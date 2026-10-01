@@ -4718,8 +4718,8 @@ violin, bar, strip, or summary plots.
 
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5. **Dependencies:** P1.4-P1.5.
 
-- [ ] Nested grouping/order/labels/jitter/summary/errors/raw-point visibility.
-  **Progress 2026-09-27 (not ticked — see "Not done").**
+- [x] Nested grouping/order/labels/jitter/summary/errors/raw-point visibility.
+  **Progress 2026-09-27 (ticked 2026-10-01 with the level rename, `3fe75caa`).**
   **Survey (before):** nested grouping (#351 compute + "then by" picker) and
   level order (`LevelOrderPanel`, `DataStruct.level_order`) existed; level
   RENAME exists only as a derived column (Recode workshop). Raw points: box
@@ -4774,7 +4774,11 @@ violin, bar, strip, or summary plots.
   per option, the shared fixtures, route validation). Wire fixture
   `statplot_levels_export.json` gained the new fields. Eager bundle 858,336 ->
   858,810 B (+474, the sanitizer and the field); all UI in the lazy stage chunk.
-  **Not done:** in-stage level RENAME (use Recode). (Former entries done:
+  **Done 2026-10-01:** level RENAME in place (`3fe75caa`): double-click a label
+  or its ✎ in the level-order workshop; one undo entry, `.dwk` round-trip,
+  refused on re-derived datasets and for duplicate names, Recode mappings
+  follow (`lib/levelRename.ts`, `store/levelRename.ts`); the Stat Stage has no
+  categorical-axis context menu, so there is no entry point there. (Former entries done:
   rotated-label depth measured from each side's own text metrics, and a long
   upright label wrapping or rotating on screen and in the export by ONE
   fixture-pinned rule (`fit: "auto"`), `bd7f61af`; the Graph Builder
@@ -8961,10 +8965,11 @@ Original acceptance criteria (unchanged):
   server-side caveat stands (cancel means "stop waiting, discard the
   result": the sync export routes still render to completion on a
   threadpool worker).
-- [~] Errors say what failed, whether data changed, and next action.
-  **2026-09-30:** one of the three REMAINING flow-change items below landed
-  (`usePeaks.ts`'s "labeling peaks failed" now reports its partial outcome);
-  two remain.
+- [x] Errors say what failed, whether data changed, and next action.
+  **2026-09-30:** all three REMAINING flow-change items below landed
+  (`usePeaks.ts`'s "labeling peaks failed", `recalcDatasets.ts`'s recalc pass
+  in `21872106`, and `useRoiBatch.ts`'s outer catch each report their partial
+  outcome).
   **Audited 2026-09-14, census corrected in the 2026-09-14 review round** —
   intended as the whole user-facing failure surface, not a sample; the first
   pass fell short of that by construction (below), fixed in this pass.
@@ -9081,11 +9086,13 @@ Original acceptance criteria (unchanged):
   | 9 × "Add to report" — `components/Stage/useGadgetChip.ts`, `components/workshops/{variability,peaks/PeaksPanel,curvefit,tabulate,peakwizard,statschooser,fityx,distribution}` | (a) | `could not add to report — <why>` (all nine were a bare `e.message`, so an HTTP failure reported itself without ever mentioning reports). |
   | `components/workshops/report/ReportPanel.tsx:148` | (a), (b) | `could not export the report as <format> — <why>; nothing was saved`. |
 
-  REMAINING — not reachable by a message edit, so this box stays open:
+  REMAINING — not reachable by a message edit (all three closed 2026-09-30):
   - `components/workshops/roicuts/useRoiBatch.ts:265` — "batch failed: …" is
     the OUTER catch of a loop that has already landed `newIds` datasets. It can
     honestly claim neither "nothing changed" nor a count without the flow
     handing it the partial outcome.
+    **Done 2026-09-30:** `batch failed: N of M succeeded; first failure:
+    <name>: <why>` (`useRoiBatch.test.ts` › "partial outcome" pair, red-first).
   - `components/workshops/peaks/usePeaks.ts:466` — "labeling peaks failed" is
     raised from inside `withHistoryBatch`, where some annotations may already
     have been added; same shape, same reason it is not a rename.
@@ -9097,9 +9104,12 @@ Original acceptance criteria (unchanged):
   - `store/recalcDatasets.ts:107,122` — "derived worksheet recompute failed" /
     "recalculation failed" say nothing about which worksheets took the new
     values and which kept the old ones.
-  All three need the operation to report its own partial outcome — a flow
-  change, and the shape `store/reimportAllRun.ts:410` already has (the
-  peaks one landed 2026-09-30, above; the other two stay open).
+    **Done 2026-09-30 (`21872106`):** a pass with any failure ends on one
+    `recalculated N of M datasets — <name>: <why>; …` status
+    (`store/recalcDatasets.test.ts`).
+  All three needed the operation to report its own partial outcome — a flow
+  change, and the shape `store/reimportAllRun.ts:410` already has; all three
+  landed 2026-09-30 (above), so the box is `[x]`.
 - [x] Copyable diagnostic bundle excludes raw/private data by default.
   **Verified shipped 2026-09-14** (it landed with #267/#268 and their
   follow-up reviews; the box was simply never ticked). Help ▸ Copy diagnostics
@@ -10535,6 +10545,10 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   documented gap carried over unchanged from the structural matrix: no
   first-class 2-D/heatmap figure exists to build a ninth-plus fixture from
   (`regressionMatrixFixtures.testkit.ts`'s own header note).
+  **2026-10-01: the automated SCREEN-canvas structural half is done**
+  (`frontend/e2e/specs/regression-matrix-screen.spec.ts`, all nine fixtures
+  against their goldens via recorded canvas draw calls); the box stays open
+  for the owner's visual review.
 - [x] ~~Migration fixtures for supported contract/workspace versions.~~ SHIPPED
   2026-09-28. Inventory of every persisted-format version this app still
   claims to LOAD (via `git log -S` on each version constant + its

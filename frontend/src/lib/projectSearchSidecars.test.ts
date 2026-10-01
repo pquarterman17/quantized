@@ -38,7 +38,8 @@ describe("sidecarHits — the four collection-shaped sidecars", () => {
 
   it("does NOT search text-column CELL contents — a measured, deliberate exclusion", () => {
     // 2M cells scanned per keystroke measured at 322 ms; a capped scan would be
-    // silent incompleteness. See the module doc.
+    // silent incompleteness. Cells are searched through the index in
+    // projectSearchCells.ts instead — never by this per-keystroke pass.
     const hits = sidecarHits(withMeta({ text_columns: { SampleID: ["NbAu-7", "NbAu-8"] } }), "nbau-7");
     expect(hits).toHaveLength(0);
   });

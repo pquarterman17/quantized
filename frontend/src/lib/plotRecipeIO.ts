@@ -44,6 +44,7 @@ import {
   sanitizeMapView,
   sanitizeOutlierPolicy,
   sanitizePanels,
+  sanitizePanelWindow,
   sanitizePreview,
   sanitizeTransformRef,
 } from "./plotRecipeMigrate";
@@ -364,6 +365,7 @@ function sanitizeRecipeEntry(v: unknown): PlotRecipe | null {
   const prov = typeof o.provenance === "object" && o.provenance !== null
     ? (o.provenance as Record<string, unknown>)
     : {};
+  const panelWindow = sanitizePanelWindow(o.panelWindow);
   return {
     id: o.id,
     name: o.name,
@@ -388,6 +390,7 @@ function sanitizeRecipeEntry(v: unknown): PlotRecipe | null {
     transform: sanitizeTransformRef(o.transform),
     panels: sanitizePanels(o.panels),
     map: sanitizeMapView(o.map),
+    ...(panelWindow ? { panelWindow } : {}), // additive: absent when not recorded
   };
 }
 

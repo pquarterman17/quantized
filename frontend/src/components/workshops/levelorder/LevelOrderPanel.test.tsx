@@ -159,3 +159,46 @@ describe("LevelOrderPanel — orphaned-panel cleanup (review LOW 7)", () => {
     expect(useLevelOrder.getState().draft).toEqual([]);
   });
 });
+
+describe("LevelOrderPanel — rename a level in place (P2.6)", () => {
+  const levels = () => useApp.getState().datasets.find((x) => x.id === "d1")!.data.cat_levels?.[0];
+
+  it("the Rename button carries a one-sentence tooltip and opens an inline edit; Enter commits", () => {
+    useLevelOrderPanel.getState().openPanel("d1", 0);
+    render(<LevelOrderPanel />);
+    const btn = screen.getByLabelText('rename "OK"');
+    expect(btn).toHaveAttribute("title", "Rename this level everywhere it is shown.");
+    fireEvent.click(btn);
+    const input = screen.getByLabelText('new name for "OK"');
+    fireEvent.change(input, { target: { value: "Okay" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(levels()).toEqual(["Pass", "Okay", "Fail"]);
+    expect(screen.getByText("Okay")).toBeInTheDocument();
+    expect(screen.queryByLabelText('new name for "OK"')).toBeNull();
+    // The reorder draft (codes) is untouched by a rename.
+    expect(useLevelOrder.getState().draft).toEqual([0, 1, 2]);
+  });
+
+  it("double-clicking the label opens the same edit; Escape cancels", () => {
+    useLevelOrderPanel.getState().openPanel("d1", 0);
+    render(<LevelOrderPanel />);
+    fireEvent.doubleClick(screen.getByText("Fail"));
+    const input = screen.getByLabelText('new name for "Fail"');
+    fireEvent.change(input, { target: { value: "Nope" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(levels()).toEqual(["Pass", "OK", "Fail"]);
+    expect(screen.queryByLabelText('new name for "Fail"')).toBeNull();
+  });
+
+  it("a duplicate name is refused with one sentence and the edit stays open", () => {
+    useLevelOrderPanel.getState().openPanel("d1", 0);
+    render(<LevelOrderPanel />);
+    fireEvent.click(screen.getByLabelText('rename "OK"'));
+    const input = screen.getByLabelText('new name for "OK"');
+    fireEvent.change(input, { target: { value: "Pass" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(toast).toHaveBeenCalledWith('A level named "Pass" already exists in this column.', "danger");
+    expect(levels()).toEqual(["Pass", "OK", "Fail"]);
+    expect(screen.getByLabelText('new name for "OK"')).toBeInTheDocument();
+  });
+});

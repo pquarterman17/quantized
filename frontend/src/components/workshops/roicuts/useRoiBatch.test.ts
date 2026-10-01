@@ -5,6 +5,7 @@ import { rsmBoxCut, rsmBoxStats, type BoxStats } from "../../../lib/api/rsm";
 import { plotSelectedTogether } from "../../../lib/plotSelectedTogether";
 import type { RoiRect } from "../../../lib/roi";
 import type { DataStruct } from "../../../lib/types";
+import { useToasts } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import {
   batchEligibility,
@@ -108,6 +109,7 @@ function setLibrary(entries: { id: string; name: string; data: DataStruct }[], s
 beforeEach(() => {
   vi.clearAllMocks();
   useApp.setState({ mapRoi: null, mapRuler: null, savedRois: [], selectedIds: [], datasets: [] });
+  useToasts.setState({ toasts: [] });
   vi.mocked(rsmBoxCut).mockResolvedValue(CUT_RESULT);
   vi.mocked(rsmBoxStats).mockResolvedValue(stats());
   vi.mocked(plotSelectedTogether).mockResolvedValue(undefined);
@@ -379,5 +381,53 @@ describe("useRoiBatch — applyToSelected", () => {
 
     // Only ONE batch actually ran (2 datasets x 1 call each = 2, not 4).
     expect(rsmBoxCut).toHaveBeenCalledTimes(2);
+  });
+
+  // The OUTER catch fires after the per-dataset loop — i.e. after some cuts
+  // may already have landed — so a bare "batch failed: …" would misdescribe
+  // a batch that did land datasets. It reports the partial outcome instead
+  // (pattern: store/reimportAllRun.ts's "re-imported N — K skipped").
+  it("an unexpected post-loop failure reports how many cuts landed and the first failure, not a bare 'batch failed'", async () => {
+    setLibrary(
+      [
+        { id: "a", name: "alpha", data: angularMap() },
+        { id: "b", name: "beta", data: angularMap() },
+        { id: "c", name: "gamma", data: angularMap() },
+      ],
+      ["a", "b", "c"],
+    );
+    vi.mocked(rsmBoxCut)
+      .mockResolvedValueOnce(CUT_RESULT)
+      .mockRejectedValueOnce(new Error("backend exploded"))
+      .mockResolvedValueOnce(CUT_RESULT);
+    vi.mocked(plotSelectedTogether).mockRejectedValueOnce(new Error("overlay exploded"));
+    const { result } = renderHook(() => useRoiBatch());
+
+    await act(async () => {
+      await result.current.applyToSelected(RECT);
+    });
+
+    expect(useToasts.getState().toasts.find((t) => t.kind === "danger")?.msg).toBe(
+      "batch failed: 2 of 3 succeeded; first failure: beta: backend exploded",
+    );
+  });
+
+  it("an unexpected failure with nothing landed says 0 of M and names the failure that stopped it", async () => {
+    setLibrary([{ id: "a", name: "alpha", data: angularMap() }], ["a"]);
+    const { resolveDatasets } = useApp.getState();
+    useApp.setState({ resolveDatasets: vi.fn().mockRejectedValue(new Error("resolve exploded")) });
+    const { result } = renderHook(() => useRoiBatch());
+
+    try {
+      await act(async () => {
+        await result.current.applyToSelected(RECT);
+      });
+    } finally {
+      useApp.setState({ resolveDatasets });
+    }
+
+    expect(useToasts.getState().toasts.find((t) => t.kind === "danger")?.msg).toBe(
+      "batch failed: 0 of 1 succeeded; first failure: resolve exploded",
+    );
   });
 });

@@ -6,6 +6,13 @@
 // So a hit activates its dataset AND switches to the surface that can actually
 // show it: a column opens the worksheet, because the Library can only show you
 // the dataset it lives in, not the column inside it.
+//
+// Text-column CELLS are searched too (P1.4's booked follow-up), through a
+// lazily built per-dataset index — see lib/projectSearchCells.ts and
+// ./useCellSearch.ts. Those hits are listed below the others, complete and
+// uncapped, one per (dataset, column); opening one reveals its first matching
+// row: the dataset is activated and shown in the Library, the worksheet opens,
+// and that row is selected.
 
 import { useMemo, useState } from "react";
 
@@ -13,6 +20,8 @@ import { searchProject, type SearchHit } from "../../../lib/projectSearch";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
 import { NumberField } from "../../primitives/NumberField";
+import CellHitList from "./CellHitList";
+import { useCellSearch, type CellHit } from "./useCellSearch";
 
 const KIND_CHIP: Record<SearchHit["kind"], string> = {
   dataset: "data",
@@ -34,6 +43,8 @@ export default function SearchPanel() {
   const setActive = useApp((s) => s.setActive);
   const setStageTab = useApp((s) => s.setStageTab);
   const setStatus = useApp((s) => s.setStatus);
+  const requestReveal = useApp((s) => s.requestReveal);
+  const setRowSelection = useApp((s) => s.setRowSelection);
   const [query, setQuery] = useState("");
 
   const hits = useMemo(
@@ -48,6 +59,7 @@ export default function SearchPanel() {
       }),
     [query, datasets, folders, reports, originFigures],
   );
+  const cells = useCellSearch(datasets, query);
 
   const reveal = (hit: SearchHit) => {
     if (hit.datasetId) setActive(hit.datasetId);
@@ -60,6 +72,19 @@ export default function SearchPanel() {
     setOpen(false);
   };
 
+  // The existing reveal actions, in order: activate (which also starts a lazy
+  // book's fetch), "Show in Library", open the worksheet, select the row. A
+  // still-sampled preview's row numbers are not real rows, so none is selected.
+  const revealCell = (hit: CellHit) => {
+    setActive(hit.datasetId);
+    requestReveal(hit.datasetId);
+    setStageTab("worksheet");
+    if (!hit.sampled) setRowSelection([hit.firstRow]);
+    setStatus(`revealed row ${hit.firstRow + 1} of ${hit.column} in ${hit.datasetName}`);
+    setOpen(false);
+  };
+  const nothing = hits.length === 0 && cells.hits.length === 0 && !cells.searching;
+
   return (
     <ToolWindow id="search" title="Find in project" width={380} onClose={() => setOpen(false)}>
       <NumberField
@@ -67,15 +92,15 @@ export default function SearchPanel() {
         value={query}
         width={356}
         placeholder="dataset, column, tag, note, report…"
-        title="Search names, column labels, tags, notes, metadata, reports and figures"
+        title="Search names, column labels, tags, notes, metadata, text cells, reports and figures"
         onChange={setQuery}
       />
       {query.trim() === "" ? (
         <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--text-faint)" }}>
-          Searches every dataset — including columns and notes inside datasets
-          you do not have open.
+          Searches every dataset — including columns, notes and text cells inside
+          datasets you do not have open.
         </div>
-      ) : hits.length === 0 ? (
+      ) : nothing ? (
         <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--text-faint)" }}>
           No matches for &ldquo;{query.trim()}&rdquo;.
         </div>
@@ -100,6 +125,12 @@ export default function SearchPanel() {
               </span>
             </button>
           ))}
+          <CellHitList
+            hits={cells.hits}
+            searching={cells.searching}
+            needle={query.trim().toLowerCase()}
+            onReveal={revealCell}
+          />
         </div>
       )}
     </ToolWindow>

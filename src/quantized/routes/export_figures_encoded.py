@@ -75,34 +75,53 @@ class FigureEncoding(BaseModel):
 
 
 class ExcludedRowsFields(BaseModel):
-    """``FigureRequest``'s per-row mask for excluded rows (F4.2c (a)). Only an
+    """``FigureRequest``'s per-row mask for excluded rows (F4.2c (a)). An
     ENCODED request takes it: the backend splits that one, so it needs the
-    full rows to take the window's levels. Every other request already sends
-    the pruned rows plus any greyed companions as ordinary channels
-    (``lib/excludedRowsExport.ts``), so the field there is refused (422)."""
+    full rows to take the window's levels. So does an UNSPLIT facet grid: its
+    panels carry their full level rows and the dataset ``rows`` behind them,
+    and the route blanks or greys the mask per panel
+    (``calc.figure_facets_excluded``). Every other request already sends the
+    pruned rows plus any greyed companions as ordinary channels
+    (``lib/excludedRowsExport.ts``), so the field there is refused (422), as it
+    is on a SPLIT facet grid, which cannot grey."""
 
     excluded_rows: list[int] | None = Field(
         default=None,
         description=(
             "Rows of `dataset` the plot window does not draw as data (excluded, or dropped "
-            "by the Data Filter). With `encoding` only: the split takes its levels over "
-            "every row, then these rows are blanked in each series."
+            "by the Data Filter). With `encoding`: the split takes its levels over every "
+            "row, then these rows are blanked in each series. With unsplit `facets` "
+            "(no `encoding`, no `group_col`): each panel names its `rows`, and these rows "
+            "are blanked in its series."
         ),
     )
     grey_excluded: bool = Field(
         default=False,
         description=(
             "With `excluded_rows`: also draw those rows as one grey, line-free "
-            "'(excluded)' marker series per series, after all the series."
+            "'(excluded)' marker series per series, after all the series (per panel "
+            "on a facet grid)."
         ),
     )
 
     @model_validator(mode="after")
     def _mask_needs_an_encoding(self) -> ExcludedRowsFields:
+        if not self.excluded_rows:
+            return self
+        if min(self.excluded_rows) < 0:
+            raise ValueError("excluded_rows must be non-negative row indices")
         encoding = getattr(self, "encoding", None)
-        if self.excluded_rows and not (isinstance(encoding, FigureEncoding) and encoding.active()):
+        encoded = isinstance(encoding, FigureEncoding) and encoding.active()
+        if getattr(self, "facets", None):
+            if encoded or getattr(self, "group_col", None) is not None:
+                raise ValueError(
+                    "excluded_rows on a facet grid needs unsplit panels (no encoding or group_col)"
+                )
+            return self
+        if not encoded:
             raise ValueError(
-                "excluded_rows needs an active encoding; other figures send the pruned rows"
+                "excluded_rows needs an active encoding or facets; other figures send the "
+                "pruned rows"
             )
         return self
 

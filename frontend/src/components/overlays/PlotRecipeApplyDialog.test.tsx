@@ -174,10 +174,36 @@ describe("PlotRecipeApplyDialog — spatial panel rebind", () => {
     expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
   });
 
-  it("still shows the recipe's preview thumbnail beside the panel prompt", async () => {
+  it("still shows the recipe's preview thumbnail beside the panel prompt, with its panel grid", async () => {
     await stageSpatialPending();
     render(<PlotRecipeApplyDialog />);
-    const thumb = screen.getByRole("img", { name: "Two-panel: preview" });
+    const thumb = screen.getByRole("img", { name: "Two-panel: preview, 2×1 panels" });
     expect(thumb.querySelectorAll("polyline")).toHaveLength(1);
+  });
+});
+
+// Q6 (c): a recipe captured from a COMPOSITE panel window goes through the
+// same rebind picker when one of its datasets is missing, and "Apply" opens
+// the composite window.
+describe("PlotRecipeApplyDialog — composite panel window rebind", () => {
+  it("picks a stand-in for a missing dataset and applies a new panel window", async () => {
+    reset();
+    const d1 = dataset(["2theta", "Intensity", "Ierr"]);
+    const d2 = dataset(["2theta", "Intensity", "Ierr"], "d2");
+    useApp.setState({ datasets: [d1, d2] });
+    const win = useApp.getState().createPanelWindow(["d1", "d2"], "grid");
+    const recipeId = await useApp.getState().saveAsPlotRecipe("Pair", "d1", win);
+    // d2 is gone; d9 is available as a stand-in.
+    useApp.setState({ plotWindows: [], datasets: [d1, dataset(["2theta", "Intensity", "Ierr"], "d9")] });
+    await useApp.getState().applyPlotRecipe(recipeId!, "d1");
+    render(<PlotRecipeApplyDialog />);
+
+    fireEvent.change(screen.getByRole("combobox", { name: 'Panel 2 dataset ("d2.xy")' }), { target: { value: "d9" } });
+    await waitFor(() => expect(useApp.getState().pendingRecipeApplication?.resolution.unmatched).toEqual([]));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(useApp.getState().pendingRecipeApplication).toBeNull());
+
+    const panel = useApp.getState().plotWindows.find((w) => w.kind === "panel")?.panel;
+    expect(panel).toEqual({ datasetIds: ["d1", "d9"], layout: "grid" });
   });
 });

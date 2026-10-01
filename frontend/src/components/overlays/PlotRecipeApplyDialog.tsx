@@ -37,6 +37,7 @@
 import { useId, useRef } from "react";
 
 import type { RecipePanelIssue } from "../../lib/plotRecipeMatch";
+import { previewGlyph } from "../../lib/plotRecipePreview";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { useDialogFocus } from "./useDialogFocus";
@@ -145,7 +146,7 @@ export default function PlotRecipeApplyDialog() {
       >
         <h2 id={titleId}>Apply Plot Recipe “{pending.recipe.name}”</h2>
         {/* F4.2: what the recipe looks like, captured when it was saved. */}
-        <RecipeThumbnail preview={pending.recipe.preview} label={pending.recipe.name} />
+        <RecipeThumbnail preview={pending.recipe.preview} label={pending.recipe.name} glyph={previewGlyph(pending.recipe)} />
         {rows.length > 0 && (
           <table className="qzk-recipe-mapping" style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
             <tbody>

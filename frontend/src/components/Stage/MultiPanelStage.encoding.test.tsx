@@ -100,6 +100,7 @@ describe("MultiPanelStage — an encoded facet grid", () => {
     useApp.setState((s) => ({ plotWindows: withFocusedEncoding(s.plotWindows, s.focusedWindowId, undefined) }));
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(2));
-    expect(labelsOf()).toEqual([["Rxy (Ohm)"], ["Rxy (Ohm)"]]);
+    // Excluded row 3 sits in the second panel, greyed under the default mode (F4.2c (a)).
+    expect(labelsOf()).toEqual([["Rxy (Ohm)"], ["Rxy (Ohm)", "Rxy (excluded) (Ohm)"]]);
   });
 });

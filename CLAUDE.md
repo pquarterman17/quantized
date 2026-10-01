@@ -295,7 +295,10 @@ Practical conventions discovered while porting — follow them to stay green.
   stalled six parallel agents. Let runs finish. When disk is low, remove the
   leaked directories older than 30 minutes:
   `find /tmp -maxdepth 1 -type d -regextype posix-extended -regex
-  '/tmp/[A-Za-z0-9]{21}' -mmin +30 -exec rm -rf {} +`.
+  '/tmp/[A-Za-z0-9_-]{21}' -mmin +30 -exec rm -rf {} +`.
+  The class must include `_` and `-` because nanoid's alphabet does, so an
+  alphanumeric-only class skips about half of all names (measured 2026-09-30:
+  1,828 leaked directories, ~20 GB, found only by the wider class).
 
 ### Origin graph-recovery safety (2026-07-13 incident)
 - Treat Origin graph recovery as one scientific pipeline: **file bytes ->

@@ -6,7 +6,7 @@
 //
 // Builds directly on wave 1's frozen pure library API:
 //   - `lib/plotRecipe.ts`'s `captureRecipe` (dataset, view, composition, opts)
-//     -> `PlotRecipe`. `saveAsPlotRecipe` below is its only store-side caller.
+//     -> `PlotRecipe`. `saveAsPlotRecipe` below (body: plotRecipeApply.ts's `saveRecipe`) is its only store-side caller.
 //   - `lib/plotRecipeMatch.ts`'s `resolveRecipe` (recipe, dataset) -> either
 //     `{ refused }` (a technique mismatch or the errorRole guard -- a plot
 //     that would be semantically WRONG if applied at all) or
@@ -116,9 +116,8 @@
 import type { PlotRecipe } from "../lib/plotRecipe";
 import type { RecipePanelBinding } from "../lib/plotRecipeMatch";
 import type { PendingPlotRecipeApplication } from "./pendingRecipeApplication";
-import { dedupeWindowTitle, snapshotView } from "../lib/plotview";
+import { dedupeWindowTitle } from "../lib/plotview";
 import type { Dataset } from "../lib/types";
-import { plotWindowDatasetId } from "./windowDocuments";
 import type { SliceGet, SliceSet } from "./plotRecipeApply";
 import { applyCore, applyCoreWithLibs } from "./plotRecipeApplyLazy";
 
@@ -168,10 +167,12 @@ export interface PlotRecipesSlice {
    *  against the wrong dataset's columns would silently build a signature
    *  that means nothing). A duplicate `name` is DEDUPED, never overwrites an
    *  existing recipe. Returns the new recipe's id. Async: lazy-loads
-   *  `captureRecipe` on first use (see the module doc's LAZY-LOADED note) --
-   *  every synchronous validation still runs (and can still fail closed)
-   *  before that load starts. */
-  saveAsPlotRecipe: (name: string, datasetId: string) => Promise<string | null>;
+   *  `captureRecipe` on first use (see the module doc's LAZY-LOADED note);
+   *  validation runs AFTER that load, in one synchronous block with the
+   *  capture, so it reads current state. Q6: `windowId` names a window other than the
+   *  focused one -- a composite panel window (never the view focus) is
+   *  captured by dataset NAME + layout, `datasetId` being one of its cells. */
+  saveAsPlotRecipe: (name: string, datasetId: string, windowId?: string) => Promise<string | null>;
   /** No-op for an unknown id (mirrors `deleteQuickPlotTemplate`). Undoable. */
   deletePlotRecipe: (id: string) => void;
   /** No-op for an unknown id or a blank/unchanged name (mirrors
@@ -272,46 +273,10 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
     plotRecipes: [],
     pendingRecipeApplication: null,
 
-    saveAsPlotRecipe: async (name, datasetId) => {
-      // Load first, validate/read second: every state read below (including
-      // `dedupedName`'s collision check) happens in ONE synchronous block
-      // after this, so a second save/apply call started while THIS load is
-      // in flight can't interleave with it and dedupe against a stale list.
-      const { captureRecipe } = await applyCoreWithLibs();
-      const state = get();
-      const dataset = state.datasets.find((d) => d.id === datasetId);
-      if (!dataset) {
-        set({ status: "Save Plot Recipe unavailable: dataset not found" });
-        return null;
-      }
-      const focused = state.plotWindows.find((w) => w.id === state.focusedWindowId);
-      if (!focused || focused.kind !== "plot" || plotWindowDatasetId(focused) !== datasetId) {
-        set({ status: "Save Plot Recipe unavailable: no focused plot window showing this dataset" });
-        return null;
-      }
-      const baseName = name.trim() || "Untitled Plot Recipe";
-      const dedupedName = dedupeWindowTitle(baseName, state.plotRecipes.map((r) => r.name));
-      // The focused window's LIVE view is the singleton PlotView fields on
-      // `state` (the "focused-window facade" contract, store/windows.ts's
-      // header) -- `snapshotView` is the same read `windowsForSave`/
-      // `duplicateWindow` use for it, never the window's own (stale-while-
-      // focused) `.view` record.
-      const view = snapshotView(state);
-      const recipe = captureRecipe(dataset, view, state.composition, {
-        id: nextPlotRecipeId(),
-        name: dedupedName,
-        appVersion: PLOT_RECIPE_APP_VERSION,
-        mark: focused.document?.plot.mark,
-        errors: focused.document?.bindings.errors,
-        axisBreaks: focused.document?.plot.axisBreaks, // facetKey rides `view` (K4/K6)
-        excludedDisplay: state.excludedDisplay, // v2 outlier policy (recorded, never applied)
-        datasets: state.datasets, // v3 spatial panels bind sibling datasets by NAME
-        mapView: state.mapViews[datasetId], // v3 map view (recorded only when non-default)
-      });
-      get().recordHistory("Save Plot Recipe");
-      set((s) => ({ plotRecipes: [...s.plotRecipes, recipe] }));
-      return recipe.id;
-    },
+    // The body (validation, the focused-window facade read, capture) lives in
+    // the lazy `plotRecipeApply.ts`'s `saveRecipe` -- see its own doc.
+    saveAsPlotRecipe: async (name, datasetId, windowId) =>
+      (await applyCore()).saveRecipe(set, get, { name, datasetId, windowId, id: nextPlotRecipeId(), appVersion: PLOT_RECIPE_APP_VERSION }),
 
     deletePlotRecipe: (id) => {
       if (!get().plotRecipes.some((r) => r.id === id)) return;

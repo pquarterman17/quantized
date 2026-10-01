@@ -198,14 +198,18 @@ export function useRoiBatch(): RoiBatchState {
     setBusy(true);
     setOutcome(null);
     setSummaryRows([]);
+    // Hoisted out of the `try` so the outer catch can report the partial
+    // outcome (how many cuts already landed, and the first failure).
+    let total = ids.length;
+    const errored: BatchNamedReason[] = [];
+    const newIds: string[] = [];
     try {
       const normalized = normalizeRect(rect);
       const resolved = await useApp.getState().resolveDatasets(ids);
+      total = resolved.length;
 
       const skipped: BatchNamedReason[] = [];
-      const errored: BatchNamedReason[] = [];
       const statsErrored: BatchNamedReason[] = [];
-      const newIds: string[] = [];
       const rows: BatchSummaryRow[] = [];
 
       for (const ds of resolved) {
@@ -258,15 +262,17 @@ export function useRoiBatch(): RoiBatchState {
       // is gone with the panel); pattern: store/reimportAllRun.ts's summary.
       const problems = [...skipped, ...errored, ...statsErrored.map((e) => ({ ...e, reason: `stats: ${e.reason}` }))];
       const why = problems.length ? ` — ${problems.map((p) => `${p.name}: ${p.reason}`).join("; ")}` : "";
-      const total = resolved.length;
       useApp.getState().setStatus(`batch: applied to ${newIds.length} of ${total} dataset${plural(total)}${why}`);
     } catch (e) {
       // Per-dataset cut/stats failures are already caught above and reported
       // in `outcome` — this only catches something unexpected (a bug in
       // plotSelectedTogether, the summary build, etc.) so the batch never
       // leaves an unhandled rejection behind a fire-and-forget `void
-      // applyToSelected(...)` call site.
-      toast(e instanceof Error ? `batch failed: ${e.message}` : "batch failed", "danger");
+      // applyToSelected(...)` call site. Cuts may already have landed by
+      // then, so it reports the partial outcome, never a bare "failed"
+      // (pattern: store/reimportAllRun.ts's "re-imported N — K skipped").
+      const first = errored[0] ? `${errored[0].name}: ${errored[0].reason}` : e instanceof Error ? e.message : String(e);
+      toast(`batch failed: ${newIds.length} of ${total} succeeded; first failure: ${first}`, "danger");
     } finally {
       busyRef.current = false;
       setBusy(false);

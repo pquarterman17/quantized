@@ -38,6 +38,10 @@ type ColumnsHeader = Omit<PlotSeriesResponse, "data"> & { n_columns: number; n_r
 // Float64Array view; the DataView path keeps a big-endian host correct.
 const LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
 
+// Every column comes out a plain Array whose only gap is `null` -- never a
+// typed array, never NaN. A Float64Array view would cost nothing to build,
+// but the payload's consumers are not typed-array safe (pinned by
+// `plotColumns.parity.test.ts`; numbers in docs/performance_envelope.md).
 function readColumn(buf: ArrayBuffer, byteOffset: number, n: number): (number | null)[] {
   const col: (number | null)[] = new Array<number | null>(n);
   if (LITTLE_ENDIAN) {

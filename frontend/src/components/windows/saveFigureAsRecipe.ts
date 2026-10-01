@@ -11,6 +11,7 @@
 // `store/plotRecipes.ts`'s own `recipeLibs()` follows for
 // `lib/plotRecipeMatch.ts`.
 
+import type { PlotWindow } from "../../lib/plotview";
 import { useApp } from "../../store/useApp";
 import { plotWindowDatasetId } from "../../store/windowDocuments";
 
@@ -21,16 +22,22 @@ import { plotWindowDatasetId } from "../../store/windowDocuments";
  *  even offered when there's nothing to capture. */
 export async function saveFocusedFigureAsRecipe(): Promise<void> {
   const state = useApp.getState();
-  const windowId = state.focusedWindowId;
-  const window = windowId ? state.plotWindows.find((w) => w.id === windowId) : undefined;
-  const datasetId = window && window.kind === "plot" ? plotWindowDatasetId(window) : null;
-  if (!datasetId) {
+  // Q6: a composite panel window never takes the view focus (`focusWindow`
+  // only raises it), so when one is the FRONT-most visible window, that is
+  // the window the user means; its first cell is the recipe's own dataset.
+  const front = state.plotWindows
+    .filter((w) => w.winState !== "minimized")
+    .reduce<PlotWindow | undefined>((a, w) => (!a || w.z > a.z ? w : a), undefined);
+  const panel = front?.kind === "panel" && front.panel?.datasetIds.length ? front : undefined;
+  const window = panel ?? state.plotWindows.find((w) => w.id === state.focusedWindowId);
+  const datasetId = panel?.panel?.datasetIds[0] ?? (window?.kind === "plot" ? plotWindowDatasetId(window) : null);
+  if (!window || !datasetId) {
     state.setStatus("Save as Plot Recipe unavailable: no focused plot window");
     return;
   }
   const { askParams } = await import("../overlays/ParamDialog");
   const params = await askParams("Save as Plot Recipe", [
-    { key: "name", label: "Name", type: "text", default: window!.title || "Untitled Plot Recipe" },
+    { key: "name", label: "Name", type: "text", default: window.title || "Untitled Plot Recipe" },
   ]);
-  if (params) await useApp.getState().saveAsPlotRecipe(String(params.name), datasetId);
+  if (params) await useApp.getState().saveAsPlotRecipe(String(params.name), datasetId, window.id);
 }

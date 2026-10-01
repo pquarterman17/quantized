@@ -84,8 +84,13 @@ export interface FigureRenderOpts {
   greyExcluded?: ExcludedRowsGhoster;
 }
 
-/** See `FigureRenderOpts.greyExcluded`. */
-export type ExcludedRowsGhoster = (spec: FigureSpec, data: DataStruct, dropped: ReadonlySet<number>) => FigureSpec;
+/** See `FigureRenderOpts.greyExcluded`. `facet` is the view's facet binding
+ *  when the spec is faceted: the panels are re-sliced from the full rows. */
+export type ExcludedRowsGhoster = (
+  spec: FigureSpec, data: DataStruct, dropped: ReadonlySet<number>, facet?: ExcludedFacetBinding,
+) => FigureSpec;
+/** The facet column and Y binding a faceted spec's panels were resolved with. */
+export interface ExcludedFacetBinding { col: number; yKeys: number[] | null }
 
 /** Optional publication choices layered over a FigureDocument's saved output
  * settings. Labels and title default to the document's PlotView; `filename`
@@ -399,7 +404,8 @@ function buildFigureSpecForView(
     filename: extras.filename ?? stem,
   };
   // F4.2c (a): greyed excluded rows ride as extra series on the pruned wire.
-  return o.greyExcluded && extras.liveDataset ? o.greyExcluded(spec, data, dropped) : spec;
+  const facet = st.facetKey != null ? { col: st.facetKey, yKeys: st.yKeys } : undefined;
+  return o.greyExcluded && extras.liveDataset ? o.greyExcluded(spec, data, dropped, facet) : spec;
 }
 
 /** Derive an export request directly from the canonical document. Frozen

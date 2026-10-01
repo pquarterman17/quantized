@@ -91,4 +91,24 @@ describe("saveFocusedFigureAsRecipe", () => {
     expect(askParams).not.toHaveBeenCalled();
     expect(useApp.getState().status).toContain("unavailable");
   });
+
+  // Q6 (c): a composite panel window never holds the view focus (focusWindow
+  // only raises it), so the front-most window is what the user means.
+  it("a composite panel window in front: saves THAT window by name", async () => {
+    const { datasetId } = datasetAndFocusedWindow();
+    useApp.setState((s) => ({ datasets: [...s.datasets, { ...s.datasets[0], id: "d2", name: "d2.xy" }] }));
+    const panelId = useApp.getState().createPanelWindow([datasetId, "d2"], "column");
+    useApp.getState().focusWindow(panelId); // raises it to the front
+    askParams.mockResolvedValueOnce({ name: "Stack" });
+
+    await saveFocusedFigureAsRecipe();
+
+    const title = useApp.getState().plotWindows.find((w) => w.id === panelId)?.title;
+    expect(askParams).toHaveBeenCalledWith("Save as Plot Recipe", [
+      { key: "name", label: "Name", type: "text", default: title },
+    ]);
+    const [recipe] = useApp.getState().plotRecipes;
+    expect(recipe.name).toBe("Stack");
+    expect(recipe.panelWindow).toEqual({ datasets: [null, "d2.xy"], layout: "column" });
+  });
 });

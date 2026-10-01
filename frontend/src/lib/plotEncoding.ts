@@ -21,9 +21,9 @@
 // combinations in nested display order (outer factor first, each factor's levels
 // through `categoryLevels`, so a user's level order holds). A row whose value in
 // ANY factor is non-finite joins no series — the group split's own rule. With no
-// factor at all (only a legend source) there is one series per channel. Group
-// alone never reaches this module: that spec renders through `buildXY`
-// unchanged.
+// factor at all (only a legend source) there is one series per channel. A flat
+// Group-alone spec never reaches this module (it renders through `buildXY`);
+// a FACETED one does, as a group-only split (`facetSplitEncoding`).
 //
 // THE ENCODING, through the existing cycles: a series is coloured
 // `SERIES_VARS[k % 8]` with `k` its colour-factor LEVEL index (so one level has
@@ -91,7 +91,7 @@ import { spatialCellStyling } from "./multipanel";
 import { buildColumns, type PlotPayload } from "./plotdata";
 import {
   encodingSplits,
-  facetEncoding,
+  facetSplitEncoding,
   isEncodingFactor,
   resolveFigureEncoding,
   type Encoding,
@@ -102,7 +102,6 @@ import {
   specDatasetId,
   specErrorBindings,
   specToRender,
-  type ChannelRef,
   type PlotSpec,
   type SpecRender,
 } from "./plotspec";
@@ -196,8 +195,13 @@ export function specFigureEncoding(spec: PlotSpec): FigureEncoding | undefined {
 /** The spec's encoding against `ds`, gated (see the module doc), or null when
  *  no colour / symbol / label / gradient survives — the ordinary render path. */
 export function resolveEncoding(spec: PlotSpec, ds: Dataset): Encoding | null {
-  const group: ChannelRef | null = spec.zones.group;
-  return resolveFigureEncoding(picksOf(spec.zones, ds.id), ds, group && group.datasetId === ds.id ? group.channel : null);
+  return resolveFigureEncoding(picksOf(spec.zones, ds.id), ds, specGroupChannel(spec, ds));
+}
+
+/** The spec's Group channel on `ds`, or null when unset or on another dataset. */
+function specGroupChannel(spec: PlotSpec, ds: Dataset): number | null {
+  const group = spec.zones.group;
+  return group?.datasetId === ds.id ? group.channel : null;
 }
 
 function channelLabel(data: DataStruct, channel: number): string {
@@ -417,7 +421,7 @@ export function encodedStyles(spec: PlotSpec, series: readonly EncodedSeries[]):
 
 /** THE derivation (see the module doc), or null when the spec renders through
  *  the ordinary path: not an xy mark, no dataset/rows/Y, or no surviving
- *  encoding (a faceted spec's gradient does not survive). */
+ *  encoding (a faceted spec's gradient does not survive; its Group alone does). */
 export function encodeSpec(spec: PlotSpec, datasets: readonly Dataset[]): EncodedSpec | null {
   if (spec.mark !== "scatter" && spec.mark !== "line" && spec.mark !== "step") return null;
   if (spec.zones.y.length === 0) return null;
@@ -425,7 +429,8 @@ export function encodeSpec(spec: PlotSpec, datasets: readonly Dataset[]): Encode
   const rows = analysisData(ds);
   if (!ds || !rows || rows.time.length === 0) return null;
   const facetCol = spec.zones.facet?.channel ?? null;
-  const enc = facetCol === null ? resolveEncoding(spec, ds) : facetEncoding(resolveEncoding(spec, ds));
+  const own = resolveEncoding(spec, ds); // a facet grid splits by Group alone too, as the Stage does
+  const enc = facetCol === null ? own : facetSplitEncoding(own, specGroupChannel(spec, ds));
   if (!enc) return null;
   const data = encodingData(rows, enc); // text-column factors appended (residual 5)
   const xKey = specXKey(spec); // own X (a negative channel) = an empty well

@@ -34,6 +34,7 @@ import { useApp } from "../../store/useApp";
 import PolarStageCore from "../Stage/PolarStageCore";
 import StatStagePlot from "../Stage/StatStagePlot";
 import { useFacetEncoding } from "../Stage/useFacetEncoding";
+import { useGreyedFacets } from "../Stage/useGreyedFacets";
 import { useMultiPanelStage } from "../Stage/useMultiPanelStage";
 import { useStatStage } from "../Stage/useStatStage";
 
@@ -149,10 +150,13 @@ export function BackgroundStackWindow({ dataset, view, bg, composition = null, e
     dataset, encoding, canvasGroupCol(view.groupKey, view.y2Keys), view.y2Keys, view.facetKey,
     view.xKey, view.yKeys, view.seriesLabels, view.seriesStyles,
   );
+  // F4.2c (a): the app-wide "Excluded rows" mode greys the facet grid here too.
+  const excludedDisplay = useApp((s) => s.excludedDisplay);
+  const shown = useGreyedFacets(composition, dataset, view.facetKey, view.xKey, excludedDisplay);
   const { hostRef, hostStyle } = useMultiPanelStage({
     active: dataset,
     datasets: NO_DATASETS,
-    composition,
+    composition: shown,
     yScale: view.yScale,
     xScale: view.xScale,
     xLim: view.xLim,

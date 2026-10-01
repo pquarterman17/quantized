@@ -385,14 +385,57 @@ with other agents at load average 5–9, so the medians carry that noise:
 | `JSON.parse` (146 MB text) | 1062 / 1183 ms | 830 / 1015 ms |
 | `decodeColumns` (64 MB frame) | 495 / 1096 ms | **376 / 754 ms** |
 
-Parity of every value across the 7M cells held in both runs. Most of the
-decode cost is the output contract, not the bytes: a column that holds any
-`null` leaves V8's packed-double representation, so each finite value in it
-is boxed. Handing consumers a `Float64Array` with NaN gaps would make the
-decode a view (tens of ms), but changes what `plotdata.ts` and the overlays
-receive — a separate change. Not measured: a real browser (the bench is
-Node), and transfer over a socket rather than in-process (the 2.3× smaller
-body only helps there).
+Parity of every value across the 7M cells held in both runs. Not measured:
+a real browser (the bench is Node), and transfer over a socket rather than
+in-process (the 2.3× smaller body only helps there).
+
+### Typed-array decode contract — 2026-10-01 (decided: stays plain arrays)
+
+The question left open above: could `decodeColumns` hand out `Float64Array`
+columns (NaN gaps) instead of boxed `(number | null)[]`? Same bodies, same
+Node 22.22 / vitest harness, 11 reps, load average 8–11:
+
+| Decoder at 1M × 7 (+x) | best / median | with `gc()` between reps |
+|---|---|---|
+| `JSON.parse` (146 MB text) | 819 / 1044 ms | 1087 / 1286 ms |
+| `decodeColumns`, shipped (plain arrays, `null` gaps) | 588 / 812 ms | 301 / 359 ms |
+| `Float64Array` copy where gap-free, plain where gapped | 146 / 290 ms | 92 / 107 ms |
+| `Float64Array` views, NaN gaps | 0 / 0 ms | 0 / 0 ms |
+
+The cost is not mostly per-element work: one column decoded alone (`gc()`
+first) takes 5–8 ms all-finite and 15–22 ms with gaps, about 70 ms for all
+eight, against 300+ ms for the same eight in one decode. `push`,
+`Array.from` and spread were all slower than the shipped loop. Filling
+doubles first and writing the `null`s last was 1.5× faster from a clean
+heap (median 247–289 vs 371–437 ms, one process per run, three runs each)
+but no faster back to back (719–1416 vs 859–1124 ms), so it was not
+adopted. Only a typed array buys a clear win.
+
+It does not ship, because the consumers of a fetched `PlotPayload` are not
+typed-array safe and changing them is outside this transport:
+
+- `uPlot` takes typed arrays, but breaks a line only on `null`
+  (`yVal === null` in its path builders); a NaN is not a gap.
+- `plotdata.ts`: `maskExcludedPayload` and `highlightSelectedPayload` write
+  `null` through `col.map`, which a `Float64Array` coerces to 0, so a grey
+  exclusion or selection companion draws points at y = 0 on every row.
+  `categoricalXPayload` does the same for an unmatched level.
+- `plotGroupSplit.ts` `applyGroupSplit` (same `col.map` → 0s in the gaps).
+- `plotsnapshot.ts`: a frozen snapshot keeps the typed array, the workspace
+  JSON writes it as an object, and `sanitizeFrozenBundle` drops the window
+  on reload.
+- Already safe: `applyWaterfall`, `logOffset`, `applyEncodedSplit`,
+  `dropTrailingEmptyRows`, overlay alignment, `payloadToTSV`.
+
+Measured on the fixture with a sabotaged decoder (typed when gap-free): the
+selection companion of an all-finite column became `[0, 0, …]`, the group
+split filled its gaps with 0, and the snapshot did not survive a reload.
+`lib/api/plotColumns.parity.test.ts` pins the contract: the same server
+answer, fetched over both transports through the real `fetchPlot`, must
+yield equal payloads, plain-`Array` columns with `null` gaps (never NaN,
+`-0` kept), and equal compose / group-split / snapshot-reload / clipboard
+results. A typed decode needs those consumers made typed-safe first, then
+this test relaxed on purpose.
 
 ## Residuals (explicitly unmeasured — carry in P0.4)
 

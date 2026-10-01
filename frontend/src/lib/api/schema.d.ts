@@ -7293,7 +7293,7 @@ export interface components {
             } | null)[] | null;
             /**
              * Excluded Rows
-             * @description Rows of `dataset` the plot window does not draw as data (excluded, or dropped by the Data Filter). With `encoding` only: the split takes its levels over every row, then these rows are blanked in each series.
+             * @description Rows of `dataset` the plot window does not draw as data (excluded, or dropped by the Data Filter). With `encoding`: the split takes its levels over every row, then these rows are blanked in each series. With unsplit `facets` (no `encoding`, no `group_col`): each panel names its `rows`, and these rows are blanked in its series.
              */
             excluded_rows?: number[] | null;
             /** Facets */
@@ -7310,7 +7310,7 @@ export interface components {
             fmt?: string;
             /**
              * Grey Excluded
-             * @description With `excluded_rows`: also draw those rows as one grey, line-free '(excluded)' marker series per series, after all the series.
+             * @description With `excluded_rows`: also draw those rows as one grey, line-free '(excluded)' marker series per series, after all the series (per panel on a facet grid).
              * @default false
              */
             grey_excluded?: boolean;

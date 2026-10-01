@@ -1,7 +1,8 @@
 // F4.2c (a) for the two figure shapes the flat ghost channels cannot carry:
 // a Color/Symbol-ENCODED figure (split server-side, so it sends every row plus
-// an `excluded_rows` mask) and a FACETED one (whose Stage grid never draws
-// excluded rows, so the export offers only the honest "omit"). Driven through
+// an `excluded_rows` mask) and a FACETED one (each panel re-sliced from its
+// full level rows, with the same mask; a SPLIT grid still offers only the
+// honest "omit"). Driven through
 // the real Export figure command and parameter-dialog store; every wait is on
 // dialog STATE, never on a mock having been called.
 
@@ -133,37 +134,58 @@ describe("an encoded figure's export honours the excluded-rows choice", () => {
   });
 });
 
-describe("a faceted figure's export asks with only the honest option", () => {
-  it("offers only omit, says why, and exports the pruned facets", async () => {
-    seed(document({ facetKey: 1 }), [3]);
+describe("a faceted figure's export honours the excluded-rows choice", () => {
+  it("asks both ways; greyed sends each panel's full level rows and the mask", async () => {
+    seed(document({ facetKey: 1 }), [0]);
     const { run } = await startExport();
-    expect(await questionOptions()).toEqual([EXCLUDED_OMIT_OPTION]);
-    expect(useParamDialog.getState().message).toBe(FACET_OMIT_REASON);
-    await answer("Excluded rows", {});
+    expect(await questionOptions()).toEqual([EXCLUDED_GREY_OPTION, EXCLUDED_OMIT_OPTION]);
+    expect(useParamDialog.getState().message ?? "").not.toBe(FACET_OMIT_REASON);
+    await answer("Excluded rows", { mode: EXCLUDED_GREY_OPTION });
     await run;
     const spec = vi.mocked(exportFigure).mock.calls[0][0];
-    expect(spec.facets?.map((f) => f.label)).toEqual(["a", "b"]); // level "c" was only in row 3
+    expect(spec.facets?.map((f) => [f.label, f.x, f.rows])).toEqual([
+      ["a", [1, 3], [0, 2]], ["b", [2], [1]], ["c", [4], [3]],
+    ]);
+    expect(spec.excluded_rows).toEqual([0]);
+    expect(spec.grey_excluded).toBe(true);
   });
 
-  it("dismissing cancels, and a faceted figure without excluded rows is never asked", async () => {
-    seed(document({ facetKey: 1 }), [3]);
+  it("omitted exports the pruned facets with no mask", async () => {
+    seed(document({ facetKey: 1 }), [0]);
+    const { run } = await startExport();
+    await answer("Excluded rows", { mode: EXCLUDED_OMIT_OPTION });
+    await run;
+    const spec = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(spec.facets?.map((f) => [f.label, f.x, f.rows])).toEqual([
+      ["a", [3], undefined], ["b", [2], undefined], ["c", [4], undefined],
+    ]);
+    expect(spec).not.toHaveProperty("excluded_rows");
+  });
+
+  it("dismissing cancels; nothing is asked when no panel holds an excluded row", async () => {
+    seed(document({ facetKey: 1 }), [0]);
     const first = await startExport();
     await answer("Excluded rows", null);
     await first.run;
     expect(exportFigure).not.toHaveBeenCalled();
     expect(useApp.getState().status).toBe("export cancelled");
 
-    seed(document({ facetKey: 1 }));
+    // Row 3 is level "c"'s only row: that level has no panel, so greyed and
+    // omitted draw the same grid.
+    seed(document({ facetKey: 1 }), [3]);
     await (await startExport()).run;
     expect(useParamDialog.getState().title).toBeNull();
-    expect(vi.mocked(exportFigure).mock.calls[0][0].facets).toHaveLength(3);
+    const spec = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(spec.facets?.map((f) => f.label)).toEqual(["a", "b"]);
+    expect(spec).not.toHaveProperty("excluded_rows");
   });
 
-  it("the omit-only reason survives a page spec's panel copy and never reaches the wire", () => {
-    const ds: Dataset = { id: "d1", name: "scan.dat", data: DATA, excludedRows: [3] };
-    const grey = buildFigureSpecFromDocument(document({ facetKey: 1 }), ds, "f", { greyExcluded: withExcludedGhosts });
+  it("a split grid still omits, and its reason survives a page spec's panel copy off the wire", () => {
+    const ds: Dataset = { id: "d1", name: "scan.dat", data: DATA, excludedRows: [0] };
+    const split = { ...buildFigureSpecFromDocument(document({ facetKey: 1 }), ds, "f"), group_col: 0 };
+    const grey = withExcludedGhosts(split, DATA, new Set([0]), { col: 1, yKeys: [0] });
     expect(omitOnlyReason(grey)).toBe(FACET_OMIT_REASON);
     expect(omitOnlyReason({ panels: [{ figure: { ...grey } }] })).toBe(FACET_OMIT_REASON);
-    expect(JSON.stringify(grey)).toBe(JSON.stringify(buildFigureSpecFromDocument(document({ facetKey: 1 }), ds, "f")));
+    expect(JSON.stringify(grey)).toBe(JSON.stringify(split));
   });
 });

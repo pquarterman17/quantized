@@ -9337,63 +9337,62 @@ see it half-built.
 - [x] Graph Builder X well cannot pick the dataset's own X: a negative channel is passed straight through as a column index in `specToRender`, `plotEncoding.ts`, `plotSpecFigure.ts`, `useGraphBuilder` and `captureLiveBlocks`. **Done 2026-09-29** (`d944669c`): the spec model reserves `OWN_X_CHANNEL` and every consumer resolves the plotted X through `specXKey` (`lib/plotspecGroupCol.ts`); pinned by `useGraphBuilder.ownX.test.ts`.
 - [x] Peak batch fits never send `y_err` (the error-column choice is per active dataset).
 - [x] Legend rows for selected-row highlight companions use the palette colour, not the accent the canvas draws.
-- [ ] Perf, measured but not yet done: ~~cell-patch uploads instead of a full re-upload per edit, plus in-flight de-dupe across plot windows~~ (done 2026-09-30, `6df85c8f`: `POST /api/datasets/patch` + `lib/api/datasetCache.ts`'s per-object `pending` WeakMap so every window shares one in-flight upload); ~~JSON body parsing off the event loop~~ (done 2026-09-30, `843bd4b8`: `routes/_offloop.py`, dataset bodies decoded in the threadpool); ~~uPlot `setSeries`/redraw instead of rebuild for hide/colour~~ (done 2026-09-30, `bed8f987`: `lib/uplotLivePaint.ts`); **binary column transport for full-resolution plots — still open, landing in a separate worktree**; ~~an encoding-active rename still refetches (`useStageEncoding` keyed on `active`)~~ (done 2026-09-29).
+- [x] Perf, measured but not yet done: ~~cell-patch uploads instead of a full re-upload per edit, plus in-flight de-dupe across plot windows~~ (done 2026-09-30, `6df85c8f`: `POST /api/datasets/patch` + `lib/api/datasetCache.ts`'s per-object `pending` WeakMap so every window shares one in-flight upload); ~~JSON body parsing off the event loop~~ (done 2026-09-30, `843bd4b8`: `routes/_offloop.py`, dataset bodies decoded in the threadpool); ~~uPlot `setSeries`/redraw instead of rebuild for hide/colour~~ (done 2026-09-30, `bed8f987`: `lib/uplotLivePaint.ts`); ~~binary column transport for full-resolution plots~~ (done 2026-09-30, `5e7a2365`: `routes/_columns.py` + `lib/api/plotColumns.ts`); ~~an encoding-active rename still refetches (`useStageEncoding` keyed on `active`)~~ (done 2026-09-29).
+- [x] Graph Builder preview: a Group-alone faceted spec is unsplit (`lib/plotEncoding.ts` `encodeSpec` still uses `facetEncoding`); Stage/export split it. **Done 2026-10-01** (`6e85b5ff`): `encodeSpec` goes through `facetSplitEncoding` with the group channel, pinned by the `group` entry of `facet_styles.json`.
 
 ## Owner-gated
 
 Open work that needs the owner's judgment, machine, data or MATLAB — not
 code. One line per category, with the plan boxes it covers (line numbers as
-of 2026-09-30; grep by content when they drift).
+of 2026-10-01; grep by content when they drift).
 
 - **Real-use sessions and timings** — `PRIMARY_SOFTWARE_AUDIT_PLAN.md` P0
   representative-project rows (~300–317: pick the project, time
   import-to-first-plot / production figure / routine fit, log every impulse
-  to open Origin/JMP) and the release-acceptance rows (~10691–10704);
+  to open Origin/JMP) and the release-acceptance rows (~10714–10727);
   `LIBRARY_WORKBOOK_UX_PLAN.md` ~3405 (revisit L0.44 after real cross-workbook
   work); `ORIGIN_REPLACEMENT_ONE_WEEK_SPRINT.md` Day-4 SOL review row.
 - **Windows/macOS packaging and the Office paste check** — PRIMARY ~626
-  (packaged Windows/macOS E2E), ~8633 (scaling/high-DPI readability),
-  ~9515/~9763 (vector copy, 300-DPI fallback, EMF only on evidence),
-  ~10617–10623 (signing, notarization, fresh-machine install, updater);
-  BUGS BUG-030 residual (~8960: the `tauri://localhost` allowance can only be
+  (packaged Windows/macOS E2E), ~8642 (scaling/high-DPI readability),
+  ~9530/~9778 (vector copy, 300-DPI fallback, EMF only on evidence),
+  ~10641–10643 (signing, notarization, fresh-machine install, updater);
+  BUGS BUG-030 residual (~8964: the `tauri://localhost` allowance can only be
   removed after a packaged-app check).
 - **Real GPU / network measurements** — PRIMARY ~395 (network/offline source
   transitions), ~403/~423 (direct-manipulation <100 ms on real hardware,
-  failed thresholds need profiles), ~5938 (regrid bottleneck on a real
-  4M-point map), ~10700 (large 2-D / long sessions); P3.3 R14 (~6936, needs
+  failed thresholds need profiles), ~5947 (regrid bottleneck on a real
+  4M-point map), ~10722 (large 2-D / long sessions); P3.3 R14 (~6945, needs
   real IME hardware).
 - **Origin screenshot / visual review** — PRIMARY ~326–331 (the 62 paired
   screenshots; graphic objects / >2 Y axes only on reviewed evidence),
-  ~10630–10633 (decode-plan #53/#54, `.opju` matrix edges, Rigaku/SPC/Oxford
-  wait for specimens), ~10483 (visual equivalence of the nine fixtures);
+  ~10652–10656 (decode-plan #53/#54, `.opju` matrix edges, Rigaku/SPC/Oxford
+  wait for specimens), ~10505 (visual equivalence of the nine fixtures);
   live-Origin COM send on the owner's Windows machine (`PORT_CHECKLIST.md`
   COM row).
-- **Owner instrument data** — PRIMARY ~3602 / ~3661–3662 / ~3683 (validate
+- **Owner instrument data** — PRIMARY ~3611 / ~3670–3672 / ~3692 (validate
   XRD phases, XRR/PNR fits and SIMS on representative owner instruments
   against trusted reference fits), the Bruker RAW byte-624/632 decode
-  (~3390); BUGS BUG-001 ~176 (a second Reductus `.refl` variant before
+  (~3391); BUGS BUG-001 ~176 (a second Reductus `.refl` variant before
   broadening name matching).
 - **MATLAB goldens** — PRIMARY ~3394 (per-peak uncertainties for the legacy
   `fit_multi_peak` / `fit_peak` producers and weighted Williamson-Hall need a
-  MATLAB freeze first); BUGS BUG-029 ~8918 (whether MATLAB `parrattRefl`
+  MATLAB freeze first); BUGS BUG-029 ~8922 (whether MATLAB `parrattRefl`
   should change its imaginary-SLD sign — sibling repo, deliberate change
   only).
 - **Decisions** — PRIMARY: CVD default-palette gap and the `tol-bright`
-  `#999933` 8th slot (~8232/~8326/~8364–8365); the raw-code data-export
+  `#999933` 8th slot (~8241/~8348/~8373–8374); the raw-code data-export
   question (~1416); F4.2c's per-figure outlier-policy question (~821/~858);
-  the SMB-timeout save policy (~617); P3.3 R10 (~6181/~6600, Escape-to-close
+  the SMB-timeout save policy (~617); P3.3 R10 (~6190/~6609, Escape-to-close
   on the multi-plot document frame is a product call); BUGS UX-002 ~712/~716
   (what lineage means across a copy boundary; "copy with dependents"),
-  BUG-030 ~8960 (drop the Tauri allowance); FIGURE F2.1f/g (BACKLOG owner
+  BUG-030 ~8964 (drop the Tauri allowance); FIGURE F2.1f/g (BACKLOG owner
   table D-1 auto-migrate, D-3 graph templates, D-4 retire legacy mode);
   LIBRARY ~3405 (folder-level behaviour after real use).
-- [ ] Perf, measured but not yet done: cell-patch uploads instead of a full re-upload per edit, plus in-flight de-dupe across plot windows; JSON body parsing off the event loop; uPlot `setSeries`/redraw instead of rebuild for hide/colour; ~~binary column transport for full-resolution plots~~ (done 2026-09-30); ~~an encoding-active rename still refetches (`useStageEncoding` keyed on `active`)~~ (done 2026-09-29).
 
 ## Completed
 
 - 2026-09-30 — Plan reconciliation against `c74776d5`: the 2026-09-29 audit's Graph Builder own-X box and three of the perf clauses (cell patches, off-loop body decode, uPlot `setSeries`) ticked with commits; BUG-018's ARIA box closed via R12; BUG-001's struck-through inference box closed; PRIMARY's clients/types + growth-ratchet rows, the manual-peak-edit/batch-recipe row, PORT_CHECKLIST's Origin COM row, the sprint's two lane-N rows (deferred with evidence) and FIGURE F2.1 (restated blocked) / F4.4's stale `[~]` note reconciled; new "Owner-gated" section above lists everything that waits on the owner.
 - 2026-09-30: "Copy figure (vector)" sends `svg_text_as_paths: true` (clipboard only; the SVG file export keeps editable text). The canonical Publication Preview draws masked rows per the app's "Excluded rows" mode (greyed companions / hidden) exactly as its export does, with the wire dataset object reused across unrelated edits so the dataset-handle cache still hits (`canonicalReadiness.ts`).
-- 2026-09-30 — Facet grid encodings (P1.4 residual 3 follow-ups): an encoded xy facet grid with no explicit Y splits the flat plot's default channel list, the same in every panel, on screen and in the export (`lib/facet.facetSplitChannels`); a sheet with no default Y stays unencoded and the Graph Builder says why in one sentence.
 - 2026-09-30 — Facet grid encodings (P1.4 residual 3 follow-ups): an encoded xy facet grid with no explicit Y splits the flat plot's default channel list, the same in every panel, on screen and in the export (`lib/facet.facetSplitChannels`); a sheet with no default Y stays unencoded and the Graph Builder says why in one sentence. Group ALONE on a facet grid now splits each panel's series by level like the flat plot, on screen and in the export (`facetSplitEncoding`; `group_col` + panel `rows`/`channels` on the wire), pinned by the `group` entry of `tests/fixtures/wire/facet_styles.json`.
 - 2026-09-29: Reorder levels refuses a re-derived dataset (the recalc drops `level_order`); recode stays allowed (its formula column survives the recalc). Selected-row legend rows draw a filled accent marker. An encoded Stage no longer refetches on a dataset rename. Peak batch sends each dataset's own error column as `y_err`.
 - 2026-09-29 — Worksheet: paste, fill-down, copy, cut and clear follow the visible (sorted/filtered) row order and never touch hidden rows; sort and filter reset on a dataset switch; paste maps categorical labels to level codes (unknown labels extend the table, one undo) and skips non-numeric or ambiguous ("1,5") text with a count; the stats footer sends finite values only and is debounced 300 ms; the exclusion Set is built once per call.
@@ -9419,3 +9418,9 @@ of 2026-09-30; grep by content when they drift).
 - 2026-09-30: Quick Plot on a recognized XYXYXY workbook now makes three correctly paired series (`lib/quickPlot.xyxyxy.test.ts`; LIBRARY_WORKBOOK_UX_PLAN acceptance scenario ticked).
 - 2026-09-30: Plot recipes rebuild SPATIAL multi-panel compositions (schema v3 `panels` + `map`, by dataset name/column label; missing bindings get a rebind picker in the apply dialog) — closes PRIMARY_SOFTWARE_AUDIT_PLAN P1.3 maps/panels + F4.2b/F4.4 spatial halves.
 - 2026-09-30 — perf: opt-in binary column transport for `/api/plot/series` (`Accept: application/x-quantized-columns`; JSON header + LE float64 columns, NaN gaps); `plotSeries` uses it above 50k rows via a lazy decoder and falls back to JSON on any failure. 1M×7 full-res: route 1.089 s / 146.3 MB → 0.179 s / 64.0 MB; client decode best 830 → 376 ms. Numbers in `docs/performance_envelope.md`.
+- 2026-10-01: The ROI batch's unexpected-failure toast reports the partial outcome ("batch failed: N of M succeeded; first failure: …") instead of a bare "batch failed" (`useRoiBatch.test.ts`); closes PRIMARY's "errors say what failed" box.
+- 2026-10-01: Graph Builder preview of a faceted spec with only Group set now splits each panel by level, matching the Stage and export (`encodeSpec` via `facetSplitEncoding`; pinned to the `group` entry of `tests/fixtures/wire/facet_styles.json` in `lib/plotEncodingFacets.test.ts`).
+- 2026-10-01: Find in project searches text-column CELLS through a lazily built per-dataset index (WeakMap on the `text_columns` object; chunked main-thread slices above 250k cells, not a Worker — cloning cells to one costs more than the build). One complete, uncapped hit per (dataset, column) with a match count; opening it activates the dataset, shows it in the Library, opens the worksheet and selects the first matching row. Query 3-63 ms at 2M cells, 23-354 ms at 15M (sliced at 8 ms). P1.4 box stays `[~]`: the worksheet grid does not yet scroll to the selected row (`lib/projectSearchCells.test.ts`, `workshops/search/*.test.*`).
+- 2026-10-01: P4.2 screen-canvas structural half: `e2e/specs/regression-matrix-screen.spec.ts` opens all nine matrix fixtures in Chromium and checks the drawn series (colour/width/dash/vertices), ticks, titles, whiskers, decorations, panels and legend against the goldens. Pins three screen-only differences: a facet needs `stackMode` to show its grid, break panels drop explicit series widths (1.5 not 2), the interactive legend shows no `legendTitle`.
+- 2026-10-01: Plot recipes v3 follow-ups — Details name "Panels" / "Panel layout" / "Map"; the thumbnail draws a panel-grid glyph and a map swatch; a composite panel window ("Panel: side by side / stacked / grid") is saved by dataset name + layout (additive v3 `panelWindow`, no version bump) and applied as a new panel window, a missing dataset rebinding through the apply dialog's picker.
+- 2026-10-01 — Excluded rows (F4.2c (a)) on xy facet grids: with "greyed", each facet panel draws its excluded / filter-dropped rows as grey "(excluded)" companions on screen (`Stage/useGreyedFacets`, focused and background windows) and in Export / Copy / page exports (panels carry their full level `rows` plus `excluded_rows` + `grey_excluded`; `calc/figure_facets_excluded.py`). Shared wire fixture `tests/fixtures/wire/facet_excluded.json` (`MultiPanelStage.facetExcluded.test.tsx`, `test_export_facet_excluded.py`). Split facet grids (Color / Symbol / Label / Group) still omit, and say why.

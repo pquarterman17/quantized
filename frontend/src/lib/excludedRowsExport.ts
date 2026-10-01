@@ -32,13 +32,19 @@
 // the companions itself (`calc/figure_excluded.py`), with the split's levels
 // over every row, as the window takes them.
 //
-// A FACETED request cannot grey: the Stage's facet grid is built from the
-// pruned view and never draws excluded rows. Its grey build is returned as an
-// unchanged copy tagged with the reason (`omitOnlyReason`, a symbol key that
-// never reaches the wire), so the export asks with only the honest option.
+// A FACETED request greys server-side too, as the Stage's facet grid does
+// (`lib/facetExcluded.ts`): each panel is re-sliced from its full level rows
+// and names the dataset `rows` behind them, and the request carries
+// `excluded_rows` + `grey_excluded`; the route draws the companions
+// (`calc/figure_facets_excluded.py`). A SPLIT facet grid (Color / Symbol /
+// label source, or Group) still cannot grey, on screen or on paper: its grey
+// build is returned as an unchanged copy tagged with the reason
+// (`omitOnlyReason`, a symbol key that never reaches the wire), so the export
+// asks with only the honest option.
 
 import type { FigureSpec } from "./api/figures";
-import type { ExcludedRowsGhoster } from "./figureSpec";
+import { greyFacetSpecs } from "./facetExcluded";
+import type { ExcludedFacetBinding, ExcludedRowsGhoster } from "./figureSpec";
 import type { ExportSeriesStyle } from "./exportStyles";
 import { activeRowIndices } from "./rowstate";
 import { sliceRowSidecars } from "./rowSidecars";
@@ -50,7 +56,7 @@ export type ExcludedRowsExport = "grey" | "omit";
 
 /** Why a figure with masked rows can only omit them (see the module header). */
 export const FACET_OMIT_REASON =
-  "Faceted figures cannot draw excluded rows greyed, so this export leaves them out.";
+  "Faceted figures split by Color, Symbol, Label or Group cannot grey excluded rows, so this export leaves them out.";
 const OMIT_ONLY = Symbol("excludedRowsOmitOnly");
 
 /** A copy of `spec` tagged with why it cannot grey (never serialized). */
@@ -93,12 +99,13 @@ export function withExcludedGhosts(
   spec: FigureSpec,
   data: DataStruct,
   dropped: ReadonlySet<number>,
+  facet?: ExcludedFacetBinding,
 ): FigureSpec {
   const n = data.time.length;
   const plotted = spec.y_keys;
   if (dropped.size === 0) return spec;
+  if (spec.facets) return withFacetGhosts(spec, spec.facets, data, dropped, facet);
   if (spec.encoding) return spec.excluded_rows?.length ? { ...spec, grey_excluded: true } : spec;
-  if (spec.facets) return [...dropped].some((r) => r >= 0 && r < n) ? omitOnly(spec, FACET_OMIT_REASON) : spec;
   if (!plotted?.length) return spec;
   if (plotted.some((k) => typeof k !== "number")) return spec;
   const kept = activeRowIndices(n, dropped);
@@ -144,6 +151,25 @@ export function withExcludedGhosts(
     ...(spec.waterfall_offsets ? { waterfall_offsets: repeat(spec.waterfall_offsets) } : {}),
     ...(spec.log_offsets ? { log_offsets: repeat(spec.log_offsets) } : {}),
   };
+}
+
+/** `withExcludedGhosts` for a faceted spec (see the module header). */
+function withFacetGhosts(
+  spec: FigureSpec,
+  facets: NonNullable<FigureSpec["facets"]>,
+  data: DataStruct,
+  dropped: ReadonlySet<number>,
+  facet: ExcludedFacetBinding | undefined,
+): FigureSpec {
+  const lost = [...dropped].filter((r) => r >= 0 && r < data.time.length).sort((a, b) => a - b);
+  if (lost.length === 0) return spec;
+  const xKey = typeof spec.x_key === "number" ? spec.x_key : null;
+  const split = !!spec.encoding || spec.group_col != null;
+  const grey = facet && !split ? greyFacetSpecs(facets, data, facet, xKey, dropped) : null;
+  if (!grey) return omitOnly(spec, FACET_OMIT_REASON);
+  // Only rows of a level with no panel are dropped: the grid greys nothing.
+  if (!grey.some((f) => f.rows?.some((r) => dropped.has(r)))) return spec;
+  return { ...spec, facets: grey, excluded_rows: lost, grey_excluded: true };
 }
 
 /** The transform a builder is handed for the app-wide display mode — what

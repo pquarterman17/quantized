@@ -101,7 +101,7 @@ describe("withExcludedGhosts (F4.2c (a))", () => {
     const base: FigureSpec = { dataset: { ...DATA, time: [1, 3, 4], values: [] }, y_keys: [0] };
     const faceted = { ...base, facets: [] as never[] };
     const encoded = { ...base, encoding: { color_col: 2 } };
-    // A faceted request cannot grey: an unchanged wire, tagged with the reason.
+    // A faceted request without its facet binding cannot grey: unchanged, with the reason.
     const facetedGrey = withExcludedGhosts(faceted, DATA, new Set([1]));
     expect(JSON.stringify(facetedGrey)).toBe(JSON.stringify(faceted));
     expect(omitOnlyReason(facetedGrey)).toBe(FACET_OMIT_REASON);
