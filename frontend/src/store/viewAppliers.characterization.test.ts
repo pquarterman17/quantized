@@ -21,7 +21,7 @@
 //      the undo label pushed (or that none is), and the macro step recorded.
 //      (Undo-coverage audit, 2026-10-01: every applyOriginFigure branch now
 //      pushes ONE "apply Origin figure" entry, so `history`/`future` join each
-//      of its key sets.)
+//      of its key sets; `breakAtGaps` now pushes ONE "break at gaps" entry too.)
 //
 // The no-op branches are pinned the same way, with an EMPTY changed set: a
 // missing dataset, an empty analysis view, a column with no finite levels, no
@@ -550,9 +550,11 @@ describe("breakAtGaps — the x-break applier", () => {
       "composition",
       "errKeys",
       "facetKey",
+      "future",
       "gadgetBusy",
       "gadgetError",
       "hiddenChannels",
+      "history",
       "plotWindows",
       "qfitBusy",
       "qfitError",
@@ -587,8 +589,10 @@ describe("breakAtGaps — the x-break applier", () => {
     expect(changedSince(before)).toEqual([
       "composition",
       "facetKey",
+      "future",
       "gadgetBusy",
       "gadgetError",
+      "history",
       "plotWindows",
       "qfitBusy",
       "qfitError",
@@ -606,8 +610,55 @@ describe("breakAtGaps — the x-break applier", () => {
     expect(s.activeId).toBe("g1");
   });
 
-  it("pushes NO undo entry of its own", () => {
+  // Undo-coverage audit (2026-10-01): this used to pin "pushes NO undo
+  // entry", so Ctrl+Z after a break silently reverted whatever edit came
+  // BEFORE it while the break stayed on screen. It now records like
+  // `facetByColumn` does — one entry, folded with `setActive`'s own.
+  it("pushes exactly ONE undo entry, labeled 'break at gaps'; undo restores the pre-break view", () => {
+    useApp.setState({ activeId: "g1" });
+    const pre = useApp.getState();
     useApp.getState().breakAtGaps("g1");
+    expect(labels()).toEqual(["break at gaps"]);
+    const post = useApp.getState();
+    useApp.getState().undo();
+    const undone = useApp.getState();
+    // `composition` is a render cache outside the snapshot (HISTORY_EXCLUDED):
+    // undo clears it like a dataset switch, so the break is gone; the durable
+    // bindings (`stackMode`, `facetKey`) come back from the snapshot.
+    expect(undone.composition).toBeNull();
+    expect(undone.stackMode).toBe(pre.stackMode);
+    expect(undone.facetKey).toBe(pre.facetKey);
+    expect(undone.activeId).toBe("g1");
+    // Redo restores the bindings; the break panels themselves are that same
+    // excluded render cache, which nothing rebuilds for a break (a facet has
+    // the `facetKey` fallback) — see the HISTORY_EXCLUDED `composition` entry.
+    useApp.getState().redo();
+    expect(useApp.getState().stackMode).toBe(post.stackMode);
+    expect(useApp.getState().facetKey).toBeNull();
+  });
+
+  it("breaking a DIFFERENT dataset is still ONE entry; undo restores the old active dataset", () => {
+    useApp.getState().breakAtGaps("g1");
+    expect(labels()).toEqual(["break at gaps"]);
+    useApp.getState().undo();
+    expect(useApp.getState().activeId).toBe("d2");
+  });
+
+  it("folds setActive's own 'create window' push (pinned focused window) into the ONE entry", () => {
+    const focusedId = useApp.getState().focusedWindowId;
+    useApp.setState({
+      plotWindows: useApp.getState().plotWindows.map((w) =>
+        w.id === focusedId ? { ...w, pinned: true } : w,
+      ),
+    });
+    useApp.getState().breakAtGaps("g1");
+    expect(labels()).toEqual(["break at gaps"]);
+    expect(useApp.getState().history[0]?.snapshot.activeId).toBe("d2");
+  });
+
+  it("a refused break (no qualifying gap) pushes NO undo entry", () => {
+    useApp.setState({ datasets: [ds("d2", chData("Book2"))] });
+    useApp.getState().breakAtGaps("d2");
     expect(labels()).toEqual([]);
   });
 

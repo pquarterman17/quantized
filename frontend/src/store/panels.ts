@@ -19,9 +19,12 @@
 // cell-header drag drops into (`components/windows/PanelCell.tsx`); the pure
 // splice lives in `lib/panelwindow.reorderPanelDatasetIds` so it's unit-
 // testable without a store. `removeFromPanel` is the header ✕ chip's
-// mutation, same shape. Neither calls `recordHistory` — window-level
-// mutations (geometry, kind, this file's own `createPanelWindow`) aren't
-// part of the undo stack, only dataset/library edits are.
+// mutation, same shape.
+//
+// Undo: all three record ONE step before their `set()`, like every
+// window-creating/-editing action in windows.ts (`plotWindows` is in the undo
+// snapshot). A reorder/remove that would change nothing records nothing, so
+// Ctrl+Z never lands on a phantom step.
 
 import {
   cascadeGeometry,
@@ -36,6 +39,7 @@ import type { AppState } from "./useApp";
 import { maxZ, nextWindowId } from "./windows";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
+type SliceGet = () => AppState;
 
 // Composite windows default larger than a plain plot window (`cascadeGeometry`'s
 // 480x360) — they hold multiple sub-plots (or a merged overlay with a wider
@@ -65,10 +69,11 @@ export interface PanelsSlice {
   removeFromPanel: (windowId: string, datasetId: string) => void;
 }
 
-export function createPanelsSlice(set: SliceSet): PanelsSlice {
+export function createPanelsSlice(set: SliceSet, get: SliceGet): PanelsSlice {
   return {
     createPanelWindow: (datasetIds, layout) => {
       const id = nextWindowId();
+      get().recordHistory("create panel window");
       set((s) => {
         const names = datasetIds
           .map((did) => s.datasets.find((d) => d.id === did)?.name)
@@ -96,28 +101,26 @@ export function createPanelsSlice(set: SliceSet): PanelsSlice {
       return id;
     },
     reorderPanelDatasets: (windowId, fromIndex, toIndex) => {
-      set((s) => {
-        const win = s.plotWindows.find((w) => w.id === windowId);
-        if (!win?.panel) return {};
-        const datasetIds = reorderPanelDatasetIds(win.panel.datasetIds, fromIndex, toIndex);
-        return {
-          plotWindows: s.plotWindows.map((w) =>
-            w.id === windowId && w.panel ? { ...w, panel: { ...w.panel, datasetIds } } : w,
-          ),
-        };
-      });
+      const old = get().plotWindows.find((w) => w.id === windowId)?.panel?.datasetIds;
+      if (!old) return;
+      const datasetIds = reorderPanelDatasetIds(old, fromIndex, toIndex);
+      if (datasetIds.every((id, i) => id === old[i])) return;
+      get().recordHistory("reorder panel");
+      setPanelIds(set, windowId, datasetIds);
     },
     removeFromPanel: (windowId, datasetId) => {
-      set((s) => {
-        const win = s.plotWindows.find((w) => w.id === windowId);
-        if (!win?.panel) return {};
-        const datasetIds = removePanelDatasetId(win.panel.datasetIds, datasetId);
-        return {
-          plotWindows: s.plotWindows.map((w) =>
-            w.id === windowId && w.panel ? { ...w, panel: { ...w.panel, datasetIds } } : w,
-          ),
-        };
-      });
+      const old = get().plotWindows.find((w) => w.id === windowId)?.panel?.datasetIds;
+      if (!old?.includes(datasetId)) return;
+      get().recordHistory("remove from panel");
+      setPanelIds(set, windowId, removePanelDatasetId(old, datasetId));
     },
   };
+}
+
+function setPanelIds(set: SliceSet, windowId: string, datasetIds: string[]): void {
+  set((s) => ({
+    plotWindows: s.plotWindows.map((w) =>
+      w.id === windowId && w.panel ? { ...w, panel: { ...w.panel, datasetIds } } : w,
+    ),
+  }));
 }

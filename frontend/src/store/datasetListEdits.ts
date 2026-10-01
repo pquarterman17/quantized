@@ -8,9 +8,9 @@
 //
 // WHAT THIS MODULE OWNS: the Library's list edits — remove (one / the
 // selection / an id list, to Trash or permanently), merge the selection,
-// duplicate, reorder, rename — plus the folder tree (create / rename / delete
-// / move / move-a-dataset / expand) and the smart folders (add / edit /
-// remove). 16 actions. The three folder collections (`folders`,
+// duplicate, reorder, rename — plus the folder tree (create / rename / edit
+// properties / delete / move / move-a-dataset / expand) and the smart folders
+// (add / edit / remove). 17 actions. The three folder collections (`folders`,
 // `expandedFolders`, `smartFolders`) are declared and initialized HERE (an
 // own-state slice, store/gadget.ts's shape); `datasets` stays on AppState —
 // every slice writes it. The selection/activation group (setActive,
@@ -18,14 +18,15 @@
 // `activeId`/`selectedIds`/`worksheetId` fields live in ./datasetSelection.
 //
 // Not exclusive write access: other slices still write the folder fields as
-// part of their own gestures (libraryPanel.ts's updateFolder, splitRun.ts's
-// split-into-folder, trash.ts's restore, workspaceHydration.ts's .dwk load).
+// part of their own gestures (splitRun.ts's split-into-folder, trash.ts's restore, workspaceHydration.ts's .dwk load).
 //
 // Contract: every action here except `toggleFolderExpanded`, `mergeSelected`,
 // the blank-name `addSmartFolder`, the empty `removeSelected` and the
 // permanent `removeDatasets` records
 // ONE undo step BEFORE its `set()` (so the snapshot is the pre-mutation
-// state). None toasts or records a macro step. `mergeSelected` writes only
+// state). `toggleFolderExpanded` is view state, not an edit: undo/redo keep
+// the live expand state (historySnapshot.ts's `restoredExpandedFolders`).
+// None toasts or records a macro step. `mergeSelected` writes only
 // the Reshape & combine dialog store, never this one. The heavy bodies stay
 // where they were already homed: `removeDatasetsWithTrash`
 // (./removeDatasets) and `deleteFolderWithTrash` (./folderDelete).
@@ -46,6 +47,7 @@ import {
   moveDatasetToFolder as treeMoveDatasetToFolder,
   moveFolder as treeMoveFolder,
   renameFolder as treeRenameFolder,
+  updateFolder as treeUpdateFolder,
 } from "../lib/foldertree";
 import type { SmartFolder } from "../lib/smartfolders";
 import { nextStageTab } from "../lib/stagetab";
@@ -93,14 +95,16 @@ export interface DatasetListEditsSlice {
   // lib/foldertree; datasets stay a flat array (membership is Dataset.folderId).
   createFolder: (parentId: string | null, name?: string) => string;
   renameFolder: (id: string, name: string) => void;
+  /** Folder Properties (notes/colour/defaultTemplate) as its OWN undo step;
+   *  `renameFolder` owns the name. Moved here from libraryPanel.ts, which has
+   *  no `get` to record with. */
+  updateFolder: (id: string, patch: { notes?: string; color?: string; defaultTemplate?: string }) => void;
   deleteFolder: (id: string, mode?: "reparent" | "cascade") => void;
   moveFolder: (id: string, newParentId: string | null, beforeId?: string) => void;
   moveDatasetToFolder: (id: string, folderId: string | null, beforeId?: string) => void;
   /** Move a multi-selection into `folderId` (null = top level) as ONE undo step. */
   moveDatasetsToFolder: (ids: readonly string[], folderId: string | null) => void;
   toggleFolderExpanded: (id: string) => void;
-  // updateFolder (Properties: notes/colour/defaultTemplate) lives on
-  // LibraryPanelSlice (store/libraryPanel.ts) — ratchet headroom.
   // Smart folders (item 9): saved queries only — membership is derived.
   addSmartFolder: (name: string, query: string) => void;
   updateSmartFolder: (id: string, name: string, query: string) => void;
@@ -246,6 +250,7 @@ export function createDatasetListEditsSlice(set: SliceSet, get: SliceGet): Datas
       return id;
     },
     renameFolder: (id, name) => (get().recordHistory("rename folder"), set((s) => ({ folders: treeRenameFolder(s.folders, id, name) }))),
+    updateFolder: (id, patch) => (get().recordHistory("edit folder properties"), set((s) => ({ folders: treeUpdateFolder(s.folders, id, patch) }))),
     deleteFolder: (id, mode = "reparent") => deleteFolderWithTrash(get, set, id, mode),
     moveFolder: (id, newParentId, beforeId) => (get().recordHistory("move folder"), set((s) => ({ folders: treeMoveFolder(s.folders, id, newParentId, beforeId) }))),
     moveDatasetToFolder: (id, folderId, beforeId) => (get().recordHistory("move dataset"), set((s) => ({ datasets: treeMoveDatasetToFolder(s.datasets, id, folderId, beforeId) }))),

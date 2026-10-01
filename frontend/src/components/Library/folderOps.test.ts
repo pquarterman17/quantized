@@ -250,6 +250,26 @@ describe("openFolderProperties (GUI_INTERACTION_PLAN #13 sub-item 4)", () => {
     expect(f.color).toBeUndefined();
   });
 
+  // Undo-coverage audit (2026-10-01): with a blank name `renameFolder` never
+  // ran, so the notes/colour change rode whatever entry came before it.
+  it("one dialog is ONE undo step, even with a blank name (do -> undo -> compare)", async () => {
+    useApp.setState({ history: [], future: [] });
+    useApp.getState().moveDatasetToFolder("d3", "grp"); // an unrelated earlier edit
+    const pre = useApp.getState().folders;
+    vi.mocked(askParams).mockResolvedValue({ name: "", notes: "n", color: "amber" });
+    await openFolderProperties(fld("grp"));
+    useApp.getState().undo();
+    expect(useApp.getState().folders).toEqual(pre);
+    expect(useApp.getState().datasets.find((d) => d.id === "d3")?.folderId).toBe("grp");
+
+    const depth = useApp.getState().history.length;
+    vi.mocked(askParams).mockResolvedValue({ name: "Renamed", notes: "n", color: "amber" });
+    await openFolderProperties(fld("grp"));
+    expect(useApp.getState().history.map((h) => h.label).slice(depth)).toEqual(["edit folder properties"]);
+    useApp.getState().undo();
+    expect(useApp.getState().folders).toEqual(pre);
+  });
+
   it("a cancelled dialog changes nothing", async () => {
     vi.mocked(askParams).mockResolvedValue(null);
     await openFolderProperties(fld("grp"));

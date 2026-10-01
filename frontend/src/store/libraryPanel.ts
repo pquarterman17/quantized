@@ -5,7 +5,7 @@
 // architecture.test.ts size-ratchet pin (same "small new slice" reasoning as
 // every other extracted slice).
 //
-// Four concerns share this one small file (kept small so an over-budget
+// These concerns share this one small file (kept small so an over-budget
 // useApp.ts can shed a self-contained block here post-merge with main's
 // #7/#10/#14 slices, rather than raise the ratchet pin):
 //   - `libraryPanelWidth` — the resizable Library panel's width. Its VALUE
@@ -21,11 +21,6 @@
 //     + selects the row, then calls `clearReveal()`). Transient, like
 //     `selectedAnnotationId` — never persisted, never reset on focus/window
 //     switches.
-//   - `updateFolder` — Folder Properties (sub-item 4: notes/colour/
-//     defaultTemplate). Lives HERE rather than alongside the other folder
-//     actions in useApp.ts purely for ratchet headroom; it's still a normal
-//     top-level store field at runtime (see pointerTool.ts's header for why
-//     that's safe) — `renameFolder` (useApp.ts) still owns the name.
 //   - `activeDrag` — GUI_INTERACTION #3 sub-item 2b's "reveal every valid
 //     drop target the moment a drag starts" state. Set by a dataset/folder
 //     row's `.qzk-drag-handle` `onDragStart` (cleared on `onDragEnd`) — the
@@ -85,7 +80,6 @@
 // session — a decoder-diagnostics disclosure toggle isn't project data worth
 // persisting to disk, just worth surviving one session's searches.
 
-import { updateFolder as treeUpdateFolder } from "../lib/foldertree";
 import { lastPointerPress, type PointerPress } from "../lib/lastPointerPress";
 import type { AppState } from "./useApp";
 
@@ -122,7 +116,6 @@ export interface LibraryPanelSlice {
   requestReveal: (target: string) => void;
   /** Consumed by Library.tsx once the reveal has run. */
   clearReveal: () => void;
-  updateFolder: (id: string, patch: { notes?: string; color?: string; defaultTemplate?: string }) => void;
   /** GUI_INTERACTION #3 sub-item 2b — see the module doc above. */
   activeDrag: ActiveDrag | null;
   setActiveDrag: (drag: ActiveDrag | null) => void;
@@ -181,7 +174,6 @@ export function createLibraryPanelSlice(set: SliceSet, initialWidth: number): Li
     revealTarget: null,
     requestReveal: (target) => set({ revealTarget: target }),
     clearReveal: () => set({ revealTarget: null }),
-    updateFolder: (id, patch) => set((s) => ({ folders: treeUpdateFolder(s.folders, id, patch) })),
     activeDrag: null,
     activeDragPress: null,
     // ONE publish path for BOTH fields. Every drag source — the three Tree

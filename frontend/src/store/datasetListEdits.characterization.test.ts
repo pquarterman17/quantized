@@ -1,9 +1,10 @@
 // Characterization tests for the DATASET-LIST EDITS domain (audit P4.1, the
 // SEVENTH store/useApp.ts domain): removing (one / the selection / an id
 // list, to Trash or permanently), merging the selection, duplicating,
-// reordering and renaming datasets, the folder tree (create / rename / delete
-// / move / move-a-dataset / expand) and the smart folders (add / edit /
-// remove) — 16 actions over `datasets` plus the three folder collections.
+// reordering and renaming datasets, the folder tree (create / rename / edit
+// properties / delete / move / move-a-dataset / expand) and the smart folders
+// (add / edit / remove) — 17 actions over `datasets` plus the three folder
+// collections.
 //
 // Unlike the sixth domain (workshop flags), these DO write `datasets` and DO
 // record undo history, so each spec pins three things through the REAL
@@ -515,6 +516,63 @@ describe("folder tree", () => {
     expect(act().expandedFolders).toEqual(["f2", "f1"]);
     expect(labels()).toEqual([]);
     expectNoSideNotices();
+  });
+
+  // Undo-coverage audit (2026-10-01): expand/collapse is view state, not an
+  // edit, so it records nothing — and undo/redo must therefore KEEP the live
+  // expand state instead of restoring the one captured with an older edit.
+  it("undo/redo of an unrelated edit keep the LIVE expand state (do -> toggle -> undo -> compare)", () => {
+    act().renameFolder("f3", "Three");
+    act().toggleFolderExpanded("f1");
+    const live = act().expandedFolders;
+    expect(live).toEqual(["f2"]);
+    act().undo();
+    expect(act().folders.find((f) => f.id === "f3")?.name).toBe("f3");
+    expect(act().expandedFolders).toBe(live);
+    act().toggleFolderExpanded("f3");
+    const live2 = act().expandedFolders;
+    act().redo();
+    expect(act().folders.find((f) => f.id === "f3")?.name).toBe("Three");
+    expect(act().expandedFolders).toBe(live2);
+  });
+
+  it("Expand all / Collapse all (a direct expandedFolders write) also survives undo", () => {
+    act().renameFolder("f3", "Three");
+    useApp.setState({ expandedFolders: [] }); // what the Library's Collapse all writes
+    act().undo();
+    expect(act().expandedFolders).toEqual([]);
+    useApp.setState({ expandedFolders: ["f1", "f2", "f3"] }); // Expand all
+    act().redo();
+    expect(act().expandedFolders).toEqual(["f1", "f2", "f3"]);
+  });
+
+  it("undoing a folder's creation drops it from the live expand state", () => {
+    const id = act().createFolder(null, "New");
+    act().toggleFolderExpanded(id);
+    act().undo();
+    expect(act().expandedFolders).toEqual(["f1", "f2"]);
+  });
+});
+
+describe("updateFolder (Folder Properties: notes/colour/template)", () => {
+  it("writes ONLY folders (+ history) as its OWN undo step, round-tripping undo/redo", () => {
+    const pre = pick(["folders"]);
+    const before = snapshot();
+    act().updateFolder("f2", { notes: "batch 3", color: "amber" });
+    expect(changedSince(before)).toEqual(["folders", "future", "history"]);
+    expect(act().folders.find((f) => f.id === "f2")).toMatchObject({ notes: "batch 3", color: "amber" });
+    expect(labels()).toEqual(["edit folder properties"]);
+    expectNoSideNotices();
+    expectUndoRedo(pre, ["folders"]);
+  });
+
+  it("does not ride the previous entry: one undo reverts only the properties", () => {
+    act().renameFolder("f3", "Three");
+    act().updateFolder("f3", { notes: "n" });
+    act().undo();
+    const f3 = act().folders.find((f) => f.id === "f3");
+    expect(f3?.notes).toBeUndefined();
+    expect(f3?.name).toBe("Three");
   });
 });
 

@@ -206,3 +206,61 @@ describe("removeFromPanel (cell header's x chip)", () => {
     expect(useApp.getState().plotWindows.find((w) => w.id === id)?.panel?.datasetIds).toEqual(["a", "b"]);
   });
 });
+
+// Undo coverage (audit 2026-10-01): every other window action records, and
+// these three did not — Ctrl+Z after opening/rearranging a panel silently
+// reverted whatever edit came BEFORE it instead. Each spec runs the action,
+// undoes it, compares against the pre-call state, then redoes it.
+describe("panel actions are undoable (do -> undo -> compare)", () => {
+  const labels = (): string[] => useApp.getState().history.map((h) => h.label);
+  const panelIds = (id: string): string[] | undefined =>
+    useApp.getState().plotWindows.find((w) => w.id === id)?.panel?.datasetIds;
+
+  beforeEach(() => {
+    useApp.setState({ history: [], future: [] });
+  });
+
+  it("createPanelWindow records ONE step; undo removes the window, redo brings it back", () => {
+    const pre = useApp.getState().plotWindows;
+    const id = useApp.getState().createPanelWindow(["a", "b"], "grid");
+    const post = useApp.getState().plotWindows;
+    expect(labels()).toEqual(["create panel window"]);
+    useApp.getState().undo();
+    expect(useApp.getState().plotWindows).toEqual(pre);
+    useApp.getState().redo();
+    expect(useApp.getState().plotWindows).toEqual(post);
+    expect(panelIds(id)).toEqual(["a", "b"]);
+  });
+
+  it("reorderPanelDatasets records ONE step; undo restores the old order", () => {
+    const id = useApp.getState().createPanelWindow(["a", "b", "c"], "grid");
+    useApp.setState({ history: [] });
+    useApp.getState().reorderPanelDatasets(id, 0, 2);
+    expect(labels()).toEqual(["reorder panel"]);
+    useApp.getState().undo();
+    expect(panelIds(id)).toEqual(["a", "b", "c"]);
+    useApp.getState().redo();
+    expect(panelIds(id)).toEqual(["b", "c", "a"]);
+  });
+
+  it("removeFromPanel records ONE step; undo puts the dataset back in its cell", () => {
+    const id = useApp.getState().createPanelWindow(["a", "b", "c"], "grid");
+    useApp.setState({ history: [] });
+    useApp.getState().removeFromPanel(id, "b");
+    expect(labels()).toEqual(["remove from panel"]);
+    useApp.getState().undo();
+    expect(panelIds(id)).toEqual(["a", "b", "c"]);
+    useApp.getState().redo();
+    expect(panelIds(id)).toEqual(["a", "c"]);
+  });
+
+  it("a no-op reorder/remove pushes no phantom undo step", () => {
+    const id = useApp.getState().createPanelWindow(["a", "b"], "grid");
+    useApp.setState({ history: [] });
+    useApp.getState().reorderPanelDatasets(id, 1, 1);
+    useApp.getState().reorderPanelDatasets("nope", 0, 1);
+    useApp.getState().removeFromPanel(id, "gone");
+    useApp.getState().removeFromPanel("nope", "a");
+    expect(labels()).toEqual([]);
+  });
+});
