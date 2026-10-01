@@ -20,6 +20,8 @@
 // roving tab stop: the focused row, else the selected row, else the first,
 // clamped to the rendered window so virtualization never leaves the tree
 // with no stop. Only that row's own controls stay tabbable (innerTabIndex).
+// Type-ahead (lib/libraryTreeTypeahead): a printable key on a row jumps to the
+// next row whose name starts with the typed prefix, and is consumed.
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
@@ -35,6 +37,7 @@ import { requestDatasetRemoval } from "../../lib/datasetRemoval";
 import { needsScrollOutFocusFallback, scrollOutFocusProps } from "../../lib/scrollOutFocus";
 import type { FlatLibraryNode, LibraryNode } from "../../lib/libraryHierarchy";
 import { indexOfKey, navigate, treeItemProps, treePositions } from "../../lib/libraryTreeNav";
+import { TYPEAHEAD_IDLE, typeahead, typeaheadChar } from "../../lib/libraryTreeTypeahead";
 import { workbookDeleteActions } from "../../lib/workbookContextActions";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
@@ -77,6 +80,7 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
   // Set by the focus-recovery effect to claim the scroll window for one render,
   // so the selection effect below cannot override it (review round).
   const recoveringRef = useRef(false);
+  const typeaheadRef = useRef(TYPEAHEAD_IDLE);
   const [artifactMenu, setArtifactMenu] = useState<{ x: number; y: number; node: ArtifactNode } | null>(null);
   const folderCounts = useMemo(() => subtreeCountIndex(folders, datasets), [folders, datasets]);
   // E-c3 "keep selection operations indexed": built once per render, not
@@ -193,7 +197,7 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
     // it rather than let it reach the global dataset handlers.
     const rovingIdx = indexOfKey(rows, focusedKeyRef.current);
     const fromContainer = e.target === containerRef.current && rovingIdx >= 0
-      && (NAV_KEYS[e.key] != null || e.key === "Enter" || e.key === "Escape");
+      && (NAV_KEYS[e.key] != null || e.key === "Enter" || e.key === "Escape" || typeaheadChar(e) != null);
     // P2 fix: a nested editor/control owns its own keystrokes — see
     // isEditorTarget's doc. Must run before Escape too: an editor's own
     // Escape (rename input's onKeyDown) stays its own, never ALSO treated as
@@ -301,6 +305,16 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
     if (e.key === "Enter") {
       e.preventDefault();
       openLibraryNode(rows[idx].node);
+      return;
+    }
+    // Type-ahead, consumed whether or not it matches, so the same letter never
+    // also reaches the global single-key tool layer.
+    const ch = typeaheadChar(e);
+    if (ch != null) {
+      e.preventDefault();
+      const hit = typeahead(rows.map((r) => r.node.name), idx, typeaheadRef.current, ch, Date.now());
+      typeaheadRef.current = hit.state;
+      if (hit.focusIndex != null && hit.focusIndex !== idx) focusRow(rows[hit.focusIndex], hit.focusIndex, rowSelector(rows[idx]));
       return;
     }
     const dir = NAV_KEYS[e.key];

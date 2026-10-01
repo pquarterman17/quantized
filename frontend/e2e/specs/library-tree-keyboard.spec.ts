@@ -4,7 +4,8 @@
 // every row and every row control (grip, "⋯", preview, tag buttons) was a
 // sequential stop, so Tab walked the rendered window's ~170 buttons instead
 // of leaving the list. Now the roving row is the tree's one stop; only its
-// own controls follow it, and the next Tab leaves the tree.
+// own controls follow it, and the next Tab leaves the tree. Printable keys
+// are type-ahead (lib/libraryTreeTypeahead).
 
 import { expect, test } from "@playwright/test";
 
@@ -53,4 +54,15 @@ test("Library tree: one roving tab stop, Home/End, and Tab leaves the tree @core
     left = where === "outside";
   }
   expect(left).toBe(true);
+
+  // Type-ahead: typing the start of the last row's name, from the first row,
+  // moves focus to a row with that name. Space is the row's select key, so
+  // only the part before any space is typed.
+  const target = ((await items.last().getAttribute("aria-label")) ?? "").split(" ")[0];
+  expect(target.length).toBeGreaterThan(1);
+  await items.first().focus();
+  await page.keyboard.type(target);
+  const landed = await page.evaluate(() => document.activeElement?.getAttribute("aria-label") ?? "");
+  expect(landed.toLowerCase().startsWith(target.toLowerCase())).toBe(true);
+  await expect(tree.locator('[role="treeitem"][tabindex="0"]')).toHaveCount(1);
 });

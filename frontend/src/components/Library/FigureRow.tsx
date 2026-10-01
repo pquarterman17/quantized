@@ -8,7 +8,7 @@
 // instead of overwriting the focused one — the payoff for an `.opj` import
 // with many graph windows.
 
-import { useState } from "react";
+import { useState, type KeyboardEvent, type MouseEvent } from "react";
 import { plural } from "../../lib/plural";
 
 import { recordWorkbookOpen } from "./libraryOpen";
@@ -44,7 +44,9 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
    *  one-click actions in both modes — they're commands, not the row. */
   treeMode?: boolean;
   /** LibraryTree's treeitem semantics + roving tab stop (U5); the action
-   *  buttons leave the Tab sequence unless this is the roving row. */
+   *  buttons leave the Tab sequence unless this is the roving row. The
+   *  treeitem is the WHOLE row (name + action strip), so the strip's buttons
+   *  are owned by their treeitem rather than sitting loose between items. */
   treeItem?: TreeItemProps;
 }) {
   const applyOriginFigure = useApp((s) => s.applyOriginFigure);
@@ -72,9 +74,24 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
   const siblingDatasets = datasets.filter((ds) => entry.siblingIds.includes(ds.id));
   const resolved = entry.datasetId != null;
   const inner = innerTabIndex(treeItem);
-  // V1: the tree's anchor is a <div role="treeitem"> (ARIA-in-HTML bars that
-  // role on a <button>); Space selects as the button's did, Enter is the tree's.
+  // V1: in the tree the name part is a <div> (ARIA-in-HTML bars treeitem on a
+  // <button>), and the treeitem is the row wrapper that also holds the action
+  // strip, so its buttons sit inside their item. Space on the row selects as
+  // the button's did; Enter is the tree's. A click on an action is that
+  // command only, never also the row's select/open.
   const Anchor = treeItem ? "div" : "button";
+  const onAction = (e: MouseEvent): boolean => (e.target as Element).closest(".qzk-origin-figure-actions") != null;
+  const treeRowProps = treeItem && {
+    ...treeItem,
+    "data-lib-row": `origin-figure:${entry.id}`,
+    // An unresolved graph stays FOCUSABLE (aria-disabled, U5): a disabled
+    // button can't take focus, so arrows would skip it. Open is a no-op.
+    "aria-disabled": !resolved ? true : undefined,
+    onClick: (e: MouseEvent) => { if (!onAction(e)) select(); },
+    onDoubleClick: (e: MouseEvent) => { if (!onAction(e)) openAndRemember(); },
+    onContextMenu: select,
+    onKeyDown: (e: KeyboardEvent) => { if (e.target === e.currentTarget) spaceActivates(e, select); },
+  };
   const n = entry.figure.n_curves;
   const fidelity = entry.figure.fidelity;
   const fidelityText = fidelity
@@ -88,22 +105,20 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
       <div
         className={`qzk-fig-row${treeMode ? " qzk-fig-row-tree" : ""}${selected ? " selected" : ""}${!resolved ? " unresolved" : ""}`}
         style={treeMode && depth ? { paddingLeft: depth * 14 } : undefined}
+        {...treeRowProps}
       >
         <Anchor
           className={`qzk-fig-item${selected ? " selected" : ""}`}
-          data-lib-row={`origin-figure:${entry.id}`}
-          // In the tree an unresolved graph stays FOCUSABLE (aria-disabled, U5):
-          // a disabled button can't take focus, so arrows would skip it and it
-          // could never hold the tree's one tab stop. Open is a no-op for it.
-          disabled={!resolved && !treeMode}
-          aria-disabled={!resolved && treeMode ? true : undefined}
           title={title}
           style={!treeMode && depth ? { marginLeft: depth * 14 } : undefined}
-          onClick={() => (treeMode ? select() : openAndRemember())}
-          onKeyDown={treeItem ? (e) => spaceActivates(e, select) : undefined}
-          onDoubleClick={treeMode ? () => openAndRemember() : undefined}
-          onContextMenu={treeMode ? select : undefined}
-          {...treeItem}
+          {...(treeItem ? {} : {
+            "data-lib-row": `origin-figure:${entry.id}`,
+            disabled: !resolved && !treeMode,
+            "aria-disabled": !resolved && treeMode ? true : undefined,
+            onClick: () => (treeMode ? select() : openAndRemember()),
+            onDoubleClick: treeMode ? () => openAndRemember() : undefined,
+            onContextMenu: treeMode ? select : undefined,
+          })}
         >
           {/* Node-type glyph (UX-001), from the one shared vocabulary
            *  (UX-004) every Library view now reads. */}
@@ -116,7 +131,13 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
             {entry.stem}{fidelity ? ` · ${fidelity.status === "exact" ? "=" : "≈"}` : ""}
           </span>
         </Anchor>
-        <div className="qzk-origin-figure-actions" role="group" aria-label="Recovered graph actions">
+        <div
+          className="qzk-origin-figure-actions"
+          // A named group outside a tree; inside one, role=group would claim
+          // to own child treeitems, which these buttons are not.
+          role={treeItem ? undefined : "group"}
+          aria-label={treeItem ? undefined : "Recovered graph actions"}
+        >
           <button
             className="qz-icon-btn"
             tabIndex={inner}

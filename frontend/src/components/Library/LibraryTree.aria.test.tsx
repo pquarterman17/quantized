@@ -9,7 +9,7 @@
 // lives in LibraryTree.scale.test.tsx beside the other virtualization tests.
 
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import LibraryTree from "./LibraryTree";
 import { useLibraryHierarchyRows } from "./useLibraryHierarchyRows";
@@ -258,5 +258,116 @@ describe("LibraryTree — icon-only buttons carry real accessible names", () => 
       name: (name) => !/[\p{L}\p{N}]{2,}/u.test(name),
     });
     expect(glyphNamed.map((el) => el.outerHTML.slice(0, 80))).toEqual([]);
+  });
+});
+
+describe("LibraryTree — owned-element structure", () => {
+  /** Everything in `root` that can take focus at all (Tab stop or not). */
+  const focusables = (root: HTMLElement): HTMLElement[] =>
+    [...root.querySelectorAll<HTMLElement>("button, input, select, textarea, a[href], [tabindex]")].filter(
+      (el) => !(el as HTMLButtonElement).disabled,
+    );
+
+  it("every focusable descendant of the tree is a treeitem or inside one; no stray role=group", () => {
+    // The fullest recovered-graph action strip: ⊞, a source-workbook button,
+    // G, the saved-preview toggle and the unresolved-binding source picker.
+    const moke = ds("d1", "w1", ["alpha"]);
+    moke.data = { ...moke.data, metadata: { origin_book: "Moke", x_column_name: "A", origin_column_names: ["B"] } };
+    useApp.setState({
+      datasets: [moke, ds("d2", "w1")],
+      originFigures: [{
+        ...originEntry,
+        siblingIds: ["d1", "d2"],
+        figure: {
+          ...originEntry.figure,
+          curves: [{ book: "Moke", x: "A", y: "B" }, { book: "Missing", x: "A", y: "B" }],
+          saved_preview: {
+            format: "png", mime: "image/png", width: 200, height: 155,
+            sha256: "c".repeat(64), data: "iVBORw0KGgo=", confidence: "exact_page", page_name: "MokeGraph",
+          },
+        },
+      }],
+    });
+    render(<Harness />);
+    const tree = screen.getByRole("tree");
+    const graph = row("origin-figure:g1");
+    expect(graph).toHaveAttribute("role", "treeitem");
+    for (const name of [/new graph window/, /source workbook Moke/, /Remake/, /saved Origin preview/, /Choose source/]) {
+      expect(within(graph).getByLabelText(name)).toBeInTheDocument();
+    }
+    const stray = focusables(tree).filter((el) => el.closest('[role="treeitem"]') == null);
+    expect(stray.map((el) => el.outerHTML.slice(0, 80))).toEqual([]);
+    // The flattened tree has no nested groups; a role=group here would claim
+    // to own treeitems while holding buttons.
+    expect(tree.querySelectorAll('[role="group"]')).toHaveLength(0);
+  });
+
+  it("Escape from a recovered graph's action button returns focus to the graph's treeitem", () => {
+    render(<Harness />);
+    const graph = row("origin-figure:g1");
+    const action = within(graph).getByRole("button", { name: "Open in a new graph window" });
+    action.focus();
+    fireEvent.keyDown(action, { key: "Escape" });
+    expect(document.activeElement).toBe(graph);
+  });
+
+  it("clicking a graph action runs the command without selecting the row; clicking the row selects it", () => {
+    render(<Harness />);
+    const graph = row("origin-figure:g1");
+    fireEvent.click(within(graph).getByRole("button", { name: "Open in a new graph window" }));
+    expect(useApp.getState().librarySelection).toBeNull();
+    fireEvent.click(graph.querySelector(".qzk-fig-name")!);
+    expect(useApp.getState().librarySelection).toEqual({ kind: "origin-figure", id: "g1" });
+  });
+});
+
+describe("LibraryTree — type-ahead", () => {
+  let now = 10_000;
+  beforeEach(() => {
+    now = 10_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  /** One keystroke on whatever has focus, `gap` ms after the previous one. */
+  const type = (key: string, gap = 50): boolean => {
+    now += gap;
+    return fireEvent.keyDown(document.activeElement!, { key });
+  };
+
+  it("a printable character moves focus to the next row starting with it, and is consumed", () => {
+    render(<Harness />);
+    row("folder:f1").focus();
+    // Consumed: the global single-key layer ("f"/"p"/tools) must not ALSO fire.
+    expect(type("B")).toBe(false);
+    expect(document.activeElement).toBe(row("workbook:w1"));
+  });
+
+  it("a repeated character cycles; a typed prefix accumulates; a pause starts over", () => {
+    render(<Harness />);
+    row("folder:f1").focus();
+    type("d");
+    expect(document.activeElement).toBe(row("worksheet:d1"));
+    type("d");
+    expect(document.activeElement).toBe(row("worksheet:d2"));
+    type("m", 1_000); // fresh search after the pause
+    expect(document.activeElement).toBe(row("origin-figure:g1")); // "MokeGraph"
+    type("y"); // "my", accumulated within the window
+    expect(document.activeElement).toBe(row("editable-figure:fig1")); // "My Figure"
+    type("f", 1_000); // wraps past the end back to the folder
+    expect(document.activeElement).toBe(row("folder:f1"));
+  });
+
+  it("never steals keys from an inline rename input or a nested control", () => {
+    render(<Harness />);
+    fireEvent.doubleClick(row("worksheet:d2").querySelector(".qzk-ds-name")!);
+    const input = row("worksheet:d2").querySelector("input")!;
+    input.focus();
+    expect(type("b")).toBe(true);
+    expect(document.activeElement).toBe(input);
+    const menuBtn = within(row("worksheet:d1")).getByRole("button", { name: "More actions" });
+    menuBtn.focus();
+    type("b", 1_000);
+    expect(document.activeElement).toBe(menuBtn);
   });
 });
