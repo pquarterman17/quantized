@@ -36,6 +36,7 @@ import {
 import { channelDigest, recordGone, recordId, savedResult, type ReflFitRecord } from "./reflFitRecord";
 import { curveDatasetFor, curveDatasets, liveCurves, presentIds, savedCurves } from "./reflFitCurves";
 import type { RestoredSetup } from "./reflFitRestore";
+import { gradedSpecs } from "./reflGraded";
 import { useReflDream, type ReflDreamState } from "./useReflDream";
 import { useReflFitFigure } from "./useReflFitFigure";
 import { useReflFitHistory, type ReflFitHistory } from "./useReflFitHistory";
@@ -44,6 +45,7 @@ import {
   applyResults,
   buildParamRows,
   fittedGlobals,
+  parseKnotName,
   parseParamName,
   resolveLayer,
   setLayerParam,
@@ -249,7 +251,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     const { value, ...rest } = patch;
     if (value !== undefined && Number.isFinite(value)) {
       if (name === "scale" || name === "background") setGlobals((g) => ({ ...g, [name]: value }));
-      else if (parseParamName(name)) replaceLayers(setLayerParam(layers, presets, radiation, name, value));
+      else if (parseParamName(name) || parseKnotName(name)) replaceLayers(setLayerParam(layers, presets, radiation, name, value));
     }
     if (Object.keys(rest).length === 0) return;
     setOverrides((o) => {
@@ -272,6 +274,9 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     const id = ++runIdRef.current;
     const fitBasis = { layers, radiation };
     const sentParams = toRequestParams(params);
+    // Graded layers ride along only when there are any (a slab fit sends what it always did).
+    const sentGraded = gradedSpecs(layers);
+    const graded = sentGraded.length ? { graded: sentGraded } : {};
     const controller = new AbortController();
     abortRef.current = controller;
     setBusy(true);
@@ -302,7 +307,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
       }
       if (controller.signal.aborted) return;
       const res = await reflFit(
-        { parameters: sentParams, channels: built.map((b) => b.channel), weighting },
+        { parameters: sentParams, channels: built.map((b) => b.channel), weighting, ...graded },
         controller.signal,
       );
       if (id !== runIdRef.current) return;
@@ -315,7 +320,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
         id: recordId(nextDatasetId),
         seq: 0,
         fittedAt: new Date().toISOString(),
-        request: { parameters: sentParams, channels: saved, settings: { ...settings }, weighting },
+        request: { parameters: sentParams, channels: saved, settings: { ...settings }, weighting, ...graded },
         model: { layers: fitBasis.layers, radiation: fitBasis.radiation },
         result: savedResult(res),
         curves: savedCurves(res),

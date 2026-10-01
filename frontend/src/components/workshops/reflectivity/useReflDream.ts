@@ -161,6 +161,8 @@ export function useReflDream(datasets: Dataset[]): ReflDreamState {
       const { job_id } = await reflDream({
         parameters: record.request.parameters,
         channels,
+        // The fit's graded layers, so their knots are sampled like any parameter.
+        ...(record.request.graded?.length ? { graded: record.request.graded } : {}),
         weighting: "dr",
         centre,
         samples: chosen.samples,

@@ -2,9 +2,9 @@
 // an SLD(z) profile through evenly spaced knots, which the backend
 // (POST /api/reflectivity/spline-sld: calc.sld.spline_sld + profile_to_layers)
 // cuts into thin slabs. `expandGraded` splices those slabs into the stack the
-// Model mode sends to /simulate and /sld-profile. The fit engine varies slab
-// fields only, so graded layers are model/simulate only (ReflectivityPanel
-// blocks the fit while one exists).
+// Model mode sends to /simulate and /sld-profile. The fit sends the same layer
+// as a `graded` spec (`gradedSpecs`) whose knots are fit parameters;
+// calc/refl_graded.py cuts it into the same slabs.
 
 import { reflSplineSld, type ReflLayer, type SplineMethod } from "../../../lib/api/reflectivity";
 import type { ModelLayer } from "./useReflectivity";
@@ -78,4 +78,30 @@ export async function expandGraded(
     }),
   );
   return parts.flat();
+}
+
+/** A graded layer as the fit request names it (`ReflGradedLayer` on the wire):
+ *  its knots are `L{layer}.knot{j}.sld` parameters, evenly spaced (the default
+ *  positions), cut into the slab count the Model mode simulates with. */
+export interface GradedFitSpec {
+  layer: number;
+  method: SplineMethod;
+  slices: number;
+}
+
+const gradedFilm = (l: ModelLayer, i: number, n: number): GradedProfile | undefined =>
+  i > 0 && i < n - 1 ? l.graded : undefined;
+
+/** The request's `graded` list: every graded film layer of the stack. */
+export function gradedSpecs(layers: ModelLayer[]): GradedFitSpec[] {
+  return layers.flatMap((l, i) => {
+    const g = gradedFilm(l, i, layers.length);
+    return g ? [{ layer: i, method: g.method, slices: gradedSlices(l.thickness) }] : [];
+  });
+}
+
+/** Why the fit cannot run with these graded layers, or null. */
+export function gradedFitBlock(layers: ModelLayer[]): string | null {
+  const i = layers.findIndex((l, k) => gradedFilm(l, k, layers.length) && !(l.thickness > 0));
+  return i < 0 ? null : `Graded layer ${i} needs a thickness above 0 Å to fit.`;
 }

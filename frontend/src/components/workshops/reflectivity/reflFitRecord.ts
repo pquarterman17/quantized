@@ -36,13 +36,14 @@
 // the column label stored beside it (reflFitRestore.ts's `resolveBinding`), so
 // a removed or reordered column can never silently rebind a restored fit.
 
-import type { ReflFitParamResult, ReflFitResult } from "../../../lib/api/reflectivity";
+import type { ReflFitParamResult, ReflFitResult, SplineMethod } from "../../../lib/api/reflectivity";
 import type { Dataset } from "../../../lib/types";
 import { objectiveSummary, type RequestParam } from "./reflFitModel";
 import type { ChannelBinding, FitDataSettings, Spin, Weighting, XKind } from "./reflFitData";
 import type { ModelLayer, Radiation } from "./useReflectivity";
 import { Bad, encodeStored, index, isObj, list, need, needNullable, num, numOrNull, oneOf, str } from "./reflFitCodec";
 import { decodePosterior, type SavedPosterior } from "./reflPosterior";
+import { SPLINE_METHODS, type GradedFitSpec } from "./reflGraded";
 
 export const REFL_FIT_RECORD_VERSION = 1;
 /** Fits kept per dataset; older ones drop off the end. */
@@ -118,6 +119,8 @@ export interface ReflFitRecord {
     settings: FitDataSettings;
     /** The weighting the fit actually used (dR falls back to log). */
     weighting: Weighting;
+    /** The graded layers the request named (absent: none). */
+    graded?: GradedFitSpec[];
   };
   /** The layer model the parameter NAMES refer to (the Apply guard's basis). */
   model: { layers: ModelLayer[]; radiation: Radiation };
@@ -218,7 +221,23 @@ function decodeLayer(v: unknown): ModelLayer {
   const msld = num(v.msld);
   if (isld !== undefined) layer.isld = isld;
   if (msld !== undefined) layer.msld = msld;
+  // A bad graded profile fails the record: read as a slab, its knot names
+  // would bind to nothing.
+  if (v.graded !== undefined) {
+    const g = v.graded;
+    if (!isObj(g)) throw new Bad("graded");
+    layer.graded = { knots: nums(g.knots), method: oneOf<SplineMethod>(g.method, SPLINE_METHODS) };
+  }
   return layer;
+}
+
+function decodeGradedSpec(v: unknown): GradedFitSpec {
+  if (!isObj(v)) throw new Bad("graded spec");
+  return {
+    layer: need(index(v.layer), "layer"),
+    method: oneOf<SplineMethod>(v.method, SPLINE_METHODS),
+    slices: need(index(v.slices), "slices"),
+  };
 }
 
 function decodeParamResult(v: unknown): ReflFitParamResult {
@@ -331,6 +350,7 @@ export function decodeRecord(v: unknown): ReflFitRecord | null {
         channels,
         settings: decodeSettings(req.settings),
         weighting: oneOf<Weighting>(req.weighting, ["dr", "log"]),
+        ...(req.graded !== undefined ? { graded: list(req.graded, decodeGradedSpec) } : {}),
       },
       model: { layers, radiation: oneOf<Radiation>(model.radiation, ["xray", "neutron"]) },
       result: decodeResult(v.result),
