@@ -187,7 +187,10 @@ def import_jcamp(filepath: str | Path) -> DataStruct:
     assignments: list[str] = []
 
     if data_kind == "XYDATA":
-        raw_y = np.asarray(decode_xydata(data_lines), dtype=float)
+        # ##NPOINTS bounds the DUP run-length expansion (security audit 2026-10-01).
+        declared = _num(header, "NPOINTS", -1.0)
+        cap = int(declared) if np.isfinite(declared) and declared >= 0 else None
+        raw_y = np.asarray(decode_xydata(data_lines, max_points=cap), dtype=float)
         y = raw_y * yfactor
         npoints = int(_num(header, "NPOINTS", len(y)))
         if len(y) != npoints:

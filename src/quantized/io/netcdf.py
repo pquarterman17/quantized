@@ -31,6 +31,12 @@ __all__ = ["import_netcdf", "is_netcdf"]
 _CDF_MAGICS = (b"CDF\x01", b"CDF\x02", b"CDF\x05")
 _HDF5_MAGIC = b"\x89HDF"
 
+# Hostile-input bound (security audit 2026-10-01): an HDF5 dataset that was
+# never written reads back as its fill value, so a ~1 KB file can declare
+# billions of elements and make ``obj[()]`` allocate them all. 2**26 float64
+# elements is 512 MiB -- the upload cap's scale, far above any real 1-D trace.
+MAX_DATASET_ELEMENTS = 1 << 26
+
 
 @dataclass
 class _Var:
@@ -84,12 +90,29 @@ def _read_netcdf4(path: Path) -> _NcData:
     with h5py.File(path, "r") as h:
         def _collect(name: str, obj: Any) -> None:
             if isinstance(obj, h5py.Dataset) and obj.ndim <= 1:
+                _check_dataset(name, obj)
                 key = name.rsplit("/", 1)[-1]
                 variables[key] = _Var(np.asarray(obj[()]), _as_str(obj.attrs.get("units", "")))
 
         h.visititems(_collect)
         attrs = {k: _as_str(v) if isinstance(v, bytes) else v for k, v in h.attrs.items()}
     return _NcData(variables, attrs)
+
+
+def _check_dataset(name: str, obj: Any) -> None:
+    """Refuse a dataset before reading it (security audit 2026-10-01).
+
+    External raw storage and virtual datasets pull their bytes from OTHER
+    files named inside this one -- any file the user can read, outside the
+    import route's allowed roots. A declared size past the cap is a memory
+    bomb (see ``MAX_DATASET_ELEMENTS``). Both fail closed."""
+    if obj.external or obj.is_virtual:
+        raise ValueError(f"variable {name!r} stores its data in another file; not read")
+    if obj.size > MAX_DATASET_ELEMENTS:
+        raise ValueError(
+            f"variable {name!r} declares {obj.size} elements "
+            f"(limit {MAX_DATASET_ELEMENTS}); not read"
+        )
 
 
 def _numeric_1d(nc: _NcData) -> dict[str, _Var]:

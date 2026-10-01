@@ -23,6 +23,15 @@ from quantized.io.delimited import _extract_units
 
 __all__ = ["import_excel"]
 
+# Hostile-input bounds (security audit 2026-10-01). openpyxl pads every row
+# out to the sheet's widest column and yields every empty row before the last
+# one, so a few-KB workbook with one far-away cell expands to rows x columns
+# cells; 2**25 is ~4x the documented 1M x 8 import envelope. Members other
+# than the streamed worksheets (shared strings, styles) are parsed whole, so
+# their uncompressed size is capped like a .brml scan document.
+MAX_CELLS = 1 << 25
+MAX_PART_BYTES = 256 << 20
+
 
 def _cell_to_float(value: Any) -> float:
     if isinstance(value, bool):  # bool is an int subclass — not data
@@ -56,6 +65,33 @@ def _header_str(value: Any, col: int) -> str:
     return f"Col{col + 1}"
 
 
+def _check_parts(path: Path) -> None:
+    """Refuse a non-worksheet part whose uncompressed size passes the cap."""
+    if not zipfile.is_zipfile(path):
+        return  # openpyxl reports a non-ZIP file below
+    with zipfile.ZipFile(path) as zf:
+        for info in zf.infolist():
+            if info.filename.startswith("xl/worksheets/"):
+                continue
+            if info.file_size > MAX_PART_BYTES:
+                raise ValueError(
+                    f"{path.name}: part {info.filename!r} is {info.file_size} bytes "
+                    f"uncompressed (limit {MAX_PART_BYTES})"
+                )
+
+
+def _read_grid(worksheet: Any, name: str) -> list[list[Any]]:
+    """The sheet's cells as rows, refusing once more than ``MAX_CELLS`` arrive."""
+    grid: list[list[Any]] = []
+    cells = 0
+    for row in worksheet.iter_rows(values_only=True):
+        cells += len(row)
+        if cells > MAX_CELLS:
+            raise ValueError(f"{name}: sheet spans more than {MAX_CELLS} cells")
+        grid.append(list(row))
+    return grid
+
+
 def import_excel(
     filepath: str | Path,
     *,
@@ -66,6 +102,7 @@ def import_excel(
     """Import an ``.xlsx`` sheet (first column = x-axis by default)."""
     path = Path(filepath)
     try:
+        _check_parts(path)
         workbook = openpyxl.load_workbook(path, data_only=True, read_only=True)
     except (zipfile.BadZipFile, InvalidFileException, OSError) as exc:
         # An empty / non-ZIP / truncated .xlsx raises BadZipFile or
@@ -75,7 +112,7 @@ def import_excel(
     try:
         worksheet = workbook[sheet] if isinstance(sheet, str) else workbook.worksheets[sheet]
         sheet_name = worksheet.title
-        grid: list[list[Any]] = [list(row) for row in worksheet.iter_rows(values_only=True)]
+        grid = _read_grid(worksheet, path.name)
     finally:
         workbook.close()
 

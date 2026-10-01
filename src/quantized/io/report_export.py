@@ -75,6 +75,9 @@ class ReportExportError(RuntimeError):
 # LaTeX special chars + the science glyphs the emitters emit (so the output
 # compiles under plain pdfLaTeX, no inputenc/unicode-engine required).
 _LATEX_REPL = {
+    # Backslash first in spirit: unescaped, file-derived text could run any
+    # command (``\input /etc/passwd``) when the .tex is compiled.
+    "\\": r"\textbackslash{}",
     "&": r"\&", "%": r"\%", "$": r"\$", "#": r"\#", "_": r"\_",
     "{": r"\{", "}": r"\}", "~": r"\textasciitilde{}", "^": r"\textasciicircum{}",
     "±": r"$\pm$", "×": r"$\times$", "·": r"$\cdot$", "²": r"$^2$", "³": r"$^3$",
