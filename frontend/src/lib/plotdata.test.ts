@@ -1191,3 +1191,69 @@ describe("fetchPlot — windowed re-fetch threading (P3.4 zoom-refetch residual)
     expect(p.data[0]).toEqual([0, 1, 2]); // offline fallback: full, un-windowed columns
   });
 });
+
+// R4: the binary column transport hands out a Float64Array for a gap-free
+// column (lib/api/plotColumns.ts). A typed array's own `.map` turns a returned
+// null into 0, so every layer that writes a gap must still produce null.
+describe("typed (Float64Array) gap-free columns", () => {
+  const typed = (): PlotPayload => ({
+    data: [Float64Array.from([0, 1, 2, 3]), Float64Array.from([10, 20, 30, 40])],
+    series: [{ label: "y", unit: "emu" }],
+    xLabel: "x",
+    xUnit: "",
+  });
+  const plain = (col: ArrayLike<number | null | undefined>) => {
+    expect(Array.isArray(col)).toBe(true);
+    return col;
+  };
+
+  it("maskExcludedPayload writes null gaps, not zeros, in both modes", () => {
+    const hide = maskExcludedPayload(typed(), new Set([1, 3]), "hide");
+    expect(plain(hide.data[1])).toEqual([10, null, 30, null]);
+    const grey = maskExcludedPayload(typed(), new Set([1]), "grey");
+    expect(plain(grey.data[1])).toEqual([10, null, 30, 40]);
+    expect(plain(grey.data[2])).toEqual([null, 20, null, null]);
+  });
+
+  it("highlightSelectedPayload's companion is null outside the selection", () => {
+    const out = highlightSelectedPayload(typed(), new Set([2]));
+    expect(out.data[1]).toEqual(Float64Array.from([10, 20, 30, 40])); // the series itself is untouched
+    expect(plain(out.data[2])).toEqual([null, null, 30, null]);
+  });
+
+  it("categoricalXPayload maps an unmatched level to null, not position 0", () => {
+    const ds: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [[10, 1], [20, 2], [10, 3], [20, 4]],
+      labels: ["Batch", "Signal"],
+      units: ["", ""],
+      metadata: {},
+    };
+    const p: PlotPayload = { ...typed(), data: [Float64Array.from([10, 20, 99, 20]), Float64Array.from([1, 2, 3, 4])] };
+    expect(plain(categoricalXPayload(p, ds, 0, "nominal").data[0])).toEqual([0, 1, null, 1]);
+  });
+
+  it("composeDisplayPayload over typed columns equals the same compose over plain ones", () => {
+    const opts = {
+      id: "d",
+      waterfall: 0.25,
+      dropped: new Set([0]),
+      excludedDisplay: "grey" as const,
+      fitOverlay: null,
+      baselineOverlay: null,
+      peakOverlay: null,
+      derivOverlay: null,
+      selection: { datasetId: "d", rows: [1, 3] },
+    };
+    const two = (p: PlotPayload): PlotPayload => ({
+      ...p,
+      data: [p.data[0], p.data[1], p.data[1]] as PlotPayload["data"],
+      series: [p.series[0], p.series[0]],
+    });
+    const viaTyped = composeDisplayPayload(two(typed()), opts);
+    const viaPlain = composeDisplayPayload(two({ ...typed(), data: [[0, 1, 2, 3], [10, 20, 30, 40]] }), opts);
+    const values = (p: PlotPayload) => p.data.map((c: ArrayLike<number | null | undefined>) => Array.from(c));
+    expect(values(viaTyped)).toEqual(values(viaPlain));
+    for (const col of viaTyped.data.slice(1)) plain(col); // the masked series and both companions
+  });
+});

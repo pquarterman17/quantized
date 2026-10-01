@@ -4,10 +4,10 @@
 // `JSON.parse` on the main thread here, for 56 MB of float64 once decoded.
 // This module asks the server (`Accept: application/x-quantized-columns`)
 // for that float64 directly and decodes it into the SAME `PlotSeriesResponse`
-// shape the JSON path produces, so `lib/plotdata.ts`'s `fromResponse` and
-// everything after it (`maskExcludedPayload`, overlays, uPlot alignment) see
-// no difference: every non-finite value becomes `null`, exactly where the
-// JSON path's `jsonify` wrote `null`; `-0` survives as it does in JSON.
+// shape the JSON path produces: every non-finite value becomes `null`, exactly
+// where the JSON path's `jsonify` wrote `null`, and `-0` survives as it does
+// in JSON. The one difference is the container: a gap-free column is a
+// `Float64Array` (see `readColumn`).
 //
 // Frame (see the backend module for the authoritative layout): "QZC1", a
 // little-endian uint32 header length, the header JSON space-padded to an
@@ -38,24 +38,29 @@ type ColumnsHeader = Omit<PlotSeriesResponse, "data"> & { n_columns: number; n_r
 // Float64Array view; the DataView path keeps a big-endian host correct.
 const LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
 
-// Every column comes out a plain Array whose only gap is `null` -- never a
-// typed array, never NaN. A Float64Array view would cost nothing to build,
-// but the payload's consumers are not typed-array safe (pinned by
-// `plotColumns.parity.test.ts`; numbers in docs/performance_envelope.md).
-function readColumn(buf: ArrayBuffer, byteOffset: number, n: number): (number | null)[] {
-  const col: (number | null)[] = new Array<number | null>(n);
+// A gap-free column comes out a `Float64Array` copy (no boxing: at 1M x 7 a
+// decode from a clean heap drops from ~400 to ~150-220 ms median); a column with any non-finite value comes out a plain
+// Array whose only gap is `null`, as on the JSON path, because uPlot breaks a
+// line only on `null`. A copy, not a view, so a column never pins the whole
+// frame. Consumers that write gaps or persist columns go through
+// `lib/plotColumnOps.ts` (pinned by `plotColumns.parity.test.ts`; numbers in
+// docs/performance_envelope.md).
+function readColumn(buf: ArrayBuffer, byteOffset: number, n: number): Float64Array | (number | null)[] {
+  let f: Float64Array;
   if (LITTLE_ENDIAN) {
-    const f = new Float64Array(buf, byteOffset, n);
-    for (let i = 0; i < n; i++) {
-      const v = f[i];
-      col[i] = Number.isFinite(v) ? v : null;
-    }
+    f = new Float64Array(buf, byteOffset, n);
   } else {
     const dv = new DataView(buf, byteOffset, n * 8);
-    for (let i = 0; i < n; i++) {
-      const v = dv.getFloat64(i * 8, true);
-      col[i] = Number.isFinite(v) ? v : null;
-    }
+    f = new Float64Array(n);
+    for (let i = 0; i < n; i++) f[i] = dv.getFloat64(i * 8, true);
+  }
+  let finite = 0;
+  while (finite < n && Number.isFinite(f[finite])) finite++;
+  if (finite === n) return LITTLE_ENDIAN ? f.slice() : f;
+  const col: (number | null)[] = new Array<number | null>(n);
+  for (let i = 0; i < n; i++) {
+    const v = f[i];
+    col[i] = Number.isFinite(v) ? v : null;
   }
   return col;
 }
@@ -80,7 +85,7 @@ export function decodeColumns(buf: ArrayBuffer): PlotSeriesResponse {
   if (bytes.length !== offset + n_columns * n_rows * 8) {
     throw new Error(`column frame is ${bytes.length} bytes, expected ${offset + n_columns * n_rows * 8}`);
   }
-  const data: (number | null)[][] = [];
+  const data: PlotSeriesResponse["data"] = [];
   for (let c = 0; c < n_columns; c++) data.push(readColumn(buf, offset + c * n_rows * 8, n_rows));
   return { ...rest, data };
 }

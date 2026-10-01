@@ -119,6 +119,19 @@ describe("sanitizeFrozenBundle (the untrusted-.dwk boundary)", () => {
     expect(out).toEqual(frozen);
   });
 
+  it("keeps a snapshot whose columns are typed (Float64Array) through JSON and reload", () => {
+    // The binary column transport hands out a Float64Array for a gap-free
+    // column; JSON writes one as an object, which the sanitizer rejects.
+    const source = live();
+    source.payload.data = [Float64Array.from([0, 1, -0]), [10, 20, null]] as LivePlotSnapshot["payload"]["data"];
+    const frozen = freezePlotSnapshot(source);
+    expect(frozen.payload.data.every((col) => Array.isArray(col))).toBe(true);
+    const restored = sanitizeFrozenBundle(JSON.parse(JSON.stringify(frozen, encodePersistedCells)));
+    expect(restored).not.toBeNull();
+    expect(restored!.payload.data).toEqual([[0, 1, -0], [10, 20, null]]);
+    expect(Object.is(restored!.payload.data[0][2], -0)).toBe(true);
+  });
+
   it("directly encodes/decodes NaN, ±Infinity, and -0 without changing null gaps", () => {
     const source = live();
     source.payload.data = [

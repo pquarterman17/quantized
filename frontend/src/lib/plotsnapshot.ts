@@ -22,6 +22,7 @@
 
 import type { ColorScatterSpec } from "./colorscatter";
 import { decodeCell } from "./nonFiniteCells";
+import { plainColumn } from "./plotColumnOps";
 import type { PlotPayload, PlotSeriesSpec } from "./plotdata";
 import type { SeriesStyle } from "./types";
 
@@ -90,6 +91,8 @@ export function readLivePlotSnapshot(): LivePlotSnapshot | null {
 export function freezePlotSnapshot(s: LivePlotSnapshot): FrozenPlotBundle {
   return structuredClone({
     ...s,
+    // A typed (Float64Array) column would serialize as an object: copy it plain.
+    payload: { ...s.payload, data: s.payload.data.map(plainColumn) as PlotPayload["data"] },
     styleList: mapNullish(s.styleList, null),
     labelList: mapNullish(s.labelList, null),
     errorBars: [...s.errorBars],

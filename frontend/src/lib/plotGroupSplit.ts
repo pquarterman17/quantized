@@ -42,6 +42,7 @@
 // site.
 
 import { categoryLevels, levelCountOf, levelsOf, orderLevels } from "./categorical";
+import { mapColumn } from "./plotColumnOps";
 import type { PlotPayload, PlotSeriesSpec } from "./plotdata";
 import type { DataStruct } from "./types";
 
@@ -137,7 +138,7 @@ export function applyGroupSplit(
       // (buildColumns/fromResponse), so this is usually a no-op in
       // practice, but a caller must never depend on that upstream
       // invariant for genuine parity with buildXY's documented contract.
-      cols.push(col.map((v, r) => (groupCodes[r] === lvl && Number.isFinite(v) ? v : null)));
+      cols.push(mapColumn(col, (v, r) => (groupCodes[r] === lvl && Number.isFinite(v) ? v : null)));
       series.push({ ...base, label: `${base.label} (${groupLabel}=${levelLabelOf(lvl)})` });
     }
   });
