@@ -29,6 +29,12 @@ one series per (channel, group level) in every panel, named as the flat
 grouped plot names them (``"{label} ({group}={level})"``), each level in its
 channel's chosen colour else the panel's cycle -- the flat plot's own rule
 (``lib/plotGroupSplit`` on screen, BUG-016 on the wire).
+
+Greyed excluded rows (F4.2c (a)) ride as the request's mask over FULL level
+panels: the split series keep their kept rows, and the masked ones become ONE
+grey companion per Y channel per panel, never coloured by level -- the screen's
+``lib/facetEncodedExcluded.ts``, pinned by ``tests/fixtures/wire/
+facet_excluded.json``.
 """
 
 from __future__ import annotations
@@ -38,6 +44,8 @@ from typing import Any
 
 import numpy as np
 
+from quantized.calc.figure_excluded import excluded_mask
+from quantized.calc.figure_facets_excluded import channel_companions
 from quantized.calc.figure_greyscale import GREY_SLOT_KEY
 from quantized.calc.plotting_encoded import (
     build_encoded_series,
@@ -69,6 +77,8 @@ def encoded_facet_panels(
     label_col: int | None,
     palette: Sequence[str] | None,
     markers: Sequence[str] | None,
+    excluded_rows: Sequence[int] | None = None,
+    grey: bool = False,
 ) -> list[dict[str, Any]]:
     """``calc.figure_facets``' panel dicts for an encoded facet grid (see the
     module doc). Each wire panel carries ``label``, ``x``, ``rows`` and
@@ -77,7 +87,12 @@ def encoded_facet_panels(
     ``style`` -- the channel's own (FEATURE-001), or ``None``. Every panel
     carries ``"key": True`` (an encoded panel always has its legend). Raises
     ``ValueError`` (the route's 422) for panels that disagree on their
-    channels or rows that do not line up with ``x``."""
+    channels, rows that do not line up with ``x``, or an out-of-range mask.
+
+    ``excluded_rows`` (F4.2c (a)): the panels then carry their FULL level rows;
+    a series keeps only its KEPT rows (and needs one in the panel), and with
+    ``grey`` a panel holding a masked row appends ONE grey companion per Y
+    channel (:func:`~quantized.calc.figure_facets_excluded.channel_companions`)."""
     if not panels:
         return []
     y_keys = [int(c) for c in panels[0].get("channels") or []]
@@ -101,12 +116,15 @@ def encoded_facet_panels(
         palette=palette, markers=markers, color_by_level=color_col is not None,
     )
     multi = len(y_keys) > 1
+    mask = excluded_mask(ds.values.shape[0], excluded_rows)
     out: list[dict[str, Any]] = []
     for p in panels:
         rows = _panel_rows(p, ds.values.shape[0])
+        dropped = np.zeros(rows.shape[0], dtype=bool) if mask is None else mask[rows]
+        kept = rows[~dropped]
         series: list[dict[str, Any]] = []
         for i, (combo, s) in enumerate(zip(encoded.rows, encoded.plot.series, strict=True)):
-            mine = combo[np.isin(combo, rows)]
+            mine = combo[np.isin(combo, kept)]
             if mine.size == 0:
                 continue
             text = None if label_col is None else legend_source_text(ds, label_col, mine)
@@ -118,12 +136,14 @@ def encoded_facet_panels(
             style = {k: v for k, v in (styles[i] or {}).items() if k != GREY_SLOT_KEY}
             series.append({
                 "label": legend if legend is not None else default,
-                "y": s.values[rows].tolist(),
+                "y": np.where(dropped, np.nan, s.values[rows]).tolist(),
                 "style": style or None,
                 # Greyscale key (U2, `greyscale_facet_panels`): the colour
                 # level's slot, else the series' place in the WHOLE split --
                 # the flat greyscale's own rule, applied grid-wide.
                 GREY_SLOT_KEY: (styles[i] or {}).get(GREY_SLOT_KEY, i),
             })
+        if grey and dropped.any():
+            series.extend(channel_companions(ds, y_keys, rows, dropped))
         out.append({"label": p.get("label", ""), "x": p.get("x"), "series": series, "key": True})
     return out

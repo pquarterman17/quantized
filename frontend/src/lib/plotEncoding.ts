@@ -58,15 +58,13 @@
 // so it is a factor or a label source like any other column, and the wire
 // dataset carries it to the backend.
 //
-// FACETS (residual 3): an xy facet grid is split ONCE over the whole data, then
-// each panel keeps the series whose level combination has rows in it, over
-// those rows (`encodedFacetPanels`). A series keeps one style in every panel —
-// its level's colour, else its position in the WHOLE split — and its legend
-// text is taken over the panel's rows. A gradient is not drawn per panel
-// (`plotEncodingBinding.facetEncoding` drops it). The Stage's facet grid
-// (`Stage/useFacetEncoding`) and the export's port (`calc/plotting_encoded_
-// facets.py`, pinned by `tests/fixtures/wire/graph_encoding_facets.json`)
-// apply the same rule. Box / violin / bar: `./plotEncodingStat`.
+// FACETS (residual 3): split ONCE over the whole data; each panel keeps the
+// series with (kept) rows in it, over those rows (`encodedFacetPanels`), in one
+// style everywhere (its level's colour, else its WHOLE-split position), legend
+// text over the panel's rows, no gradient (`facetEncoding`). Greyed excluded
+// rows add one muted companion per Y channel (`./facetEncodedExcluded`). The
+// Stage (`Stage/useFacetEncoding`) and `calc/plotting_encoded_facets.py` share
+// it (`graph_encoding_facets.json`, `facet_excluded.json`). Box/violin/bar: `./plotEncodingStat`.
 //
 // Applying the graph stores the picks on the plot window's document
 // (`FigureBindings.encoding`, lib/plotEncodingBinding.ts); the editable Stage
@@ -74,8 +72,7 @@
 // `encodedStyle` below (Stage/usePlotEncoding.ts), the SAME functions
 // `buildEncodedXY` and `encodedStyles` are made of, over its own fetched
 // columns. The gate is `plotEncodingBinding.resolveFigureEncoding`, shared.
-// Opening Publication Preview puts the picks on its draft the same way
-// (`plotSpecFigure.plotSpecToFigureDocument`), rendered by the document export.
+// Publication Preview puts the picks on its draft the same way.
 //
 // LAZY-ONLY on purpose: imported by the Graph Builder workshop and, through a
 // dynamic import, by the Stage — never by lib/plotspec.ts, which sits in the
@@ -89,6 +86,7 @@ import { facetSlices, type FacetPanel, type FacetSlice } from "./facet";
 import { seriesDisplayLabel } from "./seriesDisplayLabel";
 import { spatialCellStyling } from "./multipanel";
 import { buildColumns, type PlotPayload } from "./plotdata";
+import { withChannelCompanions } from "./facetEncodedExcluded";
 import {
   encodingSplits,
   facetSplitEncoding,
@@ -360,8 +358,8 @@ export function buildEncodedXY(
 /** An encoded xy FACET grid (see the module doc): `data` is the split's
  *  source, each slice's `rows` index it, and each slice's `data` gives the
  *  panel's x and Y columns. `yLegends` is the per-Y rename, as `encodedNames`;
- *  `channelStyles` the channel-keyed styles each series' encoding is laid
- *  over (`encodedStyle`, one style per channel in every panel -- FEATURE-001). */
+ *  `channelStyles` the per-channel styles (one in every panel) the encoding is laid
+ *  over (`encodedStyle`, FEATURE-001); `dropped` greys FULL level slices (F4.2c (a)). */
 export function encodedFacetPanels(
   data: DataStruct,
   slices: readonly Pick<FacetSlice, "label" | "data" | "rows">[],
@@ -370,6 +368,7 @@ export function encodedFacetPanels(
   enc: Encoding,
   yLegends?: readonly (string | undefined)[],
   channelStyles?: Record<number, SeriesStyle>,
+  dropped?: ReadonlySet<number>,
 ): EncodedFacetPanel[] {
   const whole = encodedSplit(data, yChannels, enc);
   const styles = encodedNames(data, whole).series.map((s, i) => encodedStyle(channelStyles?.[s.channel], s, i));
@@ -377,7 +376,7 @@ export function encodedFacetPanels(
     const local = new Map(slice.rows.map((r, j) => [r, j]));
     const keep: number[] = [];
     const cells = whole.cells.flatMap((c, i) => {
-      const mine = c.rows.filter((r) => local.has(r));
+      const mine = c.rows.filter((r) => local.has(r) && !dropped?.has(r));
       if (mine.length === 0) return [];
       keep.push(i);
       const text = enc.label === null ? null : legendSourceText(data, enc.label, mine);
@@ -385,9 +384,10 @@ export function encodedFacetPanels(
     });
     const split: EncodedSplit = { yChannels, cells };
     const { specs, series } = encodedNames(data, split, yLegends);
+    const base = buildColumns(slice.data, null, xKey, [...yChannels]);
     return {
       label: slice.label,
-      payload: applyEncodedSplit(buildColumns(slice.data, null, xKey, [...yChannels]), split, specs),
+      payload: withChannelCompanions(applyEncodedSplit(base, split, specs), base, slice.rows, dropped),
       channels: series.map((s) => s.channel),
       series,
       styles: keep.map((i) => styles[i]),

@@ -1,8 +1,8 @@
 // F4.2c (a) for the two figure shapes the flat ghost channels cannot carry:
 // a Color/Symbol-ENCODED figure (split server-side, so it sends every row plus
 // an `excluded_rows` mask) and a FACETED one (each panel re-sliced from its
-// full level rows, with the same mask; a SPLIT grid still offers only the
-// honest "omit"). Driven through
+// full level rows, with the same mask; a SPLIT grid too, re-split by the
+// route). Driven through
 // the real Export figure command and parameter-dialog store; every wait is on
 // dialog STATE, never on a mock having been called.
 
@@ -180,12 +180,22 @@ describe("a faceted figure's export honours the excluded-rows choice", () => {
     expect(spec).not.toHaveProperty("excluded_rows");
   });
 
-  it("a split grid still omits, and its reason survives a page spec's panel copy off the wire", () => {
+  it("a split grid greys too; panels that do not line up omit, and the reason survives a page spec's copy", () => {
     const ds: Dataset = { id: "d1", name: "scan.dat", data: DATA, excludedRows: [0] };
-    const split = { ...buildFigureSpecFromDocument(document({ facetKey: 1 }), ds, "f"), group_col: 0 };
+    const built = buildFigureSpecFromDocument(document({ facetKey: 1 }), ds, "f");
+    // A split panel names its channels (`figureSpecFacets.withFacetRows`); the route re-splits it.
+    const split = { ...built, group_col: 0, facets: built.facets!.map((f) => ({ ...f, channels: [0] })) };
     const grey = withExcludedGhosts(split, DATA, new Set([0]), { col: 1, yKeys: [0] });
-    expect(omitOnlyReason(grey)).toBe(FACET_OMIT_REASON);
-    expect(omitOnlyReason({ panels: [{ figure: { ...grey } }] })).toBe(FACET_OMIT_REASON);
-    expect(JSON.stringify(grey)).toBe(JSON.stringify(split));
+    expect(omitOnlyReason(grey)).toBeNull();
+    expect(grey.facets?.map((f) => [f.label, f.x, f.rows, f.channels])).toEqual([
+      ["a", [1, 3], [0, 2], [0]], ["b", [2], [1], [0]], ["c", [4], [3], [0]],
+    ]);
+    expect([grey.excluded_rows, grey.grey_excluded]).toEqual([[0], true]);
+
+    const stale = { ...split, facets: split.facets.map((f) => ({ ...f, label: `${f.label}?` })) };
+    const omitted = withExcludedGhosts(stale, DATA, new Set([0]), { col: 1, yKeys: [0] });
+    expect(omitOnlyReason(omitted)).toBe(FACET_OMIT_REASON);
+    expect(omitOnlyReason({ panels: [{ figure: { ...omitted } }] })).toBe(FACET_OMIT_REASON);
+    expect(JSON.stringify(omitted)).toBe(JSON.stringify(stale));
   });
 });

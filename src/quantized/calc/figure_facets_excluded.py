@@ -21,10 +21,36 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
+from numpy.typing import NDArray
 
-from quantized.calc.figure_excluded import with_excluded_rows
+from quantized.calc.figure_excluded import EXCLUDED_GHOST_STYLE, EXCLUDED_SUFFIX, with_excluded_rows
+from quantized.datastruct import DataStruct
 
-__all__ = ["facet_panels_with_excluded"]
+__all__ = ["channel_companions", "facet_panels_with_excluded"]
+
+
+def channel_companions(
+    ds: DataStruct,
+    y_keys: Sequence[int],
+    rows: NDArray[np.intp],
+    dropped: NDArray[np.bool_],
+) -> list[dict[str, Any]]:
+    """A SPLIT facet panel's greyed rows (``calc.plotting_encoded_facets``):
+    ONE companion per Y channel holding the panel's ``dropped`` rows of every
+    level, named as the screen names it (``"<label> (excluded) (<unit>)"``,
+    ``lib/facetEncodedExcluded.ts``) and styled
+    :data:`~quantized.calc.figure_excluded.EXCLUDED_GHOST_STYLE` -- never a
+    level's colour. ``rows[j]`` is the dataset row behind panel position j."""
+    out: list[dict[str, Any]] = []
+    for ch in y_keys:
+        name = f"{ds.labels[ch]}{EXCLUDED_SUFFIX}"
+        unit = ds.units[ch]
+        out.append({
+            "label": f"{name} ({unit})" if unit else name,
+            "y": np.where(dropped, ds.values[rows, ch], np.nan).tolist(),
+            "style": dict(EXCLUDED_GHOST_STYLE),
+        })
+    return out
 
 
 def _plain(panel: Mapping[str, Any]) -> dict[str, Any]:

@@ -4,8 +4,8 @@
 // filter-dropped rows as muted "(excluded)" companions, as the flat plot does
 // (`lib/facetExcluded.greyFacetPanels`, the rule the export shares). Returns
 // the composition unchanged for any other arrangement, the "hide" mode, or a
-// grid with nothing dropped. An ENCODED grid (`useFacetEncoding`) draws its own
-// panels and still hides them.
+// grid with nothing dropped. A SPLIT grid (`useFacetEncoding`) draws its own
+// panels and greys them there.
 
 import { useMemo } from "react";
 

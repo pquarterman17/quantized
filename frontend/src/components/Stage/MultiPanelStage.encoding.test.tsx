@@ -65,7 +65,7 @@ beforeEach(() => {
   root.dataset.theme = "light";
   useApp.setState({
     datasets: [DS], activeId: "fe", xKey: 0, yKeys: [1], y2Keys: null, seriesOrder: null, stackMode: true,
-    composition: null, facetKey: null, groupKey: null, seriesLabels: {},
+    composition: null, facetKey: null, groupKey: null, seriesLabels: {}, excludedDisplay: "grey",
   });
 });
 afterEach(() => {
@@ -78,6 +78,8 @@ const labelsOf = () => created.map((c) => c.opts.series.slice(1).map((s) => s.la
 
 describe("MultiPanelStage — an encoded facet grid", () => {
   it("draws the fixture's series, legend text and colours in every panel", async () => {
+    // The fixture pins the HIDDEN grid; greyed: MultiPanelStage.facetExcluded.test.tsx.
+    useApp.setState({ excludedDisplay: "hide" });
     useApp.getState().facetByColumn("fe", 5);
     useApp.setState((s) => ({ plotWindows: withFocusedEncoding(s.plotWindows, s.focusedWindowId, PICKS) }));
     render(<MultiPanelStage />);
@@ -88,11 +90,14 @@ describe("MultiPanelStage — an encoded facet grid", () => {
     expect(strokes).toEqual(FIXTURE.screen.map((p) => p.series.map((s) => s.color)));
   });
 
-  it("a BACKGROUND window's facet grid draws its own document's picks too", async () => {
+  it("a BACKGROUND window's facet grid draws its own document's picks too, greying row 3", async () => {
     const view = { ...defaultPlotView(), xKey: 0, yKeys: [1], facetKey: 5 };
     const composition = facetCompositionFromBinding(DS, 5, 0, [1]);
     render(<BackgroundStackWindow dataset={DS} view={view} composition={composition} encoding={PICKS} />);
-    await waitFor(() => expect(labelsOf().slice(-2)).toEqual(FIXTURE.screen.map((p) => p.series.map((s) => s.label))));
+    // Greyed (the default mode, F4.2c (a)): the second panel holds excluded row 3,
+    // drawn as one companion after its split series.
+    const want = FIXTURE.screen.map((p, i) => [...p.series.map((s) => s.label), ...(i === 1 ? ["Rxy (excluded) (Ohm)"] : [])]);
+    await waitFor(() => expect(labelsOf().slice(-2)).toEqual(want));
   });
 
   it("without picks the grid is the plain one (one Rxy per panel)", async () => {

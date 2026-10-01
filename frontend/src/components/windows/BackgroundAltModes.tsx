@@ -150,12 +150,12 @@ export function BackgroundStackWindow({ dataset, view, bg, composition = null, e
   // never with the focused stage's panels or another window's (cross-window
   // linking stays item 13's opt-in XY feature — deliberately NOT wired here).
   const instanceId = useId();
-  const encodedFacets = useFacetEncoding(
-    dataset, encoding, canvasGroupCol(view.groupKey, view.y2Keys), view.y2Keys, view.facetKey,
-    view.xKey, view.yKeys, view.seriesLabels, view.seriesStyles,
-  );
   // F4.2c (a): the app-wide "Excluded rows" mode greys the facet grid here too.
   const excludedDisplay = useApp((s) => s.excludedDisplay);
+  const encodedFacets = useFacetEncoding(
+    dataset, encoding, canvasGroupCol(view.groupKey, view.y2Keys), view.y2Keys, view.facetKey,
+    view.xKey, view.yKeys, view.seriesLabels, view.seriesStyles, excludedDisplay,
+  );
   const shown = useGreyedFacets(composition, dataset, view.facetKey, view.xKey, excludedDisplay);
   const breakSeriesStyles = useBreakSeriesStyles(useWindowCycles(view, document), composition, dataset, view);
   const { hostRef, hostStyle } = useMultiPanelStage({

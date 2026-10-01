@@ -136,6 +136,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   const picks = useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.document?.bindings.encoding);
   const encodedFacets = useFacetEncoding(
     active, picks, canvasGroupCol(groupKey, y2Keys), y2Keys, facetKey, xKey, yKeys, seriesLabels, seriesStyles,
+    excludedDisplay,
   );
   const shown = useGreyedFacets(composition, active, facetKey, xKey, excludedDisplay); // F4.2c (a)
   // S1 (b): an x-break exports as the flat figure, so its panels cycle exactly when that figure does.

@@ -21,12 +21,15 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { withExcludedGhosts } from "../../lib/excludedRowsExport";
+import { omitOnlyReason, withExcludedGhosts } from "../../lib/excludedRowsExport";
 import { createFigureDocument } from "../../lib/figureDocument";
 import { buildFigureSpecFromDocument } from "../../lib/figureSpec";
+import type { FigureEncoding } from "../../lib/plotEncodingBinding";
 import { defaultPlotView } from "../../lib/plotview";
+import { SERIES_VARS } from "../../lib/seriesStyleCycle";
 import type { Dataset, DataStruct } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import { withFocusedEncoding } from "../../store/windowDocuments";
 import RealMultiPanelStage from "./MultiPanelStage";
 import { useEffectiveComposition } from "./useEffectiveComposition";
 
@@ -76,6 +79,7 @@ const DATA: DataStruct = {
   metadata: {},
 };
 const DS: Dataset = { id: "fx", name: "excluded.csv", data: DATA, excludedRows: [1, 5, 6] };
+const PALETTE = ["#0b6e4f", "#c3423f", "#2d3047", "#f2a541", "#5e548e", "#1b998b", "#e84855", "#3e2f5b"];
 const OPTS = { fmt: "svg", style: "default", dpi: 100, title: "", xLabel: "", yLabel: "" };
 
 beforeEach(() => {
@@ -90,7 +94,10 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.unstubAllGlobals();
-  useApp.setState({ facetKey: null, composition: null });
+  useApp.setState((s) => ({
+    facetKey: null, composition: null, groupKey: null,
+    plotWindows: withFocusedEncoding(s.plotWindows, s.focusedWindowId, undefined),
+  }));
   useApp.getState().setPref("excludedDisplay", "hide");
 });
 
@@ -152,5 +159,87 @@ describe("MultiPanelStage — greyed excluded rows on a facet grid", () => {
         [[0, 1], [3.0, 2.5]],
       ]),
     );
+  });
+});
+
+// A SPLIT grid (Color by `sample`, or Group by it alone): ch3 `sample` (s1/s2).
+// Row 1 is excluded inside level 0; rows 6 and 7 are level 1's only s2 rows, so
+// that panel keeps no s2 series and its companion holds them; row 8 is level
+// 2's only row (no panel). Each panel draws ONE grey companion per Y channel,
+// after its split series, never recoloured by level.
+const SPLIT_ROWS = [
+  [0, 0, 1.0, 0], [1, 0, 1.5, 1], [2, 0, 1.2, 0], [3, 0, 1.4, 1],
+  [0, 1, 3.0, 0], [1, 1, 2.5, 0], [2, 1, 2.8, 1], [3, 1, 2.6, 1],
+  [0, 2, 9.0, 0],
+];
+const SPLIT_DATA: DataStruct = {
+  time: SPLIT_ROWS.map((_, i) => i),
+  values: SPLIT_ROWS,
+  labels: ["B", "level", "M", "sample"],
+  units: ["T", "", "emu", ""],
+  metadata: {},
+  cat_levels: { 3: ["s1", "s2"] },
+};
+const SPLIT_DS: Dataset = { id: "fs", name: "split.csv", data: SPLIT_DATA, excludedRows: [1, 6, 7, 8] };
+const SPLIT_CASES: { key: string; picks?: FigureEncoding; groupKey?: number }[] = [
+  { key: "split_color", picks: { color: 3 } },
+  { key: "split_group", groupKey: 3 },
+];
+const root = document.documentElement;
+
+describe("MultiPanelStage — greyed excluded rows on a SPLIT facet grid", () => {
+  beforeEach(() => {
+    SERIES_VARS.forEach((v, i) => root.style.setProperty(v, PALETTE[i]));
+    useApp.setState({ datasets: [SPLIT_DS], activeId: "fs" });
+  });
+  afterEach(() => SERIES_VARS.forEach((v) => root.style.removeProperty(v)));
+
+  it.each(SPLIT_CASES)("$key: one grey companion per panel, on screen and in the export", async (c) => {
+    useApp.setState({ groupKey: c.groupKey ?? null });
+    useApp.getState().facetByColumn("fs", 1);
+    if (c.picks) useApp.setState((s) => ({ plotWindows: withFocusedEncoding(s.plotWindows, s.focusedWindowId, c.picks) }));
+    render(<MultiPanelStage />);
+    await waitFor(() =>
+      expect(columnsOf()).toEqual([
+        [[0, 1, 2, 3], [1.0, null, 1.2, null], [null, null, null, 1.4], [null, 1.5, null, null]],
+        [[0, 1, 2, 3], [3.0, 2.5, null, null], [null, null, 2.8, 2.6]],
+      ]),
+    );
+    const grid = lastGrid();
+    const screen = grid.map((p) => ({
+      label: p.opts.title ?? "",
+      x: [...p.data[0]],
+      series: p.opts.series.slice(1).map((s, j) => ({ label: s.label, y: [...p.data[j + 1]] })),
+    }));
+    // The companion is each panel's last series, named for its channel and
+    // drawn in the dim ink, never in a level's colour.
+    for (const p of grid) {
+      const series = p.opts.series.slice(1) as { label?: string; stroke?: unknown }[];
+      const ghost = series[series.length - 1];
+      expect(ghost.label).toBe("M (excluded) (emu)");
+      expect(series.slice(0, -1).map((s) => s.stroke)).not.toContain(ghost.stroke);
+    }
+
+    const view = { ...defaultPlotView(), xKey: 0, yKeys: [2], facetKey: 1 };
+    const doc = createFigureDocument({
+      id: "w", name: "w", datasetId: "fs", view, facetKey: 1, mark: "line",
+      ...(c.picks ? { encoding: c.picks } : {}), ...(c.groupKey != null ? { groupKey: c.groupKey } : {}),
+    });
+    const request = buildFigureSpecFromDocument(doc, SPLIT_DS, "fs", { ...OPTS, greyExcluded: withExcludedGhosts });
+    expect(request.facets?.map((f) => [f.label, f.x, f.rows, f.channels])).toEqual([
+      ["0", [0, 1, 2, 3], [0, 1, 2, 3], [2]],
+      ["1", [0, 1, 2, 3], [4, 5, 6, 7], [2]],
+    ]);
+    expect(request.excluded_rows).toEqual([1, 6, 7, 8]);
+    expect(request.grey_excluded).toBe(true);
+    expect(omitOnlyReason(request)).toBeNull();
+    // The omit build is untouched: the analysis view's rows, no mask.
+    const omit = buildFigureSpecFromDocument(doc, SPLIT_DS, "fs", OPTS);
+    expect(omit.facets?.map((f) => [f.x, f.rows])).toEqual([[[0, 2, 3], [0, 2, 3]], [[0, 1], [4, 5]]]);
+    expect(omit).not.toHaveProperty("excluded_rows");
+
+    const current = JSON.parse(JSON.stringify({ request, screen })) as unknown;
+    written[c.key] = current;
+    expect(current).toEqual(JSON.parse(readFileSync(FIXTURE, "utf-8"))[c.key]);
   });
 });
