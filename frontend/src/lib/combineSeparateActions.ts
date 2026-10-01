@@ -32,6 +32,6 @@ export const datasetCombineSeparateActions: ContextAction<DatasetActionTarget>[]
   {
     id: "dataset.separate",
     label: (t) => (multiSelected(t) ? `Separate ${t.selectedIds.length} selected into new workbook…` : "Separate into new workbook…"),
-    run: (t) => useApp.getState().previewSeparateWorksheets(actionIds(t)),
+    run: (t) => void useApp.getState().previewSeparateWorksheets(actionIds(t)),
   },
 ];

@@ -44,9 +44,9 @@ describe("workbookSeparate slice", () => {
   });
 
   describe("previewSeparateWorksheets", () => {
-    it("computes a plan without mutating datasets/workbooks", () => {
+    it("computes a plan without mutating datasets/workbooks", async () => {
       const before = useApp.getState();
-      useApp.getState().previewSeparateWorksheets(["d1"]);
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
       const s = useApp.getState();
       expect(s.datasets).toBe(before.datasets);
       expect(s.workbooks).toBe(before.workbooks);
@@ -55,8 +55,8 @@ describe("workbookSeparate slice", () => {
       expect(s.history).toHaveLength(0); // preview is not an edit
     });
 
-    it("carries the source workbook's own folder as the new workbook's suggested folder", () => {
-      useApp.getState().previewSeparateWorksheets(["d1"]);
+    it("carries the source workbook's own folder as the new workbook's suggested folder", async () => {
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
       expect(useApp.getState().separatePreview?.newWorkbookFolderId).toBe("f1");
     });
 
@@ -65,11 +65,11 @@ describe("workbookSeparate slice", () => {
     // for no reason a live-updating preview would make worse. The plan's own
     // `newWorkbookId` is now a fixed placeholder shared by every preview —
     // the REAL id is minted once, at commit.
-    it("does not mint a fresh workbook id on every preview open", () => {
-      useApp.getState().previewSeparateWorksheets(["d1"]);
+    it("does not mint a fresh workbook id on every preview open", async () => {
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
       const firstPlanId = useApp.getState().separatePreview?.newWorkbookId;
       useApp.getState().closeSeparatePreview();
-      useApp.getState().previewSeparateWorksheets(["d2"]);
+      await useApp.getState().previewSeparateWorksheets(["d2"]);
       const secondPlanId = useApp.getState().separatePreview?.newWorkbookId;
       expect(firstPlanId).toBeDefined();
       expect(secondPlanId).toBe(firstPlanId);
@@ -85,8 +85,8 @@ describe("workbookSeparate slice", () => {
       expect(useApp.getState().history).toHaveLength(0);
     });
 
-    it("applies exactly the previewed plan: new workbook, moving dataset(s) reassigned, one history entry", () => {
-      useApp.getState().previewSeparateWorksheets(["d1"]);
+    it("applies exactly the previewed plan: new workbook, moving dataset(s) reassigned, one history entry", async () => {
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
       const planId = useApp.getState().separatePreview?.newWorkbookId;
       const newId = useApp.getState().commitSeparateWorksheets();
       const s = useApp.getState();
@@ -110,7 +110,7 @@ describe("workbookSeparate slice", () => {
     // workbook tree (the NEW workbook). This covers BOTH the seed and a
     // closure-swept dependent whose folderId had drifted to something
     // DIFFERENT from the seed's own.
-    it("re-homes the seed's AND a closure-swept dependent's folderId to the new workbook's folder, even when the dependent had drifted to a different one (P1 fix)", () => {
+    it("re-homes the seed's AND a closure-swept dependent's folderId to the new workbook's folder, even when the dependent had drifted to a different one (P1 fix)", async () => {
       useApp.setState({
         datasets: [
           ds("d1", "A.dat", "w1", { folderId: "f1" }),
@@ -122,16 +122,16 @@ describe("workbookSeparate slice", () => {
           { id: "f2", name: "F2", parentId: null, order: 0 },
         ],
       });
-      useApp.getState().previewSeparateWorksheets(["d1"]);
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
       useApp.getState().commitSeparateWorksheets();
       const s = useApp.getState();
       expect(s.datasets.find((d) => d.id === "d1")?.folderId).toBe("f1");
       expect(s.datasets.find((d) => d.id === "d2")?.folderId).toBe("f1"); // re-homed, not left at the drifted "f2"
     });
 
-    it("moves an exclusively-dependent report along with the separated worksheet", () => {
+    it("moves an exclusively-dependent report along with the separated worksheet", async () => {
       useApp.setState({ reports: [report("r1", "d1")] });
-      useApp.getState().previewSeparateWorksheets(["d1"]);
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
       const newId = useApp.getState().commitSeparateWorksheets();
       // The report itself carries no workbookId (placement is derived) — the
       // plan/commit contract is that the DATASET move is the only mutation;
@@ -141,24 +141,24 @@ describe("workbookSeparate slice", () => {
       expect(useApp.getState().datasets.find((d) => d.id === "d1")?.workbookId).toBe(newId);
     });
 
-    it("an explicit name overrides the plan's suggested default", () => {
-      useApp.getState().previewSeparateWorksheets(["d1"]);
+    it("an explicit name overrides the plan's suggested default", async () => {
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
       const newId = useApp.getState().commitSeparateWorksheets("Custom Name");
       expect(useApp.getState().workbooks.find((w) => w.id === newId)?.name).toBe("Custom Name");
     });
 
-    it("undo restores the pre-separate workbook/worksheet assignment exactly", () => {
+    it("undo restores the pre-separate workbook/worksheet assignment exactly", async () => {
       const preWorkbooks = useApp.getState().workbooks;
       const preDatasets = useApp.getState().datasets;
-      useApp.getState().previewSeparateWorksheets(["d1"]);
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
       useApp.getState().commitSeparateWorksheets();
       useApp.getState().undo();
       expect(useApp.getState().workbooks).toBe(preWorkbooks);
       expect(useApp.getState().datasets).toBe(preDatasets);
     });
 
-    it("fails closed (zero mutation) if a previewed worksheet vanished before commit", () => {
-      useApp.getState().previewSeparateWorksheets(["d1"]);
+    it("fails closed (zero mutation) if a previewed worksheet vanished before commit", async () => {
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
       // Simulate a race: d1 got removed after the preview opened.
       useApp.setState((s) => ({ datasets: s.datasets.filter((d) => d.id !== "d1") }));
       const before = useApp.getState();
@@ -171,8 +171,8 @@ describe("workbookSeparate slice", () => {
   });
 
   describe("closeSeparatePreview", () => {
-    it("clears the preview without mutating datasets/workbooks", () => {
-      useApp.getState().previewSeparateWorksheets(["d1"]);
+    it("clears the preview without mutating datasets/workbooks", async () => {
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
       useApp.getState().closeSeparatePreview();
       expect(useApp.getState().separatePreview).toBeNull();
       expect(useApp.getState().history).toHaveLength(0);

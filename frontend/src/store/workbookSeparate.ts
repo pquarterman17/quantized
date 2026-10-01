@@ -27,7 +27,9 @@
 // (`lib/foldertree.ts`'s `folderDatasets`) and the workbook tree can never
 // disagree about where a separated worksheet or its dependents live.
 
-import { computeSeparatePlan, type SeparatePlan } from "../lib/workbookSeparate";
+// The plan builder loads on the first Separate (bundle diet slice 16): only
+// the preview needs it, and its caller is the lazy dataset-row menu.
+import type { SeparatePlan } from "../lib/workbookSeparate";
 import { nextWorkbookId } from "./workbookIds";
 import { toast } from "./toasts";
 import type { WorkbookNode } from "../lib/workbooks";
@@ -70,8 +72,11 @@ export interface WorkbookSeparateSlice {
    *  `worksheetIds` (usually one, but a multi-select gesture may pass
    *  several — they land in ONE resulting workbook). Pure computation over
    *  live state; makes no mutation of its own. A status message and no
-   *  preview open on an empty request. */
-  previewSeparateWorksheets: (worksheetIds: readonly string[]) => void;
+   *  preview open on an empty request. Resolves once the preview is open:
+   *  the plan builder (lib/workbookSeparate.ts) loads on first use, and a
+   *  builder that will not load is reported (status + danger toast) with no
+   *  preview opened. */
+  previewSeparateWorksheets: (worksheetIds: readonly string[]) => Promise<void>;
   /** Discard the open preview without applying it. No-op if none is open. */
   closeSeparatePreview: () => void;
   /** Apply the CURRENTLY OPEN preview atomically (L0.51's "commit applies
@@ -92,14 +97,24 @@ export function createWorkbookSeparateSlice(set: SliceSet, get: SliceGet): Workb
   return {
     separatePreview: null,
 
-    previewSeparateWorksheets: (worksheetIds) => {
+    previewSeparateWorksheets: async (worksheetIds) => {
       if (worksheetIds.length === 0) {
         get().setStatus("Separate unavailable: nothing selected");
         return;
       }
+      let builder: typeof import("../lib/workbookSeparate");
+      try {
+        builder = await import("../lib/workbookSeparate");
+      } catch (e) {
+        const msg = `Separate failed to load: ${e instanceof Error ? e.message : "error"}`;
+        get().setStatus(msg);
+        toast(msg, "danger");
+        return;
+      }
       // P3 slice-2 fix: shared placeholder, not a fresh mint per open — see
-      // PENDING_SEPARATE_WORKBOOK_ID's doc above.
-      const plan = computeSeparatePlan(hierarchyInput(get()), worksheetIds, PENDING_SEPARATE_WORKBOOK_ID);
+      // PENDING_SEPARATE_WORKBOOK_ID's doc above. Planned against the state
+      // as of the load, not the click.
+      const plan = builder.computeSeparatePlan(hierarchyInput(get()), worksheetIds, PENDING_SEPARATE_WORKBOOK_ID);
       set({ separatePreview: plan });
     },
 

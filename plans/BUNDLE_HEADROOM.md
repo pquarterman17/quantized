@@ -1,6 +1,12 @@
 # Bundle headroom campaign
 
-**Current state (2026-10-01, after slice 15):** three lazy-only halves split
+**Current state (2026-10-01, after slice 16):** two async load seams and
+three more re-exported lazy halves. Parent `97932150` measured **859,253 B**
+(3,954 B under the pin after later batches); after, **854,654 B**
+(**−4,599 B**). The pin was LOWERED by that same amount, **863,207 →
+858,608 B**, so the headroom is unchanged (**3,954 B**). See "Slice 16".
+
+**Previous state (2026-10-01, after slice 15):** three lazy-only halves split
 off behind `export *` re-exports, no seam. Parent `06a1a9ca` measured
 **856,426 B**; after, **853,275 B** (**−3,151 B**). The pin was LOWERED by
 that same amount, **866,358 → 863,207 B**, so the banked headroom is
@@ -2326,6 +2332,95 @@ importing `copySvgAsync`.
 That keeps the headroom slices 10–14 banked for queued work (9,932 B on
 this tree) and locks in this slice's gain. Nothing is left on the
 slice-13 candidate list.
+
+### Slice 16 — two async seams, three more lazy halves, pin ratcheted DOWN — **DONE (2026-10-01)**
+
+**Measured net eager delta −4,599 B — pin LOWERED 863,207 → 858,608 B**
+
+Later batches had taken the tree to 859,253 B, 3,954 B under the pin.
+Exact bytes, `npm ci`, then `node_modules/.vite` wiped before every build.
+Rows are cumulative:
+
+| tree | eager B | delta |
+|---|---:|---:|
+| `97932150` (parent) | 859,253 | — |
+| + append-import body → `store/importAppendRun.ts` | 858,283 | **−970** |
+| + Separate plan builder (`lib/workbookSeparate.ts`) behind `import()` | 856,870 | **−1,413** |
+| + `lib/recode.ts` → `lib/recodeMappings.ts`, `lib/rowSidecars.ts` → `lib/rowSidecarsConcat.ts` | 855,209 | **−1,661** |
+| + `lib/datafilter.ts` → `lib/datafilterSanitize.ts` | 854,654 | **−555** |
+
+**The recent-batch modules the brief named were checked first.** Of
+`statFigureCommands`, `statStageBridge`, `exportAxisTitles`,
+`exportDefaultTrace`, `polarFigureSpec`, `screenOnlyExport`, `fitSpecParse`,
+`undoStep` and `uplotErrorRange`, only the last two are eager. `undoStep` is
+119 B. `uplotErrorRange` (1,641 B, split from `uplotOpts` with the error-range
+y-extents) and `uplotXRange` run on every plot render, so they stay. The
+growth since slice 15 was mostly those two plus `store/importAppend.ts`, which
+left `useApp.ts` as an eager slice.
+
+#### The two seams
+
+- **`importFilesAppended`.** The action was already async: it uploads every
+  file before touching the store. `store/importAppend.ts` keeps the slice, the
+  "fewer than two files" refusal and the progress status line. The upload,
+  review and merge body moved verbatim to `store/importAppendRun.ts`, loaded
+  on the first append. A body that will not load keeps the action's own
+  contract (never a dead import): a danger toast, then `importFiles(files,
+  { bypassGuard: true })`, the same degrade every other failure takes.
+  `uploadFile` is passed in rather than imported. A static `lib/api` import
+  from the lazy body made Rolldown split `lib/api` into an eager chunk of its
+  own. That cost +53 B of boundary (−881 B instead of −970), which is the
+  same finding `commands/fileCommandsLazy.ts` records.
+- **`previewSeparateWorksheets`.** Only the preview needs
+  `computeSeparatePlan`, and its one caller is the lazy dataset-row menu
+  (`lib/combineSeparateActions.ts`, already `DRAGGED_OUT`). The action now
+  returns a `Promise` that resolves once the preview is open. The plan is
+  computed against the state as of the load. A builder that will not load
+  sets the status and raises a danger toast (`Separate failed to load: …`),
+  and opens no preview. Nothing mutates. Commit and close are unchanged and
+  stay synchronous. The cost is that `lib/libraryHierarchy.ts` now ships as
+  its own eager chunk (4,474 B, about 145 B of boundary over its
+  attribution). The table's −1,413 B is net of that.
+
+#### The three halves
+
+These use the slice-15 method: code that only lazy modules call moves
+verbatim into a sibling, and the parent re-exports it with `export *`.
+
+- **recode:** the eager formula engine needs the recode math only.
+  Find/replace mapping, saved-mapping reapply and the panel's channel
+  re-resolve serve the lazy Recode panel, worksheet pane and level-order
+  panel.
+- **rowSidecars:** `withoutRowSidecars` and `concatRowSidecars` serve only
+  `lib/merge.ts`.
+- **datafilter:** `sanitizeFilter` serves only the `.dwk` codec.
+
+**Tried and dropped:** `lib/quickPlot.ts`'s workbook-row gate
+(`quickPlotWorkbookGate`) as a fourth half saved **0 B**. Its only importer,
+`lib/workbookContextActions.ts`, is lazy by the import walk. Rolldown still
+emits it into the eager `ConfirmDialog` shared chunk, so splitting its callee
+moves nothing. Before a half is pinned, check that its importers' code
+actually leaves the eager chunks, not just the walk. Also dropped: deferring
+the "Import Origin template" body behind `runLazy`. It netted only about
+−700 B, because a lazy `lib/originTemplate.ts` made Rolldown re-chunk
+`lib/api`, `lib/figuredoc`, `lib/publicationStyles` and
+`lib/seriesStyleCycle` into new eager chunks.
+
+#### Guards and tests
+
+`architecture.test.ts`: both seams are `SEAMS` entries (nothing imports them
+statically). The three halves are `REEXPORTED_LAZY_HALVES` entries. Sabotage
+turned three arms RED: a value import of `computeSeparatePlan` in
+`store/workbookSeparate.ts` (the seam and reachability arms), and `App.tsx`
+importing a half's name from its parent (the lazy-half arm).
+`store/importAppend.lazyFail.test.ts` and
+`store/workbookSeparate.lazyFail.test.ts` pin the load-failure contracts and
+the retry. Both were RED before their change. The existing Separate store,
+dialog and row-menu tests now await the preview, or wait on its state.
+`preload-verify` passes (188 wrapped sites, 0 violations).
+
+**Pin:** lowered by exactly the measured saving, the slice-15 convention. That
+locks in the gain and keeps the 3,954 B of headroom this tree had.
 
 ## What this does NOT change
 

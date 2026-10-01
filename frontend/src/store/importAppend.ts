@@ -30,9 +30,6 @@
 // N-dataset result end to end.
 
 import { uploadFile } from "../lib/api";
-import { lit } from "../lib/macro";
-import type { DataStruct } from "../lib/types";
-import { nextDatasetId } from "./idSeq";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 
@@ -48,6 +45,11 @@ export interface ImportAppendSlice {
 }
 
 // Takes only `get`: every write goes through addDataset/setStatus/pushRecent.
+// The upload/merge body, store/importAppendRun.ts, loads on the first append
+// (bundle diet slice 16). A body that will not load keeps this action's
+// contract: the files land as separate datasets with a danger toast, like
+// every other degrade. A failed load is not cached, so the next append
+// retries it.
 export function createImportAppendSlice(get: SliceGet): ImportAppendSlice {
   return {
     importFilesAppended: async (files) => {
@@ -56,50 +58,15 @@ export function createImportAppendSlice(get: SliceGet): ImportAppendSlice {
         return;
       }
       get().setStatus(`importing ${files.length} files to append…`);
-      const uploaded: { name: string; size: number; data: DataStruct }[] = [];
-      let failReason = "";
-      for (const file of files) {
-        try {
-          const data = await uploadFile(file);
-          if (data.books && data.books.length > 1) {
-            failReason = `${file.name} is a multi-workbook Origin project — can't append`;
-            break;
-          }
-          uploaded.push({ name: file.name, size: file.size, data });
-        } catch (e) {
-          failReason = `${file.name}: ${e instanceof Error ? e.message : "error"}`;
-          break;
-        }
+      let body: typeof import("./importAppendRun");
+      try {
+        body = await import("./importAppendRun");
+      } catch (e) {
+        toast(`append import failed to load: ${e instanceof Error ? e.message : "error"} — importing separately instead`, "danger");
+        await get().importFiles(files, { bypassGuard: true });
+        return;
       }
-      if (!failReason && uploaded.length === files.length) {
-        try {
-          // lazy (bundle ratchet); reviews unit/label mismatches first (P2.5) —
-          // declining lands the files as separate datasets below.
-          const merged = await (await import("../lib/transformRun")).reviewedAppend(
-            uploaded.map((u) => u.data),
-            uploaded.map((u) => u.name),
-          );
-          if (!merged) throw new Error("append cancelled at the unit/name review");
-          const id = nextDatasetId();
-          const name = `${uploaded[0].name} +${uploaded.length - 1} more (appended)`;
-          get().addDataset({ id, name, data: merged });
-          for (const u of uploaded) get().pushRecent(u.name, u.size);
-          get().recordMacro(
-            `Import (append) ${uploaded.length} files`,
-            `qz.importAppended(${lit(uploaded.map((u) => u.name))})`,
-            { kind: "import", params: { names: uploaded.map((u) => u.name) } },
-          );
-          const msg = `appended ${uploaded.length} files → ${merged.time.length} rows`;
-          get().setStatus(msg);
-          toast(msg, "ok");
-          return;
-        } catch (e) {
-          failReason = e instanceof Error ? e.message : "append failed (column-count mismatch)";
-        }
-      }
-      // Degrade to N separate datasets rather than a dead import (bypassGuard: "import-append" already holds it).
-      toast(`${failReason} — importing separately instead`, failReason.startsWith("append cancelled") ? "info" : "danger");
-      await get().importFiles(files, { bypassGuard: true });
+      await body.runImportFilesAppended(get, files, uploadFile);
     },
   };
 }
