@@ -226,6 +226,23 @@ describe("CorrectionsCard rescale relabel (MAIN #37)", () => {
     expect(vi.mocked(applyCorrectionsApi).mock.calls[0][0].params.yScale).toBe(1000);
   });
 
+  it("keeps the old axis labels when the correction FAILS", async () => {
+    // Silent-failure audit (2026-10-01): a rejected apply still relabelled the
+    // axes, so they claimed a rescale the numbers never received.
+    vi.mocked(applyCorrectionsApi).mockRejectedValue(new Error("422 bad scale"));
+    useApp.setState({ xAxisLabel: "old x", yAxisLabel: "old y" });
+    render(<CorrectionsCard active={d1} />);
+    fireEvent.change(scaleInput("Y scale"), { target: { value: "1000" } });
+    fireEvent.change(labelInput("X label"), { target: { value: "Field (T)" } });
+    fireEvent.change(labelInput("Y label"), { target: { value: "Moment (memu)" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(useApp.getState().status).toContain("corrections failed"));
+    // Apply re-enables only after onApply has fully returned.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled());
+    expect(useApp.getState().xAxisLabel).toBe("old x");
+    expect(useApp.getState().yAxisLabel).toBe("old y");
+  });
+
   it("leaves an axis label untouched when its field is blank", async () => {
     useApp.setState({ yAxisLabel: "original" });
     render(<CorrectionsCard active={d1} />);
