@@ -18,6 +18,7 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 from quantized.io._delimited_layout import _to_float
+from quantized.io._row_width import conform_rows, modal_width
 from quantized.io.base import read_text
 
 __all__ = ["import_ncnr_dat", "import_ncnr_pnr", "import_ncnr_refl", "is_ncnr_refl"]
@@ -283,9 +284,16 @@ def import_ncnr_refl(filepath: str | Path) -> DataStruct:
             continue  # any non-numeric token -> drop the row (MATLAB parity)
     if not rows:
         raise ValueError(f"no numeric data rows in {path.name}")
-    matrix = np.asarray(rows, dtype=float)
-
     n_cols = len(columns)
+    # A cut-off last line used to crash np.asarray ("inhomogeneous shape"),
+    # and values past the declared columns were dropped without a word.
+    matrix, row_meta = conform_rows(rows, n_cols, truncate_wide=True)
+    if matrix.shape[0] == 0:
+        raise ValueError(
+            f"{path.name}: every data row has fewer values than the "
+            f"{n_cols}-column 'columns' header"
+        )
+
     qz = matrix[:, 0]
     values = matrix[:, 1:n_cols]
     labels = columns[1:n_cols]
@@ -303,6 +311,7 @@ def import_ncnr_refl(filepath: str | Path) -> DataStruct:
         "wavelengths": wavelength,
     }
     metadata.update(_refl_role_metadata(labels, out_units, metadata["x_column_unit"]))
+    metadata.update(row_meta)
     return DataStruct.create(qz, values, labels=labels, units=out_units, metadata=metadata)
 
 
@@ -416,8 +425,9 @@ def import_ncnr_dat(filepath: str | Path) -> DataStruct:
             continue
     if not rows:
         raise ValueError(f"no numeric data in {path.name}")
-    width = len(rows[0])
-    matrix = np.asarray([r for r in rows if len(r) == width], dtype=float)
+    # The modal width, not row 0's: a truncated first row used to set the
+    # width and so discard every full row after it.
+    matrix, row_meta = conform_rows(rows, modal_width(rows), truncate_wide=False)
 
     n_val = matrix.shape[1] - 1
     labels: list[str] = []
@@ -432,6 +442,7 @@ def import_ncnr_dat(filepath: str | Path) -> DataStruct:
         "x_column_name": "Q",
         "x_column_unit": "1/Ang",
         "polarization": pol,
+        **row_meta,
     }
     if not np.isnan(intensity):
         metadata["intensity"] = intensity

@@ -20,7 +20,6 @@ its own — callers hand in text.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -64,9 +63,13 @@ class _Parsed:
 
 
 def _split(line: str, delim: str) -> list[str]:
+    """Tokenize one line exactly as ``import_csv`` does (`layout.split_row`):
+    a quoted cell is one cell with its quotes removed, so the wizard and the
+    direct import agree on quoted files. A whitespace delimiter splits on
+    runs; other delimiters keep a line's leading empty cells (no strip)."""
     if delim in (" ", "whitespace"):
-        return re.split(r"\s+", line.strip())
-    return line.split(delim)
+        return layout.split_row(line.strip(), " ") or [""]
+    return layout.split_row(line, delim)
 
 
 def _effective_ncols(rows: list[list[str]]) -> int:
