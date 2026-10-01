@@ -36,7 +36,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { statsDescriptive } from "../../../lib/api/statsDescriptive";
 import { copyText, tableToTSV } from "../../../lib/clipboard";
 import { categoricalLevels } from "../../../lib/categorical";
 import { useEscapeSurface } from "../../../lib/escapeStack";
@@ -47,6 +46,7 @@ import { autofitColWidth, clampColWidth } from "../../../lib/gridwindow";
 import { excludedSet, filteredOutSet } from "../../../lib/rowstate";
 import { resolveSelectionPlot, selectionToSpec } from "../../../lib/selectionplot";
 import { useWorksheetBlockOps, type BlockOpsApi } from "./useWorksheetBlockOps";
+import { useWorksheetStats } from "./useWorksheetStats";
 import type { CalcResult, ChannelRole, Dataset, DataStruct } from "../../../lib/types";
 import { nextDatasetId, plotIntentStageTab, useApp } from "../../../store/useApp";
 import { askParams } from "../../overlays/ParamDialog";
@@ -232,8 +232,6 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   const [addColumnPending, setAddColumnPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showStats, setShowStats] = useState(false);
-  const [colStats, setColStats] = useState<(CalcResult | null)[] | null>(null);
-  const [statsErr, setStatsErr] = useState(false);
   const [filterCol, setFilterCol] = useState("");
   const [filterOp, setFilterOp] = useState(">");
   const [filterV1, setFilterV1] = useState("");
@@ -370,41 +368,9 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   const analysisRows = useMemo(() => analysisWorksheetRows(filtered, masked), [filtered, masked]);
   const rowRules = { filterCol, filterOp, filterV1, filterV2, sort };
 
-  // Fetch per-column descriptive stats (golden /api/stats/descriptive) over
-  // the ANALYSIS rows — independent of the windowed display range and the
-  // sort order, so stats follow filter + mask but not scroll/ordering.
-  useEffect(() => {
-    if (!showStats) {
-      setColStats(null);
-      setStatsErr(false);
-      return;
-    }
-    let cancelled = false;
-    setColStats(null);
-    setStatsErr(false);
-    const { time, values, labels } = ds.data;
-    // Finite values only, like the Distribution workshop: a blank (NaN) cell
-    // serializes as null, which the route rejects (422). Debounced so a burst
-    // of edits costs one round of requests, not one per edit.
-    const finite = (xs: (number | undefined)[]) => xs.filter((v): v is number => Number.isFinite(v));
-    const timer = setTimeout(() => {
-      const columns = [
-        finite(analysisRows.map((r) => time[r])),
-        ...labels.map((_, c) => finite(analysisRows.map((r) => values[r]?.[c]))),
-      ];
-      Promise.all(columns.map((col) => statsDescriptive(col)))
-        .then((res) => {
-          if (!cancelled) setColStats(res);
-        })
-        .catch(() => {
-          if (!cancelled) setStatsErr(true);
-        });
-    }, 300);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [ds, showStats, analysisRows]);
+  // Per-column stats footer over the ANALYSIS rows; only changed columns are
+  // re-requested (./useWorksheetStats).
+  const { colStats, statsErr } = useWorksheetStats(ds.data, analysisRows, showStats);
 
   const { time, values, labels, units, metadata } = ds.data;
   const baseCount = labels.length - (ds.formulas?.length ?? 0);
