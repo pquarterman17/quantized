@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Toaster from "./Toaster";
-import { TOAST_ACTION_TTL, useToasts } from "../../store/toasts";
+import { TOAST_ACTION_TTL, TOAST_TTL, useToasts } from "../../store/toasts";
 
 describe("Toaster", () => {
   beforeEach(() => {
@@ -82,7 +82,7 @@ describe("Toaster pauses an action toast while it is in use", () => {
       vi.advanceTimersByTime(ms);
     });
 
-  it("hover holds it past its timer; leaving resumes the time it had left", () => {
+  it("hover holds it past its timer; once the pointer leaves it lingers one short TTL more", () => {
     render(<Toaster />);
     offer();
     elapse(TOAST_ACTION_TTL - 1000);
@@ -90,9 +90,20 @@ describe("Toaster pauses an action toast while it is in use", () => {
     elapse(TOAST_ACTION_TTL * 3);
     expect(screen.getByText("overlay?")).toBeInTheDocument();
     fireEvent.mouseLeave(screen.getByText("overlay?"));
-    elapse(999);
+    elapse(TOAST_TTL - 1);
     expect(screen.getByText("overlay?")).toBeInTheDocument();
     elapse(1);
+    expect(screen.queryByText("overlay?")).toBeNull();
+  });
+
+  it("a hover that ends before the timer leaves the timer as it was", () => {
+    render(<Toaster />);
+    offer();
+    fireEvent.mouseEnter(screen.getByText("overlay?"));
+    fireEvent.mouseLeave(screen.getByText("overlay?"));
+    // An unpaired leave (the toast appeared under the pointer) is not a hold.
+    fireEvent.mouseLeave(screen.getByText("overlay?"));
+    elapse(TOAST_ACTION_TTL);
     expect(screen.queryByText("overlay?")).toBeNull();
   });
 

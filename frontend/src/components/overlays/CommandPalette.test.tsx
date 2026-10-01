@@ -76,6 +76,29 @@ describe("CommandPalette returns focus to its opener (R2)", () => {
   });
 });
 
+// The context-action registry loads with `import()` (eager-bundle cost), so
+// its entries join the list a microtask after the palette opens.
+describe("CommandPalette context actions", () => {
+  const dataset = { id: "d1", name: "Alpha", data: { time: [1], values: [[1]], labels: ["m"], units: [""], metadata: {} } };
+
+  it("lists the active dataset's actions under its own group", async () => {
+    useApp.setState({ datasets: [dataset], activeId: "d1", selectedAnnotationId: null, selectedShapeId: null });
+    render(<CommandPalette actions={[action]} />);
+    const group = await screen.findByRole("group", { name: "Active dataset — Alpha" });
+    expect(within(group).getByRole("option", { name: /^Duplicate/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Break x-axis/ })).toBeInTheDocument();
+  });
+
+  it("closing and reopening lists each context action once", async () => {
+    useApp.setState({ datasets: [dataset], activeId: "d1", selectedAnnotationId: null, selectedShapeId: null });
+    render(<CommandPalette actions={[action]} />);
+    act(() => useApp.setState({ cmdkOpen: false }));
+    act(() => useApp.setState({ cmdkOpen: true }));
+    const group = await screen.findByRole("group", { name: "Active dataset — Alpha" });
+    expect(within(group).getAllByRole("option", { name: /^Duplicate/ })).toHaveLength(1);
+  });
+});
+
 describe("CommandPalette discovery descriptions", () => {
   it("shows the concise command outcome below its label", () => {
     render(<CommandPalette actions={[action]} />);
@@ -138,5 +161,8 @@ describe("CommandPalette as a modal listbox", () => {
       expect(header).toHaveAttribute("role", "presentation");
       expect(header.closest('[role="group"]')).not.toBeNull();
     }
+    // A grouped option still runs on click.
+    fireEvent.mouseDown(within(file).getByRole("option", { name: "Export page" }));
+    expect(actions[2].run).toHaveBeenCalledTimes(1);
   });
 });

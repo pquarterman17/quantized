@@ -11,22 +11,24 @@ import type { FocusEvent } from "react";
 
 import { useToasts, type Toast } from "../../store/toasts";
 
-function ToastPill({ t }: { t: Toast }) {
-  const danger = t.kind === "danger";
+export default function Toaster() {
+  const toasts = useToasts((s) => s.toasts);
   const dismiss = useToasts((s) => s.dismiss);
   const hold = useToasts((s) => s.hold);
-  const onBlur = (e: FocusEvent<HTMLDivElement>) => {
-    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) hold(t.id, "focus", false);
+  // Focus moving WITHIN a toast is neither a new hold nor a release.
+  const focusHold = (t: Toast, on: boolean) => (e: FocusEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) hold(t.id, on);
   };
-  return (
+  const pill = (t: Toast) => (
     <div
+      key={t.id}
       className={`qzk-toast${t.kind !== "info" ? ` ${t.kind}` : ""}`}
-      role={danger ? "alert" : undefined}
+      role={t.kind === "danger" ? "alert" : undefined}
       onClick={() => dismiss(t.id)}
-      onMouseEnter={() => hold(t.id, "hover", true)}
-      onMouseLeave={() => hold(t.id, "hover", false)}
-      onFocus={() => hold(t.id, "focus", true)}
-      onBlur={onBlur}
+      onMouseEnter={() => hold(t.id, true)}
+      onMouseLeave={() => hold(t.id, false)}
+      onFocus={focusHold(t, true)}
+      onBlur={focusHold(t, false)}
     >
       {t.msg}
       {t.action && (
@@ -44,10 +46,6 @@ function ToastPill({ t }: { t: Toast }) {
       )}
     </div>
   );
-}
-
-export default function Toaster() {
-  const toasts = useToasts((s) => s.toasts);
   // Rendered even while empty: screen readers commonly skip a live region
   // that enters the DOM together with its first text, which lost the first
   // toast's announcement (often the only one). The same holds for the nested
@@ -61,9 +59,9 @@ export default function Toaster() {
     // Spelled as a literal: importing the constant would pull modalInert into
     // the entry chunk; modalInert.test.tsx pins the spelling.
     <div className="qzk-toaster" aria-live="polite" data-live-region="">
-      {toasts.map((t) => t.kind !== "danger" && <ToastPill key={t.id} t={t} />)}
+      {toasts.map((t) => t.kind !== "danger" && pill(t))}
       <div className="qzk-toast-alerts" aria-live="assertive">
-        {toasts.map((t) => t.kind === "danger" && <ToastPill key={t.id} t={t} />)}
+        {toasts.map((t) => t.kind === "danger" && pill(t))}
       </div>
     </div>
   );

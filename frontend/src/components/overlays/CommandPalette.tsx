@@ -10,7 +10,6 @@
 
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { contextPaletteActions } from "../../lib/paletteContextActions";
 import { fuzzy } from "../../lib/fuzzy";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcutFormat";
 import { mergeCommands, PALETTE_LABEL, runAction, useCommands, type Action } from "../../store/commands";
@@ -23,17 +22,10 @@ export type { Action };
 const IS_MAC = isMacPlatform();
 
 // The background-`inert` registry every other modal uses (lib/modalInert.ts,
-// via the lazy `useDialogFocus`). Loaded on the first open rather than
-// imported: this component is eager and must not pull it into the entry
-// chunk. Once loaded it is held here, so every later open registers in the
-// same layout phase the other modals do.
-type ModalInert = typeof import("../../lib/modalInert");
-let modalInert: ModalInert | null = null;
-let modalInertLoad: Promise<ModalInert> | null = null;
-function loadModalInert(): Promise<ModalInert> {
-  modalInertLoad ??= import("../../lib/modalInert").then((m) => (modalInert = m));
-  return modalInertLoad;
-}
+// via the lazy `useDialogFocus`), loaded with `import()`: this component is
+// eager and must not pull it into the entry chunk. Kept once loaded, so a
+// close can lift the inert synchronously before focus goes back.
+let modalInert: typeof import("../../lib/modalInert") | undefined;
 
 export default function CommandPalette({ actions }: { actions: Action[] }) {
   const open = useApp((s) => s.cmdkOpen);
@@ -65,19 +57,19 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `opener` is a ref
   }, [open]);
-  // The page behind goes inert while the palette is open. A failed chunk
-  // load only costs that: Tab is trapped here and the backdrop takes clicks.
+  // The page behind goes inert while the palette is open (registered a
+  // microtask after the commit, before paint). A failed chunk load only costs
+  // that: Tab is trapped here and the backdrop takes clicks.
   useLayoutEffect(() => {
     if (!open) return;
     let live = true;
-    if (modalInert) modalInert.registerModal(dialogRef);
-    else
-      loadModalInert().then(
-        (m) => {
-          if (live) m.registerModal(dialogRef);
-        },
-        () => {},
-      );
+    void import("../../lib/modalInert").then(
+      (m) => {
+        modalInert = m;
+        if (live) m.registerModal(dialogRef);
+      },
+      () => {},
+    );
     return () => {
       live = false;
       modalInert?.releaseModal(dialogRef);
@@ -91,15 +83,27 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
   };
 
   useEffect(() => {
-    if (open) {
-      setQuery("");
-      setCursor(0);
-      // Context-selection commands (the active dataset / selected annotation
-      // / selected shape's registry actions) are computed fresh each open —
-      // non-reactive by design, same snapshot discipline as menuCommands.
-      setMenuCmds([...useCommands.getState().menuCommands, ...contextPaletteActions()]);
-      requestAnimationFrame(() => inputRef.current?.focus());
-    }
+    if (!open) return;
+    let live = true;
+    setQuery("");
+    setCursor(0);
+    const menu = useCommands.getState().menuCommands;
+    setMenuCmds(menu);
+    // Context-selection commands (the active dataset / selected annotation
+    // / selected shape's registry actions) are computed fresh each open —
+    // non-reactive by design, same snapshot discipline as menuCommands. Their
+    // registry loads with `import()` (a microtask once cached), which keeps
+    // it and the action modules it reaches out of the entry chunk.
+    void import("../../lib/paletteContextActions").then(
+      (m) => {
+        if (live) setMenuCmds([...menu, ...m.contextPaletteActions()]);
+      },
+      () => {},
+    );
+    requestAnimationFrame(() => inputRef.current?.focus());
+    return () => {
+      live = false;
+    };
   }, [open]);
 
   const allActions = useMemo(
@@ -163,11 +167,10 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
 
   // Consecutive matches of one group form a labelled `group` (the header is
   // its name, not an option); a group can recur after a better-scoring match.
-  const runs: { group: string; items: { a: Action; m: (typeof matches)[number]["m"]; i: number }[] }[] = [];
-  matches.forEach(({ a, m }, i) => {
-    const last = runs[runs.length - 1];
-    if (last?.group === a.group) last.items.push({ a, m, i });
-    else runs.push({ group: a.group, items: [{ a, m, i }] });
+  const runs: ((typeof matches)[number] & { i: number })[][] = [];
+  matches.forEach((x, i) => {
+    if (x.a.group !== matches[i - 1]?.a.group) runs.push([]);
+    runs[runs.length - 1].push({ ...x, i });
   });
 
   return (
@@ -208,11 +211,11 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
             <div className="qz-cmdk-empty">No matching commands</div>
           )}
           {runs.map((grp, r) => (
-            <div key={`${r}-${grp.group}`} role="group" aria-labelledby={`${listId}-g${r}`}>
+            <div key={r} role="group" aria-labelledby={`${listId}-g${r}`}>
               <div id={`${listId}-g${r}`} className="qz-cmdk-group" role="presentation">
-                {grp.group}
+                {grp[0].a.group}
               </div>
-              {grp.items.map(({ a, m, i }) => (
+              {grp.map(({ a, m, i }) => (
                 <div
                   key={a.id}
                   id={`${listId}-${i}`}

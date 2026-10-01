@@ -3438,6 +3438,11 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // kept the overlay half in `lib/originOverlay.ts`'s eager chunk.
     "/lib/originOverlayFigure.ts",
     "/lib/originCurveText.ts",
+    // Dialog a11y residuals (2026-10-01): the palette's context-action
+    // registry, loaded with `import()` when the palette opens (-2,293 B
+    // measured), which paid for the palette's inert + option groups and the
+    // toasts' hover/focus hold and assertive region.
+    "/lib/paletteContextActions.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
