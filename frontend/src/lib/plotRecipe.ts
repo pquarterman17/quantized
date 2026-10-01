@@ -49,6 +49,7 @@
 // id. A copy never touches its source; a user wanting move semantics
 // deletes the source afterward.
 
+import type { HalfLim } from "./axisLim";
 import { inferErrorBindings, type ErrorBinding } from "./errorRoles";
 import { legacyErrorBindings } from "./figureDocument";
 import { isAxisScale, type PlotView } from "./plotview";
@@ -82,7 +83,7 @@ export * from "./plotRecipeSchema";
 // `./plotRecipe` unchanged; only ONE implementation exists anywhere.
 export { classifyErrorRole, normalizeLabel };
 
-function rangeFrom(lim: [number, number] | null, step: number | null): RecipeAxisRange {
+function rangeFrom(lim: HalfLim | null, step: number | null): RecipeAxisRange {
   if (lim === null) return { mode: "auto" };
   return step === null ? { mode: "fixed", lim } : { mode: "fixed", lim, step };
 }

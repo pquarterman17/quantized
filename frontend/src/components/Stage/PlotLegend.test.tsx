@@ -86,6 +86,54 @@ describe("PlotLegend — P1.4 encoded legend text", () => {
   });
 });
 
+// BUGS_AND_ISSUES BUG-014 finding 4: the export drops a zero-length legend
+// label (matplotlib's rule, `test_an_empty_rename_drops_the_series_from_the_
+// rendered_legend`). The screen now does the same: an empty display name hides
+// the ROW, never the series, so the plot and its hidden state are untouched.
+describe("PlotLegend — empty display name (matches the export)", () => {
+  it("an empty rename drops that series' legend row but leaves it plotted", () => {
+    useApp.setState({ seriesLabels: { 1: "" } });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    const rows = container.querySelectorAll(".qzk-legend .it");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain("A");
+    expect(container.querySelectorAll(".qzk-legend-sample")).toHaveLength(1);
+    expect(useApp.getState().hiddenChannels).toEqual([]);
+  });
+
+  // matplotlib draws no legend when no artist has a label, so the screen
+  // draws no box either, in both modes. A title or a colour scale keeps it.
+  it.each([false, true])("no box at all when every row is empty and there is no title (static=%s)", (legendStatic) => {
+    useApp.setState({ legendStatic, seriesLabels: { 0: "", 1: "" } });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    expect(container.querySelector(".qzk-legend")).toBeNull();
+    expect(useApp.getState().hiddenChannels).toEqual([]);
+  });
+
+  it("a title keeps the box when every row is empty", () => {
+    useApp.setState({ seriesLabels: { 0: "", 1: "" }, legendTitle: "Runs" });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    expect(container.querySelector(".qzk-legend")).not.toBeNull();
+    expect(container.querySelectorAll(".qzk-legend .it:not(.qzk-legend-title)")).toHaveLength(0);
+  });
+
+  it("static mode: empty rows plus hidden rows leave nothing, so no box", () => {
+    useApp.setState({ legendStatic: true, seriesLabels: { 1: "" } });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[true, false]} />);
+    expect(container.querySelector(".qzk-legend")).toBeNull();
+  });
+
+  it("an empty ENCODED label drops the row too, in static mode as well", () => {
+    useApp.setState({ legendStatic: true });
+    const { container } = render(
+      <PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} labels={["", "B"]} />,
+    );
+    const rows = container.querySelectorAll(".qzk-legend .it");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain("B");
+  });
+});
+
 describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
   beforeEach(() => {
     // jsdom's requestAnimationFrame never fires on its own (no paint loop) —

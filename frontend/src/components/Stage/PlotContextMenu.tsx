@@ -9,6 +9,7 @@
 import { type RefObject, useMemo } from "react";
 import type uPlot from "uplot";
 
+import { drawnSeriesStyle } from "../../lib/drawnSeriesStyle";
 import { fullPlottedX } from "../../lib/fitselectionActions";
 import type { PlotPayload } from "../../lib/plotdata";
 import { axisZoneAt, type AxisZone, nearestIndex, pickNearestSeries } from "../../lib/plotHitTest";
@@ -22,6 +23,7 @@ import ContextMenu from "../overlays/ContextMenu";
 import { askParams } from "../overlays/ParamDialog";
 import { createAnnotationFromDialog } from "./annotationShapeActions";
 import type { PlotStageActions } from "./usePlotStageActions";
+import { selectFocusedWindowCycles } from "./useStageSeriesCycle";
 
 // A right-click further than this (px) from every curve shows axis/plot entries
 // only — no spurious "nearest series" header for a click in empty plot space.
@@ -101,6 +103,9 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
         channel,
         label: st.seriesLabels[channel] ?? def,
         style: st.seriesStyles[channel] ?? {},
+        // The focused canvas' own cycle decision (useStageSeriesCycle), at the
+        // same display position it draws this series.
+        drawn: drawnSeriesStyle(st.seriesStyles[channel], nearIdx, plotted.length, selectFocusedWindowCycles(st)),
         hidden: st.hiddenChannels.includes(channel),
         onY2: (st.y2Keys ?? []).includes(channel),
       };
@@ -142,7 +147,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
     // Set-limits dialog seeded from the current manual range or the live scale.
     const editLimits = (
       scaleKey: string,
-      cur: [number, number] | null,
+      cur: readonly [number | null, number | null] | null, // a null side prefills from the live scale
       setter: (lim: [number, number] | null) => void,
     ) => {
       const sc = plotRef.current?.scales?.[scaleKey];

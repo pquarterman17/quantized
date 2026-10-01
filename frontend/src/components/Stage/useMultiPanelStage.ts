@@ -21,6 +21,10 @@
 import { type CSSProperties, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import uPlot from "uplot";
 
+import type { HalfLim } from "../../lib/axisLim";
+import { limOr } from "../../lib/axisLimFields";
+import { resolveCanvasLims } from "../../lib/canvasLims";
+
 import {
   breakPanelsOf,
   facetPanelsOf,
@@ -113,8 +117,8 @@ export interface MultiPanelStageParams {
   pageSetup?: PageSetup | null;
   yScale: AxisScale;
   xScale: AxisScale;
-  xLim: [number, number] | null;
-  yLim: [number, number] | null;
+  xLim: HalfLim | null; // a null side = auto for that side (lib/axisLim.ts)
+  yLim: HalfLim | null;
   xFmt: AxisFormat;
   yFmt: AxisFormat;
   showGrid: boolean;
@@ -254,13 +258,13 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
   // The explicit store xLim (a manual override / prior zoom) wins; otherwise
   // the union domain across every facet panel — one shared horizontal scale.
   const facetXLim = useMemo(
-    () => (facet ? (xLim ?? sharedXDomain(facetPanels!)) : null),
+    () => (facet ? limOr(xLim, sharedXDomain(facetPanels!)) : null),
     [facet, facetPanels, xLim],
   );
   // Break panels share ONE y-domain instead (each keeps its own x-range) — an
   // honest axis break only elides x, never y.
   const breakYLim = useMemo(
-    () => (breakMode ? (yLim ?? sharedYDomain(breakPanels!, breakHidden ?? [])) : null),
+    () => (breakMode ? limOr(yLim, sharedYDomain(breakPanels!, breakHidden ?? [])) : null),
     [breakMode, breakPanels, yLim, breakHidden],
   );
 
@@ -621,7 +625,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       onSetScale: xZoomSyncHook(() => plotsRef.current),
       box: { w, h: host.clientHeight || 400 },
       cell: {
-        yScale, xScale, xLim, xFmt, yFmt, showGrid, axisBox: showAxisBox,
+        yScale, xScale, xLim: resolveCanvasLims(payload.payload, { xLim, xScale, yScale }).x.range, xFmt, yFmt, showGrid, axisBox: showAxisBox,
         fontSize, baseLineWidth, defaultTrace, refLines, tool,
         onReadout: setReadout, bg,
       },

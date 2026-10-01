@@ -598,7 +598,11 @@ the existing remote-IPC security boundary must remain.
   `isdir`/`realpath` — classification logic only, no real SMB/CIFS
   connection; and quick-save through a mount that vanishes AFTER consent was
   granted fails cleanly (`ok: False`) rather than recreating the missing
-  directory. **A real defect was found and documented, not fixed (needs a
+  directory. (**Since fixed 2026-09-20 as BUG-002, PR #382 `6d7b9df7`:**
+  identity-aware `desktop_consent.is_declared_source`
+  (`src/quantized/desktop_consent.py:322-337`); the xfail is now passing
+  coverage in `tests/test_desktop_bridge_path_shapes.py:658-683`.)
+  **A real defect was found and documented, not fixed (needs a
   design decision):** `is_declared_source`/`payload_declares_source` key on
   a path STRING post-`realpath`/`normcase`, never on filesystem identity
   (dev/ino) — a hard-linked alias of a declared/open source (proven on Linux,
@@ -6040,7 +6044,9 @@ covers a much smaller subset and guards focus on Analyze.
   **Still open — a content gap, not a wiring one:** Help has no Library
   topic. Folder, workbook, and Library-item menus land on "Toggle library
   panel", the closest real entry; a Library/folder/workbook topic would
-  make those three footers genuinely useful.
+  make those three footers genuinely useful. (**Closed 2026-10-01:**
+  `lib/libraryHelp.ts` adds "Library items/folders/workbooks" topics and
+  each footer lands on its own, pinned in `contextMenuHelp.test.ts`.)
 - [x] ~~Progressive disclosure; tooltips remain one sentence.~~ SHIPPED
   2026-09-28: `frontend/src/lib/tooltipSentenceAudit.test.ts`, a script-free
   vitest audit (no separate node script — the test itself walks
@@ -7088,7 +7094,10 @@ that goes red without its fix.
     modal dialog. It registers no hold, and it keeps its own
     editing-target guard. Preferences' tabs are `<div>`s with click
     handlers only, so they are not keyboard-reachable. That was found
-    while writing the slider test and is not part of R15.
+    while writing the slider test and is not part of R15. (**Since
+    closed:** a vertical `role="tablist"` of `role="tab"` buttons,
+    `PreferencesDialog.tsx:139-167`, tested in
+    `PreferencesDialog.tablist.test.tsx`.)
 
   - **R16** (round 10, R12 closure) — **Escape was ranked by OPEN order;
     Tab and `inert` by PAINT order; paint by TREE order.**
@@ -7998,7 +8007,11 @@ that goes red without its fix.
       it is precisely why the default-trace branch must not cycle a glyph, since
       doing so would widen a divergence the export cannot follow. (It is filed as
       a known gap, not fixed here: sending the resolved default-trace marker
-      would change every existing ambient-Scatter export.) The legend restating
+      would change every existing ambient-Scatter export. **Since closed:** the
+      export now lays the default trace over its styles,
+      `figureSpec.ts:430` `withDefaultTrace` (`lib/exportDefaultTrace.ts`),
+      pinned screen == export by `lib/defaultTraceFixture.test.ts:405` and
+      `tests/test_export_default_trace.py`.) The legend restating
       the rule is exactly how it drifted: it took the glyph from
       `style.markerShape` whenever markers showed
       at all, so with the preference on and a `Scatter` / `Line + markers` default
@@ -8120,7 +8133,9 @@ that goes red without its fix.
       picker and the plot context menu still show the STORED value, so an
       unstyled series reads "solid" there while the canvas draws its cycled
       dash; picking an entry still does exactly what it says, and the stored
-      value then wins everywhere, but the display is a known gap. `thumbnailSvg`
+      value then wins everywhere, but the display is a known gap (**closed
+      2026-10-01:** both now show the drawn dash/glyph marked "(auto)", via
+      `lib/drawnSeriesStyle.ts`). `thumbnailSvg`
       draws no dashes at all (it never did). No fourth dash pattern (it would
       need the Inspector picker, the wire type and `_LINESTYLE` extended
       together).
@@ -8955,7 +8970,9 @@ Original acceptance criteria (unchanged):
   `folderOps.test.ts`, `MultivarPanel.test.tsx`, `ReportPanel.test.tsx`,
   `useStatStage.test.ts`, each waiting on the in-flight request's signal
   (state), and each seen red against the pre-change code or a sabotaged
-  signal. **Still open (the box stays [~]):**
+  signal. **Still open (the box stays [~])** — superseded: the
+  code-actionable items were closed by the 2026-09-29 third pass below
+  (`448b6217`) and the box is ticked:
   `workshops/figurebuilder/previewExport.ts` (out of this slice's bounds:
   another workstream owns figurebuilder/), the rest of `lib/api/figures.ts`
   (`exportCornerFigure`/`exportTernaryFigure`/`exportFieldFigure` take no

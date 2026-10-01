@@ -14,6 +14,7 @@
 // representation at all — they ride their own request field, built by
 // `figureSpec.exportErrorSpans`. See `viewOverrides`' own doc below.
 
+import type { HalfLim } from "./axisLim";
 import type { StoreGet } from "./exportActive";
 import { compactOverrides, legendPosToLoc, type FigureOverrides } from "./figureOverrides";
 import type { PlotView } from "./plotview";
@@ -120,8 +121,10 @@ export function viewOverrides(st: Pick<
       fill: r.fill,
       ...(r.axis === 1 ? { axis: 1 as const } : {}),
     }));
-  const finiteLim = (lim: [number, number] | null): [number, number] | undefined =>
-    lim && lim.every(Number.isFinite) ? lim : undefined;
+  // A null side is auto for that side (half-open, P2.8 residual (b)) and rides
+  // the wire as null: matplotlib's own `set_xlim(None, hi)` autoscales it.
+  const finiteLim = (lim: HalfLim | null): HalfLim | undefined =>
+    lim && lim.every((v) => v === null || Number.isFinite(v)) && lim.some((v) => v !== null) ? lim : undefined;
   return (
     compactOverrides({
       legend,

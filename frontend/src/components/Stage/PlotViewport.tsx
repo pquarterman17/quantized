@@ -22,6 +22,7 @@ import {
   shouldDecimate,
   xExtent,
 } from "../../lib/plotDecimate";
+import type { HalfLim } from "../../lib/axisLim";
 import { classifyLimChange, type Lim } from "../../lib/plotLimApply";
 import { frameVarsPlugin } from "../../lib/uplotFrameVars";
 import type { LivePaintRef } from "../../lib/uplotLivePaint";
@@ -35,10 +36,15 @@ import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
 import { loadPlotPerfPrefs } from "../../store/prefs";
 import type { Accent, AnchorEditBridge, PeakWizardEditBridge, Theme } from "../../store/useApp";
 import { useLivePaint } from "./useLivePaint";
+import { useResolvedLims } from "./useResolvedLims";
 
 export interface PlotViewportProps
-  extends Omit<BuildOptsArgs, "width" | "height" | "peakWizardEdit" | "anchorEdit"> {
+  extends Omit<BuildOptsArgs, "width" | "height" | "peakWizardEdit" | "anchorEdit" | "xLim" | "yLim"> {
   displayPayload: PlotPayload | null;
+  /** Committed X/Y limits; a null side is auto for that side (`useResolvedLims`). */
+  xLim?: HalfLim | null;
+  yLim?: HalfLim | null;
+  onLimCrossed?: (axis: "x" | "y") => void; // a half-open limit fell back to full auto
   /** The live uPlot instance, exposed as a controlled ref so the caller can
    *  drive toolbar/context-menu actions over it (see `usePlotStageActions`). */
   plotRef: RefObject<uPlot | null>;
@@ -90,9 +96,10 @@ export interface PlotViewportProps
  *  every other Stage chrome (toolbar, legend, readouts, context menu) is a
  *  sibling owned by the caller. */
 export default function PlotViewport(props: PlotViewportProps) {
-  const { displayPayload, plotRef, theme, accent, peakWizardEdit, anchorEdit, syncKey, insetTop, frameVars, ...args } =
+  const { displayPayload, plotRef, theme, accent, peakWizardEdit, anchorEdit, syncKey, insetTop, frameVars, onLimCrossed, ...args } =
     props;
   const hostRef = useRef<HTMLDivElement>(null);
+  const lims = useResolvedLims(displayPayload, args, onLimCrossed); // half-open -> concrete pairs
 
   // P0.4 follow-up #8 (docs/performance_envelope.md): a committed zoom/pan
   // used to tear down and rebuild the WHOLE uPlot instance, because
@@ -107,8 +114,8 @@ export default function PlotViewport(props: PlotViewportProps) {
   // `classifyLimChange`'s doc), bumps `rebuildEpoch` — the ONLY thing that
   // still forces the create effect to run for a lim-only change.
   const limsRef = useRef<{ x: Lim; y: Lim; y2: Lim }>({
-    x: args.xLim ?? null,
-    y: args.yLim ?? null,
+    x: lims.x,
+    y: lims.y,
     y2: args.y2Lim ?? null,
   });
   const [rebuildEpoch, setRebuildEpoch] = useState(0);
@@ -141,8 +148,8 @@ export default function PlotViewport(props: PlotViewportProps) {
   useEffect(() => {
     const prev = limsRef.current;
     const next: { x: Lim; y: Lim; y2: Lim } = {
-      x: args.xLim ?? null,
-      y: args.yLim ?? null,
+      x: lims.x,
+      y: lims.y,
       y2: args.y2Lim ?? null,
     };
     limsRef.current = next;
@@ -165,7 +172,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     // plotRef is a stable RefObject identity for this component's lifetime
     // (owned by the caller, e.g. PlotStage's own useRef) — listed so
     // exhaustive-deps doesn't warn; it never actually changes across renders.
-  }, [args.xLim, args.yLim, args.y2Lim, plotRef]);
+  }, [lims.x, lims.y, args.y2Lim, plotRef]);
 
   // (Re)create the uPlot instance when payload / size / theme change.
   useEffect(() => {

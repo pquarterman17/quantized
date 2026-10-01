@@ -81,6 +81,7 @@ export function usePlotStageActions(
 ): PlotStageActions & {
   onRegionSelect: (x0: number, x1: number, y0?: number, y1?: number) => void;
   onRangeSelect: (x0: number, x1: number) => void;
+  onLimCrossed: (axis: "x" | "y") => void;
 } {
   function resetView() {
     if (plotRef.current && displayPayload) {
@@ -185,7 +186,12 @@ export function usePlotStageActions(
     useApp.getState().setRowSelection(waterfallSourceRows(displayPayload, rows));
   }
 
+  // P2.8 residual (b): a half-open limit crossed the data, so the axis is on auto.
+  const onLimCrossed = (axis: "x" | "y") =>
+    useApp.getState().setStatus(`${axis.toUpperCase()} limit crosses the data range, so the axis is back on auto.`);
+
   return {
+    onLimCrossed,
     resetView,
     smartScale,
     savePng,

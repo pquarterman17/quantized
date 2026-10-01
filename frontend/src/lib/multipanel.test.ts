@@ -244,6 +244,15 @@ describe("spatialCellStyling (P3.3)", () => {
     expect(out.legendEntries.map((e) => e.style?.line)).toEqual(["solid", "dotted"]);
   });
 
+  // BUG-014 finding 4: an EMPTY rename has no legend row (the export's rule),
+  // but the canvas still plots the series and it keeps its cycle position.
+  it("an empty rename drops the legend row but not the plotted series", () => {
+    const out = spatialCellStyling({ ...panel, seriesLabels: { 1: "", 2: "B", 3: "C" } }, true);
+    expect(out.plottedChannels).toEqual([1, 2, 3]);
+    expect(out.legendEntries.map((e) => e.label)).toEqual(["B", "C"]);
+    expect(out.legendEntries.map((e) => e.displayIndex)).toEqual([1, 2]);
+  });
+
   it("an explicit per-series style still wins in the legend", () => {
     const out = spatialCellStyling({ ...panel, seriesStyles: { 2: { line: "solid" } } }, true);
     expect(out.legendEntries.map((e) => e.style?.line)).toEqual(["solid", "solid", "dotted"]);

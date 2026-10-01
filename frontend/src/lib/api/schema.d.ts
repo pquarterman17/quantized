@@ -8460,8 +8460,8 @@ export interface components {
             x_key?: number | null;
             /** X Lim */
             x_lim?: [
-                number,
-                number
+                number | null,
+                number | null
             ] | null;
             /**
              * X Log
@@ -8477,8 +8477,8 @@ export interface components {
             y_keys?: number[] | null;
             /** Y Lim */
             y_lim?: [
-                number,
-                number
+                number | null,
+                number | null
             ] | null;
             /**
              * Y Log

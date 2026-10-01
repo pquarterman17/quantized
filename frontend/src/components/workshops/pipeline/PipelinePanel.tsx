@@ -7,13 +7,13 @@
 import { useState } from "react";
 
 import { saveBlob } from "../../../lib/download";
-import { IN_PLACE_OPS } from "../../../lib/metadataRun";
-import { pipelineToScript, STEP_FIELDS, type PipelineStep } from "../../../lib/pipeline";
+import { pipelineToScript } from "../../../lib/pipeline";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, StatusDot } from "../../primitives";
+import StepEditor from "./StepEditor";
 import TemplatesSection from "./TemplatesSection";
 import { usePipeline, type StepStatus } from "./usePipeline";
 
@@ -23,70 +23,6 @@ const TONE: Record<StepStatus, "ok" | "warn" | "danger"> = {
   failed: "danger",
   warn: "warn",
 };
-
-/** Inline param editor for a selected step: schema fields for known kinds,
- *  read-only code for ui steps. */
-function StepEditor({
-  step,
-  onParams,
-  validate,
-}: {
-  step: PipelineStep;
-  onParams: (params: Record<string, unknown>) => void;
-  validate: (expr: string) => string | null;
-}) {
-  const fields = STEP_FIELDS[step.kind];
-  const [draft, setDraft] = useState<Record<string, unknown>>({ ...step.params });
-  if (!fields) {
-    return (
-      <div className="qzk-step-editor">
-        <code className="qzk-step-code">{step.code}</code>
-        {step.kind === "correction" && (
-          <div className="qzk-ds-meta" style={{ color: "var(--text-faint)", marginTop: 4 }}>
-            Re-runs these corrections on the active dataset. Edit by re-recording.
-          </div>
-        )}
-        {step.kind === "transform" && (
-          <div className="qzk-ds-meta" style={{ color: "var(--text-faint)", marginTop: 4 }}>
-            {typeof step.params.op === "string" && IN_PLACE_OPS.has(step.params.op)
-              ? "Edits the current dataset in place (a metadata factor column, or its metadata); later steps continue on it."
-              : "Derives a new dataset from the current one; later steps continue on it. A second input is the recorded dataset (matched by id — the step fails if it is no longer in this workspace)."}
-          </div>
-        )}
-      </div>
-    );
-  }
-  const exprError =
-    step.kind === "expression" ? validate(String(draft.expr ?? "")) : null;
-  return (
-    <div className="qzk-step-editor">
-      {fields.map((f) => (
-        <span key={f.key} style={{ display: "inline-flex", flexDirection: "column", gap: 2, marginRight: 8 }}>
-          <label className="qzk-field-lbl">{f.label}</label>
-          <NumberField
-            numeric={false}
-            width={f.key === "expr" ? 180 : 110}
-            value={String(draft[f.key] ?? "")}
-            onChange={(v) => setDraft((d) => ({ ...d, [f.key]: v }))}
-          />
-        </span>
-      ))}
-      <Button
-        size="sm"
-        disabled={!!exprError}
-        onClick={() => onParams(draft)}
-        style={{ verticalAlign: "bottom" }}
-      >
-        Apply
-      </Button>
-      {exprError && (
-        <div className="qzk-ds-meta" style={{ color: "var(--danger)", marginTop: 4 }}>
-          {exprError}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function PipelinePanel() {
   const setOpen = useApp((s) => s.setPipelineOpen);
@@ -130,9 +66,11 @@ export default function PipelinePanel() {
                 </div>
                 {selected === s.id && (
                   <StepEditor
+                    // Re-seed the draft when the step changes under it (undo/redo).
+                    key={`${s.code}\n${JSON.stringify(s.params)}`}
                     step={s}
                     validate={p.validate}
-                    onParams={(params) => p.updateStepParams(s.id, params)}
+                    onParams={(params, text) => p.editStep(s.id, params, text)}
                   />
                 )}
               </div>

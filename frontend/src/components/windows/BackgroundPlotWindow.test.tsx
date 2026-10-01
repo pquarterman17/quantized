@@ -169,6 +169,20 @@ describe("BackgroundPlotWindow", () => {
     expect(opts.scales.y.distr).toBe(3); // uPlot's log-scale distr code
   });
 
+  // BUG-014 finding 4: an empty display name hides a series from the legend,
+  // never from the plot. A background window draws no legend at all (the
+  // header's "no toolbar/legend"), so the empty rename must still leave the
+  // series drawn and add no legend row.
+  it("an empty rename keeps the series drawn and shows no legend row", async () => {
+    const view = { ...noBoxView(), yKeys: [0, 1], seriesLabels: { 1: "" } };
+    const { container } = render(<BackgroundPlotWindow dataset={DATASET2} view={view} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+    const series = (created[0].opts as { series: { show?: boolean; label?: string }[] }).series;
+    expect(series).toHaveLength(3);
+    expect(series[2].show).not.toBe(false);
+    expect(container.querySelector(".qzk-legend")).toBeNull();
+  });
+
   it("a linkGroup joins the uPlot cursor-sync group + x-range sync hook (item 13); no group = no sync patch", async () => {
     render(<BackgroundPlotWindow dataset={DATASET} view={defaultPlotView()} linkGroup={2} />);
     await waitFor(() => expect(created).toHaveLength(1));

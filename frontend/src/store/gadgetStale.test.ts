@@ -6,7 +6,7 @@
 //  2. No request sequence: an older response landing last overwrote a newer one.
 // Promises are held open by hand and the debounce runs on fake timers.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FftSpectralResult, IntegrateResponse } from "../lib/api";
 import type { CalcResult, DataStruct } from "../lib/types";
@@ -47,6 +47,13 @@ function held<T>(fn: (...a: never[]) => Promise<T>) {
   );
   return pending;
 }
+
+// The compute bodies load on the first ROI compute (bundle diet slice 19).
+// Warm that load once, so the fake-timer specs below see the debounce run the
+// body on the same tick it always did.
+beforeAll(async () => {
+  await useApp.getState().runQuickFit();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

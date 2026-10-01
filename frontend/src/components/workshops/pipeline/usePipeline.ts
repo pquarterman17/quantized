@@ -27,7 +27,9 @@ export interface PipelineState {
   toggleStep: (id: string) => void;
   removeStep: (id: string) => void;
   moveStep: (id: string, delta: number) => void;
-  updateStepParams: (id: string, params: Record<string, unknown>) => void;
+  /** A params edit from the step editor — ONE undo entry (macroSteps is in
+   *  the undo snapshot), then the store edit. `text` as updateStepParams. */
+  editStep: (id: string, params: Record<string, unknown>, text?: { label: string; code: string }) => void;
 }
 
 export function usePipeline(): PipelineState {
@@ -39,6 +41,7 @@ export function usePipeline(): PipelineState {
   const removeStep = useApp((s) => s.removeStep);
   const moveStep = useApp((s) => s.moveStep);
   const updateStepParams = useApp((s) => s.updateStepParams);
+  const recordHistory = useApp((s) => s.recordHistory);
   const insertStep = useApp((s) => s.insertStep);
 
   const [runLog, setRunLog] = useState<Record<string, StepLogEntry>>({});
@@ -64,6 +67,14 @@ export function usePipeline(): PipelineState {
     [insertStep, validate],
   );
 
+  const editStep = useCallback(
+    (id: string, params: Record<string, unknown>, text?: { label: string; code: string }) => {
+      recordHistory("edit pipeline step");
+      updateStepParams(id, params, text);
+    },
+    [recordHistory, updateStepParams],
+  );
+
   const run = useCallback(async () => {
     const target = useApp.getState().activeId;
     if (!target) return;
@@ -87,6 +98,6 @@ export function usePipeline(): PipelineState {
     toggleStep,
     removeStep,
     moveStep,
-    updateStepParams,
+    editStep,
   };
 }

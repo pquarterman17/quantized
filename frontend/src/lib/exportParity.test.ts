@@ -167,6 +167,17 @@ describe("1. Axis limits", () => {
     expect(body.overrides?.y_lim).toEqual([0.1, 99]);
   });
 
+  // P2.8 residual (b): a half-open limit (one side auto) rides the wire with a
+  // `null` side — matplotlib's own `set_xlim(None, hi)`, the export's
+  // autoscale for that side, as the canvas fills it from its own autoscale.
+  // It used to be dropped whole, so the export ignored the typed side.
+  it("sends a half-open xLim/yLim with its auto side as null", async () => {
+    useApp.setState({ xLim: [null, 9], yLim: [0.1, null] });
+    const body = await exportBody();
+    expect(body.overrides?.x_lim).toEqual([null, 9]);
+    expect(body.overrides?.y_lim).toEqual([0.1, null]);
+  });
+
   it("omits x_lim/y_lim when the axis is autoscaled (null)", async () => {
     const body = await exportBody();
     expect(body.overrides).not.toHaveProperty("x_lim");

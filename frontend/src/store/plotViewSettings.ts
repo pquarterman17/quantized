@@ -47,6 +47,7 @@
 // each. They were written and run GREEN against the pre-extraction code in
 // useApp.ts, and pass unchanged against this module.
 
+import type { HalfLim } from "../lib/axisLim";
 import { lit } from "../lib/macro";
 import type { PageSetup } from "../lib/pagesetup";
 import { nextPanelFit, type PanelFit } from "../lib/panelFit";
@@ -85,8 +86,8 @@ export interface PlotViewSettingsSlice {
   setInsetMode: (insetMode: boolean) => void;
   setPolarMode: (polarMode: boolean) => void;
   setStatMode: (statMode: boolean) => void;
-  setXLim: (xLim: [number, number] | null) => void;
-  setYLim: (yLim: [number, number] | null) => void;
+  setXLim: (xLim: HalfLim | null) => void;
+  setYLim: (yLim: HalfLim | null) => void;
   // Secondary (right) Y axis: expose the already-rendered y2Scale/y2Lim fields
   // so the plot context menu can edit an Origin double-Y import's right axis.
   // Only meaningful when y2Keys is non-empty (otherwise there is no y2 scale).

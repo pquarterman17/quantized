@@ -62,6 +62,16 @@ describe("effectiveColorLimits", () => {
     expect(effectiveColorLimits(null, 0, 119)).toEqual([0, 119]);
   });
 
+  // P2.8 residual (b): a blank side is auto for THAT side.
+  it("fills a half-open pair's blank side from the auto extent", () => {
+    expect(effectiveColorLimits([null, 50], 0, 119)).toEqual([0, 50]);
+    expect(effectiveColorLimits([20, null], 0, 119)).toEqual([20, 119]);
+    // Log mode: the blank floor is the log floor (the smallest positive cell).
+    expect(effectiveColorLimits([null, 50], 0.5, 119, true)).toEqual([0.5, 50]);
+    // The typed side crossing the auto side falls back to the auto extent.
+    expect(effectiveColorLimits([200, null], 0, 119)).toEqual([0, 119]);
+  });
+
   it("returns null ONLY when the auto extent itself is unusable", () => {
     expect(effectiveColorLimits(null, null, null)).toBeNull();
     expect(effectiveColorLimits(null, 5, 5)).toBeNull(); // zero span

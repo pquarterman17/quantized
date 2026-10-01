@@ -396,6 +396,6 @@ export function decorOf(view: PlotView): CanonicalDecor {
   };
 }
 
-export function limitsOf(lim: readonly [number, number] | null | undefined): [number, number] | null {
-  return lim && lim.every(Number.isFinite) ? [lim[0], lim[1]] : null;
+export function limitsOf(lim: readonly (number | null)[] | null | undefined): [number, number] | null {
+  return lim && lim.every(Number.isFinite) ? [lim[0] as number, lim[1] as number] : null;
 }

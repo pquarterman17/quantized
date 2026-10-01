@@ -3,7 +3,7 @@
 // unchanged and stays covered by store/quickfit.test.ts — mirrors its
 // fake-timer + api-mock pattern (the same debounce shape as the recalc engine).
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset, DataStruct } from "../lib/types";
 import { useApp } from "./useApp";
@@ -36,6 +36,13 @@ const ds = (id: string, over: Partial<Dataset> = {}): Dataset => ({
   name: id,
   data: data(),
   ...over,
+});
+
+// The compute bodies load on the first ROI compute (bundle diet slice 19).
+// Warm that load once, so the fake-timer specs below see the debounce run the
+// body on the same tick it always did.
+beforeAll(async () => {
+  await useApp.getState().runQuickFit();
 });
 
 beforeEach(() => {

@@ -55,6 +55,7 @@
 // "clear+add via existing actions", never a new store action (this module
 // stays action-only, no `useApp.ts` edits).
 
+import { fixedLim } from "./axisLim";
 import type { StoreGet } from "./exportActive";
 import { markSeriesStyle, type AxesBlock, type DecorBlock, type DisplayBlock, type PageBlock, type PlotSpec } from "./plotspec";
 import type { Annotation, SeriesStyle } from "./types";
@@ -147,7 +148,7 @@ function applyAxesBlock(axes: AxesBlock | undefined, s: StoreGet): void {
   }
   if (axes.y2) {
     if (axes.y2.label !== undefined) state.setY2AxisLabel(axes.y2.label);
-    if (axes.y2.lim !== undefined) state.setY2Lim(axes.y2.lim);
+    if (axes.y2.lim !== undefined) state.setY2Lim(fixedLim(axes.y2.lim)); // y2 has no half-open
     if (axes.y2.scale !== undefined) state.setY2Scale(axes.y2.scale);
     if (axes.y2.fmt !== undefined) state.setY2Fmt(axes.y2.fmt);
     // axes.y2.step: no setY2Step action exists — see module doc.

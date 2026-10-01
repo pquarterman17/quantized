@@ -206,3 +206,42 @@ def test_annotation_without_anchor_still_uses_axes_data_coords() -> None:
     data = _page_ann(x, {"x": 0.5, "y": 0.5, "text": "pk"})
     page = _page_ann(x, {"x": 0.5, "y": 0.5, "text": "pk", "anchor": "page"})
     assert _ann_box(data) != _ann_box(page)
+
+
+# ── Half-open limits (P2.8 residual (b)) ────────────────────────────────────
+# A blank min/max field in the GUI is "auto for that side": the wire carries
+# a null member, the typed side is honoured and matplotlib's own autoscale
+# keeps the other. A typed side that would cross the auto side falls back to
+# full autoscale, the canvas' rule (frontend `lib/canvasLims.ts`).
+
+
+def _plotted_axes():  # type: ignore[no-untyped-def]
+    from matplotlib.figure import Figure
+
+    ax = Figure().add_subplot()
+    ax.plot([0.0, 1.0, 2.0, 3.0], [10.0, 20.0, 30.0, 40.0])
+    return ax
+
+
+def _apply_lims(ax, ov: dict) -> None:  # type: ignore[no-untyped-def]
+    from types import SimpleNamespace
+
+    from quantized.calc.figure_overrides import apply_axis_shape_overrides
+
+    st = SimpleNamespace(grid_alpha=None)
+    apply_axis_shape_overrides(ax, st, ov, lim_keys=("x_lim", "y_lim"))
+
+
+def test_half_open_lim_honours_the_typed_side_and_autoscales_the_other() -> None:
+    ax = _plotted_axes()
+    auto_lo = ax.get_ylim()[0]
+    _apply_lims(ax, {"y_lim": [None, 25.0], "x_lim": [1.5, None]})
+    assert ax.get_ylim() == (auto_lo, 25.0)
+    assert ax.get_xlim()[0] == 1.5 and ax.get_xlim()[1] > 3.0
+
+
+def test_half_open_lim_crossing_the_data_falls_back_to_full_autoscale() -> None:
+    ax = _plotted_axes()
+    auto = ax.get_ylim()
+    _apply_lims(ax, {"y_lim": [50.0, None]})
+    assert ax.get_ylim() == auto  # not an inverted (50, 41.5) axis

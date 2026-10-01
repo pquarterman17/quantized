@@ -150,7 +150,8 @@ export function captureMapView(view: MapViewState | undefined): RecipeMapView | 
   if (!view) return null;
   const untouched = view.colormap === DEFAULT_MAP_VIEW.colormap && !view.logZ && view.colorLimits === null;
   if (untouched) return null;
-  return { colormap: view.colormap, logZ: view.logZ, colorLimits: view.colorLimits ? copyRange(view.colorLimits) : null };
+  const lim = view.colorLimits;
+  return { colormap: view.colormap, logZ: view.logZ, colorLimits: lim ? [lim[0], lim[1]] : null };
 }
 
 /** `plotRecipeMatch.ts`'s `findChannel` tiers minus aliases (a panel channel

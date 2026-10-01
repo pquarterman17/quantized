@@ -3042,6 +3042,13 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/store/workbookSeparate.ts",
       call: 'import("../lib/workbookSeparate")',
     },
+    // SLICE 19 (2026-10-01): the five ROI-gadget region computes. They load on
+    // the first debounced compute; the slice keeps its setters and commits.
+    {
+      module: "/store/gadgetRun.ts",
+      loader: "/store/gadget.ts",
+      call: 'import("./gadgetRun")',
+    },
   ];
 
   /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
@@ -3443,6 +3450,10 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // measured), which paid for the palette's inert + option groups and the
     // toasts' hover/focus hold and assertive region.
     "/lib/paletteContextActions.ts",
+    // SLICE 19 (2026-10-01): only the ROI-gadget compute bodies
+    // (`store/gadgetRun.ts`) call these, so they left with them.
+    "/lib/differentiate.ts",
+    "/lib/api/statsDescriptive.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

@@ -22,6 +22,26 @@ describe("SpatialPanelLegend", () => {
     expect(container.textContent).toContain("Measured");
   });
 
+  // Same rule as the export and PlotLegend: a zero-length label has no row.
+  it("drops an entry whose label is empty, keeping the others", () => {
+    const { container } = render(
+      <SpatialPanelLegend
+        entries={[
+          { label: "", displayIndex: 0 },
+          { label: "Kept", displayIndex: 1 },
+        ]}
+      />,
+    );
+    expect(container.querySelectorAll(".it")).toHaveLength(1);
+    expect(container.querySelectorAll(".qzk-legend-sample")).toHaveLength(1);
+    expect(container.textContent).toContain("Kept");
+  });
+
+  it("renders nothing when every entry is empty and there is no title", () => {
+    const { container } = render(<SpatialPanelLegend entries={[{ label: "", displayIndex: 0 }]} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("renders nothing without independently decoded title or entries", () => {
     const { container } = render(<SpatialPanelLegend entries={[]} />);
     expect(container).toBeEmptyDOMElement();

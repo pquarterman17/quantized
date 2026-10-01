@@ -9,6 +9,7 @@
 import type { ContextMenuItem, Swatch } from "../components/overlays/ContextMenu";
 import { buildMenuItems } from "./contextActions";
 import { curveActions } from "./curveContextActions";
+import type { DrawnSeriesStyle } from "./drawnSeriesStyle";
 import { fmtNum } from "./format";
 import { MARKER_SHAPES } from "./markers";
 import type { AxisZone } from "./plotHitTest";
@@ -25,6 +26,8 @@ export interface MenuSeries {
   label: string;
   /** Current per-series override (possibly empty). */
   style: SeriesStyle;
+  /** What the canvas DRAWS (P3.3 auto cycle resolved); absent → `style`. */
+  drawn?: DrawnSeriesStyle;
   hidden: boolean;
   onY2: boolean;
 }
@@ -191,17 +194,18 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
     const overridden = Object.values(s.style).some((v) => v !== undefined);
     items.push({ header: s.label });
     items.push({ swatches: colorSwatches(s, ctx) });
+    // Checks what the canvas DRAWS: with P3.3's auto cycle on, an unstyled
+    // series' dash/glyph comes from the cycle and is marked "(auto)". Picking
+    // any entry still stores it explicitly, and the cycle then steps aside.
+    const drawn = s.drawn?.style ?? s.style;
+    const auto = (label: string, isAuto: boolean | undefined) => (isAuto ? `${label} (auto)` : label);
+    const line = drawn.line ?? "solid";
     items.push({
       label: "Line style",
-      // Shows the STORED choice. With P3.3's auto cycle on, a series with no
-      // stored line reads "solid" here while the canvas draws its cycled dash —
-      // a known gap (PRIMARY_SOFTWARE_AUDIT_PLAN P3.3, "not done"). Picking any
-      // entry stores it and the cycle steps aside, so the menu is never WRONG
-      // about what a click will do, only about what is currently drawn.
       submenu: LINE_OPTS.map((o) => ({
-        label: o.label,
+        label: auto(o.label, o.value === line && s.drawn?.autoLine),
         run: () => ctx.setLine(s.channel, o.value),
-        checked: (s.style.line ?? "solid") === o.value,
+        checked: line === o.value,
       })),
     });
     items.push({
@@ -216,11 +220,14 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
       label: "Marker",
       submenu: [
         { label: "None", run: () => ctx.setMarker(s.channel, false), checked: !s.style.marker },
-        ...MARKER_SHAPES.map((m) => ({
-          label: m.label,
-          run: () => ctx.setMarker(s.channel, true, m.value),
-          checked: !!s.style.marker && (s.style.markerShape ?? "circle") === m.value,
-        })),
+        ...MARKER_SHAPES.map((m) => {
+          const on = !!s.style.marker && (drawn.markerShape ?? "circle") === m.value;
+          return {
+            label: auto(m.label, on && s.drawn?.autoMarkerShape),
+            run: () => ctx.setMarker(s.channel, true, m.value),
+            checked: on,
+          };
+        }),
       ],
     });
     items.push({ separator: true });

@@ -26,9 +26,8 @@
 // because it calls the general-purpose `addDataset` (which does record); the
 // gadget action itself stays history-silent.
 
-import { fftSpectral, fitModel, peaksIntegrate, type FftSpectralResult, type IntegrateResponse } from "../lib/api";
-import { statsDescriptive } from "../lib/api/statsDescriptive";
-import { centralDifference, sortByX, type DerivativeResult } from "../lib/differentiate";
+import type { FftSpectralResult, IntegrateResponse } from "../lib/api";
+import type { DerivativeResult } from "../lib/differentiate";
 import { fitStepParams } from "../lib/fitselection";
 import { computeCursorReadout } from "../lib/gadgetCursors";
 import { lit } from "../lib/macro";
@@ -41,10 +40,10 @@ import {
   selectRoiRows,
   type GadgetMode,
 } from "../lib/quickfit";
-import { expandToFull } from "../lib/rowstate";
 import type { CalcResult, DataStruct, FitOverlay } from "../lib/types";
 import { toast } from "./toasts";
 import { nextDatasetId } from "./idSeq";
+import type { GadgetRunCtx, GadgetRunner } from "./gadgetRun";
 import type { AppState } from "./useApp";
 
 /** The ROI-gadget / quick-fit state + actions composed into `useApp`. */
@@ -96,7 +95,7 @@ export interface GadgetSlice {
   runGadget: () => Promise<void>;
   runGadgetIntegrate: () => Promise<void>;
   runGadgetStats: () => Promise<void>;
-  runGadgetDifferentiate: () => void;
+  runGadgetDifferentiate: () => Promise<void>;
   runGadgetFft: () => Promise<void>;
   commitGadgetFft: () => void;
   setGadgetCursors: (cursors: [number, number] | null) => void;
@@ -124,21 +123,27 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
     fitOverlay: s.qfitResult != null ? null : s.fitOverlay,
   });
 
-  // One async region-mode request: only the LATEST may land, and a stale one
-  // (ROI/mode moved, gadget cleared, dataset switched) leaves busy to its successor.
-  const runRegion = async <T>(
-    activeId: string, call: () => Promise<T>, apply: (r: T) => Partial<AppState>, what: string,
-  ): Promise<void> => {
-    set({ gadgetBusy: true, gadgetError: null });
-    const seq = ++qfitSeq;
-    const stale = () => seq !== qfitSeq || get().activeId !== activeId || !get().qfitRoi;
-    try {
-      const r = await call();
-      if (!stale()) set({ ...apply(r), gadgetBusy: false });
-    } catch (e) {
-      if (!stale()) set({ gadgetBusy: false, gadgetError: e instanceof Error ? e.message : `${what} failed` });
-    }
-  };
+  // The compute bodies (store/gadgetRun.ts) load on the first ROI compute
+  // (bundle diet slice 19). A failed load is not cached, so the next compute
+  // fetches again. It lands in the mode's own error slot, like a failed
+  // request, unless the region moved on while it loaded.
+  let runner: GadgetRunner | null = null;
+  const runCtx: GadgetRunCtx = { set, get, nextSeq: () => ++qfitSeq, seq: () => qfitSeq, dropQfitResult };
+  const viaRun = (call: (r: GadgetRunner) => Promise<void> | void, slot: "fit" | "gadget" | "deriv") =>
+    async (): Promise<void> => {
+      const seq = qfitSeq;
+      try {
+        runner ??= (await import("./gadgetRun")).createGadgetRun(runCtx);
+      } catch (e) {
+        if (seq !== qfitSeq || !get().qfitRoi) return;
+        const msg = `ROI gadget failed to load: ${e instanceof Error ? e.message : "error"}`;
+        if (slot === "fit") set((cur) => ({ ...dropQfitResult(cur), qfitBusy: false, qfitError: msg }));
+        else if (slot === "deriv") set({ gadgetError: msg, gadgetDerivResult: null, derivOverlay: null });
+        else set({ gadgetBusy: false, gadgetError: msg });
+        return;
+      }
+      await call(runner);
+    };
 
   return {
     qfitRoi: null,
@@ -208,41 +213,7 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
       // Switching model while an ROI is active refits it (debounced, like a move).
       if (get().qfitRoi) get().setQfitRoi(get().qfitRoi);
     },
-    runQuickFit: async () => {
-      const s = get();
-      const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
-      if (!active || !s.qfitRoi) return;
-      const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
-      const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
-      const sel = selectRoiRows(active, s.qfitRoi, col);
-      if (sel.x.length < 2) {
-        set({ qfitError: "not enough points in the selected region", qfitBusy: false });
-        return;
-      }
-      set({ qfitBusy: true, qfitError: null });
-      const seq = ++qfitSeq;
-      const model = s.qfitModel;
-      // Guard a stale response: the gadget may have been cleared, the ROI or
-      // model changed, or the active dataset switched while in flight.
-      const stale = () => seq !== qfitSeq || get().activeId !== active.id || !get().qfitRoi;
-      try {
-        const r = await fitModel({ model, x: sel.x, y: sel.y });
-        if (stale()) return;
-        set({ qfitResult: r, qfitResultModel: model, qfitBusy: false });
-        const yFit = r.yFit as (number | null)[] | undefined;
-        if (Array.isArray(yFit)) {
-          // yFit aligns to the ROI-sliced rows; expand back to the full row
-          // count (null outside the ROI / excluded / filtered) so it overlays
-          // the full-length plot x in register — the expandToFull pattern
-          // useCurveFit uses for the whole-dataset case (rowstate.ts).
-          const y = expandToFull(yFit, sel.rows, active.data.time.length);
-          set({ fitOverlay: { datasetId: active.id, y } });
-        }
-      } catch (e) {
-        if (stale()) return;
-        set((cur) => ({ ...dropQfitResult(cur), qfitBusy: false, qfitError: e instanceof Error ? e.message : "fit failed" }));
-      }
-    },
+    runQuickFit: viaRun((r) => r.runQuickFit(), "fit"),
     commitQfit: () => {
       const s = get();
       const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
@@ -291,74 +262,12 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
           return; // cursors don't ride the ROI-band debounce path
       }
     },
-    runGadgetIntegrate: async () => {
-      const s = get();
-      const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
-      if (!active || !s.qfitRoi) return set({ gadgetBusy: false }); // nothing to compute: never stuck busy
-      const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
-      const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
-      const sel = selectRoiRows(active, s.qfitRoi, col);
-      if (sel.x.length < 2) {
-        set({ gadgetError: "not enough points in the selected region", gadgetBusy: false, gadgetIntegrateResult: null });
-        return;
-      }
-      const lo = Math.min(s.qfitRoi[0], s.qfitRoi[1]);
-      const hi = Math.max(s.qfitRoi[0], s.qfitRoi[1]);
-      await runRegion(
-        active.id,
-        () => peaksIntegrate({ x: sel.x, y: sel.y, regions: [[lo, hi]], baseline: "linear" }),
-        (r) => ({ gadgetIntegrateResult: r }),
-        "integrate",
-      );
-    },
-    runGadgetStats: async () => {
-      const s = get();
-      const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
-      if (!active || !s.qfitRoi) return set({ gadgetBusy: false }); // nothing to compute: never stuck busy
-      const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
-      const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
-      const sel = selectRoiRows(active, s.qfitRoi, col);
-      if (sel.y.length < 1) {
-        set({ gadgetError: "not enough points in the selected region", gadgetBusy: false, gadgetStatsResult: null });
-        return;
-      }
-      await runRegion(active.id, () => statsDescriptive(sel.y), (r) => ({ gadgetStatsResult: r }), "stats");
-    },
-    // Synchronous (client-side central differences) — no busy state, but shares
-    // `gadgetError` with the async modes for a consistent chip error slot.
-    runGadgetDifferentiate: () => {
-      const s = get();
-      const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
-      if (!active || !s.qfitRoi) return;
-      const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
-      const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
-      const sel = selectRoiRows(active, s.qfitRoi, col);
-      const result = centralDifference(sel.x, sel.y);
-      if (!result) {
-        set({ gadgetError: "not enough points in the selected region", gadgetDerivResult: null, derivOverlay: null });
-        return;
-      }
-      set({ gadgetError: null, gadgetDerivResult: result });
-      const y = expandToFull(result.dydx, sel.rows, active.data.time.length);
-      set({ derivOverlay: { datasetId: active.id, y } });
-    },
-    runGadgetFft: async () => {
-      const s = get();
-      const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
-      if (!active || !s.qfitRoi) return set({ gadgetBusy: false }); // nothing to compute: never stuck busy
-      const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
-      const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
-      const sel = selectRoiRows(active, s.qfitRoi, col);
-      if (sel.x.length < 4) {
-        set({ gadgetError: "need at least 4 points in the selected region", gadgetBusy: false, gadgetFftPreview: null });
-        return;
-      }
-      // FFT assumes evenly-sampled, ascending x (fs = 1/mean(diff(x))); ROI rows
-      // arrive in acquisition order, which may not be monotonic (loops/swept-
-      // back scans) — sort before sending (same discipline as differentiate).
-      const sorted = sortByX(sel.x, sel.y);
-      await runRegion(active.id, () => fftSpectral({ x: sorted.x, y: sorted.y }), (r) => ({ gadgetFftPreview: r }), "FFT");
-    },
+    // The five region computes live in store/gadgetRun.ts (bundle diet slice
+    // 19) and load on the first compute of a session; see `viaRun` above.
+    runGadgetIntegrate: viaRun((r) => r.runGadgetIntegrate(), "gadget"),
+    runGadgetStats: viaRun((r) => r.runGadgetStats(), "gadget"),
+    runGadgetDifferentiate: viaRun((r) => r.runGadgetDifferentiate(), "deriv"),
+    runGadgetFft: viaRun((r) => r.runGadgetFft(), "gadget"),
     // Ending action for FFT mode: the live preview becomes a new library dataset
     // (there's no fitSpec-like durable slot for a spectrum) — mirrors "Commit"
     // for the other modes, but adds to the library instead of writing a spec.

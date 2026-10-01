@@ -7945,10 +7945,24 @@
                 "minItems": 2,
                 "prefixItems": [
                   {
-                    "type": "number"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   {
-                    "type": "number"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 ],
                 "type": "array"
@@ -7993,10 +8007,24 @@
                 "minItems": 2,
                 "prefixItems": [
                   {
-                    "type": "number"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   {
-                    "type": "number"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 ],
                 "type": "array"

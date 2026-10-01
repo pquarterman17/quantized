@@ -196,8 +196,9 @@ export interface OriginGraphSpec {
   x_key?: number | null;
   x_log?: boolean;
   y_log?: boolean;
-  x_lim?: [number, number] | null;
-  y_lim?: [number, number] | null;
+  /** A null side is auto for that side (half-open): only the typed side is set. */
+  x_lim?: [number | null, number | null] | null;
+  y_lim?: [number | null, number | null] | null;
   y2_keys?: number[];
 }
 

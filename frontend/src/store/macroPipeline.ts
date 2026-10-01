@@ -34,7 +34,9 @@
 // are not part of the undo stack (history.ts's own exclusion list covers
 // transient tool/selection state; this is simply the pre-existing,
 // unchanged behavior being pinned, not a judgment about whether it should be
-// undoable) and never toast.
+// undoable) and never toast. The Pipeline panel's param Apply is undoable
+// anyway: its hook (usePipeline `editStep`) records history before calling
+// `updateStepParams`, and `macroSteps` is in the undo snapshot.
 //
 // WHAT IT MUST NOT IMPORT: nothing from `../components`, and no React — this
 // is store-layer code (architecture.test.ts's "store/ layering guard"
@@ -85,8 +87,10 @@ export interface MacroPipelineSlice {
     code: string,
     typed?: { kind: StepKind; params: Record<string, unknown> },
   ) => void;
-  // Pipeline view (#6): edit the recorded step list in place.
-  updateStepParams: (id: string, params: Record<string, unknown>) => void;
+  // Pipeline view (#6): edit the recorded step list in place. `text` is the
+  // new label + script line when the caller built them (a `transform` step,
+  // whose text lives in the lazy lib/transformRun); else `regenerateStep`.
+  updateStepParams: (id: string, params: Record<string, unknown>, text?: { label: string; code: string }) => void;
   toggleStep: (id: string) => void;
   removeStep: (id: string) => void;
   moveStep: (id: string, delta: number) => void;
@@ -116,10 +120,10 @@ export function createMacroPipelineSlice(set: SliceSet): MacroPipelineSlice {
             }
           : {},
       ),
-    updateStepParams: (id, params) =>
+    updateStepParams: (id, params, text) =>
       set((s) => ({
         macroSteps: s.macroSteps.map((st) =>
-          st.id === id ? regenerateStep({ ...st, params }) : st,
+          st.id !== id ? st : text ? { ...st, params, ...text } : regenerateStep({ ...st, params }),
         ),
       })),
     toggleStep: (id) =>

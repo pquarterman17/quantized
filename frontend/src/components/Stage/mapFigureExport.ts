@@ -38,7 +38,8 @@ const MPL_CMAP: Record<ColormapName, string> = {
 export interface MapExportView {
   cmap: ColormapName;
   logZ: boolean;
-  colorLimits: readonly [number, number] | null;
+  /** A null side is auto for that side (half-open, `lib/axisLim.ts`). */
+  colorLimits: readonly [number | null, number | null] | null;
   contour: { on: boolean; levelCount: number; scale: "linear" | "log" };
 }
 
@@ -57,8 +58,10 @@ function zCell(v: number | null, view: MapExportView): number | null {
   if (view.logZ && v <= 0) return null;
   let z = v;
   if (view.colorLimits) {
+    // Only a typed side saturates; an auto side is the data's own extent.
     const [lo, hi] = view.colorLimits;
-    z = Math.min(hi, view.logZ && lo <= 0 ? z : Math.max(lo, z));
+    if (hi !== null) z = Math.min(hi, z);
+    if (lo !== null && !(view.logZ && lo <= 0)) z = Math.max(lo, z);
   }
   return view.logZ ? Math.log10(z) : z;
 }

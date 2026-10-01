@@ -26,6 +26,7 @@ import {
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
 import { boolViewFields, sanitizeLegendSize, sanitizeRegionShades, sanitizeStatMarksByMode, sanitizeStatPicks, uniqueIds, type StatMarksByMode, type StatPicks } from "./plotviewSanitize";
 import { isString, keyedRecord } from "./sanitizeRecord";
+import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { FigureDocument } from "./figureDocument";
 import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
 
@@ -139,8 +140,8 @@ export interface PlotView {
   statShowGroupN: boolean;
   statShowSummary: boolean;
   statMarks: StatMarksByMode; statPicks: StatPicks; // + plot type / columns / dist / bins / fit / stacking (2026-10-01)
-  xLim: [number, number] | null;
-  yLim: [number, number] | null;
+  xLim: HalfLim | null; // either side null = auto for that side (lib/axisLim.ts)
+  yLim: HalfLim | null;
   xStep: number | null;
   yStep: number | null;
   xFmt: AxisFormat;
@@ -692,8 +693,7 @@ export function sanitizePlotView(v: unknown): PlotView {
     axisLabelOffsets: axisLabelOffsetsOrDefault(o.axisLabelOffsets),
     axisLabelStyles: axisLabelStylesOrDefault(o.axisLabelStyles),
     plotTemplate: strOrDefault(o.plotTemplate, fb.plotTemplate),
-    xLim: isRange(o.xLim) ? o.xLim : null,
-    yLim: isRange(o.yLim) ? o.yLim : null,
+    xLim: sanitizeHalfLim(o.xLim), yLim: sanitizeHalfLim(o.yLim), // half-open survives reopen
     xStep: numOrNull(o.xStep),
     yStep: numOrNull(o.yStep),
     xFmt: isAxisFormat(o.xFmt) ? o.xFmt : fb.xFmt,

@@ -23,6 +23,7 @@
 //
 // WHAT IT MUST NOT IMPORT: nothing from `../components`, no React; only types.
 
+import type { HalfLim } from "../lib/axisLim";
 import type { Composition } from "../lib/composition";
 import type { PageSetup } from "../lib/pagesetup";
 import type { PanelFit } from "../lib/panelLayout";
@@ -63,8 +64,8 @@ export interface PlotViewFieldsSlice {
   insetMode: boolean; // show a magnifier inset over the plot
   polarMode: boolean; // render the active series in polar (angle vs radius)
   statMode: boolean; statHideEmptyLevels: boolean; statShowGroupN: boolean; statShowSummary: boolean; statMarks: PlotView["statMarks"]; statPicks: PlotView["statPicks"]; // Statistics stage (gap #16) + its P2.6 options + its picks
-  xLim: [number, number] | null; // explicit X range (null = autoscale)
-  yLim: [number, number] | null; // explicit Y range (null = autoscale)
+  xLim: HalfLim | null; // explicit X range (null = autoscale; a null side = auto for that side)
+  yLim: HalfLim | null; // explicit Y range (same)
   // Origin's decoded major-tick increment for a FIXED log axis (plot-fidelity
   // fix #2) — only meaningful alongside xLim/yLim/y2Lim; see
   // `lib/uplotOpts.fixedLogAxisSplits`'s doc. null = undecoded (falls back to

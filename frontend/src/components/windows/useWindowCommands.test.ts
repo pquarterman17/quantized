@@ -9,8 +9,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { publishLivePlotSnapshot, type LivePlotSnapshot } from "../../lib/plotsnapshot";
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
 import { useCommands } from "../../store/commands";
+import { useToasts } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
-import { useWindowCommands } from "./useWindowCommands";
+import { SNAPSHOT_ALT_MODE_REASON, useWindowCommands } from "./useWindowCommands";
 
 const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
   id: "w1",
@@ -321,6 +322,29 @@ describe("useWindowCommands — Snapshot to New Window (item 11)", () => {
     renderHook(() => useWindowCommands());
     act(() => action("window-snapshot").run());
     expect(useApp.getState().plotWindows).toHaveLength(2);
+  });
+
+  // BUGS_AND_ISSUES (BUG-012 residue): the no-op used to be SILENT, so the
+  // palette/menu command looked broken on a polar/stat/stack/facet/break view.
+  it("says why it did nothing when an alternate render mode is showing", () => {
+    useApp.setState({ status: "" });
+    useToasts.setState({ toasts: [] });
+    publishLivePlotSnapshot(null, true);
+    renderHook(() => useWindowCommands());
+    act(() => action("window-snapshot").run());
+    expect(useApp.getState().plotWindows).toHaveLength(2);
+    expect(useApp.getState().status).toBe(SNAPSHOT_ALT_MODE_REASON);
+    expect(useToasts.getState().toasts.map((t) => t.msg)).toEqual([SNAPSHOT_ALT_MODE_REASON]);
+  });
+
+  it("says there is nothing to snapshot when no plot is showing at all", () => {
+    useApp.setState({ status: "" });
+    useToasts.setState({ toasts: [] });
+    publishLivePlotSnapshot(null);
+    renderHook(() => useWindowCommands());
+    act(() => action("window-snapshot").run());
+    expect(useApp.getState().status).toMatch(/^Nothing to snapshot/);
+    expect(useApp.getState().status).not.toBe(SNAPSHOT_ALT_MODE_REASON);
   });
 
   it("focus cycling skips snapshot windows", () => {

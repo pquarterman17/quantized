@@ -584,19 +584,16 @@ def test_a_renamed_solo_series_titles_its_axis_with_the_same_text() -> None:
 
 
 def test_an_empty_rename_drops_the_series_from_the_rendered_legend() -> None:
-    # RESIDUAL DIVERGENCE, pinned deliberately rather than "fixed" (BUG-014
-    # review round, NIT 4). An empty rename is honoured VERBATIM on the wire
-    # and by `series_display_name` -- but matplotlib treats a zero-length
-    # label the way it treats a leading "_" and omits the artist from the
-    # legend entirely, so the series loses its ROW here while uPlot still
-    # draws a blank row with its swatch on screen. "Identical text" therefore
-    # degenerates to "blank row vs no row" for `""` alone.
+    # THE RULE BOTH LEGS FOLLOW (BUG-014 review round, NIT 4). An empty rename
+    # is honoured VERBATIM on the wire and by `series_display_name`, and
+    # matplotlib treats a zero-length label the way it treats a leading "_":
+    # it omits the artist from the legend entirely. The series keeps its line
+    # but loses its legend ROW. The screen legends (`Stage/PlotLegend.tsx`,
+    # `Stage/SpatialPanelLegend.tsx`) now drop the row the same way, so this
+    # export behaviour is the reference, not a residual.
     #
-    # Not papered over with a " ": which of the two legs should move is a
-    # product decision, and a space would silently change what the user typed.
-    # The pre-BUG-014 wire rendered " (au)" here, so this is a change from one
-    # divergence to another, and the point of this test is that the change is
-    # a chosen, visible one.
+    # Not papered over with a " ": a space would silently change what the
+    # user typed.
     payload = _renamed_payload(["", None, None])
     assert payload["series_styles"][0] == {"legend": ""}
     resp = client.post("/api/export/figure", json=payload)

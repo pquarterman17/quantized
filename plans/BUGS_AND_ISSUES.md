@@ -3013,7 +3013,9 @@ follow-up commit closes:
   fresh state it receives and refuses if anything still is
   (`lib/workbookTransfer.ts:182-183`) — a re-check of its own, already
   closing this for workbook Copy/Duplicate. Only `store/workspaceIO.ts`'s
-  Save/Save As path is genuinely still open. `lib/workspaceSerialize.ts`'s
+  Save/Save As path is genuinely still open (**since closed:** a post-resolve
+  `pending` re-check refuses the save, `store/workspaceIO.ts:98-108`, tested in
+  `workspaceIO.test.ts`). `lib/workspaceSerialize.ts`'s
   comment is narrowed accordingly in round 2, below.
 - **Not attempted:** nit 2 ("Start pack's resolve can essentially never
   rescue a pack, only buy a better error code") and nit 6 (an unverifiable
@@ -4919,7 +4921,9 @@ rename; a null rename derives the label`, on top of `230a174a`:
   `seriesDisplayLabel("Signal", "au", null)` -> `"Signal (au)"` and a facet
   spec built with `seriesLabels: {1: null}` carrying the derived label in
   `figureSpecFacets.test.ts`.
-  **`sanitizePlotView` validation — residual, not fixed.** Whether
+  **`sanitizePlotView` validation — residual, not fixed** (**since closed,
+  BUG-014 round 4:** `plotview.ts:723` `keyedRecord(o.seriesLabels, isString)`,
+  tested at `plotview.test.ts:1084`). Whether
   `sanitizePlotView` should drop non-string `seriesLabels` entries: it
   should (the flat and facet legs both now degrade gracefully for a `null`
   *value* reaching `seriesDisplayLabel`, but a non-string *key-to-value* pair
@@ -9471,3 +9475,9 @@ of 2026-10-01; grep by content when they drift).
 - 2026-10-01 — Dialog-basics a11y audit: `frontend/src/test/dialogA11y.ts` checks role/title name/inert/focus-in/Tab trap/Escape/restore/field labels/error links/disabled reasons; applied to every backdrop dialog, the command palette and the ToolWindow host (`dialogInventory*.a11y.test.tsx`), with a ratchet (`dialogInventory.ratchet.test.ts`). Fixed: unnamed askParams fields (all export prompts), placeholder-only annotation text + unlinked invalid-markup message, unnamed tool windows, palette semantics + Tab leak, first toast never announced, silent StatusBar message, Pack Project disabled reason, Recode field labels.
 - 2026-10-01 — Widthless lines on the remaining export paths: a spatial page exports at the cell canvas' `canvasLineWidth`, the Graph Builder's encoded export at its preview's fixed `GRAPH_PREVIEW_LINE_PX` (the preview ignores the template), and a polar figure at the polar canvas' fixed `POLAR_LINE_PX`; fixture `tests/fixtures/wire/line_width_paths.json`, both halves. The seven uPlot canvases now call `canvasLineWidth` instead of inlining the rule, held by `src/canvasLineWidth.ratchet.test.ts`.
 - 2026-10-01 — Dialog a11y audit residuals: disabled reasons linked by `aria-describedby` (Quick Figure Builder setup, plot toolbar); toasts hold their timer under hover/focus and danger toasts are `role="alert"` in an always-mounted assertive region; command palette makes the page `inert` (lib/modalInert) and labels option groups; worksheet cell editors, formula/column fields, Library rename + filter, curve-fit model name, digitizer and legend label fields named; the dialog ratchet now credits only a test that renders AND audits the dialog. Eager JS 828.0 -> 827.2 kB (palette context actions now load on open).
+- 2026-10-01 — Half-open limits (PRIMARY_SOFTWARE_AUDIT_PLAN P2.8 residual (b)): a blank side of the X/Y limit fields or the map colour-limit fields is auto for that side, not `Number("") === 0` (`lib/axisLim.ts`, `lib/axisLimFields.ts`). The canvas fills it from its own scanned extent (`lib/canvasLims.ts`); a typed side crossing the auto side falls back to full auto with a status note; the map fills it from the grid extent. Half-open survives .dwk/document/recipe/plot-spec reopen and undo; export sends the null side (matplotlib autoscale, same crossing fallback in `calc.figure_overrides`), map export sends the painted pair, Origin `.ogs` emits only the typed side. y2 limits stay fully fixed.
+- 2026-10-01 — BUG-012 residual (row exclusion collapses a break): the export sends `x_breaks` only when the screen's own rule (`facet.breakCompositionFromData`, two or more surviving panels over the analysis rows) draws a break (`lib/figureSpec.ts`); pinned in `regressionMatrix.test.ts`.
+- 2026-10-01 — BUG-014 finding 4 (empty rename): no plan text chose a side, so the screen now matches the export: an empty display name drops the legend row but keeps the series plotted (`Stage/PlotLegend.tsx`, `Stage/SpatialPanelLegend.tsx`; background windows draw no legend). Tests in `PlotLegend.test.tsx`, `SpatialPanelLegend.test.tsx`, `multipanel.test.ts`, `BackgroundPlotWindow.test.tsx`.
+- 2026-10-01 — An open Figure Page follows a Library rename of itself (title, Save and undo of the rename), pinned by `usePageLifecycle.rename.test.ts`. "Snapshot to New Window" on a polar/stats/stack/facet/break view now says why it did nothing (status + toast) instead of a silent no-op; a real snapshot of those views still needs a new snapshot kind.
+- 2026-10-01 — Auto style cycle shown where it is drawn: the Inspector Line/marker-shape pickers and the plot curve menu show the cycled dash/glyph marked "(auto)" (`lib/drawnSeriesStyle.ts`, the canvas' own resolver); picking a value still stores it. Library, folder and workbook menu Help now lands on new "Library items/folders/workbooks" topics (`lib/libraryHelp.ts`). Stale plan boxes reconciled with evidence (F4.2, BUG-002 note, Preferences tablist, default trace export, export cancel, J1 header, reimport groupKey/facetKey).
+- 2026-10-01 — Pipeline panel edits `transform` step params (audit P2.5 "Not done" item): stack/unstack/split columns, join mode, append match + source column, dataset-math operation/interp, resample grid/points/step/start/stop/method/out-of-range/sort, promote name/type — validated by the replay's own `transformParamsOf`, label + script line regenerated, one undo entry per Apply. Join keys, second inputs, SIMS and metadata-cleanup rules get a one-line note + "Open in workshop" (`pipeline/TransformStepEditor.tsx`, `transformStepForm.ts`). Tests: `PipelinePanel.transform.test.tsx` (edit → re-run changes, parity vs direct run, undo/redo, `.dwk` round trip, inline refusal).

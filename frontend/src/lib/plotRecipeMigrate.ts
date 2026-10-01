@@ -22,6 +22,7 @@
 // The v2/v3 fields' sanitizers live here, beside the steps that introduced
 // them, so plotRecipeIO.ts (near its line ceiling) only wires them in.
 
+import { sanitizeHalfLim } from "./axisLim";
 import { COLORMAP_NAMES } from "./mapView";
 import type { ColormapName } from "./colormap";
 import type { NormalizedFrameRect } from "./originPanels";
@@ -221,8 +222,8 @@ export function sanitizePanelWindow(v: unknown): RecipePanelWindow | undefined {
 }
 
 /** An unknown colormap or a non-boolean scale is not a view (both are the
- *  decision being recorded); limits that are not an ascending pair read as
- *  auto. */
+ *  decision being recorded); limits that are not an ascending pair, or a
+ *  half-open one (a null side = auto for that side), read as auto. */
 export function sanitizeMapView(v: unknown): RecipeMapView | null {
   if (typeof v !== "object" || v === null) return null;
   const { colormap, logZ, colorLimits } = v as Raw;
@@ -230,6 +231,10 @@ export function sanitizeMapView(v: unknown): RecipeMapView | null {
   return {
     colormap: colormap as ColormapName,
     logZ,
-    colorLimits: isRange(colorLimits) && colorLimits[1] > colorLimits[0] ? [colorLimits[0], colorLimits[1]] : null,
+    colorLimits: ascendingOrHalfOpen(sanitizeHalfLim(colorLimits)),
   };
+}
+
+function ascendingOrHalfOpen(lim: [number | null, number | null] | null): [number | null, number | null] | null {
+  return lim && (lim[0] === null || lim[1] === null || lim[1] > lim[0]) ? lim : null;
 }

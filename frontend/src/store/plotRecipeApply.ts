@@ -56,6 +56,7 @@
 // -- only `resolvedCandidates` (and, since the review round, the "recently
 // used" scope lookup in `applyResolvedRecipe` below) actually needs it.
 
+import { fixedLim } from "../lib/axisLim";
 import { spatialComposition } from "../lib/composition";
 import { errKeysFromBindings } from "../lib/errorRoles";
 import { createFigureDocument } from "../lib/figureDocument";
@@ -121,7 +122,7 @@ export function viewFromResolved(
     xStep: visual.xRange.mode === "fixed" ? (visual.xRange.step ?? null) : null,
     yLim: visual.yRange.mode === "fixed" ? visual.yRange.lim : null,
     yStep: visual.yRange.mode === "fixed" ? (visual.yRange.step ?? null) : null,
-    y2Lim: visual.y2Range.mode === "fixed" ? visual.y2Range.lim : null,
+    y2Lim: visual.y2Range.mode === "fixed" ? fixedLim(visual.y2Range.lim) : null, // y2 has no half-open
     y2Step: visual.y2Range.mode === "fixed" ? (visual.y2Range.step ?? null) : null,
     xFmt: visual.xFmt,
     yFmt: visual.yFmt,
