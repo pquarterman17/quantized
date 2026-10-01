@@ -47,6 +47,7 @@
 
 import type { ColormapName } from "./colormap";
 import type { CutSpace } from "./mapcuts";
+import { uniqueIds } from "./uniqueIds";
 
 /** Which of the map's two axes a slice is fixed on. `h` holds y and sweeps x,
  *  `v` holds x and sweeps y, `seg` is a free line between two picked points —
@@ -312,16 +313,16 @@ export function sanitizeMapView(raw: unknown): MapViewState {
     logZ: o.logZ === true,
     colorLimits: lo !== null && hi !== null && hi > lo ? [lo, hi] : null,
     slices: Array.isArray(o.slices)
-      ? o.slices
+      ? uniqueIds(o.slices
           .map(sliceDef)
           .filter((s): s is MapSliceDef => s !== null)
-          .slice(0, MAX_SLICES)
+          .slice(0, MAX_SLICES))
       : [],
     annotations: Array.isArray(o.annotations)
-      ? o.annotations
+      ? uniqueIds(o.annotations
           .map(annotation)
           .filter((a): a is MapAnnotation => a !== null)
-          .slice(0, MAX_ANNOTATIONS)
+          .slice(0, MAX_ANNOTATIONS))
       : [],
   };
 }

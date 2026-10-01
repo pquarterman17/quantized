@@ -24,7 +24,7 @@ import {
   type PanelLayout,
 } from "./panelWindowModel";
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
-import { boolViewFields, sanitizeLegendSize, sanitizeRegionShades, sanitizeStatMarksByMode, type StatMarksByMode } from "./plotviewSanitize";
+import { boolViewFields, sanitizeLegendSize, sanitizeRegionShades, sanitizeStatMarksByMode, uniqueIds, type StatMarksByMode } from "./plotviewSanitize";
 import { isString, keyedRecord } from "./sanitizeRecord";
 import type { FigureDocument } from "./figureDocument";
 import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
@@ -711,10 +711,10 @@ export function sanitizePlotView(v: unknown): PlotView {
     y2Scale: y2ScaleOrDefault(o.y2Scale, o.y2Log),
     y2Step: numOrNull(o.y2Step),
     y2AxisLabel: strOrDefault(o.y2AxisLabel, fb.y2AxisLabel),
-    refLines: Array.isArray(o.refLines) ? (o.refLines as RefLine[]) : [],
-    annotations: sanitizeAnnotations(o.annotations),
-    regionShades: sanitizeRegionShades(o.regionShades),
-    shapes: sanitizeShapes(o.shapes),
+    refLines: uniqueIds(Array.isArray(o.refLines) ? (o.refLines as RefLine[]) : []),
+    annotations: uniqueIds(sanitizeAnnotations(o.annotations)),
+    regionShades: uniqueIds(sanitizeRegionShades(o.regionShades)),
+    shapes: uniqueIds(sanitizeShapes(o.shapes)),
     seriesStyles:
       typeof o.seriesStyles === "object" && o.seriesStyles !== null
         ? (o.seriesStyles as Record<number, SeriesStyle>)
