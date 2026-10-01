@@ -398,6 +398,10 @@ export interface StatStageExportInputs extends FacetedExportInputs {
   dist: string;
   bins: string;
   fit: string | null;
+  /** The CURRENT grouping's nest column label (null: not nested). The draw
+   *  can lag a "then by" change (it is null while recomputing), so the
+   *  nested-axis flag comes from here when given, never from a pending draw. */
+  nestLabel?: string | null;
 }
 
 /** `signal` (P3.4): the stage's StatusBar Cancel; every render request
@@ -462,7 +466,7 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs, sig
     spec.show_n = showN;
     spec.caveat = caveat;
     if (o.errorNote) spec.error_note = o.errorNote;
-    spec.axis_style = axisWire(m, spec.labels ?? [], nestLabelOf(draw));
+    spec.axis_style = axisWire(m, spec.labels ?? [], o.nestLabel !== undefined ? o.nestLabel : nestLabelOf(draw));
     // Review finding 2: send the canvas's own y-domain so matplotlib's
     // autoscale-to-drawn-artists can never disagree with it (points/fliers
     // hidden by the current marks would otherwise narrow the export's range).
