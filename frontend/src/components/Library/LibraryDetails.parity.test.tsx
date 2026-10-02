@@ -11,7 +11,7 @@
 // `dataTransfer` and dispatched through RTL's low-level fireEvent — the same
 // workaround FolderRow.test.tsx uses for the Tree's identical gestures.
 
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import LibraryDetails from "./LibraryDetails";
@@ -515,7 +515,7 @@ describe("LibraryDetails — L1.4 move / drag-drop parity (continued)", () => {
 // fires no blur on unmount, so nothing was committed and the typed name was
 // silently destroyed.
 describe("LibraryDetails — L1.4 inline rename under virtualization", () => {
-  it("an open editor and its half-typed draft survive the row scrolling out of the window and back", () => {
+  it("an open editor and its half-typed draft survive the row scrolling out of the window and back", async () => {
     applyToStore(() =>
       useApp.setState({ datasets: Array.from({ length: 4000 }, (_, i) => dataset(`d${i}`, `run-${i}.csv`, i)) }),
     );
@@ -527,12 +527,13 @@ describe("LibraryDetails — L1.4 inline rename under virtualization", () => {
     const panel = document.querySelector(".qzk-details-scroll") as HTMLElement;
     fireEvent.scroll(panel, { target: { scrollTop: 40000 } });
     // The row really is gone — otherwise this test proves nothing.
-    expect(rowFor("workbook:w")).toBeNull();
+    await waitFor(() => expect(rowFor("workbook:w")).toBeNull());
     // And nothing was committed behind the user's back on the way out.
     expect(useApp.getState().workbooks.find((w) => w.id === "w")!.name).toBe("Run");
 
     fireEvent.scroll(panel, { target: { scrollTop: 0 } });
-    const reopened = rowFor("workbook:w").querySelector(".qzk-folder-rename") as HTMLInputElement | null;
+    await waitFor(() => expect(rowFor("workbook:w")).not.toBeNull());
+    const reopened = rowFor("workbook:w")!.querySelector(".qzk-folder-rename") as HTMLInputElement | null;
     expect(reopened, "the rename editor was destroyed by the scroll").not.toBeNull();
     expect(reopened!.value).toBe("Half typed");
   });
@@ -546,7 +547,7 @@ describe("LibraryDetails — L1.4 inline rename under virtualization", () => {
 // virtualization" block is the Tiles half and also covers the
 // abandoned-drag (no-drop) case this file does not repeat.
 describe("LibraryDetails — L1.4 drag survives its source scrolling out of the window", () => {
-  it("a drag whose SOURCE row scrolls out of the virtualized window still completes when dropped on a folder", () => {
+  it("a drag whose SOURCE row scrolls out of the virtualized window still completes when dropped on a folder", async () => {
     applyToStore(() =>
       useApp.setState({ datasets: Array.from({ length: 4000 }, (_, i) => dataset(`d${i}`, `run-${i}.csv`, i)) }),
     );
@@ -562,7 +563,9 @@ describe("LibraryDetails — L1.4 drag survives its source scrolling out of the 
     // the browser then has no element left to fire a local `dragend` on.
     const panel = document.querySelector(".qzk-details-scroll") as HTMLElement;
     fireEvent.scroll(panel, { target: { scrollTop: 1_000_000 } });
-    expect(rowFor("workbook:w"), "the source row must really be gone, or this proves nothing").toBeNull();
+    await waitFor(() => {
+      expect(rowFor("workbook:w"), "the source row must really be gone, or this proves nothing").toBeNull();
+    });
     // The drag SURVIVES the unmount — before this fix a per-row unmount
     // effect cleared `activeDrag` right here, and the drop below would have
     // been silently refused.

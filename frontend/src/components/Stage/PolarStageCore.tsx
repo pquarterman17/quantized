@@ -6,17 +6,17 @@
 // `windows/BackgroundAltModes.tsx`). The item-1 usePlotPayload/PlotViewport
 // decomposition precedent, applied to the polar mode.
 //
-// Row state note: this core reads `dataset.data` raw — exactly what the
-// focused polar path always did (polar never routed through
-// lib/rowstate.analysisData). Focused and background windows on the same
-// dataset therefore stay mutually consistent; making polar honor exclusions
-// would be a separate, deliberate behavior change to BOTH paths at once.
+// Row state follows the same analysisData contract as fits/statistics: manual
+// exclusions and Data Filter failures are omitted. The publication path uses
+// the same helper (`lib/polarFigureSpec.ts`) so screen and export cannot drift.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
+import { observeResizePaint } from "../../lib/frameCoalesce";
 import { POLAR_LINE_PX, polarChannels, polarRadialRange, polarToXY, radiusNorm } from "../../lib/polar";
+import { analysisData } from "../../lib/rowstate";
 import { niceTicks } from "../../lib/ticks";
-import type { Dataset } from "../../lib/types";
+import type { Dataset, DataStruct } from "../../lib/types";
 import { seriesColor } from "../../lib/uplotOpts";
 import type { Accent, Theme } from "../../store/useApp";
 
@@ -55,17 +55,16 @@ export default function PolarStageCore({
 }: PolarStageCoreProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const data = useMemo(() => analysisData(dataset), [dataset]);
 
   useEffect(() => {
     const host = hostRef.current;
     const canvas = canvasRef.current;
     if (!host || !canvas) return;
-    const paint = () => draw(canvas, host, dataset, yKeys, seriesStyles, showGrid);
+    const paint = () => draw(canvas, host, data, yKeys, seriesStyles, showGrid);
     paint();
-    const ro = new ResizeObserver(paint);
-    ro.observe(host);
-    return () => ro.disconnect();
-  }, [dataset, yKeys, seriesStyles, showGrid, theme, accent]);
+    return observeResizePaint(host, paint);
+  }, [data, yKeys, seriesStyles, showGrid, theme, accent]);
 
   return (
     <div ref={hostRef} style={{ position: "absolute", inset: 8 }}>
@@ -74,14 +73,10 @@ export default function PolarStageCore({
   );
 }
 
-interface DS {
-  data: { time: number[]; values: number[][]; labels: string[]; units: string[] };
-}
-
 function draw(
   canvas: HTMLCanvasElement,
   host: HTMLElement,
-  active: DS | null,
+  data: DataStruct | null,
   yKeys: number[] | null,
   seriesStyles: Record<number, { color?: string }>,
   showGrid: boolean,
@@ -95,18 +90,18 @@ function draw(
   canvas.height = Math.round(H * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
-  if (!active) return;
+  if (!data) return;
 
   const ink = cssVar("--text", "#e6e6e6");
   const muted = cssVar("--text-dim", "#9aa");
   const cx = W / 2;
   const cy = H / 2;
   const radius = Math.max(10, Math.min(W, H) / 2 - 44);
-  const angle = active.data.time;
-  const plotted = polarChannels(yKeys, active.data.labels.length);
+  const angle = data.time;
+  const plotted = polarChannels(yKeys, data.labels.length);
 
   // Shared radial scale across all plotted channels — the export sends this same range.
-  const [vmin, vmax] = polarRadialRange(active.data.values, plotted);
+  const [vmin, vmax] = polarRadialRange(data.values, plotted);
 
   // Radial grid rings + value labels.
   ctx.strokeStyle = muted;
@@ -153,7 +148,7 @@ function draw(
     ctx.beginPath();
     let started = false;
     for (let k = 0; k < angle.length; k++) {
-      const v = active.data.values[k]?.[ch];
+      const v = data.values[k]?.[ch];
       if (!Number.isFinite(angle[k]) || !Number.isFinite(v)) {
         started = false;
         continue;

@@ -32,6 +32,7 @@
 import { useEffect, useMemo, useRef } from "react";
 
 import type { ColorScatterSpec } from "../../../lib/colorscatter";
+import { observeResizePaint } from "../../../lib/frameCoalesce";
 import { GRADIENT_COLORMAP, gradientColumns, type EncodedSpec } from "../../../lib/plotEncoding";
 import type { PlotSpec, SpecRender } from "../../../lib/plotspec";
 import type { SeriesStyle } from "../../../lib/types";
@@ -93,9 +94,7 @@ function CanvasHost({
     };
     paint();
     if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(paint);
-    ro.observe(host);
-    return () => ro.disconnect();
+    return observeResizePaint(host, paint);
   }, [render, stat, styles, colorBy, theme, accent]);
 
   return (

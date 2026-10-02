@@ -12,6 +12,7 @@
 
 import { useEffect, useRef, type MouseEvent } from "react";
 
+import { observeResizePaint } from "../../lib/frameCoalesce";
 import type { Accent, Theme } from "../../store/useApp";
 import { draw, type StatDrawData } from "./statRender";
 import { clickedSlotAt } from "./statRenderSelection";
@@ -38,9 +39,7 @@ export default function StatStageCanvas({ data, theme, accent, slotCount = 0, on
     if (!host || !canvas) return;
     const paint = () => draw(canvas, host, data);
     paint();
-    const ro = new ResizeObserver(paint);
-    ro.observe(host);
-    return () => ro.disconnect();
+    return observeResizePaint(host, paint);
     // theme/accent so the plot recolors from fresh design tokens (PolarStage's pattern).
   }, [data, theme, accent]);
 
