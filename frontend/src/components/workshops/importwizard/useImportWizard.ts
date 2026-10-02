@@ -29,6 +29,7 @@ import type {
   ImportPreviewResponse,
   ImportSettingsWire,
 } from "../../../lib/types";
+import { notifyParserNotes, parserNotes } from "../../../store/importNotes";
 import { toast } from "../../../store/toasts";
 import { nextDatasetId, useApp } from "../../../store/useApp";
 import { useImportErrorBindings } from "./useImportErrorBindings";
@@ -366,6 +367,7 @@ export function useImportWizard(): ImportWizardState {
       pushRecent(file.name, file.size);
       setStatus(`imported ${file.name} via Import wizard`);
       toast(`imported ${file.name}`, "ok");
+      notifyParserNotes([{ name: file.name, notes: parserNotes(data) }]);
       setImported(true);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "import failed";
