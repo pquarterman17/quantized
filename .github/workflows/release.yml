@@ -98,6 +98,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          # The API and SPA need the per-launch token (docs/api_auth.md). Fix one
+          # here so the smoke can authenticate exactly as a launcher would.
+          $env:QZ_API_TOKEN = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
+          $auth = @{ "X-Quantized-Token" = $env:QZ_API_TOKEN }
           $p = Start-Process -FilePath "dist-sidecar/qz-server/qz-server.exe" `
                 -ArgumentList "--no-browser" -PassThru
           $ok = $false
@@ -107,7 +111,11 @@ jobs:
               if ($h.status -eq "ok") { $ok = $true; break }
             } catch { Start-Sleep -Milliseconds 1000 }
           }
-          $spa = (Invoke-WebRequest http://127.0.0.1:8000/ -UseBasicParsing).StatusCode
+          # Without the token the page is locked; the launch URL trades the token
+          # for the session cookie, after which the SPA is served.
+          $locked = (Invoke-WebRequest http://127.0.0.1:8000/ -UseBasicParsing -SkipHttpErrorCheck).StatusCode
+          $null = Invoke-WebRequest "http://127.0.0.1:8000/?token=$($env:QZ_API_TOKEN)" -UseBasicParsing -SessionVariable qz
+          $spa = (Invoke-WebRequest http://127.0.0.1:8000/ -UseBasicParsing -WebSession $qz).StatusCode
           # Package-data-backed endpoints (tools/bundle/qz-server.spec's
           # collect_data_files("quantized") regression guard): each one reads
           # a JSON/CSV file shipped alongside the module via Path(__file__).parent,
@@ -115,14 +123,14 @@ jobs:
           # ships a working /api/health + SPA but 500s on real use.
           $failReason = $null
           try {
-            $els = Invoke-RestMethod http://127.0.0.1:8000/api/reference/elements -TimeoutSec 5
+            $els = Invoke-RestMethod http://127.0.0.1:8000/api/reference/elements -Headers $auth -TimeoutSec 5
             if ($els.elements.Count -ne 118) {
               $failReason = "elements endpoint returned $($els.elements.Count) entries, expected 118"
             }
           } catch { $failReason = "elements endpoint failed: $_" }
           if (-not $failReason) {
             try {
-              $presets = Invoke-RestMethod http://127.0.0.1:8000/api/reflectivity/presets -TimeoutSec 5
+              $presets = Invoke-RestMethod http://127.0.0.1:8000/api/reflectivity/presets -Headers $auth -TimeoutSec 5
               if ($presets.presets.Count -lt 1) {
                 $failReason = "reflectivity presets endpoint returned no presets"
               }
@@ -130,14 +138,16 @@ jobs:
           }
           if (-not $failReason) {
             try {
-              $demo = Invoke-RestMethod http://127.0.0.1:8000/api/samples/demo -TimeoutSec 5
+              $demo = Invoke-RestMethod http://127.0.0.1:8000/api/samples/demo -Headers $auth -TimeoutSec 5
               if (-not $demo.time -or $demo.time.Count -lt 1) {
                 $failReason = "samples demo endpoint returned no data"
               }
             } catch { $failReason = "samples demo endpoint failed: $_" }
           }
           Stop-Process -Id $p.Id -Force
-          if (-not $ok -or $spa -ne 200) { throw "sidecar smoke failed (health=$ok spa=$spa)" }
+          if (-not $ok -or $spa -ne 200 -or $locked -ne 401) {
+            throw "sidecar smoke failed (health=$ok spa=$spa locked=$locked)"
+          }
           if ($failReason) { throw "sidecar package-data smoke failed: $failReason" }
           Write-Host "sidecar healthy, SPA served, package data (elements/presets/demo) loaded"
 
@@ -145,6 +155,11 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
+          # The API and SPA need the per-launch token (docs/api_auth.md). Fix one
+          # here so the smoke can authenticate exactly as a launcher would.
+          export QZ_API_TOKEN="$(openssl rand -hex 32)"
+          auth="X-Quantized-Token: $QZ_API_TOKEN"
+          jar="$(mktemp)"
           ./dist-sidecar/qz-server/qz-server --no-browser &
           pid=$!
           ok=0
@@ -154,32 +169,36 @@ jobs:
             fi
             sleep 1
           done
-          spa=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/ || echo 000)
+          # Without the token the page is locked; the launch URL trades the token
+          # for the session cookie, after which the SPA is served.
+          locked=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/ || echo 000)
+          curl -s -o /dev/null -c "$jar" "http://127.0.0.1:8000/?token=$QZ_API_TOKEN" || true
+          spa=$(curl -s -o /dev/null -b "$jar" -w "%{http_code}" http://127.0.0.1:8000/ || echo 000)
           # Package-data-backed endpoints (tools/bundle/qz-server.spec's
           # collect_data_files("quantized") regression guard): each reads a
           # JSON/CSV shipped alongside its module via Path(__file__).parent, so
           # a sidecar whose datas listing drops package data still passes
           # health + SPA but 500s the moment a user opens it.
           fail_reason=""
-          n_elements=$(curl -sf http://127.0.0.1:8000/api/reference/elements | jq '.elements | length' 2>/dev/null || echo 0)
+          n_elements=$(curl -sf -H "$auth" http://127.0.0.1:8000/api/reference/elements | jq '.elements | length' 2>/dev/null || echo 0)
           if [ "$n_elements" != "118" ]; then
             fail_reason="elements endpoint returned $n_elements entries, expected 118"
           fi
           if [ -z "$fail_reason" ]; then
-            n_presets=$(curl -sf http://127.0.0.1:8000/api/reflectivity/presets | jq '.presets | length' 2>/dev/null || echo 0)
+            n_presets=$(curl -sf -H "$auth" http://127.0.0.1:8000/api/reflectivity/presets | jq '.presets | length' 2>/dev/null || echo 0)
             if [ "$n_presets" -lt 1 ]; then
               fail_reason="reflectivity presets endpoint returned no presets"
             fi
           fi
           if [ -z "$fail_reason" ]; then
-            n_demo=$(curl -sf http://127.0.0.1:8000/api/samples/demo | jq '.time | length' 2>/dev/null || echo 0)
+            n_demo=$(curl -sf -H "$auth" http://127.0.0.1:8000/api/samples/demo | jq '.time | length' 2>/dev/null || echo 0)
             if [ "$n_demo" -lt 1 ]; then
               fail_reason="samples demo endpoint returned no data"
             fi
           fi
           kill "$pid" 2>/dev/null || true
-          if [ "$ok" != "1" ] || [ "$spa" != "200" ]; then
-            echo "sidecar smoke failed (health=$ok spa=$spa)"; exit 1
+          if [ "$ok" != "1" ] || [ "$spa" != "200" ] || [ "$locked" != "401" ]; then
+            echo "sidecar smoke failed (health=$ok spa=$spa locked=$locked)"; exit 1
           fi
           if [ -n "$fail_reason" ]; then
             echo "sidecar package-data smoke failed: $fail_reason"; exit 1
