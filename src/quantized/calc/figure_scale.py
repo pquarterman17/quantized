@@ -21,8 +21,10 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from matplotlib.ticker import Locator, LogLocator, NullFormatter
+from matplotlib.ticker import Locator, LogLocator
 from numpy.typing import NDArray
+
+from quantized.calc.figure_log_ticks import LogTickLabels
 
 __all__ = ["apply_axis_scale", "drawable_lim", "reciprocal_tick_values", "resolve_axis_scale"]
 
@@ -132,7 +134,10 @@ def apply_axis_scale(ax: Any, axis: str, scale: str) -> None:
         set_scale("log")
         target = ax.xaxis if axis == "x" else ax.yaxis
         target.set_minor_locator(LogLocator(base=10.0, subs=tuple(range(2, 10))))
-        target.set_minor_formatter(NullFormatter())
+        # Screen-parity labels (lib/logTicks.ts): decades only on a view
+        # spanning a decade, every tick on a sub-decade one.
+        target.set_major_formatter(LogTickLabels(minor=False))
+        target.set_minor_formatter(LogTickLabels(minor=True))
         return
     if scale == "reciprocal":
         set_scale("function", functions=(_reciprocal, _reciprocal))
