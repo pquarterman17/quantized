@@ -14,6 +14,7 @@ import { defaultPlotView } from "../lib/plotview";
 import type { ComputedColumn, Dataset, DataStruct, FitSpec } from "../lib/types";
 import { formulaLetter } from "./computedColumns";
 import { useApp } from "./useApp";
+import { untilState } from "../test/untilState";
 import { resetBookTransportForTests } from "../lib/bookData";
 
 vi.mock("../lib/api", async (orig) => ({
@@ -213,7 +214,7 @@ describe("updateFormula (K4)", () => {
     // finding 4 bug is that a refresh only ever re-snapped an EXISTING
     // snapshot, so this could never resolve at all. The lazy refresh this
     // edit now schedules resolves it fresh against the CURRENT saved fit.
-    await vi.waitFor(() => expect(useApp.getState().datasets[0].formulas![0].derived?.fits?.length).toBeGreaterThan(0));
+    await untilState(useApp, (s) => expect(s.datasets[0].formulas![0].derived?.fits?.length).toBeGreaterThan(0));
     const d = useApp.getState().datasets[0];
     expect(d.formulaErrors).toBeUndefined();
     const x = d.data.time; // fitval("Gaussian", x) at params [1,0,1] = exp(-x^2/2); A = [1,2,3]
@@ -1050,7 +1051,7 @@ describe("pending formula actions resolve and continue automatically (BUG-009)",
     expect(useApp.getState().addFormula("pf", "Calc", "A*2")).toBe(true); // accepted and queued
     expect(useApp.getState().datasets[0].formulas).toEqual([]);
     expect(useApp.getState().history).toHaveLength(0);
-    await vi.waitFor(() => expect(useApp.getState().datasets[0].formulas).toHaveLength(1));
+    await untilState(useApp, (s) => expect(s.datasets[0].formulas).toHaveLength(1));
     const d = useApp.getState().datasets[0];
     expect(d.data.labels).toEqual(["Ya", "Yb", "Calc"]);
     expect(d.data.values).toEqual([[1, 100, 2], [2, 200, 4], [3, 300, 6]]);
@@ -1063,7 +1064,7 @@ describe("pending formula actions resolve and continue automatically (BUG-009)",
     const patch = { expr: "A*3" };
     expect(useApp.getState().updateFormula("pf", 0, patch)).toBe(true);
     patch.expr = "A*999"; // the queued request owns an invocation-time snapshot
-    await vi.waitFor(() => expect(useApp.getState().datasets[0].formulas?.[0].expr).toBe("A*3"));
+    await untilState(useApp, (s) => expect(s.datasets[0].formulas?.[0].expr).toBe("A*3"));
     expect(useApp.getState().datasets[0].data.values).toEqual([[1, 100, 3], [2, 200, 6], [3, 300, 9]]);
   });
 
@@ -1071,7 +1072,7 @@ describe("pending formula actions resolve and continue automatically (BUG-009)",
     seedExisting();
     vi.mocked(fetchBookData).mockResolvedValueOnce(full);
     useApp.getState().removeFormula("pf", 0);
-    await vi.waitFor(() => expect(useApp.getState().datasets[0].formulas).toBeUndefined());
+    await untilState(useApp, (s) => expect(s.datasets[0].formulas).toBeUndefined());
     expect(useApp.getState().datasets[0].data).toEqual(full);
     expect(useApp.getState().history).toHaveLength(1);
   });
@@ -1081,7 +1082,7 @@ describe("pending formula actions resolve and continue automatically (BUG-009)",
     vi.mocked(fetchBookData).mockResolvedValueOnce(full);
     useApp.getState().addFormula("pf", "Double", "A*2");
     useApp.getState().addFormula("pf", "Triple", "A*3");
-    await vi.waitFor(() => expect(useApp.getState().datasets[0].formulas).toHaveLength(2));
+    await untilState(useApp, (s) => expect(s.datasets[0].formulas).toHaveLength(2));
     expect(fetchBookData).toHaveBeenCalledTimes(1);
     expect(useApp.getState().datasets[0].data.labels).toEqual(["Ya", "Yb", "Double", "Triple"]);
     expect(useApp.getState().history).toHaveLength(2);
@@ -1091,7 +1092,7 @@ describe("pending formula actions resolve and continue automatically (BUG-009)",
     seedPending();
     vi.mocked(fetchBookData).mockResolvedValueOnce(full);
     expect(useApp.getState().addFormula("pf", "Recursive", "C + 1")).toBe(true);
-    await vi.waitFor(() => expect(useApp.getState().status).toMatch(/Can't add column/));
+    await untilState(useApp, (s) => expect(s.status).toMatch(/Can't add column/));
     expect(useApp.getState().datasets[0].formulas).toEqual([]);
     expect(useApp.getState().history).toHaveLength(0);
   });
@@ -1100,7 +1101,7 @@ describe("pending formula actions resolve and continue automatically (BUG-009)",
     seedPending();
     vi.mocked(fetchBookData).mockRejectedValueOnce(new Error("network unavailable"));
     expect(useApp.getState().addFormula("pf", "Calc", "A*2")).toBe(true);
-    await vi.waitFor(() => expect(useApp.getState().status).toMatch(/network unavailable/));
+    await untilState(useApp, (s) => expect(s.status).toMatch(/network unavailable/));
     expect(useApp.getState().datasets[0].formulas).toEqual([]);
     expect(useApp.getState().datasets[0].pending).toBeDefined();
     expect(useApp.getState().history).toHaveLength(0);
