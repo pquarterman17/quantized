@@ -45,7 +45,8 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from typing import Any
 
 from matplotlib.patches import Rectangle
@@ -132,6 +133,21 @@ def _validate_region_shades(shades: Sequence[Mapping[str, Any]] | None) -> None:
             raise ValueError("region_shades axis must be 0 or 1")
 
 
+@contextmanager
+def _outside_autoscale(ax: Any) -> Iterator[None]:
+    """Keep artists added inside out of ``ax``'s data limits. The screen
+    ranges its scales from the series alone and paints decor in uPlot hooks;
+    matplotlib's ``axvline``/``axhline``/``add_patch`` would otherwise widen
+    the exported autoscale to reach a reference line or shade off the data."""
+    lim = ax.dataLim.frozen()
+    ignore = ax.ignore_existing_data_limits
+    try:
+        yield
+    finally:
+        ax.dataLim.set(lim)
+        ax.ignore_existing_data_limits = ignore
+
+
 def _apply_ref_lines(ax: Any, ref_lines: Sequence[Mapping[str, Any]] | None) -> None:
     """Draw dashed reference lines at fixed X/Y DATA values on ``ax`` -- the
     export counterpart of ``refLinePlugin``. Always the PRIMARY axes (see
@@ -161,10 +177,11 @@ def _apply_ref_lines(ax: Any, ref_lines: Sequence[Mapping[str, Any]] | None) -> 
             dashes=_REF_LINE_DASH,
             gid=f"refline:{index}",
         )
-        if rl["axis"] == "x":
-            ax.axvline(value, **line_kw)
-        else:
-            ax.axhline(value, **line_kw)
+        with _outside_autoscale(ax):
+            if rl["axis"] == "x":
+                ax.axvline(value, **line_kw)
+            else:
+                ax.axhline(value, **line_kw)
 
 
 def _apply_region_shades(ax: Any, shades: Sequence[Mapping[str, Any]] | None) -> None:
@@ -179,17 +196,18 @@ def _apply_region_shades(ax: Any, shades: Sequence[Mapping[str, Any]] | None) ->
     for sh in shades:
         x0, x1 = sorted((float(sh["x1"]), float(sh["x2"])))
         y0, y1 = sorted((float(sh["y1"]), float(sh["y2"])))
-        ax.add_patch(
-            Rectangle(
-                (x0, y0),
-                x1 - x0,
-                y1 - y0,
-                facecolor=str(sh["fill"]),
-                edgecolor="none",
-                alpha=REGION_SHADE_ALPHA,
-                zorder=_REGION_SHADE_ZORDER,
+        with _outside_autoscale(ax):
+            ax.add_patch(
+                Rectangle(
+                    (x0, y0),
+                    x1 - x0,
+                    y1 - y0,
+                    facecolor=str(sh["fill"]),
+                    edgecolor="none",
+                    alpha=REGION_SHADE_ALPHA,
+                    zorder=_REGION_SHADE_ZORDER,
+                )
             )
-        )
 
 
 def _split_region_shades_by_axis(

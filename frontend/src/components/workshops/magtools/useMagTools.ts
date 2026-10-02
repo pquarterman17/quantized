@@ -127,6 +127,23 @@ export type MagBgFit =
   | { kind: "mt"; slope: number; intercept: number }
   | { kind: "mh"; slope: number; offset: number };
 
+/** The Units tab's SOURCE units, read from the data: the plotted x's own unit
+ *  when it is a field (blank = QD's "Oe"), else `null` (never convert it), and
+ *  the plotted moment channel's unit (blank = "emu"). */
+function sourceUnits(
+  ds: Dataset, xKey: number | null, yKeys: number[] | null, seriesOrder: number[] | null,
+): { fromField: string | null; xLabel: string; xUnit: string; fromMoment: string } {
+  const axis = magXAxis(ds.data, xKey);
+  const isField = detectMagXKind(axis.label, axis.unit).kind === "field";
+  const yKey = plottedYKey(ds, xKey, yKeys, seriesOrder) ?? 0;
+  return {
+    fromField: isField ? axis.unit || "Oe" : null,
+    xLabel: axis.label,
+    xUnit: axis.unit,
+    fromMoment: ds.data.units[yKey] || "emu",
+  };
+}
+
 export const FIELD_UNITS = ["Oe", "T", "mT", "A/m"];
 export const MOMENT_UNITS = ["emu", "emu/g", "emu/cm³", "A·m²", "kA/m"];
 
@@ -137,9 +154,10 @@ export const DEFAULT_AUTO_FRACTION = 0.1;
 export const DEFAULT_HI_FRACTION = 0.7;
 
 export interface UnitParams {
-  fromField: string;
+  fromField: string; // read from the data (sourceUnits), never chosen
   toField: string;
-  toMoment: string; // source moment is always "emu" (the only supported source)
+  fromMoment: string; // read from the data (sourceUnits); the backend converts from "emu" only
+  toMoment: string;
   sampleMass: number; // g (for emu/g)
   sampleVolume: number; // cm³ (for emu/cm³, kA/m)
 }
@@ -147,6 +165,7 @@ export interface UnitParams {
 const DEFAULT_UNITS: UnitParams = {
   fromField: "Oe",
   toField: "T",
+  fromMoment: "emu",
   toMoment: "emu",
   sampleMass: 0,
   sampleVolume: 0,
@@ -191,6 +210,8 @@ export interface MagToolsState {
 export function useMagTools(): MagToolsState {
   const active = useActiveDataset();
   const xKey = useApp((s) => s.xKey);
+  const yKeys = useApp((s) => s.yKeys);
+  const seriesOrder = useApp((s) => s.seriesOrder);
   const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
   const [tab, setTab] = useState<MagTab>("background");
@@ -219,6 +240,7 @@ export function useMagTools(): MagToolsState {
     const axis = magXAxis(active.data, xKey);
     return detectMagXKind(axis.label, axis.unit);
   }, [active, xKey]);
+  const src = active ? sourceUnits(active, xKey, yKeys, seriesOrder) : null;
 
   const bgPath: MagBgPath | null =
     bgMode === "auto"
@@ -404,12 +426,16 @@ export function useMagTools(): MagToolsState {
       const warnings: string[] = [];
       if (!anyX) warnings.push("Every field value is a gap; the converted x column is all gaps.");
       if (!anyY) warnings.push("Every moment value is a gap; the converted y column is all gaps.");
+      // Source units come from the data; a non-field x (an M(T) curve) passes
+      // through unchanged (from == to) instead of being scaled as oersteds.
+      const from = sourceUnits(ds, st.xKey, st.yKeys, st.seriesOrder);
+      if (from.fromField == null) warnings.push(`x (${from.xLabel || "unnamed"}) is not a field, so only the moment was converted.`);
       const res = await convertMagUnits({
         x: xs.safe,
         y: ys.safe,
-        from_field: units.fromField,
-        to_field: units.toField,
-        from_moment: "emu",
+        from_field: from.fromField ?? from.xUnit,
+        to_field: from.fromField == null ? from.xUnit : units.toField,
+        from_moment: from.fromMoment,
         to_moment: units.toMoment,
         sample_mass: units.sampleMass,
         sample_volume: units.sampleVolume,
@@ -458,7 +484,7 @@ export function useMagTools(): MagToolsState {
     setAutoFraction,
     hiFraction,
     setHiFraction,
-    units,
+    units: src ? { ...units, fromField: src.fromField ?? src.xUnit, fromMoment: src.fromMoment } : units,
     setUnits,
     fit: visible.fit,
     warning: visible.warning,

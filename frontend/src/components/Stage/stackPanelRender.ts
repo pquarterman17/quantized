@@ -57,17 +57,31 @@ export interface StackPanelsArgs {
   cell: StackCellOpts;
 }
 
+/** The x-axis band (px) kept on every panel above the bottom one: room for
+ *  the tick marks only, since their tick labels and title are blank. */
+const TICK_BAND = 8;
+
+/** How much taller the bottom panel is than the rest, per built stack: its
+ *  full x-axis band (tick labels + title) minus the others' `TICK_BAND`. */
+const bottomExtra = new WeakMap<readonly uPlot[], number>();
+
+/** Panel heights giving every plot AREA the same height: the bottom panel
+ *  also carries `extra` px of x axis. Never below 1 px (as `panelHeights`). */
+function stackHeights(n: number, total: number, extra: number): number[] {
+  const hs = panelHeights(n, total - extra);
+  if (n) hs[n - 1] += extra;
+  return hs;
+}
+
 /** Build one uPlot per stacked panel into `host` (which the caller has
  *  already emptied) and return them in panel order. */
 export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): uPlot[] {
-  const heights = panelHeights(args.panels.length, args.box.h);
-  return args.panels.map((pp, i) => {
-    const div = document.createElement("div");
-    host.appendChild(div);
+  const n = args.panels.length;
+  const built = args.panels.map((pp, i) => {
     const opts = buildOpts(pp, {
       ...args.cell,
       width: args.box.w,
-      height: heights[i],
+      height: 0,
       seriesStyles: [args.seriesStyles[i]],
       seriesLabels: [args.seriesLabels[i]],
       // Item A: same class of fix as the spatial multi-panel path — an
@@ -80,13 +94,23 @@ export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): 
     opts.cursor = { ...opts.cursor, sync: { key: args.syncKey } };
     opts.hooks = { setScale: [args.onSetScale] };
     // Blank the x tick labels on every panel but the bottom (keep the axis so
-    // the plot areas stay the same width and the panels line up).
-    const isBottom = i === args.panels.length - 1;
-    if (!isBottom && opts.axes?.[0]) {
-      opts.axes[0] = { ...opts.axes[0], label: undefined, values: (_u, splits) => splits.map(() => "") };
+    // the plot areas stay the same width and the panels line up), and shrink
+    // its band to the tick marks: blank labels reserved ~70 px per panel.
+    if (i < n - 1 && opts.axes?.[0]) {
+      opts.axes[0] = { ...opts.axes[0], label: undefined, size: TICK_BAND, values: (_u, splits) => splits.map(() => "") };
     }
-    return new uPlot(opts, pp.data, div);
+    return opts;
   });
+  const x = built[n - 1]?.axes?.[0];
+  const extra = x ? Math.max(0, Number(x.size) + (x.label != null ? Number(x.labelSize) : 0) - TICK_BAND) || 0 : 0;
+  const heights = stackHeights(n, args.box.h, extra);
+  const plots = built.map((opts, i) => {
+    const div = document.createElement("div");
+    host.appendChild(div);
+    return new uPlot({ ...opts, height: heights[i] }, args.panels[i].data, div);
+  });
+  bottomExtra.set(plots, extra);
+  return plots;
 }
 
 /** Re-size an already-built stack to `host`'s current box — the
@@ -95,7 +119,7 @@ export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): 
  *  was BUILT at, used when the host reports 0 (detached/hidden); the height
  *  keeps the in-hook version's own `clientHeight || 400` fallback. */
 export function resizeStackPanels(host: HTMLDivElement, plots: readonly uPlot[], fallbackW: number): void {
-  const hs = panelHeights(plots.length, host.clientHeight || 400);
+  const hs = stackHeights(plots.length, host.clientHeight || 400, bottomExtra.get(plots) ?? 0);
   const width = host.clientWidth || fallbackW;
   plots.forEach((u, idx) => u.setSize({ width, height: hs[idx] }));
 }

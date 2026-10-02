@@ -434,12 +434,14 @@ describe("MultiPanelStage — mode regressions", () => {
     const axis = (created[0] as {
       opts: { axes: {
         splits?: (u: unknown, i: number, min: number, max: number) => number[];
-        filter?: (u: unknown, splits: number[]) => (number | null)[];
+        filter?: (u: unknown, splits: number[], axisIdx: number) => (number | null)[];
       }[] };
     }).opts.axes[1];
     const splits = axis.splits?.(null, 1, 0.001, 0.1) ?? [];
     expect(splits).toContain(0.002);
-    const labels = axis.filter?.(null, splits) ?? splits;
+    // 100 px per decade: room for every decade label (lib/logTicks.ts thins).
+    const roomy = { axes: [{ scale: "x" }, { scale: "y" }], valToPos: (v: number) => -100 * Math.log10(v) };
+    const labels = axis.filter?.(roomy, splits, 1) ?? splits;
     expect(labels.filter((v) => v != null)).toEqual([0.001, 0.01, 0.1]);
   });
 

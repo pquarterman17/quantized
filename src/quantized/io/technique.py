@@ -99,6 +99,14 @@ def _refine_xrdml(ds: DataStruct) -> str:
     return XRD_RSM if bool(ds.metadata.get("is2D")) else XRD_POWDER
 
 
+def _refine_refl1d(ds: DataStruct) -> str:
+    """``reflectometry`` (log R) only for a reflectivity export on a Q axis.
+    refl1d's profile/slabs/steps exports are SLD depth profiles (signed, often
+    zero): on the reflectometry tag's log axis irho and rhoM vanished."""
+    x_name = str(ds.metadata.get("x_column_name", "")).strip().lower()
+    return REFLECTOMETRY if x_name in ("q", "qz") else GENERIC
+
+
 # ── The one parser -> technique mapping table ───────────────────────────────
 # Keyed by the parser's self-reported (or dispatched) `parser_name` -- see
 # `stamp_technique`. A parser absent from both maps below is ambiguous /
@@ -114,7 +122,6 @@ _STATIC_TECHNIQUE_BY_PARSER: dict[str, str] = {
     "import_ncnr_refl": REFLECTOMETRY,
     "import_ncnr_pnr": REFLECTOMETRY,  # polarized neutron reflectometry
     "import_ncnr_dat": REFLECTOMETRY,  # refl1d-fit cross sections (.datA-D)
-    "import_refl1d_dat": REFLECTOMETRY,
     "import_csv": GENERIC,
     "import_excel": GENERIC,
     # NetCDF already degrades to a generic heuristic for non-chromatography
@@ -134,6 +141,7 @@ _REFINED_TECHNIQUE_BY_PARSER: dict[str, TechniqueRefiner] = {
     "import_mpms": _refine_qd_family,
     "import_lake_shore": _refine_qd_family,
     "import_xrdml": _refine_xrdml,
+    "import_refl1d_dat": _refine_refl1d,
 }
 
 

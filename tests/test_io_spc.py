@@ -499,3 +499,23 @@ def test_real_edax_spc_corpus_is_declined(corpus_dir: Path) -> None:
         assert is_spc(path) is False, f"{path.name}: EDAX file passed the GRAMS sniffer"
         with pytest.raises(ValueError, match="no parser registered"):
             resolve_parser(path)
+
+
+def test_y_channels_carry_no_duplicate_unit(tmp_path: Path) -> None:
+    # The y label IS the fytype quantity; repeating it as the unit drew
+    # "Transmission (Transmission)" on the axis and legend.
+    body = struct.pack("<3f", 90.0, 91.0, 92.0)
+    raw = _pack_head(fnpts=3, ffirst=4000.0, flast=450.0, fexp=-128, fxtype=1, fytype=128)
+    ds = import_spc(_write(tmp_path, "t.spc", raw + _pack_sub(subexp=-128) + body))
+    assert ds.labels == ("Transmission",)
+    assert ds.units == ("",)
+
+
+def test_txyxys_long_form_plots_the_signal_not_the_index(tmp_path: Path) -> None:
+    exp = 8
+    sub_a = _pack_txyxys_sub([1 << 24, 2 << 24], [10, 20], subexp=exp)
+    sub_b = _pack_txyxys_sub([5 << 24, 6 << 24, 7 << 24], [30, 40, 50], subexp=exp)
+    raw = _pack_head(ftflgs=_TXY | _TMULTI, fnpts=0, fnsub=2, fexp=exp) + sub_a + sub_b
+    ds = import_spc(_write(tmp_path, "txy_diff.spc", raw))
+    assert ds.units == ("", "")
+    assert ds.metadata["default_value_channels"] == [0]

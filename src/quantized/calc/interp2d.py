@@ -69,10 +69,10 @@ from typing import Any, Final
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.interpolate import RegularGridInterpolator, griddata
-from scipy.spatial import Delaunay
 from scipy.spatial._qhull import QhullError
 
 from quantized.calc._grid_detect import GridLayout, detect_regular_grid, grid_to_zarray
+from quantized.calc._hull_query import inside_hull
 from quantized.calc._natural_neighbor import sibson_interpolate
 
 __all__ = ["interpolate2d", "regrid2d"]
@@ -188,14 +188,11 @@ def _hull_mask(
     zqv: NDArray[np.float64],
 ) -> NDArray[np.float64]:
     """Set query points outside the data convex hull to NaN (extrapolation='none')."""
-    if xv.size < 3:
-        return zqv
-    try:
-        tri = Delaunay(np.column_stack([xv, yv]))
-    except QhullError:
+    inside = inside_hull(np.column_stack([xv, yv]), qpts) if xv.size >= 3 else None
+    if inside is None:
         return zqv
     out = zqv.copy()
-    out[tri.find_simplex(qpts) < 0] = np.nan
+    out[~inside] = np.nan
     return out
 
 
@@ -277,7 +274,11 @@ def _interp_scattered(
             zqv = _query_grid_linear(grid, zv, xqv, yqv)
         else:
             try:
-                zqv = np.asarray(griddata(pts, zv, qpts, method="linear"), dtype=float)
+                # Inside-hull queries only (calc/_hull_query); None = degenerate.
+                keep = inside_hull(pts, qpts)
+                zqv = np.full(qpts.shape[0], np.nan)
+                sel = slice(None) if keep is None else keep
+                zqv[sel] = griddata(pts, zv, qpts[sel], method="linear")
             except QhullError:
                 # Degenerate (collinear / coincident) cloud — Qhull can't triangulate,
                 # so linear interpolation is undefined. Degrade to NaN (as for points

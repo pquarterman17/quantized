@@ -1812,8 +1812,12 @@ import { fileURLToPath } from "node:url";
  * 1.1 kB over, because Vite promoted its already-shared API dependencies into
  * modulepreloads. A clipboard-import split was also measured at 858.5 kB and
  * rejected. All three changes were reverted.
+ *
+ * 2026-10-02 — pin LOWERED 844,997 -> 841,233 after batch 27 (real-corpus plot
+ * audit fixes + bundle diet slice 21). Measured eager JS is 840,209 B
+ * (`.vite` wiped); the new pin is measured + 1,024 B.
  */
-const EAGER_JS_BUDGET = 844_997;
+const EAGER_JS_BUDGET = 841_233;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

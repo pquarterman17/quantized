@@ -5,6 +5,7 @@
 // io/refl1d parser already reads both; this just arranges them for display.
 
 import type { PlotPayload, PlotSeriesSpec } from "./plotdata";
+import type { SeriesStyle } from "./seriesStyleTypes";
 import type { DataStruct } from "./types";
 
 const lc = (s: string) => s.toLowerCase();
@@ -63,18 +64,34 @@ function pack(ds: DataStruct, names: string[], xFallback: string): PlotPayload |
 
 export interface ReflPanels {
   top: PlotPayload | null; // R + theory (+ fresnel) vs Q
-  bottom: PlotPayload | null; // rho (+ irho) vs z
+  bottom: PlotPayload | null; // rho, irho (+ rhoM for a polarized model) vs z
+  /** R's dR whiskers keyed by uPlot data column (R is column 1), or null. */
+  topErrorBars: Map<number, (number | null)[]> | null;
+}
+
+/** Top-frame series styles: the measured R (first) as markers, so it reads as
+ *  data against the theory/fresnel lines. */
+export const TOP_STYLES: readonly SeriesStyle[] = [{ width: 0, marker: true, markerSize: 4 }];
+
+/** dR as R's error bars when the top frame plots R first. */
+function rErrorBars(ds: DataStruct, top: PlotPayload | null): Map<number, (number | null)[]> | null {
+  const dr = findCol(ds, "dR");
+  if (!top || dr < 0 || top.series[0]?.label !== ds.labels[findCol(ds, "R")]) return null;
+  return new Map([[1, colData(ds, dr)]]);
 }
 
 /** Build the two frames: top = measured + modelled reflectivity vs Q, bottom =
- *  the SLD profile vs depth. Either may be null if its dataset is absent. */
+ *  the SLD profile vs depth (with the magnetic rhoM of a PNR model). Either may
+ *  be null if its dataset is absent. */
 export function buildReflPanels(
   reflDs: DataStruct | null,
   profileDs: DataStruct | null,
 ): ReflPanels {
+  const top = reflDs ? pack(reflDs, ["R", "theory", "fresnel"], "Q") : null;
   return {
-    top: reflDs ? pack(reflDs, ["R", "theory", "fresnel"], "Q") : null,
-    bottom: profileDs ? pack(profileDs, ["rho", "irho"], "z") : null,
+    top,
+    bottom: profileDs ? pack(profileDs, ["rho", "irho", "rhoM"], "z") : null,
+    topErrorBars: reflDs ? rErrorBars(reflDs, top) : null,
   };
 }
 
@@ -92,6 +109,13 @@ export function autoPair(datasets: { id: string; name: string; data: DataStruct 
   for (const r of refls) {
     const stem = reflStem(r.name);
     const p = profiles.find((d) => reflStem(d.name) === stem);
+    if (p) return { reflId: r.id, profileId: p.id };
+  }
+  // A multi-model / magnetic refl1d export numbers its profiles under the
+  // model stem (`X-2-refl.datA` with `X-2-0-profile.dat`).
+  for (const r of refls) {
+    const stem = reflStem(r.name) + "-";
+    const p = profiles.find((d) => reflStem(d.name).startsWith(stem));
     if (p) return { reflId: r.id, profileId: p.id };
   }
   return { reflId: refls[0]?.id ?? null, profileId: profiles[0]?.id ?? null };

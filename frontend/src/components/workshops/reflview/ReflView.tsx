@@ -3,6 +3,7 @@
 // refl1d export set (`*-refl.dat` + `*-profile.dat`) is two datasets; this pairs
 // them (auto by filename stem) and shows both frames at once.
 
+import { TOP_STYLES } from "../../../lib/reflview";
 import { useReflView } from "./useReflView";
 import ReflPanel from "./ReflPanel";
 import { useApp } from "../../../store/useApp";
@@ -59,7 +60,15 @@ export default function ReflView() {
 
         {/* Top frame — reflectivity */}
         {v.panels.top ? (
-          <ReflPanel payload={v.panels.top} yLog={v.logY} height={240} label="reflectivity" />
+          <ReflPanel
+            payload={v.panels.top}
+            yLog={v.logY}
+            height={240}
+            label="reflectivity"
+            yLabel="R"
+            errorBars={v.panels.topErrorBars}
+            seriesStyles={TOP_STYLES}
+          />
         ) : (
           <div className="qzk-ds-meta" style={{ height: 240, display: "grid", placeItems: "center" }}>
             Pick a reflectivity dataset (Q · R · theory)
@@ -68,7 +77,13 @@ export default function ReflView() {
 
         {/* Bottom frame — SLD profile */}
         {v.panels.bottom ? (
-          <ReflPanel payload={v.panels.bottom} yLog={false} height={200} label="sld-profile" />
+          <ReflPanel
+            payload={v.panels.bottom}
+            yLog={false}
+            height={200}
+            label="sld-profile"
+            yLabel={v.panels.bottom.series[0]?.unit ? `SLD (${v.panels.bottom.series[0].unit})` : "SLD"}
+          />
         ) : (
           <div className="qzk-ds-meta" style={{ height: 200, display: "grid", placeItems: "center" }}>
             Pick an SLD profile dataset (z · rho)

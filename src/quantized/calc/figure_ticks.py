@@ -39,6 +39,8 @@ from typing import Any
 
 from matplotlib.ticker import Formatter, MultipleLocator
 
+from quantized.heavy_import import heavy_imports
+
 __all__ = ["apply_tick_formats", "apply_tick_steps", "axis_tick_formatter"]
 
 _MODES = ("fixed", "sci", "eng", "date", "time", "datetime")
@@ -258,12 +260,20 @@ def apply_tick_formats(
     chokepoint shared by ``figure.draw_series_axes`` (single-figure export +
     figure-page panels) and ``figure_break.render_breaks_impl`` (broken-axis
     panels) -- MAIN #24."""
-    xf = axis_tick_formatter(x_fmt)
-    if xf is not None:
-        ax.xaxis.set_major_formatter(xf)
-    yf = axis_tick_formatter(y_fmt)
-    if yf is not None:
-        ax.yaxis.set_major_formatter(yf)
+    pairs = ((ax.xaxis, ax.get_xscale(), x_fmt), (ax.yaxis, ax.get_yscale(), y_fmt))
+    for axis, scale, fmt in pairs:
+        formatter = axis_tick_formatter(fmt)
+        if formatter is None:
+            continue
+        if scale == "log":
+            # The log rule still picks WHICH ticks carry text (lib/logTicks.ts).
+            with heavy_imports("quantized.calc.figure_log_ticks"):
+                from quantized.calc.figure_log_ticks import LogTickLabels
+
+            axis.set_major_formatter(LogTickLabels(minor=False, inner=formatter))
+            axis.set_minor_formatter(LogTickLabels(minor=True, inner=axis_tick_formatter(fmt)))
+        else:
+            axis.set_major_formatter(formatter)
 
 
 def apply_tick_steps(

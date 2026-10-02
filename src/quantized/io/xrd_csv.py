@@ -289,7 +289,9 @@ def _metadata_block(data: DataStruct, prefix: str) -> list[str]:
         else:
             lines.append(f"{prefix}Anode: {anode}")
 
-    ka1 = _meta_get(meta, "k_alpha1", "kAlpha1", default=None)
+    # wavelength_a (XRDML) / alpha1 (Bruker) are the keys the parsers write;
+    # k_alpha1/kAlpha1 are the MATLAB-era names, kept for old metadata.
+    ka1 = _meta_get(meta, "wavelength_a", "alpha1", "k_alpha1", "kAlpha1", default=None)
     if ka1 is not None:
         lines.append(f"{prefix}Wavelength: Ka1 = {float(ka1):.5g} A")
 

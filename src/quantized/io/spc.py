@@ -333,7 +333,7 @@ def _import_old(raw: bytes, path: Path) -> DataStruct:
         "flags": flags,
     }
     return DataStruct.create(
-        x, np.column_stack(ys), labels=labels, units=[y_label] * n_sub, metadata=metadata
+        x, np.column_stack(ys), labels=labels, units=[""] * n_sub, metadata=metadata
     )
 
 
@@ -473,7 +473,8 @@ def import_spc(filepath: str | Path) -> DataStruct:
         if long_form:
             metadata["subfile_points"] = [len(y) for _own_x, y, _info in subfiles]
             metadata["subfile_times"] = [float(info["subtime"]) for _ox, _y, info in subfiles]
+            metadata["default_value_channels"] = [0]  # the signal; "Subfile" is an index
 
     return DataStruct.create(
-        x, y_cols, labels=y_labels, units=[y_label] * len(y_labels), metadata=metadata
+        x, y_cols, labels=y_labels, units=[""] * len(y_labels), metadata=metadata
     )

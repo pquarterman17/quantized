@@ -60,8 +60,8 @@ describe("techniqueViewDefaults", () => {
     expect(techniqueViewDefaults(ds(technique)).yScale).toBe(expected);
   });
 
-  it("spectroscopy and generic carry no axis-scale opinion", () => {
-    expect(techniqueViewDefaults(ds("spectroscopy"))).toEqual({});
+  it("spectroscopy is explicitly linear; generic carries no axis-scale opinion", () => {
+    expect(techniqueViewDefaults(ds("spectroscopy"))).toEqual({ yScale: "linear" });
     expect(techniqueViewDefaults(ds("generic"))).toEqual({});
   });
 

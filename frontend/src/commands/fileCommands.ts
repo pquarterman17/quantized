@@ -11,11 +11,11 @@ import { loadSampleDataset } from "../lib/sampleDataset";
 import { clearAutosave } from "../lib/autosave";
 import type { StoreGet } from "../lib/exportActive";
 import { createFigureDocument } from "../lib/figureDocument";
+import { loadGraphTemplates, saveGraphTemplate } from "../lib/figuredoc";
 import { chooseAndImport } from "../lib/importEntry";
 import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { openWorkspaceCommand } from "../lib/openWorkspaceCommand";
-import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "../lib/originTemplate";
 import { snapshotView } from "../lib/plotview";
 import type { Action } from "../store/commands";
 import { useImportBatch } from "../store/importBatch";
@@ -111,7 +111,14 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Import Origin template (.otp/.otpu)…",
       description: "Import plot styling and layout from an Origin graph template.",
       keywords: "otp otpu origin graph template style preset",
-      run: () => openFilePicker((files) => void importOriginTemplateFiles(files), TEMPLATE_ACCEPT),
+      // The picker opens in the click's own task; the upload client loads
+      // once files are picked (bundle diet slice 21). A cancel loads nothing.
+      run: () =>
+        openFilePicker((files) => {
+          if (files.length === 0) return;
+          void runLazy("Loading template import…", () => import("../lib/originTemplate"))
+            .then((m) => m.importOriginTemplateFiles(files, { load: loadGraphTemplates, save: saveGraphTemplate }), onLoadFailure);
+        }, ".otp,.otpu"),
     },
     {
       id: "demo",

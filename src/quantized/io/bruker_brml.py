@@ -93,6 +93,44 @@ def _axis_range(axis: ET.Element) -> tuple[float, float]:
     return lo, hi
 
 
+_ANGSTROM_UNITS = ("\u00c5", "A", "Angstrom", "\u212b")
+
+
+def _value_attr(elem: ET.Element | None, units: tuple[str, ...] | None = None) -> float | None:
+    """Finite ``Value=`` attribute of ``elem`` (in one of ``units``), else None."""
+    if elem is None or (units is not None and elem.get("Unit", "") not in units):
+        return None
+    try:
+        v = float(elem.get("Value", ""))
+    except ValueError:
+        return None
+    return v if np.isfinite(v) else None
+
+
+def _tube_meta(root: ET.Element) -> dict[str, Any]:
+    """X-ray source from the first ``<Tube>`` block: wavelengths (A) under the
+    keys ``io/bruker_raw.py`` uses (read by ``lib/xrdWavelength.ts``), anode,
+    and the generator kV/mA. Absent or non-Angstrom fields are omitted."""
+    tube = next(root.iter("Tube"), None)
+    if tube is None:
+        return {}
+    out: dict[str, Any] = {}
+    for tag, key in (("WaveLengthAlpha1", "alpha1"), ("WaveLengthAlpha2", "alpha2"),
+                     ("WaveLengthAverage", "alpha_average")):
+        v = _value_attr(tube.find(tag), _ANGSTROM_UNITS)
+        if v is not None and v > 0:
+            out[key] = v
+    mat = tube.find("TubeMaterial")
+    if mat is not None and mat.text and mat.text.strip():
+        out["anode_material"] = mat.text.strip()
+    gen = tube.find("Generator")
+    for tag, key, unit in (("Voltage", "tension_kV", "kV"), ("Current", "current_mA", "mA")):
+        v = _value_attr(gen.find(tag) if gen is not None else None, (unit,))
+        if v is not None:
+            out[key] = v
+    return out
+
+
 def import_bruker_brml(filepath: str | Path) -> DataStruct:
     """Import a 1-D Bruker ``.brml`` line scan (2theta vs intensity).
 
@@ -177,6 +215,7 @@ def import_bruker_brml(filepath: str | Path) -> DataStruct:
         "start_angle": x_lo,
         "end_angle": x_hi,
         "scan_axes": [a.get("VisibleName") or a.get("AxisName") for a in axes],
+        **_tube_meta(root),
     }
     return DataStruct.create(
         x, intensity, labels=["Intensity"], units=["counts"], metadata=metadata

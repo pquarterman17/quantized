@@ -75,6 +75,11 @@ describe("datasetViewDefaults — technique-change gating (log axes survive a sa
     expect(datasetViewDefaults(next, prev).yScale).toBe("log");
   });
 
+  it("a spectrum after a SIMS profile gets a linear y back (IR transmittance was drawn on log)", () => {
+    expect(datasetViewDefaults(ds("spectroscopy"), ds("sims")).yScale).toBe("linear");
+    expect(datasetViewDefaults(ds("spectroscopy")).yScale).toBe("linear");
+  });
+
   it("an omitted prevDs (fresh import/split/reimport) always counts as a change", () => {
     expect(datasetViewDefaults(ds("xrd.powder"), undefined).yScale).toBe("log");
   });

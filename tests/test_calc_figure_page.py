@@ -1292,3 +1292,16 @@ def test_free_placement_ignores_gap_and_resize_mode_but_honors_link() -> None:
         import matplotlib.pyplot as plt
 
         plt.close(fig)
+
+
+@pytest.mark.parametrize("y2_mask", [None, [False, True]])
+def test_a_page_panel_draws_its_error_bars(y2_mask: list[bool] | None) -> None:
+    # A page panel exported its series with no error bars at all: PagePanel
+    # had no `error_spans` field, though the panel's FigureRequest carries one.
+    x = np.linspace(1, 6, 6)
+    span = {"y": {"plus": [0.1] * 6, "minus": [0.1] * 6}}
+    panel = PagePanel(
+        x=x, series=[("a", x), ("b", x)], row=0, col=0, error_spans=[span, span], y2_mask=y2_mask
+    )
+    svg = render_figure_page([panel], rows=1, cols=1, fmt="svg").decode("utf8")
+    assert svg.count('id="LineCollection_') == 2

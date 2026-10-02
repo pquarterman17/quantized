@@ -10,8 +10,11 @@
 // localStorage list), tagged `source: "origin"` and de-duplicated by name so
 // an import can never silently overwrite a user-saved template.
 
-import { postForm } from "./api";
-import { loadGraphTemplates, saveGraphTemplate, type GraphTemplate } from "./figuredoc";
+// `./api/http`, not `./api`, and the template store passed in rather than
+// imported from `./figuredoc`: a lazy import of either eager module splits it
+// out of its shared chunk, which measured +300 B eager (bundle diet slice 21).
+import { postForm } from "./api/http";
+import type { GraphTemplate } from "./figuredoc";
 // Shared with the P3.5 operation layer (lib/nameKeyedRecipes.ts), which needs
 // the same collision rule for renames and duplicates. In its own leaf module
 // so importing it here — from an eagerly-reachable file — cannot reach that
@@ -21,8 +24,16 @@ import type { FigureOverrides } from "./figureOverrides";
 import type { ExportSeriesStyle } from "./exportStyles";
 import { toast } from "../store/toasts";
 
-/** File-picker filter for the "Import Origin template…" command. */
-export const TEMPLATE_ACCEPT = ".otp,.otpu";
+// The "Import Origin template…" command (commands/fileCommands.ts) owns its
+// ".otp,.otpu" picker filter and loads this module only once files are
+// picked (bundle diet slice 21), so nothing eager may value-import it.
+
+/** The saved graph-templates store: lib/figuredoc.ts's `loadGraphTemplates`
+ *  and `saveGraphTemplate`, handed in by the caller. */
+export interface GraphTemplateStore {
+  load: () => GraphTemplate[];
+  save: (t: GraphTemplate) => unknown;
+}
 
 /** Upload a template file's bytes to the backend decoder (the same FormData
  *  shape as api.ts::uploadFile, via the shared postForm helper). */
@@ -83,16 +94,16 @@ function markOriginColorChosen(entry: ExportSeriesStyle | null): ExportSeriesSty
 /** Full flow for one file: upload → sanitize → unique-name → persist into the
  *  saved graph-templates store. Throws (with the backend's 422 detail when
  *  available) so the caller can surface per-file failures. */
-export async function importOriginTemplateFile(file: File): Promise<GraphTemplate> {
+export async function importOriginTemplateFile(file: File, store: GraphTemplateStore): Promise<GraphTemplate> {
   const raw = await uploadOriginTemplate(file);
   const stem = file.name.replace(/\.[^.]+$/, "");
   const t = sanitizeImportedTemplate(raw, stem);
   if (!t) throw new Error(`"${file.name}" did not decode to a graph template`);
   const named = {
     ...t,
-    name: uniqueTemplateName(t.name, new Set(loadGraphTemplates().map((x) => x.name))),
+    name: uniqueTemplateName(t.name, new Set(store.load().map((x) => x.name))),
   };
-  saveGraphTemplate(named);
+  store.save(named);
   return named;
 }
 
@@ -100,11 +111,11 @@ export async function importOriginTemplateFile(file: File): Promise<GraphTemplat
  *  import each picked file independently — one bad template toasts its error
  *  and never blocks the rest (the same per-file isolation importFiles has).
  *  Returns the successfully imported templates (for tests/status). */
-export async function importOriginTemplateFiles(files: File[]): Promise<GraphTemplate[]> {
+export async function importOriginTemplateFiles(files: File[], store: GraphTemplateStore): Promise<GraphTemplate[]> {
   const imported: GraphTemplate[] = [];
   for (const file of files) {
     try {
-      const t = await importOriginTemplateFile(file);
+      const t = await importOriginTemplateFile(file, store);
       imported.push(t);
       toast(`imported graph template "${t.name}"`, "ok");
     } catch (e) {

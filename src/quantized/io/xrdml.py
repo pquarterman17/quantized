@@ -1,7 +1,8 @@
 """PANalytical XRDML parser. Port of MATLAB parser.importXRDML.
 
 **1D scans** (the common case): x = 2theta reconstructed by
-``linspace(start, end, N)``; intensity = counts, optionally divided by
+``linspace(start, end, N)`` -- or, when 2theta is held fixed (rocking curve,
+phi scan), the swept Omega/Chi/Phi/Psi motor; intensity = counts, optionally divided by
 ``commonCountingTime`` to cps (the default). Multi-scan files concatenate
 Completed scans in appendNumber order. Returns ``[Intensity]`` vs 2theta.
 
@@ -137,6 +138,25 @@ def _attenuator_meta(root: ET.Element) -> tuple[float, str, float]:
     )
 
 
+def _tube_meta(root: ET.Element) -> dict[str, Any]:
+    """``<xRayTube>`` anode / tension (kV) / current (mA); absent fields omitted."""
+    tube = _find_first(root, "xRayTube")
+    if tube is None:
+        return {}
+    out: dict[str, Any] = {}
+    anode = _find_first(tube, "anodeMaterial")
+    if anode is not None and anode.text and anode.text.strip():
+        out["anode_material"] = anode.text.strip()
+    for tag, key in (("tension", "tension_kV"), ("current", "current_mA")):
+        try:
+            v = _text_float(_find_first(tube, tag))
+        except ValueError:
+            continue
+        if np.isfinite(v):
+            out[key] = v
+    return out
+
+
 def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
     """Import a PANalytical ``.xrdml`` (1D scan or 2D RSM mesh). Default = cps."""
     if intensity not in ("cps", "counts"):
@@ -253,6 +273,7 @@ def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
         "attenuator_material": att_material,
         "attenuator_activate_level": float(att_level) if np.isfinite(att_level) else None,
         "n_scans_att_corrected": n_att_corrected,
+        **_tube_meta(root),
     }
     pole = _classify_pole(collected)
     if pole is not None:
@@ -268,7 +289,7 @@ def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
         cloud_axis, mesh_kind = cloud
         return _build_2d_cloud(collected, cloud_axis, mesh_kind, path, intensity,
                                counting_time, wavelength, intensity_tag, att)
-    return _build_1d(collected, path, intensity, counting_time, intensity_tag, att)
+    return _build_1d(collected, path, intensity, counting_time, wavelength, intensity_tag, att)
 
 
 def _is_2d(scans: list[_Scan], sec_name: str | None) -> bool:
@@ -286,39 +307,61 @@ def _is_2d(scans: list[_Scan], sec_name: str | None) -> bool:
     return tt_same and sec_varies
 
 
+def _swept_axis_1d(scans: list[_Scan]) -> str | None:
+    """The abscissa of a 1-D scan when 2Theta is held FIXED in every scan.
+
+    A rocking curve (``scanAxis="Omega"``) or a phi scan parks 2Theta at one
+    commonPosition and sweeps another motor; x must be that motor, or every
+    point lands on the same 2Theta. Returns the first secondary axis that
+    sweeps within every scan, else ``None`` (x stays 2Theta).
+    """
+    if any(s.tt_range[0] != s.tt_range[1] for s in scans):
+        return None
+    for axis in _SECONDARY_AXES:
+        ranges = [s.sec_ranges.get(axis) for s in scans]
+        if all(r is not None and r[0] != r[1] for r in ranges):
+            return axis
+    return None
+
+
 def _build_1d(
     scans: list[_Scan],
     path: Path,
     intensity: str,
     counting_time: float,
+    wavelength: float,
     intensity_tag: str,
     att: dict[str, Any],
 ) -> DataStruct:
-    """Concatenate Completed scans into a single 2theta/Intensity trace (unchanged
-    behaviour; golden-frozen)."""
-    two_theta_parts: list[NDArray[np.float64]] = []
+    """Concatenate Completed scans into a single x/Intensity trace (x = 2theta
+    unless 2theta is fixed -- see ``_swept_axis_1d``; golden-frozen)."""
+    swept = _swept_axis_1d(scans)
+    x_parts: list[NDArray[np.float64]] = []
     counts_parts: list[NDArray[np.float64]] = []
     for s in scans:
-        start, end = s.tt_range
-        two_theta_parts.append(np.linspace(start, end, s.counts.size))
+        start, end = s.tt_range if swept is None else s.sec_ranges[swept]
+        x_parts.append(np.linspace(start, end, s.counts.size))
         counts_parts.append(s.counts)
-    two_theta = np.concatenate(two_theta_parts)
+    x = np.concatenate(x_parts)
     counts = np.concatenate(counts_parts)
 
     values, unit = _apply_intensity(counts, intensity, counting_time)
     metadata: dict[str, Any] = {
         "source": str(path),
         "parser_name": "import_xrdml",
-        "x_column_name": "2-Theta",
+        "x_column_name": "2-Theta" if swept is None else swept,
         "x_column_unit": "deg",
-        "num_points": int(two_theta.size),
+        "num_points": int(x.size),
         "counting_time": counting_time,
         "intensity_tag": intensity_tag,
         "is2D": False,
+        "wavelength_a": float(wavelength) if np.isfinite(wavelength) else None,
     }
+    if swept is not None:
+        metadata["two_theta_deg"] = float(scans[0].tt_range[0])
     metadata.update(att)
     return DataStruct.create(
-        two_theta, values, labels=["Intensity"], units=[unit], metadata=metadata
+        x, values, labels=["Intensity"], units=[unit], metadata=metadata
     )
 
 

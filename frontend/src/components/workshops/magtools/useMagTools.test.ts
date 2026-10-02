@@ -551,6 +551,7 @@ describe("useMagTools units", () => {
       y_unit: "emu",
       warning: "",
     });
+    load(mvh, "loop.dat"); // a FIELD axis: an M(T) curve's x is never converted (useMagTools.units.test.ts)
     const { result } = renderHook(() => useMagTools());
 
     act(() => result.current.setTab("units"));

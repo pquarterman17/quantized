@@ -146,10 +146,12 @@ export default function MagToolsPanel() {
             <Select
               options={unitOpts(FIELD_UNITS)}
               value={m.units.toField}
+              disabled={m.detection.kind !== "field"}
+              title={m.detection.kind !== "field" ? "The x axis is not a field, so it is not converted." : undefined}
               onChange={(e) => m.setUnits({ toField: e.target.value })}
             />
             <label className="qzk-field-lbl" style={{ margin: 0 }}>
-              Moment emu →
+              Moment {m.units.fromMoment} →
             </label>
             <Select
               options={unitOpts(MOMENT_UNITS)}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { originErrKeys, originHiddenChannels } from "./errorbars";
 import { buildSelectionOverlay } from "./originOverlay";
+import { buildColumns } from "./plotdata";
 import { buildOverlayDataset, overlayBooks, overlayCurveLabels, overlayCurveStyles } from "./originOverlayFigure";
 import type { Dataset, OriginFigure } from "./types";
 
@@ -419,5 +420,28 @@ describe("buildSelectionOverlay", () => {
     const out = buildSelectionOverlay([empty, a, b]);
     expect(out).not.toBeNull();
     expect(out!.labels).toEqual(["Sample A", "Sample B"]);
+  });
+
+  it("keeps the sources' x-axis title, not the Origin column letter", () => {
+    // Two QD VSM loops: the parser names the x column, there is no Origin long name.
+    const vsm = (id: string): Dataset => {
+      const d = plain(id, `${id}.dat`, [5, 0, -5, 0, 4], [-1, 0, 1, 0, -1]);
+      return { ...d, data: { ...d.data, metadata: { x_column_name: "Magnetic Field", x_column_unit: "Oe" } } };
+    };
+    const out = buildSelectionOverlay([vsm("a"), vsm("b")])!;
+    const payload = buildColumns(out, null, null);
+    expect([payload.xLabel, payload.xUnit]).toEqual(["Magnetic Field", "Oe"]);
+  });
+
+  it("names every source's x unit when they differ, so kelvins never sit on an Oe axis", () => {
+    const withX = (d: Dataset, name: string, unit: string): Dataset => ({
+      ...d,
+      data: { ...d.data, metadata: { x_column_name: name, x_column_unit: unit } },
+    });
+    const loop = withX(plain("h", "mvsh", [5, -5, 5], [1, -1, 1]), "Magnetic Field", "Oe");
+    const sweep = withX(plain("t", "mvst", [2, 300], [3, 1]), "Temperature", "K");
+    const bare = plain("n", "bare", [1, 2], [3, 4]); // no unit at all: not listed
+    expect(buildColumns(buildSelectionOverlay([loop, sweep, bare])!, null, null).xUnit).toBe("Oe / K");
+    expect(buildColumns(buildSelectionOverlay([loop, { ...loop, id: "h2" }])!, null, null).xUnit).toBe("Oe");
   });
 });

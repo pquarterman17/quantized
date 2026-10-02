@@ -303,3 +303,31 @@ class TestAxisOneRoutesToTheSecondaryAxes:
             assert _shade_rects(ax2) == []
         finally:
             plt.close(fig)
+
+
+# ── Autoscale parity: decor never widens the data range ─────────────────
+# The screen draws reference lines and region shades in uPlot hooks, after the
+# scales are ranged from the series alone. matplotlib's axvline/axhline and
+# add_patch fold their coordinates into the axes' data limits instead, so a
+# reference line left of the data (e.g. a T=5 K marker kept after switching to
+# a 400-800 nm spectrum) stretched the exported x axis to 0-800.
+
+
+@pytest.mark.parametrize(
+    "decor",
+    [
+        {"ref_lines": [{"axis": "x", "value": -500.0}]},
+        {"ref_lines": [{"axis": "y", "value": 1e6}]},
+        {"region_shades": [{"x1": -50.0, "x2": 6.0, "y1": -1e6, "y2": 1e6, "fill": "#ff0000"}]},
+    ],
+)
+def test_decor_outside_the_data_does_not_widen_the_autoscaled_range(decor: dict) -> None:
+    fig, ax = _draw({})
+    plain = (ax.get_xlim(), ax.get_ylim())
+    plt.close(fig)
+    fig, ax = _draw(decor)
+    try:
+        assert (ax.get_xlim(), ax.get_ylim()) == plain
+        assert _ref_lines(ax) or _shade_rects(ax)  # still drawn, just clipped
+    finally:
+        plt.close(fig)

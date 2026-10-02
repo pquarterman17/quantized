@@ -13,14 +13,19 @@ import type { PlotPayload } from "./plotdata";
  *  view keeps its bounds. Autoscale passes the first and last x, or, when they
  *  are equal (a loop that ends where it started), a padded interval around
  *  that value — recognised as the pair of the first such call, which is the
- *  construction autoscale, so no uPlot internals are restated here. */
+ *  construction autoscale, so no uPlot internals are restated here. uPlot's
+ *  setScale swaps a min above max, so a sweep whose first x is ABOVE its last
+ *  (a VSM loop starting at +Hmax) arrives as [last, first]. */
 export function scannedXRange(extent: [number, number]): uPlot.Range.Function {
   let constructed: [number, number] | null = null;
   return (u, min, max) => {
     if (min == null || max == null) return extent;
     const xs = u.data?.[0];
-    if (!xs?.length || (min === xs[0] && max === xs[xs.length - 1])) return extent;
-    if (!constructed && xs[0] === xs[xs.length - 1]) constructed = [min, max];
+    if (!xs?.length) return extent;
+    const first = xs[0];
+    const last = xs[xs.length - 1];
+    if (min === Math.min(first, last) && max === Math.max(first, last)) return extent;
+    if (!constructed && first === last) constructed = [min, max];
     return constructed && min === constructed[0] && max === constructed[1] ? extent : [min, max];
   };
 }

@@ -108,7 +108,8 @@ def test_primary_ab_block_with_parameters(tmp_path: Path) -> None:
     assert_allclose(ds.time[0], 4000.0)
     assert_allclose(ds.time[-1], 400.0)
     assert ds.metadata["primary_block"] == "AB"
-    assert ds.metadata["x_column_name"] == "Wavenumber (cm-1)"
+    assert ds.metadata["x_column_name"] == "Wavenumber"
+    assert ds.metadata["x_column_unit"] == "cm^-1"
 
 
 def test_fallback_to_scsm_when_no_ab(tmp_path: Path) -> None:
@@ -186,3 +187,63 @@ def test_descending_wavenumber_sweep_preserved(tmp_path: Path) -> None:
     ds = import_opus(_write(tmp_path, "sweep.opus", b.build()))
     assert ds.time[0] > ds.time[-1]
     assert_allclose(ds.time, np.linspace(4000.0, 400.0, 8))
+
+
+def test_series_padding_past_npt_is_dropped(tmp_path: Path) -> None:
+    # Real files pad the series chunk past NPT (the corpus FTIR: 4928 floats,
+    # NPT=4927, trailing 0.0); the x grid must span NPT points, not the chunk.
+    b = _OpusBuilder()
+    b.add_series(15, 0, [0.1, 0.2, 0.3, 0.0])
+    b.add_params(31, 0, [("FXV", 4000.0), ("LXV", 3000.0), ("NPT", 3), ("DXU", "WN")])
+    ds = import_opus(_write(tmp_path, "padded.opus", b.build()))
+    assert_allclose(ds.values[:, 0], [0.1, 0.2, 0.3], rtol=1e-6)
+    assert_allclose(ds.time, [4000.0, 3500.0, 3000.0])
+
+
+@pytest.mark.parametrize(
+    ("dxu", "name", "unit"),
+    [
+        ("WN", "Wavenumber", "cm^-1"),
+        ("MI", "Wavelength", "um"),
+        ("MIN", "Time", "min"),
+        ("PNT", "Data points", ""),
+    ],
+)
+def test_x_axis_name_and_unit_from_dxu(tmp_path: Path, dxu: str, name: str, unit: str) -> None:
+    b = _OpusBuilder()
+    b.add_series(15, 0, [1.0, 2.0])
+    b.add_params(31, 0, [("FXV", 0.0), ("LXV", 1.0), ("NPT", 2), ("DXU", dxu)])
+    ds = import_opus(_write(tmp_path, "dxu.opus", b.build()))
+    assert ds.metadata["x_column_name"] == name
+    assert ds.metadata["x_column_unit"] == unit
+
+
+def _numbered(b: _OpusBuilder, magic: bool) -> bytes:
+    raw = bytearray(b.build())
+    if magic:
+        raw[:4] = b"\n\n\xfe\xfe"
+    return bytes(raw)
+
+
+def test_numbered_extension_routes_to_opus_by_magic(tmp_path: Path) -> None:
+    # OPUS saves sample.0, sample.1, ...; the registry only knew ".opus".
+    b = _OpusBuilder()
+    b.add_series(15, 0, [9.0, 8.0])
+    b.add_params(31, 0, [("FXV", 0.0), ("LXV", 1.0), ("NPT", 2)])
+    ds = import_auto(_write(tmp_path, "sample.0", _numbered(b, magic=True)))
+    assert_allclose(ds.values[:, 0], [9.0, 8.0])
+    assert ds.metadata["technique"] == "spectroscopy"
+    with pytest.raises(ValueError, match="no parser"):
+        import_auto(_write(tmp_path, "scan.001", _numbered(b, magic=False)))
+
+
+@pytest.mark.realdata
+def test_real_numbered_opus_file(corpus_dir: Path) -> None:
+    path = corpus_dir / "bruker" / "ftir" / "brukeropus_ftir.0"
+    if not path.exists():
+        pytest.skip("corpus file missing")
+    ds = import_auto(path)
+    npt = ds.metadata["parameters"]["AB Data Parameter"]["NPT"]
+    assert ds.n_points == npt
+    assert_allclose(ds.time[-1], ds.metadata["parameters"]["AB Data Parameter"]["LXV"])
+    assert ds.metadata["x_column_unit"] == "cm^-1"

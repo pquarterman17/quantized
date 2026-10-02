@@ -6805,7 +6805,7 @@ export interface components {
         /** DescriptiveRequest */
         DescriptiveRequest: {
             /** X */
-            x: number[];
+            x: (number | null)[];
         };
         /** DiagnosticsRequest */
         DiagnosticsRequest: {

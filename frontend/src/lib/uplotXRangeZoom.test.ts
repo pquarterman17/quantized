@@ -39,6 +39,13 @@ const LOOP: PlotPayload = {
   xUnit: "Oe",
 };
 const OPEN_LOOP: PlotPayload = { ...LOOP, data: [[-100, 0, 100, 0, -90], [-1, -0.5, 1, 0.5, -0.9]] as PlotPayload["data"] };
+// A VSM loop that starts at +Hmax and returns just short of it: the first x is
+// ABOVE the last, so uPlot's setScale swaps them and the autoscale call arrives
+// as [last, first], not [first, last].
+const DESCENDING_LOOP: PlotPayload = { ...LOOP, data: [[100, 0, -100, 0, 90], [1, 0.5, -1, -0.5, 0.9]] as PlotPayload["data"] };
+// Its LAST x below its FIRST (a sweep from +H, or concatenated descending scans):
+// uPlot swaps the [first, last] it autoscales with into ascending order.
+const DESC_ENDS: PlotPayload = { ...LOOP, data: [[90, 0, 100, -100, -50], [0.9, 0, 1, -1, -0.5]] as PlotPayload["data"] };
 // A waterfall X-offset layout (lib/waterfallX.ts): two blocks of three rows.
 const WATERFALL: PlotPayload = {
   data: [[0, 1, 2, 5, 6, 7], [1, 2, 3, null, null, null], [null, null, null, 4, 5, 6]] as PlotPayload["data"],
@@ -67,6 +74,8 @@ describe("the scanned X range keeps an explicit zoom (real uPlot)", () => {
   it.each([
     ["a closed hysteresis loop", LOOP],
     ["an open hysteresis loop", OPEN_LOOP],
+    ["a loop whose first x is above its last", DESCENDING_LOOP],
+    ["a sweep whose last x is below its first", DESC_ENDS],
     ["a waterfall X-offset layout", WATERFALL],
   ])("%s: autoscales to the scan, keeps a zoom and a pan, resets to the scan", async (_, payload) => {
     const u = await mount(payload);
@@ -103,6 +112,8 @@ describe("a fixed X limit applies on autoscale only (real uPlot)", () => {
   it.each([
     ["a monotonic plot", MONOTONIC],
     ["a closed hysteresis loop", LOOP],
+    ["a loop whose first x is above its last", DESCENDING_LOOP],
+    ["a sweep whose last x is below its first", DESC_ENDS],
     ["a waterfall X-offset layout", WATERFALL],
   ])("%s: starts at the limit, keeps a zoom, a pan and a new limit, resets to the limit", async (_, payload) => {
     const lim: [number, number] = [-0.5, 2.5];

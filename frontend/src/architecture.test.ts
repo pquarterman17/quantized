@@ -1386,7 +1386,9 @@ describe("row-state model guard (#50 universal linking)", () => {
       // stale allow entry is exactly the dishonesty the sibling
       // "grandfathered list stays honest" test exists to prevent.
       "/store/rowState.ts",
-      "/store/corrections.ts",
+      // The applyCorrections body, moved out of store/corrections.ts behind
+      // an import() (bundle diet slice 21); corrections.ts no longer names it.
+      "/store/correctionsRun.ts",
       "/store/cellEdit.ts",
       // recalcNow's dataset-recompute loop, extracted out of useApp.ts
       // (2026-09-09, LIBRARY_WORKBOOK_UX_PLAN recalc determinism/auditability
@@ -3051,6 +3053,19 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/store/gadget.ts",
       call: 'import("./gadgetRun")',
     },
+    // SLICE 21 (2026-10-02): the Origin template upload client, loaded once
+    // the picker returns files, and the two async corrections bodies, loaded
+    // on the first apply. Each slice keeps its synchronous refusals.
+    {
+      module: "/lib/originTemplate.ts",
+      loader: "/commands/fileCommands.ts",
+      call: 'import("../lib/originTemplate")',
+    },
+    {
+      module: "/store/correctionsRun.ts",
+      loader: "/store/corrections.ts",
+      call: 'import("./correctionsRun")',
+    },
   ];
 
   /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
@@ -3466,6 +3481,11 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/pageGeometry.ts",
     "/store/roisCodec.ts",
     "/lib/quickfitChip.ts",
+    // SLICE 21 (2026-10-02): the plot-recipe confirm tail, re-exported by the
+    // lazy apply core, and the template-name rule only the lazy template
+    // client and recipe operations call.
+    "/store/plotRecipeConfirm.ts",
+    "/lib/uniqueName.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

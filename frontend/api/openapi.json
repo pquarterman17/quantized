@@ -3784,7 +3784,14 @@
         "properties": {
           "x": {
             "items": {
-              "type": "number"
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "title": "X",
             "type": "array"

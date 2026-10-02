@@ -85,11 +85,18 @@ def test_xrdml_1d_scan_is_xrd_powder(fixtures_dir: Path) -> None:
 
 @pytest.mark.parametrize(
     "name",
-    ["ncnr_j395.refl", "ncnr_s11_nsf.pnr", "ncnr_s3.datA", "refl1d_nbau_profile.dat"],
+    ["ncnr_j395.refl", "ncnr_s11_nsf.pnr", "ncnr_s3.datA", "refl1d_refl_fit.dat"],
 )
 def test_reflectometry_family_all_tag_reflectometry(fixtures_dir: Path, name: str) -> None:
     ds = import_auto(fixtures_dir / name)
     assert ds.metadata["technique"] == REFLECTOMETRY
+
+
+def test_refl1d_sld_profile_is_generic(fixtures_dir: Path) -> None:
+    """An SLD depth profile is not R(Q): the reflectometry tag's log axis hid
+    its zero/negative channels."""
+    ds = import_auto(fixtures_dir / "refl1d_nbau_profile.dat")
+    assert ds.metadata["technique"] == GENERIC
 
 
 def test_sims_is_sims(fixtures_dir: Path) -> None:

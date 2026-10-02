@@ -130,6 +130,8 @@ class PagePanel:
     y2_scale: str | None = None
     y2_fmt: Mapping[str, Any] | None = None
     y2_step: float | None = None
+    # Per-series error spans, parallel to `series` (FigureRequest.error_spans).
+    error_spans: Sequence[Mapping[str, Any] | None] | None = None
     # F4.4 follow-up (2026-08-24): a faceted panel's RESOLVED small-multiples
     # data -- the same reshaped panel-dict list `calc.figure_facets.
     # render_facets_figure` takes (`routes.export_figures_facets._facet_panels`
@@ -432,7 +434,7 @@ def _draw_panel(fig: Any, ax: Any, p: PagePanel, st: FigureStyle) -> None:
             title=title, x_label=x_label, y_label=y_label,
             x_fmt=p.x_fmt, y_fmt=p.y_fmt, x_step=p.x_step, y_step=p.y_step,
             y2_label=safe_mathtext_label(p.y2_label), y2_scale=p.y2_scale,
-            y2_fmt=p.y2_fmt, y2_step=p.y2_step,
+            y2_fmt=p.y2_fmt, y2_step=p.y2_step, error_spans=p.error_spans,
         )
         return
     draw_series_axes(
@@ -450,6 +452,7 @@ def _draw_panel(fig: Any, ax: Any, p: PagePanel, st: FigureStyle) -> None:
         x_label=x_label,
         y_label=y_label,
         series_styles=styles,
+        error_spans=p.error_spans,
         x_fmt=p.x_fmt,
         y_fmt=p.y_fmt,
         x_step=p.x_step,

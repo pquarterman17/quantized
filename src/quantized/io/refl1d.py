@@ -14,6 +14,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io._refl_columns import refl_fit_role_metadata
 from quantized.io.base import read_head, read_text
 
 __all__ = ["import_refl1d_dat", "is_refl1d_dat"]
@@ -124,6 +125,16 @@ def import_refl1d_dat(filepath: str | Path) -> DataStruct:
         "x_column_unit": units_all[0],
         **header_meta,
     }
+    if labels_all[0] == "Q":
+        # A reflectivity export (`*-refl.dat`): the same R + theory curves and
+        # dR/dQ error roles as the NCNR `.datA` it mirrors.
+        metadata.update(refl_fit_role_metadata(labels_all[1:n_cols]))
+    else:
+        # An SLD profile/steps/slabs export: plot the SLDs. theta (the magnetic
+        # angle in degrees) and the slab interface width would swamp them.
+        slds = [j for j, lab in enumerate(labels_all[1:n_cols]) if lab in ("rho", "irho", "rhoM")]
+        if slds:
+            metadata["default_value_channels"] = slds
     return DataStruct.create(
         matrix[:, 0],
         matrix[:, 1:],

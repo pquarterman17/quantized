@@ -28,7 +28,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defaultPlotView, type PlotView } from "../lib/plotview";
 import type { Dataset } from "../lib/types";
+import { resolveRecipe } from "../lib/plotRecipeMatch";
 import { useGlobalPlotRecipes } from "./globalPlotRecipes";
+import type { PendingPlotRecipeApplication } from "./pendingRecipeApplication";
 import { resetApplyCoreForTests } from "./plotRecipeApplyLazy";
 import { useApp } from "./useApp";
 
@@ -142,6 +144,43 @@ describe("Plot Recipe apply — chunk-deferred core", () => {
     vi.resetModules();
     expect(await useApp.getState().applyPlotRecipe(id, "d1")).toBe(true);
     expect(useApp.getState().plotWindows.length).toBe(windowsBefore + 1);
+  });
+
+  // Bundle diet slice 21: the two confirm actions' re-resolve-and-apply tail
+  // (store/plotRecipeConfirm.ts) rides this same load, re-exported by the core.
+  async function stagedPending(): Promise<PendingPlotRecipeApplication> {
+    await savedRecipeId();
+    const recipe = useApp.getState().plotRecipes[0];
+    const resolution = resolveRecipe(recipe, useApp.getState().datasets[0]);
+    if ("refused" in resolution) throw new Error(`fixture recipe refused: ${resolution.refused}`);
+    const pending = { recipe, datasetId: "d1", resolution };
+    useApp.setState({ pendingRecipeApplication: pending });
+    return pending;
+  }
+
+  it("confirms a staged apply through the deferred core", async () => {
+    await stagedPending();
+    const windowsBefore = useApp.getState().plotWindows.length;
+    resetApplyCoreForTests();
+
+    expect(await useApp.getState().confirmPendingRecipeApplication()).toBe(true);
+    expect(useApp.getState().pendingRecipeApplication).toBeNull();
+    expect(useApp.getState().plotWindows.length).toBe(windowsBefore + 1);
+  });
+
+  it("rejects a staged confirm and keeps the pending apply when the chunk will not load", async () => {
+    const pending = await stagedPending();
+    const windowsBefore = useApp.getState().plotWindows.length;
+
+    resetApplyCoreForTests();
+    vi.doMock("./plotRecipeApply", () => {
+      throw new Error("network error");
+    });
+    await expect(useApp.getState().confirmPendingRecipeApplication()).rejects.toThrow();
+    await expect(useApp.getState().confirmPendingRecipeApplicationPartial()).rejects.toThrow();
+
+    expect(useApp.getState().pendingRecipeApplication).toBe(pending);
+    expect(useApp.getState().plotWindows.length).toBe(windowsBefore);
   });
 
   it("surfaces the loaded core's OWN failure rather than mistaking it for a load failure", async () => {

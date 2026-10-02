@@ -132,11 +132,14 @@ describe("uniqueTemplateName", () => {
   });
 });
 
+// The command hands the module lib/figuredoc.ts's store (bundle diet slice 21).
+const STORE = { load: loadGraphTemplates, save: saveGraphTemplate };
+
 describe("importOriginTemplateFile (upload → sanitize → store)", () => {
   it("uploads to the template route and lands the tagged template in the saved store", async () => {
     const mock = stubFetchOk(WIRE);
     const file = new File(["bytes"], "SLD_DoubleY.otp");
-    const t = await importOriginTemplateFile(file);
+    const t = await importOriginTemplateFile(file, STORE);
     expect(mock).toHaveBeenCalledWith(
       "/api/import/template/upload",
       expect.objectContaining({ method: "POST" }),
@@ -150,8 +153,8 @@ describe("importOriginTemplateFile (upload → sanitize → store)", () => {
 
   it("re-importing appends a numbered copy instead of clobbering the earlier import", async () => {
     stubFetchOk(WIRE);
-    await importOriginTemplateFile(new File(["b"], "SLD_DoubleY.otp"));
-    const second = await importOriginTemplateFile(new File(["b"], "SLD_DoubleY.otp"));
+    await importOriginTemplateFile(new File(["b"], "SLD_DoubleY.otp"), STORE);
+    const second = await importOriginTemplateFile(new File(["b"], "SLD_DoubleY.otp"), STORE);
     expect(second.name).toBe("SLD_DoubleY (2)");
     expect(loadGraphTemplates().map((t) => t.name)).toEqual(["SLD_DoubleY", "SLD_DoubleY (2)"]);
   });
@@ -159,7 +162,7 @@ describe("importOriginTemplateFile (upload → sanitize → store)", () => {
   it("never overwrites a USER-saved template with the same name", async () => {
     saveGraphTemplate({ name: "SLD_DoubleY", style: "aps", overrides: null, seriesStyles: null });
     stubFetchOk(WIRE);
-    await importOriginTemplateFile(new File(["b"], "SLD_DoubleY.otp"));
+    await importOriginTemplateFile(new File(["b"], "SLD_DoubleY.otp"), STORE);
     const byName = Object.fromEntries(loadGraphTemplates().map((t) => [t.name, t]));
     expect(byName["SLD_DoubleY"].style).toBe("aps"); // the user's, untouched
     expect(byName["SLD_DoubleY (2)"].source).toBe("origin");
@@ -167,7 +170,7 @@ describe("importOriginTemplateFile (upload → sanitize → store)", () => {
 
   it("surfaces the backend's 422 detail (honest decode failures)", async () => {
     stubFetch422("no graph layer or curve style could be decoded");
-    await expect(importOriginTemplateFile(new File(["b"], "workbook.otp"))).rejects.toThrow(
+    await expect(importOriginTemplateFile(new File(["b"], "workbook.otp"), STORE)).rejects.toThrow(
       /no graph layer/,
     );
     expect(loadGraphTemplates()).toHaveLength(0);
@@ -175,7 +178,7 @@ describe("importOriginTemplateFile (upload → sanitize → store)", () => {
 
   it("rejects a non-template-shaped 200 response without storing anything", async () => {
     stubFetchOk([1, 2, 3]);
-    await expect(importOriginTemplateFile(new File(["b"], "t.otpu"))).rejects.toThrow(
+    await expect(importOriginTemplateFile(new File(["b"], "t.otpu"), STORE)).rejects.toThrow(
       /did not decode/,
     );
     expect(loadGraphTemplates()).toHaveLength(0);
@@ -202,7 +205,7 @@ describe("importOriginTemplateFiles (the file-open branch)", () => {
       new File(["a"], "SLD_DoubleY.otp"),
       new File(["b"], "broken.otp"),
       new File(["c"], "PNR-SF.otpu"),
-    ]);
+    ], STORE);
     expect(imported.map((t) => t.name)).toEqual(["SLD_DoubleY", "PNR-SF"]);
     expect(loadGraphTemplates().map((t) => t.name)).toEqual(["SLD_DoubleY", "PNR-SF"]);
   });
