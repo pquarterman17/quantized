@@ -28,7 +28,9 @@ export default function StatsCard({ active }: { active: Dataset | null }) {
     setStats(null);
     setError(false);
     if (!active) return;
-    const y = active.data.values.map((row) => row[0]);
+    // Finite values only: a NaN gap serializes as JSON null, which the route
+    // rejects (422) — the calc drops NaN anyway, so N counts finite values.
+    const y = active.data.values.map((row) => row[0]).filter(Number.isFinite);
     statsDescriptive(y)
       .then((s) => {
         if (!cancelled) setStats(s);
