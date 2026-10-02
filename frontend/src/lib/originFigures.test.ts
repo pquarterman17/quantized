@@ -279,6 +279,15 @@ describe("figureChannelSelection", () => {
     expect(figureChannelSelection(fig, ds)).toBeNull();
   });
 
+  it("returns null instead of selecting a decoded but entirely empty curve", () => {
+    const empty = {
+      ...ds,
+      data: { ...ds.data, values: ds.data.values.map(() => [1, Number.NaN]) },
+    };
+    const fig = figure({ curves: [{ book: "Co", x: "A", y: "C" }] });
+    expect(figureChannelSelection(fig, empty)).toBeNull();
+  });
+
   it("returns null with no curves or no origin_column_names metadata", () => {
     expect(figureChannelSelection(figure(), ds)).toBeNull();
     const bare = book("b2", "bare", { origin_book: "Co" });
@@ -1257,7 +1266,9 @@ describe("figureSelectionState (decode #52 — store-ratchet extraction)", () =>
       seriesStyles: { 1: { color: "#111" } },
       seriesLabels: { 1: "L" },
     });
-    expect(figureSelectionState(null)).toEqual({});
+    expect(figureSelectionState(null)).toEqual({
+      xKey: null, yKeys: null, seriesStyles: {}, seriesLabels: {},
+    });
   });
 });
 

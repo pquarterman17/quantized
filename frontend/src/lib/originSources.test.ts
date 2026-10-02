@@ -59,6 +59,21 @@ describe("resolveOriginFigureSources", () => {
     ]);
   });
 
+  it("reports a decoded curve column with no numeric data instead of treating it as renderable", () => {
+    const emptyY = dataset("d1", "Book1");
+    emptyY.data.values = [[Number.NaN, 1], [Number.NaN, 2]];
+    const e = entry(figure([{ book: "Book1", x: "A", y: "B" }]));
+    const result = resolveOriginFigureSources(e, [e], [emptyY]);
+    expect(result.sources).toEqual([]);
+    expect(result.unresolved).toEqual([
+      { book: "Book1", x: "A", y: "B", reason: "y_column_has_no_numeric_data" },
+    ]);
+    // Inspection can still reveal the empty saved column; rebuilding cannot
+    // advertise a plot that is known to contain no points.
+    expect(resolveOriginSourceManually(e, [e], emptyY)).not.toBeNull();
+    expect(resolveOriginSourceManually(e, [e], emptyY, { requireFinite: true })).toBeNull();
+  });
+
   it("uses raw letters only after the user explicitly chooses a workbook", () => {
     const e = entry(figure([{ book: "MissingBook", x: "A", y: "B" }]), ["d1"]);
     const chosen = resolveOriginSourceManually(e, [e], dataset("d1", "Book1"));

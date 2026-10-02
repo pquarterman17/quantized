@@ -599,6 +599,21 @@ describe("buildOpts defaultTrace", () => {
       expect(labels).toEqual(["-15,000", "-10,000", "-5,000", "0", "5,000", "10,000", "15,000"]);
     });
 
+    it("auto mode uses publication-style decade labels on a logarithmic axis", () => {
+      const fmt = tickFormatter(undefined, "log");
+      expect(fmt(null as never, [0.1, 1, 10, 100, 1_000, 10_000], 0, 0, 1)).toEqual([
+        "10⁻¹", "1", "10", "10²", "10³", "10⁴",
+      ]);
+    });
+
+    it("auto log mode leaves minor decades blank and preserves numeric labels for a sub-decade view", () => {
+      const fmt = tickFormatter({ mode: "auto", digits: 2 }, "log");
+      expect(fmt(null as never, [1, 2, 5, 10], 0, 0, 1)).toEqual(["1", "", "", "10"]);
+      expect(fmt(null as never, [0.8, 0.9, 1, 1.1, 1.2], 0, 0, 0.1)).toEqual([
+        "0.8", "0.9", "1", "1.1", "1.2",
+      ]);
+    });
+
     it("sci mode floors mantissa digits so same-decade dense ticks stay distinct", () => {
       const fmt = tickFormatter({ mode: "sci", digits: 1 });
       const labels = fmt(null as never, [1.1e-3, 1.2e-3, 1.3e-3], 0, 0, 0.0001);
@@ -1136,6 +1151,20 @@ describe("buildOpts y2 axis state (Origin double-Y apply, 13.2 #6)", () => {
     const opts = buildOpts(dual, { ...base, yScale: "log", tool: "zoom" });
     expect(opts.scales?.y2?.distr).toBe(3);
     expect(opts.scales?.y2?.range).toBeUndefined();
+  });
+
+  it("formats an automatic log y2 as decades even when the primary y axis is linear", () => {
+    const opts = buildOpts(dual, { ...base, yScale: "linear", y2Scale: "log", tool: "zoom" });
+    const values = opts.axes?.[2].values as (
+      u: uPlot,
+      splits: number[],
+      axisIdx: number,
+      foundSpace: number,
+      foundIncr: number,
+    ) => (string | number | null)[];
+    expect(values(null as unknown as uPlot, [1, 10, 100, 1_000], 2, 0, 1)).toEqual([
+      "1", "10", "10²", "10³",
+    ]);
   });
 });
 

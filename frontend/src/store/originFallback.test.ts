@@ -61,6 +61,47 @@ describe("Origin figure fallbacks", () => {
     expect(useApp.getState().originWorksheetSeed).toEqual({ datasetId: "d1", columns: [-1, 0] });
   });
 
+  it("lets an unresolved graph seed Graph Builder from an explicitly chosen compatible workbook", async () => {
+    useApp.setState({
+      originFigures: [{
+        id: "manual", stem: "Project", datasetId: null, siblingIds: ["d1"],
+        figure: { ...figure, curves: [{ book: "MissingBook", x: "A", y: "B", style: "line" }] },
+      }],
+    });
+
+    await useApp.getState().remakeOriginFigure("manual", "d1");
+
+    expect(useApp.getState()).toMatchObject({
+      activeId: "d1",
+      graphBuilderOpen: true,
+      graphBuilderSeed: {
+        version: 1,
+        zones: {
+          x: null,
+          y: [{ datasetId: "d1", channel: 0 }],
+          group: null,
+          facet: null,
+          yErr: [],
+          xErr: null,
+        },
+        mark: "line",
+      },
+    });
+  });
+
+  it("refuses manual recovery from a workbook outside the same Origin import", async () => {
+    useApp.setState({
+      datasets: [book, { ...book, id: "foreign", name: "foreign" }],
+      originFigures: [{
+        id: "manual", stem: "Project", datasetId: null, siblingIds: ["d1"],
+        figure: { ...figure, curves: [{ book: "MissingBook", x: "A", y: "B", style: "line" }] },
+      }],
+    });
+
+    await expect(useApp.getState().openOriginFigureSource("manual", "foreign", { manual: true })).resolves.toBe(false);
+    expect(useApp.getState().originWorksheetSeed).toBeNull();
+  });
+
   it("seeds Graph Builder with the exact decoded X/Y binding", async () => {
     await useApp.getState().remakeOriginFigure("f1");
     expect(useApp.getState().graphBuilderOpen).toBe(true);

@@ -79,7 +79,7 @@ test("dense recovered Origin graphs stay inside the Library and reveal one actio
   const unresolvedItem = unresolved.locator(".qzk-fig-item");
   const unresolvedActions = unresolved.locator(".qzk-origin-figure-actions");
   await expect(unresolvedActions).toHaveCSS("position", "static");
-  await expect(unresolvedActions.getByRole("combobox", { name: /Choose source workbook/ })).toBeVisible();
+  await expect(unresolvedActions.getByRole("button", { name: /Recover unresolved Origin bindings/ })).toBeVisible();
   const [itemBox, actionBox] = await Promise.all([unresolvedItem.boundingBox(), unresolvedActions.boundingBox()]);
   expect(itemBox).not.toBeNull();
   expect(actionBox).not.toBeNull();

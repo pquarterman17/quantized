@@ -39,8 +39,11 @@ export function originFallbackCore(): Promise<OriginFallbackCore> {
   return loader.core();
 }
 
-function loadFailed(what: string): (e: unknown) => void {
-  return (e) => toast(`Couldn't ${what} — ${e instanceof Error ? e.message : "load failed"}`, "danger");
+function loadFailed(what: string): (e: unknown) => false {
+  return (e) => {
+    toast(`Couldn't ${what} — ${e instanceof Error ? e.message : "load failed"}`, "danger");
+    return false;
+  };
 }
 
 export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginFallbackSlice {
@@ -52,9 +55,9 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
         (core) => core.createOriginFallbackSlice(set, get).openOriginFigureSource(figureId, datasetId, opts),
         loadFailed("open Origin source workbook"),
       ),
-    remakeOriginFigure: (figureId) =>
+    remakeOriginFigure: (figureId, datasetId) =>
       originFallbackCore().then(
-        (core) => core.createOriginFallbackSlice(set, get).remakeOriginFigure(figureId),
+        (core) => core.createOriginFallbackSlice(set, get).remakeOriginFigure(figureId, datasetId),
         loadFailed("seed Graph Builder"),
       ),
   };

@@ -19,6 +19,8 @@ import type { PlotPayload } from "./plotdata";
 import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst, type RichNode } from "./richtext";
+import { logDecadeLabels, logMajorTickFilter } from "./logTicks";
+export { logMajorTickFilter };
 import { decimalsForIncrement, pow10 } from "./ticks";
 import { errorRange, errorReach, fullYExtents, withXBarRows } from "./uplotErrorRange";
 import { fixedXRange, fullXExtents, scannedXRange } from "./uplotXRange";
@@ -223,6 +225,10 @@ const autoTickValues: TickValues = (_u, splits, _axisIdx, _foundSpace, foundIncr
   return splits.map((v) => (v == null ? null : stripNegZero(nf.format(v))));
 };
 
+/** Auto labels on a log axis: decade anchors on a multi-decade view, the
+ *  ordinary auto labels on a sub-decade one (lib/logTicks.ts). */
+const autoLogTickValues: TickValues = (u, splits, ...rest) => logDecadeLabels(splits) ?? autoTickValues(u, splits, ...rest);
+
 /** Decimal places needed for a value's MANTISSA (sci/eng modes) so that two
  *  ticks `incr` apart in the SAME decade never format to the same digits —
  *  `incr` is rescaled into the mantissa's own units (divided by the same
@@ -313,9 +319,9 @@ function dateTickFormatter(
  *  `fixed`/`sci`/`eng` each floor their configured `digits` at what the
  *  actual tick increment (`splitsIncrement`) needs, so a dense axis can
  *  never render two different ticks with the same label. */
-export function tickFormatter(fmt?: AxisFormat): TickValues {
+export function tickFormatter(fmt?: AxisFormat, scale: AxisScale = "linear"): TickValues {
   const mode = fmt?.mode ?? "auto";
-  if (mode === "auto") return autoTickValues;
+  if (mode === "auto") return scale === "log" ? autoLogTickValues : autoTickValues;
   if (mode === "date" || mode === "time" || mode === "datetime") {
     // `Intl.DateTimeFormat.format(new Date(x))` throws RangeError ("Invalid
     // time value") for NaN AND for any FINITE value beyond the ECMA-262 Date
@@ -463,24 +469,6 @@ export function fixedLogAxisSplits(min: number, max: number, step?: number | nul
   const out: number[] = [];
   for (let n = n0; n <= n1; n++) out.push(cleanStepValue(n * s));
   return out;
-}
-
-/** Keep labels only on decade anchors while retaining 2-9 subdivisions as
- * splits for log grid lines and tick marks. Sub-decade Origin axes use their
- * decoded arithmetic step, so every split remains a labeled major tick. */
-export function logMajorTickFilter(
-  _u: uPlot,
-  splits: number[],
-): (number | null)[] {
-  const positive = splits.filter((v) => Number.isFinite(v) && v > 0);
-  if (positive.length < 2 || positive[positive.length - 1] / positive[0] < 10 * (1 - 1e-9)) {
-    return splits;
-  }
-  return splits.map((v) => {
-    if (!(v > 0)) return null;
-    const exp = Math.log10(v);
-    return Math.abs(exp - Math.round(exp)) < 1e-9 ? v : null;
-  });
 }
 
 // ── Reciprocal (1/x) scale — MAIN #12, Arrhenius-style plots ────────────────
@@ -1111,11 +1099,13 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // number format would show "1.0"/"2.0" instead of the real category names.
   const xValues = payload.xCategories
     ? categoricalTickFormatter(payload.xCategories)
-    : tickFormatter(xFmt);
-  const yValues = tickFormatter(yFmt);
+    : tickFormatter(xFmt, xScale);
+  const yValues = tickFormatter(yFmt, yScale);
   // y2Fmt null/undefined inherits yFmt (compatibility default — see the
-  // BuildOptsArgs doc); only build a distinct formatter when overridden.
-  const y2Values = y2Fmt ? tickFormatter(y2Fmt) : yValues;
+  // BuildOptsArgs doc), but formatting still resolves against y2's OWN
+  // scale. In particular, an auto-format linear primary axis plus a log y2
+  // needs decade labels rather than inheriting y's linear formatter.
+  const y2Values = tickFormatter(y2Fmt ?? yFmt, y2ScaleEff);
   // A FIXED range (xLim/yLim/y2Lim — an applied Origin figure or a hand-typed
   // Inspector AxisLimits value) bypasses uPlot's own rangeLog decade-snapping
   // on a log axis, so supply our own splits generator there (see

@@ -4,7 +4,7 @@
 // workbookLastChild for the figure's owning workbook on open.
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import FigureRow from "./FigureRow";
 import type { OriginFigureEntry } from "../../lib/originFigures";
@@ -25,12 +25,16 @@ const ds = (id: string, workbookId?: string): Dataset => ({
   data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} },
   ...(workbookId ? { workbookId } : {}),
 });
+const realOpenOriginFigureSource = useApp.getState().openOriginFigureSource;
+const realRemakeOriginFigure = useApp.getState().remakeOriginFigure;
 
 beforeEach(() => {
   useApp.setState({
     datasets: [ds("a", "w1")],
     originFigures: [entry("g1", "a")],
     workbookLastChild: {},
+    openOriginFigureSource: realOpenOriginFigureSource,
+    remakeOriginFigure: realRemakeOriginFigure,
   });
 });
 
@@ -61,6 +65,15 @@ describe("FigureRow — PR C additions", () => {
     render(<FigureRow entry={entry("g2", null)} />);
     expect(screen.getByRole("button", { name: /MokeGraph/ })).toBeDisabled();
     expect(useApp.getState().workbookLastChild).toEqual({});
+  });
+
+  it("an unresolved graph with nothing to recover still shows its raw Origin source hint", () => {
+    const bare = { ...entry("g2", null), figure: { ...entry("g2", null).figure, source_hint: "Book7" } };
+    render(<FigureRow entry={bare} />);
+    expect(screen.queryByRole("button", { name: /Recover unresolved Origin bindings/ })).toBeNull();
+    const remake = screen.getByRole("button", { name: "Remake in Graph Builder" });
+    expect(remake).toBeDisabled();
+    expect(remake).toHaveAttribute("title", "No decoded bindings; Origin hint: Book7");
   });
 
   it("a resolved dataset with no workbookId records nothing", () => {
@@ -94,13 +107,121 @@ describe("FigureRow — PR C additions", () => {
   });
 
   it("keeps source-recovery controls exposed when the unresolved main button cannot receive focus", () => {
-    const { container } = render(<FigureRow entry={entry("g2", null)} treeMode />);
+    const unresolvedEntry = {
+      ...entry("g2", null),
+      siblingIds: ["a"],
+      figure: {
+        ...entry("g2", null).figure,
+        source_hint: "MissingBook",
+        curves: [{ book: "MissingBook", x: "A", y: "B" }],
+      },
+    };
+    useApp.setState({ originFigures: [unresolvedEntry] });
+    const { container } = render(<FigureRow entry={unresolvedEntry} treeMode />);
     expect(container.querySelector(".qzk-fig-row-tree")).toHaveClass("unresolved");
     expect(screen.getByRole("group", { name: "Recovered graph actions" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Recover unresolved Origin bindings/ })).toBeVisible();
     const rules = flatRules(readShellCss());
     const unresolved = rules.find((r) => r.selector === ".qzk-fig-row-tree.unresolved .qzk-origin-figure-actions");
     expect(declares(unresolved!.body, "position", "static")).toBe(true);
     expect(declares(unresolved!.body, "transform", "none")).toBe(true);
+  });
+
+  it("opens a focused recovery window instead of an inline workbook selector", async () => {
+    const unresolvedEntry = {
+      ...entry("g2", null),
+      siblingIds: ["a"],
+      figure: {
+        ...entry("g2", null).figure,
+        source_hint: "MissingBook",
+        curves: [{ book: "MissingBook", x: "A", y: "B" }],
+      },
+    };
+    useApp.setState({
+      datasets: [{
+        ...ds("a", "w1"),
+        data: {
+          ...ds("a", "w1").data,
+          metadata: { origin_book: "Book1", x_column_name: "A", origin_column_names: ["B"] },
+        },
+      }],
+      originFigures: [unresolvedEntry],
+    });
+    render(<FigureRow entry={unresolvedEntry} treeMode />);
+    fireEvent.click(screen.getByRole("button", { name: /Recover unresolved Origin bindings/ }));
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Recover MokeGraph" })).toBeVisible();
+    expect(screen.getByText("1 compatible Y column")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Inspect columns" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Rebuild plot" })).toBeEnabled();
+  });
+
+  it("explains an unresolved graph even when no sibling workbook survived import", async () => {
+    const unresolvedEntry = {
+      ...entry("g2", null),
+      figure: {
+        ...entry("g2", null).figure,
+        curves: [{ book: "MissingBook", x: "A", y: "B" }],
+      },
+    };
+    useApp.setState({ datasets: [], originFigures: [unresolvedEntry] });
+    render(<FigureRow entry={unresolvedEntry} treeMode />);
+    fireEvent.click(screen.getByRole("button", { name: /Recover unresolved Origin bindings/ }));
+    expect(await screen.findByText("No workbooks from this import are available.")).toBeVisible();
+  });
+
+  it("keeps recovery open when the chosen workbook cannot be opened", async () => {
+    const unresolvedEntry = {
+      ...entry("g2", null),
+      siblingIds: ["a"],
+      figure: {
+        ...entry("g2", null).figure,
+        curves: [{ book: "MissingBook", x: "A", y: "B" }],
+      },
+    };
+    const openOriginFigureSource = vi.fn(async () => false);
+    useApp.setState({
+      datasets: [{
+        ...ds("a", "w1"),
+        data: {
+          ...ds("a", "w1").data,
+          metadata: { origin_book: "Book1", x_column_name: "A", origin_column_names: ["B"] },
+        },
+      }],
+      originFigures: [unresolvedEntry],
+      openOriginFigureSource,
+    });
+    render(<FigureRow entry={unresolvedEntry} treeMode />);
+    fireEvent.click(screen.getByRole("button", { name: /Recover unresolved Origin bindings/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Inspect columns" }));
+    expect(openOriginFigureSource).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("region", { name: "Recover MokeGraph" })).toBeVisible();
+  });
+
+  it("does not advertise a known-empty saved curve as a renderable graph", async () => {
+    const emptyEntry = {
+      ...entry("g2", "a"),
+      figure: {
+        ...entry("g2", "a").figure,
+        curves: [{ book: "Book1", x: "A", y: "B" }],
+      },
+    };
+    useApp.setState({
+      datasets: [{
+        ...ds("a", "w1"),
+        data: {
+          time: [0], values: [[Number.NaN]], labels: ["empty"], units: [""],
+          metadata: { origin_book: "Book1", x_column_name: "A", origin_column_names: ["B"] },
+        },
+      }],
+      originFigures: [emptyEntry],
+    });
+    const { container } = render(<FigureRow entry={emptyEntry} treeMode />);
+    expect(container.querySelector('[data-lib-row="origin-figure:g2"]')).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(screen.getByRole("button", { name: /Recover unresolved Origin bindings/ }));
+    expect(await screen.findByText("Saved columns found, but this layer has no numeric data")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Inspect columns" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Rebuild plot" })).toBeDisabled();
   });
 });
 

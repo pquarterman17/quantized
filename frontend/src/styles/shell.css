@@ -621,6 +621,22 @@ body {
 .qzk-origin-preview-canvas img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; image-rendering: auto; }
 .qzk-origin-preview-window figcaption { color: var(--text-dim); font-size: var(--font-size-sm); }
 .qzk-origin-preview-window small { color: var(--text-faint); font-size: var(--type-nano); }
+.qzk-origin-recover-btn { white-space: nowrap; }
+.qzk-origin-recovery { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.qzk-origin-recovery > p { margin: 0; color: var(--text-dim); }
+.qzk-origin-recovery-hints { padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-1); }
+.qzk-origin-recovery-hints ul { max-height: min(160px, 22vh); margin: 6px 0 0; padding-left: 18px; overflow: auto; }
+.qzk-origin-recovery-hints li { margin: 3px 0; font-family: var(--font-mono); font-size: var(--type-nano); }
+.qzk-origin-recovery-hints li span { margin-left: 8px; color: var(--text-faint); font-family: var(--font-sans); }
+.qzk-origin-recovery-search { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 8px; color: var(--text-dim); font-size: var(--type-label); }
+.qzk-origin-recovery-search input { min-width: 0; width: 100%; }
+.qzk-origin-recovery-list { display: flex; flex-direction: column; gap: 6px; max-height: min(360px, 45vh); overflow: auto; }
+.qzk-origin-recovery-candidate { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); }
+.qzk-origin-recovery-candidate > div:first-child { min-width: 0; }
+.qzk-origin-recovery-candidate strong,
+.qzk-origin-recovery-candidate small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qzk-origin-recovery-candidate small,
+.qzk-origin-recovery > small { color: var(--text-faint); }
 
 /* Test chooser (#26): plain-language assumption reasons. */
 .qzk-reason-list { list-style: none; margin: 6px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 2px; color: var(--text-dim); font-size: var(--font-size-sm); }

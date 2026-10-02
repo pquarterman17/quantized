@@ -240,24 +240,13 @@ async function main() {
         continue;
       }
 
-      // Reset transient cross-figure state before every apply so one shot's
-      // multi-panel/double-Y leftovers can never bleed into the next (real UI
-      // gap: applyOriginFigure's single/double-Y branches don't clear
-      // stackMode/spatialPanels/y2*, since a normal click sequence rarely
-      // crosses figure "kinds" back-to-back the way this batch does).
+      // Apply figures consecutively without test-only state cleanup. This is
+      // deliberately the real Library click sequence: an apply must clear
+      // incompatible modes from the previous graph itself, or this campaign
+      // should expose the bleed instead of hiding it.
       pageErrors = [];
       await page.evaluate((id) => {
         const { useApp } = window.__qz;
-        useApp.setState({
-          stackMode: false,
-          spatialPanels: null,
-          facetPanels: null,
-          breakPanels: null,
-          y2Keys: null,
-          y2Lim: null,
-          y2Log: null,
-          y2Step: null,
-        });
         useApp.getState().applyOriginFigure(id);
       }, representative.id);
 
@@ -272,6 +261,27 @@ async function main() {
 
       const applied = await page.evaluate(() => {
         const s = window.__qz.useApp.getState();
+        const active = s.datasets.find((dataset) => dataset.id === s.activeId);
+        const hidden = new Set(s.hiddenChannels || []);
+        const selected = (s.yKeys ?? active?.data.labels.map((_, index) => index) ?? [])
+          .filter((key) => !hidden.has(key));
+        const secondary = new Set(s.y2Keys || []);
+        const within = (value, lim) => Number.isFinite(value)
+          && (!lim || ((lim[0] == null || value >= lim[0]) && (lim[1] == null || value <= lim[1])));
+        let visibleSampleCount = 0;
+        if (active) {
+          for (let row = 0; row < active.data.time.length; row += 1) {
+            const x = s.xKey == null ? active.data.time[row] : active.data.values[row]?.[s.xKey];
+            if (!within(x, s.xLim) || (s.xScale === "log" && !(x > 0))) continue;
+            for (const key of selected) {
+              const y = active.data.values[row]?.[key];
+              const onY2 = secondary.has(key);
+              const lim = onY2 ? s.y2Lim : s.yLim;
+              const scale = onY2 ? (s.y2Scale ?? s.yScale) : s.yScale;
+              if (within(y, lim) && (scale !== "log" || y > 0)) visibleSampleCount += 1;
+            }
+          }
+        }
         const stage = document.querySelector(".qzk-stage");
         const host = stage?.firstElementChild;
         const hostBox = host?.getBoundingClientRect();
@@ -312,6 +322,10 @@ async function main() {
           y2Step: s.y2Step,
           y2Keys: s.y2Keys,
           stackMode: s.stackMode,
+          polarMode: s.polarMode,
+          statMode: s.statMode,
+          insetMode: s.insetMode,
+          visibleSampleCount,
           // `spatialPanels` was collapsed into the `composition` discriminated
           // union (frontend/src/lib/composition.ts, decode-plan #54 pass A,
           // commit 5cdc7303) -- there is no raw `s.spatialPanels` field any

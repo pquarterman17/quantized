@@ -15,6 +15,7 @@
 // (`src/architecture.test.ts`'s SEAMS list is the guard).
 
 import { spatialComposition } from "../lib/composition";
+import { originHiddenChannels } from "../lib/errorbars";
 import { lit } from "../lib/macro";
 import { figureLabel, figureLayerFamily, type OriginFigureEntry } from "../lib/originFigures";
 import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlayFigure";
@@ -32,6 +33,35 @@ type SliceGet = () => AppState;
 // Origin figures apply gridless + boxed + a clean read-only legend (decode
 // #52); every apply branch spreads this, so `legendStatic` costs zero lines.
 const ORIGIN_FIGURE_AXIS = { showAxisBox: true, showGrid: false, legendStatic: true };
+
+// Applying a recovered graph is a whole-view command, not a dataset switch.
+// `setActive()` deliberately preserves presentation choices when the target
+// dataset is already active, but that is dangerous here: a prior polar/stat/
+// stacked view can otherwise keep rendering instead of the recovered XY
+// graph, and stale Y2 membership can route its only curve to an old axis
+// range.  The corpus harness used to hide this real-UI bug by clearing these
+// fields before every screenshot.  Keep the reset beside the apply body so
+// every branch gets the same clean mode transition.
+const ORIGIN_FIGURE_MODE_RESET = {
+  stackMode: false,
+  insetMode: false,
+  polarMode: false,
+  statMode: false,
+  composition: null,
+  facetKey: null,
+  groupKey: null,
+  waterfall: 0,
+  waterfallDx: 0,
+  seriesOrder: null,
+};
+
+const ORIGIN_FIGURE_Y2_RESET = {
+  y2Keys: null,
+  y2Lim: null,
+  y2Scale: null,
+  y2Step: null,
+  y2AxisLabel: "",
+};
 
 /** Apply `entry` (figure `id`) to the store. Callers have already run every
  *  preflight and hold the loaded `libs`; `label` is the undo label the
@@ -108,7 +138,8 @@ export function runOriginFigureApply(
         // `composition` itself needs no matching explicit clear here --
         // `setActive`'s `focusTransientReset()` already nulls it
         // UNCONDITIONALLY, genuine switch or not.
-        facetKey: null,
+        ...ORIGIN_FIGURE_MODE_RESET,
+        ...ORIGIN_FIGURE_Y2_RESET,
         ...ORIGIN_FIGURE_AXIS,
         xLim: [fig.x_from, fig.x_to],
         yLim: [fig.y_from, fig.y_to],
@@ -118,6 +149,7 @@ export function runOriginFigureApply(
         yScale: scaleFromLog(fig.y_log),
         xKey: null,
         yKeys: Array.from({ length: n }, (_, i) => i),
+        hiddenChannels: [],
         // Restore each overlay column's decoded line/scatter look + legend caption.
         seriesStyles: overlayCurveStyles(src),
         seriesLabels: overlayCurveLabels(src),
@@ -152,9 +184,13 @@ export function runOriginFigureApply(
     const baseSel = libs.figureChannelSelection(lower.figure, dsForPartner);
     const partnerSel = libs.figureChannelSelection(upper.figure, dsForPartner);
     if (baseSel && partnerSel) {
+      const plotted = [
+        ...baseSel.yKeys,
+        ...partnerSel.yKeys.filter((k) => !baseSel.yKeys.includes(k)),
+      ];
       get().setActive(entry.datasetId);
       set({
-        facetKey: null, // F4.4 review L1 -- see the overlay branch's doc above
+        ...ORIGIN_FIGURE_MODE_RESET,
         ...ORIGIN_FIGURE_AXIS,
         xLim: [lower.figure.x_from, lower.figure.x_to],
         yLim: [lower.figure.y_from, lower.figure.y_to],
@@ -167,10 +203,11 @@ export function runOriginFigureApply(
         // which of them sit on the right axis), so yKeys must be the UNION of
         // both layers' channels (lower layer first) or layer-2's curves never
         // render. The filter also dedupes a y2 channel that overlaps primary.
-        yKeys: [
-          ...baseSel.yKeys,
-          ...partnerSel.yKeys.filter((k) => !baseSel.yKeys.includes(k)),
-        ],
+        yKeys: plotted,
+        // A legend hide belongs to the view being replaced. Preserve only
+        // structural Origin error/X-column hiding, except when the saved
+        // graph explicitly plots that column as a curve.
+        hiddenChannels: originHiddenChannels(dsForPartner.data).filter((key) => !plotted.includes(key)),
         y2Keys: partnerSel.yKeys,
         // Layer 2's own axis state -> the secondary axis (13.2 #6): range,
         // log flag, and title (falls back to auto when undecoded).
@@ -218,9 +255,10 @@ export function runOriginFigureApply(
       // showAxisBox is the SINGLETON flag `useMultiPanelStage` reads for
       // every spatial panel (item 4) — Origin layers are boxed by default.
       set({
+        ...ORIGIN_FIGURE_MODE_RESET,
+        ...ORIGIN_FIGURE_Y2_RESET,
         stackMode: true,
         composition: spatialComposition(placed),
-        facetKey: null, // F4.4 review L1 -- see the overlay branch's doc above
         // #54: a fresh tiled apply starts at the app-wide default fit
         // (Preferences ▸ Plot ▸ Multi-panel fit). The per-window value then
         // persists in `.dwk`.
@@ -232,6 +270,7 @@ export function runOriginFigureApply(
         // when the page didn't decode. Enables the "page" fit + page export.
         pageSetup: pageSetupFromDecoded(family[0].figure.page ?? null),
         ...ORIGIN_FIGURE_AXIS,
+        hiddenChannels: [],
         // Spatial bands live on each SpatialPanel; clear only the singleton
         // overlay list so a prior single plot cannot leak into this view.
         regionShades: [],
@@ -251,7 +290,8 @@ export function runOriginFigureApply(
   const ds = get().datasets.find((d) => d.id === entry.datasetId);
   const selection = ds ? libs.figureChannelSelection(fig, ds) : null;
   set({
-    facetKey: null, // F4.4 review L1 -- see the overlay branch's doc above
+    ...ORIGIN_FIGURE_MODE_RESET,
+    ...ORIGIN_FIGURE_Y2_RESET,
     ...ORIGIN_FIGURE_AXIS,
     xLim: [fig.x_from, fig.x_to],
     yLim: [fig.y_from, fig.y_to],
@@ -266,6 +306,9 @@ export function runOriginFigureApply(
     regionShades: libs.originRegionShades([fig], entry.id),
     ...libs.originLegendState(fig),
     ...libs.figureSelectionState(selection),
+    hiddenChannels: ds
+      ? originHiddenChannels(ds.data).filter((key) => selection ? !selection.yKeys.includes(key) : true)
+      : [],
   });
   get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
 }
