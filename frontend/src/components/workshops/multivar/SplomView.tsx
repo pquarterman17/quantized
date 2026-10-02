@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 
+import { observeResizePaint } from "../../../lib/frameCoalesce";
 import { downsampleIndices, SPLOM_MAX_POINTS } from "../../../lib/multivar";
 import type { Accent, Theme } from "../../../store/useApp";
 import { draw } from "./splomRender";
@@ -43,9 +44,7 @@ export default function SplomView({ labels, rows, theme, accent, onSampleInfo }:
     if (!host || !canvas) return;
     const paint = () => draw(canvas, host, data);
     paint();
-    const ro = new ResizeObserver(paint);
-    ro.observe(host);
-    return () => ro.disconnect();
+    return observeResizePaint(host, paint);
     // theme/accent so a re-theme repaints from fresh design tokens (StatStageCanvas's pattern).
   }, [data, theme, accent]);
 

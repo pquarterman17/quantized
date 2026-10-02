@@ -75,7 +75,7 @@ const REGION_TOOL: ToolDef = {
   id: "region",
   glyph: "▭",
   name: "Background Region",
-  desc: "Drag to select a background range for baseline fitting",
+  desc: "Drag a background range on x for baseline fitting; drag a taller box to limit y too",
 };
 
 /** Every PlotTool with a ToolDef, keyed by id — the ONE lookup ToolHud.tsx

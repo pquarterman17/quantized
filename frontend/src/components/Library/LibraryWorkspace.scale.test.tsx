@@ -62,7 +62,7 @@ describe("LibraryWorkspace — E-c3 large-Library virtualization", () => {
     expect(grid.style.paddingTop).toBe(""); // no virtualization spacers
   });
 
-  it("scrolling moves the rendered window", () => {
+  it("scrolling moves the rendered window", async () => {
     seed(500);
     render(<LibraryWorkspace onClose={vi.fn()} />);
     const section = screen.getByLabelText("Library workspace");
@@ -71,9 +71,11 @@ describe("LibraryWorkspace — E-c3 large-Library virtualization", () => {
     section.scrollTop = 4000; // ~row 20 at the 200px fallback row height
     fireEvent.scroll(section);
 
-    const first = renderedTiles()[0]?.dataset.libraryTile;
-    expect(first).toBeDefined();
-    expect(first).not.toBe("worksheet:d0");
+    await waitFor(() => {
+      const first = renderedTiles()[0]?.dataset.libraryTile;
+      expect(first).toBeDefined();
+      expect(first).not.toBe("worksheet:d0");
+    });
   });
 
   it("Arrow navigation crosses the rendered-window boundary by MODEL index", async () => {
@@ -132,7 +134,7 @@ describe("LibraryWorkspace — E-c3 large-Library virtualization", () => {
     expect(renderedTiles().length).toBeGreaterThan(0); // lib/gridwindow clamping
   });
 
-  it("entering a different container resets the window from a stale deep scroll", () => {
+  it("entering a different container resets the window from a stale deep scroll", async () => {
     useApp.setState({
       workbooks: [{ id: "w1", name: "Big run" }, { id: "w2", name: "Second run" }],
       datasets: [
@@ -145,7 +147,9 @@ describe("LibraryWorkspace — E-c3 large-Library virtualization", () => {
     const section = screen.getByLabelText("Library workspace");
     section.scrollTop = 12000;
     fireEvent.scroll(section);
-    expect(renderedTiles()[0]?.dataset.libraryTile).not.toBe("worksheet:d0");
+    await waitFor(() => {
+      expect(renderedTiles()[0]?.dataset.libraryTile).not.toBe("worksheet:d0");
+    });
 
     // Breadcrumb to the project root, then browse into the second workbook.
     fireEvent.click(screen.getByRole("button", { name: "Project" }));
@@ -198,7 +202,9 @@ describe("LibraryWorkspace — E-c3 large-Library virtualization", () => {
 
     section.scrollTop = 24000; // the focused tile unmounts with its window
     fireEvent.scroll(section);
-    expect(document.querySelector('[data-library-tile="worksheet:d0"]')).toBeNull();
+    await waitFor(() => {
+      expect(document.querySelector('[data-library-tile="worksheet:d0"]')).toBeNull();
+    });
     // Focus must NOT be stranded on <body> — the grid takes it, and an arrow
     // key resumes navigation from the roving tile's model position.
     expect(document.activeElement).not.toBe(document.body);
@@ -222,7 +228,7 @@ describe("LibraryWorkspace — E-c3 large-Library virtualization", () => {
   // nothing to do". A live, selected dataset makes the outcomes observably
   // different: it is removed if the keystroke reaches the global handler,
   // and untouched if the grid holder consumes it first.
-  it("Delete/Backspace on the grid holder (fallback focus) does not reach the global dataset removal", () => {
+  it("Delete/Backspace on the grid holder (fallback focus) does not reach the global dataset removal", async () => {
     function GlobalHarness() {
       useGlobalShortcuts();
       return <LibraryWorkspace onClose={vi.fn()} />;
@@ -237,7 +243,9 @@ describe("LibraryWorkspace — E-c3 large-Library virtualization", () => {
 
     section.scrollTop = 24000; // the focused tile unmounts with its window
     fireEvent.scroll(section);
-    expect(document.querySelector('[data-library-tile="worksheet:d0"]')).toBeNull();
+    await waitFor(() => {
+      expect(document.querySelector('[data-library-tile="worksheet:d0"]')).toBeNull();
+    });
     const holder = document.activeElement as HTMLElement;
     expect(holder).not.toBe(document.body); // the grid took the orphaned focus
     expect(holder.hasAttribute("data-scroll-out-focus")).toBe(true);
@@ -248,13 +256,16 @@ describe("LibraryWorkspace — E-c3 large-Library virtualization", () => {
     expect(useApp.getState().datasets).toHaveLength(500); // NOT removed
   });
 
-  it("windowed listitems report their TRUE set size and position to assistive tech", () => {
+  it("windowed listitems report their TRUE set size and position to assistive tech", async () => {
     seed(500);
     render(<LibraryWorkspace onClose={vi.fn()} />);
     const section = screen.getByLabelText("Library workspace");
     section.scrollTop = 4000;
     fireEvent.scroll(section);
 
+    await waitFor(() => {
+      expect(renderedTiles()[0]?.dataset.libraryTile).not.toBe("worksheet:d0");
+    });
     const tiles = renderedTiles();
     const firstIndex = Number(tiles[0].dataset.libraryTile!.replace("worksheet:d", ""));
     expect(tiles[0]).toHaveAttribute("aria-setsize", "500");

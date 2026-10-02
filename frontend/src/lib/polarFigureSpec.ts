@@ -5,9 +5,8 @@
 // figure — silent wrong output. This builds the request from the SAME inputs
 // `Stage/PolarStageCore` draws from, through the same helpers (`lib/polar.ts`):
 //   - angle = the `time` column (no `x_key`), radius = `polarChannels(yKeys)`;
-//   - the raw `dataset.data` — the canvas has never honoured exclusions (see
-//     PolarStageCore's header), so the export does not either, and the
-//     excluded-rows question never fires for a polar figure;
+//   - the dataset's `analysisData` view, matching the canvas: manual
+//     exclusions and Data Filter failures are omitted on both paths;
 //   - `POLAR_CANVAS` (degrees, counter-clockwise, 0 east), the shared radial
 //     range `polarRadialRange` (min at the centre, values clamped) and the
 //     `niceTicks` rings, all sent explicitly (`routes/export_figures_polar`);
@@ -24,6 +23,7 @@ import type { FigureRenderOpts } from "./figureSpec";
 import { pageSizeInches } from "./pageGeometry";
 import type { PlotView } from "./plotview";
 import { POLAR_CANVAS, POLAR_LINE_PX, polarChannels, polarRadialRange } from "./polar";
+import { analysisData } from "./rowstate";
 import { niceTicks } from "./ticks";
 import type { Dataset } from "./types";
 
@@ -35,14 +35,15 @@ export function buildPolarFigureSpec(
   stem: string,
   o: FigureRenderOpts,
 ): FigureSpec {
-  const channels = polarChannels(st.yKeys, ds.data.labels.length);
-  const rLim = polarRadialRange(ds.data.values, channels);
+  const data = analysisData(ds) ?? ds.data;
+  const channels = polarChannels(st.yKeys, data.labels.length);
+  const rLim = polarRadialRange(data.values, channels);
   const styles = toWireSeriesStyles(buildExportStyles(channels, st.seriesStyles), false).map((s, i) => {
     const legend = st.seriesLabels[channels[i]];
     return { ...(s?.color ? { color: s.color } : {}), ...(legend ? { legend } : {}), width: POLAR_LINE_PX };
   });
   return {
-    dataset: ds.data,
+    dataset: data,
     y_keys: channels,
     polar: { ...POLAR_CANVAS, r_lim: rLim, r_ticks: niceTicks(rLim[0], rLim[1]), grid: st.showGrid },
     fmt: o.fmt,

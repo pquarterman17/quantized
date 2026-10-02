@@ -7,6 +7,7 @@
 
 import { useEffect, useRef } from "react";
 
+import { observeResizePaint } from "../../../lib/frameCoalesce";
 import type { SpecRender } from "../../../lib/plotspec";
 import type { LegendPos } from "../../../lib/plotview";
 import type { SeriesStyle } from "../../../lib/types";
@@ -42,9 +43,7 @@ export default function QuickFigurePreviewCanvas({
     };
     paint();
     if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(paint);
-    ro.observe(host);
-    return () => ro.disconnect();
+    return observeResizePaint(host, paint);
   }, [render, styles, theme, accent]);
 
   return (

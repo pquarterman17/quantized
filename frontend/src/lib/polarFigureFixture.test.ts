@@ -36,6 +36,12 @@ interface Case {
   showGrid?: boolean;
 }
 
+/** Canvas coordinates can differ by one final IEEE-754 bit across JS engines. */
+function stableCanvasPoints(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableCanvasPoints);
+  return typeof value === "number" ? Number(value.toPrecision(14)) : value;
+}
+
 const ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
 const CASES: Case[] = [
   {
@@ -70,13 +76,14 @@ const CASES: Case[] = [
   },
 ];
 
-function dataset(c: Case): Dataset {
-  return { id: "polar-ds", name: "polar.dat", data: c.data } as Dataset;
+function dataset(c: Case, extra: Partial<Dataset> = {}): Dataset {
+  return { id: "polar-ds", name: "polar.dat", data: c.data, ...extra } as Dataset;
 }
 
-function request(c: Case) {
+function request(c: Case, extra: Partial<Dataset> = {}) {
+  const ds = dataset(c, extra);
   useApp.setState({
-    datasets: [dataset(c)],
+    datasets: [ds],
     activeId: "polar-ds",
     polarMode: true,
     xKey: null,
@@ -86,7 +93,7 @@ function request(c: Case) {
     showGrid: c.showGrid ?? true,
     pageSetup: null,
   });
-  return buildStageFigureSpec(useApp.getState, dataset(c), "polar", { fmt: "svg", style: "default", dpi: 100, title: "" });
+  return buildStageFigureSpec(useApp.getState, ds, "polar", { fmt: "svg", style: "default", dpi: 100, title: "" });
 }
 
 /** Where the canvas draws each point, on a unit disk (x right, y down);
@@ -116,7 +123,18 @@ describe("a polar view exports as a polar figure, screen == export", () => {
     expect(spec.polar?.grid).toBe(c.showGrid ?? true);
     expect(spec.y_keys).toEqual(channels);
     expect(spec.x_key).toBeUndefined(); // the angle is the time column, as on the canvas
-    expect(spec.dataset).toEqual(c.data); // the raw rows the canvas reads
+    expect(spec.dataset).toEqual(c.data); // no row state: the analysis view is the original data by reference
+  });
+
+  it("omits excluded and filtered rows through the same analysis view the canvas reads", () => {
+    const c = CASES[1];
+    const spec = request(c, {
+      excludedRows: [1],
+      filter: [{ col: 1, kind: "range", max: 7 }],
+    });
+    expect(spec.dataset.time).toEqual([-90, 30]);
+    expect(spec.dataset.values).toEqual([[1, 5, 2], [1, 7, 4]]);
+    expect(spec.polar?.r_lim).toEqual(polarRadialRange([[1, 5, 2], [1, 7, 4]], [2]));
   });
 
   it("the convention constant is what polarToXY draws: 90° up, counter-clockwise from east", () => {
@@ -138,6 +156,16 @@ describe("a polar view exports as a polar figure, screen == export", () => {
     if (process.env.POLAR_FIXTURE_WRITE) {
       writeFileSync(FIXTURE, `${JSON.stringify(now, null, 2)}\n`, "utf8");
     }
-    expect(JSON.parse(readFileSync(FIXTURE, "utf8"))).toEqual(JSON.parse(JSON.stringify(now)));
+    const committed = JSON.parse(readFileSync(FIXTURE, "utf8")) as typeof now;
+    const current = JSON.parse(JSON.stringify(now)) as typeof now;
+    // Keep the actual request wire exact. The backend checks canvas geometry
+    // with a 1e-6 tolerance, so only normalize its separately stored reference
+    // coordinates past 14 significant digits to avoid libm/engine noise.
+    expect(committed.cases.map(({ name, request: body }) => ({ name, request: body }))).toEqual(
+      current.cases.map(({ name, request: body }) => ({ name, request: body })),
+    );
+    expect(stableCanvasPoints(committed.cases.map((c) => c.canvas_points))).toEqual(
+      stableCanvasPoints(current.cases.map((c) => c.canvas_points)),
+    );
   });
 });
