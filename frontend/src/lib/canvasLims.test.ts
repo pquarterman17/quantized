@@ -1,9 +1,9 @@
 // The canvas' resolution of committed X/Y limits (`lib/canvasLims.ts`) on a
-// LOG axis. A typed side at or below zero cannot be drawn there (uPlot takes
-// log10 of the bound), and the export's matplotlib ignores such a side
-// (`set_ylim(0, None)` on a log axis keeps its autoscale). So the canvas treats
-// it as auto for that side too, half-open or fully typed. A reciprocal axis
-// keeps the side, as its export does.
+// LOG or RECIPROCAL axis. A typed side at or below zero cannot be drawn there
+// (uPlot takes log10 or 1/x of the bound), and the export ignores such a side
+// (matplotlib's log `set_ylim(0, None)` keeps its autoscale; the reciprocal
+// axis drops it in `calc/figure_scale.drawable_lim`). So the canvas treats it
+// as auto for that side too, half-open or fully typed.
 
 import { describe, expect, it } from "vitest";
 
@@ -22,7 +22,7 @@ const payload = {
 
 const positive = (r: [number, number] | null) => r === null || (r[0] > 0 && r[1] > 0);
 
-describe("resolveCanvasLims on a log axis", () => {
+describe("resolveCanvasLims on a log or reciprocal axis", () => {
   it("a half-open pair's non-positive typed side is auto, never a log10(0) bound", () => {
     const r = resolveCanvasLims(payload, { yLim: [0, null], xScale: "linear", yScale: "log" });
     expect(positive(r.y.range)).toBe(true);
@@ -46,11 +46,22 @@ describe("resolveCanvasLims on a log axis", () => {
     expect(resolveCanvasLims(payload, { yLim: [5, 50], xScale: "linear", yScale: "log" }).y.dropped).toBe(false);
   });
 
-  // The export's reciprocal axis (calc/figure_scale.py, matplotlib's FuncScale)
-  // has no such rule: `set_ylim(0, None)` is kept as 0. The canvas keeps it too.
-  it("a reciprocal axis keeps the typed side, as the export does", () => {
-    const r = resolveCanvasLims(payload, { yLim: [0, null], xScale: "linear", yScale: "reciprocal" });
-    expect(r.y.range?.[0]).toBe(0);
+  // A reciprocal axis follows the same rule: 1/x of a side <= 0 is undefined,
+  // and the export (calc/figure_scale.drawable_lim) drops that side as well.
+  it("a reciprocal axis drops a non-positive side to auto and says so", () => {
+    const half = resolveCanvasLims(payload, { yLim: [0, null], xScale: "linear", yScale: "reciprocal" });
+    expect(positive(half.y.range)).toBe(true);
+    expect(half.y.dropped).toBe(true);
+    const full = resolveCanvasLims(payload, { xLim: [-1, 3], xScale: "reciprocal", yScale: "linear" });
+    expect(full.x.range?.[1]).toBe(3);
+    expect(positive(full.x.range)).toBe(true);
+    expect(full.x.dropped).toBe(true);
+  });
+
+  it("a positive reciprocal pair passes through by reference", () => {
+    const fixed: [number, number] = [5, 50];
+    const r = resolveCanvasLims(payload, { yLim: fixed, xScale: "linear", yScale: "reciprocal" });
+    expect(r.y.range).toBe(fixed);
     expect(r.y.dropped).toBe(false);
   });
 

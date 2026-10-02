@@ -9,10 +9,10 @@
 // (`fullXExtents` / `fullYExtents`, which cover drawn error bars too, as the
 // autoscale does). A fully fixed pair passes through as the same reference.
 // When the typed side would land on or past the auto side, the axis goes back
-// to full auto (`range: null`) and `crossed` says so. On a LOG axis a typed
-// side <= 0 counts as blank (`drawableLim`, `dropped`), as matplotlib's own
-// `set_ylim` ignores it there. A reciprocal axis keeps it: the export's
-// reciprocal scale (calc/figure_scale.py, a FuncScale) has no such rule.
+// to full auto (`range: null`) and `crossed` says so. On a LOG or RECIPROCAL
+// axis a typed side <= 0 counts as blank (`drawableLim`, `dropped`), as the
+// export ignores it there too (matplotlib's log `set_ylim`, and
+// calc/figure_scale.drawable_lim for the reciprocal FuncScale).
 
 import { fixedLim, resolveHalfLim, type HalfLim, type ResolvedLim } from "./axisLim";
 import type { ErrorSpan } from "./errorbars";
@@ -33,10 +33,10 @@ export interface LimResolveInputs {
 
 const positiveOnly = (s: AxisScale): boolean => s === "log" || s === "reciprocal";
 
-/** On a log axis a typed side <= 0 is auto for that side: uPlot cannot draw
- *  it, and the export's matplotlib ignores it the same way. */
+/** On a log or reciprocal axis a typed side <= 0 is auto for that side: uPlot
+ *  cannot draw it, and the export ignores it the same way. */
 export function drawableLim(lim: HalfLim | null | undefined, s: AxisScale): HalfLim | null | undefined {
-  if (!lim || s !== "log" || !lim.some((v) => v !== null && v <= 0)) return lim;
+  if (!lim || !positiveOnly(s) || !lim.some((v) => v !== null && v <= 0)) return lim;
   const side = (v: number | null) => (v !== null && v > 0 ? v : null);
   return lim.every((v) => side(v) === null) ? null : [side(lim[0]), side(lim[1])];
 }

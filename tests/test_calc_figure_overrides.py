@@ -11,8 +11,9 @@ output is more honest than mocking the Axes.
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
-from quantized.calc.figure import render_figure_map
+from quantized.calc.figure import render_figure, render_figure_map
 
 
 def _ann_box(hitmap: dict, index: int = 0) -> dict:
@@ -245,3 +246,50 @@ def test_half_open_lim_crossing_the_data_falls_back_to_full_autoscale() -> None:
     auto = ax.get_ylim()
     _apply_lims(ax, {"y_lim": [50.0, None]})
     assert ax.get_ylim() == auto  # not an inverted (50, 41.5) axis
+
+
+# ── A limit side <= 0 on a reciprocal axis ──────────────────────────────────
+# matplotlib's FuncScale keeps a typed 0 (a log axis' set_ylim ignores it), and
+# 1/x then maps every point to NaN: the export drew empty axes with no ticks.
+# Such a side is auto, as on a log axis (frontend `lib/canvasLims.drawableLim`).
+
+_RX = np.linspace(1.0, 10.0, 20)
+
+
+def _recip_axes(**kw):  # type: ignore[no-untyped-def]
+    return render_figure_map(_RX, [("y", _RX)], dpi=50, **kw)["axes"]
+
+
+@pytest.mark.parametrize("lim", [[0, None], [-5.0, None], [None, 0], [0, 0]])
+def test_reciprocal_y_lim_non_positive_side_is_auto_in_the_export(lim) -> None:  # type: ignore[no-untyped-def]
+    auto = _recip_axes(y_scale="reciprocal")["ylim"]
+    assert _recip_axes(y_scale="reciprocal", overrides={"y_lim": lim})["ylim"] == auto
+
+
+def test_reciprocal_lim_keeps_its_positive_side_on_both_axes() -> None:
+    axes = _recip_axes(
+        x_scale="reciprocal", y_scale="reciprocal",
+        overrides={"x_lim": [0, 20.0], "y_lim": [-5.0, 50.0]},
+    )
+    assert axes["xlim"][1] == 20.0 and axes["xlim"][0] > 0
+    assert axes["ylim"][1] == 50.0 and axes["ylim"][0] > 0
+
+
+def test_reciprocal_axis_with_a_zero_limit_still_has_ticks() -> None:
+    from quantized.calc.figure_scale import apply_axis_scale
+
+    ax = _plotted_axes()
+    apply_axis_scale(ax, "y", "reciprocal")
+    _apply_lims(ax, {"y_lim": [0.0, None]})
+    assert ax.get_ylim()[0] > 0
+    assert len(ax.yaxis.get_majorticklocs()) > 0
+
+
+def test_reciprocal_y2_lim_non_positive_side_is_auto() -> None:
+    def png(**ov):  # type: ignore[no-untyped-def]
+        return render_figure(
+            _RX, [("a", _RX), ("b", _RX)], fmt="png", dpi=50,
+            y2_mask=[False, True], y2_scale="reciprocal", overrides=ov or None,
+        )
+
+    assert png(y2_lim=[0, None]) == png()

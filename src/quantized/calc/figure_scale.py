@@ -24,7 +24,7 @@ import numpy as np
 from matplotlib.ticker import Locator, LogLocator, NullFormatter
 from numpy.typing import NDArray
 
-__all__ = ["apply_axis_scale", "reciprocal_tick_values", "resolve_axis_scale"]
+__all__ = ["apply_axis_scale", "drawable_lim", "reciprocal_tick_values", "resolve_axis_scale"]
 
 _SCALES = ("linear", "log", "reciprocal")
 
@@ -103,6 +103,21 @@ class _ReciprocalLocator(Locator):
             return []
         vmin, vmax = self.axis.get_view_interval()
         return self.tick_values(vmin, vmax)
+
+
+def drawable_lim(
+    ax: Any, axis: str, lo: float | None, hi: float | None
+) -> tuple[float | None, float | None]:
+    """A typed limit pair with each side <= 0 turned to ``None`` (auto) when
+    ``ax``'s ``axis`` is log or reciprocal. matplotlib's log ``set_ylim``
+    already ignores such a side, but the reciprocal FuncScale keeps it, and
+    1/x then maps every point to NaN (a blank export). The screen's rule is
+    ``frontend/src/lib/canvasLims.ts``'s ``drawableLim``. The only
+    ``"function"`` scale this package sets is the reciprocal one."""
+    scale = ax.get_xscale() if axis == "x" else ax.get_yscale()
+    if scale not in ("log", "function"):
+        return lo, hi
+    return (None if lo is None or lo <= 0 else lo), (None if hi is None or hi <= 0 else hi)
 
 
 def apply_axis_scale(ax: Any, axis: str, scale: str) -> None:

@@ -30,7 +30,7 @@ from quantized.calc.figure import _apply_fill, _plot_kwargs, draw_series_axes
 from quantized.calc.figure_axis_titles import apply_axis_titles
 from quantized.calc.figure_decor import _apply_region_shades, _split_region_shades_by_axis
 from quantized.calc.figure_overrides import legend_kwargs
-from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
+from quantized.calc.figure_scale import apply_axis_scale, drawable_lim, resolve_axis_scale
 from quantized.calc.figure_styles import FigureStyle
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
 
@@ -273,7 +273,10 @@ def render_with_secondary_axis(
     y2_lim = ov.get("y2_lim")
     if y2_lim is not None:
         lo, hi = y2_lim
-        ax2.set_ylim(None if lo is None else float(lo), None if hi is None else float(hi))
+        # A side <= 0 on a log or reciprocal y2 is auto, as on the primary axes.
+        ax2.set_ylim(*drawable_lim(
+            ax2, "y", None if lo is None else float(lo), None if hi is None else float(hi)
+        ))
     _combined_legend(fig, ax, st, ov, artists, y2_artists, y2_mask, n_series=len(series))
     return artists + y2_artists
 

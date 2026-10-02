@@ -187,10 +187,10 @@ export function usePlotStageActions(
   }
 
   // P2.8 residual (b): a half-open limit crossed the data, so the axis is on auto;
-  // "log": a typed side <= 0 was dropped on a log axis (lib/canvasLims.drawableLim).
+  // "log": a typed side <= 0 was dropped on a log or reciprocal axis (lib/canvasLims.drawableLim).
   const onLimCrossed = (axis: "x" | "y", why?: "log") =>
     useApp.getState().setStatus(
-      `${axis.toUpperCase()} limit ${why ? "at or below zero is ignored on a log axis" : "crosses the data range, so the axis is back on auto"}.`,
+      `${axis.toUpperCase()} limit ${why ? "at or below zero is ignored on a log or reciprocal axis" : "crosses the data range, so the axis is back on auto"}.`,
     );
 
   return {
