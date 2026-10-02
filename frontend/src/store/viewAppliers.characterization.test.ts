@@ -561,7 +561,6 @@ describe("breakAtGaps — the x-break applier", () => {
       "selectedIds",
       "seriesLabels",
       "seriesStyles",
-      "stackMode",
       "xLim",
       "xStep",
       "y2AxisLabel",
@@ -597,14 +596,16 @@ describe("breakAtGaps — the x-break applier", () => {
       "qfitBusy",
       "qfitError",
       "selectedIds",
-      "stackMode",
     ]);
   });
 
-  it("installs the break composition, turns on stackMode and CLEARS facetKey", () => {
+  it("installs the break composition, commits its ranges, leaves stackMode alone and CLEARS facetKey", () => {
     useApp.getState().breakAtGaps("g1");
     const s = useApp.getState();
-    expect(s.stackMode).toBe(true);
+    // A break mounts on its own (`multiPanelShowing`); the ranges ride the
+    // focused document so the export and a save carry them.
+    expect(s.stackMode).toBe(false);
+    expect(s.windowsForSave().find((w) => w.id === s.focusedWindowId)?.document?.plot.axisBreaks.x).toHaveLength(1);
     expect(s.facetKey).toBeNull();
     expect(breakPanelsOf(s.composition)).toHaveLength(2);
     expect(s.activeId).toBe("g1");

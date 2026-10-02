@@ -16,6 +16,7 @@ import type { SpatialPanel } from "../../lib/multipanel";
 import { defaultPlotView } from "../../lib/plotview";
 import type { DataStruct } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import { clearFocusedXBreaks } from "../../store/windowDocuments";
 import RealMultiPanelStage from "./MultiPanelStage";
 import { useEffectiveComposition } from "./useEffectiveComposition";
 
@@ -94,6 +95,9 @@ beforeEach(() => {
     // asserting derived labels must not inherit it (`yKeys` is already reset
     // above for the same reason).
     seriesLabels: {},
+    // Same again for x-breaks: `breakAtGaps` commits its ranges to the
+    // focused window's document, which the screen rebuilds a break from.
+    plotWindows: clearFocusedXBreaks(useApp.getState().plotWindows, useApp.getState().focusedWindowId),
     showLegend: true,
     showAxisBox: false,
     plotTemplate: "screen",

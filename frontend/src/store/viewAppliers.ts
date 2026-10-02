@@ -64,6 +64,7 @@ import { confirmOriginReapplyDiscard, deferOriginApplyLibs, deferOriginFigureApp
 import { toast } from "./toasts";
 import { asOneEditStep } from "./undoStep";
 import type { AppState } from "./useApp";
+import { setFocusedXBreaks } from "./windowDocuments";
 
 const ORIGIN_APPLY_LABEL = "apply Origin figure";
 
@@ -91,7 +92,8 @@ export interface ViewAppliersSlice {
   // `lib/facet.breakPayloads`) instead of partitioning by a category column.
   // `breaks` is an explicit `[lo,hi]` override list; when omitted (or empty),
   // auto-detects via `lib/facet.suggestBreaks(xs, gapFactor)`. Activates
-  // `datasetId`, turns on `stackMode`, and replaces any prior `composition`,
+  // `datasetId`, commits the ranges to the focused document's
+  // `plot.axisBreaks.x` (export + save), and replaces any prior `composition`,
   // as ONE "break at gaps" undo step.
   // No-op (with a toast) when the dataset is missing, has no
   // rows in the analysis view, or no qualifying gap/override breaks exist.
@@ -222,7 +224,20 @@ export function createViewAppliersSlice(set: SliceSet, get: SliceGet): ViewAppli
         // this, a later focus round-trip resurrects the REPLACED facet grid
         // instead of this break arrangement (`useEffectiveComposition`'s
         // fallback reads facetKey whenever `composition` itself is null again).
-        set({ stackMode: true, composition, facetKey: null });
+        // The gap ranges go into the focused window's document too
+        // (`plot.axisBreaks.x`), so the export, a save and a focus switch read
+        // the same break the screen shows. Only when the view's x is the one
+        // the ranges were measured on (a non-active dataset's activation may
+        // pick another). `stackMode` is left alone: a break mounts on its own
+        // (`multiPanelShowing`), so a collapsed break returns to the user's
+        // own layout, not to a stack the export cannot draw.
+        set((s) => ({
+          composition,
+          facetKey: null,
+          plotWindows: s.xKey === xKey
+            ? setFocusedXBreaks(s.plotWindows, s.focusedWindowId, [...useBreaks].sort((a, b) => a[0] - b[0]))
+            : s.plotWindows,
+        }));
       });
       get().recordMacro(`Break x-axis at gaps`, `qz.breakAtGaps(${lit(datasetId)})`);
     },
