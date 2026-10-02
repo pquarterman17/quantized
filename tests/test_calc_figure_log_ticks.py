@@ -62,6 +62,16 @@ def test_a_sub_decade_log_view_labels_every_tick(
     assert _labels(ax, lo, hi) == expected
 
 
+def test_a_sub_decade_view_of_huge_values_reads_mantissa_times_ten_to_the_k(ax: plt.Axes) -> None:
+    # The screen's 1.5x10^22 form (logTicks.ts scaledLabels), not 22 digits.
+    _view(ax, 1.1e22, 4.5e22)
+    assert _labels(ax, 1.1e22, 4.5e22) == [
+        r"$\mathdefault{2\times10^{22}}$",
+        r"$\mathdefault{3\times10^{22}}$",
+        r"$\mathdefault{4\times10^{22}}$",
+    ]
+
+
 def test_a_multi_decade_log_view_labels_decades_only_as_the_screen_does(ax: plt.Axes) -> None:
     _view(ax, 1e-3, 100.0)
     assert _labels(ax, 1e-3, 100.0) == [

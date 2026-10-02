@@ -40,11 +40,22 @@ def _visible_ticks(axis: Any) -> list[float]:
     return sorted({float(v) for v in locs if v > 0 and lo - eps <= v <= hi + eps})
 
 
-def _plain(v: float, incr: float) -> str:
-    """The screen's auto label: just enough decimals for the tick spacing,
-    trailing zeros dropped (``Intl.NumberFormat`` maximumFractionDigits)."""
-    text = f"{v:.{_decimals_for_increment(incr)}f}"
+def _trim(text: str) -> str:
+    """Drop trailing fractional zeros, as ``Intl.NumberFormat`` does."""
     return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def _plain(v: float, incr: float, lo: float, hi: float) -> str:
+    """The screen's sub-decade label: just enough decimals for the tick
+    spacing. Huge or tiny views (``hi >= 1e6`` or ``lo < 1e-4``) read
+    ``1.5x10^22`` in each value's own decade instead, as the screen's
+    ``scaledLabels`` (lib/logTicks.ts)."""
+    if hi < 1e6 and lo >= 1e-4:
+        return _trim(f"{v:.{_decimals_for_increment(incr)}f}")
+    k = math.floor(math.log10(v) + 1e-9)
+    m = _trim(f"{v / 10.0**k:.{_decimals_for_increment(incr / 10.0**k)}f}")
+    body = f"10^{{{k}}}" if m == "1" else f"{m}\\times10^{{{k}}}"
+    return f"$\\mathdefault{{{body}}}$"
 
 
 class LogTickLabels(Formatter):
@@ -78,4 +89,4 @@ class LogTickLabels(Formatter):
         if self.inner is not None:
             return str(self.inner(x, pos))
         gaps = [b - a for a, b in zip(ticks, ticks[1:], strict=False) if b > a]
-        return _plain(x, min(gaps) if gaps else 0.0)
+        return _plain(x, min(gaps) if gaps else 0.0, ticks[0], ticks[-1]) if ticks else ""
