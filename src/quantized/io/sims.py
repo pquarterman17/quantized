@@ -52,16 +52,18 @@ def _excel_preview_text(path: Path, max_rows: int = 8) -> str:
     with heavy_imports("openpyxl"):
         import openpyxl
 
-    workbook = openpyxl.load_workbook(path, data_only=True, read_only=True)
-    try:
-        ws = workbook.worksheets[0]
-        cells: list[str] = []
-        for i, row in enumerate(ws.iter_rows(values_only=True)):
-            if i >= max_rows:
-                break
-            cells.extend(str(v) for v in row if v is not None)
-    finally:
-        workbook.close()
+    # Own the handle: openpyxl leaks its archive when it raises (see io/excel.py).
+    with Path(path).open("rb") as handle:
+        workbook = openpyxl.load_workbook(handle, data_only=True, read_only=True)
+        try:
+            ws = workbook.worksheets[0]
+            cells: list[str] = []
+            for i, row in enumerate(ws.iter_rows(values_only=True)):
+                if i >= max_rows:
+                    break
+                cells.extend(str(v) for v in row if v is not None)
+        finally:
+            workbook.close()
     return " ".join(cells)
 
 
@@ -302,12 +304,13 @@ def _read_excel_tokens(path: Path, sheet: int | str) -> list[list[str]]:
     with heavy_imports("openpyxl"):
         import openpyxl
 
-    workbook = openpyxl.load_workbook(path, data_only=True, read_only=True)
-    try:
-        ws = workbook[sheet] if isinstance(sheet, str) else workbook.worksheets[sheet]
-        grid = [list(row) for row in ws.iter_rows(values_only=True)]
-    finally:
-        workbook.close()
+    with Path(path).open("rb") as handle:  # owned handle, as in _excel_preview_text
+        workbook = openpyxl.load_workbook(handle, data_only=True, read_only=True)
+        try:
+            ws = workbook[sheet] if isinstance(sheet, str) else workbook.worksheets[sheet]
+            grid = [list(row) for row in ws.iter_rows(values_only=True)]
+        finally:
+            workbook.close()
     tokens: list[list[str]] = []
     for row in grid:
         cells: list[str] = []

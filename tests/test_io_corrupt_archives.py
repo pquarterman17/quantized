@@ -114,3 +114,34 @@ def test_corrupt_archive_upload_is_422_not_500(tmp_path: Path, fmt: str, how: st
     )
     assert resp.status_code == 422, resp.text
     assert path.name in resp.json()["detail"]
+
+
+def _open_handles_to(path: Path) -> list[str]:
+    fd_dir = Path("/proc/self/fd")
+    hits = []
+    for fd in fd_dir.iterdir():
+        try:
+            if Path(fd.readlink()).resolve() == path.resolve():
+                hits.append(fd.name)
+        except OSError:
+            continue
+    return hits
+
+
+@pytest.mark.skipif(not Path("/proc/self/fd").is_dir(), reason="needs /proc to list open fds")
+@pytest.mark.parametrize("how", _DAMAGE)
+@pytest.mark.parametrize("fmt", list(_FORMATS))
+def test_a_damaged_archive_leaves_no_open_handle(tmp_path: Path, fmt: str, how: str) -> None:
+    """A failed parse must release the file: on Windows an open handle makes the
+    upload route's temp-dir cleanup raise PermissionError, turning a clean 422
+    into a 500 (seen on the windows-latest CI job). Linux unlinks open files
+    happily, so check for the leaked handle directly."""
+    ext, build, parse = _FORMATS[fmt]
+    path = tmp_path / f"damaged{ext}"
+    _damage(path, build(path), how)
+    with pytest.raises(ValueError) as caught:
+        parse(path)
+    # Checked while the exception (and its traceback frames) is still alive --
+    # exactly the state the route is in when its temp dir is cleaned up.
+    assert caught.value is not None
+    assert _open_handles_to(path) == []

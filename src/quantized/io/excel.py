@@ -129,22 +129,26 @@ def import_excel(
 ) -> DataStruct:
     """Import an ``.xlsx`` sheet (first column = x-axis by default)."""
     path = Path(filepath)
-    try:
-        _check_parts(path)
-        workbook = openpyxl.load_workbook(path, data_only=True, read_only=True)
-    except _UNREADABLE as exc:
-        # An empty / non-ZIP / truncated / damaged .xlsx raises BadZipFile,
-        # InvalidFileException, zlib or XML errors (none a ValueError) ->
-        # would 500 the import route. Reject cleanly instead.
-        raise ValueError(f"{path.name} is not a readable .xlsx workbook: {exc}") from exc
-    try:
-        worksheet = workbook[sheet] if isinstance(sheet, str) else workbook.worksheets[sheet]
-        sheet_name = worksheet.title
-        grid = _read_grid(worksheet, path.name)
-    except CORRUPT_ARCHIVE_ERRORS as exc:  # the worksheet is streamed: damage shows up here
-        raise ValueError(f"{path.name}: damaged worksheet data ({exc})") from exc
-    finally:
-        workbook.close()
+    # We own the OS handle: openpyxl leaves its archive open when it raises
+    # mid-load or mid-stream, and on Windows an open handle makes the upload
+    # route's temp-dir cleanup fail, turning a clean 422 into a 500.
+    with path.open("rb") as handle:
+        try:
+            _check_parts(path)
+            workbook = openpyxl.load_workbook(handle, data_only=True, read_only=True)
+        except _UNREADABLE as exc:
+            # An empty / non-ZIP / truncated / damaged .xlsx raises BadZipFile,
+            # InvalidFileException, zlib or XML errors (none a ValueError) ->
+            # would 500 the import route. Reject cleanly instead.
+            raise ValueError(f"{path.name} is not a readable .xlsx workbook: {exc}") from exc
+        try:
+            worksheet = workbook[sheet] if isinstance(sheet, str) else workbook.worksheets[sheet]
+            sheet_name = worksheet.title
+            grid = _read_grid(worksheet, path.name)
+        except CORRUPT_ARCHIVE_ERRORS as exc:  # the worksheet is streamed: damage shows up here
+            raise ValueError(f"{path.name}: damaged worksheet data ({exc})") from exc
+        finally:
+            workbook.close()
 
     while grid and all(v is None for v in grid[-1]):
         grid.pop()
