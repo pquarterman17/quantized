@@ -232,9 +232,9 @@ describe("the Origin fallback seam (store/originFallbackLazy.ts)", () => {
       createOriginFallbackSlice: () => ({ openOriginFigureSource, remakeOriginFigure }),
     }));
     await useApp.getState().openOriginFigureSource("fig", "a", { manual: true });
-    await useApp.getState().remakeOriginFigure("fig");
+    await useApp.getState().remakeOriginFigure("fig", "a");
     expect(openOriginFigureSource).toHaveBeenCalledWith("fig", "a", { manual: true });
-    expect(remakeOriginFigure).toHaveBeenCalledWith("fig");
+    expect(remakeOriginFigure).toHaveBeenCalledWith("fig", "a");
   });
 
   it("settles both actions with a danger toast when the module will not load", async () => {

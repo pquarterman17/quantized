@@ -94,13 +94,53 @@ describe("FigureRow — PR C additions", () => {
   });
 
   it("keeps source-recovery controls exposed when the unresolved main button cannot receive focus", () => {
-    const { container } = render(<FigureRow entry={entry("g2", null)} treeMode />);
+    const unresolvedEntry = {
+      ...entry("g2", null),
+      siblingIds: ["a"],
+      figure: {
+        ...entry("g2", null).figure,
+        source_hint: "MissingBook",
+        curves: [{ book: "MissingBook", x: "A", y: "B" }],
+      },
+    };
+    useApp.setState({ originFigures: [unresolvedEntry] });
+    const { container } = render(<FigureRow entry={unresolvedEntry} treeMode />);
     expect(container.querySelector(".qzk-fig-row-tree")).toHaveClass("unresolved");
     expect(screen.getByRole("group", { name: "Recovered graph actions" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Recover unresolved Origin bindings/ })).toBeVisible();
     const rules = flatRules(readShellCss());
     const unresolved = rules.find((r) => r.selector === ".qzk-fig-row-tree.unresolved .qzk-origin-figure-actions");
     expect(declares(unresolved!.body, "position", "static")).toBe(true);
     expect(declares(unresolved!.body, "transform", "none")).toBe(true);
+  });
+
+  it("opens a focused recovery window instead of an inline workbook selector", async () => {
+    const unresolvedEntry = {
+      ...entry("g2", null),
+      siblingIds: ["a"],
+      figure: {
+        ...entry("g2", null).figure,
+        source_hint: "MissingBook",
+        curves: [{ book: "MissingBook", x: "A", y: "B" }],
+      },
+    };
+    useApp.setState({
+      datasets: [{
+        ...ds("a", "w1"),
+        data: {
+          ...ds("a", "w1").data,
+          metadata: { origin_book: "Book1", x_column_name: "A", origin_column_names: ["B"] },
+        },
+      }],
+      originFigures: [unresolvedEntry],
+    });
+    render(<FigureRow entry={unresolvedEntry} treeMode />);
+    fireEvent.click(screen.getByRole("button", { name: /Recover unresolved Origin bindings/ }));
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Recover MokeGraph" })).toBeVisible();
+    expect(screen.getByText("1 compatible Y column")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Inspect columns" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Rebuild plot" })).toBeEnabled();
   });
 });
 

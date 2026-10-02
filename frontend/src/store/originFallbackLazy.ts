@@ -52,9 +52,9 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
         (core) => core.createOriginFallbackSlice(set, get).openOriginFigureSource(figureId, datasetId, opts),
         loadFailed("open Origin source workbook"),
       ),
-    remakeOriginFigure: (figureId) =>
+    remakeOriginFigure: (figureId, datasetId) =>
       originFallbackCore().then(
-        (core) => core.createOriginFallbackSlice(set, get).remakeOriginFigure(figureId),
+        (core) => core.createOriginFallbackSlice(set, get).remakeOriginFigure(figureId, datasetId),
         loadFailed("seed Graph Builder"),
       ),
   };

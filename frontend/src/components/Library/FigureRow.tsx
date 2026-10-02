@@ -33,6 +33,7 @@ import { lazyRegion } from "../../lib/lazyRegion";
  *  window paints one chunk-fetch later the first time it is opened in a
  *  session. Measured: 917,136 -> 912,461 B eager. */
 const OriginSavedPreviewWindow = lazyRegion(() => import("./OriginSavedPreviewWindow"), "Preview");
+const OriginRecoveryWindow = lazyRegion(() => import("./OriginRecoveryWindow"), "Origin recovery");
 
 export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem }: {
   entry: OriginFigureEntry;
@@ -67,6 +68,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
     recordWorkbookOpen(ownerWorkbookId, `origin-figure:${entry.id}`);
   };
   const [showSavedPreview, setShowSavedPreview] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
   const savedPreviewSrc = originPreviewDataUrl(entry.figure.saved_preview);
   const previewActionLabel = showSavedPreview
     ? "Close saved Origin preview"
@@ -138,17 +140,16 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
           role={treeItem ? undefined : "group"}
           aria-label={treeItem ? undefined : "Recovered graph actions"}
         >
-          <button
-            className="qz-icon-btn"
-            tabIndex={inner}
-            title="Open in a new graph window"
-            aria-label="Open in a new graph window"
-            disabled={!resolved}
-            onClick={() => openAndRemember({ newWindow: true })}
-          >
-            ⊞
-          </button>
-          {sourceResolution.sources.map((source) => (
+          {resolved && <button
+              className="qz-icon-btn"
+              tabIndex={inner}
+              title="Open in a new graph window"
+              aria-label="Open in a new graph window"
+              onClick={() => openAndRemember({ newWindow: true })}
+            >
+              ⊞
+            </button>}
+          {resolved && sourceResolution.sources.map((source) => (
             <button
               key={source.datasetId}
               className="qz-icon-btn"
@@ -164,7 +165,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
               {LIBRARY_NODE_GLYPH.workbook}
             </button>
           ))}
-          <button
+          {resolved && <button
             className="qz-icon-btn"
             tabIndex={inner}
             title={sourceResolution.sources.length
@@ -175,7 +176,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
             onClick={() => void remakeOriginFigure(entry.id)}
           >
             G
-          </button>
+          </button>}
           {savedPreviewSrc && (
             <button
               className="qz-icon-btn"
@@ -189,20 +190,15 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
             </button>
           )}
           {sourceResolution.unresolved.length > 0 && siblingDatasets.length > 0 && (
-            <select
-              className="qz-select"
+            <button
+              className="qz-btn qz-btn-sm qz-btn-primary qzk-origin-recover-btn"
               tabIndex={inner}
-              aria-label={`Choose source workbook for ${figureLabel(entry)}`}
-              title={`Unresolved Origin binding: ${sourceResolution.unresolved.map((item) => `${item.book}:${item.x},${item.y}`).join("; ")}`}
-              defaultValue=""
-              onChange={(event) => {
-                if (event.target.value) void openOriginFigureSource(entry.id, event.target.value, { manual: true });
-                event.currentTarget.value = "";
-              }}
+              aria-label={`Recover unresolved Origin bindings for ${figureLabel(entry)}`}
+              title={`Review ${sourceResolution.unresolved.length} unresolved Origin binding${plural(sourceResolution.unresolved.length)}`}
+              onClick={() => setShowRecovery(true)}
             >
-              <option value="" disabled>Choose source…</option>
-              {siblingDatasets.map((ds) => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
-            </select>
+              Recover…
+            </button>
           )}
         </div>
       </div>
@@ -212,6 +208,9 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
           src={savedPreviewSrc}
           onClose={() => setShowSavedPreview(false)}
         />
+      )}
+      {showRecovery && (
+        <OriginRecoveryWindow entry={entry} onClose={() => setShowRecovery(false)} />
       )}
     </div>
   );

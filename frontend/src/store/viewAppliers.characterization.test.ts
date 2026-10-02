@@ -839,6 +839,11 @@ describe("applyOriginFigure — cross-book overlay branch", () => {
         "xLim",
         "xScale",
         "xStep",
+        "y2AxisLabel",
+        "y2Keys",
+        "y2Lim",
+        "y2Scale",
+        "y2Step",
         "yAxisLabel",
         "yKeys",
         "yLim",
@@ -942,22 +947,29 @@ describe("applyOriginFigure — single-layer branch", () => {
       "qfitError",
       "regionShades",
       "selectedIds",
+      "seriesLabels",
+      "seriesStyles",
       "showAxisBox",
       "showGrid",
       "xAxisLabel",
       "xLim",
       "xScale",
       "xStep",
+      "y2AxisLabel",
+      "y2Keys",
+      "y2Lim",
+      "y2Scale",
+      "y2Step",
       "yAxisLabel",
       "yLim",
       "yStep",
     ]);
   });
 
-  // The fixture above carries NO decoded curve bindings, so
-  // `figureSelectionState(null)` contributes nothing. With bindings it adds
-  // the channel-selection keys — pinned separately so a sabotage that drops
-  // the selection spread cannot hide behind the binding-less case.
+  // The fixture above carries NO decoded curve bindings, so the apply restores
+  // the dataset-default channel selection. With bindings it replaces that
+  // fallback with the decoded channel selection — pinned separately so a
+  // sabotage that drops the selection spread cannot hide behind the default.
   it("a figure WITH decoded curve bindings additionally writes the channel selection", () => {
     useApp.setState({
       originFigures: [
@@ -1024,6 +1036,52 @@ describe("applyOriginFigure — single-layer branch", () => {
     expect(s.facetKey).toBeNull();
     expect(s.annotations).toEqual([]);
     expect(s.regionShades).toEqual([]);
+  });
+
+  it("leaves stale alternate render modes and secondary-axis state behind", () => {
+    useApp.setState({
+      activeId: "d2",
+      stackMode: true,
+      insetMode: true,
+      polarMode: true,
+      statMode: true,
+      groupKey: 0,
+      facetKey: 1,
+      xKey: 1,
+      yKeys: [],
+      seriesStyles: { 0: { color: "#ff00ff" } },
+      seriesLabels: { 0: "stale label" },
+      y2Keys: [0],
+      y2Lim: [-9, -8],
+      y2Scale: "log",
+      y2Step: 0.25,
+      y2AxisLabel: "stale secondary axis",
+      waterfall: 0.2,
+      waterfallDx: 0.1,
+    });
+
+    useApp.getState().applyOriginFigure("fig-single");
+
+    expect(useApp.getState()).toMatchObject({
+      stackMode: false,
+      insetMode: false,
+      polarMode: false,
+      statMode: false,
+      composition: null,
+      groupKey: null,
+      facetKey: null,
+      xKey: null,
+      yKeys: null,
+      seriesStyles: {},
+      seriesLabels: {},
+      y2Keys: null,
+      y2Lim: null,
+      y2Scale: null,
+      y2Step: null,
+      y2AxisLabel: "",
+      waterfall: 0,
+      waterfallDx: 0,
+    });
   });
 
   it("records the macro step and pushes ONE undo entry (undo-coverage audit)", () => {

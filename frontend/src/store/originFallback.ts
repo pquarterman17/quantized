@@ -24,7 +24,7 @@ export interface OriginFallbackSlice {
     datasetId?: string,
     opts?: { manual?: boolean },
   ) => Promise<void>;
-  remakeOriginFigure: (figureId: string) => Promise<void>;
+  remakeOriginFigure: (figureId: string, datasetId?: string) => Promise<void>;
 }
 
 export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginFallbackSlice {
@@ -64,20 +64,30 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
         status: `opened ${source.book}; selected ${source.columns.length} bound column${plural(source.columns.length)}`,
       });
     },
-    remakeOriginFigure: async (figureId) => {
+    remakeOriginFigure: async (figureId, requestedId) => {
       const entry = get().originFigures.find((item) => item.id === figureId);
       if (!entry) return;
       const resolution = resolveOriginFigureSources(entry, get().originFigures, get().datasets);
       // PlotSpec v1 edits one layer at a time. Resolve the whole graph family
       // above for lazy preflight/diagnostics, but seed the clicked layer's
       // curves; applyOriginFigure keeps the recovered multi-panel state live.
-      const layerResolution = resolveOriginFigureSources(entry, [entry], get().datasets);
+      const manuallySelected = requestedId
+        ? get().datasets.find((ds) => ds.id === requestedId && entry.siblingIds.includes(ds.id))
+        : undefined;
+      const manualSource = manuallySelected
+        ? resolveOriginSourceManually(entry, [entry], manuallySelected)
+        : null;
+      const layerResolution = manualSource
+        ? { sources: [manualSource], unresolved: [] }
+        : resolveOriginFigureSources(entry, [entry], get().datasets);
       if (layerResolution.sources.length === 0) {
         toast(`No decoded curve bindings; use the raw Origin hint ${entry.figure.source_hint || "unknown"}`, "info");
         return;
       }
       try {
-        await get().resolveDatasets(resolution.sources.map((source) => source.datasetId));
+        await get().resolveDatasets(
+          (manualSource ? [manualSource] : resolution.sources).map((source) => source.datasetId),
+        );
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "source book fetch failed";
         toast(`Couldn't seed Graph Builder — ${message}`, "danger");
@@ -88,7 +98,8 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
       // titles, styles, legend, annotations, regions, and layer state behind
       // the builder; the seed below supplies its editable channel wells.
       // Every lazy source is already resolved, so this is synchronous.
-      get().applyOriginFigure(figureId);
+      if (!manualSource) get().applyOriginFigure(figureId);
+      else get().setActive(manualSource.datasetId);
 
       let datasetId: string;
       let yColumns: number[];
@@ -99,7 +110,7 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
       // regardless of source-book count. Falling through to sources[0] for a
       // one-book multi-X figure would collapse every Y back onto xColumns[0]
       // and recreate the hysteresis corruption fixed by PR #38.
-      const overlayDataset = get().datasets.find(
+      const overlayDataset = manualSource ? undefined : get().datasets.find(
         (ds) => (ds.data.metadata ?? {}).origin_overlay_source === entry.id
           && (ds.data.metadata ?? {}).origin_overlay_version === ORIGIN_OVERLAY_VERSION,
       );
@@ -134,7 +145,7 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
         ) ? "line" : "scatter",
       };
       get().openGraphBuilderSeeded(spec);
-      set({ status: `opened ${entry.figure.name || "Origin graph"} layer ${entry.figure.layer ?? 1} in Graph Builder${resolution.unresolved.length ? `; ${resolution.unresolved.length} binding${plural(resolution.unresolved.length)} unresolved` : ""}` });
+      set({ status: `opened ${entry.figure.name || "Origin graph"} layer ${entry.figure.layer ?? 1} in Graph Builder${manualSource ? ` using manually chosen ${manualSource.book}` : resolution.unresolved.length ? `; ${resolution.unresolved.length} binding${plural(resolution.unresolved.length)} unresolved` : ""}` });
     },
   };
 }

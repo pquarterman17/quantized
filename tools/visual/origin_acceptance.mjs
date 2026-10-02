@@ -299,6 +299,11 @@ export const check = (name, pass, detail) => ({ name, pass: !!pass, detail: deta
  *  the exact regression this comment and its unit tests guard against. */
 export function compareFigureToState(family, representative, applied) {
   const checks = [];
+  checks.push(check(
+    "xy_render_mode",
+    !applied.polarMode && !applied.statMode && !applied.insetMode,
+    `polar=${!!applied.polarMode} stat=${!!applied.statMode} inset=${!!applied.insetMode}`,
+  ));
   const isMultiPanel = applied.stackMode && Array.isArray(applied.spatialPanels) && applied.spatialPanels.length >= 2;
   if (isMultiPanel) {
     const panels = applied.spatialPanels;
@@ -368,6 +373,8 @@ export function compareFigureToState(family, representative, applied) {
     checks.push(check("y2_range", approxEq(applied.y2Lim?.[0], upper.y_from) && approxEq(applied.y2Lim?.[1], upper.y_to)));
     checks.push(check("y2_log", applied.y2Log === upper.y_log));
     checks.push(check("y2_step", approxEq(applied.y2Step ?? null, upper.y_step ?? null)));
+    checks.push(check("stack_mode_clear", applied.stackMode === false));
+    checks.push(check("visible_samples", applied.visibleSampleCount > 0, `${applied.visibleSampleCount ?? 0} samples inside decoded axes`));
     return { mode: "doubleY", checks };
   }
   const fig = representative.figure; // single-layer, or a family that degraded to single
@@ -377,6 +384,9 @@ export function compareFigureToState(family, representative, applied) {
   checks.push(check("y_log", applied.yLog === fig.y_log));
   checks.push(check("x_step", approxEq(applied.xStep ?? null, fig.x_step ?? null)));
   checks.push(check("y_step", approxEq(applied.yStep ?? null, fig.y_step ?? null)));
+  checks.push(check("stack_mode_clear", applied.stackMode === false));
+  checks.push(check("secondary_axis_clear", applied.y2Keys == null && applied.y2Lim == null));
+  checks.push(check("visible_samples", applied.visibleSampleCount > 0, `${applied.visibleSampleCount ?? 0} samples inside decoded axes`));
   return { mode: "single", checks };
 }
 

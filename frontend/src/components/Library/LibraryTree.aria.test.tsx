@@ -292,7 +292,7 @@ describe("LibraryTree — owned-element structure", () => {
     const tree = screen.getByRole("tree");
     const graph = row("origin-figure:g1");
     expect(graph).toHaveAttribute("role", "treeitem");
-    for (const name of [/new graph window/, /source workbook Moke/, /Remake/, /saved Origin preview/, /Choose source/]) {
+    for (const name of [/new graph window/, /source workbook Moke/, /Remake/, /saved Origin preview/, /Recover unresolved Origin bindings/]) {
       expect(within(graph).getByLabelText(name)).toBeInTheDocument();
     }
     const stray = focusables(tree).filter((el) => el.closest('[role="treeitem"]') == null);

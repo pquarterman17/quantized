@@ -33,6 +33,34 @@ type SliceGet = () => AppState;
 // #52); every apply branch spreads this, so `legendStatic` costs zero lines.
 const ORIGIN_FIGURE_AXIS = { showAxisBox: true, showGrid: false, legendStatic: true };
 
+// Applying a recovered graph is a whole-view command, not a dataset switch.
+// `setActive()` deliberately preserves presentation choices when the target
+// dataset is already active, but that is dangerous here: a prior polar/stat/
+// stacked view can otherwise keep rendering instead of the recovered XY
+// graph, and stale Y2 membership can route its only curve to an old axis
+// range.  The corpus harness used to hide this real-UI bug by clearing these
+// fields before every screenshot.  Keep the reset beside the apply body so
+// every branch gets the same clean mode transition.
+const ORIGIN_FIGURE_MODE_RESET = {
+  stackMode: false,
+  insetMode: false,
+  polarMode: false,
+  statMode: false,
+  composition: null,
+  facetKey: null,
+  groupKey: null,
+  waterfall: 0,
+  waterfallDx: 0,
+};
+
+const ORIGIN_FIGURE_Y2_RESET = {
+  y2Keys: null,
+  y2Lim: null,
+  y2Scale: null,
+  y2Step: null,
+  y2AxisLabel: "",
+};
+
 /** Apply `entry` (figure `id`) to the store. Callers have already run every
  *  preflight and hold the loaded `libs`; `label` is the undo label the
  *  caller's one-edit-step wrapper uses. */
@@ -108,7 +136,8 @@ export function runOriginFigureApply(
         // `composition` itself needs no matching explicit clear here --
         // `setActive`'s `focusTransientReset()` already nulls it
         // UNCONDITIONALLY, genuine switch or not.
-        facetKey: null,
+        ...ORIGIN_FIGURE_MODE_RESET,
+        ...ORIGIN_FIGURE_Y2_RESET,
         ...ORIGIN_FIGURE_AXIS,
         xLim: [fig.x_from, fig.x_to],
         yLim: [fig.y_from, fig.y_to],
@@ -154,7 +183,7 @@ export function runOriginFigureApply(
     if (baseSel && partnerSel) {
       get().setActive(entry.datasetId);
       set({
-        facetKey: null, // F4.4 review L1 -- see the overlay branch's doc above
+        ...ORIGIN_FIGURE_MODE_RESET,
         ...ORIGIN_FIGURE_AXIS,
         xLim: [lower.figure.x_from, lower.figure.x_to],
         yLim: [lower.figure.y_from, lower.figure.y_to],
@@ -218,9 +247,10 @@ export function runOriginFigureApply(
       // showAxisBox is the SINGLETON flag `useMultiPanelStage` reads for
       // every spatial panel (item 4) — Origin layers are boxed by default.
       set({
+        ...ORIGIN_FIGURE_MODE_RESET,
+        ...ORIGIN_FIGURE_Y2_RESET,
         stackMode: true,
         composition: spatialComposition(placed),
-        facetKey: null, // F4.4 review L1 -- see the overlay branch's doc above
         // #54: a fresh tiled apply starts at the app-wide default fit
         // (Preferences ▸ Plot ▸ Multi-panel fit). The per-window value then
         // persists in `.dwk`.
@@ -251,7 +281,8 @@ export function runOriginFigureApply(
   const ds = get().datasets.find((d) => d.id === entry.datasetId);
   const selection = ds ? libs.figureChannelSelection(fig, ds) : null;
   set({
-    facetKey: null, // F4.4 review L1 -- see the overlay branch's doc above
+    ...ORIGIN_FIGURE_MODE_RESET,
+    ...ORIGIN_FIGURE_Y2_RESET,
     ...ORIGIN_FIGURE_AXIS,
     xLim: [fig.x_from, fig.x_to],
     yLim: [fig.y_from, fig.y_to],

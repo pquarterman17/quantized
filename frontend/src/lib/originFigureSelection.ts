@@ -100,17 +100,18 @@ export function originLegendState(
   };
 }
 
-/** The channel-selection slice of a single-layer apply's plot state — the
- *  `xKey`/`yKeys`/style/label fields when `figureChannelSelection` resolved a
- *  selection, or `{}` (leave the default view) when it didn't. Extracted from
- *  `applyOriginFigure`'s single-layer branch so the store stays under its
- *  size ratchet; pure and independently testable. */
+/** The channel-selection slice of a single-layer apply's plot state. When
+ *  decoded bindings are absent, explicitly restore the dataset-default
+ *  channel view. `setActive()` only derives that default on a genuine dataset
+ *  switch; without this explicit fallback, applying a binding-less graph to
+ *  the dataset already on Stage inherits stale/empty channel picks and can
+ *  produce a blank plot. */
 export function figureSelectionState(
   sel: ReturnType<typeof figureChannelSelection>,
-): { xKey?: number | null; yKeys?: number[]; seriesStyles?: Record<number, SeriesStyle>; seriesLabels?: Record<number, string> } {
+): { xKey: number | null; yKeys: number[] | null; seriesStyles: Record<number, SeriesStyle>; seriesLabels: Record<number, string> } {
   return sel
     ? { xKey: sel.xKey, yKeys: sel.yKeys, seriesStyles: sel.styles, seriesLabels: sel.labels }
-    : {};
+    : { xKey: null, yKeys: null, seriesStyles: {}, seriesLabels: {} };
 }
 /** Channel selection for a figure's decoded curves on its resolved dataset:
  *  maps each curve's Origin column letter through the dataset's

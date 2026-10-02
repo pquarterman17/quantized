@@ -1257,7 +1257,9 @@ describe("figureSelectionState (decode #52 — store-ratchet extraction)", () =>
       seriesStyles: { 1: { color: "#111" } },
       seriesLabels: { 1: "L" },
     });
-    expect(figureSelectionState(null)).toEqual({});
+    expect(figureSelectionState(null)).toEqual({
+      xKey: null, yKeys: null, seriesStyles: {}, seriesLabels: {},
+    });
   });
 });
 
