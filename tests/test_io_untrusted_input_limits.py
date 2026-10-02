@@ -12,6 +12,7 @@ harmless on code that has no limit, so the test fails on the assertion.
 
 from __future__ import annotations
 
+import re
 import struct
 import tracemalloc
 import zipfile
@@ -169,6 +170,86 @@ def test_xlsx_refuses_sparse_cell_bomb(tmp_path: Path, monkeypatch: pytest.Monke
     ws["A1"], ws["A2"] = 1.0, 2.0
     ws.cell(row=1000, column=500, value=3.0)  # 500k cells once padded
     path = tmp_path / "sparse.xlsx"
+    wb.save(path)
+    with pytest.raises(ValueError, match="cells"):
+        import_excel(path)
+
+
+def _xlsx_with_dimension(tmp_path: Path, rows: int, ref: str) -> Path:
+    """A ``rows`` x 2 numeric sheet whose ``<dimension>`` tag says ``ref``."""
+    openpyxl = pytest.importorskip("openpyxl")
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["x", "y"])
+    for i in range(rows):
+        ws.append([float(i), float(2 * i)])
+    plain = tmp_path / "plain.xlsx"
+    wb.save(plain)
+    path = tmp_path / "tagged.xlsx"
+    with zipfile.ZipFile(plain) as src, zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as dst:
+        for info in src.infolist():
+            data = src.read(info)
+            if info.filename == "xl/worksheets/sheet1.xml":
+                tag = f'<dimension ref="{ref}"'.encode()
+                data, n = re.subn(rb'<dimension ref="[^"]*"', tag, data)
+                assert n == 1
+            dst.writestr(info.filename, data)
+    return path
+
+
+def test_xlsx_wrong_dimension_tag_does_not_count_against_the_cap(tmp_path: Path) -> None:
+    """openpyxl pads every row to the tag's width, so ``A1:XFD...`` made a
+    2-column sheet count 16,384 cells per row and refused it past ~2,048 rows."""
+    path = _xlsx_with_dimension(tmp_path, 5000, "A1:XFD5001")
+    ds = import_excel(path)
+    assert ds.values.shape == (5000, 1)
+    np.testing.assert_array_equal(ds.time, np.arange(5000.0))
+    np.testing.assert_array_equal(ds.values[:, 0], 2 * np.arange(5000.0))
+
+
+def test_xlsx_refuses_a_huge_real_grid(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    openpyxl = pytest.importorskip("openpyxl")
+    monkeypatch.setattr(excel, "MAX_CELLS", 100_000, raising=False)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    for i in range(400):
+        ws.append([float(i + j) for j in range(300)])
+    path = tmp_path / "grid.xlsx"
+    wb.save(path)
+    with pytest.raises(ValueError, match="cells"):
+        import_excel(path)
+
+
+def test_xlsx_refuses_a_distant_row(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Missing rows before a far-down cell are yielded one by one; each counts."""
+    openpyxl = pytest.importorskip("openpyxl")
+    monkeypatch.setattr(excel, "MAX_CELLS", 100_000, raising=False)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws["A1"], ws["A2"] = 1.0, 2.0
+    ws["A200000"] = 3.0
+    path = tmp_path / "tall.xlsx"
+    wb.save(path)
+    with pytest.raises(ValueError, match="cells"):
+        import_excel(path)
+
+
+def test_xlsx_cap_counts_far_empty_styled_cells_as_scanned(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A styled empty cell far right makes openpyxl build the whole row; the
+    trimmed row is small, but the work to read it still counts."""
+    openpyxl = pytest.importorskip("openpyxl")
+    from openpyxl.styles import Font
+
+    monkeypatch.setattr(excel, "MAX_CELLS", 100_000, raising=False)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    for r in range(1, 301):
+        ws.cell(row=r, column=1, value=float(r))
+        ws.cell(row=r, column=2, value=float(r))
+        ws.cell(row=r, column=500).font = Font(bold=True)
+    path = tmp_path / "styled.xlsx"
     wb.save(path)
     with pytest.raises(ValueError, match="cells"):
         import_excel(path)

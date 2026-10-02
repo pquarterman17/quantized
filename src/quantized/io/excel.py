@@ -109,14 +109,26 @@ def _check_parts(path: Path) -> None:
 
 
 def _read_grid(worksheet: Any, name: str) -> list[list[Any]]:
-    """The sheet's cells as rows, refusing once more than ``MAX_CELLS`` arrive."""
+    """The sheet's cells as rows with trailing blanks trimmed.
+
+    The ``<dimension>`` tag is ignored: openpyxl pads every row to its width,
+    and a wrong ``A1:XFD...`` tag would refuse a 2-column sheet past ~2,048
+    rows. Two counts stay under ``MAX_CELLS``: the cells read (each row at
+    least one, so a run of missing rows counts), and rows x widest trimmed
+    row, the grid the import pads them to."""
+    worksheet.reset_dimensions()
     grid: list[list[Any]] = []
-    cells = 0
+    scanned = 0
+    width = 1
     for row in worksheet.iter_rows(values_only=True):
-        cells += len(row)
-        if cells > MAX_CELLS:
+        scanned += max(1, len(row))
+        end = len(row)
+        while end and row[end - 1] is None:
+            end -= 1
+        width = max(width, end)
+        if scanned > MAX_CELLS or (len(grid) + 1) * width > MAX_CELLS:
             raise ValueError(f"{name}: sheet spans more than {MAX_CELLS} cells")
-        grid.append(list(row))
+        grid.append(list(row[:end]))
     return grid
 
 
