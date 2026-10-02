@@ -420,7 +420,7 @@ export function breakCompositionFromData(
 ): Composition | null {
   if (!breaks?.length || !data) return null;
   const panels = breakPayloads(data, xKey, yKeys, breaks);
-  return panels.length >= 2 ? breakComposition(panels) : null;
+  return panels.length >= 2 ? breakComposition(panels, { breaks, xKey, yKeys }) : null;
 }
 
 /** The arrangement a SAVED figure shows on screen when the live render cache
