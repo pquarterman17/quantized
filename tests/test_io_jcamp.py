@@ -89,7 +89,7 @@ def test_import_fix_reconstructs_x_and_scales_y() -> None:
     assert_allclose(ds.time, np.linspace(100.0, 106.0, 7))
     assert_allclose(ds.values[:, 0], np.array([10, 12, 15, 15, 15, 13, 10]) * 0.5)
     assert ds.labels == ("Transmittance",)
-    assert ds.metadata["x_column_unit"] == "1/CM"
+    assert ds.metadata["x_column_unit"] == "cm^-1"
     assert ds.metadata["data_form"] == "XYDATA"
 
 
@@ -201,7 +201,7 @@ def test_link_finds_data_behind_structure_block() -> None:
     # The data block's own labels win over the LINK envelope's.
     assert ds.metadata["title"] == "NMR data block"
     assert ds.metadata["data_type"] == "NMR PEAK ASSIGNMENTS"
-    assert ds.metadata["x_column_unit"] == "PPM"
+    assert ds.metadata["x_column_unit"] == "ppm"
     assert ds.metadata["data_form"] == "PEAKASSIGNMENTS"
     assert ds.metadata["peak_assignments"] == ["7", "6", "2"]
     assert ds.metadata["extra_blocks"] == 2
@@ -230,5 +230,30 @@ def test_real_isas_cdx_link_file(corpus_dir: Path) -> None:
     assert_allclose(ds.time[0], 27.0)
     assert_allclose(ds.time[-1], 218.4)
     assert ds.metadata["data_type"] == "NMR PEAK ASSIGNMENTS"
-    assert ds.metadata["x_column_unit"] == "PPM"
+    assert ds.metadata["x_column_unit"] == "ppm"
     assert len(ds.metadata["peak_assignments"]) == 16
+
+
+@pytest.mark.parametrize(
+    ("data_type", "xunits", "name", "unit"),
+    [
+        ("INFRARED SPECTRUM", "1/CM", "Wavenumber", "cm^-1"),
+        ("RAMAN SPECTRUM", "1/CM", "Raman shift", "cm^-1"),
+        ("UV/VIS SPECTRUM", "NANOMETERS", "Wavelength", "nm"),
+        ("INFRARED SPECTRUM", "MICROMETERS", "Wavelength", "um"),
+        ("NMR SPECTRUM", "HZ", "Frequency", "Hz"),
+        ("NMR SPECTRUM", "PPM", "Chemical shift", "ppm"),
+        ("MASS SPECTRUM", "M/Z", "m/z", ""),
+        ("ION MOBILITY SPECTRUM", "MILLISECONDS", "Time", "ms"),
+        ("CHROMATOGRAM", "SECONDS", "Time", "s"),
+        ("ODD SPECTRUM", "FURLONGS", "X", "FURLONGS"),
+    ],
+)
+def test_x_axis_is_named_by_its_quantity(data_type: str, xunits: str, name: str, unit: str) -> None:
+    # The x title was "<DATA TYPE> (<XUNITS>)", e.g. "INFRARED SPECTRUM (1/CM)".
+    text = _FIX.replace("INFRARED SPECTRUM", data_type)
+    text = text.replace("##XUNITS=1/CM", f"##XUNITS={xunits}")
+    ds = import_jcamp_from_text(text)
+    assert ds.metadata["x_column_name"] == name
+    assert ds.metadata["x_column_unit"] == unit
+    assert ds.metadata["data_type"] == data_type

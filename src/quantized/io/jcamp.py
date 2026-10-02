@@ -167,6 +167,28 @@ def _decode_assignments(
     return np.asarray(xs, dtype=float), np.asarray(ys, dtype=float), assignments
 
 
+# ##XUNITS -> (axis quantity, unit). The x title used to be the DATA TYPE
+# ("INFRARED SPECTRUM (1/CM)"); units are spelled so calc.unit_convert parses them.
+_X_AXES: dict[str, tuple[str, str]] = {
+    "1/CM": ("Wavenumber", "cm^-1"),
+    "NANOMETERS": ("Wavelength", "nm"),
+    "MICROMETERS": ("Wavelength", "um"),
+    "HZ": ("Frequency", "Hz"),
+    "PPM": ("Chemical shift", "ppm"),
+    "M/Z": ("m/z", ""),
+    "SECONDS": ("Time", "s"),
+    "MILLISECONDS": ("Time", "ms"),
+    "MINUTES": ("Time", "min"),
+}
+
+
+def _x_axis(xunits: str, data_type: str) -> tuple[str, str]:
+    name, unit = _X_AXES.get(xunits.strip().upper(), ("X", xunits))
+    if name == "Wavenumber" and "RAMAN" in data_type.upper():
+        name = "Raman shift"
+    return name, unit
+
+
 def import_jcamp(filepath: str | Path) -> DataStruct:
     """Import a JCAMP-DX ``.jdx``/``.dx`` spectrum (one channel).
 
@@ -218,6 +240,7 @@ def import_jcamp(filepath: str | Path) -> DataStruct:
 
     xunits = header.get("XUNITS", "")
     yunits = header.get("YUNITS", "") or "Intensity"
+    x_name, x_unit = _x_axis(xunits, header.get("DATATYPE", ""))
     metadata: dict[str, Any] = {
         "source": str(path),
         "parser_name": "import_jcamp",
@@ -225,8 +248,9 @@ def import_jcamp(filepath: str | Path) -> DataStruct:
         "data_type": header.get("DATATYPE", ""),
         "jcamp_version": header.get("JCAMPDX", ""),
         "data_form": data_kind,
-        "x_column_name": header.get("DATATYPE", "") or "X",
-        "x_column_unit": xunits,
+        "x_column_name": x_name,
+        "x_column_unit": x_unit,
+        "xunits": xunits,
         "num_points": int(len(y)),
     }
     if extra_blocks:
