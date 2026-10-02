@@ -56,7 +56,7 @@ from numpy.typing import NDArray
 
 from quantized.datastruct import DataStruct
 
-__all__ = ["import_opus", "is_opus"]
+__all__ = ["OPUS_MAGIC", "import_opus", "is_numbered_opus", "is_opus"]
 
 _HEADER_LEN = 504
 _DIR_START = 24
@@ -88,9 +88,21 @@ _AB_SERIES_TYPE = 15  # data_type for the final absorbance/transmittance block
 
 _PRIMARY_PRIORITY = ("AB", "ScSm", "IgSm", "PhSm", "PwSm", "ScRf", "IgRf", "PhRf", "PwRf")
 
-_DXU_UNITS = {
-    "WN": "Wavenumber (cm-1)", "MI": "Minutes", "PNT": "Data Points", "WL": "Wavelength (nm)",
+# DXU -> (x quantity, unit), units spelled so calc.unit_convert parses them.
+# OPUS's own codes: WN wavenumber, MI micrometres, LGW log wavenumber, MIN
+# minutes, PNT points (MI used to read as "Minutes"; MIN is the time code).
+_DXU_AXES: dict[str, tuple[str, str]] = {
+    "WN": ("Wavenumber", "cm^-1"),
+    "MI": ("Wavelength", "um"),
+    "LGW": ("log Wavenumber", ""),
+    "MIN": ("Time", "min"),
+    "PNT": ("Data points", ""),
+    "WL": ("Wavelength", "nm"),
 }
+
+#: First four bytes of every OPUS file (what lets a numbered ``sample.0``,
+#: OPUS's own naming, be told apart from other numbered files).
+OPUS_MAGIC = b"\n\n\xfe\xfe"
 
 
 def _block_name(data_type: int, channel_type: int, text_type: int) -> tuple[str, str] | None:
@@ -168,6 +180,16 @@ def is_opus(path: str | Path) -> bool:
     return len(_parse_directory(raw[:_HEADER_LEN], len(raw))) > 0
 
 
+def is_numbered_opus(path: str | Path) -> bool:
+    """Sniff a numbered-extension file (``sample.0``): OPUS magic + directory."""
+    try:
+        with Path(path).open("rb") as fh:
+            head = fh.read(_HEADER_LEN)
+    except OSError:
+        return False
+    return head[:4] == OPUS_MAGIC and is_opus(path)
+
+
 def import_opus(filepath: str | Path) -> DataStruct:
     """Import a Bruker OPUS binary spectrum into a DataStruct."""
     path = Path(filepath)
@@ -205,11 +227,15 @@ def import_opus(filepath: str | Path) -> DataStruct:
 
     y = blocks[primary]
     params = blocks.get(f"{primary} Data Parameter", {})
+    declared = params.get("NPT")
+    if isinstance(declared, int) and 0 < declared < len(y):
+        y = y[:declared]  # the chunk is padded past NPT; FXV..LXV spans NPT points
     npt = len(y)
     fxv = float(params.get("FXV", 0.0))
     lxv = float(params.get("LXV", float(npt - 1)))
     x = np.linspace(fxv, lxv, npt) if npt > 1 else np.array([fxv])
     dxu = str(params.get("DXU", ""))
+    x_name, x_unit = _DXU_AXES.get(dxu, ("Wavenumber", "cm^-1") if not dxu else ("X", dxu))
 
     y_label = "Absorbance" if primary == "AB" else "Intensity"
     param_blocks = {
@@ -222,8 +248,9 @@ def import_opus(filepath: str | Path) -> DataStruct:
         "source": str(path),
         "parser_name": "import_opus",
         "primary_block": primary,
-        "x_column_name": _DXU_UNITS.get(dxu, dxu or "Wavenumber (cm-1)"),
-        "x_column_unit": dxu,
+        "x_column_name": x_name,
+        "x_column_unit": x_unit,
+        "dxu": dxu,
         "blocks_found": sorted(blocks.keys()),
         "parameters": param_blocks,
         "text": text_blocks,

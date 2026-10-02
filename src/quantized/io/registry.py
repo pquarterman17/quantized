@@ -28,7 +28,7 @@ from quantized.io.jcamp import import_jcamp
 from quantized.io.lakeshore import import_lake_shore, is_lakeshore_file
 from quantized.io.ncnr import import_ncnr_dat, import_ncnr_pnr, import_ncnr_refl, is_ncnr_refl
 from quantized.io.netcdf import import_netcdf
-from quantized.io.opus import import_opus
+from quantized.io.opus import import_opus, is_numbered_opus
 from quantized.io.origin_project import read_origin_project
 from quantized.io.qd import import_ppms, import_qd_vsm, is_ppms_dat, is_qd_file
 from quantized.io.refl1d import import_refl1d_dat, is_refl1d_dat
@@ -282,6 +282,10 @@ def resolve_parser(path: Path) -> Parser:
     for sniff, parser in _SNIFFERS.get(ext, []):
         if sniff(path):
             return parser
+    # OPUS names its files sample.0, sample.1, ...: any all-digit extension,
+    # claimed only by the OPUS magic bytes (Bruker AFM .000 files share the form).
+    if ext[1:].isdigit() and is_numbered_opus(path):
+        return import_opus
     raise ValueError(f"no parser registered for '{path.name}' (extension '{ext}')")
 
 
