@@ -9,6 +9,8 @@
 import { type RefObject, useMemo } from "react";
 import type uPlot from "uplot";
 
+import { fixedLim, type HalfLim } from "../../lib/axisLim";
+import { parseLimFields } from "../../lib/axisLimFields";
 import { drawnSeriesStyle } from "../../lib/drawnSeriesStyle";
 import { fullPlottedX } from "../../lib/fitselectionActions";
 import type { PlotPayload } from "../../lib/plotdata";
@@ -144,23 +146,28 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
         if (v) st.setSeriesLabel(channel, String(v.label));
       });
     };
-    // Set-limits dialog seeded from the current manual range or the live scale.
+    // Set-limits dialog seeded from the current manual range or, with none, the
+    // live scale. A blank side is auto for that side (half-open, lib/axisLim.ts):
+    // shown blank, saved as null. Text fields, as a blank number field reads 0.
     const editLimits = (
       scaleKey: string,
-      cur: readonly [number | null, number | null] | null, // a null side prefills from the live scale
-      setter: (lim: [number, number] | null) => void,
+      cur: HalfLim | null,
+      setter: (lim: HalfLim | null) => void,
     ) => {
       const sc = plotRef.current?.scales?.[scaleKey];
-      const min = cur?.[0] ?? sc?.min ?? 0;
-      const max = cur?.[1] ?? sc?.max ?? 1;
+      const side = (i: 0 | 1) => String((cur ? cur[i] : i ? sc?.max : sc?.min) ?? (cur ? "" : i));
+      // A descending committed pair is a deliberately reversed axis: keep its order.
+      const reversed = !!fixedLim(cur) && cur![0]! > cur![1]!;
       void askParams("Set axis limits", [
-        { key: "min", label: "Min", type: "number", default: min },
-        { key: "max", label: "Max", type: "number", default: max },
+        { key: "min", label: "Min", type: "text", default: side(0), hint: "Blank = auto" },
+        { key: "max", label: "Max", type: "text", default: side(1), hint: "Blank = auto" },
       ]).then((v) => {
         if (!v) return;
-        const lo = Number(v.min);
-        const hi = Number(v.max);
-        if (Number.isFinite(lo) && Number.isFinite(hi) && lo !== hi) setter([Math.min(lo, hi), Math.max(lo, hi)]);
+        const [a, b] = [String(v.min), String(v.max)];
+        const asc = parseLimFields(a, b);
+        if (asc !== undefined) return setter(asc);
+        const swapped = parseLimFields(b, a); // typed high -> low
+        if (swapped) setter(reversed ? [swapped[1], swapped[0]] : swapped);
       });
     };
     const y2ScaleEff = st.y2Scale ?? st.yScale;
@@ -235,7 +242,8 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       autoscaleY2: () => st.setY2Lim(null),
       limitsX: () => editLimits("x", st.xLim, st.setXLim),
       limitsY: () => editLimits("y", st.yLim, st.setYLim),
-      limitsY2: () => editLimits("y2", st.y2Lim, st.setY2Lim),
+      // y2 has no half-open limit: one blank side leaves it unchanged.
+      limitsY2: () => editLimits("y2", st.y2Lim, (lim) => (!lim || fixedLim(lim)) && st.setY2Lim(fixedLim(lim))),
       setShowGrid: st.setShowGrid,
       setShowLegend: st.setShowLegend,
       setLegendPos: (pos) => st.setLegendPos(pos),
