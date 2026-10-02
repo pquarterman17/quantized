@@ -53,8 +53,8 @@ function channelHasFiniteData(ds: Dataset, channel: number): boolean {
   // preflight resolves it. Absence from that preview is unknown, not proof
   // that the full saved column is empty.
   if (ds.pending) return true;
-  const values = channel < 0 ? ds.data.time : ds.data.values.map((row) => row[channel]);
-  return values.some(Number.isFinite);
+  // No column copy: this runs for every curve on every Library row render.
+  return channel < 0 ? ds.data.time.some(Number.isFinite) : ds.data.values.some((row) => Number.isFinite(row[channel]));
 }
 
 /** Resolve raw curve letters against a workbook the user explicitly chose.

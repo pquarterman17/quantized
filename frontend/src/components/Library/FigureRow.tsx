@@ -166,7 +166,9 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
               {LIBRARY_NODE_GLYPH.workbook}
             </button>
           ))}
-          {resolved && <button
+          {/* Unresolved with nothing to recover (no decoded bindings): G stays,
+              so its toast still surfaces the raw Origin source hint. */}
+          {(resolved || sourceResolution.unresolved.length === 0) && <button
             className="qz-icon-btn"
             tabIndex={inner}
             title={sourceResolution.sources.length

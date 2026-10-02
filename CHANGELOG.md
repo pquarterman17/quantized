@@ -6,6 +6,27 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Added
+
+- **SIMS:** direct depth-axis rescaling (multiply or divide x, then add an
+  offset), bound to the x unit it was made for. Batch processing applies the
+  same settings to several profiles; every profile is checked first and any
+  warnings are reviewed once before anything is created.
+- **Origin:** a "Recover…" window for graphs whose saved curves could not be
+  matched to an imported workbook — inspect a compatible workbook's columns
+  or rebuild an editable plot from it.
+
+### Changed
+
+- Log axes on automatic number format label only their decades (1, 10, 10²…).
+- Switching a plot window to another dataset now clears hand-typed axis
+  titles, so the new data's own axis names show instead of the old ones.
+
+### Fixed
+
+- Applying recovered Origin graphs one after another no longer carries the
+  previous graph's stacked, polar, grouped or second-axis state into the next.
+
 ## [0.28.0] - 2026-10-02
 
 A **minor** release: the 50 pull requests since `v0.27.0` lock the

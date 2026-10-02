@@ -193,11 +193,11 @@ export function figureChannelSelection(
     if (!yHasData) continue; // decoded-but-empty formula/result column — never produce a blank plot
     const requestedX = curve.x && curve.x !== xLetter ? letters.indexOf(curve.x) : -1;
     if (curve.x && curve.x !== xLetter && requestedX < 0) continue;
-    const xValues = requestedX >= 0
-      ? ds.data.values.map((row) => row[requestedX])
-      : ds.data.time;
     const xCellsExist = requestedX < 0 || ds.data.values.some((row) => requestedX < row.length);
-    if (requireMaterializedData && xCellsExist && !xValues.some(Number.isFinite)) continue;
+    const xHasData = requestedX >= 0
+      ? ds.data.values.some((row) => Number.isFinite(row[requestedX]))
+      : ds.data.time.some(Number.isFinite);
+    if (requireMaterializedData && xCellsExist && !xHasData) continue;
     if (!yKeys.includes(yIdx)) yKeys.push(yIdx);
     const st = originCurveSeriesStyle(curve);
     if (st) styles[yIdx] = st; // line/scatter from the decoded .opju curve record

@@ -446,6 +446,7 @@ describe("facetByColumn — the facet-partition applier", () => {
       "seriesLabels",
       "seriesStyles",
       "stackMode",
+      "xAxisLabel",
       "xLim",
       "xStep",
       "y2AxisLabel",
@@ -453,6 +454,7 @@ describe("facetByColumn — the facet-partition applier", () => {
       "y2Lim",
       "y2Scale",
       "y2Step",
+      "yAxisLabel",
       "yLim",
       "yStep",
     ]);
@@ -561,6 +563,7 @@ describe("breakAtGaps — the x-break applier", () => {
       "selectedIds",
       "seriesLabels",
       "seriesStyles",
+      "xAxisLabel",
       "xLim",
       "xStep",
       "y2AxisLabel",
@@ -568,6 +571,7 @@ describe("breakAtGaps — the x-break applier", () => {
       "y2Lim",
       "y2Scale",
       "y2Step",
+      "yAxisLabel",
       "yLim",
       "yStep",
     ]);
@@ -1212,6 +1216,7 @@ describe("applyOriginFigure — spatial multi-panel branch", () => {
       "showAxisBox",
       "showGrid",
       "stackMode",
+      "xAxisLabel",
       "xLim",
       "xStep",
       "y2AxisLabel",
@@ -1219,6 +1224,7 @@ describe("applyOriginFigure — spatial multi-panel branch", () => {
       "y2Lim",
       "y2Scale",
       "y2Step",
+      "yAxisLabel",
       "yLim",
       "yStep",
     ]);

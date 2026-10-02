@@ -846,7 +846,9 @@ const TS_MODULE_PINS: Record<string, number> = {
   // can re-resolve a LIVE instance's paint through the code a rebuild runs.
   // 1330 -> 1279 (2026-10-01): fullXExtents moved to lib/uplotXRange.ts and
   // fullYExtents to lib/uplotErrorRange.ts (error-bar autoscale).
-  "/lib/uplotOpts.ts": 1279,
+  // 1279 -> 1269 (2026-10-02): log-axis tick labels (decade anchors + the
+  // major-tick filter) moved to lib/logTicks.ts.
+  "/lib/uplotOpts.ts": 1269,
   "/lib/uplotOverlays.ts": 1175,
   // 1090 -> 1040 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR A1): the Reductions
   // wire types (WilliamsonHallResult/FftThicknessResult/SuperlatticeResult/

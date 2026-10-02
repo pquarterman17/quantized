@@ -67,6 +67,15 @@ describe("FigureRow — PR C additions", () => {
     expect(useApp.getState().workbookLastChild).toEqual({});
   });
 
+  it("an unresolved graph with nothing to recover still shows its raw Origin source hint", () => {
+    const bare = { ...entry("g2", null), figure: { ...entry("g2", null).figure, source_hint: "Book7" } };
+    render(<FigureRow entry={bare} />);
+    expect(screen.queryByRole("button", { name: /Recover unresolved Origin bindings/ })).toBeNull();
+    const remake = screen.getByRole("button", { name: "Remake in Graph Builder" });
+    expect(remake).toBeDisabled();
+    expect(remake).toHaveAttribute("title", "No decoded bindings; Origin hint: Book7");
+  });
+
   it("a resolved dataset with no workbookId records nothing", () => {
     useApp.setState({ datasets: [ds("a")] }); // no workbookId this time
     render(<FigureRow entry={entry("g1", "a")} />);
