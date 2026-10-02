@@ -24,6 +24,7 @@ from quantized.calc.figure_decor import (
     _validate_region_shades,
 )
 from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_scale import drawable_lim
 from quantized.calc.figure_shapes import _apply_shapes, _validate_shapes
 
 __all__ = ["_apply_overrides", "_validate_overrides", "apply_axis_shape_overrides", "legend_kwargs"]
@@ -100,8 +101,12 @@ def apply_axis_shape_overrides(
         lim = ov.get(key)
         if lim is not None:
             lo, hi = lim
-            lo_f = None if lo is None else float(lo)
-            hi_f = None if hi is None else float(hi)
+            # A side <= 0 on a log or reciprocal axis is auto (drawable_lim).
+            lo_f, hi_f = drawable_lim(
+                ax, key[0], None if lo is None else float(lo), None if hi is None else float(hi)
+            )
+            if lo_f is None and hi_f is None:
+                continue
             setter = ax.set_xlim if key == "x_lim" else ax.set_ylim
             if (lo_f is None) != (hi_f is None):
                 # Half-open (a blank GUI field = auto for that side): the

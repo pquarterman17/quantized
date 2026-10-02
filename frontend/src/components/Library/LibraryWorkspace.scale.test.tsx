@@ -243,12 +243,13 @@ describe("LibraryWorkspace — E-c3 large-Library virtualization", () => {
 
     section.scrollTop = 24000; // the focused tile unmounts with its window
     fireEvent.scroll(section);
+    // Wait on the END state (tile gone AND focus rescued), not the unmount alone.
     await waitFor(() => {
       expect(document.querySelector('[data-library-tile="worksheet:d0"]')).toBeNull();
+      expect(document.activeElement).not.toBe(document.body); // the grid took the orphaned focus
+      expect((document.activeElement as HTMLElement).hasAttribute("data-scroll-out-focus")).toBe(true);
     });
     const holder = document.activeElement as HTMLElement;
-    expect(holder).not.toBe(document.body); // the grid took the orphaned focus
-    expect(holder.hasAttribute("data-scroll-out-focus")).toBe(true);
 
     fireEvent.keyDown(holder, { key: "Delete" });
     expect(useApp.getState().datasets.some((d) => d.id === "d5")).toBe(true); // NOT removed

@@ -163,11 +163,13 @@ describe("LibraryDetails — large-Library virtualization", () => {
     // NO keyboard interaction: the window moves under the focused row.
     fireEvent.scroll(panel, { target: { scrollTop: 40000 } });
 
+    // Wait on the END state (row gone AND focus rescued): the window update and
+    // the rescue effect both land after a frame, not with the unmount.
     await waitFor(() => {
       expect(document.querySelector(`[data-lib-row="${focusedKey}"]`)).toBeNull();
+      expect(document.activeElement).not.toBe(document.body);
+      expect(panel.contains(document.activeElement)).toBe(true);
     });
-    expect(document.activeElement).not.toBe(document.body);
-    expect(panel.contains(document.activeElement)).toBe(true);
 
     // lib/focusGuard.ts's data-loss path: a focused plain container is not an
     // "editing target", so the container must CONSUME Delete itself rather

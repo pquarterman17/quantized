@@ -43,9 +43,11 @@
 //     `composition` prop below — this file never calls the hook itself, so
 //     the O(rows) facetPayloads scan the fallback can trigger never runs
 //     twice for the one arrangement actually on screen.
-//  4) Paneled x-breaks (gap #21 LAST residual): `store.breakPanels`, set by
-//     the `breakAtGaps` action, splits ONE series at large x-gaps
-//     (`lib/facet.suggestBreaks` or an explicit override) into adjacent
+//  4) Paneled x-breaks (gap #21 LAST residual): a break `composition`, set by
+//     the `breakAtGaps` action (which also commits its ranges to the
+//     figure's `plot.axisBreaks.x`, the durable source the export and a
+//     reopen use) or rebuilt from those saved ranges, splits ONE series at
+//     large x-gaps (`lib/facet.suggestBreaks` or an explicit override) into adjacent
 //     panels laid out in a single row (`lib/multipanel.breakPanelWidths`),
 //     with a diagonal break-glyph seam between each pair. Unlike facet, break
 //     panels each keep their OWN local x-range but share ONE y-domain

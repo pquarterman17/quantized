@@ -67,12 +67,12 @@ export function useEffectiveComposition(active: Dataset | null): Composition | n
 /** Whether `MultiPanelStage` is what the Stage is actually rendering.
  *
  *  A break arrangement is its OWN explicit-intent gate, independent of the
- *  `stackMode` toggle (BUG-012): `breakAtGaps` turns `stackMode` on with the
- *  same gesture that installs its composition, but a figure whose break was
- *  authored into `plot.axisBreaks.x` (the Figure Builder's breaks panel, a
- *  plot recipe) has no such toggle to restore — gating it on `stackMode`
- *  would leave the reopened figure rendering an unbroken line, which is the
- *  bug. `breakCompositionFromBreaks` already refuses anything under two
+ *  `stackMode` toggle (BUG-012): a figure whose break lives in
+ *  `plot.axisBreaks.x` (Break at gaps, the Figure Builder's breaks panel, a
+ *  plot recipe) has no toggle to restore — gating it on `stackMode` would
+ *  leave the reopened figure rendering an unbroken line, which is the bug.
+ *  `breakAtGaps` therefore leaves `stackMode` alone, so a break that row
+ *  exclusion collapses falls back to the user's own layout. `breakCompositionFromBreaks` already refuses anything under two
  *  panels, so this never mounts a one-panel "break".
  *
  *  A facet arrangement is the same kind of gate (R1, the regression matrix's

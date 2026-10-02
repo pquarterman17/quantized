@@ -57,9 +57,10 @@
 //
 // COMPOSITIONS: FACET rebuilds from `facetKey`, authored break RANGES from
 // `visual.axisBreaks`, and SPATIAL (v3 `panels`, F4.4's last half) from the
-// by-name panel capture `store/plotRecipeApply.ts` installs after focus. The
-// one remaining gap: a LIVE `breakAtGaps` writes no durable field, so a recipe
-// taken while one shows records `"break"` with empty `axisBreaks.x`.
+// by-name panel capture `store/plotRecipeApply.ts` installs after focus. A
+// LIVE `breakAtGaps` commits its gap ranges to the focused document's
+// `plot.axisBreaks.x`, so a recipe taken while one shows records them too
+// (`store/plotRecipes.test.ts`, "live Break-at-gaps").
 //
 // PERSISTENCE: `plotRecipes` lives in memory only this lane (the
 // `store/quickPlotTemplates.ts` PR-H two-commit precedent) -- `setPlotRecipes`

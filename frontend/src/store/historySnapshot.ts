@@ -99,11 +99,13 @@ export interface HistorySnapshot {
   focusedWindowId: AppState["focusedWindowId"];
   view: PlotView;
   // The live BREAK or SPATIAL arrangement only — not `composition` wholesale
-  // (a render cache, HISTORY_EXCLUDED). A facet rebuilds from `view.facetKey`;
-  // a break (`breakAtGaps`) and an Origin multi-panel apply (spatial) have no
-  // durable binding, so without this redo restored `stackMode` with no panels
-  // and any undo wiped the live arrangement. Held by reference (no copy);
-  // built from this same snapshot's datasets/view.
+  // (a render cache, HISTORY_EXCLUDED). A facet rebuilds from `view.facetKey`.
+  // An Origin multi-panel apply (spatial) has no durable binding, so without
+  // this undo/redo lost its panels. A break (`breakAtGaps`) does have one,
+  // `plot.axisBreaks.x` in `plotWindows`, but that rebuilds with the CURRENT
+  // channels; carrying the cache keeps the gesture's own channel binding
+  // (`BreakComposition.source`) across undo/redo. Held by reference (no
+  // copy); built from this same snapshot's datasets/view.
   carriedComposition: BreakComposition | SpatialComposition | null;
 }
 

@@ -19,7 +19,7 @@
 // Imported only by lazily-loaded export modules.
 
 import type { FigureSpec } from "./api/figures";
-import { breakPanelsOf, spatialPanelsOf, type Composition } from "./composition";
+import { spatialPanelsOf, type Composition } from "./composition";
 import { askConfirm } from "../store/confirmDialog";
 
 export interface ScreenOnlyView {
@@ -41,7 +41,9 @@ export function screenOnlyExportNotice(st: ScreenOnlyView, spec: FigureSpec): st
   if (st.statMode) return STAT_EXPORT_NOTICE;
   if (spec.facets) return null;
   const composition = st.composition ?? null; // a partial store snapshot may omit it
-  if (spec.overrides?.x_breaks?.length || breakPanelsOf(composition) !== null) return null;
+  // Only the WIRE's breaks count: a cached break whose rows were excluded away
+  // no longer draws on screen (`useEffectiveComposition`), so it says nothing.
+  if (spec.overrides?.x_breaks?.length) return null;
   // PlotStage's stack gate (`multiPanelShowing`): two or more series, or a spatial page.
   const series = spec.y_keys?.length ?? spec.dataset.labels.length;
   if (st.stackMode && (series >= 2 || (spatialPanelsOf(composition)?.length ?? 0) >= 2)) {

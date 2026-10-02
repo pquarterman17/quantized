@@ -84,6 +84,30 @@ def test_sniffer_accepts_synthetic(tmp_path: Path) -> None:
     assert is_bruker_brml(_make_brml(tmp_path))
 
 
+def _damage_central_directory(p: Path, how: str) -> None:
+    """Keep the end-of-central-directory record, so ``zipfile.is_zipfile``
+    still says yes, but break the central directory ``ZipFile()`` reads."""
+    data = bytearray(p.read_bytes())
+    cd = data.rfind(b"PK\x01\x02")
+    if how == "magic":
+        data[cd + 3] = 0  # "Bad magic number for central directory"
+    else:  # the UTF-8 flag on a name that is not UTF-8: UnicodeDecodeError
+        data[cd + 9] |= 0x08  # general-purpose flag bit 11 (0x0800)
+        name_len = int.from_bytes(data[cd + 28 : cd + 30], "little")
+        data[cd + 46 : cd + 46 + name_len] = b"\xff" * name_len
+    p.write_bytes(bytes(data))
+
+
+@pytest.mark.parametrize("how", ["magic", "name"])
+def test_sniffer_never_raises_on_a_damaged_central_directory(tmp_path: Path, how: str) -> None:
+    p = _make_brml(tmp_path)
+    _damage_central_directory(p, how)
+    assert zipfile.is_zipfile(p)
+    assert is_bruker_brml(p) is False
+    with pytest.raises(ValueError, match="damaged .brml archive"):
+        import_bruker_brml(p)
+
+
 @pytest.mark.realdata
 def test_fairmat_2thomega(corpus_dir: Path) -> None:
     path = corpus_dir / "bruker" / "xrd" / "FAIRmat_2thomega.brml"

@@ -303,11 +303,14 @@ describe("LibraryTree — large-Library virtualization", () => {
     // NO keyboard interaction: the window moves under the focused row.
     fireEvent.scroll(panel, { target: { scrollTop: 40000 } });
 
+    // The window update and the scroll-out focus rescue both land after a frame
+    // (frameCoalesced) and a passive effect, so wait on the END state -- row gone
+    // AND focus caught inside the tree -- not on the unmount alone.
     await waitFor(() => {
       expect(document.querySelector(`[data-ds-id="${focusedId}"]`)).toBeNull();
+      expect(document.activeElement).not.toBe(document.body);
+      expect(panel.contains(document.activeElement)).toBe(true);
     });
-    expect(document.activeElement).not.toBe(document.body);
-    expect(panel.contains(document.activeElement)).toBe(true);
 
     // lib/focusGuard.ts's data-loss path: a focused plain container is not an
     // "editing target", so the container must CONSUME Delete itself rather

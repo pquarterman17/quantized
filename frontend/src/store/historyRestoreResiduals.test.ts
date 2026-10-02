@@ -68,12 +68,17 @@ describe("break at gaps survives undo/redo", () => {
     const broken = app().composition;
     expect(breakPanelsOf(broken)).toHaveLength(2);
 
+    const savedBreaks = () => app().windowsForSave().find((w) => w.id === app().focusedWindowId)?.document?.plot.axisBreaks.x;
+    const ranges = savedBreaks();
+    expect(ranges).toHaveLength(1); // the gesture commits its gap ranges too
+
     app().undo();
     expect(app().composition).toBeNull();
-    expect(app().stackMode).toBe(false);
+    expect(savedBreaks()).toEqual([]);
 
     app().redo();
-    expect(app().stackMode).toBe(true);
+    expect(app().stackMode).toBe(false); // a break mounts without stackMode
+    expect(savedBreaks()).toEqual(ranges);
     expect(app().composition).toBe(broken);
   });
 

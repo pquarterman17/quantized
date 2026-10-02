@@ -3590,11 +3590,12 @@ describe("useApp breakAtGaps (gap #21 last residual)", () => {
     });
   });
 
-  it("auto-detects the gap, builds paneled segments, activates the dataset, and turns on stack mode", () => {
+  it("auto-detects the gap, builds paneled segments, activates the dataset, commits the ranges, and leaves stack mode alone", () => {
     useApp.getState().breakAtGaps("d1");
     const s = useApp.getState();
     expect(s.activeId).toBe("d1");
-    expect(s.stackMode).toBe(true);
+    expect(s.stackMode).toBe(false); // a break mounts on its own (multiPanelShowing)
+    expect(s.windowsForSave().find((w) => w.id === s.focusedWindowId)?.document?.plot.axisBreaks.x).toEqual([[9, 60]]);
     expect(spatialPanelsOf(s.composition)).toBeNull();
     expect(facetPanelsOf(s.composition)).toBeNull();
     expect(breakPanelsOf(s.composition)).toHaveLength(2);

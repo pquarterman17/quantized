@@ -67,7 +67,7 @@ describe("usePlotStageActions resetView with a half-open limit", () => {
     result.current.onLimCrossed("x", "log");
     const log = useApp.getState().status;
     expect(log).not.toBe(crossed);
-    expect(log).toMatch(/^X limit .*log axis.*\.$/);
+    expect(log).toMatch(/^X limit .*log or reciprocal axis.*\.$/);
     expect(log.split(". ").length).toBe(1);
   });
 

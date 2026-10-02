@@ -218,15 +218,27 @@ export function clearFocusedXBreaks(
   windows: readonly PlotWindow[],
   focusedId: string | null,
 ): PlotWindow[] {
+  return setFocusedXBreaks(windows, focusedId, []);
+}
+
+/** `clearFocusedXBreaks` with a value: the live Break-at-gaps gesture
+ *  (`store/viewAppliers.ts`) commits its gap ranges here, so the export and a
+ *  saved `.dwk` carry the break the screen shows. Clearing nothing still
+ *  returns the same array. */
+export function setFocusedXBreaks(
+  windows: readonly PlotWindow[],
+  focusedId: string | null,
+  x: readonly (readonly [number, number])[],
+): PlotWindow[] {
   let changed = false;
   const next = windows.map((window) => {
     if (window.id !== focusedId || window.kind !== "plot" || !window.document) return window;
     const breaks = window.document.plot.axisBreaks;
-    if (breaks.x.length === 0) return window;
+    if (breaks.x.length === 0 && x.length === 0) return window;
     changed = true;
     return withPlotWindowDocument(window, {
       ...window.document,
-      plot: { ...window.document.plot, axisBreaks: { ...breaks, x: [] } },
+      plot: { ...window.document.plot, axisBreaks: { ...breaks, x: x.map(([lo, hi]): [number, number] => [lo, hi]) } },
     });
   });
   return changed ? next : (windows as PlotWindow[]);
