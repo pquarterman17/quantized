@@ -47,6 +47,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { HalfLim } from "../../lib/axisLim";
 import type { ColormapName } from "../../lib/colormap";
+import { observeResizePaint } from "../../lib/frameCoalesce";
 import type { MapPayload } from "../../lib/mapdataFetch";
 import type { RsmPeak } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -136,9 +137,7 @@ export function useMapPaint({
       setHostSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
     };
     paint();
-    const ro = new ResizeObserver(paint);
-    ro.observe(host);
-    return () => ro.disconnect();
+    return observeResizePaint(host, paint);
   }, [
     hostRef,
     canvasRef,

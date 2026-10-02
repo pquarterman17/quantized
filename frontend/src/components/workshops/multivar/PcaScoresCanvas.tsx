@@ -4,6 +4,7 @@
 
 import { useEffect, useRef } from "react";
 
+import { observeResizePaint } from "../../../lib/frameCoalesce";
 import type { Accent, Theme } from "../../../store/useApp";
 import { draw, type PcaDrawData } from "./pcaScoresRender";
 
@@ -23,9 +24,7 @@ export default function PcaScoresCanvas({ data, theme, accent }: PcaScoresCanvas
     if (!host || !canvas) return;
     const paint = () => draw(canvas, host, data);
     paint();
-    const ro = new ResizeObserver(paint);
-    ro.observe(host);
-    return () => ro.disconnect();
+    return observeResizePaint(host, paint);
   }, [data, theme, accent]);
 
   return (

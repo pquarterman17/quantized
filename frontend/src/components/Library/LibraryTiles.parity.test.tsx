@@ -13,7 +13,7 @@
 // `dataTransfer` and dispatched through RTL's low-level fireEvent — the same
 // workaround FolderRow.test.tsx and LibraryDetails.parity.test.tsx use.
 
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import LibraryWorkspace from "./LibraryWorkspace";
@@ -395,7 +395,7 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
 
   const SCROLL_PAST_END = 1_000_000;
 
-  it("a drag whose SOURCE tile scrolls out of the virtualized window still completes when dropped on a folder", () => {
+  it("a drag whose SOURCE tile scrolls out of the virtualized window still completes when dropped on a folder", async () => {
     applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
     render(<LibraryWorkspace onClose={vi.fn()} />);
     expect(tileFor("folder:vf0")).not.toBeNull();
@@ -412,7 +412,7 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
         fireEvent.scroll(scroller);
       }),
     ).not.toThrow();
-    expect(tileFor("folder:vf0")).toBeNull();
+    await waitFor(() => expect(tileFor("folder:vf0")).toBeNull());
     // The drag SURVIVES the unmount — before this fix `activeDrag` would
     // already be null here, and the drop below would be refused.
     expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
@@ -446,7 +446,7 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
     expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
   });
 
-  it("an abandoned drag is NOT ended by a dragend at its (detached) source, but IS ended by a pointerdown from the SAME physical pointer that pressed last", () => {
+  it("an abandoned drag is NOT ended by a dragend at its (detached) source, but IS ended by a pointerdown from the SAME physical pointer that pressed last", async () => {
     applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
     render(<LibraryWorkspace onClose={vi.fn()} />);
 
@@ -469,7 +469,7 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
       scroller.scrollTop = SCROLL_PAST_END;
       fireEvent.scroll(scroller);
     });
-    expect(tileFor("folder:vf0")).toBeNull(); // the source tile is really gone
+    await waitFor(() => expect(tileFor("folder:vf0")).toBeNull()); // the source tile is really gone
 
     // What a real browser actually does with an abandoned drag: it fires
     // `dragend` at the SOURCE element, not at `document`. Firing it here (at
@@ -705,7 +705,7 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
   // re-snapshotted by `setActiveDrag` itself, so the Tree publish below
   // replaces the stale record rather than inheriting it. Verified to FAIL
   // against the pre-fix code (see this round's plan entry).
-  it("a press left over from an ABANDONED drag does not clear a later Tree-published drag, and its move commits", () => {
+  it("a press left over from an ABANDONED drag does not clear a later Tree-published drag, and its move commits", async () => {
     applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
     render(<LibraryWorkspace onClose={vi.fn()} />);
 
@@ -722,6 +722,7 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
       scroller.scrollTop = SCROLL_PAST_END;
       fireEvent.scroll(scroller);
     });
+    await waitFor(() => expect(tileFor("folder:vf0")).toBeNull());
     act(() => {
       fireDrag(source, "dragend", transfer(FOLDER_DND, "vf0"));
     });

@@ -33,6 +33,7 @@
 import { useCallback, useEffect, useState, type RefObject } from "react";
 
 import { computeAxisWindow } from "../../lib/gridwindow";
+import { frameCoalesced } from "../../lib/frameCoalesce";
 import { SCROLL_OUT_FOCUS_SELECTOR } from "../../lib/scrollOutFocus";
 
 export const VIRTUALIZE_ABOVE = 150;
@@ -92,7 +93,8 @@ export function useListVirtualization(
     // (a row growing/shrinking, a resize) arrive via ResizeObserver. jsdom has
     // neither real geometry nor ResizeObserver: the initial remeasure() runs
     // the deterministic-fallback path once, which is the test contract.
-    const onScroll = (): void => setScrollTop(scrollEl.scrollTop);
+    const scrollFrame = frameCoalesced(() => setScrollTop(scrollEl.scrollTop));
+    const onScroll = scrollFrame.request;
     remeasure();
     setScrollTop(scrollEl.scrollTop);
     scrollEl.addEventListener("scroll", onScroll, { passive: true });
@@ -101,6 +103,7 @@ export function useListVirtualization(
     if (rowsRef.current) observer?.observe(rowsRef.current);
     return () => {
       scrollEl.removeEventListener("scroll", onScroll);
+      scrollFrame.cancel();
       observer?.disconnect();
     };
   }, [virtualized, scrollRef, rowsRef, rowSelector]);

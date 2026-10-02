@@ -303,7 +303,9 @@ describe("LibraryTree — large-Library virtualization", () => {
     // NO keyboard interaction: the window moves under the focused row.
     fireEvent.scroll(panel, { target: { scrollTop: 40000 } });
 
-    expect(document.querySelector(`[data-ds-id="${focusedId}"]`)).toBeNull();
+    await waitFor(() => {
+      expect(document.querySelector(`[data-ds-id="${focusedId}"]`)).toBeNull();
+    });
     expect(document.activeElement).not.toBe(document.body);
     expect(panel.contains(document.activeElement)).toBe(true);
 
@@ -330,18 +332,21 @@ describe("LibraryTree — large-Library virtualization", () => {
     render(<Harness />);
     const panel = document.querySelector(".qzk-lib-tree") as HTMLElement;
     const focusedId = renderedRows()[3].getAttribute("data-ds-id")!;
-    const holdFocus = (): void => {
+    const holdFocus = async (): Promise<void> => {
       act(() => (document.querySelector(`[data-ds-id="${focusedId}"]`) as HTMLElement).focus());
       fireEvent.scroll(panel, { target: { scrollTop: 40000 } });
-      expect(document.activeElement).toBe(panel);
+      await waitFor(() => expect(document.activeElement).toBe(panel));
     };
 
-    holdFocus();
+    await holdFocus();
     expect(fireEvent.keyDown(panel, { key: "Enter" })).toBe(false);
     expect(useApp.getState().activeId).toBe(focusedId);
 
     fireEvent.scroll(panel, { target: { scrollTop: 0 } });
-    holdFocus();
+    await waitFor(() => {
+      expect(document.querySelector(`[data-ds-id="${focusedId}"]`)).not.toBeNull();
+    });
+    await holdFocus();
     expect(fireEvent.keyDown(panel, { key: "Escape" })).toBe(false);
     await waitFor(() => expect(document.activeElement?.getAttribute("data-ds-id")).toBe(focusedId));
   });
@@ -350,7 +355,7 @@ describe("LibraryTree — large-Library virtualization", () => {
   // stop is a model-level row; when a scroll unmounts it, the window's first
   // rendered row stands in (Details' `effectiveRovingKey` rule) so Tab can
   // still enter the tree, and the real roving row reclaims it on return.
-  it("a 400-item tree keeps exactly ONE tabbable treeitem through organic scrolls, with absolute aria positions", () => {
+  it("a 400-item tree keeps exactly ONE tabbable treeitem through organic scrolls, with absolute aria positions", async () => {
     seedWide(400);
     render(<Harness />);
     const panel = document.querySelector(".qzk-lib-tree") as HTMLElement;
@@ -362,7 +367,9 @@ describe("LibraryTree — large-Library virtualization", () => {
     expect(tabbable()).toEqual([focused]);
 
     fireEvent.scroll(panel, { target: { scrollTop: 6000 } });
-    expect(document.querySelector(`[data-ds-id="${focusedId}"]`)).toBeNull();
+    await waitFor(() => {
+      expect(document.querySelector(`[data-ds-id="${focusedId}"]`)).toBeNull();
+    });
     expect(tabbable()).toHaveLength(1);
     // Positions are absolute model facts, not window-relative: d{i} is sibling i+1 of 400.
     const deep = renderedRows().find((r) => r.hasAttribute("data-ds-id"))!;
@@ -370,6 +377,8 @@ describe("LibraryTree — large-Library virtualization", () => {
     expect(deep.getAttribute("aria-posinset")).toBe(String(Number(deep.getAttribute("data-ds-id")!.slice(1)) + 1));
 
     fireEvent.scroll(panel, { target: { scrollTop: 0 } });
-    expect(tabbable()).toEqual([document.querySelector(`[data-ds-id="${focusedId}"]`)]);
+    await waitFor(() => {
+      expect(tabbable()).toEqual([document.querySelector(`[data-ds-id="${focusedId}"]`)]);
+    });
   });
 });

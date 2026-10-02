@@ -37,7 +37,7 @@ export default function PlotReadouts({ tool, readout, measurement, stats }: Prop
   }
 
   if (tool === "region") {
-    return <div className="qzk-glass qzk-readout">Drag to select a background range</div>;
+    return <div className="qzk-glass qzk-readout">Drag an x-range; drag a taller box to limit y too</div>;
   }
 
   if (tool === "measure") {

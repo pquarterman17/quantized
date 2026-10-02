@@ -163,7 +163,9 @@ describe("LibraryDetails — large-Library virtualization", () => {
     // NO keyboard interaction: the window moves under the focused row.
     fireEvent.scroll(panel, { target: { scrollTop: 40000 } });
 
-    expect(document.querySelector(`[data-lib-row="${focusedKey}"]`)).toBeNull();
+    await waitFor(() => {
+      expect(document.querySelector(`[data-lib-row="${focusedKey}"]`)).toBeNull();
+    });
     expect(document.activeElement).not.toBe(document.body);
     expect(panel.contains(document.activeElement)).toBe(true);
 
