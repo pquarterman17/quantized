@@ -135,7 +135,11 @@ export function assembleOverlay(bound: OverlayBound[], figureName = ""): DataStr
         ),
       ],
       x_column_name: "A",
-      x_column_long: String((first as Record<string, unknown>).x_column_long ?? ""),
+      // The x-axis title reads `x_column_long || x_column_name`: a non-Origin
+      // source (a QD loop's "Magnetic Field") has only a name, so carry it here.
+      x_column_long: String(
+        (first as Record<string, unknown>).x_column_long || (first as Record<string, unknown>).x_column_name || "",
+      ),
       x_column_unit: String((first as Record<string, unknown>).x_column_unit ?? ""),
     },
   };

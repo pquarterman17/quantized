@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { originErrKeys, originHiddenChannels } from "./errorbars";
 import { buildSelectionOverlay } from "./originOverlay";
+import { buildColumns } from "./plotdata";
 import { buildOverlayDataset, overlayBooks, overlayCurveLabels, overlayCurveStyles } from "./originOverlayFigure";
 import type { Dataset, OriginFigure } from "./types";
 
@@ -419,5 +420,16 @@ describe("buildSelectionOverlay", () => {
     const out = buildSelectionOverlay([empty, a, b]);
     expect(out).not.toBeNull();
     expect(out!.labels).toEqual(["Sample A", "Sample B"]);
+  });
+
+  it("keeps the sources' x-axis title, not the Origin column letter", () => {
+    // Two QD VSM loops: the parser names the x column, there is no Origin long name.
+    const vsm = (id: string): Dataset => {
+      const d = plain(id, `${id}.dat`, [5, 0, -5, 0, 4], [-1, 0, 1, 0, -1]);
+      return { ...d, data: { ...d.data, metadata: { x_column_name: "Magnetic Field", x_column_unit: "Oe" } } };
+    };
+    const out = buildSelectionOverlay([vsm("a"), vsm("b")])!;
+    const payload = buildColumns(out, null, null);
+    expect([payload.xLabel, payload.xUnit]).toEqual(["Magnetic Field", "Oe"]);
   });
 });
