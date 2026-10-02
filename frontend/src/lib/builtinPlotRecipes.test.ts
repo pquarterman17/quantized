@@ -185,17 +185,18 @@ describe("reflectometry recipe resolves against real parser shapes (findings 1+2
 // rename of these constants fails HERE, at the alias list, rather than
 // silently drifting the recipe out of sync with what the parsers really emit.
 describe("reflectometry/M(H) aliases guarded against the real io/ source (findings 1+2+3)", () => {
-  const ncnrPy = readIo("ncnr.py");
+  // The .pnr/.datA parsers moved to ncnr_polarized.py (re-exported by ncnr.py).
+  const ncnrPy = readIo("ncnr_polarized.py");
   const qdPy = readIo("qd.py");
 
-  it("io/ncnr.py's polarization-cleaning table still spells the non-spin-flip/spin-flip channels this recipe aliases", () => {
+  it("io/ncnr_polarized.py's polarization-cleaning table still spells the non-spin-flip/spin-flip channels this recipe aliases", () => {
     expect(ncnrPy).toContain('("++", "pp")');
     expect(ncnrPy).toContain('("--", "mm")');
     expect(ncnrPy).toContain('("+-", "pm")');
     expect(ncnrPy).toContain('("-+", "mp")');
   });
 
-  it("io/ncnr.py's refl1d-fit cross-section label list still names 'R'", () => {
+  it("io/ncnr_polarized.py's refl1d-fit cross-section label list still names 'R'", () => {
     expect(ncnrPy).toContain('_NCNR_DAT_LABELS = ["dQ", "R", "dR", "theory", "fresnel"]');
   });
 

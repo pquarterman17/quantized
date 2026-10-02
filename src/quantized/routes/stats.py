@@ -51,7 +51,8 @@ router = APIRouter(prefix="/api/stats", tags=["stats"])
 
 
 class DescriptiveRequest(BaseModel):
-    x: list[float]
+    # null = a NaN gap (JSON has no NaN); dropped like NaN by the calc.
+    x: list[float | None]
 
 
 class RegressionRequest(BaseModel):
@@ -147,7 +148,8 @@ def _wrap(result: dict[str, Any]) -> dict[str, Any]:
 def descriptive(req: DescriptiveRequest) -> dict[str, Any]:
     """Descriptive statistics of a 1-D array (NaNs dropped)."""
     try:
-        return _wrap(descriptive_stats(np.asarray(req.x, dtype=float)))
+        x = np.asarray([np.nan if v is None else v for v in req.x], dtype=float)
+        return _wrap(descriptive_stats(x))
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

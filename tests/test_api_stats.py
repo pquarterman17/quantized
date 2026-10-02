@@ -165,6 +165,17 @@ def test_descriptive_empty_is_graceful_with_null_stats() -> None:
     assert out["mean"] is None  # NaN -> null at the wire boundary
 
 
+def test_descriptive_drops_null_gaps() -> None:
+    # A NaN gap reaches the wire as null (JSON has no NaN). The Inspector's
+    # Channel statistics card sends whole columns, so a gappy channel (one
+    # spin state of a multi-block .refl) must be summarised, not refused.
+    resp = client.post("/api/stats/descriptive", json={"x": [1, None, 3, None, 5]})
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["N"] == 3
+    assert abs(out["mean"] - 3.0) < 1e-12
+
+
 def test_mann_whitney_roundtrip() -> None:
     resp = client.post(
         "/api/stats/mann-whitney", json={"x": [1, 2, 3], "y": [4, 5, 6]}
