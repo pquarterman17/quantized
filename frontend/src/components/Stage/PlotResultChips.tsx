@@ -10,7 +10,7 @@
 import { formatMeasurement } from "../../lib/measure";
 import { fmtNum } from "../../lib/format";
 import type { FwhmResult } from "../../lib/peakwidth";
-import { formatQfitParams, GADGET_MODE_LABELS } from "../../lib/quickfit";
+import { formatQfitParams, GADGET_MODE_LABELS } from "../../lib/quickfitChip";
 import type { IntegralResult } from "../../store/useApp";
 import { Button, Select } from "../primitives";
 import type { GadgetChipState } from "./useGadgetChip";

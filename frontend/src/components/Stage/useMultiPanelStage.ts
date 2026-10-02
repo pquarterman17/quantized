@@ -33,7 +33,7 @@ import {
 } from "../../lib/composition";
 import { secondaryAxisFromPanel } from "../../lib/axisspec";
 import { buildErrorColumns } from "../../lib/errorbars";
-import { sharedXDomain, sharedYDomain } from "../../lib/facet";
+import { sharedXDomain, sharedYDomain } from "../../lib/facetDomains";
 import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
 import {
   DECIMATE_MIN_POINTS,

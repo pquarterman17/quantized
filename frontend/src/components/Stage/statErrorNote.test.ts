@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { seriesStat } from "../../lib/barlayout";
+import { seriesStat } from "../../lib/barMatrix";
 import { resolveStatMarks, type StatMarks } from "../../lib/statMarks";
 import { boxStatsClient, type StatMode } from "../../lib/statstage";
 import { drawsErrorBars, figureErrorNote } from "./statErrorNote";

@@ -32,12 +32,8 @@
 
 import type { FigureFacetSpec } from "./api/figures";
 import { buildExportStyles, toWireSeriesStyles } from "./exportStyles";
-import {
-  facetPayloads,
-  facetSliceRowIds,
-  facetSlices,
-  type FacetPanel,
-} from "./facet";
+import { facetPayloads, facetSlices, type FacetPanel } from "./facet";
+import { facetSliceRowIds } from "./facetDomains";
 import { seriesDisplayLabel } from "./seriesDisplayLabel";
 import { activeRowIndices, droppedRows, pruneToLiveDataset } from "./rowstate";
 import type { Dataset, DataStruct, SeriesStyle } from "./types";

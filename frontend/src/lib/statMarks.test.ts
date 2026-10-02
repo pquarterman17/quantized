@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { seriesStat } from "./barlayout";
+import { seriesStat } from "./barMatrix";
 import { sanitizePlotView } from "./plotview";
 import { sanitizeStatMarks } from "./plotviewSanitize";
 import {

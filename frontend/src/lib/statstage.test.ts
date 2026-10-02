@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { facetSliceRowIds, facetSlices } from "./facet";
+import { facetSlices } from "./facet";
+import { facetSliceRowIds } from "./facetDomains";
 import { deterministicJitter } from "./jitter";
 import { analysisData, analysisRowIds } from "./rowstate";
 import type { DataStruct, Dataset } from "./types";

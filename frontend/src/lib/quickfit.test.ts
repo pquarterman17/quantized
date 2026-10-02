@@ -1,13 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  firstVisiblePlottedChannel,
-  formatQfitParams,
-  GADGET_MODE_LABELS,
-  GADGET_MODES,
-  qfitSpec,
-  selectRoiRows,
-} from "./quickfit";
+import { firstVisiblePlottedChannel, GADGET_MODES, qfitSpec, selectRoiRows } from "./quickfit";
+import { formatQfitParams, GADGET_MODE_LABELS } from "./quickfitChip";
 import type { CalcResult, Dataset, DataStruct } from "./types";
 
 const DATA: DataStruct = {

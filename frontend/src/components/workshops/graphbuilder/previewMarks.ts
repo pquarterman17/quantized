@@ -31,7 +31,8 @@
 // the stage and in the export is missing in the preview too — never closed
 // up.
 
-import { facetSlices, facetSliceRowIds, type FacetSlice } from "../../../lib/facet";
+import { facetSlices, type FacetSlice } from "../../../lib/facet";
+import { facetSliceRowIds } from "../../../lib/facetDomains";
 import { specDatasetId, type PlotSpec, type SpecRender } from "../../../lib/plotspec";
 import { barLevels, groupLevels, planColor, statPlan, type StatPlan } from "../../../lib/plotEncodingStat";
 import type { StatMarksByMode } from "../../../lib/plotviewSanitize";

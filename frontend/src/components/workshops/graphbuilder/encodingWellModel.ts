@@ -11,7 +11,7 @@
 // (`ChannelRef.text`, channel -1), so no index can go stale.
 
 import { originTextColumnNames } from "../../../lib/columnmeta";
-import { facetSplitChannels } from "../../../lib/facet";
+import { facetSplitChannels } from "../../../lib/facetDomains";
 import { isEncodingFactor } from "../../../lib/plotEncoding";
 import { isStatSpec, statEncodingRefusal } from "../../../lib/plotEncodingStat";
 import type { ChannelRef, PlotSpec } from "../../../lib/plotspec";

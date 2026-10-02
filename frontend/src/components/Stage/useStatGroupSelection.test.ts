@@ -8,7 +8,8 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as categorical from "../../lib/categorical";
-import { facetSliceRowIds, facetSlices } from "../../lib/facet";
+import { facetSlices } from "../../lib/facet";
+import { facetSliceRowIds } from "../../lib/facetDomains";
 import { analysisData, analysisRowIds } from "../../lib/rowstate";
 import { boxStatsClient, resolveGroupsIndexed } from "../../lib/statstage";
 import type { DataStruct, Dataset } from "../../lib/types";

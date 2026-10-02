@@ -26,7 +26,7 @@ import { buildFileCommands, runLazy } from "./fileCommands";
 import { runExportConsolidated } from "./fileCommandsLazy";
 import { runAction } from "../store/commands";
 import { spatialComposition } from "../lib/composition";
-import { defaultPageSetup } from "../lib/pagesetup";
+import { defaultPageSetup } from "../lib/pageGeometry";
 import { usePendingOps } from "../store/pendingOps";
 import { useToasts } from "../store/toasts";
 import { useApp } from "../store/useApp";

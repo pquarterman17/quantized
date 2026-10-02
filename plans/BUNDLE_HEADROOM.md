@@ -1,6 +1,13 @@
 # Bundle headroom campaign
 
-**Current state (2026-10-01, after slice 19):** the five ROI-gadget region
+**Current state (2026-10-02, after slice 20):** five halves of eager modules
+that only lazy modules call moved out, each imported by its own path.
+Batch 25's head `7554f4c1` measured **847,223 B**, 221 B OVER the pin;
+after, **843,997 B** (**−3,226 B**). The pin was LOWERED to
+`measured + 1,000`, **847,002 → 844,997 B**, leaving **1,000 B** of
+headroom. See "Slice 20".
+
+**Previous state (2026-10-01, after slice 19):** the five ROI-gadget region
 computes load on the first debounced compute. Batch 24's head `1d88745f`
 measured **848,804 B**, 559 B OVER the pin; after, **846,002 B**
 (**−2,802 B**). The pin was LOWERED to `measured + 1,000`, **848,245 →
@@ -2725,6 +2732,105 @@ Playwright browser here).
 **Pin:** the tree started over the pin, so it could not keep "the headroom
 this tree had". It was lowered to `measured + 1,000` instead, which leaves
 1,000 B for queued work and locks in the rest of the gain.
+
+### Slice 20 — five lazy-only halves, imported by path, pin ratcheted DOWN — **DONE (2026-10-02)**
+
+**Measured net eager delta −3,226 B — pin LOWERED 847,002 → 844,997 B**
+
+Batches 22–25 had taken the tree to 847,223 B, 221 B OVER the pin. Exact
+bytes, `npm ci`, then `node_modules/.vite` wiped before every build. Rows are
+cumulative; the parent and the last row were reproduced after a second
+`npm ci`, and the eager chunk count stayed at 80 throughout:
+
+| tree | eager B | delta |
+|---|---:|---:|
+| `7554f4c1` (parent) | 847,223 | — |
+| + facet/break panel domains → `lib/facetDomains.ts` | 846,759 | **−464** |
+| + bar matrix and grouped/stacked geometry → `lib/barMatrix.ts` | 846,031 | **−728** |
+| + page geometry → `lib/pageGeometry.ts` | 845,455 | **−576** |
+| + saved-ROI `.dwk` codec → `store/roisCodec.ts` | 844,396 | **−1,059** |
+| + gadget chip labels and fit readout → `lib/quickfitChip.ts` | 843,997 | **−399** |
+
+**The brief's batch 22–25 candidates were checked first and left alone.**
+Since slice 19 the eager attribution grew +1,089 B, spread thin:
+`Toaster.tsx` +350, `lib/canvasLims.ts` +211, `useGlobalShortcuts.ts` +129,
+`store/history.ts` +93, `useEffectiveComposition.ts` +85, the rest under
+75 B each. None is worth a seam. The Toaster's focus restore runs inside the
+action button's click, so it has to be loaded by then; the most a
+first-toast load could recover is about 300 B. The shortcut guard runs on
+every keydown. The limit-note text was already trimmed by `a574e20f`. The
+break-source rebuild runs in a render memo, so a load there would draw an
+un-paneled frame first. The pack and CSV helpers (`lib/csvCell.ts`,
+`lib/desktopPackBridge.ts`) have no bytes in the eager chunks. The API
+hardening (`81828839`) changed `public/loading.*` only, which is not bundled
+JS.
+
+**How the halves were found.** A scan over the static import graph
+(TypeScript AST, type-only edges dropped) listed, for every eager module,
+the exported declarations that no eager module imports and that nothing
+inside the module calls. The five taken are the largest ones whose
+importers are all lazy and that the earlier slices did not already rule
+out. Each half is moved verbatim and imported by its own path, with the
+private helpers only it uses. The parent re-exports nothing (slices 18 and
+19). No `import()`, timing or behaviour changed, so there is no load and no
+load-failure path to test. `preload-verify` is unchanged (195 wrapped sites,
+0 violations).
+
+- **`lib/facetDomains.ts`:** `facetSliceRowIds`, `facetSplitChannels`,
+  `sharedXDomain` and `sharedYDomain`. The store's facet and break gestures
+  and the durable composition keep the rest of `lib/facet.ts`.
+- **`lib/barMatrix.ts`:** `seriesStat`, `buildBarMatrix`, `groupedBarSlots`,
+  `stackedSegments` and `stackedTotal`. The eager graph needs
+  `lib/barlayout.ts` only for the category labels. (Slice 12 listed this one
+  as ~1.0 kB.)
+- **`lib/pageGeometry.ts`:** unit conversions, `defaultPageSetup`,
+  `pageSetupFromDecoded`, `pageSizeInches`, `marginFractions`, and three
+  exports only the tests call (`fromInches`, `pageAspect`,
+  `contentRectFractions`). `lib/pagesetup.ts` keeps the model,
+  `PAGE_UNITS` and the sanitizer `lib/plotview.ts` runs, and now exports
+  `DEFAULT_PAGE_WIDTH_IN` for the half.
+- **`store/roisCodec.ts`:** `serializeRois`, `deserializeRois` and their
+  shape checks. Only `lib/workspace.ts` and `lib/workspaceSerialize.ts`
+  call them. The saving is larger than the source suggests: the attribution
+  for `store/rois.ts` fell 1,999 → 1,008 B.
+- **`lib/quickfitChip.ts`:** `GADGET_MODE_LABELS` and `formatQfitParams`,
+  which only the lazy `Stage/PlotResultChips.tsx` renders.
+
+Every half was checked against a `--sourcemap` build: none of the five
+appears in the eager chunks' `sources`.
+
+#### Guards and tests
+
+`architecture.test.ts`: the five halves are `DRAGGED_OUT` entries, because
+lazy modules import them statically. One sabotage run broke all five, each in
+a different way, and the reachability arm failed naming all five:
+`lib/facet.ts` re-exporting `./facetDomains` with `export *`,
+`lib/plotdata.ts` importing `seriesStat`, `lib/plotview.ts` importing
+`pageSizeInches`, `store/rois.ts` re-exporting `serializeRois`, and
+`store/gadget.ts` importing `GADGET_MODE_LABELS`. The tests that named the
+moved functions now import them from the new modules. Not measured in a
+browser (no Playwright browser here).
+
+#### Candidates still not taken
+
+- **More halves from the same scan**, upper bounds in source characters,
+  roughly half that minified: `lib/columnmeta.ts` (~700:
+  `DESIGNATION_BADGE`, `originTextColumns`, `originTextColumnNames`,
+  `hasOriginReportSheets`; seven lazy importers, mostly the worksheet),
+  `lib/grouping.ts` (~730: `familyBooks`, `bookLabel`),
+  `components/Library/libraryOpen.ts` (~720), `store/pendingOps.ts` (~740:
+  `trackJob`, `runCancellable`; about 20 lazy import sites), `lib/mapView.ts`
+  (~640, the `.dwk` serializer), `lib/smartfolders.ts` (~620) and
+  `lib/plotEncodingBinding.ts` (~770). Before pinning any of them, check
+  that the importers' code really leaves the eager chunks (the slice-16
+  `quickPlotWorkbookGate` and slice-17 `sanitizeFigureDocs` cases).
+- **`commitGadgetFft` and `commitQfit`** and **`confirmPendingRecipeApplication`
+  and its Partial variant**, as slice 19 recorded. Each is under 1 kB.
+- **The Toaster's focus restore** (~300 B at most, on the first toast).
+
+**Pin:** the tree started over the pin, so it was lowered to
+`measured + 1,000`, the slice-19 rule. That leaves 1,000 B for queued work and
+locks in the rest of the gain.
 
 ## What this does NOT change
 

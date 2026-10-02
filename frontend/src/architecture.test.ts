@@ -3454,6 +3454,16 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // (`store/gadgetRun.ts`) call these, so they left with them.
     "/lib/differentiate.ts",
     "/lib/api/statsDescriptive.ts",
+    // SLICE 20 (2026-10-02): five halves of eager modules that only lazy
+    // modules call, each imported by its own path (an `export *` from the
+    // parent saves nothing, slices 18-19): the facet/break panel domains,
+    // the bar-chart matrix and geometry, the page geometry, the saved-ROI
+    // `.dwk` codec and the gadget chip's text.
+    "/lib/facetDomains.ts",
+    "/lib/barMatrix.ts",
+    "/lib/pageGeometry.ts",
+    "/store/roisCodec.ts",
+    "/lib/quickfitChip.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

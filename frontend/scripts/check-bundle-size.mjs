@@ -45,6 +45,19 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-10-02 (bundle diet slice 20, `plans/BUNDLE_HEADROOM.md`) - pin
+ *  LOWERED 847,002 -> 844,997 (`measured + 1,000`). Batches 22-25 had taken
+ *  the tree 221 B OVER the pin. Five halves of eager modules that only lazy
+ *  modules call moved out, each imported by its own path; no `import()` was
+ *  added. Exact bytes, `npm ci`-fresh, `.vite` wiped before each build:
+ *    `7554f4c1` (parent)                                847,223
+ *    + facet/break panel domains -> `lib/facetDomains`  846,759  (-464)
+ *    + bar matrix + geometry -> `lib/barMatrix`         846,031  (-728)
+ *    + page geometry -> `lib/pageGeometry`              845,455  (-576)
+ *    + saved-ROI `.dwk` codec -> `store/roisCodec`      844,396  (-1,059)
+ *    + gadget chip text -> `lib/quickfitChip`           843,997  (-399)
+ *  Net: -3,226 B, leaving 1,000 B of headroom.
+ *
  *  2026-10-01 (bundle diet slice 19, `plans/BUNDLE_HEADROOM.md`) - pin
  *  LOWERED 848,245 -> 847,002 (`measured + 1,000`). Batch 24 had taken the
  *  tree 559 B OVER the pin. The five ROI-gadget region computes
@@ -1800,7 +1813,7 @@ import { fileURLToPath } from "node:url";
  * modulepreloads. A clipboard-import split was also measured at 858.5 kB and
  * rejected. All three changes were reverted.
  */
-const EAGER_JS_BUDGET = 847_002;
+const EAGER_JS_BUDGET = 844_997;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

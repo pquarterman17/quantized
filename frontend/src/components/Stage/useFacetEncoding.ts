@@ -24,7 +24,8 @@
 
 import { useMemo } from "react";
 
-import { facetSliceRowIds, facetSlices, facetSplitChannels, type FacetPanel } from "../../lib/facet";
+import { facetSlices, type FacetPanel } from "../../lib/facet";
+import { facetSliceRowIds, facetSplitChannels } from "../../lib/facetDomains";
 import { facetFullSlices } from "../../lib/facetExcluded";
 import { facetSplitEncoding, windowEncoding, type FigureEncoding } from "../../lib/plotEncodingBinding";
 import { analysisView, droppedRows } from "../../lib/rowstate";

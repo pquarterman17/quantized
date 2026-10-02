@@ -12,7 +12,7 @@ import { spatialComposition } from "./composition";
 import { EXCLUDED_GREY_OPTION, EXCLUDED_OMIT_OPTION } from "./excludedRowsChoice";
 import { EXCLUDED_GHOST_STYLE } from "./excludedRowsExport";
 import { runExportSpatialPageCommand } from "./exportPageCommand";
-import { defaultPageSetup } from "./pagesetup";
+import { defaultPageSetup } from "./pageGeometry";
 import type { Dataset } from "./types";
 import { useParamDialog } from "../store/paramDialog";
 import { usePendingOps } from "../store/pendingOps";

@@ -15,7 +15,7 @@
 // every test that needs non-default behaviour sets `marks` directly now).
 
 import type { BarSeriesStat } from "../../lib/barlayout";
-import { stackedTotal } from "../../lib/barlayout";
+import { stackedTotal } from "../../lib/barMatrix";
 import { resolveStatMarks, errorBounds, errorHalfWidth, type ResolvedStatMarks } from "../../lib/statMarks";
 import { finiteDomain, type BoxStat } from "../../lib/statstage";
 import { barMarkExtents } from "./statBarMarks";

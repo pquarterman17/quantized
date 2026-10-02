@@ -11,7 +11,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { facetSlices, facetSliceRowIds } from "../../../lib/facet";
+import { facetSlices } from "../../../lib/facet";
+import { facetSliceRowIds } from "../../../lib/facetDomains";
 import type { PlotSpec } from "../../../lib/plotspec";
 import { specToRender } from "../../../lib/plotspec";
 import { analysisView } from "../../../lib/rowstate";
