@@ -429,7 +429,7 @@ def _render_impl(
                 title=title, x_label=x_label, y_label=y_label,
                 x_fmt=x_fmt, y_fmt=y_fmt, x_step=x_step, y_step=y_step,
                 y2_label=y2_label, y2_scale=y2_scale,
-                y2_fmt=y2_fmt, y2_step=y2_step,
+                y2_fmt=y2_fmt, y2_step=y2_step, error_spans=error_spans,
             )
         else:
             artists = draw_series_axes(

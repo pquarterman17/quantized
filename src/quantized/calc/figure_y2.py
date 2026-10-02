@@ -29,6 +29,7 @@ from numpy.typing import ArrayLike, NDArray
 from quantized.calc.figure import _apply_fill, _plot_kwargs, draw_series_axes
 from quantized.calc.figure_axis_titles import apply_axis_titles
 from quantized.calc.figure_decor import _apply_region_shades, _split_region_shades_by_axis
+from quantized.calc.figure_errorbars import apply_error_bars
 from quantized.calc.figure_overrides import legend_kwargs
 from quantized.calc.figure_scale import apply_axis_scale, drawable_lim, resolve_axis_scale
 from quantized.calc.figure_styles import FigureStyle
@@ -122,6 +123,7 @@ def draw_secondary_axes(
     y_step: float | None = None,
     color_offset: int = 0,
     minor_ticks: bool = False,
+    error_spans: Sequence[Mapping[str, Any] | None] | None = None,
 ) -> list[Any]:
     """Plot ``series`` (the y2 subset, in request order) onto an EXISTING
     ``twinx()`` axes: lines, y-axis scale/label/tick-format/step. NO
@@ -156,6 +158,7 @@ def draw_secondary_axes(
         (line,) = ax2.plot(xv, yv, label=label, **kw)
         _apply_fill(ax2, xv, yv, series, i, spec, line.get_color())
         artists.append(line)
+    apply_error_bars(ax2, xv, series, error_spans, artists)
     resolved_y_scale = resolve_axis_scale(y_scale, False)
     apply_axis_scale(ax2, "y", resolved_y_scale)
     apply_tick_steps(ax2, None, y_step, "linear", resolved_y_scale)
@@ -195,6 +198,7 @@ def render_with_secondary_axis(
     y2_scale: str | None,
     y2_fmt: Mapping[str, Any] | None,
     y2_step: float | None,
+    error_spans: Sequence[Mapping[str, Any] | None] | None = None,
 ) -> list[Any]:
     """The twinx orchestration ``calc.figure._render_impl`` dispatches to
     when ``y2_mask`` has at least one ``True`` entry: split ``series`` by
@@ -240,6 +244,12 @@ def render_with_secondary_axis(
     primary, primary_styles, y2_series, y2_styles = _split_by_mask(
         series, series_styles, y2_mask
     )
+    # Each series' error bars ride to the axes it is drawn on (the screen draws
+    # them on both); `error_spans` is parallel to `series`, like `y2_mask`.
+    given = list(error_spans or [])
+    spans = [given[i] if i < len(given) else None for i in range(len(series))]
+    primary_spans = [s for s, on_y2 in zip(spans, y2_mask, strict=False) if not on_y2]
+    y2_spans = [s for s, on_y2 in zip(spans, y2_mask, strict=False) if on_y2]
     # Export-fidelity gap (2026-08-11): axis-1 region shades belong on ax2,
     # which does not exist yet -- strip them from the ov the primary
     # draw_series_axes call below sees (unless there are none, in which case
@@ -251,7 +261,7 @@ def render_with_secondary_axis(
         fig, ax, xv, primary,
         st=st, ov=primary_ov, x_log=x_log, y_log=y_log, x_scale=x_scale, y_scale=y_scale,
         title=title, x_label=x_label, y_label=y_label,
-        series_styles=primary_styles,
+        series_styles=primary_styles, error_spans=primary_spans,
         x_fmt=x_fmt, y_fmt=y_fmt, x_step=x_step, y_step=y_step,
     )
     ax2 = ax.twinx()
@@ -265,7 +275,7 @@ def render_with_secondary_axis(
         fig, ax2, xv, y2_series,
         st=st, series_styles=y2_styles, y_scale=y2_scale, y_label=y2_label,
         y_fmt=y2_fmt, y_step=y2_step, color_offset=len(primary),
-        minor_ticks=minor_ticks,
+        minor_ticks=minor_ticks, error_spans=y2_spans,
     )
     ax2.spines["right"].set_visible(True)
     apply_axis_titles(fig, {"y2": ax2}, ov.get("axis_titles"))  # the y2 title's Format + drag

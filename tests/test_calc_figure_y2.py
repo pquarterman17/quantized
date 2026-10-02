@@ -284,3 +284,32 @@ class TestSplitByMask:
         styles = [None, None, {"fill": {"vs": 1}, "color": "#abcdef"}]
         primary, primary_styles, _y2, _y2s = _split_by_mask(series, styles, [False, True, False])
         assert primary_styles[-1] == {"color": "#abcdef"}  # fill dropped, color kept
+
+
+# ── Error bars survive a secondary axis (screen/export parity) ───────────
+# The y2 render path dropped `error_spans` entirely, so a reflectivity curve
+# with its Qz-resolution channel on y2 exported with no error bars on EITHER
+# axis while the screen drew them on both.
+_SPAN = {"y": {"plus": [0.5] * 6, "minus": [0.5] * 6}}
+
+
+def _bar_groups(svg: bytes) -> int:
+    """Error-bar line collections in a matplotlib SVG (one per errorbar call)."""
+    return svg.decode("utf8").count('id="LineCollection_')
+
+
+def test_error_bars_draw_on_both_axes_with_a_secondary_axis():
+    x = np.linspace(1, 6, 6)
+    series = [("a", x), ("b", 100 * x)]
+    flat = render_figure(x, series, fmt="svg", error_spans=[_SPAN, _SPAN])
+    twin = render_figure(x, series, fmt="svg", error_spans=[_SPAN, _SPAN], y2_mask=[False, True])
+    assert _bar_groups(flat) == 2
+    assert _bar_groups(twin) == 2
+
+
+def test_each_axis_gets_only_its_own_series_error_bars():
+    x = np.linspace(1, 6, 6)
+    series = [("a", x), ("b", 100 * x)]
+    spans = [None, _SPAN]
+    only_y2 = render_figure(x, series, fmt="svg", error_spans=spans, y2_mask=[False, True])
+    assert _bar_groups(only_y2) == 1

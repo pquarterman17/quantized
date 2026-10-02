@@ -202,6 +202,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
                     y2_scale=f.y2_scale,
                     y2_fmt=_tick_fmt(f.y2_fmt),
                     y2_step=f.y2_step,
+                    error_spans=resolved.error_spans,
                     # V6 (P3.3 review F1): PER-PANEL, since a page can mix a
                     # greyscale panel next to a coloured one -- see
                     # calc.figure_page.PagePanel.greyscale's own doc (the
