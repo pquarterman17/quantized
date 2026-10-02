@@ -239,8 +239,8 @@ describe("the Origin fallback seam (store/originFallbackLazy.ts)", () => {
 
   it("settles both actions with a danger toast when the module will not load", async () => {
     vi.doMock("./originFallback", failLoad);
-    await expect(useApp.getState().openOriginFigureSource("fig")).resolves.toBeUndefined();
-    await expect(useApp.getState().remakeOriginFigure("fig")).resolves.toBeUndefined();
+    await expect(useApp.getState().openOriginFigureSource("fig")).resolves.toBe(false);
+    await expect(useApp.getState().remakeOriginFigure("fig")).resolves.toBe(false);
     expect(dangerToasts()).toEqual([
       expect.stringMatching(/^Couldn't open Origin source workbook — /),
       expect.stringMatching(/^Couldn't seed Graph Builder — /),

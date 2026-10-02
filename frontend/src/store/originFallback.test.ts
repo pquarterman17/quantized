@@ -89,6 +89,19 @@ describe("Origin figure fallbacks", () => {
     });
   });
 
+  it("refuses manual recovery from a workbook outside the same Origin import", async () => {
+    useApp.setState({
+      datasets: [book, { ...book, id: "foreign", name: "foreign" }],
+      originFigures: [{
+        id: "manual", stem: "Project", datasetId: null, siblingIds: ["d1"],
+        figure: { ...figure, curves: [{ book: "MissingBook", x: "A", y: "B", style: "line" }] },
+      }],
+    });
+
+    await expect(useApp.getState().openOriginFigureSource("manual", "foreign", { manual: true })).resolves.toBe(false);
+    expect(useApp.getState().originWorksheetSeed).toBeNull();
+  });
+
   it("seeds Graph Builder with the exact decoded X/Y binding", async () => {
     await useApp.getState().remakeOriginFigure("f1");
     expect(useApp.getState().graphBuilderOpen).toBe(true);

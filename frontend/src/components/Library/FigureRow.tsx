@@ -59,6 +59,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
   const selected = treeMode && selection?.kind === "origin-figure" && selection.id === entry.id;
   const select = () => useApp.getState().setLibrarySelection({ kind: "origin-figure", id: entry.id });
   const sourceResolution = resolveOriginFigureSources(entry, figures, datasets);
+  const rowResolution = resolveOriginFigureSources(entry, [entry], datasets);
   // PR C: the workbook owning this figure's bound dataset, for L0.6's
   // remembered-child recording — undefined when unresolved or unowned
   // (a cross-workbook/root placement never "remembers" a single workbook).
@@ -73,8 +74,8 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
   const previewActionLabel = showSavedPreview
     ? "Close saved Origin preview"
     : "Open saved Origin preview for comparison";
-  const siblingDatasets = datasets.filter((ds) => entry.siblingIds.includes(ds.id));
-  const resolved = entry.datasetId != null;
+  const hasCurveBindings = (entry.figure.curves?.length ?? 0) > 0;
+  const resolved = entry.datasetId != null && (!hasCurveBindings || rowResolution.sources.length > 0);
   const inner = innerTabIndex(treeItem);
   // V1: in the tree the name part is a <div> (ARIA-in-HTML bars treeitem on a
   // <button>), and the treeitem is the row wrapper that also holds the action
@@ -189,7 +190,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
               ▣
             </button>
           )}
-          {sourceResolution.unresolved.length > 0 && siblingDatasets.length > 0 && (
+          {sourceResolution.unresolved.length > 0 && (
             <button
               className="qz-btn qz-btn-sm qz-btn-primary qzk-origin-recover-btn"
               tabIndex={inner}

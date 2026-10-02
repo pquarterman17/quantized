@@ -21,7 +21,12 @@ export interface UnresolvedOriginBinding {
   book: string;
   x: string;
   y: string;
-  reason: "book_not_imported" | "x_column_not_decoded" | "y_column_not_decoded";
+  reason:
+    | "book_not_imported"
+    | "x_column_not_decoded"
+    | "y_column_not_decoded"
+    | "x_column_has_no_numeric_data"
+    | "y_column_has_no_numeric_data";
 }
 
 export interface OriginSourceResolution {
@@ -43,6 +48,15 @@ function pushUnique(items: number[], value: number): void {
   if (!items.includes(value)) items.push(value);
 }
 
+function channelHasFiniteData(ds: Dataset, channel: number): boolean {
+  // A lazy Origin book carries only a sampled preview until the apply/open
+  // preflight resolves it. Absence from that preview is unknown, not proof
+  // that the full saved column is empty.
+  if (ds.pending) return true;
+  const values = channel < 0 ? ds.data.time : ds.data.values.map((row) => row[channel]);
+  return values.some(Number.isFinite);
+}
+
 /** Resolve raw curve letters against a workbook the user explicitly chose.
  * Unlike automatic resolution this intentionally ignores the curve's book
  * name; the picker choice is the authority. Still never invents a column. */
@@ -50,6 +64,7 @@ export function resolveOriginSourceManually(
   entry: OriginFigureEntry,
   figures: OriginFigureEntry[],
   ds: Dataset,
+  options: { requireFinite?: boolean } = {},
 ): OriginSourceBinding | null {
   const source: OriginSourceBinding = {
     datasetId: ds.id,
@@ -61,6 +76,7 @@ export function resolveOriginSourceManually(
       const x = channelOf(ds, curve.x);
       const y = channelOf(ds, curve.y);
       if (x === null || y === null || y < 0) continue;
+      if (options.requireFinite && (!channelHasFiniteData(ds, x) || !channelHasFiniteData(ds, y))) continue;
       pushUnique(source.xColumns, x);
       pushUnique(source.yColumns, y);
       pushUnique(source.columns, x);
@@ -104,6 +120,14 @@ export function resolveOriginFigureSources(
       }
       if (y === null || y < 0) {
         unresolved.push({ ...curveRef(curve), reason: "y_column_not_decoded" });
+        continue;
+      }
+      if (!channelHasFiniteData(ds, x)) {
+        unresolved.push({ ...curveRef(curve), reason: "x_column_has_no_numeric_data" });
+        continue;
+      }
+      if (!channelHasFiniteData(ds, y)) {
+        unresolved.push({ ...curveRef(curve), reason: "y_column_has_no_numeric_data" });
         continue;
       }
       let source = sources.find((item) => item.datasetId === ds.id);

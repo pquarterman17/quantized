@@ -2,6 +2,7 @@
 // columns could not be matched automatically.  Manual recovery is explicit:
 // it never rewrites the imported metadata or pretends the guess is exact.
 
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { figureLabel, figureLayerFamily, type OriginFigureEntry } from "../../lib/originFigures";
@@ -21,13 +22,45 @@ export default function OriginRecoveryWindow({
   const datasets = useApp((s) => s.datasets);
   const openSource = useApp((s) => s.openOriginFigureSource);
   const remake = useApp((s) => s.remakeOriginFigure);
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState<{ datasetId: string; action: "inspect" | "rebuild" } | null>(null);
   const resolution = resolveOriginFigureSources(entry, figures, datasets);
-  const siblings = datasets.filter((ds) => entry.siblingIds.includes(ds.id));
-  const family = figureLayerFamily(entry, figures);
-  const candidates = siblings.map((dataset) => ({
-    dataset,
-    source: resolveOriginSourceManually(entry, family.length ? family : [entry], dataset),
-  }));
+  const candidates = useMemo(() => {
+    const family = figureLayerFamily(entry, figures);
+    return datasets
+      .filter((dataset) => entry.siblingIds.includes(dataset.id))
+      .map((dataset) => ({
+        dataset,
+        inspectSource: resolveOriginSourceManually(entry, family.length ? family : [entry], dataset),
+        layerSource: resolveOriginSourceManually(entry, [entry], dataset),
+        rebuildSource: resolveOriginSourceManually(entry, [entry], dataset, { requireFinite: true }),
+      }))
+      .sort((a, b) => {
+        const aCompatible = a.inspectSource ? 1 : 0;
+        const bCompatible = b.inspectSource ? 1 : 0;
+        return bCompatible - aCompatible || a.dataset.name.localeCompare(b.dataset.name, undefined, { numeric: true });
+      });
+  }, [datasets, entry, figures]);
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const visibleCandidates = normalizedQuery
+    ? candidates.filter(({ dataset, inspectSource }) =>
+        dataset.name.toLocaleLowerCase().includes(normalizedQuery)
+        || inspectSource?.book.toLocaleLowerCase().includes(normalizedQuery))
+    : candidates;
+
+  const run = async (
+    datasetId: string,
+    action: "inspect" | "rebuild",
+    operation: () => Promise<boolean>,
+  ) => {
+    if (busy) return;
+    setBusy({ datasetId, action });
+    try {
+      if (await operation()) onClose();
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return createPortal(
     <ToolWindow
@@ -56,38 +89,70 @@ export default function OriginRecoveryWindow({
             </ul>
           </div>
         )}
+        {candidates.length > 6 && (
+          <label className="qzk-origin-recovery-search">
+            <span>Find workbook</span>
+            <input
+              className="qz-input"
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Filter by workbook name…"
+            />
+          </label>
+        )}
         <div className="qzk-origin-recovery-list">
-          {candidates.map(({ dataset, source }) => (
+          {visibleCandidates.map(({ dataset, inspectSource, layerSource, rebuildSource }) => (
             <div className="qzk-origin-recovery-candidate" key={dataset.id}>
               <div>
                 <strong>{dataset.name}</strong>
                 <small>
-                  {source
-                    ? `${source.yColumns.length} compatible Y column${source.yColumns.length === 1 ? "" : "s"}`
+                  {inspectSource
+                    ? rebuildSource
+                      ? `${rebuildSource.yColumns.length} compatible Y column${rebuildSource.yColumns.length === 1 ? "" : "s"}`
+                      : layerSource
+                        ? "Saved columns found, but this layer has no numeric data"
+                        : "Compatible columns were found only for another layer"
                     : "Saved column letters do not exist in this workbook"}
                 </small>
               </div>
               <div className="qz-btn-row">
                 <Button
                   size="sm"
-                  disabled={!source}
-                  onClick={() => void openSource(entry.id, dataset.id, { manual: true }).then(onClose)}
+                  disabled={!inspectSource || busy !== null}
+                  onClick={() => void run(
+                    dataset.id,
+                    "inspect",
+                    () => openSource(entry.id, dataset.id, { manual: true }),
+                  )}
                 >
-                  Inspect columns
+                  {busy?.datasetId === dataset.id && busy.action === "inspect" ? "Opening…" : "Inspect columns"}
                 </Button>
                 <Button
                   size="sm"
                   variant="primary"
-                  disabled={!source}
-                  onClick={() => void remake(entry.id, dataset.id).then(onClose)}
+                  disabled={!rebuildSource || busy !== null}
+                  title={!rebuildSource && inspectSource
+                    ? layerSource
+                      ? "The selected graph layer has no numeric data to plot"
+                      : "This workbook matches another layer, but not the selected graph layer"
+                    : undefined}
+                  onClick={() => void run(
+                    dataset.id,
+                    "rebuild",
+                    () => remake(entry.id, dataset.id),
+                  )}
                 >
-                  Rebuild plot
+                  {busy?.datasetId === dataset.id && busy.action === "rebuild" ? "Rebuilding…" : "Rebuild plot"}
                 </Button>
               </div>
             </div>
           ))}
           {candidates.length === 0 && (
             <p className="qz-muted">No workbooks from this import are available.</p>
+          )}
+          {candidates.length > 0 && visibleCandidates.length === 0 && (
+            <p className="qz-muted">No workbooks match “{query.trim()}”.</p>
           )}
         </div>
         <small>

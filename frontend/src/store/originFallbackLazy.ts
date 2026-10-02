@@ -39,8 +39,11 @@ export function originFallbackCore(): Promise<OriginFallbackCore> {
   return loader.core();
 }
 
-function loadFailed(what: string): (e: unknown) => void {
-  return (e) => toast(`Couldn't ${what} — ${e instanceof Error ? e.message : "load failed"}`, "danger");
+function loadFailed(what: string): (e: unknown) => false {
+  return (e) => {
+    toast(`Couldn't ${what} — ${e instanceof Error ? e.message : "load failed"}`, "danger");
+    return false;
+  };
 }
 
 export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginFallbackSlice {

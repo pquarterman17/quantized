@@ -155,6 +155,7 @@ export function figureChannelSelection(
   const mine: OriginCurve[] = (figure.curves ?? []).filter((c) => c.book === book);
   if (mine.length === 0) return null;
   const xLetter = String(meta.x_column_name ?? "");
+  const requireMaterializedData = !ds.pending;
   const yKeys: number[] = [];
   const styles: Record<number, SeriesStyle> = {};
   const labels: Record<number, string> = {};
@@ -164,7 +165,17 @@ export function figureChannelSelection(
   // actually resolved a channel count" filter as the curveIdx loop below, so
   // a template's index lines up with the curve curveIdx is currently on.
   const curveNames: (string | undefined)[] = mine
-    .filter((c) => letters.indexOf(c.y) >= 0)
+    .filter((c) => {
+      const yIdx = letters.indexOf(c.y);
+      if (yIdx < 0) return false;
+      const yCellsExist = ds.data.values.some((row) => yIdx < row.length);
+      if (requireMaterializedData && yCellsExist && !ds.data.values.some((row) => Number.isFinite(row[yIdx]))) return false;
+      if (!c.x || c.x === xLetter) return !requireMaterializedData || ds.data.time.some(Number.isFinite);
+      const xIdx = letters.indexOf(c.x);
+      if (xIdx < 0) return false;
+      const xCellsExist = ds.data.values.some((row) => xIdx < row.length);
+      return !requireMaterializedData || !xCellsExist || ds.data.values.some((row) => Number.isFinite(row[xIdx]));
+    })
     .map((c) => curveDisplayName(ds, c.y, letters.indexOf(c.y)));
   let xKey: number | null = null;
   // legend_labels is a dense 1-based list, one entry per curve in the SAME
@@ -177,12 +188,21 @@ export function figureChannelSelection(
   for (const curve of mine) {
     const yIdx = letters.indexOf(curve.y);
     if (yIdx < 0) continue; // e.g. a text/dropped column — skip, never guess
+    const yCellsExist = ds.data.values.some((row) => yIdx < row.length);
+    const yHasData = !requireMaterializedData || !yCellsExist || ds.data.values.some((row) => Number.isFinite(row[yIdx]));
+    if (!yHasData) continue; // decoded-but-empty formula/result column — never produce a blank plot
+    const requestedX = curve.x && curve.x !== xLetter ? letters.indexOf(curve.x) : -1;
+    if (curve.x && curve.x !== xLetter && requestedX < 0) continue;
+    const xValues = requestedX >= 0
+      ? ds.data.values.map((row) => row[requestedX])
+      : ds.data.time;
+    const xCellsExist = requestedX < 0 || ds.data.values.some((row) => requestedX < row.length);
+    if (requireMaterializedData && xCellsExist && !xValues.some(Number.isFinite)) continue;
     if (!yKeys.includes(yIdx)) yKeys.push(yIdx);
     const st = originCurveSeriesStyle(curve);
     if (st) styles[yIdx] = st; // line/scatter from the decoded .opju curve record
     if (curve.x && curve.x !== xLetter) {
-      const xIdx = letters.indexOf(curve.x);
-      if (xIdx >= 0) xKey = xIdx; // plot against a non-default x channel
+      if (requestedX >= 0) xKey = requestedX; // plot against a non-default x channel
     }
     if (curveIdx < legend.length && legend[curveIdx]) {
       labels[yIdx] = resolveLegendTemplate(legend[curveIdx], curveNames);

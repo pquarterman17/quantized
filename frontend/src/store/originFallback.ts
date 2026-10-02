@@ -23,8 +23,8 @@ export interface OriginFallbackSlice {
     figureId: string,
     datasetId?: string,
     opts?: { manual?: boolean },
-  ) => Promise<void>;
-  remakeOriginFigure: (figureId: string, datasetId?: string) => Promise<void>;
+  ) => Promise<boolean>;
+  remakeOriginFigure: (figureId: string, datasetId?: string) => Promise<boolean>;
 }
 
 export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginFallbackSlice {
@@ -33,10 +33,10 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
     clearOriginWorksheetSeed: () => set({ originWorksheetSeed: null }),
     openOriginFigureSource: async (figureId, requestedId, opts) => {
       const entry = get().originFigures.find((item) => item.id === figureId);
-      if (!entry) return;
+      if (!entry) return false;
       const resolution = resolveOriginFigureSources(entry, get().originFigures, get().datasets);
       const manuallySelected = requestedId
-        ? get().datasets.find((ds) => ds.id === requestedId)
+        ? get().datasets.find((ds) => ds.id === requestedId && entry.siblingIds.includes(ds.id))
         : undefined;
       let source = opts?.manual && manuallySelected
         ? resolveOriginSourceManually(entry, get().originFigures, manuallySelected) ?? undefined
@@ -48,14 +48,14 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
       }
       if (!source) {
         toast(`No decoded source columns; Origin hint: ${entry.figure.source_hint || "unknown"}`, "info");
-        return;
+        return false;
       }
       try {
         await get().resolveDatasets([source.datasetId]);
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "source book fetch failed";
         toast(`Couldn't open Origin source workbook — ${message}`, "danger");
-        return;
+        return false;
       }
       set({
         worksheetId: source.datasetId,
@@ -63,10 +63,11 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
         originWorksheetSeed: { datasetId: source.datasetId, columns: source.columns },
         status: `opened ${source.book}; selected ${source.columns.length} bound column${plural(source.columns.length)}`,
       });
+      return true;
     },
     remakeOriginFigure: async (figureId, requestedId) => {
       const entry = get().originFigures.find((item) => item.id === figureId);
-      if (!entry) return;
+      if (!entry) return false;
       const resolution = resolveOriginFigureSources(entry, get().originFigures, get().datasets);
       // PlotSpec v1 edits one layer at a time. Resolve the whole graph family
       // above for lazy preflight/diagnostics, but seed the clicked layer's
@@ -75,14 +76,14 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
         ? get().datasets.find((ds) => ds.id === requestedId && entry.siblingIds.includes(ds.id))
         : undefined;
       const manualSource = manuallySelected
-        ? resolveOriginSourceManually(entry, [entry], manuallySelected)
+        ? resolveOriginSourceManually(entry, [entry], manuallySelected, { requireFinite: true })
         : null;
       const layerResolution = manualSource
         ? { sources: [manualSource], unresolved: [] }
         : resolveOriginFigureSources(entry, [entry], get().datasets);
       if (layerResolution.sources.length === 0) {
         toast(`No decoded curve bindings; use the raw Origin hint ${entry.figure.source_hint || "unknown"}`, "info");
-        return;
+        return false;
       }
       try {
         await get().resolveDatasets(
@@ -91,7 +92,7 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "source book fetch failed";
         toast(`Couldn't seed Graph Builder — ${message}`, "danger");
-        return;
+        return false;
       }
 
       // Apply the decoded figure first. This restores the recovered axes,
@@ -128,7 +129,7 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
         xColumn = sourceX < 0 ? null : sourceX;
       } else {
         toast("Origin remake could not resolve every decoded curve", "info");
-        return;
+        return false;
       }
       const spec: PlotSpec = {
         version: 1,
@@ -146,6 +147,7 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
       };
       get().openGraphBuilderSeeded(spec);
       set({ status: `opened ${entry.figure.name || "Origin graph"} layer ${entry.figure.layer ?? 1} in Graph Builder${manualSource ? ` using manually chosen ${manualSource.book}` : resolution.unresolved.length ? `; ${resolution.unresolved.length} binding${plural(resolution.unresolved.length)} unresolved` : ""}` });
+      return true;
     },
   };
 }
