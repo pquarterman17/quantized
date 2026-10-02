@@ -169,6 +169,11 @@ export function buildSelectionOverlay(datasets: Dataset[]): DataStruct | null {
       legendLabel: undefined,
     });
   }
-  return assembleOverlay(bound);
+  const out = assembleOverlay(bound);
+  // assembleOverlay names x by Origin's column letter "A"; a Library selection
+  // keeps the first source's own x name ("A (deg)" was the XRD symptom).
+  const xName = bound[0]?.ds.data.metadata?.x_column_name;
+  if (out) out.metadata.x_column_name = typeof xName === "string" && xName ? xName : "x";
+  return out;
 }
 
