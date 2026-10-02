@@ -6,6 +6,7 @@ import {
   isProfile,
   isReflCurve,
   reflStem,
+  TOP_STYLES,
 } from "./reflview";
 import type { DataStruct } from "./types";
 
@@ -69,7 +70,24 @@ describe("buildReflPanels", () => {
     expect(bottom?.data[1]).toEqual([20.0, 20.0, 20.0]); // rho
   });
   it("returns null frames for absent datasets", () => {
-    expect(buildReflPanels(null, null)).toEqual({ top: null, bottom: null });
+    expect(buildReflPanels(null, null)).toEqual({ top: null, bottom: null, topErrorBars: null });
+  });
+  it("draws measured R (first) as markers with its dR error bars", () => {
+    const { top, topErrorBars } = buildReflPanels(reflDs, null);
+    expect(top?.series[0].label).toBe("R");
+    expect(TOP_STYLES[0]).toMatchObject({ width: 0, marker: true }); // R = markers
+    expect(TOP_STYLES[1]).toBeUndefined(); // theory stays a line
+    expect(topErrorBars?.get(1)).toEqual([0.007, 0.007, 0.007]); // column 1 = R
+  });
+  it("keeps the magnetic SLD (rhoM) of a polarized profile", () => {
+    const magnetic: DataStruct = {
+      ...profileDs,
+      values: profileDs.values.map((r) => [...r, 1.2, 270]),
+      labels: ["rho", "irho", "rhoM", "theta"],
+      units: ["1e-6/A2", "1e-6/A2", "1e-6/A2", "degrees"],
+    };
+    const { bottom } = buildReflPanels(null, magnetic);
+    expect(bottom?.series.map((s) => s.label)).toEqual(["rho", "irho", "rhoM"]);
   });
 });
 
@@ -88,6 +106,14 @@ describe("autoPair", () => {
       { id: "p", name: "b-profile.dat", data: profileDs },
     ];
     expect(autoPair(sets)).toEqual({ reflId: "r", profileId: "p" });
+  });
+  it("pairs a refl1d model's cross section with that model's profile", () => {
+    const sets = [
+      { id: "r", name: "S11-2-refl.datA", data: reflDs },
+      { id: "p1", name: "S11-1-0-profile.dat", data: profileDs },
+      { id: "p2", name: "S11-2-0-profile.dat", data: profileDs },
+    ];
+    expect(autoPair(sets)).toEqual({ reflId: "r", profileId: "p2" });
   });
   it("returns nulls when nothing matches", () => {
     expect(autoPair([])).toEqual({ reflId: null, profileId: null });
