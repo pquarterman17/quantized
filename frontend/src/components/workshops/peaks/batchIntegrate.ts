@@ -25,6 +25,7 @@ import { parseQuantity } from "../../../lib/metadataCleanup";
 import { metaValue, pathLabel, type MetaPath } from "../../../lib/metadataKeys";
 import { analysisData } from "../../../lib/rowstate";
 import type { DataStruct, Dataset } from "../../../lib/types";
+import { csvTextCell } from "../../../lib/csvCell";
 
 export interface IntegrateWindow {
   lo: number;
@@ -165,7 +166,7 @@ export function batchIntegrateRows(
   });
 }
 
-const q = (s: string): string => (/[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+const q = csvTextCell; // text cells are file-derived: formula-neutralized (OWASP)
 const num = (v: number | null): string => (v === null ? "" : String(v));
 
 /** RFC 4180 CSV of the result rows, in order; missing numbers are empty. */

@@ -8,6 +8,7 @@
 // same request, so rows name the user's columns, not "group 1" or "x2".
 
 import type { AnovaTableRow, MultiRegressionResult, StatsTestResult } from "./api/statsTests";
+import { csvTextCell } from "./csvCell";
 
 export type Cell = string | number | null;
 
@@ -329,8 +330,6 @@ export function outputToTSV(out: TestOutput): string {
 
 /** The sentence and every table as RFC-4180 CSV (for Export). */
 export function outputToCSV(out: TestOutput): string {
-  return serialize(out, ",", (v) => {
-    const s = plain(v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  });
+  // Text cells may carry file-derived labels: formula-neutralized (OWASP).
+  return serialize(out, ",", (v) => (typeof v === "string" ? csvTextCell(v) : plain(v)));
 }

@@ -7,6 +7,7 @@
 import ToolWindow from "./ToolWindow";
 import { DataTable } from "../primitives/DataTable";
 import { Button } from "../primitives";
+import { csvTextCell } from "../../lib/csvCell";
 
 export interface ResultsData {
   title: string;
@@ -24,10 +25,8 @@ function download(name: string, mime: string, text: string): void {
 }
 
 function toCSV(columns: string[], rows: (string | number)[][]): string {
-  const esc = (v: string | number) => {
-    const s = String(v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
+  // Text cells may carry file-derived names: formula-neutralized (OWASP).
+  const esc = (v: string | number) => (typeof v === "number" ? String(v) : csvTextCell(v));
   return [columns.map(esc).join(","), ...rows.map((r) => r.map(esc).join(","))].join("\n");
 }
 

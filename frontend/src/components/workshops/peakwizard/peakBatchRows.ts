@@ -19,6 +19,7 @@ import type { PeakBatchFit, PeakBatchResult } from "../../../lib/api/peakBatch";
 import type { DataStruct } from "../../../lib/types";
 import { derivedErrorReason, type DerivedKey } from "./modelFitReasons";
 import { paramLabel } from "./peakModelParams";
+import { csvTextCell } from "../../../lib/csvCell";
 
 /** A dataset's outcome: prepared + fitted, or where it failed and why. */
 export interface BatchDatasetResult {
@@ -213,7 +214,7 @@ const CSV_HEADER = [
   "n_warnings", "at_bound", "undetermined", "missing_errors", "warnings",
 ];
 
-const q = (s: string): string => (/[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+const q = csvTextCell; // text cells are file-derived: formula-neutralized (OWASP)
 const num = (v: number | null | undefined): string => (v === null || v === undefined || !Number.isFinite(v) ? "" : String(v));
 
 /** RFC 4180 CSV of the table (every row, in the given order). Missing numbers

@@ -19,6 +19,7 @@ from typing import Any
 
 import numpy as np
 
+from quantized.csv_safe import csv_text_cell
 from quantized.datastruct import DataStruct
 
 __all__ = ["GraphSpec", "format_origin_project_script", "format_origin_script"]
@@ -239,9 +240,11 @@ def format_origin_script(
     values = np.asarray(data.values, dtype=float)
 
     # ── CSV: header, units, then %.10g data rows ──
+    # Names/units come from the imported file: neutralize spreadsheet formulas
+    # (OWASP) and quote a cell holding a comma. Numeric rows are untouched.
     csv_lines = [
-        ",".join([x_name, *labels]),
-        ",".join([x_unit, *units]),
+        ",".join(csv_text_cell(c) for c in [x_name, *labels]),
+        ",".join(csv_text_cell(c) for c in [x_unit, *units]),
     ]
     for r in range(values.shape[0]):
         cells = [f"{time[r]:.10g}"]

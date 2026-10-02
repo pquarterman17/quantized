@@ -24,6 +24,7 @@ from typing import Any
 
 import numpy as np
 
+from quantized.csv_safe import csv_text_cell
 from quantized.datastruct import DataStruct
 from quantized.x_units import x_unit_of
 
@@ -81,10 +82,10 @@ def _column_role(label: str) -> str:
 
 
 def _csv_field(text: str) -> str:
-    """Quote a header cell if it holds a comma, quote, or newline."""
-    if any(ch in text for ch in ',"\n\r'):
-        return '"' + text.replace('"', '""') + '"'
-    return text
+    """A header cell: spreadsheet formulas neutralized (OWASP ``'`` prefix --
+    labels/units/file names come from imported files), then quoted if it
+    holds a comma, quote, or newline."""
+    return csv_text_cell(text)
 
 
 def _columns(datasets: list[tuple[DataStruct, str]]) -> list[_Col]:

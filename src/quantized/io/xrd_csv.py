@@ -30,6 +30,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from quantized.csv_safe import csv_text_cell, safe_comment_line
 from quantized.datastruct import DataStruct
 
 __all__ = ["format_xrd_csv", "write_xrd_csv"]
@@ -102,19 +103,25 @@ def format_xrd_csv(
     sep = "\t" if is_origin else ","
     prefix = "#\t" if is_origin else "# "
 
+    # Labels, units, and metadata come from the imported file: neutralize
+    # spreadsheet formulas (OWASP) in every text cell. Data rows are numeric
+    # and never touched.
     lines: list[str] = []
     if include_metadata:
-        lines.extend(_metadata_block(data, prefix))
+        lines.extend(safe_comment_line(ln, sep) for ln in _metadata_block(data, prefix))
+
+    def header(cells: list[str]) -> str:
+        return sep.join(csv_text_cell(c, sep) for c in cells)
 
     if is_origin:
         names = [x_label, *int_labels]
         units = [x_unit, *int_units]
         designations = ["X", *(["Y"] * len(int_labels))]
-        lines.append(sep.join(names))
-        lines.append(sep.join(units))
+        lines.append(header(names))
+        lines.append(header(units))
         lines.append(sep.join(designations))
     else:
-        lines.append(sep.join([x_label, *int_labels]))
+        lines.append(header([x_label, *int_labels]))
 
     time = np.asarray(data.time, dtype=float)
     for row in range(int_vals.shape[0]):
