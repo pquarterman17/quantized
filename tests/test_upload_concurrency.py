@@ -69,6 +69,7 @@ import pytest
 import uvicorn
 
 from quantized.app import create_app
+from quantized.auth import TOKEN_HEADER
 
 # How long the probe blocks the parse for before giving up and proceeding
 # anyway (so a genuinely broken test/handler times out instead of hanging
@@ -76,6 +77,11 @@ from quantized.app import create_app
 # held. Both are generous backstops, never sized to any fixture or machine.
 _PARSE_RELEASE_TIMEOUT_S = 30.0
 _HEALTH_REQUEST_TIMEOUT_S = 5.0
+
+
+# The API token the live server is built with (every /api route but health
+# needs it; quantized.auth).
+_TOKEN = "c" * 43
 
 
 def _start_server() -> tuple[uvicorn.Server, int, threading.Thread]:
@@ -91,7 +97,11 @@ def _start_server() -> tuple[uvicorn.Server, int, threading.Thread]:
     fresh app alone did not prevent).
     """
     config = uvicorn.Config(
-        create_app(), host="127.0.0.1", port=0, log_level="warning", lifespan="off"
+        create_app(api_token=_TOKEN),
+        host="127.0.0.1",
+        port=0,
+        log_level="warning",
+        lifespan="off",
     )
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True)
@@ -136,6 +146,7 @@ def _upload(base: str, csv_path: Path, result: dict[str, Any]) -> None:
         resp = httpx.post(
             f"{base}/api/parsers/upload",
             files={"file": ("small.csv", fh, "text/csv")},
+            headers={TOKEN_HEADER: _TOKEN},
             timeout=120.0,
         )
         result["status_code"] = resp.status_code

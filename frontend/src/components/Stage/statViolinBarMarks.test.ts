@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { groupedBarSlots, seriesStat } from "../../lib/barlayout";
+import { groupedBarSlots, seriesStat } from "../../lib/barMatrix";
 import { deterministicJitter } from "../../lib/jitter";
 import { errorBounds, resolveStatMarks, type ResolvedStatMarks } from "../../lib/statMarks";
 import { barValueDomain, boxStatsClient, categorySlots } from "../../lib/statstage";

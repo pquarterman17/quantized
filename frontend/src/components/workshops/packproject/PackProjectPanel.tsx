@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { askConfirm } from "../../overlays/ConfirmDialog";
@@ -8,6 +8,7 @@ import { MetaRow } from "../../primitives/MetaRow";
 import { NOTHING_MODIFIED_NOTE, usePackProject } from "../../../store/packProject";
 import { usePackProjectPanel } from "../../../store/packProjectPanel";
 import { formatBytes as bytes } from "../../../lib/formatBytes";
+import PackAttention, { flaggedSources } from "./PackAttention";
 
 function statusLabel(status: string): string {
   return status.replaceAll("_", " ");
@@ -25,7 +26,11 @@ export default function PackProjectPanel() {
   const reset = usePackProject((s) => s.resetPackProject);
   const retry = usePackProject((s) => s.previewPackProject);
   const setOpen = usePackProjectPanel((s) => s.setOpen);
-
+  // The explicit "include flagged files" confirm, bound to ONE preview token
+  // so a fresh preview always starts from the safe default (excluded).
+  const [includeFor, setIncludeFor] = useState<string | null>(null);
+  const flagged = preview ? flaggedSources(preview.manifest.sources) : [];
+  const includeFlagged = preview !== null && includeFor === preview.token;
 
   // The panel opens (commands/packProjectCommands.ts) BEFORE the preview has
   // moved the phase off "idle", so an unconditional "idle -> close" here
@@ -109,19 +114,22 @@ export default function PackProjectPanel() {
               <ul>{preview.warnings.map((warning, i) => <li key={`${warning.code}-${i}`}>{warning.message}</li>)}</ul>
             </section>
           )}
+          {flagged.length > 0 && (
+            <PackAttention flagged={flagged} include={includeFlagged} onIncludeChange={(on) => setIncludeFor(on ? preview.token : null)} />
+          )}
           <div style={{ maxHeight: 230, overflow: "auto" }}>
             <DataTable
               columns={["Source", "Status", "Size"]}
               rows={preview.manifest.sources.map((source) => [
                 <span key="p" title={source.original_path} style={{ overflowWrap: "anywhere" }}>{source.original_path}</span>,
-                source.packable ? (source.changed ? "changed" : source.unverified ? "unverified" : "ready") : statusLabel(source.status),
+                source.packable && source.attention?.length ? (includeFlagged ? "flagged" : "excluded") : source.packable ? (source.changed ? "changed" : source.unverified ? "unverified" : "ready") : statusLabel(source.status),
                 source.size === null ? "—" : bytes(source.size),
               ])}
             />
           </div>
           {preview.blockers.length > 0 && <p className="qzk-ds-meta qzk-msg">{preview.blockers.length === 1 ? "1 unavailable source keeps its original absolute path" : `${preview.blockers.length} unavailable sources keep their original absolute paths`} in the packed copy.</p>}
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <Button size="sm" onClick={() => void start(preview.manifest)} disabled={preview.destination.exists} aria-describedby={preview.destination.exists ? existsId : undefined}>Pack Project</Button>
+            <Button size="sm" onClick={() => void start(preview.manifest, includeFlagged)} disabled={preview.destination.exists} aria-describedby={preview.destination.exists ? existsId : undefined}>Pack Project</Button>
             <Button size="sm" onClick={() => void dismiss()}>Cancel</Button>
           </div>
         </>

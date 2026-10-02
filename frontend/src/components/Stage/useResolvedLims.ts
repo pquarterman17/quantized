@@ -19,7 +19,7 @@ import type { Lim } from "../../lib/plotLimApply";
 export function useResolvedLims(
   payload: PlotPayload | null,
   inp: LimResolveInputs,
-  onCrossed?: (axis: "x" | "y") => void,
+  onCrossed?: (axis: "x" | "y", why?: "log") => void,
 ): { x: Lim; y: Lim } {
   const r = useMemo(
     () => resolveCanvasLims(payload, inp),
@@ -29,10 +29,13 @@ export function useResolvedLims(
   );
   // Keyed by the committed values, so a re-render never repeats the note but
   // a new crossing commit does. `onCrossed` is a notifier, not an input.
-  const key = (r.x.crossed || r.y.crossed) && JSON.stringify([inp.xLim, inp.yLim]);
+  // A side dropped on a log axis (`drawableLim`) gets its own note instead.
+  const key = (r.x.crossed || r.y.crossed || r.x.dropped || r.y.dropped) && JSON.stringify([inp.xLim, inp.yLim, inp.xScale, inp.yScale]);
   useEffect(() => {
-    if (r.x.crossed) onCrossed?.("x");
-    if (r.y.crossed) onCrossed?.("y");
+    for (const a of ["x", "y"] as const) {
+      if (r[a].dropped) onCrossed?.(a, "log");
+      else if (r[a].crossed) onCrossed?.(a);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   return { x: r.x.range, y: r.y.range };

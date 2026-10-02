@@ -109,6 +109,23 @@ describe("Figure Page session follows a Library rename", () => {
     expect(useApp.getState().pages[0].output.dpi).toBe(150);
   });
 
+  it("an unsaved name typed in the session is not overwritten by a Library rename or its undo", () => {
+    const { result } = openSavedPage();
+    act(() => useApp.getState().renamePageDocument("page-1", "Renamed in Library"));
+    act(() => result.current.setName("Typed in session"));
+
+    act(() => useApp.getState().undo()); // reverts the Library rename only
+    expect(useApp.getState().pages[0].name).toBe("Original name");
+    expect(result.current.name).toBe("Typed in session");
+    expect(result.current.dirty).toBe(true);
+
+    act(() => useApp.getState().renamePageDocument("page-1", "Renamed again"));
+    expect(result.current.name).toBe("Typed in session");
+
+    act(() => result.current.save());
+    expect(useApp.getState().pages[0].name).toBe("Typed in session");
+  });
+
   it("a rename of a DIFFERENT page leaves the open session alone", () => {
     const other = createPageDocument({ id: "page-2", name: "Other page" });
     useApp.setState({ pages: [SAVED, other] });

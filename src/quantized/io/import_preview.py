@@ -64,6 +64,7 @@ from quantized.io.import_parse import (
     DATA_ROLES as _DATA_ROLES,
 )
 from quantized.io.import_parse import (
+    _decimal_names,
     _effective_names,
     _effective_ncols,
     _label_row_overrides,
@@ -73,6 +74,7 @@ from quantized.io.import_parse import (
     _resolve_names,
     _scoring_rows,
     _split,
+    _uncommented,
 )
 
 __all__ = [
@@ -232,7 +234,7 @@ def guess_settings(text: str) -> ImportSettings:
         header_line = data_start - 2 if scores[data_start - 2] < 0.5 else None
     elif data_start >= 1 and scores[data_start - 1] < 0.5:
         header_line = data_start - 1
-
+    header_line, units_line = (_uncommented(lines, i) for i in (header_line, units_line))
     names = _resolve_names(tokens, header_line, n_cols)
     roles = ["x"] + ["y"] * (n_cols - 1) if n_cols else []
     return ImportSettings(
@@ -343,7 +345,7 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
         ],
         "suggested_error_bindings": [b.to_dict() for b in suggested_bindings],
         "categorical_problems": categorical_problems,
-        "decimal_comma_columns": [p.names[k] for k in p.decimal_columns],
+        "decimal_comma_columns": _decimal_names(p, effective_names),
     }
 
 
@@ -459,7 +461,7 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
         "import_settings": settings.to_dict(),
     }
     if p.decimal_columns:
-        decimal_meta, decimal_note = decimal_metadata([p.names[k] for k in p.decimal_columns])
+        decimal_meta, decimal_note = decimal_metadata(_decimal_names(p, effective_names))
         metadata.update(decimal_meta, notes=[decimal_note])
     label_cols = [k for k in range(n_cols) if p.roles[k] == "label"]
     if label_cols:

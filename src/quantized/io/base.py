@@ -6,10 +6,13 @@ Ports of the MATLAB helpers parseColHeader + resolveColumnShorthand.
 from __future__ import annotations
 
 import re
+import zipfile
+import zlib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 __all__ = [
+    "CORRUPT_ARCHIVE_ERRORS",
     "NO_COLUMN",
     "decode_text",
     "parse_col_header",
@@ -19,6 +22,21 @@ __all__ = [
 ]
 
 NO_COLUMN = -1
+
+#: What a damaged ZIP-of-XML file (``.brml``, ``.xlsx``) raises while it is
+#: read: a bad header or checksum (``BadZipFile``), a broken or cut-off
+#: deflate stream (``zlib.error`` / ``EOFError``), a garbled compression-method
+#: field (``NotImplementedError``), XML that does not parse (``ET.ParseError``
+#: and lxml's ``XMLSyntaxError`` both subclass ``SyntaxError``). None is a
+#: ``ValueError``, so the import routes answered 500; the archive parsers
+#: re-raise these as a ``ValueError`` naming the file.
+CORRUPT_ARCHIVE_ERRORS: tuple[type[Exception], ...] = (
+    zipfile.BadZipFile,
+    zlib.error,
+    EOFError,
+    NotImplementedError,
+    SyntaxError,
+)
 
 _HEADER_UNIT_RE = re.compile(r"^(.+?)\s*\(([^)]+)\)\s*$")
 

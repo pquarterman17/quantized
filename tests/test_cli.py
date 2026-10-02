@@ -24,6 +24,16 @@ def _isolate_auto_shutdown() -> Iterator[None]:
         os.environ["QZ_AUTO_SHUTDOWN"] = prior
 
 
+TOKEN = "k" * 43
+
+
+@pytest.fixture(autouse=True)
+def _known_api_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A known launch token (``QZ_API_TOKEN`` honoured at launch), restored
+    after each test -- the launcher re-exports it into os.environ."""
+    monkeypatch.setenv("QZ_API_TOKEN", TOKEN)
+
+
 @pytest.fixture(autouse=True)
 def _stub_resolve_port() -> Iterator[None]:
     """Pass the requested port through unchanged, as if it were always free.
@@ -66,7 +76,7 @@ def test_default_opens_when_healthy_and_arms_shutdown() -> None:
         patch("quantized.cli._open_when_healthy") as opener,
     ):
         cli.main([])
-    opener.assert_called_once_with("http://127.0.0.1:8000", "127.0.0.1", 8000)
+    opener.assert_called_once_with(f"http://127.0.0.1:8000/?token={TOKEN}", "127.0.0.1", 8000)
     assert os.environ.get("QZ_AUTO_SHUTDOWN") == "1"
 
 
@@ -141,7 +151,9 @@ def test_calc_opens_view_calc_url() -> None:
         patch("quantized.cli._open_when_healthy") as opener,
     ):
         cli.main(["--calc"])
-    opener.assert_called_once_with("http://127.0.0.1:8000/?view=calc", "127.0.0.1", 8000)
+    opener.assert_called_once_with(
+        f"http://127.0.0.1:8000/?view=calc&token={TOKEN}", "127.0.0.1", 8000
+    )
 
 
 def test_calc_composes_with_desktop() -> None:
@@ -179,7 +191,9 @@ def test_main_calc_defaults_to_serving() -> None:
         patch("quantized.cli._open_when_healthy") as opener,
     ):
         cli.main_calc([])
-    opener.assert_called_once_with("http://127.0.0.1:8000/?view=calc", "127.0.0.1", 8000)
+    opener.assert_called_once_with(
+        f"http://127.0.0.1:8000/?view=calc&token={TOKEN}", "127.0.0.1", 8000
+    )
 
 
 def test_calc_composes_with_dev() -> None:
@@ -223,3 +237,32 @@ def test_explicit_port_marks_resolve_as_explicit() -> None:
     ):
         cli.main(["--port", "9001"])
     resolve.assert_called_once_with("127.0.0.1", 9001, explicit=True)
+
+
+# ── API token (quantized.auth) ───────────────────────────────────────
+
+
+def test_launch_generates_and_exports_a_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("QZ_API_TOKEN")
+    with (
+        patch("quantized.cli.uvicorn.run"),
+        patch("quantized.cli._open_when_healthy") as opener,
+    ):
+        cli.main([])
+    token = os.environ["QZ_API_TOKEN"]
+    assert len(token) >= 43
+    opener.assert_called_once_with(f"http://127.0.0.1:8000/?token={token}", "127.0.0.1", 8000)
+
+
+def test_no_browser_prints_the_launch_url(capsys: pytest.CaptureFixture[str]) -> None:
+    with patch("quantized.cli.uvicorn.run"):
+        cli.main(["--no-browser"])
+    assert f"http://127.0.0.1:8000/?token={TOKEN}" in capsys.readouterr().out
+
+
+def test_weak_env_token_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("QZ_API_TOKEN", "short")
+    with patch("quantized.cli.uvicorn.run") as run, pytest.raises(SystemExit) as exc:
+        cli.main(["--no-browser"])
+    assert exc.value.code == 2
+    run.assert_not_called()

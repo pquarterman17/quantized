@@ -6,6 +6,7 @@
 // different, lesser thing). Pure core: data in → traces / CSV out. No rendering.
 
 import type { DataStruct } from "./types";
+import { csvTextCell } from "./csvCell";
 
 export type OffsetMode = "add" | "mul";
 
@@ -130,9 +131,8 @@ export function alignToUnionX(traces: WaterfallTrace[]): {
   return { x, ys };
 }
 
-function csvEscape(text: string): string {
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
+// Headers carry dataset labels (file-derived): formula-neutralized (OWASP).
+const csvEscape = csvTextCell;
 
 /** Consolidated CSV: each dataset contributes an `x` column and a `<channel>`
  *  column, side by side (ragged columns blank-fill). With `baked` the y columns

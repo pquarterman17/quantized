@@ -22,7 +22,7 @@ import { sanitizeQuickPlotTemplates } from "./quickPlotTemplatesSanitize";
 import type { PlotWindow } from "./plotview";
 import type { RoiDef } from "./roi";
 import type { LibrarySelection } from "../store/libraryPanel";
-import { deserializeRois } from "../store/rois";
+import { deserializeRois } from "../store/roisCodec";
 import { sanitizeMapViews, type MapViewMap } from "./mapView";
 import { sanitizeDocumentBackedPlotWindows } from "./windowDocumentPersistence";
 import {

@@ -21,8 +21,10 @@ import numpy as np
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.testclient import TestClient as StarletteTestClient
 
 from quantized.app import create_app
+from quantized.auth import TOKEN_HEADER
 from quantized.datastruct import DataStruct
 from quantized.security import ALLOWED_HOSTS
 
@@ -32,6 +34,24 @@ from quantized.security import ALLOWED_HOSTS
 # the ONE place all call sites share, instead of per-file fixtures.
 # Production's default set (127.0.0.1/localhost/::1) never includes it.
 ALLOWED_HOSTS.add("testserver")
+
+
+# Every /api route but /api/health needs the app's API token (quantized.auth).
+# The suite builds ~100 module-level ``TestClient(app)``s, so -- like the Host
+# set above -- authentication is added here, once, for all of them: each
+# TestClient over an app that has a token sends it in the header programmatic
+# callers use. ``test_api_auth.py`` drops the header to test the refusals.
+_starlette_test_client_init = StarletteTestClient.__init__
+
+
+def _authenticated_init(self: StarletteTestClient, app: Any, *args: Any, **kwargs: Any) -> None:
+    _starlette_test_client_init(self, app, *args, **kwargs)
+    token = getattr(getattr(app, "state", None), "api_token", None)
+    if isinstance(token, str):
+        self.headers.setdefault(TOKEN_HEADER, token)
+
+
+StarletteTestClient.__init__ = _authenticated_init  # type: ignore[method-assign]
 
 # Group F: the large-workbook transfer store lives in the user CACHE dir. The
 # suite must never read or write the real one (a `with TestClient(...)` runs

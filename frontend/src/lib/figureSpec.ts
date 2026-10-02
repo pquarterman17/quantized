@@ -43,12 +43,13 @@ import {
   mergeFigureOverrides,
   type FigureOverrides,
 } from "./figureOverrides";
-import { marginFractions, pageSizeInches } from "./pagesetup";
+import { marginFractions, pageSizeInches } from "./pageGeometry";
 import type { PlotView } from "./plotview";
 import { canvasGroupCol } from "./plotGroupSplit";
 import { encodingSplits, facetEncoding, figureEncodingWire, windowEncoding, type FigureEncoding } from "./plotEncodingBinding";
 import { droppedRows, pruneToLiveDataset } from "./rowstate";
-import { breakCompositionFromData, facetSplitChannels } from "./facet";
+import { breakCompositionFromData } from "./facet";
+import { facetSplitChannels } from "./facetDomains";
 // The screen-parity override projection moved to lib/figureViewOverrides.ts to
 // fund P3.3's threading against this file's 500-line ceiling. Imported, NOT
 // re-exported: a barrel here would make every importer of this module pull the

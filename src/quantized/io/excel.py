@@ -7,6 +7,7 @@ importExcel's logic; the cell grid replaces MATLAB's ``readcell``.
 
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
 import zipfile
 from collections.abc import Sequence
 from pathlib import Path
@@ -18,7 +19,7 @@ from openpyxl.utils.exceptions import InvalidFileException
 
 from quantized.datastruct import DataStruct
 from quantized.io._delimited_layout import _is_data_cell, _walk_back_gappy_rows
-from quantized.io.base import resolve_column
+from quantized.io.base import CORRUPT_ARCHIVE_ERRORS, resolve_column
 from quantized.io.delimited import _extract_units
 
 __all__ = ["import_excel"]
@@ -31,6 +32,10 @@ __all__ = ["import_excel"]
 # their uncompressed size is capped like a .brml scan document.
 MAX_CELLS = 1 << 25
 MAX_PART_BYTES = 256 << 20
+_UNREADABLE: tuple[type[Exception], ...] = (*CORRUPT_ARCHIVE_ERRORS, InvalidFileException, OSError)
+_MANIFEST = "[Content_Types].xml"
+_CT_NS = "http://schemas.openxmlformats.org/package/2006/content-types"
+_WORKSHEET_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"
 
 
 def _cell_to_float(value: Any) -> float:
@@ -65,13 +70,36 @@ def _header_str(value: Any, col: int) -> str:
     return f"Col{col + 1}"
 
 
+def _worksheet_parts(zf: zipfile.ZipFile) -> set[str]:
+    """The parts ``[Content_Types].xml`` declares as worksheets.
+
+    Only these are streamed. A folder name proves nothing: a worksheet's own
+    ``.rels`` sits under ``xl/worksheets/`` and is parsed whole, and shared
+    strings live wherever the manifest says."""
+    try:
+        root = ET.fromstring(zf.read(_MANIFEST))  # noqa: S314 (size checked first)
+    except (KeyError, ET.ParseError):
+        return set()
+    return {
+        str(el.get("PartName", "")).lstrip("/")
+        for el in root.iter(f"{{{_CT_NS}}}Override")
+        if el.get("ContentType") == _WORKSHEET_TYPE
+    }
+
+
 def _check_parts(path: Path) -> None:
     """Refuse a non-worksheet part whose uncompressed size passes the cap."""
     if not zipfile.is_zipfile(path):
         return  # openpyxl reports a non-ZIP file below
     with zipfile.ZipFile(path) as zf:
-        for info in zf.infolist():
-            if info.filename.startswith("xl/worksheets/"):
+        infos = zf.infolist()
+        # The manifest is checked before it is read to find the worksheets.
+        infos.sort(key=lambda info: info.filename != _MANIFEST)
+        streamed: set[str] | None = None
+        for info in infos:
+            if streamed is None and info.filename != _MANIFEST:
+                streamed = _worksheet_parts(zf)
+            if streamed is not None and info.filename in streamed:
                 continue
             if info.file_size > MAX_PART_BYTES:
                 raise ValueError(
@@ -101,20 +129,26 @@ def import_excel(
 ) -> DataStruct:
     """Import an ``.xlsx`` sheet (first column = x-axis by default)."""
     path = Path(filepath)
-    try:
-        _check_parts(path)
-        workbook = openpyxl.load_workbook(path, data_only=True, read_only=True)
-    except (zipfile.BadZipFile, InvalidFileException, OSError) as exc:
-        # An empty / non-ZIP / truncated .xlsx raises BadZipFile or
-        # InvalidFileException (neither a ValueError) -> would 500 the import
-        # route. Reject cleanly instead.
-        raise ValueError(f"{path.name} is not a readable .xlsx workbook: {exc}") from exc
-    try:
-        worksheet = workbook[sheet] if isinstance(sheet, str) else workbook.worksheets[sheet]
-        sheet_name = worksheet.title
-        grid = _read_grid(worksheet, path.name)
-    finally:
-        workbook.close()
+    # We own the OS handle: openpyxl leaves its archive open when it raises
+    # mid-load or mid-stream, and on Windows an open handle makes the upload
+    # route's temp-dir cleanup fail, turning a clean 422 into a 500.
+    with path.open("rb") as handle:
+        try:
+            _check_parts(path)
+            workbook = openpyxl.load_workbook(handle, data_only=True, read_only=True)
+        except _UNREADABLE as exc:
+            # An empty / non-ZIP / truncated / damaged .xlsx raises BadZipFile,
+            # InvalidFileException, zlib or XML errors (none a ValueError) ->
+            # would 500 the import route. Reject cleanly instead.
+            raise ValueError(f"{path.name} is not a readable .xlsx workbook: {exc}") from exc
+        try:
+            worksheet = workbook[sheet] if isinstance(sheet, str) else workbook.worksheets[sheet]
+            sheet_name = worksheet.title
+            grid = _read_grid(worksheet, path.name)
+        except CORRUPT_ARCHIVE_ERRORS as exc:  # the worksheet is streamed: damage shows up here
+            raise ValueError(f"{path.name}: damaged worksheet data ({exc})") from exc
+        finally:
+            workbook.close()
 
     while grid and all(v is None for v in grid[-1]):
         grid.pop()

@@ -7,8 +7,14 @@
 
 import { expect, type Page } from "@playwright/test";
 
+/** The launch URL `qz` opens: `?token=` is traded for the API cookie and
+ *  redirected away (docs/api_auth.md). playwright.config.ts sets the token. */
+export function launchPath(query = "harness"): string {
+  return `/?${query}&token=${process.env.QZ_API_TOKEN ?? ""}`;
+}
+
 export async function gotoApp(page: Page): Promise<void> {
-  await page.goto("/?harness");
+  await page.goto(launchPath());
   await expect(page.locator(".qzk-library")).toBeVisible();
   await page.waitForFunction(() => Boolean((window as unknown as { __qz?: unknown }).__qz));
 }

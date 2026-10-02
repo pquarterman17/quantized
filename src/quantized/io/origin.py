@@ -19,6 +19,7 @@ from typing import Any
 
 import numpy as np
 
+from quantized.csv_safe import csv_text_cell
 from quantized.datastruct import DataStruct
 
 __all__ = ["GraphSpec", "format_origin_project_script", "format_origin_script"]
@@ -60,14 +61,16 @@ def _meta_get(meta: dict[str, Any], *keys: str, default: Any = None) -> Any:
 
 
 def _escape_lt(text: str) -> str:
-    """Escape double-quotes for a LabTalk string literal.
+    """Make ``text`` safe inside a LabTalk string literal.
 
     Control characters become spaces first: a newline in a file-derived label
     would end the statement's line and run the rest as LabTalk (``run -e``
     starts a program) when the user runs the script (security audit
-    2026-10-01)."""
+    2026-10-01). LabTalk has no backslash escape (``\\"`` lands literally,
+    live-verified 2026-07-04, docs/origin_re/validation_log.md), so a double
+    quote becomes ``'``, as in ``origin_com._escape_lt``."""
     text = _CONTROL_CHARS.sub(" ", text)
-    return text.replace('"', '\\"')
+    return text.replace('"', "'")
 
 
 def _sanitize(name: str) -> str:
@@ -237,9 +240,11 @@ def format_origin_script(
     values = np.asarray(data.values, dtype=float)
 
     # ── CSV: header, units, then %.10g data rows ──
+    # Names/units come from the imported file: neutralize spreadsheet formulas
+    # (OWASP) and quote a cell holding a comma. Numeric rows are untouched.
     csv_lines = [
-        ",".join([x_name, *labels]),
-        ",".join([x_unit, *units]),
+        ",".join(csv_text_cell(c) for c in [x_name, *labels]),
+        ",".join(csv_text_cell(c) for c in [x_unit, *units]),
     ]
     for r in range(values.shape[0]):
         cells = [f"{time[r]:.10g}"]

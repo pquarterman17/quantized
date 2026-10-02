@@ -54,6 +54,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from ..csv_safe import neutralize_formula, safe_comment_line
 from ..datastruct import DataStruct
 from ..x_units import x_unit_of
 from ._warn import warn as _warn
@@ -329,6 +330,9 @@ def _cell(v: Any) -> str:
         return ""
     if isinstance(v, float):
         return f"{v:.10g}"
+    if isinstance(v, str):
+        # Species names/units come from the imported file (OWASP formula guard).
+        return neutralize_formula(v)
     return str(v)
 
 
@@ -356,7 +360,7 @@ def region_summary_csv(result: dict[str, Any], *, dataset: str = "") -> str:
         *(f"warning: {x['text']}" for x in result.get("warnings", [])),
     ):
         if line is not None:
-            buf.write(f"# {line}\n")
+            buf.write(safe_comment_line(f"# {line}") + "\n")
     d = f" ({xu})" if xu else ""
     w.writerow([
         "species", "unit", "points", "blank", "integral", "integral unit", "integral kind",

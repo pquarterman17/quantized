@@ -116,6 +116,17 @@ def _parse_host(host_header: str | None, scheme: str) -> tuple[str, int] | None:
     return None if port is None else (host, port)
 
 
+def host_port(host_header: str | None, scheme: str) -> int | None:
+    """The port the request's ``Host`` names (scheme default when absent).
+
+    ``scheme`` may be a WebSocket's ``ws``/``wss``; None for a malformed Host."""
+    req_scheme = _ORIGIN_SCHEME_FOR.get(scheme.lower())
+    if req_scheme is None:
+        return None
+    parsed = _parse_host(host_header, req_scheme)
+    return None if parsed is None else parsed[1]
+
+
 def dev_origins(vite_port: int | None) -> frozenset[str]:
     """The Vite dev server's origins (both loopback aliases), or none."""
     if vite_port is None:

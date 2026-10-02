@@ -7,17 +7,37 @@
 // decline: the toast still auto-dismisses on its own timer either way — but
 // never while the pointer is over it or focus is in it (WCAG 2.2.1).
 
-import type { FocusEvent } from "react";
+import { useRef, type FocusEvent, type MouseEvent } from "react";
 
+import { absorbStrayDeleteOnContainer } from "../../lib/focusGuard";
 import { useToasts, type Toast } from "../../store/toasts";
 
 export default function Toaster() {
   const toasts = useToasts((s) => s.toasts);
   const dismiss = useToasts((s) => s.dismiss);
   const hold = useToasts((s) => s.hold);
+  const rootRef = useRef<HTMLDivElement>(null);
+  // Where focus was before it entered each toast, to give it back after the
+  // action button (which unmounts with its toast) is used.
+  const cameFrom = useRef(new Map<number, Element | null>());
   // Focus moving WITHIN a toast is neither a new hold nor a release.
   const focusHold = (t: Toast, on: boolean) => (e: FocusEvent<HTMLDivElement>) => {
-    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) hold(t.id, on);
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+    hold(t.id, on);
+    if (on) cameFrom.current.set(t.id, e.relatedTarget);
+    else cameFrom.current.delete(t.id);
+  };
+  // Focus left on the vanishing button would drop to <body>, where Delete
+  // removes the active dataset: return it, else to this Delete-absorbing root.
+  const onAction = (t: Toast) => (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    const btn = e.currentTarget;
+    const back = cameFrom.current.get(t.id);
+    t.action?.onClick();
+    dismiss(t.id);
+    const stranded = () => document.activeElement === btn || document.activeElement === document.body;
+    if (stranded() && back instanceof HTMLElement && back.isConnected) back.focus();
+    if (stranded()) rootRef.current?.focus();
   };
   const pill = (t: Toast) => (
     <div
@@ -35,11 +55,7 @@ export default function Toaster() {
         <button
           type="button"
           className="qzk-toast-action"
-          onClick={(e) => {
-            e.stopPropagation();
-            t.action?.onClick();
-            dismiss(t.id);
-          }}
+          onClick={onAction(t)}
         >
           {t.action.label}
         </button>
@@ -58,7 +74,14 @@ export default function Toaster() {
     // raised meanwhile reached the screen but not the accessibility tree.
     // Spelled as a literal: importing the constant would pull modalInert into
     // the entry chunk; modalInert.test.tsx pins the spelling.
-    <div className="qzk-toaster" aria-live="polite" data-live-region="">
+    <div
+      ref={rootRef}
+      className="qzk-toaster"
+      aria-live="polite"
+      data-live-region=""
+      tabIndex={-1}
+      onKeyDown={absorbStrayDeleteOnContainer}
+    >
       {toasts.map((t) => t.kind !== "danger" && pill(t))}
       <div className="qzk-toast-alerts" aria-live="assertive">
         {toasts.map((t) => t.kind === "danger" && pill(t))}

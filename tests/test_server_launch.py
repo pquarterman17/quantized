@@ -31,6 +31,22 @@ def _isolate_dev_origin_env(monkeypatch: pytest.MonkeyPatch) -> None:
 # ── probe helpers ────────────────────────────────────────────────────────────
 
 
+TOKEN = "d" * 43
+
+
+@pytest.fixture(autouse=True)
+def _known_api_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The launch token the launcher exports (``QZ_API_TOKEN``), restored after."""
+    monkeypatch.setenv("QZ_API_TOKEN", TOKEN)
+
+
+def _app_token() -> str:
+    """The token of the app ``_run_desktop`` serves (its window must carry it)."""
+    from quantized.app import app
+
+    return str(app.state.api_token)
+
+
 def test_health_ok_false_when_nothing_listens() -> None:
     # Grab a port the OS considers free, close it, and probe it: connection
     # refused must read as "not healthy", not raise.
@@ -251,7 +267,9 @@ def test_run_dev_default_opens_plain_dev_url(
         patch.object(server_launch, "_open_browser_later") as opener,
     ):
         server_launch._run_dev("127.0.0.1", 9001)
-    opener.assert_called_once_with("http://localhost:5173")
+    # the dev-only bootstrap (proxied to the API) trades the token for the
+    # cookie on the Vite origin, then redirects to the Vite-served index
+    opener.assert_called_once_with(f"http://localhost:5173/api/auth/bootstrap?token={TOKEN}")
 
 
 def test_run_dev_calc_combo_opens_calc_url(
@@ -269,7 +287,9 @@ def test_run_dev_calc_combo_opens_calc_url(
         patch.object(server_launch, "_open_browser_later") as opener,
     ):
         server_launch._run_dev("127.0.0.1", 9001, calc=True)
-    opener.assert_called_once_with("http://localhost:5173/?view=calc")
+    opener.assert_called_once_with(
+        f"http://localhost:5173/api/auth/bootstrap?view=calc&token={TOKEN}"
+    )
 
 
 def test_run_dev_stops_vite_when_uvicorn_dies(
@@ -344,7 +364,7 @@ def test_run_desktop_default_title_and_geometry_unchanged(
     # geometry positionally/by-kwarg as before, and the bridge separately, so
     # this test keeps pinning the window AND now pins that the bridge is wired.
     (args, kwargs) = webview.create_window.call_args
-    assert args == ("Quantized", "http://127.0.0.1:8000")
+    assert args == ("Quantized", f"http://127.0.0.1:8000/?token={_app_token()}")
     assert kwargs["width"] == 1440
     assert kwargs["height"] == 920
     assert kwargs["background_color"] == "#121116"
@@ -366,7 +386,7 @@ def test_run_desktop_calc_combo_uses_diraculator_title_and_geometry(
         "127.0.0.1", 8000, title="DiraCulator", width=600, height=860, path="/?view=calc"
     )
     (args, kwargs) = webview.create_window.call_args
-    assert args == ("DiraCulator", "http://127.0.0.1:8000/?view=calc")
+    assert args == ("DiraCulator", f"http://127.0.0.1:8000/?view=calc&token={_app_token()}")
     assert kwargs["width"] == 600
     assert kwargs["height"] == 860
     assert kwargs["background_color"] == "#121116"

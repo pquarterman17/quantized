@@ -19,8 +19,10 @@
 
 import { statsBox, statsHistogram, statsQQ, statsViolin } from "../../lib/api";
 import type { BoxStatWire } from "../../lib/api/stats";
-import { buildBarMatrix, seriesStat, type BarChartData } from "../../lib/barlayout";
-import { facetSliceRowIds, type FacetSlice } from "../../lib/facet";
+import type { BarChartData } from "../../lib/barlayout";
+import { buildBarMatrix, seriesStat } from "../../lib/barMatrix";
+import type { FacetSlice } from "../../lib/facet";
+import { facetSliceRowIds } from "../../lib/facetDomains";
 import type { GroupSpec } from "../../lib/statschooser";
 import {
   groupBoxStatsClient,

@@ -21,7 +21,7 @@
 import type { FigureSpec } from "./api/figures";
 import { buildExportStyles, toWireSeriesStyles } from "./exportStyles";
 import type { FigureRenderOpts } from "./figureSpec";
-import { pageSizeInches } from "./pagesetup";
+import { pageSizeInches } from "./pageGeometry";
 import type { PlotView } from "./plotview";
 import { POLAR_CANVAS, POLAR_LINE_PX, polarChannels, polarRadialRange } from "./polar";
 import { niceTicks } from "./ticks";

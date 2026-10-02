@@ -65,6 +65,28 @@ def test_base_url_resolves_default_and_env(monkeypatch: pytest.MonkeyPatch) -> N
     assert QuantizedClient(base_url="http://127.0.0.1:7000")._base_url == "http://127.0.0.1:7000"
 
 
+def test_token_resolves_arg_then_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The API token (docs/api_auth.md) rides every request as a header."""
+    monkeypatch.delenv("QZ_API_TOKEN", raising=False)
+    assert "x-quantized-token" not in QuantizedClient()._http.headers
+    monkeypatch.setenv("QZ_API_TOKEN", "e" * 43)
+    assert QuantizedClient()._http.headers["x-quantized-token"] == "e" * 43
+    explicit = QuantizedClient(token="a" * 43)
+    assert explicit._http.headers["x-quantized-token"] == "a" * 43
+
+
+def test_missing_token_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A server that refuses the token names the fix, not just "HTTP 401"."""
+    # The client reads QZ_API_TOKEN itself; a shell that exports it must not
+    # silently authenticate this "no token" case.
+    monkeypatch.delenv("QZ_API_TOKEN", raising=False)
+    http = TestClient(app, base_url="http://testserver")
+    http.headers.pop("x-quantized-token")  # conftest authenticates TestClients
+    client = QuantizedClient(_client=http)
+    with pytest.raises(QuantizedClientError, match="QZ_API_TOKEN"):
+        client.import_bytes(FIXTURE)
+
+
 def test_no_server_required_to_construct(monkeypatch: pytest.MonkeyPatch) -> None:
     """Building a client object never touches the network (lazy handshake)."""
     monkeypatch.delenv("QZ_URL", raising=False)
@@ -336,7 +358,9 @@ def test_live_socket_smoke() -> None:
         assert server.started, "uvicorn did not start within 10s"
         port = server.servers[0].sockets[0].getsockname()[1]
 
-        client = QuantizedClient(base_url=f"http://127.0.0.1:{port}")
+        client = QuantizedClient(
+            base_url=f"http://127.0.0.1:{port}", token=str(app.state.api_token)
+        )
         try:
             health = client.health()
             assert health["app"] == "quantized"

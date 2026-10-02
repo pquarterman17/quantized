@@ -28,7 +28,7 @@ FAIRmat pynxtools-xrd corpus) seed the parity tests.
 
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET  # noqa: S405 (matches io/xrdml.py; trusted local files)
+import xml.etree.ElementTree as ET  # noqa: S405 (types only; parsing via _safe_xml)
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -36,6 +36,8 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io._safe_xml import parse_untrusted_xml
+from quantized.io.base import CORRUPT_ARCHIVE_ERRORS
 
 __all__ = ["import_bruker_brml", "is_bruker_brml"]
 
@@ -101,24 +103,26 @@ def import_bruker_brml(filepath: str | Path) -> DataStruct:
     if not zipfile.is_zipfile(path):
         raise ValueError(f"not a ZIP archive (expected a .brml): {path.name}")
 
-    with zipfile.ZipFile(path) as zf:
-        members = _raw_data_members(zf.namelist())
-        if not members:
-            raise ValueError(f"no RawData scan document in archive: {path.name}")
-        if len(members) > 1:
-            raise ValueError(
-                f"multi-scan .brml detected ({len(members)} scans) -- reciprocal-space "
-                f"maps are not supported by the 1-D parser: {path.name}"
-            )
-        size = zf.getinfo(members[0]).file_size
-        if size > MAX_XML_BYTES:
-            raise ValueError(
-                f"scan document is {size} bytes uncompressed "
-                f"(limit {MAX_XML_BYTES}): {path.name}"
-            )
-        xml_text = zf.read(members[0]).decode("utf-8", "replace")
-
-    root = ET.fromstring(xml_text)  # noqa: S314 (trusted local file, matches xrdml)
+    try:
+        with zipfile.ZipFile(path) as zf:
+            members = _raw_data_members(zf.namelist())
+            if not members:
+                raise ValueError(f"no RawData scan document in archive: {path.name}")
+            if len(members) > 1:
+                raise ValueError(
+                    f"multi-scan .brml detected ({len(members)} scans) -- reciprocal-space "
+                    f"maps are not supported by the 1-D parser: {path.name}"
+                )
+            size = zf.getinfo(members[0]).file_size
+            if size > MAX_XML_BYTES:
+                raise ValueError(
+                    f"scan document is {size} bytes uncompressed "
+                    f"(limit {MAX_XML_BYTES}): {path.name}"
+                )
+            xml_text = zf.read(members[0]).decode("utf-8", "replace")
+        root = parse_untrusted_xml(xml_text, path.name, kind="BRML")  # refuses DTDs
+    except CORRUPT_ARCHIVE_ERRORS as exc:
+        raise ValueError(f"damaged .brml archive ({exc}): {path.name}") from exc
 
     routes = root.findall(".//DataRoute")
     route = next((r for r in routes if r.get("RouteFlag") == "Measured"), None)

@@ -44,6 +44,12 @@ Locally the config reuses an already-running server on that port
 (`reuseExistingServer: true` outside CI) so repeat runs are fast; in CI it
 always starts fresh.
 
+The API needs a per-launch token (`docs/api_auth.md`). The config sets
+`QZ_API_TOKEN` for the webServer and the workers, and `gotoApp` opens the
+launch URL. If you reuse a server you started yourself, start it with the
+same `QZ_API_TOKEN` you export for the run. Set `QZ_E2E_PORT` to use a port
+other than 8934.
+
 ## Layout
 
 ```

@@ -456,7 +456,9 @@ def import_csv(
         metadata.update({"time_is_datetime": True, "time_timezone": "UTC"})
     notes: list[str] = []
     if comma_cols:
-        decimal_meta, decimal_note = dc.decimal_metadata([col_headers[c] for c in comma_cols])
+        # Named as the dataset shows them: the header with its unit split off.
+        shown = [_extract_units(col_headers[c])[1] for c in comma_cols]
+        decimal_meta, decimal_note = dc.decimal_metadata(shown)
         metadata.update(decimal_meta)
         notes.append(decimal_note)
     if time_promoted:

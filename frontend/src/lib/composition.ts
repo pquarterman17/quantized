@@ -56,6 +56,16 @@ export interface FacetComposition {
 export interface BreakComposition {
   kind: "break";
   panels: BreakPanel[];
+  /** What it was built from — the elided x-ranges and the channel binding at
+   *  that moment — so a live arrangement can be rebuilt over the CURRENT rows
+   *  without changing its channels (`Stage/useEffectiveComposition.ts`). */
+  source?: BreakSource;
+}
+
+export interface BreakSource {
+  breaks: readonly [number, number][];
+  xKey: number | null;
+  yKeys: number[] | null;
 }
 
 export type Composition = SpatialComposition | FacetComposition | BreakComposition;
@@ -70,8 +80,8 @@ export function facetComposition(panels: FacetPanel[]): Composition | null {
   return panels.length > 0 ? { kind: "facet", panels } : null;
 }
 
-export function breakComposition(panels: BreakPanel[]): Composition | null {
-  return panels.length > 0 ? { kind: "break", panels } : null;
+export function breakComposition(panels: BreakPanel[], source?: BreakSource): Composition | null {
+  return panels.length > 0 ? { kind: "break", panels, source } : null;
 }
 
 /** The spatial panels, or `null` when the composition is a different kind (or

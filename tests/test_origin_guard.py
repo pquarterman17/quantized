@@ -29,9 +29,9 @@ import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 
-from quantized import app as app_module
-from quantized import server_launch
+from quantized import server_launch, web_guard
 from quantized.app import create_app
+from quantized.auth import TOKEN_HEADER
 from quantized.io.workbook_transfer_store import TransferStore
 from quantized.routes import workbook_transfer
 from quantized.security import (
@@ -238,8 +238,15 @@ def test_missing_host_refuses_any_origin() -> None:
 # ── desktop mode: a real uvicorn on an OS-picked port, as _run_desktop runs it ─
 
 
+# The token the live server is built with; ``_request`` sends it, as the
+# desktop window's cookie would (quantized.auth).
+LIVE_TOKEN = "l" * 43
+
+
 def _request(url: str, origin: str, method: str = "GET") -> int:
-    req = urllib.request.Request(url, method=method, headers={"Origin": origin})
+    req = urllib.request.Request(
+        url, method=method, headers={"Origin": origin, TOKEN_HEADER: LIVE_TOKEN}
+    )
     if method == "POST":
         req.data = b"{}"
         req.add_header("Content-Type", "text/plain")
@@ -262,7 +269,9 @@ def live_port(monkeypatch: pytest.MonkeyPatch) -> Iterator[int]:
     assert sock is not None
     port = int(sock.getsockname()[1])
     server = uvicorn.Server(
-        uvicorn.Config(create_app(), host="127.0.0.1", port=port, log_level="warning")
+        uvicorn.Config(
+            create_app(api_token=LIVE_TOKEN), host="127.0.0.1", port=port, log_level="warning"
+        )
     )
     t = threading.Thread(target=lambda: server.run(sockets=[sock]), daemon=True)
     t.start()
@@ -413,7 +422,7 @@ def test_refusal_reads_only_a_bounded_prefix_of_an_endless_body() -> None:
     status, headers, body = _refuse_via_asgi(endless)
     assert (status, json.loads(body)) == (403, {"detail": BLOCKED})
     assert headers.get(b"connection") == b"close"
-    assert 1 < reads <= app_module._REFUSED_BODY_DRAIN_CAP // chunk + 1
+    assert 1 < reads <= web_guard.REFUSED_BODY_DRAIN_CAP // chunk + 1
 
 
 def test_refusal_does_not_invite_a_100_continue_body() -> None:

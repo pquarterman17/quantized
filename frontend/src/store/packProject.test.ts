@@ -262,6 +262,26 @@ describe("cancel before packing (each pre-packing active state)", () => {
   });
 });
 
+describe("flagged sources (needs attention)", () => {
+  it("start excludes flagged sources by default", async () => {
+    vi.useFakeTimers();
+    const manifest = await runToAwaitingConfirmation();
+    vi.mocked(bridge.packStart).mockResolvedValue({ ok: true });
+    await usePackProject.getState().startPackProject(manifest);
+    expect(usePackProject.getState().phase).toBe("packing");
+    expect(bridge.packStart).toHaveBeenCalledWith("tok-1", expect.any(String), false);
+  });
+
+  it("start forwards the explicit include-flagged confirm to the bridge", async () => {
+    vi.useFakeTimers();
+    const manifest = await runToAwaitingConfirmation();
+    vi.mocked(bridge.packStart).mockResolvedValue({ ok: true });
+    await usePackProject.getState().startPackProject(manifest, true);
+    expect(usePackProject.getState().phase).toBe("packing");
+    expect(bridge.packStart).toHaveBeenCalledWith("tok-1", expect.any(String), true);
+  });
+});
+
 describe("cancel during packing", () => {
   it("packStatus returning cancelling then cancelled resolves the final phase, and polling stops", async () => {
     vi.useFakeTimers();

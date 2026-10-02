@@ -4,7 +4,8 @@
 // Metadata card shows the full text (lib/metadata.ts); this fires the ONE toast
 // per import batch that tells the user to look there.
 //
-// Loaded only from the import chunks (importDatasets.ts, importAppendRun.ts),
+// Loaded only from the import chunks (importDatasets.ts, importAppendRun.ts,
+// the lazy Import Wizard's useImportWizard.ts),
 // never from startup code.
 
 import type { DataStruct } from "../lib/types";

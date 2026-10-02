@@ -15,7 +15,8 @@
 //     they read against the bar's fill) and a summary marker — the rules are
 //     `statBarMarks`' and the export draws them identically.
 
-import { groupedBarSlots, stackedSegments, stackedTotal, type BarSeriesStat } from "../../lib/barlayout";
+import type { BarSeriesStat } from "../../lib/barlayout";
+import { groupedBarSlots, stackedSegments, stackedTotal } from "../../lib/barMatrix";
 import { barCountAnchor } from "../../lib/groupAxis";
 import { barValueDomain, categorySlots } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";

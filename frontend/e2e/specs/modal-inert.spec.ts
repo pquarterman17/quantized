@@ -154,7 +154,12 @@ test("an open dialog takes the background out of focus, Tab, pointer and the acc
   }
   // Pointer: with the backdrop made click-through, a real click lands on the
   // Library control itself — and does nothing, because it is inert.
-  await page.addStyleTag({ content: ".qz-overlay-backdrop { pointer-events: none !important; }" });
+  // A constructed stylesheet, not addStyleTag: the CSP refuses <style> tags.
+  await page.evaluate(() => {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(".qz-overlay-backdrop { pointer-events: none !important; }");
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  });
   const box = (await tiles.boundingBox())!;
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await expect(tiles).toHaveAttribute("aria-pressed", "false");

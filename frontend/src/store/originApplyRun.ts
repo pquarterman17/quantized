@@ -18,7 +18,7 @@ import { spatialComposition } from "../lib/composition";
 import { lit } from "../lib/macro";
 import { figureLabel, figureLayerFamily, type OriginFigureEntry } from "../lib/originFigures";
 import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlayFigure";
-import { pageSetupFromDecoded } from "../lib/pagesetup";
+import { pageSetupFromDecoded } from "../lib/pageGeometry";
 import { dedupeWindowTitle, displayedWindowTitle, scaleFromLog } from "../lib/plotview";
 import { nextDatasetId } from "./idSeq";
 import type { OriginApplyLibs } from "./originApplyLibs";

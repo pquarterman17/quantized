@@ -69,6 +69,11 @@ export function usePipeline(): PipelineState {
 
   const editStep = useCallback(
     (id: string, params: Record<string, unknown>, text?: { label: string; code: string }) => {
+      // An Apply that changes nothing (a double-click) is not an undo step.
+      const st = useApp.getState().macroSteps.find((s) => s.id === id);
+      if (!st) return;
+      const same = JSON.stringify(st.params) === JSON.stringify(params);
+      if (same && (!text || (text.label === st.label && text.code === st.code))) return;
       recordHistory("edit pipeline step");
       updateStepParams(id, params, text);
     },

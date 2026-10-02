@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { SpatialPanel } from "./multipanel";
-import { defaultPageSetup } from "./pagesetup";
+import { defaultPageSetup } from "./pageGeometry";
 import { buildSpatialPageRequest, canExportSpatialPage } from "./spatialPageExport";
 import type { DataStruct } from "./types";
 

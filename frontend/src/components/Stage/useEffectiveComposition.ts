@@ -29,7 +29,7 @@
 import { useMemo } from "react";
 
 import { breakPanelsOf, facetPanelsOf, spatialPanelsOf, type Composition } from "../../lib/composition";
-import { durableComposition } from "../../lib/facet";
+import { breakCompositionFromBreaks, durableComposition } from "../../lib/facet";
 import type { Dataset } from "../../lib/types";
 import { useApp, type AppState } from "../../store/useApp";
 
@@ -52,7 +52,14 @@ export function useEffectiveComposition(active: Dataset | null): Composition | n
     // break precedence -- the same function the P4.2 matrix's screen leg
     // projects, so the two cannot answer "what is the canvas showing?"
     // differently.
-    () => rawComposition ?? durableComposition(active, facetKey, xBreaks, xKey, yKeys),
+    // A live Break-at-gaps arrangement is rebuilt from its own ranges and
+    // channels over the CURRENT rows, so a row exclusion that empties a side
+    // collapses it here exactly where the export drops `x_breaks` (lib/figureSpec.ts).
+    () => {
+      const src = rawComposition?.kind === "break" ? rawComposition.source : undefined;
+      const live = src && active ? breakCompositionFromBreaks(active, src.breaks, src.xKey, src.yKeys) : rawComposition;
+      return live ?? durableComposition(active, facetKey, xBreaks, xKey, yKeys);
+    },
     [rawComposition, active, facetKey, xKey, yKeys, xBreaks],
   );
 }

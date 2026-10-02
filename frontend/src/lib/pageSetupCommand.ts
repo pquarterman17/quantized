@@ -6,12 +6,8 @@
 // calling it aspect-derived.
 
 import { askParams, type ParamField } from "../components/overlays/ParamDialog";
-import {
-  defaultPageSetup,
-  PAGE_UNITS,
-  type PageSetup,
-  type PageUnit,
-} from "./pagesetup";
+import { defaultPageSetup } from "./pageGeometry";
+import { PAGE_UNITS, type PageSetup, type PageUnit } from "./pagesetup";
 import type { StoreGet } from "./exportActive";
 
 /** Open the Page Setup dialog for the focused window, seeded from its current

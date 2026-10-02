@@ -215,8 +215,9 @@ def test_origin_graph_respects_make_graph_false() -> None:
 
 
 def test_origin_graph_quoting_safety() -> None:
-    # A label containing a double-quote is escaped in the axis title, same
-    # guard as the existing wks.col*.lname$ quoting.
+    # A label containing a double-quote is made safe in the axis title, same
+    # guard as the existing wks.col*.lname$ quoting. LabTalk has no backslash
+    # escape (docs/origin_re/validation_log.md, 2026-07-04), so it becomes '.
     from quantized.datastruct import DataStruct
 
     ds = DataStruct.create(
@@ -227,4 +228,4 @@ def test_origin_graph_quoting_safety() -> None:
         metadata={"x_column_name": "X"},
     )
     _, ogs = format_origin_script(ds, make_graph=True, graph=GraphSpec())
-    assert 'yl.text$ = "Weird \\"Y\\"";' in ogs
+    assert "yl.text$ = \"Weird 'Y'\";" in ogs

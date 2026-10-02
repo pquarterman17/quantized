@@ -5,10 +5,16 @@
 // so a slow server start (cold numpy/scipy/matplotlib import, first-run AV
 // scan) never leaves the user staring at a "can't reach this page" error.
 //
-// Port policy (mirrors the qz CLI): reuse an already-healthy QUANTIZED server
-// on the default port; if a foreign app holds it (the sibling fermiviewer
-// shares the 8000 default), spawn our sidecar on a free ephemeral port and
-// point the window there instead of timing out against the wrong app.
+// Port policy: spawn our sidecar on the default port when it is free, else on
+// a free ephemeral port (a foreign app such as the sibling fermiviewer, or
+// another Quantized, may hold 8000). An already-running server is never
+// adopted: every /api call needs that server's per-launch API token, which
+// this shell only knows for a sidecar it launched itself.
+//
+// API token (docs/api_auth.md): the shell generates it, hands it to the
+// sidecar as QZ_API_TOKEN, and navigates to the launch URL `/?token=...`;
+// the server trades that for an HttpOnly cookie and redirects the token out
+// of the URL.
 
 #![cfg_attr(
     all(not(debug_assertions), target_os = "windows"),
@@ -32,6 +38,25 @@ const DEFAULT_PORT: u16 = 8000;
 
 fn app_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}")
+}
+
+/// A fresh 256-bit API token, hex-encoded (URL- and cookie-safe as-is).
+fn new_api_token() -> std::io::Result<String> {
+    let mut bytes = [0u8; 32];
+    getrandom::getrandom(&mut bytes).map_err(|e| std::io::Error::other(e.to_string()))?;
+    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// The launch URL: the mode's page carrying the API token as `token=`.
+fn launch_url(base: &str, mode: Mode, token: &str) -> String {
+    let page = webview_url(base, mode);
+    if page.contains('?') {
+        format!("{page}&token={token}")
+    } else if page.ends_with('/') {
+        format!("{page}?token={token}")
+    } else {
+        format!("{page}/?token={token}")
+    }
 }
 
 /// True iff nothing currently holds 127.0.0.1:`port` (bind-probe; the
@@ -103,7 +128,7 @@ const SIDECAR_EXE: &str = "qz-server.exe";
 #[cfg(not(target_os = "windows"))]
 const SIDECAR_EXE: &str = "qz-server";
 
-fn spawn_server(repo: &PathBuf, port: u16) -> std::io::Result<Child> {
+fn spawn_server(repo: &PathBuf, port: u16, token: &str) -> std::io::Result<Child> {
     // Passing --port explicitly pins the server to the port this shell will
     // navigate to. Without it, a busy default port makes the qz CLI fall
     // back to an ephemeral port of ITS OWN choosing — one this shell can't
@@ -120,6 +145,7 @@ fn spawn_server(repo: &PathBuf, port: u16) -> std::io::Result<Child> {
                 if cand.is_file() {
                     let mut cmd = Command::new(&cand);
                     cmd.args(["--no-browser", "--port", &port_arg]);
+                    cmd.env("QZ_API_TOKEN", token);
                     hide_console(&mut cmd);
                     return cmd.spawn();
                 }
@@ -134,6 +160,7 @@ fn spawn_server(repo: &PathBuf, port: u16) -> std::io::Result<Child> {
     let python = repo.join(".venv").join("bin").join("python");
     let mut cmd = Command::new(python);
     cmd.args(["-m", "quantized", "--no-browser", "--port", &port_arg])
+        .env("QZ_API_TOKEN", token)
         .current_dir(repo);
     hide_console(&mut cmd);
     cmd.spawn()
@@ -262,21 +289,17 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
             let repo = repo_root();
-            // a dev/leftover QUANTIZED server may already own the default
-            // port — reuse it. If a foreign app holds it instead (typically
-            // the sibling fermiviewer, which shares the 8000 default), fall
-            // back to a free ephemeral port rather than timing out — the
-            // same policy as the qz CLI's _resolve_port.
-            let already = wait_for_health(Duration::from_millis(800), DEFAULT_PORT);
-            let (port, child) = if already {
-                (DEFAULT_PORT, None)
-            } else if port_is_free(DEFAULT_PORT) {
-                (DEFAULT_PORT, Some(spawn_server(&repo, DEFAULT_PORT)?))
+            // Whatever holds a busy default port (a foreign app, or another
+            // Quantized whose API token we cannot know) is left alone: fall
+            // back to a free ephemeral port -- the qz CLI's _resolve_port.
+            let token = new_api_token()?;
+            let port = if port_is_free(DEFAULT_PORT) {
+                DEFAULT_PORT
             } else {
-                let fallback = pick_free_port().unwrap_or(DEFAULT_PORT);
-                (fallback, Some(spawn_server(&repo, fallback)?))
+                pick_free_port().unwrap_or(DEFAULT_PORT)
             };
-            app.manage(ServerProc(Mutex::new(child)));
+            let child = spawn_server(&repo, port, &token)?;
+            app.manage(ServerProc(Mutex::new(Some(child))));
 
             // Keep the live window/taskbar thumbnail on the same Quantized
             // artwork embedded in the packaged executable and shortcuts.
@@ -351,10 +374,10 @@ fn main() {
             // surface a clear error if it never comes up).
             let handle = app.handle().clone();
             std::thread::spawn(move || {
-                let ok = already || wait_for_health(Duration::from_secs(60), port);
+                let ok = wait_for_health(Duration::from_secs(60), port);
                 if let Some(win) = handle.get_webview_window("main") {
                     if ok {
-                        if let Ok(url) = webview_url(&app_url(port), mode).parse() {
+                        if let Ok(url) = launch_url(&app_url(port), mode, &token).parse() {
                             let _ = win.navigate(url);
                         }
                     } else {
@@ -471,6 +494,28 @@ mod tests {
             webview_url("http://127.0.0.1:8000/?foo=bar", Mode::Calc),
             "http://127.0.0.1:8000/?foo=bar&view=calc"
         );
+    }
+
+    #[test]
+    fn launch_url_carries_the_token_in_both_modes() {
+        let base = app_url(DEFAULT_PORT);
+        assert_eq!(
+            launch_url(&base, Mode::Normal, "ab12"),
+            "http://127.0.0.1:8000/?token=ab12"
+        );
+        assert_eq!(
+            launch_url(&base, Mode::Calc, "ab12"),
+            "http://127.0.0.1:8000/?view=calc&token=ab12"
+        );
+    }
+
+    #[test]
+    fn api_tokens_are_long_hex_and_fresh() {
+        let a = new_api_token().expect("token");
+        let b = new_api_token().expect("token");
+        assert_eq!(a.len(), 64);
+        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(a, b);
     }
 
     #[test]

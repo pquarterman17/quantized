@@ -113,6 +113,7 @@ from quantized.desktop_consent import (
     revoke_paths,
 )
 from quantized.desktop_project_file import parse_workspace_payload
+from quantized.portable.attention import exclude_flagged
 from quantized.portable.copy_stream import StageProgress, safe_os_error
 from quantized.portable.grouping import Consented, Probe
 from quantized.portable.manifest import build_dry_run_manifest, manifest_json
@@ -206,6 +207,9 @@ class DesktopPackBridge:
             # offending bundle_path in the message. A genuine bug, still
             # reported as a structured refusal, never raised into pywebview.
             return _state.err("internal_error", "could not build a pack preview")
+        # Flag sources outside the data folders / not a data file type: an
+        # untrusted .dwk can declare any path. Part of the token-bound plan.
+        dry_run_manifest = _state.flag_attention(dry_run_manifest)
 
         project = dry_run_manifest["project"]
         sanitized_name = project["name"] if isinstance(project, dict) else project_name
@@ -240,10 +244,14 @@ class DesktopPackBridge:
 
     # -- start (the ONE call that mints real read consent + touches disk) ----
 
-    def pack_start(self, token: str, content: str) -> dict[str, Any]:
+    def pack_start(
+        self, token: str, content: str, include_flagged: bool = False
+    ) -> dict[str, Any]:
         """Start the actual copy/publish pipeline on a daemon worker
         thread. See this module's doc for the full stale-preview /
-        consent-minting / revoke-on-completion contract."""
+        consent-minting / revoke-on-completion contract. Sources the preview
+        flagged as needing attention are excluded unless ``include_flagged``
+        is exactly ``True`` (the user's explicit confirm)."""
         with self._pack_lock:
             if self._pack_phase in ("packing", "cancelling"):
                 return {"ok": False, "error": {"code": "already_running"}}
@@ -269,6 +277,8 @@ class DesktopPackBridge:
                 return _state.err("invalid_project", err or "invalid project")
             project_name = preview["project_name"]
             manifest = preview["manifest"]
+            if include_flagged is not True:
+                manifest = exclude_flagged(manifest)
 
             if _state.ineligible_packable_sources(manifest):
                 return _state.err(

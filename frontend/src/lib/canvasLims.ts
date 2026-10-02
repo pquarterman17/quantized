@@ -9,7 +9,10 @@
 // (`fullXExtents` / `fullYExtents`, which cover drawn error bars too, as the
 // autoscale does). A fully fixed pair passes through as the same reference.
 // When the typed side would land on or past the auto side, the axis goes back
-// to full auto (`range: null`) and `crossed` says so.
+// to full auto (`range: null`) and `crossed` says so. On a LOG axis a typed
+// side <= 0 counts as blank (`drawableLim`, `dropped`), as matplotlib's own
+// `set_ylim` ignores it there. A reciprocal axis keeps it: the export's
+// reciprocal scale (calc/figure_scale.py, a FuncScale) has no such rule.
 
 import { fixedLim, resolveHalfLim, type HalfLim, type ResolvedLim } from "./axisLim";
 import type { ErrorSpan } from "./errorbars";
@@ -30,18 +33,31 @@ export interface LimResolveInputs {
 
 const positiveOnly = (s: AxisScale): boolean => s === "log" || s === "reciprocal";
 
-/** The concrete X/Y pairs for `payload`, plus whether each one crossed. The
- *  data is scanned only for a half-open side — the common fixed/auto limit
- *  costs nothing here. */
+/** On a log axis a typed side <= 0 is auto for that side: uPlot cannot draw
+ *  it, and the export's matplotlib ignores it the same way. */
+export function drawableLim(lim: HalfLim | null | undefined, s: AxisScale): HalfLim | null | undefined {
+  if (!lim || s !== "log" || !lim.some((v) => v !== null && v <= 0)) return lim;
+  const side = (v: number | null) => (v !== null && v > 0 ? v : null);
+  return lim.every((v) => side(v) === null) ? null : [side(lim[0]), side(lim[1])];
+}
+
+/** A resolved limit, plus whether a typed side was dropped (`drawableLim`). */
+export type CanvasLim = ResolvedLim & { dropped: boolean };
+
+/** The concrete X/Y pairs for `payload`, plus whether each one crossed or
+ *  dropped a side. The data is scanned only for a half-open side — the
+ *  common fixed/auto limit costs nothing here. */
 export function resolveCanvasLims(
   payload: PlotPayload | null,
-  { xLim, yLim, xScale, yScale, hidden, errorBars, errorSpans }: LimResolveInputs,
-): { x: ResolvedLim; y: ResolvedLim } {
+  { xLim: xTyped, yLim: yTyped, xScale, yScale, hidden, errorBars, errorSpans }: LimResolveInputs,
+): { x: CanvasLim; y: CanvasLim } {
+  const xLim = drawableLim(xTyped, xScale);
+  const yLim = drawableLim(yTyped, yScale);
   const openX = !!payload && !!xLim && !fixedLim(xLim);
   const openY = !!payload && !!yLim && !fixedLim(yLim);
   const reach = openX || openY ? errorReach(payload!, errorBars, errorSpans) : null;
   return {
-    x: resolveHalfLim(xLim, openX ? fullXExtents(withXBarRows(payload!, reach, hidden), hidden, positiveOnly(xScale)) : null),
-    y: resolveHalfLim(yLim, openY ? fullYExtents(payload!, hidden, 0, positiveOnly(yScale), reach) : null),
+    x: { ...resolveHalfLim(xLim, openX ? fullXExtents(withXBarRows(payload!, reach, hidden), hidden, positiveOnly(xScale)) : null), dropped: xLim !== xTyped },
+    y: { ...resolveHalfLim(yLim, openY ? fullYExtents(payload!, hidden, 0, positiveOnly(yScale), reach) : null), dropped: yLim !== yTyped },
   };
 }

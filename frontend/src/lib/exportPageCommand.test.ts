@@ -6,7 +6,7 @@ import { spatialComposition } from "./composition";
 import { EXCLUDED_OMIT_OPTION } from "./excludedRowsChoice";
 import { GREYSCALE_FIELD } from "./exportFigureCommand";
 import { runExportSpatialPageCommand } from "./exportPageCommand";
-import { defaultPageSetup } from "./pagesetup";
+import { defaultPageSetup } from "./pageGeometry";
 import { useParamDialog } from "../store/paramDialog";
 import { usePendingOps } from "../store/pendingOps";
 import { useApp } from "../store/useApp";

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import type { BoxStat } from "../../lib/statstage";
-import { seriesStat, type BarChartData } from "../../lib/barlayout";
+import type { BarChartData } from "../../lib/barlayout";
+import { seriesStat } from "../../lib/barMatrix";
 import { resolveStatMarks, type ResolvedStatMarks } from "../../lib/statMarks";
 import { boxValueDomain } from "./statDrawMarks";
 import { draw, drawCategoryAxis, fmt, plotRect, type StatDrawData, type ViolinGroup } from "./statRender";

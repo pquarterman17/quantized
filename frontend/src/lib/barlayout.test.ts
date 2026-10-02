@@ -1,14 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  buildBarMatrix,
-  categoryLevels,
-  groupedBarSlots,
-  resolveCategoryLabels,
-  seriesStat,
-  stackedSegments,
-  stackedTotal,
-} from "./barlayout";
+import { categoryLevels, resolveCategoryLabels } from "./barlayout";
+import { buildBarMatrix, groupedBarSlots, seriesStat, stackedSegments, stackedTotal } from "./barMatrix";
 import type { DataStruct } from "./types";
 
 describe("categoryLevels", () => {

@@ -306,6 +306,17 @@ describe("PlotViewport — half-open limits", () => {
     expect(onLimCrossed).toHaveBeenCalledWith("y");
   });
 
+  it("a typed side <= 0 on a log axis is auto and says so, apart from the crossing note", () => {
+    vi.stubGlobal("ResizeObserver", MockResizeObserver);
+    const onLimCrossed = vi.fn();
+    render(<PlotViewport {...baseProps()} yScale="log" yLim={[0, 25]} onLimCrossed={onLimCrossed} />);
+    const range = optsOf(0).scales?.y?.range as [number, number];
+    expect(range[0]).toBeGreaterThan(0);
+    expect(range[1]).toBe(25);
+    expect(onLimCrossed).toHaveBeenCalledWith("y", "log");
+    expect(onLimCrossed).toHaveBeenCalledTimes(1);
+  });
+
   it("editing the typed side nudges the live instance, keeping the resolved auto side, without a rebuild", () => {
     vi.stubGlobal("ResizeObserver", MockResizeObserver);
     const props = { ...baseProps(), yLim: [null, 25] as [number | null, number | null] };

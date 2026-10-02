@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { RoiDef } from "../lib/roi";
-import { deserializeRois, serializeRois } from "./rois";
+import { deserializeRois, serializeRois } from "./roisCodec";
 
 // Unit coverage for the .dwk (de)serialize helpers (RSM_CUTS_PLAN item 13).
 // The CRUD actions (saveRoi/applySavedRoi/removeSavedRoi) this slice also

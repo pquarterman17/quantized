@@ -19,6 +19,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from quantized import data_roots
 from quantized.desktop_consent import (
     grant_paths,
     is_consented,
@@ -27,6 +28,8 @@ from quantized.desktop_consent import (
     normalize_path,
 )
 from quantized.desktop_source_probe import probe_source_path
+from quantized.heavy_import import heavy_imports
+from quantized.portable.attention import annotate_attention
 
 __all__ = [
     "grant_eligible_packable_sources",
@@ -35,6 +38,7 @@ __all__ = [
     "empty_progress",
     "eligible",
     "err",
+    "flag_attention",
     "initial_progress",
     "probe_checksummed",
     "probe_no_checksum",
@@ -65,6 +69,21 @@ def eligible(path: str) -> bool:
     if resolved is None:
         return False
     return is_consented(resolved) or is_dir_consented(resolved) or is_declared_source(resolved)
+
+
+def flag_attention(manifest: Mapping[str, Any]) -> dict[str, Any]:
+    """``manifest`` with every packable source flagged when it lies outside
+    the allowed data folders or is not a recognised data file type (see
+    :mod:`quantized.portable.attention`). The registry is imported here, not
+    at module load, so the bridge does not pull in every parser on startup."""
+    with heavy_imports("quantized.io.registry"):
+        from quantized.io.registry import is_recognised_data_name
+
+    return annotate_attention(
+        manifest,
+        inside_roots=data_roots.is_inside_data_roots,
+        recognised=is_recognised_data_name,
+    )
 
 
 def probe_checksummed(path: str) -> dict[str, Any]:

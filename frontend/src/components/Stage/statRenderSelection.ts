@@ -11,7 +11,7 @@
 // strip and bar alike. Selected POINTS (box "points" / strip) are ringed by
 // the box renderer itself (`statRenderBox`), which owns their jitter.
 
-import { stackedTotal } from "../../lib/barlayout";
+import { stackedTotal } from "../../lib/barMatrix";
 import { barValueDomain } from "../../lib/statstage";
 import {
   barDomainCandidates,

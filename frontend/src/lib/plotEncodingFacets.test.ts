@@ -27,7 +27,7 @@ import { encodingNotes } from "../components/workshops/graphbuilder/encodingWell
 import { createFigureDocument } from "./figureDocument";
 import { buildFigureSpecFromDocument } from "./figureSpec";
 import { withFacetRows } from "./figureSpecFacets";
-import { facetSplitChannels } from "./facet";
+import { facetSplitChannels } from "./facetDomains";
 import { encodedFacetPanels, encodedSpecRender, encodeSpec } from "./plotEncoding";
 import { facetEncoding, facetSplitEncoding, type FigureEncoding } from "./plotEncodingBinding";
 import type { PlotSpec } from "./plotspec";

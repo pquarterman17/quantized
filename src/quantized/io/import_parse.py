@@ -28,7 +28,7 @@ import numpy as np
 
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
-from quantized.io.delimited import _extract_units
+from quantized.io.delimited import _extract_units, _split_lines
 
 if TYPE_CHECKING:  # ImportSettings lives in import_preview, which imports THIS
     from quantized.io.import_preview import ImportSettings
@@ -99,12 +99,22 @@ def _scoring_rows(text: str, tokens: list[list[str]], delim: str) -> Sequence[Se
     return tokens
 
 
+def _uncommented(lines: list[str], index: int | None) -> int | None:
+    """``index`` unless it points at a comment line (`delimited._split_lines`):
+    the wizard never takes one for a header or units row; import drops them."""
+    if index is None or not _split_lines(lines[index])[1]:
+        return index
+    return None
+
+
 def _resolve_delim(lines: list[str], setting: str) -> str:
     d = _NAMED_DELIMS.get(setting.lower(), setting)
     if d != "auto":
         return d
-    non_empty = [ln for ln in lines if ln.strip()]
-    return layout._detect_delimiter(non_empty) if non_empty else ","
+    # The same sample direct import votes on (stripped, blank and comment
+    # lines skipped), so the wizard and `import_csv` pick one delimiter.
+    sample = _split_lines("\n".join(lines))[0]
+    return layout._detect_delimiter(sample) if sample else ","
 
 
 def _resolve_names(tokens: list[list[str]], header_line: int | None, n_cols: int) -> list[str]:
@@ -192,6 +202,13 @@ def _effective_names(p: _Parsed, label_overrides: list[str] | None, n_cols: int)
         label_overrides[k] if label_overrides and label_overrides[k] else p.names[k]
         for k in range(n_cols)
     ]
+
+
+def _decimal_names(p: _Parsed, effective_names: list[str]) -> list[str]:
+    """The decimal-comma columns, named as the parsed dataset shows them: the
+    x column keeps its header name (`x_column_name`); every other column
+    carries its effective (label-row) name."""
+    return [p.names[k] if p.roles[k] == "x" else effective_names[k] for k in p.decimal_columns]
 
 
 def _resolve_roles(roles: list[str] | None, n_cols: int) -> list[str]:

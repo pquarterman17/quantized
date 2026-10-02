@@ -8,6 +8,7 @@ import type {
   ImportPreviewResponse,
   ImportSettingsWire,
 } from "../../../lib/types";
+import { useToasts } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { useImportWizard } from "./useImportWizard";
 
@@ -142,6 +143,24 @@ describe("useImportWizard", () => {
     expect(ds[0].name).toBe("run1.dat");
     expect(ds[0].data).toEqual(DS);
     expect(result.current.imported).toBe(true);
+  });
+
+  it("reports the parser's notes in one toast, like every other import path", async () => {
+    useToasts.setState({ toasts: [] });
+    const note = "3 rows with too few values were dropped.";
+    vi.mocked(importParse).mockResolvedValue({ ...DS, metadata: { ...DS.metadata, notes: [note, "Second note."] } });
+    const { result } = renderHook(() => useImportWizard());
+    await act(async () => {
+      await result.current.pickFile(fakeFile("run1.dat"));
+    });
+    await waitFor(() => expect(result.current.preview).toEqual(PREVIEW));
+
+    await act(async () => {
+      await result.current.doImport();
+    });
+
+    const msgs = useToasts.getState().toasts.map((t) => t.msg);
+    expect(msgs).toContain(`run1.dat: ${note} (+1 more in Metadata)`);
   });
 
   it("P1.6 item 2: attaches CONFIRMED error-role bindings (from the auto-suggestion) to the new dataset", async () => {

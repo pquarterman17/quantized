@@ -21,14 +21,12 @@ import {
   durableComposition,
   facetCompositionFromBinding,
   facetPayloads,
-  facetSliceRowIds,
   facetSlices,
-  sharedXDomain,
-  sharedYDomain,
   suggestBreaks,
   type BreakPanel,
   type FacetPanel,
 } from "./facet";
+import { facetSliceRowIds, sharedXDomain, sharedYDomain } from "./facetDomains";
 import { defaultDenseChannels, type PlotPayload } from "./plotdata";
 import { analysisData, analysisRowIds } from "./rowstate";
 import { resolveGroupsIndexed } from "./statstage";

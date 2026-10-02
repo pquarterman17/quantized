@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 import numpy as np
 
@@ -63,22 +63,43 @@ def _as_str(value: Any) -> str:
     return str(value).strip()
 
 
+class _ClampedReader:
+    """A read-only file whose ``read(n)`` never asks for more than is left.
+
+    scipy reads each header-declared size in one ``read(n)``, and a buffered
+    read allocates ``n`` bytes up front: a 200-byte classic file declaring a
+    200M-point variable allocated 1.6 GB before failing. A read past EOF
+    returns only what is left anyway, so clamping changes no result."""
+
+    def __init__(self, fh: BinaryIO, size: int) -> None:
+        self._fh, self._size = fh, size
+
+    def read(self, n: int = -1) -> bytes:
+        if n >= 0:
+            n = min(n, max(self._size - self._fh.tell(), 0))
+        return self._fh.read(n)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._fh, name)
+
+
 def _read_netcdf3(path: Path) -> _NcData:
     with heavy_imports("scipy.io"):
         from scipy.io import netcdf_file  # noqa: PLC0415
 
-    f = netcdf_file(str(path), "r", mmap=False)
-    try:
-        variables = {
-            name: _Var(np.asarray(var[:], dtype=float) if var.data.dtype.kind in "fiu"
-                       else np.asarray(var[:]),
-                       _as_str(getattr(var, "units", b"")))
-            for name, var in f.variables.items()
-        }
-        attrs = {k: _as_str(v) if isinstance(v, bytes) else v
-                 for k, v in f._attributes.items()}  # noqa: SLF001 (scipy's public-in-practice map)
-    finally:
-        f.close()
+    with path.open("rb") as fh:
+        f = netcdf_file(_ClampedReader(fh, path.stat().st_size), "r", mmap=False)
+        try:
+            variables = {
+                name: _Var(np.asarray(var[:], dtype=float) if var.data.dtype.kind in "fiu"
+                           else np.asarray(var[:]),
+                           _as_str(getattr(var, "units", b"")))
+                for name, var in f.variables.items()
+            }
+            attrs = {k: _as_str(v) if isinstance(v, bytes) else v
+                     for k, v in f._attributes.items()}  # noqa: SLF001 (scipy's public-in-practice map)
+        finally:
+            f.close()
     return _NcData(variables, attrs)
 
 
@@ -112,6 +133,14 @@ def _check_dataset(name: str, obj: Any) -> None:
         raise ValueError(
             f"variable {name!r} declares {obj.size} elements "
             f"(limit {MAX_DATASET_ELEMENTS}); not read"
+        )
+    # One element can be a whole sub-array or a long fixed string, so the
+    # element count alone does not bound the read.
+    nbytes = obj.size * obj.dtype.itemsize
+    if nbytes > 8 * MAX_DATASET_ELEMENTS:
+        raise ValueError(
+            f"variable {name!r} declares {nbytes} bytes "
+            f"(limit {8 * MAX_DATASET_ELEMENTS}); not read"
         )
 
 

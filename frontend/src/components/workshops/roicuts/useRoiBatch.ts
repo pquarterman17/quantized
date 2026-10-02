@@ -37,6 +37,7 @@ import type { DataStruct } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { useCutLanding } from "../../Stage/useCutLanding";
+import { csvTextCell } from "../../../lib/csvCell";
 
 /** A dataset that did NOT contribute a result, and why — every skip/error
  *  names its dataset (RSM_CUTS_PLAN item 9: "a silent skip is the failure
@@ -129,7 +130,7 @@ export function summaryToCsv(rows: readonly BatchSummaryRow[]): string {
     "max_intensity",
     "n_points",
   ];
-  const q = (s: string): string => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+  const q = csvTextCell; // dataset names are file-derived: formula-neutralized (OWASP)
   const lines = rows.map((r) =>
     [
       q(r.name),

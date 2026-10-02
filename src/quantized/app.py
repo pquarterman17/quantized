@@ -10,17 +10,17 @@ import asyncio
 import logging
 import os
 from collections.abc import Collection
-from contextlib import aclosing, asynccontextmanager
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.requests import ClientDisconnect, HTTPConnection
 
 from quantized import __version__
+from quantized.auth import resolve_token
+from quantized.body_limit import BodyLimitMiddleware
 from quantized.io.workbook_transfer_store import cleanup_transfer_dir
 from quantized.jobs import jobs
 from quantized.plugins import load_plugins
@@ -84,7 +84,8 @@ from quantized.routes import (
     xray,
 )
 from quantized.routes._errors import validation_error_handler
-from quantized.security import dev_origins_from_env, host_allowed, origin_allowed
+from quantized.security import dev_origins_from_env, host_allowed
+from quantized.web_guard import authorized, origin_ok, security_guard
 
 __all__ = ["create_app", "app"]
 
@@ -115,11 +116,11 @@ async def _lifecycle_ws(ws: WebSocket) -> None:
     create_app simple."""
     global _clients, _ever_connected
     # The HTTP middleware doesn't run on the WS upgrade — enforce the same
-    # Host + Origin checks here (closing before accept()).
+    # Host + Origin + API-token checks here (closing before accept()).
     if not host_allowed(ws.headers.get("host")):
         await ws.close(code=1008)  # policy violation
         return
-    if not _origin_ok(ws):
+    if not origin_ok(ws) or not authorized(ws):
         await ws.close(code=1008)  # policy violation
         return
     await ws.accept()
@@ -142,67 +143,6 @@ async def _grace_check() -> None:
     if _AUTO_SHUTDOWN and _ever_connected and _clients == 0:
         os._exit(0)
 
-def _origin_ok(conn: HTTPConnection) -> bool:
-    """The CSRF check shared by the HTTP guard and the WS upgrade.
-
-    No Origin header passes (same-origin navigations, curl, the desktop
-    shells -- ``host_allowed`` covers those). A present Origin must be this
-    server's own origin for the request's scheme + Host port (BUG-030), the
-    Tauri shell, or -- under ``qz --dev`` only -- the Vite dev origin."""
-    origin = conn.headers.get("origin")
-    if not origin:
-        return True
-    return origin_allowed(
-        origin,
-        host_header=conn.headers.get("host"),
-        scheme=conn.url.scheme,
-        extra_origins=getattr(conn.app.state, "dev_origins", frozenset()),
-    )
-
-
-# A refused request's body is read and discarded (never kept) up to this many
-# bytes before the 403 goes out; see ``_refuse``.
-_REFUSED_BODY_DRAIN_CAP = 64 * 1024
-
-
-async def _refuse(request: Request, detail: str) -> JSONResponse:
-    """The guard's 403, sent only once the request body has been drained.
-
-    Answering from the headers alone left the body unread (or still in
-    flight) when uvicorn closed the connection -- which it does straight after
-    the response when the client sent ``Connection: close``, as urllib does.
-    The kernel answers such a close with a TCP RST instead of a FIN, and on
-    Windows an RST discards data the client has received but not yet read, so
-    the refusal could surface as ``ConnectionResetError`` [WinError 10054]
-    instead of the 403 already sent.
-
-    Bounded: reading stops once more than ``_REFUSED_BODY_DRAIN_CAP`` bytes
-    have arrived, and nothing is read for ``Expect: 100-continue`` (reading
-    would make the server invite the very body being refused). When the body
-    was not fully read, the 403 carries ``Connection: close`` so the server
-    closes rather than keep reading it -- an attacker's body is never read
-    without limit. (A client that stalls mid-body stalls this wait exactly as
-    it would stall any route that reads a body; uvicorn times neither out.)"""
-    drained = await _drain_body(request)
-    headers = None if drained else {"Connection": "close"}
-    return JSONResponse({"detail": detail}, status_code=403, headers=headers)
-
-
-async def _drain_body(request: Request) -> bool:
-    """Read and discard the body up to the cap; True only if all of it was read."""
-    if request.headers.get("expect", "").lower() == "100-continue":
-        return False
-    seen = 0
-    try:
-        async with aclosing(request.stream()) as chunks:
-            async for chunk in chunks:
-                seen += len(chunk)
-                if seen > _REFUSED_BODY_DRAIN_CAP:
-                    return False
-    except ClientDisconnect:
-        return False
-    return True
-
 
 @asynccontextmanager
 async def _app_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
@@ -221,16 +161,23 @@ async def _app_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     _datasetcache.clear_cache()
 
 
-def create_app(*, dev_origins: Collection[str] | None = None) -> FastAPI:
+def create_app(
+    *, dev_origins: Collection[str] | None = None, api_token: str | None = None
+) -> FastAPI:
     """Build the FastAPI app and wire the domain routers.
 
     ``dev_origins`` are the only cross-origin pages (besides the Tauri shell)
     allowed to call /api. None reads them from the environment, where
     ``qz --dev`` exports the Vite port (``security.dev_origins_from_env``);
-    every other run mode leaves it unset, so the set is empty there."""
+    every other run mode leaves it unset, so the set is empty there.
+
+    ``api_token`` is the secret every /api route but /api/health needs
+    (``quantized.auth``). None takes ``QZ_API_TOKEN``, which the ``qz``
+    launcher exports, else a fresh random token."""
     allowed_dev = frozenset(dev_origins_from_env() if dev_origins is None else dev_origins)
     application = FastAPI(title="quantized", version=__version__, lifespan=_app_lifespan)
     application.state.dev_origins = allowed_dev
+    application.state.api_token = resolve_token() if api_token is None else api_token
     application.add_exception_handler(RequestValidationError, validation_error_handler)
     # CORS read access for the Vite dev origin in --dev only (empty otherwise:
     # the served SPA and the desktop shells are same-origin and need none).
@@ -241,17 +188,13 @@ def create_app(*, dev_origins: Collection[str] | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
-    @application.middleware("http")
-    async def _security_guard(request: Request, call_next):  # type: ignore[no-untyped-def]
-        """Host check (all paths, defeats DNS rebinding) then Origin check
-        (/api/* only, the CSRF guard) — see ``quantized.security`` for what
-        each one does and doesn't cover. CORSMiddleware alone is NOT this:
-        it never inspects Host and doesn't block simple cross-site POSTs."""
-        if not host_allowed(request.headers.get("host")):
-            return await _refuse(request, "unrecognized Host header")
-        if request.url.path.startswith("/api") and not _origin_ok(request):
-            return await _refuse(request, "cross-origin API request blocked")
-        return await call_next(request)
+    # Body caps while the body streams (413) -- inside the guard, so an
+    # unauthenticated request is refused before its size matters.
+    application.add_middleware(BodyLimitMiddleware)
+    # Host, Origin and API-token checks, the SPA index cookie bootstrap and
+    # the CSP header -- see ``quantized.web_guard``. Registered last, so it is
+    # the outermost layer and refuses before anything reads a body.
+    application.middleware("http")(security_guard)
 
     @application.get("/api/health")
     def health() -> dict[str, str]:

@@ -49,7 +49,7 @@ def test_auto_converts_unambiguous_decimal_comma(tmp_path: Path, delim: str) -> 
     assert list(ds.units) == ["emu"]
     assert ds.metadata["x_column_name"] == "Temp"
     assert ds.metadata["decimal_separator"] == ","
-    assert ds.metadata["decimal_comma_columns"] == ["Temp (K)", "Moment (emu)"]
+    assert ds.metadata["decimal_comma_columns"] == ["Temp", "Moment"]  # as the dataset shows them
     assert any("decimal separator" in n for n in ds.metadata["notes"])
 
 
@@ -294,6 +294,10 @@ def test_wizard_detects_headerless_semicolon_file() -> None:
         ["Temp,Moment", "300.5,1.25e-3", "301,1.5e-3"],
         ['1,"x; y, z"', '2,"p; q"'],  # quoted text with a ';' in it
         ["a, b;1", "c, d;2"],  # ';' present but the commas are text
+        # Every line ends in ';' and the title line has fewer commas: ragged
+        # comma counts alone are no evidence of decimal commas.
+        ["Run 1, sample A;", "1.0,2.0,3.0;", "2.0,3.0,4.0;"],
+        ["a, b;1", "c, d, e;2"],
     ],
 )
 def test_us_comma_layouts_keep_the_comma_delimiter(lines: list[str]) -> None:

@@ -91,6 +91,10 @@ def _detect_delimiter(raw_lines: Sequence[str]) -> str:
                 best_delim = ch
     if best_delim == "," and _semicolon_over_comma(test):
         return ";"
+    if best_delim == " " and len(tabs := {ln.count("\t") for ln in test}) == 1 and 0 not in tabs:
+        # Every line has the same nonzero tab count: a tab export whose text
+        # cells hold spaces ("Smith, J"), which outvoted the tabs as whitespace.
+        return "\t"
     return best_delim
 
 
@@ -100,20 +104,21 @@ def _semicolon_over_comma(lines: Sequence[str]) -> bool:
     A headerless ``"1,5;2,5"`` file has more commas than semicolons, so the
     plain vote picked ``","``. Narrow on purpose: every line needs the same
     nonzero ``;`` count and no quotes, and then either the comma counts vary
-    line to line or every ``;``-cell holding a comma is a comma number. A
-    file with no ``;`` returns at once.
+    line to line and some ``;``-cell is a comma number, or every ``;``-cell
+    holding a comma is one. A file with no ``;`` returns at once.
     """
     first = lines[0].count(";") if lines else 0
     if first == 0 or any(ln.count(";") != first or '"' in ln for ln in lines):
         return False
-    if len({ln.count(",") for ln in lines}) > 1:
-        return True
-    return all(
-        _COMMA_NUMBER_RE.match(cell.strip())
+    numbers = [
+        bool(_COMMA_NUMBER_RE.match(cell.strip()))
         for ln in lines
         for cell in ln.split(";")
         if "," in cell
-    )
+    ]
+    if len({ln.count(",") for ln in lines}) > 1:
+        return any(numbers)  # ragged alone is no evidence: "a, b;1" / "c, d, e;2"
+    return all(numbers)
 
 
 def _to_float(token: str) -> float:

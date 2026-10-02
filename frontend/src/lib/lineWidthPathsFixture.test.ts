@@ -38,7 +38,7 @@ import { encodeSpec } from "./plotEncoding";
 import { buildEncodedExport } from "./plotEncodingExport";
 import type { PlotSpec } from "./plotspec";
 import { canvasLineWidth } from "./plotTemplates";
-import { defaultPageSetup } from "./pagesetup";
+import { defaultPageSetup } from "./pageGeometry";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import { buildSpatialPageRequest } from "./spatialPageExport";
 import type { Dataset, DefaultTrace, SeriesStyle } from "./types";

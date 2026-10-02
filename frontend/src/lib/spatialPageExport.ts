@@ -53,7 +53,8 @@ import { compactOverrides, gateY2Overrides, type FigureOverrides } from "./figur
 import { spatialGridSize, spatialPlottedChannels, type SpatialPanel } from "./multipanel";
 import { pageValidRects } from "./panelLayout";
 import { withPageGreyscale } from "./pageGreyscale";
-import { pageSizeInches, type PageSetup } from "./pagesetup";
+import { pageSizeInches } from "./pageGeometry";
+import type { PageSetup } from "./pagesetup";
 import { droppedRows } from "./rowstate";
 import { axisFmtParam, type AxisFormat, type DataStruct, type Dataset, type DefaultTrace } from "./types";
 import type { ExcludedRowsGhoster } from "./figureSpec";

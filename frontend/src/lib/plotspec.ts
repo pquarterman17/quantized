@@ -115,7 +115,8 @@
 // Slices 2 + "part C"); this module only owns the top-level version/
 // promotion seam.
 
-import { buildBarMatrix, type BarChartData } from "./barlayout";
+import type { BarChartData } from "./barlayout";
+import { buildBarMatrix } from "./barMatrix";
 import { buildErrorSpans, type ErrorSpan } from "./errorbars";
 import { facetPayloads, facetSlices, type FacetPanel } from "./facet";
 import { groupLevelLabel } from "./categorical";

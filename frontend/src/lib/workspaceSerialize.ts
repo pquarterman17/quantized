@@ -22,7 +22,7 @@ import type { PlotRecipe } from "./plotRecipe";
 import type { QuickPlotTemplate } from "./quickPlotTemplates";
 import type { RoiDef } from "./roi";
 import type { LibrarySelection } from "../store/libraryPanel";
-import { serializeRois } from "../store/rois";
+import { serializeRois } from "../store/roisCodec";
 import { isDefaultMapViews, serializeMapViews, type MapViewMap } from "./mapView";
 import type { TechniqueViewMemoryMap } from "./techniqueViewMemory";
 import type { RecalcMode } from "./recalc";

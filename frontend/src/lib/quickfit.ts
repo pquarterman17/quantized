@@ -10,7 +10,6 @@
 // band + row math is identical across modes, only what's computed FROM the
 // selected rows differs (see the store's `runGadget*` actions).
 
-import { fmtNum } from "./format";
 import { effectiveChannels } from "./plotdata";
 import { activeRowIndices, analysisData, droppedRows } from "./rowstate";
 import type { CalcResult, Dataset, FitSpec } from "./types";
@@ -20,16 +19,6 @@ import type { CalcResult, Dataset, FitSpec } from "./types";
  *  the ROI band at all — see the store's `gadgetCursors` field. */
 export const GADGET_MODES = ["fit", "integrate", "stats", "differentiate", "fft", "cursors"] as const;
 export type GadgetMode = (typeof GADGET_MODES)[number];
-
-/** Human label for the mode picker. */
-export const GADGET_MODE_LABELS: Record<GadgetMode, string> = {
-  fit: "Fit",
-  integrate: "Integrate",
-  stats: "Stats",
-  differentiate: "Differentiate",
-  fft: "FFT",
-  cursors: "Cursors",
-};
 
 /** The curated model choices offered by the gadget — a small, fast subset of
  *  the full /api/fitting/models registry (the Curve Fit workshop exposes the
@@ -76,24 +65,6 @@ export function selectRoiRows(
     rows.push(kept[i] ?? i);
   }
   return { x, y, rows };
-}
-
-/** Compact "p0=1.23±0.04  p1=0.01±0.00" text for the chip — the gadget skips
- *  the /api/fitting/models round-trip the Curve Fit workshop uses for real
- *  parameter names, so params are indexed (matches the report's own p0/p1/…
- *  fallback naming, lib/api.reportEmit param_names). Empty string when there
- *  are no params to show. */
-export function formatQfitParams(result: CalcResult | null): string {
-  if (!result) return "";
-  const params = Array.isArray(result.params) ? (result.params as number[]) : [];
-  const errors = Array.isArray(result.errors) ? (result.errors as (number | null)[]) : [];
-  return params
-    .map((p, i) => {
-      const e = errors[i];
-      const ev = typeof e === "number" && Number.isFinite(e) ? `±${fmtNum(e)}` : "";
-      return `p${i}=${fmtNum(p)}${ev}`;
-    })
-    .join("  ");
 }
 
 /** The raw dataset channel of the first VISIBLE plotted series — the column

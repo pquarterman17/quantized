@@ -16,6 +16,14 @@ import { toolForKey } from "./lib/plotToolKeys";
 import { loadInteractionPrefs } from "./store/prefs";
 import { useApp } from "./store/useApp";
 
+/** Focus is in a tool window (`ToolWindow`'s `data-tool-window` frame): a
+ *  non-modal dialog whose own controls own the plain keys, so Delete, the tool
+ *  letters and the arrows must not reach the app behind it. Modifier
+ *  shortcuts, `?` and Escape are unaffected. */
+function inToolWindow(t: EventTarget | null): boolean {
+  return t instanceof Element && t.closest("[data-tool-window]") !== null;
+}
+
 export function useGlobalShortcuts(): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -38,6 +46,7 @@ export function useGlobalShortcuts(): void {
       // gets this protection by calling preventDefault(), which it must do
       // anyway to stop the browser's Back navigation on Backspace.
       if ((e.key === "Delete" || e.key === "Backspace") && !e.defaultPrevented && !isEditingTarget(e.target)) {
+        if (inToolWindow(e.target)) return;
         const s = useApp.getState();
         if (s.datasets.length === 0) return;
         e.preventDefault();
@@ -81,6 +90,7 @@ export function useGlobalShortcuts(): void {
       // stepped the global prev/next-dataset navigation — two handlers, one
       // key press.
       if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.defaultPrevented && !isEditingTarget(e.target)) {
+        if (inToolWindow(e.target)) return;
         const s = useApp.getState();
         switch (e.key) {
           case "a":

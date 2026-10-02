@@ -41,6 +41,7 @@ from quantized.io.xrdml import import_xrdml
 __all__ = [
     "import_auto",
     "import_structure",
+    "is_recognised_data_name",
     "is_structure_file",
     "register_parser",
     "resolve_parser",
@@ -252,6 +253,16 @@ def unregister_plugin_parsers() -> None:
         if not chain:
             _SNIFFERS.pop(ext, None)
     _PLUGIN_SNIFFERS.clear()
+
+
+def is_recognised_data_name(filename: str) -> bool:
+    """Is ``filename`` (a bare name, no directory) a data file this registry
+    would try to import: a registered extension (built-in, sniffed, structure,
+    or plugin) or a saved import filter's glob. Reads no file content."""
+    ext = _normalize_ext(Path(filename).suffix) if Path(filename).suffix else ""
+    if ext and (ext in _EXT_MAP or ext in _SNIFFERS or ext in _STRUCTURE_MAP):
+        return True
+    return match_filter(Path(filename)) is not None
 
 
 def resolve_parser(path: Path) -> Parser:

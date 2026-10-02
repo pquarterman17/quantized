@@ -8,10 +8,9 @@ import {
   pageAspect,
   pageSetupFromDecoded,
   pageSizeInches,
-  sanitizePageSetup,
   toInches,
-  type PageSetup,
-} from "./pagesetup";
+} from "./pageGeometry";
+import { sanitizePageSetup, type PageSetup } from "./pagesetup";
 
 describe("unit conversions", () => {
   it("round-trips cm/px through inches", () => {

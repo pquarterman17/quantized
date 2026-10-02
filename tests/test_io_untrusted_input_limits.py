@@ -100,6 +100,49 @@ def test_netcdf4_refuses_oversized_dataset(
         import_netcdf(path)
 
 
+@pytest.mark.parametrize("dtype", [np.dtype(("f8", (1000,))), np.dtype("S8000")])
+def test_netcdf4_cap_counts_bytes_not_elements(
+    tmp_path: Path, h5py_mod: Any, monkeypatch: pytest.MonkeyPatch, dtype: np.dtype[Any]
+) -> None:
+    """An element can be a whole array or a long fixed string, so a dataset
+    under the element cap could still read back as terabytes of fill value."""
+    monkeypatch.setattr(netcdf, "MAX_DATASET_ELEMENTS", 1000, raising=False)
+    path = tmp_path / "wide.nc"
+    with h5py_mod.File(path, "w") as h:
+        h.create_dataset("x", data=np.arange(16.0))
+        h.create_dataset("y", shape=(500,), dtype=dtype)  # 4 MB, never written
+    with pytest.raises(ValueError, match="not read"):
+        import_netcdf(path)
+
+
+def _nc3_one_variable(dim_len: int) -> bytes:
+    """A NetCDF-3 classic header declaring one float64 variable of ``dim_len``
+    points, followed by only 64 bytes of data."""
+
+    def name(s: bytes) -> bytes:
+        return struct.pack(">i", len(s)) + s + b"\0" * (-len(s) % 4)
+
+    out = b"CDF\x01" + struct.pack(">i", 0)
+    out += struct.pack(">ii", 0x0A, 1) + name(b"t") + struct.pack(">i", dim_len)
+    out += struct.pack(">ii", 0, 0)  # no global attributes
+    out += struct.pack(">ii", 0x0B, 1) + name(b"v") + struct.pack(">ii", 1, 0)
+    out += struct.pack(">ii", 0, 0)  # no variable attributes
+    begin = len(out) + 12
+    out += struct.pack(">iii", 6, (8 * dim_len) & 0x7FFFFFFF, begin)  # NC_DOUBLE
+    return out + bytes(64)
+
+
+def test_netcdf3_declared_size_is_not_allocated(tmp_path: Path) -> None:
+    """The classic reader asked for each header-declared size in one read, and
+    a buffered read allocates that much up front: 200 bytes -> 1.6 GB."""
+    path = tmp_path / "bomb.nc"
+    path.write_bytes(_nc3_one_variable(200_000_000))
+    peak = _peak_bytes(lambda: import_netcdf(path))
+    assert peak < 4 * 1024 * 1024, f"allocated {peak} bytes before refusing"
+    with pytest.raises(ValueError):
+        import_netcdf(path)
+
+
 # --------------------------------------------------------------------------
 # ZIP containers: Bruker .brml, Excel .xlsx
 # --------------------------------------------------------------------------
@@ -152,6 +195,52 @@ def test_xlsx_refuses_whole_parsed_part_bomb(
             if info.filename == "xl/styles.xml":
                 data += b" " * (2 << 20)  # trailing whitespace: still valid XML
             dst.writestr(info.filename, data)
+    with pytest.raises(ValueError, match="uncompressed"):
+        import_excel(path)
+
+
+_SST_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"
+
+
+@pytest.mark.parametrize(
+    ("member", "content_type"),
+    [
+        # A worksheet's own relationships part: read whole even in read-only mode.
+        ("xl/worksheets/_rels/sheet1.xml.rels", None),
+        # Shared strings are found through [Content_Types].xml, at any path.
+        ("xl/worksheets/strings.xml", _SST_TYPE),
+    ],
+)
+def test_xlsx_part_cap_is_not_bypassed_under_worksheets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, member: str, content_type: str | None
+) -> None:
+    """Only the worksheets themselves are streamed; a part merely stored under
+    ``xl/worksheets/`` is still parsed whole, so it is capped like any other."""
+    openpyxl = pytest.importorskip("openpyxl")
+    monkeypatch.setattr(excel, "MAX_PART_BYTES", 1 << 20, raising=False)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["x", "y"])
+    for i in range(5):
+        ws.append([float(i), float(i * i)])
+    plain = tmp_path / "plain.xlsx"
+    wb.save(plain)
+    if content_type is None:
+        root = "Relationships"
+        ns = "http://schemas.openxmlformats.org/package/2006/relationships"
+    else:
+        root = "sst"
+        ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    bomb = f'<{root} xmlns="{ns}">'.encode() + b" " * (2 << 20) + f"</{root}>".encode()
+    path = tmp_path / "bomb.xlsx"
+    with zipfile.ZipFile(plain) as src, zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as dst:
+        for info in src.infolist():
+            data = src.read(info)
+            if info.filename == "[Content_Types].xml" and content_type is not None:
+                override = f'<Override PartName="/{member}" ContentType="{content_type}"/>'
+                data = data.replace(b"</Types>", override.encode() + b"</Types>")
+            dst.writestr(info.filename, data)
+        dst.writestr(member, bomb)
     with pytest.raises(ValueError, match="uncompressed"):
         import_excel(path)
 
@@ -244,3 +333,19 @@ def test_labtalk_script_cannot_gain_lines_from_a_label() -> None:
         [(_ds(payload, origin_book_long=payload), "book")]
     )
     assert not any(s.startswith(("run ", "type ")) for s in _statements(ogs2))
+
+
+def test_labtalk_string_literal_holds_no_inner_double_quote() -> None:
+    """LabTalk has no backslash escape (live-verified 2026-07-04,
+    docs/origin_re/validation_log.md): ``\\"`` does not keep a quote inside
+    the literal. A label's quote becomes ``'``, as ``origin_com`` does."""
+    payload = 'a"; run -e calc.exe; "b'
+    _csv, ogs = format_origin_script(
+        _ds(payload, payload, x_column_name=payload, x_column_unit=payload),
+        make_graph=True,
+    )
+    literals = [ln for ln in ogs.splitlines() if "a" in ln and "calc" in ln]
+    assert literals, "the label never reached the script"
+    for line in literals:
+        assert line.count('"') == 2, line  # just the literal's own pair
+        assert "a'; run -e calc.exe; 'b" in line
