@@ -68,3 +68,22 @@ def test_two_row_header_with_bare_parenthesised_units(tmp_path: Path) -> None:
     assert ds.units == ("atoms/cc", "atoms/cc")
     assert ds.metadata["x_column_name"] == "Depth"
     assert ds.metadata["x_column_unit"] == "nm"
+
+
+@pytest.mark.parametrize("banner", ["", "SIMS profile\n"])
+def test_decimal_comma_semicolon_profile(tmp_path: Path, banner: str) -> None:
+    # A European export: ';' delimiter, ',' decimal mark. It used to fail
+    # ("need >=2 non-empty columns") or, under a banner line, split on the
+    # commas and return garbage (depth 0,5 -> 0, a 'Col4' channel).
+    text = banner + (
+        "Depth (nm);H (atoms/cc);O (atoms/cc)\n"
+        "0,5;1,2E+21;3,4E+22\n"
+        "1,0;1,3E+21;3,5E+22\n"
+        "1,5;1,4E+21;3,6E+22\n"
+    )
+    ds = import_sims(_write(tmp_path, "eu.csv", text))
+    assert ds.labels == ("H", "O")
+    assert ds.units == ("atoms/cc", "atoms/cc")
+    assert ds.time.tolist() == pytest.approx([0.5, 1.0, 1.5])
+    assert ds.values[:, 0].tolist() == pytest.approx([1.2e21, 1.3e21, 1.4e21])
+    assert ds.values[:, 1].tolist() == pytest.approx([3.4e22, 3.5e22, 3.6e22])

@@ -22,9 +22,19 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 from quantized.heavy_import import heavy_imports
+from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
+from quantized.io._sims_header import (
+    _BARE_UNIT_RE,
+    _BRACK_RE,
+    _PAREN_RE,
+    _detect_depth_unit,
+    _detect_time_axis,
+    _is_cycle_axis,
+    _numeric_score,
+    _two_row_header,
+)
 from quantized.io.base import read_head, read_text
-from quantized.time_units import TIME_UNIT_CANON
 
 __all__ = ["import_sims", "is_sims_file"]
 
@@ -81,27 +91,6 @@ def _read_raw_lines(text: str) -> list[str]:
     return out
 
 
-def _numeric_score(row: Sequence[str]) -> float:
-    """Fraction of ``row``'s cells that are numeric -- SIMS-specific twin of
-    ``_delimited_layout._numeric_score``, not a byte-for-byte duplicate:
-
-    * shares the D5 fix (``_is_numeric_like``, so a "nan" cell counts as
-      numeric rather than silently mis-scoring the row it's in -- the same
-      class of bug, now fixed here too);
-    * but deliberately does NOT also try ``_datetime_epoch`` the way the
-      shared version does. A SIMS vendor preamble routinely carries a bare
-      date line (``"03/18/2026"``, see ``tests/fixtures/sims_barrier.csv``)
-      several rows above the real header; scoring that single-cell row as
-      100% "numeric" via datetime detection would make `_detect_layout`
-      mistake the preamble for the data region. Delimited lab-instrument
-      exports legitimately have date/time X columns and want that credit;
-      a depth-profile preamble never should.
-    """
-    if not row:
-        return 0.0
-    return sum(1 for t in row if layout._is_numeric_like(t.strip())) / len(row)
-
-
 def _detect_layout(tokens: Sequence[Sequence[str]]) -> tuple[int, int]:
     """0-based (header_row, data_start); header walks back past blank rows.
 
@@ -141,9 +130,6 @@ def _detect_paired(matrix: np.ndarray) -> bool:
     return bool((n_monotonic / n_odd) >= 0.8)
 
 
-_BARE_UNIT_RE = re.compile(r"^\(([^)]+)\)$")
-_PAREN_RE = re.compile(r"(.+?)\s*\(([^)]+)\)\s*$")
-_BRACK_RE = re.compile(r"(.+?)\s*\[([^\]]+)\]\s*$")
 _CONC_RE = re.compile(r"^\s*(?:conc(?:entration)?)\s+", re.IGNORECASE)
 _MASS_PREFIX_RE = re.compile(r"^\d+([A-Z][a-z]?)")
 _MASS_TRAIL_RE = re.compile(r"^([A-Z][a-z]?)\d+[+\-]?$")
@@ -238,114 +224,19 @@ def _build_union_grid(
     return union, interp
 
 
-# Whole words only: a bare substring test read the "um" in a vendor banner's
-# "Num of Cycles" line as micrometres, labelling an nm profile 1000x off.
-_UM_RE = re.compile(r"(?<![a-z])(?:um|µm|μm|microns?|micromet(?:er|re)s?)(?![a-z])")
-_NM_RE = re.compile(r"(?<![a-z])(?:nm|nanomet(?:er|re)s?)(?![a-z])")
+def _read_text_tokens(path: Path) -> tuple[list[list[str]], bool]:
+    """Token rows, and whether decimal-comma numbers may need reading.
 
-
-def _length_unit_in(text: str) -> str | None:
-    low = text.lower()
-    if _UM_RE.search(low):
-        return "um"
-    if _NM_RE.search(low):
-        return "nm"
-    if "angstrom" in low or "Å" in text:
-        return "A"
-    return None
-
-
-def _detect_depth_unit(col_headers: Sequence[str], header_meta: Sequence[str]) -> str:
-    """The column headers' own unit wins over a word in the vendor banner."""
-    for text in (" ".join(col_headers), " ".join(header_meta)):
-        unit = _length_unit_in(text)
-        if unit is not None:
-            return unit
-    return "nm"
-
-
-_UNIT_WORDS = {"counts", "cps", "c/s", "arb", "a.u.", "au", "nm", "um", "s", "sec", "min"}
-
-
-def _is_unit_cell(cell: str) -> bool:
-    c = cell.strip()
-    return bool(_BARE_UNIT_RE.match(c)) or "/" in c or "%" in c or c.lower() in _UNIT_WORDS
-
-
-def _two_row_header(tokens: Sequence[Sequence[str]], header_row: int) -> list[str] | None:
-    """Merge a names row and the units row under it into ``"name (unit)"`` cells.
-
-    Raw-count exports put species on one row and ``counts/sec`` (or ``(nm)``)
-    on the next; the units row alone then stood in for the names. ``None`` when
-    the header row is not a units-only row under a multi-cell names row.
+    The delimiter is voted on the rows after the vendor banner (the second
+    half of the file): a ``;`` export's banner line has no ``;`` in it and
+    used to hand the vote to ``,``, splitting every ``0,5`` in two.
     """
-    if header_row < 1:
-        return None
-    units, names = list(tokens[header_row]), list(tokens[header_row - 1])
-    filled = [u for u in units if u.strip()]
-    if not filled or not all(_is_unit_cell(u) for u in filled):
-        return None
-    if sum(1 for n in names if n.strip()) < max(2, len(filled)) or _numeric_score(names) >= 0.5:
-        return None
-    names = (names + [""] * len(units))[: len(units)]
-    out: list[str] = []
-    for name, unit in zip(names, units, strict=True):
-        bare = _BARE_UNIT_RE.match(unit.strip())
-        u = bare.group(1).strip() if bare else unit.strip()
-        n = name.strip()
-        out.append(f"{n} ({u})" if n and u else n or unit.strip())
-    return out
-
-
-#: A cycle-count x axis ("Cycle", "Cycles", "Cycle #"): never a depth.
-_CYCLE_NAME_RE = re.compile(r"^\s*cycles?(?:\s*(?:no\.?|number|#))?\s*$", re.IGNORECASE)
-
-
-def _is_cycle_axis(x_header: str) -> bool:
-    m = _PAREN_RE.match(x_header.strip()) or _BRACK_RE.match(x_header.strip())
-    return bool(_CYCLE_NAME_RE.match(m.group(1) if m else x_header))
-
-
-#: The header NAME (with any unit stripped) must be time-like -- "time",
-#: bare "t", or "sputter time" (any amount of whitespace), case-insensitive.
-#: Without this, any first header ending in a recognized time unit's
-#: parenthesized/bracketed spelling -- "Cycle (s)", "Scan(s)" -- was read as
-#: a raw sputter-TIME axis just because "(s)" parses as seconds; a depth
-#: profile whose header happens to end in "(s)" for an unrelated reason (a
-#: cycle count, a scan number) must NOT be mislabelled "Time".
-_TIME_NAME_RE = re.compile(r"^\s*(?:t|time|sputter\s+time)\s*$", re.IGNORECASE)
-
-
-def _detect_time_axis(x_header: str) -> str | None:
-    """The x axis's time unit when its header names sputter TIME, else None.
-
-    Not in MATLAB's ``importSIMS`` (which only reads depth-axis profiles and
-    labels any x "Depth" in nm): a quantized extension so a raw time-axis
-    export reaches depth calibration labelled as what it is. ``"Time (s)"`` /
-    ``"Sputter time [min]"`` / ``"t (s)"`` give their unit; a bare ``"Time"``
-    gives ``""`` (unit unknown -- calibration then asks for it rather than
-    guessing seconds). The header NAME itself must be time-like -- a unit
-    alone is not enough, so ``"Cycle (s)"`` or ``"Scan(s)"`` are never
-    mistaken for a time axis just because seconds happens to parse.
-    """
-    h = x_header.strip()
-    unit = ""
-    m = _PAREN_RE.match(h) or _BRACK_RE.match(h)
-    if m:
-        h, unit = m.group(1).strip(), m.group(2).strip()
-    if not _TIME_NAME_RE.match(h):
-        return None
-    if not unit:
-        return ""
-    return TIME_UNIT_CANON.get(unit.lower())
-
-
-def _read_text_tokens(path: Path) -> list[list[str]]:
     raw_lines = _read_raw_lines(read_text(path))
     if not raw_lines:
         raise ValueError(f"file empty or only comments: {path.name}")
-    delim = layout._detect_delimiter(raw_lines)
-    return [layout.split_row(line, delim) for line in raw_lines]
+    delim = layout._detect_delimiter(raw_lines[len(raw_lines) // 2 :])
+    comma = dc.uses_decimal_path("auto", delim, any("," in ln for ln in raw_lines))
+    return [layout.split_row(line, delim) for line in raw_lines], comma
 
 
 def _read_excel_tokens(path: Path, sheet: int | str) -> list[list[str]]:
@@ -382,9 +273,12 @@ def import_sims(
     """Import a SIMS depth profile (paired or shared-depth layout)."""
     path = Path(filepath)
     is_excel = path.suffix.lower() in {".xlsx", ".xls", ".xlsm", ".xlsb", ".ods"}
-    tokens = _read_excel_tokens(path, sheet) if is_excel else _read_text_tokens(path)
+    if is_excel:
+        tokens, comma = _read_excel_tokens(path, sheet), False
+    else:
+        tokens, comma = _read_text_tokens(path)
 
-    header_row, data_start = _detect_layout(tokens)
+    header_row, data_start = _detect_layout(dc.layout_rows(tokens) if comma else tokens)
     data_rows = tokens[data_start:]
     n_data_cols = max(len(r) for r in data_rows)
     if header_row >= 0:
@@ -410,6 +304,8 @@ def import_sims(
     for r, row in enumerate(data_rows):
         for c in range(min(len(row), n_cols)):
             matrix[r, c] = layout._to_float(row[c])
+    if comma:  # ';'-delimited "0,5" cells, read column by column (fails closed)
+        dc.resolve_decimal_columns(path.name, col_headers, matrix, data_rows, decimal="auto")
 
     empty_mask = np.all(np.isnan(matrix), axis=0)
     matrix = matrix[:, ~empty_mask]
