@@ -190,9 +190,7 @@ export function usePlotStageActions(
   // "log": a typed side <= 0 was dropped on a log axis (lib/canvasLims.drawableLim).
   const onLimCrossed = (axis: "x" | "y", why?: "log") =>
     useApp.getState().setStatus(
-      why
-        ? `${axis.toUpperCase()} limit at or below zero is ignored on a log axis, so that side is on auto.`
-        : `${axis.toUpperCase()} limit crosses the data range, so the axis is back on auto.`,
+      `${axis.toUpperCase()} limit ${why ? "at or below zero is ignored on a log axis" : "crosses the data range, so the axis is back on auto"}.`,
     );
 
   return {

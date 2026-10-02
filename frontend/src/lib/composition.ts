@@ -81,7 +81,7 @@ export function facetComposition(panels: FacetPanel[]): Composition | null {
 }
 
 export function breakComposition(panels: BreakPanel[], source?: BreakSource): Composition | null {
-  return panels.length > 0 ? { kind: "break", panels, ...(source ? { source } : {}) } : null;
+  return panels.length > 0 ? { kind: "break", panels, source } : null;
 }
 
 /** The spatial panels, or `null` when the composition is a different kind (or
