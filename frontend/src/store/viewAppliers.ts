@@ -226,17 +226,21 @@ export function createViewAppliersSlice(set: SliceSet, get: SliceGet): ViewAppli
         // fallback reads facetKey whenever `composition` itself is null again).
         // The gap ranges go into the focused window's document too
         // (`plot.axisBreaks.x`), so the export, a save and a focus switch read
-        // the same break the screen shows. Only when the view's x is the one
-        // the ranges were measured on (a non-active dataset's activation may
-        // pick another). `stackMode` is left alone: a break mounts on its own
-        // (`multiPanelShowing`), so a collapsed break returns to the user's
-        // own layout, not to a stack the export cannot draw.
+        // the same break the screen shows. `stackMode` is left alone: a break
+        // mounts on its own (`multiPanelShowing`), so a collapsed break
+        // returns to the user's own layout, not to a stack the export cannot
+        // draw.
+        // A non-active dataset (macro replay) was measured on its time axis,
+        // but activating it may restore another x and channels (technique
+        // memory). The view keeps the measured x, and the panels take the
+        // activated channels, so screen, view and export describe one plot.
+        // (Panel count depends on rows only, so it is still >= 2.)
+        const built = sameActive ? composition : (breakCompositionFromData(data, useBreaks, xKey, get().yKeys) ?? composition);
         set((s) => ({
-          composition,
+          composition: built,
           facetKey: null,
-          plotWindows: s.xKey === xKey
-            ? setFocusedXBreaks(s.plotWindows, s.focusedWindowId, [...useBreaks].sort((a, b) => a[0] - b[0]))
-            : s.plotWindows,
+          ...(s.xKey === xKey ? {} : { xKey }),
+          plotWindows: setFocusedXBreaks(s.plotWindows, s.focusedWindowId, [...useBreaks].sort((a, b) => a[0] - b[0])),
         }));
       });
       get().recordMacro(`Break x-axis at gaps`, `qz.breakAtGaps(${lit(datasetId)})`);

@@ -48,8 +48,8 @@ function setup(): void {
   });
 }
 
-function exportSpec() {
-  const ds = useApp.getState().datasets.find((d) => d.id === "d1") as Dataset;
+function exportSpec(id = "d1") {
+  const ds = useApp.getState().datasets.find((d) => d.id === id) as Dataset;
   return buildStageFigureSpec(useApp.getState, ds, "fig", { fmt: "pdf", style: "default", dpi: 300, title: "" });
 }
 
@@ -122,5 +122,30 @@ describe("Break at gaps — the view after the break collapses", () => {
     excludeRightSide();
     expect(screen()).toEqual({ breakPanels: 0, multiPanel: true });
     expect(screenOnlyExportNotice(useApp.getState(), exportSpec())).toBe(STACK_EXPORT_NOTICE);
+  });
+});
+
+describe("Break at gaps on a dataset that is not active (macro replay)", () => {
+  it("keeps the axis the gaps were measured on, so the screen, the view and the export agree", () => {
+    // Same technique, so activating d2 restores d1's x (column 0) from
+    // technique memory. d2's gap is on its TIME axis; column 0 is even.
+    const xrd = { technique: "xrd.powder" };
+    const d2: DataStruct = {
+      ...DATA,
+      time: [0, 1, 2, 10, 11, 12],
+      values: DATA.values.map((row, i) => [i, row[1], row[2]]),
+      metadata: xrd,
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "ds1", data: { ...DATA, metadata: xrd } }, { id: "d2", name: "ds2", data: d2 }],
+    });
+    useApp.getState().breakAtGaps("d2");
+    const s = useApp.getState();
+    expect(s.activeId).toBe("d2");
+    expect(screen().breakPanels).toBe(2);
+    const spec = exportSpec("d2");
+    expect(spec.overrides?.x_breaks).toEqual([[2, 10]]);
+    expect(s.xKey).toBeNull(); // the view plots the time axis the panels show
+    expect(breakPanelsOf(s.composition)?.[0].channels).toEqual(spec.y_keys);
   });
 });

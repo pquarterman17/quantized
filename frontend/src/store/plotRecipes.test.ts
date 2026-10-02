@@ -1148,6 +1148,37 @@ describe("applyPlotRecipe rebuilds a live paneled x-break (BUG-012)", () => {
     expect(breakPanelsOf(rebuilt)).toHaveLength(2);
     expect(breakPanelsOf(rebuilt)?.map((p) => p.xRange)).toEqual([[10, 10], [20, 30]]);
   });
+
+  // A LIVE Break-at-gaps break is captured the same way: the gesture commits
+  // its gap ranges to the focused document, which is what capture reads.
+  it("a recipe saved during a live Break-at-gaps break records the gap ranges and re-applies the break", async () => {
+    // 2theta 10,11,12 | 40,41,42: one large gap that `suggestBreaks` finds.
+    const gapped = (id: string): Dataset => {
+      const base = dataset(id);
+      const xs = [10, 11, 12, 40, 41, 42];
+      return { ...base, data: { ...base.data, time: xs.map((_, i) => i), values: xs.map((x, i) => [x, 100 + i, 1]) } };
+    };
+    resetStore([gapped("d1")]);
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    useApp.getState().breakAtGaps("d1");
+    expect(breakPanelsOf(useApp.getState().composition)).toHaveLength(2);
+
+    const id = (await useApp.getState().saveAsPlotRecipe("Gapped XRD", "d1"))!;
+    const recipe = useApp.getState().plotRecipes.find((r) => r.id === id)!;
+    expect(recipe.visual.axisBreaks.x).toEqual([[12, 40]]);
+
+    const d2 = gapped("d2");
+    useApp.setState({ datasets: [gapped("d1"), d2] });
+    expect(await useApp.getState().applyPlotRecipe(id, "d2")).toBe(true);
+    const s = useApp.getState();
+    const focused = s.plotWindows.find((w) => w.id === s.focusedWindowId);
+    const applied = focused?.kind === "plot" ? focused.document : undefined;
+    expect(applied?.plot.axisBreaks.x).toEqual([[12, 40]]);
+    const rebuilt = durableComposition(d2, s.facetKey, applied?.plot.axisBreaks.x, s.xKey, s.yKeys);
+    expect(breakPanelsOf(rebuilt)?.map((p) => p.xRange)).toEqual([[10, 12], [40, 42]]);
+    const render = { fmt: "pdf" as const, style: "default", dpi: 300, title: "" };
+    expect(buildStageFigureSpec(() => useApp.getState(), d2, "d2", render).overrides?.x_breaks).toEqual([[12, 40]]);
+  });
 });
 
 // PRIMARY_SOFTWARE_AUDIT_PLAN P2.1 "Technique-specific plot recipe is
