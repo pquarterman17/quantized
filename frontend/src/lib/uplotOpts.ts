@@ -223,6 +223,47 @@ const autoTickValues: TickValues = (_u, splits, _axisIdx, _foundSpace, foundIncr
   return splits.map((v) => (v == null ? null : stripNegZero(nf.format(v))));
 };
 
+const SUPERSCRIPT_DIGITS: Record<string, string> = {
+  "-": "⁻",
+  "0": "⁰",
+  "1": "¹",
+  "2": "²",
+  "3": "³",
+  "4": "⁴",
+  "5": "⁵",
+  "6": "⁶",
+  "7": "⁷",
+  "8": "⁸",
+  "9": "⁹",
+};
+
+function superscriptInteger(value: number): string {
+  return String(value).split("").map((ch) => SUPERSCRIPT_DIGITS[ch] ?? ch).join("");
+}
+
+/** Publication-style labels for an automatic logarithmic axis. Multi-decade
+ * axes label only their decade anchors (1, 10, 10², 10³, …); the 2–9 minor
+ * splits stay blank. A sub-decade log view intentionally keeps ordinary
+ * numeric labels because values such as 0.8/0.9/1.0 are more useful there
+ * than pretending every arithmetic split is a power of ten. */
+const autoLogTickValues: TickValues = (u, splits, axisIdx, foundSpace, foundIncr) => {
+  const positive = splits.filter((v): v is number => v != null && Number.isFinite(v) && v > 0);
+  const lo = positive.length > 0 ? Math.min(...positive) : Infinity;
+  const hi = positive.length > 0 ? Math.max(...positive) : -Infinity;
+  if (positive.length < 2 || hi / lo < 10 * (1 - 1e-9)) {
+    return autoTickValues(u, splits, axisIdx, foundSpace, foundIncr);
+  }
+  return splits.map((v) => {
+    if (v == null || !(v > 0) || !Number.isFinite(v)) return null;
+    const rawExp = Math.log10(v);
+    const exp = Math.round(rawExp);
+    if (Math.abs(rawExp - exp) >= 1e-9) return "";
+    if (exp === 0) return "1";
+    if (exp === 1) return "10";
+    return `10${superscriptInteger(exp)}`;
+  });
+};
+
 /** Decimal places needed for a value's MANTISSA (sci/eng modes) so that two
  *  ticks `incr` apart in the SAME decade never format to the same digits —
  *  `incr` is rescaled into the mantissa's own units (divided by the same
@@ -313,9 +354,9 @@ function dateTickFormatter(
  *  `fixed`/`sci`/`eng` each floor their configured `digits` at what the
  *  actual tick increment (`splitsIncrement`) needs, so a dense axis can
  *  never render two different ticks with the same label. */
-export function tickFormatter(fmt?: AxisFormat): TickValues {
+export function tickFormatter(fmt?: AxisFormat, scale: AxisScale = "linear"): TickValues {
   const mode = fmt?.mode ?? "auto";
-  if (mode === "auto") return autoTickValues;
+  if (mode === "auto") return scale === "log" ? autoLogTickValues : autoTickValues;
   if (mode === "date" || mode === "time" || mode === "datetime") {
     // `Intl.DateTimeFormat.format(new Date(x))` throws RangeError ("Invalid
     // time value") for NaN AND for any FINITE value beyond the ECMA-262 Date
@@ -1111,11 +1152,13 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // number format would show "1.0"/"2.0" instead of the real category names.
   const xValues = payload.xCategories
     ? categoricalTickFormatter(payload.xCategories)
-    : tickFormatter(xFmt);
-  const yValues = tickFormatter(yFmt);
+    : tickFormatter(xFmt, xScale);
+  const yValues = tickFormatter(yFmt, yScale);
   // y2Fmt null/undefined inherits yFmt (compatibility default — see the
-  // BuildOptsArgs doc); only build a distinct formatter when overridden.
-  const y2Values = y2Fmt ? tickFormatter(y2Fmt) : yValues;
+  // BuildOptsArgs doc), but formatting still resolves against y2's OWN
+  // scale. In particular, an auto-format linear primary axis plus a log y2
+  // needs decade labels rather than inheriting y's linear formatter.
+  const y2Values = tickFormatter(y2Fmt ?? yFmt, y2ScaleEff);
   // A FIXED range (xLim/yLim/y2Lim — an applied Origin figure or a hand-typed
   // Inspector AxisLimits value) bypasses uPlot's own rangeLog decade-snapping
   // on a log axis, so supply our own splits generator there (see
