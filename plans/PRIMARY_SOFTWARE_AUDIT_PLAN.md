@@ -3739,9 +3739,10 @@ real bug before merge: depth computed via metres gave 400.00000000000006 nm,
 silently dropping a point from a background region typed as "400 to 500";
 calibration is now exact in matching units and the region is inclusive to a
 1e-9 relative tolerance. Eager bundle +0.6 kB (the menu entry, the dialog
-store and the lazy import's deps map). Not done: multi-layer (per-layer
-rate) calibration, depth-axis rescaling of an already-calibrated profile,
-batch processing of several profiles at once, and anything in boxes 3-5.
+store and the lazy import's deps map). Not done at that point: multi-layer
+(per-layer rate) calibration, depth-axis rescaling of an already-calibrated
+profile, batch processing of several profiles at once, and anything in boxes
+3-5. See the 2026-10-02 update for direct depth-axis rescaling.
 
 **Progress 2026-09-27 (slice 1 review fixes):** a code review of
 the slice 1 landing found ten issues, all fixed with a failing-first test
@@ -3776,6 +3777,30 @@ and the duplicated time-unit spelling table (`io.sims` / `calc.sims_depth`)
 each now have one source (`calc/_warn.py`, `quantized/time_units.py` —
 pure, same precedent as `quantized/x_units.py`). No behavior change to the
 golden depth-axis parity cases or the e2e journey.
+
+**Progress 2026-10-02 (direct depth-axis rescaling):** the Process tab can
+now multiply or divide an existing x coordinate and add a depth offset, with
+the exact formula shown in the live preview. The backend's explicit
+`method="scale"` accepts an arbitrary recorded x unit rather than pretending
+counts or an existing length axis are sputter time; validates the positive
+finite factor and offset; refuses numeric overflow; and records the input
+unit, factor, offset, output unit and formula in provenance. A saved recipe
+captures the exact input x unit and refuses a mismatch both in recipe
+preflight and again at replay, so (for example) a counts-to-nm divisor cannot
+silently shrink a profile already in nm. The critical review also corrected
+the recipe classifier so a direct scale is not falsely treated as a
+time-to-depth calibration. The same slice now supports a sequential batch
+over several loaded profiles: one representative profile is previewed, every
+source gets an independent derived output, incompatible profiles fail without
+stopping the rest, progress and per-profile warning/failure details stay
+visible, and Stop takes effect after the current profile. Each completed
+output retains its own safe Undo entry: the critical review rejected the
+tempting single-snapshot batch undo because a user edit made between two
+awaited requests could be reverted with it (the history module documents this
+exact limitation). The coordinator is a data-type-neutral shared runner, so
+XRD/XRR and general processing tools can adopt progress, stop and failure
+isolation without cloning SIMS-specific control logic. Still open: owner-data
+validation and multi-layer rates.
 
 **Progress 2026-09-27 (slice 2, boxes 3-4):** still no MATLAB reference, so
 every formula is the textbook one, stated in the module headers and tested
@@ -4156,10 +4181,15 @@ messy metadata. Begin only from Gate A examples; much pipeline logic exists.
     derived dataset per pick through `lib/transformRun` (op `resample`). Each
     carries `worksheet_transform`, `transform_warnings`, `resample_of`,
     `resample_grid` and `aligned_to`, alongside the backend's
-    `resampled` / `resampleMethod` / `resampleMode`. Each is one undo entry
-    (the existing `addDataset`), and each records a replayable `transform`
-    step (the matched dataset is a dataset-id reference, refused by name on
-    replay when it is gone).
+    `resampled` / `resampleMethod` / `resampleMode`. Each records a replayable
+    `transform` step (the matched dataset is a dataset-id reference, refused
+    by name on replay when it is gone).
+    **2026-10-02 batch hardening:** a multi-pick now uses the shared sequential
+    batch coordinator, shows progress and Stop-after-current, isolates a
+    failed dataset, and keeps each completed output independently undoable.
+    A proposed one-step async batch undo was rejected in critical review
+    because the snapshot-history model cannot safely exclude an unrelated edit
+    made between two awaited resample requests.
     **Backend:** `POST /api/transform/resample` (`routes/transform.py`) is a
     thin route over the pure `calc/resample_align.py`, which wraps the golden
     `calc.resample.resample_data` with its numerics untouched.

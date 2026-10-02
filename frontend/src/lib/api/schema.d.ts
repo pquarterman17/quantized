@@ -9856,12 +9856,19 @@ export interface components {
              * Method
              * @enum {string}
              */
-            method: "rate" | "crater";
+            method: "rate" | "crater" | "scale";
+            /**
+             * Offset
+             * @default 0
+             */
+            offset?: number;
             /**
              * Rate Unit
              * @default nm/s
              */
             rate_unit?: string;
+            /** Scale Factor */
+            scale_factor?: number | null;
             /** Sputter Rate */
             sputter_rate?: number | null;
             /** Time Unit */

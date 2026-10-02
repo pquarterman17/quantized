@@ -92,6 +92,16 @@ describe("simsRequest", () => {
     expect(body.smoothing).toEqual({ method: "savitzky-golay", window: 3, poly_order: 2 });
   });
 
+  it("maps direct scale/offset without a time-unit override", () => {
+    const body = simsRequest({
+      op: "sims",
+      calibration: { method: "scale", scaleFactor: 0.001, offset: -2, depthUnit: "um", inputUnit: "s" },
+    }, profile, { preview: true });
+    expect(body.calibration).toMatchObject({
+      method: "scale", scale_factor: 0.001, offset: -2, depth_unit: "um", time_unit: null,
+    });
+  });
+
   it("refuses a reference or RSF column the dataset does not have, or has twice", () => {
     expect(() => simsRequest({ op: "sims", normalization: { reference: "O" } }, profile)).toThrow('no column "O"');
     expect(() => simsRequest({ op: "sims", normalization: { reference: "Si", rsf: { P: 1 } } }, profile)).toThrow('no column "P"');
@@ -163,11 +173,25 @@ describe("simsParamsOf (replay validation)", () => {
     ).toThrow("acceptedTimeUnit");
   });
 
+  it("round-trips direct scale/offset calibration with its replay input-unit guard", () => {
+    const p: SimsParams = {
+      op: "sims",
+      calibration: { method: "scale", scaleFactor: 0.001, offset: -2, depthUnit: "um", inputUnit: "s" },
+    };
+    expect(simsParamsOf(JSON.parse(JSON.stringify(p)) as Record<string, unknown>)).toEqual(p);
+    expect(() => simsRequest(p, { ...profile, metadata: { x_column_unit: "nm" } })).toThrow(/made for x in s, not nm/);
+    expect(simsRequest(p, profile).calibration?.scale_factor).toBe(0.001);
+  });
+
   it.each([
     [{}, "at least one stage"],
     [{ calibration: { method: "magic" } }, 'unknown SIMS calibration "magic"'],
     [{ calibration: { method: "rate" } }, "sputterRate"],
     [{ calibration: { method: "crater" } }, "craterDepth"],
+    [{ calibration: { method: "scale" } }, "scaleFactor"],
+    [{ calibration: { method: "scale", scaleFactor: 0, inputUnit: "s" } }, "scaleFactor"],
+    [{ calibration: { method: "scale", scaleFactor: 1, offset: "no", inputUnit: "s" } }, "offset"],
+    [{ calibration: { method: "scale", scaleFactor: 1 } }, "inputUnit"],
     [{ background: { lo: 1 } }, '"lo" and "hi"'],
     [{ normalization: { reference: "" } }, "reference column name"],
     [{ normalization: { reference: "Si", rsf: { B: -1 } } }, "positive"],

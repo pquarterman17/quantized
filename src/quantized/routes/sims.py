@@ -39,7 +39,7 @@ router = APIRouter(prefix="/api/sims", tags=["sims"], route_class=OffloopJSONRou
 
 
 class SimsCalibration(BaseModel):
-    method: Literal["rate", "crater"]
+    method: Literal["rate", "crater", "scale"]
     sputter_rate: float | None = None
     rate_unit: str = "nm/s"
     crater_depth: float | None = None
@@ -49,6 +49,9 @@ class SimsCalibration(BaseModel):
     depth_unit: str = "nm"
     #: The time unit x is in, stated by the user (overrides the recorded unit).
     time_unit: str | None = None
+    #: Direct linear conversion: depth = scale_factor * x + offset.
+    scale_factor: float | None = None
+    offset: float = 0.0
 
 
 class SimsBackground(BaseModel):
@@ -212,8 +215,12 @@ def region(req: SimsRegionRequest) -> dict[str, Any]:
     try:
         data = DataStruct.from_dict(req.dataset)
         res = region_measures(
-            data, lo=req.lo, hi=req.hi, columns=req.columns,
-            threshold_mode=req.threshold_mode, threshold=req.threshold,
+            data,
+            lo=req.lo,
+            hi=req.hi,
+            columns=req.columns,
+            threshold_mode=req.threshold_mode,
+            threshold=req.threshold,
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

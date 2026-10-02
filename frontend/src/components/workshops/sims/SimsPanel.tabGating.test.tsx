@@ -85,7 +85,7 @@ describe("SimsPanel — hidden tabs stop firing their debounced preview (finding
   it("Process's preview goes silent once Compare is the visible tab, and resumes when it is visible again", async () => {
     render(<SimsPanel />);
     // Turn on a stage so Process's form is valid and previews.
-    fireEvent.click(screen.getByRole("checkbox", { name: "Depth calibration (time → depth)" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Calibrate / rescale x to depth" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Calibration method" }), { target: { value: "rate" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Sputter rate" }), { target: { value: "2" } });
     await tick(300);

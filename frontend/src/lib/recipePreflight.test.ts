@@ -134,6 +134,18 @@ describe("preflightRecipe", () => {
     expect(pf.blocked).toBe(true);
     expect(pf.issues).toContainEqual(expect.objectContaining({ kind: "not-time-unit", blocking: true }));
   });
+
+  it("refuses a direct SIMS scale on a different x unit even when unit mismatches are acknowledged", () => {
+    const simsStep = makeStep("transform", "sims", "", { op: "sims", calibration: { method: "scale", scaleFactor: 0.001, inputUnit: "encoder counts" } });
+    const expects: RecipeExpectations = { columns: [], metadata: [], scaleInputUnit: "encoder counts" };
+    const matching = ds(data(["B"], ["c/s"], { x_column_unit: "encoder counts" }));
+    expect(preflightRecipe({ steps: [simsStep], expects }, matching, [], IDS, false).blocked).toBe(false);
+    const wrong = ds(data(["B"], ["c/s"], { x_column_unit: "nm" }));
+    const pf = preflightRecipe({ steps: [simsStep], expects }, wrong, [], IDS, true);
+    expect(pf.blocked).toBe(true);
+    expect(pf.unitMismatch).toBe(false);
+    expect(pf.issues).toContainEqual(expect.objectContaining({ kind: "x-unit-mismatch", blocking: true, text: expect.stringContaining("encoder counts") }));
+  });
 });
 
 describe("conformData — the working copy", () => {

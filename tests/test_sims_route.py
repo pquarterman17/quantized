@@ -49,6 +49,30 @@ def test_blank_values_travel_as_null() -> None:
     assert res.json()["dataset"]["values"][1][0] is None
 
 
+def test_direct_scale_and_offset_calibration_wire() -> None:
+    res = client.post(
+        URL,
+        json={
+            "dataset": {
+                **PROFILE,
+                "metadata": {"x_column_name": "Position", "x_column_unit": "counts"},
+            },
+            "calibration": {
+                "method": "scale",
+                "scale_factor": 0.5,
+                "offset": 2.0,
+                "depth_unit": "nm",
+            },
+        },
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["dataset"]["time"] == pytest.approx([2.0, 7.0, 12.0, 17.0])
+    assert body["dataset"]["metadata"]["x_column_name"] == "Depth"
+    assert body["stages"][0]["scale_factor"] == pytest.approx(0.5)
+    assert body["stages"][0]["offset"] == pytest.approx(2.0)
+
+
 def test_refusals_are_422_with_the_reason() -> None:
     cases: list[dict[str, Any]] = [
         {"dataset": PROFILE},
@@ -99,12 +123,19 @@ DEPTH: dict[str, Any] = {
 
 
 def test_compare_returns_the_block_table_with_blanks_as_null() -> None:
-    other = {**DEPTH, "time": [0.0, 100.0], "values": [[1.0, 2.0], [3.0, 4.0]],
-             "metadata": {"x_column_unit": "A"}}
-    res = client.post("/api/sims/compare", json={
-        "profiles": [{"name": "a.csv", "dataset": DEPTH}, {"name": "b.csv", "dataset": other}],
-        "species": ["B"],
-    })
+    other = {
+        **DEPTH,
+        "time": [0.0, 100.0],
+        "values": [[1.0, 2.0], [3.0, 4.0]],
+        "metadata": {"x_column_unit": "A"},
+    }
+    res = client.post(
+        "/api/sims/compare",
+        json={
+            "profiles": [{"name": "a.csv", "dataset": DEPTH}, {"name": "b.csv", "dataset": other}],
+            "species": ["B"],
+        },
+    )
     assert res.status_code == 200, res.text
     body = res.json()
     assert body["dataset"]["labels"] == ["B — a", "B — b"]
@@ -125,9 +156,16 @@ def test_compare_refusals_are_422() -> None:
 
 
 def test_region_returns_measures_and_csv() -> None:
-    res = client.post("/api/sims/region", json={
-        "dataset": DEPTH, "dataset_name": "implant.csv", "lo": 0, "hi": 40, "columns": [0],
-    })
+    res = client.post(
+        "/api/sims/region",
+        json={
+            "dataset": DEPTH,
+            "dataset_name": "implant.csv",
+            "lo": 0,
+            "hi": 40,
+            "columns": [0],
+        },
+    )
     assert res.status_code == 200, res.text
     body = res.json()
     (b,) = body["species"]
@@ -153,10 +191,15 @@ def test_region_refusals_are_422() -> None:
 
 def test_region_result_emits_a_report_sheet() -> None:
     region = client.post("/api/sims/region", json={"dataset": DEPTH, "lo": 0, "hi": 40}).json()
-    res = client.post("/api/report/emit", json={
-        "kind": "sims_region", "result": region, "title": "SIMS region — implant",
-        "source_refs": [{"kind": "dataset", "id": "d1", "name": "implant.csv"}],
-    })
+    res = client.post(
+        "/api/report/emit",
+        json={
+            "kind": "sims_region",
+            "result": region,
+            "title": "SIMS region — implant",
+            "source_refs": [{"kind": "dataset", "id": "d1", "name": "implant.csv"}],
+        },
+    )
     assert res.status_code == 200, res.text
     report = res.json()["report"]
     assert report["title"] == "SIMS region — implant"

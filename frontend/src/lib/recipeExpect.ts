@@ -51,6 +51,10 @@ export interface RecipeExpectations {
   /** A sims step calibrates WITHOUT a stated time-unit override, so the
    *  target's OWN recorded x unit must already be a time unit (finding 6). */
   needsTimeUnitX?: boolean;
+  /** A direct SIMS x-scale recipe is dimensionful: its numeric factor is
+   *  valid only for the exact x unit it was recorded against. The empty
+   *  string deliberately means "the recording had no x unit". */
+  scaleInputUnit?: string;
 }
 
 /** Ops that edit their dataset in place (lib/metadataRun.ts's IN_PLACE_OPS —
@@ -173,7 +177,7 @@ const KNOWN_TIME_UNITS = new Set(["s", "ms", "min", "h"]);
 /** A dataset's recorded x unit ("" when unknown) — the same 3-key fallback
  *  as `lib/transformResample.ts`'s `xUnitOf`, duplicated (not imported) so
  *  this leaf module stays free of that workshop's API/store import chain. */
-function recordedXUnit(d: Dataset): string {
+export function recordedXUnit(d: Dataset): string {
   for (const key of ["xUnit", "x_column_unit", "xColumnUnit"]) {
     const raw = d.data.metadata?.[key];
     if (typeof raw === "string" && raw.trim()) return raw.trim();
@@ -196,9 +200,21 @@ export function hasTimeUnitX(d: Dataset): boolean {
 function needsTimeUnitX(steps: readonly PipelineStep[]): boolean {
   return inputSegment(steps).some((s) => {
     if (s.kind !== "transform" || s.params.op !== "sims") return false;
-    const cal = s.params.calibration as { timeUnit?: unknown } | undefined;
-    return Boolean(cal) && !(typeof cal?.timeUnit === "string" && cal.timeUnit.trim());
+    const cal = s.params.calibration as { method?: unknown; timeUnit?: unknown } | undefined;
+    return Boolean(cal) && cal?.method !== "scale" && !(typeof cal?.timeUnit === "string" && cal.timeUnit.trim());
   });
+}
+
+/** The x unit captured by the first direct-scale SIMS step. New scale
+ * recipes always carry it; undefined keeps legacy, non-scale recipes
+ * compatible. Runtime replay independently enforces the same condition. */
+function scaleInputUnit(steps: readonly PipelineStep[]): string | undefined {
+  for (const s of inputSegment(steps)) {
+    if (s.kind !== "transform" || s.params.op !== "sims") continue;
+    const cal = s.params.calibration as { method?: unknown; inputUnit?: unknown } | undefined;
+    if (cal?.method === "scale" && typeof cal.inputUnit === "string") return cal.inputUnit.trim();
+  }
+  return undefined;
 }
 
 /** The names of the columns the recipe's own in-place steps append, in order.
@@ -249,11 +265,13 @@ export function deriveExpectations(steps: readonly PipelineStep[], example: Data
     unit: d.units[i] ?? "",
     required: refs.all || refs.cols.has(i),
   }));
+  const scaleUnit = scaleInputUnit(steps);
   return {
     columns,
     metadata: metadataRefs(steps),
     example: example.name,
     ...(needsTimeUnitX(steps) ? { needsTimeUnitX: true } : {}),
+    ...(scaleUnit !== undefined ? { scaleInputUnit: scaleUnit } : {}),
   };
 }
 
@@ -279,6 +297,7 @@ export function sanitizeExpectations(v: unknown): RecipeExpectations | undefined
     metadata,
     ...(typeof o.example === "string" ? { example: o.example } : {}),
     ...(o.needsTimeUnitX === true ? { needsTimeUnitX: true } : {}),
+    ...(typeof o.scaleInputUnit === "string" ? { scaleInputUnit: o.scaleInputUnit.trim() } : {}),
   };
 }
 
@@ -289,6 +308,7 @@ export function expectationsText(e: RecipeExpectations | undefined): string {
   const meta = e.metadata.map((p) => p.join(" › "));
   const parts = [cols.length ? `columns ${cols.join(", ")}` : "no specific columns"];
   if (meta.length) parts.push(`metadata ${meta.join(", ")}`);
+  if (e.scaleInputUnit !== undefined) parts.push(`x unit ${e.scaleInputUnit || "unknown"}`);
   return parts.join("; ");
 }
 

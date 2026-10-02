@@ -75,6 +75,50 @@ def test_rate_units_convert() -> None:
     assert prov["depth_unit"] == "um"
 
 
+def test_direct_scale_and_offset_calibration_does_not_pretend_x_is_time() -> None:
+    depth, prov, ws = calibrate_depth(
+        np.array([1000.0, 1500.0, 2000.0]),
+        x_unit="encoder counts",
+        method="scale",
+        scale_factor=0.01,
+        offset=-10.0,
+        depth_unit="nm",
+    )
+    np.testing.assert_allclose(depth, [0.0, 5.0, 10.0])
+    assert prov == {
+        "stage": "calibration",
+        "method": "scale",
+        "depth_unit": "nm",
+        "input_unit": "encoder counts",
+        "scale_factor": 0.01,
+        "offset": -10.0,
+        "formula": "depth = scale_factor * x + offset",
+    }
+    assert ws == []
+
+
+def test_direct_scale_reports_negative_depth_and_preserves_nonmonotonic_rows() -> None:
+    depth, _, ws = calibrate_depth(
+        np.array([2.0, 0.0, 1.0]),
+        x_unit="nm",
+        method="scale",
+        scale_factor=2.0,
+        offset=-1.0,
+    )
+    np.testing.assert_allclose(depth, [3.0, -1.0, 1.0])
+    assert set(_codes(ws)) == {"negative-depth", "reordered"}
+
+
+def test_direct_scale_refuses_numeric_overflow() -> None:
+    with pytest.raises(ValueError, match="overflowed"):
+        calibrate_depth(
+            np.array([1e308]),
+            x_unit="counts",
+            method="scale",
+            scale_factor=1e308,
+        )
+
+
 def test_crater_calibration_defaults_total_time_to_last_point_and_says_so() -> None:
     depth, prov, ws = calibrate_depth(
         T, x_unit="s", method="crater", crater_depth=1.0, crater_unit="um"
@@ -146,6 +190,9 @@ def test_whitespace_only_stated_time_unit_is_not_a_stated_override() -> None:
         {"method": "crater", "crater_depth": 5.0, "total_time": 0.0},
         {"method": "rate", "sputter_rate": 1.0, "rate_unit": "nm"},
         {"method": "rate", "sputter_rate": 1.0, "depth_unit": "furlong"},
+        {"method": "scale"},
+        {"method": "scale", "scale_factor": 0.0},
+        {"method": "scale", "scale_factor": 1.0, "offset": math.inf},
         {"method": "magic"},
     ],
 )

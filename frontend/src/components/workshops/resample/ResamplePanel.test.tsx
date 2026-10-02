@@ -73,6 +73,8 @@ beforeEach(() => {
     selectedIds: ["d1"],
     macroRecording: true,
     macroSteps: [],
+    history: [],
+    future: [],
   });
   useResampleDialog.setState({ seed: ["d1"] });
 });
@@ -210,6 +212,10 @@ describe("ResamplePanel — previewed align/interpolate", () => {
     // The active dataset's step applies to a template's target; b.dat is an
     // explicit reference.
     expect(steps.map((s) => s.params.inputIsTarget)).toEqual([true, false]);
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["d1", "d2", "g", made[0].id]);
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["d1", "d2", "g"]);
   });
 
   it("the dataset being matched is the grid, not a pick", async () => {
