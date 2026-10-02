@@ -6,9 +6,9 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
-## [0.28.0-rc1] - 2026-10-02
+## [0.28.0] - 2026-10-02
 
-A **minor** release candidate: the 50 pull requests since `v0.27.0` lock the
+A **minor** release: the 50 pull requests since `v0.27.0` lock the
 local API behind a per-launch token, harden imports against hostile files,
 add decimal-comma import, and close a long list of screen-versus-export
 mismatches. Also new: a Project Explorer for dense Origin imports, Curve Fit
