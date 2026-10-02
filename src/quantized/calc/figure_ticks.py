@@ -39,6 +39,8 @@ from typing import Any
 
 from matplotlib.ticker import Formatter, MultipleLocator
 
+from quantized.heavy_import import heavy_imports
+
 __all__ = ["apply_tick_formats", "apply_tick_steps", "axis_tick_formatter"]
 
 _MODES = ("fixed", "sci", "eng", "date", "time", "datetime")
@@ -265,7 +267,8 @@ def apply_tick_formats(
             continue
         if scale == "log":
             # The log rule still picks WHICH ticks carry text (lib/logTicks.ts).
-            from quantized.calc.figure_log_ticks import LogTickLabels
+            with heavy_imports("quantized.calc.figure_log_ticks"):
+                from quantized.calc.figure_log_ticks import LogTickLabels
 
             axis.set_major_formatter(LogTickLabels(minor=False, inner=formatter))
             axis.set_minor_formatter(LogTickLabels(minor=True, inner=axis_tick_formatter(fmt)))
