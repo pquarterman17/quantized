@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from quantized.io._delimited_layout import _detect_delimiter
 from quantized.io.delimited import import_csv
 from quantized.io.import_preview import (
     ImportSettings,
@@ -80,3 +81,49 @@ def test_wizard_decimal_comma_columns_follow_the_label_row() -> None:
     assert _shown(ds) == ["Temp", "M_sample"]
     assert ds.metadata["decimal_comma_columns"] == ["Temp", "M_sample"]
     assert preview_import(text, settings)["decimal_comma_columns"] == ["Temp", "M_sample"]
+
+
+# --- tab beats generic whitespace when every line has the same tab count ------------
+
+_TAB_TEXT = [
+    'T\tV\tNote\n1\t2.5\t"Smith, J"\n2\t3.5\t"Doe, A"\n',  # Excel "tab-delimited", quoted
+    "T\tV\tSample\n1\t2.5\tSample A\n2\t3.5\tSample B\n",  # unquoted text with a space
+]
+
+
+@pytest.mark.parametrize("text", _TAB_TEXT)
+def test_tab_export_with_spaced_text_reads_as_tab(tmp_path: Path, text: str) -> None:
+    direct = import_csv(_write(tmp_path, text))
+    assert direct.metadata["delimiter"] == "\t"
+    assert direct.time.tolist() == [1.0, 2.0]
+    assert direct.values[:, 0].tolist() == [2.5, 3.5]
+    note = text.split("\n")[0].split("\t")[2]
+    assert [s.strip('"') for s in direct.metadata["text_columns"][note]] == [
+        line.split("\t")[2].strip('"') for line in text.splitlines()[1:]
+    ]
+    assert preview_import(text, guess_settings(text))["delimiter"] == "\t"
+
+
+@pytest.mark.parametrize(
+    ("lines", "expected"),
+    [
+        (["T     V", "1.0   2.0", "3.0   4.0"], " "),  # space-padded, no tabs
+        (["1.0  2.0  3.0", "4.0\t5.0  6.0", "7.0  8.0  9.0"], " "),  # a stray tab
+        (["1.0\t  2.0\t  3.0", "4.0\t  5.0\t  6.0"], "\t"),  # tab + space alignment
+        (["Temp,Moment,Note", "300.5,1.2,Smith J", "301,1.5,Doe A"], ","),
+    ],
+)
+def test_whitespace_layouts_keep_their_delimiter(lines: list[str], expected: str) -> None:
+    assert _detect_delimiter(lines) == expected
+
+
+# --- a comment line is never the wizard's header -------------------------------------
+
+
+def test_wizard_never_takes_a_comment_line_for_the_header(tmp_path: Path) -> None:
+    text = "# exported by X\n1,5;2,25\n3,5;4,75\n"
+    settings = guess_settings(text)
+    assert settings.header_line is None
+    direct = import_csv(_write(tmp_path, text))
+    wizard = parse_import(text, settings)
+    assert _shown(wizard) == _shown(direct) == ["Col1", "Col2"]

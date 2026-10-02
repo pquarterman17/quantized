@@ -74,6 +74,7 @@ from quantized.io.import_parse import (
     _resolve_names,
     _scoring_rows,
     _split,
+    _uncommented,
 )
 
 __all__ = [
@@ -233,7 +234,7 @@ def guess_settings(text: str) -> ImportSettings:
         header_line = data_start - 2 if scores[data_start - 2] < 0.5 else None
     elif data_start >= 1 and scores[data_start - 1] < 0.5:
         header_line = data_start - 1
-
+    header_line, units_line = (_uncommented(lines, i) for i in (header_line, units_line))
     names = _resolve_names(tokens, header_line, n_cols)
     roles = ["x"] + ["y"] * (n_cols - 1) if n_cols else []
     return ImportSettings(

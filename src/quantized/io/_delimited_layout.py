@@ -91,6 +91,10 @@ def _detect_delimiter(raw_lines: Sequence[str]) -> str:
                 best_delim = ch
     if best_delim == "," and _semicolon_over_comma(test):
         return ";"
+    if best_delim == " " and len(tabs := {ln.count("\t") for ln in test}) == 1 and 0 not in tabs:
+        # Every line has the same nonzero tab count: a tab export whose text
+        # cells hold spaces ("Smith, J"), which outvoted the tabs as whitespace.
+        return "\t"
     return best_delim
 
 

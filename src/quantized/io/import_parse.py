@@ -99,6 +99,14 @@ def _scoring_rows(text: str, tokens: list[list[str]], delim: str) -> Sequence[Se
     return tokens
 
 
+def _uncommented(lines: list[str], index: int | None) -> int | None:
+    """``index`` unless it points at a comment line (`delimited._split_lines`):
+    the wizard never takes one for a header or units row; import drops them."""
+    if index is None or not _split_lines(lines[index])[1]:
+        return index
+    return None
+
+
 def _resolve_delim(lines: list[str], setting: str) -> str:
     d = _NAMED_DELIMS.get(setting.lower(), setting)
     if d != "auto":
