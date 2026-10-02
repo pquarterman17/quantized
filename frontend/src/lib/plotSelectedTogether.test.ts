@@ -98,4 +98,24 @@ describe("plotSelectedTogether (PLOT_WORKFLOW_PLAN #3)", () => {
     const t = useToasts.getState().toasts.find((x) => x.msg.includes("book fetch failed"));
     expect(t?.kind).toBe("danger");
   });
+
+  it("warns when the sources' x units differ (an M-H loop in Oe beside an M-T sweep in K)", async () => {
+    // One shared x axis titled from the FIRST source: the M-T curve's kelvins
+    // would otherwise sit unannounced on a "Magnetic Field (Oe)" axis.
+    const withX = (d: Dataset, name: string, unit: string): Dataset => ({
+      ...d,
+      data: { ...d.data, metadata: { x_column_name: name, x_column_unit: unit } },
+    });
+    useApp.setState({ datasets: [withX(a, "Magnetic Field", "Oe"), withX(b, "Temperature", "K"), withX(c, "Magnetic Field", "Oe")] });
+    await plotSelectedTogether(["a", "b"]);
+    const t = useToasts.getState().toasts.find((x) => x.msg.includes("plotted 2 datasets together"));
+    expect(t?.msg).toContain("x units differ (Oe, K)");
+    expect(t?.kind).toBe("info");
+
+    useToasts.setState({ toasts: [] });
+    await plotSelectedTogether(["a", "c"]); // same unit: the plain success toast
+    const same = useToasts.getState().toasts.find((x) => x.msg.includes("plotted 2 datasets together"));
+    expect(same?.msg).not.toContain("differ");
+    expect(same?.kind).toBe("ok");
+  });
 });

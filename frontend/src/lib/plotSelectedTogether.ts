@@ -75,5 +75,13 @@ export async function plotSelectedTogether(ids: readonly string[]): Promise<void
     return;
   }
   useApp.getState().addDataset({ id: nextDatasetId(), name: `overlay (${plottable.length})`, data });
-  toast(`plotted ${plottable.length} datasets together${mapSkipNote(maps)}`, "ok");
+  const units = xUnitMismatch(plottable);
+  toast(`plotted ${plottable.length} datasets together${units}${mapSkipNote(maps)}`, units ? "info" : "ok");
+}
+
+/** " — x units differ (Oe, K)" when the sources' x units disagree, else "".
+ *  The overlay shares ONE x axis titled from the first source. */
+function xUnitMismatch(datasets: Dataset[]): string {
+  const units = [...new Set(datasets.map((d) => String(d.data.metadata?.x_column_unit ?? "").trim()))];
+  return units.length > 1 ? ` — x units differ (${units.map((u) => u || "none").join(", ")})` : "";
 }
