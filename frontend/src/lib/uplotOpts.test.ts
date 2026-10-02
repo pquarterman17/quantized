@@ -1084,7 +1084,7 @@ describe("buildOpts non-monotonic x (hysteresis loops)", () => {
     expect(s.paths).toBeDefined();
     // uPlot would call with a collapsed window (e.g. 2..2); the wrapper must
     // forward the full index range instead.
-    const fakeU = { data: [loop.data[0]] };
+    const fakeU = { data: [loop.data[0]], bbox: { width: 600 } }; // a real instance always has a bbox
     s.paths!(fakeU, 1, 2, 2);
     expect(spyLinear).toHaveBeenCalledWith(fakeU, 1, 0, 4);
   });

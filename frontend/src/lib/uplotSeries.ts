@@ -53,8 +53,18 @@ export function buildSeriesDefs(
   const { accentColor, inkColor, inkDimColor, isDarkBg } = colors;
   // Non-monotonic x: wrap a path builder so it ignores uPlot's (collapsed)
   // index window and draws the full acquisition order. See `linearPaths` docs.
+  // uPlot min/max-decimates a run of >= 4 points per pixel assuming ascending
+  // x, collapsing a dense descending spectrum to one vertical line: draw in
+  // runs short enough to stay exact, joined end to end.
   const fullLine = (b: uPlot.Series.PathBuilder): uPlot.Series.PathBuilder =>
-    (u, sidx) => b(u, sidx, 0, u.data[0].length - 1);
+    (u, sidx) => {
+      const last = u.data[0].length - 1;
+      const run = u.bbox.width * 3 + 1; // < 4 per pixel, and >= 1 at zero width
+      const out = b(u, sidx, 0, Math.min(last, run));
+      for (let i = run; out && i < last; i += run)
+        (out.stroke as Path2D).addPath(b(u, sidx, i, Math.min(last, i + run))!.stroke as Path2D);
+      return out;
+    };
   const fullPoints = (b: uPlot.Series.Points.PathBuilder): uPlot.Series.Points.PathBuilder =>
     (u, sidx, _i0, _i1, filt) => b(u, sidx, 0, u.data[0].length - 1, filt);
   /** Point-marker config for one series honoring the loop fix. */
