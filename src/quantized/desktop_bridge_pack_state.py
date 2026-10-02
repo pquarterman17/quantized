@@ -28,6 +28,7 @@ from quantized.desktop_consent import (
     normalize_path,
 )
 from quantized.desktop_source_probe import probe_source_path
+from quantized.heavy_import import heavy_imports
 from quantized.portable.attention import annotate_attention
 
 __all__ = [
@@ -75,7 +76,8 @@ def flag_attention(manifest: Mapping[str, Any]) -> dict[str, Any]:
     the allowed data folders or is not a recognised data file type (see
     :mod:`quantized.portable.attention`). The registry is imported here, not
     at module load, so the bridge does not pull in every parser on startup."""
-    from quantized.io.registry import is_recognised_data_name
+    with heavy_imports("quantized.io.registry"):
+        from quantized.io.registry import is_recognised_data_name
 
     return annotate_attention(
         manifest,
