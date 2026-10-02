@@ -59,8 +59,9 @@ export interface TechniqueViewDefaults {
 // intensity axes are log. Reflectometry log R subsumes ncnr's
 // default_value_channels channel hint -- a different axis of the same view,
 // not a competing mechanism. Magnetometry/transport are explicitly linear
-// (not just "unset") so switching FROM a log-technique window resets it.
-// spectroscopy/generic carry no opinion -- {} leaves the view untouched.
+// (not just "unset") so switching FROM a log-technique window resets it;
+// spectroscopy too (an IR spectrum opened after a SIMS profile kept its log
+// y). generic carries no opinion -- {} leaves the view untouched.
 const TECHNIQUE_VIEW_DEFAULTS: Partial<Record<Technique, TechniqueViewDefaults>> = {
   "xrd.powder": { yScale: "log" },
   "xrd.rsm": { yScale: "log" },
@@ -69,6 +70,7 @@ const TECHNIQUE_VIEW_DEFAULTS: Partial<Record<Technique, TechniqueViewDefaults>>
   "magnetometry.mvsh": { yScale: "linear" },
   "magnetometry.mvst": { yScale: "linear" },
   transport: { yScale: "linear" },
+  spectroscopy: { yScale: "linear" },
 };
 
 /** The technique-driven view defaults for `ds` -- {} for an unmapped or
