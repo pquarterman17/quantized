@@ -27,6 +27,7 @@
 //   structural_report.json        decoded-figure vs applied-store-state checks
 
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { basename, join, resolve } from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -58,6 +59,10 @@ if (!args.opj || !args.project) {
 const OPJ_PATH = resolve(args.opj);
 const PROJECT = String(args.project);
 const PORT = Number(args.port || 8793);
+// Every /api call needs the server's API token (docs/api_auth.md). Exported
+// before the spawn, so the backend `qz` launches with this same token.
+process.env.QZ_API_TOKEN ??= randomBytes(32).toString("base64url");
+const API_TOKEN = process.env.QZ_API_TOKEN;
 const EXPORTS_DIR = exportsDirFor(PROJECT, args["exports-root"]);
 const QZ_DIR = join(EXPORTS_DIR, "quantized");
 
@@ -133,6 +138,7 @@ async function main() {
     const uploadRes = await fetch(`${baseUrl}/api/parsers/upload?full_books=true`, {
       method: "POST",
       body: form,
+      headers: { "X-Quantized-Token": API_TOKEN },
     });
     if (!uploadRes.ok) {
       throw new Error(`upload failed: ${uploadRes.status} ${await uploadRes.text()}`);
@@ -173,7 +179,7 @@ async function main() {
       console.error(`[pageerror] ${error.stack || error.message}`);
     });
 
-    await page.goto(`${baseUrl}/?harness=1`, { waitUntil: "networkidle2", timeout: 30000 });
+    await page.goto(`${baseUrl}/?harness=1&token=${API_TOKEN}`, { waitUntil: "networkidle2", timeout: 30000 });
     await page.waitForFunction("window.__qz && window.__qz.useApp", { timeout: 15000 });
 
     const { entries, datasetInfo } = await page.evaluate(

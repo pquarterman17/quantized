@@ -33,6 +33,11 @@ route comment names for exactly this purpose (a probe that checks
 same ``{"status": "ok"}`` shape on the same default port). Raises
 :class:`QuantizedConnectionError`, never silently talks to the wrong app.
 
+Authentication: every ``/api`` route but ``/api/health`` needs the server's
+per-launch API token (``docs/api_auth.md``). Launch the server with
+``QZ_API_TOKEN`` set and give this client the same variable (or ``token=``);
+it is sent as the ``X-Quantized-Token`` header.
+
 No automatic port discovery in slice 1 (the server can silently fall back to
 an ephemeral port when 8000 is busy) — pass ``base_url`` explicitly, or set
 ``QZ_URL``, when the session isn't on the default port.
@@ -59,6 +64,10 @@ from quantized.datastruct import DataStruct
 __all__ = ["QuantizedClient", "QuantizedClientError", "QuantizedConnectionError"]
 
 _DEFAULT_BASE_URL = "http://127.0.0.1:8000"
+# Same values as quantized.auth (not imported: this module stays a plain HTTP
+# client that never needs the server package's internals).
+_TOKEN_ENV = "QZ_API_TOKEN"
+_TOKEN_HEADER = "x-quantized-token"
 _TERMINAL_JOB_STATUSES = ("done", "error", "cancelled")
 
 
@@ -89,6 +98,7 @@ class QuantizedClient:
         base_url: str | None = None,
         timeout: float = 30.0,
         *,
+        token: str | None = None,
         _client: httpx.Client | None = None,
     ) -> None:
         self._identity_ok = False
@@ -100,6 +110,9 @@ class QuantizedClient:
                 base_url or os.environ.get("QZ_URL") or _DEFAULT_BASE_URL
             ).rstrip("/")
             self._http = httpx.Client(base_url=self._base_url, timeout=timeout)
+        api_token = token or os.environ.get(_TOKEN_ENV)
+        if api_token:
+            self._http.headers[_TOKEN_HEADER] = api_token
 
     def __enter__(self) -> QuantizedClient:
         return self
@@ -122,6 +135,11 @@ class QuantizedClient:
             ) from exc
 
     def _unwrap(self, resp: httpx.Response) -> Any:
+        if resp.status_code == 401:
+            raise QuantizedClientError(
+                f"HTTP 401: the server refused the API token -- set {_TOKEN_ENV} "
+                "to the token the server was launched with (docs/api_auth.md)"
+            )
         if resp.status_code >= 400:
             detail = f"{resp.status_code} {resp.reason_phrase}"
             try:

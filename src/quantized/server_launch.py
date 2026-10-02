@@ -18,6 +18,8 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from quantized.auth import DEV_BOOTSTRAP_PATH, ensure_launch_token, launch_url
+
 if TYPE_CHECKING:
     import socket as _socket
     from collections.abc import Callable
@@ -216,6 +218,10 @@ def _run_desktop(
             if not _health_ok(host, port):
                 print(f"[qz] port {port} is in use by another app - close it and retry")
                 return
+            print(
+                f"[qz] reusing the Quantized server on port {port}; its window opens "
+                "only if both were launched with the same QZ_API_TOKEN"
+            )
         else:
             server = uvicorn.Server(
                 uvicorn.Config(app, host=host, port=port, log_level="warning")
@@ -235,9 +241,11 @@ def _run_desktop(
         # re-import needs no second picker). Browser mode has no
         # window.pywebview and degrades to the file picker, unchanged.
         api = DesktopApi()
+        # The launch URL carries the API token; the index trades it for the
+        # HttpOnly cookie the webview then sends with every /api call.
         win = webview.create_window(
             title,
-            f"http://{host}:{port}{path}",
+            launch_url(f"http://{host}:{port}", app.state.api_token, path),
             width=width,
             height=height,
             background_color="#121116",  # dark --surface-0 (oklch 0.16 0.008 280)
@@ -290,8 +298,15 @@ def _run_dev(host: str, port: int, *, calc: bool = False) -> None:
         cwd=frontend,
         env=env,
     )
-    calc_path = "/?view=calc" if calc else ""
-    _open_browser_later(f"http://localhost:{_VITE_PORT}{calc_path}")
+    # The Vite server, not the API, serves the index here, so the browser
+    # opens the dev-only bootstrap instead: Vite proxies it to the API, which
+    # sets the token cookie on the Vite origin and redirects to "/". The
+    # token is exported (ensure_launch_token) so the reloader keeps it.
+    calc_query = "?view=calc" if calc else ""
+    token = ensure_launch_token()
+    bootstrap = launch_url(f"http://localhost:{_VITE_PORT}", token, DEV_BOOTSTRAP_PATH + calc_query)
+    print(f"[qz] dev UI -> {bootstrap}")
+    _open_browser_later(bootstrap)
     # BUG-030: admit the Vite origin in the API's Origin guard -- dev mode
     # only. Via os.environ because reload=True builds the app in a reloader
     # subprocess that inherits the environment, not our arguments.

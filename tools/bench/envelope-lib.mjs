@@ -13,7 +13,14 @@
 // headless Chrome) patch the PAGE's runtime from the outside, exactly the
 // way a test harness stubs `fetch` — no repo source file is touched.
 
+import { randomBytes } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
+
+// Every /api call needs the server's API token (docs/api_auth.md). Set at
+// import, before any harness spawns its backend `qz` (which inherits the
+// environment and honours QZ_API_TOKEN); `gotoHarness` opens the launch URL.
+process.env.QZ_API_TOKEN ??= randomBytes(32).toString("base64url");
+export const API_TOKEN = process.env.QZ_API_TOKEN;
 
 export function sleep(ms) {
   return delay(ms);
@@ -55,7 +62,7 @@ export async function withDeadline(fn, ms, label) {
  *  the SAME query param tools/visual and frontend/e2e use) and wait for the
  *  shell + `window.__qz.useApp` to be ready. */
 export async function gotoHarness(page, baseUrl) {
-  await page.goto(`${baseUrl}/?harness`, { waitUntil: "domcontentloaded", timeout: 30000 });
+  await page.goto(`${baseUrl}/?harness&token=${API_TOKEN}`, { waitUntil: "domcontentloaded", timeout: 30000 });
   await page.waitForSelector(".qzk-library", { timeout: 20000 });
   await page.waitForFunction(() => Boolean(window.__qz && window.__qz.useApp), { timeout: 20000 });
 }

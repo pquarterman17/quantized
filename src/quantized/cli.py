@@ -4,7 +4,8 @@
                         exit when the last tab closes (app-like run model;
                         pre-set QZ_AUTO_SHUTDOWN=0 to opt out)
     qz --port 9000      use a different port
-    qz --no-browser     don't open a browser (headless / CI; never auto-exits)
+    qz --no-browser     don't open a browser (headless / CI; never auto-exits);
+                        open the printed launch URL yourself
     qz --dev            Vite dev server (HMR) + auto-reloading backend
     qz --desktop        native window (pywebview; pip install quantized[desktop])
     qz --calc           calculator-only view (DiraCulator materials calculators),
@@ -20,6 +21,10 @@ If the requested port is busy and ``--port`` was NOT given explicitly, qz
 falls back to a free ephemeral port automatically (the main app is often
 already running on 8000) and prints a note. An explicit ``--port`` that's
 busy still errors as before.
+
+Every /api call needs the per-launch API token (``docs/api_auth.md``): the
+browser gets it from the launch URL qz opens (and prints), scripts from
+``QZ_API_TOKEN`` set before launch.
 
 The UI is served from the Vite build output (``src/quantized/web``). On a bare
 dev checkout that directory is absent — build it once with
@@ -37,6 +42,7 @@ from pathlib import Path
 import uvicorn
 
 from quantized import __version__
+from quantized.auth import ensure_launch_token, launch_url
 from quantized.server_launch import _open_when_healthy, _resolve_port, _run_desktop, _run_dev
 
 # Same resolution as quantized.app._WEB_DIR (kept as a separate constant here
@@ -97,6 +103,13 @@ def _serve(argv: list[str]) -> None:
         "--desktop", action="store_true", help="native window (pywebview)"
     )
     args = parser.parse_args(argv)
+    # The per-launch API token (quantized.auth; docs/api_auth.md): exported as
+    # QZ_API_TOKEN before uvicorn imports quantized.app, which reads it there
+    # (and in --dev's reloader subprocess). A user-set QZ_API_TOKEN is kept.
+    try:
+        token = ensure_launch_token()
+    except ValueError as exc:
+        parser.error(str(exc))
 
     explicit_port = args.port is not None
     port = _resolve_port(args.host, args.port if explicit_port else 8000, explicit=explicit_port)
@@ -124,7 +137,9 @@ def _serve(argv: list[str]) -> None:
             _run_desktop(args.host, port)
         return
 
-    url = f"http://{args.host}:{port}{calc_path}"
+    # The launch URL carries the token once; the index trades it for the
+    # HttpOnly cookie and redirects it out of the address bar.
+    url = launch_url(f"http://{args.host}:{port}", token, calc_path)
     if not _WEB_DIR.is_dir():
         print(
             f"[qz] UI not built ({_WEB_DIR} missing). "

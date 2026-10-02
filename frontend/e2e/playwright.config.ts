@@ -38,18 +38,27 @@
 // QZ_E2E_XBROWSER_FULL=1 as well to run every spec on both engines.
 
 import { defineConfig, devices } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Distinct from the app's default :8000 and from `qz --dev`'s :5173 proxy
 // target, so a developer's already-running instance is never disturbed.
-const PORT = 8934;
+// QZ_E2E_PORT lets parallel checkouts each run their own e2e server.
+const PORT = Number(process.env.QZ_E2E_PORT ?? 8934);
 // package.json has "type": "module", so this file loads as ESM — no
 // __dirname global; derive it from import.meta.url instead.
 const here = path.dirname(fileURLToPath(import.meta.url));
 // frontend/e2e -> frontend -> repo root (where pyproject.toml + `uv run qz`
 // resolve from).
 const REPO_ROOT = path.resolve(here, "../..");
+
+// Every /api call needs the server's API token (docs/api_auth.md). Set HERE,
+// in the runner's environment: the webServer's `qz` honours QZ_API_TOKEN at
+// launch, and the worker processes inherit it, so `gotoApp` opens the same
+// launch URL a user's browser gets. A server reused from an earlier run
+// (`reuseExistingServer`) must have been started with this same variable.
+process.env.QZ_API_TOKEN ??= randomBytes(32).toString("base64url");
 
 const XBROWSER = process.env.QZ_E2E_XBROWSER === "1";
 const XBROWSER_FULL = process.env.QZ_E2E_XBROWSER_FULL === "1";
