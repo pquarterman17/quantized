@@ -64,6 +64,15 @@ describe("plotSelectedTogether (PLOT_WORKFLOW_PLAN #3)", () => {
     expect(toastMsgs().some((m) => m.includes("plotted 2 datasets together"))).toBe(true);
   });
 
+  it("titles the overlay's x axis from the selection, not the Origin column letter", async () => {
+    const meta = { x_column_name: "2-Theta", x_column_unit: "deg" };
+    const xrd = (id: string): Dataset => ({ ...plain(id, id, [1, 2], [3, 4]), data: { ...a.data, metadata: meta } });
+    useApp.setState({ datasets: [xrd("p"), xrd("q")] });
+    await plotSelectedTogether(["p", "q"]);
+    const created = useApp.getState().datasets.find((d) => d.id !== "p" && d.id !== "q")!.data.metadata;
+    expect([created.x_column_long, created.x_column_unit]).toEqual(["2-Theta", "deg"]);
+  });
+
   it("skips a 2-D map in the selection, names it in the toast, and still overlays the rest", async () => {
     await plotSelectedTogether(["a", "b", "m"]);
     const s = useApp.getState();
