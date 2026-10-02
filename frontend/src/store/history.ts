@@ -50,7 +50,7 @@
 // when its promise settles, exactly like any other external mutation racing
 // the store.
 
-import type { HalfLim } from "../lib/axisLim";
+import { fixedLim, type HalfLim } from "../lib/axisLim";
 import type { AppState } from "./useApp";
 import { restorePatch, snapshotOf, type HistorySnapshot } from "./historySnapshot";
 
@@ -434,6 +434,9 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
           (before.xLim === null) === (after.xLim === null) &&
           (before.yLim === null) === (after.yLim === null)
         ) return {};
+        // A committed half-open limit (a side on auto) is what Back restores, not the live numbers.
+        const open = (lim: HalfLim | null, live: HalfLim | null) => (lim && !fixedLim(lim) ? lim : live);
+        before = { xLim: open(s.xLim, before.xLim), yLim: open(s.yLim, before.yLim) };
         return {
           viewHistory: [...s.viewHistory, { before, after }].slice(-HISTORY_DEPTH),
           viewFuture: [],
