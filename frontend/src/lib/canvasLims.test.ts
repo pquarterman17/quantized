@@ -2,7 +2,8 @@
 // LOG axis. A typed side at or below zero cannot be drawn there (uPlot takes
 // log10 of the bound), and the export's matplotlib ignores such a side
 // (`set_ylim(0, None)` on a log axis keeps its autoscale). So the canvas treats
-// it as auto for that side too, half-open or fully typed.
+// it as auto for that side too, half-open or fully typed. A reciprocal axis
+// keeps the side, as its export does.
 
 import { describe, expect, it } from "vitest";
 
@@ -36,6 +37,21 @@ describe("resolveCanvasLims on a log axis", () => {
   it("an X half-open pair on a log X follows the same rule", () => {
     const r = resolveCanvasLims(payload, { xLim: [null, 0], xScale: "log", yScale: "linear" });
     expect(positive(r.x.range)).toBe(true);
+  });
+
+  it("reports which axis had a side dropped, for the status note", () => {
+    const r = resolveCanvasLims(payload, { yLim: [0, 50], xScale: "linear", yScale: "log" });
+    expect(r.y.dropped).toBe(true);
+    expect(r.x.dropped).toBe(false);
+    expect(resolveCanvasLims(payload, { yLim: [5, 50], xScale: "linear", yScale: "log" }).y.dropped).toBe(false);
+  });
+
+  // The export's reciprocal axis (calc/figure_scale.py, matplotlib's FuncScale)
+  // has no such rule: `set_ylim(0, None)` is kept as 0. The canvas keeps it too.
+  it("a reciprocal axis keeps the typed side, as the export does", () => {
+    const r = resolveCanvasLims(payload, { yLim: [0, null], xScale: "linear", yScale: "reciprocal" });
+    expect(r.y.range?.[0]).toBe(0);
+    expect(r.y.dropped).toBe(false);
   });
 
   it("a linear axis keeps a typed zero, and a positive log pair passes through by reference", () => {

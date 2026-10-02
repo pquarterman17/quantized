@@ -44,7 +44,7 @@ export interface PlotViewportProps
   /** Committed X/Y limits; a null side is auto for that side (`useResolvedLims`). */
   xLim?: HalfLim | null;
   yLim?: HalfLim | null;
-  onLimCrossed?: (axis: "x" | "y") => void; // a half-open limit fell back to full auto
+  onLimCrossed?: (axis: "x" | "y", why?: "log") => void; // a half-open limit fell back to full auto, or "log": a side <= 0 was dropped
   /** The live uPlot instance, exposed as a controlled ref so the caller can
    *  drive toolbar/context-menu actions over it (see `usePlotStageActions`). */
   plotRef: RefObject<uPlot | null>;

@@ -60,6 +60,17 @@ describe("usePlotStageActions resetView with a half-open limit", () => {
     expect(useApp.getState().viewHistory).toHaveLength(0);
   });
 
+  it("the limit notes: a dropped log side reads apart from a crossing, one sentence each", () => {
+    const { result } = renderHook(() => usePlotStageActions({ current: plot }, payload, null));
+    result.current.onLimCrossed("y");
+    const crossed = useApp.getState().status;
+    result.current.onLimCrossed("x", "log");
+    const log = useApp.getState().status;
+    expect(log).not.toBe(crossed);
+    expect(log).toMatch(/^X limit .*log axis.*\.$/);
+    expect(log.split(". ").length).toBe(1);
+  });
+
   it("a fully fixed or auto axis still records the live view (unchanged)", () => {
     useApp.setState({ xLim: [1, 2.04], yLim: null, viewHistory: [], viewFuture: [] });
     const { result } = renderHook(() => usePlotStageActions({ current: plot }, payload, null));

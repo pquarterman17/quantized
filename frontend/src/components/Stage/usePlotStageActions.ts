@@ -81,7 +81,7 @@ export function usePlotStageActions(
 ): PlotStageActions & {
   onRegionSelect: (x0: number, x1: number, y0?: number, y1?: number) => void;
   onRangeSelect: (x0: number, x1: number) => void;
-  onLimCrossed: (axis: "x" | "y") => void;
+  onLimCrossed: (axis: "x" | "y", why?: "log") => void;
 } {
   function resetView() {
     if (plotRef.current && displayPayload) {
@@ -186,9 +186,14 @@ export function usePlotStageActions(
     useApp.getState().setRowSelection(waterfallSourceRows(displayPayload, rows));
   }
 
-  // P2.8 residual (b): a half-open limit crossed the data, so the axis is on auto.
-  const onLimCrossed = (axis: "x" | "y") =>
-    useApp.getState().setStatus(`${axis.toUpperCase()} limit crosses the data range, so the axis is back on auto.`);
+  // P2.8 residual (b): a half-open limit crossed the data, so the axis is on auto;
+  // "log": a typed side <= 0 was dropped on a log axis (lib/canvasLims.drawableLim).
+  const onLimCrossed = (axis: "x" | "y", why?: "log") =>
+    useApp.getState().setStatus(
+      why
+        ? `${axis.toUpperCase()} limit at or below zero is ignored on a log axis, so that side is on auto.`
+        : `${axis.toUpperCase()} limit crosses the data range, so the axis is back on auto.`,
+    );
 
   return {
     onLimCrossed,
