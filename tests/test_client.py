@@ -75,8 +75,11 @@ def test_token_resolves_arg_then_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert explicit._http.headers["x-quantized-token"] == "a" * 43
 
 
-def test_missing_token_is_a_clear_error() -> None:
+def test_missing_token_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """A server that refuses the token names the fix, not just "HTTP 401"."""
+    # The client reads QZ_API_TOKEN itself; a shell that exports it must not
+    # silently authenticate this "no token" case.
+    monkeypatch.delenv("QZ_API_TOKEN", raising=False)
     http = TestClient(app, base_url="http://testserver")
     http.headers.pop("x-quantized-token")  # conftest authenticates TestClients
     client = QuantizedClient(_client=http)
