@@ -125,16 +125,6 @@ import { applyCore, applyCoreWithLibs } from "./plotRecipeApplyLazy";
 let _recipeSeq = 0;
 const nextPlotRecipeId = (): string => `pr-${Date.now().toString(36)}-${++_recipeSeq}`;
 
-/** Set-equality for two `unmatched` field-name lists (order-independent --
- *  `resolveRecipe` iterates `recipe.signature` in a stable order today, but
- *  comparing as sets is the honest contract: "the same fields, however
- *  listed" is what "nothing changed" means here, not "the same array"). */
-function sameUnmatchedSet(a: readonly string[], b: readonly string[]): boolean {
-  if (a.length !== b.length) return false;
-  const bSet = new Set(b);
-  return a.every((x) => bSet.has(x));
-}
-
 // Was a hardcoded `"0"` until vite's `define` supplied a real version. Read
 // as a bare global rather than via lib/buildInfo.ts because this module is
 // EAGER: measured, importing that module costs 43 B of startup budget and
@@ -270,6 +260,26 @@ export interface PlotRecipesSlice {
 }
 
 export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipesSlice {
+  // Both confirm actions. The refusals stay synchronous; the re-resolve and
+  // apply tail (store/plotRecipeConfirm.ts) rides the apply-core load (bundle
+  // diet slice 21). Finding 4: never trust `pending.resolution` as-is -- it
+  // was computed at STAGE time and the dataset may have been edited since, so
+  // the tail re-resolves against the CURRENT dataset before applying anything.
+  const confirmPending = async (partial: boolean): Promise<boolean> => {
+    const pending = get().pendingRecipeApplication;
+    if (!pending) {
+      set({ status: "No pending Plot Recipe application to confirm" });
+      return false;
+    }
+    const dataset = get().datasets.find((d) => d.id === pending.datasetId);
+    if (!dataset) {
+      set({ pendingRecipeApplication: null, status: `Plot Recipe "${pending.recipe.name}" unavailable: dataset not found` });
+      return false;
+    }
+    const libs = await applyCoreWithLibs();
+    return libs.confirmStagedRecipe(set, get, libs, pending, dataset, partial);
+  };
+
   return {
     plotRecipes: [],
     pendingRecipeApplication: null,
@@ -343,86 +353,8 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
       return resolveApplyOrStage(set, get, recipe, datasetId, resolveRecipe);
     },
 
-    confirmPendingRecipeApplication: async () => {
-      const pending = get().pendingRecipeApplication;
-      if (!pending) {
-        set({ status: "No pending Plot Recipe application to confirm" });
-        return false;
-      }
-      // Finding 4: never trust `pending.resolution` as-is -- it was computed
-      // at STAGE time and the dataset may have been edited since (a column
-      // removed/reordered/recoded). Re-resolve against the CURRENT dataset
-      // before applying anything.
-      const dataset = get().datasets.find((d) => d.id === pending.datasetId);
-      if (!dataset) {
-        set({ pendingRecipeApplication: null, status: `Plot Recipe "${pending.recipe.name}" unavailable: dataset not found` });
-        return false;
-      }
-      const { applyResolvedRecipe, resolveOptionsFor, resolveRecipe } = await applyCoreWithLibs();
-      const resolution = resolveRecipe(pending.recipe, dataset, resolveOptionsFor(get, pending));
-      if ("refused" in resolution) {
-        set({ pendingRecipeApplication: null, status: `Plot Recipe "${pending.recipe.name}" unavailable: ${resolution.refused}` });
-        return false;
-      }
-      if (resolution.unmatched.length > 0) {
-        // Still not a clean match against the CURRENT dataset -- re-stage
-        // the fresh resolution (never apply a stale one) and tell the user
-        // why, so a second confirm always re-verifies rather than silently
-        // compounding staleness.
-        //
-        // ORCHESTRATOR RULING A (code-review finding 1): "the dataset
-        // changed since the preview" is only TRUE wording when the fresh
-        // unmatched set actually differs from the staged one. The dialog
-        // that used to call this action is modal (blocks dataset edits
-        // while it's up) and only ever opens with unmatched > 0, so its own
-        // "Confirm" click always reproduced the IDENTICAL set -- the wording
-        // below distinguishes the two cases so a future non-modal caller
-        // (this action's remaining reason to exist) doesn't inherit that
-        // same false claim.
-        set({
-          pendingRecipeApplication: { ...pending, resolution }, // keeps `onCancel`
-          status: sameUnmatchedSet(resolution.unmatched, pending.resolution.unmatched)
-            ? `Plot Recipe "${pending.recipe.name}": ${resolution.unmatched.length} field${resolution.unmatched.length === 1 ? "" : "s"} still unmatched`
-            : `Plot Recipe "${pending.recipe.name}": the dataset changed since the preview -- review the updated mapping`,
-        });
-        return false;
-      }
-      set({ pendingRecipeApplication: null });
-      return applyResolvedRecipe(set, get, pending.recipe, pending.datasetId, resolution.resolved);
-    },
-
-    confirmPendingRecipeApplicationPartial: async () => {
-      const pending = get().pendingRecipeApplication;
-      if (!pending) {
-        set({ status: "No pending Plot Recipe application to confirm" });
-        return false;
-      }
-      // Same staleness guard as confirmPendingRecipeApplication: never trust
-      // `pending.resolution` as-is, re-resolve against the CURRENT dataset.
-      const dataset = get().datasets.find((d) => d.id === pending.datasetId);
-      if (!dataset) {
-        set({ pendingRecipeApplication: null, status: `Plot Recipe "${pending.recipe.name}" unavailable: dataset not found` });
-        return false;
-      }
-      const { applyResolvedRecipe, resolveOptionsFor, resolveRecipe } = await applyCoreWithLibs();
-      const resolution = resolveRecipe(pending.recipe, dataset, resolveOptionsFor(get, pending));
-      if ("refused" in resolution) {
-        set({ pendingRecipeApplication: null, status: `Plot Recipe "${pending.recipe.name}" unavailable: ${resolution.refused}` });
-        return false;
-      }
-      // The one divergence from confirm: a still-non-empty `unmatched` here
-      // does NOT re-stage -- this action's whole point is applying the fresh
-      // resolution's resolved subset anyway, dropping whatever didn't match.
-      const dropped = resolution.unmatched.length;
-      set({ pendingRecipeApplication: null });
-      const applied = await applyResolvedRecipe(set, get, pending.recipe, pending.datasetId, resolution.resolved);
-      if (applied && dropped > 0) {
-        set({
-          status: `applied plot recipe "${pending.recipe.name}" — dropped ${dropped} unmatched field${dropped === 1 ? "" : "s"}`,
-        });
-      }
-      return applied;
-    },
+    confirmPendingRecipeApplication: () => confirmPending(false),
+    confirmPendingRecipeApplicationPartial: () => confirmPending(true),
 
     cancelPendingRecipeApplication: () => {
       const cancelled = get().pendingRecipeApplication;

@@ -80,6 +80,8 @@ import { nextFigureId } from "./figureLifecycle";
 import { nextRefLineId } from "./plotViewSettings";
 import { recordRecipeUse } from "./recordRecipeUse";
 import { plotWindowDatasetId, withPlotWindowDocument } from "./windowDocuments";
+// The confirm actions' tail rides this module's load (bundle diet slice 21).
+export { confirmStagedRecipe } from "./plotRecipeConfirm";
 
 export type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 export type SliceGet = () => AppState;
