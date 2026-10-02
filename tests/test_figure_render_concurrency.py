@@ -54,20 +54,37 @@ def _ds(scale: float) -> dict[str, Any]:
     }
 
 
+#: Loose order-of-magnitude BACKSTOP for every wait in the race test -- never
+#: what the test asserts (``docs/testing.md``: assert the load-invariant
+#: property, keep the clock only as a backstop). It was 5 s, which a cold
+#: first render (font/mathtext loading, then a log-axis render + PNG encode)
+#: overran under CPU load (2026-10-02: 5/5 cold runs failed at
+#: ``fut_a.result(timeout=5.0)`` under 24 busy-loop processes on 4 cores,
+#: with the call taking 15-21 s. Both renders still completed, so this was a
+#: budget, not a deadlock). A real deadlock still fails, after this bound.
+_RACE_BACKSTOP_S = 300.0
+
+
 def test_render_lock_forces_the_mathtext_race() -> None:
     real_parse = mpl_mathtext.Parser.parse
     a_ident: list[int] = []
     a_inside = threading.Event()
     release_a = threading.Event()
     b_inside = threading.Event()
+    # Whether A's pause ended because the TEST released it. With a timed
+    # wait that silently resumed A, a starved main thread would let A finish,
+    # drop the lock and let B into the parser BEFORE the "B is not inside"
+    # check ran -- a false "lock did not serialize" failure under load.
+    a_released_by_test: list[bool] = []
 
     def instrumented_parse(self: Any, *args: Any, **kwargs: Any) -> Any:
         if threading.get_ident() == a_ident[0]:
-            # Freeze thread A right here, INSIDE the shared parser, still
-            # holding RENDER_LOCK (the trial parse in figure_labels runs
-            # under the SAME re-entrant lock render_scope already holds).
-            a_inside.set()
-            release_a.wait(timeout=5.0)
+            if not a_inside.is_set():
+                # Freeze thread A right here, INSIDE the shared parser, still
+                # holding RENDER_LOCK (the trial parse in figure_labels runs
+                # under the SAME re-entrant lock render_scope already holds).
+                a_inside.set()
+                a_released_by_test.append(release_a.wait(timeout=_RACE_BACKSTOP_S))
         else:
             b_inside.set()
         return real_parse(self, *args, **kwargs)
@@ -87,27 +104,35 @@ def test_render_lock_forces_the_mathtext_race() -> None:
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(mpl_mathtext.Parser, "parse", instrumented_parse)
         with ThreadPoolExecutor(2) as ex:
-            fut_a = ex.submit(render_a)
-            assert a_inside.wait(timeout=5.0), "thread A never reached the mathtext parser"
+            try:
+                fut_a = ex.submit(render_a)
+                assert a_inside.wait(timeout=_RACE_BACKSTOP_S), (
+                    "thread A never reached the mathtext parser"
+                )
 
-            fut_b = ex.submit(render_b)
-            # Give a BROKEN lock every chance to let B slip in early -- this
-            # wait only makes sabotage detection more reliable, it is never
-            # required for the assertion below to pass when the lock is
-            # correct: B is blocked on RENDER_LOCK's own acquire (a real OS
-            # lock, not a timing guess) for as long as release_a is unset,
-            # however long that is.
-            b_inside.wait(timeout=0.2)
-            assert not b_inside.is_set(), (
-                "thread B entered the shared mathtext parser while thread A "
-                "(holding RENDER_LOCK) was still paused inside its own parse "
-                "-- the lock did not serialize them"
-            )
+                fut_b = ex.submit(render_b)
+                # Give a BROKEN lock every chance to let B slip in early -- this
+                # wait only makes sabotage detection more reliable, it is never
+                # required for the assertion below to pass when the lock is
+                # correct: B is blocked on RENDER_LOCK's own acquire (a real OS
+                # lock, not a timing guess) for as long as release_a is unset,
+                # however long that is.
+                b_inside.wait(timeout=0.2)
+                assert not b_inside.is_set(), (
+                    "thread B entered the shared mathtext parser while thread A "
+                    "(holding RENDER_LOCK) was still paused inside its own parse "
+                    "-- the lock did not serialize them"
+                )
+            finally:
+                # Always unfreeze A, so a failed assertion above cannot leave
+                # the executor's shutdown waiting on it.
+                release_a.set()
+            out_a = fut_a.result(timeout=_RACE_BACKSTOP_S)
+            out_b = fut_b.result(timeout=_RACE_BACKSTOP_S)
 
-            release_a.set()
-            out_a = fut_a.result(timeout=5.0)
-            out_b = fut_b.result(timeout=5.0)
-
+    assert a_released_by_test == [True], (
+        "thread A's pause ended on its own backstop, not on the test's release"
+    )
     assert out_a[:8] == b"\x89PNG\r\n\x1a\n"
     assert out_b[:8] == b"\x89PNG\r\n\x1a\n"
     assert b_inside.is_set(), "thread B never reached the mathtext parser at all"
