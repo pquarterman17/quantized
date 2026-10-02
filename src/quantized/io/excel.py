@@ -22,7 +22,7 @@ from quantized.io._delimited_layout import _is_data_cell, _walk_back_gappy_rows
 from quantized.io.base import CORRUPT_ARCHIVE_ERRORS, resolve_column
 from quantized.io.delimited import _extract_units
 
-__all__ = ["import_excel"]
+__all__ = ["import_excel", "read_sheet"]
 
 # Hostile-input bounds (security audit 2026-10-01). openpyxl pads every row
 # out to the sheet's widest column and yields every empty row before the last
@@ -108,8 +108,9 @@ def _check_parts(path: Path) -> None:
                 )
 
 
-def _read_grid(worksheet: Any, name: str) -> list[list[Any]]:
-    """The sheet's cells as rows with trailing blanks trimmed.
+def _read_grid(worksheet: Any, name: str, max_rows: int | None = None) -> list[list[Any]]:
+    """The sheet's cells as rows with trailing blanks trimmed (the first
+    ``max_rows`` only, when given).
 
     The ``<dimension>`` tag is ignored: openpyxl pads every row to its width,
     and a wrong ``A1:XFD...`` tag would refuse a 2-column sheet past ~2,048
@@ -121,6 +122,8 @@ def _read_grid(worksheet: Any, name: str) -> list[list[Any]]:
     scanned = 0
     width = 1
     for row in worksheet.iter_rows(values_only=True):
+        if max_rows is not None and len(grid) >= max_rows:
+            break
         scanned += max(1, len(row))
         end = len(row)
         while end and row[end - 1] is None:
@@ -132,15 +135,13 @@ def _read_grid(worksheet: Any, name: str) -> list[list[Any]]:
     return grid
 
 
-def import_excel(
-    filepath: str | Path,
-    *,
-    sheet: int | str = 0,
-    time_column: int | str = 0,
-    data_columns: Sequence[int | str] | None = None,
-) -> DataStruct:
-    """Import an ``.xlsx`` sheet (first column = x-axis by default)."""
-    path = Path(filepath)
+def read_sheet(
+    path: Path, sheet: int | str = 0, *, max_rows: int | None = None
+) -> tuple[str, list[list[Any]]]:
+    """A sheet's title and bounded rows (``_read_grid``), behind the part-size
+    check. The one way any parser reads a workbook (``io/sims.py`` too).
+
+    Raises ``ValueError`` for an unreadable, damaged or over-cap workbook."""
     # We own the OS handle: openpyxl leaves its archive open when it raises
     # mid-load or mid-stream, and on Windows an open handle makes the upload
     # route's temp-dir cleanup fail, turning a clean 422 into a 500.
@@ -155,12 +156,23 @@ def import_excel(
             raise ValueError(f"{path.name} is not a readable .xlsx workbook: {exc}") from exc
         try:
             worksheet = workbook[sheet] if isinstance(sheet, str) else workbook.worksheets[sheet]
-            sheet_name = worksheet.title
-            grid = _read_grid(worksheet, path.name)
+            return worksheet.title, _read_grid(worksheet, path.name, max_rows)
         except CORRUPT_ARCHIVE_ERRORS as exc:  # the worksheet is streamed: damage shows up here
             raise ValueError(f"{path.name}: damaged worksheet data ({exc})") from exc
         finally:
             workbook.close()
+
+
+def import_excel(
+    filepath: str | Path,
+    *,
+    sheet: int | str = 0,
+    time_column: int | str = 0,
+    data_columns: Sequence[int | str] | None = None,
+) -> DataStruct:
+    """Import an ``.xlsx`` sheet (first column = x-axis by default)."""
+    path = Path(filepath)
+    sheet_name, grid = read_sheet(path, sheet)
 
     while grid and all(v is None for v in grid[-1]):
         grid.pop()

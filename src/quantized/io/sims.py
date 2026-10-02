@@ -48,23 +48,14 @@ def _sims_signals(text: str) -> bool:
 
 
 def _excel_preview_text(path: Path, max_rows: int = 8) -> str:
-    """First few rows of sheet 0 flattened to a string (for content sniffing)."""
-    with heavy_imports("openpyxl"):
-        import openpyxl
+    """First few rows of sheet 0 flattened to a string (for content sniffing).
+    Read through ``io/excel.read_sheet`` (owned handle, part and cell caps),
+    stopping after ``max_rows`` so the sniffer stays cheap on a big sheet."""
+    with heavy_imports("quantized.io.excel"):
+        from quantized.io.excel import read_sheet
 
-    # Own the handle: openpyxl leaks its archive when it raises (see io/excel.py).
-    with Path(path).open("rb") as handle:
-        workbook = openpyxl.load_workbook(handle, data_only=True, read_only=True)
-        try:
-            ws = workbook.worksheets[0]
-            cells: list[str] = []
-            for i, row in enumerate(ws.iter_rows(values_only=True)):
-                if i >= max_rows:
-                    break
-                cells.extend(str(v) for v in row if v is not None)
-        finally:
-            workbook.close()
-    return " ".join(cells)
+    _, grid = read_sheet(Path(path), 0, max_rows=max_rows)
+    return " ".join(str(v) for row in grid for v in row if v is not None)
 
 
 def is_sims_file(path: Path) -> bool:
@@ -301,18 +292,16 @@ def _read_text_tokens(path: Path) -> list[list[str]]:
 
 
 def _read_excel_tokens(path: Path, sheet: int | str) -> list[list[str]]:
-    with heavy_imports("openpyxl"):
-        import openpyxl
+    with heavy_imports("quantized.io.excel"):
+        from quantized.io.excel import read_sheet
 
-    with Path(path).open("rb") as handle:  # owned handle, as in _excel_preview_text
-        workbook = openpyxl.load_workbook(handle, data_only=True, read_only=True)
-        try:
-            ws = workbook[sheet] if isinstance(sheet, str) else workbook.worksheets[sheet]
-            grid = [list(row) for row in ws.iter_rows(values_only=True)]
-        finally:
-            workbook.close()
+    # The shared bounded reader (owned handle, part and cell caps). It trims
+    # each row's trailing blanks; pad back to a rectangle (rows x widest row,
+    # within its cap), the shape the delimited layout detection expects.
+    _, grid = read_sheet(Path(path), sheet)
+    width = max((len(r) for r in grid), default=0)
     tokens: list[list[str]] = []
-    for row in grid:
+    for row in (r + [None] * (width - len(r)) for r in grid):
         cells: list[str] = []
         for v in row:
             if isinstance(v, str):

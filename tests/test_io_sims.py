@@ -128,3 +128,84 @@ def test_sims_first_row_with_nan_cells_is_not_eaten(tmp_path: Path) -> None:
     assert n_col[0] == pytest.approx(6.0e21)
     for label in ("H", "O", "X"):
         assert ds.column(label)[0] != ds.column(label)[0]  # NaN
+
+
+# --------------------------------------------------------------------------
+# SIMS .xlsx goes through io/excel.read_sheet: the same cell cap, the same
+# part-size cap, and the sniffer preview reads only its first rows.
+# --------------------------------------------------------------------------
+def _sims_xlsx(path: Path, rows: int, *, far_cell: tuple[int, int] | None = None) -> Path:
+    openpyxl = pytest.importorskip("openpyxl")
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["Evans Analytical Group"])
+    ws.append(["Depth (nm)", "H (atoms/cc)", "O (atoms/cc)"])
+    for i in range(rows):
+        ws.append([float(i), 1e21 + i, 2e22 + i])
+    if far_cell is not None:
+        ws.cell(row=far_cell[0], column=far_cell[1], value=1.0)
+    wb.save(path)
+    return path
+
+
+@pytest.fixture
+def small_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    from quantized.io import excel
+
+    monkeypatch.setattr(excel, "MAX_CELLS", 100_000, raising=False)
+
+
+def test_sims_xlsx_cell_bomb_is_refused(tmp_path: Path, small_cap: None) -> None:
+    path = _sims_xlsx(tmp_path / "bomb.xlsx", 5, far_cell=(1000, 500))
+    assert is_sims_file(path) is True  # the preview's first rows are fine
+    with pytest.raises(ValueError, match="cells"):
+        import_sims(path)
+    with pytest.raises(ValueError, match="cells"):
+        import_auto(path)
+
+
+def test_sims_xlsx_part_bomb_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The sniffer's preview parses styles and shared strings whole too."""
+    import zipfile
+
+    from quantized.io import excel
+
+    monkeypatch.setattr(excel, "MAX_PART_BYTES", 1 << 20, raising=False)
+    plain = _sims_xlsx(tmp_path / "plain.xlsx", 5)
+    path = tmp_path / "bomb.xlsx"
+    with zipfile.ZipFile(plain) as src, zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as dst:
+        for info in src.infolist():
+            data = src.read(info)
+            if info.filename == "xl/styles.xml":
+                data += b" " * (2 << 20)
+            dst.writestr(info.filename, data)
+    assert is_sims_file(path) is False
+    with pytest.raises(ValueError, match="uncompressed"):
+        import_sims(path)
+
+
+def test_sims_xlsx_fixture_tokens_stay_rectangular(fixtures_dir: Path) -> None:
+    """The bounded reader trims trailing blanks; the SIMS tokens are padded back,
+    so the fixture's banner and blank rows read as before the shared reader."""
+    from quantized.io.sims import _read_excel_tokens
+
+    tokens = _read_excel_tokens(fixtures_dir / "sims_synth.xlsx", 0)
+    assert tokens[:5] == [
+        ["Evans Analytical Group", "", ""],
+        ["Sample : ID TEST-XLSX", "", ""],
+        ["Drawn Curves", "3", ""],
+        ["", "", ""],
+        ["Depth (nm)", "H (atoms/cc)", "O (atoms/cc)"],
+    ]
+    ds = import_sims(fixtures_dir / "sims_synth.xlsx")
+    assert ds.labels == ("H", "O")
+    assert ds.time.tolist() == pytest.approx([0.0, 1.0, 2.0, 3.0])
+    assert ds.column("H").tolist() == pytest.approx([1e21, 2e21, 1.5e21, 1.2e21])
+
+
+def test_sims_preview_reads_only_its_first_rows(tmp_path: Path, small_cap: None) -> None:
+    # 40k rows x 3 columns passes the cap: the import refuses, the preview does not.
+    path = _sims_xlsx(tmp_path / "tall.xlsx", 40_000)
+    assert is_sims_file(path) is True
+    with pytest.raises(ValueError, match="cells"):
+        import_sims(path)
