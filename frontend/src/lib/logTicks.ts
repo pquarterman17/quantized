@@ -15,8 +15,8 @@ function decadeOf(v: number): number | null {
 
 /** True when the positive splits span at least one full decade. */
 function spansDecade(splits: readonly (number | null)[]): boolean {
-  const positive = splits.filter((v): v is number => v != null && Number.isFinite(v) && v > 0);
-  return positive.length >= 2 && Math.max(...positive) / Math.min(...positive) >= 10 * (1 - 1e-9);
+  const positive = splits.filter((v): v is number => Number.isFinite(v) && v! > 0);
+  return positive.length >= 2 && Math.max(...positive) / Math.min(...positive) >= 9.99999999;
 }
 
 /** Publication-style labels for an automatic logarithmic axis: on a view that
@@ -30,15 +30,23 @@ export function logDecadeLabels(splits: readonly (number | null)[]): (string | n
     if (v == null || !(v > 0) || !Number.isFinite(v)) return null;
     const k = decadeOf(v);
     if (k === null) return "";
-    if (k === 0 || k === 1) return String(10 ** k);
-    return `10${String(k).replace("-", "⁻").replace(/\d/g, (d) => SUPERSCRIPT[Number(d)])}`;
+    if (k === 0 || k === 1) return `${10 ** k}`;
+    return `10${String(k).replace("-", "⁻").replace(/\d/g, (d) => SUPERSCRIPT[+d])}`;
   });
 }
 
 /** Keep labels only on decade anchors while retaining 2-9 subdivisions as
  * splits for log grid lines and tick marks. Sub-decade Origin axes use their
- * decoded arithmetic step, so every split remains a labeled major tick. */
-export function logMajorTickFilter(_u: uPlot, splits: number[]): (number | null)[] {
+ * decoded arithmetic step, so every split remains a labeled major tick. When a
+ * decade is narrower than uPlot's minimum label spacing, only every n-th
+ * decade (k % n == 0) keeps its label, as uPlot's own log filter thins them. */
+export function logMajorTickFilter(u: uPlot, splits: number[], axisIdx: number): (number | null)[] {
   if (!spansDecade(splits)) return splits;
-  return splits.map((v) => (v > 0 && decadeOf(v) !== null ? v : null));
+  const key = u.axes[axisIdx].scale!;
+  // uPlot's default minimum label spacing: 50 px along x, 30 px along y/y2.
+  const n = Math.ceil((axisIdx ? 30 : 50) / Math.abs(u.valToPos(10, key) - u.valToPos(1, key))) || 1;
+  return splits.map((v) => {
+    const k = decadeOf(v); // null for v <= 0 too
+    return k !== null && k % n === 0 ? v : null;
+  });
 }

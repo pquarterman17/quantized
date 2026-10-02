@@ -1238,16 +1238,18 @@ describe("fixedLogAxisSplits", () => {
 });
 
 describe("logMajorTickFilter", () => {
+  // 100 px per decade: room to label every decade (lib/logTicks.test.ts thins).
+  const roomyLogPlot = { axes: [{ scale: "y" }], valToPos: (v: number) => -100 * Math.log10(v) } as unknown as uPlot;
   it("labels decades and blanks the 2-9 minor subdivisions", () => {
     const splits = fixedLogAxisSplits(0.001, 0.1);
-    const filtered = logMajorTickFilter(null as unknown as uPlot, splits);
+    const filtered = logMajorTickFilter(roomyLogPlot, splits, 0);
     expect(filtered.filter((v) => v != null)).toEqual([0.001, 0.01, 0.1]);
     expect(filtered).toHaveLength(splits.length);
   });
 
   it("keeps every arithmetic tick on a sub-decade Origin range", () => {
     const splits = fixedLogAxisSplits(0.7, 1.3, 0.1);
-    expect(logMajorTickFilter(null as unknown as uPlot, splits)).toEqual(splits);
+    expect(logMajorTickFilter(roomyLogPlot, splits, 0)).toEqual(splits);
   });
 });
 
