@@ -202,13 +202,13 @@ describe("buildBatchFigureArtifacts", () => {
       "c",
     ]);
     expect(built.figures[0].bindings.errors).toHaveLength(1);
-    expect(built.page).toMatchObject({
+    expect(built.pages[0]).toMatchObject({
       id: "page-1",
       name: "Summary (2)",
       rows: 2,
       cols: 2,
     });
-    expect(built.page?.panels.map((panel) => panel.figureId)).toEqual([
+    expect(built.pages[0].panels.map((panel) => panel.figureId)).toEqual([
       "figure-1",
       "figure-2",
       "figure-3",
@@ -239,7 +239,39 @@ describe("buildBatchFigureArtifacts", () => {
       nextFigureId: () => "unexpected",
       nextPageId: () => "unexpected",
     });
-    expect(built).toEqual({ figures: [], page: null });
+    expect(built).toEqual({ figures: [], pages: [] });
+  });
+
+  it("splits batches larger than the supported 4 by 4 grid without losing figures", () => {
+    const saved = recipe();
+    const rows = Array.from({ length: 18 }, (_, index) =>
+      preflightBatchFigure(saved, dataset(`dataset-${index + 1}`), { datasets: [] }),
+    );
+    let figureId = 0;
+    let pageId = 0;
+    const built = buildBatchFigureArtifacts({
+      recipe: saved,
+      rows,
+      includedDatasetIds: new Set(rows.map((row) => row.datasetId)),
+      existingFigureNames: [],
+      existingPageNames: ["Summary — 1 of 2"],
+      namePattern: "{dataset}",
+      createPage: true,
+      pageName: "Summary",
+      columns: "auto",
+      nextFigureId: () => `figure-${++figureId}`,
+      nextPageId: () => `page-${++pageId}`,
+    });
+
+    expect(built.pages).toHaveLength(2);
+    expect(built.pages.map((page) => [page.rows, page.cols])).toEqual([[4, 4], [1, 2]]);
+    expect(built.pages.map((page) => page.name)).toEqual([
+      "Summary — 1 of 2 (2)",
+      "Summary — 2 of 2",
+    ]);
+    expect(built.pages.flatMap((page) => page.panels.map((panel) => panel.figureId).filter(Boolean))).toEqual(
+      built.figures.map((figure) => figure.id),
+    );
   });
 });
 
@@ -305,5 +337,21 @@ describe("commitBatchFigureArtifacts", () => {
     expect(state.pages.map((page) => page.id)).toEqual(["page-1"]);
     expect(state.pageDocSeed).toBeNull();
     expect(state.librarySelection).toEqual({ kind: "workbook", id: "w1" });
+  });
+
+  it("commits every split page while opening only the first one", () => {
+    const built = artifacts();
+    const secondPage = {
+      ...structuredClone(built.pages[0]),
+      id: "page-2",
+      name: "Batch page — 2 of 2",
+    };
+
+    expect(commitBatchFigureArtifacts({ ...built, pages: [...built.pages, secondPage] })).toEqual({
+      pageOpened: true,
+    });
+    const state = useApp.getState();
+    expect(state.pages.map((page) => page.id)).toEqual(["page-1", "page-2"]);
+    expect(state.pageDocSeed?.id).toBe("page-1");
   });
 });

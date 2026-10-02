@@ -69,7 +69,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
   const [createPage, setCreatePage] = useState(true);
   const [pageName, setPageName] = useState("");
   const [columns, setColumns] = useState<number | "auto">("auto");
-  const [result, setResult] = useState<{ figures: number; page: string | null; pageOpened: boolean } | null>(null);
+  const [result, setResult] = useState<{ figures: number; pages: string[]; pageOpened: boolean } | null>(null);
   const controller = useRef<AbortController | null>(null);
 
   useEffect(() => hydrateGlobal(), [hydrateGlobal]);
@@ -194,7 +194,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
       recordRecipeUse({ kind: "plot", scope: recipeChoice.scope, id: recipeChoice.recipe.id });
     }
     setProgress({ done: artifacts.figures.length, total: artifacts.figures.length, current: null });
-    setResult({ figures: artifacts.figures.length, page: artifacts.page?.name ?? null, pageOpened });
+    setResult({ figures: artifacts.figures.length, pages: artifacts.pages.map((page) => page.name), pageOpened });
     setPhase("done");
   };
 
@@ -315,7 +315,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
 
       {phase === "done" && result && (
         <div role="status" style={{ border: "1px solid var(--ok)", borderRadius: 6, padding: 10 }}>
-          Created {result.figures} editable figure{result.figures === 1 ? "" : "s"}{result.page ? result.pageOpened ? ` and opened Figure Page “${result.page}”.` : ` and saved Figure Page “${result.page}” in the Library. Your already-open page was left unchanged.` : "."}
+          Created {result.figures} editable figure{result.figures === 1 ? "" : "s"}{result.pages.length === 1 ? result.pageOpened ? ` and opened Figure Page “${result.pages[0]}”.` : ` and saved Figure Page “${result.pages[0]}” in the Library. Your already-open page was left unchanged.` : result.pages.length > 1 ? result.pageOpened ? ` and ${result.pages.length} Figure Pages. The first page is open; the rest are saved in the Library.` : ` and ${result.pages.length} Figure Pages in the Library. Your already-open page was left unchanged.` : "."}
           <div style={{ marginTop: 8 }}><Button variant="primary" onClick={onClose}>Done</Button></div>
         </div>
       )}

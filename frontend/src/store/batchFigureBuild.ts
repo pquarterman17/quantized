@@ -5,6 +5,7 @@
 import { createFigureDocument, type FigureDocument } from "../lib/figureDocument";
 import { createPageDocument } from "../lib/pageDocumentActions";
 import type { PageDocument } from "../lib/pageDocument";
+import { PAGE_MAX_GRID } from "../lib/figurepage";
 import type { PlotRecipe } from "../lib/plotRecipeSchema";
 import {
   resolveRecipe,
@@ -171,7 +172,7 @@ export interface BuildBatchFigureArtifactsInput {
 
 export interface BatchFigureArtifacts {
   figures: FigureDocument[];
-  page: PageDocument | null;
+  pages: PageDocument[];
 }
 
 export interface BatchFigureCommitResult {
@@ -184,24 +185,25 @@ export interface BatchFigureCommitResult {
 export function commitBatchFigureArtifacts(artifacts: BatchFigureArtifacts): BatchFigureCommitResult {
   if (artifacts.figures.length === 0) return { pageOpened: false };
   const state = useApp.getState();
-  const pageOpened = artifacts.page !== null && !state.figurePageOpen;
+  const firstPage = artifacts.pages[0] ?? null;
+  const pageOpened = firstPage !== null && !state.figurePageOpen;
   state.recordHistory(`build ${artifacts.figures.length} figure${artifacts.figures.length === 1 ? "" : "s"}`);
   useApp.setState((current) => ({
     editableFigures: [...current.editableFigures, ...artifacts.figures],
-    ...(artifacts.page
+    ...(firstPage
       ? {
-          pages: [...current.pages, artifacts.page],
+          pages: [...current.pages, ...artifacts.pages],
           ...(pageOpened
             ? {
-                pageDocSeed: structuredClone(artifacts.page),
+                pageDocSeed: structuredClone(firstPage),
                 figurePageOpen: true,
-                librarySelection: { kind: "page" as const, id: artifacts.page.id },
+                librarySelection: { kind: "page" as const, id: firstPage.id },
                 selectedIds: [],
               }
             : {}),
         }
       : {}),
-    status: `created ${artifacts.figures.length} editable figure${artifacts.figures.length === 1 ? "" : "s"}${artifacts.page ? ` and page "${artifacts.page.name}"` : ""}`,
+    status: `created ${artifacts.figures.length} editable figure${artifacts.figures.length === 1 ? "" : "s"}${artifacts.pages.length === 1 ? ` and page "${artifacts.pages[0].name}"` : artifacts.pages.length > 1 ? ` and ${artifacts.pages.length} pages` : ""}`,
   }));
   return { pageOpened };
 }
@@ -230,19 +232,30 @@ export function buildBatchFigureArtifacts(input: BuildBatchFigureArtifactsInput)
     }));
   }
 
-  if (!input.createPage || figures.length === 0) return { figures, page: null };
-  const cols = input.columns === "auto"
-    ? Math.max(1, Math.ceil(Math.sqrt(figures.length)))
-    : Math.max(1, Math.min(input.columns, figures.length));
-  const rows = Math.max(1, Math.ceil(figures.length / cols));
+  if (!input.createPage || figures.length === 0) return { figures, pages: [] };
+  const capacity = PAGE_MAX_GRID * PAGE_MAX_GRID;
   const requestedPageName = input.pageName.trim() || `${input.recipe.name} batch`;
-  const name = dedupeWindowTitle(requestedPageName, input.existingPageNames);
-  const page = createPageDocument({
-    id: input.nextPageId(),
-    name,
-    rows,
-    cols,
-    panels: figures.map((figure) => ({ figureId: figure.id, label: null, title: null })),
-  });
-  return { figures, page };
+  const pageCount = Math.ceil(figures.length / capacity);
+  const pageNames = [...input.existingPageNames];
+  const pages: PageDocument[] = [];
+  for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+    const pageFigures = figures.slice(pageIndex * capacity, (pageIndex + 1) * capacity);
+    const cols = input.columns === "auto"
+      ? Math.min(PAGE_MAX_GRID, Math.max(1, Math.ceil(Math.sqrt(pageFigures.length))))
+      : Math.max(1, Math.min(PAGE_MAX_GRID, input.columns, pageFigures.length));
+    const rows = Math.max(1, Math.ceil(pageFigures.length / cols));
+    const requestedChunkName = pageCount === 1
+      ? requestedPageName
+      : `${requestedPageName} — ${pageIndex + 1} of ${pageCount}`;
+    const name = dedupeWindowTitle(requestedChunkName, pageNames);
+    pageNames.push(name);
+    pages.push(createPageDocument({
+      id: input.nextPageId(),
+      name,
+      rows,
+      cols,
+      panels: pageFigures.map((figure) => ({ figureId: figure.id, label: null, title: null })),
+    }));
+  }
+  return { figures, pages };
 }
