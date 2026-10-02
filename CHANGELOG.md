@@ -6,20 +6,151 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
-### Plot copy and Office export
+## [0.28.0-rc1] - 2026-10-02
 
-- **Copy Figure** (plot toolbar and Figure Page) now places the 300-DPI
-  publication PNG on the clipboard together with an HTML image of that same
-  PNG, sized to paste into Word/PowerPoint at its physical size. Where the
-  browser advertises `image/svg+xml` it also adds a vector SVG with text
-  converted to outlines, so the paste needs no installed fonts. That SVG
-  costs a **second server render** per copy, so it is skipped when the
-  browser cannot take SVG (the copy then costs one render, as before) and
-  for figures over 20,000 plotted points. A failed SVG render does not
-  fail the copy; older browsers keep the previous PNG-only behavior.
-- `POST /api/export/figure` and `/api/export/figure-page` accept an optional
-  `svg_text_as_paths` (default `false`, output unchanged) that writes SVG
-  glyphs as path outlines instead of live text.
+A **minor** release candidate: the 50 pull requests since `v0.27.0` lock the
+local API behind a per-launch token, harden imports against hostile files,
+add decimal-comma import, and close a long list of screen-versus-export
+mismatches. Also new: a Project Explorer for dense Origin imports, Curve Fit
+statistics and global fits, a Statistical tests workshop, and Office-ready
+figure copy.
+
+### Upgrade notes — action needed
+
+- **Launch through `qz` (or the desktop app).** The page now needs the
+  per-launch link that `qz` opens and prints. A bookmarked localhost URL
+  from an earlier launch shows a locked page; use the new launch link.
+- **Scripts calling the local API** must set `QZ_API_TOKEN` before starting
+  the server and send it as the `X-Quantized-Token` header (`QuantizedClient`
+  does this for you). See `docs/api_auth.md`.
+- **The Tauri desktop app always starts its own server**; it no longer
+  attaches to one that is already running.
+- **CSV exports** prefix text cells and headers that start with `=`, `+`,
+  `-`, `@`, tab or CR with `'`, so spreadsheets do not run them as formulas.
+  Numeric cells are unchanged.
+- **Request size limits:** request bodies over 256 MiB (JSON/raw) or
+  512 MiB + 1 MiB (file uploads) are refused with `413`.
+
+### Import
+
+- **Decimal comma:** delimited text and the Import Wizard take a decimal
+  separator (Auto / `.` / `,`). Auto converts a column only when the reading
+  is unambiguous; an ambiguous `1,500`-style column still fails and points
+  to the wizard. Semicolon-delimited decimal-comma files are detected.
+- **Parser notes** (dropped rows, converted columns) show as one toast per
+  import and read as sentences in Metadata.
+- Sturdier text parsing: whitespace-aligned columns no longer shift, quoted
+  cells are read correctly, UTF-8/UTF-16 BOM files keep their first row and
+  labels, and the wizard never takes a comment line for the header.
+- Excel keeps gappy leading rows; NCNR and `.refl` files handle ragged or
+  cut-off rows and report what was dropped; a header-only CSV says
+  "no data rows".
+- **File-safety limits:** NetCDF files that point at external or virtual
+  data are refused, and NetCDF, `.brml`, `.xlsx`, SPC and JCAMP imports cap
+  declared sizes, so a tiny hostile file cannot exhaust memory. XRDML/BRML
+  files with a DTD are refused. Damaged `.brml`/`.xlsx` files give a clear
+  error instead of a server error.
+- Bruker RAW patterns now decode Kα1/Kα2, so the Kα1 preference applies.
+- **CIF import** loads a structure as a lattice preset for Pawley and the
+  Crystal calculator.
+
+### Plotting & export
+
+- **Half-open limits:** a blank side of an axis or colour-limit pair is auto,
+  not 0, on screen, in export, `.ogs`, save/reopen, recipes and undo. A limit
+  at or below zero on a log or reciprocal axis is treated as auto.
+- **Line width and marker parity:** series with no explicit width or size
+  export at the width and size the canvas draws.
+- **Break at gaps** now reaches the export and `.dwk`, follows row
+  exclusion, and is a single undo step.
+- **Excluded rows** are greyed by default, with a status-bar toggle.
+  Exports, copies and Send to report ask whether to grey or omit them, and
+  facet, encoded and polar plots now treat them as the canvas does.
+- **Legends:** drag to resize; the legend title shows on the canvas; empty
+  names drop their row on screen as in export; Y2 export legends list every
+  series.
+- Graph Builder **Color-by / Symbol-by / Label** encodings, including
+  gradients and text factors, draw on the editable plot, the preview, box,
+  violin, bar and facet plots, and in export.
+- Polar views export as polar figures; waterfall plots gain an X offset;
+  autoscale covers error bars; a fixed X limit no longer undoes a live zoom.
+- **Copy Figure** places a 300-DPI PNG plus an Office-sized HTML image on
+  the clipboard, and a text-as-outlines SVG where the browser accepts one.
+  `POST /api/export/figure` and `/figure-page` accept `svg_text_as_paths`.
+- PDF export embeds TrueType fonts instead of Type 3.
+- Built-in Plot Recipes for XRD, reflectivity and M(H); recipes now capture
+  multi-panel layouts and map views.
+- Stat plots: long category labels wrap or rotate, the summary table
+  persists, and bar/violin plots show raw points and summary marks.
+- Ternary and vector-field workshops; vector map export.
+
+### Analysis
+
+- **Curve Fit:** confidence/prediction bands, diagnostics, model comparison,
+  ODR when an X-error column exists, a **Global fit** mode, and a rendered
+  LaTeX preview of custom equations.
+- **Statistical tests** workshop: normality, two-sample, group comparison,
+  regression, partial correlation and power tests, each with a plain-
+  language reading.
+- Peaks: Advanced find settings, batch integration with a trend dataset, and
+  fits weighted by each dataset's error column.
+- Reflectivity: residual plot with a linked data/model/residual/SLD view,
+  spin asymmetry, and graded (spline) SLD layers that can be fitted.
+- Custom demagnetization geometry by dimensions.
+- Quick Plot and Quick Figure Builder pair each Y with its own X on
+  `X,Y,X,Y` sheets, attach error columns with a confidence grade, and add
+  Label and Grouping roles.
+
+### Workflow
+
+- **Project Explorer** for dense imports: focus a folder or workbook,
+  breadcrumbs, Data/Figures/Reports filters, and type-ahead in the tree.
+- **Pipeline steps:** transform-step parameters can be edited in the
+  Pipeline panel, with undo.
+- **Page rename:** an open figure page follows a rename made in the Library.
+- **Snapshot to New Window** says why it did nothing in polar, stat and
+  multi-panel modes.
+- Find in project searches text-column cells and scrolls to the hit; rename
+  a categorical level in place; export an Origin project (`.opj`, data only).
+- Queued jobs and exports show progress and can be cancelled.
+- Failed actions now report themselves: partial batch outcomes, failed
+  loads, refused browser-storage writes and failed corrections no longer
+  pass silently.
+- More gestures are single undo steps; report and figure deletions can be
+  undone; save/reopen keeps fit recipes, frozen figure cells and waterfall
+  layout.
+
+### Accessibility
+
+- Every icon-only control has an accessible name; dialogs, tool windows and
+  the command palette carry proper roles and labels.
+- The Library tree, tab strips, segmented controls and legend entries work
+  from the keyboard; floating panels move and resize by keyboard.
+- Focus returns to its opener after the palette and toasts; toasts pause
+  while in use; disabled controls explain why.
+
+### Security
+
+- Local API token, Content-Security-Policy and request body limits (see
+  Upgrade notes).
+- Pack Project flags sources outside the data folders or of unknown type and
+  leaves them out unless you include them.
+- LaTeX report and Origin `.ogs` exports escape text so labels cannot inject
+  commands.
+
+### Performance & reliability
+
+- The first plot after an import reuses the server's parsed copy instead of
+  re-uploading it; cell edits upload only the changed cells.
+- Large files plot faster through a binary column transport.
+- Legend, colour and width edits patch the live plot instead of rebuilding.
+- Formula aggregates, worksheet sort and the stats footer are much faster
+  on large data.
+- Smoother canvas resizes and Library scrolling.
+- Removing, adding or reimporting columns keeps figures, specs and workshop
+  picks pointed at the right column.
+- Fixes for stale results after switching datasets, Remove All, workspace
+  replacement and project locks.
 
 ## [0.27.0] - 2026-09-27
 
