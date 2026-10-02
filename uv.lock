@@ -2586,7 +2586,7 @@ wheels = [
 
 [[package]]
 name = "quantized-lab"
-version = "0.27.0"
+version = "0.28.0rc1"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
