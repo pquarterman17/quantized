@@ -49,6 +49,12 @@ _UNIT_MAP = {"°": "deg", "deg": "deg", "Degree": "deg", "": ""}
 # member's declared size, so checking that size bounds the read.
 MAX_XML_BYTES = 256 << 20
 
+# A damaged central directory raises BadZipFile, or UnicodeDecodeError for a
+# member name flagged UTF-8 that is not. The parser reports both as damage;
+# the sniffer answers False for anything ZipFile() raises on a bad file.
+_DAMAGED: tuple[type[Exception], ...] = (*CORRUPT_ARCHIVE_ERRORS, UnicodeDecodeError)
+_UNREADABLE_ZIP: tuple[type[Exception], ...] = (*_DAMAGED, OSError, ValueError)
+
 
 def _raw_data_members(names: list[str]) -> list[str]:
     """ZIP members matching ``Experiment*/RawData*.xml`` (the scan documents)."""
@@ -65,8 +71,11 @@ def is_bruker_brml(path: Path) -> bool:
     p = Path(path)
     if not zipfile.is_zipfile(p):
         return False
-    with zipfile.ZipFile(p) as zf:
-        names = zf.namelist()
+    try:  # is_zipfile reads only the end record; a sniffer must never raise
+        with zipfile.ZipFile(p) as zf:
+            names = zf.namelist()
+    except _UNREADABLE_ZIP:
+        return False
     return any(n.endswith("experimentCollection.xml") for n in names) or bool(
         _raw_data_members(names)
     )
@@ -121,7 +130,7 @@ def import_bruker_brml(filepath: str | Path) -> DataStruct:
                 )
             xml_text = zf.read(members[0]).decode("utf-8", "replace")
         root = parse_untrusted_xml(xml_text, path.name, kind="BRML")  # refuses DTDs
-    except CORRUPT_ARCHIVE_ERRORS as exc:
+    except _DAMAGED as exc:
         raise ValueError(f"damaged .brml archive ({exc}): {path.name}") from exc
 
     routes = root.findall(".//DataRoute")
