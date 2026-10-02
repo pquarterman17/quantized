@@ -138,6 +138,25 @@ def _attenuator_meta(root: ET.Element) -> tuple[float, str, float]:
     )
 
 
+def _tube_meta(root: ET.Element) -> dict[str, Any]:
+    """``<xRayTube>`` anode / tension (kV) / current (mA); absent fields omitted."""
+    tube = _find_first(root, "xRayTube")
+    if tube is None:
+        return {}
+    out: dict[str, Any] = {}
+    anode = _find_first(tube, "anodeMaterial")
+    if anode is not None and anode.text and anode.text.strip():
+        out["anode_material"] = anode.text.strip()
+    for tag, key in (("tension", "tension_kV"), ("current", "current_mA")):
+        try:
+            v = _text_float(_find_first(tube, tag))
+        except ValueError:
+            continue
+        if np.isfinite(v):
+            out[key] = v
+    return out
+
+
 def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
     """Import a PANalytical ``.xrdml`` (1D scan or 2D RSM mesh). Default = cps."""
     if intensity not in ("cps", "counts"):
@@ -254,6 +273,7 @@ def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
         "attenuator_material": att_material,
         "attenuator_activate_level": float(att_level) if np.isfinite(att_level) else None,
         "n_scans_att_corrected": n_att_corrected,
+        **_tube_meta(root),
     }
     pole = _classify_pole(collected)
     if pole is not None:
