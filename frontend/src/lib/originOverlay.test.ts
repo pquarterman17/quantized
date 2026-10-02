@@ -432,4 +432,16 @@ describe("buildSelectionOverlay", () => {
     const payload = buildColumns(out, null, null);
     expect([payload.xLabel, payload.xUnit]).toEqual(["Magnetic Field", "Oe"]);
   });
+
+  it("names every source's x unit when they differ, so kelvins never sit on an Oe axis", () => {
+    const withX = (d: Dataset, name: string, unit: string): Dataset => ({
+      ...d,
+      data: { ...d.data, metadata: { x_column_name: name, x_column_unit: unit } },
+    });
+    const loop = withX(plain("h", "mvsh", [5, -5, 5], [1, -1, 1]), "Magnetic Field", "Oe");
+    const sweep = withX(plain("t", "mvst", [2, 300], [3, 1]), "Temperature", "K");
+    const bare = plain("n", "bare", [1, 2], [3, 4]); // no unit at all: not listed
+    expect(buildColumns(buildSelectionOverlay([loop, sweep, bare])!, null, null).xUnit).toBe("Oe / K");
+    expect(buildColumns(buildSelectionOverlay([loop, { ...loop, id: "h2" }])!, null, null).xUnit).toBe("Oe");
+  });
 });

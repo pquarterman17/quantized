@@ -140,7 +140,9 @@ export function assembleOverlay(bound: OverlayBound[], figureName = ""): DataStr
       x_column_long: String(
         (first as Record<string, unknown>).x_column_long || (first as Record<string, unknown>).x_column_name || "",
       ),
-      x_column_unit: String((first as Record<string, unknown>).x_column_unit ?? ""),
+      // One shared x axis: list every block's unit ("Oe / K") rather than
+      // titling a mixed overlay with the first source's unit alone.
+      x_column_unit: [...new Set(blocks.map((b) => b.ds.data.metadata?.x_column_unit))].filter(Boolean).join(" / "),
     },
   };
 }

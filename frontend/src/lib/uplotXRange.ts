@@ -24,7 +24,7 @@ export function scannedXRange(extent: [number, number]): uPlot.Range.Function {
     if (!xs?.length) return extent;
     const first = xs[0];
     const last = xs[xs.length - 1];
-    if ((min === first && max === last) || (min === last && max === first)) return extent;
+    if (min === Math.min(first, last) && max === Math.max(first, last)) return extent;
     if (!constructed && first === last) constructed = [min, max];
     return constructed && min === constructed[0] && max === constructed[1] ? extent : [min, max];
   };
