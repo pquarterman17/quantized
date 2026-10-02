@@ -17,7 +17,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAckForKey, useDebouncedPreview, useLatestRef, tokenOf } from "../../../lib/previewKey";
-import { runSequentialBatch, type BatchProgress, type BatchResult } from "../../../lib/sequentialBatch";
+import { BatchSkip, runSequentialBatch, type BatchProgress, type BatchResult } from "../../../lib/sequentialBatch";
 import {
   computeResample,
   resampleSource,
@@ -205,7 +205,9 @@ export function useResample(): ResampleState {
           const ds = byId.get(item.id);
           if (!ds) throw new Error("the input dataset is unavailable");
           const out = await runTransform(s, paramsFor(ds), ds.id);
-          if (!out) throw new Error("resampling was cancelled");
+          // A declined review is the user's choice, not a failure (the
+          // pre-coordinator loop skipped it silently, the same way).
+          if (!out) throw new BatchSkip("not created (review declined)");
           return ds;
         },
         { signal: ctrl.signal, onProgress: setProgress },
@@ -218,6 +220,7 @@ export function useResample(): ResampleState {
     const made = results.flatMap((r) => (r.status === "created" ? [r.value] : []));
     const failed = results.flatMap((r) => (r.status === "failed" ? [`${r.item.name}: ${r.reason}`] : []));
     const stopped = results.filter((r) => r.status === "stopped");
+    const skipped = results.flatMap((r) => (r.status === "skipped" ? [`${r.item.name}: ${r.reason}`] : []));
     if (made.length) toast(`created ${made.length} resampled dataset${made.length === 1 ? "" : "s"}`, "ok");
     if (!failed.length && !stopped.length) {
       close();
@@ -227,7 +230,7 @@ export function useResample(): ResampleState {
     // does not create those a second time.
     setPicks((p) => p.filter((id) => !made.some((d) => d.id === id)));
     const done = made.length ? `resampled ${made.map((d) => d.name).join(", ")} (now unticked); ` : "";
-    const notMade = [...failed, ...(stopped.length ? [`${stopped.length} stopped before starting`] : [])];
+    const notMade = [...failed, ...skipped, ...(stopped.length ? [`${stopped.length} stopped before starting`] : [])];
     setError(`${done}not created — ${notMade.join("; ")}`);
   }
 

@@ -17,7 +17,12 @@ export interface BatchProgress {
 export type BatchResult<T> =
   | { item: BatchItem; status: "created"; value: T }
   | { item: BatchItem; status: "failed"; reason: string }
+  | { item: BatchItem; status: "skipped"; reason: string }
   | { item: BatchItem; status: "stopped" };
+
+/** Thrown by a worker for an item deliberately not processed (the user
+ *  declined its review) — reported as "skipped", never as a failure. */
+export class BatchSkip extends Error {}
 
 export interface SequentialBatchOptions {
   signal?: AbortSignal;
@@ -49,7 +54,11 @@ export async function runSequentialBatch<T>(
     try {
       results.push({ item, status: "created", value: await worker(item) });
     } catch (error) {
-      results.push({ item, status: "failed", reason: reasonOf(error) });
+      results.push(
+        error instanceof BatchSkip
+          ? { item, status: "skipped", reason: error.message }
+          : { item, status: "failed", reason: reasonOf(error) },
+      );
     }
     completed += 1;
     progress(completed, null);

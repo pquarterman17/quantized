@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { runSequentialBatch } from "./sequentialBatch";
+import { BatchSkip, runSequentialBatch } from "./sequentialBatch";
 
 const ITEMS = [
   { id: "a", name: "A" },
@@ -38,5 +38,15 @@ describe("runSequentialBatch", () => {
     expect(worker).toHaveBeenCalledTimes(1);
     expect(results.map((r) => r.status)).toEqual(["created", "stopped", "stopped"]);
     expect(progress).toHaveBeenLastCalledWith({ done: 1, total: 3, current: null });
+  });
+
+  it("reports a deliberately skipped item as skipped, not failed", async () => {
+    const results = await runSequentialBatch(ITEMS, async (item) => {
+      if (item.id === "a") throw new BatchSkip("review declined");
+      if (item.id === "b") throw new Error("bad columns");
+      return item.id;
+    });
+    expect(results.map((r) => r.status)).toEqual(["skipped", "failed", "created"]);
+    expect(results[0]).toEqual({ item: ITEMS[0], status: "skipped", reason: "review declined" });
   });
 });

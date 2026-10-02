@@ -9,7 +9,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAckForKey, useDebouncedPreview, useLatestRef, tokenOf } from "../../../lib/previewKey";
-import { runSequentialBatch, type BatchProgress, type BatchResult } from "../../../lib/sequentialBatch";
 import { xUnitOf } from "../../../lib/transformResample";
 import { runTransform } from "../../../lib/transformRun";
 import { computeSims, simsSource, type SimsComputed, type SimsParams } from "../../../lib/transformSims";
@@ -18,6 +17,7 @@ import type { DataStruct } from "../../../lib/types";
 import { useSimsDialog } from "../../../store/simsDialog";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
+import { batchCandidates, runSimsBatch, type SimsBatchCandidate, type SimsBatchProgress, type SimsBatchResult } from "./simsBatch";
 import { defaultForm, formToParams, guessReference, type SimsForm } from "./simsForm";
 
 /** Debounce between an edit and the preview request. */
@@ -63,10 +63,14 @@ export interface SimsState {
   error: string | null;
   batchMode: boolean;
   setBatchMode: (on: boolean) => void;
+  /** Every loaded dataset, each with the reason (if any) it cannot take the
+   *  current settings — an incompatible one cannot be ticked. */
+  batchCandidates: SimsBatchCandidate[];
+  /** The ticked, compatible profiles a batch Create would process. */
   batchIds: string[];
   toggleBatchId: (id: string, on: boolean) => void;
-  batchProgress: BatchProgress | null;
-  batchResults: BatchResult<{ id: string; name: string; warningCount: number }>[] | null;
+  batchProgress: SimsBatchProgress | null;
+  batchResults: SimsBatchResult[] | null;
   stopBatch: () => void;
   create: () => Promise<void>;
   close: () => void;
@@ -95,13 +99,26 @@ export function useSims(active: boolean): SimsState {
   // Opening remounts the panel, so these deliberately seed once from the
   // Library selection instead of chasing later selection changes.
   const [batchMode, setBatchMode] = useState(batchIds.length >= 2);
-  const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
-  const [batchResults, setBatchResults] = useState<BatchResult<{ id: string; name: string; warningCount: number }>[] | null>(null);
+  const [batchProgress, setBatchProgress] = useState<SimsBatchProgress | null>(null);
+  const [batchResults, setBatchResults] = useState<SimsBatchResult[] | null>(null);
   const batchAbort = useRef<AbortController | null>(null);
   useEffect(() => () => batchAbort.current?.abort(), []);
 
   const labels = useMemo(() => [...(source?.labels ?? [])], [source]);
   const parsed = useMemo(() => formToParams(form, labels), [form, labels]);
+  // What Create runs: a stated calibration time-unit override is recorded as
+  // the exact (recorded, stated) pair just accepted (finding 2) — never a
+  // blanket flag a future replay would apply unconditionally; a direct scale
+  // is bound to the x unit it was made for.
+  const runParams = useMemo((): SimsParams | string => {
+    if (typeof parsed === "string" || !source) return typeof parsed === "string" ? parsed : "no dataset";
+    const cal = parsed.calibration;
+    if (cal?.method === "scale") return { ...parsed, calibration: { ...cal, inputUnit: xUnitOf(source) } };
+    if (cal?.timeUnit) return { ...parsed, calibration: { ...cal, acceptedTimeUnit: [xUnitOf(source), cal.timeUnit] } };
+    return parsed;
+  }, [parsed, source]);
+  const candidates = useMemo(() => batchCandidates(runParams, datasets), [runParams, datasets]);
+  const runnableIds = candidates.filter((c) => !c.problem && batchIds.includes(c.id)).map((c) => c.id);
   // Everything the preview depends on: the params, the dataset id (recorded
   // in the output's provenance) and its data by object identity. Finding 9:
   // a tab stays MOUNTED (hidden) when the workshop switches away from it, so
@@ -174,47 +191,28 @@ export function useSims(active: boolean): SimsState {
   }
 
   async function create(): Promise<void> {
-    if (typeof parsed === "string" || !dataset || !source || !result || blockedByUnits) return;
+    if (typeof runParams === "string" || !dataset || !source || !result || blockedByUnits) return;
     setBusy(true);
     setError(null);
     try {
-      // A stated calibration time-unit override is recorded as the exact
-      // (recorded, stated) pair just accepted (finding 2) — never a blanket
-      // flag a future replay would apply unconditionally.
-      const toRun: SimsParams =
-        parsed.calibration?.method === "scale"
-          ? {
-              ...parsed,
-              calibration: { ...parsed.calibration, inputUnit: xUnitOf(source) },
-            }
-          : parsed.calibration?.timeUnit
-          ? { ...parsed, calibration: { ...parsed.calibration, acceptedTimeUnit: [xUnitOf(source), parsed.calibration.timeUnit] } }
-          : parsed;
       if (batchMode) {
-        const items = datasets.filter((d) => batchIds.includes(d.id)).map((d) => ({ id: d.id, name: d.name }));
-        if (!items.length) throw new Error("Pick at least one profile for the batch.");
+        const items = candidates.filter((c) => runnableIds.includes(c.id)).map(({ id, name }) => ({ id, name }));
+        if (!items.length) throw new Error("Pick at least one compatible profile for the batch.");
         const ctrl = new AbortController();
         batchAbort.current = ctrl;
         setBatchResults(null);
-        const results = await runSequentialBatch(
+        const results = await runSimsBatch({
+          store: useApp.getState,
+          params: runParams,
           items,
-          async (item) => {
-            const out = await runTransform(
-              useApp.getState,
-              toRun,
-              item.id,
-              async (preview) => {
-                if (needsConfirm(preview.warnings)) {
-                  throw new Error("this profile needs its x-unit override reviewed individually");
-                }
-                return true;
-              },
-            );
-            if (!out) throw new Error("processing was cancelled");
-            return { id: out.id, name: out.name, warningCount: out.warnings.length };
-          },
-          { signal: ctrl.signal, onProgress: setBatchProgress },
-        );
+          previewedId: dataset.id,
+          signal: ctrl.signal,
+          onProgress: setBatchProgress,
+        });
+        if (!results) {
+          setError("SIMS batch cancelled at the warning review — nothing was created.");
+          return;
+        }
         setBatchResults(results);
         const made = results.filter((r) => r.status === "created").length;
         const failed = results.filter((r) => r.status === "failed").length;
@@ -225,7 +223,7 @@ export function useSims(active: boolean): SimsState {
         );
         return;
       }
-      const out = await runTransform(useApp.getState, toRun, dataset.id);
+      const out = await runTransform(useApp.getState, runParams, dataset.id);
       if (out) {
         toast(`created ${out.name}`, "ok");
         close();
@@ -264,7 +262,7 @@ export function useSims(active: boolean): SimsState {
     blockedByUnits,
     unitsAcknowledged,
     setUnitsAcknowledged,
-    canCreate: Boolean(result) && !busy && !blockedByUnits && (!batchMode || batchIds.length > 0),
+    canCreate: Boolean(result) && !busy && !blockedByUnits && (!batchMode || runnableIds.length > 0),
     busy,
     error,
     batchMode,
@@ -273,7 +271,8 @@ export function useSims(active: boolean): SimsState {
       setBatchResults(null);
       setBatchMode(on);
     },
-    batchIds,
+    batchCandidates: candidates,
+    batchIds: runnableIds,
     toggleBatchId: (id, on) => {
       setError(null);
       setBatchResults(null);

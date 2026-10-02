@@ -330,7 +330,7 @@ function ProcessView({ active }: { active: boolean }) {
             onClick={() => void r.create()}
             style={{ marginTop: 12, width: "100%" }}
           >
-            {r.busy ? "Creating…" : r.batchMode ? `Create ${r.batchIds.length} processed datasets` : "Create processed dataset"}
+            {r.busy ? "Creating…" : r.batchMode ? `Create ${r.batchIds.length} processed dataset${r.batchIds.length === 1 ? "" : "s"}` : "Create processed dataset"}
           </Button>
           {r.error && (
             <div className="qzk-ds-meta" role="alert" style={{ marginTop: 8, color: "var(--danger)" }}>

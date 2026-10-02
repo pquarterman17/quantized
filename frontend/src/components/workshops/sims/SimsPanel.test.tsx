@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildAnalysisCommands } from "../../../commands/analysisCommands";
 import type { SimsProcessRequest, SimsProcessResult } from "../../../lib/api/sims";
 import type { DataStruct } from "../../../lib/types";
+import { useConfirm } from "../../../store/confirmDialog";
 import { useSimsDialog } from "../../../store/simsDialog";
 import { useApp } from "../../../store/useApp";
 import SimsPanel from "./SimsPanel";
@@ -22,9 +23,12 @@ function fakeBackend(body: SimsProcessRequest): Promise<SimsProcessResult> {
   const cal = Boolean(body.calibration);
   const time = cal ? body.dataset.time.map((t) => t * rate) : body.dataset.time;
   const metadata = cal ? { ...body.dataset.metadata, x_column_name: "Depth", x_column_unit: "nm" } : body.dataset.metadata;
+  const override = body.calibration?.time_unit
+    ? [{ code: "unit-override", text: `x is treated as ${body.calibration.time_unit} (stated)`, confirm: true }]
+    : [];
   return Promise.resolve({
     dataset: { ...body.dataset, time, metadata: { ...metadata, sims_processing: [{ stage: "calibration" }] } },
-    warnings: [{ code: "reordered", text: "time does not increase monotonically; depth keeps the row order" }],
+    warnings: [{ code: "reordered", text: "time does not increase monotonically; depth keeps the row order" }, ...override],
     stages: [{ stage: "calibration" }],
   });
 }
@@ -143,7 +147,7 @@ describe("SimsPanel", () => {
     expect(screen.getByText(/Depth \(nm\) = x \(s\) ÷ 1000 − 2/)).toBeTruthy();
   });
 
-  it("batch-processes compatible profiles and isolates an x-unit mismatch", async () => {
+  it("lists an incompatible profile disabled WITH its reason and never sends it", async () => {
     const alreadyDepth = { ...raw, metadata: { ...raw.metadata, x_column_name: "Depth", x_column_unit: "nm" } };
     useApp.setState({
       datasets: [
@@ -158,14 +162,68 @@ describe("SimsPanel", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Calibrate / rescale x to depth" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Calibration method" }), { target: { value: "scale" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Scale value" }), { target: { value: "0.5" } });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Create 2 processed datasets" })).not.toBeDisabled());
+    const depthBox = screen.getByRole("checkbox", { name: "depth.csv" });
+    expect(depthBox).toBeDisabled();
+    expect(depthBox).not.toBeChecked();
+    expect(screen.getByText("not compatible: this SIMS scale calibration was made for x in s, not nm")).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create 1 processed dataset" })).not.toBeDisabled());
 
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Create 2 processed datasets" })));
-    await waitFor(() => expect(screen.getByLabelText("SIMS batch results")).toHaveTextContent("1 created · 1 failed"));
-    expect(screen.getByLabelText("SIMS batch results")).toHaveTextContent("depth.csv: this SIMS scale calibration was made for x in s, not nm");
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Create 1 processed dataset" })));
+    await waitFor(() => expect(screen.getByLabelText("SIMS batch results")).toHaveTextContent("1 created"));
+    expect(vi.mocked(processSims).mock.calls.every(([body]) => body.dataset.metadata.x_column_unit === "s")).toBe(true);
     expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["counts.csv", "depth.csv", "counts (SIMS processed)"]);
     act(() => useApp.getState().undo());
     expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["counts.csv", "depth.csv"]);
+  });
+
+  it("shows the other profiles' warnings in ONE review before creating; declining creates nothing", async () => {
+    useApp.setState({
+      datasets: [
+        { id: "s1", name: "one.csv", data: raw },
+        { id: "s2", name: "two.csv", data: raw },
+      ],
+      activeId: "s1",
+      selectedIds: ["s1", "s2"],
+    });
+    render(<SimsPanel />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Smooth" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create 2 processed datasets" })).not.toBeDisabled());
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Create 2 processed datasets" })));
+    // Only two.csv is listed: one.csv's warnings were already in the preview.
+    await waitFor(() => expect(useConfirm.getState().title).toBe("SIMS batch: 1 profile has warnings"));
+    expect(useConfirm.getState().message).toBe("two.csv\n  • time does not increase monotonically; depth keeps the row order");
+    expect(useConfirm.getState().danger).toBe(false);
+    act(() => useConfirm.getState().resolve?.(false));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("nothing was created"));
+    expect(useApp.getState().datasets).toHaveLength(2);
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("a stated time-unit override goes to the danger review for the other profiles, then creates them", async () => {
+    const blank = { ...raw, metadata: { x_column_name: "Time" } };
+    useApp.setState({
+      datasets: [
+        { id: "s1", name: "one.csv", data: blank },
+        { id: "s2", name: "two.csv", data: blank },
+      ],
+      activeId: "s1",
+      selectedIds: ["s1", "s2"],
+    });
+    render(<SimsPanel />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Calibrate / rescale x to depth" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Calibration method" }), { target: { value: "rate" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Sputter rate" }), { target: { value: "2" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Time unit of x" }), { target: { value: "s" } });
+    const ack = await screen.findByRole("checkbox", { name: "Calibrate despite the stated x unit override" });
+    fireEvent.click(ack);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create 2 processed datasets" })).not.toBeDisabled());
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Create 2 processed datasets" })));
+    await waitFor(() => expect(useConfirm.getState().confirmLabel).toBe("Create despite unit override"));
+    expect(useConfirm.getState().danger).toBe(true);
+    expect(useConfirm.getState().message).toContain("x is treated as s (stated)");
+    act(() => useConfirm.getState().resolve?.(true));
+    await waitFor(() => expect(screen.getByLabelText("SIMS batch results")).toHaveTextContent("2 created"));
+    expect(useApp.getState().datasets.map((d) => d.data.time)).toEqual([raw.time, raw.time, [0, 20, 40, 60], [0, 20, 40, 60]]);
   });
 
   it("keeps each successful async batch output independently undoable", async () => {
@@ -181,7 +239,10 @@ describe("SimsPanel", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Smooth" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Create 2 processed datasets" })).not.toBeDisabled());
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Create 2 processed datasets" })));
+    await waitFor(() => expect(useConfirm.getState().title).toBe("SIMS batch: 1 profile has warnings"));
+    act(() => useConfirm.getState().resolve?.(true));
     await waitFor(() => expect(screen.getByLabelText("SIMS batch results")).toHaveTextContent("2 created"));
+    expect(screen.getByLabelText("SIMS batch results")).toHaveTextContent("two.csv: time does not increase monotonically");
     expect(useApp.getState().datasets).toHaveLength(4);
     expect(useApp.getState().history).toHaveLength(2);
     fireEvent.click(screen.getByRole("checkbox", { name: "Smooth" }));
