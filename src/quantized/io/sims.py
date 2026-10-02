@@ -238,15 +238,72 @@ def _build_union_grid(
     return union, interp
 
 
-def _detect_depth_unit(col_headers: Sequence[str], header_meta: Sequence[str]) -> str:
-    text = " ".join(list(col_headers) + list(header_meta)).lower()
-    if "um" in text or "µ" in text or "micron" in text or "micrometer" in text:
+# Whole words only: a bare substring test read the "um" in a vendor banner's
+# "Num of Cycles" line as micrometres, labelling an nm profile 1000x off.
+_UM_RE = re.compile(r"(?<![a-z])(?:um|µm|μm|microns?|micromet(?:er|re)s?)(?![a-z])")
+_NM_RE = re.compile(r"(?<![a-z])(?:nm|nanomet(?:er|re)s?)(?![a-z])")
+
+
+def _length_unit_in(text: str) -> str | None:
+    low = text.lower()
+    if _UM_RE.search(low):
         return "um"
-    if "nm" in text or "nanometer" in text:
+    if _NM_RE.search(low):
         return "nm"
-    if "angstrom" in text or "Å" in " ".join(col_headers):
+    if "angstrom" in low or "Å" in text:
         return "A"
+    return None
+
+
+def _detect_depth_unit(col_headers: Sequence[str], header_meta: Sequence[str]) -> str:
+    """The column headers' own unit wins over a word in the vendor banner."""
+    for text in (" ".join(col_headers), " ".join(header_meta)):
+        unit = _length_unit_in(text)
+        if unit is not None:
+            return unit
     return "nm"
+
+
+_UNIT_WORDS = {"counts", "cps", "c/s", "arb", "a.u.", "au", "nm", "um", "s", "sec", "min"}
+
+
+def _is_unit_cell(cell: str) -> bool:
+    c = cell.strip()
+    return bool(_BARE_UNIT_RE.match(c)) or "/" in c or "%" in c or c.lower() in _UNIT_WORDS
+
+
+def _two_row_header(tokens: Sequence[Sequence[str]], header_row: int) -> list[str] | None:
+    """Merge a names row and the units row under it into ``"name (unit)"`` cells.
+
+    Raw-count exports put species on one row and ``counts/sec`` (or ``(nm)``)
+    on the next; the units row alone then stood in for the names. ``None`` when
+    the header row is not a units-only row under a multi-cell names row.
+    """
+    if header_row < 1:
+        return None
+    units, names = list(tokens[header_row]), list(tokens[header_row - 1])
+    filled = [u for u in units if u.strip()]
+    if not filled or not all(_is_unit_cell(u) for u in filled):
+        return None
+    if sum(1 for n in names if n.strip()) < max(2, len(filled)) or _numeric_score(names) >= 0.5:
+        return None
+    names = (names + [""] * len(units))[: len(units)]
+    out: list[str] = []
+    for name, unit in zip(names, units, strict=True):
+        bare = _BARE_UNIT_RE.match(unit.strip())
+        u = bare.group(1).strip() if bare else unit.strip()
+        n = name.strip()
+        out.append(f"{n} ({u})" if n and u else n or unit.strip())
+    return out
+
+
+#: A cycle-count x axis ("Cycle", "Cycles", "Cycle #"): never a depth.
+_CYCLE_NAME_RE = re.compile(r"^\s*cycles?(?:\s*(?:no\.?|number|#))?\s*$", re.IGNORECASE)
+
+
+def _is_cycle_axis(x_header: str) -> bool:
+    m = _PAREN_RE.match(x_header.strip()) or _BRACK_RE.match(x_header.strip())
+    return bool(_CYCLE_NAME_RE.match(m.group(1) if m else x_header))
 
 
 #: The header NAME (with any unit stripped) must be time-like -- "time",
@@ -339,6 +396,10 @@ def import_sims(
     elif len(col_headers) > n_data_cols:
         col_headers = col_headers[:n_data_cols]
     col_headers = [h if h.strip() else f"Col{k + 1}" for k, h in enumerate(col_headers)]
+    merged = _two_row_header(tokens, header_row)
+    if merged is not None:
+        merged = (merged + [""] * n_data_cols)[:n_data_cols]
+        merged = [h if h.strip() else col_headers[k] for k, h in enumerate(merged)]
 
     header_meta: list[str] = []
     if header_row > 0:
@@ -358,6 +419,10 @@ def import_sims(
         raise ValueError(f"need >=2 non-empty columns in {path.name}")
 
     is_paired = _detect_paired(matrix)
+    if merged is not None and not is_paired:
+        # Shared layout under a names + units header pair (paired files keep
+        # their established bare-units-row recovery, _recover_paired_names).
+        col_headers = [h for h, drop in zip(merged, empty_mask, strict=True) if not drop]
     depths: list[np.ndarray] = []
     concs: list[np.ndarray] = []
     elem_headers: list[str] = []
@@ -392,6 +457,8 @@ def import_sims(
     if time_axis is not None:
         # A raw sputter-TIME profile (P2.3): never label its x as a depth in nm.
         x_name, resolved_unit = "Time", time_axis
+    elif depth_unit == "auto" and _is_cycle_axis(col_headers[0]):
+        x_name, resolved_unit = "Cycle", ""
 
     metadata: dict[str, Any] = {
         "source": str(path),

@@ -430,8 +430,9 @@ def test_process_leaves_the_source_unchanged() -> None:
         # A header ending in a recognized time unit's spelling, but whose
         # NAME is not time-like, must stay a depth axis (2026-09 review
         # finding 3): "Cycle (s)"/"Scan(s)" are cycle/scan COUNTS, not time,
-        # even though "(s)" alone parses as seconds.
-        ("Cycle (s)", "Depth", "nm"),
+        # even though "(s)" alone parses as seconds. A cycle count is named
+        # as one (not a depth in nm either).
+        ("Cycle (s)", "Cycle", ""),
         ("Scan(s)", "Depth", "nm"),
     ],
 )
