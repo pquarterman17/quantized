@@ -37,7 +37,7 @@
 // `level_order`) move with their columns; Origin's per-column name list is
 // dropped when the order changed, since it is positional.
 
-import { addedColumnNames, derivesOutput, hasMetadata, hasTimeUnitX, inputSegment, editsInPlace, type ExpectedColumn, type RecipeExpectations } from "./recipeExpect";
+import { addedColumnNames, derivesOutput, hasMetadata, hasTimeUnitX, inputSegment, editsInPlace, recordedXUnit, type ExpectedColumn, type RecipeExpectations } from "./recipeExpect";
 import type { ErrorBinding } from "./errorRoles";
 import type { PipelineStep } from "./pipeline";
 import type { ColumnFilter, DataStruct, Dataset } from "./types";
@@ -58,7 +58,8 @@ export type PreflightKind =
   | "recorded-input"
   | "blank-column"
   | "corrections"
-  | "not-time-unit";
+  | "not-time-unit"
+  | "x-unit-mismatch";
 
 export interface PreflightIssue {
   kind: PreflightKind;
@@ -184,6 +185,17 @@ export function preflightRecipe(
     // target's OWN recorded x unit must already be a time unit, or
     // `calc.sims_depth.calibrate_depth` refuses it mid-replay.
     push("not-time-unit", "x is not recorded as a time unit — the recipe calibrates sputter time to depth (state a time-unit override, or pick a target whose x is already s/ms/min/h)", true);
+  }
+  if (recipe.expects?.scaleInputUnit !== undefined) {
+    const actual = recordedXUnit(ds);
+    if (actual !== recipe.expects.scaleInputUnit) {
+      const shown = (u: string) => u || "an unknown unit";
+      push(
+        "x-unit-mismatch",
+        `x is in ${shown(actual)}; this SIMS scale recipe was recorded for ${shown(recipe.expects.scaleInputUnit)} — choose a matching dataset or create another scale recipe`,
+        true,
+      );
+    }
   }
   for (const { step, ref, isInput } of externalRefs(recipe.steps)) {
     if (!workspaceIds.has(ref.id)) {

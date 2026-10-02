@@ -49,7 +49,7 @@ SMOOTH_METHODS = ("moving", "gaussian", "savitzky-golay")
 
 @dataclass(frozen=True)
 class CalibrationSpec:
-    method: str  # "rate" | "crater"
+    method: str  # "rate" | "crater" | "scale"
     sputter_rate: float | None = None
     rate_unit: str = "nm/s"
     crater_depth: float | None = None
@@ -58,6 +58,9 @@ class CalibrationSpec:
     depth_unit: str = "nm"
     #: The time unit x is in, when stated by the user (overrides the recorded one).
     time_unit: str | None = None
+    #: ``scale``: depth = scale_factor * x + offset, both in ``depth_unit``.
+    scale_factor: float | None = None
+    offset: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -146,9 +149,7 @@ def process_sims(
                 f"the normalization reference column {ref} is out of range (0..{n_cols - 1})"
             )
         if normalization.rsf is not None and len(normalization.rsf) != n_cols:
-            raise ValueError(
-                f"{len(normalization.rsf)} RSF values given for {n_cols} columns"
-            )
+            raise ValueError(f"{len(normalization.rsf)} RSF values given for {n_cols} columns")
         if ref in cats:
             raise ValueError(
                 f"the reference column {_colname(ref)!r} is categorical and cannot be "
@@ -183,6 +184,8 @@ def process_sims(
             crater_unit=c.crater_unit,
             total_time=c.total_time,
             depth_unit=c.depth_unit,
+            scale_factor=c.scale_factor,
+            offset=c.offset,
         )
         stages.append(prov)
         warnings += w
@@ -206,7 +209,12 @@ def process_sims(
     if normalization is not None:
         n = normalization
         values, units, prov, w = normalize_to_reference(
-            values, n.reference, labels=labels, units=units, rsf=n.rsf, rsf_unit=n.rsf_unit,
+            values,
+            n.reference,
+            labels=labels,
+            units=units,
+            rsf=n.rsf,
+            rsf_unit=n.rsf_unit,
             skip=sorted(cats),
         )
         stages.append(prov)

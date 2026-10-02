@@ -11673,15 +11673,32 @@
           "method": {
             "enum": [
               "rate",
-              "crater"
+              "crater",
+              "scale"
             ],
             "title": "Method",
             "type": "string"
+          },
+          "offset": {
+            "default": 0.0,
+            "title": "Offset",
+            "type": "number"
           },
           "rate_unit": {
             "default": "nm/s",
             "title": "Rate Unit",
             "type": "string"
+          },
+          "scale_factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale Factor"
           },
           "sputter_rate": {
             "anyOf": [

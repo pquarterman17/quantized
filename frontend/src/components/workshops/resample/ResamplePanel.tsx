@@ -173,6 +173,14 @@ function ResampleWorkshop() {
             </div>
           )}
 
+          {r.progress && (
+            <div className="qzk-ds-meta" aria-live="polite" style={{ marginTop: 8 }}>
+              {r.progress.done}/{r.progress.total}{r.progress.current ? ` — ${r.progress.current}` : ""}
+              <progress aria-label="Resample batch progress" value={r.progress.done} max={r.progress.total} style={{ width: "100%" }} />
+              <Button size="sm" onClick={r.stop} style={{ marginTop: 4 }}>Stop after current</Button>
+            </div>
+          )}
+
           <Button
             variant="primary"
             size="sm"

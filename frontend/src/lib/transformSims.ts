@@ -40,7 +40,7 @@ import { xUnitOf } from "./transformResample";
 import type { TransformWarning, TransformWarningCode } from "./transformWarnings";
 import type { DataStruct, Dataset } from "./types";
 
-export type SimsCalMethod = "rate" | "crater";
+export type SimsCalMethod = "rate" | "crater" | "scale";
 export type SimsSmoothMethod = "moving" | "gaussian" | "savitzky-golay";
 
 export const SIMS_SMOOTH_METHODS: readonly SimsSmoothMethod[] = ["moving", "gaussian", "savitzky-golay"];
@@ -63,6 +63,12 @@ export interface SimsCalibration {
   /** The [recorded, stated] x-unit pair `timeUnit` was explicitly accepted
    *  for (module doc). Only THAT exact pair is let through on replay. */
   acceptedTimeUnit?: [string, string];
+  /** `scale`: depth = scaleFactor * x + offset. */
+  scaleFactor?: number;
+  offset?: number;
+  /** `scale`: the exact recorded input x unit this factor was accepted for.
+   *  Blank is a real value ("unit unknown"), not absence. */
+  inputUnit?: string;
 }
 
 export interface SimsParams {
@@ -155,11 +161,29 @@ function resolvedTimeUnit(c: SimsCalibration, source: DataStruct, preview: boole
   return accepted && accepted[0] === recorded && accepted[1] === c.timeUnit ? c.timeUnit : null;
 }
 
+/** A direct scale is meaningful only in the input unit it was created for.
+ *  Unlike a time calibration there is no unit conversion to rescue a replay:
+ *  e.g. divide-by-1000 might mean counts -> nm, while on an already-nm file it
+ *  would silently shrink a correct axis. */
+function assertScaleInputUnit(c: SimsCalibration, source: DataStruct, preview: boolean): void {
+  if (c.method !== "scale" || preview) return;
+  const current = xUnitOf(source);
+  if (c.inputUnit === undefined) {
+    throw new Error("a saved SIMS scale calibration is missing its input x unit; reopen it in the SIMS workshop");
+  }
+  if (c.inputUnit !== current) {
+    const expected = c.inputUnit || "unit unknown";
+    const actual = current || "unit unknown";
+    throw new Error(`this SIMS scale calibration was made for x in ${expected}, not ${actual}`);
+  }
+}
+
 /** The request body for `p` over `source`. `preview`: see `resolvedTimeUnit`. */
 export function simsRequest(p: SimsParams, source: DataStruct, opts: { preview?: boolean } = {}): SimsProcessRequest {
   const body: SimsProcessRequest = { dataset: simsWireDataset(source) };
   const c = p.calibration;
   if (c) {
+    assertScaleInputUnit(c, source, opts.preview ?? false);
     body.calibration = {
       method: c.method,
       sputter_rate: c.sputterRate ?? null,
@@ -169,6 +193,8 @@ export function simsRequest(p: SimsParams, source: DataStruct, opts: { preview?:
       total_time: c.totalTime ?? null,
       depth_unit: c.depthUnit,
       time_unit: resolvedTimeUnit(c, source, opts.preview ?? false),
+      scale_factor: c.scaleFactor ?? null,
+      offset: c.offset ?? 0,
     };
   }
   if (p.background) {
@@ -239,10 +265,17 @@ export function simsParamsOf(raw: Record<string, unknown>): SimsParams {
   const cal = obj("calibration");
   if (cal) {
     const method = String(cal.method ?? "");
-    if (method !== "rate" && method !== "crater") throw new Error(`unknown SIMS calibration "${method}"`);
+    if (method !== "rate" && method !== "crater" && method !== "scale") throw new Error(`unknown SIMS calibration "${method}"`);
     const num = (k: string): number | undefined => (finite(cal[k]) ? (cal[k] as number) : undefined);
     p.calibration = { method, depthUnit: str(cal.depthUnit, "nm") };
-    if (method === "rate") {
+    if (method === "scale") {
+      const factor = num("scaleFactor");
+      if (factor === undefined || factor <= 0) throw new Error('sims calibration "scale" needs a positive "scaleFactor"');
+      const offset = cal.offset === undefined ? 0 : num("offset");
+      if (offset === undefined) throw new Error('sims calibration "scale" needs a finite "offset"');
+      if (typeof cal.inputUnit !== "string") throw new Error('sims calibration "scale" needs its string "inputUnit"');
+      Object.assign(p.calibration, { scaleFactor: factor, offset, inputUnit: cal.inputUnit });
+    } else if (method === "rate") {
       const rate = num("sputterRate");
       if (rate === undefined) throw new Error('sims calibration "rate" needs a number "sputterRate"');
       Object.assign(p.calibration, { sputterRate: rate, rateUnit: str(cal.rateUnit, "nm/s") });
@@ -253,9 +286,9 @@ export function simsParamsOf(raw: Record<string, unknown>): SimsParams {
       const total = num("totalTime");
       if (total !== undefined) p.calibration.totalTime = total;
     }
-    if (typeof cal.timeUnit === "string" && cal.timeUnit.trim()) p.calibration.timeUnit = cal.timeUnit.trim();
+    if (method !== "scale" && typeof cal.timeUnit === "string" && cal.timeUnit.trim()) p.calibration.timeUnit = cal.timeUnit.trim();
     const acc = cal.acceptedTimeUnit;
-    if (acc !== undefined) {
+    if (method !== "scale" && acc !== undefined) {
       if (!Array.isArray(acc) || acc.length !== 2 || typeof acc[0] !== "string" || typeof acc[1] !== "string" || !acc[1]) {
         throw new Error('sims "acceptedTimeUnit" must be two unit names');
       }

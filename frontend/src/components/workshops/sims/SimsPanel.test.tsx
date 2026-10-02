@@ -45,6 +45,8 @@ beforeEach(() => {
     folders: [],
     activeId: "s1",
     selectedIds: ["s1"],
+    history: [],
+    future: [],
     macroRecording: true,
     macroSteps: [],
   });
@@ -65,7 +67,7 @@ describe("SimsPanel", () => {
     expect(screen.getByText("Turn on at least one step.")).toBeTruthy();
     expect(createButton()).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "Depth calibration (time → depth)" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Calibrate / rescale x to depth" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Calibration method" }), { target: { value: "rate" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Sputter rate" }), { target: { value: "2" } });
 
@@ -119,5 +121,74 @@ describe("SimsPanel", () => {
     await waitFor(() =>
       expect(vi.mocked(processSims).mock.calls.at(-1)?.[0].normalization).toEqual({ reference: 1, rsf: [3e22, null], rsf_unit: "atoms/cm3" }),
     );
+  });
+
+  it("previews an explicit divide-and-offset calibration without claiming x is time", async () => {
+    render(<SimsPanel />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Calibrate / rescale x to depth" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Calibration method" }), { target: { value: "scale" } });
+    expect(screen.queryByRole("combobox", { name: "Time unit of x" })).toBeNull();
+    fireEvent.change(screen.getByRole("combobox", { name: "Scale operation" }), { target: { value: "divide" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Scale value" }), { target: { value: "1000" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Depth offset" }), { target: { value: "-2" } });
+    await waitFor(() =>
+      expect(vi.mocked(processSims).mock.calls.at(-1)?.[0].calibration).toMatchObject({
+        method: "scale",
+        scale_factor: 0.001,
+        offset: -2,
+        depth_unit: "nm",
+        time_unit: null,
+      }),
+    );
+    expect(screen.getByText(/Depth \(nm\) = x \(s\) ÷ 1000 − 2/)).toBeTruthy();
+  });
+
+  it("batch-processes compatible profiles and isolates an x-unit mismatch", async () => {
+    const alreadyDepth = { ...raw, metadata: { ...raw.metadata, x_column_name: "Depth", x_column_unit: "nm" } };
+    useApp.setState({
+      datasets: [
+        { id: "s1", name: "counts.csv", data: raw },
+        { id: "s2", name: "depth.csv", data: alreadyDepth },
+      ],
+      activeId: "s1",
+      selectedIds: ["s1", "s2"],
+    });
+    render(<SimsPanel />);
+    expect(screen.getByRole("checkbox", { name: "Apply these settings to several loaded profiles" })).toBeChecked();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Calibrate / rescale x to depth" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Calibration method" }), { target: { value: "scale" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Scale value" }), { target: { value: "0.5" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create 2 processed datasets" })).not.toBeDisabled());
+
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Create 2 processed datasets" })));
+    await waitFor(() => expect(screen.getByLabelText("SIMS batch results")).toHaveTextContent("1 created · 1 failed"));
+    expect(screen.getByLabelText("SIMS batch results")).toHaveTextContent("depth.csv: this SIMS scale calibration was made for x in s, not nm");
+    expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["counts.csv", "depth.csv", "counts (SIMS processed)"]);
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["counts.csv", "depth.csv"]);
+  });
+
+  it("keeps each successful async batch output independently undoable", async () => {
+    useApp.setState({
+      datasets: [
+        { id: "s1", name: "one.csv", data: raw },
+        { id: "s2", name: "two.csv", data: raw },
+      ],
+      activeId: "s1",
+      selectedIds: ["s1", "s2"],
+    });
+    render(<SimsPanel />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Smooth" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create 2 processed datasets" })).not.toBeDisabled());
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Create 2 processed datasets" })));
+    await waitFor(() => expect(screen.getByLabelText("SIMS batch results")).toHaveTextContent("2 created"));
+    expect(useApp.getState().datasets).toHaveLength(4);
+    expect(useApp.getState().history).toHaveLength(2);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Smooth" }));
+    expect(screen.queryByLabelText("SIMS batch results")).toBeNull();
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["one.csv", "two.csv", "one (SIMS processed)"]);
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["one.csv", "two.csv"]);
   });
 });

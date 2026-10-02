@@ -39,7 +39,7 @@ test.describe("SIMS depth-profile workshop (P2.3)", () => {
     await expect(panel).toContainText("x: Time (s) · 2 species");
 
     // 500 nm crater over the 50 s profile (the last point) = 10 nm/s.
-    await panel.getByRole("checkbox", { name: "Depth calibration (time → depth)" }).check();
+    await panel.getByRole("checkbox", { name: "Calibrate / rescale x to depth" }).check();
     await panel.getByRole("textbox", { name: "Crater depth" }).fill("500");
     // Background from the deepest two points (400-500 nm); Si is kept by default.
     await panel.getByRole("checkbox", { name: "Subtract background" }).check();

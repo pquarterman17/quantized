@@ -6,9 +6,10 @@
 // transform through lib/transformRun (one undo entry and one pipeline step —
 // the replayable recipe; per-stage provenance in `metadata.sims_processing`).
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAckForKey, useDebouncedPreview, useLatestRef, tokenOf } from "../../../lib/previewKey";
+import { runSequentialBatch, type BatchProgress, type BatchResult } from "../../../lib/sequentialBatch";
 import { xUnitOf } from "../../../lib/transformResample";
 import { runTransform } from "../../../lib/transformRun";
 import { computeSims, simsSource, type SimsComputed, type SimsParams } from "../../../lib/transformSims";
@@ -60,6 +61,13 @@ export interface SimsState {
   canCreate: boolean;
   busy: boolean;
   error: string | null;
+  batchMode: boolean;
+  setBatchMode: (on: boolean) => void;
+  batchIds: string[];
+  toggleBatchId: (id: string, on: boolean) => void;
+  batchProgress: BatchProgress | null;
+  batchResults: BatchResult<{ id: string; name: string; warningCount: number }>[] | null;
+  stopBatch: () => void;
   create: () => Promise<void>;
   close: () => void;
 }
@@ -79,6 +87,18 @@ export function useSims(active: boolean): SimsState {
   const [preview, setPreview] = useState<Preview>({ key: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const selectedIds = useApp((s) => s.selectedIds);
+  const [batchIds, setBatchIds] = useState<string[]>(() => {
+    const selected = datasets.filter((d) => selectedIds.includes(d.id)).map((d) => d.id);
+    return selected.length >= 2 ? selected : [datasetId].filter(Boolean);
+  });
+  // Opening remounts the panel, so these deliberately seed once from the
+  // Library selection instead of chasing later selection changes.
+  const [batchMode, setBatchMode] = useState(batchIds.length >= 2);
+  const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
+  const [batchResults, setBatchResults] = useState<BatchResult<{ id: string; name: string; warningCount: number }>[] | null>(null);
+  const batchAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => batchAbort.current?.abort(), []);
 
   const labels = useMemo(() => [...(source?.labels ?? [])], [source]);
   const parsed = useMemo(() => formToParams(form, labels), [form, labels]);
@@ -117,6 +137,7 @@ export function useSims(active: boolean): SimsState {
 
   function setForm(patch: Partial<SimsForm>): void {
     setError(null);
+    setBatchResults(null);
     setFormState((f) => ({ ...f, ...patch }));
   }
 
@@ -126,6 +147,7 @@ export function useSims(active: boolean): SimsState {
    *  their own choice. */
   function setReference(name: string): void {
     setError(null);
+    setBatchResults(null);
     setFormState((f) => {
       const wasGuessDefault = f.bgKeep.length === 1 && f.bgKeep[0] === f.reference;
       return { ...f, reference: name, bgKeep: wasGuessDefault ? (name ? [name] : []) : f.bgKeep };
@@ -135,6 +157,7 @@ export function useSims(active: boolean): SimsState {
   function setDatasetId(id: string): void {
     setId(id);
     setError(null);
+    setBatchResults(null);
     const next = datasets.find((d) => d.id === id);
     const nextSource = next ? simsSource(next) : undefined;
     // Keep the stages (on/off); re-guess the reference (and its background
@@ -159,9 +182,49 @@ export function useSims(active: boolean): SimsState {
       // (recorded, stated) pair just accepted (finding 2) — never a blanket
       // flag a future replay would apply unconditionally.
       const toRun: SimsParams =
-        parsed.calibration?.timeUnit
+        parsed.calibration?.method === "scale"
+          ? {
+              ...parsed,
+              calibration: { ...parsed.calibration, inputUnit: xUnitOf(source) },
+            }
+          : parsed.calibration?.timeUnit
           ? { ...parsed, calibration: { ...parsed.calibration, acceptedTimeUnit: [xUnitOf(source), parsed.calibration.timeUnit] } }
           : parsed;
+      if (batchMode) {
+        const items = datasets.filter((d) => batchIds.includes(d.id)).map((d) => ({ id: d.id, name: d.name }));
+        if (!items.length) throw new Error("Pick at least one profile for the batch.");
+        const ctrl = new AbortController();
+        batchAbort.current = ctrl;
+        setBatchResults(null);
+        const results = await runSequentialBatch(
+          items,
+          async (item) => {
+            const out = await runTransform(
+              useApp.getState,
+              toRun,
+              item.id,
+              async (preview) => {
+                if (needsConfirm(preview.warnings)) {
+                  throw new Error("this profile needs its x-unit override reviewed individually");
+                }
+                return true;
+              },
+            );
+            if (!out) throw new Error("processing was cancelled");
+            return { id: out.id, name: out.name, warningCount: out.warnings.length };
+          },
+          { signal: ctrl.signal, onProgress: setBatchProgress },
+        );
+        setBatchResults(results);
+        const made = results.filter((r) => r.status === "created").length;
+        const failed = results.filter((r) => r.status === "failed").length;
+        const stopped = results.filter((r) => r.status === "stopped").length;
+        toast(
+          `SIMS batch: ${made} created${failed ? `, ${failed} failed` : ""}${stopped ? `, ${stopped} stopped` : ""}`,
+          failed ? "danger" : stopped ? "info" : "ok",
+        );
+        return;
+      }
       const out = await runTransform(useApp.getState, toRun, dataset.id);
       if (out) {
         toast(`created ${out.name}`, "ok");
@@ -170,6 +233,8 @@ export function useSims(active: boolean): SimsState {
     } catch (e) {
       setError(message(e, "SIMS processing failed"));
     } finally {
+      batchAbort.current = null;
+      setBatchProgress(null);
       setBusy(false);
     }
   }
@@ -187,6 +252,7 @@ export function useSims(active: boolean): SimsState {
     setReference,
     setRsf: (name, text) => {
       setError(null);
+      setBatchResults(null);
       setFormState((f) => ({ ...f, rsf: { ...f.rsf, [name]: text } }));
     },
     formError: typeof parsed === "string" ? parsed : null,
@@ -198,9 +264,24 @@ export function useSims(active: boolean): SimsState {
     blockedByUnits,
     unitsAcknowledged,
     setUnitsAcknowledged,
-    canCreate: Boolean(result) && !busy && !blockedByUnits,
+    canCreate: Boolean(result) && !busy && !blockedByUnits && (!batchMode || batchIds.length > 0),
     busy,
     error,
+    batchMode,
+    setBatchMode: (on) => {
+      setError(null);
+      setBatchResults(null);
+      setBatchMode(on);
+    },
+    batchIds,
+    toggleBatchId: (id, on) => {
+      setError(null);
+      setBatchResults(null);
+      setBatchIds((ids) => (on ? [...new Set([...ids, id])] : ids.filter((x) => x !== id)));
+    },
+    batchProgress,
+    batchResults,
+    stopBatch: () => batchAbort.current?.abort(),
     create,
     close,
   };

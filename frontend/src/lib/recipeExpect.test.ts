@@ -128,6 +128,16 @@ describe("deriveExpectations", () => {
     expect(deriveExpectations([simsStep], EXAMPLE).needsTimeUnitX).toBeUndefined();
   });
 
+  it("a direct SIMS scale records its exact x unit instead of demanding a time unit", () => {
+    const steps = [transform({ op: "sims", calibration: { method: "scale", scaleFactor: 0.001, offset: 0, inputUnit: "encoder counts" } })];
+    const example = { ...EXAMPLE, data: { ...EXAMPLE.data, metadata: { x_column_unit: "encoder counts" } } };
+    const e = deriveExpectations(steps, example);
+    expect(e.needsTimeUnitX).toBeUndefined();
+    expect(e.scaleInputUnit).toBe("encoder counts");
+    expect(expectationsText(e)).toContain("x unit encoder counts");
+    expect(sanitizeExpectations(JSON.parse(JSON.stringify(e)))).toEqual(e);
+  });
+
   it("a whole-table op lists every column as required; a promote step lists its metadata path", () => {
     const e = deriveExpectations(
       [transform({ op: "promote", path: ["instrument", "sample"], as: "categorical", name: "sample" }), transform({ op: "transpose" })],

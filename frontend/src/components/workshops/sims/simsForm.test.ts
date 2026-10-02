@@ -25,6 +25,10 @@ describe("simsForm", () => {
     expect(formToParams(form({ calOn: true, calMethod: "rate" }), labels)).toMatch(/sputter rate/);
     expect(formToParams(form({ calOn: true, craterDepth: "-1" }), labels)).toMatch(/crater depth/);
     expect(formToParams(form({ calOn: true, craterDepth: "500", totalTime: "abc" }), labels)).toMatch(/total sputter time/);
+    expect(formToParams(form({ calOn: true, calMethod: "scale", scaleValue: "0" }), labels)).toMatch(/multiplier/);
+    expect(formToParams(form({ calOn: true, calMethod: "scale", scaleMode: "divide", scaleValue: "0" }), labels)).toMatch(/divisor/);
+    expect(formToParams(form({ calOn: true, calMethod: "scale", scaleMode: "divide", scaleValue: "5e-324" }), labels)).toMatch(/numeric range/);
+    expect(formToParams(form({ calOn: true, calMethod: "scale", offset: "nope" }), labels)).toMatch(/offset/);
     expect(formToParams(form({ bgOn: true, bgLo: "1" }), labels)).toMatch(/both limits/);
     expect(formToParams(form({ normOn: true, reference: "O" }), labels)).toMatch(/reference/);
     expect(formToParams(form({ normOn: true, rsf: { B: "0" } }), labels)).toMatch(/RSF for B/);
@@ -69,6 +73,10 @@ describe("simsForm", () => {
     expect(formToParams(form({ calOn: true, calMethod: "rate", sputterRate: "0.4", rateLen: "A", rateTime: "min" }), labels)).toEqual({
       op: "sims",
       calibration: { method: "rate", sputterRate: 0.4, rateUnit: "A/min", depthUnit: "nm" },
+    });
+    expect(formToParams(form({ calOn: true, calMethod: "scale", scaleMode: "divide", scaleValue: "1000", offset: "-2", depthUnit: "um" }), labels)).toEqual({
+      op: "sims",
+      calibration: { method: "scale", scaleFactor: 0.001, offset: -2, depthUnit: "um" },
     });
     expect(formToParams(form({ normOn: true }), labels)).toEqual({ op: "sims", normalization: { reference: "Si" } });
   });

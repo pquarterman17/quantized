@@ -23,6 +23,7 @@ import { useSimsDialog } from "../../../store/simsDialog";
 import { useApp } from "../../../store/useApp";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import SimsCompareView from "./SimsCompareView";
+import SimsBatchControls from "./SimsBatchControls";
 import SimsPreviewPlot from "./SimsPreviewPlot";
 import SimsRegionView from "./SimsRegionView";
 import { useSims, type SimsState } from "./useSims";
@@ -35,31 +36,59 @@ const opts = (xs: readonly string[]) => xs.map((v) => ({ value: v, label: v }));
 const LENGTH_LABEL: Record<string, string> = { nm: "nm", A: "Å", um: "µm" };
 const lengthOpts = SIMS_LENGTH_UNITS.map((v) => ({ value: v, label: LENGTH_LABEL[v] ?? v }));
 const fmt = (v: number): string => String(Number(v.toPrecision(5)));
+const signedOffset = (raw: string): string => {
+  if (!raw.trim()) return "+ ?";
+  const value = Number(raw);
+  return Number.isFinite(value) ? `${value < 0 ? "−" : "+"} ${Math.abs(value)}` : `+ ${raw}`;
+};
 
 function Calibration({ r }: { r: SimsState }) {
   const f = r.form;
   return (
     <div role="group" aria-label="Depth calibration">
-      <div style={row}>
-        <span className="qzk-ds-meta">x is time in</span>
-        <Select
-          aria-label="Time unit of x"
-          options={[{ value: "", label: r.xUnit ? `${r.xUnit} (recorded)` : "— unknown —" }, ...opts(SIMS_TIME_UNITS)]}
-          value={f.timeUnit}
-          onChange={(e) => r.setForm({ timeUnit: e.target.value })}
-        />
-      </div>
       <Select
         aria-label="Calibration method"
         options={[
           { value: "crater", label: "Crater depth (profilometer)" },
           { value: "rate", label: "Known sputter rate" },
+          { value: "scale", label: "Scale / divide existing x" },
         ]}
         value={f.calMethod}
-        onChange={(e) => r.setForm({ calMethod: e.target.value as "rate" | "crater" })}
+        onChange={(e) => r.setForm({ calMethod: e.target.value as "rate" | "crater" | "scale" })}
         style={{ marginTop: 4 }}
       />
-      {f.calMethod === "rate" ? (
+      {f.calMethod !== "scale" && (
+        <div style={row}>
+          <span className="qzk-ds-meta">x is time in</span>
+          <Select
+            aria-label="Time unit of x"
+            options={[{ value: "", label: r.xUnit ? `${r.xUnit} (recorded)` : "— unknown —" }, ...opts(SIMS_TIME_UNITS)]}
+            value={f.timeUnit}
+            onChange={(e) => r.setForm({ timeUnit: e.target.value })}
+          />
+        </div>
+      )}
+      {f.calMethod === "scale" ? (
+        <>
+          <div style={row}>
+            <Select
+              aria-label="Scale operation"
+              options={[
+                { value: "multiply", label: "Multiply x by" },
+                { value: "divide", label: "Divide x by" },
+              ]}
+              value={f.scaleMode}
+              onChange={(e) => r.setForm({ scaleMode: e.target.value as "multiply" | "divide" })}
+            />
+            <NumberField aria-label="Scale value" value={f.scaleValue} onChange={(v) => r.setForm({ scaleValue: v })} width={80} />
+          </div>
+          <div style={row}>
+            <span className="qzk-ds-meta">then add</span>
+            <NumberField aria-label="Depth offset" value={f.offset} onChange={(v) => r.setForm({ offset: v })} width={80} />
+            <Select aria-label="Depth unit" options={lengthOpts} value={f.depthUnit} onChange={(e) => r.setForm({ depthUnit: e.target.value })} />
+          </div>
+        </>
+      ) : f.calMethod === "rate" ? (
         <div style={row}>
           <NumberField aria-label="Sputter rate" value={f.sputterRate} onChange={(v) => r.setForm({ sputterRate: v })} width={80} />
           <Select aria-label="Rate length unit" options={lengthOpts} value={f.rateLen} onChange={(e) => r.setForm({ rateLen: e.target.value })} />
@@ -84,12 +113,19 @@ function Calibration({ r }: { r: SimsState }) {
           </div>
         </>
       )}
-      <div style={row}>
-        <span className="qzk-ds-meta">depth in</span>
-        <Select aria-label="Depth unit" options={lengthOpts} value={f.depthUnit} onChange={(e) => r.setForm({ depthUnit: e.target.value })} />
-      </div>
+      {f.calMethod !== "scale" && (
+        <div style={row}>
+          <span className="qzk-ds-meta">depth in</span>
+          <Select aria-label="Depth unit" options={lengthOpts} value={f.depthUnit} onChange={(e) => r.setForm({ depthUnit: e.target.value })} />
+        </div>
+      )}
       <div className="qzk-ds-meta" style={{ ...faint, marginTop: 4 }}>
-        Constant sputter rate; depth = rate × time from the start of sputtering.
+        {f.calMethod === "scale"
+          ? `Depth (${LENGTH_LABEL[f.depthUnit] ?? f.depthUnit}) = x (${r.xUnit || "unit unknown"}) ` +
+            `${f.scaleMode === "divide" ? "÷" : "×"} ${f.scaleValue || "?"} ` +
+            `${signedOffset(f.offset)}. ` +
+            "Saved recipes refuse an input-unit mismatch."
+          : "Constant sputter rate; depth = rate × time from the start of sputtering."}
       </div>
     </div>
   );
@@ -266,7 +302,7 @@ function ProcessView({ active }: { active: boolean }) {
           <div className="qzk-ds-meta" style={{ marginTop: 4, ...faint }}>
             x: {r.xName}{r.xUnit ? ` (${r.xUnit})` : " (unit unknown)"} · {r.labels.length} species
           </div>
-          <Stage label="Depth calibration (time → depth)" on={f.calOn} set={(on) => r.setForm({ calOn: on })}>
+          <Stage label="Calibrate / rescale x to depth" on={f.calOn} set={(on) => r.setForm({ calOn: on })}>
             <Calibration r={r} />
           </Stage>
           <Stage label="Subtract background" on={f.bgOn} set={(on) => r.setForm({ bgOn: on })}>
@@ -286,6 +322,7 @@ function ProcessView({ active }: { active: boolean }) {
               </Checkbox>
             </div>
           )}
+          <SimsBatchControls state={r} />
           <Button
             variant="primary"
             size="sm"
@@ -293,7 +330,7 @@ function ProcessView({ active }: { active: boolean }) {
             onClick={() => void r.create()}
             style={{ marginTop: 12, width: "100%" }}
           >
-            {r.busy ? "Creating…" : "Create processed dataset"}
+            {r.busy ? "Creating…" : r.batchMode ? `Create ${r.batchIds.length} processed datasets` : "Create processed dataset"}
           </Button>
           {r.error && (
             <div className="qzk-ds-meta" role="alert" style={{ marginTop: 8, color: "var(--danger)" }}>

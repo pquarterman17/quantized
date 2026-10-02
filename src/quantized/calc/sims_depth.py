@@ -15,6 +15,11 @@ finite time point -- i.e. it assumes sputtering stopped at the last recorded
 cycle -- and that assumption is always reported, because a profile whose
 acquisition ended before the beam did would otherwise be silently stretched.
 
+An already depth-like instrument coordinate can instead use ``method="scale"``:
+``depth = scale_factor * x + offset``. This is deliberately explicit rather
+than pretending the input is sputter time; it covers unit divisors/multipliers
+and a non-zero surface origin while preserving both numbers in provenance.
+
 Deliberate rules:
 
 - **Time is measured from the start of sputtering (t = 0)**, not from the
@@ -22,9 +27,10 @@ Deliberate rules:
 - **A constant rate** through the whole profile. A multilayer whose layers
   sputter at different rates is NOT corrected -- the provenance says
   ``"assumes": "constant sputter rate"`` so the result cannot pass for more.
-- **The x unit must be a time unit.** A blank or length unit is refused, by
-  name, unless the caller states the time unit explicitly (``time_unit``),
-  which is then recorded (and reported, when it overrides a recorded unit).
+- **For rate/crater calibration the x unit must be a time unit.** A blank or
+  length unit is refused, by name, unless the caller states the time unit
+  explicitly (``time_unit``), which is then recorded (and reported, when it
+  overrides a recorded unit). Direct scaling intentionally accepts any unit.
 
 Units are a small explicit table (not ``calc.unit_convert``, whose ``A`` is
 the ampere -- SIMS files write Angstrom as ``A``).
@@ -179,19 +185,26 @@ def calibrate_depth(
     crater_unit: str = "nm",
     total_time: float | None = None,
     depth_unit: str = "nm",
+    scale_factor: float | None = None,
+    offset: float = 0.0,
 ) -> tuple[NDArray[np.float64], dict[str, Any], list[dict[str, Any]]]:
-    """Convert a sputter-time axis to depth. Returns (depth, provenance, warnings).
+    """Convert a sputter-time or instrument x axis to depth.
+
+    Returns (depth, provenance, warnings).
 
     ``total_time`` (crater method) is in the same unit as ``x``.
     """
-    if method not in ("rate", "crater"):
-        raise ValueError(f"calibration method must be 'rate' or 'crater', got {method!r}")
+    if method not in ("rate", "crater", "scale"):
+        raise ValueError(f"calibration method must be 'rate', 'crater' or 'scale', got {method!r}")
     # A whitespace-only `time_unit` is not a stated override -- stripped to
     # "" here ONCE, so both the resolution below and `time_unit_source`
     # agree on whether anything was actually stated (a bare `if time_unit`
     # on the unstripped value would call "   " a stated override).
     stated_unit = time_unit.strip() if time_unit else None
-    unit, warnings = _resolve_time_unit(x_unit.strip(), stated_unit or None)
+    unit = ""
+    warnings: list[dict[str, Any]] = []
+    if method != "scale":
+        unit, warnings = _resolve_time_unit(x_unit.strip(), stated_unit or None)
     # Arithmetic stays in x's OWN time unit and the output length unit, with
     # exact power-of-ten length ratios, so a 500 nm crater over 50 s is exactly
     # 10 nm/s and t = 40 s is exactly 400 nm -- not 400.00000000000006, which
@@ -199,18 +212,37 @@ def calibrate_depth(
     tx = np.asarray(x, dtype=float)
     finite = tx[np.isfinite(tx)]
     if finite.size == 0:
-        raise ValueError("the x axis has no finite time values to calibrate")
+        raise ValueError("the x axis has no finite values to calibrate")
     length_factor(depth_unit)  # validate
 
     prov: dict[str, Any] = {
         "stage": "calibration",
         "method": method,
-        "time_unit": unit,
-        "time_unit_source": "stated" if stated_unit else "recorded",
         "depth_unit": canonical_length(depth_unit),
-        "assumes": "constant sputter rate; depth measured from t = 0",
     }
-    if method == "rate":
+    if method == "scale":
+        if scale_factor is None or not math.isfinite(scale_factor) or scale_factor <= 0:
+            raise ValueError("the x scale factor must be a positive number")
+        if not math.isfinite(offset):
+            raise ValueError("the depth offset must be a finite number")
+        with np.errstate(over="ignore", invalid="ignore"):
+            depth = np.asarray(tx * scale_factor + offset, dtype=float)
+        prov.update(
+            {
+                "input_unit": x_unit.strip(),
+                "scale_factor": scale_factor,
+                "offset": offset,
+                "formula": "depth = scale_factor * x + offset",
+            }
+        )
+    elif method == "rate":
+        prov.update(
+            {
+                "time_unit": unit,
+                "time_unit_source": "stated" if stated_unit else "recorded",
+                "assumes": "constant sputter rate; depth measured from t = 0",
+            }
+        )
         if sputter_rate is None or not math.isfinite(sputter_rate) or sputter_rate <= 0:
             raise ValueError("the sputter rate must be a positive number")
         rate_factor(rate_unit)  # validate the length/time form
@@ -223,6 +255,13 @@ def calibrate_depth(
         )
         prov.update({"sputter_rate": sputter_rate, "rate_unit": rate_unit})
     else:
+        prov.update(
+            {
+                "time_unit": unit,
+                "time_unit_source": "stated" if stated_unit else "recorded",
+                "assumes": "constant sputter rate; depth measured from t = 0",
+            }
+        )
         if crater_depth is None or not math.isfinite(crater_depth) or crater_depth <= 0:
             raise ValueError("the crater depth must be a positive number")
         if total_time is None:
@@ -263,21 +302,37 @@ def calibrate_depth(
                     count=beyond,
                 )
             )
-    prov["sputter_rate_nm_per_s"] = rate_x * length_ratio(depth_unit, "nm") / time_factor(unit)
-    depth = np.asarray(tx * rate_x, dtype=float)
+    if method != "scale":
+        prov["sputter_rate_nm_per_s"] = rate_x * length_ratio(depth_unit, "nm") / time_factor(unit)
+        with np.errstate(over="ignore", invalid="ignore"):
+            depth = np.asarray(tx * rate_x, dtype=float)
 
-    negative = int(np.count_nonzero(finite < 0))
+    # NaN/inf already present in x is preserved, but a finite x must never
+    # become non-finite because the chosen rate/scale overflowed. That would
+    # silently erase usable points from every downstream calculation.
+    overflowed = np.isfinite(tx) & ~np.isfinite(depth)
+    if bool(np.any(overflowed)):
+        raise ValueError("the depth calibration overflowed the supported numeric range")
+
+    finite_depth = depth[np.isfinite(depth)]
+    negative = int(np.count_nonzero(finite_depth < 0))
     if negative:
+        if method == "scale":
+            text = f"{negative} depth value{'s are' if negative != 1 else ' is'} negative"
+        else:
+            text = (
+                f"{negative} time value{'s are' if negative != 1 else ' is'} negative, "
+                "giving negative depth"
+            )
         warnings.append(
             _warn(
-                "negative-time",
-                f"{negative} time value{'s are' if negative != 1 else ' is'} negative, "
-                "giving negative depth",
+                "negative-depth" if method == "scale" else "negative-time",
+                text,
                 count=negative,
             )
         )
-    if finite.size > 1 and not bool(np.all(np.diff(finite) > 0)):
+    if finite_depth.size > 1 and not bool(np.all(np.diff(finite_depth) > 0)):
         warnings.append(
-            _warn("reordered", "time does not increase monotonically; depth keeps the row order")
+            _warn("reordered", "depth does not increase monotonically; row order is preserved")
         )
     return depth, prov, warnings

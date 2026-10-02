@@ -5,17 +5,19 @@
 // resampled by the backend (debounced), and the result, the row counts and
 // the warnings are shown before anything is created. Nothing is added to the
 // workspace until "Create"; the commit then runs one recorded `resample`
-// transform per dataset through lib/transformRun (one undo entry and one
-// pipeline step each; provenance and warnings stamped into the metadata).
+// transform per dataset through lib/transformRun (one replayable pipeline
+// step and one safe undo entry each; provenance and warnings stamped into
+// the metadata).
 //
 // Aligning several datasets to a common grid = pick them all with one grid
 // (fixed points/step/range, or "match" one dataset's x — that dataset is the
 // grid and is not itself resampled). An x unit mismatch keeps Create disabled
 // until the explicit acknowledgment for THIS pick and grid is ticked.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAckForKey, useDebouncedPreview, useLatestRef, tokenOf } from "../../../lib/previewKey";
+import { runSequentialBatch, type BatchProgress, type BatchResult } from "../../../lib/sequentialBatch";
 import {
   computeResample,
   resampleSource,
@@ -74,6 +76,8 @@ export interface ResampleState {
   canCreate: boolean;
   busy: boolean;
   error: string | null;
+  progress: BatchProgress | null;
+  stop: () => void;
   create: () => Promise<void>;
   close: () => void;
 }
@@ -93,6 +97,9 @@ export function useResample(): ResampleState {
   const [previews, setPreviews] = useState<Previews>({ key: "", entries: [] });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<BatchProgress | null>(null);
+  const batchAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => batchAbort.current?.abort(), []);
 
   const parsed = useMemo(() => formToParams(form, datasets), [form, datasets]);
   const matchDs = form.mode === "match" ? datasets.find((d) => d.id === form.matchId) : undefined;
@@ -187,18 +194,32 @@ export function useResample(): ResampleState {
     const order = [...targets].sort((a, b) => Number(b.id === active) - Number(a.id === active));
     setBusy(true);
     setError(null);
-    const made: Dataset[] = [];
-    const failed: string[] = [];
-    for (const ds of order) {
-      try {
-        if (await runTransform(s, paramsFor(ds), ds.id)) made.push(ds);
-      } catch (e) {
-        failed.push(`${ds.name}: ${message(e, "resample failed")}`);
-      }
+    const ctrl = new AbortController();
+    batchAbort.current = ctrl;
+    const byId = new Map(order.map((d) => [d.id, d]));
+    let results: BatchResult<Dataset>[];
+    try {
+      results = await runSequentialBatch(
+        order.map((d) => ({ id: d.id, name: d.name })),
+        async (item) => {
+          const ds = byId.get(item.id);
+          if (!ds) throw new Error("the input dataset is unavailable");
+          const out = await runTransform(s, paramsFor(ds), ds.id);
+          if (!out) throw new Error("resampling was cancelled");
+          return ds;
+        },
+        { signal: ctrl.signal, onProgress: setProgress },
+      );
+    } finally {
+      batchAbort.current = null;
+      setProgress(null);
+      setBusy(false);
     }
-    setBusy(false);
+    const made = results.flatMap((r) => (r.status === "created" ? [r.value] : []));
+    const failed = results.flatMap((r) => (r.status === "failed" ? [`${r.item.name}: ${r.reason}`] : []));
+    const stopped = results.filter((r) => r.status === "stopped");
     if (made.length) toast(`created ${made.length} resampled dataset${made.length === 1 ? "" : "s"}`, "ok");
-    if (!failed.length) {
+    if (!failed.length && !stopped.length) {
       close();
       return;
     }
@@ -206,7 +227,8 @@ export function useResample(): ResampleState {
     // does not create those a second time.
     setPicks((p) => p.filter((id) => !made.some((d) => d.id === id)));
     const done = made.length ? `resampled ${made.map((d) => d.name).join(", ")} (now unticked); ` : "";
-    setError(`${done}not created — ${failed.join("; ")}`);
+    const notMade = [...failed, ...(stopped.length ? [`${stopped.length} stopped before starting`] : [])];
+    setError(`${done}not created — ${notMade.join("; ")}`);
   }
 
   return {
@@ -231,6 +253,8 @@ export function useResample(): ResampleState {
     canCreate: allOk && !blockedByUnits && !busy && targets.length > 0,
     busy,
     error,
+    progress,
+    stop: () => batchAbort.current?.abort(),
     create,
     close,
   };

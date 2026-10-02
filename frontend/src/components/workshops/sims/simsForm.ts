@@ -18,6 +18,9 @@ export interface SimsForm {
   depthUnit: string;
   /** "" = use x's recorded unit; otherwise the user's explicit statement. */
   timeUnit: string;
+  scaleMode: "multiply" | "divide";
+  scaleValue: string;
+  offset: string;
   bgOn: boolean;
   bgLo: string;
   bgHi: string;
@@ -65,6 +68,9 @@ export function defaultForm(data?: DataStruct): SimsForm {
     totalTime: "",
     depthUnit: "nm",
     timeUnit: "",
+    scaleMode: "multiply",
+    scaleValue: "1",
+    offset: "0",
     bgOn: false,
     bgLo: "",
     bgHi: "",
@@ -92,8 +98,18 @@ export function formToParams(f: SimsForm, labels: readonly string[]): SimsParams
   const p: SimsParams = { op: "sims" };
   if (f.calOn) {
     const cal: NonNullable<SimsParams["calibration"]> = { method: f.calMethod, depthUnit: f.depthUnit };
-    if (f.timeUnit) cal.timeUnit = f.timeUnit;
-    if (f.calMethod === "rate") {
+    if (f.calMethod !== "scale" && f.timeUnit) cal.timeUnit = f.timeUnit;
+    if (f.calMethod === "scale") {
+      const v = num(f.scaleValue);
+      if (v === null || v <= 0) return `The ${f.scaleMode === "divide" ? "divisor" : "multiplier"} must be a positive number.`;
+      const offset = num(f.offset);
+      if (offset === null) return "The depth offset must be a number.";
+      const scaleFactor = f.scaleMode === "divide" ? 1 / v : v;
+      if (!Number.isFinite(scaleFactor) || scaleFactor <= 0) {
+        return `The ${f.scaleMode === "divide" ? "divisor" : "multiplier"} produces a scale outside the supported numeric range.`;
+      }
+      Object.assign(cal, { scaleFactor, offset });
+    } else if (f.calMethod === "rate") {
       const r = num(f.sputterRate);
       if (r === null || r <= 0) return "Enter the sputter rate (a positive number).";
       Object.assign(cal, { sputterRate: r, rateUnit: `${f.rateLen}/${f.rateTime}` });
