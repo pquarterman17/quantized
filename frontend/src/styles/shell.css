@@ -766,6 +766,11 @@ body {
 .qzk-mini-toolbar button.danger:hover { background: color-mix(in srgb, var(--danger, #e5484d) 18%, transparent); }
 .qzk-zoom-chip { bottom: 12px; left: 12px; padding: 3px 9px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
 .qzk-readout { bottom: 12px; right: 12px; padding: 3px 9px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-dim); }
+/* Plot audit round 3: a legend in the bottom-right corner (fixed, auto-placed
+   there, or the outside column) owns that spot; the readout takes bottom left. */
+.qzk-stage:has(> .qzk-legend.se) > .qzk-readout,
+.qzk-stage:has(> .qzk-legend.out) > .qzk-readout,
+.qzk-stage[data-lc="se"]:has(> .qzk-legend.auto) > .qzk-readout { right: auto; left: 12px; }
 /* On-plot analysis result chips (∫ Integrate / ∩ FWHM) — stack bottom-center,
    newest on top. The container is click-through; each chip re-enables pointers. */
 .qzk-result-chips { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column-reverse; align-items: center; gap: 6px; pointer-events: none; }
