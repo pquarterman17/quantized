@@ -41,9 +41,6 @@ import {
 } from "../lib/types";
 import { deriveWorkbooks } from "../lib/workbooks";
 import { sheetDatasetName, splitSheets } from "../lib/workbookSheets";
-import { DEFAULT_MAP_VIEW } from "../lib/mapView";
-import { is2DMap } from "../lib/mapdata";
-import { techniqueOf } from "../lib/techniqueDefaults";
 import { ALREADY_RUNNING_MSG, useImportBatch } from "./importBatch";
 import { presentBatchOutcome } from "./importBatchOffers";
 import { createErrorRolesActions, seedErrorRoles, type ErrorRolesActions } from "./importErrorRoles";
@@ -288,9 +285,15 @@ function addFromPayload(
       // RSM / pole-figure intensities span decades: open on a log colour scale.
       // Stored as an ENTRY (not a technique-aware absent default), so it saves
       // with the document, a later switch to linear saves and reloads as linear,
-      // and an older .dwk's untouched maps load exactly as they did.
-      if (techniqueOf(dsInput) === "xrd.rsm" && is2DMap(dsInput.data)) {
-        set((s) => ({ mapViews: { ...s.mapViews, [dsInput.id]: { ...DEFAULT_MAP_VIEW, logZ: true } } }));
+      // and an older .dwk's untouched maps load exactly as they did. The tag,
+      // `is2D` and the view are restated, not imported (lib/techniqueDefaults,
+      // lib/mapdata, lib/mapView's DEFAULT_MAP_VIEW — the test pins the view
+      // equal to it): each import grew this lazy chunk's eager preload lists.
+      const md = dsInput.data.metadata;
+      if (md?.technique === "xrd.rsm" && md.is2D === true) {
+        set((s) => ({
+          mapViews: { ...s.mapViews, [dsInput.id]: { colormap: "viridis", logZ: true, colorLimits: null, slices: [], annotations: [] } },
+        }));
       }
       newIds.push(dsInput.id);
     }

@@ -5,6 +5,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { importFile, uploadFile } from "../lib/api";
 import { probeSource } from "../lib/desktopBridge";
+import { DEFAULT_MAP_VIEW } from "../lib/mapView";
 import type { PlotRecipe } from "../lib/plotRecipe";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { PREVIEW_SOURCE_ROWS } from "../lib/rowSidecars";
@@ -1400,7 +1401,7 @@ describe("XRD map colour scale", () => {
     await useApp.getState().importPaths(["/data/rsm.xrdml"]);
     const s = useApp.getState();
     const id = s.datasets[0].id;
-    expect(s.mapViews[id]?.logZ).toBe(true);
+    expect(s.mapViews[id]).toEqual({ ...DEFAULT_MAP_VIEW, logZ: true });
     const save = () => {
       const { datasets, mapViews } = useApp.getState();
       return parseWorkspace(serializeWorkspace({ datasets, mapViews }));
