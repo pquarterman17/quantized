@@ -424,9 +424,11 @@ describe("useFigureBuilder", () => {
     const { result } = renderHook(() => useFigureBuilder());
     await waitFor(() => expect(result.current.preview).not.toBeNull());
     await waitFor(() => expect(result.current.hitmap).not.toBeNull());
-    expect(vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0]).toMatchObject({
-      y2_keys: [0], overrides: { x_breaks: [[0.2, 0.5]] }, error_spans: [null, null],
-    });
+    // An x-break draws every channel on its panels' one y axis, so the
+    // request carries no y2 split (the backend rejects y2_keys + x_breaks).
+    const hitmapReq = vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0];
+    expect(hitmapReq).toMatchObject({ overrides: { x_breaks: [[0.2, 0.5]] }, error_spans: [null, null] });
+    expect(hitmapReq?.y2_keys).toBeUndefined();
 
     act(() => {
       result.current.setFmt("svg");

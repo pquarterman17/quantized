@@ -37,7 +37,8 @@ export function metadataWavelength(metadata: Record<string, unknown> | undefined
   return null;
 }
 
-export type XKind = "q" | "twotheta";
+/** x is Q in Å⁻¹, Q in nm⁻¹ (ORSO allows it; sent ÷10), or 2θ in degrees. */
+export type XKind = "q" | "qnm" | "twotheta";
 export type Spin = "none" | "+" | "-";
 export type Weighting = "dr" | "log";
 
@@ -116,6 +117,7 @@ export function buildChannel(
   if (twoTheta && (lambda == null || !(lambda > 0))) {
     throw new Error(`${label}: the X-ray wavelength is unknown — enter λ to convert 2θ to Q`);
   }
+  const perNm = s.xKind === "qnm" ? 0.1 : 1; // nm⁻¹ → Å⁻¹ (Q and dQ alike)
   const col = (row: number, c: number): number => data.values[row]?.[c] ?? Number.NaN;
   const sendDr = weighting === "dr" && b.drCol != null;
   const rows: number[] = [];
@@ -126,7 +128,7 @@ export function buildChannel(
   for (let row = 0; row < data.time.length; row++) {
     if (dropped.has(row)) continue;
     const x = data.time[row];
-    const qv = twoTheta ? twoThetaToQ(x, lambda as number) : x;
+    const qv = twoTheta ? twoThetaToQ(x, lambda as number) : x * perNm;
     const rv = col(row, b.rCol);
     if (!Number.isFinite(qv) || qv <= 0 || !Number.isFinite(rv)) continue;
     if (s.qMin != null && qv < s.qMin) continue;
@@ -140,7 +142,7 @@ export function buildChannel(
     let dqv = 0;
     if (b.dqCol != null) {
       const raw = col(row, b.dqCol);
-      dqv = twoTheta ? twoThetaWidthToDq(x, raw, lambda as number) : raw;
+      dqv = twoTheta ? twoThetaWidthToDq(x, raw, lambda as number) : raw * perNm;
       if (!Number.isFinite(dqv) || dqv < 0) continue;
     }
     rows.push(row);
@@ -254,12 +256,21 @@ export function defaultChannels(ds: Dataset): ChannelBinding[] {
   return [make(measured[0], "none")];
 }
 
-/** Q or 2θ from the dataset's own description of its x axis. */
+/** Q (Å⁻¹ or nm⁻¹) or 2θ from the dataset's own description of its x axis. */
 export function defaultXKind(data: DataStruct): XKind {
   const meta = data.metadata ?? {};
   const unit = String(meta.x_column_unit ?? "").toLowerCase();
+  if (/nm(⁻¹|\^?-1)|1\/nm/.test(unit)) return "qnm";
   if (/ang|å|a-1|1\/a/.test(unit)) return "q";
   const name = String(meta.x_column_name ?? "").toLowerCase();
   if (/2.?theta|2θ|tth/.test(name) || metadataWavelength(meta) != null) return "twotheta";
   return "q";
+}
+
+/** The radiation a file declares in `metadata.probe` (ORSO's experiment.probe;
+ *  the NCNR parsers write the same key), or null when it does not say. */
+export function probeRadiation(metadata: Record<string, unknown> | undefined): "xray" | "neutron" | null {
+  const p = String(metadata?.probe ?? "").toLowerCase();
+  if (p.includes("neutron")) return "neutron";
+  return /x-?ray/.test(p) ? "xray" : null;
 }

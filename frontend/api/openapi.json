@@ -4937,6 +4937,11 @@
             "title": "Rows",
             "type": "integer"
           },
+          "stack": {
+            "default": false,
+            "title": "Stack",
+            "type": "boolean"
+          },
           "style": {
             "default": "default",
             "title": "Style",
@@ -7141,6 +7146,11 @@
             "title": "Colorbar",
             "type": "boolean"
           },
+          "colorbar_log10": {
+            "default": false,
+            "title": "Colorbar Log10",
+            "type": "boolean"
+          },
           "contour_source": {
             "default": "grid",
             "title": "Contour Source",
@@ -7156,6 +7166,11 @@
               }
             ],
             "title": "Dpi"
+          },
+          "equal_aspect": {
+            "default": false,
+            "title": "Equal Aspect",
+            "type": "boolean"
           },
           "filename": {
             "default": "map",
@@ -7188,6 +7203,20 @@
             "title": "Label Contours",
             "type": "boolean"
           },
+          "labels": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MapLabel"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Labels"
+          },
           "level_scale": {
             "default": "linear",
             "title": "Level Scale",
@@ -7207,6 +7236,23 @@
             ],
             "default": 12,
             "title": "Levels"
+          },
+          "lines": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lines"
           },
           "style": {
             "default": "default",
@@ -7326,6 +7372,30 @@
           "y_axis"
         ],
         "title": "MapFigureRequest",
+        "type": "object"
+      },
+      "MapLabel": {
+        "description": "A text label pinned to a map data coordinate (MapStage's annotations).",
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "x": {
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "text"
+        ],
+        "title": "MapLabel",
         "type": "object"
       },
       "MapRequest": {
@@ -8006,6 +8076,11 @@
           "x_log": {
             "default": false,
             "title": "X Log",
+            "type": "boolean"
+          },
+          "x_reversed": {
+            "default": false,
+            "title": "X Reversed",
             "type": "boolean"
           },
           "y2_keys": {

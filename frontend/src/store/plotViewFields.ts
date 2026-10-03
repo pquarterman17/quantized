@@ -15,19 +15,20 @@
 // legendFrameXY/axisLabelOffsets/axisLabelStyles (./pointerTool), shapes
 // (./shapes), regionShades (./regionShades), waterfallDx (./plotViewSettings).
 //
-// The initial values must keep matching `defaultPlotView()` (lib/plotview),
-// except `showGrid`, which starts at the persisted `defaultGrid` preference —
+// The initial values ARE `defaultPlotView()` (lib/plotview), except
+// `showGrid`, which starts at the persisted `defaultGrid` preference —
 // MULTI_PLOT_PLAN decision #6: the first window is indistinguishable from
 // "no windows yet". Pinned by store/plotViewFields.characterization.test.ts,
 // written green against the pre-extraction useApp.ts.
 //
-// WHAT IT MUST NOT IMPORT: nothing from `../components`, no React; only types.
+// WHAT IT MUST NOT IMPORT: nothing from `../components`, no React; only types
+// plus lib/plotview's `defaultPlotView`.
 
 import type { HalfLim } from "../lib/axisLim";
 import type { Composition } from "../lib/composition";
 import type { PageSetup } from "../lib/pagesetup";
 import type { PanelFit } from "../lib/panelLayout";
-import type { PlotView } from "../lib/plotview";
+import { defaultPlotView, type PlotView } from "../lib/plotview";
 import type { Annotation, AxisFormat, AxisScale, RefLine, SeriesStyle } from "../lib/types";
 import type { LegendPos } from "./useApp";
 
@@ -41,6 +42,7 @@ export interface PlotViewFieldsSlice {
   legendTitle: string | null; // legend header text (Origin apply, decode #52)
   plotTemplate: string; // on-screen publication template (base font + line width)
   showAxisBox: boolean; // full frame on all four sides of the plot area (on by default)
+  xReversed: boolean; // x drawn high-to-low (IR wavenumber convention; PlotView field)
   stackMode: boolean; // multi-panel: one stacked sub-plot per channel
   panelFit: PanelFit; // #54: how a spatial multi-panel view fills the stage (PlotView field)
   pageSetup: PageSetup | null; // #54: this window's physical page model (PlotView field; null = none)
@@ -103,51 +105,10 @@ export interface PlotViewFieldsSlice {
   waterfall: number; // waterfall offset as a fraction of the y-span (0 = off)
 }
 
-/** `defaultGrid` is the persisted pref (store/prefs.ts) that seeds `showGrid`. */
+/** `defaultGrid` is the persisted pref (store/prefs.ts) that seeds `showGrid`.
+ *  Derived from `defaultPlotView()` rather than restated, so the two can never
+ *  drift; the PlotView fields other slices own (legendXY, shapes, …) come
+ *  along at the same defaults those slices declare. */
 export function createPlotViewFieldsSlice(defaultGrid: boolean): PlotViewFieldsSlice {
-  return {
-    yScale: "linear",
-    xScale: "linear",
-    showGrid: defaultGrid,
-    showLegend: true,
-    legendPos: "ne",
-    legendStatic: false,
-    legendTitle: null,
-    plotTemplate: "screen",
-    showAxisBox: true,
-    stackMode: false,
-    panelFit: "frames",
-    pageSetup: null,
-    composition: null,
-    insetMode: false,
-    polarMode: false,
-    statMode: false, statHideEmptyLevels: false, statShowGroupN: true, statShowSummary: false, statMarks: {}, statPicks: {},
-    xLim: null,
-    yLim: null,
-    xStep: null,
-    yStep: null,
-    xFmt: { mode: "auto", digits: 2 },
-    yFmt: { mode: "auto", digits: 2 },
-    y2Fmt: null,
-    plotTitle: "",
-    xAxisLabel: "",
-    yAxisLabel: "",
-    xKey: null,
-    yKeys: null,
-    groupKey: null,
-    facetKey: null,
-    y2Keys: null,
-    y2Lim: null,
-    y2Scale: null,
-    y2Step: null,
-    y2AxisLabel: "",
-    refLines: [],
-    annotations: [],
-    seriesStyles: {},
-    seriesLabels: {},
-    errKeys: {},
-    seriesOrder: null,
-    hiddenChannels: [],
-    waterfall: 0,
-  };
+  return { ...defaultPlotView(), showGrid: defaultGrid, composition: null };
 }

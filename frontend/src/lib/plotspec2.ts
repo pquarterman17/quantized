@@ -600,10 +600,10 @@ export function buildDecorBlock(
   if (annotations.length > 0) block.annotations = [...annotations];
   if (shapes.length > 0) block.shapes = [...shapes];
   const legendBlock: LegendBlock = {};
-  // "ne" is legendPos's default (store/useApp.ts's initial state) — only a
-  // real deviation counts as a captured override, mirroring buildAxesBlock's
+  // "auto" is legendPos's default (plotview.defaultPlotView) — only a real
+  // deviation counts as a captured override, mirroring buildAxesBlock's
   // xScale/yScale "captured only when it differs from default" rule.
-  if (legend.pos !== "ne") legendBlock.pos = legend.pos;
+  if (legend.pos !== "auto") legendBlock.pos = legend.pos;
   if (legend.xy != null) legendBlock.xy = legend.xy;
   if (legend.title) legendBlock.title = legend.title;
   if (Object.keys(legendBlock).length > 0) block.legend = legendBlock;

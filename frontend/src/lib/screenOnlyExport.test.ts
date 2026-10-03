@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigure, renderFigureBlob, type FigureSpec } from "./api/figures";
+import { exportFigurePage } from "./api/figurePage";
 import { runCopyFigureCommand } from "./copyFigureCommand";
 import { runExportFigureCommand } from "./exportFigureCommand";
 import {
@@ -22,6 +23,7 @@ vi.mock("./api/figures", () => ({
   exportFigure: vi.fn().mockResolvedValue(undefined),
   renderFigureBlob: vi.fn().mockResolvedValue(new Blob(["png"], { type: "image/png" })),
 }));
+vi.mock("./api/figurePage", () => ({ exportFigurePage: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("../components/overlays/ParamDialog", () => ({
   askParams: vi.fn().mockResolvedValue({ fmt: "pdf", style: "default", dpi: 300, title: "", x_label: "", y_label: "" }),
 }));
@@ -83,12 +85,22 @@ describe("the Stage export commands ask before exporting a screen-only view", ()
     vi.mocked(exportFigure).mockResolvedValue(undefined);
   });
 
-  it("Export figure… from a stack: cancelling the notice exports nothing", async () => {
+  // Plot audit round 4: the vector export draws the stack's own panels now.
+  it("Export figure… from a stack exports one panel per channel and asks nothing", async () => {
+    seedStore({ stackMode: true });
+    await runExportFigureCommand(useApp.getState);
+    expect(askConfirm).not.toHaveBeenCalled();
+    expect(exportFigure).not.toHaveBeenCalled();
+    const page = vi.mocked(exportFigurePage).mock.calls[0][0];
+    expect(page).toMatchObject({ rows: 2, cols: 1, stack: true });
+    expect(page.panels.map((p) => p.figure.y_keys)).toEqual([[0], [1]]);
+  });
+
+  it("Copy figure from a stack still says the copy is one overlaid plot", async () => {
     seedStore({ stackMode: true });
     vi.mocked(askConfirm).mockResolvedValueOnce(false);
-    await runExportFigureCommand(useApp.getState);
-    expect(askConfirm).toHaveBeenCalledWith(expect.any(String), STACK_EXPORT_NOTICE, "Export anyway");
-    expect(exportFigure).not.toHaveBeenCalled();
+    await runCopyFigureCommand(useApp.getState);
+    expect(askConfirm).toHaveBeenCalledWith(expect.any(String), STACK_EXPORT_NOTICE, "Copy anyway");
   });
 
   it("Export figure… from an inset: confirming exports the overlaid figure", async () => {

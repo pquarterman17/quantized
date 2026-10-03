@@ -200,6 +200,8 @@ export interface OriginGraphSpec {
   x_lim?: [number | null, number | null] | null;
   y_lim?: [number | null, number | null] | null;
   y2_keys?: number[];
+  /** The x axis runs high-to-low (PlotView.xReversed). */
+  x_reversed?: boolean;
 }
 
 /** Export a DataStruct as an Origin LabTalk .ogs script + CSV (zipped).

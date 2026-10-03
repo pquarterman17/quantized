@@ -25,6 +25,7 @@ from numpy.typing import NDArray
 
 from quantized.calc.figure_excluded import EXCLUDED_GHOST_STYLE, EXCLUDED_SUFFIX, with_excluded_rows
 from quantized.datastruct import DataStruct
+from quantized.unit_display import with_unit
 
 __all__ = ["channel_companions", "facet_panels_with_excluded"]
 
@@ -46,7 +47,7 @@ def channel_companions(
         name = f"{ds.labels[ch]}{EXCLUDED_SUFFIX}"
         unit = ds.units[ch]
         out.append({
-            "label": f"{name} ({unit})" if unit else name,
+            "label": with_unit(name, unit),
             "y": np.where(dropped, ds.values[rows, ch], np.nan).tolist(),
             "style": dict(EXCLUDED_GHOST_STYLE),
         })

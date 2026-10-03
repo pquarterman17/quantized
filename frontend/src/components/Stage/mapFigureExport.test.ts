@@ -41,6 +41,12 @@ const view: MapExportView = {
 const opts = { fmt: "pdf", style: "default", title: "", filename: "scan_map" };
 
 describe("mapFigureBody", () => {
+  it("asks for equal aspect exactly when the canvas letterboxes (axes sharing a unit, e.g. Qx/Qz)", () => {
+    const q = { ...payload, xLabel: "Qx", xUnit: "Ang^-1", yLabel: "Qz", yUnit: "Ang^-1" };
+    expect(mapFigureBody(q, view, opts).equal_aspect).toBe(true);
+    expect(mapFigureBody({ ...payload, yUnit: "deg" }, view, opts)).not.toHaveProperty("equal_aspect");
+  });
+
   it("sends the on-screen grid as a heatmap with gaps as null and unit-suffixed labels", () => {
     const b = mapFigureBody(payload, view, opts);
     expect(b).toMatchObject({
@@ -64,13 +70,17 @@ describe("mapFigureBody", () => {
     expect(mapFigureBody(payload, { ...view, cmap: "rdbu" }, opts).cmap).toBe("RdBu_r");
   });
 
-  it("log colour scale exports log10(z), dropping non-positive cells, and says so on the colorbar", () => {
+  it("log colour scale exports log10(z), dropping non-positive cells, with the canvas' colour-bar title", () => {
     const b = mapFigureBody(payload, { ...view, logZ: true }, opts);
     expect(b.z_grid).toEqual([
       [0, 1, null],
       [2, 3, null],
     ]);
-    expect(b.z_label).toBe("log₁₀ Intensity (cps)");
+    // The canvas bar reads values (1e-3, 0.01 …) under "Intensity (cps) — log";
+    // the export labels its decades the same way rather than with exponents.
+    expect(b.z_label).toBe("Intensity (cps) — log");
+    expect(b.colorbar_log10).toBe(true);
+    expect(mapFigureBody(payload, view, opts).colorbar_log10).toBeUndefined();
   });
 
   it("clamps to the explicit colour limits the canvas saturates at", () => {

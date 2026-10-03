@@ -22,7 +22,7 @@ const positiveOf = (splits: readonly (number | null)[]) =>
   splits.filter((v): v is number => Number.isFinite(v) && v! > 0);
 
 /** True when the positive splits span at least one full decade. */
-function spansDecade(splits: readonly (number | null)[]): boolean {
+export function spansDecade(splits: readonly (number | null)[]): boolean {
   const positive = positiveOf(splits);
   return positive.length >= 2 && Math.max(...positive) / Math.min(...positive) >= 9.99999999;
 }
@@ -51,26 +51,51 @@ function scaledLabels(splits: readonly (number | null)[]): (string | null)[] | n
 export function logDecadeLabels(splits: readonly (number | null)[]): (string | null)[] | null {
   if (!spansDecade(splits)) return scaledLabels(splits);
   return splits.map((v) => {
-    if (v == null || !(v > 0) || !Number.isFinite(v)) return null;
-    const k = decadeOf(v);
+    if (!positiveOf([v]).length) return null;
+    const k = decadeOf(v!);
     if (k === null) return "";
     if (k === 0 || k === 1) return `${10 ** k}`;
     return tenTo(k);
   });
 }
 
-/** Keep labels only on decade anchors while retaining 2-9 subdivisions as
- * splits for log grid lines and tick marks. Sub-decade Origin axes use their
- * decoded arithmetic step, so every split remains a labeled major tick. When a
- * decade is narrower than uPlot's minimum label spacing, only every n-th
- * decade (k % n == 0) keeps its label, as uPlot's own log filter thins them. */
-export function logMajorTickFilter(u: uPlot, splits: number[], axisIdx: number): (number | null)[] {
-  if (!spansDecade(splits)) return splits;
+/** CSS px along axis `axisIdx` between `a` and `b`. */
+const gapPx = (u: uPlot, axisIdx: number, a: number, b: number) => {
   const key = u.axes[axisIdx].scale!;
-  // uPlot's default minimum label spacing: 50 px along x, 30 px along y/y2.
-  const n = Math.ceil((axisIdx ? 30 : 50) / Math.abs(u.valToPos(10, key) - u.valToPos(1, key))) || 1;
+  return Math.abs(u.valToPos(a, key) - u.valToPos(b, key));
+};
+
+/** uPlot's default minimum label spacing: 50 px along x, 30 px along y/y2.
+ *  calc/figure_log_ticks.py uses the same numbers. */
+const space = (axisIdx: number) => (axisIdx ? 30 : 50);
+
+/** Every n-th decade keeps its label so labels stay `space` apart. */
+const decadeStride = (u: uPlot, axisIdx: number) => Math.ceil(space(axisIdx) / gapPx(u, axisIdx, 10, 1)) || 1;
+
+/** Keep labels only on decade anchors while retaining 2-9 subdivisions as
+ * splits for log grid lines and tick marks. When a decade is narrower than
+ * uPlot's minimum label spacing, only every n-th decade (k % n == 0) keeps its
+ * label, as uPlot's own log filter thins them. A sub-decade view's arithmetic
+ * ticks (an Origin step, or `niceLinearStep`) are all labelled unless one
+ * would sit closer than that spacing to the last label kept. */
+export function logMajorTickFilter(u: uPlot, splits: number[], axisIdx: number): (number | null)[] {
+  if (!spansDecade(splits)) {
+    let last = NaN;
+    return splits.map((v) => (last === last && gapPx(u, axisIdx, v, last) < space(axisIdx) ? null : (last = v)));
+  }
+  const n = decadeStride(u, axisIdx);
   return splits.map((v) => {
     const k = decadeOf(v); // null for v <= 0 too
     return k !== null && k % n === 0 ? v : null;
   });
+}
+
+/** Grid and tick positions for a log axis: the 2-9 subdivisions are dropped
+ *  when the decade labels are thinned or the view spans more than six decades,
+ *  where they only fill the plot with lines. Decades always stay. */
+export function logGridSplits(u: uPlot, axisIdx: number, splits: number[]): number[] {
+  // `fixedLogAxisSplits` output: positive and ascending.
+  return spansDecade(splits) && (splits[splits.length - 1] / splits[0] > 1e6 || decadeStride(u, axisIdx) > 1)
+    ? splits.filter((v) => decadeOf(v) !== null)
+    : splits;
 }

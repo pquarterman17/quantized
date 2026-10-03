@@ -10,6 +10,8 @@ import { useEffect, useState } from "react";
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { hysteresisAnalysis, subtractHysteresisBackground } from "../../../lib/api/magnetometry";
 import { selectedFitData } from "../../../lib/fitselection";
+import { plottedYKey } from "../../../lib/fitselectionActions";
+import { magXAxis, stampXIdentity } from "../../../lib/magDataKind";
 import { analysisData } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, DataStruct } from "../../../lib/types";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
@@ -33,6 +35,9 @@ function hm(
 export interface HysteresisState {
   active: Dataset | null;
   result: CalcResult | null;
+  /** Units of the analysed H (plotted X) and M (primary plotted Y), for the
+   *  parameter table: Hc/SFD are in `h`, Mr/Ms in `m`. Blank when undeclared. */
+  units: { h: string; m: string };
   busy: boolean;
   /** Set when gap rows were excluded from the analysis — silently dropping
    *  measured rows is exactly the kind of quiet change the user must be told
@@ -55,6 +60,12 @@ export function useHysteresis(): HysteresisState {
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [bgBusy, setBgBusy] = useState(false);
+  const units = active
+    ? {
+        h: magXAxis(active.data, xKey).unit,
+        m: active.data.units[plottedYKey(active, xKey, yKeys, seriesOrder) ?? 0] ?? "",
+      }
+    : { h: "", m: "" };
 
   useEffect(() => {
     let cancelled = false;
@@ -132,7 +143,13 @@ export function useHysteresis(): HysteresisState {
         values: restoreGapRows(res.corrected, pairs).map((v) => [v]),
         labels: [ds.data.labels[yKey] ?? "Moment"],
         units: [ds.data.units[yKey] ?? ""],
-        metadata: { ...ds.data.metadata, hysteresis_bg_subtracted: true },
+        // `time` is the PLOTTED x, which may be a channel: describe it, not
+        // the source's own time column (the MagTools path does the same).
+        metadata: stampXIdentity(
+          { ...ds.data.metadata, hysteresis_bg_subtracted: true },
+          ds.data,
+          st.xKey,
+        ),
       };
       const stem = ds.name.replace(/\.[^.]+$/, "");
       addDataset({ id: nextDatasetId(), name: `${stem} (bg-sub)`, data });
@@ -149,5 +166,5 @@ export function useHysteresis(): HysteresisState {
     }
   }
 
-  return { active, result, busy, warning, error, bgBusy, subtractBackground };
+  return { active, result, units, busy, warning, error, bgBusy, subtractBackground };
 }

@@ -62,7 +62,7 @@ export default function PlotStage() {
   const showGrid = useApp((s) => s.showGrid);
   const showLegend = useApp((s) => s.showLegend);
   const plotTemplate = useApp((s) => s.plotTemplate);
-  const showAxisBox = useApp((s) => s.showAxisBox);
+  const showAxisBox = useApp((s) => s.showAxisBox), xReversed = useApp((s) => s.xReversed);
   // Plot defaults from Preferences (apply when no per-series override / template).
   const defaultTrace = useApp((s) => s.defaultTrace);
   const defaultLineWidth = useApp((s) => s.defaultLineWidth);
@@ -278,7 +278,7 @@ export default function PlotStage() {
         displayPayload={displayPayload}
         theme={theme}
         accent={accent}
-        insetTop={52}
+        insetTop={60}
         frameVars // publish the plot-frame rect for the frame-anchored legend (decode #52)
         bg={winBg}
         syncKey={windowSyncKey(winLinkGroup)}
@@ -293,7 +293,7 @@ export default function PlotStage() {
         xFmt={xFmt}
         yFmt={yFmt} y2Fmt={y2Fmt}
         showGrid={showGrid}
-        axisBox={showAxisBox}
+        axisBox={showAxisBox} xReversed={xReversed}
         fontSize={resolveTemplate(plotTemplate).fontSize}
         // A publication template sets its own line width; the "screen" default
         // defers to the user's Preferences default line width.

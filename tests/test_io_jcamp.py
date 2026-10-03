@@ -207,6 +207,18 @@ def test_link_finds_data_behind_structure_block() -> None:
     assert ds.metadata["extra_blocks"] == 2
 
 
+def test_peak_lists_hint_a_marker_trace_and_spectra_do_not() -> None:
+    """A peak list is discrete lines, not a continuous spectrum: joining its
+    points draws a fake curve. The parser says so with the frontend's own
+    default-trace vocabulary; a sampled spectrum carries no hint."""
+    assert import_jcamp_from_text(_LINK).metadata["default_trace"] == "Scatter"
+    table = "##TITLE=t\n##PEAK TABLE=(XY..XY)\n100 5; 101 8; 102 3\n##END="
+    assert import_jcamp_from_text(table).metadata["default_trace"] == "Scatter"
+    assert "default_trace" not in import_jcamp_from_text(_FIX).metadata
+    xy = "##TITLE=s\n##XYPOINTS=(XY..XY)\n100 5; 101 8; 102 3\n##END="
+    assert "default_trace" not in import_jcamp_from_text(xy).metadata
+
+
 def test_assignments_without_y_default_to_one() -> None:
     text = """##TITLE= xa only
 ##PEAK ASSIGNMENTS= (XA)
@@ -257,3 +269,19 @@ def test_x_axis_is_named_by_its_quantity(data_type: str, xunits: str, name: str,
     assert ds.metadata["x_column_name"] == name
     assert ds.metadata["x_column_unit"] == unit
     assert ds.metadata["data_type"] == data_type
+
+
+@pytest.mark.parametrize(
+    ("yunits", "label", "unit"),
+    [
+        ("TRANSMITTANCE", "Transmittance", ""),
+        ("ABSORBANCE", "Absorbance", ""),
+        ("PICOAMPERES", "Current", "pA"),
+        ("VOLTS", "Voltage", "V"),
+        ("ARBITRARY UNITS", "Arbitrary Units", ""),
+    ],
+)
+def test_y_unit_words_split_into_quantity_and_unit(yunits: str, label: str, unit: str) -> None:
+    # "##YUNITS=PICOAMPERES" titled the channel "Picoamperes" with no unit.
+    ds = import_jcamp_from_text(_FIX.replace("##YUNITS=TRANSMITTANCE", f"##YUNITS={yunits}"))
+    assert (ds.labels[0], ds.units[0]) == (label, unit)

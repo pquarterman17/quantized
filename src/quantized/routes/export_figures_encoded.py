@@ -26,6 +26,7 @@ from quantized.calc.plotting_encoded import (
 from quantized.datastruct import DataStruct
 from quantized.routes.export_figures_labels import derived_axis_label, series_legends
 from quantized.routes.export_figures_schema import _ResolvedFigure
+from quantized.unit_display import with_unit
 
 __all__ = ["ExcludedRowsFields", "FigureEncoding", "resolve_encoded_figure"]
 
@@ -177,7 +178,7 @@ def resolve_encoded_figure(
     plot = encoded.plot
     series: list[tuple[str, Any]] = [
         (
-            legend if legend is not None else (f"{s.label} ({s.unit})" if s.unit else s.label),
+            legend if legend is not None else with_unit(s.label, s.unit),
             s.values,
         )
         for s, legend in zip(plot.series, encoded.legends, strict=True)

@@ -267,7 +267,7 @@ describe("useFigurePage", () => {
     expect(p1.figure.y_scale).toBe("log");
     expect(p1.figure.title).toBe("doc title");
     expect(p1.figure.overrides).toEqual({
-      legend: { show: true, loc: "upper right" },
+      legend: { show: true, loc: "auto" },
       grid: true,
       spines: { top: true, right: true },
       ticks: { minor: true },

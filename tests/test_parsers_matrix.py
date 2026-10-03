@@ -78,6 +78,10 @@ _KNOWN_GAPS: dict[str, str] = {
     "origin/specimens/matrix_spec.opju": (
         "matrix-only Origin project: MBook codec undecoded (format gap register 13.2 #9)"
     ),
+    # Negative fixture (test-data/orso/MANIFEST.md): bare columns named .ort
+    # with no ORSO first line. Refusing it is the pinned contract
+    # (test_io_orso.test_realdata_orsopy_examples).
+    "orso/reflectometry/orsopy_not_orso.ort": "negative fixture: not ORSO, rejected by contract",
     # --- corpus additions 2026-07-25 (see test-data/spc/MANIFEST.md) ---------
     # These arrived with the SPC/JCAMP fixtures acquired to validate parsers
     # that until then had only synthetic tests. Two are pinned contracts, two

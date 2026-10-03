@@ -16,6 +16,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+import matplotlib as mpl
+from matplotlib.lines import Line2D
+
 from quantized.calc.figure_axis_titles import apply_axis_titles, validate_axis_titles
 from quantized.calc.figure_decor import (
     _apply_ref_lines,
@@ -32,8 +35,14 @@ __all__ = ["_apply_overrides", "_validate_overrides", "apply_axis_shape_override
 _LEGEND_LOCS = frozenset({
     "best", "upper right", "upper left", "lower left", "lower right",
     "right", "center left", "center right", "lower center", "upper center",
-    "center", "outside right", "outside top", "custom", "axes",
+    "center", "outside right", "outside top", "custom", "axes", "auto",
 })
+
+# ``auto`` (the screen's default legend placement): matplotlib's "best" while
+# the palette's eight colours last, then a column outside the right edge, as
+# the screen draws it. Columns hold at most this many entries.
+_AUTO_INSIDE_MAX = 8
+_OUTSIDE_COLUMN_ROWS = 18
 
 
 def _validate_overrides(ov: Mapping[str, Any]) -> None:
@@ -118,6 +127,12 @@ def apply_axis_shape_overrides(
                     continue
             setter(lo_f, hi_f)
 
+    # The screen's reversed x (IR wavenumber convention, frontend
+    # `PlotView.xReversed`). After the limits, which set ascending; a
+    # descending x_lim already inverted the axis and is left as it is.
+    if ov.get("x_reversed") and not ax.xaxis_inverted():
+        ax.invert_xaxis()
+
     if "grid" in ov:
         ax.grid(bool(ov["grid"]), which="both", alpha=st.grid_alpha or 0.3)
 
@@ -139,6 +154,10 @@ def legend_kwargs(
     kw: dict[str, Any] = {"frameon": frame, "fontsize": st.legend_font_size}
     if title:
         kw["title"] = str(title)
+    if loc == "auto":
+        loc = "outside right" if n_series > _AUTO_INSIDE_MAX else "best"
+        if loc == "outside right":
+            kw["ncols"] = -(-n_series // _OUTSIDE_COLUMN_ROWS)
     if loc == "outside right":
         kw.update(loc="center left", bbox_to_anchor=(1.02, 0.5))
     elif loc == "outside top":
@@ -203,7 +222,7 @@ def _apply_overrides(
     _apply_region_shades(ax, ov.get("region_shades"))
     _apply_ref_lines(ax, ov.get("ref_lines"))
 
-    for ann in ov.get("annotations", []):
+    for i, ann in enumerate(ov.get("annotations", [])):
         # MAIN #18: a per-annotation `size` (the pointer tool's corner-handle
         # font-size resize, screen px) wins over the property panel's global
         # font_size override -- matches the screen, where each annotation's
@@ -244,9 +263,16 @@ def _apply_overrides(
                 ec=frame.get("stroke") or "black",
                 alpha=frame.get("opacity", 1.0),
             )
+        # The canvas marks every annotation's anchor with a 3 px dot and sets
+        # the label 6 px right of it, its bottom 2 px above (uplotOverlays'
+        # annotationLayout); 1 CSS px = 0.75 pt.
+        _anchor_dot(fig, ax, i, x, y, page=ann.get("anchor") == "page")
         ax.annotate(
             safe_mathtext_label(str(ann.get("text", ""))),
             xy=(x, y),
+            xytext=(4.5, 1.5),
+            textcoords="offset points",
+            va="bottom",
             fontsize=float(size) if size else float(ov.get("font_size", st.font_size)),
             **ann_kw,
         )
@@ -264,3 +290,16 @@ def _apply_overrides(
     # drew (annotations included), matching export intent: shapes mark up
     # the finished figure.
     _apply_shapes(fig, ax, ov.get("shapes"))
+
+
+def _anchor_dot(fig: Any, ax: Any, i: int, x: float, y: float, *, page: bool) -> None:
+    """Annotation ``i``'s anchor dot, in the text colour: the canvas' 3 px dot
+    (6 px across = 4.5 pt). ``add_artist`` rather than ``plot`` so an anchor
+    outside the data never widens the autoscaled axes; ``gid`` names it in
+    the SVG."""
+    ax.add_artist(Line2D(
+        [x], [y], marker="o", markersize=4.5, linestyle="none",
+        color=mpl.rcParams["text.color"], markeredgewidth=0,
+        transform=fig.transFigure if page else ax.transData, clip_on=False,
+        gid=f"annotation_dot_{i}",
+    ))

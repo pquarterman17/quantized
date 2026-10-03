@@ -105,6 +105,7 @@ class OriginGraphSpec(BaseModel):
     x_lim: tuple[float | None, float | None] | None = None
     y_lim: tuple[float | None, float | None] | None = None
     y2_keys: list[int] = []
+    x_reversed: bool = False
 
 
 class OriginRequest(BaseModel):
@@ -153,6 +154,7 @@ def export_origin(req: OriginRequest) -> Response:
             x_lim=g.x_lim,
             y_lim=g.y_lim,
             y2_keys=tuple(g.y2_keys),
+            x_reversed=g.x_reversed,
         )
     try:
         ds = DataStruct.from_dict(req.dataset)

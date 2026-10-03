@@ -7,12 +7,13 @@
 import { OWN_X_CHANNEL } from "../../../lib/plotspecGroupCol";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import type { WellOption } from "./ZoneWell";
+import { withUnit } from "../../../lib/unitDisplay";
 
 /** The dataset's own X, as the well names it: "Field (Oe)", or "Field". */
 export function ownXLabel(data: DataStruct): string {
   const name = String(data.metadata?.["x_column_name"] ?? "") || "x";
   const unit = String(data.metadata?.["x_column_unit"] ?? "");
-  return unit ? `${name} (${unit})` : name;
+  return withUnit(name, unit);
 }
 
 /** The X well's options: the dataset's own X first, then every value column. */

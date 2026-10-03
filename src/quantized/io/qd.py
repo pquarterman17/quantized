@@ -15,6 +15,7 @@ import numpy as np
 from quantized.datastruct import DataStruct
 from quantized.io._delimited_layout import _to_float
 from quantized.io.base import NO_COLUMN, parse_col_header, read_head, read_text, resolve_column
+from quantized.io.qd_companions import with_companions
 
 __all__ = ["import_mpms", "import_ppms", "import_qd_vsm", "is_ppms_dat", "is_qd_file"]
 
@@ -121,8 +122,13 @@ def import_qd_vsm(
     x_axis: str | int = "field",
     y_axis: str | int | Sequence[str | int] = "moment",
     include_raw: bool = False,
+    companions: bool = False,
 ) -> DataStruct:
-    """Import a QD ``.dat`` file. Defaults to Magnetic Field (x) vs Moment (y)."""
+    """Import a QD ``.dat`` file. Defaults to Magnetic Field (x) vs Moment (y).
+
+    ``companions`` (what ``import_auto`` asks for) also carries the moment's
+    error column and the temperature/field/time columns (``io/qd_companions``);
+    the default keeps MATLAB ``importQDVSM``'s single column."""
     path = Path(filepath)
     raw_lines = read_text(path).splitlines()
 
@@ -140,14 +146,27 @@ def import_qd_vsm(
         raise ValueError("x-axis column could not be resolved")
     x_idx = _auto_x_index(col_names, matrix, x_idx)
 
+    others: list[int] = []
     if isinstance(y_axis, str) and y_axis.lower() == "all":
         y_idx = _resolve_all_columns(col_names, matrix, x_idx, include_raw)
     else:
         specs: list[str | int] = [y_axis] if isinstance(y_axis, (str, int)) else list(y_axis)
-        y_idx = [resolve_column(s, col_names, _QD_SHORTHAND, "y-axis") for s in specs]
+        try:
+            y_idx = [resolve_column(s, col_names, _QD_SHORTHAND, "y-axis") for s in specs]
+        except KeyError:
+            if y_axis != "moment":
+                raise  # a column the caller named is genuinely missing
+            # A MultiVu file from a non-VSM option (Resistivity, ETO, Heat
+            # Capacity, ACMS) has no Moment column: plot what it measured.
+            y_idx, others = _measured_columns(col_names, matrix, x_idx, include_raw)
     if not y_idx:
         raise ValueError("no valid data columns resolved")
     y_idx = _apply_moment_fallback(col_names, matrix, y_idx)
+    channels: list[int] = list(y_idx)
+    hints: dict[str, Any] = {}
+    if companions:
+        channels, hints = with_companions(col_names, col_units, matrix, x_idx, y_idx)
+        channels += [c for c in others if c not in channels]
 
     metadata: dict[str, Any] = {
         "source": str(path),
@@ -159,12 +178,13 @@ def import_qd_vsm(
         "all_column_names": col_names,
         "all_column_units": col_units,
         **header,
+        **hints,
     }
     return DataStruct.create(
         matrix[:, x_idx],
-        matrix[:, y_idx],
-        labels=[col_names[i] for i in y_idx],
-        units=[col_units[i] for i in y_idx],
+        matrix[:, channels],
+        labels=[col_names[i] for i in channels],
+        units=[col_units[i] for i in channels],
         metadata=metadata,
     )
 
@@ -269,8 +289,10 @@ def import_ppms(
     x_axis: str | int = "field",
     y_axis: str | int | Sequence[str | int] = "moment",
     include_raw: bool = False,
+    companions: bool = False,
 ) -> DataStruct:
-    """Import a legacy PPMS/VSM plain-CSV ``.dat`` (no [Header]/[Data] markers)."""
+    """Import a legacy PPMS/VSM plain-CSV ``.dat`` (no [Header]/[Data] markers).
+    ``companions``: as :func:`import_qd_vsm`."""
     path = Path(filepath)
     lines = read_text(path).splitlines()
 
@@ -333,6 +355,10 @@ def import_ppms(
     if not y_idx:
         raise ValueError("no valid data columns resolved")
     y_idx = _apply_moment_fallback(col_names, matrix, y_idx)
+    channels: list[int] = list(y_idx)
+    hints: dict[str, Any] = {}
+    if companions:
+        channels, hints = with_companions(col_names, col_units, matrix, x_idx, y_idx)
 
     metadata: dict[str, Any] = {
         "source": str(path),
@@ -341,14 +367,36 @@ def import_ppms(
         "x_column_unit": col_units[x_idx],
         "all_column_names": col_names,
         "all_column_units": col_units,
+        **hints,
     }
     return DataStruct.create(
         matrix[:, x_idx],
-        matrix[:, y_idx],
-        labels=[col_names[i] for i in y_idx],
-        units=[col_units[i] for i in y_idx],
+        matrix[:, channels],
+        labels=[col_names[i] for i in channels],
+        units=[col_units[i] for i in channels],
         metadata=metadata,
     )
+
+
+def _measured_columns(
+    col_names: Sequence[str],
+    matrix: np.ndarray,
+    x_idx: int,
+    include_raw: bool,
+) -> tuple[list[int], list[int]]:
+    """``(measured, other)`` populated columns of a QD file with no Moment
+    column: the sweep/condition columns (time, temperature, field) are not
+    what the file measured, so they are kept off the default curves."""
+    every = _resolve_all_columns(col_names, matrix, x_idx, include_raw)
+
+    def is_sweep(name: str) -> bool:
+        low = name.lower()
+        return low.startswith("time") or "temp" in low or "field" in low
+
+    measured = [c for c in every if not is_sweep(col_names[c])]
+    if not measured:
+        return every, []
+    return measured, [c for c in every if c not in measured]
 
 
 def _resolve_all_columns(

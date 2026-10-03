@@ -2,7 +2,8 @@
 the per-dataset-block path of MATLAB ``+bosonPlotter/saveConsolidatedNeutronCSV.m``
 (also the writer ``+bosonPlotter/exportCombinedCSV.m`` uses).
 
-Each dataset contributes its own ``Q`` (X) column followed by its value columns,
+Each dataset contributes its own X column (``Q`` for a Q axis, as in MATLAB;
+otherwise the dataset's own x name) followed by its value columns,
 each tagged with an Origin designation by role (X / Y / yEr / xEr). Columns may
 differ in length; shorter ones leave trailing cells blank (not ``NaN``) so the
 file imports cleanly into Origin / Excel.
@@ -25,23 +26,44 @@ from typing import Any
 import numpy as np
 
 from quantized.csv_safe import csv_text_cell
-from quantized.datastruct import DataStruct
+from quantized.datastruct import DataStruct, is_categorical, level_labels
+from quantized.io._error_roles import error_axes
 from quantized.x_units import x_unit_of
 
 __all__ = ["consolidate_csv"]
 
 
 class _Col:
-    __slots__ = ("name", "unit", "file", "desig", "data")
+    __slots__ = ("name", "unit", "file", "desig", "data", "levels")
 
     def __init__(
-        self, name: str, unit: str, file: str, desig: str, data: np.ndarray
+        self,
+        name: str,
+        unit: str,
+        file: str,
+        desig: str,
+        data: np.ndarray,
+        levels: tuple[str, ...] = (),
     ) -> None:
         self.name = name
         self.unit = unit
         self.file = file
         self.desig = desig
         self.data = data
+        # A categorical channel's level table: cells are written as labels.
+        self.levels = levels
+
+    def cell(self, r: int) -> str:
+        """Row ``r`` as text: blank past the end or for a missing value (like
+        the ragged padding, never "nan"), a level label for a categorical
+        code, else ``%.10g``."""
+        if r >= self.data.size or not np.isfinite(self.data[r]):
+            return ""
+        v = float(self.data[r])
+        if self.levels:
+            ok = v.is_integer() and 0 <= v < len(self.levels)
+            return csv_text_cell(self.levels[int(v)]) if ok else ""
+        return f"{v:.10g}"
 
 
 def _meta_get(meta: dict[str, Any], *keys: str, default: Any = None) -> Any:
@@ -66,10 +88,22 @@ def _resolve_x_unit(ds: DataStruct) -> str:
     return x_unit_of(ds)
 
 
+def _x_name(ds: DataStruct) -> str:
+    """The X column's title. MATLAB's neutron writer always wrote ``Q``; that
+    stays for a Q axis (or an unnamed one) so the golden holds byte-for-byte,
+    but the GUI offers this export for every dataset, and a temperature or
+    2-theta axis titled "Q" mislabels the data."""
+    name = str(_meta_get(dict(ds.metadata), "x_column_name", "xColumnName", default="")).strip()
+    return name if name and not name.lower().startswith("q") else "Q"
+
+
 def _dataset_filename(ds: DataStruct, name: str) -> str:
     source = _meta_get(dict(ds.metadata), "source", "filepath", "filename", default="")
     base = str(source).replace("\\", "/").rsplit("/", 1)[-1]
     return base or name or "dataset"
+
+
+_ROLE_OF_AXIS: dict[str | None, str] = {"y": "yEr", "x": "xEr"}
 
 
 def _column_role(label: str) -> str:
@@ -94,10 +128,17 @@ def _columns(datasets: list[tuple[DataStruct, str]]) -> list[_Col]:
         file = _dataset_filename(ds, name)
         time = np.asarray(ds.time, dtype=float)
         values = np.asarray(ds.values, dtype=float)
-        cols.append(_Col("Q", _resolve_x_unit(ds), file, "X", time))
+        cols.append(_Col(_x_name(ds), _resolve_x_unit(ds), file, "X", time))
+        # Declared error roles decide; the label keywords are the fallback.
+        err_axes = error_axes(ds.metadata, len(ds.labels))
         for i, label in enumerate(ds.labels):
             unit = ds.units[i] if i < len(ds.units) else ""
-            cols.append(_Col(label, unit, file, _column_role(label), values[:, i]))
+            if err_axes is None:
+                role = _column_role(label)
+            else:
+                role = _ROLE_OF_AXIS.get(err_axes.get(i), "Y")
+            levels = level_labels(ds, i) if is_categorical(ds, i) else ()
+            cols.append(_Col(label, unit, file, role, values[:, i], levels))
     return cols
 
 
@@ -122,7 +163,7 @@ def consolidate_csv(datasets: list[tuple[DataStruct, str]], *, fmt: str = "stand
 
     max_rows = max((c.data.size for c in cols), default=0)
     for r in range(max_rows):
-        cells = [f"{c.data[r]:.10g}" if r < c.data.size else "" for c in cols]
+        cells = [c.cell(r) for c in cols]
         lines.append(",".join(cells))
 
     return "\n".join(lines) + "\n"

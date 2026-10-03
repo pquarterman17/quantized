@@ -227,3 +227,23 @@ describe("useGlobalShortcuts — Ctrl/Cmd+S (P1.2 box 1)", () => {
     expect(saveWorkspace).toHaveBeenCalledOnce();
   });
 });
+
+// Plot audit round 3: a box zoom now commits the secondary y range too, so
+// "A" (reset view) has to clear it with x and y or the right axis stays zoomed.
+describe("useGlobalShortcuts — A resets the view", () => {
+  it("clears a zoomed secondary y range with x and y", () => {
+    useApp.setState({ xLim: [1, 2], yLim: [3, 4], y2Lim: [5, 6], viewHistory: [], viewFuture: [] });
+    renderHook(() => useGlobalShortcuts());
+    fireEvent.keyDown(window, { key: "a" });
+    expect(useApp.getState()).toMatchObject({ xLim: null, yLim: null, y2Lim: null });
+    useApp.getState().backView();
+    expect(useApp.getState().y2Lim).toEqual([5, 6]);
+  });
+
+  it("resets a view zoomed on y2 alone", () => {
+    useApp.setState({ xLim: null, yLim: null, y2Lim: [5, 6] });
+    renderHook(() => useGlobalShortcuts());
+    fireEvent.keyDown(window, { key: "a" });
+    expect(useApp.getState().y2Lim).toBeNull();
+  });
+});

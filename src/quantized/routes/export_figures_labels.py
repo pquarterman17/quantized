@@ -26,7 +26,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from quantized.calc.figure_labels import series_display_name
+from quantized.calc.figure_labels import series_display_name, shared_axis_title
 from quantized.calc.plot_log_offsets import log_offset_decades, log_offset_suffix
 from quantized.calc.plotting import PlotSeries
 
@@ -107,8 +107,8 @@ def solo_axis_label(
     axis: int,
 ) -> str:
     """A Y axis' title: the caller's override, else the ONE series on that
-    axis named exactly as the legend names it, else blank (the legend names
-    them instead).
+    axis named exactly as the legend names it, else what its series share
+    (``calc.figure_labels.shared_axis_title``; blank when nothing is shared).
 
     Reading the name out of ``names`` rather than recomposing it from the
     channel is what keeps a renamed solo series' axis title equal to its
@@ -118,4 +118,6 @@ def solo_axis_label(
     if explicit is not None:
         return explicit
     idxs = [i for i, s in enumerate(series) if s.axis == axis]
-    return names[idxs[0]] if len(idxs) == 1 else ""
+    if len(idxs) == 1:
+        return names[idxs[0]]
+    return shared_axis_title([series[i] for i in idxs])

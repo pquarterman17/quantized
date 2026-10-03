@@ -59,6 +59,7 @@ from quantized.calc.plotting import (
     _resolve,
 )
 from quantized.datastruct import DataStruct, is_categorical, level_of
+from quantized.unit_display import with_unit
 
 __all__ = [
     "LABEL_LIST_MAX",
@@ -319,5 +320,5 @@ def gradient_spec(
         "color_lim": [float(finite.min()), float(finite.max())],
         "color_stops": list(GRADIENT_STOPS),
         "colormap": "viridis",
-        "colorbar_label": f"{ds.labels[col]} ({unit})" if unit else ds.labels[col],
+        "colorbar_label": with_unit(ds.labels[col], unit),
     }

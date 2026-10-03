@@ -49,7 +49,7 @@ export const DEFAULT_QUICK_FIGURE_SETUP: QuickFigureSetup = {
   yScale: "linear",
   showGrid: true,
   showLegend: true,
-  legendPos: "ne",
+  legendPos: "auto",
   errorBars: true,
 };
 
@@ -60,6 +60,7 @@ export const MARKER_SHAPES: readonly MarkerShape[] = [
   "circle", "square", "triangle", "downtriangle", "diamond", "plus", "cross", "star",
 ];
 export const LEGEND_CORNERS: readonly { value: LegendPos; label: string }[] = [
+  { value: "auto", label: "Auto (least crowded)" },
   { value: "ne", label: "Top right" },
   { value: "nw", label: "Top left" },
   { value: "se", label: "Bottom right" },

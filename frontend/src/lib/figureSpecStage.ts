@@ -13,10 +13,13 @@
 import type { FigureSpec } from "./api/figures";
 import type { StoreGet } from "./exportActive";
 import { buildFigureSpec, buildFigureSpecFromDocument, type FigureRenderOpts } from "./figureSpec";
+import { withAnalysisOverlays } from "./figureSpecOverlays";
+import { effectiveChannels } from "./plotdata";
 import { buildPolarFigureSpec } from "./polarFigureSpec";
 import { windowCyclesSeriesStyles } from "./seriesStyleCycle";
 import type { Dataset } from "./types";
 import { readLiveWaterfallSpan } from "./waterfallOffset";
+import { withLiveLegendCorner } from "./liveLegendCorner";
 
 /** Stage copy/export entry point (F2.5b). Every Stage command that renders
  *  "the active dataset" (Copy figure, Copy figure (vector), Export figure…)
@@ -97,7 +100,10 @@ export function buildStageFigureSpec(
   // FALLBACK branch below (a live-view spec, which never sees
   // `document.publication`) would otherwise cycle while the canvas — which reads
   // the pin straight off the focused window — refuses.
-  const autoSeriesStyles = windowCyclesSeriesStyles(st.autoSeriesStyles, st, document);
+  // `count`: the canvas' plotted channels (`usePlotPayload.fetchChannels`) — past
+  // the palette's eight the cycle engages on its own, as on screen.
+  const count = effectiveChannels(ds.data, st.yKeys, st.xKey, ds.channelRoles, st.seriesOrder).length;
+  const autoSeriesStyles = windowCyclesSeriesStyles(st.autoSeriesStyles, st, document, count);
   // BUG-013 review round: the y-span the FOCUSED canvas actually measured its
   // waterfall stagger from — the one thing about this export that cannot be
   // re-derived from `ds`, because a committed zoom on a server-decimated
@@ -132,5 +138,16 @@ export function buildStageFigureSpec(
         defaultLineWidth,
       })
     : buildFigureSpec(s, ds, stem, { ...o, defaultTrace, defaultLineWidth }, { autoSeriesStyles, waterfallSpan, waterfallXSpan });
-  return extra.transparent === undefined ? spec : { ...spec, transparent: extra.transparent };
+  // The fit / baseline / peak overlays the canvas splices on after `count`
+  // channels (lib/figureSpecOverlays.ts). Not on a frozen document: it renders
+  // its own snapshot, not the rows the overlay was computed on.
+  const overlaid = withLiveLegendCorner( // an "auto" legend where the screen put it
+    document?.data.mode === "frozen"
+      ? spec
+      : withAnalysisOverlays(spec, ds, st, count, {
+          screen: st.excludedDisplay === "grey",
+          wire: Boolean(o.greyExcluded),
+        }),
+  );
+  return extra.transparent === undefined ? overlaid : { ...overlaid, transparent: extra.transparent };
 }

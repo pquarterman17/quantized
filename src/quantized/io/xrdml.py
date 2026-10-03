@@ -213,8 +213,11 @@ def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
             continue
 
         # Beam-attenuation correction: per-pixel factors (>1) restore the true
-        # intensity where the attenuator was engaged. Matches importXRDML.
-        baf = _attenuation_factors(dp)
+        # intensity where the attenuator was engaged -- for raw schema-2.x
+        # <counts> only. Schema-1.x <intensities> are already corrected
+        # (xrayutilities and refnx multiply only <counts>); MATLAB importXRDML
+        # multiplied both, a divergence its <counts> golden does not cover.
+        baf = _attenuation_factors(dp) if counts_elem.tag.endswith("counts") else None
         if baf is not None:
             if baf.size == counts.size:
                 if bool(np.any(np.abs(baf - 1.0) > 1e-6)):

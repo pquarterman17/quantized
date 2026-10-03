@@ -44,8 +44,10 @@ def _axes(monkeypatch: pytest.MonkeyPatch, body: dict[str, Any]) -> Any:
 
 
 def _padded(domain: list[float], margin: float) -> tuple[float, float]:
+    """matplotlib's margin, never across zero (``calc.figure_autoscale``)."""
     pad = (domain[1] - domain[0]) * margin
-    return (domain[0] - pad, domain[1] + pad)
+    lo, hi = domain[0] - pad, domain[1] + pad
+    return (max(0.0, lo) if domain[0] >= 0 else lo, min(0.0, hi) if domain[1] <= 0 else hi)
 
 
 @pytest.mark.parametrize("case", CASES, ids=[c["name"] for c in CASES])

@@ -36,6 +36,7 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 from quantized.io._jcamp_asdf import decode_xydata
+from quantized.io.base import read_head, read_text
 
 __all__ = ["import_jcamp", "is_jcamp"]
 
@@ -55,16 +56,13 @@ def _strip_comment(line: str) -> str:
 def is_jcamp(path: Path) -> bool:
     """Sniff a file as JCAMP-DX: the first data record must be ``##TITLE=``."""
     try:
-        with Path(path).open("r", encoding="latin-1") as fh:
-            for _ in range(20):
-                line = fh.readline()
-                if not line:
-                    break
-                s = line.strip()
-                if s.startswith("##"):
-                    return _norm_label(s[2:].split("=", 1)[0]) == "TITLE"
+        head = read_head(path, 8192)
     except OSError:
         return False
+    for line in head.splitlines()[:20]:
+        s = line.strip()
+        if s.startswith("##"):
+            return _norm_label(s[2:].split("=", 1)[0]) == "TITLE"
     return False
 
 
@@ -182,6 +180,17 @@ _X_AXES: dict[str, tuple[str, str]] = {
 }
 
 
+# ##YUNITS that name a UNIT rather than a quantity -> (quantity, unit); any
+# other value ("TRANSMITTANCE", "ABSORBANCE") titles the channel as before.
+_Y_AXES: dict[str, tuple[str, str]] = {
+    "PICOAMPERES": ("Current", "pA"),
+    "NANOAMPERES": ("Current", "nA"),
+    "MICROAMPERES": ("Current", "uA"),
+    "VOLTS": ("Voltage", "V"),
+    "MILLIVOLTS": ("Voltage", "mV"),
+}
+
+
 def _x_axis(xunits: str, data_type: str) -> tuple[str, str]:
     name, unit = _X_AXES.get(xunits.strip().upper(), ("X", xunits))
     if name == "Wavenumber" and "RAMAN" in data_type.upper():
@@ -199,7 +208,7 @@ def import_jcamp(filepath: str | Path) -> DataStruct:
         one ordinate channel (``##YUNITS``).
     """
     path = Path(filepath)
-    text = path.read_text(encoding="latin-1")
+    text = read_text(path)
     header, data_lines, data_kind, extra_blocks = _parse_records(text)
     if not data_kind or not data_lines:
         raise ValueError(f"no XYDATA/XYPOINTS/PEAK TABLE block found: {path.name}")
@@ -257,4 +266,9 @@ def import_jcamp(filepath: str | Path) -> DataStruct:
         metadata["extra_blocks"] = extra_blocks  # compound/LINK file
     if data_kind == "PEAKASSIGNMENTS" and assignments:
         metadata["peak_assignments"] = assignments
-    return DataStruct.create(x, y, labels=[yunits.title()], units=[""], metadata=metadata)
+    if data_kind in ("PEAKTABLE", "PEAKASSIGNMENTS"):
+        # Discrete peaks, not a sampled curve: joining them draws a fake
+        # spectrum. The frontend's own default-trace vocabulary.
+        metadata["default_trace"] = "Scatter"
+    y_label, y_unit = _Y_AXES.get(yunits.strip().upper(), (yunits.title(), ""))
+    return DataStruct.create(x, y, labels=[y_label], units=[y_unit], metadata=metadata)

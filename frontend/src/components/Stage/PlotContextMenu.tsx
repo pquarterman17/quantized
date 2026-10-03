@@ -107,7 +107,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
         style: st.seriesStyles[channel] ?? {},
         // The focused canvas' own cycle decision (useStageSeriesCycle), at the
         // same display position it draws this series.
-        drawn: drawnSeriesStyle(st.seriesStyles[channel], nearIdx, plotted.length, selectFocusedWindowCycles(st)),
+        drawn: drawnSeriesStyle(st.seriesStyles[channel], nearIdx, plotted.length, selectFocusedWindowCycles(st, plotted.length)),
         hidden: st.hiddenChannels.includes(channel),
         onY2: (st.y2Keys ?? []).includes(channel),
       };

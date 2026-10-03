@@ -19,6 +19,7 @@ body {
 .qzk-main { display: grid; grid-template-columns: var(--lw, 210px) 1fr var(--rw, 296px); min-height: 0; }
 .qzk-main.lc { grid-template-columns: 0 1fr var(--rw, 296px); }
 .qzk-main.rc { grid-template-columns: var(--lw, 210px) 1fr 0; }
+.qzk-main.lc.rc { grid-template-columns: 0 1fr 0; } /* both collapsed: without this .rc won and the library stayed open */
 
 /* ── calc-only shell (?view=calc — MAIN_PLAN #22 standalone DiraCulator) ── */
 .qzk-calc-app { display: grid; grid-template-rows: 38px 1fr; height: 100%; }
@@ -65,6 +66,8 @@ body {
 
 /* ── menubar dropdowns ── */
 .qzk-menu-wrap { position: relative; }
+/* The File, Plot and Analyze menus are 720-780px tall: in a shorter window they scroll (no flyouts to clip). */
+.qzk-menu-wrap > .qzk-menu-pop { max-height: calc(100vh - 68px); overflow-y: auto; overscroll-behavior: contain; }
 .qzk-menu-pop { position: absolute; top: 100%; left: 0; min-width: 200px; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 4px; z-index: 40; display: flex; flex-direction: column; }
 .qzk-menu-item { display: flex; justify-content: space-between; gap: 16px; align-items: center; width: 100%; text-align: left; padding: 5px 9px; border: 0; background: transparent; border-radius: var(--radius-sm); white-space: nowrap; cursor: default; font-size: var(--font-size-sm); color: var(--text-dim); text-decoration: none; }
 .qzk-menu-item:hover { background: var(--accent-soft); color: var(--accent-text); }
@@ -129,6 +132,8 @@ body {
 /* Right-click context menu: a fixed-position variant of the menubar popup. */
 .qzk-ctx { position: fixed; top: auto; left: auto; min-width: 180px; }
 .qzk-ctx-sep { height: 1px; margin: 4px 6px; background: var(--glass-border); }
+.qzk-ctx.fit .qzk-menu-item { padding-block: 2px; } /* a menu taller than the window (ContextMenu.tsx) */
+.qzk-ctx.fit .qzk-ctx-sep { margin-block: 2px; }
 /* Non-interactive section label (e.g. the hit-tested series name). */
 .qzk-ctx-header { padding: 4px 9px 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
 /* Submenu affordance + toggle check glyph, pinned to the item's right edge. */
@@ -692,6 +697,9 @@ body {
    ended at the right spot"). Tint it with the accent + a dashed border so the
    user sees exactly what will be zoomed. Double-click the plot to reset. */
 .u-select { background: color-mix(in srgb, var(--accent) 16%, transparent); border: 1px dashed var(--accent); }
+/* Idle, uPlot leaves the box at 0x0 in the plot's top-left corner, where the
+   border alone drew a 2 px accent dot (stacked panels, facet cells, the inset). */
+.u-select:not([style]), .u-select[style*="width: 0px"], .u-select[style*="height: 0px"] { border: 0; }
 .qzk-glass { position: absolute; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow); }
 /* GUI audit P1: centred by auto margins between 12px insets, NOT left:50% +
    translate — an absolute box at left:50% only gets half the stage as its
@@ -726,7 +734,10 @@ body {
 /* GUI_INTERACTION_PLAN #9: active-tool HUD, top-left — clear of the toolbar
    (top-center) and the legend's default NE/NW/SE/SW corners. Hidden for
    Pointer (ToolHud.tsx returns null), so a fresh workspace shows nothing. */
-.qzk-tool-hud { top: 12px; left: 12px; padding: 5px 10px; display: flex; align-items: center; gap: 7px; font-size: var(--font-size-sm); white-space: nowrap; }
+.qzk-tool-hud { top: 12px; left: 12px; max-width: calc(100% - 24px); padding: 5px 10px; display: flex; align-items: center; gap: 7px; font-size: var(--font-size-sm); white-space: nowrap; }
+/* A narrow stage cut the HUD off at its edge (Esc cancels and all): only the hint gives way. */
+.qzk-tool-hud > * { flex-shrink: 0; }
+.qzk-tool-hud .hint { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .qzk-tool-hud .g { color: var(--accent); font-size: 14px; }
 .qzk-tool-hud .name { color: var(--text); font-weight: var(--weight-semibold); }
 .qzk-tool-hud .sep,
@@ -766,10 +777,26 @@ body {
 .qzk-mini-toolbar button.danger:hover { background: color-mix(in srgb, var(--danger, #e5484d) 18%, transparent); }
 .qzk-zoom-chip { bottom: 12px; left: 12px; padding: 3px 9px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
 .qzk-readout { bottom: 12px; right: 12px; padding: 3px 9px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-dim); }
+/* Plot audit round 3: a legend in the bottom-right corner (fixed, auto-placed
+   there, or the outside column) owns that spot; the readout takes bottom left. */
+.qzk-stage:not([data-rc]):has(> .qzk-legend.se) > .qzk-readout,
+.qzk-stage:not([data-rc]):has(> .qzk-legend.out) > .qzk-readout,
+.qzk-stage[data-lc="se"]:not([data-rc]):has(> .qzk-legend.auto) > .qzk-readout { right: auto; left: 12px; }
+/* Chrome audit round 4: the stage's bottom band is where the x tick labels and
+   title are, so in a narrow window the readout covered the title. On the plot
+   stage it now takes a frame corner (data-rc, lib/legendAutoPlace: the
+   emptiest one the legend does not hold). */
+.qzk-stage[data-rc] > .qzk-readout { max-width: calc(var(--qz-frame-width, 100%) - 16px); overflow-wrap: anywhere; top: auto; left: auto; right: calc(100% - var(--qz-frame-left, 0px) - var(--qz-frame-width, 100%) + 8px); bottom: calc(100% - var(--qz-frame-top, 0px) - var(--qz-frame-height, 100%) + 8px); }
+.qzk-stage[data-rc$="w"] > .qzk-readout { right: auto; left: calc(var(--qz-frame-left, 0px) + 8px); }
+.qzk-stage[data-rc^="n"] > .qzk-readout { bottom: auto; top: calc(var(--qz-frame-top, 0px) + 8px); }
 /* On-plot analysis result chips (∫ Integrate / ∩ FWHM) — stack bottom-center,
    newest on top. The container is click-through; each chip re-enables pointers. */
-.qzk-result-chips { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column-reverse; align-items: center; gap: 6px; pointer-events: none; }
-.qzk-result-chip { pointer-events: auto; display: flex; align-items: center; gap: 7px; padding: 3px 5px 3px 10px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--accent-text); }
+/* Chrome audit round 4: the stack sat at the STAGE's bottom centre, i.e. on the
+   x-axis title; it now sits at the bottom centre inside the plot frame (the
+   --qz-frame-* vars; without them, the stage's bottom centre as before). Each
+   chip is in the flow (.qzk-glass is absolute), or the stack piles up on itself. */
+.qzk-result-chips { position: absolute; bottom: calc(100% - var(--qz-frame-top, 0px) - var(--qz-frame-height, 100%) + 8px); left: calc(var(--qz-frame-left, 0px) + var(--qz-frame-width, 100%) / 2); max-width: calc(var(--qz-frame-width, 100%) - 16px); transform: translateX(-50%); display: flex; flex-direction: column-reverse; align-items: center; gap: 6px; pointer-events: none; }
+.qzk-result-chip { position: relative; max-width: 100%; flex-wrap: wrap; pointer-events: auto; display: flex; align-items: center; gap: 7px; padding: 3px 5px 3px 10px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--accent-text); }
 .qzk-result-chip .g { color: var(--accent); font-size: 14px; }
 .qzk-result-chip .v { color: var(--accent-text); }
 .qzk-result-chip .lbl { color: var(--text-faint); }
@@ -809,7 +836,7 @@ body {
 /* Gadget chip (#33 fit → #34 the ROI gadget family: integrate/stats/
    differentiate/fft/cursors) is richer than ∫/∩ (mode + model pickers +
    results + actions), so it wraps instead of forcing one long unreadable row. */
-.qzk-gadget-chip { flex-wrap: wrap; max-width: min(92vw, 560px); padding: 5px 6px 5px 10px; gap: 6px; }
+.qzk-gadget-chip { flex-wrap: wrap; max-width: min(100%, 560px); padding: 5px 6px 5px 10px; gap: 6px; }
 .qzk-gadget-chip .qz-select { font-size: var(--font-size-sm); padding: 2px 6px; }
 .qzk-legend { padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
 .qzk-legend-content { display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; gap: 4px; overflow: auto; }
@@ -860,6 +887,29 @@ body {
 .qzk-stage:has(> .qzk-float-tools) > .qzk-legend.nw { top: 72px; }
 .qzk-legend.se { bottom: 12px; right: 12px; }
 .qzk-legend.sw { bottom: 12px; left: 12px; }
+/* Plot audit round 2: the "auto" legend sits INSIDE the plot frame (the
+   --qz-frame-* vars, lib/uplotFrameVars.ts) in the corner lib/legendAutoPlace
+   writes to the stage as data-lc (top right until it has measured). Past
+   eight shown series it is an "out" column beside the frame instead, and the
+   plot host gives up --qz-plot-right for it (--qz-out-w is its measured
+   width) — the export's "outside right". */
+.qzk-legend.auto { top: calc(var(--qz-frame-top, 72px) + 8px); right: calc(100% - var(--qz-frame-left, 0px) - var(--qz-frame-width, 100%) + 8px); }
+.qzk-stage[data-lc$="w"] > .qzk-legend.auto { left: calc(var(--qz-frame-left, 0px) + 8px); right: auto; }
+.qzk-stage[data-lc^="s"] > .qzk-legend.auto { top: auto; bottom: calc(100% - var(--qz-frame-top, 0px) - var(--qz-frame-height, 100%) + 8px); }
+/* Chrome audit round 4: in a narrow frame the auto legend grew left past the
+   frame over the y ticks and title (and off the stage). It now stays inside
+   the frame: labels wrap, and the rows scroll once it is full. Any other
+   placement at least stays on the stage. */
+.qzk-stage > .qzk-legend { max-width: calc(100% - 24px); }
+.qzk-stage > .qzk-legend.auto { max-width: calc(var(--qz-frame-width, 100%) - 16px); max-height: calc(var(--qz-frame-height, 100%) - 16px); }
+.qzk-legend-toggle { overflow-wrap: anywhere; }
+.qzk-stage[data-narrow-frame] > .qzk-legend .it .qz-icon-btn { display: none; }
+.qzk-legend.out { top: var(--qz-frame-top, 72px); right: 8px; max-height: var(--qz-frame-height, 70%); max-width: min(260px, 40%); } /* the plot keeps 60% of a narrow stage */
+.qzk-stage:has(> .qzk-legend.out) { --qz-plot-right: calc(var(--qz-out-w, 200px) + 16px); }
+.qzk-legend.out .qzk-legend-content { gap: 1px; }
+.qzk-legend.out .it { font-size: var(--font-size-sm); }
+.qzk-legend.out .it .qz-icon-btn { display: none; }
+.qzk-legend.out .qzk-legend-toggle { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 /* Owner 2026-07-09 (item 2, "up the default x/y axis legend and label
    size"): one step up the density-scaled type ramp from --font-size-sm
    (was 11px @ regular) to --font-size (13px @ regular / 12 compact / 14
@@ -957,6 +1007,8 @@ body {
 .qzk-grid-headcell { border-color: var(--border); background: var(--surface-2); color: var(--text-dim); font-weight: var(--weight-medium); cursor: pointer; white-space: normal; }
 .qzk-grid-footer .qzk-grid-headcell, .qzk-grid-header .qzk-grid-rownum { cursor: default; }
 .qzk-grid-headcell .role { display: block; font-size: var(--type-nano); color: var(--accent-text); text-transform: uppercase; letter-spacing: var(--tracking-label); }
+/* Units are case-sensitive data ("mT" is not "MT"): exempt them from the uppercase role line. */
+.qzk-grid-headcell .role .unit { text-transform: none; letter-spacing: 0; }
 .qzk-grid-headcell .comment { display: block; font-size: var(--type-nano); color: var(--text-faint); font-weight: var(--weight-regular); text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qzk-grid-rownum { background: var(--surface-1); color: var(--text-faint); text-align: center; cursor: pointer; }
 .qzk-grid-footer .qzk-grid-rownum { cursor: default; }
@@ -1024,7 +1076,7 @@ body {
    past the viewport. ToolWindow publishes its top edge as --qzk-win-top, so
    the cap is "down to 12px above the viewport bottom" (never under 120px, so a
    window dragged low still shows a body). */
-.qzk-win { position: absolute; display: flex; flex-direction: column; max-height: max(120px, calc(100% - var(--qzk-win-top, 12px) - 12px)); width: 360px; z-index: 20; }
+.qzk-win { position: absolute; display: flex; flex-direction: column; max-height: max(120px, calc(100% - var(--qzk-win-top, 12px) - 12px)); max-width: 100%; width: 360px; z-index: 20; } /* max-width: an 840px panel in an 800px window */
 .qzk-win-title { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border-soft); font-size: var(--font-size-sm); font-weight: var(--weight-semibold); color: var(--text-dim); cursor: default; user-select: none; touch-action: none; }
 .qzk-win-title .grow { flex: 1; }
 .qzk-win-title:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }

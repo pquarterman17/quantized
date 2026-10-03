@@ -8,6 +8,7 @@
 import type uPlot from "uplot";
 
 import { resolveDrawColor } from "./contrastColor";
+import { logGaps } from "./logGaps";
 import { seriesPoints, seriesTrace } from "./markers";
 import type { PlotPayload } from "./plotdata";
 import { DASH, resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
@@ -55,15 +56,36 @@ export function buildSeriesDefs(
   // index window and draws the full acquisition order. See `linearPaths` docs.
   // uPlot min/max-decimates a run of >= 4 points per pixel assuming ascending
   // x, collapsing a dense descending spectrum to one vertical line: draw in
-  // runs short enough to stay exact, joined end to end.
+  // runs short enough to stay exact, joined end to end. `bbox.width` is device
+  // px rounded to a HALF pixel (x.5 at a 125 %/150 % display), so the run is
+  // floored to a whole row count: a fractional run start reads undefined rows,
+  // uPlot's non-null scan answers -1 and the run sweeps from row 0, decimated.
+  // Gaps: uPlot breaks a line by CLIPPING the x interval a null run spans,
+  // which assumes ascending x — on a loop it cut holes into whatever curve
+  // crossed that interval (an overlay's block rows are all nulls). A loop
+  // breaks the line by not drawing across a null (or a value a log axis cannot
+  // place) and keeps no clip.
   const fullLine = (b: uPlot.Series.PathBuilder): uPlot.Series.PathBuilder =>
     (u, sidx) => {
+      const ys = u.data[sidx] as readonly (number | null | undefined)[];
       const last = u.data[0].length - 1;
-      const run = u.bbox.width * 3 + 1; // < 4 per pixel, and >= 1 at zero width
-      const out = b(u, sidx, 0, Math.min(last, run));
-      for (let i = run; out && i < last; i += run)
-        (out.stroke as Path2D).addPath(b(u, sidx, i, Math.min(last, i + run))!.stroke as Path2D);
-      return out;
+      const run = Math.max(1, Math.ceil(u.bbox.width * 4) - 1); // whole rows, < 4 per pixel
+      const log = (u.scales?.[u.series?.[sidx]?.scale ?? "y"]?.distr as number | undefined) === 3;
+      const drawable = (i: number) => { const y = ys[i]; return y != null && Number.isFinite(y) && !(log && y <= 0); };
+      let out: uPlot.Series.Paths | null = null;
+      for (let s = 0; s <= last; s++) {
+        if (!drawable(s)) continue;
+        let e = s;
+        while (e < last && drawable(e + 1)) e++;
+        for (let i = s; ; i += run) {
+          const p = b(u, sidx, i, Math.min(e, i + run));
+          if (p && out) (out.stroke as Path2D).addPath(p.stroke as Path2D);
+          else if (p) out = { ...p, clip: null };
+          if (i + run >= e) break;
+        }
+        s = e;
+      }
+      return out ?? b(u, sidx, 0, last);
     };
   const fullPoints = (b: uPlot.Series.Points.PathBuilder): uPlot.Series.Points.PathBuilder =>
     (u, sidx, _i0, _i1, filt) => b(u, sidx, 0, u.data[0].length - 1, filt);
@@ -139,9 +161,11 @@ export function buildSeriesDefs(
       // Fill-under (MAIN #13): uPlot's native `series.fill`/`fillTo`, derived
       // from this series' own resolved stroke. `{vs}` band fills are NOT a
       // per-series prop — see `resolveFillBands` below (opts.bands).
+      // A log axis breaks the line at values it cannot place (lib/logGaps.ts).
       const def: uPlot.Series = {
         label, scale, stroke, width, dash, points: loopPoints(points), show,
         ...seriesFillProps(style?.fill, stroke),
+        ...(xAscending ? { gaps: logGaps } : {}),
       };
       // Per-series step alignment (SeriesStyle.step, GAP_PLOTTYPES "step"
       // mark) — a MORE SPECIFIC override than the "Step" default-trace

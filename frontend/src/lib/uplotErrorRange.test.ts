@@ -72,6 +72,27 @@ describe("error bars in the canvas autoscale", () => {
     expect(scale(u, "y")).toEqual([10, 1000]);
   });
 
+  it("on a log axis lets bars reach at most two decades below the lowest point", async () => {
+    // Low-count reflectivity: sR ~ R leaves a lower end of ~1e-15, which
+    // stretched the axis down fifteen decades. Such an end runs to the floor.
+    const nearZero = await draw(PAYLOAD, { yScale: "log", errorSpans: new Map([[1, [ySpan([0, 0, 0, 0], [10 - 1e-15, 0, 0, 0])]]]) });
+    expect(scale(nearZero, "y")).toEqual(uPlot.rangeLog(10, 13, 10, false));
+    const deep = await draw(PAYLOAD, { yScale: "log", errorSpans: new Map([[1, [ySpan([0, 0, 0, 0], [9.5, 0, 0, 0])]]]) });
+    expect(scale(deep, "y")).toEqual(uPlot.rangeLog(0.5, 13, 10, false));
+  });
+
+  it("applies the same floor to a non-monotonic x's log y scan", async () => {
+    const loop = { ...PAYLOAD, data: [[0, 2, 1, 3], ...PAYLOAD.data.slice(1)] as PlotPayload["data"] };
+    const u = await draw(loop, { yScale: "log", errorSpans: new Map([[1, [ySpan([0, 0, 0, 0], [10 - 1e-15, 0, 0, 0])]]]) });
+    expect(scale(u, "y")[0]).toBeCloseTo(10 / 1.1, 9);
+  });
+
+  it("does not pad all-non-negative counts below zero on a non-monotonic x", async () => {
+    const counts = { ...PAYLOAD, data: [[0, 2, 1, 3], [0, 5e6, 2e7, 1e6], [1, 2, 3, 4]] as PlotPayload["data"] };
+    const u = await draw(counts, {});
+    expect(scale(u, "y")[0]).toBe(0);
+  });
+
   it("widens again on uPlot's own reset after a zoom", async () => {
     const u = await draw(PAYLOAD, { errorSpans: new Map([[1, [{ axis: "x", plus: [0, 0, 0, 2], minus: [1, 0, 0, 0] }]]]) });
     expect(scale(u, "x")).toEqual([-1, 5]);

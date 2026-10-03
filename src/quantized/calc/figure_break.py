@@ -10,13 +10,15 @@ Renders one matplotlib panel per contiguous x-range between the (sorted,
 validated) break pairs, sharing the y scale (``sharey``), with a diagonal
 break glyph at each seam and the touching inner spines hidden — the paneled
 representation the plan's RESOLVED decision calls for (never a
-discontinuous-tick trick that lies about slope). Each panel plots the FULL
-series and clips its own view via ``set_xlim``, so no data slicing is needed.
+discontinuous-tick trick that lies about slope). Each panel plots only the
+rows inside its own x-range, as the screen's panels do (``lib/facet.ts``
+``breakPayloads``), so the shared y autoscales over what is SHOWN -- by the
+unbroken export's rule -- and a typed ``y_lim`` applies to every panel.
 
 Scoped deliberately smaller than ``_render_impl``'s single-axes path: the
 full ``_apply_overrides`` sweep (legend/spines/limits/margins) targets ONE
 axes and a broken figure has several, so breaks combine with the plot itself
-+ title/labels/basic legend/grid only — not the rest of gap #11's property
++ title/labels/basic legend/grid/y_lim only — not the rest of gap #11's property
 panel. Also not compatible with the figure-hitmap collector (`collect_map`),
 which harvests pixel boxes off a single axes. Same scope limit for MAIN
 #13/#14: a `series_styles` entry's `fill`/`color_by` keys are silently
@@ -36,6 +38,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.figure import _plot_kwargs
+from quantized.calc.figure_overrides import apply_axis_shape_overrides
 from quantized.calc.figure_render import in_render_scope, new_figure, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
@@ -65,6 +68,38 @@ def _visible_bounds(
     # The interactive view declines a break if fewer than two panels survive.
     # A fully covered dataset must still export as an ordinary single panel.
     return bounds or [(xlo, xhi)]
+
+
+def _in_view_ticks(ax: Any) -> list[float]:
+    lo, hi = sorted(ax.get_xlim())
+    return [float(t) for t in ax.get_xticks() if lo <= t <= hi]
+
+
+def _fig_x(ax: Any, t: float) -> float:
+    """Figure-fraction x of data value ``t`` on ``ax`` (any x scale)."""
+    ax_frac = ax.transAxes.inverted().transform(ax.transData.transform((t, 0.0)))[0]
+    pos = ax.get_position()
+    return float(pos.x0 + pos.width * ax_frac)
+
+
+def clear_seam_labels(fig: Any, axes: Sequence[Any]) -> None:
+    """Drop an incoming panel's first x tick when its label would run into
+    the outgoing panel's last one across a seam (plot audit round 2: "1.5" and
+    "2.5" printed as "1.52.5"). Label widths are estimated at 0.6 em per
+    character -- no renderer pass -- and the outgoing label is the one kept."""
+    fig_w_pt = fig.get_figwidth() * 72.0
+    for left, right in zip(axes, axes[1:], strict=False):
+        lt, rt = _in_view_ticks(left), _in_view_ticks(right)
+        if not lt or not rt:
+            continue
+        fmt_l = left.xaxis.get_major_formatter().format_ticks(lt)[-1]
+        fmt_r = right.xaxis.get_major_formatter().format_ticks(rt)[0]
+        size = float(right.xaxis.get_major_ticks()[0].label1.get_fontsize())
+        gap = (_fig_x(right, rt[0]) - _fig_x(left, lt[-1])) * fig_w_pt
+        if gap < (len(fmt_l) + len(fmt_r)) * 0.3 * size + 0.5 * size:
+            lim = right.get_xlim()
+            right.set_xticks(rt[1:])
+            right.set_xlim(lim)
 
 
 @in_render_scope  # normally nested in calc.figure's scope; direct calls stay safe
@@ -112,11 +147,12 @@ def render_breaks_impl(
     handles: list[Any] = []
     labels_out: list[str] = []
     for i, ax in enumerate(axes):
+        lo, hi = bounds[i]
+        shown = (x >= lo) & (x <= hi)
         for si, (label, y) in enumerate(series):
             spec = series_styles[si] if series_styles and si < len(series_styles) else None
             kw = _plot_kwargs(st.line_width, st.marker_size, spec)
-            ax.plot(x, np.asarray(y, dtype=float), label=label, **kw)
-        lo, hi = bounds[i]
+            ax.plot(x[shown], np.asarray(y, dtype=float)[shown], label=label, **kw)
         ax.set_xlim(lo, hi)
         resolved_x_scale = resolve_axis_scale(x_scale, x_log)
         resolved_y_scale = resolve_axis_scale(y_scale, y_log)
@@ -136,6 +172,10 @@ def render_breaks_impl(
         if st.grid_alpha > 0:
             ax.grid(True, which="major", alpha=st.grid_alpha)
             ax.grid(True, which="minor", alpha=st.grid_alpha * 0.4)
+
+    if ov.get("y_lim") is not None:  # shared y: set once, after the autoscale
+        apply_axis_shape_overrides(axes[0], st, {"y_lim": ov["y_lim"]}, lim_keys=("y_lim",))
+    clear_seam_labels(fig, axes)
 
     # Diagonal break glyphs (matplotlib's standard broken-axis recipe):
     # short strokes angled across each seam, on both the outgoing panel's

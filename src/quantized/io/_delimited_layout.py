@@ -239,6 +239,15 @@ def _numeric_score(row: Sequence[str]) -> float:
     return recognized / len(row)
 
 
+# Unit spellings too long for the short-token rule below. quantized's own
+# Origin-ASCII export writes "counts" (XRD) and "counts per second"
+# (reductus) in its units row; unrecognized, that row was read as the HEADER.
+_UNIT_WORDS = frozenset(
+    {"counts", "counts per second", "degrees", "seconds", "minutes", "kelvin", "tesla", "gauss",
+     "oersted", "volts", "amps", "ohms", "percent", "arb. units", "arb units"}
+)
+
+
 def _looks_like_units_row(row: Sequence[str], n_data_cols: int) -> bool:
     n = len(row)
     if n < max(n_data_cols * 0.5, 2):
@@ -251,7 +260,7 @@ def _looks_like_units_row(row: Sequence[str], n_data_cols: int) -> bool:
             n_unit_like += 1
             continue
         n_non_empty += 1
-        if re.match(r"^[(\[{].*[)\]}]$", token):
+        if re.match(r"^[(\[{].*[)\]}]$", token) or token.lower() in _UNIT_WORDS:
             n_unit_like += 1
         elif " " not in token and not _is_numeric(token):
             has_non_alpha = re.search(r"[^a-zA-Z]", token) is not None
@@ -471,10 +480,14 @@ def _detect_layout(tokens: Sequence[Sequence[str]]) -> tuple[int, int, int]:
     scores = computed
     header_row = -1
     units_row = -1
+    # A units row needs a header above it at least as wide: short names such as
+    # "T,R" pass the units test, so a one-cell "Date: ..." preamble line above
+    # them used to be taken as the header and "T,R" as the units.
     if (
         first_data >= 2
         and scores[first_data - 1] < 0.5
         and scores[first_data - 2] < 0.5
+        and len(tokens[first_data - 2]) >= len(tokens[first_data - 1])
         and _looks_like_units_row(tokens[first_data - 1], len(tokens[first_data]))
     ):
         units_row = first_data - 1

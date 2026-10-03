@@ -302,6 +302,55 @@
   align-items: center;
   gap: 6px;
 }
+/* In the workbench the window's bottom-centre IS the stage's bottom-centre,
+   where the x-axis title is drawn. Dock the stack over a side panel instead
+   (Inspector, else Library), or as a row of chips in the status bar when both
+   are collapsed, so a toast never covers any part of a plot
+   (layout-fit.spec.ts). */
+.qzk-app .qzk-toaster {
+  left: auto;
+  right: 8px;
+  bottom: 32px;
+  transform: none;
+  max-width: calc(var(--rw, 296px) - 16px);
+  align-items: flex-end;
+}
+.qzk-app:has(.qzk-main.rc) .qzk-toaster {
+  left: 8px;
+  right: auto;
+  max-width: calc(var(--lw, 210px) - 16px);
+  align-items: flex-start;
+}
+.qzk-app .qzk-toast-alerts {
+  align-items: inherit;
+}
+.qzk-app:has(.qzk-main.lc.rc) .qzk-toaster {
+  bottom: 1px;
+  left: 50%;
+  max-width: 50vw;
+  overflow: hidden;
+  transform: translateX(-50%);
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end; /* an overflowing row clips the OLDEST chips */
+}
+.qzk-app:has(.qzk-main.lc.rc) .qzk-toast-alerts {
+  flex-direction: row;
+}
+.qzk-app:has(.qzk-main.lc.rc) .qzk-toast-alerts:empty {
+  margin: 0 0 0 -6px;
+}
+.qzk-app:has(.qzk-main.lc.rc) .qzk-toast {
+  padding-block: 1px;
+  white-space: nowrap;
+}
+/* The interaction-hints card docks in the same side column (reopened from
+   Help over a plot, a fixed 310px card stuck out of the 296px Inspector over
+   the x-axis); while it is open the toasts take the top of that column. */
+.qzk-hints-card { right: 8px; bottom: 32px; width: min(310px, calc(var(--rw, 296px) - 16px)); }
+.qzk-app:has(.qzk-main.rc) .qzk-hints-card { right: auto; left: 8px; width: min(310px, calc(var(--lw, 210px) - 16px)); }
+.qzk-app:has(.qzk-main.lc.rc) .qzk-hints-card { top: 76px; bottom: auto; left: auto; right: 16px; width: 310px; }
+.qzk-app:has(.qzk-hints-card):not(:has(.qzk-main.lc.rc)) .qzk-toaster { top: 76px; bottom: auto; }
 /* The always-mounted assertive region for danger toasts: a column of its own;
    while empty it cancels the stack gap it would otherwise add. */
 .qzk-toast-alerts {

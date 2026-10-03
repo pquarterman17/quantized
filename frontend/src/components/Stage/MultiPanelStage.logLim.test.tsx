@@ -23,6 +23,8 @@ type Opts = { scales?: { x?: { range?: unknown }; y?: { range?: unknown } } };
 const { created, MockUPlot } = vi.hoisted(() => {
   const created: { opts: Opts }[] = [];
   class MockUPlot {
+    static rangeNum = (lo: number, hi: number) => [lo - 1, hi + 1];
+    static rangeLog = (lo: number, hi: number) => [lo / 10, hi * 10];
     scales = { x: { min: 0, max: 1 } };
     constructor(opts: Opts) {
       created.push({ opts });
@@ -121,6 +123,26 @@ describe("MultiPanelStage — break panels on a log Y with a non-positive typed 
       expect(range[1]).toBe(80);
       expect(range[0]).toBeGreaterThan(0);
     }
+  });
+
+  // Plot audit round 3: zero-count rows (a real Bruker scan has 211) made the
+  // AUTO shared range start at 0 — two blank log panels.
+  it("an auto range skips zero counts", async () => {
+    breakView([null, null]);
+    const ds = useApp.getState().datasets[0];
+    useApp.setState({ datasets: [{ ...ds, data: { ...ds.data, values: ds.data.values.map((r, i) => (i % 3 ? r : [0, r[1]])) } }] });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    for (const { opts } of created) expect((opts.scales?.y?.range as [number, number])[0]).toBeGreaterThan(0);
+  });
+
+  // Plot audit round 4: the auto shared range is padded by uPlot's own rule
+  // (here the mock's), as an unbroken plot is; a typed side is not.
+  it("pads a full-auto range by the unbroken rule, not a typed one", async () => {
+    breakView([null, null]);
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    for (const { opts } of created) expect(opts.scales?.y?.range).toEqual([0.1, 600]);
   });
 
   it("a half-open pair whose only typed side is <= 0 is full auto, still positive", async () => {

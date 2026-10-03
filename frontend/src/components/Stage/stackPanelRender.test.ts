@@ -21,7 +21,7 @@ const { created, MockUPlot } = vi.hoisted(() => {
 vi.mock("uplot", () => ({ default: MockUPlot }));
 
 import type { PlotPayload } from "../../lib/plotdata";
-import { renderStackPanels, resizeStackPanels, type StackPanelsArgs } from "./stackPanelRender";
+import { fitAxisTitle, renderStackPanels, resizeStackPanels, type StackPanelsArgs } from "./stackPanelRender";
 
 const panel: PlotPayload = {
   data: [[0, 1, 2], [1, 2, 3]] as PlotPayload["data"],
@@ -75,5 +75,48 @@ describe("renderStackPanels", () => {
     const areas = heights.map((hh, i) => hh - band(created[i]));
     expect(new Set(areas).size).toBe(1);
     expect(heights.reduce((a, b) => a + b, 0) + 3 * 8).toBeLessThanOrEqual(800);
+  });
+});
+
+describe("stacked y titles fit their panel", () => {
+  /** 7 px per character: deterministic, independent of the test canvas. */
+  const w = (t: string) => t.length * 7;
+
+  it("keeps a title that fits, drops the unit next, then ellipsizes", () => {
+    expect(fitAxisTitle("H (atoms/cc)", 200, w)).toBe("H (atoms/cc)");
+    expect(fitAxisTitle("H (atoms/cc)", 40, w)).toBe("H");
+    expect(fitAxisTitle("Absorbance (au)", 50, w)).toBe("Absorb…");
+    expect(fitAxisTitle("Absorbance", 3, w)).toBe("");
+  });
+
+  it("shortens every panel's title when ten channels share a short stage", () => {
+    // Plot audit round 2: ten ~70 px SIMS panels drew "atoms/c" ten times —
+    // the centred title clipped at each panel's canvas edge.
+    renderStackPanels(document.createElement("div"), args(10, 500));
+    const titles = created.map((c) => String(c.opts.axes[1].label));
+    expect(titles.every((t) => t.length > 0 && t.length < "H (atoms/cc)".length)).toBe(true);
+    expect(titles.every((t) => t.startsWith("H"))).toBe(true);
+  });
+
+  it("leaves a title alone when the panels are tall enough", () => {
+    renderStackPanels(document.createElement("div"), args(2, 800));
+    expect(created.map((c) => c.opts.axes[1].label)).toEqual(["H (atoms/cc)", "H (atoms/cc)"]);
+  });
+});
+
+describe("stacked y ticks", () => {
+  // Plot audit round 3: uPlot's 30 px minimum between y ticks fitted a single
+  // "0" into a ~65 px stacked panel (7-file VSM overlay), so no panel's scale
+  // could be read. A linear stacked axis packs ticks at 1.4 tick-font heights.
+  it("pack closer on a linear stack, so a short panel labels more than one tick", () => {
+    renderStackPanels(document.createElement("div"), { ...args(7, 600), cell: { ...args(7, 600).cell, yScale: "linear" } });
+    const space = (created[0].opts.axes[1] as { space?: unknown }).space;
+    expect(typeof space).toBe("number");
+    expect(space as number).toBeLessThan(30);
+  });
+
+  it("leave a log axis' decade rule alone", () => {
+    renderStackPanels(document.createElement("div"), args(7, 600));
+    expect((created[0].opts.axes[1] as { space?: unknown }).space).toBeUndefined();
   });
 });

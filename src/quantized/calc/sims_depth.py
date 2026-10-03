@@ -139,6 +139,17 @@ def canonical_length(unit: str) -> str:
     return _LENGTH_CANON.get(u, _LENGTH_CANON.get(u.lower(), u))
 
 
+#: How a depth AXIS spells the two units whose ASCII form misleads a reader:
+#: "Depth (A)" reads as amperes. Provenance keeps the canonical ASCII form.
+_LENGTH_DISPLAY = {"A": "Å", "um": "µm"}
+
+
+def display_length(unit: str) -> str:
+    """The axis-title spelling of a length unit (``A`` -> ``Å``, ``um`` -> ``µm``)."""
+    c = canonical_length(unit)
+    return _LENGTH_DISPLAY.get(c, c)
+
+
 def _g(v: float) -> str:
     return f"{v:.6g}"
 

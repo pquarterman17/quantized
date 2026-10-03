@@ -24,10 +24,27 @@ export interface Readout {
   rows: ReadoutRow[];
 }
 
+/** Set every scale to the data between two of its own pixel positions (`null`
+ *  leaves it alone). Going through posToVal keeps this right on log,
+ *  reciprocal and reversed axes, and a secondary y2 moves with y. */
+function setScalesPx(u: uPlot, px: (k: string, s: uPlot.Scale) => [number, number] | null): void {
+  u.batch(() => {
+    for (const k of Object.keys(u.scales)) {
+      const r = px(k, u.scales[k]);
+      if (!r) continue;
+      const a = u.posToVal(r[0], k);
+      const b = u.posToVal(r[1], k);
+      // Past a reciprocal axis's pole posToVal is NaN or Infinity: stop there.
+      if (Number.isFinite(a + b)) u.setScale(k, { min: Math.min(a, b), max: Math.max(a, b) });
+    }
+  });
+}
+
 /**
- * Drag-to-pan: shifts both scales by the pointer delta (linear mapping over the
- * plotting area). Document-level move/up listeners are bound per drag and torn
- * down on release, so destroyed plots leave nothing behind.
+ * Drag-to-pan: every scale follows the pointer by its pixel delta
+ * (`setScalesPx`), so a log axis pans by decades and never reaches zero.
+ * Document-level move/up listeners are bound per drag and torn down on
+ * release, so destroyed plots leave nothing behind.
  */
 export function panPlugin(): uPlot.Plugin {
   return {
@@ -39,20 +56,18 @@ export function panPlugin(): uPlot.Plugin {
           if (e.button !== 0) return;
           e.preventDefault();
           over.style.cursor = "grabbing";
-          const startX = e.clientX;
-          const startY = e.clientY;
-          const x0min = u.scales.x.min ?? 0;
-          const x0max = u.scales.x.max ?? 1;
-          const y0min = u.scales.y.min ?? 0;
-          const y0max = u.scales.y.max ?? 1;
-
+          let lastX = e.clientX;
+          let lastY = e.clientY;
+          const start = Object.entries(u.scales).map(([k, s]) => [k, s.min ?? 0, s.max ?? 1] as const);
           const onMove = (ev: MouseEvent) => {
-            const w = over.clientWidth || 1;
-            const h = over.clientHeight || 1;
-            const dx = ((ev.clientX - startX) / w) * (x0max - x0min);
-            const dy = ((ev.clientY - startY) / h) * (y0max - y0min);
-            u.setScale("x", { min: x0min - dx, max: x0max - dx });
-            u.setScale("y", { min: y0min + dy, max: y0max + dy });
+            const dx = ev.clientX - lastX;
+            const dy = ev.clientY - lastY;
+            lastX = ev.clientX;
+            lastY = ev.clientY;
+            setScalesPx(u, (k, s) => {
+              const d = k === "x" ? dx : dy;
+              return [u.valToPos(s.min ?? 0, k) - d, u.valToPos(s.max ?? 1, k) - d];
+            });
           };
           const onUp = () => {
             over.style.cursor = "grab";
@@ -62,15 +77,12 @@ export function panPlugin(): uPlot.Plugin {
           };
           document.addEventListener("mousemove", onMove);
           document.addEventListener("mouseup", onUp);
-          // GUI_INTERACTION #9: Escape/right-click cancel — restore the pan's
-          // starting scales (a pan has no "committed result" to discard, just
-          // the view it moved) and tear down like a normal release.
+          // GUI_INTERACTION #9: Escape/right-click cancel — tear down like a
+          // normal release, then restore the pan's starting scales (a pan has
+          // no "committed result" to discard, just the view it moved).
           setActiveGestureCancel(() => {
-            document.removeEventListener("mousemove", onMove);
-            document.removeEventListener("mouseup", onUp);
-            over.style.cursor = "grab";
-            u.setScale("x", { min: x0min, max: x0max });
-            u.setScale("y", { min: y0min, max: y0max });
+            onUp();
+            u.batch(() => start.forEach(([k, min, max]) => u.setScale(k, { min, max })));
           });
         });
       },
@@ -285,18 +297,12 @@ export function wheelZoomPlugin(step = 1.18): uPlot.Plugin {
             const f = e.deltaY < 0 ? 1 / step : step; // up → zoom in (shrink range)
             const onlyX = e.metaKey || e.ctrlKey;
             const onlyY = e.shiftKey;
-            if (!onlyY) {
-              // New left/right edges in OLD pixel space, scaled about the cursor,
-              // mapped back to data values (posToVal handles linear + log x).
-              const a = u.posToVal(cx - cx * f, "x");
-              const b = u.posToVal(cx + (wid - cx) * f, "x");
-              u.setScale("x", { min: Math.min(a, b), max: Math.max(a, b) });
-            }
-            if (!onlyX) {
-              const a = u.posToVal(cy - cy * f, "y");
-              const b = u.posToVal(cy + (hgt - cy) * f, "y");
-              u.setScale("y", { min: Math.min(a, b), max: Math.max(a, b) });
-            }
+            // New edges in OLD pixel space, scaled about the cursor.
+            setScalesPx(u, (k) =>
+              k === "x"
+                ? onlyY ? null : [cx - cx * f, cx + (wid - cx) * f]
+                : onlyX ? null : [cy - cy * f, cy + (hgt - cy) * f],
+            );
           },
           { passive: false },
         );
@@ -305,35 +311,50 @@ export function wheelZoomPlugin(step = 1.18): uPlot.Plugin {
   };
 }
 
+/** A view's limits; null is auto (a reset). */
 export interface PlotViewBounds {
-  xLim: [number, number];
-  yLim: [number, number];
+  xLim: [number, number] | null;
+  yLim: [number, number] | null;
+  /** Present only when the plot has a secondary y axis. */
+  y2Lim?: [number, number] | null;
+}
+
+/** The live view: x, y and (only when the plot has one) the secondary y range;
+ *  `auto` gives the same shape with every limit null. */
+export function viewBounds(u: uPlot, auto = false): PlotViewBounds {
+  const lim = (s: uPlot.Scale): [number, number] | null => (auto ? null : [s.min ?? 0, s.max ?? 1]);
+  return { xLim: lim(u.scales.x), yLim: lim(u.scales.y), ...(u.scales.y2 ? { y2Lim: lim(u.scales.y2) } : {}) };
 }
 
 /** Observe completed navigation gestures without participating in their
  * mechanics. Pointer drags (box zoom or pan) commit once on mouseup; a wheel
- * burst commits once after a short idle period. */
+ * burst commits once after a short idle period. uPlot's double-click re-fit
+ * commits as auto limits, not as the fitted numbers (which would pin them). */
 export function viewHistoryPlugin(onCommit: (before: PlotViewBounds, after: PlotViewBounds) => void): uPlot.Plugin {
   let cleanup = () => {};
   return {
     hooks: {
       ready: (u: uPlot) => {
         const over = u.over;
-        const bounds = (): PlotViewBounds => ({
-          xLim: [u.scales.x.min ?? 0, u.scales.x.max ?? 1],
-          yLim: [u.scales.y.min ?? 0, u.scales.y.max ?? 1],
-        });
+        const bounds = () => viewBounds(u);
         let pointerStart: PlotViewBounds | null = null;
         let wheelStart: PlotViewBounds | null = null;
         let wheelTimer: ReturnType<typeof setTimeout> | null = null;
+        let lastBefore: PlotViewBounds | null = null;
+        let refits = 0; // a click commit still pending when a double-click lands is dropped
         const down = (e: MouseEvent) => {
           if (e.button === 0) pointerStart = bounds();
         };
         const up = () => {
           if (!pointerStart) return;
-          const before = pointerStart;
+          const before = (lastBefore = pointerStart);
+          const at = refits;
           pointerStart = null;
-          setTimeout(() => onCommit(before, bounds()), 0);
+          setTimeout(() => at === refits && onCommit(before, bounds()), 0);
+        };
+        const dbl = () => {
+          refits++;
+          if (lastBefore) onCommit(lastBefore, viewBounds(u, true));
         };
         const wheel = () => {
           wheelStart ??= bounds();
@@ -347,6 +368,7 @@ export function viewHistoryPlugin(onCommit: (before: PlotViewBounds, after: Plot
         over.addEventListener("mousedown", down);
         document.addEventListener("mouseup", up);
         over.addEventListener("wheel", wheel);
+        over.addEventListener("dblclick", dbl);
         cleanup = () => {
           over.removeEventListener("mousedown", down);
           document.removeEventListener("mouseup", up);
@@ -361,8 +383,16 @@ export function viewHistoryPlugin(onCommit: (before: PlotViewBounds, after: Plot
 
 /** Report every visible series' value at the nearest-x cursor index (or null when
  *  off-plot / no visible series have a value there). The cursor index is shared
- *  across the aligned data, so one lookup per column gives a full readout. */
-export function readoutPlugin(onReadout: (r: Readout | null) => void): uPlot.Plugin {
+ *  across the aligned data, so one lookup per column gives a full readout.
+ *  `shift` (a waterfall's per-column stagger) and the X offset (block b of
+ *  `blockRows` rows slid by b·`xStep`) are taken back off: the readout states
+ *  the data, not where the display moved it. */
+export function readoutPlugin(
+  onReadout: (r: Readout | null) => void,
+  shift?: number[],
+  blockRows?: number,
+  xStep?: number,
+): uPlot.Plugin {
   return {
     hooks: {
       setCursor: (u: uPlot) => {
@@ -382,13 +412,13 @@ export function readoutPlugin(onReadout: (r: Readout | null) => void): uPlot.Plu
           const y = u.data[s]?.[idx];
           if (y == null) continue;
           const lbl = u.series[s]?.label;
-          rows.push({ label: typeof lbl === "string" ? lbl : "", y });
+          rows.push({ label: typeof lbl === "string" ? lbl : "", y: y - (shift?.[s] ?? 0) });
         }
         if (rows.length === 0) {
           onReadout(null);
           return;
         }
-        onReadout({ x, rows });
+        onReadout({ x: blockRows && xStep ? x - Math.floor(idx / blockRows) * xStep : x, rows });
       },
     },
   };

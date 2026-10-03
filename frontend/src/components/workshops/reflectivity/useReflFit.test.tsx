@@ -123,6 +123,23 @@ beforeEach(() => {
 });
 
 describe("useReflFit", () => {
+  it("takes the radiation from the file's probe: on open and on dataset choice", async () => {
+    const withProbe = (d: Dataset, probe: string): Dataset =>
+      ({ ...d, id: `${d.id}-${probe}`, data: { ...d.data, metadata: { ...d.data.metadata, probe } } }) as Dataset;
+    const nr = withProbe(XRR, "neutron");
+    const xr = withProbe(XRR, "x-ray");
+    useApp.setState({ datasets: [nr, xr, XRR], activeId: nr.id });
+    const { result } = await mountHook();
+    expect(result.current.refl.radiation).toBe("neutron");
+    act(() => result.current.fit.selectDataset(xr.id));
+    expect(result.current.refl.radiation).toBe("xray");
+    act(() => result.current.fit.selectDataset(nr.id));
+    expect(result.current.refl.radiation).toBe("neutron");
+    // A file that does not say leaves the user's choice alone.
+    act(() => result.current.fit.selectDataset(XRR.id));
+    expect(result.current.refl.radiation).toBe("neutron");
+  });
+
   it("prefills the channel from the active dataset's error roles", async () => {
     const { result } = await mountHook();
     expect(result.current.fit.channels).toEqual([

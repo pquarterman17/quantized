@@ -7,6 +7,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { subtractHysteresisBackground, subtractMagBackground } from "../../../lib/api/magnetometry";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import MagToolsPanel from "./MagToolsPanel";
@@ -106,5 +107,31 @@ describe("MagToolsPanel — ambiguous data fails closed in the UI", () => {
 
     expect(screen.getByLabelText("High-T fraction")).toBeInTheDocument();
     expect(screen.getByText(/high-T tail of M\(T\)/)).toBeInTheDocument();
+  });
+});
+
+describe("MagToolsPanel — the fit readout names its units (round-3 plot audit)", () => {
+  it("an M(H) run reports χ in moment/field and the offset in moment", async () => {
+    load("loop.dat", "Magnetic Field", "Oe");
+    vi.mocked(subtractHysteresisBackground).mockResolvedValue({
+      corrected: [-1, 0, 1],
+      slope: -1.6e-7,
+      offset: 2e-6,
+    });
+    render(<MagToolsPanel />);
+    fireEvent.click(subtractButton());
+    expect(await screen.findByText(/emu\/Oe/)).toHaveTextContent(/offset .* emu$/);
+  });
+
+  it("an M(T) run reports the slope in moment/temperature and the intercept in moment", async () => {
+    load("mt.dat", "Temperature", "K");
+    vi.mocked(subtractMagBackground).mockResolvedValue({
+      corrected: [-1, 0, 1],
+      slope: -1.2e-6,
+      intercept: 7e-4,
+    });
+    render(<MagToolsPanel />);
+    fireEvent.click(subtractButton());
+    expect(await screen.findByText(/emu\/K/)).toHaveTextContent(/intercept .* emu$/);
   });
 });

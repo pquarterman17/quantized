@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable
 from pathlib import Path
 
@@ -19,7 +20,23 @@ def test_refl1d_profile_matches_matlab(
     assert_golden: Callable[..., None],
 ) -> None:
     ds = import_refl1d_dat(fixtures_dir / "refl1d_nbau_profile.dat")
-    assert_golden(ds, "refl1d_nbau_profile_default.json")
+    # Units are compared in the header's own ASCII spelling (kept in
+    # `header_units`); `.units` spells refl1d's Angstrom as Å -- see below.
+    raw_units = tuple(ds.metadata["header_units"][1:])
+    assert_golden(dataclasses.replace(ds, units=raw_units), "refl1d_nbau_profile_default.json")
+
+
+def test_refl1d_angstrom_units_are_spelled_as_angstrom(fixtures_dir: Path) -> None:
+    """refl1d writes Angstrom as "A" ("z (A)", "rho (1e-6/A2)"), which an axis
+    title shows as amperes. The parser knows the convention, so it spells the
+    unit Å; the header's ASCII stays in ``header_units``."""
+    ds = import_refl1d_dat(fixtures_dir / "refl1d_nbau_profile.dat")
+    assert ds.metadata["x_column_unit"] == "Å"
+    assert ds.units == ("10⁻⁶ Å⁻²", "10⁻⁶ Å⁻²", "10⁻⁶ Å⁻²", "degrees")
+    assert ds.metadata["header_units"] == ["A", "1e-6/A2", "1e-6/A2", "1e-6/A2", "degrees"]
+    fit = import_refl1d_dat(fixtures_dir / "refl1d_refl_fit.dat")
+    assert fit.metadata["x_column_unit"] == "Å⁻¹"
+    assert fit.units[0] == "Å⁻¹"  # dQ
 
 
 def test_refl1d_profile_structure(fixtures_dir: Path) -> None:
@@ -45,7 +62,7 @@ def test_sniffer_detects_refl_fit_below_preamble(fixtures_dir: Path) -> None:
 def test_refl_fit_parses_q_r_columns(fixtures_dir: Path) -> None:
     ds = import_refl1d_dat(fixtures_dir / "refl1d_refl_fit.dat")
     assert ds.metadata["x_column_name"] == "Q"
-    assert ds.metadata["x_column_unit"] == "1/A"
+    assert ds.metadata["x_column_unit"] == "Å⁻¹"
     assert ds.labels == ("dQ", "R", "dR", "theory", "fresnel")
     # Header key/value preamble is captured as float metadata.
     assert ds.metadata["intensity"] == pytest.approx(1.04776102038159)

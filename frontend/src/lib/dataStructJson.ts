@@ -15,15 +15,15 @@
 // The rest of the DataStruct (labels/units/metadata/…) still goes through the
 // replacer, so anything it encodes there is encoded exactly as before.
 
-import { encodeCell, encodePersistedCells, type WireDataStruct } from "./nonFiniteCells";
+import { encodeDataCell, encodePersistedCells, type WireDataStruct } from "./nonFiniteCells";
 
 const cache = new WeakMap<WireDataStruct, string>();
 
-/** Would the replacer rewrite this cell? It passes `null` through and sends
- *  everything else to `encodeCell`, which changes only a non-finite, a -0, or
- *  a non-number. */
+/** Would the replacer rewrite this cell? It sends every DataStruct cell to
+ *  `encodeDataCell`, which changes only a null (-> "NaN"), a non-finite, a
+ *  -0, or a non-number. */
 function needsSentinel(c: unknown): boolean {
-  return c !== null && (typeof c !== "number" || !Number.isFinite(c) || Object.is(c, -0));
+  return typeof c !== "number" || !Number.isFinite(c) || Object.is(c, -0);
 }
 
 function rowJson(row: readonly unknown[]): string {
@@ -31,7 +31,7 @@ function rowJson(row: readonly unknown[]): string {
 }
 
 function encodeRow(row: readonly unknown[]): unknown[] {
-  return row.map((c) => (c === null ? null : encodeCell(c as number)));
+  return row.map((c) => encodeDataCell(c as number | null));
 }
 
 // A per-page nonce keeps the splice markers from matching any user text.

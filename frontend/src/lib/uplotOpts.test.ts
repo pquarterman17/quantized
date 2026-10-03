@@ -614,6 +614,22 @@ describe("buildOpts defaultTrace", () => {
       ]);
     });
 
+    it("sci and eng modes keep one digit count across the decades of a log axis", () => {
+      // Filtered decade splits: the 2-9 subdivisions arrive as null.
+      const splits = [1e-7, null, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1] as number[];
+      const sci = tickFormatter({ mode: "sci", digits: 1 }, "log")(null as never, splits, 1, 0, 1e-7);
+      expect(sci).toEqual(["1.0e-7", null, "1.0e-6", "1.0e-5", "1.0e-4", "1.0e-3", "1.0e-2", "1.0e-1"]);
+      const eng = tickFormatter({ mode: "eng", digits: 1 }, "log")(null as never, splits, 1, 0, 1e-7);
+      expect(eng).toEqual(["100.0e-9", null, "1.0e-6", "10.0e-6", "100.0e-6", "1.0e-3", "10.0e-3", "100.0e-3"]);
+      // Fixed: every thinned decade label gets the decimals its smallest one needs.
+      const thinned = [1e-6, null, 1e-3, 1, 1e3] as number[];
+      const fixed = tickFormatter({ mode: "fixed", digits: 1 }, "log")(null as never, thinned, 1, 0, 1e-6);
+      expect(fixed).toEqual(["0.000001", null, "0.001000", "1.000000", "1000.000000"]);
+      // A sub-decade log view keeps the increment floor: its ticks are arithmetic.
+      const sub = tickFormatter({ mode: "sci", digits: 0 }, "log")(null as never, [1.1e-3, 1.2e-3, 1.3e-3], 1, 0, 1e-4);
+      expect(sub).toEqual(["1.1e-3", "1.2e-3", "1.3e-3"]);
+    });
+
     it("sci mode floors mantissa digits so same-decade dense ticks stay distinct", () => {
       const fmt = tickFormatter({ mode: "sci", digits: 1 });
       const labels = fmt(null as never, [1.1e-3, 1.2e-3, 1.3e-3], 0, 0, 0.0001);
@@ -1084,7 +1100,7 @@ describe("buildOpts non-monotonic x (hysteresis loops)", () => {
     expect(s.paths).toBeDefined();
     // uPlot would call with a collapsed window (e.g. 2..2); the wrapper must
     // forward the full index range instead.
-    const fakeU = { data: [loop.data[0]], bbox: { width: 600 } }; // a real instance always has a bbox
+    const fakeU = { data: loop.data, bbox: { width: 600 } }; // a real instance always has a bbox and y data
     s.paths!(fakeU, 1, 2, 2);
     expect(spyLinear).toHaveBeenCalledWith(fakeU, 1, 0, 4);
   });
@@ -1247,9 +1263,11 @@ describe("logMajorTickFilter", () => {
     expect(filtered).toHaveLength(splits.length);
   });
 
-  it("keeps every arithmetic tick on a sub-decade Origin range", () => {
+  it("keeps every arithmetic tick on a sub-decade Origin range that has room", () => {
+    // 0.7..1.3 is 0.27 decade: a 600 px axis spends ~2200 px per decade.
+    const zoomed = { axes: [{ scale: "y" }], valToPos: (v: number) => -2200 * Math.log10(v) } as unknown as uPlot;
     const splits = fixedLogAxisSplits(0.7, 1.3, 0.1);
-    expect(logMajorTickFilter(roomyLogPlot, splits, 0)).toEqual(splits);
+    expect(logMajorTickFilter(zoomed, splits, 0)).toEqual(splits);
   });
 });
 
@@ -1355,8 +1373,16 @@ describe("buildOpts fixed log-range ticks (plot-fidelity fix)", () => {
     const splits = opts.axes?.[1].splits;
     expect(typeof splits).toBe("function");
     const fn = splits as (u: uPlot, i: number, min: number, max: number) => number[];
-    expect(fn(null as unknown as uPlot, 1, 0.001, 0.1)).toContain(0.002);
+    const roomy = { axes: [{ scale: "x" }, { scale: "y" }], valToPos: (v: number) => -100 * Math.log10(v) } as unknown as uPlot;
+    expect(fn(roomy, 1, 0.001, 0.1)).toContain(0.002);
     expect(opts.axes?.[1].filter).toBe(logMajorTickFilter);
+  });
+
+  it("drops the 2-9 minor grid splits on a many-decade autoscaled log axis", () => {
+    const opts = buildOpts(payload, { ...base, yScale: "log", tool: "zoom" });
+    const fn = opts.axes?.[1].splits as (u: uPlot, i: number, min: number, max: number) => number[];
+    const roomy = { axes: [{ scale: "x" }, { scale: "y" }], valToPos: (v: number) => -100 * Math.log10(v) } as unknown as uPlot;
+    expect(fn(roomy, 1, 1e15, 1e23)).toEqual([1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22, 1e23]);
   });
 
   it("leaves splits undefined on a fixed but LINEAR axis", () => {

@@ -442,3 +442,17 @@ def test_import_sims_labels_a_time_axis(tmp_path: Path, header: str, name: str, 
     ds = import_sims(f)
     assert ds.metadata["x_column_name"] == name
     assert ds.metadata["x_column_unit"] == unit
+
+
+@pytest.mark.parametrize(
+    ("depth_unit", "axis_unit"), [("A", "Å"), ("Å", "Å"), ("um", "µm"), ("nm", "nm")]
+)
+def test_calibrated_depth_axis_spells_its_unit_for_a_reader(
+    depth_unit: str, axis_unit: str
+) -> None:
+    # Round-3 plot audit: a profile calibrated to angstroms plotted as
+    # "Depth (A)" -- A reads as amperes on an axis title.
+    cal = CalibrationSpec(method="rate", sputter_rate=2.0, depth_unit=depth_unit)
+    res = process_sims(_profile(), calibration=cal)
+    assert res.data.metadata["x_column_unit"] == axis_unit
+    assert x_unit_of(res.data) == axis_unit

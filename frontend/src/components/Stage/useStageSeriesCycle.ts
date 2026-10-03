@@ -43,12 +43,13 @@ import { useApp, type AppState } from "../../store/useApp";
  *  `AppState` satisfies `CycleView` structurally (`groupKey`, `facetKey`,
  *  `stackMode`, `polarMode`, `statMode`, `xKey`, `yKeys` are all live
  *  singletons), so nothing is assembled to ask. */
-export function selectFocusedWindowCycles(s: AppState): boolean {
+export function selectFocusedWindowCycles(s: AppState, count = 0): boolean {
   const win = s.plotWindows.find((w) => w.id === s.focusedWindowId);
   return windowCyclesSeriesStyles(
     s.autoSeriesStyles,
     s,
     win?.kind === "plot" ? win.document : undefined,
+    count,
   );
 }
 
@@ -77,7 +78,7 @@ export function useWindowSeriesCycle(
   count: number,
 ): SeriesCycle {
   const autoSeriesStyles = useApp((s) => s.autoSeriesStyles);
-  const on = windowCyclesSeriesStyles(autoSeriesStyles, view, doc);
+  const on = windowCyclesSeriesStyles(autoSeriesStyles, view, doc, count);
   return useMemo(() => displayPositions(on, count), [on, count]);
 }
 
@@ -85,6 +86,6 @@ export function useWindowSeriesCycle(
  *  the live view, which is the same call `useWindowSeriesCycle` makes for a
  *  background window, read as ONE boolean subscription rather than seven. */
 export function useStageSeriesCycle(count: number): SeriesCycle {
-  const on = useApp(selectFocusedWindowCycles);
+  const on = useApp((s) => selectFocusedWindowCycles(s, count));
   return useMemo(() => displayPositions(on, count), [on, count]);
 }

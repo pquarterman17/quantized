@@ -48,8 +48,8 @@ import { canvasLineWidth, resolveTemplate } from "../../lib/plotTemplates";
 import type { Dataset } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
 import { windowSyncKey } from "../../lib/windowsync";
+import { lazyRegion } from "../../lib/lazyRegion";
 import { useApp } from "../../store/useApp";
-import InsetPlot from "../Stage/InsetPlot";
 import PlotViewport from "../Stage/PlotViewport";
 import { multiPanelShowing } from "../Stage/useEffectiveComposition";
 import { usePlotPayload } from "../Stage/usePlotPayload";
@@ -59,6 +59,8 @@ import {
   BackgroundStackWindow,
   BackgroundStatWindow,
 } from "./BackgroundAltModes";
+
+const InsetPlot = lazyRegion(() => import("../Stage/InsetPlot"), "Inset");
 
 export interface BackgroundPlotWindowProps {
   /** The window's bound dataset (null = unbound, or its dataset was removed
@@ -239,6 +241,7 @@ function BackgroundXYWindow({
         yFmt={view.yFmt}
         showGrid={view.showGrid}
         axisBox={view.showAxisBox}
+        xReversed={view.xReversed}
         fontSize={resolveTemplate(view.plotTemplate).fontSize}
         baseLineWidth={canvasLineWidth(view.plotTemplate, defaultLineWidth)}
         defaultTrace={defaultTrace}
@@ -277,7 +280,7 @@ function BackgroundXYWindow({
           zoom/close affordances are moot here: the frame's capture-phase
           pointerdown focuses the window first (decision #2). */}
       {view.insetMode && displayPayload && (
-        <InsetPlot payload={displayPayload} styleList={styleList} seriesCycle={seriesCycle} />
+        <InsetPlot payload={displayPayload} styleList={styleList} seriesCycle={seriesCycle} view={view} />
       )}
     </>
   );

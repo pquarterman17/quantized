@@ -191,3 +191,21 @@ describe("block ops follow the visible row order", () => {
     expect(statuses).toEqual([REDERIVED_EDIT_NOTICE, REDERIVED_EDIT_NOTICE]);
   });
 });
+
+// A copied block goes to Excel/Origin as what the grid SHOWS: a categorical
+// cell's level label (not its numeric code) and a blank for a missing value.
+describe("block copy writes displayed text", () => {
+  it("emits level labels for a categorical column and blanks for NaN", () => {
+    const levels = ["low", "high"];
+    const cells: Record<string, number> = { "0,0": 1, "0,1": 2.5, "1,0": 0, "1,1": Number.NaN };
+    const { result } = renderHook(() =>
+      useWorksheetBlockOps({
+        ...source([0, 1], [0, 1]),
+        valueAt: (r: number, c: number) => cells[`${r},${c}`],
+        levelsAt: (c: number) => (c === 0 ? levels : null),
+      }),
+    );
+    result.current.copyBlock();
+    expect(copyText).toHaveBeenCalledWith("high\t2.5\nlow\t");
+  });
+});

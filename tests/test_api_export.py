@@ -100,6 +100,24 @@ def test_origin_export_is_zip_with_both_files() -> None:
         assert "impASC" in ogs and 'wks.col1.type = 4;  // X' in ogs
 
 
+def test_origin_export_passes_reversed_x_to_the_graph() -> None:
+    import io
+    import zipfile
+
+    resp = client.post(
+        "/api/export/origin",
+        json={
+            "dataset": _xrd_dataset(),
+            "filename": "s",
+            "graph": {"y_keys": [0], "x_reversed": True},
+        },
+    )
+    assert resp.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+        ogs = zf.read("s.ogs").decode()
+    assert "layer.x.from = 10.06;  // reversed X" in ogs and "layer.x.to = 10;" in ogs
+
+
 def test_consolidated_export_combines_datasets() -> None:
     ds = _xrd_dataset()
     resp = client.post(
@@ -115,8 +133,9 @@ def test_consolidated_export_combines_datasets() -> None:
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/csv")
     header = resp.text.splitlines()[0]
-    # two Q blocks (one per dataset).
-    assert header.count("Q") == 2
+    # two X blocks (one per dataset), titled by the dataset's own 2-theta
+    # axis -- "Q" is reserved for a Q axis (test_io_consolidated).
+    assert header == "2Theta (deg),Intensity (cps),2Theta (deg),Intensity (cps)"
 
 
 def test_consolidated_empty_is_422() -> None:

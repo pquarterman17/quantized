@@ -19,7 +19,8 @@ import type { PlotPayload } from "./plotdata";
 import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst, type RichNode } from "./richtext";
-import { logDecadeLabels, logMajorTickFilter } from "./logTicks";
+import { sharedAxisTitle } from "./sharedAxisTitle";
+import { logDecadeLabels, logGridSplits, logMajorTickFilter, spansDecade } from "./logTicks";
 export { logMajorTickFilter };
 import { decimalsForIncrement, pow10 } from "./ticks";
 import { errorRange, errorReach, fullYExtents, withXBarRows } from "./uplotErrorRange";
@@ -43,6 +44,9 @@ import { gadgetCursorsPlugin, quickFitPlugin } from "./uplotGadgets";
 import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit";
 import { anchorEditPlugin, type AnchorPoint } from "./uplotAnchors";
 import { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
+import { xLabelRightPad, xTickSpace } from "./uplotRightPad";
+import { withUnit } from "./unitDisplay";
+export { withUnit }; // eager callers import it here: ~260 B less first-paint JS than direct
 import {
   measurePlugin,
   panPlugin,
@@ -317,8 +321,8 @@ function dateTickFormatter(
 /** Build a uPlot axis `values` formatter for a tick mode. `auto` no longer
  *  defers to uPlot's own formatter (see `autoTickValues`'s doc for why);
  *  `fixed`/`sci`/`eng` each floor their configured `digits` at what the
- *  actual tick increment (`splitsIncrement`) needs, so a dense axis can
- *  never render two different ticks with the same label. */
+ *  tick increment (`splitsIncrement`) needs — not sci/eng on log decades, whose
+ *  mantissa is always 1 — so a dense axis never repeats a label. */
 export function tickFormatter(fmt?: AxisFormat, scale: AxisScale = "linear"): TickValues {
   const mode = fmt?.mode ?? "auto";
   if (mode === "auto") return scale === "log" ? autoLogTickValues : autoTickValues;
@@ -342,9 +346,11 @@ export function tickFormatter(fmt?: AxisFormat, scale: AxisScale = "linear"): Ti
     };
   }
   const digits = fmt ? Math.max(0, Math.min(20, Math.round(fmt.digits))) : 2;
+  const mantissaIncr = (splits: number[], foundIncr: number) =>
+    scale === "log" && spansDecade(splits) ? 0 : splitsIncrement(splits, foundIncr);
   if (mode === "sci") {
     return (_u, splits, _axisIdx, _foundSpace, foundIncr) => {
-      const incr = splitsIncrement(splits, foundIncr);
+      const incr = mantissaIncr(splits, foundIncr);
       return splits.map((v) => {
         if (v == null) return null;
         const exp = v === 0 ? 0 : Math.floor(Math.log10(Math.abs(v)));
@@ -355,7 +361,7 @@ export function tickFormatter(fmt?: AxisFormat, scale: AxisScale = "linear"): Ti
   }
   if (mode === "eng") {
     return (_u, splits, _axisIdx, _foundSpace, foundIncr) => {
-      const incr = splitsIncrement(splits, foundIncr);
+      const incr = mantissaIncr(splits, foundIncr);
       return splits.map((v) => (v == null ? null : formatEng(v, digits, incr)));
     };
   }
@@ -463,12 +469,7 @@ export function fixedLogAxisSplits(min: number, max: number, step?: number | nul
     }
     return out;
   }
-  const s = step && step > 0 ? step : niceLinearStep(max - min);
-  const n0 = Math.ceil(min / s - EPS);
-  const n1 = Math.floor(max / s + EPS);
-  const out: number[] = [];
-  for (let n = n0; n <= n1; n++) out.push(cleanStepValue(n * s));
-  return out;
+  return fixedLinearAxisSplits(min, max, step && step > 0 ? step : niceLinearStep(max - min));
 }
 
 // ── Reciprocal (1/x) scale — MAIN #12, Arrhenius-style plots ────────────────
@@ -514,23 +515,15 @@ export function reciprocalTransform(v: number): number {
  *  return `[]`. */
 export function reciprocalAxisSplits(min: number, max: number, targetTicks = 5): number[] {
   if (!(min > 0) || !(max > min)) return [];
-  const r0 = reciprocalTransform(min); // larger (smaller x -> larger 1/x)
-  const r1 = reciprocalTransform(max); // smaller
-  const rLo = Math.min(r0, r1);
-  const rHi = Math.max(r0, r1);
+  const rLo = reciprocalTransform(max); // smaller x -> larger 1/x
+  const rHi = reciprocalTransform(min);
   if (!(rHi > rLo)) return [min, max];
-  const step = niceLinearStep(rHi - rLo, targetTicks);
   const EPS = 1e-9;
-  const n0 = Math.ceil(rLo / step - EPS);
-  const n1 = Math.floor(rHi / step + EPS);
-  const out: number[] = [];
-  for (let n = n0; n <= n1; n++) {
-    const r = cleanStepValue(n * step);
-    if (r === 0) continue; // 1/0 is undefined — skip the (rare) exact-zero tick
-    const v = cleanStepValue(reciprocalTransform(r));
-    if (v >= min * (1 - EPS) && v <= max * (1 + EPS)) out.push(v);
-  }
-  return out.sort((a, b) => a - b);
+  // An exact-zero 1/x tick maps to NaN (1/0 is undefined) and fails the range test.
+  return fixedLinearAxisSplits(rLo, rHi, niceLinearStep(rHi - rLo, targetTicks))
+    .map((r) => cleanStepValue(reciprocalTransform(r)))
+    .filter((v) => v >= min * (1 - EPS) && v <= max * (1 + EPS))
+    .sort((a, b) => a - b);
 }
 
 /** Is the x column sorted ascending? uPlot's x scale defaults to `sorted: 1`,
@@ -624,7 +617,7 @@ export interface BuildOptsArgs {
   } | null;
   /** Explicit axis ranges (null = uPlot autoscale). Fix the axis Origin-style. */
   xLim?: [number, number] | null;
-  yLim?: [number, number] | null;
+  yLim?: [number, number] | null; xReversed?: boolean; // x high-to-low: uPlot dir -1 (cursor/posToVal/zoom honour it)
   /** Secondary (right) Y axis: explicit range + scale. An applied Origin
    *  double-Y figure carries layer 2's own axis state here; null/undefined =
    *  autoscale / inherit yScale (the pre-2026-07-06 behaviour). */
@@ -834,18 +827,17 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     args.xAxisLabel === null
       ? ""
       : args.xAxisLabel?.trim() ||
-        (payload.xUnit ? `${payload.xLabel} (${payload.xUnit})` : payload.xLabel);
+        withUnit(payload.xLabel, payload.xUnit);
   // Resolved display label per series: an explicit rename wins, else "label (unit)".
   const labels = payload.series.map((s, i) =>
-    args.seriesLabels?.[i] ?? (s.unit ? `${s.label} (${s.unit})` : s.label),
+    args.seriesLabels?.[i] ?? withUnit(s.label, s.unit),
   );
-  // Label each Y axis only when it carries a single series (else the legend names
-  // them); a non-blank override on the primary axis always wins and forces a label.
+  // Y title: the override, else a solo series' legend name, else what several share.
   const soloLabel = (which: number): string | undefined => {
     if (which === 0 && args.yAxisLabel?.trim()) return args.yAxisLabel.trim();
     if (which === 1 && args.y2AxisLabel?.trim()) return args.y2AxisLabel.trim();
     const idxs = payload.series.map((_, i) => i).filter((i) => (payload.series[i].axis ?? 0) === which);
-    return idxs.length === 1 ? labels[idxs[0]] : undefined;
+    return idxs.length === 1 ? labels[idxs[0]] : sharedAxisTitle(idxs.map((i) => payload.series[i]));
   };
   const hasY2 = payload.series.some((s) => (s.axis ?? 0) === 1);
 
@@ -901,7 +893,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
 
   const plugins: uPlot.Plugin[] = [];
   if (tool === "pan") plugins.push(panPlugin());
-  if (tool === "cursor") plugins.push(readoutPlugin(onReadout));
+  if (tool === "cursor") plugins.push(readoutPlugin(onReadout, payload.yShift, payload.blockRows, payload.xStep));
   if (tool === "measure" && args.onMeasure) {
     plugins.push(measurePlugin(args.onMeasure, cssVar("--accent") || "#8b5cf6"));
   }
@@ -1079,14 +1071,16 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const loopY2 = !xAscending ? fullYExtents(payload, args.hidden, 1, isPositiveOnlyScale(y2ScaleEff), reach) : null;
   // …and its x auto-range collapses to a sliver for the same reason — scan the
   // x column for the true sweep width. uPlot calls X's range on a zoom too: `scannedXRange` keeps it.
-  // A waterfall X-offset layout always scans (its drawn points, `fullXExtents`).
-  const loopX = (!xAscending || payload.blockRows) && !xLim
+  // A waterfall X-offset layout always scans (its drawn points, `fullXExtents`), as does an x
+  // column whose end rows no series draws (uPlot ranges over the whole column, the export the points).
+  const blank = (r: number) => payload.data.every((c, k) => !k || c[r] == null);
+  const loopX = (!xAscending || payload.blockRows || blank(0) || blank(payload.data[0].length - 1)) && !xLim
     ? fullXExtents(withXBarRows(payload, reach, args.hidden), args.hidden, isPositiveOnlyScale(xScale))
     : null;
   const scales: uPlot.Scales = {
     x: {
       time: xFmt?.mode === "date" || xFmt?.mode === "time" || xFmt?.mode === "datetime",
-      ...scaleDistrProps(xScale),
+      dir: args.xReversed ? -1 : 1, ...scaleDistrProps(xScale),
       ...(xLim ? { range: fixedXRange(xLim) } : loopX ? { range: scannedXRange(loopX) } : errorRange(reach, "x", isPositiveOnlyScale(xScale))),
     },
     y: {
@@ -1131,8 +1125,8 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         fixedLinearAxisSplits(scaleMin, scaleMax, step);
     }
     return scale === "log"
-      ? (_u: uPlot, _axisIdx: number, scaleMin: number, scaleMax: number): number[] =>
-          fixedLogAxisSplits(scaleMin, scaleMax, step ?? null)
+      ? (u: uPlot, axisIdx: number, scaleMin: number, scaleMax: number): number[] =>
+          logGridSplits(u, axisIdx, fixedLogAxisSplits(scaleMin, scaleMax, step ?? null))
       : undefined;
   };
   const xSplits = splitsFor(xScale, xLim, args.xStep);
@@ -1182,6 +1176,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       ...(xValues ? { values: xValues } : {}),
       ...(xSplits ? { splits: xSplits } : {}),
       ...(xScale === "log" ? { filter: logMajorTickFilter } : {}),
+      ...(xScale === "linear" && !payload.xCategories ? { space: xTickSpace(tickPx) } : {}),
     },
     {
       ...axis,
@@ -1262,6 +1257,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     ...(scales.x?.time ? { tzDate: utcTzDate } : {}),
     scales,
     axes,
+    padding: [null, hasY2 ? null : xLabelRightPad(tickPx), null, null],
     series: seriesArr,
     ...(bands.length > 0 ? { bands } : {}),
   };

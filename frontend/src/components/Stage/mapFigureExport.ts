@@ -11,22 +11,29 @@
 //     (`mapRender.effectiveColorLimits`) -- a clamp alone left matplotlib
 //     normalising over the clamped data, so limits wider than the data
 //     exported the full colormap (`tests/fixtures/wire/map_color_limits.json`);
-//   * the log colour scale, as log10(z) with the colorbar label saying so —
-//     the heatmap kind has no log norm; non-positive cells become gaps,
-//     exactly as the canvas leaves them unpainted;
+//   * the log colour scale, as log10(z) with `colorbar_log10` so the bar
+//     labels its decades by value like the canvas — the heatmap kind has no
+//     log norm; non-positive cells become gaps, as the canvas leaves them;
 //   * the contour overlay, as filled contours with the overlay's level count
-//     and spacing (the route has no heatmap+contour kind).
-// Cuts, ROIs, slices and annotations are interactive overlays and are not
-// part of the exported figure.
+//     and spacing (the route has no heatmap+contour kind);
+//   * the frame: the canvas' letterboxed equal aspect for axes sharing a unit
+//     (Qx/Qz), and the heatmap's axis span (calc frames it like the canvas).
+//   * the committed slices and text labels the map shows (`mapSliceGeometry`).
+// ROIs, the ruler and the sector wedge are tools, not part of the figure.
 
 import type { ColormapName } from "../../lib/colormap";
 import { exportMapFigure, type MapFigureSpec } from "../../lib/api/mapFigure";
+import { shouldLockAspect } from "../../lib/mapAspect";
+import type { CutSpace } from "../../lib/mapcuts";
+import type { MapAnnotation, MapSliceDef } from "../../lib/mapView";
 import type { MapPayload } from "../../lib/mapdataFetch";
 import { exportCanvasPng } from "../../lib/plotExport";
 import { runCancellable } from "../../store/pendingOps";
 import { askParams } from "../overlays/ParamDialog";
 import { effectiveColorLimits, minPositive } from "./mapRender";
+import { mapMarks } from "./mapSliceGeometry";
 import { FIGURE_STYLES } from "../workshops/figurebuilder/figureOutputConstants";
+import { withUnit } from "../../lib/unitDisplay";
 
 const MPL_CMAP: Record<ColormapName, string> = {
   viridis: "viridis",
@@ -41,6 +48,8 @@ export interface MapExportView {
   /** A null side is auto for that side (half-open, `lib/axisLim.ts`). */
   colorLimits: readonly [number | null, number | null] | null;
   contour: { on: boolean; levelCount: number; scale: "linear" | "log" };
+  /** The map's committed slices and text labels, and the axis space shown. */
+  marks?: { slices: readonly MapSliceDef[]; annotations: readonly MapAnnotation[]; space: CutSpace | null };
 }
 
 export interface MapExportOptions {
@@ -49,8 +58,6 @@ export interface MapExportOptions {
   title: string;
   filename: string;
 }
-
-const withUnit = (label: string, unit: string) => (unit ? `${label} (${unit})` : label);
 
 function zCell(v: number | null, view: MapExportView): number | null {
   if (v == null || !Number.isFinite(v)) return null;
@@ -84,6 +91,7 @@ function zLimits(p: MapPayload, view: MapExportView): [number, number] | null {
 export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOptions): MapFigureSpec {
   const zLabel = withUnit(p.zLabel, p.zUnit);
   const limits = zLimits(p, view);
+  const marks = view.marks ? mapMarks(p, view.marks.slices, view.marks.annotations, view.marks.space) : null;
   const contour = view.contour.on
     ? {
         kind: "contourf",
@@ -98,6 +106,10 @@ export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOp
     y_axis: p.yAxis,
     z_grid: p.zGrid.map((row) => row.map((v) => zCell(v, view))),
     ...(limits ? { z_limits: limits } : {}),
+    // The canvas letterboxes a map whose axes share a unit (`mapRender.plotRect`).
+    ...(shouldLockAspect(p.xUnit, p.yUnit) ? { equal_aspect: true } : {}),
+    ...(marks?.lines.length ? { lines: marks.lines } : {}),
+    ...(marks?.labels.length ? { labels: marks.labels } : {}),
     ...contour,
     fmt: o.fmt,
     style: o.style,
@@ -105,7 +117,9 @@ export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOp
     title: o.title,
     x_label: withUnit(p.xLabel, p.xUnit),
     y_label: withUnit(p.yLabel, p.yUnit),
-    z_label: view.logZ ? `log₁₀ ${zLabel}` : zLabel,
+    // The canvas bar's title, and its decade labels by value (not exponent).
+    z_label: view.logZ ? `${zLabel} — log` : zLabel,
+    ...(view.logZ ? { colorbar_log10: true } : {}),
     filename: o.filename,
   };
 }

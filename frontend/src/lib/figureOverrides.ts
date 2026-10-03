@@ -14,6 +14,8 @@ export interface FigureOverrides {
   ticks?: { dir?: "in" | "out"; len?: number; minor?: boolean };
   spines?: { top?: boolean; right?: boolean };
   x_lim?: [number | null, number | null];
+  /** x drawn high-to-low (`PlotView.xReversed`): matplotlib invert_xaxis. */
+  x_reversed?: boolean;
   y_lim?: [number | null, number | null];
   /** Fixed secondary (right) Y-axis range — the twinx counterpart of
    *  `y_lim`, applied by `calc.figure_y2.render_with_secondary_axis`
@@ -117,6 +119,7 @@ export const LEGEND_LOCS = [
   "lower center",
   "outside right",
   "outside top",
+  "auto",
 ] as const;
 
 /** The screen's corner-preset legend position (`ne`/`nw`/`se`/`sw`) as a
@@ -126,6 +129,9 @@ export const LEGEND_LOCS = [
  *  drag-to-place handling verbatim). */
 export function legendPosToLoc(pos: LegendPos): string {
   const loc: Record<LegendPos, string> = {
+    // calc.figure_overrides: "best" for up to eight series, then "outside
+    // right" — the screen's auto rule (lib/legendAutoPlace).
+    auto: "auto",
     ne: "upper right",
     nw: "upper left",
     se: "lower right",

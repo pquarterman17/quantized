@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -83,7 +84,9 @@ def test_ncnr_pnr_matches_matlab(
     assert_golden: Callable[..., None],
 ) -> None:
     ds = import_ncnr_pnr(fixtures_dir / "ncnr_s11_nsf.pnr")
-    assert_golden(ds, "ncnr_s11_nsf_default.json")
+    # Units compare in the file's ASCII (`header_units`); `.units` spell Å.
+    raw_units = tuple(ds.metadata["header_units"][1:])
+    assert_golden(dataclasses.replace(ds, units=raw_units), "ncnr_s11_nsf_default.json")
 
 
 def test_ncnr_pnr_cleans_polarization_labels(fixtures_dir: Path) -> None:
@@ -106,7 +109,23 @@ def test_ncnr_dat_matches_matlab(
     assert_golden: Callable[..., None],
 ) -> None:
     ds = import_ncnr_dat(fixtures_dir / "ncnr_s3.datA")
-    assert_golden(ds, "ncnr_s3_datA_default.json")
+    raw_units = tuple(ds.metadata["header_units"][1:])
+    assert_golden(dataclasses.replace(ds, units=raw_units), "ncnr_s3_datA_default.json")
+
+
+def test_pnr_and_dat_spell_their_angstrom_units(fixtures_dir: Path) -> None:
+    """"Q (A-1)" / "dQ (1/A)" read as inverse amperes on an axis title; the
+    parsers know these files mean Angstrom and spell it Å (as ORSO does)."""
+    pnr = import_ncnr_pnr(fixtures_dir / "ncnr_s11_nsf.pnr")
+    assert pnr.metadata["x_column_unit"] == "Å⁻¹"
+    assert pnr.units[pnr.labels.index("dQ")] == "Å⁻¹"
+    assert pnr.metadata["header_units"][:2] == ["A-1", "A-1"]
+    # dQ still binds as the x resolution: both spellings moved together.
+    x_res = {"channel": 0, "target": -1, "axis": "x", "side": "both"}
+    assert x_res in pnr.metadata["error_roles"]
+    dat = import_ncnr_dat(fixtures_dir / "ncnr_s3.datA")
+    assert dat.metadata["x_column_unit"] == "Å⁻¹"
+    assert dat.units[0] == "Å⁻¹"
 
 
 def test_ncnr_dat_polarization_from_extension(fixtures_dir: Path) -> None:
@@ -390,3 +409,56 @@ def test_refl_roles_leave_an_unknown_token_column_plotted_but_still_bind_resolut
     assert meta["default_value_channels"] == [0, 1]
     assert meta["error_roles"] == [{"channel": 2, "target": -1, "axis": "x", "side": "both"}]
     assert "error_channels" not in meta
+
+
+# ── probe (neutron vs x-ray) — the Reflectivity Fit workshop defaults its
+# radiation switch and the FFT "Neutron" box from metadata["probe"], the same
+# key and vocabulary ORSO files carry. reductus writes X-ray .refl too (its
+# Bruker loader), so ".refl means neutron" would be wrong: the evidence is the
+# template's raw-data path (ncnrdata/ = NCNR neutron store, xraydata/ = X-ray)
+# or a spin-polarized block. ──────────────────────────────────────────────
+
+_REFL_BODY = '# "columns": ["Qz", "R", "dR", "dQ"]\n0.01 0.9 0.01 0.001\n0.02 0.5 0.01 0.001\n'
+
+
+def _template(path: str) -> str:
+    return '#"template_data":{"modules":[{"config":{"filelist":[{"path":"' + path + '"}]}}]}\n'
+
+
+@pytest.mark.parametrize(
+    ("header", "probe"),
+    [
+        (_template("ncnrdata/pbr/202011/a.nxz.cgd"), "neutron"),
+        (_template("ncnrdata/candor/202011/a.nxs.cdr"), "neutron"),
+        (_template("xraydata/bruker/user/a.raw"), "x-ray"),
+        ('# "polarization": "++"\n', "neutron"),
+        ("", None),
+        ('# "polarization": ""\n', None),
+    ],
+)
+def test_refl_probe_from_reduction_evidence(tmp_path: Path, header: str, probe: str | None) -> None:
+    f = tmp_path / "p.refl"
+    f.write_text(header + _REFL_BODY, encoding="utf-8")
+    assert import_ncnr_refl(f).metadata.get("probe") == probe
+
+
+def test_polarized_formats_are_neutron(fixtures_dir: Path, tmp_path: Path) -> None:
+    f = tmp_path / "x.datA"
+    f.write_text("# Q (1/A) R dR\n0.01 0.5 0.01\n0.02 0.6 0.01\n", encoding="latin-1")
+    assert import_ncnr_dat(f).metadata["probe"] == "neutron"
+    pnr = next(fixtures_dir.glob("*.pnr"))
+    assert import_ncnr_pnr(pnr).metadata["probe"] == "neutron"
+
+
+@pytest.mark.realdata
+@pytest.mark.parametrize(
+    ("rel", "probe"),
+    [
+        ("ncnr/reflectometry/NR_Nickelate/raw_data/nickelate_dfs03.refl", "neutron"),
+        ("ncnr/reflectometry/NR_Nickelate/raw_data/nickelate_dfs01_candor.refl", "neutron"),
+        ("ncnr/reflectometry/PNR_SF/S11_40G.refl", "neutron"),
+        ("reductus/xrr/NbAu_XRR_v2.refl", "x-ray"),
+    ],
+)
+def test_real_refl_probe(corpus_dir: Path, rel: str, probe: str) -> None:
+    assert import_ncnr_refl(corpus_dir / rel).metadata["probe"] == probe

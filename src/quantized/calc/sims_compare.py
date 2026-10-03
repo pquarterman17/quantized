@@ -33,7 +33,7 @@ import numpy as np
 from ..datastruct import DataStruct
 from ..x_units import x_unit_of
 from ._warn import warn as _warn
-from .sims_depth import canonical_length, is_length_unit, length_ratio
+from .sims_depth import display_length, is_length_unit, length_ratio
 
 __all__ = ["CompareResult", "compare_profiles"]
 
@@ -63,7 +63,7 @@ def _x_factors(profiles: Sequence[tuple[str, DataStruct]]) -> tuple[str, list[fl
             "the profiles' x units differ and these are not depth units: "
             f"{', '.join(bad)} -- calibrate them to depth first"
         )
-    return canonical_length(target), [length_ratio(u, target) for u in units]
+    return display_length(target), [length_ratio(u, target) for u in units]
 
 
 def compare_profiles(

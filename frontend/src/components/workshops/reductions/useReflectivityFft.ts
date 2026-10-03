@@ -18,6 +18,20 @@ import type { ReductionColumn } from "./useFftThickness";
 
 export type ReflFftPreprocess = "logR" | "logRQ4" | "R" | "RQ4";
 
+// The file's own say on its x axis. `is_neutron` means "x is Q in Å⁻¹" to the
+// backend, so a neutron probe (ORSO/NCNR metadata) or a reciprocal-length x
+// unit opens checked. Restated from reflectivity/reflFitData rather than
+// imported: sharing that module across two lazy chunks splits it into a third
+// and grows the eager preload map.
+const NM = /nm(⁻¹|\^?-1)|1\/nm/;
+function unitOf(d: DataStruct | undefined): string {
+  return String(d?.metadata?.x_column_unit ?? "").toLowerCase();
+}
+function xIsQ(d: DataStruct | undefined): boolean {
+  const unit = unitOf(d);
+  return /neutron/i.test(String(d?.metadata?.probe ?? "")) || NM.test(unit) || /ang|å|a-1|1\/a/.test(unit);
+}
+
 export interface ReflectivityFftState {
   active: Dataset | null;
   columns: ReductionColumn[];
@@ -57,7 +71,7 @@ export function useReflectivityFft(): ReflectivityFftState {
     : [];
 
   const [col, setCol] = useState(0);
-  const [isNeutron, setIsNeutron] = useState(false);
+  const [isNeutron, setIsNeutron] = useState(() => xIsQ(active?.data));
   const [wavelength, setWavelength] = useState(1.5406);
   const [xMin, setXMin] = useState<number | null>(null);
   const [xMax, setXMax] = useState<number | null>(null);
@@ -73,6 +87,8 @@ export function useReflectivityFft(): ReflectivityFftState {
     setResult(null);
     setError(null);
     setCol(0);
+    setIsNeutron(xIsQ(active?.data));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-default per dataset, not per edit
   }, [active?.id]);
 
   async function compute(): Promise<void> {
@@ -89,13 +105,14 @@ export function useReflectivityFft(): ReflectivityFftState {
       if (!ds) return;
       const d = analysisData(ds) ?? ds.data;
       const y = d.values.map((row) => row[col]);
+      const k = isNeutron && NM.test(unitOf(d)) ? 0.1 : 1; // nm⁻¹ → Å⁻¹
       const res = await reflectivityFft({
-        x: d.time,
+        x: k === 1 ? d.time : d.time.map((q) => q * k),
         reflectivity: y,
         is_neutron: isNeutron,
         wavelength_a: isNeutron ? undefined : wavelength,
-        x_min: xMin ?? undefined,
-        x_max: xMax ?? undefined,
+        x_min: xMin == null ? undefined : xMin * k,
+        x_max: xMax == null ? undefined : xMax * k,
         window: windowFn,
         preprocess,
         max_thickness_nm: maxThicknessNm,

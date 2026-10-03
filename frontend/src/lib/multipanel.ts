@@ -6,7 +6,7 @@ import type uPlot from "uplot";
 
 import type { NormalizedFrameRect } from "./originPanels";
 import type { PlotPayload } from "./plotdata";
-import { displayPositions, resolveSeriesStyle, type SeriesCycle } from "./seriesStyleCycle";
+import { cyclesPastPalette, displayPositions, resolveSeriesStyle, type SeriesCycle } from "./seriesStyleCycle";
 import type { Annotation, RegionShade, SeriesStyle } from "./types";
 
 /** One payload per plotted series: each keeps the shared x column + a single
@@ -15,7 +15,8 @@ export function splitPayload(p: PlotPayload): PlotPayload[] {
   const x = p.data[0];
   return p.series.map((s, i) => ({
     data: [x, p.data[i + 1]] as uPlot.AlignedData,
-    series: [s],
+    series: [{ ...s, axis: 0 }], // one series per panel: a y2 tag would only move its axis right
+
     xLabel: p.xLabel,
     xUnit: p.xUnit,
   }));
@@ -189,18 +190,20 @@ export function breakPanelWidths(n: number, width: number, glyphW = 20): number[
  *  mode). Guards its own re-entrant `setScale` calls with a closed-over flag
  *  (one call → N-1 `setScale` calls on the others → would otherwise loop).
  *  `getPlots` is a thunk rather than a plain array so a caller can pass a
- *  live React ref's `.current` and always read the up-to-date panel list. */
+ *  live React ref's `.current` and always read the up-to-date panel list.
+ *  `axis` "y" is the x-break's mirror image: its panels share y, not x. */
 export function xZoomSyncHook(
   getPlots: () => readonly uPlot[],
+  axis = "x",
 ): (self: uPlot, key: string) => void {
   let syncing = false;
   return (u, key) => {
-    if (key !== "x" || syncing) return;
-    const { min, max } = u.scales.x;
+    if (key !== axis || syncing) return;
+    const { min, max } = u.scales[axis];
     if (min == null || max == null) return;
     syncing = true;
     for (const other of getPlots()) {
-      if (other !== u) other.setScale("x", { min, max });
+      if (other !== u) other.setScale(axis, { min, max });
     }
     syncing = false;
   };
@@ -216,10 +219,13 @@ export function xZoomSyncHook(
  *  list — hidden channels already dropped on BOTH sides — so plain display
  *  order is a single shared position space. `legendEntries` carries the
  *  EFFECTIVE style: a key showing a solid line beside a dashed curve is the
- *  contradiction the cycle exists to remove. */
+ *  contradiction the cycle exists to remove. Past the palette's eight series the
+ *  cycle engages without the preference (`cyclesPastPalette`), as on a flat
+ *  plot; `pastPalette: false` is for a caller whose styles are already final. */
 export function spatialCellStyling(
   panel: Pick<SpatialPanel, "yKeys" | "hiddenChannels" | "seriesStyles" | "seriesLabels">,
   autoSeriesStyles: boolean,
+  pastPalette = true,
 ): {
   plottedChannels: number[];
   cellStyles: (SeriesStyle | undefined)[];
@@ -228,7 +234,8 @@ export function spatialCellStyling(
   legendEntries: { label: string; style?: SeriesStyle; displayIndex: number }[];
 } {
   const plottedChannels = spatialPlottedChannels(panel);
-  const cellCycle = displayPositions(autoSeriesStyles, plottedChannels.length);
+  const n = plottedChannels.length;
+  const cellCycle = displayPositions(pastPalette ? cyclesPastPalette(autoSeriesStyles, n) : autoSeriesStyles, n);
   return {
     plottedChannels,
     cellCycle,

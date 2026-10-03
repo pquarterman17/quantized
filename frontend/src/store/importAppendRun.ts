@@ -35,6 +35,10 @@ export async function runImportFilesAppended(
         failReason = `${file.name} is a multi-workbook Origin project — can't append`;
         break;
       }
+      if (data.sheets?.length) {
+        failReason = `${file.name} has several data sheets — can't append`;
+        break;
+      }
       uploaded.push({ name: file.name, size: file.size, data });
     } catch (e) {
       failReason = `${file.name}: ${e instanceof Error ? e.message : "error"}`;

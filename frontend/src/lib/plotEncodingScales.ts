@@ -10,6 +10,7 @@ import { textColumnCells } from "./columnmeta";
 import type { Encoding } from "./plotEncodingBinding";
 import { analysisData } from "./rowstate";
 import type { DataStruct, Dataset, SeriesStyle } from "./types";
+import { withUnit } from "./uplotOpts";
 
 /** A gradient Color-by (residual 4): the colour column, its scale over the
  *  rows the figure keeps (`encodedGradient`) and each row's value. */
@@ -83,7 +84,7 @@ export function encodedGradient(data: DataStruct, enc: Encoding, scaleRows: Data
   const unit = data.units[g] ?? "";
   const name = data.labels[g] ?? `col ${g}`;
   const z = data.values.map((row) => (Number.isFinite(row[g]) ? row[g] : null));
-  return { channel: g, lo, hi, label: unit ? `${name} (${unit})` : name, z };
+  return { channel: g, lo, hi, label: withUnit(name, unit), z };
 }
 
 /** The Stage's gradient: `data` is the window's FULL rows (+ text factors),

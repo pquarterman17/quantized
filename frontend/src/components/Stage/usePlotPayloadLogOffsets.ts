@@ -15,9 +15,9 @@
 // series it's drawn against moved by `10^k`. Scaling by that same channel's
 // factor here (before composing) keeps every overlay glued to its parent
 // series; `derivOverlay`'s dy/dx scales identically -- d(10^k·y)/dx =
-// 10^k·dy/dx. None of these overlays reach the export wire (they're
-// canvas-only gadget previews), so there is nothing for export to disagree
-// with once the canvas is right.
+// 10^k·dy/dx. The fit / baseline / peak overlays reach the export wire
+// (lib/figureSpecOverlays.ts), pre-scaled by this same first-channel factor;
+// the dy/dx preview stays canvas-only.
 //
 // finding 8: the caller's `displayPayload` memo is the one that walks the
 // full row array (O(rows)) -- `offsetsKey`, the derived per-channel offsets

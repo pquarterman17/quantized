@@ -404,32 +404,34 @@ describe("buildDecorBlock", () => {
   const SHAPE: Shape = { id: "s1", kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1 };
 
   it("returns undefined for a fully-default capture (no overlays, default legend)", () => {
-    expect(buildDecorBlock([], [], { pos: "ne", xy: null, title: null })).toBeUndefined();
+    expect(buildDecorBlock([], [], { pos: "auto", xy: null, title: null })).toBeUndefined();
   });
 
   it("captures annotations/shapes verbatim when present", () => {
-    expect(buildDecorBlock([ANN], [SHAPE], { pos: "ne", xy: null, title: null })).toEqual({
+    expect(buildDecorBlock([ANN], [SHAPE], { pos: "auto", xy: null, title: null })).toEqual({
       annotations: [ANN],
       shapes: [SHAPE],
     });
   });
 
-  it("captures legend.pos only when it differs from the 'ne' default", () => {
-    expect(buildDecorBlock([], [], { pos: "ne", xy: null, title: null })).toBeUndefined();
+  it("captures legend.pos only when it differs from the 'auto' default", () => {
+    expect(buildDecorBlock([], [], { pos: "auto", xy: null, title: null })).toBeUndefined();
     expect(buildDecorBlock([], [], { pos: "sw", xy: null, title: null })).toEqual({
       legend: { pos: "sw" },
     });
+    // The old fixed default is now an explicit choice, so it is captured.
+    expect(buildDecorBlock([], [], { pos: "ne", xy: null, title: null })).toEqual({ legend: { pos: "ne" } });
   });
 
   it("captures a free legend.xy independently of pos", () => {
-    expect(buildDecorBlock([], [], { pos: "ne", xy: [0.2, 0.8], title: null })).toEqual({
+    expect(buildDecorBlock([], [], { pos: "auto", xy: [0.2, 0.8], title: null })).toEqual({
       legend: { xy: [0.2, 0.8] },
     });
   });
 
   it("captures a non-blank legend.title only", () => {
-    expect(buildDecorBlock([], [], { pos: "ne", xy: null, title: "" })).toBeUndefined();
-    expect(buildDecorBlock([], [], { pos: "ne", xy: null, title: "Nb/Au" })).toEqual({
+    expect(buildDecorBlock([], [], { pos: "auto", xy: null, title: "" })).toBeUndefined();
+    expect(buildDecorBlock([], [], { pos: "auto", xy: null, title: "Nb/Au" })).toEqual({
       legend: { title: "Nb/Au" },
     });
   });

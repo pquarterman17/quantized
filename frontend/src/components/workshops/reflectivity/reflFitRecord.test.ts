@@ -46,6 +46,12 @@ describe("reflFitRecord — the stored form", () => {
     expect(back).toEqual(rec);
   });
 
+  it("keeps a fit made on Q in nm⁻¹", () => {
+    const rec = makeRecord();
+    rec.request.settings.xKind = "qnm";
+    expect(decodeRecord(JSON.parse(JSON.stringify(encodeRecord(rec))))?.request.settings.xKind).toBe("qnm");
+  });
+
   it("encodes the non-finite numbers as the BUG-017 sentinel strings, never as null", () => {
     const rec = makeRecord();
     rec.result.chi2 = Number.NaN;

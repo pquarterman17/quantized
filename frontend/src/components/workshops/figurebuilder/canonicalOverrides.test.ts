@@ -12,7 +12,7 @@ import {
 describe("effectiveFigureOverrides", () => {
   it("falls back to the view-derived overrides when publication is absent", () => {
     const view = defaultPlotView();
-    const expected = { legend: { show: true, loc: "upper right" }, grid: true, spines: { top: true, right: true } };
+    const expected = { legend: { show: true, loc: "auto" }, grid: true, spines: { top: true, right: true } };
     expect(effectiveFigureOverrides(view, undefined)).toEqual(expected);
     expect(effectiveFigureOverrides(view, null)).toEqual(expected);
   });
@@ -24,7 +24,7 @@ describe("effectiveFigureOverrides", () => {
     // `legend` MERGES (mergeFigureOverrides's nested-group rule): the
     // publication's `frame` layers over the view's derived show/loc/title
     // instead of replacing the whole group.
-    expect(effective.legend).toEqual({ show: true, loc: "upper right", title: "Series", frame: true });
+    expect(effective.legend).toEqual({ show: true, loc: "auto", title: "Series", frame: true });
   });
 
   it("surfaces view-derived state a fresh publication delta never carries (the bug this module fixes)", () => {

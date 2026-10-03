@@ -63,15 +63,14 @@ export function padXDomain([min, max]: readonly [number, number], positiveOnly: 
  *  consider positive x only. Null when nothing qualifies (leave uPlot's
  *  default alone).
  *
- *  A waterfall X-offset payload (`blockRows` set, `lib/waterfallX.ts`) holds
- *  one x block per display slot, so its x column is NOT what is drawn: a
- *  hidden series keeps its shifted block, and an excluded row its x. There
- *  only the x of a point some visible series draws counts — every shifted
- *  series is covered and nothing else, the domain the export autoscales to
- *  (`tests/fixtures/wire/waterfall_x_domain.json`). */
+ *  Only the x of a point some visible series draws counts, the domain the
+ *  export autoscales to: a waterfall X-offset payload (`blockRows`,
+ *  `lib/waterfallX.ts`) holds a hidden series' shifted block and an excluded
+ *  row's x (`tests/fixtures/wire/waterfall_x_domain.json`), and a sheet whose
+ *  other columns start earlier holds end rows no plotted series draws. */
 export function fullXExtents(payload: PlotPayload, hidden: boolean[] | undefined, positiveOnly: boolean): [number, number] | null {
   const [xs, ...ys] = payload.data as (number | null)[][];
-  const drawn = payload.blockRows ? ys.filter((_, i) => !hidden?.[i]) : null;
+  const drawn = ys.length ? ys.filter((_, i) => !hidden?.[i]) : null;
   let min = Infinity;
   let max = -Infinity;
   xs.forEach((v, r) => {

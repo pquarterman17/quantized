@@ -21,7 +21,6 @@ from pydantic import BaseModel
 from quantized.data_roots import allowed_data_roots
 from quantized.datastruct import DataStruct
 from quantized.desktop_consent import consented_path
-from quantized.io import import_auto
 from quantized.io.origin_project import (
     drop_empty_library_books,
     read_origin_project_all,
@@ -41,6 +40,7 @@ from quantized.routes._bookcache import cache_project_books
 from quantized.routes._datasetcache import cache_dataset
 from quantized.routes._errors import CALC_ERRORS_IO
 from quantized.routes._payload import DataStructResponse, datastruct_payload, jsonify
+from quantized.routes._plainimport import plain_import_payload
 from quantized.routes._uploadcache import clear_in_flight, stage_upload_stream
 from quantized.routes._uploadstream import UploadTooLargeError, stream_to_path
 
@@ -185,7 +185,11 @@ def _book_source_ref(path: Path, upload_token: str | None) -> dict[str, str]:
 
 
 def _import_with_books(
-    path: Path, *, full_books: bool = False, upload_token: str | None = None
+    path: Path,
+    *,
+    full_books: bool = False,
+    upload_token: str | None = None,
+    upload_name: str | None = None,
 ) -> tuple[dict[str, Any], str | None]:
     """``(payload, dataset handle)``: a single-DataStruct payload; Origin
     projects also carry every workbook.
@@ -283,8 +287,8 @@ def _import_with_books(
         payload["origin_fidelity"] = fidelity
         return payload, None
 
-    ds = import_auto(path)
-    return datastruct_payload(ds), cache_dataset(ds)
+    payload, ds = plain_import_payload(path, upload_name)
+    return payload, cache_dataset(ds)
 
 
 def _payload_response(payload: dict[str, Any], handle: str | None) -> Response:
@@ -294,7 +298,11 @@ def _payload_response(payload: dict[str, Any], handle: str | None) -> Response:
 
 
 def _import_response(
-    path: Path, *, full_books: bool = False, upload_token: str | None = None
+    path: Path,
+    *,
+    full_books: bool = False,
+    upload_token: str | None = None,
+    upload_name: str | None = None,
 ) -> Response:
     """``_import_with_books`` plus its OWN JSON encoding, so both run off the
     event loop together.
@@ -342,7 +350,9 @@ def _import_response(
     docstring), it surfaces as the 500 it actually is.
     """
     try:
-        payload, handle = _import_with_books(path, full_books=full_books, upload_token=upload_token)
+        payload, handle = _import_with_books(
+            path, full_books=full_books, upload_token=upload_token, upload_name=upload_name
+        )
     except CALC_ERRORS_IO as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _payload_response(payload, handle)
@@ -485,4 +495,6 @@ async def upload_file(file: UploadFile, full_books: bool = False) -> Response:
             raise HTTPException(status_code=413, detail=str(exc)) from exc
         except CALC_ERRORS_IO as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        return await run_in_threadpool(_import_response, dest, full_books=full_books)
+        return await run_in_threadpool(
+            _import_response, dest, full_books=full_books, upload_name=name
+        )

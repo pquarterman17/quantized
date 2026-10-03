@@ -293,3 +293,57 @@ def test_reciprocal_y2_lim_non_positive_side_is_auto() -> None:
         )
 
     assert png(y2_lim=[0, None]) == png()
+
+
+# ── x_reversed (IR wavenumber convention): the screen's reversed x axis ────
+
+
+def test_x_reversed_inverts_the_x_axis_with_or_without_limits() -> None:
+    ax = _plotted_axes()
+    _apply_lims(ax, {"x_reversed": True})
+    assert ax.xaxis_inverted()
+    ax = _plotted_axes()
+    _apply_lims(ax, {"x_reversed": True, "x_lim": [0.5, 2.5]})
+    assert ax.get_xlim() == (2.5, 0.5)
+    ax = _plotted_axes()
+    _apply_lims(ax, {"x_reversed": False})
+    assert not ax.xaxis_inverted()
+
+
+def test_x_reversed_never_double_flips_a_descending_limit() -> None:
+    ax = _plotted_axes()
+    _apply_lims(ax, {"x_reversed": True, "x_lim": [2.5, 0.5]})
+    assert ax.get_xlim() == (2.5, 0.5)
+
+
+def test_x_reversed_reaches_a_rendered_figure() -> None:
+    lo, hi = _recip_axes(overrides={"x_reversed": True})["xlim"]
+    assert lo > hi
+    lo, hi = _recip_axes()["xlim"]
+    assert lo < hi
+
+
+# ── the annotation's anchor dot (screen: uplotOverlays' 3 px dot) ────────────
+
+
+def test_every_annotation_exports_its_anchor_dot() -> None:
+    """The canvas draws each annotation as a dot at its anchor with the label
+    beside it (a peak label marks its peak); the vector export drew only the
+    text, so the dot showing WHERE the label points was lost."""
+    x = np.linspace(0, 10, 5)
+    anns = [
+        {"x": 2.0, "y": 4.0, "text": "pk"},
+        {"x": 0.5, "y": 0.5, "text": "page", "anchor": "page"},
+        {"x": 6.0, "y": 3.0, "text": ""},
+    ]
+    svg = render_figure(x, [("y", x)], fmt="svg", overrides={"annotations": anns}).decode("utf-8")
+    for i in range(3):
+        assert f'id="annotation_dot_{i}"' in svg
+
+
+def test_an_anchor_dot_never_widens_the_axes() -> None:
+    x = np.linspace(0, 10, 5)
+    far = {"annotations": [{"x": 50.0, "y": 90.0, "text": "off"}]}
+    dotted = render_figure_map(x, [("y", x)], overrides=far)["axes"]
+    plain = render_figure_map(x, [("y", x)])["axes"]
+    assert (dotted["xlim"], dotted["ylim"]) == (plain["xlim"], plain["ylim"])

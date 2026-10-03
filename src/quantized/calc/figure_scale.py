@@ -21,10 +21,11 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from matplotlib.ticker import Locator, LogLocator
+from matplotlib.ticker import Locator
 from numpy.typing import NDArray
 
-from quantized.calc.figure_log_ticks import LogTickLabels
+from quantized.calc.figure_autoscale import mask_nonpositive, shared_autoscale
+from quantized.calc.figure_log_ticks import LogMajorLocator, LogMinorLocator, LogTickLabels
 
 __all__ = ["apply_axis_scale", "drawable_lim", "reciprocal_tick_values", "resolve_axis_scale"]
 
@@ -128,16 +129,23 @@ def apply_axis_scale(ax: Any, axis: str, scale: str) -> None:
     (matplotlib's own default). ``"reciprocal"`` uses the ``"function"``
     scale (matplotlib's documented custom-scale hook,
     :class:`matplotlib.scale.FuncScale`) with the self-inverse 1/x transform
-    plus :class:`_ReciprocalLocator` for reciprocal-spaced ticks."""
+    plus :class:`_ReciprocalLocator` for reciprocal-spaced ticks.
+
+    Linear and log axes then autoscale by the screen's rule, and a log axis'
+    lines break at values <= 0 (:mod:`quantized.calc.figure_autoscale`), so
+    call this after every series and error bar is drawn."""
     set_scale = ax.set_xscale if axis == "x" else ax.set_yscale
     if scale == "log":
         set_scale("log")
         target = ax.xaxis if axis == "x" else ax.yaxis
-        target.set_minor_locator(LogLocator(base=10.0, subs=tuple(range(2, 10))))
-        # Screen-parity labels (lib/logTicks.ts): decades only on a view
-        # spanning a decade, every tick on a sub-decade one.
+        # Screen-parity ticks and labels (lib/logTicks.ts, figure_log_ticks).
+        target.set_major_locator(LogMajorLocator())
+        target.set_minor_locator(LogMinorLocator())
         target.set_major_formatter(LogTickLabels(minor=False))
         target.set_minor_formatter(LogTickLabels(minor=True))
+        mask_nonpositive(ax, axis)
+    if scale in ("linear", "log"):
+        shared_autoscale(ax, axis, scale)
         return
     if scale == "reciprocal":
         set_scale("function", functions=(_reciprocal, _reciprocal))

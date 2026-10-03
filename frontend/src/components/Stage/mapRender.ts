@@ -4,12 +4,14 @@
 // up-scale instead of nx·ny rects. NaN cells (outside the data hull) are
 // transparent (gaps), matching uPlot's null = gap for 1-D.
 
-import { COLORMAPS, type ColormapName, colormapCss, normalize, sampleColormap } from "../../lib/colormap";
+import { COLORMAPS, type ColormapName, normalize, sampleColormap } from "../../lib/colormap";
 import { computeContours, contourLevels, type LevelScale, ringToCanvas } from "../../lib/contour";
 import { fitAspectRect, shouldLockAspect } from "../../lib/mapAspect";
 import type { MapPayload } from "../../lib/mapdataFetch";
 import { niceTicks } from "../../lib/ticks";
 import type { RsmPeak } from "../../lib/types";
+import { drawColorbar, fmt } from "./mapColorbar";
+import { withUnit } from "../../lib/unitDisplay";
 
 // Homed here, NOT in lib/mapView.ts: this is a RENDERER decision, and
 // lib/mapView.ts is eagerly reachable (lib/workspaceSerialize.ts) while this
@@ -83,13 +85,8 @@ export interface Readout {
   z: number | null;
 }
 
-/** Compact numeric label: ≤4 sig figs, exponential outside [1e-3, 1e5). */
-export function fmt(v: number): string {
-  if (!Number.isFinite(v)) return "—";
-  const a = Math.abs(v);
-  if (a !== 0 && (a < 1e-3 || a >= 1e5)) return v.toExponential(2);
-  return Number(v.toPrecision(4)).toString();
-}
+// `fmt` lives in the colour-bar leaf (its first user there); re-exported for the overlays.
+export { fmt } from "./mapColorbar";
 
 function cssVar(name: string, fallback: string): string {
   if (typeof getComputedStyle !== "function") return fallback;
@@ -295,7 +292,17 @@ export function draw(
       // smooth = bilinear-interpolated heatmap; off = crisp pixel cells
       // (Preferences ▸ Plot ▸ Antialias). Crisp suits sparse RSM grids.
       ctx.imageSmoothingEnabled = smooth;
-      ctx.drawImage(off, rect.x, rect.y, rect.w, rect.h);
+      // Each texel CENTRED on its axis value (`zGrid[j][i]` sits at
+      // `(xAxis[i], yAxis[j])`, as the ticks, readout, contours and export
+      // place it): the image overhangs the frame by half a cell, clipped.
+      const cw = nx > 1 ? rect.w / (nx - 1) : 0;
+      const ch = ny > 1 ? rect.h / (ny - 1) : 0;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(rect.x, rect.y, rect.w, rect.h);
+      ctx.clip();
+      ctx.drawImage(off, rect.x - cw / 2, rect.y - ch / 2, rect.w + cw, rect.h + ch);
+      ctx.restore();
     }
   }
 
@@ -306,7 +313,7 @@ export function draw(
 
   if (contour?.on) drawContours(ctx, p, rect, contour, ink);
   drawAxes(ctx, p, rect, ink, muted);
-  drawColorbar(ctx, p, rect, W, cmap, lo, hi, logZ, ink, muted);
+  drawColorbar(ctx, p, rect, W - MARGIN.right + 16, cmap, lo, hi, logZ, ink, muted);
   if (peaks && peaks.length) drawPeaks(ctx, p, rect, peaks, ink);
   return limits;
 }
@@ -447,53 +454,13 @@ function drawAxes(
   ctx.font = "11px 'JetBrains Mono', monospace";
   ctx.textAlign = "center";
   ctx.textBaseline = "bottom";
-  const xt = p.xUnit ? `${p.xLabel} (${p.xUnit})` : p.xLabel;
+  const xt = withUnit(p.xLabel, p.xUnit);
   ctx.fillText(xt, rect.x + rect.w / 2, rect.y + rect.h + 38);
   ctx.save();
   ctx.translate(12, rect.y + rect.h / 2);
   ctx.rotate(-Math.PI / 2);
   ctx.textBaseline = "top";
-  const yt = p.yUnit ? `${p.yLabel} (${p.yUnit})` : p.yLabel;
+  const yt = withUnit(p.yLabel, p.yUnit);
   ctx.fillText(yt, 0, 0);
-  ctx.restore();
-}
-
-function drawColorbar(
-  ctx: CanvasRenderingContext2D,
-  p: MapPayload,
-  rect: { x: number; y: number; w: number; h: number },
-  W: number,
-  cmap: ColormapName,
-  lo: number | null,
-  hi: number | null,
-  logZ: boolean,
-  ink: string,
-  muted: string,
-) {
-  const bx = W - MARGIN.right + 16;
-  const bw = 14;
-  const grad = ctx.createLinearGradient(0, rect.y + rect.h, 0, rect.y);
-  for (let s = 0; s <= 8; s++) grad.addColorStop(s / 8, colormapCss(cmap, s / 8));
-  ctx.fillStyle = grad;
-  ctx.fillRect(bx, rect.y, bw, rect.h);
-  ctx.strokeStyle = muted;
-  ctx.strokeRect(bx + 0.5, rect.y + 0.5, bw, rect.h);
-
-  // Endpoint labels show the effective colour range (the log floor when on).
-  ctx.fillStyle = muted;
-  ctx.font = "10px 'JetBrains Mono', monospace";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  if (hi != null) ctx.fillText(fmt(hi), bx + bw + 4, rect.y);
-  if (lo != null) ctx.fillText(fmt(lo), bx + bw + 4, rect.y + rect.h);
-  ctx.fillStyle = ink;
-  ctx.save();
-  ctx.translate(bx + bw + 30, rect.y + rect.h / 2);
-  ctx.rotate(Math.PI / 2);
-  ctx.font = "11px 'JetBrains Mono', monospace";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "bottom";
-  const base = p.zUnit ? `${p.zLabel} (${p.zUnit})` : p.zLabel;
-  ctx.fillText(logZ ? `${base} — log` : base, 0, 0);
   ctx.restore();
 }

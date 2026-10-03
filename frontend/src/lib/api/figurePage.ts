@@ -64,6 +64,9 @@ export interface FigurePageSpec {
   /** SVG only: glyphs as outlines (see FigureSpec.svg_text_as_paths). The
    *  PAGE's flag applies; a panel figure's own flag is unused here. */
   svg_text_as_paths?: boolean;
+  /** The Stage's per-channel stack: one column, x on the bottom panel only
+   *  (`lib/stackPageExport.ts`). */
+  stack?: boolean;
 }
 
 /** Compose N plots onto one publication page server-side and download it.

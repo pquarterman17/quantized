@@ -105,6 +105,8 @@ class FigurePageRequest(BaseModel):
     align_labels: bool = False
     resize_mode: str = "constrained"  # constrained | tight | none
     svg_text_as_paths: bool = Field(default=False, description=SVG_TEXT_AS_PATHS_DOC)
+    # The Stage's per-channel stack (one column, x on the bottom panel only).
+    stack: bool = False
 
 
 @router.post("/figure-page")
@@ -228,6 +230,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
             align_labels=req.align_labels,
             resize_mode=req.resize_mode,
             svg_text_as_paths=req.svg_text_as_paths,
+            stack=req.stack,
         )
     except CALC_ERRORS_WITH_LOCK as exc:
         raise_calc_error(exc)

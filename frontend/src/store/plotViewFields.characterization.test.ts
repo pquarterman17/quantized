@@ -28,7 +28,7 @@ const INITIAL = {
   yScale: "linear",
   xScale: "linear",
   showLegend: true,
-  legendPos: "ne",
+  legendPos: "auto",
   legendStatic: false,
   legendTitle: null,
   plotTemplate: "screen",

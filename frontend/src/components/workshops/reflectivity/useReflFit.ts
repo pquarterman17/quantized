@@ -28,6 +28,7 @@ import {
   defaultXKind,
   effectiveWeighting,
   MAX_CHANNELS,
+  probeRadiation,
   type BuiltChannel,
   type ChannelBinding,
   type FitDataSettings,
@@ -184,6 +185,8 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     const next = defaultChannels(ds);
     setChannels(next.length ? next : [{ datasetId: ds.id, rCol: 0, drCol: null, dqCol: null, dqIsFwhm: false, spin: "none" }]);
     setSettingsState((s) => ({ ...s, xKind: defaultXKind(ds.data), weighting: "dr" }));
+    const probe = probeRadiation(ds.data.metadata);
+    if (probe) setRadiation(probe);
   }
 
   function selectDataset(id: string): void {

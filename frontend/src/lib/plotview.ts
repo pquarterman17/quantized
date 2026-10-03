@@ -38,7 +38,7 @@ const VALID_TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "d
 // the type from HERE like every other PlotWindow-adjacent type, not the leaf
 // module.
 export type { PanelLayout };
-export type LegendPos = "ne" | "nw" | "se" | "sw";
+export type LegendPos = "auto" | "ne" | "nw" | "se" | "sw"; // "auto": lib/legendAutoPlace
 
 /** The corner-preset nearest a free legend position (MAIN #18's pointer-mode
  *  drag): quadrant of the fractional position within the plot area — the
@@ -130,6 +130,7 @@ export interface PlotView {
   axisLabelStyles: AxisLabelStyles;
   plotTemplate: string;
   showAxisBox: boolean;
+  xReversed: boolean; // x high-to-low (IR wavenumber): uPlot dir -1, export x_reversed
   stackMode: boolean;
   insetMode: boolean;
   polarMode: boolean;
@@ -198,7 +199,7 @@ export function defaultPlotView(): PlotView {
     xScale: "linear",
     showGrid: true,
     showLegend: true,
-    legendPos: "ne",
+    legendPos: "auto",
     legendXY: null, legendSize: null,
     legendFrameXY: null,
     legendStatic: false,
@@ -206,7 +207,7 @@ export function defaultPlotView(): PlotView {
     axisLabelOffsets: {},
     axisLabelStyles: {},
     plotTemplate: "screen",
-    showAxisBox: true,
+    showAxisBox: true, xReversed: false,
     stackMode: false,
     insetMode: false,
     polarMode: false,
@@ -220,8 +221,7 @@ export function defaultPlotView(): PlotView {
     plotTitle: "",
     xAxisLabel: "",
     yAxisLabel: "",
-    xKey: null,
-    yKeys: null,
+    xKey: null, yKeys: null,
     groupKey: null,
     facetKey: null,
     y2Keys: null,
@@ -491,7 +491,7 @@ function isAxisFormat(v: unknown): v is AxisFormat {
  *  validate a bare `legendPos` value outside `sanitizeView` (GUI_INTERACTION
  *  #12's `decor.legend` block, `lib/plotspec2.ts`) reuses the SAME list
  *  rather than redeclaring it. */
-export const LEGEND_POS: readonly LegendPos[] = ["ne", "nw", "se", "sw"];
+export const LEGEND_POS: readonly LegendPos[] = ["auto", "ne", "nw", "se", "sw"];
 
 /** A `legendXY` fraction pair: a finite 2-tuple, each component clamped to
  *  [0, 1] — a hand-edited or stale `.dwk` can't smuggle in an off-canvas

@@ -244,7 +244,8 @@ def test_matches_real_perkin_elmer_ftir_header_shape(tmp_path: Path) -> None:
         + body
     )
     ds = import_spc(_write(tmp_path, "ftir_like.spc", raw))
-    assert ds.metadata["x_column_name"] == "Wavenumber (cm-1)"
+    assert ds.metadata["x_column_name"] == "Wavenumber"
+    assert ds.metadata["x_column_unit"] == "cm^-1"
     assert ds.labels[0] == "Transmission"
     assert_allclose(ds.time[0], 4000.0)
     assert_allclose(ds.time[-1], 450.0)
@@ -259,12 +260,15 @@ def test_matches_real_perkin_elmer_ftir_header_shape(tmp_path: Path) -> None:
 _TXY = _TXYXYS | _TXVALS  # txyxys implies per-subfile x arrays
 
 
-def _pack_txyxys_sub(x_ints: list[int], y_ints: list[int], *, subexp: int) -> bytes:
-    n = len(x_ints)
+def _pack_txyxys_sub(x_vals: list[float], y_ints: list[int], *, subexp: int) -> bytes:
+    """Per-subfile x is IEEE float32 (SPC spec: X arrays are always floats;
+    only Y is exponent-scaled fixed point). Real-file evidence: see
+    ``test_real_txyxys_x_is_float32_mz``."""
+    n = len(x_vals)
     assert n == len(y_ints)
     return (
         _pack_sub(subexp=subexp, subnpts=n)
-        + struct.pack(f"<{n}i", *x_ints)
+        + struct.pack(f"<{n}f", *x_vals)
         + struct.pack(f"<{n}i", *y_ints)
     )
 
@@ -272,22 +276,24 @@ def _pack_txyxys_sub(x_ints: list[int], y_ints: list[int], *, subexp: int) -> by
 def test_txyxys_fnpts_zero_is_legal(tmp_path: Path) -> None:
     """fnpts=0 with per-subfile counts is a valid TXYXYS file, not 'empty'."""
     exp = 8
-    x_ints = [1 << 24, 2 << 24, 3 << 24]  # 1.0, 2.0, 3.0 at 2**(8-32)
+    # Non-dyadic m/z: an exponent-scaled int32 read of these float32 bytes
+    # lands near 2**(exp-32) * 2**30 (the old power-of-two clustering bug).
+    x_vals = [42.0, 43.5, 413.25]
     y_ints = [100, 200, 300]
     raw = _pack_head(ftflgs=_TXY, fnpts=0, fnsub=1, fexp=exp) + _pack_txyxys_sub(
-        x_ints, y_ints, subexp=exp
+        x_vals, y_ints, subexp=exp
     )
     ds = import_spc(_write(tmp_path, "txy0.spc", raw))
-    assert_allclose(ds.time, [1.0, 2.0, 3.0])
+    assert_allclose(ds.time, x_vals)
     assert_allclose(ds.values[:, 0], np.array(y_ints, dtype=float) * 2.0 ** (exp - 32))
 
 
 def test_txyxys_identical_x_stacks_columns(tmp_path: Path) -> None:
     """Subfiles repeating one x grid stack losslessly as columns."""
     exp = 8
-    x_ints = [1 << 24, 2 << 24]
-    sub_a = _pack_txyxys_sub(x_ints, [10, 20], subexp=exp)
-    sub_b = _pack_txyxys_sub(x_ints, [30, 40], subexp=exp)
+    x_vals = [1.0, 2.0]
+    sub_a = _pack_txyxys_sub(x_vals, [10, 20], subexp=exp)
+    sub_b = _pack_txyxys_sub(x_vals, [30, 40], subexp=exp)
     raw = _pack_head(ftflgs=_TXY | _TMULTI, fnpts=0, fnsub=2, fexp=exp) + sub_a + sub_b
     ds = import_spc(_write(tmp_path, "txy_same.spc", raw))
     assert ds.n_channels == 2
@@ -300,8 +306,8 @@ def test_txyxys_differing_x_long_form_keeps_every_point(tmp_path: Path) -> None:
     with a Subfile index column — NEVER silently drops subfiles 1..N (the
     old behaviour returned subfile 0 only, no error)."""
     exp = 8
-    sub_a = _pack_txyxys_sub([1 << 24, 2 << 24], [10, 20], subexp=exp)
-    sub_b = _pack_txyxys_sub([5 << 24, 6 << 24, 7 << 24], [30, 40, 50], subexp=exp)
+    sub_a = _pack_txyxys_sub([1.0, 2.0], [10, 20], subexp=exp)
+    sub_b = _pack_txyxys_sub([5.0, 6.0, 7.0], [30, 40, 50], subexp=exp)
     raw = _pack_head(ftflgs=_TXY | _TMULTI, fnpts=0, fnsub=2, fexp=exp) + sub_a + sub_b
     ds = import_spc(_write(tmp_path, "txy_diff.spc", raw))
     assert len(ds.time) == 5  # 2 + 3: every point survives
@@ -312,11 +318,30 @@ def test_txyxys_differing_x_long_form_keeps_every_point(tmp_path: Path) -> None:
     assert ds.metadata["subfile_points"] == [2, 3]
 
 
+def test_txyxys_peak_lists_hint_a_marker_trace(tmp_path: Path) -> None:
+    """Per-scan m/z lists (and long-form scans, whose x restarts every scan)
+    are discrete peaks: joined lines draw fake curves. A shared-x stack or a
+    plain spectrum carries no hint."""
+    exp = 8
+    sub_a = _pack_txyxys_sub([1.0, 2.0], [10, 20], subexp=exp)
+    sub_b = _pack_txyxys_sub([5.0, 6.0, 7.0], [30, 40, 50], subexp=exp)
+    raw = _pack_head(ftflgs=_TXY | _TMULTI, fnpts=0, fnsub=2, fexp=exp) + sub_a + sub_b
+    assert import_spc(_write(tmp_path, "long.spc", raw)).metadata["default_trace"] == "Scatter"
+    one = _pack_head(ftflgs=_TXY, fnpts=0, fnsub=1, fexp=exp, fxtype=9) + sub_b
+    assert import_spc(_write(tmp_path, "ms.spc", one)).metadata["default_trace"] == "Scatter"
+    same = _pack_head(ftflgs=_TXY | _TMULTI, fnpts=0, fnsub=2, fexp=exp) + sub_a + sub_a
+    assert "default_trace" not in import_spc(_write(tmp_path, "same.spc", same)).metadata
+    body = struct.pack("<3f", 90.0, 91.0, 92.0)
+    plain = _pack_head(fnpts=3, ffirst=4000.0, flast=450.0, fexp=-128, fxtype=1)
+    spectrum = import_spc(_write(tmp_path, "ir.spc", plain + _pack_sub(subexp=-128) + body))
+    assert "default_trace" not in spectrum.metadata
+
+
 def test_txyxys_data_may_not_overrun_directory(tmp_path: Path) -> None:
     """When fnpts is a directory offset, a subfile whose declared size would
     run into the directory raises loudly instead of reading it as data."""
     exp = 8
-    sub = _pack_txyxys_sub([1 << 24], [10], subexp=exp)
+    sub = _pack_txyxys_sub([1.0], [10], subexp=exp)
     dir_off = 512 + len(sub)
     # Claim a second subfile but place the directory right after the first —
     # subfile 1 has nowhere to live.
@@ -345,13 +370,29 @@ def test_real_txyxys_single_subfile_reads_128_points(corpus_dir: Path) -> None:
 
 
 @pytest.mark.realdata
+@pytest.mark.parametrize("name", ["rohanisaac_ms_xyxys.spc", "rohanisaac_m_xyxy.spc"])
+def test_real_txyxys_x_is_float32_mz(corpus_dir: Path, name: str) -> None:
+    """Per-subfile x is IEEE float32, not exponent-scaled int32. Oracle: the
+    header's own ffirst/flast equal subfile 0's first/last x exactly, and every
+    scan's m/z lies in a plausible 1..1000 window. The int32 reading put m/z
+    in clusters near 2**13..2**17 (~8.4k, 17k, 34k, 69k, 137k)."""
+    path = corpus_dir / "spc" / "spectroscopy" / name
+    raw = path.read_bytes()
+    ffirst, flast = struct.unpack_from("<dd", raw, 8)
+    ds = import_spc(path)
+    n0 = struct.unpack_from("<I", raw, 512 + 16)[0]
+    assert_allclose([ds.time[0], ds.time[n0 - 1]], [ffirst, flast], rtol=1e-6)
+    assert 1.0 < float(np.min(ds.time)) and float(np.max(ds.time)) < 1000.0
+
+
+@pytest.mark.realdata
 def test_real_txyxys_multifile_loses_nothing(corpus_dir: Path) -> None:
     """rohanisaac_m_xyxy.spc: 512 scans, per-scan m/z. The old reader
     returned subfile 0 only — shape (8, 1), no error, >99% of the file
     silently gone. Oracle: the file's own trailing directory (one 12-byte
     SSFSTC entry per subfile) — entries 1..511 each match the sequential
     subfile boundaries byte-for-byte (posn == computed start, size ==
-    32 + 6·subnpts for int32 x + int16 y), and every subheader's subindx
+    32 + 6·subnpts for float32 x + int16 y), and every subheader's subindx
     runs 0..511 contiguously with strictly increasing subtime, so the
     sequential read is exact. Entry 0 alone is anomalous: it points at a
     96-byte tail block just before the directory that is a REWRITTEN COPY
@@ -450,7 +491,8 @@ def test_real_old_format_raman(corpus_dir: Path) -> None:
     assert len(ds.time) == 1602
     assert_allclose(ds.time[0], 100.0)
     assert_allclose(ds.time[-1], 1800.0)
-    assert ds.metadata["x_column_name"] == "Raman Shift (cm-1)"
+    assert ds.metadata["x_column_name"] == "Raman shift"
+    assert ds.metadata["x_column_unit"] == "cm^-1"
     y = ds.values[:, 0]
     assert np.abs(np.diff(y)).sum() / (y.max() - y.min()) < 30  # smooth, not noise
     assert ds.metadata["date"]["year"] == 2013
@@ -464,7 +506,8 @@ def test_real_old_format_ftir_multifile(corpus_dir: Path) -> None:
     ds = import_spc(corpus_dir / "spc" / "spectroscopy" / "rohanisaac_old_0x4D_m_ordz.spc")
     assert ds.n_channels == 10
     assert len(ds.time) == 857
-    assert ds.metadata["x_column_name"] == "Wavenumber (cm-1)"
+    assert ds.metadata["x_column_name"] == "Wavenumber"
+    assert ds.metadata["x_column_unit"] == "cm^-1"
     assert ds.labels[0].startswith("Absorbance")
     for k in range(10):  # every channel decodes to smooth absorbance-scale data
         y = ds.values[:, k]
@@ -513,9 +556,50 @@ def test_y_channels_carry_no_duplicate_unit(tmp_path: Path) -> None:
 
 def test_txyxys_long_form_plots_the_signal_not_the_index(tmp_path: Path) -> None:
     exp = 8
-    sub_a = _pack_txyxys_sub([1 << 24, 2 << 24], [10, 20], subexp=exp)
-    sub_b = _pack_txyxys_sub([5 << 24, 6 << 24, 7 << 24], [30, 40, 50], subexp=exp)
+    sub_a = _pack_txyxys_sub([1.0, 2.0], [10, 20], subexp=exp)
+    sub_b = _pack_txyxys_sub([5.0, 6.0, 7.0], [30, 40, 50], subexp=exp)
     raw = _pack_head(ftflgs=_TXY | _TMULTI, fnpts=0, fnsub=2, fexp=exp) + sub_a + sub_b
     ds = import_spc(_write(tmp_path, "txy_diff.spc", raw))
     assert ds.units == ("", "")
     assert ds.metadata["default_value_channels"] == [0]
+
+
+@pytest.mark.parametrize(
+    ("fxtype", "fytype", "x_name", "x_unit", "y_label", "y_unit"),
+    [
+        (1, 128, "Wavenumber", "cm^-1", "Transmission", ""),
+        (3, 2, "Wavelength", "nm", "Absorbance", ""),
+        (13, 12, "Raman shift", "cm^-1", "Intensity", ""),
+        (9, 4, "m/z", "", "Counts", ""),
+        (21, 5, "Temperature", "K", "Voltage", "V"),
+        (23, 7, "Time", "ms", "Current", "mA"),
+    ],
+)
+def test_axis_unit_codes_split_into_name_and_unit(
+    tmp_path: Path, fxtype: int, fytype: int, x_name: str, x_unit: str, y_label: str, y_unit: str
+) -> None:
+    """The SPC unit enumerations name a quantity AND its unit ("Wavenumber
+    (cm-1)", "Volts"); the unit belongs in the unit field, not the title, so
+    the axis title can typeset it (cm⁻¹) like every other parser's."""
+    raw = (
+        _pack_head(fnpts=2, ffirst=0.0, flast=1.0, fexp=32, fxtype=fxtype, fytype=fytype)
+        + _pack_sub()
+        + struct.pack("<2i", 5, 6)
+    )
+    ds = import_spc(_write(tmp_path, "codes.spc", raw))
+    assert (ds.metadata["x_column_name"], ds.metadata["x_column_unit"]) == (x_name, x_unit)
+    assert (ds.labels[0], ds.units[0]) == (y_label, y_unit)
+
+
+def test_talabs_title_with_a_trailing_unit_is_split(tmp_path: Path) -> None:
+    """A custom title written "Name (unit)" splits like the coded ones; a
+    title that is ONLY a parenthetical ("(arb)") stays the title."""
+    fcatxt = b"Wavenumber (cm-1)\x00(arb)\x00" + b"\x00" * 8
+    raw = (
+        _pack_head(fnpts=2, ffirst=0, flast=1, fexp=32, ftflgs=_TALABS, fcatxt=fcatxt)
+        + _pack_sub()
+        + struct.pack("<2i", 5, 6)
+    )
+    ds = import_spc(_write(tmp_path, "talabs_unit.spc", raw))
+    assert (ds.metadata["x_column_name"], ds.metadata["x_column_unit"]) == ("Wavenumber", "cm-1")
+    assert (ds.labels[0], ds.units[0]) == ("(arb)", "")

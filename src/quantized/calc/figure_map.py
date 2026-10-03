@@ -14,12 +14,14 @@ publication path; interactive 3-D is deferred (#22).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import math
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import matplotlib
 import matplotlib.tri as mtri
 import numpy as np
+from matplotlib import patheffects
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (registers the 3d projection)
 from numpy.typing import ArrayLike, NDArray
 
@@ -27,7 +29,7 @@ from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
-__all__ = ["MAP_KINDS", "render_map_figure"]
+__all__ = ["MAP_KINDS", "log_decade_ticks", "render_map_figure"]
 
 _FORMATS = ("pdf", "svg", "png", "tiff")
 MAP_KINDS = ("contourf", "contour", "heatmap", "surface", "scatter3d", "waterfall")
@@ -85,6 +87,10 @@ def render_map_figure(
     view_elev: float = 30.0,
     view_azim: float = -60.0,
     z_limits: Sequence[float] | None = None,
+    equal_aspect: bool = False,
+    lines: Sequence[Sequence[float]] | None = None,
+    labels: Sequence[Mapping[str, Any]] | None = None,
+    colorbar_log10: bool = False,
 ) -> bytes:
     """Render a 2-D map to image bytes in the chosen ``kind``.
 
@@ -123,6 +129,22 @@ def render_map_figure(
     colour limits the canvas paints over, which may be wider than the data
     (``tests/fixtures/wire/map_color_limits.json``). Contour LEVELS still come
     from the data. ``None`` = the data's extent, as before.
+
+    A 2-D map is framed like the canvas (``mapRender.draw``): a ``heatmap`` at
+    its grid's axis span, each cell centred on its axis value (``pcolormesh``
+    alone widens the frame by half a cell), and ``equal_aspect`` sets one data
+    unit per unit on both axes -- the canvas letterboxes a map whose two axes
+    share a physical unit (Qx/Qz) the same way.
+
+    ``lines`` (``[x0, y0, x1, y1]`` each) and ``labels`` (``{x, y, text}``
+    each) are the map's committed slices and text labels in data coordinates
+    (``MapSliceOverlay`` on screen), drawn over a 2-D map without moving its
+    frame.
+
+    ``colorbar_log10``: ``z`` (and ``z_limits``) are log10 of the quantity --
+    MapStage's log colour scale -- so the colour bar ticks its decades and
+    labels them with the VALUE (``1e-4``, ``0.01``), as the canvas bar does
+    (:func:`log_decade_ticks`), instead of the bare exponents.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -205,6 +227,13 @@ def render_map_figure(
         )
         if clim is not None and mappable is not None:
             mappable.set_clim(*clim)
+        if kind == "heatmap":
+            ax.set_xlim(x[0], x[-1])
+            ax.set_ylim(y[0], y[-1])
+        if equal_aspect and kind not in _3D_KINDS:
+            ax.set_aspect("equal", adjustable="box")
+        if kind not in _3D_KINDS:
+            _draw_marks(ax, lines or [], labels or [], st.font_size)
         if title:
             ax.set_title(title)
         if x_label:
@@ -214,9 +243,51 @@ def render_map_figure(
         if kind in _3D_KINDS and z_label:
             ax.set_zlabel(z_label)
         if colorbar and mappable is not None:
-            fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8)
+            cb = fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8)
+            if colorbar_log10:
+                ticks = log_decade_ticks(*mappable.get_clim())
+                cb.set_ticks([k for k, _ in ticks], labels=[label for _, label in ticks])
         fig.tight_layout()
         return savefig_bytes(fig, fmt, dpi=resolved_dpi)
+
+
+def log_decade_ticks(lo: float, hi: float) -> list[tuple[int, str]]:
+    """Colour-bar ticks for a log10 range ``[lo, hi]`` (exponents): every
+    decade inside, thinned evenly to at most six, each labelled with its
+    VALUE -- ``1e{k}`` from ``|k| >= 3``, plain digits nearer 1. The canvas
+    leg is ``mapColorbar.colorbarTicks``; both read
+    ``tests/fixtures/wire/map_log_colorbar.json``."""
+    k0 = math.ceil(lo)
+    n = math.floor(hi) - k0 + 1
+    if n <= 0:
+        return []
+    step = max(1, math.ceil(n / 6))
+    ks = [k0 + i * step for i in range(math.ceil(n / step))]
+    return [(k, f"1e{k}" if abs(k) >= 3 else f"{10.0**k:g}") for k in ks]
+
+
+def _draw_marks(
+    ax: Any, lines: Sequence[Sequence[float]], labels: Sequence[Mapping[str, Any]], size: float
+) -> None:
+    """Slices as dashed lines and labels as boxed text, in data coordinates;
+    the axis limits are restored so a mark never widens the frame. White with
+    a dark halo reads over every colormap, as the canvas' accent does on its
+    dark theme."""
+    if not lines and not labels:
+        return
+    xlim, ylim = ax.get_xlim(), ax.get_ylim()
+    halo = [patheffects.withStroke(linewidth=2.6, foreground="black")]
+    for line in lines:
+        x0, y0, x1, y1 = (float(v) for v in line)
+        ax.plot([x0, x1], [y0, y1], color="white", lw=1.25, ls=(0, (6, 3)), path_effects=halo)
+    for lab in labels:
+        ax.text(
+            float(lab["x"]), float(lab["y"]), safe_mathtext_label(str(lab["text"])),
+            ha="center", va="center", fontsize=size * 0.85,
+            bbox={"boxstyle": "round,pad=0.25", "fc": "white", "ec": "0.35", "alpha": 0.85},
+        )
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
 
 
 def _z_limits(z_limits: Sequence[float] | None) -> tuple[float, float] | None:

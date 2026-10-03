@@ -297,8 +297,9 @@ function buildFigureSpecForView(
   // `plotted` — send y_keys = the FULL plotted list (the backend's y2_keys is a
   // subset marker, not a replacement), plus that subset in display order, so
   // the render shows the same dual-Y split the screen does. The split + the
-  // scale/format inherit rules live in lib/axisspec.ts (#54 pass B).
-  const y2Axis = resolveSecondaryAxis(plotted, secondaryAxisFromView(st), {
+  // scale/format inherit rules live in lib/axisspec.ts (#54 pass B). An x-break's
+  // panels draw every channel on their one shared y, so it sends no y2 split.
+  const y2Axis = xBreaks ? null : resolveSecondaryAxis(plotted, secondaryAxisFromView(st), {
     scale: st.yScale,
     fmt: st.yFmt,
   });

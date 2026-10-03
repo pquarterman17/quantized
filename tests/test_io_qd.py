@@ -114,7 +114,8 @@ def test_classic_mpms_imports_and_swaps_constant_field_to_temperature(
     ds = import_auto(fixtures_dir / "mpms_zfc_classic.dat")
     assert ds.metadata["parser_name"] == "import_qd_vsm"
     assert ds.metadata["x_column_name"] == "Temperature"
-    assert ds.labels == ("Long Moment",)
+    assert ds.labels[0] == "Long Moment"  # + companions (test_io_qd_companions.py)
+    assert ds.metadata["default_value_channels"] == [0]
     # x must actually vary so the data is plottable by default.
     assert float(np.ptp(ds.time)) > 0
     assert np.isfinite(ds.values[:, 0]).all()

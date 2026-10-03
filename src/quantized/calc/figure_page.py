@@ -190,6 +190,7 @@ def render_figure_page(
     align_labels: bool = False,
     resize_mode: str = "constrained",
     svg_text_as_paths: bool = False,  # glyphs as outlines -- see savefig_bytes
+    stack: bool = False,
 ) -> bytes:
     """Compose ``panels`` onto one rows x cols page and render to image bytes.
 
@@ -219,6 +220,12 @@ def render_figure_page(
     layout engine (``"constrained"`` default / ``"tight"`` / ``"none"``).
     All five default to today's exact rendering; free placement ignores
     ``row_gap``/``col_gap``/``resize_mode`` but still honors the links.
+
+    ``stack`` (plot audit round 4) lays the page out as the Stage's
+    per-channel stack: one grid column, x tick labels and title on the bottom
+    panel only (the canvas blanks them above), and a default height of a
+    third of the preset's figure per panel, never under one figure -- the
+    canvas splits ONE window, so a row per figure would stretch the page.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -240,6 +247,8 @@ def render_figure_page(
         _validate_page_rects(panels)
     else:
         _validate_page(rows, cols, panels)
+    if stack and (free_placement or cols != 1):
+        raise ValueError("a stack page is one column of grid panels")
 
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
@@ -249,6 +258,8 @@ def render_figure_page(
         # rows/cols are meaningless in free placement -- no grid-cell aspect
         # to preserve, so height falls back to the preset's own aspect.
         h = float(height_in) if height_in is not None else st.fig_height_in
+    elif height_in is None and stack:
+        h = max(st.fig_height_in, st.fig_height_in * rows / 3)
     else:
         h = (
             float(height_in)
@@ -282,6 +293,12 @@ def render_figure_page(
             align_labels=align_labels,
             resize_mode=resize_mode,
         )
+        if stack:  # x on the bottom panel only, as the canvas stack draws it
+            for ax in fig.axes:
+                spec = ax.get_subplotspec()
+                if spec is not None and spec.rowspan.stop < rows:
+                    ax.tick_params(axis="x", which="both", labelbottom=False)
+                    ax.set_xlabel("")
         return savefig_bytes(fig, fmt, dpi=resolved_dpi, svg_text_as_paths=svg_text_as_paths)
 
 

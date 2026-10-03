@@ -60,9 +60,9 @@ describe("techniqueViewDefaults", () => {
     expect(techniqueViewDefaults(ds(technique)).yScale).toBe(expected);
   });
 
-  it("spectroscopy is explicitly linear; generic carries no axis-scale opinion", () => {
+  it("spectroscopy is explicitly linear; generic resets both axes to linear", () => {
     expect(techniqueViewDefaults(ds("spectroscopy"))).toEqual({ yScale: "linear" });
-    expect(techniqueViewDefaults(ds("generic"))).toEqual({});
+    expect(techniqueViewDefaults(ds("generic"))).toEqual({ xScale: "linear", yScale: "linear" });
   });
 
   it("reflectometry's log-R default coexists with the default_value_channels hint (subsumes, not fights)", () => {

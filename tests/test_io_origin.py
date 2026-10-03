@@ -13,9 +13,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 
+from quantized.datastruct import DataStruct
 from quantized.io.origin import GraphSpec, format_origin_script
+from quantized.io.registry import import_auto
 from quantized.io.xrdml import import_xrdml
 
 
@@ -229,3 +232,121 @@ def test_origin_graph_quoting_safety() -> None:
     )
     _, ogs = format_origin_script(ds, make_graph=True, graph=GraphSpec())
     assert "yl.text$ = \"Weird 'Y'\";" in ogs
+
+
+@pytest.mark.parametrize(
+    ("x", "labels", "units"),
+    [
+        (("2-Theta", "deg"), ["Intensity"], ["counts"]),  # Bruker/Rigaku XRD
+        (("Qz", "1/Ang"), ["Intensity", "uncertainty"], ["counts per second"] * 2),  # reductus
+    ],
+)
+def test_origin_csv_reimports_with_names_and_units(
+    tmp_path: Path, x: tuple[str, str], labels: list[str], units: list[str]
+) -> None:
+    # The export's CSV (name row, unit row, data) must come back into quantized
+    # with the same column names and units. "counts" / "counts per second" were
+    # not recognized as a units row, so the UNIT row was taken as the header:
+    # "Intensity (counts)" re-imported as a column named "counts", unitless.
+    n = len(labels)
+    ds = DataStruct.create(
+        [10.0, 10.5, 11.0],
+        [[float(i + 1) * (r + 1) for i in range(n)] for r in range(3)],
+        labels=labels,
+        units=units,
+        metadata={"x_column_name": x[0], "x_column_unit": x[1]},
+    )
+    csv_text, _ = format_origin_script(ds, csv_name="scan_data.csv")
+    path = tmp_path / "scan_data.csv"
+    path.write_text(csv_text)
+    back = import_auto(path)
+    assert list(back.labels) == labels
+    assert list(back.units) == units
+    assert back.metadata.get("x_column_unit") == x[1]
+    np.testing.assert_array_equal(back.values, ds.values)
+
+
+def test_origin_designations_follow_declared_error_roles() -> None:
+    # ORSO/reductus name their error columns sR / uncertainty / resolution, none
+    # of which the keyword rule knows, so they exported as plain Y. The parser's
+    # error_roles (or the user's live bindings, sent the same way) decide.
+    ds = DataStruct.create(
+        [0.01, 0.02],
+        [[1.0, 0.1, 1e-4, 5.0], [0.5, 0.05, 1e-4, 6.0]],
+        labels=["R", "sR", "sQz", "Std counter"],
+        units=["", "", "1/A", ""],
+        metadata={
+            "x_column_name": "Qz",
+            "error_roles": [
+                {"channel": 1, "target": 0, "axis": "y", "side": "both"},
+                {"channel": 2, "target": -1, "axis": "x", "side": "both"},
+            ],
+        },
+    )
+    _, ogs = format_origin_script(ds)
+    types = [ln for ln in ogs.splitlines() if ".type =" in ln]
+    assert types == [
+        "wks.col1.type = 4;  // X",
+        "wks.col2.type = 1;  // Y",
+        "wks.col3.type = 3;  // yErr",
+        "wks.col4.type = 7;  // xErr",
+        "wks.col5.type = 1;  // Y",  # declared roles are authoritative: no keyword guess
+    ]
+
+
+def test_origin_designations_keep_keyword_fallback_without_roles() -> None:
+    ds = DataStruct.create(
+        [1.0, 2.0], [[1.0, 0.1], [2.0, 0.2]], labels=["M", "M err"], units=["", ""]
+    )
+    _, ogs = format_origin_script(ds)
+    assert "wks.col3.type = 3;  // yErr" in ogs
+
+
+def test_origin_csv_writes_missing_values_as_blank_cells() -> None:
+    # "nan" is text to Origin's impASC and Excel (Excel charts plot a text
+    # cell as 0); a blank cell is "missing" to Origin, Excel and quantized's
+    # own importer alike.
+    ds = DataStruct.create(
+        [1.0, float("nan"), 3.0],
+        [[1.0, float("inf")], [float("nan"), 0.5], [3.0, 0.7]],
+        labels=["A", "B"],
+        units=["", ""],
+    )
+    csv_text, _ = format_origin_script(ds)
+    assert csv_text.splitlines()[2:] == ["1,1,", ",,0.5", "3,3,0.7"]
+
+
+def _graded() -> DataStruct:
+    return DataStruct.create(
+        [1.0, 2.0, 3.0],
+        [[1.0, 0.5], [0.0, 0.7], [float("nan"), 0.9]],
+        labels=["grade", "y"],
+        units=["", "mT"],
+        cat_levels={0: ("low", "high")},
+    )
+
+
+def test_origin_csv_writes_categorical_levels_not_codes() -> None:
+    # A categorical channel stores level CODES; the export must carry what
+    # they mean (Origin would otherwise get 0/1 with no level table).
+    csv_text, _ = format_origin_script(_graded())
+    assert csv_text.splitlines()[2:] == ["1,high,0.5", "2,low,0.7", "3,,0.9"]
+
+
+def test_origin_graph_reversed_x_swaps_the_axis_range() -> None:
+    # A reversed x axis (wavenumber spectra default to it) exported upright.
+    # Origin draws an axis reversed when its From is greater than its To, so
+    # the range is emitted high-to-low: the given limits, else the x data's.
+    ds = _three_channel_ds()
+    _, ogs = format_origin_script(
+        ds, graph=GraphSpec(y_keys=(0,), x_lim=(0.5, 12.0), x_reversed=True)
+    )
+    assert "layer.x.from = 12;" in ogs and "layer.x.to = 0.5;" in ogs
+    _, ogs = format_origin_script(ds, graph=GraphSpec(y_keys=(0,), x_reversed=True))
+    t = np.asarray(ds.time)
+    assert f"layer.x.from = {t.max():.10g};" in ogs and f"layer.x.to = {t.min():.10g};" in ogs
+    # Half-open: the typed side is kept, the other comes from the data.
+    _, ogs = format_origin_script(
+        ds, graph=GraphSpec(y_keys=(0,), x_lim=(None, 2.0), x_reversed=True)
+    )
+    assert "layer.x.from = 2;" in ogs and f"layer.x.to = {t.min():.10g};" in ogs

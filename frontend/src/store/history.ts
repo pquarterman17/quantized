@@ -105,7 +105,11 @@ export type HistoryBatchToken = symbol;
 export interface ViewSnapshot {
   xLim: HalfLim | null;
   yLim: HalfLim | null;
+  /** Only when the plot has a secondary y axis; absent leaves `y2Lim` alone. */
+  y2Lim?: [number, number] | null;
 }
+
+const y2Patch = (v: ViewSnapshot) => (v.y2Lim === undefined ? {} : { y2Lim: v.y2Lim, y2Step: null });
 
 export interface ViewHistoryEntry {
   before: ViewSnapshot;
@@ -432,11 +436,12 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
           before.xLim?.[0] === after.xLim?.[0] && before.xLim?.[1] === after.xLim?.[1] &&
           before.yLim?.[0] === after.yLim?.[0] && before.yLim?.[1] === after.yLim?.[1] &&
           (before.xLim === null) === (after.xLim === null) &&
-          (before.yLim === null) === (after.yLim === null)
+          (before.yLim === null) === (after.yLim === null) &&
+          String(before.y2Lim) === String(after.y2Lim)
         ) return {};
         // A committed half-open limit (a side on auto) is what Back restores, not the live numbers.
         const open = (lim: HalfLim | null, live: HalfLim | null) => (lim && !fixedLim(lim) ? lim : live);
-        before = { xLim: open(s.xLim, before.xLim), yLim: open(s.yLim, before.yLim) };
+        before = { ...before, xLim: open(s.xLim, before.xLim), yLim: open(s.yLim, before.yLim) };
         return {
           viewHistory: [...s.viewHistory, { before, after }].slice(-HISTORY_DEPTH),
           viewFuture: [],
@@ -444,6 +449,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
           yLim: after.yLim,
           xStep: null,
           yStep: null,
+          ...y2Patch(after),
           status: "Plot view changed",
         };
       }),
@@ -458,6 +464,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
           yLim: entry.before.yLim,
           xStep: null,
           yStep: null,
+          ...y2Patch(entry.before),
           status: "Back to previous plot view",
         };
       }),
@@ -472,6 +479,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
           yLim: entry.after.yLim,
           xStep: null,
           yStep: null,
+          ...y2Patch(entry.after),
           status: "Forward to next plot view",
         };
       }),

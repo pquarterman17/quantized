@@ -65,7 +65,8 @@ export interface PlotPayload {
    *  `usePlotPayload.ts`'s windowed re-fetch effect is the single producer of
    *  a request that sets this. */
   window?: [number, number] | null;
-  blockRows?: number; // waterfall X offset: rows per x block (lib/waterfallX.ts); absent = one block
+  blockRows?: number; xStep?: number; // waterfall X offset: rows per x block, block b slid by b·xStep (lib/waterfallX.ts)
+  yShift?: number[]; // per data column, the waterfall stagger added for display; the cursor readout takes it back off
 }
 
 /** Pure client-side column packing — the offline mirror of /api/plot/series.
@@ -516,9 +517,8 @@ export function withPeakOverlay(
 
 /** Vertically offset each series for a waterfall view: series s (1-indexed among
  *  the value columns) is shifted up by (s-1)·fraction·span, where span is the
- *  combined y-range. `fraction` is 0..1 (0 = off); a no-op with <2 series. The
- *  offset is display-only, so absolute y-values no longer read true (standard for
- *  waterfall). Apply to the base payload before overlays so channel 0 stays put. */
+ *  combined y-range. `fraction` is 0..1 (0 = off); a no-op with <2 series. Display
+ *  only: `yShift` lets the cursor readout report true values. Apply before overlays. */
 export function applyWaterfall(payload: PlotPayload, fraction: number): PlotPayload {
   if (!waterfallApplies(fraction) || payload.data.length <= 2) return payload;
   const cols = payload.data as unknown as (number | null)[][];
@@ -528,7 +528,7 @@ export function applyWaterfall(payload: PlotPayload, fraction: number): PlotPayl
   const data = cols.map((col, s) =>
     s === 0 ? col : col.map((v) => (v == null ? v : v + (s - 1) * step)),
   );
-  return { ...payload, data: data as unknown as uPlot.AlignedData };
+  return { ...payload, data: data as unknown as uPlot.AlignedData, yShift: cols.map((_, s) => (s && (s - 1) * step)) };
 }
 
 /** Fetch plot series from the backend; fall back to client packing offline.

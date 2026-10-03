@@ -63,7 +63,7 @@ def test_synthetic_1d_scan(tmp_path: Path) -> None:
     assert_allclose(ds.time, [10.0, 10.5, 11.0, 11.5, 12.0])
     assert_allclose(ds.values[:, 0], [100.0, 250.0, 900.0, 240.0, 110.0])  # last col
     assert ds.labels == ("Intensity",) and ds.units == ("counts",)
-    assert ds.metadata["x_column_name"] == "2Theta"
+    assert ds.metadata["x_column_name"] == "2-Theta"  # the other XRD parsers' spelling
     assert ds.metadata["x_column_unit"] == "deg"  # ° normalized
 
 
@@ -116,7 +116,7 @@ def test_fairmat_2thomega(corpus_dir: Path) -> None:
     ds = import_auto(str(path))
     assert len(ds.time) == 2001
     assert ds.time[0] == pytest.approx(44.0) and ds.time[-1] == pytest.approx(48.0)
-    assert ds.metadata["x_column_name"] == "2Theta"
+    assert ds.metadata["x_column_name"] == "2-Theta"  # the other XRD parsers' spelling
     assert np.all(np.diff(ds.time) > 0)  # monotonic 2theta
     assert np.all(ds.values[:, 0] >= 0)
 

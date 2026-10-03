@@ -165,6 +165,7 @@ export function axisBoxPlugin(color: string): uPlot.Plugin {
         ctx.save();
         ctx.strokeStyle = color;
         ctx.lineWidth = 1;
+        ctx.setLineDash([]); // a dashed series leaves its dash on the shared context
         ctx.strokeRect(left + 0.5, top + 0.5, width - 1, height - 1);
         ctx.restore();
       },
@@ -991,6 +992,10 @@ export function regionShadePlugin(shades: RegionShade[]): uPlot.Plugin {
   };
 }
 
+/** A series' stroke once uPlot has initialised it (always a function). A
+ *  column's bars draw in it, as the export's (`calc/figure_errorbars`). */
+type Ink = (u: uPlot, i: number) => string | null;
+
 export function errorBarsPlugin(
   errorsByCol: Map<number, (number | null)[]>,
   color: string,
@@ -1006,11 +1011,11 @@ export function errorBarsPlugin(
         ctx.beginPath();
         ctx.rect(left, top, width, height);
         ctx.clip();
-        ctx.strokeStyle = color;
         ctx.lineWidth = 1;
         for (const [col, errs] of errorsByCol) {
           const ys = u.data[col];
-          if (!ys) continue;
+          if (!ys || u.series[col]?.show === false) continue;
+          ctx.strokeStyle = (u.series[col].stroke as Ink | undefined)?.(u, col) || color;
           const scaleKey = u.series[col]?.scale ?? "y";
           for (let i = 0; i < xs.length; i++) {
             const x = xs[i];
@@ -1115,11 +1120,11 @@ export function errorSpansPlugin(
         ctx.beginPath();
         ctx.rect(left, top, width, height);
         ctx.clip();
-        ctx.strokeStyle = color;
         ctx.lineWidth = 1;
         for (const [col, spans] of spansByCol) {
           const ys = u.data[col];
-          if (!ys) continue;
+          if (!ys || u.series[col]?.show === false) continue;
+          ctx.strokeStyle = (u.series[col].stroke as Ink | undefined)?.(u, col) || color;
           const scaleKey = u.series[col]?.scale ?? "y";
           for (const span of spans) {
             for (let i = 0; i < xs.length; i++) {

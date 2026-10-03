@@ -31,6 +31,17 @@ def _pm_opt(value: Any, err: Any) -> list[Any]:
     return _pm(value, err) if _finite(value) is not None else [None, None]
 
 
+def _unit_headers(cols: list[str], result: Mapping[str, Any]) -> list[str]:
+    """``cols`` headed with the fitted axes' units when the payload names them
+    (``xUnit``/``yUnit``): centre and widths in x, height in y, area in x·y."""
+    xu = str(result.get("xUnit") or "").strip()
+    yu = str(result.get("yUnit") or "").strip()
+    area = f"{xu}·{yu}" if xu and yu else ""
+    unit = {"Center": xu, "FWHM": xu, "Height": yu, "Area": area}
+    voigt = {label: f"{label[:-1]}, {xu})" for _, label in _VOIGT_WIDTHS} if xu else {}
+    return [voigt.get(c) or (f"{c} ({unit[c]})" if unit.get(c) else c) for c in cols]
+
+
 def from_multipeak_fit(
     result: Mapping[str, Any],
     *,
@@ -53,7 +64,8 @@ def from_multipeak_fit(
     finite error (every classic fit) is laid out exactly as before.
     A peak with ``excluded: true`` (the user unticked it; every downstream
     consumer omits it) gets an "Included" column saying so, and the caption
-    counts it; only shown when there is one.
+    counts it; only shown when there is one. Optional ``xUnit``/``yUnit``
+    head the value columns with their units (absent: headers as before).
     (Ported from PR #434, adapted to the PeakTable field names.)
     """
     peaks = list(result.get("peaks", []))
@@ -77,6 +89,7 @@ def from_multipeak_fit(
     n_excluded = sum(1 for pk in peaks if pk.get("excluded") is True)
     if n_excluded:
         cols.append("Included")
+    cols = _unit_headers(cols, result)
     rows = []
     for i, pk in enumerate(peaks, start=1):
         if has_err:
@@ -174,8 +187,9 @@ def from_peak_model_fit(
               f"converged: {'yes' if result.get('success') else 'no'}"]
     blocks: list[dict[str, Any]] = [
         text_block(f"Background: {bg_kind or _NONE}"),
-        table_block(["Peak", "Shape", "Center", "± center", "FWHM", "± FWHM", "Height",
-                     "± height", "Area", "± area"], peak_rows, caption=f"{len(peaks)} peak(s)"),
+        table_block(_unit_headers(["Peak", "Shape", "Center", "± center", "FWHM", "± FWHM",
+                                   "Height", "± height", "Area", "± area"], result),
+                    peak_rows, caption=f"{len(peaks)} peak(s)"),
         table_block(["Parameter", "Value", "± stderr", "Status"], param_rows,
                     caption="Fitted parameters"),
         text_block(" · ".join(stats)),

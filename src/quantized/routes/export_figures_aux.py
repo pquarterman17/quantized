@@ -37,6 +37,14 @@ from quantized.routes._export_common import (
 router = APIRouter(prefix="/api/export", tags=["export"])
 
 
+class MapLabel(BaseModel):
+    """A text label pinned to a map data coordinate (MapStage's annotations)."""
+
+    x: float
+    y: float
+    text: str
+
+
 class MapFigureRequest(BaseModel):
     x_axis: list[float]
     y_axis: list[float]
@@ -74,6 +82,16 @@ class MapFigureRequest(BaseModel):
     # [lo, hi] colour range (MapStage's explicit colour limits, in z_grid's
     # units); None = the data's own extent. See calc.figure_map.render_map_figure.
     z_limits: list[float] | None = None
+    # z_grid holds log10 of the quantity (MapStage's log colour scale): the
+    # colour bar labels its decades by value, as the canvas does.
+    colorbar_log10: bool = False
+    # One data unit per unit on both axes: the canvas letterboxes a map whose
+    # axes share a physical unit (Qx/Qz, frontend lib/mapAspect.ts) this way.
+    equal_aspect: bool = False
+    # The map's committed slices ([x0, y0, x1, y1] each) and text labels, in
+    # data coordinates -- drawn on the map as on screen (MapSliceOverlay).
+    lines: list[list[float]] | None = None
+    labels: list[MapLabel] | None = None
     label_contours: bool = True
     colorbar: bool = True
     title: str = ""
@@ -112,6 +130,8 @@ def export_map_figure(req: MapFigureRequest) -> Response:
         title=req.title, x_label=req.x_label, y_label=req.y_label, z_label=req.z_label,
         width_in=req.width_in, height_in=req.height_in,
         view_elev=req.view_elev, view_azim=req.view_azim, z_limits=req.z_limits,
+        equal_aspect=req.equal_aspect, lines=req.lines, colorbar_log10=req.colorbar_log10,
+        labels=[lab.model_dump() for lab in req.labels] if req.labels else None,
     )
     return Response(
         content=data,

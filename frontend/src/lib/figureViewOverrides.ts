@@ -57,6 +57,7 @@ export function viewOverrides(st: Pick<
   | "showAxisBox"
   | "xScale"
   | "yScale"
+  | "xReversed"
 >): FigureOverrides | undefined {
   // Decode #52: the legend title (Origin's bold header) rides the legend
   // override so vector export matches the screen's static legend.
@@ -133,6 +134,7 @@ export function viewOverrides(st: Pick<
       ref_lines: refLines,
       region_shades: regionShades,
       x_lim: finiteLim(st.xLim),
+      x_reversed: st.xReversed || undefined, // matplotlib invert_xaxis (calc/figure_overrides.py)
       y_lim: finiteLim(st.yLim),
       y2_lim: finiteLim(st.y2Lim),
       grid: st.showGrid,
