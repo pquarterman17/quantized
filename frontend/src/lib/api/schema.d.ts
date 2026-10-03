@@ -904,6 +904,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/export/figure-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Figure Batch
+         * @description Render 1–64 ordinary figures and download them in one ZIP archive.
+         *
+         *     The response is all-or-nothing: if any figure is invalid or rendering is
+         *     unavailable, no partial archive is returned.  Duplicate or sanitization-
+         *     colliding filenames are numbered rather than overwritten by ``ZipFile``.
+         */
+        post: operations["export_figure_batch_api_export_figure_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/export/figure-hitmap": {
         parameters: {
             query?: never;
@@ -7123,6 +7147,16 @@ export interface components {
              */
             y_label?: string;
         };
+        /** FigureBatchRequest */
+        FigureBatchRequest: {
+            /** Figures */
+            figures: components["schemas"]["FigureRequest"][];
+            /**
+             * Filename
+             * @default figures
+             */
+            filename?: string;
+        };
         /**
          * FigureEncoding
          * @description Per-level encodings for an xy figure. Present (with any column set) it
@@ -12354,6 +12388,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["FigureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_figure_batch_api_export_figure_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FigureBatchRequest"];
             };
         };
         responses: {

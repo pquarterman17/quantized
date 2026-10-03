@@ -38,6 +38,7 @@ from quantized.routes import (
     electrical,
     electrochemistry,
     export,
+    export_figure_batch,
     export_figures,
     export_figures_aux,
     export_multivar,
@@ -226,6 +227,7 @@ def create_app(
     application.include_router(statplots.router)
     application.include_router(reference.router)
     application.include_router(export.router)
+    application.include_router(export_figure_batch.router)
     application.include_router(export_figures.router)
     application.include_router(export_figures_aux.router)
     application.include_router(export_statplots.router)

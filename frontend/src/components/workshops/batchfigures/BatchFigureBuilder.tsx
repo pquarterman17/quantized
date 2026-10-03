@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { BUILTIN_PLOT_RECIPES } from "../../../lib/builtinPlotRecipes";
+import { downloadBatchFigures, MAX_BATCH_FIGURE_EXPORT } from "../../../lib/batchFigureExport";
 import type { PlotRecipe } from "../../../lib/plotRecipeSchema";
 import { runSequentialBatch, type BatchProgress } from "../../../lib/sequentialBatch";
 import { nextFigureId } from "../../../store/figureLifecycle";
@@ -26,6 +27,8 @@ type Phase = "idle" | "checking" | "review" | "creating" | "done";
 const SCOPE_LABEL = { project: "Project", global: "Global", "built-in": "Built-in" } as const;
 const STATUS_LABEL = { ready: "Ready", partial: "Needs review", blocked: "Cannot build" } as const;
 const STATUS_TONE = { ready: "ok", partial: "warn", blocked: "danger" } as const;
+const EXPORT_FORMATS = ["pdf", "svg", "png", "tiff"] as const;
+const EXPORT_STYLES = ["default", "aps", "nature", "thesis", "report", "web", "presentation", "poster"];
 
 function recipeChoices(project: readonly PlotRecipe[], global: readonly PlotRecipe[]): BatchRecipeChoice[] {
   return [
@@ -66,7 +69,12 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
   const [createPage, setCreatePage] = useState(true);
   const [pageName, setPageName] = useState("");
   const [columns, setColumns] = useState<number | "auto">("auto");
-  const [result, setResult] = useState<{ figures: number; pages: string[]; pageOpened: boolean } | null>(null);
+  const [downloadArchive, setDownloadArchive] = useState(false);
+  const [exportFormat, setExportFormat] = useState<(typeof EXPORT_FORMATS)[number]>("pdf");
+  const [exportStyle, setExportStyle] = useState("default");
+  const [exportDpi, setExportDpi] = useState(300);
+  const [archiveName, setArchiveName] = useState("");
+  const [result, setResult] = useState<{ figures: number; pages: string[]; pageOpened: boolean; downloaded: boolean } | null>(null);
   const controller = useRef<AbortController | null>(null);
 
   useEffect(() => hydrateGlobal(), [hydrateGlobal]);
@@ -186,12 +194,32 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
       toast("No figures were created. Select at least one compatible dataset.", "danger");
       return;
     }
+    if (downloadArchive) {
+      try {
+        await downloadBatchFigures(artifacts.figures, state.datasets, {
+          format: exportFormat,
+          style: exportStyle,
+          dpi: Math.max(50, Math.min(1200, exportDpi)),
+          archiveName: archiveName.trim() || `${recipeChoice.recipe.name} figures`,
+        }, abort.signal);
+      } catch (error) {
+        setProgress(null);
+        setPhase("review");
+        if (error instanceof Error && error.name === "AbortError") {
+          toast("Batch figure export cancelled.", "info");
+        } else {
+          toast(`Batch figure export failed: ${error instanceof Error ? error.message : String(error)}`, "danger");
+        }
+        return;
+      }
+    }
+    if (abort.signal.aborted) return;
     const { pageOpened } = commitBatchFigureArtifacts(artifacts);
     if (recipeChoice.scope !== "built-in") {
       recordRecipeUse({ kind: "plot", scope: recipeChoice.scope, id: recipeChoice.recipe.id });
     }
     setProgress({ done: artifacts.figures.length, total: artifacts.figures.length, current: null });
-    setResult({ figures: artifacts.figures.length, pages: artifacts.pages.map((page) => page.name), pageOpened });
+    setResult({ figures: artifacts.figures.length, pages: artifacts.pages.map((page) => page.name), pageOpened, downloaded: downloadArchive });
     setPhase("done");
   };
 
@@ -303,16 +331,30 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
               <label className="qzk-field"><span className="qzk-field-lbl">Columns</span><Select value={String(columns)} disabled={busy} onChange={(event) => setColumns(event.target.value === "auto" ? "auto" : Number(event.target.value))} options={[{ value: "auto", label: "Automatic" }, ...[1, 2, 3, 4].map((value) => ({ value: String(value), label: String(value) }))]} /></label>
             </div>
           )}
+          <Checkbox checked={downloadArchive} disabled={busy} onChange={setDownloadArchive}>
+            Also download one ZIP of publication figures
+          </Checkbox>
+          {downloadArchive && (
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) repeat(3, 120px)", gap: 8 }}>
+              <label className="qzk-field"><span className="qzk-field-lbl">Archive name</span><input className="qz-input" value={archiveName} placeholder={`${recipeChoice?.recipe.name ?? "Batch"} figures`} disabled={busy} onChange={(event) => setArchiveName(event.target.value)} /></label>
+              <label className="qzk-field"><span className="qzk-field-lbl">Format</span><Select value={exportFormat} disabled={busy} onChange={(event) => setExportFormat(event.target.value as (typeof EXPORT_FORMATS)[number])} options={EXPORT_FORMATS.map((value) => ({ value, label: value.toUpperCase() }))} /></label>
+              <label className="qzk-field"><span className="qzk-field-lbl">Style</span><Select value={exportStyle} disabled={busy} onChange={(event) => setExportStyle(event.target.value)} options={EXPORT_STYLES.map((value) => ({ value, label: value }))} /></label>
+              <label className="qzk-field"><span className="qzk-field-lbl">DPI</span><input className="qz-input" type="number" min={50} max={1200} value={exportDpi} disabled={busy || exportFormat === "pdf" || exportFormat === "svg"} onChange={(event) => setExportDpi(Number(event.target.value) || 300)} /></label>
+            </div>
+          )}
+          {downloadArchive && includedIds.size > MAX_BATCH_FIGURE_EXPORT && (
+            <div style={{ color: "var(--danger)" }}>A ZIP archive supports at most {MAX_BATCH_FIGURE_EXPORT} figures. Uncheck some datasets or turn off ZIP export.</div>
+          )}
           <div style={{ display: "flex", gap: 6 }}>
             <Button onClick={() => void checkCompatibility()} disabled={busy}>Check again</Button>
-            <Button variant="primary" onClick={() => void build()} disabled={busy || includedIds.size === 0}>Create {includedIds.size} figure{includedIds.size === 1 ? "" : "s"}</Button>
+            <Button variant="primary" onClick={() => void build()} disabled={busy || includedIds.size === 0 || (downloadArchive && includedIds.size > MAX_BATCH_FIGURE_EXPORT)}>Create {includedIds.size} figure{includedIds.size === 1 ? "" : "s"}</Button>
           </div>
         </>
       )}
 
       {phase === "done" && result && (
         <div role="status" style={{ border: "1px solid var(--ok)", borderRadius: 6, padding: 10 }}>
-          Created {result.figures} editable figure{result.figures === 1 ? "" : "s"}{result.pages.length === 1 ? result.pageOpened ? ` and opened Figure Page “${result.pages[0]}”.` : ` and saved Figure Page “${result.pages[0]}” in the Library. Your already-open page was left unchanged.` : result.pages.length > 1 ? result.pageOpened ? ` and ${result.pages.length} Figure Pages. The first page is open; the rest are saved in the Library.` : ` and ${result.pages.length} Figure Pages in the Library. Your already-open page was left unchanged.` : "."}
+          Created {result.figures} editable figure{result.figures === 1 ? "" : "s"}{result.pages.length === 1 ? result.pageOpened ? ` and opened Figure Page “${result.pages[0]}”.` : ` and saved Figure Page “${result.pages[0]}” in the Library. Your already-open page was left unchanged.` : result.pages.length > 1 ? result.pageOpened ? ` and ${result.pages.length} Figure Pages. The first page is open; the rest are saved in the Library.` : ` and ${result.pages.length} Figure Pages in the Library. Your already-open page was left unchanged.` : "."}{result.downloaded ? " The publication-file ZIP was downloaded." : ""}
           <div style={{ marginTop: 8 }}><Button variant="primary" onClick={onClose}>Done</Button></div>
         </div>
       )}

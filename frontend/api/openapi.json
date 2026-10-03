@@ -4597,6 +4597,29 @@
         "title": "FieldFigureRequest",
         "type": "object"
       },
+      "FigureBatchRequest": {
+        "properties": {
+          "figures": {
+            "items": {
+              "$ref": "#/components/schemas/FigureRequest"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Figures",
+            "type": "array"
+          },
+          "filename": {
+            "default": "figures",
+            "title": "Filename",
+            "type": "string"
+          }
+        },
+        "required": [
+          "figures"
+        ],
+        "title": "FigureBatchRequest",
+        "type": "object"
+      },
       "FigureEncoding": {
         "description": "Per-level encodings for an xy figure. Present (with any column set) it\nswitches ``_figure_series`` to the encoded split, which ALSO takes\n``group_col`` as a split factor; absent, every request renders exactly as\nit did before the field existed.",
         "properties": {
@@ -16234,6 +16257,46 @@
           }
         },
         "summary": "Export Figure",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/export/figure-batch": {
+      "post": {
+        "description": "Render 1\u201364 ordinary figures and download them in one ZIP archive.\n\nThe response is all-or-nothing: if any figure is invalid or rendering is\nunavailable, no partial archive is returned.  Duplicate or sanitization-\ncolliding filenames are numbered rather than overwritten by ``ZipFile``.",
+        "operationId": "export_figure_batch_api_export_figure_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FigureBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Figure Batch",
         "tags": [
           "export"
         ]
