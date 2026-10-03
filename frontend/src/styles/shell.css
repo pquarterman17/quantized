@@ -732,7 +732,10 @@ body {
 /* GUI_INTERACTION_PLAN #9: active-tool HUD, top-left — clear of the toolbar
    (top-center) and the legend's default NE/NW/SE/SW corners. Hidden for
    Pointer (ToolHud.tsx returns null), so a fresh workspace shows nothing. */
-.qzk-tool-hud { top: 12px; left: 12px; padding: 5px 10px; display: flex; align-items: center; gap: 7px; font-size: var(--font-size-sm); white-space: nowrap; }
+.qzk-tool-hud { top: 12px; left: 12px; max-width: calc(100% - 24px); padding: 5px 10px; display: flex; align-items: center; gap: 7px; font-size: var(--font-size-sm); white-space: nowrap; }
+/* A narrow stage cut the HUD off at its edge (Esc cancels and all): only the hint gives way. */
+.qzk-tool-hud > * { flex-shrink: 0; }
+.qzk-tool-hud .hint { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .qzk-tool-hud .g { color: var(--accent); font-size: 14px; }
 .qzk-tool-hud .name { color: var(--text); font-weight: var(--weight-semibold); }
 .qzk-tool-hud .sep,

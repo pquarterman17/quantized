@@ -246,6 +246,24 @@ test("the ∫ and ∩ result chips stack inside the plot frame", async ({ page }
   }
 });
 
+// Round-4 chrome audit: in a narrow stage the active-tool HUD ran past the
+// stage edge and was cut off, "Esc cancels" included; now only its hint shrinks.
+test("the active-tool HUD stays inside the stage", async ({ page }) => {
+  await loadPlot(page);
+  await page.evaluate(() =>
+    (window as unknown as { __qz: { useApp: { getState: () => { setPlotTool: (t: string) => void } } } }).__qz.useApp
+      .getState()
+      .setPlotTool("stats"),
+  );
+  const esc = page.locator(".qzk-stage > .qzk-tool-hud .esc");
+  await expect(esc).toBeVisible();
+  for (const size of SIZES) {
+    await page.setViewportSize(size);
+    const [e, s] = await Promise.all([rectOf(esc), rectOf(page.locator(".qzk-stage").first())]);
+    expect(e.right, `HUD cut off at ${size.width}x${size.height}`).toBeLessThanOrEqual(s.right);
+  }
+});
+
 type QzHarness = { __qz: { useApp: { setState: (s: object) => void } } };
 
 // Round-4 chrome audit: the import toast sat bottom-centre of the WINDOW,
