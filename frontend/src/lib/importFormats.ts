@@ -66,7 +66,12 @@ export const IMPORT_FORMATS: readonly ImportFormat[] = [
   // ── Spectroscopy ─────────────────────────────────────────────────────
   { exts: [".jdx", ".dx"], name: "JCAMP-DX", category: "Spectroscopy", note: "IR / Raman / UV-Vis / NMR / MS." },
   { exts: [".spc"], name: "GRAMS / Thermo SPC", category: "Spectroscopy", note: "Spectral binary." },
-  { exts: [".opus"], name: "Bruker OPUS", category: "Spectroscopy", note: "FTIR / NIR / Raman binary." },
+  {
+    exts: [".opus", ".0", ".1", ".2", ".3", ".4", ".5", ".6", ".7", ".8", ".9"],
+    name: "Bruker OPUS",
+    category: "Spectroscopy",
+    note: "FTIR / NIR / Raman binary, including numbered sample.0, sample.1 … files.",
+  },
   // ── Chromatography ───────────────────────────────────────────────────
   { exts: [".nc", ".cdf"], name: "NetCDF (ANDI / AIA)", category: "Chromatography", note: "Generic NetCDF-3/4 too." },
   // ── Origin projects ──────────────────────────────────────────────────
@@ -81,7 +86,8 @@ export const IMPORT_FORMATS: readonly ImportFormat[] = [
     exts: [".csv", ".tsv", ".xlsx", ".xlsm"],
     name: "Delimited text & Excel",
     category: "Tables & generic",
-    note: "SIMS depth profiles are auto-detected first. Any text file also imports via the Import Wizard.",
+    note:
+      "SIMS depth profiles are auto-detected first. Every data sheet of a workbook imports as its own dataset. Any text file also imports via the Import Wizard.",
   },
 ];
 

@@ -27,3 +27,8 @@ def test_data_filter_covers_every_registered_extension() -> None:
 
 def test_orso_is_offered() -> None:
     assert ".ort" in _data_filter_exts()
+
+
+def test_numbered_opus_files_are_offered() -> None:
+    """OPUS writes sample.0, sample.1, ...; the registry sniffs any digit suffix."""
+    assert {".0", ".1", ".9"} <= _data_filter_exts()

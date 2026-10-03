@@ -267,6 +267,8 @@ def is_recognised_data_name(filename: str) -> bool:
     ext = _normalize_ext(Path(filename).suffix) if Path(filename).suffix else ""
     if ext and (ext in _EXT_MAP or ext in _SNIFFERS or ext in _STRUCTURE_MAP):
         return True
+    if ext[1:].isdigit():  # OPUS's sample.0, sample.1, ... (resolve_parser sniffs them)
+        return True
     return match_filter(Path(filename)) is not None
 
 
