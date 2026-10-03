@@ -25,6 +25,7 @@ import { exportPlotPng, plotPngBlob } from "../../lib/plotExport";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import type { Dataset } from "../../lib/types";
 import { waterfallSourceRows } from "../../lib/waterfallOffset";
+import { viewBounds } from "../../lib/uplotTools";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 
@@ -86,12 +87,9 @@ export function usePlotStageActions(
   function resetView() {
     if (plotRef.current && displayPayload) {
       const u = plotRef.current;
-      const before = {
-        xLim: [u.scales.x.min ?? 0, u.scales.x.max ?? 1] as [number, number],
-        yLim: [u.scales.y.min ?? 0, u.scales.y.max ?? 1] as [number, number],
-      };
+      const before = viewBounds(u);
       plotRef.current.setData(displayPayload.data, true); // resetScales = re-fit
-      useApp.getState().recordView(before, { xLim: null, yLim: null });
+      useApp.getState().recordView(before, { xLim: null, yLim: null, ...(u.scales.y2 ? { y2Lim: null } : {}) });
     }
   }
 

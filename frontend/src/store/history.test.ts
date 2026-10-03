@@ -171,6 +171,24 @@ describe("separate plot-view history", () => {
     expect(useApp.getState().xLim).toEqual([1, 3]);
     expect(useApp.getState().yLim).toEqual([10, 20]);
   });
+
+  // Plot audit round 3: a box zoom moved y2 on screen but only x/y were
+  // committed, so the next rebuild (and the export) snapped y2 back to auto.
+  it("commits and walks a secondary y range, and leaves y2 alone when a gesture has none", () => {
+    useApp.setState({ y2Lim: [0, 5] });
+    useApp.getState().recordView(
+      { xLim: [0, 4], yLim: [0, 1], y2Lim: [0, 5] },
+      { xLim: [0, 4], yLim: [0, 1], y2Lim: [1, 2] },
+    );
+    expect(useApp.getState().y2Lim).toEqual([1, 2]);
+    expect(useApp.getState().viewHistory).toHaveLength(1);
+    useApp.getState().backView();
+    expect(useApp.getState().y2Lim).toEqual([0, 5]);
+    useApp.getState().forwardView();
+    expect(useApp.getState().y2Lim).toEqual([1, 2]);
+    useApp.getState().recordView({ xLim: [0, 4], yLim: [0, 1] }, { xLim: [1, 2], yLim: [0, 1] });
+    expect(useApp.getState().y2Lim).toEqual([1, 2]);
+  });
 });
 
 describe("history keyboard guard (focus in an editable field)", () => {

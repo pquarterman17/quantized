@@ -24,10 +24,26 @@ export interface Readout {
   rows: ReadoutRow[];
 }
 
+/** Set every scale to the data between two of its own pixel positions (`null`
+ *  leaves it alone). Going through posToVal keeps this right on log,
+ *  reciprocal and reversed axes, and a secondary y2 moves with y. */
+function setScalesPx(u: uPlot, px: (k: string, s: uPlot.Scale) => [number, number] | null): void {
+  u.batch(() => {
+    for (const k of Object.keys(u.scales)) {
+      const r = px(k, u.scales[k]);
+      if (!r) continue;
+      const a = u.posToVal(r[0], k);
+      const b = u.posToVal(r[1], k);
+      u.setScale(k, { min: Math.min(a, b), max: Math.max(a, b) });
+    }
+  });
+}
+
 /**
- * Drag-to-pan: shifts both scales by the pointer delta (linear mapping over the
- * plotting area). Document-level move/up listeners are bound per drag and torn
- * down on release, so destroyed plots leave nothing behind.
+ * Drag-to-pan: every scale follows the pointer by its pixel delta
+ * (`setScalesPx`), so a log axis pans by decades and never reaches zero.
+ * Document-level move/up listeners are bound per drag and torn down on
+ * release, so destroyed plots leave nothing behind.
  */
 export function panPlugin(): uPlot.Plugin {
   return {
@@ -39,20 +55,18 @@ export function panPlugin(): uPlot.Plugin {
           if (e.button !== 0) return;
           e.preventDefault();
           over.style.cursor = "grabbing";
-          const startX = e.clientX;
-          const startY = e.clientY;
-          const x0min = u.scales.x.min ?? 0;
-          const x0max = u.scales.x.max ?? 1;
-          const y0min = u.scales.y.min ?? 0;
-          const y0max = u.scales.y.max ?? 1;
-
+          let lastX = e.clientX;
+          let lastY = e.clientY;
+          const start = Object.entries(u.scales).map(([k, s]) => [k, s.min ?? 0, s.max ?? 1] as const);
           const onMove = (ev: MouseEvent) => {
-            const w = over.clientWidth || 1;
-            const h = over.clientHeight || 1;
-            const dx = ((ev.clientX - startX) / w) * (x0max - x0min) * (u.scales.x.dir ?? 1); // reversed x (dir -1)
-            const dy = ((ev.clientY - startY) / h) * (y0max - y0min);
-            u.setScale("x", { min: x0min - dx, max: x0max - dx });
-            u.setScale("y", { min: y0min + dy, max: y0max + dy });
+            const dx = ev.clientX - lastX;
+            const dy = ev.clientY - lastY;
+            lastX = ev.clientX;
+            lastY = ev.clientY;
+            setScalesPx(u, (k, s) => {
+              const d = k === "x" ? dx : dy;
+              return [u.valToPos(s.min ?? 0, k) - d, u.valToPos(s.max ?? 1, k) - d];
+            });
           };
           const onUp = () => {
             over.style.cursor = "grab";
@@ -69,8 +83,7 @@ export function panPlugin(): uPlot.Plugin {
             document.removeEventListener("mousemove", onMove);
             document.removeEventListener("mouseup", onUp);
             over.style.cursor = "grab";
-            u.setScale("x", { min: x0min, max: x0max });
-            u.setScale("y", { min: y0min, max: y0max });
+            u.batch(() => start.forEach(([k, min, max]) => u.setScale(k, { min, max })));
           });
         });
       },
@@ -285,18 +298,12 @@ export function wheelZoomPlugin(step = 1.18): uPlot.Plugin {
             const f = e.deltaY < 0 ? 1 / step : step; // up → zoom in (shrink range)
             const onlyX = e.metaKey || e.ctrlKey;
             const onlyY = e.shiftKey;
-            if (!onlyY) {
-              // New left/right edges in OLD pixel space, scaled about the cursor,
-              // mapped back to data values (posToVal handles linear + log x).
-              const a = u.posToVal(cx - cx * f, "x");
-              const b = u.posToVal(cx + (wid - cx) * f, "x");
-              u.setScale("x", { min: Math.min(a, b), max: Math.max(a, b) });
-            }
-            if (!onlyX) {
-              const a = u.posToVal(cy - cy * f, "y");
-              const b = u.posToVal(cy + (hgt - cy) * f, "y");
-              u.setScale("y", { min: Math.min(a, b), max: Math.max(a, b) });
-            }
+            // New edges in OLD pixel space, scaled about the cursor.
+            setScalesPx(u, (k) =>
+              k === "x"
+                ? onlyY ? null : [cx - cx * f, cx + (wid - cx) * f]
+                : onlyX ? null : [cy - cy * f, cy + (hgt - cy) * f],
+            );
           },
           { passive: false },
         );
@@ -308,6 +315,14 @@ export function wheelZoomPlugin(step = 1.18): uPlot.Plugin {
 export interface PlotViewBounds {
   xLim: [number, number];
   yLim: [number, number];
+  /** Present only when the plot has a secondary y axis. */
+  y2Lim?: [number, number];
+}
+
+/** The live view: x, y and (only when the plot has one) the secondary y range. */
+export function viewBounds(u: uPlot): PlotViewBounds {
+  const lim = (s: uPlot.Scale): [number, number] => [s.min ?? 0, s.max ?? 1];
+  return { xLim: lim(u.scales.x), yLim: lim(u.scales.y), ...(u.scales.y2 ? { y2Lim: lim(u.scales.y2) } : {}) };
 }
 
 /** Observe completed navigation gestures without participating in their
@@ -319,10 +334,7 @@ export function viewHistoryPlugin(onCommit: (before: PlotViewBounds, after: Plot
     hooks: {
       ready: (u: uPlot) => {
         const over = u.over;
-        const bounds = (): PlotViewBounds => ({
-          xLim: [u.scales.x.min ?? 0, u.scales.x.max ?? 1],
-          yLim: [u.scales.y.min ?? 0, u.scales.y.max ?? 1],
-        });
+        const bounds = () => viewBounds(u);
         let pointerStart: PlotViewBounds | null = null;
         let wheelStart: PlotViewBounds | null = null;
         let wheelTimer: ReturnType<typeof setTimeout> | null = null;
