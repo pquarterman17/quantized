@@ -81,7 +81,7 @@ test.describe("SIMS compare + region (P2.3 slice 2)", () => {
     ]);
 
     // The canvas legend states the offset (suffix before the unit).
-    await expect(page.locator(".qzk-stage")).toContainText("B — sampleB ×10^1 (atoms/cm3)");
+    await expect(page.locator(".qzk-stage")).toContainText("B — sampleB ×10^1 (atoms/cm³)");
 
     // The publication export of this same view carries the same offsets…
     const hitmap = page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/export/figure-hitmap");
@@ -98,8 +98,8 @@ test.describe("SIMS compare + region (P2.3 slice 2)", () => {
     const svg = await page.request.post("/api/export/figure", { data: { ...spec, fmt: "svg" } });
     expect(svg.ok(), await svg.text()).toBe(true);
     const text = await svg.text();
-    expect(text).toContain("B — sampleB ×10^1 (atoms/cm3)");
-    expect(text).toContain("B — sampleA (atoms/cm3)");
+    expect(text).toContain("B — sampleB ×10^1 (atoms/cm³)");
+    expect(text).toContain("B — sampleA (atoms/cm³)");
 
     // Region measures on sample A, from the real backend.
     await panel.getByRole("radio", { name: "Region" }).click();
