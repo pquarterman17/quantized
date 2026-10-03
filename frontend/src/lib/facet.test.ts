@@ -591,6 +591,13 @@ describe("sharedYDomain", () => {
     expect(sharedYDomain([])).toBeNull();
   });
 
+  // Plot audit round 3: a log-Y break of a Bruker scan with zero-count rows
+  // (FAIRmat_2thomega.brml, 211 zeros) drew two empty panels — log10(0).
+  it("skips values <= 0 for a log or reciprocal axis", () => {
+    expect(sharedYDomain([panel([0, 5]), panel([10, -3, 2])], [], true)).toEqual([2, 10]);
+    expect(sharedYDomain([panel([0, -1])], [], true)).toBeNull();
+  });
+
   it("covers multiple series within one panel", () => {
     const twoSeries: BreakPanel = {
       xRange: [0, 1],

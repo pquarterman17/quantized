@@ -264,7 +264,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
   // Break panels share ONE y-domain instead (each keeps its own x-range) — an
   // honest axis break only elides x, never y.
   const breakYLim = useMemo(
-    () => (breakMode ? limOr(drawableLim(yLim, yScale), sharedYDomain(breakPanels!, breakHidden ?? [])) : null),
+    () => (breakMode ? limOr(drawableLim(yLim, yScale), sharedYDomain(breakPanels!, breakHidden ?? [], yScale !== "linear")) : null),
     [breakMode, breakPanels, yLim, yScale, breakHidden],
   );
 

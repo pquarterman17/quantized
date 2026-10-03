@@ -123,6 +123,17 @@ describe("MultiPanelStage — break panels on a log Y with a non-positive typed 
     }
   });
 
+  // Plot audit round 3: zero-count rows (a real Bruker scan has 211) made the
+  // AUTO shared range start at 0 — two blank log panels.
+  it("an auto range skips zero counts", async () => {
+    breakView([null, null]);
+    const ds = useApp.getState().datasets[0];
+    useApp.setState({ datasets: [{ ...ds, data: { ...ds.data, values: ds.data.values.map((r, i) => (i % 3 ? r : [0, r[1]])) } }] });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    for (const { opts } of created) expect((opts.scales?.y?.range as [number, number])[0]).toBeGreaterThan(0);
+  });
+
   it("a half-open pair whose only typed side is <= 0 is full auto, still positive", async () => {
     breakView([0, null]);
     render(<MultiPanelStage />);
