@@ -384,9 +384,15 @@ export function viewHistoryPlugin(onCommit: (before: PlotViewBounds, after: Plot
 /** Report every visible series' value at the nearest-x cursor index (or null when
  *  off-plot / no visible series have a value there). The cursor index is shared
  *  across the aligned data, so one lookup per column gives a full readout.
- *  `shift` (a waterfall's per-column stagger) is taken back off: the readout
- *  states the data, not where the display moved it. */
-export function readoutPlugin(onReadout: (r: Readout | null) => void, shift?: number[]): uPlot.Plugin {
+ *  `shift` (a waterfall's per-column stagger) and the X offset (block b of
+ *  `blockRows` rows slid by b·`xStep`) are taken back off: the readout states
+ *  the data, not where the display moved it. */
+export function readoutPlugin(
+  onReadout: (r: Readout | null) => void,
+  shift?: number[],
+  blockRows?: number,
+  xStep?: number,
+): uPlot.Plugin {
   return {
     hooks: {
       setCursor: (u: uPlot) => {
@@ -412,7 +418,7 @@ export function readoutPlugin(onReadout: (r: Readout | null) => void, shift?: nu
           onReadout(null);
           return;
         }
-        onReadout({ x, rows });
+        onReadout({ x: blockRows && xStep ? x - Math.floor(idx / blockRows) * xStep : x, rows });
       },
     },
   };

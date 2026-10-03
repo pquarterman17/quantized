@@ -23,6 +23,7 @@ import uPlot from "uplot";
 import { applyWaterfall, type PlotPayload } from "./plotdata";
 import { buildOpts } from "./uplotOpts";
 import type { Readout } from "./uplotTools";
+import { expandWaterfallX } from "./waterfallX";
 
 const live: uPlot[] = [];
 afterEach(() => live.splice(0).forEach((u) => u.destroy()));
@@ -48,5 +49,27 @@ describe("cursor readout on a waterfall", () => {
     await new Promise((r) => setTimeout(r, 0));
     u.setCursor({ left: u.valToPos(2, "x"), top: 10 });
     expect(seen).toEqual({ x: 2, rows: [{ label: "a", y: 3 }, { label: "b", y: 30 }, { label: "c", y: 7 }] });
+  });
+
+  it("reports a series' own x on a waterfall with an X offset, not the slid x", async () => {
+    const base: PlotPayload = {
+      data: [[0, 1, 2], [1, 2, 3], [10, 20, 30]] as PlotPayload["data"],
+      series: [{ label: "a", unit: "" }, { label: "b", unit: "" }],
+      xLabel: "x",
+      xUnit: "",
+    };
+    const none = new Map();
+    // x-span 2, fraction 0.5 -> series b slides right by 1.
+    const shown = expandWaterfallX(base, 2, 0.5, { errorBars: none, errorSpans: none, colorByColumns: none }).displayPayload;
+    let seen: Readout | null = null;
+    const opts = buildOpts(shown, {
+      width: 600, height: 400, xScale: "linear", yScale: "linear", tool: "cursor",
+      onReadout: (r) => (seen = r), linearPaths: uPlot.paths.linear!(),
+    });
+    const u = new uPlot(opts, shown.data, document.body.appendChild(document.createElement("div")));
+    live.push(u);
+    await new Promise((r) => setTimeout(r, 0));
+    u.setCursor({ left: u.valToPos(3, "x"), top: 10 }); // b's last point, drawn at x = 2 + 1
+    expect(seen).toEqual({ x: 2, rows: [{ label: "b", y: 30 }] });
   });
 });
