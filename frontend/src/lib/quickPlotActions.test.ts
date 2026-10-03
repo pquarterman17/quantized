@@ -1,6 +1,7 @@
 // PR F, L0.36/L0.38: the worksheet-row Quick Plot / Configure Quick Plot…
 // menu entries.
 
+import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { actionMenuItem, type ContextAction, type DatasetActionTarget } from "./contextActions";
@@ -8,6 +9,7 @@ import { datasetQuickPlotActions } from "./quickPlotActions";
 import type { Dataset } from "./types";
 import { useApp } from "../store/useApp";
 import type { ContextMenuItem } from "../components/overlays/ContextMenu";
+import { openOriginMigrationReview, useWorkflowWorkspaceView } from "./workflowWorkspace";
 
 function dataset(id: string, technique = "magnetometry.mvsh"): Dataset {
   return {
@@ -131,6 +133,16 @@ describe("dataset.techniqueWorkspace", () => {
     expect(useApp.getState().activeId).toBe("d1");
     expect(useApp.getState().stageTab).toBe("technique");
     expect(onStageOpen).toHaveBeenCalledOnce();
+  });
+
+  it("clears a stale Origin review route before showing a worksheet workflow", async () => {
+    const ds = dataset("d1");
+    useApp.setState({ datasets: [ds], activeId: null });
+    openOriginMigrationReview("old-import");
+    const { result } = renderHook(() => useWorkflowWorkspaceView());
+
+    menuItemFor(find("dataset.techniqueWorkspace"), target(ds)).run();
+    await waitFor(() => expect(result.current).toEqual({ kind: "technique" }));
   });
 });
 

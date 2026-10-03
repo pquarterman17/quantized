@@ -11,6 +11,7 @@
 // contextActions.ts itself, which has no line-budget room left).
 
 import { quickPlotAvailability } from "./quickPlot";
+import { onLoadFailure, runLazy } from "./runLazy";
 import type { ContextAction, DatasetActionTarget } from "./contextActions";
 import { useApp } from "../store/useApp";
 import { openQuickPlotWith } from "../store/quickPlotWithDialog";
@@ -47,6 +48,13 @@ export const datasetQuickPlotActions: ContextAction<DatasetActionTarget>[] = [
       state.setActive(t.dataset.id);
       state.setStageTab("technique");
       t.onStageOpen?.();
+      // This module is eager; the workspace state stays in its lazy chunk so
+      // first paint does not pay for Workflow navigation. Reset a prior Origin
+      // migration review before opening the technique route.
+      void runLazy("Loading workflow workspace…", () => import("./workflowWorkspace")).then(
+        ({ openTechniqueWorkflow }) => openTechniqueWorkflow(),
+        onLoadFailure,
+      );
     },
   },
   {

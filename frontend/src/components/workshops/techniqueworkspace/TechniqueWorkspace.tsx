@@ -13,6 +13,8 @@ import type { Action } from "../../../store/commands";
 import { runTechniqueWorkspaceAction, techniqueActionDefinition } from "../../../store/techniqueWorkspaceRun";
 import { useApp } from "../../../store/useApp";
 import { Badge, Button } from "../../primitives";
+import { useWorkflowWorkspaceView } from "../../../lib/workflowWorkspace";
+import OriginMigrationCockpit from "../originmigration/OriginMigrationCockpit";
 
 function sourceName(ds: Dataset): string {
   const parser = ds.data.metadata.parser_name;
@@ -45,6 +47,14 @@ function ActionButton({ action, disabled, title, onRun }: { action: Pick<Action,
 }
 
 export default function TechniqueWorkspace({ onClose }: { onClose: () => void }) {
+  const workspaceView = useWorkflowWorkspaceView();
+  if (workspaceView.kind === "origin") {
+    return <OriginMigrationCockpit key={workspaceView.requestId} initialFidelityId={workspaceView.fidelityId} onClose={onClose} />;
+  }
+  return <TechniqueWorkspaceContent onClose={onClose} />;
+}
+
+function TechniqueWorkspaceContent({ onClose }: { onClose: () => void }) {
   const activeId = useApp((s) => s.activeId);
   const dataset = useApp((s) => s.datasets.find((d) => d.id === s.activeId));
   const hasFigure = useApp((s) => s.editableFigures.some((f) => f.bindings.datasetId === s.activeId));

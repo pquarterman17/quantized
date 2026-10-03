@@ -2,6 +2,7 @@
 // Graph Builder seeding. Composed into useApp to keep the root store bounded.
 
 import { resolveOriginFigureSources, resolveOriginSourceManually } from "../lib/originSources";
+import { figureLayerFamily } from "../lib/originFigures";
 import { plural } from "../lib/plural";
 import { ORIGIN_OVERLAY_VERSION } from "../lib/originOverlay";
 import type { PlotSpec } from "../lib/plotspec";
@@ -111,10 +112,18 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
       // regardless of source-book count. Falling through to sources[0] for a
       // one-book multi-X figure would collapse every Y back onto xColumns[0]
       // and recreate the hysteresis corruption fixed by PR #38.
-      const overlayDataset = manualSource ? undefined : get().datasets.find(
-        (ds) => (ds.data.metadata ?? {}).origin_overlay_source === entry.id
-          && (ds.data.metadata ?? {}).origin_overlay_version === ORIGIN_OVERLAY_VERSION,
-      );
+      const familyIds = new Set(figureLayerFamily(entry, get().originFigures).map((member) => member.id));
+      const overlayDataset = manualSource ? undefined : get().datasets.find((ds) => {
+        const metadata = ds.data.metadata ?? {};
+        const sourceId = String(metadata.origin_overlay_source ?? "");
+        const refreshedBy = metadata.origin_overlay_entry;
+        const matchesLayer = refreshedBy === entry.id
+          // Backward compatibility for overlays saved before the layer stamp:
+          // their source was the clicked layer, not the canonical family id.
+          || (refreshedBy == null && sourceId === entry.id);
+        return matchesLayer && familyIds.has(sourceId)
+          && metadata.origin_overlay_version === ORIGIN_OVERLAY_VERSION;
+      });
       if (overlayDataset) {
         datasetId = overlayDataset.id;
         yColumns = overlayDataset.data.labels.map((_, index) => index);

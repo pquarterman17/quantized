@@ -2489,6 +2489,58 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(overlay?.data.time).toEqual([1, 2]); // rebuilt synchronously
   });
 
+  it("does not warn about sibling-overlay edits when applying a single-X layer that cannot rebuild it", () => {
+    const source: Dataset = {
+      id: "mixed-book", name: "P:BookA",
+      data: {
+        time: [1, 2],
+        values: [[10, 3, 30, 5, 50], [20, 4, 40, 6, 60]],
+        labels: ["B", "E", "H", "I", "L"], units: ["", "", "", "", ""],
+        metadata: { origin_book: "BookA", x_column_name: "A", origin_column_names: ["B", "E", "H", "I", "L"] },
+      },
+    };
+    useApp.setState({
+      datasets: [source],
+      originFigures: [
+        {
+          id: "mixed-layer-1", stem: "P", datasetId: source.id, siblingIds: [source.id],
+          figure: {
+            ...figureEntry.figure, name: "Mixed", layer: 1, n_curves: 2,
+            curves: [
+              { book: "BookA", x: "E", y: "H" },
+              { book: "BookA", x: "I", y: "L" },
+            ],
+          },
+        },
+        {
+          id: "mixed-layer-2", stem: "P", datasetId: source.id, siblingIds: [source.id],
+          figure: {
+            ...figureEntry.figure, name: "Mixed", layer: 2,
+            curves: [{ book: "BookA", x: "A", y: "B" }],
+          },
+        },
+      ],
+    });
+    useApp.getState().applyOriginFigure("mixed-layer-1");
+    useApp.setState({
+      datasets: useApp.getState().datasets.map((dataset) =>
+        dataset.data.metadata.origin_overlay_source === "mixed-layer-1"
+          ? { ...dataset, corrections: { xOff: 1 } }
+          : dataset,
+      ),
+    });
+    vi.mocked(askConfirm).mockClear();
+
+    useApp.getState().applyOriginFigure("mixed-layer-2");
+
+    expect(askConfirm).not.toHaveBeenCalled();
+    const overlay = useApp.getState().datasets.find(
+      (dataset) => dataset.data.metadata.origin_overlay_source === "mixed-layer-1",
+    );
+    expect(overlay?.corrections).toEqual({ xOff: 1 });
+    expect(overlay?.data.metadata.origin_overlay_entry).toBe("mixed-layer-1");
+  });
+
   it("re-apply with edits: asks, then rebuilds on confirm, clearing edit fields but preserving id/notes/tags/folder/order (#57)", async () => {
     vi.mocked(askConfirm).mockResolvedValue(true);
     staleOverlaySetup();
