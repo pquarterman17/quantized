@@ -302,6 +302,47 @@
   align-items: center;
   gap: 6px;
 }
+/* In the workbench the window's bottom-centre IS the stage's bottom-centre,
+   where the x-axis title is drawn. Dock the stack over a side panel instead
+   (Inspector, else Library), or as a row of chips in the status bar when both
+   are collapsed, so a toast never covers any part of a plot
+   (layout-fit.spec.ts). */
+.qzk-app .qzk-toaster {
+  left: auto;
+  right: 8px;
+  bottom: 32px;
+  transform: none;
+  max-width: calc(var(--rw, 296px) - 16px);
+  align-items: flex-end;
+}
+.qzk-app:has(.qzk-main.rc) .qzk-toaster {
+  left: 8px;
+  right: auto;
+  max-width: calc(var(--lw, 210px) - 16px);
+  align-items: flex-start;
+}
+.qzk-app .qzk-toast-alerts {
+  align-items: inherit;
+}
+.qzk-app:has(.qzk-main.lc.rc) .qzk-toaster {
+  bottom: 1px;
+  left: 50%;
+  max-width: 50vw;
+  overflow: hidden;
+  transform: translateX(-50%);
+  flex-direction: row;
+  align-items: center;
+}
+.qzk-app:has(.qzk-main.lc.rc) .qzk-toast-alerts {
+  flex-direction: row;
+}
+.qzk-app:has(.qzk-main.lc.rc) .qzk-toast-alerts:empty {
+  margin: 0 0 0 -6px;
+}
+.qzk-app:has(.qzk-main.lc.rc) .qzk-toast {
+  padding-block: 1px;
+  white-space: nowrap;
+}
 /* The always-mounted assertive region for danger toasts: a column of its own;
    while empty it cancels the stack gap it would otherwise add. */
 .qzk-toast-alerts {

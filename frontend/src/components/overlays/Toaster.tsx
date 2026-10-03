@@ -1,5 +1,6 @@
-// Toast stack (design interaction layer): a fixed, centered column of glass pills
-// above the status bar. Pure renderer — the queue + auto-dismiss live in
+// Toast stack (design interaction layer): a fixed column of glass pills above
+// the status bar, docked over a side panel so it never covers the plot (the
+// placement rules live in platform.css). Pure renderer — the queue + auto-dismiss live in
 // store/toasts. Click a toast to dismiss it early; a toast carrying an
 // action (store/toasts.ts's ToastAction) also renders an inline button —
 // clicking it fires the action AND dismisses (PLOT_WORKFLOW_PLAN #4's

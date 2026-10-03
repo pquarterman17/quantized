@@ -142,3 +142,42 @@ test("the Quick Figure Builder grid never overflows its container", async ({ pag
     expect(m.maxRight).toBeLessThanOrEqual(m.right + 1);
   }
 });
+
+type QzHarness = { __qz: { useApp: { setState: (s: object) => void } } };
+
+// Round-4 chrome audit: the import toast sat bottom-centre of the WINDOW,
+// which is the bottom-centre of the stage, exactly where the x-axis title is
+// drawn. A toast now docks over a side panel (or the title bar when both
+// panels are collapsed), so it never covers any part of the plot stage.
+test("an import toast never covers the plot stage", async ({ page }) => {
+  test.setTimeout(60_000);
+  await loadPlot(page);
+  const cases = [
+    ...SIZES.map((size) => ({ size, lc: false, rc: false })),
+    { size: SIZES[0], lc: false, rc: true },
+    { size: SIZES[0], lc: true, rc: true },
+  ];
+  const files = ["two-channel.csv", "six-channel.csv", "linear-ramp.csv", "dataset-a.csv", "dataset-b.csv"];
+  for (const [i, c] of cases.entries()) {
+    await page.setViewportSize(c.size);
+    await page.evaluate(
+      ([lc, rc]) => (window as unknown as QzHarness).__qz.useApp.setState({ leftCollapsed: lc, rightCollapsed: rc }),
+      [c.lc, c.rc],
+    );
+    await dropFileOnto(page, page.locator(".qzk-library"), fixturePath(files[i]));
+    await waitForDatasetCount(page, i + 2);
+    const toast = page.locator(".qzk-toast", { hasText: "imported 1 file" }).last();
+    await expect(toast).toBeVisible();
+    const where = `${c.size.width}x${c.size.height}${c.lc ? " no library" : ""}${c.rc ? " no inspector" : ""}`;
+    const [t, s] = await Promise.all([
+      toast.evaluate((e) => e.getBoundingClientRect().toJSON() as DOMRect),
+      page.locator(".qzk-stage").first().evaluate((e) => e.getBoundingClientRect().toJSON() as DOMRect),
+    ]);
+    expect(overlaps(t, s), `toast covers the plot stage at ${where}`).toBe(false);
+    // A collapsed panel gives its width to the stage (both at once, too).
+    if (c.lc) expect(s.left, `library still open at ${where}`).toBeLessThanOrEqual(1);
+    if (c.rc) expect(s.right, `inspector still open at ${where}`).toBeGreaterThanOrEqual(c.size.width - 1);
+    const inside = t.left >= 0 && t.top >= 0 && t.right <= c.size.width && t.bottom <= c.size.height;
+    expect(inside, `toast clipped at ${where}`).toBe(true);
+  }
+});

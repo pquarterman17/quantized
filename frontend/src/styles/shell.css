@@ -19,6 +19,7 @@ body {
 .qzk-main { display: grid; grid-template-columns: var(--lw, 210px) 1fr var(--rw, 296px); min-height: 0; }
 .qzk-main.lc { grid-template-columns: 0 1fr var(--rw, 296px); }
 .qzk-main.rc { grid-template-columns: var(--lw, 210px) 1fr 0; }
+.qzk-main.lc.rc { grid-template-columns: 0 1fr 0; } /* both collapsed: without this .rc won and the library stayed open */
 
 /* ── calc-only shell (?view=calc — MAIN_PLAN #22 standalone DiraCulator) ── */
 .qzk-calc-app { display: grid; grid-template-rows: 38px 1fr; height: 100%; }
