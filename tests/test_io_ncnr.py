@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -83,7 +84,9 @@ def test_ncnr_pnr_matches_matlab(
     assert_golden: Callable[..., None],
 ) -> None:
     ds = import_ncnr_pnr(fixtures_dir / "ncnr_s11_nsf.pnr")
-    assert_golden(ds, "ncnr_s11_nsf_default.json")
+    # Units compare in the file's ASCII (`header_units`); `.units` spell Å.
+    raw_units = tuple(ds.metadata["header_units"][1:])
+    assert_golden(dataclasses.replace(ds, units=raw_units), "ncnr_s11_nsf_default.json")
 
 
 def test_ncnr_pnr_cleans_polarization_labels(fixtures_dir: Path) -> None:
@@ -106,7 +109,23 @@ def test_ncnr_dat_matches_matlab(
     assert_golden: Callable[..., None],
 ) -> None:
     ds = import_ncnr_dat(fixtures_dir / "ncnr_s3.datA")
-    assert_golden(ds, "ncnr_s3_datA_default.json")
+    raw_units = tuple(ds.metadata["header_units"][1:])
+    assert_golden(dataclasses.replace(ds, units=raw_units), "ncnr_s3_datA_default.json")
+
+
+def test_pnr_and_dat_spell_their_angstrom_units(fixtures_dir: Path) -> None:
+    """"Q (A-1)" / "dQ (1/A)" read as inverse amperes on an axis title; the
+    parsers know these files mean Angstrom and spell it Å (as ORSO does)."""
+    pnr = import_ncnr_pnr(fixtures_dir / "ncnr_s11_nsf.pnr")
+    assert pnr.metadata["x_column_unit"] == "Å⁻¹"
+    assert pnr.units[pnr.labels.index("dQ")] == "Å⁻¹"
+    assert pnr.metadata["header_units"][:2] == ["A-1", "A-1"]
+    # dQ still binds as the x resolution: both spellings moved together.
+    x_res = {"channel": 0, "target": -1, "axis": "x", "side": "both"}
+    assert x_res in pnr.metadata["error_roles"]
+    dat = import_ncnr_dat(fixtures_dir / "ncnr_s3.datA")
+    assert dat.metadata["x_column_unit"] == "Å⁻¹"
+    assert dat.units[0] == "Å⁻¹"
 
 
 def test_ncnr_dat_polarization_from_extension(fixtures_dir: Path) -> None:

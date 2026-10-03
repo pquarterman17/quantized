@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
-from quantized.io._refl_columns import refl_fit_role_metadata
+from quantized.io._refl_columns import angstrom_unit, refl_fit_role_metadata
 from quantized.io.base import read_head, read_text
 
 __all__ = ["import_refl1d_dat", "is_refl1d_dat"]
@@ -118,11 +118,14 @@ def import_refl1d_dat(filepath: str | Path) -> DataStruct:
         labels_all = [f"Col{j + 1}" for j in range(n_cols)]
         units_all = [""] * n_cols
 
+    header_units = units_all
+    units_all = [angstrom_unit(u) for u in units_all]
     metadata: dict[str, Any] = {
         "source": str(path),
         "parser_name": "import_refl1d_dat",
         "x_column_name": labels_all[0],
         "x_column_unit": units_all[0],
+        "header_units": header_units,  # the header's ASCII; units_all spell Å
         **header_meta,
     }
     if labels_all[0] == "Q":
