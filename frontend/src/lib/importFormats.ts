@@ -42,7 +42,7 @@ export const IMPORT_FORMATS: readonly ImportFormat[] = [
     exts: [".dat"],
     name: "Quantum Design / PPMS / Lake Shore",
     category: "Magnetometry & transport",
-    note: "Content-sniffed: Quantum Design VSM, refl1d, PPMS, or Lake Shore.",
+    note: "Content-sniffed: Quantum Design, refl1d, PPMS, or Lake Shore; any other .dat reads as a plain table.",
   },
   // ── Reflectometry & neutron ──────────────────────────────────────────
   {
@@ -83,7 +83,7 @@ export const IMPORT_FORMATS: readonly ImportFormat[] = [
   },
   // ── Tables ───────────────────────────────────────────────────────────
   {
-    exts: [".csv", ".tsv", ".xlsx", ".xlsm"],
+    exts: [".csv", ".tsv", ".txt", ".xy", ".xye", ".xlsx", ".xlsm"],
     name: "Delimited text & Excel",
     category: "Tables & generic",
     note:
