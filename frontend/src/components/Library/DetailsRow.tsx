@@ -53,7 +53,8 @@ import { useState, type CSSProperties } from "react";
 
 import { deleteArtifactConfirmed, isArtifactNode } from "./artifactContextActions";
 import { buildLibraryTileMenu } from "./libraryTileMenu";
-import { isSelected, openLibraryNode, selectLibraryNode } from "./libraryOpen";
+import { isSelected, openLibraryNode } from "./libraryOpen";
+import { selectLibraryNode } from "../../lib/librarySelect";
 import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import { renameLibraryNode } from "../../lib/libraryRename";
 import { useDetailsDragDrop, type DetailsDragDropContext } from "./useDetailsDragDrop";

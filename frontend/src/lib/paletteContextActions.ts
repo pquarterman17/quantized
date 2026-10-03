@@ -27,8 +27,32 @@ import {
 import { askParams } from "../components/overlays/ParamDialog";
 import type { Action } from "../store/commands";
 import { useApp } from "../store/useApp";
-import { actionPaletteEntry, datasetActions, type DatasetActionTarget } from "./contextActions";
+import { resolveLabel, runContextAction, type ContextAction, type DatasetActionTarget } from "./contextActions";
+import { datasetActions } from "./datasetContextActions";
 import { withQuickPlot } from "./quickPlotActions";
+
+// Moved verbatim from lib/contextActions.ts (bundle diet slice 22): this
+// bridge is its only caller, and it is already lazy.
+/** One registry action → one ⌘K palette `Action`, or null when the entry
+ *  doesn't apply: hidden/disabled entries are OMITTED (the palette has no
+ *  greyed rows — a command you can't run shouldn't be findable). The same
+ *  `runContextAction` routing means destructive entries keep their confirm
+ *  step when launched from the palette. */
+export function actionPaletteEntry<T>(
+  a: ContextAction<T>,
+  t: T,
+  group: string,
+  idPrefix: string,
+): Action | null {
+  if (a.hidden?.(t)) return null;
+  if (a.enabled && !a.enabled(t)) return null;
+  return {
+    id: `${idPrefix}.${a.id}`,
+    group,
+    label: resolveLabel(a, t),
+    run: () => runContextAction(a, t),
+  };
+}
 
 function renameDatasetDialog(id: string, name: string): void {
   void askParams(`Rename "${name}"`, [{ key: "name", label: "Name", type: "text", default: name }]).then(

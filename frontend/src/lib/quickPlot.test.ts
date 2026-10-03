@@ -11,13 +11,11 @@ import {
   MAP_DATA_REASON,
   NO_PLOTTABLE_COLUMNS_REASON,
   UNSUPPORTED_TECHNIQUE_REASON,
-  pickConfigureQuickPlotWorksheet,
-  pickQuickPlotWorksheet,
   quickPlotAvailability,
   quickPlotFigureSeed,
   quickPlotProfile,
-  quickPlotWorkbookGate,
 } from "./quickPlot";
+import { pickConfigureQuickPlotWorksheet, pickQuickPlotWorksheet, quickPlotWorkbookGate } from "./quickPlotWorkbook";
 import type { DataStruct, Dataset } from "./types";
 import type { TechniqueViewMemoryMap } from "./techniqueViewMemory";
 import type { WorkbookNode } from "./workbooks";

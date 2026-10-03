@@ -7,6 +7,10 @@
 // this hierarchy and don't carry a LibraryNode, so they call
 // `recordWorkbookOpen` directly alongside their own existing open action
 // instead of routing through here — see their own onClick/onRowClick.
+//
+// `selectLibraryNode` lives in lib/librarySelect.ts (bundle diet slice 22,
+// plans/BUNDLE_HEADROOM.md): the eager Library panel needs only that one, and
+// every caller of this module is already lazy, so this module loads with them.
 
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
@@ -18,17 +22,6 @@ import { useApp } from "../../store/useApp";
 export function recordWorkbookOpen(workbookId: string | undefined, key: string): void {
   if (!workbookId) return;
   useApp.getState().setWorkbookLastChild(workbookId, key);
-}
-
-/** The single "select a Library node" contract (L0.25, shared by Details rows,
- *  the search-results surface, and the reveal effect): a worksheet's selection
- *  IS the app-wide dataset selection (`selectedIds`); every other kind selects
- *  through `librarySelection`. The two stay mutually exclusive at their store
- *  chokepoints — see store/libraryPanel.ts. */
-export function selectLibraryNode(node: LibraryNode): void {
-  const s = useApp.getState();
-  if (node.kind === "worksheet") s.selectIds([node.entityId]);
-  else s.setLibrarySelection({ kind: node.kind, id: node.entityId });
 }
 
 /** The L0.25 selection test for one node, mirroring `selectLibraryNode`'s

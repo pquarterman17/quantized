@@ -25,11 +25,7 @@
 import { multiSelected } from "./multiSelected";
 import type { ContextMenuItem } from "../components/overlays/ContextMenu";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
-import { plotInNewWindow } from "./plotInNewWindow";
-import { plotSelectedTogether } from "./plotSelectedTogether";
 import type { Dataset } from "./types";
-import type { Action as PaletteAction } from "../store/commands";
-import { useApp } from "../store/useApp";
 
 // ── generic engine ──────────────────────────────────────────────────────
 
@@ -71,7 +67,7 @@ export interface ContextAction<T> {
  *  compose a registry block straight into a hand-built item list. */
 export type MenuEntry<T> = ContextAction<T> | { separator: true };
 
-function resolveLabel<T>(a: ContextAction<T>, t: T): string {
+export function resolveLabel<T>(a: ContextAction<T>, t: T): string {
   return typeof a.label === "function" ? a.label(t) : a.label;
 }
 
@@ -99,27 +95,6 @@ export function actionMenuItem<T>(a: ContextAction<T>, t: T): ContextMenuItem | 
     title: disabled ? a.disabledReason?.(t) : undefined,
     danger: a.destructive || a.danger || undefined,
     checked: a.checked ? a.checked(t) : undefined,
-  };
-}
-
-/** One registry action → one ⌘K palette `Action`, or null when the entry
- *  doesn't apply: hidden/disabled entries are OMITTED (the palette has no
- *  greyed rows — a command you can't run shouldn't be findable). The same
- *  `runContextAction` routing means destructive entries keep their confirm
- *  step when launched from the palette. */
-export function actionPaletteEntry<T>(
-  a: ContextAction<T>,
-  t: T,
-  group: string,
-  idPrefix: string,
-): PaletteAction | null {
-  if (a.hidden?.(t)) return null;
-  if (a.enabled && !a.enabled(t)) return null;
-  return {
-    id: `${idPrefix}.${a.id}`,
-    group,
-    label: resolveLabel(a, t),
-    run: () => runContextAction(a, t),
   };
 }
 
@@ -165,168 +140,18 @@ export interface DatasetActionTarget {
   onStageOpen?: () => void;
 }
 
-
-// Grouped (not one flat array) so `datasetRowMenu.ts` can splice the
-// genuinely-dynamic per-folder "Move to …" list (one entry per live folder —
-// not representable as a fixed registry entry) between `datasetCoreActions`
-// and `datasetNewFolderAction`, matching the pre-registry item order exactly.
-// `datasetActions` below is the flat concatenation for anything that wants
-// "every dataset action" (tests, a future Command Palette / Plot Objects
-// tree consumer) without caring about menu layout.
-
-export const datasetCoreActions: ContextAction<DatasetActionTarget>[] = [
-  {
-    id: "dataset.plot",
-    label: "Plot (make active)",
-    enabled: (t) => !t.active,
-    run: (t) => {
-      useApp.getState().setActive(t.dataset.id);
-      t.onStageOpen?.();
-    },
-  },
-  // Multi-plot discoverability: a plain Library click REBINDS the focused
-  // window (unless pinned), so there was no direct "plot this dataset in a
-  // NEW window" gesture — users could only discover multiple windows via
-  // Graph Builder's "Create New Plot". Always enabled (unlike `dataset.plot`
-  // above): even the already-active dataset is worth plotting again, styled
-  // differently, side by side.
-  {
-    id: "dataset.plotInNewWindow",
-    label: "Plot in new window",
-    run: (t) => {
-      void plotInNewWindow(t.dataset.id);
-      t.onStageOpen?.();
-    },
-  },
-  { id: "dataset.duplicate", label: "Duplicate", run: (t) => void useApp.getState().duplicateDataset(t.dataset.id) },
-  { id: "dataset.rename", label: "Rename…", run: (t) => t.onRename() },
-  { id: "dataset.addTag", label: "Add tag…", run: (t) => t.onAddTag() },
-  {
-    id: "dataset.showInFolder",
-    label: "Show in folder",
-    hidden: (t) => t.dataset.folderId == null,
-    run: (t) => useApp.getState().requestReveal(t.dataset.id),
-  },
-  {
-    id: "dataset.reimport",
-    label: (t) => (t.dataset.source ? "Re-import from source" : "Re-import from file…"),
-    run: (t) => void useApp.getState().reimportDataset(t.dataset.id),
-  },
-  {
-    id: "dataset.split",
-    label: "Split by column value…",
-    run: (t) => useApp.getState().openSplitDialog(t.dataset.id),
-  },
-];
-
-/** Appended right after the dynamic per-folder move list. */
-export const datasetNewFolderAction: ContextAction<DatasetActionTarget> = {
-  id: "dataset.newFolderWithThis",
-  label: "New folder with this…",
-  run: (t) => {
-    const s = useApp.getState();
-    s.moveDatasetToFolder(t.dataset.id, s.createFolder(null, "New Folder"));
-  },
-};
-
-export const datasetCorrectionsActions: ContextAction<DatasetActionTarget>[] = [
-  {
-    id: "dataset.applyCorrectionsAll",
-    label: "Apply corrections to all",
-    hidden: (t) => !t.dataset.corrections,
-    run: (t) => {
-      const s = useApp.getState();
-      void s.applyCorrectionsToMany(
-        t.dataset.id,
-        s.datasets.map((x) => x.id),
-      );
-    },
-  },
-  {
-    id: "dataset.applyCorrectionsSelected",
-    label: (t) => `Apply corrections to ${t.selectedIds.length} selected`,
-    hidden: (t) => !t.dataset.corrections || !multiSelected(t),
-    run: (t) => void useApp.getState().applyCorrectionsToMany(t.dataset.id, [...t.selectedIds]),
-  },
-];
-
-export const datasetMultiSelectActions: ContextAction<DatasetActionTarget>[] = [
-  {
-    id: "dataset.mergeSelected",
-    label: (t) => `Merge ${t.selectedIds.length} selected`,
-    hidden: (t) => !multiSelected(t),
-    run: (t) => {
-      void useApp.getState().mergeSelected();
-      t.onStageOpen?.();
-    },
-  },
-  ...(
-    [
-      ["panelRow", "Panel: side by side", "row"],
-      ["panelColumn", "Panel: stacked", "column"],
-      ["panelGrid", "Panel: grid", "grid"],
-      ["overlay", "Overlay in one plot", "overlay"],
-    ] as const
-  ).map(
-    ([key, label, layout]): ContextAction<DatasetActionTarget> => ({
-      id: `dataset.${key}`,
-      label,
-      hidden: (t) => !multiSelected(t),
-      run: (t) => {
-        const s = useApp.getState();
-        s.focusWindow(s.createPanelWindow([...t.selectedIds], layout));
-        t.onStageOpen?.();
-      },
-    }),
-  ),
-  // PLOT_WORKFLOW_PLAN #3: distinct from "Overlay in one plot" above (a
-  // composite panel window keeping each dataset separate) — this MERGES the
-  // selection into one real Library dataset via the same gate+build+land
-  // sequence the Plot-menu/palette command uses (lib/plotSelectedTogether),
-  // so the row menu and the menu bar can never drift apart.
-  {
-    id: "dataset.plotSelectedTogether",
-    label: "Plot selected together",
-    hidden: (t) => !multiSelected(t),
-    run: (t) => {
-      void plotSelectedTogether(t.selectedIds);
-      t.onStageOpen?.();
-    },
-  },
-];
-
-export const datasetMoveActions: ContextAction<DatasetActionTarget>[] = [
-  { id: "dataset.moveUp", label: "Move up", enabled: (t) => t.canMoveUp, run: (t) => useApp.getState().moveDataset(t.dataset.id, -1) },
-  {
-    id: "dataset.moveDown",
-    label: "Move down",
-    enabled: (t) => t.canMoveDown,
-    run: (t) => useApp.getState().moveDataset(t.dataset.id, 1),
-  },
-];
-
-// Moved to lib/datasetRemoveActions.ts (funds the .ts 500-line ceiling — see
-// that file's header); re-exported so every existing `from "./contextActions"`
-// importer is untouched.
-import { datasetRemoveActions } from "./datasetRemoveActions";
-export { datasetRemoveActions } from "./datasetRemoveActions";
-
-/** Every dataset action, flat — for callers that don't care about layout. */
-export const datasetActions: ContextAction<DatasetActionTarget>[] = [
-  ...datasetCoreActions,
-  datasetNewFolderAction,
-  ...datasetCorrectionsActions,
-  ...datasetMultiSelectActions,
-  ...datasetMoveActions,
-  ...datasetRemoveActions,
-];
-
+// The dataset registry itself (`datasetCoreActions` … `datasetActions`) lives
+// in lib/datasetContextActions.ts and the palette bridge's
+// `actionPaletteEntry` in lib/paletteContextActions.ts (bundle diet slice 22,
+// plans/BUNDLE_HEADROOM.md): their only consumers are the dataset row menu
+// and the ⌘K palette's context entries, both already lazy, so they load with
+// them. Import them by path; this module does not re-export them.
+//
 // The folder registry lives in components/Library/folderRowMenu.ts and
 // the plot-curve registry in lib/curveContextActions.ts (bundle diet slice
 // 12, plans/BUNDLE_HEADROOM.md): their only consumers are the folder row
 // menu / Library tree and the plot-canvas menu, all already lazy, so they
 // load in the same chunk as the menu that shows them — no right-click waits
-// longer. This module (the engine and the dataset registry the ⌘K palette
-// reads) stays eager.
+// longer. This module (the engine and the target types) stays eager.
 
 export { multiSelected };
