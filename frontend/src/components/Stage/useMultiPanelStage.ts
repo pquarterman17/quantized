@@ -554,7 +554,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         // — so both belong here as on the facet leg below. Channel-keyed,
         // projected per panel through `BreakPanel.channels`.
         seriesLabels, seriesStyles: breakSeriesStyles, hiddenChannels: breakHidden ?? [],
-        syncKey,
+        syncKey, yAuto: !drawableLim(yLim, yScale)?.some((v) => v !== null),
         box,
         cell: {
           yScale, xScale, yLim: breakYLim, xFmt, yFmt, showGrid,
@@ -646,7 +646,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     pageSetup, // #54 Stage 2: page dims/aspect change re-lays "page" fit
     breakMode,
     breakPanels,
-    breakYLim,
+    breakYLim, yLim, // yLim: whether the shared range is typed or auto (padded)
     facet,
     facetPanels,
     encodedFacets,

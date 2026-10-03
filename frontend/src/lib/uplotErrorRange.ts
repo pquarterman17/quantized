@@ -89,6 +89,14 @@ function uplotDefault(u: uPlot, min: number, max: number, key: string, isX: bool
   return isX ? [min, max] : statics.rangeNum(min, max, 0.1, true);
 }
 
+/** uPlot's own auto y range for a [min, max] domain (log: decade-snapped) —
+ *  what an unbroken plot draws, for a shared y the caller computed itself (the
+ *  x-break panels). The bare domain until uPlot's helpers are provided. */
+export function autoYRange(min: number, max: number, log: boolean): [number, number] {
+  if (typeof statics?.rangeNum !== "function") return [min, max];
+  return (log ? statics.rangeLog(min, max, 10, false) : statics.rangeNum(min, max, 0.1, true)) as [number, number];
+}
+
 /** The lowest bar end a log/reciprocal autoscale counts: two decades below
  *  the lowest point. A lower end <= 0 or near zero (sR ~ R on low-count
  *  reflectivity) would stretch the axis many decades; it runs to the floor

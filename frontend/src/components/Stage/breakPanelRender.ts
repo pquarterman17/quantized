@@ -37,6 +37,7 @@ import uPlot from "uplot";
 import type { BreakPanel } from "../../lib/facet";
 import { breakPanelWidths, xZoomSyncHook } from "../../lib/multipanel";
 import type { SeriesStyle } from "../../lib/types";
+import { autoYRange } from "../../lib/uplotErrorRange";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
 
@@ -67,6 +68,9 @@ export interface BreakPanelsArgs {
   hiddenChannels: readonly number[];
   /** uPlot cursor-sync group; see `MULTIPANEL_SYNC_KEY`. */
   syncKey: string;
+  /** `cell.yLim` is the panels' shared DATA extent (no typed limit), so pad it
+   *  the way an unbroken plot's auto y is padded (`autoYRange`). */
+  yAuto?: boolean;
   /** The host box to lay the row out in (the caller's `clientWidth || 600` /
    *  `clientHeight || 400`), reused as the resize fallback. */
   box: { w: number; h: number };
@@ -94,6 +98,8 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
   // wheel or pan on one panel moves them all.
   const plots: uPlot[] = [];
   const ySync = xZoomSyncHook(() => plots, "y");
+  const { yLim, yScale } = args.cell;
+  const padded = args.yAuto && yLim && yScale !== "reciprocal" ? autoYRange(yLim[0], yLim[1], yScale === "log") : null;
   args.panels.forEach((p, i) => {
     if (i > 0) host.appendChild(makeBreakGlyph(BREAK_GLYPH_W));
     const div = document.createElement("div");
@@ -105,6 +111,7 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
       height: args.box.h,
       // A break panel's whole point is showing only its own x-slice.
       xLim: p.xRange,
+      ...(padded ? { yLim: padded } : {}),
       // `channels[i]` is the dataset channel behind `payload.series[i]`, by
       // construction in `lib/facet.breakPayloads` — so a rename lands on the
       // channel it was made for even when this panel's channel list differs
