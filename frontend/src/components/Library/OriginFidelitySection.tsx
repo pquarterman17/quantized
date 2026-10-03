@@ -4,9 +4,11 @@ import {
 } from "../../lib/originFidelity";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
+import { openOriginMigrationReview } from "../../lib/workflowWorkspace";
 
-export default function OriginFidelitySection() {
+export default function OriginFidelitySection({ onStageOpen }: { onStageOpen?: () => void }) {
   const entries = useApp((s) => s.originFidelity);
+  const setStageTab = useApp((s) => s.setStageTab);
   // UX-R3: this group is exactly the "low-value technical artifact" case the
   // spec calls out — decoder diagnostics (internal-filtered graph records,
   // preview-asset inventory) a reader almost never needs on the common path.
@@ -47,6 +49,16 @@ export default function OriginFidelitySection() {
               <div className="qzk-ds-meta">
                 Missing: {m.omissions.map(originFidelityLabel).join(", ")}
               </div>
+              <button
+                className="qz-btn qz-btn-sm qz-btn-primary"
+                onClick={() => {
+                  openOriginMigrationReview(entry.id);
+                  setStageTab("technique");
+                  onStageOpen?.();
+                }}
+              >
+                Review import…
+              </button>
               {m.filtered_figures.length > 0 && (
                 <div className="qzk-ds-meta">
                   Filtered: {m.filtered_figures.map((f) => f.name).join(", ")}

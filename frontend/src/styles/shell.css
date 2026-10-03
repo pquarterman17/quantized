@@ -1282,6 +1282,32 @@ body {
 .qzk-technique-actions .qz-btn small { color: var(--text-faint); font-size: var(--type-nano); font-weight: var(--weight-regular); line-height: 1.3; }
 @container (max-width: 760px) { .qzk-technique-dataset dl { grid-template-columns: repeat(2, minmax(120px, 1fr)); } .qzk-technique-stage { grid-template-columns: 30px minmax(0, 1fr); } .qzk-technique-actions { grid-column: 1 / -1; } }
 @container (max-width: 480px) { .qzk-technique-head { flex-direction: column-reverse; } .qzk-technique-dataset > div:first-child { flex-direction: column; gap: 4px; } .qzk-technique-dataset dl { grid-template-columns: 1fr; } }
+.qzk-origin-migration-project { display: grid; grid-template-columns: max-content minmax(180px, 360px); align-items: center; gap: 10px; margin-bottom: 14px; color: var(--text-dim); font-size: var(--type-small); }
+.qzk-origin-migration-summary { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.qzk-origin-migration-summary > div { display: grid; gap: 2px; padding: 13px 15px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-1); }
+.qzk-origin-migration-summary > div.attention { border-color: color-mix(in srgb, var(--danger) 55%, var(--border)); }
+.qzk-origin-migration-summary strong { font-size: 21px; font-weight: var(--weight-semibold); }
+.qzk-origin-migration-summary span { color: var(--text); font-size: var(--type-small); }
+.qzk-origin-migration-summary small { color: var(--text-faint); font-size: var(--type-nano); }
+.qzk-origin-migration-disclosure { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 14px; color: var(--text-dim); font-size: var(--type-small); }
+.qzk-origin-migration-disclosure .qz-badge { flex: none; }
+.qzk-origin-migration-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.qzk-origin-migration-issue-groups { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: start; gap: 8px 12px; margin-bottom: 10px; color: var(--text-dim); font-size: var(--type-small); }
+.qzk-origin-migration-issue-groups > div { display: flex; flex-wrap: wrap; gap: 5px; }
+.qzk-origin-migration-list { display: grid; gap: 8px; }
+.qzk-origin-migration-row { padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-1); }
+.qzk-origin-migration-row.deferred { opacity: .65; }
+.qzk-origin-migration-row-head { display: flex; justify-content: space-between; gap: 16px; }
+.qzk-origin-migration-row h3 { margin: 0 0 4px; overflow-wrap: anywhere; font-size: var(--type-body); }
+.qzk-origin-migration-row p { font-size: var(--type-small); }
+.qzk-origin-migration-badges { display: flex; flex: none; flex-wrap: wrap; align-items: flex-start; justify-content: flex-end; gap: 5px; }
+.qzk-origin-migration-issues { display: grid; gap: 3px; max-height: 120px; margin: 10px 0 0; padding: 8px 10px 8px 26px; overflow: auto; border-radius: var(--radius-sm); background: var(--surface-2); font-family: var(--font-mono); font-size: var(--type-nano); }
+.qzk-origin-migration-issues span { margin-left: 8px; color: var(--text-faint); font-family: var(--font-sans); }
+.qzk-origin-migration-actions { margin-top: 12px; }
+.qzk-origin-migration-filtered { margin-top: 12px; color: var(--text-dim); font-size: var(--type-small); }
+.qzk-origin-migration-filtered summary { cursor: pointer; }
+@container (max-width: 720px) { .qzk-origin-migration-summary { grid-template-columns: repeat(2, minmax(120px, 1fr)); } .qzk-origin-migration-row-head { flex-direction: column; } .qzk-origin-migration-badges { justify-content: flex-start; } }
+@container (max-width: 440px) { .qzk-origin-migration-summary { grid-template-columns: 1fr; } .qzk-origin-migration-project { grid-template-columns: 1fr; } }
 
 .qzk-quick-builder { container-type: inline-size; min-width: 0; min-height: 0; overflow: auto; padding: clamp(18px, 2.4vw, 34px); background: var(--surface-0); }
 .qzk-quick-builder-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
