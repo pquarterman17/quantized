@@ -53,6 +53,7 @@ from quantized.calc.plotting_encoded import (
     legend_source_text,
 )
 from quantized.datastruct import DataStruct
+from quantized.unit_display import with_unit
 
 __all__ = ["encoded_facet_panels"]
 
@@ -132,7 +133,7 @@ def encoded_facet_panels(
             rename = y_legends[c] if y_legends else None
             y_label = rename if rename is not None else ds.labels[y_keys[c]]
             legend = None if text is None else f"{y_label} ({text})" if multi else text
-            default = f"{s.label} ({s.unit})" if s.unit else s.label
+            default = with_unit(s.label, s.unit)
             style = {k: v for k, v in (styles[i] or {}).items() if k != GREY_SLOT_KEY}
             series.append({
                 "label": legend if legend is not None else default,

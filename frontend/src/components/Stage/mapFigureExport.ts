@@ -33,6 +33,7 @@ import { askParams } from "../overlays/ParamDialog";
 import { effectiveColorLimits, minPositive } from "./mapRender";
 import { mapMarks } from "./mapSliceGeometry";
 import { FIGURE_STYLES } from "../workshops/figurebuilder/figureOutputConstants";
+import { withUnit } from "../../lib/unitDisplay";
 
 const MPL_CMAP: Record<ColormapName, string> = {
   viridis: "viridis",
@@ -57,8 +58,6 @@ export interface MapExportOptions {
   title: string;
   filename: string;
 }
-
-const withUnit = (label: string, unit: string) => (unit ? `${label} (${unit})` : label);
 
 function zCell(v: number | null, view: MapExportView): number | null {
   if (v == null || !Number.isFinite(v)) return null;

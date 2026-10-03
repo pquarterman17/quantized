@@ -11,6 +11,7 @@ import type { MapPayload } from "../../lib/mapdataFetch";
 import { niceTicks } from "../../lib/ticks";
 import type { RsmPeak } from "../../lib/types";
 import { drawColorbar, fmt } from "./mapColorbar";
+import { withUnit } from "../../lib/unitDisplay";
 
 // Homed here, NOT in lib/mapView.ts: this is a RENDERER decision, and
 // lib/mapView.ts is eagerly reachable (lib/workspaceSerialize.ts) while this
@@ -453,13 +454,13 @@ function drawAxes(
   ctx.font = "11px 'JetBrains Mono', monospace";
   ctx.textAlign = "center";
   ctx.textBaseline = "bottom";
-  const xt = p.xUnit ? `${p.xLabel} (${p.xUnit})` : p.xLabel;
+  const xt = withUnit(p.xLabel, p.xUnit);
   ctx.fillText(xt, rect.x + rect.w / 2, rect.y + rect.h + 38);
   ctx.save();
   ctx.translate(12, rect.y + rect.h / 2);
   ctx.rotate(-Math.PI / 2);
   ctx.textBaseline = "top";
-  const yt = p.yUnit ? `${p.yLabel} (${p.yUnit})` : p.yLabel;
+  const yt = withUnit(p.yLabel, p.yUnit);
   ctx.fillText(yt, 0, 0);
   ctx.restore();
 }

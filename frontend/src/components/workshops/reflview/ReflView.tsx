@@ -8,6 +8,7 @@ import { useReflView } from "./useReflView";
 import ReflPanel from "./ReflPanel";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
+import { withUnit } from "../../../lib/unitDisplay";
 
 export default function ReflView() {
   const close = useApp((s) => s.setReflViewOpen);
@@ -82,7 +83,7 @@ export default function ReflView() {
             yLog={false}
             height={200}
             label="sld-profile"
-            yLabel={v.panels.bottom.series[0]?.unit ? `SLD (${v.panels.bottom.series[0].unit})` : "SLD"}
+            yLabel={withUnit("SLD", v.panels.bottom.series[0]?.unit)}
           />
         ) : (
           <div className="qzk-ds-meta" style={{ height: 200, display: "grid", placeItems: "center" }}>

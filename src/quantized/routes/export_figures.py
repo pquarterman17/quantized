@@ -301,7 +301,7 @@ def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _Resolve
         x_label = derived_axis_label(req.x_label, grouped.x_label, grouped.x_unit)
         y_label = req.y_label if req.y_label is not None else ""
         g_series: list[tuple[str, Any]] = [
-            (f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in grouped.series
+            (derived_axis_label(None, s.label, s.unit), s.values) for s in grouped.series
         ]
         # BUG-016: every level draws with its channel's style, as the canvas
         # does -- `calc.figure_group_styles` carries the measured rule.

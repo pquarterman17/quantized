@@ -45,6 +45,8 @@ import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit"
 import { anchorEditPlugin, type AnchorPoint } from "./uplotAnchors";
 import { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
 import { xLabelRightPad, xTickSpace } from "./uplotRightPad";
+import { withUnit } from "./unitDisplay";
+export { withUnit }; // eager callers import it here: ~260 B less first-paint JS than direct
 import {
   measurePlugin,
   panPlugin,
@@ -825,10 +827,10 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     args.xAxisLabel === null
       ? ""
       : args.xAxisLabel?.trim() ||
-        (payload.xUnit ? `${payload.xLabel} (${payload.xUnit})` : payload.xLabel);
+        withUnit(payload.xLabel, payload.xUnit);
   // Resolved display label per series: an explicit rename wins, else "label (unit)".
   const labels = payload.series.map((s, i) =>
-    args.seriesLabels?.[i] ?? (s.unit ? `${s.label} (${s.unit})` : s.label),
+    args.seriesLabels?.[i] ?? withUnit(s.label, s.unit),
   );
   // Y title: the override, else a solo series' legend name, else what several share.
   const soloLabel = (which: number): string | undefined => {
