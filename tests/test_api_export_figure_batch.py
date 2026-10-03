@@ -76,6 +76,19 @@ def test_batch_export_rejects_empty_oversized_and_unknown_format() -> None:
     assert "fmt must be one of" in response.json()["detail"]
 
 
+def test_batch_export_validates_every_format_before_rendering(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "quantized.routes.export_figure_batch.render_figure_request",
+        lambda *_args, **_kwargs: pytest.fail("validation must finish before rendering"),
+    )
+    response = client.post(
+        "/api/export/figure-batch",
+        json={"figures": [_figure("valid"), _figure("invalid", fmt="bmp")]},
+    )
+    assert response.status_code == 422
+    assert "fmt must be one of" in response.json()["detail"]
+
+
 def test_batch_export_is_all_or_nothing_when_a_render_fails(monkeypatch) -> None:
     calls = 0
 

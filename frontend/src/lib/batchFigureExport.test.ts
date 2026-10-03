@@ -81,4 +81,27 @@ describe("downloadBatchFigures", () => {
     );
     expect(exportFigureBatch).not.toHaveBeenCalled();
   });
+
+  it("resolves pending worksheet previews before building any archive member", async () => {
+    const preview = { ...dataset(), pending: { bookId: "book-1", sheetIndex: 0 } } as Dataset;
+    const full = { ...dataset(), data: { ...dataset().data, values: [[10, 20, 30]], time: [0, 1, 2] } };
+    const resolve = vi.fn(async () => full);
+
+    await downloadBatchFigures([figure], [preview], options, undefined, resolve);
+
+    expect(resolve).toHaveBeenCalledWith("d1");
+    expect(exportFigureBatch).toHaveBeenCalledWith(
+      [expect.objectContaining({ dataset: expect.objectContaining({ values: [[10, 20, 30]] }) })],
+      "My figures",
+      undefined,
+    );
+  });
+
+  it("fails closed when full pending data cannot be resolved", async () => {
+    const preview = { ...dataset(), pending: { bookId: "book-1", sheetIndex: 0 } } as Dataset;
+    await expect(downloadBatchFigures([figure], [preview], options, undefined, async () => undefined)).rejects.toThrow(
+      "no archive was created",
+    );
+    expect(exportFigureBatch).not.toHaveBeenCalled();
+  });
 });

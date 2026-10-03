@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { BUILTIN_PLOT_RECIPES } from "../../../lib/builtinPlotRecipes";
 import { downloadBatchFigures, MAX_BATCH_FIGURE_EXPORT } from "../../../lib/batchFigureExport";
+import { ghosterFor } from "../../../lib/excludedRowsExport";
 import type { PlotRecipe } from "../../../lib/plotRecipeSchema";
 import { runSequentialBatch, type BatchProgress } from "../../../lib/sequentialBatch";
 import { nextFigureId } from "../../../store/figureLifecycle";
@@ -21,6 +22,7 @@ import { nextPageDocumentId } from "../../../store/pageDocuments";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Badge, Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
+import { FIGURE_STYLES } from "../figurebuilder/figureOutputConstants";
 
 type Phase = "idle" | "checking" | "review" | "creating" | "done";
 
@@ -28,7 +30,6 @@ const SCOPE_LABEL = { project: "Project", global: "Global", "built-in": "Built-i
 const STATUS_LABEL = { ready: "Ready", partial: "Needs review", blocked: "Cannot build" } as const;
 const STATUS_TONE = { ready: "ok", partial: "warn", blocked: "danger" } as const;
 const EXPORT_FORMATS = ["pdf", "svg", "png", "tiff"] as const;
-const EXPORT_STYLES = ["default", "aps", "nature", "thesis", "report", "web", "presentation", "poster"];
 
 function recipeChoices(project: readonly PlotRecipe[], global: readonly PlotRecipe[]): BatchRecipeChoice[] {
   return [
@@ -196,12 +197,19 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
     }
     if (downloadArchive) {
       try {
+        // Export and commit intentionally share this one freshly revalidated
+        // artifact snapshot. Edits made while the render is running belong to
+        // a later batch; they cannot partly leak into this archive or commit.
         await downloadBatchFigures(artifacts.figures, state.datasets, {
           format: exportFormat,
           style: exportStyle,
           dpi: Math.max(50, Math.min(1200, exportDpi)),
           archiveName: archiveName.trim() || `${recipeChoice.recipe.name} figures`,
-        }, abort.signal);
+          autoSeriesStyles: state.autoSeriesStyles,
+          defaultTrace: state.defaultTrace,
+          defaultLineWidth: state.defaultLineWidth,
+          greyExcluded: ghosterFor(state.excludedDisplay),
+        }, abort.signal, (id) => useApp.getState().resolveDataset(id));
       } catch (error) {
         setProgress(null);
         setPhase("review");
@@ -338,7 +346,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
             <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) repeat(3, 120px)", gap: 8 }}>
               <label className="qzk-field"><span className="qzk-field-lbl">Archive name</span><input className="qz-input" value={archiveName} placeholder={`${recipeChoice?.recipe.name ?? "Batch"} figures`} disabled={busy} onChange={(event) => setArchiveName(event.target.value)} /></label>
               <label className="qzk-field"><span className="qzk-field-lbl">Format</span><Select value={exportFormat} disabled={busy} onChange={(event) => setExportFormat(event.target.value as (typeof EXPORT_FORMATS)[number])} options={EXPORT_FORMATS.map((value) => ({ value, label: value.toUpperCase() }))} /></label>
-              <label className="qzk-field"><span className="qzk-field-lbl">Style</span><Select value={exportStyle} disabled={busy} onChange={(event) => setExportStyle(event.target.value)} options={EXPORT_STYLES.map((value) => ({ value, label: value }))} /></label>
+              <label className="qzk-field"><span className="qzk-field-lbl">Style</span><Select value={exportStyle} disabled={busy} onChange={(event) => setExportStyle(event.target.value)} options={FIGURE_STYLES.map((value) => ({ value, label: value }))} /></label>
               <label className="qzk-field"><span className="qzk-field-lbl">DPI</span><input className="qz-input" type="number" min={50} max={1200} value={exportDpi} disabled={busy || exportFormat === "pdf" || exportFormat === "svg"} onChange={(event) => setExportDpi(Number(event.target.value) || 300)} /></label>
             </div>
           )}

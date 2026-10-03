@@ -10,13 +10,16 @@ block after the first file.
 
 from __future__ import annotations
 
-import io
+import tempfile
 import threading
 import zipfile
+from collections.abc import Iterator
+from typing import BinaryIO
 from functools import partial
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
+from starlette.responses import StreamingResponse
 
 from quantized.routes._disconnect import run_watching_disconnect
 from quantized.routes._errors import CALC_ERRORS_WITH_LOCK, raise_calc_error
@@ -47,6 +50,15 @@ def _unique_entry_name(filename: str, fmt: str, used: set[str]) -> str:
     return candidate
 
 
+def _archive_chunks(archive: BinaryIO) -> Iterator[bytes]:
+    """Stream and then close a completed spool without a second full copy."""
+    try:
+        while chunk := archive.read(1024 * 1024):
+            yield chunk
+    finally:
+        archive.close()
+
+
 @router.post("/figure-batch")
 async def export_figure_batch(req: FigureBatchRequest, request: Request) -> Response:
     """Render 1–64 ordinary figures and download them in one ZIP archive.
@@ -67,7 +79,9 @@ def _export_figure_batch(req: FigureBatchRequest, gone: threading.Event) -> Resp
                 detail=f"fmt must be one of {sorted(_FIGURE_MIME)}",
             )
 
-    archive = io.BytesIO()
+    # Keep ordinary archives in memory, but spill large TIFF/high-DPI batches
+    # to disk instead of holding the ZIP plus BytesIO.getvalue()'s full copy.
+    archive = tempfile.SpooledTemporaryFile(max_size=64 * 1024 * 1024)
     used: set[str] = set()
     try:
         with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as output:
@@ -78,10 +92,15 @@ def _export_figure_batch(req: FigureBatchRequest, gone: threading.Event) -> Resp
                 data = render_figure_request(figure, fmt=figure.fmt, dpi=figure.dpi)
                 output.writestr(name, data)
     except CALC_ERRORS_WITH_LOCK as exc:
+        archive.close()
         raise_calc_error(exc)
+    except BaseException:
+        archive.close()
+        raise
 
-    return Response(
-        content=archive.getvalue(),
+    archive.seek(0)
+    return StreamingResponse(
+        _archive_chunks(archive),
         media_type="application/zip",
         headers=_attachment(_safe_name(req.filename, ".zip")),
     )
