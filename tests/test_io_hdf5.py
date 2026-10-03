@@ -284,6 +284,51 @@ def test_special_chars_in_labels(tmp_path: Path) -> None:
         assert labels[0].endswith("(m?/mol)")
 
 
+def test_non_ascii_strings_survive_in_a_utf8_attribute(tmp_path: Path) -> None:
+    # The padded-ASCII matrix stays MATLAB-compatible (one byte per char, so
+    # non-ASCII becomes '?'), which lost real units such as ORSO's "Å⁻¹". The
+    # exact strings ride along in a `utf8` attribute whenever any is lossy.
+    ds = DataStruct.create(
+        [1.0, 2.0],
+        [[1.0, 0.1], [2.0, 0.2]],
+        labels=["χ (m³/mol)", "sQz"],
+        units=["", "Å⁻¹"],
+    )
+    out = tmp_path / "utf8.h5"
+    write_hdf5(ds, out)
+    with h5py.File(out, "r") as hf:
+        def utf8(name: str) -> list[str]:
+            raw = hf[name].attrs["utf8"]
+            return [s.decode() if isinstance(s, bytes) else str(s) for s in raw]
+
+        assert utf8("/raw/labels") == ["χ (m³/mol)", "sQz"]
+        assert utf8("/raw/units") == ["", "Å⁻¹"]
+        assert _decode_ascii_matrix(np.asarray(hf["/raw/units"]))[1] == "???"
+
+
+def test_ascii_strings_add_no_utf8_attribute(tmp_path: Path) -> None:
+    out = tmp_path / "ascii.h5"
+    write_hdf5(_basic_ds(), out)
+    with h5py.File(out, "r") as hf:
+        assert "utf8" not in hf["/raw/labels"].attrs
+        assert "utf8" not in hf["/raw/units"].attrs
+
+
+def test_categorical_level_tables_are_written(tmp_path: Path) -> None:
+    # /raw/values holds a categorical channel's CODES; without its level table
+    # the export cannot say what code 1 means.
+    ds = DataStruct.create(
+        [1.0, 2.0], [[1.0, 0.5], [0.0, 0.7]], labels=["grade", "y"], units=["", ""],
+        cat_levels={0: ("low", "high")},
+    )
+    out = tmp_path / "cat.h5"
+    write_hdf5(ds, out)
+    with h5py.File(out, "r") as hf:
+        raw = hf["/raw/values"].attrs["cat_levels_0"]
+        assert [s.decode() if isinstance(s, bytes) else str(s) for s in raw] == ["low", "high"]
+        assert "cat_levels_1" not in hf["/raw/values"].attrs
+
+
 def test_corrections_only_when_nonempty(tmp_path: Path) -> None:
     out = tmp_path / "corr.h5"
     write_hdf5(_basic_ds(), out, corrections={"xOff": 0.0, "yOff": 0.0})

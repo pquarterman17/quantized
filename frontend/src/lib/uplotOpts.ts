@@ -891,7 +891,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
 
   const plugins: uPlot.Plugin[] = [];
   if (tool === "pan") plugins.push(panPlugin());
-  if (tool === "cursor") plugins.push(readoutPlugin(onReadout));
+  if (tool === "cursor") plugins.push(readoutPlugin(onReadout, payload.yShift));
   if (tool === "measure" && args.onMeasure) {
     plugins.push(measurePlugin(args.onMeasure, cssVar("--accent") || "#8b5cf6"));
   }

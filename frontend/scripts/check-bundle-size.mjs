@@ -1816,8 +1816,12 @@ import { fileURLToPath } from "node:url";
  * 2026-10-02 — pin LOWERED 844,997 -> 841,233 after batch 27 (real-corpus plot
  * audit fixes + bundle diet slice 21). Measured eager JS is 840,209 B
  * (`.vite` wiped); the new pin is measured + 1,024 B.
+ *
+ * 2026-10-03 — pin LOWERED 841,233 -> 841,021 after batch 29 (plot audit
+ * round 3; the magnifier inset moved behind its own chunk). Measured eager JS
+ * is 839,997 B after `npm ci` with `.vite` wiped; pin is measured + 1,024 B.
  */
-const EAGER_JS_BUDGET = 841_233;
+const EAGER_JS_BUDGET = 841_021;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

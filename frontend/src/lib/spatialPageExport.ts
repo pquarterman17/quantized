@@ -56,6 +56,7 @@ import { withPageGreyscale } from "./pageGreyscale";
 import { pageSizeInches } from "./pageGeometry";
 import type { PageSetup } from "./pagesetup";
 import { droppedRows } from "./rowstate";
+import { cyclesPastPalette } from "./seriesStyleCycle";
 import { axisFmtParam, type AxisFormat, type DataStruct, type Dataset, type DefaultTrace } from "./types";
 import type { ExcludedRowsGhoster } from "./figureSpec";
 import type { FigurePageSpec, PagePanelSpec } from "./api";
@@ -226,7 +227,7 @@ function spatialPanelFigure(
         lineWidthSeriesStyles(
           traceSeriesStyles(
             toWireSeriesStyles(
-              buildExportStyles(plotted, panel.seriesStyles ?? {}, null, appearance?.autoSeriesStyles ?? false),
+              buildExportStyles(plotted, panel.seriesStyles ?? {}, null, cyclesPastPalette(appearance?.autoSeriesStyles ?? false, plotted.length)),
               false,
             ),
             plotted,

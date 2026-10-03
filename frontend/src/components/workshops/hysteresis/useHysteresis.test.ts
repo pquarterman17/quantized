@@ -174,3 +174,65 @@ describe("useHysteresis — gaps (NaN) never reach the wire", () => {
     expect(useApp.getState().datasets).toHaveLength(1);
   });
 });
+
+// Round-3 plot audit: the derived loop and the readout must say WHAT they are.
+const MULTI: DataStruct = {
+  time: [0, 1, 2, 3, 4], // a timestamp column — NOT the field
+  values: [[-2, -1], [-1, -0.5], [0, 0], [1, 0.5], [2, 1]], // [Field, Moment]
+  labels: ["Field", "Moment"],
+  units: ["Oe", "emu"],
+  metadata: { x_column_name: "Time Stamp", x_column_unit: "sec" },
+};
+
+describe("useHysteresis — axis identity of the readout and the derived loop", () => {
+  it("reports the plotted H and M units for the parameter table", async () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "mvsh.dat", data: MULTI }],
+      activeId: "d1",
+      xKey: 0,
+      yKeys: [1],
+    });
+    const { result } = renderHook(() => useHysteresis());
+    await waitFor(() => expect(result.current.result).not.toBeNull());
+    expect(result.current.units).toEqual({ h: "Oe", m: "emu" });
+  });
+
+  it("reads the H unit from the x-column hints when the field is the x column", async () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "vsm.dat",
+          data: { ...DATA, metadata: { x_column_name: "Magnetic Field", x_column_unit: "Oe" } },
+        },
+      ],
+      activeId: "d1",
+    });
+    const { result } = renderHook(() => useHysteresis());
+    await waitFor(() => expect(result.current.result).not.toBeNull());
+    expect(result.current.units).toEqual({ h: "Oe", m: "emu" });
+  });
+
+  it("stamps the plotted field's identity on the (bg-sub) loop, not the source time column", async () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "mvsh.dat", data: MULTI }],
+      activeId: "d1",
+      xKey: 0,
+      yKeys: [1],
+    });
+    vi.mocked(subtractHysteresisBackground).mockResolvedValue({
+      corrected: [-1, -0.5, 0, 0.5, 1],
+      slope: 1,
+      offset: 2,
+    });
+    const { result } = renderHook(() => useHysteresis());
+    await waitFor(() => expect(result.current.result).not.toBeNull());
+    await act(async () => {
+      await result.current.subtractBackground();
+    });
+    const out = useApp.getState().datasets[1].data;
+    expect(out.time).toEqual([-2, -1, 0, 1, 2]);
+    expect(out.metadata.x_column_name).toBe("Field");
+    expect(out.metadata.x_column_unit).toBe("Oe");
+  });
+});

@@ -42,6 +42,7 @@ import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import { hasWorkspaceContent } from "../lib/openWorkspaceReplace";
 import { runCancellable } from "../store/pendingOps";
 import { closeProjectLock } from "../store/projectLockLifecycle";
+import type { Dataset, DataStruct } from "../lib/types";
 import { toast } from "../store/toasts";
 import type {
   exportConsolidated,
@@ -51,6 +52,14 @@ import type {
   originComStatus,
   sendToOrigin,
 } from "../lib/api";
+
+/** The DataStruct an Origin-designating export sends: the user's LIVE error
+ *  bindings (`Dataset.errorRoles`) as `metadata.error_roles`, which the writers
+ *  read to mark yErr/xErr columns. Unchanged when there are none. */
+export function withLiveErrorRoles(ds: Dataset): DataStruct {
+  if (!ds.errorRoles) return ds.data;
+  return { ...ds.data, metadata: { ...ds.data.metadata, error_roles: ds.errorRoles } };
+}
 
 export async function runExportXrdCsv(s: StoreGet, exportXrdCsvFn: typeof exportXrdCsv): Promise<void> {
   await exportActive(s, (stem, ds, signal) => exportXrdCsvFn({ dataset: ds.data, filename: stem }, signal));
@@ -112,7 +121,7 @@ export async function runExportOrigin(s: StoreGet, exportOriginFn: typeof export
   await exportActive(s, (stem, ds, signal) =>
     exportOriginFn(
       {
-        dataset: ds.data,
+        dataset: withLiveErrorRoles(ds),
         filename: stem,
         log_x: s().xScale === "log", // Origin's own axis type is boolean-only
         log_y: s().yScale === "log",
@@ -125,6 +134,7 @@ export async function runExportOrigin(s: StoreGet, exportOriginFn: typeof export
           x_lim: s().xLim,
           y_lim: s().yLim,
           y2_keys: s().y2Keys ?? [],
+          x_reversed: s().xReversed,
         },
       },
       signal,
@@ -151,7 +161,7 @@ export async function runExportConsolidated(
       const resolved = await s().resolveDatasets(all.map((d) => d.id));
       signal.throwIfAborted();
       await exportConsolidatedFn({
-        datasets: resolved.map((d) => ({ dataset: d.data, name: d.name })),
+        datasets: resolved.map((d) => ({ dataset: withLiveErrorRoles(d), name: d.name })),
       }, signal);
     });
     if (!done) s().setStatus("export cancelled");

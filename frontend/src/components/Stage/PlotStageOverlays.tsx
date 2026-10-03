@@ -23,7 +23,6 @@ import type { PlotTool } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotTools";
 import type { IntegralResult } from "../../store/useApp";
 import { snapshotToNewWindow } from "../windows/useWindowCommands";
-import InsetPlot from "./InsetPlot";
 import PlotLegend from "./PlotLegend";
 import PlotReadouts from "./PlotReadouts";
 import PlotToolbar from "./PlotToolbar";
@@ -40,6 +39,8 @@ import type { GadgetChipState } from "./useGadgetChip";
 // the component's OWN visibility predicate, shared through
 // `resultChipsVisible` so the gate and the component cannot drift apart.
 const PlotResultChips = lazyRegion(() => import("./PlotResultChips"), "Plot");
+// The magnifier shows only in inset mode: its own chunk (plot audit round 3).
+const InsetPlot = lazyRegion(() => import("./InsetPlot"), "Inset");
 
 export interface PlotStageOverlaysProps {
   displayPayload: PlotPayload | null;

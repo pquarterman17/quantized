@@ -10,6 +10,7 @@ import "uplot/dist/uPlot.min.css";
 
 import { centralRange } from "../../lib/inset";
 import type { PlotPayload } from "../../lib/plotdata";
+import type { PlotView } from "../../lib/plotview";
 import { buildOpts } from "../../lib/uplotOpts";
 import type { SeriesCycle } from "../../lib/seriesStyleCycle";
 import type { SeriesStyle } from "../../lib/types";
@@ -23,9 +24,20 @@ interface Props {
    *  those series at exactly those display positions, so it must resolve the
    *  same dash/glyph — it has no export of its own to disagree with. */
   seriesCycle?: SeriesCycle;
+  /** A background window's own scales; omitted, the focused plot's. The inset
+   *  magnifies the plot behind it, so it draws on that plot's scales. */
+  view?: Pick<PlotView, "xScale" | "yScale" | "y2Scale" | "xReversed">;
 }
 
-export default function InsetPlot({ payload, styleList, seriesCycle }: Props) {
+export default function InsetPlot({ payload, styleList, seriesCycle, view }: Props) {
+  const liveX = useApp((s) => s.xScale);
+  const liveY = useApp((s) => s.yScale);
+  const liveY2 = useApp((s) => s.y2Scale);
+  const liveRev = useApp((s) => s.xReversed);
+  const xScale = view ? view.xScale : liveX;
+  const yScale = view ? view.yScale : liveY;
+  const y2Scale = view ? view.y2Scale : liveY2;
+  const xReversed = view ? view.xReversed : liveRev;
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const setInsetMode = useApp((s) => s.setInsetMode);
@@ -41,8 +53,10 @@ export default function InsetPlot({ payload, styleList, seriesCycle }: Props) {
     const opts = buildOpts(payload, {
       width: w,
       height: h,
-      yScale: "linear",
-      xScale: "linear",
+      yScale,
+      xScale,
+      y2Scale: y2Scale ?? undefined,
+      xReversed,
       showGrid: true,
       tool: "zoom", // drag to re-zoom the inset
       onReadout: () => {},
@@ -76,7 +90,7 @@ export default function InsetPlot({ payload, styleList, seriesCycle }: Props) {
       plotRef.current?.destroy();
       plotRef.current = null;
     };
-  }, [payload, styleList, seriesCycle, theme, accent]);
+  }, [payload, styleList, seriesCycle, theme, accent, xScale, yScale, y2Scale, xReversed]);
 
   return (
     <div

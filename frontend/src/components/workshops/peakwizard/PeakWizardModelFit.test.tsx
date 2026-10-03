@@ -233,6 +233,8 @@ describe("Peak Analyzer — model fit results (step 4)", () => {
     expect(sent.kind).toBe("peak_model_fit");
     expect(sent.result).not.toHaveProperty("curves");
     expect(sent.result).toHaveProperty("metrics.objective", "ssr");
+    // The fitted y channel's unit heads the report's height/area columns.
+    expect(sent.result).toHaveProperty("yUnit", "cts");
   });
 
   it("switching to the classic engine, or closing the panel, takes the model curve off the plot", async () => {

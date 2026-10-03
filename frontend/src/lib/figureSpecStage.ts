@@ -13,6 +13,7 @@
 import type { FigureSpec } from "./api/figures";
 import type { StoreGet } from "./exportActive";
 import { buildFigureSpec, buildFigureSpecFromDocument, type FigureRenderOpts } from "./figureSpec";
+import { withAnalysisOverlays } from "./figureSpecOverlays";
 import { effectiveChannels } from "./plotdata";
 import { buildPolarFigureSpec } from "./polarFigureSpec";
 import { windowCyclesSeriesStyles } from "./seriesStyleCycle";
@@ -136,5 +137,15 @@ export function buildStageFigureSpec(
         defaultLineWidth,
       })
     : buildFigureSpec(s, ds, stem, { ...o, defaultTrace, defaultLineWidth }, { autoSeriesStyles, waterfallSpan, waterfallXSpan });
-  return extra.transparent === undefined ? spec : { ...spec, transparent: extra.transparent };
+  // The fit / baseline / peak overlays the canvas splices on after `count`
+  // channels (lib/figureSpecOverlays.ts). Not on a frozen document: it renders
+  // its own snapshot, not the rows the overlay was computed on.
+  const overlaid =
+    document?.data.mode === "frozen"
+      ? spec
+      : withAnalysisOverlays(spec, ds, st, count, {
+          screen: st.excludedDisplay === "grey",
+          wire: Boolean(o.greyExcluded),
+        });
+  return extra.transparent === undefined ? overlaid : { ...overlaid, transparent: extra.transparent };
 }

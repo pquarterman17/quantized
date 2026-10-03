@@ -182,3 +182,11 @@ def test_scale_error_spans_is_a_no_op_with_no_offsets_or_no_spans() -> None:
     assert scale_error_spans(spans, None) is spans
     assert scale_error_spans(spans, [0]) is spans
     assert scale_error_spans(None, [2]) is None
+
+
+def test_an_angstrom_target_axis_is_spelled_for_a_reader() -> None:
+    # Round-3 plot audit: the shared axis took the first profile's ASCII "A",
+    # which an axis title reads as amperes.
+    res = compare_profiles([("s2.csv", S2), ("a.csv", A)], ["B"])
+    assert res.data.metadata["x_column_unit"] == "Å"
+    assert res.data.time.tolist()[-1] == 200.0

@@ -212,7 +212,10 @@ export default function MapStage({ dataset }: MapStageProps) {
       canvas: canvasRef.current,
       payload,
       loading: !payloadFresh,
-      view: { cmap, logZ, colorLimits: mapView.colorLimits, contour: { on: contourOn, levelCount: contourLevelCount, scale: contourScale } },
+      view: {
+        cmap, logZ, colorLimits: mapView.colorLimits, contour: { on: contourOn, levelCount: contourLevelCount, scale: contourScale },
+        marks: { slices: mapView.slices, annotations: mapView.annotations, space: cutSpace },
+      },
       stem: active?.name.replace(/\.[^.]+$/, "") ?? "map",
       setStatus,
     });

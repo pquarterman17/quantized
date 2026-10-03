@@ -42,6 +42,10 @@ function bgDescription(path: "mt" | "mh" | null, reason: string): string {
 export default function MagToolsPanel() {
   const setOpen = useApp((s) => s.setMagToolsOpen);
   const m = useMagTools();
+  // The readout's units: a slope/χ is moment per x, an intercept/offset is moment.
+  const { fromField: xU, fromMoment: mU } = m.units;
+  const perX = mU && xU ? ` ${mU}/${xU}` : "";
+  const inM = mU ? ` ${mU}` : "";
 
   return (
     <ToolWindow id="magtools" title="Magnetometry" width={330} onClose={() => setOpen(false)}>
@@ -125,8 +129,8 @@ export default function MagToolsPanel() {
           {m.fit && (
             <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
               {m.fit.kind === "mh"
-                ? `removed: χ ${fmtNum(m.fit.slope)}, offset ${fmtNum(m.fit.offset)}`
-                : `fit: slope ${fmtNum(m.fit.slope)}, intercept ${fmtNum(m.fit.intercept)}`}
+                ? `removed: χ ${fmtNum(m.fit.slope)}${perX}, offset ${fmtNum(m.fit.offset)}${inM}`
+                : `fit: slope ${fmtNum(m.fit.slope)}${perX}, intercept ${fmtNum(m.fit.intercept)}${inM}`}
             </div>
           )}
         </div>

@@ -12,6 +12,7 @@
 // table" action (useModelFit.ts + ./modelFitPeakTable, audit P2.1).
 
 import { useCallback, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 import type { PeakModelFitResponse } from "../../../lib/api/peaks";
 import { peaksIntegrate, reportEmit, type IntegratedPeak } from "../../../lib/api";
@@ -19,6 +20,7 @@ import { regionsFromPeaks, type PeakRecipe } from "../../../lib/peakwizard";
 import type { Dataset, MultiFitResult } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
+import { peakReportUnits } from "../peaks/peakReport";
 
 export type IntegrateResult = { peaks: IntegratedPeak[]; total_area: number } | null;
 
@@ -50,6 +52,7 @@ export function usePeakWizardOutput(inp: Inputs) {
   const { active, segment, workingY, fitted, candidates, classicResult, modelResult, report } = inp;
   const { integrateResult, setIntegrateResult, blocked, setBusy, setError } = inp;
   const addReport = useApp((s) => s.addReport);
+  const plotView = useApp(useShallow((s) => ({ xKey: s.xKey, yKeys: s.yKeys, seriesOrder: s.seriesOrder })));
   const [reportBusy, setReportBusy] = useState(false);
 
   // ⑤ Integrate-only path (#32): regions from the best peak positions we have.
@@ -96,6 +99,8 @@ export function usePeakWizardOutput(inp: Inputs) {
     setReportBusy(true);
     try {
       const refs = [{ kind: "dataset", id: active.id, name: active.name }];
+      // The fitted axes' units head the report's value columns.
+      const units = peakReportUnits(active, active.peakTable, plotView);
       const title = `Peak analysis — ${active.name}`;
       if (report.mode === "integrate" && integrateResult) {
         const { report: sheet } = await reportEmit({
@@ -110,14 +115,14 @@ export function usePeakWizardOutput(inp: Inputs) {
         // them, so they are not shipped.
         const { curves: _curves, ...rest } = modelResult;
         const { report: sheet } = await reportEmit({
-          kind: "peak_model_fit", result: rest as unknown as Record<string, unknown>,
+          kind: "peak_model_fit", result: { ...(rest as unknown as Record<string, unknown>), ...units },
           title, source_refs: refs,
         });
         addReport(title, sheet, active.id);
       } else if (classicResult) {
         const { report: sheet } = await reportEmit({
           kind: "multipeak_fit",
-          result: classicResult as unknown as Record<string, unknown>,
+          result: { ...(classicResult as unknown as Record<string, unknown>), ...units },
           title,
           source_refs: refs,
         });
@@ -128,7 +133,7 @@ export function usePeakWizardOutput(inp: Inputs) {
     } finally {
       setReportBusy(false);
     }
-  }, [active, blocked, report.mode, integrateResult, modelResult, classicResult, addReport, setError]);
+  }, [active, blocked, report.mode, integrateResult, modelResult, classicResult, addReport, setError, plotView]);
 
   return { runIntegrate, reportBusy, toReport };
 }

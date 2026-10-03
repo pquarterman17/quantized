@@ -24,6 +24,7 @@ import { panelHeights, type xZoomSyncHook } from "../../lib/multipanel";
 import type { SeriesStyle } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
+import { alignGutters, resizeAligned, sharedGutters } from "./panelGutters";
 
 /** Everything a stack panel's `buildOpts` call needs that is the SAME for
  *  every panel. `width`/`height`, and the three per-panel lists below, are
@@ -65,6 +66,18 @@ const TICK_BAND = 8;
  *  full x-axis band (tick labels + title) minus the others' `TICK_BAND`. */
 const bottomExtra = new WeakMap<readonly uPlot[], number>();
 
+/** A linear stacked y axis' minimum px between ticks: 1.4 tick-font heights.
+ *  uPlot's own 30 fitted a single "0" into a ~65 px panel, so no panel's scale
+ *  could be read. A log axis keeps its decade rule. */
+function packYTicks(opts: uPlot.Options, cell: StackCellOpts): void {
+  opts.axes = opts.axes?.map((ax, k) => {
+    const scale = k === 0 ? null : ax.scale === "y2" ? (cell.y2Scale ?? cell.yScale) : cell.yScale;
+    if (scale !== "linear") return ax;
+    const px = Number(/(\d+(?:\.\d+)?)px/.exec(String(ax.font ?? ""))?.[1] ?? 12);
+    return { ...ax, space: Math.ceil(px * 1.4) };
+  });
+}
+
 /** Panel heights giving every plot AREA the same height: the bottom panel
  *  also carries `extra` px of x axis. Never below 1 px (as `panelHeights`). */
 function stackHeights(n: number, total: number, extra: number): number[] {
@@ -102,6 +115,7 @@ function textWidth(font: string): (t: string) => number {
  *  already emptied) and return them in panel order. */
 export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): uPlot[] {
   const n = args.panels.length;
+  const shared = new Map<number, number>();
   const built = args.panels.map((pp, i) => {
     const opts = buildOpts(pp, {
       ...args.cell,
@@ -118,6 +132,8 @@ export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): 
     });
     opts.cursor = { ...opts.cursor, sync: { key: args.syncKey } };
     opts.hooks = { setScale: [args.onSetScale] };
+    sharedGutters(opts, shared);
+    packYTicks(opts, args.cell);
     // Blank the x tick labels on every panel but the bottom (keep the axis so
     // the plot areas stay the same width and the panels line up), and shrink
     // its band to the tick marks: blank labels reserved ~70 px per panel.
@@ -146,6 +162,7 @@ export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): 
     return new uPlot({ ...opts, height: heights[i] }, args.panels[i].data, div);
   });
   bottomExtra.set(plots, extra);
+  alignGutters(plots, shared);
   return plots;
 }
 
@@ -157,5 +174,5 @@ export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): 
 export function resizeStackPanels(host: HTMLDivElement, plots: readonly uPlot[], fallbackW: number): void {
   const hs = stackHeights(plots.length, host.clientHeight || 400, bottomExtra.get(plots) ?? 0);
   const width = host.clientWidth || fallbackW;
-  plots.forEach((u, idx) => u.setSize({ width, height: hs[idx] }));
+  resizeAligned(plots, () => plots.forEach((u, idx) => u.setSize({ width, height: hs[idx] })));
 }

@@ -35,7 +35,7 @@
 import uPlot from "uplot";
 
 import type { BreakPanel } from "../../lib/facet";
-import { breakPanelWidths } from "../../lib/multipanel";
+import { breakPanelWidths, xZoomSyncHook } from "../../lib/multipanel";
 import type { SeriesStyle } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
@@ -90,7 +90,11 @@ function makeBreakGlyph(width: number): HTMLDivElement {
  *  emptied), seam glyphs between them, and return the plots in panel order. */
 export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): uPlot[] {
   const widths = breakPanelWidths(args.panels.length, args.box.w, BREAK_GLYPH_W);
-  return args.panels.map((p, i) => {
+  // One y scale across the break (an axis break elides x only): a y zoom,
+  // wheel or pan on one panel moves them all.
+  const plots: uPlot[] = [];
+  const ySync = xZoomSyncHook(() => plots, "y");
+  args.panels.forEach((p, i) => {
     if (i > 0) host.appendChild(makeBreakGlyph(BREAK_GLYPH_W));
     const div = document.createElement("div");
     div.style.flex = `0 0 ${widths[i]}px`;
@@ -111,11 +115,15 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
     });
-    opts.cursor = { ...opts.cursor, sync: { key: args.syncKey } };
+    // Cursor sync by shared y only: uPlot maps a synced cursor or box-zoom
+    // selection BY X VALUE, which put the left panel's x slice on the right.
+    opts.cursor = { ...opts.cursor, sync: { key: args.syncKey, scales: ["x", "y"], match: [() => false, (a, b) => a === b] } };
     // No x-zoom sync: each panel shows its OWN x-slice, so copying one
     // panel's x domain onto another would show the wrong slice there.
-    return new uPlot(opts, p.payload.data, div);
+    opts.hooks = { ...opts.hooks, setScale: [...(opts.hooks?.setScale ?? []), ySync] };
+    plots.push(new uPlot(opts, p.payload.data, div));
   });
+  return plots;
 }
 
 /** Re-size an already-built break row to `host`'s current box — the

@@ -13,6 +13,7 @@
 import { copyText } from "../../../lib/clipboard";
 import {
   clearEdits,
+  clipboardCellText,
   fillDownEdits,
   gridToClipboardText,
   parseClipboardGrid,
@@ -102,6 +103,11 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
     return src.order.filter((r) => sel.has(r));
   }
 
+  /** The block as the grid displays it (categorical labels, blanks). */
+  function displayGrid(block: number[]): string[][] {
+    return block.map((r) => cols.map((c) => clipboardCellText(src.valueAt(r, c), c >= 0 ? src.levelsAt?.(c) : null)));
+  }
+
   function copyBlock() {
     const block = viewRows();
     if (block.length === 0 || cols.length === 0) {
@@ -111,7 +117,7 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
     // No header row: this block is meant to round-trip back into a paste, and
     // a header would land in the first data row. The header-bearing export is
     // the existing "Copy rows".
-    const grid = block.map((r) => cols.map((c) => src.valueAt(r, c) ?? null));
+    const grid = displayGrid(block);
     void copyText(gridToClipboardText(grid)).then((ok) =>
       src.setStatus(ok ? `copied ${block.length}×${cols.length} block` : "clipboard unavailable"),
     );
@@ -207,7 +213,7 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
     }
     // Copy FIRST and only clear once the clipboard write resolved — a cut that
     // clears after a failed copy destroys data with nowhere to paste it.
-    const grid = block.map((r) => cols.map((c) => src.valueAt(r, c) ?? null));
+    const grid = displayGrid(block);
     void copyText(gridToClipboardText(grid)).then((ok) => {
       if (!ok) {
         src.setStatus("clipboard unavailable — nothing was cut");

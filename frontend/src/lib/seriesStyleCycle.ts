@@ -265,8 +265,12 @@ export function windowCyclesSeriesStyles(
   // Plot audit round 2: past `count` > 8 series the palette repeats (series 9
   // is series 1's hue), so the cycle engages without the preference — under
   // the same refusals. `count` is the canvas' plotted-channel count.
-  return (on || count > SERIES_VARS.length) && !documentPinsSeriesStyles(doc) && !doc?.bindings?.encoding && overlayExportsSeriesStyles(view);
+  return cyclesPastPalette(on, count) && !documentPinsSeriesStyles(doc) && !doc?.bindings?.encoding && overlayExportsSeriesStyles(view);
 }
+
+/** The preference `on`, or `count` plotted series past the palette's eight
+ *  (series 9 would repeat series 1 exactly) — every canvas/export pair's switch. */
+export const cyclesPastPalette = (on: boolean, count: number): boolean => on || count > SERIES_VARS.length;
 
 /** The display positions of `count` series in their own natural order — the
  *  opt-in a canvas passes, since a canvas indexes its series by display position

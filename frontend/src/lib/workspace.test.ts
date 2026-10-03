@@ -745,7 +745,10 @@ describe("workspace report persistence (#36)", () => {
       report: { title: "Figures", sections: [{ title: "Figures", blocks: [specBlock] }] },
     });
     const loaded = parseWorkspace(serializeWorkspace({ datasets, reports: [entry] }));
-    expect(loaded.reports[0]).toEqual(entry);
+    // The spec's missing cell (null, as the export wire writes it) reopens as
+    // NaN (the persisted-cell contract for a DataStruct); both post to
+    // /api/export/figure as the same JSON, so the request is unchanged.
+    expect(JSON.stringify(loaded.reports[0])).toBe(JSON.stringify(entry));
     expect(loaded.migrationWarnings).toEqual([]);
   });
 

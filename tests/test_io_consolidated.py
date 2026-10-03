@@ -56,3 +56,50 @@ def test_ragged_columns_blank_pad() -> None:
 def test_bad_fmt_raises() -> None:
     with pytest.raises(ValueError, match="fmt"):
         consolidate_csv(_datasets(), fmt="nope")
+
+
+def test_non_q_x_axis_keeps_its_own_name() -> None:
+    # The MATLAB writer came from the neutron tool and always titled X "Q"; the
+    # GUI offers it for every dataset, so a magnetometry sweep exported as
+    # "Q (K)". A Q axis keeps "Q" (golden parity); any other keeps its name.
+    mpms = DataStruct.create(
+        [2.0, 5.0],
+        [[1e-3], [2e-3]],
+        labels=["Long Moment"],
+        units=["emu"],
+        metadata={"x_column_name": "Temperature", "x_column_unit": "K"},
+    )
+    std = consolidate_csv([(mpms, "mpms.dat"), _datasets()[0]], fmt="standard")
+    assert std.splitlines()[0] == "Temperature (K),Long Moment (emu),Q (1/A),R,dR"
+    org = consolidate_csv([(mpms, "mpms.dat")], fmt="origin")
+    assert org.splitlines()[0] == "Temperature,Long Moment"
+
+
+def test_designations_follow_declared_error_roles() -> None:
+    ds = DataStruct.create(
+        [0.01, 0.02],
+        [[1.0, 0.1, 1e-4], [0.5, 0.05, 1e-4]],
+        labels=["R", "sR", "sQz"],
+        units=["", "", "1/A"],
+        metadata={
+            "x_column_name": "Qz",
+            "error_roles": [
+                {"channel": 1, "target": 0, "axis": "y", "side": "both"},
+                {"channel": 2, "target": -1, "axis": "x", "side": "both"},
+            ],
+        },
+    )
+    org = consolidate_csv([(ds, "a.ort")], fmt="origin")
+    assert org.splitlines()[3] == "X,Y,yEr,xEr"
+
+
+def test_missing_values_are_blank_like_the_padding() -> None:
+    ds = DataStruct.create([1.0, 2.0], [[float("nan")], [2.0]], labels=["A"], units=[""])
+    assert consolidate_csv([(ds, "a")]).splitlines()[1:] == ["1,", "2,2"]
+
+
+def test_categorical_channel_exports_level_labels() -> None:
+    ds = DataStruct.create(
+        [1.0, 2.0], [[1.0], [0.0]], labels=["grade"], units=[""], cat_levels={0: ("low", "high")}
+    )
+    assert consolidate_csv([(ds, "a")]).splitlines()[1:] == ["1,high", "2,low"]

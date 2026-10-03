@@ -179,7 +179,13 @@ export default function GridHeader({
       >
         {xName}
         <span className="role">
-          X{xUnit ? ` · ${xUnit}` : ""}
+          X
+          {xUnit && (
+            <>
+              {" · "}
+              <span className="unit">{xUnit}</span>
+            </>
+          )}
           {sortMark(-1)}
         </span>
         {resizeHandle(-1)}
@@ -220,7 +226,12 @@ export default function GridHeader({
             )}
             <span className="role">
               {roleText(c, computed, channelRoles[c], meta)}
-              {data.units[c] ? ` · ${data.units[c]}` : ""}
+              {data.units[c] && (
+                <>
+                  {" · "}
+                  <span className="unit">{data.units[c]}</span>
+                </>
+              )}
               {sortMark(c)}
             </span>
             {modelingTypeOf && onChangeChannelType && (

@@ -13,12 +13,13 @@
 // "value ± error" (PeakValueCell), and the header names that producer.
 
 import { useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 import PeakFitControls from "./PeakFitControls";
 import PeakTable from "./PeakTable";
 import PeakValueCell from "./PeakValueCell";
 import { DEFAULT_PEAK_FIND } from "./peakFindParams";
-import { peakReportResult } from "./peakReport";
+import { peakReportResult, peakReportUnits } from "./peakReport";
 import { usePeakTableSelection } from "./peakSelection";
 import { usePeaks, type PeakFindRequest } from "./usePeaks";
 import ToolWindow from "../../overlays/ToolWindow";
@@ -54,6 +55,7 @@ export default function PeaksPanel() {
   const setOpen = useApp((s) => s.setPeaksOpen);
   const setPeakOverlay = useApp((s) => s.setPeakOverlay);
   const addReport = useApp((s) => s.addReport);
+  const plotView = useApp(useShallow((s) => ({ xKey: s.xKey, yKeys: s.yKeys, seriesOrder: s.seriesOrder })));
   const [reporting, setReporting] = useState(false);
   const [labeling, setLabeling] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
@@ -88,7 +90,10 @@ export default function PeaksPanel() {
         kind: "multipeak_fit",
         // A published model-fit table's errors and objective ride along, so
         // the report says what the table shows (./peakReport).
-        result: peakReportResult(fitResult, peakTable, active.id),
+        result: {
+          ...peakReportResult(fitResult, peakTable, active.id),
+          ...peakReportUnits(active, peakTable, plotView),
+        },
         title: `Peak fit — ${active.name}`,
         source_refs: [{ kind: "dataset", id: active.id, name: active.name }],
       });

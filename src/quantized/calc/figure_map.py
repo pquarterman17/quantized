@@ -14,12 +14,13 @@ publication path; interactive 3-D is deferred (#22).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import matplotlib
 import matplotlib.tri as mtri
 import numpy as np
+from matplotlib import patheffects
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (registers the 3d projection)
 from numpy.typing import ArrayLike, NDArray
 
@@ -85,6 +86,9 @@ def render_map_figure(
     view_elev: float = 30.0,
     view_azim: float = -60.0,
     z_limits: Sequence[float] | None = None,
+    equal_aspect: bool = False,
+    lines: Sequence[Sequence[float]] | None = None,
+    labels: Sequence[Mapping[str, Any]] | None = None,
 ) -> bytes:
     """Render a 2-D map to image bytes in the chosen ``kind``.
 
@@ -123,6 +127,17 @@ def render_map_figure(
     colour limits the canvas paints over, which may be wider than the data
     (``tests/fixtures/wire/map_color_limits.json``). Contour LEVELS still come
     from the data. ``None`` = the data's extent, as before.
+
+    A 2-D map is framed like the canvas (``mapRender.draw``): a ``heatmap`` at
+    its grid's axis span, each cell centred on its axis value (``pcolormesh``
+    alone widens the frame by half a cell), and ``equal_aspect`` sets one data
+    unit per unit on both axes -- the canvas letterboxes a map whose two axes
+    share a physical unit (Qx/Qz) the same way.
+
+    ``lines`` (``[x0, y0, x1, y1]`` each) and ``labels`` (``{x, y, text}``
+    each) are the map's committed slices and text labels in data coordinates
+    (``MapSliceOverlay`` on screen), drawn over a 2-D map without moving its
+    frame.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -205,6 +220,13 @@ def render_map_figure(
         )
         if clim is not None and mappable is not None:
             mappable.set_clim(*clim)
+        if kind == "heatmap":
+            ax.set_xlim(x[0], x[-1])
+            ax.set_ylim(y[0], y[-1])
+        if equal_aspect and kind not in _3D_KINDS:
+            ax.set_aspect("equal", adjustable="box")
+        if kind not in _3D_KINDS:
+            _draw_marks(ax, lines or [], labels or [], st.font_size)
         if title:
             ax.set_title(title)
         if x_label:
@@ -217,6 +239,30 @@ def render_map_figure(
             fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8)
         fig.tight_layout()
         return savefig_bytes(fig, fmt, dpi=resolved_dpi)
+
+
+def _draw_marks(
+    ax: Any, lines: Sequence[Sequence[float]], labels: Sequence[Mapping[str, Any]], size: float
+) -> None:
+    """Slices as dashed lines and labels as boxed text, in data coordinates;
+    the axis limits are restored so a mark never widens the frame. White with
+    a dark halo reads over every colormap, as the canvas' accent does on its
+    dark theme."""
+    if not lines and not labels:
+        return
+    xlim, ylim = ax.get_xlim(), ax.get_ylim()
+    halo = [patheffects.withStroke(linewidth=2.6, foreground="black")]
+    for line in lines:
+        x0, y0, x1, y1 = (float(v) for v in line)
+        ax.plot([x0, x1], [y0, y1], color="white", lw=1.25, ls=(0, (6, 3)), path_effects=halo)
+    for lab in labels:
+        ax.text(
+            float(lab["x"]), float(lab["y"]), safe_mathtext_label(str(lab["text"])),
+            ha="center", va="center", fontsize=size * 0.85,
+            bbox={"boxstyle": "round,pad=0.25", "fc": "white", "ec": "0.35", "alpha": 0.85},
+        )
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
 
 
 def _z_limits(z_limits: Sequence[float] | None) -> tuple[float, float] | None:

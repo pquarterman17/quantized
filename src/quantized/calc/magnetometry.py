@@ -281,6 +281,33 @@ def _sorted_unique(
     return xu, y[idx]
 
 
+# Field readings closer than this fraction of the branch's median H step are one
+# reading for dM/dH. A VSM settling at the sweep setpoint logs points ~0.3 Oe
+# apart amid ~75 Oe steps; differentiating noise over that sliver put the SFD
+# peak at -Hmax on real loops. Evenly stepped data never merges (golden-safe).
+_SFD_MERGE_FRACTION = 0.1
+
+
+def _merge_close_fields(
+    h: NDArray[np.float64], m: NDArray[np.float64]
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Average runs of sorted ``h`` closer than ``_SFD_MERGE_FRACTION`` x median step."""
+    if h.size < 3:
+        return h, m
+    step = float(np.median(np.diff(h)))
+    if not np.isfinite(step) or step <= 0:
+        return h, m
+    tol = _SFD_MERGE_FRACTION * step
+    group = np.concatenate([[0], np.cumsum(np.diff(h) >= tol)])
+    if int(group[-1]) == h.size - 1:
+        return h, m
+    counts = np.bincount(group).astype(float)
+    return (
+        np.asarray(np.bincount(group, weights=h) / counts, dtype=float),
+        np.asarray(np.bincount(group, weights=m) / counts, dtype=float),
+    )
+
+
 def hysteresis_analysis(
     h: ArrayLike,
     m: ArrayLike,
@@ -385,13 +412,23 @@ def hysteresis_analysis(
             ms[1] = float(np.mean(asc_m[lo]))
     ms_mean = _nanmean_abs(ms)
 
+    # Saturation check, per field sign. MATLAB pooled both high-field tails,
+    # whose mean is ~0 on any symmetric loop, so it flagged every loop
+    # (std / ~0); that golden value was a source bug, deliberately not ported.
+    # Here: how much M still changes across each tail's field window
+    # (linear slope x window width), relative to that tail's |M|.
     if desc_h.size and asc_h.size:
-        all_hi = np.abs(hv) > sat_thresh
-        if int(all_hi.sum()) >= 6:
-            m_hi = mv[all_hi]
-            dm_rel = float(np.std(m_hi, ddof=1) / max(abs(np.mean(m_hi)), _EPS))
-            if dm_rel > 0.1:
+        for tail in (hv > sat_thresh, hv < -sat_thresh):
+            if int(tail.sum()) < 3:
+                continue
+            h_t, m_t = hv[tail], mv[tail]
+            span = float(np.ptp(h_t))
+            if span <= 0:
+                continue
+            slope = float(np.polyfit(h_t, m_t, 1)[0])
+            if abs(slope) * span / max(abs(float(np.mean(m_t))), _EPS) > 0.05:
                 warnings.append("Loop may not be saturated (high-field M still varying)")
+                break
 
     squareness = float(np.fmin(mr_mean / max(ms_mean, _EPS), 1.0))
 
@@ -399,7 +436,7 @@ def hysteresis_analysis(
     dmdh_asc: NDArray[np.float64] = np.array([])
     dmdh_desc: NDArray[np.float64] = np.array([])
     if asc_h.size >= 5:
-        hu, mu = _sorted_unique(asc_h, asc_m)
+        hu, mu = _merge_close_fields(*_sorted_unique(asc_h, asc_m))
         if hu.size >= 5:
             dmdh_asc = derivative(hu, mu, pre_smooth=max(3, pre_smooth))
             pk = int(np.argmax(np.abs(dmdh_asc)))
@@ -409,7 +446,7 @@ def hysteresis_analysis(
                 "fwhm": _compute_fwhm(hu, np.abs(dmdh_asc), pk),
             }
     if desc_h.size >= 5:
-        hud, mud = _sorted_unique(desc_h, desc_m)
+        hud, mud = _merge_close_fields(*_sorted_unique(desc_h, desc_m))
         if hud.size >= 5:
             dmdh_desc = derivative(hud, mud, pre_smooth=max(3, pre_smooth))
 

@@ -33,7 +33,7 @@ import numpy as np
 from ..datastruct import DataStruct
 from ..x_units import x_unit_of
 from .sims_correct import normalize_to_reference, smooth_profiles, subtract_background
-from .sims_depth import calibrate_depth, canonical_length
+from .sims_depth import calibrate_depth, display_length
 
 __all__ = [
     "BackgroundSpec",
@@ -189,7 +189,7 @@ def process_sims(
         )
         stages.append(prov)
         warnings += w
-        depth_unit = canonical_length(c.depth_unit)
+        depth_unit = display_length(c.depth_unit)
         meta["x_column_name"] = "Depth"
         meta["x_column_unit"] = depth_unit
         meta["xUnit"] = depth_unit

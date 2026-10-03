@@ -57,15 +57,23 @@ export function parseClipboardGrid(text: string): string[][] {
   return withoutTrailing.split(/\r?\n/).map((line) => line.split("\t"));
 }
 
-/** Serialize a rectangular block of numbers to TSV for the clipboard.
- *
- *  `null`/NaN become empty fields so the row width stays constant — the same
- *  convention `payloadToTSV` uses, and what a spreadsheet reads back as blank. */
-export function gridToClipboardText(grid: readonly (readonly (number | null)[])[]): string {
+/** One cell as the clipboard should carry it: what the grid SHOWS. A
+ *  categorical code becomes its level label (Excel/Origin would otherwise get
+ *  0/1/2, and a paste back resolves the label through `levelCode`); a missing
+ *  or non-finite value becomes an empty field, which a spreadsheet reads as
+ *  blank; anything else keeps full precision. */
+export function clipboardCellText(v: number | null | undefined, levels?: readonly string[] | null): string {
+  if (v == null || !Number.isFinite(v)) return "";
+  if (levels && Number.isInteger(v) && v >= 0 && v < levels.length) return levels[v];
+  return String(v);
+}
+
+/** Serialize a rectangular block to TSV for the clipboard. Numbers go through
+ *  `clipboardCellText` (null/NaN -> empty field, so the row width stays
+ *  constant — the convention `payloadToTSV` uses); strings pass through. */
+export function gridToClipboardText(grid: readonly (readonly (number | string | null)[])[]): string {
   return grid
-    .map((row) =>
-      row.map((v) => (v == null || !Number.isFinite(v) ? "" : String(v))).join("\t"),
-    )
+    .map((row) => row.map((v) => (typeof v === "string" ? v : clipboardCellText(v))).join("\t"))
     .join("\n");
 }
 

@@ -77,10 +77,13 @@ export function sharedXDomain(panels: readonly FacetPanel[]): [number, number] |
  *  break reads honestly (a real axis break must keep one y-scale; only x is
  *  discontinuous). Null when no panel has any finite y value anywhere.
  *  Series of a `hidden` channel are skipped: the export drops them before
- *  matplotlib autoscales, so counting them would stretch only the screen. */
+ *  matplotlib autoscales, so counting them would stretch only the screen.
+ *  `positiveOnly` (a log or reciprocal y) skips values <= 0, which those axes
+ *  cannot draw: a zero-count row otherwise blanked every panel. */
 export function sharedYDomain(
   panels: readonly BreakPanel[],
   hidden: readonly number[] = [],
+  positiveOnly = false,
 ): [number, number] | null {
   let min = Infinity;
   let max = -Infinity;
@@ -88,7 +91,7 @@ export function sharedYDomain(
     for (let s = 1; s < p.payload.data.length; s++) {
       if (hidden.includes(p.channels[s - 1])) continue;
       for (const v of p.payload.data[s] as (number | null)[]) {
-        if (v == null || !Number.isFinite(v)) continue;
+        if (v == null || !Number.isFinite(v) || (positiveOnly && v <= 0)) continue;
         if (v < min) min = v;
         if (v > max) max = v;
       }

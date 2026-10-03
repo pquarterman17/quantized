@@ -61,4 +61,43 @@ describe("renderBreakPanels", () => {
     await settle();
     expect(plots.map((u) => [u.scales.x.min, u.scales.x.max])).toEqual([[0, 2], [3, 5]]);
   });
+
+  // Plot audit round 3: an x-break keeps ONE y scale. A box zoom or wheel on
+  // one panel rescaled y there alone, so one break read two y ranges.
+  it("moves every panel's y with a y zoom on one, and leaves each panel's own x alone", async () => {
+    const host = document.body.appendChild(document.createElement("div"));
+    plots = renderBreakPanels(host, {
+      panels: [panel([0, 1, 2], [0, 2]), panel([3, 4, 5], [3, 5])],
+      seriesLabels: {}, seriesStyles: {}, hiddenChannels: [], syncKey: "break-test-y", box: { w: 800, h: 300 },
+      cell: { xScale: "linear", yScale: "linear", yLim: [0, 10], tool: "zoom", onReadout: vi.fn() },
+    });
+    await settle();
+    plots[0].setScale("y", { min: 1, max: 3 });
+    await settle();
+    expect([plots[1].scales.y.min, plots[1].scales.y.max]).toEqual([1, 3]);
+    expect(plots.map((u) => [u.scales.x.min, u.scales.x.max])).toEqual([[0, 2], [3, 5]]);
+  });
+
+  // Plot audit round 3, measured on FAIRmat_2thomega.brml: a box zoom on the
+  // left panel reached the right one through uPlot's cursor sync, which maps
+  // the selection BY X VALUE, so the right panel showed the left's (empty) x.
+  it("a box zoom on one panel does not move another panel's x", async () => {
+    const host = document.body.appendChild(document.createElement("div"));
+    plots = renderBreakPanels(host, {
+      panels: [panel([0, 1, 2], [0, 2]), panel([3, 4, 5], [3, 5])],
+      seriesLabels: {}, seriesStyles: {}, hiddenChannels: [], syncKey: "break-test-drag", box: { w: 800, h: 300 },
+      cell: { xScale: "linear", yScale: "linear", tool: "zoom", onReadout: vi.fn() },
+    });
+    await settle();
+    const over = plots[0].over;
+    const at = (type: string, x: number, y: number, el: EventTarget) =>
+      el.dispatchEvent(new MouseEvent(type, { button: 0, clientX: x, clientY: y, movementX: 1, movementY: 1, bubbles: true }));
+    at("mousedown", 40, 40, over);
+    at("mousemove", 200, 150, over);
+    at("mouseup", 200, 150, document);
+    await settle();
+    expect(plots[0].scales.x.max).toBeLessThan(2); // the zoom itself happened
+    expect([plots[1].scales.x.min, plots[1].scales.x.max]).toEqual([3, 5]);
+  });
 });
+

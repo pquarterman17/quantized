@@ -8094,6 +8094,11 @@ export interface components {
             /** Dpi */
             dpi?: number | null;
             /**
+             * Equal Aspect
+             * @default false
+             */
+            equal_aspect?: boolean;
+            /**
              * Filename
              * @default map
              */
@@ -8115,6 +8120,8 @@ export interface components {
              * @default true
              */
             label_contours?: boolean;
+            /** Labels */
+            labels?: components["schemas"]["MapLabel"][] | null;
             /**
              * Level Scale
              * @default linear
@@ -8125,6 +8132,8 @@ export interface components {
              * @default 12
              */
             levels?: number | number[];
+            /** Lines */
+            lines?: number[][] | null;
             /**
              * Style
              * @default default
@@ -8172,6 +8181,18 @@ export interface components {
             z_limits?: number[] | null;
             /** Z Values */
             z_values?: number[] | null;
+        };
+        /**
+         * MapLabel
+         * @description A text label pinned to a map data coordinate (MapStage's annotations).
+         */
+        MapLabel: {
+            /** Text */
+            text: string;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
         };
         /**
          * MapRequest
@@ -8468,6 +8489,11 @@ export interface components {
              * @default false
              */
             x_log?: boolean;
+            /**
+             * X Reversed
+             * @default false
+             */
+            x_reversed?: boolean;
             /**
              * Y2 Keys
              * @default []

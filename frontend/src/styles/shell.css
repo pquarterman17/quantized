@@ -692,6 +692,9 @@ body {
    ended at the right spot"). Tint it with the accent + a dashed border so the
    user sees exactly what will be zoomed. Double-click the plot to reset. */
 .u-select { background: color-mix(in srgb, var(--accent) 16%, transparent); border: 1px dashed var(--accent); }
+/* Idle, uPlot leaves the box at 0x0 in the plot's top-left corner, where the
+   border alone drew a 2 px accent dot (stacked panels, facet cells, the inset). */
+.u-select:not([style]), .u-select[style*="width: 0px"], .u-select[style*="height: 0px"] { border: 0; }
 .qzk-glass { position: absolute; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow); }
 /* GUI audit P1: centred by auto margins between 12px insets, NOT left:50% +
    translate — an absolute box at left:50% only gets half the stage as its
@@ -766,6 +769,11 @@ body {
 .qzk-mini-toolbar button.danger:hover { background: color-mix(in srgb, var(--danger, #e5484d) 18%, transparent); }
 .qzk-zoom-chip { bottom: 12px; left: 12px; padding: 3px 9px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
 .qzk-readout { bottom: 12px; right: 12px; padding: 3px 9px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-dim); }
+/* Plot audit round 3: a legend in the bottom-right corner (fixed, auto-placed
+   there, or the outside column) owns that spot; the readout takes bottom left. */
+.qzk-stage:has(> .qzk-legend.se) > .qzk-readout,
+.qzk-stage:has(> .qzk-legend.out) > .qzk-readout,
+.qzk-stage[data-lc="se"]:has(> .qzk-legend.auto) > .qzk-readout { right: auto; left: 12px; }
 /* On-plot analysis result chips (∫ Integrate / ∩ FWHM) — stack bottom-center,
    newest on top. The container is click-through; each chip re-enables pointers. */
 .qzk-result-chips { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column-reverse; align-items: center; gap: 6px; pointer-events: none; }
@@ -972,6 +980,8 @@ body {
 .qzk-grid-headcell { border-color: var(--border); background: var(--surface-2); color: var(--text-dim); font-weight: var(--weight-medium); cursor: pointer; white-space: normal; }
 .qzk-grid-footer .qzk-grid-headcell, .qzk-grid-header .qzk-grid-rownum { cursor: default; }
 .qzk-grid-headcell .role { display: block; font-size: var(--type-nano); color: var(--accent-text); text-transform: uppercase; letter-spacing: var(--tracking-label); }
+/* Units are case-sensitive data ("mT" is not "MT"): exempt them from the uppercase role line. */
+.qzk-grid-headcell .role .unit { text-transform: none; letter-spacing: 0; }
 .qzk-grid-headcell .comment { display: block; font-size: var(--type-nano); color: var(--text-faint); font-weight: var(--weight-regular); text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qzk-grid-rownum { background: var(--surface-1); color: var(--text-faint); text-align: center; cursor: pointer; }
 .qzk-grid-footer .qzk-grid-rownum { cursor: default; }

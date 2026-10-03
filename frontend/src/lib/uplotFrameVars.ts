@@ -89,8 +89,10 @@ export function frameVarsPlugin(stageSelector = ".qzk-stage"): uPlot.Plugin {
     publishFrameVars(stage, frameRect(u.over.getBoundingClientRect(), stage.getBoundingClientRect()));
     // An "auto" legend's corner / outside column (plot audit round 2), on demand.
     // Runs on every draw, so no runLazy busy op; a failed chunk load leaves the
-    // legend in its CSS default corner, which is still a usable legend.
-    if (stage.querySelector(":scope>.qzk-legend:is(.auto,.out)"))
+    // legend in its CSS default corner, which is still a usable legend. The
+    // corner is kept current under a FIXED legend too (round 3): switching to
+    // auto draws nothing, and used to show the corner of an older plot.
+    if (stage.querySelector(":scope>.qzk-legend"))
       void import("./legendAutoPlace").then((m) => m.placeLegend(u, stage)).catch(() => undefined);
   };
   return { hooks: { ready: publish, setSize: publish, draw: publish } };

@@ -103,3 +103,20 @@ describe("stacked y titles fit their panel", () => {
     expect(created.map((c) => c.opts.axes[1].label)).toEqual(["H (atoms/cc)", "H (atoms/cc)"]);
   });
 });
+
+describe("stacked y ticks", () => {
+  // Plot audit round 3: uPlot's 30 px minimum between y ticks fitted a single
+  // "0" into a ~65 px stacked panel (7-file VSM overlay), so no panel's scale
+  // could be read. A linear stacked axis packs ticks at 1.4 tick-font heights.
+  it("pack closer on a linear stack, so a short panel labels more than one tick", () => {
+    renderStackPanels(document.createElement("div"), { ...args(7, 600), cell: { ...args(7, 600).cell, yScale: "linear" } });
+    const space = (created[0].opts.axes[1] as { space?: unknown }).space;
+    expect(typeof space).toBe("number");
+    expect(space as number).toBeLessThan(30);
+  });
+
+  it("leave a log axis' decade rule alone", () => {
+    renderStackPanels(document.createElement("div"), args(7, 600));
+    expect((created[0].opts.axes[1] as { space?: unknown }).space).toBeUndefined();
+  });
+});

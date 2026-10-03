@@ -34,6 +34,7 @@ import { cellSize, type xZoomSyncHook } from "../../lib/multipanel";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import type { SeriesStyle } from "../../lib/types";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
+import { alignGutters, resizeAligned, sharedGutters } from "./panelGutters";
 
 /** Everything a facet cell's `buildOpts` call needs that is the SAME for
  *  every panel. `width`/`height` (the computed cell size), `title` (the
@@ -82,7 +83,8 @@ export function facetPanelStyles(
  *  emptied) and return them in panel order. */
 export function renderFacetGrid(host: HTMLDivElement, args: FacetGridArgs): uPlot[] {
   const { cellW, cellH } = cellSize(args.box.w, args.box.h, args.grid, args.gap);
-  return args.panels.map((p, i) => {
+  const shared = new Map<number, number>();
+  const plots = args.panels.map((p, i) => {
     const div = document.createElement("div");
     host.appendChild(div);
     const opts = buildOpts(p.payload, {
@@ -100,8 +102,11 @@ export function renderFacetGrid(host: HTMLDivElement, args: FacetGridArgs): uPlo
     });
     opts.cursor = { ...opts.cursor, sync: { key: args.syncKey } };
     opts.hooks = { setScale: [args.onSetScale] };
+    sharedGutters(opts, shared); // a column's x ticks line up row to row
     return new uPlot(opts, p.payload.data, div);
   });
+  alignGutters(plots, shared);
+  return plots;
 }
 
 /** Re-size an already-built facet grid to `host`'s current box — the
@@ -119,5 +124,5 @@ export function resizeFacetGrid(
   const w = host.clientWidth || fallback.w;
   const h = host.clientHeight || fallback.h;
   const { cellW, cellH } = cellSize(w, h, grid, gap);
-  plots.forEach((u) => u.setSize({ width: cellW, height: cellH }));
+  resizeAligned(plots, () => plots.forEach((u) => u.setSize({ width: cellW, height: cellH })));
 }

@@ -117,6 +117,22 @@ describe("frameVarsPlugin", () => {
     await vi.waitFor(() => expect(stage!.dataset.lc).toBe("ne"));
   });
 
+  // Plot audit round 3: the corner used to be chosen only while the legend was
+  // auto, so switching a fixed legend back to auto (which draws nothing) showed
+  // the corner chosen for an older plot, over the current data.
+  it("keeps the auto corner current while the legend sits in a fixed corner", async () => {
+    const { u, stage } = mockPlot(true);
+    const xs = Array.from({ length: 50 }, (_, i) => i);
+    // Every point at (2, 2): inside the top-left patch even for jsdom's 0-px legend box.
+    Object.assign(u, { data: [xs, xs], series: [{}, { show: true, scale: "y" }], valToPos: () => 2 });
+    stage!.dataset.lc = "nw"; // chosen for an earlier plot; every point now lies there
+    const box = document.createElement("div");
+    box.className = "qzk-legend sw";
+    stage!.appendChild(box);
+    runHook(frameVarsPlugin(), "draw", u);
+    await vi.waitFor(() => expect(stage!.dataset.lc).toBe("ne"));
+  });
+
   it("no-ops when there is no .qzk-stage ancestor (MultiPanel / inset hosts)", () => {
     const { u } = mockPlot(false);
     // Must not throw and must touch nothing.

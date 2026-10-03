@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { baselineALS, baselineAnchor, baselineEstimate, baselineModPoly, baselineRegion, baselineRollingBall, baselineShirley, baselineXrdLowAngle } from "../../../lib/api/baseline";
 import { fullPlottedX, plottedYKey } from "../../../lib/fitselectionActions";
+import { magXAxis } from "../../../lib/magDataKind";
 import type { CorrectionParams, Dataset, DataStruct } from "../../../lib/types";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -108,7 +109,7 @@ function baselineInput(
       datasetId: ds.id,
       xKey,
       yKey,
-      xLabel: xKey == null ? "Time" : (ds.data.labels[xKey] ?? `Channel ${xKey + 1}`),
+      xLabel: xKey == null ? magXAxis(ds.data, null).label || "Time" : (ds.data.labels[xKey] ?? `Channel ${xKey + 1}`),
       yLabel: ds.data.labels[yKey] ?? `Channel ${yKey + 1}`,
     },
     x,
