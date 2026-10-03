@@ -282,6 +282,20 @@ test("tooltips at the window's right edge stay inside it", async ({ page }) => {
   }
 });
 
+// Round-4 chrome audit: reopened from Help over a plot, the 310px hints card
+// stuck 30px out of the 296px Inspector column, over the x-axis ticks and title.
+test("the interaction-hints card stays in the side column, clear of the plot", async ({ page }) => {
+  await loadPlot(page);
+  await page.evaluate(() => window.dispatchEvent(new Event("qz:show-interaction-hints")));
+  const card = page.getByRole("complementary", { name: "Interaction hints" });
+  await expect(card).toBeVisible();
+  for (const size of SIZES) {
+    await page.setViewportSize(size);
+    const [c, s] = await Promise.all([rectOf(card), rectOf(page.locator(".qzk-stage").first())]);
+    expect(overlaps(c, s), `hints card covers the plot stage at ${size.width}x${size.height}`).toBe(false);
+  }
+});
+
 type QzHarness = { __qz: { useApp: { setState: (s: object) => void } } };
 
 // Round-4 chrome audit: the import toast sat bottom-centre of the WINDOW,
