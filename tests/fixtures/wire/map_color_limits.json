@@ -203,7 +203,8 @@
         "title": "",
         "x_label": "2Theta (deg)",
         "y_label": "Omega (deg)",
-        "z_label": "log₁₀ I (cts)",
+        "z_label": "I (cts) — log",
+        "colorbar_log10": true,
         "filename": "scan_map"
       },
       "clim": [
@@ -246,7 +247,8 @@
         "title": "",
         "x_label": "2Theta (deg)",
         "y_label": "Omega (deg)",
-        "z_label": "log₁₀ I (cts)",
+        "z_label": "I (cts) — log",
+        "colorbar_log10": true,
         "filename": "scan_map"
       },
       "clim": [

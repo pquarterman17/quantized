@@ -80,7 +80,8 @@ describe("MapStage export", () => {
       cmap: "RdBu_r",
       x_label: "X (mm)",
       y_label: "Y (mm)",
-      z_label: "log₁₀ Signal (V)",
+      z_label: "Signal (V) — log",
+      colorbar_log10: true,
       filename: "scan_map",
     });
     expect(body.z_grid!.length).toBe(body.y_axis.length);
