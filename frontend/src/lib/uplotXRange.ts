@@ -63,15 +63,14 @@ export function padXDomain([min, max]: readonly [number, number], positiveOnly: 
  *  consider positive x only. Null when nothing qualifies (leave uPlot's
  *  default alone).
  *
- *  A waterfall X-offset payload (`blockRows` set, `lib/waterfallX.ts`) holds
- *  one x block per display slot, so its x column is NOT what is drawn: a
- *  hidden series keeps its shifted block, and an excluded row its x. There
- *  only the x of a point some visible series draws counts — every shifted
- *  series is covered and nothing else, the domain the export autoscales to
- *  (`tests/fixtures/wire/waterfall_x_domain.json`). */
+ *  Only the x of a point some visible series draws counts, the domain the
+ *  export autoscales to: a waterfall X-offset payload (`blockRows`,
+ *  `lib/waterfallX.ts`) holds a hidden series' shifted block and an excluded
+ *  row's x (`tests/fixtures/wire/waterfall_x_domain.json`), and a sheet whose
+ *  other columns start earlier holds end rows no plotted series draws. */
 export function fullXExtents(payload: PlotPayload, hidden: boolean[] | undefined, positiveOnly: boolean): [number, number] | null {
   const [xs, ...ys] = payload.data as (number | null)[][];
-  const drawn = payload.blockRows ? ys.filter((_, i) => !hidden?.[i]) : null;
+  const drawn = ys.length ? ys.filter((_, i) => !hidden?.[i]) : null;
   let min = Infinity;
   let max = -Infinity;
   xs.forEach((v, r) => {
@@ -81,19 +80,4 @@ export function fullXExtents(payload: PlotPayload, hidden: boolean[] | undefined
     if (v > max) max = v;
   });
   return min > max ? null : padXDomain([min, max], positiveOnly);
-}
-
-/** An ascending x column's DRAWN span when rows no visible series draws pad
- *  its ends (a sheet whose other columns start earlier): uPlot ranges x over
- *  the whole column, the export over the drawn points. Unpadded, as uPlot's
- *  own x. Null when both end rows are drawn, or nothing is. */
-export function drawnXSpan(payload: PlotPayload, hidden: boolean[] | undefined, positiveOnly = false): [number, number] | null {
-  const [xs, ...ys] = payload.data as (number | null)[][];
-  const drawn = (r: number) => Number.isFinite(xs[r]) && ys.some((y, i) => !hidden?.[i] && y[r] != null && Number.isFinite(y[r]));
-  let a = 0;
-  let b = xs.length - 1;
-  while (a <= b && !drawn(a)) a++;
-  while (b > a && !drawn(b)) b--;
-  if (!ys.length || a > b || (a === 0 && b === xs.length - 1) || (positiveOnly && (xs[a] as number) <= 0)) return null;
-  return (xs[a] as number) < (xs[b] as number) ? [xs[a] as number, xs[b] as number] : null;
 }

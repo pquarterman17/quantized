@@ -24,7 +24,7 @@ import { logDecadeLabels, logGridSplits, logMajorTickFilter, spansDecade } from 
 export { logMajorTickFilter };
 import { decimalsForIncrement, pow10 } from "./ticks";
 import { errorRange, errorReach, fullYExtents, withXBarRows } from "./uplotErrorRange";
-import { drawnXSpan, fixedXRange, fullXExtents, scannedXRange } from "./uplotXRange";
+import { fixedXRange, fullXExtents, scannedXRange } from "./uplotXRange";
 import type { Annotation, AxisFormat, AxisScale, DefaultTrace, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
 import {
   annotationPlugin,
@@ -1071,16 +1071,17 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const loopY2 = !xAscending ? fullYExtents(payload, args.hidden, 1, isPositiveOnlyScale(y2ScaleEff), reach) : null;
   // …and its x auto-range collapses to a sliver for the same reason — scan the
   // x column for the true sweep width. uPlot calls X's range on a zoom too: `scannedXRange` keeps it.
-  // A waterfall X-offset layout always scans (its drawn points, `fullXExtents`).
-  const loopX = (!xAscending || payload.blockRows) && !xLim
+  // A waterfall X-offset layout always scans (its drawn points, `fullXExtents`), as does an x
+  // column whose end rows no series draws (uPlot ranges over the whole column, the export the points).
+  const blank = (r: number) => payload.data.every((c, k) => !k || c[r] == null);
+  const loopX = (!xAscending || payload.blockRows || blank(0) || blank(payload.data[0].length - 1)) && !xLim
     ? fullXExtents(withXBarRows(payload, reach, args.hidden), args.hidden, isPositiveOnlyScale(xScale))
     : null;
-  const drawnX = !xLim && !loopX && !reach?.some((e) => e.on === "x") ? drawnXSpan(payload, args.hidden, isPositiveOnlyScale(xScale)) : null; // blank edge rows
   const scales: uPlot.Scales = {
     x: {
       time: xFmt?.mode === "date" || xFmt?.mode === "time" || xFmt?.mode === "datetime",
       dir: args.xReversed ? -1 : 1, ...scaleDistrProps(xScale),
-      ...(xLim ? { range: fixedXRange(xLim) } : (loopX ?? drawnX) ? { range: scannedXRange((loopX ?? drawnX)!) } : errorRange(reach, "x", isPositiveOnlyScale(xScale))),
+      ...(xLim ? { range: fixedXRange(xLim) } : loopX ? { range: scannedXRange(loopX) } : errorRange(reach, "x", isPositiveOnlyScale(xScale))),
     },
     y: {
       ...scaleDistrProps(yScale),

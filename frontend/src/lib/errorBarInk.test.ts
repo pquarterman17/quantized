@@ -34,8 +34,9 @@ function stub(series: { stroke?: unknown; show?: boolean }[]) {
 }
 
 describe("error bar ink", () => {
-  it("draws each column's bars in its series' colour (a function stroke too)", () => {
-    const { u, inks } = stub([{ stroke: "#ff0000" }, { stroke: () => "#00ff00" }]);
+  // uPlot turns every series' `stroke` into a function when it initialises.
+  it("draws each column's bars in its series' colour", () => {
+    const { u, inks } = stub([{ stroke: () => "#ff0000" }, { stroke: () => "#00ff00" }]);
     const bars = errorBarsPlugin(new Map([[1, [1, 1]], [2, [1, 1]]]), "#dim");
     // @ts-expect-error — minimal stub stands in for a real uPlot instance
     bars.hooks.draw?.(u);
@@ -43,7 +44,7 @@ describe("error bar ink", () => {
   });
 
   it("falls back to the dim ink without a series colour, and skips a hidden series", () => {
-    const { u, inks } = stub([{}, { stroke: "#00ff00", show: false }]);
+    const { u, inks } = stub([{ stroke: () => null }, { stroke: () => "#00ff00", show: false }]);
     const spans = errorSpansPlugin(
       new Map([
         [1, [{ axis: "y" as const, plus: [1, 1], minus: [1, 1] }]],

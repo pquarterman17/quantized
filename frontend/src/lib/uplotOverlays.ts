@@ -992,11 +992,9 @@ export function regionShadePlugin(shades: RegionShade[]): uPlot.Plugin {
   };
 }
 
-/** A column's series colour (its bars draw in it, as the export's `calc/figure_errorbars`), else `fallback`. */
-const seriesInk = (u: uPlot, col: number, fallback: string): string => {
-  const s = u.series[col]?.stroke, c = typeof s === "function" ? s(u, col) : s;
-  return typeof c === "string" && c ? c : fallback;
-};
+/** A series' stroke once uPlot has initialised it (always a function). A
+ *  column's bars draw in it, as the export's (`calc/figure_errorbars`). */
+type Ink = (u: uPlot, i: number) => string | null;
 
 export function errorBarsPlugin(
   errorsByCol: Map<number, (number | null)[]>,
@@ -1017,7 +1015,7 @@ export function errorBarsPlugin(
         for (const [col, errs] of errorsByCol) {
           const ys = u.data[col];
           if (!ys || u.series[col]?.show === false) continue;
-          ctx.strokeStyle = seriesInk(u, col, color);
+          ctx.strokeStyle = (u.series[col].stroke as Ink | undefined)?.(u, col) || color;
           const scaleKey = u.series[col]?.scale ?? "y";
           for (let i = 0; i < xs.length; i++) {
             const x = xs[i];
@@ -1126,7 +1124,7 @@ export function errorSpansPlugin(
         for (const [col, spans] of spansByCol) {
           const ys = u.data[col];
           if (!ys || u.series[col]?.show === false) continue;
-          ctx.strokeStyle = seriesInk(u, col, color);
+          ctx.strokeStyle = (u.series[col].stroke as Ink | undefined)?.(u, col) || color;
           const scaleKey = u.series[col]?.scale ?? "y";
           for (const span of spans) {
             for (let i = 0; i < xs.length; i++) {

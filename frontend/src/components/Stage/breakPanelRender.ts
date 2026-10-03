@@ -37,7 +37,6 @@ import uPlot from "uplot";
 import type { BreakPanel } from "../../lib/facet";
 import { breakPanelWidths, xZoomSyncHook } from "../../lib/multipanel";
 import type { SeriesStyle } from "../../lib/types";
-import { autoYRange } from "../../lib/uplotErrorRange";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
 
@@ -69,7 +68,7 @@ export interface BreakPanelsArgs {
   /** uPlot cursor-sync group; see `MULTIPANEL_SYNC_KEY`. */
   syncKey: string;
   /** `cell.yLim` is the panels' shared DATA extent (no typed limit), so pad it
-   *  the way an unbroken plot's auto y is padded (`autoYRange`). */
+   *  by uPlot's own auto rule, as an unbroken plot's y is. */
   yAuto?: boolean;
   /** The host box to lay the row out in (the caller's `clientWidth || 600` /
    *  `clientHeight || 400`), reused as the resize fallback. */
@@ -99,7 +98,10 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
   const plots: uPlot[] = [];
   const ySync = xZoomSyncHook(() => plots, "y");
   const { yLim, yScale } = args.cell;
-  const padded = args.yAuto && yLim && yScale !== "reciprocal" ? autoYRange(yLim[0], yLim[1], yScale === "log") : null;
+  const padded =
+    args.yAuto && yLim && yScale !== "reciprocal" && typeof uPlot.rangeNum === "function" // (a test's mock may lack it)
+      ? ((yScale === "log" ? uPlot.rangeLog(yLim[0], yLim[1], 10, false) : uPlot.rangeNum(yLim[0], yLim[1], 0.1, true)) as [number, number])
+      : null;
   args.panels.forEach((p, i) => {
     if (i > 0) host.appendChild(makeBreakGlyph(BREAK_GLYPH_W));
     const div = document.createElement("div");

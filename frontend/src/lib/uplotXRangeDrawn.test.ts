@@ -2,7 +2,8 @@
 // (first point at 0.87 nm) from a sheet whose Al column starts at 0 nm drew
 // the x axis from 0, a blank band the export (matplotlib autoscales to the
 // drawn points) does not have. uPlot ranges an ascending x over the whole
-// column; rows where no plotted series has a value now stay out of it.
+// column; rows where no plotted series has a value now stay out of it (the
+// scanned range, padded 2% as a loop's is).
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.hoisted(() => {
@@ -24,7 +25,7 @@ import uPlot from "uplot";
 
 import type { PlotPayload } from "./plotdata";
 import { buildOpts } from "./uplotOpts";
-import { drawnXSpan } from "./uplotXRange";
+import { fullXExtents } from "./uplotXRange";
 
 const live: uPlot[] = [];
 afterEach(() => live.splice(0).forEach((u) => u.destroy()));
@@ -49,15 +50,17 @@ async function xRange(p: PlotPayload, hidden?: boolean[]): Promise<[number, numb
 
 describe("x autoscale over the drawn rows", () => {
   it("leaves out leading and trailing rows no plotted series draws", async () => {
-    expect(await xRange(payload([[null, 1, 2, 3, null], [null, 4, null, 6, null]]))).toEqual([0.87, 2.5]);
+    const [lo, hi] = await xRange(payload([[null, 1, 2, 3, null], [null, 4, null, 6, null]]));
+    expect(lo).toBeCloseTo(0.87 - 1.63 * 0.02, 9);
+    expect(hi).toBeCloseTo(2.5 + 1.63 * 0.02, 9);
   });
 
   it("keeps uPlot's own range when the ends are drawn", async () => {
-    expect(drawnXSpan(payload([[1, null, 2, null, 3]]), undefined)).toBeNull();
     expect(await xRange(payload([[1, null, 2, null, 3]]))).toEqual([0, 3.3]);
   });
 
   it("counts only visible series, as the export draws only those", () => {
-    expect(drawnXSpan(payload([[null, 1, 2, null, null], [5, 5, 5, 5, 5]]), [false, true])).toEqual([0.87, 1.7]);
+    const [lo, hi] = fullXExtents(payload([[null, 1, 2, null, null], [5, 5, 5, 5, 5]]), [false, true], false)!;
+    expect([lo, hi].map((v) => +v.toFixed(4))).toEqual([0.8534, 1.7166]);
   });
 });
