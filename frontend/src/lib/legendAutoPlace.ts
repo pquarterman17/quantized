@@ -96,7 +96,8 @@ export function pickCorner(counts: Record<Corner, number>, current?: string): Co
 export function placeLegend(u: uPlot, stage: HTMLElement): void {
   const out = stage.querySelector<HTMLElement>(":scope > .qzk-legend.out");
   if (out) stage.style.setProperty("--qz-out-w", `${out.offsetWidth}px`);
-  const box = stage.querySelector<HTMLElement>(":scope > .qzk-legend.auto");
+  // Any in-frame legend: a fixed corner keeps `data-lc` current for a later switch to auto.
+  const box = stage.querySelector<HTMLElement>(":scope > .qzk-legend:not(.out)");
   if (!box) return;
   const r = u.over.getBoundingClientRect();
   const counts = cornerCounts(drawnPoints(u), r.width, r.height, box.offsetWidth + INSET, box.offsetHeight + INSET);

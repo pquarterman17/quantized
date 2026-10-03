@@ -4,14 +4,13 @@
 // baseline — index ≥ plotted.length) are display-only: not toggleable, not
 // renameable. Extracted from PlotStage to keep that component lean.
 
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
 import { colorScaleLegendEntries, type ColorScatterSpec } from "../../lib/colorscatter";
 import { resolveDrawColor } from "../../lib/contrastColor";
 import { lazyRegion } from "../../lib/lazyRegion";
-import type { LegendPlaceHost } from "../../lib/uplotFrameVars";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import type { DefaultTrace, SeriesStyle } from "../../lib/types";
 import { RichText } from "../primitives";
@@ -95,11 +94,6 @@ export default function PlotLegend({
   const titleId = useId();
   const tool = useApp((s) => s.plotTool);
   const legendBox = useLegendBox(tool);
-  // An "auto" corner is chosen after a draw; a position switch draws nothing.
-  const { boxRef, legendPos } = legendBox;
-  useEffect(() => {
-    (boxRef.current?.parentElement as LegendPlaceHost | null)?.qzPlace?.();
-  }, [boxRef, legendPos]);
   const [editing, setEditing] = useState<{ channel: number; value: string } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; channel: number; i: number } | null>(null);
   // Toggle a plotted channel between the primary (left) and secondary (right) Y
