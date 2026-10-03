@@ -33,7 +33,7 @@ function runsAt(width: number): [number, number][] {
     linearPaths: linearPaths as never,
   });
   const paths = (opts.series?.[1] as { paths: (u: unknown, si: number, i0: number, i1: number) => unknown }).paths;
-  paths({ data: [xs], bbox: { width } }, 1, 0, 0);
+  paths({ data: loop.data, bbox: { width } }, 1, 0, 0);
   return runs;
 }
 
@@ -49,5 +49,38 @@ describe("a non-monotonic line's draw runs", () => {
       expect(i1 - i0).toBeLessThan(width * 4);
       if (k > 0) expect(i0).toBe(runs[k - 1][1]);
     });
+  });
+});
+
+// uPlot breaks a line at a null by CLIPPING the x interval the null run spans,
+// which assumes ascending x. On a loop that interval is wherever the sweep
+// happened to be, so an overlay's block rows (every series null outside its own
+// file's rows) cut holes into the curves that cross it. A loop breaks its line
+// by not drawing across the null instead, and keeps no x clip.
+describe("a non-monotonic line's gaps", () => {
+  const ys: (number | null)[] = xs.map((x, i) => (i < 300 || i === 1200 ? null : x * 2));
+  const block: PlotPayload = { ...loop, data: [xs, ys] };
+
+  it("draws only across non-null rows, every one of them, and clips nothing", () => {
+    const runs: [number, number][] = [];
+    const linearPaths = vi.fn((_u: unknown, _s: number, i0: number, i1: number) => {
+      runs.push([i0, i1]);
+      return { stroke: { addPath: vi.fn() }, clip: "x-interval clip" };
+    });
+    const opts = buildOpts(block, {
+      width: 600, height: 400, xScale: "linear", yScale: "linear", tool: "zoom", onReadout: vi.fn(),
+      linearPaths: linearPaths as never,
+    });
+    const paths = (opts.series?.[1] as { paths: (u: unknown, si: number, i0: number, i1: number) => { clip?: unknown } }).paths;
+    const out = paths({ data: [xs, ys], bbox: { width: 100.5 }, series: [{}, { scale: "y" }], scales: { y: { distr: 1 } } }, 1, 0, 0);
+    expect(out.clip ?? null).toBeNull();
+    const drawn = new Set<number>();
+    for (const [i0, i1] of runs) {
+      for (let i = i0; i <= i1; i++) {
+        expect(ys[i], `row ${i} in run [${i0}, ${i1}]`).not.toBeNull();
+        drawn.add(i);
+      }
+    }
+    expect(drawn.size).toBe(ys.filter((y) => y !== null).length);
   });
 });

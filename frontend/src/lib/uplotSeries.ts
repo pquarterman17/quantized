@@ -60,14 +60,32 @@ export function buildSeriesDefs(
   // px rounded to a HALF pixel (x.5 at a 125 %/150 % display), so the run is
   // floored to a whole row count: a fractional run start reads undefined rows,
   // uPlot's non-null scan answers -1 and the run sweeps from row 0, decimated.
+  // Gaps: uPlot breaks a line by CLIPPING the x interval a null run spans,
+  // which assumes ascending x — on a loop it cut holes into whatever curve
+  // crossed that interval (an overlay's block rows are all nulls). A loop
+  // breaks the line by not drawing across a null (or a value a log axis cannot
+  // place) and keeps no clip.
   const fullLine = (b: uPlot.Series.PathBuilder): uPlot.Series.PathBuilder =>
     (u, sidx) => {
+      const ys = u.data[sidx] as readonly (number | null | undefined)[];
       const last = u.data[0].length - 1;
       const run = Math.max(1, Math.ceil(u.bbox.width * 4) - 1); // whole rows, < 4 per pixel
-      const out = b(u, sidx, 0, Math.min(last, run));
-      for (let i = run; out && i < last; i += run)
-        (out.stroke as Path2D).addPath(b(u, sidx, i, Math.min(last, i + run))!.stroke as Path2D);
-      return out;
+      const log = (u.scales?.[u.series?.[sidx]?.scale ?? "y"]?.distr as number | undefined) === 3;
+      const drawable = (i: number) => { const y = ys[i]; return y != null && Number.isFinite(y) && !(log && y <= 0); };
+      let out: uPlot.Series.Paths | null = null;
+      for (let s = 0; s <= last; s++) {
+        if (!drawable(s)) continue;
+        let e = s;
+        while (e < last && drawable(e + 1)) e++;
+        for (let i = s; ; i += run) {
+          const p = b(u, sidx, i, Math.min(e, i + run));
+          if (p && out) (out.stroke as Path2D).addPath(p.stroke as Path2D);
+          else if (p) out = { ...p, clip: null };
+          if (i + run >= e) break;
+        }
+        s = e;
+      }
+      return out ?? b(u, sidx, 0, last);
     };
   const fullPoints = (b: uPlot.Series.Points.PathBuilder): uPlot.Series.Points.PathBuilder =>
     (u, sidx, _i0, _i1, filt) => b(u, sidx, 0, u.data[0].length - 1, filt);
