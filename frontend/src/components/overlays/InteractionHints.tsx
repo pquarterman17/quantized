@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from "react";
 
+import { useApp } from "../../store/useApp";
 import { Button } from "../primitives";
 
 const SEEN_KEY = "qz.interactionHints.seen";
@@ -14,18 +15,21 @@ export function showInteractionHints(): void {
 }
 
 export default function InteractionHints() {
-  const [open, setOpen] = useState(() => localStorage.getItem(SEEN_KEY) !== "1");
+  // 1 = first run, 2 = reopened from Help. A first-run card only shows on an
+  // empty workspace: once data loads it would sit over the plot's right edge.
+  const [open, setOpen] = useState(() => +(localStorage.getItem(SEEN_KEY) !== "1"));
+  const hasData = useApp((s) => s.datasets.length > 0);
 
   useEffect(() => {
-    const show = () => setOpen(true);
+    const show = () => setOpen(2);
     window.addEventListener(SHOW_INTERACTION_HINTS, show);
     return () => window.removeEventListener(SHOW_INTERACTION_HINTS, show);
   }, []);
 
-  if (!open) return null;
+  if (!open || (hasData && open < 2)) return null;
   const dismiss = () => {
     localStorage.setItem(SEEN_KEY, "1");
-    setOpen(false);
+    setOpen(0);
   };
 
   return (
