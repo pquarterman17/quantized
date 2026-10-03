@@ -331,3 +331,22 @@ def test_origin_csv_writes_categorical_levels_not_codes() -> None:
     # they mean (Origin would otherwise get 0/1 with no level table).
     csv_text, _ = format_origin_script(_graded())
     assert csv_text.splitlines()[2:] == ["1,high,0.5", "2,low,0.7", "3,,0.9"]
+
+
+def test_origin_graph_reversed_x_swaps_the_axis_range() -> None:
+    # A reversed x axis (wavenumber spectra default to it) exported upright.
+    # Origin draws an axis reversed when its From is greater than its To, so
+    # the range is emitted high-to-low: the given limits, else the x data's.
+    ds = _three_channel_ds()
+    _, ogs = format_origin_script(
+        ds, graph=GraphSpec(y_keys=(0,), x_lim=(0.5, 12.0), x_reversed=True)
+    )
+    assert "layer.x.from = 12;" in ogs and "layer.x.to = 0.5;" in ogs
+    _, ogs = format_origin_script(ds, graph=GraphSpec(y_keys=(0,), x_reversed=True))
+    t = np.asarray(ds.time)
+    assert f"layer.x.from = {t.max():.10g};" in ogs and f"layer.x.to = {t.min():.10g};" in ogs
+    # Half-open: the typed side is kept, the other comes from the data.
+    _, ogs = format_origin_script(
+        ds, graph=GraphSpec(y_keys=(0,), x_lim=(None, 2.0), x_reversed=True)
+    )
+    assert "layer.x.from = 2;" in ogs and f"layer.x.to = {t.min():.10g};" in ogs

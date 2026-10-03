@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+from numpy.typing import NDArray
 
 from quantized.csv_safe import csv_text_cell
 from quantized.datastruct import DataStruct, is_categorical, level_of
@@ -50,6 +51,8 @@ class GraphSpec:
     x_lim: tuple[float | None, float | None] | None = None
     y_lim: tuple[float | None, float | None] | None = None
     y2_keys: tuple[int, ...] = ()
+    # The plot's x axis runs high-to-low (``PlotView.xReversed``).
+    x_reversed: bool = False
 
 
 def _meta_get(meta: dict[str, Any], *keys: str, default: Any = None) -> Any:
@@ -111,6 +114,24 @@ def _lim_lines(axis: str, lim: tuple[float | None, float | None] | None) -> list
     return [f"layer.{axis}.{side} = {v:.10g};" for side, v in sides if v is not None]
 
 
+def _reversed_x_lines(
+    lim: tuple[float | None, float | None] | None, x_data: NDArray[np.float64]
+) -> list[str]:
+    """``layer.x.from/to`` for a REVERSED x axis: Origin draws an axis reversed
+    when From > To, so the range is written high-to-low. Each side is the
+    typed limit when finite, else the x data's own finite extent; with no
+    finite extent either, nothing is emitted (Origin auto-scales upright)."""
+    finite = x_data[np.isfinite(x_data)]
+    lo, hi = lim if lim is not None else (None, None)
+    if lo is None or not math.isfinite(lo):
+        lo = float(finite.min()) if finite.size else None
+    if hi is None or not math.isfinite(hi):
+        hi = float(finite.max()) if finite.size else None
+    if lo is None or hi is None:
+        return []
+    return [f"layer.x.from = {hi:.10g};  // reversed X", f"layer.x.to = {lo:.10g};"]
+
+
 def _axis_title(label: str, unit: str) -> str:
     return label + (f" ({unit})" if unit else "")
 
@@ -123,6 +144,7 @@ def _plot_state_graph(
     x_name: str,
     x_unit: str,
     sheet: str,
+    x_data: NDArray[np.float64],
 ) -> list[str]:
     """LabTalk lines recreating the CURRENT PLOT STATE (item 26): selected
     channels, x source, log flags, axis limits, and an optional secondary
@@ -176,7 +198,10 @@ def _plot_state_graph(
         o.append("layer.x.type = 1;  // Log X")
     if graph.y_log:
         o.append("layer.y.type = 1;  // Log Y")
-    o.extend(_lim_lines("x", graph.x_lim))  # finite sides only (see _lim_lines)
+    if graph.x_reversed:
+        o.extend(_reversed_x_lines(graph.x_lim, x_data))
+    else:
+        o.extend(_lim_lines("x", graph.x_lim))  # finite sides only (see _lim_lines)
     o.extend(_lim_lines("y", graph.y_lim))
     o.append(f'xb.text$ = "{_escape_lt(_axis_title(x_label, x_lbl_unit))}";')
     if len(primary) == 1:
@@ -311,7 +336,9 @@ def format_origin_script(
     if make_graph:
         if graph is not None:
             o += _plot_state_graph(
-                graph, labels=labels, units=units, x_name=x_name, x_unit=x_unit, sheet=sheet
+                graph, labels=labels, units=units, x_name=x_name, x_unit=x_unit, sheet=sheet,
+                x_data=time if graph.x_key is None or graph.x_key >= values.shape[1]
+                else values[:, graph.x_key],
             )
         else:
             o += ["", "// Create graph", "plotxy iy:=(1,2) plot:=201 ogl:=[<new>];"]

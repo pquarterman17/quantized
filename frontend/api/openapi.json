@@ -8045,6 +8045,11 @@
             "title": "X Log",
             "type": "boolean"
           },
+          "x_reversed": {
+            "default": false,
+            "title": "X Reversed",
+            "type": "boolean"
+          },
           "y2_keys": {
             "default": [],
             "items": {

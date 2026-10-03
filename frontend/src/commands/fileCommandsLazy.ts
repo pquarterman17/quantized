@@ -134,6 +134,7 @@ export async function runExportOrigin(s: StoreGet, exportOriginFn: typeof export
           x_lim: s().xLim,
           y_lim: s().yLim,
           y2_keys: s().y2Keys ?? [],
+          x_reversed: s().xReversed,
         },
       },
       signal,

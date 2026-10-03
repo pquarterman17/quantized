@@ -48,3 +48,12 @@ describe("Origin-designating exports carry the live error bindings", () => {
     expect(fn.mock.calls[0][0].dataset).toBe(plain.data);
   });
 });
+
+describe("Export Origin (.ogs) carries the plot's reversed x axis", () => {
+  it("sends xReversed as graph.x_reversed", async () => {
+    useApp.setState({ xReversed: true });
+    const fn = vi.fn(async (_body: { graph?: { x_reversed?: boolean } }) => undefined);
+    await runExportOrigin(useApp.getState, fn as never);
+    expect(fn.mock.calls[0][0].graph?.x_reversed).toBe(true);
+  });
+});

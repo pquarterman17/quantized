@@ -8490,6 +8490,11 @@ export interface components {
              */
             x_log?: boolean;
             /**
+             * X Reversed
+             * @default false
+             */
+            x_reversed?: boolean;
+            /**
              * Y2 Keys
              * @default []
              */
