@@ -115,8 +115,9 @@ def test_consolidated_export_combines_datasets() -> None:
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/csv")
     header = resp.text.splitlines()[0]
-    # two Q blocks (one per dataset).
-    assert header.count("Q") == 2
+    # two X blocks (one per dataset), titled by the dataset's own 2-theta
+    # axis -- "Q" is reserved for a Q axis (test_io_consolidated).
+    assert header == "2Theta (deg),Intensity (cps),2Theta (deg),Intensity (cps)"
 
 
 def test_consolidated_empty_is_422() -> None:

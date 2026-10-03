@@ -56,3 +56,20 @@ def test_ragged_columns_blank_pad() -> None:
 def test_bad_fmt_raises() -> None:
     with pytest.raises(ValueError, match="fmt"):
         consolidate_csv(_datasets(), fmt="nope")
+
+
+def test_non_q_x_axis_keeps_its_own_name() -> None:
+    # The MATLAB writer came from the neutron tool and always titled X "Q"; the
+    # GUI offers it for every dataset, so a magnetometry sweep exported as
+    # "Q (K)". A Q axis keeps "Q" (golden parity); any other keeps its name.
+    mpms = DataStruct.create(
+        [2.0, 5.0],
+        [[1e-3], [2e-3]],
+        labels=["Long Moment"],
+        units=["emu"],
+        metadata={"x_column_name": "Temperature", "x_column_unit": "K"},
+    )
+    std = consolidate_csv([(mpms, "mpms.dat"), _datasets()[0]], fmt="standard")
+    assert std.splitlines()[0] == "Temperature (K),Long Moment (emu),Q (1/A),R,dR"
+    org = consolidate_csv([(mpms, "mpms.dat")], fmt="origin")
+    assert org.splitlines()[0] == "Temperature,Long Moment"

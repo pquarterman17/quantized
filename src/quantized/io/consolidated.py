@@ -2,7 +2,8 @@
 the per-dataset-block path of MATLAB ``+bosonPlotter/saveConsolidatedNeutronCSV.m``
 (also the writer ``+bosonPlotter/exportCombinedCSV.m`` uses).
 
-Each dataset contributes its own ``Q`` (X) column followed by its value columns,
+Each dataset contributes its own X column (``Q`` for a Q axis, as in MATLAB;
+otherwise the dataset's own x name) followed by its value columns,
 each tagged with an Origin designation by role (X / Y / yEr / xEr). Columns may
 differ in length; shorter ones leave trailing cells blank (not ``NaN``) so the
 file imports cleanly into Origin / Excel.
@@ -66,6 +67,15 @@ def _resolve_x_unit(ds: DataStruct) -> str:
     return x_unit_of(ds)
 
 
+def _x_name(ds: DataStruct) -> str:
+    """The X column's title. MATLAB's neutron writer always wrote ``Q``; that
+    stays for a Q axis (or an unnamed one) so the golden holds byte-for-byte,
+    but the GUI offers this export for every dataset, and a temperature or
+    2-theta axis titled "Q" mislabels the data."""
+    name = str(_meta_get(dict(ds.metadata), "x_column_name", "xColumnName", default="")).strip()
+    return name if name and not name.lower().startswith("q") else "Q"
+
+
 def _dataset_filename(ds: DataStruct, name: str) -> str:
     source = _meta_get(dict(ds.metadata), "source", "filepath", "filename", default="")
     base = str(source).replace("\\", "/").rsplit("/", 1)[-1]
@@ -94,7 +104,7 @@ def _columns(datasets: list[tuple[DataStruct, str]]) -> list[_Col]:
         file = _dataset_filename(ds, name)
         time = np.asarray(ds.time, dtype=float)
         values = np.asarray(ds.values, dtype=float)
-        cols.append(_Col("Q", _resolve_x_unit(ds), file, "X", time))
+        cols.append(_Col(_x_name(ds), _resolve_x_unit(ds), file, "X", time))
         for i, label in enumerate(ds.labels):
             unit = ds.units[i] if i < len(ds.units) else ""
             cols.append(_Col(label, unit, file, _column_role(label), values[:, i]))
