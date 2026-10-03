@@ -460,6 +460,7 @@ export function encodeSpec(spec: PlotSpec, datasets: readonly Dataset[]): Encode
       seriesLabels: Object.fromEntries(entries.map((e, i) => [i, e.label])),
     },
     false,
+    false,
   );
   const errors = split || facets ? [] : specErrorBindings(spec);
   const gradient = encodedGradient(data, enc);

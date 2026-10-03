@@ -6,7 +6,7 @@ import type uPlot from "uplot";
 
 import type { NormalizedFrameRect } from "./originPanels";
 import type { PlotPayload } from "./plotdata";
-import { displayPositions, resolveSeriesStyle, type SeriesCycle } from "./seriesStyleCycle";
+import { cyclesPastPalette, displayPositions, resolveSeriesStyle, type SeriesCycle } from "./seriesStyleCycle";
 import type { Annotation, RegionShade, SeriesStyle } from "./types";
 
 /** One payload per plotted series: each keeps the shared x column + a single
@@ -218,10 +218,13 @@ export function xZoomSyncHook(
  *  list — hidden channels already dropped on BOTH sides — so plain display
  *  order is a single shared position space. `legendEntries` carries the
  *  EFFECTIVE style: a key showing a solid line beside a dashed curve is the
- *  contradiction the cycle exists to remove. */
+ *  contradiction the cycle exists to remove. Past the palette's eight series the
+ *  cycle engages without the preference (`cyclesPastPalette`), as on a flat
+ *  plot; `pastPalette: false` is for a caller whose styles are already final. */
 export function spatialCellStyling(
   panel: Pick<SpatialPanel, "yKeys" | "hiddenChannels" | "seriesStyles" | "seriesLabels">,
   autoSeriesStyles: boolean,
+  pastPalette = true,
 ): {
   plottedChannels: number[];
   cellStyles: (SeriesStyle | undefined)[];
@@ -230,7 +233,8 @@ export function spatialCellStyling(
   legendEntries: { label: string; style?: SeriesStyle; displayIndex: number }[];
 } {
   const plottedChannels = spatialPlottedChannels(panel);
-  const cellCycle = displayPositions(autoSeriesStyles, plottedChannels.length);
+  const n = plottedChannels.length;
+  const cellCycle = displayPositions(pastPalette ? cyclesPastPalette(autoSeriesStyles, n) : autoSeriesStyles, n);
   return {
     plottedChannels,
     cellCycle,
