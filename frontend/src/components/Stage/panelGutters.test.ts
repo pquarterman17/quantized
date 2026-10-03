@@ -2,7 +2,8 @@
 // its y-tick gutter from its OWN labels, so a panel reading "-0.0025" started
 // its plot area ~16 px right of one reading "0" and the x ticks no longer lined
 // up down the stack (7-file VSM overlay, stacked). Every panel now takes the
-// widest gutter of the stack, on build and on resize.
+// widest gutter of the stack, on build and on resize — and so does every cell
+// of a facet grid, whose columns share an x axis the same way.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Axis = { side?: number; show?: boolean; size?: unknown; _size?: number };
@@ -42,6 +43,7 @@ const { created, MockUPlot, tickLabels } = vi.hoisted(() => {
 vi.mock("uplot", () => ({ default: MockUPlot }));
 
 import type { PlotPayload } from "../../lib/plotdata";
+import { renderFacetGrid, resizeFacetGrid } from "./facetGridRender";
 import { renderStackPanels, resizeStackPanels, type StackPanelsArgs } from "./stackPanelRender";
 
 const panel: PlotPayload = {
@@ -83,6 +85,22 @@ describe("stacked panels' y gutters", () => {
     tickLabels.length = 0;
     expect(plots).toHaveLength(3);
     resizeStackPanels(host, plots, 600);
+    expect(new Set(gutters()).size).toBe(1);
+  });
+});
+
+describe("facet cells' y gutters", () => {
+  it("take the grid's widest, so a column's x ticks line up row to row", () => {
+    tickLabels.push(["0"], ["-0.0025000000"], ["0"], ["1"]);
+    const host = document.createElement("div");
+    const grid = { rows: 2, cols: 2 };
+    const panels = [0, 1, 2, 3].map((i) => ({ label: `L${i}`, payload: panel, channels: [1] }));
+    const plots = renderFacetGrid(host, {
+      panels, seriesLabels: {}, seriesStyles: {}, grid, gap: 8, syncKey: "k", onSetScale: () => {},
+      box: { w: 600, h: 400 }, cell: { xScale: "linear", yScale: "linear", tool: "zoom", onReadout: () => {} },
+    });
+    expect(new Set(gutters()).size).toBe(1);
+    resizeFacetGrid(host, plots, grid, 8, { w: 600, h: 400 });
     expect(new Set(gutters()).size).toBe(1);
   });
 });
