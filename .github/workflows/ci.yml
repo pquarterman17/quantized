@@ -4,6 +4,22 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+  # The floating-Node compatibility probe is valuable, but repeating the
+  # entire 1,100+ file Vitest suite on every PR consumed runner capacity
+  # without contributing a required status check. Keep it on main, provide a
+  # weekly drift probe, and allow an explicit run while investigating a new
+  # Node release.
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+# A correction pushed to a PR supersedes the older result. Cancelling that
+# stale run keeps limited hosted-runner slots available for the candidate a
+# reviewer can actually merge.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 # Least privilege: CI only checks out and tests — it never writes to the repo.
 permissions:
@@ -11,6 +27,7 @@ permissions:
 
 jobs:
   backend:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -52,6 +69,7 @@ jobs:
   # slow drift shows up in the run history even before it's large enough to
   # trip the (deliberately generous, ~10x-measured) wall-clock ceiling.
   perf-guard:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -80,6 +98,7 @@ jobs:
           retention-days: 90
 
   frontend:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -118,12 +137,58 @@ jobs:
       - name: Build (includes typecheck)
         run: npm run build
 
+  # Draft PRs get static integration checks without paying for the complete
+  # backend matrix or 1,100+ file frontend suite. `ready_for_review` is an
+  # explicit trigger above, so the unchanged commit receives the normal
+  # required jobs as soon as substantive review work is finished.
+  draft-backend-preflight:
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Sync deps
+        run: uv sync --group dev
+      - name: Lint
+        run: uv run ruff check src tests tools
+      - name: Type check
+        run: uv run mypy src
+
+  draft-frontend-preflight:
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == true
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Generated API types are up to date
+        run: |
+          npm run api:types
+          git diff --exit-code -- src/lib/api/schema.d.ts
+      - name: Lint
+        run: npm run lint
+      - name: Build (includes typecheck)
+        run: npm run build
+
   # ROBUSTNESS_PLAN #1: on 2026-07-29 a clean checkout failed 176 frontend
   # tests across 22 files under Node 26 while this workflow stayed green the
   # whole time, because `frontend` above only ever runs the one pinned Node
   # version. This job re-runs the same steps against the latest Node release
-  # so a future runtime-version break is visible on every PR instead of only
-  # on a fresh checkout. Deliberately a SEPARATE job (not folded into
+  # on main, weekly, and on demand so runtime-version drift remains visible
+  # without duplicating the complete suite on every PR. Deliberately a
+  # SEPARATE job (not folded into
   # `frontend` above) and deliberately NOT added to required status checks:
   # renaming/matrixing `frontend` would change its check-context name and
   # silently desync branch protection's required-checks list (which pins the
@@ -146,6 +211,7 @@ jobs:
   # the unit-test run — the actual Node-version-sensitive check this job
   # exists for — is repeated against the latest Node release.
   frontend-node-current:
+    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults:
       run:
