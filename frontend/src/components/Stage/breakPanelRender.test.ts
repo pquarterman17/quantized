@@ -129,4 +129,19 @@ describe("renderBreakPanels", () => {
     await settle();
     expect(plots.map((u) => [u.scales.y.min, u.scales.y.max])).toEqual([[2, 10], [2, 10]]);
   });
+
+  // Plot audit round 4, measured on Cu3Au XRD broken over 45-70 deg: the two
+  // panels (23 and 30 deg wide) drew equally wide, while the export sizes them
+  // by x span (matplotlib width_ratios), so a slope read differently.
+  it("sizes each plot area by its x span, as the export does", async () => {
+    const host = document.body.appendChild(document.createElement("div"));
+    plots = renderBreakPanels(host, {
+      panels: [panel([0, 1, 2], [0, 2]), panel([3, 6, 9], [3, 9])],
+      seriesLabels: {}, seriesStyles: {}, hiddenChannels: [], syncKey: "break-widths", box: { w: 900, h: 300 },
+      cell: { xScale: "linear", yScale: "linear", yLim: [0, 20], tool: "zoom", onReadout: vi.fn() },
+    });
+    await settle();
+    const [a, b] = plots.map((u) => u.bbox.width / uPlot.pxRatio);
+    expect(b / a).toBeCloseTo(3, 1);
+  });
 });
