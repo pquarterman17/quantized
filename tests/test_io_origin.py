@@ -13,9 +13,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 
+from quantized.datastruct import DataStruct
 from quantized.io.origin import GraphSpec, format_origin_script
+from quantized.io.registry import import_auto
 from quantized.io.xrdml import import_xrdml
 
 
@@ -229,3 +232,35 @@ def test_origin_graph_quoting_safety() -> None:
     )
     _, ogs = format_origin_script(ds, make_graph=True, graph=GraphSpec())
     assert "yl.text$ = \"Weird 'Y'\";" in ogs
+
+
+@pytest.mark.parametrize(
+    ("x", "labels", "units"),
+    [
+        (("2-Theta", "deg"), ["Intensity"], ["counts"]),  # Bruker/Rigaku XRD
+        (("Qz", "1/Ang"), ["Intensity", "uncertainty"], ["counts per second"] * 2),  # reductus
+    ],
+)
+def test_origin_csv_reimports_with_names_and_units(
+    tmp_path: Path, x: tuple[str, str], labels: list[str], units: list[str]
+) -> None:
+    # The export's CSV (name row, unit row, data) must come back into quantized
+    # with the same column names and units. "counts" / "counts per second" were
+    # not recognized as a units row, so the UNIT row was taken as the header:
+    # "Intensity (counts)" re-imported as a column named "counts", unitless.
+    n = len(labels)
+    ds = DataStruct.create(
+        [10.0, 10.5, 11.0],
+        [[float(i + 1) * (r + 1) for i in range(n)] for r in range(3)],
+        labels=labels,
+        units=units,
+        metadata={"x_column_name": x[0], "x_column_unit": x[1]},
+    )
+    csv_text, _ = format_origin_script(ds, csv_name="scan_data.csv")
+    path = tmp_path / "scan_data.csv"
+    path.write_text(csv_text)
+    back = import_auto(path)
+    assert list(back.labels) == labels
+    assert list(back.units) == units
+    assert back.metadata.get("x_column_unit") == x[1]
+    np.testing.assert_array_equal(back.values, ds.values)
