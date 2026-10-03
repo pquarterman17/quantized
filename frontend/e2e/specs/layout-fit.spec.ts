@@ -143,7 +143,50 @@ test("the Quick Figure Builder grid never overflows its container", async ({ pag
   }
 });
 
-type QzHarness = { __qz: { useApp: { setState: (s: object) => void } } };
+const rectOf = (l: Locator) => l.evaluate((e) => e.getBoundingClientRect().toJSON() as DOMRect);
+
+async function plotFile(page: Page, file: string): Promise<void> {
+  await gotoApp(page);
+  await dropFileOnto(page, page.locator(".qzk-library"), fixturePath(file));
+  await waitForDatasetCount(page, 1);
+  await page.locator("[data-ds-id]").first().click();
+  await expect(page.locator(".qzk-stage .u-over")).toBeVisible();
+}
+
+// Round-4 chrome audit: in a narrow window the auto legend grew left past the
+// frame, over the y tick labels and title and off the stage; past eight
+// series the outside column took 260px of a ~300px stage and covered the plot.
+test("the auto legend stays inside the plot frame at every window size", async ({ page }) => {
+  await plotFile(page, "long-labels.csv");
+  const legend = page.locator(".qzk-stage > .qzk-legend.auto");
+  for (const size of SIZES) {
+    await page.setViewportSize(size);
+    // The frame vars follow the resize on the next draw; wait for the legend to settle inside.
+    await expect
+      .poll(async () => {
+        const [l, f] = await Promise.all([rectOf(legend), rectOf(page.locator(".qzk-stage .u-over"))]);
+        return l.left >= f.left - 0.5 && l.right <= f.right + 0.5 && l.top >= f.top - 0.5 && l.bottom <= f.bottom + 0.5;
+      }, { message: `legend leaves the frame at ${size.width}x${size.height}` })
+      .toBe(true);
+  }
+});
+
+test("an outside legend column never covers the plot frame", async ({ page }) => {
+  await plotFile(page, "long-labels-many.csv");
+  const legend = page.locator(".qzk-stage > .qzk-legend.out");
+  await expect(legend).toBeVisible();
+  for (const size of SIZES) {
+    await page.setViewportSize(size);
+    await expect
+      .poll(async () => {
+        const [l, f] = await Promise.all([rectOf(legend), rectOf(page.locator(".qzk-stage .u-over"))]);
+        return !overlaps(l, f);
+      }, { message: `outside legend covers the frame at ${size.width}x${size.height}` })
+      .toBe(true);
+  }
+});
+
+type QzHarness ={ __qz: { useApp: { setState: (s: object) => void } } };
 
 // Round-4 chrome audit: the import toast sat bottom-centre of the WINDOW,
 // which is the bottom-centre of the stage, exactly where the x-axis title is
@@ -168,16 +211,19 @@ test("an import toast never covers the plot stage", async ({ page }) => {
     await waitForDatasetCount(page, i + 2);
     const toast = page.locator(".qzk-toast", { hasText: "imported 1 file" }).last();
     await expect(toast).toBeVisible();
+    await toast.evaluate((e) => Promise.all(e.getAnimations().map((a) => a.finished))); // the slide-in
     const where = `${c.size.width}x${c.size.height}${c.lc ? " no library" : ""}${c.rc ? " no inspector" : ""}`;
-    const [t, s] = await Promise.all([
-      toast.evaluate((e) => e.getBoundingClientRect().toJSON() as DOMRect),
-      page.locator(".qzk-stage").first().evaluate((e) => e.getBoundingClientRect().toJSON() as DOMRect),
+    const [t, s, box] = await Promise.all([
+      rectOf(toast),
+      rectOf(page.locator(".qzk-stage").first()),
+      rectOf(page.locator(".qzk-toaster")),
     ]);
     expect(overlaps(t, s), `toast covers the plot stage at ${where}`).toBe(false);
     // A collapsed panel gives its width to the stage (both at once, too).
     if (c.lc) expect(s.left, `library still open at ${where}`).toBeLessThanOrEqual(1);
     if (c.rc) expect(s.right, `inspector still open at ${where}`).toBeGreaterThanOrEqual(c.size.width - 1);
-    const inside = t.left >= 0 && t.top >= 0 && t.right <= c.size.width && t.bottom <= c.size.height;
-    expect(inside, `toast clipped at ${where}`).toBe(true);
+    // Inside the window AND the stack's own box (a full chip row clips at its edge).
+    const inside = t.left >= Math.max(0, box.left - 0.5) && t.right <= Math.min(c.size.width, box.right + 0.5);
+    expect(inside && t.top >= 0 && t.bottom <= c.size.height, `newest toast clipped at ${where}`).toBe(true);
   }
 });

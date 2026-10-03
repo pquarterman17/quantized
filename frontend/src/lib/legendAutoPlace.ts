@@ -24,6 +24,9 @@ const CORNERS: readonly Corner[] = ["ne", "nw", "se", "sw"];
 const INSET = 8;
 /** Drawn points examined per plot at most (spread across its series). */
 const BUDGET = 6000;
+/** A frame narrower than this (CSS px) gets `data-narrow-frame` on the stage,
+ *  and shell.css drops the legend's ▲▼ buttons (its row menu keeps them). */
+export const NARROW_FRAME = 320;
 
 /** Drawn points (CSS px inside the frame) of every shown series, sampled to
  *  `BUDGET`, with long segments filled in so a sparse line crossing a corner
@@ -94,12 +97,13 @@ export function pickCorner(counts: Record<Corner, number>, current?: string): Co
 
 /** Place the stage's auto legend (corner) and size its outside column. */
 export function placeLegend(u: uPlot, stage: HTMLElement): void {
+  const r = u.over.getBoundingClientRect();
+  stage.toggleAttribute("data-narrow-frame", r.width < NARROW_FRAME);
   const out = stage.querySelector<HTMLElement>(":scope > .qzk-legend.out");
   if (out) stage.style.setProperty("--qz-out-w", `${out.offsetWidth}px`);
   // Any in-frame legend: a fixed corner keeps `data-lc` current for a later switch to auto.
   const box = stage.querySelector<HTMLElement>(":scope > .qzk-legend:not(.out)");
   if (!box) return;
-  const r = u.over.getBoundingClientRect();
   const counts = cornerCounts(drawnPoints(u), r.width, r.height, box.offsetWidth + INSET, box.offsetHeight + INSET);
   const lc = pickCorner(counts, stage.dataset.lc);
   if (stage.dataset.lc !== lc) stage.dataset.lc = lc;

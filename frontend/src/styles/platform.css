@@ -332,6 +332,7 @@
   transform: translateX(-50%);
   flex-direction: row;
   align-items: center;
+  justify-content: flex-end; /* an overflowing row clips the OLDEST chips */
 }
 .qzk-app:has(.qzk-main.lc.rc) .qzk-toast-alerts {
   flex-direction: row;

@@ -878,7 +878,15 @@ body {
 .qzk-legend.auto { top: calc(var(--qz-frame-top, 72px) + 8px); right: calc(100% - var(--qz-frame-left, 0px) - var(--qz-frame-width, 100%) + 8px); }
 .qzk-stage[data-lc$="w"] > .qzk-legend.auto { left: calc(var(--qz-frame-left, 0px) + 8px); right: auto; }
 .qzk-stage[data-lc^="s"] > .qzk-legend.auto { top: auto; bottom: calc(100% - var(--qz-frame-top, 0px) - var(--qz-frame-height, 100%) + 8px); }
-.qzk-legend.out { top: var(--qz-frame-top, 72px); right: 8px; max-height: var(--qz-frame-height, 70%); max-width: 260px; }
+/* Chrome audit round 4: in a narrow frame the auto legend grew left past the
+   frame over the y ticks and title (and off the stage). It now stays inside
+   the frame: labels wrap, and the rows scroll once it is full. Any other
+   placement at least stays on the stage. */
+.qzk-stage > .qzk-legend { max-width: calc(100% - 24px); }
+.qzk-stage > .qzk-legend.auto { max-width: calc(var(--qz-frame-width, 100%) - 16px); max-height: calc(var(--qz-frame-height, 100%) - 16px); }
+.qzk-legend-toggle { overflow-wrap: anywhere; }
+.qzk-stage[data-narrow-frame] > .qzk-legend .it .qz-icon-btn { display: none; }
+.qzk-legend.out { top: var(--qz-frame-top, 72px); right: 8px; max-height: var(--qz-frame-height, 70%); max-width: min(260px, 40%); } /* the plot keeps 60% of a narrow stage */
 .qzk-stage:has(> .qzk-legend.out) { --qz-plot-right: calc(var(--qz-out-w, 200px) + 16px); }
 .qzk-legend.out .qzk-legend-content { gap: 1px; }
 .qzk-legend.out .it { font-size: var(--font-size-sm); }

@@ -3,7 +3,7 @@
 import type uPlot from "uplot";
 import { describe, expect, it } from "vitest";
 
-import { cornerCounts, drawnPoints, pickCorner, placeLegend } from "./legendAutoPlace";
+import { cornerCounts, drawnPoints, NARROW_FRAME, pickCorner, placeLegend } from "./legendAutoPlace";
 
 /** A 400×300 frame whose scales map data 0..100 straight onto it (y up). */
 function fakePlot(series: (number | null)[][], xs: number[], show: boolean[] = series.map(() => true)): uPlot {
@@ -69,5 +69,15 @@ describe("placeLegend", () => {
     placeLegend(fakePlot([[1, 2]], [0, 1]), stage);
     expect(stage.style.getPropertyValue("--qz-out-w")).toBe("180px");
     expect(stage.dataset.lc).toBeUndefined();
+  });
+
+  it("flags a frame too narrow for the legend's reorder buttons", () => {
+    const stage = stageWith("auto", 120, 60);
+    const plot = fakePlot([[1, 2]], [0, 1]);
+    const narrow = { ...plot, over: { getBoundingClientRect: () => ({ width: NARROW_FRAME - 1, height: 300 }) } };
+    placeLegend(narrow as uPlot, stage);
+    expect(stage.hasAttribute("data-narrow-frame")).toBe(true);
+    placeLegend(plot, stage);
+    expect(stage.hasAttribute("data-narrow-frame")).toBe(false);
   });
 });
