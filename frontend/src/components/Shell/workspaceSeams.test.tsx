@@ -7,7 +7,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { LibraryWorkspace, QuickFigureBuilderWorkspace } from "./workspaceSeams";
+import { LibraryWorkspace, PendingWorkspace, QuickFigureBuilderWorkspace } from "./workspaceSeams";
 import { useApp } from "../../store/useApp";
 
 vi.mock("../Library/LibraryWorkspace", () => new Promise(() => {}));
@@ -44,5 +44,17 @@ describe("a workspace still loading its chunk already owns Escape (R9)", () => {
     });
 
     await waitFor(() => expect(useApp.getState().quickFigureBuilderDatasetId).toBeNull());
+  });
+
+  it("the shared pending workspace fallback closes on Escape", async () => {
+    function Harness() {
+      const [open, setOpen] = useState(true);
+      return open ? <PendingWorkspace className="pending" label="Workflow" onClose={() => setOpen(false)} /> : <p>stage</p>;
+    }
+    render(<Harness />);
+    act(() => {
+      fireEvent.keyDown(document.body, { key: "Escape" });
+    });
+    await waitFor(() => expect(screen.getByText("stage")).toBeInTheDocument());
   });
 });

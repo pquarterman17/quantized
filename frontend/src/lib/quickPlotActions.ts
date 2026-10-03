@@ -39,6 +39,17 @@ export const datasetQuickPlotActions: ContextAction<DatasetActionTarget>[] = [
     },
   },
   {
+    id: "dataset.techniqueWorkspace",
+    label: "Technique workspace…",
+    run: (t) => {
+      const state = useApp.getState();
+      state.closeQuickFigureBuilder();
+      state.setActive(t.dataset.id);
+      state.setStageTab("technique");
+      t.onStageOpen?.();
+    },
+  },
+  {
     id: "dataset.quickPlotWith",
     label: "Quick Plot With…",
     // L0.37: the chooser has no useful content before any template exists —

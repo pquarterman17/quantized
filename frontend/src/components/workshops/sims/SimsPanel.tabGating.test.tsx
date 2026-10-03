@@ -68,7 +68,7 @@ beforeEach(() => {
     macroRecording: true,
     macroSteps: [],
   });
-  useSimsDialog.setState({ seed: "s1", opened: 1 });
+  useSimsDialog.setState({ seed: "s1", opened: 1, requestedTab: "process" });
 });
 
 afterEach(() => {
