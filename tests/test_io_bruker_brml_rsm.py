@@ -142,7 +142,11 @@ def test_psd_frames_become_an_omega_by_2theta_mesh(tmp_path: Path) -> None:
     qx, qz = compute_qspace(grid[:, :, 0], grid[:, :, 1], WAVELENGTH)
     assert_allclose(grid[:, :, 3], qx)
     assert_allclose(grid[:, :, 4], qz)
-    assert_allclose(ds.time, np.arange(4 * NPIX))
+    # The default plot x is the 2theta its title names, never the row index
+    # (tests/test_io_map_plot_axis.py has the XRDML side of this contract).
+    assert md["x_column_name"] == "2-Theta"
+    assert_allclose(ds.time, grid[:, :, 0].ravel())
+    assert md["default_value_channels"] == [2] and md["default_trace"] == "Scatter"
 
 
 def test_psd_map_is_tagged_as_an_rsm(tmp_path: Path) -> None:
@@ -172,6 +176,7 @@ def test_coupled_point_scans_become_a_sheared_map(tmp_path: Path) -> None:
         assert_allclose(grid[row, :, 0], tt)
         assert_allclose(grid[row, :, 1], np.asarray(tt) / 2 + off)
         assert_allclose(grid[row, :, 2], [off * 10 + k for k in range(4)])
+    assert_allclose(ds.time, grid[:, :, 0].ravel())
 
 
 def test_point_scans_without_an_omega_step_are_refused(tmp_path: Path) -> None:

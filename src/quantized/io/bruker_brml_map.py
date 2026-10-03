@@ -46,6 +46,7 @@ from numpy.typing import NDArray
 
 from quantized.calc.qspace import compute_qspace
 from quantized.datastruct import DataStruct
+from quantized.io._map_schema import map_datastruct
 
 __all__ = ["BrmlFrame", "assemble_map", "measured_route", "read_frame"]
 
@@ -303,7 +304,4 @@ def assemble_map(frames: list[BrmlFrame], *, path: Path, meta: dict[str, Any]) -
         "counting_time": times.pop() if len(times) == 1 else None,
         **meta,
     }
-    return DataStruct.create(
-        np.arange(values.shape[0], dtype=float), values, labels=labels, units=units,
-        metadata=metadata,
-    )
+    return map_datastruct(values, labels, units, metadata, x_channel="2Theta")

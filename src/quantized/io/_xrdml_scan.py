@@ -18,6 +18,7 @@ from numpy.typing import NDArray
 
 from quantized.calc.qspace import compute_qspace
 from quantized.datastruct import DataStruct
+from quantized.io._map_schema import map_datastruct
 
 _SECONDARY_AXES = ("Omega", "Chi", "Phi")
 # Tilt-axis element names PANalytical schemas use for pole-figure cradles:
@@ -205,13 +206,7 @@ def _build_pole(
         "tilt_axis_source": tilt_axis,
     }
     metadata.update(att)
-    return DataStruct.create(
-        np.arange(values.shape[0], dtype=float),
-        values,
-        labels=labels,
-        units=units,
-        metadata=metadata,
-    )
+    return map_datastruct(values, labels, units, metadata, x_channel="Phi")
 
 
 def _build_2d_cloud(
@@ -273,13 +268,7 @@ def _build_2d_cloud(
         "wavelength_a": float(wavelength) if np.isfinite(wavelength) else None,
     }
     metadata.update(att)
-    return DataStruct.create(
-        np.arange(values.shape[0], dtype=float),
-        values,
-        labels=labels,
-        units=units,
-        metadata=metadata,
-    )
+    return map_datastruct(values, labels, units, metadata, x_channel="2Theta")
 
 
 def _apply_intensity(

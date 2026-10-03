@@ -43,6 +43,7 @@ from numpy.typing import NDArray
 
 from quantized.calc.qspace import compute_qspace
 from quantized.datastruct import DataStruct
+from quantized.io._map_schema import map_datastruct
 from quantized.io._safe_xml import parse_untrusted_xml
 from quantized.io._xrdml_scan import (
     _apply_intensity,
@@ -428,11 +429,5 @@ def _build_2d(
         "wavelength_a": float(wavelength) if np.isfinite(wavelength) else None,
     }
     metadata.update(att)
-    return DataStruct.create(
-        np.arange(values.shape[0], dtype=float),
-        values,
-        labels=labels,
-        units=units,
-        metadata=metadata,
-    )
+    return map_datastruct(values, labels, units, metadata, x_channel="2Theta")
 
