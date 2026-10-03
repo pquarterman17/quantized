@@ -66,6 +66,18 @@ const TICK_BAND = 8;
  *  full x-axis band (tick labels + title) minus the others' `TICK_BAND`. */
 const bottomExtra = new WeakMap<readonly uPlot[], number>();
 
+/** A linear stacked y axis' minimum px between ticks: 1.4 tick-font heights.
+ *  uPlot's own 30 fitted a single "0" into a ~65 px panel, so no panel's scale
+ *  could be read. A log axis keeps its decade rule. */
+function packYTicks(opts: uPlot.Options, cell: StackCellOpts): void {
+  opts.axes = opts.axes?.map((ax, k) => {
+    const scale = k === 0 ? null : ax.scale === "y2" ? (cell.y2Scale ?? cell.yScale) : cell.yScale;
+    if (scale !== "linear") return ax;
+    const px = Number(/(\d+(?:\.\d+)?)px/.exec(String(ax.font ?? ""))?.[1] ?? 12);
+    return { ...ax, space: Math.ceil(px * 1.4) };
+  });
+}
+
 /** Panel heights giving every plot AREA the same height: the bottom panel
  *  also carries `extra` px of x axis. Never below 1 px (as `panelHeights`). */
 function stackHeights(n: number, total: number, extra: number): number[] {
@@ -121,6 +133,7 @@ export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): 
     opts.cursor = { ...opts.cursor, sync: { key: args.syncKey } };
     opts.hooks = { setScale: [args.onSetScale] };
     sharedGutters(opts, shared);
+    packYTicks(opts, args.cell);
     // Blank the x tick labels on every panel but the bottom (keep the axis so
     // the plot areas stay the same width and the panels line up), and shrink
     // its band to the tick marks: blank labels reserved ~70 px per panel.
