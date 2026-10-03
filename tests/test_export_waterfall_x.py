@@ -21,6 +21,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from quantized.app import app
+from quantized.calc.figure_autoscale import log_auto_range
 
 client = TestClient(app)
 
@@ -91,10 +92,14 @@ DOMAIN_CASES = json.loads(DOMAIN_FIXTURE.read_text(encoding="utf-8"))["cases"]
 
 
 def _padded(domain: list[float], margin: float, log: bool) -> tuple[float, float]:
-    lo, hi = (np.log10(domain[0]), np.log10(domain[1])) if log else (domain[0], domain[1])
-    pad = (hi - lo) * margin
-    a, b = lo - pad, hi + pad
-    return (float(10**a), float(10**b)) if log else (a, b)
+    """The export's autoscale of ``domain`` (``calc.figure_autoscale``): a log
+    axis snaps as uPlot's ``rangeLog``; a linear one takes matplotlib's margin,
+    never across zero."""
+    if log:
+        return log_auto_range(domain[0], domain[1])
+    pad = (domain[1] - domain[0]) * margin
+    a, b = domain[0] - pad, domain[1] + pad
+    return (max(0.0, a) if domain[0] >= 0 else a, min(0.0, b) if domain[1] <= 0 else b)
 
 
 @pytest.mark.parametrize("case", DOMAIN_CASES, ids=[c["name"] for c in DOMAIN_CASES])

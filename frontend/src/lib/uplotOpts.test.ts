@@ -621,6 +621,10 @@ describe("buildOpts defaultTrace", () => {
       expect(sci).toEqual(["1.0e-7", null, "1.0e-6", "1.0e-5", "1.0e-4", "1.0e-3", "1.0e-2", "1.0e-1"]);
       const eng = tickFormatter({ mode: "eng", digits: 1 }, "log")(null as never, splits, 1, 0, 1e-7);
       expect(eng).toEqual(["100.0e-9", null, "1.0e-6", "10.0e-6", "100.0e-6", "1.0e-3", "10.0e-3", "100.0e-3"]);
+      // Fixed: every thinned decade label gets the decimals its smallest one needs.
+      const thinned = [1e-6, null, 1e-3, 1, 1e3] as number[];
+      const fixed = tickFormatter({ mode: "fixed", digits: 1 }, "log")(null as never, thinned, 1, 0, 1e-6);
+      expect(fixed).toEqual(["0.000001", null, "0.001000", "1.000000", "1000.000000"]);
       // A sub-decade log view keeps the increment floor: its ticks are arithmetic.
       const sub = tickFormatter({ mode: "sci", digits: 0 }, "log")(null as never, [1.1e-3, 1.2e-3, 1.3e-3], 1, 0, 1e-4);
       expect(sub).toEqual(["1.1e-3", "1.2e-3", "1.3e-3"]);
