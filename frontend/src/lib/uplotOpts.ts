@@ -24,7 +24,7 @@ import { logDecadeLabels, logGridSplits, logMajorTickFilter, spansDecade } from 
 export { logMajorTickFilter };
 import { decimalsForIncrement, pow10 } from "./ticks";
 import { errorRange, errorReach, fullYExtents, withXBarRows } from "./uplotErrorRange";
-import { fixedXRange, fullXExtents, scannedXRange } from "./uplotXRange";
+import { drawnXSpan, fixedXRange, fullXExtents, scannedXRange } from "./uplotXRange";
 import type { Annotation, AxisFormat, AxisScale, DefaultTrace, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
 import {
   annotationPlugin,
@@ -1075,11 +1075,12 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const loopX = (!xAscending || payload.blockRows) && !xLim
     ? fullXExtents(withXBarRows(payload, reach, args.hidden), args.hidden, isPositiveOnlyScale(xScale))
     : null;
+  const drawnX = !xLim && !loopX && !reach?.some((e) => e.on === "x") ? drawnXSpan(payload, args.hidden, isPositiveOnlyScale(xScale)) : null; // blank edge rows
   const scales: uPlot.Scales = {
     x: {
       time: xFmt?.mode === "date" || xFmt?.mode === "time" || xFmt?.mode === "datetime",
       dir: args.xReversed ? -1 : 1, ...scaleDistrProps(xScale),
-      ...(xLim ? { range: fixedXRange(xLim) } : loopX ? { range: scannedXRange(loopX) } : errorRange(reach, "x", isPositiveOnlyScale(xScale))),
+      ...(xLim ? { range: fixedXRange(xLim) } : (loopX ?? drawnX) ? { range: scannedXRange((loopX ?? drawnX)!) } : errorRange(reach, "x", isPositiveOnlyScale(xScale))),
     },
     y: {
       ...scaleDistrProps(yScale),

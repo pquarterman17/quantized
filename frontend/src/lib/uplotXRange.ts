@@ -82,3 +82,18 @@ export function fullXExtents(payload: PlotPayload, hidden: boolean[] | undefined
   });
   return min > max ? null : padXDomain([min, max], positiveOnly);
 }
+
+/** An ascending x column's DRAWN span when rows no visible series draws pad
+ *  its ends (a sheet whose other columns start earlier): uPlot ranges x over
+ *  the whole column, the export over the drawn points. Unpadded, as uPlot's
+ *  own x. Null when both end rows are drawn, or nothing is. */
+export function drawnXSpan(payload: PlotPayload, hidden: boolean[] | undefined, positiveOnly = false): [number, number] | null {
+  const [xs, ...ys] = payload.data as (number | null)[][];
+  const drawn = (r: number) => Number.isFinite(xs[r]) && ys.some((y, i) => !hidden?.[i] && y[r] != null && Number.isFinite(y[r]));
+  let a = 0;
+  let b = xs.length - 1;
+  while (a <= b && !drawn(a)) a++;
+  while (b > a && !drawn(b)) b--;
+  if (!ys.length || a > b || (a === 0 && b === xs.length - 1) || (positiveOnly && (xs[a] as number) <= 0)) return null;
+  return (xs[a] as number) < (xs[b] as number) ? [xs[a] as number, xs[b] as number] : null;
+}
