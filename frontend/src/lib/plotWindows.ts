@@ -70,6 +70,36 @@ export function dropGeometry(
   };
 }
 
+/** The smallest a NEW window shrinks to on a tiny stage (tileLayout's cell floor). */
+export const NEW_WINDOW_MIN_W = 200;
+export const NEW_WINDOW_MIN_H = 140;
+
+/** Fit a NEW window's placement (cascade spot + default size) to the live
+ *  stage `bounds` (round-4 chrome audit: at 1000x700 a default window opened
+ *  partly clipped by the stage). A frame larger than the stage shrinks to it
+ *  (never below the minimum above); the position then slides back so the
+ *  whole frame is inside. Null bounds (Plot tab never mounted) leave `g` as
+ *  is. Creation-time only — saved/existing geometry is never refitted. */
+export function fitNewWindowGeometry(
+  g: WindowGeometry,
+  bounds: { width: number; height: number } | null,
+): WindowGeometry {
+  if (!bounds) return g;
+  const w = Math.min(g.w, Math.max(NEW_WINDOW_MIN_W, bounds.width));
+  const h = Math.min(g.h, Math.max(NEW_WINDOW_MIN_H, bounds.height));
+  return { x: Math.max(0, Math.min(g.x, bounds.width - w)), y: Math.max(0, Math.min(g.y, bounds.height - h)), w, h };
+}
+
+/** A new window's geometry from store state: the next cascade spot at size
+ *  `w` x `h`, fitted to the live stage (`fitNewWindowGeometry`). */
+export function newWindowGeometry(
+  s: { plotWindows: readonly unknown[]; plotCanvasBounds: { width: number; height: number } | null },
+  w = DEFAULT_WIDTH,
+  h = DEFAULT_HEIGHT,
+): WindowGeometry {
+  return fitNewWindowGeometry({ ...cascadeGeometry(s.plotWindows.length), w, h }, s.plotCanvasBounds);
+}
+
 /** The next/previous window id in `ids` order, wrapping — the pure cycling
  *  step behind the "Focus Next/Previous Window" commands (item 5). v1 cycles
  *  by array (creation) order; item 6's Tier-2 Ctrl+Tab upgrade makes this

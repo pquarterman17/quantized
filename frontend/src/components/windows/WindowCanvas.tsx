@@ -85,7 +85,11 @@ export default function WindowCanvas() {
   // so item 6's Tile/Cascade commands have a real pixel size to lay out
   // against (`plotCanvasBounds` — the store's sole writer is this effect).
   useEffect(() => {
-    const host = hostRef.current;
+    // A sole maximized window renders no frames host, so measure the stage's
+    // tab panel (the box the frames host will fill) — the FIRST new window is
+    // then fitted to the stage too, not opened at its default size blind.
+    const frames = hostRef.current;
+    const host = frames ?? document.getElementById("qz-stage-panel");
     if (!host) return;
     const ro = new ResizeObserver(([entry]) => {
       const box = entry?.contentRect;
@@ -97,7 +101,7 @@ export default function WindowCanvas() {
         // render and global-store broadcast to every window subscriber.
         if (previous?.width === next.width && previous.height === next.height) return;
         boundsRef.current = next;
-        setBounds(next);
+        if (frames) setBounds(next); // frame clamping only; never re-render a lone PlotStage per resize
         setPlotCanvasBounds(next);
       }
     });

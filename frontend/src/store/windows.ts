@@ -19,7 +19,6 @@
 
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import {
-  cascadeGeometry,
   cascadeLayout,
   defaultPlotView,
   displayedWindowTitle,
@@ -30,6 +29,7 @@ import {
   type PlotWindow,
   type WinState,
 } from "../lib/plotview";
+import { fitNewWindowGeometry, newWindowGeometry } from "../lib/plotWindows";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { createPlotWindowDocument, plotWindowDatasetId, plotWindowView, syncPlotWindow } from "./windowDocuments";
@@ -86,7 +86,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           kind: "plot",
           title: resolvedTitle,
           datasetId: boundId,
-          geometry: cascadeGeometry(s.plotWindows.length),
+          geometry: newWindowGeometry(s),
           z: maxZ(s.plotWindows) + 1,
           winState: "normal",
           view: seedView,
@@ -119,7 +119,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         kind: "snapshot",
         title,
         datasetId: null,
-        geometry: cascadeGeometry(s.plotWindows.length),
+        geometry: newWindowGeometry(s),
         z: maxZ(s.plotWindows) + 1,
         winState: "normal",
         view: snapshotView(s),
@@ -151,7 +151,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         kind,
         title,
         datasetId: ds ? ds.id : null,
-        geometry: cascadeGeometry(s.plotWindows.length),
+        geometry: newWindowGeometry(s),
         z: maxZ(s.plotWindows) + 1,
         winState: "normal",
         // Required by the model, unused by a document window (the mounted
@@ -173,7 +173,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       set((s) => ({
         plotWindows: s.plotWindows.map((w) =>
           w.id === id
-            ? { ...w, geometry: dropGeometry(x, y, s.plotCanvasBounds ?? { width: 1200, height: 800 }) }
+            ? { ...w, geometry: fitNewWindowGeometry(dropGeometry(x, y, s.plotCanvasBounds ?? { width: 1200, height: 800 }), s.plotCanvasBounds) }
             : w,
         ),
       }));
@@ -300,7 +300,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         kind: src.kind,
         title,
         datasetId: plotWindowDatasetId(src),
-        geometry: cascadeGeometry(s.plotWindows.length),
+        geometry: newWindowGeometry(s),
         z: maxZ(s.plotWindows) + 1,
         winState: "normal",
         view,
