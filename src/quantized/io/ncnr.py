@@ -261,6 +261,20 @@ def _merge_row_meta(metas: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
+# reductus writes X-ray .refl too (its Bruker loader), so the probe comes from
+# the reduction's own evidence: the raw-data store its template read from, or a
+# spin-polarized block. Same key and vocabulary as ORSO's experiment.probe.
+_STORE_RE = re.compile(r'"path"\s*:\s*"(ncnrdata|xraydata)/')
+_STORE_PROBE = {"ncnrdata": "neutron", "xraydata": "x-ray"}
+
+
+def _refl_probe(text: str, blocks: Sequence[RawBlock]) -> str | None:
+    probes = {_STORE_PROBE[m] for m in _STORE_RE.findall(text)}
+    if any(b.polarization and set(b.polarization) <= {"+", "-"} for b in blocks):
+        probes.add("neutron")
+    return probes.pop() if len(probes) == 1 else None
+
+
 def import_ncnr_refl(filepath: str | Path) -> DataStruct:
     """Import an NCNR reductus ``.refl`` file (PBR or CANDOR).
 
@@ -268,7 +282,8 @@ def import_ncnr_refl(filepath: str | Path) -> DataStruct:
     measurement) keeps each block as its own series -- see
     :mod:`quantized.io._ncnr_blocks`."""
     path = Path(filepath)
-    blocks = split_blocks(read_text(path).splitlines())
+    text = read_text(path)
+    blocks = split_blocks(text.splitlines())
     if not blocks:
         raise ValueError(f"no 'columns' header found in {path.name}")
     parts = [_block_matrix(b, path.name) for b in blocks]
@@ -298,6 +313,9 @@ def import_ncnr_refl(filepath: str | Path) -> DataStruct:
         "instrument_type": instrument_type,
         "wavelengths": wavelength,
     }
+    probe = _refl_probe(text, blocks)
+    if probe:
+        metadata["probe"] = probe
     if len(blocks) > 1:
         metadata["entries"] = [b.entry for b in blocks]
         bounds = [int(b) for b in np.cumsum([0] + [p[0].shape[0] for p in parts])]
