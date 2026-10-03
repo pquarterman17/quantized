@@ -7,6 +7,7 @@ import {
   frameRect,
   frameVarsPlugin,
   publishFrameVars,
+  type LegendPlaceHost,
 } from "./uplotFrameVars";
 
 /** A minimal DOMRect (only the fields getBoundingClientRect consumers read). */
@@ -114,6 +115,18 @@ describe("frameVarsPlugin", () => {
     box.className = "qzk-legend auto";
     stage!.appendChild(box);
     runHook(frameVarsPlugin(), "draw", u);
+    await vi.waitFor(() => expect(stage!.dataset.lc).toBe("ne"));
+  });
+
+  it("leaves the stage a hook that places a legend switched to auto after the last draw", async () => {
+    const { u, stage } = mockPlot(true);
+    Object.assign(u, { data: [[0, 1], [5, 5]], series: [{}, { show: true, scale: "y" }], valToPos: () => 10 });
+    runHook(frameVarsPlugin(), "draw", u); // drawn while the legend sat in a fixed corner
+    const box = document.createElement("div");
+    box.className = "qzk-legend auto";
+    stage!.appendChild(box);
+    expect(stage!.dataset.lc).toBeUndefined();
+    (stage as LegendPlaceHost).qzPlace?.();
     await vi.waitFor(() => expect(stage!.dataset.lc).toBe("ne"));
   });
 

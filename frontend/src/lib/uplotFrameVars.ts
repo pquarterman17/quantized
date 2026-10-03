@@ -77,6 +77,11 @@ export function publishFrameVars(stage: HTMLElement, r: FrameRect): void {
   stage.style.setProperty(FRAME_VARS.height, `${r.height}px`);
 }
 
+/** A `.qzk-stage` the plugin has published to: `qzPlace` re-runs that publish
+ *  for the latest plot, so a legend switched to "auto" is placed at once
+ *  instead of keeping whichever corner was current until the next draw. */
+export type LegendPlaceHost = HTMLElement & { qzPlace?: () => void };
+
 /** uPlot plugin: on layout (ready), resize (setSize) and every redraw (draw —
  *  catches zoom/pan gutter shifts), publish the frame rect as CSS vars on the
  *  nearest `.qzk-stage` ancestor. No-op when there is no such ancestor
@@ -86,6 +91,7 @@ export function frameVarsPlugin(stageSelector = ".qzk-stage"): uPlot.Plugin {
   const publish = (u: uPlot): void => {
     const stage = u.root.closest(stageSelector);
     if (!(stage instanceof HTMLElement)) return;
+    (stage as LegendPlaceHost).qzPlace = () => publish(u);
     publishFrameVars(stage, frameRect(u.over.getBoundingClientRect(), stage.getBoundingClientRect()));
     // An "auto" legend's corner / outside column (plot audit round 2), on demand.
     // Runs on every draw, so no runLazy busy op; a failed chunk load leaves the

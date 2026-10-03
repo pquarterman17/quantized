@@ -2,7 +2,7 @@
 // least-occupied corner (lib/legendAutoPlace), or, past the palette's eight
 // shown series, a column outside the frame's right edge (the export's
 // "outside right"). Hidden series do not count: the export does not draw them.
-import { render } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { legendPosToLoc } from "../../lib/figureOverrides";
@@ -57,5 +57,17 @@ describe("auto legend", () => {
     useApp.setState({ legendPos: "ne" });
     const { container } = render(<PlotLegend series={many(12)} plotted={range(12)} />);
     expect(container.querySelector(".qzk-legend")!.className).toMatch(/\bne\b/);
+  });
+
+  // Plot audit round 3: the corner is chosen after a DRAW, so switching to
+  // auto with nothing redrawing kept whatever corner was current, possibly
+  // over the data. The legend now asks the plot to place it on the switch.
+  it("asks its plot to place it when the position changes, with no redraw", () => {
+    useApp.setState({ legendPos: "sw" });
+    const stage = document.body.appendChild(document.createElement("div"));
+    Object.assign(stage, { qzPlace: () => (stage.dataset.lc = stage.querySelector(".auto") ? "nw" : "") });
+    render(<PlotLegend series={many(2)} plotted={range(2)} />, { container: stage });
+    act(() => useApp.getState().setLegendPos("auto"));
+    expect(stage.dataset.lc).toBe("nw");
   });
 });
