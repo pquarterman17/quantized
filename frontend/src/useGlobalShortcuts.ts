@@ -95,9 +95,9 @@ export function useGlobalShortcuts(): void {
         switch (e.key) {
           case "a":
           case "A": // autoscale / reset the plot view
-            if (!s.xLim && !s.yLim) return; // nothing to reset
+            if (!s.xLim && !s.yLim && !s.y2Lim) return; // nothing to reset
             e.preventDefault();
-            s.recordView({ xLim: s.xLim, yLim: s.yLim }, { xLim: null, yLim: null });
+            s.recordView({ xLim: s.xLim, yLim: s.yLim, y2Lim: s.y2Lim }, { xLim: null, yLim: null, y2Lim: null });
             return;
           case "f":
           case "F": // curve-fit workshop
