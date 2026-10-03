@@ -5,10 +5,11 @@ import { ghosterFor } from "../../../lib/excludedRowsExport";
 import {
   BATCH_ALL_WORKBOOKS,
   BATCH_LOOSE_WORKSHEETS,
+  batchFolderLabels,
   filterBatchDatasets,
   setShownBatchSelection,
+  validBatchWorkbookScope,
 } from "../../../lib/batchFigureSelection";
-import { folderPathLabel } from "../../../lib/foldertree";
 import { runSequentialBatch, type BatchProgress } from "../../../lib/sequentialBatch";
 import { nextFigureId } from "../../../store/figureLifecycle";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
@@ -78,11 +79,8 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
   useEffect(() => hydrateGlobal(), [hydrateGlobal]);
   useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => {
-    if (
-      workbookScope !== BATCH_ALL_WORKBOOKS &&
-      workbookScope !== BATCH_LOOSE_WORKSHEETS &&
-      !workbooks.some((workbook) => workbook.id === workbookScope)
-    ) setWorkbookScope(BATCH_ALL_WORKBOOKS);
+    const valid = validBatchWorkbookScope(workbookScope, workbooks);
+    if (valid !== workbookScope) setWorkbookScope(valid);
   }, [workbooks, workbookScope]);
   useEffect(() => {
     if (!choices.some((choice) => choice.key === recipeKey)) setRecipeKey(choices[0]?.key ?? "");
@@ -91,6 +89,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
   const recipeChoice = choices.find((choice) => choice.key === recipeKey) ?? null;
   const selectedSet = useMemo(() => new Set(datasetIds), [datasetIds]);
   const workbookById = useMemo(() => new Map(workbooks.map((workbook) => [workbook.id, workbook])), [workbooks]);
+  const folderLabels = useMemo(() => batchFolderLabels(folders), [folders]);
   const workbookCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const dataset of datasets) {
@@ -103,6 +102,8 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
     [datasets, workbooks, folders, workbookScope, datasetQuery],
   );
   const busy = phase === "checking" || phase === "creating";
+  const visibleSelected = visibleDatasets.reduce((count, dataset) => count + Number(selectedSet.has(dataset.id)), 0);
+  const hiddenSelected = datasetIds.length - visibleSelected;
 
   const invalidate = () => {
     setRows([]);
@@ -307,12 +308,13 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
         <Button size="sm" disabled={busy || visibleDatasets.length === 0} onClick={() => { setDatasetIds((current) => setShownBatchSelection(current, visibleDatasets, true)); invalidate(); }}>Select shown</Button>
         <Button size="sm" disabled={busy || !visibleDatasets.some((dataset) => selectedSet.has(dataset.id))} onClick={() => { setDatasetIds((current) => setShownBatchSelection(current, visibleDatasets, false)); invalidate(); }}>Clear shown</Button>
-        <span className="qzk-ds-meta">{visibleDatasets.length} shown · {datasetIds.length} of {datasets.length} selected</span>
+        <span className="qzk-ds-meta">{visibleDatasets.length} shown · {datasetIds.length} of {datasets.length} selected{hiddenSelected > 0 ? ` · ${hiddenSelected} hidden by filter` : ""}</span>
       </div>
       <div role="group" aria-label="Datasets to build" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 4, maxHeight: 170, overflowY: "auto", padding: 6, border: "1px solid var(--border-soft)", borderRadius: 6 }}>
         {visibleDatasets.map((dataset) => {
           const workbook = dataset.workbookId ? workbookById.get(dataset.workbookId) : undefined;
-          const folder = folderPathLabel(folders, workbook?.folderId ?? dataset.folderId ?? null);
+          const folderId = workbook?.folderId ?? dataset.folderId ?? null;
+          const folder = folderId === null ? undefined : folderLabels.get(folderId);
           return (
           <Checkbox key={dataset.id} checked={selectedSet.has(dataset.id)} disabled={busy} onChange={(on) => toggleDataset(dataset.id, on)}>
             <span title={dataset.name} style={{ display: "inline-block", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}>{dataset.name}</span>

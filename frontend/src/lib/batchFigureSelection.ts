@@ -12,31 +12,38 @@ export interface BatchDatasetFilterInput {
   query: string;
 }
 
+/** Build every breadcrumb once for both search and row captions. Parent
+ * cycles and broken links stop locally rather than hanging an imported tree. */
+export function batchFolderLabels(folders: readonly FolderNode[]): Map<string, string> {
+  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  const labels = new Map<string, string>();
+  for (const folder of folders) {
+    const names: string[] = [];
+    const seen = new Set<string>();
+    let current: string | null = folder.id;
+    while (current !== null && !seen.has(current)) {
+      seen.add(current);
+      const node = byId.get(current);
+      if (!node) break;
+      names.unshift(node.name);
+      current = node.parentId;
+    }
+    labels.set(folder.id, names.join(" › "));
+  }
+  return labels;
+}
+
+export function validBatchWorkbookScope(scope: string, workbooks: readonly WorkbookNode[]): string {
+  if (scope === BATCH_ALL_WORKBOOKS || scope === BATCH_LOOSE_WORKSHEETS) return scope;
+  return workbooks.some((workbook) => workbook.id === scope) ? scope : BATCH_ALL_WORKBOOKS;
+}
+
 /** Project-aware filtering for Batch Figure Builder. Search includes the
  * worksheet, workbook/folder path, tags, and column labels so an imported
  * Origin project can be narrowed by the names users actually recognize. */
 export function filterBatchDatasets(input: BatchDatasetFilterInput): Dataset[] {
   const workbooks = new Map(input.workbooks.map((workbook) => [workbook.id, workbook]));
-  const folders = new Map(input.folders.map((folder) => [folder.id, folder]));
-  const folderLabels = new Map<string, string>();
-  const folderLabel = (id: string | null): string => {
-    if (id === null) return "";
-    const cached = folderLabels.get(id);
-    if (cached !== undefined) return cached;
-    const names: string[] = [];
-    const seen = new Set<string>();
-    let current: string | null = id;
-    while (current !== null && !seen.has(current)) {
-      seen.add(current);
-      const folder = folders.get(current);
-      if (!folder) break;
-      names.unshift(folder.name);
-      current = folder.parentId;
-    }
-    const label = names.join(" › ");
-    folderLabels.set(id, label);
-    return label;
-  };
+  const folderLabels = batchFolderLabels(input.folders);
   const needle = input.query.trim().toLocaleLowerCase();
   return input.datasets.filter((dataset) => {
     if (input.workbookScope === BATCH_LOOSE_WORKSHEETS && dataset.workbookId) return false;
@@ -52,7 +59,7 @@ export function filterBatchDatasets(input: BatchDatasetFilterInput): Dataset[] {
     const searchable = [
       dataset.name,
       workbook?.name,
-      folderLabel(folderId),
+      folderId === null ? "" : folderLabels.get(folderId),
       ...(dataset.tags ?? []),
       ...dataset.data.labels,
     ].filter((value): value is string => typeof value === "string");

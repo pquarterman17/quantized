@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   BATCH_ALL_WORKBOOKS,
   BATCH_LOOSE_WORKSHEETS,
+  batchFolderLabels,
   filterBatchDatasets,
   setShownBatchSelection,
+  validBatchWorkbookScope,
 } from "./batchFigureSelection";
 import type { Dataset, FolderNode } from "./types";
 import type { WorkbookNode } from "./workbooks";
@@ -45,6 +47,24 @@ describe("filterBatchDatasets", () => {
     expect(ids("magnetism")).toEqual(["raw"]);
     expect(ids("control")).toEqual(["raw"]);
     expect(ids("temperature")).toEqual(["fit"]);
+  });
+});
+
+describe("batch selection context", () => {
+  it("builds cycle-safe folder captions once", () => {
+    const nested: FolderNode[] = [
+      { id: "a", name: "Root", parentId: null, order: 0 },
+      { id: "b", name: "Child", parentId: "a", order: 0 },
+      { id: "loop", name: "Loop", parentId: "loop", order: 1 },
+    ];
+    expect(batchFolderLabels(nested).get("b")).toBe("Root › Child");
+    expect(batchFolderLabels(nested).get("loop")).toBe("Loop");
+  });
+
+  it("resets a deleted workbook scope but preserves built-in scopes", () => {
+    expect(validBatchWorkbookScope("missing", workbooks)).toBe(BATCH_ALL_WORKBOOKS);
+    expect(validBatchWorkbookScope("w1", workbooks)).toBe("w1");
+    expect(validBatchWorkbookScope(BATCH_LOOSE_WORKSHEETS, workbooks)).toBe(BATCH_LOOSE_WORKSHEETS);
   });
 });
 
