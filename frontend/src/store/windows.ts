@@ -171,8 +171,7 @@ export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
     // setActive normally carries plot intent (item 15's DatasetRow "Plot
     // (make active)", every applyOriginFigure branch, a plain Library click
     // on a non-Origin dataset, …), unlike passive import/workspace restore.
-    // Workflow is the one browsing surface that deliberately follows the
-    // active worksheet. Explicit actions launched from it switch to Plot/Map
+    // Workflow deliberately follows the active worksheet. Actions launched from it switch to Plot/Map
     // themselves (techniqueWorkspaceRun); a Library selection only retargets
     // the workflow summary and must not eject the user from it.
     stageTab: ds ? (s.stageTab === "technique" ? "technique" : plotIntentStageTab(ds)) : s.stageTab,
