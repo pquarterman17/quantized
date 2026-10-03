@@ -252,6 +252,14 @@ describe("useBaseline", () => {
     expect(sub.data.metadata.baseline_subtracted).toBe("modpoly");
   });
 
+  it("names the x column by its recorded name, not a blanket 'Time' (round-3 plot audit)", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "scan.xrdml", data: { ...raw, metadata: { x_column_name: "2-Theta", x_column_unit: "deg" } } }],
+    });
+    const { result } = renderHook(() => useBaseline());
+    expect(result.current.binding).toMatchObject({ xKey: null, xLabel: "2-Theta" });
+  });
+
   it("uses the plotted X/primary Y and subtracts only that Y with provenance", async () => {
     const multi: DataStruct = {
       time: [0, 1, 2, 3],
