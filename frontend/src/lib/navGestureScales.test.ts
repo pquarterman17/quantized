@@ -23,6 +23,7 @@ vi.hoisted(() => {
 
 import uPlot from "uplot";
 
+import { cancelActiveGesture } from "./gestureCancel";
 import type { PlotPayload } from "./plotdata";
 import { buildOpts, type BuildOptsArgs } from "./uplotOpts";
 
@@ -101,6 +102,19 @@ describe("drag-pan", () => {
     const [lo2, hi2] = lim(u, "y2");
     expect(lo2 - lo).toBeCloseTo((hi - lo) / 2, 9);
     expect(hi2 - hi).toBeCloseTo((hi - lo) / 2, 9);
+  });
+});
+
+describe("drag-pan cancel", () => {
+  it("puts every scale back and stops following the pointer", async () => {
+    const u = await mount(payload(true), {});
+    const before = ["x", "y", "y2"].map((k) => lim(u, k));
+    u.over.dispatchEvent(new MouseEvent("mousedown", { button: 0, clientX: 100, clientY: 100 }));
+    document.dispatchEvent(new MouseEvent("mousemove", { clientX: 160, clientY: 140 }));
+    expect(cancelActiveGesture()).toBe(true);
+    document.dispatchEvent(new MouseEvent("mousemove", { clientX: 260, clientY: 240 }));
+    await tick();
+    expect(["x", "y", "y2"].map((k) => lim(u, k))).toEqual(before);
   });
 });
 

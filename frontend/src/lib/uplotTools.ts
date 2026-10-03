@@ -76,13 +76,11 @@ export function panPlugin(): uPlot.Plugin {
           };
           document.addEventListener("mousemove", onMove);
           document.addEventListener("mouseup", onUp);
-          // GUI_INTERACTION #9: Escape/right-click cancel — restore the pan's
-          // starting scales (a pan has no "committed result" to discard, just
-          // the view it moved) and tear down like a normal release.
+          // GUI_INTERACTION #9: Escape/right-click cancel — tear down like a
+          // normal release, then restore the pan's starting scales (a pan has
+          // no "committed result" to discard, just the view it moved).
           setActiveGestureCancel(() => {
-            document.removeEventListener("mousemove", onMove);
-            document.removeEventListener("mouseup", onUp);
-            over.style.cursor = "grab";
+            onUp();
             u.batch(() => start.forEach(([k, min, max]) => u.setScale(k, { min, max })));
           });
         });
