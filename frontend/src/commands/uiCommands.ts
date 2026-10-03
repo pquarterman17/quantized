@@ -87,6 +87,14 @@ export function buildUiCommands(s: StoreGet): Action[] {
       description: "Switch the central stage to the active dataset's worksheet.",
       run: () => s().setStageTab("worksheet"),
     },
+    {
+      id: "workflow",
+      group: "View",
+      label: "Show workflow",
+      description: "Switch the central stage to the technique-aware workflow for the active worksheet.",
+      keywords: "technique analysis guided steps active worksheet",
+      run: () => s().setStageTab("technique"),
+    },
     // GUI_INTERACTION #10: restores every open-or-ever-opened floating
     // ToolWindow (curve fit, peaks, baseline, …) to its own default
     // position/size, uncollapsed — the recovery path for a window dragged

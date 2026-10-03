@@ -3,6 +3,7 @@
 // preserves the components/ getState-in-render architecture ratchet.
 
 import { buildAppActions } from "../appCommands";
+import { plotIntentStageTab } from "../lib/stagetab";
 import type { TechniqueActionId } from "../lib/techniqueWorkflow";
 import { runAction, type Action } from "./commands";
 import { withResolved } from "./pendingEdit";
@@ -46,6 +47,10 @@ export async function runTechniqueWorkspaceAction(id: TechniqueActionId, dataset
         runQuickPlot(resolved.id, onClose);
         return;
       }
+      // The Workflow page is a launcher, not a canvas. Every launched tool
+      // must reveal the plot/map it operates on; otherwise marker, range, and
+      // figure-producing tools open over an unrelated full-stage page.
+      state.setStageTab(plotIntentStageTab(resolved));
       if (id === "configure-figure") {
         state.openQuickFigureBuilder(resolved.id);
         return;

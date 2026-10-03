@@ -27,6 +27,7 @@ import { useEffect } from "react";
 
 import { canRenderMap } from "../../lib/mapdata";
 import { lazyRegion } from "../../lib/lazyRegion";
+import { plotIntentStageTab } from "../../lib/stagetab";
 import { onTabListKeyDown } from "../../lib/tabListKeys";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { useRecentProjectsCommands } from "../../commands/recentProjectsCommands";
@@ -124,7 +125,7 @@ export default function Stage() {
         ) : shown === "worksheet" ? (
           <Worksheet />
         ) : shown === "technique" ? (
-          <TechniqueWorkspace onClose={() => setStageTab("plot")} />
+          <TechniqueWorkspace onClose={() => setStageTab(active ? plotIntentStageTab(active) : "plot")} />
         ) : (
           <WindowCanvas />
         )}

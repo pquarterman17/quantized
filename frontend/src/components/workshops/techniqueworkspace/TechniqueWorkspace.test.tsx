@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Dataset } from "../../../lib/types";
 import { useSimsDialog } from "../../../store/simsDialog";
 import { useApp } from "../../../store/useApp";
+import QuickFigureBuilderWorkspace from "../quickfigurebuilder/QuickFigureBuilderWorkspace";
 import TechniqueWorkspace from "./TechniqueWorkspace";
 
 function dataset(id: string, technique: string, pending = false): Dataset {
@@ -88,7 +89,22 @@ describe("TechniqueWorkspace", () => {
       finish(full);
     });
     await waitFor(() => expect(useApp.getState().quickFigureBuilderDatasetId).toBe("lazy"));
+    expect(useApp.getState().stageTab).toBe("plot");
     expect(useApp.getState().status).toContain("Full data loaded");
+  });
+
+  it("creates a configured figure into a visible Plot stage from Workflow", async () => {
+    const ds = dataset("s1", "sims");
+    useApp.setState({ datasets: [ds], activeId: "s1", stageTab: "technique" });
+    render(<><TechniqueWorkspace onClose={() => {}} /><QuickFigureBuilderWorkspace /></>);
+
+    fireEvent.click(screen.getByRole("button", { name: /Configure figure/i }));
+    await waitFor(() => expect(useApp.getState().quickFigureBuilderDatasetId).toBe("s1"));
+    expect(useApp.getState().stageTab).toBe("plot");
+    fireEvent.click(screen.getByRole("button", { name: "Create Editable Figure" }));
+    expect(useApp.getState().editableFigures).toHaveLength(1);
+    expect(useApp.getState().quickFigureBuilderDatasetId).toBeNull();
+    expect(useApp.getState().stageTab).toBe("plot");
   });
 
   it("cancels a resolved action if the active worksheet changed while it loaded", async () => {

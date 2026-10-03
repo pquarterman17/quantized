@@ -61,7 +61,7 @@ export default function TechniqueWorkspace({ onClose }: { onClose: () => void })
       <section className="qzk-technique-workspace" aria-labelledby="technique-workspace-title">
         <header className="qzk-technique-head">
           <div>
-            <div className="qzk-technique-eyebrow">Technique workspace</div>
+            <div className="qzk-technique-eyebrow">Workflow</div>
             <h1 id="technique-workspace-title">Choose a worksheet</h1>
             <p>Select a worksheet in the Library, then return here for a technique-aware workflow.</p>
           </div>
@@ -87,7 +87,7 @@ export default function TechniqueWorkspace({ onClose }: { onClose: () => void })
     <section className="qzk-technique-workspace" aria-labelledby="technique-workspace-title">
       <header className="qzk-technique-head">
         <div>
-          <div className="qzk-technique-eyebrow">Technique workspace</div>
+          <div className="qzk-technique-eyebrow">Workflow</div>
           <h1 id="technique-workspace-title">{workflow.label}</h1>
           <p>{workflow.summary}</p>
         </div>
