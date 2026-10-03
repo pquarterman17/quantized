@@ -507,3 +507,20 @@ def test_map2d_golden_vs_matlab(
         ds.column("Qz").reshape(n, m), np.asarray(ref["Qz"], dtype=float), rtol=1e-9, atol=1e-12
     )
     assert ds.units[list(ds.labels).index("Intensity")] == ref["intensityUnit"]
+
+
+def test_schema1_intensities_are_not_multiplied_again(fixtures_dir: Path, tmp_path: Path) -> None:
+    """Schema-1.x ``<intensities>`` are already attenuation-corrected; only raw
+    schema-2.x ``<counts>`` take ``<beamAttenuationFactors>`` (plot audit r2).
+    Evidence: xrayutilities ``panalytical_xml.py`` multiplies only when a
+    ``counts`` element is present, and refnx ``reduce/xray.py`` only for
+    version-2 (``counts``) files; neither touches ``intensities``. The MATLAB
+    importXRDML multiplied both; its golden (above) uses ``<counts>``."""
+    text = (fixtures_dir / "xrdml_attenuation.xrdml").read_text()
+    text = text.replace('<counts unit="counts">', '<intensities unit="counts">')
+    text = text.replace("</counts>", "</intensities>")
+    (tmp_path / "v1.xrdml").write_text(text)
+    ds = import_xrdml(tmp_path / "v1.xrdml")
+    expected = np.arange(10, 101, 10, dtype=float)  # [100..1000] / countingTime 10
+    assert_allclose(ds.values[:, 0], expected, rtol=1e-12)
+    assert ds.metadata["n_scans_att_corrected"] == 0
