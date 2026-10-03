@@ -27,7 +27,6 @@ VENDORS = (
 # Files the registry refuses on purpose, with the reason.
 EXPECTED_REFUSALS = {
     "orso/reflectometry/orsopy_not_orso.ort": "not an ORSO file",  # negative fixture
-    "bruker/xrd/FAIRmat_RSM.brml": "reciprocal-space maps are not supported",
 }
 
 # Technique by corpus folder prefix; refl1d/ncnr exports mix reflectivity
@@ -36,7 +35,7 @@ TECHNIQUE_BY_PREFIX = {
     "quantum-design/": ("magnetometry.mvsh", "magnetometry.mvst"),
     "panalytical/xrd/": ("xrd.powder", "xrd.rsm", "generic"),
     "rigaku/": ("xrd.powder",),
-    "bruker/xrd/": ("xrd.powder",),
+    "bruker/xrd/": ("xrd.powder", "xrd.rsm"),  # FAIRmat_RSM.brml is a 2-D map
     "bruker/ftir/": ("spectroscopy",),
     "jcamp/": ("spectroscopy",),
     "spc/": ("spectroscopy",),

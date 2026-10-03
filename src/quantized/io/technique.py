@@ -112,7 +112,8 @@ def _has_magnetic_channel(ds: DataStruct) -> bool:
 def _refine_xrdml(ds: DataStruct) -> str:
     """``xrd.rsm`` for a 2-D area-detector map (``metadata['is2D']``, set by
     every ``_build_2d*``/``_build_pole`` path in ``io/xrdml.py`` /
-    ``io/_xrdml_scan.py``), else ``xrd.powder`` for the 1-D line-scan case."""
+    ``io/_xrdml_scan.py`` and by ``io/bruker_brml_map.py``), else
+    ``xrd.powder`` for the 1-D line-scan case."""
     return XRD_RSM if bool(ds.metadata.get("is2D")) else XRD_POWDER
 
 
@@ -129,7 +130,6 @@ def _refine_refl1d(ds: DataStruct) -> str:
 # `stamp_technique`. A parser absent from both maps below is ambiguous /
 # not yet classified and stamps GENERIC (the safe default, never a guess).
 _STATIC_TECHNIQUE_BY_PARSER: dict[str, str] = {
-    "import_bruker_brml": XRD_POWDER,  # 1-D line scans only (registry.py note)
     "import_bruker_raw": XRD_POWDER,
     "import_rigaku_raw": XRD_POWDER,
     "import_xrd_export": XRD_POWDER,  # our own 1-D XRD CSV export, re-imported
@@ -160,6 +160,7 @@ _REFINED_TECHNIQUE_BY_PARSER: dict[str, TechniqueRefiner] = {
     "import_mpms": _refine_qd_family,
     "import_lake_shore": _refine_qd_family,
     "import_xrdml": _refine_xrdml,
+    "import_bruker_brml": _refine_xrdml,  # 1-D line scan or multi-scan RSM map
     "import_refl1d_dat": _refine_refl1d,
 }
 

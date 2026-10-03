@@ -58,7 +58,7 @@ Sniffer = Callable[[Path], bool]
 # NOTE: resolve_parser lowercases the suffix, so .datA -> '.data', etc.
 _EXT_MAP: dict[str, Parser] = {
     ".xrdml": import_xrdml,
-    ".brml": import_bruker_brml,  # Bruker XRD (ZIP of XML); 1-D line scans
+    ".brml": import_bruker_brml,  # Bruker XRD (ZIP of XML); line scans + RSM maps
     ".jdx": import_jcamp,  # JCAMP-DX spectroscopy (IR/Raman/UV-Vis/...)
     ".dx": import_jcamp,
     ".nc": import_netcdf,  # NetCDF-3/4 (generic + ANDI/AIA chromatography)
