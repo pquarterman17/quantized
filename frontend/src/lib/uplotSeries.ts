@@ -56,11 +56,14 @@ export function buildSeriesDefs(
   // index window and draws the full acquisition order. See `linearPaths` docs.
   // uPlot min/max-decimates a run of >= 4 points per pixel assuming ascending
   // x, collapsing a dense descending spectrum to one vertical line: draw in
-  // runs short enough to stay exact, joined end to end.
+  // runs short enough to stay exact, joined end to end. `bbox.width` is device
+  // px rounded to a HALF pixel (x.5 at a 125 %/150 % display), so the run is
+  // floored to a whole row count: a fractional run start reads undefined rows,
+  // uPlot's non-null scan answers -1 and the run sweeps from row 0, decimated.
   const fullLine = (b: uPlot.Series.PathBuilder): uPlot.Series.PathBuilder =>
     (u, sidx) => {
       const last = u.data[0].length - 1;
-      const run = u.bbox.width * 3 + 1; // < 4 per pixel, and >= 1 at zero width
+      const run = Math.max(1, Math.ceil(u.bbox.width * 4) - 1); // whole rows, < 4 per pixel
       const out = b(u, sidx, 0, Math.min(last, run));
       for (let i = run; out && i < last; i += run)
         (out.stroke as Path2D).addPath(b(u, sidx, i, Math.min(last, i + run))!.stroke as Path2D);
