@@ -261,9 +261,11 @@ def _read_subfile(
 
     own_x = None
     if txyxys:
-        # Per-subfile x is fixed-point scaled int32 (same exponent formula as y).
-        x_ints = np.frombuffer(raw, dtype="<i4", count=pts, offset=cursor)
-        own_x = _y_from_ints(x_ints, exp, 32)
+        # Per-subfile x is IEEE float32, like the TXVALS array — the exponent
+        # scales Y only. Reading it as scaled int32 put real m/z values in
+        # clusters near 2**13..2**17; float32 reproduces the header's
+        # ffirst/flast exactly on both real TXYXYS corpus files.
+        own_x = np.frombuffer(raw, dtype="<f4", count=pts, offset=cursor).astype(float)
         cursor += 4 * pts
 
     if exp == _FLOAT_EXP_SENTINEL:
