@@ -72,7 +72,7 @@ function overlaps(a: DOMRect | null, b: DOMRect | null): boolean {
   return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
 }
 
-test("the plot dock keeps every tool reachable and the NE legend clears it @core", async ({ page }) => {
+test("the plot dock keeps every tool reachable and the default legend clears it @core", async ({ page }) => {
   test.setTimeout(60_000);
   await loadPlot(page);
   for (const size of SIZES) {
@@ -81,7 +81,8 @@ test("the plot dock keeps every tool reachable and the NE legend clears it @core
     await expect(dock).toBeVisible();
     await expectEveryToolReachable(page, dock);
 
-    const legend = page.locator(".qzk-stage > .qzk-legend.ne").first();
+    // The default legend is "auto" (least-crowded corner); a saved view keeps "ne".
+    const legend = page.locator(".qzk-stage > .qzk-legend:is(.auto,.ne)").first();
     await expect(legend).toBeVisible();
     const [l, d] = await Promise.all([
       legend.evaluate((e) => e.getBoundingClientRect().toJSON() as DOMRect),
