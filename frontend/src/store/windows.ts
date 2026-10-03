@@ -129,8 +129,8 @@ export function focusTransientReset(): Partial<AppState> {
  *  Channel-keyed state (keys/styles/labels/order/hidden) resets because it
  *  indexes the OLD dataset's columns; axis limits reset to autoscale; errKeys/
  *  hiddenChannels seed from the dataset (Origin Y-error designations + parser
- *  hints — see lib/errorbars). Display config that survives a dataset switch
- *  (grid, legend, template, title, annotations, …) is deliberately absent —
+ *  hints — see lib/errorbars); with `outgoing`, data-tied marks and tick
+ *  formats too. Window style (grid, legend, template, title, …) is absent —
  *  same as `setActive` has always behaved, EXCEPT axis scale (item 2):
  *  `prevDs` gates the technique-defaults table to a genuine technique change
  *  (`lib/techniqueDefaults.isTechniqueChange`), so log axes still survive a
@@ -149,7 +149,7 @@ export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
   // before computing the incoming patch (unused on the no-op path below).
   const prevDs = s.datasets.find((d) => d.id === s.activeId);
   const memory = captureTechniqueView(prevDs, s, s.techniqueViewMemory);
-  const viewPatch = s.activeId === id ? {} : datasetViewDefaults(ds, prevDs, memory);
+  const viewPatch = s.activeId === id ? {} : datasetViewDefaults(ds, prevDs, memory, { outgoing: s });
   const nextView = { ...snapshotView(s), ...viewPatch };
   return {
     activeId: id,
@@ -491,7 +491,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         const priorDs = s.datasets.find((d) => d.id === win.datasetId);
         const currentView = plotWindowView(win);
         const memory = captureTechniqueView(priorDs, currentView, s.techniqueViewMemory); // item 5
-        const reboundView = { ...currentView, ...datasetViewDefaults(ds, priorDs, memory) };
+        const reboundView = { ...currentView, ...datasetViewDefaults(ds, priorDs, memory, { outgoing: currentView }) };
         set((st) => ({
           plotWindows: st.plotWindows.map((w) =>
             w.id === windowId

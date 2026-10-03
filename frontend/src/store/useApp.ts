@@ -356,7 +356,7 @@ export const useApp = create<AppState>((set, get) => ({
     // `ds.name` seeds the title when a fresh window must be created, since
     // the dataset isn't in the store yet for createWindow to look up).
     retargetPassiveRebind(get(), ds.id, ds.name);
-    const defaults = datasetViewDefaults(ds);
+    const defaults = datasetViewDefaults(ds, undefined, {}, { outgoing: get() });
     set((s) => ({
       datasets: [...s.datasets, ds],
       activeId: ds.id,

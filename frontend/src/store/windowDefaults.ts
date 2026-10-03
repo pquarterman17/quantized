@@ -4,7 +4,7 @@ import { defaultErrKeys, errorRoleViewDefaults, originHiddenChannels } from "../
 import { isTechniqueChange, techniqueViewDefaults } from "../lib/techniqueDefaults";
 import { applyTechniqueMemory, type TechniqueViewMemoryMap } from "../lib/techniqueViewMemory";
 import { cascadeGeometry, defaultPlotView, type PlotView, type PlotWindow } from "../lib/plotview";
-import type { Dataset } from "../lib/types";
+import type { AxisFormat, Dataset } from "../lib/types";
 import { createPlotWindowDocument } from "./windowDocuments";
 
 export interface DatasetViewDefaultsOptions {
@@ -13,6 +13,32 @@ export interface DatasetViewDefaultsOptions {
    *  instead of plotting them as curves. Off for every silent rebind
    *  (import/switch/reimport), whose defaults this leaves byte-identical. */
   errorRoles?: boolean;
+  /** The view a GENUINE dataset switch is leaving (setActive to another id,
+   *  an import, a window rebind): its coordinate-tied decorations and tick
+   *  formats reset too (`switchDecorationReset`). Omitted by split/reimport,
+   *  whose rows keep the same coordinates. */
+  outgoing?: SwitchDecorations;
+}
+
+type SwitchDecorations = Pick<PlotView, "refLines" | "regionShades" | "annotations" | "shapes" | "xFmt" | "yFmt" | "y2Fmt">;
+
+const isAutoFmt = (f: AxisFormat | null): boolean => !f || (f.mode === "auto" && f.digits === 2);
+
+/** What a genuine dataset switch drops from `view`: ref lines, region shades,
+ *  data-anchored annotations/shapes (page-anchored ones are not tied to the
+ *  data and stay) and non-default tick formats. Only the fields that change,
+ *  so an undecorated view keeps every reference ({} = nothing to drop). */
+export function switchDecorationReset(view: SwitchDecorations): Partial<PlotView> {
+  const out: Partial<PlotView> = {};
+  const onPage = (m: { anchor?: "data" | "page" }) => m.anchor === "page";
+  if (view.refLines.length) out.refLines = [];
+  if (view.regionShades.length) out.regionShades = [];
+  if (!view.annotations.every(onPage)) out.annotations = view.annotations.filter(onPage);
+  if (!view.shapes.every(onPage)) out.shapes = view.shapes.filter(onPage);
+  if (!isAutoFmt(view.xFmt)) out.xFmt = { mode: "auto", digits: 2 };
+  if (!isAutoFmt(view.yFmt)) out.yFmt = { mode: "auto", digits: 2 };
+  if (view.y2Fmt) out.y2Fmt = null;
+  return out;
 }
 
 export function datasetViewDefaults(
@@ -57,6 +83,7 @@ export function datasetViewDefaults(
     xStep: null,
     yStep: null,
     // Below memory, like the two error seeds it widens (memory > defaults).
+    ...(options.outgoing ? switchDecorationReset(options.outgoing) : {}),
     ...(dataset && options.errorRoles ? errorRoleViewDefaults(dataset) : {}),
     ...(remembered ?? (isTechniqueChange(dataset, previous) ? techniqueViewDefaults(dataset) : {})),
   };

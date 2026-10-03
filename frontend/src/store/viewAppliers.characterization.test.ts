@@ -431,6 +431,7 @@ describe("facetByColumn — the facet-partition applier", () => {
     useApp.getState().facetByColumn("d2", 1);
     expect(changedSince(before)).toEqual([
       "activeId",
+      "annotations", // a genuine switch drops data-anchored annotations (round 2)
       "composition",
       "errKeys",
       "facetKey",
@@ -549,6 +550,7 @@ describe("breakAtGaps — the x-break applier", () => {
     useApp.getState().breakAtGaps("g1");
     expect(changedSince(before)).toEqual([
       "activeId",
+      "annotations", // a genuine switch drops data-anchored annotations (round 2)
       "composition",
       "errKeys",
       "facetKey",
@@ -1191,6 +1193,7 @@ describe("applyOriginFigure — spatial multi-panel branch", () => {
     useApp.getState().applyOriginFigure("fig-sp-1");
     expect(changedSince(before)).toEqual([
       "activeId",
+      "annotations", // a genuine switch drops data-anchored annotations (round 2)
       "composition",
       "errKeys",
       "facetKey",
@@ -1218,6 +1221,7 @@ describe("applyOriginFigure — spatial multi-panel branch", () => {
       "stackMode",
       "xAxisLabel",
       "xLim",
+      "xScale", // a switch into a generic dataset resets to linear (round 2)
       "xStep",
       "y2AxisLabel",
       "y2Keys",
@@ -1226,6 +1230,7 @@ describe("applyOriginFigure — spatial multi-panel branch", () => {
       "y2Step",
       "yAxisLabel",
       "yLim",
+      "yScale",
       "yStep",
     ]);
   });
