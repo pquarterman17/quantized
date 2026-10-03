@@ -40,7 +40,7 @@ import {
 } from "../../lib/api/figures";
 import type { BarChartData } from "../../lib/barlayout";
 import type { AxisSlot } from "../../lib/groupAxis";
-import { resolvedPalette } from "../../lib/plotEncodingBinding";
+import { resolvedPalette } from "../../lib/plotEncodingWire";
 import type { StatExportOut, StatStageRequest } from "../../lib/statStageBridge";
 import { axisStyleWire, errorHalfWidth, nestedTiers, type ResolvedStatMarks } from "../../lib/statMarks";
 import type { GroupSpec } from "../../lib/statschooser";

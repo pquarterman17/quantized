@@ -12,7 +12,8 @@
 // before moving: none of `fitStepParams`/`fitSpecFromStepParams`/
 // `fitDataForSpec`/`stampRecompute`/`selectedFitData` calls any export below,
 // and every real (non-test) importer of what moved is one of those lazy
-// workshop hooks.
+// workshop hooks. (Slice 22 later moved `fitSpecFromStepParams` to
+// `lib/fitStepDecode.ts`: its only caller, the pipeline executor, is lazy.)
 
 import { effectiveChannels } from "./plotdata";
 import type { FitSelection } from "./fitselection";

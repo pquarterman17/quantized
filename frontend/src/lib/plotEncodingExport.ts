@@ -33,7 +33,7 @@ import { withCanvasLineWidth } from "./exportLineWidth";
 import { exportErrorSpans } from "./figureSpecSeries";
 import { buildStageFigureSpec } from "./figureSpecStage";
 import { encodeSpec, type EncodedSpec } from "./plotEncoding";
-import { figureEncodingWire, resolvedPalette } from "./plotEncodingBinding";
+import { figureEncodingWire, resolvedPalette } from "./plotEncodingWire";
 import type { PlotSpec } from "./plotspec";
 import { stylesForMark } from "./plotSpecFigure";
 import { GRAPH_PREVIEW_LINE_PX } from "./plotTemplates";

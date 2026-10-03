@@ -21,7 +21,8 @@
 // never touches `stageTab` away from "worksheet" in the first place — but
 // still applies if the pref is "plot".)
 
-import { bookLabel, familyBooks, originBookFamilies, originSheetGroups, originSheetNumber } from "../../../lib/grouping";
+import { originBookFamilies, originSheetGroups, originSheetNumber } from "../../../lib/grouping";
+import { bookLabel, familyBooks } from "../../../lib/originFamilyBooks";
 import { onTabListKeyDown } from "../../../lib/tabListKeys";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";

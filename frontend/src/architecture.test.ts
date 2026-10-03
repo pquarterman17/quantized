@@ -3499,6 +3499,12 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/datasetRemoveActions.ts",
     "/lib/quickPlotWorkbook.ts",
     "/components/Library/libraryOpen.ts",
+    // ...and three more: the encodings' facet split, export wire and palette
+    // (the lazy facet Stage, series derivation and export builders), the
+    // worksheet book switcher's helpers, and the pipeline fit-step decoder.
+    "/lib/plotEncodingWire.ts",
+    "/lib/originFamilyBooks.ts",
+    "/lib/fitStepDecode.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

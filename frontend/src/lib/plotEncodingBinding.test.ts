@@ -22,12 +22,12 @@ import {
 import { resetFigureDocumentForReshape } from "./figureDocumentReimport";
 import { buildFigureSpecFromDocument } from "./figureSpec";
 import {
-  figureEncodingWire,
   resolveFigureEncoding,
   sanitizeFigureEncoding,
   windowEncoding,
   type FigureEncoding,
 } from "./plotEncodingBinding";
+import { figureEncodingWire } from "./plotEncodingWire";
 import { markSeriesStyle } from "./plotspec";
 import { defaultPlotView, type PlotView, type PlotWindow } from "./plotview";
 import { AUTO_MARKER_CYCLE, SERIES_VARS, windowCyclesSeriesStyles } from "./seriesStyleCycle";
