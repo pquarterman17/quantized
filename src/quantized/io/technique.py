@@ -115,6 +115,7 @@ _STATIC_TECHNIQUE_BY_PARSER: dict[str, str] = {
     "import_bruker_brml": XRD_POWDER,  # 1-D line scans only (registry.py note)
     "import_bruker_raw": XRD_POWDER,
     "import_rigaku_raw": XRD_POWDER,
+    "import_xrd_export": XRD_POWDER,  # our own 1-D XRD CSV export, re-imported
     "import_jcamp": SPECTROSCOPY,
     "import_spc": SPECTROSCOPY,
     "import_opus": SPECTROSCOPY,

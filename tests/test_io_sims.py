@@ -67,7 +67,8 @@ def test_registry_routes_sims(fixtures_dir: Path, name: str) -> None:
 
 @pytest.mark.parametrize(
     ("name", "parser"),
-    [("csv_xrd.csv", "import_csv"), ("excel_synth.xlsx", "import_excel")],
+    # csv_xrd.csv is an XRD export: claimed by its own marker line, not SIMS.
+    [("csv_xrd.csv", "import_xrd_export"), ("excel_synth.xlsx", "import_excel")],
 )
 def test_registry_keeps_generic_tables(fixtures_dir: Path, name: str, parser: str) -> None:
     # Non-SIMS .csv/.xlsx must fall through the SIMS sniffer to the generic parser.

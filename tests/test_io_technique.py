@@ -104,9 +104,13 @@ def test_sims_is_sims(fixtures_dir: Path) -> None:
     assert ds.metadata["technique"] == SIMS
 
 
-def test_generic_csv_never_guesses(fixtures_dir: Path) -> None:
-    """Content-ambiguous imports (plain CSV) stamp 'generic', never a guess."""
-    ds = import_auto(fixtures_dir / "csv_xrd.csv")
+def test_generic_csv_never_guesses(fixtures_dir: Path, tmp_path: Path) -> None:
+    """Content-ambiguous imports (plain CSV) stamp 'generic', never a guess --
+    even 2-Theta/Intensity columns, once the XRD export's marker line is gone
+    (with it, io/xrd_export_read.py claims the file by proof, not a guess)."""
+    text = (fixtures_dir / "csv_xrd.csv").read_text().split("\n", 1)[1]
+    (tmp_path / "plain.csv").write_text(text)
+    ds = import_auto(tmp_path / "plain.csv")
     assert ds.metadata["parser_name"] == "import_csv"
     assert ds.metadata["technique"] == GENERIC
 

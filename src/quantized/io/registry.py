@@ -37,6 +37,7 @@ from quantized.io.rigaku import import_rigaku_raw, is_rigaku_raw
 from quantized.io.sims import import_sims, is_sims_file
 from quantized.io.spc import import_spc, is_spc
 from quantized.io.technique import stamp_technique
+from quantized.io.xrd_export_read import import_xrd_export, is_xrd_export
 from quantized.io.xrdml import import_xrdml
 
 __all__ = [
@@ -168,7 +169,10 @@ _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
     # Lake Shore VSM self-identifies in its preamble (MAIN_PLAN #7 — the
     # parser existed unregistered; the #52 matrix surfaced it). SIMS keeps
     # precedence (established chain order).
+    # quantized's own XRD export (io/xrd_csv.py) proves itself by its first
+    # line; it goes first so a re-import keeps the XRD technique tag.
     ".csv": [
+        (is_xrd_export, import_xrd_export),
         (is_sims_file, import_sims),
         (is_lakeshore_file, import_lake_shore),
         (_accept_any, import_csv),
