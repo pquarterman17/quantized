@@ -48,7 +48,8 @@ export const STEPPED_MID_PATHS: uPlot.Series.PathBuilder = (u, seriesIdx, idx0, 
   for (let i = idx0; i <= idx1; i++) {
     const xv = dataX[i];
     const yv = dataY[i];
-    if (xv == null || yv == null || !Number.isFinite(xv) || !Number.isFinite(yv)) {
+    // A log y cannot place yv <= 0: a gap, as `lib/logGaps.ts` makes for uPlot's own builders.
+    if (xv == null || yv == null || !Number.isFinite(xv) || !Number.isFinite(yv) || (yv <= 0 && (u.scales[scaleKey].distr as number) === 3)) {
       pen = false;
       continue;
     }

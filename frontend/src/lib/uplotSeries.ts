@@ -8,6 +8,7 @@
 import type uPlot from "uplot";
 
 import { resolveDrawColor } from "./contrastColor";
+import { logGaps } from "./logGaps";
 import { seriesPoints, seriesTrace } from "./markers";
 import type { PlotPayload } from "./plotdata";
 import { DASH, resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
@@ -139,9 +140,11 @@ export function buildSeriesDefs(
       // Fill-under (MAIN #13): uPlot's native `series.fill`/`fillTo`, derived
       // from this series' own resolved stroke. `{vs}` band fills are NOT a
       // per-series prop — see `resolveFillBands` below (opts.bands).
+      // A log axis breaks the line at values it cannot place (lib/logGaps.ts).
       const def: uPlot.Series = {
         label, scale, stroke, width, dash, points: loopPoints(points), show,
         ...seriesFillProps(style?.fill, stroke),
+        ...(xAscending ? { gaps: logGaps } : {}),
       };
       // Per-series step alignment (SeriesStyle.step, GAP_PLOTTYPES "step"
       // mark) — a MORE SPECIFIC override than the "Step" default-trace
