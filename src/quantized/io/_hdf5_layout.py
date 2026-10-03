@@ -32,6 +32,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from quantized.datastruct import DataStruct
+from quantized.heavy_import import heavy_imports
 
 if TYPE_CHECKING:  # pragma: no cover - h5py only needed at write time
     import h5py
@@ -118,12 +119,29 @@ def _write_padded_ascii(
     *,
     count_attr: bool = True,
 ) -> None:
-    """Create a padded-ASCII dataset + ``encoding`` (and optional ``count``)."""
+    """Create a padded-ASCII dataset + ``encoding`` (and optional ``count``).
+
+    The matrix is MATLAB's one-byte-per-char layout, so non-ASCII text
+    (``"Å⁻¹"``, ``"χ"``) degrades to ``?`` there. When any string would, the
+    exact strings are also stored as a ``utf8`` attribute (variable-length
+    UTF-8), so the export does not lose units a reader can recover."""
     mat = encode_padded_ascii(strings)
     dset = group.create_dataset(name, data=mat)
     dset.attrs["encoding"] = "ASCII_padded_space"
+    texts = [str(s) for s in strings]
+    if any(not t.isascii() for t in texts):
+        h5py = _h5py()
+        dset.attrs.create("utf8", texts, dtype=h5py.string_dtype("utf-8"))
     if count_attr:
         dset.attrs["count"] = np.int32(len(strings) if strings else 1)
+
+
+def _h5py() -> Any:
+    """``h5py`` (already imported by the caller, ``io.hdf5.write_hdf5``)."""
+    with heavy_imports("h5py"):
+        import h5py  # noqa: PLC0415
+
+    return h5py
 
 
 def write_data_group(parent: h5py.Group, group_path: str, d: DataStruct) -> None:
