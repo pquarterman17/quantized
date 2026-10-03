@@ -167,6 +167,25 @@ def test_from_multipeak_fit_builds_table() -> None:
     assert table["rows"][0][0] == 1 and table["rows"][1][2] == 20.0
 
 
+def test_from_multipeak_fit_heads_its_columns_with_the_axis_units() -> None:
+    # Round-3 plot audit: "FWHM 0.137" in a report gave no hint it was degrees.
+    peak = {"model": "Gaussian", "center": 31.4, "fwhm": 0.14, "height": 426.0,
+            "area": 92.0, "eta": None, "fwhmG": 0.1, "centerErr": 0.01}
+    result = {"peaks": [peak], "rmse": 2.5, "nPeaks": 1, "model": "Voigt",
+              "xUnit": "deg", "yUnit": "cps"}
+    table = next(b for b in from_multipeak_fit(result).iter_blocks() if b["type"] == "table")
+    assert table["columns"][2:9] == [
+        "Center (deg)", "± center", "FWHM (deg)", "± FWHM", "Height (cps)", "± height",
+        "Area (deg·cps)",
+    ]
+    assert "FWHM (G, deg)" in table["columns"]
+    # No units on the payload: the headers stay exactly as before.
+    del result["xUnit"], result["yUnit"]
+    plain = next(b for b in from_multipeak_fit(result).iter_blocks() if b["type"] == "table")
+    assert plain["columns"][2:5] == ["Center", "± center", "FWHM"]
+    assert "FWHM (G)" in plain["columns"]
+
+
 
 def test_from_multipeak_fit_marks_hand_edited_rows() -> None:
     result = {

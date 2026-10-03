@@ -265,6 +265,21 @@ describe("PeaksPanel — a published model-fit table", () => {
     expect(vi.mocked(reportEmit).mock.calls[0][0].result).toEqual({
       peaks: [{ center: 2, fwhm: 0.8, height: 5, bg: 0.5, eta: null, area: 4, status: "fitted", model: "Gaussian" }],
       bgCoeffs: [0.5], R2: 0.9, rmse: 0.1, nPeaks: 1, model: "Gaussian",
+      yUnit: "cps", // the fitted axes' units head the report's columns; x recorded none
     });
+  });
+
+  it("→ Report names the fitted axes' units so the table's columns can say them", async () => {
+    vi.mocked(reportEmit).mockResolvedValue({ report: { title: "t", sections: [] } } as never);
+    const xrd: Dataset = { ...DS, data: { ...DS.data, metadata: { x_column_name: "2-Theta", x_column_unit: "deg" } } };
+    const table = peakTableFromModelFit(modelFitResponse(), xrd, {
+      xKey: null, recipe: null, baseline: "none", bgAtCenter: [0.5, 0.5], fingerprint: peakDataFingerprint(xrd),
+    }, null);
+    show({ ...xrd, peakTable: table });
+    const grid = await screen.findByRole("table", { name: "fitted peaks" });
+    await waitFor(() => expect(within(grid).getAllByRole("cell")[1]).toHaveTextContent("2.01 ± 0.004"));
+    fireEvent.click(screen.getByRole("button", { name: "→ Report" }));
+    await waitFor(() => expect(useApp.getState().reports).toHaveLength(1));
+    expect(vi.mocked(reportEmit).mock.calls[0][0].result).toMatchObject({ xUnit: "deg", yUnit: "cps" });
   });
 });

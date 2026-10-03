@@ -17,7 +17,26 @@
 // calc/report_emit_peaks.py's `from_multipeak_fit` prints them as "±" columns
 // and goodness-of-fit rows.
 
+import { plottedYKey } from "../../../lib/fitselectionActions";
 import { ERR_COLUMNS, ERR_FIELDS, type MultiFitResult, type PeakTable, type PeakTableEntry } from "../../../lib/peakTable";
+import { xChannelIdentity } from "../../../lib/peakTableFit";
+import type { Dataset } from "../../../lib/types";
+
+/** The fitted axes' units, which head the report's value columns
+ *  (calc/report_emit_peaks.py `_unit_headers`): x from the unit the table
+ *  recorded for the channel the fit ran on, else the plotted x's; y from the
+ *  plotted channel. A blank unit is omitted. */
+export function peakReportUnits(
+  ds: Dataset,
+  table: PeakTable | null | undefined,
+  view: { xKey: number | null; yKeys: number[] | null; seriesOrder: number[] | null },
+): { xUnit?: string; yUnit?: string } {
+  const recorded = table?.provenance?.datasetId === ds.id ? table.provenance.xUnit : null;
+  const xUnit = (recorded ?? xChannelIdentity(ds.data, view.xKey).xUnit).trim();
+  const yKey = plottedYKey(ds, view.xKey, view.yKeys, view.seriesOrder);
+  const yUnit = (yKey == null ? "" : (ds.data.units[yKey] ?? "")).trim();
+  return { ...(xUnit ? { xUnit } : {}), ...(yUnit ? { yUnit } : {}) };
+}
 
 /** One peak as the report reads it. */
 function reportPeak(e: PeakTableEntry): Record<string, unknown> {

@@ -123,3 +123,12 @@ def test_emit_route_accepts_the_kind() -> None:
     assert report["title"] == "XRD peaks"
     bad = client.post("/api/report/emit", json={"kind": "peak_model_fit", "result": {}})
     assert bad.status_code == 422
+
+
+def test_peak_table_heads_its_columns_with_the_axis_units() -> None:
+    rep = from_peak_model_fit({**_fit(), "xUnit": "deg", "yUnit": "cps"})
+    peaks, _params = _tables(rep)
+    assert peaks["columns"][2:] == [
+        "Center (deg)", "± center", "FWHM (deg)", "± FWHM", "Height (cps)", "± height",
+        "Area (deg·cps)", "± area",
+    ]
