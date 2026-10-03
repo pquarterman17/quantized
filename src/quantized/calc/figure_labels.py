@@ -38,13 +38,19 @@ the matplotlib-free ``calc.render_lock``, so importing it here costs nothing.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from functools import lru_cache
-from typing import Any
+from typing import Any, Protocol
 
 from quantized.calc.render_lock import RenderLockTimeout, acquire_render_lock
 from quantized.heavy_import import heavy_imports
 
-__all__ = ["safe_mathtext_label", "series_display_name", "SUPPORTED_MATHTEXT_COMMANDS"]
+__all__ = [
+    "safe_mathtext_label",
+    "series_display_name",
+    "shared_axis_title",
+    "SUPPORTED_MATHTEXT_COMMANDS",
+]
 
 # A "$" not preceded by a backslash -- matplotlib's own math-region rule
 # (matplotlib.cbook.is_math_text counts these; an odd count means the string
@@ -204,3 +210,29 @@ def series_display_name(label: str, unit: str, legend: str | None = None) -> str
     if legend is not None:
         return legend
     return f"{label} ({unit})" if unit else label
+
+
+class _Labelled(Protocol):
+    @property
+    def label(self) -> str: ...
+    @property
+    def unit(self) -> str: ...
+
+
+def shared_axis_title(series: Sequence[_Labelled]) -> str:
+    """The auto title of a Y axis that carries several series.
+
+    "quantity (unit)" when every series shares both, "(unit)" when only the
+    unit is common, else blank (the legend names them). Reads the DATA's
+    label/unit, never a legend rename. The screen leg is
+    ``frontend/src/lib/sharedAxisTitle.ts``; both read the cases in
+    ``tests/fixtures/wire/shared_axis_title.json``.
+    """
+    if not series:
+        return ""
+    label, unit = series[0].label, series[0].unit or ""
+    if any((s.unit or "") != unit for s in series):
+        return ""
+    if all(s.label == label for s in series):
+        return f"{label} ({unit})" if unit else label
+    return f"({unit})" if unit else ""

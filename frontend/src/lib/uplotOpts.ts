@@ -19,6 +19,7 @@ import type { PlotPayload } from "./plotdata";
 import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst, type RichNode } from "./richtext";
+import { sharedAxisTitle } from "./sharedAxisTitle";
 import { logDecadeLabels, logMajorTickFilter } from "./logTicks";
 export { logMajorTickFilter };
 import { decimalsForIncrement, pow10 } from "./ticks";
@@ -839,13 +840,13 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const labels = payload.series.map((s, i) =>
     args.seriesLabels?.[i] ?? (s.unit ? `${s.label} (${s.unit})` : s.label),
   );
-  // Label each Y axis only when it carries a single series (else the legend names
-  // them); a non-blank override on the primary axis always wins and forces a label.
+  // A single series titles its Y axis with its legend name; several get what
+  // they share (`sharedAxisTitle`); a non-blank override always wins.
   const soloLabel = (which: number): string | undefined => {
     if (which === 0 && args.yAxisLabel?.trim()) return args.yAxisLabel.trim();
     if (which === 1 && args.y2AxisLabel?.trim()) return args.y2AxisLabel.trim();
     const idxs = payload.series.map((_, i) => i).filter((i) => (payload.series[i].axis ?? 0) === which);
-    return idxs.length === 1 ? labels[idxs[0]] : undefined;
+    return idxs.length === 1 ? labels[idxs[0]] : sharedAxisTitle(idxs.map((i) => payload.series[i]));
   };
   const hasY2 = payload.series.some((s) => (s.axis ?? 0) === 1);
 
