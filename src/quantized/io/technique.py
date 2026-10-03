@@ -22,6 +22,7 @@ test_repo_integrity).
 from __future__ import annotations
 
 import dataclasses
+import re
 from collections.abc import Callable
 
 from quantized.datastruct import DataStruct
@@ -170,4 +171,18 @@ def stamp_technique(ds: DataStruct, parser: Callable[..., DataStruct]) -> DataSt
     metadata = dict(ds.metadata)
     metadata["parser_name"] = parser_name
     metadata["technique"] = resolve_technique(parser_name, ds)
+    if metadata["technique"] == SPECTROSCOPY and _is_ir_wavenumber(ds):
+        metadata["x_reversed"] = True
     return dataclasses.replace(ds, metadata=metadata)
+
+
+_WAVENUMBER_RE = re.compile(r"wavenumber|cm(\^?-1|⁻¹)|1/cm")
+
+
+def _is_ir_wavenumber(ds: DataStruct) -> bool:
+    """An IR/FTIR spectrum on a wavenumber axis -- drawn high-to-low by
+    convention, so the frontend's view defaults to a reversed x
+    (``metadata['x_reversed']``). Raman shift shares the unit but reads
+    ascending."""
+    axis = f"{ds.metadata.get('x_column_name', '')} {ds.metadata.get('x_column_unit', '')}".lower()
+    return bool(_WAVENUMBER_RE.search(axis)) and "raman" not in axis

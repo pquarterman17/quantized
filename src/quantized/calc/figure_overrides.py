@@ -118,6 +118,12 @@ def apply_axis_shape_overrides(
                     continue
             setter(lo_f, hi_f)
 
+    # The screen's reversed x (IR wavenumber convention, frontend
+    # `PlotView.xReversed`). After the limits, which set ascending; a
+    # descending x_lim already inverted the axis and is left as it is.
+    if ov.get("x_reversed") and not ax.xaxis_inverted():
+        ax.invert_xaxis()
+
     if "grid" in ov:
         ax.grid(bool(ov["grid"]), which="both", alpha=st.grid_alpha or 0.3)
 
