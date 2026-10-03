@@ -119,6 +119,11 @@ CASES = [
         MAP_GOOD,
     ),
     ("/api/export/figure", lambda ds: {"dataset": ds, "y_keys": [1]}, GOOD_DATASET),
+    (
+        "/api/export/figure-batch",
+        lambda ds: {"figures": [{"dataset": ds, "y_keys": [1], "fmt": "svg"}]},
+        GOOD_DATASET,
+    ),
     ("/api/export/figure-hitmap", lambda ds: {"dataset": ds, "y_keys": [1]}, GOOD_DATASET),
     (
         "/api/export/figure-page",
