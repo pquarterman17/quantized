@@ -16,24 +16,12 @@
 
 import type { AxisScale, Dataset, Technique } from "./types";
 
-const TECHNIQUES = new Set<Technique>([
-  "magnetometry.mvsh",
-  "magnetometry.mvst",
-  "xrd.powder",
-  "xrd.rsm",
-  "reflectometry",
-  "sims",
-  "transport",
-  "spectroscopy",
-  "generic",
-]);
-
 /** Whether `v` is one of the closed technique-tag strings -- exported so
  *  `lib/techniqueViewMemory.ts`'s `.dwk` sanitizer can validate a persisted
  *  memory map's keys against the SAME vocabulary `techniqueOf` narrows to,
  *  never a second, drifting list. */
 export function isValidTechnique(v: string): v is Technique {
-  return TECHNIQUES.has(v as Technique);
+  return TECHNIQUES.has(v);
 }
 
 /** Narrow `ds.data.metadata.technique` (`unknown` off the wire) to the closed
@@ -43,7 +31,7 @@ export function isValidTechnique(v: string): v is Technique {
  *  stamp it) or a missing dataset. Never guesses beyond the wire value. */
 export function techniqueOf(ds: Dataset | undefined): Technique {
   const raw = ds?.data.metadata?.["technique"];
-  return typeof raw === "string" && TECHNIQUES.has(raw as Technique)
+  return typeof raw === "string" && TECHNIQUES.has(raw)
     ? (raw as Technique)
     : "generic";
 }
@@ -67,7 +55,8 @@ export interface TechniqueViewDefaults {
 const LOG_Y: TechniqueViewDefaults = Object.freeze({ yScale: "log" });
 const LINEAR_Y: TechniqueViewDefaults = Object.freeze({ yScale: "linear" });
 const LINEAR_XY: TechniqueViewDefaults = Object.freeze({ xScale: "linear", yScale: "linear" });
-const TECHNIQUE_VIEW_DEFAULTS: Partial<Record<Technique, TechniqueViewDefaults>> = {
+// Every technique has a row, so the table doubles as the closed vocabulary.
+const TECHNIQUE_VIEW_DEFAULTS: Record<Technique, TechniqueViewDefaults> = {
   "xrd.powder": LOG_Y,
   "xrd.rsm": LOG_Y,
   sims: LOG_Y,
@@ -78,12 +67,13 @@ const TECHNIQUE_VIEW_DEFAULTS: Partial<Record<Technique, TechniqueViewDefaults>>
   spectroscopy: LINEAR_Y,
   generic: LINEAR_XY,
 };
+const TECHNIQUES = new Set(Object.keys(TECHNIQUE_VIEW_DEFAULTS));
 
 /** The technique-driven view defaults for `ds` (an unmapped tag reads as
  *  generic). Pure table lookup; see the module doc for why "data,
  *  not switch statements" matters here. */
 export function techniqueViewDefaults(ds: Dataset | undefined): TechniqueViewDefaults {
-  return TECHNIQUE_VIEW_DEFAULTS[techniqueOf(ds)] ?? {};
+  return TECHNIQUE_VIEW_DEFAULTS[techniqueOf(ds)];
 }
 
 /** Whether `prevDs` -> `ds` is a genuine technique change. `datasetViewDefaults`

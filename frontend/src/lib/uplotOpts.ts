@@ -840,8 +840,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const labels = payload.series.map((s, i) =>
     args.seriesLabels?.[i] ?? (s.unit ? `${s.label} (${s.unit})` : s.label),
   );
-  // A single series titles its Y axis with its legend name; several get what
-  // they share (`sharedAxisTitle`); a non-blank override always wins.
+  // Y title: the override, else a solo series' legend name, else what several share.
   const soloLabel = (which: number): string | undefined => {
     if (which === 0 && args.yAxisLabel?.trim()) return args.yAxisLabel.trim();
     if (which === 1 && args.y2AxisLabel?.trim()) return args.y2AxisLabel.trim();
