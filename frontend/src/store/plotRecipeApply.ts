@@ -56,9 +56,7 @@
 // -- only `resolvedCandidates` (and, since the review round, the "recently
 // used" scope lookup in `applyResolvedRecipe` below) actually needs it.
 
-import { fixedLim } from "../lib/axisLim";
 import { spatialComposition } from "../lib/composition";
-import { errKeysFromBindings } from "../lib/errorRoles";
 import { createFigureDocument } from "../lib/figureDocument";
 import { mapViewFor } from "../lib/mapView";
 import type { PlotRecipe } from "../lib/plotRecipe";
@@ -66,13 +64,11 @@ import type {
   RecipePanelBinding,
   RecipeResolution,
   ResolvedRecipeApplication,
-  ResolvedRecipeMapping,
-  ResolvedRecipePanels,
-  ResolvedRecipeVisual,
   ResolveRecipeOptions,
 } from "../lib/plotRecipeMatch";
+import { resolvedRecipeView } from "../lib/plotRecipeView";
 import type { PendingPlotRecipeApplication } from "./pendingRecipeApplication";
-import { dedupeWindowTitle, defaultPlotView, snapshotView, type PlotView } from "../lib/plotview";
+import { dedupeWindowTitle, snapshotView, type PlotView } from "../lib/plotview";
 import { techniqueOf } from "../lib/techniqueDefaults";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
@@ -101,59 +97,11 @@ export function resolveOptionsFor(get: SliceGet, pending?: Pick<PendingPlotRecip
  *  travel separately into the document via `createFigureDocument`'s own
  *  `errors` input, same split `createFigureDocument` itself makes). */
 export function viewFromResolved(
-  mapping: ResolvedRecipeMapping,
-  visual: ResolvedRecipeVisual,
-  panels: ResolvedRecipePanels | null = null,
+  mapping: Parameters<typeof resolvedRecipeView>[0],
+  visual: Parameters<typeof resolvedRecipeView>[1],
+  panels: Parameters<typeof resolvedRecipeView>[3] = null,
 ): PlotView {
-  return {
-    ...defaultPlotView(),
-    // F4.4 SPATIAL: a rebuilt composition reads these two PlotView fields
-    // (and renders only under `stackMode`) -- `applyResolvedRecipe` installs
-    // the panels themselves after focus, since `composition` is ephemeral.
-    ...(panels ? { stackMode: true, panelFit: panels.panelFit, pageSetup: panels.pageSetup } : {}),
-    xKey: mapping.xKey,
-    yKeys: mapping.yKeys,
-    y2Keys: mapping.y2Keys,
-    groupKey: mapping.groupKey,
-    facetKey: mapping.facetKey,
-    errKeys: errKeysFromBindings(mapping.errors),
-    xScale: visual.xScale,
-    yScale: visual.yScale,
-    y2Scale: visual.y2Scale,
-    xLim: visual.xRange.mode === "fixed" ? visual.xRange.lim : null,
-    xStep: visual.xRange.mode === "fixed" ? (visual.xRange.step ?? null) : null,
-    yLim: visual.yRange.mode === "fixed" ? visual.yRange.lim : null,
-    yStep: visual.yRange.mode === "fixed" ? (visual.yRange.step ?? null) : null,
-    y2Lim: visual.y2Range.mode === "fixed" ? fixedLim(visual.y2Range.lim) : null, // y2 has no half-open
-    y2Step: visual.y2Range.mode === "fixed" ? (visual.y2Range.step ?? null) : null,
-    xFmt: visual.xFmt,
-    yFmt: visual.yFmt,
-    y2Fmt: visual.y2Fmt,
-    showLegend: visual.showLegend,
-    legendPos: visual.legendPos,
-    legendXY: visual.legendXY,
-    legendSize: visual.legendSize,
-    legendTitle: visual.legendTitle,
-    legendStatic: visual.legendStatic,
-    stackMode: visual.stackMode,
-    waterfall: visual.waterfall,
-    waterfallDx: visual.waterfallDx,
-    plotTemplate: visual.plotTemplate,
-    seriesStyles: visual.seriesStyles,
-    seriesLabels: visual.seriesLabels,
-    seriesOrder: visual.seriesOrder,
-    hiddenChannels: visual.hiddenChannels,
-    annotations: visual.decorations.annotations,
-    shapes: visual.decorations.shapes,
-    regionShades: visual.decorations.regionShades,
-    // FINDING 4 (code-review): every incoming refLine is RE-MINTED a fresh id
-    // from `store/plotViewSettings.ts`'s `nextRefLineId()` -- the same source
-    // `addRefLine` draws from -- rather than keeping whatever id the recipe
-    // captured. Ids are timestamped (store/idSeq.ts `nextPlotObjectId`), so a
-    // reminted line can never share an id with one already on the plot, which
-    // `removeRefLine`/`updateRefLine` (both keyed by id) rely on.
-    refLines: visual.refLines.map((r) => ({ ...r, id: nextRefLineId() })),
-  };
+  return resolvedRecipeView(mapping, visual, nextRefLineId, panels);
 }
 
 /** The apply gesture's entire body, shared by the clean-match path and both

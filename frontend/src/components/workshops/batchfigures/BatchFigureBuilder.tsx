@@ -1,0 +1,395 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import { downloadBatchFigures, MAX_BATCH_FIGURE_EXPORT } from "../../../lib/batchFigureExport";
+import { ghosterFor } from "../../../lib/excludedRowsExport";
+import {
+  BATCH_ALL_WORKBOOKS,
+  BATCH_LOOSE_WORKSHEETS,
+  batchFolderLabels,
+  filterBatchDatasets,
+  setShownBatchSelection,
+  validBatchWorkbookScope,
+} from "../../../lib/batchFigureSelection";
+import { runSequentialBatch, type BatchProgress } from "../../../lib/sequentialBatch";
+import { nextFigureId } from "../../../store/figureLifecycle";
+import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
+import { recordRecipeUse } from "../../../store/recordRecipeUse";
+import {
+  batchSeedDatasetIds,
+  buildBatchFigureArtifacts,
+  commitBatchFigureArtifacts,
+  preflightBatchFigure,
+  type BatchFigureRow,
+} from "../../../store/batchFigureBuild";
+import { toast } from "../../../store/toasts";
+import { useApp } from "../../../store/useApp";
+import { nextPageDocumentId } from "../../../store/pageDocuments";
+import ToolWindow from "../../overlays/ToolWindow";
+import { Button, Select } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
+import { FIGURE_STYLES } from "../figurebuilder/figureOutputConstants";
+import BatchCompatibilityReview from "./BatchCompatibilityReview";
+import {
+  batchRecipeChoices,
+  EXPORT_FORMATS,
+  SCOPE_LABEL,
+  type BatchFigurePhase,
+} from "./batchFigureBuilderOptions";
+export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDatasetIds: readonly string[]; onClose: () => void }) {
+  const datasets = useApp((state) => state.datasets);
+  const folders = useApp((state) => state.folders);
+  const workbooks = useApp((state) => state.workbooks);
+  const selectedIds = useApp((state) => state.selectedIds);
+  const activeId = useApp((state) => state.activeId);
+  const librarySelection = useApp((state) => state.librarySelection);
+  const projectRecipes = useApp((state) => state.plotRecipes);
+  const globalRecipes = useGlobalPlotRecipes((state) => state.recipes);
+  const hydrateGlobal = useGlobalPlotRecipes((state) => state.hydrate);
+
+  const initialIds = useMemo(() => {
+    const explicit = seedDatasetIds.filter((id) => datasets.some((dataset) => dataset.id === id));
+    return explicit.length > 0
+      ? explicit
+      : batchSeedDatasetIds({ datasets, folders, workbooks, selectedIds, activeId, librarySelection });
+    // Seeds are intentionally latched for this opening. Later Library clicks
+    // must not rewrite a half-reviewed batch under the user's hands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const choices = useMemo(() => batchRecipeChoices(projectRecipes, globalRecipes), [projectRecipes, globalRecipes]);
+  const [datasetIds, setDatasetIds] = useState<string[]>(initialIds);
+  const [datasetQuery, setDatasetQuery] = useState("");
+  const [workbookScope, setWorkbookScope] = useState(BATCH_ALL_WORKBOOKS);
+  const [recipeKey, setRecipeKey] = useState(choices[0]?.key ?? "");
+  const [rows, setRows] = useState<BatchFigureRow[]>([]);
+  const [includedIds, setIncludedIds] = useState<Set<string>>(new Set());
+  const [phase, setPhase] = useState<BatchFigurePhase>("idle");
+  const [progress, setProgress] = useState<BatchProgress | null>(null);
+  const [namePattern, setNamePattern] = useState("{dataset} — {recipe}");
+  const [createPage, setCreatePage] = useState(true);
+  const [pageName, setPageName] = useState("");
+  const [columns, setColumns] = useState<number | "auto">("auto");
+  const [downloadArchive, setDownloadArchive] = useState(false);
+  const [exportFormat, setExportFormat] = useState<(typeof EXPORT_FORMATS)[number]>("pdf");
+  const [exportStyle, setExportStyle] = useState("default");
+  const [exportDpi, setExportDpi] = useState(300);
+  const [archiveName, setArchiveName] = useState("");
+  const [result, setResult] = useState<{ figures: number; pages: string[]; pageOpened: boolean; downloaded: boolean } | null>(null);
+  const controller = useRef<AbortController | null>(null);
+
+  useEffect(() => hydrateGlobal(), [hydrateGlobal]);
+  useEffect(() => () => controller.current?.abort(), []);
+  useEffect(() => {
+    const valid = validBatchWorkbookScope(workbookScope, workbooks);
+    if (valid !== workbookScope) setWorkbookScope(valid);
+  }, [workbooks, workbookScope]);
+  useEffect(() => {
+    if (!choices.some((choice) => choice.key === recipeKey)) setRecipeKey(choices[0]?.key ?? "");
+  }, [choices, recipeKey]);
+
+  const recipeChoice = choices.find((choice) => choice.key === recipeKey) ?? null;
+  const selectedSet = useMemo(() => new Set(datasetIds), [datasetIds]);
+  const workbookById = useMemo(() => new Map(workbooks.map((workbook) => [workbook.id, workbook])), [workbooks]);
+  const folderLabels = useMemo(() => batchFolderLabels(folders), [folders]);
+  const workbookCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const dataset of datasets) {
+      if (dataset.workbookId) counts.set(dataset.workbookId, (counts.get(dataset.workbookId) ?? 0) + 1);
+    }
+    return counts;
+  }, [datasets]);
+  const visibleDatasets = useMemo(
+    () => filterBatchDatasets({ datasets, workbooks, folders, workbookScope, query: datasetQuery }),
+    [datasets, workbooks, folders, workbookScope, datasetQuery],
+  );
+  const busy = phase === "checking" || phase === "creating";
+  const visibleSelected = visibleDatasets.reduce((count, dataset) => count + Number(selectedSet.has(dataset.id)), 0);
+  const hiddenSelected = datasetIds.length - visibleSelected;
+
+  const invalidate = () => {
+    setRows([]);
+    setIncludedIds(new Set());
+    setResult(null);
+    setPhase("idle");
+  };
+
+  const toggleDataset = (id: string, on: boolean) => {
+    setDatasetIds((current) => on ? [...current, id] : current.filter((candidate) => candidate !== id));
+    invalidate();
+  };
+
+  const toggleIncluded = (id: string, on: boolean) => setIncludedIds((current) => {
+    const next = new Set(current);
+    if (on) next.add(id); else next.delete(id);
+    return next;
+  });
+
+  const checkCompatibility = async () => {
+    if (!recipeChoice || datasetIds.length === 0) return;
+    controller.current?.abort();
+    const abort = new AbortController();
+    controller.current = abort;
+    setPhase("checking");
+    setRows([]);
+    setIncludedIds(new Set());
+    setResult(null);
+    const targets = datasets.filter((dataset) => selectedSet.has(dataset.id));
+    const results = await runSequentialBatch(
+      targets.map((dataset) => ({ id: dataset.id, name: dataset.name })),
+      async (item) => {
+        // Yield between large imported worksheets so Stop is observable.
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+        const dataset = useApp.getState().datasets.find((candidate) => candidate.id === item.id);
+        if (!dataset) throw new Error("dataset was removed while checking");
+        return preflightBatchFigure(recipeChoice.recipe, dataset, { datasets: useApp.getState().datasets });
+      },
+      { signal: abort.signal, onProgress: setProgress },
+    );
+    if (abort.signal.aborted) {
+      setPhase("idle");
+      setProgress(null);
+      return;
+    }
+    const checked = results.map((entry): BatchFigureRow => {
+      if (entry.status === "created") return entry.value;
+      return {
+        datasetId: entry.item.id,
+        datasetName: entry.item.name,
+        status: "blocked",
+        summary: entry.status === "failed" ? entry.reason : "Check stopped before this dataset.",
+        unmatched: [],
+        warnings: [],
+        resolved: null,
+      };
+    });
+    setRows(checked);
+    setIncludedIds(new Set(checked.filter((row) => row.status === "ready").map((row) => row.datasetId)));
+    setPageName(`${recipeChoice.recipe.name} batch`);
+    setProgress(null);
+    setPhase("review");
+  };
+
+  const build = async () => {
+    if (!recipeChoice || includedIds.size === 0) return;
+    const latestState = useApp.getState();
+    const latestRows = rows.map((row): BatchFigureRow => {
+      const dataset = latestState.datasets.find((candidate) => candidate.id === row.datasetId);
+      return dataset
+        ? preflightBatchFigure(recipeChoice.recipe, dataset, { datasets: latestState.datasets })
+        : { ...row, status: "blocked", summary: "Dataset was removed after compatibility was checked.", resolved: null };
+    });
+    // The panel is non-modal: a worksheet can be edited while this review is
+    // open. Re-resolve immediately before commit and force another review if
+    // any mapping or recipe visual changed; stale channel indices must never
+    // be used merely because the dataset id still exists.
+    if (JSON.stringify(latestRows) !== JSON.stringify(rows)) {
+      setRows(latestRows);
+      setIncludedIds(new Set(latestRows.filter((row) => row.status === "ready").map((row) => row.datasetId)));
+      setPhase("review");
+      toast("Data or recipe settings changed. Review the refreshed compatibility results before creating figures; partial-figure opt-ins were cleared.", "danger");
+      return;
+    }
+    controller.current?.abort();
+    const abort = new AbortController();
+    controller.current = abort;
+    setPhase("creating");
+    setProgress({ done: 0, total: includedIds.size, current: null });
+    // Give the progress state a paint before constructing the documents.
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    if (abort.signal.aborted) return;
+    const state = latestState;
+    const artifacts = buildBatchFigureArtifacts({
+      recipe: recipeChoice.recipe,
+      rows,
+      includedDatasetIds: includedIds,
+      existingFigureNames: state.editableFigures.map((figure) => figure.name),
+      existingPageNames: state.pages.map((page) => page.name),
+      namePattern,
+      createPage,
+      pageName,
+      columns,
+      nextFigureId,
+      nextPageId: nextPageDocumentId,
+    });
+    if (abort.signal.aborted) return;
+    if (artifacts.figures.length === 0) {
+      setPhase("review");
+      setProgress(null);
+      toast("No figures were created. Select at least one compatible dataset.", "danger");
+      return;
+    }
+    if (downloadArchive) {
+      try {
+        // Export and commit intentionally share this one freshly revalidated
+        // artifact snapshot. Edits made while the render is running belong to
+        // a later batch; they cannot partly leak into this archive or commit.
+        await downloadBatchFigures(artifacts.figures, state.datasets, {
+          format: exportFormat,
+          style: exportStyle,
+          dpi: Math.max(50, Math.min(1200, exportDpi)),
+          archiveName: archiveName.trim() || `${recipeChoice.recipe.name} figures`,
+          autoSeriesStyles: state.autoSeriesStyles,
+          defaultTrace: state.defaultTrace,
+          defaultLineWidth: state.defaultLineWidth,
+          greyExcluded: ghosterFor(state.excludedDisplay),
+        }, abort.signal, (id) => useApp.getState().resolveDataset(id));
+      } catch (error) {
+        setProgress(null);
+        setPhase("review");
+        if (error instanceof Error && error.name === "AbortError") {
+          toast("Batch figure export cancelled.", "info");
+        } else {
+          toast(`Batch figure export failed: ${error instanceof Error ? error.message : String(error)}`, "danger");
+        }
+        return;
+      }
+    }
+    if (abort.signal.aborted) return;
+    const { pageOpened } = commitBatchFigureArtifacts(artifacts);
+    if (recipeChoice.scope !== "built-in") {
+      recordRecipeUse({ kind: "plot", scope: recipeChoice.scope, id: recipeChoice.recipe.id });
+    }
+    setProgress({ done: artifacts.figures.length, total: artifacts.figures.length, current: null });
+    setResult({ figures: artifacts.figures.length, pages: artifacts.pages.map((page) => page.name), pageOpened, downloaded: downloadArchive });
+    setPhase("done");
+  };
+
+  const stop = () => {
+    controller.current?.abort();
+    setProgress(null);
+    setPhase(rows.length > 0 ? "review" : "idle");
+  };
+
+  return (
+    <ToolWindow id="batch-figure-builder" title="Batch Figure Builder" width={780} x={180} y={80} onClose={onClose}>
+      <div className="qzk-ds-meta">
+        Repeat one Plot Recipe across several datasets. Quantized checks every mapping first; incompatible datasets are never silently dropped.
+      </div>
+
+      <label className="qzk-field">
+        <span className="qzk-field-lbl">Plot Recipe</span>
+        <Select
+          aria-label="Plot Recipe"
+          value={recipeKey}
+          disabled={busy || choices.length === 0}
+          onChange={(event) => { setRecipeKey(event.target.value); invalidate(); }}
+          options={choices.map((choice) => ({
+            value: choice.key,
+            label: `${choice.recipe.name} — ${SCOPE_LABEL[choice.scope]}`,
+          }))}
+        />
+      </label>
+      {choices.length === 0 && <div style={{ color: "var(--danger)" }}>No Plot Recipes are available. Save one from a plot first.</div>}
+
+      <div className="qzk-win-section">Datasets</div>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(180px, 0.7fr)", gap: 8 }}>
+        <input
+          className="qz-input"
+          aria-label="Search batch datasets"
+          placeholder="Search worksheet, workbook, folder, tag, or column…"
+          value={datasetQuery}
+          disabled={busy}
+          onChange={(event) => setDatasetQuery(event.target.value)}
+        />
+        <Select
+          aria-label="Limit batch datasets to workbook"
+          value={workbookScope}
+          disabled={busy}
+          onChange={(event) => setWorkbookScope(event.target.value)}
+          options={[
+            { value: BATCH_ALL_WORKBOOKS, label: "All workbooks" },
+            ...workbooks.map((workbook) => ({
+              value: workbook.id,
+              label: `${workbook.name} (${workbookCounts.get(workbook.id) ?? 0})`,
+            })),
+            ...(datasets.some((dataset) => !dataset.workbookId) ? [{ value: BATCH_LOOSE_WORKSHEETS, label: "Loose worksheets" }] : []),
+          ]}
+        />
+      </div>
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <Button size="sm" disabled={busy || visibleDatasets.length === 0} onClick={() => { setDatasetIds((current) => setShownBatchSelection(current, visibleDatasets, true)); invalidate(); }}>Select shown</Button>
+        <Button size="sm" disabled={busy || !visibleDatasets.some((dataset) => selectedSet.has(dataset.id))} onClick={() => { setDatasetIds((current) => setShownBatchSelection(current, visibleDatasets, false)); invalidate(); }}>Clear shown</Button>
+        <span className="qzk-ds-meta">{visibleDatasets.length} shown · {datasetIds.length} of {datasets.length} selected{hiddenSelected > 0 ? ` · ${hiddenSelected} hidden by filter` : ""}</span>
+      </div>
+      <div role="group" aria-label="Datasets to build" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 4, maxHeight: 170, overflowY: "auto", padding: 6, border: "1px solid var(--border-soft)", borderRadius: 6 }}>
+        {visibleDatasets.map((dataset) => {
+          const workbook = dataset.workbookId ? workbookById.get(dataset.workbookId) : undefined;
+          const folderId = workbook?.folderId ?? dataset.folderId ?? null;
+          const folder = folderId === null ? undefined : folderLabels.get(folderId);
+          return (
+          <Checkbox key={dataset.id} checked={selectedSet.has(dataset.id)} disabled={busy} onChange={(on) => toggleDataset(dataset.id, on)}>
+            <span title={dataset.name} style={{ display: "inline-block", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}>{dataset.name}</span>
+            <span className="qzk-ds-meta"> · {dataset.workbookId ? workbook?.name ?? "Workbook" : "Loose"}{folder ? ` · ${folder}` : ""}</span>
+          </Checkbox>
+          );
+        })}
+        {datasets.length === 0 ? <span className="qzk-ds-meta">Load datasets before building figures.</span> : visibleDatasets.length === 0 && <span className="qzk-ds-meta">No datasets match this workbook and search.</span>}
+      </div>
+
+      {phase === "idle" && (
+        <Button variant="primary" disabled={!recipeChoice || datasetIds.length === 0} onClick={() => void checkCompatibility()}>
+          Check compatibility
+        </Button>
+      )}
+      {busy && progress && (
+        <div aria-live="polite" className="qzk-ds-meta">
+          {phase === "checking" ? "Checking" : "Creating"} {progress.done}/{progress.total}{progress.current ? ` — ${progress.current}` : ""}
+          <progress aria-label="Batch Figure Builder progress" value={progress.done} max={Math.max(progress.total, 1)} style={{ width: "100%" }} />
+          <Button size="sm" onClick={stop}>Stop</Button>
+        </div>
+      )}
+
+      {(phase === "review" || phase === "creating" || phase === "done") && rows.length > 0 && (
+        <BatchCompatibilityReview
+          rows={rows}
+          includedIds={includedIds}
+          busy={busy}
+          done={phase === "done"}
+          onToggle={toggleIncluded}
+        />
+      )}
+
+      {(phase === "review" || phase === "creating") && (
+        <>
+          <div className="qzk-win-section">Output</div>
+          <label className="qzk-field">
+            <span className="qzk-field-lbl">Figure names</span>
+            <input className="qz-input" value={namePattern} disabled={busy} onChange={(event) => setNamePattern(event.target.value)} aria-label="Figure name pattern" />
+            <span className="qzk-ds-meta">Use {"{dataset}"} and {"{recipe}"}. Existing names are numbered, never overwritten.</span>
+          </label>
+          <Checkbox checked={createPage} disabled={busy} onChange={setCreatePage}>Also create an editable multi-panel Figure Page</Checkbox>
+          {createPage && (
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 160px", gap: 8 }}>
+              <label className="qzk-field"><span className="qzk-field-lbl">Page name</span><input className="qz-input" value={pageName} disabled={busy} onChange={(event) => setPageName(event.target.value)} /></label>
+              <label className="qzk-field"><span className="qzk-field-lbl">Columns</span><Select value={String(columns)} disabled={busy} onChange={(event) => setColumns(event.target.value === "auto" ? "auto" : Number(event.target.value))} options={[{ value: "auto", label: "Automatic" }, ...[1, 2, 3, 4].map((value) => ({ value: String(value), label: String(value) }))]} /></label>
+            </div>
+          )}
+          <Checkbox checked={downloadArchive} disabled={busy} onChange={setDownloadArchive}>
+            Also download one ZIP of publication figures
+          </Checkbox>
+          {downloadArchive && (
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) repeat(3, 120px)", gap: 8 }}>
+              <label className="qzk-field"><span className="qzk-field-lbl">Archive name</span><input className="qz-input" value={archiveName} placeholder={`${recipeChoice?.recipe.name ?? "Batch"} figures`} disabled={busy} onChange={(event) => setArchiveName(event.target.value)} /></label>
+              <label className="qzk-field"><span className="qzk-field-lbl">Format</span><Select value={exportFormat} disabled={busy} onChange={(event) => setExportFormat(event.target.value as (typeof EXPORT_FORMATS)[number])} options={EXPORT_FORMATS.map((value) => ({ value, label: value.toUpperCase() }))} /></label>
+              <label className="qzk-field"><span className="qzk-field-lbl">Style</span><Select value={exportStyle} disabled={busy} onChange={(event) => setExportStyle(event.target.value)} options={FIGURE_STYLES.map((value) => ({ value, label: value }))} /></label>
+              <label className="qzk-field"><span className="qzk-field-lbl">DPI</span><input className="qz-input" type="number" min={50} max={1200} value={exportDpi} disabled={busy || exportFormat === "pdf" || exportFormat === "svg"} onChange={(event) => setExportDpi(Number(event.target.value) || 300)} /></label>
+            </div>
+          )}
+          {downloadArchive && includedIds.size > MAX_BATCH_FIGURE_EXPORT && (
+            <div style={{ color: "var(--danger)" }}>A ZIP archive supports at most {MAX_BATCH_FIGURE_EXPORT} figures. Uncheck some datasets or turn off ZIP export.</div>
+          )}
+          <div style={{ display: "flex", gap: 6 }}>
+            <Button onClick={() => void checkCompatibility()} disabled={busy}>Check again</Button>
+            <Button variant="primary" onClick={() => void build()} disabled={busy || includedIds.size === 0 || (downloadArchive && includedIds.size > MAX_BATCH_FIGURE_EXPORT)}>Create {includedIds.size} figure{includedIds.size === 1 ? "" : "s"}</Button>
+          </div>
+        </>
+      )}
+
+      {phase === "done" && result && (
+        <div role="status" style={{ border: "1px solid var(--ok)", borderRadius: 6, padding: 10 }}>
+          Created {result.figures} editable figure{result.figures === 1 ? "" : "s"}{result.pages.length === 1 ? result.pageOpened ? ` and opened Figure Page “${result.pages[0]}”.` : ` and saved Figure Page “${result.pages[0]}” in the Library. Your already-open page was left unchanged.` : result.pages.length > 1 ? result.pageOpened ? ` and ${result.pages.length} Figure Pages. The first page is open; the rest are saved in the Library.` : ` and ${result.pages.length} Figure Pages in the Library. Your already-open page was left unchanged.` : "."}{result.downloaded ? " The publication-file ZIP was downloaded." : ""}
+          <div style={{ marginTop: 8 }}><Button variant="primary" onClick={onClose}>Done</Button></div>
+        </div>
+      )}
+    </ToolWindow>
+  );
+}

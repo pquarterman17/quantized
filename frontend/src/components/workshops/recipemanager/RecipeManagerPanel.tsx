@@ -47,6 +47,9 @@ import { Button, Select } from "../../primitives";
 import { RecipeThumbnail } from "./RecipeThumbnail";
 import { RecipeTransformPicker } from "./RecipeTransformPicker";
 import { useSavedTransforms } from "./useSavedTransforms";
+import BatchFigureBuilder from "../batchfigures/BatchFigureBuilder";
+import BatchFigureLauncher from "../batchfigures/BatchFigureLauncher";
+import { takeBatchFigureRequest } from "../../../store/batchFigureRequest";
 import {
   applyRecipeWithChoices,
   combinedRecipeRows,
@@ -92,6 +95,7 @@ export default function RecipeManagerPanel() {
   // (`useSavedTransforms`): the Pipeline workshop saves into it while this
   // window is open.
   const [styleTemplate, setStyleTemplate] = useState("");
+  const [batchSeed, setBatchSeed] = useState<string[] | null>(() => takeBatchFigureRequest());
   const [transformPick, setTransformPick] = useState<Record<string, string>>({});
   const transforms = useSavedTransforms();
   // Finding 3, belt-and-braces: keyed by `${scope}:${id}` (rowKey), not id
@@ -212,6 +216,10 @@ export default function RecipeManagerPanel() {
       });
   };
 
+  if (batchSeed) {
+    return <BatchFigureBuilder seedDatasetIds={batchSeed} onClose={() => setBatchSeed(null)} />;
+  }
+
   return (
     <ToolWindow id="recipe-manager" title="Plot Recipe Manager" width={600} onClose={close}>
       <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
@@ -226,6 +234,7 @@ export default function RecipeManagerPanel() {
           onChange={(e) => setDatasetId(e.target.value)}
         />
         <span style={{ flex: 1 }} />
+        <BatchFigureLauncher onOpen={setBatchSeed} />
         <Button size="sm" onClick={() => projectImportRef.current?.click()}>
           Import to Project…
         </Button>

@@ -3814,7 +3814,10 @@ describe("file URLs are converted with fileURLToPath, never .pathname (#269)", (
 // legitimate under the ratchet's own rule (a capture-phase `pointerdown`
 // listener, not a render body — see the file's own comment at the call
 // site).
-const GETSTATE_IN_RENDER_FILE_COUNT_PIN = 81;
+// Batch Figure Builder adds two legitimate event-handler reads
+// (BatchFigureBuilder + its launcher). Keep them visible here instead of
+// hiding them behind an alias: 81 -> 83, exactly those two measured files.
+const GETSTATE_IN_RENDER_FILE_COUNT_PIN = 83;
 
 describe("getState()-in-render ratchet (repo evaluation 2026-09-03)", () => {
   it("no more files under components/ + App*.tsx call useApp.getState() than the 2026-09-03 baseline", () => {

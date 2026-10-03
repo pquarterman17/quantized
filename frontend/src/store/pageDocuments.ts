@@ -13,7 +13,7 @@ import type { AppState } from "./useApp";
 import { byteSize } from "./trash";
 
 let pageSequence = 0;
-const nextPageId = (): string => `page-${Date.now().toString(36)}-${++pageSequence}`;
+export const nextPageDocumentId = (): string => `page-${Date.now().toString(36)}-${++pageSequence}`;
 
 export interface PageDocumentSlice {
   pages: PageDocument[];
@@ -70,7 +70,7 @@ export function createPageDocumentsSlice(set: SliceSet, get: SliceGet): PageDocu
       const trimmed = name.trim();
       if (!trimmed) return null;
       const now = new Date().toISOString();
-      const saved: PageDocument = { ...document, id: nextPageId(), name: trimmed, createdAt: now, modifiedAt: now };
+      const saved: PageDocument = { ...document, id: nextPageDocumentId(), name: trimmed, createdAt: now, modifiedAt: now };
       get().recordHistory("save figure page as");
       set((state) => ({
         pages: [...state.pages, saved],
@@ -94,7 +94,7 @@ export function createPageDocumentsSlice(set: SliceSet, get: SliceGet): PageDocu
       const now = new Date().toISOString();
       const copy: PageDocument = {
         ...structuredClone(source),
-        id: nextPageId(),
+        id: nextPageDocumentId(),
         name: `${source.name} copy`,
         createdAt: now,
         modifiedAt: now,

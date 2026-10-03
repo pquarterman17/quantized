@@ -22,6 +22,8 @@ import { RecipeRow, rowKey } from "./RecipeRow";
 import { importAnyRecipe, type ActionResult } from "./recipeActions";
 import { Checkbox } from "../../primitives/Checkbox";
 import { Button, Select } from "../../primitives";
+import BatchFigureLauncher from "../batchfigures/BatchFigureLauncher";
+import { queueBatchFigureRequest } from "../../../store/batchFigureRequest";
 type KindFilter = "all" | RecipeKind;
 /** Success, refusal, and the third state — needs-confirmation — are separated
  *  by more than colour: the text itself is prefixed ("Not done — …"), because
@@ -190,6 +192,7 @@ export default function RecipeLibraryPanel() {
         </Checkbox>
         <span className="qz-recipe-library-count">{rows.length} of {collection.recipes.length}</span>
         <Button size="sm" disabled={busy} onClick={() => importInputRef.current?.click()}>Import recipe…</Button>
+        <BatchFigureLauncher onOpen={(ids) => { queueBatchFigureRequest(ids); openPlotManager(); }} />
         <Button size="sm" onClick={() => openPlotManager()}>Manage Plot Recipes…</Button>
         <input
           ref={importInputRef}
