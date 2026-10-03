@@ -31,10 +31,12 @@
 //      format only gains a shape it could never previously hold.
 //   3. OLD DOCUMENTS ARE UNTOUCHED. A pre-fix `.dwk` has no sentinels, so
 //      `decodeDataStruct` returns it by reference and it parses exactly as
-//      before. A pre-fix `null` cell stays a REJECTION (see the decision note
-//      in `lib/workspaceDatasetParse.ts`): `null` is ambiguous — it could
-//      have been NaN, +Infinity or -Infinity, and it is also what genuinely
-//      corrupt input looks like — so this module never guesses at one.
+//      before. A pre-fix `null` cell is not a sentinel, and this module's
+//      checks still refuse it. RULING 2026-10-03 (owner decision, reversing
+//      the original "stays a rejection"): the .dwk reader reads a legacy null
+//      CELL as missing (NaN) with one migration warning before these checks
+//      run (`lib/legacyNullCells.ts`, lazy-only). Refusal stays for
+//      structural corruption: other strings, null rows, non-arrays, truncation.
 //   4. AN OLD BUILD FAILS LOUDLY, NOT SILENTLY. A build without this module
 //      reading a `.dwk` WITH sentinels runs the old `typeof x === "number"`
 //      check, which a string fails, and reports `dataset N ("name") has an
@@ -81,8 +83,8 @@ export function encodePersistedCells(this: unknown, key: string, value: unknown)
   const owner = this as Record<string, unknown>;
   const row = (cells: (number | null)[]) => cells.map((cell) => cell === null ? null : encodeCell(cell));
   // A DataStruct cell that is `null` came off the import wire, which sends
-  // every non-finite value as null; in memory it means "missing", and the
-  // reader refuses a null cell, so it is written as the NaN sentinel.
+  // every non-finite value as null; in memory it means "missing", so it is
+  // written as the NaN sentinel (a null is only ever read back as legacy).
   const cells = (c: (number | null)[]) => (owner.metadata ? c.map(encodeDataCell) : row(c));
   if ((key === "time" || key === "z") && (owner.metadata || owner.colormap)) return cells(value);
   if ((key === "values" && owner.metadata) || (key === "data" && owner.series)) {
@@ -119,11 +121,10 @@ export function isWireCellArray(v: unknown): v is WireCell[] {
  *  `time`/`values` rows independently of its `labels`/`units`/`metadata` and
  *  needs to know per-row whether THAT row decoded cleanly). Bails out the
  *  MOMENT a cell fails to decode, returning `v` itself UNCHANGED (`ok:
- *  false`, `changed: false`) — never a partially-decoded array — since a
- *  cell this contract cannot interpret (a `null`, or any other string) is
- *  the same ambiguous case this module's header says it never guesses at;
- *  decoding only the cells before the bad one would silently commit to a
- *  guess about the rest. `value` is `v` itself when nothing needed
+ *  false`, `changed: false`) — never a partially-decoded array — since
+ *  decoding only the cells before a bad one would silently commit to a guess
+ *  about the rest. (A legacy `null` is read as NaN one layer up, by
+ *  `lib/legacyNullCells.ts`'s `decodeLegacyWireRow`.) `value` is `v` itself when nothing needed
  *  decoding, so an already-clean row round-trips with no new allocation. */
 export function decodeWireRow(v: unknown): { value: unknown; changed: boolean; ok: boolean } {
   if (!Array.isArray(v)) return { value: v, changed: false, ok: false };

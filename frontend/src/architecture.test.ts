@@ -3487,6 +3487,8 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // client and recipe operations call.
     "/store/plotRecipeConfirm.ts",
     "/lib/uniqueName.ts",
+    // 2026-10-03: the legacy-null-cell read (.dwk and report-spec decode only).
+    "/lib/legacyNullCells.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

@@ -8,7 +8,8 @@
 // the WHOLE workspace unopenable. The NaN is not exotic: `store/cellEdit.ts`'s
 // `insertRows` mints `Number.NaN` in every cell of a blank inserted row, which
 // is why the first test here reaches it through that action rather than by
-// writing a NaN into a fixture by hand.
+// writing a NaN into a fixture by hand. (A pre-fix file's `null` cell opens
+// as missing since the 2026-10-03 ruling — workspaceLegacyNullCells.test.ts.)
 
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -286,10 +287,10 @@ describe("compatibility in both directions", () => {
     ]);
   });
 
-  it("still REFUSES a pre-fix null cell rather than guessing which value it was", () => {
-    // Deliberate (see parseWorkspaceDataset's doc): `null` meant NaN, +Infinity
-    // OR -Infinity in a pre-fix save and is also what corrupt input looks like,
-    // so it stays a hard rejection instead of being silently read as NaN.
+  it("reads a pre-fix null cell as a missing value, with a warning (2026-10-03 ruling)", () => {
+    // `null` meant NaN, +Infinity OR -Infinity in a pre-fix save; the identity
+    // is unrecoverable, so it opens as missing and the user is told
+    // (lib/legacyNullCells.ts; full suite in workspaceLegacyNullCells.test.ts).
     const lossy = JSON.stringify({
       format: "quantized-workspace",
       version: 1,
@@ -302,9 +303,11 @@ describe("compatibility in both directions", () => {
       ],
     });
 
-    expect(() => parseWorkspace(lossy)).toThrow(
-      'dataset 0 ("scan.dat") has an invalid data structure',
-    );
+    const loaded = parseWorkspace(lossy);
+    expect(loaded.datasets[0].data.values[0][1]).toBeNaN();
+    expect(loaded.migrationWarnings).toEqual([
+      '1 cell saved as blank by an older version was read as a missing value in "scan.dat".',
+    ]);
   });
 
   it("makes an OLD build refuse a sentinel-bearing .dwk loudly instead of corrupting it", () => {

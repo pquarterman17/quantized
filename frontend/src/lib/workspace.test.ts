@@ -770,7 +770,9 @@ describe("workspace report persistence (#36)", () => {
     const blocks = loaded.reports[0].report.sections[0].blocks;
     expect(blocks).toHaveLength(3);
     expect(blocks[0]).toEqual({ type: "figure", name: "scan", caption: "Fig. 1" });
-    expect(blocks[1]).toEqual(specBlock);
+    // The raw `null` cell written straight into this doc is a legacy null, read
+    // as NaN (2026-10-03 ruling); the export request JSON is unchanged.
+    expect(JSON.stringify(blocks[1])).toBe(JSON.stringify(specBlock));
     expect(blocks[2]).not.toHaveProperty("spec");
     expect(loaded.migrationWarnings.filter((w) => /render spec/.test(w))).toEqual([
       'report "Figs": figure "scan" had an unreadable render spec and is now a reference only',

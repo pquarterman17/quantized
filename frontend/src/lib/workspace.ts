@@ -40,6 +40,7 @@ import { sanitizeToolWindowLayout, type ToolWindowLayout } from "./toolwindow";
 import { applyWorkbookMigration, sanitizeWorkbooks, type WorkbookNode } from "./workbooks";
 import { parseOriginFidelity, parseOriginFigures, stringsIn } from "./workspaceOrigin";
 import { parseWorkspaceDataset } from "./workspaceDatasetParse";
+import { legacyNullWarning, type LegacyNullTally } from "./legacyNullCells";
 import { splitProjectFitModels } from "./fitModelsProject";
 import type { CustomFitModel } from "./fitmodels";
 import type { AnalysisTemplate } from "./template";
@@ -330,7 +331,8 @@ export function parseWorkspace(
   // Per-entry parse/validate lives in lib/workspaceDatasetParse.ts (moved out
   // under the MODULE_PINS ratchet — see that file's header); it throws the
   // same per-index errors this inline callback used to.
-  const datasetsRaw = o.datasets.map((d, i) => parseWorkspaceDataset(d, i, opts?.projectDir));
+  const legacyNulls: LegacyNullTally = { cells: 0, names: [] }; // 2026-10-03 ruling, lib/legacyNullCells.ts
+  const datasetsRaw = o.datasets.map((d, i) => parseWorkspaceDataset(d, i, opts?.projectDir, legacyNulls));
 
   // Folder tree (absent in v1 → empty). Prune datasets pointing at a folder that
   // didn't survive validation; clamp active/selection/expansion to live ids.
@@ -361,7 +363,9 @@ export function parseWorkspace(
   const originFigures = parseOriginFigures(o.originFigures, dsIds);
   const originFidelity = parseOriginFidelity(o.originFidelity, dsIds);
   const smartFolders = sanitizeSmartFolders(o.smartFolders);
-  const reports = sanitizeReports(o.reports, dsIds, migrationWarnings);
+  const reports = sanitizeReports(o.reports, dsIds, migrationWarnings, legacyNulls);
+  const nullWarning = legacyNullWarning(legacyNulls);
+  if (nullWarning) migrationWarnings.unshift(nullWarning); // first: the status line shows only [0]
   const macroSteps = sanitizeSteps(o.pipeline);
   const recalcMode: RecalcMode =
     o.recalcMode === "manual" || o.recalcMode === "off" ? o.recalcMode : "auto";
