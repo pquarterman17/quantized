@@ -19,9 +19,7 @@ export interface DataStruct {
   cat_levels?: Record<number, string[]>; // P1.4: channel idx -> ordered level strings; values carry float codes 0..n-1 (lib/categorical.ts)
   /** JMP_GAP J1 (Group O-2): channel idx -> the level CODES in the user's
    *  chosen DISPLAY order. Purely presentational — read only through
-   *  `lib/categorical.ts`'s `categoryLevels`.
-   *
-   *  WHY A SEPARATE FIELD RATHER THAN REORDERING `cat_levels`: a level's CODE
+   *  `lib/categorical.ts`'s `categoryLevels`. WHY A SEPARATE FIELD RATHER THAN REORDERING `cat_levels`: a level's CODE
    *  is its identity. Reordering `cat_levels` would renumber the codes, and
    *  codes are referenced from places nothing can rewrite — most sharply, a
    *  computed column's formula text, where a literal like `A==1` binds to the
@@ -38,9 +36,7 @@ export interface DataStruct {
    *  reference `POST /api/parsers/books/data` needs (with a book's `id`) to
    *  fetch that book's full data on its first activation in the UI. */
   book_source?: BookSourceRef;
-  /** Multi-sheet Excel workbooks only: every OTHER data sheet, in full (each
-   *  carries `metadata.sheet_name`; io/excel_sheets.py). Import envelope only. */
-  sheets?: DataStruct[];
+  sheets?: DataStruct[]; // multi-sheet Excel import envelope: the OTHER sheets (io/excel_sheets.py)
   /** Origin `.opj` projects only: every graph window as a plot-state snapshot
    *  (`figures.extract_figures`, plan items 12/13/18). `.opju` figures are not
    *  extracted yet (item 14). */

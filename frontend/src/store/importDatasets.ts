@@ -274,9 +274,9 @@ function addFromPayload(
     // the MORE common file) took this branch and used ONLY the label guess —
     // the same harm E1 fixed for the multi-book branch above. Prefer Origin's
     // designations here too; a genuinely non-Origin file (`null`) is unchanged.
-    const inputs: Dataset[] = sheets.map((sheet) => ({
-      id: nextDatasetId(), name: sheetDatasetName(origin.name, sheet, sheets.length), data: sheet, ...src,
-      ...seedErrorRoles(sheet),
+    const inputs: Dataset[] = sheets.map((sheetData) => ({
+      ...seedErrorRoles(sheetData), ...src,
+      id: nextDatasetId(), name: sheetDatasetName(origin.name, sheetData, sheets.length), ["data"]: sheetData,
       importedAt,
       ...(targetFolderId ? { folderId: targetFolderId } : {}),
     }));
