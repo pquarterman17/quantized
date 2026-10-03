@@ -11,7 +11,7 @@ import { useEscapeSurface } from "../../lib/escapeStack";
 import { lazyRegion } from "../../lib/lazyRegion";
 import { useApp } from "../../store/useApp";
 
-function PendingWorkspace({ className, label, onClose }: { className: string; label: string; onClose: () => void }) {
+export function PendingWorkspace({ className, label, onClose }: { className: string; label: string; onClose: () => void }) {
   useEscapeSurface("workspace", () => {
     onClose();
     return true;

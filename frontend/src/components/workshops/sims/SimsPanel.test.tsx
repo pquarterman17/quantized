@@ -54,7 +54,7 @@ beforeEach(() => {
     macroRecording: true,
     macroSteps: [],
   });
-  useSimsDialog.setState({ seed: "s1" });
+  useSimsDialog.setState({ seed: "s1", requestedTab: "process" });
 });
 
 const createButton = () => screen.getByRole("button", { name: /^Create/ });
@@ -64,6 +64,17 @@ describe("SimsPanel", () => {
     useSimsDialog.setState({ seed: null });
     buildAnalysisCommands(useApp.getState).find((a) => a.id === "sims")!.run();
     expect(useSimsDialog.getState().seed).toBe("s1");
+  });
+
+  it("honors a requested deep-link tab and keeps existing callers defaulted to Process", () => {
+    useSimsDialog.getState().open("s1", "compare");
+    const { unmount } = render(<SimsPanel />);
+    expect(screen.getByRole("radio", { name: "Compare" })).toBeChecked();
+    unmount();
+
+    useSimsDialog.getState().open("s1");
+    render(<SimsPanel />);
+    expect(screen.getByRole("radio", { name: "Process" })).toBeChecked();
   });
 
   it("previews the calibrated profile BEFORE creating; Create adds a recorded, undoable dataset", async () => {
