@@ -308,6 +308,25 @@ test("a tool window wider than the window is capped to it", async ({ page }) => 
   expect(r.left >= 0 && r.right <= 800, `window spans ${r.left}..${r.right}`).toBe(true);
 });
 
+// Round-4 chrome audit: the File, Plot and Analyze menus are 720-780px tall,
+// so in a 700px-high window their last items sat below the window edge.
+test("a menubar menu taller than the window scrolls instead of running off it", async ({ page }) => {
+  await loadPlot(page);
+  await page.setViewportSize({ width: 1000, height: 700 });
+  for (const name of ["File", "Plot", "Analyze"]) {
+    await page.locator(".qzk-menubar .qzk-menu-wrap > :first-child", { hasText: name }).first().click();
+    const pop = page.locator(".qzk-menu-wrap > .qzk-menu-pop");
+    await expect(pop).toBeVisible();
+    expect((await rectOf(pop)).bottom, `${name} menu bottom`).toBeLessThanOrEqual(700);
+    const last = pop.locator(".qzk-menu-item").last();
+    await last.scrollIntoViewIfNeeded();
+    const r = await rectOf(last);
+    expect(r.top >= 0 && r.bottom <= 700, `${name}'s last item unreachable`).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(pop).toBeHidden();
+  }
+});
+
 type QzHarness = { __qz: { useApp: { setState: (s: object) => void } } };
 
 // Round-4 chrome audit: the import toast sat bottom-centre of the WINDOW,

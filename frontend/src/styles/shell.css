@@ -66,6 +66,8 @@ body {
 
 /* ── menubar dropdowns ── */
 .qzk-menu-wrap { position: relative; }
+/* The File, Plot and Analyze menus are 720-780px tall: in a shorter window they scroll (no flyouts to clip). */
+.qzk-menu-wrap > .qzk-menu-pop { max-height: calc(100vh - 68px); overflow-y: auto; overscroll-behavior: contain; }
 .qzk-menu-pop { position: absolute; top: 100%; left: 0; min-width: 200px; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 4px; z-index: 40; display: flex; flex-direction: column; }
 .qzk-menu-item { display: flex; justify-content: space-between; gap: 16px; align-items: center; width: 100%; text-align: left; padding: 5px 9px; border: 0; background: transparent; border-radius: var(--radius-sm); white-space: nowrap; cursor: default; font-size: var(--font-size-sm); color: var(--text-dim); text-decoration: none; }
 .qzk-menu-item:hover { background: var(--accent-soft); color: var(--accent-text); }
