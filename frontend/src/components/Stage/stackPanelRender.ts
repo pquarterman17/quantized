@@ -65,6 +65,37 @@ const TICK_BAND = 8;
  *  full x-axis band (tick labels + title) minus the others' `TICK_BAND`. */
 const bottomExtra = new WeakMap<readonly uPlot[], number>();
 
+/** Each stack's shared y-gutter width by axis side (3 left, 1 right). */
+const gutters = new WeakMap<readonly uPlot[], Map<number, number>>();
+
+/** `opts`' y axes sized at least `shared`'s width for their side: a stack shares
+ *  one x axis, so every panel's plot area must start at the same x. */
+function sharedGutters(opts: uPlot.Options, shared: Map<number, number>): void {
+  opts.axes = opts.axes?.map((ax, k) => {
+    if (k === 0) return ax;
+    const own = ax.size ?? 50;
+    const side = ax.side ?? 3;
+    return {
+      ...ax,
+      size: (u, values, i, cycle) => Math.max(typeof own === "function" ? own(u, values, i, cycle) : own, shared.get(side) ?? 0),
+    };
+  });
+}
+
+/** The y axes uPlot laid out, with the gutter width it gave each. */
+const yGutters = (u: uPlot) =>
+  (u.axes ?? []).slice(1).flatMap((ax) => (ax.show === false ? [] : [{ side: ax.side ?? 3, size: (ax as { _size?: number })._size ?? 0 }]));
+
+/** Measure the widest y gutter per side across `plots` and lay out again every
+ *  panel narrower than it. */
+function alignGutters(plots: readonly uPlot[], shared: Map<number, number>): void {
+  shared.clear();
+  for (const g of plots.flatMap(yGutters)) shared.set(g.side, Math.max(shared.get(g.side) ?? 0, g.size));
+  for (const u of plots) {
+    if (yGutters(u).some((g) => g.size < (shared.get(g.side) ?? 0))) u.setSize({ width: u.width, height: u.height });
+  }
+}
+
 /** Panel heights giving every plot AREA the same height: the bottom panel
  *  also carries `extra` px of x axis. Never below 1 px (as `panelHeights`). */
 function stackHeights(n: number, total: number, extra: number): number[] {
@@ -102,6 +133,7 @@ function textWidth(font: string): (t: string) => number {
  *  already emptied) and return them in panel order. */
 export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): uPlot[] {
   const n = args.panels.length;
+  const shared = new Map<number, number>();
   const built = args.panels.map((pp, i) => {
     const opts = buildOpts(pp, {
       ...args.cell,
@@ -118,6 +150,7 @@ export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): 
     });
     opts.cursor = { ...opts.cursor, sync: { key: args.syncKey } };
     opts.hooks = { setScale: [args.onSetScale] };
+    sharedGutters(opts, shared);
     // Blank the x tick labels on every panel but the bottom (keep the axis so
     // the plot areas stay the same width and the panels line up), and shrink
     // its band to the tick marks: blank labels reserved ~70 px per panel.
@@ -146,6 +179,8 @@ export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): 
     return new uPlot({ ...opts, height: heights[i] }, args.panels[i].data, div);
   });
   bottomExtra.set(plots, extra);
+  gutters.set(plots, shared);
+  alignGutters(plots, shared);
   return plots;
 }
 
@@ -157,5 +192,8 @@ export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): 
 export function resizeStackPanels(host: HTMLDivElement, plots: readonly uPlot[], fallbackW: number): void {
   const hs = stackHeights(plots.length, host.clientHeight || 400, bottomExtra.get(plots) ?? 0);
   const width = host.clientWidth || fallbackW;
+  const shared = gutters.get(plots);
+  shared?.clear(); // re-measure: the new heights may draw different tick labels
   plots.forEach((u, idx) => u.setSize({ width, height: hs[idx] }));
+  if (shared) alignGutters(plots, shared);
 }
