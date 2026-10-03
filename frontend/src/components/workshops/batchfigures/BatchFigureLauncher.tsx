@@ -1,4 +1,5 @@
-import { batchFigureAppState, batchSeedDatasetIds } from "../../../store/batchFigureBuild";
+import { batchSeedDatasetIds } from "../../../store/batchFigureBuild";
+import { useApp } from "../../../store/useApp";
 import { Button } from "../../primitives";
 
 /** Small Plot Recipe Manager entry point. Keeping selection expansion here
@@ -8,7 +9,7 @@ export default function BatchFigureLauncher({ onOpen }: { onOpen: (ids: string[]
     <Button
       size="sm"
       onClick={() => {
-        const state = batchFigureAppState();
+        const state = useApp.getState();
         onOpen(batchSeedDatasetIds({
           datasets: state.datasets,
           folders: state.folders,

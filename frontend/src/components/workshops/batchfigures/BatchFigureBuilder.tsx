@@ -8,7 +8,6 @@ import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { recordRecipeUse } from "../../../store/recordRecipeUse";
 import {
   batchSeedDatasetIds,
-  batchFigureAppState,
   buildBatchFigureArtifacts,
   commitBatchFigureArtifacts,
   preflightBatchFigure,
@@ -17,12 +16,10 @@ import {
 } from "../../../store/batchFigureBuild";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
+import { nextPageDocumentId } from "../../../store/pageDocuments";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Badge, Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
-
-let pageSequence = 0;
-const nextPageId = (): string => `page-batch-${Date.now().toString(36)}-${++pageSequence}`;
 
 type Phase = "idle" | "checking" | "review" | "creating" | "done";
 
@@ -110,9 +107,9 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
       async (item) => {
         // Yield between large imported worksheets so Stop is observable.
         await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-        const dataset = batchFigureAppState().datasets.find((candidate) => candidate.id === item.id);
+        const dataset = useApp.getState().datasets.find((candidate) => candidate.id === item.id);
         if (!dataset) throw new Error("dataset was removed while checking");
-        return preflightBatchFigure(recipeChoice.recipe, dataset, { datasets: batchFigureAppState().datasets });
+        return preflightBatchFigure(recipeChoice.recipe, dataset, { datasets: useApp.getState().datasets });
       },
       { signal: abort.signal, onProgress: setProgress },
     );
@@ -142,7 +139,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
 
   const build = async () => {
     if (!recipeChoice || includedIds.size === 0) return;
-    const latestState = batchFigureAppState();
+    const latestState = useApp.getState();
     const latestRows = rows.map((row): BatchFigureRow => {
       const dataset = latestState.datasets.find((candidate) => candidate.id === row.datasetId);
       return dataset
@@ -157,7 +154,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
       setRows(latestRows);
       setIncludedIds(new Set(latestRows.filter((row) => row.status === "ready").map((row) => row.datasetId)));
       setPhase("review");
-      toast("Data or recipe settings changed. Review the refreshed compatibility results before creating figures.", "danger");
+      toast("Data or recipe settings changed. Review the refreshed compatibility results before creating figures; partial-figure opt-ins were cleared.", "danger");
       return;
     }
     controller.current?.abort();
@@ -180,7 +177,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
       pageName,
       columns,
       nextFigureId,
-      nextPageId,
+      nextPageId: nextPageDocumentId,
     });
     if (abort.signal.aborted) return;
     if (artifacts.figures.length === 0) {

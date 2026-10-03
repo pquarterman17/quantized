@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { captureRecipe, type PlotRecipe } from "../lib/plotRecipe";
+import { sanitizePageDocument } from "../lib/pageDocument";
 import { defaultPlotView } from "../lib/plotview";
 import { resolvedRecipeView } from "../lib/plotRecipeView";
 import type { Dataset } from "../lib/types";
@@ -270,6 +271,37 @@ describe("buildBatchFigureArtifacts", () => {
       "Summary — 2 of 2",
     ]);
     expect(built.pages.flatMap((page) => page.panels.map((panel) => panel.figureId).filter(Boolean))).toEqual(
+      built.figures.map((figure) => figure.id),
+    );
+  });
+
+  it("splits fixed-column pages at four rows and survives a project round-trip", () => {
+    const saved = recipe();
+    const rows = Array.from({ length: 16 }, (_, index) =>
+      preflightBatchFigure(saved, dataset(`dataset-${index + 1}`), { datasets: [] }),
+    );
+    let figureId = 0;
+    let pageId = 0;
+    const built = buildBatchFigureArtifacts({
+      recipe: saved,
+      rows,
+      includedDatasetIds: new Set(rows.map((row) => row.datasetId)),
+      existingFigureNames: [],
+      existingPageNames: [],
+      namePattern: "{dataset}",
+      createPage: true,
+      pageName: "One column",
+      columns: 1,
+      nextFigureId: () => `figure-${++figureId}`,
+      nextPageId: () => `page-${++pageId}`,
+    });
+
+    expect(built.pages).toHaveLength(4);
+    expect(built.pages.map((page) => [page.rows, page.cols])).toEqual([
+      [4, 1], [4, 1], [4, 1], [4, 1],
+    ]);
+    const restored = built.pages.map((page) => sanitizePageDocument(structuredClone(page))!);
+    expect(restored.flatMap((page) => page.panels.map((panel) => panel.figureId).filter(Boolean))).toEqual(
       built.figures.map((figure) => figure.id),
     );
   });

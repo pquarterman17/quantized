@@ -38,10 +38,6 @@ export interface BatchRecipeChoice {
   recipe: PlotRecipe;
 }
 
-/** Imperative snapshot for the lazy workshop's event handlers. Kept outside
- * components/ so the render tree never grows a direct getState read. */
-export const batchFigureAppState = () => useApp.getState();
-
 /** Resolve the current Library intent into initial checked datasets. The
  * dialog still lists every loaded dataset, so this seed never traps someone
  * inside the selection they happened to have before opening it. */
@@ -233,16 +229,19 @@ export function buildBatchFigureArtifacts(input: BuildBatchFigureArtifactsInput)
   }
 
   if (!input.createPage || figures.length === 0) return { figures, pages: [] };
-  const capacity = PAGE_MAX_GRID * PAGE_MAX_GRID;
+  const fixedColumns = input.columns === "auto"
+    ? null
+    : Math.max(1, Math.min(PAGE_MAX_GRID, input.columns));
+  const capacity = (fixedColumns ?? PAGE_MAX_GRID) * PAGE_MAX_GRID;
   const requestedPageName = input.pageName.trim() || `${input.recipe.name} batch`;
   const pageCount = Math.ceil(figures.length / capacity);
   const pageNames = [...input.existingPageNames];
   const pages: PageDocument[] = [];
   for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
     const pageFigures = figures.slice(pageIndex * capacity, (pageIndex + 1) * capacity);
-    const cols = input.columns === "auto"
+    const cols = fixedColumns === null
       ? Math.min(PAGE_MAX_GRID, Math.max(1, Math.ceil(Math.sqrt(pageFigures.length))))
-      : Math.max(1, Math.min(PAGE_MAX_GRID, input.columns, pageFigures.length));
+      : Math.min(fixedColumns, pageFigures.length);
     const rows = Math.max(1, Math.ceil(pageFigures.length / cols));
     const requestedChunkName = pageCount === 1
       ? requestedPageName
