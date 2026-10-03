@@ -32,7 +32,7 @@ import {
   type Composition,
 } from "../../lib/composition";
 import { secondaryAxisFromPanel } from "../../lib/axisspec";
-import { buildErrorColumns } from "../../lib/errorbars";
+import { buildErrorColumns, buildErrorSpans } from "../../lib/errorbars";
 import { sharedXDomain, sharedYDomain } from "../../lib/facetDomains";
 import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
 import {
@@ -321,7 +321,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       decimationRequestEligible({
         defaultTrace,
         hasErrorBars: Object.keys(errKeys).length > 0,
-        hasErrorSpans: errorBindingsApplyToPlotted(active.errorRoles, plotted, { xErrorRenders: false }), // M1: legacy Y-only bars here, no X-error rendering
+        hasErrorSpans: errorBindingsApplyToPlotted(active.errorRoles, plotted, { xErrorRenders: true }), // M1: the stack draws X whiskers too
         hasColorByColumns: false,
       })
         ? defaultDecimateWidthHint()
@@ -620,6 +620,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       seriesLabels: labelList,
       seriesStyles: styleList,
       errorBars: errorBarsList,
+      errorSpans: active?.errorRoles?.length ? payload.channels.map((ch) => buildErrorSpans(active.data, [ch], active.errorRoles!)) : [], // as the flat plot
       syncKey,
       // Propagate an x-zoom on one panel to all the others.
       onSetScale: xZoomSyncHook(() => plotsRef.current),
@@ -652,7 +653,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     encodedFacets,
     facetGrid,
     facetXLim,
-    payload,
+    payload, active, // active: the stack panels' error spans
     yScale,
     xScale,
     xLim,
