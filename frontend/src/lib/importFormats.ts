@@ -24,7 +24,7 @@ export interface ImportFormat {
 export const IMPORT_FORMATS: readonly ImportFormat[] = [
   // ── X-ray & diffraction ──────────────────────────────────────────────
   { exts: [".xrdml"], name: "PANalytical XRDML", category: "X-ray & diffraction" },
-  { exts: [".brml"], name: "Bruker DIFFRAC (BRML)", category: "X-ray & diffraction", note: "1-D line scans" },
+  { exts: [".brml"], name: "Bruker DIFFRAC (BRML)", category: "X-ray & diffraction", note: "scans and RSMs" },
   {
     exts: [".raw"],
     name: "Rigaku SmartLab / Bruker RAW",
