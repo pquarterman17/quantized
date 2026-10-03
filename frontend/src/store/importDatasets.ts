@@ -41,6 +41,9 @@ import {
 } from "../lib/types";
 import { deriveWorkbooks } from "../lib/workbooks";
 import { sheetDatasetName, splitSheets } from "../lib/workbookSheets";
+import { DEFAULT_MAP_VIEW } from "../lib/mapView";
+import { is2DMap } from "../lib/mapdata";
+import { techniqueOf } from "../lib/techniqueDefaults";
 import { ALREADY_RUNNING_MSG, useImportBatch } from "./importBatch";
 import { presentBatchOutcome } from "./importBatchOffers";
 import { createErrorRolesActions, seedErrorRoles, type ErrorRolesActions } from "./importErrorRoles";
@@ -282,6 +285,13 @@ function addFromPayload(
     }));
     for (const dsInput of inputs) {
       get().addDataset(dsInput, historyToken);
+      // RSM / pole-figure intensities span decades: open on a log colour scale.
+      // Stored as an ENTRY (not a technique-aware absent default), so it saves
+      // with the document, a later switch to linear saves and reloads as linear,
+      // and an older .dwk's untouched maps load exactly as they did.
+      if (techniqueOf(dsInput) === "xrd.rsm" && is2DMap(dsInput.data)) {
+        set((s) => ({ mapViews: { ...s.mapViews, [dsInput.id]: { ...DEFAULT_MAP_VIEW, logZ: true } } }));
+      }
       newIds.push(dsInput.id);
     }
     // LIBRARY_WORKBOOK_UX_PLAN PR A3: one workbook per imported source file

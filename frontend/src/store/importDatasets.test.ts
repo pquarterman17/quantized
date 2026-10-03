@@ -1384,3 +1384,38 @@ describe("a TRIMMED (unsampled, shorter) preview gets the identity map", () => {
     expect(data?.metadata && PREVIEW_SOURCE_ROWS in data.metadata).toBe(false);
   });
 });
+
+describe("XRD map colour scale", () => {
+  const map = (technique: Technique) => ({
+    time: [0, 1, 2],
+    values: [[0, 0, 1], [1, 0, 10], [2, 0, 1000]],
+    labels: ["x", "y", "Counts"],
+    units: ["deg", "deg", "cts"],
+    metadata: { technique, is2D: true },
+  });
+  beforeEach(() => useApp.setState({ mapViews: {} }));
+
+  it("opens an RSM / pole figure on a log colour scale that saves and reloads", async () => {
+    vi.mocked(importFile).mockResolvedValue(map("xrd.rsm"));
+    await useApp.getState().importPaths(["/data/rsm.xrdml"]);
+    const s = useApp.getState();
+    const id = s.datasets[0].id;
+    expect(s.mapViews[id]?.logZ).toBe(true);
+    const save = () => {
+      const { datasets, mapViews } = useApp.getState();
+      return parseWorkspace(serializeWorkspace({ datasets, mapViews }));
+    };
+    expect(save().mapViews?.[id]?.logZ).toBe(true);
+    // Switched to linear, the entry is default-equal: it saves as nothing and
+    // reloads linear (the absent-entry default), never back to log.
+    useApp.getState().setMapLogZ(id, false);
+    const linear = save();
+    expect(linear.mapViews?.[id]?.logZ ?? false).toBe(false);
+  });
+
+  it("leaves other maps and 1-D scans alone", async () => {
+    vi.mocked(importFile).mockResolvedValueOnce(map("generic")).mockResolvedValueOnce(payload("xrd.rsm"));
+    await useApp.getState().importPaths(["/data/a.dat", "/data/b.dat"]);
+    expect(useApp.getState().mapViews).toEqual({});
+  });
+});
