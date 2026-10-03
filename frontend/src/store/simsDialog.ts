@@ -11,22 +11,26 @@
 
 import { create } from "zustand";
 
+export type SimsTab = "process" | "compare" | "region";
+
 interface SimsDialogState {
   /** Non-null while the workshop is open ("" = open with no dataset). */
   seed: string | null;
   opened: number;
-  open: (seed: string) => void;
+  requestedTab: SimsTab;
+  open: (seed: string, tab?: SimsTab) => void;
   close: () => void;
 }
 
 export const useSimsDialog = create<SimsDialogState>((set) => ({
   seed: null,
   opened: 0,
-  open: (seed) => set((s) => ({ seed, opened: s.opened + 1 })),
+  requestedTab: "process",
+  open: (seed, requestedTab = "process") => set((s) => ({ seed, requestedTab, opened: s.opened + 1 })),
   close: () => set({ seed: null }),
 }));
 
 /** Open the SIMS workshop on dataset `id`. */
-export function openSimsDialog(id: string): void {
-  useSimsDialog.getState().open(id);
+export function openSimsDialog(id: string, tab: SimsTab = "process"): void {
+  useSimsDialog.getState().open(id, tab);
 }

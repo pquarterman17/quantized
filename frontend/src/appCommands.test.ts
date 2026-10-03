@@ -44,6 +44,16 @@ describe("Cycle X/Y tick format commands (MAIN #20)", () => {
   });
 });
 
+describe("Workflow view command", () => {
+  it("registers a discoverable command that opens Workflow", () => {
+    useApp.setState({ stageTab: "plot" });
+    const cmd = findCommand("workflow");
+    expect(cmd.group).toBe("View");
+    cmd.run();
+    expect(useApp.getState().stageTab).toBe("technique");
+  });
+});
+
 describe("Insert commands (MAIN #27 drawing shapes — the menu-driven counterpart of the dock flyout)", () => {
   it("registers all five entries in the Insert group", () => {
     const ids = ["insert-arrow", "insert-line", "insert-rect", "insert-ellipse", "insert-textbox"];

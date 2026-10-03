@@ -4420,6 +4420,13 @@ describe("stage routing — plot-intent forces the Plot tab off Worksheet (item 
     expect(useApp.getState().stageTab).toBe("plot");
   });
 
+  it("setActive keeps Workflow open so it follows the newly active worksheet", () => {
+    useApp.setState({ stageTab: "technique" });
+    useApp.getState().setActive("d1");
+    expect(useApp.getState().stageTab).toBe("technique");
+    expect(useApp.getState().activeId).toBe("d1");
+  });
+
   it("setActive still routes a 2-D map to the Map tab, not Plot, off Worksheet", () => {
     useApp.getState().setActive("m1");
     expect(useApp.getState().stageTab).toBe("map");
