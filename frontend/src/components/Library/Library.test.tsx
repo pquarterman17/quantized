@@ -703,6 +703,32 @@ describe("Library — Tree -> Tiles -> Details selection continuity (LIBRARY_WOR
     expect(modelIds(useApp.getState())).toEqual(before); // still exactly the same ids back on one panel
     expect(screen.getAllByText("beta.csv")).toHaveLength(1);
   });
+
+  it("exits Tiles when an Origin migration review opens", async () => {
+    const dataset = { ...dsWith("origin-sheet"), workbookId: "w1" };
+    useApp.setState({
+      datasets: [dataset],
+      workbooks: [{ id: "w1", name: "Origin Book" }],
+      expandedWorkbookIds: ["w1"],
+      originFigures: [], editableFigures: [], figureDocs: [], pages: [], reports: [],
+      originFidelitySectionExpanded: false,
+      originFidelity: [{
+        id: "f1", stem: "Origin Project", siblingIds: [dataset.id],
+        manifest: { version: 1, container: "opj", status: "best_effort", graph_records_total: 0, graph_records_actionable: 0, graph_records_filtered: 0, omissions: [], filtered_figures: [] },
+      }],
+    });
+    render(<AppLibraryHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Tiles" }));
+    expect(screen.getByLabelText("Library workspace")).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByText("Origin fidelity"));
+    fireEvent.click(screen.getByText(/Origin Project · Best effort/));
+    fireEvent.click(screen.getByRole("button", { name: "Review import…" }));
+
+    expect(screen.queryByLabelText("Library workspace")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tree" })).toHaveAttribute("aria-pressed", "true");
+    expect(useApp.getState().stageTab).toBe("technique");
+  });
 });
 
 // FU-2 (provenance-disclosure follow-ups): OriginFidelitySection used to hold

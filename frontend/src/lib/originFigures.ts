@@ -109,6 +109,7 @@ export function figureLayerFamily(
     .filter((e) => e.stem === entry.stem && e.figure.name === name && e.siblingIds[0] === key)
     .sort((a, b) => (a.figure.layer ?? 1) - (b.figure.layer ?? 1));
 }
+
 /** Library row label: prefer a surviving annotation (reads like a plot title
  *  or peak label) over the raw Origin graph-window name (e.g. "Graph3"). */
 export function figureLabel(entry: OriginFigureEntry): string {

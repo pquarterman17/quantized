@@ -1,16 +1,18 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useApp } from "../../store/useApp";
 import OriginFidelitySection from "./OriginFidelitySection";
+import { openTechniqueWorkflow } from "../../lib/workflowWorkspace";
 
-beforeEach(() =>
+beforeEach(() => {
+  openTechniqueWorkflow();
   // FU-2: the disclosure flag now lives in the store (store/libraryPanel.ts),
   // not per-mount useState, so it must be reset between tests like any other
   // shared store field — otherwise a later test inherits an earlier test's
   // expanded/collapsed state.
-  useApp.setState({ originFidelity: [], originFidelitySectionExpanded: false }),
-);
+  useApp.setState({ originFidelity: [], originFidelitySectionExpanded: false, stageTab: "plot" });
+});
 
 describe("OriginFidelitySection", () => {
   it("renders nothing without an Origin fidelity manifest", () => {
@@ -87,5 +89,21 @@ describe("OriginFidelitySection", () => {
     expect(screen.getByText(/XRD · Best effort/)).toBeInTheDocument();
     fireEvent.click(screen.getByText("Origin fidelity"));
     expect(screen.queryByText(/XRD · Best effort/)).not.toBeInTheDocument();
+  });
+
+  it("opens the project-level review in Workflow instead of adding more Library rows", () => {
+    const onStageOpen = vi.fn();
+    useApp.setState({
+      originFidelity: [{
+        id: "fidelity-d1", stem: "XRD", siblingIds: ["d1"],
+        manifest: { version: 1, container: "opj", status: "best_effort", graph_records_total: 1, graph_records_actionable: 1, graph_records_filtered: 0, omissions: [], filtered_figures: [] },
+      }],
+    });
+    render(<OriginFidelitySection onStageOpen={onStageOpen} />);
+    fireEvent.click(screen.getByText("Origin fidelity"));
+    fireEvent.click(screen.getByText(/XRD · Best effort/));
+    fireEvent.click(screen.getByRole("button", { name: "Review import…" }));
+    expect(useApp.getState().stageTab).toBe("technique");
+    expect(onStageOpen).toHaveBeenCalledOnce();
   });
 });

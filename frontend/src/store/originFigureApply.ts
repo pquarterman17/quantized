@@ -159,8 +159,10 @@ export function confirmOriginReapplyDiscard(
   opts?: ApplyOpts,
 ): boolean {
   if (opts?.discardConfirmed) return false;
-  const existing = get().datasets.find(
-    (d) => (d.data.metadata ?? {}).origin_overlay_source === entry.id,
+  const all = get().originFigures;
+  const familyIds = new Set(figureLayerFamily(entry, all).map((member) => member.id));
+  const existing = get().datasets.find((d) =>
+    familyIds.has(String((d.data.metadata ?? {}).origin_overlay_source ?? "")),
   );
   if (!existing) return false;
   const edits = discardedEdits(existing);
