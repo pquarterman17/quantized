@@ -36,6 +36,7 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 from quantized.io._jcamp_asdf import decode_xydata
+from quantized.io.base import read_head, read_text
 
 __all__ = ["import_jcamp", "is_jcamp"]
 
@@ -55,16 +56,13 @@ def _strip_comment(line: str) -> str:
 def is_jcamp(path: Path) -> bool:
     """Sniff a file as JCAMP-DX: the first data record must be ``##TITLE=``."""
     try:
-        with Path(path).open("r", encoding="latin-1") as fh:
-            for _ in range(20):
-                line = fh.readline()
-                if not line:
-                    break
-                s = line.strip()
-                if s.startswith("##"):
-                    return _norm_label(s[2:].split("=", 1)[0]) == "TITLE"
+        head = read_head(path, 8192)
     except OSError:
         return False
+    for line in head.splitlines()[:20]:
+        s = line.strip()
+        if s.startswith("##"):
+            return _norm_label(s[2:].split("=", 1)[0]) == "TITLE"
     return False
 
 
@@ -199,7 +197,7 @@ def import_jcamp(filepath: str | Path) -> DataStruct:
         one ordinate channel (``##YUNITS``).
     """
     path = Path(filepath)
-    text = path.read_text(encoding="latin-1")
+    text = read_text(path)
     header, data_lines, data_kind, extra_blocks = _parse_records(text)
     if not data_kind or not data_lines:
         raise ValueError(f"no XYDATA/XYPOINTS/PEAK TABLE block found: {path.name}")
