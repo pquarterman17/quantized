@@ -108,7 +108,7 @@
         "overrides": {
           "legend": {
             "show": true,
-            "loc": "upper right"
+            "loc": "auto"
           },
           "grid": true,
           "spines": {
@@ -206,7 +206,7 @@
         "overrides": {
           "legend": {
             "show": true,
-            "loc": "upper right"
+            "loc": "auto"
           },
           "grid": true,
           "spines": {
@@ -336,7 +336,7 @@
         "overrides": {
           "legend": {
             "show": true,
-            "loc": "upper right"
+            "loc": "auto"
           },
           "grid": true,
           "spines": {
@@ -466,7 +466,7 @@
         "overrides": {
           "legend": {
             "show": true,
-            "loc": "upper right"
+            "loc": "auto"
           },
           "grid": true,
           "spines": {
@@ -596,7 +596,7 @@
         "overrides": {
           "legend": {
             "show": true,
-            "loc": "upper right"
+            "loc": "auto"
           },
           "x_lim": [
             0.5,
