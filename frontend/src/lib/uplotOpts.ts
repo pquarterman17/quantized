@@ -1253,7 +1253,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     ...(scales.x?.time ? { tzDate: utcTzDate } : {}),
     scales,
     axes,
-    padding: [null, xLabelRightPad(tickPx), null, null],
+    padding: [null, hasY2 ? null : xLabelRightPad(tickPx), null, null],
     series: seriesArr,
     ...(bands.length > 0 ? { bands } : {}),
   };

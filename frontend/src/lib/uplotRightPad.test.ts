@@ -17,28 +17,31 @@ const payload: PlotPayload = {
 /** A uPlot stand-in after an axes pass: the x axis' drawn tick strings. */
 const plotWith = (values: (string | null)[]): uPlot => ({ axes: [{ _values: values }] }) as unknown as uPlot;
 
-function rightPad(fontSize: number) {
-  const opts = buildOpts(payload, { width: 600, height: 400, xScale: "linear", yScale: "linear", tool: "zoom", onReadout: vi.fn(), fontSize });
-  const side = opts.padding?.[1];
-  expect(typeof side, "right padding is computed from the drawn labels").toBe("function");
-  return side as Exclude<uPlot.PaddingSide, number | null>;
+function rightPad(fontSize: number, p: PlotPayload = payload) {
+  const opts = buildOpts(p, { width: 600, height: 400, xScale: "linear", yScale: "linear", tool: "zoom", onReadout: vi.fn(), fontSize });
+  return opts.padding?.[1];
 }
 
 describe("right padding holds the last x tick label", () => {
-  it("leaves room for half a wide label at a large tick font", () => {
-    const pad = rightPad(16);
-    // "20,000" in 16 px monospace is ~58 px wide: half of it overhangs the frame by 29 px.
-    expect(pad(plotWith(["-20,000", "0", "20,000"]), 1, [false, false, true, true], 1)).toBeGreaterThanOrEqual(29);
+  it("leaves room for half a 7-character label at a large tick font", () => {
+    // "-20,000" in 16 px monospace is ~67 px wide: half of it overhangs the frame by ~34 px.
+    expect(rightPad(16)).toBeGreaterThanOrEqual(34);
+    expect(rightPad(12)).toBeGreaterThanOrEqual(Math.ceil((7 * 12 * 0.6) / 2));
   });
 
-  it("never pads less than uPlot's own default, and skips blank minor labels", () => {
-    const pad = rightPad(12);
-    expect(pad(plotWith(["0", "5", null]), 1, [false, false, true, true], 1)).toBe(25);
-    expect(pad(plotWith([]), 1, [false, false, true, true], 0)).toBe(25);
+  it("is a fixed number, not a function uPlot would re-converge its layout on", () => {
+    // Measured: a padding function broke a 7-file VSM overlay (block rows,
+    // non-monotonic x) — every series but the last drew as a vertical line.
+    expect(typeof rightPad(12)).toBe("number");
   });
 
-  it("adds nothing when a right y axis already holds the label", () => {
-    expect(rightPad(16)(plotWith(["20,000"]), 1, [false, true, true, true], 1)).toBe(0);
+  it("never pads less than uPlot's own default", () => {
+    expect(rightPad(9)).toBe(25);
+  });
+
+  it("leaves a right y axis to uPlot, whose gutter already holds the label", () => {
+    const withY2: PlotPayload = { ...payload, data: [...payload.data, [3, 2, 1]] as PlotPayload["data"], series: [...payload.series, { label: "T", unit: "K", axis: 1 }] };
+    expect(rightPad(16, withY2)).toBeNull();
   });
 });
 
