@@ -980,6 +980,8 @@ body {
 .qzk-grid-headcell { border-color: var(--border); background: var(--surface-2); color: var(--text-dim); font-weight: var(--weight-medium); cursor: pointer; white-space: normal; }
 .qzk-grid-footer .qzk-grid-headcell, .qzk-grid-header .qzk-grid-rownum { cursor: default; }
 .qzk-grid-headcell .role { display: block; font-size: var(--type-nano); color: var(--accent-text); text-transform: uppercase; letter-spacing: var(--tracking-label); }
+/* Units are case-sensitive data ("mT" is not "MT"): exempt them from the uppercase role line. */
+.qzk-grid-headcell .role .unit { text-transform: none; letter-spacing: 0; }
 .qzk-grid-headcell .comment { display: block; font-size: var(--type-nano); color: var(--text-faint); font-weight: var(--weight-regular); text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qzk-grid-rownum { background: var(--surface-1); color: var(--text-faint); text-align: center; cursor: pointer; }
 .qzk-grid-footer .qzk-grid-rownum { cursor: default; }
