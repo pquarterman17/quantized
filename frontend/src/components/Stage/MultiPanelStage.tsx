@@ -64,6 +64,7 @@
 
 import "uplot/dist/uPlot.min.css";
 
+import { useMemo } from "react";
 import { createPortal } from "react-dom";
 
 import type { Composition } from "../../lib/composition";
@@ -80,6 +81,7 @@ import { useBreakSeriesStyles } from "./useBreakSeriesStyles";
 import { MULTIPANEL_SYNC_KEY, useMultiPanelStage } from "./useMultiPanelStage";
 import { selectFocusedWindowCycles } from "./useStageSeriesCycle";
 import SpatialPanelLegend from "./SpatialPanelLegend";
+import { stackDataset } from "./stackRows";
 
 export interface MultiPanelStageProps {
   /** The effective arrangement to render — L4 (review round 3): derived
@@ -107,6 +109,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   const showGrid = useApp((s) => s.showGrid);
   const showLegend = useApp((s) => s.showLegend);
   const showAxisBox = useApp((s) => s.showAxisBox);
+  const xReversed = useApp((s) => s.xReversed);
   const plotTemplate = useApp((s) => s.plotTemplate);
   const defaultLineWidth = useApp((s) => s.defaultLineWidth);
   const defaultTrace = useApp((s) => s.defaultTrace);
@@ -145,8 +148,9 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   const breakSeriesStyles = useBreakSeriesStyles(
     selectFocusedWindowCycles, composition, active, { xKey, yKeys, seriesOrder, seriesStyles },
   );
+  const stackActive = useMemo(() => stackDataset(active), [active]); // the rows the flat plot draws
   const { hostRef, hostStyle, readout, tool, spatialLegends } = useMultiPanelStage({
-    active,
+    active: stackActive,
     datasets,
     composition: shown,
     panelFit,
@@ -159,6 +163,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
     yFmt,
     showGrid,
     showAxisBox,
+    xReversed,
     fontSize: template.fontSize,
     baseLineWidth: canvasLineWidth(plotTemplate, defaultLineWidth),
     defaultTrace,

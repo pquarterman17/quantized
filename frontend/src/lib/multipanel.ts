@@ -15,7 +15,8 @@ export function splitPayload(p: PlotPayload): PlotPayload[] {
   const x = p.data[0];
   return p.series.map((s, i) => ({
     data: [x, p.data[i + 1]] as uPlot.AlignedData,
-    series: [s],
+    series: [{ ...s, axis: 0 }], // one series per panel: a y2 tag would only move its axis right
+
     xLabel: p.xLabel,
     xUnit: p.xUnit,
   }));

@@ -38,6 +38,7 @@ def _reference_detect_layout(tokens: Sequence[Sequence[str]]) -> tuple[int, int,
         first_data >= 2
         and scores[first_data - 1] < 0.5
         and scores[first_data - 2] < 0.5
+        and len(tokens[first_data - 2]) >= len(tokens[first_data - 1])
         and layout._looks_like_units_row(tokens[first_data - 1], len(tokens[first_data]))
     ):
         units_row = first_data - 1
@@ -140,7 +141,15 @@ _NASTY_FILES: list[list[list[str]]] = [
     _tok("T,M", "1_000,10", "2_000,20"),  # underscore numbers as data
     _tok("Timestamp,Signal", "2026-07-19T12:00:00Z,1", "2026-07-19T12:01:00Z,2"),
     _tok("T,M1,M2", "(K)", ",a,b", "1,10,11", "2,20,21"),  # ragged descriptive row
+    _tok("Sample: x", "Date: 2026-01-01", "T,R", "1,2", "2,3"),  # key: value preamble
 ]
+
+
+def test_short_header_under_a_preamble_is_not_a_units_row() -> None:
+    """"T,R" passes the units-row test on its own; the one-cell preamble line
+    above it must not then be promoted to the header."""
+    tokens = _tok("Sample: x", "Date: 2026-01-01", "T,R", "1,2", "2,3")
+    assert layout._detect_layout(tokens) == (2, 3, -1)
 
 
 @pytest.mark.parametrize("tokens", _NASTY_FILES, ids=range(len(_NASTY_FILES)))

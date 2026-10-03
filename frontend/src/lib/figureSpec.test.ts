@@ -207,9 +207,6 @@ describe("FigureDocument FigureSpec adapter", () => {
     expect(spec).toMatchObject({
       x_key: undefined,
       y_keys: [2, 1],
-      y2_keys: [2],
-      y2_scale: "log",
-      y2_fmt: { mode: "sci", digits: 3 },
       x_fmt: { mode: "fixed", digits: 1 },
       y_fmt: { mode: "eng", digits: 2 },
       fmt: "png",
@@ -244,6 +241,9 @@ describe("FigureDocument FigureSpec adapter", () => {
       x_breaks: [[0.4, 0.6]],
       margins: { left: 0.1, right: 0.2, top: 0.1, bottom: 0.3 },
     });
+    // Plot audit round 4: an x-break sends no y2 split; its panels draw every
+    // channel on their one shared y (and the route refuses the pair).
+    expect(spec.y2_keys).toBeUndefined();
 
     expect(buildFigureSpecFromDocument(document, dataset, "fallback", {
       fmt: "svg", dpi: 72, transparent: false, filename: null,
@@ -582,6 +582,29 @@ describe("buildStageFigureSpec (F2.5b — Stage copy/export routing)", () => {
     expect(routed.group_col).toBe(0);
     expect(routed.overrides?.x_breaks).toEqual([[0.4, 0.6]]);
     expect(routed.overrides?.font_size).toBe(11);
+  });
+
+  // Plot audit round 4: an x-break's panels draw a y2 channel on their shared
+  // primary axis, and the export refused the pair outright (422, "y2_keys is
+  // not supported together with x_breaks"), so Export figure just failed.
+  it("an x-break exports its y2 channels on the primary axis, as its panels draw them", () => {
+    const document = createFigureDocument({
+      id: "stage-window-y2",
+      name: "Stage window y2",
+      datasetId: dataset.id,
+      view: richView(),
+      axisBreaks: { x: [[0.4, 0.6]] },
+    });
+    const routed = buildStageFigureSpec(
+      fakeStage({ focusedWindowId: "w1", windowsForSave: () => [{ id: "w1", kind: "plot", document }] }),
+      dataset,
+      "device",
+      opts,
+    );
+    expect(routed.overrides?.x_breaks).toEqual([[0.4, 0.6]]);
+    expect([...(routed.y_keys ?? [])].sort()).toEqual([1, 2]);
+    expect(routed.y2_keys).toBeUndefined();
+    expect(routed.overrides?.y2_lim).toBeUndefined();
   });
 
   it("dialog/copy-default choices win over the document's saved output settings, and the dataset stem still names the file", () => {

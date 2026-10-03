@@ -1,0 +1,9 @@
+{
+  "about": "A log colour scale's colour-bar ticks: decades (at most six, thinned evenly), labelled with the VALUE, never the exponent. Both legs read this table: frontend/src/components/Stage/mapColorbar.test.ts (canvas) and tests/test_calc_figure_map.py (export). lo/hi are the colour range in data units; no decade sits at an end, where only the canvas prints the range itself.",
+  "cases": [
+    { "name": "seven decades thin to every other", "lo": 2e-5, "hi": 500, "labels": ["1e-4", "0.01", "1", "100"] },
+    { "name": "large values switch to e-notation at 1e3", "lo": 0.5, "hi": 20000, "labels": ["1", "10", "100", "1e3", "1e4"] },
+    { "name": "small values", "lo": 0.0002, "hi": 0.5, "labels": ["1e-3", "0.01", "0.1"] },
+    { "name": "no decade inside", "lo": 3, "hi": 8, "labels": [] }
+  ]
+}

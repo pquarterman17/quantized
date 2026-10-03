@@ -11,9 +11,9 @@
 //     (`mapRender.effectiveColorLimits`) -- a clamp alone left matplotlib
 //     normalising over the clamped data, so limits wider than the data
 //     exported the full colormap (`tests/fixtures/wire/map_color_limits.json`);
-//   * the log colour scale, as log10(z) with the colorbar label saying so —
-//     the heatmap kind has no log norm; non-positive cells become gaps,
-//     exactly as the canvas leaves them unpainted;
+//   * the log colour scale, as log10(z) with `colorbar_log10` so the bar
+//     labels its decades by value like the canvas — the heatmap kind has no
+//     log norm; non-positive cells become gaps, as the canvas leaves them;
 //   * the contour overlay, as filled contours with the overlay's level count
 //     and spacing (the route has no heatmap+contour kind);
 //   * the frame: the canvas' letterboxed equal aspect for axes sharing a unit
@@ -33,6 +33,7 @@ import { askParams } from "../overlays/ParamDialog";
 import { effectiveColorLimits, minPositive } from "./mapRender";
 import { mapMarks } from "./mapSliceGeometry";
 import { FIGURE_STYLES } from "../workshops/figurebuilder/figureOutputConstants";
+import { withUnit } from "../../lib/unitDisplay";
 
 const MPL_CMAP: Record<ColormapName, string> = {
   viridis: "viridis",
@@ -57,8 +58,6 @@ export interface MapExportOptions {
   title: string;
   filename: string;
 }
-
-const withUnit = (label: string, unit: string) => (unit ? `${label} (${unit})` : label);
 
 function zCell(v: number | null, view: MapExportView): number | null {
   if (v == null || !Number.isFinite(v)) return null;
@@ -118,7 +117,9 @@ export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOp
     title: o.title,
     x_label: withUnit(p.xLabel, p.xUnit),
     y_label: withUnit(p.yLabel, p.yUnit),
-    z_label: view.logZ ? `log₁₀ ${zLabel}` : zLabel,
+    // The canvas bar's title, and its decade labels by value (not exponent).
+    z_label: view.logZ ? `${zLabel} — log` : zLabel,
+    ...(view.logZ ? { colorbar_log10: true } : {}),
     filename: o.filename,
   };
 }

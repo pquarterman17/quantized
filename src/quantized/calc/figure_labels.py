@@ -44,6 +44,7 @@ from typing import Any, Protocol
 
 from quantized.calc.render_lock import RenderLockTimeout, acquire_render_lock
 from quantized.heavy_import import heavy_imports
+from quantized.unit_display import display_unit, with_unit
 
 __all__ = [
     "safe_mathtext_label",
@@ -209,7 +210,7 @@ def series_display_name(label: str, unit: str, legend: str | None = None) -> str
     """
     if legend is not None:
         return legend
-    return f"{label} ({unit})" if unit else label
+    return with_unit(label, unit)
 
 
 class _Labelled(Protocol):
@@ -234,4 +235,4 @@ def shared_axis_title(series: Sequence[_Labelled]) -> str:
     if any((s.unit or "") != unit for s in series):
         return ""
     label = series[0].label if all(s.label == series[0].label for s in series) else ""
-    return f"{label} ({unit})".strip() if unit else label
+    return f"{label} ({display_unit(unit)})".strip() if unit else label

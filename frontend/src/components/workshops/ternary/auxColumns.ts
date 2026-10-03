@@ -4,6 +4,7 @@
 // rows are already gone by the time a request is built.
 
 import type { DataStruct } from "../../../lib/types";
+import { withUnit } from "../../../lib/unitDisplay";
 
 export interface AuxColumn {
   index: number;
@@ -25,7 +26,7 @@ export function columnLabel(data: DataStruct, index: number): string {
 export function columnAxisLabel(data: DataStruct, index: number): string {
   const label = columnLabel(data, index);
   const unit = index >= 0 ? data.units[index] : undefined;
-  return unit ? `${label} (${unit})` : label;
+  return withUnit(label, unit);
 }
 
 /** The column's value at `row`; NaN when the column is missing. */

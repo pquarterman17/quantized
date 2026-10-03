@@ -91,11 +91,15 @@ def read_head(path: str | Path, nbytes: int = 65536, *, encoding: str = "latin-1
 
     A leading UTF-8 byte-order mark is dropped, so a sniffer anchored on the
     first line (``line.startswith("#")``) sees the same text the parser will.
+    A UTF-16 one selects UTF-16, as :func:`decode_text` does for the parse:
+    read as latin-1, every other character was a NUL and no sniffer matched.
     """
     with Path(path).open("rb") as fh:
         raw = fh.read(nbytes)
     if raw.startswith(_UTF8_BOM):
         raw = raw[len(_UTF8_BOM) :]
+    elif raw.startswith(_UTF16_BOMS):
+        return raw[: len(raw) // 2 * 2].decode("utf-16", errors="replace")
     return raw.decode(encoding, errors="replace")
 
 

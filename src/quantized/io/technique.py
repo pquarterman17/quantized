@@ -89,8 +89,24 @@ def _refine_qd_family(ds: DataStruct) -> str:
     labels_lower = " ".join(ds.labels).lower()
     if any(marker in labels_lower for marker in ("resistance", "resistivity", "voltage")):
         return TRANSPORT
+    if not _has_magnetic_channel(ds):
+        # A heat-capacity run or a temperature/pressure log shares the shape.
+        return GENERIC
     x_name = str(ds.metadata.get("x_column_name", "")).lower()
     return MAGNETOMETRY_MVSH if "field" in x_name else MAGNETOMETRY_MVST
+
+
+_MAGNETIC_LABELS = ("moment", "magnetization", "magnetisation", "susceptib")
+_MAGNETIC_UNITS = re.compile(r"^(emu(/.*)?|a\s*[·.]?\s*m(2|\^2|²)|a/m|μb|µb|mu_?b)$")
+
+
+def _has_magnetic_channel(ds: DataStruct) -> bool:
+    """A moment/magnetization channel by name, or any channel in a magnetic
+    moment unit (an ACMS ``M'`` column in emu)."""
+    labels_lower = " ".join(ds.labels).lower()
+    if any(marker in labels_lower for marker in _MAGNETIC_LABELS):
+        return True
+    return any(_MAGNETIC_UNITS.match(str(u).strip().lower()) for u in ds.units)
 
 
 def _refine_xrdml(ds: DataStruct) -> str:

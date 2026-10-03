@@ -132,6 +132,16 @@ def _accept_any(_path: Path) -> bool:
     return True
 
 
+def _is_text_table(path: Path) -> bool:
+    """Catch-all sniffer for the plain-text extensions (``.dat``/``.txt``/
+    ``.xy``/``.xye``): no NUL byte in the first 4 KB, unless the file opens with
+    a UTF-16 byte-order mark. A binary file then gets the clear "no parser"
+    error instead of importing as a table of garbage text cells."""
+    with path.open("rb") as fh:
+        head = fh.read(4096)
+    return head.startswith((b"\xff\xfe", b"\xfe\xff")) or b"\x00" not in head
+
+
 def _import_excel_lazy(path: Path) -> DataStruct:
     """Deferred ``import_excel`` — ``openpyxl`` (~0.2 s import, measured) loads only when
     an ``.xlsx``/``.xlsm`` file is actually parsed, not at registry import time
@@ -158,6 +168,9 @@ _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
         (is_refl1d_dat, import_refl1d_dat),
         (is_ppms_dat, _import_ppms_auto),
         (is_lakeshore_file, import_lake_shore),
+        # Any other .dat is a plain table (round-4 import audit: it used to
+        # fail with "no parser"). Last, so every instrument sniffer wins first.
+        (_is_text_table, import_csv),
     ],
     # .refl is reductus (JSON "columns" header) for the whole corpus, but refl1d
     # also exports .refl (a "Q (1/A) R dR" column header below # metadata): route
@@ -194,6 +207,16 @@ _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
         (_accept_any, import_csv),
     ],
     ".tsv": [(is_sims_file, import_sims), (_accept_any, import_csv)],
+    # Plain text tables: both Open dialogs offer .txt, and .xy/.xye are the
+    # usual 2theta-intensity(-esd) exports. Same chain as .csv.
+    ".txt": [
+        (is_xrd_export, import_xrd_export),
+        (is_sims_file, import_sims),
+        (is_lakeshore_file, import_lake_shore),
+        (_is_text_table, import_csv),
+    ],
+    ".xy": [(_is_text_table, import_csv)],
+    ".xye": [(_is_text_table, import_csv)],
     ".xlsx": [(is_sims_file, import_sims), (_accept_any, _import_excel_lazy)],
     ".xlsm": [(is_sims_file, import_sims), (_accept_any, _import_excel_lazy)],
 }
@@ -292,6 +315,12 @@ def is_recognised_data_name(filename: str) -> bool:
     return match_filter(Path(filename)) is not None
 
 
+# Extensions the browser Open dialog offers but no parser reads: say why.
+_UNSUPPORTED_HINTS: dict[str, str] = {
+    ".xls": "legacy Excel 97-2003 workbooks cannot be read; re-save it as .xlsx",
+}
+
+
 def resolve_parser(path: Path) -> Parser:
     """Pick the parser for ``path``: unambiguous extension, else a saved
     import filter (gap #40 — a user-named glob -> ``ImportSettings``), else
@@ -313,6 +342,9 @@ def resolve_parser(path: Path) -> Parser:
     # claimed only by the OPUS magic bytes (Bruker AFM .000 files share the form).
     if ext[1:].isdigit() and is_numbered_opus(path):
         return import_opus
+    reason = _UNSUPPORTED_HINTS.get(ext)
+    if reason is not None:
+        raise ValueError(f"'{path.name}': {reason}")
     raise ValueError(f"no parser registered for '{path.name}' (extension '{ext}')")
 
 

@@ -480,10 +480,14 @@ def _detect_layout(tokens: Sequence[Sequence[str]]) -> tuple[int, int, int]:
     scores = computed
     header_row = -1
     units_row = -1
+    # A units row needs a header above it at least as wide: short names such as
+    # "T,R" pass the units test, so a one-cell "Date: ..." preamble line above
+    # them used to be taken as the header and "T,R" as the units.
     if (
         first_data >= 2
         and scores[first_data - 1] < 0.5
         and scores[first_data - 2] < 0.5
+        and len(tokens[first_data - 2]) >= len(tokens[first_data - 1])
         and _looks_like_units_row(tokens[first_data - 1], len(tokens[first_data]))
     ):
         units_row = first_data - 1

@@ -14,6 +14,7 @@ publication path; interactive 3-D is deferred (#22).
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -28,7 +29,7 @@ from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
-__all__ = ["MAP_KINDS", "render_map_figure"]
+__all__ = ["MAP_KINDS", "log_decade_ticks", "render_map_figure"]
 
 _FORMATS = ("pdf", "svg", "png", "tiff")
 MAP_KINDS = ("contourf", "contour", "heatmap", "surface", "scatter3d", "waterfall")
@@ -89,6 +90,7 @@ def render_map_figure(
     equal_aspect: bool = False,
     lines: Sequence[Sequence[float]] | None = None,
     labels: Sequence[Mapping[str, Any]] | None = None,
+    colorbar_log10: bool = False,
 ) -> bytes:
     """Render a 2-D map to image bytes in the chosen ``kind``.
 
@@ -138,6 +140,11 @@ def render_map_figure(
     each) are the map's committed slices and text labels in data coordinates
     (``MapSliceOverlay`` on screen), drawn over a 2-D map without moving its
     frame.
+
+    ``colorbar_log10``: ``z`` (and ``z_limits``) are log10 of the quantity --
+    MapStage's log colour scale -- so the colour bar ticks its decades and
+    labels them with the VALUE (``1e-4``, ``0.01``), as the canvas bar does
+    (:func:`log_decade_ticks`), instead of the bare exponents.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -236,9 +243,27 @@ def render_map_figure(
         if kind in _3D_KINDS and z_label:
             ax.set_zlabel(z_label)
         if colorbar and mappable is not None:
-            fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8)
+            cb = fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8)
+            if colorbar_log10:
+                ticks = log_decade_ticks(*mappable.get_clim())
+                cb.set_ticks([k for k, _ in ticks], labels=[label for _, label in ticks])
         fig.tight_layout()
         return savefig_bytes(fig, fmt, dpi=resolved_dpi)
+
+
+def log_decade_ticks(lo: float, hi: float) -> list[tuple[int, str]]:
+    """Colour-bar ticks for a log10 range ``[lo, hi]`` (exponents): every
+    decade inside, thinned evenly to at most six, each labelled with its
+    VALUE -- ``1e{k}`` from ``|k| >= 3``, plain digits nearer 1. The canvas
+    leg is ``mapColorbar.colorbarTicks``; both read
+    ``tests/fixtures/wire/map_log_colorbar.json``."""
+    k0 = math.ceil(lo)
+    n = math.floor(hi) - k0 + 1
+    if n <= 0:
+        return []
+    step = max(1, math.ceil(n / 6))
+    ks = [k0 + i * step for i in range(math.ceil(n / step))]
+    return [(k, f"1e{k}" if abs(k) >= 3 else f"{10.0**k:g}") for k in ks]
 
 
 def _draw_marks(

@@ -22,7 +22,7 @@ vi.hoisted(() => {
   window.matchMedia ??= (() => mq) as unknown as typeof window.matchMedia;
 });
 
-import type uPlot from "uplot";
+import uPlot from "uplot";
 
 import type { BreakPanel } from "../../lib/facet";
 import type { PlotPayload } from "../../lib/plotdata";
@@ -99,5 +99,49 @@ describe("renderBreakPanels", () => {
     expect(plots[0].scales.x.max).toBeLessThan(2); // the zoom itself happened
     expect([plots[1].scales.x.min, plots[1].scales.x.max]).toEqual([3, 5]);
   });
-});
 
+  // Plot audit round 4: the AUTO shared y range was the bare data extent, so the
+  // curves touched the frame; an unbroken plot pads by uPlot's own rule.
+  it.each([
+    ["linear", uPlot.rangeNum(2, 10, 0.1, true)],
+    ["log", uPlot.rangeLog(1.5, 10, 10, false)],
+  ] as const)("pads an auto shared %s y range by the unbroken plot's rule", async (yScale, want) => {
+    const host = document.body.appendChild(document.createElement("div"));
+    const lo = yScale === "log" ? 1.5 : 2;
+    plots = renderBreakPanels(host, {
+      panels: [panel([1, 2, 3], [1, 3]), panel([4, 5], [4, 5])],
+      seriesLabels: {}, seriesStyles: {}, hiddenChannels: [], syncKey: `break-pad-${yScale}`, box: { w: 800, h: 300 },
+      yAuto: true,
+      cell: { xScale: "linear", yScale, yLim: [lo, 10], tool: "zoom", onReadout: vi.fn() },
+    });
+    await settle();
+    expect(want[0]).toBeLessThan(lo);
+    expect(plots.map((u) => [u.scales.y.min, u.scales.y.max])).toEqual([want, want]);
+  });
+
+  it("keeps a typed y limit exactly", async () => {
+    const host = document.body.appendChild(document.createElement("div"));
+    plots = renderBreakPanels(host, {
+      panels: [panel([1, 2, 3], [1, 3]), panel([4, 5], [4, 5])],
+      seriesLabels: {}, seriesStyles: {}, hiddenChannels: [], syncKey: "break-typed", box: { w: 800, h: 300 },
+      cell: { xScale: "linear", yScale: "linear", yLim: [2, 10], tool: "zoom", onReadout: vi.fn() },
+    });
+    await settle();
+    expect(plots.map((u) => [u.scales.y.min, u.scales.y.max])).toEqual([[2, 10], [2, 10]]);
+  });
+
+  // Plot audit round 4, measured on Cu3Au XRD broken over 45-70 deg: the two
+  // panels (23 and 30 deg wide) drew equally wide, while the export sizes them
+  // by x span (matplotlib width_ratios), so a slope read differently.
+  it("sizes each plot area by its x span, as the export does", async () => {
+    const host = document.body.appendChild(document.createElement("div"));
+    plots = renderBreakPanels(host, {
+      panels: [panel([0, 1, 2], [0, 2]), panel([3, 6, 9], [3, 9])],
+      seriesLabels: {}, seriesStyles: {}, hiddenChannels: [], syncKey: "break-widths", box: { w: 900, h: 300 },
+      cell: { xScale: "linear", yScale: "linear", yLim: [0, 20], tool: "zoom", onReadout: vi.fn() },
+    });
+    await settle();
+    const [a, b] = plots.map((u) => u.bbox.width / uPlot.pxRatio);
+    expect(b / a).toBeCloseTo(3, 1);
+  });
+});

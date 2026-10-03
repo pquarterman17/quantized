@@ -4914,6 +4914,11 @@
             "title": "Rows",
             "type": "integer"
           },
+          "stack": {
+            "default": false,
+            "title": "Stack",
+            "type": "boolean"
+          },
           "style": {
             "default": "default",
             "title": "Style",
@@ -7116,6 +7121,11 @@
           "colorbar": {
             "default": true,
             "title": "Colorbar",
+            "type": "boolean"
+          },
+          "colorbar_log10": {
+            "default": false,
+            "title": "Colorbar Log10",
             "type": "boolean"
           },
           "contour_source": {

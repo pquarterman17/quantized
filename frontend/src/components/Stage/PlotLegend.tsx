@@ -19,6 +19,7 @@ import ColorScaleChip from "./ColorScaleChip";
 import LegendSample from "./LegendSample";
 import { resolveSeriesStyle, SERIES_VARS, type SeriesCycle } from "../../lib/seriesStyleCycle";
 import { useLegendBox } from "./useLegendBox";
+import { withUnit } from "../../lib/uplotOpts";
 
 /** The canvas' excluded companion: line-free 5px hollow circles. */
 const EXCLUDED_SAMPLE: SeriesStyle = { width: 0, marker: true, markerShape: "circle", markerSize: 5 };
@@ -114,7 +115,7 @@ export default function PlotLegend({
       ? colorScaleLegendEntries(active.data, colorByColumns)
       : [];
 
-  const defaultLabel = (s: PlotSeriesSpec) => (s.unit ? `${s.label} (${s.unit})` : s.label);
+  const defaultLabel = (s: PlotSeriesSpec) => withUnit(s.label, s.unit);
   // A row's finished text. An EMPTY one has no legend row (the series stays
   // plotted), exactly as the export's matplotlib legend drops a zero-length label.
   const rowText = (s: PlotSeriesSpec, i: number) =>

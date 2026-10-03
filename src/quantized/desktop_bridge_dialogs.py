@@ -59,11 +59,12 @@ __all__ = ["DesktopDialogBridge", "IMPORT_FILE_TYPES", "PROJECT_FILE_TYPES"]
 # IMPORT_ACCEPT list; "All files" stays LAST but present, because an instrument
 # writing an unregistered extension is common and a dialog that cannot open it
 # would be worse than a permissive filter. tests/test_desktop_import_filter.py
-# asserts "Data files" lists every extension io/registry.py reads.
+# asserts "Data files" lists every extension io/registry.py reads, and
+# tests/test_io_registry_text_fallback.py that it lists nothing else.
 IMPORT_FILE_TYPES: tuple[str, ...] = (
     (
         "Data files (*.dat;*.csv;*.txt;*.tsv;*.xy;*.xye;*.raw;*.brml;*.xrdml;"
-        "*.opj;*.opju;*.h5;*.hdf5;*.nxs;*.spc;*.dx;*.jdx;*.cif;*.refl;*.ogs;"
+        "*.opj;*.opju;*.spc;*.dx;*.jdx;*.cif;*.refl;"
         "*.ort;*.pnr;*.datA;*.datB;*.datC;*.datD;*.nc;*.cdf;*.xlsx;*.xlsm;*.opus;"
         # Bruker OPUS numbered files (sample.0, sample.1, ...), sniffed by magic.
         "*.0;*.1;*.2;*.3;*.4;*.5;*.6;*.7;*.8;*.9)"

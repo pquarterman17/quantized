@@ -536,3 +536,17 @@ def test_export_then_reimport_round_trip_preserves_rows(tmp_path: Path) -> None:
     ds_out = import_csv(out)
     assert ds_out.n_points == 5, f"exported 5 rows, re-imported {ds_out.n_points}"
     assert ds_out.labels == ("Intensity",)
+
+
+def test_key_value_preamble_above_a_short_header(tmp_path: Path) -> None:
+    """Round-4 import audit: an instrument preamble ("Sample: ...", "Date:
+    ...") above a short "T,R" header made the last preamble line the header
+    and "T,R" its units row (x named "Date: ...", unit "T")."""
+    path = tmp_path / "logger.csv"
+    path.write_text("Sample: film A\nDate: 2026-01-01\n\nT,R\n1,2\n2,3\n", encoding="utf-8")
+    ds = import_csv(path)
+    assert ds.metadata["x_column_name"] == "T"
+    assert ds.metadata["x_column_unit"] == ""
+    assert ds.labels == ("R",)
+    assert ds.units == ("",)
+    assert ds.time.tolist() == [1.0, 2.0]

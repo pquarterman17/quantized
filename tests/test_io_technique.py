@@ -176,7 +176,14 @@ def test_stamp_technique_prefers_parser_self_reported_name() -> None:
     def dispatched_wrapper(path: Path) -> DataStruct:  # pragma: no cover - never invoked
         raise NotImplementedError(str(path))
 
-    ds = _tiny_ds({"parser_name": "import_mpms", "x_column_name": "Temperature"})
+    # An MPMS import always carries its moment channel (the refiner checks it).
+    ds = DataStruct.create(
+        [0.0, 1.0],
+        [[1.0], [2.0]],
+        labels=["DC Moment Free Ctr"],
+        units=["emu"],
+        metadata={"parser_name": "import_mpms", "x_column_name": "Temperature"},
+    )
     stamped = stamp_technique(ds, dispatched_wrapper)
     assert stamped.metadata["parser_name"] == "import_mpms"
     assert stamped.metadata["technique"] == MAGNETOMETRY_MVST
@@ -203,10 +210,10 @@ def test_stamp_technique_is_additive_over_existing_metadata() -> None:
     [
         ("import_jcamp", "Wavenumber", "cm^-1", True),  # JCAMP IR
         ("import_opus", "Wavenumber", "cm^-1", True),  # Bruker OPUS FTIR
-        ("import_spc", "Wavenumber (cm-1)", "", True),  # SPC fxtype=1
-        ("import_spc", "Raman Shift (cm-1)", "", False),  # Raman reads ascending
+        ("import_spc", "Wavenumber", "cm^-1", True),  # SPC fxtype=1
+        ("import_spc", "Raman shift", "cm^-1", False),  # Raman reads ascending
         ("import_jcamp", "Raman shift", "cm^-1", False),
-        ("import_spc", "Nanometers (nm)", "", False),  # UV-Vis
+        ("import_spc", "Wavelength", "nm", False),  # UV-Vis
         ("import_jcamp", "Chemical shift", "ppm", False),
         ("import_csv", "Wavenumber", "cm-1", False),  # generic: never guess
     ],

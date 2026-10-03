@@ -61,6 +61,7 @@ import { axisFmtParam, type AxisFormat, type DataStruct, type Dataset, type Defa
 import type { ExcludedRowsGhoster } from "./figureSpec";
 import type { FigurePageSpec, PagePanelSpec } from "./api";
 import type { FigureSpec } from "./api/figures";
+import { withUnit } from "./unitDisplay";
 
 /** One spatial panel's own dataset + channel selection -> the single-figure
  *  payload the page route embeds — the same field mapping the on-screen
@@ -194,9 +195,7 @@ function spatialPanelFigure(
   const only = primaryOnly.length === 1 ? primaryOnly[0] : null;
   const fallbackYLabel = only == null
     ? undefined
-    : dataset.units[only]
-      ? `${dataset.labels[only]} (${dataset.units[only]})`
-      : dataset.labels[only];
+    : withUnit(dataset.labels[only], dataset.units[only]);
   const minorTicks = panel.xLog || panel.yLog || secondaryAxisIsLog(y2Axis);
   return {
     dataset,

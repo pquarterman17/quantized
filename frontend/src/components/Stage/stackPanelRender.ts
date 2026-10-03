@@ -19,6 +19,7 @@
 
 import uPlot from "uplot";
 
+import type { ErrorSpan } from "../../lib/errorbars";
 import type { PlotPayload } from "../../lib/plotdata";
 import { panelHeights, type xZoomSyncHook } from "../../lib/multipanel";
 import type { SeriesStyle } from "../../lib/types";
@@ -31,7 +32,7 @@ import { alignGutters, resizeAligned, sharedGutters } from "./panelGutters";
  *  supplied by `renderStackPanels` itself. */
 export type StackCellOpts = Omit<
   BuildOptsArgs,
-  "width" | "height" | "seriesStyles" | "seriesLabels" | "errorBars" | "linearPaths" | "pointsPaths"
+  "width" | "height" | "seriesStyles" | "seriesLabels" | "errorBars" | "errorSpans" | "linearPaths" | "pointsPaths"
 >;
 
 export interface StackPanelsArgs {
@@ -46,6 +47,9 @@ export interface StackPanelsArgs {
   /** Per-panel error-bar columns (each panel is its own single-series uPlot,
    *  so each map is keyed from that panel's own column 1). */
   errorBars: readonly (Map<number, (number | null)[]> | undefined)[];
+  /** Per-panel error spans (x whiskers, asymmetric bars), keyed the same way;
+   *  they supersede `errorBars` per column, as on the flat plot. */
+  errorSpans?: readonly (Map<number, ErrorSpan[]> | undefined)[];
   /** uPlot cursor-sync group; see `MULTIPANEL_SYNC_KEY`. */
   syncKey: string;
   /** The shared x-zoom/pan propagation hook — one instance for the whole
@@ -127,6 +131,7 @@ export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): 
       // Origin "Y-error" column is already dropped from `plotted`, so its
       // paired Y channel's own panel draws whiskers instead.
       errorBars: args.errorBars[i],
+      errorSpans: args.errorSpans?.[i],
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
     });

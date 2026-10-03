@@ -6,6 +6,7 @@
 // lazy-only exports into first-paint JS (~1.2 kB measured 2026-09-30 by
 // sourcemap attribution). Same shape as the other eager-bytes extractions
 // (`architecture.test.ts`); nothing here changed.
+import { withUnit } from "./uplotOpts";
 
 /**
  * The finished legend text for ONE series, by the BUG-014 product rule: a
@@ -27,5 +28,5 @@
  * An EMPTY rename is honoured verbatim, matching `??` on the screen side.
  */
 export function seriesDisplayLabel(label: string, unit: string, legend: string | undefined): string {
-  return legend ?? (unit ? `${label} (${unit})` : label);
+  return legend ?? withUnit(label, unit);
 }

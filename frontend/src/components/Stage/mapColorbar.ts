@@ -5,6 +5,7 @@
 import { type ColormapName, colormapCss, normalize } from "../../lib/colormap";
 import type { MapPayload } from "../../lib/mapdataFetch";
 import { niceTicks } from "../../lib/ticks";
+import { withUnit } from "../../lib/unitDisplay";
 
 /** Compact numeric label: ≤4 sig figs, exponential outside [1e-3, 1e5). */
 export function fmt(v: number): string {
@@ -64,7 +65,7 @@ export function drawColorbar(
   ctx.textBaseline = "middle";
   if (hi != null) ctx.fillText(fmt(hi), bx + bw + 4, rect.y);
   if (lo != null) ctx.fillText(fmt(lo), bx + bw + 4, rect.y + rect.h);
-  const base = p.zUnit ? `${p.zLabel} (${p.zUnit})` : p.zLabel;
+  const base = withUnit(p.zLabel, p.zUnit);
   const title = logZ ? `${base} — log` : base;
   // A long tick label beside the bar's middle would run into the rotated title.
   const half = (title.length * 11 * 0.6) / 2 + 4;

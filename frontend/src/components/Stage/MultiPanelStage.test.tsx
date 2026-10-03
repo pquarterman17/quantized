@@ -846,17 +846,16 @@ describe("MultiPanelStage — a legend rename in the stack and break legs (BUG-0
     expect(yAxisLabels()).toEqual(["Signal (au)", "Signal (au)"]);
   });
 
-  // The stack leg's SECONDARY-axis slot — the other place a rename can land
-  // on screen in a multi-panel view, untested until round 5. A y2 channel's
-  // panel paints its resolved name on `axes[2]`, not `axes[1]`.
-  it("paints a renamed Y2 channel's STACK panel on the SECONDARY axis", async () => {
+  // A y2 channel's STACK panel: one series, so (plot audit round 4) it draws
+  // on the left like every other panel — on a right axis its plot area no
+  // longer lined up with the others' x, and the export draws it on the left.
+  // Its resolved name lands on that axis.
+  it("paints a renamed Y2 channel's STACK panel on its own left axis", async () => {
     useApp.setState({ y2Keys: [1], seriesLabels: { 1: "Loop 1" } });
     render(<MultiPanelStage />);
     await waitFor(() => expect(created).toHaveLength(2));
-    expect(y2AxisLabels()).toEqual([undefined, "Loop 1"]);
-    // Non-vacuous: channel 1's rename is NOT on the primary axis of its own
-    // panel, and channel 0's un-renamed panel still reads its derived label.
-    expect(yAxisLabels()).toEqual(["Field (T)", undefined]);
+    expect(y2AxisLabels()).toEqual([undefined, undefined]);
+    expect(yAxisLabels()).toEqual(["Field (T)", "Loop 1"]);
   });
 
   // The parity the bug is actually about: the string on screen and the string

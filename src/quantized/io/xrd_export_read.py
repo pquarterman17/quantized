@@ -62,7 +62,8 @@ def is_xrd_export(path: Path) -> bool:
         head = read_head(path, 256)
     except OSError:
         return False
-    first = head.lstrip("﻿").split("\n", 1)[0]
+    lines = head.lstrip("﻿").splitlines()  # also a classic-Mac "\r"-only file
+    first = lines[0] if lines else ""
     return first.startswith("#") and first[1:].strip() == MARKER
 
 

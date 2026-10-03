@@ -61,6 +61,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from quantized.datastruct import DataStruct
+from quantized.io._spc_axes import split_title, x_axis, y_axis
 
 __all__ = ["import_spc", "is_spc"]
 
@@ -115,28 +116,6 @@ _OLD_HEAD_FIELDS = (
 )
 assert struct.calcsize(_OLD_HEAD_FMT) == _OLD_HEAD_SIZE
 
-# X/Z axis unit codes (fxtype/fztype) — the SPC spec's defined enumeration.
-_XZ_UNITS = (
-    "Arbitrary", "Wavenumber (cm-1)", "Micrometers (um)", "Nanometers (nm)",
-    "Seconds", "Minutes", "Hertz (Hz)", "Kilohertz (KHz)", "Megahertz (MHz)",
-    "Mass (M/z)", "Parts per million (PPM)", "Days", "Years",
-    "Raman Shift (cm-1)", "eV", "XYZ text labels in fcatxt", "Diode Number",
-    "Channel", "Degrees", "Temperature (F)", "Temperature (C)",
-    "Temperature (K)", "Data Points", "Milliseconds (mSec)",
-    "Microseconds (uSec)", "Nanoseconds (nSec)", "Gigahertz (GHz)",
-    "Centimeters (cm)", "Meters (m)", "Millimeters (mm)", "Hours",
-)
-# Y axis unit codes (fytype): 0-26 direct table, 128-131 a second table.
-_Y_UNITS = (
-    "Arbitrary Intensity", "Interferogram", "Absorbance", "Kubelka-Munk",
-    "Counts", "Volts", "Degrees", "Milliamps", "Millimeters", "Millivolts",
-    "Log(1/R)", "Percent", "Intensity", "Relative Intensity", "Energy", "",
-    "Decibel", "", "", "Temperature (F)", "Temperature (C)",
-    "Temperature (K)", "Index of Refraction [N]", "Extinction Coeff. [K]",
-    "Real", "Imaginary", "Complex",
-)
-_Y_UNITS_ALT = ("Transmission", "Reflectance", "Arbitrary or Single Beam", "Emission")
-
 _EXPERIMENT_TYPES = (
     "General SPC", "Gas Chromatogram", "General Chromatogram",
     "HPLC Chromatogram", "FT-IR, FT-NIR, FT-Raman Spectrum or Igram",
@@ -144,18 +123,6 @@ _EXPERIMENT_TYPES = (
     "Mass Spectrum", "NMR Spectrum or FID", "Raman Spectrum",
     "Fluorescence Spectrum", "Atomic Spectrum", "Chromatography Diode Array Spectra",
 )
-
-
-def _axis_label(code: int) -> str:
-    return _XZ_UNITS[code] if 0 <= code < len(_XZ_UNITS) else "Unknown"
-
-
-def _y_label(code: int) -> str:
-    if 0 <= code < len(_Y_UNITS):
-        return _Y_UNITS[code] or "Arbitrary Intensity"
-    if 128 <= code < 128 + len(_Y_UNITS_ALT):
-        return _Y_UNITS_ALT[code - 128]
-    return "Unknown"
 
 
 def is_spc(path: str | Path) -> bool:
@@ -312,7 +279,8 @@ def _import_old(raw: bytes, path: Path) -> DataStruct:
         )
         ys.append(_y_from_ints(y_int, exp, 32))
     x = np.linspace(head["ofirst"], head["olast"], npts)
-    y_label = _y_label(head["oytype"])
+    y_label, y_unit = y_axis(head["oytype"])
+    x_label, x_unit = x_axis(head["oxtype"])
     labels = [y_label] if n_sub == 1 else [f"{y_label} {i + 1}" for i in range(n_sub)]
     year = int(head["oyear"])
     date = None
@@ -326,8 +294,8 @@ def _import_old(raw: bytes, path: Path) -> DataStruct:
         "source": str(path),
         "parser_name": "import_spc",
         "spc_format": "old (fversn=0x4D)",
-        "x_column_name": _axis_label(head["oxtype"]),
-        "x_column_unit": "",
+        "x_column_name": x_label,
+        "x_column_unit": x_unit,
         "comment": _null_str(head["ocmnt"]),
         "source_instrument": _null_str(head["ores"]),
         "date": date,
@@ -335,7 +303,7 @@ def _import_old(raw: bytes, path: Path) -> DataStruct:
         "flags": flags,
     }
     return DataStruct.create(
-        x, np.column_stack(ys), labels=labels, units=[""] * n_sub, metadata=metadata
+        x, np.column_stack(ys), labels=labels, units=[y_unit] * n_sub, metadata=metadata
     )
 
 
@@ -399,14 +367,15 @@ def import_spc(filepath: str | Path) -> DataStruct:
         subfiles.append((own_x, y, sub_info))
         pos += consumed
 
-    x_label = _axis_label(head["fxtype"])
-    y_label = _y_label(head["fytype"])
+    x_label, x_unit = x_axis(head["fxtype"])
+    y_label, y_unit = y_axis(head["fytype"])
     if flags["talabs"]:
+        # Custom titles: a trailing "(unit)" splits off like the coded ones.
         parts = head["fcatxt"].split(b"\x00")
         if len(parts) >= 2:
             xl, yl = _null_str(parts[0]), _null_str(parts[1])
-            x_label = xl or x_label
-            y_label = yl or y_label
+            x_label, x_unit = split_title(xl) if xl else (x_label, x_unit)
+            y_label, y_unit = split_title(yl) if yl else (y_label, y_unit)
 
     multi_x = flags["txyxys"] and fnsub > 1
     long_form = False
@@ -455,7 +424,7 @@ def import_spc(filepath: str | Path) -> DataStruct:
         "source": str(path),
         "parser_name": "import_spc",
         "x_column_name": x_label,
-        "x_column_unit": "",
+        "x_column_unit": x_unit,
         "experiment_type": (
             _EXPERIMENT_TYPES[head["fexper"]]
             if head["fexper"] < len(_EXPERIMENT_TYPES)
@@ -482,5 +451,7 @@ def import_spc(filepath: str | Path) -> DataStruct:
         metadata["default_trace"] = "Scatter"
 
     return DataStruct.create(
-        x, y_cols, labels=y_labels, units=[""] * len(y_labels), metadata=metadata
+        x, y_cols, labels=y_labels,
+        units=[y_unit] * (len(y_labels) - 1) + ["" if long_form else y_unit],
+        metadata=metadata,
     )

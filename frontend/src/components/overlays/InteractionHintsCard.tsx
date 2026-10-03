@@ -11,13 +11,10 @@ export default function InteractionHintsCard({ onDismiss }: { onDismiss: () => v
     // fixed 10 e2e tests: a fresh Playwright session has no `seen` flag, so
     // the card rendered over the Annotations card and swallowed their clicks.)
     <aside
-      className="qzk-glass"
+      className="qzk-glass qzk-hints-card"
       aria-label="Interaction hints"
       style={{
-        position: "fixed",
-        right: 16,
-        bottom: 34,
-        width: 310,
+        position: "fixed", // corner and width: platform.css (.qzk-hints-card)
         zIndex: 1200,
         padding: 12,
         pointerEvents: "none",

@@ -69,15 +69,19 @@ function PopupBox({
 }) {
   const localRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y });
+  // Taller than the window (the plot menu in a short one): tighten the rows.
+  // Not a scroll: a scrolling root clips its flyouts, and a scroll closes it.
+  const [fit, setFit] = useState(false);
   useLayoutEffect(() => {
     const el = localRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
     const pad = 8;
+    if (!fit && r.height + 2 * pad > window.innerHeight) return setFit(true);
     const nx = x + r.width + pad > window.innerWidth ? Math.max(pad, window.innerWidth - r.width - pad) : x;
     const ny = y + r.height + pad > window.innerHeight ? Math.max(pad, window.innerHeight - r.height - pad) : y;
     setPos({ x: nx, y: ny });
-  }, [x, y]);
+  }, [x, y, fit]);
   return (
     <div
       ref={(node) => {
@@ -85,7 +89,7 @@ function PopupBox({
         if (typeof boxRef === "function") boxRef(node);
         else if (boxRef) (boxRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       }}
-      className="qzk-menu-pop qzk-ctx"
+      className={`qzk-menu-pop qzk-ctx${fit ? " fit" : ""}`}
       style={{ position: "fixed", left: pos.x, top: pos.y, zIndex: 2100 }} // see module header: stacking
       onContextMenu={(e) => e.preventDefault()}
       onClick={(e) => {

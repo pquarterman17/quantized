@@ -8,10 +8,12 @@
 //     and an Origin spatial arrangement under it — the request is one
 //     overlaid plot;
 //   - the magnifier INSET (`insetMode`) — the request is the main plot only.
-// A faithful stack export would mean rebuilding MultiPanelStage's layout on
-// the figure-page route, which is not a small change, so the export instead
-// says what it will produce and lets the user cancel (owner rule: silent
-// wrong output is the bug). Views that DO export faithfully never ask: polar
+// "Export figure…" now draws a plain per-channel stack as its own panels on
+// the figure-page route (`lib/stackPageExport.ts`) and never reaches this
+// for one; Copy figure and Send to report still post the one request, so for
+// them (and an inset, or a spatial page under the stack) the export says what
+// it will produce and lets the user cancel (owner rule: silent wrong output
+// is the bug). Views that DO export faithfully never ask: polar
 // (`lib/polarFigureSpec.ts`), facets (the spec carries `facets`) and an x-break
 // (the flat figure plus `x_breaks`, by design). Stat mode routes to the stat
 // stage's own export first (`lib/statStageBridge.ts`); reaching this XY

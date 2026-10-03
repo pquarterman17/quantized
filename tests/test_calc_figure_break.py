@@ -202,3 +202,39 @@ class TestRenderBreaksImplDirect:
             figsize=(6.0, 4.0), series_styles=[{"color": "#123456"}],
         )
         assert "#123456" in out.decode("utf-8", "ignore")
+
+
+def _panel_limits(overrides: dict[str, object], *, y_log: bool = False) -> list[tuple[float, ...]]:
+    """Render a broken figure and return each panel's y limits."""
+    import quantized.calc.figure_break as fb
+
+    captured: dict[str, object] = {}
+    real = fb.savefig_bytes
+
+    def grab(fig, *a, **k):  # type: ignore[no-untyped-def]
+        captured["fig"] = fig
+        return real(fig, *a, **k)
+
+    x = np.concatenate([np.linspace(0, 10, 11), np.linspace(20, 30, 11), np.linspace(100, 110, 11)])
+    y = np.concatenate([np.linspace(1, 2, 11), np.full(11, 50.0), np.linspace(3, 4, 11)])
+    with patch.object(fb, "savefig_bytes", grab):
+        render_figure(x, [("s", y)], fmt="svg", overrides=overrides, y_log=y_log)
+    return [tuple(float(v) for v in a.get_ylim()) for a in captured["fig"].axes]  # type: ignore[attr-defined]
+
+
+class TestBreakYRange:
+    """Plot audit round 4: the screen's break panels range y over the rows each
+    panel SHOWS (padded like the unbroken plot) and honour a typed y limit."""
+
+    def test_elided_rows_do_not_stretch_y(self):
+        for lo, hi in _panel_limits({"x_breaks": [[12, 95]]}):
+            assert hi < 10  # the elided rows hold 50; the shown ones top out at 4
+            assert lo < 1 < 4 < hi  # padded, not touching the frame
+
+    def test_elided_rows_do_not_stretch_log_y(self):
+        assert set(_panel_limits({"x_breaks": [[12, 95]]}, y_log=True)) == {(1.0, 10.0)}
+
+    def test_typed_y_limit_is_honoured(self):
+        assert set(_panel_limits({"x_breaks": [[12, 95]], "y_lim": [0, 3]})) == {(0.0, 3.0)}
+        lo, hi = _panel_limits({"x_breaks": [[12, 95]], "y_lim": [None, 3.5]})[0]
+        assert hi == 3.5 and lo < 1

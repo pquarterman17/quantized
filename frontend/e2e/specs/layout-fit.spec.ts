@@ -6,7 +6,10 @@
 //   - the default NE legend sits below the dock, not under it;
 //   - the Graph Builder window stays inside the viewport with a usable preview;
 //   - a Library worksheet name keeps real width at the default 210px panel;
-//   - the Quick Figure Builder grid never overflows its container.
+//   - the Quick Figure Builder grid never overflows its container;
+//   - round 4 (transient chrome): toasts, the hints card, the legend, the
+//     tool readout, result chips and the HUD keep off the plot's axes and
+//     inside their container; tooltips, tool windows and menus fit the window.
 // The dock journey is `@core` so it also runs in the 125%/200% projects.
 
 import { expect, type Locator, type Page, test } from "@playwright/test";
@@ -141,4 +144,244 @@ test("the Quick Figure Builder grid never overflows its container", async ({ pag
     expect(m.overflow, `grid overflow at ${size.width}x${size.height}`).toBeLessThanOrEqual(1);
     expect(m.maxRight).toBeLessThanOrEqual(m.right + 1);
   }
+});
+
+const rectOf = (l: Locator) => l.evaluate((e) => e.getBoundingClientRect().toJSON() as DOMRect);
+
+async function plotFile(page: Page, file: string): Promise<void> {
+  await gotoApp(page);
+  await dropFileOnto(page, page.locator(".qzk-library"), fixturePath(file));
+  await waitForDatasetCount(page, 1);
+  await page.locator("[data-ds-id]").first().click();
+  await expect(page.locator(".qzk-stage .u-over")).toBeVisible();
+}
+
+// Round-4 chrome audit: in a narrow window the auto legend grew left past the
+// frame, over the y tick labels and title and off the stage; past eight
+// series the outside column took 260px of a ~300px stage and covered the plot.
+test("the auto legend stays inside the plot frame at every window size", async ({ page }) => {
+  await plotFile(page, "long-labels.csv");
+  const legend = page.locator(".qzk-stage > .qzk-legend.auto");
+  for (const size of SIZES) {
+    await page.setViewportSize(size);
+    // The frame vars follow the resize on the next draw; wait for the legend to settle inside.
+    await expect
+      .poll(async () => {
+        const [l, f] = await Promise.all([rectOf(legend), rectOf(page.locator(".qzk-stage .u-over"))]);
+        return l.left >= f.left - 0.5 && l.right <= f.right + 0.5 && l.top >= f.top - 0.5 && l.bottom <= f.bottom + 0.5;
+      }, { message: `legend leaves the frame at ${size.width}x${size.height}` })
+      .toBe(true);
+  }
+});
+
+test("an outside legend column never covers the plot frame", async ({ page }) => {
+  await plotFile(page, "long-labels-many.csv");
+  const legend = page.locator(".qzk-stage > .qzk-legend.out");
+  await expect(legend).toBeVisible();
+  for (const size of SIZES) {
+    await page.setViewportSize(size);
+    await expect
+      .poll(async () => {
+        const [l, f] = await Promise.all([rectOf(legend), rectOf(page.locator(".qzk-stage .u-over"))]);
+        return !overlaps(l, f);
+      }, { message: `outside legend covers the frame at ${size.width}x${size.height}` })
+      .toBe(true);
+  }
+});
+
+// Round-4 chrome audit: the data-cursor readout sat at the STAGE's bottom right,
+// the x-axis band; in a narrow window that is right on the x-axis title. It now
+// takes a corner inside the frame.
+test("the data-cursor readout stays inside the plot frame @core", async ({ page }) => {
+  await plotFile(page, "linear-ramp.csv");
+  await page.evaluate(() =>
+    (window as unknown as { __qz: { useApp: { getState: () => { setPlotTool: (t: string) => void } } } }).__qz.useApp
+      .getState()
+      .setPlotTool("cursor"),
+  );
+  const over = page.locator(".qzk-stage .u-over");
+  const readout = page.locator(".qzk-stage > .qzk-readout");
+  for (const size of SIZES) {
+    await page.setViewportSize(size);
+    await over.hover({ position: { x: 20, y: 20 } });
+    await over.hover(); // the centre lies on the ramp
+    await expect(readout).toBeVisible();
+    await expect
+      .poll(async () => {
+        const [r, f] = await Promise.all([rectOf(readout), rectOf(over)]);
+        return r.left >= f.left - 0.5 && r.right <= f.right + 0.5 && r.top >= f.top - 0.5 && r.bottom <= f.bottom + 0.5;
+      }, { message: `readout leaves the frame at ${size.width}x${size.height}` })
+      .toBe(true);
+  }
+});
+
+// Round-4 chrome audit: the ∫ / ∩ result chips sat at the STAGE's bottom
+// centre, on the x-axis title, and (each chip being .qzk-glass, i.e.
+// absolute) piled up on each other instead of stacking.
+test("the ∫ and ∩ result chips stack inside the plot frame", async ({ page }) => {
+  await plotFile(page, "two-peaks.csv");
+  const over = page.locator(".qzk-stage .u-over");
+  const f = await rectOf(over);
+  for (const tool of ["integ", "fwhm"]) {
+    await page.evaluate(
+      (t) =>
+        (window as unknown as { __qz: { useApp: { getState: () => { setPlotTool: (t: string) => void } } } }).__qz.useApp
+          .getState()
+          .setPlotTool(t),
+      tool,
+    );
+    await page.mouse.move(f.left + f.width * 0.2, f.top + f.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(f.left + f.width * 0.45, f.top + f.height / 2, { steps: 6 });
+    await page.mouse.up();
+  }
+  const chips = page.locator(".qzk-result-chips > .qzk-result-chip");
+  await expect(chips).toHaveCount(2);
+  for (const size of SIZES) {
+    await page.setViewportSize(size);
+    await expect
+      .poll(async () => {
+        const [a, b, fr] = await Promise.all([rectOf(chips.nth(0)), rectOf(chips.nth(1)), rectOf(over)]);
+        const inFrame = (r: DOMRect) => r.left >= fr.left - 0.5 && r.right <= fr.right + 0.5 && r.bottom <= fr.bottom + 0.5;
+        return inFrame(a) && inFrame(b) && !overlaps(a, b);
+      }, { message: `result chips at ${size.width}x${size.height}` })
+      .toBe(true);
+  }
+});
+
+// Round-4 chrome audit: in a narrow stage the active-tool HUD ran past the
+// stage edge and was cut off, "Esc cancels" included; now only its hint shrinks.
+test("the active-tool HUD stays inside the stage", async ({ page }) => {
+  await loadPlot(page);
+  await page.evaluate(() =>
+    (window as unknown as { __qz: { useApp: { getState: () => { setPlotTool: (t: string) => void } } } }).__qz.useApp
+      .getState()
+      .setPlotTool("stats"),
+  );
+  const esc = page.locator(".qzk-stage > .qzk-tool-hud .esc");
+  await expect(esc).toBeVisible();
+  for (const size of SIZES) {
+    await page.setViewportSize(size);
+    const [e, s] = await Promise.all([rectOf(esc), rectOf(page.locator(".qzk-stage").first())]);
+    expect(e.right, `HUD cut off at ${size.width}x${size.height}`).toBeLessThanOrEqual(s.right);
+  }
+});
+
+// Round-4 chrome audit: a tooltip is centred on its control, so the tips of
+// the Inspector's "?" buttons and the search pill ran off the right edge.
+test("tooltips at the window's right edge stay inside it", async ({ page }) => {
+  await loadPlot(page);
+  for (const size of [SIZES[0], { width: 800, height: 600 }]) {
+    await page.setViewportSize(size);
+    for (const target of [page.locator("[data-tip='Open related help']").first(), page.locator(".qzk-menubar [data-tip]").last()]) {
+      await target.hover();
+      const tip = page.getByRole("tooltip");
+      await expect(tip).toBeVisible();
+      const t = await rectOf(tip);
+      expect(t.left >= 0 && t.right <= size.width, `tip cut off at ${size.width}x${size.height}`).toBe(true);
+      await page.mouse.move(1, size.height - 2);
+      await expect(tip).toBeHidden();
+    }
+  }
+});
+
+// Round-4 chrome audit: reopened from Help over a plot, the 310px hints card
+// stuck 30px out of the 296px Inspector column, over the x-axis ticks and title.
+test("the interaction-hints card stays in the side column, clear of the plot", async ({ page }) => {
+  await loadPlot(page);
+  await page.evaluate(() => window.dispatchEvent(new Event("qz:show-interaction-hints")));
+  const card = page.getByRole("complementary", { name: "Interaction hints" });
+  await expect(card).toBeVisible();
+  for (const size of SIZES) {
+    await page.setViewportSize(size);
+    const [c, s] = await Promise.all([rectOf(card), rectOf(page.locator(".qzk-stage").first())]);
+    expect(overlaps(c, s), `hints card covers the plot stage at ${size.width}x${size.height}`).toBe(false);
+  }
+});
+
+// Round-4 chrome audit: sweeping every palette command at 800x600, the only
+// window that left the viewport was the 840px Multi-panel export panel.
+test("a tool window wider than the window is capped to it", async ({ page }) => {
+  await loadPlot(page);
+  await page.setViewportSize({ width: 800, height: 600 });
+  await runPaletteCommand(page, "Multi-panel export…");
+  const win = page.locator(".qzk-win").filter({ hasText: "Multi-panel export" });
+  await expect(win).toBeVisible();
+  const r = await rectOf(win);
+  expect(r.left >= 0 && r.right <= 800, `window spans ${r.left}..${r.right}`).toBe(true);
+});
+
+// Round-4 chrome audit: the File, Plot and Analyze menus are 720-780px tall,
+// so in a 700px-high window their last items sat below the window edge.
+test("a menubar menu taller than the window scrolls instead of running off it", async ({ page }) => {
+  await loadPlot(page);
+  await page.setViewportSize({ width: 1000, height: 700 });
+  for (const name of ["File", "Plot", "Analyze"]) {
+    await page.locator(".qzk-menubar .qzk-menu-wrap > :first-child", { hasText: name }).first().click();
+    const pop = page.locator(".qzk-menu-wrap > .qzk-menu-pop");
+    await expect(pop).toBeVisible();
+    expect((await rectOf(pop)).bottom, `${name} menu bottom`).toBeLessThanOrEqual(700);
+    const last = pop.locator(".qzk-menu-item").last();
+    await last.scrollIntoViewIfNeeded();
+    const r = await rectOf(last);
+    expect(r.top >= 0 && r.bottom <= 700, `${name}'s last item unreachable`).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(pop).toBeHidden();
+  }
+});
+
+type QzHarness = { __qz: { useApp: { setState: (s: object) => void } } };
+
+// Round-4 chrome audit: the import toast sat bottom-centre of the WINDOW,
+// which is the bottom-centre of the stage, exactly where the x-axis title is
+// drawn. A toast now docks over a side panel (or the title bar when both
+// panels are collapsed), so it never covers any part of the plot stage.
+test("an import toast never covers the plot stage", async ({ page }) => {
+  test.setTimeout(60_000);
+  await loadPlot(page);
+  const cases = [
+    ...SIZES.map((size) => ({ size, lc: false, rc: false })),
+    { size: SIZES[0], lc: false, rc: true },
+    { size: SIZES[0], lc: true, rc: true },
+  ];
+  const files = ["two-channel.csv", "six-channel.csv", "linear-ramp.csv", "dataset-a.csv", "dataset-b.csv"];
+  for (const [i, c] of cases.entries()) {
+    await page.setViewportSize(c.size);
+    await page.evaluate(
+      ([lc, rc]) => (window as unknown as QzHarness).__qz.useApp.setState({ leftCollapsed: lc, rightCollapsed: rc }),
+      [c.lc, c.rc],
+    );
+    await dropFileOnto(page, page.locator(".qzk-library"), fixturePath(files[i]));
+    await waitForDatasetCount(page, i + 2);
+    const toast = page.locator(".qzk-toast", { hasText: "imported 1 file" }).last();
+    await expect(toast).toBeVisible();
+    await toast.evaluate((e) => Promise.all(e.getAnimations().map((a) => a.finished))); // the slide-in
+    const where = `${c.size.width}x${c.size.height}${c.lc ? " no library" : ""}${c.rc ? " no inspector" : ""}`;
+    const [t, s, box] = await Promise.all([
+      rectOf(toast),
+      rectOf(page.locator(".qzk-stage").first()),
+      rectOf(page.locator(".qzk-toaster")),
+    ]);
+    expect(overlaps(t, s), `toast covers the plot stage at ${where}`).toBe(false);
+    // A collapsed panel gives its width to the stage (both at once, too).
+    if (c.lc) expect(s.left, `library still open at ${where}`).toBeLessThanOrEqual(1);
+    if (c.rc) expect(s.right, `inspector still open at ${where}`).toBeGreaterThanOrEqual(c.size.width - 1);
+    // Inside the window AND the stack's own box (a full chip row clips at its edge).
+    const inside = t.left >= Math.max(0, box.left - 0.5) && t.right <= Math.min(c.size.width, box.right + 0.5);
+    expect(inside && t.top >= 0 && t.bottom <= c.size.height, `newest toast clipped at ${where}`).toBe(true);
+  }
+});
+
+// Round-4 chrome audit: the plot's right-click menu is ~640px tall; in a
+// 600px-high window its export and Help rows sat below the window edge.
+test("the plot's right-click menu fits a 600px-high window", async ({ page }) => {
+  await plotFile(page, "linear-ramp.csv");
+  await page.setViewportSize({ width: 800, height: 600 });
+  // The frame centre lies on the diagonal ramp, so this opens the (taller) series menu.
+  await page.locator(".qzk-stage .u-over").click({ button: "right" });
+  const menu = page.locator(".qzk-ctx").first();
+  await expect(menu.getByRole("menuitem", { name: "Marker" })).toBeVisible();
+  const [m, last] = await Promise.all([rectOf(menu), rectOf(menu.getByRole("menuitem").last())]);
+  expect(m.top, "menu top").toBeGreaterThanOrEqual(0);
+  expect(last.bottom, "last menu row below the window").toBeLessThanOrEqual(600);
 });

@@ -67,6 +67,9 @@ export interface BreakPanelsArgs {
   hiddenChannels: readonly number[];
   /** uPlot cursor-sync group; see `MULTIPANEL_SYNC_KEY`. */
   syncKey: string;
+  /** `cell.yLim` is the panels' shared DATA extent (no typed limit), so pad it
+   *  by uPlot's own auto rule, as an unbroken plot's y is. */
+  yAuto?: boolean;
   /** The host box to lay the row out in (the caller's `clientWidth || 600` /
    *  `clientHeight || 400`), reused as the resize fallback. */
   box: { w: number; h: number };
@@ -86,6 +89,24 @@ function makeBreakGlyph(width: number): HTMLDivElement {
   return glyph;
 }
 
+/** Each built row's panel x spans, for `resizeBreakPanels`. */
+const rowSpans = new WeakMap<readonly uPlot[], number[]>();
+
+/** Size `plots` across `width` px so each PLOT AREA's width is in proportion
+ *  to its panel's x span — the export's `width_ratios`
+ *  (`calc/figure_break.py`), so a slope reads the same in every panel. Each
+ *  panel keeps its own axis gutters on top (each names its own channels). */
+function layoutRow(plots: readonly uPlot[], spans: readonly number[], width: number, height: number): void {
+  const off = plots.map((u) => Math.max(0, u.width - (u.bbox?.width ?? u.width) / (uPlot.pxRatio || 1)) || 0);
+  const free = Math.max(plots.length, width - (plots.length - 1) * BREAK_GLYPH_W - off.reduce((a, b) => a + b, 0));
+  const total = spans.reduce((a, b) => a + b, 0);
+  plots.forEach((u, i) => {
+    const w = Math.max(1, Math.floor(off[i] + (free * spans[i]) / total));
+    if (u.root?.parentElement) u.root.parentElement.style.flex = `0 0 ${w}px`;
+    u.setSize({ width: w, height });
+  });
+}
+
 /** Build one uPlot per break panel into `host` (which the caller has already
  *  emptied), seam glyphs between them, and return the plots in panel order. */
 export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): uPlot[] {
@@ -94,6 +115,11 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
   // wheel or pan on one panel moves them all.
   const plots: uPlot[] = [];
   const ySync = xZoomSyncHook(() => plots, "y");
+  const { yLim, yScale } = args.cell;
+  const padded =
+    args.yAuto && yLim && yScale !== "reciprocal" && typeof uPlot.rangeNum === "function" // (a test's mock may lack it)
+      ? ((yScale === "log" ? uPlot.rangeLog(yLim[0], yLim[1], 10, false) : uPlot.rangeNum(yLim[0], yLim[1], 0.1, true)) as [number, number])
+      : null;
   args.panels.forEach((p, i) => {
     if (i > 0) host.appendChild(makeBreakGlyph(BREAK_GLYPH_W));
     const div = document.createElement("div");
@@ -105,6 +131,7 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
       height: args.box.h,
       // A break panel's whole point is showing only its own x-slice.
       xLim: p.xRange,
+      ...(padded ? { yLim: padded } : {}),
       // `channels[i]` is the dataset channel behind `payload.series[i]`, by
       // construction in `lib/facet.breakPayloads` — so a rename lands on the
       // channel it was made for even when this panel's channel list differs
@@ -123,6 +150,10 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
     opts.hooks = { ...opts.hooks, setScale: [...(opts.hooks?.setScale ?? []), ySync] };
     plots.push(new uPlot(opts, p.payload.data, div));
   });
+  const spans = args.panels.map((p) => Math.max(p.xRange[1] - p.xRange[0], 1e-9));
+  rowSpans.set(plots, spans);
+  // Twice: a panel's gutters move a little with its width (x tick overhang).
+  for (let k = 0; k < 2; k++) layoutRow(plots, spans, args.box.w, args.box.h);
   return plots;
 }
 
@@ -138,6 +169,5 @@ export function resizeBreakPanels(
 ): void {
   const width = host.clientWidth || fallback.w;
   const height = host.clientHeight || fallback.h;
-  const ws = breakPanelWidths(plots.length, width, BREAK_GLYPH_W);
-  plots.forEach((u, idx) => u.setSize({ width: ws[idx], height }));
+  for (let k = 0; k < 2; k++) layoutRow(plots, rowSpans.get(plots) ?? plots.map(() => 1), width, height);
 }

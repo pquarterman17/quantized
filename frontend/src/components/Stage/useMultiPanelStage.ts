@@ -32,7 +32,7 @@ import {
   type Composition,
 } from "../../lib/composition";
 import { secondaryAxisFromPanel } from "../../lib/axisspec";
-import { buildErrorColumns } from "../../lib/errorbars";
+import { buildErrorColumns, buildErrorSpans } from "../../lib/errorbars";
 import { sharedXDomain, sharedYDomain } from "../../lib/facetDomains";
 import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
 import {
@@ -122,7 +122,7 @@ export interface MultiPanelStageParams {
   xFmt: AxisFormat;
   yFmt: AxisFormat;
   showGrid: boolean;
-  showAxisBox: boolean;
+  showAxisBox: boolean; xReversed?: boolean; // x high-to-low: the stack and facet panels, as the flat plot (dir -1)
   /** Same presentation inputs PlotViewport receives. Multi-panel modes must
    * not silently fall back to uPlot's 12px/1.5px/Line defaults. */
   fontSize?: number;
@@ -199,7 +199,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     xFmt,
     yFmt,
     showGrid,
-    showAxisBox,
+    showAxisBox, xReversed = false,
     fontSize,
     baseLineWidth,
     defaultTrace,
@@ -321,7 +321,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       decimationRequestEligible({
         defaultTrace,
         hasErrorBars: Object.keys(errKeys).length > 0,
-        hasErrorSpans: errorBindingsApplyToPlotted(active.errorRoles, plotted, { xErrorRenders: false }), // M1: legacy Y-only bars here, no X-error rendering
+        hasErrorSpans: errorBindingsApplyToPlotted(active.errorRoles, plotted, { xErrorRenders: true }), // M1: the stack draws X whiskers too
         hasColorByColumns: false,
       })
         ? defaultDecimateWidthHint()
@@ -554,7 +554,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         // — so both belong here as on the facet leg below. Channel-keyed,
         // projected per panel through `BreakPanel.channels`.
         seriesLabels, seriesStyles: breakSeriesStyles, hiddenChannels: breakHidden ?? [],
-        syncKey,
+        syncKey, yAuto: !drawableLim(yLim, yScale)?.some((v) => v !== null),
         box,
         cell: {
           yScale, xScale, yLim: breakYLim, xFmt, yFmt, showGrid,
@@ -591,7 +591,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         onSetScale: xZoomSyncHook(() => plotsRef.current),
         box,
         cell: {
-          yScale, xScale, xLim: facetXLim, xFmt, yFmt, showGrid,
+          yScale, xScale, xLim: facetXLim, xReversed, xFmt, yFmt, showGrid,
           axisBox: showAxisBox, fontSize, baseLineWidth, defaultTrace,
           tool, onReadout: setReadout, bg,
         },
@@ -619,14 +619,14 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       // screen and export disagree.
       seriesLabels: labelList,
       seriesStyles: styleList,
-      errorBars: errorBarsList,
+      errorBars: errorBarsList, errorSpans: active?.errorRoles?.length ? payload.channels.map((ch) => buildErrorSpans(active.data, [ch], active.errorRoles!)) : [], // spans as the flat plot
       syncKey,
       // Propagate an x-zoom on one panel to all the others.
       onSetScale: xZoomSyncHook(() => plotsRef.current),
       box: { w, h: host.clientHeight || 400 },
       cell: {
         yScale, xScale, xLim: resolveCanvasLims(payload.payload, { xLim, xScale, yScale }).x.range, xFmt, yFmt, showGrid, axisBox: showAxisBox,
-        fontSize, baseLineWidth, defaultTrace, refLines, tool,
+        fontSize, baseLineWidth, defaultTrace, refLines, tool, xReversed,
         onReadout: setReadout, bg,
       },
     });
@@ -646,20 +646,20 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     pageSetup, // #54 Stage 2: page dims/aspect change re-lays "page" fit
     breakMode,
     breakPanels,
-    breakYLim,
+    breakYLim, yLim, // yLim: whether the shared range is typed or auto (padded)
     facet,
     facetPanels,
     encodedFacets,
     facetGrid,
     facetXLim,
-    payload,
+    payload, active, // active: the stack panels' error spans
     yScale,
     xScale,
     xLim,
     xFmt,
     yFmt,
     showGrid,
-    showAxisBox,
+    showAxisBox, xReversed,
     fontSize,
     baseLineWidth,
     defaultTrace,

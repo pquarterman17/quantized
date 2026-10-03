@@ -14,6 +14,7 @@
 
 import { askParams, type ParamField } from "../components/overlays/ParamDialog";
 import { exportFigure } from "./api/figures";
+import { exportFigurePage } from "./api/figurePage";
 import { exportActive, type StoreGet } from "./exportActive";
 import type { FigureSpec } from "./api/figures";
 import type { FigureRenderOpts } from "./figureSpec";
@@ -21,6 +22,7 @@ import { buildStageFigureSpec } from "./figureSpecStage";
 import { chooseExcludedRows } from "./excludedRowsChoice";
 import { excludedChoiceMatters } from "./excludedRowsExport";
 import { confirmScreenOnlyExport } from "./screenOnlyExport";
+import { stackExportView, stackPageRequest } from "./stackPageExport";
 import { exportStatFigure } from "./statFigureCommands";
 import { activeStatExporter } from "./statStageBridge";
 import type { Dataset } from "./types";
@@ -142,7 +144,11 @@ export async function runExportFigureCommand(
       s().excludedDisplay,
     );
     if (!picked) return false;
-    // A stack/inset view the request cannot carry says so first (lib/screenOnlyExport.ts).
+    // A per-channel stack exports as its own panels (lib/stackPageExport.ts).
+    const stackView = buildSpec ? null : stackExportView(s(), ds);
+    const stacked = stackView && stackPageRequest(picked.value, stackView);
+    if (stacked) return exportFigurePage(stacked, signal);
+    // A view the request still cannot carry (an inset) says so first (lib/screenOnlyExport.ts).
     if (!buildSpec && !(await confirmScreenOnlyExport(s(), picked.value, "Export"))) return false;
     await exportFigure(picked.value, signal);
   });

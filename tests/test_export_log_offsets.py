@@ -78,8 +78,8 @@ def test_the_legend_states_the_offset_like_the_canvas() -> None:
     assert legend is not None
     text = legend.group(1)
     # Canvas rule: suffix BEFORE the unit; an un-offset series is unchanged.
-    assert "P ×10^3 (atoms/cm3)" in text
-    assert "B (atoms/cm3)" in text and "B ×10" not in text
+    assert "P ×10^3 (atoms/cm³)" in text
+    assert "B (atoms/cm³)" in text and "B ×10" not in text
 
 
 def test_a_renamed_legend_still_states_the_offset() -> None:
@@ -96,7 +96,7 @@ def test_a_renamed_legend_still_states_the_offset() -> None:
     assert legend is not None
     text = legend.group(1)
     assert "Renamed P ×10^3" in text
-    assert "B (atoms/cm3)" in text and "B ×10" not in text
+    assert "B (atoms/cm³)" in text and "B ×10" not in text
 
 
 def test_absent_or_zero_offsets_render_as_before() -> None:

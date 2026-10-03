@@ -15,7 +15,24 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-__all__ = ["pnr_role_metadata", "refl_fit_role_metadata"]
+__all__ = ["angstrom_unit", "pnr_role_metadata", "refl_fit_role_metadata"]
+
+# refl1d/NCNR files write the Angstrom as "A" ("z (A)", "Q (A-1)", "rho
+# (1e-6/A2)"), which an axis title reads as amperes. Only these parsers know
+# the convention, so they spell it Å at parse time (ORSO's own spelling) and
+# keep the header's ASCII as provenance -- the SIMS depth fix's split (#527).
+_ANGSTROM_UNITS = {
+    "A": "Å", "Ang": "Å",
+    "1/A": "Å⁻¹", "A-1": "Å⁻¹", "A^-1": "Å⁻¹", "1/Ang": "Å⁻¹", "Ang^-1": "Å⁻¹",
+    "A2": "Å²", "A^2": "Å²",
+    "1e-6/A2": "10⁻⁶ Å⁻²", "1e-6/A^2": "10⁻⁶ Å⁻²", "10^-6/A^2": "10⁻⁶ Å⁻²",
+}
+
+
+def angstrom_unit(unit: str) -> str:
+    """A reflectometry file's ASCII Angstrom unit, spelled with Å; any other
+    unit unchanged."""
+    return _ANGSTROM_UNITS.get(unit.strip(), unit)
 
 
 def _x_binding(channel: int) -> dict[str, Any]:

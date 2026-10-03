@@ -7,6 +7,8 @@ importExcel's logic; the cell grid replaces MATLAB's ``readcell``.
 
 from __future__ import annotations
 
+import datetime as dt
+import re
 import xml.etree.ElementTree as ET
 import zipfile
 from collections.abc import Sequence
@@ -18,7 +20,12 @@ import openpyxl
 from openpyxl.utils.exceptions import InvalidFileException
 
 from quantized.datastruct import DataStruct
-from quantized.io._delimited_layout import _is_data_cell, _walk_back_gappy_rows
+from quantized.io._delimited_layout import (
+    _is_data_cell,
+    _looks_like_units_row,
+    _to_float,
+    _walk_back_gappy_rows,
+)
 from quantized.io.base import CORRUPT_ARCHIVE_ERRORS, resolve_column
 from quantized.io.delimited import _extract_units
 
@@ -38,28 +45,64 @@ _CT_NS = "http://schemas.openxmlformats.org/package/2006/content-types"
 _WORKSHEET_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"
 
 
-def _cell_to_float(value: Any) -> float:
+def _cell_to_float(value: Any, text_numbers: bool = False) -> float:
+    """A cell's number; NaN for anything else. ``text_numbers`` also reads a
+    numeric TEXT cell (only used when the sheet has no real number at all)."""
     if isinstance(value, bool):  # bool is an int subclass — not data
         return float("nan")
     if isinstance(value, (int, float)):
         return float(value)
+    if text_numbers and isinstance(value, str):
+        return _to_float(value)
     return float("nan")
 
 
-def _cell_token(value: Any) -> str:
+def _is_datetime(value: Any) -> bool:
+    return isinstance(value, (dt.datetime, dt.date))
+
+
+def _epoch(value: dt.date) -> float:
+    """A date/time cell as UTC epoch seconds (the CSV reader's convention)."""
+    stamp = value if isinstance(value, dt.datetime) else dt.datetime(*value.timetuple()[:3])
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=dt.UTC)
+    return stamp.timestamp()
+
+
+def _cell_token(value: Any, text_numbers: bool = False) -> str:
     """A cell as the text token ``_walk_back_gappy_rows`` classifies.
 
     The sheet is typed, so only a real number is data: a text cell that
     merely LOOKS numeric (a ``"2019"`` year header) or a date is mapped to a
-    placeholder that is neither a number nor a missing-value spelling.
+    placeholder that is neither a number nor a missing-value spelling --
+    unless ``text_numbers`` (the sheet holds numbers only as text).
     """
     if value is None:
         return ""
     if not isinstance(value, bool) and isinstance(value, (int, float)):
         return repr(float(value))
-    if isinstance(value, str) and not _is_data_cell(value.strip()):
+    if isinstance(value, str) and (text_numbers or not _is_data_cell(value.strip())):
         return value
     return "#text"
+
+
+def _row_width(row: Sequence[Any]) -> int:
+    end = len(row)
+    while end and row[end - 1] is None:
+        end -= 1
+    return end
+
+
+def _units_row(grid: list[list[Any]], scores: list[float], first_data: int, n_cols: int) -> bool:
+    """Is the row above ``first_data`` a units row under a header (the CSV
+    reader's ``_looks_like_units_row`` rule, header at least as wide)?"""
+    if first_data < 2 or scores[first_data - 1] >= 0.5 or scores[first_data - 2] >= 0.5:
+        return False
+    head, units = grid[first_data - 2], grid[first_data - 1]
+    if _row_width(head) < _row_width(units):
+        return False
+    tokens = ["" if v is None else str(v) for v in units[: _row_width(units)]]
+    return _looks_like_units_row(tokens, n_cols)
 
 
 def _header_str(value: Any, col: int) -> str:
@@ -198,10 +241,26 @@ def import_excel(
     while n_cols > 0 and all(row[n_cols - 1] is None for row in grid):
         n_cols -= 1
         grid = [row[:n_cols] for row in grid]
+    # Leading blank columns too: a table that starts in column B otherwise
+    # took the empty column A as its x axis (all NaN, nothing plots).
+    lead = 0
+    while lead < n_cols - 1 and all(row[lead] is None for row in grid):
+        lead += 1
+    if lead:
+        grid = [row[lead:] for row in grid]
+        n_cols -= lead
 
-    num_mat = np.array([[_cell_to_float(v) for v in row] for row in grid], dtype=float)
+    # Numbers typed in as text count only when the sheet has no real number.
+    text_numbers = not any(
+        not isinstance(v, bool) and isinstance(v, (int, float)) for row in grid for v in row
+    )
+    num_mat = np.array(
+        [[_cell_to_float(v, text_numbers) for v in row] for row in grid], dtype=float
+    )
+    dates = np.array([[_is_datetime(v) for v in row] for row in grid], dtype=bool)
+    present = ~np.isnan(num_mat) | dates
     scores = [
-        (float(np.count_nonzero(~np.isnan(num_mat[i]))) / n_cols) if n_cols else 0.0
+        (float(np.count_nonzero(present[i])) / n_cols) if n_cols else 0.0
         for i in range(len(grid))
     ]
     first_data = next((i for i, s in enumerate(scores) if s > 0.5), -1)
@@ -211,18 +270,25 @@ def import_excel(
         # A 2-column row with one blank cell scores exactly 0.5, so leading
         # gappy data rows (and the header above them) were dropped silently.
         # Same positive-evidence walk-back the delimited parser uses.
-        tokens = [[_cell_token(v) for v in row] for row in grid[: first_data + 1]]
+        tokens = [[_cell_token(v, text_numbers) for v in row] for row in grid[: first_data + 1]]
         first_data = _walk_back_gappy_rows(tokens, first_data)
-    header_row = first_data - 1 if first_data >= 1 and scores[first_data - 1] < 0.5 else -1
+    units_row = first_data - 1 if _units_row(grid, scores, first_data, n_cols) else -1
+    if units_row >= 0:
+        header_row = units_row - 1
+    else:
+        header_row = first_data - 1 if first_data >= 1 and scores[first_data - 1] < 0.5 else -1
 
     if header_row >= 0:
         col_headers = [_header_str(grid[header_row][c], c) for c in range(n_cols)]
     else:
         col_headers = [f"Col{c + 1}" for c in range(n_cols)]
+    row_units = [
+        "" if units_row < 0 or v is None else re.sub(r"^\s*[(\[](.*?)[)\]]\s*$", r"\1", str(v))
+        for v in (grid[units_row] if units_row >= 0 else [None] * n_cols)
+    ]
 
-    data = num_mat[first_data:]
-    keep = [i for i in range(data.shape[0]) if not np.all(np.isnan(data[i]))]
-    data = data[keep]
+    keep = [i for i in range(first_data, len(grid)) if present[i].any()]
+    data = num_mat[keep]
     if data.shape[0] == 0:
         raise ValueError(f"no numeric data rows in {path.name}")
     n_rows = data.shape[0]
@@ -232,6 +298,12 @@ def import_excel(
     else:
         time_idx = resolve_column(time_column, col_headers)
     time_vec = np.arange(1, n_rows + 1, dtype=float) if time_idx < 0 else data[:, time_idx]
+    time_is_datetime = time_idx >= 0 and bool(dates[keep, time_idx].mean() >= 0.8)
+    if time_is_datetime:
+        time_vec = np.array(
+            [_epoch(grid[i][time_idx]) if dates[i, time_idx] else np.nan for i in keep],
+            dtype=float,
+        )
 
     if data_columns is None:
         candidates = [c for c in range(n_cols) if c != time_idx]
@@ -248,10 +320,11 @@ def import_excel(
     for c in data_idx:
         unit, label = _extract_units(col_headers[c])
         labels.append(label)
-        units.append(unit)
+        units.append(row_units[c] or unit)
 
     if time_idx >= 0:
         x_unit, x_name = _extract_units(col_headers[time_idx])
+        x_unit = row_units[time_idx] or x_unit
         if not x_name:
             x_name = col_headers[time_idx]
     else:
@@ -265,6 +338,8 @@ def import_excel(
         "sheet_name": sheet_name,
         "all_column_names": col_headers,
     }
+    if time_is_datetime:
+        metadata.update({"time_is_datetime": True, "time_timezone": "UTC"})
     return DataStruct.create(
         time_vec, data[:, data_idx], labels=labels, units=units, metadata=metadata
     )

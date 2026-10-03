@@ -3,7 +3,7 @@
 import type uPlot from "uplot";
 import { describe, expect, it } from "vitest";
 
-import { cornerCounts, drawnPoints, pickCorner, placeLegend } from "./legendAutoPlace";
+import { cornerCounts, drawnPoints, NARROW_FRAME, pickCorner, pickReadoutCorner, placeLegend } from "./legendAutoPlace";
 
 /** A 400×300 frame whose scales map data 0..100 straight onto it (y up). */
 function fakePlot(series: (number | null)[][], xs: number[], show: boolean[] = series.map(() => true)): uPlot {
@@ -69,5 +69,51 @@ describe("placeLegend", () => {
     placeLegend(fakePlot([[1, 2]], [0, 1]), stage);
     expect(stage.style.getPropertyValue("--qz-out-w")).toBe("180px");
     expect(stage.dataset.lc).toBeUndefined();
+  });
+
+  it("flags a frame too narrow for the legend's reorder buttons", () => {
+    const stage = stageWith("auto", 120, 60);
+    const plot = fakePlot([[1, 2]], [0, 1]);
+    const narrow = { ...plot, over: { getBoundingClientRect: () => ({ width: NARROW_FRAME - 1, height: 300 }) } };
+    placeLegend(narrow as uPlot, stage);
+    expect(stage.hasAttribute("data-narrow-frame")).toBe(true);
+    placeLegend(plot, stage);
+    expect(stage.hasAttribute("data-narrow-frame")).toBe(false);
+  });
+
+  // Chrome audit round 4: the readout sat at the STAGE's bottom right, i.e. on
+  // the x-axis title in a narrow window. It now takes a frame corner: the
+  // emptiest one that is not the legend's.
+  it("puts the tool readout in the emptiest frame corner the legend does not hold", () => {
+    const xs = Array.from({ length: 21 }, (_, i) => 90 + i / 2); // a tail of points in the bottom right
+    const stage = stageWith("auto", 120, 60);
+    placeLegend(fakePlot([xs.map(() => 2)], xs), stage);
+    expect(stage.dataset.lc).toBe("ne");
+    expect(stage.dataset.rc).toBe("sw");
+  });
+
+  it("keeps the readout off a legend that spans the frame's width", () => {
+    const stage = stageWith("auto", 380, 60); // a 400px frame: no room beside it
+    const xs = Array.from({ length: 101 }, (_, i) => i);
+    placeLegend(fakePlot([xs.map(() => 2)], xs), stage); // data all along the bottom
+    expect(stage.dataset.lc).toBe("ne");
+    expect(stage.dataset.rc?.[0]).toBe("s");
+  });
+
+  it("places the readout with no legend at all", () => {
+    const stage = document.createElement("div");
+    placeLegend(fakePlot([[50, 50]], [0, 1]), stage);
+    expect(stage.dataset.rc).toBe("se");
+  });
+});
+
+describe("pickReadoutCorner", () => {
+  const empty = { ne: 0, nw: 0, se: 0, sw: 0 };
+  it("prefers the bottom right, never takes the legend's corner, and avoids data", () => {
+    expect(pickReadoutCorner(empty)).toBe("se");
+    expect(pickReadoutCorner(empty, ["se"])).toBe("sw");
+    expect(pickReadoutCorner({ ne: 0, nw: 9, se: 30, sw: 12 }, ["ne"])).toBe("nw");
+    expect(pickReadoutCorner(empty, ["ne", "nw", "se", "sw"])).toBe("se");
+    expect(pickReadoutCorner(empty, ["se", "sw", "ne", "nw"])).toBe("sw");
   });
 });

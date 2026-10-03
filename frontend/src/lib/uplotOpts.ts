@@ -45,6 +45,8 @@ import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit"
 import { anchorEditPlugin, type AnchorPoint } from "./uplotAnchors";
 import { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
 import { xLabelRightPad, xTickSpace } from "./uplotRightPad";
+import { withUnit } from "./unitDisplay";
+export { withUnit }; // eager callers import it here: ~260 B less first-paint JS than direct
 import {
   measurePlugin,
   panPlugin,
@@ -825,10 +827,10 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     args.xAxisLabel === null
       ? ""
       : args.xAxisLabel?.trim() ||
-        (payload.xUnit ? `${payload.xLabel} (${payload.xUnit})` : payload.xLabel);
+        withUnit(payload.xLabel, payload.xUnit);
   // Resolved display label per series: an explicit rename wins, else "label (unit)".
   const labels = payload.series.map((s, i) =>
-    args.seriesLabels?.[i] ?? (s.unit ? `${s.label} (${s.unit})` : s.label),
+    args.seriesLabels?.[i] ?? withUnit(s.label, s.unit),
   );
   // Y title: the override, else a solo series' legend name, else what several share.
   const soloLabel = (which: number): string | undefined => {
@@ -891,7 +893,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
 
   const plugins: uPlot.Plugin[] = [];
   if (tool === "pan") plugins.push(panPlugin());
-  if (tool === "cursor") plugins.push(readoutPlugin(onReadout, payload.yShift));
+  if (tool === "cursor") plugins.push(readoutPlugin(onReadout, payload.yShift, payload.blockRows, payload.xStep));
   if (tool === "measure" && args.onMeasure) {
     plugins.push(measurePlugin(args.onMeasure, cssVar("--accent") || "#8b5cf6"));
   }
@@ -1069,8 +1071,10 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const loopY2 = !xAscending ? fullYExtents(payload, args.hidden, 1, isPositiveOnlyScale(y2ScaleEff), reach) : null;
   // …and its x auto-range collapses to a sliver for the same reason — scan the
   // x column for the true sweep width. uPlot calls X's range on a zoom too: `scannedXRange` keeps it.
-  // A waterfall X-offset layout always scans (its drawn points, `fullXExtents`).
-  const loopX = (!xAscending || payload.blockRows) && !xLim
+  // A waterfall X-offset layout always scans (its drawn points, `fullXExtents`), as does an x
+  // column whose end rows no series draws (uPlot ranges over the whole column, the export the points).
+  const blank = (r: number) => payload.data.every((c, k) => !k || c[r] == null);
+  const loopX = (!xAscending || payload.blockRows || blank(0) || blank(payload.data[0].length - 1)) && !xLim
     ? fullXExtents(withXBarRows(payload, reach, args.hidden), args.hidden, isPositiveOnlyScale(xScale))
     : null;
   const scales: uPlot.Scales = {
