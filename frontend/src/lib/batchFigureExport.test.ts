@@ -83,7 +83,7 @@ describe("downloadBatchFigures", () => {
   });
 
   it("resolves pending worksheet previews before building any archive member", async () => {
-    const preview = { ...dataset(), pending: { bookId: "book-1", sheetIndex: 0 } } as Dataset;
+    const preview = { ...dataset(), pending: { kind: "path", path: "project.opju", bookId: "book-1", rows: 3, cols: 1 } } as Dataset;
     const full = { ...dataset(), data: { ...dataset().data, values: [[10, 20, 30]], time: [0, 1, 2] } };
     const resolve = vi.fn(async () => full);
 
@@ -98,7 +98,7 @@ describe("downloadBatchFigures", () => {
   });
 
   it("fails closed when full pending data cannot be resolved", async () => {
-    const preview = { ...dataset(), pending: { bookId: "book-1", sheetIndex: 0 } } as Dataset;
+    const preview = { ...dataset(), pending: { kind: "path", path: "project.opju", bookId: "book-1", rows: 3, cols: 1 } } as Dataset;
     await expect(downloadBatchFigures([figure], [preview], options, undefined, async () => undefined)).rejects.toThrow(
       "no archive was created",
     );
