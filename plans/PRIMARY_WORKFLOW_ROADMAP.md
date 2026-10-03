@@ -27,14 +27,14 @@ Acceptance: a user can select a worksheet, understand why a workflow was chosen,
 
 Goal: replace the current “large imported tree plus unresolved graph controls” experience with a guided project-level review that distinguishes recovered, approximate, unresolved, and non-actionable content.
 
-- [ ] Define a project-level migration summary from the existing Origin fidelity manifest, book families, graph records, saved previews, omissions, and lazy-book inventory.
-- [ ] Present a compact first screen: recovered worksheets/graphs, items needing review, unsupported items, and safe recommended next actions.
-- [ ] Group unresolved graphs by cause and source workbook rather than showing repeated flat “Choose source…” rows.
+- [x] Define a project-level migration summary from the existing Origin fidelity manifest, book families, graph records, saved previews, omissions, and lazy-book inventory.
+- [x] Present a compact first screen: recovered worksheets/graphs, items needing review, unsupported items, and safe recommended next actions.
+- [x] Group unresolved graphs by cause and source workbook rather than showing repeated flat “Choose source…” rows.
 - [ ] Add bulk resolution where one source choice can safely resolve repeated graph/layer references; always preview scope before applying.
-- [ ] Distinguish an empty graph from a failed graph and explain the reason inline.
-- [ ] Provide direct routes to the relevant workbook, worksheet, reconstructed graph, saved Origin preview, or fidelity details.
-- [ ] Preserve lazy-loading guarantees: inventory is cheap; opening or converting a book resolves full data through the canonical resolver.
-- [ ] Add “review later” state without discarding unresolved records.
+- [x] Distinguish an empty graph from a failed graph and explain the reason inline.
+- [x] Provide direct routes to the relevant workbook, worksheet, reconstructed graph, saved Origin preview, or fidelity details.
+- [x] Preserve lazy-loading guarantees: inventory is cheap; opening or converting a book resolves full data through the canonical resolver.
+- [x] Add “review later” state without discarding unresolved records.
 - [ ] Add real-corpus characterization tests for small, large, partially decoded, and offline/missing-source projects.
 - [ ] Run the cockpit against the local Origin test-data corpus and at least one representative user project.
 

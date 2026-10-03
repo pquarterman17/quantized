@@ -42,6 +42,7 @@ export interface LibrarySectionsProps {
   hierarchy: LibraryHierarchy;
   onFilterTag: (query: string) => void;
   onShowInLibrary: (node: LibraryNode) => void;
+  onStageOpen?: () => void;
   /** Focus mode deliberately suppresses project-wide navigation sections so
    *  the selected Origin branch is the only hierarchy competing for space. */
   focusActive?: boolean;
@@ -62,7 +63,7 @@ export default function LibrarySections(p: LibrarySectionsProps) {
   return (
     <>
       {flat && originFigureCount > 0 && <FiguresSection />}
-      {!p.searchActive && originFidelityCount > 0 && <OriginFidelitySection />}
+      {!p.searchActive && originFidelityCount > 0 && <OriginFidelitySection onStageOpen={p.onStageOpen} />}
       {flat && <EditableFiguresSection />}
       {flat && figureDocCount > 0 && <SavedFiguresSection />}
       {flat && <PagesSection />}

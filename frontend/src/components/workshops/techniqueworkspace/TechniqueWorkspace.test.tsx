@@ -6,6 +6,7 @@ import { useSimsDialog } from "../../../store/simsDialog";
 import { useApp } from "../../../store/useApp";
 import QuickFigureBuilderWorkspace from "../quickfigurebuilder/QuickFigureBuilderWorkspace";
 import TechniqueWorkspace from "./TechniqueWorkspace";
+import { openOriginMigrationReview, openTechniqueWorkflow } from "../../../lib/workflowWorkspace";
 
 function dataset(id: string, technique: string, pending = false): Dataset {
   return {
@@ -23,9 +24,10 @@ function dataset(id: string, technique: string, pending = false): Dataset {
 }
 
 beforeEach(() => {
+  openTechniqueWorkflow();
   useSimsDialog.setState({ seed: null, opened: 0, requestedTab: "process" });
   useApp.setState({
-    datasets: [], activeId: null, selectedIds: [], editableFigures: [], reports: [],
+    datasets: [], activeId: null, selectedIds: [], editableFigures: [], reports: [], originFigures: [], originFidelity: [],
     history: [], future: [], status: "", quickFigureBuilderDatasetId: null,
   });
 });
@@ -37,6 +39,20 @@ describe("TechniqueWorkspace", () => {
     expect(screen.getByText("Choose a worksheet")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back to plot" }));
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("routes an explicit Origin review into the same uncluttered Workflow surface", () => {
+    useApp.setState({
+      originFidelity: [{
+        id: "f1", stem: "sample", siblingIds: ["d1"],
+        manifest: { version: 1, container: "opj", status: "best_effort", graph_records_total: 0, graph_records_actionable: 0, graph_records_filtered: 0, omissions: [], filtered_figures: [] },
+      }],
+    });
+    openOriginMigrationReview("f1");
+    render(<TechniqueWorkspace onClose={() => {}} />);
+    expect(screen.getByRole("heading", { name: "sample" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Technique workflow" }));
+    expect(screen.getByRole("heading", { name: "Choose a worksheet" })).toBeInTheDocument();
   });
 
   it("shows the declared technique, provenance, dimensions, and existing results without mutating science state", () => {

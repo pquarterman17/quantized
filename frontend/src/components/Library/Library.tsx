@@ -370,6 +370,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
         hierarchy={hierarchy}
         onFilterTag={setQuery}
         onShowInLibrary={showInLibrary}
+        onStageOpen={() => changeViewMode("tree")}
         focusActive={libraryFocus.focusActive || contentFilter !== "all"}
       />
 

@@ -5,12 +5,16 @@ const SHA256 = /^[a-f0-9]{64}$/;
 const MAX_BASE64_LENGTH = 14_000_000;
 
 /** Safe browser source for a backend-validated saved Origin PNG. */
+export function isOriginPreviewUsable(preview: OriginSavedPreview | undefined): preview is OriginSavedPreview {
+  if (!preview) return false;
+  if (preview.format !== "png" || preview.mime !== "image/png") return false;
+  if (!Number.isInteger(preview.width) || preview.width < 1 || preview.width > 16_384) return false;
+  if (!Number.isInteger(preview.height) || preview.height < 1 || preview.height > 16_384) return false;
+  if (!SHA256.test(preview.sha256)) return false;
+  return Boolean(preview.data && preview.data.length <= MAX_BASE64_LENGTH && BASE64.test(preview.data));
+}
+
 export function originPreviewDataUrl(preview: OriginSavedPreview | undefined): string | null {
-  if (!preview) return null;
-  if (preview.format !== "png" || preview.mime !== "image/png") return null;
-  if (!Number.isInteger(preview.width) || preview.width < 1 || preview.width > 16_384) return null;
-  if (!Number.isInteger(preview.height) || preview.height < 1 || preview.height > 16_384) return null;
-  if (!SHA256.test(preview.sha256)) return null;
-  if (!preview.data || preview.data.length > MAX_BASE64_LENGTH || !BASE64.test(preview.data)) return null;
+  if (!isOriginPreviewUsable(preview)) return null;
   return `data:image/png;base64,${preview.data}`;
 }

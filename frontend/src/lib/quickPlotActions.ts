@@ -47,6 +47,12 @@ export const datasetQuickPlotActions: ContextAction<DatasetActionTarget>[] = [
       state.setActive(t.dataset.id);
       state.setStageTab("technique");
       t.onStageOpen?.();
+      // This module is eager; the workspace state stays in its lazy chunk so
+      // first paint does not pay for Workflow navigation. Reset a prior Origin
+      // migration review before opening the technique route.
+      void import("./workflowWorkspace").then(({ openTechniqueWorkflow }) => {
+        openTechniqueWorkflow();
+      });
     },
   },
   {
