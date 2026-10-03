@@ -281,6 +281,33 @@ def _sorted_unique(
     return xu, y[idx]
 
 
+# Field readings closer than this fraction of the branch's median H step are one
+# reading for dM/dH. A VSM settling at the sweep setpoint logs points ~0.3 Oe
+# apart amid ~75 Oe steps; differentiating noise over that sliver put the SFD
+# peak at -Hmax on real loops. Evenly stepped data never merges (golden-safe).
+_SFD_MERGE_FRACTION = 0.1
+
+
+def _merge_close_fields(
+    h: NDArray[np.float64], m: NDArray[np.float64]
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Average runs of sorted ``h`` closer than ``_SFD_MERGE_FRACTION`` x median step."""
+    if h.size < 3:
+        return h, m
+    step = float(np.median(np.diff(h)))
+    if not np.isfinite(step) or step <= 0:
+        return h, m
+    tol = _SFD_MERGE_FRACTION * step
+    group = np.concatenate([[0], np.cumsum(np.diff(h) >= tol)])
+    if int(group[-1]) == h.size - 1:
+        return h, m
+    counts = np.bincount(group).astype(float)
+    return (
+        np.asarray(np.bincount(group, weights=h) / counts, dtype=float),
+        np.asarray(np.bincount(group, weights=m) / counts, dtype=float),
+    )
+
+
 def hysteresis_analysis(
     h: ArrayLike,
     m: ArrayLike,
@@ -399,7 +426,7 @@ def hysteresis_analysis(
     dmdh_asc: NDArray[np.float64] = np.array([])
     dmdh_desc: NDArray[np.float64] = np.array([])
     if asc_h.size >= 5:
-        hu, mu = _sorted_unique(asc_h, asc_m)
+        hu, mu = _merge_close_fields(*_sorted_unique(asc_h, asc_m))
         if hu.size >= 5:
             dmdh_asc = derivative(hu, mu, pre_smooth=max(3, pre_smooth))
             pk = int(np.argmax(np.abs(dmdh_asc)))
@@ -409,7 +436,7 @@ def hysteresis_analysis(
                 "fwhm": _compute_fwhm(hu, np.abs(dmdh_asc), pk),
             }
     if desc_h.size >= 5:
-        hud, mud = _sorted_unique(desc_h, desc_m)
+        hud, mud = _merge_close_fields(*_sorted_unique(desc_h, desc_m))
         if hud.size >= 5:
             dmdh_desc = derivative(hud, mud, pre_smooth=max(3, pre_smooth))
 

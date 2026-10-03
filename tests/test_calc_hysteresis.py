@@ -55,3 +55,20 @@ def test_hysteresis_saturation_and_squareness() -> None:
 def test_hysteresis_too_few_points() -> None:
     with pytest.raises(ValueError, match="at least 20"):
         hysteresis_analysis(np.arange(10.0), np.arange(10.0))
+
+
+def test_sfd_ignores_near_duplicate_field_at_sweep_turnaround() -> None:
+    # A real VSM sweep settles at the setpoint: two readings ~0.3 Oe apart at
+    # -Hmax whose moment differs by noise. dM/dH over that 0.3 Oe step dwarfs
+    # the true switching slope, and the SFD peak used to land at -Hmax
+    # (corpus: a 15 kOe VSM loop reported "SFD peak H -15000, FWHM 0.38 Oe").
+    hmax, hc, w, ms = 1000.0, 100.0, 200.0, 5.0
+    hd = np.linspace(hmax, -hmax, 100)
+    hu = np.concatenate([[-hmax, -hmax + 0.3], np.linspace(-hmax, hmax, 100)[1:]])
+    mu = ms * np.tanh((hu - hc) / w)
+    mu[1] += 0.25  # 5% noise on the settling reading (the corpus loop: ~6%)
+    h = np.concatenate([hd, hu])
+    m = np.concatenate([ms * np.tanh((hd + hc) / w), mu])
+    r = hysteresis_analysis(h, m)
+    assert r["SFD"]["peakH"] == pytest.approx(hc, abs=25.0)
+    assert r["SFD"]["fwhm"] > 100.0
