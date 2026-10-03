@@ -553,7 +553,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         // y-axis label, and its EXPORT carries the rename (and, R1, the styles)
         // — so both belong here as on the facet leg below. Channel-keyed,
         // projected per panel through `BreakPanel.channels`.
-        seriesLabels, seriesStyles: breakSeriesStyles, hiddenChannels: breakHidden ?? [],
+        seriesLabels, seriesStyles: breakSeriesStyles, hiddenChannels: breakHidden ?? [], errors: { roles: active?.errorRoles, errKeys }, // bars as the flat plot
         syncKey, yAuto: !drawableLim(yLim, yScale)?.some((v) => v !== null),
         box,
         cell: {
@@ -668,7 +668,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     labelList,
     seriesLabels, seriesStyles, breakSeriesStyles, breakHidden, // FEATURE-001: the facet leg reads the channel-keyed map directly
     autoSeriesStyles,
-    errorBarsList,
+    errorBarsList, errKeys, // errKeys: the break panels' bars
     tool,
     theme,
     accent,

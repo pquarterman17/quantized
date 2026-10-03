@@ -184,6 +184,10 @@ export interface BreakPanel {
    *  `[[2.2, 2.8]]` over x = 0..5 elided `(2, 3)` on screen while the export
    *  elided `(2.2, 2.8)`, with different panel width ratios to match. */
   xRange: [number, number];
+  /** This panel's own rows of the source data, in payload row order — what its
+   *  error bars are read from (`Stage/breakPanelRender.ts`), as the flat plot's
+   *  are from the whole dataset. Absent on hand-built panels: no bars. */
+  data?: DataStruct;
 }
 
 /** Split `data` into one panel per contiguous x-segment implied by `breaks`
@@ -245,7 +249,7 @@ export function breakPayloads(
     // `payload.series[i]` by construction -- identical to `facetPayloads`.
     const channels = yChannels ?? defaultDenseChannels(sliced, xKey);
     const payload = buildColumns(sliced, null, xKey, channels);
-    panels.push({ payload, channels, xRange: [Math.max(lo, dataLo), Math.min(hi, dataHi)] });
+    panels.push({ payload, channels, xRange: [Math.max(lo, dataLo), Math.min(hi, dataHi)], data: sliced });
   }
   return panels;
 }

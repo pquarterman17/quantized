@@ -408,6 +408,7 @@ def _render_impl(
                     dpi=resolved_dpi,
                     figsize=figsize,
                     series_styles=series_styles,
+                    error_spans=error_spans,
                     x_fmt=x_fmt,
                     y_fmt=y_fmt,
                     x_step=x_step,
