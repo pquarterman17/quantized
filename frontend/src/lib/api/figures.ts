@@ -219,17 +219,6 @@ export function exportFigure(body: FigureSpec, signal?: AbortSignal): Promise<vo
   return postDownload("/api/export/figure", body, `figure.${body.fmt ?? "pdf"}`, signal);
 }
 
-/** Render several ordinary FigureSpecs and download one ZIP. The backend
- * calls the same renderer as `exportFigure` for every member, while one
- * archive avoids browser multi-download blocking and preserves cancellation. */
-export function exportFigureBatch(
-  figures: readonly FigureSpec[],
-  filename: string,
-  signal?: AbortSignal,
-): Promise<void> {
-  return postDownload("/api/export/figure-batch", { figures, filename }, `${filename || "figures"}.zip`, signal);
-}
-
 /** Preview render + element hit-map (#13): PNG + per-artist pixel boxes.
  *  Rides the dataset-handle cache (`./datasetCache`); `signal` aborts a
  *  superseded preview. */

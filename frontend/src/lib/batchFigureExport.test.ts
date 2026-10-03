@@ -1,13 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { exportFigureBatch } from "./api/figures";
+import { exportFigureBatch } from "./api/figureBatch";
 import { batchFigureSpecs, downloadBatchFigures, MAX_BATCH_FIGURE_EXPORT } from "./batchFigureExport";
 import { createFigureDocument } from "./figureDocument";
 import { defaultPlotView } from "./plotview";
 import type { Dataset } from "./types";
 
-vi.mock("./api/figures", async (original) => ({
-  ...(await original()),
+vi.mock("./api/figureBatch", () => ({
   exportFigureBatch: vi.fn(),
 }));
 

@@ -1,4 +1,5 @@
-import { exportFigureBatch, type FigureSpec } from "./api/figures";
+import { exportFigureBatch } from "./api/figureBatch";
+import type { FigureSpec } from "./api/figures";
 import type { FigureDocument } from "./figureDocument";
 import { buildFigureSpecFromDocument } from "./figureSpec";
 import type { Dataset } from "./types";
