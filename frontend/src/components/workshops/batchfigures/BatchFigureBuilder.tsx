@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { BUILTIN_PLOT_RECIPES } from "../../../lib/builtinPlotRecipes";
 import { downloadBatchFigures, MAX_BATCH_FIGURE_EXPORT } from "../../../lib/batchFigureExport";
 import { ghosterFor } from "../../../lib/excludedRowsExport";
 import {
@@ -10,7 +9,6 @@ import {
   setShownBatchSelection,
 } from "../../../lib/batchFigureSelection";
 import { folderPathLabel } from "../../../lib/foldertree";
-import type { PlotRecipe } from "../../../lib/plotRecipeSchema";
 import { runSequentialBatch, type BatchProgress } from "../../../lib/sequentialBatch";
 import { nextFigureId } from "../../../store/figureLifecycle";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
@@ -21,31 +19,21 @@ import {
   commitBatchFigureArtifacts,
   preflightBatchFigure,
   type BatchFigureRow,
-  type BatchRecipeChoice,
 } from "../../../store/batchFigureBuild";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { nextPageDocumentId } from "../../../store/pageDocuments";
 import ToolWindow from "../../overlays/ToolWindow";
-import { Badge, Button, Select } from "../../primitives";
+import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { FIGURE_STYLES } from "../figurebuilder/figureOutputConstants";
-
-type Phase = "idle" | "checking" | "review" | "creating" | "done";
-
-const SCOPE_LABEL = { project: "Project", global: "Global", "built-in": "Built-in" } as const;
-const STATUS_LABEL = { ready: "Ready", partial: "Needs review", blocked: "Cannot build" } as const;
-const STATUS_TONE = { ready: "ok", partial: "warn", blocked: "danger" } as const;
-const EXPORT_FORMATS = ["pdf", "svg", "png", "tiff"] as const;
-
-function recipeChoices(project: readonly PlotRecipe[], global: readonly PlotRecipe[]): BatchRecipeChoice[] {
-  return [
-    ...project.map((recipe) => ({ key: `project:${recipe.id}`, scope: "project" as const, recipe })),
-    ...global.map((recipe) => ({ key: `global:${recipe.id}`, scope: "global" as const, recipe })),
-    ...BUILTIN_PLOT_RECIPES.map((recipe) => ({ key: `built-in:${recipe.id}`, scope: "built-in" as const, recipe })),
-  ];
-}
-
+import BatchCompatibilityReview from "./BatchCompatibilityReview";
+import {
+  batchRecipeChoices,
+  EXPORT_FORMATS,
+  SCOPE_LABEL,
+  type BatchFigurePhase,
+} from "./batchFigureBuilderOptions";
 export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDatasetIds: readonly string[]; onClose: () => void }) {
   const datasets = useApp((state) => state.datasets);
   const folders = useApp((state) => state.folders);
@@ -66,14 +54,14 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
     // must not rewrite a half-reviewed batch under the user's hands.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const choices = useMemo(() => recipeChoices(projectRecipes, globalRecipes), [projectRecipes, globalRecipes]);
+  const choices = useMemo(() => batchRecipeChoices(projectRecipes, globalRecipes), [projectRecipes, globalRecipes]);
   const [datasetIds, setDatasetIds] = useState<string[]>(initialIds);
   const [datasetQuery, setDatasetQuery] = useState("");
   const [workbookScope, setWorkbookScope] = useState(BATCH_ALL_WORKBOOKS);
   const [recipeKey, setRecipeKey] = useState(choices[0]?.key ?? "");
   const [rows, setRows] = useState<BatchFigureRow[]>([]);
   const [includedIds, setIncludedIds] = useState<Set<string>>(new Set());
-  const [phase, setPhase] = useState<Phase>("idle");
+  const [phase, setPhase] = useState<BatchFigurePhase>("idle");
   const [progress, setProgress] = useState<BatchProgress | null>(null);
   const [namePattern, setNamePattern] = useState("{dataset} — {recipe}");
   const [createPage, setCreatePage] = useState(true);
@@ -127,6 +115,12 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
     setDatasetIds((current) => on ? [...current, id] : current.filter((candidate) => candidate !== id));
     invalidate();
   };
+
+  const toggleIncluded = (id: string, on: boolean) => setIncludedIds((current) => {
+    const next = new Set(current);
+    if (on) next.add(id); else next.delete(id);
+    return next;
+  });
 
   const checkCompatibility = async () => {
     if (!recipeChoice || datasetIds.length === 0) return;
@@ -343,40 +337,13 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
       )}
 
       {(phase === "review" || phase === "creating" || phase === "done") && rows.length > 0 && (
-        <>
-          <div className="qzk-win-section">Compatibility review</div>
-          <div style={{ maxHeight: 230, overflow: "auto" }}>
-            <table className="qz-table" aria-label="Batch figure compatibility">
-              <thead><tr><th>Build</th><th>Dataset</th><th>Status</th><th>Details</th></tr></thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.datasetId}>
-                    <td>
-                      <Checkbox
-                        aria-label={`Build ${row.datasetName}`}
-                        checked={includedIds.has(row.datasetId)}
-                        disabled={busy || phase === "done" || row.status === "blocked"}
-                        onChange={(on) => setIncludedIds((current) => {
-                          const next = new Set(current);
-                          if (on) next.add(row.datasetId); else next.delete(row.datasetId);
-                          return next;
-                        })}
-                      />
-                    </td>
-                    <td>{row.datasetName}</td>
-                    <td><Badge tone={STATUS_TONE[row.status]}>{STATUS_LABEL[row.status]}</Badge></td>
-                    <td>
-                      <div>{row.summary}</div>
-                      {row.status === "partial" && !includedIds.has(row.datasetId) && <div className="qzk-ds-meta">Check Build to explicitly accept a partial figure.</div>}
-                      {row.unmatched.length > 0 && <div className="qzk-ds-meta" title={row.unmatched.join("; ")}>Missing: {row.unmatched.join("; ")}</div>}
-                      {row.warnings.length > 0 && <div className="qzk-ds-meta" title={row.warnings.join("; ")}>Warnings: {row.warnings.join("; ")}</div>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <BatchCompatibilityReview
+          rows={rows}
+          includedIds={includedIds}
+          busy={busy}
+          done={phase === "done"}
+          onToggle={toggleIncluded}
+        />
       )}
 
       {(phase === "review" || phase === "creating") && (
