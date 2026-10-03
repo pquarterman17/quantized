@@ -52,7 +52,7 @@ export default function QuickFigurePreviewCanvas({
         <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block" }} />
       </div>
       {render.kind === "xy" && legend && render.payload.series.length > 0 && (
-        <div className={`qzk-glass qzk-legend ${legend}`} aria-label="Preview legend">
+        <div className={`qzk-glass qzk-legend ${legend === "auto" ? "ne" : legend}`} aria-label="Preview legend">
           {render.payload.series.map((series, i) => (
             <div className="it" key={`${i}-${series.label}`}>
               <LegendSample

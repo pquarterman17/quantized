@@ -1069,7 +1069,7 @@ describe("useGraphBuilder — capture on save (GUI_INTERACTION_PLAN #12 Slice 3)
       // "part C" — same isolation rationale, extended to the decor fields.
       annotations: [],
       shapes: [],
-      legendPos: "ne",
+      legendPos: "auto",
       legendXY: null,
       legendTitle: null,
     });
@@ -1308,7 +1308,7 @@ describe("useGraphBuilder — apply saved blocks on a plot action (GUI_INTERACTI
       // "part C" — same isolation rationale, extended to the decor fields.
       annotations: [],
       shapes: [],
-      legendPos: "ne",
+      legendPos: "auto",
       legendXY: null,
       legendTitle: null,
     });
@@ -1422,7 +1422,7 @@ describe("useGraphBuilder — apply saved blocks on a plot action (GUI_INTERACTI
         y2Fmt: null,
         annotations: [],
         shapes: [],
-        legendPos: "ne",
+        legendPos: "auto",
       });
       useApp.getState().addAnnotation(9, 9, "stale");
       useApp.getState().setLegendPos("nw");

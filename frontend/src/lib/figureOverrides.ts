@@ -119,6 +119,7 @@ export const LEGEND_LOCS = [
   "lower center",
   "outside right",
   "outside top",
+  "auto",
 ] as const;
 
 /** The screen's corner-preset legend position (`ne`/`nw`/`se`/`sw`) as a
@@ -128,6 +129,9 @@ export const LEGEND_LOCS = [
  *  drag-to-place handling verbatim). */
 export function legendPosToLoc(pos: LegendPos): string {
   const loc: Record<LegendPos, string> = {
+    // calc.figure_overrides: "best" for up to eight series, then "outside
+    // right" — the screen's auto rule (lib/legendAutoPlace).
+    auto: "auto",
     ne: "upper right",
     nw: "upper left",
     se: "lower right",

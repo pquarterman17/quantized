@@ -17,7 +17,7 @@ import { RichText } from "../primitives";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import ColorScaleChip from "./ColorScaleChip";
 import LegendSample from "./LegendSample";
-import { resolveSeriesStyle, type SeriesCycle } from "../../lib/seriesStyleCycle";
+import { resolveSeriesStyle, SERIES_VARS, type SeriesCycle } from "../../lib/seriesStyleCycle";
 import { useLegendBox } from "./useLegendBox";
 
 /** The canvas' excluded companion: line-free 5px hollow circles. */
@@ -137,13 +137,17 @@ export default function PlotLegend({
 
   // No rows, no title, no colour scale: no box, as the export draws no legend.
   if (!anyRow && !legendTitle && colorScales.length === 0) return null;
+  const visibleCount = plotted.filter((c) => !hiddenChannels.includes(c)).length;
+  // "auto" past the palette's eight shown series: a column outside the frame
+  // (shell.css; the export's "outside right"). Else lib/legendAutoPlace's corner.
+  const pos = legendBox.legendPos === "auto" && visibleCount > SERIES_VARS.length ? "out" : legendBox.legendPos;
 
   return (
     <div
       ref={legendBox.boxRef}
       // Precedence (decode #52): frame anchor > free container fraction > corner
       // preset. A frame-anchored or free position drops the corner class.
-      className={`qzk-glass qzk-legend ${legendBox.isFree ? "" : legendBox.legendPos}`}
+      className={`qzk-glass qzk-legend ${legendBox.isFree ? "" : pos}`}
       style={legendBox.style}
       onMouseDown={legendBox.onBoxMouseDown}
       onDoubleClick={legendBox.onBoxDoubleClick}
@@ -198,7 +202,6 @@ export default function PlotLegend({
         // showing them greyed + struck through — Origin's legend never lists
         // the error/secondary-X columns it doesn't draw (decode #52).
         if (legendStatic && isHidden) return null;
-        const visibleCount = plotted.filter((c) => !hiddenChannels.includes(c)).length;
         const text = rowText(s, i);
         if (text === "") return null;
 

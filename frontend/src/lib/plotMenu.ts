@@ -16,7 +16,7 @@ import type { AxisZone } from "./plotHitTest";
 import { NO_RANGE_REASON, type PlotRange } from "./plotRangeSelection";
 import type { AxisScale, LineStyle, MarkerShape, SeriesStyle } from "./types";
 
-export type LegendCorner = "ne" | "nw" | "se" | "sw";
+export type LegendCorner = "auto" | "ne" | "nw" | "se" | "sw";
 
 /** The hit-tested series under the cursor (null → clicked empty plot space). */
 export interface MenuSeries {
@@ -137,6 +137,7 @@ const LINE_OPTS: { value: LineStyle; label: string }[] = [
 ];
 
 const LEGEND_OPTS: { value: LegendCorner; label: string }[] = [
+  { value: "auto", label: "Auto (least crowded)" },
   { value: "ne", label: "Top-right" },
   { value: "nw", label: "Top-left" },
   { value: "se", label: "Bottom-right" },

@@ -127,6 +127,6 @@ describe("Quick Plot templates carry the look", () => {
     const [plain] = sanitizeQuickPlotTemplates([base]);
     expect(plain.look).toBeUndefined();
     const [fixed] = sanitizeQuickPlotTemplates([{ ...base, look: { xScale: "banana", showGrid: "no", series: [3, { width: 2 }], errorBars: false } }]);
-    expect(fixed.look).toEqual({ xScale: "linear", yScale: "linear", showGrid: true, showLegend: true, legendPos: "ne", series: [{ width: 2 }], errorBars: false });
+    expect(fixed.look).toEqual({ xScale: "linear", yScale: "linear", showGrid: true, showLegend: true, legendPos: "auto", series: [{ width: 2 }], errorBars: false });
   });
 });

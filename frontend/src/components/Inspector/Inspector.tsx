@@ -109,6 +109,7 @@ export default function Inspector() {
             Legend position
             <Select
               options={[
+                { value: "auto", label: "Auto (least crowded)" },
                 { value: "ne", label: "Top right" },
                 { value: "nw", label: "Top left" },
                 { value: "se", label: "Bottom right" },

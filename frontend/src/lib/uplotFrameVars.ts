@@ -87,6 +87,9 @@ export function frameVarsPlugin(stageSelector = ".qzk-stage"): uPlot.Plugin {
     const stage = u.root.closest(stageSelector);
     if (!(stage instanceof HTMLElement)) return;
     publishFrameVars(stage, frameRect(u.over.getBoundingClientRect(), stage.getBoundingClientRect()));
+    // An "auto" legend's corner / outside column (plot audit round 2), on demand.
+    if (stage.querySelector(":scope>.qzk-legend:is(.auto,.out)"))
+      void import("./legendAutoPlace").then((m) => m.placeLegend(u, stage));
   };
   return { hooks: { ready: publish, setSize: publish, draw: publish } };
 }

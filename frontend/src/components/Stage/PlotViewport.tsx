@@ -395,5 +395,5 @@ export default function PlotViewport(props: PlotViewportProps) {
   // Display-only edits patch the live instance (after the create effect: see useLivePaint).
   useLivePaint(plotRef, paintRef, displayPayload, args, xAscending, limsRef, () => setRebuildEpoch((e) => e + 1));
 
-  return <div ref={hostRef} style={{ position: "absolute", inset: 8, top: insetTop ?? 8 }} />;
+  return <div ref={hostRef} style={{ position: "absolute", inset: 8, top: insetTop ?? 8, right: "var(--qz-plot-right,8px)" }} />;
 }

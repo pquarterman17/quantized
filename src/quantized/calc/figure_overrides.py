@@ -32,8 +32,14 @@ __all__ = ["_apply_overrides", "_validate_overrides", "apply_axis_shape_override
 _LEGEND_LOCS = frozenset({
     "best", "upper right", "upper left", "lower left", "lower right",
     "right", "center left", "center right", "lower center", "upper center",
-    "center", "outside right", "outside top", "custom", "axes",
+    "center", "outside right", "outside top", "custom", "axes", "auto",
 })
+
+# ``auto`` (the screen's default legend placement): matplotlib's "best" while
+# the palette's eight colours last, then a column outside the right edge, as
+# the screen draws it. Columns hold at most this many entries.
+_AUTO_INSIDE_MAX = 8
+_OUTSIDE_COLUMN_ROWS = 18
 
 
 def _validate_overrides(ov: Mapping[str, Any]) -> None:
@@ -145,6 +151,10 @@ def legend_kwargs(
     kw: dict[str, Any] = {"frameon": frame, "fontsize": st.legend_font_size}
     if title:
         kw["title"] = str(title)
+    if loc == "auto":
+        loc = "outside right" if n_series > _AUTO_INSIDE_MAX else "best"
+        if loc == "outside right":
+            kw["ncols"] = -(-n_series // _OUTSIDE_COLUMN_ROWS)
     if loc == "outside right":
         kw.update(loc="center left", bbox_to_anchor=(1.02, 0.5))
     elif loc == "outside top":

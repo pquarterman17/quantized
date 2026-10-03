@@ -39,7 +39,7 @@ describe("defaultPlotView", () => {
     expect(v.yKeys).toBeNull();
     expect(v.seriesStyles).toEqual({});
     expect(v.hiddenChannels).toEqual([]);
-    expect(v.legendPos).toBe("ne");
+    expect(v.legendPos).toBe("auto"); // plot audit round 2: least-crowded corner
     expect(v.legendXY).toBeNull();
     expect(v.plotTemplate).toBe("screen");
     expect(v.waterfall).toBe(0);
