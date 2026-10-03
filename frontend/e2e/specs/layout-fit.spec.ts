@@ -227,3 +227,17 @@ test("an import toast never covers the plot stage", async ({ page }) => {
     expect(inside && t.top >= 0 && t.bottom <= c.size.height, `newest toast clipped at ${where}`).toBe(true);
   }
 });
+
+// Round-4 chrome audit: the plot's right-click menu is ~640px tall; in a
+// 600px-high window its export and Help rows sat below the window edge.
+test("the plot's right-click menu fits a 600px-high window", async ({ page }) => {
+  await plotFile(page, "linear-ramp.csv");
+  await page.setViewportSize({ width: 800, height: 600 });
+  // The frame centre lies on the diagonal ramp, so this opens the (taller) series menu.
+  await page.locator(".qzk-stage .u-over").click({ button: "right" });
+  const menu = page.locator(".qzk-ctx").first();
+  await expect(menu.getByRole("menuitem", { name: "Marker" })).toBeVisible();
+  const [m, last] = await Promise.all([rectOf(menu), rectOf(menu.getByRole("menuitem").last())]);
+  expect(m.top, "menu top").toBeGreaterThanOrEqual(0);
+  expect(last.bottom, "last menu row below the window").toBeLessThanOrEqual(600);
+});

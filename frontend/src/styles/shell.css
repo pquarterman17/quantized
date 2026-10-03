@@ -130,6 +130,8 @@ body {
 /* Right-click context menu: a fixed-position variant of the menubar popup. */
 .qzk-ctx { position: fixed; top: auto; left: auto; min-width: 180px; }
 .qzk-ctx-sep { height: 1px; margin: 4px 6px; background: var(--glass-border); }
+.qzk-ctx.fit .qzk-menu-item { padding-block: 2px; } /* a menu taller than the window (ContextMenu.tsx) */
+.qzk-ctx.fit .qzk-ctx-sep { margin-block: 2px; }
 /* Non-interactive section label (e.g. the hit-tested series name). */
 .qzk-ctx-header { padding: 4px 9px 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
 /* Submenu affordance + toggle check glyph, pinned to the item's right edge. */
