@@ -74,6 +74,17 @@ describe("MultiPanelStage — stack panels match the flat plot", () => {
     expect(built.map((b) => b.payload.series[0].axis ?? 0)).toEqual([0, 0]);
   });
 
+  // The flat plot and every export leave excluded rows out (or grey them); the
+  // stack drew them as ordinary data.
+  it("leaves excluded rows out, as the flat plot and the export do", async () => {
+    const ds = useApp.getState().datasets[0];
+    useApp.setState({ datasets: [{ ...ds, excludedRows: [1] }] });
+    render(<MultiPanelStage composition={null} />);
+    await waitFor(() => expect(built).toHaveLength(2));
+    expect(built[0].payload.data[0]).toEqual([0.01, 0.03]);
+    expect(built[0].payload.data[1]).toEqual([1, 0.1]);
+  });
+
   it("draws the dataset's error spans, x whiskers included", async () => {
     render(<MultiPanelStage composition={null} />);
     await waitFor(() => expect(built).toHaveLength(2));

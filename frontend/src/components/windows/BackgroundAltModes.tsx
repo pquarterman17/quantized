@@ -36,6 +36,7 @@ import StatStagePlot from "../Stage/StatStagePlot";
 import { useBreakSeriesStyles, useWindowCycles } from "../Stage/useBreakSeriesStyles";
 import { useFacetEncoding } from "../Stage/useFacetEncoding";
 import { useGreyedFacets } from "../Stage/useGreyedFacets";
+import { stackDataset } from "../Stage/stackRows";
 import { useMultiPanelStage } from "../Stage/useMultiPanelStage";
 import { useStatStage } from "../Stage/useStatStage";
 
@@ -160,8 +161,9 @@ export function BackgroundStackWindow({ dataset, view, bg, composition = null, e
   );
   const shown = useGreyedFacets(composition, dataset, view.facetKey, view.xKey, excludedDisplay);
   const breakSeriesStyles = useBreakSeriesStyles(useWindowCycles(view, document), composition, dataset, view);
+  const stackActive = useMemo(() => stackDataset(dataset), [dataset]); // the rows the flat plot draws
   const { hostRef, hostStyle } = useMultiPanelStage({
-    active: dataset,
+    active: stackActive,
     datasets: NO_DATASETS,
     composition: shown,
     yScale: view.yScale,
