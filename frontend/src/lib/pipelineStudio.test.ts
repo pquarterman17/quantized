@@ -78,6 +78,18 @@ describe("analyzePipeline", () => {
     expect(review.steps.map((step) => step.state)).toEqual(["ready", "ready"]);
   });
 
+  it("accounts for the value and sigma columns from propagated expressions", () => {
+    const propagated = makeStep("expression", "Ratio", "qz.add()", {
+      name: "ratio", expr: "A / B", derived: true, propagate: true,
+    });
+    const usesSigma = makeStep("expression", "Normalized sigma", "qz.add()", {
+      name: "sigma ratio", expr: "D / C",
+    });
+    const review = analyzePipeline([propagated, usesSigma], dataset(), [dataset()]);
+    expect(review.steps.map((step) => step.state)).toEqual(["ready", "ready"]);
+    expect(review.canRun).toBe(true);
+  });
+
   it("explains the executor's fit fallbacks without blocking a recoverable run", () => {
     const fit = makeStep("fit", "Fit", "qz.fit()", {
       model: "Linear", yKey: 8, xKey: 7, weight: { mode: "yerr", errKey: 6 },
@@ -100,5 +112,10 @@ describe("pipelineEditImpact", () => {
     expect(pipelineEditImpact(steps, steps[0].id, "remove")).toMatchObject({ requiresConfirmation: true });
     expect(pipelineEditImpact(steps, steps[0].id, "remove").detail).toContain("1 later enabled step");
     expect(pipelineEditImpact(steps, steps[0].id, "move_down")).toMatchObject({ requiresConfirmation: true });
+  });
+
+  it("does not interrupt a reversible final-step toggle with a confirmation", () => {
+    const step = makeStep("fit", "Fit", "qz.fit()", { model: "Linear" });
+    expect(pipelineEditImpact([step], step.id, "toggle")).toMatchObject({ requiresConfirmation: false });
   });
 });

@@ -5,7 +5,7 @@
 // is suppressed while running via `pipelineRunning`, so a run never re-records
 // itself. Per-step success/skip/failure markers land in `runLog`.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { executeSteps, type ExecuteResult, type StepLogEntry, type StepStatus } from "./executeSteps";
 import { makeStep, regenerateStep, validateExpression, type PipelineStep } from "../../../lib/pipeline";
@@ -62,6 +62,7 @@ export function usePipeline(): PipelineState {
 
   const [runLog, setRunLog] = useState<Record<string, StepLogEntry>>({});
   const [lastRun, setLastRun] = useState<PipelineRunSummary | null>(null);
+  const runningTarget = useRef<string | null>(null);
   const review = useMemo(() => analyzePipeline(steps, active, datasets), [active, datasets, steps]);
 
   // A result belongs to exactly one recipe/input pair. Keeping its markers
@@ -71,7 +72,12 @@ export function usePipeline(): PipelineState {
     setRunLog({});
     setLastRun(null);
   }, [steps]);
-  useEffect(() => setRunLog({}), [active?.id]);
+  useEffect(() => {
+    // A creating transform activates its output as part of a normal replay.
+    // Keep that run's markers through the handoff; once no run owns the log,
+    // a user-driven worksheet change clears it as before.
+    if (runningTarget.current === null) setRunLog({});
+  }, [active?.id]);
 
   const validate = useCallback(
     (expr: string) => validateExpression(expr, active?.data.labels.length ?? 0),
@@ -121,8 +127,12 @@ export function usePipeline(): PipelineState {
     const index = current.findIndex((step) => step.id === id);
     if (index < 0) return;
     const source = current[index];
+    const copyParams = structuredClone(source.params);
+    // Recorded transform output ids identify datasets from the original run.
+    // A duplicate must mint its own outputs instead of claiming the same ids.
+    if (source.kind === "transform") delete copyParams.outputs;
     const copy = {
-      ...makeStep(source.kind, `${source.label} copy`, source.code, structuredClone(source.params)),
+      ...makeStep(source.kind, `${source.label} copy`, source.code, copyParams),
       enabled: source.enabled,
     };
     recordHistory("duplicate pipeline step");
@@ -155,14 +165,17 @@ export function usePipeline(): PipelineState {
       return;
     }
     setPipelineRunning(true);
+    runningTarget.current = target;
     setRunLog({});
     setLastRun(null);
     try {
       const result = await executeSteps(before.macroSteps, target, (log) => {
-        if (useApp.getState().activeId === target) setRunLog(log);
+        if (runningTarget.current === target) setRunLog(log);
       });
+      setRunLog(result.log);
       setLastRun(summarizeRun(result, targetDataset?.name ?? target));
     } finally {
+      runningTarget.current = null;
       setPipelineRunning(false);
     }
   }, [setPipelineRunning]);

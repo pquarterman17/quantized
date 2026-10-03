@@ -188,7 +188,10 @@ export function analyzePipeline(steps: readonly PipelineStep[], dataset: Dataset
       reviews.push({ id: step.id, state: issue ? "invalid" : "ready", summary, impact, issue: issue ?? warning });
       if (issue && step.kind === "transform") blockedBy = step.label;
     }
-    if (step.enabled && step.kind === "expression" && columnCount !== null) columnCount += 1;
+    if (step.enabled && step.kind === "expression" && columnCount !== null) {
+      // Propagated expressions append both the value and its sigma column.
+      columnCount += step.params.propagate === true ? 2 : 1;
+    }
     if (step.enabled && step.kind === "transform") columnCount = null;
     for (const id of outputIds(step)) available.add(id);
   });
@@ -228,7 +231,7 @@ export function pipelineEditImpact(
       : later
         ? `${later} later enabled step${later === 1 ? "" : "s"} may receive different input.`
         : `This step will be ${step.enabled ? "skipped" : "included"} on the next run.`,
-    requiresConfirmation: structural,
+    requiresConfirmation: structural && later > 0,
   };
   return {
     title: `Reorder “${step.label}”?`,

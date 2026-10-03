@@ -73,6 +73,14 @@ async function deriveOutputs(steps: readonly PipelineStep[]): Promise<string[]> 
   }
 }
 
+function sameStepDefinition(a: readonly PipelineStep[], b: readonly PipelineStep[]): boolean {
+  return a.length === b.length && a.every((step, index) => {
+    const other = b[index];
+    return step.kind === other.kind && step.label === other.label && step.code === other.code &&
+      step.enabled === other.enabled && JSON.stringify(step.params) === JSON.stringify(other.params);
+  });
+}
+
 export function useTemplates(): TemplatesState {
   const [templates, setTemplates] = useState<AnalysisTemplate[]>(() => loadTemplates());
   const [batch, setBatch] = useState<BatchProgress | null>(null);
@@ -110,13 +118,18 @@ export function useTemplates(): TemplatesState {
     (name: string) => {
       const t = loadTemplates().find((x) => x.name === name);
       if (!t) return;
-      if (JSON.stringify(useApp.getState().macroSteps) === JSON.stringify(t.steps)) return;
+      recordUse({ kind: "analysis", scope: "global", id: t.name });
+      // Loading from storage deliberately remints step ids. Compare the
+      // scientific/script definition, not those transient identities.
+      if (sameStepDefinition(useApp.getState().macroSteps, t.steps)) {
+        toast(`template "${name}" is already loaded`);
+        return;
+      }
       recordHistory("load pipeline template");
       loadSteps(t.steps);
       // P3.5 "recently used". After the existence check, so loading a template
       // deleted in another tab records nothing. A direct import is free here:
       // this hook only ever ships in the lazy Pipeline workshop chunk.
-      recordUse({ kind: "analysis", scope: "global", id: t.name });
       toast(`template "${name}" loaded — ${t.steps.length} steps`);
     },
     [loadSteps, recordHistory],

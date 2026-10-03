@@ -172,6 +172,18 @@ describe("PipelinePanel", () => {
     expect(useApp.getState().macroSteps).toEqual([original]);
   });
 
+  it("drops recorded output ids when duplicating a creating transform", () => {
+    const original = makeStep("transform", "Split", "qz.split()", {
+      op: "split", col: 0, tolerance: null,
+      outputs: [{ id: "old-child", name: "old child", key: "one" }],
+    });
+    useApp.setState({ macroSteps: [original] });
+    render(<PipelinePanel />);
+    fireEvent.click(screen.getByTitle("duplicate step"));
+    expect(useApp.getState().macroSteps[0].params.outputs).toEqual(original.params.outputs);
+    expect(useApp.getState().macroSteps[1].params.outputs).toBeUndefined();
+  });
+
   it("blocks execution before an invalid step can mutate the worksheet", () => {
     useApp.setState({
       macroSteps: [makeStep("expression", "Bad", "qz.add()", { name: "bad", expr: "Q + 1" })],
@@ -222,5 +234,20 @@ describe("PipelinePanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /Run on scan/ }));
     await waitFor(() => expect(screen.getByText("backend fit failed")).toBeInTheDocument());
     expect(screen.getByText("ui step")).toBeInTheDocument(); // later step still ran
+  });
+
+  it("keeps per-step logs when a transform activates its newly-created output", async () => {
+    useApp.setState({
+      macroSteps: [
+        makeStep("transform", "Transpose", "qz.transpose()", { op: "transpose" }),
+        makeStep("expression", "Bad after transform", "qz.add()", { name: "bad", expr: "Q + 1" }),
+      ],
+    });
+    render(<PipelinePanel />);
+    fireEvent.click(screen.getByRole("button", { name: /Run on scan/ }));
+
+    await waitFor(() => expect(screen.getByText(/unknown variable "Q"/)).toBeInTheDocument());
+    expect(useApp.getState().activeId).not.toBe("d1");
+    expect(screen.getByRole("region", { name: "Last pipeline run" })).toHaveTextContent("1 completed · 0 warnings · 1 failed");
   });
 });
