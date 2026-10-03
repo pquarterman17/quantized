@@ -292,6 +292,10 @@ function freeze_calc_values()
     Hup = linspace(-Hmx, Hmx, 100).';  Mup = Ms0 * tanh((Hup - Hc0) / wch);
     Hloop = [Hdn; Hup];  Mloop = [Mdn; Mup];
     rhy = utilities.hysteresisAnalysis(Hloop, Mloop);
+    % MATLAB source bug: the saturation check pools both high-field tails
+    % (mean ~0 on a symmetric loop) and flags every loop. Freeze the INTENDED
+    % output: this loop is saturated, so no warning (calc/magnetometry.py).
+    rhy.warnings = {};
     writeJson(struct('input', struct('H', Hloop.', 'M', Mloop.'), 'output', rhy), ...
         fullfile(goldenDir, 'calc_hysteresis.json'));
 

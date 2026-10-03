@@ -47,8 +47,15 @@ def test_hysteresis_saturation_and_squareness() -> None:
     assert r["MsMean"] == pytest.approx(5.0, abs=0.05)
     assert 0.0 <= r["squareness"] <= 1.0
     assert r["loopArea"] > 0.0
-    # A symmetric loop's combined high-field M averages ~0, so MATLAB's
-    # saturation heuristic always flags it — match that behavior.
+    # A saturated symmetric loop is not flagged. (MATLAB pooled both tails,
+    # whose mean is ~0, so it flagged every loop; that source bug is fixed.)
+    assert not any("saturated" in w for w in r["warnings"])
+
+
+def test_hysteresis_flags_unsaturated_tails() -> None:
+    # A ferromagnet on a paramagnetic background: M still climbs at high field.
+    h, m = _make_loop()
+    r = hysteresis_analysis(h, m + 0.004 * h)
     assert any("saturated" in w for w in r["warnings"])
 
 

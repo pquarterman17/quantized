@@ -412,13 +412,23 @@ def hysteresis_analysis(
             ms[1] = float(np.mean(asc_m[lo]))
     ms_mean = _nanmean_abs(ms)
 
+    # Saturation check, per field sign. MATLAB pooled both high-field tails,
+    # whose mean is ~0 on any symmetric loop, so it flagged every loop
+    # (std / ~0); that golden value was a source bug, deliberately not ported.
+    # Here: how much M still changes across each tail's field window
+    # (linear slope x window width), relative to that tail's |M|.
     if desc_h.size and asc_h.size:
-        all_hi = np.abs(hv) > sat_thresh
-        if int(all_hi.sum()) >= 6:
-            m_hi = mv[all_hi]
-            dm_rel = float(np.std(m_hi, ddof=1) / max(abs(np.mean(m_hi)), _EPS))
-            if dm_rel > 0.1:
+        for tail in (hv > sat_thresh, hv < -sat_thresh):
+            if int(tail.sum()) < 3:
+                continue
+            h_t, m_t = hv[tail], mv[tail]
+            span = float(np.ptp(h_t))
+            if span <= 0:
+                continue
+            slope = float(np.polyfit(h_t, m_t, 1)[0])
+            if abs(slope) * span / max(abs(float(np.mean(m_t))), _EPS) > 0.05:
                 warnings.append("Loop may not be saturated (high-field M still varying)")
+                break
 
     squareness = float(np.fmin(mr_mean / max(ms_mean, _EPS), 1.0))
 
