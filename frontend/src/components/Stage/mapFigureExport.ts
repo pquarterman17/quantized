@@ -18,17 +18,20 @@
 //     and spacing (the route has no heatmap+contour kind);
 //   * the frame: the canvas' letterboxed equal aspect for axes sharing a unit
 //     (Qx/Qz), and the heatmap's axis span (calc frames it like the canvas).
-// Cuts, ROIs, slices and annotations are interactive overlays and are not
-// part of the exported figure.
+//   * the committed slices and text labels the map shows (`mapSliceGeometry`).
+// ROIs, the ruler and the sector wedge are tools, not part of the figure.
 
 import type { ColormapName } from "../../lib/colormap";
 import { exportMapFigure, type MapFigureSpec } from "../../lib/api/mapFigure";
 import { shouldLockAspect } from "../../lib/mapAspect";
+import type { CutSpace } from "../../lib/mapcuts";
+import type { MapAnnotation, MapSliceDef } from "../../lib/mapView";
 import type { MapPayload } from "../../lib/mapdataFetch";
 import { exportCanvasPng } from "../../lib/plotExport";
 import { runCancellable } from "../../store/pendingOps";
 import { askParams } from "../overlays/ParamDialog";
 import { effectiveColorLimits, minPositive } from "./mapRender";
+import { mapMarks } from "./mapSliceGeometry";
 import { FIGURE_STYLES } from "../workshops/figurebuilder/figureOutputConstants";
 
 const MPL_CMAP: Record<ColormapName, string> = {
@@ -44,6 +47,8 @@ export interface MapExportView {
   /** A null side is auto for that side (half-open, `lib/axisLim.ts`). */
   colorLimits: readonly [number | null, number | null] | null;
   contour: { on: boolean; levelCount: number; scale: "linear" | "log" };
+  /** The map's committed slices and text labels, and the axis space shown. */
+  marks?: { slices: readonly MapSliceDef[]; annotations: readonly MapAnnotation[]; space: CutSpace | null };
 }
 
 export interface MapExportOptions {
@@ -87,6 +92,7 @@ function zLimits(p: MapPayload, view: MapExportView): [number, number] | null {
 export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOptions): MapFigureSpec {
   const zLabel = withUnit(p.zLabel, p.zUnit);
   const limits = zLimits(p, view);
+  const marks = view.marks ? mapMarks(p, view.marks.slices, view.marks.annotations, view.marks.space) : null;
   const contour = view.contour.on
     ? {
         kind: "contourf",
@@ -103,6 +109,8 @@ export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOp
     ...(limits ? { z_limits: limits } : {}),
     // The canvas letterboxes a map whose axes share a unit (`mapRender.plotRect`).
     ...(shouldLockAspect(p.xUnit, p.yUnit) ? { equal_aspect: true } : {}),
+    ...(marks?.lines.length ? { lines: marks.lines } : {}),
+    ...(marks?.labels.length ? { labels: marks.labels } : {}),
     ...contour,
     fmt: o.fmt,
     style: o.style,

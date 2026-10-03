@@ -59,3 +59,31 @@ def test_a_shared_unit_map_exports_at_equal_aspect(monkeypatch: pytest.MonkeyPat
 def test_filled_contours_take_the_aspect_too(monkeypatch: pytest.MonkeyPatch) -> None:
     body = {**BODY, "z_grid": [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], "kind": "contourf"}
     assert _axes(monkeypatch, {**body, "equal_aspect": True}).get_aspect() == 1.0
+
+
+def test_slices_and_labels_draw_on_the_map_without_moving_its_frame(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The map's committed slices and text labels are figure content on screen
+    (``MapSliceOverlay``); the export draws them at the same data coordinates."""
+    ax = _axes(
+        monkeypatch,
+        {
+            **BODY,
+            "lines": [[0.0, 20.0, 2.0, 20.0], [0.5, 10.0, 1.5, 30.0]],
+            "labels": [{"x": 1.0, "y": 25.0, "text": "film peak"}],
+        },
+    )
+    assert len(ax.lines) == 2
+    assert list(ax.lines[0].get_xdata()) == [0.0, 2.0]
+    assert list(ax.lines[0].get_ydata()) == [20.0, 20.0]
+    assert [t.get_text() for t in ax.texts] == ["film peak"]
+    assert ax.texts[0].get_position() == (1.0, 25.0)
+    assert ax.get_xlim() == pytest.approx((0.0, 2.0))
+    assert ax.get_ylim() == pytest.approx((10.0, 30.0))
+
+
+def test_no_marks_is_the_plain_map(monkeypatch: pytest.MonkeyPatch) -> None:
+    ax = _axes(monkeypatch, BODY)
+    assert not ax.lines
+    assert not ax.texts
