@@ -21,6 +21,7 @@ import { fmt } from "./mapRender";
 import { runMapExport } from "./mapFigureExport";
 import { useMapPaint } from "./useMapPaint";
 import { useMapPayload } from "./useMapPayload";
+import { useDockClearance } from "./useDockClearance";
 import { useMapCuts } from "./useMapCuts";
 import { useMapPointer } from "./useMapPointer";
 import { useMapRoi } from "./useMapRoi";
@@ -47,6 +48,9 @@ export default function MapStage({ dataset }: MapStageProps) {
   const rsmPeaks = useApp((s) => s.rsmPeaks);
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // The dock wraps on a narrow stage: keep the map (top tick, colour-bar max) below it.
+  const [dock, setDock] = useState<HTMLDivElement | null>(null);
+  const hostTop = useDockClearance(dock);
   // Audit P2.8: the colormap, the linear/log colour scale, the explicit colour
   // limits, the committed H/V/segment slices and the map annotations are ONE
   // durable record PER DATASET in the store (store/mapView.ts) instead of this
@@ -219,7 +223,7 @@ export default function MapStage({ dataset }: MapStageProps) {
 
   return (
     <div className="qzk-stage">
-      <div ref={hostRef} style={{ position: "absolute", inset: 8 }}>
+      <div ref={hostRef} style={{ position: "absolute", inset: 8, top: hostTop }}>
         <canvas
           ref={canvasRef}
           tabIndex={roi.rect || ruler.ruler ? 0 : -1}
@@ -344,6 +348,7 @@ export default function MapStage({ dataset }: MapStageProps) {
           wedgeMode={wedge.mode}
           onToggleWedge={toggleWedge}
           onExport={exportMap}
+          dockRef={setDock}
         />
       )}
 

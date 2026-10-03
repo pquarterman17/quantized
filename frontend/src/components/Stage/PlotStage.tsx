@@ -278,7 +278,7 @@ export default function PlotStage() {
         displayPayload={displayPayload}
         theme={theme}
         accent={accent}
-        insetTop={52}
+        insetTop={60}
         frameVars // publish the plot-frame rect for the frame-anchored legend (decode #52)
         bg={winBg}
         syncKey={windowSyncKey(winLinkGroup)}
