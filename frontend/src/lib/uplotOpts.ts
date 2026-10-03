@@ -44,6 +44,7 @@ import { gadgetCursorsPlugin, quickFitPlugin } from "./uplotGadgets";
 import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit";
 import { anchorEditPlugin, type AnchorPoint } from "./uplotAnchors";
 import { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
+import { xLabelRightPad, xTickSpace } from "./uplotRightPad";
 import {
   measurePlugin,
   panPlugin,
@@ -1171,6 +1172,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       ...(xValues ? { values: xValues } : {}),
       ...(xSplits ? { splits: xSplits } : {}),
       ...(xScale === "log" ? { filter: logMajorTickFilter } : {}),
+      ...(xScale === "linear" && !payload.xCategories ? { space: xTickSpace(tickPx) } : {}),
     },
     {
       ...axis,
@@ -1251,6 +1253,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     ...(scales.x?.time ? { tzDate: utcTzDate } : {}),
     scales,
     axes,
+    padding: [null, xLabelRightPad(tickPx), null, null],
     series: seriesArr,
     ...(bands.length > 0 ? { bands } : {}),
   };
