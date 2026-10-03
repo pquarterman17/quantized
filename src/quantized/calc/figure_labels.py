@@ -230,9 +230,8 @@ def shared_axis_title(series: Sequence[_Labelled]) -> str:
     """
     if not series:
         return ""
-    label, unit = series[0].label, series[0].unit or ""
+    unit = series[0].unit or ""
     if any((s.unit or "") != unit for s in series):
         return ""
-    if all(s.label == label for s in series):
-        return f"{label} ({unit})" if unit else label
-    return f"({unit})" if unit else ""
+    label = series[0].label if all(s.label == series[0].label for s in series) else ""
+    return f"{label} ({unit})".strip() if unit else label

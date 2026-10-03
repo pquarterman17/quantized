@@ -6,9 +6,9 @@
  *  shared unit alone ("(emu)"), else undefined (the legend names them). Reads
  *  the DATA's label/unit, never a legend rename. */
 export function sharedAxisTitle(series: readonly { label: string; unit?: string }[]): string | undefined {
-  if (series.length === 0) return undefined;
-  const { label, unit = "" } = series[0];
-  if (series.some((s) => (s.unit ?? "") !== unit)) return undefined;
-  if (series.every((s) => s.label === label)) return unit ? `${label} (${unit})` : label || undefined;
-  return unit ? `(${unit})` : undefined;
+  const [first] = series;
+  const unit = first?.unit ?? "";
+  if (!first || series.some((s) => (s.unit ?? "") !== unit)) return undefined;
+  const label = series.every((s) => s.label === first.label) ? first.label : "";
+  return (unit ? `${label} (${unit})`.trim() : label) || undefined;
 }

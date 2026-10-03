@@ -4,7 +4,7 @@ import { defaultErrKeys, errorRoleViewDefaults, originHiddenChannels } from "../
 import { isTechniqueChange, techniqueViewDefaults } from "../lib/techniqueDefaults";
 import { applyTechniqueMemory, type TechniqueViewMemoryMap } from "../lib/techniqueViewMemory";
 import { cascadeGeometry, defaultPlotView, type PlotView, type PlotWindow } from "../lib/plotview";
-import type { AxisFormat, Dataset } from "../lib/types";
+import type { Dataset } from "../lib/types";
 import { createPlotWindowDocument } from "./windowDocuments";
 
 export interface DatasetViewDefaultsOptions {
@@ -20,25 +20,24 @@ export interface DatasetViewDefaultsOptions {
   outgoing?: SwitchDecorations;
 }
 
-type SwitchDecorations = Pick<PlotView, "refLines" | "regionShades" | "annotations" | "shapes" | "xFmt" | "yFmt" | "y2Fmt">;
-
-const isAutoFmt = (f: AxisFormat | null): boolean => !f || (f.mode === "auto" && f.digits === 2);
+/** The view fields tied to the outgoing dataset's coordinates. */
+export const SWITCH_DECORATIONS = ["refLines", "regionShades", "annotations", "shapes", "xFmt", "yFmt", "y2Fmt"] as const;
+type SwitchDecorations = Pick<PlotView, (typeof SWITCH_DECORATIONS)[number]>;
 
 /** What a genuine dataset switch drops from `view`: ref lines, region shades,
  *  data-anchored annotations/shapes (page-anchored ones are not tied to the
  *  data and stay) and non-default tick formats. Only the fields that change,
  *  so an undecorated view keeps every reference ({} = nothing to drop). */
 export function switchDecorationReset(view: SwitchDecorations): Partial<PlotView> {
-  const out: Partial<PlotView> = {};
-  const onPage = (m: { anchor?: "data" | "page" }) => m.anchor === "page";
-  if (view.refLines.length) out.refLines = [];
-  if (view.regionShades.length) out.regionShades = [];
-  if (!view.annotations.every(onPage)) out.annotations = view.annotations.filter(onPage);
-  if (!view.shapes.every(onPage)) out.shapes = view.shapes.filter(onPage);
-  if (!isAutoFmt(view.xFmt)) out.xFmt = { mode: "auto", digits: 2 };
-  if (!isAutoFmt(view.yFmt)) out.yFmt = { mode: "auto", digits: 2 };
-  if (view.y2Fmt) out.y2Fmt = null;
-  return out;
+  const blank = defaultPlotView() as unknown as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const k of SWITCH_DECORATIONS) {
+    const v: unknown = view[k];
+    // Ref lines and shades carry no anchor, so the filter empties them.
+    const next = Array.isArray(v) ? v.filter((m: { anchor?: string }) => m.anchor === "page") : blank[k];
+    if (JSON.stringify(next) !== JSON.stringify(v)) out[k] = next;
+  }
+  return out as Partial<PlotView>;
 }
 
 export function datasetViewDefaults(

@@ -44,7 +44,7 @@
 
 import { isOriginBookDataset } from "../lib/grouping";
 import type { AppState } from "./useApp";
-import { switchDecorationReset } from "./windowDefaults";
+import { SWITCH_DECORATIONS, switchDecorationReset } from "./windowDefaults";
 import { focusedRebindPatch, retargetPassiveRebind } from "./windows";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -86,8 +86,6 @@ export interface DatasetSelectionSlice {
   selectIds: (ids: string[]) => void;
 }
 
-const DECORATIONS = ["refLines", "regionShades", "annotations", "shapes", "xFmt", "yFmt", "y2Fmt"] as const;
-
 /** A switch that drops ref lines/annotations/tick formats is undoable; a
  *  plain switch with nothing to drop stays out of the undo stack, and so does
  *  one inside a gesture whose own fresh entry (facet, break, Origin apply)
@@ -95,7 +93,7 @@ const DECORATIONS = ["refLines", "regionShades", "annotations", "shapes", "xFmt"
 function switchNeedsUndoEntry(s: AppState, id: string): boolean {
   if (s.activeId === id || Object.keys(switchDecorationReset(s)).length === 0) return false;
   const top = s.history[s.history.length - 1]?.snapshot;
-  return !(top && top.activeId === s.activeId && DECORATIONS.every((k) => top.view[k] === s[k]));
+  return !(top && top.activeId === s.activeId && SWITCH_DECORATIONS.every((k) => top.view[k] === s[k]));
 }
 
 export function createDatasetSelectionSlice(set: SliceSet, get: SliceGet): DatasetSelectionSlice {
