@@ -296,6 +296,18 @@ test("the interaction-hints card stays in the side column, clear of the plot", a
   }
 });
 
+// Round-4 chrome audit: sweeping every palette command at 800x600, the only
+// window that left the viewport was the 840px Multi-panel export panel.
+test("a tool window wider than the window is capped to it", async ({ page }) => {
+  await loadPlot(page);
+  await page.setViewportSize({ width: 800, height: 600 });
+  await runPaletteCommand(page, "Multi-panel export…");
+  const win = page.locator(".qzk-win").filter({ hasText: "Multi-panel export" });
+  await expect(win).toBeVisible();
+  const r = await rectOf(win);
+  expect(r.left >= 0 && r.right <= 800, `window spans ${r.left}..${r.right}`).toBe(true);
+});
+
 type QzHarness = { __qz: { useApp: { setState: (s: object) => void } } };
 
 // Round-4 chrome audit: the import toast sat bottom-centre of the WINDOW,

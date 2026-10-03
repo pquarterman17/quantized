@@ -1074,7 +1074,7 @@ body {
    past the viewport. ToolWindow publishes its top edge as --qzk-win-top, so
    the cap is "down to 12px above the viewport bottom" (never under 120px, so a
    window dragged low still shows a body). */
-.qzk-win { position: absolute; display: flex; flex-direction: column; max-height: max(120px, calc(100% - var(--qzk-win-top, 12px) - 12px)); width: 360px; z-index: 20; }
+.qzk-win { position: absolute; display: flex; flex-direction: column; max-height: max(120px, calc(100% - var(--qzk-win-top, 12px) - 12px)); max-width: 100%; width: 360px; z-index: 20; } /* max-width: an 840px panel in an 800px window */
 .qzk-win-title { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border-soft); font-size: var(--font-size-sm); font-weight: var(--weight-semibold); color: var(--text-dim); cursor: default; user-select: none; touch-action: none; }
 .qzk-win-title .grow { flex: 1; }
 .qzk-win-title:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
