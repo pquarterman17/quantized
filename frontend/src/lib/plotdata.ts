@@ -517,9 +517,8 @@ export function withPeakOverlay(
 
 /** Vertically offset each series for a waterfall view: series s (1-indexed among
  *  the value columns) is shifted up by (s-1)·fraction·span, where span is the
- *  combined y-range. `fraction` is 0..1 (0 = off); a no-op with <2 series. The
- *  offset is display-only, so absolute y-values no longer read true (standard for
- *  waterfall). Apply to the base payload before overlays so channel 0 stays put. */
+ *  combined y-range. `fraction` is 0..1 (0 = off); a no-op with <2 series. Display
+ *  only: `yShift` lets the cursor readout report true values. Apply before overlays. */
 export function applyWaterfall(payload: PlotPayload, fraction: number): PlotPayload {
   if (!waterfallApplies(fraction) || payload.data.length <= 2) return payload;
   const cols = payload.data as unknown as (number | null)[][];
