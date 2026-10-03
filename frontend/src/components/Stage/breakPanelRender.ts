@@ -115,7 +115,9 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
     });
-    opts.cursor = { ...opts.cursor, sync: { key: args.syncKey } };
+    // Cursor sync by shared y only: uPlot maps a synced cursor or box-zoom
+    // selection BY X VALUE, which put the left panel's x slice on the right.
+    opts.cursor = { ...opts.cursor, sync: { key: args.syncKey, scales: ["x", "y"], match: [() => false, (a, b) => a === b] } };
     // No x-zoom sync: each panel shows its OWN x-slice, so copying one
     // panel's x domain onto another would show the wrong slice there.
     opts.hooks = { ...opts.hooks, setScale: [...(opts.hooks?.setScale ?? []), ySync] };
