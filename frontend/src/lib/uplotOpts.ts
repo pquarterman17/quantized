@@ -20,7 +20,7 @@ import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst, type RichNode } from "./richtext";
 import { sharedAxisTitle } from "./sharedAxisTitle";
-import { logDecadeLabels, logMajorTickFilter } from "./logTicks";
+import { logDecadeLabels, logGridSplits, logMajorTickFilter, spansDecade } from "./logTicks";
 export { logMajorTickFilter };
 import { decimalsForIncrement, pow10 } from "./ticks";
 import { errorRange, errorReach, fullYExtents, withXBarRows } from "./uplotErrorRange";
@@ -318,8 +318,8 @@ function dateTickFormatter(
 /** Build a uPlot axis `values` formatter for a tick mode. `auto` no longer
  *  defers to uPlot's own formatter (see `autoTickValues`'s doc for why);
  *  `fixed`/`sci`/`eng` each floor their configured `digits` at what the
- *  actual tick increment (`splitsIncrement`) needs, so a dense axis can
- *  never render two different ticks with the same label. */
+ *  tick increment (`splitsIncrement`) needs — not sci/eng on log decades, whose
+ *  mantissa is always 1 — so a dense axis never repeats a label. */
 export function tickFormatter(fmt?: AxisFormat, scale: AxisScale = "linear"): TickValues {
   const mode = fmt?.mode ?? "auto";
   if (mode === "auto") return scale === "log" ? autoLogTickValues : autoTickValues;
@@ -343,9 +343,11 @@ export function tickFormatter(fmt?: AxisFormat, scale: AxisScale = "linear"): Ti
     };
   }
   const digits = fmt ? Math.max(0, Math.min(20, Math.round(fmt.digits))) : 2;
+  const mantissaIncr = (splits: number[], foundIncr: number) =>
+    scale === "log" && spansDecade(splits) ? 0 : splitsIncrement(splits, foundIncr);
   if (mode === "sci") {
     return (_u, splits, _axisIdx, _foundSpace, foundIncr) => {
-      const incr = splitsIncrement(splits, foundIncr);
+      const incr = mantissaIncr(splits, foundIncr);
       return splits.map((v) => {
         if (v == null) return null;
         const exp = v === 0 ? 0 : Math.floor(Math.log10(Math.abs(v)));
@@ -356,7 +358,7 @@ export function tickFormatter(fmt?: AxisFormat, scale: AxisScale = "linear"): Ti
   }
   if (mode === "eng") {
     return (_u, splits, _axisIdx, _foundSpace, foundIncr) => {
-      const incr = splitsIncrement(splits, foundIncr);
+      const incr = mantissaIncr(splits, foundIncr);
       return splits.map((v) => (v == null ? null : formatEng(v, digits, incr)));
     };
   }
@@ -464,12 +466,7 @@ export function fixedLogAxisSplits(min: number, max: number, step?: number | nul
     }
     return out;
   }
-  const s = step && step > 0 ? step : niceLinearStep(max - min);
-  const n0 = Math.ceil(min / s - EPS);
-  const n1 = Math.floor(max / s + EPS);
-  const out: number[] = [];
-  for (let n = n0; n <= n1; n++) out.push(cleanStepValue(n * s));
-  return out;
+  return fixedLinearAxisSplits(min, max, step && step > 0 ? step : niceLinearStep(max - min));
 }
 
 // ── Reciprocal (1/x) scale — MAIN #12, Arrhenius-style plots ────────────────
@@ -515,23 +512,15 @@ export function reciprocalTransform(v: number): number {
  *  return `[]`. */
 export function reciprocalAxisSplits(min: number, max: number, targetTicks = 5): number[] {
   if (!(min > 0) || !(max > min)) return [];
-  const r0 = reciprocalTransform(min); // larger (smaller x -> larger 1/x)
-  const r1 = reciprocalTransform(max); // smaller
-  const rLo = Math.min(r0, r1);
-  const rHi = Math.max(r0, r1);
+  const rLo = reciprocalTransform(max); // smaller x -> larger 1/x
+  const rHi = reciprocalTransform(min);
   if (!(rHi > rLo)) return [min, max];
-  const step = niceLinearStep(rHi - rLo, targetTicks);
   const EPS = 1e-9;
-  const n0 = Math.ceil(rLo / step - EPS);
-  const n1 = Math.floor(rHi / step + EPS);
-  const out: number[] = [];
-  for (let n = n0; n <= n1; n++) {
-    const r = cleanStepValue(n * step);
-    if (r === 0) continue; // 1/0 is undefined — skip the (rare) exact-zero tick
-    const v = cleanStepValue(reciprocalTransform(r));
-    if (v >= min * (1 - EPS) && v <= max * (1 + EPS)) out.push(v);
-  }
-  return out.sort((a, b) => a - b);
+  // An exact-zero 1/x tick maps to NaN (1/0 is undefined) and fails the range test.
+  return fixedLinearAxisSplits(rLo, rHi, niceLinearStep(rHi - rLo, targetTicks))
+    .map((r) => cleanStepValue(reciprocalTransform(r)))
+    .filter((v) => v >= min * (1 - EPS) && v <= max * (1 + EPS))
+    .sort((a, b) => a - b);
 }
 
 /** Is the x column sorted ascending? uPlot's x scale defaults to `sorted: 1`,
@@ -1131,8 +1120,8 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         fixedLinearAxisSplits(scaleMin, scaleMax, step);
     }
     return scale === "log"
-      ? (_u: uPlot, _axisIdx: number, scaleMin: number, scaleMax: number): number[] =>
-          fixedLogAxisSplits(scaleMin, scaleMax, step ?? null)
+      ? (u: uPlot, axisIdx: number, scaleMin: number, scaleMax: number): number[] =>
+          logGridSplits(u, axisIdx, fixedLogAxisSplits(scaleMin, scaleMax, step ?? null))
       : undefined;
   };
   const xSplits = splitsFor(xScale, xLim, args.xStep);
