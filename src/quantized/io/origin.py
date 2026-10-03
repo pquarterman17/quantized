@@ -23,12 +23,21 @@ from numpy.typing import NDArray
 from quantized.csv_safe import csv_text_cell
 from quantized.datastruct import DataStruct, is_categorical, level_of
 from quantized.io._error_roles import error_axes
+from quantized.unit_display import display_unit
 
-__all__ = ["GraphSpec", "format_origin_project_script", "format_origin_script"]
+__all__ = [
+    "GraphSpec",
+    "format_origin_project_script",
+    "format_origin_script",
+    "origin_rich_unit",
+]
 
 _ERR_KEYWORDS = ("err", "dr", "std", "sigma")
 # C0/C1 controls plus the Unicode line/paragraph separators (see _escape_lt).
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
+# A run of Unicode superscript digits/signs (display_unit's exponent output).
+_SUPERSCRIPT_RUN = re.compile("[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+")
+_FROM_SUPERSCRIPT = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻", "0123456789+-")
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,8 +141,22 @@ def _reversed_x_lines(
     return [f"layer.x.from = {hi:.10g};  // reversed X", f"layer.x.to = {lo:.10g};"]
 
 
+def origin_rich_unit(unit: str) -> str:
+    """``unit`` as Origin graph rich text: the screen/export spelling
+    (``display_unit``) with each superscript run as LabTalk's ``\\+(...)``
+    escape, so ``cm^-1`` -> ``cm\\+(-1)`` and ``emu/cm3`` -> ``emu/cm\\+(3)``.
+    Å and µ stay Unicode (Origin 2018+ draws them). A mathtext (``$``) unit
+    is returned as written. Graph text only: worksheet units stay raw."""
+    if "$" in unit:
+        return unit
+    return _SUPERSCRIPT_RUN.sub(
+        lambda m: "\\+(" + m.group(0).translate(_FROM_SUPERSCRIPT) + ")", display_unit(unit)
+    )
+
+
 def _axis_title(label: str, unit: str) -> str:
-    return label + (f" ({unit})" if unit else "")
+    """A graph axis title; the unit in Origin rich text (``origin_rich_unit``)."""
+    return label + (f" ({origin_rich_unit(unit)})" if unit else "")
 
 
 def _plot_state_graph(
@@ -346,12 +369,10 @@ def format_origin_script(
                 o.append("layer.x.type = 1;  // Log X")
             if log_y:
                 o.append("layer.y.type = 1;  // Log Y")
-            x_title = x_name + (f" ({x_unit})" if x_unit else "")
-            o.append(f'xb.text$ = "{_escape_lt(x_title)}";')
+            o.append(f'xb.text$ = "{_escape_lt(_axis_title(x_name, x_unit))}";')
             if len(labels) == 1:
                 y_unit = units[0] if units else ""
-                y_title = labels[0] + (f" ({y_unit})" if y_unit else "")
-                o.append(f'yl.text$ = "{_escape_lt(y_title)}";')
+                o.append(f'yl.text$ = "{_escape_lt(_axis_title(labels[0], y_unit))}";')
 
     o += ["", "// Done"]
     ogs_text = "\n".join(o) + "\n"
