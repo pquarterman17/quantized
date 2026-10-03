@@ -42,6 +42,7 @@ export interface PlotViewFieldsSlice {
   legendTitle: string | null; // legend header text (Origin apply, decode #52)
   plotTemplate: string; // on-screen publication template (base font + line width)
   showAxisBox: boolean; // full frame on all four sides of the plot area (on by default)
+  xReversed: boolean; // x drawn high-to-low (IR wavenumber convention; PlotView field)
   stackMode: boolean; // multi-panel: one stacked sub-plot per channel
   panelFit: PanelFit; // #54: how a spatial multi-panel view fills the stage (PlotView field)
   pageSetup: PageSetup | null; // #54: this window's physical page model (PlotView field; null = none)
