@@ -115,7 +115,7 @@ export function runOriginFigureApply(
   const overlay = buildOverlayDataset(fig, siblings);
   if (overlay) {
     const targetId = existing?.id ?? nextDatasetId();
-    const refreshed = originOverlayDataset(targetId, overlayName, overlay, overlaySource, existing);
+    const refreshed = originOverlayDataset(targetId, overlayName, overlay, overlaySource, entry.id, existing);
     if (existing) {
       set((s) => ({
         datasets: s.datasets.map((d) =>

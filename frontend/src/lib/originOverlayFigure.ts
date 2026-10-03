@@ -19,13 +19,19 @@ export function originOverlayDataset(
   name: string,
   data: DataStruct,
   sourceId: string,
+  refreshedById: string,
   existing?: Dataset,
 ): Dataset {
   const stamped = {
     ...data,
     metadata: {
       ...data.metadata,
+      // `source` is the canonical graph-family id used to reuse one dataset;
+      // `entry` is the specific layer whose curves currently occupy it.
+      // A single-X sibling does not rebuild the family overlay, so consumers
+      // must not infer its contents from family identity alone.
       origin_overlay_source: sourceId,
+      origin_overlay_entry: refreshedById,
       origin_overlay_version: ORIGIN_OVERLAY_VERSION,
     },
   };

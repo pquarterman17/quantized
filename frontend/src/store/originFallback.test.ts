@@ -270,4 +270,48 @@ describe("Origin figure fallbacks", () => {
       [0, 1, 2].map((channel) => ({ datasetId: overlay!.id, channel })),
     );
   });
+
+  it("does not reuse a multi-X sibling's overlay when remaking a single-X layer", async () => {
+    const multiX: Dataset = {
+      id: "mx-mixed", name: "Moke:Book2",
+      data: {
+        time: [10, 20],
+        values: [[1, 30, 3, 50, 5], [2, 40, 4, 60, 6]],
+        labels: ["B", "E", "H", "I", "L"], units: ["", "Oe", "", "Oe", ""],
+        metadata: { origin_book: "Book2", x_column_name: "A", origin_column_names: ["B", "E", "H", "I", "L"] },
+      },
+    };
+    const multiLayer: OriginFigure = {
+      ...figure, name: "Mixed family", layer: 1, n_curves: 2,
+      curves: [
+        { book: "Book2", x: "E", y: "H", style: "line" },
+        { book: "Book2", x: "I", y: "L", style: "line" },
+      ],
+    };
+    const singleLayer: OriginFigure = {
+      ...figure, name: "Mixed family", layer: 2,
+      curves: [{ book: "Book2", x: "A", y: "B", style: "line" }],
+    };
+    useApp.setState({
+      datasets: [multiX],
+      originFigures: [
+        { id: "mixed-l1", stem: "Moke", figure: multiLayer, datasetId: "mx-mixed", siblingIds: ["mx-mixed"] },
+        { id: "mixed-l2", stem: "Moke", figure: singleLayer, datasetId: "mx-mixed", siblingIds: ["mx-mixed"] },
+      ],
+    });
+    useApp.getState().applyOriginFigure("mixed-l1");
+    const overlay = useApp.getState().datasets.find(
+      (ds) => ds.data.metadata?.origin_overlay_source === "mixed-l1",
+    );
+    expect(overlay?.data.metadata.origin_overlay_entry).toBe("mixed-l1");
+
+    await useApp.getState().remakeOriginFigure("mixed-l2");
+
+    expect(useApp.getState().graphBuilderSeed?.zones).toMatchObject({
+      x: null,
+      y: [{ datasetId: "mx-mixed", channel: 0 }],
+    });
+    expect(useApp.getState().datasets.find((ds) => ds.id === overlay?.id)?.data.metadata.origin_overlay_entry)
+      .toBe("mixed-l1");
+  });
 });

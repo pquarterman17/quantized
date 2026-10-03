@@ -161,9 +161,15 @@ export function confirmOriginReapplyDiscard(
   if (opts?.discardConfirmed) return false;
   const all = get().originFigures;
   const familyIds = new Set(figureLayerFamily(entry, all).map((member) => member.id));
-  const existing = get().datasets.find((d) =>
-    familyIds.has(String((d.data.metadata ?? {}).origin_overlay_source ?? "")),
-  );
+  const existing = get().datasets.find((d) => {
+    const metadata = d.data.metadata ?? {};
+    const sourceId = String(metadata.origin_overlay_source ?? "");
+    const refreshedBy = metadata.origin_overlay_entry;
+    return familyIds.has(sourceId) && (
+      refreshedBy === entry.id
+      || (refreshedBy == null && sourceId === entry.id)
+    );
+  });
   if (!existing) return false;
   const edits = discardedEdits(existing);
   if (!edits) return false;

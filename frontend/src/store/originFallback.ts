@@ -115,7 +115,13 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
       const familyIds = new Set(figureLayerFamily(entry, get().originFigures).map((member) => member.id));
       const overlayDataset = manualSource ? undefined : get().datasets.find((ds) => {
         const metadata = ds.data.metadata ?? {};
-        return familyIds.has(String(metadata.origin_overlay_source ?? ""))
+        const sourceId = String(metadata.origin_overlay_source ?? "");
+        const refreshedBy = metadata.origin_overlay_entry;
+        const matchesLayer = refreshedBy === entry.id
+          // Backward compatibility for overlays saved before the layer stamp:
+          // their source was the clicked layer, not the canonical family id.
+          || (refreshedBy == null && sourceId === entry.id);
+        return matchesLayer && familyIds.has(sourceId)
           && metadata.origin_overlay_version === ORIGIN_OVERLAY_VERSION;
       });
       if (overlayDataset) {
