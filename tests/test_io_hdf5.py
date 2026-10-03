@@ -314,6 +314,21 @@ def test_ascii_strings_add_no_utf8_attribute(tmp_path: Path) -> None:
         assert "utf8" not in hf["/raw/units"].attrs
 
 
+def test_categorical_level_tables_are_written(tmp_path: Path) -> None:
+    # /raw/values holds a categorical channel's CODES; without its level table
+    # the export cannot say what code 1 means.
+    ds = DataStruct.create(
+        [1.0, 2.0], [[1.0, 0.5], [0.0, 0.7]], labels=["grade", "y"], units=["", ""],
+        cat_levels={0: ("low", "high")},
+    )
+    out = tmp_path / "cat.h5"
+    write_hdf5(ds, out)
+    with h5py.File(out, "r") as hf:
+        raw = hf["/raw/values"].attrs["cat_levels_0"]
+        assert [s.decode() if isinstance(s, bytes) else str(s) for s in raw] == ["low", "high"]
+        assert "cat_levels_1" not in hf["/raw/values"].attrs
+
+
 def test_corrections_only_when_nonempty(tmp_path: Path) -> None:
     out = tmp_path / "corr.h5"
     write_hdf5(_basic_ds(), out, corrections={"xOff": 0.0, "yOff": 0.0})

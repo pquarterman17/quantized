@@ -26,7 +26,7 @@ from typing import Any
 import numpy as np
 
 from quantized.csv_safe import csv_text_cell
-from quantized.datastruct import DataStruct
+from quantized.datastruct import DataStruct, is_categorical, level_labels
 from quantized.io._error_roles import error_axes
 from quantized.x_units import x_unit_of
 
@@ -34,16 +34,36 @@ __all__ = ["consolidate_csv"]
 
 
 class _Col:
-    __slots__ = ("name", "unit", "file", "desig", "data")
+    __slots__ = ("name", "unit", "file", "desig", "data", "levels")
 
     def __init__(
-        self, name: str, unit: str, file: str, desig: str, data: np.ndarray
+        self,
+        name: str,
+        unit: str,
+        file: str,
+        desig: str,
+        data: np.ndarray,
+        levels: tuple[str, ...] = (),
     ) -> None:
         self.name = name
         self.unit = unit
         self.file = file
         self.desig = desig
         self.data = data
+        # A categorical channel's level table: cells are written as labels.
+        self.levels = levels
+
+    def cell(self, r: int) -> str:
+        """Row ``r`` as text: blank past the end or for a missing value (like
+        the ragged padding, never "nan"), a level label for a categorical
+        code, else ``%.10g``."""
+        if r >= self.data.size or not np.isfinite(self.data[r]):
+            return ""
+        v = float(self.data[r])
+        if self.levels:
+            ok = v.is_integer() and 0 <= v < len(self.levels)
+            return csv_text_cell(self.levels[int(v)]) if ok else ""
+        return f"{v:.10g}"
 
 
 def _meta_get(meta: dict[str, Any], *keys: str, default: Any = None) -> Any:
@@ -117,7 +137,8 @@ def _columns(datasets: list[tuple[DataStruct, str]]) -> list[_Col]:
                 role = _column_role(label)
             else:
                 role = _ROLE_OF_AXIS.get(err_axes.get(i), "Y")
-            cols.append(_Col(label, unit, file, role, values[:, i]))
+            levels = level_labels(ds, i) if is_categorical(ds, i) else ()
+            cols.append(_Col(label, unit, file, role, values[:, i], levels))
     return cols
 
 
@@ -142,11 +163,7 @@ def consolidate_csv(datasets: list[tuple[DataStruct, str]], *, fmt: str = "stand
 
     max_rows = max((c.data.size for c in cols), default=0)
     for r in range(max_rows):
-        # Missing values are blank like the ragged padding (not "nan" text).
-        cells = [
-            f"{c.data[r]:.10g}" if r < c.data.size and np.isfinite(c.data[r]) else ""
-            for c in cols
-        ]
+        cells = [c.cell(r) for c in cols]
         lines.append(",".join(cells))
 
     return "\n".join(lines) + "\n"

@@ -314,3 +314,20 @@ def test_origin_csv_writes_missing_values_as_blank_cells() -> None:
     )
     csv_text, _ = format_origin_script(ds)
     assert csv_text.splitlines()[2:] == ["1,1,", ",,0.5", "3,3,0.7"]
+
+
+def _graded() -> DataStruct:
+    return DataStruct.create(
+        [1.0, 2.0, 3.0],
+        [[1.0, 0.5], [0.0, 0.7], [float("nan"), 0.9]],
+        labels=["grade", "y"],
+        units=["", "mT"],
+        cat_levels={0: ("low", "high")},
+    )
+
+
+def test_origin_csv_writes_categorical_levels_not_codes() -> None:
+    # A categorical channel stores level CODES; the export must carry what
+    # they mean (Origin would otherwise get 0/1 with no level table).
+    csv_text, _ = format_origin_script(_graded())
+    assert csv_text.splitlines()[2:] == ["1,high,0.5", "2,low,0.7", "3,,0.9"]

@@ -96,3 +96,10 @@ def test_designations_follow_declared_error_roles() -> None:
 def test_missing_values_are_blank_like_the_padding() -> None:
     ds = DataStruct.create([1.0, 2.0], [[float("nan")], [2.0]], labels=["A"], units=[""])
     assert consolidate_csv([(ds, "a")]).splitlines()[1:] == ["1,", "2,2"]
+
+
+def test_categorical_channel_exports_level_labels() -> None:
+    ds = DataStruct.create(
+        [1.0, 2.0], [[1.0], [0.0]], labels=["grade"], units=[""], cat_levels={0: ("low", "high")}
+    )
+    assert consolidate_csv([(ds, "a")]).splitlines()[1:] == ["1,high", "2,low"]

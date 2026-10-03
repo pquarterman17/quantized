@@ -20,7 +20,7 @@ from typing import Any
 import numpy as np
 
 from quantized.csv_safe import csv_text_cell
-from quantized.datastruct import DataStruct
+from quantized.datastruct import DataStruct, is_categorical, level_of
 from quantized.io._error_roles import error_axes
 
 __all__ = ["GraphSpec", "format_origin_project_script", "format_origin_script"]
@@ -254,9 +254,15 @@ def format_origin_script(
         ",".join(csv_text_cell(c) for c in [x_name, *labels]),
         ",".join(csv_text_cell(c) for c in [x_unit, *units]),
     ]
+    # A categorical channel stores level CODES: write the level text instead.
+    categorical = [is_categorical(data, c) for c in range(values.shape[1])]
     for r in range(values.shape[0]):
         cells = [_num_cell(time[r])]
-        cells.extend(_num_cell(values[r, c]) for c in range(values.shape[1]))
+        cells.extend(
+            csv_text_cell(level_of(data, c, values[r, c]) or "") if categorical[c]
+            else _num_cell(values[r, c])
+            for c in range(values.shape[1])
+        )
         csv_lines.append(",".join(cells))
     csv_text = "\n".join(csv_lines) + "\n"
 

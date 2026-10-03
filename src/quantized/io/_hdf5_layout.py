@@ -159,7 +159,11 @@ def write_data_group(parent: h5py.Group, group_path: str, d: DataStruct) -> None
     grp.create_dataset("time", data=d.time.astype(np.float64).reshape(n, 1))
     grp["time"].attrs["timeIsDatetime"] = np.uint8(0)
 
-    grp.create_dataset("values", data=d.values.astype(np.float64).reshape(n, m))
+    vals = grp.create_dataset("values", data=d.values.astype(np.float64).reshape(n, m))
+    # A categorical channel's cells are level CODES; its level table rides
+    # along as a UTF-8 string attribute so the codes stay interpretable.
+    for ch, levels in (d.cat_levels or {}).items():
+        vals.attrs.create(f"cat_levels_{ch}", list(levels), dtype=_h5py().string_dtype("utf-8"))
 
     _write_padded_ascii(grp, "labels", list(d.labels))
     _write_padded_ascii(grp, "units", list(d.units))
