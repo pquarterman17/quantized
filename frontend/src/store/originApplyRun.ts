@@ -17,7 +17,7 @@
 import { spatialComposition } from "../lib/composition";
 import { originHiddenChannels } from "../lib/errorbars";
 import { lit } from "../lib/macro";
-import { figureLabel, figureLayerFamily, originFigureFamilyId, type OriginFigureEntry } from "../lib/originFigures";
+import { figureLabel, figureLayerFamily, type OriginFigureEntry } from "../lib/originFigures";
 import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlayFigure";
 import { pageSetupFromDecoded } from "../lib/pageGeometry";
 import { dedupeWindowTitle, displayedWindowTitle, scaleFromLog } from "../lib/plotview";
@@ -107,8 +107,9 @@ export function runOriginFigureApply(
   // rebuilds the same overlay without colliding across imports.
   const siblings = get().datasets.filter((d) => entry.siblingIds.includes(d.id));
   const allFigures = get().originFigures;
-  const familyIds = new Set(figureLayerFamily(entry, allFigures).map((member) => member.id));
-  const overlaySource = originFigureFamilyId(entry, allFigures);
+  const layerFamily = figureLayerFamily(entry, allFigures);
+  const familyIds = new Set(layerFamily.map((member) => member.id));
+  const overlaySource = layerFamily[0]?.id ?? entry.id;
   const existing = get().datasets.find((d) =>
     familyIds.has(String((d.data.metadata ?? {}).origin_overlay_source ?? "")));
   const overlay = buildOverlayDataset(fig, siblings);
