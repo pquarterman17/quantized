@@ -56,6 +56,7 @@ import {
 } from "../../../lib/recipePreflight";
 import { excludedSet } from "../../../lib/rowstate";
 import { extractOutputs, type AnalysisTemplate, type BatchRow } from "../../../lib/template";
+import { analyzePipeline } from "../../../lib/pipelineStudio";
 import { snapshotOf } from "../../../store/historySnapshot";
 import { removeDatasetsPatch } from "../../../store/removeDatasets";
 import { nextDatasetId, useApp } from "../../../store/useApp";
@@ -69,6 +70,19 @@ export async function runTemplateOnDataset(
   targetId: string,
   displayName: string,
 ): Promise<BatchRow> {
+  const before = useApp.getState();
+  const target = before.datasets.find((dataset) => dataset.id === targetId) ?? null;
+  const preflight = analyzePipeline(t.steps, target, before.datasets);
+  if (!preflight.canRun) {
+    const failures = preflight.steps
+      .filter((step) => step.state === "invalid")
+      .map((step) => step.issue ?? "invalid step");
+    return {
+      file: displayName,
+      values: extractOutputs(t.outputs, undefined),
+      failed: failures.join("; ") || "template preflight failed",
+    };
+  }
   // A transform step (P2.5) moves the run onto its output, so the fit report
   // cites the dataset the fit actually ran on (`fitTargets`), not the input.
   const { fits, fitTargets, log } = await executeSteps(t.steps, targetId);

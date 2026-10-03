@@ -4,10 +4,11 @@
 // and export the same script the macro card exports (one source of truth).
 // Thin — state and the runner live in usePipeline.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { saveBlob } from "../../../lib/download";
 import { pipelineToScript } from "../../../lib/pipeline";
+import { pipelineEditImpact, type PipelineEditImpact } from "../../../lib/pipelineStudio";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Checkbox } from "../../primitives/Checkbox";
@@ -24,6 +25,22 @@ const TONE: Record<StepStatus, "ok" | "warn" | "danger"> = {
   warn: "warn",
 };
 
+type StructuralAction = "toggle" | "remove" | "move_up" | "move_down";
+interface PendingEdit {
+  stepId: string;
+  action: StructuralAction;
+  impact: PipelineEditImpact;
+}
+
+const STATE_LABEL = {
+  ready: "Ready",
+  display_only: "Script only",
+  input: "Input",
+  disabled: "Off",
+  invalid: "Needs attention",
+  blocked: "Blocked",
+} as const;
+
 export default function PipelinePanel() {
   const setOpen = useApp((s) => s.setPipelineOpen);
   const setStatus = useApp((s) => s.setStatus);
@@ -32,39 +49,113 @@ export default function PipelinePanel() {
   const [newName, setNewName] = useState("");
   const [newExpr, setNewExpr] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
+  const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null);
+
+  // Undo, template load, or another command can replace the list while a
+  // confirmation is open. Never apply wording calculated for an old list.
+  useEffect(() => setPendingEdit(null), [p.steps]);
+  useEffect(() => {
+    if (selected && !p.steps.some((step) => step.id === selected)) setSelected(null);
+  }, [p.steps, selected]);
+
+  const applyStructuralEdit = (stepId: string, action: StructuralAction) => {
+    if (action === "toggle") p.toggleStep(stepId);
+    else if (action === "remove") p.removeStep(stepId);
+    else p.moveStep(stepId, action === "move_up" ? -1 : 1);
+    setPendingEdit(null);
+  };
+
+  const requestStructuralEdit = (stepId: string, action: StructuralAction) => {
+    const impact = pipelineEditImpact(p.steps, stepId, action);
+    if (impact.requiresConfirmation) setPendingEdit({ stepId, action, impact });
+    else applyStructuralEdit(stepId, action);
+  };
+
+  const reviewById = new Map(p.review.steps.map((step) => [step.id, step]));
+  const activeMeta = p.active
+    ? `${p.active.data.time.length.toLocaleString()} rows · ${p.active.data.labels.length.toLocaleString()} columns${p.active.pending ? " · full data loads before run" : ""}`
+    : "Choose a worksheet before running this pipeline.";
 
   return (
-    <ToolWindow id="pipeline" title="Pipeline" width={440} onClose={() => setOpen(false)}>
+    <ToolWindow id="pipeline" title="Pipeline Studio" width={720} onClose={() => setOpen(false)}>
+      <section className="qzk-pipeline-overview" aria-label="Pipeline overview">
+        <div className="qzk-pipeline-overview-head">
+          <div>
+            <div className="qzk-pipeline-eyebrow">CURRENT INPUT</div>
+            <strong>{p.active?.name ?? "No worksheet selected"}</strong>
+            <div className="qzk-ds-meta">{activeMeta}</div>
+          </div>
+          <div className="qzk-pipeline-counts" aria-label="Step compatibility summary">
+            <span>{p.review.runnable} runnable</span>
+            <span>{p.review.displayOnly} script only</span>
+            {p.review.inputs > 0 && <span>{p.review.inputs} input marker{p.review.inputs === 1 ? "" : "s"}</span>}
+            {p.review.disabled > 0 && <span>{p.review.disabled} off</span>}
+            {p.review.blocked > 0 && <span className="qzk-pipeline-count-warn">{p.review.blocked} blocked</span>}
+            {p.review.invalid > 0 && <span className="qzk-pipeline-count-danger">{p.review.invalid} invalid</span>}
+          </div>
+        </div>
+        {p.review.invalid > 0 && (
+          <div className="qzk-pipeline-alert" role="alert">
+            Fix the steps marked “Needs attention” before running. Nothing has been changed.
+          </div>
+        )}
+      </section>
+
       {p.steps.length === 0 ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           No steps yet — turn on the macro recorder (Inspector ▸ Macro recorder) and work
           normally, or add an expression step below.
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 260, overflowY: "auto" }}>
-          {p.steps.map((s) => {
+        <div className="qzk-pipeline-list">
+          {p.steps.map((s, index) => {
             const log = p.runLog[s.id];
+            const review = reviewById.get(s.id)!;
+            const confirming = pendingEdit?.stepId === s.id ? pendingEdit : null;
             return (
-              <div key={s.id}>
+              <div key={s.id} className="qzk-pipeline-step">
                 <div
                   className={`qzk-step-row${selected === s.id ? " qzk-active" : ""}`}
                   onClick={() => setSelected(selected === s.id ? null : s.id)}
                 >
                   {/* stop propagation so toggling never also selects the row */}
                   <span onClick={(e) => e.stopPropagation()}>
-                    <Checkbox checked={s.enabled} onChange={() => p.toggleStep(s.id)} />
+                    <Checkbox disabled={p.running} checked={s.enabled} onChange={() => requestStructuralEdit(s.id, "toggle")} />
                   </span>
                   <span className="qzk-step-kind">{s.kind}</span>
-                  <span className="qzk-step-label" style={s.enabled ? undefined : { opacity: 0.45 }}>
-                    {s.label}
+                  <span className="qzk-step-copy" style={s.enabled ? undefined : { opacity: 0.55 }}>
+                    <span className="qzk-step-label">{s.label}</span>
+                    <span className="qzk-step-summary">{review.summary}</span>
+                    <span className="qzk-step-impact">{review.impact}</span>
                   </span>
-                  {log && <StatusDot tone={TONE[log.status]} label={log.note ?? log.status} />}
+                  <span className={`qzk-step-state qzk-step-state-${review.state}${review.state === "ready" && review.issue ? " qzk-step-state-warning" : ""}`}>
+                    {review.state === "ready" && review.issue ? "Ready with fallback" : STATE_LABEL[review.state]}
+                  </span>
+                  {log && <StatusDot tone={TONE[log.status]} label={log.status} />}
                   <span style={{ flex: 1 }} />
-                  <button aria-label="Move up" className="qz-btn qz-ghost qz-sm" title="move up" onClick={(e) => { e.stopPropagation(); p.moveStep(s.id, -1); }}>↑</button>
-                  <button aria-label="Move down" className="qz-btn qz-ghost qz-sm" title="move down" onClick={(e) => { e.stopPropagation(); p.moveStep(s.id, 1); }}>↓</button>
-                  <button aria-label="Delete step" className="qz-btn qz-ghost qz-sm" title="delete step" onClick={(e) => { e.stopPropagation(); p.removeStep(s.id); }}>×</button>
+                  <button aria-label="Move up" disabled={p.running || index === 0} className="qz-btn qz-ghost qz-sm" title="move up" onClick={(e) => { e.stopPropagation(); requestStructuralEdit(s.id, "move_up"); }}>↑</button>
+                  <button aria-label="Move down" disabled={p.running || index === p.steps.length - 1} className="qz-btn qz-ghost qz-sm" title="move down" onClick={(e) => { e.stopPropagation(); requestStructuralEdit(s.id, "move_down"); }}>↓</button>
+                  <button aria-label="Duplicate step" disabled={p.running} className="qz-btn qz-ghost qz-sm" title="duplicate step" onClick={(e) => { e.stopPropagation(); p.duplicateStep(s.id); }}>⧉</button>
+                  <button aria-label="Delete step" disabled={p.running} className="qz-btn qz-ghost qz-sm" title="delete step" onClick={(e) => { e.stopPropagation(); requestStructuralEdit(s.id, "remove"); }}>×</button>
                 </div>
-                {selected === s.id && (
+                {(review.issue || log?.note) && (
+                  <div className={`qzk-step-note${review.state === "invalid" ? " qzk-step-note-danger" : ""}`}>
+                    {log?.note ?? review.issue}
+                  </div>
+                )}
+                {confirming && (
+                  <div className="qzk-pipeline-confirm" role="group" aria-live="polite" aria-label={confirming.impact.title}>
+                    <div><strong>{confirming.impact.title}</strong> {confirming.impact.detail}</div>
+                    <div className="qzk-pipeline-confirm-actions">
+                      <Button size="sm" onClick={() => applyStructuralEdit(confirming.stepId, confirming.action)}>Confirm</Button>
+                      <Button size="sm" onClick={() => setPendingEdit(null)}>Cancel</Button>
+                    </div>
+                  </div>
+                )}
+                {selected === s.id && p.running && (
+                  <div className="qzk-ds-meta qzk-step-note">Editing is paused while this run finishes.</div>
+                )}
+                {selected === s.id && !p.running && (
                   <StepEditor
                     // Re-seed the draft when the step changes under it (undo/redo).
                     key={`${s.code}\n${JSON.stringify(s.params)}`}
@@ -91,6 +182,7 @@ export default function PipelinePanel() {
         </span>
         <Button
           size="sm"
+          disabled={p.running}
           onClick={() => {
             const err = p.addExpressionStep(newName.trim(), newExpr.trim());
             setAddError(err);
@@ -113,7 +205,8 @@ export default function PipelinePanel() {
         <Button
           variant="primary"
           size="sm"
-          disabled={p.running || !p.active || p.steps.length === 0}
+          disabled={p.running || pendingEdit !== null || p.steps.length === 0 || !p.review.canRun}
+          title={!p.review.canRun ? "Resolve invalid steps before running" : undefined}
           onClick={() => void p.run()}
         >
           {p.running ? "Running…" : `Run on ${p.active?.name ?? "…"}`}
@@ -133,6 +226,15 @@ export default function PipelinePanel() {
           Export script
         </Button>
       </div>
+
+      {p.lastRun && (
+        <section className={`qzk-pipeline-result${p.lastRun.failed ? " qzk-pipeline-result-failed" : ""}`} aria-label="Last pipeline run">
+          <strong>{p.lastRun.failed ? "Run finished with errors" : "Run complete"}</strong>
+          <span>{p.lastRun.inputName} → {p.lastRun.outputName}</span>
+          <span>{p.lastRun.ok} completed · {p.lastRun.warned} warnings · {p.lastRun.failed} failed · {p.lastRun.skipped} skipped</span>
+          {p.lastRun.createdNames.length > 0 && <span>Created: {p.lastRun.createdNames.join(", ")}</span>}
+        </section>
+      )}
 
       <TemplatesSection />
     </ToolWindow>

@@ -39,6 +39,7 @@ const ds = (over: Partial<Dataset> = {}): Dataset => ({
   data: data(),
   ...over,
 });
+const realAddFormula = useApp.getState().addFormula;
 
 /** A "fit" step carrying `params` (the recorded recipe). */
 const fitStep = (params: Record<string, unknown>): PipelineStep =>
@@ -53,6 +54,7 @@ beforeEach(() => {
     xKey: null,
     yKeys: null,
     seriesOrder: null,
+    addFormula: realAddFormula,
   });
 });
 
@@ -60,6 +62,17 @@ async function runFit(step: PipelineStep, target = "a") {
   const { fits, log } = await executeSteps([step], target);
   return { fit: fits[0], entry: log[step.id] };
 }
+
+describe("executeSteps expression replay", () => {
+  it("logs a store refusal as failed instead of claiming the column was added", async () => {
+    const addFormula = vi.fn(() => false);
+    useApp.setState({ addFormula, status: "the expression would create a cycle" });
+    const step = makeStep("expression", "Add loop", "qz.addColumn()", { name: "loop", expr: "A" });
+    const { log } = await executeSteps([step], "a");
+    expect(addFormula).toHaveBeenCalledWith("a", "loop", "A");
+    expect(log[step.id]).toEqual({ status: "failed", note: "the expression would create a cycle" });
+  });
+});
 
 describe("executeSteps fit replay (#6)", () => {
   it("reproduces the recorded xKey/yKey channels (not time/values[0])", async () => {

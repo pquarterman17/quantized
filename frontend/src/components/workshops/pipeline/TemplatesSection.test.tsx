@@ -6,6 +6,8 @@ import { makeStep } from "../../../lib/pipeline";
 import { loadTemplates, saveTemplate, serializeTemplate, toTemplate, type AnalysisTemplate } from "../../../lib/template";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { metaFor } from "../../../lib/recipeIndex";
+import { useToasts } from "../../../store/toasts";
 
 const { uploadMock, fitMock, modelsMock, emitMock } = vi.hoisted(() => ({
   uploadMock: vi.fn(),
@@ -53,6 +55,7 @@ const file = (name: string) => new File(["x,y\n1,2\n"], name, { type: "text/csv"
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  useToasts.setState({ toasts: [] });
   useApp.setState({
     datasets: [],
     activeId: null,
@@ -87,10 +90,22 @@ describe("TemplatesSection", () => {
   it("loads a template's steps into the pipeline", () => {
     saveTemplate(TEMPLATE);
     render(<TemplatesSection />);
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "linear flow" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Saved template" }), { target: { value: "linear flow" } });
     fireEvent.click(screen.getByRole("button", { name: "Load" }));
     const steps = useApp.getState().macroSteps;
     expect(steps.map((s) => s.kind)).toEqual(["import", "expression", "fit"]);
+  });
+
+  it("acknowledges and records use when the selected template is already loaded", () => {
+    saveTemplate(TEMPLATE);
+    useApp.setState({ macroSteps: TEMPLATE.steps });
+    const historyLength = useApp.getState().history.length;
+    render(<TemplatesSection />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Saved template" }), { target: { value: "linear flow" } });
+    fireEvent.click(screen.getByRole("button", { name: "Load" }));
+    expect(metaFor({ kind: "analysis", scope: "global", id: "linear flow" }).useCount).toBe(1);
+    expect(useToasts.getState().toasts.at(-1)?.msg).toContain("already loaded");
+    expect(useApp.getState().history).toHaveLength(historyLength);
   });
 
   it("batch: N files → per-file reports + one summary sheet; a corrupt file flags, never crashes", async () => {
@@ -104,7 +119,7 @@ describe("TemplatesSection", () => {
     emitMock.mockResolvedValue({ report: { title: "t", sections: [] } });
 
     render(<TemplatesSection />);
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "linear flow" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Saved template" }), { target: { value: "linear flow" } });
     const input = document.querySelector('input[type="file"][multiple]') as HTMLInputElement;
     fireEvent.change(input, {
       target: { files: [file("a.dat"), file("bad.dat"), file("c.dat")] },
@@ -133,12 +148,31 @@ describe("TemplatesSection", () => {
     expect(a.data.labels).toContain("d");
   });
 
+  it("batch preflight flags an invalid template without mutating the imported worksheet", async () => {
+    saveTemplate(toTemplate(
+      "broken flow",
+      [makeStep("expression", "Bad", "qz.add()", { name: "bad", expr: "Q + 1" })],
+      [],
+    ));
+    uploadMock.mockResolvedValue(DATA);
+    render(<TemplatesSection />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Saved template" }), { target: { value: "broken flow" } });
+    const input = document.querySelector('input[type="file"][multiple]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file("a.dat")] } });
+
+    await waitFor(() => expect(useApp.getState().datasets.some((d) => d.name.includes("summary"))).toBe(true));
+    const imported = useApp.getState().datasets.find((d) => d.name === "a.dat")!;
+    expect(imported.data.labels).toEqual(["I"]);
+    const summary = useApp.getState().datasets.find((d) => d.name.includes("summary"))!;
+    expect(summary.data.metadata.failures).toEqual([expect.stringContaining("a.dat")]);
+  });
+
   // Finding #4: Apply and Batch both toggle the SAME `pipelineRunning` flag
   // while they run — either one already in flight must disable the other.
   it("disables Apply and Batch while the other is running", () => {
     saveTemplate(TEMPLATE);
     render(<TemplatesSection />);
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "linear flow" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Saved template" }), { target: { value: "linear flow" } });
     expect(screen.getByRole("button", { name: "Apply…" })).not.toBeDisabled();
     expect(screen.getByRole("button", { name: "Batch…" })).not.toBeDisabled();
 
