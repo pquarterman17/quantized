@@ -3,7 +3,7 @@
 
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { plural } from "../lib/plural";
-import { figureLayerFamily, originFigureFamilyId, type OriginFigureEntry } from "../lib/originFigures";
+import { figureLayerFamily, type OriginFigureEntry } from "../lib/originFigures";
 import { loadOriginApplyLibs } from "./originApplyLibs";
 import { excludedSet } from "../lib/rowstate";
 import type { Dataset } from "../lib/types";
@@ -161,7 +161,6 @@ export function confirmOriginReapplyDiscard(
   if (opts?.discardConfirmed) return false;
   const all = get().originFigures;
   const familyIds = new Set(figureLayerFamily(entry, all).map((member) => member.id));
-  familyIds.add(originFigureFamilyId(entry, all));
   const existing = get().datasets.find((d) =>
     familyIds.has(String((d.data.metadata ?? {}).origin_overlay_source ?? "")),
   );
