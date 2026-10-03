@@ -22,6 +22,7 @@ from quantized.calc.figure_colorscatter import (
 )
 from quantized.calc.figure_greyscale import apply_greyscale
 from quantized.calc.figure_hitmap import collect_map as _collect_map_impl
+from quantized.calc.figure_inset import apply_inset
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_overrides import _apply_overrides, _validate_overrides
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
@@ -249,6 +250,7 @@ def draw_series_axes(
     else:
         ax.grid(False, which="both")
     _apply_overrides(fig, ax, st, ov, n_series=len(series))
+    apply_inset(ax, artists, ov, resolved_x_scale, resolved_y_scale, st.grid_alpha)
     return artists
 
 

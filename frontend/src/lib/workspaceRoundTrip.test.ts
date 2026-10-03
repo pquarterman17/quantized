@@ -38,6 +38,7 @@ function everyFieldChanged(): PlotView {
     legendXY: [0.2, 0.3], legendSize: [200, 100], legendFrameXY: [0.1, 0.4], legendStatic: true, legendTitle: "T",
     axisLabelOffsets: { x: [3, 4], y2: [1, 2] }, axisLabelStyles: { x: { size: 14, italic: true }, y: { bold: true } },
     plotTemplate: "aps", showAxisBox: false, xReversed: true, stackMode: true, insetMode: true, polarMode: true, statMode: true,
+    inset: { x: [1, 2], y: [3, 4], yZoom: true, at: [0.1, 0.2, 0.3, 0.4], lines: false },
     statHideEmptyLevels: true, statShowGroupN: false, statShowSummary: true,
     statMarks: { box: { points: "none", jitterWidth: 0.5 } },
     statPicks: {

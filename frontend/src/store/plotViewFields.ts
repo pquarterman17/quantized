@@ -64,6 +64,7 @@ export interface PlotViewFieldsSlice {
   // and the reference-stable accessors: `lib/composition.ts`.
   composition: Composition | null;
   insetMode: boolean; // show a magnifier inset over the plot
+  inset: PlotView["inset"]; // its source region + placement (Stage/InsetPlot writes it)
   polarMode: boolean; // render the active series in polar (angle vs radius)
   statMode: boolean; statHideEmptyLevels: boolean; statShowGroupN: boolean; statShowSummary: boolean; statMarks: PlotView["statMarks"]; statPicks: PlotView["statPicks"]; // Statistics stage (gap #16) + its P2.6 options + its picks
   xLim: HalfLim | null; // explicit X range (null = autoscale; a null side = auto for that side)

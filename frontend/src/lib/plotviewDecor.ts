@@ -193,3 +193,34 @@ export function sanitizeShapes(v: unknown): Shape[] {
   }
   return out;
 }
+
+/** The magnifier inset's geometry (`PlotView.inset`; `insetMode` is its
+ *  visibility). The screen draws it (`Stage/InsetPlot.tsx`) and the vector
+ *  export draws the same inset (`calc/figure_inset.py`), so a saved inset
+ *  exports as shown. */
+export interface InsetView {
+  /** The source region's x range, data coordinates. */
+  x: [number, number];
+  /** Its y range as last drawn; `yZoom` false = autoscaled (re-ranged on redraw). */
+  y: [number, number] | null;
+  yZoom: boolean;
+  /** The inset's plot area as fractions of the main plot frame:
+   *  [left, top, width, height], top-origin (`legendFrameXY`'s convention). */
+  at: [number, number, number, number];
+  /** Connector lines from the source outline to the inset. */
+  lines: boolean;
+}
+
+/** A persisted inset, or null (absent or malformed = no saved inset, so an
+ *  older `.dwk` opens unchanged): finite x and y pairs (y may be absent) and a
+ *  finite placement. Kept this small because it is eager: the lazy readers
+ *  order-check the pairs and clamp the placement into the frame
+ *  (`lib/inset.clampAt` / `insetWire`), so neither the screen nor the export
+ *  ever draws a malformed one. */
+export function sanitizeInset(v: unknown): InsetView | null {
+  const o = v as InsetView | null;
+  const at = o?.at;
+  return o && isRange(o.x) && Array.isArray(at) && at.length === 4 && at.every(Number.isFinite)
+    ? { x: o.x, y: isRange(o.y) ? o.y : null, yZoom: !!o.yZoom, at, lines: o.lines !== false }
+    : null;
+}

@@ -22,7 +22,7 @@ import type { PanelLayout } from "./panelWindowModel";
 import type { FrozenPlotBundle } from "./plotsnapshot";
 import { boolViewFields, sanitizeLegendSize, sanitizeRegionShades, sanitizeStatMarksByMode, sanitizeStatPicks, uniqueIds, type StatMarksByMode, type StatPicks } from "./plotviewSanitize";
 import { axisScaleOrDefault, y2ScaleOrDefault } from "./plotviewAxis";
-import { LEGEND_POS, axisLabelOffsetsOrDefault, axisLabelStylesOrDefault, isRange, legendXYOrNull, sanitizeAnnotations, sanitizeShapes } from "./plotviewDecor";
+import { LEGEND_POS, axisLabelOffsetsOrDefault, axisLabelStylesOrDefault, isRange, legendXYOrNull, sanitizeAnnotations, sanitizeInset, sanitizeShapes, type InsetView } from "./plotviewDecor";
 import { isString, keyedRecord } from "./sanitizeRecord";
 import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { FigureDocument } from "./figureDocument";
@@ -31,6 +31,7 @@ import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisSca
 // Moved-out siblings (module-size ratchet), re-exported so no importer changed.
 export { cycleAxisScale, cycleTickMode, isAxisScale, scaleFromLog } from "./plotviewAxis";
 export { LEGEND_POS, legendXYOrNull, nearestLegendCorner, sanitizeAnnotations, sanitizeShapes } from "./plotviewDecor";
+export type { InsetView } from "./plotviewDecor";
 export { cascadeGeometry, cascadeLayout, cycleWindow, dedupeWindowTitle, displayedWindowTitle, dropGeometry, nextLinkGroup, nextPlotBg, tileLayout, zOrderIds } from "./plotWindows";
 
 const VALID_TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "date", "time", "datetime"];
@@ -93,6 +94,9 @@ export interface PlotView {
   xReversed: boolean; // x high-to-low (IR wavenumber): uPlot dir -1, export x_reversed
   stackMode: boolean;
   insetMode: boolean;
+  /** The inset's source region + placement (null = never drawn: the screen
+   *  seeds a central third, and the export the same). */
+  inset: InsetView | null;
   polarMode: boolean;
   statMode: boolean;
   /** P2.6 — Stat Stage options that persist with the plot (screen and export both honour
@@ -169,7 +173,7 @@ export function defaultPlotView(): PlotView {
     plotTemplate: "screen",
     showAxisBox: true, xReversed: false,
     stackMode: false,
-    insetMode: false,
+    insetMode: false, inset: null,
     polarMode: false,
     statMode: false,
     statHideEmptyLevels: false, statShowGroupN: true, statShowSummary: false, statMarks: {}, statPicks: {},
@@ -380,6 +384,7 @@ export function sanitizePlotView(v: unknown): PlotView {
     // Same fraction shape + clamp-not-drop convention as `legendXY` (decode #52).
     legendFrameXY: legendXYOrNull(o.legendFrameXY),
     legendTitle: typeof o.legendTitle === "string" ? o.legendTitle : null,
+    inset: sanitizeInset(o.inset),
     axisLabelOffsets: axisLabelOffsetsOrDefault(o.axisLabelOffsets),
     axisLabelStyles: axisLabelStylesOrDefault(o.axisLabelStyles),
     plotTemplate: strOrDefault(o.plotTemplate, fb.plotTemplate),

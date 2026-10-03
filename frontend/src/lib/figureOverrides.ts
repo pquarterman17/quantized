@@ -84,6 +84,14 @@ export interface FigureOverrides {
    *  primary scale otherwise — matches the screen's own `hasY2` fallback.
    *  See `calc.figure_decor._apply_region_shades`/`_split_region_shades_by_axis`. */
   region_shades?: { x1: number; x2: number; y1: number; y2: number; fill: string; axis?: 0 | 1 }[];
+  /** The magnifier inset (`PlotView.inset`, sent while `insetMode` is on):
+   *  an inset axes at `at` (main-frame fractions, top-origin) showing the
+   *  source region `x` × `y` with the plot's own series and scales, plus the
+   *  source outline and, with `lines`, its connectors —
+   *  `calc.figure_inset.apply_inset`. No `x`: the export seeds the screen's
+   *  central third; no `y`: autoscaled over that x window. Single-axes
+   *  figures only, so `gateY2Overrides` drops it for a dual-Y request. */
+  inset?: { x?: [number, number]; y?: [number, number]; at: [number, number, number, number]; lines?: boolean };
 }
 
 // `sanitizeFigureOverrides` and `compactOverrides` (with the helpers only
@@ -160,11 +168,12 @@ export function gateY2Overrides(
   opts: { y2Plotted: boolean; minorTicks: boolean },
 ): FigureOverrides | undefined {
   if (!ov && !opts.minorTicks) return ov;
-  const { y2_lim, ticks, ...rest } = ov ?? {};
+  const { y2_lim, ticks, inset, ...rest } = ov ?? {};
   return (
     compactOverrides({
       ...rest,
-      ...(opts.y2Plotted ? { y2_lim } : {}),
+      // The inset magnifies a single-axes plot (`FigureOverrides.inset`).
+      ...(opts.y2Plotted ? { y2_lim } : { inset }),
       ticks: opts.minorTicks ? { ...ticks, minor: true } : ticks,
     }) ?? undefined
   );

@@ -17,6 +17,7 @@
 import type { HalfLim } from "./axisLim";
 import type { StoreGet } from "./exportActive";
 import { compactOverrides, legendPosToLoc, type FigureOverrides } from "./figureOverrides";
+import { insetWire } from "./inset";
 import type { PlotView } from "./plotview";
 
 
@@ -58,6 +59,8 @@ export function viewOverrides(st: Pick<
   | "xScale"
   | "yScale"
   | "xReversed"
+  | "insetMode"
+  | "inset"
 >): FigureOverrides | undefined {
   // Decode #52: the legend title (Origin's bold header) rides the legend
   // override so vector export matches the screen's static legend.
@@ -140,6 +143,8 @@ export function viewOverrides(st: Pick<
       grid: st.showGrid,
       spines: { top: st.showAxisBox, right: st.showAxisBox },
       ticks: st.xScale === "log" || st.yScale === "log" ? { minor: true } : undefined,
+      // The magnifier inset draws in the export as on screen (lib/inset.ts).
+      inset: st.insetMode ? insetWire(st.inset) : undefined,
     }) ?? undefined
   );
 }

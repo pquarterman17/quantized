@@ -38,6 +38,7 @@ const INITIAL = {
   pageSetup: null,
   composition: null,
   insetMode: false,
+  inset: null,
   polarMode: false,
   statMode: false,
   statHideEmptyLevels: false,

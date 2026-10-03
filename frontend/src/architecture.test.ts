@@ -2010,6 +2010,7 @@ const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   xReversed: "x axis direction toggle, not channel-indexed",
   stackMode: "display toggle, not channel-indexed",
   insetMode: "display toggle, not channel-indexed",
+  inset: "the magnifier's source region (data coords) + placement fractions, not channel-indexed",
   polarMode: "display toggle, not channel-indexed",
   statMode: "display toggle, not channel-indexed",
   statHideEmptyLevels: "display toggle (P2.6 box 2), not channel-indexed",
