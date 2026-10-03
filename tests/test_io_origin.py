@@ -264,3 +264,39 @@ def test_origin_csv_reimports_with_names_and_units(
     assert list(back.units) == units
     assert back.metadata.get("x_column_unit") == x[1]
     np.testing.assert_array_equal(back.values, ds.values)
+
+
+def test_origin_designations_follow_declared_error_roles() -> None:
+    # ORSO/reductus name their error columns sR / uncertainty / resolution, none
+    # of which the keyword rule knows, so they exported as plain Y. The parser's
+    # error_roles (or the user's live bindings, sent the same way) decide.
+    ds = DataStruct.create(
+        [0.01, 0.02],
+        [[1.0, 0.1, 1e-4, 5.0], [0.5, 0.05, 1e-4, 6.0]],
+        labels=["R", "sR", "sQz", "Std counter"],
+        units=["", "", "1/A", ""],
+        metadata={
+            "x_column_name": "Qz",
+            "error_roles": [
+                {"channel": 1, "target": 0, "axis": "y", "side": "both"},
+                {"channel": 2, "target": -1, "axis": "x", "side": "both"},
+            ],
+        },
+    )
+    _, ogs = format_origin_script(ds)
+    types = [ln for ln in ogs.splitlines() if ".type =" in ln]
+    assert types == [
+        "wks.col1.type = 4;  // X",
+        "wks.col2.type = 1;  // Y",
+        "wks.col3.type = 3;  // yErr",
+        "wks.col4.type = 7;  // xErr",
+        "wks.col5.type = 1;  // Y",  # declared roles are authoritative: no keyword guess
+    ]
+
+
+def test_origin_designations_keep_keyword_fallback_without_roles() -> None:
+    ds = DataStruct.create(
+        [1.0, 2.0], [[1.0, 0.1], [2.0, 0.2]], labels=["M", "M err"], units=["", ""]
+    )
+    _, ogs = format_origin_script(ds)
+    assert "wks.col3.type = 3;  // yErr" in ogs

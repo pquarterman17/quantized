@@ -73,3 +73,21 @@ def test_non_q_x_axis_keeps_its_own_name() -> None:
     assert std.splitlines()[0] == "Temperature (K),Long Moment (emu),Q (1/A),R,dR"
     org = consolidate_csv([(mpms, "mpms.dat")], fmt="origin")
     assert org.splitlines()[0] == "Temperature,Long Moment"
+
+
+def test_designations_follow_declared_error_roles() -> None:
+    ds = DataStruct.create(
+        [0.01, 0.02],
+        [[1.0, 0.1, 1e-4], [0.5, 0.05, 1e-4]],
+        labels=["R", "sR", "sQz"],
+        units=["", "", "1/A"],
+        metadata={
+            "x_column_name": "Qz",
+            "error_roles": [
+                {"channel": 1, "target": 0, "axis": "y", "side": "both"},
+                {"channel": 2, "target": -1, "axis": "x", "side": "both"},
+            ],
+        },
+    )
+    org = consolidate_csv([(ds, "a.ort")], fmt="origin")
+    assert org.splitlines()[3] == "X,Y,yEr,xEr"

@@ -27,6 +27,7 @@ import numpy as np
 
 from quantized.csv_safe import csv_text_cell
 from quantized.datastruct import DataStruct
+from quantized.io._error_roles import error_axes
 from quantized.x_units import x_unit_of
 
 __all__ = ["consolidate_csv"]
@@ -82,6 +83,9 @@ def _dataset_filename(ds: DataStruct, name: str) -> str:
     return base or name or "dataset"
 
 
+_ROLE_OF_AXIS: dict[str | None, str] = {"y": "yEr", "x": "xEr"}
+
+
 def _column_role(label: str) -> str:
     low = label.lower()
     if low in ("dr", "di") or any(k in low for k in ("uncert", "err", "std", "sigma")):
@@ -105,9 +109,15 @@ def _columns(datasets: list[tuple[DataStruct, str]]) -> list[_Col]:
         time = np.asarray(ds.time, dtype=float)
         values = np.asarray(ds.values, dtype=float)
         cols.append(_Col(_x_name(ds), _resolve_x_unit(ds), file, "X", time))
+        # Declared error roles decide; the label keywords are the fallback.
+        err_axes = error_axes(ds.metadata, len(ds.labels))
         for i, label in enumerate(ds.labels):
             unit = ds.units[i] if i < len(ds.units) else ""
-            cols.append(_Col(label, unit, file, _column_role(label), values[:, i]))
+            if err_axes is None:
+                role = _column_role(label)
+            else:
+                role = _ROLE_OF_AXIS.get(err_axes.get(i), "Y")
+            cols.append(_Col(label, unit, file, role, values[:, i]))
     return cols
 
 

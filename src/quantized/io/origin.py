@@ -21,6 +21,7 @@ import numpy as np
 
 from quantized.csv_safe import csv_text_cell
 from quantized.datastruct import DataStruct
+from quantized.io._error_roles import error_axes
 
 __all__ = ["GraphSpec", "format_origin_project_script", "format_origin_script"]
 
@@ -278,11 +279,17 @@ def format_origin_script(
         f'wks.col1.lname$ = "{_escape_lt(x_name)}";',
         f'wks.col1.unit$ = "{_escape_lt(x_unit)}";',
     ]
+    # Declared error roles (parser / the user's live bindings) decide; the
+    # MATLAB label-keyword rule is the fallback when none are declared.
+    err_axes = error_axes(meta, len(labels))
     for k, label in enumerate(labels):
         cn = k + 2
         unit = units[k] if k < len(units) else ""
-        if _is_err_label(label):
+        axis = err_axes.get(k) if err_axes is not None else ("y" if _is_err_label(label) else None)
+        if axis == "y":
             o.append(f"wks.col{cn}.type = 3;  // yErr")
+        elif axis == "x":
+            o.append(f"wks.col{cn}.type = 7;  // xErr")
         else:
             o.append(f"wks.col{cn}.type = 1;  // Y")
         o.append(f'wks.col{cn}.lname$ = "{_escape_lt(label)}";')
