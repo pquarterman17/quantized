@@ -90,6 +90,18 @@ describe("analyzePipeline", () => {
     expect(review.canRun).toBe(true);
   });
 
+  it("does not invent a sigma column for a non-derived expression with a stray propagate flag", () => {
+    const valueOnly = makeStep("expression", "Legacy expression", "qz.add()", {
+      name: "value", expr: "A + B", propagate: true,
+    });
+    const readsInventedSigma = makeStep("expression", "Reads D", "qz.add()", {
+      name: "bad", expr: "D + 1",
+    });
+    const review = analyzePipeline([valueOnly, readsInventedSigma], dataset(), [dataset()]);
+    expect(review.steps.map((step) => step.state)).toEqual(["ready", "invalid"]);
+    expect(review.steps[1].issue).toContain('unknown variable "D"');
+  });
+
   it("explains the executor's fit fallbacks without blocking a recoverable run", () => {
     const fit = makeStep("fit", "Fit", "qz.fit()", {
       model: "Linear", yKey: 8, xKey: 7, weight: { mode: "yerr", errKey: 6 },

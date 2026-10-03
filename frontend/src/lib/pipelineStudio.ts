@@ -190,7 +190,7 @@ export function analyzePipeline(steps: readonly PipelineStep[], dataset: Dataset
     }
     if (step.enabled && step.kind === "expression" && columnCount !== null) {
       // Propagated expressions append both the value and its sigma column.
-      columnCount += step.params.propagate === true ? 2 : 1;
+      columnCount += step.params.derived === true && step.params.propagate === true ? 2 : 1;
     }
     if (step.enabled && step.kind === "transform") columnCount = null;
     for (const id of outputIds(step)) available.add(id);
