@@ -257,4 +257,8 @@ def import_jcamp(filepath: str | Path) -> DataStruct:
         metadata["extra_blocks"] = extra_blocks  # compound/LINK file
     if data_kind == "PEAKASSIGNMENTS" and assignments:
         metadata["peak_assignments"] = assignments
+    if data_kind in ("PEAKTABLE", "PEAKASSIGNMENTS"):
+        # Discrete peaks, not a sampled curve: joining them draws a fake
+        # spectrum. The frontend's own default-trace vocabulary.
+        metadata["default_trace"] = "Scatter"
     return DataStruct.create(x, y, labels=[yunits.title()], units=[""], metadata=metadata)

@@ -476,6 +476,10 @@ def import_spc(filepath: str | Path) -> DataStruct:
             metadata["subfile_points"] = [len(y) for _own_x, y, _info in subfiles]
             metadata["subfile_times"] = [float(info["subtime"]) for _ox, _y, info in subfiles]
             metadata["default_value_channels"] = [0]  # the signal; "Subfile" is an index
+    if flags["txyxys"] and (long_form or head["fxtype"] == 9):
+        # Per-scan m/z lists are discrete peaks (and long-form x restarts every
+        # scan): joined lines draw fake curves. Frontend default-trace vocabulary.
+        metadata["default_trace"] = "Scatter"
 
     return DataStruct.create(
         x, y_cols, labels=y_labels, units=[""] * len(y_labels), metadata=metadata

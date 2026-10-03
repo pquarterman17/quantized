@@ -47,6 +47,11 @@ export function datasetViewDefaults(
   options: DatasetViewDefaultsOptions = {},
 ): Partial<PlotView> {
   const remembered = applyTechniqueMemory(dataset, memory);
+  // A parser's peak-list hint (io/jcamp.py, io/spc.py): markers, not joined
+  // lines, per channel -- under any style memory remembers for that channel.
+  const seriesStyles: PlotView["seriesStyles"] = {};
+  if (dataset?.data.metadata?.default_trace === "Scatter")
+    dataset.data.labels.forEach((_, i) => (seriesStyles[i] = { marker: true, width: 0 }));
   return {
     xKey: null,
     yKeys: null,
@@ -72,7 +77,7 @@ export function datasetViewDefaults(
     // Blank means "derive from the incoming dataset", not "hide the title".
     xAxisLabel: "",
     yAxisLabel: "",
-    seriesStyles: {},
+    seriesStyles,
     seriesLabels: {},
     errKeys: dataset ? defaultErrKeys(dataset.data) : {},
     seriesOrder: null,
@@ -84,7 +89,9 @@ export function datasetViewDefaults(
     // Below memory, like the two error seeds it widens (memory > defaults).
     ...(options.outgoing ? switchDecorationReset(options.outgoing) : {}),
     ...(dataset && options.errorRoles ? errorRoleViewDefaults(dataset) : {}),
-    ...(remembered ?? (isTechniqueChange(dataset, previous) ? techniqueViewDefaults(dataset) : {})),
+    ...(remembered
+      ? { ...remembered, seriesStyles: { ...seriesStyles, ...remembered.seriesStyles } }
+      : isTechniqueChange(dataset, previous) ? techniqueViewDefaults(dataset) : {}),
   };
 }
 

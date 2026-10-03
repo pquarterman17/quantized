@@ -317,6 +317,25 @@ def test_txyxys_differing_x_long_form_keeps_every_point(tmp_path: Path) -> None:
     assert ds.metadata["subfile_points"] == [2, 3]
 
 
+def test_txyxys_peak_lists_hint_a_marker_trace(tmp_path: Path) -> None:
+    """Per-scan m/z lists (and long-form scans, whose x restarts every scan)
+    are discrete peaks: joined lines draw fake curves. A shared-x stack or a
+    plain spectrum carries no hint."""
+    exp = 8
+    sub_a = _pack_txyxys_sub([1.0, 2.0], [10, 20], subexp=exp)
+    sub_b = _pack_txyxys_sub([5.0, 6.0, 7.0], [30, 40, 50], subexp=exp)
+    raw = _pack_head(ftflgs=_TXY | _TMULTI, fnpts=0, fnsub=2, fexp=exp) + sub_a + sub_b
+    assert import_spc(_write(tmp_path, "long.spc", raw)).metadata["default_trace"] == "Scatter"
+    one = _pack_head(ftflgs=_TXY, fnpts=0, fnsub=1, fexp=exp, fxtype=9) + sub_b
+    assert import_spc(_write(tmp_path, "ms.spc", one)).metadata["default_trace"] == "Scatter"
+    same = _pack_head(ftflgs=_TXY | _TMULTI, fnpts=0, fnsub=2, fexp=exp) + sub_a + sub_a
+    assert "default_trace" not in import_spc(_write(tmp_path, "same.spc", same)).metadata
+    body = struct.pack("<3f", 90.0, 91.0, 92.0)
+    plain = _pack_head(fnpts=3, ffirst=4000.0, flast=450.0, fexp=-128, fxtype=1)
+    spectrum = import_spc(_write(tmp_path, "ir.spc", plain + _pack_sub(subexp=-128) + body))
+    assert "default_trace" not in spectrum.metadata
+
+
 def test_txyxys_data_may_not_overrun_directory(tmp_path: Path) -> None:
     """When fnpts is a directory offset, a subfile whose declared size would
     run into the directory raises loudly instead of reading it as data."""

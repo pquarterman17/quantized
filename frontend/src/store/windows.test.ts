@@ -234,3 +234,23 @@ describe("datasetViewDefaults — outgoing decorations (genuine switch only)", (
     expect(patch.xFmt).toBeUndefined();
   });
 });
+
+describe("datasetViewDefaults — a parser's peak-list trace hint", () => {
+  const DOT = { marker: true, width: 0 };
+
+  it("draws every channel of a peak list as markers, not joined lines", () => {
+    const peaks = ds("spectroscopy", { default_trace: "Scatter" }, ["Abundance", "Subfile"]);
+    expect(datasetViewDefaults(peaks).seriesStyles).toEqual({ 0: DOT, 1: DOT });
+    expect(datasetViewDefaults(ds("spectroscopy")).seriesStyles).toEqual({});
+  });
+
+  it("survives a same-technique memory that carries no style, and yields to one that does", () => {
+    const ir = ds("spectroscopy", {}, ["Absorbance"]);
+    const view = { xKey: null, yKeys: null, yScale: "linear" as const, xScale: "linear" as const, seriesLabels: {}, seriesOrder: null, errKeys: {}, hiddenChannels: [] };
+    const bare = captureTechniqueView(ir, { ...view, seriesStyles: {} }, {});
+    const peaks = ds("spectroscopy", { default_trace: "Scatter" }, ["Abundance"]);
+    expect(datasetViewDefaults(peaks, ir, bare).seriesStyles).toEqual({ 0: DOT });
+    const styled = captureTechniqueView(peaks, { ...view, seriesStyles: { 0: { color: "red" } } }, {});
+    expect(datasetViewDefaults(peaks, peaks, styled).seriesStyles).toEqual({ 0: { color: "red" } });
+  });
+});
