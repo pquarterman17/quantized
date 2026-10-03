@@ -139,6 +139,7 @@ export default function FitDataBinding({ fit }: { fit: ReflFitState }) {
         <SegmentedControl<XKind>
           options={[
             { value: "q", label: "Q (Å⁻¹)" },
+            { value: "qnm", label: "Q (nm⁻¹)" },
             { value: "twotheta", label: "2θ (deg)" },
           ]}
           value={settings.xKind}
@@ -157,7 +158,7 @@ export default function FitDataBinding({ fit }: { fit: ReflFitState }) {
             />
           </>
         )}
-        <label className="qzk-field-lbl" style={LBL}>Q window</label>
+        <label className="qzk-field-lbl" style={LBL}>Q window (Å⁻¹)</label>
         <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
           <BufferedNumberField
             aria-label="Q min"

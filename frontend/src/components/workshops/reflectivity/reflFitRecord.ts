@@ -200,7 +200,7 @@ function decodeChannel(v: unknown): SavedChannel {
 function decodeSettings(v: unknown): FitDataSettings {
   if (!isObj(v)) throw new Bad("settings");
   return {
-    xKind: oneOf<XKind>(v.xKind, ["q", "twotheta"]),
+    xKind: oneOf<XKind>(v.xKind, ["q", "qnm", "twotheta"]),
     lambda: numOrNull(v.lambda) ?? null,
     qMin: numOrNull(v.qMin) ?? null,
     qMax: numOrNull(v.qMax) ?? null,

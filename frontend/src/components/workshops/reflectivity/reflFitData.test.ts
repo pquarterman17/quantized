@@ -5,6 +5,7 @@ import { wavelengthFromMetadata } from "../../../lib/xrdWavelength";
 import {
   alignToRows,
   metadataWavelength,
+  probeRadiation,
   buildChannel,
   DEFAULT_SETTINGS,
   defaultChannels,
@@ -195,5 +196,40 @@ describe("prefill", () => {
 
   it("treats an XRD pattern with a wavelength as 2θ", () => {
     expect(defaultXKind({ ...DATA, metadata: { wavelength_a: 1.5406 } })).toBe("twotheta");
+  });
+});
+
+describe("x unit and probe defaults", () => {
+  const meta = (m: Record<string, unknown>): DataStruct => ({ ...DATA, metadata: m });
+
+  it("reads Q in nm⁻¹ as its own kind, not as Å⁻¹", () => {
+    for (const unit of ["nm⁻¹", "1/nm", "nm-1", "nm^-1"]) {
+      expect(defaultXKind(meta({ x_column_name: "Qz", x_column_unit: unit }))).toBe("qnm");
+    }
+    expect(defaultXKind(meta({ x_column_unit: "Å⁻¹" }))).toBe("q");
+    expect(defaultXKind(meta({ x_column_unit: "1/Ang" }))).toBe("q");
+  });
+
+  it("converts nm⁻¹ Q and dQ to Å⁻¹ before fitting", () => {
+    const nm: DataStruct = {
+      ...DATA,
+      time: DATA.time.map((q) => q * 10),
+      values: DATA.values.map(([r, dr, dq]) => [r, dr, dq * 10]),
+    };
+    const s = { ...DEFAULT_SETTINGS, xKind: "qnm" as const };
+    const a = buildChannel(nm, new Set(), BIND, s, "dr", null, "nm");
+    const b = buildChannel(DATA, new Set(), BIND, { ...s, xKind: "q" }, "dr", null, "a");
+    expect(a.rows).toEqual(b.rows);
+    a.channel.q.forEach((q, i) => expect(q).toBeCloseTo(b.channel.q[i], 12));
+    expect(a.channel.dq).not.toBeNull();
+    a.channel.dq?.forEach((q, i) => expect(q).toBeCloseTo(b.channel.dq?.[i] ?? NaN, 12));
+  });
+
+  it("takes the radiation from the file's probe", () => {
+    expect(probeRadiation({ probe: "neutron" })).toBe("neutron");
+    expect(probeRadiation({ probe: "x-ray" })).toBe("xray");
+    expect(probeRadiation({ probe: "xray" })).toBe("xray");
+    expect(probeRadiation({})).toBeNull();
+    expect(probeRadiation(undefined)).toBeNull();
   });
 });
