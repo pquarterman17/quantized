@@ -11,19 +11,22 @@ import { useHysteresis } from "./useHysteresis";
 
 export default function HysteresisPanel() {
   const setOpen = useApp((s) => s.setHysteresisOpen);
-  const { active, result, busy, warning, error, bgBusy, subtractBackground } = useHysteresis();
+  const { active, result, units, busy, warning, error, bgBusy, subtractBackground } =
+    useHysteresis();
+  const { h, m } = units;
+  const area = h && m ? `${h}·${m}` : "";
 
   const sfd = (result?.SFD as Record<string, unknown> | undefined) ?? {};
   const warnings = (result?.warnings as string[] | undefined) ?? [];
   const rows: (string | number)[][] = result
     ? [
-        ["Hc (mean)", fmtNum(result.HcMean)],
-        ["Mr (mean)", fmtNum(result.MrMean)],
-        ["Ms (mean)", fmtNum(result.MsMean)],
-        ["Squareness", fmtNum(result.squareness)],
-        ["Loop area", fmtNum(result.loopArea)],
-        ["SFD peak H", fmtNum(sfd.peakH)],
-        ["SFD FWHM", fmtNum(sfd.fwhm)],
+        ["Hc (mean)", fmtNum(result.HcMean), h],
+        ["Mr (mean)", fmtNum(result.MrMean), m],
+        ["Ms (mean)", fmtNum(result.MsMean), m],
+        ["Squareness", fmtNum(result.squareness), ""],
+        ["Loop area", fmtNum(result.loopArea), area],
+        ["SFD peak H", fmtNum(sfd.peakH), h],
+        ["SFD FWHM", fmtNum(sfd.fwhm), h],
       ]
     : [];
 
@@ -47,7 +50,7 @@ export default function HysteresisPanel() {
       )}
       {rows.length > 0 && (
         <>
-          <DataTable columns={["parameter", "value"]} rows={rows} />
+          <DataTable columns={["parameter", "value", "unit"]} rows={rows} />
           {warnings.length > 0 && (
             <div
               className="qzk-ds-meta"
@@ -64,7 +67,7 @@ export default function HysteresisPanel() {
             size="sm"
             disabled={bgBusy}
             onClick={() => void subtractBackground()}
-            title="Fit the linear dia/paramagnetic slope on the high-field tails and subtract it (offset kept, so Hc/Mr are unchanged); writes a new (bg-sub) dataset."
+            title="Subtract the high-field linear background and centre the loop into a new (bg-sub) dataset."
           >
             {bgBusy ? "Subtracting…" : "Subtract linear background"}
           </Button>

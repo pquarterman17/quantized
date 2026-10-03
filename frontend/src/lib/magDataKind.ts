@@ -27,6 +27,8 @@
 // failure mode being fixed, in a new costume. `unknown` is surfaced in the UI
 // and the user picks; nothing runs until they do.
 
+import type { DataStruct } from "./types";
+
 export type MagXKind = "field" | "temperature" | "unknown";
 
 export interface MagXDetection {
@@ -148,5 +150,61 @@ export function detectMagXKind(label: string, unit: string): MagXDetection {
     reason: label.trim() || unit.trim()
       ? `x axis "${[label.trim(), unit.trim()].filter(Boolean).join(" / ")}" is neither a known field nor a known temperature unit`
       : "the x axis carries no label or unit",
+  };
+}
+
+/** The DECLARED name/unit of the plotted X — the `xKey` channel's own, or the
+ *  `x_column_long` / `x_column_name` / `x_column_unit` hints when X is `time`.
+ *
+ *  `x_column_long` FIRST, exactly as `lib/plotdata.ts`, `lib/plotspec.ts`,
+ *  `ChannelsCard.tsx`, `lib/quickFigureMapping.ts`, `lib/panelwindow.ts` and
+ *  `lib/peakTableFit.ts` all resolve it. This is not cosmetic here:
+ *  `io/origin_project/opj.py` puts Origin's SHORT column name in
+ *  `x_column_name` (a bare letter — "A", "B", … "H", … "T") and the human
+ *  label in `x_column_long`. Reading the short name alone hands
+ *  `detectMagXKind` a single letter, whose whole-word symbol rule then fires:
+ *  an M(T) curve whose Origin column happens to be "B" or "H" classifies as
+ *  FIELD and silently runs the hysteresis routine — the same silent
+ *  misdispatch this module exists to remove, mirror-imaged. Origin's
+ *  unrecovered-x case writes `x_column_long: "Row"`, which matches neither
+ *  rule and correctly lands on `unknown`. */
+export function magXAxis(data: DataStruct, xKey: number | null): { label: string; unit: string } {
+  const named = xKey != null && xKey >= 0 && xKey < data.labels.length;
+  return {
+    label: named
+      ? (data.labels[xKey] ?? "")
+      : String(data.metadata?.["x_column_long"] || data.metadata?.["x_column_name"] || ""),
+    unit: named ? (data.units[xKey] ?? "") : String(data.metadata?.["x_column_unit"] ?? ""),
+  };
+}
+
+/** The `x_column_*` hints to STAMP on a derived dataset whose `time` is the
+ *  plotted x of `src`.
+ *
+ *  A derived dataset's x is a bare `time` column, so whatever the source's
+ *  hints said is what every downstream reader — including this hook's own
+ *  detector on a second pass — will believe about it. When x came from a
+ *  CHANNEL those inherited hints describe the source's ORIGINAL time column,
+ *  a different quantity entirely: right after a successful M(H) run the panel
+ *  could flip to "Cannot tell M(T) from M(H)" beside "removed: χ …", and a
+ *  second run could dispatch off metadata for the wrong axis. Stamping the
+ *  real identity (and clearing a now-meaningless long name) keeps the derived
+ *  dataset self-describing. `unitOverride` is for the Units tab, whose x is
+ *  converted. */
+export function stampXIdentity(
+  meta: Record<string, unknown>,
+  src: DataStruct,
+  xKey: number | null,
+  unitOverride?: string,
+): Record<string, unknown> {
+  const axis = magXAxis(src, xKey);
+  const named = xKey != null && xKey >= 0 && xKey < src.labels.length;
+  return {
+    ...meta,
+    x_column_name: axis.label,
+    // The channel's own label IS the human label; there is no separate short
+    // designation to keep, and the source's long name described another column.
+    x_column_long: named ? axis.label : String(src.metadata?.["x_column_long"] ?? ""),
+    x_column_unit: unitOverride ?? axis.unit,
   };
 }
