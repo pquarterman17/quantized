@@ -38,6 +38,9 @@ export interface DataStruct {
    *  reference `POST /api/parsers/books/data` needs (with a book's `id`) to
    *  fetch that book's full data on its first activation in the UI. */
   book_source?: BookSourceRef;
+  /** Multi-sheet Excel workbooks only: every OTHER data sheet, in full (each
+   *  carries `metadata.sheet_name`; io/excel_sheets.py). Import envelope only. */
+  sheets?: DataStruct[];
   /** Origin `.opj` projects only: every graph window as a plot-state snapshot
    *  (`figures.extract_figures`, plan items 12/13/18). `.opju` figures are not
    *  extracted yet (item 14). */

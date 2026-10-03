@@ -41,6 +41,7 @@ from quantized.io.xrdml import import_xrdml
 
 __all__ = [
     "import_auto",
+    "import_auto_sheets",
     "import_structure",
     "is_recognised_data_name",
     "is_structure_file",
@@ -303,3 +304,16 @@ def import_auto(path: str | Path) -> DataStruct:
     resolved = Path(path)
     parser = resolve_parser(resolved)
     return stamp_technique(parser(resolved), parser)
+
+
+def import_auto_sheets(path: str | Path) -> list[DataStruct]:
+    """``import_auto``, plus every other data-bearing sheet of an Excel workbook
+    (``io/excel_sheets.py``). The first entry is always the primary dataset;
+    every non-workbook file gives exactly ``[import_auto(path)]``."""
+    resolved = Path(path)
+    if resolved.suffix.lower() in (".xlsx", ".xlsm") and match_filter(resolved) is None:
+        with heavy_imports("quantized.io.excel_sheets"):
+            from quantized.io.excel_sheets import import_workbook_sheets
+
+        return import_workbook_sheets(resolved, import_auto)
+    return [import_auto(resolved)]

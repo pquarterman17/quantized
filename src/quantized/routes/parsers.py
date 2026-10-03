@@ -21,7 +21,6 @@ from pydantic import BaseModel
 from quantized.data_roots import allowed_data_roots
 from quantized.datastruct import DataStruct
 from quantized.desktop_consent import consented_path
-from quantized.io import import_auto
 from quantized.io.origin_project import (
     drop_empty_library_books,
     read_origin_project_all,
@@ -37,6 +36,7 @@ from quantized.io.origin_project.graph_preview import (
     attach_opju_graph_previews,
 )
 from quantized.io.origin_project.preview import decimate_with_alignment
+from quantized.io.registry import import_auto_sheets
 from quantized.routes._bookcache import cache_project_books
 from quantized.routes._datasetcache import cache_dataset
 from quantized.routes._errors import CALC_ERRORS_IO
@@ -283,8 +283,11 @@ def _import_with_books(
         payload["origin_fidelity"] = fidelity
         return payload, None
 
-    ds = import_auto(path)
-    return datastruct_payload(ds), cache_dataset(ds)
+    ds, *sheets = import_auto_sheets(path)
+    payload = datastruct_payload(ds)
+    if sheets:  # a multi-sheet workbook: every other data sheet, in full
+        payload["sheets"] = [datastruct_payload(s) for s in sheets]
+    return payload, cache_dataset(ds)
 
 
 def _payload_response(payload: dict[str, Any], handle: str | None) -> Response:

@@ -40,6 +40,7 @@ import {
   type Dataset,
 } from "../lib/types";
 import { deriveWorkbooks } from "../lib/workbooks";
+import { sheetDatasetName, splitSheets } from "../lib/workbookSheets";
 import { ALREADY_RUNNING_MSG, useImportBatch } from "./importBatch";
 import { presentBatchOutcome } from "./importBatchOffers";
 import { createErrorRolesActions, seedErrorRoles, type ErrorRolesActions } from "./importErrorRoles";
@@ -266,26 +267,34 @@ function addFromPayload(
   } else {
     delete data.books;
     delete data.book_source;
-    const id = nextDatasetId();
+    // Plot audit r2: a multi-sheet Excel workbook brings every data sheet;
+    // each is its own dataset in the ONE workbook below (lib/workbookSheets).
+    const sheets = splitSheets(data);
     // L1: a single-book `.opj`/`.opju` import (books.length <= 1, probably
     // the MORE common file) took this branch and used ONLY the label guess —
     // the same harm E1 fixed for the multi-book branch above. Prefer Origin's
     // designations here too; a genuinely non-Origin file (`null`) is unchanged.
-    const dsInput: Dataset = {
-      id, name: origin.name, data, ...src,
-      ...seedErrorRoles(data),
+    const inputs: Dataset[] = sheets.map((sheet) => ({
+      id: nextDatasetId(), name: sheetDatasetName(origin.name, sheet, sheets.length), data: sheet, ...src,
+      ...seedErrorRoles(sheet),
       importedAt,
       ...(targetFolderId ? { folderId: targetFolderId } : {}),
-    };
-    get().addDataset(dsInput, historyToken);
-    newIds.push(id);
+    }));
+    for (const dsInput of inputs) {
+      get().addDataset(dsInput, historyToken);
+      newIds.push(dsInput.id);
+    }
     // LIBRARY_WORKBOOK_UX_PLAN PR A3: one workbook per imported source file
     // (L0.2), or per book for a single-book Origin project (its origin_book
     // metadata already survived onto dsInput.data.metadata — the `books`
     // branch above only fires for length > 1). deriveWorkbooks decides
     // which, the SAME way a reload would, so import-time creation and
     // load-time derivation can never disagree (the plan's consistency gate).
-    const derived = deriveWorkbooks([dsInput], [], nextWorkbookId);
+    // Every other sheet joins the first one's workbook (L0.3).
+    const derived = deriveWorkbooks([inputs[0]], [], nextWorkbookId);
+    const workbookId = derived.membership[inputs[0].id];
+    if (sheets.length > 1 && !src.source) derived.workbooks[0].name = origin.name;
+    const mine = new Set(newIds);
     set((s) => ({
       workbooks: [...s.workbooks, ...derived.workbooks],
       // A single-file (0/1-book) import creates exactly ONE new workbook, so
@@ -295,7 +304,7 @@ function addFromPayload(
       // creates (project scale: auto-expanding every one is the "too many
       // similarly weighted objects" complaint that branch exists to fix).
       expandedWorkbookIds: [...new Set([...s.expandedWorkbookIds, ...derived.workbooks.map((w) => w.id)])],
-      datasets: s.datasets.map((d) => (d.id === id ? { ...d, workbookId: derived.membership[id] } : d)),
+      datasets: s.datasets.map((d) => (mine.has(d.id) ? { ...d, workbookId } : d)),
     }));
   }
   if (figures?.length) get().addOriginFigures(stem, figures, newIds);

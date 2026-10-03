@@ -36,7 +36,7 @@ from quantized.io._sims_header import (
 )
 from quantized.io.base import read_head, read_text
 
-__all__ = ["import_sims", "is_sims_file"]
+__all__ = ["import_sims", "is_sims_file", "is_sims_sheet"]
 
 _COMMENT_CHARS = "#%"
 _EXCEL_EXTS = {".xlsx", ".xls", ".xlsm", ".xlsb", ".ods"}
@@ -57,14 +57,14 @@ def _sims_signals(text: str) -> bool:
     return "depth" in low and ("atoms/cc" in low or "atoms/cm" in low)
 
 
-def _excel_preview_text(path: Path, max_rows: int = 8) -> str:
-    """First few rows of sheet 0 flattened to a string (for content sniffing).
+def _excel_preview_text(path: Path, max_rows: int = 8, sheet: int = 0) -> str:
+    """First few rows of ``sheet`` (default 0) flattened to a string (for content sniffing).
     Read through ``io/excel.read_sheet`` (owned handle, part and cell caps),
     stopping after ``max_rows`` so the sniffer stays cheap on a big sheet."""
     with heavy_imports("quantized.io.excel"):
         from quantized.io.excel import read_sheet
 
-    _, grid = read_sheet(Path(path), 0, max_rows=max_rows)
+    _, grid = read_sheet(Path(path), sheet, max_rows=max_rows)
     return " ".join(str(v) for row in grid for v in row if v is not None)
 
 
@@ -79,6 +79,14 @@ def is_sims_file(path: Path) -> bool:
     except Exception:  # noqa: BLE001 — a sniffer must never raise; unreadable -> not SIMS
         return False
     return _sims_signals(text)
+
+
+def is_sims_sheet(path: Path, sheet: int) -> bool:
+    """``is_sims_file`` for one worksheet of a workbook (``io/excel_sheets.py``)."""
+    try:
+        return _sims_signals(_excel_preview_text(Path(path), sheet=sheet))
+    except Exception:  # noqa: BLE001 — a sniffer must never raise; unreadable -> not SIMS
+        return False
 
 
 def _read_raw_lines(text: str) -> list[str]:
