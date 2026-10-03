@@ -19,6 +19,7 @@ import { buildPolarFigureSpec } from "./polarFigureSpec";
 import { windowCyclesSeriesStyles } from "./seriesStyleCycle";
 import type { Dataset } from "./types";
 import { readLiveWaterfallSpan } from "./waterfallOffset";
+import { withLiveLegendCorner } from "./liveLegendCorner";
 
 /** Stage copy/export entry point (F2.5b). Every Stage command that renders
  *  "the active dataset" (Copy figure, Copy figure (vector), Export figure…)
@@ -140,12 +141,13 @@ export function buildStageFigureSpec(
   // The fit / baseline / peak overlays the canvas splices on after `count`
   // channels (lib/figureSpecOverlays.ts). Not on a frozen document: it renders
   // its own snapshot, not the rows the overlay was computed on.
-  const overlaid =
+  const overlaid = withLiveLegendCorner( // an "auto" legend where the screen put it
     document?.data.mode === "frozen"
       ? spec
       : withAnalysisOverlays(spec, ds, st, count, {
           screen: st.excludedDisplay === "grey",
           wire: Boolean(o.greyExcluded),
-        });
+        }),
+  );
   return extra.transparent === undefined ? overlaid : { ...overlaid, transparent: extra.transparent };
 }
