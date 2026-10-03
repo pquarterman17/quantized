@@ -15,12 +15,15 @@
 //     the heatmap kind has no log norm; non-positive cells become gaps,
 //     exactly as the canvas leaves them unpainted;
 //   * the contour overlay, as filled contours with the overlay's level count
-//     and spacing (the route has no heatmap+contour kind).
+//     and spacing (the route has no heatmap+contour kind);
+//   * the frame: the canvas' letterboxed equal aspect for axes sharing a unit
+//     (Qx/Qz), and the heatmap's axis span (calc frames it like the canvas).
 // Cuts, ROIs, slices and annotations are interactive overlays and are not
 // part of the exported figure.
 
 import type { ColormapName } from "../../lib/colormap";
 import { exportMapFigure, type MapFigureSpec } from "../../lib/api/mapFigure";
+import { shouldLockAspect } from "../../lib/mapAspect";
 import type { MapPayload } from "../../lib/mapdataFetch";
 import { exportCanvasPng } from "../../lib/plotExport";
 import { runCancellable } from "../../store/pendingOps";
@@ -98,6 +101,8 @@ export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOp
     y_axis: p.yAxis,
     z_grid: p.zGrid.map((row) => row.map((v) => zCell(v, view))),
     ...(limits ? { z_limits: limits } : {}),
+    // The canvas letterboxes a map whose axes share a unit (`mapRender.plotRect`).
+    ...(shouldLockAspect(p.xUnit, p.yUnit) ? { equal_aspect: true } : {}),
     ...contour,
     fmt: o.fmt,
     style: o.style,

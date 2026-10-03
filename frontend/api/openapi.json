@@ -7134,6 +7134,11 @@
             ],
             "title": "Dpi"
           },
+          "equal_aspect": {
+            "default": false,
+            "title": "Equal Aspect",
+            "type": "boolean"
+          },
           "filename": {
             "default": "map",
             "title": "Filename",

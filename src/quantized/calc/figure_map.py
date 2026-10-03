@@ -85,6 +85,7 @@ def render_map_figure(
     view_elev: float = 30.0,
     view_azim: float = -60.0,
     z_limits: Sequence[float] | None = None,
+    equal_aspect: bool = False,
 ) -> bytes:
     """Render a 2-D map to image bytes in the chosen ``kind``.
 
@@ -123,6 +124,12 @@ def render_map_figure(
     colour limits the canvas paints over, which may be wider than the data
     (``tests/fixtures/wire/map_color_limits.json``). Contour LEVELS still come
     from the data. ``None`` = the data's extent, as before.
+
+    A 2-D map is framed like the canvas (``mapRender.draw``): a ``heatmap`` at
+    its grid's axis span, each cell centred on its axis value (``pcolormesh``
+    alone widens the frame by half a cell), and ``equal_aspect`` sets one data
+    unit per unit on both axes -- the canvas letterboxes a map whose two axes
+    share a physical unit (Qx/Qz) the same way.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -205,6 +212,11 @@ def render_map_figure(
         )
         if clim is not None and mappable is not None:
             mappable.set_clim(*clim)
+        if kind == "heatmap":
+            ax.set_xlim(x[0], x[-1])
+            ax.set_ylim(y[0], y[-1])
+        if equal_aspect and kind not in _3D_KINDS:
+            ax.set_aspect("equal", adjustable="box")
         if title:
             ax.set_title(title)
         if x_label:

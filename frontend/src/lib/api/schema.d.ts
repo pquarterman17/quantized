@@ -8094,6 +8094,11 @@ export interface components {
             /** Dpi */
             dpi?: number | null;
             /**
+             * Equal Aspect
+             * @default false
+             */
+            equal_aspect?: boolean;
+            /**
              * Filename
              * @default map
              */

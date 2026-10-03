@@ -41,6 +41,12 @@ const view: MapExportView = {
 const opts = { fmt: "pdf", style: "default", title: "", filename: "scan_map" };
 
 describe("mapFigureBody", () => {
+  it("asks for equal aspect exactly when the canvas letterboxes (axes sharing a unit, e.g. Qx/Qz)", () => {
+    const q = { ...payload, xLabel: "Qx", xUnit: "Ang^-1", yLabel: "Qz", yUnit: "Ang^-1" };
+    expect(mapFigureBody(q, view, opts).equal_aspect).toBe(true);
+    expect(mapFigureBody({ ...payload, yUnit: "deg" }, view, opts)).not.toHaveProperty("equal_aspect");
+  });
+
   it("sends the on-screen grid as a heatmap with gaps as null and unit-suffixed labels", () => {
     const b = mapFigureBody(payload, view, opts);
     expect(b).toMatchObject({
