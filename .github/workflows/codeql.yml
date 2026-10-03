@@ -13,8 +13,11 @@ on:
   schedule:
     - cron: "27 3 * * 1" # weekly, Monday 03:27 UTC
 
+# Only PR runs share a group (a newer push supersedes the older run). Every
+# other run is keyed by its commit, so back-to-back merges to main never
+# cancel each other or a pending run: each main commit keeps a full result.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
