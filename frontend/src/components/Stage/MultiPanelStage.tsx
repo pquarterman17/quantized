@@ -107,6 +107,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   const showGrid = useApp((s) => s.showGrid);
   const showLegend = useApp((s) => s.showLegend);
   const showAxisBox = useApp((s) => s.showAxisBox);
+  const xReversed = useApp((s) => s.xReversed);
   const plotTemplate = useApp((s) => s.plotTemplate);
   const defaultLineWidth = useApp((s) => s.defaultLineWidth);
   const defaultTrace = useApp((s) => s.defaultTrace);
@@ -159,6 +160,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
     yFmt,
     showGrid,
     showAxisBox,
+    xReversed,
     fontSize: template.fontSize,
     baseLineWidth: canvasLineWidth(plotTemplate, defaultLineWidth),
     defaultTrace,

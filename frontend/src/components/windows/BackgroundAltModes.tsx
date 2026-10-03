@@ -172,6 +172,7 @@ export function BackgroundStackWindow({ dataset, view, bg, composition = null, e
     yFmt: view.yFmt,
     showGrid: view.showGrid,
     showAxisBox: view.showAxisBox,
+    xReversed: view.xReversed,
     fontSize: template.fontSize,
     baseLineWidth: canvasLineWidth(view.plotTemplate, defaultLineWidth),
     defaultTrace,

@@ -122,7 +122,7 @@ export interface MultiPanelStageParams {
   xFmt: AxisFormat;
   yFmt: AxisFormat;
   showGrid: boolean;
-  showAxisBox: boolean;
+  showAxisBox: boolean; xReversed?: boolean; // x high-to-low: the stack and facet panels, as the flat plot (dir -1)
   /** Same presentation inputs PlotViewport receives. Multi-panel modes must
    * not silently fall back to uPlot's 12px/1.5px/Line defaults. */
   fontSize?: number;
@@ -199,7 +199,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     xFmt,
     yFmt,
     showGrid,
-    showAxisBox,
+    showAxisBox, xReversed = false,
     fontSize,
     baseLineWidth,
     defaultTrace,
@@ -591,7 +591,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         onSetScale: xZoomSyncHook(() => plotsRef.current),
         box,
         cell: {
-          yScale, xScale, xLim: facetXLim, xFmt, yFmt, showGrid,
+          yScale, xScale, xLim: facetXLim, xReversed, xFmt, yFmt, showGrid,
           axisBox: showAxisBox, fontSize, baseLineWidth, defaultTrace,
           tool, onReadout: setReadout, bg,
         },
@@ -626,7 +626,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       box: { w, h: host.clientHeight || 400 },
       cell: {
         yScale, xScale, xLim: resolveCanvasLims(payload.payload, { xLim, xScale, yScale }).x.range, xFmt, yFmt, showGrid, axisBox: showAxisBox,
-        fontSize, baseLineWidth, defaultTrace, refLines, tool,
+        fontSize, baseLineWidth, defaultTrace, refLines, tool, xReversed,
         onReadout: setReadout, bg,
       },
     });
@@ -659,7 +659,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     xFmt,
     yFmt,
     showGrid,
-    showAxisBox,
+    showAxisBox, xReversed,
     fontSize,
     baseLineWidth,
     defaultTrace,
