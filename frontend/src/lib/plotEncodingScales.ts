@@ -6,7 +6,7 @@
 
 import { COLORMAPS } from "./colormap";
 import type { ColorScatterSpec } from "./colorscatter";
-import { textColumnCells } from "./columnmeta";
+import { textColumnCells } from "./originTextColumnCells";
 import type { Encoding } from "./plotEncodingBinding";
 import { analysisData } from "./rowstate";
 import type { DataStruct, Dataset, SeriesStyle } from "./types";

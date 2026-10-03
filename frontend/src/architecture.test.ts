@@ -3518,6 +3518,14 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/plotEncodingWire.ts",
     "/lib/originFamilyBooks.ts",
     "/lib/fitStepDecode.ts",
+    // Post-#536 Workflow headroom: the 1-2-5 tick generator is used only by
+    // lazy map, stat and polar renderers; the eager plot path keeps pow10 and
+    // decimalsForIncrement in ticks.ts.
+    "/lib/niceTicks.ts",
+    // Origin inline-text materialization/report-sheet inspection is reached
+    // only by lazy worksheet, builder, search and encoding surfaces. Keep the
+    // eager designation reader in columnmeta.ts without pulling this half in.
+    "/lib/originTextColumns.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

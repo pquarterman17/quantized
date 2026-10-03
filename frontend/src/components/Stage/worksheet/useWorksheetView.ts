@@ -40,7 +40,7 @@ import { copyText, tableToTSV } from "../../../lib/clipboard";
 import { categoricalLevels } from "../../../lib/categorical";
 import { useEscapeSurface } from "../../../lib/escapeStack";
 import { channelLetter } from "../../../lib/formula";
-import type { TextColumn } from "../../../lib/columnmeta";
+import type { TextColumn } from "../../../lib/originTextColumns";
 import { textColumnRowCount, worksheetTextColumns } from "./textColumns";
 import { autofitColWidth, clampColWidth } from "../../../lib/gridwindow";
 import { excludedSet, filteredOutSet } from "../../../lib/rowstate";

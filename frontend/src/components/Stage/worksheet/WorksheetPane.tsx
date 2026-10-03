@@ -26,7 +26,7 @@
 import { useEffect, useState } from "react";
 
 import { isCategoricalChannel } from "../../../lib/categorical";
-import { hasOriginReportSheets } from "../../../lib/columnmeta";
+import { hasOriginReportSheets } from "../../../lib/originTextColumns";
 import { isRederived } from "../../../lib/rederived";
 import { channelModelingType } from "../../../lib/modeling";
 import type { Dataset } from "../../../lib/types";

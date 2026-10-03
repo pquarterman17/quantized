@@ -6,7 +6,7 @@
 // Cohesive because these two derivations are one question — "what text is in
 // this grid, and how far down does it go" — and the second reads the first.
 
-import { originTextColumns, type TextColumn } from "../../../lib/columnmeta";
+import { originTextColumns, type TextColumn } from "../../../lib/originTextColumns";
 import { rowsAreSampled } from "../../../lib/rowSidecars";
 import type { Dataset } from "../../../lib/types";
 

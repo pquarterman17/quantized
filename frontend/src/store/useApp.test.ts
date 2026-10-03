@@ -2287,6 +2287,12 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(s.yScale).toBe("log");
   });
 
+  it("reveals an explicitly applied Origin figure instead of leaving it behind Workflow", () => {
+    useApp.setState({ stageTab: "technique" });
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    expect(useApp.getState().stageTab).toBe("plot");
+  });
+
   // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 review round L1: re-applying a
   // figure onto a dataset that's ALREADY active is not a genuine dataset
   // switch, so `setActive` alone never resets `facetKey`
@@ -4420,11 +4426,17 @@ describe("stage routing — plot-intent forces the Plot tab off Worksheet (item 
     expect(useApp.getState().stageTab).toBe("plot");
   });
 
-  it("setActive keeps Workflow open so it follows the newly active worksheet", () => {
+  it("a passive Library activation keeps Workflow open and follows the newly active worksheet", () => {
     useApp.setState({ stageTab: "technique" });
-    useApp.getState().setActive("d1");
+    useApp.getState().activateFromLibrary("d1");
     expect(useApp.getState().stageTab).toBe("technique");
     expect(useApp.getState().activeId).toBe("d1");
+  });
+
+  it("setActive remains explicit plot intent when invoked from Workflow", () => {
+    useApp.setState({ stageTab: "technique" });
+    useApp.getState().setActive("d1");
+    expect(useApp.getState().stageTab).toBe("plot");
   });
 
   it("setActive still routes a 2-D map to the Map tab, not Plot, off Worksheet", () => {

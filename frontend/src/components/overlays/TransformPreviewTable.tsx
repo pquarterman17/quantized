@@ -5,7 +5,7 @@
 // dialogs import this.
 
 import { levelLabel } from "../../lib/categorical";
-import { originTextColumns } from "../../lib/columnmeta";
+import { originTextColumns } from "../../lib/originTextColumns";
 import type { DataStruct } from "../../lib/types";
 
 /** Rows shown. */

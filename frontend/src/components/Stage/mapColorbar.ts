@@ -4,7 +4,7 @@
 
 import { type ColormapName, colormapCss, normalize } from "../../lib/colormap";
 import type { MapPayload } from "../../lib/mapdataFetch";
-import { niceTicks } from "../../lib/ticks";
+import { niceTicks } from "../../lib/niceTicks";
 import { withUnit } from "../../lib/unitDisplay";
 
 /** Compact numeric label: ≤4 sig figs, exponential outside [1e-3, 1e5). */

@@ -17,7 +17,7 @@ import type { BarChartData } from "../../lib/barlayout";
 import type { AxisSlot } from "../../lib/groupAxis";
 import { glyphColor } from "../../lib/statColor";
 import type { ResolvedStatMarks } from "../../lib/statMarks";
-import { niceTicks } from "../../lib/ticks";
+import { niceTicks } from "../../lib/niceTicks";
 import { axisLabelsOf, axisStyleOf, drawMarks, violinValueDomain } from "./statDrawMarks";
 import { categoryAxisLayout, drawCategoryAxis } from "./statRenderAxes";
 import {

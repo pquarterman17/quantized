@@ -28,7 +28,8 @@
 // double-click autofits to a content sample. Handles stopPropagation so the
 // select-click gesture above never fires from a resize.
 
-import { columnMetaList, DESIGNATION_BADGE, type ColumnMeta, type TextColumn } from "../../../lib/columnmeta";
+import { columnMetaList, type ColumnMeta } from "../../../lib/columnmeta";
+import { DESIGNATION_BADGE, type TextColumn } from "../../../lib/originTextColumns";
 import { channelLetter } from "../../../lib/formula";
 import type { ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
 import { Select } from "../../primitives";

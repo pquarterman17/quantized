@@ -91,8 +91,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "workflow",
       group: "View",
       label: "Show workflow",
-      description: "Switch the central stage to the technique-aware workflow for the active worksheet.",
-      keywords: "technique analysis guided steps active worksheet",
+      description: "Show analysis steps for the active worksheet.",
       run: () => s().setStageTab("technique"),
     },
     // GUI_INTERACTION #10: restores every open-or-ever-opened floating

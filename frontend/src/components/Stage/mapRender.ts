@@ -8,7 +8,7 @@ import { COLORMAPS, type ColormapName, normalize, sampleColormap } from "../../l
 import { computeContours, contourLevels, type LevelScale, ringToCanvas } from "../../lib/contour";
 import { fitAspectRect, shouldLockAspect } from "../../lib/mapAspect";
 import type { MapPayload } from "../../lib/mapdataFetch";
-import { niceTicks } from "../../lib/ticks";
+import { niceTicks } from "../../lib/niceTicks";
 import type { RsmPeak } from "../../lib/types";
 import { drawColorbar, fmt } from "./mapColorbar";
 import { withUnit } from "../../lib/unitDisplay";

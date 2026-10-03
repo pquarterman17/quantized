@@ -22,7 +22,7 @@
 import { useState } from "react";
 
 import { labelForCode } from "../../../lib/categorical";
-import type { TextColumn } from "../../../lib/columnmeta";
+import type { TextColumn } from "../../../lib/originTextColumns";
 import { REDERIVED_EDIT_NOTICE } from "../../../lib/rederived";
 import { fmtCell, type CellFormatter } from "./cellFormat";
 import type { CellEditApi } from "./useCellEdit";

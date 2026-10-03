@@ -24,7 +24,7 @@ import { pageSizeInches } from "./pageGeometry";
 import type { PlotView } from "./plotview";
 import { POLAR_CANVAS, POLAR_LINE_PX, polarChannels, polarRadialRange } from "./polar";
 import { analysisData } from "./rowstate";
-import { niceTicks } from "./ticks";
+import { niceTicks } from "./niceTicks";
 import type { Dataset } from "./types";
 
 export type PolarSpecView = Pick<PlotView, "yKeys" | "seriesStyles" | "seriesLabels" | "showGrid" | "pageSetup">;

@@ -10,7 +10,7 @@
 // order) that exist only in this UI — the spec stores a text pick by name
 // (`ChannelRef.text`, channel -1), so no index can go stale.
 
-import { originTextColumnNames } from "../../../lib/columnmeta";
+import { originTextColumnNames } from "../../../lib/originTextColumnCells";
 import { facetSplitChannels } from "../../../lib/facetDomains";
 import { isEncodingFactor } from "../../../lib/plotEncoding";
 import { isStatSpec, statEncodingRefusal } from "../../../lib/plotEncodingStat";

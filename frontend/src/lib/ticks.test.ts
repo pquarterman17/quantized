@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { decimalsForIncrement, niceTicks, pow10 } from "./ticks";
+import { niceTicks } from "./niceTicks";
+import { decimalsForIncrement, pow10 } from "./ticks";
 
 describe("niceTicks", () => {
   it("produces round 1-2-5 values inside the range", () => {

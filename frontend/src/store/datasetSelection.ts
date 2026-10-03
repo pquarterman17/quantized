@@ -128,6 +128,15 @@ export function createDatasetSelectionSlice(set: SliceSet, get: SliceGet): Datas
     activateFromLibrary: (id) => {
       const s = get();
       const ds = s.datasets.find((d) => d.id === id);
+      // Workflow is the one passive browsing surface that follows Library
+      // selection. Route through the normal rebind so its summary receives
+      // the new active worksheet, then restore the surface; explicit plot
+      // actions continue to call setActive directly and reveal Plot/Map.
+      if (s.stageTab === "technique") {
+        get().setActive(id);
+        set({ stageTab: "technique" });
+        return;
+      }
       if (ds && isOriginBookDataset(ds) && s.originBookClickOpens === "worksheet") {
         set({
           worksheetId: id,
