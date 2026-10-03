@@ -17,7 +17,7 @@
 import { spatialComposition } from "../lib/composition";
 import { originHiddenChannels } from "../lib/errorbars";
 import { lit } from "../lib/macro";
-import { figureLabel, figureLayerFamily, type OriginFigureEntry } from "../lib/originFigures";
+import { figureLabel, figureLayerFamily, originFigureFamilyId, type OriginFigureEntry } from "../lib/originFigures";
 import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlayFigure";
 import { pageSetupFromDecoded } from "../lib/pageGeometry";
 import { dedupeWindowTitle, displayedWindowTitle, scaleFromLog } from "../lib/plotview";
@@ -102,16 +102,19 @@ export function runOriginFigureApply(
   // Scope overlay resolution to THIS import's datasets: Origin's default book
   // names (Book1/Book2/…) repeat across separate projects, so resolving
   // against every dataset in the store would silently combine the wrong
-  // books. Reuse is keyed on the entry id (not the display name, which can
-  // collide across same-stem imports) so re-applying reuses only this
-  // figure's own overlay.
+  // books. Reuse is keyed on the import-scoped graph-window family id (not
+  // the clicked layer id or display name), so every layer and entry point
+  // rebuilds the same overlay without colliding across imports.
   const siblings = get().datasets.filter((d) => entry.siblingIds.includes(d.id));
+  const allFigures = get().originFigures;
+  const familyIds = new Set(figureLayerFamily(entry, allFigures).map((member) => member.id));
+  const overlaySource = originFigureFamilyId(entry, allFigures);
   const existing = get().datasets.find((d) =>
-    (d.data.metadata ?? {}).origin_overlay_source === entry.id);
+    familyIds.has(String((d.data.metadata ?? {}).origin_overlay_source ?? "")));
   const overlay = buildOverlayDataset(fig, siblings);
   if (overlay) {
     const targetId = existing?.id ?? nextDatasetId();
-    const refreshed = originOverlayDataset(targetId, overlayName, overlay, entry.id, existing);
+    const refreshed = originOverlayDataset(targetId, overlayName, overlay, overlaySource, existing);
     if (existing) {
       set((s) => ({
         datasets: s.datasets.map((d) =>

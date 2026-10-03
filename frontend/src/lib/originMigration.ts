@@ -144,7 +144,7 @@ export function buildOriginMigrationProjects(
       return {
         id,
         entry: actionEntry,
-        label: figureLabel(representative).replace(/ · layer 2$/, ""),
+        label: figureLabel(representative).replace(/ · layer \d+$/, ""),
         layers: sorted.length,
         previewEntry: sorted.find((item) => isOriginPreviewUsable(item.figure.saved_preview)),
         ...graphState(actionEntry, sorted, importFigures, datasets),
@@ -174,7 +174,9 @@ export function buildOriginMigrationProjects(
       pendingBookCount: books.filter((dataset) => dataset.pending != null).length,
       needsReview: graphs.filter((graph) => graph.state === "needs_review" || graph.state === "approximate").length,
       recovered: graphs.filter((graph) => graph.state === "recovered").length,
-      referenceOnly: graphs.filter((graph) => graph.state === "reference_only").length + fidelity.manifest.filtered_figures.length,
+      // Filtered/internal records are disclosed separately below the graph
+      // list. They are not user graph windows and must not inflate this tile.
+      referenceOnly: graphs.filter((graph) => graph.state === "reference_only").length,
       issueGroups: [...issueMap.values()].sort((a, b) =>
         b.graphIds.length - a.graphIds.length || a.book.localeCompare(b.book, undefined, { numeric: true }),
       ),

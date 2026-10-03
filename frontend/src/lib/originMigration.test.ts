@@ -136,4 +136,20 @@ describe("buildOriginMigrationProjects", () => {
     expect(project.graphs[0]).toMatchObject({ layers: 2, canOpen: true });
     expect(project.graphs[0].entry.id).toBe("layer-2");
   });
+
+  it("removes any numeric layer suffix from the grouped graph label", () => {
+    const figures = [
+      entry("layer-3", "d1", figure({ layer: 3 })),
+      entry("layer-4", "d1", figure({ layer: 4 })),
+    ];
+    const [project] = buildOriginMigrationProjects([fidelity()], figures, [dataset("d1", "Book1")]);
+    expect(project.graphs[0].label).toBe("Graph1");
+  });
+
+  it("does not count internal filtered records as reference-only graph windows", () => {
+    const f = fidelity();
+    f.manifest.filtered_figures = [{ index: 9, name: "SYSTEM", layer: null, reason: "internal" }];
+    const [project] = buildOriginMigrationProjects([f], [], [dataset("d1", "Book1")]);
+    expect(project.referenceOnly).toBe(0);
+  });
 });

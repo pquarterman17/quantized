@@ -6,6 +6,7 @@ export type WorkflowWorkspaceView =
 
 let view: WorkflowWorkspaceView = { kind: "technique" };
 let deferredOriginReviews: ReadonlySet<string> = new Set();
+let originReviewScope: readonly unknown[] | null = null;
 const listeners = new Set<() => void>();
 
 function subscribe(listener: () => void): () => void {
@@ -54,6 +55,20 @@ export function clearOriginReviewDeferred(): void {
   if (deferredOriginReviews.size === 0) return;
   deferredOriginReviews = new Set();
   listeners.forEach((listener) => listener());
+}
+
+/** Reset session-only review marks when the workspace's Origin-import
+ * collection is replaced. The array identity remains stable across ordinary
+ * dataset/figure edits and unmounts, but load/clear/import replacement mints
+ * a new collection, preventing stale keys from leaking into another project. */
+export function syncOriginReviewScope(scope: readonly unknown[]): void {
+  if (originReviewScope === null) {
+    originReviewScope = scope;
+    return;
+  }
+  if (originReviewScope === scope) return;
+  originReviewScope = scope;
+  clearOriginReviewDeferred();
 }
 
 export function useOriginReviewDeferred(): ReadonlySet<string> {

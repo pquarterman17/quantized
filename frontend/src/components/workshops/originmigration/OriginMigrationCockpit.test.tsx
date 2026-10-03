@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset, OriginFigure } from "../../../lib/types";
@@ -68,9 +68,29 @@ describe("OriginMigrationCockpit", () => {
     expect(screen.getByRole("list", { name: "Unresolved saved sources" })).toHaveTextContent("Missing · X → B");
     expect(screen.getByRole("button", { name: "Missing · book not imported (1 graph)" })).toBeInTheDocument();
     expect(screen.getByText(/drawn arrows and shapes/)).toBeInTheDocument();
+    expect(screen.getByText("reference only").parentElement).toHaveTextContent("0reference only");
     fireEvent.click(screen.getByRole("button", { name: "All graphs (2)" }));
     expect(screen.getByRole("heading", { name: "Recovered" })).toBeInTheDocument();
     expect(JSON.stringify(useApp.getState().datasets)).toBe(before);
+  });
+
+  it("does not snap a manual project choice back when live store data updates", () => {
+    const first = dataset();
+    const second = { ...dataset(), id: "d2", name: "Book2", data: { ...dataset().data, metadata: { origin_book: "Book2", origin_column_names: ["B"] } } } as Dataset;
+    useApp.setState({
+      datasets: [first, second],
+      originFidelity: [
+        { id: "f1", stem: "alpha", siblingIds: ["d1"], manifest: { version: 1, container: "opj", status: "exact", graph_records_total: 0, graph_records_actionable: 0, graph_records_filtered: 0, omissions: [], filtered_figures: [] } },
+        { id: "f2", stem: "beta", siblingIds: ["d2"], manifest: { version: 1, container: "opj", status: "exact", graph_records_total: 0, graph_records_actionable: 0, graph_records_filtered: 0, omissions: [], filtered_figures: [] } },
+      ],
+    });
+    render(<OriginMigrationCockpit initialFidelityId="f1" onClose={() => {}} />);
+    fireEvent.change(screen.getByLabelText("Imported project"), { target: { value: "f2" } });
+    expect(screen.getByRole("heading", { name: "beta" })).toBeInTheDocument();
+
+    act(() => useApp.setState({ datasets: [...useApp.getState().datasets] }));
+    expect(screen.getByRole("heading", { name: "beta" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Imported project")).toHaveValue("f2");
   });
 
   it("marks review-later locally and still allows the user to return it to review", () => {
@@ -90,5 +110,20 @@ describe("OriginMigrationCockpit", () => {
     expect(screen.getByText("Review later", { selector: ".qz-badge" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Return to review" }));
     expect(screen.queryByText("Review later", { selector: ".qz-badge" })).not.toBeInTheDocument();
+  });
+
+  it("clears review-later marks when the Origin project collection is replaced", async () => {
+    const manifest = { version: 1 as const, container: "opj" as const, status: "best_effort" as const, graph_records_total: 1, graph_records_actionable: 1, graph_records_filtered: 0, omissions: [], filtered_figures: [] };
+    useApp.setState({
+      datasets: [dataset()],
+      originFidelity: [{ id: "f1", stem: "sample", siblingIds: ["d1"], manifest }],
+      originFigures: [{ id: "bad", stem: "sample", siblingIds: ["d1"], datasetId: null, figure: figure("Broken", "Missing") }],
+    });
+    const { unmount } = render(<OriginMigrationCockpit onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Review later" }));
+    unmount();
+    act(() => useApp.setState({ originFidelity: [{ id: "f1", stem: "replacement", siblingIds: ["d1"], manifest }] }));
+    render(<OriginMigrationCockpit onClose={() => {}} />);
+    await waitFor(() => expect(screen.queryByText("Review later", { selector: ".qz-badge" })).not.toBeInTheDocument());
   });
 });

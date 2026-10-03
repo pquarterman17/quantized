@@ -109,6 +109,14 @@ export function figureLayerFamily(
     .filter((e) => e.stem === entry.stem && e.figure.name === name && e.siblingIds[0] === key)
     .sort((a, b) => (a.figure.layer ?? 1) - (b.figure.layer ?? 1));
 }
+
+/** Stable provenance id for one Origin graph window, independent of which
+ * layer launched the action. Overlay reuse and discard confirmation must use
+ * this id so Library and migration-review entry points cannot materialize
+ * duplicate overlays for different layers of the same window. */
+export function originFigureFamilyId(entry: OriginFigureEntry, all: OriginFigureEntry[]): string {
+  return figureLayerFamily(entry, all)[0]?.id ?? entry.id;
+}
 /** Library row label: prefer a surviving annotation (reads like a plot title
  *  or peak label) over the raw Origin graph-window name (e.g. "Graph3"). */
 export function figureLabel(entry: OriginFigureEntry): string {

@@ -55,6 +55,20 @@ describe("TechniqueWorkspace", () => {
     expect(screen.getByRole("heading", { name: "Choose a worksheet" })).toBeInTheDocument();
   });
 
+  it("updates the Origin review target while Workflow is already mounted", () => {
+    useApp.setState({
+      originFidelity: ["alpha", "beta"].map((stem, index) => ({
+        id: `f${index + 1}`, stem, siblingIds: [`d${index + 1}`],
+        manifest: { version: 1 as const, container: "opj" as const, status: "best_effort" as const, graph_records_total: 0, graph_records_actionable: 0, graph_records_filtered: 0, omissions: [], filtered_figures: [] },
+      })),
+    });
+    openOriginMigrationReview("f1");
+    render(<TechniqueWorkspace onClose={() => {}} />);
+    expect(screen.getByRole("heading", { name: "alpha" })).toBeInTheDocument();
+    act(() => openOriginMigrationReview("f2"));
+    expect(screen.getByRole("heading", { name: "beta" })).toBeInTheDocument();
+  });
+
   it("shows the declared technique, provenance, dimensions, and existing results without mutating science state", () => {
     const ds = { ...dataset("s1", "sims"), fitSpec: { model: "linear" } } as Dataset;
     useApp.setState({ datasets: [ds], activeId: "s1", selectedIds: ["s1"] });

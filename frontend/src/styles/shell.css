@@ -1305,7 +1305,7 @@ body {
 .qzk-origin-migration-issues span { margin-left: 8px; color: var(--text-faint); font-family: var(--font-sans); }
 .qzk-origin-migration-actions { margin-top: 12px; }
 .qzk-origin-migration-filtered { margin-top: 12px; color: var(--text-dim); font-size: var(--type-small); }
-.qzk-origin-migration-filtered summary { cursor: pointer; }
+.qzk-origin-migration-filtered summary { cursor: default; }
 @container (max-width: 720px) { .qzk-origin-migration-summary { grid-template-columns: repeat(2, minmax(120px, 1fr)); } .qzk-origin-migration-row-head { flex-direction: column; } .qzk-origin-migration-badges { justify-content: flex-start; } }
 @container (max-width: 440px) { .qzk-origin-migration-summary { grid-template-columns: 1fr; } .qzk-origin-migration-project { grid-template-columns: 1fr; } }
 

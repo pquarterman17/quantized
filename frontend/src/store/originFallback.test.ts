@@ -150,6 +150,37 @@ describe("Origin figure fallbacks", () => {
     expect(state.datasets.filter((ds) => ds.data.metadata?.origin_overlay_source === "cross")).toHaveLength(1);
   });
 
+  it("reuses one overlay when different layers of the same graph window are applied", () => {
+    const book2: Dataset = {
+      ...book,
+      id: "d2",
+      name: "Project:Book2",
+      data: { ...book.data, metadata: { ...book.data.metadata, origin_book: "Book2" } },
+    };
+    const cross: OriginFigure = {
+      ...figure,
+      n_curves: 2,
+      curves: [
+        { book: "Book1", x: "A", y: "B", style: "line" },
+        { book: "Book2", x: "A", y: "B", style: "line" },
+      ],
+    };
+    useApp.setState({
+      datasets: [book, book2],
+      originFigures: [
+        { id: "layer-1", stem: "Project", figure: { ...cross, layer: 1 }, datasetId: "d1", siblingIds: ["d1", "d2"] },
+        { id: "layer-2", stem: "Project", figure: { ...cross, layer: 2 }, datasetId: "d1", siblingIds: ["d1", "d2"] },
+      ],
+    });
+
+    useApp.getState().applyOriginFigure("layer-2");
+    useApp.getState().applyOriginFigure("layer-1");
+
+    const overlays = useApp.getState().datasets.filter((ds) => ds.data.metadata?.origin_overlay);
+    expect(overlays).toHaveLength(1);
+    expect(overlays[0].data.metadata.origin_overlay_source).toBe("layer-1");
+  });
+
   it("seeds a one-book multi-X remake from its segmented overlay", async () => {
     const multiX: Dataset = {
       id: "mx", name: "Moke:Book2",
