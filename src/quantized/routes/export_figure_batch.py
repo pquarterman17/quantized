@@ -15,7 +15,6 @@ import threading
 import zipfile
 from collections.abc import Iterator
 from functools import partial
-from typing import BinaryIO
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
@@ -50,7 +49,7 @@ def _unique_entry_name(filename: str, fmt: str, used: set[str]) -> str:
     return candidate
 
 
-def _archive_chunks(archive: BinaryIO) -> Iterator[bytes]:
+def _archive_chunks(archive: tempfile.SpooledTemporaryFile[bytes]) -> Iterator[bytes]:
     """Stream and then close a completed spool without a second full copy."""
     try:
         while chunk := archive.read(1024 * 1024):
