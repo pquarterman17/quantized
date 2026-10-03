@@ -168,12 +168,14 @@ export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
         ? syncPlotWindow(w, nextView, { datasetId: id, errors: ds?.errorRoles, resetErrors: true, resetAxisBreaks: s.activeId !== id }) // resetAxisBreaks (review F4, windowDocuments.ts): same genuine-switch test `viewPatch` uses
         : w,
     ),
-    // setActive IS the plot-intent primitive (item 15's DatasetRow "Plot
+    // setActive normally carries plot intent (item 15's DatasetRow "Plot
     // (make active)", every applyOriginFigure branch, a plain Library click
-    // on a non-Origin dataset, …) — unlike a fresh import/workspace restore,
-    // it always means "show me the plot", so it uses `plotIntentStageTab`
-    // (never sticks on a stale Worksheet tab; owner-routing item 1).
-    stageTab: ds ? plotIntentStageTab(ds) : s.stageTab,
+    // on a non-Origin dataset, …), unlike passive import/workspace restore.
+    // Workflow is the one browsing surface that deliberately follows the
+    // active worksheet. Explicit actions launched from it switch to Plot/Map
+    // themselves (techniqueWorkspaceRun); a Library selection only retargets
+    // the workflow summary and must not eject the user from it.
+    stageTab: ds ? (s.stageTab === "technique" ? "technique" : plotIntentStageTab(ds)) : s.stageTab,
     ...(s.activeId === id ? {} : { ...viewPatch, techniqueViewMemory: memory }), // #12 slice 4b + item 5: a GENUINE dataset switch resets channel-keyed defaults (or applies technique memory) AND commits the capture above; re-activating the id that's ALREADY active (facetByColumn/breakAtGaps's trailing setActive) must not clobber a selection the caller just made — exportParity2.test.ts 8b
     // A plain click on a different dataset always drops a prior spatial
     // multi-panel arrangement (decode-plan #36) — it was built for a specific

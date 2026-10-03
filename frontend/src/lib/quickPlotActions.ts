@@ -40,7 +40,7 @@ export const datasetQuickPlotActions: ContextAction<DatasetActionTarget>[] = [
   },
   {
     id: "dataset.techniqueWorkspace",
-    label: "Technique workspace…",
+    label: "Show workflow",
     run: (t) => {
       const state = useApp.getState();
       state.closeQuickFigureBuilder();
