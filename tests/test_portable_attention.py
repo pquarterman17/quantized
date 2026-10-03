@@ -105,7 +105,7 @@ def test_exclude_flagged_unpacks_only_flagged_rows() -> None:
 
 
 def test_registry_recognises_data_extensions_only() -> None:
-    for name in ("run.csv", "scan.XRDML", "m.dat", "proj.opju", "x.brml"):
+    for name in ("run.csv", "scan.XRDML", "m.dat", "proj.opju", "x.brml", "sample.0", "s.12"):
         assert is_recognised_data_name(name), name
     for name in ("id_rsa", "payload.exe", "notes.docx", "shadow"):
         assert not is_recognised_data_name(name), name

@@ -261,9 +261,11 @@ def _read_subfile(
 
     own_x = None
     if txyxys:
-        # Per-subfile x is fixed-point scaled int32 (same exponent formula as y).
-        x_ints = np.frombuffer(raw, dtype="<i4", count=pts, offset=cursor)
-        own_x = _y_from_ints(x_ints, exp, 32)
+        # Per-subfile x is IEEE float32, like the TXVALS array — the exponent
+        # scales Y only. Reading it as scaled int32 put real m/z values in
+        # clusters near 2**13..2**17; float32 reproduces the header's
+        # ffirst/flast exactly on both real TXYXYS corpus files.
+        own_x = np.frombuffer(raw, dtype="<f4", count=pts, offset=cursor).astype(float)
         cursor += 4 * pts
 
     if exp == _FLOAT_EXP_SENTINEL:
@@ -474,6 +476,10 @@ def import_spc(filepath: str | Path) -> DataStruct:
             metadata["subfile_points"] = [len(y) for _own_x, y, _info in subfiles]
             metadata["subfile_times"] = [float(info["subtime"]) for _ox, _y, info in subfiles]
             metadata["default_value_channels"] = [0]  # the signal; "Subfile" is an index
+    if flags["txyxys"] and (long_form or head["fxtype"] == 9):
+        # Per-scan m/z lists are discrete peaks (and long-form x restarts every
+        # scan): joined lines draw fake curves. Frontend default-trace vocabulary.
+        metadata["default_trace"] = "Scatter"
 
     return DataStruct.create(
         x, y_cols, labels=y_labels, units=[""] * len(y_labels), metadata=metadata

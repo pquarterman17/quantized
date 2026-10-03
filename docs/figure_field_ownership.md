@@ -80,6 +80,7 @@ to all 56 fields and is not repeated per row.
 | `axisLabelStyles` | `axes.labelStyles` | `plot.view.axisLabelStyles` | Setter `setAxisLabelStyle` (`store/pointerTool.ts`) | no |
 | `plotTemplate` | `style.templateId` | `plot.view.plotTemplate` | Setter `setPlotTemplate`; Bulk (Recipe) | no |
 | `showAxisBox` | `axes.box.visible` | `plot.view.showAxisBox` | Setter `setShowAxisBox`; Bulk (Origin's `ORIGIN_FIGURE_AXIS`) | no |
+| `xReversed` | `axes.x.reversed` | `plot.view.xReversed` | Inspector "Reverse X" (`AxisScaleControls`, history + live field); Rebind default from `metadata.x_reversed` (`datasetViewDefaults`) | no |
 | `stackMode` | `plot.stack.enabled` | `plot.view.stackMode` | Setter `setStackMode` (also clears `facetKey`/`composition`); Bulk (Recipe, Origin, `facetByColumn` sets it true) | no |
 | `insetMode` | `plot.inset.enabled` | `plot.view.insetMode` | Setter `setInsetMode` | no |
 | `polarMode` | `plot.coordinateSystem` | `plot.view.polarMode` | Setter `setPolarMode` | no |

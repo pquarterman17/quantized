@@ -165,6 +165,7 @@ export function axisBoxPlugin(color: string): uPlot.Plugin {
         ctx.save();
         ctx.strokeStyle = color;
         ctx.lineWidth = 1;
+        ctx.setLineDash([]); // a dashed series leaves its dash on the shared context
         ctx.strokeRect(left + 0.5, top + 0.5, width - 1, height - 1);
         ctx.restore();
       },

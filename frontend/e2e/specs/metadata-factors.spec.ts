@@ -98,7 +98,7 @@ test.describe("Metadata → factors (P2.5)", () => {
     await waitForDatasetCount(page, 3);
 
     const merged = (await state(page)).datasets.find((d) => d.name.startsWith("merged"))!;
-    expect(merged.data.labels).toEqual(["Moment", "sample", "source"]);
+    expect(merged.data.labels).toEqual(["Moment", "Temperature", "Time Stamp", "sample", "source"]); // + QD companions
     expect(levelsOf(merged, "sample")).toEqual(["S1", "S1", "S1", "S2", "S2", "S2"]);
     expect(levelsOf(merged, "source")).toEqual([
       "sample-s1.dat", "sample-s1.dat", "sample-s1.dat", "sample-s2.dat", "sample-s2.dat", "sample-s2.dat",

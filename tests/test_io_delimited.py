@@ -32,9 +32,20 @@ def test_csv_structure(fixtures_dir: Path) -> None:
     assert ds.n_points == 6474
 
 
-def test_registry_routes_csv(fixtures_dir: Path) -> None:
-    ds = import_auto(fixtures_dir / "csv_xrd.csv")
+def test_registry_routes_csv(fixtures_dir: Path, tmp_path: Path) -> None:
+    # Without its "# XRD Batch Export" marker line (io/xrd_export_read.py).
+    text = (fixtures_dir / "csv_xrd.csv").read_text().split("\n", 1)[1]
+    (tmp_path / "plain.csv").write_text(text)
+    ds = import_auto(tmp_path / "plain.csv")
     assert ds.metadata["parser_name"] == "import_csv"
+
+
+def test_registry_routes_the_matlab_xrd_export_as_xrd(fixtures_dir: Path) -> None:
+    """csv_xrd.csv IS writeXRDcsv.m output: its marker line claims it."""
+    ds = import_auto(fixtures_dir / "csv_xrd.csv")
+    assert ds.metadata["parser_name"] == "import_xrd_export"
+    assert ds.metadata["technique"] == "xrd.powder"
+    assert ds.metadata["anode_material"] == "Cu" and ds.metadata["tension_kV"] == 45.0
 
 
 def test_csv_iso_datetime_x_is_converted_to_epoch_seconds(tmp_path: Path) -> None:

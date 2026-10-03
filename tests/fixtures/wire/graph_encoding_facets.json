@@ -286,7 +286,7 @@
       "overrides": {
         "legend": {
           "show": true,
-          "loc": "upper right"
+          "loc": "auto"
         },
         "grid": true,
         "spines": {

@@ -116,6 +116,45 @@ describe("useReflectivityFft", () => {
     expect(datasets[1].data.values).toEqual([[1], [2]]);
   });
 
+  it("defaults the Q-input (neutron) box from the file: probe or a reciprocal-length x", () => {
+    const meta = (id: string, metadata: Record<string, unknown>) => ({ id, name: id, data: { ...scan, metadata } });
+    useApp.setState({
+      datasets: [
+        meta("nr", { probe: "neutron" }),
+        meta("xrrq", { probe: "x-ray", x_column_unit: "1/Ang" }),
+        meta("tth", { x_column_name: "2Theta", x_column_unit: "deg" }),
+      ],
+      activeId: "nr",
+    });
+    const { result, rerender } = renderHook(() => useReflectivityFft());
+    expect(result.current.isNeutron).toBe(true);
+    act(() => useApp.setState({ activeId: "tth" }));
+    rerender();
+    expect(result.current.isNeutron).toBe(false);
+    act(() => useApp.setState({ activeId: "xrrq" }));
+    rerender();
+    expect(result.current.isNeutron).toBe(true);
+  });
+
+  it("sends Q in nm⁻¹ as Å⁻¹", async () => {
+    vi.mocked(reflectivityFft).mockResolvedValue({
+      thicknesses_nm: [], amplitudes: [], harmonic_labels: [],
+      q_range: [0.01, 0.12], preprocess: "logR", fft_magnitude: [], thickness_axis: [],
+      is_neutron: true, superlattice: NO_SL,
+    });
+    const nm = { ...scan, time: scan.time.map((q) => q * 10), metadata: { x_column_unit: "nm⁻¹" } };
+    useApp.setState({ datasets: [{ id: "nm", name: "nm.ort", data: nm }], activeId: "nm" });
+    const { result } = renderHook(() => useReflectivityFft());
+    expect(result.current.isNeutron).toBe(true);
+    act(() => result.current.setXMax(1.0)); // the user's window is in the file's unit
+    await act(async () => {
+      await result.current.compute();
+    });
+    const body = vi.mocked(reflectivityFft).mock.calls[0][0];
+    body.x.forEach((q, i) => expect(q).toBeCloseTo(scan.time[i], 12));
+    expect(body.x_max).toBeCloseTo(0.1, 12);
+  });
+
   it("surfaces the API's error message", async () => {
     vi.mocked(reflectivityFft).mockRejectedValue(new Error("too few points"));
     const { result } = renderHook(() => useReflectivityFft());

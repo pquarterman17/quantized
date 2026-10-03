@@ -73,6 +73,31 @@ function stackHeights(n: number, total: number, extra: number): number[] {
   return hs;
 }
 
+/** The longest form of a rotated y title that fits `room` px: the whole
+ *  title, else the series name without its " (unit)" tail, else that name cut
+ *  short with an ellipsis. A stacked panel is often shorter than its title, and
+ *  uPlot centres the title on the panel and clips it at the canvas edge, so a
+ *  ten-channel SIMS stack read "atoms/c" ten times. */
+export function fitAxisTitle(text: string, room: number, width: (t: string) => number): string {
+  if (width(text) <= room) return text;
+  const name = text.replace(/\s*\([^()]*\)\s*$/, "") || text;
+  if (width(name) <= room) return name;
+  for (let k = name.length - 1; k > 0; k--) {
+    const cut = `${name.slice(0, k).trimEnd()}…`;
+    if (width(cut) <= room) return cut;
+  }
+  return "";
+}
+
+/** Canvas text width at `font`, or a 0.6 em per character estimate where no
+ *  2-D context exists. */
+function textWidth(font: string): (t: string) => number {
+  const ctx = document.createElement("canvas").getContext("2d");
+  if (ctx) ctx.font = font;
+  const px = Number(/(\d+(?:\.\d+)?)px/.exec(font)?.[1] ?? 12);
+  return (t) => ctx?.measureText(t).width ?? t.length * px * 0.6;
+}
+
 /** Build one uPlot per stacked panel into `host` (which the caller has
  *  already emptied) and return them in panel order. */
 export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): uPlot[] {
@@ -104,6 +129,17 @@ export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): 
   const x = built[n - 1]?.axes?.[0];
   const extra = x ? Math.max(0, Number(x.size) + (x.label != null ? Number(x.labelSize) : 0) - TICK_BAND) || 0 : 0;
   const heights = stackHeights(n, args.box.h, extra);
+  // Room for a y title: the plot area plus the 8 px tick band below it on
+  // each side of its centre (uPlot's top padding is wider), less a margin.
+  const y = built[0]?.axes?.[1];
+  if (n > 1 && y && typeof y.label === "string" && y.label) {
+    const room = heights[0] - 13;
+    const width = textWidth(String(y.labelFont ?? ""));
+    for (const opts of built) {
+      const ax = opts.axes?.[1];
+      if (ax && typeof ax.label === "string") opts.axes![1] = { ...ax, label: fitAxisTitle(ax.label, room, width) };
+    }
+  }
   const plots = built.map((opts, i) => {
     const div = document.createElement("div");
     host.appendChild(div);

@@ -860,6 +860,21 @@ body {
 .qzk-stage:has(> .qzk-float-tools) > .qzk-legend.nw { top: 72px; }
 .qzk-legend.se { bottom: 12px; right: 12px; }
 .qzk-legend.sw { bottom: 12px; left: 12px; }
+/* Plot audit round 2: the "auto" legend sits INSIDE the plot frame (the
+   --qz-frame-* vars, lib/uplotFrameVars.ts) in the corner lib/legendAutoPlace
+   writes to the stage as data-lc (top right until it has measured). Past
+   eight shown series it is an "out" column beside the frame instead, and the
+   plot host gives up --qz-plot-right for it (--qz-out-w is its measured
+   width) — the export's "outside right". */
+.qzk-legend.auto { top: calc(var(--qz-frame-top, 72px) + 8px); right: calc(100% - var(--qz-frame-left, 0px) - var(--qz-frame-width, 100%) + 8px); }
+.qzk-stage[data-lc$="w"] > .qzk-legend.auto { left: calc(var(--qz-frame-left, 0px) + 8px); right: auto; }
+.qzk-stage[data-lc^="s"] > .qzk-legend.auto { top: auto; bottom: calc(100% - var(--qz-frame-top, 0px) - var(--qz-frame-height, 100%) + 8px); }
+.qzk-legend.out { top: var(--qz-frame-top, 72px); right: 8px; max-height: var(--qz-frame-height, 70%); max-width: 260px; }
+.qzk-stage:has(> .qzk-legend.out) { --qz-plot-right: calc(var(--qz-out-w, 200px) + 16px); }
+.qzk-legend.out .qzk-legend-content { gap: 1px; }
+.qzk-legend.out .it { font-size: var(--font-size-sm); }
+.qzk-legend.out .it .qz-icon-btn { display: none; }
+.qzk-legend.out .qzk-legend-toggle { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 /* Owner 2026-07-09 (item 2, "up the default x/y axis legend and label
    size"): one step up the density-scaled type ramp from --font-size-sm
    (was 11px @ regular) to --font-size (13px @ regular / 12 compact / 14

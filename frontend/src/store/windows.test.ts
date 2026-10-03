@@ -40,15 +40,15 @@ describe("datasetViewDefaults — technique defaults apply with no prevDs (impor
     expect(datasetViewDefaults(ds("transport")).yScale).toBe("linear");
   });
 
-  it("generic keeps the density heuristic -- no axis-scale opinion, yKeys still delegates downstream", () => {
+  it("generic gets linear axes; yKeys still delegates to the density heuristic", () => {
     const patch = datasetViewDefaults(ds("generic"));
-    expect(patch.yScale).toBeUndefined();
-    expect(patch.xScale).toBeUndefined();
+    expect(patch.yScale).toBe("linear");
+    expect(patch.xScale).toBe("linear");
     expect(patch.yKeys).toBeNull(); // lib/plotdata.ts's defaultDenseChannels resolves this
   });
 
   it("an unrecognized technique tag also falls back to generic (never guesses)", () => {
-    expect(datasetViewDefaults(ds("some.future.tag")).yScale).toBeUndefined();
+    expect(datasetViewDefaults(ds("some.future.tag")).xScale).toBe("linear");
   });
 
   it("ncnr reflectometry keeps its default_value_channels channel hint AND gets log R", () => {
@@ -78,6 +78,11 @@ describe("datasetViewDefaults — technique-change gating (log axes survive a sa
   it("a spectrum after a SIMS profile gets a linear y back (IR transmittance was drawn on log)", () => {
     expect(datasetViewDefaults(ds("spectroscopy"), ds("sims")).yScale).toBe("linear");
     expect(datasetViewDefaults(ds("spectroscopy")).yScale).toBe("linear");
+  });
+
+  it("a generic dataset after a log technique resets to linear; generic -> generic keeps the scale", () => {
+    expect(datasetViewDefaults(ds("generic"), ds("reflectometry")).yScale).toBe("linear");
+    expect(datasetViewDefaults(ds("generic"), ds("generic")).yScale).toBeUndefined();
   });
 
   it("an omitted prevDs (fresh import/split/reimport) always counts as a change", () => {
@@ -138,7 +143,7 @@ describe("datasetViewDefaults — per-technique view memory (item 5)", () => {
     const memory = { generic: { xKey: 0, yKeys: [0], yScale: "log" as const, xScale: "linear" as const, seriesStyles: {}, seriesLabels: {}, seriesOrder: null, errKeys: {}, hiddenChannels: [], labels: { 0: "Y" } } };
     const patch = datasetViewDefaults(ds("generic"), undefined, memory);
     expect(patch.yKeys).toBeNull(); // untouched by the hand-crafted entry
-    expect(patch.yScale).toBeUndefined();
+    expect(patch.yScale).toBe("linear"); // the generic row, not the entry's "log"
   });
 });
 
@@ -172,19 +177,23 @@ const DATASET_REBIND_RESET_FIELDS = [
   "yLim",
   "xStep",
   "yStep",
+  // The reversed-x convention belongs to the dataset's x quantity (IR
+  // wavenumber, metadata.x_reversed) -- an IR spectrum's reversal must not
+  // ride into the next XRD scan.
+  "xReversed",
 ] as const;
 
 describe("datasetViewDefaults — dataset-bound field coverage (P1.5 review P1)", () => {
   it("resets every known dataset-bound PlotView field, no more and no fewer", () => {
-    const patch = datasetViewDefaults(ds("generic"));
-    // "generic" contributes no technique-defaults spread, so the returned
-    // keys are EXACTLY the unconditional reset object's own keys -- a
-    // precise set match, not just "contains".
+    const patch = datasetViewDefaults(ds("generic"), ds("generic"));
+    // A same-technique switch contributes no technique-defaults spread, so
+    // the returned keys are EXACTLY the unconditional reset object's own
+    // keys -- a precise set match, not just "contains".
     expect(Object.keys(patch).sort()).toEqual([...DATASET_REBIND_RESET_FIELDS].sort());
   });
 
   it("every listed field actually resets to its blank value (not just present)", () => {
-    const patch = datasetViewDefaults(ds("generic"));
+    const patch = datasetViewDefaults(ds("generic"), ds("generic"));
     expect(patch.xKey).toBeNull();
     expect(patch.yKeys).toBeNull();
     expect(patch.groupKey).toBeNull();
@@ -197,5 +206,55 @@ describe("datasetViewDefaults — dataset-bound field coverage (P1.5 review P1)"
     expect(patch.hiddenChannels).toEqual([]);
     expect(patch.xLim).toBeNull();
     expect(patch.yLim).toBeNull();
+  });
+});
+
+// Plot audit round 2: a GENUINE switch (the caller passes the outgoing view)
+// also drops the outgoing dataset's coordinate-tied decorations and tick
+// formats; split/reimport pass none and keep them.
+describe("datasetViewDefaults — outgoing decorations (genuine switch only)", () => {
+  const outgoing = {
+    refLines: [{ id: "r", axis: "x" as const, value: 1 }],
+    regionShades: [],
+    annotations: [{ id: "a", x: 0.5, y: 0.5, text: "page", anchor: "page" as const }],
+    shapes: [],
+    xFmt: { mode: "sci" as const, digits: 2 },
+    yFmt: { mode: "auto" as const, digits: 2 },
+    y2Fmt: null,
+  };
+
+  it("adds only the fields that change", () => {
+    const patch = datasetViewDefaults(ds("generic"), ds("generic"), {}, { outgoing });
+    const extra = Object.keys(patch).filter((k) => !(DATASET_REBIND_RESET_FIELDS as readonly string[]).includes(k));
+    expect(extra.sort()).toEqual(["refLines", "xFmt"]);
+    expect(patch.refLines).toEqual([]);
+    expect(patch.xFmt).toEqual({ mode: "auto", digits: 2 });
+  });
+
+  it("no outgoing view (split/reimport) leaves decorations alone", () => {
+    const patch = datasetViewDefaults(ds("generic"), ds("generic"));
+    expect(patch.refLines).toBeUndefined();
+    expect(patch.annotations).toBeUndefined();
+    expect(patch.xFmt).toBeUndefined();
+  });
+});
+
+describe("datasetViewDefaults — a parser's peak-list trace hint", () => {
+  const DOT = { marker: true, width: 0 };
+
+  it("draws every channel of a peak list as markers, not joined lines", () => {
+    const peaks = ds("spectroscopy", { default_trace: "Scatter" }, ["Abundance", "Subfile"]);
+    expect(datasetViewDefaults(peaks).seriesStyles).toEqual({ 0: DOT, 1: DOT });
+    expect(datasetViewDefaults(ds("spectroscopy")).seriesStyles).toEqual({});
+  });
+
+  it("survives a same-technique memory that carries no style, and yields to one that does", () => {
+    const ir = ds("spectroscopy", {}, ["Absorbance"]);
+    const view = { xKey: null, yKeys: null, yScale: "linear" as const, xScale: "linear" as const, seriesLabels: {}, seriesOrder: null, errKeys: {}, hiddenChannels: [] };
+    const bare = captureTechniqueView(ir, { ...view, seriesStyles: {} }, {});
+    const peaks = ds("spectroscopy", { default_trace: "Scatter" }, ["Abundance"]);
+    expect(datasetViewDefaults(peaks, ir, bare).seriesStyles).toEqual({ 0: DOT });
+    const styled = captureTechniqueView(peaks, { ...view, seriesStyles: { 0: { color: "red" } } }, {});
+    expect(datasetViewDefaults(peaks, peaks, styled).seriesStyles).toEqual({ 0: { color: "red" } });
   });
 });

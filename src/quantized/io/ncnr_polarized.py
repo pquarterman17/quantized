@@ -81,6 +81,7 @@ def import_ncnr_pnr(filepath: str | Path) -> DataStruct:
         "x_column_name": "Q",
         "x_column_unit": units[0] if units else "1/Ang",
         "variant": variant,
+        "probe": "neutron",  # spin states: polarized neutrons only
     }
     # Plot hints: R and theory per spin state, dR/dSA as error bars, dQ as the
     # x resolution. dQ, the dR columns and the signed spin asymmetry used to
@@ -153,6 +154,7 @@ def import_ncnr_dat(filepath: str | Path) -> DataStruct:
         "x_column_name": "Q",
         "x_column_unit": "1/Ang",
         "polarization": pol,
+        "probe": "neutron",  # spin cross sections: polarized neutrons only
         **row_meta,
     }
     if not np.isnan(intensity):

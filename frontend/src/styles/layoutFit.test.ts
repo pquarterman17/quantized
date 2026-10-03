@@ -37,6 +37,14 @@ describe("plot dock + legend (P1)", () => {
     const body = bodiesFor(".qzk-stage:has(> .qzk-float-tools) > .qzk-legend.ne");
     expect(body).toMatch(/top:\s*72px/);
   });
+
+  it("keeps an auto legend inside the plot frame, and narrows the plot for an outside column", () => {
+    // Plot audit round 2: the auto legend is placed against the published
+    // frame rect (never over the axes' tick labels), and the "out" column
+    // takes room from the plot host rather than covering the data.
+    expect(bodiesFor(".qzk-legend.auto")).toMatch(/var\(--qz-frame-top/);
+    expect(bodiesFor(".qzk-stage:has(> .qzk-legend.out)")).toMatch(/--qz-plot-right:\s*calc\(var\(--qz-out-w/);
+  });
 });
 
 describe("Graph Builder window", () => {

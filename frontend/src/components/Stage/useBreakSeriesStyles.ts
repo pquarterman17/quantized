@@ -38,14 +38,14 @@ import {
   type CycleView,
 } from "../../lib/seriesStyleCycle";
 import type { Dataset, SeriesStyle } from "../../lib/types";
-import { useApp } from "../../store/useApp";
+import { useApp, type AppState } from "../../store/useApp";
 
 /** Does the plot window drawing `view` (with `doc` behind it) cycle? The same
  *  `windowCyclesSeriesStyles` call `useStageSeriesCycle.useWindowSeriesCycle`
  *  makes, as a boolean — for a BACKGROUND window's break panels. Lives here,
  *  not beside it, so the eager bundle does not carry it. */
-export function useWindowCycles(view: CycleView, doc: FigureDocument | undefined): boolean {
-  return windowCyclesSeriesStyles(useApp((s) => s.autoSeriesStyles), view, doc);
+export function useWindowCycles(view: CycleView, doc: FigureDocument | undefined): (s: AppState, count: number) => boolean {
+  return (s, count) => windowCyclesSeriesStyles(s.autoSeriesStyles, view, doc, count);
 }
 
 /** `styles` with every channel of the flat canvas list `channels` given its
@@ -68,23 +68,23 @@ export function breakChannelStyles(
   return out;
 }
 
+/** `cyclesFor` answers the window's cycle decision for a series count (a store
+ *  selector), so the flat list's own length can engage it past the palette. */
 export function useBreakSeriesStyles(
-  cycles: boolean,
+  cyclesFor: (s: AppState, count: number) => boolean,
   composition: Composition | null,
   dataset: Dataset | null,
   v: { xKey: number | null; yKeys: number[] | null; seriesOrder: number[] | null; seriesStyles: Record<number, SeriesStyle> },
 ): Record<number, SeriesStyle> | undefined {
   const on = dataset !== null && breakPanelsOf(composition) !== null;
   const { xKey, yKeys, seriesOrder, seriesStyles } = v;
+  const channels = useMemo(
+    () => (on && dataset ? effectiveChannels(dataset.data, yKeys, xKey, dataset.channelRoles, seriesOrder) : null),
+    [on, dataset, xKey, yKeys, seriesOrder],
+  );
+  const cycles = useApp((s) => cyclesFor(s, channels?.length ?? 0));
   return useMemo(
-    () =>
-      on && dataset
-        ? breakChannelStyles(
-            seriesStyles,
-            effectiveChannels(dataset.data, yKeys, xKey, dataset.channelRoles, seriesOrder),
-            cycles,
-          )
-        : undefined,
-    [on, cycles, dataset, xKey, yKeys, seriesOrder, seriesStyles],
+    () => (channels ? breakChannelStyles(seriesStyles, channels, cycles) : undefined),
+    [channels, cycles, seriesStyles],
   );
 }

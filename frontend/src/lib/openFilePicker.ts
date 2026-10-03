@@ -10,10 +10,12 @@
 // here, so a user could not pick an Origin file in the Open dialog even though
 // the reader exists — added 2026-07-19. `lib/importFormats.ts` documents these
 // and importFormats.test.ts asserts every documented extension appears below,
-// so the drift can't silently return.
+// so the drift can't silently return. `.0`-`.9` are Bruker OPUS's numbered
+// files (sample.0, sample.1, …; the backend sniffs any digit suffix) — an
+// accept list cannot say "any number", and a higher one needs "All files".
 export const IMPORT_ACCEPT =
-  ".dat,.csv,.tsv,.txt,.xrdml,.brml,.raw,.refl,.pnr,.datA,.datB,.datC,.datD," +
-  ".jdx,.dx,.nc,.cdf,.cif,.xlsx,.xlsm,.xls,.spc,.opus,.opj,.opju";
+  ".dat,.csv,.tsv,.txt,.xrdml,.brml,.raw,.refl,.pnr,.ort,.datA,.datB,.datC,.datD," +
+  ".jdx,.dx,.nc,.cdf,.cif,.xlsx,.xlsm,.xls,.spc,.opus,.0,.1,.2,.3,.4,.5,.6,.7,.8,.9,.opj,.opju";
 
 // DEFECT B (Sol audit P1-6, 2026-08-21): a canceled OS file dialog used to
 // fire NO event at all — `onchange` only fires on an actual pick — so any

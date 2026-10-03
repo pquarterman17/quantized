@@ -8,6 +8,7 @@
 import { fetchBookData } from "./api";
 import { columnMetaList } from "./columnmeta";
 import { isLazyBookEntry, isPrimaryBookMarker } from "./types";
+import { freshSheet, sheetNameOf } from "./workbookSheets";
 import type { BookSource, DataStruct, Dataset, LazyBookEntry, PrimaryBookMarker } from "./types";
 
 /** The Origin book id `ds` was imported from (`metadata.origin_book`), or
@@ -31,13 +32,14 @@ export function findBook(
 }
 
 /** The dataset-level DataStruct from a re-read. Spread-first so additive
- *  scientific fields such as `cat_levels`/`level_order` survive; only the four
- *  project-level Origin envelopes are removed because they are not part of one
- *  Dataset's own `.data` (BUG-005). */
+ *  scientific fields such as `cat_levels`/`level_order` survive; only the
+ *  import envelopes (Origin's four, a workbook's `sheets`) are removed because
+ *  they are not part of one Dataset's own `.data` (BUG-005). */
 function core(d: DataStruct, labels = d.labels, units = d.units, metadata = d.metadata): DataStruct {
   const out = { ...d, labels, units, metadata };
   delete out.books;
   delete out.book_source;
+  delete out.sheets;
   delete out.figures;
   delete out.origin_fidelity;
   return out;
@@ -51,7 +53,7 @@ function core(d: DataStruct, labels = d.labels, units = d.units, metadata = d.me
  *  refreshed file, or the refreshed file lost its book-source reference. */
 export async function resolveFreshData(ds: Dataset, fresh: DataStruct): Promise<DataStruct> {
   const bookId = datasetBookId(ds);
-  if (bookId == null || !fresh.books?.length) return core(fresh);
+  if (bookId == null || !fresh.books?.length) return core(freshSheet(fresh, sheetNameOf(ds.data)) ?? fresh);
   const book = findBook(fresh, bookId);
   if (!book) throw new Error(`book "${bookId}" no longer exists in the re-imported file`);
   if (isPrimaryBookMarker(book)) return core(fresh, book.labels, book.units, book.metadata);

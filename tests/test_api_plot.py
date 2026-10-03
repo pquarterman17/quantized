@@ -21,7 +21,10 @@ def _import() -> dict[str, Any]:
 
 def test_plot_series_from_imported_dataset() -> None:
     dataset = _import()
-    resp = client.post("/api/plot/series", json={"dataset": dataset})
+    # The import's default curve (metadata.default_value_channels; the QD
+    # companion columns ride along unplotted -- io/qd_companions.py).
+    assert dataset["metadata"]["default_value_channels"] == [0]
+    resp = client.post("/api/plot/series", json={"dataset": dataset, "y_keys": [0]})
     assert resp.status_code == 200
     body = resp.json()
     # uPlot column data: [x, y] for the single Moment channel.

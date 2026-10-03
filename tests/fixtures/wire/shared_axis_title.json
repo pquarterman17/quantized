@@ -1,0 +1,11 @@
+{
+  "about": "Auto title of a Y axis that carries several series (no user override). Both legs read this table: frontend/src/lib/sharedAxisTitle.test.ts and tests/test_export_shared_axis_title.py.",
+  "cases": [
+    { "name": "same quantity and unit", "series": [["Moment", "emu"], ["Moment", "emu"]], "title": "Moment (emu)" },
+    { "name": "different quantities, one unit", "series": [["Sample A", "emu"], ["Sample B", "emu"], ["Sample C", "emu"]], "title": "(emu)" },
+    { "name": "different units", "series": [["M", "emu"], ["T", "K"]], "title": "" },
+    { "name": "same quantity, no unit", "series": [["R", ""], ["R", ""]], "title": "R" },
+    { "name": "different quantities, no unit", "series": [["R ++", ""], ["R --", ""]], "title": "" },
+    { "name": "same quantity, different units", "series": [["M", "emu"], ["M", "A m2"]], "title": "" }
+  ]
+}

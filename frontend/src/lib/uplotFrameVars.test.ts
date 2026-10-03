@@ -103,6 +103,20 @@ describe("frameVarsPlugin", () => {
     expect(stage!.style.getPropertyValue(FRAME_VARS.width)).toBe("250px");
   });
 
+  it("places an auto legend after a draw (plot audit round 2)", async () => {
+    const { u, stage } = mockPlot(true);
+    Object.assign(u, {
+      data: [[0, 1], [5, 5]],
+      series: [{}, { show: true, scale: "y" }],
+      valToPos: () => 10, // every point in the top-left corner patch
+    });
+    const box = document.createElement("div");
+    box.className = "qzk-legend auto";
+    stage!.appendChild(box);
+    runHook(frameVarsPlugin(), "draw", u);
+    await vi.waitFor(() => expect(stage!.dataset.lc).toBe("ne"));
+  });
+
   it("no-ops when there is no .qzk-stage ancestor (MultiPanel / inset hosts)", () => {
     const { u } = mockPlot(false);
     // Must not throw and must touch nothing.

@@ -146,7 +146,7 @@ export type { IntegralResult };
 // with their fields to store/workshopFlags.ts; re-exported so no importer changed.
 export type { AnchorEditBridge, PeakWizardEditBridge, ReflectivitySeed, StatStageSeed } from "./workshopFlags";
 
-export type LegendPos = "ne" | "nw" | "se" | "sw";
+export type LegendPos = "auto" | "ne" | "nw" | "se" | "sw";
 
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
@@ -356,7 +356,7 @@ export const useApp = create<AppState>((set, get) => ({
     // `ds.name` seeds the title when a fresh window must be created, since
     // the dataset isn't in the store yet for createWindow to look up).
     retargetPassiveRebind(get(), ds.id, ds.name);
-    const defaults = datasetViewDefaults(ds);
+    const defaults = datasetViewDefaults(ds, undefined, {}, { outgoing: get() });
     set((s) => ({
       datasets: [...s.datasets, ds],
       activeId: ds.id,

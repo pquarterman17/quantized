@@ -7,7 +7,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import { reflPresets, reflSimulate, reflSldProfile, type ReflLayer } from "../../../lib/api/reflectivity";
 import type { DataStruct, SldPreset } from "../../../lib/types";
-import { nextDatasetId, useApp } from "../../../store/useApp";
+import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { probeRadiation } from "./reflFitData";
 import { resolveLayer } from "./reflFitModel";
 import { expandGraded, type GradedProfile } from "./reflGraded";
 
@@ -68,7 +69,9 @@ export function useReflectivity(): ReflectivityState {
   const clearReflectivitySeed = useApp((s) => s.clearReflectivitySeed);
   const [presets, setPresets] = useState<SldPreset[]>([]);
   const [layers, setLayers] = useState<ModelLayer[]>(DEFAULT_LAYERS);
-  const [radiation, setRadiation] = useState<Radiation>("xray");
+  // Opens on the active file's own probe (ORSO / NCNR metadata), else X-ray.
+  const active = useActiveDataset();
+  const [radiation, setRadiation] = useState<Radiation>(() => probeRadiation(active?.data.metadata) ?? "xray");
   const [grid, setGridState] = useState<QGrid>(DEFAULT_GRID);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

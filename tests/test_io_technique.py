@@ -104,9 +104,13 @@ def test_sims_is_sims(fixtures_dir: Path) -> None:
     assert ds.metadata["technique"] == SIMS
 
 
-def test_generic_csv_never_guesses(fixtures_dir: Path) -> None:
-    """Content-ambiguous imports (plain CSV) stamp 'generic', never a guess."""
-    ds = import_auto(fixtures_dir / "csv_xrd.csv")
+def test_generic_csv_never_guesses(fixtures_dir: Path, tmp_path: Path) -> None:
+    """Content-ambiguous imports (plain CSV) stamp 'generic', never a guess --
+    even 2-Theta/Intensity columns, once the XRD export's marker line is gone
+    (with it, io/xrd_export_read.py claims the file by proof, not a guess)."""
+    text = (fixtures_dir / "csv_xrd.csv").read_text().split("\n", 1)[1]
+    (tmp_path / "plain.csv").write_text(text)
+    ds = import_auto(tmp_path / "plain.csv")
     assert ds.metadata["parser_name"] == "import_csv"
     assert ds.metadata["technique"] == GENERIC
 
@@ -191,3 +195,35 @@ def test_stamp_technique_is_additive_over_existing_metadata() -> None:
     assert stamped.metadata["custom_field"] == 42
     assert "technique" in stamped.metadata
     assert "parser_name" in stamped.metadata
+
+
+# ── x_reversed: IR wavenumber spectra draw x descending by convention ──────
+@pytest.mark.parametrize(
+    ("parser_name", "x_name", "x_unit", "expected"),
+    [
+        ("import_jcamp", "Wavenumber", "cm^-1", True),  # JCAMP IR
+        ("import_opus", "Wavenumber", "cm^-1", True),  # Bruker OPUS FTIR
+        ("import_spc", "Wavenumber (cm-1)", "", True),  # SPC fxtype=1
+        ("import_spc", "Raman Shift (cm-1)", "", False),  # Raman reads ascending
+        ("import_jcamp", "Raman shift", "cm^-1", False),
+        ("import_spc", "Nanometers (nm)", "", False),  # UV-Vis
+        ("import_jcamp", "Chemical shift", "ppm", False),
+        ("import_csv", "Wavenumber", "cm-1", False),  # generic: never guess
+    ],
+)
+def test_ir_wavenumber_spectra_hint_a_reversed_x(
+    parser_name: str, x_name: str, x_unit: str, expected: bool
+) -> None:
+    def parser(path: Path) -> DataStruct:  # pragma: no cover - never invoked
+        raise NotImplementedError(str(path))
+
+    ds = _tiny_ds({"parser_name": parser_name, "x_column_name": x_name, "x_column_unit": x_unit})
+    assert stamp_technique(ds, parser).metadata.get("x_reversed", False) is expected
+
+
+@pytest.mark.realdata
+def test_real_ftir_files_hint_a_reversed_x(corpus_dir: Path) -> None:
+    for rel in ("jcamp/ir/benzene.jdx", "spc/spectroscopy/rohanisaac_ftir.spc"):
+        assert import_auto(corpus_dir / rel).metadata["x_reversed"] is True
+    raman = import_auto(corpus_dir / "spc/spectroscopy/rohanisaac_raman.spc")
+    assert "x_reversed" not in raman.metadata

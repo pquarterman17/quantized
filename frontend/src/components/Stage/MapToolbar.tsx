@@ -7,6 +7,8 @@
 // toggle); this component only lays them out. No behaviour change from
 // the block it replaces.
 
+import type { Ref } from "react";
+
 import type { ColormapName } from "../../lib/colormap";
 import type { CutMode, CutSpace } from "../../lib/mapcuts";
 import MapToolbarColorLimits from "./MapToolbarColorLimits";
@@ -97,6 +99,8 @@ export interface MapToolbarProps {
 
   /** ⤓ — opens the export dialog (vector PDF/SVG by default, or PNG). */
   onExport: () => void;
+  /** Receives the dock element, so the stage can keep its map below it. */
+  dockRef?: Ref<HTMLDivElement>;
 }
 
 export default function MapToolbar(props: MapToolbarProps) {
@@ -133,10 +137,11 @@ export default function MapToolbar(props: MapToolbarProps) {
     wedgeMode,
     onToggleWedge,
     onExport,
+    dockRef,
   } = props;
 
   return (
-    <div className="qzk-glass qzk-float-tools" style={{ gap: 8, padding: "6px 8px" }}>
+    <div ref={dockRef} className="qzk-glass qzk-float-tools" style={{ gap: 8, padding: "6px 8px" }}>
       {qAvailable && (
         <>
           <button

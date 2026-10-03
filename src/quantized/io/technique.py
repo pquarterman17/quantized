@@ -22,6 +22,7 @@ test_repo_integrity).
 from __future__ import annotations
 
 import dataclasses
+import re
 from collections.abc import Callable
 
 from quantized.datastruct import DataStruct
@@ -115,6 +116,7 @@ _STATIC_TECHNIQUE_BY_PARSER: dict[str, str] = {
     "import_bruker_brml": XRD_POWDER,  # 1-D line scans only (registry.py note)
     "import_bruker_raw": XRD_POWDER,
     "import_rigaku_raw": XRD_POWDER,
+    "import_xrd_export": XRD_POWDER,  # our own 1-D XRD CSV export, re-imported
     "import_jcamp": SPECTROSCOPY,
     "import_spc": SPECTROSCOPY,
     "import_opus": SPECTROSCOPY,
@@ -122,6 +124,7 @@ _STATIC_TECHNIQUE_BY_PARSER: dict[str, str] = {
     "import_ncnr_refl": REFLECTOMETRY,
     "import_ncnr_pnr": REFLECTOMETRY,  # polarized neutron reflectometry
     "import_ncnr_dat": REFLECTOMETRY,  # refl1d-fit cross sections (.datA-D)
+    "import_orso": REFLECTOMETRY,  # ORSO .ort (Qz is the standard's first column)
     "import_csv": GENERIC,
     "import_excel": GENERIC,
     # NetCDF already degrades to a generic heuristic for non-chromatography
@@ -168,4 +171,18 @@ def stamp_technique(ds: DataStruct, parser: Callable[..., DataStruct]) -> DataSt
     metadata = dict(ds.metadata)
     metadata["parser_name"] = parser_name
     metadata["technique"] = resolve_technique(parser_name, ds)
+    if metadata["technique"] == SPECTROSCOPY and _is_ir_wavenumber(ds):
+        metadata["x_reversed"] = True
     return dataclasses.replace(ds, metadata=metadata)
+
+
+_WAVENUMBER_RE = re.compile(r"wavenumber|cm(\^?-1|⁻¹)|1/cm")
+
+
+def _is_ir_wavenumber(ds: DataStruct) -> bool:
+    """An IR/FTIR spectrum on a wavenumber axis -- drawn high-to-low by
+    convention, so the frontend's view defaults to a reversed x
+    (``metadata['x_reversed']``). Raman shift shares the unit but reads
+    ascending."""
+    axis = f"{ds.metadata.get('x_column_name', '')} {ds.metadata.get('x_column_unit', '')}".lower()
+    return bool(_WAVENUMBER_RE.search(axis)) and "raman" not in axis

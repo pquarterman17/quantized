@@ -64,6 +64,7 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
   axisLabelStyles: canonical("axes.labelStyles"),
   plotTemplate: canonical("style.templateId", "Keep the selected template identity without reapplying it over later edits."),
   showAxisBox: canonical("axes.box.visible"),
+  xReversed: canonical("axes.x.reversed"),
   stackMode: canonical("plot.stack.enabled"),
   insetMode: canonical("plot.inset.enabled"),
   polarMode: canonical("plot.coordinateSystem", "Represent the current polar mode as an explicit coordinate system."),

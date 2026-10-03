@@ -13,6 +13,7 @@
 import type { FigureSpec } from "./api/figures";
 import type { StoreGet } from "./exportActive";
 import { buildFigureSpec, buildFigureSpecFromDocument, type FigureRenderOpts } from "./figureSpec";
+import { effectiveChannels } from "./plotdata";
 import { buildPolarFigureSpec } from "./polarFigureSpec";
 import { windowCyclesSeriesStyles } from "./seriesStyleCycle";
 import type { Dataset } from "./types";
@@ -97,7 +98,10 @@ export function buildStageFigureSpec(
   // FALLBACK branch below (a live-view spec, which never sees
   // `document.publication`) would otherwise cycle while the canvas — which reads
   // the pin straight off the focused window — refuses.
-  const autoSeriesStyles = windowCyclesSeriesStyles(st.autoSeriesStyles, st, document);
+  // `count`: the canvas' plotted channels (`usePlotPayload.fetchChannels`) — past
+  // the palette's eight the cycle engages on its own, as on screen.
+  const count = effectiveChannels(ds.data, st.yKeys, st.xKey, ds.channelRoles, st.seriesOrder).length;
+  const autoSeriesStyles = windowCyclesSeriesStyles(st.autoSeriesStyles, st, document, count);
   // BUG-013 review round: the y-span the FOCUSED canvas actually measured its
   // waterfall stagger from — the one thing about this export that cannot be
   // re-derived from `ds`, because a committed zoom on a server-decimated

@@ -257,16 +257,17 @@ function StyleRow({
 
 export default function SeriesStyleCard({ active }: { active: Dataset | null }) {
   const styled = useApp((s) => Object.keys(s.seriesStyles).length);
-  const on = useApp(selectFocusedWindowCycles);
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
   const data = active?.data;
   const roles = active?.channelRoles;
-  const cycle = useMemo<CycleSlot>(
-    () => ({ on, channels: on && data ? effectiveChannels(data, yKeys, xKey, roles, seriesOrder) : [] }),
-    [on, data, roles, yKeys, xKey, seriesOrder],
+  const channels = useMemo(
+    () => (data ? effectiveChannels(data, yKeys, xKey, roles, seriesOrder) : []),
+    [data, roles, yKeys, xKey, seriesOrder],
   );
+  const on = useApp((s) => selectFocusedWindowCycles(s, channels.length));
+  const cycle = useMemo<CycleSlot>(() => ({ on, channels: on ? channels : [] }), [on, channels]);
   if (!active || active.data.labels.length === 0) return null;
 
   // Default error pairing per series (Origin Y-error / parser hint) so the

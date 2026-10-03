@@ -67,6 +67,38 @@ def _visible_bounds(
     return bounds or [(xlo, xhi)]
 
 
+def _in_view_ticks(ax: Any) -> list[float]:
+    lo, hi = sorted(ax.get_xlim())
+    return [float(t) for t in ax.get_xticks() if lo <= t <= hi]
+
+
+def _fig_x(ax: Any, t: float) -> float:
+    """Figure-fraction x of data value ``t`` on ``ax`` (any x scale)."""
+    ax_frac = ax.transAxes.inverted().transform(ax.transData.transform((t, 0.0)))[0]
+    pos = ax.get_position()
+    return float(pos.x0 + pos.width * ax_frac)
+
+
+def clear_seam_labels(fig: Any, axes: Sequence[Any]) -> None:
+    """Drop an incoming panel's first x tick when its label would run into
+    the outgoing panel's last one across a seam (plot audit round 2: "1.5" and
+    "2.5" printed as "1.52.5"). Label widths are estimated at 0.6 em per
+    character -- no renderer pass -- and the outgoing label is the one kept."""
+    fig_w_pt = fig.get_figwidth() * 72.0
+    for left, right in zip(axes, axes[1:], strict=False):
+        lt, rt = _in_view_ticks(left), _in_view_ticks(right)
+        if not lt or not rt:
+            continue
+        fmt_l = left.xaxis.get_major_formatter().format_ticks(lt)[-1]
+        fmt_r = right.xaxis.get_major_formatter().format_ticks(rt)[0]
+        size = float(right.xaxis.get_major_ticks()[0].label1.get_fontsize())
+        gap = (_fig_x(right, rt[0]) - _fig_x(left, lt[-1])) * fig_w_pt
+        if gap < (len(fmt_l) + len(fmt_r)) * 0.3 * size + 0.5 * size:
+            lim = right.get_xlim()
+            right.set_xticks(rt[1:])
+            right.set_xlim(lim)
+
+
 @in_render_scope  # normally nested in calc.figure's scope; direct calls stay safe
 def render_breaks_impl(
     x: NDArray[np.float64],
@@ -136,6 +168,8 @@ def render_breaks_impl(
         if st.grid_alpha > 0:
             ax.grid(True, which="major", alpha=st.grid_alpha)
             ax.grid(True, which="minor", alpha=st.grid_alpha * 0.4)
+
+    clear_seam_labels(fig, axes)
 
     # Diagonal break glyphs (matplotlib's standard broken-axis recipe):
     # short strokes angled across each seam, on both the outgoing panel's

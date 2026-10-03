@@ -22,7 +22,7 @@ from quantized.io._delimited_layout import _is_data_cell, _walk_back_gappy_rows
 from quantized.io.base import CORRUPT_ARCHIVE_ERRORS, resolve_column
 from quantized.io.delimited import _extract_units
 
-__all__ = ["import_excel", "read_sheet"]
+__all__ = ["import_excel", "read_sheet", "sheet_titles"]
 
 # Hostile-input bounds (security audit 2026-10-01). openpyxl pads every row
 # out to the sheet's widest column and yields every empty row before the last
@@ -135,6 +135,28 @@ def _read_grid(worksheet: Any, name: str, max_rows: int | None = None) -> list[l
     return grid
 
 
+def _open_workbook(path: Path, handle: Any) -> Any:
+    """``openpyxl``'s read-only workbook on ``handle``, behind the part-size check."""
+    try:
+        _check_parts(path)
+        return openpyxl.load_workbook(handle, data_only=True, read_only=True)
+    except _UNREADABLE as exc:
+        # An empty / non-ZIP / truncated / damaged .xlsx raises BadZipFile,
+        # InvalidFileException, zlib or XML errors (none a ValueError) ->
+        # would 500 the import route. Reject cleanly instead.
+        raise ValueError(f"{path.name} is not a readable .xlsx workbook: {exc}") from exc
+
+
+def sheet_titles(path: Path) -> list[str]:
+    """Every worksheet's title, in workbook order (no cell is read)."""
+    with path.open("rb") as handle:
+        workbook = _open_workbook(path, handle)
+        try:
+            return [str(ws.title) for ws in workbook.worksheets]
+        finally:
+            workbook.close()
+
+
 def read_sheet(
     path: Path, sheet: int | str = 0, *, max_rows: int | None = None
 ) -> tuple[str, list[list[Any]]]:
@@ -146,14 +168,7 @@ def read_sheet(
     # mid-load or mid-stream, and on Windows an open handle makes the upload
     # route's temp-dir cleanup fail, turning a clean 422 into a 500.
     with path.open("rb") as handle:
-        try:
-            _check_parts(path)
-            workbook = openpyxl.load_workbook(handle, data_only=True, read_only=True)
-        except _UNREADABLE as exc:
-            # An empty / non-ZIP / truncated / damaged .xlsx raises BadZipFile,
-            # InvalidFileException, zlib or XML errors (none a ValueError) ->
-            # would 500 the import route. Reject cleanly instead.
-            raise ValueError(f"{path.name} is not a readable .xlsx workbook: {exc}") from exc
+        workbook = _open_workbook(path, handle)
         try:
             worksheet = workbook[sheet] if isinstance(sheet, str) else workbook.worksheets[sheet]
             return worksheet.title, _read_grid(worksheet, path.name, max_rows)

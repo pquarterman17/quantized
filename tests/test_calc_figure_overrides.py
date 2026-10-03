@@ -293,3 +293,31 @@ def test_reciprocal_y2_lim_non_positive_side_is_auto() -> None:
         )
 
     assert png(y2_lim=[0, None]) == png()
+
+
+# ── x_reversed (IR wavenumber convention): the screen's reversed x axis ────
+
+
+def test_x_reversed_inverts_the_x_axis_with_or_without_limits() -> None:
+    ax = _plotted_axes()
+    _apply_lims(ax, {"x_reversed": True})
+    assert ax.xaxis_inverted()
+    ax = _plotted_axes()
+    _apply_lims(ax, {"x_reversed": True, "x_lim": [0.5, 2.5]})
+    assert ax.get_xlim() == (2.5, 0.5)
+    ax = _plotted_axes()
+    _apply_lims(ax, {"x_reversed": False})
+    assert not ax.xaxis_inverted()
+
+
+def test_x_reversed_never_double_flips_a_descending_limit() -> None:
+    ax = _plotted_axes()
+    _apply_lims(ax, {"x_reversed": True, "x_lim": [2.5, 0.5]})
+    assert ax.get_xlim() == (2.5, 0.5)
+
+
+def test_x_reversed_reaches_a_rendered_figure() -> None:
+    lo, hi = _recip_axes(overrides={"x_reversed": True})["xlim"]
+    assert lo > hi
+    lo, hi = _recip_axes()["xlim"]
+    assert lo < hi

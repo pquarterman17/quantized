@@ -31,6 +31,12 @@ describe("import-format catalog ⊆ file-dialog filter (the drift guard)", () =>
 });
 
 describe("IMPORT_FORMATS content", () => {
+  it("documents OPUS's numbered files, not only .opus", () => {
+    const opus = IMPORT_FORMATS.find((f) => f.name === "Bruker OPUS");
+    expect(opus?.exts).toEqual(expect.arrayContaining([".opus", ".0", ".1", ".9"]));
+  });
+
+
   it("every entry has extensions (dot-prefixed, lower-case), a name, and a category", () => {
     for (const f of IMPORT_FORMATS) {
       expect(f.exts.length).toBeGreaterThan(0);

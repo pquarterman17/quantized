@@ -207,6 +207,18 @@ def test_link_finds_data_behind_structure_block() -> None:
     assert ds.metadata["extra_blocks"] == 2
 
 
+def test_peak_lists_hint_a_marker_trace_and_spectra_do_not() -> None:
+    """A peak list is discrete lines, not a continuous spectrum: joining its
+    points draws a fake curve. The parser says so with the frontend's own
+    default-trace vocabulary; a sampled spectrum carries no hint."""
+    assert import_jcamp_from_text(_LINK).metadata["default_trace"] == "Scatter"
+    table = "##TITLE=t\n##PEAK TABLE=(XY..XY)\n100 5; 101 8; 102 3\n##END="
+    assert import_jcamp_from_text(table).metadata["default_trace"] == "Scatter"
+    assert "default_trace" not in import_jcamp_from_text(_FIX).metadata
+    xy = "##TITLE=s\n##XYPOINTS=(XY..XY)\n100 5; 101 8; 102 3\n##END="
+    assert "default_trace" not in import_jcamp_from_text(xy).metadata
+
+
 def test_assignments_without_y_default_to_one() -> None:
     text = """##TITLE= xa only
 ##PEAK ASSIGNMENTS= (XA)

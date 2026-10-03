@@ -30,16 +30,19 @@ from quantized.io.ncnr import import_ncnr_dat, import_ncnr_pnr, import_ncnr_refl
 from quantized.io.netcdf import import_netcdf
 from quantized.io.opus import import_opus, is_numbered_opus
 from quantized.io.origin_project import read_origin_project
+from quantized.io.orso import import_orso
 from quantized.io.qd import import_ppms, import_qd_vsm, is_ppms_dat, is_qd_file
 from quantized.io.refl1d import import_refl1d_dat, is_refl1d_dat
 from quantized.io.rigaku import import_rigaku_raw, is_rigaku_raw
 from quantized.io.sims import import_sims, is_sims_file
 from quantized.io.spc import import_spc, is_spc
 from quantized.io.technique import stamp_technique
+from quantized.io.xrd_export_read import import_xrd_export, is_xrd_export
 from quantized.io.xrdml import import_xrdml
 
 __all__ = [
     "import_auto",
+    "import_auto_sheets",
     "import_structure",
     "is_recognised_data_name",
     "is_structure_file",
@@ -61,6 +64,9 @@ _EXT_MAP: dict[str, Parser] = {
     ".nc": import_netcdf,  # NetCDF-3/4 (generic + ANDI/AIA chromatography)
     ".cdf": import_netcdf,  # ANDI/AIA chromatography (NetCDF-3 classic)
     ".pnr": import_ncnr_pnr,
+    # ORSO reduced reflectometry (standards 0.1/1.0). A file without the ORSO
+    # first line is refused by the parser with a reason, not by a sniffer.
+    ".ort": import_orso,
     # Origin project files — clean-room reader (no GPL liborigin). Currently
     # recognizes + guides; the binary decoders land against sample files.
     ".opj": read_origin_project,  # Origin ≤2017 binary project
@@ -105,6 +111,22 @@ def import_structure(path: str | Path) -> dict[str, Any]:
     return parser(resolved)
 
 
+def _import_qd_vsm_auto(path: Path) -> DataStruct:
+    """``import_qd_vsm`` plus its companion channels (``io/qd_companions.py``)."""
+    return import_qd_vsm(path, companions=True)
+
+
+def _import_ppms_auto(path: Path) -> DataStruct:
+    """``import_ppms`` plus its companion channels (``io/qd_companions.py``)."""
+    return import_ppms(path, companions=True)
+
+
+# Name-keyed consumers (parser matrix ids, stamp_technique's fallback) see the
+# parser's own name, as with _import_excel_lazy below.
+_import_qd_vsm_auto.__name__ = _import_qd_vsm_auto.__qualname__ = "import_qd_vsm"
+_import_ppms_auto.__name__ = _import_ppms_auto.__qualname__ = "import_ppms"
+
+
 def _accept_any(_path: Path) -> bool:
     """Catch-all sniffer: routes to the generic fallback parser for an extension."""
     return True
@@ -132,9 +154,9 @@ _import_excel_lazy.__doc__ = """Import an ``.xlsx`` sheet (first column = x-axis
 # Ambiguous extensions resolve by content sniffing — first match wins.
 _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
     ".dat": [
-        (is_qd_file, import_qd_vsm),
+        (is_qd_file, _import_qd_vsm_auto),
         (is_refl1d_dat, import_refl1d_dat),
-        (is_ppms_dat, import_ppms),
+        (is_ppms_dat, _import_ppms_auto),
         (is_lakeshore_file, import_lake_shore),
     ],
     # .refl is reductus (JSON "columns" header) for the whole corpus, but refl1d
@@ -163,7 +185,10 @@ _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
     # Lake Shore VSM self-identifies in its preamble (MAIN_PLAN #7 — the
     # parser existed unregistered; the #52 matrix surfaced it). SIMS keeps
     # precedence (established chain order).
+    # quantized's own XRD export (io/xrd_csv.py) proves itself by its first
+    # line; it goes first so a re-import keeps the XRD technique tag.
     ".csv": [
+        (is_xrd_export, import_xrd_export),
         (is_sims_file, import_sims),
         (is_lakeshore_file, import_lake_shore),
         (_accept_any, import_csv),
@@ -262,6 +287,8 @@ def is_recognised_data_name(filename: str) -> bool:
     ext = _normalize_ext(Path(filename).suffix) if Path(filename).suffix else ""
     if ext and (ext in _EXT_MAP or ext in _SNIFFERS or ext in _STRUCTURE_MAP):
         return True
+    if ext[1:].isdigit():  # OPUS's sample.0, sample.1, ... (resolve_parser sniffs them)
+        return True
     return match_filter(Path(filename)) is not None
 
 
@@ -299,3 +326,16 @@ def import_auto(path: str | Path) -> DataStruct:
     resolved = Path(path)
     parser = resolve_parser(resolved)
     return stamp_technique(parser(resolved), parser)
+
+
+def import_auto_sheets(path: str | Path) -> list[DataStruct]:
+    """``import_auto``, plus every other data-bearing sheet of an Excel workbook
+    (``io/excel_sheets.py``). The first entry is always the primary dataset;
+    every non-workbook file gives exactly ``[import_auto(path)]``."""
+    resolved = Path(path)
+    if resolved.suffix.lower() in (".xlsx", ".xlsm") and match_filter(resolved) is None:
+        with heavy_imports("quantized.io.excel_sheets"):
+            from quantized.io.excel_sheets import import_workbook_sheets
+
+        return import_workbook_sheets(resolved, import_auto)
+    return [import_auto(resolved)]

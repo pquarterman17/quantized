@@ -19,8 +19,17 @@ const AXIS_SCALE_OPTIONS: { value: AxisScale; label: string }[] = [
 export default function AxisScaleControls() {
   const xScale = useApp((s) => s.xScale);
   const yScale = useApp((s) => s.yScale);
+  const xReversed = useApp((s) => s.xReversed);
   const setXScale = useApp((s) => s.setXScale);
   const setYScale = useApp((s) => s.setYScale);
+  const recordHistory = useApp((s) => s.recordHistory);
+  // Reverse X (IR wavenumber convention, `PlotView.xReversed`) is written here,
+  // in the lazy Inspector, not through an eager store action (the ChannelsCard
+  // precedent): one history entry, then the live view field.
+  const setXReversed = (v: boolean) => {
+    recordHistory("reverse x axis");
+    useApp.setState({ xReversed: v });
+  };
 
   return (
     <>
@@ -31,6 +40,10 @@ export default function AxisScaleControls() {
           value={xScale}
           onChange={(e) => setXScale(e.target.value as AxisScale)}
         />
+      </label>
+      <label className="qz-check" title="Draw x from high to low, as IR spectra are read.">
+        <input type="checkbox" checked={xReversed} onChange={(e) => setXReversed(e.target.checked)} />
+        Reverse X
       </label>
       <label className="qzk-field-lbl" style={{ marginTop: 2 }}>
         Y scale

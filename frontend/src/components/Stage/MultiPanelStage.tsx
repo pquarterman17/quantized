@@ -143,7 +143,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   const shown = useGreyedFacets(composition, active, facetKey, xKey, excludedDisplay); // F4.2c (a)
   // S1 (b): an x-break exports as the flat figure, so its panels cycle exactly when that figure does.
   const breakSeriesStyles = useBreakSeriesStyles(
-    useApp(selectFocusedWindowCycles), composition, active, { xKey, yKeys, seriesOrder, seriesStyles },
+    selectFocusedWindowCycles, composition, active, { xKey, yKeys, seriesOrder, seriesStyles },
   );
   const { hostRef, hostStyle, readout, tool, spatialLegends } = useMultiPanelStage({
     active,

@@ -49,7 +49,7 @@ export function panPlugin(): uPlot.Plugin {
           const onMove = (ev: MouseEvent) => {
             const w = over.clientWidth || 1;
             const h = over.clientHeight || 1;
-            const dx = ((ev.clientX - startX) / w) * (x0max - x0min);
+            const dx = ((ev.clientX - startX) / w) * (x0max - x0min) * (u.scales.x.dir ?? 1); // reversed x (dir -1)
             const dy = ((ev.clientY - startY) / h) * (y0max - y0min);
             u.setScale("x", { min: x0min - dx, max: x0max - dx });
             u.setScale("y", { min: y0min + dy, max: y0max + dy });

@@ -8,7 +8,9 @@ describe("IMPORT_ACCEPT", () => {
   const REQUIRED = [
     ".dat", ".csv", ".tsv", ".xrdml", ".brml", ".raw", ".refl", ".pnr",
     ".datA", ".datB", ".datC", ".datD", ".jdx", ".dx", ".nc", ".cdf",
-    ".xlsx", ".xlsm", ".spc", ".opus",
+    ".xlsx", ".xlsm", ".spc", ".opus", ".ort",
+    // Bruker OPUS writes numbered files (sample.0, sample.1, …), sniffed by magic bytes.
+    ".0", ".1", ".9",
   ];
   const exts = IMPORT_ACCEPT.split(",");
 

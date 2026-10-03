@@ -13,6 +13,31 @@ export interface DatasetViewDefaultsOptions {
    *  instead of plotting them as curves. Off for every silent rebind
    *  (import/switch/reimport), whose defaults this leaves byte-identical. */
   errorRoles?: boolean;
+  /** The view a GENUINE dataset switch is leaving (setActive to another id,
+   *  an import, a window rebind): its coordinate-tied decorations and tick
+   *  formats reset too (`switchDecorationReset`). Omitted by split/reimport,
+   *  whose rows keep the same coordinates. */
+  outgoing?: SwitchDecorations;
+}
+
+/** The view fields tied to the outgoing dataset's coordinates. */
+export const SWITCH_DECORATIONS = ["refLines", "regionShades", "annotations", "shapes", "xFmt", "yFmt", "y2Fmt"] as const;
+type SwitchDecorations = Pick<PlotView, (typeof SWITCH_DECORATIONS)[number]>;
+
+/** What a genuine dataset switch drops from `view`: ref lines, region shades,
+ *  data-anchored annotations/shapes (page-anchored ones are not tied to the
+ *  data and stay) and non-default tick formats. Only the fields that change,
+ *  so an undecorated view keeps every reference ({} = nothing to drop). */
+export function switchDecorationReset(view: SwitchDecorations): Partial<PlotView> {
+  const blank = defaultPlotView() as unknown as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const k of SWITCH_DECORATIONS) {
+    const v: unknown = view[k];
+    // Ref lines and shades carry no anchor, so the filter empties them.
+    const next = Array.isArray(v) ? v.filter((m: { anchor?: string }) => m.anchor === "page") : blank[k];
+    if (JSON.stringify(next) !== JSON.stringify(v)) out[k] = next;
+  }
+  return out as Partial<PlotView>;
 }
 
 export function datasetViewDefaults(
@@ -22,6 +47,11 @@ export function datasetViewDefaults(
   options: DatasetViewDefaultsOptions = {},
 ): Partial<PlotView> {
   const remembered = applyTechniqueMemory(dataset, memory);
+  // A parser's peak-list hint (io/jcamp.py, io/spc.py): markers, not joined
+  // lines, per channel -- under any style memory remembers for that channel.
+  const seriesStyles: PlotView["seriesStyles"] = {};
+  if (dataset?.data.metadata?.default_trace === "Scatter")
+    dataset.data.labels.forEach((_, i) => (seriesStyles[i] = { marker: true, width: 0 }));
   return {
     xKey: null,
     yKeys: null,
@@ -47,7 +77,8 @@ export function datasetViewDefaults(
     // Blank means "derive from the incoming dataset", not "hide the title".
     xAxisLabel: "",
     yAxisLabel: "",
-    seriesStyles: {},
+    seriesStyles,
+    xReversed: dataset?.data.metadata?.x_reversed === true, // IR wavenumber (io/technique.py)
     seriesLabels: {},
     errKeys: dataset ? defaultErrKeys(dataset.data) : {},
     seriesOrder: null,
@@ -57,8 +88,11 @@ export function datasetViewDefaults(
     xStep: null,
     yStep: null,
     // Below memory, like the two error seeds it widens (memory > defaults).
+    ...(options.outgoing ? switchDecorationReset(options.outgoing) : {}),
     ...(dataset && options.errorRoles ? errorRoleViewDefaults(dataset) : {}),
-    ...(remembered ?? (isTechniqueChange(dataset, previous) ? techniqueViewDefaults(dataset) : {})),
+    ...(remembered
+      ? { ...remembered, seriesStyles: { ...seriesStyles, ...remembered.seriesStyles } }
+      : isTechniqueChange(dataset, previous) ? techniqueViewDefaults(dataset) : {}),
   };
 }
 

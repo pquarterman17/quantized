@@ -213,7 +213,11 @@ class _AxisTickFormatter(Formatter):
         # the increment floor, same as the "no axis attached yet" case.
         get_locs = getattr(self.axis, "get_majorticklocs", None)
         locs = get_locs() if callable(get_locs) else ()
-        incr = _splits_increment(locs)
+        return self.text(x, _splits_increment(locs))
+
+    def text(self, x: float, incr: float) -> str:
+        """The label for ``x`` with ``incr`` as the precision floor (a log
+        axis' ``LogTickLabels`` supplies its own, as the screen does)."""
         if self.mode in ("date", "time", "datetime"):
             # `datetime.fromtimestamp` raises OSError/OverflowError for an
             # out-of-range epoch and ValueError for NaN. That happens when a
@@ -283,23 +287,29 @@ def apply_tick_steps(
     x_scale: str,
     y_scale: str,
 ) -> None:
-    """Apply saved major-tick increments to linear axes only.
+    """Apply saved major-tick increments to linear axes, and to a log axis'
+    sub-decade arithmetic ticks.
 
-    Origin's decoded ``from/to/step`` triples carry a linear increment. Log
-    axes retain their scale-specific locator; reciprocal axes have their own
+    Origin's decoded ``from/to/step`` triples carry a linear increment. A log
+    axis keeps its own locator, handed the step for a sub-decade view as the
+    screen's ``fixedLogAxisSplits`` uses it; reciprocal axes have their own
     locator. Invalid or absent increments leave matplotlib's locator intact.
     ``MultipleLocator`` anchors ticks at integer multiples of the step, the
     same convention as the interactive ``fixedLinearAxisSplits`` helper.
     """
-    def apply_one(axis: Any, limits: tuple[float, float], step: float | None) -> None:
+    def apply_one(axis: Any, limits: tuple[float, float], step: float | None, scale: str) -> None:
         if step is None or not math.isfinite(step) or step <= 0:
+            return
+        if scale == "log":
+            if hasattr(axis.get_major_locator(), "step"):  # figure_log_ticks.LogMajorLocator
+                axis.get_major_locator().step = float(step)
             return
         span = abs(float(limits[1]) - float(limits[0]))
         if not math.isfinite(span) or span / step > 1000:
             return
         axis.set_major_locator(MultipleLocator(float(step)))
 
-    if x_scale == "linear":
-        apply_one(ax.xaxis, ax.get_xlim(), x_step)
-    if y_scale == "linear":
-        apply_one(ax.yaxis, ax.get_ylim(), y_step)
+    if x_scale in ("linear", "log"):
+        apply_one(ax.xaxis, ax.get_xlim(), x_step, x_scale)
+    if y_scale in ("linear", "log"):
+        apply_one(ax.yaxis, ax.get_ylim(), y_step, y_scale)

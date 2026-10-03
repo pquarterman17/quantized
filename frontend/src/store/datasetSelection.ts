@@ -44,6 +44,7 @@
 
 import { isOriginBookDataset } from "../lib/grouping";
 import type { AppState } from "./useApp";
+import { switchDecorationReset } from "./windowDefaults";
 import { focusedRebindPatch, retargetPassiveRebind } from "./windows";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -85,6 +86,15 @@ export interface DatasetSelectionSlice {
   selectIds: (ids: string[]) => void;
 }
 
+/** A switch that drops ref lines/annotations/tick formats is undoable. A
+ *  switch with nothing to drop stays out of the undo stack, and so does one
+ *  whose dropped fields the top entry already restores (a facet/break/Origin
+ *  apply records its own entry just before activating). */
+function switchNeedsUndoEntry(s: AppState, id: string): boolean {
+  const top = s.history.at(-1)?.snapshot.view as Record<string, unknown> | undefined;
+  return s.activeId !== id && Object.keys(switchDecorationReset(s)).some((k) => top?.[k] !== s[k as keyof AppState]);
+}
+
 export function createDatasetSelectionSlice(set: SliceSet, get: SliceGet): DatasetSelectionSlice {
   return {
     activeId: null,
@@ -97,6 +107,7 @@ export function createDatasetSelectionSlice(set: SliceSet, get: SliceGet): Datas
       // the normal focused-window rebind below lands on the new focus. The
       // rebind itself lives in `focusedRebindPatch` (hoisted, module level) so
       // `rebindWindow`'s explicit-drop path shares it verbatim.
+      if (switchNeedsUndoEntry(get(), id)) get().recordHistory("switch dataset");
       retargetPassiveRebind(get(), id);
       set((s) => focusedRebindPatch(s, id));
       // ORIGIN_FILE_DECODE_PLAN #38: a plain click covers the common "activate
