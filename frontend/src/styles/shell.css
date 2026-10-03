@@ -1244,10 +1244,32 @@ body {
 .qzk-wizard-step.qzk-active .qzk-wizard-num { color: var(--accent); }
 
 /* Pipeline view (#6): the editable step list. */
-.qzk-step-row { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); cursor: default; }
+.qzk-step-row { display: flex; align-items: center; gap: 6px; padding: 7px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); cursor: default; }
 .qzk-step-row.qzk-active { border-color: var(--accent); }
 .qzk-step-kind { flex-shrink: 0; padding: 0 5px; border-radius: var(--radius-sm); background: var(--surface-3, var(--surface-1)); color: var(--text-faint); font-family: var(--font-mono); font-size: var(--type-nano); }
+.qzk-step-copy { min-width: 0; max-width: 330px; display: flex; flex-direction: column; gap: 2px; }
 .qzk-step-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: var(--font-size-sm); }
+.qzk-step-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-faint); font-size: var(--type-nano); }
+.qzk-step-impact { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); font-size: var(--type-nano); }
+.qzk-pipeline-overview { margin-bottom: 10px; padding: 10px; border: 1px solid var(--border-soft); border-radius: var(--radius-md); background: var(--surface-2); }
+.qzk-pipeline-overview-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.qzk-pipeline-eyebrow { margin-bottom: 2px; color: var(--text-faint); font-size: var(--type-nano); letter-spacing: .08em; }
+.qzk-pipeline-counts { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 5px; max-width: 330px; }
+.qzk-pipeline-counts > span, .qzk-step-state { padding: 2px 6px; border: 1px solid var(--border-soft); border-radius: 999px; color: var(--text-muted); font-size: var(--type-nano); white-space: nowrap; }
+.qzk-pipeline-count-warn, .qzk-step-state-blocked { color: var(--warn) !important; }
+.qzk-pipeline-count-danger, .qzk-step-state-invalid { color: var(--danger) !important; border-color: color-mix(in srgb, var(--danger) 45%, var(--border-soft)) !important; }
+.qzk-step-state-ready { color: var(--ok) !important; }
+.qzk-step-state-warning { color: var(--warn) !important; }
+.qzk-step-state-display_only, .qzk-step-state-input, .qzk-step-state-disabled { color: var(--text-faint) !important; }
+.qzk-pipeline-alert { margin-top: 8px; padding: 6px 8px; border-left: 2px solid var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); color: var(--text); font-size: var(--font-size-sm); }
+.qzk-pipeline-list { display: flex; flex-direction: column; gap: 5px; max-height: 410px; overflow-y: auto; padding-right: 2px; }
+.qzk-pipeline-step { min-width: 0; }
+.qzk-step-note { margin: 2px 8px 4px 68px; color: var(--text-faint); font-size: var(--type-nano); }
+.qzk-step-note-danger { color: var(--danger); }
+.qzk-pipeline-confirm { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin: 4px 8px 6px 28px; padding: 8px; border: 1px solid color-mix(in srgb, var(--warn) 50%, var(--border-soft)); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--warn) 7%, var(--surface-2)); color: var(--text-muted); font-size: var(--font-size-sm); }
+.qzk-pipeline-confirm-actions { display: flex; flex-shrink: 0; gap: 5px; }
+.qzk-pipeline-result { display: flex; flex-wrap: wrap; gap: 5px 12px; margin-top: 10px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--ok) 40%, var(--border-soft)); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--ok) 6%, var(--surface-2)); color: var(--text-muted); font-size: var(--font-size-sm); }
+.qzk-pipeline-result-failed { border-color: color-mix(in srgb, var(--danger) 40%, var(--border-soft)); background: color-mix(in srgb, var(--danger) 6%, var(--surface-2)); }
 .qzk-step-editor { margin: 2px 0 6px 24px; padding: 6px 8px; border-left: 2px solid var(--border-soft); }
 .qzk-step-code { font-family: var(--font-mono); font-size: var(--type-nano); color: var(--text-dim); word-break: break-all; }
 
