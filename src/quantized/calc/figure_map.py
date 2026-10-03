@@ -114,7 +114,8 @@ def render_map_figure(
       count or explicit list, ``level_scale`` lin or log, ``label_contours``
       draws inline labels on the line variant. Same level semantics
       (:func:`_contour_levels`) for both ``contour_source`` values.
-    - ``heatmap`` — ``pcolormesh`` of the grid (``"grid"`` source only).
+    - ``heatmap`` — ``pcolormesh`` of the grid (``"grid"`` source only),
+      rasterized at ``dpi`` inside an otherwise vector SVG/PDF (no cell seams).
     - ``surface`` / ``scatter3d`` / ``waterfall`` — static 3-D (mplot3d),
       viewed from (``view_elev``, ``view_azim``) (``"grid"`` source only).
 
@@ -340,7 +341,11 @@ def _draw(
         return cs
 
     if kind == "heatmap":
-        return ax.pcolormesh(x, y, z, cmap=cmap, shading="auto")
+        # Rasterized at the export dpi, the mesh ONLY (axes, ticks, labels,
+        # marks stay vector): as one polygon per cell, every SVG/PDF viewer
+        # antialiased each cell's edges separately and the background showed
+        # through as faint seams. Matplotlib's colour bar does the same.
+        return ax.pcolormesh(x, y, z, cmap=cmap, shading="auto", rasterized=True)
     if kind in ("contourf", "contour"):
         lv = _contour_levels(z_min, z_max, levels, level_scale)
         if kind == "contourf":
