@@ -14,7 +14,10 @@ export function resolvedRecipeView(
 ): PlotView {
   return {
     ...defaultPlotView(),
-    ...(panels ? { stackMode: true, panelFit: panels.panelFit, pageSetup: panels.pageSetup } : {}),
+    // `stackMode` is the captured visual value below. Panels contribute only
+    // their layout fields here; setting stackMode in this spread would be
+    // immediately overwritten and falsely imply a second source of truth.
+    ...(panels ? { panelFit: panels.panelFit, pageSetup: panels.pageSetup } : {}),
     xKey: mapping.xKey,
     yKeys: mapping.yKeys,
     y2Keys: mapping.y2Keys,
