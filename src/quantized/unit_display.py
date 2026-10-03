@@ -14,7 +14,8 @@ cases in ``tests/fixtures/wire/unit_display.json``.
 Rules, applied in order and only when the unit has no ``$`` (a mathtext unit
 is already typeset):
 
-1. ``Ang`` / ``Angstrom(s)`` as a whole word -> ``Å``.
+1. ``Ang`` / ``Angstrom(s)`` as a whole word -> ``Å``; ``um`` -> ``µm``
+   (lower case only: ``uM`` is micromolar).
    A bare ``A`` is left alone: it is the ampere as often as the Ångström,
    so only a parser that knows its file's convention may map it.
 2. ``^n`` / ``^{n}`` with a signed integer ``n`` -> superscript digits.
@@ -38,6 +39,7 @@ _SUPERSCRIPT = str.maketrans("0123456789+-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻"
 # Each pattern mirrors unitDisplay.ts character for character; re.ASCII gives
 # \b \w \d their JavaScript (ASCII) meaning and IGNORECASE matches its /i.
 _ANGSTROM = re.compile(r"\bang(?:stroms?)?\b", re.ASCII | re.IGNORECASE)
+_MICRON = re.compile(r"(?<![A-Za-z])um(?![A-Za-z])")
 _CARET = re.compile(r"\^\{?([+-]?\d+)\}?(?![\d.])", re.ASCII)
 _BARE = re.compile(r"(?<![\w.])([a-zµÅ]+)(-?[1-9])(?![\w.^])", re.ASCII | re.IGNORECASE)
 
@@ -47,6 +49,7 @@ def display_unit(unit: str) -> str:
     if "$" in unit:
         return unit
     out = _ANGSTROM.sub("Å", unit)
+    out = _MICRON.sub("µm", out)
     out = _CARET.sub(lambda m: m.group(1).translate(_SUPERSCRIPT), out)
     return _BARE.sub(lambda m: m.group(1) + m.group(2).translate(_SUPERSCRIPT), out)
 

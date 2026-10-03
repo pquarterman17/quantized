@@ -244,7 +244,8 @@ def test_matches_real_perkin_elmer_ftir_header_shape(tmp_path: Path) -> None:
         + body
     )
     ds = import_spc(_write(tmp_path, "ftir_like.spc", raw))
-    assert ds.metadata["x_column_name"] == "Wavenumber (cm-1)"
+    assert ds.metadata["x_column_name"] == "Wavenumber"
+    assert ds.metadata["x_column_unit"] == "cm^-1"
     assert ds.labels[0] == "Transmission"
     assert_allclose(ds.time[0], 4000.0)
     assert_allclose(ds.time[-1], 450.0)
@@ -490,7 +491,8 @@ def test_real_old_format_raman(corpus_dir: Path) -> None:
     assert len(ds.time) == 1602
     assert_allclose(ds.time[0], 100.0)
     assert_allclose(ds.time[-1], 1800.0)
-    assert ds.metadata["x_column_name"] == "Raman Shift (cm-1)"
+    assert ds.metadata["x_column_name"] == "Raman shift"
+    assert ds.metadata["x_column_unit"] == "cm^-1"
     y = ds.values[:, 0]
     assert np.abs(np.diff(y)).sum() / (y.max() - y.min()) < 30  # smooth, not noise
     assert ds.metadata["date"]["year"] == 2013
@@ -504,7 +506,8 @@ def test_real_old_format_ftir_multifile(corpus_dir: Path) -> None:
     ds = import_spc(corpus_dir / "spc" / "spectroscopy" / "rohanisaac_old_0x4D_m_ordz.spc")
     assert ds.n_channels == 10
     assert len(ds.time) == 857
-    assert ds.metadata["x_column_name"] == "Wavenumber (cm-1)"
+    assert ds.metadata["x_column_name"] == "Wavenumber"
+    assert ds.metadata["x_column_unit"] == "cm^-1"
     assert ds.labels[0].startswith("Absorbance")
     for k in range(10):  # every channel decodes to smooth absorbance-scale data
         y = ds.values[:, k]
@@ -559,3 +562,44 @@ def test_txyxys_long_form_plots_the_signal_not_the_index(tmp_path: Path) -> None
     ds = import_spc(_write(tmp_path, "txy_diff.spc", raw))
     assert ds.units == ("", "")
     assert ds.metadata["default_value_channels"] == [0]
+
+
+@pytest.mark.parametrize(
+    ("fxtype", "fytype", "x_name", "x_unit", "y_label", "y_unit"),
+    [
+        (1, 128, "Wavenumber", "cm^-1", "Transmission", ""),
+        (3, 2, "Wavelength", "nm", "Absorbance", ""),
+        (13, 12, "Raman shift", "cm^-1", "Intensity", ""),
+        (9, 4, "m/z", "", "Counts", ""),
+        (21, 5, "Temperature", "K", "Voltage", "V"),
+        (23, 7, "Time", "ms", "Current", "mA"),
+    ],
+)
+def test_axis_unit_codes_split_into_name_and_unit(
+    tmp_path: Path, fxtype: int, fytype: int, x_name: str, x_unit: str, y_label: str, y_unit: str
+) -> None:
+    """The SPC unit enumerations name a quantity AND its unit ("Wavenumber
+    (cm-1)", "Volts"); the unit belongs in the unit field, not the title, so
+    the axis title can typeset it (cm⁻¹) like every other parser's."""
+    raw = (
+        _pack_head(fnpts=2, ffirst=0.0, flast=1.0, fexp=32, fxtype=fxtype, fytype=fytype)
+        + _pack_sub()
+        + struct.pack("<2i", 5, 6)
+    )
+    ds = import_spc(_write(tmp_path, "codes.spc", raw))
+    assert (ds.metadata["x_column_name"], ds.metadata["x_column_unit"]) == (x_name, x_unit)
+    assert (ds.labels[0], ds.units[0]) == (y_label, y_unit)
+
+
+def test_talabs_title_with_a_trailing_unit_is_split(tmp_path: Path) -> None:
+    """A custom title written "Name (unit)" splits like the coded ones; a
+    title that is ONLY a parenthetical ("(arb)") stays the title."""
+    fcatxt = b"Wavenumber (cm-1)\x00(arb)\x00" + b"\x00" * 8
+    raw = (
+        _pack_head(fnpts=2, ffirst=0, flast=1, fexp=32, ftflgs=_TALABS, fcatxt=fcatxt)
+        + _pack_sub()
+        + struct.pack("<2i", 5, 6)
+    )
+    ds = import_spc(_write(tmp_path, "talabs_unit.spc", raw))
+    assert (ds.metadata["x_column_name"], ds.metadata["x_column_unit"]) == ("Wavenumber", "cm-1")
+    assert (ds.labels[0], ds.units[0]) == ("(arb)", "")

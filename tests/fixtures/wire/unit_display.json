@@ -17,6 +17,8 @@
     { "unit": "1/Ang", "display": "1/Å" },
     { "unit": "Angstrom", "display": "Å" },
     { "unit": "angstroms", "display": "Å" },
+    { "unit": "um", "display": "µm" },
+    { "unit": "1/um", "display": "1/µm" },
     { "unit": "", "display": "" },
     { "unit": "Oe", "display": "Oe" },
     { "unit": "emu", "display": "emu" },

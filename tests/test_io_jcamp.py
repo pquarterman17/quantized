@@ -269,3 +269,19 @@ def test_x_axis_is_named_by_its_quantity(data_type: str, xunits: str, name: str,
     assert ds.metadata["x_column_name"] == name
     assert ds.metadata["x_column_unit"] == unit
     assert ds.metadata["data_type"] == data_type
+
+
+@pytest.mark.parametrize(
+    ("yunits", "label", "unit"),
+    [
+        ("TRANSMITTANCE", "Transmittance", ""),
+        ("ABSORBANCE", "Absorbance", ""),
+        ("PICOAMPERES", "Current", "pA"),
+        ("VOLTS", "Voltage", "V"),
+        ("ARBITRARY UNITS", "Arbitrary Units", ""),
+    ],
+)
+def test_y_unit_words_split_into_quantity_and_unit(yunits: str, label: str, unit: str) -> None:
+    # "##YUNITS=PICOAMPERES" titled the channel "Picoamperes" with no unit.
+    ds = import_jcamp_from_text(_FIX.replace("##YUNITS=TRANSMITTANCE", f"##YUNITS={yunits}"))
+    assert (ds.labels[0], ds.units[0]) == (label, unit)

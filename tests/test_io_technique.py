@@ -210,10 +210,10 @@ def test_stamp_technique_is_additive_over_existing_metadata() -> None:
     [
         ("import_jcamp", "Wavenumber", "cm^-1", True),  # JCAMP IR
         ("import_opus", "Wavenumber", "cm^-1", True),  # Bruker OPUS FTIR
-        ("import_spc", "Wavenumber (cm-1)", "", True),  # SPC fxtype=1
-        ("import_spc", "Raman Shift (cm-1)", "", False),  # Raman reads ascending
+        ("import_spc", "Wavenumber", "cm^-1", True),  # SPC fxtype=1
+        ("import_spc", "Raman shift", "cm^-1", False),  # Raman reads ascending
         ("import_jcamp", "Raman shift", "cm^-1", False),
-        ("import_spc", "Nanometers (nm)", "", False),  # UV-Vis
+        ("import_spc", "Wavelength", "nm", False),  # UV-Vis
         ("import_jcamp", "Chemical shift", "ppm", False),
         ("import_csv", "Wavenumber", "cm-1", False),  # generic: never guess
     ],

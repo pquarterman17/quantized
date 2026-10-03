@@ -13,6 +13,7 @@ export function displayUnit(unit: string): string {
     ? unit
     : unit
         .replace(/\bang(?:stroms?)?\b/gi, "Å")
+        .replace(/(?<![A-Za-z])um(?![A-Za-z])/g, "µm")
         .replace(/\^\{?([+-]?\d+)\}?(?![\d.])/g, (_m, e: string) => sup(e))
         .replace(/(?<![\w.])([a-zµÅ]+)(-?[1-9])(?![\w.^])/gi, (_m, r: string, e: string) => r + sup(e));
 }

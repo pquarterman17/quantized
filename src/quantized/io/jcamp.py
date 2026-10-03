@@ -180,6 +180,17 @@ _X_AXES: dict[str, tuple[str, str]] = {
 }
 
 
+# ##YUNITS that name a UNIT rather than a quantity -> (quantity, unit); any
+# other value ("TRANSMITTANCE", "ABSORBANCE") titles the channel as before.
+_Y_AXES: dict[str, tuple[str, str]] = {
+    "PICOAMPERES": ("Current", "pA"),
+    "NANOAMPERES": ("Current", "nA"),
+    "MICROAMPERES": ("Current", "uA"),
+    "VOLTS": ("Voltage", "V"),
+    "MILLIVOLTS": ("Voltage", "mV"),
+}
+
+
 def _x_axis(xunits: str, data_type: str) -> tuple[str, str]:
     name, unit = _X_AXES.get(xunits.strip().upper(), ("X", xunits))
     if name == "Wavenumber" and "RAMAN" in data_type.upper():
@@ -259,4 +270,5 @@ def import_jcamp(filepath: str | Path) -> DataStruct:
         # Discrete peaks, not a sampled curve: joining them draws a fake
         # spectrum. The frontend's own default-trace vocabulary.
         metadata["default_trace"] = "Scatter"
-    return DataStruct.create(x, y, labels=[yunits.title()], units=[""], metadata=metadata)
+    y_label, y_unit = _Y_AXES.get(yunits.strip().upper(), (yunits.title(), ""))
+    return DataStruct.create(x, y, labels=[y_label], units=[y_unit], metadata=metadata)
