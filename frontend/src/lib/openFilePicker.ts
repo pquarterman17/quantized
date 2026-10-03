@@ -12,7 +12,7 @@
 // and importFormats.test.ts asserts every documented extension appears below,
 // so the drift can't silently return.
 export const IMPORT_ACCEPT =
-  ".dat,.csv,.tsv,.txt,.xrdml,.brml,.raw,.refl,.pnr,.datA,.datB,.datC,.datD," +
+  ".dat,.csv,.tsv,.txt,.xrdml,.brml,.raw,.refl,.pnr,.ort,.datA,.datB,.datC,.datD," +
   ".jdx,.dx,.nc,.cdf,.cif,.xlsx,.xlsm,.xls,.spc,.opus,.opj,.opju";
 
 // DEFECT B (Sol audit P1-6, 2026-08-21): a canceled OS file dialog used to

@@ -53,6 +53,12 @@ export const IMPORT_FORMATS: readonly ImportFormat[] = [
   },
   { exts: [".pnr"], name: "NCNR polarized neutron reflectometry", category: "Reflectometry & neutron" },
   {
+    exts: [".ort"],
+    name: "ORSO reduced reflectivity",
+    category: "Reflectometry & neutron",
+    note: "Standards 0.1 and 1.0; each data set becomes its own curve.",
+  },
+  {
     exts: [".data", ".datb", ".datc", ".datd"],
     name: "NCNR .datA/B/C/D",
     category: "Reflectometry & neutron",

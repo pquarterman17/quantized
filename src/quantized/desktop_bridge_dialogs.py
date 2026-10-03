@@ -58,11 +58,13 @@ __all__ = ["DesktopDialogBridge", "IMPORT_FILE_TYPES", "PROJECT_FILE_TYPES"]
 # Shown in the native dialog's format dropdown. Mirrors the frontend's
 # IMPORT_ACCEPT list; "All files" stays LAST but present, because an instrument
 # writing an unregistered extension is common and a dialog that cannot open it
-# would be worse than a permissive filter.
+# would be worse than a permissive filter. tests/test_desktop_import_filter.py
+# asserts "Data files" lists every extension io/registry.py reads.
 IMPORT_FILE_TYPES: tuple[str, ...] = (
     (
         "Data files (*.dat;*.csv;*.txt;*.tsv;*.xy;*.xye;*.raw;*.brml;*.xrdml;"
-        "*.opj;*.opju;*.h5;*.hdf5;*.nxs;*.spc;*.dx;*.jdx;*.cif;*.refl;*.ogs)"
+        "*.opj;*.opju;*.h5;*.hdf5;*.nxs;*.spc;*.dx;*.jdx;*.cif;*.refl;*.ogs;"
+        "*.ort;*.pnr;*.datA;*.datB;*.datC;*.datD;*.nc;*.cdf;*.xlsx;*.xlsm;*.opus)"
     ),
     "Origin projects (*.opj;*.opju)",
     "All files (*.*)",
