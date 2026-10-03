@@ -8,6 +8,7 @@ import type { PlotWindow } from "../../../lib/plotview";
 // P3.3: the SAME call both canvas hooks make (`Stage/useStageSeriesCycle`),
 // imported rather than restated — restating it is exactly how the focus gate
 // below drifted from the canvas in the first place.
+import { effectiveChannels } from "../../../lib/plotdata";
 import { windowCyclesSeriesStyles } from "../../../lib/seriesStyleCycle";
 import { liveWindowDocument, type FigurePublicationSession } from "../../../store/figureLifecycle";
 import { libraryWindowLiveDrifted } from "../../../store/figurePublicationLibrary";
@@ -99,14 +100,16 @@ export function selectSessionCyclesSeriesStyles(state: AppState): boolean {
   // case (preference off, or no open session) must not walk `plotWindows`. The
   // preference is then passed on rather than assumed, so the shared decision
   // still reads as the whole rule at its call site.
-  if (!state.autoSeriesStyles || session === null || session.target !== "window") return false;
+  if (session === null || session.target !== "window") return false;
   const target = state.plotWindows.find((candidate) => candidate.id === session.windowId);
   if (target === undefined || target.kind !== "plot") return false;
-  return windowCyclesSeriesStyles(
-    state.autoSeriesStyles,
-    target.id === state.focusedWindowId ? state : plotWindowView(target),
-    target.document,
-  );
+  const focused = target.id === state.focusedWindowId;
+  const view = focused ? state : plotWindowView(target);
+  // The canvas' plotted-channel count: past the palette's eight the cycle
+  // engages without the preference, exactly as that window's canvas does.
+  const ds = state.datasets.find((d) => d.id === (focused ? state.activeId : target.datasetId));
+  const count = ds ? effectiveChannels(ds.data, view.yKeys, view.xKey, ds.channelRoles, view.seriesOrder).length : 0;
+  return windowCyclesSeriesStyles(state.autoSeriesStyles, view, target.document, count);
 }
 
 /** Zustand SELECTOR form of the check above -- the form `useFigureBuilder`

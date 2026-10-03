@@ -248,7 +248,8 @@ export function documentPinsSeriesStyles(
  *      produces.
  *
  *  `on` is the `autoSeriesStyles` preference; it is a parameter rather than a
- *  store read because this module is pure and every caller already holds it. */
+ *  store read because this module is pure and every caller already holds it.
+ *  `count` (the window's plotted series) engages it past the palette's eight. */
 export function windowCyclesSeriesStyles(
   on: boolean,
   view: CycleView,
@@ -256,11 +257,15 @@ export function windowCyclesSeriesStyles(
     | { publication?: { seriesStyles?: readonly unknown[] | null }; bindings?: { encoding?: object } }
     | null
     | undefined,
+  count = 0,
 ): boolean {
   // P1.4: a window with Color / Symbol / Label encodings has handed colour and
   // glyph to its factor levels (lib/plotEncodingBinding) — refused like a
   // grouped view, on the canvas and in the export alike.
-  return on && !documentPinsSeriesStyles(doc) && !doc?.bindings?.encoding && overlayExportsSeriesStyles(view);
+  // Plot audit round 2: past `count` > 8 series the palette repeats (series 9
+  // is series 1's hue), so the cycle engages without the preference — under
+  // the same refusals. `count` is the canvas' plotted-channel count.
+  return (on || count > SERIES_VARS.length) && !documentPinsSeriesStyles(doc) && !doc?.bindings?.encoding && overlayExportsSeriesStyles(view);
 }
 
 /** The display positions of `count` series in their own natural order — the
