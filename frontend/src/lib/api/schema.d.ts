@@ -7268,6 +7268,11 @@ export interface components {
             /** Rows */
             rows: number;
             /**
+             * Stack
+             * @default false
+             */
+            stack?: boolean;
+            /**
              * Style
              * @default default
              */

@@ -4914,6 +4914,11 @@
             "title": "Rows",
             "type": "integer"
           },
+          "stack": {
+            "default": false,
+            "title": "Stack",
+            "type": "boolean"
+          },
           "style": {
             "default": "default",
             "title": "Style",
