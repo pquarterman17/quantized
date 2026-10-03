@@ -12,7 +12,8 @@
 //
 // The corner is written to the stage as `data-lc` and the column's measured
 // width as `--qz-out-w`; shell.css does the placing, so React never
-// re-renders for either.
+// re-renders for either. The tool readout's frame corner rides along as
+// `data-rc` (`pickReadoutCorner`).
 
 import type uPlot from "uplot";
 
@@ -95,16 +96,56 @@ export function pickCorner(counts: Record<Corner, number>, current?: string): Co
   return cur && counts[cur] <= counts[best] * 1.25 + 2 ? cur : best;
 }
 
-/** Place the stage's auto legend (corner) and size its outside column. */
+/** The tool readout's corner (chrome audit round 4): the least-covered frame
+ *  corner other than the legend's, bottom right first on a tie, and sticky
+ *  like the legend's. It used to sit at the STAGE's bottom right, which is
+ *  the x-axis title once the window is narrow. */
+export function pickReadoutCorner(counts: Record<Corner, number>, blocked: readonly string[] = [], current?: string): Corner {
+  const all = ["se", "sw", "ne", "nw"] as const;
+  const open = all.filter((k) => !blocked.includes(k));
+  // Nowhere clear of the legend (a tiny frame): at least not its own corner.
+  const free = open.length ? open : all.filter((k) => k !== blocked[0]);
+  let best: Corner = free[0];
+  for (const k of free) if (counts[k] < counts[best]) best = k;
+  const cur = free.find((k) => k === current);
+  return cur && counts[cur] <= counts[best] * 1.25 + 2 ? cur : best;
+}
+
+/** Place the stage's auto legend (corner), size its outside column, and pick
+ *  the tool readout's corner (`data-rc`; shell.css does the placing). */
 export function placeLegend(u: uPlot, stage: HTMLElement): void {
   const r = u.over.getBoundingClientRect();
   stage.toggleAttribute("data-narrow-frame", r.width < NARROW_FRAME);
+  const pts = drawnPoints(u);
   const out = stage.querySelector<HTMLElement>(":scope > .qzk-legend.out");
   if (out) stage.style.setProperty("--qz-out-w", `${out.offsetWidth}px`);
   // Any in-frame legend: a fixed corner keeps `data-lc` current for a later switch to auto.
   const box = stage.querySelector<HTMLElement>(":scope > .qzk-legend:not(.out)");
-  if (!box) return;
-  const counts = cornerCounts(drawnPoints(u), r.width, r.height, box.offsetWidth + INSET, box.offsetHeight + INSET);
-  const lc = pickCorner(counts, stage.dataset.lc);
-  if (stage.dataset.lc !== lc) stage.dataset.lc = lc;
+  // The readout may not be showing yet (it appears on hover): size it from its rows.
+  const ro = stage.querySelector<HTMLElement>(":scope > .qzk-readout");
+  const rows = u.series.filter((s, k) => k > 0 && s.show !== false).length + 1;
+  const w = (ro?.offsetWidth || 190) + INSET;
+  const h = (ro?.offsetHeight || 8 + 16 * rows) + INSET;
+  // The legend's corner, then each neighbour the two boxes cannot share.
+  const blocked: string[] = [];
+  if (box) {
+    const lw = box.offsetWidth + INSET;
+    const lh = box.offsetHeight + INSET;
+    const counts = cornerCounts(pts, r.width, r.height, lw, lh);
+    const lc = pickCorner(counts, stage.dataset.lc);
+    if (stage.dataset.lc !== lc) stage.dataset.lc = lc;
+    const held = box.classList.contains("auto") ? lc : CORNERS.find((k) => box.classList.contains(k));
+    if (held) {
+      const wide = lw + w + INSET > r.width;
+      const tall = lh + h + INSET > r.height;
+      const v = held[0] === "n" ? "s" : "n";
+      const hz = held[1] === "e" ? "w" : "e";
+      blocked.push(held);
+      if (wide) blocked.push(held[0] + hz);
+      if (tall) blocked.push(v + held[1]);
+      if (wide && tall) blocked.push(v + hz);
+    }
+  }
+  const rc = pickReadoutCorner(cornerCounts(pts, r.width, r.height, w, h), blocked, stage.dataset.rc);
+  if (stage.dataset.rc !== rc) stage.dataset.rc = rc;
 }

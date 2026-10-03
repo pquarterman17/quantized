@@ -186,7 +186,33 @@ test("an outside legend column never covers the plot frame", async ({ page }) =>
   }
 });
 
-type QzHarness ={ __qz: { useApp: { setState: (s: object) => void } } };
+// Round-4 chrome audit: the data-cursor readout sat at the STAGE's bottom right,
+// the x-axis band; in a narrow window that is right on the x-axis title. It now
+// takes a corner inside the frame.
+test("the data-cursor readout stays inside the plot frame @core", async ({ page }) => {
+  await plotFile(page, "linear-ramp.csv");
+  await page.evaluate(() =>
+    (window as unknown as { __qz: { useApp: { getState: () => { setPlotTool: (t: string) => void } } } }).__qz.useApp
+      .getState()
+      .setPlotTool("cursor"),
+  );
+  const over = page.locator(".qzk-stage .u-over");
+  const readout = page.locator(".qzk-stage > .qzk-readout");
+  for (const size of SIZES) {
+    await page.setViewportSize(size);
+    await over.hover({ position: { x: 20, y: 20 } });
+    await over.hover(); // the centre lies on the ramp
+    await expect(readout).toBeVisible();
+    await expect
+      .poll(async () => {
+        const [r, f] = await Promise.all([rectOf(readout), rectOf(over)]);
+        return r.left >= f.left - 0.5 && r.right <= f.right + 0.5 && r.top >= f.top - 0.5 && r.bottom <= f.bottom + 0.5;
+      }, { message: `readout leaves the frame at ${size.width}x${size.height}` })
+      .toBe(true);
+  }
+});
+
+type QzHarness = { __qz: { useApp: { setState: (s: object) => void } } };
 
 // Round-4 chrome audit: the import toast sat bottom-centre of the WINDOW,
 // which is the bottom-centre of the stage, exactly where the x-axis title is

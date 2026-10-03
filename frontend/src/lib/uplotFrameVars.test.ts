@@ -133,6 +133,14 @@ describe("frameVarsPlugin", () => {
     await vi.waitFor(() => expect(stage!.dataset.lc).toBe("ne"));
   });
 
+  // Chrome audit round 4: the tool readout's corner is chosen even with the legend hidden.
+  it("places the tool readout after a draw with no legend", async () => {
+    const { u, stage } = mockPlot(true);
+    Object.assign(u, { data: [[0, 1], [5, 5]], series: [{}, { show: true, scale: "y" }], valToPos: () => 10 });
+    runHook(frameVarsPlugin(), "draw", u);
+    await vi.waitFor(() => expect(stage!.dataset.rc).toBe("se"));
+  });
+
   it("no-ops when there is no .qzk-stage ancestor (MultiPanel / inset hosts)", () => {
     const { u } = mockPlot(false);
     // Must not throw and must touch nothing.
