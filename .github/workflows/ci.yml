@@ -97,7 +97,11 @@ jobs:
           path: perf-guard-timing.txt
           retention-days: 90
 
-  frontend:
+  # Keep static checks together: lint is the longest of these steps and the
+  # clean build follows in under a minute, so another runner would add more
+  # setup/queue overhead than useful wall-clock reduction.
+  frontend-static:
+    name: frontend static checks
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     defaults:
@@ -132,10 +136,61 @@ jobs:
       # warning fails CI same as an error — no warning can go unnoticed again.
       - name: Lint (eslint flat config; errors AND warnings fail via --max-warnings=0)
         run: npm run lint
-      - name: Unit tests (vitest)
-        run: npm test
       - name: Build (includes typecheck)
         run: npm run build
+
+  # The complete suite currently contains 1,100+ files. Vitest's native
+  # deterministic sharding preserves its normal process/file isolation while
+  # cutting the required gate's critical path; every file belongs to exactly
+  # one shard. Do not use the tempting `vmThreads` pool here: a measured full
+  # run failed before collection because jsdom/undici's ReadableStream global
+  # is unavailable in that VM context.
+  frontend-tests:
+    name: frontend tests (shard ${{ matrix.shard }}/3)
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Unit tests (vitest shard ${{ matrix.shard }}/3)
+        run: npm test -- --shard=${{ matrix.shard }}/3
+
+  # Branch protection pins the literal `frontend` context. Keep that stable
+  # and make it an explicit fail-closed aggregate: `always()` ensures this job
+  # runs even when a prerequisite fails, and the script turns any failed,
+  # cancelled, or skipped prerequisite into a red required check.
+  frontend:
+    if: >-
+      always() &&
+      (github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false))
+    needs: [frontend-static, frontend-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require static checks and every test shard
+        env:
+          STATIC_RESULT: ${{ needs.frontend-static.result }}
+          TEST_RESULT: ${{ needs.frontend-tests.result }}
+        run: |
+          echo "frontend-static: $STATIC_RESULT"
+          echo "frontend-tests: $TEST_RESULT"
+          if [[ "$STATIC_RESULT" != "success" || "$TEST_RESULT" != "success" ]]; then
+            echo "Frontend gate failed because at least one prerequisite did not succeed."
+            exit 1
+          fi
 
   # Draft PRs get static integration checks without paying for the complete
   # backend matrix or 1,100+ file frontend suite. `ready_for_review` is an
@@ -184,7 +239,7 @@ jobs:
 
   # ROBUSTNESS_PLAN #1: on 2026-07-29 a clean checkout failed 176 frontend
   # tests across 22 files under Node 26 while this workflow stayed green the
-  # whole time, because `frontend` above only ever runs the one pinned Node
+  # whole time, because `frontend-tests` above only ever runs the one pinned Node
   # version. This job re-runs the same steps against the latest Node release
   # on main, weekly, and on demand so runtime-version drift remains visible
   # without duplicating the complete suite on every PR. Deliberately a
@@ -205,7 +260,7 @@ jobs:
   # class this repo has actually seen.
   #
   # Lint and build are NOT repeated here (cut 2026-09-03 as a CI wall-clock
-  # trim): both are already covered by the `frontend` job above on the
+  # trim): both are already covered by the `frontend-static` job above on the
   # pinned Node version, and neither is Node-version-sensitive the way the
   # 2026-07-29 vitest break was (a runtime global vitest picked up). Only
   # the unit-test run — the actual Node-version-sensitive check this job
