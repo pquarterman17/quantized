@@ -51,8 +51,8 @@ function scaledLabels(splits: readonly (number | null)[]): (string | null)[] | n
 export function logDecadeLabels(splits: readonly (number | null)[]): (string | null)[] | null {
   if (!spansDecade(splits)) return scaledLabels(splits);
   return splits.map((v) => {
-    if (v == null || !(v > 0) || !Number.isFinite(v)) return null;
-    const k = decadeOf(v);
+    if (!positiveOf([v]).length) return null;
+    const k = decadeOf(v!);
     if (k === null) return "";
     if (k === 0 || k === 1) return `${10 ** k}`;
     return tenTo(k);

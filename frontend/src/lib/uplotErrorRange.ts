@@ -57,12 +57,11 @@ export function errorReach(
   return out.length ? out : null;
 }
 
-/** Widen [min, max] by `e`'s ends over rows [r0, r1] (positive values only on
- *  a log/reciprocal scale). */
-function widen(e: BarEnds, min: number, max: number, r0: number, r1: number, positiveOnly: boolean): [number, number] {
+/** Widen [min, max] by `e`'s ends over rows [r0, r1], skipping ends <= `floor`. */
+function widen(e: BarEnds, min: number, max: number, r0: number, r1: number, floor: number): [number, number] {
   for (let r = r0; r <= Math.min(r1, e.rows.length - 1); r++) {
     for (const v of e.rows[r]) {
-      if (positiveOnly && v <= 0) continue;
+      if (v <= floor) continue;
       min = Math.min(min, v);
       max = Math.max(max, v);
     }
@@ -90,6 +89,12 @@ function uplotDefault(u: uPlot, min: number, max: number, key: string, isX: bool
   return isX ? [min, max] : statics.rangeNum(min, max, 0.1, true);
 }
 
+/** The lowest bar end a log/reciprocal autoscale counts: two decades below
+ *  the lowest point. A lower end <= 0 or near zero (sR ~ R on low-count
+ *  reflectivity) would stretch the axis many decades; it runs to the floor
+ *  instead. `calc/figure_autoscale.py` applies the same rule to the export. */
+const barFloor = (min: number, positiveOnly: boolean) => (positiveOnly ? min / 100 : -Infinity);
+
 /** The `range` prop for an auto-scaled X (`on` "x") or Y axis (0 = y, 1 = y2)
  *  that no fixed limit or loop scan already ranges: {} without bars on it, so
  *  the scale is exactly uPlot's own. X spans every row; Y the rows uPlot
@@ -103,11 +108,12 @@ export function errorRange(reach: BarEnds[] | null, on: "x" | 0 | 1, positiveOnl
       const xs = u.data[0];
       if (min == null) return [null, null];
       if (isX && (min !== xs[0] || max !== xs[xs.length - 1])) return uplotDefault(u, min, max, key, isX);
+      const floor = barFloor(min, positiveOnly);
       for (const e of ends) {
         const s = u.series[e.series + 1];
         if (s?.show === false) continue;
         const [i0, i1] = (!isX && s?.idxs) || [0, Infinity];
-        [min, max] = widen(e, min, max, i0, i1, positiveOnly);
+        [min, max] = widen(e, min, max, i0, i1, floor);
       }
       return uplotDefault(u, min, max, key, isX);
     },
@@ -149,11 +155,13 @@ export function fullYExtents(
       if (v > max) max = v;
     }
   });
+  const floor = barFloor(min, positiveOnly);
   for (const e of reach ?? []) {
-    if (e.on === axis && !hidden?.[e.series]) [min, max] = widen(e, min, max, 0, Infinity, positiveOnly);
+    if (e.on === axis && !hidden?.[e.series]) [min, max] = widen(e, min, max, 0, Infinity, floor);
   }
   if (min > max) return null;
   if (positiveOnly) return [min / 1.1, max * 1.1];
   const pad = (max - min || Math.abs(max) || 1) * 0.1; // mirror uPlot's soft pad
-  return [min - pad, max + pad];
+  // ...and its soft zero: data on one side of zero never pad across it.
+  return [min < 0 ? min - pad : Math.max(0, min - pad), max >= 0 ? max + pad : Math.min(0, max + pad)];
 }
