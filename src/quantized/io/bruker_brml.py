@@ -42,6 +42,10 @@ from quantized.io.base import CORRUPT_ARCHIVE_ERRORS
 __all__ = ["import_bruker_brml", "is_bruker_brml"]
 
 _UNIT_MAP = {"°": "deg", "deg": "deg", "Degree": "deg", "": ""}
+# DIFFRAC names the detector axis "2Theta" / "TwoTheta"; every other XRD parser
+# (xrdml, Rigaku/Bruker .raw, XRD CSV) says "2-Theta", so a BRML scan's x title
+# and overlays with those files agree. ``scan_axes`` keeps the vendor names.
+_AXIS_NAMES = {"2theta": "2-Theta", "twotheta": "2-Theta"}
 
 # Hostile-input bound (security audit 2026-10-01): the scan XML is read whole,
 # and deflate packs ~1000:1, so a 1.5 MB .brml can expand to gigabytes. A real
@@ -183,6 +187,7 @@ def import_bruker_brml(filepath: str | Path) -> DataStruct:
         raise ValueError(f"no scan axis in scan document: {path.name}")
     primary = axes[0]
     axis_name = primary.get("VisibleName") or primary.get("AxisName") or "2-Theta"
+    axis_name = _AXIS_NAMES.get(axis_name.lower(), axis_name)
     axis_unit = _UNIT_MAP.get(primary.get("Unit", ""), primary.get("Unit", "") or "")
     x_lo, x_hi = _axis_range(primary)
 
