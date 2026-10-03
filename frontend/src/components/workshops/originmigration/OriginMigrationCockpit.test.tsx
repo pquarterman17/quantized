@@ -1,10 +1,17 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset, OriginFigure } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { loadOriginApplyLibs } from "../../../store/originApplyLibs";
 import OriginMigrationCockpit from "./OriginMigrationCockpit";
 import { clearOriginReviewDeferred } from "../../../lib/workflowWorkspace";
+
+const applyOriginFigure = useApp.getState().applyOriginFigure;
+
+beforeAll(async () => {
+  await loadOriginApplyLibs();
+});
 
 function dataset(): Dataset {
   return {
@@ -110,6 +117,39 @@ describe("OriginMigrationCockpit", () => {
     expect(screen.getByText("Review later", { selector: ".qz-badge" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Return to review" }));
     expect(screen.queryByText("Review later", { selector: ".qz-badge" })).not.toBeInTheDocument();
+  });
+
+  it("keeps existing review-later marks when another Origin import is appended", async () => {
+    const manifest = { version: 1 as const, container: "opj" as const, status: "best_effort" as const, graph_records_total: 1, graph_records_actionable: 1, graph_records_filtered: 0, omissions: [], filtered_figures: [] };
+    const first = { id: "f1", stem: "sample", siblingIds: ["d1"], manifest };
+    useApp.setState({
+      datasets: [dataset()],
+      originFidelity: [first],
+      originFigures: [{ id: "bad", stem: "sample", siblingIds: ["d1"], datasetId: null, figure: figure("Broken", "Missing") }],
+    });
+    const { unmount } = render(<OriginMigrationCockpit onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Review later" }));
+    unmount();
+    act(() => useApp.setState({
+      originFidelity: [first, { ...first, id: "f2", stem: "second" }],
+    }));
+    render(<OriginMigrationCockpit initialFidelityId="f1" onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Review later", { selector: ".qz-badge" })).toBeInTheDocument());
+  });
+
+  it("opens an editable Origin graph into the visible Plot stage from Workflow", () => {
+    const ds = dataset();
+    useApp.setState({
+      datasets: [ds], activeId: "d1", stageTab: "technique", applyOriginFigure,
+      originFidelity: [{
+        id: "f1", stem: "sample", siblingIds: ["d1"],
+        manifest: { version: 1, container: "opj", status: "best_effort", graph_records_total: 1, graph_records_actionable: 1, graph_records_filtered: 0, omissions: [], filtered_figures: [] },
+      }],
+      originFigures: [{ id: "open-me", stem: "sample", siblingIds: ["d1"], datasetId: "d1", figure: figure("Editable", "Book1", "best_effort") }],
+    });
+    render(<OriginMigrationCockpit initialFidelityId="f1" onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open editable graph" }));
+    expect(useApp.getState().stageTab).toBe("plot");
   });
 
   it("clears review-later marks when the Origin project collection is replaced", async () => {

@@ -233,4 +233,41 @@ describe("Origin figure fallbacks", () => {
       mark: "line",
     });
   });
+
+  it("finds a layer family's canonical overlay when remaking a later multi-X layer", async () => {
+    const multiX: Dataset = {
+      id: "mx-family", name: "Moke:Book2",
+      data: {
+        time: [10, 20],
+        values: [[1, 30, 3, 50, 5], [2, 40, 4, 60, 6]],
+        labels: ["B", "E", "H", "I", "L"], units: ["", "Oe", "", "Oe", ""],
+        metadata: { origin_book: "Book2", x_column_name: "A", origin_column_names: ["B", "E", "H", "I", "L"] },
+      },
+    };
+    const layer1 = { ...figure, name: "Graph family", layer: 1 };
+    const layer2: OriginFigure = {
+      ...figure, name: "Graph family", layer: 2, n_curves: 3,
+      curves: [
+        { book: "Book2", x: "A", y: "B", style: "line_symbol" },
+        { book: "Book2", x: "E", y: "H", style: "line_symbol" },
+        { book: "Book2", x: "I", y: "L", style: "line_symbol" },
+      ],
+    };
+    useApp.setState({
+      datasets: [multiX],
+      originFigures: [
+        { id: "family-l1", stem: "Moke", figure: layer1, datasetId: "mx-family", siblingIds: ["mx-family"] },
+        { id: "family-l2", stem: "Moke", figure: layer2, datasetId: "mx-family", siblingIds: ["mx-family"] },
+      ],
+    });
+
+    await useApp.getState().remakeOriginFigure("family-l2");
+
+    const state = useApp.getState();
+    const overlay = state.datasets.find((ds) => ds.data.metadata?.origin_overlay_source === "family-l1");
+    expect(overlay).toBeDefined();
+    expect(state.graphBuilderSeed?.zones.y).toEqual(
+      [0, 1, 2].map((channel) => ({ datasetId: overlay!.id, channel })),
+    );
+  });
 });

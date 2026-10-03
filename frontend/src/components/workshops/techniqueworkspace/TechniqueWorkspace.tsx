@@ -49,7 +49,7 @@ function ActionButton({ action, disabled, title, onRun }: { action: Pick<Action,
 export default function TechniqueWorkspace({ onClose }: { onClose: () => void }) {
   const workspaceView = useWorkflowWorkspaceView();
   if (workspaceView.kind === "origin") {
-    return <OriginMigrationCockpit initialFidelityId={workspaceView.fidelityId} onClose={onClose} />;
+    return <OriginMigrationCockpit key={workspaceView.requestId} initialFidelityId={workspaceView.fidelityId} onClose={onClose} />;
   }
   return <TechniqueWorkspaceContent onClose={onClose} />;
 }

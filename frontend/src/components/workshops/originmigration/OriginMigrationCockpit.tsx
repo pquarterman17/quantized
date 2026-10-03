@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useEscapeSurface } from "../../../lib/escapeStack";
 import { originFidelityLabel, originFidelityStatusLabel } from "../../../lib/originFidelity";
@@ -137,7 +137,6 @@ export default function OriginMigrationCockpit({
   const [filter, setFilter] = useState<Filter>("attention");
   const [issueGroupId, setIssueGroupId] = useState<string | null>(null);
   const deferred = useOriginReviewDeferred();
-  const appliedInitialId = useRef<string | undefined>(undefined);
   const selected = projects.find((project) => project.fidelity.id === selectedId) ?? projects[0];
 
   useEffect(() => syncOriginReviewScope(fidelityEntries), [fidelityEntries]);
@@ -145,20 +144,6 @@ export default function OriginMigrationCockpit({
   useEffect(() => {
     if (selected && selected.fidelity.id !== selectedId) setSelectedId(selected.fidelity.id);
   }, [selected, selectedId]);
-
-  useEffect(() => {
-    if (!initialFidelityId) {
-      appliedInitialId.current = undefined;
-      return;
-    }
-    if (
-      initialFidelityId !== appliedInitialId.current &&
-      projects.some((project) => project.fidelity.id === initialFidelityId)
-    ) {
-      appliedInitialId.current = initialFidelityId;
-      setSelectedId(initialFidelityId);
-    }
-  }, [initialFidelityId, projects]);
 
   useEscapeSurface("workspace", () => {
     onClose();

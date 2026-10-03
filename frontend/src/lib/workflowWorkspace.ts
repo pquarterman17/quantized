@@ -2,11 +2,12 @@ import { useSyncExternalStore } from "react";
 
 export type WorkflowWorkspaceView =
   | { kind: "technique" }
-  | { kind: "origin"; fidelityId?: string };
+  | { kind: "origin"; fidelityId?: string; requestId: number };
 
 let view: WorkflowWorkspaceView = { kind: "technique" };
 let deferredOriginReviews: ReadonlySet<string> = new Set();
-let originReviewScope: readonly unknown[] | null = null;
+let originReviewScope: ReadonlyMap<string, unknown> | null = null;
+let originReviewRequestId = 0;
 const listeners = new Set<() => void>();
 
 function subscribe(listener: () => void): () => void {
@@ -27,7 +28,7 @@ function setView(next: WorkflowWorkspaceView): void {
  * does not enter the workspace file: opening an Origin review must not dirty
  * scientific data or persist a stale import id into a different project. */
 export function openOriginMigrationReview(fidelityId?: string): void {
-  setView({ kind: "origin", fidelityId });
+  setView({ kind: "origin", fidelityId, requestId: ++originReviewRequestId });
 }
 
 export function openTechniqueWorkflow(): void {
@@ -57,18 +58,28 @@ export function clearOriginReviewDeferred(): void {
   listeners.forEach((listener) => listener());
 }
 
-/** Reset session-only review marks when the workspace's Origin-import
- * collection is replaced. The array identity remains stable across ordinary
- * dataset/figure edits and unmounts, but load/clear/import replacement mints
- * a new collection, preventing stale keys from leaking into another project. */
-export function syncOriginReviewScope(scope: readonly unknown[]): void {
+/** Keep marks for import records that survive an append, and discard only
+ * records actually replaced/removed. Array identity alone changes when a
+ * second Origin project is imported and must not erase the first project's
+ * session review work. */
+export function syncOriginReviewScope(scope: readonly { id: string }[]): void {
+  const nextScope = new Map(scope.map((entry) => [entry.id, entry]));
   if (originReviewScope === null) {
-    originReviewScope = scope;
+    originReviewScope = nextScope;
     return;
   }
-  if (originReviewScope === scope) return;
-  originReviewScope = scope;
-  clearOriginReviewDeferred();
+  const retained = new Set(
+    [...deferredOriginReviews].filter((key) => {
+      const separator = key.indexOf(":");
+      if (separator < 0) return false;
+      const fidelityId = key.slice(0, separator);
+      return nextScope.get(fidelityId) === originReviewScope?.get(fidelityId);
+    }),
+  );
+  originReviewScope = nextScope;
+  if (retained.size === deferredOriginReviews.size) return;
+  deferredOriginReviews = retained;
+  listeners.forEach((listener) => listener());
 }
 
 export function useOriginReviewDeferred(): ReadonlySet<string> {
