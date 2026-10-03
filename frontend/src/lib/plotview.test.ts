@@ -22,7 +22,6 @@ import {
   nextLinkGroup,
   nextPlotBg,
   sanitizePlotView,
-  sanitizePlotWindows,
   scaleFromLog,
   snapshotView,
   tileLayout,
@@ -31,6 +30,7 @@ import {
   type PlotView,
   type PlotWindow,
 } from "./plotview";
+import { sanitizePlotWindows } from "./plotWindows";
 
 describe("defaultPlotView", () => {
   it("matches the store's own initial singleton-field values", () => {
