@@ -127,7 +127,7 @@ def _resolve_names(tokens: list[list[str]], header_line: int | None, n_cols: int
 
 
 def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
-    lines = text.splitlines()
+    lines = text.removeprefix("\ufeff").splitlines()  # a BOM is not cell text
     delim = _resolve_delim(lines, settings.delimiter)
     tokens = [_split(ln, delim) for ln in lines]
     ds = max(0, settings.data_start_line)

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 
-__all__ = ["csv_text_cell", "neutralize_formula", "safe_comment_line"]
+__all__ = ["csv_text_cell", "neutralize_formula", "safe_comment_line", "with_excel_bom"]
 
 _TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
 _NUMBER = re.compile(r"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
@@ -56,3 +56,15 @@ def safe_comment_line(line: str, sep: str = ",") -> str:
     for part in parts[1:]:
         safe.append("'" + part if part.startswith('"') else neutralize_formula(part))
     return sep.join(safe)
+
+
+def with_excel_bom(text: str) -> str:
+    """``text`` with a UTF-8 BOM in front when it holds a non-ASCII character.
+
+    Excel on Windows reads a BOM-less CSV in the ANSI code page, which garbles
+    ``Å``, ``⁻¹`` and ``µ``. ASCII-only text is returned unchanged, so plain
+    exports (and the MATLAB goldens) stay byte-identical; a BOM already there
+    is not doubled. Every in-repo reader drops a leading BOM."""
+    if text.startswith("﻿") or text.isascii():
+        return text
+    return "﻿" + text

@@ -215,7 +215,7 @@ class ImportSettings:
 
 def guess_settings(text: str) -> ImportSettings:
     """Best-effort starting settings for ``text`` (the wizard's initial state)."""
-    lines = text.splitlines()
+    lines = text.removeprefix("\ufeff").splitlines()  # a BOM is not cell text
     delim = _resolve_delim(lines, "auto")
     tokens = [_split(ln, delim) for ln in lines]
     scored = _scoring_rows(text, tokens, delim)

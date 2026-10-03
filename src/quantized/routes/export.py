@@ -4,7 +4,8 @@ Wraps data exporters: ``io.xrd_csv`` (pure in-memory text), ``io.hdf5``
 (writes a binary file; staged in temp dir), and ``io.origin`` (LabTalk scripts
 for Origin). No formatting logic here — writers own it. Figure rendering is
 in ``routes.export_figures``. Filenames are sanitized before the
-Content-Disposition header.
+Content-Disposition header. A CSV carries a UTF-8 BOM when it holds non-ASCII
+text (``csv_safe.with_excel_bom``) so Excel on Windows reads Å/⁻¹/µ.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
+from quantized.csv_safe import with_excel_bom
 from quantized.datastruct import DataStruct
 from quantized.io.consolidated import consolidate_csv
 from quantized.io.hdf5 import write_hdf5
@@ -63,7 +65,7 @@ def export_xrd_csv(req: XrdCsvRequest) -> Response:
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
-        content=text,
+        content=with_excel_bom(text),
         media_type="text/csv",
         headers=_attachment(_safe_name(req.filename, ".csv")),
     )
@@ -175,7 +177,7 @@ def export_origin(req: OriginRequest) -> Response:
     buf = BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr(f"{stem}.ogs", ogs_text)
-        zf.writestr(csv_name, csv_text)
+        zf.writestr(csv_name, with_excel_bom(csv_text))
     return Response(
         content=buf.getvalue(),
         media_type="application/zip",
@@ -192,7 +194,7 @@ def export_consolidated(req: ConsolidatedRequest) -> Response:
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
-        content=text,
+        content=with_excel_bom(text),
         media_type="text/csv",
         headers=_attachment(_safe_name(req.filename, ".csv")),
     )
@@ -242,7 +244,7 @@ def export_origin_project(req: OpjRequest) -> Response:
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr(f"{stem}.ogs", ogs_text)
         for csv_name, csv_text in csvs:
-            zf.writestr(csv_name, csv_text)
+            zf.writestr(csv_name, with_excel_bom(csv_text))
     return Response(
         content=buf.getvalue(),
         media_type="application/zip",
