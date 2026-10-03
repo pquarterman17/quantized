@@ -619,8 +619,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       // screen and export disagree.
       seriesLabels: labelList,
       seriesStyles: styleList,
-      errorBars: errorBarsList,
-      errorSpans: active?.errorRoles?.length ? payload.channels.map((ch) => buildErrorSpans(active.data, [ch], active.errorRoles!)) : [], // as the flat plot
+      errorBars: errorBarsList, errorSpans: active?.errorRoles?.length ? payload.channels.map((ch) => buildErrorSpans(active.data, [ch], active.errorRoles!)) : [], // spans as the flat plot
       syncKey,
       // Propagate an x-zoom on one panel to all the others.
       onSetScale: xZoomSyncHook(() => plotsRef.current),
