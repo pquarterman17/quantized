@@ -156,7 +156,8 @@ describe("the magnifier inset's placement and outline", () => {
     expect(Number(outline.getAttribute("x"))).toBeCloseTo(50 + 66.667, 2);
     expect(Number(outline.getAttribute("width"))).toBeCloseTo(133.333, 2);
     expect(Number(outline.getAttribute("y"))).toBeCloseTo(20 + 166.667, 2);
-    const shown = [...svg.querySelectorAll("line")].filter((l) => l.getAttribute("display") !== "none");
+    const wires = screen.getByTestId("inset-connectors");
+    const shown = [...wires.querySelectorAll("line")].filter((l) => l.getAttribute("display") !== "none");
     expect(shown).toHaveLength(2);
   });
 

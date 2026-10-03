@@ -83,7 +83,8 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, plotR
   const recordHistory = useApp((s) => s.recordHistory);
   const boxRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null); // the source outline, under the inset
+  const wireRef = useRef<SVGSVGElement>(null); // the connectors, over its chrome (to its plot area)
   const plotRef = useRef<uPlot | null>(null);
   const savedRef = useRef(saved);
   const atRef = useRef<InsetView["at"]>(clampAt(saved?.at));
@@ -207,6 +208,7 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, plotR
         if (last !== "corner") box.style.cssText += `;${CORNER_STYLE}`;
         last = "corner";
         svgRef.current?.setAttribute("display", "none");
+        wireRef.current?.setAttribute("display", "none");
         return;
       }
       const sr = stage.getBoundingClientRect();
@@ -227,8 +229,10 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, plotR
       last = key;
       Object.assign(box.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`, right: "auto", bottom: "auto" });
       const svg = svgRef.current;
-      if (!svg || !src) return;
+      const wire = wireRef.current;
+      if (!svg || !wire || !src) return;
       svg.removeAttribute("display");
+      wire.removeAttribute("display");
       const ind = insetIndicator(frame, [src[0] + frame.left, src[1] + frame.top, src[2] + frame.left, src[3] + frame.top], atRef.current, linesRef.current);
       const [clip, rect] = svg.querySelectorAll("rect");
       for (const [el, v] of [[clip, frame], [rect, ind.rect]] as const) {
@@ -237,7 +241,7 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, plotR
         el.setAttribute("width", String(Math.max(0, v.width)));
         el.setAttribute("height", String(Math.max(0, v.height)));
       }
-      svg.querySelectorAll("line").forEach((ln, i) => {
+      wire.querySelectorAll("line").forEach((ln, i) => {
         const sgm = ind.segments[i];
         ln.setAttribute("display", sgm ? "inline" : "none");
         if (sgm) ["x1", "y1", "x2", "y2"].forEach((a, k) => ln.setAttribute(a, String(sgm[k])));
@@ -273,14 +277,14 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, plotR
   // The plot's dimmed axis ink, as the inset's own axes (themed like it, `theme` above).
   const stroke = resolvePlotBg().inkDimColor;
 
+  const layer = { position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" } as const;
+  const ink = { stroke, strokeWidth: 1, opacity: 0.75 };
+
   return (
     <>
-      <svg ref={svgRef} aria-hidden="true" display="none" data-testid="inset-indicator"
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" }}>
+      <svg ref={svgRef} aria-hidden="true" display="none" data-testid="inset-indicator" style={layer}>
         <defs><clipPath id={clipId}><rect /></clipPath></defs>
-        <rect clipPath={`url(#${clipId})`} fill="none" stroke={stroke} strokeWidth={1} opacity={0.75} />
-        <line stroke={stroke} strokeWidth={1} opacity={0.75} display="none" />
-        <line stroke={stroke} strokeWidth={1} opacity={0.75} display="none" />
+        <rect clipPath={`url(#${clipId})`} fill="none" {...ink} />
       </svg>
       <div ref={boxRef} className="qzk-glass" data-testid="inset-box"
         style={{ position: "absolute", right: 14, bottom: 14, width: 280, height: 168, padding: 6 }}>
@@ -306,6 +310,11 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, plotR
             style={{ position: "absolute", right: 0, bottom: 0, width: 10, height: 10 }} />
         )}
       </div>
+      {/* Over the box: a connector ends on the inset's PLOT AREA, across its tick labels, as exported. */}
+      <svg ref={wireRef} aria-hidden="true" display="none" data-testid="inset-connectors" style={layer}>
+        <line {...ink} display="none" />
+        <line {...ink} display="none" />
+      </svg>
     </>
   );
 }

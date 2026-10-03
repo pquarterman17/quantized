@@ -159,6 +159,21 @@ describe("runSendFigureToReportCommand — the spec IS the Export figure… spec
     expect(Number.isNaN(values[1][1])).toBe(true);
   });
 
+  // Plot audit leftovers: the magnifier inset rides the request, so a sent
+  // figure carries it exactly as Export figure… does (no screen-only notice).
+  it("a magnifier inset rides the sent spec", async () => {
+    const inset = { x: [0.5, 1.5] as [number, number], y: [1, 20] as [number, number], yZoom: true, at: [0.5, 0.1, 0.4, 0.3] as [number, number, number, number], lines: true };
+    useApp.setState({ insetMode: true, inset });
+    vi.mocked(askParams).mockResolvedValueOnce(sendParams());
+    await runSendFigureToReportCommand(useApp.getState);
+    const [block] = figureBlocks(useApp.getState().reports[0].id);
+    expect((block.spec?.overrides as { inset?: unknown } | undefined)?.inset).toEqual({
+      x: [0.5, 1.5], y: [1, 20], at: [0.5, 0.1, 0.4, 0.3], lines: true,
+    });
+    expect(wire(block.spec)).toEqual(await exportBodyFor("svg", "aps", true));
+    useApp.setState({ insetMode: false, inset: null });
+  });
+
   it("canonical-document route (focused grouped window): block.spec equals the export body", async () => {
     useApp.setState({ yKeys: [0], groupKey: 1 });
     const document = createFigureDocument({
