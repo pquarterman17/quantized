@@ -43,7 +43,7 @@ beforeEach(() => {
     plotRecipes: [recipe],
     selectedIds: ["target"],
     activeId: "target",
-    librarySelection: { kind: "dataset", id: "target" },
+    librarySelection: null,
     editableFigures: [],
     pages: [],
     figurePageOpen: false,
