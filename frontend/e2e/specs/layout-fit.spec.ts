@@ -212,6 +212,40 @@ test("the data-cursor readout stays inside the plot frame @core", async ({ page 
   }
 });
 
+// Round-4 chrome audit: the ∫ / ∩ result chips sat at the STAGE's bottom
+// centre, on the x-axis title, and (each chip being .qzk-glass, i.e.
+// absolute) piled up on each other instead of stacking.
+test("the ∫ and ∩ result chips stack inside the plot frame", async ({ page }) => {
+  await plotFile(page, "two-peaks.csv");
+  const over = page.locator(".qzk-stage .u-over");
+  const f = await rectOf(over);
+  for (const tool of ["integ", "fwhm"]) {
+    await page.evaluate(
+      (t) =>
+        (window as unknown as { __qz: { useApp: { getState: () => { setPlotTool: (t: string) => void } } } }).__qz.useApp
+          .getState()
+          .setPlotTool(t),
+      tool,
+    );
+    await page.mouse.move(f.left + f.width * 0.2, f.top + f.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(f.left + f.width * 0.45, f.top + f.height / 2, { steps: 6 });
+    await page.mouse.up();
+  }
+  const chips = page.locator(".qzk-result-chips > .qzk-result-chip");
+  await expect(chips).toHaveCount(2);
+  for (const size of SIZES) {
+    await page.setViewportSize(size);
+    await expect
+      .poll(async () => {
+        const [a, b, fr] = await Promise.all([rectOf(chips.nth(0)), rectOf(chips.nth(1)), rectOf(over)]);
+        const inFrame = (r: DOMRect) => r.left >= fr.left - 0.5 && r.right <= fr.right + 0.5 && r.bottom <= fr.bottom + 0.5;
+        return inFrame(a) && inFrame(b) && !overlaps(a, b);
+      }, { message: `result chips at ${size.width}x${size.height}` })
+      .toBe(true);
+  }
+});
+
 type QzHarness = { __qz: { useApp: { setState: (s: object) => void } } };
 
 // Round-4 chrome audit: the import toast sat bottom-centre of the WINDOW,

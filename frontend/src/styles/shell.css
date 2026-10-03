@@ -786,8 +786,12 @@ body {
 .qzk-stage[data-rc^="n"] > .qzk-readout { bottom: auto; top: calc(var(--qz-frame-top, 0px) + 8px); }
 /* On-plot analysis result chips (∫ Integrate / ∩ FWHM) — stack bottom-center,
    newest on top. The container is click-through; each chip re-enables pointers. */
-.qzk-result-chips { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column-reverse; align-items: center; gap: 6px; pointer-events: none; }
-.qzk-result-chip { pointer-events: auto; display: flex; align-items: center; gap: 7px; padding: 3px 5px 3px 10px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--accent-text); }
+/* Chrome audit round 4: the stack sat at the STAGE's bottom centre, i.e. on the
+   x-axis title; it now sits at the bottom centre inside the plot frame (the
+   --qz-frame-* vars; without them, the stage's bottom centre as before). Each
+   chip is in the flow (.qzk-glass is absolute), or the stack piles up on itself. */
+.qzk-result-chips { position: absolute; bottom: calc(100% - var(--qz-frame-top, 0px) - var(--qz-frame-height, 100%) + 8px); left: calc(var(--qz-frame-left, 0px) + var(--qz-frame-width, 100%) / 2); max-width: calc(var(--qz-frame-width, 100%) - 16px); transform: translateX(-50%); display: flex; flex-direction: column-reverse; align-items: center; gap: 6px; pointer-events: none; }
+.qzk-result-chip { position: relative; max-width: 100%; flex-wrap: wrap; pointer-events: auto; display: flex; align-items: center; gap: 7px; padding: 3px 5px 3px 10px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--accent-text); }
 .qzk-result-chip .g { color: var(--accent); font-size: 14px; }
 .qzk-result-chip .v { color: var(--accent-text); }
 .qzk-result-chip .lbl { color: var(--text-faint); }
@@ -827,7 +831,7 @@ body {
 /* Gadget chip (#33 fit → #34 the ROI gadget family: integrate/stats/
    differentiate/fft/cursors) is richer than ∫/∩ (mode + model pickers +
    results + actions), so it wraps instead of forcing one long unreadable row. */
-.qzk-gadget-chip { flex-wrap: wrap; max-width: min(92vw, 560px); padding: 5px 6px 5px 10px; gap: 6px; }
+.qzk-gadget-chip { flex-wrap: wrap; max-width: min(100%, 560px); padding: 5px 6px 5px 10px; gap: 6px; }
 .qzk-gadget-chip .qz-select { font-size: var(--font-size-sm); padding: 2px 6px; }
 .qzk-legend { padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
 .qzk-legend-content { display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; gap: 4px; overflow: auto; }
