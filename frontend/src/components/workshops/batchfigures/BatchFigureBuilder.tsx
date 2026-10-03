@@ -3,6 +3,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BUILTIN_PLOT_RECIPES } from "../../../lib/builtinPlotRecipes";
 import { downloadBatchFigures, MAX_BATCH_FIGURE_EXPORT } from "../../../lib/batchFigureExport";
 import { ghosterFor } from "../../../lib/excludedRowsExport";
+import {
+  BATCH_ALL_WORKBOOKS,
+  BATCH_LOOSE_WORKSHEETS,
+  filterBatchDatasets,
+  setShownBatchSelection,
+} from "../../../lib/batchFigureSelection";
+import { folderPathLabel } from "../../../lib/foldertree";
 import type { PlotRecipe } from "../../../lib/plotRecipeSchema";
 import { runSequentialBatch, type BatchProgress } from "../../../lib/sequentialBatch";
 import { nextFigureId } from "../../../store/figureLifecycle";
@@ -61,6 +68,8 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
   }, []);
   const choices = useMemo(() => recipeChoices(projectRecipes, globalRecipes), [projectRecipes, globalRecipes]);
   const [datasetIds, setDatasetIds] = useState<string[]>(initialIds);
+  const [datasetQuery, setDatasetQuery] = useState("");
+  const [workbookScope, setWorkbookScope] = useState(BATCH_ALL_WORKBOOKS);
   const [recipeKey, setRecipeKey] = useState(choices[0]?.key ?? "");
   const [rows, setRows] = useState<BatchFigureRow[]>([]);
   const [includedIds, setIncludedIds] = useState<Set<string>>(new Set());
@@ -81,12 +90,30 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
   useEffect(() => hydrateGlobal(), [hydrateGlobal]);
   useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => {
+    if (
+      workbookScope !== BATCH_ALL_WORKBOOKS &&
+      workbookScope !== BATCH_LOOSE_WORKSHEETS &&
+      !workbooks.some((workbook) => workbook.id === workbookScope)
+    ) setWorkbookScope(BATCH_ALL_WORKBOOKS);
+  }, [workbooks, workbookScope]);
+  useEffect(() => {
     if (!choices.some((choice) => choice.key === recipeKey)) setRecipeKey(choices[0]?.key ?? "");
   }, [choices, recipeKey]);
 
   const recipeChoice = choices.find((choice) => choice.key === recipeKey) ?? null;
   const selectedSet = useMemo(() => new Set(datasetIds), [datasetIds]);
-  const workbookNames = useMemo(() => new Map(workbooks.map((workbook) => [workbook.id, workbook.name])), [workbooks]);
+  const workbookById = useMemo(() => new Map(workbooks.map((workbook) => [workbook.id, workbook])), [workbooks]);
+  const workbookCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const dataset of datasets) {
+      if (dataset.workbookId) counts.set(dataset.workbookId, (counts.get(dataset.workbookId) ?? 0) + 1);
+    }
+    return counts;
+  }, [datasets]);
+  const visibleDatasets = useMemo(
+    () => filterBatchDatasets({ datasets, workbooks, folders, workbookScope, query: datasetQuery }),
+    [datasets, workbooks, folders, workbookScope, datasetQuery],
+  );
   const busy = phase === "checking" || phase === "creating";
 
   const invalidate = () => {
@@ -259,19 +286,47 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
       {choices.length === 0 && <div style={{ color: "var(--danger)" }}>No Plot Recipes are available. Save one from a plot first.</div>}
 
       <div className="qzk-win-section">Datasets</div>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(180px, 0.7fr)", gap: 8 }}>
+        <input
+          className="qz-input"
+          aria-label="Search batch datasets"
+          placeholder="Search worksheet, workbook, folder, tag, or column…"
+          value={datasetQuery}
+          disabled={busy}
+          onChange={(event) => setDatasetQuery(event.target.value)}
+        />
+        <Select
+          aria-label="Limit batch datasets to workbook"
+          value={workbookScope}
+          disabled={busy}
+          onChange={(event) => setWorkbookScope(event.target.value)}
+          options={[
+            { value: BATCH_ALL_WORKBOOKS, label: "All workbooks" },
+            ...workbooks.map((workbook) => ({
+              value: workbook.id,
+              label: `${workbook.name} (${workbookCounts.get(workbook.id) ?? 0})`,
+            })),
+            ...(datasets.some((dataset) => !dataset.workbookId) ? [{ value: BATCH_LOOSE_WORKSHEETS, label: "Loose worksheets" }] : []),
+          ]}
+        />
+      </div>
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-        <Button size="sm" disabled={busy} onClick={() => { setDatasetIds(datasets.map((dataset) => dataset.id)); invalidate(); }}>Select all</Button>
-        <Button size="sm" disabled={busy || datasetIds.length === 0} onClick={() => { setDatasetIds([]); invalidate(); }}>Clear</Button>
-        <span className="qzk-ds-meta">{datasetIds.length} of {datasets.length} selected</span>
+        <Button size="sm" disabled={busy || visibleDatasets.length === 0} onClick={() => { setDatasetIds((current) => setShownBatchSelection(current, visibleDatasets, true)); invalidate(); }}>Select shown</Button>
+        <Button size="sm" disabled={busy || !visibleDatasets.some((dataset) => selectedSet.has(dataset.id))} onClick={() => { setDatasetIds((current) => setShownBatchSelection(current, visibleDatasets, false)); invalidate(); }}>Clear shown</Button>
+        <span className="qzk-ds-meta">{visibleDatasets.length} shown · {datasetIds.length} of {datasets.length} selected</span>
       </div>
       <div role="group" aria-label="Datasets to build" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 4, maxHeight: 170, overflowY: "auto", padding: 6, border: "1px solid var(--border-soft)", borderRadius: 6 }}>
-        {datasets.map((dataset) => (
+        {visibleDatasets.map((dataset) => {
+          const workbook = dataset.workbookId ? workbookById.get(dataset.workbookId) : undefined;
+          const folder = folderPathLabel(folders, workbook?.folderId ?? dataset.folderId ?? null);
+          return (
           <Checkbox key={dataset.id} checked={selectedSet.has(dataset.id)} disabled={busy} onChange={(on) => toggleDataset(dataset.id, on)}>
             <span title={dataset.name} style={{ display: "inline-block", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}>{dataset.name}</span>
-            {dataset.workbookId && <span className="qzk-ds-meta"> · {workbookNames.get(dataset.workbookId) ?? "Workbook"}</span>}
+            <span className="qzk-ds-meta"> · {dataset.workbookId ? workbook?.name ?? "Workbook" : "Loose"}{folder ? ` · ${folder}` : ""}</span>
           </Checkbox>
-        ))}
-        {datasets.length === 0 && <span className="qzk-ds-meta">Load datasets before building figures.</span>}
+          );
+        })}
+        {datasets.length === 0 ? <span className="qzk-ds-meta">Load datasets before building figures.</span> : visibleDatasets.length === 0 && <span className="qzk-ds-meta">No datasets match this workbook and search.</span>}
       </div>
 
       {phase === "idle" && (
