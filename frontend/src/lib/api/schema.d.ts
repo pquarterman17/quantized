@@ -8087,6 +8087,11 @@ export interface components {
              */
             colorbar?: boolean;
             /**
+             * Colorbar Log10
+             * @default false
+             */
+            colorbar_log10?: boolean;
+            /**
              * Contour Source
              * @default grid
              */

@@ -7,7 +7,10 @@ is correct (lin/log/explicit), and that malformed input is rejected.
 
 from __future__ import annotations
 
+import json
+import math
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -15,6 +18,7 @@ import pytest
 from quantized.calc.figure_map import (
     MAP_KINDS,
     _contour_levels,  # noqa: PLC2701 (internal, tested directly)
+    log_decade_ticks,
     render_map_figure,
 )
 
@@ -244,3 +248,28 @@ def test_scattered_rsm_cloud_from_corpus(corpus_dir: Path) -> None:
         x, y, None, contour_source="points", z_values=z, kind="contourf", fmt="png"
     )
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+# ── log colour scale: the bar labels decade VALUES, as the canvas does ───────
+_LOG_BAR = json.loads(
+    (Path(__file__).parent / "fixtures" / "wire" / "map_log_colorbar.json").read_text("utf-8")
+)["cases"]
+
+
+@pytest.mark.parametrize("case", _LOG_BAR, ids=[c["name"] for c in _LOG_BAR])
+def test_log_decade_ticks_match_the_canvas_colour_bar(case: dict[str, Any]) -> None:
+    ticks = log_decade_ticks(math.log10(case["lo"]), math.log10(case["hi"]))
+    assert [label for _k, label in ticks] == case["labels"]
+
+
+def test_log_colour_bar_exports_values_not_exponents() -> None:
+    """MapStage sends log10(z) under a log colour scale; the bar used to read
+    -4 … 2 where the canvas reads 1e-4 … 100."""
+    x, y, _z = _demo_grid()
+    z = np.tile(np.linspace(-4.7, 2.7, x.size), (y.size, 1))  # log10 of 2e-5 … 500
+    svg = render_map_figure(
+        x, y, z, kind="heatmap", fmt="svg", z_label="I (cps) — log", colorbar_log10=True
+    ).decode("utf-8")
+    for label in ("1e-4", "0.01", "100"):
+        assert f">{label}<" in svg or f"<!-- {label} -->" in svg
+    assert "<!-- \N{MINUS SIGN}4 -->" not in svg

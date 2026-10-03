@@ -7118,6 +7118,11 @@
             "title": "Colorbar",
             "type": "boolean"
           },
+          "colorbar_log10": {
+            "default": false,
+            "title": "Colorbar Log10",
+            "type": "boolean"
+          },
           "contour_source": {
             "default": "grid",
             "title": "Contour Source",
