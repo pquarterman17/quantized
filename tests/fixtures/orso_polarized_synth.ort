@@ -1,0 +1,42 @@
+# # ORSO reflectivity data file | 1.0 standard | YAML encoding | https://www.reflectometry.org/
+# data_source:
+#   owner: {name: Synthetic Owner, affiliation: null}
+#   experiment:
+#     title: Synthetic polarized reflectivity
+#     instrument: TestRefl
+#     start_date: 2024-01-02T03:04:05
+#     probe: neutron
+#     facility: Nowhere
+#   sample:
+#     name: FeSi-synth
+#   measurement:
+#     instrument_settings:
+#       incident_angle: {min: 0.2, max: 2.0, unit: deg}
+#       wavelength: {magnitude: 5.0, unit: angstrom, comment: a long comment that wraps
+#           onto a second line}
+#       polarization: pp
+#     data_files:
+#     - file: synth_0001.nxs
+#       timestamp: 2024-01-02T03:04:05
+#     scheme: angle-dispersive
+# reduction:
+#   software: {name: synth-reduce, version: '1.0'}
+#   timestamp: 2024-01-02T04:00:00
+# data_set: up
+# columns:
+# - {name: Qz, unit: 1/angstrom, physical_quantity: normal momentum transfer}
+# - {name: R, unit: '', physical_quantity: specular reflectivity}
+# - {error_of: R, error_type: uncertainty, value_is: sigma}
+# - {error_of: Qz, error_type: resolution, value_is: sigma}
+# # Qz (1/angstrom)    R ()    sR    sQz
+1.0e-02 9.0e-01 1.0e-02 1.0e-04
+2.0e-02 1.0e-01 5.0e-03 2.0e-04
+3.0e-02 1.0e-02 1.0e-03 3.0e-04
+# data_set: down
+# data_source:
+#   measurement:
+#     instrument_settings:
+#       polarization: mm
+# # Qz (1/angstrom)    R ()    sR    sQz
+1.5e-02 8.0e-01 2.0e-02 1.5e-04
+2.5e-02 5.0e-02 4.0e-03 2.5e-04

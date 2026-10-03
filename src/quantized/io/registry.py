@@ -30,6 +30,7 @@ from quantized.io.ncnr import import_ncnr_dat, import_ncnr_pnr, import_ncnr_refl
 from quantized.io.netcdf import import_netcdf
 from quantized.io.opus import import_opus, is_numbered_opus
 from quantized.io.origin_project import read_origin_project
+from quantized.io.orso import import_orso
 from quantized.io.qd import import_ppms, import_qd_vsm, is_ppms_dat, is_qd_file
 from quantized.io.refl1d import import_refl1d_dat, is_refl1d_dat
 from quantized.io.rigaku import import_rigaku_raw, is_rigaku_raw
@@ -61,6 +62,9 @@ _EXT_MAP: dict[str, Parser] = {
     ".nc": import_netcdf,  # NetCDF-3/4 (generic + ANDI/AIA chromatography)
     ".cdf": import_netcdf,  # ANDI/AIA chromatography (NetCDF-3 classic)
     ".pnr": import_ncnr_pnr,
+    # ORSO reduced reflectometry (standards 0.1/1.0). A file without the ORSO
+    # first line is refused by the parser with a reason, not by a sniffer.
+    ".ort": import_orso,
     # Origin project files — clean-room reader (no GPL liborigin). Currently
     # recognizes + guides; the binary decoders land against sample files.
     ".opj": read_origin_project,  # Origin ≤2017 binary project

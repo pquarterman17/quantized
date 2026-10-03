@@ -122,6 +122,7 @@ _STATIC_TECHNIQUE_BY_PARSER: dict[str, str] = {
     "import_ncnr_refl": REFLECTOMETRY,
     "import_ncnr_pnr": REFLECTOMETRY,  # polarized neutron reflectometry
     "import_ncnr_dat": REFLECTOMETRY,  # refl1d-fit cross sections (.datA-D)
+    "import_orso": REFLECTOMETRY,  # ORSO .ort (Qz is the standard's first column)
     "import_csv": GENERIC,
     "import_excel": GENERIC,
     # NetCDF already degrades to a generic heuristic for non-chromatography
