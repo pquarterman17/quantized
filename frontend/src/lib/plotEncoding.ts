@@ -459,8 +459,7 @@ export function encodeSpec(spec: PlotSpec, datasets: readonly Dataset[]): Encode
       seriesStyles: Object.fromEntries(entries.map((e, i) => [i, e.style])),
       seriesLabels: Object.fromEntries(entries.map((e, i) => [i, e.label])),
     },
-    false,
-    false,
+    false, false, // no preference, and never past the palette: the encoding chose these styles
   );
   const errors = split || facets ? [] : specErrorBindings(spec);
   const gradient = encodedGradient(data, enc);
