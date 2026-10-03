@@ -3,12 +3,15 @@ name: E2E (Playwright)
 # GUI_INTERACTION_PLAN.md #15 — real-browser interaction coverage. A separate,
 # independent workflow from CI (ci.yml): NOT wired into branch protection as a
 # required check, so a flaky/slow browser run never blocks a merge. It exists
-# so the suite gets exercised on every push/PR without being load-bearing.
+# so the suite gets exercised on main and every review-ready PR without being
+# load-bearing. Drafts intentionally defer browser coverage until substantive
+# author/reviewer edits are complete.
 
 on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
   # Manual runs exist for the cross-browser job's full-suite probe (below).
   # On push/pull_request `inputs.xbrowser_full` is empty, so both jobs behave
   # exactly as on any other run.
@@ -19,11 +22,16 @@ on:
         type: boolean
         default: false
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   e2e:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -78,6 +86,7 @@ jobs:
   # a red leg here needs reading, not an automatic merge block.
   e2e-xbrowser:
     name: e2e cross-browser (${{ matrix.engine }})
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     # 50, not 25: the install step below may take up to 30 on its own when
     # apt is slow, which leaves 20 for everything else (it all fit in 25).
