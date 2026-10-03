@@ -24,7 +24,7 @@ import { useState } from "react";
 import { labelForCode } from "../../../lib/categorical";
 import type { TextColumn } from "../../../lib/columnmeta";
 import { REDERIVED_EDIT_NOTICE } from "../../../lib/rederived";
-import { fmtCell } from "./cellFormat";
+import { fmtCell, type CellFormatter } from "./cellFormat";
 import type { CellEditApi } from "./useCellEdit";
 
 /** Sentinel `<select>` value meaning "the user wants to type a new level"
@@ -82,6 +82,9 @@ export interface GridRowProps {
   /** A column's header name (-1 = x), which names the cell editor with its
    *  row ("A, row 3"); the editors have no visible label of their own. */
   colName?: (col: number) => string;
+  /** A column's number formatter (-1 = x): GridViewport's per-column
+   *  precision (cellFormat.gridFormatters). Omitted: fmtCell. */
+  fmtOf?: (col: number) => CellFormatter;
 }
 
 export default function GridRow({
@@ -109,6 +112,7 @@ export default function GridRow({
   onEditCell,
   readOnly = false,
   colName = (col) => (col < 0 ? "x" : `column ${col + 1}`),
+  fmtOf,
 }: GridRowProps) {
   const editorName = (col: number) => `${colName(col)}, row ${r + 1}`;
   const rowTitle = isMasked
@@ -246,7 +250,7 @@ export default function GridRow({
         ) : levels ? (
           labelForCode(levels, value ?? Number.NaN) ?? "—"
         ) : (
-          fmtCell(value)
+          (fmtOf?.(col) ?? fmtCell)(value)
         )}
       </div>
     );

@@ -369,7 +369,7 @@ export default function PlotStage() {
       />
 
       <PlotStageOverlays
-        displayPayload={displayPayload}
+        displayPayload={displayPayload} plotRef={plotRef}
         active={active}
         tool={tool}
         insetMode={insetMode}

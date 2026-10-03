@@ -27,6 +27,10 @@ colour-mapped scatter are single-axes features, like the rest of gap #11.
 The axis-title Format + drag (``ov["axis_titles"]``, ``calc.figure_axis_titles``)
 is skipped on purpose: the canvas' break panels build without that bridge and
 draw plain titles (``tests/fixtures/wire/axis_titles.json``' break case).
+Error bars (``error_spans``) ARE drawn, per panel over the rows it shows, by the
+unbroken export's own ``calc.figure_errorbars`` before the axis scale is
+applied, so the shared y autoscale covers them under the same log floor
+(``calc.figure_autoscale``) -- as the screen's panels do (plot audit leftovers).
 """
 
 from __future__ import annotations
@@ -38,6 +42,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.figure import _plot_kwargs
+from quantized.calc.figure_errorbars import apply_error_bars
 from quantized.calc.figure_overrides import apply_axis_shape_overrides
 from quantized.calc.figure_render import in_render_scope, new_figure, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
@@ -68,6 +73,31 @@ def _visible_bounds(
     # The interactive view declines a break if fewer than two panels survive.
     # A fully covered dataset must still export as an ordinary single panel.
     return bounds or [(xlo, xhi)]
+
+
+def _slice_spans(
+    spans: Sequence[Mapping[str, Any] | None] | None, rows: NDArray[np.intp]
+) -> list[Mapping[str, Any] | None] | None:
+    """``error_spans`` cut to one panel's ``rows`` (each side's list indexed
+    like the request's x; a short list leaves the missing rows unbarred)."""
+    if not spans:
+        return None
+
+    def cut(raw: Any) -> list[Any]:
+        seq = raw if isinstance(raw, (list, tuple)) else []
+        return [seq[int(r)] if int(r) < len(seq) else None for r in rows]
+
+    out: list[Mapping[str, Any] | None] = []
+    for span in spans:
+        if not isinstance(span, Mapping):
+            out.append(None)
+            continue
+        out.append({
+            k: {"plus": cut(v.get("plus")), "minus": cut(v.get("minus"))}
+            for k, v in span.items()
+            if k in ("x", "y") and isinstance(v, Mapping)
+        })
+    return out
 
 
 def _in_view_ticks(ax: Any) -> list[float]:
@@ -122,6 +152,7 @@ def render_breaks_impl(
     transparent: bool = False,
     figsize: tuple[float, float],
     series_styles: Sequence[Mapping[str, Any] | None] | None,
+    error_spans: Sequence[Mapping[str, Any] | None] | None = None,
     x_fmt: Mapping[str, Any] | None = None,
     y_fmt: Mapping[str, Any] | None = None,
     x_step: float | None = None,
@@ -149,10 +180,14 @@ def render_breaks_impl(
     for i, ax in enumerate(axes):
         lo, hi = bounds[i]
         shown = (x >= lo) & (x <= hi)
-        for si, (label, y) in enumerate(series):
+        cut = [(label, np.asarray(y, dtype=float)[shown]) for label, y in series]
+        artists = []
+        for si, (label, yv) in enumerate(cut):
             spec = series_styles[si] if series_styles and si < len(series_styles) else None
             kw = _plot_kwargs(st.line_width, st.marker_size, spec)
-            ax.plot(x[shown], np.asarray(y, dtype=float)[shown], label=label, **kw)
+            artists.extend(ax.plot(x[shown], yv, label=label, **kw))
+        panel_spans = _slice_spans(error_spans, np.flatnonzero(shown))
+        apply_error_bars(ax, x[shown], cut, panel_spans, artists)
         ax.set_xlim(lo, hi)
         resolved_x_scale = resolve_axis_scale(x_scale, x_log)
         resolved_y_scale = resolve_axis_scale(y_scale, y_log)

@@ -67,6 +67,7 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
   xReversed: canonical("axes.x.reversed"),
   stackMode: canonical("plot.stack.enabled"),
   insetMode: canonical("plot.inset.enabled"),
+  inset: canonical("plot.inset.geometry"),
   polarMode: canonical("plot.coordinateSystem", "Represent the current polar mode as an explicit coordinate system."),
   statMode: canonical("plot.statMode"),
   statHideEmptyLevels: canonical("plot.stat.hideEmptyLevels"),

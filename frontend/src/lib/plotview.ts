@@ -18,17 +18,21 @@
 
 import { PANEL_FITS, type PanelFit } from "./panelFit";
 import { sanitizePageSetup, type PageSetup } from "./pagesetup";
-import {
-  sanitizePanelDatasetIds,
-  sanitizePanelLayout,
-  type PanelLayout,
-} from "./panelWindowModel";
-import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
+import type { PanelLayout } from "./panelWindowModel";
+import type { FrozenPlotBundle } from "./plotsnapshot";
 import { boolViewFields, sanitizeLegendSize, sanitizeRegionShades, sanitizeStatMarksByMode, sanitizeStatPicks, uniqueIds, type StatMarksByMode, type StatPicks } from "./plotviewSanitize";
+import { axisScaleOrDefault, y2ScaleOrDefault } from "./plotviewAxis";
+import { LEGEND_POS, axisLabelOffsetsOrDefault, axisLabelStylesOrDefault, isRange, legendXYOrNull, sanitizeAnnotations, sanitizeInset, sanitizeShapes, type InsetView } from "./plotviewDecor";
 import { isString, keyedRecord } from "./sanitizeRecord";
 import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { FigureDocument } from "./figureDocument";
 import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
+
+// Moved-out siblings (module-size ratchet), re-exported so no importer changed.
+export { cycleAxisScale, cycleTickMode, isAxisScale, scaleFromLog } from "./plotviewAxis";
+export { LEGEND_POS, legendXYOrNull, nearestLegendCorner, sanitizeAnnotations, sanitizeShapes } from "./plotviewDecor";
+export type { InsetView } from "./plotviewDecor";
+export { cascadeGeometry, cascadeLayout, cycleWindow, dedupeWindowTitle, displayedWindowTitle, dropGeometry, nextLinkGroup, nextPlotBg, tileLayout, zOrderIds } from "./plotWindows";
 
 const VALID_TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "date", "time", "datetime"];
 
@@ -40,49 +44,6 @@ const VALID_TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "d
 export type { PanelLayout };
 export type LegendPos = "auto" | "ne" | "nw" | "se" | "sw"; // "auto": lib/legendAutoPlace
 
-/** The corner-preset nearest a free legend position (MAIN #18's pointer-mode
- *  drag): quadrant of the fractional position within the plot area — the
- *  double-click-to-reset gesture's pure geometry. `[0.5, 0.5]` (dead center)
- *  resolves to "ne" — an arbitrary but deterministic tie-break, never a
- *  random/unstable pick. */
-export function nearestLegendCorner(fx: number, fy: number): LegendPos {
-  const n = fy <= 0.5; // <= (not <): a dead-center tie resolves north
-  const e = fx >= 0.5; // >= : a dead-center tie resolves east
-  return n ? (e ? "ne" : "nw") : e ? "se" : "sw";
-}
-
-const AXIS_SCALES: readonly AxisScale[] = ["linear", "log", "reciprocal"];
-
-/** Narrow an arbitrary value to a valid `AxisScale`. */
-export function isAxisScale(v: unknown): v is AxisScale {
-  return typeof v === "string" && (AXIS_SCALES as readonly string[]).includes(v);
-}
-
-/** The back-compat bridge from the pre-MAIN-#12 boolean log flags to the
- *  3-way scale enum: `true` -> `"log"`, `false` -> `"linear"`. Used wherever
- *  an older persisted shape (a `.dwk` view, an Origin-decoded figure's own
- *  `x_log`/`y_log`, which has no reciprocal concept) still only carries a
- *  boolean. */
-export function scaleFromLog(log: boolean): AxisScale {
-  return log ? "log" : "linear";
-}
-
-/** The command-palette / context-menu "cycle" step (MAIN #12 #5): each
- *  invocation advances linear -> log -> reciprocal -> linear. Pure so it's
- *  unit-testable without the store. */
-export function cycleAxisScale(current: AxisScale): AxisScale {
-  const i = AXIS_SCALES.indexOf(current);
-  return AXIS_SCALES[(i + 1) % AXIS_SCALES.length];
-}
-
-/** The command-palette "cycle tick format" step (MAIN #20): each invocation
- *  advances auto -> fixed -> sci -> eng -> auto. Same pure/unit-testable
- *  shape as `cycleAxisScale`. */
-export function cycleTickMode(current: TickMode): TickMode {
-  const modes: readonly TickMode[] = ["auto", "fixed", "sci", "eng"];
-  const i = modes.indexOf(current);
-  return modes[(i + 1) % modes.length];
-}
 
 /** One plot's full display configuration — everything that differs window to
  *  window. See the module doc above for what's deliberately excluded. */
@@ -133,6 +94,9 @@ export interface PlotView {
   xReversed: boolean; // x high-to-low (IR wavenumber): uPlot dir -1, export x_reversed
   stackMode: boolean;
   insetMode: boolean;
+  /** The inset's source region + placement (null = never drawn: the screen
+   *  seeds a central third, and the export the same). */
+  inset: InsetView | null;
   polarMode: boolean;
   statMode: boolean;
   /** P2.6 — Stat Stage options that persist with the plot (screen and export both honour
@@ -209,7 +173,7 @@ export function defaultPlotView(): PlotView {
     plotTemplate: "screen",
     showAxisBox: true, xReversed: false,
     stackMode: false,
-    insetMode: false,
+    insetMode: false, inset: null,
     polarMode: false,
     statMode: false,
     statHideEmptyLevels: false, statShowGroupN: true, statShowSummary: false, statMarks: {}, statPicks: {},
@@ -309,29 +273,6 @@ export type WinState = "normal" | "minimized" | "maximized";
  *  into concrete colours by `lib/uplotOpts.ts`'s `resolvePlotBg`. */
 export type PlotBg = "theme" | "light" | "dark";
 
-const PLOT_BG_CYCLE: readonly PlotBg[] = ["theme", "light", "dark"];
-
-/** The next background mode in the title-bar toggle's cycle
- *  (theme -> light -> dark -> theme -> ...). Pure; used by both the
- *  per-window toggle button (`PlotWindowFrame`) and the "Window Background"
- *  command (`useWindowCommands`). */
-export function nextPlotBg(current: PlotBg): PlotBg {
-  return PLOT_BG_CYCLE[(PLOT_BG_CYCLE.indexOf(current) + 1) % PLOT_BG_CYCLE.length];
-}
-
-/** The highest cross-window link group (item 13) — three groups is the
- *  Origin-ish sweet spot: enough for two or three simultaneous comparisons,
- *  few enough that a single toggle button can cycle through all of them. */
-const MAX_LINK_GROUP = 3;
-
-/** The next link group in the title-bar toggle's cycle
- *  (null -> 1 -> 2 -> 3 -> null -> ...) — item 13's `nextPlotBg` analogue.
- *  Pure; used by both the per-window ⧟ button (`PlotWindowFrame`) and the
- *  "Link Window Group" command (`useWindowCommands`). */
-export function nextLinkGroup(current: number | null): number | null {
-  if (current === null) return 1;
-  return current >= MAX_LINK_GROUP ? null : current + 1;
-}
 
 /** The window-kind discriminator (item 19 adds "panel"): `"plot"` is the
  *  live XY graph window (the only kind that can hold the view-facade focus);
@@ -399,63 +340,10 @@ export interface PlotWindow {
   panel?: { datasetIds: string[]; layout: PanelLayout };
 }
 
-const DEFAULT_WIDTH = 480;
-const DEFAULT_HEIGHT = 360;
-const CASCADE_ORIGIN = 40;
-const CASCADE_STEP = 24;
-
-/** A cascade-offset geometry for the `index`-th new "normal" window (0-based) —
- *  Origin/typical-MDI "new window" placement so successive windows don't stack
- *  exactly on top of one another. Pure; item 6 builds real tile/cascade
- *  commands on top of this. */
-export function cascadeGeometry(index: number): WindowGeometry {
-  const n = Math.max(0, index);
-  return {
-    x: CASCADE_ORIGIN + n * CASCADE_STEP,
-    y: CASCADE_ORIGIN + n * CASCADE_STEP,
-    w: DEFAULT_WIDTH,
-    h: DEFAULT_HEIGHT,
-  };
-}
-
-/** Geometry for a window created by DROPPING a dataset onto empty canvas
- *  (item 14): a default-sized window whose top-left lands at the drop point,
- *  clamped so the whole frame stays inside `bounds` (a drop near the right/
- *  bottom edge slides back on-canvas rather than spawning half off-screen;
- *  a canvas smaller than the default size degrades to 0,0). Pure — the
- *  store's `createWindowAt` applies it against the live canvas bounds. */
-export function dropGeometry(
-  x: number,
-  y: number,
-  bounds: { width: number; height: number },
-): WindowGeometry {
-  return {
-    x: Math.min(Math.max(0, x), Math.max(0, bounds.width - DEFAULT_WIDTH)),
-    y: Math.min(Math.max(0, y), Math.max(0, bounds.height - DEFAULT_HEIGHT)),
-    w: DEFAULT_WIDTH,
-    h: DEFAULT_HEIGHT,
-  };
-}
-
-/** The next/previous window id in `ids` order, wrapping — the pure cycling
- *  step behind the "Focus Next/Previous Window" commands (item 5). v1 cycles
- *  by array (creation) order; item 6's Tier-2 Ctrl+Tab upgrade makes this
- *  z-order-aware instead. Returns null when there's nothing to cycle to
- *  (fewer than 2 windows, or `currentId` isn't among `ids`). */
-export function cycleWindow(
-  ids: readonly string[],
-  currentId: string | null,
-  direction: 1 | -1,
-): string | null {
-  if (ids.length < 2 || currentId === null) return null;
-  const i = ids.indexOf(currentId);
-  if (i < 0) return null;
-  return ids[(i + direction + ids.length) % ids.length];
-}
 
 // ── .dwk / untrusted-boundary sanitizer (wired by item 7) ──────────────────
 
-function num(v: unknown, d: number): number {
+export function num(v: unknown, d: number): number {
   return typeof v === "number" && Number.isFinite(v) ? v : d;
 }
 
@@ -463,20 +351,10 @@ function numOrNull(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
-function strOrDefault(v: unknown, d: string): string {
+export function strOrDefault(v: unknown, d: string): string {
   return typeof v === "string" ? v : d;
 }
 
-function isRange(v: unknown): v is [number, number] {
-  return (
-    Array.isArray(v) &&
-    v.length === 2 &&
-    typeof v[0] === "number" &&
-    typeof v[1] === "number" &&
-    Number.isFinite(v[0]) &&
-    Number.isFinite(v[1])
-  );
-}
 
 function isAxisFormat(v: unknown): v is AxisFormat {
   if (typeof v !== "object" || v === null) return false;
@@ -487,190 +365,6 @@ function isAxisFormat(v: unknown): v is AxisFormat {
     && Number.isFinite(candidate.digits);
 }
 
-/** Every valid legend corner preset — exported so a consumer that needs to
- *  validate a bare `legendPos` value outside `sanitizeView` (GUI_INTERACTION
- *  #12's `decor.legend` block, `lib/plotspec2.ts`) reuses the SAME list
- *  rather than redeclaring it. */
-export const LEGEND_POS: readonly LegendPos[] = ["auto", "ne", "nw", "se", "sw"];
-
-/** A `legendXY` fraction pair: a finite 2-tuple, each component clamped to
- *  [0, 1] — a hand-edited or stale `.dwk` can't smuggle in an off-canvas
- *  position. Exported so `lib/plotspec2.ts`'s `decor.legend.xy` validator
- *  reuses this exact clamp instead of a second copy. */
-export function legendXYOrNull(v: unknown): [number, number] | null {
-  if (!isRange(v)) return null;
-  const clamp = (n: number) => Math.min(1, Math.max(0, n));
-  return [clamp(v[0]), clamp(v[1])];
-}
-
-/** Per-axis title offsets from a persisted view: keep only x/y/y2 keys whose
- *  value is a finite 2-tuple, each px clamped to a sane range so a stale/hand-
- *  edited `.dwk` can't fling a title far off-screen (mirrors `legendXYOrNull`'s
- *  clamp-not-drop convention). */
-function axisLabelOffsetsOrDefault(v: unknown): AxisLabelOffsets {
-  const out: AxisLabelOffsets = {};
-  if (!v || typeof v !== "object") return out;
-  const clamp = (n: number) => Math.max(-2000, Math.min(2000, n));
-  for (const k of ["x", "y", "y2"] as const) {
-    const o = (v as Record<string, unknown>)[k];
-    if (isRange(o)) out[k] = [clamp(o[0]), clamp(o[1])];
-  }
-  return out;
-}
-
-/** Per-axis title styles from a persisted view: keep only x/y/y2 keys with a
- *  sane subset of {size (clamped 6..96 px), italic, bold}; drop empties. */
-function axisLabelStylesOrDefault(v: unknown): AxisLabelStyles {
-  const out: AxisLabelStyles = {};
-  if (!v || typeof v !== "object") return out;
-  for (const k of ["x", "y", "y2"] as const) {
-    const raw = (v as Record<string, unknown>)[k];
-    if (!raw || typeof raw !== "object") continue;
-    const s = raw as Record<string, unknown>;
-    const style: { size?: number; italic?: boolean; bold?: boolean } = {};
-    if (typeof s.size === "number" && Number.isFinite(s.size)) {
-      style.size = Math.max(6, Math.min(96, s.size));
-    }
-    if (s.italic === true) style.italic = true;
-    if (s.bold === true) style.bold = true;
-    if (Object.keys(style).length) out[k] = style;
-  }
-  return out;
-}
-
-const ANNOTATION_ANCHORS: readonly Annotation["anchor"][] = ["data", "page"];
-
-/** Validate a persisted annotation list (MAIN #21's `.anchor` field). The
- *  other simple overlay list in this sanitizer (`refLines`) is a structural
- *  "cast, don't deep-validate" passthrough — but `anchor` gets
- *  real validation because an unrecognized value would silently change
- *  where `annotationLayout` reads `x`/`y` FROM (data coords vs. canvas
- *  fractions): an unknown string falls back to `undefined` (= "data", the
- *  back-compat default) rather than being trusted verbatim. A `"page"`
- *  entry's `x`/`y` are canvas FRACTIONS, so they're clamped into [0, 1] —
- *  same clamp-not-drop convention as `legendXYOrNull` for the identical
- *  fraction-coordinate shape — rather than dropping the whole annotation
- *  for a stale/hand-edited out-of-range value. An entry missing the
- *  required `id`/finite `x`/`y` shape is dropped (nothing sane to fall back
- *  to for a single list entry). Never throws. Exported so GUI_INTERACTION
- *  #12's `decor` PlotSpec v2 block (`lib/plotspec2.ts`) validates a saved
- *  spec's captured annotations through the SAME sanitizer `.dwk` window
- *  restore uses — never a second, drifting copy. */
-export function sanitizeAnnotations(v: unknown): Annotation[] {
-  if (!Array.isArray(v)) return [];
-  const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
-  const out: Annotation[] = [];
-  for (const e of v) {
-    if (typeof e !== "object" || e === null) continue;
-    const o = e as Record<string, unknown>;
-    if (typeof o.id !== "string" || typeof o.x !== "number" || typeof o.y !== "number") continue;
-    if (!Number.isFinite(o.x) || !Number.isFinite(o.y)) continue;
-    const anchor = ANNOTATION_ANCHORS.includes(o.anchor as Annotation["anchor"])
-      ? (o.anchor as Annotation["anchor"])
-      : undefined;
-    const isPage = anchor === "page";
-    const frame = sanitizeFrame(o.frame);
-    out.push({
-      id: o.id,
-      ...(typeof o.groupId === "string" && o.groupId ? { groupId: o.groupId } : {}),
-      x: isPage ? clamp01(o.x) : o.x,
-      y: isPage ? clamp01(o.y) : o.y,
-      text: typeof o.text === "string" ? o.text : "",
-      ...(o.axis === 0 || o.axis === 1 ? { axis: o.axis } : {}),
-      ...(typeof o.size === "number" && Number.isFinite(o.size) ? { size: o.size } : {}),
-      ...(anchor ? { anchor } : {}),
-      ...(frame ? { frame } : {}),
-    });
-  }
-  return out;
-}
-
-/** Validate a persisted annotation `frame` (MAIN #27's "text box" backing
- *  rect) — every field optional/independently defaulted at draw time, so
- *  this only needs to drop non-string colors and clamp `opacity`/`pad` into
- *  sane ranges; a non-object input (absent, on every pre-#27 annotation)
- *  returns null (no frame). */
-function sanitizeFrame(
-  v: unknown,
-): { fill?: string; stroke?: string; opacity?: number; pad?: number } | null {
-  if (typeof v !== "object" || v === null) return null;
-  const o = v as Record<string, unknown>;
-  const out: { fill?: string; stroke?: string; opacity?: number; pad?: number } = {};
-  if (typeof o.fill === "string") out.fill = o.fill;
-  if (typeof o.stroke === "string") out.stroke = o.stroke;
-  if (typeof o.opacity === "number" && Number.isFinite(o.opacity)) {
-    out.opacity = Math.min(1, Math.max(0, o.opacity));
-  }
-  if (typeof o.pad === "number" && Number.isFinite(o.pad)) out.pad = Math.max(0, o.pad);
-  return out;
-}
-
-const SHAPE_KINDS: readonly Shape["kind"][] = ["arrow", "line", "rect", "ellipse"];
-const SHAPE_ANCHORS: readonly Shape["anchor"][] = ["data", "page"];
-
-/** Validate a persisted shape list (MAIN #27) — the `Shape` analogue of
- *  `sanitizeAnnotations` above: an entry missing its required `id`/`kind`/
- *  finite `x1..y2` shape is dropped (nothing sane to fall back to for a
- *  single list entry); a `"page"` anchor's coords are canvas FRACTIONS,
- *  clamped into [0, 1] (same convention as a page-anchored annotation);
- *  `opacity` clamps into [0, 1]; `width` floors at a hairline (0 would be
- *  invisible AND unclickable). Never throws. Exported for the same reason
- *  as `sanitizeAnnotations` — GUI_INTERACTION #12's `decor` block reuses
- *  this exact sanitizer. */
-export function sanitizeShapes(v: unknown): Shape[] {
-  if (!Array.isArray(v)) return [];
-  const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
-  const out: Shape[] = [];
-  for (const e of v) {
-    if (typeof e !== "object" || e === null) continue;
-    const o = e as Record<string, unknown>;
-    if (typeof o.id !== "string" || !SHAPE_KINDS.includes(o.kind as Shape["kind"])) continue;
-    const coords = [o.x1, o.y1, o.x2, o.y2];
-    if (!coords.every((n): n is number => typeof n === "number" && Number.isFinite(n))) continue;
-    const anchor = SHAPE_ANCHORS.includes(o.anchor as Shape["anchor"])
-      ? (o.anchor as Shape["anchor"])
-      : undefined;
-    const isPage = anchor === "page";
-    out.push({
-      id: o.id,
-      ...(typeof o.groupId === "string" && o.groupId ? { groupId: o.groupId } : {}),
-      kind: o.kind as Shape["kind"],
-      x1: isPage ? clamp01(o.x1 as number) : (o.x1 as number),
-      y1: isPage ? clamp01(o.y1 as number) : (o.y1 as number),
-      x2: isPage ? clamp01(o.x2 as number) : (o.x2 as number),
-      y2: isPage ? clamp01(o.y2 as number) : (o.y2 as number),
-      ...(anchor ? { anchor } : {}),
-      ...(typeof o.stroke === "string" ? { stroke: o.stroke } : {}),
-      ...(typeof o.fill === "string" ? { fill: o.fill } : {}),
-      ...(typeof o.opacity === "number" && Number.isFinite(o.opacity)
-        ? { opacity: clamp01(o.opacity) }
-        : {}),
-      ...(typeof o.width === "number" && Number.isFinite(o.width)
-        ? { width: Math.max(0.5, o.width) }
-        : {}),
-      ...(typeof o.dash === "boolean" ? { dash: o.dash } : {}),
-    });
-  }
-  return out;
-}
-
-/** Back-compat axis-scale resolver (MAIN #12): a NEW `scale` field (post-#12
- *  `.dwk`) wins when present and valid; else an OLD boolean `log` field
- *  (pre-#12 `.dwk`) maps `true` -> `"log"`, `false` -> `"linear"`; else `fb`. */
-function axisScaleOrDefault(scale: unknown, log: unknown, fb: AxisScale): AxisScale {
-  if (isAxisScale(scale)) return scale;
-  if (typeof log === "boolean") return scaleFromLog(log);
-  return fb;
-}
-
-/** Same bridge for the secondary (y2) axis, whose scale is nullable — `null`
- *  means "inherit the primary Y axis's scale" (both the old `y2Log: boolean |
- *  null` and the new `y2Scale: AxisScale | null` share that convention). */
-function y2ScaleOrDefault(scale: unknown, log: unknown): AxisScale | null {
-  if (isAxisScale(scale)) return scale;
-  if (typeof log === "boolean") return scaleFromLog(log);
-  return null;
-}
 
 /** Validate a persisted view (or drop back to `defaultPlotView()` field by
  *  field) — the same per-field-fallback discipline as `loadPrefs`/
@@ -690,6 +384,7 @@ export function sanitizePlotView(v: unknown): PlotView {
     // Same fraction shape + clamp-not-drop convention as `legendXY` (decode #52).
     legendFrameXY: legendXYOrNull(o.legendFrameXY),
     legendTitle: typeof o.legendTitle === "string" ? o.legendTitle : null,
+    inset: sanitizeInset(o.inset),
     axisLabelOffsets: axisLabelOffsetsOrDefault(o.axisLabelOffsets),
     axisLabelStyles: axisLabelStylesOrDefault(o.axisLabelStyles),
     plotTemplate: strOrDefault(o.plotTemplate, fb.plotTemplate),
@@ -735,210 +430,3 @@ export function sanitizePlotView(v: unknown): PlotView {
     pageSetup: sanitizePageSetup(o.pageSetup),
   };
 }
-
-const WIN_STATES: readonly WinState[] = ["normal", "minimized", "maximized"];
-const PLOT_BGS: readonly PlotBg[] = ["theme", "light", "dark"];
-const WINDOW_KINDS: readonly WindowKind[] = ["plot", "snapshot", "worksheet", "map", "panel"];
-
-// ── Tile / Cascade / z-order-aware focus cycling (item 6) ──────────────────
-
-const TILE_GUTTER = 6;
-const TILE_MIN_W = 200;
-const TILE_MIN_H = 140;
-
-/** An even grid layout for `count` windows inside `bounds` (roughly square —
- *  cols = ceil(sqrt(count))) — the pure geometry behind the "Tile Windows"
- *  command. Fills row-major; an incomplete last row simply leaves its unused
- *  cells empty (standard grid-tile behaviour) rather than stretching cells to
- *  fill the gap. Cell size is floored at a sane minimum so a large `count`
- *  against a small `bounds` degrades to overlapping-but-usable cells instead
- *  of collapsing to zero. */
-export function tileLayout(count: number, bounds: { width: number; height: number }): WindowGeometry[] {
-  if (count <= 0) return [];
-  const cols = Math.max(1, Math.ceil(Math.sqrt(count)));
-  const rows = Math.max(1, Math.ceil(count / cols));
-  const cellW = Math.max(TILE_MIN_W, (bounds.width - TILE_GUTTER * (cols + 1)) / cols);
-  const cellH = Math.max(TILE_MIN_H, (bounds.height - TILE_GUTTER * (rows + 1)) / rows);
-  return Array.from({ length: count }, (_, i) => {
-    const row = Math.floor(i / cols);
-    const col = i % cols;
-    return {
-      x: TILE_GUTTER + col * (cellW + TILE_GUTTER),
-      y: TILE_GUTTER + row * (cellH + TILE_GUTTER),
-      w: cellW,
-      h: cellH,
-    };
-  });
-}
-
-/** A cascade layout for ALL `count` windows at once (item 6's "Cascade
- *  Windows" command) — distinct from `cascadeGeometry` above, which places
- *  only ONE new window at a given index. Reuses the same offset step so
- *  cascading N windows looks identical to N windows each freshly created in
- *  turn via `cascadeGeometry`. */
-export function cascadeLayout(count: number): WindowGeometry[] {
-  return Array.from({ length: count }, (_, i) => cascadeGeometry(i));
-}
-
-/** Window ids in Z-order, back-to-front (ascending z) — the item-6 upgrade to
- *  focus cycling, replacing v1's plain creation-order input to `cycleWindow`.
- *  A stable sort, so windows that have never been raised (equal z) keep their
- *  creation order — identical to v1 in the common case where nothing has
- *  been raised yet. */
-export function zOrderIds(windows: readonly PlotWindow[]): string[] {
-  return [...windows].sort((a, b) => a.z - b.z).map((w) => w.id);
-}
-
-// ── Default window titles + rename dedupe (item 10) ─────────────────────────
-
-/** The title a window CURRENTLY displays — matches `PlotWindowFrame`'s own
- *  fallback chain (explicit title, else its bound dataset's name, else
- *  "Untitled graph") so a fresh window's computed default can be deduped
- *  against what's already showing. */
-export function displayedWindowTitle(
-  win: Pick<PlotWindow, "title" | "datasetId">,
-  datasets: readonly { id: string; name: string }[],
-): string {
-  if (win.title) return win.title;
-  const name = win.datasetId ? datasets.find((d) => d.id === win.datasetId)?.name : undefined;
-  return name || "Untitled graph";
-}
-
-/** A default title for a NEW window named `baseName`, deduped against
- *  `existingTitles` (each already resolved via `displayedWindowTitle`) by
- *  appending " (2)", " (3)", … — so two windows that would otherwise show the
- *  identical name (e.g. two windows bound to the same dataset) are
- *  distinguishable at a glance (item 10). A user's own explicit rename
- *  (`renameWindow`) is never deduped — this only applies to computed
- *  defaults at creation time. */
-export function dedupeWindowTitle(baseName: string, existingTitles: readonly string[]): string {
-  if (!existingTitles.includes(baseName)) return baseName;
-  let n = 2;
-  while (existingTitles.includes(`${baseName} (${n})`)) n++;
-  return `${baseName} (${n})`;
-}
-
-// LIBRARY_WORKBOOK_UX_PLAN PR E2 ("oversized window coordinates") — how far
-// off the right/bottom edge a restored window's position may sail before
-// its top-left becomes permanently unreachable (a workspace saved on a big
-// monitor must not restore a window the user can never grab back on a
-// smaller one; applies to every winState, see sanitizePlotWindows's doc).
-// Mirrors lib/toolwindow.ts's clampToolWindowPos margin discipline, but
-// clamps the UPPER bound only: this function's own pre-existing "clamps
-// non-finite/negative geometry to sane defaults" test pins that a negative
-// x/y is left alone (already a valid on-screen position — partially off the
-// left/top edge, same as any live drag can stop short of); this only guards
-// the direction restoring onto a smaller viewport can actually overflow
-// toward.
-const RESTORE_POSITION_MARGIN = 40;
-
-function clampRestoreAxis(pos: number, viewport: number): number {
-  if (!Number.isFinite(viewport) || viewport <= RESTORE_POSITION_MARGIN) return pos;
-  return Math.min(pos, viewport - RESTORE_POSITION_MARGIN);
-}
-
-/** Validate persisted plot windows (drop malformed entries; clamp dead
- *  dataset refs to null — never drop the window itself, see decision #4;
- *  clamp geometry to finite, non-negative numbers). `viewport` (PR E2)
- *  additionally clamps every window's restored x/y so its top-left stays
- *  reachable — INCLUDING a maximized/minimized one: its stored geometry is
- *  the "restore to normal" target `restoreWindow`/`toggleMaximizeWindow`
- *  (store/windows.ts) apply verbatim on un-maximize/un-minimize, so leaving
- *  it unclamped would just recreate an unreachable window one click later.
- *  Width/height keep their existing finite-only clamp. Defaults to the real
- *  browser window, like lib/toolwindow.ts's `sanitizeToolWindowLayout`, so
- *  callers only override it in tests. Never throws. */
-export function sanitizePlotWindows(
-  v: unknown,
-  dsIds: ReadonlySet<string>,
-  viewport: { width: number; height: number } = {
-    width: typeof window !== "undefined" ? window.innerWidth : 1280,
-    height: typeof window !== "undefined" ? window.innerHeight : 800,
-  },
-): PlotWindow[] {
-  if (!Array.isArray(v)) return [];
-  const out: PlotWindow[] = [];
-  for (const e of v) {
-    if (typeof e !== "object" || e === null) continue;
-    const o = e as Record<string, unknown>;
-    if (typeof o.id !== "string" || !WINDOW_KINDS.includes(o.kind as WindowKind)) continue;
-    const kind = o.kind as WindowKind;
-    // A snapshot window (item 11) IS its at-rest frozen bundle — with nothing
-    // live to fall back to, a malformed bundle drops the whole entry (still
-    // never throws; the per-field-fallback discipline applies inside). The
-    // item-17 worksheet/map kinds carry no bundle — they're LIVE documents,
-    // so the ordinary datasetId clamp below is all they need.
-    const snapshot = kind === "snapshot" ? sanitizeFrozenBundle(o.snapshot) : null;
-    if (kind === "snapshot" && !snapshot) continue;
-    // Item 19 v1: a panel window carries its dataset ids + layout in the
-    // `panel` field, not a single `datasetId` (see PlotWindow.panel's doc).
-    // A stale/removed dataset id simply drops out of the list (never nulls
-    // the whole window — same "never force-close" spirit as decision #4);
-    // an empty resulting list still loads (the empty-panel placeholder).
-    const rawPanel =
-      kind === "panel" && typeof o.panel === "object" && o.panel !== null
-        ? (o.panel as Record<string, unknown>)
-        : null;
-    const panel =
-      kind === "panel"
-        ? { datasetIds: sanitizePanelDatasetIds(rawPanel?.datasetIds, dsIds), layout: sanitizePanelLayout(rawPanel?.layout) }
-        : null;
-    const g = (typeof o.geometry === "object" && o.geometry !== null ? o.geometry : {}) as Record<
-      string,
-      unknown
-    >;
-    const datasetId = typeof o.datasetId === "string" && dsIds.has(o.datasetId) ? o.datasetId : null;
-    const winState = WIN_STATES.includes(o.winState as WinState) ? (o.winState as WinState) : "normal";
-    // PR E2: clamp every winState's stored x/y — see this function's doc.
-    const x = clampRestoreAxis(num(g.x, 0), viewport.width);
-    const y = clampRestoreAxis(num(g.y, 0), viewport.height);
-    out.push({
-      id: o.id,
-      kind,
-      title: strOrDefault(o.title, ""),
-      // Snapshot ("frozen means frozen") and panel (its binding is the
-      // `panel.datasetIds` LIST, not a single id) windows are never
-      // dataset-bound via this field.
-      datasetId: kind === "snapshot" || kind === "panel" ? null : datasetId,
-      geometry: {
-        x,
-        y,
-        w: Math.max(1, num(g.w, DEFAULT_WIDTH)),
-        h: Math.max(1, num(g.h, DEFAULT_HEIGHT)),
-      },
-      z: num(o.z, 0),
-      winState,
-      view: sanitizePlotView(o.view),
-      bg: PLOT_BGS.includes(o.bg as PlotBg) ? (o.bg as PlotBg) : "theme",
-      // Only plot windows can sync, and only groups 1..MAX_LINK_GROUP exist —
-      // a hand-edited .dwk can't smuggle in a ⧟7 badge or a "linked" snapshot.
-      linkGroup:
-        kind === "plot" &&
-        typeof o.linkGroup === "number" &&
-        Number.isInteger(o.linkGroup) &&
-        o.linkGroup >= 1 &&
-        o.linkGroup <= MAX_LINK_GROUP
-          ? o.linkGroup
-          : null,
-      pinned: o.pinned === true, // a boolean, else false (the plain-boolean view fields: plotviewSanitize.boolViewFields)
-      ...(snapshot ? { snapshot } : {}),
-      ...(panel ? { panel } : {}),
-    });
-  }
-  return out;
-}
-
-/** Dataset-removal semantics are implemented in `store/windowDocuments.ts`: when datasets are
- *  deleted from the store — the single helper `removeDataset`/
- *  `removeSelected`/`removeDatasets` in `store/useApp.ts` all call, so the
- *  "never force-close a window" rule (decision #4) applies uniformly: a
- *  plain `kind:"plot"`/`"snapshot"`-adjacent window's `datasetId` nulls out
- *  (its existing behaviour), and a `kind:"panel"` window's `panel.
- *  datasetIds` drops the removed ids (item 19's "a removed dataset drops
- *  out of the panel" — the render layer already treats a missing id as an
- *  empty slot, and an empty `datasetIds` as the whole-window empty state).
- *  Identity (same window object) when nothing on it changed, so callers
- *  that spread this into other patch fields don't force needless re-renders. */
-// Edge/sibling drag-snapping (item 12) moved to lib/windowSnap.ts (F2.3j) —
-// pure window-geometry math with no PlotView involvement, extracted to fund
-// the region-shades sanitizer below under this module's own size ratchet.

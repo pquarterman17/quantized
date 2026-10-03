@@ -257,6 +257,9 @@ def render_with_secondary_axis(
     # stays byte-identical to before this feature existed).
     primary_shades, secondary_shades = _split_region_shades_by_axis(ov.get("region_shades"))
     primary_ov = ov if not secondary_shades else {**ov, "region_shades": primary_shades}
+    # The magnifier inset is single-axes only (calc.figure_inset): drawn here it
+    # would show the primary series alone, so a dual-Y request never draws it.
+    primary_ov = {k: v for k, v in primary_ov.items() if k != "inset"}
     artists = draw_series_axes(
         fig, ax, xv, primary,
         st=st, ov=primary_ov, x_log=x_log, y_log=y_log, x_scale=x_scale, y_scale=y_scale,

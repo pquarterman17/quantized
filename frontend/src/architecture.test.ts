@@ -597,7 +597,12 @@ const STORE_PINS: Record<string, number> = {
   // owns the actual logic), paid for by extracting the FIVE repeated
   // `dedupeWindowTitle(x, s.plotWindows.map(...))` call sites into one
   // `dedupeAgainstDisplayed` helper — net zero, ceiling unchanged.
-  "/store/windows.ts": 749,
+  // windows.ts GRADUATED 2026-10-03 (pin was 749): 747 -> 466 lines. The
+  // shared helpers (ids/z-order, focus handoff, rebind patches, mainWindow)
+  // moved verbatim to store/windowFocus.ts and the WindowsSlice contract to
+  // store/windowsSliceTypes.ts, both re-exported so no importer changed.
+  // Measured eager-neutral (833,639 -> 833,625 B with the plotview.ts split
+  // below): the actions stay in one object literal, no wrapper function.
 };
 
 describe("store-size ratchet (MAIN_PLAN #2)", () => {
@@ -781,7 +786,14 @@ const MODULE_PINS: Record<string, number> = {
   // fields' sanitizing (now one loop, `boolViewFields`) moved to
   // lib/plotviewSanitize.ts, funding the two persisted Stat Stage options
   // (`statHideEmptyLevels`/`statShowGroupN`) in lines AND in eager bytes.
-  "/lib/plotview.ts": 945,
+  // plotview.ts GRADUATED 2026-10-03 (pin was 945): 944 -> 427 lines. The
+  // axis-scale vocabulary moved to lib/plotviewAxis.ts, the legend/annotation/
+  // shape sanitizers to lib/plotviewDecor.ts and the window layout/title
+  // helpers to lib/plotWindows.ts (all re-exported), together with
+  // sanitizePlotWindows (its one caller imports it from there). ONE window
+  // module, not two: a separate layout module became its own eager chunk
+  // (+58 B measured); merged, the split is eager-neutral. The PlotView
+  // interface the guards below parse stays here.
 };
 
 describe("module-size ratchet (JMP_GAP #14)", () => {
@@ -1998,6 +2010,7 @@ const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   xReversed: "x axis direction toggle, not channel-indexed",
   stackMode: "display toggle, not channel-indexed",
   insetMode: "display toggle, not channel-indexed",
+  inset: "the magnifier's source region (data coords) + placement fractions, not channel-indexed",
   polarMode: "display toggle, not channel-indexed",
   statMode: "display toggle, not channel-indexed",
   statHideEmptyLevels: "display toggle (P2.6 box 2), not channel-indexed",

@@ -385,3 +385,43 @@ test("the plot's right-click menu fits a 600px-high window", async ({ page }) =>
   expect(m.top, "menu top").toBeGreaterThanOrEqual(0);
   expect(last.bottom, "last menu row below the window").toBeLessThanOrEqual(600);
 });
+
+// Round-4 follow-up: a NEW graph/panel window opened at its fixed default
+// size (480x360; panels 760x560) whatever the stage size, so at 1000x700 part
+// of it was clipped by the stage. New windows now fit the live stage.
+type QzBounds = { __qz: { useApp: { getState: () => { plotCanvasBounds: { width: number } | null } } } };
+
+for (const size of [{ width: 1000, height: 700 }, { width: 800, height: 600 }]) {
+  test(`a new graph or panel window fits a ${size.width}x${size.height} stage`, async ({ page }) => {
+    await loadPlot(page);
+    await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("two-channel.csv"));
+    await waitForDatasetCount(page, 2);
+    await page.setViewportSize(size);
+    // The store's stage size follows a ResizeObserver (on the tab panel while the
+    // sole window is maximized); create only once it has caught up.
+    await expect
+      .poll(() =>
+        page.locator("#qz-stage-panel").evaluate((el) => {
+          const b = (window as unknown as QzBounds).__qz.useApp.getState().plotCanvasBounds;
+          return b?.width === Math.round(el.getBoundingClientRect().width);
+        }),
+      )
+      .toBe(true);
+    await runPaletteCommand(page, "New Graph Window");
+    const rows = page.locator("[data-ds-id]");
+    await rows.nth(0).click();
+    await rows.nth(1).click({ modifiers: ["Control"] });
+    await runPaletteCommand(page, "Panel: grid");
+    const frames = page.locator(".qzk-plotwin");
+    const panels = frames.filter({ has: page.locator(".qzk-plotwin-title", { hasText: /^Panel: / }) });
+    await expect(panels).toHaveCount(1);
+    await expect(frames).toHaveCount(3); // the main window, the new graph window, the panel
+    const c = await rectOf(page.locator(".qzk-wincanvas-frames"));
+    for (const f of await frames.all()) {
+      const r = await rectOf(f);
+      const at = `frame ${r.left}..${r.right} x ${r.top}..${r.bottom}, stage ${c.left}..${c.right} x ${c.top}..${c.bottom}`;
+      expect(r.left >= c.left - 0.5 && r.right <= c.right + 0.5, at).toBe(true);
+      expect(r.top >= c.top - 0.5 && r.bottom <= c.bottom + 0.5, at).toBe(true);
+    }
+  });
+}

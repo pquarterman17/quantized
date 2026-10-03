@@ -27,7 +27,6 @@
 // Ctrl+Z never lands on a phantom step.
 
 import {
-  cascadeGeometry,
   dedupeWindowTitle,
   defaultPlotView,
   displayedWindowTitle,
@@ -35,6 +34,7 @@ import {
   type PlotWindow,
 } from "../lib/plotview";
 import { panelWindowTitle, reorderPanelDatasetIds, removePanelDatasetId } from "../lib/panelWindowModel";
+import { newWindowGeometry } from "../lib/plotWindows";
 import type { AppState } from "./useApp";
 import { maxZ, nextWindowId } from "./windows";
 
@@ -87,7 +87,7 @@ export function createPanelsSlice(set: SliceSet, get: SliceGet): PanelsSlice {
           kind: "panel",
           title,
           datasetId: null,
-          geometry: { ...cascadeGeometry(s.plotWindows.length), w: PANEL_WIDTH, h: PANEL_HEIGHT },
+          geometry: newWindowGeometry(s, PANEL_WIDTH, PANEL_HEIGHT),
           z: maxZ(s.plotWindows) + 1,
           winState: "normal",
           view: defaultPlotView(), // unused by a panel window, like the item-17 document kinds

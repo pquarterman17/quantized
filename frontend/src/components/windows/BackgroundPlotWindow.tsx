@@ -280,7 +280,10 @@ function BackgroundXYWindow({
           zoom/close affordances are moot here: the frame's capture-phase
           pointerdown focuses the window first (decision #2). */}
       {view.insetMode && displayPayload && (
-        <InsetPlot payload={displayPayload} styleList={styleList} seriesCycle={seriesCycle} view={view} />
+        <InsetPlot
+          payload={displayPayload} styleList={styleList} seriesCycle={seriesCycle} view={view}
+          plotRef={plotRef} hidden={hidden}
+        />
       )}
     </>
   );

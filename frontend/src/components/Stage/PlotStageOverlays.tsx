@@ -11,6 +11,9 @@
 // PlotStageMenus mounting SelectionMiniToolbar, which reads its own store
 // slice instead of taking it as a prop).
 
+import type { RefObject } from "react";
+import type uPlot from "uplot";
+
 import type { ColorScatterSpec } from "../../lib/colorscatter";
 import { lazyRegion } from "../../lib/lazyRegion";
 import type { Measurement } from "../../lib/measure";
@@ -44,6 +47,8 @@ const InsetPlot = lazyRegion(() => import("./InsetPlot"), "Inset");
 
 export interface PlotStageOverlaysProps {
   displayPayload: PlotPayload | null;
+  /** The main plot: the magnifier inset is placed on its frame and outlines its source there. */
+  plotRef?: RefObject<uPlot | null>;
   active: Dataset | null;
   tool: PlotTool;
   insetMode: boolean;
@@ -90,7 +95,9 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
       {p.displayPayload && <ToolHud tool={p.tool} />}
 
       {p.insetMode && p.displayPayload && (
-        <InsetPlot payload={p.displayPayload} styleList={p.styleList} seriesCycle={p.seriesCycle} />
+        // The overlay props carry the inset's own by name (styleList,
+        // seriesCycle, hidden, plotRef): spread, not restated (eager bytes).
+        <InsetPlot {...p} payload={p.displayPayload} />
       )}
 
       {!p.active && (

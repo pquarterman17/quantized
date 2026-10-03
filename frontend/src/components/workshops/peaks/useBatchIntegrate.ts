@@ -13,6 +13,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { csvBlob } from "../../../lib/csvCell";
 import { saveBlob } from "../../../lib/download";
 import { parseQuantity } from "../../../lib/metadataCleanup";
 import { keysAcross, metaValue, pathFromId, type MetaKeyInfo } from "../../../lib/metadataKeys";
@@ -135,7 +136,7 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
   };
 
   const exportCsv = () => {
-    if (run) saveBlob(new Blob([batchIntegrateCsv(run.rows)], { type: "text/csv" }), "peak-batch-integrate.csv");
+    if (run) saveBlob(csvBlob(batchIntegrateCsv(run.rows)), "peak-batch-integrate.csv");
   };
 
   /** Land the trend in the library; returns its id and whatever was skipped. */

@@ -51,7 +51,7 @@ import type { CalcResult, ChannelRole, Dataset, DataStruct } from "../../../lib/
 import { nextDatasetId, plotIntentStageTab, useApp } from "../../../store/useApp";
 import { askParams } from "../../overlays/ParamDialog";
 import { describeExtract, planExtract } from "./extractRows";
-import { fmtCell } from "./cellFormat";
+import { gridFormatters } from "./cellFormat";
 import { resolvePendingEdit } from "../../../store/pendingEdit";
 import {
   analysisWorksheetRows,
@@ -510,9 +510,8 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
       col < 0
         ? [xName, xUnit ? `X · ${xUnit}` : "X"]
         : [labels[col] ?? "", units[col] ? `· ${units[col]}` : ""];
-    for (const r of order.slice(0, AUTOFIT_SAMPLE_ROWS)) {
-      samples.push(fmtCell(col < 0 ? time[r] : values[r]?.[col]));
-    }
+    const fmt = gridFormatters(time, values)(col); // the grid's per-column precision
+    for (const r of order.slice(0, AUTOFIT_SAMPLE_ROWS)) samples.push(fmt(col < 0 ? time[r] : values[r]?.[col]));
     setColWidth(col, autofitColWidth(samples));
   }
 

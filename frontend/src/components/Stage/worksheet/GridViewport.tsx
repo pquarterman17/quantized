@@ -39,6 +39,7 @@ import {
 } from "../../../lib/gridwindow";
 import type { CalcResult, ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
 import GridHeader from "./GridHeader";
+import { gridFormatters } from "./cellFormat";
 import GridRow from "./GridRow";
 import GridStatsFooter from "./GridStatsFooter";
 import { useCellEdit } from "./useCellEdit";
@@ -160,6 +161,8 @@ export default function GridViewport({
   // one axis over. -1 (the pinned x/time column) is a valid anchor.
   const [colAnchor, setColAnchor] = useState<number | null>(null);
   const cellEdit = useCellEdit(onEditCell);
+  // Per-column number precision: each drawn column is scanned once per data change.
+  const fmtOf = useMemo(() => gridFormatters(data.time, data.values), [data.time, data.values]);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -344,6 +347,7 @@ export default function GridViewport({
           onEditCategoricalCell={onEditCategoricalCell}
           onEditCell={onEditCell}
           colName={(col) => (col < 0 ? xName : data.labels[col] ?? `column ${col + 1}`)}
+          fmtOf={fmtOf}
         />
       ))}
       {trailingRowSpacer > 0 && <div style={{ height: trailingRowSpacer }} aria-hidden="true" />}

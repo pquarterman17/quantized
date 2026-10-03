@@ -8,7 +8,8 @@ import {
   sanitizeFigureDocument,
   type FigureDocument,
 } from "./figureDocument";
-import { sanitizePlotWindows, type PlotWindow } from "./plotview";
+import type { PlotWindow } from "./plotview";
+import { sanitizePlotWindows } from "./plotWindows";
 
 function rawDocumentsByWindowId(value: unknown): Map<string, unknown> {
   const out = new Map<string, unknown>();

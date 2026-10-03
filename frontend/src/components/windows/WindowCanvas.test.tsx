@@ -13,7 +13,7 @@
 // MultiPanelStage.test.tsx pattern) so both PlotStage's and
 // BackgroundPlotWindow's render effects can run headlessly.
 
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createFigureDocument } from "../../lib/figureDocument";
@@ -130,6 +130,35 @@ describe("WindowCanvas — single maximized window (migration guarantee)", () =>
     expect(container.querySelector(".qzk-plotwin")).toBeNull();
     expect(container.querySelector(".qzk-stage")).not.toBeNull();
     expect(created).toHaveLength(1); // exactly one live plot instance
+  });
+
+  it("still reports the stage size (its tab panel's), so the FIRST new window fits the stage", async () => {
+    const seen: { el: Element; cb: ResizeObserverCallback }[] = [];
+    class CapturingRO {
+      constructor(private cb: ResizeObserverCallback) {}
+      observe(el: Element): void {
+        seen.push({ el, cb: this.cb });
+      }
+      disconnect(): void {}
+    }
+    vi.stubGlobal("ResizeObserver", CapturingRO);
+    try {
+      useApp.setState({ plotWindows: [win({ id: "w1", winState: "maximized" })], focusedWindowId: "w1", plotCanvasBounds: null });
+      const { unmount } = render(
+        <div id="qz-stage-panel">
+          <WindowCanvas />
+        </div>,
+      );
+      const panel = document.getElementById("qz-stage-panel")!;
+      const hit = seen.find((s) => s.el === panel);
+      expect(hit, "the stage panel is observed").toBeDefined();
+      act(() => hit!.cb([{ contentRect: { width: 640.4, height: 480 } } as ResizeObserverEntry], {} as ResizeObserver));
+      expect(useApp.getState().plotCanvasBounds).toEqual({ width: 640, height: 480 });
+      unmount();
+      expect(useApp.getState().plotCanvasBounds).toBeNull();
+    } finally {
+      vi.stubGlobal("ResizeObserver", MockResizeObserver);
+    }
   });
 });
 

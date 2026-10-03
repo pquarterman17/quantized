@@ -10,6 +10,7 @@ import { useMemo, useState } from "react";
 
 import { reportEmit } from "../../../lib/api/report";
 import { measureSimsRegion, type SimsRegionResult } from "../../../lib/api/sims";
+import { csvBlob } from "../../../lib/csvCell";
 import { saveBlob } from "../../../lib/download";
 import { xExtent } from "../../../lib/plotDecimate";
 import { useDebouncedPreview, useLatestRef, tokenOf } from "../../../lib/previewKey";
@@ -149,7 +150,7 @@ export function useSimsRegion(active: boolean): SimsRegionState {
 
   function exportCsv(): void {
     if (!result || !dataset) return;
-    saveBlob(new Blob([result.csv], { type: "text/csv" }), `${stem(dataset.name)}_region_${regionText.replace(/[^\w.-]+/g, "_")}.csv`);
+    saveBlob(csvBlob(result.csv), `${stem(dataset.name)}_region_${regionText.replace(/[^\w.-]+/g, "_")}.csv`);
   }
 
   async function addToReports(): Promise<void> {

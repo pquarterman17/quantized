@@ -30,7 +30,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from quantized.csv_safe import csv_text_cell, safe_comment_line
+from quantized.csv_safe import csv_text_cell, safe_comment_line, with_excel_bom
 from quantized.datastruct import DataStruct
 
 __all__ = ["format_xrd_csv", "write_xrd_csv"]
@@ -76,7 +76,8 @@ def write_xrd_csv(
     )
     # newline="" so the explicit "\n" in the text is written verbatim (no
     # platform translation), matching MATLAB's byte-for-byte fprintf output.
-    out.write_text(text, encoding="utf-8", newline="")
+    # A UTF-8 BOM only for non-ASCII text (Excel), so ASCII stays byte-identical.
+    out.write_text(with_excel_bom(text), encoding="utf-8", newline="")
 
 
 def format_xrd_csv(

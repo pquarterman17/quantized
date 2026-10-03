@@ -7,7 +7,7 @@
 import ToolWindow from "./ToolWindow";
 import { DataTable } from "../primitives/DataTable";
 import { Button } from "../primitives";
-import { csvTextCell } from "../../lib/csvCell";
+import { csvBlob, csvTextCell } from "../../lib/csvCell";
 
 export interface ResultsData {
   title: string;
@@ -15,8 +15,8 @@ export interface ResultsData {
   rows: (string | number)[][];
 }
 
-function download(name: string, mime: string, text: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+function download(name: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = name;
@@ -46,7 +46,7 @@ export default function ResultsWindow({
       <div className="qz-btn-row">
         <Button
           size="sm"
-          onClick={() => download(`${stem}.csv`, "text/csv", toCSV(data.columns, data.rows))}
+          onClick={() => download(`${stem}.csv`, csvBlob(toCSV(data.columns, data.rows)))}
         >
           Download CSV
         </Button>
@@ -55,8 +55,9 @@ export default function ResultsWindow({
           onClick={() =>
             download(
               `${stem}.json`,
-              "application/json",
-              JSON.stringify({ columns: data.columns, rows: data.rows }, null, 2),
+              new Blob([JSON.stringify({ columns: data.columns, rows: data.rows }, null, 2)], {
+                type: "application/json",
+              }),
             )
           }
         >

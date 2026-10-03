@@ -31,12 +31,23 @@
 // matrix's S2): the leg used to pass none, so an explicit width / colour /
 // dash fell back to the defaults on every break panel (a width-2 line drew at
 // 1.5) while the export — the flat figure — carried them.
+//
+// Error bars (plot audit leftovers): each panel draws the bars of its OWN rows
+// (`BreakPanel.data`), from the same bindings as the flat plot — role spans
+// (asymmetric, X/dQ) plus the legacy `errKeys` whiskers — so `buildOpts`'
+// plugins colour them by series and skip hidden ones exactly as unbroken. An
+// auto shared y range widens to cover them under the flat plot's log floor
+// (`lib/uplotErrorRange.ts`); the export draws the same bars per panel
+// (`calc/figure_break.py`).
 
 import uPlot from "uplot";
 
+import { buildErrorColumns, buildErrorSpans, type ErrorSpan } from "../../lib/errorbars";
+import type { ErrorBinding } from "../../lib/errorRoles";
 import type { BreakPanel } from "../../lib/facet";
 import { breakPanelWidths, xZoomSyncHook } from "../../lib/multipanel";
 import type { SeriesStyle } from "../../lib/types";
+import { errorReach } from "../../lib/uplotErrorRange";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
 
@@ -49,8 +60,15 @@ const BREAK_GLYPH_W = 20;
  *  supplied by `renderBreakPanels` itself. */
 export type BreakCellOpts = Omit<
   BuildOptsArgs,
-  "width" | "height" | "xLim" | "seriesLabels" | "seriesStyles" | "hidden" | "linearPaths" | "pointsPaths"
+  "width" | "height" | "xLim" | "seriesLabels" | "seriesStyles" | "hidden" | "linearPaths" | "pointsPaths" | "errorBars" | "errorSpans"
 >;
+
+/** The error bindings the flat plot draws from: the dataset's role bindings
+ *  (spans) and the view's legacy `errKeys` (symmetric y whiskers). */
+export interface BreakErrors {
+  roles: readonly ErrorBinding[] | undefined;
+  errKeys: Record<number, number>;
+}
 
 export interface BreakPanelsArgs {
   panels: readonly BreakPanel[];
@@ -65,6 +83,8 @@ export interface BreakPanelsArgs {
    *  payload with `show: false`, as on the flat canvas, so it is not drawn
    *  while the export (which drops it) is matched series for series. */
   hiddenChannels: readonly number[];
+  /** Absent: no error bars (as before). */
+  errors?: BreakErrors;
   /** uPlot cursor-sync group; see `MULTIPANEL_SYNC_KEY`. */
   syncKey: string;
   /** `cell.yLim` is the panels' shared DATA extent (no typed limit), so pad it
@@ -87,6 +107,43 @@ function makeBreakGlyph(width: number): HTMLDivElement {
     "background-image:repeating-linear-gradient(65deg, var(--border) 0 2px, transparent 2px 9px);" +
     "opacity:0.7;";
   return glyph;
+}
+
+interface PanelBars {
+  errorBars?: Map<number, (number | null)[]>;
+  errorSpans?: Map<number, ErrorSpan[]>;
+}
+
+/** One panel's bars, keyed by its payload column like the flat plot's. */
+function panelBars(p: BreakPanel, errors: BreakErrors | undefined): PanelBars {
+  if (!errors || !p.data) return {};
+  const spans = errors.roles?.length ? buildErrorSpans(p.data, p.channels, errors.roles) : undefined;
+  const bars = buildErrorColumns(p.data, p.channels, errors.errKeys);
+  return {
+    ...(bars.size ? { errorBars: bars } : {}),
+    ...(spans?.size ? { errorSpans: spans } : {}),
+  };
+}
+
+/** `lim` widened by every visible panel's y bar ends — the flat plot's
+ *  autoscale rule, ends under the log floor (two decades below the lowest
+ *  point) skipped as `uplotErrorRange.errorRange` skips them. */
+function widenByBars(
+  lim: [number, number],
+  panels: readonly BreakPanel[],
+  bars: readonly PanelBars[],
+  hidden: readonly number[],
+  positiveOnly: boolean,
+): [number, number] {
+  let [lo, hi] = lim;
+  const floor = positiveOnly ? lim[0] / 100 : -Infinity;
+  panels.forEach((p, i) => {
+    for (const e of errorReach(p.payload, bars[i].errorBars, bars[i].errorSpans) ?? []) {
+      if (e.on !== 0 || hidden.includes(p.channels[e.series])) continue;
+      for (const v of e.rows.flat()) if (v > floor) [lo, hi] = [Math.min(lo, v), Math.max(hi, v)];
+    }
+  });
+  return [lo, hi];
 }
 
 /** Each built row's panel x spans, for `resizeBreakPanels`. */
@@ -115,7 +172,11 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
   // wheel or pan on one panel moves them all.
   const plots: uPlot[] = [];
   const ySync = xZoomSyncHook(() => plots, "y");
-  const { yLim, yScale } = args.cell;
+  const { yScale } = args.cell;
+  const bars = args.panels.map((p) => panelBars(p, args.errors));
+  const yLim = args.yAuto && args.cell.yLim
+    ? widenByBars(args.cell.yLim, args.panels, bars, args.hiddenChannels, yScale !== "linear")
+    : args.cell.yLim;
   const padded =
     args.yAuto && yLim && yScale !== "reciprocal" && typeof uPlot.rangeNum === "function" // (a test's mock may lack it)
       ? ((yScale === "log" ? uPlot.rangeLog(yLim[0], yLim[1], 10, false) : uPlot.rangeNum(yLim[0], yLim[1], 0.1, true)) as [number, number])
@@ -131,7 +192,7 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
       height: args.box.h,
       // A break panel's whole point is showing only its own x-slice.
       xLim: p.xRange,
-      ...(padded ? { yLim: padded } : {}),
+      yLim: padded ?? yLim,
       // `channels[i]` is the dataset channel behind `payload.series[i]`, by
       // construction in `lib/facet.breakPayloads` — so a rename lands on the
       // channel it was made for even when this panel's channel list differs
@@ -139,6 +200,7 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
       seriesLabels: p.channels.map((ch) => args.seriesLabels[ch]),
       seriesStyles: p.channels.map((ch) => args.seriesStyles[ch]),
       hidden: p.channels.map((ch) => args.hiddenChannels.includes(ch)),
+      ...bars[i],
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
     });
