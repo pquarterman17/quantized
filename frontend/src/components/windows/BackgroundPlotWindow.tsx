@@ -239,6 +239,7 @@ function BackgroundXYWindow({
         yFmt={view.yFmt}
         showGrid={view.showGrid}
         axisBox={view.showAxisBox}
+        xReversed={view.xReversed}
         fontSize={resolveTemplate(view.plotTemplate).fontSize}
         baseLineWidth={canvasLineWidth(view.plotTemplate, defaultLineWidth)}
         defaultTrace={defaultTrace}

@@ -130,6 +130,7 @@ export interface PlotView {
   axisLabelStyles: AxisLabelStyles;
   plotTemplate: string;
   showAxisBox: boolean;
+  xReversed: boolean; // x high-to-low (IR wavenumber): uPlot dir -1, export x_reversed
   stackMode: boolean;
   insetMode: boolean;
   polarMode: boolean;
@@ -206,7 +207,7 @@ export function defaultPlotView(): PlotView {
     axisLabelOffsets: {},
     axisLabelStyles: {},
     plotTemplate: "screen",
-    showAxisBox: true,
+    showAxisBox: true, xReversed: false,
     stackMode: false,
     insetMode: false,
     polarMode: false,
@@ -220,8 +221,7 @@ export function defaultPlotView(): PlotView {
     plotTitle: "",
     xAxisLabel: "",
     yAxisLabel: "",
-    xKey: null,
-    yKeys: null,
+    xKey: null, yKeys: null,
     groupKey: null,
     facetKey: null,
     y2Keys: null,

@@ -177,6 +177,10 @@ const DATASET_REBIND_RESET_FIELDS = [
   "yLim",
   "xStep",
   "yStep",
+  // The reversed-x convention belongs to the dataset's x quantity (IR
+  // wavenumber, metadata.x_reversed) -- an IR spectrum's reversal must not
+  // ride into the next XRD scan.
+  "xReversed",
 ] as const;
 
 describe("datasetViewDefaults — dataset-bound field coverage (P1.5 review P1)", () => {

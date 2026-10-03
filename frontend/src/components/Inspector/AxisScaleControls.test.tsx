@@ -53,4 +53,16 @@ describe("AxisScaleControls", () => {
     expect((selects[0] as HTMLSelectElement).value).toBe("reciprocal");
     expect((selects[1] as HTMLSelectElement).value).toBe("log");
   });
+
+  it("Reverse X toggles the view's reversed x as one undoable edit", () => {
+    useApp.setState({ xReversed: false });
+    const { getByLabelText } = render(<AxisScaleControls />);
+    const box = getByLabelText("Reverse X") as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    fireEvent.click(box);
+    expect(useApp.getState().xReversed).toBe(true);
+    expect(box.checked).toBe(true);
+    useApp.getState().undo();
+    expect(useApp.getState().xReversed).toBe(false);
+  });
 });

@@ -361,7 +361,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.yFmt,
     args.y2Fmt,
     args.showGrid,
-    args.axisBox,
+    args.axisBox, args.xReversed,
     args.fontSize,
     args.defaultTrace,
     args.wheelZoom,

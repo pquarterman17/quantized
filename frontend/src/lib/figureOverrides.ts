@@ -14,6 +14,8 @@ export interface FigureOverrides {
   ticks?: { dir?: "in" | "out"; len?: number; minor?: boolean };
   spines?: { top?: boolean; right?: boolean };
   x_lim?: [number | null, number | null];
+  /** x drawn high-to-low (`PlotView.xReversed`): matplotlib invert_xaxis. */
+  x_reversed?: boolean;
   y_lim?: [number | null, number | null];
   /** Fixed secondary (right) Y-axis range — the twinx counterpart of
    *  `y_lim`, applied by `calc.figure_y2.render_with_secondary_axis`

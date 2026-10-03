@@ -1995,6 +1995,7 @@ const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   axisLabelStyles: "keyed by AXIS (x/y/y2), not by channel",
   plotTemplate: "named template, not channel-indexed",
   showAxisBox: "display toggle, not channel-indexed",
+  xReversed: "x axis direction toggle, not channel-indexed",
   stackMode: "display toggle, not channel-indexed",
   insetMode: "display toggle, not channel-indexed",
   polarMode: "display toggle, not channel-indexed",

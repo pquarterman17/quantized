@@ -78,6 +78,7 @@ export function datasetViewDefaults(
     xAxisLabel: "",
     yAxisLabel: "",
     seriesStyles,
+    xReversed: dataset?.data.metadata?.x_reversed === true, // IR wavenumber (io/technique.py)
     seriesLabels: {},
     errKeys: dataset ? defaultErrKeys(dataset.data) : {},
     seriesOrder: null,
