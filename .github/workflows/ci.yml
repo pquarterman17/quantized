@@ -16,9 +16,11 @@ on:
 
 # A correction pushed to a PR supersedes the older result. Cancelling that
 # stale run keeps limited hosted-runner slots available for the candidate a
-# reviewer can actually merge.
+# reviewer can actually merge. Every non-PR run is keyed by its commit, so
+# back-to-back merges to main never cancel each other (or a pending run):
+# each main commit keeps a complete result.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 # Least privilege: CI only checks out and tests — it never writes to the repo.
