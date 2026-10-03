@@ -264,6 +264,24 @@ test("the active-tool HUD stays inside the stage", async ({ page }) => {
   }
 });
 
+// Round-4 chrome audit: a tooltip is centred on its control, so the tips of
+// the Inspector's "?" buttons and the search pill ran off the right edge.
+test("tooltips at the window's right edge stay inside it", async ({ page }) => {
+  await loadPlot(page);
+  for (const size of [SIZES[0], { width: 800, height: 600 }]) {
+    await page.setViewportSize(size);
+    for (const target of [page.locator("[data-tip='Open related help']").first(), page.locator(".qzk-menubar [data-tip]").last()]) {
+      await target.hover();
+      const tip = page.getByRole("tooltip");
+      await expect(tip).toBeVisible();
+      const t = await rectOf(tip);
+      expect(t.left >= 0 && t.right <= size.width, `tip cut off at ${size.width}x${size.height}`).toBe(true);
+      await page.mouse.move(1, size.height - 2);
+      await expect(tip).toBeHidden();
+    }
+  }
+});
+
 type QzHarness = { __qz: { useApp: { setState: (s: object) => void } } };
 
 // Round-4 chrome audit: the import toast sat bottom-centre of the WINDOW,

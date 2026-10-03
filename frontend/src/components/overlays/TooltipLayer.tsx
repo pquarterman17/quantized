@@ -12,7 +12,7 @@
 // propagation, so it never steals Escape from a dialog/menu that's also
 // listening for it.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useHelp } from "../../store/help";
@@ -97,9 +97,21 @@ export default function TooltipLayer() {
     };
   }, []);
 
+  // Centred on its control, a tip at the window's edge (the Inspector's "?"
+  // buttons, the search pill) was cut off: shift it back inside, 8px clear.
+  const tipRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = tipRef.current;
+    if (!el) return;
+    el.style.marginLeft = "";
+    const r = el.getBoundingClientRect();
+    el.style.marginLeft = `${Math.min(0, window.innerWidth - 8 - r.right) || Math.max(0, 8 - r.left)}px`;
+  }, [tip]);
+
   if (!tip) return null;
   return createPortal(
     <div
+      ref={tipRef}
       className="qz-tip"
       role="tooltip"
       style={{

@@ -39,6 +39,7 @@ describe("TooltipLayer", () => {
     useHelp.setState({ whatIsThis: false });
   });
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
     useHelp.setState({ whatIsThis: false });
   });
@@ -144,5 +145,22 @@ describe("TooltipLayer", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
     advance(1);
     expect(screen.getByRole("tooltip")).toBeInTheDocument();
+  });
+
+  // Chrome audit round 4: a tip is centred on its control, so the Inspector's
+  // "?" buttons and the search pill (both at the window's right edge) had
+  // their tips cut off by it. jsdom has no layout: the tip's box is stubbed.
+  it("shifts a tip that would leave the window back inside it", () => {
+    const W = window.innerWidth;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      const off = this.classList.contains("qz-tip") ? parseFloat(this.style.marginLeft || "0") : 0;
+      const left = W - 60 + off; // 120px wide, centred 60px from the right edge... and so half outside
+      return { x: left, y: 200, left, top: 200, width: 120, height: 30, right: left + 120, bottom: 230, toJSON: () => ({}) } as DOMRect;
+    });
+    const el = renderTarget({ "data-tip": "Open related help" });
+    fireEvent.mouseOver(el);
+    advance(400);
+    const tip = screen.getByRole("tooltip");
+    expect(parseFloat(tip.style.marginLeft)).toBe(-68); // 60px over the edge + an 8px margin
   });
 });
