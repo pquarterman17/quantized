@@ -4,7 +4,7 @@
 
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Stage from "./Stage";
 import { useApp } from "../../store/useApp";
@@ -17,6 +17,14 @@ vi.mock("./MapStage", () => ({ default: () => <div>map-canvas</div> }));
 vi.mock("./Worksheet", () => ({ default: () => <div>worksheet</div> }));
 vi.mock("../windows/useWindowCommands", () => ({ useWindowCommands: () => {} }));
 vi.mock("../history/useHistoryCommands", () => ({ useHistoryCommands: () => {} }));
+// The empty-workspace view is a lazy chunk. Cold, under load, it resolved
+// after findByRole's 1 s default (the "no workspace content" flake). Every
+// run now takes longer than that, so the race is forced, not left to load;
+// the preload below (the libraryFlatRowsSeam idiom) is the fix.
+vi.mock("./EmptyProjectStage", async (importOriginal) => {
+  await new Promise((r) => setTimeout(r, 1200));
+  return importOriginal();
+});
 
 const ds = (nChannels: number): Dataset => ({
   id: "d1",
@@ -38,6 +46,10 @@ beforeEach(() => {
 });
 
 describe("Map tab visibility", () => {
+  beforeAll(async () => {
+    await import("./EmptyProjectStage");
+  });
+
   it("is hidden with no workspace content at all", async () => {
     render(<Stage />);
     expect(screen.queryByText("Map")).not.toBeInTheDocument();
