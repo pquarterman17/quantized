@@ -1,5 +1,6 @@
 import type { Dataset, FolderNode } from "./types";
 import type { WorkbookNode } from "./workbooks";
+import { folderPathLabelIndex } from "./foldertree";
 
 export const BATCH_ALL_WORKBOOKS = "all";
 export const BATCH_LOOSE_WORKSHEETS = "loose";
@@ -14,24 +15,7 @@ export interface BatchDatasetFilterInput {
 
 /** Build every breadcrumb once for both search and row captions. Parent
  * cycles and broken links stop locally rather than hanging an imported tree. */
-export function batchFolderLabels(folders: readonly FolderNode[]): Map<string, string> {
-  const byId = new Map(folders.map((folder) => [folder.id, folder]));
-  const labels = new Map<string, string>();
-  for (const folder of folders) {
-    const names: string[] = [];
-    const seen = new Set<string>();
-    let current: string | null = folder.id;
-    while (current !== null && !seen.has(current)) {
-      seen.add(current);
-      const node = byId.get(current);
-      if (!node) break;
-      names.unshift(node.name);
-      current = node.parentId;
-    }
-    labels.set(folder.id, names.join(" › "));
-  }
-  return labels;
-}
+export const batchFolderLabels = folderPathLabelIndex;
 
 export function validBatchWorkbookScope(scope: string, workbooks: readonly WorkbookNode[]): string {
   if (scope === BATCH_ALL_WORKBOOKS || scope === BATCH_LOOSE_WORKSHEETS) return scope;

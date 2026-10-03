@@ -137,6 +137,28 @@ export function folderPathLabel(folders: FolderNode[], folderId: string | null |
   return path.length ? path.map((f) => f.name).join(" › ") : undefined;
 }
 
+/** Every folder breadcrumb from one shared id index. Use this when a view
+ * needs captions for many rows: calling `folderPathLabel` per row rebuilds
+ * the folder id map each time. Broken links and cycles stop safely. */
+export function folderPathLabelIndex(folders: readonly FolderNode[]): Map<string, string> {
+  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  const labels = new Map<string, string>();
+  for (const folder of folders) {
+    const names: string[] = [];
+    const seen = new Set<string>();
+    let current: string | null = folder.id;
+    while (current !== null && !seen.has(current)) {
+      seen.add(current);
+      const node = byId.get(current);
+      if (!node) break;
+      names.unshift(node.name);
+      current = node.parentId;
+    }
+    labels.set(folder.id, names.join(" › "));
+  }
+  return labels;
+}
+
 // ── integrity ────────────────────────────────────────────────────────────
 
 /** Clear any `folderId` that points at a folder no longer present (→ root).
