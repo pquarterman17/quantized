@@ -34,6 +34,8 @@ beforeEach(() => {
     macroSteps: [],
     macroRecording: false,
     pipelineRunning: false,
+    history: [],
+    future: [],
   });
 });
 
@@ -54,6 +56,15 @@ describe("PipelinePanel", () => {
     expect(steps).toHaveLength(1);
     expect(steps[0].kind).toBe("expression");
     expect(steps[0].params).toEqual({ name: "double", expr: "A * 2" });
+  });
+
+  it("escapes an expression step's name in exported script text", () => {
+    render(<PipelinePanel />);
+    const [nameField, exprField] = screen.getAllByRole("textbox");
+    fireEvent.change(nameField, { target: { value: 'ratio "raw"' } });
+    fireEvent.change(exprField, { target: { value: "A / 2" } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Step" }));
+    expect(useApp.getState().macroSteps[0].code).toBe('qz.addColumn("ratio \\"raw\\"", "A / 2")');
   });
 
   it("runs steps in order: expression applies, ui skips, edited fit re-runs", async () => {
@@ -82,6 +93,7 @@ describe("PipelinePanel", () => {
     expect(fitMock).toHaveBeenCalledWith(expect.objectContaining({ model: "Linear" }));
     // and the run did NOT re-record itself
     expect(useApp.getState().macroSteps).toHaveLength(3);
+    expect(screen.getByRole("region", { name: "Last pipeline run" })).toHaveTextContent("2 completed · 0 warnings · 0 failed · 1 skipped");
   });
 
   it("editing a fit step's model through the schema form regenerates label + code", () => {
@@ -117,6 +129,61 @@ describe("PipelinePanel", () => {
     expect(useApp.getState().macroSteps.map((s) => s.label)).toEqual(["two"]);
   });
 
+  it("previews a structural edit, supports cancel, and restores the confirmed edit with undo", () => {
+    useApp.setState({
+      macroSteps: [
+        makeStep("transform", "Stack", "qz.stack()", { op: "stack", channels: [0] }),
+        makeStep("fit", "Fit Linear", 'qz.fit("Linear")', { model: "Linear" }),
+      ],
+    });
+    render(<PipelinePanel />);
+    expect(screen.getByText("Changes the pipeline dataset for 1 later enabled step.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByTitle("delete step")[0]);
+    expect(screen.getByRole("group", { name: "Remove “Stack”?" })).toHaveTextContent("1 later enabled step");
+    expect(useApp.getState().macroSteps).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("group", { name: "Remove “Stack”?" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByTitle("delete step")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    expect(useApp.getState().macroSteps.map((step) => step.label)).toEqual(["Fit Linear"]);
+    expect(useApp.getState().history).toHaveLength(1);
+    useApp.getState().undo();
+    expect(useApp.getState().macroSteps.map((step) => step.label)).toEqual(["Stack", "Fit Linear"]);
+  });
+
+  it("duplicates a step next to its source with independent params and one undo entry", () => {
+    const original = makeStep("transform", "Stack", "qz.stack()", {
+      op: "stack", channels: [0, 1], nested: { keep: true },
+    });
+    useApp.setState({ macroSteps: [original] });
+    render(<PipelinePanel />);
+    fireEvent.click(screen.getByTitle("duplicate step"));
+
+    const [source, copy] = useApp.getState().macroSteps;
+    expect(copy.id).not.toBe(source.id);
+    expect(copy.label).toBe("Stack copy");
+    expect(copy.params).toEqual(source.params);
+    expect(copy.params).not.toBe(source.params);
+    expect(copy.params.nested).not.toBe(source.params.nested);
+    expect(useApp.getState().history).toHaveLength(1);
+    useApp.getState().undo();
+    expect(useApp.getState().macroSteps).toEqual([original]);
+  });
+
+  it("blocks execution before an invalid step can mutate the worksheet", () => {
+    useApp.setState({
+      macroSteps: [makeStep("expression", "Bad", "qz.add()", { name: "bad", expr: "Q + 1" })],
+    });
+    render(<PipelinePanel />);
+    const run = screen.getByRole("button", { name: /Run on scan/ });
+    expect(run).toBeDisabled();
+    expect(screen.getByText("Needs attention")).toBeInTheDocument();
+    expect(screen.getByText('unknown variable "Q"')).toBeInTheDocument();
+    expect(useApp.getState().datasets[0].data.labels).toEqual(["I"]);
+  });
+
   it("describes a promote/metaclean transform step as in-place, others as derived (finding #7)", () => {
     useApp.setState({
       macroSteps: [
@@ -143,19 +210,17 @@ describe("PipelinePanel", () => {
     expect(screen.getByText(/Derives a new dataset from the current one/)).toBeInTheDocument();
   });
 
-  it("failure isolation: a bad step logs failed and the run continues", async () => {
+  it("failure isolation: a runtime failure is logged and the run continues", async () => {
+    fitMock.mockRejectedValue(new Error("backend fit failed"));
     useApp.setState({
       macroSteps: [
-        makeStep("expression", "Add column bad", 'qz.addColumn("bad", "Q + 1")', {
-          name: "bad",
-          expr: "Q + 1", // unknown channel — fails at run time
-        }),
+        makeStep("fit", "Fit Linear", 'qz.fit("Linear")', { model: "Linear" }),
         makeStep("ui", "Y axis log", "qz.setYLog(true)"),
       ],
     });
     render(<PipelinePanel />);
     fireEvent.click(screen.getByRole("button", { name: /Run on scan/ }));
-    await waitFor(() => expect(screen.getByText(/unknown variable/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("backend fit failed")).toBeInTheDocument());
     expect(screen.getByText("ui step")).toBeInTheDocument(); // later step still ran
   });
 });

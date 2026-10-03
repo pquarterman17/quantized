@@ -77,6 +77,7 @@ export function useTemplates(): TemplatesState {
   const [templates, setTemplates] = useState<AnalysisTemplate[]>(() => loadTemplates());
   const [batch, setBatch] = useState<BatchProgress | null>(null);
   const loadSteps = useApp((s) => s.loadSteps);
+  const recordHistory = useApp((s) => s.recordHistory);
   const addDataset = useApp((s) => s.addDataset);
   const setPipelineRunning = useApp((s) => s.setPipelineRunning);
 
@@ -109,6 +110,8 @@ export function useTemplates(): TemplatesState {
     (name: string) => {
       const t = loadTemplates().find((x) => x.name === name);
       if (!t) return;
+      if (JSON.stringify(useApp.getState().macroSteps) === JSON.stringify(t.steps)) return;
+      recordHistory("load pipeline template");
       loadSteps(t.steps);
       // P3.5 "recently used". After the existence check, so loading a template
       // deleted in another tab records nothing. A direct import is free here:
@@ -116,7 +119,7 @@ export function useTemplates(): TemplatesState {
       recordUse({ kind: "analysis", scope: "global", id: t.name });
       toast(`template "${name}" loaded — ${t.steps.length} steps`);
     },
-    [loadSteps],
+    [loadSteps, recordHistory],
   );
 
   const remove = useCallback((name: string) => {
