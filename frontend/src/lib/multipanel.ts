@@ -189,18 +189,20 @@ export function breakPanelWidths(n: number, width: number, glyphW = 20): number[
  *  mode). Guards its own re-entrant `setScale` calls with a closed-over flag
  *  (one call → N-1 `setScale` calls on the others → would otherwise loop).
  *  `getPlots` is a thunk rather than a plain array so a caller can pass a
- *  live React ref's `.current` and always read the up-to-date panel list. */
+ *  live React ref's `.current` and always read the up-to-date panel list.
+ *  `axis` "y" is the x-break's mirror image: its panels share y, not x. */
 export function xZoomSyncHook(
   getPlots: () => readonly uPlot[],
+  axis = "x",
 ): (self: uPlot, key: string) => void {
   let syncing = false;
   return (u, key) => {
-    if (key !== "x" || syncing) return;
-    const { min, max } = u.scales.x;
+    if (key !== axis || syncing) return;
+    const { min, max } = u.scales[axis];
     if (min == null || max == null) return;
     syncing = true;
     for (const other of getPlots()) {
-      if (other !== u) other.setScale("x", { min, max });
+      if (other !== u) other.setScale(axis, { min, max });
     }
     syncing = false;
   };

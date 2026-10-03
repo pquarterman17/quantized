@@ -61,4 +61,20 @@ describe("renderBreakPanels", () => {
     await settle();
     expect(plots.map((u) => [u.scales.x.min, u.scales.x.max])).toEqual([[0, 2], [3, 5]]);
   });
+
+  // Plot audit round 3: an x-break keeps ONE y scale. A box zoom or wheel on
+  // one panel rescaled y there alone, so one break read two y ranges.
+  it("moves every panel's y with a y zoom on one, and leaves each panel's own x alone", async () => {
+    const host = document.body.appendChild(document.createElement("div"));
+    plots = renderBreakPanels(host, {
+      panels: [panel([0, 1, 2], [0, 2]), panel([3, 4, 5], [3, 5])],
+      seriesLabels: {}, seriesStyles: {}, hiddenChannels: [], syncKey: "break-test-y", box: { w: 800, h: 300 },
+      cell: { xScale: "linear", yScale: "linear", yLim: [0, 10], tool: "zoom", onReadout: vi.fn() },
+    });
+    await settle();
+    plots[0].setScale("y", { min: 1, max: 3 });
+    await settle();
+    expect([plots[1].scales.y.min, plots[1].scales.y.max]).toEqual([1, 3]);
+    expect(plots.map((u) => [u.scales.x.min, u.scales.x.max])).toEqual([[0, 2], [3, 5]]);
+  });
 });
