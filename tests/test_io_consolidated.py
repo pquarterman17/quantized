@@ -91,3 +91,8 @@ def test_designations_follow_declared_error_roles() -> None:
     )
     org = consolidate_csv([(ds, "a.ort")], fmt="origin")
     assert org.splitlines()[3] == "X,Y,yEr,xEr"
+
+
+def test_missing_values_are_blank_like_the_padding() -> None:
+    ds = DataStruct.create([1.0, 2.0], [[float("nan")], [2.0]], labels=["A"], units=[""])
+    assert consolidate_csv([(ds, "a")]).splitlines()[1:] == ["1,", "2,2"]

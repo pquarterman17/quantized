@@ -142,7 +142,11 @@ def consolidate_csv(datasets: list[tuple[DataStruct, str]], *, fmt: str = "stand
 
     max_rows = max((c.data.size for c in cols), default=0)
     for r in range(max_rows):
-        cells = [f"{c.data[r]:.10g}" if r < c.data.size else "" for c in cols]
+        # Missing values are blank like the ragged padding (not "nan" text).
+        cells = [
+            f"{c.data[r]:.10g}" if r < c.data.size and np.isfinite(c.data[r]) else ""
+            for c in cols
+        ]
         lines.append(",".join(cells))
 
     return "\n".join(lines) + "\n"

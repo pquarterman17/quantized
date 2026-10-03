@@ -61,6 +61,13 @@ def _meta_get(meta: dict[str, Any], *keys: str, default: Any = None) -> Any:
     return default
 
 
+def _num_cell(v: float) -> str:
+    """One ``%.10g`` data cell; a missing (non-finite) value is a BLANK cell,
+    which Origin's impASC, Excel and quantized's importer all read as missing
+    (``"nan"`` is text to the first two -- Excel charts even plot it as 0)."""
+    return f"{v:.10g}" if math.isfinite(v) else ""
+
+
 def _escape_lt(text: str) -> str:
     """Make ``text`` safe inside a LabTalk string literal.
 
@@ -248,8 +255,8 @@ def format_origin_script(
         ",".join(csv_text_cell(c) for c in [x_unit, *units]),
     ]
     for r in range(values.shape[0]):
-        cells = [f"{time[r]:.10g}"]
-        cells.extend(f"{values[r, c]:.10g}" for c in range(values.shape[1]))
+        cells = [_num_cell(time[r])]
+        cells.extend(_num_cell(values[r, c]) for c in range(values.shape[1]))
         csv_lines.append(",".join(cells))
     csv_text = "\n".join(csv_lines) + "\n"
 

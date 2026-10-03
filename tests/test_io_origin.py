@@ -300,3 +300,17 @@ def test_origin_designations_keep_keyword_fallback_without_roles() -> None:
     )
     _, ogs = format_origin_script(ds)
     assert "wks.col3.type = 3;  // yErr" in ogs
+
+
+def test_origin_csv_writes_missing_values_as_blank_cells() -> None:
+    # "nan" is text to Origin's impASC and Excel (Excel charts plot a text
+    # cell as 0); a blank cell is "missing" to Origin, Excel and quantized's
+    # own importer alike.
+    ds = DataStruct.create(
+        [1.0, float("nan"), 3.0],
+        [[1.0, float("inf")], [float("nan"), 0.5], [3.0, 0.7]],
+        labels=["A", "B"],
+        units=["", ""],
+    )
+    csv_text, _ = format_origin_script(ds)
+    assert csv_text.splitlines()[2:] == ["1,1,", ",,0.5", "3,3,0.7"]
