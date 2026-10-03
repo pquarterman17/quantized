@@ -239,6 +239,35 @@ describe("±Infinity and -0 cells", () => {
   });
 });
 
+// The import wire (routes/_payload.jsonify) sends every non-finite cell as
+// JSON null, and the store keeps it as null: a blank CSV cell or a SIMS
+// element absent at some depth. Saving wrote that null verbatim, the reader
+// refused it, and the WHOLE workspace failed to open (found 2026-10-03 on the
+// real EAG SIMS workbook). In memory null already means "missing", so the
+// writer records it as the NaN sentinel.
+describe("a missing cell as imported (null)", () => {
+  const imported = (): DataStruct => {
+    const data = finiteData();
+    (data.values[1] as (number | null)[])[0] = null;
+    (data.time as (number | null)[])[2] = null;
+    return data;
+  };
+
+  it("saves and reopens as a missing (NaN) value instead of failing the open", () => {
+    const loaded = roundTrip(ws([ds({ data: imported(), raw: imported() })]));
+    expect(loaded.datasets[0].data.values[1][0]).toBeNaN();
+    expect(loaded.datasets[0].data.time[2]).toBeNaN();
+    expect(loaded.datasets[0].raw?.values[1][0]).toBeNaN();
+    expect(loaded.datasets[0].data.values[1][1]).toBe(200);
+  });
+
+  it("survives an autosave generation too", async () => {
+    expect(await saveAutosave(ws([ds({ data: imported() })]))).toBe(true);
+    const restored = await loadAutosave();
+    expect(restored?.datasets[0].data.values[1][0]).toBeNaN();
+  });
+});
+
 describe("compatibility in both directions", () => {
   it("parses a pre-fix .dwk (plain numbers, no sentinels) exactly as before", () => {
     const legacy = JSON.stringify({

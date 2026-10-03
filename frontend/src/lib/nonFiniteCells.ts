@@ -67,6 +67,12 @@ export function encodeCell(v: number): WireCell {
   return Number.isFinite(v) ? v : String(v) as WireCell;
 }
 
+/** One DataStruct cell for JSON: `encodeCell`, with an in-memory `null` (a
+ *  missing value from the import wire) written as `"NaN"`. */
+export function encodeDataCell(v: number | null): WireCell {
+  return v === null ? "NaN" : encodeCell(v);
+}
+
 /** JSON boundary hook shared by every persistence container. It recognizes
  *  only the numeric-array shapes whose readers decode this sentinel contract;
  *  unrelated numeric configuration fields keep native JSON behavior. */
@@ -74,9 +80,13 @@ export function encodePersistedCells(this: unknown, key: string, value: unknown)
   if (!Array.isArray(value)) return value;
   const owner = this as Record<string, unknown>;
   const row = (cells: (number | null)[]) => cells.map((cell) => cell === null ? null : encodeCell(cell));
-  if ((key === "time" || key === "z") && (owner.metadata || owner.colormap)) return row(value);
+  // A DataStruct cell that is `null` came off the import wire, which sends
+  // every non-finite value as null; in memory it means "missing", and the
+  // reader refuses a null cell, so it is written as the NaN sentinel.
+  const cells = (c: (number | null)[]) => (owner.metadata ? c.map(encodeDataCell) : row(c));
+  if ((key === "time" || key === "z") && (owner.metadata || owner.colormap)) return cells(value);
   if ((key === "values" && owner.metadata) || (key === "data" && owner.series)) {
-    return (value as number[][]).map(row);
+    return (value as number[][]).map(cells);
   }
   if (key === "errorBars" && owner.payload) {
     return (value as [number, number[]][]).map(([index, cells]) => [index, row(cells)]);
