@@ -22,7 +22,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { categoricalLevels } from "../../../lib/categorical";
-import type { TextColumn } from "../../../lib/columnmeta";
+import type { TextColumn } from "../../../lib/originTextColumns";
 import {
   buildOffsets,
   computeAxisWindow,

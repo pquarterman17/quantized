@@ -122,6 +122,18 @@ describe("dataset.configureQuickPlot", () => {
   });
 });
 
+describe("dataset.techniqueWorkspace", () => {
+  it("activates the clicked worksheet, opens the workspace, and exits Tiles", () => {
+    const ds = dataset("d1");
+    useApp.setState({ datasets: [ds], activeId: null });
+    const onStageOpen = vi.fn();
+    menuItemFor(find("dataset.techniqueWorkspace"), target(ds, { onStageOpen })).run();
+    expect(useApp.getState().activeId).toBe("d1");
+    expect(useApp.getState().stageTab).toBe("technique");
+    expect(onStageOpen).toHaveBeenCalledOnce();
+  });
+});
+
 describe("dataset.quickPlotWith (PR H, L0.37)", () => {
   beforeEach(() => {
     useApp.setState({ quickPlotTemplates: [] });

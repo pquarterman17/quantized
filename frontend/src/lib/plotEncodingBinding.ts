@@ -25,7 +25,7 @@
 // palette live in ./plotEncodingWire.ts (bundle diet slice 22): only lazy
 // modules call them.
 
-import { textColumnCells } from "./columnmeta";
+import { textColumnCells } from "./originTextColumnCells";
 import type { FigureEncoding } from "./figureEncoding";
 import { channelModelingType, isCategorical } from "./modeling";
 import { rowsAreSampled } from "./rowSidecars";

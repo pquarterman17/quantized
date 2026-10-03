@@ -15,6 +15,9 @@ import type { Dataset } from "../../lib/types";
 vi.mock("../windows/WindowCanvas", () => ({ default: () => <div>plot-canvas</div> }));
 vi.mock("./MapStage", () => ({ default: () => <div>map-canvas</div> }));
 vi.mock("./Worksheet", () => ({ default: () => <div>worksheet</div> }));
+vi.mock("../workshops/techniqueworkspace/TechniqueWorkspace", () => ({
+  default: ({ onClose }: { onClose: () => void }) => <button onClick={onClose}>technique-workspace</button>,
+}));
 vi.mock("../windows/useWindowCommands", () => ({ useWindowCommands: () => {} }));
 vi.mock("../history/useHistoryCommands", () => ({ useHistoryCommands: () => {} }));
 // The empty-workspace view is a lazy chunk. Cold, under load, it resolved
@@ -134,12 +137,12 @@ describe("Stage view tabs are a WAI-ARIA tablist (manual activation)", () => {
     useApp.setState({ datasets: [ds(3)], activeId: "d1" });
     render(<Stage />);
     const tabs = within(screen.getByRole("tablist", { name: "Stage view" })).getAllByRole("tab");
-    expect(tabs.map((t) => t.textContent)).toEqual(["Plot", "Map", "Worksheet"]);
+    expect(tabs.map((t) => t.textContent)).toEqual(["Plot", "Map", "Worksheet", "Workflow"]);
     const panel = screen.getByRole("tabpanel", { name: "Plot" });
     expect(panel).toHaveTextContent("plot-canvas");
     for (const t of tabs) expect(t).toHaveAttribute("aria-controls", panel.id);
     expect(tabs.map((t) => [t.getAttribute("aria-selected"), t.tabIndex])).toEqual([
-      ["true", 0], ["false", -1], ["false", -1],
+      ["true", 0], ["false", -1], ["false", -1], ["false", -1],
     ]);
   });
 
@@ -152,12 +155,13 @@ describe("Stage view tabs are a WAI-ARIA tablist (manual activation)", () => {
     fireEvent.keyDown(tabs[0], { key: "ArrowRight" });
     expect(tabs[1]).toHaveFocus();
     fireEvent.keyDown(tabs[1], { key: "End" });
-    expect(tabs[2]).toHaveFocus();
-    fireEvent.keyDown(tabs[2], { key: "ArrowRight" });
+    expect(tabs[3]).toHaveFocus();
+    fireEvent.keyDown(tabs[3], { key: "ArrowRight" });
     expect(tabs[0]).toHaveFocus();
     fireEvent.keyDown(tabs[0], { key: "ArrowLeft" });
-    expect(tabs[2]).toHaveFocus();
+    expect(tabs[3]).toHaveFocus();
     expect(useApp.getState().stageTab).toBe("plot");
+    tabs[2].focus();
     await user.keyboard("{Enter}");
     expect(useApp.getState().stageTab).toBe("worksheet");
     expect(await screen.findByText("worksheet")).toBeInTheDocument();
@@ -174,5 +178,14 @@ describe("Stage view tabs are a WAI-ARIA tablist (manual activation)", () => {
     plot.focus();
     expect(fireEvent.keyDown(plot, { key: "ArrowDown" })).toBe(true); // not defaultPrevented
     expect(plot).toHaveFocus();
+  });
+
+  it("opens and closes the technique workflow as a real Stage view", async () => {
+    useApp.setState({ datasets: [ds(3)], activeId: "d1", stageTab: "technique" });
+    render(<Stage />);
+    expect(await screen.findByRole("button", { name: "technique-workspace" })).toBeInTheDocument();
+    expect(screen.getByRole("tabpanel", { name: "Workflow" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "technique-workspace" }));
+    expect(useApp.getState().stageTab).toBe("plot");
   });
 });

@@ -7,12 +7,10 @@ import { describe, expect, it } from "vitest";
 import {
   columnMetaAt,
   columnMetaList,
-  DESIGNATION_BADGE,
-  hasOriginReportSheets,
   ORIGIN_DESIGNATIONS,
-  originTextColumnNames,
-  originTextColumns,
 } from "./columnmeta";
+import { originTextColumnNames } from "./originTextColumnCells";
+import { DESIGNATION_BADGE, hasOriginReportSheets, originTextColumns } from "./originTextColumns";
 import type { DataStruct } from "./types";
 
 /** An Origin-shaped DataStruct carrying only the metadata columnmeta reads. */

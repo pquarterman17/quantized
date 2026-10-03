@@ -4,7 +4,7 @@
 // the commit run (lib/transformRun.computeTransform). No React, no store.
 
 import { isCategoricalChannel } from "../../../lib/categorical";
-import { originTextColumnNames } from "../../../lib/columnmeta";
+import { originTextColumnNames } from "../../../lib/originTextColumnCells";
 import type { AppendMatch } from "../../../lib/mergeByName";
 import type { TransformParams } from "../../../lib/transformRun";
 import type { DataStruct } from "../../../lib/types";

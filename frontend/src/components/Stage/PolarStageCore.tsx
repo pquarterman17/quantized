@@ -15,7 +15,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { observeResizePaint } from "../../lib/frameCoalesce";
 import { POLAR_LINE_PX, polarChannels, polarRadialRange, polarToXY, radiusNorm } from "../../lib/polar";
 import { analysisData } from "../../lib/rowstate";
-import { niceTicks } from "../../lib/ticks";
+import { niceTicks } from "../../lib/niceTicks";
 import type { Dataset, DataStruct } from "../../lib/types";
 import { seriesColor } from "../../lib/uplotOpts";
 import type { Accent, Theme } from "../../store/useApp";

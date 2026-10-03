@@ -7,13 +7,13 @@
 import { is2DMap } from "./mapdata";
 import type { Dataset } from "./types";
 
-export type StageTab = "plot" | "map" | "worksheet";
+export type StageTab = "plot" | "map" | "worksheet" | "technique";
 
 /** Default stage tab for a newly-activated dataset: a 2-D map (XRDML RSM) opens
  *  in the Map view, a 1-D scan in the Plot view — but never override an explicit
  *  Worksheet choice (the user is inspecting the data grid). */
 export function nextStageTab(d: Dataset, current: StageTab): StageTab {
-  if (current === "worksheet") return current;
+  if (current === "worksheet" || current === "technique") return current;
   return is2DMap(d.data) ? "map" : "plot";
 }
 

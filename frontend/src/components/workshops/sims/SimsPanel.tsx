@@ -19,7 +19,7 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { SIMS_LENGTH_UNITS, SIMS_SMOOTH_METHODS, SIMS_TIME_UNITS, type SimsSmoothMethod } from "../../../lib/transformSims";
 import { xExtent } from "../../../lib/plotDecimate";
-import { useSimsDialog } from "../../../store/simsDialog";
+import { useSimsDialog, type SimsTab } from "../../../store/simsDialog";
 import { useApp } from "../../../store/useApp";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import SimsCompareView from "./SimsCompareView";
@@ -250,26 +250,26 @@ function Stage({ label, on, set, children }: { label: string; on: boolean; set: 
 /** Remounted on every opening, so running the command again re-seeds it. */
 export default function SimsPanel() {
   const opened = useSimsDialog((s) => s.opened);
-  return <SimsWorkshop key={opened} />;
+  const requestedTab = useSimsDialog((s) => s.requestedTab);
+  return <SimsWorkshop key={opened} initialTab={requestedTab} />;
 }
 
-type Tab = "process" | "compare" | "region";
-const TABS: { value: Tab; label: string }[] = [
+const TABS: { value: SimsTab; label: string }[] = [
   { value: "process", label: "Process" },
   { value: "compare", label: "Compare" },
   { value: "region", label: "Region" },
 ];
 
-function SimsWorkshop() {
+function SimsWorkshop({ initialTab }: { initialTab: SimsTab }) {
   const close = useSimsDialog((s) => s.close);
   const hasData = useApp((s) => s.datasets.length > 0);
-  const [tab, setTab] = useState<Tab>("process");
-  const [visited, setVisited] = useState<Tab[]>(["process"]);
-  const pick = (t: Tab) => {
+  const [tab, setTab] = useState<SimsTab>(initialTab);
+  const [visited, setVisited] = useState<SimsTab[]>([initialTab]);
+  const pick = (t: SimsTab) => {
     setTab(t);
     setVisited((v) => (v.includes(t) ? v : [...v, t]));
   };
-  const pane = (t: Tab, node: ReactNode) =>
+  const pane = (t: SimsTab, node: ReactNode) =>
     visited.includes(t) ? <div hidden={tab !== t} style={{ marginTop: 8 }}>{node}</div> : null;
   return (
     <ToolWindow id="sims" title="SIMS depth profile" width={380} onClose={close}>
@@ -277,7 +277,7 @@ function SimsWorkshop() {
         <div className="qzk-ds-meta" style={faint}>Load a SIMS profile to process.</div>
       ) : (
         <>
-          <SegmentedControl<Tab> options={TABS} value={tab} onChange={pick} />
+          <SegmentedControl<SimsTab> options={TABS} value={tab} onChange={pick} />
           {pane("process", <ProcessView active={tab === "process"} />)}
           {pane("compare", <SimsCompareView active={tab === "compare"} />)}
           {pane("region", <SimsRegionView active={tab === "region"} />)}

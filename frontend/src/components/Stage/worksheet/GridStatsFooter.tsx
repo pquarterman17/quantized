@@ -7,7 +7,7 @@
 // the old WorksheetTable behaviour. Text columns (item 8) always blank ("—")
 // — read-only, never in stats.
 
-import type { TextColumn } from "../../../lib/columnmeta";
+import type { TextColumn } from "../../../lib/originTextColumns";
 import type { CalcResult, ChannelRole } from "../../../lib/types";
 import { fmtNum } from "../../../lib/format";
 

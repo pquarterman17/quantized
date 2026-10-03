@@ -172,8 +172,9 @@ describe("rendered controls are named in words (U6)", () => {
     useApp.setState({ datasets: [{ id: "d1", name: "d.dat", data }], activeId: "d1", stageTab: "plot" });
     const { container } = render(<Stage />);
     const strip = screen.getByRole("tablist", { name: "Stage view" });
-    expect(screen.getAllByRole("tab").map((t) => computeAccessibleName(t))).toEqual(["Plot", "Worksheet"]);
+    expect(screen.getAllByRole("tab").map((t) => computeAccessibleName(t))).toEqual(["Plot", "Worksheet", "Workflow"]);
     expect(strip).toContainElement(screen.getByRole("tab", { name: "Plot" }));
+    expect(strip).toContainElement(screen.getByRole("tab", { name: "Workflow" }));
     expect(unnamedControls(container), FIX).toEqual([]);
   });
 });

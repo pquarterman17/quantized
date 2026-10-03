@@ -46,7 +46,7 @@
 // block), and the complete answer arrives over the following slices behind a
 // visible "Searching cell text…" state, never as a partial count.
 
-import { originTextColumnNames } from "./columnmeta";
+import { originTextColumnNames } from "./originTextColumnCells";
 
 /** Cells per block: small enough that building one block (the unit of work
  *  between yields) stays around 10 ms even for long cells. */

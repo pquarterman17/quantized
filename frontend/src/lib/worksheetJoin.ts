@@ -19,7 +19,7 @@
 // warnings can never count keys the join treats differently.
 
 import { categoricalLevels, labelForCode } from "./categorical";
-import { originTextColumns, type TextColumn } from "./columnmeta";
+import { originTextColumns, type TextColumn } from "./originTextColumns";
 import { sidecarRowCount } from "./rowSidecars";
 import type { DataStruct } from "./types";
 

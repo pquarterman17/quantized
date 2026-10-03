@@ -27,6 +27,7 @@ import { useEffect } from "react";
 
 import { canRenderMap } from "../../lib/mapdata";
 import { lazyRegion } from "../../lib/lazyRegion";
+import { plotIntentStageTab } from "../../lib/stagetab";
 import { onTabListKeyDown } from "../../lib/tabListKeys";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { useRecentProjectsCommands } from "../../commands/recentProjectsCommands";
@@ -36,15 +37,22 @@ import { useWorkbookTransferCommands } from "../../commands/workbookTransferComm
 import { useHistoryCommands } from "../history/useHistoryCommands";
 import { useWindowCommands } from "../windows/useWindowCommands";
 import WindowCanvas from "../windows/WindowCanvas";
+import { PendingWorkspace } from "../Shell/workspaceSeams";
 
 const EmptyProjectStage = lazyRegion(() => import("./EmptyProjectStage"), "Empty workspace");
 const MapStage = lazyRegion(() => import("./MapStage"), "Map");
 const Worksheet = lazyRegion(() => import("./Worksheet"), "Worksheet");
+const TechniqueWorkspace = lazyRegion(
+  () => import("../workshops/techniqueworkspace/TechniqueWorkspace"),
+  "Workflow",
+  ({ onClose }) => <PendingWorkspace className="qzk-technique-workspace" label="Workflow" onClose={onClose} />,
+);
 
 const TABS = [
   { id: "plot", label: "Plot" },
   { id: "map", label: "Map" },
   { id: "worksheet", label: "Worksheet" },
+  { id: "technique", label: "Workflow" },
 ] as const;
 
 export default function Stage() {
@@ -112,7 +120,15 @@ export default function Stage() {
         ))}
       </div>
       <div className="qzk-stage-panel" role="tabpanel" id="qz-stage-panel" aria-labelledby={`qz-stage-${shown}`}>
-        {shown === "map" ? <MapStage /> : shown === "worksheet" ? <Worksheet /> : <WindowCanvas />}
+        {shown === "map" ? (
+          <MapStage />
+        ) : shown === "worksheet" ? (
+          <Worksheet />
+        ) : shown === "technique" ? (
+          <TechniqueWorkspace onClose={() => setStageTab(active ? plotIntentStageTab(active) : "plot")} />
+        ) : (
+          <WindowCanvas />
+        )}
       </div>
     </section>
   );
