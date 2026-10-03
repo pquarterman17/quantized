@@ -7,6 +7,7 @@
 
 import { useMemo, useState } from "react";
 
+import { csvBlob } from "../../../lib/csvCell";
 import { saveBlob } from "../../../lib/download";
 import type { PeakRecipe } from "../../../lib/peakwizard";
 import { toast } from "../../../store/toasts";
@@ -39,7 +40,7 @@ export default function PeakBatchView({ recipes, current, pollMs }: {
   const exportCsv = () => {
     if (!b.ran) return;
     const safe = b.ran.recipe.name.replace(/[^\w.-]+/g, "_") || "recipe";
-    saveBlob(new Blob([batchCsv(shown)], { type: "text/csv" }), `peak-batch-${safe}.csv`);
+    saveBlob(csvBlob(batchCsv(shown)), `peak-batch-${safe}.csv`);
   };
   const addTable = () => {
     const id = b.addAsTable();

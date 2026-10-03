@@ -5,6 +5,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { csvBlob } from "../../../lib/csvCell";
 import { saveBlob } from "../../../lib/download";
 import {
   alignToUnionX,
@@ -141,7 +142,7 @@ export function useWaterfall(): WaterfallState {
       : [];
     const csv = waterfallToCSV(resolvedSeries, opts, activeChannel, baked);
     const tag = baked ? "offset" : "raw";
-    saveBlob(new Blob([csv], { type: "text/csv" }), `waterfall_${activeChannel}_${tag}.csv`);
+    saveBlob(csvBlob(csv), `waterfall_${activeChannel}_${tag}.csv`);
     setStatus(`exported waterfall CSV (${baked ? "with" : "without"} offset) — ${resolvedSeries.length} datasets`);
   };
 

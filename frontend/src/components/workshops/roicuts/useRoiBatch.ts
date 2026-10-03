@@ -37,7 +37,7 @@ import type { DataStruct } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { useCutLanding } from "../../Stage/useCutLanding";
-import { csvTextCell } from "../../../lib/csvCell";
+import { csvBlob, csvTextCell } from "../../../lib/csvCell";
 
 /** A dataset that did NOT contribute a result, and why — every skip/error
  *  names its dataset (RSM_CUTS_PLAN item 9: "a silent skip is the failure
@@ -282,7 +282,7 @@ export function useRoiBatch(): RoiBatchState {
 
   function exportCsv(): void {
     if (!summaryRows.length) return;
-    saveBlob(new Blob([summaryToCsv(summaryRows)], { type: "text/csv" }), "roi-batch-summary.csv");
+    saveBlob(csvBlob(summaryToCsv(summaryRows)), "roi-batch-summary.csv");
   }
 
   return {

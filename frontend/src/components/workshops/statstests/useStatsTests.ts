@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { reportEmit } from "../../../lib/api";
 import { runStatsTest, type StatsTestId } from "../../../lib/api/statsTests";
 import { copyText } from "../../../lib/clipboard";
+import { csvBlob } from "../../../lib/csvCell";
 import { saveBlob } from "../../../lib/download";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { analysisData } from "../../../lib/rowstate";
@@ -155,7 +156,7 @@ export function useStatsTests(): StatsTestsState {
 
   function exportCsv(): void {
     if (!output) return;
-    saveBlob(new Blob([outputToCSV(output)], { type: "text/csv" }), `${fileStem}.csv`);
+    saveBlob(csvBlob(outputToCSV(output)), `${fileStem}.csv`);
   }
 
   async function toReport(): Promise<void> {

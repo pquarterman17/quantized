@@ -19,3 +19,15 @@ export function csvTextCell(text: string): string {
   const s = neutralizeFormula(text);
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
+
+/** `text` with a UTF-8 BOM in front when it holds a non-ASCII character, so
+ *  Excel on Windows reads Å/⁻¹/µ right (the twin of csv_safe.with_excel_bom).
+ *  ASCII stays byte-identical; a BOM already there is not doubled. */
+export function withExcelBom(text: string): string {
+  return text.startsWith("﻿") || !/[\u0080-￿]/.test(text) ? text : `﻿${text}`;
+}
+
+/** The Blob for a CSV download (see withExcelBom). */
+export function csvBlob(text: string): Blob {
+  return new Blob([withExcelBom(text)], { type: "text/csv" });
+}
