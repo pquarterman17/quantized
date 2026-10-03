@@ -1820,8 +1820,22 @@ import { fileURLToPath } from "node:url";
  * 2026-10-03 — pin LOWERED 841,233 -> 841,021 after batch 29 (plot audit
  * round 3; the magnifier inset moved behind its own chunk). Measured eager JS
  * is 839,997 B after `npm ci` with `.vite` wiped; pin is measured + 1,024 B.
+ *
+ * 2026-10-03 (bundle diet slice 22, `plans/BUNDLE_HEADROOM.md`) - pin
+ * LOWERED 841,021 -> 834,639 (`measured + 1,000`). Plot audit rounds 2-4 and
+ * the batch figure builder had left 16 B of headroom. Six halves of eager
+ * modules that only lazy modules call moved out, each imported by its own
+ * path; no `import()` was added. Exact bytes, `npm ci`-fresh, `.vite` wiped
+ * before each build, 82 eager chunks throughout:
+ *   `8c6ea3a` (parent)                                 841,005
+ *   + dataset context-action registry                  837,565  (-3,440)
+ *   + workbook-row Quick Plot gate                     836,770  (-795)
+ *   + Library open dispatcher                          835,647  (-1,123)
+ *   + encodings' facet/export wire                     834,555  (-1,092)
+ *   + book-switcher helpers, fit-step decoder          833,639  (-916)
+ * Net: -7,366 B, leaving 1,000 B of headroom.
  */
-const EAGER_JS_BUDGET = 841_021;
+const EAGER_JS_BUDGET = 834_639;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to
