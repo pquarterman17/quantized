@@ -89,7 +89,7 @@ export function usePlotStageActions(
       const u = plotRef.current;
       const before = viewBounds(u);
       plotRef.current.setData(displayPayload.data, true); // resetScales = re-fit
-      useApp.getState().recordView(before, { xLim: null, yLim: null, ...(u.scales.y2 ? { y2Lim: null } : {}) });
+      useApp.getState().recordView(before, viewBounds(u, true));
     }
   }
 

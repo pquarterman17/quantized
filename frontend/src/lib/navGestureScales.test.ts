@@ -138,6 +138,29 @@ describe("wheel zoom", () => {
   });
 });
 
+describe("double-click reset", () => {
+  // Measured live: after a box zoom, uPlot's double-click re-fit was committed
+  // as FIXED limits ([0, 100] x [0, 1100]), so the view never autoscaled again
+  // (hiding a series left y at 1100) and the export carried them too.
+  it("commits the re-fit as auto limits, not as the fitted numbers", async () => {
+    const seen: unknown[] = [];
+    const u = await mount(payload(true), { tool: "zoom", onViewChange: (_b, a) => seen.push(a) });
+    const at = (type: string, x: number, y: number) =>
+      u.over.dispatchEvent(new MouseEvent(type, { button: 0, clientX: x, clientY: y, movementX: 1, movementY: 1, bubbles: true }));
+    at("mousedown", 40, 40);
+    at("mousemove", 200, 150);
+    at("mouseup", 200, 150);
+    await tick();
+    await tick();
+    expect(seen).toHaveLength(1); // the box zoom
+    for (const t of ["mousedown", "mouseup", "mousedown", "mouseup", "dblclick"]) at(t, 100, 100);
+    await tick();
+    await tick();
+    expect(seen.at(-1)).toEqual({ xLim: null, yLim: null, y2Lim: null });
+    expect(seen).toHaveLength(2);
+  });
+});
+
 describe("view history", () => {
   it("reports the secondary y range of a committed gesture, and only when there is one", async () => {
     const seen: unknown[] = [];

@@ -311,22 +311,25 @@ export function wheelZoomPlugin(step = 1.18): uPlot.Plugin {
   };
 }
 
+/** A view's limits; null is auto (a reset). */
 export interface PlotViewBounds {
-  xLim: [number, number];
-  yLim: [number, number];
+  xLim: [number, number] | null;
+  yLim: [number, number] | null;
   /** Present only when the plot has a secondary y axis. */
-  y2Lim?: [number, number];
+  y2Lim?: [number, number] | null;
 }
 
-/** The live view: x, y and (only when the plot has one) the secondary y range. */
-export function viewBounds(u: uPlot): PlotViewBounds {
-  const lim = (s: uPlot.Scale): [number, number] => [s.min ?? 0, s.max ?? 1];
+/** The live view: x, y and (only when the plot has one) the secondary y range;
+ *  `auto` gives the same shape with every limit null. */
+export function viewBounds(u: uPlot, auto = false): PlotViewBounds {
+  const lim = (s: uPlot.Scale): [number, number] | null => (auto ? null : [s.min ?? 0, s.max ?? 1]);
   return { xLim: lim(u.scales.x), yLim: lim(u.scales.y), ...(u.scales.y2 ? { y2Lim: lim(u.scales.y2) } : {}) };
 }
 
 /** Observe completed navigation gestures without participating in their
  * mechanics. Pointer drags (box zoom or pan) commit once on mouseup; a wheel
- * burst commits once after a short idle period. */
+ * burst commits once after a short idle period. uPlot's double-click re-fit
+ * commits as auto limits, not as the fitted numbers (which would pin them). */
 export function viewHistoryPlugin(onCommit: (before: PlotViewBounds, after: PlotViewBounds) => void): uPlot.Plugin {
   let cleanup = () => {};
   return {
@@ -337,14 +340,21 @@ export function viewHistoryPlugin(onCommit: (before: PlotViewBounds, after: Plot
         let pointerStart: PlotViewBounds | null = null;
         let wheelStart: PlotViewBounds | null = null;
         let wheelTimer: ReturnType<typeof setTimeout> | null = null;
+        let lastBefore: PlotViewBounds | null = null;
+        let refits = 0; // a click commit still pending when a double-click lands is dropped
         const down = (e: MouseEvent) => {
           if (e.button === 0) pointerStart = bounds();
         };
         const up = () => {
           if (!pointerStart) return;
-          const before = pointerStart;
+          const before = (lastBefore = pointerStart);
+          const at = refits;
           pointerStart = null;
-          setTimeout(() => onCommit(before, bounds()), 0);
+          setTimeout(() => at === refits && onCommit(before, bounds()), 0);
+        };
+        const dbl = () => {
+          refits++;
+          if (lastBefore) onCommit(lastBefore, viewBounds(u, true));
         };
         const wheel = () => {
           wheelStart ??= bounds();
@@ -358,6 +368,7 @@ export function viewHistoryPlugin(onCommit: (before: PlotViewBounds, after: Plot
         over.addEventListener("mousedown", down);
         document.addEventListener("mouseup", up);
         over.addEventListener("wheel", wheel);
+        over.addEventListener("dblclick", dbl);
         cleanup = () => {
           over.removeEventListener("mousedown", down);
           document.removeEventListener("mouseup", up);
