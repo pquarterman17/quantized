@@ -26,8 +26,8 @@ def test_import_qd_returns_datastruct() -> None:
     resp = client.post("/api/parsers/import", json={"path": str(FIXTURE)})
     assert resp.status_code == 200
     body = resp.json()
-    assert body["labels"] == ["Moment"]
-    assert body["units"] == ["emu"]
+    assert body["labels"][0] == "Moment"  # + QD companions (io/qd_companions.py)
+    assert body["units"][0] == "emu"
     assert len(body["time"]) == 401
     assert len(body["values"]) == 401
     assert body["metadata"]["parser_name"] == "import_qd_vsm"
@@ -53,7 +53,7 @@ def test_upload_qd_returns_datastruct() -> None:
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["labels"] == ["Moment"]
+    assert body["labels"][0] == "Moment"  # + QD companions (io/qd_companions.py)
     assert len(body["time"]) == 401
     assert body["metadata"]["parser_name"] == "import_qd_vsm"
 

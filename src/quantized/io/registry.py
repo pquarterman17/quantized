@@ -111,6 +111,22 @@ def import_structure(path: str | Path) -> dict[str, Any]:
     return parser(resolved)
 
 
+def _import_qd_vsm_auto(path: Path) -> DataStruct:
+    """``import_qd_vsm`` plus its companion channels (``io/qd_companions.py``)."""
+    return import_qd_vsm(path, companions=True)
+
+
+def _import_ppms_auto(path: Path) -> DataStruct:
+    """``import_ppms`` plus its companion channels (``io/qd_companions.py``)."""
+    return import_ppms(path, companions=True)
+
+
+# Name-keyed consumers (parser matrix ids, stamp_technique's fallback) see the
+# parser's own name, as with _import_excel_lazy below.
+_import_qd_vsm_auto.__name__ = _import_qd_vsm_auto.__qualname__ = "import_qd_vsm"
+_import_ppms_auto.__name__ = _import_ppms_auto.__qualname__ = "import_ppms"
+
+
 def _accept_any(_path: Path) -> bool:
     """Catch-all sniffer: routes to the generic fallback parser for an extension."""
     return True
@@ -138,9 +154,9 @@ _import_excel_lazy.__doc__ = """Import an ``.xlsx`` sheet (first column = x-axis
 # Ambiguous extensions resolve by content sniffing — first match wins.
 _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
     ".dat": [
-        (is_qd_file, import_qd_vsm),
+        (is_qd_file, _import_qd_vsm_auto),
         (is_refl1d_dat, import_refl1d_dat),
-        (is_ppms_dat, import_ppms),
+        (is_ppms_dat, _import_ppms_auto),
         (is_lakeshore_file, import_lake_shore),
     ],
     # .refl is reductus (JSON "columns" header) for the whole corpus, but refl1d

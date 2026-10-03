@@ -15,6 +15,7 @@ import numpy as np
 from quantized.datastruct import DataStruct
 from quantized.io._delimited_layout import _to_float
 from quantized.io.base import NO_COLUMN, parse_col_header, read_head, read_text, resolve_column
+from quantized.io.qd_companions import with_companions
 
 __all__ = ["import_mpms", "import_ppms", "import_qd_vsm", "is_ppms_dat", "is_qd_file"]
 
@@ -121,8 +122,13 @@ def import_qd_vsm(
     x_axis: str | int = "field",
     y_axis: str | int | Sequence[str | int] = "moment",
     include_raw: bool = False,
+    companions: bool = False,
 ) -> DataStruct:
-    """Import a QD ``.dat`` file. Defaults to Magnetic Field (x) vs Moment (y)."""
+    """Import a QD ``.dat`` file. Defaults to Magnetic Field (x) vs Moment (y).
+
+    ``companions`` (what ``import_auto`` asks for) also carries the moment's
+    error column and the temperature/field/time columns (``io/qd_companions``);
+    the default keeps MATLAB ``importQDVSM``'s single column."""
     path = Path(filepath)
     raw_lines = read_text(path).splitlines()
 
@@ -148,6 +154,10 @@ def import_qd_vsm(
     if not y_idx:
         raise ValueError("no valid data columns resolved")
     y_idx = _apply_moment_fallback(col_names, matrix, y_idx)
+    channels: list[int] = list(y_idx)
+    hints: dict[str, Any] = {}
+    if companions:
+        channels, hints = with_companions(col_names, col_units, matrix, x_idx, y_idx)
 
     metadata: dict[str, Any] = {
         "source": str(path),
@@ -159,12 +169,13 @@ def import_qd_vsm(
         "all_column_names": col_names,
         "all_column_units": col_units,
         **header,
+        **hints,
     }
     return DataStruct.create(
         matrix[:, x_idx],
-        matrix[:, y_idx],
-        labels=[col_names[i] for i in y_idx],
-        units=[col_units[i] for i in y_idx],
+        matrix[:, channels],
+        labels=[col_names[i] for i in channels],
+        units=[col_units[i] for i in channels],
         metadata=metadata,
     )
 
@@ -269,8 +280,10 @@ def import_ppms(
     x_axis: str | int = "field",
     y_axis: str | int | Sequence[str | int] = "moment",
     include_raw: bool = False,
+    companions: bool = False,
 ) -> DataStruct:
-    """Import a legacy PPMS/VSM plain-CSV ``.dat`` (no [Header]/[Data] markers)."""
+    """Import a legacy PPMS/VSM plain-CSV ``.dat`` (no [Header]/[Data] markers).
+    ``companions``: as :func:`import_qd_vsm`."""
     path = Path(filepath)
     lines = read_text(path).splitlines()
 
@@ -333,6 +346,10 @@ def import_ppms(
     if not y_idx:
         raise ValueError("no valid data columns resolved")
     y_idx = _apply_moment_fallback(col_names, matrix, y_idx)
+    channels: list[int] = list(y_idx)
+    hints: dict[str, Any] = {}
+    if companions:
+        channels, hints = with_companions(col_names, col_units, matrix, x_idx, y_idx)
 
     metadata: dict[str, Any] = {
         "source": str(path),
@@ -341,12 +358,13 @@ def import_ppms(
         "x_column_unit": col_units[x_idx],
         "all_column_names": col_names,
         "all_column_units": col_units,
+        **hints,
     }
     return DataStruct.create(
         matrix[:, x_idx],
-        matrix[:, y_idx],
-        labels=[col_names[i] for i in y_idx],
-        units=[col_units[i] for i in y_idx],
+        matrix[:, channels],
+        labels=[col_names[i] for i in channels],
+        units=[col_units[i] for i in channels],
         metadata=metadata,
     )
 

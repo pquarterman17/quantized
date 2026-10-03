@@ -147,15 +147,15 @@ def test_http_error_unwraps_detail(qz_client: QuantizedClient) -> None:
 def test_import_path(qz_client: QuantizedClient) -> None:
     ds = qz_client.import_path(FIXTURE)
     assert isinstance(ds, DataStruct)
-    assert ds.labels == ("Moment",)
-    assert ds.units == ("emu",)
+    assert ds.labels[0] == "Moment"  # + QD companions (io/qd_companions.py)
+    assert ds.units[0] == "emu"
     assert ds.n_points == 401
 
 
 def test_import_bytes(qz_client: QuantizedClient) -> None:
     ds = qz_client.import_bytes(FIXTURE)
     assert isinstance(ds, DataStruct)
-    assert ds.labels == ("Moment",)
+    assert ds.labels[0] == "Moment"  # + QD companions (io/qd_companions.py)
     assert ds.n_points == 401
 
 
