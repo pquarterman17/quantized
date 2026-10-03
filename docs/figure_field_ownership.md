@@ -83,6 +83,7 @@ to all 56 fields and is not repeated per row.
 | `xReversed` | `axes.x.reversed` | `plot.view.xReversed` | Inspector "Reverse X" (`AxisScaleControls`, history + live field); Rebind default from `metadata.x_reversed` (`datasetViewDefaults`) | no |
 | `stackMode` | `plot.stack.enabled` | `plot.view.stackMode` | Setter `setStackMode` (also clears `facetKey`/`composition`); Bulk (Recipe, Origin, `facetByColumn` sets it true) | no |
 | `insetMode` | `plot.inset.enabled` | `plot.view.insetMode` | Setter `setInsetMode` | no |
+| `inset` | `plot.inset.geometry` | `plot.view.inset` | `Stage/InsetPlot` (zoom, header drag, corner resize, connector toggle; one undo step each); sanitized by `sanitizeInset` (`lib/plotviewDecor.ts`) | no |
 | `polarMode` | `plot.coordinateSystem` | `plot.view.polarMode` | Setter `setPolarMode` | no |
 | `statMode` | `plot.statMode` | `plot.view.statMode` | Setter `setStatMode` | no |
 | `statHideEmptyLevels` | `plot.stat.hideEmptyLevels` | `plot.view.statHideEmptyLevels` | Setter `setStatHideEmptyLevels` (`store/statLevelOptions.ts`) | no |
