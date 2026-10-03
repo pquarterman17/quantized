@@ -129,7 +129,9 @@ export async function executeSteps(
             store().datasets.find((d) => d.id === target)?.data.labels.length ?? 0,
           );
           if (err) throw new Error(err);
-          store().addFormula(target, name, expr);
+          if (!store().addFormula(target, name, expr)) {
+            throw new Error(store().status || "couldn't add the computed column");
+          }
           log[step.id] = { status: "ok" };
           break;
         }
