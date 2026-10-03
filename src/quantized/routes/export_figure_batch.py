@@ -14,8 +14,8 @@ import tempfile
 import threading
 import zipfile
 from collections.abc import Iterator
-from typing import BinaryIO
 from functools import partial
+from typing import BinaryIO
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
