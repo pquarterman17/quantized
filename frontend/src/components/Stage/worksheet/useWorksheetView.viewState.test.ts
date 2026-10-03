@@ -105,6 +105,28 @@ describe("copyRows", () => {
   });
 });
 
+describe("copyRows writes displayed text", () => {
+  it("emits a categorical column's level labels and blanks a missing value", () => {
+    const ds: Dataset = {
+      id: "c",
+      name: "c.dat",
+      data: {
+        time: [0, 1, 2],
+        values: [[1, 0.5], [0, Number.NaN], [Number.NaN, 2]],
+        labels: ["grade", "y"],
+        units: ["", "mT"],
+        metadata: {},
+        cat_levels: { 0: ["low", "high"] },
+      },
+    };
+    useApp.setState({ datasets: [ds] });
+    const { result } = renderHook(() => useWorksheetView(ds));
+    result.current.copyRows();
+    const tsv = vi.mocked(copyText).mock.calls[0][0];
+    expect(tsv.split("\n")).toEqual(["x\tgrade\ty (mT)", "0\thigh\t0.5", "1\tlow\t", "2\t\t2"]);
+  });
+});
+
 describe("the stats footer", () => {
   it("sends only finite values, so a blank cell does not fail the request", () => {
     vi.useFakeTimers();

@@ -60,6 +60,7 @@ import {
   sortWorksheetRows,
   visibleWorksheetRows,
   worksheetTsvHeaders,
+  worksheetTsvRow,
 } from "./worksheetRows";
 
 export interface WorksheetView {
@@ -419,7 +420,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
       const excluded = excludedSet(source); // once, not per row
       const rows = (source === ds ? order : resolveWorksheetRows(source, rowRules).ordered)
         .filter((r) => !excluded.has(r));
-      const data = rows.map((r) => [source.data.time[r], ...source.data.labels.map((_, c) => source.data.values[r]?.[c])]);
+      const data = rows.map((r) => worksheetTsvRow(source, r));
       void copyText(tableToTSV(worksheetTsvHeaders(source), data)).then((ok) =>
         setStatus(ok ? `copied ${rows.length} rows to clipboard` : "clipboard unavailable"),
       );
@@ -435,8 +436,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
         setStatus("Full data loaded, but that preview row could not be matched — select the row again");
         return;
       }
-      const data = [[source.data.time[sourceRow], ...source.data.labels.map((_, c) => source.data.values[sourceRow!]?.[c])]];
-      void copyText(tableToTSV(worksheetTsvHeaders(source), data)).then((ok) =>
+      void copyText(tableToTSV(worksheetTsvHeaders(source), [worksheetTsvRow(source, sourceRow)])).then((ok) =>
         setStatus(ok ? `copied row ${sourceRow! + 1}` : "clipboard unavailable"),
       );
     };
