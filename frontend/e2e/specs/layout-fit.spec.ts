@@ -6,7 +6,10 @@
 //   - the default NE legend sits below the dock, not under it;
 //   - the Graph Builder window stays inside the viewport with a usable preview;
 //   - a Library worksheet name keeps real width at the default 210px panel;
-//   - the Quick Figure Builder grid never overflows its container.
+//   - the Quick Figure Builder grid never overflows its container;
+//   - round 4 (transient chrome): toasts, the hints card, the legend, the
+//     tool readout, result chips and the HUD keep off the plot's axes and
+//     inside their container; tooltips, tool windows and menus fit the window.
 // The dock journey is `@core` so it also runs in the 125%/200% projects.
 
 import { expect, type Locator, type Page, test } from "@playwright/test";
