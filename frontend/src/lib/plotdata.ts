@@ -66,6 +66,7 @@ export interface PlotPayload {
    *  a request that sets this. */
   window?: [number, number] | null;
   blockRows?: number; // waterfall X offset: rows per x block (lib/waterfallX.ts); absent = one block
+  yShift?: number[]; // per data column, the waterfall stagger added for display; the cursor readout takes it back off
 }
 
 /** Pure client-side column packing — the offline mirror of /api/plot/series.
@@ -528,7 +529,7 @@ export function applyWaterfall(payload: PlotPayload, fraction: number): PlotPayl
   const data = cols.map((col, s) =>
     s === 0 ? col : col.map((v) => (v == null ? v : v + (s - 1) * step)),
   );
-  return { ...payload, data: data as unknown as uPlot.AlignedData };
+  return { ...payload, data: data as unknown as uPlot.AlignedData, yShift: cols.map((_, s) => (s && (s - 1) * step)) };
 }
 
 /** Fetch plot series from the backend; fall back to client packing offline.
