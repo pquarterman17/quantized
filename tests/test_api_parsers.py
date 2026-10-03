@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from quantized.app import app
 from quantized.datastruct import DataStruct
+from quantized.routes import _plainimport as plainimport_mod
 from quantized.routes import parsers as parsers_mod
 
 client = TestClient(app)
@@ -76,7 +77,7 @@ def test_upload_metadata_encoding_failure_is_500_not_422(
         units=[""],
         metadata={"bad": np.uint8(5)},
     )
-    monkeypatch.setattr(parsers_mod, "import_auto", lambda path: bad)
+    monkeypatch.setattr(plainimport_mod, "import_auto_sheets", lambda path: [bad])
     resp = no_raise_client.post(
         "/api/parsers/upload",
         files={"file": ("data.csv", b"x,y\n1,2\n", "text/csv")},
@@ -97,7 +98,7 @@ def test_import_metadata_encoding_failure_is_500_not_422(
         units=[""],
         metadata={"bad": float("nan")},
     )
-    monkeypatch.setattr(parsers_mod, "import_auto", lambda path: bad)
+    monkeypatch.setattr(plainimport_mod, "import_auto_sheets", lambda path: [bad])
     target = tmp_path / "data.csv"
     target.write_text("x,y\n1,2\n")
     resp = no_raise_client.post("/api/parsers/import", json={"path": str(target)})
