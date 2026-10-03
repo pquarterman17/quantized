@@ -44,8 +44,8 @@ Acceptance: after opening an Origin project, the user can tell what imported suc
 
 Goal: make reproducible transformations understandable and editable as a workflow, while preserving raw data and failing closed when dependencies or schemas no longer match.
 
-- [x] Audit the current recorded-step and recalculation model; document which operations are replayable, partially replayable, or display-only.
-- [x] Add an overview that shows inputs, ordered steps, outputs, stale/broken state, and downstream impact.
+- [x] Audit the current recorded-step and recalculation model; document which operations are replayable, partially replayable, or display-only in `docs/pipeline-studio-replay.md`.
+- [x] Add an overview that shows inputs, ordered steps, outputs, stale/broken state, and later-step exposure.
 - [x] Make each step inspectable and editable with a human-readable summary plus exact parameters.
 - [x] Add safe enable/disable, reorder, duplicate, and remove operations with dependency validation and undo.
 - [ ] Preview the result and warnings before committing a structural pipeline edit.
@@ -57,9 +57,9 @@ Goal: make reproducible transformations understandable and editable as a workflo
 Progress — 2026-10-03, Pipeline Studio 2.0 pass:
 
 - The panel now distinguishes runnable, input/script-only, disabled, invalid, and downstream-blocked steps before a run. It shows the active input shape, ordered human-readable summaries, exact editable parameters, the output and created worksheets from the last run, and per-step/run outcomes.
-- Structural enable/disable, reorder, duplicate, remove, add-expression, parameter edit, and template-load operations are session-undoable. Operations that can change downstream input show an explicit impact confirmation first; duplicate parameters are deep-copied.
+- Structural enable/disable, reorder, duplicate, remove, add-expression, parameter edit, and template-load operations are session-undoable. Operations with later enabled consumers show an explicit impact confirmation first; duplicate parameters are deep-copied and recorded transform output ids are removed.
 - Preflight fails closed on absent inputs, missing referenced worksheets/backgrounds, invalid expressions/models, malformed transform settings, and stale column indices. It deliberately defers schema checks after a shape-changing transform rather than comparing them with the wrong original schema.
-- Remaining for the two partial boxes above: compute a bounded data/result preview before a structural edit (the current preview explains dependency impact, not numeric output), and add unit-compatibility diagnostics where they can be determined without executing an expensive transform. Cancellation and representative large-data replay coverage also remain open.
+- Remaining for the two partial boxes above: compute a bounded data/result preview before a structural edit (the current preview reports later-step exposure, not a true dataflow graph or numeric output), and add unit-compatibility diagnostics where they can be determined without executing an expensive transform. Cancellation and representative large-data replay coverage also remain open.
 
 Acceptance: a user can understand and safely modify how a derived dataset was produced, rerun it deterministically, and recover from changed inputs without touching the original raw data.
 
