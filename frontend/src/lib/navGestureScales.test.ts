@@ -94,6 +94,14 @@ describe("drag-pan", () => {
     expect(Math.abs(1 / lo2 - 1 / lo)).toBeCloseTo((1 / lo - 1 / hi) / 5, 9);
   });
 
+  it("stops a reciprocal x axis at its pole instead of handing uPlot a NaN bound", async () => {
+    const u = await mount(payload(false), { xScale: "reciprocal" });
+    drag(u, -50 * u.bbox.width, 0); // far past 1/x = 0
+    await tick();
+    expect(Number.isFinite(u.scales.x.min!) && Number.isFinite(u.scales.x.max!)).toBe(true);
+    expect(u.scales.x.min!).toBeGreaterThan(0);
+  });
+
   it("moves a secondary y axis with the primary one", async () => {
     const u = await mount(payload(true), {});
     const [lo, hi] = lim(u, "y2");

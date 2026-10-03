@@ -34,7 +34,8 @@ function setScalesPx(u: uPlot, px: (k: string, s: uPlot.Scale) => [number, numbe
       if (!r) continue;
       const a = u.posToVal(r[0], k);
       const b = u.posToVal(r[1], k);
-      u.setScale(k, { min: Math.min(a, b), max: Math.max(a, b) });
+      // Past a reciprocal axis's pole posToVal is NaN or Infinity: stop there.
+      if (Number.isFinite(a + b)) u.setScale(k, { min: Math.min(a, b), max: Math.max(a, b) });
     }
   });
 }
