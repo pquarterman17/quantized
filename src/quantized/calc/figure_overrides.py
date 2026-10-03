@@ -16,6 +16,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+import matplotlib as mpl
+from matplotlib.lines import Line2D
+
 from quantized.calc.figure_axis_titles import apply_axis_titles, validate_axis_titles
 from quantized.calc.figure_decor import (
     _apply_ref_lines,
@@ -219,7 +222,7 @@ def _apply_overrides(
     _apply_region_shades(ax, ov.get("region_shades"))
     _apply_ref_lines(ax, ov.get("ref_lines"))
 
-    for ann in ov.get("annotations", []):
+    for i, ann in enumerate(ov.get("annotations", [])):
         # MAIN #18: a per-annotation `size` (the pointer tool's corner-handle
         # font-size resize, screen px) wins over the property panel's global
         # font_size override -- matches the screen, where each annotation's
@@ -260,9 +263,16 @@ def _apply_overrides(
                 ec=frame.get("stroke") or "black",
                 alpha=frame.get("opacity", 1.0),
             )
+        # The canvas marks every annotation's anchor with a 3 px dot and sets
+        # the label 6 px right of it, its bottom 2 px above (uplotOverlays'
+        # annotationLayout); 1 CSS px = 0.75 pt.
+        _anchor_dot(fig, ax, i, x, y, page=ann.get("anchor") == "page")
         ax.annotate(
             safe_mathtext_label(str(ann.get("text", ""))),
             xy=(x, y),
+            xytext=(4.5, 1.5),
+            textcoords="offset points",
+            va="bottom",
             fontsize=float(size) if size else float(ov.get("font_size", st.font_size)),
             **ann_kw,
         )
@@ -280,3 +290,16 @@ def _apply_overrides(
     # drew (annotations included), matching export intent: shapes mark up
     # the finished figure.
     _apply_shapes(fig, ax, ov.get("shapes"))
+
+
+def _anchor_dot(fig: Any, ax: Any, i: int, x: float, y: float, *, page: bool) -> None:
+    """Annotation ``i``'s anchor dot, in the text colour: the canvas' 3 px dot
+    (6 px across = 4.5 pt). ``add_artist`` rather than ``plot`` so an anchor
+    outside the data never widens the autoscaled axes; ``gid`` names it in
+    the SVG."""
+    ax.add_artist(Line2D(
+        [x], [y], marker="o", markersize=4.5, linestyle="none",
+        color=mpl.rcParams["text.color"], markeredgewidth=0,
+        transform=fig.transFigure if page else ax.transData, clip_on=False,
+        gid=f"annotation_dot_{i}",
+    ))
