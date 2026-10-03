@@ -6,7 +6,7 @@
 // lines in the row itself.
 //
 // GUI_INTERACTION #8: the fixed (non-per-folder) items now come from the
-// shared `lib/contextActions.ts` dataset registry via `buildMenuItems` —
+// shared `lib/datasetContextActions.ts` dataset registry via `buildMenuItems` —
 // each action is defined once (id/label/enabled/run) and this builder's job
 // shrinks to composing the registry groups around the one genuinely dynamic
 // block, the per-folder "Move to …" list (one entry per LIVE folder, which
@@ -18,17 +18,15 @@
 // (matching the EXACT non-reactive read the original inline code used —
 // this is evaluated once per DatasetRow render, not a subscribed hook).
 
+import { buildMenuItems, runContextAction, type DatasetActionTarget } from "../../lib/contextActions";
 import {
-  buildMenuItems,
   datasetCoreActions,
   datasetCorrectionsActions,
   datasetMoveActions,
   datasetMultiSelectActions,
   datasetNewFolderAction,
   datasetRemoveActions,
-  runContextAction,
-  type DatasetActionTarget,
-} from "../../lib/contextActions";
+} from "../../lib/datasetContextActions";
 import { datasetCombineSeparateActions } from "../../lib/combineSeparateActions";
 import { datasetDerivedWorksheetActions } from "../../lib/derivedWorksheetActions";
 import { datasetMetaFactorsAction } from "../../lib/metaFactorsAction";

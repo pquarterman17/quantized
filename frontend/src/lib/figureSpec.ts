@@ -46,7 +46,8 @@ import {
 import { marginFractions, pageSizeInches } from "./pageGeometry";
 import type { PlotView } from "./plotview";
 import { canvasGroupCol } from "./plotGroupSplit";
-import { encodingSplits, facetEncoding, figureEncodingWire, windowEncoding, type FigureEncoding } from "./plotEncodingBinding";
+import { encodingSplits, windowEncoding, type FigureEncoding } from "./plotEncodingBinding";
+import { facetEncoding, figureEncodingWire } from "./plotEncodingWire";
 import { droppedRows, pruneToLiveDataset } from "./rowstate";
 import { breakCompositionFromData } from "./facet";
 import { facetSplitChannels } from "./facetDomains";

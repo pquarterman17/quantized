@@ -89,12 +89,12 @@ import { buildColumns, type PlotPayload } from "./plotdata";
 import { withChannelCompanions } from "./facetEncodedExcluded";
 import {
   encodingSplits,
-  facetSplitEncoding,
   isEncodingFactor,
   resolveFigureEncoding,
   type Encoding,
   type FigureEncoding,
 } from "./plotEncodingBinding";
+import { facetSplitEncoding } from "./plotEncodingWire";
 import {
   markSeriesStyle,
   specDatasetId,

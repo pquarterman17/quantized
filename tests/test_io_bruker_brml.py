@@ -3,8 +3,9 @@ FAIRmat 1-D line scan decode (realdata).
 
 The synthetic builder writes a minimal but structurally faithful RawData XML
 (ScanInformation / ScanAxisInfo / Datum rows) into a ZIP, so CI exercises the
-abscissa-column matching, last-column-is-intensity rule, and multi-scan (RSM)
-rejection without shipping a binary.
+abscissa-column matching, last-column-is-intensity rule, and the refusal of
+repeated line scans without shipping a binary. Multi-scan RSM maps are covered
+by ``test_io_bruker_brml_rsm.py``.
 """
 
 from __future__ import annotations
@@ -119,12 +120,3 @@ def test_fairmat_2thomega(corpus_dir: Path) -> None:
     assert ds.metadata["x_column_name"] == "2-Theta"  # the other XRD parsers' spelling
     assert np.all(np.diff(ds.time) > 0)  # monotonic 2theta
     assert np.all(ds.values[:, 0] >= 0)
-
-
-@pytest.mark.realdata
-def test_fairmat_rsm_rejected(corpus_dir: Path) -> None:
-    path = corpus_dir / "bruker" / "xrd" / "FAIRmat_RSM.brml"
-    if not path.exists():
-        pytest.skip("corpus file missing")
-    with pytest.raises(ValueError, match="multi-scan"):
-        import_bruker_brml(str(path))

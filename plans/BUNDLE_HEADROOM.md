@@ -1,6 +1,15 @@
 # Bundle headroom campaign
 
-**Current state (2026-10-02, after slice 20):** five halves of eager modules
+**Current state (2026-10-03, after slice 22):** six halves of eager modules
+that only lazy modules call moved out, each imported by its own path. Plot
+audit rounds 2–4 and the batch figure builder had left the pin 16 B of
+headroom: the parent `8c6ea3a` measured **841,005 B**; after, **833,639 B**
+(**−7,366 B**). The pin was LOWERED to `measured + 1,000`, **841,021 →
+834,639 B**, leaving **1,000 B** of headroom. See "Slice 22". (Slice 21, three
+user-action seams, is recorded in `plans/BUGS_AND_ISSUES.md`'s Completed log
+and in `check-bundle-size.mjs`'s pin history.)
+
+**Previous state (2026-10-02, after slice 20):** five halves of eager modules
 that only lazy modules call moved out, each imported by its own path.
 Batch 25's head `7554f4c1` measured **847,223 B**, 221 B OVER the pin;
 after, **843,997 B** (**−3,226 B**). The pin was LOWERED to
@@ -2829,6 +2838,116 @@ browser (no Playwright browser here).
 - **The Toaster's focus restore** (~300 B at most, on the first toast).
 
 **Pin:** the tree started over the pin, so it was lowered to
+`measured + 1,000`, the slice-19 rule. That leaves 1,000 B for queued work and
+locks in the rest of the gain.
+
+### Slice 22 — six lazy-only halves, imported by path, pin ratcheted DOWN — **DONE (2026-10-03)**
+
+**Measured net eager delta −7,366 B — pin LOWERED 841,021 → 834,639 B**
+
+Plot audit rounds 2–4 and the batch figure builder (#523–#525) had left the
+tree 16 B under the pin. Exact bytes, `npm ci`, then `node_modules/.vite`
+wiped before every build. Rows are cumulative; the parent and the last row
+were measured after a fresh `npm ci`, and the eager chunk count stayed at 82
+throughout:
+
+| tree | eager B | delta |
+|---|---:|---:|
+| `8c6ea3a` (parent) | 841,005 | — |
+| + dataset context-action registry → `lib/datasetContextActions.ts` | 837,565 | **−3,440** |
+| + workbook-row Quick Plot gate → `lib/quickPlotWorkbook.ts` | 836,770 | **−795** |
+| + Library open dispatcher (`selectLibraryNode` → `lib/librarySelect.ts`) | 835,647 | **−1,123** |
+| + encodings' facet split, export wire, palette → `lib/plotEncodingWire.ts` | 834,555 | **−1,092** |
+| + book-switcher helpers → `lib/originFamilyBooks.ts`, fit-step decoder → `lib/fitStepDecode.ts` | 833,639 | **−916** |
+
+**The brief's recent-batch candidates were checked first and left alone.**
+A sourcemap profile of slice 20's tree (`049c2ce`) against this parent shows
+the growth since then is plot rendering: `lib/logTicks.ts` +1,150,
+`store/windowDefaults.ts` +497, `lib/uplotSeries.ts` +412,
+`lib/unitDisplay.ts` +395, `lib/logGaps.ts` +298, `lib/uplotOverlays.ts`
++287, `lib/sharedAxisTitle.ts` +167 and `lib/uplotRightPad.ts` +166. All of
+them run on every plot render (`unitDisplay` labels the axes through
+`uplotOpts`), so they stay. The stack page export, the legend auto-place
+helpers, the batch figure builder and its launcher have no bytes in the
+eager chunks. `PlotReadouts.tsx` (1,633 B) draws on the plot surface, so a
+seam there fails the `PlotLegend` ruling.
+
+**How the halves were found.** The slice-20 scan, extended to follow
+private helpers: for every module with bytes in the eager chunks (the
+sourcemap set, not the import walk), it lists the top-level declarations
+that no eager import reaches, directly or through another declaration. The
+six taken are the largest whose importers have no bytes in the eager
+chunks. Each is moved verbatim with the private helpers only it uses. No
+parent re-exports its half (slices 18–20). No `import()`, timing or
+behaviour changed, so there is no load and no load-failure path to test.
+
+- **`lib/datasetContextActions.ts`:** the dataset registry
+  (`datasetCoreActions` … `datasetActions`) and the
+  `lib/datasetRemoveActions.ts` re-export, which only it reaches. The callers
+  are the lazy row menu (`components/Library/datasetRowMenu.ts`) and the
+  palette bridge (`lib/paletteContextActions.ts`), which the palette loads
+  with `import()` since 2026-10-01. `actionPaletteEntry` moved into that
+  bridge, its only caller. `lib/contextActions.ts` keeps the engine and the
+  target types. The saving is larger than the source suggests: the
+  attribution for `lib/contextActions.ts` fell 3,134 → 671 B, and
+  `lib/datasetRemoveActions.ts` (861 B) left with it.
+- **`lib/quickPlotWorkbook.ts`:** `pickQuickPlotWorksheet`,
+  `pickConfigureQuickPlotWorksheet`, `quickPlotWorkbookGate` and their two
+  private helpers. Slice 16 measured a split of the gate alone at 0 B, because
+  `lib/workbookContextActions.ts` then shipped in the eager `ConfirmDialog`
+  chunk. It no longer has bytes there, and the split now saves 795 B.
+- **`components/Library/libraryOpen.ts`:** the eager Library panel calls
+  only `selectLibraryNode`, so that function moved to `lib/librarySelect.ts`
+  and the open dispatcher stays where it was, now lazy-only. It went to
+  `lib/`, not beside the panel, because the getState()-in-render ratchet
+  counts files under `components/`, and this store helper is not a
+  component.
+- **`lib/plotEncodingWire.ts`:** `facetEncoding`, `facetSplitEncoding`,
+  `figureEncodingWire` and `resolvedPalette`. The callers are the facet Stage,
+  the series derivation (`lib/plotEncoding.ts`) and the export builders.
+  `lib/color.ts` (462 B) left with the palette.
+- **`lib/originFamilyBooks.ts`:** `bookLabel` and `familyBooks`, which only
+  the worksheet's `SheetTabs` calls.
+- **`lib/fitStepDecode.ts`:** `fitSpecFromStepParams` and its weight
+  decoder, which only the pipeline executor calls. `lib/fitselection.ts`
+  keeps the encoder that the eager fit path records with.
+
+A `--sourcemap` build confirms that none of the moved modules appears in the
+eager chunks' `sources`, and neither does `lib/color.ts`.
+
+#### Guards and tests
+
+`architecture.test.ts`: the seven lazy-only modules are `DRAGGED_OUT`
+entries. One sabotage run broke all of them, each in its own way, and the
+reachability arm failed naming all seven: `lib/contextActions.ts`,
+`lib/quickPlot.ts`, `lib/plotEncodingBinding.ts` and `lib/fitselection.ts`
+re-exporting their halves with `export *`, `lib/grouping.ts` re-exporting
+`bookLabel`, and `Library.tsx` importing `openLibraryNode`. The tests that
+named the moved functions now import them from the new modules. The
+importers' own test files pass unchanged. Not measured in a browser (no
+Playwright browser here).
+
+#### Candidates still not taken
+
+- **More halves from the same scan**, upper bounds in source characters,
+  roughly half that minified: `store/pendingOps.ts` (~1,050: `trackJob`,
+  `runCancellable`, `updateOp`; about 20 lazy import sites),
+  `lib/columnmeta.ts` (~880), `lib/ticks.ts` (~860: `niceTicks`, five lazy
+  importers), `store/windowDocuments.ts` (~730: `withFocusedEncoding`, the
+  Graph Builder), `lib/api/finitePairs.ts` (~700, the magnetometry tools),
+  `store/prefs.ts` (~700: the accent swatches and two Preferences savers),
+  `lib/mapView.ts` (~690, the `.dwk` serializer), `lib/smartfolders.ts`
+  (~680), `lib/logOffset.ts` (~590: `logOffsetWire`; `lib/figureSpec.ts` is
+  at 499 lines) and `lib/colormap.ts` (~550, the correlation matrix's
+  diverging map). Check each against the eager chunks' `sources` before
+  pinning it (the slice-16 and slice-17 cases).
+- **`lib/nonFiniteCells.ts`** (~1,800 in the scan) and
+  **`lib/categorical.ts`**'s `sanitizeDataStruct`: both serve the workspace
+  load path, which another lane is editing; not touched.
+- **`commitGadgetFft` and `commitQfit`** and **the Toaster's focus
+  restore**, as slices 19 and 20 recorded.
+
+**Pin:** the tree had 16 B of headroom, so it was lowered to
 `measured + 1,000`, the slice-19 rule. That leaves 1,000 B for queued work and
 locks in the rest of the gain.
 

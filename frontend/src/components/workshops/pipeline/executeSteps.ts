@@ -5,7 +5,8 @@
 
 import { fitModel } from "../../../lib/api";
 import { dropGapRows } from "../../../lib/api/finitePairs";
-import { fitDataForSpec, fitSpecFromStepParams } from "../../../lib/fitselection";
+import { fitDataForSpec } from "../../../lib/fitselection";
+import { fitSpecFromStepParams } from "../../../lib/fitStepDecode";
 import { dyForFit } from "../../../lib/fitweights";
 import { validateExpression, type PipelineStep } from "../../../lib/pipeline";
 import { analysisData } from "../../../lib/rowstate";

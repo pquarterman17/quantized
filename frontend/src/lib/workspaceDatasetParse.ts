@@ -18,6 +18,7 @@
 
 import { sanitizeDataStruct } from "./categorical";
 import { decodeDataStruct, isWireCellArray, type WireDataStruct } from "./nonFiniteCells";
+import { noteLegacyNulls, readLegacyNullStruct, type LegacyNullTally } from "./legacyNullCells";
 import { parseDatasetSource } from "./datasetSource";
 import { sanitizeFilter } from "./datafilter";
 import { sanitizeBindings } from "./errorRoles";
@@ -38,12 +39,13 @@ import type {
 // BUG-017: the per-cell check is `isWireCellArray` (lib/nonFiniteCells.ts),
 // which accepts a number OR exactly the four sentinel strings `"NaN"`,
 // `"Infinity"`, `"-Infinity"` and `"-0"` — the values `JSON.stringify` cannot
-// represent, and which `lib/workspaceSerialize.ts` now writes in that form. It
-// is deliberately NOT widened to accept `null`: a pre-fix `.dwk` wrote NaN,
-// +Infinity and -Infinity all as the SAME `null`, so the original value is not
-// recoverable from one, and `null` is equally what genuinely corrupt input
-// looks like. Rejecting it keeps that a real rejection rather than a guess
-// (the ruling BUG-017's Implementation box asked for).
+// represent, and which `lib/workspaceSerialize.ts` now writes in that form.
+// The check itself still refuses `null`. RULING 2026-10-03 (owner decision,
+// reversing BUG-017's "a pre-fix null cell stays a rejection"): a legacy
+// `null` CELL is read as NaN (missing) before the check, by
+// lib/legacyNullCells.ts, and counted into ONE migration warning. Its
+// NaN/±Infinity identity is unrecoverable, so "missing" is the honest reading.
+// Refusal stays for structural corruption (see `parseWorkspaceDataset`).
 
 /** Validate a persisted `Dataset.pending` (#38) — a stale/hand-edited value
  *  degrades to "not pending" (the dataset then just shows whatever rows its
@@ -114,34 +116,37 @@ function isWireDataStruct(v: unknown): v is WireDataStruct {
  *  and the user's very next "Save" would write the workspace WITHOUT it,
  *  making a recoverable file permanently lossy. Refusing to open is
  *  recoverable (the file on disk is untouched, and the error names the
- *  dataset); silently dropping a worksheet is not. What BUG-017 changed is
- *  that the ordinary NaN/±Infinity/-0 cell VALUES this app writes now parse
- *  correctly — that is scoped to cell values written FROM THIS COMMIT ON, not
- *  to "any file the app wrote": a pre-fix save with a non-finite cell (its
- *  `null` predates this fix) still refuses, by the ruling above, exactly as
- *  it always did. A hole or explicit `undefined` in a `values` row would
- *  ALSO still serialize to `null` and still refuse — `encodeCells` cannot see
- *  either (`Array.prototype.some`/`map` skip holes, and `encodeCell` has no
- *  branch for `undefined`) — but no known app path mints one: the three cell
- *  writers in `store/cellEdit.ts` are bounds-guarded, and `padRows`/
- *  `insertBlanks`/`blankRow` all build with `Array.from`, which never leaves
- *  a hole. That makes the row-hole case a LATENT edge, not a live one, unlike
- *  the cell-value case this fix actually closes. The throw remains reserved
- *  for genuinely malformed structure: hand-edited JSON, a truncated file, a
- *  pre-fix `null` cell, or a row hole/`undefined`. */
-export function parseWorkspaceDataset(d: unknown, i: number, projectDir?: string): Dataset {
+ *  dataset); silently dropping a worksheet is not. BUG-017 made the
+ *  NaN/±Infinity/-0 cell VALUES this app writes parse correctly, and since
+ *  the 2026-10-03 ruling (header note) a pre-fix `null` cell opens too, read
+ *  as missing with a migration warning. The throw remains reserved for
+ *  genuinely malformed structure: hand-edited JSON, a truncated file, a
+ *  non-sentinel string cell, a null row or null `time`/`values`, or an
+ *  in-memory `undefined` cell.
+ *
+ *  `legacyNulls` tallies the legacy null cells read from `data`. `raw` (the
+ *  same cells' base copy) is read the same way but not counted twice. */
+export function parseWorkspaceDataset(
+  d: unknown,
+  i: number,
+  projectDir?: string,
+  legacyNulls: LegacyNullTally = { cells: 0, names: [] },
+): Dataset {
   if (typeof d !== "object" || d === null) {
     throw new Error(`dataset ${i} is invalid`);
   }
   const dd = d as Record<string, unknown>;
-  if (!isWireDataStruct(dd.data)) {
+  const nullsBefore = legacyNulls.cells;
+  const data = readLegacyNullStruct(dd.data, legacyNulls);
+  if (!isWireDataStruct(data)) {
     throw new Error(`dataset ${i} ("${String(dd.name ?? "")}") has an invalid data structure`);
   }
   const ds: Dataset = {
     id: typeof dd.id === "string" ? dd.id : `ws-${i}`,
     name: typeof dd.name === "string" ? dd.name : `dataset ${i + 1}`,
-    data: sanitizeDataStruct(decodeDataStruct(dd.data)),
+    data: sanitizeDataStruct(decodeDataStruct(data)),
   };
+  noteLegacyNulls(legacyNulls, nullsBefore, `"${ds.name}"`);
   if (dd.corrections && typeof dd.corrections === "object") {
     ds.corrections = dd.corrections as CorrectionParams;
   }
@@ -186,8 +191,9 @@ export function parseWorkspaceDataset(d: unknown, i: number, projectDir?: string
   // down to the expected base width when `raw` is too WIDE; a `raw`
   // that's already base-only (the common case) or narrower than expected
   // (nothing to invent) passes through untouched.
-  if (isWireDataStruct(dd.raw)) {
-    const raw = sanitizeDataStruct(decodeDataStruct(dd.raw));
+  const wireRaw = readLegacyNullStruct(dd.raw, { cells: 0 });
+  if (isWireDataStruct(wireRaw)) {
+    const raw = sanitizeDataStruct(decodeDataStruct(wireRaw));
     const expectedWidth = ds.data.labels.length - (ds.formulas?.length ?? 0);
     ds.raw = raw.labels.length > expectedWidth ? baseColumns(raw, raw.labels.length - expectedWidth) : raw;
   }

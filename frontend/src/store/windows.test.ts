@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { defaultDenseChannels } from "../lib/plotdata";
 import { captureTechniqueView, type TechniqueViewMemoryMap } from "../lib/techniqueViewMemory";
 import type { Dataset } from "../lib/types";
 import { datasetViewDefaults } from "./windows";
@@ -246,6 +247,13 @@ describe("datasetViewDefaults — a parser's peak-list trace hint", () => {
     const peaks = ds("spectroscopy", { default_trace: "Scatter" }, ["Abundance", "Subfile"]);
     expect(datasetViewDefaults(peaks).seriesStyles).toEqual({ 0: DOT, 1: DOT });
     expect(datasetViewDefaults(ds("spectroscopy")).seriesStyles).toEqual({});
+  });
+
+  it("opens a 2-D map's Plot tab on Intensity as markers (io/_map_schema.py's hints)", () => {
+    const hints = { is2D: true, default_trace: "Scatter", default_value_channels: [2] };
+    const map = ds("xrd.rsm", hints, ["2Theta", "Omega", "Intensity", "Qx", "Qz"]);
+    expect(datasetViewDefaults(map).seriesStyles).toEqual({ 0: DOT, 1: DOT, 2: DOT, 3: DOT, 4: DOT });
+    expect(defaultDenseChannels(map.data)).toEqual([2]);
   });
 
   it("survives a same-technique memory that carries no style, and yields to one that does", () => {

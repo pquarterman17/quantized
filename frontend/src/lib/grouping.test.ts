@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { bookLabel, familyBooks, isOriginBookDataset, originBookFamilies, originSheetGroups } from "./grouping";
+import { isOriginBookDataset, originBookFamilies, originSheetGroups } from "./grouping";
+import { bookLabel, familyBooks } from "./originFamilyBooks";
 import type { Dataset } from "./types";
 
 const ds = (id: string): Dataset => ({

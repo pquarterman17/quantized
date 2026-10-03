@@ -4,7 +4,7 @@
 // store holds ReportEntry wrappers, and the viewer renders it. Pure (no React /
 // store imports) so the sanitizers unit-test standalone, mirroring lib/dataset.
 
-import { decodeWireRow } from "./nonFiniteCells";
+import { decodeLegacyWireRow, noteLegacyNulls, type LegacyNullTally } from "./legacyNullCells";
 
 /** One fitted-parameter row (rendered as value ± error [unit]). */
 export interface ReportParam {
@@ -180,11 +180,9 @@ function stripBadFigureSpecs(report: unknown, warn: (block: string) => void): un
  *  unit left "NaN"/"Infinity"/… sentinel STRINGS sitting in `time`/`values`
  *  with no warning at all (silently wrong plotted numbers). A malformed cell
  *  in `time`/`values` itself is still left as-is either way (never partially
- *  decoded — see `decodeWireRow`): a cell this module has never been able to
- *  interpret (a `null`, or anything else outside the WireCell contract) is
- *  exactly the ambiguous case `lib/nonFiniteCells.ts`'s own header says this
- *  layer never guesses at, so it is treated the SAME as before this fix —
- *  opaque, untouched, no warning — UNLESS at least one cell WAS a real
+ *  decoded — see `decodeWireRow`): a cell outside the WireCell contract is
+ *  treated the SAME as before this fix — opaque, untouched, no warning —
+ *  UNLESS at least one cell WAS a real
  *  sentinel string that got decoded (`changed` below): only THAT combination
  *  (something genuinely non-finite got fixed, but the dataset around it is
  *  still not a fully well-formed `DataStruct`) is the bug this finding
@@ -193,18 +191,24 @@ function stripBadFigureSpecs(report: unknown, warn: (block: string) => void): un
  *  first place, matching this function's long-standing "opaque unless
  *  confidently ours" contract. Returns `block` itself when nothing needed
  *  decoding, preserving the identity contract `stripBadFigureSpecs`/
- *  `sanitizeReports` rely on. */
-function decodeFigureSpec(block: ReportFigureBlock, warn: (block: string) => void): ReportFigureBlock {
+ *  `sanitizeReports` rely on. A legacy `null` cell (pre-PR #527 save) is read
+ *  as NaN and counted into `legacyNulls` (the 2026-10-03 ruling in
+ *  lib/legacyNullCells.ts), all-or-nothing per row like any other decode. */
+function decodeFigureSpec(
+  block: ReportFigureBlock,
+  warn: (block: string) => void,
+  legacyNulls: LegacyNullTally,
+): ReportFigureBlock {
   const spec = block.spec;
   const raw = spec?.dataset as Record<string, unknown> | undefined;
   if (!spec || !raw) return block;
 
-  const time = decodeWireRow(raw.time);
+  const time = decodeLegacyWireRow(raw.time, legacyNulls);
   let valuesOk = Array.isArray(raw.values);
   let valuesChanged = false;
   const values = valuesOk
     ? (raw.values as unknown[]).map((row) => {
-        const r = decodeWireRow(row);
+        const r = decodeLegacyWireRow(row, legacyNulls);
         if (!r.ok) valuesOk = false;
         if (r.changed) valuesChanged = true;
         return r.value;
@@ -230,7 +234,12 @@ function decodeFigureSpec(block: ReportFigureBlock, warn: (block: string) => voi
  *  changed, preserving the identity contract `stripBadFigureSpecs` already
  *  relies on (a report with no work to do round-trips through
  *  `sanitizeReports` as the SAME object). */
-function decodeReportFigureSpecs(report: ReportSheet, reportName: string, warnings?: string[]): ReportSheet {
+function decodeReportFigureSpecs(
+  report: ReportSheet,
+  reportName: string,
+  legacyNulls: LegacyNullTally,
+  warnings?: string[],
+): ReportSheet {
   let changed = false;
   const sections = report.sections.map((section) => {
     let sectionChanged = false;
@@ -238,6 +247,7 @@ function decodeReportFigureSpecs(report: ReportSheet, reportName: string, warnin
       if (block.type !== "figure" || block.spec === undefined) return block;
       const decoded = decodeFigureSpec(block, (name) =>
         warnings?.push(`report "${reportName}": figure "${name}" has a malformed embedded dataset`),
+        legacyNulls,
       );
       if (decoded !== block) sectionChanged = true;
       return decoded;
@@ -253,11 +263,13 @@ function decodeReportFigureSpecs(report: ReportSheet, reportName: string, warnin
  *  A malformed figure `spec` is stripped, not fatal — see
  *  `stripBadFigureSpecs`; `warnings` (the loader's migrationWarnings) names
  *  each one so the user is told a figure lost its embedded render, and names
- *  each well-identified entry (string id + name) whose sheet was dropped. */
+ *  each well-identified entry (string id + name) whose sheet was dropped;
+ *  `legacyNulls` tallies legacy null cells read from figure specs. */
 export function sanitizeReports(
   v: unknown,
   dsIds: ReadonlySet<string>,
   warnings?: string[],
+  legacyNulls: LegacyNullTally = { cells: 0, names: [] },
 ): ReportEntry[] {
   if (!Array.isArray(v)) return [];
   const out: ReportEntry[] = [];
@@ -279,7 +291,9 @@ export function sanitizeReports(
     }
     const datasetId =
       typeof o.datasetId === "string" && dsIds.has(o.datasetId) ? o.datasetId : null;
-    out.push({ id: o.id, name: o.name, datasetId, report: decodeReportFigureSpecs(report, o.name, warnings) });
+    const nullsBefore = legacyNulls.cells;
+    out.push({ id: o.id, name: o.name, datasetId, report: decodeReportFigureSpecs(report, o.name, legacyNulls, warnings) });
+    noteLegacyNulls(legacyNulls, nullsBefore, `report "${o.name}"`);
   }
   return out;
 }

@@ -174,14 +174,11 @@ describe("sanitizeReports", () => {
   });
 
   it("leaves an undecodable cell in time/values untouched (never partially decoded), with no warning when nothing else decoded", () => {
-    // `null`/an unrecognized string is the SAME ambiguous case
-    // `lib/nonFiniteCells.ts` has always refused to guess at (ANY report
-    // figure's `spec.dataset` is opaque data, not necessarily ours) — so
-    // when NOTHING in the dataset was a real sentinel needing a fix, this
-    // stays silent exactly as before this finding, matching
-    // `sanitizeReports`'s other "round-trips a spec-carrying figure block
-    // unchanged" pin (`lib/workspace.test.ts`) whose fixture also carries a
-    // `null` cell.
+    // An unrecognized string is a cell `lib/nonFiniteCells.ts` refuses to
+    // guess at (ANY report figure's `spec.dataset` is opaque data, not
+    // necessarily ours) — so the row stays untouched and, with nothing else
+    // decoded, silent. (A legacy `null` cell is read as NaN since the
+    // 2026-10-03 ruling; see workspaceLegacyNullCells.test.ts.)
     const warnings: string[] = [];
     const report = entry({
       id: "rep-bad2",

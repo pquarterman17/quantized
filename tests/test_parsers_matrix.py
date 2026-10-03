@@ -65,13 +65,9 @@ _EXCLUDE_PREFIXES = (
 # skip) so the gap stays visible until the decoder grows the feature. Add
 # entries ONLY with a named, documented gap.
 _KNOWN_GAPS: dict[str, str] = {
-    # Multi-scan RSM .brml: the 1-D parser declines by pinned contract
-    # (test_io_bruker_brml.test_fairmat_rsm_rejected). Real coverage gap:
-    # no 2-D .brml import yet.
-    "Bruker/FAIRmat_RSM.brml": "multi-scan RSM .brml is declined by the 1-D parser (contract)",
-    "bruker/xrd/FAIRmat_RSM.brml": (
-        "multi-scan RSM .brml is declined by the 1-D parser (contract)"
-    ),
+    # (FAIRmat_RSM.brml was registered here as a declined multi-scan RSM;
+    # FIXED 2026-10-03 — io/bruker_brml_map.py assembles it into a 2-D map,
+    # anchored in test_io_bruker_brml_rsm.py.)
     # Matrix-only Origin project: the matrix (MBook) codec is undecoded
     # (origin format gap register §13.2 #9); a clean OriginProjectError with
     # guidance is the pinned contract (test_io_origin_fuzz).

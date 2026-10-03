@@ -3,7 +3,8 @@
 import { describe, expect, it } from "vitest";
 
 import type { CalcResult, Dataset } from "./types";
-import { fitDataForSpec, fitSpecFromStepParams, fitStepParams, selectedFitData, stampRecompute } from "./fitselection";
+import { fitDataForSpec, fitStepParams, selectedFitData, stampRecompute } from "./fitselection";
+import { fitSpecFromStepParams } from "./fitStepDecode";
 import { activeCorrectionNames, fitSpecFrom, fullPlottedX } from "./fitselectionActions";
 
 const dataset: Dataset = {

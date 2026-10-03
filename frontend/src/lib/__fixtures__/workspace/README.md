@@ -37,6 +37,10 @@ override, one saved Quick Plot template, one plot recipe (via
   `activeId`/`selectedIds`/`expandedFolders`. No pipeline, no recipes, no
   workbooks.
 - `v1.dwk.json` is datasets only — no `folderId`, no `workbookId`.
+- `legacy-null-cells.dwk.json` is `v1.dwk.json` with a `raw` copy of
+  "run-a.csv" and JSON `null` in three `data` cells (two in run-a's `values`,
+  one in run-b's `time`), exactly what a pre-PR #527 save wrote for a
+  NaN/±Infinity or missing cell. `lib/workspaceLegacyNullCells.test.ts`.
 
 The generator script itself (`_generate.test.ts`, a one-off vitest file that
 called the real `serializeWorkspace`/`captureRecipe`/`createFigureDocument`

@@ -7,7 +7,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askConfirm } from "../components/overlays/ConfirmDialog";
-import { datasetRemoveActions, runContextAction, type DatasetActionTarget } from "./contextActions";
+import { runContextAction, type DatasetActionTarget } from "./contextActions";
+import { datasetRemoveActions } from "./datasetRemoveActions";
 import { trashEntryId, type DatasetTrashEntry } from "../store/trash";
 import { useApp } from "../store/useApp";
 import type { Dataset } from "./types";

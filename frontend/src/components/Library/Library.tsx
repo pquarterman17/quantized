@@ -25,7 +25,7 @@ import { matchesQuery, parseQuery } from "../../lib/smartfolders";
 import type { LibraryViewMode } from "../../lib/libraryViewPrefs";
 import { libraryNodeCount, type LibraryContentFilter } from "../../lib/libraryExplorer";
 import type { LibraryNode, LibraryNodeKey } from "../../lib/libraryHierarchy";
-import { selectLibraryNode } from "./libraryOpen";
+import { selectLibraryNode } from "../../lib/librarySelect";
 
 // Bundle diet slice 4 (plans/BUNDLE_HEADROOM.md): the multi-select action bar
 // renders null below two selected rows, so its chunk waits for the second row

@@ -403,8 +403,9 @@ MATLAB."**
 ~~52. **Parameterized parser tests**~~ ✅ completed 2026-07-11 —
     `tests/test_parsers_matrix.py`: 330 parser×file cases (21 committed
     fixtures in CI; 309 realdata auto-skip) + 30 registry-route cases;
-    3 xfails are pinned contracts (multi-scan .brml declined, matrix-only
-    .opju = parked codec gap). Findings: `import_spc`/`import_opus` have
+    3 xfails were pinned contracts (multi-scan .brml declined, matrix-only
+    .opju = parked codec gap); the .brml one closed 2026-10-03 when
+    multi-scan RSMs began importing as maps (`io/bruker_brml_map.py`). Findings: `import_spc`/`import_opus` have
     zero corpus files (spec-written, awaiting samples); `import_lake_shore`
     is unregistered in the registry → booked as MAIN_PLAN #7.
 ~~53. **Performance baselines**~~ ✅ completed 2026-07-11 —

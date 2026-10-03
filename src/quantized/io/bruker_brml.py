@@ -19,8 +19,8 @@ un-prefixed, so ElementTree tags are plain)::
 
 Each ``<Datum>`` is a comma-separated row; the *first* scan axis (2theta) is
 the abscissa and the *last* field is the recorded counter (intensity). This
-parser handles the 1-D case (item #42); an RSM raises a clear error pointing
-at the map path rather than silently returning one line.
+parser handles the 1-D case (item #42); a multi-scan archive (an RSM) is
+assembled into a 2-D map by :mod:`quantized.io.bruker_brml_map`.
 
 Sample files ``FAIRmat_2thomega.brml`` / ``FAIRmat_RSM.brml`` (Apache-2.0,
 FAIRmat pynxtools-xrd corpus) seed the parity tests.
@@ -38,6 +38,7 @@ import numpy as np
 from quantized.datastruct import DataStruct
 from quantized.io._safe_xml import parse_untrusted_xml
 from quantized.io.base import CORRUPT_ARCHIVE_ERRORS
+from quantized.io.bruker_brml_map import assemble_map, measured_route, read_frame
 
 __all__ = ["import_bruker_brml", "is_bruker_brml"]
 
@@ -50,7 +51,8 @@ _AXIS_NAMES = {"2theta": "2-Theta", "twotheta": "2-Theta"}
 # Hostile-input bound (security audit 2026-10-01): the scan XML is read whole,
 # and deflate packs ~1000:1, so a 1.5 MB .brml can expand to gigabytes. A real
 # 1-D RawData document is a few MB. zipfile never returns more than the
-# member's declared size, so checking that size bounds the read.
+# member's declared size, so checking that size bounds the read. A multi-scan
+# map (hundreds of small documents) is bounded by the members' TOTAL size.
 MAX_XML_BYTES = 256 << 20
 
 # A damaged central directory raises BadZipFile, or UnicodeDecodeError for a
@@ -136,19 +138,20 @@ def _tube_meta(root: ET.Element) -> dict[str, Any]:
 
 
 def import_bruker_brml(filepath: str | Path) -> DataStruct:
-    """Import a 1-D Bruker ``.brml`` line scan (2theta vs intensity).
+    """Import a Bruker ``.brml``: a 1-D line scan, or a multi-scan RSM map.
 
     Returns
     -------
     DataStruct
-        ``time`` = the primary scan axis (typically 2theta, deg), one
-        ``Intensity`` channel (counts).
+        1-D: ``time`` = the primary scan axis (typically 2theta, deg), one
+        ``Intensity`` channel (counts). Multi-scan: the XRDML-style 2-D map
+        (``io/bruker_brml_map.py``).
 
     Raises
     ------
     ValueError
-        If the archive is not a ``.brml``, holds no scan, or is a multi-scan
-        RSM (which this 1-D parser does not stitch).
+        If the archive is not a ``.brml``, holds no scan, or holds several
+        scans that do not form a map (repeated or multi-range line scans).
     """
     path = Path(filepath)
     if not zipfile.is_zipfile(path):
@@ -160,10 +163,7 @@ def import_bruker_brml(filepath: str | Path) -> DataStruct:
             if not members:
                 raise ValueError(f"no RawData scan document in archive: {path.name}")
             if len(members) > 1:
-                raise ValueError(
-                    f"multi-scan .brml detected ({len(members)} scans) -- reciprocal-space "
-                    f"maps are not supported by the 1-D parser: {path.name}"
-                )
+                return _import_map(path, zf, members)
             size = zf.getinfo(members[0]).file_size
             if size > MAX_XML_BYTES:
                 raise ValueError(
@@ -175,9 +175,7 @@ def import_bruker_brml(filepath: str | Path) -> DataStruct:
     except _DAMAGED as exc:
         raise ValueError(f"damaged .brml archive ({exc}): {path.name}") from exc
 
-    routes = root.findall(".//DataRoute")
-    route = next((r for r in routes if r.get("RouteFlag") == "Measured"), None)
-    route = route if route is not None else (routes[0] if routes else None)
+    route = measured_route(root)
     if route is None:
         raise ValueError(f"no DataRoute in scan document: {path.name}")
 
@@ -225,6 +223,31 @@ def import_bruker_brml(filepath: str | Path) -> DataStruct:
     return DataStruct.create(
         x, intensity, labels=["Intensity"], units=["counts"], metadata=metadata
     )
+
+
+def _member_index(name: str) -> tuple[str, int]:
+    """Natural order key for ``Experiment0/RawData12.xml`` (12 after 2)."""
+    stem = name.rsplit("RawData", 1)
+    digits = stem[-1].removesuffix(".xml")
+    return stem[0], int(digits) if digits.isdigit() else -1
+
+
+def _import_map(path: Path, zf: zipfile.ZipFile, members: list[str]) -> DataStruct:
+    """Read every scan document of a multi-scan archive into one 2-D map."""
+    total = sum(zf.getinfo(m).file_size for m in members)
+    if total > MAX_XML_BYTES:
+        raise ValueError(
+            f"{len(members)} scan documents are {total} bytes uncompressed "
+            f"(limit {MAX_XML_BYTES}): {path.name}"
+        )
+    frames = []
+    meta: dict[str, Any] = {}
+    for member in sorted(members, key=_member_index):
+        label = f"{path.name}:{member}"
+        root = parse_untrusted_xml(zf.read(member).decode("utf-8", "replace"), label, kind="BRML")
+        meta = meta or _tube_meta(root)
+        frames.append(read_frame(root, label))
+    return assemble_map(frames, path=path, meta=meta)
 
 
 def _resolve_abscissa(

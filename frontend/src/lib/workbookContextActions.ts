@@ -27,7 +27,7 @@ import { openLibraryNode } from "../components/Library/libraryOpen";
 import type { ContextAction } from "./contextActions";
 import { computeDependencyImpact, formatDependencyImpact, hasDependencyImpact } from "./dependencyImpact";
 import type { LibraryNode } from "./libraryHierarchy";
-import { pickConfigureQuickPlotWorksheet, pickQuickPlotWorksheet, quickPlotWorkbookGate } from "./quickPlot";
+import { pickConfigureQuickPlotWorksheet, pickQuickPlotWorksheet, quickPlotWorkbookGate } from "./quickPlotWorkbook";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
 import { openQuickPlotWith, openQuickPlotWithForWorkbook } from "../store/quickPlotWithDialog";

@@ -3487,6 +3487,24 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // client and recipe operations call.
     "/store/plotRecipeConfirm.ts",
     "/lib/uniqueName.ts",
+    // 2026-10-03: the legacy-null-cell read (.dwk and report-spec decode only).
+    "/lib/legacyNullCells.ts",
+    // SLICE 22 (2026-10-03): more halves only lazy modules call, each
+    // imported by its own path: the dataset context-action registry (the
+    // lazy row menu and palette bridge) with the remove actions only it
+    // reaches, the workbook-row Quick Plot gate (the lazy workbook menu), and
+    // the Library open dispatcher (the lazy rows, tree and workspace; the
+    // eager panel keeps `selectLibraryNode` in `lib/librarySelect.ts`).
+    "/lib/datasetContextActions.ts",
+    "/lib/datasetRemoveActions.ts",
+    "/lib/quickPlotWorkbook.ts",
+    "/components/Library/libraryOpen.ts",
+    // ...and three more: the encodings' facet split, export wire and palette
+    // (the lazy facet Stage, series derivation and export builders), the
+    // worksheet book switcher's helpers, and the pipeline fit-step decoder.
+    "/lib/plotEncodingWire.ts",
+    "/lib/originFamilyBooks.ts",
+    "/lib/fitStepDecode.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
