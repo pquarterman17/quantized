@@ -36,6 +36,7 @@
 // side effect of opening someone else's file) would also lose.
 
 import { appendTemplates, loadTemplates, parseTemplate, type AnalysisTemplate } from "./template";
+import { canonicalJson } from "./canonicalJson";
 import { toast } from "../store/toasts";
 
 /** The file's `analysisTemplates` field → the templates this build reads.
@@ -80,7 +81,7 @@ export function projectTemplatesForSave(library = true): AnalysisTemplate[] {
  *  name may keep the local revision or must bump past both. */
 export function definitionKey(t: AnalysisTemplate): string {
   const expects = t.expects ? { columns: t.expects.columns, metadata: t.expects.metadata } : null;
-  return JSON.stringify([
+  return canonicalJson([
     t.steps.map((s) => [s.kind, s.label, s.code, s.params, s.enabled]),
     t.outputs,
     t.description ?? "",

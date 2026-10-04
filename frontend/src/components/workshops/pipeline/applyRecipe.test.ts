@@ -92,6 +92,31 @@ async function recordRecipe(): Promise<AnalysisTemplate> {
 const expected = (d: DataStruct): DataStruct => transposeWorksheet(stackWorksheet(d, [1, 2]));
 
 describe("applyRecipe", () => {
+  it("replays a serialized recipe deterministically on equivalent inputs", async () => {
+    const recipe = await recordRecipe();
+    useApp.setState({
+      datasets: [...store().datasets, { ...B, id: "b-copy", name: "b-copy.dat", data: structuredClone(B.data) }],
+    });
+    const roundTripped = parseTemplate(serializeTemplate(recipe));
+    const results = await applyRecipe(
+      roundTripped,
+      [
+        { datasetId: "b", bindings: [2, 1, 0] },
+        { datasetId: "b-copy", bindings: [2, 1, 0] },
+      ],
+      { ackUnits: false },
+    );
+    expect(results.map((r) => r.status)).toEqual(["ok", "ok"]);
+    const first = byId(results[0].outputId!)!.data;
+    const second = byId(results[1].outputId!)!.data;
+    expect({ time: second.time, values: second.values, labels: second.labels, units: second.units }).toEqual({
+      time: first.time,
+      values: first.values,
+      labels: first.labels,
+      units: first.units,
+    });
+  });
+
   it("applies to a dataset with another column order: the output equals the recipe on the recorded layout, with provenance", async () => {
     const recipe = await recordRecipe();
     expect(recipe.expects?.columns.map((c) => [c.name, c.required])).toEqual([["key", false], ["T", true], ["v", true]]);

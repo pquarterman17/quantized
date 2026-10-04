@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { makeStep } from "./pipeline";
 import { deriveExpectations } from "./recipeExpect";
 import { loadTemplates, saveTemplate, toTemplate, type AnalysisTemplate } from "./template";
-import { mergeProjectTemplates, splitProjectTemplates } from "./templatesProject";
+import { definitionKey, mergeProjectTemplates, splitProjectTemplates } from "./templatesProject";
 import type { Dataset } from "./types";
 import { parseWorkspace, serializeWorkspace } from "./workspace";
 import { useToasts } from "../store/toasts";
@@ -90,6 +90,14 @@ describe("save → open round trip", () => {
 });
 
 describe("the merge rule", () => {
+  it("treats recursively reordered parameter keys as the same recipe definition", () => {
+    const a = toTemplate("Stable", [makeStep("transform", "x", "", { op: "stack", options: { z: 2, a: 1 } })], []);
+    const b = toTemplate("Stable", [makeStep("transform", "x", "", { options: { a: 1, z: 2 }, op: "stack" })], []);
+    expect(definitionKey(a)).toBe(definitionKey(b));
+    saveTemplate(a);
+    expect(mergeProjectTemplates([b])).toEqual({ added: [], renamed: [], unstored: [] });
+  });
+
   it("a same-named, different recipe is added as '(from project)'; the local one is kept", () => {
     saveTemplate(recipe("Stack M", "mine"));
     const r = mergeProjectTemplates([recipe("Stack M", "theirs"), recipe("Other")]);

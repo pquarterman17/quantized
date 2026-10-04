@@ -41,12 +41,38 @@ describe("toTemplate / serialize / parse round-trip", () => {
     expect(a).toContain('"version": 1');
   });
 
+  it("canonicalizes recursively equivalent parameter maps, not just the same object instance", () => {
+    const left = toTemplate("stable", [
+      makeStep("transform", "reshape", "", { op: "reshape", nested: { z: 3, a: 1 }, channels: [2, 0] }),
+    ], []);
+    const right = toTemplate("stable", [
+      makeStep("transform", "reshape", "", { channels: [2, 0], nested: { a: 1, z: 3 }, op: "reshape" }),
+    ], []);
+    expect(serializeTemplate(left)).toBe(serializeTemplate(right));
+  });
+
   it("rejects bad JSON, wrong version, and malformed steps with clear errors", () => {
     expect(() => parseTemplate("nope")).toThrow(/bad JSON/);
     expect(() => parseTemplate('{"version":2,"name":"x","steps":[]}')).toThrow(/version/);
     expect(() =>
       parseTemplate('{"version":1,"name":"x","steps":[{"kind":"alien"}]}'),
     ).toThrow(/malformed/);
+    expect(() =>
+      parseTemplate('{"version":1,"name":"x","steps":[{"kind":"fit","label":"x","code":"","params":[]}]}'),
+    ).toThrow(/malformed/);
+  });
+
+  it("migrates the original version-1 shape with absent optional fields", () => {
+    const old = JSON.stringify({
+      version: 1,
+      name: "  old pipeline  ",
+      steps: [{ kind: "expression", label: "double", code: "", params: { expr: "A*2", name: "B" } }],
+    });
+    const parsed = parseTemplate(old);
+    expect(parsed.name).toBe("old pipeline");
+    expect(parsed.outputs).toEqual([]);
+    expect(parsed.steps[0]).toMatchObject({ enabled: true, kind: "expression" });
+    expect(parsed).not.toHaveProperty("expects");
   });
 });
 

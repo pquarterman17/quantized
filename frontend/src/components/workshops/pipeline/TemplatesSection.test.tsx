@@ -8,6 +8,7 @@ import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { metaFor } from "../../../lib/recipeIndex";
 import { useToasts } from "../../../store/toasts";
+import { usePendingOps } from "../../../store/pendingOps";
 
 const { uploadMock, fitMock, modelsMock, emitMock } = vi.hoisted(() => ({
   uploadMock: vi.fn(),
@@ -56,6 +57,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   useToasts.setState({ toasts: [] });
+  usePendingOps.setState({ ops: [] });
   useApp.setState({
     datasets: [],
     activeId: null,
@@ -64,6 +66,8 @@ beforeEach(() => {
     pipelineRunning: false,
     reports: [],
     openReportId: null,
+    history: [],
+    future: [],
   });
 });
 
@@ -165,6 +169,79 @@ describe("TemplatesSection", () => {
     expect(imported.data.labels).toEqual(["I"]);
     const summary = useApp.getState().datasets.find((d) => d.name.includes("summary"))!;
     expect(summary.data.metadata.failures).toEqual([expect.stringContaining("a.dat")]);
+  });
+
+  it("batch Cancel aborts the in-flight file, removes only its partial input, and keeps a labelled partial summary", async () => {
+    saveTemplate(TEMPLATE);
+    uploadMock.mockResolvedValue(DATA);
+    let markSecondFitStarted!: () => void;
+    const secondFitStarted = new Promise<void>((resolve) => { markSecondFitStarted = resolve; });
+    fitMock
+      .mockResolvedValueOnce({ params: [2, 0], errors: [0.1, 0.1], R2: 0.999 })
+      .mockImplementationOnce((_request, signal: AbortSignal | undefined) => new Promise((_resolve, reject) => {
+        markSecondFitStarted();
+        signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+      }));
+    emitMock.mockResolvedValue({ report: { title: "t", sections: [] } });
+
+    render(<TemplatesSection />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Saved template" }), { target: { value: "linear flow" } });
+    const input = document.querySelector('input[type="file"][multiple]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file("done.dat"), file("in-flight.dat")] } });
+
+    await secondFitStarted;
+    const op = usePendingOps.getState().ops.find((item) => item.label.includes("linear flow"));
+    expect(op?.cancel).toBeTypeOf("function");
+    act(() => op?.cancel?.());
+
+    await waitFor(() => expect(useApp.getState().pipelineRunning).toBe(false));
+    const state = useApp.getState();
+    expect(state.datasets.some((d) => d.name === "done.dat")).toBe(true);
+    expect(state.datasets.some((d) => d.name === "in-flight.dat")).toBe(false);
+    const summary = state.datasets.find((d) => d.name === "linear flow summary (1/2, cancelled)");
+    expect(summary?.data.time).toEqual([1]);
+    expect(state.reports.map((r) => r.name)).toEqual(["linear flow — done.dat"]);
+    expect(useToasts.getState().toasts.at(-1)?.msg).toBe("batch cancelled — kept 1 completed file");
+    expect(usePendingOps.getState().ops).toEqual([]);
+    // A cancelled partial file is not merely hidden from live state: no
+    // later undo/redo snapshot may resurrect it.
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().datasets.some((d) => d.name === "in-flight.dat")).toBe(false);
+    act(() => useApp.getState().redo());
+    expect(useApp.getState().datasets.some((d) => d.name === "in-flight.dat")).toBe(false);
+  });
+
+  it("batch Cancel removes derived outputs made by the in-flight file from live state and history", async () => {
+    saveTemplate(toTemplate(
+      "transform then fit",
+      [
+        makeStep("transform", "Stack signal", "", { op: "stack", channels: [0] }),
+        makeStep("fit", "Fit Linear", "", { model: "Linear" }),
+      ],
+      ["R2"],
+    ));
+    uploadMock.mockResolvedValue(DATA);
+    let markFitStarted!: () => void;
+    const fitStarted = new Promise<void>((resolve) => { markFitStarted = resolve; });
+    fitMock.mockImplementationOnce((_request, signal: AbortSignal | undefined) => new Promise((_resolve, reject) => {
+      markFitStarted();
+      signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+    }));
+
+    render(<TemplatesSection />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Saved template" }), { target: { value: "transform then fit" } });
+    const input = document.querySelector('input[type="file"][multiple]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file("partial.dat")] } });
+    await fitStarted; // transform already completed
+    act(() => usePendingOps.getState().ops.find((item) => item.label.includes("transform then fit"))?.cancel?.());
+
+    await waitFor(() => expect(useApp.getState().pipelineRunning).toBe(false));
+    const state = useApp.getState();
+    expect(state.datasets).toEqual([]);
+    expect(state.history.flatMap((entry) => entry.snapshot.datasets)).toEqual([]);
+    expect(state.future.flatMap((entry) => entry.snapshot.datasets)).toEqual([]);
+    expect(state.reports).toEqual([]);
+    expect(state.datasets.some((d) => d.name.includes("summary"))).toBe(false);
   });
 
   // Finding #4: Apply and Batch both toggle the SAME `pipelineRunning` flag
