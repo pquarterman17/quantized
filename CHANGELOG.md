@@ -6,26 +6,87 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-10-04
+
+A **minor** release focused on turning imported instrument and Origin projects
+into safe, understandable analysis workflows. It adds project-level Origin
+migration review, a technique-aware workflow workspace, Pipeline Studio
+preflight/replay hardening, project-aware batch figure creation, and a broad
+real-data plotting and export parity pass.
+
 ### Added
 
+- **Technique-aware Workflow workspace:** SIMS, XRD, reflectometry,
+  magnetometry, transport and spectroscopy datasets now open into a guided
+  analysis path with provenance, dimensions, lazy-load state, existing results
+  and direct links to the appropriate tools. Unknown data stays generic rather
+  than being guessed incorrectly.
+- **Origin migration cockpit:** imported projects receive a dedicated review
+  surface that groups graph windows, unresolved sources and fidelity issues.
+  Repeated missing workbook references can be resolved atomically after a
+  complete-scope preview; choices support undo/redo, workspace round-trip,
+  deletion pruning and lazy workbook loading.
+- Large Origin reviews now use search, 40-row paging, bulk Review later/Return
+  to review actions and project-scoped state reset. A repeatable local corpus
+  auditor and exact migration contracts cover representative projects up to
+  the 127 MB PNR corpus file.
+- **Pipeline Studio 2.0:** inspect input, step and output state; safely edit,
+  reorder, duplicate, enable, disable and remove steps; preview structural
+  changes without mutating data; and fail closed on broken references,
+  incompatible settings or stale columns.
+- Pipeline templates now replay deterministically with recursive
+  canonicalization and version-1 migration. File-batch replay is cancellable,
+  preserves completed files, removes partial in-flight outputs from live and
+  undo/redo state, and records output provenance across Workflow, Recipe
+  Library, editable figures and reports.
+- **Batch Figure Builder:** apply one Plot Recipe across selected worksheets,
+  workbooks or folders with ready/review/blocked preflight results, independently
+  editable figure outputs, an optional multi-panel page, project-aware search
+  and selection, cancellation, and an all-or-nothing ZIP export in PDF, SVG,
+  PNG or TIFF.
 - **SIMS:** direct depth-axis rescaling (multiply or divide x, then add an
   offset), bound to the x unit it was made for. Batch processing applies the
   same settings to several profiles; every profile is checked first and any
   warnings are reviewed once before anything is created.
+- **Import coverage:** ORSO `.ort` reflectometry, multi-sheet Excel, Bruker
+  multi-scan `.brml` reciprocal-space maps, additional NCNR/OPUS extensions,
+  QD companion/error channels and legacy-workspace null-cell migration.
 - **Origin:** a "Recover…" window for graphs whose saved curves could not be
   matched to an imported workbook — inspect a compatible workbook's columns
   or rebuild an editable plot from it.
 
 ### Changed
 
+- Plotting defaults and exports were audited against roughly 200 real
+  magnetometry, XRD, reflectometry, spectroscopy and SIMS files. Screen and
+  publication rendering now share scientific unit display for Å, µm, cm⁻¹ and
+  emu/cm³, log colour-bar decades, peak anchors and recovered Origin graph
+  state.
+- Plot navigation now handles log and reciprocal pan/zoom safely, keeps the
+  second Y axis linked through navigation and history, and makes double-click
+  reset return to autoscale.
+- Origin/CSV export writes rich scientific graph titles; CSV files add a UTF-8
+  BOM only when non-ASCII text requires it for Excel. Magnifier insets persist
+  and export through SVG, PDF, Copy Figure and reports.
 - Log axes on automatic number format label only their decades (1, 10, 10²…).
 - Switching a plot window to another dataset now clears hand-typed axis
   titles, so the new data's own axis names show instead of the old ones.
+- CI now cancels only superseded runs, preserves back-to-back `main` results,
+  shards the frontend suite and keeps the required aggregate gate fail-closed.
 
 ### Fixed
 
 - Applying recovered Origin graphs one after another no longer carries the
   previous graph's stacked, polar, grouped or second-axis state into the next.
+- Fixed real-data plotting failures including positive-field-first VSM
+  autoscaling, mixed X-unit overlays, XRD wavelength handling, reflectometry
+  error channels, reciprocal-space map routing, log-axis error bars and
+  screen-versus-export axis/layout mismatches.
+- Damaged, ragged and hostile instrument files now fail with bounded, useful
+  errors instead of exhausting memory or producing server errors; supported
+  text, Excel, NetCDF, Bruker, SPC and JCAMP paths retain clearer parser notes.
+- Map selection, multi-panel layout, annotations, error bars and inset
+  rendering retain their intended state across editing, export and reload.
 
 ## [0.28.0] - 2026-10-02
 
