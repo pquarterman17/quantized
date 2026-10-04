@@ -28,6 +28,7 @@ fails closed on conditions it can determine without executing scientific work:
 - invalid expression syntax or a missing expression output name;
 - missing fit model;
 - missing correction background worksheet;
+- correction/reset steps aimed at a source-owned derived worksheet;
 - malformed transform parameters;
 - missing explicitly referenced worksheets or transform outputs;
 - stale recorded column indices while the input schema is knowable; and
@@ -38,12 +39,30 @@ Pipeline Studio deliberately does not compare those later expressions or
 column references with the original input schema. Runtime step failures remain
 isolated and are reported per step.
 
-## Structural-edit preview limits
+## Structural-edit result preview
 
-The current confirmation describes **later-step exposure**: how many enabled
-steps occur after the edit and may therefore receive different input. It is not
-a complete dataflow graph, numeric result preview, or unit-compatibility proof.
-Those deeper previews remain tracked in the Primary Workflow Roadmap.
+Before a risky enable/disable, reorder, or remove is committed, the confirmation
+evaluates the exact proposed step list against bounded clones. It shows the
+result shape, the first three rows and four result columns, step-specific
+warnings, and whether the result is complete, partial, blocked, or unavailable.
+Numeric table materialization uses at most the first 20 matched rows from each
+worksheet and at most 50 steps. Purpose-built transform analyzers may scan the
+complete loaded inputs for warnings while still bounding their result table.
+The preview never resolves a lazy Origin thumbnail as though it were full
+data, calls a store action, creates a worksheet, changes selection, or adds an
+undo entry. A change to the recipe, input, or loaded dataset list invalidates
+the pending result; late async completions are ignored.
+
+Expression, correction, reset, and single-output transform steps are evaluated
+numerically. Fit and display/import marker steps do not replace the pipeline
+table and are represented without executing their side effects. Multi-output
+split, metadata promotion/cleanup, a disabled creating transform, and recipes
+beyond the step cap stop with an explicit **partial preview** rather than
+inventing an output. This bounded evaluation checks derived-expression units,
+uncertainty bindings, saved-fit references, and transform warnings against the
+proposed step order. A statically incompatible proposed recipe is blocked. A
+backend outage or not-yet-loaded referenced worksheet is reported as preview
+unavailable; the structural edit remains session-undoable.
 
 Structural edits are session-undoable. Duplicating a transform deep-copies its
 parameters but removes recorded output dataset ids so the copy cannot claim the

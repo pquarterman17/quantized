@@ -4,11 +4,15 @@
 // and export the same script the macro card exports (one source of truth).
 // Thin — state and the runner live in usePipeline.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { saveBlob } from "../../../lib/download";
 import { pipelineToScript } from "../../../lib/pipeline";
-import { pipelineEditImpact, type PipelineEditImpact } from "../../../lib/pipelineStudio";
+import {
+  pipelineEditImpact,
+  type PipelineEditImpact,
+} from "../../../lib/pipelineStudio";
+import { pipelineStepsAfterEdit, type PipelineStructuralAction } from "../../../lib/pipelineStructuralEdit";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Checkbox } from "../../primitives/Checkbox";
@@ -16,6 +20,8 @@ import { NumberField } from "../../primitives/NumberField";
 import { Button, StatusDot } from "../../primitives";
 import StepEditor from "./StepEditor";
 import TemplatesSection from "./TemplatesSection";
+import ProposedPipelineResult from "./ProposedPipelineResult";
+import type { PipelineEditPreview as EditPreview } from "./pipelineEditPreview";
 import { usePipeline, type StepStatus } from "./usePipeline";
 
 const TONE: Record<StepStatus, "ok" | "warn" | "danger"> = {
@@ -25,11 +31,11 @@ const TONE: Record<StepStatus, "ok" | "warn" | "danger"> = {
   warn: "warn",
 };
 
-type StructuralAction = "toggle" | "remove" | "move_up" | "move_down";
 interface PendingEdit {
   stepId: string;
-  action: StructuralAction;
+  action: PipelineStructuralAction;
   impact: PipelineEditImpact;
+  preview: EditPreview | null;
 }
 
 const STATE_LABEL = {
@@ -45,30 +51,61 @@ export default function PipelinePanel() {
   const setOpen = useApp((s) => s.setPipelineOpen);
   const setStatus = useApp((s) => s.setStatus);
   const p = usePipeline();
+  const datasets = useApp((s) => s.datasets);
   const [selected, setSelected] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [newExpr, setNewExpr] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null);
+  const previewRequest = useRef(0);
 
   // Undo, template load, or another command can replace the list while a
   // confirmation is open. Never apply wording calculated for an old list.
-  useEffect(() => setPendingEdit(null), [p.steps]);
+  useEffect(() => {
+    previewRequest.current += 1;
+    setPendingEdit(null);
+  }, [datasets, p.active?.id, p.steps]);
   useEffect(() => {
     if (selected && !p.steps.some((step) => step.id === selected)) setSelected(null);
   }, [p.steps, selected]);
 
-  const applyStructuralEdit = (stepId: string, action: StructuralAction) => {
+  const applyStructuralEdit = (stepId: string, action: PipelineStructuralAction) => {
     if (action === "toggle") p.toggleStep(stepId);
     else if (action === "remove") p.removeStep(stepId);
     else p.moveStep(stepId, action === "move_up" ? -1 : 1);
     setPendingEdit(null);
   };
 
-  const requestStructuralEdit = (stepId: string, action: StructuralAction) => {
+  const requestStructuralEdit = (stepId: string, action: PipelineStructuralAction) => {
     const impact = pipelineEditImpact(p.steps, stepId, action);
-    if (impact.requiresConfirmation) setPendingEdit({ stepId, action, impact });
-    else applyStructuralEdit(stepId, action);
+    if (!impact.requiresConfirmation) {
+      applyStructuralEdit(stepId, action);
+      return;
+    }
+    const request = ++previewRequest.current;
+    const proposed = pipelineStepsAfterEdit(p.steps, stepId, action);
+    setPendingEdit({ stepId, action, impact, preview: null });
+    void import("./pipelineEditPreview").then(({ previewPipelineEdit }) => (
+      previewPipelineEdit(proposed, p.active, datasets)
+    )).then((preview) => {
+      if (previewRequest.current !== request) return;
+      setPendingEdit((current) => current?.stepId === stepId && current.action === action
+        ? { ...current, preview }
+        : current);
+    }).catch((error: unknown) => {
+      if (previewRequest.current !== request) return;
+      const preview: EditPreview = {
+        status: "unavailable",
+        input: null,
+        output: null,
+        warnings: [error instanceof Error ? error.message : "The proposed result could not be previewed."],
+        capped: false,
+        canCommit: true,
+      };
+      setPendingEdit((current) => current?.stepId === stepId && current.action === action
+        ? { ...current, preview }
+        : current);
+    });
   };
 
   const reviewById = new Map(p.review.steps.map((step) => [step.id, step]));
@@ -145,10 +182,22 @@ export default function PipelinePanel() {
                 )}
                 {confirming && (
                   <div className="qzk-pipeline-confirm" role="group" aria-live="polite" aria-label={confirming.impact.title}>
-                    <div><strong>{confirming.impact.title}</strong> {confirming.impact.detail}</div>
+                    <div className="qzk-pipeline-confirm-copy">
+                      <div><strong>{confirming.impact.title}</strong> {confirming.impact.detail}</div>
+                      <ProposedPipelineResult preview={confirming.preview} />
+                    </div>
                     <div className="qzk-pipeline-confirm-actions">
-                      <Button size="sm" onClick={() => applyStructuralEdit(confirming.stepId, confirming.action)}>Confirm</Button>
-                      <Button size="sm" onClick={() => setPendingEdit(null)}>Cancel</Button>
+                      <Button
+                        size="sm"
+                        disabled={!confirming.preview?.canCommit}
+                        onClick={() => applyStructuralEdit(confirming.stepId, confirming.action)}
+                      >
+                        {confirming.preview ? "Confirm" : "Previewing…"}
+                      </Button>
+                      <Button size="sm" onClick={() => {
+                        previewRequest.current += 1;
+                        setPendingEdit(null);
+                      }}>Cancel</Button>
                     </div>
                   </div>
                 )}

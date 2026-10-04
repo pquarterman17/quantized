@@ -2,6 +2,7 @@ import { validateExpression } from "./pipeline";
 import type { PipelineStep } from "./pipelineStep";
 import { transformParamsOf } from "./transformRun";
 import type { Dataset } from "./types";
+import type { PipelineStructuralAction } from "./pipelineStructuralEdit";
 
 export type PipelineStepState = "ready" | "display_only" | "input" | "disabled" | "invalid" | "blocked";
 
@@ -46,6 +47,7 @@ function outputIds(step: PipelineStep): string[] {
 function problem(
   step: PipelineStep,
   dataset: Dataset | null,
+  schemaDataset: Dataset | null,
   loadedDatasets: ReadonlyMap<string, Dataset>,
   loaded: ReadonlySet<string>,
   available: ReadonlySet<string>,
@@ -60,12 +62,17 @@ function problem(
     // A preceding transform may change the schema. Validate syntax there but
     // defer exact column compatibility to execution; rejecting against the
     // original input would be a false failure.
-    return validateExpression(expr, columnCount ?? 16_384) ?? undefined;
+    const syntax = validateExpression(expr, columnCount ?? 16_384);
+    if (syntax) return syntax;
+    return undefined;
   }
   if (step.kind === "fit") {
     if (!String(step.params.model ?? "").trim()) return "The fit model is missing.";
   }
   if (step.kind === "correction") {
+    if (schemaDataset?.derivedFrom) {
+      return "This input is a derived worksheet; freeze a copy before applying corrections.";
+    }
     const bg = step.params.bg as { datasetId?: unknown } | undefined;
     // Correction replay does not translate recorded transform-output IDs the
     // way transformReplay does. Only a worksheet that is loaded right now is
@@ -74,6 +81,9 @@ function problem(
     if (typeof bg?.datasetId === "string" && !loaded.has(bg.datasetId)) {
       return `The background worksheet “${bg.datasetId}” is not loaded.`;
     }
+  }
+  if (step.kind === "reset" && schemaDataset?.derivedFrom) {
+    return "This input is a derived worksheet; its source-owned corrections cannot be reset here.";
   }
   if (step.kind === "transform") {
     try {
@@ -168,6 +178,7 @@ export function analyzePipeline(steps: readonly PipelineStep[], dataset: Dataset
   const available = new Set(loaded);
   let blockedBy: string | null = null;
   let columnCount: number | null = dataset?.data.labels.length ?? null;
+  let schemaDataset = dataset;
   const reviews: PipelineStepReview[] = [];
   steps.forEach((step, index) => {
     const later = steps.slice(index + 1).filter((item) => item.enabled && item.kind !== "ui" && item.kind !== "import").length;
@@ -183,16 +194,20 @@ export function analyzePipeline(steps: readonly PipelineStep[], dataset: Dataset
     } else if (step.kind === "import") {
       reviews.push({ id: step.id, state: "input", summary, impact });
     } else {
-      const issue = problem(step, dataset, loadedDatasets, loaded, available, columnCount);
+      const issue = problem(step, dataset, schemaDataset, loadedDatasets, loaded, available, columnCount);
       const warning = issue ? undefined : compatibilityWarning(step, columnCount);
       reviews.push({ id: step.id, state: issue ? "invalid" : "ready", summary, impact, issue: issue ?? warning });
       if (issue && step.kind === "transform") blockedBy = step.label;
     }
-    if (step.enabled && step.kind === "expression" && columnCount !== null) {
+    const landed = reviews.at(-1)?.state === "ready";
+    if (landed && step.kind === "expression" && columnCount !== null) {
       // Propagated expressions append both the value and its sigma column.
       columnCount += step.params.derived === true && step.params.propagate === true ? 2 : 1;
     }
-    if (step.enabled && step.kind === "transform") columnCount = null;
+    if (landed && step.kind === "transform") {
+      columnCount = null;
+      schemaDataset = null;
+    }
     for (const id of outputIds(step)) available.add(id);
   });
   return {
@@ -210,7 +225,7 @@ export function analyzePipeline(steps: readonly PipelineStep[], dataset: Dataset
 export function pipelineEditImpact(
   steps: readonly PipelineStep[],
   stepId: string,
-  action: "toggle" | "remove" | "move_up" | "move_down",
+  action: PipelineStructuralAction,
 ): PipelineEditImpact {
   const index = steps.findIndex((step) => step.id === stepId);
   if (index < 0) return { title: "Step no longer exists", detail: "The pipeline changed before this edit could be applied.", requiresConfirmation: false };
