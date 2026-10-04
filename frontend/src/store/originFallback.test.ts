@@ -2,6 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { Dataset, OriginFigure } from "../lib/types";
 import { loadOriginApplyLibs } from "./originApplyLibs";
+import { commitOriginSourceMapping } from "./originFallback";
 import { useApp } from "./useApp";
 
 const book: Dataset = {
@@ -87,6 +88,97 @@ describe("Origin figure fallbacks", () => {
         mark: "line",
       },
     });
+  });
+
+  it("commits a previewed source mapping atomically and applies the mapped figure", async () => {
+    useApp.setState({
+      originFigures: [{
+        id: "mapped", stem: "Project", datasetId: null, siblingIds: ["d1"],
+        figure: { ...figure, curves: [{ book: "MissingBook", x: "A", y: "B", style: "line" }] },
+      }],
+      history: [], future: [],
+    });
+
+    await expect(commitOriginSourceMapping(useApp.setState, useApp.getState, "MissingBook", "d1", ["mapped"])).resolves.toBe(true);
+    expect(useApp.getState().originFigures[0]).toMatchObject({
+      datasetId: null, sourceOverrides: { MissingBook: "d1" },
+    });
+    expect(useApp.getState().history.at(-1)?.label).toBe("resolve Origin source");
+
+    useApp.getState().undo();
+    expect(useApp.getState().originFigures[0].datasetId).toBeNull();
+    expect(useApp.getState().originFigures[0].sourceOverrides).toBeUndefined();
+    useApp.getState().redo();
+    expect(useApp.getState().originFigures[0].sourceOverrides).toEqual({ MissingBook: "d1" });
+
+    useApp.getState().applyOriginFigure("mapped");
+    expect(useApp.getState()).toMatchObject({ activeId: "d1", yKeys: [0], stageTab: "plot" });
+  });
+
+  it("does not apply a persisted mapping after its target loses Origin provenance", () => {
+    const ordinary = { ...book, data: { ...book.data, metadata: {} } };
+    useApp.setState({
+      datasets: [ordinary],
+      activeId: null,
+      originFigures: [{
+        id: "stale-mapping", stem: "Project", datasetId: null, siblingIds: ["d1"],
+        sourceOverrides: { MissingBook: "d1" },
+        figure: { ...figure, curves: [{ book: "MissingBook", x: "A", y: "B" }] },
+      }],
+      history: [], future: [],
+    });
+
+    useApp.getState().applyOriginFigure("stale-mapping");
+
+    expect(useApp.getState().activeId).toBeNull();
+    expect(useApp.getState().history).toEqual([]);
+  });
+
+  it("does not apply or create history after a mapped worksheet loses a required column", () => {
+    useApp.setState({
+      activeId: null,
+      originFigures: [{
+        id: "stale-columns", stem: "Project", datasetId: null, siblingIds: ["d1"],
+        sourceOverrides: { MissingBook: "d1" },
+        figure: { ...figure, curves: [{ book: "MissingBook", x: "A", y: "Gone" }] },
+      }],
+      history: [], future: [],
+    });
+
+    useApp.getState().applyOriginFigure("stale-columns");
+
+    expect(useApp.getState().activeId).toBeNull();
+    expect(useApp.getState().history).toEqual([]);
+  });
+
+  it("revalidates bulk scope and leaves state untouched when one requested layer is incompatible", async () => {
+    useApp.setState({
+      originFigures: [
+        { id: "good", stem: "Project", datasetId: null, siblingIds: ["d1"], figure: { ...figure, curves: [{ book: "MissingBook", x: "A", y: "B" }] } },
+        { id: "bad", stem: "Project", datasetId: null, siblingIds: ["d1"], figure: { ...figure, curves: [{ book: "MissingBook", x: "A", y: "Z" }] } },
+      ],
+      history: [], future: [],
+    });
+    const before = useApp.getState().originFigures;
+    await expect(commitOriginSourceMapping(useApp.setState, useApp.getState, "MissingBook", "d1", ["good", "bad"])).resolves.toBe(false);
+    expect(useApp.getState().originFigures).toBe(before);
+    expect(useApp.getState().history).toEqual([]);
+  });
+
+  it("refuses a stale preview when another matching layer entered the import scope", async () => {
+    useApp.setState({
+      originFigures: [
+        { id: "previewed", stem: "Project", datasetId: null, siblingIds: ["d1"], figure: { ...figure, curves: [{ book: "MissingBook", x: "A", y: "B" }] } },
+        { id: "added-later", stem: "Project", datasetId: null, siblingIds: ["d1"], figure: { ...figure, curves: [{ book: "MissingBook", x: "A", y: "B" }] } },
+      ],
+      history: [], future: [],
+    });
+    const before = useApp.getState().originFigures;
+
+    await expect(commitOriginSourceMapping(useApp.setState, useApp.getState, "MissingBook", "d1", ["previewed"])).resolves.toBe(false);
+
+    expect(useApp.getState().originFigures).toBe(before);
+    expect(useApp.getState().history).toEqual([]);
   });
 
   it("refuses manual recovery from a workbook outside the same Origin import", async () => {

@@ -103,18 +103,23 @@ export interface ViewAppliersSlice {
 export function createViewAppliersSlice(set: SliceSet, get: SliceGet): ViewAppliersSlice {
   const slice: ViewAppliersSlice = {
     applyOriginFigure: (id, opts) => {
-      const entry = get().originFigures.find((f) => f.id === id);
-      if (!entry?.datasetId) return;
-      if (confirmOriginReapplyDiscard(get, entry, id, opts) || deferOriginFigureApply(get, entry, id, opts)) return; // #57 confirm-then-defer
+      let entry = get().originFigures.find((f) => f.id === id);
+      if (!entry) return;
+      if (confirmOriginReapplyDiscard(get, entry, id, opts)) return;
       // Bundle headroom slice 1: `libs` is the apply-only half of the figure
-      // library, a LAZY chunk. Until it has been fetched, hand off to the third
-      // preflight — it loads the chunk and re-enters here, taking this
-      // synchronous path on the second pass (see store/originApplyLibs.ts).
+      // library, a LAZY chunk. An explicitly mapped figure also needs its
+      // projection helper from that chunk before its target can be validated.
       const libs = originApplyLibs();
       if (!libs) return deferOriginApplyLibs(get, id, opts);
+      if (!entry.datasetId) {
+        if (!entry.sourceOverrides) return;
+        entry = libs.originFigureWithSourceMappings(entry, get().datasets);
+        if (!entry.datasetId) return;
+      }
+      const sourceIds = libs.originFigureSourceDatasetIds(entry, get().originFigures, get().datasets);
+      if (deferOriginFigureApply(get, id, sourceIds, opts)) return;
       // Past every preflight: the body (store/originApplyRun.ts, bundle
       // headroom slice 18) came with `libs`, so it runs now, synchronously.
-      // (`entry.datasetId` was checked non-null on this action's first line.)
       libs.runOriginFigureApply(set, get, ORIGIN_APPLY_LABEL, entry as OriginFigureEntry & { datasetId: string }, id, opts, libs);
     },
     // Facet-by-column (gap #21 residual): see `lib/composition.ts` for why a

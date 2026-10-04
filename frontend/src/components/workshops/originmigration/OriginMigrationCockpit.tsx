@@ -17,6 +17,7 @@ import {
 import { useApp } from "../../../store/useApp";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { Badge, Button } from "../../primitives";
+import { clearOriginSourceMapping } from "./originSourceMappingCommands";
 
 const OriginRecoveryWindow = lazyRegion(
   () => import("../../Library/OriginRecoveryWindow"),
@@ -25,6 +26,10 @@ const OriginRecoveryWindow = lazyRegion(
 const OriginSavedPreviewWindow = lazyRegion(
   () => import("../../Library/OriginSavedPreviewWindow"),
   "Origin preview",
+);
+const OriginBulkRecoveryWindow = lazyRegion(
+  () => import("./OriginBulkRecoveryWindow"),
+  "Origin bulk recovery",
 );
 
 type Filter = "attention" | "all" | "recovered";
@@ -136,6 +141,7 @@ export default function OriginMigrationCockpit({
   const [selectedId, setSelectedId] = useState(initialFidelityId);
   const [filter, setFilter] = useState<Filter>("attention");
   const [issueGroupId, setIssueGroupId] = useState<string | null>(null);
+  const [bulkBook, setBulkBook] = useState<string | null>(null);
   const deferred = useOriginReviewDeferred();
   const selected = projects.find((project) => project.fidelity.id === selectedId) ?? projects[0];
 
@@ -237,6 +243,40 @@ export default function OriginMigrationCockpit({
         </div>
       )}
 
+      {issueGroup && (
+        <div className="qzk-origin-migration-bulk-callout">
+          <div>
+            <strong>Resolve repeated source together</strong>
+            <span>
+              Preview one workbook choice for {issueGroup.bindingCount} saved binding{issueGroup.bindingCount === 1 ? "" : "s"} across {issueGroup.graphIds.length} graph{issueGroup.graphIds.length === 1 ? "" : "s"}.
+            </span>
+          </div>
+          <Button size="sm" variant="primary" onClick={() => setBulkBook(issueGroup.book)}>
+            Preview bulk resolution…
+          </Button>
+        </div>
+      )}
+
+      {selected.sourceMappings.length > 0 && (
+        <div className="qzk-origin-migration-mappings" role="region" aria-label="Saved Origin source mappings">
+          <strong>Saved source choices</strong>
+          {selected.sourceMappings.map((mapping) => {
+            const target = datasets.find((dataset) => dataset.id === mapping.datasetId);
+            return (
+              <div key={mapping.id}>
+                <span><strong>{mapping.book || "Unknown book"}</strong> → {target?.name ?? "missing workbook"} · {mapping.graphIds.length} graph{mapping.graphIds.length === 1 ? "" : "s"}</span>
+                <div className="qz-btn-row">
+                  <Button size="sm" aria-label={`Review or change mapping for ${mapping.book || "Unknown book"}`} onClick={() => setBulkBook(mapping.book)}>Review or change…</Button>
+                  <Button size="sm" aria-label={`Clear mapping for ${mapping.book || "Unknown book"}`} onClick={() => void clearOriginSourceMapping(
+                    mapping.book, mapping.entryIds,
+                  )}>Clear</Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div className="qzk-origin-migration-toolbar" role="group" aria-label="Filter recovered graphs">
         <Button size="sm" variant={filter === "attention" && !issueGroup ? "primary" : "default"} onClick={() => { setFilter("attention"); setIssueGroupId(null); }}>Needs review ({selected.needsReview})</Button>
         <Button size="sm" variant={filter === "all" ? "primary" : "default"} onClick={() => { setFilter("all"); setIssueGroupId(null); }}>All graphs ({selected.graphs.length})</Button>
@@ -264,6 +304,14 @@ export default function OriginMigrationCockpit({
           <summary>{manifest.filtered_figures.length} non-editable Origin record{manifest.filtered_figures.length === 1 ? "" : "s"}</summary>
           <ul>{manifest.filtered_figures.map((figure) => <li key={`${figure.index}-${figure.name}`}>{figure.name || `Record ${figure.index}`} — {figure.reason}</li>)}</ul>
         </details>
+      )}
+      {bulkBook !== null && (
+        <OriginBulkRecoveryWindow
+          key={`${selected.fidelity.id}:${bulkBook}`}
+          fidelityId={selected.fidelity.id}
+          book={bulkBook}
+          onClose={() => setBulkBook(null)}
+        />
       )}
     </section>
   );

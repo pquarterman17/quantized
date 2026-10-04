@@ -1,7 +1,11 @@
 // Origin graph recovery fallbacks (#50): exact source worksheet focus and
 // Graph Builder seeding. Composed into useApp to keep the root store bounded.
 
-import { resolveOriginFigureSources, resolveOriginSourceManually } from "../lib/originSources";
+import {
+  previewOriginSourceMapping,
+  resolveOriginFigureSources,
+  resolveOriginSourceManually,
+} from "../lib/originSources";
 import { figureLayerFamily } from "../lib/originFigures";
 import { plural } from "../lib/plural";
 import { ORIGIN_OVERLAY_VERSION } from "../lib/originOverlay";
@@ -26,6 +30,59 @@ export interface OriginFallbackSlice {
     opts?: { manual?: boolean },
   ) => Promise<boolean>;
   remakeOriginFigure: (figureId: string, datasetId?: string) => Promise<boolean>;
+}
+
+export async function commitOriginSourceMapping(
+  set: SliceSet, get: SliceGet, book: string, datasetId: string, entryIds: string[],
+): Promise<boolean> {
+  const uniqueIds = [...new Set(entryIds)];
+  const state = get();
+  const dataset = state.datasets.find((item) => item.id === datasetId);
+  const entries = uniqueIds.map((id) => state.originFigures.find((item) => item.id === id));
+  if (!dataset || entries.some((entry) => !entry)) return false;
+  const targets = entries.filter((entry): entry is NonNullable<typeof entry> => entry != null);
+  const importIds = new Set(targets[0]?.siblingIds ?? []);
+  const currentScope = state.originFigures.filter((entry) =>
+    entry.siblingIds.some((id) => importIds.has(id))
+      && entry.figure.curves?.some((curve) => curve.book === book),
+  );
+  const preview = previewOriginSourceMapping(currentScope, dataset, book);
+  if (!preview.canApply || preview.entryIds.length !== uniqueIds.length
+    || uniqueIds.some((id) => !preview.entryIds.includes(id))) {
+    toast("Origin source mapping changed before it could be applied; review the scope again", "danger");
+    return false;
+  }
+  if (targets.every((entry) => entry.sourceOverrides?.[book] === datasetId)) return true;
+  get().recordHistory("resolve Origin source");
+  const selected = new Set(uniqueIds);
+  set((s) => ({
+    originFigures: s.originFigures.map((entry) => selected.has(entry.id)
+      ? { ...entry, sourceOverrides: { ...entry.sourceOverrides, [book]: datasetId } }
+      : entry),
+    status: `mapped Origin source ${book || "unknown"} to ${dataset.name} for ${uniqueIds.length} layer${plural(uniqueIds.length)}`,
+  }));
+  return true;
+}
+
+export async function clearOriginSourceMapping(
+  set: SliceSet, get: SliceGet, book: string, entryIds: string[],
+): Promise<boolean> {
+  const selected = new Set(entryIds);
+  const affected = get().originFigures.filter(
+    (entry) => selected.has(entry.id) && entry.sourceOverrides?.[book],
+  );
+  if (affected.length === 0) return false;
+  get().recordHistory("clear Origin source mapping");
+  set((s) => ({
+    originFigures: s.originFigures.map((entry) => {
+      if (!selected.has(entry.id) || !entry.sourceOverrides?.[book]) return entry;
+      const sourceOverrides = { ...entry.sourceOverrides };
+      delete sourceOverrides[book];
+      return { ...entry, sourceOverrides: Object.keys(sourceOverrides).length ? sourceOverrides : undefined };
+    }),
+    status: `cleared Origin source mapping for ${book || "unknown"}`,
+  }));
+  return true;
 }
 
 export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginFallbackSlice {

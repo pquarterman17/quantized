@@ -80,6 +80,22 @@ describe("applyOriginFigure — cold lazy-chunk path", () => {
     expect(useApp.getState().activeId).toBe("d1");
   });
 
+  it("loads the projection helper before the first apply of an explicitly mapped figure", async () => {
+    useApp.setState({
+      originFigures: [{
+        ...entry("mapped", { ...figure("Mapped", 3), curves: [{ book: "Missing", x: "A", y: "B" }] }),
+        datasetId: null,
+        sourceOverrides: { Missing: "d1" },
+      }],
+    });
+
+    useApp.getState().applyOriginFigure("mapped");
+    expect(useApp.getState().xLim).toBeNull();
+
+    await vi.waitFor(() => expect(useApp.getState().xLim).toEqual([0, 3]));
+    expect(useApp.getState().activeId).toBe("d1");
+  });
+
   it("is synchronous once the chunk is loaded", async () => {
     useApp.getState().applyOriginFigure("a");
     await vi.waitFor(() => expect(useApp.getState().xLim).toEqual([0, 2]));

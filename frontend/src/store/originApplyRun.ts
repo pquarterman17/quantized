@@ -19,12 +19,42 @@ import { originHiddenChannels } from "../lib/errorbars";
 import { lit } from "../lib/macro";
 import { figureLabel, figureLayerFamily, type OriginFigureEntry } from "../lib/originFigures";
 import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlayFigure";
+import { originFigureWithSourceMappings } from "../lib/originSources";
 import { pageSetupFromDecoded } from "../lib/pageGeometry";
 import { dedupeWindowTitle, displayedWindowTitle, scaleFromLog } from "../lib/plotview";
+import type { Dataset } from "../lib/types";
 import { nextDatasetId } from "./idSeq";
 import type { OriginApplyLibs } from "./originApplyLibs";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
+
+export { originFigureWithSourceMappings } from "../lib/originSources";
+
+/** Import-scoped source datasets the complete graph family may read. Kept in
+ * the apply chunk because discovery is only needed after an apply gesture. */
+export function originFigureSourceDatasetIds(
+  entry: OriginFigureEntry,
+  figures: OriginFigureEntry[],
+  datasets: Dataset[],
+): string[] {
+  const siblingSet = new Set(entry.siblingIds);
+  const family = figureLayerFamily(entry, figures);
+  const ids = new Set<string>();
+  const books = new Set<string>();
+  for (const member of family.length ? family : [entry]) {
+    if (member.datasetId && siblingSet.has(member.datasetId)) ids.add(member.datasetId);
+    for (const mappedId of Object.values(member.sourceOverrides ?? {})) {
+      if (siblingSet.has(mappedId)) ids.add(mappedId);
+    }
+    for (const curve of member.figure.curves ?? []) books.add(curve.book);
+  }
+  for (const ds of datasets) {
+    if (!siblingSet.has(ds.id)) continue;
+    const book = String((ds.data.metadata ?? {}).origin_book ?? "");
+    if (books.has(book)) ids.add(ds.id);
+  }
+  return [...ids];
+}
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
@@ -94,7 +124,9 @@ export function runOriginFigureApply(
     const winId = s.createWindow(entry.datasetId, undefined, title);
     s.focusWindow(winId);
   }
-  const fig = entry.figure;
+  const siblings = get().datasets.filter((d) => entry.siblingIds.includes(d.id));
+  const resolvedEntry = originFigureWithSourceMappings(entry, siblings);
+  const fig = resolvedEntry.figure;
   // Cross-book figures (curves spanning ≥2 workbooks) materialize as an
   // overlay dataset (owner decision) so the combined graph Origin showed is
   // reproduced in one plot; re-applying reuses the existing overlay.
@@ -105,7 +137,6 @@ export function runOriginFigureApply(
   // books. Reuse is keyed on the import-scoped graph-window family id (not
   // the clicked layer id or display name), so every layer and entry point
   // rebuilds the same overlay without colliding across imports.
-  const siblings = get().datasets.filter((d) => entry.siblingIds.includes(d.id));
   const allFigures = get().originFigures;
   const layerFamily = figureLayerFamily(entry, allFigures);
   const familyIds = new Set(layerFamily.map((member) => member.id));
@@ -180,11 +211,14 @@ export function runOriginFigureApply(
   // primary Y axis, layer-2 curves on the secondary (y2) axis — instead
   // of just the clicked layer's own curves. Axis range/log come from the
   // LOWER layer number (Origin draws layer 1's axis as the "main" one).
-  const partner = libs.doubleYPartner(entry, get().originFigures);
+  const mappedFigures = get().originFigures.map((member) => originFigureWithSourceMappings(member, siblings));
+  const partner = libs.doubleYPartner(resolvedEntry, mappedFigures);
   const dsForPartner = partner ? get().datasets.find((d) => d.id === entry.datasetId) : null;
   if (partner && dsForPartner) {
-    const lower = (entry.figure.layer ?? 1) <= (partner.figure.layer ?? 1) ? entry : partner;
-    const upper = lower === entry ? partner : entry;
+    const resolvedPartner = originFigureWithSourceMappings(partner, siblings);
+    const lower = (resolvedEntry.figure.layer ?? 1) <= (resolvedPartner.figure.layer ?? 1)
+      ? resolvedEntry : resolvedPartner;
+    const upper = lower === resolvedEntry ? resolvedPartner : resolvedEntry;
     const baseSel = libs.figureChannelSelection(lower.figure, dsForPartner);
     const partnerSel = libs.figureChannelSelection(upper.figure, dsForPartner);
     if (baseSel && partnerSel) {
@@ -250,7 +284,9 @@ export function runOriginFigureApply(
   // to a dataset + plotted channels (all-or-nothing). Falls through to the
   // clicked layer's own single-layer apply below, with a status note, when
   // any layer doesn't resolve.
-  const family = figureLayerFamily(entry, get().originFigures);
+  const family = figureLayerFamily(entry, get().originFigures).map(
+    (member) => originFigureWithSourceMappings(member, siblings),
+  );
   if (family.length >= 2) {
     const spatialResult = libs.resolveSpatialPanels(family, get().datasets);
     if (spatialResult) {

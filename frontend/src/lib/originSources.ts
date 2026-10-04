@@ -34,6 +34,15 @@ export interface OriginSourceResolution {
   unresolved: UnresolvedOriginBinding[];
 }
 
+export interface OriginSourceMappingPreview {
+  book: string;
+  datasetId: string;
+  entryIds: string[];
+  bindingCount: number;
+  incompatible: UnresolvedOriginBinding[];
+  canApply: boolean;
+}
+
 function channelOf(ds: Dataset, letter: string): number | null {
   const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
   if (!letter || letter === String(meta.x_column_name ?? "")) return -1;
@@ -55,6 +64,96 @@ function channelHasFiniteData(ds: Dataset, channel: number): boolean {
   if (ds.pending) return true;
   // No column copy: this runs for every curve on every Library row render.
   return channel < 0 ? ds.data.time.some(Number.isFinite) : ds.data.values.some((row) => Number.isFinite(row[channel]));
+}
+
+function curveProblem(ds: Dataset, curve: OriginCurve): UnresolvedOriginBinding["reason"] | null {
+  const x = channelOf(ds, curve.x);
+  const y = channelOf(ds, curve.y);
+  if (x === null) return "x_column_not_decoded";
+  if (y === null || y < 0) return "y_column_not_decoded";
+  if (!channelHasFiniteData(ds, x)) return "x_column_has_no_numeric_data";
+  if (!channelHasFiniteData(ds, y)) return "y_column_has_no_numeric_data";
+  return null;
+}
+
+/** Preview one explicit saved-book -> imported-dataset recovery decision.
+ * Every matching binding must be compatible; partial bulk mappings fail
+ * closed because a single Apply button must mean the whole listed scope. */
+export function previewOriginSourceMapping(
+  entries: OriginFigureEntry[],
+  ds: Dataset,
+  book: string,
+): OriginSourceMappingPreview {
+  const entryIds: string[] = [];
+  const incompatible: UnresolvedOriginBinding[] = [];
+  let bindingCount = 0;
+  for (const entry of entries) {
+    if (!entry.siblingIds.includes(ds.id)) continue;
+    const curves = (entry.figure.curves ?? []).filter((curve) => curve.book === book);
+    if (curves.length === 0) continue;
+    entryIds.push(entry.id);
+    for (const curve of curves) {
+      bindingCount += 1;
+      const hasOriginBook = String((ds.data.metadata ?? {}).origin_book ?? "").length > 0;
+      const reason = hasOriginBook ? curveProblem(ds, curve) : "book_not_imported";
+      if (reason) incompatible.push({ ...curveRef(curve), reason });
+    }
+  }
+  return {
+    book,
+    datasetId: ds.id,
+    entryIds,
+    bindingCount,
+    incompatible,
+    canApply: entryIds.length > 0 && incompatible.length === 0,
+  };
+}
+
+function mappedDataset(
+  entry: OriginFigureEntry,
+  book: string,
+  candidates: Dataset[],
+): Dataset | undefined {
+  const override = entry.sourceOverrides?.[book];
+  if (override) return candidates.find((candidate) => candidate.id === override
+    && String((candidate.data.metadata ?? {}).origin_book ?? "").length > 0);
+  return book.length > 0 ? candidates.find(
+    (candidate) => String((candidate.data.metadata ?? {}).origin_book ?? "") === book,
+  ) : undefined;
+}
+
+/** Clone only the decoded curve-book references needed by apply/render code.
+ * The persisted Origin figure remains byte-for-byte faithful; this projection
+ * makes a confirmed source override consumable by existing selection/overlay
+ * algorithms without teaching them to guess aliases. */
+export function originFigureWithSourceMappings(
+  entry: OriginFigureEntry,
+  datasets: Dataset[],
+): OriginFigureEntry {
+  if (!entry.sourceOverrides || !entry.figure.curves?.length) return entry;
+  const mappedBooks = new Map<string, Dataset>();
+  for (const [book, datasetId] of Object.entries(entry.sourceOverrides)) {
+    const ds = datasets.find((candidate) => candidate.id === datasetId
+      && entry.siblingIds.includes(candidate.id)
+      && String((candidate.data.metadata ?? {}).origin_book ?? "").length > 0);
+    const curves = entry.figure.curves.filter((curve) => curve.book === book);
+    // A saved mapping can outlive a worksheet schema edit. Projection is
+    // deliberately all-or-nothing per saved book so apply never silently
+    // drops the now-incompatible curves or redirects them to another source.
+    if (ds && curves.length > 0 && curves.every((curve) => curveProblem(ds, curve) === null)) {
+      mappedBooks.set(book, ds);
+    }
+  }
+  const curves = entry.figure.curves.map((curve) => {
+    const ds = mappedBooks.get(curve.book);
+    if (!ds) return curve;
+    const mappedBook = String((ds.data.metadata ?? {}).origin_book ?? "");
+    return mappedBook ? { ...curve, book: mappedBook } : curve;
+  });
+  const mappedTarget = entry.datasetId ?? Object.keys(entry.sourceOverrides)
+    .map((book) => mappedBooks.get(book)?.id)
+    .find((id): id is string => id != null) ?? null;
+  return { ...entry, datasetId: mappedTarget, figure: { ...entry.figure, curves } };
 }
 
 /** Resolve raw curve letters against a workbook the user explicitly chose.
@@ -105,31 +204,18 @@ export function resolveOriginFigureSources(
 
   for (const member of family.length ? family : [entry]) {
     for (const curve of member.figure.curves ?? []) {
-      const ds = candidates.find(
-        (candidate) => String((candidate.data.metadata ?? {}).origin_book ?? "") === curve.book,
-      );
+      const ds = mappedDataset(member, curve.book, candidates);
       if (!ds) {
         unresolved.push({ ...curveRef(curve), reason: "book_not_imported" });
         continue;
       }
-      const x = channelOf(ds, curve.x);
-      const y = channelOf(ds, curve.y);
-      if (x === null) {
-        unresolved.push({ ...curveRef(curve), reason: "x_column_not_decoded" });
+      const problem = curveProblem(ds, curve);
+      if (problem) {
+        unresolved.push({ ...curveRef(curve), reason: problem });
         continue;
       }
-      if (y === null || y < 0) {
-        unresolved.push({ ...curveRef(curve), reason: "y_column_not_decoded" });
-        continue;
-      }
-      if (!channelHasFiniteData(ds, x)) {
-        unresolved.push({ ...curveRef(curve), reason: "x_column_has_no_numeric_data" });
-        continue;
-      }
-      if (!channelHasFiniteData(ds, y)) {
-        unresolved.push({ ...curveRef(curve), reason: "y_column_has_no_numeric_data" });
-        continue;
-      }
+      const x = channelOf(ds, curve.x)!;
+      const y = channelOf(ds, curve.y)!;
       let source = sources.find((item) => item.datasetId === ds.id);
       if (!source) {
         source = { datasetId: ds.id, book: curve.book, xColumns: [], yColumns: [], errorColumns: [], columns: [] };

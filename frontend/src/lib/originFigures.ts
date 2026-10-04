@@ -34,6 +34,11 @@ export interface OriginFigureEntry {
    *  (Origin's default `Book1`/`Book2`/… repeat across separate projects) from
    *  a different import. */
   siblingIds: string[];
+  /** Explicit recovery choices keyed by the saved Origin workbook name.
+   * Values are dataset ids from this import's `siblingIds`. The decoded
+   * figure stays untouched; consumers use this provenance map only when an
+   * exact saved-book match was unavailable and the user confirmed a preview. */
+  sourceOverrides?: Record<string, string>;
 }
 
 /** Best-effort match of a figure's loose `source_hint` against the datasets
