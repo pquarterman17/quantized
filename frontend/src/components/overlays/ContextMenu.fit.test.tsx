@@ -38,4 +38,13 @@ describe("ContextMenu fits a short window", () => {
     expect(root.classList.contains("fit")).toBe(true);
     expect(parseFloat(root.style.top) + window.innerHeight - 100).toBeLessThanOrEqual(window.innerHeight - 8);
   });
+
+  it("detects rows overflowing a max-height-constrained border box", () => {
+    // CSS max-height makes getBoundingClientRect() look safe even while the
+    // default visible overflow leaves later commands below the viewport.
+    stubMenuHeight(window.innerHeight - 16, window.innerHeight - 100);
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(window.innerHeight - 16);
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(window.innerHeight + 80);
+    expect(open()).toHaveClass("fit");
+  });
 });

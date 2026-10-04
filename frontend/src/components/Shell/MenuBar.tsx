@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { reopenRecent } from "../../lib/reopenRecent";
@@ -72,6 +72,14 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
     if (!buildMenuItems)
       void loadMenuModel().then((builder) => setBuildMenuItems(() => builder));
   };
+
+  // Start the small menu-model chunk as soon as the persistent shell mounts.
+  // Pointer/focus warming remains as a fallback, but cannot be the only path:
+  // a fast click (or an automated click that does not dwell on the trigger)
+  // can otherwise set aria-expanded while there are still no items to render.
+  useEffect(() => {
+    void loadMenuModel().then((builder) => setBuildMenuItems(() => builder));
+  }, []);
 
   const positionFor = (label: string): OpenMenu | null => {
     const trigger = buttonRefs.current[label];

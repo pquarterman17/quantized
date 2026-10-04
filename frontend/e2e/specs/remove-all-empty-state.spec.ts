@@ -18,7 +18,7 @@ test("Remove all returns a populated project to the usable empty shell @core", a
   await expect(page.locator("[data-ds-id='origin-sheet']")).toBeVisible();
 
   await page.getByText("File", { exact: true }).click();
-  await page.getByRole("button", { name: "Remove all…" }).click();
+  await page.getByRole("menuitem", { name: "Remove all…" }).click();
   await page.getByRole("button", { name: "Remove all", exact: true }).click();
 
   await expect(page.locator(".qzk-menubar")).toBeVisible();
@@ -31,6 +31,6 @@ test("Remove all returns a populated project to the usable empty shell @core", a
   // The empty center must not unmount Stage's command registration: removal
   // remains undoable for this session, exactly as the confirmation promises.
   await page.getByText("Edit", { exact: true }).click();
-  await page.getByRole("button", { name: "Undo remove all" }).click();
+  await page.getByRole("menuitem", { name: "Undo remove all" }).click();
   await expect(page.locator("[data-ds-id='origin-sheet']")).toBeVisible();
 });

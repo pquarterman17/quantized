@@ -62,6 +62,13 @@ describe("MenuBar", () => {
     );
   });
 
+  it("preloads its model so a direct click cannot leave an empty expanded menu", async () => {
+    render(<MenuBar actions={actions} onOpenPalette={vi.fn()} />);
+    fireEvent.click(screen.getByRole("menuitem", { name: "File" }));
+    expect(await screen.findByRole("menu")).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Import data…" })).toBeVisible();
+  });
+
   it("merges published command-registry entries (e.g. Window commands) into the matching menu", async () => {
     useCommands.setState({
       menuCommands: [

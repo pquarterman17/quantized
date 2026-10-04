@@ -4,7 +4,7 @@ import { runAction, type Action } from "../../store/commands";
 type Dynamic<T> = T | (() => T);
 
 const COMMON_IDS: Record<string, ReadonlySet<string>> = {
-  File: new Set(["import", "open-workspace", "save-workspace"]),
+  File: new Set(["import", "open-workspace", "save-workspace", "figure-save"]),
   Edit: new Set(["undo", "redo", "paste-data", "palette"]),
   Data: new Set(["merge", "duplicate", "reimport"]),
   Plot: new Set(["autoscale", "legend", "grid", "plot-in-new-window"]),

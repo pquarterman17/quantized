@@ -20,7 +20,12 @@ export function PopupBox({
     if (!el) return;
     const r = el.getBoundingClientRect();
     const pad = 8;
-    if (!fit && r.height + 2 * pad > window.innerHeight) return setFit(true);
+    // max-height constrains the border box before this measurement, while
+    // overflow remains visible by default. Check the content dimensions too,
+    // otherwise a tall menu appears to "fit" even though its final rows run
+    // below the viewport and the compact-row pass never activates.
+    if (!fit && (r.height + 2 * pad > window.innerHeight || el.scrollHeight > el.clientHeight))
+      return setFit(true);
     const nx = x + r.width + pad > window.innerWidth ? Math.max(pad, window.innerWidth - r.width - pad) : x;
     const ny = y + r.height + pad > window.innerHeight ? Math.max(pad, window.innerHeight - r.height - pad) : y;
     setPos({ x: nx, y: ny });
