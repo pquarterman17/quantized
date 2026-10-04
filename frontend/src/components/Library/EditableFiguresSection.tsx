@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { pagesReferencingFigure } from "../../lib/pageDocumentActions";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
+import { transformProvenanceOfData, transformProvenanceOfDataset, transformRecipeLabel } from "../../lib/transformProvenance";
 import { SESSION_BUSY_MSG } from "../../store/figureLifecycle";
 import { figurePublicationSourceUnavailable } from "../../store/figurePublicationLibrary";
 import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
@@ -33,6 +34,8 @@ export default function EditableFiguresSection() {
       </button>
       {!collapsed && documents.map((document) => {
         const dataset = datasets.find((candidate) => candidate.id === document.bindings.datasetId);
+        const transformProvenance = transformProvenanceOfDataset(dataset) ??
+          transformProvenanceOfData(document.data.mode === "frozen" ? document.data.snapshot : null);
         // Same readiness gate beginFigurePublicationEditForFigure enforces at
         // click time -- computed here too so the button can fail closed with
         // a tooltip instead of only a post-click toast (SESSION_BUSY_MSG is
@@ -58,7 +61,13 @@ export default function EditableFiguresSection() {
                 </span>
                 {document.name}
               </span>
-              <span className="qzk-fig-meta">{dataset?.name ?? "unbound"}</span>
+              <span
+                className="qzk-fig-meta"
+                title={transformProvenance ? `source pipeline: ${transformRecipeLabel(transformProvenance)}` : undefined}
+              >
+                {dataset?.name ?? "unbound"}
+                {transformProvenance ? ` · ${transformProvenance.recipe} r${transformProvenance.revision}` : ""}
+              </span>
             </button>
             <button
               className="qz-btn qz-ghost qz-sm"

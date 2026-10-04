@@ -328,6 +328,10 @@ export interface RecipeDescriptor {
   readonly createdAt?: string;
   readonly modifiedAt?: string;
   readonly schemaVersion?: number;
+  /** User-facing revision of an analysis transformation recipe. Distinct
+   * from its file schema version; lets provenance links refuse to call a
+   * newer same-name recipe the exact recipe an older output used. */
+  readonly revision?: number;
   /** Short, kind-specific line for a list row ("3 peaks", "2 outputs").
    *  A summary of SHAPE, never of user content. */
   readonly summary?: string;

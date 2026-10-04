@@ -24,6 +24,12 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { reportExport, type ExportFormat, type ReportExportResult } from "../../../lib/api/reportExport";
 import type { ReportSheet } from "../../../lib/report";
 import { moveReportBlock, removeReportBlock, reportBlockKey } from "../../../lib/reportBlocks";
+import {
+  reportTransformProvenance,
+  reportTransformProvenanceWasTruncated,
+  stampReportTransformProvenance,
+} from "../../../lib/reportTransformProvenance";
+import { transformRecipeLabel } from "../../../lib/transformProvenance";
 import { runCancellable } from "../../../store/pendingOps";
 import { TOAST_ACTION_TTL, toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
@@ -137,6 +143,7 @@ function SheetView({
 export default function ReportPanel() {
   const openReportId = useApp((s) => s.openReportId);
   const reports = useApp((s) => s.reports);
+  const datasets = useApp((s) => s.datasets);
   const setOpenReport = useApp((s) => s.setOpenReport);
   const removeReport = useApp((s) => s.removeReport);
   const setStatus = useApp((s) => s.setStatus);
@@ -163,6 +170,25 @@ export default function ReportPanel() {
 
   const entry = reports.find((r) => r.id === openReportId);
   if (!entry) return null;
+  // Older reports predate the durable snapshot. Show lineage from any live
+  // referenced dataset too; new/edited reports are stamped by the store so
+  // that same information survives later source deletion.
+  const lineageReport = stampReportTransformProvenance(entry.report, datasets, entry.datasetId);
+  const transformLineage = reportTransformProvenance(lineageReport);
+  const reportMeta = [
+    entry.report.created ?? null,
+    entry.report.source_refs?.length
+      ? `from ${entry.report.source_refs.map((r) => r.name ?? r.id).join(", ")}`
+      : null,
+    ...transformLineage.slice(0, 3).map((provenance) =>
+      `pipeline ${transformRecipeLabel(provenance)}${provenance.input ? ` from ${provenance.input.name}` : ""}`),
+    transformLineage.length > 3
+      ? `${transformLineage.length - 3} more pipeline source${transformLineage.length === 4 ? "" : "s"}`
+      : null,
+    reportTransformProvenanceWasTruncated(lineageReport)
+      ? "pipeline lineage list truncated"
+      : null,
+  ].filter((value): value is string => Boolean(value));
 
   const doExport = async (format: ExportFormat, label: string) => {
     setRunningFormat(format);
@@ -214,12 +240,9 @@ export default function ReportPanel() {
 
   return (
     <ToolWindow id="report" title={entry.name} width={460} onClose={() => setOpenReport(null)}>
-      {entry.report.created && (
+      {reportMeta.length > 0 && (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
-          {entry.report.created}
-          {entry.report.source_refs?.length
-            ? ` · from ${entry.report.source_refs.map((r) => r.name ?? r.id).join(", ")}`
-            : ""}
+          {reportMeta.join(" · ")}
         </div>
       )}
       <SheetView sheet={entry.report} onMove={onMove} onRemove={onRemove} />

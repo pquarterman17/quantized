@@ -221,6 +221,27 @@ describe("runSendFigureToReportCommand — targets, undo, failure", () => {
     expect(useApp.getState().reports[0].name).toBe("Hall sweep results");
   });
 
+  it("snapshots a transformed figure source into the new report", async () => {
+    const [dataset] = useApp.getState().datasets;
+    useApp.setState({
+      datasets: [{
+        ...dataset,
+        data: {
+          ...dataset.data,
+          metadata: {
+            ...dataset.data.metadata,
+            transform_recipe: { recipe: "Normalize", revision: 2, input: { id: "raw", name: "raw.dat" } },
+          },
+        },
+      }],
+    });
+    vi.mocked(askParams).mockResolvedValueOnce(sendParams());
+    await runSendFigureToReportCommand(useApp.getState);
+    expect(useApp.getState().reports[0].report.meta).toMatchObject({
+      quantized_transform_recipes: [{ recipe: "Normalize", revision: 2 }],
+    });
+  });
+
   it("an existing report: appended to a new Figures section after its analysis sections, one undo step", async () => {
     useApp.setState({ reports: [existing("rep-a", "Fit A"), existing("rep-b", "Fit B")], openReportId: "rep-b" });
     // The picker defaults to the report that is open in the viewer.

@@ -165,6 +165,7 @@ export function collectRecipes(input: RecipeSourceInput): RecipeCollection {
     out.push(
       describe({ kind: "analysis", scope: "global", id: t.name }, t.name, {
         schemaVersion: t.version,
+        revision: t.revision ?? 1,
         summary: `${plural(t.steps.length, "step")}, ${plural(t.outputs.length, "output")}`,
       }, index),
     );

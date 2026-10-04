@@ -24,6 +24,7 @@ import {
   tabulateNested,
 } from "../../../lib/tabulate";
 import type { DataStruct, Dataset } from "../../../lib/types";
+import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -125,7 +126,6 @@ function moveInArray<T>(arr: readonly T[], item: T, direction: -1 | 1): T[] {
 export function useTabulate(): TabulateState {
   const active = useActiveDataset();
   const addDataset = useApp((s) => s.addDataset);
-  const addReport = useApp((s) => s.addReport);
   const setStatus = useApp((s) => s.setStatus);
   const [reportBusy, setReportBusy] = useState(false);
 
@@ -404,7 +404,7 @@ export function useTabulate(): TabulateState {
         title,
         source_refs: [{ kind: "dataset", id: active.id, name: active.name }],
       });
-      addReport(title, report, active.id);
+      addReportWithProvenance(title, report, active.id);
       setStatus(`emitted ${title} (${rows.length} rows)`);
     } catch (e) {
       toast(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`, "danger");

@@ -68,6 +68,61 @@ describe("ReportPanel", () => {
     expect(screen.getByText(/from scan A/)).toBeInTheDocument(); // source refs in header
   });
 
+  it("shows the durable pipeline lineage saved with a report", () => {
+    useApp.setState({
+      reports: [{
+        ...ENTRY,
+        report: {
+          ...ENTRY.report,
+          meta: {
+            quantized_transform_recipes: [{
+              recipe: "Normalize profile", revision: 3,
+              input: { id: "raw", name: "raw.csv" }, bindings: [], steps: 2, appliedAt: "now",
+            }],
+          },
+        },
+      }],
+    });
+    render(<ReportPanel />);
+    expect(screen.getByText(/pipeline Normalize profile \(revision 3\) from raw.csv/)).toBeInTheDocument();
+  });
+
+  it("discloses when a saved pipeline lineage list was truncated", () => {
+    useApp.setState({
+      reports: [{
+        ...ENTRY,
+        report: {
+          ...ENTRY.report,
+          meta: {
+            quantized_transform_recipes: [{ recipe: "Normalize", revision: 1 }],
+            quantized_transform_recipes_truncated: true,
+          },
+        },
+      }],
+    });
+    render(<ReportPanel />);
+    expect(screen.getByText(/pipeline lineage list truncated/)).toBeInTheDocument();
+  });
+
+  it("summarizes long lineage instead of flooding the report header", () => {
+    useApp.setState({
+      reports: [{
+        ...ENTRY,
+        report: {
+          ...ENTRY.report,
+          meta: {
+            quantized_transform_recipes: Array.from({ length: 5 }, (_, index) => ({
+              recipe: `Recipe ${index + 1}`, revision: 1,
+            })),
+          },
+        },
+      }],
+    });
+    render(<ReportPanel />);
+    expect(screen.getByText(/2 more pipeline sources/)).toBeInTheDocument();
+    expect(screen.queryByText(/Recipe 4/)).not.toBeInTheDocument();
+  });
+
   it("collapses a section on header click", () => {
     render(<ReportPanel />);
     fireEvent.click(screen.getByText("Fit results"));

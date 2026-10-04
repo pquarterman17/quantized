@@ -1419,6 +1419,7 @@ body {
 .qz-recipe-library-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .qz-recipe-library-count { margin-left: auto; color: var(--text-faint); font-family: var(--font-mono); font-size: var(--type-micro); }
 .qz-recipe-library-warning { margin-bottom: 8px; padding: 8px 10px; border: 1px solid var(--warn); border-radius: var(--radius-sm); color: var(--text-dim); }
+.qz-recipe-library-context { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-1); color: var(--text-dim); }
 .qz-recipe-library-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; max-height: min(62vh, 560px); overflow: auto; }
 /* flex-wrap lets the Details region (P3.5) drop onto its own full-width line
    below the favorite/name/actions row, via its own flex-basis: 100% below,

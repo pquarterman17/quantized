@@ -19,6 +19,7 @@ import { fmtNum } from "../../../lib/format";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { analysisView } from "../../../lib/rowstate";
 import type { ModelingType } from "../../../lib/types";
+import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { buildNestedLevels, toWireGroups, type VariabilityFactorLevel } from "../../../lib/variability";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -98,7 +99,6 @@ function firstContinuous(active: ReturnType<typeof useActiveDataset>, avoid: num
 
 export function useVariability(): VariabilityState {
   const active = useActiveDataset();
-  const addReport = useApp((s) => s.addReport);
   const setStatus = useApp((s) => s.setStatus);
   const [reportBusy, setReportBusy] = useState(false);
 
@@ -250,7 +250,7 @@ export function useVariability(): VariabilityState {
         caption,
         source_refs: refs,
       });
-      addReport(title, report, active.id);
+      addReportWithProvenance(title, report, active.id);
       setStatus(`emitted ${title} report`);
     } catch (e) {
       toast(`could not add to report — ${errMsg(e, "unknown error")}`, "danger");

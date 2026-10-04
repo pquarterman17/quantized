@@ -19,6 +19,7 @@ import {
   type Recommendation,
 } from "../../../lib/statschooser";
 import type { CalcResult, Dataset } from "../../../lib/types";
+import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
@@ -60,7 +61,6 @@ export interface StatsChooserState {
 
 export function useStatsChooser(): StatsChooserState {
   const active = useActiveDataset();
-  const addReport = useApp((s) => s.addReport);
   const data = useMemo(() => analysisData(active), [active]);
 
   const columns = useMemo<ChooserColumn[]>(() => {
@@ -231,7 +231,7 @@ export function useStatsChooser(): StatsChooserState {
         caption: rec.reasons.join("; "),
         source_refs: [{ kind: "dataset", id: active.id, name: active.name }],
       });
-      addReport(`${rec.recommendation} — ${active.name}`, report, active.id);
+      addReportWithProvenance(`${rec.recommendation} — ${active.name}`, report, active.id);
     } catch (e) {
       toast(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`, "danger");
     } finally {

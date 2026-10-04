@@ -25,6 +25,7 @@
 import { askParams } from "../store/paramDialog";
 import type { ParamField } from "./params";
 import type { ReportEntry, ReportFigureBlock, ReportSheet, ReportSourceRef } from "./report";
+import { stampReportTransformProvenance } from "./reportTransformProvenance";
 import { cancelled, exportActive, stemFromName, type StoreGet } from "./exportActive";
 import { chooseExcludedRows } from "./excludedRowsChoice";
 import { excludedChoiceMatters } from "./excludedRowsExport";
@@ -218,14 +219,21 @@ export function addFigureToReport(
     asOneEditStep(s, SEND_UNDO_LABEL, () =>
       st.addReport(
         newReportName,
-        withSourceRefs(newFigureReport(newReportName, { ...block, name: stem }), refs),
+        stampReportTransformProvenance(
+          withSourceRefs(newFigureReport(newReportName, { ...block, name: stem }), refs),
+          s().datasets,
+          datasetId,
+        ),
         datasetId,
       ),
     );
     return;
   }
-  const append = (sheet: ReportSheet) =>
-    withSourceRefs(appendFigureBlock(sheet, { ...block, name: uniqueFigureName(sheet, stem) }), refs);
+  const append = (sheet: ReportSheet) => stampReportTransformProvenance(
+    withSourceRefs(appendFigureBlock(sheet, { ...block, name: uniqueFigureName(sheet, stem) }), refs),
+    s().datasets,
+    datasetId,
+  );
   if (!st.updateReportSheet(targetId, append, SEND_UNDO_LABEL)) {
     throw new Error("that report was deleted before the figure was added");
   }

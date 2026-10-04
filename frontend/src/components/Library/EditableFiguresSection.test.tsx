@@ -60,6 +60,28 @@ describe("EditableFiguresSection", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it("shows the transformation recipe behind a live editable figure", () => {
+    const transformed = structuredClone(d1);
+    transformed.data.metadata.transform_recipe = { recipe: "Normalize", revision: 3 };
+    useApp.setState({ datasets: [transformed], editableFigures: [figure()] });
+    render(<EditableFiguresSection />);
+    expect(screen.getByText("loop · Normalize r3")).toHaveAttribute(
+      "title", "source pipeline: Normalize (revision 3)",
+    );
+  });
+
+  it("keeps frozen figure provenance visible without a live source dataset", () => {
+    const snapshot = structuredClone(d1.data);
+    snapshot.metadata.transform_recipe = { recipe: "Smooth", revision: 2 };
+    const frozen = createFigureDocument({
+      id: "frozen", name: "Frozen", datasetId: null, view: defaultPlotView(),
+      data: { mode: "frozen", snapshot },
+    });
+    useApp.setState({ datasets: [], editableFigures: [frozen] });
+    render(<EditableFiguresSection />);
+    expect(screen.getByText("unbound · Smooth r2")).toBeInTheDocument();
+  });
+
   it("deletes plainly (no page references) with the plain confirm message", async () => {
     useApp.setState({ editableFigures: [figure()] });
     vi.mocked(askConfirm).mockResolvedValue(true);

@@ -31,6 +31,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { FigureConfig, FigureDoc } from "../lib/figuredoc";
 import type { ReportSheet } from "../lib/report";
 import type { Dataset, DataStruct } from "../lib/types";
+import { addReportWithProvenance } from "./addReportWithProvenance";
 import { nextDatasetId, useApp, type AppState } from "./useApp";
 
 const data: DataStruct = {
@@ -169,6 +170,27 @@ describe("report sheets — addReport", () => {
     expect(s.reports[0].report).toEqual({ title: "Peaks", sections: [] });
     expect(s.openReportId).toBe(s.reports[0].id);
     expect(s.status).toBe('report "peak table" created');
+  });
+
+  it("snapshots the bound dataset's transformation provenance into the report", () => {
+    useApp.setState({
+      datasets: [{
+        ...ds("d1"),
+        data: {
+          ...ds("d1").data,
+          metadata: {
+            transform_recipe: {
+              recipe: "Normalize", revision: 2,
+              input: { id: "raw", name: "raw.csv" }, bindings: [], steps: 1, appliedAt: "now",
+            },
+          },
+        },
+      }],
+    });
+    addReportWithProvenance("derived result", sheet("Result"), "d1");
+    expect(useApp.getState().reports[0].report.meta).toMatchObject({
+      quantized_transform_recipes: [{ recipe: "Normalize", revision: 2 }],
+    });
   });
 
   it("mints a fresh `rep-` id per call and keeps existing reports", () => {

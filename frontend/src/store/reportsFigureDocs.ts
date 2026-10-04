@@ -70,7 +70,9 @@ import type { AppState } from "./useApp";
 import { withWindowDocumentErrors } from "./windowDocuments";
 
 export interface ReportsFigureDocsSlice {
-  // Report sheets (#36): add opens the viewer on the new report.
+  // Report sheets (#36): add opens the viewer on the new report. This is the
+  // low-level collection write; feature report producers must call
+  // addReportWithProvenance so transformed inputs are snapshotted first.
   addReport: (name: string, report: ReportSheet, datasetId?: string | null) => void;
   removeReport: (id: string) => void;
   renameReport: (id: string, name: string) => void;
