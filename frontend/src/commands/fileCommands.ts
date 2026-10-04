@@ -258,6 +258,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "remove-all",
       group: "File",
       label: "Remove all…",
+      danger: true,
       description: "Permanently clear every dataset, folder, report, and imported figure from the session.",
       // Body lives in lazily-imported commands/fileCommandsLazy.ts (bundle-
       // size ratchet); the import-running refusal stays here so it is instant.

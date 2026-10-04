@@ -6,7 +6,15 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-09-06 (twenty-sixth pass). What changed:
+**Last reconciled:** 2026-10-04 (menu-system follow-up). The owner-reported
+v0.29.0 dropdown-menu regression is implemented on
+`feat/menu-system-polish` and awaiting PR review; the detailed, checkable scope
+lives in `plans/GUI_INTERACTION_PLAN.md` and UX-008 in
+`plans/BUGS_AND_ISSUES.md`. The current stable release is **v0.29.0**. The
+historical twenty-sixth-pass narrative below is retained for provenance; its
+v0.24.0 release sentence is historical, not current status.
+
+**Previous reconciliation:** 2026-09-06 (twenty-sixth pass). What changed:
 `PRIMARY_SOFTWARE_AUDIT_PLAN.md` §P1.7's "Pack Project stack" subsection is
 reconciled against PR 1-5 (#305-#308 + a PR 5 adversarial-audit pass on
 this same branch) into one coherent record — two stale "planned, not
@@ -24,7 +32,7 @@ shipped, assigned to ChatGPT/Sol against PR 4 (#308)'s contract, and
 all); no `CHANGELOG.md` entry (no shipped user-facing surface yet). Full
 narrative: the twenty-sixth pass in `plans/archive/BACKLOG_HISTORY.md`
 (future passes append there, per the 2026-09-03 split, not here). Current
-state carried forward: **`v0.24.0` is the current stable release**;
+state carried forward at that time: **`v0.24.0` was the current stable release**;
 Dependabot alert #24 (extract-zip) is open, upstream-blocked; alert #1
 (glib) is dismissed as tolerable risk (re-evaluated 2026-09-02, decision
 unchanged). `#293` (`91583f9`, 2026-09-04: API type drift detection,
@@ -51,6 +59,7 @@ still make the owner switch back to Origin.
 
 | Item | Plan / item |
 |------|-------------|
+| **Top application menu overhaul** — implementation complete on the feature branch; compact task flyouts, shared state metadata, full keyboard semantics, viewport-safe positioning, recent-file management, focused tests, and label/duplicate audit. Remaining gate is Claude PR review plus the owner's packaged-Windows feel-check at 100/125/150% scaling | GUI_INTERACTION 2026-10-04 follow-up / BUGS UX-008 |
 | **Map ROI: one owner design call** (owner-reported 2026-08-12; every other part of that report — the drag, Delete, ✕, `x`/`y` labels and toolbar icons — is FIXED, see GUI_INTERACTION Completed). A near-miss on a resize handle (>7 px) does not fail to resize: it starts a NEW box at the click point, destroying the old one, and `mapRoi` is deliberately out of undo so it is unrecoverable. The real question is whether ONE gesture should keep both drawing and editing duty, with two sub-questions worth settling alongside it: should the box survive its tool being disarmed, and should `mapRoi` join the undo snapshot after all | GUI_INTERACTION (2026-08-12) |
 | Figure-authoring campaign, residue — F2.1–F2.5 all COMPLETE except **F2.3i facet editing**, still BLOCKED (needs a multi-panel Publication Preview contract) and two owner-gated legacy-convergence decisions (see Owner actions); F4.1–F4.3 COMPLETE; **F4.4 is `[~]`** — live grouping/faceting parity and its export path both shipped (2026-08-23/24, PRs #222/#226/#227/#232/#234), leaving SPATIAL/BREAK composition rebuild as the one genuinely open item; A1–A10 acceptance journeys are the exit gate, all owner-run, none checked | FIGURE_AUTHORING F2.3i, F4.4, A1–A10 |
 | **2026-09-06 perf-pass deferred follow-ups** (booked, not shipped, by `#295`–`#301`): eager tokenization in `io/import_preview.py::guess_settings`; a separately profiled model-scan/optimizer follow-up: Poly4, bi-exponential, and Bloch became the dominant scan cost only after `#297` sped Debye up, and their evaluators are already vectorized NumPy — `#297` attributes the time to optimizer behaviour and poor starting points, not to any per-point loop; identify the slow candidates and improve starts/bounds/selection only with measurements in hand; the still-eager `scipy.stats` import at startup (kept eager in `#300` because the always-on statistics routes already need it); a thread-based job queue for import/export (today only the DREAM/bumps fit uses `routes/jobs_api`); `response_model` on the routes that still lack one; the 33 `test_api_*.py` files still building their own `TestClient()` instead of the shared `app`/`client` fixtures `#293` added; and the seven ESLint rules `#293`'s type-aware sweep left off with dated counts (`require-await`, `no-unnecessary-type-assertion`, the four `no-unsafe-*` rules, `no-base-to-string`) | MAIN_PLAN Completed (2026-09-06 perf pass) |

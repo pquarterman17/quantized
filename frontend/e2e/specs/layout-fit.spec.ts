@@ -27,6 +27,33 @@ const SIZES = [
   { width: 820, height: 700 },
 ];
 
+test("application menus and their flyouts stay compact and inside scaled viewports @core", async ({ page }) => {
+  await gotoApp(page);
+  for (const size of SIZES) {
+    await page.setViewportSize(size);
+    await page.getByRole("menuitem", { name: "Analyze", exact: true }).click();
+    const root = page.getByRole("menu").first();
+    await expect(root).toBeVisible();
+    const rootBox = (await root.locator("xpath=..").boundingBox())!;
+    expect(rootBox.x).toBeGreaterThanOrEqual(0);
+    expect(rootBox.y).toBeGreaterThanOrEqual(0);
+    expect(rootBox.x + rootBox.width).toBeLessThanOrEqual(size.width);
+    expect(rootBox.y + rootBox.height).toBeLessThanOrEqual(size.height);
+    expect(rootBox.height, "root menu should be grouped rather than a scrolling command wall").toBeLessThan(360);
+
+    await root.getByRole("menuitem", { name: "XRD & reflectivity", exact: true }).hover();
+    const flyout = page.getByRole("menu").last();
+    await expect(flyout).toBeVisible();
+    const flyoutBox = (await flyout.locator("xpath=..").boundingBox())!;
+    expect(flyoutBox.x).toBeGreaterThanOrEqual(0);
+    expect(flyoutBox.y).toBeGreaterThanOrEqual(0);
+    expect(flyoutBox.x + flyoutBox.width).toBeLessThanOrEqual(size.width);
+    expect(flyoutBox.y + flyoutBox.height).toBeLessThanOrEqual(size.height);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu")).toHaveCount(0);
+  }
+});
+
 async function loadPlot(page: Page): Promise<void> {
   await gotoApp(page);
   await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("three-channel.csv"));
@@ -311,22 +338,22 @@ test("a tool window wider than the window is capped to it", async ({ page }) => 
   expect(r.left >= 0 && r.right <= 800, `window spans ${r.left}..${r.right}`).toBe(true);
 });
 
-// Round-4 chrome audit: the File, Plot and Analyze menus are 720-780px tall,
-// so in a 700px-high window their last items sat below the window edge.
-test("a menubar menu taller than the window scrolls instead of running off it", async ({ page }) => {
+// The menu overhaul replaces the old 720-780px command walls with compact
+// roots and one-level task flyouts. Keep all three historically tall roots
+// inside a short window and semantic-keyboard reachable.
+test("the historically tall application menus stay compact and inside a short window", async ({ page }) => {
   await loadPlot(page);
   await page.setViewportSize({ width: 1000, height: 700 });
   for (const name of ["File", "Plot", "Analyze"]) {
-    await page.locator(".qzk-menubar .qzk-menu-wrap > :first-child", { hasText: name }).first().click();
-    const pop = page.locator(".qzk-menu-wrap > .qzk-menu-pop");
-    await expect(pop).toBeVisible();
-    expect((await rectOf(pop)).bottom, `${name} menu bottom`).toBeLessThanOrEqual(700);
-    const last = pop.locator(".qzk-menu-item").last();
-    await last.scrollIntoViewIfNeeded();
-    const r = await rectOf(last);
-    expect(r.top >= 0 && r.bottom <= 700, `${name}'s last item unreachable`).toBe(true);
+    await page.getByRole("menuitem", { name, exact: true }).click();
+    const menu = page.getByRole("menu").first();
+    await expect(menu).toBeVisible();
+    const pop = menu.locator("xpath=..");
+    const r = await rectOf(pop);
+    expect(r.bottom, `${name} menu bottom`).toBeLessThanOrEqual(700);
+    expect(r.height, `${name} should not regress to a command wall`).toBeLessThan(360);
     await page.keyboard.press("Escape");
-    await expect(pop).toBeHidden();
+    await expect(menu).toBeHidden();
   }
 });
 
@@ -383,6 +410,7 @@ test("the plot's right-click menu fits a 600px-high window", async ({ page }) =>
   await expect(menu.getByRole("menuitem", { name: "Marker" })).toBeVisible();
   const [m, last] = await Promise.all([rectOf(menu), rectOf(menu.getByRole("menuitem").last())]);
   expect(m.top, "menu top").toBeGreaterThanOrEqual(0);
+  expect(m.bottom, "menu box below the window").toBeLessThanOrEqual(600);
   expect(last.bottom, "last menu row below the window").toBeLessThanOrEqual(600);
 });
 

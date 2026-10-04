@@ -48,10 +48,11 @@ body {
 
 /* ── menubar ── */
 .qzk-menubar { display: flex; align-items: center; gap: 2px; background: var(--surface-1); border-bottom: 1px solid var(--border-soft); padding: 0 var(--pad); position: relative; z-index: 30; }
-.qzk-menu { padding: 3px 9px; border-radius: var(--radius-sm); color: var(--text-dim); cursor: default; font-size: var(--font-size-sm); }
+.qzk-menu { padding: 3px 9px; border: 0; background: transparent; border-radius: var(--radius-sm); color: var(--text-dim); cursor: default; font: inherit; font-size: var(--font-size-sm); }
 .qzk-menu:hover, .qzk-menu.open { background: var(--surface-3); color: var(--text); }
+.qzk-menu:focus-visible, .qzk-search:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .qzk-spacer { flex: 1; }
-.qzk-search { display: flex; align-items: center; gap: 7px; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 7px; color: var(--text-faint); font-size: var(--font-size-sm); padding: 3px 9px; cursor: default; margin: 2px; white-space: nowrap; }
+.qzk-search { display: flex; align-items: center; gap: 7px; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 7px; color: var(--text-faint); font: inherit; font-size: var(--font-size-sm); padding: 3px 9px; cursor: default; margin: 2px; white-space: nowrap; }
 .qzk-search:hover { border-color: var(--border); color: var(--text-dim); }
 .qzk-ws-chip { display: flex; align-items: center; gap: 6px; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 7px; color: var(--text-dim); font-size: var(--font-size-sm); padding: 3px 9px; margin: 2px; cursor: default; white-space: nowrap; }
 .qzk-ws-chip:hover { border-color: var(--border); color: var(--text); }
@@ -65,15 +66,16 @@ body {
 .qzk-sep { height: 1px; background: var(--border-soft); margin: 4px 6px; }
 
 /* ── menubar dropdowns ── */
-.qzk-menu-wrap { position: relative; }
-/* The File, Plot and Analyze menus are 720-780px tall: in a shorter window they scroll (no flyouts to clip). */
-.qzk-menu-wrap > .qzk-menu-pop { max-height: calc(100vh - 68px); overflow-y: auto; overscroll-behavior: contain; }
-.qzk-menu-pop { position: absolute; top: 100%; left: 0; min-width: 200px; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 4px; z-index: 40; display: flex; flex-direction: column; }
-.qzk-menu-item { display: flex; justify-content: space-between; gap: 16px; align-items: center; width: 100%; text-align: left; padding: 5px 9px; border: 0; background: transparent; border-radius: var(--radius-sm); white-space: nowrap; cursor: default; font-size: var(--font-size-sm); color: var(--text-dim); text-decoration: none; }
+.qzk-menu-pop { position: absolute; top: 100%; left: 0; min-width: 210px; max-width: min(360px, calc(100vw - 16px)); background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 4px; z-index: 40; display: flex; flex-direction: column; }
+.qzk-menu-item { display: flex; justify-content: space-between; gap: 16px; align-items: center; width: 100%; min-width: 0; text-align: left; padding: 6px 9px; border: 0; background: transparent; border-radius: var(--radius-sm); white-space: nowrap; cursor: default; font-size: var(--font-size-sm); color: var(--text-dim); text-decoration: none; }
+.qzk-menu-item > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.qzk-menu-item-end { display: inline-flex; flex: none; align-items: center; gap: 8px; }
 .qzk-menu-item:hover { background: var(--accent-soft); color: var(--accent-text); }
-.qzk-menu-item:disabled { opacity: 0.4; pointer-events: none; }
-.qzk-menu-item.danger { color: var(--danger, #e5484d); }
-.qzk-menu-item.danger:hover { background: color-mix(in srgb, var(--danger, #e5484d) 18%, transparent); color: var(--danger, #e5484d); }
+.qzk-menu-item:disabled { opacity: 0.4; cursor: not-allowed; }
+.qzk-menu-item:disabled:hover { background: transparent; color: var(--text-dim); }
+.qzk-menu-item.danger { color: var(--danger); }
+.qzk-menu-item.danger:hover { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
+.qzk-ctx { max-height: calc(100vh - 16px); overscroll-behavior: contain; }
 /* File ▸ Recent section (#20): a section label, a divider, and a name that
    truncates so a long filename can't blow out the menu width. */
 .qzk-menu-sep { height: 1px; margin: 4px 6px; background: var(--border-soft); }
@@ -132,8 +134,10 @@ body {
 /* Right-click context menu: a fixed-position variant of the menubar popup. */
 .qzk-ctx { position: fixed; top: auto; left: auto; min-width: 180px; }
 .qzk-ctx-sep { height: 1px; margin: 4px 6px; background: var(--glass-border); }
-.qzk-ctx.fit .qzk-menu-item { padding-block: 2px; } /* a menu taller than the window (ContextMenu.tsx) */
-.qzk-ctx.fit .qzk-ctx-sep { margin-block: 2px; }
+.qzk-ctx.fit .qzk-menu-item { padding-block: 0; line-height: 1.2; } /* a menu taller than the window (ContextMenu.tsx) */
+.qzk-ctx.fit .qzk-ctx-sep { margin-block: 1px; }
+.qzk-ctx.fit .qzk-ctx-header { padding-block: 1px; }
+.qzk-ctx.fit .qzk-ctx-swatches { padding-block: 2px; }
 /* Non-interactive section label (e.g. the hit-tested series name). */
 .qzk-ctx-header { padding: 4px 9px 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
 /* Submenu affordance + toggle check glyph, pinned to the item's right edge. */

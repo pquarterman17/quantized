@@ -11,7 +11,11 @@ for a publication tool outrank any discoverability gap.
 
 **Status:** Active
 **Created:** 2026-07-12
-**Updated:** 2026-08-13 (the #17 `clearShapes` parked judgment call is
+**Updated:** 2026-10-04 (owner testing of v0.29.0 reopened the top-menu portion
+of #17: the commands existed, but the flat dropdowns had become difficult to
+scan and inconsistent with the stronger right-click menu system. The bounded
+menu-system follow-up below is implemented on `feat/menu-system-polish` and
+awaits PR review. Prior: 2026-08-13, the #17 `clearShapes` parked judgment call is
 CLOSED — owner decided ADD CONFIRM, shipped `77bc718` same session; see
 Completed. Prior: 2026-08-10, plan-hygiene reconciliation: #2, #5, #15, #17 had
 every sub-box checked in their tier sections but were never struck/moved —
@@ -26,6 +30,44 @@ the stacked feature series.)
 **Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12. The raw audit was
 absorbed and DELETED on 2026-07-25 (plan-consolidation rule) — full text in git
 history @ `e4f6590`. THIS file is the live tracker and always was.
+
+---
+
+## 2026-10-04 owner follow-up — application menu system
+
+The earlier #17 pass added labels and section headers, but subsequent feature
+growth turned File, Data, Plot, and Analyze into tall command walls. This is a
+new owner-observed usability regression, not evidence that the historical #17
+work never shipped. Goal: a polished desktop menu that remains quick to scan at
+Windows display scaling and does not require remembering the command palette.
+
+- [x] Keep frequent actions at the root and move topic-specific commands into
+      stable, shallow flyouts (no deep technique maze).
+- [x] Give File, Window, and View explicit task taxonomy; reuse the existing
+      Data, Plot, and Analyze command sections instead of maintaining a second
+      label registry.
+- [x] Render live checked state, disabled state plus a concise reason, danger
+      styling, and platform-formatted shortcut hints from shared `Action`
+      metadata.
+- [x] Use semantic menubar/menu/menuitem/menuitemcheckbox roles and support
+      Left/Right, Up/Down, Home/End, Enter/Space, type-ahead, Escape, submenu
+      entry/return, and focus restoration.
+- [x] Reuse the portal-backed context-menu geometry so root menus and flyouts
+      flip/clamp inside the viewport; cap width and truncate long scientific
+      labels rather than widening the workbench.
+- [x] Preserve recent-file open, individual removal, and clear-all paths in
+      compact Recent/Manage recent flyouts.
+- [x] Audit duplicate command merging: same-group duplicate labels still
+      collapse with curated actions winning, while identically named commands
+      in different menus no longer disappear.
+- [x] Add focused model/DOM tests for grouping, states, shortcuts, semantic
+      roles, keyboard switching, submenu execution, Escape ownership, and
+      focus return; retain the context-menu regression suite.
+- [ ] Owner visual feel-check in the packaged Windows build at 100%, 125%, and
+      150% scaling. This is release acceptance, not missing implementation.
+
+Implementation ownership: ChatGPT-Sol/Codex (frontend UX); Claude review is the
+final PR gate. Backend work is not involved.
 
 ---
 

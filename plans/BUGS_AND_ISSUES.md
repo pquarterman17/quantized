@@ -115,6 +115,7 @@ This is a working document, not a claim that every observation is already reprod
 | UX-005 | P1 | Quick Plot refusal guidance | Quick Plot refusal text exposed obsolete roadmap wording instead of directing users to the shipped configuration workflow | ChatGPT-Sol | **FIXED 2026-09-20** — commit `4997396a`; both refusal paths name **Configure Quick Plot…**, map data retains Map-specific guidance, and focused/full gates passed |
 | UX-006 | P3 | Installed-version diagnostics | The installed CLI previously rejected `qz --version`, obscuring the package version during release support | ChatGPT-Sol | **FIXED 2026-09-20** — `qz` and `quantized` now use argparse's version action backed by canonical `quantized.__version__`, exiting before server/browser startup; focused CLI tests and both-alias wheel smoke coverage added. Commit/PR recorded in the audit completion entry. |
 | UX-007 | P2 | Workbook Properties command | The workbook right-click menu showed **Properties…** permanently disabled and explained it with the internal roadmap text “arrives with Details/Properties (PR D)”, even though PR D shipped; the result was a prominent dead end in the new Origin-like Library | ChatGPT-Sol | **FIXED 2026-09-20** — Properties now opens a bounded read-only inspector from the shared workbook action registry in Tree, Details, and Tiles. It projects canonical workbook children, location, recorded source/Origin provenance, availability, member/artifact counts, member tags, and import time only when present; Close/Escape restores its invoking row/tile focus. Editing remains in existing commands. Focused 42 tests, full frontend suite, forced typecheck, lint, build/bundle, and integrity gates run; full pickup brief retained in `POST_RELEASE_PROBLEM_AUDIT.md` |
+| UX-008 | P1 | Top application menus | Owner testing after v0.29.0 found the dropdowns cluttered and hard to scan: long feature-grown lists, weak state feedback, and incomplete desktop-menu keyboard semantics made existing tools difficult to discover | ChatGPT-Sol | **IMPLEMENTED on `feat/menu-system-polish`, PR review pending (2026-10-04)** — compact task flyouts, common actions first, live checked/disabled/danger state, platform shortcuts, semantic keyboard-complete navigation, portal viewport clamping, long-label truncation, recent-file management, and scoped duplicate-label repair. Packaged-Windows visual feel-check remains owner acceptance; detailed checklist is in `GUI_INTERACTION_PLAN.md` |
 | BUG-030 | P1 | Local API Origin guard (security) | `origin_allowed` accepted any `localhost`/`127.0.0.1` origin on any port, so another local dev server or app page could trigger write routes (file writes, job submission) with a simple text/plain POST | Claude (agent) | **FIXED 2026-09-25** on branch `origin-guard` — Origin must match the request's own scheme + Host port (both loopback aliases); the Vite origin is admitted in `qz --dev` only. Tauri-origin residual recorded in the entry |
 | BUG-031 | P2 | Lazy promise dialogs (Confirm/Param) — keyboard hand-off | On the first ask of a session the lazy dialog body painted one macrotask BEFORE it took focus: the background was already `inert` and the pending-ask guard had dropped its Enter/Space swallow, but focus was still on the control behind the backdrop and the body's own Enter handler and Tab trap were not installed yet | Claude (agent) | **FIXED 2026-09-25** — `useRegionLoaded` commits the load flip with `flushSync`, so the body's passive effects run in the task that paints it; forced by `lazyDialogPaintFocus.test.tsx` (fails 2/2 with the fix reverted). Found as a one-off full-suite failure of `dialogFocus.a11y.test.tsx`, whose second reported failure was a cascade (fixed in its `beforeEach`) |
 | BUG-032 | P1 | Cold process — concurrent first imports of lazily imported heavy modules | The app defers matplotlib (every `calc/figure*.py` renderer), lifelines, statsmodels, bumps, openpyxl, h5py, periodictable, `scipy.io`, python-docx/pptx to function-level imports. Sync routes and jobs run on worker threads, so on a freshly started process concurrent requests can perform several DIFFERENT modules' first import at once; CPython locks imports per module name only, so threads racing into a shared package another thread is still initialising see it half-built and fail -- for matplotlib, for the rest of the process's life | Claude (agent) | **FIXED 2026-09-27** — new pure `quantized/heavy_import.py`: every lazy heavy import in `src/` goes through `with heavy_imports("<module>"):`. Fast path (no lock) when every requested module, its parents and its top-level package are loaded and finished initialising -- never gated on other in-flight imports; otherwise one process-wide re-entrant lock serializes the first import (unbounded but cooperative wait: DREAM jobs pass a `while_waiting` hook and stay cancellable). A missing optional package is detected by `find_spec` before the lock and never cached. `tests/test_heavy_import_guard.py` fails any lazy import that bypasses it and any module-scope use; `tests/test_render_lock_import_time.py` forbids taking the render lock at import. Nothing is preloaded. Forced 58-thread cold race: 0 failures in 20 runs; six-thread shared-matplotlib race 0/10. Supersedes a startup preload, a gated single-lock version and a per-package/metadata/timeout version (see the entry) |
@@ -8482,6 +8483,36 @@ surface exists.
 - [x] Replace the stale-copy assertion with behavior/accessibility coverage.
 
 Full scope and acceptance criteria are in `POST_RELEASE_PROBLEM_AUDIT.md`.
+
+## UX-008 — top application menus became long, cluttered feature inventories
+
+**Priority:** P1
+**State:** Implemented 2026-10-04 on `feat/menu-system-polish`; PR and packaged-Windows owner acceptance pending
+**Reported:** 2026-10-04 by owner
+**Investigated:** 2026-10-04 by ChatGPT-Sol/Codex
+**Suggested implementation owner/model:** ChatGPT/Codex frontend model with Claude review
+**Related plan:** `GUI_INTERACTION_PLAN.md`, "Top application-menu overhaul"
+
+The File, Edit, Data, Plot, Analyze, Window, and View dropdowns had grown as
+flat command inventories. Important actions were hard to scan, live state was
+mostly invisible, keyboard behavior was incomplete, and long menus or labels
+were fragile in compact and scaled Windows layouts.
+
+- [x] Keep frequent commands at the root and move specialized commands into
+  one-level, task-named flyouts.
+- [x] Show checked, disabled-with-reason, destructive, and platform-formatted
+  shortcut states from live command data.
+- [x] Provide semantic menubar/menu roles, arrow/Home/End/Enter/Escape
+  navigation, type-ahead, submenu traversal, and Escape focus restoration.
+- [x] Clamp root menus and flyouts to the viewport; flip flyouts at the right
+  edge; truncate long labels without hiding their full tooltip text.
+- [x] Preserve repeated labels when they belong to different command groups
+  while removing true duplicates inside a group.
+- [x] Preserve recent-project open/remove/clear behavior in a compact flyout.
+- [x] Verify unit, accessibility/architecture, production bundle, and real
+  Chromium layouts at the repository's 100%, 125%, and 200% scale profiles.
+- [ ] Owner: visually confirm menu grouping, hover timing, and legibility in
+  the packaged Windows desktop build at 100%, 125%, and 150% display scaling.
 
 ## New issue template
 

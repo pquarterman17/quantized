@@ -6,6 +6,14 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- Rebuilt the application menu bar into compact task-based menus with one-level
+  flyouts, live checked/disabled/destructive states, complete keyboard
+  navigation, focus restoration, viewport clamping, and consistent shortcut
+  hints. Long Data, Plot, Analyze, File, Window, and View menus no longer form
+  a single scrolling wall of commands.
+
 ## [0.29.0] - 2026-10-04
 
 A **minor** release focused on turning imported instrument and Origin projects

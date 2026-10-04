@@ -9,7 +9,7 @@
 // the material that must never leave the machine, and inspects the bytes that
 // reached the clipboard.
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MenuBar from "./MenuBar";
@@ -89,8 +89,12 @@ afterEach(() => {
 
 async function clickCopyDiagnostics(): Promise<void> {
   render(<MenuBar actions={buildAppActions(useApp.getState)} onOpenPalette={vi.fn()} />);
+  fireEvent.pointerEnter(screen.getByRole("menubar"));
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
   fireEvent.click(screen.getByText("Help"));
-  fireEvent.click(screen.getByText("Copy diagnostics"));
+  fireEvent.click(await screen.findByText("Copy diagnostics"));
   // Wait on the STATE the user observes (the status line the command sets when
   // it finishes), never on the mock having been called — architecture.test.ts's
   // weak-wait ratchet fails the build for the latter.

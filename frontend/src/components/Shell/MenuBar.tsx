@@ -1,287 +1,263 @@
-// Menu bar: click a title to open its dropdown (items are the same actions the
-// ⌘K palette runs, grouped by `action.group`). Click-outside / Escape close it;
-// hovering another title while one is open switches menus. A search chip on the
-// right opens the palette. The File menu also lists Recent imports (#20); the
-// Help menu surfaces Help-group actions (e.g. the keyboard-shortcuts sheet).
-
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { mergeCommands, PALETTE_LABEL, PALETTE_SHORTCUT, runAction, useCommands, type Action } from "../../store/commands";
-import { useEscapeSurface } from "../../lib/escapeStack";
+import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { reopenRecent } from "../../lib/reopenRecent";
-import { recentKey, recentParentLabel, relativeTime, type RecentFile } from "../../lib/recentFiles";
-import { withSectionHeaders } from "../../lib/menuSections";
+import {
+  recentParentLabel,
+  relativeTime,
+  type RecentFile,
+} from "../../lib/recentFiles";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcutFormat";
-import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
+import {
+  mergeCommands,
+  PALETTE_LABEL,
+  PALETTE_SHORTCUT,
+  useCommands,
+  type Action,
+} from "../../store/commands";
 import { useApp } from "../../store/useApp";
 
-// Top-level menus and the action group each shows. "Help" is built in below.
-// Order mirrors the design handoff's menubar (File · Edit · Data · Plot ·
-// Insert · Analyze · Window · View · Help). Empty groups simply don't open.
-// "Window" (MULTI_PLOT_PLAN item 5) has no entries in App.tsx's curated
-// list — it's populated entirely by `useCommands().menuCommands` (see the
-// merge below), published by `windows/useWindowCommands` — zero lines added
-// to App.tsx. "Insert" (MAIN #27) is the NEW top-level menu this repo
-// didn't have before — the drawn-shapes commands' second discoverability
-// path alongside the plot's own dock flyout (`PlotToolbar`).
-// Resolved once at module load — the host platform does not change.
 const IS_MAC = isMacPlatform();
+const MENUS = [
+  "File",
+  "Edit",
+  "Data",
+  "Plot",
+  "Insert",
+  "Analyze",
+  "Window",
+  "View",
+  "Help",
+] as const;
+type MenuBuilder = typeof import("./appMenuModel").buildAppMenuItems;
+let menuModelPromise: Promise<MenuBuilder> | null = null;
 
-const MENUS: { label: string; group: string }[] = [
-  { label: "File", group: "File" },
-  { label: "Edit", group: "Edit" },
-  { label: "Data", group: "Data" },
-  { label: "Plot", group: "Plot" },
-  { label: "Insert", group: "Insert" },
-  { label: "Analyze", group: "Analyze" },
-  { label: "Window", group: "Window" },
-  { label: "View", group: "View" },
-];
+function loadMenuModel(): Promise<MenuBuilder> {
+  menuModelPromise ??= import("./appMenuModel").then(
+    (module) => module.buildAppMenuItems,
+  );
+  return menuModelPromise;
+}
 
+interface OpenMenu {
+  label: string;
+  x: number;
+  y: number;
+}
 
 interface MenuBarProps {
   actions: Action[];
   onOpenPalette: () => void;
 }
 
+function recentLabel(entry: RecentFile, now: number): string {
+  const parent = entry.path ? ` — ${recentParentLabel(entry.path)}` : "";
+  return `${entry.name}${parent} · ${relativeTime(entry.at, now)}`;
+}
+
 export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
-  const [open, setOpen] = useState<string | null>(null);
-  const navRef = useRef<HTMLElement>(null);
+  const [open, setOpen] = useState<OpenMenu | null>(null);
+  const [focusedMenu, setFocusedMenu] = useState<string>(MENUS[0]);
+  const [buildMenuItems, setBuildMenuItems] = useState<MenuBuilder | null>(null);
+  const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const recent = useApp((s) => s.recent);
   const clearRecent = useApp((s) => s.clearRecent);
-  // App's curated list PLUS anything published into the shared command
-  // registry (e.g. the Window menu's commands — see MULTI_PLOT_PLAN item 5)
-  // — the same merge the ⌘K palette does, so a menu entry and a palette
-  // entry are always the same set.
   const menuCmds = useCommands((s) => s.menuCommands);
-  const allActions = useMemo(() => mergeCommands(actions, menuCmds), [actions, menuCmds]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (navRef.current && !navRef.current.contains(e.target as Node)) setOpen(null);
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-    };
-  }, [open]);
-
-  // Escape closes the open menu (GUI_INTERACTION #9, "an open menu OWNS
-  // Escape"). Round 4: this was a plain document-keydown listener with no
-  // `preventDefault`/`stopPropagation`, so the shared registry ALSO walked and
-  // a surface below closed on the same keystroke — measured, the menu closed
-  // and the armed plot tool reverted to pointer together. As a `menu`-layer
-  // surface it is the top of the ladder, and one Escape does one thing.
-  useEscapeSurface(
-    "menu",
-    () => {
-      setOpen(null);
-      return true;
-    },
-    open !== null,
+  const allActions = useMemo(
+    () => mergeCommands(actions, menuCmds),
+    [actions, menuCmds],
   );
+  const format = (shortcut: string) => formatShortcut(shortcut, IS_MAC);
+  const warmMenuModel = () => {
+    if (!buildMenuItems)
+      void loadMenuModel().then((builder) => setBuildMenuItems(() => builder));
+  };
 
-  // MAIN #31: an entry imported through a native dialog carries a path and
-  // reopens its TARGET; a browser-uploaded one still re-opens the picker,
-  // because no path was ever knowable. reopenRecent owns the missing-vs-offline
-  // decision — an unmounted share must not be treated as a deleted file.
+  // Start the small menu-model chunk as soon as the persistent shell mounts.
+  // Pointer/focus warming remains as a fallback, but cannot be the only path:
+  // a fast click (or an automated click that does not dwell on the trigger)
+  // can otherwise set aria-expanded while there are still no items to render.
+  useEffect(() => {
+    void loadMenuModel().then((builder) => setBuildMenuItems(() => builder));
+  }, []);
+
+  const positionFor = (label: string): OpenMenu | null => {
+    const trigger = buttonRefs.current[label];
+    if (!trigger) return null;
+    const rect = trigger.getBoundingClientRect();
+    return { label, x: rect.left, y: rect.bottom + 2 };
+  };
+
+  const openMenu = (label: string) => {
+    warmMenuModel();
+    if (label === "Help")
+      void import("../../store/diagnostics").catch(() => {});
+    const next = positionFor(label);
+    if (next) setOpen(next);
+  };
+
+  const moveTopLevel = (from: string, direction: -1 | 1, keepOpen: boolean) => {
+    const current = MENUS.indexOf(from as (typeof MENUS)[number]);
+    const index = (current + direction + MENUS.length) % MENUS.length;
+    const label = MENUS[index];
+    setFocusedMenu(label);
+    buttonRefs.current[label]?.focus();
+    if (keepOpen) openMenu(label);
+  };
+
   const reopen = (entry: RecentFile) => {
-    setOpen(null);
-    if (!entry.path) useApp.getState().setStatus(`re-select "${entry.name}" to import it`);
+    if (!entry.path)
+      useApp.getState().setStatus(`re-select "${entry.name}" to import it`);
     void reopenRecent(useApp.getState(), entry);
   };
-  const forget = (e: React.MouseEvent, entry: RecentFile) => {
-    // Removing a stale entry must not also re-import it.
-    e.stopPropagation();
-    // Hardening review fix: the ✕ span's ancestor <button> unmounts with the
-    // entry, and Chromium then drops focus to <body> — arming the global
-    // Delete against the active dataset. removeRowSafely's contract: focus a
-    // SURVIVING container synchronously in the same click. The nav persists.
-    removeRowSafely(navRef.current, () => useApp.getState().removeRecent(entry));
+
+  const recentItems = (): ContextMenuItem[] => {
+    if (!recent.length) return [];
+    const now = Date.now();
+    return [
+      { separator: true },
+      {
+        label: "Recent",
+        submenu: recent.map((entry) => ({
+          label: recentLabel(entry, now),
+          title: entry.path ?? `Re-open the import picker for ${entry.name}`,
+          run: () => reopen(entry),
+        })),
+      },
+      {
+        label: "Manage recent",
+        submenu: [
+          ...recent.map((entry) => ({
+            label: `Remove ${entry.name}`,
+            title:
+              "Remove this entry from Recent without deleting its source file",
+            run: () => useApp.getState().removeRecent(entry),
+          })),
+          { separator: true } as const,
+          { label: "Clear recent", run: clearRecent },
+        ],
+      },
+    ];
   };
 
-  // `onOpen` fires only on a closed→open transition (click from nothing, or
-  // hover-switch from a different menu) — never on close, never as a repeat
-  // while already open. Only the Help title below passes one, to warm the
-  // "Copy diagnostics" chunk (see there for why).
-  function title(label: string, onOpen?: () => void) {
-    const isOpen = open === label;
-    const openMenu = () => {
-      if (open !== label) onOpen?.();
-      setOpen(label);
-    };
-    return (
-      <span
-        className={`qzk-menu${isOpen ? " open" : ""}`}
-        onClick={() => (isOpen ? setOpen(null) : openMenu())}
-        // Once a menu is open, hovering siblings switches to them (menubar feel).
-        onMouseEnter={() => open && openMenu()}
-      >
-        {label}
-      </span>
+  const itemsFor = (label: string): ContextMenuItem[] => {
+    if (!buildMenuItems) return [];
+    if (label === "Help") {
+      const help = buildMenuItems(
+        "Help",
+        allActions.filter((action) => action.group === "Help"),
+        format,
+      );
+      return [
+        ...help,
+        { separator: true },
+        {
+          label: PALETTE_LABEL,
+          shortcutLabel: format(PALETTE_SHORTCUT),
+          run: onOpenPalette,
+        },
+        {
+          label: "About Quantized ↗",
+          run: () =>
+            window.open(
+              "https://github.com/pquarterman17/quantized",
+              "_blank",
+              "noopener,noreferrer",
+            ),
+        },
+      ];
+    }
+    const items = buildMenuItems(
+      label,
+      allActions.filter((action) => action.group === label),
+      format,
     );
-  }
-
-  // P3.4 review round (2026-09-14, finding 3): "Copy diagnostics" dynamically
-  // imports `store/diagnostics.ts` on click, kept out of the eager bundle on
-  // purpose (see that command's comment in `commands/uiCommands.ts`) — but an
-  // AWAITED import still sits inside the click's user gesture the first time
-  // it runs. Opening the Help menu is a strong signal the user is about to
-  // reach for it, so warm the chunk here: fire-and-forget, not a static or
-  // eager import (the bundle-size ratchet is exactly the reason the click
-  // handler defers it at all), so this never lands in `dist/index.html`'s
-  // modulepreload list. A failed warm (offline, a 404'd chunk after a
-  // redeploy) is silently swallowed — the click handler's own `.catch` is
-  // what actually reports that failure to the user.
-  const warmDiagnosticsChunk = () => {
-    void import("../../store/diagnostics").catch(() => {});
+    return label === "File" ? [...items, ...recentItems()] : items;
   };
 
-  const now = Date.now();
+  const openItems = open ? itemsFor(open.label) : [];
 
   return (
-    <nav className="qzk-menubar" ref={navRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer}>
-      {MENUS.map((m) => {
-        const items = allActions.filter((a) => a.group === m.group);
-        const isFile = m.group === "File";
+    <nav
+      className="qzk-menubar"
+      role="menubar"
+      aria-label="Application menu"
+      onPointerEnter={warmMenuModel}
+      onFocus={warmMenuModel}
+    >
+      {MENUS.map((label) => {
+        const expanded = open?.label === label;
         return (
-          <div key={m.label} className="qzk-menu-wrap">
-            {title(m.label)}
-            {open === m.label && (items.length > 0 || (isFile && recent.length > 0)) && (
-              <div className="qzk-menu-pop">
-                {/* #17: menus that declare `section` render sub-topic headers
-                    (Analyze had grown to 17 flat items). Menus that don't set
-                    it produce exactly one item row each, as before. */}
-                {withSectionHeaders(items).map((row, i) =>
-                  row.kind === "header" ? (
-                    <div key={`h-${row.label}`}>
-                      {i > 0 && <div className="qzk-menu-sep" />}
-                      <div className="qzk-menu-label">{row.label}</div>
-                    </div>
-                  ) : (
-                    <button
-                      key={row.action.id}
-                      className="qzk-menu-item"
-                      onClick={() => {
-                        setOpen(null);
-                        // P3.4 slice 2: same chokepoint the palette uses —
-                        // an async command (every File-menu export) now
-                        // registers an in-flight signal for StatusBar.
-                        runAction(row.action);
-                      }}
-                    >
-                      <span>{row.action.label}</span>
-                      {row.action.shortcut && (
-                        <span className="qz-shortcut">{formatShortcut(row.action.shortcut, IS_MAC)}</span>
-                      )}
-                    </button>
-                  ),
-                )}
-                {isFile && recent.length > 0 && (
-                  <>
-                    <div className="qzk-menu-sep" />
-                    <div className="qzk-menu-label">Recent</div>
-                    {recent.map((r) => (
-                      <button
-                        key={recentKey(r)}
-                        className="qzk-menu-item"
-                        title={
-                          r.path
-                            ? `${r.path} — reopens this file directly`
-                            : `${r.name} — re-opens the import picker (no path was saved)`
-                        }
-                        onClick={() => reopen(r)}
-                      >
-                        <span className="qzk-menu-trunc">
-                          {r.name}{r.path ? ` — ${recentParentLabel(r.path)}` : ""}
-                        </span>
-                        <span className="qz-shortcut">{relativeTime(r.at, now)}</span>
-                        {/* Retrospective-audit P2 fix: no tabIndex — any
-                            tabindex makes an element click-focusable, and
-                            this click unmounts the span: focus fell to
-                            <body>, arming the global Delete. */}
-                        <span
-                          role="button"
-                          aria-label={`Remove ${r.name} from recent`}
-                          title="Remove from recent"
-                          className="qz-shortcut"
-                          onClick={(e) => forget(e, r)}
-                        >
-                          ✕
-                        </span>
-                      </button>
-                    ))}
-                    <button
-                      className="qzk-menu-item"
-                      onClick={() => {
-                        setOpen(null);
-                        clearRecent();
-                      }}
-                    >
-                      <span>Clear recent</span>
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+          <button
+            key={label}
+            ref={(node) => {
+              buttonRefs.current[label] = node;
+            }}
+            type="button"
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded={expanded}
+            className={`qzk-menu${expanded ? " open" : ""}`}
+            tabIndex={focusedMenu === label ? 0 : -1}
+            onFocus={() => setFocusedMenu(label)}
+            onClick={() => (expanded ? setOpen(null) : openMenu(label))}
+            onMouseEnter={() => open && openMenu(label)}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+                event.preventDefault();
+                moveTopLevel(
+                  label,
+                  event.key === "ArrowRight" ? 1 : -1,
+                  open !== null,
+                );
+              } else if (
+                event.key === "ArrowDown" ||
+                event.key === "Enter" ||
+                event.key === " "
+              ) {
+                event.preventDefault();
+                openMenu(label);
+              } else if (event.key === "Home" || event.key === "End") {
+                event.preventDefault();
+                const target =
+                  event.key === "Home" ? MENUS[0] : MENUS[MENUS.length - 1];
+                setFocusedMenu(target);
+                buttonRefs.current[target]?.focus();
+                if (open) openMenu(target);
+              }
+            }}
+          >
+            {label}
+          </button>
         );
       })}
 
-      <div className="qzk-menu-wrap">
-        {title("Help", warmDiagnosticsChunk)}
-        {open === "Help" && (
-          <div className="qzk-menu-pop">
-            {allActions
-              .filter((a) => a.group === "Help")
-              .map((a) => (
-                <button
-                  key={a.id}
-                  className="qzk-menu-item"
-                  onClick={() => {
-                    setOpen(null);
-                    runAction(a);
-                  }}
-                >
-                  <span>{a.label}</span>
-                  {a.shortcut && <span className="qz-shortcut">{formatShortcut(a.shortcut, IS_MAC)}</span>}
-                </button>
-              ))}
-            <button
-              className="qzk-menu-item"
-              onClick={() => {
-                setOpen(null);
-                onOpenPalette();
-              }}
-            >
-              <span>{PALETTE_LABEL}</span>
-              <span className="qz-shortcut">{formatShortcut(PALETTE_SHORTCUT, IS_MAC)}</span>
-            </button>
-            <a
-              className="qzk-menu-item"
-              href="https://github.com/pquarterman17/quantized"
-              target="_blank"
-              rel="noreferrer"
-              onClick={() => setOpen(null)}
-            >
-              <span>About quantized ↗</span>
-            </a>
-          </div>
-        )}
-      </div>
+      {open && openItems.length > 0 && (
+        <ContextMenu
+          key={open.label}
+          x={open.x}
+          y={open.y}
+          items={openItems}
+          onClose={() => setOpen(null)}
+          onNavigateRoot={(direction) =>
+            moveTopLevel(open.label, direction, true)
+          }
+          returnFocus={buttonRefs.current[open.label]}
+        />
+      )}
 
       <span className="qzk-spacer" />
-      <span
+      <button
+        type="button"
         className="qzk-search"
         onClick={onOpenPalette}
         data-tip={PALETTE_LABEL}
-        data-tip-key={formatShortcut(PALETTE_SHORTCUT, IS_MAC)}
+        data-tip-key={format(PALETTE_SHORTCUT)}
       >
-        <span>⌕</span>
+        <span aria-hidden="true">⌕</span>
         <span>Search…</span>
-        <span className="qz-shortcut">{formatShortcut(PALETTE_SHORTCUT, IS_MAC)}</span>
-      </span>
+        <span className="qz-shortcut">{format(PALETTE_SHORTCUT)}</span>
+      </button>
     </nav>
   );
 }
