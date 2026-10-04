@@ -46,4 +46,8 @@ describe("mergeCommands", () => {
     const merged = mergeCommands([a("c1", "Toggle theme")], [a("m1", "toggle theme"), a("m2", "Other")]);
     expect(merged.map((x) => x.id)).toEqual(["c1", "m2"]);
   });
+  it("keeps the same label when it belongs to a different menu", () => {
+    const other = { ...a("m1", "Toggle theme"), group: "Help" };
+    expect(mergeCommands([a("c1", "Toggle theme")], [other]).map((x) => x.id)).toEqual(["c1", "m1"]);
+  });
 });

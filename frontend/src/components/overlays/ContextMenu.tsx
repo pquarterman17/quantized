@@ -39,6 +39,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { edgeFocusableIndex, nextFocusableIndex, typeaheadIndex } from "../../lib/menuKeyboardNav";
+import { FlyoutBox, PopupBox } from "./ContextMenuBoxes";
 import { appendContextHelp, type ContextMenuHelp } from "./contextMenuHelp";
 import type { ContextMenuItem } from "./contextMenuTypes";
 
@@ -51,96 +52,8 @@ interface Props {
   onClose: () => void;
   /** Optional one-line Help footer (see ./contextMenuHelp). */
   help?: ContextMenuHelp;
-}
-
-/** A positioned, self-clamping popup box. Used for the root menu and each
- *  nested flyout; both portal-free flyouts stay DOM descendants of the root so
- *  a single outside-click guard covers the whole tree. */
-function PopupBox({
-  x,
-  y,
-  children,
-  boxRef,
-}: {
-  x: number;
-  y: number;
-  children: React.ReactNode;
-  boxRef?: React.Ref<HTMLDivElement>;
-}) {
-  const localRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ x, y });
-  // Taller than the window (the plot menu in a short one): tighten the rows.
-  // Not a scroll: a scrolling root clips its flyouts, and a scroll closes it.
-  const [fit, setFit] = useState(false);
-  useLayoutEffect(() => {
-    const el = localRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const pad = 8;
-    if (!fit && r.height + 2 * pad > window.innerHeight) return setFit(true);
-    const nx = x + r.width + pad > window.innerWidth ? Math.max(pad, window.innerWidth - r.width - pad) : x;
-    const ny = y + r.height + pad > window.innerHeight ? Math.max(pad, window.innerHeight - r.height - pad) : y;
-    setPos({ x: nx, y: ny });
-  }, [x, y, fit]);
-  return (
-    <div
-      ref={(node) => {
-        localRef.current = node;
-        if (typeof boxRef === "function") boxRef(node);
-        else if (boxRef) (boxRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-      }}
-      className={`qzk-menu-pop qzk-ctx${fit ? " fit" : ""}`}
-      style={{ position: "fixed", left: pos.x, top: pos.y, zIndex: 2100 }} // see module header: stacking
-      onContextMenu={(e) => e.preventDefault()}
-      onClick={(e) => {
-        // `createPortal` moves the DOM node to <body>, but a React synthetic
-        // event still bubbles through the REACT tree (the menu's JSX parent —
-        // e.g. a Library row) regardless of DOM placement. Item handlers have
-        // already run by the time the event bubbles up here, so stopping it
-        // at the popup root prevents an item click from ALSO firing the host
-        // row's onClick (a real bug once the two can diverge — the
-        // "Plot (make active)" menu item vs. a plain row click).
-        e.stopPropagation();
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-/** A nested flyout, anchored to its `.qzk-ctx-subwrap` row (position:absolute
- *  — see the module header for why fixed/viewport coords are forbidden here).
- *  Opens to the right overlapping the parent by 3px so the pointer can travel
- *  into it without a mouseleave gap; flips to the left / shifts up only when
- *  the viewport would clip it. */
-function FlyoutBox({ children }: { children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [side, setSide] = useState<"right" | "left">("right");
-  const [shiftY, setShiftY] = useState(0);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    if (r.width === 0 && r.height === 0) return; // jsdom / not laid out yet
-    const pad = 8;
-    if (r.right > window.innerWidth - pad) setSide("left");
-    const overflowY = r.bottom - (window.innerHeight - pad);
-    if (overflowY > 0) setShiftY(-overflowY);
-  }, []);
-  const sidePos =
-    side === "right"
-      ? { left: "calc(100% - 3px)" }
-      : { right: "calc(100% - 3px)" };
-  return (
-    <div
-      ref={ref}
-      className="qzk-menu-pop qzk-ctx"
-      style={{ position: "absolute", top: -4 + shiftY, zIndex: 2101, ...sidePos }}
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      {children}
-    </div>
-  );
+  onNavigateRoot?: (direction: -1 | 1) => void;
+  returnFocus?: HTMLElement | null;
 }
 
 interface MenuListProps {
@@ -155,11 +68,12 @@ interface MenuListProps {
   onCollapse?: () => void;
   /** Root-only: lets <ContextMenu> focus this level's container on mount. */
   menuRef?: React.Ref<HTMLDivElement>;
+  onNavigateRoot?: (direction: -1 | 1) => void;
 }
 
 /** Renders one item list (root or a submenu). Owns which submenu is currently
  *  hovered/opened. `onClose` closes the WHOLE menu after any leaf action runs. */
-function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, menuRef }: MenuListProps) {
+function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, menuRef, onNavigateRoot }: MenuListProps) {
   const [openSub, setOpenSub] = useState<{ i: number; via: "mouse" | "key" } | null>(null);
   const itemRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const containerRef = useRef<HTMLDivElement>(null);
@@ -206,6 +120,10 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, menuRef 
           e.preventDefault();
           e.stopPropagation();
           setOpenSub({ i: idx, via: "key" });
+        } else if (!onCollapse && onNavigateRoot) {
+          e.preventDefault();
+          e.stopPropagation();
+          onNavigateRoot(1);
         }
         return;
       }
@@ -214,6 +132,10 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, menuRef 
           e.preventDefault();
           e.stopPropagation();
           onCollapse();
+        } else if (onNavigateRoot) {
+          e.preventDefault();
+          e.stopPropagation();
+          onNavigateRoot(-1);
         }
         return;
       default:
@@ -285,6 +207,7 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, menuRef 
                 aria-haspopup="true"
                 aria-expanded={openSub?.i === i}
                 aria-disabled={it.disabled || undefined}
+                title={it.title}
                 onClick={() => setOpenSub((s) => (s?.i === i ? null : { i, via: "key" }))}
               >
                 <span>{it.label}</span>
@@ -326,11 +249,18 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, menuRef 
             }}
           >
             <span>{it.label}</span>
-            {it.checked && (
-              <span className="qzk-ctx-check" aria-hidden="true">
-                ✓
-              </span>
-            )}
+            <span className="qzk-menu-item-end">
+              {it.shortcutLabel && (
+                <span className="qz-shortcut" aria-hidden="true">
+                  {it.shortcutLabel}
+                </span>
+              )}
+              {it.checked && (
+                <span className="qzk-ctx-check" aria-hidden="true">
+                  ✓
+                </span>
+              )}
+            </span>
           </button>
         );
       })}
@@ -338,13 +268,15 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, menuRef 
   );
 }
 
-export default function ContextMenu({ x, y, items, onClose, help }: Props) {
+export default function ContextMenu({ x, y, items, onClose, help, onNavigateRoot, returnFocus }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   // Captured once, synchronously, before the menu steals focus — GUI_INTERACTION
   // #8's "Esc returns focus to the invoking element" (a keyboard-opened row,
   // the "⋯" resting-cue button, or nothing for a plain mouse right-click).
-  const [prevFocus] = useState<HTMLElement | null>(() => document.activeElement as HTMLElement | null);
+  const [prevFocus] = useState<HTMLElement | null>(
+    () => returnFocus ?? (document.activeElement as HTMLElement | null),
+  );
 
   useLayoutEffect(() => {
     // Grab focus onto the menu itself (not any one item) as soon as it opens
@@ -388,7 +320,7 @@ export default function ContextMenu({ x, y, items, onClose, help }: Props) {
   const visibleItems = appendContextHelp(items, help, prevFocus);
   return createPortal(
     <PopupBox x={x} y={y} boxRef={rootRef}>
-      <MenuList items={visibleItems} onClose={onClose} menuRef={menuRef} />
+      <MenuList items={visibleItems} onClose={onClose} menuRef={menuRef} onNavigateRoot={onNavigateRoot} />
     </PopupBox>,
     document.body,
   );

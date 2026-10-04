@@ -23,6 +23,13 @@ export interface Action {
    *  searched, not browsed. Omit it and the command renders flat, exactly as
    *  before. See lib/menuSections.ts. */
   section?: string;
+  /** Optional menu state. Functions are evaluated when the menu renders so
+   * long-lived command registries never publish stale UI state. */
+  checked?: boolean | (() => boolean);
+  disabled?: boolean | (() => boolean);
+  disabledReason?: string | (() => string | undefined);
+  /** Destructive commands receive the shared danger treatment in menus. */
+  danger?: boolean;
   /** True for a PER-ENTITY command — one published per recent project, per
    *  dataset, and so on. It names a piece of the user's DATA, not a capability
    *  of the app. The ⌘K palette wants these; searchable HELP does not: Help
@@ -59,12 +66,18 @@ export const useCommands = create<CommandsState>((set) => ({
   },
 }));
 
-/** Merge curated palette actions with published menu commands (curated wins
- *  on duplicate labels, so each command appears once). */
+/** Merge curated palette actions with published menu commands. Curated wins
+ *  on duplicate labels within the same menu group; an identically named
+ *  command in another group remains reachable instead of disappearing. */
 export function mergeCommands(curated: Action[], menu: Action[]): Action[] {
-  const seen = new Set(curated.map((a) => a.label.toLowerCase()));
-  const extra = menu.filter((a) => !seen.has(a.label.toLowerCase()));
-  return [...curated, ...extra];
+  const key = (a: Action) => `${a.group.toLowerCase()}\0${a.label.toLowerCase()}`;
+  const seen = new Set<string>();
+  return [...curated, ...menu].filter((action) => {
+    const k = key(action);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 /** True when `x` looks like a promise (has a callable `.then`) — the runtime

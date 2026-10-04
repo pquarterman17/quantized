@@ -18,5 +18,5 @@ export type ContextMenuItem =
   | { separator: true }
   | { header: string }
   | { swatches: Swatch[] }
-  | { label: string; submenu: ContextMenuItem[]; disabled?: boolean }
-  | { label: string; run: () => void; disabled?: boolean; danger?: boolean; checked?: boolean; title?: string }; // title: disabled-reason tooltip (L0.36)
+  | { label: string; submenu: ContextMenuItem[]; disabled?: boolean; title?: string }
+  | { label: string; run: () => void; disabled?: boolean; danger?: boolean; checked?: boolean; title?: string; shortcutLabel?: string }; // title: disabled-reason tooltip (L0.36)

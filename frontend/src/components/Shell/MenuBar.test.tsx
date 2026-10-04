@@ -1,4 +1,4 @@
-import { fireEvent, render, renderHook, screen } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MenuBar from "./MenuBar";
@@ -10,7 +10,12 @@ import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 const actions: Action[] = [
   { id: "imp", group: "File", label: "Import data…", run: vi.fn() },
   { id: "pal", group: "Edit", label: PALETTE_LABEL, run: vi.fn() },
-  { id: "merge", group: "Data", label: "Merge selected datasets", run: vi.fn() },
+  {
+    id: "merge",
+    group: "Data",
+    label: "Merge selected datasets",
+    run: vi.fn(),
+  },
   { id: "auto", group: "Plot", label: "Autoscale / reset view", run: vi.fn() },
   { id: "fit", group: "Analyze", label: "Curve fit…", run: vi.fn() },
   { id: "thm", group: "View", label: "Toggle theme", run: vi.fn() },
@@ -19,77 +24,192 @@ const actions: Action[] = [
 beforeEach(() => useCommands.setState({ menuCommands: [] }));
 afterEach(() => useCommands.setState({ menuCommands: [] }));
 
+async function warmMenus(): Promise<void> {
+  fireEvent.pointerEnter(screen.getByRole("menubar"));
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+async function openMenu(label: string): Promise<void> {
+  await warmMenus();
+  fireEvent.click(screen.getByRole("menuitem", { name: label }));
+  await screen.findByRole("menu");
+}
+
 describe("MenuBar", () => {
   it("renders the nine-menu structure (File·Edit·Data·Plot·Insert·Analyze·Window·View + Help)", () => {
     render(<MenuBar actions={actions} onOpenPalette={vi.fn()} />);
-    for (const m of ["File", "Edit", "Data", "Plot", "Insert", "Analyze", "Window", "View", "Help"]) {
+    for (const m of [
+      "File",
+      "Edit",
+      "Data",
+      "Plot",
+      "Insert",
+      "Analyze",
+      "Window",
+      "View",
+      "Help",
+    ]) {
       expect(screen.getByText(m)).toBeInTheDocument();
     }
+    expect(
+      screen.getByRole("menubar", { name: "Application menu" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "File" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
   });
 
-  it("merges published command-registry entries (e.g. Window commands) into the matching menu", () => {
+  it("merges published command-registry entries (e.g. Window commands) into the matching menu", async () => {
     useCommands.setState({
-      menuCommands: [{ id: "window-new", group: "Window", label: "New Graph Window", run: vi.fn() }],
+      menuCommands: [
+        {
+          id: "window-new",
+          group: "Window",
+          label: "New Graph Window",
+          run: vi.fn(),
+        },
+      ],
     });
     render(<MenuBar actions={actions} onOpenPalette={vi.fn()} />);
-    fireEvent.click(screen.getByText("Window"));
+    await openMenu("Window");
     expect(screen.getByText("New Graph Window")).toBeInTheDocument();
   });
 
-  it("opens a menu and runs an item, scoped to that group", () => {
+  it("opens a menu and runs an item, scoped to that group", async () => {
     render(<MenuBar actions={actions} onOpenPalette={vi.fn()} />);
-    fireEvent.click(screen.getByText("Plot"));
+    await openMenu("Plot");
     expect(screen.getByText("Autoscale / reset view")).toBeInTheDocument();
     // Plot's popup shows only Plot items, not Data's.
     expect(screen.queryByText("Merge selected datasets")).toBeNull();
 
     fireEvent.click(screen.getByText("Data"));
     fireEvent.click(screen.getByText("Merge selected datasets"));
-    expect((actions[2].run as ReturnType<typeof vi.fn>)).toHaveBeenCalledOnce();
+    expect(actions[2].run as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
   });
 
-  it("the Help menu offers the command palette under the SAME label as the Edit menu", () => {
+  it("the Help menu offers the command palette under the SAME label as the Edit menu", async () => {
     // #17: this test previously clicked the literal "Command palette" while
     // the Edit-menu fixture above said "Command palette…" — it DOCUMENTED the
     // label divergence instead of catching it. Both now resolve through
     // PALETTE_LABEL, so a future edit cannot reintroduce the mismatch here.
     const onOpenPalette = vi.fn();
     render(<MenuBar actions={actions} onOpenPalette={onOpenPalette} />);
-    fireEvent.click(screen.getByText("Help"));
+    await openMenu("Help");
     const entries = screen.getAllByText(PALETTE_LABEL);
     fireEvent.click(entries[entries.length - 1]);
     expect(onOpenPalette).toHaveBeenCalledOnce();
   });
-  // GUI_INTERACTION #17 — sub-topic headers in a long menu.
-  it("renders section headers for a sectioned menu, and none for a flat one", () => {
+  it("turns long-menu sections into shallow task flyouts", async () => {
     const sectioned: Action[] = [
-      { id: "cf", group: "Analyze", section: "Fit", label: "Curve fit…", run: vi.fn() },
-      { id: "pk", group: "Analyze", section: "Peaks & baseline", label: "Find peaks…", run: vi.fn() },
-      { id: "bl", group: "Analyze", section: "Peaks & baseline", label: "Baseline…", run: vi.fn() },
+      {
+        id: "cf",
+        group: "Analyze",
+        section: "Fit",
+        label: "Curve fit…",
+        run: vi.fn(),
+      },
+      {
+        id: "pk",
+        group: "Analyze",
+        section: "Peaks & baseline",
+        label: "Find peaks…",
+        run: vi.fn(),
+      },
+      {
+        id: "bl",
+        group: "Analyze",
+        section: "Peaks & baseline",
+        label: "Baseline…",
+        run: vi.fn(),
+      },
     ];
-    const { container } = render(<MenuBar actions={sectioned} onOpenPalette={vi.fn()} />);
-    fireEvent.click(screen.getByText("Analyze"));
-    const headers = [...container.querySelectorAll(".qzk-menu-label")].map((n) => n.textContent);
-    expect(headers).toEqual(["Fit", "Peaks & baseline"]);
-    // Both peak tools live under the ONE header.
+    render(<MenuBar actions={sectioned} onOpenPalette={vi.fn()} />);
+    await openMenu("Analyze");
+    expect(screen.getByRole("menuitem", { name: "Fit" })).toHaveAttribute(
+      "aria-haspopup",
+      "true",
+    );
+    expect(
+      screen.getByRole("menuitem", { name: "Peaks & baseline" }),
+    ).toHaveAttribute("aria-haspopup", "true");
+    expect(screen.queryByText("Find peaks…")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Peaks & baseline" }));
     expect(screen.getByText("Find peaks…")).toBeInTheDocument();
     expect(screen.getByText("Baseline…")).toBeInTheDocument();
-
-    // The File menu declares no sections -> no headers (Recent aside, which
-    // needs recent files this fixture has none of).
-    fireEvent.click(screen.getByText("File"));
-    expect(container.querySelectorAll(".qzk-menu-label")).toHaveLength(0);
   });
 
-  it("still runs a command that sits under a section header", () => {
+  it("still runs a command that sits under a section header", async () => {
     const run = vi.fn();
     const sectioned: Action[] = [
       { id: "cf", group: "Analyze", section: "Fit", label: "Curve fit…", run },
     ];
     render(<MenuBar actions={sectioned} onOpenPalette={vi.fn()} />);
-    fireEvent.click(screen.getByText("Analyze"));
+    await openMenu("Analyze");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Fit" }));
     fireEvent.click(screen.getByText("Curve fit…"));
     expect(run).toHaveBeenCalledOnce();
+  });
+
+  it("supports top-level arrows, popup arrows, and restores focus on Escape", async () => {
+    render(<MenuBar actions={actions} onOpenPalette={vi.fn()} />);
+    await warmMenus();
+    const file = screen.getByRole("menuitem", { name: "File" });
+    const edit = screen.getByRole("menuitem", { name: "Edit" });
+    file.focus();
+    fireEvent.keyDown(file, { key: "ArrowRight" });
+    expect(edit).toHaveFocus();
+    fireEvent.keyDown(edit, { key: "ArrowDown" });
+    expect(edit).toHaveAttribute("aria-expanded", "true");
+    const popup = screen.getByRole("menu");
+    fireEvent.keyDown(popup, { key: "ArrowRight" });
+    expect(screen.getByRole("menuitem", { name: "Data" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await pressEscape(document);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Data" })).toHaveFocus();
+  });
+
+  it("exposes checked, disabled, and danger state with native menu semantics", async () => {
+    const stateful: Action[] = [
+      {
+        id: "left",
+        group: "View",
+        label: "Library",
+        checked: () => true,
+        run: vi.fn(),
+      },
+      {
+        id: "plot",
+        group: "View",
+        label: "Plot",
+        disabled: () => true,
+        disabledReason: "Select data first",
+        run: vi.fn(),
+      },
+      {
+        id: "remove-all",
+        group: "File",
+        label: "Remove all…",
+        danger: true,
+        run: vi.fn(),
+      },
+    ];
+    render(<MenuBar actions={stateful} onOpenPalette={vi.fn()} />);
+    await openMenu("View");
+    expect(
+      screen.getByRole("menuitemcheckbox", { name: "Library" }),
+    ).toHaveAttribute("aria-checked", "true");
+    const disabledPlot = screen.getByTitle("Select data first");
+    expect(disabledPlot).toBeDisabled();
+    fireEvent.click(screen.getByText("File"));
+    expect(screen.getByRole("menuitem", { name: "Remove all…" })).toHaveClass(
+      "danger",
+    );
   });
 });
 
@@ -105,10 +225,10 @@ describe("MenuBar Escape ownership (P3.3 round 4)", () => {
     useApp.setState({ plotTool: "zoom" });
     renderHook(() => useGlobalShortcuts());
     render(<MenuBar actions={actions} onOpenPalette={vi.fn()} />);
-    fireEvent.click(screen.getByText("Analyze"));
+    await openMenu("Analyze");
     expect(screen.getByText("Curve fit…")).toBeInTheDocument();
 
-    await pressEscape();
+    await pressEscape(document);
 
     expect(screen.queryByText("Curve fit…")).not.toBeInTheDocument(); // menu closed…
     expect(useApp.getState().plotTool).toBe("zoom"); // …and ONLY the menu closed

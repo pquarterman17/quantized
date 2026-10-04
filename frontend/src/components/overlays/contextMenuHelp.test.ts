@@ -27,6 +27,9 @@ const HELP_PROP = /help=\{\{/g;
 // Hosts that deliberately carry NO footer, each with its reason. Keys are the
 // glob's own (path relative to this file).
 const EXEMPT: Readonly<Record<string, string>> = {
+  // This is the application's top-level menubar, not an object context menu;
+  // it already contains the dedicated Help menu and searchable Help topics.
+  "../Shell/MenuBar.tsx": "application menubar owns a first-class Help menu",
   // The draw-shape kind chooser and the "Group labels" options flyout are
   // one-decision chooser popovers off a toolbar button, not object menus.
   "../Stage/PlotToolbar.tsx": "chooser flyouts",

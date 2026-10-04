@@ -171,6 +171,44 @@ describe("ContextMenu", () => {
     expect(document.body.querySelector(".qzk-ctx")).toBeInTheDocument();
   });
 
+  it("clamps a large popup into a small scaled viewport", () => {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 320 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 240 });
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 300,
+      bottom: 300,
+      width: 300,
+      height: 300,
+      toJSON: () => ({}),
+    });
+    render(<ContextMenu x={310} y={230} items={items} onClose={vi.fn()} />);
+    const popup = document.body.querySelector<HTMLElement>(".qzk-ctx");
+    expect(popup).toHaveClass("fit");
+    expect(popup).toHaveStyle({ left: "12px", top: "8px" });
+    rect.mockRestore();
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: height });
+  });
+
+  it("renders a shortcut hint without adding it to the accessible item name", () => {
+    render(
+      <ContextMenu
+        x={0}
+        y={0}
+        items={[{ label: "Save", shortcutLabel: "CtrlS", run: vi.fn() }]}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("menuitem", { name: "Save" })).toBeInTheDocument();
+    expect(screen.getByText("CtrlS")).toHaveClass("qz-shortcut");
+  });
+
   it("renders a header, a checked action, and a swatch row", () => {
     const pick = vi.fn();
     render(

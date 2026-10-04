@@ -27,6 +27,33 @@ const SIZES = [
   { width: 820, height: 700 },
 ];
 
+test("application menus and their flyouts stay compact and inside scaled viewports @core", async ({ page }) => {
+  await gotoApp(page);
+  for (const size of SIZES) {
+    await page.setViewportSize(size);
+    await page.getByRole("menuitem", { name: "Analyze", exact: true }).click();
+    const root = page.getByRole("menu").first();
+    await expect(root).toBeVisible();
+    const rootBox = (await root.locator("xpath=..").boundingBox())!;
+    expect(rootBox.x).toBeGreaterThanOrEqual(0);
+    expect(rootBox.y).toBeGreaterThanOrEqual(0);
+    expect(rootBox.x + rootBox.width).toBeLessThanOrEqual(size.width);
+    expect(rootBox.y + rootBox.height).toBeLessThanOrEqual(size.height);
+    expect(rootBox.height, "root menu should be grouped rather than a scrolling command wall").toBeLessThan(360);
+
+    await root.getByRole("menuitem", { name: "XRD & reflectivity", exact: true }).hover();
+    const flyout = page.getByRole("menu").last();
+    await expect(flyout).toBeVisible();
+    const flyoutBox = (await flyout.locator("xpath=..").boundingBox())!;
+    expect(flyoutBox.x).toBeGreaterThanOrEqual(0);
+    expect(flyoutBox.y).toBeGreaterThanOrEqual(0);
+    expect(flyoutBox.x + flyoutBox.width).toBeLessThanOrEqual(size.width);
+    expect(flyoutBox.y + flyoutBox.height).toBeLessThanOrEqual(size.height);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu")).toHaveCount(0);
+  }
+});
+
 async function loadPlot(page: Page): Promise<void> {
   await gotoApp(page);
   await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("three-channel.csv"));
