@@ -43,7 +43,7 @@
 // change would not make it safe. Recording is suppressed while it runs
 // (`pipelineRunning`), exactly like a folder batch.
 
-import { executeSteps } from "./executeSteps";
+import { executeSteps, PipelineCancelledError } from "./executeSteps";
 import { reportEmit } from "../../../lib/api";
 import {
   conformData,
@@ -70,7 +70,9 @@ export async function runTemplateOnDataset(
   t: AnalysisTemplate,
   targetId: string,
   displayName: string,
+  signal?: AbortSignal,
 ): Promise<BatchRow> {
+  signal?.throwIfAborted();
   const before = useApp.getState();
   const target = before.datasets.find((dataset) => dataset.id === targetId) ?? null;
   const preflight = analyzePipeline(t.steps, target, before.datasets);
@@ -86,7 +88,9 @@ export async function runTemplateOnDataset(
   }
   // A transform step (P2.5) moves the run onto its output, so the fit report
   // cites the dataset the fit actually ran on (`fitTargets`), not the input.
-  const { fits, fitTargets, log } = await executeSteps(t.steps, targetId);
+  const run = await executeSteps(t.steps, targetId, undefined, signal);
+  const { fits, fitTargets, log } = run;
+  if (signal?.aborted) throw new PipelineCancelledError(run.created);
   const failedSteps = Object.values(log).filter((l) => l.status === "failed");
   const lastFit = fits[fits.length - 1];
   const fitOn = fitTargets[fitTargets.length - 1] ?? targetId;
@@ -106,8 +110,12 @@ export async function runTemplateOnDataset(
         title: `${t.name} — ${displayName}`,
         source_refs: [{ kind: "dataset", id: fitOn, name: fitName }],
       });
+      if (signal?.aborted) throw new PipelineCancelledError(run.created);
       addReportWithProvenance(`${t.name} — ${displayName}`, report, fitOn);
     } catch {
+      // Report generation is best-effort, but cancellation is control flow:
+      // swallowing it here would let the batch continue to the next file.
+      if (signal?.aborted) throw new PipelineCancelledError(run.created);
       /* offline / report route down — the extracted row still lands */
     }
   }

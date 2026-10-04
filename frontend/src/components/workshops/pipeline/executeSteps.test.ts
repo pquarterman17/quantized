@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { makeStep, type PipelineStep } from "../../../lib/pipeline";
 import { useApp } from "../../../store/useApp";
-import { executeSteps } from "./executeSteps";
+import { executeSteps, PipelineCancelledError } from "./executeSteps";
 
 vi.mock("../../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api")>()),
@@ -72,9 +72,50 @@ describe("executeSteps expression replay", () => {
     expect(addFormula).toHaveBeenCalledWith("a", "loop", "A");
     expect(log[step.id]).toEqual({ status: "failed", note: "the expression would create a cycle" });
   });
+
+  it("replays every row of a large worksheet without preview truncation", async () => {
+    const n = 50_000;
+    useApp.setState({
+      datasets: [ds({
+        data: {
+          time: Array.from({ length: n }, (_, i) => i),
+          values: Array.from({ length: n }, (_, i) => [i]),
+          labels: ["signal"],
+          units: ["V"],
+          metadata: {},
+        },
+      })],
+    });
+    const step = makeStep("expression", "Double", "", { name: "double", expr: "A * 2" });
+    const result = await executeSteps([step], "a");
+    const output = useApp.getState().datasets[0].data;
+    expect(result.log[step.id].status).toBe("ok");
+    expect(output.values).toHaveLength(n);
+    expect(output.values[n - 1]).toEqual([n - 1, (n - 1) * 2]);
+  });
 });
 
 describe("executeSteps fit replay (#6)", () => {
+  it("forwards cancellation to an in-flight fit and never starts a later step", async () => {
+    const controller = new AbortController();
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    vi.mocked(fitModel).mockImplementationOnce((_req, signal) => new Promise((_resolve, reject) => {
+      markStarted();
+      signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+    }));
+    const addFormula = vi.fn(() => true);
+    useApp.setState({ addFormula });
+    const fit = fitStep({ model: "Linear", xKey: 0, yKey: 1 });
+    const later = makeStep("expression", "Must not run", "", { name: "later", expr: "A" });
+    const pending = executeSteps([fit, later], "a", undefined, controller.signal);
+    await started;
+    controller.abort();
+    await expect(pending).rejects.toBeInstanceOf(PipelineCancelledError);
+    expect(vi.mocked(fitModel).mock.calls[0]?.[1]).toBe(controller.signal);
+    expect(addFormula).not.toHaveBeenCalled();
+  });
+
   it("reproduces the recorded xKey/yKey channels (not time/values[0])", async () => {
     await runFit(fitStep({ model: "Linear", xKey: 0, yKey: 1 }));
     expect(fitModel).toHaveBeenCalledWith({

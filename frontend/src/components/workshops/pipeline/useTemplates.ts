@@ -9,6 +9,7 @@
 import { useCallback, useState } from "react";
 
 import { runTemplateOnDataset } from "./runTemplate";
+import { PipelineCancelledError } from "./executeSteps";
 import { listFitModels } from "../../../lib/api/curvefit";
 import { uploadFile } from "../../../lib/api";
 import { saveBlob } from "../../../lib/download";
@@ -26,9 +27,12 @@ import {
   type BatchRow,
 } from "../../../lib/template";
 import { deriveExpectations } from "../../../lib/recipeExpect";
+import { canonicalJson } from "../../../lib/canonicalJson";
 import { definitionKey } from "../../../lib/templatesProject";
 import { recordUse } from "../../../lib/recipeIndex";
 import { toast } from "../../../store/toasts";
+import { runCancellable } from "../../../store/pendingOps";
+import { removeDatasetsPatch, scrubDatasetsFromHistory } from "../../../store/removeDatasets";
 import { nextDatasetId, useApp } from "../../../store/useApp";
 
 export interface BatchProgress {
@@ -77,7 +81,7 @@ function sameStepDefinition(a: readonly PipelineStep[], b: readonly PipelineStep
   return a.length === b.length && a.every((step, index) => {
     const other = b[index];
     return step.kind === other.kind && step.label === other.label && step.code === other.code &&
-      step.enabled === other.enabled && JSON.stringify(step.params) === JSON.stringify(other.params);
+      step.enabled === other.enabled && canonicalJson(step.params) === canonicalJson(other.params);
   });
 }
 
@@ -183,35 +187,71 @@ export function useTemplates(): TemplatesState {
       const rows: BatchRow[] = [];
       const failures: string[] = [];
       try {
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
-          setBatch({ done: i, total: files.length, current: file.name, failures });
-          try {
-            const data = await uploadFile(file);
-            const id = nextDatasetId();
-            addDataset({ id, name: file.name, data });
-            // Shared core: steps + output extraction + the per-file #36 report.
-            const row = await runTemplateOnDataset(t, id, file.name);
-            rows.push(row);
-            if (row.failed) failures.push(file.name);
-          } catch (e) {
-            // One bad file yields a flagged row, never a dead batch (#3).
-            const note = e instanceof Error ? e.message : "import failed";
-            rows.push({ file: file.name, values: extractOutputs(t.outputs, undefined), failed: note });
-            failures.push(file.name);
+        const completed = await runCancellable(`Running “${t.name}” on ${files.length} files…`, async (signal) => {
+          for (let i = 0; i < files.length; i++) {
+            signal.throwIfAborted();
+            const file = files[i];
+            let importedId: string | null = null;
+            setBatch({ done: i, total: files.length, current: file.name, failures });
+            try {
+              const data = await uploadFile(file, signal);
+              signal.throwIfAborted();
+              importedId = nextDatasetId();
+              addDataset({ id: importedId, name: file.name, data });
+              // Shared core: steps + output extraction + the per-file #36 report.
+              const row = await runTemplateOnDataset(t, importedId, file.name, signal);
+              rows.push(row);
+              if (row.failed) failures.push(file.name);
+              // This file is complete. A later Cancel keeps completed files;
+              // only an in-flight file and its partial derived outputs roll back.
+              importedId = null;
+            } catch (e) {
+              if (signal.aborted) {
+                const partial = e instanceof PipelineCancelledError ? e.created : [];
+                const own = [...(importedId ? [importedId] : []), ...partial];
+                if (own.length) {
+                  // This is a true rollback, not Delete: no trash entry. Scrub
+                  // the cancelled ids from undo/redo too, or a later Ctrl+Z
+                  // can resurrect the partial input/output we just promised
+                  // was removed.
+                  useApp.setState((state) => ({
+                    ...removeDatasetsPatch(state, own),
+                    ...scrubDatasetsFromHistory(state, own),
+                  }));
+                }
+                throw e;
+              }
+              // One bad file yields a flagged row, never a dead batch (#3).
+              const note = e instanceof Error ? e.message : "import failed";
+              rows.push({ file: file.name, values: extractOutputs(t.outputs, undefined), failed: note });
+              failures.push(file.name);
+            }
           }
-        }
-        addDataset({
-          id: nextDatasetId(),
-          name: `${t.name} summary (${rows.length} files)`,
-          data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows),
+          addDataset({
+            id: nextDatasetId(),
+            name: `${t.name} summary (${rows.length} files)`,
+            data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows),
+          });
         });
-        toast(
-          failures.length
-            ? `batch done — ${failures.length}/${files.length} file(s) flagged`
-            : `batch done — ${files.length} file(s)`,
-          failures.length ? "danger" : undefined,
-        );
+        if (completed) {
+          toast(
+            failures.length
+              ? `batch done — ${failures.length}/${files.length} file(s) flagged`
+              : `batch done — ${files.length} file(s)`,
+            failures.length ? "danger" : undefined,
+          );
+        } else {
+          // Completed files are real, useful work. Keep them and make their
+          // partial result set discoverable instead of silently stranding it.
+          if (rows.length) {
+            addDataset({
+              id: nextDatasetId(),
+              name: `${t.name} summary (${rows.length}/${files.length}, cancelled)`,
+              data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows),
+            });
+          }
+          toast(`batch cancelled — kept ${rows.length} completed file${rows.length === 1 ? "" : "s"}`, "info");
+        }
       } finally {
         setPipelineRunning(false);
         setBatch(null);

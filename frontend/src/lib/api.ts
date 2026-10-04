@@ -159,8 +159,8 @@ export interface FitRequest {
 }
 
 /** Bounded nonlinear least-squares fit of a named model. */
-export function fitModel(req: FitRequest): Promise<CalcResult> {
-  return postJSON("/api/fitting/fit", req);
+export function fitModel(req: FitRequest, signal?: AbortSignal): Promise<CalcResult> {
+  return postJSON("/api/fitting/fit", req, signal);
 }
 
 // ── Export (file downloads) ─────────────────────────────────────────────────

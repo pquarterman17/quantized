@@ -59,7 +59,7 @@ Goal: make reproducible transformations understandable and editable as a workflo
 - [x] Explain broken inputs, missing datasets, changed columns, and incompatible units at the affected step.
 - [x] Support saved pipeline templates with explicit compatibility checks and no automatic overwrite of customized plots or data.
 - [x] Connect pipeline outputs to the Workflow view, Recipe Library, and report/figure provenance.
-- [ ] Add deterministic replay, serialization, migration, cancellation, and large-data tests.
+- [x] Add deterministic replay, serialization, migration, cancellation, and large-data tests.
 
 Progress — 2026-10-03, Pipeline Studio 2.0 pass:
 
@@ -70,7 +70,9 @@ Progress — 2026-10-03, Pipeline Studio 2.0 pass:
 - The bounded result evaluation checks derived-expression units, uncertainty bindings, saved-fit references, and transform warnings against the proposed order; correction/reset preflight rejects source-owned derived worksheets. The ordinary overview stays cheap and the scientific preview code loads only after a risky edit is requested, preserving the eager bundle ratchet.
 - Saved transformation recipes already carry revision/description/input expectations, show per-dataset bindings and compatibility before Apply, require explicit unit-mismatch acknowledgment, fail without partial mutation, produce new derived outputs with provenance, and use one undo step. They do not overwrite customized plots or the original worksheet.
 - Pipeline-output lineage is now visible from Workflow, Recipe Library, editable figures, and reports. Recipe Library distinguishes the exact cited revision from a newer same-name recipe or a missing recipe. Reports take a bounded, validated provenance snapshot on creation and later source-adding edits; live and frozen figures expose lineage through their bound worksheet or detached snapshot without duplicating a second mutable authority.
-- Remaining work is deterministic serialization/migration/cancellation/large-data coverage. Numeric preview intentionally does not execute fit or display-only side effects and reports multi-output or metadata-changing steps as partial.
+- Template files and recipe-definition comparisons now use the same recursive canonical JSON ordering, preserving semantic array order while eliminating false differences from object insertion order. Original version-1 templates with absent recipe fields still migrate with safe defaults; array-valued step parameters are refused rather than coerced.
+- File-batch replay is cooperatively cancellable through the shared Status Bar. Uploads and fits receive the abort signal; checks between other awaited steps stop before the next step. Completed files remain with an explicitly cancelled partial summary, while the in-flight input and every derived output are removed from live state and scrubbed from undo/redo so they cannot reappear later.
+- The hardening matrix now pins serialized-recipe replay on equivalent inputs, canonical nested parameters, old-shape migration, cancellation before later steps, transformed partial-output cleanup, completed-work preservation, and an untruncated 50,000-row execution. Numeric structural preview intentionally remains bounded and does not execute fit or display-only side effects; multi-output or metadata-changing steps remain labelled partial there.
 
 Acceptance: a user can understand and safely modify how a derived dataset was produced, rerun it deterministically, and recover from changed inputs without touching the original raw data.
 

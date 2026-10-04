@@ -14,6 +14,7 @@
 // stays 1 because no existing field changed meaning.
 
 import { makeStep, STEP_KINDS, type PipelineStep, type StepKind } from "./pipeline";
+import { canonicalJson } from "./canonicalJson";
 import { sanitizeExpectations, type RecipeExpectations } from "./recipeExpect";
 import { warnStorageRefused } from "./storageWarning";
 import { TEMPLATES_KEY } from "./templateKey";
@@ -69,7 +70,7 @@ function recipeFieldsOf(o: Record<string, unknown>): RecipeFields {
 
 /** Pretty, key-stable JSON so templates diff cleanly in git (#2 acceptance). */
 export function serializeTemplate(t: AnalysisTemplate): string {
-  return JSON.stringify(t, null, 2) + "\n";
+  return canonicalJson(t, 2) + "\n";
 }
 
 function isStep(v: unknown): v is PipelineStep {
@@ -80,7 +81,8 @@ function isStep(v: unknown): v is PipelineStep {
     typeof o.code === "string" &&
     STEP_KINDS.includes(String(o.kind)) &&
     typeof o.params === "object" &&
-    o.params !== null
+    o.params !== null &&
+    !Array.isArray(o.params)
   );
 }
 
@@ -105,7 +107,7 @@ export function parseTemplate(text: string): AnalysisTemplate {
     : [];
   return {
     version: 1,
-    name: o.name,
+    name: o.name.trim(),
     steps: (o.steps as PipelineStep[]).map((s) => ({
       ...makeStep(s.kind as StepKind, s.label, s.code, { ...s.params }),
       enabled: s.enabled !== false,

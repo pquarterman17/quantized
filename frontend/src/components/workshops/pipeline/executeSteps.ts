@@ -49,6 +49,19 @@ export interface ExecuteResult {
   lastOutputs: string[];
 }
 
+/** Cancellation carries the exact derived datasets created before the abort,
+ * so a batch can remove its own partial work without diffing the whole store
+ * (which could catch an unrelated concurrent import). */
+export class PipelineCancelledError extends Error {
+  readonly created: string[];
+
+  constructor(created: readonly string[]) {
+    super("pipeline cancelled");
+    this.name = "AbortError";
+    this.created = [...created];
+  }
+}
+
 /** Run `steps` against dataset `targetId`. A failing step logs `failed` and
  *  the run continues (failure isolation); disabled / ui / import steps are
  *  skipped with a note. `onProgress` fires after every step for live UIs. */
@@ -56,6 +69,7 @@ export async function executeSteps(
   steps: readonly PipelineStep[],
   targetId: string,
   onProgress?: (log: Record<string, StepLogEntry>) => void,
+  signal?: AbortSignal,
 ): Promise<ExecuteResult> {
   const log: Record<string, StepLogEntry> = {};
   const fits: CalcResult[] = [];
@@ -63,6 +77,9 @@ export async function executeSteps(
   const created: string[] = [];
   let lastOutputs: string[] = [];
   const store = () => useApp.getState();
+  const throwIfCancelled = (): void => {
+    if (signal?.aborted) throw new PipelineCancelledError(created);
+  };
 
   // #38 deferred edge: a still-pending (preview-only) target must resolve to
   // full data before ANY step runs, or every step below would silently
@@ -72,8 +89,11 @@ export async function executeSteps(
   // were never activated/rendered. Abort the whole run (no partial output)
   // rather than let some steps execute against wrong data.
   try {
+    throwIfCancelled();
     await store().resolveDataset(targetId);
+    throwIfCancelled();
   } catch (e) {
+    if (signal?.aborted) throw new PipelineCancelledError(created);
     const note = `couldn't load full data — ${e instanceof Error ? e.message : "error"}`;
     for (const step of steps) log[step.id] = { status: "failed", note };
     onProgress?.({ ...log });
@@ -93,6 +113,7 @@ export async function executeSteps(
   // so a later step's reference to an earlier step's output follows the replay.
   const produced = new Map<string, string | null>();
   for (const step of steps) {
+    throwIfCancelled();
     if (!step.enabled || blockedBy) {
       if (step.kind === "transform") {
         (await import("../../../lib/transformReplay")).markNotReproduced(produced, step.params);
@@ -120,6 +141,7 @@ export async function executeSteps(
               propagate: step.params.propagate === true,
               allowUnitMismatch: step.params.allowUnitMismatch === true,
             });
+            throwIfCancelled();
             if (!r.ok) throw new Error(r.error);
             log[step.id] = { status: "ok" };
             break;
@@ -141,6 +163,7 @@ export async function executeSteps(
           // applyCorrections reports failure by returning false with the
           // reason on the status line — never log that as "ok".
           if (!(await store().applyCorrections(target, params, bg))) throw new Error(store().status);
+          throwIfCancelled();
           log[step.id] = { status: "ok" };
           break;
         }
@@ -187,7 +210,9 @@ export async function executeSteps(
           if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
           const finiteDy = dy ? pairs.keep.map((i) => dy![i]!) : undefined;
           const gapNote = pairs.complete ? "" : ` (${pairs.n - pairs.keep.length} gap rows excluded)`;
-          const r = await fitModel({ model: spec.model, x: pairs.x, y: pairs.y, ...(finiteDy ? { dy: finiteDy } : {}) });
+          const request = { model: spec.model, x: pairs.x, y: pairs.y, ...(finiteDy ? { dy: finiteDy } : {}) };
+          const r = signal ? await fitModel(request, signal) : await fitModel(request);
+          throwIfCancelled();
           fits.push(r);
           fitTargets.push(target);
           const r2 = typeof r.R2 === "number" ? ` R²=${r.R2.toFixed(4)}` : "";
@@ -211,6 +236,7 @@ export async function executeSteps(
           // creates nothing new; `target` itself (unchanged by this step)
           // is still the run's current output.
           lastOutputs = out.outputs.length ? out.outputs.map((o) => o.id) : [target];
+          throwIfCancelled();
           const n = out.warnings.length;
           log[step.id] = {
             // Finding #4: a metaclean replay whose rules were all refused
@@ -228,6 +254,7 @@ export async function executeSteps(
           };
       }
     } catch (e) {
+      if (signal?.aborted) throw new PipelineCancelledError(created);
       log[step.id] = {
         status: "failed",
         note: e instanceof Error ? e.message : "error",

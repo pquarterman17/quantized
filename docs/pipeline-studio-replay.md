@@ -85,3 +85,30 @@ referenced transformed worksheet into `report.meta` when they are created or
 edited, so a report does not silently change its claimed origin after a source
 worksheet changes or is removed. Older reports can display lineage from a still-
 loaded referenced worksheet without mutating the saved report.
+
+## Persistence, replay, and cancellation hardening
+
+Template JSON is canonical: object keys, including nested step parameters,
+are sorted recursively while array order remains significant. Recipe equality
+uses the same canonical form, so two scientifically identical parameter maps
+do not become duplicate project recipes merely because their keys were
+inserted in another order. The parser accepts the original version-1 shape
+with absent recipe fields and `enabled`, remints volatile step ids, trims the
+name, and refuses array-valued `params` instead of interpreting their numeric
+indices as parameter names.
+
+File batches are cancellable from the shared Status Bar operation. Cancellation
+is cooperative between steps and is forwarded to an in-flight upload or fit.
+Already completed files and their reports remain; the current file, every
+derived worksheet it created, and every undo/redo reference to those partial
+worksheets are removed. When at least one file completed, Quantized creates an
+explicitly labelled partial summary such as `Recipe summary (3/10, cancelled)`.
+Cancellation before the first completion creates no summary. Operations that
+do not expose backend cancellation finish their current await and then stop
+before the next step; their current file is still rolled back.
+
+Regression coverage includes canonical serialization and definition matching,
+version-1 migration defaults, equivalent-input deterministic replay,
+cancellation before a later step, exact live/history cleanup of a transformed
+in-flight file, preservation of completed batch work, and a 50,000-row replay
+that proves execution is not bounded by the structural-preview sample size.
