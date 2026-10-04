@@ -94,6 +94,20 @@ describe("buildOriginMigrationProjects", () => {
     }]);
   });
 
+  it("does not enable Open from diagnostic source resolution alone", () => {
+    const [project] = buildOriginMigrationProjects(
+      [fidelity()],
+      [entry("unassigned", null)],
+      [dataset("d1", "Book1")],
+    );
+
+    expect(project.graphs[0]).toMatchObject({
+      canOpen: false,
+      state: "needs_review",
+      detail: "Source columns were found, but this graph has no confirmed workbook assignment.",
+    });
+  });
+
   it("distinguishes a heuristic graph from an empty graph record", () => {
     const [project] = buildOriginMigrationProjects(
       [fidelity()],
@@ -130,6 +144,20 @@ describe("buildOriginMigrationProjects", () => {
     const figures = [
       entry("layer-1", null, figure({ layer: 1 })),
       entry("layer-2", "d1", figure({ layer: 2 })),
+    ];
+    const [project] = buildOriginMigrationProjects([fidelity()], figures, [dataset("d1", "Book1")]);
+
+    expect(project.graphs[0]).toMatchObject({ layers: 2, canOpen: true });
+    expect(project.graphs[0].entry.id).toBe("layer-2");
+  });
+
+  it("uses the explicitly mapped sibling when only a later layer needed recovery", () => {
+    const figures = [
+      entry("layer-1", null, figure({ layer: 1, curves: [{ book: "Book1", x: "", y: "B" }] })),
+      {
+        ...entry("layer-2", null, figure({ layer: 2, curves: [{ book: "Missing", x: "", y: "B" }] })),
+        sourceOverrides: { Missing: "d1" },
+      },
     ];
     const [project] = buildOriginMigrationProjects([fidelity()], figures, [dataset("d1", "Book1")]);
 

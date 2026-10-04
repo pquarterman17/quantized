@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { OriginFidelityEntry } from "../lib/originFidelity";
-import { pruneOriginFidelityRefs } from "./originImport";
+import { pruneOriginFidelityRefs, pruneOriginFigureRefs } from "./originImport";
 
 const entry: OriginFidelityEntry = {
   id: "f1",
@@ -28,5 +28,18 @@ describe("Origin fidelity dataset-reference pruning", () => {
 
   it("drops the project artifact after its last imported dataset is removed", () => {
     expect(pruneOriginFidelityRefs([entry], new Set(["d1", "d2"]))).toEqual([]);
+  });
+});
+
+describe("Origin source-mapping pruning", () => {
+  it("drops only mappings to removed datasets and preserves the original object when nothing changes", () => {
+    const figure = {
+      id: "fig", stem: "Moke", datasetId: "d1", siblingIds: ["d1", "d2"],
+      figure: {} as never, sourceOverrides: { Missing: "d2" },
+    };
+    expect(pruneOriginFigureRefs([figure], new Set())[0]).toBe(figure);
+    expect(pruneOriginFigureRefs([figure], new Set(["d2"]))[0]).toMatchObject({
+      datasetId: "d1", sourceOverrides: undefined,
+    });
   });
 });

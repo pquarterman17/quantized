@@ -152,6 +152,44 @@ describe("OriginMigrationCockpit", () => {
     expect(useApp.getState().stageTab).toBe("plot");
   });
 
+  it("previews and atomically applies one source choice across repeated graph layers", async () => {
+    const ds = dataset();
+    const missing = (id: string, name: string) => ({
+      id, stem: "sample", siblingIds: ["d1"], datasetId: null,
+      figure: figure(name, "Missing"),
+    });
+    useApp.setState({
+      datasets: [ds],
+      originFidelity: [{
+        id: "f1", stem: "sample", siblingIds: ["d1"],
+        manifest: { version: 1, container: "opj", status: "best_effort", graph_records_total: 2, graph_records_actionable: 2, graph_records_filtered: 0, omissions: [], filtered_figures: [] },
+      }],
+      originFigures: [missing("g1", "Graph 1"), missing("g2", "Graph 2")],
+      history: [], future: [],
+    });
+    render(<OriginMigrationCockpit initialFidelityId="f1" onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Missing · book not imported (2 graphs)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Preview bulk resolution…" }));
+
+    const previewButton = await screen.findByRole("button", { name: "Preview Book1" });
+    fireEvent.click(previewButton);
+    expect(screen.getByRole("region", { name: "Bulk resolution preview" })).toHaveTextContent("2 saved bindings across 2 layers");
+    fireEvent.click(screen.getByRole("button", { name: "Apply to 2 layers" }));
+
+    await waitFor(() => expect(useApp.getState().originFigures.every(
+      (entry) => entry.sourceOverrides?.Missing === "d1",
+    )).toBe(true));
+    expect(screen.getByRole("region", { name: "Saved Origin source mappings" })).toHaveTextContent("Missing → Book1 · 2 graphs");
+    expect(useApp.getState().history.at(-1)?.label).toBe("resolve Origin source");
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear mapping for Missing" }));
+    await waitFor(() => expect(useApp.getState().originFigures.every(
+      (entry) => entry.sourceOverrides == null,
+    )).toBe(true));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Missing · book not imported (2 graphs)" })).toBeInTheDocument());
+    expect(screen.getAllByRole("button", { name: "Open editable graph" }).every((button) => button.hasAttribute("disabled"))).toBe(true);
+  });
+
   it("clears review-later marks when the Origin project collection is replaced", async () => {
     const manifest = { version: 1 as const, container: "opj" as const, status: "best_effort" as const, graph_records_total: 1, graph_records_actionable: 1, graph_records_filtered: 0, omissions: [], filtered_figures: [] };
     useApp.setState({

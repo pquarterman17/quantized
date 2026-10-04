@@ -27,7 +27,20 @@ export const pruneOriginFigureRefs = (
   figures: OriginFigureEntry[],
   removedIds: ReadonlySet<string>,
 ): OriginFigureEntry[] =>
-  figures.map((f) => (f.datasetId && removedIds.has(f.datasetId) ? { ...f, datasetId: null } : f));
+  figures.map((f) => {
+    const datasetId = f.datasetId && removedIds.has(f.datasetId) ? null : f.datasetId;
+    const mappings = Object.entries(f.sourceOverrides ?? {}).filter(
+      ([, targetId]) => !removedIds.has(targetId),
+    );
+    if (datasetId === f.datasetId && mappings.length === Object.keys(f.sourceOverrides ?? {}).length) {
+      return f;
+    }
+    return {
+      ...f,
+      datasetId,
+      sourceOverrides: mappings.length > 0 ? Object.fromEntries(mappings) : undefined,
+    };
+  });
 
 export function pruneOriginFidelityRefs(
   entries: OriginFidelityEntry[],

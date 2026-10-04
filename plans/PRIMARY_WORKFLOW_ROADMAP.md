@@ -30,13 +30,20 @@ Goal: replace the current “large imported tree plus unresolved graph controls�
 - [x] Define a project-level migration summary from the existing Origin fidelity manifest, book families, graph records, saved previews, omissions, and lazy-book inventory.
 - [x] Present a compact first screen: recovered worksheets/graphs, items needing review, unsupported items, and safe recommended next actions.
 - [x] Group unresolved graphs by cause and source workbook rather than showing repeated flat “Choose source…” rows.
-- [ ] Add bulk resolution where one source choice can safely resolve repeated graph/layer references; always preview scope before applying.
+- [x] Add bulk resolution where one source choice can safely resolve repeated graph/layer references; always preview scope before applying.
 - [x] Distinguish an empty graph from a failed graph and explain the reason inline.
 - [x] Provide direct routes to the relevant workbook, worksheet, reconstructed graph, saved Origin preview, or fidelity details.
 - [x] Preserve lazy-loading guarantees: inventory is cheap; opening or converting a book resolves full data through the canonical resolver.
 - [x] Add “review later” state without discarding unresolved records.
 - [ ] Add real-corpus characterization tests for small, large, partially decoded, and offline/missing-source projects.
 - [ ] Run the cockpit against the local Origin test-data corpus and at least one representative user project.
+
+Progress — 2026-10-03, bulk Origin source recovery:
+
+- The cockpit can now map one missing saved workbook name across every affected graph layer in the same import. It shows the complete layer/binding scope and blocks Apply unless every binding can be reproduced from the chosen imported workbook.
+- The saved choice is provenance, not a rewrite of decoded Origin metadata. It is undoable, persists in `.dwk`, is pruned when its target worksheet is deleted, and remains visible with Review/change and Clear actions.
+- Apply revalidates the live project scope and schema so deleted layers, newly added matching layers, changed columns, stale previews, non-Origin targets, and partial matches fail closed without a history entry or partial mutation.
+- The local real-data route imported every `.opj`/`.opju` in the sibling corpus successfully, including the 127 MB PNR project, and the existing XMCD partial-decode fidelity characterization passed. The broader cockpit-specific small/large/partial/offline matrix and hands-on representative-project sign-off remain open above.
 
 Acceptance: after opening an Origin project, the user can tell what imported successfully, what needs a decision, what cannot yet be reproduced, and how to reach the important work without parsing a crowded tree.
 

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import type { OriginFigureEntry } from "./originFigures";
-import { resolveOriginFigureSources, resolveOriginSourceManually } from "./originSources";
+import {
+  originFigureWithSourceMappings,
+  previewOriginSourceMapping,
+  resolveOriginFigureSources,
+  resolveOriginSourceManually,
+} from "./originSources";
 import type { Dataset, OriginFigure } from "./types";
 
 const dataset = (id: string, book: string): Dataset => ({
@@ -78,5 +83,80 @@ describe("resolveOriginFigureSources", () => {
     const e = entry(figure([{ book: "MissingBook", x: "A", y: "B" }]), ["d1"]);
     const chosen = resolveOriginSourceManually(e, [e], dataset("d1", "Book1"));
     expect(chosen).toMatchObject({ datasetId: "d1", xColumns: [-1], yColumns: [0] });
+  });
+
+  it("previews the complete repeated-book scope and fails closed on one incompatible binding", () => {
+    const good = entry(figure([{ book: "Missing", x: "A", y: "B" }]), ["d1"]);
+    const bad = { ...entry(figure([{ book: "Missing", x: "A", y: "Z" }]), ["d1"]), id: "f2" };
+    const preview = previewOriginSourceMapping([good, bad], dataset("d1", "Book1"), "Missing");
+    expect(preview).toMatchObject({
+      entryIds: ["f1", "f2"], bindingCount: 2, canApply: false,
+      incompatible: [{ book: "Missing", x: "A", y: "Z", reason: "y_column_not_decoded" }],
+    });
+  });
+
+  it("does not accept an arbitrary non-Origin dataset as a recovery source", () => {
+    const e = entry(figure([{ book: "Missing", x: "A", y: "B" }]), ["d1"]);
+    const ordinary = dataset("d1", "Book1");
+    delete ordinary.data.metadata!.origin_book;
+
+    expect(previewOriginSourceMapping([e], ordinary, "Missing")).toMatchObject({
+      canApply: false,
+      incompatible: [{ book: "Missing", x: "A", y: "B", reason: "book_not_imported" }],
+    });
+  });
+
+  it("requires an explicit choice for a blank saved-book name instead of matching absent metadata", () => {
+    const e = entry(figure([{ book: "", x: "A", y: "B" }]), ["d1"]);
+    const ordinary = dataset("d1", "Book1");
+    delete ordinary.data.metadata!.origin_book;
+
+    expect(resolveOriginFigureSources(e, [e], [ordinary]).unresolved).toEqual([
+      { book: "", x: "A", y: "B", reason: "book_not_imported" },
+    ]);
+  });
+
+  it("resolves only through an explicit saved mapping and projects it without rewriting the stored figure", () => {
+    const raw = entry(figure([{ book: "Missing", x: "A", y: "B" }]), ["d1"]);
+    const mapped = { ...raw, sourceOverrides: { Missing: "d1" } };
+    const ds = dataset("d1", "Book1");
+    expect(resolveOriginFigureSources(raw, [raw], [ds]).unresolved[0].reason).toBe("book_not_imported");
+    expect(resolveOriginFigureSources(mapped, [mapped], [ds]).unresolved).toEqual([]);
+    expect(originFigureWithSourceMappings(mapped, [ds]).figure.curves?.[0].book).toBe("Book1");
+    expect(mapped.figure.curves?.[0].book).toBe("Missing");
+  });
+
+  it("fails closed when a persisted mapping points at a dataset that is no longer an Origin book", () => {
+    const ds = dataset("d1", "Book1");
+    delete ds.data.metadata!.origin_book;
+    const mapped = {
+      ...entry(figure([{ book: "Missing", x: "A", y: "B" }]), ["d1"]),
+      datasetId: null,
+      sourceOverrides: { Missing: "d1" },
+    };
+
+    expect(resolveOriginFigureSources(mapped, [mapped], [ds])).toMatchObject({
+      sources: [],
+      unresolved: [{ book: "Missing", reason: "book_not_imported" }],
+    });
+    expect(originFigureWithSourceMappings(mapped, [ds]).datasetId).toBeNull();
+  });
+
+  it("fails closed when a persisted mapping no longer matches the worksheet columns", () => {
+    const ds = dataset("d1", "Book1");
+    const mapped = {
+      ...entry(figure([{ book: "Missing", x: "A", y: "NotThere" }]), ["d1"]),
+      datasetId: null,
+      sourceOverrides: { Missing: "d1" },
+    };
+
+    expect(resolveOriginFigureSources(mapped, [mapped], [ds])).toMatchObject({
+      sources: [],
+      unresolved: [{ book: "Missing", reason: "y_column_not_decoded" }],
+    });
+    expect(originFigureWithSourceMappings(mapped, [ds])).toMatchObject({
+      datasetId: null,
+      figure: { curves: [{ book: "Missing", y: "NotThere" }] },
+    });
   });
 });

@@ -9,6 +9,7 @@ export type OriginMigrationState = "needs_review" | "approximate" | "recovered" 
 export interface OriginMigrationGraph {
   id: string;
   entry: OriginFigureEntry;
+  entryIds: string[];
   label: string;
   layers: number;
   state: OriginMigrationState;
@@ -28,6 +29,7 @@ export interface OriginMigrationProject {
   recovered: number;
   referenceOnly: number;
   issueGroups: OriginMigrationIssueGroup[];
+  sourceMappings: OriginMigrationSourceMapping[];
 }
 
 export interface OriginMigrationIssueGroup {
@@ -36,6 +38,14 @@ export interface OriginMigrationIssueGroup {
   reason: UnresolvedOriginBinding["reason"];
   graphIds: string[];
   bindingCount: number;
+}
+
+export interface OriginMigrationSourceMapping {
+  id: string;
+  book: string;
+  datasetId: string;
+  entryIds: string[];
+  graphIds: string[];
 }
 
 function sameImport(entry: OriginFigureEntry, fidelity: OriginFidelityEntry): boolean {
@@ -60,7 +70,14 @@ function graphState(
   const decodedCurves = family.reduce((count, item) => count + (item.figure.curves?.length ?? 0), 0);
   const declaredCurves = family.reduce((count, item) => count + Math.max(0, item.figure.n_curves), 0);
   const fidelityStates = family.map((item) => item.figure.fidelity?.status).filter(Boolean);
-  const hasTarget = family.some((item) => item.datasetId != null);
+  const hasDirectTarget = family.some((item) => item.datasetId != null);
+  const hasExplicitMapping = family.some(
+    (item) => Object.keys(item.sourceOverrides ?? {}).length > 0,
+  );
+  // `resolution.sources` alone is diagnostic: an old entry can have a book
+  // whose columns resolve even though no executable target was ever assigned.
+  // Only a decoded target or a validated explicit mapping may enable Open.
+  const hasTarget = hasDirectTarget || (hasExplicitMapping && resolution.sources.length > 0);
   const canOpen = hasTarget && (decodedCurves === 0 || resolution.sources.length > 0);
   const sourceDatasetIds = resolution.sources.map((source) => source.datasetId);
 
@@ -87,6 +104,8 @@ function graphState(
       state: "needs_review",
       detail: unresolved.length > 0
         ? `${unresolved.length} saved source binding${unresolved.length === 1 ? "" : "s"} need attention.`
+        : !hasTarget && resolution.sources.length > 0
+        ? "Source columns were found, but this graph has no confirmed workbook assignment."
         : "The saved graph could not be matched to an imported workbook.",
       sourceDatasetIds,
       unresolved,
@@ -137,13 +156,17 @@ export function buildOriginMigrationProjects(
     const graphs = [...grouped.entries()].map(([id, family]) => {
       const sorted = [...family].sort((a, b) => (a.figure.layer ?? 1) - (b.figure.layer ?? 1));
       const representative = sorted[0];
-      // Applying a family through an unresolved first layer is a silent no-op
-      // (`applyOriginFigure` requires entry.datasetId). Prefer a resolved layer
-      // for actions while keeping the page/layer-1 label for display.
-      const actionEntry = sorted.find((item) => item.datasetId != null) ?? representative;
+      // Applying a family through an unresolved first layer is a silent no-op.
+      // Prefer either a directly resolved layer or one carrying the explicit
+      // source choice that apply can project, while keeping layer 1 for the
+      // page label. A bulk choice may legitimately affect only a later layer.
+      const actionEntry = sorted.find((item) => item.datasetId != null)
+        ?? sorted.find((item) => Object.keys(item.sourceOverrides ?? {}).length > 0)
+        ?? representative;
       return {
         id,
         entry: actionEntry,
+        entryIds: sorted.map((item) => item.id),
         label: figureLabel(representative).replace(/ · layer \d+$/, ""),
         layers: sorted.length,
         previewEntry: sorted.find((item) => isOriginPreviewUsable(item.figure.saved_preview)),
@@ -167,6 +190,19 @@ export function buildOriginMigrationProjects(
         issueMap.set(id, group);
       }
     }
+    const mappingMap = new Map<string, OriginMigrationSourceMapping>();
+    for (const entry of importFigures) {
+      for (const [book, datasetId] of Object.entries(entry.sourceOverrides ?? {})) {
+        const id = `${book}\u0000${datasetId}`;
+        const graphId = graphs.find((graph) => graph.entryIds.includes(entry.id))?.id;
+        const mapping = mappingMap.get(id) ?? {
+          id, book, datasetId, entryIds: [], graphIds: [],
+        };
+        if (!mapping.entryIds.includes(entry.id)) mapping.entryIds.push(entry.id);
+        if (graphId && !mapping.graphIds.includes(graphId)) mapping.graphIds.push(graphId);
+        mappingMap.set(id, mapping);
+      }
+    }
     return {
       fidelity,
       graphs,
@@ -179,6 +215,9 @@ export function buildOriginMigrationProjects(
       referenceOnly: graphs.filter((graph) => graph.state === "reference_only").length,
       issueGroups: [...issueMap.values()].sort((a, b) =>
         b.graphIds.length - a.graphIds.length || a.book.localeCompare(b.book, undefined, { numeric: true }),
+      ),
+      sourceMappings: [...mappingMap.values()].sort((a, b) =>
+        a.book.localeCompare(b.book, undefined, { numeric: true }),
       ),
     };
   });

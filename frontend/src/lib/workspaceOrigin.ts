@@ -46,12 +46,20 @@ export function parseOriginFigures(v: unknown, dsIds: Set<string>): OriginFigure
     const siblingIds = Array.isArray(o.siblingIds)
       ? o.siblingIds.filter((x): x is string => typeof x === "string" && dsIds.has(x))
       : [];
+    const rawOverrides = typeof o.sourceOverrides === "object" && o.sourceOverrides !== null
+      ? o.sourceOverrides as Record<string, unknown>
+      : {};
+    const sourceOverrides = Object.fromEntries(Object.entries(rawOverrides).filter(
+      ([, datasetId]) => typeof datasetId === "string"
+        && dsIds.has(datasetId) && siblingIds.includes(datasetId),
+    )) as Record<string, string>;
     out.push({
       id: o.id,
       stem: o.stem,
       figure: o.figure as OriginFigureEntry["figure"],
       datasetId,
       siblingIds,
+      ...(Object.keys(sourceOverrides).length > 0 ? { sourceOverrides } : {}),
     });
   }
   return out;

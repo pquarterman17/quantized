@@ -568,6 +568,13 @@ describe("workspace originFigures persistence", () => {
     expect(loaded.originFigures[0].figure).toEqual(originFig());
   });
 
+  it("round-trips explicit source mappings and drops targets outside the surviving import", () => {
+    const datasets = [makeDataset("a", "first"), makeDataset("b", "second")];
+    const entry = figEntry({ sourceOverrides: { Missing: "b", "": "a", Gone: "gone" } });
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, originFigures: [entry] }));
+    expect(loaded.originFigures[0].sourceOverrides).toEqual({ Missing: "b", "": "a" });
+  });
+
   it("preserves original saved-preview bytes and attribution metadata", () => {
     const saved_preview = {
       format: "png" as const,
