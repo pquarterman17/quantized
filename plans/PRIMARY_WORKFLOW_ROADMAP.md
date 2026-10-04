@@ -55,9 +55,9 @@ Goal: make reproducible transformations understandable and editable as a workflo
 - [x] Add an overview that shows inputs, ordered steps, outputs, stale/broken state, and later-step exposure.
 - [x] Make each step inspectable and editable with a human-readable summary plus exact parameters.
 - [x] Add safe enable/disable, reorder, duplicate, and remove operations with dependency validation and undo.
-- [ ] Preview the result and warnings before committing a structural pipeline edit.
-- [ ] Explain broken inputs, missing datasets, changed columns, and incompatible units at the affected step.
-- [ ] Support saved pipeline templates with explicit compatibility checks and no automatic overwrite of customized plots or data.
+- [x] Preview the result and warnings before committing a structural pipeline edit.
+- [x] Explain broken inputs, missing datasets, changed columns, and incompatible units at the affected step.
+- [x] Support saved pipeline templates with explicit compatibility checks and no automatic overwrite of customized plots or data.
 - [ ] Connect pipeline outputs to the Workflow view, Recipe Library, and report/figure provenance.
 - [ ] Add deterministic replay, serialization, migration, cancellation, and large-data tests.
 
@@ -66,7 +66,10 @@ Progress — 2026-10-03, Pipeline Studio 2.0 pass:
 - The panel now distinguishes runnable, input/script-only, disabled, invalid, and downstream-blocked steps before a run. It shows the active input shape, ordered human-readable summaries, exact editable parameters, the output and created worksheets from the last run, and per-step/run outcomes.
 - Structural enable/disable, reorder, duplicate, remove, add-expression, parameter edit, and template-load operations are session-undoable. Operations with later enabled consumers show an explicit impact confirmation first; duplicate parameters are deep-copied and recorded transform output ids are removed.
 - Preflight fails closed on absent inputs, missing referenced worksheets/backgrounds, invalid expressions/models, malformed transform settings, and stale column indices. It deliberately defers schema checks after a shape-changing transform rather than comparing them with the wrong original schema.
-- Remaining for the two partial boxes above: compute a bounded data/result preview before a structural edit (the current preview reports later-step exposure, not a true dataflow graph or numeric output), and add unit-compatibility diagnostics where they can be determined without executing an expensive transform. Cancellation and representative large-data replay coverage also remain open.
+- Risky structural edits now compute the exact proposed list on bounded, non-mutating worksheet clones before Confirm becomes available. The confirmation shows result dimensions and sample values, names warnings by step, refuses static incompatibilities, treats lazy worksheet thumbnails as unavailable rather than full data, and labels unsupported multi-output/metadata transitions as partial. Recipe/input changes invalidate the pending async result.
+- The bounded result evaluation checks derived-expression units, uncertainty bindings, saved-fit references, and transform warnings against the proposed order; correction/reset preflight rejects source-owned derived worksheets. The ordinary overview stays cheap and the scientific preview code loads only after a risky edit is requested, preserving the eager bundle ratchet.
+- Saved transformation recipes already carry revision/description/input expectations, show per-dataset bindings and compatibility before Apply, require explicit unit-mismatch acknowledgment, fail without partial mutation, produce new derived outputs with provenance, and use one undo step. They do not overwrite customized plots or the original worksheet.
+- Remaining work is output integration/provenance across Workflow, Recipe Library, figures/reports, followed by deterministic serialization/migration/cancellation/large-data coverage. Numeric preview intentionally does not execute fit or display-only side effects and reports multi-output or metadata-changing steps as partial.
 
 Acceptance: a user can understand and safely modify how a derived dataset was produced, rerun it deterministically, and recover from changed inputs without touching the original raw data.
 

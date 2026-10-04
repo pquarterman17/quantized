@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { makeStep } from "./pipelineStep";
 import { analyzePipeline, pipelineEditImpact } from "./pipelineStudio";
+import { pipelineStepsAfterEdit } from "./pipelineStructuralEdit";
 import type { Dataset } from "./types";
 
 const dataset = (id = "d1"): Dataset => ({
@@ -79,13 +80,15 @@ describe("analyzePipeline", () => {
   });
 
   it("accounts for the value and sigma columns from propagated expressions", () => {
+    const d = dataset();
+    d.errorRoles = [{ channel: 1, target: 0, axis: "y", side: "both" }];
     const propagated = makeStep("expression", "Ratio", "qz.add()", {
       name: "ratio", expr: "A / B", derived: true, propagate: true,
     });
     const usesSigma = makeStep("expression", "Normalized sigma", "qz.add()", {
       name: "sigma ratio", expr: "D / C",
     });
-    const review = analyzePipeline([propagated, usesSigma], dataset(), [dataset()]);
+    const review = analyzePipeline([propagated, usesSigma], d, [d]);
     expect(review.steps.map((step) => step.state)).toEqual(["ready", "ready"]);
     expect(review.canRun).toBe(true);
   });
@@ -100,6 +103,16 @@ describe("analyzePipeline", () => {
     const review = analyzePipeline([valueOnly, readsInventedSigma], dataset(), [dataset()]);
     expect(review.steps.map((step) => step.state)).toEqual(["ready", "invalid"]);
     expect(review.steps[1].issue).toContain('unknown variable "D"');
+  });
+
+  it("flags corrections and reset steps that the executor refuses on a derived worksheet", () => {
+    const d = { ...dataset(), derivedFrom: { datasetId: "raw", pipeline: "recipe" } };
+    const correction = makeStep("correction", "Correct", "qz.correct()", { params: {} });
+    const reset = makeStep("reset", "Reset", "qz.reset()", {});
+
+    const review = analyzePipeline([correction, reset], d, [d]);
+    expect(review.steps[0]).toMatchObject({ state: "invalid", issue: expect.stringContaining("freeze a copy") });
+    expect(review.steps[1]).toMatchObject({ state: "invalid", issue: expect.stringContaining("cannot be reset") });
   });
 
   it("explains the executor's fit fallbacks without blocking a recoverable run", () => {
@@ -129,5 +142,19 @@ describe("pipelineEditImpact", () => {
   it("does not interrupt a reversible final-step toggle with a confirmation", () => {
     const step = makeStep("fit", "Fit", "qz.fit()", { model: "Linear" });
     expect(pipelineEditImpact([step], step.id, "toggle")).toMatchObject({ requiresConfirmation: false });
+  });
+});
+
+describe("pipelineStepsAfterEdit", () => {
+  it("models the exact toggle, remove, and move transitions without mutating the source", () => {
+    const first = makeStep("expression", "First", "qz.add()", { name: "a", expr: "A" });
+    const second = makeStep("fit", "Second", "qz.fit()", { model: "Linear" });
+    const steps = [first, second];
+
+    expect(pipelineStepsAfterEdit(steps, first.id, "toggle").map((step) => step.enabled)).toEqual([false, true]);
+    expect(pipelineStepsAfterEdit(steps, first.id, "remove")).toEqual([second]);
+    expect(pipelineStepsAfterEdit(steps, first.id, "move_down")).toEqual([second, first]);
+    expect(pipelineStepsAfterEdit(steps, "missing", "remove")).toEqual(steps);
+    expect(steps).toEqual([first, second]);
   });
 });

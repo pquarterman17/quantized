@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import PipelinePanel from "./PipelinePanel";
@@ -6,10 +6,11 @@ import { makeStep } from "../../../lib/pipeline";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 
-const { fitMock } = vi.hoisted(() => ({ fitMock: vi.fn() }));
+const { correctionMock, fitMock } = vi.hoisted(() => ({ correctionMock: vi.fn(), fitMock: vi.fn() }));
 
 vi.mock("../../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api")>()),
+  applyCorrections: correctionMock,
   fitModel: fitMock,
 }));
 
@@ -27,6 +28,7 @@ const ds: Dataset = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  correctionMock.mockImplementation(async (request: { dataset: Dataset["data"] }) => structuredClone(request.dataset));
   useApp.setState({
     datasets: [ds],
     activeId: "d1",
@@ -129,7 +131,7 @@ describe("PipelinePanel", () => {
     expect(useApp.getState().macroSteps.map((s) => s.label)).toEqual(["two"]);
   });
 
-  it("previews a structural edit, supports cancel, and restores the confirmed edit with undo", () => {
+  it("previews a structural edit, supports cancel, and restores the confirmed edit with undo", async () => {
     useApp.setState({
       macroSteps: [
         makeStep("transform", "Stack", "qz.stack()", { op: "stack", channels: [0] }),
@@ -141,16 +143,53 @@ describe("PipelinePanel", () => {
 
     fireEvent.click(screen.getAllByTitle("delete step")[0]);
     expect(screen.getByRole("group", { name: "Remove “Stack”?" })).toHaveTextContent("1 later enabled step");
+    expect(screen.getByRole("button", { name: "Previewing…" })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Confirm" })).toBeEnabled());
+    expect(screen.getByRole("region", { name: "Proposed pipeline result" })).toHaveTextContent("Preview ready");
     expect(useApp.getState().macroSteps).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("group", { name: "Remove “Stack”?" })).not.toBeInTheDocument();
+    await Promise.resolve();
+    expect(screen.queryByRole("group", { name: "Remove “Stack”?" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getAllByTitle("delete step")[0]);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Confirm" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
     expect(useApp.getState().macroSteps.map((step) => step.label)).toEqual(["Fit Linear"]);
     expect(useApp.getState().history).toHaveLength(1);
     useApp.getState().undo();
     expect(useApp.getState().macroSteps.map((step) => step.label)).toEqual(["Stack", "Fit Linear"]);
+  });
+
+  it("discards a late preview when the active worksheet changes", async () => {
+    let finish!: (value: Dataset["data"]) => void;
+    let started!: () => void;
+    const requestStarted = new Promise<void>((resolve) => { started = resolve; });
+    correctionMock.mockImplementation(() => new Promise((resolve) => {
+      finish = resolve;
+      started();
+    }));
+    useApp.setState({
+      datasets: [ds, { ...ds, id: "d2", name: "replacement" }],
+      macroSteps: [
+        makeStep("correction", "Correct", "qz.correct()", { params: { yOff: 1 } }),
+        makeStep("fit", "Fit Linear", 'qz.fit("Linear")', { model: "Linear" }),
+      ],
+    });
+    render(<PipelinePanel />);
+
+    fireEvent.click(screen.getAllByTitle("move down")[0]);
+    expect(screen.getByRole("button", { name: "Previewing…" })).toBeDisabled();
+    await act(async () => requestStarted);
+    act(() => useApp.setState({ activeId: "d2" }));
+    expect(screen.queryByRole("group", { name: "Reorder “Correct”?" })).not.toBeInTheDocument();
+
+    await act(async () => {
+      finish(structuredClone(ds.data));
+      await Promise.resolve();
+    });
+    expect(screen.queryByRole("group", { name: "Reorder “Correct”?" })).not.toBeInTheDocument();
+    expect(useApp.getState().macroSteps.map((step) => step.label)).toEqual(["Correct", "Fit Linear"]);
   });
 
   it("duplicates a step next to its source with independent params and one undo entry", () => {
