@@ -1,10 +1,18 @@
 import "@testing-library/jest-dom/vitest";
 
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { JSDOM } from "jsdom";
 import { afterEach } from "vitest";
 
 import { monospaceEstimate, setLabelMeasurer } from "../components/Stage/statLabelMetrics";
+
+// The full suite creates more than 1,100 isolated jsdom environments in
+// parallel. Under that scheduler load, a healthy lazy import or worker-backed
+// preview can exceed Testing Library's 1 s polling default even though the
+// same interaction finishes in milliseconds alone. Keep assertions strict,
+// but give async DOM queries the same contention allowance as Vitest's
+// existing 20 s per-test ceiling.
+configure({ asyncUtilTimeout: 5_000 });
 
 // node-canvas gives jsdom a REAL `measureText`, in whatever monospace font
 // this machine resolves — the Stat Stage's label metrics would then differ

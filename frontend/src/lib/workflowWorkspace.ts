@@ -52,6 +52,27 @@ export function toggleOriginReviewDeferred(key: string): void {
   listeners.forEach((listener) => listener());
 }
 
+/** Apply one session-only review decision to a group without notifying once
+ * per row. Large Origin projects commonly contain hundreds of graph windows;
+ * bulk review must remain one immediate UI update rather than a render storm. */
+export function setOriginReviewsDeferred(keys: readonly string[], deferred: boolean): void {
+  const next = new Set(deferredOriginReviews);
+  let changed = false;
+  for (const key of keys) {
+    if (deferred) {
+      if (!next.has(key)) {
+        next.add(key);
+        changed = true;
+      }
+    } else if (next.delete(key)) {
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  deferredOriginReviews = next;
+  listeners.forEach((listener) => listener());
+}
+
 export function clearOriginReviewDeferred(): void {
   if (deferredOriginReviews.size === 0) return;
   deferredOriginReviews = new Set();

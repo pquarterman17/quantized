@@ -11,6 +11,7 @@ import { runAction, useCommands } from "../store/commands";
 import { usePendingOps } from "../store/pendingOps";
 import { useProjectLock } from "../store/projectLock";
 import { useToasts } from "../store/toasts";
+import { untilState } from "../test/untilState";
 import { useProjectLockCommands } from "./projectLockCommands";
 
 function action(id: string) {
@@ -42,7 +43,9 @@ describe("project-lock commands: the body's chunk will not load", () => {
 
     runAction(action("take-over-editing"));
 
-    await vi.waitFor(() => expect(dangerToasts()).toEqual([expect.stringMatching(/^Take Over Editing failed: .+/)]));
+    await untilState(useToasts, () => {
+      expect(dangerToasts()).toEqual([expect.stringMatching(/^Take Over Editing failed: .+/)]);
+    });
     expect(takeOverEditing).not.toHaveBeenCalled();
     expect(usePendingOps.getState().ops).toEqual([]);
   });
@@ -54,7 +57,9 @@ describe("project-lock commands: the body's chunk will not load", () => {
 
     runAction(action("open-as-copy"));
 
-    await vi.waitFor(() => expect(dangerToasts()).toEqual([expect.stringMatching(/^Open as Copy failed: .+/)]));
+    await untilState(useToasts, () => {
+      expect(dangerToasts()).toEqual([expect.stringMatching(/^Open as Copy failed: .+/)]);
+    });
     expect(openAsCopy).not.toHaveBeenCalled();
   });
 });
