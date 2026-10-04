@@ -67,3 +67,21 @@ unavailable; the structural edit remains session-undoable.
 Structural edits are session-undoable. Duplicating a transform deep-copies its
 parameters but removes recorded output dataset ids so the copy cannot claim the
 original run's outputs.
+
+## Output lineage
+
+A saved transformation recipe stamps each final output with the recipe name and
+revision, original input, resolved column bindings, runnable-step count, and
+application time in `metadata.transform_recipe`. Quantized validates that
+metadata before displaying it; malformed or foreign metadata is not presented
+as a Pipeline Studio result.
+
+The active output's lineage is visible in Workflow and links to Recipe Library.
+Recipe Library distinguishes an exact saved revision from a newer same-name
+recipe, and says when the cited recipe is no longer saved. Editable-figure rows
+show the recipe behind their live bound worksheet; frozen figures read the same
+lineage from their detached data snapshot. Reports snapshot the lineage of each
+referenced transformed worksheet into `report.meta` when they are created or
+edited, so a report does not silently change its claimed origin after a source
+worksheet changes or is removed. Older reports can display lineage from a still-
+loaded referenced worksheet without mutating the saved report.

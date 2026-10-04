@@ -28,6 +28,7 @@ import { effectiveChannels } from "../../../lib/plotdata";
 import { selectedFitData } from "../../../lib/fitselection";
 import { analysisData } from "../../../lib/rowstate";
 import type { FitModel, FitOverlay } from "../../../lib/types";
+import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { trackJob } from "../../../store/pendingOps";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import {
@@ -92,7 +93,6 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
   const setFitOverlay = useApp((s) => s.setFitOverlay);
   const resolveDataset = useApp((s) => s.resolveDataset);
   const setActive = useApp((s) => s.setActive);
-  const addReport = useApp((s) => s.addReport);
   const [source, setSourceState] = useState<GlobalSource>("channels");
   const [picked, setPicked] = useState<string[] | null>(null);
   const [rows, setRows] = useState<FitParamRow[]>(() => rowsFromModel(model as FitModel | undefined));
@@ -250,7 +250,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
         caption: `${members.length} series; shared: ${sharedNames.join(", ") || "none"}; reduced χ² = ${fmtNum(fit.chiSqRed)}`,
         source_refs: refs,
       });
-      addReport(title, report, activeId);
+      addReportWithProvenance(title, report, activeId);
     } catch (e) {
       setError(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`);
     } finally {

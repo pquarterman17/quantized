@@ -59,6 +59,7 @@ import { extractOutputs, type AnalysisTemplate, type BatchRow } from "../../../l
 import { analyzePipeline } from "../../../lib/pipelineStudio";
 import { snapshotOf } from "../../../store/historySnapshot";
 import { removeDatasetsPatch } from "../../../store/removeDatasets";
+import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { nextDatasetId, useApp } from "../../../store/useApp";
 
 
@@ -105,7 +106,7 @@ export async function runTemplateOnDataset(
         title: `${t.name} — ${displayName}`,
         source_refs: [{ kind: "dataset", id: fitOn, name: fitName }],
       });
-      useApp.getState().addReport(`${t.name} — ${displayName}`, report, fitOn);
+      addReportWithProvenance(`${t.name} — ${displayName}`, report, fitOn);
     } catch {
       /* offline / report route down — the extracted row still lands */
     }

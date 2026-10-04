@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
 import { useSimsDialog } from "../../../store/simsDialog";
+import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
 import QuickFigureBuilderWorkspace from "../quickfigurebuilder/QuickFigureBuilderWorkspace";
 import TechniqueWorkspace from "./TechniqueWorkspace";
@@ -26,6 +27,7 @@ function dataset(id: string, technique: string, pending = false): Dataset {
 beforeEach(() => {
   openTechniqueWorkflow();
   useSimsDialog.setState({ seed: null, opened: 0, requestedTab: "process" });
+  useRecipeManager.setState({ open: false, library: false });
   useApp.setState({
     datasets: [], activeId: null, selectedIds: [], editableFigures: [], reports: [], originFigures: [], originFidelity: [],
     history: [], future: [], status: "", quickFigureBuilderDatasetId: null,
@@ -96,6 +98,23 @@ describe("TechniqueWorkspace", () => {
     expect(screen.getByText("sims")).toBeInTheDocument();
     expect(screen.getByText("Fit result")).toBeInTheDocument();
     expect(JSON.stringify({ datasets: useApp.getState().datasets, history: useApp.getState().history })).toBe(before);
+  });
+
+  it("connects a pipeline output to its source recipe without changing data", () => {
+    const ds = dataset("processed", "sims");
+    ds.data.metadata.transform_recipe = {
+      recipe: "Normalize profile", revision: 4,
+      input: { id: "raw", name: "raw.csv" }, bindings: [], steps: 2, appliedAt: "now",
+    };
+    useApp.setState({ datasets: [ds], activeId: ds.id });
+    const before = structuredClone(ds);
+    render(<TechniqueWorkspace onClose={() => {}} />);
+
+    expect(screen.getByLabelText("Pipeline provenance")).toHaveTextContent("Normalize profile (revision 4)");
+    expect(screen.getByLabelText("Pipeline provenance")).toHaveTextContent("input raw.csv · 2 steps");
+    fireEvent.click(screen.getByRole("button", { name: "Find source recipe" }));
+    expect(useRecipeManager.getState()).toMatchObject({ open: true, library: true });
+    expect(useApp.getState().datasets[0]).toEqual(before);
   });
 
   it("is honest about generic data and exposes the Quick Plot refusal reason", () => {

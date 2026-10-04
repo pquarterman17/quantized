@@ -58,7 +58,7 @@ Goal: make reproducible transformations understandable and editable as a workflo
 - [x] Preview the result and warnings before committing a structural pipeline edit.
 - [x] Explain broken inputs, missing datasets, changed columns, and incompatible units at the affected step.
 - [x] Support saved pipeline templates with explicit compatibility checks and no automatic overwrite of customized plots or data.
-- [ ] Connect pipeline outputs to the Workflow view, Recipe Library, and report/figure provenance.
+- [x] Connect pipeline outputs to the Workflow view, Recipe Library, and report/figure provenance.
 - [ ] Add deterministic replay, serialization, migration, cancellation, and large-data tests.
 
 Progress — 2026-10-03, Pipeline Studio 2.0 pass:
@@ -69,7 +69,8 @@ Progress — 2026-10-03, Pipeline Studio 2.0 pass:
 - Risky structural edits now compute the exact proposed list on bounded, non-mutating worksheet clones before Confirm becomes available. The confirmation shows result dimensions and sample values, names warnings by step, refuses static incompatibilities, treats lazy worksheet thumbnails as unavailable rather than full data, and labels unsupported multi-output/metadata transitions as partial. Recipe/input changes invalidate the pending async result.
 - The bounded result evaluation checks derived-expression units, uncertainty bindings, saved-fit references, and transform warnings against the proposed order; correction/reset preflight rejects source-owned derived worksheets. The ordinary overview stays cheap and the scientific preview code loads only after a risky edit is requested, preserving the eager bundle ratchet.
 - Saved transformation recipes already carry revision/description/input expectations, show per-dataset bindings and compatibility before Apply, require explicit unit-mismatch acknowledgment, fail without partial mutation, produce new derived outputs with provenance, and use one undo step. They do not overwrite customized plots or the original worksheet.
-- Remaining work is output integration/provenance across Workflow, Recipe Library, figures/reports, followed by deterministic serialization/migration/cancellation/large-data coverage. Numeric preview intentionally does not execute fit or display-only side effects and reports multi-output or metadata-changing steps as partial.
+- Pipeline-output lineage is now visible from Workflow, Recipe Library, editable figures, and reports. Recipe Library distinguishes the exact cited revision from a newer same-name recipe or a missing recipe. Reports take a bounded, validated provenance snapshot on creation and later source-adding edits; live and frozen figures expose lineage through their bound worksheet or detached snapshot without duplicating a second mutable authority.
+- Remaining work is deterministic serialization/migration/cancellation/large-data coverage. Numeric preview intentionally does not execute fit or display-only side effects and reports multi-output or metadata-changing steps as partial.
 
 Acceptance: a user can understand and safely modify how a derived dataset was produced, rerun it deterministically, and recover from changed inputs without touching the original raw data.
 

@@ -26,9 +26,8 @@
 
 import { useState } from "react";
 
-import { reportEmit, type FftSpectralResult, type IntegrateResponse } from "../../lib/api";
+import type { FftSpectralResult, IntegrateResponse } from "../../lib/api";
 import type { DerivativeResult } from "../../lib/differentiate";
-import { fmtNum } from "../../lib/format";
 import type { Measurement } from "../../lib/measure";
 import { GADGET_MODES, QUICK_FIT_MODELS, type GadgetMode } from "../../lib/quickfit";
 import type { CalcResult } from "../../lib/types";
@@ -111,38 +110,10 @@ export function useGadgetChip(): GadgetChipState {
     if (!active || !roi || busy) return;
     setReporting(true);
     try {
-      if (mode === "fit" && fitResult) {
-        const params = (fitResult.params as number[] | undefined) ?? [];
-        const { report: sheet } = await reportEmit({
-          kind: "curve_fit",
-          result: fitResult as Record<string, unknown>,
-          param_names: params.map((_, i) => `p${i}`),
-          model_name: model,
-          title: `${model} quick-fit — ${active.name}`,
-          caption: `region ${fmtNum(Math.min(roi[0], roi[1]))}–${fmtNum(Math.max(roi[0], roi[1]))}`,
-          source_refs: [{ kind: "dataset", id: active.id, name: active.name }],
-        });
-        useApp.getState().addReport(`${model} quick-fit — ${active.name}`, sheet, active.id);
-      } else if (mode === "integrate" && integrateResult) {
-        const { report: sheet } = await reportEmit({
-          kind: "integrate",
-          result: integrateResult as unknown as Record<string, unknown>,
-          title: `Integrate — ${active.name}`,
-          caption: `region ${fmtNum(Math.min(roi[0], roi[1]))}–${fmtNum(Math.max(roi[0], roi[1]))}`,
-          source_refs: [{ kind: "dataset", id: active.id, name: active.name }],
-        });
-        useApp.getState().addReport(`Integrate — ${active.name}`, sheet, active.id);
-      } else if (mode === "stats" && statsResult) {
-        const { report: sheet } = await reportEmit({
-          kind: "stats_table",
-          records: [statsResult as Record<string, unknown>],
-          columns: ["N", "mean", "std", "min", "max"],
-          title: `Stats — ${active.name}`,
-          caption: `region ${fmtNum(Math.min(roi[0], roi[1]))}–${fmtNum(Math.max(roi[0], roi[1]))}`,
-          source_refs: [{ kind: "dataset", id: active.id, name: active.name }],
-        });
-        useApp.getState().addReport(`Stats — ${active.name}`, sheet, active.id);
-      }
+      // PlotStage is eager; reporting and lineage stay behind the deliberate
+      // Report action rather than becoming startup code.
+      const { addGadgetReport } = await import("./gadgetReport");
+      await addGadgetReport({ active, roi, mode, model, fitResult, integrateResult, statsResult });
     } catch (e) {
       toast(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`, "danger");
     } finally {

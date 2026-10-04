@@ -13,6 +13,7 @@ import {
   type RecipeKind,
 } from "../../../lib/recipeLibrary";
 import { collectRecipes, liveKeys, type RecipeSourceInput } from "../../../lib/recipeSources";
+import { transformProvenanceOfDataset, transformRecipeLabel } from "../../../lib/transformProvenance";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { recipeSourcesWhole } from "../../../store/recipeFidelity";
 import { useRecipeManager } from "../../../store/recipeManager";
@@ -47,6 +48,7 @@ export default function RecipeLibraryPanel() {
   const openPlotManager = useRecipeManager((s) => s.openRecipeManager);
   const projectPlots = useApp((s) => s.plotRecipes);
   const quickPlots = useApp((s) => s.quickPlotTemplates);
+  const activeDataset = useApp((s) => s.datasets.find((dataset) => dataset.id === s.activeId));
   const globalPlots = useGlobalPlotRecipes((s) => s.recipes);
   const globalHydrated = useGlobalPlotRecipes((s) => s.hydrated);
   const globalComplete = useGlobalPlotRecipes((s) => s.complete);
@@ -93,6 +95,20 @@ export default function RecipeLibraryPanel() {
   useEffect(() => hydrateGlobal(), [hydrateGlobal]);
 
   const collection = collectRecipes(sourceInput);
+  const activeTransform = transformProvenanceOfDataset(activeDataset);
+  const sourceRecipe = activeTransform === null ? undefined : collection.recipes.find((recipe) =>
+    recipe.kind === "analysis" && recipe.name === activeTransform.recipe,
+  );
+  const sourceRecipeIsExact = sourceRecipe?.revision === activeTransform?.revision;
+  const revealSourceRecipe = (): void => {
+    if (!sourceRecipe) return;
+    setKind("analysis");
+    setFavoritesOnly(false);
+    // Filtering alone can leave the referenced recipe buried among a long
+    // analysis list. Reuse the row's established, remount-safe focus handoff
+    // so "Show" actually lands on the named recipe.
+    setFocusRowKey(rowKey(sourceRecipe.ref));
+  };
 
   // P3.5: drop sidecar metadata for recipes that no longer exist — the only
   // thing keeping `qz.recipeIndex` from growing forever as recipes come and go.
@@ -227,6 +243,28 @@ export default function RecipeLibraryPanel() {
         // announces nothing anyway.
         <div className="qz-recipe-library-warning">
           Some recipe sources could not be read completely. Available recipes are shown; cleanup is paused.
+        </div>
+      )}
+
+      {activeTransform && (
+        <div className="qz-recipe-library-context" aria-label="Active worksheet pipeline provenance">
+          <strong>{activeDataset?.name}</strong> was produced by {transformRecipeLabel(activeTransform)}.
+          {sourceRecipeIsExact ? (
+            <Button size="sm" onClick={revealSourceRecipe}>
+              Show source recipe
+            </Button>
+          ) : sourceRecipe ? (
+            <>
+              <span>
+                The saved recipe is now revision {sourceRecipe.revision}; this output cites revision {activeTransform.revision}.
+              </span>
+              <Button size="sm" onClick={revealSourceRecipe}>
+                Show current recipe
+              </Button>
+            </>
+          ) : (
+            <span> The referenced recipe is not currently saved in this library.</span>
+          )}
         </div>
       )}
 

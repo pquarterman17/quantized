@@ -25,6 +25,7 @@ import {
 } from "../../../lib/statsTests";
 import { describeResult, outputToCSV, outputToTSV, type TestOutput } from "../../../lib/statsTestsResults";
 import type { Dataset } from "../../../lib/types";
+import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { withResolved } from "../../../store/pendingEdit";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -72,7 +73,6 @@ function defaultSelection(columns: TestColumn[]): TestSelection {
 
 export function useStatsTests(): StatsTestsState {
   const active = useActiveDataset();
-  const addReport = useApp((s) => s.addReport);
   const setStatus = useApp((s) => s.setStatus);
 
   const columns = useMemo<TestColumn[]>(() => {
@@ -173,7 +173,7 @@ export function useStatsTests(): StatsTestsState {
         caption: output.sentence,
         source_refs: active ? [{ kind: "dataset", id: active.id, name: active.name }] : [],
       });
-      addReport(title, report, active?.id ?? null);
+      addReportWithProvenance(title, report, active?.id ?? null);
     } catch (e) {
       toast(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`, "danger");
     } finally {

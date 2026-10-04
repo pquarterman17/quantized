@@ -27,6 +27,7 @@ import { fmtNum } from "../../../lib/format";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset, ModelingType } from "../../../lib/types";
+import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { colValues, groupsForOneway, InsufficientDataError, runLeg } from "./runLeg";
@@ -132,7 +133,6 @@ function colType(active: ReturnType<typeof useActiveDataset>, index: number): Mo
 
 export function useFitYByX(): FitYByXState {
   const active = useActiveDataset();
-  const addReport = useApp((s) => s.addReport);
   const setStatus = useApp((s) => s.setStatus);
   const [reportBusy, setReportBusy] = useState(false);
   const [queuedReport, setQueuedReport] = useState<{ key: string; id: string; resolved: Dataset | null } | null>(null);
@@ -416,7 +416,7 @@ export function useFitYByX(): FitYByXState {
       const columns =
         byPartition.levels.length > 0 && records.length > 0 ? Object.keys(records[0]) : undefined;
       const { report } = await reportEmit({ kind: "stats_table", records, title, columns, caption, source_refs: refs });
-      addReport(title, report, active.id);
+      addReportWithProvenance(title, report, active.id);
       setStatus(`emitted ${title} report`);
     } catch (e) {
       toast(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`, "danger");

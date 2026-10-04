@@ -29,7 +29,7 @@ const plot = {
 
 beforeEach(() => {
   localStorage.clear();
-  useApp.setState({ plotRecipes: [], quickPlotTemplates: [], recipeSourcesComplete: true, fitModelCarry: [] });
+  useApp.setState({ datasets: [], activeId: null, plotRecipes: [], quickPlotTemplates: [], recipeSourcesComplete: true, fitModelCarry: [] });
   useGlobalPlotRecipes.setState({ recipes: [], hydrated: true, complete: true });
   useRecipeManager.setState({ open: true, library: true });
 });
@@ -39,6 +39,58 @@ describe("RecipeLibraryPanel", () => {
     render(<RecipeLibraryPanel />);
     expect(screen.getByText("No saved recipes yet")).toBeInTheDocument();
     expect(screen.getByText(/Save a plot, Quick Plot setup/)).toBeInTheDocument();
+  });
+
+  it("links the active pipeline output to its saved analysis recipe", () => {
+    saveTemplate({
+      version: 1, name: "Normalize profile", revision: 2,
+      steps: [makeStep("expression", "Normalize", "qz.add()", { name: "n", expr: "A" })], outputs: [],
+    });
+    const derived = {
+      id: "derived", name: "processed.csv",
+      data: {
+        time: [0], values: [[1]], labels: ["A"], units: [""],
+        metadata: { transform_recipe: { recipe: "Normalize profile", revision: 2 } },
+      },
+    };
+    useApp.setState({ datasets: [derived], activeId: derived.id });
+    render(<RecipeLibraryPanel />);
+
+    expect(screen.getByLabelText("Active worksheet pipeline provenance")).toHaveTextContent(
+      "processed.csv was produced by Normalize profile (revision 2)",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Show source recipe" }));
+    expect(screen.getByRole("combobox", { name: "Recipe type" })).toHaveValue("analysis");
+    expect(screen.getByText("Normalize profile")).toBeInTheDocument();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Rename Normalize profile" }));
+  });
+
+  it("says when an output's referenced recipe is no longer saved", () => {
+    useApp.setState({
+      datasets: [{
+        id: "derived", name: "processed.csv",
+        data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: { transform_recipe: { recipe: "Gone" } } },
+      }],
+      activeId: "derived",
+    });
+    render(<RecipeLibraryPanel />);
+    expect(screen.getByText(/referenced recipe is not currently saved/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show source recipe" })).not.toBeInTheDocument();
+  });
+
+  it("does not mislabel a newer same-name revision as the exact source recipe", () => {
+    saveTemplate({ version: 1, name: "Normalize", revision: 4, steps: [], outputs: [] });
+    useApp.setState({
+      datasets: [{
+        id: "derived", name: "processed.csv",
+        data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: { transform_recipe: { recipe: "Normalize", revision: 2 } } },
+      }],
+      activeId: "derived",
+    });
+    render(<RecipeLibraryPanel />);
+    expect(screen.getByText(/saved recipe is now revision 4; this output cites revision 2/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show source recipe" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show current recipe" })).toBeInTheDocument();
   });
 
   it("labels kind and scope without hiding the useful summary", () => {

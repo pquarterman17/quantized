@@ -17,6 +17,7 @@ import { useDebouncedPreview, useLatestRef, tokenOf } from "../../../lib/preview
 import { xUnitOf } from "../../../lib/transformResample";
 import { simsSource, simsWireDataset, speciesOf } from "../../../lib/transformSims";
 import { useSimsDialog } from "../../../store/simsDialog";
+import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 
@@ -97,7 +98,6 @@ interface Preview {
 export function useSimsRegion(active: boolean): SimsRegionState {
   const seed = useSimsDialog((s) => s.seed);
   const datasets = useApp((s) => s.datasets);
-  const addReport = useApp((s) => s.addReport);
   const [datasetId, setId] = useState(() =>
     datasets.some((d) => d.id === seed) ? (seed as string) : (datasets[0]?.id ?? ""),
   );
@@ -164,7 +164,7 @@ export function useSimsRegion(active: boolean): SimsRegionState {
         title,
         source_refs: [{ kind: "dataset", id: dataset.id, name: dataset.name }],
       });
-      addReport(title, report, dataset.id);
+      addReportWithProvenance(title, report, dataset.id);
       toast("added the region measures to Reports", "ok");
     } catch (e) {
       toast(message(e, "could not add the report"), "danger");

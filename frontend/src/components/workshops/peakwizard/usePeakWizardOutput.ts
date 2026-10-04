@@ -18,6 +18,7 @@ import type { PeakModelFitResponse } from "../../../lib/api/peaks";
 import { peaksIntegrate, reportEmit, type IntegratedPeak } from "../../../lib/api";
 import { regionsFromPeaks, type PeakRecipe } from "../../../lib/peakwizard";
 import type { Dataset, MultiFitResult } from "../../../lib/types";
+import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { peakReportUnits } from "../peaks/peakReport";
@@ -51,7 +52,6 @@ export function modelPeaksForIntegrate(res: PeakModelFitResponse): { center: num
 export function usePeakWizardOutput(inp: Inputs) {
   const { active, segment, workingY, fitted, candidates, classicResult, modelResult, report } = inp;
   const { integrateResult, setIntegrateResult, blocked, setBusy, setError } = inp;
-  const addReport = useApp((s) => s.addReport);
   const plotView = useApp(useShallow((s) => ({ xKey: s.xKey, yKeys: s.yKeys, seriesOrder: s.seriesOrder })));
   const [reportBusy, setReportBusy] = useState(false);
 
@@ -109,7 +109,7 @@ export function usePeakWizardOutput(inp: Inputs) {
           title: `Peak integration — ${active.name}`,
           source_refs: refs,
         });
-        addReport(`Peak integration — ${active.name}`, sheet, active.id);
+        addReportWithProvenance(`Peak integration — ${active.name}`, sheet, active.id);
       } else if (modelResult) {
         // The curves are plot data, not report content — the emitter ignores
         // them, so they are not shipped.
@@ -118,7 +118,7 @@ export function usePeakWizardOutput(inp: Inputs) {
           kind: "peak_model_fit", result: { ...(rest as unknown as Record<string, unknown>), ...units },
           title, source_refs: refs,
         });
-        addReport(title, sheet, active.id);
+        addReportWithProvenance(title, sheet, active.id);
       } else if (classicResult) {
         const { report: sheet } = await reportEmit({
           kind: "multipeak_fit",
@@ -126,14 +126,14 @@ export function usePeakWizardOutput(inp: Inputs) {
           title,
           source_refs: refs,
         });
-        addReport(title, sheet, active.id);
+        addReportWithProvenance(title, sheet, active.id);
       }
     } catch (e) {
       toast(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`, "danger");
     } finally {
       setReportBusy(false);
     }
-  }, [active, blocked, report.mode, integrateResult, modelResult, classicResult, addReport, setError, plotView]);
+  }, [active, blocked, report.mode, integrateResult, modelResult, classicResult, setError, plotView]);
 
   return { runIntegrate, reportBusy, toReport };
 }

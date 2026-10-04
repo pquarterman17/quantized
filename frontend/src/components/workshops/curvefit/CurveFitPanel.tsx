@@ -13,6 +13,7 @@ import { reportEmit } from "../../../lib/api";
 import type { CustomFitModel } from "../../../lib/fitmodels";
 import { fmtNum as fmt } from "../../../lib/format";
 import { lazyRegion } from "../../../lib/lazyRegion";
+import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import BumpsSection from "./BumpsSection";
@@ -53,7 +54,6 @@ function customLabel(m: CustomFitModel): string {
 
 export default function CurveFitPanel() {
   const setOpen = useApp((s) => s.setCurveFitOpen);
-  const addReport = useApp((s) => s.addReport);
   const [reporting, setReporting] = useState(false);
   const [globalMode, setGlobalMode] = useState(false);
   const {
@@ -163,7 +163,7 @@ export default function CurveFitPanel() {
         title: `${modelName} fit — ${active.name}`,
         source_refs: [{ kind: "dataset", id: active.id, name: active.name }],
       });
-      addReport(`${modelName} fit — ${active.name}`, report, active.id);
+      addReportWithProvenance(`${modelName} fit — ${active.name}`, report, active.id);
     } catch (e) {
       toast(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`, "danger");
     } finally {

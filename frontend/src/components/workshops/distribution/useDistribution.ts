@@ -43,6 +43,7 @@ import { type DistFamily, distPdfCurve, distQuantile } from "../../../lib/distpd
 import { rowsInBins } from "../../../lib/distribution";
 import { activeRowIndices, analysisData, droppedRows } from "../../../lib/rowstate";
 import type { CalcResult } from "../../../lib/types";
+import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { toast } from "../../../store/toasts";
 import type { ByColumnOption, ByLevel } from "../useByPartition";
@@ -172,7 +173,6 @@ export function useDistribution(): DistributionState {
   const data = useMemo(() => analysisData(active), [active]);
   const setRowSelection = useApp((s) => s.setRowSelection);
   const clearRowSelection = useApp((s) => s.clearRowSelection);
-  const addReport = useApp((s) => s.addReport);
   const setStatus = useApp((s) => s.setStatus);
 
   const columns = useMemo<DistributionColumn[]>(() => {
@@ -431,7 +431,7 @@ export function useDistribution(): DistributionState {
         ];
       }
       const { report } = await reportEmit({ kind: "stats_table", records, title, source_refs: refs });
-      addReport(title, report, active.id);
+      addReportWithProvenance(title, report, active.id);
       setStatus(`emitted ${title} report`);
     } catch (e) {
       toast(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`, "danger");

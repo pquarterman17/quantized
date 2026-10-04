@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { reportEmit } from "../../../lib/api/report";
 import type { Dataset } from "../../../lib/types";
+import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { nextDatasetId, useApp } from "../../../store/useApp";
 import { curveDatasetFor, curveDatasets, presentIds, savedOverlay } from "./reflFitCurves";
 import { applyBlockedReason, applyResults, fittedGlobals, type FitGlobals } from "./reflFitModel";
@@ -73,7 +74,6 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
   const { hostId, datasets, model, loadSetup, setGlobals, setError } = deps;
   const { layers, presets, radiation, replaceLayers } = model;
   const recordHistory = useApp((s) => s.recordHistory);
-  const addReport = useApp((s) => s.addReport);
   const setStatus = useApp((s) => s.setStatus);
   const addDataset = useApp((s) => s.addDataset);
   const setFitOverlay = useApp((s) => s.setFitOverlay);
@@ -198,7 +198,7 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
           name: datasets.find((d) => d.id === id)?.name ?? record.request.channels.find((c) => c.datasetId === id)?.datasetName,
         })),
       });
-      addReport(title, report, record.request.channels[0].datasetId);
+      addReportWithProvenance(title, report, record.request.channels[0].datasetId);
       setStatus(`added reflectivity fit #${record.seq} to the reports`);
     } catch (e) {
       setError(`could not add to the report — ${e instanceof Error ? e.message : "unknown error"}`);

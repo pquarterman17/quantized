@@ -30,6 +30,7 @@ import { lazyRegion } from "../../../lib/lazyRegion";
 import { fmtNum } from "../../../lib/format";
 import { manualEditCount, peakManualEditProblem } from "../../../lib/peakTableFit";
 import type { FittedPeak } from "../../../lib/types";
+import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 
@@ -54,7 +55,6 @@ const PeakFindAdvanced = lazyRegion(() => import("./PeakFindAdvanced"), "Advance
 export default function PeaksPanel() {
   const setOpen = useApp((s) => s.setPeaksOpen);
   const setPeakOverlay = useApp((s) => s.setPeakOverlay);
-  const addReport = useApp((s) => s.addReport);
   const plotView = useApp(useShallow((s) => ({ xKey: s.xKey, yKeys: s.yKeys, seriesOrder: s.seriesOrder })));
   const [reporting, setReporting] = useState(false);
   const [labeling, setLabeling] = useState(false);
@@ -97,7 +97,7 @@ export default function PeaksPanel() {
         title: `Peak fit — ${active.name}`,
         source_refs: [{ kind: "dataset", id: active.id, name: active.name }],
       });
-      addReport(`Peak fit — ${active.name}`, report, active.id);
+      addReportWithProvenance(`Peak fit — ${active.name}`, report, active.id);
     } catch (e) {
       toast(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`, "danger");
     } finally {

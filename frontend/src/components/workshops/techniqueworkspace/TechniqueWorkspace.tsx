@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useEscapeSurface } from "../../../lib/escapeStack";
 import { quickPlotAvailability } from "../../../lib/quickPlot";
 import { techniqueOf } from "../../../lib/techniqueDefaults";
+import { transformProvenanceOfDataset, transformRecipeLabel } from "../../../lib/transformProvenance";
 import {
   TECHNIQUE_WORKFLOWS,
   workflowArtifacts,
@@ -12,6 +13,7 @@ import type { Dataset } from "../../../lib/types";
 import type { Action } from "../../../store/commands";
 import { runTechniqueWorkspaceAction, techniqueActionDefinition } from "../../../store/techniqueWorkspaceRun";
 import { useApp } from "../../../store/useApp";
+import { useRecipeManager } from "../../../store/recipeManager";
 import { Badge, Button } from "../../primitives";
 import { useWorkflowWorkspaceView } from "../../../lib/workflowWorkspace";
 import OriginMigrationCockpit from "../originmigration/OriginMigrationCockpit";
@@ -59,6 +61,7 @@ function TechniqueWorkspaceContent({ onClose }: { onClose: () => void }) {
   const dataset = useApp((s) => s.datasets.find((d) => d.id === s.activeId));
   const hasFigure = useApp((s) => s.editableFigures.some((f) => f.bindings.datasetId === s.activeId));
   const hasReport = useApp((s) => s.reports.some((r) => r.datasetId === s.activeId));
+  const openRecipeLibrary = useRecipeManager((s) => s.openRecipeLibrary);
   const [busyAction, setBusyAction] = useState<TechniqueActionId | null>(null);
 
   useEscapeSurface("workspace", () => {
@@ -86,6 +89,7 @@ function TechniqueWorkspaceContent({ onClose }: { onClose: () => void }) {
   const workflow = TECHNIQUE_WORKFLOWS[technique];
   const availability = quickPlotAvailability(dataset);
   const artifacts = workflowArtifacts(dataset, hasFigure, hasReport);
+  const transformProvenance = transformProvenanceOfDataset(dataset);
 
   const launch = (id: TechniqueActionId): void => {
     if (busyAction) return;
@@ -120,6 +124,17 @@ function TechniqueWorkspaceContent({ onClose }: { onClose: () => void }) {
             ? "No technique was declared by the import. Quantized is showing general-purpose tools instead of guessing."
             : "This workflow comes from the technique recorded during import; every action remains editable and optional."}
         </p>
+        {transformProvenance && (
+          <div className="qzk-technique-artifacts" aria-label="Pipeline provenance">
+            <strong>Pipeline output</strong>
+            <span>
+              {transformRecipeLabel(transformProvenance)}
+              {transformProvenance.input ? ` · input ${transformProvenance.input.name}` : ""}
+              {transformProvenance.steps !== null ? ` · ${transformProvenance.steps} step${transformProvenance.steps === 1 ? "" : "s"}` : ""}
+            </span>
+            <Button size="sm" onClick={openRecipeLibrary}>Find source recipe</Button>
+          </div>
+        )}
         {artifacts.length > 0 && (
           <div className="qzk-technique-artifacts" aria-label="Existing results">
             <span>Existing results</span>
