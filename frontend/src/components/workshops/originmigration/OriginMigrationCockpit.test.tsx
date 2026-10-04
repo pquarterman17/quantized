@@ -92,8 +92,12 @@ describe("OriginMigrationCockpit", () => {
       ],
     });
     render(<OriginMigrationCockpit initialFidelityId="f1" onClose={() => {}} />);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search graph windows" }), {
+      target: { value: "old project query" },
+    });
     fireEvent.change(screen.getByLabelText("Imported project"), { target: { value: "f2" } });
     expect(screen.getByRole("heading", { name: "beta" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Search graph windows" })).toHaveValue("");
 
     act(() => useApp.setState({ datasets: [...useApp.getState().datasets] }));
     expect(screen.getByRole("heading", { name: "beta" })).toBeInTheDocument();
@@ -203,5 +207,45 @@ describe("OriginMigrationCockpit", () => {
     act(() => useApp.setState({ originFidelity: [{ id: "f1", stem: "replacement", siblingIds: ["d1"], manifest }] }));
     render(<OriginMigrationCockpit onClose={() => {}} />);
     await waitFor(() => expect(screen.queryByText("Review later", { selector: ".qz-badge" })).not.toBeInTheDocument());
+  });
+
+  it("keeps a large Origin project responsive with search, paging, and one bulk review decision", () => {
+    const count = 75;
+    useApp.setState({
+      datasets: [dataset()],
+      originFidelity: [{
+        id: "f1", stem: "large-project", siblingIds: ["d1"],
+        manifest: {
+          version: 1, container: "opj", status: "best_effort",
+          graph_records_total: count, graph_records_actionable: count,
+          graph_records_filtered: 0, omissions: [], filtered_figures: [],
+        },
+      }],
+      originFigures: Array.from({ length: count }, (_unused, index) => ({
+        id: `g${index}`, stem: "large-project", siblingIds: ["d1"], datasetId: null,
+        figure: figure(`Graph ${index + 1}`, "Missing"),
+      })),
+    });
+
+    render(<OriginMigrationCockpit initialFidelityId="f1" onClose={() => {}} />);
+    expect(screen.getAllByRole("article")).toHaveLength(40);
+    expect(screen.getByText("Showing 40 of 75 matching graph windows.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show 35 more" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search graph windows" }), {
+      target: { value: "Graph 75" },
+    });
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "Graph 75" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search graph windows" }), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Review matching later" }));
+    expect(screen.getAllByText("Review later", { selector: ".qz-badge" })).toHaveLength(40);
+    expect(screen.getByRole("button", { name: "Return matching to review" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show 35 more" }));
+    expect(screen.getAllByRole("article")).toHaveLength(75);
   });
 });

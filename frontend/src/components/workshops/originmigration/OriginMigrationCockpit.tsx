@@ -10,6 +10,7 @@ import {
 import { originPreviewDataUrl } from "../../../lib/originPreview";
 import {
   openTechniqueWorkflow,
+  setOriginReviewsDeferred,
   syncOriginReviewScope,
   toggleOriginReviewDeferred,
   useOriginReviewDeferred,
@@ -33,6 +34,12 @@ const OriginBulkRecoveryWindow = lazyRegion(
 );
 
 type Filter = "attention" | "all" | "recovered";
+
+// The 127 MB corpus project currently contains 205 graph windows. Rendering
+// every row (and every button/source lookup) synchronously made opening the
+// cockpit look frozen. Keep the first useful screen immediate and expand only
+// at the user's request.
+const GRAPH_BATCH_SIZE = 40;
 
 function stateBadge(state: OriginMigrationState) {
   if (state === "recovered") return <Badge tone="ok">Recovered</Badge>;
@@ -140,6 +147,8 @@ export default function OriginMigrationCockpit({
   );
   const [selectedId, setSelectedId] = useState(initialFidelityId);
   const [filter, setFilter] = useState<Filter>("attention");
+  const [query, setQuery] = useState("");
+  const [visibleLimit, setVisibleLimit] = useState(GRAPH_BATCH_SIZE);
   const [issueGroupId, setIssueGroupId] = useState<string | null>(null);
   const [bulkBook, setBulkBook] = useState<string | null>(null);
   const deferred = useOriginReviewDeferred();
@@ -150,6 +159,19 @@ export default function OriginMigrationCockpit({
   useEffect(() => {
     if (selected && selected.fidelity.id !== selectedId) setSelectedId(selected.fidelity.id);
   }, [selected, selectedId]);
+
+  useEffect(() => {
+    // Search/group/dialog state describes one project. Carrying it into a
+    // different import can produce an apparently empty cockpit or a recovery
+    // dialog for a workbook name that only existed in the previous project.
+    setQuery("");
+    setIssueGroupId(null);
+    setBulkBook(null);
+  }, [selected?.fidelity.id]);
+
+  useEffect(() => {
+    setVisibleLimit(GRAPH_BATCH_SIZE);
+  }, [selected?.fidelity.id, filter, issueGroupId, query]);
 
   useEscapeSurface("workspace", () => {
     onClose();
@@ -175,12 +197,20 @@ export default function OriginMigrationCockpit({
 
   const manifest = selected.fidelity.manifest;
   const issueGroup = selected.issueGroups.find((group) => group.id === issueGroupId);
+  const normalizedQuery = query.trim().toLocaleLowerCase();
   const visibleGraphs = selected.graphs.filter((graph) => {
     if (issueGroup && !issueGroup.graphIds.includes(graph.id)) return false;
     if (filter === "all") return true;
     if (filter === "recovered") return graph.state === "recovered";
     return graph.state === "needs_review" || graph.state === "approximate";
-  }).sort((a, b) => Number(deferred.has(`${selected.fidelity.id}:${a.id}`)) - Number(deferred.has(`${selected.fidelity.id}:${b.id}`)));
+  }).filter((graph) => !normalizedQuery || graph.label.toLocaleLowerCase().includes(normalizedQuery))
+    .sort((a, b) => Number(deferred.has(`${selected.fidelity.id}:${a.id}`)) - Number(deferred.has(`${selected.fidelity.id}:${b.id}`)));
+  const renderedGraphs = visibleGraphs.slice(0, visibleLimit);
+  const remainingGraphs = visibleGraphs.length - renderedGraphs.length;
+  const reviewKeys = visibleGraphs
+    .filter((graph) => graph.state === "needs_review" || graph.state === "approximate")
+    .map((graph) => `${selected.fidelity.id}:${graph.id}`);
+  const allVisibleDeferred = reviewKeys.length > 0 && reviewKeys.every((key) => deferred.has(key));
 
   return (
     <section className="qzk-technique-workspace qzk-origin-migration" aria-labelledby="origin-migration-title">
@@ -281,10 +311,28 @@ export default function OriginMigrationCockpit({
         <Button size="sm" variant={filter === "attention" && !issueGroup ? "primary" : "default"} onClick={() => { setFilter("attention"); setIssueGroupId(null); }}>Needs review ({selected.needsReview})</Button>
         <Button size="sm" variant={filter === "all" ? "primary" : "default"} onClick={() => { setFilter("all"); setIssueGroupId(null); }}>All graphs ({selected.graphs.length})</Button>
         <Button size="sm" variant={filter === "recovered" ? "primary" : "default"} onClick={() => { setFilter("recovered"); setIssueGroupId(null); }}>Recovered ({selected.recovered})</Button>
+        <label className="qzk-origin-migration-search">
+          <span>Search graph windows</span>
+          <input
+            className="qz-input"
+            type="search"
+            value={query}
+            placeholder="Graph name…"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        {reviewKeys.length > 1 && (
+          <Button
+            size="sm"
+            onClick={() => setOriginReviewsDeferred(reviewKeys, !allVisibleDeferred)}
+          >
+            {allVisibleDeferred ? "Return matching to review" : "Review matching later"}
+          </Button>
+        )}
       </div>
 
       <div className="qzk-origin-migration-list">
-        {visibleGraphs.map((graph) => (
+        {renderedGraphs.map((graph) => (
           <GraphReviewRow
             key={graph.id}
             graph={graph}
@@ -292,9 +340,20 @@ export default function OriginMigrationCockpit({
             onToggleDeferred={() => toggleOriginReviewDeferred(`${selected.fidelity.id}:${graph.id}`)}
           />
         ))}
-        {visibleGraphs.length === 0 && (
+        {renderedGraphs.length === 0 && (
           <div className="qzk-technique-empty">
             {issueGroup ? "No graph windows remain in this source-issue group." : filter === "attention" ? "No graph windows currently need review." : "No graph windows match this filter."}
+          </div>
+        )}
+        {remainingGraphs > 0 && (
+          <div className="qzk-origin-migration-more">
+            <span role="status" aria-live="polite">Showing {renderedGraphs.length} of {visibleGraphs.length} matching graph windows.</span>
+            <Button
+              size="sm"
+              onClick={() => setVisibleLimit((current) => current + GRAPH_BATCH_SIZE)}
+            >
+              Show {Math.min(GRAPH_BATCH_SIZE, remainingGraphs)} more
+            </Button>
           </div>
         )}
       </div>
