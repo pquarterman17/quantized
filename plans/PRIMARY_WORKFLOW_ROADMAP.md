@@ -1,6 +1,6 @@
 # Primary Workflow Roadmap
 
-Last updated: 2026-10-03
+Last updated: 2026-10-04
 
 This roadmap tracks three large workflow improvements in the agreed order. It is intentionally outcome-based: completing a checkbox means the behavior is implemented and tested, not merely that a control exists.
 
@@ -35,15 +35,22 @@ Goal: replace the current “large imported tree plus unresolved graph controls�
 - [x] Provide direct routes to the relevant workbook, worksheet, reconstructed graph, saved Origin preview, or fidelity details.
 - [x] Preserve lazy-loading guarantees: inventory is cheap; opening or converting a book resolves full data through the canonical resolver.
 - [x] Add “review later” state without discarding unresolved records.
-- [ ] Add real-corpus characterization tests for small, large, partially decoded, and offline/missing-source projects.
-- [ ] Run the cockpit against the local Origin test-data corpus and at least one representative user project.
+- [x] Add real-corpus characterization tests for small, large, partially decoded, and offline/missing-source projects.
+- [x] Run the cockpit against the local Origin test-data corpus and at least one representative user project.
+
+Progress — 2026-10-04, real-corpus migration qualification:
+
+- A local-only migration contract now pins the exact workbook, lazy-workbook, actionable/filtered graph-record, and decoded-curve inventories for RockingCurve, Moke, XMCD, and the 127 MB PNR project. A second sweep requires every top-level Origin project to reconcile the graph totals shown by the cockpit. Controlled missing/offline lazy-book tests continue to prove that apply fails atomically without creating a partial graph.
+- `tools/origin_migration_audit.py` provides a repeatable corpus report without copying private test data into this repository. It checks count reconciliation, reloadable lazy sources, graph-layer identity, and blank actionable records, and can emit JSON for comparisons between runs.
+- The real-browser renderer uploaded and reconstructed every Moke and PNR graph-window family through the application path: 12/12 Moke and 99/99 PNR windows resolved and passed live canvas, routing, axis, and layout checks, including double-Y and multi-panel graphs. No browser/runtime/structural failures were reported.
+- Large projects no longer mount hundreds of review cards at once. The cockpit renders graph windows in batches of 40, provides graph-name search, and supports one bulk review-later/return-to-review decision across the matching attention set.
 
 Progress — 2026-10-03, bulk Origin source recovery:
 
 - The cockpit can now map one missing saved workbook name across every affected graph layer in the same import. It shows the complete layer/binding scope and blocks Apply unless every binding can be reproduced from the chosen imported workbook.
 - The saved choice is provenance, not a rewrite of decoded Origin metadata. It is undoable, persists in `.dwk`, is pruned when its target worksheet is deleted, and remains visible with Review/change and Clear actions.
 - Apply revalidates the live project scope and schema so deleted layers, newly added matching layers, changed columns, stale previews, non-Origin targets, and partial matches fail closed without a history entry or partial mutation.
-- The local real-data route imported every `.opj`/`.opju` in the sibling corpus successfully, including the 127 MB PNR project, and the existing XMCD partial-decode fidelity characterization passed. The broader cockpit-specific small/large/partial/offline matrix and hands-on representative-project sign-off remain open above.
+- The local real-data route imported every `.opj`/`.opju` in the sibling corpus successfully, including the 127 MB PNR project, and the existing XMCD partial-decode fidelity characterization passed. The broader cockpit-specific matrix and browser reconstruction pass were completed in the 2026-10-04 qualification above.
 
 Acceptance: after opening an Origin project, the user can tell what imported successfully, what needs a decision, what cannot yet be reproduced, and how to reach the important work without parsing a crowded tree.
 
