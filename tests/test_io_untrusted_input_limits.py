@@ -136,6 +136,12 @@ def _nc3_one_variable(dim_len: int) -> bytes:
 def test_netcdf3_declared_size_is_not_allocated(tmp_path: Path) -> None:
     """The classic reader asked for each header-declared size in one read, and
     a buffered read allocates that much up front: 200 bytes -> 1.6 GB."""
+    # ``_read_netcdf3`` intentionally imports scipy lazily. The memory guard is
+    # measuring hostile-file allocation, not scipy's one-time module import;
+    # on an otherwise-cold xdist worker that import alone can exceed 4 MiB.
+    from scipy.io import netcdf_file as scipy_netcdf_file  # noqa: PLC0415
+
+    assert scipy_netcdf_file is not None
     path = tmp_path / "bomb.nc"
     path.write_bytes(_nc3_one_variable(200_000_000))
     peak = _peak_bytes(lambda: import_netcdf(path))
