@@ -104,6 +104,37 @@ describe("OriginMigrationCockpit", () => {
     expect(screen.getByLabelText("Imported project")).toHaveValue("f2");
   });
 
+  it("clears a stale graph search when a workspace replaces a project under the same id", () => {
+    const manifest = {
+      version: 1 as const, container: "opj" as const, status: "best_effort" as const,
+      graph_records_total: 1, graph_records_actionable: 1,
+      graph_records_filtered: 0, omissions: [], filtered_figures: [],
+    };
+    useApp.setState({
+      datasets: [dataset()],
+      originFidelity: [{ id: "f1", stem: "first", siblingIds: ["d1"], manifest }],
+      originFigures: [{
+        id: "old", stem: "first", siblingIds: ["d1"], datasetId: null,
+        figure: figure("Old graph", "Missing"),
+      }],
+    });
+    render(<OriginMigrationCockpit initialFidelityId="f1" onClose={() => {}} />);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search graph windows" }), {
+      target: { value: "Old graph" },
+    });
+
+    act(() => useApp.setState({
+      originFidelity: [{ id: "f1", stem: "replacement", siblingIds: ["d1"], manifest }],
+      originFigures: [{
+        id: "new", stem: "replacement", siblingIds: ["d1"], datasetId: null,
+        figure: figure("New graph", "Missing"),
+      }],
+    }));
+
+    expect(screen.getByRole("searchbox", { name: "Search graph windows" })).toHaveValue("");
+    expect(screen.getByRole("heading", { name: "New graph" })).toBeInTheDocument();
+  });
+
   it("marks review-later locally and still allows the user to return it to review", () => {
     useApp.setState({
       datasets: [dataset()],
@@ -247,5 +278,9 @@ describe("OriginMigrationCockpit", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Show 35 more" }));
     expect(screen.getAllByRole("article")).toHaveLength(75);
+    expect(screen.getAllByText("Review later", { selector: ".qz-badge" })).toHaveLength(75);
+
+    fireEvent.click(screen.getByRole("button", { name: "Return matching to review" }));
+    expect(screen.queryByText("Review later", { selector: ".qz-badge" })).not.toBeInTheDocument();
   });
 });

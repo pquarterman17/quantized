@@ -21,6 +21,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from quantized.io.origin_project import OriginProjectError
 from quantized.routes.parsers import _import_with_books
 
 
@@ -36,11 +37,32 @@ def _default_corpus() -> Path:
 
 def audit_project(path: Path) -> dict[str, Any]:
     started = time.perf_counter()
-    payload, handle = _import_with_books(path)
+    try:
+        payload, handle = _import_with_books(path)
+    except OriginProjectError as exc:
+        # Recursive mode deliberately includes controlled probes that may have
+        # no worksheet payload. One unreadable specimen must be evidence in the
+        # report, not an exception that prevents every later project from being
+        # audited.
+        return {
+            "project": path.name,
+            "bytes": path.stat().st_size,
+            "seconds": round(time.perf_counter() - started, 3),
+            "status": "unreadable",
+            "books": 0,
+            "lazy_books": 0,
+            "graph_records_total": 0,
+            "graph_records_actionable": 0,
+            "graph_records_filtered": 0,
+            "decoded_curves": 0,
+            "empty_actionable_graphs": [],
+            "issues": [f"import failed: {exc}"],
+        }
     elapsed = time.perf_counter() - started
     books = payload.get("books", [])
     figures = payload.get("figures", [])
     manifest = payload["origin_fidelity"]
+    lazy_books = sum(book.get("lazy") is True for book in books)
     actionable = len(figures)
     filtered = len(manifest["filtered_figures"])
     total = manifest["graph_records_total"]
@@ -64,7 +86,7 @@ def audit_project(path: Path) -> dict[str, Any]:
         issues.append("actionable + filtered does not equal total")
     if len(identities) != len(set(identities)):
         issues.append("duplicate graph-window/layer identities")
-    if books and not payload.get("book_source"):
+    if lazy_books and not payload.get("book_source"):
         issues.append("lazy workbook inventory has no reloadable source")
     if empty:
         issues.append(f"{len(empty)} actionable graph layers have no decoded curves")
@@ -75,7 +97,7 @@ def audit_project(path: Path) -> dict[str, Any]:
         "seconds": round(elapsed, 3),
         "status": manifest["status"],
         "books": len(books),
-        "lazy_books": sum(book.get("lazy") is True for book in books),
+        "lazy_books": lazy_books,
         "graph_records_total": total,
         "graph_records_actionable": actionable,
         "graph_records_filtered": filtered,
@@ -122,7 +144,17 @@ def main() -> int:
     if not paths:
         parser.error(f"no .opj/.opju projects found in {args.corpus}")
 
-    rows = [audit_project(path) for path in paths]
+    rows = []
+    for path in paths:
+        row = audit_project(path)
+        # Recursive audits contain same-named projects in different probe
+        # directories. Preserve the relative path so the report identifies
+        # the failing specimen unambiguously.
+        try:
+            row["project"] = path.relative_to(args.corpus).as_posix()
+        except ValueError:
+            row["project"] = str(path)
+        rows.append(row)
     _print_table(rows)
     if args.json:
         args.json.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")

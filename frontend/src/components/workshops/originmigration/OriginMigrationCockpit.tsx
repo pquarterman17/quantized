@@ -167,7 +167,7 @@ export default function OriginMigrationCockpit({
     setQuery("");
     setIssueGroupId(null);
     setBulkBook(null);
-  }, [selected?.fidelity.id]);
+  }, [selected?.fidelity]);
 
   useEffect(() => {
     setVisibleLimit(GRAPH_BATCH_SIZE);
