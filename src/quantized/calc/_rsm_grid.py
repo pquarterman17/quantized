@@ -247,6 +247,12 @@ def cut_result(
         "x_column_unit": x_unit,
         "cut_label": label,
         "is2D": False,
+        # A cut is an intensity profile.  "N points" is useful diagnostic
+        # data, but plotting it by default can dominate the shared Y scale
+        # (or vanish on a log scale because empty bins are zero), making the
+        # newly landed profile appear blank.  Keep it available in Channels
+        # while opening every cut on its scientific signal only.
+        "default_value_channels": [0],
         **(extra or {}),
     }
     return DataStruct.create(

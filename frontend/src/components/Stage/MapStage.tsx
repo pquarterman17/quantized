@@ -236,8 +236,12 @@ export default function MapStage({ dataset }: MapStageProps) {
             display: "block",
             cursor: routed ? routed.cursor : cuts.mode === "off" ? "default" : "crosshair",
           }}
-          onMouseMove={pointer.onMove}
-          onMouseLeave={() => {
+          onPointerMove={pointer.onMove}
+          onPointerLeave={(ev) => {
+            // A captured drag still belongs to this canvas even when the
+            // pointer crosses a floating ROI bar or the canvas edge.  The
+            // old mouse-leave path cancelled exactly those valid gestures.
+            if (ev.currentTarget.hasPointerCapture?.(ev.pointerId)) return;
             pointer.onLeave();
             roi.onLeave();
             ruler.onLeave();
@@ -245,8 +249,21 @@ export default function MapStage({ dataset }: MapStageProps) {
           }}
           onClick={pointer.onClick}
           onDoubleClick={pointer.onDoubleClick}
-          onMouseDown={pointer.onDown}
-          onMouseUp={pointer.onUp}
+          onPointerDown={(ev) => {
+            ev.currentTarget.setPointerCapture?.(ev.pointerId);
+            pointer.onDown(ev);
+          }}
+          onPointerUp={(ev) => {
+            pointer.onUp(ev);
+            if (ev.currentTarget.hasPointerCapture?.(ev.pointerId)) ev.currentTarget.releasePointerCapture(ev.pointerId);
+          }}
+          onPointerCancel={(ev) => {
+            if (ev.currentTarget.hasPointerCapture?.(ev.pointerId)) ev.currentTarget.releasePointerCapture(ev.pointerId);
+            pointer.onLeave();
+            roi.onLeave();
+            ruler.onLeave();
+            wedge.onLeave();
+          }}
           onKeyDown={(ev) => {
             if (!payload) return;
             roi.onKeyDown(ev, payload);
@@ -298,6 +315,7 @@ export default function MapStage({ dataset }: MapStageProps) {
             onRemove={roi.remove}
             focusAnchor={() => canvasRef.current}
             dragging={roi.dragging}
+            boxActive={roi.mode === "roi"}
             rulerState={ruler}
             wedgeState={wedge}
           />

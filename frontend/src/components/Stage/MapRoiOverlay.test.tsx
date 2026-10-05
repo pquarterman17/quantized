@@ -43,7 +43,7 @@ const RULER: RoiRuler = { space: "q", cx: 1, cy: 1, angle: 30, length: 1, width:
 
 function rulerState(overrides: Partial<UseMapRulerState> = {}): UseMapRulerState {
   return {
-    mode: "off", setMode: vi.fn(), ruler: null, hover: null, dragging: false, cursor: "default",
+    mode: overrides.ruler ? "ruler" : "off", setMode: vi.fn(), ruler: null, hover: null, dragging: false, cursor: "default",
     onDown: vi.fn(), onMove: vi.fn(), onUp: vi.fn(), onLeave: vi.fn(), onKeyDown: vi.fn(),
     remove: vi.fn(),
     preview: null, previewAxis: "x", setPreviewAxis: vi.fn(), previewStats: null,
@@ -59,13 +59,13 @@ function renderOverlay(overrides: Partial<MapRoiOverlayProps> = {}) {
     payload: PAYLOAD, w: 400, h: 300, rect: RECT,
     preview: null, previewAxis: "x", onPreviewAxisChange: vi.fn(), previewStats: null,
     onIntegrate: vi.fn(), landingBusy: false, onStats: vi.fn(), statsBusy: false,
-    apiStats: null, statsError: null, onClearStats: vi.fn(), onRemove, dragging: false,
+    apiStats: null, statsError: null, onClearStats: vi.fn(), onRemove, dragging: false, boxActive: true,
     rulerState: rulerState(),
     wedgeState: {} as UseMapSectorWedgeState,
     ...overrides,
   };
-  render(<MapRoiOverlay {...props} />);
-  return { onRemove, props };
+  const view = render(<MapRoiOverlay {...props} />);
+  return { onRemove, props, ...view };
 }
 
 describe("MapRoiOverlay remove affordance", () => {
@@ -86,11 +86,9 @@ describe("MapRoiOverlay remove affordance", () => {
     expect(onRemove).not.toHaveBeenCalled();
   });
 
-  it("labels the two removes distinctly when both shapes are on the map", () => {
-    // Both bars render at once; an ambiguous label would make the wrong one
-    // reachable by name for a screen-reader user.
-    renderOverlay({ rulerState: rulerState({ ruler: RULER }) });
-    expect(screen.getByLabelText("Remove this box")).toBeInTheDocument();
+  it("only exposes the armed shape's remove control", () => {
+    renderOverlay({ boxActive: false, rulerState: rulerState({ ruler: RULER }) });
+    expect(screen.queryByLabelText("Remove this box")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Remove this ruler")).toBeInTheDocument();
   });
 
@@ -156,22 +154,21 @@ describe("MapRoiOverlay names its collapse axes after the data", () => {
     // is full-strength ink over a surface-coloured halo. jsdom applies no
     // stylesheet, so the class is the only thing a unit test can hold onto —
     // the contrast itself was verified visually in both themes.
-    renderOverlay({ rulerState: rulerState({ ruler: RULER }) });
-    expect(screen.getByText(/^Qx 0\.2…1\.8/)).toHaveClass("qzk-roi-readout");
+    renderOverlay({ boxActive: false, rulerState: rulerState({ ruler: RULER }) });
     expect(screen.getByText(/^30° L=/)).toHaveClass("qzk-roi-readout");
   });
 
   it("gives the ROTATED ruler along/across, never the data axis names", () => {
     // The ruler integrates in its own frame (useMapRuler passes the angle), so
     // borrowing "Qx"/"Qz" here would be false at every angle but zero.
-    renderOverlay({ rect: null, rulerState: rulerState({ ruler: RULER }) });
+    renderOverlay({ rect: null, boxActive: false, rulerState: rulerState({ ruler: RULER }) });
     expect(screen.getByRole("button", { name: "∫ along" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "∫ across" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "∫ Qx" })).not.toBeInTheDocument();
   });
 
   it("spells the ruler's angle out in its tooltip", () => {
-    renderOverlay({ rect: null, rulerState: rulerState({ ruler: RULER }) });
+    renderOverlay({ rect: null, boxActive: false, rulerState: rulerState({ ruler: RULER }) });
     expect(screen.getByRole("button", { name: "∫ along" })).toHaveAttribute(
       "title",
       "Integrate onto the ruler's length (30° from Qx), summing over its width — lands as a new dataset",
@@ -201,8 +198,17 @@ describe("MapRoiOverlay does not eat its own drag", () => {
   it("applies the same rule to the ruler's own bar, driven by the RULER's drag", () => {
     // The two shapes drag independently; the box's flag must not silence the
     // ruler's bar or vice versa.
-    renderOverlay({ dragging: false, rulerState: rulerState({ ruler: RULER, dragging: true }) });
+    renderOverlay({ boxActive: false, dragging: false, rulerState: rulerState({ ruler: RULER, dragging: true }) });
     expect(barOf("Remove this ruler")).toHaveStyle({ pointerEvents: "none" });
-    expect(barOf("Remove this box")).not.toHaveStyle({ pointerEvents: "none" });
+    expect(screen.queryByLabelText("Remove this box")).not.toBeInTheDocument();
+  });
+
+  it("keeps an inactive box passive so another tool can own the same pixels", () => {
+    const { container } = renderOverlay({ boxActive: false });
+    expect(container.querySelector('[data-roi-handle^="box-"]')).toBeNull();
+    expect(screen.queryByLabelText("Remove this box")).not.toBeInTheDocument();
+    // The saved working shape remains legible without advertising a drag
+    // affordance that is not currently armed.
+    expect(container.querySelector('svg rect[fill="var(--accent-soft)"]')).not.toBeNull();
   });
 });

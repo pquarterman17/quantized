@@ -164,6 +164,31 @@ export function sectorPreviewFor(s: MapSectorState, polar: PolarBranch): RoiSect
   return { qMin: Math.min(s.secMin, s.secMax), qMax: Math.max(s.secMin, s.secMax), phiMin, phiMax };
 }
 
+/** Dataset-specific scratch-sector defaults shared by the numeric panel and
+ *  a bound map window. Keeping this pure prevents a map bound to dataset B
+ *  from inheriting q bounds primed from the Library-active dataset A. */
+export function sectorDefaultsFor(active: Dataset): Partial<MapSectorState> {
+  const ds = active.data;
+  const branch = polarBranch(ds);
+  const [secMin, secMax] =
+    branch.kind === "q"
+      ? qMagnitudeExtent(ds)
+      : branch.kind === "pole"
+        ? columnExtentIdx(ds, branch.axis === "x" ? 1 : 0)
+        : ([0, 1] as [number, number]);
+  return {
+    phiParam: "bounds",
+    phiCenter: 0,
+    phiHalfWidth: 180,
+    phiMin: 0,
+    phiMax: 360,
+    secMin,
+    secMax,
+    sectorBins: defaultSectorBins(mapShapeOf(ds)),
+    primedFor: active.id,
+  };
+}
+
 /** Build the periodic-axis box (branch ii) from the sector card's own
  *  phi/secondary fields, reusing `roiBoxBody` — never a third inline
  *  request shape. `phiLo`/`phiHi` are passed through UNSORTED on purpose:
@@ -291,25 +316,7 @@ export function useRoiCuts(): RoiCutsState {
   // it — is a no-op, not a silent reset of a live drag; see that field's doc.
   useEffect(() => {
     if (!active || mapSector.primedFor === active.id) return;
-    const ds = active.data;
-    const branch = polarBranch(ds);
-    const [secMin, secMax] =
-      branch.kind === "q"
-        ? qMagnitudeExtent(ds)
-        : branch.kind === "pole"
-          ? columnExtentIdx(ds, branch.axis === "x" ? 1 : 0)
-          : ([0, 1] as [number, number]);
-    setMapSector({
-      phiParam: "bounds",
-      phiCenter: 0,
-      phiHalfWidth: 180,
-      phiMin: 0,
-      phiMax: 360,
-      secMin,
-      secMax,
-      sectorBins: defaultSectorBins(mapShapeOf(ds)),
-      primedFor: active.id,
-    });
+    setMapSector(sectorDefaultsFor(active));
     setBoxStats(null);
     setStatsError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps

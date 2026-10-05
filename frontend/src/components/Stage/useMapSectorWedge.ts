@@ -17,16 +17,14 @@
 // own `store.mapRoi`/`store.mapRuler` pattern, now applied here too.
 // `writeSector` below reads/writes it directly via `useApp`, so a drag here
 // and a numeric edit in a separately-mounted `RoiCutsPanel` are the SAME
-// store field, in sync for free — no second `useRoiCuts()` instance is
-// needed to reach the state anymore (that indirection, and the cross-
-// instance gap it left, only existed while the state was local; see
-// store/rois.ts's header for the fix this replaces). `rc = useRoiCuts()`
-// below is kept for exactly one thing: `runSector`/`runChi`/`busy`, the SAME
-// request-shaping + landing logic the panel's own buttons call — not for
-// its state, which this hook no longer reads.
+// store field, in sync for free. Commits and default priming deliberately
+// follow this map's bound dataset: a document map can differ from the
+// Library-active dataset, so delegating either operation to `useRoiCuts()`
+// could send the wrong dataset or install the wrong q range.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { rsmChiProfile, rsmSector } from "../../lib/api/rsm";
 import { cancelActiveGesture, setActiveGestureCancel } from "../../lib/gestureCancel";
 import type { CutSpace } from "../../lib/mapcuts";
 import { rsmAxisKeys, type MapPayload } from "../../lib/mapdataFetch";
@@ -36,9 +34,10 @@ import { chiProfileLocal, sectorProfileLocal, type PolarCols, type RoiProfile } 
 import type { Dataset, DataStruct } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import type { MapSectorState } from "../../store/rois";
-import { sectorPreviewFor, useRoiCuts } from "../workshops/roicuts/useRoiCuts";
+import { effectivePhiBounds, polarBranch, sectorDefaultsFor, sectorPreviewFor } from "../workshops/roicuts/useRoiCuts";
 import type { WedgeMode } from "./MapToolbar";
 import { plotRect } from "./mapRender";
+import { useCutLanding } from "./useCutLanding";
 import { pxToData } from "./useMapRoi";
 
 const RAD2DEG = 180 / Math.PI;
@@ -129,16 +128,15 @@ export interface UseMapSectorWedgeState {
   previewAxis: "q" | "phi";
   setPreviewAxis: (axis: "q" | "phi") => void;
 
-  /** Radial/Azimuthal — POST /api/rsm/sector · /chi-profile via the SAME
-   *  `useRoiCuts().runSector`/`runChi` the panel's own buttons call (no
-   *  second request-shaping path). */
+  /** Radial/Azimuthal — POST /api/rsm/sector · /chi-profile for this map's
+   *  bound dataset, landed through the shared cut-landing workflow. */
   runRadial: () => void;
   runAzimuthal: () => void;
   busy: boolean;
 }
 
 export function useMapSectorWedge(active: Dataset | null, cutSpace: CutSpace | null): UseMapSectorWedgeState {
-  const rc = useRoiCuts();
+  const { busy, land } = useCutLanding();
   const mapSector = useApp((s) => s.mapSector);
   const setMapSector = useApp((s) => s.setMapSector);
 
@@ -149,13 +147,11 @@ export function useMapSectorWedge(active: Dataset | null, cutSpace: CutSpace | n
   const [previewAxis, setPreviewAxis] = useState<"q" | "phi">("q");
   const [preview, setPreview] = useState<RoiProfile | null>(null);
 
-  // Only shown/draggable over the CURRENTLY DISPLAYED Q axes — `rc.polar`
-  // is about the ACTIVE DATASET's capability (Qx/Qz present at all), not
-  // which axes are on screen right now (mirrors useMapRoi.ts's `rect`
-  // space-mismatch gate). Read from `rc`, not re-derived from this hook's
-  // own `active` param, so a bound-panel dataset (MapStage's `dataset`
-  // prop) can never disagree with the panel's own polar-branch gate.
-  const sector: RoiSector | null = cutSpace === "q" ? sectorPreviewFor(mapSector, rc.polar) : null;
+  // Capability follows THIS map's bound dataset, not the Library-active one.
+  // The old `rc.polar` read could draw a wedge over dataset B but commit a
+  // cut against dataset A, producing an empty or plainly wrong profile.
+  const polar = active ? polarBranch(active.data) : { kind: "none" as const, reason: "no bound dataset" };
+  const sector: RoiSector | null = cutSpace === "q" ? sectorPreviewFor(mapSector, polar) : null;
 
   const cols = useMemo(() => (active ? polarColsFor(active.data) : null), [active]);
 
@@ -244,12 +240,30 @@ export function useMapSectorWedge(active: Dataset | null, cutSpace: CutSpace | n
   const draggingHit = dragging ? (dragRef.current?.hit ?? null) : null;
   const cursor = mode !== "sector" ? "default" : draggingHit ? sectorCursor(draggingHit) : sectorCursor(hover);
 
+  function commit(kind: "radial" | "azimuthal"): void {
+    if (!active || !sector) return;
+    const { phiMin, phiMax } = effectivePhiBounds(mapSector);
+    const request = {
+      dataset: active.data,
+      q_min: sector.qMin,
+      q_max: sector.qMax,
+      n_bins: mapSector.sectorBins,
+      mode: mapSector.sectorMode,
+      phi_min: phiMin,
+      phi_max: phiMax,
+    };
+    void land(kind === "radial" ? rsmSector(request) : rsmChiProfile(request));
+  }
+
   return {
     mode,
     setMode: (m) => {
       // Disarming (or becoming unreachable) mid-drag must abort the gesture
       // the same way Esc does — never leave a half-dragged sector behind.
       if (m !== "sector") cancelActiveGesture();
+      if (m === "sector" && active && mapSector.primedFor !== active.id) {
+        setMapSector(sectorDefaultsFor(active));
+      }
       setModeState(m);
     },
     sector,
@@ -263,8 +277,8 @@ export function useMapSectorWedge(active: Dataset | null, cutSpace: CutSpace | n
     preview,
     previewAxis,
     setPreviewAxis,
-    runRadial: rc.runSector,
-    runAzimuthal: rc.runChi,
-    busy: rc.busy,
+    runRadial: () => commit("radial"),
+    runAzimuthal: () => commit("azimuthal"),
+    busy,
   };
 }

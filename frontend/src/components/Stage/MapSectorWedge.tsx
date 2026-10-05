@@ -64,11 +64,44 @@ const HANDLE_ORDER: readonly SectorField[] = ["qMin", "qMax", "phiMin", "phiMax"
  *  a handle off the visible map isn't drawn, but the others still are). */
 function handlePx(
   sector: RoiSector,
+  payload: MapPayload,
   project: (x: number, y: number) => [number, number] | null,
 ): { field: SectorField; x: number; y: number }[] {
   const pos = sectorHandlePositions(sector);
   return HANDLE_ORDER.map((field) => {
-    const p = project(pos[field].x, pos[field].y);
+    let p = project(pos[field].x, pos[field].y);
+    // A valid polar boundary can intersect the square plot while its usual
+    // midpoint marker is outside it.  The common full-map default is exactly
+    // that case: qMax reaches a corner (sqrt(xMax²+yMax²)), but its 180°
+    // midpoint lies beyond the left edge.  Search along the SAME boundary
+    // for a visible representative instead of silently dropping the handle.
+    if (!p && (field === "qMin" || field === "qMax")) {
+      const span = (((sector.phiMax - sector.phiMin) % 360) + 360) % 360 || 360;
+      const radius = field === "qMin" ? sector.qMin : sector.qMax;
+      const xEnds = [payload.xAxis[0]!, payload.xAxis[payload.xAxis.length - 1]!];
+      const yEnds = [payload.yAxis[0]!, payload.yAxis[payload.yAxis.length - 1]!];
+      const cornerAngles = xEnds.flatMap((x) => yEnds.map((y) => (Math.atan2(y, x) * 180) / Math.PI));
+      const angles = [
+        ...cornerAngles.filter((phi) => (((phi - sector.phiMin) % 360) + 360) % 360 <= span),
+        ...Array.from({ length: 33 }, (_, i) => sector.phiMin + (span * i) / 32),
+      ];
+      // Nudge the marker a sub-pixel amount inward so a boundary point such
+      // as sqrt(2)*cos(45°) does not miss a strict viewport comparison by a
+      // floating-point ulp. Hit-testing still resolves it as the true arc.
+      const markerRadius = radius * (1 - 1e-9);
+      for (const phiDeg of angles) {
+        if (p) break;
+        const phi = (phiDeg * Math.PI) / 180;
+        p = project(markerRadius * Math.cos(phi), markerRadius * Math.sin(phi));
+      }
+    }
+    if (!p && (field === "phiMin" || field === "phiMax")) {
+      const phi = ((field === "phiMin" ? sector.phiMin : sector.phiMax) * Math.PI) / 180;
+      for (let i = 0; i <= 16 && !p; i++) {
+        const radius = sector.qMin + ((sector.qMax - sector.qMin) * i) / 16;
+        p = project(radius * Math.cos(phi), radius * Math.sin(phi));
+      }
+    }
     return p ? { field, x: p[0], y: p[1] } : null;
   }).filter((p): p is { field: SectorField; x: number; y: number } => p != null);
 }
@@ -82,11 +115,14 @@ export interface MapSectorWedgeProps {
 
 export default function MapSectorWedge({ payload, w, h, wedge }: MapSectorWedgeProps) {
   const { sector } = wedge;
-  if (!sector) return null;
+  // The sector state always exists, but its handles/bar must not exist while
+  // another map tool is armed.  Before this gate, the inactive sector bar
+  // could sit over a visible box corner and eat the box's pointer-down.
+  if (!sector || wedge.mode !== "sector") return null;
 
   const project = (x: number, y: number) => dataToPx(payload, w, h, x, y);
   const wedgeD = sectorWedgePath(sector, project);
-  const handles = handlePx(sector, project);
+  const handles = handlePx(sector, payload, project);
   const bounds = handles.reduce(
     (b, p) => ({ x0: Math.min(b.x0, p.x), x1: Math.max(b.x1, p.x), y0: Math.min(b.y0, p.y), y1: Math.max(b.y1, p.y) }),
     { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity },
@@ -95,11 +131,11 @@ export default function MapSectorWedge({ payload, w, h, wedge }: MapSectorWedgeP
 
   return (
     <>
-      {wedgeD && (
+      {(wedgeD || handles.length > 0) && (
         <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} width="100%" height="100%">
-          <path d={wedgeD} fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth={1} strokeDasharray="3 3" />
+          {wedgeD && <path d={wedgeD} fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth={1} strokeDasharray="3 3" />}
           {handles.map((p) => (
-            <rect key={p.field} x={p.x - 3} y={p.y - 3} width={6} height={6} fill="var(--accent)" stroke="var(--surface-0)" />
+            <rect key={p.field} data-roi-handle={`sector-${p.field}`} x={p.x - 3} y={p.y - 3} width={6} height={6} fill="var(--accent)" stroke="var(--surface-0)" />
           ))}
           {handles[0] && (
             <text className="qzk-roi-readout" x={handles[0].x} y={Math.max(10, bounds.y0 - 6)}>
