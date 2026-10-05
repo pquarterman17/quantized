@@ -64,12 +64,28 @@ describe("WindowWorkspaceControls", () => {
   });
 
   it("restores the full-bleed starter plot without requiring a hidden title bar", () => {
+    useApp.setState({ stageTab: "map" });
     render(<WindowWorkspaceControls />);
     const restore = screen.getByRole("button", { name: "Restore active window" });
     fireEvent.click(restore);
     expect(useApp.getState().plotWindows[0].winState).toBe("normal");
+    expect(useApp.getState().stageTab).toBe("plot");
     expect(screen.getByRole("button", { name: "Maximize active window" })).toBeEnabled();
   });
+
+  it.each(["Tile visible windows", "Cascade visible windows"] as const)(
+    "reveals the Plot workspace when %s is used from another tab",
+    (label) => {
+      const second = { ...mainWindow(), id: "w2", winState: "normal" as const };
+      useApp.setState({
+        stageTab: "worksheet",
+        plotWindows: [{ ...mainWindow(), winState: "normal" as const }, second],
+      });
+      render(<WindowWorkspaceControls />);
+      fireEvent.click(screen.getByRole("button", { name: label }));
+      expect(useApp.getState().stageTab).toBe("plot");
+    },
+  );
 
   it("disables the worksheet shortcut when no dataset is active", () => {
     useApp.setState({ activeId: null });

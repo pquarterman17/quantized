@@ -48,7 +48,10 @@ export default function WindowWorkspaceControls() {
         type="button"
         onClick={() => {
           const s = useApp.getState();
-          if (s.focusedWindowId) s.toggleMaximizeWindow(s.focusedWindowId);
+          if (s.focusedWindowId) {
+            s.toggleMaximizeWindow(s.focusedWindowId);
+            s.setStageTab("plot");
+          }
         }}
         disabled={!focusedState}
         title={focusedState === "maximized" ? "Restore the active window" : "Maximize the active window"}
@@ -58,7 +61,11 @@ export default function WindowWorkspaceControls() {
       </button>
       <button
         type="button"
-        onClick={() => useApp.getState().tileWindows()}
+        onClick={() => {
+          const s = useApp.getState();
+          s.tileWindows();
+          s.setStageTab("plot");
+        }}
         disabled={visibleCount < 2}
         title="Tile visible windows side by side"
         aria-label="Tile visible windows"
@@ -67,7 +74,11 @@ export default function WindowWorkspaceControls() {
       </button>
       <button
         type="button"
-        onClick={() => useApp.getState().cascadeWindows()}
+        onClick={() => {
+          const s = useApp.getState();
+          s.cascadeWindows();
+          s.setStageTab("plot");
+        }}
         disabled={visibleCount < 2}
         title="Cascade visible windows"
         aria-label="Cascade visible windows"
