@@ -250,6 +250,10 @@ export default function MapStage({ dataset }: MapStageProps) {
           onClick={pointer.onClick}
           onDoubleClick={pointer.onDoubleClick}
           onPointerDown={(ev) => {
+            // Context-clicks belong to menus/browser handling, never to a
+            // scientific selection gesture. Capturing a secondary pointer
+            // here used to route its subsequent move through the armed ROI.
+            if (ev.button !== 0) return;
             ev.currentTarget.setPointerCapture?.(ev.pointerId);
             pointer.onDown(ev);
           }}
