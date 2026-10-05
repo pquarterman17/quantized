@@ -91,7 +91,7 @@ test("XRD map box and sector handles drag and land visible 1-D profiles @core", 
   const qMax = await page.locator('[data-roi-handle="sector-qMax"]').boundingBox();
   if (!qMax) throw new Error("sector qMax handle geometry unavailable");
   const sectorBefore = await page.evaluate(() =>
-    (window as unknown as { __qz: { useApp: { getState: () => { mapSector: { secMax: number } } } } }).__qz.useApp.getState().mapSector.secMax,
+    (window as unknown as { __qz: { useApp: { getState: () => { mapSector: Record<string, { secMax: number }> } } } }).__qz.useApp.getState().mapSector.rsm?.secMax,
   );
   const mapBox = await canvas.boundingBox();
   if (!mapBox) throw new Error("restored map canvas geometry unavailable");
@@ -104,7 +104,7 @@ test("XRD map box and sector handles drag and land visible 1-D profiles @core", 
   await page.mouse.move(handleX + (centerX - handleX) * 0.15, handleY + (centerY - handleY) * 0.15, { steps: 4 });
   await page.mouse.up();
   await expect.poll(() => page.evaluate(() =>
-    (window as unknown as { __qz: { useApp: { getState: () => { mapSector: { secMax: number } } } } }).__qz.useApp.getState().mapSector.secMax,
+    (window as unknown as { __qz: { useApp: { getState: () => { mapSector: Record<string, { secMax: number }> } } } }).__qz.useApp.getState().mapSector.rsm?.secMax,
   )).not.toBe(sectorBefore);
 
   await page.getByRole("button", { name: "Radial", exact: true }).click();
