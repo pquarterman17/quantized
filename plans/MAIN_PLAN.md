@@ -355,19 +355,29 @@ of being booked here.)*
     Suggested ownership: ChatGPT-Sol/Codex for the compact GUI and feedback;
     Claude Sonnet for conversion contracts, dimensional validation, and
     backend reliability. A cheaper model is suitable for mechanical unit-list
-    wiring after the dimensional model and tests are settled.
+    wiring after the dimensional model and tests are settled. **This item is
+    the authoritative implementation contract; do not create a parallel
+    unchecked normalization checklist in another plan.**
     - [ ] Provide an explicit normalization basis selector: none/raw moment,
           mass, area, or volume. Do not infer and silently apply a basis from
           whatever metadata happens to be present.
+    - [ ] Define one persisted `SampleProfile` contract with optional mass,
+          direct volume, area, width, length, diameter, and **magnetic-film
+          thickness**. Preserve the entered value and unit for editing, plus
+          a canonical value for calculation. Keep magnetic-film thickness
+          visibly distinct from substrate or total-sample thickness; never
+          guess which thickness the user meant.
     - [ ] Use a reusable `value | unit` row for every quantity. Minimum unit
           sets: mass (µg, mg, g, kg); length/thickness (nm, µm, mm, cm, m);
-          area (mm², cm², m²); volume (mm³, cm³, m³, µL, mL). Each field
+          thin-film length/thickness also includes Å; area (mm², cm², m²);
+          volume (mm³, cm³, m³, µL, mL). Each field
           converts to one canonical internal unit while preserving the value
           and unit the user entered for later editing.
     - [ ] Support the owner's common geometry paths without forcing algebra:
           width × length + thickness; direct area + thickness; direct volume;
-          or sample mass. Width, length, and thickness may each use different
-          units (for example cm, cm, and nm).
+          circular diameter × thickness; or sample mass. Width, length,
+          diameter, and thickness may each use different units (for example
+          cm, cm, and nm).
     - [ ] Show a live read-only calculation summary before Apply: computed
           area/volume, normalization divisor, source moment unit, requested
           output unit, and the equation used. Invalid, missing, zero, or
@@ -375,7 +385,8 @@ of being booked here.)*
     - [ ] Offer output units appropriate to the selected basis, rather than
           one mixed list: raw moment (emu, A·m²); mass-normalized (emu/g,
           A·m²/kg); volume magnetization (emu/cm³, A/m, kA/m); and an
-          explicitly labelled area-normalized set when area is selected.
+          explicitly labelled area-normalized set (at minimum emu/cm² and
+          A·m²/m²) when area is selected.
           Conversion factors must be dimensionally tested, including the
           emu/cm³ ↔ A/m relationship.
     - [ ] Apply non-destructively: create a derived/corrected dataset, never
@@ -385,14 +396,23 @@ of being booked here.)*
     - [ ] Reuse sample geometry stored in metadata only through a visible
           “Use metadata values” action. Never overwrite already customized
           plot settings when the derived dataset opens.
+    - [ ] Let the user explicitly save a named sample profile and deliberately
+          apply it to related measurements. Never auto-apply a saved profile
+          by technique, filename, or similarity, and never overwrite a
+          dataset's already customized normalization.
     - [ ] Add focused backend tests for mixed-unit geometry and every output
           family; frontend tests for unit changes preserving the physical
           value, validation, basis-dependent choices, and live summary; and a
           real workflow test for 5 cm × 5 cm × 30 nm → emu/cm³ and A/m.
-    - [ ] Revisit after owner testing whether density, irregular-shape volume,
-          multiple pieces/sample count, and saved sample presets are frequent
-          enough to justify expansion. Do not grow those speculative fields
-          into the first implementation.
+    - [ ] **Deferred follow-up, not part of the first implementation:** add
+          optional uncertainty fields for dimensions/mass and propagate their
+          contribution separately from measurement uncertainty. The first
+          release must preserve enough profile/provenance information to add
+          this without changing previously saved meanings.
+    - [ ] Revisit after owner testing whether density-derived volume,
+          irregular-shape volume, multiple pieces/sample count, and batch
+          profile assignment are frequent enough to justify expansion. Do not
+          grow those speculative fields into the first implementation.
 
 *(items 29–30 folded up 2026-07-25 from the two orphan ChatGPT-"Sol"
 audit docs, which were absorbed and deleted the same day per the
