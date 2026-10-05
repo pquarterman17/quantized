@@ -124,6 +124,7 @@ def test_sector_full_annulus_peak_matches_raw_brightest_pixel(
     assert resp.status_code == 200
     out = resp.json()
     assert out["labels"] == ["Intensity", "N points"]
+    assert out["metadata"]["default_value_channels"] == [0]
     assert len(out["time"]) == 60
     _assert_has_provenance(out["metadata"], "cut_kind", "q_range", "sector", "mode")
     assert out["metadata"]["cut_kind"] == "sector"
@@ -196,6 +197,7 @@ def test_chi_profile_peak_azimuth_matches_raw_brightest_pixel(
     assert resp.status_code == 200
     out = resp.json()
     assert out["labels"] == ["Intensity", "N points"]
+    assert out["metadata"]["default_value_channels"] == [0]
     assert len(out["time"]) == 45
     _assert_has_provenance(out["metadata"], "cut_kind", "q_range", "sector", "mode")
     assert out["metadata"]["cut_kind"] == "chi"
@@ -251,6 +253,7 @@ def test_box_q_space_around_bright_peak_collapse_x(
     assert resp.status_code == 200
     out = resp.json()
     assert out["labels"] == ["Intensity", "N points"]
+    assert out["metadata"]["default_value_channels"] == [0]
     assert len(out["time"]) == 200  # calc.boxcut's cloud-path default n_bins
     _assert_has_provenance(out["metadata"], "cut_kind", "roi", "cut_space", "collapse")
     assert out["metadata"]["cut_kind"] == "box"

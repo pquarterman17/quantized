@@ -37,8 +37,8 @@ export default function WindowWorkspaceControls() {
   };
 
   return (
-    <div className="qzk-window-workspace" role="toolbar" aria-label="Plot and worksheet windows">
-      <button type="button" onClick={newPlot} title="Open another editable plot window">
+    <div className="qzk-window-workspace" role="toolbar" aria-label="Window controls">
+      <button type="button" onClick={newPlot} title="Open another plot window">
         <span aria-hidden="true">＋</span>
         <span>Plot</span>
       </button>
@@ -46,7 +46,7 @@ export default function WindowWorkspaceControls() {
         type="button"
         onClick={openWorksheet}
         disabled={!activeId}
-        title={activeId ? "Show this dataset's worksheet beside its plot" : "Select a dataset first"}
+        title={activeId ? "Show this worksheet beside its plot" : "Select a dataset first"}
       >
         <span aria-hidden="true">▦</span>
         <span>Sheet</span>
@@ -62,7 +62,7 @@ export default function WindowWorkspaceControls() {
           }
         }}
         disabled={!frontWindow}
-        title={frontWindow?.winState === "maximized" ? "Restore the active window" : "Maximize the active window"}
+        title={frontWindow?.winState === "maximized" ? "Restore active window" : "Maximize active window"}
         aria-label={frontWindow?.winState === "maximized" ? "Restore active window" : "Maximize active window"}
       >
         {frontWindow?.winState === "maximized" ? "❐" : "□"}
@@ -75,7 +75,7 @@ export default function WindowWorkspaceControls() {
           s.setStageTab("plot");
         }}
         disabled={visibleCount < 2}
-        title="Tile visible windows side by side"
+        title="Tile windows side by side"
         aria-label="Tile visible windows"
       >
         ▦▦
@@ -88,7 +88,7 @@ export default function WindowWorkspaceControls() {
           s.setStageTab("plot");
         }}
         disabled={visibleCount < 2}
-        title="Cascade visible windows"
+        title="Cascade windows"
         aria-label="Cascade visible windows"
       >
         ◫

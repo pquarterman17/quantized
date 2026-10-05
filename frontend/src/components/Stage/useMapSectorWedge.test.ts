@@ -5,8 +5,8 @@
 //
 // The sector's authoritative fields live in `store.mapSector` (MAIN_PLAN
 // item 41 — see useMapSectorWedge.ts's header), re-primed to a dataset-
-// derived DEFAULT (full circle, q-range from the data) by useRoiCuts.ts's
-// per-active-dataset effect, which this hook still mounts internally. Each
+// derived DEFAULT (full circle, q-range from the data) when the wedge is
+// armed for its own bound dataset. Each
 // test "primes" the sector with one unambiguous drag (moving phiMin away
 // from the coincident phiMin===phiMax point at the full circle's seam)
 // before exercising the handle under test — this is exactly the kind of
@@ -109,10 +109,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   useApp.setState({ mapRoi: null, mapRuler: null, savedRois: [], selectedIds: [] });
   // `mapSector` is shared store state now (MAIN_PLAN item 41) — clear its
-  // `primedFor` marker so useRoiCuts.ts's per-active-dataset effect re-primes
+  // dataset bank so arming the wedge re-primes
   // fresh for every test instead of skipping (already primed for "d1" by a
   // PRIOR test) and leaking that test's dragged values into this one.
-  useApp.getState().setMapSector({ primedFor: null });
+  useApp.setState({ mapSector: {} });
   setActive();
   rafCb = null;
   vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
@@ -140,6 +140,7 @@ function primeToQuarter(result: { current: ReturnType<typeof useMapSectorWedge> 
 describe("useMapSectorWedge — priming + each handle changes only its own field", () => {
   it("priming drag moves phiMin only", () => {
     const { result } = renderHook(() => useMapSectorWedge(ACTIVE, "q"));
+    act(() => result.current.setMode("sector"));
     expect(result.current.sector).toEqual({ qMin: 2, qMax: 4, phiMin: 0, phiMax: 360 });
     primeToQuarter(result);
     const s = result.current.sector!;
@@ -304,6 +305,61 @@ describe("useMapSectorWedge — preview vs commit separation", () => {
     await flush();
 
     expect(rsmSector).toHaveBeenCalledTimes(1);
+  });
+
+  it("commits the dataset bound to this map, not a different Library-active dataset", async () => {
+    const other = {
+      id: "other",
+      name: "other.dat",
+      data: { time: [0], values: [[1]], labels: ["Signal"], units: [""], metadata: {} },
+    };
+    useApp.setState({ datasets: [ACTIVE, other], activeId: other.id });
+    vi.mocked(rsmSector).mockResolvedValue({
+      time: [0],
+      values: [[1, 1]],
+      labels: ["Intensity", "N points"],
+      units: ["cps", ""],
+      metadata: {},
+    });
+
+    const { result } = renderHook(() => useMapSectorWedge(ACTIVE, "q"));
+    act(() => result.current.setMode("sector"));
+    act(() => result.current.runRadial());
+    await flush();
+
+    expect(rsmSector).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(rsmSector).mock.calls[0]![0]).toMatchObject({ dataset: DS, q_min: 2, q_max: 4 });
+  });
+
+  it("keeps a bound map's sector when the mounted numeric panel changes Library dataset", async () => {
+    const scaled = (id: string, factor: number) => ({
+      id,
+      name: `${id}.xrdml`,
+      data: {
+        ...DS,
+        values: DS.values.map((row) => [row[0]!, row[1]!, row[2]!, row[3]! * factor, row[4]! * factor]),
+      },
+    });
+    const a = scaled("a", 3);
+    const c = scaled("c", 5);
+    useApp.setState({ datasets: [a, ACTIVE, c], activeId: a.id });
+    const panel = renderHook(() => useRoiCuts());
+    const wedge = renderHook(() => useMapSectorWedge(ACTIVE, "q"));
+
+    act(() => wedge.result.current.setMode("sector"));
+    expect(wedge.result.current.sector).toMatchObject({ qMin: 2, qMax: 4 });
+
+    act(() => useApp.setState({ activeId: c.id }));
+    expect(panel.result.current.secMin).toBe(10);
+    expect(panel.result.current.secMax).toBe(20);
+    expect(wedge.result.current.sector).toMatchObject({ qMin: 2, qMax: 4 });
+
+    vi.mocked(rsmSector).mockResolvedValue({
+      time: [0], values: [[1, 1]], labels: ["Intensity", "N points"], units: ["cps", ""], metadata: {},
+    });
+    act(() => wedge.result.current.runRadial());
+    await flush();
+    expect(vi.mocked(rsmSector).mock.calls.at(-1)?.[0]).toMatchObject({ dataset: DS, q_min: 2, q_max: 4 });
   });
 });
 

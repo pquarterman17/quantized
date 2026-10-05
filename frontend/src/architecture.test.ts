@@ -2255,8 +2255,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   mapRoi: "in-progress ROI box geometry; survives dataset switch but not undo",
   mapRuler: "in-progress ruler geometry; survives dataset switch but not undo",
   mapSector:
-    "in-progress sector/wedge geometry; same working-scratch class as mapRoi/mapRuler " +
-    "(MAIN_PLAN #41 moved it here from useRoiCuts local state so both panels share it)",
+    "dataset-scoped sector/wedge scratch geometry; prevents visible maps from sharing incompatible q bounds",
   rsmPeaks: "RSM peak markers from analysis; cleared on dataset change or analysis reset",
 
   // Windows slice: computed from plot DOM

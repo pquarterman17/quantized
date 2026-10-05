@@ -128,6 +128,10 @@ export function useMapPointer(opts: MapPointerOptions): MapPointerState {
       if (r) opts.onAnnotate(r.x, r.y);
     },
     onDown: (ev) => {
+      // Defense in depth for callers: only a primary-button press can begin
+      // a box/ruler/sector or segment gesture. In particular, right-click is
+      // reserved for context actions and must not mutate ROI geometry.
+      if (ev.button !== 0) return;
       if (routed && payload) {
         const { px } = hitAt(ev);
         routed.onDown(payload, hostSize.w, hostSize.h, px);

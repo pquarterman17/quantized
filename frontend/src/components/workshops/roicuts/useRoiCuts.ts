@@ -25,12 +25,11 @@
 //         inline request shape).
 //   (iii) neither -> both buttons stay disabled; `polar.reason` is the
 //         tooltip text the panel shows, never a silent no-op.
-// `mapRoi`/`mapRuler`/`mapSector` are read from store/rois.ts (mapRuler only
-// to gate "Save"). `mapSector` (MAIN_PLAN item 41, moved out of local
-// useState) gets the same treatment as `mapRoi`: setters below are thin
-// wrappers over `store.setMapSector`, so a value typed here and a drag on
-// the map's wedge (`Stage/useMapSectorWedge.ts`) are the same field — see
-// store/rois.ts's header for why. `effectivePhiBounds`/`sectorPreviewFor`
+// `mapRoi`/`mapRuler`/dataset-owned `mapSector` entries are read from store/rois.ts
+// (mapRuler only to gate "Save"). Sector setters below address the active
+// dataset's entry, so its numeric panel and wedge share one value without
+// allowing another visible map to replace its q bounds — see store/rois.ts's
+// header for why. `effectivePhiBounds`/`sectorPreviewFor`
 // are exported so that hook derives the identical true-polar bounds without
 // re-deriving the center/bounds mode-select (SEAM for item 6/12, no
 // useMapRoi.ts/MapRoiOverlay.tsx/useMapSectorWedge.ts in this file).
@@ -59,6 +58,13 @@ import type { MapSectorState } from "../../../store/rois";
 import { useCutLanding } from "../../Stage/useCutLanding";
 
 // ── Pure helpers (column extents, polar-branch detection) ──────────────────
+
+/** Full-circle fallback used only inside the lazy map/cuts feature. */
+export const DEFAULT_MAP_SECTOR: MapSectorState = {
+  phiParam: "bounds", phiCenter: 0, phiHalfWidth: 180,
+  phiMin: 0, phiMax: 360, secMin: 0, secMax: 1,
+  sectorBins: 100, sectorMode: "sum",
+};
 
 function columnExtentIdx(ds: DataStruct, idx: number): [number, number] {
   if (idx < 0) return [0, 1];
@@ -164,6 +170,31 @@ export function sectorPreviewFor(s: MapSectorState, polar: PolarBranch): RoiSect
   return { qMin: Math.min(s.secMin, s.secMax), qMax: Math.max(s.secMin, s.secMax), phiMin, phiMax };
 }
 
+/** Dataset-specific scratch-sector defaults shared by the numeric panel and
+ *  a bound map window. Keeping this pure prevents a map bound to dataset B
+ *  from inheriting q bounds primed from the Library-active dataset A. */
+export function sectorDefaultsFor(active: Dataset): Partial<MapSectorState> {
+  const ds = active.data;
+  const branch = polarBranch(ds);
+  const [secMin, secMax] =
+    branch.kind === "q"
+      ? qMagnitudeExtent(ds)
+      : branch.kind === "pole"
+        ? columnExtentIdx(ds, branch.axis === "x" ? 1 : 0)
+        : ([0, 1] as [number, number]);
+  return {
+    phiParam: "bounds",
+    phiCenter: 0,
+    phiHalfWidth: 180,
+    phiMin: 0,
+    phiMax: 360,
+    secMin,
+    secMax,
+    sectorBins: defaultSectorBins(mapShapeOf(ds)),
+    sectorMode: "sum",
+  };
+}
+
 /** Build the periodic-axis box (branch ii) from the sector card's own
  *  phi/secondary fields, reusing `roiBoxBody` — never a third inline
  *  request shape. `phiLo`/`phiHi` are passed through UNSORTED on purpose:
@@ -256,8 +287,11 @@ export function useRoiCuts(): RoiCutsState {
   const mapRoi = useRoisStore((s) => s.mapRoi);
   const setMapRoi = useRoisStore((s) => s.setMapRoi);
   const mapRuler = useRoisStore((s) => s.mapRuler);
-  const mapSector = useRoisStore((s) => s.mapSector);
-  const setMapSector = useRoisStore((s) => s.setMapSector);
+  const mapSector = useRoisStore((s) => s.mapSector[active?.id ?? ""] ?? DEFAULT_MAP_SECTOR);
+  const setMapSectorFor = useRoisStore((s) => s.setMapSector);
+  const setMapSector = (patch: Partial<MapSectorState>) => {
+    if (active) setMapSectorFor(active.id, patch);
+  };
   const savedRois = useRoisStore((s) => s.savedRois);
   const saveRoi = useRoisStore((s) => s.saveRoi);
   const applySavedRoi = useRoisStore((s) => s.applySavedRoi);
@@ -283,33 +317,13 @@ export function useRoiCuts(): RoiCutsState {
   // A new active dataset re-primes the sector card's defaults (full circle,
   // q-range/secondary-range from the data, bins from map_shape) — mirrors
   // useRsm.ts's "a new active dataset invalidates the current analysis".
-  // `sectorMode` is deliberately left out of the patch (mirrors the old
-  // local-state version, which never reset it here either) — the merge
-  // setter means omitting a field simply carries its current value forward.
-  // Guarded by `primedFor` (store/rois.ts) so a SECOND mount for the SAME
-  // dataset — e.g. opening this panel after the wedge already primed/dragged
-  // it — is a no-op, not a silent reset of a live drag; see that field's doc.
+  // A new bank entry starts in sum mode. Returning to an existing dataset
+  // skips this effect, so that dataset's explicit mode remains untouched.
+  // The immutable default is returned only while this dataset has no banked
+  // entry, so a second consumer cannot reset geometry the first one dragged.
   useEffect(() => {
-    if (!active || mapSector.primedFor === active.id) return;
-    const ds = active.data;
-    const branch = polarBranch(ds);
-    const [secMin, secMax] =
-      branch.kind === "q"
-        ? qMagnitudeExtent(ds)
-        : branch.kind === "pole"
-          ? columnExtentIdx(ds, branch.axis === "x" ? 1 : 0)
-          : ([0, 1] as [number, number]);
-    setMapSector({
-      phiParam: "bounds",
-      phiCenter: 0,
-      phiHalfWidth: 180,
-      phiMin: 0,
-      phiMax: 360,
-      secMin,
-      secMax,
-      sectorBins: defaultSectorBins(mapShapeOf(ds)),
-      primedFor: active.id,
-    });
+    if (!active || mapSector !== DEFAULT_MAP_SECTOR) return;
+    setMapSector(sectorDefaultsFor(active));
     setBoxStats(null);
     setStatsError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps

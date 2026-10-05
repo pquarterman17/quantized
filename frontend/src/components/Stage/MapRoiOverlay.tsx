@@ -227,6 +227,10 @@ export interface MapRoiOverlayProps {
   /** Is a box gesture in flight? The bar goes pointer-transparent while it is
    *  — see the `barPointerEvents` note below. */
   dragging: boolean;
+  /** Only the armed shape owns handles and controls.  Inactive working
+   *  shapes retain a passive outline but cannot cover another tool's hit
+   *  targets with their floating bar. */
+  boxActive: boolean;
   /** The cut-ruler hook's full state (RSM_CUTS_PLAN item 7) — passed as one
    *  grouped object (unlike the box's flattened props above) so MapStage.tsx
    *  only needs one line to wire it, buying back headroom on its own
@@ -263,6 +267,7 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
     onClearStats,
     onRemove,
     dragging,
+    boxActive,
     rulerState,
     wedgeState,
   } = props;
@@ -292,12 +297,14 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
                 stroke="var(--accent)"
                 strokeWidth={1.5}
               />
-              {handlePositions(rectPx).map((p, i) => (
-                <rect key={i} x={p.x - 3} y={p.y - 3} width={6} height={6} fill="var(--accent)" stroke="var(--surface-0)" />
+              {boxActive && handlePositions(rectPx).map((p, i) => (
+                <rect key={i} data-roi-handle={`box-${i}`} x={p.x - 3} y={p.y - 3} width={6} height={6} fill="var(--accent)" stroke="var(--surface-0)" />
               ))}
-              <text className="qzk-roi-readout" x={rectPx.x0} y={Math.max(10, rectPx.y0 - 6)}>
-                {fmtBounds(rect, boxNames)}
-              </text>
+              {boxActive && (
+                <text className="qzk-roi-readout" x={rectPx.x0} y={Math.max(10, rectPx.y0 - 6)}>
+                  {fmtBounds(rect, boxNames)}
+                </text>
+              )}
             </g>
           )}
           {rulerPx && ruler && (
@@ -308,12 +315,14 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
                 stroke="var(--accent)"
                 strokeWidth={1.5}
               />
-              {rulerHandlePositions(rulerPx).map((p, i) => (
+              {rulerState.mode === "ruler" && rulerHandlePositions(rulerPx).map((p, i) => (
                 <rect key={i} x={p.x - 3} y={p.y - 3} width={6} height={6} fill="var(--accent)" stroke="var(--surface-0)" />
               ))}
-              <text className="qzk-roi-readout" x={rulerPx[0]!.x} y={Math.max(10, rulerPx[0]!.y - 6)}>
-                {fmtRuler(ruler)}
-              </text>
+              {rulerState.mode === "ruler" && (
+                <text className="qzk-roi-readout" x={rulerPx[0]!.x} y={Math.max(10, rulerPx[0]!.y - 6)}>
+                  {fmtRuler(ruler)}
+                </text>
+              )}
             </g>
           )}
         </svg>
@@ -321,7 +330,7 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
 
       <MapSectorWedge payload={payload} w={w} h={h} wedge={wedgeState} />
 
-      {rect && rectPx && (
+      {boxActive && rect && rectPx && (
         <div
           className="qzk-glass qzk-roi-bar"
           style={{ ...barPosition(rectPx, plotRect(payload, w, h)), pointerEvents: barPointerEvents(dragging) }}
@@ -355,7 +364,7 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
         </div>
       )}
 
-      {ruler && rulerPx && (
+      {rulerState.mode === "ruler" && ruler && rulerPx && (
         <div
           className="qzk-glass qzk-roi-bar"
           style={{ ...barPosition(boundsOfPoints(rulerPx), plotRect(payload, w, h)), pointerEvents: barPointerEvents(rulerState.dragging) }}
