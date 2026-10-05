@@ -3,7 +3,7 @@
 // — it's tested purely through its side effects (the command registry +
 // window.addEventListener("keydown")).
 
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { publishLivePlotSnapshot, type LivePlotSnapshot } from "../../lib/plotsnapshot";
@@ -101,6 +101,19 @@ describe("useWindowCommands — published registry entries", () => {
     expect(s.focusedWindowId).toBe(created.id);
   });
 
+  it("the first new graph reveals both windows side by side instead of hiding behind the starter plot", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "maximized" })],
+      focusedWindowId: "w1",
+      plotCanvasBounds: { width: 900, height: 600 },
+    });
+    renderHook(() => useWindowCommands());
+    act(() => action("window-new").run());
+    const windows = useApp.getState().plotWindows;
+    expect(windows.every((item) => item.winState === "normal")).toBe(true);
+    expect(windows[0].geometry.x).not.toBe(windows[1].geometry.x);
+  });
+
   it("'Duplicate Window' clones the FOCUSED window and focuses the copy", () => {
     renderHook(() => useWindowCommands());
     act(() => action("window-duplicate").run());
@@ -111,12 +124,11 @@ describe("useWindowCommands — published registry entries", () => {
     expect(s.focusedWindowId).toBe(dup.id);
   });
 
-  it("'Close Window' closes the focused window and refocuses a survivor", () => {
+  it("'Close Window' closes the focused window and refocuses a survivor", async () => {
     renderHook(() => useWindowCommands());
     act(() => action("window-close").run());
-    const s = useApp.getState();
-    expect(s.plotWindows.map((w) => w.id)).toEqual(["w2"]);
-    expect(s.focusedWindowId).toBe("w2");
+    await waitFor(() => expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w2"]));
+    expect(useApp.getState().focusedWindowId).toBe("w2");
   });
 
   it("'Close Window' is a no-op on the last surviving window (the ≥1-window invariant)", () => {
@@ -138,6 +150,20 @@ describe("useWindowCommands — published registry entries", () => {
     expect(doc.z).toBe(Math.max(...s.plotWindows.map((w) => w.z))); // raised on top
     expect(s.focusedWindowId).toBe("w1"); // document windows never take the view-facade focus
     expect(s.stageTab).toBe("plot"); // the window canvas only renders on the Plot tab
+  });
+
+  it("the first worksheet window automatically reveals a plot-and-sheet workspace", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "maximized" })],
+      focusedWindowId: "w1",
+      plotCanvasBounds: { width: 900, height: 600 },
+    });
+    renderHook(() => useWindowCommands());
+    act(() => action("window-worksheet").run());
+    const windows = useApp.getState().plotWindows;
+    expect(windows.map((item) => item.kind)).toEqual(["plot", "worksheet"]);
+    expect(windows.every((item) => item.winState === "normal")).toBe(true);
+    expect(windows[0].geometry.x).not.toBe(windows[1].geometry.x);
   });
 
   it("'Open Map in Window' (item 17) does the same with kind:'map'", () => {
@@ -367,10 +393,10 @@ describe("useWindowCommands — keyboard shortcuts", () => {
     expect(useApp.getState().plotWindows).toHaveLength(3);
   });
 
-  it("⌘⇧W triggers Close Window", () => {
+  it("⌘⇧W triggers Close Window", async () => {
     renderHook(() => useWindowCommands());
     act(() => press("w", { ctrl: true, shift: true }));
-    expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w2"]);
+    await waitFor(() => expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w2"]));
   });
 
   it("Ctrl+Tab cycles focus forward; Ctrl+Shift+Tab cycles backward — Cmd+Tab is untouched", () => {

@@ -699,12 +699,20 @@ body {
 
 /* ── stage ── */
 .qzk-stage-cell { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
-.qzk-tabs { display: flex; align-items: center; gap: 2px; background: var(--surface-1); border-bottom: 1px solid var(--border-soft); padding: 0 var(--pad); height: 30px; }
+.qzk-stagebar { display: flex; align-items: stretch; height: 30px; flex: none; background: var(--surface-1); border-bottom: 1px solid var(--border-soft); }
+.qzk-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 1; padding: 0 var(--pad); }
 .qzk-tab { padding: 4px 12px; font: inherit; font-size: var(--font-size-sm); color: var(--text-faint); background: none; border: 0; border-bottom: 2px solid transparent; cursor: default; margin-bottom: -1px; }
 .qzk-tab:focus-visible, .qzk-prefs-tab:focus-visible, .qzk-help-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .qzk-stage-panel { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
 .qzk-tab:hover { color: var(--text-dim); }
 .qzk-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.qzk-window-workspace { display: flex; align-items: center; gap: 2px; flex: none; padding: 0 6px; border-left: 1px solid var(--border-soft); }
+.qzk-window-workspace button { display: inline-flex; align-items: center; gap: 4px; min-width: 24px; height: 23px; justify-content: center; border: 0; border-radius: var(--radius-sm); padding: 0 6px; background: transparent; color: var(--text-faint); font: inherit; font-size: var(--font-size-sm); cursor: default; }
+.qzk-window-workspace button:hover:not(:disabled) { background: var(--surface-3); color: var(--text); }
+.qzk-window-workspace button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.qzk-window-workspace button:disabled { opacity: 0.35; }
+.qzk-window-workspace-sep { width: 1px; height: 16px; margin: 0 2px; background: var(--border-soft); }
+@media (max-width: 900px) { .qzk-window-workspace button span + span { display: none; } }
 .qzk-stage { position: relative; flex: 1; background: var(--axes-bg); min-height: 0; overflow: hidden; }
 /* Optional uPlot chart title (Inspector "Titles & labels"); themed + a fixed
    ~24px height so PlotStage can reserve matching room and not clip the x-axis. */
@@ -1174,6 +1182,8 @@ body {
 .qzk-plotwin-rebind:hover { background: var(--surface-3); color: var(--text); }
 .qzk-plotwin-close { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface-3); cursor: default; padding: 0; flex-shrink: 0; }
 .qzk-plotwin-close:hover { background: var(--danger); border-color: var(--danger); }
+.qzk-plotwin-maximize { width: 18px; height: 18px; display: grid; place-items: center; flex: none; border: 0; border-radius: var(--radius-sm); padding: 0; background: transparent; color: var(--text-faint); font: inherit; font-size: 13px; line-height: 1; cursor: default; }
+.qzk-plotwin-maximize:hover { background: var(--surface-3); color: var(--text); }
 .qzk-plotwin-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 /* P3.4 slice 4 (staged workspace-restore rendering): a bulk-restored
    window's inert placeholder body, shown until its turn in

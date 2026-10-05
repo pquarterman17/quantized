@@ -67,7 +67,11 @@ export const datasetQuickPlotActions: ContextAction<DatasetActionTarget>[] = [
   },
 ];
 
-const PLOT_GROUP_IDS = new Set(["dataset.plot", "dataset.plotInNewWindow"]);
+const PLOT_GROUP_IDS = new Set([
+  "dataset.plot",
+  "dataset.plotInNewWindow",
+  "dataset.openWorksheetWindow",
+]);
 
 /** L0.38's ordering (Open, Quick Plot, ...): splice `datasetQuickPlotActions`
  *  right after the "plot" group inside `actions`, leaving every other

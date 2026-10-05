@@ -2,6 +2,7 @@
 // title-bar's right-click menu (WindowTitleButtons). Same store-seeded
 // convention as useWindowCommands.test.ts's own `win()` helper.
 
+import { waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
@@ -86,10 +87,10 @@ describe("windowMenu — label parity with useWindowCommands.ts's palette action
 });
 
 describe("windowMenu — close action", () => {
-  it("closes the TARGET window, not necessarily the focused one", () => {
+  it("closes the TARGET window, not necessarily the focused one", async () => {
     useApp.setState({ plotWindows: [win({ id: "w1" }), win({ id: "w2" })], focusedWindowId: "w1" });
     windowCloseAction.run({ win: win({ id: "w2" }) });
-    expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w1"]);
+    await waitFor(() => expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w1"]));
   });
 });
 

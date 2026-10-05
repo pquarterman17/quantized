@@ -25,7 +25,6 @@ import { cycleWindow, nextPlotBg, snapshotView, zOrderIds } from "../../lib/plot
 import { useCommands, type Action } from "../../store/commands";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
-import { closeFigureWindow, saveFigureAs } from "./figureLifecycleUi";
 
 /** New Graph Window: clones the focused view onto the focused dataset by
  *  default (the plan's "fast compare workflow"), then focuses it — Origin's
@@ -50,7 +49,13 @@ function duplicateFocusedWindow(): void {
  *  the ≥1-window invariant). */
 function closeFocusedWindow(): void {
   const s = useApp.getState();
-  if (s.focusedWindowId) void closeFigureWindow(s.focusedWindowId);
+  const id = s.focusedWindowId;
+  if (id) {
+    void runLazy("Closing window…", () => import("./figureLifecycleUi")).then(
+      (module) => module.closeFigureWindow(id),
+      onLoadFailure,
+    );
+  }
 }
 
 function saveFocusedFigure(): void {
@@ -60,7 +65,12 @@ function saveFocusedFigure(): void {
 
 function saveFocusedFigureAs(): void {
   const id = useApp.getState().focusedWindowId;
-  if (id) void saveFigureAs(id);
+  if (id) {
+    void runLazy("Loading figure save…", () => import("./figureLifecycleUi")).then(
+      (module) => module.saveFigureAs(id),
+      onLoadFailure,
+    );
+  }
 }
 
 /** Why "Snapshot to New Window" did nothing on a polar/stats/stack/facet/

@@ -21,6 +21,7 @@ import { runPaletteCommand } from "../utils/palette";
 
 interface WindowSnapshot {
   id: string;
+  kind: "plot" | "snapshot" | "worksheet" | "map" | "panel";
   winState: "normal" | "minimized" | "maximized";
   geometry: { x: number; y: number; w: number; h: number };
 }
@@ -43,6 +44,28 @@ function rectsOverlap(
 }
 
 test.describe("Window arrange, tile, cascade, maximize/restore, and close", () => {
+  test("the visible Sheet shortcut reveals a side-by-side plot and worksheet workspace", async ({ page }) => {
+    await gotoApp(page);
+    await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("linear-ramp.csv"));
+    await waitForDatasetCount(page, 1);
+
+    await page.getByRole("button", { name: "Sheet", exact: true }).click();
+    await expect.poll(async () => (await readWindows(page)).length).toBe(2);
+
+    const windows = await readWindows(page);
+    expect(windows.map((window) => window.kind)).toEqual(["plot", "worksheet"]);
+    expect(windows.every((window) => window.winState === "normal")).toBe(true);
+    expect(rectsOverlap(windows[0].geometry, windows[1].geometry)).toBe(false);
+    await expect(page.locator(".qzk-plotwin")).toHaveCount(2);
+    await expect(page.getByRole("button", { name: "Tile visible windows" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Cascade visible windows" })).toBeEnabled();
+
+    await page.getByRole("button", { name: "Maximize active window" }).click();
+    await expect(page.getByRole("button", { name: "Restore active window" })).toBeVisible();
+    await page.getByRole("button", { name: "Restore active window" }).click();
+    await expect(page.getByRole("button", { name: "Maximize active window" })).toBeVisible();
+  });
+
   test("create windows, tile, cascade, maximize/restore via the title bar, close via its context menu", async ({
     page,
   }) => {
@@ -57,6 +80,9 @@ test.describe("Window arrange, tile, cascade, maximize/restore, and close", () =
     // ── New Graph Window x2 -> 3 windows total ─────────────────────────────
     await runPaletteCommand(page, "New Graph Window");
     await expect.poll(async () => (await readWindows(page)).length).toBe(2);
+    windows = await readWindows(page);
+    expect(windows.every((window) => window.winState === "normal")).toBe(true);
+    expect(rectsOverlap(windows[0].geometry, windows[1].geometry)).toBe(false);
     await runPaletteCommand(page, "New Graph Window");
     await expect.poll(async () => (await readWindows(page)).length).toBe(3);
 
