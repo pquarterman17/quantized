@@ -3,7 +3,7 @@
 // — it's tested purely through its side effects (the command registry +
 // window.addEventListener("keydown")).
 
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { publishLivePlotSnapshot, type LivePlotSnapshot } from "../../lib/plotsnapshot";
@@ -50,6 +50,7 @@ beforeEach(() => {
   useApp.setState({
     datasets: [{ id: "d1", name: "a", data: { time: [1], values: [[1]], labels: ["m"], units: [""], metadata: {} } }],
     activeId: "d1",
+    stageTab: "plot",
     plotWindows: [win({ id: "w1" }), win({ id: "w2" })],
     focusedWindowId: "w1",
   });
@@ -92,6 +93,7 @@ describe("useWindowCommands — published registry entries", () => {
   });
 
   it("'New Graph Window' creates + focuses a new window bound to the active dataset", () => {
+    useApp.setState({ stageTab: "map" });
     renderHook(() => useWindowCommands());
     act(() => action("window-new").run());
     const s = useApp.getState();
@@ -99,9 +101,24 @@ describe("useWindowCommands — published registry entries", () => {
     const created = s.plotWindows.find((w) => !["w1", "w2"].includes(w.id))!;
     expect(created.datasetId).toBe("d1");
     expect(s.focusedWindowId).toBe(created.id);
+    expect(s.stageTab).toBe("plot");
+  });
+
+  it("the first new graph reveals both windows side by side instead of hiding behind the starter plot", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "maximized" })],
+      focusedWindowId: "w1",
+      plotCanvasBounds: { width: 900, height: 600 },
+    });
+    renderHook(() => useWindowCommands());
+    act(() => action("window-new").run());
+    const windows = useApp.getState().plotWindows;
+    expect(windows.every((item) => item.winState === "normal")).toBe(true);
+    expect(windows[0].geometry.x).not.toBe(windows[1].geometry.x);
   });
 
   it("'Duplicate Window' clones the FOCUSED window and focuses the copy", () => {
+    useApp.setState({ stageTab: "worksheet" });
     renderHook(() => useWindowCommands());
     act(() => action("window-duplicate").run());
     const s = useApp.getState();
@@ -109,14 +126,14 @@ describe("useWindowCommands — published registry entries", () => {
     const dup = s.plotWindows.find((w) => !["w1", "w2"].includes(w.id))!;
     expect(dup.datasetId).toBe("d1");
     expect(s.focusedWindowId).toBe(dup.id);
+    expect(s.stageTab).toBe("plot");
   });
 
-  it("'Close Window' closes the focused window and refocuses a survivor", () => {
+  it("'Close Window' closes the focused window and refocuses a survivor", async () => {
     renderHook(() => useWindowCommands());
     act(() => action("window-close").run());
-    const s = useApp.getState();
-    expect(s.plotWindows.map((w) => w.id)).toEqual(["w2"]);
-    expect(s.focusedWindowId).toBe("w2");
+    await waitFor(() => expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w2"]));
+    expect(useApp.getState().focusedWindowId).toBe("w2");
   });
 
   it("'Close Window' is a no-op on the last surviving window (the ≥1-window invariant)", () => {
@@ -138,6 +155,20 @@ describe("useWindowCommands — published registry entries", () => {
     expect(doc.z).toBe(Math.max(...s.plotWindows.map((w) => w.z))); // raised on top
     expect(s.focusedWindowId).toBe("w1"); // document windows never take the view-facade focus
     expect(s.stageTab).toBe("plot"); // the window canvas only renders on the Plot tab
+  });
+
+  it("the first worksheet window automatically reveals a plot-and-sheet workspace", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "maximized" })],
+      focusedWindowId: "w1", stageTab: "map",
+      plotCanvasBounds: { width: 900, height: 600 },
+    });
+    renderHook(() => useWindowCommands());
+    act(() => action("window-worksheet").run());
+    const windows = useApp.getState().plotWindows;
+    expect(windows.map((item) => item.kind)).toEqual(["plot", "worksheet"]);
+    expect(windows.every((item) => item.winState === "normal")).toBe(true);
+    expect(windows[0].geometry.x).not.toBe(windows[1].geometry.x);
   });
 
   it("'Open Map in Window' (item 17) does the same with kind:'map'", () => {
@@ -177,10 +208,12 @@ describe("useWindowCommands — published registry entries", () => {
     useApp.setState({
       plotWindows: [win({ id: "w1" }), win({ id: "w2" }), win({ id: "w3" })],
       focusedWindowId: "w1",
+      stageTab: "map",
     });
     renderHook(() => useWindowCommands());
     act(() => action("window-focus-next").run());
     expect(useApp.getState().focusedWindowId).toBe("w2");
+    expect(useApp.getState().stageTab).toBe("plot");
   });
 
   it("'Focus Next/Previous Window' is Z-ORDER aware (item 6) — NOT creation order when z differs", () => {
@@ -208,12 +241,13 @@ describe("useWindowCommands — published registry entries", () => {
     useApp.setState({
       plotWindows: [win({ id: "w1" }), win({ id: "w2" })],
       focusedWindowId: "w1",
-      plotCanvasBounds: { width: 800, height: 400 },
+      plotCanvasBounds: { width: 800, height: 400 }, stageTab: "worksheet",
     });
     renderHook(() => useWindowCommands());
     act(() => action("window-tile").run());
     const tiled = useApp.getState().plotWindows;
     expect(tiled.find((w) => w.id === "w1")!.geometry).not.toEqual(tiled.find((w) => w.id === "w2")!.geometry);
+    expect(useApp.getState().stageTab).toBe("plot");
 
     act(() => action("window-cascade").run());
     const cascaded = useApp.getState().plotWindows;
@@ -367,10 +401,10 @@ describe("useWindowCommands — keyboard shortcuts", () => {
     expect(useApp.getState().plotWindows).toHaveLength(3);
   });
 
-  it("⌘⇧W triggers Close Window", () => {
+  it("⌘⇧W triggers Close Window", async () => {
     renderHook(() => useWindowCommands());
     act(() => press("w", { ctrl: true, shift: true }));
-    expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w2"]);
+    await waitFor(() => expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w2"]));
   });
 
   it("Ctrl+Tab cycles focus forward; Ctrl+Shift+Tab cycles backward — Cmd+Tab is untouched", () => {

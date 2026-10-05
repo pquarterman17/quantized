@@ -109,6 +109,23 @@ first-use tooltip or empty-state hint rather than a persistent tutorial.
 **Owner:** ChatGPT-Sol UX decision; Claude Sonnet implementation. **Sprint
 priority:** daily-driver critical usability.
 
+**ChatGPT-Sol implementation update — 2026-10-04:** implemented in
+[PR #544](https://github.com/pquarterman17/quantized/pull/544). The stage strip
+now exposes persistent **Plot**, **Sheet**, **Tile**, **Cascade**, and active
+window **Maximize/Restore** controls. Opening the first additional plot,
+snapshot, worksheet, map, or duplicate beside the full-bleed starter plot
+automatically changes both to non-overlapping tiled windows; later windows do
+not rearrange a layout the user has positioned manually. Every framed window
+also has an explicit maximize/restore title-bar button, and dataset right-click
+menus offer **Open worksheet in window** beside the existing plot actions.
+Close/Save-As window lifecycle code is loaded only when invoked so this UX does
+not increase first-load JavaScript. Unit tests cover commands, visible controls,
+title-bar behavior, context-menu ordering/actions, and the first-window
+transition; Playwright covers a real imported dataset, live plot + worksheet
+coexistence, non-overlap, layout controls, and maximize/restore. Final owner
+visual acceptance remains unchecked until the PR is merged and exercised in a
+desktop build.
+
 ### UX-R5 — Window resizing feels clunky
 
 **Observation:** resize acquisition, tracking and feedback are not comfortable

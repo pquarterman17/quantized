@@ -49,6 +49,21 @@ export type { WindowsSlice } from "./windowsSliceTypes";
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
+/** Append a window without hiding it behind the full-bleed starter plot.
+ * The first transition from one maximized window to two visible windows is
+ * the teachable moment for MDI: reveal both side by side once, then leave all
+ * later positioning entirely manual unless the user chooses Tile/Cascade. */
+function appendWindow(s: AppState, win: PlotWindow): PlotWindow[] {
+  const plotWindows = [...s.plotWindows, win];
+  const visible = s.plotWindows.filter((item) => item.winState !== "minimized");
+  if (visible.length !== 1 || visible[0].winState !== "maximized") return plotWindows;
+  const bounds = s.plotCanvasBounds ?? { width: 1200, height: 800 };
+  return (
+    _relayoutVisible({ ...s, plotWindows }, tileLayout(2, bounds)).plotWindows ??
+    plotWindows
+  );
+}
+
 // The ≥1-window invariant's startup value (MULTI_PLOT_PLAN item 2): a single
 // maximized main window bound to no dataset yet (activeId starts null).
 const _mainWindow = mainWindow(null);
@@ -97,7 +112,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           linkGroup: null,
           pinned: false,
         };
-        return { plotWindows: [...s.plotWindows, win] };
+        return { plotWindows: appendWindow(s, win) };
       });
       return id;
     },
@@ -133,7 +148,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         pinned: false,
         snapshot: frozen,
       };
-      set({ plotWindows: [...s.plotWindows, win] });
+      set((state) => ({ plotWindows: appendWindow(state, win) }));
       return id;
     },
     // Worksheet/map document windows (item 17). The bound dataset is validated
@@ -161,7 +176,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         linkGroup: null, // cursor/x-range sync (item 13) is XY-plot-only
         pinned: false, // never a passive-retarget candidate anyway (kind-guarded)
       };
-      set({ plotWindows: [...s.plotWindows, win] });
+      set((state) => ({ plotWindows: appendWindow(state, win) }));
       return id;
     },
     createWindowAt: (datasetId, x, y) => {
@@ -321,7 +336,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           freshIdentity: true, // else Save on the copy overwrites the ORIGINAL saved figure
         });
       }
-      set({ plotWindows: [...s.plotWindows, dup] });
+      set((state) => ({ plotWindows: appendWindow(state, dup) }));
       return newId;
     },
     setWindowGeometry: (id, geometry) => set((s) => ({

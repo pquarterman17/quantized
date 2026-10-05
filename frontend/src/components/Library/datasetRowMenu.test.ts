@@ -1,6 +1,6 @@
 // PR F, L0.38: Quick Plot's position in the worksheet row's full context
-// menu -- right after the "plot" group (Plot (make active), Plot in new
-// window), before Duplicate/Rename/etc.
+// menu -- right after the plot/window group (Plot (make active), Plot in new
+// window, Open worksheet in window), before Duplicate/Rename/etc.
 
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -31,14 +31,32 @@ function labelOf(item: unknown): string | undefined {
 }
 
 describe("buildDatasetRowMenu — Quick Plot ordering (L0.38)", () => {
-  it("Quick Plot appears right after the 'Plot in new window' entry", () => {
+  it("keeps the worksheet-window shortcut with the plot actions, before Quick Plot", () => {
     const ds = dataset("d1");
     const items = buildDatasetRowMenu(ds, false, false, [], false, false, () => {}, () => {});
     const labels = items.map(labelOf);
     const plotInNewWindowIdx = labels.indexOf("Plot in new window");
+    const worksheetWindowIdx = labels.indexOf("Open worksheet in window");
     const quickPlotIdx = labels.indexOf("Quick Plot");
     expect(plotInNewWindowIdx).toBeGreaterThanOrEqual(0);
-    expect(quickPlotIdx).toBe(plotInNewWindowIdx + 1);
+    expect(worksheetWindowIdx).toBe(plotInNewWindowIdx + 1);
+    expect(quickPlotIdx).toBe(worksheetWindowIdx + 1);
+  });
+
+  it("opens the selected dataset as a live worksheet window", () => {
+    const ds = dataset("d1");
+    useApp.setState({
+      datasets: [ds],
+      activeId: ds.id,
+      plotCanvasBounds: { width: 900, height: 600 },
+    });
+    const items = buildDatasetRowMenu(ds, true, false, [], false, false, () => {}, () => {});
+    const openWorksheet = items.find((item) => labelOf(item) === "Open worksheet in window");
+    expect(openWorksheet && "run" in openWorksheet).toBe(true);
+    if (openWorksheet && "run" in openWorksheet) openWorksheet.run();
+    const windows = useApp.getState().plotWindows;
+    expect(windows.some((win) => win.kind === "worksheet" && win.datasetId === ds.id)).toBe(true);
+    expect(useApp.getState().stageTab).toBe("plot");
   });
 
   it("Configure Quick Plot… immediately follows Quick Plot", () => {

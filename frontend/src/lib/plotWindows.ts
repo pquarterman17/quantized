@@ -131,7 +131,15 @@ const TILE_MIN_H = 140;
  *  of collapsing to zero. */
 export function tileLayout(count: number, bounds: { width: number; height: number }): WindowGeometry[] {
   if (count <= 0) return [];
-  const cols = Math.max(1, Math.ceil(Math.sqrt(count)));
+  let cols = Math.max(1, Math.ceil(Math.sqrt(count)));
+  // The first two windows normally sit side by side. With both sidebars open
+  // at an 800px viewport the centre pane cannot hold two minimum-width
+  // columns, but it can hold two rows; stack that pair instead of clipping it.
+  if (
+    count === 2 &&
+    bounds.width < 2 * TILE_MIN_W + 3 * TILE_GUTTER &&
+    bounds.height >= 2 * TILE_MIN_H + 3 * TILE_GUTTER
+  ) cols = 1;
   const rows = Math.max(1, Math.ceil(count / cols));
   const cellW = Math.max(TILE_MIN_W, (bounds.width - TILE_GUTTER * (cols + 1)) / cols);
   const cellH = Math.max(TILE_MIN_H, (bounds.height - TILE_GUTTER * (rows + 1)) / rows);

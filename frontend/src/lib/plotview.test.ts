@@ -985,6 +985,18 @@ describe("tileLayout (item 6 — Tile Windows)", () => {
     expect(geoms[0].x).toBe(geoms[2].x);
   });
 
+  it("stacks two windows vertically when minimum-width columns cannot fit", () => {
+    const bounds = { width: 294, height: 478 };
+    const geoms = tileLayout(2, bounds);
+    expect(geoms).toHaveLength(2);
+    expect(geoms[0].x).toBe(geoms[1].x);
+    expect(geoms[0].y).toBeLessThan(geoms[1].y);
+    for (const g of geoms) {
+      expect(g.x + g.w).toBeLessThanOrEqual(bounds.width);
+      expect(g.y + g.h).toBeLessThanOrEqual(bounds.height);
+    }
+  });
+
   it("floors cell size at a sane minimum instead of collapsing to zero", () => {
     const geoms = tileLayout(9, { width: 100, height: 100 });
     for (const g of geoms) {
