@@ -109,8 +109,8 @@ first-use tooltip or empty-state hint rather than a persistent tutorial.
 **Owner:** ChatGPT-Sol UX decision; Claude Sonnet implementation. **Sprint
 priority:** daily-driver critical usability.
 
-**ChatGPT-Sol implementation update — 2026-10-04:** implemented on
-`feat/origin-mdi-workspace` (PR link to be added when opened). The stage strip
+**ChatGPT-Sol implementation update — 2026-10-04:** implemented in
+[PR #544](https://github.com/pquarterman17/quantized/pull/544). The stage strip
 now exposes persistent **Plot**, **Sheet**, **Tile**, **Cascade**, and active
 window **Maximize/Restore** controls. Opening the first additional plot,
 snapshot, worksheet, map, or duplicate beside the full-bleed starter plot
