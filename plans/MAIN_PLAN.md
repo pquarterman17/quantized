@@ -11,7 +11,9 @@ achieved empirically via the switch-trigger protocol (GOTO_PLAN).
 
 **Status:** Active
 **Created:** 2026-07-10
-**Updated:** 2026-08-11 (#41 struck — it shipped `5ad96db` the same
+**Updated:** 2026-10-04 (ChatGPT-Sol added future item #42: unit-aware
+sample-geometry normalization for magnetometry and other volume-sensitive
+methods, clarified by owner during release testing.) Prior: 2026-08-11 (#41 struck — it shipped `5ad96db` the same
 evening it was folded up, in a worktree parallel to the twenty-first
 reconcile pass, so that pass recorded it open; see Completed.)
 Prior: 2026-08-10 (plan-hygiene reconciliation sweep — three items:
@@ -341,6 +343,56 @@ of being booked here.)*
       one is present, and httpx/requests send none by default.
 
 ## Tier 2 — Medium Impact
+
+42. **Unit-aware sample normalization for magnetometry and other
+    geometry-sensitive methods** — FUTURE FEATURE, specified by owner
+    2026-10-04. The current magnetometry unit conversion can accept sample
+    information, but daily use needs a clearer geometry editor: every
+    physical quantity is entered as a numeric value beside a unit dropdown,
+    with independent units per field. A representative workflow is a
+    5 cm × 5 cm sample with 30 nm thickness, normalized to emu/cm³ or A/m.
+    The user must never have to pre-convert mixed laboratory units by hand.
+    Suggested ownership: ChatGPT-Sol/Codex for the compact GUI and feedback;
+    Claude Sonnet for conversion contracts, dimensional validation, and
+    backend reliability. A cheaper model is suitable for mechanical unit-list
+    wiring after the dimensional model and tests are settled.
+    - [ ] Provide an explicit normalization basis selector: none/raw moment,
+          mass, area, or volume. Do not infer and silently apply a basis from
+          whatever metadata happens to be present.
+    - [ ] Use a reusable `value | unit` row for every quantity. Minimum unit
+          sets: mass (µg, mg, g, kg); length/thickness (nm, µm, mm, cm, m);
+          area (mm², cm², m²); volume (mm³, cm³, m³, µL, mL). Each field
+          converts to one canonical internal unit while preserving the value
+          and unit the user entered for later editing.
+    - [ ] Support the owner's common geometry paths without forcing algebra:
+          width × length + thickness; direct area + thickness; direct volume;
+          or sample mass. Width, length, and thickness may each use different
+          units (for example cm, cm, and nm).
+    - [ ] Show a live read-only calculation summary before Apply: computed
+          area/volume, normalization divisor, source moment unit, requested
+          output unit, and the equation used. Invalid, missing, zero, or
+          negative dimensions disable Apply and identify the exact field.
+    - [ ] Offer output units appropriate to the selected basis, rather than
+          one mixed list: raw moment (emu, A·m²); mass-normalized (emu/g,
+          A·m²/kg); volume magnetization (emu/cm³, A/m, kA/m); and an
+          explicitly labelled area-normalized set when area is selected.
+          Conversion factors must be dimensionally tested, including the
+          emu/cm³ ↔ A/m relationship.
+    - [ ] Apply non-destructively: create a derived/corrected dataset, never
+          rewrite imported raw values. Record all geometry inputs, original
+          units, canonical values, selected basis, output unit, and formula in
+          provenance so save/reopen/recompute reproduce the result exactly.
+    - [ ] Reuse sample geometry stored in metadata only through a visible
+          “Use metadata values” action. Never overwrite already customized
+          plot settings when the derived dataset opens.
+    - [ ] Add focused backend tests for mixed-unit geometry and every output
+          family; frontend tests for unit changes preserving the physical
+          value, validation, basis-dependent choices, and live summary; and a
+          real workflow test for 5 cm × 5 cm × 30 nm → emu/cm³ and A/m.
+    - [ ] Revisit after owner testing whether density, irregular-shape volume,
+          multiple pieces/sample count, and saved sample presets are frequent
+          enough to justify expansion. Do not grow those speculative fields
+          into the first implementation.
 
 *(items 29–30 folded up 2026-07-25 from the two orphan ChatGPT-"Sol"
 audit docs, which were absorbed and deleted the same day per the
