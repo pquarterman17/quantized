@@ -206,7 +206,7 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
         aria-label="Close window"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={() => {
-          void runLazy("Closing window…", () => import("./figureLifecycleUi")).then(
+          void runLazy("Loading window actions…", () => import("./figureLifecycleUi")).then(
             (module) => module.closeFigureWindow(win.id),
             onLoadFailure,
           );

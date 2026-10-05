@@ -1,4 +1,4 @@
-import { snapshotView } from "../../lib/plotview";
+import { snapshotView, type PlotWindow } from "../../lib/plotview";
 import { useApp } from "../../store/useApp";
 
 /** Always-visible entry points for the common Origin-style MDI workflows.
@@ -9,8 +9,16 @@ export default function WindowWorkspaceControls() {
   const visibleCount = useApp(
     (s) => s.plotWindows.filter((win) => win.winState !== "minimized").length,
   );
-  const focusedState = useApp(
-    (s) => s.plotWindows.find((win) => win.id === s.focusedWindowId)?.winState ?? null,
+  // `focusedWindowId` deliberately tracks only editable plot windows. A
+  // worksheet/map/snapshot can still be the frontmost document, so the
+  // workspace-level maximize action must follow z-order rather than silently
+  // changing the last plot behind it. Equal z values resolve to the later DOM
+  // window, which is also the one painted on top.
+  const frontWindow = useApp(
+    (s) => s.plotWindows.reduce<PlotWindow | null>((front, win) => {
+      if (win.winState === "minimized") return front;
+      return front === null || win.z >= front.z ? win : front;
+    }, null),
   );
 
   const newPlot = () => {
@@ -48,16 +56,16 @@ export default function WindowWorkspaceControls() {
         type="button"
         onClick={() => {
           const s = useApp.getState();
-          if (s.focusedWindowId) {
-            s.toggleMaximizeWindow(s.focusedWindowId);
+          if (frontWindow) {
+            s.toggleMaximizeWindow(frontWindow.id);
             s.setStageTab("plot");
           }
         }}
-        disabled={!focusedState}
-        title={focusedState === "maximized" ? "Restore the active window" : "Maximize the active window"}
-        aria-label={focusedState === "maximized" ? "Restore active window" : "Maximize active window"}
+        disabled={!frontWindow}
+        title={frontWindow?.winState === "maximized" ? "Restore the active window" : "Maximize the active window"}
+        aria-label={frontWindow?.winState === "maximized" ? "Restore active window" : "Maximize active window"}
       >
-        {focusedState === "maximized" ? "❐" : "□"}
+        {frontWindow?.winState === "maximized" ? "❐" : "□"}
       </button>
       <button
         type="button"

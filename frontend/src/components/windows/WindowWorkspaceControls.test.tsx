@@ -73,6 +73,24 @@ describe("WindowWorkspaceControls", () => {
     expect(screen.getByRole("button", { name: "Maximize active window" })).toBeEnabled();
   });
 
+  it("maximizes the frontmost document window instead of the last focused plot behind it", () => {
+    const plot = { ...mainWindow(), winState: "normal" as const };
+    const worksheet: PlotWindow = {
+      ...mainWindow(), id: "sheet", kind: "worksheet", z: 9, winState: "normal",
+    };
+    useApp.setState({
+      stageTab: "worksheet",
+      plotWindows: [plot, worksheet],
+      focusedWindowId: plot.id,
+    });
+    render(<WindowWorkspaceControls />);
+    fireEvent.click(screen.getByRole("button", { name: "Maximize active window" }));
+    const windows = useApp.getState().plotWindows;
+    expect(windows.find((win) => win.id === "sheet")?.winState).toBe("maximized");
+    expect(windows.find((win) => win.id === plot.id)?.winState).toBe("normal");
+    expect(useApp.getState().stageTab).toBe("plot");
+  });
+
   it.each(["Tile visible windows", "Cascade visible windows"] as const)(
     "reveals the Plot workspace when %s is used from another tab",
     (label) => {

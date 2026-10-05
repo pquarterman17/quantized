@@ -50,6 +50,7 @@ beforeEach(() => {
   useApp.setState({
     datasets: [{ id: "d1", name: "a", data: { time: [1], values: [[1]], labels: ["m"], units: [""], metadata: {} } }],
     activeId: "d1",
+    stageTab: "plot",
     plotWindows: [win({ id: "w1" }), win({ id: "w2" })],
     focusedWindowId: "w1",
   });
@@ -92,6 +93,7 @@ describe("useWindowCommands — published registry entries", () => {
   });
 
   it("'New Graph Window' creates + focuses a new window bound to the active dataset", () => {
+    useApp.setState({ stageTab: "map" });
     renderHook(() => useWindowCommands());
     act(() => action("window-new").run());
     const s = useApp.getState();
@@ -99,6 +101,7 @@ describe("useWindowCommands — published registry entries", () => {
     const created = s.plotWindows.find((w) => !["w1", "w2"].includes(w.id))!;
     expect(created.datasetId).toBe("d1");
     expect(s.focusedWindowId).toBe(created.id);
+    expect(s.stageTab).toBe("plot");
   });
 
   it("the first new graph reveals both windows side by side instead of hiding behind the starter plot", () => {
@@ -115,6 +118,7 @@ describe("useWindowCommands — published registry entries", () => {
   });
 
   it("'Duplicate Window' clones the FOCUSED window and focuses the copy", () => {
+    useApp.setState({ stageTab: "worksheet" });
     renderHook(() => useWindowCommands());
     act(() => action("window-duplicate").run());
     const s = useApp.getState();
@@ -122,6 +126,7 @@ describe("useWindowCommands — published registry entries", () => {
     const dup = s.plotWindows.find((w) => !["w1", "w2"].includes(w.id))!;
     expect(dup.datasetId).toBe("d1");
     expect(s.focusedWindowId).toBe(dup.id);
+    expect(s.stageTab).toBe("plot");
   });
 
   it("'Close Window' closes the focused window and refocuses a survivor", async () => {
@@ -155,7 +160,7 @@ describe("useWindowCommands — published registry entries", () => {
   it("the first worksheet window automatically reveals a plot-and-sheet workspace", () => {
     useApp.setState({
       plotWindows: [win({ id: "w1", winState: "maximized" })],
-      focusedWindowId: "w1",
+      focusedWindowId: "w1", stageTab: "map",
       plotCanvasBounds: { width: 900, height: 600 },
     });
     renderHook(() => useWindowCommands());
@@ -203,10 +208,12 @@ describe("useWindowCommands — published registry entries", () => {
     useApp.setState({
       plotWindows: [win({ id: "w1" }), win({ id: "w2" }), win({ id: "w3" })],
       focusedWindowId: "w1",
+      stageTab: "map",
     });
     renderHook(() => useWindowCommands());
     act(() => action("window-focus-next").run());
     expect(useApp.getState().focusedWindowId).toBe("w2");
+    expect(useApp.getState().stageTab).toBe("plot");
   });
 
   it("'Focus Next/Previous Window' is Z-ORDER aware (item 6) — NOT creation order when z differs", () => {
@@ -234,12 +241,13 @@ describe("useWindowCommands — published registry entries", () => {
     useApp.setState({
       plotWindows: [win({ id: "w1" }), win({ id: "w2" })],
       focusedWindowId: "w1",
-      plotCanvasBounds: { width: 800, height: 400 },
+      plotCanvasBounds: { width: 800, height: 400 }, stageTab: "worksheet",
     });
     renderHook(() => useWindowCommands());
     act(() => action("window-tile").run());
     const tiled = useApp.getState().plotWindows;
     expect(tiled.find((w) => w.id === "w1")!.geometry).not.toEqual(tiled.find((w) => w.id === "w2")!.geometry);
+    expect(useApp.getState().stageTab).toBe("plot");
 
     act(() => action("window-cascade").run());
     const cascaded = useApp.getState().plotWindows;

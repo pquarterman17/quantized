@@ -40,7 +40,7 @@ export const windowCoreActions: ContextAction<WindowActionTarget>[] = [
     label: "Save Editable Figure As…",
     hidden: (t) => t.win.kind !== "plot",
     run: (t) => {
-      void runLazy("Loading figure save…", () => import("./figureLifecycleUi")).then(
+      void runLazy("Loading window actions…", () => import("./figureLifecycleUi")).then(
         (module) => module.saveFigureAs(t.win.id),
         onLoadFailure,
       );
@@ -94,7 +94,7 @@ export const windowCloseAction: ContextAction<WindowActionTarget> = {
   id: "window.close",
   label: "Close Window",
   run: (t) => {
-    void runLazy("Closing window…", () => import("./figureLifecycleUi")).then(
+    void runLazy("Loading window actions…", () => import("./figureLifecycleUi")).then(
       (module) => module.closeFigureWindow(t.win.id),
       onLoadFailure,
     );

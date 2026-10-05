@@ -26,11 +26,19 @@ import { useCommands, type Action } from "../../store/commands";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 
+/** Window commands operate on the Plot workspace. Returning the same live
+ * state keeps each command's mutation and reveal in one small primitive. */
+function windowState(): ReturnType<typeof useApp.getState> {
+  const state = useApp.getState();
+  state.setStageTab("plot");
+  return state;
+}
+
 /** New Graph Window: clones the focused view onto the focused dataset by
  *  default (the plan's "fast compare workflow"), then focuses it — Origin's
  *  "New Graph" opens on top, ready to interact with immediately. */
 function newGraphWindow(): void {
-  const s = useApp.getState();
+  const s = windowState();
   const id = s.createWindow(s.activeId, snapshotView(s));
   s.focusWindow(id);
 }
@@ -39,19 +47,21 @@ function newGraphWindow(): void {
  *  record is stale while focused — see `duplicateWindow`'s own doc) and
  *  focuses the copy. */
 function duplicateFocusedWindow(): void {
-  const s = useApp.getState();
+  const s = windowState();
   if (!s.focusedWindowId) return;
   const id = s.duplicateWindow(s.focusedWindowId);
-  if (id) s.focusWindow(id);
+  if (id) {
+    s.focusWindow(id);
+  }
 }
 
 /** Close Window: closes the FOCUSED window (a no-op on the last survivor —
  *  the ≥1-window invariant). */
 function closeFocusedWindow(): void {
-  const s = useApp.getState();
+  const s = windowState();
   const id = s.focusedWindowId;
   if (id) {
-    void runLazy("Closing window…", () => import("./figureLifecycleUi")).then(
+    void runLazy("Loading window actions…", () => import("./figureLifecycleUi")).then(
       (module) => module.closeFigureWindow(id),
       onLoadFailure,
     );
@@ -66,7 +76,7 @@ function saveFocusedFigure(): void {
 function saveFocusedFigureAs(): void {
   const id = useApp.getState().focusedWindowId;
   if (id) {
-    void runLazy("Loading figure save…", () => import("./figureLifecycleUi")).then(
+    void runLazy("Loading window actions…", () => import("./figureLifecycleUi")).then(
       (module) => module.saveFigureAs(id),
       onLoadFailure,
     );
@@ -122,26 +132,30 @@ function openDocumentWindow(kind: "worksheet" | "map"): void {
  *  has ever been raised, since `zOrderIds` is a stable sort). Snapshot
  *  windows (item 11) are skipped — they can never hold focus. */
 function cycleFocus(direction: 1 | -1): void {
-  const s = useApp.getState();
+  const s = windowState();
   const next = cycleWindow(
     zOrderIds(s.plotWindows.filter((w) => w.kind === "plot")),
     s.focusedWindowId,
     direction,
   );
-  if (next) s.focusWindow(next);
+  if (next) {
+    s.focusWindow(next);
+  }
 }
 
 /** Tile Windows (item 6): re-lay-out every visible window into an even grid
  *  sized to the Plot tab's current canvas. A no-op with fewer than 2 visible
  *  windows (the store action itself guards this too). */
 function tileWindows(): void {
-  useApp.getState().tileWindows();
+  const s = windowState();
+  s.tileWindows();
 }
 
 /** Cascade Windows (item 6): re-lay-out every visible window in a staggered
  *  cascade (same offset step as placing new windows in turn). */
 function cascadeWindows(): void {
-  useApp.getState().cascadeWindows();
+  const s = windowState();
+  s.cascadeWindows();
 }
 
 /** Window Background (item 18, owner request 2026-07-09): cycles the
@@ -151,7 +165,7 @@ function cascadeWindows(): void {
  *  default window, which has no title bar to click. A no-op if there's
  *  somehow no focused window. */
 function cycleWindowBg(): void {
-  const s = useApp.getState();
+  const s = windowState();
   if (!s.focusedWindowId) return;
   const win = s.plotWindows.find((w) => w.id === s.focusedWindowId);
   if (!win) return;
@@ -164,7 +178,7 @@ function cycleWindowBg(): void {
  *  item 18's Window Background command exists: the sole maximized default
  *  window has no title bar to click. A no-op with no focused window. */
 function cycleFocusedWindowLinkGroup(): void {
-  const s = useApp.getState();
+  const s = windowState();
   if (!s.focusedWindowId) return;
   s.cycleWindowLinkGroup(s.focusedWindowId);
 }
@@ -175,8 +189,10 @@ function cycleFocusedWindowLinkGroup(): void {
  *  clicks/imports retarget another window instead of rebinding this one;
  *  an explicit drop still rebinds. A no-op with no focused window. */
 function togglePinFocusedWindow(): void {
-  const s = useApp.getState();
-  if (s.focusedWindowId) s.toggleWindowPin(s.focusedWindowId);
+  const s = windowState();
+  if (s.focusedWindowId) {
+    s.toggleWindowPin(s.focusedWindowId);
+  }
 }
 
 export function useWindowCommands(): void {
