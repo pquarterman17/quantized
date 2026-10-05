@@ -50,10 +50,9 @@
 // Sector geometry (MAIN_PLAN item 41, folded up from RSM_CUTS_PLAN #25)
 // joins mapRoi/mapRuler here for the identical reason. Unlike a box reused
 // deliberately across maps, sector defaults depend on each dataset's q
-// extent. `mapSectors` therefore owns one scratch value per dataset so two
+// extent. `mapSector` therefore owns one scratch value per dataset so two
 // visible map windows cannot overwrite each other's scientific bounds.
-// `mapSector` remains the active-dataset mirror used by older callers/tests;
-// `setMapSectorFor` is the authoritative dataset-scoped writer. A value typed
+// `setMapSector` is the authoritative dataset-scoped writer. A value typed
 // into the active dataset's panel and a drag on that dataset's wedge still
 // update the SAME entry and stay in sync. The state used to be
 // component-local `useState` inside `useRoiCuts.ts`, which is why the wedge
@@ -101,28 +100,7 @@ export interface MapSectorState {
   secMax: number;
   sectorBins: number;
   sectorMode: "sum" | "mean";
-  /** Internal bookkeeping, not shown by either card: the dataset id that
-   * owns this entry. A second consumer for the same dataset must not reset a
-   * live drag; a different dataset reads a different `mapSectors` entry. */
-  primedFor: string | null;
 }
-
-/** Full-circle, q-range-yet-to-be-primed defaults — `useRoiCuts.ts`'s
- *  per-active-dataset effect immediately overwrites `secMin`/`secMax`/
- *  `sectorBins` from the dataset's own extents, exactly as it did when
- *  these were local `useState` initializers. */
-const DEFAULT_MAP_SECTOR: MapSectorState = {
-  phiParam: "bounds",
-  phiCenter: 0,
-  phiHalfWidth: 180,
-  phiMin: 0,
-  phiMax: 360,
-  secMin: 0,
-  secMax: 1,
-  sectorBins: 100,
-  sectorMode: "sum",
-  primedFor: null,
-};
 
 // P2.8's durable map view (`store/mapView.ts`) is composed THROUGH this slice
 // rather than through a spread of its own in useApp.ts — that module is at its
@@ -147,16 +125,10 @@ export interface RoisSlice extends MapViewSlice {
   mapRuler: RoiRuler | null;
   setMapRuler: (mapRuler: RoiRuler | null) => void;
 
-  /** Compatibility mirror for the active/last legacy sector writer. New
-   * consumers use `mapSectors` so concurrently visible datasets cannot share
-   * q bounds. Never null; `setMapSector` remains a merge patch for existing
-   * callers and mirrors an owned value into the dataset bank. */
-  mapSector: MapSectorState;
-  setMapSector: (patch: Partial<MapSectorState>) => void;
   /** Dataset-owned sector scratch state. Not persisted or undoable; it only
    * prevents concurrently visible maps from sharing incompatible q bounds. */
-  mapSectors: Record<string, MapSectorState>;
-  setMapSectorFor: (datasetId: string, patch: Partial<MapSectorState>) => void;
+  mapSector: Record<string, MapSectorState>;
+  setMapSector: (datasetId: string, patch: Partial<MapSectorState>) => void;
 
   /** Every named saved ROI (item 8's Saved ROIs card): box, ruler, or
    *  sector. In-memory only until item 13 pays `lib/workspace.ts`'s pin for
@@ -193,21 +165,13 @@ export function createRoisSlice(set: SliceSet, get: SliceGet): RoisSlice {
     mapRuler: null,
     setMapRuler: (mapRuler) => set({ mapRuler }),
 
-    mapSector: DEFAULT_MAP_SECTOR,
-    mapSectors: {},
-    setMapSector: (patch) => set((st) => {
-      const mapSector = { ...st.mapSector, ...patch };
-      if (patch.primedFor === null) return { mapSector, mapSectors: {} };
-      const owner = mapSector.primedFor;
-      return owner ? { mapSector, mapSectors: { ...st.mapSectors, [owner]: mapSector } } : { mapSector };
-    }),
-    setMapSectorFor: (datasetId, patch) => set((st) => {
-      const next = { ...mapSectorFor(st, datasetId), ...patch, primedFor: datasetId };
-      return {
-        mapSectors: { ...st.mapSectors, [datasetId]: next },
-        ...(st.activeId === datasetId ? { mapSector: next } : {}),
-      };
-    }),
+    mapSector: {},
+    setMapSector: (datasetId, patch) => set((st) => ({
+      mapSector: {
+        ...st.mapSector,
+        [datasetId]: { ...st.mapSector[datasetId], ...patch } as MapSectorState,
+      },
+    })),
 
     savedRois: [],
     saveRoi: (name) => {
@@ -237,15 +201,6 @@ export function createRoisSlice(set: SliceSet, get: SliceGet): RoisSlice {
       set((st) => ({ savedRois: st.savedRois.filter((r) => r.id !== id) }));
     },
   };
-}
-
-/** Read the sector scratch value belonging to `datasetId`. The unprimed
- * default is immutable and is copied by the first dataset-scoped write. */
-export function mapSectorFor(
-  state: { mapSectors: Record<string, MapSectorState> },
-  datasetId: string,
-): MapSectorState {
-  return state.mapSectors[datasetId] ?? DEFAULT_MAP_SECTOR;
 }
 
 // Re-exported for store/workspaceHydration.ts's `loadWorkspace` (P4.1's

@@ -13,7 +13,7 @@
 // a sub-3px release discarded as a click.
 //
 // STATE OWNERSHIP (MAIN_PLAN item 41): the sector's authoritative fields
-// live in `store.mapSectors[datasetId]` (RoisSlice, store/rois.ts). A drag
+// live in `store.mapSector[datasetId]` (RoisSlice, store/rois.ts). A drag
 // here and a numeric edit for the same dataset in `RoiCutsPanel` share one
 // entry, while simultaneously visible maps keep independent q ranges.
 // Commits and default priming deliberately follow this map's bound dataset:
@@ -30,8 +30,8 @@ import { applySectorDrag, classifySectorHit, pymod, sectorCursor, type SectorHit
 import { chiProfileLocal, sectorProfileLocal, type PolarCols, type RoiProfile } from "../../lib/roiMath";
 import type { Dataset, DataStruct } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import { mapSectorFor, type MapSectorState } from "../../store/rois";
-import { effectivePhiBounds, polarBranch, sectorDefaultsFor, sectorPreviewFor } from "../workshops/roicuts/useRoiCuts";
+import type { MapSectorState } from "../../store/rois";
+import { DEFAULT_MAP_SECTOR, effectivePhiBounds, polarBranch, sectorDefaultsFor, sectorPreviewFor } from "../workshops/roicuts/useRoiCuts";
 import type { WedgeMode } from "./MapToolbar";
 import { plotRect } from "./mapRender";
 import { useCutLanding } from "./useCutLanding";
@@ -134,8 +134,8 @@ export interface UseMapSectorWedgeState {
 
 export function useMapSectorWedge(active: Dataset | null, cutSpace: CutSpace | null): UseMapSectorWedgeState {
   const { busy, land } = useCutLanding();
-  const mapSector = useApp((s) => active ? mapSectorFor(s, active.id) : s.mapSector);
-  const setMapSectorFor = useApp((s) => s.setMapSectorFor);
+  const mapSector = useApp((s) => s.mapSector[active?.id ?? ""] ?? DEFAULT_MAP_SECTOR);
+  const setMapSectorFor = useApp((s) => s.setMapSector);
   const setMapSector = (patch: Partial<MapSectorState>) => {
     if (active) setMapSectorFor(active.id, patch);
   };
@@ -261,7 +261,7 @@ export function useMapSectorWedge(active: Dataset | null, cutSpace: CutSpace | n
       // Disarming (or becoming unreachable) mid-drag must abort the gesture
       // the same way Esc does — never leave a half-dragged sector behind.
       if (m !== "sector") cancelActiveGesture();
-      if (m === "sector" && active && mapSector.primedFor !== active.id) {
+      if (m === "sector" && active && mapSector === DEFAULT_MAP_SECTOR) {
         setMapSector(sectorDefaultsFor(active));
       }
       setModeState(m);

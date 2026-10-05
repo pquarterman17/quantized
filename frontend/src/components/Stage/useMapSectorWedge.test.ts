@@ -109,10 +109,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   useApp.setState({ mapRoi: null, mapRuler: null, savedRois: [], selectedIds: [] });
   // `mapSector` is shared store state now (MAIN_PLAN item 41) — clear its
-  // `primedFor` marker so arming the wedge re-primes
+  // dataset bank so arming the wedge re-primes
   // fresh for every test instead of skipping (already primed for "d1" by a
   // PRIOR test) and leaking that test's dragged values into this one.
-  useApp.getState().setMapSector({ primedFor: null });
+  useApp.setState({ mapSector: {} });
   setActive();
   rafCb = null;
   vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
