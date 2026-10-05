@@ -6,6 +6,22 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-10-05
+
+A **minor** usability and plotting release focused on making Quantized behave
+like a polished desktop analysis workspace. It adds discoverable independent
+plot and worksheet windows, redesigns the application menus, and makes 2-D XRD
+box and sector integrations directly editable and reliable.
+
+### Added
+
+- **Multi-window plot and worksheet workspace:** open independent plot or table
+  windows, bring them forward from the Window menu, and arrange, minimize,
+  maximize, restore, or close them without losing access from another view.
+- **Interactive XRD map integration:** box and sector selections expose visible
+  drag handles, stay within the map, and update horizontal or vertical slice
+  results as their geometry changes.
+
 ### Changed
 
 - Rebuilt the application menu bar into compact task-based menus with one-level
@@ -13,6 +29,22 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   navigation, focus restoration, viewport clamping, and consistent shortcut
   hints. Long Data, Plot, Analyze, File, Window, and View menus no longer form
   a single scrolling wall of commands.
+- Window actions now target the frontmost visible window and reveal the Plot
+  workspace when needed, so commands never appear to do nothing from Map or
+  Worksheet views.
+
+### Fixed
+
+- Fixed empty XRD slice plots and unreliable box/sector resizing, including
+  clamped edge and corner dragging and regression coverage across display
+  scales.
+- Right-clicking an XRD map no longer begins an ROI gesture; context actions
+  remain independent of primary-button drawing and resizing.
+- Sector geometry is now stored per dataset and reset safely during workspace
+  replacement, preventing one reciprocal-space map's selection from leaking
+  into another map or a reopened project.
+- Window arrangement and maximize behavior now respect the available workspace
+  bounds and keep title bars reachable after layout changes.
 
 ## [0.29.0] - 2026-10-04
 
