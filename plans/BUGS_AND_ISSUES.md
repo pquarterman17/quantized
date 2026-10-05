@@ -9352,6 +9352,7 @@ see it half-built.
 - [x] A full-map sector's outer radius commonly reaches a map corner while its fixed midpoint marker lies outside the square viewport. The boundary was valid, but the outer-radius resize handle (and, in this edge case, the SVG containing all handles) was dropped.
 - [x] `useMapSectorWedge(active, ...)` drew its preview from the dataset passed to that map, but delegated commit to a separate `useRoiCuts()` instance, which reads the globally Library-active dataset. A bound map window could therefore display dataset B and cut dataset A.
 - [x] The same delegation also initialized the shared sector bounds from the Library-active dataset instead of the dataset bound to the map, so correcting only the request dataset would still have applied A's q range to B.
+- [x] Review follow-up: one app-global sector scratch value still allowed a mounted numeric panel to replace an already-armed document map's geometry when the Library selection changed after arming. The request then used dataset B with dataset C's bounds.
 - [x] Box/sector results contain `Intensity` plus the diagnostic `N points` channel. Both plotted by default, so counts could dominate the shared scale (and zero-count bins disappear on log Y), making the scientific profile look empty even when the backend returned valid intensity data.
 - [x] Real-corpus backend check: `epytaxy_rsm.xrdml` produces non-empty box, radial-sector, and azimuthal profiles; the defect is in interaction/dataset routing/default presentation rather than the cut mathematics.
 
@@ -9361,6 +9362,7 @@ see it half-built.
 - [x] Give only the armed box/ruler/sector its handles and floating actions; retain inactive box/ruler geometry as a passive outline, and place sector boundary handles at a visible point on the same boundary when the midpoint is offscreen.
 - [x] Commit sector/azimuthal profiles against the map's bound dataset and the same sector shown on that map.
 - [x] Prime sector defaults from the bound dataset when that map's sector tool is armed, not from a different Library selection.
+- [x] Keep sector scratch geometry per dataset so multiple visible maps and the numeric panel cannot overwrite one another; clear the transient bank on project replacement.
 - [x] Mark cut outputs with `default_value_channels: [0]`, leaving `N points` available in Channels but opening on Intensity only.
 - [x] Add stable box/sector handle identifiers for real-browser interaction coverage.
 - [x] Focused and full frontend tests, real-corpus API tests, lint/typecheck, production build, repository-integrity checks, and the real-browser box/sector workflow pass.
@@ -9371,6 +9373,7 @@ see it half-built.
 ### Regression coverage
 
 - [x] Hook test: a map bound to dataset B commits B even while the Library-active dataset is A.
+- [x] Hook test: after B is armed, changing a separately mounted numeric panel from A to C leaves B's visible and submitted bounds unchanged.
 - [x] Component test: an inactive sector renders no controls, and a full-radius boundary that only reaches viewport corners still exposes its outer-radius handle.
 - [x] Real-data API tests: box, sector, and chi results advertise Intensity as the only default curve.
 - [x] Playwright `@core`: draw and resize a box via real pointer input, land a visible positive profile, resize a sector handle, and land a radial profile.
@@ -9379,6 +9382,7 @@ see it half-built.
 
 | Date | Author | Change | Evidence/status |
 |---|---|---|---|
+| 2026-10-04 | ChatGPT-Sol (Codex) | Closed critical-review follow-up: sector geometry is now dataset-scoped, so later Library selection changes cannot cross-wire a bound map's request bounds | Focused sector/panel/store/architecture tests, forced TypeScript build, production build/bundle gate, and Chromium 100/125/200% map ROI workflow pass |
 | 2026-10-04 | ChatGPT-Sol (Codex) | Filed and fixed BUG-033: reliable pointer-captured box/sector resizing, active-tool-only overlays, visible full-sector handles, bound-dataset sector priming/commit, and intensity-only default cut presentation | Full frontend suite 1,157 files / 16,768 passed + 2 expected-fail; 52 RSM API/calc tests; 13 repository-integrity tests; production build and bundle gate; real Chromium workflow green at 100/125/200% scaling. PR/CI and owner desktop feel-check remain |
 | 2026-09-20 | ChatGPT-Sol (Codex) | Reconciled UX-005/UX-006 and BUG-024 through BUG-028 after verifying their implementations on `main` | UX-005 `4997396a`; UX-006 `26e5272e`; BUG-024–028 merged as PR #385 (`8760fbb6`); BUG-026 retains its explicit owner feel-check |
 | 2026-09-20 | ChatGPT-Sol (Codex) | Fixed BUG-024 through BUG-028 in one reviewed bug-hunt follow-up | Focused backend/UI tests, generated OpenAPI schema/types, lint, production build and full suites run before PR; BUG-026 retains its explicit owner feel-check |

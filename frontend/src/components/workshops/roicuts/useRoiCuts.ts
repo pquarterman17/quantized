@@ -25,12 +25,11 @@
 //         inline request shape).
 //   (iii) neither -> both buttons stay disabled; `polar.reason` is the
 //         tooltip text the panel shows, never a silent no-op.
-// `mapRoi`/`mapRuler`/`mapSector` are read from store/rois.ts (mapRuler only
-// to gate "Save"). `mapSector` (MAIN_PLAN item 41, moved out of local
-// useState) gets the same treatment as `mapRoi`: setters below are thin
-// wrappers over `store.setMapSector`, so a value typed here and a drag on
-// the map's wedge (`Stage/useMapSectorWedge.ts`) are the same field — see
-// store/rois.ts's header for why. `effectivePhiBounds`/`sectorPreviewFor`
+// `mapRoi`/`mapRuler`/dataset-owned `mapSectors` are read from store/rois.ts
+// (mapRuler only to gate "Save"). Sector setters below address the active
+// dataset's entry, so its numeric panel and wedge share one value without
+// allowing another visible map to replace its q bounds — see store/rois.ts's
+// header for why. `effectivePhiBounds`/`sectorPreviewFor`
 // are exported so that hook derives the identical true-polar bounds without
 // re-deriving the center/bounds mode-select (SEAM for item 6/12, no
 // useMapRoi.ts/MapRoiOverlay.tsx/useMapSectorWedge.ts in this file).
@@ -55,7 +54,7 @@ import {
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useRoisStore } from "../../../store/hooks/useRoisStore";
-import type { MapSectorState } from "../../../store/rois";
+import { mapSectorFor, type MapSectorState } from "../../../store/rois";
 import { useCutLanding } from "../../Stage/useCutLanding";
 
 // ── Pure helpers (column extents, polar-branch detection) ──────────────────
@@ -281,8 +280,11 @@ export function useRoiCuts(): RoiCutsState {
   const mapRoi = useRoisStore((s) => s.mapRoi);
   const setMapRoi = useRoisStore((s) => s.setMapRoi);
   const mapRuler = useRoisStore((s) => s.mapRuler);
-  const mapSector = useRoisStore((s) => s.mapSector);
-  const setMapSector = useRoisStore((s) => s.setMapSector);
+  const mapSector = useRoisStore((s) => active ? mapSectorFor(s, active.id) : s.mapSector);
+  const setMapSectorFor = useRoisStore((s) => s.setMapSectorFor);
+  const setMapSector = (patch: Partial<MapSectorState>) => {
+    if (active) setMapSectorFor(active.id, patch);
+  };
   const savedRois = useRoisStore((s) => s.savedRois);
   const saveRoi = useRoisStore((s) => s.saveRoi);
   const applySavedRoi = useRoisStore((s) => s.applySavedRoi);

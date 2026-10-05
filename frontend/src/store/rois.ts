@@ -47,13 +47,15 @@
 // `focusTransientReset`) — markers belong to the analysis run that produced
 // them, not to a box the user is actively reusing.
 //
-// `mapSector` (MAIN_PLAN item 41, folded up from RSM_CUTS_PLAN #25) joins
-// mapRoi/mapRuler here for the identical reason: it is the SECTOR tool's
-// working geometry (annulus bounds, the center/bounds entry-mode toggle,
-// and the profile bins/reduce-mode config) — `workshops/roicuts/
-// useRoiCuts.ts` now reads/writes it exactly like it already does `mapRoi`,
-// so a value typed into the panel and a drag on `Stage/useMapSectorWedge.ts`'s
-// wedge are the SAME store field, in sync for free. It used to be
+// Sector geometry (MAIN_PLAN item 41, folded up from RSM_CUTS_PLAN #25)
+// joins mapRoi/mapRuler here for the identical reason. Unlike a box reused
+// deliberately across maps, sector defaults depend on each dataset's q
+// extent. `mapSectors` therefore owns one scratch value per dataset so two
+// visible map windows cannot overwrite each other's scientific bounds.
+// `mapSector` remains the active-dataset mirror used by older callers/tests;
+// `setMapSectorFor` is the authoritative dataset-scoped writer. A value typed
+// into the active dataset's panel and a drag on that dataset's wedge still
+// update the SAME entry and stay in sync. The state used to be
 // component-local `useState` inside `useRoiCuts.ts`, which is why the wedge
 // had to mount a SECOND `useRoiCuts()` instance and drive its setters
 // directly to reach it — a second, independently-mounted `RoiCutsPanel`
@@ -99,15 +101,9 @@ export interface MapSectorState {
   secMax: number;
   sectorBins: number;
   sectorMode: "sum" | "mean";
-  /** Internal bookkeeping, not shown by either card: the dataset id
-   *  `useRoiCuts.ts`'s per-active-dataset effect last (re-)primed these
-   *  fields for. Now that the fields are SHARED (this file's whole point),
-   *  that effect fires from every mounted consumer — the wedge AND the
-   *  panel, independently — and a naive "reset every mount" would let a
-   *  panel opened AFTER a wedge drag silently discard it the instant it
-   *  mounts. Matching `primedFor` against the active id lets a second
-   *  mount for the SAME dataset no-op instead, while a REAL dataset switch
-   *  (the id actually changing) still re-primes exactly as before. */
+  /** Internal bookkeeping, not shown by either card: the dataset id that
+   * owns this entry. A second consumer for the same dataset must not reset a
+   * live drag; a different dataset reads a different `mapSectors` entry. */
   primedFor: string | null;
 }
 
@@ -151,14 +147,16 @@ export interface RoisSlice extends MapViewSlice {
   mapRuler: RoiRuler | null;
   setMapRuler: (mapRuler: RoiRuler | null) => void;
 
-  /** The live/working sector/annulus — see this file's header. Both the
-   *  Sector card's numeric fields (`useRoiCuts.ts`) and the draggable wedge
-   *  (`Stage/useMapSectorWedge.ts`) read/write this ONE field, mirroring
-   *  `mapRoi`'s "same field = in sync" contract. Never null (see header);
-   *  always a MERGE patch, not a whole-value replace — every writer touches
-   *  one or two fields at a time, unlike `mapRoi`'s cohesive single rect. */
+  /** Compatibility mirror for the active/last legacy sector writer. New
+   * consumers use `mapSectors` so concurrently visible datasets cannot share
+   * q bounds. Never null; `setMapSector` remains a merge patch for existing
+   * callers and mirrors an owned value into the dataset bank. */
   mapSector: MapSectorState;
   setMapSector: (patch: Partial<MapSectorState>) => void;
+  /** Dataset-owned sector scratch state. Not persisted or undoable; it only
+   * prevents concurrently visible maps from sharing incompatible q bounds. */
+  mapSectors: Record<string, MapSectorState>;
+  setMapSectorFor: (datasetId: string, patch: Partial<MapSectorState>) => void;
 
   /** Every named saved ROI (item 8's Saved ROIs card): box, ruler, or
    *  sector. In-memory only until item 13 pays `lib/workspace.ts`'s pin for
@@ -196,7 +194,20 @@ export function createRoisSlice(set: SliceSet, get: SliceGet): RoisSlice {
     setMapRuler: (mapRuler) => set({ mapRuler }),
 
     mapSector: DEFAULT_MAP_SECTOR,
-    setMapSector: (patch) => set((st) => ({ mapSector: { ...st.mapSector, ...patch } })),
+    mapSectors: {},
+    setMapSector: (patch) => set((st) => {
+      const mapSector = { ...st.mapSector, ...patch };
+      if (patch.primedFor === null) return { mapSector, mapSectors: {} };
+      const owner = mapSector.primedFor;
+      return owner ? { mapSector, mapSectors: { ...st.mapSectors, [owner]: mapSector } } : { mapSector };
+    }),
+    setMapSectorFor: (datasetId, patch) => set((st) => {
+      const next = { ...mapSectorFor(st, datasetId), ...patch, primedFor: datasetId };
+      return {
+        mapSectors: { ...st.mapSectors, [datasetId]: next },
+        ...(st.activeId === datasetId ? { mapSector: next } : {}),
+      };
+    }),
 
     savedRois: [],
     saveRoi: (name) => {
@@ -226,6 +237,15 @@ export function createRoisSlice(set: SliceSet, get: SliceGet): RoisSlice {
       set((st) => ({ savedRois: st.savedRois.filter((r) => r.id !== id) }));
     },
   };
+}
+
+/** Read the sector scratch value belonging to `datasetId`. The unprimed
+ * default is immutable and is copied by the first dataset-scoped write. */
+export function mapSectorFor(
+  state: { mapSectors: Record<string, MapSectorState> },
+  datasetId: string,
+): MapSectorState {
+  return state.mapSectors[datasetId] ?? DEFAULT_MAP_SECTOR;
 }
 
 // Re-exported for store/workspaceHydration.ts's `loadWorkspace` (P4.1's

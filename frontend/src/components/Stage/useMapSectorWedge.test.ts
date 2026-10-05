@@ -330,6 +330,37 @@ describe("useMapSectorWedge — preview vs commit separation", () => {
     expect(rsmSector).toHaveBeenCalledTimes(1);
     expect(vi.mocked(rsmSector).mock.calls[0]![0]).toMatchObject({ dataset: DS, q_min: 2, q_max: 4 });
   });
+
+  it("keeps a bound map's sector when the mounted numeric panel changes Library dataset", async () => {
+    const scaled = (id: string, factor: number) => ({
+      id,
+      name: `${id}.xrdml`,
+      data: {
+        ...DS,
+        values: DS.values.map((row) => [row[0]!, row[1]!, row[2]!, row[3]! * factor, row[4]! * factor]),
+      },
+    });
+    const a = scaled("a", 3);
+    const c = scaled("c", 5);
+    useApp.setState({ datasets: [a, ACTIVE, c], activeId: a.id });
+    const panel = renderHook(() => useRoiCuts());
+    const wedge = renderHook(() => useMapSectorWedge(ACTIVE, "q"));
+
+    act(() => wedge.result.current.setMode("sector"));
+    expect(wedge.result.current.sector).toMatchObject({ qMin: 2, qMax: 4 });
+
+    act(() => useApp.setState({ activeId: c.id }));
+    expect(panel.result.current.secMin).toBe(10);
+    expect(panel.result.current.secMax).toBe(20);
+    expect(wedge.result.current.sector).toMatchObject({ qMin: 2, qMax: 4 });
+
+    vi.mocked(rsmSector).mockResolvedValue({
+      time: [0], values: [[1, 1]], labels: ["Intensity", "N points"], units: ["cps", ""], metadata: {},
+    });
+    act(() => wedge.result.current.runRadial());
+    await flush();
+    expect(vi.mocked(rsmSector).mock.calls.at(-1)?.[0]).toMatchObject({ dataset: DS, q_min: 2, q_max: 4 });
+  });
 });
 
 describe("useMapSectorWedge — angular axes disable the interaction", () => {

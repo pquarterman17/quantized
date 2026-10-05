@@ -13,14 +13,11 @@
 // a sub-3px release discarded as a click.
 //
 // STATE OWNERSHIP (MAIN_PLAN item 41): the sector's authoritative fields
-// live in `store.mapSector` (RoisSlice, store/rois.ts) — the box/ruler's
-// own `store.mapRoi`/`store.mapRuler` pattern, now applied here too.
-// `writeSector` below reads/writes it directly via `useApp`, so a drag here
-// and a numeric edit in a separately-mounted `RoiCutsPanel` are the SAME
-// store field, in sync for free. Commits and default priming deliberately
-// follow this map's bound dataset: a document map can differ from the
-// Library-active dataset, so delegating either operation to `useRoiCuts()`
-// could send the wrong dataset or install the wrong q range.
+// live in `store.mapSectors[datasetId]` (RoisSlice, store/rois.ts). A drag
+// here and a numeric edit for the same dataset in `RoiCutsPanel` share one
+// entry, while simultaneously visible maps keep independent q ranges.
+// Commits and default priming deliberately follow this map's bound dataset:
+// a document map can differ from the Library-active dataset.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -33,7 +30,7 @@ import { applySectorDrag, classifySectorHit, pymod, sectorCursor, type SectorHit
 import { chiProfileLocal, sectorProfileLocal, type PolarCols, type RoiProfile } from "../../lib/roiMath";
 import type { Dataset, DataStruct } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import type { MapSectorState } from "../../store/rois";
+import { mapSectorFor, type MapSectorState } from "../../store/rois";
 import { effectivePhiBounds, polarBranch, sectorDefaultsFor, sectorPreviewFor } from "../workshops/roicuts/useRoiCuts";
 import type { WedgeMode } from "./MapToolbar";
 import { plotRect } from "./mapRender";
@@ -76,7 +73,7 @@ function qPxScale(payload: MapPayload, w: number, h: number): number {
   return xSpan > 0 ? rect.w / xSpan : 1;
 }
 
-/** Write a dragged `RoiSector` back into `store.mapSector` — `secMin`/
+/** Write a dragged `RoiSector` back into this dataset's sector entry — `secMin`/
  *  `secMax` always directly; `phiMin`/`phiMax` directly in "bounds" mode, or
  *  re-derived into `phiCenter`/`phiHalfWidth` in "center" mode via the
  *  sector's own SPAN (not a naive `(max-min)/2`, which goes negative the
@@ -137,8 +134,11 @@ export interface UseMapSectorWedgeState {
 
 export function useMapSectorWedge(active: Dataset | null, cutSpace: CutSpace | null): UseMapSectorWedgeState {
   const { busy, land } = useCutLanding();
-  const mapSector = useApp((s) => s.mapSector);
-  const setMapSector = useApp((s) => s.setMapSector);
+  const mapSector = useApp((s) => active ? mapSectorFor(s, active.id) : s.mapSector);
+  const setMapSectorFor = useApp((s) => s.setMapSectorFor);
+  const setMapSector = (patch: Partial<MapSectorState>) => {
+    if (active) setMapSectorFor(active.id, patch);
+  };
 
   const [mode, setModeState] = useState<WedgeMode>("off");
   const [hover, setHover] = useState<SectorHit>(null);
