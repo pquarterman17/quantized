@@ -20,9 +20,9 @@
 
 import { nextPlotBg, type PlotWindow } from "../../lib/plotview";
 import type { ContextAction } from "../../lib/contextActions";
+import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import { useApp } from "../../store/useApp";
 import { forceHydrate } from "../../store/windowHydration";
-import { closeFigureWindow, saveFigureAs } from "./figureLifecycleUi";
 
 export interface WindowActionTarget {
   win: PlotWindow;
@@ -39,7 +39,12 @@ export const windowCoreActions: ContextAction<WindowActionTarget>[] = [
     id: "window.saveFigureAs",
     label: "Save Editable Figure As…",
     hidden: (t) => t.win.kind !== "plot",
-    run: (t) => { void saveFigureAs(t.win.id); },
+    run: (t) => {
+      void runLazy("Loading window actions…", () => import("./figureLifecycleUi")).then(
+        (module) => module.saveFigureAs(t.win.id),
+        onLoadFailure,
+      );
+    },
   },
   {
     id: "window.duplicate",
@@ -88,7 +93,12 @@ export const windowCoreActions: ContextAction<WindowActionTarget>[] = [
 export const windowCloseAction: ContextAction<WindowActionTarget> = {
   id: "window.close",
   label: "Close Window",
-  run: (t) => { void closeFigureWindow(t.win.id); },
+  run: (t) => {
+    void runLazy("Loading window actions…", () => import("./figureLifecycleUi")).then(
+      (module) => module.closeFigureWindow(t.win.id),
+      onLoadFailure,
+    );
+  },
 };
 
 /** Every window action, flat — for callers that don't care about layout. */

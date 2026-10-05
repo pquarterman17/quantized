@@ -47,6 +47,17 @@ export const datasetCoreActions: ContextAction<DatasetActionTarget>[] = [
       t.onStageOpen?.();
     },
   },
+  {
+    id: "dataset.openWorksheetWindow",
+    label: "Open worksheet in window",
+    run: (t) => {
+      const s = useApp.getState();
+      const id = s.createDocumentWindow("worksheet", t.dataset.id);
+      s.focusWindow(id);
+      s.setStageTab("plot");
+      t.onStageOpen?.();
+    },
+  },
   { id: "dataset.duplicate", label: "Duplicate", run: (t) => void useApp.getState().duplicateDataset(t.dataset.id) },
   { id: "dataset.rename", label: "Rename…", run: (t) => t.onRename() },
   { id: "dataset.addTag", label: "Add tag…", run: (t) => t.onAddTag() },

@@ -280,14 +280,14 @@ describe("PlotWindowFrame", () => {
     expect(container.querySelector(".qzk-plotwin-resize")).toBeNull();
   });
 
-  it("the close button closes the window via the store", () => {
+  it("the close button closes the window via the store", async () => {
     const { getByLabelText } = render(
       <PlotWindowFrame win={win({ id: "w2" })} focused={false} datasetName={undefined}>
         <div>content</div>
       </PlotWindowFrame>,
     );
     fireEvent.click(getByLabelText("Close window"));
-    expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w1"]);
+    await waitFor(() => expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w1"]));
   });
 
   it("the ◐ background button cycles this window's bg (theme -> light -> dark) via the store (item 18)", () => {
@@ -402,6 +402,24 @@ describe("PlotWindowFrame", () => {
     fireEvent.doubleClick(titlebar);
     expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.winState).toBe("maximized");
     fireEvent.doubleClick(titlebar);
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.winState).toBe("normal");
+  });
+
+  it("offers an explicit maximize/restore button for users who do not know the double-click gesture", () => {
+    const { getByRole, rerender } = render(
+      <PlotWindowFrame win={win({ id: "w1", winState: "normal" })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    fireEvent.click(getByRole("button", { name: "Maximize window" }));
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.winState).toBe("maximized");
+
+    rerender(
+      <PlotWindowFrame win={win({ id: "w1", winState: "maximized" })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    fireEvent.click(getByRole("button", { name: "Restore window" }));
     expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.winState).toBe("normal");
   });
 

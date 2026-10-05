@@ -19,6 +19,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { nextPlotBg, type PlotBg, type PlotWindow } from "../../lib/plotview";
+import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import { useApp } from "../../store/useApp";
 import { useWindowsStore } from "../../store/hooks/useWindowsStore";
 import { forceHydrate } from "../../store/windowHydration";
@@ -26,7 +27,6 @@ import { editableFigureDirty } from "../../store/figureLifecycle";
 import { buildMenuItems } from "../../lib/contextActions";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { windowCloseAction, windowCoreActions, type WindowActionTarget } from "./windowMenu";
-import { closeFigureWindow } from "./figureLifecycleUi";
 
 const BG_LABEL: Record<PlotBg, string> = { theme: "Theme", light: "Light", dark: "Dark" };
 
@@ -34,6 +34,7 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
   const saveFigure = useApp((s) => s.saveFigure);
   const figureDirty = useApp((s) => editableFigureDirty(s, win));
   const setWindowBg = useWindowsStore((s) => s.setWindowBg);
+  const toggleMaximizeWindow = useWindowsStore((s) => s.toggleMaximizeWindow);
   const cycleWindowLinkGroup = useWindowsStore((s) => s.cycleWindowLinkGroup);
   const toggleWindowPin = useWindowsStore((s) => s.toggleWindowPin);
   const rebindWindow = useWindowsStore((s) => s.rebindWindow);
@@ -191,10 +192,25 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
       )}
       <button
         type="button"
+        className="qzk-plotwin-maximize"
+        title={win.winState === "maximized" ? "Restore window" : "Maximize window"}
+        aria-label={win.winState === "maximized" ? "Restore window" : "Maximize window"}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={() => toggleMaximizeWindow(win.id)}
+      >
+        {win.winState === "maximized" ? "❐" : "□"}
+      </button>
+      <button
+        type="button"
         className="qzk-plotwin-close"
         aria-label="Close window"
         onPointerDown={(e) => e.stopPropagation()}
-        onClick={() => { void closeFigureWindow(win.id); }}
+        onClick={() => {
+          void runLazy("Loading window actions…", () => import("./figureLifecycleUi")).then(
+            (module) => module.closeFigureWindow(win.id),
+            onLoadFailure,
+          );
+        }}
       />
     </>
   );

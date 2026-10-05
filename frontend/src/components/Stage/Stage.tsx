@@ -42,6 +42,11 @@ import { PendingWorkspace } from "../Shell/workspaceSeams";
 const EmptyProjectStage = lazyRegion(() => import("./EmptyProjectStage"), "Empty workspace");
 const MapStage = lazyRegion(() => import("./MapStage"), "Map");
 const Worksheet = lazyRegion(() => import("./Worksheet"), "Worksheet");
+const WindowWorkspaceControls = lazyRegion(
+  () => import("../windows/WindowWorkspaceControls"),
+  "Window controls",
+  () => null,
+);
 const TechniqueWorkspace = lazyRegion(
   () => import("../workshops/techniqueworkspace/TechniqueWorkspace"),
   "Workflow",
@@ -103,21 +108,24 @@ export default function Stage() {
       {/* WAI-ARIA tablist, MANUAL activation (lib/tabListKeys): showing a view
           mounts a lazy chunk and tears down the plot windows, so arrowing
           across the strip moves focus only and Enter/Space selects. */}
-      <div className="qzk-tabs" role="tablist" aria-label="Stage view" onKeyDown={(e) => onTabListKeyDown(e, false)}>
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            role="tab"
-            id={`qz-stage-${t.id}`}
-            aria-selected={shown === t.id}
-            aria-controls="qz-stage-panel"
-            tabIndex={shown === t.id ? 0 : -1}
-            className={`qzk-tab${shown === t.id ? " active" : ""}`}
-            onClick={() => setStageTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="qzk-stagebar">
+        <div className="qzk-tabs" role="tablist" aria-label="Stage view" onKeyDown={(e) => onTabListKeyDown(e, false)}>
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              id={`qz-stage-${t.id}`}
+              aria-selected={shown === t.id}
+              aria-controls="qz-stage-panel"
+              tabIndex={shown === t.id ? 0 : -1}
+              className={`qzk-tab${shown === t.id ? " active" : ""}`}
+              onClick={() => setStageTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <WindowWorkspaceControls />
       </div>
       <div className="qzk-stage-panel" role="tabpanel" id="qz-stage-panel" aria-labelledby={`qz-stage-${shown}`}>
         {shown === "map" ? (
