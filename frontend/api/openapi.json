@@ -5546,6 +5546,11 @@
             "title": "Snr Threshold",
             "type": "number"
           },
+          "strict_prominence": {
+            "default": false,
+            "title": "Strict Prominence",
+            "type": "boolean"
+          },
           "x": {
             "items": {
               "type": "number"

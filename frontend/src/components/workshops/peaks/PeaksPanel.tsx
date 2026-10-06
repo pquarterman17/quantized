@@ -4,18 +4,14 @@
 // background) or each independently, then show the fitted parameters + R².
 // "→ Report" lands the fitted peak table as a #36 report sheet in the library.
 //
-// Audit P2.1: the fitted table is DURABLE — a fit is saved onto the dataset
-// (`Dataset.peakTable`, lib/peakTable.ts), so it survives a dataset switch, a
-// panel close, and a `.dwk` save/reopen, and each row carries an "incl."
-// checkbox whose state travels with it. Williamson-Hall's "Use fitted peaks"
-// reads that same table and honours the exclusions set here. A table the Peak
-// Analyzer's model fit published carries standard errors: its cells read
-// "value ± error" (PeakValueCell), and the header names that producer.
+// Fitted tables are durable on the dataset; Peak Analyzer model-fit tables
+// additionally show their standard errors through PeakValueCell.
 
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import PeakFitControls from "./PeakFitControls";
+import DetectedPeakActions from "./DetectedPeakActions";
 import PeakTable from "./PeakTable";
 import PeakValueCell from "./PeakValueCell";
 import { DEFAULT_PEAK_FIND } from "./peakFindParams";
@@ -34,13 +30,7 @@ import { addReportWithProvenance } from "../../../store/addReportWithProvenance"
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 
-// Stable empty-array reference (peak-selection RULING 2) — `fitResult?.peaks
-// ?? []` written inline here would mint a NEW [] every render while
-// fitResult is null. usePeakTableSelection now TOLERATES that specific
-// empty-vs-empty case (its own `bothEmpty` backstop, N3 review finding) so
-// it no longer crashes — but a fresh literal here would still cost an extra
-// wasted render pass on every keystroke elsewhere in the panel, which this
-// stable constant avoids entirely. Prefer it; don't rely on the backstop.
+// Stable fallback: a fresh [] would needlessly reset selection each render.
 const NO_FITTED_PEAKS: FittedPeak[] = [];
 
 // Opened on demand only: its chunk loads on the first "Batch integrate…".
@@ -70,6 +60,8 @@ export default function PeaksPanel() {
     toggleExcluded,
     editFittedPeak,
     removeFittedPeaks,
+    addDetectedPeakAt,
+    removeDetectedPeaks,
     fitting,
     fitError,
     fitTogether,
@@ -288,6 +280,18 @@ export default function PeaksPanel() {
           // (no aria-selected, no highlight, no tab stop, no handler) —
           // exactly the "never look selected while ignored" contract.
           onSelect={hasFit ? undefined : detectedSelection.select}
+          onDelete={hasFit ? undefined : () => removeDetectedPeaks(detectedSelection.selected)}
+        />
+      )}
+
+      {active && !busy && !error && (
+        <DetectedPeakActions
+          activeId={active.id}
+          peaks={peaks}
+          selected={detectedSelection.selected}
+          allowed={!hasFit && !fitting}
+          addPeakAt={addDetectedPeakAt}
+          removePeaks={removeDetectedPeaks}
         />
       )}
 
@@ -344,6 +348,7 @@ export default function PeaksPanel() {
             rows={fitRows}
             selected={fittedSelection.selected}
             onSelect={fittedSelection.select}
+            onDelete={() => void removeSelectedPeaks()}
           />
           <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
             <Button

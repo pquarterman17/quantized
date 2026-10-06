@@ -59,13 +59,11 @@ export interface StatStageSeed {
   facetCol?: number | null; group2Col?: number | null; colorCol?: number | null; // #11 facet; P1.4 Color-by (lib/statColor)
 }
 
-/** Peak Analyzer wizard click-on-plot marker editing (interaction plan item
- *  5, deferred from closed gap #31) — the bridge PlotStage reads to wire
- *  `peakMarkerEditPlugin` (lib/peakMarkerHit.ts). `usePeakWizard` is the sole
- *  owner of the candidate list and `addPeakAt`/`removePeak`; this is a THIN,
- *  minimal projection (marker data coords + the two callbacks) pushed into
- *  the store only while step ② is live — null the rest of the time (wizard
- *  closed, a different step, or Escape-suppressed). Mirrors
+/** Peak-workshop click-on-plot marker editing (interaction plan item 5) — the
+ *  bridge PlotStage reads to wire `peakMarkerEditPlugin` (lib/peakMarkerHit.ts).
+ *  Peak Analyzer or the simpler Peaks panel owns the candidate list and
+ *  callbacks; this is only a THIN projection while one edit mode is live.
+ *  The field/type retain their original wizard name for compatibility. Mirrors
  *  ReflectivitySeed/StatStageSeed's cross-panel-hook shape, generalized to a
  *  live bridge rather than a one-shot consume (closer in spirit to
  *  qfitRoi/onRoiChange, but the callbacks travel WITH the data since

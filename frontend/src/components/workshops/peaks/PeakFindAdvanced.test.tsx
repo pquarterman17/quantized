@@ -51,6 +51,18 @@ describe("PeaksPanel ▸ Advanced peak-find settings", () => {
     expect(Object.keys(vi.mocked(findPeaks).mock.calls[0]![0]).sort()).toEqual(["x", "y"]);
   });
 
+  it("enables the false-ripple guard automatically for a powder-XRD dataset", async () => {
+    useApp.setState((s) => ({
+      datasets: s.datasets.map((d) => ({
+        ...d,
+        data: { ...d.data, metadata: { ...d.data.metadata, technique: "xrd.powder" } },
+      })),
+    }));
+    render(<PeaksPanel />);
+    await waitFor(() => expect(detectedRows()).toHaveLength(2));
+    expect(vi.mocked(findPeaks).mock.calls[0]![0]).toMatchObject({ strict_prominence: true });
+  });
+
   it("edited widths, window and background method go on the next find, and only they do", async () => {
     render(<PeaksPanel />);
     await waitFor(() => expect(detectedRows()).toHaveLength(2));

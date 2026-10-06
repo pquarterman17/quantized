@@ -7534,6 +7534,11 @@ export interface components {
              * @default 5
              */
             snr_threshold?: number;
+            /**
+             * Strict Prominence
+             * @default false
+             */
+            strict_prominence?: boolean;
             /** X */
             x: number[];
             /** Y */

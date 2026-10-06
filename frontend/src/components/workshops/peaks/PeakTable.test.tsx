@@ -60,6 +60,14 @@ describe("PeakTable — interactive (governing table)", () => {
     expect(onSelect).toHaveBeenCalledWith(0, { shift: false, ctrlOrMeta: false });
   });
 
+  it("Delete invokes the table's delete owner after consuming the key", () => {
+    const onDelete = vi.fn();
+    render(<PeakTable ariaLabel="test peaks" columns={COLUMNS} rows={ROWS} selected={new Set([0])} onSelect={vi.fn()} onDelete={onDelete} />);
+    const row = within(screen.getByRole("table")).getAllByRole("row")[1];
+    fireEvent.keyDown(row, { key: "Delete" });
+    expect(onDelete).toHaveBeenCalledOnce();
+  });
+
   it("selected rows carry aria-selected=true, others aria-selected=false", () => {
     render(<PeakTable ariaLabel="test peaks" columns={COLUMNS} rows={ROWS} selected={new Set([1])} onSelect={vi.fn()} />);
     const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);

@@ -56,6 +56,24 @@ def test_find_peaks_short_signal_empty() -> None:
     np.testing.assert_array_equal(bg, [1.0, 2.0, 1.0, 2.0])
 
 
+def test_strict_prominence_rejects_locally_prominent_weak_peak() -> None:
+    """The app's stricter mode must honour the documented global floor.
+
+    The historical detector deliberately lets a sufficiently isolated weak
+    peak bypass ``min_prominence``.  That is useful for MATLAB parity, but it
+    is also the mechanism that labels low-angle XRD background ripples.
+    """
+    x = np.linspace(0.0, 20.0, 2000)
+    y = (
+        1000 * np.exp(-((x - 12.0) / 0.12) ** 2)
+        + 8 * np.exp(-((x - 3.0) / 0.12) ** 2)
+    )
+    legacy, _ = find_peaks_robust(x, y, min_prominence=0.02)
+    strict, _ = find_peaks_robust(x, y, min_prominence=0.02, strict_prominence=True)
+    assert [p["center"] for p in legacy] == pytest.approx([3.0, 12.0], abs=0.02)
+    assert [p["center"] for p in strict] == pytest.approx([12.0], abs=0.02)
+
+
 # ── prominence: fast O(n log n) path is bit-for-bit equal to the brute force ──
 
 

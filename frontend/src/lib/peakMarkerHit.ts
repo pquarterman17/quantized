@@ -1,5 +1,5 @@
-// Peak Analyzer wizard click-on-plot marker editing (interaction plan item 5,
-// deferred from closed gap #31): hit-test the wizard's candidate markers
+// Peak-workshop click-on-plot marker editing (interaction plan item 5,
+// introduced for Peak Analyzer and shared by the simpler Peaks panel): hit-test candidate markers
 // against a plot click, in PIXEL space so the tolerance stays constant across
 // zoom levels. Rides the shared point-gesture core (lib/pointGesture) for the
 // pixel-frame conversion + nearest-point hit test — this file was the template
@@ -49,8 +49,8 @@ export function peakMarkerPixels(
 }
 
 /**
- * Wizard-scoped plot plugin (step ② only — see PlotStage's `peakWizardEdit`
- * prop, sourced from the store bridge usePeakWizard maintains). A plain click
+ * Workshop-scoped plot plugin (see PlotStage's legacy-named `peakWizardEdit`
+ * prop, sourced from the active peak editor's store bridge). A plain click
  * (mousedown+mouseup with < CLICK_PX movement, the shared click-vs-drag
  * threshold) either removes the marker under the pointer or adds a new
  * candidate at the clicked x; a genuine drag (box zoom, pan) is left alone.
