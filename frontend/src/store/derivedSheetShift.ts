@@ -7,7 +7,7 @@
 // the references held outside it. Called by `recomputeDerivedSheet`
 // (store/derivedWorksheets.ts) on every derived-sheet recalc.
 
-import { type ColumnShift, remapChannelList, remapDatasetChannels } from "../lib/channelRemap";
+import { type ColumnShift, remapDatasetChannels } from "../lib/channelRemap";
 import { remapSurvivingFormulas } from "../lib/formulaRename";
 import type { Dataset } from "../lib/types";
 
@@ -40,22 +40,8 @@ export function shiftForColumnChange(
   const shift = detectColumnShift(before, after);
   if (shift === null) return { sheet, shift };
   const { formulas, forcedErrors } = remapSurvivingFormulas(sheet.formulas ?? [], shift);
-  // Signal-processing recipes select measured columns positionally. Keep that
-  // selection attached to the same surviving columns when the source gains or
-  // loses a column; leaving it stale silently transforms a neighbour instead.
-  const corrections = sheet.corrections?.signalChannels
-    ? {
-        ...sheet.corrections,
-        signalChannels: remapChannelList(sheet.corrections.signalChannels, shift),
-      }
-    : sheet.corrections;
   return {
-    sheet: {
-      ...sheet,
-      ...remapDatasetChannels(sheet, shift),
-      corrections,
-      formulas: formulas.length ? formulas : undefined,
-    },
+    sheet: { ...sheet, ...remapDatasetChannels(sheet, shift), formulas: formulas.length ? formulas : undefined },
     shift,
     forcedErrors: Object.keys(forcedErrors).length ? forcedErrors : undefined,
   };

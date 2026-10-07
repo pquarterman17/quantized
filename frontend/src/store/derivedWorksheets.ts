@@ -23,11 +23,11 @@
 
 import { cloneDataStruct } from "../lib/dataset";
 import { applyCorrections as applyCorrectionsApi } from "../lib/api";
+import { type ColumnShift, remapChannelList } from "../lib/channelRemap";
 import { recomputeFromBaseOrEmpty } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { CorrectionParams, Dataset } from "../lib/types";
-import type { ColumnShift } from "../lib/channelRemap";
 import { shiftForColumnChange } from "./derivedSheetShift";
 import { nextDatasetId } from "./idSeq";
 import type { AppState } from "./useApp";
@@ -111,15 +111,12 @@ export async function recomputeDerivedSheet(
   // into the stale index.
   const own = sheet.formulas?.length ?? 0; // the sheet's own computed columns trail its base
   const before = sheet.data.labels.slice(0, sheet.data.labels.length - own);
-  const { sheet: base, shift, forcedErrors } = shiftForColumnChange(sheet, before, sourceData.labels);
-  const selected = sheet.corrections?.signalChannels;
-  if (
-    shift === null
-    && selected?.some((channel) => before[channel] !== sourceData.labels[channel])
-  ) {
-    throw new Error(
-      "source columns changed in a way that cannot safely remap the selected signal columns",
-    );
+  let { sheet: base, shift, forcedErrors } = shiftForColumnChange(sheet, before, sourceData.labels);
+  const selected = base.corrections?.signalChannels;
+  if (selected && shift !== null) {
+    base = { ...base, corrections: { ...base.corrections, signalChannels: remapChannelList(selected, shift) } };
+  } else if (selected?.some((channel) => before[channel] !== sourceData.labels[channel])) {
+    throw new Error("selected signal columns changed");
   }
   const corrected = await applyCorrectionsApi({
     dataset: sourceData,

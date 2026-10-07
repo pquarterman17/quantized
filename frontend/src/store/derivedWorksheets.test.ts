@@ -367,7 +367,7 @@ describe("recomputeDerivedSheet — must not strip the SOURCE's own columns (#4)
     useApp.setState({ datasets: [source, sheet] });
 
     await expect(recomputeDerivedSheet(useApp.getState, sheet)).rejects.toThrow(
-      /cannot safely remap the selected signal columns/,
+      /selected signal columns changed/,
     );
     expect(applyCorrectionsApi).not.toHaveBeenCalled();
   });
