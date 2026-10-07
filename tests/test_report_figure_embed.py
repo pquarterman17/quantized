@@ -577,7 +577,7 @@ def test_render_lock_is_not_held_across_figures(monkeypatch: pytest.MonkeyPatch)
 
 
 # ── fix 6 -- no invalid-escape-sequence warning from any src/ module ──────
-def test_no_src_module_emits_an_escape_sequence_warning() -> None:
+def test_no_src_module_emits_an_escape_sequence_warning(tmp_path) -> None:
     """``python -W error::SyntaxWarning -m compileall -q src`` is the CI-
     matching check; this is the version-portable equivalent (Python 3.11
     still classifies an invalid escape sequence as a DeprecationWarning, only
@@ -590,10 +590,13 @@ def test_no_src_module_emits_an_escape_sequence_warning() -> None:
 
     src_root = pathlib.Path(__file__).resolve().parents[1] / "src" / "quantized"
     offenders = []
-    for path in sorted(src_root.rglob("*.py")):
+    for index, path in enumerate(sorted(src_root.rglob("*.py"))):
         with warnings.catch_warnings(record=True) as rec:
             warnings.simplefilter("always")
-            py_compile.compile(str(path), doraise=True)
+            # Never write into src/**/__pycache__: under xdist another worker
+            # may import the same module concurrently, and Windows refuses the
+            # atomic .pyc replacement while that destination is in use.
+            py_compile.compile(str(path), cfile=str(tmp_path / f"{index}.pyc"), doraise=True)
         for w in rec:
             if "escape sequence" in str(w.message):
                 offenders.append(f"{path.relative_to(src_root)}: {w.message}")
