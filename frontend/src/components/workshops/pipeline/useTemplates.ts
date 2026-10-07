@@ -31,7 +31,7 @@ import { canonicalJson } from "../../../lib/canonicalJson";
 import { definitionKey } from "../../../lib/templatesProject";
 import { recordUse } from "../../../lib/recipeIndex";
 import { toast } from "../../../store/toasts";
-import { runCancellable } from "../../../store/pendingOps";
+import { runCancellable } from "../../../store/pendingOpActions";
 import { removeDatasetsPatch, scrubDatasetsFromHistory } from "../../../store/removeDatasets";
 import { nextDatasetId, useApp } from "../../../store/useApp";
 

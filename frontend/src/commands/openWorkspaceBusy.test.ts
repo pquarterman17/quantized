@@ -68,22 +68,23 @@ describe("Open workspace — busy state", () => {
   it("clears the busy op on successful parse", async () => {
     runCommand("open-workspace");
     pickFile({ text: () => Promise.resolve(WS) } as unknown as File);
-    await vi.waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
+    await vi.waitFor(() => expect(useApp.getState().status).toMatch(/loaded workspace/));
+    expect(usePendingOps.getState().ops).toHaveLength(0);
     expect(useApp.getState().datasets).toEqual([]);
   });
 
   it("clears the busy op when the parse fails (bad JSON)", async () => {
     runCommand("open-workspace");
     pickFile({ text: () => Promise.resolve("not json {{{") } as unknown as File);
-    await vi.waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
-    expect(useApp.getState().status).toMatch(/open failed/);
+    await vi.waitFor(() => expect(useApp.getState().status).toMatch(/open failed/));
+    expect(usePendingOps.getState().ops).toHaveLength(0);
   });
 
   it("clears the busy op when file.text() itself rejects", async () => {
     runCommand("open-workspace");
     pickFile({ text: () => Promise.reject(new Error("disk error")) } as unknown as File);
-    await vi.waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
-    expect(useApp.getState().status).toBe("open failed: disk error");
+    await vi.waitFor(() => expect(useApp.getState().status).toBe("open failed: disk error"));
+    expect(usePendingOps.getState().ops).toHaveLength(0);
   });
 
   it("does not register a busy op before a file is picked (dialog merely open)", () => {
@@ -118,7 +119,7 @@ describe("Append workspace — busy state", () => {
   it("clears the busy op on failure with the append-specific status message", async () => {
     runCommand("append-workspace");
     pickFile({ text: () => Promise.resolve("not json {{{") } as unknown as File);
-    await vi.waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
-    expect(useApp.getState().status).toMatch(/append failed/);
+    await vi.waitFor(() => expect(useApp.getState().status).toMatch(/append failed/));
+    expect(usePendingOps.getState().ops).toHaveLength(0);
   });
 });

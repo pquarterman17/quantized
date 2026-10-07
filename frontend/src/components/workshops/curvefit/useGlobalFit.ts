@@ -29,7 +29,7 @@ import { selectedFitData } from "../../../lib/fitselection";
 import { analysisData } from "../../../lib/rowstate";
 import type { FitModel, FitOverlay } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
-import { trackJob } from "../../../store/pendingOps";
+import { trackJob } from "../../../store/pendingOpActions";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import {
   channelMembers,

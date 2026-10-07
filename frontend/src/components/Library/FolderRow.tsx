@@ -61,7 +61,7 @@ import {
   type DropZone3,
 } from "../../lib/foldertree";
 import type { FolderNode } from "../../lib/types";
-import { ACCENT_SWATCHES } from "../../store/prefs";
+import { ACCENT_SWATCHES } from "../../store/accentSwatches";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import { innerTabIndex, type TreeItemProps } from "../../lib/libraryTreeNav";

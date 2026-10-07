@@ -30,7 +30,7 @@ import {
   stampReportTransformProvenance,
 } from "../../../lib/reportTransformProvenance";
 import { transformRecipeLabel } from "../../../lib/transformProvenance";
-import { runCancellable } from "../../../store/pendingOps";
+import { runCancellable } from "../../../store/pendingOpActions";
 import { TOAST_ACTION_TTL, toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";

@@ -28,7 +28,7 @@ import type { CutSpace } from "../../lib/mapcuts";
 import type { MapAnnotation, MapSliceDef } from "../../lib/mapView";
 import type { MapPayload } from "../../lib/mapdataFetch";
 import { exportCanvasPng } from "../../lib/plotExport";
-import { runCancellable } from "../../store/pendingOps";
+import { runCancellable } from "../../store/pendingOpActions";
 import { askParams } from "../overlays/ParamDialog";
 import { effectiveColorLimits, minPositive } from "./mapRender";
 import { mapMarks } from "./mapSliceGeometry";

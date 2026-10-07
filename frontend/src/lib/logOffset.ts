@@ -32,7 +32,6 @@
 
 import type { ErrorSpan } from "./errorbars";
 import type { PlotPayload } from "./plotdata";
-import { overlayModesMatchTheCanvas, type CycleView } from "./seriesStyleCycle";
 import type { SeriesStyle } from "./types";
 import { waterfallApplies } from "./waterfallOffset";
 
@@ -150,21 +149,4 @@ export function scaleErrorSpans(
     );
   });
   return changed ? out : spans;
-}
-
-/** The `log_offsets` half of a `FigureSpec` — one entry per `plotted`
- *  channel (the wire's `y_keys`) — or `{}` when nothing is offset or the view
- *  is one the rule above refuses, so an ordinary export's wire is unchanged. */
-export function logOffsetWire(args: {
-  plotted: readonly number[];
-  seriesStyles: Record<number, SeriesStyle>;
-  waterfall: number;
-  view: CycleView;
-  /** The `group_col` this spec emits (null = an ungrouped overlay). */
-  groupCol: number | null;
-}): { log_offsets?: number[] } {
-  if (!logOffsetsApply(args.waterfall, args.groupCol)) return {};
-  if (!overlayModesMatchTheCanvas({ ...args.view, groupKey: args.groupCol })) return {};
-  const ks = args.plotted.map((ch) => logOffsetDecades(args.seriesStyles[ch]?.logOffset));
-  return ks.some((k) => k !== 0) ? { log_offsets: ks } : {};
 }

@@ -72,6 +72,21 @@ describe("createDerivedWorksheet (K2/K4, L0.50)", () => {
     expect(created?.derivedFrom?.pipeline).toBe("My custom pipeline");
   });
 
+  it("passes uncertainty bindings through the calculation and onto the derived sheet", async () => {
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(data());
+    const errorRoles = [{ channel: 1, target: 0, axis: "y" as const, side: "both" as const }];
+    useApp.setState({ datasets: [ds("a", { errorRoles })] });
+
+    const newId = await useApp.getState().createDerivedWorksheet("a", { normMethod: "Peak (max=1)" });
+
+    expect(applyCorrectionsApi).toHaveBeenCalledWith({
+      dataset: data(),
+      params: { normMethod: "Peak (max=1)" },
+      error_bindings: errorRoles,
+    });
+    expect(useApp.getState().datasets.find((d) => d.id === newId)?.errorRoles).toEqual(errorRoles);
+  });
+
   it("refuses (zero mutation, no API call) when the source doesn't exist", async () => {
     const before = useApp.getState().datasets;
     const result = await useApp.getState().createDerivedWorksheet("ghost", {});

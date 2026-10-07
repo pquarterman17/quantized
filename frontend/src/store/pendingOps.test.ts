@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { beginOp, endOp, runCancellable, trackJob, updateOp, usePendingOps, withOp } from "./pendingOps";
+import { runCancellable, trackJob } from "./pendingOpActions";
+import { beginOp, endOp, updateOp, usePendingOps, withOp } from "./pendingOps";
 
 beforeEach(() => usePendingOps.setState({ ops: [] }));
 

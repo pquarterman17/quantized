@@ -105,7 +105,11 @@ export async function recomputeDerivedSheet(
   if (!source) throw new Error(`source dataset "${sourceId}" no longer exists`);
   if (source.pending) throw new Error(`source dataset "${source.name}" hasn't fully loaded yet`);
   const sourceData = source.data;
-  const corrected = await applyCorrectionsApi({ dataset: sourceData, params: sheet.corrections ?? {} });
+  const corrected = await applyCorrectionsApi({
+    dataset: sourceData,
+    params: sheet.corrections ?? {},
+    ...(source.errorRoles ? { error_bindings: source.errorRoles } : {}),
+  });
   // #50/#53 row-count-changed guard (excludedRows + the four overlays) is
   // applied by the CALLER (useApp.ts's recalcNow, via the shared
   // rowsChangedGuard — see store/corrections.ts) once it can see both the
@@ -117,7 +121,16 @@ export async function recomputeDerivedSheet(
   const { data, formulaErrors } = recomputeFromBaseOrEmpty(corrected, base.formulas);
   // A formula that named the removed column is an explicit error, never a guess.
   const errors = forcedErrors ? { ...formulaErrors, ...forcedErrors } : formulaErrors;
-  return { sheet: { ...base, data, raw: sourceData, formulaErrors: errors }, shift };
+  return {
+    sheet: {
+      ...base,
+      data,
+      raw: sourceData,
+      formulaErrors: errors,
+      ...(source.errorRoles ? { errorRoles: [...source.errorRoles] } : {}),
+    },
+    shift,
+  };
 }
 
 // `set` unused here: both actions delegate to `get().addDataset(...)` (the
@@ -157,7 +170,11 @@ export function createDerivedWorksheetsSlice(_set: SliceSet, get: SliceGet): Der
         // own correction pipeline (or, for a chain, skip an intermediate
         // derived sheet's entire pipeline and jump straight to ITS source).
         const sourceData = source.data;
-        const data = await applyCorrectionsApi({ dataset: sourceData, params });
+        const data = await applyCorrectionsApi({
+          dataset: sourceData,
+          params,
+          ...(source.errorRoles ? { error_bindings: source.errorRoles } : {}),
+        });
         const newDs: Dataset = {
           id: newId,
           name: `${source.name} (derived)`,
@@ -165,6 +182,7 @@ export function createDerivedWorksheetsSlice(_set: SliceSet, get: SliceGet): Der
           raw: sourceData,
           ...(Object.keys(params).length ? { corrections: params } : {}),
           derivedFrom: { datasetId: sourceId, pipeline: pipelineLabel?.trim() || summarizePipeline(params) },
+          ...(source.errorRoles ? { errorRoles: [...source.errorRoles] } : {}),
           ...(source.workbookId ? { workbookId: source.workbookId } : {}),
           ...(source.folderId ? { folderId: source.folderId } : {}),
         };

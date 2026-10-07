@@ -2951,6 +2951,28 @@ Playwright browser here).
 `measured + 1,000`, the slice-19 rule. That leaves 1,000 B for queued work and
 locks in the rest of the gain.
 
+### Slice 23 — four lazy-only halves fund the Signal Processing workbench — **DONE (2026-10-06)**
+
+The first General Signal Processing tranche crossed the 834,639 B startup
+ratchet even though its panel was already flag-gated and lazy. Four helpers
+identified by the earlier source scan moved to modules reached only by
+existing lazy callers; no new `import()` or user-visible loading boundary was
+introduced:
+
+- `store/pendingOpActions.ts`: `trackJob` and `runCancellable`;
+- `store/accentSwatches.ts`: the fixed folder/Preferences paint table;
+- `lib/mapViewSerialize.ts`: default detection and the `.dwk` save copier;
+- `lib/logOffsetWire.ts`: the export-only `log_offsets` builder.
+
+Production callers import those modules directly, and none of the eager
+parents re-exports them. `architecture.test.ts` lists all four in
+`DRAGGED_OUT`, so a future eager import fails the reachability guard. The
+focused owner tests, architecture suite, TypeScript build, and production
+bundle gate pass. Final exact eager size from `dist/index.html` is **834,392
+B**, 247 B under the unchanged 834,639 B pin. The margin is intentionally
+small; the next eager feature should begin with another measured extraction,
+not a budget raise.
+
 ## What this does NOT change
 
 Vendor is 26% and fixed. `useApp.ts` at 36.5 kB is the largest app module and
