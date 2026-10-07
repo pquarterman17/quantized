@@ -9,8 +9,9 @@ import type { MultiFitResult, Peak, SinglePeakFit } from "../types";
 import type { components } from "./schema";
 
 /** Robust peak detection -> peak list + estimated background. Omitted
- *  settings take the route's (2θ-tuned) defaults; the `_deg` fields are in x
- *  units, and `bg_*` picks the detector's own background (SNIP default). */
+ *  settings take the route defaults; the `_deg` fields are in x units, and
+ *  `bg_*` picks the detector's own background (SNIP default). Powder-XRD
+ *  callers opt into `strict_prominence` to suppress background ripples. */
 export function findPeaks(body: {
   x: number[];
   y: number[];
@@ -25,6 +26,7 @@ export function findPeaks(body: {
   bg_method?: "snip" | "polynomial";
   bg_poly_degree?: number;
   bg_iterative?: boolean;
+  strict_prominence?: boolean;
 }): Promise<{ peaks: Peak[]; background: (number | null)[] }> {
   return postJSON("/api/peaks/find", body);
 }

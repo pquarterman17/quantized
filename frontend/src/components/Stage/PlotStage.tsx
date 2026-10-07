@@ -142,8 +142,8 @@ export default function PlotStage() {
   const peakOverlay = useApp((s) => s.peakOverlay);
   const baselineOverlay = useApp((s) => s.baselineOverlay);
   const derivOverlay = useApp((s) => s.derivOverlay);
-  // Peak wizard click-on-plot marker editing (item 5) — non-null only while
-  // the wizard's step ② is live (see usePeakWizard's store bridge).
+  // Peak-workshop click-on-plot editing — Peak Analyzer or the simpler Peaks
+  // panel owns this legacy-named bridge while its edit mode is live.
   const peakWizardEdit = useApp((s) => s.peakWizardEdit);
   // Anchor-point baseline editing (GOTO #2) — non-null only while the
   // Baseline workshop's "Anchor points" method is live (useBaseline's bridge).
