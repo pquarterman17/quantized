@@ -6,9 +6,30 @@ function finiteRows(data: DataStruct, channel: number): (readonly [number, numbe
     .filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
 }
 
-function sample(rows: (readonly [number, number])[]): (readonly [number, number])[] {
-  const stride = Math.max(1, Math.ceil(rows.length / 400));
-  return rows.filter((_, index) => index % stride === 0 || index === rows.length - 1);
+export function samplePreviewRows(
+  rows: (readonly [number, number])[],
+  maxPoints = 400,
+): (readonly [number, number])[] {
+  if (rows.length <= maxPoints) return rows;
+  // Keep the local high and low point from each bucket. Uniform every-Nth
+  // sampling can erase a narrow diffraction/spectroscopy peak completely,
+  // making the smoothing preview scientifically misleading.
+  const bucketCount = Math.max(1, Math.floor((maxPoints - 2) / 2));
+  const bucketSize = Math.ceil((rows.length - 2) / bucketCount);
+  const sampled: (readonly [number, number])[] = [rows[0]];
+  for (let start = 1; start < rows.length - 1; start += bucketSize) {
+    const end = Math.min(rows.length - 1, start + bucketSize);
+    let low = start;
+    let high = start;
+    for (let index = start + 1; index < end; index += 1) {
+      if (rows[index][1] < rows[low][1]) low = index;
+      if (rows[index][1] > rows[high][1]) high = index;
+    }
+    sampled.push(rows[Math.min(low, high)]);
+    if (low !== high) sampled.push(rows[Math.max(low, high)]);
+  }
+  sampled.push(rows[rows.length - 1]);
+  return sampled;
 }
 
 function points(
@@ -38,8 +59,8 @@ export default function SignalPreview({
 }) {
   const width = 460;
   const height = 150;
-  const originalRows = sample(finiteRows(source, channel));
-  const processedRows = result ? sample(finiteRows(result, channel)) : [];
+  const originalRows = samplePreviewRows(finiteRows(source, channel));
+  const processedRows = result ? samplePreviewRows(finiteRows(result, channel)) : [];
   const combined = [...originalRows, ...processedRows];
   const bounds = combined.length
     ? [

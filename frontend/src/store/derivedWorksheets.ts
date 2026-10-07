@@ -105,9 +105,25 @@ export async function recomputeDerivedSheet(
   if (!source) throw new Error(`source dataset "${sourceId}" no longer exists`);
   if (source.pending) throw new Error(`source dataset "${source.name}" hasn't fully loaded yet`);
   const sourceData = source.data;
+  // Remap channel-indexed recipe fields BEFORE executing the pipeline. Doing
+  // this after the API call updates the saved recipe for next time, but the
+  // current recalculation has already transformed whichever neighbour moved
+  // into the stale index.
+  const own = sheet.formulas?.length ?? 0; // the sheet's own computed columns trail its base
+  const before = sheet.data.labels.slice(0, sheet.data.labels.length - own);
+  const { sheet: base, shift, forcedErrors } = shiftForColumnChange(sheet, before, sourceData.labels);
+  const selected = sheet.corrections?.signalChannels;
+  if (
+    shift === null
+    && selected?.some((channel) => before[channel] !== sourceData.labels[channel])
+  ) {
+    throw new Error(
+      "source columns changed in a way that cannot safely remap the selected signal columns",
+    );
+  }
   const corrected = await applyCorrectionsApi({
     dataset: sourceData,
-    params: sheet.corrections ?? {},
+    params: base.corrections ?? {},
     ...(source.errorRoles ? { error_bindings: source.errorRoles } : {}),
   });
   // #50/#53 row-count-changed guard (excludedRows + the four overlays) is
@@ -115,9 +131,6 @@ export async function recomputeDerivedSheet(
   // rowsChangedGuard — see store/corrections.ts) once it can see both the
   // old and new row counts and perform the actual `set()`; this function
   // stays a pure "compute the new Dataset" step, same shape as before.
-  const own = sheet.formulas?.length ?? 0; // the sheet's own computed columns trail its base
-  const before = sheet.data.labels.slice(0, sheet.data.labels.length - own);
-  const { sheet: base, shift, forcedErrors } = shiftForColumnChange(sheet, before, corrected.labels);
   const { data, formulaErrors } = recomputeFromBaseOrEmpty(corrected, base.formulas);
   // A formula that named the removed column is an explicit error, never a guess.
   const errors = forcedErrors ? { ...formulaErrors, ...forcedErrors } : formulaErrors;
