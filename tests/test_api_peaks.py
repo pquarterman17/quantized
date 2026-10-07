@@ -7,9 +7,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 from fastapi.testclient import TestClient
 
 from quantized.app import app
+from quantized.io.registry import import_auto
 from quantized.io.xrdml import import_xrdml
 
 client = TestClient(app)
@@ -81,6 +83,32 @@ def test_xrd_strict_prominence_does_not_label_low_angle_background_ripples() -> 
     assert sum(c < 20 for c in centers) <= 2
     assert any(abs(c - 24.11) < 0.05 for c in centers)
     assert any(abs(c - 31.37) < 0.05 for c in centers)
+
+
+def test_xrd_strict_prominence_on_real_laboratory_pattern(corpus_dir: Path) -> None:
+    """Exercise the import + API path on the file that exposed the GUI defect.
+
+    The sibling test-data corpus is intentionally optional in CI, but this runs
+    in local acceptance passes where the laboratory file is available.
+    """
+    path = corpus_dir / "panalytical" / "xrd" / "La2NiO4_1.xrdml"
+    if not path.is_file():
+        pytest.skip("La2NiO4_1.xrdml is not present in the test-data corpus")
+    ds = import_auto(path)
+    assert ds.metadata["technique"] == "xrd.powder"
+    payload = {"x": ds.time.tolist(), "y": ds.values[:, 0].tolist()}
+    legacy = client.post("/api/peaks/find", json=payload)
+    strict = client.post(
+        "/api/peaks/find", json={**payload, "strict_prominence": True}
+    )
+    assert legacy.status_code == 200
+    assert strict.status_code == 200
+    legacy_centers = [p["center"] for p in legacy.json()["peaks"]]
+    strict_centers = [p["center"] for p in strict.json()["peaks"]]
+    assert len(strict_centers) < len(legacy_centers)
+    assert sum(c < 20 for c in strict_centers) <= 2
+    assert any(abs(c - 24.11) < 0.05 for c in strict_centers)
+    assert any(abs(c - 31.37) < 0.05 for c in strict_centers)
 
 
 def _one_lorentzian() -> tuple[list[float], list[float]]:

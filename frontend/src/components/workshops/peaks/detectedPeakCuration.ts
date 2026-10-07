@@ -21,6 +21,11 @@ const nearestIndex = (xs: readonly number[], at: number): number => {
   return nearest;
 };
 
+const finiteBackground = (background: readonly (number | null)[], index: number): number => {
+  const value = background[index];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+};
+
 /** Build a manual candidate near ``at``, snapped to the local apex. */
 export function manualPeakAt(data: PeakDetectionData, at: number): Peak | null {
   if (data.x.length === 0) return null;
@@ -33,12 +38,16 @@ export function manualPeakAt(data: PeakDetectionData, at: number): Peak | null {
     }
   }
   if (!Number.isFinite(at) || at < lo || at > hi) return null;
-  const seed = seedPeakNear(data.x, data.y, at);
+  // The automatic detector finds peaks in y - background, so manual additions
+  // must use the same coordinate system. Snapping against raw intensity makes
+  // a steep low-angle XRD background win over the local diffraction apex: the
+  // seeder then keeps the literal click (a slope/edge) instead of the peak.
+  const corrected = data.y.map((value, index) => value - finiteBackground(data.background, index));
+  const seed = seedPeakNear(data.x, corrected, at);
   if (!seed) return null;
   const i = nearestIndex(data.x, seed.center);
-  const bgValue = data.background[i];
-  const bg = typeof bgValue === "number" && Number.isFinite(bgValue) ? bgValue : 0;
-  const height = Math.max(Number.EPSILON, seed.height - bg);
+  const bg = finiteBackground(data.background, i);
+  const height = Math.max(Number.EPSILON, seed.height);
   return {
     center: seed.center,
     height,

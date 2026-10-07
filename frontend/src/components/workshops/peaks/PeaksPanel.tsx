@@ -280,7 +280,10 @@ export default function PeaksPanel() {
           // (no aria-selected, no highlight, no tab stop, no handler) —
           // exactly the "never look selected while ignored" contract.
           onSelect={hasFit ? undefined : detectedSelection.select}
-          onDelete={hasFit ? undefined : () => removeDetectedPeaks(detectedSelection.selected)}
+          // A fit snapshots the current seeds. Keep its in-flight inputs and
+          // the visible candidate table aligned: Delete remains consumed by
+          // PeakTable, but cannot mutate candidates until the fit lands.
+          onDelete={hasFit || fitting ? undefined : () => removeDetectedPeaks(detectedSelection.selected)}
         />
       )}
 

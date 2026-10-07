@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { findPeaks } from "../../../lib/api/peaks";
+import { findPeaks, fitMultiPeak } from "../../../lib/api/peaks";
 import type { DataStruct, Peak } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { askParams } from "../../overlays/ParamDialog";
@@ -66,5 +66,16 @@ describe("PeaksPanel — detected peak curation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Stop plot editing" }));
     expect(useApp.getState().peakWizardEdit).toBeNull();
+  });
+
+  it("does not let Delete change the snapshotted candidates during a fit", async () => {
+    vi.mocked(fitMultiPeak).mockReturnValue(new Promise<never>(() => {}));
+    render(<PeaksPanel />);
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    fireEvent.click(rows()[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Fit all together" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Fitting…" })).toBeDisabled());
+    fireEvent.keyDown(rows()[0], { key: "Delete" });
+    expect(rows()).toHaveLength(2);
   });
 });
