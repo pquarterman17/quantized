@@ -111,7 +111,9 @@ export async function recomputeDerivedSheet(
   // into the stale index.
   const own = sheet.formulas?.length ?? 0; // the sheet's own computed columns trail its base
   const before = sheet.data.labels.slice(0, sheet.data.labels.length - own);
-  let { sheet: base, shift, forcedErrors } = shiftForColumnChange(sheet, before, sourceData.labels);
+  const shifted = shiftForColumnChange(sheet, before, sourceData.labels);
+  let base = shifted.sheet;
+  const { shift, forcedErrors } = shifted;
   const selected = base.corrections?.signalChannels;
   if (selected && shift !== null) {
     base = { ...base, corrections: { ...base.corrections, signalChannels: remapChannelList(selected, shift) } };
