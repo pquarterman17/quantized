@@ -5,13 +5,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset, DataStruct } from "../lib/types";
 import { useApp } from "./useApp";
+import { createSpectralWorksheet } from "./spectralWorksheetsRun";
 
 vi.mock("../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/api")>()),
   applyCorrections: vi.fn(),
 }));
+vi.mock("../lib/api/spectralWorkbench", () => ({ runSpectralWorkbench: vi.fn() }));
 
 import { applyCorrections as applyCorrectionsApi } from "../lib/api";
+import { runSpectralWorkbench } from "../lib/api/spectralWorkbench";
+import { DEFAULT_SPECTRAL_RECIPE, type SpectralAnalysisRecipe } from "../lib/spectralWorkbench";
 import * as recalcModule from "../lib/recalc";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 
@@ -27,6 +31,12 @@ const ds = (id: string, over: Partial<Dataset> = {}): Dataset => ({
   id,
   name: id,
   data: data(),
+  ...over,
+});
+
+const spectralRecipe = (over: Partial<SpectralAnalysisRecipe> = {}): SpectralAnalysisRecipe => ({
+  ...DEFAULT_SPECTRAL_RECIPE,
+  channels: [{ index: 0, label: "A" }],
   ...over,
 });
 
@@ -187,6 +197,68 @@ describe("createDerivedWorksheet (K2/K4, L0.50)", () => {
     expect(result).toBeNull();
     expect(useApp.getState().status).toContain("create derived worksheet failed");
     expect(useApp.getState().datasets).toBe(before);
+  });
+});
+
+describe("linked spectral worksheets", () => {
+  it("creates one linked output in the source workbook without carrying stale error roles", async () => {
+    const output = { ...data(), labels: ["A · Magnitude"], units: ["u"] };
+    vi.mocked(runSpectralWorkbench).mockResolvedValue(output);
+    useApp.setState({
+      datasets: [ds("a", {
+        workbookId: "wb",
+        folderId: "folder",
+        errorRoles: [{ channel: 0, target: 0, axis: "y", side: "both" }],
+      })],
+    });
+
+    const recipe = spectralRecipe();
+    const id = await createSpectralWorksheet(
+      () => useApp.getState(),
+      "a",
+      recipe,
+      "Frequency spectrum · A",
+    );
+    const created = useApp.getState().datasets.find((item) => item.id === id);
+    expect(runSpectralWorkbench).toHaveBeenCalledWith(data(), recipe);
+    expect(created).toMatchObject({
+      data: output,
+      analysisRecipe: recipe,
+      derivedFrom: { datasetId: "a", pipeline: "Frequency spectrum · A" },
+      workbookId: "wb",
+      folderId: "folder",
+    });
+    expect(created?.errorRoles).toBeUndefined();
+  });
+
+  it("rebinds a moved source column by its unique label before recalculation", async () => {
+    const sourceData = { ...data(), values: [[1, 10], [2, 20], [3, 30]], labels: ["new", "A"], units: ["", "u"] };
+    const output = { ...data(), labels: ["A · Magnitude"] };
+    vi.mocked(runSpectralWorkbench).mockResolvedValue(output);
+    const sheet = ds("derived", {
+      derivedFrom: { datasetId: "src", pipeline: "fft" },
+      analysisRecipe: spectralRecipe(),
+    });
+    useApp.setState({ datasets: [ds("src", { data: sourceData }), sheet] });
+
+    const { sheet: result } = await recomputeDerivedSheet(useApp.getState, sheet);
+    expect(result.analysisRecipe?.channels).toEqual([{ index: 1, label: "A" }]);
+    expect(runSpectralWorkbench).toHaveBeenCalledWith(
+      sourceData,
+      expect.objectContaining({ channels: [{ index: 1, label: "A" }] }),
+    );
+  });
+
+  it("fails closed instead of guessing when a source label becomes ambiguous", async () => {
+    const sourceData = { ...data(), values: [[1, 10], [2, 20], [3, 30]], labels: ["A", "A"], units: ["u", "u"] };
+    const sheet = ds("derived", {
+      derivedFrom: { datasetId: "src", pipeline: "fft" },
+      analysisRecipe: spectralRecipe({ channels: [{ index: 2, label: "A" }] }),
+    });
+    useApp.setState({ datasets: [ds("src", { data: sourceData }), sheet] });
+
+    await expect(recomputeDerivedSheet(useApp.getState, sheet)).rejects.toThrow("ambiguous");
+    expect(runSpectralWorkbench).not.toHaveBeenCalled();
   });
 });
 

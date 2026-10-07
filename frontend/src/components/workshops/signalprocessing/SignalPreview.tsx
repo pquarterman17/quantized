@@ -52,15 +52,19 @@ export default function SignalPreview({
   source,
   result,
   channel,
+  resultChannel = channel,
+  showOriginal = true,
 }: {
   source: DataStruct;
   result: DataStruct | null;
   channel: number;
+  resultChannel?: number;
+  showOriginal?: boolean;
 }) {
   const width = 460;
   const height = 150;
-  const originalRows = samplePreviewRows(finiteRows(source, channel));
-  const processedRows = result ? samplePreviewRows(finiteRows(result, channel)) : [];
+  const originalRows = showOriginal ? samplePreviewRows(finiteRows(source, channel)) : [];
+  const processedRows = result ? samplePreviewRows(finiteRows(result, resultChannel)) : [];
   const combined = [...originalRows, ...processedRows];
   const bounds = combined.length
     ? [
@@ -72,14 +76,14 @@ export default function SignalPreview({
     : [0, 1, 0, 1] as const;
   return (
     <div className="qz-signal-preview">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Original and processed signal preview">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={showOriginal ? "Original and processed signal preview" : "Analysis output preview"}>
         <rect x="0" y="0" width={width} height={height} fill="var(--bg-1)" />
         <polyline points={points(originalRows, bounds, width, height)} fill="none" stroke="var(--text-faint)" strokeWidth="1.2" />
         {result && <polyline points={points(processedRows, bounds, width, height)} fill="none" stroke="var(--accent)" strokeWidth="1.8" />}
       </svg>
       <div className="qz-signal-preview-key">
-        <span className="qz-signal-preview-name">Preview: {source.labels[channel] ?? `channel ${channel + 1}`}</span>
-        <span>Original</span><strong>Processed</strong>
+        <span className="qz-signal-preview-name">Preview: {result?.labels[resultChannel] ?? source.labels[channel] ?? `channel ${channel + 1}`}</span>
+        {showOriginal && <span>Original</span>}<strong>{showOriginal ? "Processed" : "Output"}</strong>
       </div>
     </div>
   );

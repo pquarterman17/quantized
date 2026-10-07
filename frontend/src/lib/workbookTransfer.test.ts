@@ -438,6 +438,24 @@ describe("pasteTransferPackage — fresh-id rewrite core", () => {
       ...pkg.datasets[1],
       versionOf: "ds-outside-this-workbook",
       derivedFrom: { datasetId: "ds-outside-this-workbook", pipeline: "flatten + smooth" },
+      analysisRecipe: {
+        kind: "spectral",
+        version: 1,
+        operation: "fft",
+        channels: [{ index: 0, label: "A" }],
+        resample: false,
+        outputType: "magnitude",
+        sided: "one",
+        window: "hanning",
+        detrend: "mean",
+        zeroPad: 0,
+        segmentLen: 0,
+        overlap: 0.5,
+        filterType: "lowpass",
+        cutoff: [1],
+        order: 4,
+        correlationDemean: true,
+      },
     };
     const result = pasteTransferPackage(pkg, emptyExisting(), generators("g"), undefined);
     const sheet2 = result.datasets.find((d) => d.name === "Sheet 2")!;
@@ -445,6 +463,7 @@ describe("pasteTransferPackage — fresh-id rewrite core", () => {
     // Dropped outright -- never carried across as a stale id.
     expect(sheet2.versionOf).toBeUndefined();
     expect(sheet2.derivedFrom).toBeUndefined();
+    expect(sheet2.analysisRecipe).toBeUndefined();
     // ...and the drop IS counted, even though nothing surfaces the count yet.
     expect(result.droppedExternalRefs).toBeGreaterThanOrEqual(2);
   });

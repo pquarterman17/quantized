@@ -121,3 +121,41 @@ def test_fft_on_near_closed_loop_reports_true_sample_rate() -> None:
         f"frequency axis tops out at {freq.max():.6g}; expected ~{nyquist:.6g} "
         f"for a true |dx| of {true_spacing:.6g}"
     )
+
+
+def test_workbench_returns_a_datastruct_and_provenance() -> None:
+    x, y = _sine(freq=7.0)
+    dataset = {
+        "time": x,
+        "values": [[value, 2 * value] for value in y],
+        "labels": ["A", "B"],
+        "units": ["V", "V"],
+        "metadata": {"xLabel": "Time", "xUnit": "s"},
+    }
+    resp = client.post(
+        "/api/spectral/workbench",
+        json={"dataset": dataset, "operation": "fft", "channels": [1]},
+    )
+    assert resp.status_code == 200, resp.text
+    out = resp.json()
+    assert out["labels"] == ["B · Magnitude"]
+    assert out["metadata"]["xUnit"] == "1/s"
+    assert out["metadata"]["spectralAnalysis"]["channels"] == [1]
+
+
+def test_workbench_rejects_irregular_x_without_explicit_resampling() -> None:
+    x, y = _sine()
+    x[50] += 0.002
+    dataset = {
+        "time": x,
+        "values": [[value] for value in y],
+        "labels": ["A"],
+        "units": ["V"],
+        "metadata": {"xUnit": "s"},
+    }
+    resp = client.post(
+        "/api/spectral/workbench",
+        json={"dataset": dataset, "operation": "filter", "channels": [0], "cutoff": [10]},
+    )
+    assert resp.status_code == 422
+    assert "resampling" in resp.json()["detail"]

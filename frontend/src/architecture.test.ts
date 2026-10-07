@@ -1979,6 +1979,7 @@ const DATASET_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
     "computed-column list; positional shift on removal is handled by lib/formulaRename's remapSurvivingFormulas, a separate mechanism from lib/channelRemap",
   formulaErrors: "keyed by formula NAME, not column index",
   derivedFrom: "source dataset id + pipeline descriptor, not channel-indexed",
+  analysisRecipe: "label-bound indices address the source dataset and are re-resolved there, not this output's columns",
   importedAt: "timestamp, not channel-indexed",
   excludedRows:
     "ROW indices (JMP-style row state, #50), not COLUMN/channel indices -- unaffected by a column removal",

@@ -1,17 +1,18 @@
 import type { ReactNode } from "react";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import SignalProcessingPanel from "./SignalProcessingPanel";
 
-const { correctionMock } = vi.hoisted(() => ({ correctionMock: vi.fn() }));
+const { correctionMock, spectralMock } = vi.hoisted(() => ({ correctionMock: vi.fn(), spectralMock: vi.fn() }));
 
 vi.mock("../../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api")>()),
   applyCorrections: correctionMock,
 }));
+vi.mock("../../../lib/api/spectralWorkbench", () => ({ runSpectralWorkbench: spectralMock }));
 
 vi.mock("../../overlays/ToolWindow", () => ({
   default: ({ title, children }: { title: string; children: ReactNode }) => (
@@ -35,6 +36,13 @@ const realCreateDerived = useApp.getState().createDerivedWorksheet;
 beforeEach(() => {
   vi.clearAllMocks();
   correctionMock.mockImplementation(async ({ dataset: data }: { dataset: Dataset["data"] }) => structuredClone(data));
+  spectralMock.mockResolvedValue({
+    time: [0, 1],
+    values: [[1], [0.5]],
+    labels: ["secondary · Magnitude"],
+    units: ["A"],
+    metadata: { xLabel: "Frequency", xUnit: "1/s" },
+  });
   useApp.setState({
     datasets: [dataset],
     activeId: dataset.id,
@@ -94,5 +102,33 @@ describe("SignalProcessingPanel", () => {
     });
     expect(createDerivedWorksheet).toHaveBeenCalledTimes(1);
     await act(async () => settle(null));
+  });
+
+  it("previews FFT through the strict spectral workbench and records a label-bound recipe", async () => {
+    render(<SignalProcessingPanel />);
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "fft" } });
+
+    await screen.findByText("Preview: secondary · Magnitude");
+    expect(spectralMock).toHaveBeenLastCalledWith(
+      dataset.data,
+      expect.objectContaining({
+        kind: "spectral",
+        operation: "fft",
+        channels: [{ index: 1, label: "secondary" }],
+        resample: false,
+      }),
+      expect.any(AbortSignal),
+      true,
+    );
+    expect(screen.getByRole("img", { name: "Analysis output preview" })).toBeInTheDocument();
+    expect(screen.getByText("Preview: secondary · Magnitude")).toBeInTheDocument();
+  });
+
+  it("requires exactly two channels for cross-correlation", () => {
+    render(<SignalProcessingPanel />);
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "correlation" } });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("requires exactly two");
+    expect(screen.getByRole("button", { name: "Create linked worksheet" })).toBeDisabled();
   });
 });

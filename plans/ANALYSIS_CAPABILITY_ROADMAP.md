@@ -118,6 +118,12 @@ Implementation status (2026-10-06):
 - [ ] Add the technique-workspace action, explicit X/range controls, included
   row counts, Save Recipe, and contextual Help before checking A1 complete.
 
+Update (2026-10-07):
+
+- [x] Added explicit, opt-in X-range controls to the shared workbench.
+- [ ] Technique-workspace launch, included/excluded row counts, Save Recipe,
+  and contextual Help still remain.
+
 ### A2. Time/domain operations
 
 - [ ] Smoothing: moving average, Gaussian, and Savitzky-Golay; odd-window and
@@ -147,14 +153,35 @@ Implementation status (2026-10-06):
 
 ### A3. Frequency and correlation operations
 
-- [ ] General FFT with magnitude, PSD, and phase; one/two-sided output; common
+- [x] General FFT with magnitude, PSD, and phase; one/two-sided output; common
   windows; optional Welch averaging; frequency-axis units.
-- [ ] Low-pass, high-pass, band-pass, and notch filters with cutoff validation,
+- [x] Low-pass, high-pass, band-pass, and notch filters with cutoff validation,
   transfer-function preview, and before/after comparison.
 - [ ] Cross-correlation between two channels or two compatible worksheets,
   including peak lag and correlation readout.
-- [ ] Create ordinary plottable output worksheets for spectra, filtered data,
+- [x] Create ordinary plottable output worksheets for spectra, filtered data,
   and correlation traces.
+
+Implementation status (2026-10-07, ChatGPT/Codex):
+
+- [x] Added FFT magnitude, PSD, and phase; one/two-sided output; five common
+  windows; optional Welch averaging; detrending; zero-padding; and canonical
+  reciprocal X-axis units/labels.
+- [x] Added low/high/band-pass and notch filtering with cutoff, Nyquist,
+  bandwidth, and order validation; before/after preview; and a live transfer-
+  function diagnostic that is deliberately omitted from persisted outputs.
+- [ ] Cross-correlation now supports exactly two columns in one worksheet and
+  displays peak lag/correlation. Cross-worksheet correlation remains blocked
+  on Workstream D's multi-dataset selection/dependency contract; do not fake a
+  second source through the current single `derivedFrom` edge.
+- [x] FFT, filtered, and correlation outputs are ordinary linked worksheets.
+  They save/load a versioned label-bound recipe, rebind only an unambiguous
+  moved label, fail closed on a missing/duplicated label, recalculate through
+  the existing stale-result graph, and can be frozen into an independent copy.
+- [x] Irregular monotonic grids require an explicit Resample choice;
+  non-monotonic/closed sweeps are refused even when resampling is selected.
+- [x] Bound uncertainties are not silently transformed; the UI states that
+  policy and no stale `errorRoles` are attached to spectral outputs.
 
 ### A4. Persistence and real-data acceptance
 
@@ -167,6 +194,25 @@ Implementation status (2026-10-06):
   magnetometry loop (closed/non-monotonic-axis refusal where appropriate).
 - [ ] Confirm raw data remains byte-identical through preview, cancel, commit,
   undo, save/reopen, and rerun.
+
+Qualification log (2026-10-07, ChatGPT/Codex):
+
+- [x] `panalytical/xrd/La2NiO4_1.xrdml`: PSD completed (4,097 bins), emitted
+  `Frequency (1/deg)`, and retained the source bytes.
+- [x] `eag/sims/sims_depth_profile.xlsx`: two-channel correlation completed
+  with explicit irregular-grid resampling; peak lag was reported in nm; source
+  bytes remained unchanged.
+- [x] `ncnr/reflectometry/PNR_NoSpinFlip/S3_650Oe_From700mT.refl`: low-pass
+  filtering completed with explicit resampling, preserved `Qz (1/Ang)`, and
+  produced an 81-point transfer diagnostic without mutating source bytes.
+- [x] `quantum-design/magnetometry/vsm_mh_perp_a.dat`: FFT with Resample was
+  correctly refused because the hysteresis X axis is not strictly monotonic.
+- [x] Automated round trips cover valid recipes, malformed/future recipes,
+  workbook transfer, label rebinding/ambiguity, linked recalculation, and
+  source-error-role removal.
+- [ ] Pipeline Studio step integration, unit-compatibility checks on rebind,
+  saved user-named recipes, and full GUI undo/save/reopen/rerun acceptance
+  remain before A4 is complete.
 
 ## Workstream B — Durable analysis result artifacts
 
@@ -294,5 +340,6 @@ menu names.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-10-07 | ChatGPT-Sol (Codex) | Completed the single-worksheet A3 spectral tranche: FFT/PSD/phase, four frequency filters, transfer-function and before/after previews, two-channel cross-correlation, linked plottable outputs, versioned recipe persistence/rebinding, and explicit irregular-grid resampling. Cross-worksheet correlation remains explicitly deferred to the multi-source dependency workstream. The adversarial pass fixed filter detrending semantics, stale metadata/error-role leakage, malformed recipe/orphan transfer handling, duplicate-label rebinding, event-loop decoding, cutoff provenance, reciprocal-unit display, large-array range handling, and startup-bundle loading. | Focused frontend: 305 passed; focused backend/API/off-loop: 122 passed; Ruff, focused mypy, TypeScript, ESLint, architecture ratchets, production build, and 814.5 kB eager-bundle gate passed. Full frontend: 16,824 passed / 2 expected failures; three unrelated lazy-workspace timing tests failed under the 322-second full run and then passed 4/4 in isolation. Real corpus: XRD PSD, SIMS resampled correlation, reflectivity filtering/transfer diagnostic, and correct refusal of a non-monotonic magnetometry loop, with source bytes unchanged. |
 | 2026-10-06 | ChatGPT-Sol (Codex) | Completed the first A1/A2 tranche: channel-targeted correction API, unit/error semantics, general Signal Processing workbench, linked-output uncertainty retention, and Savitzky-Golay compatibility fix. The adversarial pass added strict channel indices, stale-preview and duplicate-commit guards, no-finite-output and invalid-area refusal, shared preview scaling, and deterministic workspace-busy tests. | Full backend: 8,139 passed / 101 skipped / 13 expected failures; focused post-review backend/API: 109 passed. Full frontend: 1,163 files, 16,806 passed / 2 expected failures. Ruff, mypy, TypeScript, ESLint, architecture ratchets, production build, and 834,392 B eager-bundle gate passed. Real corpus: `La2NiO4_1.xrdml` (6,474 rows, smoothing), `rohanisaac_raman.spc` (3,632 rows, derivative with reciprocal-axis units), and `YIG_Py_S7.raw` (15,385 rows, peak normalization), all finite with source arrays unchanged. |
 | 2026-10-06 | ChatGPT-Sol (Codex) | Created the GUI/backend capability audit and roadmap; selected General Signal Processing as the first coherent tranche. | Inspected current Analyze/Data commands, technique workflows, workshops, routes, calculation modules, derived worksheets, pipeline replay, and existing PRIMARY/JMP plans on `origin/main` after PR #550. |

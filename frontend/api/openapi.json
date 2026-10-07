@@ -12605,6 +12605,153 @@
         "title": "SldRequest",
         "type": "object"
       },
+      "SpectralWorkbenchRequest": {
+        "properties": {
+          "bandwidth": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bandwidth"
+          },
+          "channels": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
+          "correlation_demean": {
+            "default": true,
+            "title": "Correlation Demean",
+            "type": "boolean"
+          },
+          "cutoff": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cutoff"
+          },
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "detrend": {
+            "default": "mean",
+            "title": "Detrend",
+            "type": "string"
+          },
+          "filter_type": {
+            "default": "lowpass",
+            "title": "Filter Type",
+            "type": "string"
+          },
+          "include_diagnostics": {
+            "default": false,
+            "title": "Include Diagnostics",
+            "type": "boolean"
+          },
+          "operation": {
+            "title": "Operation",
+            "type": "string"
+          },
+          "order": {
+            "default": 4,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Order",
+            "type": "integer"
+          },
+          "output_type": {
+            "default": "magnitude",
+            "title": "Output Type",
+            "type": "string"
+          },
+          "overlap": {
+            "default": 0.5,
+            "exclusiveMaximum": 1.0,
+            "minimum": 0.0,
+            "title": "Overlap",
+            "type": "number"
+          },
+          "resample": {
+            "default": false,
+            "title": "Resample",
+            "type": "boolean"
+          },
+          "segment_len": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Segment Len",
+            "type": "integer"
+          },
+          "sided": {
+            "default": "one",
+            "title": "Sided",
+            "type": "string"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window"
+          },
+          "x_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Max"
+          },
+          "x_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Min"
+          },
+          "zero_pad": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Zero Pad",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dataset",
+          "operation",
+          "channels"
+        ],
+        "title": "SpectralWorkbenchRequest",
+        "type": "object"
+      },
       "SpinAsymmetryRequest": {
         "properties": {
           "dr_mm": {
@@ -21628,6 +21775,50 @@
           }
         },
         "summary": "Fft",
+        "tags": [
+          "spectral"
+        ]
+      }
+    },
+    "/api/spectral/workbench": {
+      "post": {
+        "description": "Run a dataset-level FFT, filter, or cross-correlation workflow.",
+        "operationId": "workbench_api_spectral_workbench_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpectralWorkbenchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Workbench Api Spectral Workbench Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Workbench",
         "tags": [
           "spectral"
         ]
