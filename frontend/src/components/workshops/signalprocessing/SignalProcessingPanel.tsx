@@ -59,6 +59,11 @@ export default function SignalProcessingPanel() {
   const [settings, setSettings] = useState<SignalSettings>(DEFAULT_SIGNAL_SETTINGS);
   const [spectralSettings, setSpectralSettings] = useState(DEFAULT_SPECTRAL_SETTINGS);
   const [preview, setPreview] = useState<DataStruct | null>(null);
+  const [previewFor, setPreviewFor] = useState<{
+    datasetId: string;
+    data: DataStruct;
+    request: object;
+  } | null>(null);
   const [previewError, setPreviewError] = useState("");
   const [busy, setBusy] = useState(false);
   const previewSequence = useRef(0);
@@ -98,14 +103,24 @@ export default function SignalProcessingPanel() {
       : null,
     [active, channels, spectralOperation, spectralSettings],
   );
+  const requestSpec = recipe ?? params;
+  const previewCurrent = Boolean(
+    preview
+    && active
+    && requestSpec
+    && previewFor?.datasetId === active.id
+    && previewFor.data === active.data
+    && previewFor.request === requestSpec,
+  );
+  const displayedPreview = previewCurrent ? preview : null;
   const boundTargets = active ? selectedBoundErrorTargets(active, channels) : [];
-  const emptyOutputs = preview
+  const emptyOutputs = displayedPreview
     ? spectral
-      ? preview.labels.flatMap((_, channel) => preview.values.some((row) => Number.isFinite(row[channel])) ? [] : [channel])
-      : channelsWithoutFiniteValues(preview, channels)
+      ? displayedPreview.labels.flatMap((_, channel) => displayedPreview.values.some((row) => Number.isFinite(row[channel])) ? [] : [channel])
+      : channelsWithoutFiniteValues(displayedPreview, channels)
     : [];
-  const outputError = preview && emptyOutputs.length
-    ? `No finite output was produced for ${emptyOutputs.map((channel) => spectral ? preview.labels[channel] : active?.data.labels[channel]).join(", ")}.`
+  const outputError = displayedPreview && emptyOutputs.length
+    ? `No finite output was produced for ${emptyOutputs.map((channel) => spectral ? displayedPreview.labels[channel] : active?.data.labels[channel]).join(", ")}.`
     : "";
   const nonlinearWithErrors = !spectral && (
     settings.operation === "smooth" ||
@@ -132,6 +147,7 @@ export default function SignalProcessingPanel() {
     let cancelled = false;
     const controller = new AbortController();
     setPreview(null);
+    setPreviewFor(null);
     setPreviewError("");
     if (!active || validation || (!params && !recipe)) return;
     const timer = window.setTimeout(() => {
@@ -143,7 +159,10 @@ export default function SignalProcessingPanel() {
             ...(active.errorRoles ? { error_bindings: active.errorRoles } : {}),
           });
       void request.then((result) => {
-        if (!cancelled && previewSequence.current === sequence) setPreview(result);
+        if (!cancelled && previewSequence.current === sequence) {
+          setPreview(result);
+          setPreviewFor({ datasetId: active.id, data: active.data, request: recipe ?? params! });
+        }
       }).catch((error: unknown) => {
         const aborted = typeof error === "object" && error !== null && "name" in error && error.name === "AbortError";
         if (!cancelled && previewSequence.current === sequence && !aborted) {
@@ -159,7 +178,7 @@ export default function SignalProcessingPanel() {
   }, [active, params, recipe, validation]);
 
   const commit = async () => {
-    if (!active || validation || outputError || commitInFlight.current) return;
+    if (!active || !displayedPreview || validation || outputError || commitInFlight.current) return;
     commitInFlight.current = true;
     setBusy(true);
     const label = `${operationLabel(settings.operation)} · ${channels.map((channel) => active.data.labels[channel]).join(", ")}`;
@@ -224,14 +243,14 @@ export default function SignalProcessingPanel() {
               </div>
             )}
             {spectralOperation && <SpectralControls operation={spectralOperation} settings={spectralSettings} setSettings={setSpectralSettings} xUnit={xUnitOf(active.data)} />}
-            <SignalPreview source={active.data} result={preview} channel={channels[0] ?? available[0] ?? 0} resultChannel={spectral ? 0 : channels[0] ?? available[0] ?? 0} showOriginal={!spectral || settings.operation === "filter"} />
-            {spectral && <SpectralReadout result={preview} />}
+            <SignalPreview source={active.data} result={displayedPreview} channel={channels[0] ?? available[0] ?? 0} resultChannel={spectral ? 0 : channels[0] ?? available[0] ?? 0} showOriginal={!spectral || settings.operation === "filter"} />
+            {spectral && <SpectralReadout result={displayedPreview} />}
             <div className="qz-signal-note">Scope: selected X range over the full worksheet, including excluded rows. The output stays linked to <strong>{active.name}</strong> and can be recalculated.</div>
             {spectral && boundTargets.length > 0 && <div className="qz-signal-note">Bound uncertainties are not propagated into spectral outputs; the linked source and full recipe remain recorded.</div>}
             {(validation || previewError || outputError) && <p className="qz-error" role="alert">{validation || previewError || outputError}</p>}
             <div className="qz-dialog-actions">
               <Button onClick={close}>Cancel</Button>
-              <Button variant="primary" disabled={Boolean(validation || outputError) || !preview || busy} onClick={() => void commit()}>
+              <Button variant="primary" disabled={Boolean(validation || outputError) || !displayedPreview || busy} onClick={() => void commit()}>
                 {busy ? "Creating…" : "Create linked worksheet"}
               </Button>
             </div>

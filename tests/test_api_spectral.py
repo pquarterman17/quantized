@@ -159,3 +159,20 @@ def test_workbench_rejects_irregular_x_without_explicit_resampling() -> None:
     )
     assert resp.status_code == 422
     assert "resampling" in resp.json()["detail"]
+
+
+@pytest.mark.parametrize("field", ["zero_pad", "segment_len", "order"])
+def test_workbench_rejects_boolean_integer_parameters(field: str) -> None:
+    x, y = _sine()
+    dataset = {
+        "time": x,
+        "values": [[value] for value in y],
+        "labels": ["A"],
+        "units": ["V"],
+        "metadata": {"xUnit": "s"},
+    }
+    resp = client.post(
+        "/api/spectral/workbench",
+        json={"dataset": dataset, "operation": "fft", "channels": [0], field: True},
+    )
+    assert resp.status_code == 422

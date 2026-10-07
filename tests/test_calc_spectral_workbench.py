@@ -153,6 +153,35 @@ def test_filter_diagnostics_are_preview_only_and_json_safe() -> None:
     assert len(diagnostics["frequency"]) == len(diagnostics["transfer"])
 
 
+def test_filter_diagnostics_are_bounded_for_large_inputs() -> None:
+    x = np.linspace(0.0, 20.0, 20_001)
+    source = DataStruct.create(
+        x,
+        np.sin(2 * np.pi * x)[:, None],
+        labels=["signal"],
+        units=["V"],
+    )
+    preview = spectral_workbench(
+        source,
+        operation="filter",
+        channels=[0],
+        filter_type="lowpass",
+        cutoff=[2],
+        include_diagnostics=True,
+    )
+    diagnostics = preview.metadata["filterDiagnostics"]
+    assert len(diagnostics["frequency"]) <= 512
+    assert diagnostics["frequency"][0] == 0
+    assert diagnostics["frequency"][-1] > 499.0
+
+
+def test_notch_default_bandwidth_is_validated_and_recorded_as_executed() -> None:
+    out = spectral_workbench(
+        _dataset(), operation="filter", channels=[0], filter_type="notch", cutoff=[10]
+    )
+    assert out.metadata["spectralAnalysis"]["parameters"]["bandwidth"] == pytest.approx(1.0)
+
+
 def test_cross_correlation_reports_lag_in_x_units() -> None:
     out = spectral_workbench(_dataset(), operation="correlation", channels=[0, 1])
     assert out.labels == ("Correlation · signal vs reference",)
@@ -160,6 +189,18 @@ def test_cross_correlation_reports_lag_in_x_units() -> None:
     assert out.metadata["xUnit"] == "s"
     assert abs(float(out.metadata["peakLag"])) < 0.1
     assert float(out.metadata["peakCorrelation"]) > 0.9
+
+
+def test_cross_correlation_refuses_a_zero_energy_signal() -> None:
+    source = _dataset()
+    constant = DataStruct.create(
+        source.time,
+        np.column_stack([np.ones(source.n_points), source.values[:, 1]]),
+        labels=source.labels,
+        units=source.units,
+    )
+    with pytest.raises(ValueError, match="non-zero energy"):
+        spectral_workbench(constant, operation="correlation", channels=[0, 1])
 
 
 def test_irregular_x_fails_closed_until_resampling_is_explicit() -> None:
@@ -192,6 +233,12 @@ def test_nonmonotonic_x_is_refused_even_when_resampling_is_requested() -> None:
             {"operation": "fft", "channels": [0], "output_type": "magnitude", "segment_len": 64},
             "only for PSD",
         ),
+        (
+            {"operation": "fft", "channels": [0], "output_type": "psd", "segment_len": 512},
+            "cannot exceed",
+        ),
+        ({"operation": "fft", "channels": [0], "x_min": float("nan")}, "must be finite"),
+        ({"operation": "unknown", "channels": [0]}, "unsupported spectral operation"),
     ],
 )
 def test_invalid_scientific_settings_fail_closed(kwargs: dict[str, object], message: str) -> None:

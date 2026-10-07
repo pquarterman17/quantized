@@ -16,6 +16,16 @@ describe("SpectralReadout", () => {
     expect(screen.getByRole("img", { name: "Filter transfer function preview" })).toBeInTheDocument();
   });
 
+  it("bounds an unexpectedly large diagnostic before constructing SVG points", () => {
+    const frequency = Array.from({ length: 20_000 }, (_, index) => index);
+    render(<SpectralReadout result={result({
+      filterDiagnostics: { frequency, transfer: frequency.map(() => 0.5) },
+    })} />);
+    const line = screen.getByRole("img", { name: "Filter transfer function preview" })
+      .querySelector("polyline");
+    expect(line?.getAttribute("points")?.trim().split(" ").length).toBeLessThanOrEqual(512);
+  });
+
   it("renders the correlation peak in source-axis units", () => {
     render(<SpectralReadout result={result({
       peakLag: 0.025,

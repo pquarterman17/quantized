@@ -76,16 +76,18 @@ export function validateSpectralSettings(
     }
     if (number(settings.xMin) >= number(settings.xMax)) return "X minimum must be less than X maximum.";
   }
-  if (!Number.isInteger(number(settings.zeroPad)) || number(settings.zeroPad) < 0) {
-    return "Zero-padding length must be a non-negative integer.";
-  }
-  if (operation === "fft" && settings.welch) {
-    if (settings.outputType !== "psd") return "Welch averaging requires PSD output.";
-    if (!Number.isInteger(number(settings.segmentLen)) || number(settings.segmentLen) < 4) {
-      return "Welch segment length must be an integer of at least 4.";
+  if (operation === "fft") {
+    if (!Number.isInteger(number(settings.zeroPad)) || number(settings.zeroPad) < 0) {
+      return "Zero-padding length must be a non-negative integer.";
     }
-    if (!Number.isFinite(number(settings.overlap)) || number(settings.overlap) < 0 || number(settings.overlap) >= 1) {
-      return "Welch overlap must be at least 0 and less than 1.";
+    if (settings.welch) {
+      if (settings.outputType !== "psd") return "Welch averaging requires PSD output.";
+      if (!Number.isInteger(number(settings.segmentLen)) || number(settings.segmentLen) < 4) {
+        return "Welch segment length must be an integer of at least 4.";
+      }
+      if (!Number.isFinite(number(settings.overlap)) || number(settings.overlap) < 0 || number(settings.overlap) >= 1) {
+        return "Welch overlap must be at least 0 and less than 1.";
+      }
     }
   }
   if (operation === "filter") {
@@ -111,26 +113,37 @@ export function buildSpectralRecipe(
   channels: number[],
   dataset: Dataset,
 ): SpectralAnalysisRecipe {
-  const cutoff = settings.filterType === "bandpass"
-    ? [number(settings.cutoffLow), number(settings.cutoffHigh)]
-    : [number(settings.cutoffLow)];
-  return {
+  const recipe: SpectralAnalysisRecipe = {
     ...DEFAULT_SPECTRAL_RECIPE,
     operation,
     channels: channels.map((index) => ({ index, label: dataset.data.labels[index] })),
     ...(settings.useRange ? { xMin: number(settings.xMin), xMax: number(settings.xMax) } : {}),
     resample: settings.resample,
-    outputType: settings.outputType,
-    sided: settings.sided,
-    window: settings.window,
-    detrend: settings.detrend,
-    zeroPad: number(settings.zeroPad),
-    segmentLen: settings.welch ? number(settings.segmentLen) : 0,
-    overlap: number(settings.overlap),
-    filterType: settings.filterType,
-    cutoff,
-    ...(settings.filterType === "notch" ? { bandwidth: number(settings.bandwidth) } : {}),
-    order: number(settings.order),
-    correlationDemean: settings.correlationDemean,
   };
+  if (operation === "fft") {
+    return {
+      ...recipe,
+      outputType: settings.outputType,
+      sided: settings.sided,
+      window: settings.window,
+      detrend: settings.detrend,
+      zeroPad: number(settings.zeroPad),
+      segmentLen: settings.welch ? number(settings.segmentLen) : 0,
+      overlap: settings.welch ? number(settings.overlap) : DEFAULT_SPECTRAL_RECIPE.overlap,
+    };
+  }
+  if (operation === "filter") {
+    return {
+      ...recipe,
+      window: settings.window,
+      detrend: settings.detrend,
+      filterType: settings.filterType,
+      cutoff: settings.filterType === "bandpass"
+        ? [number(settings.cutoffLow), number(settings.cutoffHigh)]
+        : [number(settings.cutoffLow)],
+      ...(settings.filterType === "notch" ? { bandwidth: number(settings.bandwidth) } : {}),
+      order: number(settings.order),
+    };
+  }
+  return { ...recipe, correlationDemean: settings.correlationDemean };
 }

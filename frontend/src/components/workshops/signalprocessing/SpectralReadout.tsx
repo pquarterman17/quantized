@@ -10,8 +10,18 @@ function diagnosticPoints(metadata: DataStruct["metadata"]): string {
   const diagnostics = raw as Record<string, unknown>;
   const frequency = Array.isArray(diagnostics.frequency) ? diagnostics.frequency : [];
   const transfer = Array.isArray(diagnostics.transfer) ? diagnostics.transfer : [];
-  const rows = frequency.flatMap((x, index): [number, number][] =>
-    finite(x) && finite(transfer[index]) ? [[x, transfer[index] as number]] : []);
+  const length = Math.min(frequency.length, transfer.length);
+  const stride = Math.max(1, Math.ceil(length / 512));
+  const rows: [number, number][] = [];
+  for (let index = 0; index < length; index += stride) {
+    const x = frequency[index];
+    const y = transfer[index];
+    if (finite(x) && finite(y)) rows.push([x, y]);
+  }
+  const last = length - 1;
+  if (last >= 0 && last % stride !== 0 && finite(frequency[last]) && finite(transfer[last])) {
+    rows.push([frequency[last], transfer[last]]);
+  }
   if (rows.length < 2) return "";
   const xmax = Math.max(...rows.map(([x]) => x)) || 1;
   return rows.map(([x, y]) => {

@@ -46,6 +46,22 @@ describe("spectral settings", () => {
     expect(validateSpectralSettings("fft", valid, [0])).toBe("");
   });
 
+  it("does not let a hidden invalid FFT field block another operation", () => {
+    const staleFft = { ...DEFAULT_SPECTRAL_SETTINGS, zeroPad: "not-a-number" };
+    expect(validateSpectralSettings("fft", staleFft, [0])).toMatch(/Zero-padding/);
+    expect(validateSpectralSettings("filter", staleFft, [0])).toBe("");
+    expect(validateSpectralSettings("correlation", staleFft, [0, 1])).toBe("");
+    expect(buildSpectralRecipe("filter", staleFft, [0], dataset).zeroPad).toBe(0);
+    expect(buildSpectralRecipe("correlation", staleFft, [0, 1], dataset).zeroPad).toBe(0);
+  });
+
+  it("does not persist irrelevant invalid filter fields in an FFT recipe", () => {
+    const staleFilter = { ...DEFAULT_SPECTRAL_SETTINGS, cutoffLow: "bad", order: "bad" };
+    const recipe = buildSpectralRecipe("fft", staleFilter, [0], dataset);
+    expect(recipe.cutoff).toEqual([1]);
+    expect(recipe.order).toBe(4);
+  });
+
   it("simplifies reciprocal axis units for frequency controls", () => {
     expect(frequencyUnitOf("s")).toBe("1/s");
     expect(frequencyUnitOf("1/Ang")).toBe("Ang");

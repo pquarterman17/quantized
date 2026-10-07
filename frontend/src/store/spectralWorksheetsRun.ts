@@ -60,20 +60,25 @@ export async function createSpectralWorksheet(
   try {
     const rebound = rebindSpectralRecipe(recipe, source.data.labels);
     const data = await runSpectralWorkbench(source.data, rebound);
+    const currentSource = get().datasets.find((dataset) => dataset.id === sourceId);
+    if (!currentSource || currentSource.pending || currentSource.data !== source.data) {
+      get().setStatus("Can't create a spectral worksheet: source data changed while analysis was running.");
+      return null;
+    }
     const created: Dataset = {
       id: newId,
-      name: `${source.name} (${rebound.operation})`,
+      name: `${currentSource.name} (${rebound.operation})`,
       data,
       raw: source.data,
       analysisRecipe: rebound,
       derivedFrom: { datasetId: sourceId, pipeline: pipelineLabel },
-      ...(source.workbookId ? { workbookId: source.workbookId } : {}),
-      ...(source.folderId ? { folderId: source.folderId } : {}),
+      ...(currentSource.workbookId ? { workbookId: currentSource.workbookId } : {}),
+      ...(currentSource.folderId ? { folderId: currentSource.folderId } : {}),
     };
     get().addDataset(created);
     get().recordMacro(
-      `Create ${pipelineLabel} worksheet from ${source.name}`,
-      `qz.createSpectralWorksheet(${lit(source.name)}, ${lit(rebound)})`,
+      `Create ${pipelineLabel} worksheet from ${currentSource.name}`,
+      `qz.createSpectralWorksheet(${lit(currentSource.name)}, ${lit(rebound)})`,
       { kind: "expression", params: { sourceId, recipe: rebound } },
     );
     return created.id;

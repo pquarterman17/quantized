@@ -1,9 +1,9 @@
-"""Thin FFT spectral route. Wraps ``calc.spectral.fft_spectral`` for the ROI
-gadget family's FFT mode (gap #34): a single-record magnitude/PSD/phase
-spectrum of one region's rows. The "complex" output type never crosses the
-wire (numpy complex isn't JSON-serializable — see CLAUDE.md's jsonencode
-notes); only magnitude/psd/phase are exposed here. Validate -> call ->
-serialize; no business logic here.
+"""Spectral routes for the ROI gadget and dataset-level analysis workbench.
+
+The compact ``/fft`` route serves a single ROI record. ``/workbench`` adapts a
+full :class:`~quantized.datastruct.DataStruct` to the strict dataset contract
+in :mod:`quantized.calc.spectral_workbench`. The "complex" FFT output never
+crosses the wire because numpy complex values are not JSON serializable.
 """
 
 from __future__ import annotations
@@ -47,13 +47,13 @@ class SpectralWorkbenchRequest(BaseModel):
     sided: str = "one"
     window: str | None = None
     detrend: str = "mean"
-    zero_pad: int = Field(default=0, ge=0)
-    segment_len: int = Field(default=0, ge=0)
+    zero_pad: StrictInt = Field(default=0, ge=0)
+    segment_len: StrictInt = Field(default=0, ge=0)
     overlap: float = Field(default=0.5, ge=0.0, lt=1.0)
     filter_type: str = "lowpass"
     cutoff: list[float] | None = None
     bandwidth: float | None = Field(default=None, gt=0)
-    order: int = Field(default=4, ge=1, le=20)
+    order: StrictInt = Field(default=4, ge=1, le=20)
     correlation_demean: bool = True
     include_diagnostics: bool = False
 

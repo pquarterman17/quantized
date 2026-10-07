@@ -31,7 +31,13 @@ def _selected_arrays(
         raise ValueError("select at least one signal channel")
     if len(set(channels)) != len(channels):
         raise ValueError("signal channels must be unique")
-    if any(isinstance(c, bool) or c < 0 or c >= ds.n_channels for c in channels):
+    if any(
+        isinstance(c, (bool, np.bool_))
+        or not isinstance(c, (int, np.integer))
+        or c < 0
+        or c >= ds.n_channels
+        for c in channels
+    ):
         raise ValueError(f"signal channel out of range for {ds.n_channels} columns")
     x = np.asarray(ds.time, dtype=float)
     y = np.asarray(ds.values[:, channels], dtype=float)
@@ -104,6 +110,17 @@ def _psd_unit(y_unit: str, x_unit: str) -> str:
     if not y_unit:
         return ""
     return f"{y_unit}²·{x_unit}" if x_unit else f"{y_unit}²"
+
+
+def _diagnostic_trace(
+    frequency: NDArray[np.float64], transfer: NDArray[np.float64], max_points: int = 512
+) -> dict[str, list[float]]:
+    """Bound preview-only response data without losing either endpoint."""
+    if frequency.size > max_points:
+        indices = np.unique(np.linspace(0, frequency.size - 1, max_points, dtype=int))
+        frequency = frequency[indices]
+        transfer = transfer[indices]
+    return {"frequency": frequency.tolist(), "transfer": transfer.tolist()}
 
 
 def _metadata(
@@ -183,6 +200,12 @@ def spectral_workbench(
     include_diagnostics: bool = False,
 ) -> DataStruct:
     """Run one workbench operation and return a plottable dataset."""
+    if operation not in {"fft", "filter", "correlation"}:
+        raise ValueError(f"unsupported spectral operation {operation!r}")
+    if x_min is not None and not np.isfinite(x_min):
+        raise ValueError("X minimum must be finite")
+    if x_max is not None and not np.isfinite(x_max):
+        raise ValueError("X maximum must be finite")
     if x_min is not None and x_max is not None and x_min >= x_max:
         raise ValueError("X minimum must be less than X maximum")
     x, values = _selected_arrays(ds, channels, x_min, x_max)
@@ -203,6 +226,14 @@ def spectral_workbench(
             raise ValueError(f"unsupported sided mode {sided!r}")
         if segment_len and output_type != "psd":
             raise ValueError("Welch averaging is available only for PSD output")
+        if isinstance(segment_len, bool) or not isinstance(segment_len, int) or segment_len < 0:
+            raise ValueError("Welch segment length must be a non-negative integer")
+        if segment_len > x.size:
+            raise ValueError("Welch segment length cannot exceed the selected row count")
+        if isinstance(zero_pad, bool) or not isinstance(zero_pad, int) or zero_pad < 0:
+            raise ValueError("zero-padding length must be a non-negative integer")
+        if not np.isfinite(overlap) or overlap < 0 or overlap >= 1:
+            raise ValueError("Welch overlap must be at least 0 and less than 1")
         columns: list[NDArray[np.float64]] = []
         freq: NDArray[np.float64] | None = None
         key = {"magnitude": "magnitude", "psd": "psd", "phase": "phase"}[output_type]
@@ -275,11 +306,13 @@ def spectral_workbench(
             )
         if filter_type == "bandpass" and cut[0] >= cut[1]:
             raise ValueError("band-pass lower cutoff must be less than its upper cutoff")
-        if filter_type == "notch" and bandwidth is not None:
-            if not np.isfinite(bandwidth) or bandwidth <= 0:
+        effective_bandwidth = bandwidth
+        if filter_type == "notch":
+            effective_bandwidth = cut[0] / 10.0 if bandwidth is None else bandwidth
+            if not np.isfinite(effective_bandwidth) or effective_bandwidth <= 0:
                 raise ValueError("notch bandwidth must be finite and positive")
-            low = cut[0] - bandwidth / 2.0
-            high = cut[0] + bandwidth / 2.0
+            low = cut[0] - effective_bandwidth / 2.0
+            high = cut[0] + effective_bandwidth / 2.0
             if low <= 0 or high >= nyquist:
                 raise ValueError("notch bandwidth must remain between 0 and Nyquist")
         if isinstance(order, bool) or not isinstance(order, int) or order < 1 or order > 20:
@@ -298,7 +331,7 @@ def spectral_workbench(
                 series,
                 filter_type=filter_type,
                 cutoff=cut,
-                bandwidth=bandwidth,
+                bandwidth=effective_bandwidth,
                 order=order,
                 window=effective_window,
                 detrend=detrend == "linear",
@@ -307,15 +340,12 @@ def spectral_workbench(
             if include_diagnostics and filter_diagnostics is None:
                 freq_pos = np.asarray(out["freqPos"], dtype=float)
                 transfer = np.asarray(out["transfer"], dtype=float)[: freq_pos.size]
-                filter_diagnostics = {
-                    "frequency": freq_pos.tolist(),
-                    "transfer": transfer.tolist(),
-                }
+                filter_diagnostics = _diagnostic_trace(freq_pos, transfer)
         filter_params: dict[str, Any] = {
             **common,
             "filterType": filter_type,
             "cutoff": cut,
-            "bandwidth": bandwidth,
+            "bandwidth": effective_bandwidth,
             "order": order,
             "window": effective_window,
             "detrend": detrend,
@@ -347,6 +377,8 @@ def spectral_workbench(
         if correlation_demean:
             left = np.asarray(left - np.mean(left), dtype=float)
             right = np.asarray(right - np.mean(right), dtype=float)
+        if np.linalg.norm(left) == 0 or np.linalg.norm(right) == 0:
+            raise ValueError("cross-correlation requires two signals with non-zero energy")
         out = cross_correlation(left, right)
         spacing = float(np.median(np.diff(x)))
         lag = np.asarray(out["lags"], dtype=float) * spacing
@@ -370,4 +402,4 @@ def spectral_workbench(
             metadata=metadata,
         )
 
-    raise ValueError(f"unsupported spectral operation {operation!r}")
+    raise AssertionError("validated spectral operation was not handled")

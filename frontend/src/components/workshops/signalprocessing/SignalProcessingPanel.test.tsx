@@ -124,6 +124,18 @@ describe("SignalProcessingPanel", () => {
     expect(screen.getByText("Preview: secondary · Magnitude")).toBeInTheDocument();
   });
 
+  it("disables commit instead of reusing a preview from the previous operation", async () => {
+    render(<SignalProcessingPanel />);
+    const create = screen.getByRole("button", { name: "Create linked worksheet" });
+    await waitFor(() => expect(create).toBeEnabled());
+    spectralMock.mockImplementation(() => new Promise(() => {}));
+
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "fft" } });
+
+    expect(create).toBeDisabled();
+    expect(screen.queryByText("Preview: secondary · Magnitude")).not.toBeInTheDocument();
+  });
+
   it("requires exactly two channels for cross-correlation", () => {
     render(<SignalProcessingPanel />);
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "correlation" } });

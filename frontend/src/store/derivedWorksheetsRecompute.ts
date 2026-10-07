@@ -18,9 +18,18 @@ export async function runDerivedWorksheetRecompute(
   const source = sourceId ? get().datasets.find((dataset) => dataset.id === sourceId) : undefined;
   if (!source) throw new Error(`source dataset "${sourceId}" no longer exists`);
   if (source.pending) throw new Error(`source dataset "${source.name}" hasn't fully loaded yet`);
+  const assertInputsUnchanged = () => {
+    const currentSource = get().datasets.find((dataset) => dataset.id === sourceId);
+    const currentSheet = get().datasets.find((dataset) => dataset.id === sheet.id);
+    if (currentSource?.data !== source.data || currentSheet !== sheet) {
+      throw new Error("source or derived worksheet changed while recalculation was running");
+    }
+  };
   if (sheet.analysisRecipe) {
     const { recomputeSpectralWorksheet } = await import("./spectralWorksheetsRun");
-    return recomputeSpectralWorksheet(source, sheet, sheet.analysisRecipe);
+    const result = await recomputeSpectralWorksheet(source, sheet, sheet.analysisRecipe);
+    assertInputsUnchanged();
+    return result;
   }
 
   const sourceData = source.data;
@@ -42,7 +51,7 @@ export async function runDerivedWorksheetRecompute(
   });
   const { data, formulaErrors } = recomputeFromBaseOrEmpty(corrected, base.formulas);
   const errors = forcedErrors ? { ...formulaErrors, ...forcedErrors } : formulaErrors;
-  return {
+  const result = {
     sheet: {
       ...base,
       data,
@@ -52,4 +61,6 @@ export async function runDerivedWorksheetRecompute(
     },
     shift,
   };
+  assertInputsUnchanged();
+  return result;
 }

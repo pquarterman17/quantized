@@ -231,6 +231,32 @@ describe("linked spectral worksheets", () => {
     expect(created?.errorRoles).toBeUndefined();
   });
 
+  it("does not create an orphan or stale output when the source changes in flight", async () => {
+    let resolve!: (value: DataStruct) => void;
+    let markStarted!: () => void;
+    const started = new Promise<void>((done) => { markStarted = done; });
+    vi.mocked(runSpectralWorkbench).mockImplementation(() => {
+      markStarted();
+      return new Promise((done) => { resolve = done; });
+    });
+    const source = ds("a");
+    useApp.setState({ datasets: [source] });
+
+    const pending = createSpectralWorksheet(
+      () => useApp.getState(),
+      "a",
+      spectralRecipe(),
+      "Frequency spectrum · A",
+    );
+    await started;
+    useApp.setState({ datasets: [{ ...source, data: { ...source.data, time: [2, 3, 4] } }] });
+    resolve({ ...data(), labels: ["A · Magnitude"] });
+
+    await expect(pending).resolves.toBeNull();
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(useApp.getState().status).toMatch(/source data changed/i);
+  });
+
   it("rebinds a moved source column by its unique label before recalculation", async () => {
     const sourceData = { ...data(), values: [[1, 10], [2, 20], [3, 30]], labels: ["new", "A"], units: ["", "u"] };
     const output = { ...data(), labels: ["A · Magnitude"] };
@@ -259,6 +285,29 @@ describe("linked spectral worksheets", () => {
 
     await expect(recomputeDerivedSheet(useApp.getState, sheet)).rejects.toThrow("ambiguous");
     expect(runSpectralWorkbench).not.toHaveBeenCalled();
+  });
+
+  it("refuses a stale spectral recalculation result when its source changes in flight", async () => {
+    let resolve!: (value: DataStruct) => void;
+    let markStarted!: () => void;
+    const started = new Promise<void>((done) => { markStarted = done; });
+    vi.mocked(runSpectralWorkbench).mockImplementation(() => {
+      markStarted();
+      return new Promise((done) => { resolve = done; });
+    });
+    const source = ds("src");
+    const sheet = ds("derived", {
+      derivedFrom: { datasetId: "src", pipeline: "fft" },
+      analysisRecipe: spectralRecipe(),
+    });
+    useApp.setState({ datasets: [source, sheet] });
+
+    const pending = recomputeDerivedSheet(useApp.getState, sheet);
+    await started;
+    useApp.setState({ datasets: [{ ...source, data: { ...source.data, time: [2, 3, 4] } }, sheet] });
+    resolve({ ...data(), labels: ["A · Magnitude"] });
+
+    await expect(pending).rejects.toThrow(/changed while recalculation/);
   });
 });
 
