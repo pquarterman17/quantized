@@ -15,7 +15,7 @@ import { chooseExcludedRows } from "../../../lib/excludedRowsChoice";
 import { excludedChoiceMatters } from "../../../lib/excludedRowsExport";
 import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import type { DataStruct, Dataset } from "../../../lib/types";
-import { runCancellable } from "../../../store/pendingOps";
+import { runCancellable } from "../../../store/pendingOpActions";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 

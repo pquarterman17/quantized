@@ -24,6 +24,7 @@ from quantized.heavy_import import heavy_imports
 from ..cat_levels import surviving_level_order
 from ..datastruct import DataStruct
 from ..row_sidecars import slice_row_sidecars
+from ..x_units import x_unit_of
 from .backgrounds import anchor_baseline, footprint_factor
 from .processing import (
     cumulative_integral,
@@ -35,6 +36,35 @@ from .processing import (
 from .units import convert_units
 
 __all__ = ["apply_corrections"]
+
+
+def _unit_product(left: str, right: str) -> str:
+    left, right = left.strip(), right.strip()
+    if left and right:
+        return f"{left}*{right}"
+    return left or right
+
+
+def _unit_quotient(numerator: str, denominator: str, power: int = 1) -> str:
+    numerator, denominator = numerator.strip(), denominator.strip()
+    if not denominator:
+        return numerator
+    # Reciprocal x units are common in spectroscopy. ``1/cm^-1`` is
+    # dimensionally valid but visually ambiguous; express the first
+    # derivative as ``cm`` (or ``V*cm``) instead. Higher powers retain an
+    # explicit parenthesized denominator rather than the malformed
+    # ``cm^-1^2``.
+    if power == 1 and denominator.endswith("^-1"):
+        return _unit_product(numerator, denominator[:-3])
+    if power == 1 and denominator.endswith("⁻¹"):
+        return _unit_product(numerator, denominator[:-2])
+    complex_denominator = any(token in denominator for token in ("/", "*", "^", "·"))
+    den = (
+        denominator
+        if power == 1
+        else f"({denominator})^{power}" if complex_denominator else f"{denominator}^{power}"
+    )
+    return f"{numerator}/{den}" if numerator else f"1/{den}"
 
 
 def _finite_scale(raw: Any, name: str) -> float:
@@ -145,12 +175,35 @@ def apply_corrections(
         if k not in categorical and k not in error_channels
     ]
     measured = set(numeric)
+    requested_signal_channels = params.get("signalChannels")
+    if requested_signal_channels is None:
+        signal_numeric = list(numeric)
+    else:
+        if not isinstance(requested_signal_channels, list):
+            raise ValueError("signalChannels must be a list of measured channel indices")
+        signal_numeric = []
+        for raw_channel in requested_signal_channels:
+            if isinstance(raw_channel, bool) or not isinstance(raw_channel, int):
+                raise ValueError("signalChannels must contain integer channel indices")
+            if raw_channel not in measured:
+                raise ValueError(
+                    f"signal channel {raw_channel} is not a measured value channel"
+                )
+            if raw_channel not in signal_numeric:
+                signal_numeric.append(raw_channel)
     for channel, (target, axis, _) in error_roles.items():
         if axis == "y" and target not in measured:
             raise ValueError(
                 f"Y-error channel {channel} must target a measured value channel"
             )
     labels = list(data.labels)
+    units = list(data.units)
+
+    def set_signal_unit(channel: int, unit: str) -> None:
+        units[channel] = unit
+        for error_channel, (target, axis, _) in error_roles.items():
+            if axis == "y" and target == channel:
+                units[error_channel] = unit
 
     def scale_errors(axis: str, factor: float | np.ndarray, target: int | None = None) -> None:
         """Scale bound uncertainty magnitudes without changing their sign.
@@ -165,7 +218,10 @@ def apply_corrections(
             if bound_axis == axis and (target is None or bound_target == target):
                 values[:, channel] = values[:, channel] * magnitude
 
-    has_y_errors = any(axis == "y" for _, axis, _ in error_roles.values())
+    has_y_errors = any(
+        axis == "y" and target in signal_numeric
+        for target, axis, _ in error_roles.values()
+    )
 
     # 0. Arbitrary X/Y rescaling (MAIN_PLAN #37) — a non-destructive unit
     # re-expression, so it runs FIRST and everything downstream is expressed in
@@ -306,12 +362,20 @@ def apply_corrections(
             "smoothing data with bound Y uncertainty is not supported; "
             "unassign the error columns or smooth before assigning them"
         )
-    if params.get("smoothEnabled", False) and numeric:
+    if params.get("smoothEnabled", False) and signal_numeric:
         win = max(1, _matlab_round(params.get("smoothWindow", 5)))
+        method = str(params["smoothMethod"]).lower()
+        # ``savgol`` was the value shipped by the original Corrections UI.
+        # Keep it as a wire-compatible alias for saved projects/macros while
+        # using the canonical processing-layer spelling internally.
+        if method == "savgol":
+            method = "savitzky-golay"
         smoothed = smooth_data(
-            values[:, numeric], method=str(params["smoothMethod"]).lower(), window=win
+            values[:, signal_numeric],
+            method=method,
+            window=win,
         )
-        values[:, numeric] = smoothed
+        values[:, signal_numeric] = smoothed
 
     # 7. Normalization.
     norm = params.get("normMethod", "None")
@@ -321,7 +385,7 @@ def apply_corrections(
             "Peak (max=1)": "peak",
             "Z-score": "zscore",
         }[norm]
-        for k in numeric:
+        for k in signal_numeric:
             col = values[:, k].copy()
             if method == "range":
                 span = float(np.nanmax(col) - np.nanmin(col)) if col.size else 0.0
@@ -334,12 +398,19 @@ def apply_corrections(
                 norm_factor = 1.0 if sigma == 0 else 1.0 / sigma
             values[:, k] = normalize(col, method=method)
             scale_errors("y", norm_factor, k)
+            set_signal_unit(k, "")
     elif norm == "Area (integral=1)":
-        for k in numeric:
+        normalized_unit = _unit_quotient("", x_unit_of(data))
+        for k in signal_numeric:
             area = float(np.trapezoid(values[:, k], time))
-            if area != 0:
-                values[:, k] = values[:, k] / area
-                scale_errors("y", 1.0 / area, k)
+            if not np.isfinite(area) or area == 0:
+                raise ValueError(
+                    f"cannot normalize channel {labels[k]!r} by area: "
+                    "integral is zero or non-finite"
+                )
+            values[:, k] = values[:, k] / area
+            scale_errors("y", 1.0 / area, k)
+            set_signal_unit(k, normalized_unit)
 
     # 8. Derivative / integral transforms.
     deriv = params.get("derivativeMode", "None")
@@ -348,14 +419,23 @@ def apply_corrections(
             "derivative/integral transforms with bound Y uncertainty are not "
             "supported; unassign the error columns or transform before assigning them"
         )
-    if deriv == "dY/dX" and numeric:
-        values[:, numeric] = derivative(time, values[:, numeric], order=1)
-    elif deriv == "d²Y/dX²" and numeric:
-        values[:, numeric] = derivative(time, values[:, numeric], order=2)
-    elif deriv == "∫Y dx" and numeric:
-        values[:, numeric] = cumulative_integral(time, values[:, numeric])
-    elif deriv == "dlog/dlog" and numeric:
-        values[:, numeric] = log_derivative(time, values[:, numeric])
+    x_unit = x_unit_of(data)
+    if deriv == "dY/dX" and signal_numeric:
+        values[:, signal_numeric] = derivative(time, values[:, signal_numeric], order=1)
+        for k in signal_numeric:
+            set_signal_unit(k, _unit_quotient(units[k], x_unit))
+    elif deriv == "d²Y/dX²" and signal_numeric:
+        values[:, signal_numeric] = derivative(time, values[:, signal_numeric], order=2)
+        for k in signal_numeric:
+            set_signal_unit(k, _unit_quotient(units[k], x_unit, 2))
+    elif deriv == "∫Y dx" and signal_numeric:
+        values[:, signal_numeric] = cumulative_integral(time, values[:, signal_numeric])
+        for k in signal_numeric:
+            set_signal_unit(k, _unit_product(units[k], x_unit))
+    elif deriv == "dlog/dlog" and signal_numeric:
+        values[:, signal_numeric] = log_derivative(time, values[:, signal_numeric])
+        for k in signal_numeric:
+            set_signal_unit(k, "")
 
     metadata = (
         dict(data.metadata)
@@ -366,7 +446,7 @@ def apply_corrections(
         time,
         values,
         labels=labels,
-        units=list(data.units),
+        units=units,
         metadata=metadata,
         cat_levels=data.cat_levels,
         level_order=surviving_level_order(

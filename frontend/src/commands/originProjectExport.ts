@@ -10,7 +10,7 @@
 
 import { exportOriginProject } from "../lib/api/originProject";
 import { stemFromName, type StoreGet } from "../lib/exportActive";
-import { runCancellable } from "../store/pendingOps";
+import { runCancellable } from "../store/pendingOpActions";
 import { toast } from "../store/toasts";
 
 export async function runExportOriginProject(s: StoreGet): Promise<void> {

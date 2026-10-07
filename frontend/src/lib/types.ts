@@ -864,7 +864,6 @@ export interface ConstantEntry {
   value: number;
   unit: string;
 }
-
 /** Correction-pipeline params (camelCase wire keys; all optional).
  *  Mirrors `routes/corrections.CorrectionParams` / MATLAB `correctionParams`. */
 export interface CorrectionParams {
@@ -886,6 +885,8 @@ export interface CorrectionParams {
   smoothMethod?: string;
   normMethod?: string;
   derivativeMode?: string;
+  /** Signal-stage subset; absent preserves all channels. */
+  signalChannels?: number[];
   /** GOTO #2 anchor-point baseline subtraction: user-picked (x, y) anchor
    *  pairs + the interpolation method (linear/pchip/spline). Present with
    *  >=2 anchors = subtracted in pipeline step 3 (beats bgPoly/slope). */

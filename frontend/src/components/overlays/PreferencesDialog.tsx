@@ -13,12 +13,12 @@ import { SliderRow } from "../primitives/SliderRow";
 import { Switch } from "../primitives/Switch";
 import { Button, Select } from "../primitives";
 import {
-  ACCENT_SWATCHES as ACCENTS,
   loadInteractionPrefs,
   loadPlotPerfPrefs,
   saveInteractionPrefs,
   savePlotPerfPrefs,
 } from "../../store/prefs";
+import { ACCENT_SWATCHES as ACCENTS } from "../../store/accentSwatches";
 import { useApp } from "../../store/useApp";
 import { focusablesIn, useDialogFocus } from "./useDialogFocus";
 import { useEscapeSurface } from "../../lib/escapeStack";

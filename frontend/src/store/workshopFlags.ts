@@ -101,6 +101,7 @@ export interface WorkshopFlagsSlice {
   rsmOpen: boolean; digitizerOpen: boolean;
   datasetMathOpen: boolean; tabulateOpen: boolean;
   distributionOpen: boolean;
+  signalProcessingOpen: boolean;
   dataFilterOpen: boolean;
   statsChooserOpen: boolean; // the "which test?" front door (#26)
   peakWizardOpen: boolean; // the Peak Analyzer stepper (#31)
@@ -149,6 +150,7 @@ export interface WorkshopFlagsSlice {
   setDatasetMathOpen: (open: boolean) => void;
   setTabulateOpen: (open: boolean) => void;
   setDistributionOpen: (open: boolean) => void;
+  setSignalProcessingOpen: (open: boolean) => void;
   setDataFilterOpen: (open: boolean) => void;
   setStatsChooserOpen: (open: boolean) => void;
   setPeakWizardOpen: (open: boolean) => void;
@@ -194,6 +196,7 @@ export function createWorkshopFlagsSlice(set: SliceSet): WorkshopFlagsSlice {
     datasetMathOpen: false,
     tabulateOpen: false,
     distributionOpen: false,
+    signalProcessingOpen: false,
     dataFilterOpen: false,
     statsChooserOpen: false,
     peakWizardOpen: false,
@@ -237,6 +240,7 @@ export function createWorkshopFlagsSlice(set: SliceSet): WorkshopFlagsSlice {
     setDatasetMathOpen: (datasetMathOpen) => set({ datasetMathOpen }),
     setTabulateOpen: (tabulateOpen) => set({ tabulateOpen }),
     setDistributionOpen: (distributionOpen) => set({ distributionOpen }),
+    setSignalProcessingOpen: (signalProcessingOpen) => set({ signalProcessingOpen }),
     setDataFilterOpen: (dataFilterOpen) => set({ dataFilterOpen }),
     setStatsChooserOpen: (statsChooserOpen) => set({ statsChooserOpen }),
     setPeakWizardOpen: (peakWizardOpen) => set({ peakWizardOpen }),

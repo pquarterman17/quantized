@@ -14,7 +14,7 @@ import {
   type BatchRow,
 } from "../../lib/template";
 import type { Dataset, FolderNode } from "../../lib/types";
-import { runCancellable } from "../../store/pendingOps";
+import { runCancellable } from "../../store/pendingOpActions";
 import { ACCENTS } from "../../store/prefs";
 import { toast } from "../../store/toasts";
 import { asOneEditStep } from "../../store/undoStep";

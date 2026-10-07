@@ -10,7 +10,7 @@ import { exportCornerFigure } from "../../../lib/api/figures";
 import { fitModel } from "../../../lib/api";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitWeighting, WeightMode } from "../../../lib/types";
-import { runCancellable } from "../../../store/pendingOps";
+import { runCancellable } from "../../../store/pendingOpActions";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { toast } from "../../../store/toasts";
 import { fitStepParams, selectedFitData } from "../../../lib/fitselection";

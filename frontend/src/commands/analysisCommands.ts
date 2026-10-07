@@ -116,6 +116,15 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
     { id: "reductions-wh", group: "Analyze", section: "XRD & reflectivity", label: "Williamson-Hall…", description: "Estimate crystallite size and microstrain from diffraction peak widths across 2θ.", keywords: "crystallite size microstrain broadening williamson hall xrd", run: () => s().openReductions("williamson-hall") },
     { id: "reductions-pawley", group: "Analyze", section: "XRD & reflectivity", label: "Pawley refinement…", description: "Refine a powder XRD unit cell from the whole pattern.", keywords: "pawley unit cell powder xrd", run: () => s().openReductions("pawley") },
     {
+      id: "signal-processing",
+      group: "Analyze",
+      section: "Transform & signal",
+      label: "Signal Processing…",
+      description: "Preview and create linked smoothing, normalization, derivative, or integral outputs.",
+      keywords: "smooth normalize derivative integral savitzky golay",
+      run: () => s().setSignalProcessingOpen(true),
+    },
+    {
       id: "sims",
       group: "Analyze",
       section: "Transform & signal",

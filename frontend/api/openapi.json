@@ -2831,6 +2831,20 @@
             ],
             "title": "Samplevolume"
           },
+          "signalChannels": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signalchannels"
+          },
           "smoothEnabled": {
             "anyOf": [
               {

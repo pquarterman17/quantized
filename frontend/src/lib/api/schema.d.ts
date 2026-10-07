@@ -6469,6 +6469,8 @@ export interface components {
             sampleMass?: number | null;
             /** Samplevolume */
             sampleVolume?: number | null;
+            /** Signalchannels */
+            signalChannels?: number[] | null;
             /** Smoothenabled */
             smoothEnabled?: boolean | null;
             /** Smoothmethod */

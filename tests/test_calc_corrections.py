@@ -209,6 +209,148 @@ def test_bound_y_uncertainty_follows_normalization_scale(
     assert_allclose(out.values[:, 1], expected_sigma)
 
 
+def test_signal_channels_limit_signal_only_stages() -> None:
+    data = DataStruct.create(
+        [1.0, 2.0, 3.0],
+        [[1.0, 10.0, 100.0], [3.0, 20.0, 200.0], [9.0, 40.0, 300.0]],
+        labels=["a", "b", "untouched"],
+        units=["V", "A", "K"],
+    )
+    out = apply_corrections(
+        data,
+        {"normMethod": "Peak (max=1)", "signalChannels": [1]},
+    )
+    assert_allclose(out.values[:, 0], data.values[:, 0])
+    assert_allclose(out.values[:, 1], [0.25, 0.5, 1.0])
+    assert_allclose(out.values[:, 2], data.values[:, 2])
+    assert out.units == ("V", "", "K")
+
+
+@pytest.mark.parametrize("channels", [[-1], [2], [99], [True], [0.5], "0"])
+def test_signal_channels_reject_non_measured_channels(channels: object) -> None:
+    data = DataStruct.create(
+        [1.0, 2.0],
+        [[10.0, 1.0, 0.0], [20.0, 2.0, 1.0]],
+        labels=["signal", "sigma", "group"],
+        units=["V", "V", ""],
+        cat_levels={2: ("a", "b")},
+    )
+    with pytest.raises(ValueError, match="signalChannels|signal channel"):
+        apply_corrections(
+            data,
+            {"normMethod": "Peak (max=1)", "signalChannels": channels},
+            error_bindings=[{"channel": 1, "target": 0, "axis": "y", "side": "both"}],
+        )
+
+
+def test_unselected_bound_error_does_not_block_selected_derivative() -> None:
+    data = DataStruct.create(
+        [1.0, 2.0, 3.0],
+        [[1.0, 10.0, 1.0], [4.0, 20.0, 1.0], [9.0, 30.0, 1.0]],
+        labels=["selected", "bound", "sigma"],
+        units=["V", "A", "A"],
+        metadata={"xUnit": "s"},
+    )
+    out = apply_corrections(
+        data,
+        {"derivativeMode": "dY/dX", "signalChannels": [0]},
+        error_bindings=[{"channel": 2, "target": 1, "axis": "y", "side": "both"}],
+    )
+    assert_allclose(out.values[:, 0], [3.0, 4.0, 5.0])
+    assert_allclose(out.values[:, 1:], data.values[:, 1:])
+    assert out.units == ("V/s", "A", "A")
+
+
+@pytest.mark.parametrize(
+    ("params", "expected_unit"),
+    [
+        ({"derivativeMode": "dY/dX"}, "V/s"),
+        ({"derivativeMode": "d²Y/dX²"}, "V/s^2"),
+        ({"derivativeMode": "∫Y dx"}, "V*s"),
+        ({"derivativeMode": "dlog/dlog"}, ""),
+        ({"normMethod": "Peak (max=1)"}, ""),
+        ({"normMethod": "Area (integral=1)"}, "1/s"),
+    ],
+)
+def test_signal_transform_updates_units(
+    params: dict[str, Any], expected_unit: str
+) -> None:
+    data = DataStruct.create(
+        [1.0, 2.0, 3.0],
+        [1.0, 4.0, 9.0],
+        labels=["signal"],
+        units=["V"],
+        metadata={"xUnit": "s"},
+    )
+    out = apply_corrections(data, params)
+    assert out.units == (expected_unit,)
+
+
+def test_area_normalization_rejects_zero_or_non_finite_integral() -> None:
+    for values in ([0.0, 0.0, 0.0], [1.0, np.nan, 2.0]):
+        data = DataStruct.create(
+            [1.0, 2.0, 3.0], values, labels=["signal"], units=["V"]
+        )
+        with pytest.raises(ValueError, match="integral is zero or non-finite"):
+            apply_corrections(data, {"normMethod": "Area (integral=1)"})
+
+
+@pytest.mark.parametrize(
+    ("x_unit", "y_unit", "order", "expected"),
+    [
+        ("cm^-1", "", 1, "cm"),
+        ("cm⁻¹", "V", 1, "V*cm"),
+        ("cm^-1", "V", 2, "V/(cm^-1)^2"),
+    ],
+)
+def test_derivative_units_handle_reciprocal_x_units(
+    x_unit: str, y_unit: str, order: int, expected: str
+) -> None:
+    data = DataStruct.create(
+        [1.0, 2.0, 3.0],
+        [1.0, 4.0, 9.0],
+        labels=["signal"],
+        units=[y_unit],
+        metadata={"xUnit": x_unit},
+    )
+    mode = "dY/dX" if order == 1 else "d²Y/dX²"
+    assert apply_corrections(data, {"derivativeMode": mode}).units == (expected,)
+
+
+def test_normalization_updates_bound_error_unit() -> None:
+    data = DataStruct.create(
+        [1.0, 2.0, 3.0],
+        [[10.0, 1.0], [20.0, 1.0], [30.0, 1.0]],
+        labels=["signal", "sigma"],
+        units=["V", "V"],
+    )
+    out = apply_corrections(
+        data,
+        {"normMethod": "Peak (max=1)", "signalChannels": [0]},
+        error_bindings=[{"channel": 1, "target": 0, "axis": "y", "side": "both"}],
+    )
+    assert out.units == ("", "")
+
+
+def test_savgol_legacy_alias_matches_canonical_name() -> None:
+    data = DataStruct.create(
+        np.arange(9.0), np.arange(9.0) ** 2, labels=["signal"], units=["V"]
+    )
+    legacy = apply_corrections(
+        data,
+        {"smoothEnabled": True, "smoothMethod": "savgol", "smoothWindow": 2},
+    )
+    canonical = apply_corrections(
+        data,
+        {
+            "smoothEnabled": True,
+            "smoothMethod": "savitzky-golay",
+            "smoothWindow": 2,
+        },
+    )
+    assert_allclose(legacy.values, canonical.values)
+
+
 @pytest.mark.parametrize(
     ("params", "factor"),
     [

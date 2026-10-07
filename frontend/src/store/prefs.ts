@@ -27,19 +27,6 @@ const THEMES = ["dark", "light"];
 // the SAME 5 design-token accent names the Appearance/Preferences accent
 // swatches use, so a folder's colour is drawn from one canonical palette.
 export const ACCENTS = ["violet", "teal", "ocean", "amber", "rose"];
-// The paint value per accent name — a FIXED colour per option (not the
-// currently-active --accent custom property, which only ever holds ONE of
-// these), so a swatch/glyph can show what an option looks like regardless of
-// the app's current accent choice. The single source both the Preferences
-// accent swatches AND the folder-Properties colour picker read (moved here
-// from a PreferencesDialog.tsx-local copy — one palette, not two).
-export const ACCENT_SWATCHES: { id: string; c: string }[] = [
-  { id: "violet", c: "oklch(0.7 0.17 295)" },
-  { id: "teal", c: "oklch(0.74 0.13 185)" },
-  { id: "ocean", c: "oklch(0.68 0.15 250)" },
-  { id: "amber", c: "oklch(0.78 0.14 75)" },
-  { id: "rose", c: "oklch(0.72 0.16 12)" },
-];
 const DENSITIES = ["compact", "regular", "comfy"];
 const NOTATIONS = ["auto", "scientific", "fixed"];
 const TRACES: readonly DefaultTrace[] = ["Line", "Line + markers", "Scatter", "Step"];

@@ -79,6 +79,46 @@ def test_apply_y_offset_subtracts() -> None:
     assert out["values"] == [[5.0], [15.0], [25.0]]
 
 
+def test_apply_signal_channels_transforms_only_selected_column() -> None:
+    dataset = {
+        "time": [1.0, 2.0, 3.0],
+        "values": [[1.0, 10.0], [2.0, 20.0], [4.0, 40.0]],
+        "labels": ["keep", "normalize"],
+        "units": ["V", "A"],
+        "metadata": {},
+    }
+    resp = client.post(
+        "/api/corrections/apply",
+        json={
+            "dataset": dataset,
+            "params": {
+                "normMethod": "Peak (max=1)",
+                "signalChannels": [1],
+            },
+        },
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["values"] == [[1.0, 0.25], [2.0, 0.5], [4.0, 1.0]]
+    assert out["units"] == ["V", ""]
+
+
+def test_apply_signal_channels_rejects_coercible_non_integers() -> None:
+    dataset = {
+        "time": [1.0, 2.0],
+        "values": [[1.0, 10.0], [2.0, 20.0]],
+        "labels": ["a", "b"],
+        "units": ["V", "A"],
+        "metadata": {},
+    }
+    for malformed in ([True], [0.0], ["0"]):
+        resp = client.post(
+            "/api/corrections/apply",
+            json={"dataset": dataset, "params": {"signalChannels": malformed}},
+        )
+        assert resp.status_code == 422, malformed
+
+
 def test_apply_preserves_bound_uncertainty_through_additive_correction() -> None:
     dataset = {
         "time": [1.0, 2.0, 3.0],

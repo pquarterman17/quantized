@@ -62,7 +62,7 @@ import { axisTitleWire } from "./exportAxisTitles";
 import { withDefaultTrace } from "./exportDefaultTrace";
 import { withCanvasLineWidth } from "./exportLineWidth";
 import { canvasLineWidth } from "./plotTemplates";
-import { logOffsetWire } from "./logOffset";
+import { logOffsetWire } from "./logOffsetWire";
 import { waterfallWire } from "./waterfallWire";
 import { axisFmtParam } from "./types";
 

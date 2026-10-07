@@ -2313,6 +2313,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   rsmOpen: "workshop/dialog visibility; UI state",
   datasetMathOpen: "workshop/dialog visibility; UI state",
   distributionOpen: "workshop/dialog visibility; UI state",
+  signalProcessingOpen: "workshop/dialog visibility; UI state",
   dataFilterOpen: "workshop/dialog visibility; UI state",
   statsChooserOpen: "workshop/dialog visibility; UI state",
   peakWizardOpen: "workshop/dialog visibility; UI state",
@@ -3356,6 +3357,8 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/workspaceParseCore.ts",
     "/lib/workspaceDatasetParse.ts",
     "/lib/workspaceSerialize.ts",
+    "/lib/mapViewSerialize.ts",
+    "/lib/logOffsetWire.ts",
     "/lib/workspaceOrigin.ts",
     "/lib/workspaceLibraryPanel.ts",
     "/lib/workspaceComputedColumns.ts",
@@ -3525,6 +3528,10 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // only by lazy worksheet, builder, search and encoding surfaces. Keep the
     // eager designation reader in columnmeta.ts without pulling this half in.
     "/lib/originTextColumns.ts",
+    // 2026-10-06 analysis workbench: cancellable-action and polled-job
+    // orchestration is used only after a lazy workshop/export action starts.
+    "/store/pendingOpActions.ts",
+    "/store/accentSwatches.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
