@@ -11,6 +11,8 @@
 // COLUMN INDEXING follows the existing `setCellValue` contract: -1 is the x/time
 // column, 0..n-1 are value channels. Callers pass that space straight through.
 
+import { toNumber } from "./fortranNumber";
+
 /** One cell to write. `value` is NaN for a blank source cell — the same
  *  "missing" marker single-cell editing already commits. */
 export interface CellEdit {
@@ -174,7 +176,7 @@ export function parseCell(raw: string): number | null {
     if (!THOUSANDS.test(text)) return null;
     text = text.replace(/,/g, "");
   }
-  const n = Number(text);
+  const n = toNumber(text);
   return Number.isNaN(n) ? null : n;
 }
 

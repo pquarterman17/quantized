@@ -15,6 +15,7 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 from quantized.io._delimited_layout import _to_float
+from quantized.io._fortran_float import parse_float
 from quantized.io._refl_columns import (
     angstrom_unit,
     pnr_role_metadata,
@@ -57,7 +58,7 @@ def import_ncnr_pnr(filepath: str | Path) -> DataStruct:
         if len(tokens) < n_cols:
             continue
         try:
-            rows.append([float(t) for t in tokens[:n_cols]])
+            rows.append([parse_float(t) for t in tokens[:n_cols]])
         except ValueError:
             continue
     if not rows:
@@ -138,7 +139,7 @@ def import_ncnr_dat(filepath: str | Path) -> DataStruct:
         if not stripped or stripped.startswith("#"):
             continue
         try:
-            rows.append([float(t) for t in stripped.split()])
+            rows.append([parse_float(t) for t in stripped.split()])
         except ValueError:
             continue
     if not rows:

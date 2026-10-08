@@ -66,6 +66,16 @@ describe("parseCell", () => {
     expect(parseCell("control")).toBeNull();
   });
 
+  it("reads a Fortran D exponent, but never D-shaped text", () => {
+    expect(parseCell("1.0D+00")).toBe(1);
+    expect(parseCell("-2.5d-3")).toBe(-0.0025);
+    expect(parseCell("3.D4")).toBe(30000);
+    expect(parseCell("1D+02")).toBe(100);
+    for (const text of ["D", "Dec", "ID", "3D", "1D2", "12D4", "1.0D", "1.0D+"]) {
+      expect(parseCell(text)).toBeNull();
+    }
+  });
+
   it("refuses a comma that is not a thousands group ('1,5' is 1.5 or 15)", () => {
     expect(parseCell("1,5")).toBeNull();
     expect(parseCell("1,5000")).toBeNull();

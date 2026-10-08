@@ -14,6 +14,7 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 from quantized.io._delimited_layout import _to_float
+from quantized.io._fortran_float import parse_float
 from quantized.io.base import NO_COLUMN, parse_col_header, read_head, read_text, resolve_column
 
 __all__ = ["import_lake_shore", "is_lakeshore_file"]
@@ -29,7 +30,7 @@ _LS_SHORTHAND: dict[str, str] = {
 
 def _is_nan_token(token: str) -> bool:
     try:
-        float(token)
+        parse_float(token)
         return False
     except ValueError:
         return True

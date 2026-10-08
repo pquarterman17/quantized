@@ -2,6 +2,7 @@
 // separate from the state hook so the array-alignment / label-composition
 // logic is unit-testable without React.
 
+import { toNumber } from "./fortranNumber";
 import type { ImportDecimal } from "./importTypes";
 import type {
   ImportColumnRole,
@@ -207,7 +208,7 @@ function looksFullyNumeric(row: string, delimiter: string): boolean {
   const cells = splitRawLine(row, delimiter)
     .map((c) => c.trim())
     .filter((c) => c !== "");
-  return cells.length > 0 && cells.every((c) => Number.isFinite(Number(c)));
+  return cells.length > 0 && cells.every((c) => Number.isFinite(toNumber(c)));
 }
 
 /** Can `filter`'s saved settings be reapplied cleanly against `fresh` (a

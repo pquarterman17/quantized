@@ -459,6 +459,18 @@ describe("resolveImportFilter — line-position sanity (P1.6 review P1-2)", () =
     expect(r.reason).toContain("numeric");
   });
 
+  it("counts a Fortran D-exponent row (\"1.0D+00,2.5D-03\") as numeric data", () => {
+    const fortranFresh = previewOf(
+      [
+        { index: 0, name: "Temp", unit: "", role: "x" },
+        { index: 1, name: "Moment", unit: "", role: "y" },
+      ],
+      { raw_lines: ["Temp,Moment", "1.0D+00,2.5D-03", "2.0D+00,2.6D-03"], delimiter: ",", label_line: 1 },
+    );
+    const r = resolveImportFilter(fileAFilter, fortranFresh, /* naturalDataStart */ 5);
+    expect(r.ok).toBe(false);
+  });
+
   it("still applies cleanly when the saved label_line genuinely IS a text row in this file", () => {
     // fileA reapplied to a file shaped just like it: header(0), label(1), data(2+).
     const properFresh = previewOf(

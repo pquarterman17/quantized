@@ -14,6 +14,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io._fortran_float import parse_float
 from quantized.io._refl_columns import angstrom_unit, refl_fit_role_metadata
 from quantized.io.base import read_head, read_text
 
@@ -73,7 +74,7 @@ def import_refl1d_dat(filepath: str | Path) -> DataStruct:
         if kv:
             key, val = kv.group(1), kv.group(2)
             try:
-                header_meta[key] = float(val)
+                header_meta[key] = parse_float(val)
             except ValueError:
                 header_meta[key] = val
         else:
@@ -96,7 +97,7 @@ def import_refl1d_dat(filepath: str | Path) -> DataStruct:
         if not stripped or stripped.startswith("#"):
             continue
         try:
-            rows.append([float(t) for t in stripped.split()])
+            rows.append([parse_float(t) for t in stripped.split()])
         except ValueError:
             continue
     if not rows:

@@ -19,6 +19,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io._fortran_float import parse_float
 from quantized.io._ncnr_blocks import RawBlock, combine_blocks, split_blocks
 from quantized.io._row_width import conform_rows
 from quantized.io.base import read_text
@@ -233,7 +234,7 @@ def _block_matrix(block: RawBlock, name: str) -> tuple[np.ndarray, dict[str, Any
         if not text:
             continue
         try:
-            rows.append([float(t) for t in text.split()])
+            rows.append([parse_float(t) for t in text.split()])
         except ValueError:
             continue  # any non-numeric token -> drop the row (MATLAB parity)
     if not rows:
