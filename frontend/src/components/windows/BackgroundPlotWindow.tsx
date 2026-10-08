@@ -86,6 +86,8 @@ export interface BackgroundPlotWindowProps {
    *  (`PlotStage`, which reads the SAME `document.bindings.errors`) or not
    *  — the visible figure must not depend on focus state. */
   document?: FigureDocument;
+  /** This window's id: its magnifier inset writes its edits back to it. */
+  windowId?: string;
 }
 
 export default function BackgroundPlotWindow({
@@ -94,6 +96,7 @@ export default function BackgroundPlotWindow({
   bg,
   linkGroup,
   document,
+  windowId,
 }: BackgroundPlotWindowProps) {
   // L2: derived unconditionally (before the `!dataset` early return) so this
   // component's hook order never varies across renders — `dataset` can flip
@@ -145,7 +148,7 @@ export default function BackgroundPlotWindow({
       />
     );
   return (
-    <BackgroundXYWindow dataset={dataset} view={view} bg={bg} linkGroup={linkGroup} document={document} />
+    <BackgroundXYWindow dataset={dataset} view={view} bg={bg} linkGroup={linkGroup} document={document} windowId={windowId} />
   );
 }
 
@@ -172,6 +175,7 @@ function BackgroundXYWindow({
   bg,
   linkGroup,
   document,
+  windowId,
 }: BackgroundPlotWindowProps & { dataset: Dataset }) {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
@@ -277,11 +281,11 @@ function BackgroundXYWindow({
       {/* Item 15: the magnifier inset is part of the view (`insetMode` ∈
           PlotView), so a background window carrying it keeps showing it —
           previously it was silently dropped while unfocused. Its own drag-
-          zoom/close affordances are moot here: the frame's capture-phase
-          pointerdown focuses the window first (decision #2). */}
+          zoom/move/resize/close edit THIS window's view (`windowId`); the
+          frame leaves a press on it to the inset (Stage/InsetPlot.tsx). */}
       {view.insetMode && displayPayload && (
         <InsetPlot
-          payload={displayPayload} styleList={styleList} seriesCycle={seriesCycle} view={view}
+          payload={displayPayload} styleList={styleList} seriesCycle={seriesCycle} view={view} windowId={windowId}
           plotRef={plotRef} hidden={hidden}
         />
       )}

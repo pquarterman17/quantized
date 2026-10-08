@@ -12,7 +12,10 @@
 // corner grip resizes it. The source region is outlined on the main plot with
 // the connector lines the export draws (`lib/inset.insetIndicator`, the rule
 // in `tests/fixtures/wire/inset_connectors.json`). A background window's
-// inset (`view`) reads the window's saved geometry and writes nothing.
+// inset (`view` + `windowId`) reads that window's saved geometry and writes
+// its edits back to that window (`store/windowViewEdit.ts`), undoably, then
+// focuses it: the frame leaves a press on the inset alone (`data-inset-box`),
+// because the focus swap would unmount it mid-gesture.
 
 import { useEffect, useId, useRef, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import uPlot from "uplot";
@@ -28,6 +31,7 @@ import { buildOpts, resolvePlotBg } from "../../lib/uplotOpts";
 import type { SeriesCycle } from "../../lib/seriesStyleCycle";
 import type { SeriesStyle } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+import { patchBackgroundView } from "../../store/windowViewEdit";
 
 interface Props {
   payload: PlotPayload;
@@ -40,6 +44,8 @@ interface Props {
   /** A background window's own view; omitted, the focused plot's. The inset
    *  magnifies the plot behind it, so it draws on that plot's scales. */
   view?: Pick<PlotView, "xScale" | "yScale" | "y2Scale" | "xReversed"> & Partial<Pick<PlotView, "inset" | "showGrid">>;
+  /** The background window `view` belongs to: its inset edits land there. */
+  windowId?: string;
   /** The plot this inset magnifies: its frame places the inset and its scales
    *  map the source outline. Absent: the inset sits in the corner, no outline. */
   plotRef?: RefObject<uPlot | null>;
@@ -64,7 +70,7 @@ function seedX(saved: InsetView | null, xs: number[]): [number, number] | null {
   return r[1] > r[0] ? r : null;
 }
 
-export default function InsetPlot({ payload, styleList, seriesCycle, view, plotRef: mainRef, hidden }: Props) {
+export default function InsetPlot({ payload, styleList, seriesCycle, view, windowId, plotRef: mainRef, hidden }: Props) {
   const liveX = useApp((s) => s.xScale);
   const liveY = useApp((s) => s.yScale);
   const liveY2 = useApp((s) => s.y2Scale);
@@ -81,6 +87,10 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, plotR
   const accent = useApp((s) => s.accent);
   const setInsetMode = useApp((s) => s.setInsetMode);
   const recordHistory = useApp((s) => s.recordHistory);
+  const focusWindow = useApp((s) => s.focusWindow);
+  const editable = !view || !!windowId;
+  /** A background window takes focus once its edit is in (after the press, so nothing unmounts mid-gesture). */
+  const focusSoon = () => void setTimeout(() => windowId && focusWindow(windowId), 0);
   const boxRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null); // the source outline, under the inset
@@ -98,16 +108,19 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, plotR
   const linesRef = useRef(lines);
   linesRef.current = lines;
 
-  /** Write `patch` over the saved inset (focused window only; equal = no-op). */
-  const commit = (patch: Partial<InsetView>, history?: string) => {
-    if (view) return;
+  /** Write `patch` over the saved inset (equal = no-op). A background
+   *  window's inset writes only what the user did (`history` or `user`), never
+   *  the region it merely drew on mounting. */
+  const commit = (patch: Partial<InsetView>, history?: string, user = false) => {
+    if (view && !(windowId && (history || user))) return;
     const cur = savedRef.current; // the store's, as of the last render or commit
     const x = patch.x ?? cur?.x;
     if (!x) return;
     const next: InsetView = { y: null, yZoom: false, at: atRef.current, lines: true, ...cur, ...patch, x };
     if (JSON.stringify(next) === JSON.stringify(cur)) return;
-    if (history) recordHistory(history);
     savedRef.current = next;
+    if (windowId) return void (patchBackgroundView(windowId, { inset: next }, history), focusSoon());
+    if (history) recordHistory(history);
     useApp.setState({ inset: next });
   };
   const commitRef = useRef(commit);
@@ -144,6 +157,7 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, plotR
     let applying = true;
     let gesture = false;
     let queued = false;
+    let touched = false; // a press or double-click in the inset since the last capture
     const capture = (u: uPlot) => {
       queued = false;
       const { min: x0, max: x1 } = u.scales?.x ?? {};
@@ -153,7 +167,8 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, plotR
       // A dual-Y plot's secondary range as drawn: the export ranges its twin inset axis by it.
       const { min: s0, max: s1 } = u.scales?.y2 ?? {};
       const y2 = s0 != null && s1 != null && s1 > s0 ? { y2: [s0, s1] as [number, number] } : {};
-      commitRef.current({ x: [x0, x1], y, ...y2, yZoom: yZoomRef.current && y !== null });
+      commitRef.current({ x: [x0, x1], y, ...y2, yZoom: yZoomRef.current && y !== null }, undefined, touched);
+      touched = false;
     };
     const onScale = (u: uPlot, key: string) => {
       if (applying) return;
@@ -179,9 +194,9 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, plotR
     applying = false;
     capture(u);
     const over = u.over as HTMLElement | undefined;
-    const down = (e: MouseEvent) => void (gesture = e.button === 0);
+    const down = (e: MouseEvent) => void (gesture = touched = e.button === 0);
     const up = () => void setTimeout(() => (gesture = false), 0);
-    const reset = () => void (gesture = false); // a double-click resets to auto
+    const reset = () => void ((gesture = false), (touched = true)); // a double-click resets to auto
     over?.addEventListener?.("mousedown", down);
     over?.addEventListener?.("dblclick", reset, true);
     window.addEventListener("mouseup", up);
@@ -259,7 +274,7 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, plotR
   }, [mainRef]);
 
   const startDrag = (mode: "move" | "size") => (e: ReactPointerEvent<HTMLElement>) => {
-    if (view || e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
+    if (!editable || e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
     e.preventDefault();
     e.stopPropagation();
     e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -293,11 +308,13 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, plotR
         <defs><clipPath id={clipId}><rect /></clipPath></defs>
         <rect clipPath={`url(#${clipId})`} fill="none" {...ink} />
       </svg>
-      <div ref={boxRef} className="qzk-glass" data-testid="inset-box"
+      <div ref={boxRef} className="qzk-glass" data-testid="inset-box" data-inset-box={windowId ? "" : undefined}
+        // A plain click on a background inset focuses its window too.
+        onClick={windowId ? focusSoon : undefined}
         style={{ position: "absolute", right: 14, bottom: 14, width: 280, height: 168, padding: 6 }}>
         <div
           {...dragProps("move")}
-          title={view ? undefined : "Drag to move the inset."}
+          title={editable ? "Drag to move the inset." : undefined}
           style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10, color: "var(--text-faint)", height: HEADER - 6, marginBottom: 2 }}
         >
           <span>inset · drag to zoom</span>
@@ -306,13 +323,13 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, plotR
               onClick={() => commit({ lines: !lines }, "toggle inset lines")}>
               ⤡
             </button>
-            <button aria-label="Close inset" className="qzk-tool-btn" title="Close inset" onClick={() => setInsetMode(false)}>
+            <button aria-label="Close inset" className="qzk-tool-btn" title="Close inset" onClick={() => (windowId ? patchBackgroundView(windowId, { insetMode: false }, "toggle inset") : setInsetMode(false))}>
               ×
             </button>
           </span>
         </div>
         <div ref={hostRef} style={{ position: "absolute", left: 6, right: 6, top: HEADER, bottom: 6 }} />
-        {!view && (
+        {editable && (
           <div {...dragProps("size")} aria-label="Resize inset" title="Drag to resize the inset."
             style={{ position: "absolute", right: 0, bottom: 0, width: 10, height: 10 }} />
         )}

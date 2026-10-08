@@ -14,8 +14,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import { DEFAULT_INSET_AT } from "../../lib/inset";
 import type { PlotPayload } from "../../lib/plotdata";
-import type { InsetView } from "../../lib/plotview";
+import { defaultPlotView, type InsetView } from "../../lib/plotview";
 import { useApp } from "../../store/useApp";
+import { plotWindowView } from "../../store/windowDocuments";
 import InsetPlot from "./InsetPlot";
 
 type Hook = (u: MockUPlot, key: string) => void;
@@ -88,7 +89,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   plots.length = 0;
-  useApp.setState({ inset: initial.inset, yScale: initial.yScale });
+  useApp.setState({ inset: initial.inset, yScale: initial.yScale, plotWindows: initial.plotWindows, focusedWindowId: initial.focusedWindowId });
 });
 
 const saved: InsetView = { x: [15, 25], y: [1, 100], yZoom: true, at: [0.1, 0.2, 0.3, 0.4], lines: true };
@@ -209,6 +210,71 @@ describe("the magnifier inset's placement and outline", () => {
     expect(at[0]).toBeCloseTo(0.2); // +40 px of a 400 px frame
     expect(at[1]).toBeCloseTo(0.3); // +20 px of a 200 px frame
     expect(record).toHaveBeenCalledWith("move inset");
+  });
+
+  // Batch 33: a background window's inset used to discard every edit (and
+  // the frame's focus swap unmounted it mid-drag). Edits now land on THAT
+  // window's view, undoably, never on the focused window's live inset.
+  function BackgroundInset({ id, plotRef }: { id: string; plotRef?: ReturnType<typeof mainPlot> }) {
+    const win = useApp((s) => s.plotWindows.find((w) => w.id === id));
+    return win ? <InsetPlot payload={payload} view={plotWindowView(win)} windowId={id} plotRef={plotRef} /> : null;
+  }
+  const bgWindow = (inset: InsetView | null = saved) => {
+    const id = useApp.getState().createWindow(null, { ...defaultPlotView(), insetMode: true, inset });
+    expect(useApp.getState().focusedWindowId).not.toBe(id);
+    return id;
+  };
+  const bgView = (id: string) => plotWindowView(useApp.getState().plotWindows.find((w) => w.id === id)!);
+
+  it("a background window's inset moves its own window's inset, as one undo step", async () => {
+    const id = bgWindow();
+    const stage = document.body.appendChild(document.createElement("div"));
+    stage.getBoundingClientRect = () => rect(0, 0, 600, 300);
+    render(<BackgroundInset id={id} plotRef={mainPlot()} />, { container: stage });
+    const header = screen.getByTitle("Drag to move the inset.");
+    await waitFor(() => expect(screen.getByTestId("inset-box").style.left).not.toBe(""));
+    expect(bgView(id).inset).toEqual(saved); // mounting writes nothing
+    fireEvent.pointerDown(header, { button: 0, clientX: 100, clientY: 100, pointerId: 1 });
+    fireEvent.pointerMove(header, { clientX: 140, clientY: 120, pointerId: 1 });
+    fireEvent.pointerUp(header, { clientX: 140, clientY: 120, pointerId: 1 });
+    expect(bgView(id).inset?.at[0]).toBeCloseTo(0.2);
+    expect(bgView(id).inset?.at[1]).toBeCloseTo(0.3);
+    expect(useApp.getState().inset).toBeNull(); // the focused window's inset is untouched
+    act(() => useApp.getState().undo());
+    expect(bgView(id).inset?.at).toEqual(saved.at);
+  });
+
+  it("a background window's inset writes nothing until the user edits it", () => {
+    const id = bgWindow(null);
+    render(<BackgroundInset id={id} />);
+    expect(plots[plots.length - 1].setCalls[0]).toEqual(["x", 20.5, 29.5]); // seeded and drawn...
+    expect(bgView(id).inset).toBeNull(); // ...but not written into the window
+  });
+
+  it("a background window's inset saves a box zoom to that window, then focuses it", async () => {
+    const id = bgWindow();
+    render(<BackgroundInset id={id} />);
+    const u = plots[plots.length - 1];
+    fireEvent.mouseDown(u.over, { button: 0 });
+    act(() => {
+      u.setScale("x", { min: 16, max: 18 });
+      u.setScale("y", { min: 2, max: 60 });
+    });
+    fireEvent.mouseUp(window);
+    await waitFor(() => expect(bgView(id).inset).toMatchObject({ x: [16, 18], y: [2, 60], yZoom: true }));
+    // Then the window takes focus, carrying the zoom into the live view.
+    await waitFor(() => expect(useApp.getState().focusedWindowId).toBe(id));
+    expect(useApp.getState().inset).toMatchObject({ x: [16, 18], yZoom: true });
+  });
+
+  it("a background window's inset saves its line toggle and its close to that window", () => {
+    const id = bgWindow();
+    render(<BackgroundInset id={id} />);
+    fireEvent.click(screen.getByRole("button", { name: "Connector lines" }));
+    expect(bgView(id).inset?.lines).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Close inset" }));
+    expect(bgView(id).insetMode).toBe(false);
+    expect(useApp.getState().inset).toBeNull();
   });
 
   it("a background window's inset reads its saved geometry and writes nothing", () => {
