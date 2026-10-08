@@ -1,4 +1,4 @@
-import { signalRecipeChannels, signalRecipeLabel } from "./signalRecipe";
+import { signalRecipeLabel } from "./signalRecipe";
 import type { Dataset } from "./types";
 
 export const ANALYSIS_RESULT_VERSION = 1 as const;
@@ -37,6 +37,10 @@ export interface AnalysisResult {
   producer: AnalysisResultProducer;
   sources: AnalysisResultSource[];
   outputs: AnalysisResultOutput[];
+  /** Read-only legacy field: early envelopes snapshotted the recipe's
+   *  channels/X range, which drift when `bindSignalRecipe` rewrites the
+   *  recipe. New envelopes omit it; the result workspace reads the linked
+   *  output's `analysisRecipe` and falls back to this only without one. */
   selection?: AnalysisResultSelection;
   settingsRef?: { datasetId: string; field: "analysisRecipe" };
   scalarValues?: Record<string, number | string | null>;
@@ -208,12 +212,6 @@ export function signalAnalysisResult(
 ): AnalysisResult | null {
   const recipe = output.analysisRecipe;
   if (!output.derivedFrom || output.derivedFrom.datasetId !== source.id || !recipe) return null;
-  const channels = signalRecipeChannels(recipe).map((channel) => ({ ...channel }));
-  const xRange = recipe.kind === "spectral"
-    ? recipe.xMin !== undefined && recipe.xMax !== undefined ? [recipe.xMin, recipe.xMax] as [number, number] : undefined
-    : recipe.params.xTrimMin !== undefined && recipe.params.xTrimMax !== undefined
-      ? [recipe.params.xTrimMin, recipe.params.xTrimMax] as [number, number]
-      : undefined;
   return {
     version: ANALYSIS_RESULT_VERSION,
     id,
@@ -221,7 +219,6 @@ export function signalAnalysisResult(
     producer: { id: "signal-processing", label: "Signal Processing", version: 1 },
     sources: [{ datasetId: source.id, role: "input" }],
     outputs: [{ datasetId: output.id, role: "linked-worksheet" }],
-    selection: { datasetId: source.id, channels, ...(xRange ? { xRange } : {}) },
     settingsRef: { datasetId: output.id, field: "analysisRecipe" },
     tableRefs: [{ datasetId: output.id, label: output.name }],
     plotBindings: [{ datasetId: output.id, channels: output.data.labels.map((_, index) => index) }],

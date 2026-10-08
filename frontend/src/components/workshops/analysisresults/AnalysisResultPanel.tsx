@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 
 import type { AnalysisResult } from "../../../lib/analysisResult";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
+import { signalRecipeChannels, signalRecipeXRange } from "../../../lib/signalRecipe";
 import { createSignalWorksheetFromApp } from "../../../store/signalWorksheetCommand";
 import { useApp } from "../../../store/useApp";
 import { askConfirm } from "../../overlays/ConfirmDialog";
@@ -120,6 +121,10 @@ export default function AnalysisResultPanel() {
     const yes = await askConfirm(`Delete "${result.name}"?`, "This removes the result record from the Library. Its linked worksheet and scientific data are kept.", "Delete", true);
     if (yes) withActions((m) => m.removeAnalysisResult(result.id));
   };
+  // The linked recipe is the authority; an old envelope's copy is a fallback.
+  const recipe = output?.analysisRecipe;
+  const channels = recipe ? signalRecipeChannels(recipe) : result.selection?.channels;
+  const xRange = recipe ? signalRecipeXRange(recipe) : result.selection?.xRange;
   const status = !source || !output ? "Incomplete" : staleDatasets.includes(output.id) ? "Out of date" : "Current";
   const moveTab = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     const offset = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
@@ -153,8 +158,8 @@ export default function AnalysisResultPanel() {
               <div><dt>Analysis</dt><dd>{result.producer.label}</dd></div>
               <div><dt>Source</dt><dd>{source?.name ?? "Missing source"}</dd></div>
               <div><dt>Output</dt><dd>{output?.name ?? "Missing output"}</dd></div>
-              <div><dt>Selection</dt><dd>{result.selection?.channels.map((channel) => channel.label).join(", ") || "Not recorded"}</dd></div>
-              <div><dt>Range</dt><dd>{result.selection?.xRange?.map(formatValue).join(" to ") ?? "Full worksheet"}</dd></div>
+              <div><dt>Selection</dt><dd>{channels?.map((channel) => channel.label).join(", ") || "Not recorded"}</dd></div>
+              <div><dt>Range</dt><dd>{xRange?.map(formatValue).join(" to ") ?? "Full worksheet"}</dd></div>
               <div><dt>Created</dt><dd>{formatDate(result.createdAt)}</dd></div>
             </dl>
             <p className="qz-analysis-caption">This result stays linked to its source. Recalculate updates this output; Rerun as new preserves it and creates another result.</p>

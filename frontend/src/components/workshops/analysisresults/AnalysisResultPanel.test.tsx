@@ -77,6 +77,24 @@ describe("AnalysisResultPanel", () => {
     expect(screen.getByText("output.analysisRecipe")).toBeInTheDocument();
   });
 
+  it("shows the selection from the output's recipe (the authority), not a stale envelope copy", () => {
+    // bindSignalRecipe rewrites output.analysisRecipe when source columns are
+    // renamed/rebound; the overview must follow it (PR #554 review).
+    const rebound = {
+      ...output,
+      analysisRecipe: {
+        ...output.analysisRecipe!,
+        channels: [{ index: 0, label: "Rebound", unit: "V" }],
+        params: { ...(output.analysisRecipe as { params: object }).params, xTrimMin: 0.25, xTrimMax: 0.75 },
+      },
+    } as Dataset;
+    useApp.setState({ datasets: [source, rebound] });
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Rebound")).toBeInTheDocument();
+    expect(screen.queryByText("Signal")).not.toBeInTheDocument();
+    expect(screen.getByText("0.25 to 0.75")).toBeInTheDocument();
+  });
+
   it("supports standard arrow-key navigation between result tabs", () => {
     render(<AnalysisResultPanel />);
     const overview = screen.getByRole("tab", { name: "Overview" });

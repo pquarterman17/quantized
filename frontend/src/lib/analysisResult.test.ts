@@ -42,9 +42,10 @@ describe("analysis result envelope", () => {
       sources: [{ datasetId: "source" }],
       outputs: [{ datasetId: "output" }],
       settingsRef: { datasetId: "output", field: "analysisRecipe" },
-      selection: { datasetId: "source", channels: [{ index: 0, label: "A", unit: "V" }], xRange: [0, 1] },
     });
     expect(result).not.toHaveProperty("parameters");
+    // No snapshot of the recipe's channels/range: they drift on rebind.
+    expect(result).not.toHaveProperty("selection");
   });
 
   it("keeps an unknown producer and missing dataset references for future-compatible diagnostics", () => {
