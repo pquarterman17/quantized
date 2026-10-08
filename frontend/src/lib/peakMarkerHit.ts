@@ -5,7 +5,8 @@
 // pixel-frame conversion + nearest-point hit test — this file was the template
 // the 2026-07-11 pixel-frame bug was cloned FROM, which is exactly why the
 // core now exists once (MAIN #8). What stays here is peak-wizard domain logic:
-// the visible-marker projection and the click-only edit plugin — usePeakWizard
+// the click-only edit plugin (the visible-marker projection is in
+// lib/peakMarkersVisible.ts) — usePeakWizard
 // is the only owner of the candidate list this hit-tests against.
 
 import type uPlot from "uplot";
@@ -21,19 +22,9 @@ export interface PeakMarkerCandidate {
   height: number;
 }
 
-/** The markers actually drawn on the plot: only `included` candidates ride the
- *  `setPeakOverlay` series (see usePeakWizard's marker-overlay effect /
- *  `withPeakOverlay` in plotdata.ts), so only those are clickable for removal.
- *  Pure — no uPlot needed, trivially unit-tested without a plot instance. */
-export function visiblePeakMarkers(
-  candidates: readonly { center: number; height: number; included: boolean }[],
-): PeakMarkerCandidate[] {
-  const out: PeakMarkerCandidate[] = [];
-  candidates.forEach((c, index) => {
-    if (c.included) out.push({ index, center: c.center, height: c.height });
-  });
-  return out;
-}
+// `visiblePeakMarkers` (the clickable-marker projection) lives in
+// lib/peakMarkersVisible.ts: only the lazy peak workshops call it (bundle
+// diet slice 24). Not re-exported.
 
 /** Marker (center, height) data coords → the core's pixel-tagged gesture
  *  points (center→x, height→y), via `pointPixels` — the CSS-px frame contract

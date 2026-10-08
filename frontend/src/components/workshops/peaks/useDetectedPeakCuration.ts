@@ -5,7 +5,7 @@
 
 import { useCallback, useRef, useState } from "react";
 
-import { peakOverlayArray } from "../../../lib/plotdata";
+import { peakOverlayArray } from "../../../lib/plotdataExtras";
 import type { Peak } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";

@@ -5,7 +5,8 @@ import { facetComposition } from "../lib/composition";
 import { facetPayloads } from "../lib/facet";
 import type { FigureDoc } from "../lib/figuredoc";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
-import { editableFigureDirty, figurePublicationDirty, liveWindowDocument } from "./figureLifecycle";
+import { editableFigureDirty, liveWindowDocument } from "./figureLifecycle";
+import { figurePublicationDirty } from "./figureUnsavedEdits";
 import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
 

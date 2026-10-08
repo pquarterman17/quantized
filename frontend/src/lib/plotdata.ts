@@ -220,17 +220,6 @@ export function defaultDenseChannels(ds: DataStruct, xKey: number | null = null)
   return result;
 }
 
-/** The single channel a one-line preview (the Library thumbnail) should draw:
- *  the first channel in the plot's own default dense set (see
- *  defaultDenseChannels), NOT a hardcoded "channel 0". Keeps the thumbnail
- *  showing the same real data the main plot draws by default even when
- *  channel 0 itself happens to be the NaN-sparse one. Returns null for a
- *  dataset with no channels at all. */
-export function primaryChannel(ds: DataStruct): number | null {
-  const dense = defaultDenseChannels(ds, null);
-  return dense.length > 0 ? dense[0] : null;
-}
-
 /** The value-channel indices actually plotted, in order: the y selection (or the
  *  robust dense default — see defaultDenseChannels), minus the channel used as
  *  the x-axis (you can't plot a channel against itself), minus any channel
@@ -459,28 +448,9 @@ export function withDerivOverlay(
   };
 }
 
-/** Build a sparse y-column (null everywhere except the data point nearest each
- *  peak center, set to its height) so peaks render as markers on the shared x. */
-export function peakOverlayArray(
-  time: number[],
-  peaks: { center: number; height: number }[],
-): (number | null)[] {
-  const y: (number | null)[] = new Array(time.length).fill(null);
-  for (const p of peaks) {
-    if (!Number.isFinite(p.center)) continue;
-    let best = 0;
-    let bestDist = Infinity;
-    for (let i = 0; i < time.length; i++) {
-      const d = Math.abs(time[i] - p.center);
-      if (d < bestDist) {
-        bestDist = d;
-        best = i;
-      }
-    }
-    y[best] = p.height;
-  }
-  return y;
-}
+// `primaryChannel` (the Library thumbnail's channel) and `peakOverlayArray`
+// (the peak workshops' marker column) live in lib/plotdataExtras.ts: only
+// lazy modules call them (bundle diet slice 24). Not re-exported.
 
 /** Append an estimated baseline as an extra line series (same guards as
  *  withFitOverlay: must belong to the active dataset and align to the x). */

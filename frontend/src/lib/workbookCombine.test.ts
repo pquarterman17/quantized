@@ -4,11 +4,8 @@
 import { describe, expect, it } from "vitest";
 
 import type { Dataset } from "./types";
-import {
-  dedupeWorksheetNames,
-  resolveCombineTargets,
-  suggestCombinedWorkbookName,
-} from "./workbookCombine";
+import { suggestCombinedWorkbookName } from "./combinedWorkbookName";
+import { dedupeWorksheetNames, resolveCombineTargets } from "./workbookCombine";
 
 function ds(id: string, name: string, workbookId?: string): Dataset {
   const d: Dataset = { id, name, data: { time: [0], values: [[0]], labels: ["y"], units: [""], metadata: {} } };

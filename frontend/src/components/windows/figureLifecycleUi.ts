@@ -1,4 +1,4 @@
-import { editableFigureHasUnsavedEdits, figurePublicationDirty } from "../../store/figureLifecycle";
+import { editableFigureHasUnsavedEdits, figurePublicationDirty } from "../../store/figureUnsavedEdits";
 import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { validateRichText } from "../../lib/richtext";
+import { validateRichText } from "../../lib/richtextValidate";
 import {
   countUnescapedDollars,
   insertLabelToken,

@@ -65,25 +65,9 @@ export function resolveCombineTargets(
   return ids;
 }
 
-const MIN_SUGGESTABLE_PREFIX = 3;
-
-/** The longest shared basename prefix across `names` (extension stripped),
- *  "when one is clear" per L0.34 -- every name must actually agree on a
- *  non-trivial prefix (>=3 chars; a 1-2 char match is noise, not a suggested
- *  identity) or this returns undefined rather than a misleading guess.
- *  Fewer than two names never has a "shared" anything to suggest FROM. */
-export function suggestCombinedWorkbookName(names: readonly string[]): string | undefined {
-  const stems = names.map((n) => n.replace(/\.[^./\\]+$/, ""));
-  if (stems.length < 2 || stems.some((s) => !s)) return undefined;
-  let prefix = stems[0];
-  for (const s of stems.slice(1)) {
-    let i = 0;
-    while (i < prefix.length && i < s.length && prefix[i] === s[i]) i++;
-    prefix = prefix.slice(0, i);
-    if (!prefix) return undefined;
-  }
-  return prefix.length >= MIN_SUGGESTABLE_PREFIX ? prefix : undefined;
-}
+// `suggestCombinedWorkbookName` (the Combine dialog's name pre-fill) lives in
+// lib/combinedWorkbookName.ts: only the lazy dialog calls it (bundle diet
+// slice 24). Not re-exported.
 
 /** Assign collision-safe display names to the worksheets landing in ONE
  *  combined workbook (L0.34). Scoped to THIS incoming batch (see module

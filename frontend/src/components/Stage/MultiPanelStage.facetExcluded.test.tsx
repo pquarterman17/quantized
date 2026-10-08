@@ -29,7 +29,7 @@ import { defaultPlotView } from "../../lib/plotview";
 import { SERIES_VARS } from "../../lib/seriesStyleCycle";
 import type { Dataset, DataStruct } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
-import { withFocusedEncoding } from "../../store/windowDocuments";
+import { withFocusedEncoding } from "../../store/focusedEncoding";
 import RealMultiPanelStage from "./MultiPanelStage";
 import { useEffectiveComposition } from "./useEffectiveComposition";
 

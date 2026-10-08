@@ -17,7 +17,7 @@ import { defaultPlotView } from "../../lib/plotview";
 import { SERIES_VARS } from "../../lib/seriesStyleCycle";
 import type { Dataset } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
-import { withFocusedEncoding } from "../../store/windowDocuments";
+import { withFocusedEncoding } from "../../store/focusedEncoding";
 import { BackgroundStackWindow } from "../windows/BackgroundAltModes";
 import RealMultiPanelStage from "./MultiPanelStage";
 import { useEffectiveComposition } from "./useEffectiveComposition";

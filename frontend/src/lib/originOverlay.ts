@@ -22,7 +22,7 @@
 // `lib/originOverlayFigure.ts`. Only the lazy apply body calls it. It is NOT
 // re-exported from here: an `export *` kept it in this module's eager chunk.
 
-import { primaryChannel } from "./plotdata";
+import { primaryChannel } from "./plotdataExtras";
 import type { Dataset, DataStruct, SeriesStyle } from "./types";
 
 /** Derived-overlay schema. Increment when construction or binding semantics

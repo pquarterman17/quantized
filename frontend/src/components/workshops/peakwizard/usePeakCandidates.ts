@@ -24,12 +24,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useEscapeSurface } from "../../../lib/escapeStack";
-import { visiblePeakMarkers } from "../../../lib/peakMarkerHit";
+import { visiblePeakMarkers } from "../../../lib/peakMarkersVisible";
 import { seedPeakNear } from "../../../lib/peakSeed";
 import { baselineValueAt, plotApexY } from "../../../lib/peakWizardApex";
 import type { PeakRecipe } from "../../../lib/peakwizard";
 import { fullPlottedX } from "../../../lib/fitselectionActions";
-import { peakOverlayArray } from "../../../lib/plotdata";
+import { peakOverlayArray } from "../../../lib/plotdataExtras";
 import { isInsideToolWindow } from "../../../lib/toolwindow";
 import type { Dataset, Peak } from "../../../lib/types";
 import { toast } from "../../../store/toasts";

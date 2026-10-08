@@ -8,7 +8,7 @@ import { useMemo } from "react";
 
 import { drawnSeriesStyle } from "../../lib/drawnSeriesStyle";
 import { defaultErrKeys } from "../../lib/errorbars";
-import { MARKER_SHAPES } from "../../lib/markers";
+import { MARKER_SHAPES } from "../../lib/markerShapes";
 import { effectiveChannels } from "../../lib/plotdata";
 import type { Dataset, LineStyle, MarkerShape, SeriesStyle } from "../../lib/types";
 import { useApp } from "../../store/useApp";

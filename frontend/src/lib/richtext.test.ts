@@ -5,9 +5,9 @@ import {
   parseRichText,
   plainText,
   richLabelAst,
-  validateRichText,
   type RichNode,
 } from "./richtext";
+import { validateRichText } from "./richtextValidate";
 
 const text = (t: string, italic = false): RichNode => ({ kind: "text", text: t, italic });
 
