@@ -18,7 +18,7 @@ import { findPeaks, fitMultiPeak, fitPeak, type PeakSeed } from "../../../lib/ap
 import { placeLabels, renderLabelTemplate, DEFAULT_LABEL_TEMPLATE } from "../../../lib/peakLabels";
 import type { PeakTable } from "../../../lib/peakTable";
 import { peakTableMatchesData, peakTableToFitResult } from "../../../lib/peakTableFit";
-import { peakOverlayArray } from "../../../lib/plotdata";
+import { peakOverlayArray } from "../../../lib/plotdataExtras";
 import { rowStateIdentity } from "../../../lib/rowstate";
 import type { Dataset, FittedPeak, MultiFitResult, Peak } from "../../../lib/types";
 import { peakInputs } from "./peakInputs";

@@ -52,7 +52,7 @@ import {
 import { toast } from "../../../store/toasts";
 import { asOneEditStep } from "../../../store/undoStep";
 import { plotIntentStageTab, useActiveDataset, useApp } from "../../../store/useApp";
-import { withFocusedEncoding } from "../../../store/windowDocuments";
+import { withFocusedEncoding } from "../../../store/focusedEncoding";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import { captureLiveBlocks } from "./captureLiveBlocks";
 import { encodingChip, encodingOptions, encodingRef, isEncodingZone, type EncodingZone } from "./encodingWellModel";

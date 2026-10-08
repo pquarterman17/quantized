@@ -29,7 +29,7 @@ import { seedPeakNear } from "../../../lib/peakSeed";
 import { baselineValueAt, plotApexY } from "../../../lib/peakWizardApex";
 import type { PeakRecipe } from "../../../lib/peakwizard";
 import { fullPlottedX } from "../../../lib/fitselectionActions";
-import { peakOverlayArray } from "../../../lib/plotdata";
+import { peakOverlayArray } from "../../../lib/plotdataExtras";
 import { isInsideToolWindow } from "../../../lib/toolwindow";
 import type { Dataset, Peak } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
