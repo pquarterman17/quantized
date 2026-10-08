@@ -4,6 +4,7 @@ import {
   type SpectralFilterType,
   type SpectralOperation,
 } from "../../../lib/spectralWorkbench";
+import { dataXUnit } from "../../../lib/signalRecipe";
 import type { Dataset } from "../../../lib/types";
 
 export interface SpectralUiSettings {
@@ -116,7 +117,12 @@ export function buildSpectralRecipe(
   const recipe: SpectralAnalysisRecipe = {
     ...DEFAULT_SPECTRAL_RECIPE,
     operation,
-    channels: channels.map((index) => ({ index, label: dataset.data.labels[index] })),
+    xUnit: dataXUnit(dataset.data),
+    channels: channels.map((index) => ({
+      index,
+      label: dataset.data.labels[index],
+      unit: dataset.data.units[index] ?? "",
+    })),
     ...(settings.useRange ? { xMin: number(settings.xMin), xMax: number(settings.xMax) } : {}),
     resample: settings.resample,
   };

@@ -120,8 +120,8 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       group: "Analyze",
       section: "Transform & signal",
       label: "Signal Processing…",
-      description: "Preview and create linked smoothing, normalization, derivative, or integral outputs.",
-      keywords: "smooth normalize derivative integral savitzky golay",
+      description: "Preview, save, and create linked time-domain, spectral, filtering, or correlation outputs.",
+      keywords: "smooth normalize reference detrend derivative integral savitzky golay fft psd phase filter correlation",
       run: () => s().setSignalProcessingOpen(true),
     },
     {

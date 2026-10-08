@@ -6,6 +6,8 @@ export type SpectralFilterType = "lowpass" | "highpass" | "bandpass" | "notch";
 export interface SpectralChannelRef {
   index: number;
   label: string;
+  /** Unit at recipe creation. Optional for pre-0.31 saved worksheets. */
+  unit?: string;
 }
 
 /** Versioned, JSON-safe recipe stored on a linked spectral worksheet. */
@@ -14,6 +16,8 @@ export interface SpectralAnalysisRecipe {
   version: 1;
   operation: SpectralOperation;
   channels: SpectralChannelRef[];
+  /** X-axis unit at recipe creation. Optional for pre-feature saved sheets. */
+  xUnit?: string;
   xMin?: number;
   xMax?: number;
   resample: boolean;
@@ -81,12 +85,19 @@ export function spectralRequest(
 export function rebindSpectralRecipe(
   recipe: SpectralAnalysisRecipe,
   labels: string[],
+  units: string[] = [],
 ): SpectralAnalysisRecipe {
   const channels = recipe.channels.map((channel) => {
     const matches = labels.flatMap((label, index) => label === channel.label ? [index] : []);
     if (matches.length !== 1) throw new Error(`signal column "${channel.label}" changed or is ambiguous`);
-    if (matches[0] === channel.index) return channel;
-    return { ...channel, index: matches[0] };
+    const index = matches[0];
+    const actualUnit = (units[index] ?? "").trim();
+    const expectedUnit = channel.unit?.trim();
+    if (expectedUnit && expectedUnit !== actualUnit) {
+      throw new Error(`signal column "${channel.label}" changed units from ${expectedUnit} to ${actualUnit || "unknown"}`);
+    }
+    if (index === channel.index) return channel;
+    return { ...channel, index };
   });
   return channels.every((channel, index) => channel === recipe.channels[index])
     ? recipe
@@ -116,7 +127,11 @@ export function sanitizeSpectralRecipe(value: unknown): SpectralAnalysisRecipe |
     if (!entry || typeof entry !== "object") return [];
     const c = entry as Record<string, unknown>;
     return Number.isInteger(c.index) && Number(c.index) >= 0 && typeof c.label === "string"
-      ? [{ index: Number(c.index), label: c.label }]
+      ? [{
+          index: Number(c.index),
+          label: c.label,
+          ...(typeof c.unit === "string" ? { unit: c.unit } : {}),
+        }]
       : [];
   });
   if (channels.length !== r.channels.length) return undefined;
@@ -136,6 +151,7 @@ export function sanitizeSpectralRecipe(value: unknown): SpectralAnalysisRecipe |
     version: 1,
     operation: r.operation as SpectralOperation,
     channels,
+    ...(typeof r.xUnit === "string" ? { xUnit: r.xUnit.trim() } : {}),
     ...(finite(r.xMin) ? { xMin: r.xMin } : {}),
     ...(finite(r.xMax) ? { xMax: r.xMax } : {}),
     resample: r.resample === true,

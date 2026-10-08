@@ -23,7 +23,8 @@ export type TechniqueActionId =
   | "graph-builder"
   | "pipeline"
   | "plot-recipe-manager"
-  | "peak-wizard";
+  | "peak-wizard"
+  | "signal-processing";
 
 export interface TechniqueWorkflowStage {
   title: string;
@@ -44,9 +45,9 @@ const finish = (): TechniqueWorkflowStage => ({
 });
 
 const inspect = (): TechniqueWorkflowStage => ({
-  title: "Inspect",
-  description: "Verify the imported columns and create a safe first figure.",
-  actions: ["quick-plot", "configure-figure"],
+  title: "Inspect and prepare",
+  description: "Verify the imported columns, create a safe first figure, or preview a non-destructive signal transform.",
+  actions: ["quick-plot", "configure-figure", "signal-processing"],
 });
 
 export const TECHNIQUE_WORKFLOWS: Record<Technique, TechniqueWorkflow> = {
@@ -135,7 +136,7 @@ export const TECHNIQUE_WORKFLOWS: Record<Technique, TechniqueWorkflow> = {
     summary: "Quantized could not identify a technique, so it will not guess a scientific workflow.",
     stages: [
       { title: "Choose the plot", description: "Assign columns explicitly, or use Quick Plot only when the structure is recognized.", actions: ["configure-figure", "quick-plot", "graph-builder"] },
-      { title: "Prepare and analyze", description: "Filter rows or choose a general fit or statistical test.", actions: ["data-filter", "curvefit", "stats-chooser"] },
+      { title: "Prepare and analyze", description: "Process signals, filter rows, or choose a general fit or statistical test.", actions: ["signal-processing", "data-filter", "curvefit", "stats-chooser"] },
       { title: "Reuse", description: "Inspect recorded steps and save a reusable plot recipe.", actions: ["pipeline", "plot-recipe-manager"] },
     ],
   },

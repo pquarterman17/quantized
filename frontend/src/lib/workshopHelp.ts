@@ -44,6 +44,7 @@ export const WORKSHOP_HELP: Readonly<Record<string, string>> = {
   "roi-cuts": "ROI cuts",
   rsm: "RSM analysis",
   search: "Find in project",
+  "signal-processing": "Signal Processing",
   "sqlite-query": "SQLite",
   statschooser: "Test chooser",
   "stats-tests": "Statistical tests",

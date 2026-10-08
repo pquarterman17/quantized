@@ -1,4 +1,6 @@
 import type { CorrectionParams, Dataset } from "../../../lib/types";
+import type { SignalCorrectionRecipe } from "../../../lib/signalTransform";
+import { dataXUnit } from "../../../lib/signalRecipe";
 import type { SpectralOperation } from "../../../lib/spectralWorkbench";
 
 export type CorrectionOperation =
@@ -7,6 +9,8 @@ export type CorrectionOperation =
   | "normalize-peak"
   | "normalize-zscore"
   | "normalize-area"
+  | "normalize-reference"
+  | "detrend"
   | "derivative-first"
   | "derivative-second"
   | "integral"
@@ -17,12 +21,30 @@ export interface SignalSettings {
   operation: SignalOperation;
   smoothMethod: "moving" | "gaussian" | "savitzky-golay";
   smoothWindow: number;
+  smoothPolyOrder: number;
+  referenceMode: "value" | "range";
+  referenceValue: string;
+  referenceMin: string;
+  referenceMax: string;
+  detrendOrder: number;
+  useRange: boolean;
+  xMin: string;
+  xMax: string;
 }
 
 export const DEFAULT_SIGNAL_SETTINGS: SignalSettings = {
   operation: "smooth",
   smoothMethod: "savitzky-golay",
   smoothWindow: 5,
+  smoothPolyOrder: 2,
+  referenceMode: "value",
+  referenceValue: "1",
+  referenceMin: "",
+  referenceMax: "",
+  detrendOrder: 1,
+  useRange: false,
+  xMin: "",
+  xMax: "",
 };
 
 export function measuredChannels(dataset: Dataset): number[] {
@@ -37,7 +59,10 @@ export function settingsToParams(
   settings: SignalSettings,
   channels: number[],
 ): CorrectionParams {
-  const params: CorrectionParams = { signalChannels: channels };
+  const params: CorrectionParams = {
+    signalChannels: channels,
+    ...(settings.useRange ? { xTrimMin: Number(settings.xMin), xTrimMax: Number(settings.xMax) } : {}),
+  };
   switch (settings.operation) {
     case "smooth":
       return {
@@ -45,6 +70,7 @@ export function settingsToParams(
         smoothEnabled: true,
         smoothMethod: settings.smoothMethod,
         smoothWindow: settings.smoothWindow,
+        smoothPolyOrder: settings.smoothPolyOrder,
       };
     case "normalize-range":
       return { ...params, normMethod: "Range [0,1]" };
@@ -54,6 +80,19 @@ export function settingsToParams(
       return { ...params, normMethod: "Z-score" };
     case "normalize-area":
       return { ...params, normMethod: "Area (integral=1)" };
+    case "normalize-reference":
+      return {
+        ...params,
+        normMethod: "Reference",
+        ...(settings.referenceMode === "value"
+          ? { normReferenceValue: Number(settings.referenceValue) }
+          : {
+              normReferenceMin: Number(settings.referenceMin),
+              normReferenceMax: Number(settings.referenceMax),
+            }),
+      };
+    case "detrend":
+      return { ...params, detrendOrder: settings.detrendOrder };
     case "derivative-first":
       return { ...params, derivativeMode: "dY/dX" };
     case "derivative-second":
@@ -69,6 +108,28 @@ export function settingsToParams(
   }
 }
 
+export function buildCorrectionRecipe(
+  settings: SignalSettings,
+  channels: number[],
+  dataset: Dataset,
+): SignalCorrectionRecipe {
+  if (isSpectralOperation(settings.operation)) {
+    throw new Error("spectral operations use a spectral recipe");
+  }
+  return {
+    kind: "signal-correction",
+    version: 1,
+    operation: operationLabel(settings.operation),
+    xUnit: dataXUnit(dataset.data),
+    channels: channels.map((index) => ({
+      index,
+      label: dataset.data.labels[index],
+      unit: dataset.data.units[index] ?? "",
+    })),
+    params: settingsToParams(settings, channels),
+  };
+}
+
 export function isSpectralOperation(operation: SignalOperation): operation is SpectralOperation {
   return operation === "fft" || operation === "filter" || operation === "correlation";
 }
@@ -80,6 +141,8 @@ export function operationLabel(operation: SignalOperation): string {
     "normalize-peak": "Normalize peak to 1",
     "normalize-zscore": "Z-score",
     "normalize-area": "Normalize area to 1",
+    "normalize-reference": "Normalize to reference",
+    detrend: "Detrend",
     "derivative-first": "First derivative",
     "derivative-second": "Second derivative",
     integral: "Cumulative integral",

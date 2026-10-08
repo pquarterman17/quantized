@@ -197,6 +197,17 @@ export function preflightRecipe(
       );
     }
   }
+  if (recipe.expects?.signalInputUnit !== undefined) {
+    const actual = recordedXUnit(ds);
+    if (actual !== recipe.expects.signalInputUnit) {
+      const shown = (unit: string) => unit || "an unknown unit";
+      push(
+        "x-unit-mismatch",
+        `x is in ${shown(actual)}; this Signal Processing recipe was recorded for ${shown(recipe.expects.signalInputUnit)} — choose a matching dataset or create another recipe`,
+        true,
+      );
+    }
+  }
   for (const { step, ref, isInput } of externalRefs(recipe.steps)) {
     if (!workspaceIds.has(ref.id)) {
       push("missing-reference", `“${step.label}” needs “${ref.name}”, which is not in this workspace`, true);

@@ -2721,6 +2721,17 @@
             ],
             "title": "Derivativemode"
           },
+          "detrendOrder": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detrendorder"
+          },
           "fieldUnit": {
             "anyOf": [
               {
@@ -2809,6 +2820,39 @@
             ],
             "title": "Normmethod"
           },
+          "normReferenceMax": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normreferencemax"
+          },
+          "normReferenceMin": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normreferencemin"
+          },
+          "normReferenceValue": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normreferencevalue"
+          },
           "sampleMass": {
             "anyOf": [
               {
@@ -2866,6 +2910,17 @@
               }
             ],
             "title": "Smoothmethod"
+          },
+          "smoothPolyOrder": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smoothpolyorder"
           },
           "smoothWindow": {
             "anyOf": [

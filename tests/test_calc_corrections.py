@@ -427,6 +427,95 @@ def test_corrections_identity() -> None:
     assert_allclose(out.values[:, 0], y, atol=1e-12)
 
 
+def test_reference_value_normalization_scales_signal_and_bound_uncertainty() -> None:
+    x = np.arange(4.0)
+    y = np.array([2.0, 4.0, 6.0, 8.0])
+    dy = np.full(4, 0.5)
+    data = DataStruct.create(x, np.column_stack([y, dy]), labels=["Y", "dY"], units=["V", "V"])
+    out = apply_corrections(
+        data,
+        {"normMethod": "Reference", "normReferenceValue": 2.0, "signalChannels": [0]},
+        error_bindings=[{"channel": 1, "target": 0, "axis": "y", "side": "both"}],
+    )
+    assert_allclose(out.values[:, 0], y / 2.0)
+    assert_allclose(out.values[:, 1], dy / 2.0)
+    assert out.units == ("", "")
+
+
+def test_reference_range_normalization_is_per_channel() -> None:
+    x = np.arange(5.0)
+    values = np.column_stack([np.array([2, 4, 6, 8, 10.0]), np.array([10, 20, 30, 40, 50.0])])
+    data = DataStruct.create(x, values, labels=["A", "B"], units=["V", "A"])
+    out = apply_corrections(
+        data,
+        {"normMethod": "Reference", "normReferenceMin": 1.0, "normReferenceMax": 3.0},
+    )
+    assert_allclose(out.values[:, 0], values[:, 0] / 6.0)
+    assert_allclose(out.values[:, 1], values[:, 1] / 30.0)
+    assert out.units == ("", "")
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"normMethod": "Reference", "normReferenceValue": 0.0},
+        {"normMethod": "Reference", "normReferenceMin": 4.0, "normReferenceMax": 1.0},
+        {"normMethod": "Reference", "normReferenceMin": 8.0, "normReferenceMax": 9.0},
+    ],
+)
+def test_reference_normalization_rejects_invalid_reference(params) -> None:
+    data = DataStruct.create(np.arange(5.0), np.arange(1.0, 6.0))
+    with pytest.raises(ValueError, match="reference"):
+        apply_corrections(data, params)
+
+
+@pytest.mark.parametrize("order", [0, 1, 2, 3])
+def test_detrend_removes_polynomial_trend(order: int) -> None:
+    x = np.linspace(-2.0, 2.0, 31)
+    y = sum((power + 1.0) * x**power for power in range(order + 1))
+    data = DataStruct.create(x, y, labels=["Y"], units=["V"])
+    out = apply_corrections(data, {"detrendOrder": order, "signalChannels": [0]})
+    assert_allclose(out.values[:, 0], 0.0, atol=1e-10)
+    assert out.units == ("V",)
+
+
+def test_detrend_refuses_bound_uncertainty() -> None:
+    x = np.arange(5.0)
+    data = DataStruct.create(x, np.column_stack([x, np.ones(5)]), labels=["Y", "dY"])
+    with pytest.raises(ValueError, match="detrending data with bound Y uncertainty"):
+        apply_corrections(
+            data,
+            {"detrendOrder": 1, "signalChannels": [0]},
+            error_bindings=[{"channel": 1, "target": 0, "axis": "y", "side": "both"}],
+        )
+
+
+def test_savgol_polynomial_order_is_forwarded() -> None:
+    x = np.linspace(-2.0, 2.0, 21)
+    y = x**4 + 0.1 * x
+    data = DataStruct.create(x, y)
+    quadratic = apply_corrections(
+        data,
+        {
+            "smoothEnabled": True,
+            "smoothMethod": "savitzky-golay",
+            "smoothWindow": 3,
+            "smoothPolyOrder": 2,
+        },
+    )
+    quartic = apply_corrections(
+        data,
+        {
+            "smoothEnabled": True,
+            "smoothMethod": "savitzky-golay",
+            "smoothWindow": 3,
+            "smoothPolyOrder": 4,
+        },
+    )
+    assert not np.allclose(quadratic.values, quartic.values)
+    assert_allclose(quartic.values[:, 0], y, atol=1e-10)
+
+
 # --- MAIN_PLAN #37: arbitrary non-destructive X/Y rescaling -----------------
 
 

@@ -146,6 +146,17 @@ describe("preflightRecipe", () => {
     expect(pf.unitMismatch).toBe(false);
     expect(pf.issues).toContainEqual(expect.objectContaining({ kind: "x-unit-mismatch", blocking: true, text: expect.stringContaining("encoder counts") }));
   });
+
+  it("refuses an X-sensitive Signal Processing recipe on a different or unknown X unit", () => {
+    const expects: RecipeExpectations = { columns: [], metadata: [], signalInputUnit: "s" };
+    const step = makeStep("transform", "Derivative", "", { op: "signal" });
+    const matching = ds(data(["A"], ["V"], { xUnit: "s" }));
+    expect(preflightRecipe({ steps: [step], expects }, matching, [], IDS, false).blocked).toBe(false);
+    for (const metadata of [{ xUnit: "ms" }, {}]) {
+      const result = preflightRecipe({ steps: [step], expects }, ds(data(["A"], ["V"], metadata)), [], IDS, true);
+      expect(result.issues).toContainEqual(expect.objectContaining({ kind: "x-unit-mismatch", blocking: true }));
+    }
+  });
 });
 
 describe("conformData — the working copy", () => {

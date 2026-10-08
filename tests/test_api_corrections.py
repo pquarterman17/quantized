@@ -119,6 +119,22 @@ def test_apply_signal_channels_rejects_coercible_non_integers() -> None:
         assert resp.status_code == 422, malformed
 
 
+def test_signal_polynomial_orders_reject_booleans_instead_of_coercing_them() -> None:
+    dataset = {
+        "time": [1.0, 2.0, 3.0],
+        "values": [[1.0], [2.0], [4.0]],
+        "labels": ["signal"],
+        "units": ["V"],
+        "metadata": {},
+    }
+    for key in ("smoothPolyOrder", "detrendOrder"):
+        resp = client.post(
+            "/api/corrections/apply",
+            json={"dataset": dataset, "params": {key: True}},
+        )
+        assert resp.status_code == 422, key
+
+
 def test_apply_preserves_bound_uncertainty_through_additive_correction() -> None:
     dataset = {
         "time": [1.0, 2.0, 3.0],

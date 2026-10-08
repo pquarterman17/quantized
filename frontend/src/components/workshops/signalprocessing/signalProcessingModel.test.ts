@@ -5,6 +5,7 @@ import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import {
   DEFAULT_SIGNAL_SETTINGS,
+  buildCorrectionRecipe,
   channelsWithoutFiniteValues,
   measuredChannels,
   selectedBoundErrorTargets,
@@ -19,7 +20,7 @@ const dataset: Dataset = {
     values: [[10, 1, 0], [20, 2, 1]],
     labels: ["signal", "sigma", "group"],
     units: ["V", "V", ""],
-    metadata: {},
+    metadata: { xUnit: "s" },
     cat_levels: { 2: ["a", "b"] },
   },
   errorRoles: [{ channel: 1, target: 0, axis: "y", side: "both" }],
@@ -42,6 +43,26 @@ describe("signal processing model", () => {
       smoothEnabled: true,
       smoothMethod: "savitzky-golay",
       smoothWindow: 5,
+      smoothPolyOrder: 2,
+    });
+  });
+
+  it("records labels and units in a correction recipe for safe rebinding", () => {
+    expect(buildCorrectionRecipe(DEFAULT_SIGNAL_SETTINGS, [0], dataset)).toMatchObject({
+      kind: "signal-correction",
+      version: 1,
+      xUnit: "s",
+      channels: [{ index: 0, label: "signal", unit: "V" }],
+      params: { signalChannels: [0], smoothPolyOrder: 2 },
+    });
+  });
+
+  it("builds detrend and reference normalization parameters", () => {
+    expect(settingsToParams({ ...DEFAULT_SIGNAL_SETTINGS, operation: "detrend", detrendOrder: 2 }, [0])).toEqual({
+      signalChannels: [0], detrendOrder: 2,
+    });
+    expect(settingsToParams({ ...DEFAULT_SIGNAL_SETTINGS, operation: "normalize-reference", referenceMode: "range", referenceMin: "1", referenceMax: "3" }, [0])).toEqual({
+      signalChannels: [0], normMethod: "Reference", normReferenceMin: 1, normReferenceMax: 3,
     });
   });
 

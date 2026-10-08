@@ -19,6 +19,7 @@
 // replay as before: primary = target, no output mapping.
 
 import type { AppState } from "../store/useApp";
+import type { SignalBindOptions } from "./signalRecipe";
 import { runTransform, transformParamsOf, type TransformOutcome } from "./transformRun";
 
 type StoreGet = () => AppState;
@@ -87,6 +88,8 @@ export async function replayTransform(
   params: Record<string, unknown>,
   target: string,
   map: ReplayMap = new Map(),
+  signal?: AbortSignal,
+  options?: SignalBindOptions,
 ): Promise<TransformOutcome> {
   let out: TransformOutcome | null;
   try {
@@ -95,7 +98,7 @@ export async function replayTransform(
       const name = String((params.input as { name?: unknown } | undefined)?.name ?? r.primaryId);
       throw new Error(`the recorded input "${name}" is not in this workspace`);
     }
-    out = await runTransform(s, transformParamsOf(r.params), r.primaryId);
+    out = await runTransform(s, transformParamsOf(r.params), r.primaryId, undefined, signal, options);
     if (!out) throw new Error("transform produced no output");
   } catch (e) {
     markNotReproduced(map, params);
