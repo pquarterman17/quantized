@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { MARKER_SHAPES } from "./markers";
+import { MARKER_SHAPES } from "./markerShapes";
 import {
   AUTO_DASH_CYCLE,
   AUTO_MARKER_CYCLE,

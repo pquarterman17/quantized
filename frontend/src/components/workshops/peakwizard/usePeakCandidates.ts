@@ -24,7 +24,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useEscapeSurface } from "../../../lib/escapeStack";
-import { visiblePeakMarkers } from "../../../lib/peakMarkerHit";
+import { visiblePeakMarkers } from "../../../lib/peakMarkersVisible";
 import { seedPeakNear } from "../../../lib/peakSeed";
 import { baselineValueAt, plotApexY } from "../../../lib/peakWizardApex";
 import type { PeakRecipe } from "../../../lib/peakwizard";

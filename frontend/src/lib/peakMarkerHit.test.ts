@@ -4,7 +4,8 @@
 
 import { describe, expect, it } from "vitest";
 
-import { peakMarkerPixels, visiblePeakMarkers } from "./peakMarkerHit";
+import { peakMarkerPixels } from "./peakMarkerHit";
+import { visiblePeakMarkers } from "./peakMarkersVisible";
 
 describe("visiblePeakMarkers", () => {
   it("keeps only included candidates, tagged with their FULL-array index", () => {

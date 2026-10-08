@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { FILLED_SHAPES, markerDecision, markerPaths, markerSubpaths, MARKER_SHAPES, seriesTrace } from "./markers";
+import { FILLED_SHAPES, markerDecision, markerPaths, markerSubpaths, seriesTrace } from "./markers";
+import { MARKER_SHAPES } from "./markerShapes";
 import type { DefaultTrace } from "./types";
 
 describe("markerSubpaths", () => {
