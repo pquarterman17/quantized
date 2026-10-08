@@ -64,6 +64,7 @@ export const LIBRARY_NODE_KINDS = [
   "folder",
   "workbook",
   "worksheet",
+  "analysis-result",
   "origin-figure",
   "editable-figure",
   "publication-figure",
@@ -79,6 +80,7 @@ export const LIBRARY_NODE_KINDS = [
  * | folder             | ▰     | U+25B0     | solid slanted bar — the only solid slab and the only slanted form; a folder tab. Adopted from TilePreview, which already drew folders this way. |
  * | workbook           | ▤     | U+25A4     | the ONE box, ruled: a bound book of sheets. Unchanged — it was never ambiguous on its own, only against ▦/▥. |
  * | worksheet          | ≡     | U+2261     | free-standing rules, no box: the rows of one sheet. The lightest mark in the set, deliberately — a worksheet is by far the most numerous row in an imported Origin project. |
+ * | analysis-result    | ⌬     | U+232C     | a linked analysis record: distinct from its worksheet output. |
  * | origin-figure      | ⌁     | U+2301     | a zigzag trace: a plotted graph recovered from Origin. Unchanged. |
  * | editable-figure    | ◇     | U+25C7     | outline diamond: a live figure document you can still edit. Unchanged. |
  * | publication-figure | ◆     | U+25C6     | solid diamond: the same family, set for publication. Replaces the old ◉/❄ pair, which swapped the TYPE mark to say "frozen" and so left a frozen publication figure with no type mark at all — frozen-ness is now its own ❄ status mark beside the name. |
@@ -89,6 +91,7 @@ export const LIBRARY_NODE_GLYPH: Record<LibraryNodeKind, string> = {
   folder: "▰",
   workbook: "▤",
   worksheet: "≡",
+  "analysis-result": "⌬",
   "origin-figure": "⌁",
   "editable-figure": "◇",
   "publication-figure": "◆",
@@ -106,6 +109,7 @@ export const LIBRARY_NODE_LABEL: Record<LibraryNodeKind, string> = {
   folder: "Folder",
   workbook: "Workbook",
   worksheet: "Worksheet",
+  "analysis-result": "Analysis result",
   "origin-figure": "Origin figure",
   "editable-figure": "Editable figure",
   "publication-figure": "Publication figure",

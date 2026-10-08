@@ -17,6 +17,7 @@
 // (modal dialog: dismissed).
 
 import type { LibraryNode } from "./libraryHierarchy";
+import { renameAnalysisResult } from "../store/analysisResultActions";
 import { useApp } from "../store/useApp";
 
 /** Apply `name` to `node`'s underlying entity through that kind's canonical
@@ -46,6 +47,9 @@ export function renameLibraryNode(node: LibraryNode, name: string): void {
       return;
     case "report":
       state.renameReport(node.entityId, name);
+      return;
+    case "analysis-result":
+      renameAnalysisResult(node.entityId, name);
       return;
     case "origin-figure":
       return;

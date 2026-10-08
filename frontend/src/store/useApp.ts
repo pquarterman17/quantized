@@ -62,6 +62,7 @@ import type { ReportEntry } from "../lib/report";
 import type { FwhmResult } from "../lib/peakwidth";
 import type { IntegralResult } from "../lib/plotRangeSelection";
 import type { FigureDoc } from "../lib/figuredoc";
+import type { AnalysisResult } from "../lib/analysisResult";
 import { createReportsFigureDocsSlice, type ReportsFigureDocsSlice } from "./reportsFigureDocs";
 import { createViewAppliersSlice, type ViewAppliersSlice } from "./viewAppliers";
 import { createWorkspaceHydrationSlice, type WorkspaceHydrationSlice } from "./workspaceHydration";
@@ -162,6 +163,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   reports: ReportEntry[];
   // The report currently open in the viewer ToolWindow (null = closed).
   openReportId: string | null;
+  analysisResults: AnalysisResult[]; openAnalysisResultId: string | null;
   // Legacy publication-preview documents; canonical editable figures live in FigureLifecycleSlice.
   figureDocs: FigureDoc[];
   figureDocSeed: FigureDoc | null;
@@ -326,6 +328,7 @@ export const useApp = create<AppState>((set, get) => ({
   datasets: [],
   reports: [],
   openReportId: null,
+  analysisResults: [], openAnalysisResultId: null,
   figureDocs: [],
   figureDocSeed: null,
   workbooks: [],
@@ -427,10 +430,7 @@ export const useApp = create<AppState>((set, get) => ({
         return { ...d, channelRoles: Object.keys(next).length ? next : undefined };
       }),
     }));
-    get().recordMacro(
-      `Channel ${channel} role → ${role ?? "data"}`,
-      `qz.setChannelRole(${channel}, ${lit(role)})`,
-    );
+    get().recordMacro(`Channel ${channel} role → ${role ?? "data"}`, `qz.setChannelRole(${channel}, ${lit(role)})`);
   },
   // Set (or clear, t=null) a modeling-type OVERRIDE on dataset `id`. Takes an
   // EXPLICIT id (P1.6b: the worksheet's own C/O/N header badge is the first

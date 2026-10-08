@@ -116,6 +116,9 @@ export function openLibraryNode(node: LibraryNode): void {
     case "report":
       s.setOpenReport(node.entityId);
       break;
+    case "analysis-result":
+      useApp.setState({ openAnalysisResultId: node.entityId });
+      break;
   }
   recordWorkbookOpen(owningWorkbookId(node), node.key);
 }

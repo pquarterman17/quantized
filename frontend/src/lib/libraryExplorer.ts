@@ -5,7 +5,7 @@ export type LibraryContentFilter = "all" | "data" | "figures" | "reports";
 const CONTENT_KINDS: Record<Exclude<LibraryContentFilter, "all">, ReadonlySet<LibraryNode["kind"]>> = {
   data: new Set(["worksheet"]),
   figures: new Set(["origin-figure", "editable-figure", "publication-figure", "page"]),
-  reports: new Set(["report"]),
+  reports: new Set(["analysis-result", "report"]),
 };
 
 /**

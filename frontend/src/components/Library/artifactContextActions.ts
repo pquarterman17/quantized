@@ -11,10 +11,11 @@ import { sendEditableFigureToReport } from "../../commands/plotCommands";
 import { buildMenuItems, runContextAction, type ContextAction, type MenuEntry } from "../../lib/contextActions";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { pagesReferencingFigure } from "../../lib/pageDocumentActions";
+import { removeAnalysisResult } from "../../store/analysisResultActions";
 
 export type ArtifactNode = Extract<
   LibraryNode,
-  { kind: "origin-figure" | "editable-figure" | "publication-figure" | "page" | "report" }
+  { kind: "analysis-result" | "origin-figure" | "editable-figure" | "publication-figure" | "page" | "report" }
 >;
 
 interface ArtifactTarget {
@@ -60,8 +61,10 @@ const artifactActions: MenuEntry<ArtifactTarget>[] = [
     id: "artifact.duplicate",
     label: "Duplicate",
     enabled: canDuplicate,
-    disabledReason: (target) => target.node.kind === "report"
-      ? "report duplication is not available yet"
+    disabledReason: (target) => target.node.kind === "analysis-result"
+      ? "use Rerun as New from the result workspace"
+      : target.node.kind === "report"
+        ? "report duplication is not available yet"
       : "recovered Origin figures are recreated from their source project",
     run: (target) => {
       const state = useApp.getState();
@@ -131,6 +134,9 @@ const artifactActions: MenuEntry<ArtifactTarget>[] = [
       if (target.node.kind === "page") {
         return { title: `Delete "${target.node.name}"?`, message: "The figure page will be removed. Undo can restore it.", confirmLabel: "Delete" };
       }
+      if (target.node.kind === "analysis-result") {
+        return { title: `Delete "${target.node.name}"?`, message: "The result record will be removed, but its linked worksheets and scientific data are kept. Undo can restore it.", confirmLabel: "Delete" };
+      }
       return { title: `Delete "${target.node.name}"?`, message: "This artifact cannot be recovered unless it exists in a workspace you saved.", confirmLabel: "Delete" };
     },
     run: (target) => {
@@ -139,12 +145,13 @@ const artifactActions: MenuEntry<ArtifactTarget>[] = [
       else if (target.node.kind === "publication-figure") state.removeFigureDoc(target.node.entityId);
       else if (target.node.kind === "page") state.deletePageDocument(target.node.entityId);
       else if (target.node.kind === "report") state.removeReport(target.node.entityId);
+      else if (target.node.kind === "analysis-result") removeAnalysisResult(target.node.entityId);
     },
   },
 ];
 
 export function isArtifactNode(node: LibraryNode): node is ArtifactNode {
-  return node.kind === "origin-figure" || node.kind === "editable-figure" || node.kind === "publication-figure"
+  return node.kind === "analysis-result" || node.kind === "origin-figure" || node.kind === "editable-figure" || node.kind === "publication-figure"
     || node.kind === "page" || node.kind === "report";
 }
 

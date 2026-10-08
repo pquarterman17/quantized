@@ -2279,6 +2279,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   rightCollapsed: "right panel collapsed; shell layout UI",
   stageTab: "Plot/Worksheet stage tab; shell navigation UI",
   openReportId: "which report window is open; UI open state",
+  openAnalysisResultId: "which analysis-result workspace is open; UI open state",
   prefsOpen: "Preferences dialog visibility; UI state",
   cmdkOpen: "Command Palette visibility; UI state",
   shortcutsOpen: "shortcuts sheet visibility; UI state",

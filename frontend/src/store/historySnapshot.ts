@@ -41,6 +41,7 @@ export interface HistorySnapshot {
   originFigures: AppState["originFigures"];
   originFidelity: AppState["originFidelity"];
   reports: AppState["reports"];
+  analysisResults: AppState["analysisResults"];
   figureDocs: AppState["figureDocs"];
   editableFigures: AppState["editableFigures"];
   pages: AppState["pages"];
@@ -119,6 +120,7 @@ export function snapshotOf(s: AppState): HistorySnapshot {
     originFigures: s.originFigures,
     originFidelity: s.originFidelity,
     reports: s.reports,
+    analysisResults: s.analysisResults,
     figureDocs: s.figureDocs,
     editableFigures: s.editableFigures,
     pages: s.pages,
@@ -188,7 +190,8 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
         : sel.kind === "editable-figure" ? snap.editableFigures.some((f) => f.id === sel.id)
         : sel.kind === "publication-figure" ? snap.figureDocs.some((f) => f.id === sel.id)
         : sel.kind === "page" ? snap.pages.some((pg) => pg.id === sel.id)
-        : snap.reports.some((r) => r.id === sel.id);
+        : sel.kind === "report" ? snap.reports.some((r) => r.id === sel.id)
+        : snap.analysisResults.some((r) => r.id === sel.id);
       return alive ? sel : null;
     })(),
     plotWindows: snap.plotWindows.map((w) =>
@@ -202,6 +205,10 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
     // restore removed (an undone "add report") rather than show nothing.
     openReportId:
       s.openReportId && !snap.reports.some((r) => r.id === s.openReportId) ? null : s.openReportId,
+    openAnalysisResultId:
+      s.openAnalysisResultId && !snap.analysisResults.some((r) => r.id === s.openAnalysisResultId)
+        ? null
+        : s.openAnalysisResultId,
   };
 }
 

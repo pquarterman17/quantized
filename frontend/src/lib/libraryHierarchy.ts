@@ -4,6 +4,7 @@
 
 import type { FigureDoc } from "./figuredoc";
 import type { FigureDocument } from "./figureDocument";
+import type { AnalysisResult } from "./analysisResult";
 import { originSheetNumber } from "./grouping";
 import { byOrder } from "./order";
 import { figureLabel, figureLayerFamily, type OriginFigureEntry } from "./originFigures";
@@ -16,6 +17,7 @@ export type LibraryNodeKind =
   | "folder"
   | "workbook"
   | "worksheet"
+  | "analysis-result"
   | "origin-figure"
   | "editable-figure"
   | "publication-figure"
@@ -47,6 +49,7 @@ export type LibraryNode =
   | (LibraryNodeBase & { kind: "folder"; entity: FolderNode })
   | (LibraryNodeBase & { kind: "workbook"; entity: WorkbookNode })
   | (LibraryNodeBase & { kind: "worksheet"; entity: Dataset })
+  | (LibraryNodeBase & { kind: "analysis-result"; entity: AnalysisResult })
   | (LibraryNodeBase & { kind: "origin-figure"; entity: OriginFigureEntry })
   | (LibraryNodeBase & { kind: "editable-figure"; entity: FigureDocument })
   | (LibraryNodeBase & { kind: "publication-figure"; entity: FigureDoc })
@@ -57,6 +60,7 @@ export interface LibraryHierarchyInput {
   folders: readonly FolderNode[];
   workbooks: readonly WorkbookNode[];
   datasets: readonly Dataset[];
+  analysisResults?: readonly AnalysisResult[];
   originFigures?: readonly OriginFigureEntry[];
   editableFigures?: readonly FigureDocument[];
   publicationFigures?: readonly FigureDoc[];
@@ -71,7 +75,7 @@ export interface LibraryHierarchy {
 }
 
 interface DraftNode extends Omit<LibraryNodeBase, "children"> {
-  entity: FolderNode | WorkbookNode | Dataset | OriginFigureEntry | FigureDocument | FigureDoc | PageDocument | ReportEntry;
+  entity: FolderNode | WorkbookNode | Dataset | AnalysisResult | OriginFigureEntry | FigureDocument | FigureDoc | PageDocument | ReportEntry;
   children: DraftNode[];
   section: number;
   /** The entity's own sort key where one exists (folders/workbooks/
@@ -259,21 +263,28 @@ export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHier
   // Artifact sections start at 2, DISJOINT from workbooks (section 1): a
   // cross-workbook artifact placed at a shared folder must follow the
   // folder's workbooks, never interleave with them. Inside a workbook the
-  // L0.16 band order is unchanged (worksheets 0, then figures, pages,
-  // reports). Artifacts pass their insertion index as `order` — every
+  // L0.16 band order is unchanged (worksheets 0, then analysis results,
+  // figures, pages, reports). Artifacts pass their insertion index as `order` — every
   // artifact is keyed, so byOrder keeps them insertion-ordered.
+  (input.analysisResults ?? []).forEach((result, index) => {
+    const owner = ownerForSources([
+      ...result.sources.map((source) => source.datasetId),
+      ...result.outputs.map((output) => output.datasetId),
+    ]);
+    add("analysis-result", result, result.name, owner.parentKey, 2, index, owner.source);
+  });
   (input.originFigures ?? []).forEach((figure, index) => {
     const sourceIds = originSourceIds(figure, input.originFigures ?? [], input.datasets);
     const owner = ownerForSources(sourceIds, figure.siblingIds);
-    add("origin-figure", figure, figureLabel(figure), owner.parentKey, 2, index, owner.source);
+    add("origin-figure", figure, figureLabel(figure), owner.parentKey, 3, index, owner.source);
   });
   (input.editableFigures ?? []).forEach((figure, index) => {
     const owner = ownerForSources(figure.bindings.datasetId ? [figure.bindings.datasetId] : []);
-    add("editable-figure", figure, figure.name, owner.parentKey, 3, index, owner.source);
+    add("editable-figure", figure, figure.name, owner.parentKey, 4, index, owner.source);
   });
   (input.publicationFigures ?? []).forEach((figure, index) => {
     const owner = ownerForSources(figure.datasetId ? [figure.datasetId] : []);
-    add("publication-figure", figure, figure.name, owner.parentKey, 4, index, owner.source);
+    add("publication-figure", figure, figure.name, owner.parentKey, 5, index, owner.source);
   });
 
   const editableById = new Map((input.editableFigures ?? []).map((figure) => [figure.id, figure]));
@@ -290,11 +301,11 @@ export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHier
     if (missingFigureIds.length > 0) {
       warnings.push(`page "${page.name}" referenced missing figure(s): ${[...new Set(missingFigureIds)].join(", ")}`);
     }
-    add("page", page, page.name, owner.parentKey, 5, index, owner.source);
+    add("page", page, page.name, owner.parentKey, 6, index, owner.source);
   });
   (input.reports ?? []).forEach((report, index) => {
     const owner = ownerForSources(report.datasetId ? [report.datasetId] : []);
-    add("report", report, report.name, owner.parentKey, 6, index, owner.source);
+    add("report", report, report.name, owner.parentKey, 7, index, owner.source);
   });
 
   const roots: DraftNode[] = [];

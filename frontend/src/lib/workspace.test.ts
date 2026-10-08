@@ -1,6 +1,7 @@
 import type { ErrorBinding } from "./errorRoles";
 import { describe, expect, it } from "vitest";
 
+import { signalAnalysisResult } from "./analysisResult";
 import { isCategoricalChannel, levelLabel } from "./categorical";
 import { createFigureDocument } from "./figureDocument";
 import { renameLevelIn } from "./levelRename";
@@ -198,6 +199,42 @@ describe("serializeWorkspace / parseWorkspace round-trip", () => {
     expect(doc.format).toBe(WORKSPACE_FORMAT);
     expect(doc.version).toBe(4); // v4 (LIBRARY_WORKBOOK_UX_PLAN PR A2): adds workbooks[]
     expect(typeof doc.savedAt).toBe("string");
+  });
+});
+
+describe("durable analysis results", () => {
+  function linkedSignalPair(): [Dataset, Dataset] {
+    const source = makeDataset("source", "Trace");
+    const output = makeDataset("output", "Trace (Smooth)");
+    output.derivedFrom = { datasetId: source.id, pipeline: "Smooth" };
+    output.analysisRecipe = {
+      kind: "signal-correction",
+      version: 1,
+      operation: "Smooth",
+      xUnit: "s",
+      channels: [{ index: 0, label: "A", unit: "emu" }],
+      params: { signalChannels: [0], smoothEnabled: true, smoothMethod: "moving", smoothWindow: 2 },
+    };
+    return [source, output];
+  }
+
+  it("round-trips a result envelope without duplicating the linked recipe", () => {
+    const [source, output] = linkedSignalPair();
+    const result = signalAnalysisResult("result-1", source, output, "2026-10-08T00:00:00Z")!;
+    const loaded = parseWorkspace(serializeWorkspace({ datasets: [source, output], analysisResults: [result] }));
+    expect(loaded.analysisResults).toEqual([result]);
+    expect(loaded.analysisResults?.[0]).not.toHaveProperty("parameters");
+    expect(loaded.datasets[1].analysisRecipe).toEqual(output.analysisRecipe);
+  });
+
+  it("migrates legacy linked signal worksheets only when the result collection is absent", () => {
+    const [source, output] = linkedSignalPair();
+    const legacy = JSON.parse(serializeWorkspace({ datasets: [source, output] }));
+    delete legacy.analysisResults;
+    expect(parseWorkspace(JSON.stringify(legacy)).analysisResults?.map((result) => result.id)).toEqual(["analysis-output"]);
+
+    legacy.analysisResults = [];
+    expect(parseWorkspace(JSON.stringify(legacy)).analysisResults).toEqual([]);
   });
 });
 

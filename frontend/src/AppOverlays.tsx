@@ -215,6 +215,7 @@ const WorkbookPropertiesDialog = lazyPanel(() => import("./components/Library/Wo
 // ternary/lazyMount.test.ts.
 const AuxFigurePanels = lazyPanel(() => import("./components/workshops/ternary/AuxFigurePanels"), "AuxFigurePanels");
 const SignalProcessingPanel = lazyPanel(() => import("./components/workshops/signalprocessing/SignalProcessingPanel"), "SignalProcessingPanel");
+const AnalysisResultPanel = lazyPanel(() => import("./components/workshops/analysisresults/AnalysisResultPanel"), "AnalysisResultPanel");
 
 export default function AppOverlays() {
   const helpOpen = useHelp((s) => s.open);
@@ -253,6 +254,7 @@ export default function AppOverlays() {
   const trashOpen = useApp((s) => s.trashOpen);
   const searchOpen = useApp((s) => s.searchOpen);
   const openReportId = useApp((s) => s.openReportId);
+  const openAnalysisResultId = useApp((s) => s.openAnalysisResultId);
   const statsChooserOpen = useApp((s) => s.statsChooserOpen);
   const peakWizardOpen = useApp((s) => s.peakWizardOpen);
   const importWizardOpen = useApp((s) => s.importWizardOpen);
@@ -343,6 +345,7 @@ export default function AppOverlays() {
       {importWizardOpen && <ImportWizardPanel />}
       {pipelineOpen && <PipelinePanel />}
       {openReportId && <ReportPanel />}
+      {openAnalysisResultId && <AnalysisResultPanel />}
       {columnSwitcherOpen && <ColumnSwitcher />}
       {figureBuilderOpen && <FigureBuilderView />}
       {figurePageOpen && <FigurePageView />}

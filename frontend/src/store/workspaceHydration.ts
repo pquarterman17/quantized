@@ -184,7 +184,9 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
           originFidelity: ws.originFidelity ?? [],
           smartFolders: ws.smartFolders ?? [], // saved queries (item 9) — .dwk persists them
           reports: ws.reports ?? [], // report sheets (#36) — .dwk v2 persists them
+          analysisResults: ws.analysisResults ?? [],
           openReportId: null,
+          openAnalysisResultId: null,
           macroSteps: ws.macroSteps ?? [], // typed pipeline (#6) — .dwk v3
           recalcMode: ws.recalcMode ?? "auto", // recalc engine (#1) — .dwk v3
           figureDocs: ws.figureDocs ?? [], // figure documents (#12) — .dwk v3
