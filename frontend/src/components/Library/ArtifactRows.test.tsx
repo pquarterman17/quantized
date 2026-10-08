@@ -20,7 +20,7 @@ import { defaultPlotView } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 
-type Artifact = Extract<LibraryNode, { kind: "editable-figure" | "publication-figure" | "page" | "report" }>;
+type Artifact = Extract<LibraryNode, { kind: "analysis-result" | "editable-figure" | "publication-figure" | "page" | "report" }>;
 
 const boundDataset: Dataset = {
   id: "d1", name: "d1.dat", workbookId: "w1",
@@ -46,6 +46,7 @@ beforeEach(() => {
     folders: [],
     activeId: null,
     openReportId: null,
+    openAnalysisResultId: null,
     workbookLastChild: {},
   });
 });
@@ -59,6 +60,11 @@ function nodeOf(kind: Artifact["kind"], key: LibraryNodeKey, input: Partial<Libr
     publicationFigures: [pubFigure("pub1", "d1")],
     pages: [createPageDocument({ id: "pg1", name: "My Page", rows: 2, cols: 3 })],
     reports: [{ id: "rep1", name: "My Report", datasetId: "d1", report: { rows: [] } as never }],
+    analysisResults: [{
+      version: 1, id: "result1", name: "My Result",
+      producer: { id: "signal-processing", label: "Signal Processing", version: 1 },
+      sources: [{ datasetId: "d1", role: "input" }], outputs: [], warnings: [], createdAt: "now",
+    }],
     ...input,
   });
   const node = hierarchy.byKey.get(key);
@@ -103,6 +109,15 @@ describe("ArtifactRow — open + workbookLastChild recording", () => {
     fireEvent.doubleClick(screen.getByRole("button", { name: /My Report/ }));
     expect(useApp.getState().openReportId).toBe("rep1");
     expect(useApp.getState().workbookLastChild.w1).toBe("report:rep1");
+  });
+
+  it("analysis result: shows its producer and double-click opens the result workspace", () => {
+    const node = nodeOf("analysis-result", "analysis-result:result1");
+    render(<ArtifactRow node={node} depth={0} />);
+    expect(screen.getByText("Signal Processing")).toBeInTheDocument();
+    fireEvent.doubleClick(screen.getByRole("button", { name: /My Result/ }));
+    expect(useApp.getState().openAnalysisResultId).toBe("result1");
+    expect(useApp.getState().workbookLastChild.w1).toBe("analysis-result:result1");
   });
 
   it("an unbound editable figure shows 'unbound'", () => {

@@ -28,6 +28,8 @@ import { isDefaultMapViews, serializeMapViews } from "./mapViewSerialize";
 import type { TechniqueViewMemoryMap } from "./techniqueViewMemory";
 import type { RecalcMode } from "./recalc";
 import type { ReportEntry } from "./report";
+import type { AnalysisResult } from "./analysisResult";
+import { stampAnalysisResults } from "./analysisResultFreshness";
 import type { SmartFolder } from "./smartfolders";
 import type { Collection } from "./collections";
 import type { LibraryDetailsColumnKey } from "./libraryDetailsColumns";
@@ -127,6 +129,7 @@ interface WorkspaceDoc {
   originFidelity: OriginFidelityEntry[];
   smartFolders: SmartFolder[];
   reports: ReportEntry[];
+  analysisResults: AnalysisResult[];
   pipeline: PipelineStep[];
   recalcMode: RecalcMode;
   figureDocs: FigureDoc[];
@@ -201,6 +204,7 @@ export function serializeWorkspace(
     originFidelity: ws.originFidelity ?? [],
     smartFolders: ws.smartFolders ?? [],
     reports: ws.reports ?? [],
+    analysisResults: stampAnalysisResults(ws.analysisResults ?? [], ws.datasets, ws.staleDatasets ?? []),
     pipeline: ws.macroSteps ?? [],
     recalcMode: ws.recalcMode ?? "auto",
     figureDocs: ws.figureDocs ?? [],

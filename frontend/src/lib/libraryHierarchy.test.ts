@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { AnalysisResult } from "./analysisResult";
 import { createFigureDocument } from "./figureDocument";
 import {
   buildLibraryHierarchy,
@@ -32,6 +33,19 @@ function folder(id: string, parentId: string | null, order = 0): FolderNode {
 
 function workbook(id: string, folderId?: string, order?: number): WorkbookNode {
   return { id, name: `workbook ${id}`, folderId, order };
+}
+
+function analysisResult(id: string, sourceId: string, outputId: string): AnalysisResult {
+  return {
+    version: 1,
+    id,
+    name: `analysis ${id}`,
+    producer: { id: "signal-processing", label: "Signal Processing", version: 1 },
+    sources: [{ datasetId: sourceId, role: "input" }],
+    outputs: [{ datasetId: outputId, role: "linked-worksheet" }],
+    warnings: [],
+    createdAt: "2026-10-08T00:00:00Z",
+  };
 }
 
 function originFigure(
@@ -70,6 +84,21 @@ describe("buildLibraryHierarchy", () => {
     expect([folderNode.depth, workbookNode.depth, worksheetNode.depth]).toEqual([0, 1, 2]);
     expect(worksheetNode.source.datasetIds).toEqual(["d"]);
     expect(result.byKey.get("worksheet:d")).toBe(worksheetNode);
+  });
+
+  it("places a durable analysis result beside its linked worksheets and reports missing references", () => {
+    const result = buildLibraryHierarchy({
+      folders: [],
+      workbooks: [workbook("w")],
+      datasets: [dataset("source", "w"), dataset("output", "w")],
+      analysisResults: [analysisResult("r", "source", "output"), analysisResult("broken", "gone", "output")],
+    });
+    expect(result.byKey.get("analysis-result:r")?.parentKey).toBe("workbook:w");
+    expect(result.byKey.get("analysis-result:r")?.source.datasetIds).toEqual(["source", "output"]);
+    expect(result.byKey.get("analysis-result:broken")?.source.missingDatasetIds).toEqual(["gone"]);
+    expect(result.byKey.get("workbook:w")?.children.map((node) => node.key)).toEqual([
+      "worksheet:source", "worksheet:output", "analysis-result:r", "analysis-result:broken",
+    ]);
   });
 
   it("uses stable section/order rules without mutating the input arrays", () => {

@@ -436,6 +436,14 @@ export async function runTransform(
     params: { ...p, ...recordedProvenance(primary, inputIsTarget, outputs) },
   });
   s().setStatus(`created ${c.name}${recordedNote(c.preview.warnings)}`);
+  // A linked signal output is a durable analysis result wherever it was made —
+  // the workbench, Pipeline Studio or macro replay — so register it here.
+  if (p.op === "signal") {
+    await import("../store/analysisResultActions").then(
+      (m) => m.registerSignalResult(primary.id, id),
+      () => s().setStatus(`created ${c.name}, but its analysis result could not be recorded`),
+    );
+  }
   return { id, name: c.name, warnings: c.preview.warnings, outputs };
 }
 

@@ -2279,6 +2279,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   rightCollapsed: "right panel collapsed; shell layout UI",
   stageTab: "Plot/Worksheet stage tab; shell navigation UI",
   openReportId: "which report window is open; UI open state",
+  openAnalysisResultId: "which analysis-result workspace is open; UI open state",
   prefsOpen: "Preferences dialog visibility; UI state",
   cmdkOpen: "Command Palette visibility; UI state",
   shortcutsOpen: "shortcuts sheet visibility; UI state",
@@ -3342,6 +3343,10 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // with `import()`, but `store/workbookTransferRun.ts` (a seam) imports it
     // statically, so only reachability can hold it.
     "/lib/workbookTransfer.ts",
+    // Durable analysis results (PR #554 review): lifecycle actions are reached
+    // only through `withAnalysisResultActions` (lib/libraryRename.ts) or the
+    // lazy result/Signal Processing panels.
+    "/store/analysisResultActions.ts",
     "/components/overlays/useDialogFocus.ts",
     "/components/overlays/ParamFields.tsx",
     "/lib/params.ts",

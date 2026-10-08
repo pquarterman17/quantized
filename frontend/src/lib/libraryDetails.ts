@@ -43,6 +43,7 @@ const TYPE_LABELS: Record<LibraryNodeKind, string> = {
   folder: "Folder",
   workbook: "Workbook",
   worksheet: "Worksheet",
+  "analysis-result": "Analysis result",
   "origin-figure": "Origin figure",
   "editable-figure": "Editable figure",
   "publication-figure": "Publication figure",
@@ -112,6 +113,7 @@ function modifiedOf(node: LibraryNode): string {
   if (node.kind === "worksheet" || node.kind === "workbook") value = node.entity.importedAt;
   else if (node.kind === "page") value = node.entity.modifiedAt;
   else if (node.kind === "report") value = node.entity.report.created ?? undefined;
+  else if (node.kind === "analysis-result") value = node.entity.updatedAt ?? node.entity.createdAt;
   if (!value) return "—";
   const date = new Date(value);
   return Number.isNaN(date.valueOf()) ? value : date.toLocaleDateString();

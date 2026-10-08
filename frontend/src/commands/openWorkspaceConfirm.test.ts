@@ -158,6 +158,11 @@ describe("Open workspace — confirms for a dataset-free session that still hold
       ],
       pages: [createPageDocument({ id: "page-1", name: "Panel", rows: 1, cols: 1 })],
       reports: [{ id: "rep-1", name: "Report", datasetId: null, report: { title: "Report", sections: [] } }],
+      analysisResults: [{
+        version: 1, id: "result-1", name: "Saved result",
+        producer: { id: "future", label: "Future analysis", version: 1 },
+        sources: [], outputs: [], warnings: [], createdAt: "2026-10-08T00:00:00Z",
+      }],
     });
   });
 
@@ -176,6 +181,7 @@ describe("Open workspace — confirms for a dataset-free session that still hold
     expect(s.editableFigures).toHaveLength(1);
     expect(s.pages).toHaveLength(1);
     expect(s.reports).toHaveLength(1);
+    expect(s.analysisResults).toHaveLength(1);
   });
 
   it("accepting replaces them (the incoming empty doc carries none)", async () => {
@@ -186,5 +192,6 @@ describe("Open workspace — confirms for a dataset-free session that still hold
     expect(s.editableFigures).toEqual([]);
     expect(s.pages).toEqual([]);
     expect(s.reports).toEqual([]);
+    expect(s.analysisResults).toEqual([]);
   });
 });

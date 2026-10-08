@@ -185,6 +185,14 @@ export function signalRecipeChannels(recipe: SignalAnalysisRecipe): readonly Sig
   }));
 }
 
+/** The X window a recipe analyses, or undefined for the full worksheet. */
+export function signalRecipeXRange(recipe: SignalAnalysisRecipe): [number, number] | undefined {
+  const [min, max] = recipe.kind === "spectral"
+    ? [recipe.xMin, recipe.xMax]
+    : [recipe.params.xTrimMin, recipe.params.xTrimMax];
+  return min !== undefined && max !== undefined ? [min, max] : undefined;
+}
+
 /** Corrections whose numeric meaning depends on the X scale/unit. */
 export function correctionNeedsXUnit(recipe: SignalCorrectionRecipe): boolean {
   return recipe.params.xTrimMin !== undefined ||
