@@ -165,6 +165,8 @@ function poison(): void {
     originFidelity: [{ figureId: "stale-fig" } as unknown as ReturnType<typeof useApp.getState>["originFidelity"][number]],
     smartFolders: [{ id: "stale-sf", name: "STALE" } as unknown as ReturnType<typeof useApp.getState>["smartFolders"][number]],
     reports: [{ id: "stale-report" } as unknown as ReturnType<typeof useApp.getState>["reports"][number]],
+    analysisResults: [{ id: "stale-result" } as unknown as ReturnType<typeof useApp.getState>["analysisResults"][number]],
+    openAnalysisResultId: "stale-result",
     openReportId: "stale-report",
     macroSteps: [{ code: "stale();", label: "stale" } as unknown as ReturnType<typeof useApp.getState>["macroSteps"][number]],
     recalcMode: "manual",
@@ -306,6 +308,7 @@ describe("loadWorkspace — legacy/fresh path (no persisted plot-window layout)"
     useApp.getState().loadWorkspace({ datasets: [] });
     expect(changedSince(before)).toEqual([
       "activePlotSpecId",
+      "analysisResults",
       "baselineOverlay",
       "collections",
       "composition",
@@ -339,6 +342,7 @@ describe("loadWorkspace — legacy/fresh path (no persisted plot-window layout)"
       "mapPaintedLimits",
       "mapSector",
       "mapViews",
+      "openAnalysisResultId",
       "openReportId",
       "originFidelity",
       "originFigures",
@@ -514,6 +518,7 @@ describe("loadWorkspace — restored plot-window layout path (restoredHasPlot tr
     expect(changedSince(before)).toEqual([
       "activeId",
       "activePlotSpecId",
+      "analysisResults",
       "annotations",
       "axisLabelOffsets",
       "axisLabelStyles",
@@ -556,6 +561,7 @@ describe("loadWorkspace — restored plot-window layout path (restoredHasPlot tr
       "mapPaintedLimits",
       "mapSector",
       "mapViews",
+      "openAnalysisResultId",
       "openReportId",
       "originFidelity",
       "originFigures",

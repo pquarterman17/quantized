@@ -21,6 +21,7 @@ const LIBRARY_SELECTION_KINDS: ReadonlySet<LibrarySelection["kind"]> = new Set([
   "publication-figure",
   "page",
   "report",
+  "analysis-result",
 ]);
 
 /** One live-id set per `LibrarySelection.kind`, so the id gets checked
@@ -41,6 +42,7 @@ export function librarySelectionLiveIds(src: {
   figureDocs: readonly { id: string }[];
   pages: readonly { id: string }[];
   reports: readonly { id: string }[];
+  analysisResults: readonly { id: string }[];
 }): LibrarySelectionLiveIds {
   return {
     folder: new Set(src.folders.map((x) => x.id)),
@@ -50,6 +52,7 @@ export function librarySelectionLiveIds(src: {
     "publication-figure": new Set(src.figureDocs.map((x) => x.id)),
     page: new Set(src.pages.map((x) => x.id)),
     report: new Set(src.reports.map((x) => x.id)),
+    "analysis-result": new Set(src.analysisResults.map((x) => x.id)),
   };
 }
 

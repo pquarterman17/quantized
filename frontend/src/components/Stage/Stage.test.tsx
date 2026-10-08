@@ -44,7 +44,7 @@ const ds = (nChannels: number): Dataset => ({
 beforeEach(() => {
   useApp.setState({
     datasets: [], activeId: null, stageTab: "plot", plotWindows: [], pages: [], reports: [],
-    originFigures: [], editableFigures: [], figureDocs: [],
+    originFigures: [], editableFigures: [], figureDocs: [], analysisResults: [],
   });
 });
 
@@ -84,6 +84,20 @@ describe("Map tab visibility", () => {
     });
     render(<Stage />);
     expect(screen.getByText("plot-canvas")).toBeInTheDocument();
+  });
+
+  it("treats a results-only project as content, not an empty project", () => {
+    // PR #554 review: the Library lists the result, so the stage must not
+    // claim "No data loaded" (reports already count the same way).
+    useApp.setState({
+      analysisResults: [{
+        version: 1, id: "res", name: "Smooth", producer: { id: "signal-processing", label: "Signal Processing", version: 1 },
+        sources: [], outputs: [], warnings: [], createdAt: "2026-10-08T00:00:00Z",
+      }],
+    });
+    render(<Stage />);
+    expect(screen.queryByRole("heading", { name: "No data loaded" })).not.toBeInTheDocument();
+    expect(screen.getByText("Plot")).toBeInTheDocument();
   });
 
   it("is hidden for an ordinary 1-D dataset (2 channels)", () => {

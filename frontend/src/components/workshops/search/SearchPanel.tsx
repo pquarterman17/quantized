@@ -32,6 +32,7 @@ const KIND_CHIP: Record<SearchHit["kind"], string> = {
   tag: "tag",
   metadata: "meta",
   report: "report",
+  result: "result",
   figure: "fig",
   folder: "folder",
 };
@@ -41,6 +42,7 @@ export default function SearchPanel() {
   const datasets = useApp((s) => s.datasets);
   const folders = useApp((s) => s.folders);
   const reports = useApp((s) => s.reports);
+  const analysisResults = useApp((s) => s.analysisResults);
   const originFigures = useApp((s) => s.originFigures);
   const setActive = useApp((s) => s.setActive);
   const setStageTab = useApp((s) => s.setStageTab);
@@ -55,11 +57,12 @@ export default function SearchPanel() {
         datasets,
         folders,
         reports: reports?.map((r) => ({ id: r.id, name: r.name, datasetId: r.datasetId })),
+        results: analysisResults.map((r) => ({ id: r.id, name: r.name, datasetId: r.outputs[0]?.datasetId ?? null })),
         // An Origin figure has no display `name` of its own — it is identified
         // by the project stem it came from, which is what a user would search.
         figures: originFigures?.map((f) => ({ id: f.id, name: f.stem })),
       }),
-    [query, datasets, folders, reports, originFigures],
+    [query, datasets, folders, reports, analysisResults, originFigures],
   );
   const cells = useCellSearch(datasets, query);
 
@@ -68,6 +71,7 @@ export default function SearchPanel() {
     // The surface comes from the hit, not from a guess here — see projectSearch.
     if (hit.reveal === "worksheet") setStageTab("worksheet");
     else if (hit.reveal === "library" || hit.reveal === "figure") setStageTab("plot");
+    if (hit.resultId) useApp.setState({ openAnalysisResultId: hit.resultId });
     setStatus(
       hit.channel != null ? `revealed ${hit.label} in ${hit.context}` : `revealed ${hit.label}`,
     );
@@ -98,7 +102,7 @@ export default function SearchPanel() {
         value={query}
         width={356}
         placeholder="dataset, column, tag, note, report…"
-        title="Search names, column labels, tags, notes, metadata, text cells, reports and figures"
+        title="Search names, column labels, tags, notes, metadata, text cells, reports, analysis results and figures"
         onChange={setQuery}
       />
       {query.trim() === "" ? (

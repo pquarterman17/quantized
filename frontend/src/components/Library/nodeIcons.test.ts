@@ -37,6 +37,7 @@ const ALL_KINDS = [
   "folder",
   "workbook",
   "worksheet",
+  "analysis-result",
   "origin-figure",
   "editable-figure",
   "publication-figure",

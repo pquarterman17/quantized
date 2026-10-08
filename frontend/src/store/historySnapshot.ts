@@ -12,7 +12,10 @@
 import type { BreakComposition, SpatialComposition } from "../lib/composition";
 import { hydrateView, navigationView, snapshotView, type PlotView } from "../lib/plotview";
 import { focusTransientReset } from "./windows";
+import type { LibrarySelection } from "./libraryPanel";
 import type { AppState } from "./useApp";
+
+const hasId = (items: readonly { id: string }[], id: string | null): boolean => items.some((item) => item.id === id);
 
 /** The undoable slice of AppState — see the module doc for why this exact
  *  field list and no more.
@@ -41,6 +44,7 @@ export interface HistorySnapshot {
   originFigures: AppState["originFigures"];
   originFidelity: AppState["originFidelity"];
   reports: AppState["reports"];
+  analysisResults: AppState["analysisResults"];
   figureDocs: AppState["figureDocs"];
   editableFigures: AppState["editableFigures"];
   pages: AppState["pages"];
@@ -119,6 +123,7 @@ export function snapshotOf(s: AppState): HistorySnapshot {
     originFigures: s.originFigures,
     originFidelity: s.originFidelity,
     reports: s.reports,
+    analysisResults: s.analysisResults,
     figureDocs: s.figureDocs,
     editableFigures: s.editableFigures,
     pages: s.pages,
@@ -181,15 +186,19 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
       if (snap.selectedIds.length > 0) return null;
       const sel = s.librarySelection;
       if (!sel) return null;
-      const alive =
-        sel.kind === "folder" ? snap.folders.some((f) => f.id === sel.id)
-        : sel.kind === "workbook" ? snap.workbooks.some((w) => w.id === sel.id)
-        : sel.kind === "origin-figure" ? snap.originFigures.some((f) => f.id === sel.id)
-        : sel.kind === "editable-figure" ? snap.editableFigures.some((f) => f.id === sel.id)
-        : sel.kind === "publication-figure" ? snap.figureDocs.some((f) => f.id === sel.id)
-        : sel.kind === "page" ? snap.pages.some((pg) => pg.id === sel.id)
-        : snap.reports.some((r) => r.id === sel.id);
-      return alive ? sel : null;
+      // One live-entity pool per kind (typed exhaustive): a lookup table, not
+      // a ternary chain, so each new artifact kind costs one entry.
+      const pools: Record<LibrarySelection["kind"], readonly { id: string }[]> = {
+        folder: snap.folders,
+        workbook: snap.workbooks,
+        "origin-figure": snap.originFigures,
+        "editable-figure": snap.editableFigures,
+        "publication-figure": snap.figureDocs,
+        page: snap.pages,
+        report: snap.reports,
+        "analysis-result": snap.analysisResults,
+      };
+      return hasId(pools[sel.kind], sel.id) ? sel : null;
     })(),
     plotWindows: snap.plotWindows.map((w) =>
       w.datasetId && !live.has(w.datasetId) ? { ...w, datasetId: null } : w,
@@ -200,8 +209,8 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
     composition: carriedComposition,
     // UI open state outside the snapshot: close the viewer on a report the
     // restore removed (an undone "add report") rather than show nothing.
-    openReportId:
-      s.openReportId && !snap.reports.some((r) => r.id === s.openReportId) ? null : s.openReportId,
+    openReportId: hasId(snap.reports, s.openReportId) ? s.openReportId : null,
+    openAnalysisResultId: hasId(snap.analysisResults, s.openAnalysisResultId) ? s.openAnalysisResultId : null,
   };
 }
 

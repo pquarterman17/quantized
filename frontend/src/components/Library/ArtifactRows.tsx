@@ -1,10 +1,10 @@
-// Light tree rows for the four artifact kinds that DON'T reuse an existing
+// Light tree rows for the artifact kinds that DON'T reuse an existing
 // row component (LIBRARY_WORKBOOK_UX_PLAN PR C): editable figures,
 // publication figures, pages, reports. Origin figures reuse FigureRow.tsx and
 // worksheets reuse DatasetRow.tsx — both predate this hierarchy and carry
 // their own established open/menu handlers (read per the plan's C brief); a
 // generic name+glyph+meta row here would be strictly worse for them. These
-// four kinds had no equivalent tree row at all before this PR — only a flat
+// original four kinds had no equivalent tree row at all before this PR — only a flat
 // Library SECTION (EditableFiguresSection etc.) — so there's nothing
 // established to preserve; per L0.25 a single click SELECTS and double-click/
 // Enter opens via the shared `openLibraryNode` dispatcher (the SAME action
@@ -31,7 +31,7 @@ import {
 
 type ArtifactNode = Extract<
   LibraryNode,
-  { kind: "editable-figure" | "publication-figure" | "page" | "report" }
+  { kind: "analysis-result" | "editable-figure" | "publication-figure" | "page" | "report" }
 >;
 
 interface Props {
@@ -67,6 +67,8 @@ function metaOf(node: ArtifactNode, datasetName: string): string {
       return `${node.entity.rows}×${node.entity.cols}`;
     case "report":
       return datasetName;
+    case "analysis-result":
+      return node.entity.producer.label;
   }
 }
 
@@ -87,6 +89,8 @@ function openTitle(node: ArtifactNode): string {
       return `open saved page "${node.name}"`;
     case "report":
       return `open report "${node.name}"`;
+    case "analysis-result":
+      return `open analysis result "${node.name}"`;
   }
 }
 

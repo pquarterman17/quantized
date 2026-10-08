@@ -20,7 +20,14 @@ export async function createSignalWorksheetFromApp(
   }
   try {
     const outcome = await runTransform(useApp.getState, { op: "signal", recipe }, sourceId, undefined, signal);
-    return outcome?.id ?? null;
+    if (!outcome) return null;
+    // runTransform registered the result (`analysis-<output id>`); the
+    // workbench opens it, while a replay leaves windows alone.
+    const resultId = `analysis-${outcome.id}`;
+    if (useApp.getState().analysisResults.some((result) => result.id === resultId)) {
+      useApp.setState({ openAnalysisResultId: resultId });
+    }
+    return outcome.id;
   } catch (error) {
     if (typeof error === "object" && error !== null && "name" in error && error.name === "AbortError") {
       useApp.getState().setStatus("signal processing cancelled — nothing was created");

@@ -15,10 +15,12 @@
 // fails here until its render site is listed.
 //
 // Scope note — only sites that name a kind LITERALLY can be miswired.
-// `ArtifactRows.tsx`, `CollectionsSection.tsx`, `DetailsRow.tsx` and
-// `TilePreview.tsx` all index the shared map by `node.kind`, so their mark is
-// correct by construction and no table entry can add information about them.
-// The eight literal sites are all listed below. (`Library.tsx`'s "New folder"
+// `CollectionsSection.tsx`, `DetailsRow.tsx` and `TilePreview.tsx` all index
+// the shared map by `node.kind`, so their mark is correct by construction.
+// `ArtifactRows.tsx` does too, but supplies the only row for the durable
+// analysis-result kind, so that kind's real render path is included below to
+// keep the exhaustive coverage assertion useful. The eight literal sites are
+// also all listed. (`Library.tsx`'s "New folder"
 // toolbar button is the ninth literal site; it is a COMMAND, covered by
 // `nodeIcons.test.ts`'s "a command that claims to name a kind really wears
 // that kind's mark".)
@@ -27,6 +29,7 @@ import { render } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import DatasetRow from "./DatasetRow";
+import ArtifactRow from "./ArtifactRows";
 import EditableFiguresSection from "./EditableFiguresSection";
 import FigureRow from "./FigureRow";
 import FolderRow from "./FolderRow";
@@ -42,6 +45,7 @@ import type { OriginFigureEntry } from "../../lib/originFigures";
 import { createPageDocument } from "../../lib/pageDocumentActions";
 import { defaultPlotView } from "../../lib/plotview";
 import type { ReportEntry } from "../../lib/report";
+import type { AnalysisResult } from "../../lib/analysisResult";
 import type { Dataset, FolderNode } from "../../lib/types";
 import type { WorkbookNode } from "../../lib/workbooks";
 import { useApp } from "../../store/useApp";
@@ -80,6 +84,19 @@ const report: ReportEntry = {
   name: "Linear fit",
   datasetId: "d1",
   report: { title: "Linear fit", sections: [{ title: "Fit", blocks: [{ type: "text", text: "Model" }] }] },
+};
+
+const analysisResult: AnalysisResult = {
+  version: 1, id: "a1", name: "Smoothed trace",
+  producer: { id: "signal-processing", label: "Signal Processing", version: 1 },
+  sources: [{ datasetId: "d1", role: "input" }], outputs: [], warnings: [], createdAt: "now",
+};
+
+const analysisResultNode = () => {
+  const node = buildLibraryHierarchy({ folders: [], workbooks: [workbook], datasets: [dataset], analysisResults: [analysisResult] })
+    .byKey.get("analysis-result:a1");
+  if (!node || node.kind !== "analysis-result") throw new Error("fixture analysis result missing");
+  return node;
 };
 
 const publicationFigure: FigureDoc = {
@@ -138,6 +155,11 @@ const SITES: readonly RenderSite[] = [
     render: () => render(<DatasetRow dataset={dataset} {...datasetRowProps} treeMode />).container,
   },
   {
+    kind: "analysis-result",
+    where: "ArtifactRows.tsx",
+    render: () => render(<ArtifactRow node={analysisResultNode()} depth={0} />).container,
+  },
+  {
     kind: "origin-figure",
     where: "FigureRow.tsx",
     render: () => render(<FigureRow entry={originFigure} treeMode />).container,
@@ -174,6 +196,7 @@ beforeEach(() => {
     figureDocs: [publicationFigure],
     pages: [page],
     reports: [report],
+    analysisResults: [analysisResult],
     activeId: null,
     selectedIds: [],
     staleDatasets: [],

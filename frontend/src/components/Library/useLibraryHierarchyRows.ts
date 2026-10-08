@@ -27,6 +27,7 @@ export function useLibraryHierarchyModel(): LibraryHierarchyModel {
   const folders = useApp((s) => s.folders);
   const workbooks = useApp((s) => s.workbooks);
   const datasets = useApp((s) => s.datasets);
+  const analysisResults = useApp((s) => s.analysisResults);
   const originFigures = useApp((s) => s.originFigures);
   const editableFigures = useApp((s) => s.editableFigures);
   const publicationFigures = useApp((s) => s.figureDocs);
@@ -41,13 +42,14 @@ export function useLibraryHierarchyModel(): LibraryHierarchyModel {
         folders,
         workbooks,
         datasets,
+        analysisResults,
         originFigures,
         editableFigures,
         publicationFigures,
         pages,
         reports,
       }),
-    [folders, workbooks, datasets, originFigures, editableFigures, publicationFigures, pages, reports],
+    [folders, workbooks, datasets, analysisResults, originFigures, editableFigures, publicationFigures, pages, reports],
   );
 
   const expandedKeys = useMemo(() => {

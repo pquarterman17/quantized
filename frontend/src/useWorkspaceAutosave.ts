@@ -320,7 +320,7 @@ export type AutosaveState = Pick<
   // necessarily changes alongside it.
   | "originFidelity"
   | "smartFolders"
-  | "reports"
+  | "reports" | "analysisResults"
   | "macroSteps"
   | "recalcMode"
   | "figureDocs"
@@ -383,7 +383,7 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.originFigures === prev.originFigures &&
     state.originFidelity === prev.originFidelity &&
     state.smartFolders === prev.smartFolders &&
-    state.reports === prev.reports &&
+    state.reports === prev.reports && state.analysisResults === prev.analysisResults &&
     state.macroSteps === prev.macroSteps &&
     state.recalcMode === prev.recalcMode &&
     state.figureDocs === prev.figureDocs &&
