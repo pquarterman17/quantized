@@ -64,8 +64,8 @@ describe("artifact lifecycle context actions — PR E-b2", () => {
       "Delete",
       true,
     );
-    await Promise.resolve();
-    expect(useApp.getState().analysisResults).toEqual([]);
+    // The delete runs through the lazy analysis-result seam: wait on the state.
+    await vi.waitFor(() => expect(useApp.getState().analysisResults).toEqual([]));
     expect(useApp.getState().openAnalysisResultId).toBeNull();
   });
 

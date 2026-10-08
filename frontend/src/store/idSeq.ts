@@ -35,7 +35,6 @@ let _idSeq = 0;
 export const nextDatasetId = (): string => `ds-${Date.now().toString(36)}-${++_idSeq}`;
 export const nextFolderId = (): string => `fld-${Date.now().toString(36)}-${++_idSeq}`;
 export const nextReportId = (): string => `rep-${Date.now().toString(36)}-${++_idSeq}`;
-export const nextAnalysisResultId = (): string => `result-${Date.now().toString(36)}-${++_idSeq}`;
 /** The `figd-` mint for `duplicateFigureDoc` (store/reportsFigureDocs.ts) and
  *  the Figure Builder's "Save as figure". The builder once kept its own
  *  counter, which restarted beside this one and minted the same id in the

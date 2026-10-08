@@ -1834,18 +1834,8 @@ import { fileURLToPath } from "node:url";
  *   + encodings' facet/export wire                     834,555  (-1,092)
  *   + book-switcher helpers, fit-step decoder          833,639  (-916)
  * Net: -7,366 B, leaving 1,000 B of headroom.
- *
- * 2026-10-07 — pin RAISED 834,639 -> 836,261 for the first durable analysis-
- * result vertical slice. Measured eager JS is 835,237 B; the new pin is the
- * required measured + 1,024 B margin. The 598 B overage after the old pin's
- * remaining headroom is irreducible project lifecycle: the result catalog,
- * undo/redo snapshot membership, and canonical Library placement must exist
- * before a saved workspace is opened. The result viewer is a lazy panel and
- * rename/delete/recalculate/rerun actions were split into lazy-only modules
- * before measuring; a further action-only dynamic-import trial increased the
- * eager graph and was reverted.
  */
-const EAGER_JS_BUDGET = 836_261;
+const EAGER_JS_BUDGET = 834_639;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

@@ -1,8 +1,5 @@
 import type { SignalAnalysisRecipe } from "../lib/signalTransform";
-import { signalAnalysisResult } from "../lib/analysisResult";
 import { runTransform } from "../lib/transformRun";
-import { nextAnalysisResultId } from "./idSeq";
-import { registerAnalysisResult } from "./analysisResultActions";
 import { useApp } from "./useApp";
 
 /** Imperative bridge for the lazy Signal Processing workbench. The shared
@@ -24,9 +21,12 @@ export async function createSignalWorksheetFromApp(
   try {
     const outcome = await runTransform(useApp.getState, { op: "signal", recipe }, sourceId, undefined, signal);
     if (!outcome) return null;
-    const output = useApp.getState().datasets.find((dataset) => dataset.id === outcome.id);
-    const result = output ? signalAnalysisResult(nextAnalysisResultId(), source, output) : null;
-    if (result) registerAnalysisResult(result);
+    // runTransform registered the result (`analysis-<output id>`); the
+    // workbench opens it, while a replay leaves windows alone.
+    const resultId = `analysis-${outcome.id}`;
+    if (useApp.getState().analysisResults.some((result) => result.id === resultId)) {
+      useApp.setState({ openAnalysisResultId: resultId });
+    }
     return outcome.id;
   } catch (error) {
     if (typeof error === "object" && error !== null && "name" in error && error.name === "AbortError") {

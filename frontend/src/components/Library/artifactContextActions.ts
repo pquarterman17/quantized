@@ -11,7 +11,7 @@ import { sendEditableFigureToReport } from "../../commands/plotCommands";
 import { buildMenuItems, runContextAction, type ContextAction, type MenuEntry } from "../../lib/contextActions";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { pagesReferencingFigure } from "../../lib/pageDocumentActions";
-import { removeAnalysisResult } from "../../store/analysisResultActions";
+import { withAnalysisResultActions } from "../../store/analysisResultLazy";
 
 export type ArtifactNode = Extract<
   LibraryNode,
@@ -145,7 +145,10 @@ const artifactActions: MenuEntry<ArtifactTarget>[] = [
       else if (target.node.kind === "publication-figure") state.removeFigureDoc(target.node.entityId);
       else if (target.node.kind === "page") state.deletePageDocument(target.node.entityId);
       else if (target.node.kind === "report") state.removeReport(target.node.entityId);
-      else if (target.node.kind === "analysis-result") removeAnalysisResult(target.node.entityId);
+      else if (target.node.kind === "analysis-result") {
+        const id = target.node.entityId;
+        withAnalysisResultActions((m) => m.removeAnalysisResult(id));
+      }
     },
   },
 ];

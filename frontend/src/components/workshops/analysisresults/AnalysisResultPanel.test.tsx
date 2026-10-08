@@ -4,8 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalysisResult } from "../../../lib/analysisResult";
 import type { Dataset } from "../../../lib/types";
 
-const { rerun } = vi.hoisted(() => ({ rerun: vi.fn() }));
+const { rerun, recalculate } = vi.hoisted(() => ({ rerun: vi.fn(), recalculate: vi.fn() }));
 vi.mock("../../../store/signalWorksheetCommand", () => ({ createSignalWorksheetFromApp: rerun }));
+vi.mock("../../../store/analysisResultActions", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../store/analysisResultActions")>()),
+  recalculateAnalysisResult: recalculate,
+}));
 vi.mock("../../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 vi.mock("../../overlays/ParamDialog", () => ({ askParams: vi.fn() }));
 vi.mock("../../overlays/ToolWindow", () => ({
@@ -82,13 +86,18 @@ describe("AnalysisResultPanel", () => {
     expect(screen.getByRole("columnheader", { name: "Time" })).toBeInTheDocument();
   });
 
-  it("recalculates the existing output even when it was not already marked stale", async () => {
-    const recalcNow = vi.fn(async () => useApp.setState({ staleDatasets: [] }));
+  it("Recalculate runs this result's own recompute, never the project-wide recalcNow", async () => {
+    const recalcNow = vi.fn(async () => {});
     useApp.setState({ recalcNow });
+    recalculate.mockImplementation(async () => {
+      useApp.setState({ status: "recalculated Smooth · Raw trace" });
+      return true;
+    });
     render(<AnalysisResultPanel />);
     fireEvent.click(screen.getByRole("button", { name: "Recalculate" }));
-    await waitFor(() => expect(appState().analysisResults[0].updatedAt).toBeTruthy());
-    expect(recalcNow).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(appState().status).toBe("recalculated Smooth · Raw trace"));
+    expect(recalculate).toHaveBeenCalledWith("result");
+    expect(recalcNow).not.toHaveBeenCalled();
   });
 
   it("keeps a broken result inspectable and disables actions that require missing data", () => {

@@ -1,12 +1,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 
 import type { AnalysisResult } from "../../../lib/analysisResult";
-import {
-  recalculateAnalysisResult,
-  removeAnalysisResult,
-  renameAnalysisResult,
-  updateAnalysisResultNotes,
-} from "../../../store/analysisResultActions";
+import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { createSignalWorksheetFromApp } from "../../../store/signalWorksheetCommand";
 import { useApp } from "../../../store/useApp";
 import { askConfirm } from "../../overlays/ConfirmDialog";
@@ -16,6 +11,13 @@ import { Button } from "../../primitives";
 
 type Tab = "overview" | "table" | "diagnostics" | "provenance" | "notes";
 const TABS: readonly Tab[] = ["overview", "table", "diagnostics", "provenance", "notes"];
+
+// Its own seam, not store/analysisResultLazy.ts: importing that from this
+// chunk would split it into a separate eagerly-named chunk (measured).
+const loadActions = () => runLazy("Loading analysis result actions…", () => import("../../../store/analysisResultActions"));
+const withActions = (run: (m: Awaited<ReturnType<typeof loadActions>>) => void): void => {
+  void loadActions().then(run, onLoadFailure);
+};
 
 function formatValue(value: number): string {
   if (!Number.isFinite(value)) return String(value);
@@ -92,7 +94,7 @@ export default function AnalysisResultPanel() {
     if (!source || !output || busy) return;
     setBusy("recalculate");
     try {
-      await recalculateAnalysisResult(result.id);
+      await loadActions().then((m) => m.recalculateAnalysisResult(result.id), onLoadFailure);
     } finally {
       setBusy(null);
     }
@@ -112,11 +114,11 @@ export default function AnalysisResultPanel() {
       { key: "name", label: "Name", type: "text", default: result.name },
     ]);
     const name = picked && String(picked.name).trim();
-    if (name) renameAnalysisResult(result.id, name);
+    if (name) withActions((m) => m.renameAnalysisResult(result.id, name));
   };
   const remove = async () => {
     const yes = await askConfirm(`Delete "${result.name}"?`, "This removes the result record from the Library. Its linked worksheet and scientific data are kept.", "Delete", true);
-    if (yes) removeAnalysisResult(result.id);
+    if (yes) withActions((m) => m.removeAnalysisResult(result.id));
   };
   const status = !source || !output ? "Incomplete" : staleDatasets.includes(output.id) ? "Out of date" : "Current";
   const moveTab = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
@@ -172,7 +174,7 @@ export default function AnalysisResultPanel() {
           {tab === "notes" && <div className="qz-analysis-notes">
             <label htmlFor="analysis-result-notes">Notes</label>
             <textarea id="analysis-result-notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Record interpretation, assumptions, or follow-up work…" />
-            <Button variant="primary" disabled={notes === (result.notes ?? "")} onClick={() => updateAnalysisResultNotes(result.id, notes)}>Save notes</Button>
+            <Button variant="primary" disabled={notes === (result.notes ?? "")} onClick={() => withActions((m) => m.updateAnalysisResultNotes(result.id, notes))}>Save notes</Button>
           </div>}
         </div>
       </div>

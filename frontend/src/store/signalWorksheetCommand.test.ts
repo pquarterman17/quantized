@@ -6,6 +6,7 @@ import type { Dataset } from "../lib/types";
 vi.mock("../lib/transformRun", () => ({ runTransform: vi.fn() }));
 
 import { runTransform } from "../lib/transformRun";
+import { registerSignalResult } from "./analysisResultActions";
 import { createSignalWorksheetFromApp } from "./signalWorksheetCommand";
 import { useApp } from "./useApp";
 
@@ -35,11 +36,16 @@ const OUTPUT: Dataset = {
 beforeEach(() => {
   vi.clearAllMocks();
   useApp.setState({ datasets: [SOURCE, OUTPUT], analysisResults: [], openAnalysisResultId: null, history: [], future: [] });
-  vi.mocked(runTransform).mockResolvedValue({ id: "output", name: OUTPUT.name, warnings: [], outputs: [{ id: "output", key: "" }] });
+  // The real runTransform registers the result for every signal output
+  // (lib/signalTransformRun.test.ts covers that); the mock does the same.
+  vi.mocked(runTransform).mockImplementation(async () => {
+    registerSignalResult("source", "output");
+    return { id: "output", name: OUTPUT.name, warnings: [], outputs: [{ id: "output", key: "" }] };
+  });
 });
 
 describe("createSignalWorksheetFromApp", () => {
-  it("registers and opens a durable result after the linked worksheet commits", async () => {
+  it("opens the durable result runTransform registered for the linked worksheet", async () => {
     expect(await createSignalWorksheetFromApp("source", RECIPE)).toBe("output");
     expect(useApp.getState().analysisResults).toHaveLength(1);
     expect(useApp.getState().analysisResults[0]).toMatchObject({
@@ -48,12 +54,14 @@ describe("createSignalWorksheetFromApp", () => {
       outputs: [{ datasetId: "output" }],
       settingsRef: { datasetId: "output", field: "analysisRecipe" },
     });
-    expect(useApp.getState().openAnalysisResultId).toBe(useApp.getState().analysisResults[0].id);
+    expect(useApp.getState().analysisResults[0].id).toBe("analysis-output");
+    expect(useApp.getState().openAnalysisResultId).toBe("analysis-output");
   });
 
   it("does not invent a result when the transform returned an output absent from the store", async () => {
     useApp.setState({ datasets: [SOURCE] });
     expect(await createSignalWorksheetFromApp("source", RECIPE)).toBe("output");
     expect(useApp.getState().analysisResults).toEqual([]);
+    expect(useApp.getState().openAnalysisResultId).toBeNull();
   });
 });

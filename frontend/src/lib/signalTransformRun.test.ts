@@ -48,6 +48,8 @@ beforeEach(() => {
     macroRecording: true,
     macroSteps: [],
     pipelineRunning: false,
+    analysisResults: [],
+    openAnalysisResultId: null,
     history: [],
     future: [],
   });
@@ -92,6 +94,24 @@ describe("Signal Processing transform commit", () => {
     useApp.getState().undo();
 
     expect(useApp.getState().datasets).toEqual([source]);
+  });
+
+  it("registers a durable result for a replayed signal step without opening it, and undo removes both", async () => {
+    // PR #554 review: Pipeline/macro replay goes through replayTransform ->
+    // runTransform, never the workbench command, so the result must be
+    // registered there or replayed outputs have none.
+    const { replayTransform } = await import("./transformReplay");
+    const result = await replayTransform(useApp.getState, { ...params, inputIsTarget: true }, source.id);
+    expect(useApp.getState().analysisResults).toEqual([expect.objectContaining({
+      id: `analysis-${result.id}`,
+      sources: [{ datasetId: "source", role: "input" }],
+      outputs: [{ datasetId: result.id, role: "linked-worksheet" }],
+    })]);
+    expect(useApp.getState().openAnalysisResultId).toBeNull();
+
+    useApp.getState().undo();
+    expect(useApp.getState().datasets).toEqual([source]);
+    expect(useApp.getState().analysisResults).toEqual([]);
   });
 
   it("fails closed without publishing an output when the source changes during compute", async () => {

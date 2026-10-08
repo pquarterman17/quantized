@@ -266,26 +266,23 @@ export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHier
   // L0.16 band order is unchanged (worksheets 0, then analysis results,
   // figures, pages, reports). Artifacts pass their insertion index as `order` — every
   // artifact is keyed, so byOrder keeps them insertion-ordered.
-  (input.analysisResults ?? []).forEach((result, index) => {
-    const owner = ownerForSources([
-      ...result.sources.map((source) => source.datasetId),
-      ...result.outputs.map((output) => output.datasetId),
-    ]);
-    add("analysis-result", result, result.name, owner.parentKey, 2, index, owner.source);
-  });
-  (input.originFigures ?? []).forEach((figure, index) => {
-    const sourceIds = originSourceIds(figure, input.originFigures ?? [], input.datasets);
-    const owner = ownerForSources(sourceIds, figure.siblingIds);
-    add("origin-figure", figure, figureLabel(figure), owner.parentKey, 3, index, owner.source);
-  });
-  (input.editableFigures ?? []).forEach((figure, index) => {
-    const owner = ownerForSources(figure.bindings.datasetId ? [figure.bindings.datasetId] : []);
-    add("editable-figure", figure, figure.name, owner.parentKey, 4, index, owner.source);
-  });
-  (input.publicationFigures ?? []).forEach((figure, index) => {
-    const owner = ownerForSources(figure.datasetId ? [figure.datasetId] : []);
-    add("publication-figure", figure, figure.name, owner.parentKey, 5, index, owner.source);
-  });
+  // Place one artifact under the owner its source datasets resolve to.
+  const place = (
+    kind: LibraryNodeKind, entity: DraftNode["entity"], name: string, section: number, index: number,
+    sourceIds: readonly string[], fallbackIds?: readonly string[],
+  ): void => {
+    const owner = ownerForSources(sourceIds, fallbackIds);
+    add(kind, entity, name, owner.parentKey, section, index, owner.source);
+  };
+  (input.analysisResults ?? []).forEach((result, index) =>
+    place("analysis-result", result, result.name, 2, index, [...result.sources, ...result.outputs].map((ref) => ref.datasetId)));
+  (input.originFigures ?? []).forEach((figure, index) =>
+    place("origin-figure", figure, figureLabel(figure), 3, index,
+      originSourceIds(figure, input.originFigures ?? [], input.datasets), figure.siblingIds));
+  (input.editableFigures ?? []).forEach((figure, index) =>
+    place("editable-figure", figure, figure.name, 4, index, figure.bindings.datasetId ? [figure.bindings.datasetId] : []));
+  (input.publicationFigures ?? []).forEach((figure, index) =>
+    place("publication-figure", figure, figure.name, 5, index, figure.datasetId ? [figure.datasetId] : []));
 
   const editableById = new Map((input.editableFigures ?? []).map((figure) => [figure.id, figure]));
   (input.pages ?? []).forEach((page, index) => {
@@ -297,16 +294,13 @@ export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHier
       if (!figure) missingFigureIds.push(panel.figureId);
       else if (figure.bindings.datasetId) sourceIds.push(figure.bindings.datasetId);
     }
-    const owner = ownerForSources(sourceIds);
     if (missingFigureIds.length > 0) {
       warnings.push(`page "${page.name}" referenced missing figure(s): ${[...new Set(missingFigureIds)].join(", ")}`);
     }
-    add("page", page, page.name, owner.parentKey, 6, index, owner.source);
+    place("page", page, page.name, 6, index, sourceIds);
   });
-  (input.reports ?? []).forEach((report, index) => {
-    const owner = ownerForSources(report.datasetId ? [report.datasetId] : []);
-    add("report", report, report.name, owner.parentKey, 7, index, owner.source);
-  });
+  (input.reports ?? []).forEach((report, index) =>
+    place("report", report, report.name, 7, index, report.datasetId ? [report.datasetId] : []));
 
   const roots: DraftNode[] = [];
   for (const node of drafts.values()) {
