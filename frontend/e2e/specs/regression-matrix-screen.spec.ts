@@ -241,6 +241,10 @@ test.describe("P4.2 regression matrix — screen canvas", () => {
     const [lo, hi] = g.axes.x.limits!;
     const ranges: [number, number][] = [[lo, g.xBreaks[0][0]], [g.xBreaks[0][1], hi]];
     const ser = g.series[0];
+    // Batch 34: the panels share panel 0's y axis (as the export does), so
+    // only panel 0 labels y ticks; the others line up with it and are read
+    // through its ticks.
+    const y0 = axesOf(s.panels[0]).y;
     s.panels.forEach((p, k) => {
       const [line] = seriesLines(p);
       expect(line.style).toBe(ser.color);
@@ -250,10 +254,14 @@ test.describe("P4.2 regression matrix — screen canvas", () => {
       expect(line.width, "S2: explicit width").toBe(ser.width);
       const ax = axesOf(p);
       expectSpan(ax.x, ranges[k], p, "x");
-      expectSpan(ax.y, g.axes.y.limits, p, "y");
+      if (k === 0) expectSpan(ax.y, g.axes.y.limits, p, "y");
+      else {
+        expect(ax.y, "a right-of-seam panel repeats no y tick labels").toEqual([]);
+        expect([p.rect.top, p.rect.height], "plot area lines up with panel 0").toEqual([s.panels[0].rect.top, s.panels[0].rect.height]);
+      }
       const rows = ROWS.map((_r, r) => r).filter((r) => r >= ranges[k][0] && r <= ranges[k][1]);
       expect(line.pts.length).toBe(rows.length);
-      expectPoints(line, ax.x, ax.y, rows, (r) => ROWS[r][ser.channel], p.dpr, `panel ${k}`);
+      expectPoints(line, ax.x, y0, rows, (r) => ROWS[r][ser.channel], p.dpr, `panel ${k}`);
     });
   });
 

@@ -80,4 +80,25 @@ describe("analysis result envelope", () => {
     expect(migrated).toHaveLength(1);
     expect(migrated[0]).toMatchObject({ id: "analysis-output", createdAt: "saved" });
   });
+
+  it("keeps a legacy output's result when its source is not in the file, naming the missing source", () => {
+    const migrated = migrateLegacySignalResults([output()], "saved");
+    expect(migrated).toEqual([{
+      version: 1,
+      id: "analysis-output",
+      name: "Smooth · Trace (Smooth)",
+      producer: { id: "signal-processing", label: "Signal Processing", version: 1 },
+      sources: [{ datasetId: "source", role: "input" }],
+      outputs: [{ datasetId: "output", role: "linked-worksheet" }],
+      settingsRef: { datasetId: "output", field: "analysisRecipe" },
+      tableRefs: [{ datasetId: "output", label: "Trace (Smooth)" }],
+      plotBindings: [{ datasetId: "output", channels: [0] }],
+      warnings: [],
+      createdAt: "saved",
+    }]);
+    // The kept record passes the loader's sanitizer untouched.
+    expect(sanitizeAnalysisResults(JSON.parse(JSON.stringify(migrated)))).toEqual(migrated);
+    // A recipe-less output is still not an analysis result.
+    expect(migrateLegacySignalResults([{ ...output(), analysisRecipe: undefined }], "saved")).toEqual([]);
+  });
 });

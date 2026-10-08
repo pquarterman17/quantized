@@ -25,7 +25,10 @@
 // slot: `soloLabel` paints the y-axis only when a SINGLE series sits on that
 // axis, so a multi-channel break panel (no legend, no solo axis label) still
 // shows no series name on screen while the export carries the rename — a
-// recorded residual, not something this projection closes.
+// recorded residual, not something this projection closes. Since batch 34 a
+// right-of-seam panel shares panel 0's y axis and shows its own y title only
+// when it differs from panel 0's (`breakPanelLayout.yTitleKey`), so the name
+// sits once, on panel 0, as in the export.
 //
 // `seriesStyles` rides the SAME per-panel projection (R1, the regression
 // matrix's S2): the leg used to pass none, so an explicit width / colour /
@@ -50,6 +53,7 @@ import type { SeriesStyle } from "../../lib/types";
 import { errorReach } from "../../lib/uplotErrorRange";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
+import { applySeamSides, breakPlotWidths, yTitleKey } from "./breakPanelLayout";
 
 /** The width of the hashed seam drawn between two adjacent break panels. */
 const BREAK_GLYPH_W = 20;
@@ -151,14 +155,16 @@ const rowSpans = new WeakMap<readonly uPlot[], number[]>();
 
 /** Size `plots` across `width` px so each PLOT AREA's width is in proportion
  *  to its panel's x span — the export's `width_ratios`
- *  (`calc/figure_break.py`), so a slope reads the same in every panel. Each
- *  panel keeps its own axis gutters on top (each names its own channels). */
+ *  (`calc/figure_break.py`), so a slope reads the same in every panel — or
+ *  equal when that would squeeze one below `MIN_BREAK_PLOT_W`
+ *  (`breakPanelLayout.ts`). Gutters come off the top: panel 0's y axis, and
+ *  the small seam pads of the panels that share it. */
 function layoutRow(plots: readonly uPlot[], spans: readonly number[], width: number, height: number): void {
   const off = plots.map((u) => Math.max(0, u.width - (u.bbox?.width ?? u.width) / (uPlot.pxRatio || 1)) || 0);
   const free = Math.max(plots.length, width - (plots.length - 1) * BREAK_GLYPH_W - off.reduce((a, b) => a + b, 0));
-  const total = spans.reduce((a, b) => a + b, 0);
+  const plotWs = breakPlotWidths(free, spans);
   plots.forEach((u, i) => {
-    const w = Math.max(1, Math.floor(off[i] + (free * spans[i]) / total));
+    const w = Math.max(1, Math.floor(off[i] + plotWs[i]));
     if (u.root?.parentElement) u.root.parentElement.style.flex = `0 0 ${w}px`;
     u.setSize({ width: w, height });
   });
@@ -181,6 +187,7 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
     args.yAuto && yLim && yScale !== "reciprocal" && typeof uPlot.rangeNum === "function" // (a test's mock may lack it)
       ? ((yScale === "log" ? uPlot.rangeLog(yLim[0], yLim[1], 10, false) : uPlot.rangeNum(yLim[0], yLim[1], 0.1, true)) as [number, number])
       : null;
+  const title0 = args.panels.length ? yTitleKey(args.panels[0], args.seriesLabels) : "";
   args.panels.forEach((p, i) => {
     if (i > 0) host.appendChild(makeBreakGlyph(BREAK_GLYPH_W));
     const div = document.createElement("div");
@@ -193,6 +200,12 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
       // A break panel's whole point is showing only its own x-slice.
       xLim: p.xRange,
       yLim: padded ?? yLim,
+      // Right of a seam the y axis is panel 0's (`applySeamSides` below), so
+      // a y title that would only repeat panel 0's goes; the x title is drawn
+      // once, on panel 0, as the export's one `supxlabel` (`null` keeps the
+      // title band, so the plot heights match).
+      ...(i > 0 ? { xAxisLabel: null } : {}),
+      ...(i > 0 && yTitleKey(p, args.seriesLabels) === title0 ? { yAxisLabel: null } : {}),
       // `channels[i]` is the dataset channel behind `payload.series[i]`, by
       // construction in `lib/facet.breakPayloads` — so a rename lands on the
       // channel it was made for even when this panel's channel list differs
@@ -204,6 +217,7 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
     });
+    applySeamSides(opts, { left: i > 0, right: i < args.panels.length - 1 });
     // Cursor sync by shared y only: uPlot maps a synced cursor or box-zoom
     // selection BY X VALUE, which put the left panel's x slice on the right.
     opts.cursor = { ...opts.cursor, sync: { key: args.syncKey, scales: ["x", "y"], match: [() => false, (a, b) => a === b] } };

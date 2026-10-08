@@ -752,8 +752,9 @@ export interface BuildOptsArgs {
    *  other caller's plain string/undefined behaves exactly as before. */
   xAxisLabel?: string | null;
   /** Override the primary y-axis label; when set it shows even with >1 series
-   *  (blank/undefined = the solo-series auto label). */
-  yAxisLabel?: string;
+   *  (blank/undefined = the solo-series auto label; `null` = no title, as on a
+   *  right-of-seam x-break panel, which shares panel 0's y axis). */
+  yAxisLabel?: string | null;
   /** Override the secondary y-axis label (Origin double-Y apply carries layer
    *  2's decoded title here); same blank/undefined semantics as yAxisLabel. */
   y2AxisLabel?: string;
@@ -834,6 +835,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   );
   // Y title: the override, else a solo series' legend name, else what several share.
   const soloLabel = (which: number): string | undefined => {
+    if (which === 0 && args.yAxisLabel === null) return undefined;
     if (which === 0 && args.yAxisLabel?.trim()) return args.yAxisLabel.trim();
     if (which === 1 && args.y2AxisLabel?.trim()) return args.y2AxisLabel.trim();
     const idxs = payload.series.map((_, i) => i).filter((i) => (payload.series[i].axis ?? 0) === which);

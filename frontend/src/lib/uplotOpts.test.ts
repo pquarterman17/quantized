@@ -821,6 +821,16 @@ describe("buildOpts defaultTrace", () => {
     expect(blankString.axes?.[0]?.label).toBe("Field (Oe)");
   });
 
+  // Batch 34: a right-of-seam x-break panel shares panel 0's y axis and must
+  // draw no title — including a rich one, which a plugin (not uPlot) paints.
+  it("null drops the y-axis title and its rich-label plugin draw", () => {
+    const rich = { ...base, yScale: "linear" as const, tool: "zoom" as const, seriesLabels: ["$M_s$ (emu)"] };
+    const drawn = buildOpts(payload, rich);
+    const dropped = buildOpts(payload, { ...rich, yAxisLabel: null });
+    expect(dropped.axes?.[1]?.label).toBeUndefined();
+    expect(dropped.plugins?.length).toBe((drawn.plugins?.length ?? 0) - 1);
+  });
+
   it("overrides the primary y-axis label and forces it to show with >1 series", () => {
     const two: PlotPayload = { ...payload, series: [...payload.series, { label: "B", unit: "T" }] };
     // Without an override, >1 series leaves the axis label to the legend (undefined).
