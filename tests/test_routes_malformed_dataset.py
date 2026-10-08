@@ -160,6 +160,11 @@ CASES = [
     ),
     ("/api/corrections/apply", lambda ds: {"dataset": ds}, GOOD_DATASET),
     (
+        "/api/spectral/workbench",
+        lambda ds: {"dataset": ds, "operation": "fft", "channels": [0]},
+        MAP_GOOD,
+    ),
+    (
         "/api/transform/resample",
         lambda ds: {"dataset": ds, "mode": "n_points", "n_points": 5},
         GOOD_DATASET,

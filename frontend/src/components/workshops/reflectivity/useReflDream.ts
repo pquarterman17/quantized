@@ -23,7 +23,7 @@ import {
 import { defaultPlotView } from "../../../lib/plotview";
 import { droppedRows } from "../../../lib/rowstate";
 import type { Dataset } from "../../../lib/types";
-import { trackJob } from "../../../store/pendingOps";
+import { trackJob } from "../../../store/pendingOpActions";
 import { nextDatasetId, useApp } from "../../../store/useApp";
 import { bandDatasets, R_BAND_FILLS } from "./reflDreamBands";
 import { buildChannel } from "./reflFitData";

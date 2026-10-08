@@ -4,7 +4,7 @@ import { useMemo } from "react";
 
 import { columnMetaList } from "../../lib/columnmeta";
 import { downsampleMinMax, trimTrailingPadding } from "../../lib/downsample";
-import { primaryChannel } from "../../lib/plotdata";
+import { primaryChannel } from "../../lib/plotdataExtras";
 import type { DataStruct } from "../../lib/types";
 
 const W = 180;

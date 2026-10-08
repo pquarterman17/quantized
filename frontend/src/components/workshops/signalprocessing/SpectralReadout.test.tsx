@@ -1,0 +1,39 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+
+import type { DataStruct } from "../../../lib/types";
+import SpectralReadout from "./SpectralReadout";
+
+function result(metadata: DataStruct["metadata"]): DataStruct {
+  return { time: [0, 1], values: [[0], [1]], labels: ["result"], units: [""], metadata };
+}
+
+describe("SpectralReadout", () => {
+  it("renders a filter transfer-function diagnostic", () => {
+    render(<SpectralReadout result={result({
+      filterDiagnostics: { frequency: [0, 1, 2], transfer: [1, 0.5, 0] },
+    })} />);
+    expect(screen.getByRole("img", { name: "Filter transfer function preview" })).toBeInTheDocument();
+  });
+
+  it("bounds an unexpectedly large diagnostic before constructing SVG points", () => {
+    const frequency = Array.from({ length: 20_000 }, (_, index) => index);
+    render(<SpectralReadout result={result({
+      filterDiagnostics: { frequency, transfer: frequency.map(() => 0.5) },
+    })} />);
+    const line = screen.getByRole("img", { name: "Filter transfer function preview" })
+      .querySelector("polyline");
+    expect(line?.getAttribute("points")?.trim().split(" ").length).toBeLessThanOrEqual(512);
+  });
+
+  it("renders the correlation peak in source-axis units", () => {
+    render(<SpectralReadout result={result({
+      peakLag: 0.025,
+      peakCorrelation: -0.875,
+      x_column_unit: "s",
+    })} />);
+    const readout = screen.getByLabelText("Cross-correlation peak");
+    expect(readout).toHaveTextContent("0.025 s");
+    expect(readout).toHaveTextContent("-0.875");
+  });
+});

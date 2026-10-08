@@ -12,7 +12,7 @@ import { useCallback, useState } from "react";
 import { exportSplomFigure } from "../../../lib/api";
 import { transposeRows } from "../../../lib/multivar";
 import { Button } from "../../primitives";
-import { runCancellable } from "../../../store/pendingOps";
+import { runCancellable } from "../../../store/pendingOpActions";
 import { useApp } from "../../../store/useApp";
 import SplomView from "./SplomView";
 import type { MultivarState } from "./useMultivar";

@@ -18,7 +18,7 @@ import { findPeaks, fitMultiPeak, fitPeak, type PeakSeed } from "../../../lib/ap
 import { placeLabels, renderLabelTemplate, DEFAULT_LABEL_TEMPLATE } from "../../../lib/peakLabels";
 import type { PeakTable } from "../../../lib/peakTable";
 import { peakTableMatchesData, peakTableToFitResult } from "../../../lib/peakTableFit";
-import { peakOverlayArray } from "../../../lib/plotdata";
+import { peakOverlayArray } from "../../../lib/plotdataExtras";
 import { rowStateIdentity } from "../../../lib/rowstate";
 import type { Dataset, FittedPeak, MultiFitResult, Peak } from "../../../lib/types";
 import { peakInputs } from "./peakInputs";
@@ -27,6 +27,7 @@ import { usePeakManualEdits } from "./usePeakManualEdits";
 import { finiteRange } from "./peakRanges";
 import { limOr } from "../../../lib/axisLimFields";
 import { findOverrides, type PeakFindParams } from "./peakFindParams";
+import { useDetectedPeakCuration } from "./useDetectedPeakCuration";
 import { askParams } from "../../overlays/ParamDialog";
 import { confirmPeaksRefit, publishFitResult, setPeakExcluded } from "../../../store/peakTables";
 import { beginOp, endOp, updateOp } from "../../../store/pendingOps";
@@ -56,6 +57,8 @@ export interface PeaksState {
   toggleExcluded: (peakId: string, excluded: boolean) => void;
   editFittedPeak: (peakId: string, patch: { center: number; fwhm: number; height: number; area: number }) => Promise<void>;
   removeFittedPeaks: (peakIds: ReadonlySet<string>) => Promise<void>;
+  addDetectedPeakAt: (x: number) => void;
+  removeDetectedPeaks: (indices: ReadonlySet<number>) => void;
   fitting: boolean;
   fitError: string | null;
   fitTogether: (opts: PeakFitOptions) => Promise<void>;
@@ -91,11 +94,13 @@ export interface PeakFindRequest {
 
 export function usePeaks(find?: PeakFindRequest): PeaksState {
   const active = useActiveDataset();
+  const activeId = active?.id ?? null;
   const setPeakOverlay = useApp((s) => s.setPeakOverlay);
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
-  const [peaks, setPeaks] = useState<Peak[]>([]);
+  const { peaks, clearDetectedPeaks, setFoundPeaks, addDetectedPeakAt, removeDetectedPeaks } =
+    useDetectedPeakCuration(activeId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fitResult, setFitResult] = useState<MultiFitResult | null>(null);
@@ -115,7 +120,6 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
   // three `analysisData` consumes) plus `selectedFitData`'s `channelRoles`.
   // Narrower, and strictly more correct: a rename, a tag, or a fitSpec no
   // longer re-runs a peak search.
-  const activeId = active?.id ?? null;
   const [rowExclusions, rowFilter, activeData] = rowStateIdentity(active);
   const activeRoles = active?.channelRoles;
   const activeTable = active?.peakTable ?? null;
@@ -126,7 +130,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
   useEffect(() => {
     let cancelled = false;
     fitRunRef.current++;
-    setPeaks([]);
+    clearDetectedPeaks();
     setError(null);
     setFitResult(null);
     setFitError(null);
@@ -159,21 +163,12 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         if (gapCount > 0) {
           toast(`${gapCount} of ${sourceCount} rows are gaps; they were excluded from peak analysis.`);
         }
-        const res = await findPeaks({ x, y, ...(JSON.parse(findExtras) as Partial<PeakFindParams>) });
+        const xrdDefaults = ds.data.metadata.technique === "xrd.powder"
+          ? { strict_prominence: true }
+          : {};
+        const res = await findPeaks({ x, y, ...xrdDefaults, ...(JSON.parse(findExtras) as Partial<PeakFindParams>) });
         if (cancelled) return;
-        setPeaks(res.peaks);
-        // Overlay on the FULL plotted x (not the pruned x) so markers align with
-        // the full-length plot; peak centers land on their nearest full-x point.
-        // L2 (review, latent pre-existing bug this work surfaced): `p.height`
-        // is measured ABOVE `p.bg` (see `Peak`'s doc, lib/types.ts) — the
-        // marker's actual y is `height + bg`, same as `overlayFitted` below
-        // already does for fitted peaks. Left as bare `p.height` here, every
-        // detected-peak marker on a backgrounded dataset (e.g. any real XRD
-        // pattern) drew a whole background below the actual peak.
-        setPeakOverlay({
-          datasetId: ds.id,
-          y: peakOverlayArray(fullX, res.peaks.map((p) => ({ center: p.center, height: p.height + p.bg }))),
-        });
+        setFoundPeaks(res.peaks, { x, y, fullX, background: res.background });
       } catch (e: unknown) {
         if (!cancelled) setError(e instanceof Error ? e.message : "peak find failed");
       } finally {
@@ -183,7 +178,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
     return () => {
       cancelled = true;
     };
-  }, [activeId, activeData, rowExclusions, rowFilter, activeRoles, setPeakOverlay, xKey, yKeys, seriesOrder, findExtras, findSeq]);
+  }, [activeId, activeData, rowExclusions, rowFilter, activeRoles, clearDetectedPeaks, setPeakOverlay, setFoundPeaks, xKey, yKeys, seriesOrder, findExtras, findSeq]);
 
   // Draw fitted peak tops (height above the local background) as the overlay,
   // on the FULL plotted x so markers align with the full-length plot x.
@@ -494,6 +489,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
 
   return {
     active, peaks, busy, error, fitResult, peakTable: activeTable, toggleExcluded,
-    editFittedPeak, removeFittedPeaks, fitting, fitError, fitTogether, fitEach, labelPeaks,
+    editFittedPeak, removeFittedPeaks, addDetectedPeakAt, removeDetectedPeaks,
+    fitting, fitError, fitTogether, fitEach, labelPeaks,
   };
 }

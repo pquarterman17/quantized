@@ -32,13 +32,16 @@ interface Props {
   selected: ReadonlySet<number>;
   /** Omit to render this table inert (non-governing) — see module header. */
   onSelect?: (index: number, mods: SelectMods) => void;
+  /** Optional owner for Delete/Backspace. The table always consumes those
+   *  keys so they can never fall through to dataset deletion. */
+  onDelete?: () => void;
 }
 
 function modsFrom(e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }): SelectMods {
   return { shift: e.shiftKey, ctrlOrMeta: e.ctrlKey || e.metaKey };
 }
 
-export default function PeakTable({ ariaLabel, columns, rows, selected, onSelect }: Props) {
+export default function PeakTable({ ariaLabel, columns, rows, selected, onSelect, onDelete }: Props) {
   const interactive = onSelect != null;
   const [rovingIndex, setRovingIndex] = useState(0);
   // Clamp rather than store the clamped value — `rows.length` can shrink
@@ -64,6 +67,7 @@ export default function PeakTable({ ariaLabel, columns, rows, selected, onSelect
     // stops Backspace triggering the browser's Back navigation.
     if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
+      onDelete?.();
       return;
     }
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;

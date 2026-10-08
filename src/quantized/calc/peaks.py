@@ -188,6 +188,7 @@ def find_peaks_robust(
     bg_method: str = "snip",
     bg_poly_degree: int = 4,
     bg_iterative: bool = False,
+    strict_prominence: bool = False,
 ) -> tuple[list[dict[str, Any]], NDArray[np.float64]]:
     """Detect peaks robustly. Port of utilities.findPeaksRobust.
 
@@ -200,6 +201,13 @@ def find_peaks_robust(
     to :func:`estimate_background` (``snip`` or ``polynomial``, optionally
     peak-masked and refined). The defaults are MATLAB's (SNIP, one pass), so
     the golden path is untouched; the others are a quantized extension.
+
+    ``strict_prominence`` makes ``min_prominence`` a true global floor: a
+    candidate must stand out by that fraction of the tallest residual peak.
+    The MATLAB-compatible default keeps the historical local-prominence
+    escape hatch; XRD callers enable the stricter behaviour because a slowly
+    varying diffraction background can otherwise produce dozens of weak,
+    locally-prominent false peaks.
     """
     xv = np.asarray(x, dtype=float).ravel()
     yv = np.asarray(y, dtype=float).ravel()
@@ -233,7 +241,9 @@ def find_peaks_robust(
     prom = _compute_prominence(residual, max_idx)
     abs_prom_thresh = max(min_prom * float(residual.max()), 4 * global_noise)
     rel_prom_ratio = prom / np.maximum(residual[max_idx], _EPS)
-    keep = (prom >= abs_prom_thresh) | ((rel_prom_ratio >= 0.15) & (prom >= 4 * global_noise))
+    keep = prom >= abs_prom_thresh
+    if not strict_prominence:
+        keep |= (rel_prom_ratio >= 0.15) & (prom >= 4 * global_noise)
     max_idx, prom = max_idx[keep], prom[keep]
     if max_idx.size == 0:
         return [], bg

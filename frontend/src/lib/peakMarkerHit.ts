@@ -1,11 +1,12 @@
-// Peak Analyzer wizard click-on-plot marker editing (interaction plan item 5,
-// deferred from closed gap #31): hit-test the wizard's candidate markers
+// Peak-workshop click-on-plot marker editing (interaction plan item 5,
+// introduced for Peak Analyzer and shared by the simpler Peaks panel): hit-test candidate markers
 // against a plot click, in PIXEL space so the tolerance stays constant across
 // zoom levels. Rides the shared point-gesture core (lib/pointGesture) for the
 // pixel-frame conversion + nearest-point hit test — this file was the template
 // the 2026-07-11 pixel-frame bug was cloned FROM, which is exactly why the
 // core now exists once (MAIN #8). What stays here is peak-wizard domain logic:
-// the visible-marker projection and the click-only edit plugin — usePeakWizard
+// the click-only edit plugin (the visible-marker projection is in
+// lib/peakMarkersVisible.ts) — usePeakWizard
 // is the only owner of the candidate list this hit-tests against.
 
 import type uPlot from "uplot";
@@ -21,19 +22,9 @@ export interface PeakMarkerCandidate {
   height: number;
 }
 
-/** The markers actually drawn on the plot: only `included` candidates ride the
- *  `setPeakOverlay` series (see usePeakWizard's marker-overlay effect /
- *  `withPeakOverlay` in plotdata.ts), so only those are clickable for removal.
- *  Pure — no uPlot needed, trivially unit-tested without a plot instance. */
-export function visiblePeakMarkers(
-  candidates: readonly { center: number; height: number; included: boolean }[],
-): PeakMarkerCandidate[] {
-  const out: PeakMarkerCandidate[] = [];
-  candidates.forEach((c, index) => {
-    if (c.included) out.push({ index, center: c.center, height: c.height });
-  });
-  return out;
-}
+// `visiblePeakMarkers` (the clickable-marker projection) lives in
+// lib/peakMarkersVisible.ts: only the lazy peak workshops call it (bundle
+// diet slice 24). Not re-exported.
 
 /** Marker (center, height) data coords → the core's pixel-tagged gesture
  *  points (center→x, height→y), via `pointPixels` — the CSS-px frame contract
@@ -49,8 +40,8 @@ export function peakMarkerPixels(
 }
 
 /**
- * Wizard-scoped plot plugin (step ② only — see PlotStage's `peakWizardEdit`
- * prop, sourced from the store bridge usePeakWizard maintains). A plain click
+ * Workshop-scoped plot plugin (see PlotStage's legacy-named `peakWizardEdit`
+ * prop, sourced from the active peak editor's store bridge). A plain click
  * (mousedown+mouseup with < CLICK_PX movement, the shared click-vs-drag
  * threshold) either removes the marker under the pointer or adds a new
  * candidate at the clicked x; a genuine drag (box zoom, pan) is left alone.

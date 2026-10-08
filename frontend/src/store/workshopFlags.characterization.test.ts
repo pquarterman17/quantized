@@ -51,6 +51,7 @@ const FLAG_SETTERS: [keyof AppState, keyof AppState][] = [
   ["setDatasetMathOpen", "datasetMathOpen"],
   ["setTabulateOpen", "tabulateOpen"],
   ["setDistributionOpen", "distributionOpen"],
+  ["setSignalProcessingOpen", "signalProcessingOpen"],
   ["setDataFilterOpen", "dataFilterOpen"],
   ["setStatsChooserOpen", "statsChooserOpen"],
   ["setPeakWizardOpen", "peakWizardOpen"],

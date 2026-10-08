@@ -8,9 +8,9 @@
 //
 // Pure types + sanitizer only — the zustand slice that owns the live value
 // lives in `store/mapView.ts`, exactly the `lib/roi.ts` / `store/rois.ts`
-// division this map subsystem already uses, so `lib/workspaceSerialize.ts`
-// and `lib/workspace.ts` can reach the (de)serializers without importing a
-// store slice's actions.
+// division this map subsystem already uses. The save-only copier lives in
+// `lib/mapViewSerialize.ts`; the sanitizer stays here because workspace load
+// and the live store both need it, without importing a store slice's actions.
 //
 // ONE VIEW PER DATASET (P2.8 review round 2, 2026-09-17). The first cut of
 // this module held ONE app-wide record carrying its own `datasetId`, rebound
@@ -119,7 +119,7 @@ export interface MapViewState {
  *  missing view — it IS `DEFAULT_MAP_VIEW` (see `mapViewFor`), which is what
  *  makes opening a map a read rather than a write. An entry that is EQUAL to
  *  the default (edited back to it) costs the saved document nothing either:
- *  `isDefaultMapViews` and `serializeMapViews` both judge by value. */
+ *  `mapViewSerialize.ts` judges defaults by value. */
 export type MapViewMap = Readonly<Record<string, MapViewState>>;
 
 /** The untouched view. DEEPLY frozen — the arrays too, since `.slices.push(…)`
@@ -137,9 +137,21 @@ export const DEFAULT_MAP_VIEW: MapViewState = Object.freeze({
 /** The untouched record: no dataset has a view yet. */
 export const EMPTY_MAP_VIEWS: MapViewMap = Object.freeze({});
 
+/** True when this dataset's view records no decision. */
+export function isDefaultMapView(v: MapViewState | undefined | null): boolean {
+  if (!v) return true;
+  return (
+    v.colormap === DEFAULT_MAP_VIEW.colormap &&
+    v.logZ === DEFAULT_MAP_VIEW.logZ &&
+    v.colorLimits === null &&
+    v.slices.length === 0 &&
+    v.annotations.length === 0
+  );
+}
+
 /** The colormap names a `.dwk` may name. Kept as a string list rather than a
  *  value import of `lib/colormap`'s `COLORMAPS` because this module is EAGER
- *  (lib/workspaceSerialize.ts reaches it) and that import would drag the
+ *  (the live map store reaches it) and that import would drag the
  *  colour LUTs into the eager chunk. `lib/mapView.test.ts` pins it equal to
  *  `Object.keys(COLORMAPS)` so a fifth colormap cannot silently start
  *  reverting to viridis on reopen. */
@@ -177,30 +189,6 @@ const MAX_LABEL_CHARS = 200;
  *  exactly when no key is integer-like. */
 const MAX_VIEWS = 256;
 
-/** True when this dataset's view records no decision — every field is still at
- *  its default. Deliberately says NOTHING about which dataset it belongs to:
- *  opening a map is not a decision, so binding one must not make a document
- *  dirty (P2.8 review round 2, finding 2). `lib/workspaceSerialize.ts` uses
- *  this to OMIT the field entirely, so a project that never touched a map
- *  serializes byte-for-byte as it did before P2.8 (BUG-017's rule: an additive
- *  field must cost an ordinary document nothing). */
-export function isDefaultMapView(v: MapViewState | undefined | null): boolean {
-  if (!v) return true;
-  return (
-    v.colormap === DEFAULT_MAP_VIEW.colormap &&
-    v.logZ === DEFAULT_MAP_VIEW.logZ &&
-    v.colorLimits === null &&
-    v.slices.length === 0 &&
-    v.annotations.length === 0
-  );
-}
-
-/** True when no dataset's view records a decision. */
-export function isDefaultMapViews(m: MapViewMap | undefined | null): boolean {
-  if (!m) return true;
-  return Object.values(m).every(isDefaultMapView);
-}
-
 /** The view a map showing `datasetId` reads. An absent entry is the default —
  *  a pure lookup, never a write, which is what makes a second open map
  *  harmless. */
@@ -221,24 +209,6 @@ export function sameColorLimits(
 ): boolean {
   if (a === b) return true;
   return a !== null && b !== null && a[0] === b[0] && a[1] === b[1];
-}
-
-/** Deep copy for the save path — a live store object must never be aliased
- *  into the saved document (the same rule `serializeRois`/`serializePeakTable`
- *  follow). Default entries are dropped: they record nothing. */
-export function serializeMapViews(m: MapViewMap): Record<string, MapViewState> {
-  const out: Record<string, MapViewState> = {};
-  for (const [id, v] of Object.entries(m)) {
-    if (isDefaultMapView(v)) continue;
-    out[id] = {
-      colormap: v.colormap,
-      logZ: v.logZ,
-      colorLimits: v.colorLimits ? [v.colorLimits[0], v.colorLimits[1]] : null,
-      slices: v.slices.map((s) => ({ ...s, a: { ...s.a }, ...(s.b ? { b: { ...s.b } } : {}) })),
-      annotations: v.annotations.map((a) => ({ ...a })),
-    };
-  }
-  return out;
 }
 
 function num(v: unknown): number | null {

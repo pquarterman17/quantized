@@ -103,9 +103,11 @@ export default function PlotWindowFrame({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bounds?.width, bounds?.height, win.id, win.winState]);
 
-  // Capture-phase focus raises the frame before child/uPlot handlers run.
-  const onFrameCapture = () => {
-    if (!focused) focusWindow(win.id);
+  // Capture-phase focus raises the frame before child/uPlot handlers run —
+  // except on a background magnifier inset, which edits this window in place
+  // and focuses it once done (the swap would unmount it mid-gesture).
+  const onFrameCapture = (e: React.PointerEvent) => {
+    if (!focused && !(e.target as Element).closest?.("[data-inset-box]")) focusWindow(win.id);
   };
 
   const maximized = win.winState === "maximized";

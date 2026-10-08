@@ -41,11 +41,18 @@ import { applyWorkbookMigration, sanitizeWorkbooks, type WorkbookNode } from "./
 import { parseOriginFidelity, parseOriginFigures, stringsIn } from "./workspaceOrigin";
 import { parseWorkspaceDataset } from "./workspaceDatasetParse";
 import { legacyNullWarning, type LegacyNullTally } from "./legacyNullCells";
+import { migrateLegacyMapX } from "./legacyMapX";
 import { splitProjectFitModels } from "./fitModelsProject";
 import type { CustomFitModel } from "./fitmodels";
 import type { AnalysisTemplate } from "./template";
 import { splitProjectTemplates } from "./templatesProject";
 import type { Dataset, FolderNode } from "./types";
+import {
+  migrateLegacySignalResults,
+  sanitizeAnalysisResults,
+  type AnalysisResult,
+} from "./analysisResult";
+import { staleAnalysisOutputs } from "./analysisResultFreshness";
 
 export const WORKSPACE_FORMAT = "quantized-workspace";
 // v2 (project-organization plan item 2): adds the folder tree, active/selection, and folder-expansion.
@@ -100,6 +107,12 @@ export interface WorkspaceState {
   originFidelity?: OriginFidelityEntry[];
   smartFolders?: SmartFolder[];
   reports?: ReportEntry[];
+  /** Workstream B: durable analysis catalog records. Scientific arrays and
+   * recipes remain in their referenced worksheet/report authorities. */
+  analysisResults?: AnalysisResult[];
+  /** Session stale marks: read at save to stamp result freshness, seeded on
+   *  load from it (lib/analysisResultFreshness.ts); never a key of their own. */
+  staleDatasets?: string[];
   macroSteps?: PipelineStep[];
   recalcMode?: RecalcMode;
   figureDocs?: FigureDoc[];
@@ -170,6 +183,10 @@ export interface LoadedWorkspace {
   originFidelity: OriginFidelityEntry[];
   smartFolders: SmartFolder[];
   reports: ReportEntry[];
+  /** Parser always populates this; optional only for the suite's hand-built
+   * LoadedWorkspace fixtures, matching mapViews below. */
+  analysisResults?: AnalysisResult[];
+  staleDatasets?: string[];
   macroSteps: PipelineStep[];
   recalcMode: RecalcMode;
   figureDocs: FigureDoc[];
@@ -333,6 +350,7 @@ export function parseWorkspace(
   // same per-index errors this inline callback used to.
   const legacyNulls: LegacyNullTally = { cells: 0, names: [] }; // 2026-10-03 ruling, lib/legacyNullCells.ts
   const datasetsRaw = o.datasets.map((d, i) => parseWorkspaceDataset(d, i, opts?.projectDir, legacyNulls));
+  const mapXWarning = migrateLegacyMapX(datasetsRaw); // pre-#532 row-index map x, lib/legacyMapX.ts
 
   // Folder tree (absent in v1 → empty). Prune datasets pointing at a folder that
   // didn't survive validation; clamp active/selection/expansion to live ids.
@@ -364,8 +382,12 @@ export function parseWorkspace(
   const originFidelity = parseOriginFidelity(o.originFidelity, dsIds);
   const smartFolders = sanitizeSmartFolders(o.smartFolders);
   const reports = sanitizeReports(o.reports, dsIds, migrationWarnings, legacyNulls);
+  const analysisResults = o.analysisResults === undefined
+    ? migrateLegacySignalResults(datasets, typeof o.savedAt === "string" && o.savedAt ? o.savedAt : new Date(0).toISOString())
+    : sanitizeAnalysisResults(o.analysisResults, migrationWarnings);
   const nullWarning = legacyNullWarning(legacyNulls);
   if (nullWarning) migrationWarnings.unshift(nullWarning); // first: the status line shows only [0]
+  if (mapXWarning) migrationWarnings.push(mapXWarning);
   const macroSteps = sanitizeSteps(o.pipeline);
   const recalcMode: RecalcMode =
     o.recalcMode === "manual" || o.recalcMode === "off" ? o.recalcMode : "auto";
@@ -404,7 +426,7 @@ export function parseWorkspace(
   const librarySelection = parseLibrarySelection(
     o.librarySelection,
     selectedIds,
-    librarySelectionLiveIds({ folders: migration.folders, workbooks, originFigures, editableFigures, figureDocs, pages, reports }),
+    librarySelectionLiveIds({ folders: migration.folders, workbooks, originFigures, editableFigures, figureDocs, pages, reports, analysisResults }),
   );
   const workbookLastChild = parseWorkbookLastChild(o.workbookLastChild, workbookIds);
   const expandedWorkbookIds = stringsIn(o.expandedWorkbookIds, workbookIds);
@@ -427,6 +449,8 @@ export function parseWorkspace(
     originFidelity,
     smartFolders,
     reports,
+    analysisResults,
+    staleDatasets: staleAnalysisOutputs(analysisResults, datasets),
     macroSteps,
     recalcMode,
     figureDocs,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { cellInk, COLORMAPS, colormap, colormapCss, diverging, divergingCss, normalize, sampleColormap } from "./colormap";
+import { COLORMAPS, colormap, colormapCss, normalize, sampleColormap } from "./colormap";
+import { cellInk, diverging, divergingCss } from "./divergingColormap";
 
 describe("sampleColormap", () => {
   const stops = COLORMAPS.viridis;

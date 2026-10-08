@@ -7,7 +7,8 @@ import { useConnection } from "../../lib/lifecycle";
 import { exportFigure } from "../../lib/api/figures";
 import { runExportFigureCommand } from "../../lib/exportFigureCommand";
 import { useAutosaveStatus } from "../../store/autosaveStatus";
-import { beginOp, endOp, trackJob, updateOp, usePendingOps } from "../../store/pendingOps";
+import { trackJob } from "../../store/pendingOpActions";
+import { beginOp, endOp, updateOp, usePendingOps } from "../../store/pendingOps";
 import { useApp } from "../../store/useApp";
 
 vi.mock("../../lib/api/figures", () => ({ exportFigure: vi.fn() }));

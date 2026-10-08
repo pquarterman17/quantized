@@ -463,9 +463,6 @@ export function plainText(input: string | RichNode[]): string {
   return out;
 }
 
-/** Live editor feedback: `{ ok: true }` or `{ ok: false, error }`. */
-export function validateRichText(s: string): { ok: boolean; error?: string } {
-  if (!hasMarkup(s)) return { ok: true };
-  const r = parseRichText(s);
-  return r.ok ? { ok: true } : { ok: false, error: r.error ?? "invalid label markup" };
-}
+// `validateRichText` (the label editor's live feedback) lives in
+// lib/richtextValidate.ts: only the lazy RichLabelInput calls it (bundle diet
+// slice 24). Not re-exported.

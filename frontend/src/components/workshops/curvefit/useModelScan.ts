@@ -17,7 +17,7 @@ import { loadCustomModels } from "../../../lib/fitmodels";
 import { scanFitModelsJob } from "../../../lib/fitscan";
 import { cancelJob, pollJob, JobCancelledError } from "../../../lib/jobs";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-import { trackJob } from "../../../store/pendingOps";
+import { trackJob } from "../../../store/pendingOpActions";
 import { toast } from "../../../store/toasts";
 import { selectedFitData } from "../../../lib/fitselection";
 

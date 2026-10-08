@@ -1,6 +1,7 @@
 import type { ErrorBinding } from "./errorRoles";
 import { describe, expect, it } from "vitest";
 
+import { signalAnalysisResult } from "./analysisResult";
 import { isCategoricalChannel, levelLabel } from "./categorical";
 import { createFigureDocument } from "./figureDocument";
 import { renameLevelIn } from "./levelRename";
@@ -16,6 +17,7 @@ import { defaultPlotView, type PlotWindow } from "./plotview";
 import type { QuickPlotTemplate } from "./quickPlotTemplates";
 import type { ReportEntry } from "./report";
 import type { RoiDef } from "./roi";
+import { DEFAULT_SPECTRAL_RECIPE } from "./spectralWorkbench";
 import type { Dataset, OriginFigure } from "./types";
 import type { WorkbookNode } from "./workbooks";
 import { parseWorkspace, serializeWorkspace, WORKSPACE_FORMAT } from "./workspace";
@@ -200,6 +202,44 @@ describe("serializeWorkspace / parseWorkspace round-trip", () => {
   });
 });
 
+describe("durable analysis results", () => {
+  function linkedSignalPair(): [Dataset, Dataset] {
+    const source = makeDataset("source", "Trace");
+    const output = makeDataset("output", "Trace (Smooth)");
+    output.derivedFrom = { datasetId: source.id, pipeline: "Smooth" };
+    output.analysisRecipe = {
+      kind: "signal-correction",
+      version: 1,
+      operation: "Smooth",
+      xUnit: "s",
+      channels: [{ index: 0, label: "A", unit: "emu" }],
+      params: { signalChannels: [0], smoothEnabled: true, smoothMethod: "moving", smoothWindow: 2 },
+    };
+    return [source, output];
+  }
+
+  it("round-trips a result envelope without duplicating the linked recipe", () => {
+    const [source, output] = linkedSignalPair();
+    const result = signalAnalysisResult("result-1", source, output, "2026-10-08T00:00:00Z")!;
+    const loaded = parseWorkspace(serializeWorkspace({ datasets: [source, output], analysisResults: [result] }));
+    // The save adds only the freshness fingerprint (lib/analysisResultFreshness.ts).
+    expect(loaded.analysisResults).toEqual([{ ...result, sourceFingerprint: expect.any(String) }]);
+    expect(loaded.staleDatasets).toEqual([]);
+    expect(loaded.analysisResults?.[0]).not.toHaveProperty("parameters");
+    expect(loaded.datasets[1].analysisRecipe).toEqual(output.analysisRecipe);
+  });
+
+  it("migrates legacy linked signal worksheets only when the result collection is absent", () => {
+    const [source, output] = linkedSignalPair();
+    const legacy = JSON.parse(serializeWorkspace({ datasets: [source, output] }));
+    delete legacy.analysisResults;
+    expect(parseWorkspace(JSON.stringify(legacy)).analysisResults?.map((result) => result.id)).toEqual(["analysis-output"]);
+
+    legacy.analysisResults = [];
+    expect(parseWorkspace(JSON.stringify(legacy)).analysisResults).toEqual([]);
+  });
+});
+
 // LIBRARY_WORKBOOK_UX_PLAN PR K (K2): deps/derivedFrom/formulaErrors round
 // trip through the existing .dwk dataset path — no version bump.
 describe("workspace PR K fields (deps/derivedFrom/formulaErrors)", () => {
@@ -231,6 +271,43 @@ describe("workspace PR K fields (deps/derivedFrom/formulaErrors)", () => {
     const bad = { ...makeDataset("a", "x"), derivedFrom: { datasetId: "raw1" } } as unknown as Dataset;
     expect(() => parseWorkspace(ser([bad]))).not.toThrow();
     expect(parseWorkspace(ser([bad])).datasets[0].derivedFrom).toBeUndefined();
+  });
+
+  it("round-trips a versioned spectral recipe and drops a malformed one", () => {
+    const ds = makeDataset("a", "spectrum");
+    ds.derivedFrom = { datasetId: "raw1", pipeline: "FFT · A" };
+    ds.analysisRecipe = {
+      ...DEFAULT_SPECTRAL_RECIPE,
+      channels: [{ index: 0, label: "A" }],
+      cutoff: [2],
+    };
+    expect(parse(ser([ds]))[0].analysisRecipe).toEqual(ds.analysisRecipe);
+
+    const doc = JSON.parse(ser([ds]));
+    doc.datasets[0].analysisRecipe.channels = [{ index: "zero", label: "A" }];
+    expect(parse(JSON.stringify(doc))[0].analysisRecipe).toBeUndefined();
+
+    const orphaned = JSON.parse(ser([ds]));
+    orphaned.datasets[0].derivedFrom = { datasetId: "raw1" };
+    expect(parse(JSON.stringify(orphaned))[0].analysisRecipe).toBeUndefined();
+  });
+
+  it("round-trips a linked correction recipe and drops one without its X-unit contract", () => {
+    const ds = makeDataset("a", "detrended");
+    ds.derivedFrom = { datasetId: "raw1", pipeline: "Detrend" };
+    ds.analysisRecipe = {
+      kind: "signal-correction",
+      version: 1,
+      operation: "Detrend",
+      channels: [{ index: 0, label: "A", unit: "V" }],
+      xUnit: "s",
+      params: { signalChannels: [0], detrendOrder: 1 },
+    };
+    expect(parse(ser([ds]))[0].analysisRecipe).toEqual(ds.analysisRecipe);
+
+    const malformed = JSON.parse(ser([ds]));
+    delete malformed.datasets[0].analysisRecipe.xUnit;
+    expect(parse(JSON.stringify(malformed))[0].analysisRecipe).toBeUndefined();
   });
 
   it("round-trips formulaErrors (and omits an empty map)", () => {

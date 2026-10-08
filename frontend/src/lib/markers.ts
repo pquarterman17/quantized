@@ -7,16 +7,9 @@ import type uPlot from "uplot";
 
 import type { DefaultTrace, MarkerShape, SeriesStyle } from "./types";
 
-export const MARKER_SHAPES: { value: MarkerShape; label: string }[] = [
-  { value: "circle", label: "● circle" },
-  { value: "square", label: "■ square" },
-  { value: "triangle", label: "▲ triangle" },
-  { value: "downtriangle", label: "▼ triangle (down)" },
-  { value: "diamond", label: "◆ diamond" },
-  { value: "plus", label: "+ plus" },
-  { value: "cross", label: "✕ cross" },
-  { value: "star", label: "✳ asterisk" },
-];
+// `MARKER_SHAPES` (the shape pickers' labelled list) lives in
+// lib/markerShapes.ts: only lazy menus and cards read it (bundle diet slice
+// 24). Not re-exported.
 
 /** Closed (filled) shapes vs. open (stroke-only) glyphs. */
 export const FILLED_SHAPES: ReadonlySet<MarkerShape> = new Set<MarkerShape>([

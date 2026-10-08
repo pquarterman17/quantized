@@ -368,6 +368,21 @@ describe("PlotWindowFrame", () => {
     expect(useApp.getState().focusedWindowId).toBe("w2");
   });
 
+  // Batch 33: focusing swaps the window's content, which unmounted a
+  // background inset mid-gesture, so a drag on it was silently lost. The
+  // inset edits its own window in place (Stage/InsetPlot.tsx) and focuses it
+  // once the gesture is done.
+  it("a pointerdown on a background window's magnifier inset leaves focus to the inset", () => {
+    const before = useApp.getState().focusedWindowId;
+    const { container } = render(
+      <PlotWindowFrame win={win({ id: "w2" })} focused={false} datasetName={undefined}>
+        <div data-inset-box=""><span className="probe">inset</span></div>
+      </PlotWindowFrame>,
+    );
+    fireEvent.pointerDown(container.querySelector(".probe")!, { clientX: 5, clientY: 5, button: 0 });
+    expect(useApp.getState().focusedWindowId).toBe(before);
+  });
+
   it("a pointerdown on an already-FOCUSED frame is a no-op (no redundant focusWindow call)", () => {
     render(
       <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="ds1">

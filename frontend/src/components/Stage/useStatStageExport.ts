@@ -30,7 +30,7 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import { registerStatStageExporter, type StatExportOut, type StatStageExporter } from "../../lib/statStageBridge";
-import { runCancellable } from "../../store/pendingOps";
+import { runCancellable } from "../../store/pendingOpActions";
 import { exportStatStage, type StatStageExportInputs } from "./statStageExport";
 
 interface Latest {

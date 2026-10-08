@@ -32,7 +32,8 @@ import { markSeriesStyle } from "./plotspec";
 import { defaultPlotView, type PlotView, type PlotWindow } from "./plotview";
 import { AUTO_MARKER_CYCLE, SERIES_VARS, windowCyclesSeriesStyles } from "./seriesStyleCycle";
 import type { Dataset, DataStruct } from "./types";
-import { createPlotWindowDocument, syncPlotWindow, withFocusedEncoding } from "../store/windowDocuments";
+import { withFocusedEncoding } from "../store/focusedEncoding";
+import { createPlotWindowDocument, syncPlotWindow } from "../store/windowDocuments";
 import { GRADIENT_DS, readGradientFixture } from "../test/gradientEncodingFixture";
 
 const here = dirname(fileURLToPath(import.meta.url));

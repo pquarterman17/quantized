@@ -30,6 +30,7 @@ from quantized.calc.figure import _apply_fill, _plot_kwargs, draw_series_axes
 from quantized.calc.figure_axis_titles import apply_axis_titles
 from quantized.calc.figure_decor import _apply_region_shades, _split_region_shades_by_axis
 from quantized.calc.figure_errorbars import apply_error_bars
+from quantized.calc.figure_inset import apply_inset
 from quantized.calc.figure_overrides import legend_kwargs
 from quantized.calc.figure_scale import apply_axis_scale, drawable_lim, resolve_axis_scale
 from quantized.calc.figure_styles import FigureStyle
@@ -257,8 +258,8 @@ def render_with_secondary_axis(
     # stays byte-identical to before this feature existed).
     primary_shades, secondary_shades = _split_region_shades_by_axis(ov.get("region_shades"))
     primary_ov = ov if not secondary_shades else {**ov, "region_shades": primary_shades}
-    # The magnifier inset is single-axes only (calc.figure_inset): drawn here it
-    # would show the primary series alone, so a dual-Y request never draws it.
+    # The magnifier inset shows BOTH axes' series, so it is drawn below once
+    # the twin exists (calc.figure_inset), not by the primary-only pass.
     primary_ov = {k: v for k, v in primary_ov.items() if k != "inset"}
     artists = draw_series_axes(
         fig, ax, xv, primary,
@@ -290,6 +291,10 @@ def render_with_secondary_axis(
         ax2.set_ylim(*drawable_lim(
             ax2, "y", None if lo is None else float(lo), None if hi is None else float(hi)
         ))
+    apply_inset(
+        ax, artists, ov, resolve_axis_scale(x_scale, x_log), resolve_axis_scale(y_scale, y_log),
+        st.grid_alpha, twin=(ax2, y2_artists, resolve_axis_scale(y2_scale, False)),
+    )
     _combined_legend(fig, ax, st, ov, artists, y2_artists, y2_mask, n_series=len(series))
     return artists + y2_artists
 

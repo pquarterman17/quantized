@@ -91,7 +91,7 @@ import type { AppState } from "./useApp";
  *  chokepoints — a non-null librarySelection clears selectedIds and vice
  *  versa — so the tree always shows exactly one coherent current item. */
 export interface LibrarySelection {
-  kind: "folder" | "workbook" | "origin-figure" | "editable-figure" | "publication-figure" | "page" | "report";
+  kind: "folder" | "workbook" | "origin-figure" | "editable-figure" | "publication-figure" | "page" | "report" | "analysis-result";
   id: string;
 }
 

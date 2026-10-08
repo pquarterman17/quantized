@@ -101,8 +101,18 @@ def _slice_spans(
 
 
 def _in_view_ticks(ax: Any) -> list[float]:
-    lo, hi = sorted(ax.get_xlim())
-    return [float(t) for t in ax.get_xticks() if lo <= t <= hi]
+    """The x ticks matplotlib DRAWS: in view in scale space, with its own
+    1e-10 relative slack (``Axis._update_ticks``). An exact ``lo <= t <= hi``
+    test missed a seam tick a float hair past the view (0.15000000000000002 on
+    a panel ending at 0.15) that is still drawn -- the reductus .refl
+    "0.15" + "0.30" collision."""
+    tr = ax.xaxis.get_transform()
+    a, b = sorted(float(v) for v in tr.transform(np.asarray(ax.get_xlim(), dtype=float)))
+    slack = (b - a) * 1e-10
+    ticks = np.asarray(ax.get_xticks(), dtype=float)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        ticks_t = np.asarray(tr.transform(ticks), dtype=float)
+    return [float(t) for t, u in zip(ticks, ticks_t, strict=True) if a - slack <= u <= b + slack]
 
 
 def _fig_x(ax: Any, t: float) -> float:

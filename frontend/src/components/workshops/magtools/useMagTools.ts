@@ -21,12 +21,8 @@
 
 import { useMemo, useState } from "react";
 
-import {
-  dropGapRows,
-  restoreGapRows,
-  restoreSubstituted,
-  substituteGaps,
-} from "../../../lib/api/finitePairs";
+import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
+import { restoreSubstituted, substituteGaps } from "../../../lib/api/finiteSubstitute";
 import {
   convertMagUnits,
   subtractHysteresisBackground,

@@ -12,7 +12,7 @@ import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { cancelJob, isJobSubmit, JobCancelledError, pollJob } from "../../../lib/jobs";
 import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-import { trackJob } from "../../../store/pendingOps";
+import { trackJob } from "../../../store/pendingOpActions";
 import { toast } from "../../../store/toasts";
 import { selectedFitData } from "../../../lib/fitselection";
 

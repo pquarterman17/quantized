@@ -41,6 +41,10 @@ override, one saved Quick Plot template, one plot recipe (via
   "run-a.csv" and JSON `null` in three `data` cells (two in run-a's `values`,
   one in run-b's `time`), exactly what a pre-PR #527 save wrote for a
   NaN/±Infinity or missing cell. `lib/workspaceLegacyNullCells.test.ts`.
+- `legacy-map-index-x.dwk.json` holds two 2-D maps (an RSM with `raw`, a
+  pole figure) as a pre-PR #532 save wrote them: `.time` = row index 0..N-1,
+  no `default_value_channels`/`default_trace` hints; plus a non-map scan with
+  the same index `.time`. `lib/legacyMapX.test.ts`.
 
 The generator script itself (`_generate.test.ts`, a one-off vitest file that
 called the real `serializeWorkspace`/`captureRecipe`/`createFigureDocument`

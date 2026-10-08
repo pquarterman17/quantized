@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 from quantized.calc.corrections import apply_corrections
 from quantized.datastruct import DataStruct
@@ -47,8 +47,17 @@ class CorrectionParams(BaseModel):
     smooth_enabled: bool | None = Field(default=None, alias="smoothEnabled")
     smooth_window: int | None = Field(default=None, alias="smoothWindow")
     smooth_method: str | None = Field(default=None, alias="smoothMethod")
+    smooth_poly_order: StrictInt | None = Field(default=None, alias="smoothPolyOrder")
     norm_method: str | None = Field(default=None, alias="normMethod")
+    norm_reference_value: float | None = Field(default=None, alias="normReferenceValue")
+    norm_reference_min: float | None = Field(default=None, alias="normReferenceMin")
+    norm_reference_max: float | None = Field(default=None, alias="normReferenceMax")
+    detrend_order: StrictInt | None = Field(default=None, alias="detrendOrder")
     derivative_mode: str | None = Field(default=None, alias="derivativeMode")
+    # Optional subset for the signal-only stages (smooth / normalize /
+    # derivative). Other correction stages still apply to the whole dataset.
+    # Absent preserves the established all-measured-channels behavior.
+    signal_channels: list[StrictInt] | None = Field(default=None, alias="signalChannels")
     # GOTO additions (new features beyond MATLAB parity):
     # #2 anchor-point baseline subtraction ((x, y) pairs + interp method).
     bg_anchors: list[list[float]] | None = Field(default=None, alias="bgAnchors")

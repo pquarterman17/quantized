@@ -7,7 +7,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { validateRichText } from "../../lib/richtext";
+import { validateRichText } from "../../lib/richtextValidate";
 import RichLabelInput from "./RichLabelInput";
 
 function getInput(): HTMLInputElement {

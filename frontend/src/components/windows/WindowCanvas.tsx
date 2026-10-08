@@ -231,6 +231,7 @@ export default function WindowCanvas() {
                   bg={win.bg}
                   linkGroup={win.linkGroup}
                   document={win.document}
+                  windowId={win.id}
                 />
               )}
             </PlotWindowFrame>

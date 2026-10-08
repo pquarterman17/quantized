@@ -89,9 +89,10 @@ export interface FigureOverrides {
    *  source region `x` × `y` with the plot's own series and scales, plus the
    *  source outline and, with `lines`, its connectors —
    *  `calc.figure_inset.apply_inset`. No `x`: the export seeds the screen's
-   *  central third; no `y`: autoscaled over that x window. Single-axes
-   *  figures only, so `gateY2Overrides` drops it for a dual-Y request. */
-  inset?: { x?: [number, number]; y?: [number, number]; at: [number, number, number, number]; lines?: boolean };
+   *  central third; no `y`: autoscaled over that x window. On a dual-Y
+   *  figure the y2 series draw on a twin inset axis ranged by `y2` (as last
+   *  drawn; absent = autoscaled), as the screen's inset does. */
+  inset?: { x?: [number, number]; y?: [number, number]; y2?: [number, number]; at: [number, number, number, number]; lines?: boolean };
 }
 
 // `sanitizeFigureOverrides` and `compactOverrides` (with the helpers only
@@ -168,12 +169,11 @@ export function gateY2Overrides(
   opts: { y2Plotted: boolean; minorTicks: boolean },
 ): FigureOverrides | undefined {
   if (!ov && !opts.minorTicks) return ov;
-  const { y2_lim, ticks, inset, ...rest } = ov ?? {};
+  const { y2_lim, ticks, ...rest } = ov ?? {};
   return (
     compactOverrides({
       ...rest,
-      // The inset magnifies a single-axes plot (`FigureOverrides.inset`).
-      ...(opts.y2Plotted ? { y2_lim } : { inset }),
+      ...(opts.y2Plotted ? { y2_lim } : {}),
       ticks: opts.minorTicks ? { ...ticks, minor: true } : ticks,
     }) ?? undefined
   );

@@ -31,6 +31,7 @@ describe("workbookSeparate slice", () => {
       editableFigures: [],
       figureDocs: [],
       reports: [],
+      analysisResults: [],
       pages: [],
       quickPlotTemplates: [],
       activeId: null,
@@ -139,6 +140,25 @@ describe("workbookSeparate slice", () => {
       // a field on ReportEntry that doesn't exist.
       expect(useApp.getState().reports[0].datasetId).toBe("d1");
       expect(useApp.getState().datasets.find((d) => d.id === "d1")?.workbookId).toBe(newId);
+    });
+
+    it("lists an analysis result that moves with its worksheets in the previewed plan", async () => {
+      // PR #554 review: results were placed by the live hierarchy but missing
+      // from the preview's hypothetical one, so they moved unannounced.
+      useApp.setState({
+        datasets: [ds("d1", "A.dat", "w1"), ds("d1out", "A (Smooth)", "w1", { derivedFrom: { datasetId: "d1", pipeline: "Smooth" } }), ds("d2", "B.dat", "w1")],
+        analysisResults: [{
+          version: 1, id: "res", name: "Smooth · A",
+          producer: { id: "signal-processing", label: "Signal Processing", version: 1 },
+          sources: [{ datasetId: "d1", role: "input" }],
+          outputs: [{ datasetId: "d1out", role: "linked-worksheet" }],
+          warnings: [], createdAt: "2026-10-08T00:00:00Z",
+        }],
+      });
+      await useApp.getState().previewSeparateWorksheets(["d1", "d1out"]);
+      expect(useApp.getState().separatePreview?.items).toContainEqual(
+        expect.objectContaining({ kind: "analysis-result", name: "Smooth · A" }),
+      );
     });
 
     it("an explicit name overrides the plan's suggested default", async () => {

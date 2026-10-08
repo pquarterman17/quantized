@@ -23,12 +23,10 @@
 
 import { cloneDataStruct } from "../lib/dataset";
 import { applyCorrections as applyCorrectionsApi } from "../lib/api";
-import { recomputeFromBaseOrEmpty } from "../lib/formulaInputs";
+import type { ColumnShift } from "../lib/channelRemap";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { CorrectionParams, Dataset } from "../lib/types";
-import type { ColumnShift } from "../lib/channelRemap";
-import { shiftForColumnChange } from "./derivedSheetShift";
 import { nextDatasetId } from "./idSeq";
 import type { AppState } from "./useApp";
 
@@ -100,24 +98,8 @@ export async function recomputeDerivedSheet(
   get: SliceGet,
   sheet: Dataset,
 ): Promise<{ sheet: Dataset; shift: ColumnShift | null }> {
-  const sourceId = sheet.derivedFrom?.datasetId;
-  const source = sourceId ? get().datasets.find((d) => d.id === sourceId) : undefined;
-  if (!source) throw new Error(`source dataset "${sourceId}" no longer exists`);
-  if (source.pending) throw new Error(`source dataset "${source.name}" hasn't fully loaded yet`);
-  const sourceData = source.data;
-  const corrected = await applyCorrectionsApi({ dataset: sourceData, params: sheet.corrections ?? {} });
-  // #50/#53 row-count-changed guard (excludedRows + the four overlays) is
-  // applied by the CALLER (useApp.ts's recalcNow, via the shared
-  // rowsChangedGuard — see store/corrections.ts) once it can see both the
-  // old and new row counts and perform the actual `set()`; this function
-  // stays a pure "compute the new Dataset" step, same shape as before.
-  const own = sheet.formulas?.length ?? 0; // the sheet's own computed columns trail its base
-  const before = sheet.data.labels.slice(0, sheet.data.labels.length - own);
-  const { sheet: base, shift, forcedErrors } = shiftForColumnChange(sheet, before, corrected.labels);
-  const { data, formulaErrors } = recomputeFromBaseOrEmpty(corrected, base.formulas);
-  // A formula that named the removed column is an explicit error, never a guess.
-  const errors = forcedErrors ? { ...formulaErrors, ...forcedErrors } : formulaErrors;
-  return { sheet: { ...base, data, raw: sourceData, formulaErrors: errors }, shift };
+  const { runDerivedWorksheetRecompute } = await import("./derivedWorksheetsRecompute");
+  return runDerivedWorksheetRecompute(get, sheet);
 }
 
 // `set` unused here: both actions delegate to `get().addDataset(...)` (the
@@ -157,7 +139,11 @@ export function createDerivedWorksheetsSlice(_set: SliceSet, get: SliceGet): Der
         // own correction pipeline (or, for a chain, skip an intermediate
         // derived sheet's entire pipeline and jump straight to ITS source).
         const sourceData = source.data;
-        const data = await applyCorrectionsApi({ dataset: sourceData, params });
+        const data = await applyCorrectionsApi({
+          dataset: sourceData,
+          params,
+          ...(source.errorRoles ? { error_bindings: source.errorRoles } : {}),
+        });
         const newDs: Dataset = {
           id: newId,
           name: `${source.name} (derived)`,
@@ -165,6 +151,7 @@ export function createDerivedWorksheetsSlice(_set: SliceSet, get: SliceGet): Der
           raw: sourceData,
           ...(Object.keys(params).length ? { corrections: params } : {}),
           derivedFrom: { datasetId: sourceId, pipeline: pipelineLabel?.trim() || summarizePipeline(params) },
+          ...(source.errorRoles ? { errorRoles: [...source.errorRoles] } : {}),
           ...(source.workbookId ? { workbookId: source.workbookId } : {}),
           ...(source.folderId ? { folderId: source.folderId } : {}),
         };

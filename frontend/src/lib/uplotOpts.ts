@@ -591,9 +591,9 @@ export interface BuildOptsArgs {
   gadgetCursors?: [number, number] | null;
   /** In `qfit` tool + cursors mode: fires on every create/move of a cursor. */
   onCursorsChange?: (c: [number, number] | null) => void;
-  /** Peak Analyzer wizard click-on-plot marker editing (interaction item 5,
-   *  deferred from closed gap #31): non-null only while wizard step ② is
-   *  live (see PlotStage's `peakWizardEdit` store read). Independent of
+  /** Peak-workshop click-on-plot marker editing (interaction item 5): non-null
+   *  while Peak Analyzer step ② or the Peaks panel's edit mode is live (see
+   *  PlotStage's legacy-named `peakWizardEdit` store read). Independent of
    *  `tool` — like wheelZoom, it composes with whatever tool is active; only
    *  a plain (non-drag) click over the plot acts. */
   peakWizardEdit?: {
@@ -1023,8 +1023,8 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   if (args.wheelZoom) {
     plugins.push(wheelZoomPlugin());
   }
-  // Peak wizard click-on-plot marker editing (item 5): also tool-independent —
-  // wizard-scoped, not toolbar-tool-scoped (see BuildOptsArgs.peakWizardEdit).
+  // Peak-workshop click-on-plot marker editing: also tool-independent —
+  // workshop-scoped, not toolbar-tool-scoped (see BuildOptsArgs.peakWizardEdit).
   if (args.peakWizardEdit) {
     const { markers, onAdd, onRemove } = args.peakWizardEdit;
     plugins.push(peakMarkerEditPlugin(markers, { onAdd, onRemove }));
