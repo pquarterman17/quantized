@@ -15,7 +15,7 @@ import { fmtNum } from "../../../lib/format";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Switch } from "../../primitives/Switch";
 import { Button, Select } from "../../primitives";
-import { runCancellable } from "../../../store/pendingOps";
+import { runCancellable } from "../../../store/pendingOpActions";
 import { useApp } from "../../../store/useApp";
 import type { PcaDrawData } from "./pcaScoresRender";
 import PcaScoresCanvas from "./PcaScoresCanvas";

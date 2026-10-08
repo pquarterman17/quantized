@@ -11,7 +11,7 @@ import { exportCorrelationHeatmapFigure } from "../../../lib/api";
 import { copyText } from "../../../lib/clipboard";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Button } from "../../primitives";
-import { runCancellable } from "../../../store/pendingOps";
+import { runCancellable } from "../../../store/pendingOpActions";
 import { useApp } from "../../../store/useApp";
 import CorrelationMatrix from "./CorrelationMatrix";
 import type { CorrMethod, MultivarState } from "./useMultivar";

@@ -18,7 +18,7 @@ import type { Dataset, FolderNode } from "./types";
 
 /** Which surface can reveal a hit — the Library tree, the worksheet grid, or a
  *  document (report / figure). */
-export type RevealIn = "library" | "worksheet" | "figure" | "report";
+export type RevealIn = "library" | "worksheet" | "figure" | "report" | "result";
 
 export interface SearchHit {
   /** Stable identity for React keys and for de-duplication. */
@@ -28,10 +28,12 @@ export interface SearchHit {
   /** Where it lives, e.g. the owning dataset's name. */
   context: string;
   /** What kind of thing matched, for the result's leading chip. */
-  kind: "dataset" | "column" | "note" | "tag" | "metadata" | "report" | "figure" | "folder";
+  kind: "dataset" | "column" | "note" | "tag" | "metadata" | "report" | "result" | "figure" | "folder";
   reveal: RevealIn;
   /** Dataset to activate when revealing (null for a folder/report with none). */
   datasetId: string | null;
+  /** The analysis result a `result` hit opens. */
+  resultId?: string;
   /** Column index for a `column` hit, so the worksheet can scroll to it. */
   channel?: number;
   /** Lower sorts first. */
@@ -42,6 +44,8 @@ export interface SearchSources {
   datasets: readonly Dataset[];
   folders?: readonly FolderNode[];
   reports?: readonly { id: string; name: string; datasetId: string | null }[];
+  /** Durable analysis results; `datasetId` is the linked output worksheet. */
+  results?: readonly { id: string; name: string; datasetId: string | null }[];
   figures?: readonly { id: string; name: string }[];
 }
 
@@ -203,6 +207,21 @@ export function searchProject(query: string, src: SearchSources, limit = 50): Se
       context: "report",
       kind: "report",
       reveal: "report",
+      datasetId: r.datasetId,
+      rank: s,
+    });
+  }
+
+  for (const r of src.results ?? []) {
+    const s = score(r.name, needle);
+    if (s === null) continue;
+    hits.push({
+      id: `result:${r.id}`,
+      label: r.name,
+      context: "analysis result",
+      kind: "result",
+      reveal: "result",
+      resultId: r.id,
       datasetId: r.datasetId,
       rank: s,
     });

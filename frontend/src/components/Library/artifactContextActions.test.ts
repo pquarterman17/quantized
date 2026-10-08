@@ -18,7 +18,7 @@ const action = (items: ContextMenuItem[], label: string): ActionItem =>
   items.find((item): item is ActionItem => "label" in item && item.label === label && "run" in item)!;
 
 beforeEach(() => {
-  useApp.setState({ pages: [], reports: [], editableFigures: [], figureDocs: [], history: [], status: "" });
+  useApp.setState({ pages: [], reports: [], analysisResults: [], openAnalysisResultId: null, editableFigures: [], figureDocs: [], history: [], status: "" });
   vi.mocked(askConfirm).mockReset();
   runSendEditableFigureToReport.mockReset();
 });
@@ -43,6 +43,30 @@ describe("artifact lifecycle context actions — PR E-b2", () => {
     const duplicate = action(buildArtifactMenu(node), "Duplicate");
     expect(duplicate.disabled).toBe(true);
     expect(duplicate.title).toBe("report duplication is not available yet");
+  });
+
+  it("keeps result duplication explicit and deletes only the catalog record with an undo warning", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true as never);
+    const result = {
+      version: 1 as const, id: "a1", name: "Smooth result",
+      producer: { id: "signal-processing", label: "Signal Processing", version: 1 },
+      sources: [], outputs: [], warnings: [], createdAt: "now",
+    };
+    useApp.setState({ analysisResults: [result], openAnalysisResultId: "a1" });
+    const hierarchy = buildLibraryHierarchy({ folders: [], workbooks: [], datasets: [], analysisResults: [result] });
+    const node = hierarchy.byKey.get("analysis-result:a1") as Extract<ArtifactNode, { kind: "analysis-result" }>;
+    expect(action(buildArtifactMenu(node), "Duplicate").title).toBe("use Rerun as New from the result workspace");
+
+    action(buildArtifactMenu(node), "Delete").run();
+    expect(askConfirm).toHaveBeenCalledWith(
+      'Delete "Smooth result"?',
+      expect.stringMatching(/linked worksheets.*Undo can restore/),
+      "Delete",
+      true,
+    );
+    // The delete runs through the lazy analysis-result seam: wait on the state.
+    await vi.waitFor(() => expect(useApp.getState().analysisResults).toEqual([]));
+    expect(useApp.getState().openAnalysisResultId).toBeNull();
   });
 
   it("editable-figure deletion names the page panels that will lose their figure", async () => {

@@ -20,7 +20,7 @@ import { useState } from "react";
 import { exportFigurePage } from "../../lib/api";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
-import { runCancellable } from "../../store/pendingOps";
+import { runCancellable } from "../../store/pendingOpActions";
 import { useApp } from "../../store/useApp";
 import { toast } from "../../store/toasts";
 import { buildPageSpecFromDocument } from "../workshops/figurepage/panelResolve";

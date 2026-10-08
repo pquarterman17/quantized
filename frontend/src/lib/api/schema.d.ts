@@ -3605,6 +3605,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/spectral/workbench": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Workbench
+         * @description Run a dataset-level FFT, filter, or cross-correlation workflow.
+         */
+        post: operations["workbench_api_spectral_workbench_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/statplots/box": {
         parameters: {
             query?: never;
@@ -6449,6 +6469,8 @@ export interface components {
             bgSlope?: number | null;
             /** Derivativemode */
             derivativeMode?: string | null;
+            /** Detrendorder */
+            detrendOrder?: number | null;
             /** Fieldunit */
             fieldUnit?: string | null;
             /** Footprintl */
@@ -6465,14 +6487,24 @@ export interface components {
             momentUnit?: string | null;
             /** Normmethod */
             normMethod?: string | null;
+            /** Normreferencemax */
+            normReferenceMax?: number | null;
+            /** Normreferencemin */
+            normReferenceMin?: number | null;
+            /** Normreferencevalue */
+            normReferenceValue?: number | null;
             /** Samplemass */
             sampleMass?: number | null;
             /** Samplevolume */
             sampleVolume?: number | null;
+            /** Signalchannels */
+            signalChannels?: number[] | null;
             /** Smoothenabled */
             smoothEnabled?: boolean | null;
             /** Smoothmethod */
             smoothMethod?: string | null;
+            /** Smoothpolyorder */
+            smoothPolyOrder?: number | null;
             /** Smoothwindow */
             smoothWindow?: number | null;
             /** Xoff */
@@ -7534,6 +7566,11 @@ export interface components {
              * @default 5
              */
             snr_threshold?: number;
+            /**
+             * Strict Prominence
+             * @default false
+             */
+            strict_prominence?: boolean;
             /** X */
             x: number[];
             /** Y */
@@ -10224,6 +10261,82 @@ export interface components {
              * @default 1.5418
              */
             xray_wavelength?: number;
+        };
+        /** SpectralWorkbenchRequest */
+        SpectralWorkbenchRequest: {
+            /** Bandwidth */
+            bandwidth?: number | null;
+            /** Channels */
+            channels: number[];
+            /**
+             * Correlation Demean
+             * @default true
+             */
+            correlation_demean?: boolean;
+            /** Cutoff */
+            cutoff?: number[] | null;
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /**
+             * Detrend
+             * @default mean
+             */
+            detrend?: string;
+            /**
+             * Filter Type
+             * @default lowpass
+             */
+            filter_type?: string;
+            /**
+             * Include Diagnostics
+             * @default false
+             */
+            include_diagnostics?: boolean;
+            /** Operation */
+            operation: string;
+            /**
+             * Order
+             * @default 4
+             */
+            order?: number;
+            /**
+             * Output Type
+             * @default magnitude
+             */
+            output_type?: string;
+            /**
+             * Overlap
+             * @default 0.5
+             */
+            overlap?: number;
+            /**
+             * Resample
+             * @default false
+             */
+            resample?: boolean;
+            /**
+             * Segment Len
+             * @default 0
+             */
+            segment_len?: number;
+            /**
+             * Sided
+             * @default one
+             */
+            sided?: string;
+            /** Window */
+            window?: string | null;
+            /** X Max */
+            x_max?: number | null;
+            /** X Min */
+            x_min?: number | null;
+            /**
+             * Zero Pad
+             * @default 0
+             */
+            zero_pad?: number;
         };
         /** SpinAsymmetryRequest */
         SpinAsymmetryRequest: {
@@ -16639,6 +16752,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["FftRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workbench_api_spectral_workbench_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpectralWorkbenchRequest"];
             };
         };
         responses: {

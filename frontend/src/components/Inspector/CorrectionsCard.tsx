@@ -22,7 +22,7 @@ const NORM_METHODS = [
   "Area (integral=1)",
 ];
 const DERIV_MODES = ["None", "dY/dX", "d²Y/dX²", "∫Y dx", "dlog/dlog"];
-const SMOOTH_METHODS = ["moving", "gaussian", "savgol"];
+const SMOOTH_METHODS = ["moving", "gaussian", "savitzky-golay"];
 // interp methods accepted by calc.corrections._interp_zero_fill (0-fill outside).
 const INTERP_METHODS = ["linear", "pchip", "spline"];
 const NO_BG = ""; // "— none —" sentinel for the background-dataset picker

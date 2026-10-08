@@ -26,7 +26,7 @@ import { filledCount, type PageSlot } from "../../../lib/figurepageActions";
 import type { PageLayoutSettings } from "../../../lib/pageDocument";
 import { copyOfficeGraphicAsync } from "../../../lib/officeClipboard";
 import { withPageGreyscale } from "../../../lib/pageGreyscale";
-import { runCancellable } from "../../../store/pendingOps";
+import { runCancellable } from "../../../store/pendingOpActions";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { panelFigure, panelRenderInputs } from "./panelResolve";

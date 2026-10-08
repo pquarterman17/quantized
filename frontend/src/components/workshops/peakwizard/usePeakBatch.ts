@@ -35,7 +35,7 @@ import {
   type PeakBatchItem,
 } from "../../../lib/api/peakBatch";
 import type { PeakRecipe } from "../../../lib/peakwizard";
-import { trackJob, type TrackedJob } from "../../../store/pendingOps";
+import { trackJob, type TrackedJob } from "../../../store/pendingOpActions";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 import {
   applyPointBudget,

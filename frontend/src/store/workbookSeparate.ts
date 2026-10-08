@@ -55,6 +55,7 @@ function hierarchyInput(s: AppState) {
     folders: s.folders,
     workbooks: s.workbooks,
     datasets: s.datasets,
+    analysisResults: s.analysisResults,
     originFigures: s.originFigures,
     editableFigures: s.editableFigures,
     publicationFigures: s.figureDocs,

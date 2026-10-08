@@ -138,8 +138,8 @@ export interface CorrectionsRequest {
 }
 
 /** Apply the correction pipeline to a DataStruct → corrected DataStruct. */
-export function applyCorrections(req: CorrectionsRequest): Promise<DataStruct> {
-  return postJSON<DataStruct>("/api/corrections/apply", req);
+export function applyCorrections(req: CorrectionsRequest, signal?: AbortSignal): Promise<DataStruct> {
+  return postJSON<DataStruct>("/api/corrections/apply", req, signal);
 }
 
 // ── Fitting ─────────────────────────────────────────────────────────────────

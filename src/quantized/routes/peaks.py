@@ -50,6 +50,9 @@ class FindPeaksRequest(BaseModel):
     bg_method: Literal["snip", "polynomial"] = "snip"
     bg_poly_degree: int = Field(4, ge=0, le=12)
     bg_iterative: bool = False
+    # Opt in for XRD searches: generic spectra can contain scientifically
+    # meaningful weak local peaks, so the transport default stays compatible.
+    strict_prominence: bool = False
 
 
 @router.post("/find")
@@ -69,6 +72,7 @@ def find(req: FindPeaksRequest) -> dict[str, Any]:
         bg_method=req.bg_method,
         bg_poly_degree=req.bg_poly_degree,
         bg_iterative=req.bg_iterative,
+        strict_prominence=req.strict_prominence,
     )
     return {"peaks": to_jsonable(peaks), "background": jsonify(background)}
 

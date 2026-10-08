@@ -11,14 +11,13 @@ import {
   COLORMAP_NAMES,
   DEFAULT_MAP_VIEW,
   isDefaultMapView,
-  isDefaultMapViews,
   mapViewFor,
   sanitizeMapView,
   sanitizeMapViews,
-  serializeMapViews,
   type MapViewMap,
   type MapViewState,
 } from "./mapView";
+import { isDefaultMapViews, serializeMapViews } from "./mapViewSerialize";
 
 const VIEW: MapViewState = {
   colormap: "magma",

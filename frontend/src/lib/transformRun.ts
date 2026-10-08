@@ -34,11 +34,17 @@ import { blanksToNaN } from "./blankCells";
 import { lit } from "./macro";
 import { mergeDatasets } from "./merge";
 import type { AppendMatch } from "./mergeByName";
-import { IN_PLACE_OPS, metaParamsOf, metaStepText, runMetaStep, type MetaStepParams } from "./metadataRun";
+import { IN_PLACE_OPS, metaStepText, runMetaStep, type MetaStepParams } from "./metadataRun";
 import { analysisData } from "./rowstate";
-import { computeResample, resampleLabel, resampleParamsOf, type ResampleParams } from "./transformResample";
-import { computeSims, simsLabel, simsParamsOf, type SimsParams } from "./transformSims";
-import { computeSimsCompare, simsCompareLabel, simsCompareParamsOf, type SimsCompareParams } from "./transformSimsCompare";
+import {
+  computeSignalTransform,
+  signalTransformStepText,
+  type SignalBindOptions,
+  type SignalTransformParams,
+} from "./signalTransform";
+import { computeResample, resampleLabel, type ResampleParams } from "./transformResample";
+import { computeSims, simsLabel, type SimsParams } from "./transformSims";
+import { computeSimsCompare, simsCompareLabel, type SimsCompareParams } from "./transformSimsCompare";
 import {
   actionable,
   analyzeAlgebra,
@@ -63,6 +69,8 @@ import {
 import type { JoinKey, JoinKeyMode } from "./worksheetJoin";
 import { askConfirm } from "../store/confirmDialog";
 import { nextDatasetId, type AppState } from "../store/useApp";
+
+export { transformParamsOf } from "./transformParams";
 
 /** The store accessor. Typed on the `AppState` interface, not
  *  `typeof useApp.getState`: `useApp.ts` lazily imports this module, and the
@@ -91,6 +99,7 @@ export type TransformParams =
   | ResampleParams
   | SimsParams
   | SimsCompareParams
+  | SignalTransformParams
   // In place, no output (lib/metadataRun.ts): a metadata factor / cleanup.
   | MetaStepParams;
 
@@ -160,6 +169,7 @@ export function transformStepText(p: TransformParams, primaryName: string): { la
     case "resample": label = resampleLabel(p, primaryName); break;
     case "sims": label = simsLabel(p, primaryName); break;
     case "simscompare": label = simsCompareLabel(p, primaryName); break;
+    case "signal": return signalTransformStepText(p);
     default: label = `${op[0].toUpperCase()}${op.slice(1)} ${primaryName}`;
   }
   return { label, code: `qz.transform(${lit(op)}, "<active>", ${lit(args)})` };
@@ -170,6 +180,8 @@ export interface TransformComputed {
   data: DataStruct;
   name: string;
   preview: TransformPreview;
+  /** Optional linked-output fields carried into the created Dataset. */
+  datasetPatch?: Partial<Dataset>;
 }
 
 /** Exported for `lib/transformPreviewCompute.ts`'s bounded preview builders —
@@ -197,7 +209,13 @@ export function preview(
  *  replay all call it, so what was previewed is what gets created. It reads
  *  the datasets it is handed as they are — the preview passes a still-loading
  *  book's preview rows, and `runTransform` resolves the full data first. */
-export async function computeTransform(p: TransformParams, primary: Dataset, others: Dataset[]): Promise<TransformComputed> {
+export async function computeTransform(
+  p: TransformParams,
+  primary: Dataset,
+  others: Dataset[],
+  signal?: AbortSignal,
+  options?: SignalBindOptions,
+): Promise<TransformComputed> {
   const src = rowsOf(primary);
   switch (p.op) {
     case "transpose": {
@@ -263,6 +281,19 @@ export async function computeTransform(p: TransformParams, primary: Dataset, oth
       const all = [primary, ...others].map((d) => ({ id: d.id, name: d.name, data: rowsOf(d) }));
       const r = await computeSimsCompare(p, all);
       return { data: r.data, name: r.name, preview: preview("SIMS comparison", r.data, r.warnings, all.map((d) => [d.name, d.data])) };
+    }
+    case "signal": {
+      // Signal Processing deliberately reads the full worksheet. Its UI
+      // discloses included/excluded counts and the full-row scope; unlike
+      // statistical transforms, row state is not silently baked into the
+      // linked output.
+      const r = await computeSignalTransform(p, primary, signal, options);
+      return {
+        data: r.data,
+        name: r.name,
+        preview: preview(signalTransformStepText(p).label, r.data, [], [[primary.name, primary.data]]),
+        datasetPatch: r.datasetPatch,
+      };
     }
     default:
       throw new Error(`"${p.op}" is not a single-output transform`);
@@ -341,6 +372,8 @@ export async function runTransform(
   p: TransformParams,
   primaryId: string,
   review?: ReviewFn,
+  signal?: AbortSignal,
+  options?: SignalBindOptions,
 ): Promise<TransformOutcome | null> {
   if (p.op === "split") {
     if (!s().datasets.some((d) => d.id === primaryId)) throw new Error("the input dataset is unavailable");
@@ -370,16 +403,32 @@ export async function runTransform(
   }
   const primary = await s().resolveDataset(primaryId);
   if (!primary) throw new Error("the input dataset is unavailable");
+  const signalErrorRoles = p.op === "signal" ? JSON.stringify(primary.errorRoles ?? []) : null;
+  const assertSignalSourceUnchanged = (): void => {
+    if (p.op !== "signal") return;
+    const current = s().datasets.find((dataset) => dataset.id === primary.id);
+    if (!current || current.pending || current.data !== primary.data ||
+        JSON.stringify(current.errorRoles ?? []) !== signalErrorRoles) {
+      throw new Error("the source worksheet changed while Signal Processing was running");
+    }
+  };
   const others = await resolveRefs(s, refsOf(p));
-  const c = await computeTransform(p, primary, others);
+  const c = await computeTransform(p, primary, others, signal, options);
+  assertSignalSourceUnchanged();
   if (review && !(await review(c.preview))) {
     s().setStatus(`${c.preview.title} cancelled — nothing was created`);
     return null;
   }
+  assertSignalSourceUnchanged();
   // Read BEFORE addDataset, which makes the output active.
   const inputIsTarget = s().activeId === primary.id;
   const id = nextDatasetId();
-  s().addDataset({ id, name: c.name, data: stampWarnings(c.data, p.op, c.preview.warnings) });
+  s().addDataset({
+    id,
+    name: c.name,
+    ...c.datasetPatch,
+    data: stampWarnings(c.data, p.op, c.preview.warnings),
+  });
   const { label, code } = transformStepText(p, primary.name);
   const outputs = [{ id, key: "" }];
   s().recordMacro(label, code, {
@@ -387,6 +436,14 @@ export async function runTransform(
     params: { ...p, ...recordedProvenance(primary, inputIsTarget, outputs) },
   });
   s().setStatus(`created ${c.name}${recordedNote(c.preview.warnings)}`);
+  // A linked signal output is a durable analysis result wherever it was made —
+  // the workbench, Pipeline Studio or macro replay — so register it here.
+  if (p.op === "signal") {
+    await import("../store/analysisResultActions").then(
+      (m) => m.registerSignalResult(primary.id, id),
+      () => s().setStatus(`created ${c.name}, but its analysis result could not be recorded`),
+    );
+  }
   return { id, name: c.name, warnings: c.preview.warnings, outputs };
 }
 
@@ -395,76 +452,6 @@ export async function runTransform(
 function recordedNote(warnings: readonly TransformWarning[]): string {
   const n = warnings.length;
   return n ? ` — ${n} warning${n === 1 ? "" : "s"} recorded in its metadata` : "";
-}
-
-const OPS = new Set(["transpose", "stack", "unstack", "join", "merge", "algebra", "split", "resample", "sims", "simscompare", "promote", "metaclean"]);
-
-/** Validate a recorded `transform` step's params (a .dwk / template is user-
- *  editable JSON) into `TransformParams`, or throw naming what is wrong. */
-export function transformParamsOf(raw: Record<string, unknown>): TransformParams {
-  const op = String(raw.op ?? "");
-  if (!OPS.has(op)) throw new Error(`unknown transform "${op}"`);
-  const num = (k: string): number => {
-    const v = raw[k];
-    if (typeof v !== "number" || !Number.isInteger(v)) throw new Error(`transform "${op}" needs an integer "${k}"`);
-    return v;
-  };
-  const ref = (v: unknown): DatasetRef => {
-    const o = (v ?? {}) as Record<string, unknown>;
-    if (typeof o.id !== "string" || !o.id) throw new Error(`transform "${op}" has no recorded second input`);
-    return { id: o.id, name: typeof o.name === "string" ? o.name : o.id };
-  };
-  switch (op) {
-    case "transpose": return { op };
-    case "stack": {
-      const ch = raw.channels;
-      if (!Array.isArray(ch) || !ch.length || !ch.every((c) => Number.isInteger(c))) {
-        throw new Error('transform "stack" needs integer "channels"');
-      }
-      return { op, channels: ch as number[] };
-    }
-    case "unstack": {
-      const agg = String(raw.aggregate ?? "mean");
-      if (!["mean", "first", "last"].includes(agg)) throw new Error(`unknown aggregate "${agg}"`);
-      return { op, key: num("key"), category: num("category"), value: num("value"), aggregate: agg as AggregateMode };
-    }
-    case "join": {
-      const mode = String(raw.mode ?? "inner");
-      if (!["inner", "left", "right", "full"].includes(mode)) throw new Error(`unknown join mode "${mode}"`);
-      // A key is a column index, or a text column's name (lib/worksheetJoin).
-      const key = (k: string): JoinKey => (typeof raw[k] === "string" && raw[k] ? (raw[k] as string) : num(k));
-      // Absent (an older recording) is NOT normalized to a default here —
-      // `computeTransform` is the one place that decides what "absent" means
-      // (the OLD numeric-code semantics), so a step this function round-trips
-      // (read then re-recorded verbatim) cannot accidentally gain a field it
-      // never had.
-      const km = raw.keyMode;
-      const keyMode = km === "text" || km === "code" ? km : undefined;
-      return { op, leftKey: key("leftKey"), rightKey: key("rightKey"), mode: mode as JoinMode, ...(keyMode ? { keyMode } : {}), with: ref(raw.with) };
-    }
-    case "merge": {
-      if (!Array.isArray(raw.with) || !raw.with.length) throw new Error('transform "merge" has no recorded inputs');
-      const match = String(raw.match ?? "position");
-      if (match !== "position" && match !== "name") throw new Error(`unknown append match "${match}"`);
-      const sf = typeof raw.sourceFactor === "string" && raw.sourceFactor.trim() ? { sourceFactor: raw.sourceFactor } : {};
-      return { op, with: raw.with.map(ref), ...(match === "name" ? { match } : {}), ...sf };
-    }
-    case "algebra":
-      return { op, operation: String(raw.operation ?? ""), interp: String(raw.interp ?? "pchip"), with: ref(raw.with) };
-    case "resample":
-      return resampleParamsOf(raw);
-    case "sims":
-      return simsParamsOf(raw);
-    case "simscompare":
-      return simsCompareParamsOf(raw);
-    case "promote":
-    case "metaclean":
-      return metaParamsOf(raw);
-    default: {
-      const tol = raw.tolerance;
-      return { op: "split", col: num("col"), tolerance: typeof tol === "number" && Number.isFinite(tol) ? tol : null };
-    }
-  }
 }
 
 /** Import-time append (`importFilesAppended`): the same by-position merge and

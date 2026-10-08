@@ -40,7 +40,7 @@ import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { exportActive, type StoreGet } from "../lib/exportActive";
 import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import { hasWorkspaceContent } from "../lib/openWorkspaceReplace";
-import { runCancellable } from "../store/pendingOps";
+import { runCancellable } from "../store/pendingOpActions";
 import { closeProjectLock } from "../store/projectLockLifecycle";
 import type { Dataset, DataStruct } from "../lib/types";
 import { toast } from "../store/toasts";

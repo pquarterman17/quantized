@@ -5,13 +5,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset, DataStruct } from "../lib/types";
 import { useApp } from "./useApp";
+import { createSpectralWorksheet } from "./spectralWorksheetsRun";
 
 vi.mock("../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/api")>()),
   applyCorrections: vi.fn(),
 }));
+vi.mock("../lib/api/spectralWorkbench", () => ({ runSpectralWorkbench: vi.fn() }));
 
 import { applyCorrections as applyCorrectionsApi } from "../lib/api";
+import { runSpectralWorkbench } from "../lib/api/spectralWorkbench";
+import { DEFAULT_SPECTRAL_RECIPE, type SpectralAnalysisRecipe } from "../lib/spectralWorkbench";
+import type { SignalCorrectionRecipe } from "../lib/signalRecipe";
 import * as recalcModule from "../lib/recalc";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 
@@ -27,6 +32,12 @@ const ds = (id: string, over: Partial<Dataset> = {}): Dataset => ({
   id,
   name: id,
   data: data(),
+  ...over,
+});
+
+const spectralRecipe = (over: Partial<SpectralAnalysisRecipe> = {}): SpectralAnalysisRecipe => ({
+  ...DEFAULT_SPECTRAL_RECIPE,
+  channels: [{ index: 0, label: "A" }],
   ...over,
 });
 
@@ -70,6 +81,21 @@ describe("createDerivedWorksheet (K2/K4, L0.50)", () => {
     const newId = await useApp.getState().createDerivedWorksheet("a", { yOff: -10 }, "My custom pipeline");
     const created = useApp.getState().datasets.find((d) => d.id === newId);
     expect(created?.derivedFrom?.pipeline).toBe("My custom pipeline");
+  });
+
+  it("passes uncertainty bindings through the calculation and onto the derived sheet", async () => {
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(data());
+    const errorRoles = [{ channel: 1, target: 0, axis: "y" as const, side: "both" as const }];
+    useApp.setState({ datasets: [ds("a", { errorRoles })] });
+
+    const newId = await useApp.getState().createDerivedWorksheet("a", { normMethod: "Peak (max=1)" });
+
+    expect(applyCorrectionsApi).toHaveBeenCalledWith({
+      dataset: data(),
+      params: { normMethod: "Peak (max=1)" },
+      error_bindings: errorRoles,
+    });
+    expect(useApp.getState().datasets.find((d) => d.id === newId)?.errorRoles).toEqual(errorRoles);
   });
 
   it("refuses (zero mutation, no API call) when the source doesn't exist", async () => {
@@ -175,6 +201,187 @@ describe("createDerivedWorksheet (K2/K4, L0.50)", () => {
   });
 });
 
+describe("linked spectral worksheets", () => {
+  it("creates one linked output in the source workbook without carrying stale error roles", async () => {
+    const output = { ...data(), labels: ["A · Magnitude"], units: ["u"] };
+    vi.mocked(runSpectralWorkbench).mockResolvedValue(output);
+    useApp.setState({
+      datasets: [ds("a", {
+        workbookId: "wb",
+        folderId: "folder",
+        errorRoles: [{ channel: 0, target: 0, axis: "y", side: "both" }],
+      })],
+    });
+
+    const recipe = spectralRecipe();
+    const id = await createSpectralWorksheet(
+      () => useApp.getState(),
+      "a",
+      recipe,
+      "Frequency spectrum · A",
+    );
+    const created = useApp.getState().datasets.find((item) => item.id === id);
+    expect(runSpectralWorkbench).toHaveBeenCalledWith(
+      data(),
+      expect.objectContaining({ ...recipe, channels: [{ index: 0, label: "A", unit: "u" }] }),
+    );
+    expect(created).toMatchObject({
+      data: output,
+      analysisRecipe: recipe,
+      derivedFrom: { datasetId: "a", pipeline: "Frequency spectrum · A" },
+      workbookId: "wb",
+      folderId: "folder",
+    });
+    expect(created?.errorRoles).toBeUndefined();
+  });
+
+  it("does not create an orphan or stale output when the source changes in flight", async () => {
+    let resolve!: (value: DataStruct) => void;
+    let markStarted!: () => void;
+    const started = new Promise<void>((done) => { markStarted = done; });
+    vi.mocked(runSpectralWorkbench).mockImplementation(() => {
+      markStarted();
+      return new Promise((done) => { resolve = done; });
+    });
+    const source = ds("a");
+    useApp.setState({ datasets: [source] });
+
+    const pending = createSpectralWorksheet(
+      () => useApp.getState(),
+      "a",
+      spectralRecipe(),
+      "Frequency spectrum · A",
+    );
+    await started;
+    useApp.setState({ datasets: [{ ...source, data: { ...source.data, time: [2, 3, 4] } }] });
+    resolve({ ...data(), labels: ["A · Magnitude"] });
+
+    await expect(pending).resolves.toBeNull();
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(useApp.getState().status).toMatch(/source data changed/i);
+  });
+
+  it("rebinds a moved source column by its unique label before recalculation", async () => {
+    const sourceData = { ...data(), values: [[1, 10], [2, 20], [3, 30]], labels: ["new", "A"], units: ["", "u"] };
+    const output = { ...data(), labels: ["A · Magnitude"] };
+    vi.mocked(runSpectralWorkbench).mockResolvedValue(output);
+    const sheet = ds("derived", {
+      derivedFrom: { datasetId: "src", pipeline: "fft" },
+      analysisRecipe: spectralRecipe(),
+    });
+    useApp.setState({ datasets: [ds("src", { data: sourceData }), sheet] });
+
+    const { sheet: result } = await recomputeDerivedSheet(useApp.getState, sheet);
+    expect(result.analysisRecipe?.channels).toEqual([{ index: 1, label: "A", unit: "u" }]);
+    expect(runSpectralWorkbench).toHaveBeenCalledWith(
+      sourceData,
+      expect.objectContaining({ channels: [{ index: 1, label: "A", unit: "u" }] }),
+    );
+  });
+
+  it("fails closed instead of guessing when a source label becomes ambiguous", async () => {
+    const sourceData = { ...data(), values: [[1, 10], [2, 20], [3, 30]], labels: ["A", "A"], units: ["u", "u"] };
+    const sheet = ds("derived", {
+      derivedFrom: { datasetId: "src", pipeline: "fft" },
+      analysisRecipe: spectralRecipe({ channels: [{ index: 2, label: "A" }] }),
+    });
+    useApp.setState({ datasets: [ds("src", { data: sourceData }), sheet] });
+
+    await expect(recomputeDerivedSheet(useApp.getState, sheet)).rejects.toThrow("ambiguous");
+    expect(runSpectralWorkbench).not.toHaveBeenCalled();
+  });
+
+  it("refuses a spectral recalculation when the source X unit changes", async () => {
+    const sourceData = { ...data(), metadata: { xUnit: "ms" } };
+    const sheet = ds("derived", {
+      derivedFrom: { datasetId: "src", pipeline: "fft" },
+      analysisRecipe: spectralRecipe({ xUnit: "s" }),
+    });
+    useApp.setState({ datasets: [ds("src", { data: sourceData }), sheet] });
+
+    await expect(recomputeDerivedSheet(useApp.getState, sheet)).rejects.toThrow(/X axis changed units/);
+    expect(runSpectralWorkbench).not.toHaveBeenCalled();
+  });
+
+  it("refuses a stale spectral recalculation result when its source changes in flight", async () => {
+    let resolve!: (value: DataStruct) => void;
+    let markStarted!: () => void;
+    const started = new Promise<void>((done) => { markStarted = done; });
+    vi.mocked(runSpectralWorkbench).mockImplementation(() => {
+      markStarted();
+      return new Promise((done) => { resolve = done; });
+    });
+    const source = ds("src");
+    const sheet = ds("derived", {
+      derivedFrom: { datasetId: "src", pipeline: "fft" },
+      analysisRecipe: spectralRecipe(),
+    });
+    useApp.setState({ datasets: [source, sheet] });
+
+    const pending = recomputeDerivedSheet(useApp.getState, sheet);
+    await started;
+    useApp.setState({ datasets: [{ ...source, data: { ...source.data, time: [2, 3, 4] } }, sheet] });
+    resolve({ ...data(), labels: ["A · Magnitude"] });
+
+    await expect(pending).rejects.toThrow(/changed while recalculation/);
+  });
+});
+
+describe("linked Signal Processing correction worksheets", () => {
+  const correctionRecipe = (over: Partial<SignalCorrectionRecipe> = {}): SignalCorrectionRecipe => ({
+    kind: "signal-correction",
+    version: 1,
+    operation: "Detrend",
+    channels: [{ index: 0, label: "A", unit: "u" }],
+    xUnit: "s",
+    params: { signalChannels: [0], detrendOrder: 1 },
+    ...over,
+  });
+
+  it("rebinds and preserves the full recipe while recalculating", async () => {
+    const sourceData = {
+      ...data(),
+      values: [[1, 10], [2, 20], [3, 30]],
+      labels: ["new", "A"],
+      units: ["", "u"],
+      metadata: { xUnit: "s" },
+    };
+    const analyzed = { ...sourceData, values: [[1, -1], [2, 0], [3, 1]] };
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(analyzed);
+    const sheet = ds("derived", {
+      derivedFrom: { datasetId: "src", pipeline: "Detrend" },
+      analysisRecipe: correctionRecipe(),
+      corrections: { signalChannels: [0], detrendOrder: 1 },
+    });
+    useApp.setState({ datasets: [ds("src", { data: sourceData }), sheet] });
+
+    const { sheet: result } = await recomputeDerivedSheet(useApp.getState, sheet);
+
+    expect(applyCorrectionsApi).toHaveBeenCalledWith({
+      dataset: sourceData,
+      params: { signalChannels: [1], detrendOrder: 1 },
+    });
+    expect(result.analysisRecipe).toMatchObject({
+      channels: [{ index: 1, label: "A", unit: "u" }],
+      xUnit: "s",
+      params: { signalChannels: [1] },
+    });
+    expect(result.corrections?.signalChannels).toEqual([1]);
+  });
+
+  it("fails closed when a linked correction source keeps its labels but changes X units", async () => {
+    const sourceData = { ...data(), metadata: { xUnit: "ms" } };
+    const sheet = ds("derived", {
+      derivedFrom: { datasetId: "src", pipeline: "Detrend" },
+      analysisRecipe: correctionRecipe(),
+    });
+    useApp.setState({ datasets: [ds("src", { data: sourceData }), sheet] });
+
+    await expect(recomputeDerivedSheet(useApp.getState, sheet)).rejects.toThrow(/X axis changed units/);
+    expect(applyCorrectionsApi).not.toHaveBeenCalled();
+  });
+});
+
 describe("freezeCopy (L0.50)", () => {
   const derived = (): Dataset =>
     ds("sheet1", {
@@ -272,5 +479,102 @@ describe("recomputeDerivedSheet — must not strip the SOURCE's own columns (#4)
       [2, 20, 200, 22],
       [3, 30, 300, 33],
     ]);
+  });
+
+  it.each([
+    {
+      name: "removed before the selected signal",
+      oldLabels: ["A", "B", "C"],
+      newLabels: ["A", "C"],
+      selected: [2],
+      expected: [1],
+    },
+    {
+      name: "inserted before the selected signal",
+      oldLabels: ["A", "C"],
+      newLabels: ["A", "B", "C"],
+      selected: [1],
+      expected: [2],
+    },
+  ])("remaps signalChannels before execution when a source column is $name", async ({
+    oldLabels,
+    newLabels,
+    selected,
+    expected,
+  }) => {
+    const rows = [[1, 2, 3], [4, 5, 6]];
+    const sourceData: DataStruct = {
+      time: [0, 1],
+      values: rows.map((row) => row.slice(0, newLabels.length)),
+      labels: newLabels,
+      units: newLabels.map(() => ""),
+      metadata: {},
+    };
+    const sheetData: DataStruct = {
+      time: [0, 1],
+      values: rows.map((row) => row.slice(0, oldLabels.length)),
+      labels: oldLabels,
+      units: oldLabels.map(() => ""),
+      metadata: {},
+    };
+    const source = ds("src", { data: sourceData });
+    const sheet = ds("sheet1", {
+      data: sheetData,
+      corrections: { signalChannels: selected },
+      derivedFrom: { datasetId: "src", pipeline: "signal" },
+    });
+    useApp.setState({ datasets: [source, sheet] });
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(sourceData);
+
+    const { sheet: result } = await recomputeDerivedSheet(useApp.getState, sheet);
+
+    expect(applyCorrectionsApi).toHaveBeenCalledWith({
+      dataset: sourceData,
+      params: { signalChannels: expected },
+    });
+    expect(result.corrections?.signalChannels).toEqual(expected);
+  });
+
+  it("refuses an ambiguous reshape instead of transforming a neighboring column", async () => {
+    const sourceData: DataStruct = {
+      time: [0, 1],
+      values: [[1, 2, 3, 4], [5, 6, 7, 8]],
+      labels: ["A", "X", "Y", "C"],
+      units: ["", "", "", ""],
+      metadata: {},
+    };
+    const sheetData: DataStruct = {
+      time: [0, 1],
+      values: [[1, 2, 4], [5, 6, 8]],
+      labels: ["A", "B", "C"],
+      units: ["", "", ""],
+      metadata: {},
+    };
+    const source = ds("src", { data: sourceData });
+    const sheet = ds("sheet1", {
+      data: sheetData,
+      corrections: { signalChannels: [2] },
+      derivedFrom: { datasetId: "src", pipeline: "signal" },
+    });
+    useApp.setState({ datasets: [source, sheet] });
+
+    await expect(recomputeDerivedSheet(useApp.getState, sheet)).rejects.toThrow(
+      /selected signal columns changed/,
+    );
+    expect(applyCorrectionsApi).not.toHaveBeenCalled();
+  });
+
+  it("honors an explicit empty uncertainty-role marker from the source", async () => {
+    const source = ds("src", { errorRoles: [] });
+    const sheet = ds("sheet1", {
+      derivedFrom: { datasetId: "src", pipeline: "identity" },
+      errorRoles: [{ channel: 0, target: -1, axis: "x", side: "both" }],
+    });
+    useApp.setState({ datasets: [source, sheet] });
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(source.data);
+
+    const { sheet: result } = await recomputeDerivedSheet(useApp.getState, sheet);
+
+    expect(result.errorRoles).toEqual([]);
   });
 });

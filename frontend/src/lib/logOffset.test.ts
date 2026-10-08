@@ -9,11 +9,11 @@ import {
   applyLogOffsets,
   logOffsetDecades,
   logOffsetSuffix,
-  logOffsetWire,
   logOffsetsApply,
   scaleErrorColumns,
   scaleErrorSpans,
 } from "./logOffset";
+import { logOffsetWire } from "./logOffsetWire";
 import { buildColumns, type PlotPayload } from "./plotdata";
 import { defaultPlotView, type PlotView, type PlotWindow } from "./plotview";
 import type { Dataset, DataStruct, SeriesStyle } from "./types";

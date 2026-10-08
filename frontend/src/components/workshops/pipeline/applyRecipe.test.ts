@@ -21,7 +21,11 @@ import { useApp } from "../../../store/useApp";
 vi.mock("../../../store/toasts", () => ({ toast: vi.fn() }));
 // Only `fitModel` is ever exercised through this mock (a single test below,
 // finding #3) — nothing here calls `reportEmit`.
-vi.mock("../../../lib/api", () => ({ fitModel: vi.fn(), reportEmit: vi.fn() }));
+vi.mock("../../../lib/api", () => ({
+  fitModel: vi.fn(),
+  reportEmit: vi.fn(),
+  applyCorrections: vi.fn(async ({ dataset }: { dataset: DataStruct }) => structuredClone(dataset)),
+}));
 
 const SRC: Dataset = {
   id: "src",
@@ -92,6 +96,42 @@ async function recordRecipe(): Promise<AnalysisTemplate> {
 const expected = (d: DataStruct): DataStruct => transposeWorksheet(stackWorksheet(d, [1, 2]));
 
 describe("applyRecipe", () => {
+  it("conforms a renamed signal column before allowing the recipe-only positional fallback", async () => {
+    const signalSource: Dataset = {
+      id: "signal-source",
+      name: "signal-source.dat",
+      data: { time: [0, 1], values: [[1], [2]], labels: ["Intensity"], units: ["counts"], metadata: {} },
+    };
+    const renamed: Dataset = {
+      id: "renamed",
+      name: "renamed.dat",
+      data: { time: [0, 1], values: [[3], [4]], labels: ["Detector A"], units: ["counts"], metadata: {} },
+    };
+    const recipeParams = {
+      op: "signal",
+      recipe: {
+        kind: "signal-correction",
+        version: 1,
+        operation: "Smooth",
+        channels: [{ index: 0, label: "Intensity", unit: "counts" }],
+        xUnit: "",
+        params: { signalChannels: [0], smoothEnabled: true, smoothMethod: "moving", smoothWindow: 2 },
+      },
+    };
+    const step = makeStep("transform", "Smooth", "", recipeParams);
+    const template = toTemplate("smooth", [step], [], { expects: deriveExpectations([step], signalSource) });
+    useApp.setState({ datasets: [signalSource, renamed], activeId: renamed.id, macroRecording: false, history: [] });
+
+    const [result] = await applyRecipe(template, [{ datasetId: renamed.id, bindings: [0] }], { ackUnits: false });
+
+    expect(result.status).toBe("ok");
+    expect(result.outputId).toBeTruthy();
+    expect(byId(result.outputId!)?.analysisRecipe).toMatchObject({
+      channels: [{ index: 0, label: "Detector A", unit: "counts" }],
+    });
+    expect(byId(renamed.id)?.data.labels).toEqual(["Detector A"]);
+  });
+
   it("replays a serialized recipe deterministically on equivalent inputs", async () => {
     const recipe = await recordRecipe();
     useApp.setState({

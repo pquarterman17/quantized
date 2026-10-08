@@ -59,13 +59,11 @@ export interface StatStageSeed {
   facetCol?: number | null; group2Col?: number | null; colorCol?: number | null; // #11 facet; P1.4 Color-by (lib/statColor)
 }
 
-/** Peak Analyzer wizard click-on-plot marker editing (interaction plan item
- *  5, deferred from closed gap #31) — the bridge PlotStage reads to wire
- *  `peakMarkerEditPlugin` (lib/peakMarkerHit.ts). `usePeakWizard` is the sole
- *  owner of the candidate list and `addPeakAt`/`removePeak`; this is a THIN,
- *  minimal projection (marker data coords + the two callbacks) pushed into
- *  the store only while step ② is live — null the rest of the time (wizard
- *  closed, a different step, or Escape-suppressed). Mirrors
+/** Peak-workshop click-on-plot marker editing (interaction plan item 5) — the
+ *  bridge PlotStage reads to wire `peakMarkerEditPlugin` (lib/peakMarkerHit.ts).
+ *  Peak Analyzer or the simpler Peaks panel owns the candidate list and
+ *  callbacks; this is only a THIN projection while one edit mode is live.
+ *  The field/type retain their original wizard name for compatibility. Mirrors
  *  ReflectivitySeed/StatStageSeed's cross-panel-hook shape, generalized to a
  *  live bridge rather than a one-shot consume (closer in spirit to
  *  qfitRoi/onRoiChange, but the callbacks travel WITH the data since
@@ -103,6 +101,7 @@ export interface WorkshopFlagsSlice {
   rsmOpen: boolean; digitizerOpen: boolean;
   datasetMathOpen: boolean; tabulateOpen: boolean;
   distributionOpen: boolean;
+  signalProcessingOpen: boolean;
   dataFilterOpen: boolean;
   statsChooserOpen: boolean; // the "which test?" front door (#26)
   peakWizardOpen: boolean; // the Peak Analyzer stepper (#31)
@@ -151,6 +150,7 @@ export interface WorkshopFlagsSlice {
   setDatasetMathOpen: (open: boolean) => void;
   setTabulateOpen: (open: boolean) => void;
   setDistributionOpen: (open: boolean) => void;
+  setSignalProcessingOpen: (open: boolean) => void;
   setDataFilterOpen: (open: boolean) => void;
   setStatsChooserOpen: (open: boolean) => void;
   setPeakWizardOpen: (open: boolean) => void;
@@ -196,6 +196,7 @@ export function createWorkshopFlagsSlice(set: SliceSet): WorkshopFlagsSlice {
     datasetMathOpen: false,
     tabulateOpen: false,
     distributionOpen: false,
+    signalProcessingOpen: false,
     dataFilterOpen: false,
     statsChooserOpen: false,
     peakWizardOpen: false,
@@ -239,6 +240,7 @@ export function createWorkshopFlagsSlice(set: SliceSet): WorkshopFlagsSlice {
     setDatasetMathOpen: (datasetMathOpen) => set({ datasetMathOpen }),
     setTabulateOpen: (tabulateOpen) => set({ tabulateOpen }),
     setDistributionOpen: (distributionOpen) => set({ distributionOpen }),
+    setSignalProcessingOpen: (signalProcessingOpen) => set({ signalProcessingOpen }),
     setDataFilterOpen: (dataFilterOpen) => set({ dataFilterOpen }),
     setStatsChooserOpen: (statsChooserOpen) => set({ statsChooserOpen }),
     setPeakWizardOpen: (peakWizardOpen) => set({ peakWizardOpen }),

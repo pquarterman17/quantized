@@ -10,17 +10,19 @@
 import { recomputeWithErrors } from "./formula";
 import { asAlreadyComputed } from "./formulaInputs";
 import type { FitRefSnapshot } from "./formulaTypes";
+import { sanitizeSignalAnalysisRecipe } from "./signalRecipe";
 import type { ComputedColumn, Dataset, FitSpec } from "./types";
 
 /** The `formulaErrors`/`derivedFrom` slice of a serialized dataset entry —
  *  spread into `serializeWorkspace`'s per-dataset object alongside every
  *  other optional field there. */
 export function serializeComputedColumnsExtras(
-  d: Pick<Dataset, "formulaErrors" | "derivedFrom">,
-): Partial<Pick<Dataset, "formulaErrors" | "derivedFrom">> {
+  d: Pick<Dataset, "formulaErrors" | "derivedFrom" | "analysisRecipe">,
+): Partial<Pick<Dataset, "formulaErrors" | "derivedFrom" | "analysisRecipe">> {
   return {
     ...(d.formulaErrors && Object.keys(d.formulaErrors).length ? { formulaErrors: d.formulaErrors } : {}),
     ...(d.derivedFrom ? { derivedFrom: d.derivedFrom } : {}),
+    ...(d.derivedFrom && d.analysisRecipe ? { analysisRecipe: d.analysisRecipe } : {}),
   };
 }
 
@@ -39,6 +41,13 @@ export function applyComputedColumnsExtras(ds: Dataset, dd: Record<string, unkno
   const df = dd.derivedFrom as Record<string, unknown> | undefined;
   if (df && typeof df === "object" && typeof df.datasetId === "string" && typeof df.pipeline === "string") {
     ds.derivedFrom = { datasetId: df.datasetId, pipeline: df.pipeline };
+  }
+  // A recipe without a valid source edge cannot be refreshed and would look
+  // linked while silently behaving as a frozen worksheet.  Keep the two
+  // fields atomic at the persistence boundary.
+  if (ds.derivedFrom) {
+    const recipe = sanitizeSignalAnalysisRecipe(dd.analysisRecipe);
+    if (recipe) ds.analysisRecipe = recipe;
   }
 }
 

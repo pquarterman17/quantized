@@ -184,7 +184,9 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
           originFidelity: ws.originFidelity ?? [],
           smartFolders: ws.smartFolders ?? [], // saved queries (item 9) — .dwk persists them
           reports: ws.reports ?? [], // report sheets (#36) — .dwk v2 persists them
+          analysisResults: ws.analysisResults ?? [],
           openReportId: null,
+          openAnalysisResultId: null,
           macroSteps: ws.macroSteps ?? [], // typed pipeline (#6) — .dwk v3
           recalcMode: ws.recalcMode ?? "auto", // recalc engine (#1) — .dwk v3
           figureDocs: ws.figureDocs ?? [], // figure documents (#12) — .dwk v3
@@ -219,7 +221,7 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
           // quickFigureBuilderDatasetId above (a stale pending would confirm
           // against whatever dataset happens to share its id in the NEW project).
           pendingRecipeApplication: null,
-          staleDatasets: [],
+          staleDatasets: ws.staleDatasets ?? [], // results stale when saved (lib/analysisResultFreshness.ts)
           staleFits: [],
           stageTab: activeDs ? nextStageTab(activeDs, s.stageTab) : s.stageTab,
           xKey: restoredView ? restoredView.xKey : null,

@@ -1979,6 +1979,7 @@ const DATASET_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
     "computed-column list; positional shift on removal is handled by lib/formulaRename's remapSurvivingFormulas, a separate mechanism from lib/channelRemap",
   formulaErrors: "keyed by formula NAME, not column index",
   derivedFrom: "source dataset id + pipeline descriptor, not channel-indexed",
+  analysisRecipe: "label-bound indices address the source dataset and are re-resolved there, not this output's columns",
   importedAt: "timestamp, not channel-indexed",
   excludedRows:
     "ROW indices (JMP-style row state, #50), not COLUMN/channel indices -- unaffected by a column removal",
@@ -2278,6 +2279,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   rightCollapsed: "right panel collapsed; shell layout UI",
   stageTab: "Plot/Worksheet stage tab; shell navigation UI",
   openReportId: "which report window is open; UI open state",
+  openAnalysisResultId: "which analysis-result workspace is open; UI open state",
   prefsOpen: "Preferences dialog visibility; UI state",
   cmdkOpen: "Command Palette visibility; UI state",
   shortcutsOpen: "shortcuts sheet visibility; UI state",
@@ -2313,6 +2315,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   rsmOpen: "workshop/dialog visibility; UI state",
   datasetMathOpen: "workshop/dialog visibility; UI state",
   distributionOpen: "workshop/dialog visibility; UI state",
+  signalProcessingOpen: "workshop/dialog visibility; UI state",
   dataFilterOpen: "workshop/dialog visibility; UI state",
   statsChooserOpen: "workshop/dialog visibility; UI state",
   peakWizardOpen: "workshop/dialog visibility; UI state",
@@ -3340,6 +3343,10 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // with `import()`, but `store/workbookTransferRun.ts` (a seam) imports it
     // statically, so only reachability can hold it.
     "/lib/workbookTransfer.ts",
+    // Durable analysis results (PR #554 review): lifecycle actions are reached
+    // only through `withAnalysisResultActions` (lib/libraryRename.ts) or the
+    // lazy result/Signal Processing panels.
+    "/store/analysisResultActions.ts",
     "/components/overlays/useDialogFocus.ts",
     "/components/overlays/ParamFields.tsx",
     "/lib/params.ts",
@@ -3356,6 +3363,8 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/workspaceParseCore.ts",
     "/lib/workspaceDatasetParse.ts",
     "/lib/workspaceSerialize.ts",
+    "/lib/mapViewSerialize.ts",
+    "/lib/logOffsetWire.ts",
     "/lib/workspaceOrigin.ts",
     "/lib/workspaceLibraryPanel.ts",
     "/lib/workspaceComputedColumns.ts",
@@ -3525,6 +3534,10 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // only by lazy worksheet, builder, search and encoding surfaces. Keep the
     // eager designation reader in columnmeta.ts without pulling this half in.
     "/lib/originTextColumns.ts",
+    // 2026-10-06 analysis workbench: cancellable-action and polled-job
+    // orchestration is used only after a lazy workshop/export action starts.
+    "/store/pendingOpActions.ts",
+    "/store/accentSwatches.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
