@@ -418,9 +418,11 @@ describe("BackgroundPlotWindow — item 15 alternate render modes", () => {
       />,
     );
     await waitFor(() => expect(created).toHaveLength(2));
+    // Panel 0 carries the renamed title; a right-of-seam panel shares its y
+    // axis and drops a repeated title (narrow-window break layout).
     expect((created as { opts: { axes: { label?: string }[] } }[]).map((p) => p.opts.axes[1]?.label)).toEqual([
       "Loop 1",
-      "Loop 1",
+      undefined,
     ]);
   });
 
