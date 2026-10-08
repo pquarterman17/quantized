@@ -638,7 +638,8 @@
 .qz-analysis-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px; border-bottom: 1px solid var(--border); }
 .qz-analysis-status { margin-right: auto; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-dim); }
 .qz-analysis-status.status-current { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); }
-.qz-analysis-status.status-out-of-date, .qz-analysis-status.status-incomplete { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); }
+.qz-analysis-status.status-out-of-date, .qz-analysis-status.status-incomplete, .qz-analysis-status.status-source-missing { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); }
+.qz-analysis-missing { margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--warn); font-size: 12px; }
 .qz-analysis-tabs { display: flex; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid var(--border); }
 .qz-analysis-tabs button { appearance: none; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--text-dim); padding: 7px 10px; cursor: pointer; }
 .qz-analysis-tabs button.active { color: var(--text); border-bottom-color: var(--accent); }

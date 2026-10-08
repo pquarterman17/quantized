@@ -210,8 +210,17 @@ export function signalAnalysisResult(
   output: Dataset,
   createdAt = new Date().toISOString(),
 ): AnalysisResult | null {
+  return output.derivedFrom?.datasetId === source.id ? signalEnvelope(id, source, output, createdAt) : null;
+}
+
+function signalEnvelope(
+  id: string,
+  source: Pick<Dataset, "id" | "name" | "errorRoles">,
+  output: Dataset,
+  createdAt: string,
+): AnalysisResult | null {
   const recipe = output.analysisRecipe;
-  if (!output.derivedFrom || output.derivedFrom.datasetId !== source.id || !recipe) return null;
+  if (!recipe) return null;
   return {
     version: ANALYSIS_RESULT_VERSION,
     id,
@@ -231,13 +240,16 @@ export function signalAnalysisResult(
 
 /** Migrate pre-result-envelope workspaces exactly once: callers invoke this
  * only when the top-level `analysisResults` key is absent. Deterministic ids
- * make repeated opens stable; an explicitly saved empty array stays empty. */
+ * make repeated opens stable; an explicitly saved empty array stays empty.
+ * An output whose source is not in the file KEEPS its result (owner
+ * decision): the source ref names the missing id, and the result workspace
+ * reports it as a missing-source diagnostic that clears if the source returns. */
 export function migrateLegacySignalResults(datasets: readonly Dataset[], createdAt: string): AnalysisResult[] {
   const byId = new Map(datasets.map((dataset) => [dataset.id, dataset]));
   return datasets.flatMap((output) => {
-    const source = output.derivedFrom ? byId.get(output.derivedFrom.datasetId) : undefined;
-    if (!source || !output.analysisRecipe) return [];
-    const result = signalAnalysisResult(`analysis-${output.id}`, source, output, createdAt);
+    const sourceId = output.derivedFrom?.datasetId;
+    const source = sourceId === undefined ? undefined : byId.get(sourceId) ?? { id: sourceId, name: output.name };
+    const result = source ? signalEnvelope(`analysis-${output.id}`, source, output, createdAt) : null;
     return result ? [result] : [];
   });
 }

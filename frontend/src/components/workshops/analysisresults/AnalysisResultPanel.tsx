@@ -12,6 +12,9 @@ import { Button } from "../../primitives";
 
 type Tab = "overview" | "table" | "diagnostics" | "provenance" | "notes";
 const TABS: readonly Tab[] = ["overview", "table", "diagnostics", "provenance", "notes"];
+// One sentence for the missing-source state: the notice AND the disabled
+// actions' reason. Derived from the refs, so it clears when the source returns.
+const SOURCE_MISSING = "Source data not found — results can't be recalculated.";
 
 // Its own seam, not store/analysisResultLazy.ts: importing that from this
 // chunk would split it into a separate eagerly-named chunk (measured).
@@ -125,7 +128,11 @@ export default function AnalysisResultPanel() {
   const recipe = output?.analysisRecipe;
   const channels = recipe ? signalRecipeChannels(recipe) : result.selection?.channels;
   const xRange = recipe ? signalRecipeXRange(recipe) : result.selection?.xRange;
-  const status = !source || !output ? "Incomplete" : staleDatasets.includes(output.id) ? "Out of date" : "Current";
+  // A kept output with no source (an older file, or a deleted source) is its
+  // own state: still openable, never recalculable.
+  const sourceMissing = !!output && !source && result.sources.length > 0;
+  const blocked = sourceMissing ? SOURCE_MISSING : undefined;
+  const status = sourceMissing ? "Source missing" : !source || !output ? "Incomplete" : staleDatasets.includes(output.id) ? "Out of date" : "Current";
   const moveTab = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     const offset = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
     const next = event.key === "Home" ? 0 : event.key === "End" ? TABS.length - 1
@@ -142,11 +149,12 @@ export default function AnalysisResultPanel() {
         <div className="qz-analysis-toolbar">
           <span className={`qz-analysis-status status-${status.toLowerCase().replaceAll(" ", "-")}`}>{status}</span>
           <Button disabled={!output} onClick={openOutput}>Open worksheet</Button>
-          <Button disabled={!source || !output || busy !== null} onClick={() => void recalculate()}>{busy === "recalculate" ? "Recalculating…" : "Recalculate"}</Button>
-          <Button disabled={!source || !output?.analysisRecipe || busy !== null} onClick={() => void rerun()}>{busy === "rerun" ? "Rerunning…" : "Rerun as new"}</Button>
+          <Button disabled={!source || !output || busy !== null} title={blocked} onClick={() => void recalculate()}>{busy === "recalculate" ? "Recalculating…" : "Recalculate"}</Button>
+          <Button disabled={!source || !output?.analysisRecipe || busy !== null} title={blocked} onClick={() => void rerun()}>{busy === "rerun" ? "Rerunning…" : "Rerun as new"}</Button>
           <Button onClick={() => void rename()}>Rename…</Button>
           <Button variant="danger" onClick={() => void remove()}>Delete…</Button>
         </div>
+        {sourceMissing && <p className="qz-analysis-missing" role="note">{SOURCE_MISSING}</p>}
         <div className="qz-analysis-tabs" role="tablist" aria-label="Analysis result views">
           {TABS.map((value, index) => (
             <button key={value} id={`analysis-result-tab-${value}`} role="tab" aria-controls="analysis-result-tabpanel" aria-selected={tab === value} tabIndex={tab === value ? 0 : -1} className={tab === value ? "active" : ""} onKeyDown={(event) => moveTab(event, index)} onClick={() => setTab(value)}>{value[0].toUpperCase() + value.slice(1)}{value === "diagnostics" && diagnostics.length ? ` (${diagnostics.length})` : ""}</button>
