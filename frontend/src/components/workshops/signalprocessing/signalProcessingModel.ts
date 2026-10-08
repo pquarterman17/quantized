@@ -1,6 +1,7 @@
 import type { CorrectionParams, Dataset } from "../../../lib/types";
+import type { SpectralOperation } from "../../../lib/spectralWorkbench";
 
-export type SignalOperation =
+export type CorrectionOperation =
   | "smooth"
   | "normalize-range"
   | "normalize-peak"
@@ -10,6 +11,7 @@ export type SignalOperation =
   | "derivative-second"
   | "integral"
   | "log-derivative";
+export type SignalOperation = CorrectionOperation | SpectralOperation;
 
 export interface SignalSettings {
   operation: SignalOperation;
@@ -60,7 +62,15 @@ export function settingsToParams(
       return { ...params, derivativeMode: "∫Y dx" };
     case "log-derivative":
       return { ...params, derivativeMode: "dlog/dlog" };
+    case "fft":
+    case "filter":
+    case "correlation":
+      throw new Error("spectral operations use a spectral recipe");
   }
+}
+
+export function isSpectralOperation(operation: SignalOperation): operation is SpectralOperation {
+  return operation === "fft" || operation === "filter" || operation === "correlation";
 }
 
 export function operationLabel(operation: SignalOperation): string {
@@ -74,6 +84,9 @@ export function operationLabel(operation: SignalOperation): string {
     "derivative-second": "Second derivative",
     integral: "Cumulative integral",
     "log-derivative": "Logarithmic derivative",
+    fft: "Frequency spectrum",
+    filter: "Frequency filter",
+    correlation: "Cross-correlation",
   }[operation];
 }
 

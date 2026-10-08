@@ -8,7 +8,6 @@ import type { DatasetSource } from "./datasetSource";
 import type { PeakTable } from "./peakTable";
 import type { RecodeSpec } from "./recode";
 import type { FactorSpec } from "./metadataFactor";
-
 /** DataStruct as serialized by `datastruct_payload` / `DataStruct.to_dict`. */
 export interface DataStruct {
   time: number[];
@@ -514,6 +513,7 @@ export interface Dataset {
   /** PR K (L0.50): set for a DERIVED WORKSHEET — recalculates only via the
    *  async scheduler (K5c); `pipeline` is a short descriptor for now. */
   derivedFrom?: { datasetId: string; pipeline: string };
+  analysisRecipe?: import("./spectralWorkbench").SpectralAnalysisRecipe; // linked analysis recipe
   /** Per-channel column roles (label / ignore) — channel index → role. Excluded
    *  from the plot; semantic metadata about the columns, so they live ON the
    *  dataset (persist across dataset switches + round-trip .dwk), not in the

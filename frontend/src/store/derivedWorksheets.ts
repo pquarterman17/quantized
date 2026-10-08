@@ -23,12 +23,10 @@
 
 import { cloneDataStruct } from "../lib/dataset";
 import { applyCorrections as applyCorrectionsApi } from "../lib/api";
-import { type ColumnShift, remapChannelList } from "../lib/channelRemap";
-import { recomputeFromBaseOrEmpty } from "../lib/formulaInputs";
+import type { ColumnShift } from "../lib/channelRemap";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { CorrectionParams, Dataset } from "../lib/types";
-import { shiftForColumnChange } from "./derivedSheetShift";
 import { nextDatasetId } from "./idSeq";
 import type { AppState } from "./useApp";
 
@@ -100,49 +98,8 @@ export async function recomputeDerivedSheet(
   get: SliceGet,
   sheet: Dataset,
 ): Promise<{ sheet: Dataset; shift: ColumnShift | null }> {
-  const sourceId = sheet.derivedFrom?.datasetId;
-  const source = sourceId ? get().datasets.find((d) => d.id === sourceId) : undefined;
-  if (!source) throw new Error(`source dataset "${sourceId}" no longer exists`);
-  if (source.pending) throw new Error(`source dataset "${source.name}" hasn't fully loaded yet`);
-  const sourceData = source.data;
-  // Remap channel-indexed recipe fields BEFORE executing the pipeline. Doing
-  // this after the API call updates the saved recipe for next time, but the
-  // current recalculation has already transformed whichever neighbour moved
-  // into the stale index.
-  const own = sheet.formulas?.length ?? 0; // the sheet's own computed columns trail its base
-  const before = sheet.data.labels.slice(0, sheet.data.labels.length - own);
-  const shifted = shiftForColumnChange(sheet, before, sourceData.labels);
-  let base = shifted.sheet;
-  const { shift, forcedErrors } = shifted;
-  const selected = base.corrections?.signalChannels;
-  if (selected && shift !== null) {
-    base = { ...base, corrections: { ...base.corrections, signalChannels: remapChannelList(selected, shift) } };
-  } else if (selected?.some((channel) => before[channel] !== sourceData.labels[channel])) {
-    throw new Error("selected signal columns changed");
-  }
-  const corrected = await applyCorrectionsApi({
-    dataset: sourceData,
-    params: base.corrections ?? {},
-    ...(source.errorRoles ? { error_bindings: source.errorRoles } : {}),
-  });
-  // #50/#53 row-count-changed guard (excludedRows + the four overlays) is
-  // applied by the CALLER (useApp.ts's recalcNow, via the shared
-  // rowsChangedGuard — see store/corrections.ts) once it can see both the
-  // old and new row counts and perform the actual `set()`; this function
-  // stays a pure "compute the new Dataset" step, same shape as before.
-  const { data, formulaErrors } = recomputeFromBaseOrEmpty(corrected, base.formulas);
-  // A formula that named the removed column is an explicit error, never a guess.
-  const errors = forcedErrors ? { ...formulaErrors, ...forcedErrors } : formulaErrors;
-  return {
-    sheet: {
-      ...base,
-      data,
-      raw: sourceData,
-      formulaErrors: errors,
-      ...(source.errorRoles ? { errorRoles: [...source.errorRoles] } : {}),
-    },
-    shift,
-  };
+  const { runDerivedWorksheetRecompute } = await import("./derivedWorksheetsRecompute");
+  return runDerivedWorksheetRecompute(get, sheet);
 }
 
 // `set` unused here: both actions delegate to `get().addDataset(...)` (the

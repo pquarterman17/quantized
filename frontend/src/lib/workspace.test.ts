@@ -16,6 +16,7 @@ import { defaultPlotView, type PlotWindow } from "./plotview";
 import type { QuickPlotTemplate } from "./quickPlotTemplates";
 import type { ReportEntry } from "./report";
 import type { RoiDef } from "./roi";
+import { DEFAULT_SPECTRAL_RECIPE } from "./spectralWorkbench";
 import type { Dataset, OriginFigure } from "./types";
 import type { WorkbookNode } from "./workbooks";
 import { parseWorkspace, serializeWorkspace, WORKSPACE_FORMAT } from "./workspace";
@@ -231,6 +232,25 @@ describe("workspace PR K fields (deps/derivedFrom/formulaErrors)", () => {
     const bad = { ...makeDataset("a", "x"), derivedFrom: { datasetId: "raw1" } } as unknown as Dataset;
     expect(() => parseWorkspace(ser([bad]))).not.toThrow();
     expect(parseWorkspace(ser([bad])).datasets[0].derivedFrom).toBeUndefined();
+  });
+
+  it("round-trips a versioned spectral recipe and drops a malformed one", () => {
+    const ds = makeDataset("a", "spectrum");
+    ds.derivedFrom = { datasetId: "raw1", pipeline: "FFT · A" };
+    ds.analysisRecipe = {
+      ...DEFAULT_SPECTRAL_RECIPE,
+      channels: [{ index: 0, label: "A" }],
+      cutoff: [2],
+    };
+    expect(parse(ser([ds]))[0].analysisRecipe).toEqual(ds.analysisRecipe);
+
+    const doc = JSON.parse(ser([ds]));
+    doc.datasets[0].analysisRecipe.channels = [{ index: "zero", label: "A" }];
+    expect(parse(JSON.stringify(doc))[0].analysisRecipe).toBeUndefined();
+
+    const orphaned = JSON.parse(ser([ds]));
+    orphaned.datasets[0].derivedFrom = { datasetId: "raw1" };
+    expect(parse(JSON.stringify(orphaned))[0].analysisRecipe).toBeUndefined();
   });
 
   it("round-trips formulaErrors (and omits an empty map)", () => {
