@@ -3,9 +3,9 @@ import type { LibraryHierarchy, LibraryNode, LibraryNodeKey } from "./libraryHie
 export type LibraryContentFilter = "all" | "data" | "figures" | "reports";
 
 const CONTENT_KINDS: Record<Exclude<LibraryContentFilter, "all">, ReadonlySet<LibraryNode["kind"]>> = {
-  data: new Set(["worksheet"]),
+  data: new Set(["worksheet", "analysis-result"]),
   figures: new Set(["origin-figure", "editable-figure", "publication-figure", "page"]),
-  reports: new Set(["analysis-result", "report"]),
+  reports: new Set(["report"]),
 };
 
 /**

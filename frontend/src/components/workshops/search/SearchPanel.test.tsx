@@ -28,6 +28,8 @@ beforeEach(() => {
     datasets: [ds("d1", "hall.dat", ["Field", "Rxy"]), ds("d2", "other.dat", ["Temp"])],
     folders: [],
     reports: [],
+    analysisResults: [],
+    openAnalysisResultId: null,
     originFigures: [],
     activeId: "d2",
     stageTab: "plot",
@@ -84,5 +86,24 @@ describe("SearchPanel", () => {
     type("rxy");
     fireEvent.click(screen.getByText("Rxy"));
     expect(useApp.getState().status).toContain("revealed Rxy");
+  });
+
+  it("finds an analysis result by name and opens its result workspace", () => {
+    // PR #554 review: durable results were missing from project search.
+    useApp.setState({
+      analysisResults: [{
+        version: 1, id: "res", name: "Smooth · hall.dat",
+        producer: { id: "signal-processing", label: "Signal Processing", version: 1 },
+        sources: [{ datasetId: "d1", role: "input" }],
+        outputs: [{ datasetId: "d2", role: "linked-worksheet" }],
+        warnings: [], createdAt: "2026-10-08T00:00:00Z",
+      }],
+    });
+    render(<SearchPanel />);
+    type("smooth");
+    fireEvent.click(screen.getByText("Smooth · hall.dat"));
+    expect(useApp.getState().openAnalysisResultId).toBe("res");
+    expect(useApp.getState().activeId).toBe("d2");
+    expect(useApp.getState().searchOpen).toBe(false);
   });
 });

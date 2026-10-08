@@ -46,6 +46,20 @@ describe("Library explorer hierarchy filters", () => {
     expect(hierarchy.byKey.has("editable-figure:figure")).toBe(true);
   });
 
+  it("lists an analysis result under Data with its linked worksheets, not under Reports", () => {
+    // PR #554 review: a result is a linked analysis of worksheet data, not a report.
+    const withResult = buildLibraryHierarchy({
+      folders: [], workbooks: [{ id: "wa", name: "Data book" }],
+      datasets: [{ id: "sheet", name: "Sheet", workbookId: "wa", data: { time: [], values: [], labels: [], units: [], metadata: {} } }],
+      analysisResults: [{
+        version: 1, id: "res", name: "Smooth", producer: { id: "signal-processing", label: "Signal Processing", version: 1 },
+        sources: [{ datasetId: "sheet", role: "input" }], outputs: [], warnings: [], createdAt: "2026-10-08T00:00:00Z",
+      }],
+    });
+    expect(filterLibraryHierarchy(withResult, "data").byKey.has("analysis-result:res")).toBe(true);
+    expect(filterLibraryHierarchy(withResult, "reports").byKey.has("analysis-result:res")).toBe(false);
+  });
+
   it("returns the original model for All and indexes visible containers", () => {
     expect(filterLibraryHierarchy(hierarchy, "all")).toBe(hierarchy);
     expect(libraryNodeCount(hierarchy)).toBe(hierarchy.byKey.size);
