@@ -19,6 +19,8 @@ from datetime import UTC, datetime
 
 import numpy as np
 
+from quantized.io._fortran_float import parse_float
+
 __all__ = [
     "_datetime_epoch",
     "_detect_delimiter",
@@ -135,7 +137,7 @@ def _to_float(token: str) -> float:
     at all -- all four were behaviourally this exact function already).
     """
     try:
-        return float(token.strip())
+        return parse_float(token.strip())
     except ValueError:
         return float("nan")
 
@@ -143,7 +145,7 @@ def _to_float(token: str) -> float:
 def _is_numeric(token: str) -> bool:
     """True if token parses to a number; NaN counts as non-numeric (str2double parity)."""
     try:
-        value = float(token)
+        value = parse_float(token)
     except ValueError:
         return False
     return not math.isnan(value)
@@ -168,7 +170,7 @@ def _is_numeric_like(token: str) -> bool:
     str2double-parity ``_is_numeric``.
     """
     try:
-        float(token)
+        parse_float(token)
     except ValueError:
         return False
     return True
