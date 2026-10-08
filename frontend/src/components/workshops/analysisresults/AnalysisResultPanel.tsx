@@ -170,7 +170,7 @@ export default function AnalysisResultPanel() {
               <div><dt>Range</dt><dd>{xRange?.map(formatValue).join(" to ") ?? "Full worksheet"}</dd></div>
               <div><dt>Created</dt><dd>{formatDate(result.createdAt)}</dd></div>
             </dl>
-            <p className="qz-analysis-caption">This result stays linked to its source. Recalculate updates this output; Rerun as new preserves it and creates another result.</p>
+            {!sourceMissing && <p className="qz-analysis-caption">This result stays linked to its source. Recalculate updates this output; Rerun as new preserves it and creates another result.</p>}
           </>}
           {tab === "table" && <ResultTable result={result} />}
           {tab === "diagnostics" && (diagnostics.length
