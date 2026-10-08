@@ -41,6 +41,7 @@ import { applyWorkbookMigration, sanitizeWorkbooks, type WorkbookNode } from "./
 import { parseOriginFidelity, parseOriginFigures, stringsIn } from "./workspaceOrigin";
 import { parseWorkspaceDataset } from "./workspaceDatasetParse";
 import { legacyNullWarning, type LegacyNullTally } from "./legacyNullCells";
+import { migrateLegacyMapX } from "./legacyMapX";
 import { splitProjectFitModels } from "./fitModelsProject";
 import type { CustomFitModel } from "./fitmodels";
 import type { AnalysisTemplate } from "./template";
@@ -349,6 +350,7 @@ export function parseWorkspace(
   // same per-index errors this inline callback used to.
   const legacyNulls: LegacyNullTally = { cells: 0, names: [] }; // 2026-10-03 ruling, lib/legacyNullCells.ts
   const datasetsRaw = o.datasets.map((d, i) => parseWorkspaceDataset(d, i, opts?.projectDir, legacyNulls));
+  const mapXWarning = migrateLegacyMapX(datasetsRaw); // pre-#532 row-index map x, lib/legacyMapX.ts
 
   // Folder tree (absent in v1 → empty). Prune datasets pointing at a folder that
   // didn't survive validation; clamp active/selection/expansion to live ids.
@@ -385,6 +387,7 @@ export function parseWorkspace(
     : sanitizeAnalysisResults(o.analysisResults, migrationWarnings);
   const nullWarning = legacyNullWarning(legacyNulls);
   if (nullWarning) migrationWarnings.unshift(nullWarning); // first: the status line shows only [0]
+  if (mapXWarning) migrationWarnings.push(mapXWarning);
   const macroSteps = sanitizeSteps(o.pipeline);
   const recalcMode: RecalcMode =
     o.recalcMode === "manual" || o.recalcMode === "off" ? o.recalcMode : "auto";

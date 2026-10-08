@@ -4,6 +4,7 @@
 import type uPlot from "uplot";
 
 import type { PlotPayload } from "./plotdata";
+import { flatView } from "./uplotErrorRange";
 
 /** The x scale's range function for a scanned extent (`fullXExtents`). uPlot
  *  calls it on EVERY x `setScale` — a box/wheel zoom and a pan too, not only
@@ -50,6 +51,8 @@ export function isFixedXRange(range: unknown): range is uPlot.Range.Function {
 /** A [min, max] x data domain lightly padded — the canvas' x margin rule.
  *  Log AND reciprocal pad multiplicatively (their domain is positive only). */
 export function padXDomain([min, max]: readonly [number, number], positiveOnly: boolean): [number, number] {
+  const flat = min === max && flatView(min, positiveOnly);
+  if (flat) return flat; // a flat x: uPlot's own view
   if (positiveOnly) return [min / 1.1, max * 1.1];
   const pad = (max - min || Math.abs(max) || 1) * 0.02; // slim x margin, avoid edge clipping
   return [min - pad, max + pad];

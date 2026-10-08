@@ -6,6 +6,13 @@ below and a whole decade above (``rangeLog``), and never pads data on one side
 of zero across it. ``shared_autoscale`` applies the screen's rule to an axis
 the caller has not given a typed limit (``_apply_overrides`` sets those after).
 
+A FLAT (zero-span) axis takes uPlot's own rule too, on x, y and y2 alike
+(``flat_auto_range``; ``log_auto_range`` already is ``rangeLog``'s): a flat
+1000 Oe field reads 0..2000, not matplotlib's ~950..1050, which frames a
+constant like a trace resolved to 0.1%. The rule, and why, is stated once in
+``frontend/src/lib/flatAutoscaleFixture.test.ts``; both halves read
+``tests/fixtures/wire/flat_autoscale.json``.
+
 On a log axis:
 
 * a value <= 0 has no position. matplotlib's default clips it to the bottom
@@ -22,6 +29,8 @@ Pure layer (matplotlib + numpy only).
 from __future__ import annotations
 
 import math
+import re
+import sys
 from typing import Any
 
 import numpy as np
@@ -31,12 +40,67 @@ from numpy.typing import NDArray
 
 from quantized.calc.figure_ticks import _pow10
 
-__all__ = ["log_auto_range", "mask_nonpositive", "shared_autoscale"]
+__all__ = ["flat_auto_range", "log_auto_range", "mask_nonpositive", "shared_autoscale"]
 
 
 def _fix(v: float) -> float:
     """Drop float noise (uPlot's ``fixFloat``)."""
     return float(f"{v:.12g}")
+
+
+_NOISE = re.compile(r"\.\d*?(?=9{6,}|0{6,})")
+
+
+def _js_str(v: float) -> str:
+    """``String(v)`` in JS: positional from 1e-6 up to 1e21, else exponent."""
+    if v == 0 or 1e-6 <= abs(v) < 1e21:
+        return np.format_float_positional(v, unique=True, trim="-")
+    return np.format_float_scientific(v, unique=True, trim="-", exp_digits=1)
+
+
+def _round_dec(v: float, dec: int) -> float:
+    """uPlot's ``roundDec`` (half up, with its 1 + epsilon nudge)."""
+    if v.is_integer():
+        return v
+    p = 10.0**dec
+    n = v * p * (1 + sys.float_info.epsilon)
+    whole = math.floor(n)  # Math.round exactly: n + 0.5 itself can round
+    return (whole + (n - whole >= 0.5)) / p
+
+
+def _fix_float(v: float) -> float:
+    """uPlot's ``fixFloat``: round off a run of six 0s or 9s in the digits
+    (``1999.9999999998`` -> ``2000``) -- exact, where ``_fix`` is 12 digits."""
+    if v.is_integer():
+        return v
+    text = _js_str(v)
+    run = _NOISE.search(text)
+    if run is None:
+        return v
+    if "e-" in text:
+        num, exp = text.split("e")
+        return float(f"{_fix_float(float(num))}e{exp}")
+    return _round_dec(v, len(run.group(0)) - 1)
+
+
+def flat_auto_range(lo: float, hi: float) -> tuple[float, float] | None:
+    """uPlot's ``rangeNum(lo, hi, 0.1, true)`` when [lo, hi] is flat by its
+    own test (a span under 1e-24, or 11+ decades below the values), else
+    None. The span grows by |v| each side, snapped out to a tenth of v's
+    decade, never across zero (a soft 0); a flat 0 reads 0..100."""
+    delta = hi - lo
+    scalar = max(abs(lo), abs(hi))
+    if delta >= 1e-24 and abs(math.log10(scalar) - math.log10(delta)) <= 10:
+        return None
+    delta = 1e-24 if lo == 0 or hi == 0 else 0.0
+    nonzero = delta or scalar or 1e3
+    incr = _pow10(math.floor(math.log10(nonzero))) / 10
+    pad = nonzero * (0.1 if delta else 1.0)
+    new_lo = _round_dec(_fix_float(math.floor(_fix_float((lo - pad) / incr)) * incr), 24)
+    new_hi = _round_dec(_fix_float(math.ceil(_fix_float((hi + pad) / incr)) * incr), 24)
+    out_lo = 0.0 if lo >= 0 and new_lo <= 0 else new_lo
+    out_hi = 0.0 if hi <= 0 and new_hi >= 0 else new_hi
+    return (0.0, 100.0) if out_lo == out_hi == 0 else (out_lo, out_hi)
 
 
 def log_auto_range(lo: float, hi: float) -> tuple[float, float]:
@@ -124,5 +188,8 @@ def shared_autoscale(ax: Any, axis: str, scale: str) -> None:
         lo, hi = min(lo, hi), max(lo, hi)
         new_lo = 0.0 if both.min() >= 0 and lo < 0 else lo
         new_hi = 0.0 if both.max() <= 0 and hi > 0 else hi
-        if (new_lo, new_hi) != (lo, hi) and new_hi > new_lo:
+        flat = flat_auto_range(float(both.min()), float(both.max()))
+        if flat:  # already soft at zero
+            new_lo, new_hi = flat
+        if (flat or (new_lo, new_hi) != (lo, hi)) and new_hi > new_lo:
             set_lim(*((new_hi, new_lo) if flip else (new_lo, new_hi)))

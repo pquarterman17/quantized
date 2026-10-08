@@ -7,7 +7,6 @@ import {
   type FigureDocument,
 } from "../lib/figureDocument";
 import { errKeysFromBindings, type ErrorBinding } from "../lib/errorRoles";
-import type { FigureEncoding } from "../lib/figureEncoding";
 import type { PlotView, PlotWindow } from "../lib/plotview";
 import type { Dataset } from "../lib/types";
 
@@ -275,27 +274,9 @@ export function withWindowDocumentErrors(
   };
 }
 
-/** P1.4: set (or, with `undefined`, clear) the FOCUSED plot window's
- *  `bindings.encoding` — the Graph Builder's apply — through the declared
- *  document-write chokepoint. The same array comes back when nothing changes. */
-export function withFocusedEncoding(
-  windows: readonly PlotWindow[],
-  focusedId: string | null,
-  encoding: FigureEncoding | undefined,
-): PlotWindow[] {
-  let changed = false;
-  const next = windows.map((window) => {
-    if (window.id !== focusedId || window.kind !== "plot" || !window.document) return window;
-    if (JSON.stringify(window.document.bindings.encoding) === JSON.stringify(encoding)) return window;
-    changed = true;
-    const { encoding: _previous, ...bindings } = window.document.bindings;
-    return withPlotWindowDocument(window, {
-      ...window.document,
-      bindings: encoding === undefined ? bindings : { ...bindings, encoding },
-    });
-  });
-  return changed ? next : (windows as PlotWindow[]);
-}
+// `withFocusedEncoding` (the Graph Builder's apply) lives in
+// store/focusedEncoding.ts: only the lazy Graph Builder calls it (bundle diet
+// slice 24). Not re-exported.
 
 export function commitFocusedPlotWindow(
   windows: readonly PlotWindow[],

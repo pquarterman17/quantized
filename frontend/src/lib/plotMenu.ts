@@ -11,7 +11,7 @@ import { buildMenuItems } from "./contextActions";
 import { curveActions } from "./curveContextActions";
 import type { DrawnSeriesStyle } from "./drawnSeriesStyle";
 import { fmtNum } from "./format";
-import { MARKER_SHAPES } from "./markers";
+import { MARKER_SHAPES } from "./markerShapes";
 import type { AxisZone } from "./plotHitTest";
 import { NO_RANGE_REASON, type PlotRange } from "./plotRangeSelection";
 import type { AxisScale, LineStyle, MarkerShape, SeriesStyle } from "./types";

@@ -89,6 +89,13 @@ function uplotDefault(u: uPlot, min: number, max: number, key: string, isX: bool
   return isX ? [min, max] : statics.rangeNum(min, max, 0.1, true);
 }
 
+/** A FLAT [v, v] as uPlot's own autoscale views it (`rangeNum`/`rangeLog`:
+ *  1000 reads 0..2000 linear, 100..10000 log), for the full-scan paths. The
+ *  export's rule too: `lib/flatAutoscaleFixture.test.ts`. */
+export function flatView(v: number, positiveOnly: boolean): [number, number] | null {
+  return statics && ((positiveOnly ? statics.rangeLog(v, v, 10, false) : statics.rangeNum(v, v, 0.1, true)) as [number, number]);
+}
+
 /** The lowest bar end a log/reciprocal autoscale counts: two decades below
  *  the lowest point. A lower end <= 0 or near zero (sR ~ R on low-count
  *  reflectivity) would stretch the axis many decades; it runs to the floor
@@ -160,6 +167,8 @@ export function fullYExtents(
     if (e.on === axis && !hidden?.[e.series]) [min, max] = widen(e, min, max, 0, Infinity, floor);
   }
   if (min > max) return null;
+  const flat = min === max && flatView(min, positiveOnly);
+  if (flat) return flat;
   if (positiveOnly) return [min / 1.1, max * 1.1];
   const pad = (max - min || Math.abs(max) || 1) * 0.1; // mirror uPlot's soft pad
   // ...and its soft zero: data on one side of zero never pad across it.

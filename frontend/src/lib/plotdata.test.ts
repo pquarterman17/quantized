@@ -12,8 +12,6 @@ import {
   fetchPlot,
   highlightSelectedPayload,
   maskExcludedPayload,
-  peakOverlayArray,
-  primaryChannel,
   rowsInXRange,
   withBaselineOverlay,
   withDerivOverlay,
@@ -22,6 +20,7 @@ import {
   type PlotPayload,
 } from "./plotdata";
 import { makeDemoDataset } from "./demo";
+import { peakOverlayArray, primaryChannel } from "./plotdataExtras";
 import type { DataStruct } from "./types";
 
 const plotSeriesMock = vi.fn();

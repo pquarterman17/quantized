@@ -5,12 +5,8 @@
 
 import { describe, expect, it } from "vitest";
 
-import {
-  dropGapRows,
-  restoreGapRows,
-  restoreSubstituted,
-  substituteGaps,
-} from "./finitePairs";
+import { dropGapRows, restoreGapRows } from "./finitePairs";
+import { restoreSubstituted, substituteGaps } from "./finiteSubstitute";
 
 describe("dropGapRows", () => {
   it("drops a row when EITHER coordinate is non-finite and records its origin", () => {

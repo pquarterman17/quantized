@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { MARKER_SHAPES } from "./markers";
+import { MARKER_SHAPES } from "./markerShapes";
 import { sanitizeExportSeriesStyles } from "./publicationStyles";
 import { installSeriesPalette, TEST_SERIES_PALETTE } from "./regressionMatrix.testkit";
 

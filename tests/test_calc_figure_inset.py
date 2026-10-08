@@ -155,9 +155,54 @@ def test_no_inset_without_the_override() -> None:
     assert fig.axes[0].child_axes == []
 
 
-def test_a_dual_y_request_draws_no_inset() -> None:
-    fig = _render({"x": [40.0, 48.0], "at": AT}, y2_mask=[False, True])
-    assert all(not ax.child_axes for ax in fig.axes)
+def _dual(inset: dict[str, Any], **kw: Any) -> tuple[Any, Any, Any, Any]:
+    """A dual-Y render (A left, B right): (main, twin, inset, inset twin)."""
+    fig = _render(inset, y2_mask=[False, True], **kw)
+    main, twin = fig.axes[:2]
+    assert main.child_axes == []  # on the twin, so the y2 curves never cross it
+    ins, ins2 = twin.child_axes
+    return main, twin, ins, ins2
+
+
+def test_a_dual_y_inset_shows_both_axes_series_on_their_own_scales() -> None:
+    """The screen's inset draws a y2 series on its own right axis
+    (``buildOpts`` y2 scale); the export's inset does the same."""
+    main, twin, ins, ins2 = _dual(
+        {"x": [40.0, 48.0], "y": [0.0, 120.0], "y2": [1.0, 60.0], "at": AT}
+    )
+    assert [ln.get_label() for ln in ins.lines] == ["_inset"]
+    assert [ln.get_label() for ln in ins2.lines] == ["_inset"]
+    (a,) = [ln for ln in main.lines if ln.get_label() == "A"]
+    (b,) = [ln for ln in twin.lines if ln.get_label() == "B"]
+    np.testing.assert_array_equal(ins.lines[0].get_ydata(), a.get_ydata())
+    np.testing.assert_array_equal(ins2.lines[0].get_ydata(), b.get_ydata())
+    assert ins2.lines[0].get_color() == b.get_color()
+    assert ins.get_ylim() == (0.0, 120.0)
+    assert ins2.get_ylim() == (1.0, 60.0)
+    assert ins.get_xlim() == ins2.get_xlim() == (40.0, 48.0)
+    main.figure.canvas.draw()
+    assert ins.get_position().bounds == pytest.approx(ins2.get_position().bounds)
+    assert ins2.yaxis.get_ticks_position() == "right"
+    # The outline marks the PRIMARY y range in primary data units, as the screen's does.
+    (rect,) = [p for p in twin.patches if isinstance(p, Rectangle)]
+    assert (rect.get_xy(), rect.get_height()) == ((40.0, 0.0), 120.0)
+    (px0, py0), (px1, py1) = main.transData.transform([(40.0, 0.0), (48.0, 120.0)])
+    ext = rect.get_window_extent()
+    assert (ext.x0, ext.y0, ext.x1, ext.y1) == pytest.approx((px0, py0, px1, py1))
+
+
+def test_a_dual_y_inset_autoscales_y2_over_the_window_on_its_scale() -> None:
+    _m, _t, _ins, ins2 = _dual({"x": [60.0, 68.0], "at": AT}, y2_scale="log")
+    assert ins2.get_yscale() == "log"
+    lo, hi = ins2.get_ylim()
+    window = Y2[(X >= 60.0) & (X <= 68.0)]
+    assert 0 < lo <= window.min() and hi >= window.max()
+
+
+def test_a_y2_range_without_a_y2_axis_is_ignored() -> None:
+    fig = _render({"x": [40.0, 48.0], "y2": [1.0, 60.0], "at": AT})
+    _main, ins = _main_and_inset(fig)
+    assert ins.get_xlim() == (40.0, 48.0)
 
 
 def test_the_hitmap_preview_renders_with_an_inset() -> None:
@@ -173,6 +218,7 @@ def test_the_hitmap_preview_renders_with_an_inset() -> None:
         {"at": [0.1, 0.2, 0.0, 0.3]},
         {"at": [0.1, 0.2, 0.3, 0.3], "x": [5.0, 1.0]},
         {"at": [0.1, 0.2, 0.3, 0.3], "y": [1.0]},
+        {"at": [0.1, 0.2, 0.3, 0.3], "y2": [3.0, 1.0]},
     ],
 )
 def test_malformed_inset_is_rejected(bad: Any) -> None:

@@ -6,7 +6,7 @@
 // cell shows r to 3 places; its title attribute carries the exact r and the
 // 2-tailed p-value for hover.
 
-import { cellInk, diverging } from "../../../lib/colormap";
+import { cellInk, diverging } from "../../../lib/divergingColormap";
 import { fmtNum } from "../../../lib/format";
 import type { CorrelationResponse } from "../../../lib/api";
 

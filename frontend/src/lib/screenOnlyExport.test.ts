@@ -1,9 +1,10 @@
-// Stack views (and a dual-Y plot's inset) export as the plain overlaid figure;
+// Stack views export as the plain overlaid figure;
 // the export must say so instead of doing it silently (lib/screenOnlyExport.ts).
 // Covers the rule itself and the three Stage entry points that ask it: Export
 // figure…, Copy figure, and Send figure to report's shared spec step (via
-// Export). Plot audit leftovers: any other inset now rides the request
-// (`overrides.inset`) and exports as drawn, so it asks nothing.
+// Export). Plot audit leftovers: the magnifier inset rides the request
+// (`overrides.inset`) and exports as drawn — a dual-Y one too, with its
+// secondary range (batch 33) — so it asks nothing.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -15,7 +16,6 @@ import type { PlotView } from "./plotview";
 import { runCopyFigureCommand } from "./copyFigureCommand";
 import { runExportFigureCommand } from "./exportFigureCommand";
 import {
-  INSET_EXPORT_NOTICE,
   STACK_EXPORT_NOTICE,
   screenOnlyExportNotice,
   type ScreenOnlyView,
@@ -39,7 +39,9 @@ vi.mock("./clipboard", () => ({
 }));
 vi.mock("./officeClipboard", () => ({ copyOfficeGraphicAsync: vi.fn().mockResolvedValue(true) }));
 
-const view = (over: Partial<ScreenOnlyView> = {}): ScreenOnlyView => ({
+/** The rule's inputs plus the inset toggle it no longer reads (an inset always exports). */
+type View = ScreenOnlyView & { insetMode: boolean };
+const view = (over: Partial<View> = {}): View => ({
   polarMode: false, statMode: false, stackMode: false, insetMode: false, composition: null, ...over,
 });
 const spec = (over: Partial<FigureSpec> = {}): FigureSpec => ({
@@ -49,11 +51,9 @@ const spec = (over: Partial<FigureSpec> = {}): FigureSpec => ({
 });
 
 describe("screenOnlyExportNotice", () => {
-  it("names a per-channel stack and an inset the request lacks, in one sentence each", () => {
+  it("names a per-channel stack in one sentence", () => {
     expect(screenOnlyExportNotice(view({ stackMode: true }), spec())).toBe(STACK_EXPORT_NOTICE);
-    // A dual-Y request drops the inset (`gateY2Overrides`), so it is not carried.
-    expect(screenOnlyExportNotice(view({ insetMode: true }), spec())).toBe(INSET_EXPORT_NOTICE);
-    for (const n of [STACK_EXPORT_NOTICE, INSET_EXPORT_NOTICE]) expect(n.split(". ")).toHaveLength(1);
+    expect(STACK_EXPORT_NOTICE.split(". ")).toHaveLength(1);
   });
 
   it("stays quiet when the export IS what the screen shows", () => {
@@ -65,12 +65,13 @@ describe("screenOnlyExportNotice", () => {
     expect(screenOnlyExportNotice(view({ insetMode: true }), spec({ polar: {} }))).toBeNull();
     expect(screenOnlyExportNotice(view({ stackMode: true }), spec({ facets: [] }))).toBeNull();
     expect(screenOnlyExportNotice(view({ insetMode: true }), spec({ overrides: { x_breaks: [[1, 2]] } }))).toBeNull();
-    // The request carries the inset: the export draws it.
+    // The request carries the inset (a dual-Y one too): the export draws it.
     expect(screenOnlyExportNotice(view({ insetMode: true }), spec({ overrides: { inset: { at: [0.5, 0.5, 0.3, 0.3] } } }))).toBeNull();
+    expect(screenOnlyExportNotice(view({ insetMode: true }), spec({ y2_keys: [1] }))).toBeNull();
   });
 });
 
-function seedStore(over: Partial<ScreenOnlyView>) {
+function seedStore(over: Partial<View>) {
   useApp.setState({
     datasets: [{ id: "d1", name: "scan.dat", data: spec().dataset }],
     activeId: "d1",
@@ -136,13 +137,14 @@ describe("the Stage export commands ask before exporting a screen-only view", ()
     expect(vi.mocked(renderFigureBlob).mock.calls[0][0].overrides?.inset).toEqual(INSET_WIRE);
   });
 
-  it("Export figure… from a dual-Y inset: confirming exports the plot without it", async () => {
+  it("Export figure… from a dual-Y inset exports it with its secondary range and asks nothing", async () => {
     seedStore({ insetMode: true });
-    useApp.setState({ y2Keys: [1], inset: structuredClone(INSET) as unknown as PlotView["inset"] });
-    vi.mocked(askConfirm).mockResolvedValueOnce(true);
+    useApp.setState({ y2Keys: [1], inset: { ...structuredClone(INSET), y2: [3, 4] } as unknown as PlotView["inset"] });
     await runExportFigureCommand(useApp.getState);
-    expect(askConfirm).toHaveBeenCalledWith(expect.any(String), INSET_EXPORT_NOTICE, "Export anyway");
-    expect(vi.mocked(exportFigure).mock.calls[0][0].overrides?.inset).toBeUndefined();
+    expect(askConfirm).not.toHaveBeenCalled();
+    const req = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(req.y2_keys).toEqual([1]);
+    expect(req.overrides?.inset).toEqual({ ...INSET_WIRE, y2: [3, 4] });
     useApp.setState({ y2Keys: null });
   });
 
@@ -154,13 +156,12 @@ describe("the Stage export commands ask before exporting a screen-only view", ()
     expect(askParams).toHaveBeenCalledTimes(1);
   });
 
-  it("Copy figure from a dual-Y inset: cancelling the notice renders nothing", async () => {
+  it("Copy figure from a dual-Y inset copies the inset too", async () => {
     seedStore({ insetMode: true });
-    useApp.setState({ y2Keys: [1] });
-    vi.mocked(askConfirm).mockResolvedValueOnce(false);
+    useApp.setState({ y2Keys: [1], inset: structuredClone(INSET) as unknown as PlotView["inset"] });
     await runCopyFigureCommand(useApp.getState);
-    expect(askConfirm).toHaveBeenCalledWith(expect.any(String), INSET_EXPORT_NOTICE, "Copy anyway");
-    expect(renderFigureBlob).not.toHaveBeenCalled();
+    expect(askConfirm).not.toHaveBeenCalled();
+    expect(vi.mocked(renderFigureBlob).mock.calls[0][0].overrides?.inset).toEqual(INSET_WIRE);
     useApp.setState({ y2Keys: null });
   });
 });

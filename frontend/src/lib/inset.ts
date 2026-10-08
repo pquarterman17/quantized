@@ -40,7 +40,13 @@ export function clampAt(at: InsetView["at"] | null | undefined): InsetView["at"]
 export function insetWire(inset: InsetView | null): NonNullable<FigureOverrides["inset"]> {
   const at = clampAt(inset?.at);
   if (!inset || !ascending(inset.x)) return { at, lines: inset?.lines ?? true };
-  return { x: [...inset.x], ...(ascending(inset.y) ? { y: [...inset.y] } : {}), at, lines: inset.lines };
+  return {
+    x: [...inset.x],
+    ...(ascending(inset.y) ? { y: [...inset.y] } : {}),
+    ...(ascending(inset.y2) ? { y2: [...inset.y2] } : {}),
+    at,
+    lines: inset.lines,
+  };
 }
 
 /** A finite [lo, hi] pair with lo < hi. */

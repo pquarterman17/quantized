@@ -5,6 +5,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 
+from matplotlib.backends.backend_agg import FigureCanvasAgg  # noqa: E402
 from matplotlib.figure import Figure  # noqa: E402
 
 from quantized.calc.figure_break import clear_seam_labels  # noqa: E402
@@ -40,3 +41,39 @@ def test_leaves_ticks_alone_when_the_seam_has_room() -> None:
     before = _labels(axes[1])
     clear_seam_labels(fig, axes)
     assert _labels(axes[1]) == before
+
+
+def _drawn_labels(fig: Figure, ax) -> list[tuple[str, float, float]]:
+    """(text, x0, x1) of every x tick label matplotlib actually DRAWS -- its
+    own draw list (``Axis._update_ticks``), which admits a tick a hair
+    outside the view by a relative tolerance."""
+    renderer = fig.canvas.get_renderer()
+    out = []
+    for tick in ax.xaxis._update_ticks():
+        label = tick.label1
+        if label.get_visible() and label.get_text():
+            box = label.get_window_extent(renderer)
+            out.append((label.get_text(), float(box.x0), float(box.x1)))
+    return out
+
+
+def test_counts_the_seam_tick_matplotlib_draws_a_float_hair_past_the_view() -> None:
+    # Reductus .refl geometry (log y, break [0.15, 0.3]): the outgoing panel
+    # ends at exactly 0.15, but MaxNLocator's tick is 3 * 0.05 =
+    # 0.15000000000000002 -- outside an exact [lo, hi] test, yet drawn by
+    # matplotlib's tolerant one. The rule compared "0.10" with "0.30" and
+    # kept both, so "0.15" ran into "0.30" at the seam.
+    fig, axes = _panels((0.035028603653, 0.15), (0.3, 0.50767634932))
+    FigureCanvasAgg(fig)
+    for ax in axes:
+        ax.set_yscale("log")
+    fig.canvas.draw()
+    assert [t for t, *_ in _drawn_labels(fig, axes[0])][-1] == "0.15"
+    clear_seam_labels(fig, axes)
+    fig.canvas.draw()
+    left = _drawn_labels(fig, axes[0])
+    right = _drawn_labels(fig, axes[1])
+    assert left[-1][0] == "0.15"
+    assert right[0][0] == "0.35"
+    assert left[-1][2] < right[0][1], "seam tick labels overlap"
+    assert axes[1].get_xlim() == (0.3, 0.50767634932)

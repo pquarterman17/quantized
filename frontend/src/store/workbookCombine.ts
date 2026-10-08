@@ -49,7 +49,7 @@ type SliceGet = () => AppState;
 export interface WorkbookCombineSlice {
   /** Combine `selection` (whole workbooks and/or individual worksheets) into
    *  ONE freshly-minted workbook named `name` (prompted for by the caller —
-   *  see `lib/workbookCombine.ts`'s `suggestCombinedWorkbookName` for the
+   *  see `lib/combinedWorkbookName.ts`'s `suggestCombinedWorkbookName` for the
    *  dialog's default-name suggestion). Refuses (no mutation, no history
    *  entry, a status message) when the selection resolves to zero worksheets
    *  or `name` is blank. Every moved worksheet's own display name is

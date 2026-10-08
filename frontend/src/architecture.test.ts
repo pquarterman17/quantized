@@ -3510,6 +3510,8 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/uniqueName.ts",
     // 2026-10-03: the legacy-null-cell read (.dwk and report-spec decode only).
     "/lib/legacyNullCells.ts",
+    // 2026-10-08: the pre-#532 map row-index x migration (.dwk load only).
+    "/lib/legacyMapX.ts",
     // SLICE 22 (2026-10-03): more halves only lazy modules call, each
     // imported by its own path: the dataset context-action registry (the
     // lazy row menu and palette bridge) with the remove actions only it
@@ -3538,6 +3540,17 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // orchestration is used only after a lazy workshop/export action starts.
     "/store/pendingOpActions.ts",
     "/store/accentSwatches.ts",
+    // SLICE 24 (2026-10-08): nine more halves only lazy modules call, each
+    // imported by its own path (plans/BUNDLE_HEADROOM.md, "Slice 24").
+    "/lib/api/finiteSubstitute.ts",
+    "/store/figureUnsavedEdits.ts",
+    "/store/focusedEncoding.ts",
+    "/lib/plotdataExtras.ts",
+    "/lib/divergingColormap.ts",
+    "/lib/combinedWorkbookName.ts",
+    "/lib/markerShapes.ts",
+    "/lib/richtextValidate.ts",
+    "/lib/peakMarkersVisible.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

@@ -15,7 +15,8 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 
-import { hasMarkup, validateRichText } from "../../lib/richtext";
+import { hasMarkup } from "../../lib/richtext";
+import { validateRichText } from "../../lib/richtextValidate";
 import RichText from "./RichText";
 import SymbolPalette, {
   insertLabelToken,

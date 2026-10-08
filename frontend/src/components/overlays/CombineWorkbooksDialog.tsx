@@ -33,7 +33,8 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 
-import { dedupeWorksheetNames, resolveCombineTargets, suggestCombinedWorkbookName } from "../../lib/workbookCombine";
+import { suggestCombinedWorkbookName } from "../../lib/combinedWorkbookName";
+import { dedupeWorksheetNames, resolveCombineTargets } from "../../lib/workbookCombine";
 import { Button } from "../primitives";
 import { toast } from "../../store/toasts";
 import { useCombineDialog } from "../../store/combineDialog";

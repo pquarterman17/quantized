@@ -20,9 +20,15 @@ annotations or legend. The source region is outlined on the main axes and,
 with ``lines``, joined to the inset by the two connector lines the screen
 draws (:func:`inset_connectors`, the shared ``inset_connectors.json`` table).
 
-Single-axes figures only: the secondary-axis path strips it
-(``figure_y2.render_with_secondary_axis``), a broken x-axis and a facet grid
-never read it, and the screen shows no inset on those views either.
+A dual-Y figure draws it too, as the screen does (the inset's uPlot carries
+the plot's ``y2`` scale and right axis): ``figure_y2.render_with_secondary_axis``
+calls :func:`apply_inset` once both axes are drawn, with ``twin`` -- the y2
+series go on a second inset axes over the first (shared x, right y axis, the
+secondary axis's scale), ranged by ``y2`` (as last drawn) or autoscaled over
+the x window by the same rule. The inset hangs off the twin axes so no y2
+curve draws over it, and its outline marks the primary y range, in primary
+data units, as the screen's does. A broken x-axis and a facet grid never read
+it, and the screen shows no inset on those views either.
 Pure layer: matplotlib + numpy only.
 """
 
@@ -68,7 +74,7 @@ def validate_inset(spec: Any) -> None:
         and at[3] > 0
     ):
         raise ValueError("inset.at must be [left, top, width, height] with a positive size")
-    for key in ("x", "y"):
+    for key in ("x", "y", "y2"):
         if spec.get(key) is not None and not _ascending(spec[key]):
             raise ValueError(f"inset.{key} must be a [lo, hi] pair with lo < hi")
 
@@ -145,18 +151,22 @@ def _clip01(v: float) -> float:
 
 
 def _indicate(
-    ax: Any, region: tuple[float, float, float, float], at: Sequence[float], lines: bool
+    ax: Any,
+    host: Any,
+    region: tuple[float, float, float, float],
+    at: Sequence[float],
+    lines: bool,
 ) -> None:
-    """Outline the source region on ``ax`` and, with ``lines``, connect it to
-    the inset. ``add_artist`` (not ``add_patch``/``plot``) so neither widens
-    the main axes' limits."""
+    """Outline the source region (``ax``'s data units) on ``host`` and, with
+    ``lines``, connect it to the inset. ``add_artist`` (not ``add_patch``/
+    ``plot``) so neither widens the axes' limits."""
     x0, x1, y0, y1 = region
     ax.get_xlim(), ax.get_ylim()  # settle a lazy autoscale before reading transData
     rect = Rectangle(
         (x0, y0), x1 - x0, y1 - y0, transform=ax.transData,
         fill=False, edgecolor=_EDGE, linewidth=_EDGE_WIDTH, zorder=4.5,
     )
-    ax.add_artist(rect)
+    host.add_artist(rect)
     if not lines:
         return
     to_frac = ax.transData + ax.transAxes.inverted()
@@ -168,10 +178,18 @@ def _indicate(
     box = [left, 1.0 - top - height, left + width, 1.0 - top]
     for c in inset_connectors(src, box):
         (sx, sy), (bx, by) = _corner(src, c), _corner(box, c)
-        ax.add_artist(Line2D(
+        host.add_artist(Line2D(
             [sx, bx], [sy, by], transform=ax.transAxes, color=_EDGE, linewidth=_EDGE_WIDTH,
             zorder=4.5, clip_on=False, label="_inset_connector",
         ))
+
+
+def _y_range(
+    spec: Mapping[str, Any], key: str, lines: Sequence[Line2D], x0: float, x1: float, scale: str
+) -> tuple[float, float] | None:
+    if _ascending(spec.get(key)):
+        return float(spec[key][0]), float(spec[key][1])
+    return _auto_y(lines, x0, x1, scale)
 
 
 def apply_inset(
@@ -181,15 +199,19 @@ def apply_inset(
     x_scale: str,
     y_scale: str,
     grid_alpha: float,
+    *,
+    twin: tuple[Any, Sequence[Any], str] | None = None,
 ) -> Any | None:
     """Draw ``ov["inset"]`` (see the module doc) on ``ax`` from the series
     ``artists`` already drawn there; returns the inset axes, or ``None`` when
-    there is no inset (or no line to magnify)."""
+    there is no inset (or no line to magnify). ``twin`` is a dual-Y figure's
+    ``(secondary axes, its series artists, its y scale)``."""
     spec = ov.get("inset")
     if not isinstance(spec, Mapping):
         return None
     lines = [a for a in artists if isinstance(a, Line2D)]
-    xs = [np.asarray(ln.get_xdata(), dtype=float) for ln in lines]
+    lines2 = [a for a in twin[1] if isinstance(a, Line2D)] if twin else []
+    xs = [np.asarray(ln.get_xdata(), dtype=float) for ln in (*lines, *lines2)]
     finite = np.concatenate([x[np.isfinite(x)] for x in xs]) if xs else np.empty(0)
     if not finite.size:
         return None
@@ -200,25 +222,38 @@ def apply_inset(
         mid, half = (lo + hi) / 2, (hi - lo) * _SEED_FRACTION / 2
         x0, x1 = (mid - half, mid + half) if hi > lo else (lo, hi)
     left, top, width, height = (float(v) for v in spec["at"])
-    ins = ax.inset_axes((left, 1.0 - top - height, width, height))
+    bounds = (left, 1.0 - top - height, width, height)
+    host = twin[0] if twin else ax  # drawn after the twin's curves, so over them
+    ins = host.inset_axes(bounds)
     for ln in lines:
         _copy_line(ins, ln)
+    ins2 = None
+    if twin and lines2:
+        ins2 = host.inset_axes(bounds, sharex=ins)
+        ins2.patch.set_visible(False)
+        ins2.xaxis.set_visible(False)
+        ins2.yaxis.tick_right()
+        for ln in lines2:
+            _copy_line(ins2, ln)
+        apply_axis_scale(ins2, "y", twin[2])
     apply_axis_scale(ins, "x", x_scale)
     apply_axis_scale(ins, "y", y_scale)
     if x1 > x0:
         ins.set_xlim((x1, x0) if ax.xaxis_inverted() else (x0, x1))
-    y = (
-        (float(spec["y"][0]), float(spec["y"][1]))
-        if _ascending(spec.get("y"))
-        else _auto_y(lines, x0, x1, y_scale)
-    )
+    y = _y_range(spec, "y", lines, x0, x1, y_scale)
     if y is not None:
         ins.set_ylim(*y)
     ins.tick_params(labelsize="small")
+    if ins2 is not None and twin:
+        y2 = _y_range(spec, "y2", lines2, x0, x1, twin[2])
+        if y2 is not None:
+            ins2.set_ylim(*y2)
+        ins2.tick_params(labelsize="small")
+        ins2.grid(False)  # the screen hides the y2 grid so the two never overlap
     if ov.get("grid", grid_alpha > 0):
         ins.grid(True, which="major", alpha=grid_alpha or 0.3)
     else:
         ins.grid(False)
     y0, y1 = sorted(ins.get_ylim())
-    _indicate(ax, (x0, x1, y0, y1), spec["at"], spec.get("lines", True) is not False)
+    _indicate(ax, host, (x0, x1, y0, y1), spec["at"], spec.get("lines", True) is not False)
     return ins
