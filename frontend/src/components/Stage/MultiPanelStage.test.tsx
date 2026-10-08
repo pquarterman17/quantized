@@ -829,13 +829,16 @@ describe("MultiPanelStage — a legend rename in the stack and break legs (BUG-0
     expect(yAxisLabels()).toEqual(["Loop 1", "Field (T)"]);
   });
 
-  it("reaches EVERY x-break panel verbatim", async () => {
+  // Batch 34: the panels of a break share panel 0's y axis (as the export
+  // does), so the title shows there once and a right-of-seam panel that would
+  // only repeat it draws none.
+  it("reaches the x-break's shared y title verbatim", async () => {
     useApp.setState({ yKeys: [1], seriesLabels: { 1: "Loop 1" } });
     useApp.getState().breakAtGaps("d1", [[1, 2]]);
     expect(breakPanelsOf(useApp.getState().composition)).toHaveLength(2);
     render(<MultiPanelStage />);
     await waitFor(() => expect(created).toHaveLength(2));
-    expect(yAxisLabels()).toEqual(["Loop 1", "Loop 1"]);
+    expect(yAxisLabels()).toEqual(["Loop 1", undefined]);
   });
 
   it("leaves an un-renamed x-break view reading its derived label", async () => {
@@ -843,7 +846,7 @@ describe("MultiPanelStage — a legend rename in the stack and break legs (BUG-0
     useApp.getState().breakAtGaps("d1", [[1, 2]]);
     render(<MultiPanelStage />);
     await waitFor(() => expect(created).toHaveLength(2));
-    expect(yAxisLabels()).toEqual(["Signal (au)", "Signal (au)"]);
+    expect(yAxisLabels()).toEqual(["Signal (au)", undefined]);
   });
 
   // A y2 channel's STACK panel: one series, so (plot audit round 4) it draws
@@ -888,7 +891,7 @@ describe("MultiPanelStage — a legend rename in the stack and break legs (BUG-0
     );
     const legend = spec.series_styles?.[0]?.legend;
     expect(legend).toBe("Loop 1");
-    expect(yAxisLabels()).toEqual([legend, legend]);
+    expect(yAxisLabels()).toEqual([legend, undefined]);
   });
 });
 

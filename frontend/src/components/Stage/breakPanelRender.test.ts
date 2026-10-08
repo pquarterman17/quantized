@@ -26,7 +26,11 @@ import uPlot from "uplot";
 
 import type { BreakPanel } from "../../lib/facet";
 import type { PlotPayload } from "../../lib/plotdata";
+import { MIN_BREAK_PLOT_W } from "./breakPanelLayout";
 import { renderBreakPanels } from "./breakPanelRender";
+
+/** Plot-area width in CSS px. */
+const plotW = (u: uPlot) => u.bbox.width / uPlot.pxRatio;
 
 function panel(xs: number[], xRange: [number, number]): BreakPanel {
   const payload: PlotPayload = {
@@ -143,5 +147,41 @@ describe("renderBreakPanels", () => {
     await settle();
     const [a, b] = plots.map((u) => u.bbox.width / uPlot.pxRatio);
     expect(b / a).toBeCloseTo(3, 1);
+  });
+
+  // Batch 34, measured at an 800x600 window: the stage is ~294 px wide, every
+  // panel drew its own ~128 px of y gutter + title + right pad, and the plot
+  // areas came out 0-1 px wide. Right-of-seam panels now share panel 0's y
+  // axis, as the export does (calc/figure_break.py: sharey, no inner ticks).
+  it("draws the y title and tick gutter on panel 0 only", async () => {
+    const host = document.body.appendChild(document.createElement("div"));
+    plots = renderBreakPanels(host, {
+      panels: [panel([0, 1, 2], [0, 2]), panel([3, 4, 5], [3, 5]), panel([6, 7, 8], [6, 8])],
+      seriesLabels: {}, seriesStyles: {}, hiddenChannels: [], syncKey: "break-gutter", box: { w: 900, h: 300 },
+      cell: { xScale: "linear", yScale: "linear", yLim: [0, 20], tool: "zoom", onReadout: vi.fn() },
+    });
+    await settle();
+    expect(plots.map((u) => u.axes[1].label)).toEqual(["y", undefined, undefined]);
+    expect(plots[0].bbox.left / uPlot.pxRatio).toBeGreaterThanOrEqual(60);
+    for (const u of plots.slice(1)) expect(u.bbox.left / uPlot.pxRatio).toBeLessThanOrEqual(8);
+    // ...and the plot areas still line up, so the shared y grid reads across.
+    expect(plots.map((u) => [u.bbox.top, u.bbox.height])).toEqual(plots.map(() => [plots[0].bbox.top, plots[0].bbox.height]));
+    // One x title, on panel 0 (the export draws one, `fig.supxlabel`); the
+    // others keep its band blank so the plot heights match.
+    expect(plots.map((u) => u.axes[0].label)).toEqual(["x", "", ""]);
+  });
+
+  it("keeps every plot area at least the minimum in a narrow row, falling back to equal widths", async () => {
+    const host = document.body.appendChild(document.createElement("div"));
+    plots = renderBreakPanels(host, {
+      // spans 10 : 1 : 1 -- proportional widths would squeeze the last two.
+      panels: [panel([0, 5, 10], [0, 10]), panel([20, 21], [20, 21]), panel([30, 31], [30, 31])],
+      seriesLabels: {}, seriesStyles: {}, hiddenChannels: [], syncKey: "break-narrow", box: { w: 340, h: 300 },
+      cell: { xScale: "linear", yScale: "linear", yLim: [0, 70], tool: "zoom", onReadout: vi.fn() },
+    });
+    await settle();
+    const ws = plots.map(plotW);
+    for (const w of ws) expect(w).toBeGreaterThanOrEqual(MIN_BREAK_PLOT_W);
+    expect(Math.max(...ws) - Math.min(...ws)).toBeLessThanOrEqual(2);
   });
 });

@@ -97,8 +97,11 @@ describe("x-axis break panels draw the fixture's titles", () => {
     });
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBeGreaterThanOrEqual(2));
-    for (const { axes } of created) {
-      expect({ x: drawnBy(axes[0]), y: drawnBy(axes[1]) }).toEqual(c.drawn);
-    }
+    const [first, ...rest] = created;
+    expect({ x: drawnBy(first.axes[0]), y: drawnBy(first.axes[1]) }).toEqual(c.drawn);
+    // Batch 34: like the export (one `supxlabel`, one `set_ylabel` on
+    // axes[0]), the titles are drawn once, on panel 0. The panels right of a
+    // seam keep a blank x title band and drop the repeated y title.
+    for (const { axes } of rest) expect([axes[0].label, axes[1].label]).toEqual(["", undefined]);
   });
 });
