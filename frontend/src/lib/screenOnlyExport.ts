@@ -1,20 +1,17 @@
 // The Stage views the single-figure export does NOT reproduce, made explicit.
 //
 // "Export figure…", "Copy figure" and "Send figure to report" all post one
-// `FigureSpec` (`lib/figureSpecStage.buildStageFigureSpec`). Two views draw
-// something that request cannot carry, and both used to export silently
-// without it:
-//   - the per-channel STACK (`stackMode`; PlotStage mounts MultiPanelStage)
-//     and an Origin spatial arrangement under it — the request is one
-//     overlaid plot;
-//   - the magnifier INSET (`insetMode`) of a DUAL-Y plot. Any other inset
-//     rides the request (`overrides.inset`, lib/inset.ts) and the export
-//     draws it as the screen does; a secondary axis has no inset there yet,
-//     so `gateY2Overrides` drops it and this says so.
+// `FigureSpec` (`lib/figureSpecStage.buildStageFigureSpec`). One view draws
+// something that request cannot carry, and used to export silently without
+// it: the per-channel STACK (`stackMode`; PlotStage mounts MultiPanelStage)
+// and an Origin spatial arrangement under it — the request is one overlaid
+// plot. The magnifier inset rides the request (`overrides.inset`,
+// lib/inset.ts), a dual-Y one included, and the export draws it as the
+// screen does, so it never asks.
 // "Export figure…" now draws a plain per-channel stack as its own panels on
 // the figure-page route (`lib/stackPageExport.ts`) and never reaches this
 // for one; Copy figure and Send to report still post the one request, so for
-// them (and an inset, or a spatial page under the stack) the export says what
+// them (and a spatial page under the stack) the export says what
 // it will produce and lets the user cancel (owner rule: silent wrong output
 // is the bug). Views that DO export faithfully never ask: polar
 // (`lib/polarFigureSpec.ts`), facets (the spec carries `facets`) and an x-break
@@ -31,12 +28,10 @@ export interface ScreenOnlyView {
   polarMode: boolean;
   statMode: boolean;
   stackMode: boolean;
-  insetMode: boolean;
   composition: Composition | null;
 }
 
 export const STACK_EXPORT_NOTICE = "Stacked panels are screen-only, so this exports one overlaid plot.";
-export const INSET_EXPORT_NOTICE = "A dual-Y plot's magnifier inset is screen-only, so this exports the plot without it.";
 export const STAT_EXPORT_NOTICE = "The statistics plot isn't ready to export, so this exports the data as an XY plot.";
 
 /** The one-sentence notice for a view whose export differs from the screen,
@@ -51,10 +46,7 @@ export function screenOnlyExportNotice(st: ScreenOnlyView, spec: FigureSpec): st
   if (spec.overrides?.x_breaks?.length) return null;
   // PlotStage's stack gate (`multiPanelShowing`): two or more series, or a spatial page.
   const series = spec.y_keys?.length ?? spec.dataset.labels.length;
-  if (st.stackMode && (series >= 2 || (spatialPanelsOf(composition)?.length ?? 0) >= 2)) {
-    return STACK_EXPORT_NOTICE;
-  }
-  return st.insetMode && !spec.overrides?.inset ? INSET_EXPORT_NOTICE : null;
+  return st.stackMode && (series >= 2 || (spatialPanelsOf(composition)?.length ?? 0) >= 2) ? STACK_EXPORT_NOTICE : null;
 }
 
 /** Ask before exporting a screen-only view; true = go ahead (also when there

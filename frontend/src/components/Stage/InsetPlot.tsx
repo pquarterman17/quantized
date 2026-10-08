@@ -150,7 +150,10 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, plotR
       const { min: y0, max: y1 } = u.scales?.y ?? {};
       if (x0 == null || x1 == null || !(x1 > x0)) return;
       const y: [number, number] | null = y0 != null && y1 != null && y1 > y0 ? [y0, y1] : null;
-      commitRef.current({ x: [x0, x1], y, yZoom: yZoomRef.current && y !== null });
+      // A dual-Y plot's secondary range as drawn: the export ranges its twin inset axis by it.
+      const { min: s0, max: s1 } = u.scales?.y2 ?? {};
+      const y2 = s0 != null && s1 != null && s1 > s0 ? { y2: [s0, s1] as [number, number] } : {};
+      commitRef.current({ x: [x0, x1], y, ...y2, yZoom: yZoomRef.current && y !== null });
     };
     const onScale = (u: uPlot, key: string) => {
       if (applying) return;
@@ -168,6 +171,10 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, plotR
     if (x) u.setScale("x", { min: x[0], max: x[1] });
     const keepY = !!(s?.yZoom && ascending(s.y) && (yScale === "linear" || s.y[0] > 0));
     if (keepY && s?.y) u.setScale("y", { min: s.y[0], max: s.y[1] });
+    // A box zoom re-ranges y2 with y, so a zoomed inset reopens on both.
+    if (keepY && u.scales.y2 && ascending(s?.y2) && ((y2Scale ?? yScale) === "linear" || s.y2[0] > 0)) {
+      u.setScale("y2", { min: s.y2[0], max: s.y2[1] });
+    }
     yZoomRef.current = keepY;
     applying = false;
     capture(u);

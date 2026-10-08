@@ -203,6 +203,8 @@ export interface InsetView {
   x: [number, number];
   /** Its y range as last drawn; `yZoom` false = autoscaled (re-ranged on redraw). */
   y: [number, number] | null;
+  /** A dual-Y plot's secondary range as last drawn (zoomed with y). */
+  y2?: [number, number];
   yZoom: boolean;
   /** The inset's plot area as fractions of the main plot frame:
    *  [left, top, width, height], top-origin (`legendFrameXY`'s convention). */
@@ -221,6 +223,6 @@ export function sanitizeInset(v: unknown): InsetView | null {
   const o = v as InsetView | null;
   const at = o?.at;
   return o && isRange(o.x) && Array.isArray(at) && at.length === 4 && at.every(Number.isFinite)
-    ? { x: o.x, y: isRange(o.y) ? o.y : null, yZoom: !!o.yZoom, at, lines: o.lines !== false }
+    ? { x: o.x, y: isRange(o.y) ? o.y : null, ...(isRange(o.y2) && { y2: o.y2 }), yZoom: !!o.yZoom, at, lines: o.lines !== false }
     : null;
 }

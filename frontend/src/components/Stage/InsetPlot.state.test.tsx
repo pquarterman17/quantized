@@ -26,8 +26,9 @@ const { plots, MockUPlot } = vi.hoisted(() => {
     over = document.createElement("div");
     setCalls: [string, number, number][] = [];
     hooks: Hook[];
-    constructor(opts: { hooks?: { setScale?: Hook[] } }) {
+    constructor(opts: { hooks?: { setScale?: Hook[] }; scales?: Record<string, unknown> }) {
       this.hooks = opts.hooks?.setScale ?? [];
+      if (opts.scales?.y2) this.scales.y2 = { min: 1, max: 9 }; // a dual-Y plot's secondary scale
       plots.push(this);
       this.hooks.forEach((h) => h(this, "x")); // creation's own autoscale
     }
@@ -129,6 +130,38 @@ describe("the magnifier inset's view state", () => {
       u.setScale("y", { min: 0, max: 600 });
     });
     await waitFor(() => expect(useApp.getState().inset).toMatchObject({ x: [10, 40], y: [0, 600], yZoom: false }));
+  });
+
+  // Batch 33: a dual-Y inset draws its y2 series on their own scale (the
+  // plot's y2), which a box zoom re-ranges with y; that range is saved and
+  // exported too, or the export's secondary axis would not match the screen.
+  const dualPayload: PlotPayload = {
+    ...payload,
+    data: [
+      [10, 20, 30, 40],
+      [5, 50, 500, 50],
+      [1, 2, 9, 3],
+    ],
+    series: [{ label: "I", unit: "cps", axis: 0 }, { label: "T", unit: "K", axis: 1 }],
+  };
+
+  it("records a dual-Y inset's secondary range as drawn, and its zoom", async () => {
+    render(<InsetPlot payload={dualPayload} />);
+    await waitFor(() => expect(useApp.getState().inset?.y2).toEqual([1, 9]));
+    const u = plots[0];
+    fireEvent.mouseDown(u.over, { button: 0 });
+    act(() => {
+      u.setScale("y", { min: 2, max: 60 });
+      u.setScale("y2", { min: 2, max: 5 });
+    });
+    fireEvent.mouseUp(window);
+    await waitFor(() => expect(useApp.getState().inset).toMatchObject({ y: [2, 60], y2: [2, 5], yZoom: true }));
+  });
+
+  it("reopens a zoomed dual-Y inset on its saved secondary range", () => {
+    useApp.setState({ inset: { ...saved, y2: [2, 8] } });
+    render(<InsetPlot payload={dualPayload} />);
+    expect(plots[0].setCalls).toEqual([["x", 15, 25], ["y", 1, 100], ["y2", 2, 8]]);
   });
 
   it("toggles the connector lines", () => {

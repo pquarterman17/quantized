@@ -52,6 +52,12 @@ describe("PlotView.inset persistence", () => {
     expect(sanitizePlotView({ ...defaultPlotView(), insetMode: true, inset: SAVED }).inset).toEqual(SAVED);
   });
 
+  it("round-trips a dual-Y inset's secondary range, and drops a malformed one", () => {
+    const dual = { ...SAVED, y2: [1, 50] };
+    expect(sanitizePlotView({ ...defaultPlotView(), insetMode: true, inset: dual }).inset).toEqual(dual);
+    expect(sanitizeInset({ ...SAVED, y2: [1] })).toEqual(SAVED);
+  });
+
   it("opens an older .dwk (no inset) with none", () => {
     const { inset: _drop, ...older } = defaultPlotView();
     expect(sanitizePlotView({ ...older, insetMode: true }).inset).toBeNull();
@@ -75,6 +81,10 @@ describe("PlotView.inset persistence", () => {
     expect(clampAt(null)).toEqual([...DEFAULT_INSET_AT]);
     expect(insetWire({ x: [1, 2], y: [3, 2], yZoom: false, at: [-1, 2, 0.01, 0.5], lines: true })).toEqual({
       x: [1, 2], at: [0, 1, 0.05, 0.5], lines: true,
+    });
+    // A dual-Y inset sends its secondary range as drawn, like y.
+    expect(insetWire({ x: [1, 2], y: [0, 5], y2: [10, 90], yZoom: false, at: [0.1, 0.2, 0.3, 0.4], lines: true })).toEqual({
+      x: [1, 2], y: [0, 5], y2: [10, 90], at: [0.1, 0.2, 0.3, 0.4], lines: true,
     });
     expect(insetWire({ x: [2, 1], y: null, yZoom: false, at: [0.1, 0.2, 0.3, 0.4], lines: false })).toEqual({
       at: [0.1, 0.2, 0.3, 0.4], lines: false,
