@@ -51,6 +51,7 @@ import {
   sanitizeAnalysisResults,
   type AnalysisResult,
 } from "./analysisResult";
+import { staleAnalysisOutputs } from "./analysisResultFreshness";
 
 export const WORKSPACE_FORMAT = "quantized-workspace";
 // v2 (project-organization plan item 2): adds the folder tree, active/selection, and folder-expansion.
@@ -108,6 +109,9 @@ export interface WorkspaceState {
   /** Workstream B: durable analysis catalog records. Scientific arrays and
    * recipes remain in their referenced worksheet/report authorities. */
   analysisResults?: AnalysisResult[];
+  /** Session stale marks: read at save to stamp result freshness, seeded on
+   *  load from it (lib/analysisResultFreshness.ts); never a key of their own. */
+  staleDatasets?: string[];
   macroSteps?: PipelineStep[];
   recalcMode?: RecalcMode;
   figureDocs?: FigureDoc[];
@@ -181,6 +185,7 @@ export interface LoadedWorkspace {
   /** Parser always populates this; optional only for the suite's hand-built
    * LoadedWorkspace fixtures, matching mapViews below. */
   analysisResults?: AnalysisResult[];
+  staleDatasets?: string[];
   macroSteps: PipelineStep[];
   recalcMode: RecalcMode;
   figureDocs: FigureDoc[];
@@ -442,6 +447,7 @@ export function parseWorkspace(
     smartFolders,
     reports,
     analysisResults,
+    staleDatasets: staleAnalysisOutputs(analysisResults, datasets),
     macroSteps,
     recalcMode,
     figureDocs,

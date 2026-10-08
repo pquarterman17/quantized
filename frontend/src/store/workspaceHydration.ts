@@ -221,7 +221,7 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
           // quickFigureBuilderDatasetId above (a stale pending would confirm
           // against whatever dataset happens to share its id in the NEW project).
           pendingRecipeApplication: null,
-          staleDatasets: [],
+          staleDatasets: ws.staleDatasets ?? [], // results stale when saved (lib/analysisResultFreshness.ts)
           staleFits: [],
           stageTab: activeDs ? nextStageTab(activeDs, s.stageTab) : s.stageTab,
           xKey: restoredView ? restoredView.xKey : null,

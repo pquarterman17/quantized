@@ -222,7 +222,9 @@ describe("durable analysis results", () => {
     const [source, output] = linkedSignalPair();
     const result = signalAnalysisResult("result-1", source, output, "2026-10-08T00:00:00Z")!;
     const loaded = parseWorkspace(serializeWorkspace({ datasets: [source, output], analysisResults: [result] }));
-    expect(loaded.analysisResults).toEqual([result]);
+    // The save adds only the freshness fingerprint (lib/analysisResultFreshness.ts).
+    expect(loaded.analysisResults).toEqual([{ ...result, sourceFingerprint: expect.any(String) }]);
+    expect(loaded.staleDatasets).toEqual([]);
     expect(loaded.analysisResults?.[0]).not.toHaveProperty("parameters");
     expect(loaded.datasets[1].analysisRecipe).toEqual(output.analysisRecipe);
   });

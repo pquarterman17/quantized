@@ -46,6 +46,11 @@ export interface AnalysisResult {
   createdAt: string;
   updatedAt?: string;
   notes?: string;
+  /** Save-time freshness (lib/analysisResultFreshness.ts): the sources' data
+   *  fingerprint as of the output's last computation, and whether the output
+   *  was known stale. Absent in files saved before them (read as current). */
+  sourceFingerprint?: string;
+  stale?: true;
 }
 
 function object(value: unknown): Record<string, unknown> | null {
@@ -188,6 +193,8 @@ export function sanitizeAnalysisResults(value: unknown, warnings?: string[]): An
       createdAt: raw.createdAt,
       ...(typeof raw.updatedAt === "string" && raw.updatedAt ? { updatedAt: raw.updatedAt } : {}),
       ...(typeof raw.notes === "string" && raw.notes.trim() ? { notes: raw.notes } : {}),
+      ...(typeof raw.sourceFingerprint === "string" && raw.sourceFingerprint ? { sourceFingerprint: raw.sourceFingerprint } : {}),
+      ...(raw.stale === true ? { stale: true as const } : {}),
     });
   }
   return out;
