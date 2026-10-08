@@ -45,5 +45,11 @@ export function libraryTileSummary(node: LibraryNode): LibraryTileSummary {
       return { primary: `${node.entity.rows} × ${node.entity.cols} panels`, secondary: "Editable figure page", warning: missing };
     case "report":
       return { primary: count(node.entity.report.sections.length, "section"), secondary: "Analysis report", warning: missing };
+    case "analysis-result":
+      return {
+        primary: node.entity.producer.label,
+        secondary: `${count(node.entity.outputs.length, "output")} · ${count(node.entity.warnings.length, "warning")}`,
+        warning: missing,
+      };
   }
 }

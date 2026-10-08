@@ -232,10 +232,10 @@ Qualification log (2026-10-07, ChatGPT/Codex):
 **Goal:** make an analysis result a first-class Library object instead of
 temporary contents of a floating window.
 
-- [ ] Define one versioned `AnalysisResult` envelope: identity, producer,
+- [x] Define one versioned `AnalysisResult` envelope: identity, producer,
   source references, selection snapshot, parameters, scalar values, tables,
   optional plot bindings, warnings, timestamps, and stale state.
-- [ ] Add an Analysis Results section under the appropriate workbook/folder.
+- [x] Add an Analysis Results section under the appropriate workbook/folder.
 - [ ] Open a result into a result workspace with Overview, Tables, Diagnostics,
   Figures, Provenance, and Notes tabs as applicable.
 - [ ] Add Edit and rerun, Recalculate, Duplicate, Freeze, Send to report, Build
@@ -243,7 +243,39 @@ temporary contents of a floating window.
 - [ ] Migrate curve fits, statistics, peak outputs, and signal-processing
   results incrementally; do not create a second authority beside existing
   durable `fitSpec`, peak tables, or reflectivity-fit history.
-- [ ] Preserve old `.dwk` files and tolerate unknown future result kinds.
+- [x] Preserve old `.dwk` files and tolerate unknown future result kinds.
+
+Implementation status (2026-10-08):
+
+- [x] Added a versioned, future-producer-tolerant result envelope. Signal
+  results reference the linked worksheet's established `analysisRecipe`
+  authority instead of copying parameters or scientific arrays. Current/
+  stale/missing state is derived from the live dependency graph so a second
+  persisted stale flag cannot disagree with the actual worksheet.
+- [x] Added Analysis Result nodes to the canonical Library hierarchy, located
+  under the source/output workbook with Tree, Tiles, Details, filters,
+  selection, rename, context-menu, and missing-source behavior shared with
+  other artifacts.
+- [x] Added a lazy result workspace with Overview, Table, Diagnostics,
+  Provenance, and Notes views. The first 100 output rows are inspectable
+  without creating an unbounded DOM table; the complete worksheet remains
+  one click away. Tabs support standard arrow/Home/End keyboard navigation.
+- [x] Added Signal result actions for Open worksheet, Recalculate in place,
+  Rerun as new, Rename, Notes, and Delete result. Delete deliberately keeps
+  the linked worksheet/data; rerun deliberately creates a new result.
+- [ ] Still required for the common result workspace: a real Figures view,
+  Duplicate/Freeze, Send to report, Build figure, and Export tables.
+- [x] New signal operations create a result in the same undo gesture as their
+  linked worksheet. Legacy `.dwk` files with linked signal worksheets migrate
+  deterministic records exactly once; an explicitly saved empty result list
+  remains empty; unknown producer ids and missing references remain
+  inspectable rather than being discarded.
+- [x] Result edits participate in undo/redo, dirty-state detection, debounced
+  autosave, explicit save/reopen, Remove All/open-replacement protection, and
+  the Library's exhaustive icon/accessibility contracts.
+- [ ] Curve fits, statistics, peak tables, and reflectivity-fit history still
+  need adapters into this envelope without replacing their existing durable
+  authorities.
 
 ## Workstream C — Analysis Center and discoverability
 
@@ -317,7 +349,9 @@ menu names.
 1. [x] A1 + A2: Signal Processing workbench using existing processing code.
 2. [ ] A3: expose the existing spectral/filter/correlation engines.
 3. [x] A4: pipeline replay, persistence, and real-corpus qualification.
-4. [ ] B: introduce the durable result envelope and migrate signal results.
+4. [ ] B: finish the common result actions and migrate fit/peak/statistics
+   results. The envelope, Library integration, signal migration, and first
+   result workspace are complete.
 5. [ ] C: build the Analysis Center on canonical commands and result inventory.
 6. [ ] D: unify selection and batch behavior, then migrate curve fit/peaks.
 7. [ ] E: migrate statistical tools into the result workspace.
@@ -351,6 +385,7 @@ menu names.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-10-08 | Paige | Implemented the first Workstream B vertical slice: durable versioned result envelopes, canonical Library placement, autosave/save/reopen and legacy signal-result migration, generic future/missing-reference diagnostics, and a lazy Signal result workspace with inspect/recalculate/rerun/rename/notes/delete lifecycle. Scientific settings and arrays remain in the linked worksheet authority rather than being duplicated. | TypeScript, ESLint, 56 architecture ratchets, production build, and the eager-bundle gate passed under the unchanged 834,639 B pin (834,526 B measured after the review fixes). A full frontend run passed 16,876 tests plus 2 expected failures and exposed two new-kind completeness omissions (autosave and icon render-site coverage); both were fixed and their focused suites then passed 64/64. Focused result/store/workspace/Library/component regressions also passed. CI remains the merge gate. |
 | 2026-10-07 | Project team | Completed A1, A2, and A4 around the existing A3 spectral work: technique-workspace launch, row-scope disclosure, X-range controls, reference normalization, editable smoothing/detrend polynomial order, contextual Help, named Recipe Library templates, one replayable `signal` transform path, unit-aware rebinding, source-race refusal, cancellation, undo, and project persistence. Cross-worksheet correlation remains explicitly deferred to Workstream D. | Focused frontend workbench/pipeline/workspace checks passed (including record → save → reload → replay); focused correction API/calc checks passed (121). Real corpus passed on `La2NiO4_1.xrdml`, `sims_depth_profile.xlsx`, `S3_650Oe_From700mT.refl`, and `vsm_mh_perp_a.dat`, with source arrays and file hashes unchanged. |
 | 2026-10-07 | ChatGPT-Sol (Codex) | Completed the single-worksheet A3 spectral tranche: FFT/PSD/phase, four frequency filters, transfer-function and before/after previews, two-channel cross-correlation, linked plottable outputs, versioned recipe persistence/rebinding, and explicit irregular-grid resampling. Cross-worksheet correlation remains explicitly deferred to the multi-source dependency workstream. Two adversarial passes fixed filter detrending semantics, stale metadata/error-role leakage, malformed recipe/orphan transfer handling, duplicate-label rebinding, event-loop decoding, cutoff provenance, reciprocal-unit display, large-array handling, startup-bundle loading, oversized Welch provenance, unbounded transfer previews, zero-energy correlation, implicit-notch provenance, hidden-setting recipe corruption, stale previews, and async source-change/orphan races. | Focused frontend: 311 passed; focused backend/API/off-loop: 131 passed; Ruff, focused mypy, TypeScript, ESLint, architecture ratchets, production build, and 814.5 kB eager-bundle gate passed. Full frontend before the second focused hardening pass: 16,824 passed / 2 expected failures; three unrelated lazy-workspace timing tests failed under the 322-second full run and then passed 4/4 in isolation. Real corpus: XRD PSD, SIMS resampled correlation, reflectivity filtering/transfer diagnostic, and correct refusal of a non-monotonic magnetometry loop, with source bytes unchanged. |
 | 2026-10-06 | ChatGPT-Sol (Codex) | Completed the first A1/A2 tranche: channel-targeted correction API, unit/error semantics, general Signal Processing workbench, linked-output uncertainty retention, and Savitzky-Golay compatibility fix. The adversarial pass added strict channel indices, stale-preview and duplicate-commit guards, no-finite-output and invalid-area refusal, shared preview scaling, and deterministic workspace-busy tests. | Full backend: 8,139 passed / 101 skipped / 13 expected failures; focused post-review backend/API: 109 passed. Full frontend: 1,163 files, 16,806 passed / 2 expected failures. Ruff, mypy, TypeScript, ESLint, architecture ratchets, production build, and 834,392 B eager-bundle gate passed. Real corpus: `La2NiO4_1.xrdml` (6,474 rows, smoothing), `rohanisaac_raman.spc` (3,632 rows, derivative with reciprocal-axis units), and `YIG_Py_S7.raw` (15,385 rows, peak normalization), all finite with source arrays unchanged. |

@@ -47,6 +47,12 @@ import type { CustomFitModel } from "./fitmodels";
 import type { AnalysisTemplate } from "./template";
 import { splitProjectTemplates } from "./templatesProject";
 import type { Dataset, FolderNode } from "./types";
+import {
+  migrateLegacySignalResults,
+  sanitizeAnalysisResults,
+  type AnalysisResult,
+} from "./analysisResult";
+import { staleAnalysisOutputs } from "./analysisResultFreshness";
 
 export const WORKSPACE_FORMAT = "quantized-workspace";
 // v2 (project-organization plan item 2): adds the folder tree, active/selection, and folder-expansion.
@@ -101,6 +107,12 @@ export interface WorkspaceState {
   originFidelity?: OriginFidelityEntry[];
   smartFolders?: SmartFolder[];
   reports?: ReportEntry[];
+  /** Workstream B: durable analysis catalog records. Scientific arrays and
+   * recipes remain in their referenced worksheet/report authorities. */
+  analysisResults?: AnalysisResult[];
+  /** Session stale marks: read at save to stamp result freshness, seeded on
+   *  load from it (lib/analysisResultFreshness.ts); never a key of their own. */
+  staleDatasets?: string[];
   macroSteps?: PipelineStep[];
   recalcMode?: RecalcMode;
   figureDocs?: FigureDoc[];
@@ -171,6 +183,10 @@ export interface LoadedWorkspace {
   originFidelity: OriginFidelityEntry[];
   smartFolders: SmartFolder[];
   reports: ReportEntry[];
+  /** Parser always populates this; optional only for the suite's hand-built
+   * LoadedWorkspace fixtures, matching mapViews below. */
+  analysisResults?: AnalysisResult[];
+  staleDatasets?: string[];
   macroSteps: PipelineStep[];
   recalcMode: RecalcMode;
   figureDocs: FigureDoc[];
@@ -366,6 +382,9 @@ export function parseWorkspace(
   const originFidelity = parseOriginFidelity(o.originFidelity, dsIds);
   const smartFolders = sanitizeSmartFolders(o.smartFolders);
   const reports = sanitizeReports(o.reports, dsIds, migrationWarnings, legacyNulls);
+  const analysisResults = o.analysisResults === undefined
+    ? migrateLegacySignalResults(datasets, typeof o.savedAt === "string" && o.savedAt ? o.savedAt : new Date(0).toISOString())
+    : sanitizeAnalysisResults(o.analysisResults, migrationWarnings);
   const nullWarning = legacyNullWarning(legacyNulls);
   if (nullWarning) migrationWarnings.unshift(nullWarning); // first: the status line shows only [0]
   if (mapXWarning) migrationWarnings.push(mapXWarning);
@@ -407,7 +426,7 @@ export function parseWorkspace(
   const librarySelection = parseLibrarySelection(
     o.librarySelection,
     selectedIds,
-    librarySelectionLiveIds({ folders: migration.folders, workbooks, originFigures, editableFigures, figureDocs, pages, reports }),
+    librarySelectionLiveIds({ folders: migration.folders, workbooks, originFigures, editableFigures, figureDocs, pages, reports, analysisResults }),
   );
   const workbookLastChild = parseWorkbookLastChild(o.workbookLastChild, workbookIds);
   const expandedWorkbookIds = stringsIn(o.expandedWorkbookIds, workbookIds);
@@ -430,6 +449,8 @@ export function parseWorkspace(
     originFidelity,
     smartFolders,
     reports,
+    analysisResults,
+    staleDatasets: staleAnalysisOutputs(analysisResults, datasets),
     macroSteps,
     recalcMode,
     figureDocs,

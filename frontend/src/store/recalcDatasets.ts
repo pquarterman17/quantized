@@ -41,6 +41,7 @@ import { recomputeDerivedSheet } from "./derivedWorksheets";
 import { rowsChangedGuard } from "./corrections";
 import { plural } from "../lib/plural";
 import { sortForRecalc } from "../lib/recalc";
+import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -60,6 +61,38 @@ function failedUpstream(
   if (d.bgRef != null && failed.has(d.bgRef.datasetId)) return d.bgRef.datasetId;
   if (d.derivedFrom != null && failed.has(d.derivedFrom.datasetId)) return d.derivedFrom.datasetId;
   return null;
+}
+
+/** Commit one derived worksheet's recompute and clear its stale mark — shared
+ *  by the stale walk below and a single analysis result's Recalculate
+ *  (store/analysisResultActions.ts), so the two cannot drift. */
+export function commitDerivedRecompute(
+  set: SliceSet,
+  get: SliceGet,
+  d: Dataset,
+  updated: Dataset,
+  shift: Awaited<ReturnType<typeof recomputeDerivedSheet>>["shift"],
+): void {
+  const id = d.id;
+  // #50/#53 guard (P1-2 review fix): a row-count-changing recompute
+  // invalidates excludedRows + the four overlays — the SAME shared
+  // helper applyCorrections uses, so the two call sites can't drift.
+  const rowsChanged = updated.data.time.length !== d.data.time.length;
+  let statusMsg: string | undefined;
+  set((s) => {
+    const guard = rowsChangedGuard(s, id, rowsChanged, d.excludedRows);
+    statusMsg = guard.statusMessage;
+    const datasets = s.datasets.map((x) => (x.id === id ? { ...updated, ...guard.datasetPatch } : x));
+    return {
+      datasets,
+      staleDatasets: s.staleDatasets.filter((x) => x !== id),
+      ...guard.statePatch,
+      // The source lost or gained a column, so this sheet did too: every
+      // window, figure and saved spec on the sheet follows the shift.
+      ...(shift !== null && columnRemovalRefsPatch(s, id, shift, datasets)),
+    };
+  });
+  if (statusMsg) get().setStatus(statusMsg);
 }
 
 /** Re-derive every stale dataset (bgRef corrections + derived-worksheet
@@ -99,25 +132,7 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
     if (d?.derivedFrom) {
       try {
         const { sheet: updated, shift } = await recomputeDerivedSheet(get, d);
-        // #50/#53 guard (P1-2 review fix): a row-count-changing recompute
-        // invalidates excludedRows + the four overlays — the SAME shared
-        // helper applyCorrections uses, so the two call sites can't drift.
-        const rowsChanged = updated.data.time.length !== d.data.time.length;
-        let statusMsg: string | undefined;
-        set((s) => {
-          const guard = rowsChangedGuard(s, id, rowsChanged, d.excludedRows);
-          statusMsg = guard.statusMessage;
-          const datasets = s.datasets.map((x) => (x.id === id ? { ...updated, ...guard.datasetPatch } : x));
-          return {
-            datasets,
-            staleDatasets: s.staleDatasets.filter((x) => x !== id),
-            ...guard.statePatch,
-            // The source lost or gained a column, so this sheet did too: every
-            // window, figure and saved spec on the sheet follows the shift.
-            ...(shift !== null && columnRemovalRefsPatch(s, id, shift, datasets)),
-          };
-        });
-        if (statusMsg) get().setStatus(statusMsg);
+        commitDerivedRecompute(set, get, d, updated, shift);
       } catch (e) {
         failed.set(id, `derived worksheet recompute failed: ${message(e)}`); /* stays stale, and so does anything downstream */
       }

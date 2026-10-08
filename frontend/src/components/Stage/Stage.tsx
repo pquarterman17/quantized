@@ -70,6 +70,7 @@ export default function Stage() {
     s.plotWindows.some((w) => w.kind === "snapshot") ||
     s.pages.length > 0 ||
     s.reports.length > 0 ||
+    s.analysisResults.length > 0 ||
     s.originFigures.length > 0 ||
     s.editableFigures.length > 0 ||
     s.figureDocs.length > 0,

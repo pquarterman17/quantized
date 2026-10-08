@@ -220,6 +220,7 @@ export function hasWorkspaceContent(s: StoreGet): boolean {
     st.figureDocs.length > 0 ||
     st.pages.length > 0 ||
     st.reports.length > 0 ||
+    st.analysisResults.length > 0 ||
     st.smartFolders.length > 0 ||
     st.savedPlotSpecs.length > 0 ||
     st.macroSteps.length > 0 ||

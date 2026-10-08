@@ -214,7 +214,8 @@ const WorkbookPropertiesDialog = lazyPanel(() => import("./components/Library/Wo
 // the eager bundle pays for the flags and a single stub; see
 // ternary/lazyMount.test.ts.
 const AuxFigurePanels = lazyPanel(() => import("./components/workshops/ternary/AuxFigurePanels"), "AuxFigurePanels");
-const SignalProcessingPanel = lazyPanel(() => import("./components/workshops/signalprocessing/SignalProcessingPanel"), "SignalProcessingPanel");
+// Signal Processing and its durable results share one lazy host chunk.
+const SignalAnalysisPanels = lazyPanel(() => import("./components/workshops/analysisresults/SignalAnalysisPanels"), "SignalAnalysisPanels");
 
 export default function AppOverlays() {
   const helpOpen = useHelp((s) => s.open);
@@ -253,6 +254,7 @@ export default function AppOverlays() {
   const trashOpen = useApp((s) => s.trashOpen);
   const searchOpen = useApp((s) => s.searchOpen);
   const openReportId = useApp((s) => s.openReportId);
+  const openAnalysisResultId = useApp((s) => s.openAnalysisResultId);
   const statsChooserOpen = useApp((s) => s.statsChooserOpen);
   const peakWizardOpen = useApp((s) => s.peakWizardOpen);
   const importWizardOpen = useApp((s) => s.importWizardOpen);
@@ -336,7 +338,7 @@ export default function AppOverlays() {
       {multivarOpen && <MultivarPanel />}
       {statsTestsOpen && <StatsTestsPanel />}
       {variabilityOpen && <VariabilityChartPanel />}
-      {signalProcessingOpen && <SignalProcessingPanel />}
+      {(signalProcessingOpen || openAnalysisResultId) && <SignalAnalysisPanels />}
       {dataFilterOpen && <DataFilterPanel />}
       {statsChooserOpen && <StatsChooserPanel />}
       {peakWizardOpen && <PeakWizardPanel />}
