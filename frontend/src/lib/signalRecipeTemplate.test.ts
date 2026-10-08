@@ -22,6 +22,7 @@ const source: Dataset = {
 const recipe: SignalCorrectionRecipe = {
   kind: "signal-correction",
   version: 1,
+      xUnit: "",
   operation: "Detrend",
   channels: [{ index: 1, label: "B", unit: "A" }],
   params: { signalChannels: [1], detrendOrder: 1 },
@@ -40,6 +41,7 @@ describe("Signal Processing Recipe Library integration", () => {
       { name: "A", unit: "V", required: false },
       { name: "B", unit: "A", required: true },
     ]);
+    expect(saved.expects?.signalInputUnit).toBe("");
     expect(inputColumnRefs(saved.steps, source.data.labels).cols).toEqual(new Set([1]));
   });
 

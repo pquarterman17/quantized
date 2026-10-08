@@ -10,6 +10,7 @@ import { fitSpecFromStepParams } from "../../../lib/fitStepDecode";
 import { dyForFit } from "../../../lib/fitweights";
 import { validateExpression, type PipelineStep } from "../../../lib/pipeline";
 import { analysisData } from "../../../lib/rowstate";
+import type { SignalBindOptions } from "../../../lib/signalRecipe";
 import type { CalcResult, CorrectionParams } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 
@@ -70,6 +71,7 @@ export async function executeSteps(
   targetId: string,
   onProgress?: (log: Record<string, StepLogEntry>) => void,
   signal?: AbortSignal,
+  options?: SignalBindOptions,
 ): Promise<ExecuteResult> {
   const log: Record<string, StepLogEntry> = {};
   const fits: CalcResult[] = [];
@@ -222,7 +224,18 @@ export async function executeSteps(
         case "transform": {
           // Lazy: only a pipeline that recorded a transform pays for it.
           const { replayTransform } = await import("../../../lib/transformReplay");
-          const out = await replayTransform(store, step.params, target, produced, signal);
+          // Position fallback is valid only while this run still addresses
+          // the Recipe Library's explicitly conformed input. A later signal
+          // step must bind strictly against the output of the transform that
+          // preceded it, whose schema was never conformed by the Library.
+          const out = await replayTransform(
+            store,
+            step.params,
+            target,
+            produced,
+            signal,
+            target === targetId ? options : undefined,
+          );
           target = out.id;
           // Finding #3: EVERY dataset any step created, cumulative (a
           // split's children, not just the one `target` continues on) — an

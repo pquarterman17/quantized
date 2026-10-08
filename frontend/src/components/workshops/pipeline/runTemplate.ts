@@ -55,6 +55,7 @@ import {
   type Binding,
 } from "../../../lib/recipePreflight";
 import { excludedSet } from "../../../lib/rowstate";
+import { inputSegment } from "../../../lib/recipeExpect";
 import { extractOutputs, type AnalysisTemplate, type BatchRow } from "../../../lib/template";
 import { analyzePipeline } from "../../../lib/pipelineStudio";
 import { snapshotOf } from "../../../store/historySnapshot";
@@ -230,7 +231,14 @@ async function applyOne(recipe: AnalysisTemplate, plan: ApplyPlan, ackUnits: boo
   const columns = recipe.expects?.columns ?? [];
   const active = s().activeId;
   let start = ds.id;
-  if (needsWorkingCopy(recipe.steps, plan.bindings)) {
+  const renamesRecordedColumns = columns.some((column, index) => {
+    const binding = plan.bindings[index];
+    return typeof binding === "number" && ds.data.labels[binding] !== column.name;
+  });
+  const hasSignalTransform = inputSegment(recipe.steps).some((step) =>
+    step.enabled && step.kind === "transform" && step.params.op === "signal");
+  const conformed = needsWorkingCopy(recipe.steps, plan.bindings) || (hasSignalTransform && renamesRecordedColumns);
+  if (conformed) {
     const c = conformData(ds.data, columns, plan.bindings, recipe.steps);
     const filter = conformFilter(ds.filter, c);
     const errorRoles = conformErrorRoles(ds.errorRoles, c);
@@ -246,7 +254,13 @@ async function applyOne(recipe: AnalysisTemplate, plan: ApplyPlan, ackUnits: boo
       ...(errorRoles ? { errorRoles } : {}),
     });
   }
-  const run = await executeSteps(recipe.steps, start);
+  const run = await executeSteps(
+    recipe.steps,
+    start,
+    undefined,
+    undefined,
+    conformed ? { allowPositionFallback: true } : undefined,
+  );
   const failed = Object.values(run.log).filter((l) => l.status === "failed");
   const output = run.target;
   // Finding #3: exactly what THIS run created — the working copy (if one was

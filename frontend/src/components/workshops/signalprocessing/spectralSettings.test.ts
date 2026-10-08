@@ -25,6 +25,7 @@ describe("spectral settings", () => {
     const settings = { ...DEFAULT_SPECTRAL_SETTINGS, useRange: true, xMin: "0.2", xMax: "0.8" };
     expect(buildSpectralRecipe("fft", settings, [1], dataset)).toMatchObject({
       operation: "fft",
+      xUnit: "s",
       channels: [{ index: 1, label: "reference" }],
       xMin: 0.2,
       xMax: 0.8,

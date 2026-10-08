@@ -20,7 +20,7 @@ const dataset: Dataset = {
     values: [[10, 1, 0], [20, 2, 1]],
     labels: ["signal", "sigma", "group"],
     units: ["V", "V", ""],
-    metadata: {},
+    metadata: { xUnit: "s" },
     cat_levels: { 2: ["a", "b"] },
   },
   errorRoles: [{ channel: 1, target: 0, axis: "y", side: "both" }],
@@ -51,6 +51,7 @@ describe("signal processing model", () => {
     expect(buildCorrectionRecipe(DEFAULT_SIGNAL_SETTINGS, [0], dataset)).toMatchObject({
       kind: "signal-correction",
       version: 1,
+      xUnit: "s",
       channels: [{ index: 0, label: "signal", unit: "V" }],
       params: { signalChannels: [0], smoothPolyOrder: 2 },
     });

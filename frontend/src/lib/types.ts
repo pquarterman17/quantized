@@ -515,7 +515,7 @@ export interface Dataset {
   /** PR K (L0.50): set for a DERIVED WORKSHEET — recalculates only via the
    *  async scheduler (K5c); `pipeline` is a short descriptor for now. */
   derivedFrom?: { datasetId: string; pipeline: string };
-  analysisRecipe?: import("./spectralWorkbench").SpectralAnalysisRecipe; // linked analysis recipe
+  analysisRecipe?: import("./signalRecipe").SignalAnalysisRecipe; // linked analysis recipe
   /** Per-channel column roles (label / ignore) — channel index → role. Excluded
    *  from the plot; semantic metadata about the columns, so they live ON the
    *  dataset (persist across dataset switches + round-trip .dwk), not in the

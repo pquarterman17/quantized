@@ -16,6 +16,8 @@ export interface SpectralAnalysisRecipe {
   version: 1;
   operation: SpectralOperation;
   channels: SpectralChannelRef[];
+  /** X-axis unit at recipe creation. Optional for pre-feature saved sheets. */
+  xUnit?: string;
   xMin?: number;
   xMax?: number;
   resample: boolean;
@@ -91,8 +93,8 @@ export function rebindSpectralRecipe(
     const index = matches[0];
     const actualUnit = (units[index] ?? "").trim();
     const expectedUnit = channel.unit?.trim();
-    if (expectedUnit && actualUnit && expectedUnit !== actualUnit) {
-      throw new Error(`signal column "${channel.label}" changed units from ${expectedUnit} to ${actualUnit}`);
+    if (expectedUnit && expectedUnit !== actualUnit) {
+      throw new Error(`signal column "${channel.label}" changed units from ${expectedUnit} to ${actualUnit || "unknown"}`);
     }
     if (index === channel.index) return channel;
     return { ...channel, index };
@@ -149,6 +151,7 @@ export function sanitizeSpectralRecipe(value: unknown): SpectralAnalysisRecipe |
     version: 1,
     operation: r.operation as SpectralOperation,
     channels,
+    ...(typeof r.xUnit === "string" ? { xUnit: r.xUnit.trim() } : {}),
     ...(finite(r.xMin) ? { xMin: r.xMin } : {}),
     ...(finite(r.xMax) ? { xMax: r.xMax } : {}),
     resample: r.resample === true,

@@ -16,6 +16,7 @@ vi.mock("../lib/api/spectralWorkbench", () => ({ runSpectralWorkbench: vi.fn() }
 import { applyCorrections as applyCorrectionsApi } from "../lib/api";
 import { runSpectralWorkbench } from "../lib/api/spectralWorkbench";
 import { DEFAULT_SPECTRAL_RECIPE, type SpectralAnalysisRecipe } from "../lib/spectralWorkbench";
+import type { SignalCorrectionRecipe } from "../lib/signalRecipe";
 import * as recalcModule from "../lib/recalc";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 
@@ -220,7 +221,10 @@ describe("linked spectral worksheets", () => {
       "Frequency spectrum · A",
     );
     const created = useApp.getState().datasets.find((item) => item.id === id);
-    expect(runSpectralWorkbench).toHaveBeenCalledWith(data(), recipe);
+    expect(runSpectralWorkbench).toHaveBeenCalledWith(
+      data(),
+      expect.objectContaining({ ...recipe, channels: [{ index: 0, label: "A", unit: "u" }] }),
+    );
     expect(created).toMatchObject({
       data: output,
       analysisRecipe: recipe,
@@ -268,10 +272,10 @@ describe("linked spectral worksheets", () => {
     useApp.setState({ datasets: [ds("src", { data: sourceData }), sheet] });
 
     const { sheet: result } = await recomputeDerivedSheet(useApp.getState, sheet);
-    expect(result.analysisRecipe?.channels).toEqual([{ index: 1, label: "A" }]);
+    expect(result.analysisRecipe?.channels).toEqual([{ index: 1, label: "A", unit: "u" }]);
     expect(runSpectralWorkbench).toHaveBeenCalledWith(
       sourceData,
-      expect.objectContaining({ channels: [{ index: 1, label: "A" }] }),
+      expect.objectContaining({ channels: [{ index: 1, label: "A", unit: "u" }] }),
     );
   });
 
@@ -284,6 +288,18 @@ describe("linked spectral worksheets", () => {
     useApp.setState({ datasets: [ds("src", { data: sourceData }), sheet] });
 
     await expect(recomputeDerivedSheet(useApp.getState, sheet)).rejects.toThrow("ambiguous");
+    expect(runSpectralWorkbench).not.toHaveBeenCalled();
+  });
+
+  it("refuses a spectral recalculation when the source X unit changes", async () => {
+    const sourceData = { ...data(), metadata: { xUnit: "ms" } };
+    const sheet = ds("derived", {
+      derivedFrom: { datasetId: "src", pipeline: "fft" },
+      analysisRecipe: spectralRecipe({ xUnit: "s" }),
+    });
+    useApp.setState({ datasets: [ds("src", { data: sourceData }), sheet] });
+
+    await expect(recomputeDerivedSheet(useApp.getState, sheet)).rejects.toThrow(/X axis changed units/);
     expect(runSpectralWorkbench).not.toHaveBeenCalled();
   });
 
@@ -308,6 +324,61 @@ describe("linked spectral worksheets", () => {
     resolve({ ...data(), labels: ["A · Magnitude"] });
 
     await expect(pending).rejects.toThrow(/changed while recalculation/);
+  });
+});
+
+describe("linked Signal Processing correction worksheets", () => {
+  const correctionRecipe = (over: Partial<SignalCorrectionRecipe> = {}): SignalCorrectionRecipe => ({
+    kind: "signal-correction",
+    version: 1,
+    operation: "Detrend",
+    channels: [{ index: 0, label: "A", unit: "u" }],
+    xUnit: "s",
+    params: { signalChannels: [0], detrendOrder: 1 },
+    ...over,
+  });
+
+  it("rebinds and preserves the full recipe while recalculating", async () => {
+    const sourceData = {
+      ...data(),
+      values: [[1, 10], [2, 20], [3, 30]],
+      labels: ["new", "A"],
+      units: ["", "u"],
+      metadata: { xUnit: "s" },
+    };
+    const analyzed = { ...sourceData, values: [[1, -1], [2, 0], [3, 1]] };
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(analyzed);
+    const sheet = ds("derived", {
+      derivedFrom: { datasetId: "src", pipeline: "Detrend" },
+      analysisRecipe: correctionRecipe(),
+      corrections: { signalChannels: [0], detrendOrder: 1 },
+    });
+    useApp.setState({ datasets: [ds("src", { data: sourceData }), sheet] });
+
+    const { sheet: result } = await recomputeDerivedSheet(useApp.getState, sheet);
+
+    expect(applyCorrectionsApi).toHaveBeenCalledWith({
+      dataset: sourceData,
+      params: { signalChannels: [1], detrendOrder: 1 },
+    });
+    expect(result.analysisRecipe).toMatchObject({
+      channels: [{ index: 1, label: "A", unit: "u" }],
+      xUnit: "s",
+      params: { signalChannels: [1] },
+    });
+    expect(result.corrections?.signalChannels).toEqual([1]);
+  });
+
+  it("fails closed when a linked correction source keeps its labels but changes X units", async () => {
+    const sourceData = { ...data(), metadata: { xUnit: "ms" } };
+    const sheet = ds("derived", {
+      derivedFrom: { datasetId: "src", pipeline: "Detrend" },
+      analysisRecipe: correctionRecipe(),
+    });
+    useApp.setState({ datasets: [ds("src", { data: sourceData }), sheet] });
+
+    await expect(recomputeDerivedSheet(useApp.getState, sheet)).rejects.toThrow(/X axis changed units/);
+    expect(applyCorrectionsApi).not.toHaveBeenCalled();
   });
 });
 

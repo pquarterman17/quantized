@@ -147,6 +147,7 @@ const cases: [string, TransformParams][] = [
     recipe: {
       kind: "signal-correction",
       version: 1,
+      xUnit: "s",
       operation: "Detrend",
       channels: [{ index: 2, label: "v", unit: "emu" }],
       params: { signalChannels: [2], detrendOrder: 1 },
@@ -195,6 +196,32 @@ describe("transform steps replay to the same output", () => {
 });
 
 describe("executeSteps with transform steps", () => {
+  it("does not carry Recipe-Library positional fallback onto a later transform output", async () => {
+    const transpose = makeStep("transform", "Transpose", "", { op: "transpose" });
+    const signal = makeStep("transform", "Smooth missing channel", "", {
+      op: "signal",
+      recipe: {
+        kind: "signal-correction",
+        version: 1,
+        operation: "Smooth",
+        channels: [{ index: 0, label: "Not in transposed output", unit: "" }],
+        xUnit: "",
+        params: { signalChannels: [0], smoothEnabled: true, smoothMethod: "moving", smoothWindow: 2 },
+      },
+    });
+
+    const { log } = await executeSteps(
+      [transpose, signal],
+      "src",
+      undefined,
+      undefined,
+      { allowPositionFallback: true },
+    );
+
+    expect(log[transpose.id].status).toBe("ok");
+    expect(log[signal.id]).toMatchObject({ status: "failed", note: expect.stringContaining("changed or is ambiguous") });
+  });
+
   it("later steps continue on the transform's output, as recording did", async () => {
     await runTransform(useApp.getState, { op: "stack", channels: [1, 2] }, "src", async () => true);
     useApp.getState().stopMacro();

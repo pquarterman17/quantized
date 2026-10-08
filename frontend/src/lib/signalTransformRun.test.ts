@@ -31,6 +31,7 @@ const params = {
   recipe: {
     kind: "signal-correction" as const,
     version: 1 as const,
+      xUnit: "",
     operation: "Detrend",
     channels: [{ index: 0, label: "Y", unit: "V" }],
     params: { signalChannels: [0], detrendOrder: 1 },
@@ -62,6 +63,7 @@ describe("Signal Processing transform commit", () => {
       folderId: "folder",
       raw: source.data,
       corrections: { signalChannels: [0], detrendOrder: 1 },
+      analysisRecipe: params.recipe,
       derivedFrom: { datasetId: "source", pipeline: "Detrend" },
     });
     expect(output.data.metadata.worksheet_transform).toBe("signal");
@@ -77,6 +79,7 @@ describe("Signal Processing transform commit", () => {
     expect(reopened.datasets.find((dataset) => dataset.id === output.id)).toMatchObject({
       raw: source.data,
       corrections: params.recipe.params,
+      analysisRecipe: params.recipe,
       derivedFrom: { datasetId: "source", pipeline: "Detrend" },
     });
     expect(reopened.macroSteps[0]).toMatchObject({ kind: "transform", params: { op: "signal" } });
@@ -106,6 +109,50 @@ describe("Signal Processing transform commit", () => {
     await expect(running).rejects.toThrow(/source worksheet changed/);
     expect(useApp.getState().datasets).toHaveLength(1);
     expect(useApp.getState().macroSteps).toEqual([]);
+  });
+
+  it.each([
+    ["assigns", [{ channel: 0, target: 0, axis: "y" as const, side: "both" as const }]],
+    ["removes", undefined],
+  ])("fails closed when the user %s an error role during compute", async (_label, nextRoles) => {
+    const initial = _label === "removes"
+      ? [{ channel: 0, target: 0, axis: "y" as const, side: "both" as const }]
+      : undefined;
+    useApp.setState({ datasets: [{ ...source, ...(initial ? { errorRoles: initial } : {}) }] });
+    let settle!: (value: Dataset["data"]) => void;
+    let announceStart!: () => void;
+    const started = new Promise<void>((resolve) => { announceStart = resolve; });
+    applyMock.mockImplementation(() => {
+      announceStart();
+      return new Promise((resolve) => { settle = resolve; });
+    });
+    const running = runTransform(useApp.getState, params, source.id);
+    await started;
+    useApp.setState({ datasets: [{ ...useApp.getState().datasets[0], errorRoles: nextRoles }] });
+    settle(source.data);
+    await expect(running).rejects.toThrow(/source worksheet changed/);
+    expect(useApp.getState().datasets).toHaveLength(1);
+  });
+
+  it("rechecks error roles after interactive review before publishing", async () => {
+    let finishReview!: (accepted: boolean) => void;
+    let announceReview!: () => void;
+    const reviewing = new Promise<void>((resolve) => { announceReview = resolve; });
+    const running = runTransform(useApp.getState, params, source.id, () => {
+      announceReview();
+      return new Promise((resolve) => { finishReview = resolve; });
+    });
+    await reviewing;
+    useApp.setState({
+      datasets: [{
+        ...source,
+        errorRoles: [{ channel: 0, target: 0, axis: "y", side: "both" }],
+      }],
+    });
+    finishReview(true);
+
+    await expect(running).rejects.toThrow(/source worksheet changed/);
+    expect(useApp.getState().datasets).toHaveLength(1);
   });
 
   it("passes cancellation to the backend and publishes no partial output", async () => {

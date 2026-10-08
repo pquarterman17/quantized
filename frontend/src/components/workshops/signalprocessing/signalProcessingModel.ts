@@ -1,5 +1,6 @@
 import type { CorrectionParams, Dataset } from "../../../lib/types";
 import type { SignalCorrectionRecipe } from "../../../lib/signalTransform";
+import { dataXUnit } from "../../../lib/signalRecipe";
 import type { SpectralOperation } from "../../../lib/spectralWorkbench";
 
 export type CorrectionOperation =
@@ -119,6 +120,7 @@ export function buildCorrectionRecipe(
     kind: "signal-correction",
     version: 1,
     operation: operationLabel(settings.operation),
+    xUnit: dataXUnit(dataset.data),
     channels: channels.map((index) => ({
       index,
       label: dataset.data.labels[index],

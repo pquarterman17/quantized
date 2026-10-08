@@ -32,6 +32,7 @@
 import { referencedColumns } from "./formula";
 import { metaValue, isPresent, type MetaPath } from "./metadataKeys";
 import type { PipelineStep } from "./pipeline";
+import { sanitizeSignalAnalysisRecipe, signalRecipeNeedsXUnit } from "./signalRecipe";
 import type { Dataset } from "./types";
 
 export interface ExpectedColumn {
@@ -55,6 +56,9 @@ export interface RecipeExpectations {
    *  valid only for the exact x unit it was recorded against. The empty
    *  string deliberately means "the recording had no x unit". */
   scaleInputUnit?: string;
+  /** X-sensitive Signal Processing recipes are valid only for the exact
+   * recorded X unit. Empty deliberately means the recording was unknown. */
+  signalInputUnit?: string;
 }
 
 /** Ops that edit their dataset in place (lib/metadataRun.ts's IN_PLACE_OPS —
@@ -224,6 +228,15 @@ function scaleInputUnit(steps: readonly PipelineStep[]): string | undefined {
   return undefined;
 }
 
+function signalInputUnit(steps: readonly PipelineStep[]): string | undefined {
+  for (const step of inputSegment(steps)) {
+    if (step.kind !== "transform" || step.params.op !== "signal") continue;
+    const recipe = sanitizeSignalAnalysisRecipe(step.params.recipe);
+    if (recipe && signalRecipeNeedsXUnit(recipe) && recipe.xUnit !== undefined) return recipe.xUnit.trim();
+  }
+  return undefined;
+}
+
 /** The names of the columns the recipe's own in-place steps append, in order.
  *  Exported for lib/recipePreflight.ts's `conformData` (finding #1): an
  *  in-place step (`addFormula`, `promote`) always lands its new column after
@@ -273,12 +286,14 @@ export function deriveExpectations(steps: readonly PipelineStep[], example: Data
     required: refs.all || refs.cols.has(i),
   }));
   const scaleUnit = scaleInputUnit(steps);
+  const signalUnit = signalInputUnit(steps);
   return {
     columns,
     metadata: metadataRefs(steps),
     example: example.name,
     ...(needsTimeUnitX(steps) ? { needsTimeUnitX: true } : {}),
     ...(scaleUnit !== undefined ? { scaleInputUnit: scaleUnit } : {}),
+    ...(signalUnit !== undefined ? { signalInputUnit: signalUnit } : {}),
   };
 }
 
@@ -305,6 +320,7 @@ export function sanitizeExpectations(v: unknown): RecipeExpectations | undefined
     ...(typeof o.example === "string" ? { example: o.example } : {}),
     ...(o.needsTimeUnitX === true ? { needsTimeUnitX: true } : {}),
     ...(typeof o.scaleInputUnit === "string" ? { scaleInputUnit: o.scaleInputUnit.trim() } : {}),
+    ...(typeof o.signalInputUnit === "string" ? { signalInputUnit: o.signalInputUnit.trim() } : {}),
   };
 }
 
@@ -316,6 +332,7 @@ export function expectationsText(e: RecipeExpectations | undefined): string {
   const parts = [cols.length ? `columns ${cols.join(", ")}` : "no specific columns"];
   if (meta.length) parts.push(`metadata ${meta.join(", ")}`);
   if (e.scaleInputUnit !== undefined) parts.push(`x unit ${e.scaleInputUnit || "unknown"}`);
+  if (e.signalInputUnit !== undefined) parts.push(`signal x unit ${e.signalInputUnit || "unknown"}`);
   return parts.join("; ");
 }
 

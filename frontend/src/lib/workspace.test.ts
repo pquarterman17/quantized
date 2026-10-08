@@ -253,6 +253,24 @@ describe("workspace PR K fields (deps/derivedFrom/formulaErrors)", () => {
     expect(parse(JSON.stringify(orphaned))[0].analysisRecipe).toBeUndefined();
   });
 
+  it("round-trips a linked correction recipe and drops one without its X-unit contract", () => {
+    const ds = makeDataset("a", "detrended");
+    ds.derivedFrom = { datasetId: "raw1", pipeline: "Detrend" };
+    ds.analysisRecipe = {
+      kind: "signal-correction",
+      version: 1,
+      operation: "Detrend",
+      channels: [{ index: 0, label: "A", unit: "V" }],
+      xUnit: "s",
+      params: { signalChannels: [0], detrendOrder: 1 },
+    };
+    expect(parse(ser([ds]))[0].analysisRecipe).toEqual(ds.analysisRecipe);
+
+    const malformed = JSON.parse(ser([ds]));
+    delete malformed.datasets[0].analysisRecipe.xUnit;
+    expect(parse(JSON.stringify(malformed))[0].analysisRecipe).toBeUndefined();
+  });
+
   it("round-trips formulaErrors (and omits an empty map)", () => {
     const ds = makeDataset("a", "erroring");
     ds.formulaErrors = { bad: "unknown variable \"Z\"" };

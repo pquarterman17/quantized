@@ -39,6 +39,7 @@ import { analysisData } from "./rowstate";
 import {
   computeSignalTransform,
   signalTransformStepText,
+  type SignalBindOptions,
   type SignalTransformParams,
 } from "./signalTransform";
 import { computeResample, resampleLabel, type ResampleParams } from "./transformResample";
@@ -213,6 +214,7 @@ export async function computeTransform(
   primary: Dataset,
   others: Dataset[],
   signal?: AbortSignal,
+  options?: SignalBindOptions,
 ): Promise<TransformComputed> {
   const src = rowsOf(primary);
   switch (p.op) {
@@ -285,7 +287,7 @@ export async function computeTransform(
       // discloses included/excluded counts and the full-row scope; unlike
       // statistical transforms, row state is not silently baked into the
       // linked output.
-      const r = await computeSignalTransform(p, primary, signal);
+      const r = await computeSignalTransform(p, primary, signal, options);
       return {
         data: r.data,
         name: r.name,
@@ -371,6 +373,7 @@ export async function runTransform(
   primaryId: string,
   review?: ReviewFn,
   signal?: AbortSignal,
+  options?: SignalBindOptions,
 ): Promise<TransformOutcome | null> {
   if (p.op === "split") {
     if (!s().datasets.some((d) => d.id === primaryId)) throw new Error("the input dataset is unavailable");
@@ -400,18 +403,23 @@ export async function runTransform(
   }
   const primary = await s().resolveDataset(primaryId);
   if (!primary) throw new Error("the input dataset is unavailable");
-  const others = await resolveRefs(s, refsOf(p));
-  const c = await computeTransform(p, primary, others, signal);
-  if (p.op === "signal") {
+  const signalErrorRoles = p.op === "signal" ? JSON.stringify(primary.errorRoles ?? []) : null;
+  const assertSignalSourceUnchanged = (): void => {
+    if (p.op !== "signal") return;
     const current = s().datasets.find((dataset) => dataset.id === primary.id);
-    if (!current || current.pending || current.data !== primary.data) {
+    if (!current || current.pending || current.data !== primary.data ||
+        JSON.stringify(current.errorRoles ?? []) !== signalErrorRoles) {
       throw new Error("the source worksheet changed while Signal Processing was running");
     }
-  }
+  };
+  const others = await resolveRefs(s, refsOf(p));
+  const c = await computeTransform(p, primary, others, signal, options);
+  assertSignalSourceUnchanged();
   if (review && !(await review(c.preview))) {
     s().setStatus(`${c.preview.title} cancelled — nothing was created`);
     return null;
   }
+  assertSignalSourceUnchanged();
   // Read BEFORE addDataset, which makes the output active.
   const inputIsTarget = s().activeId === primary.id;
   const id = nextDatasetId();
