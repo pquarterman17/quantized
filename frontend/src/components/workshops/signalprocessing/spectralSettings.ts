@@ -116,7 +116,11 @@ export function buildSpectralRecipe(
   const recipe: SpectralAnalysisRecipe = {
     ...DEFAULT_SPECTRAL_RECIPE,
     operation,
-    channels: channels.map((index) => ({ index, label: dataset.data.labels[index] })),
+    channels: channels.map((index) => ({
+      index,
+      label: dataset.data.labels[index],
+      unit: dataset.data.units[index] ?? "",
+    })),
     ...(settings.useRange ? { xMin: number(settings.xMin), xMax: number(settings.xMax) } : {}),
     resample: settings.resample,
   };

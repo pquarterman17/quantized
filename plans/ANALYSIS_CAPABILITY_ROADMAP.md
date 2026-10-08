@@ -78,12 +78,13 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   only when the project's recalculation mode permits it.
 - [ ] Missing inputs, incompatible units, insufficient rows, non-finite data,
   lazy Origin previews, and cancelled work fail closed with a useful message.
-- [ ] Excluded/filtered rows and bound uncertainties follow an explicit policy
+- [x] Excluded/filtered rows and bound uncertainties follow an explicit policy
   shown in the UI rather than an implicit implementation detail.
-- [ ] Long work reports progress and supports cancellation.
-- [ ] The same saved recipe can run over selected compatible datasets without
+- [ ] Long work supports cancellation; determinate progress remains for jobs
+  whose backend can expose meaningful progress rather than only busy/complete.
+- [x] The same saved recipe can run over selected compatible datasets without
   overwriting customized plots or raw data.
-- [ ] Tests use representative files from the sibling `test-data` repository
+- [x] Tests use representative files from the sibling `test-data` repository
   where a relevant real format exists.
 
 ## Workstream A — General Signal Processing workbench
@@ -95,13 +96,13 @@ or unavailable in the GUI through one previewed, non-destructive workflow.
 
 ### A1. Shared workbench and input contract
 
-- [ ] Add `Analyze > Signal Processing…` and a technique-workflow action.
-- [ ] Show the active worksheet, X channel, one or more Y channels, units,
+- [x] Add `Analyze > Signal Processing…` and a technique-workflow action.
+- [x] Show the active worksheet, X channel, one or more Y channels, units,
   included/excluded row counts, and optional X range.
-- [ ] Support choosing the plot's current channels or worksheet columns.
-- [ ] Add live preview with an obvious original/processed comparison.
-- [ ] Add Preview, Commit as derived worksheet, Save recipe, Cancel, and Help.
-- [ ] Refuse lazy/downsampled Origin data until the canonical resolver loads the
+- [x] Support choosing the plot's current channels or worksheet columns.
+- [x] Add live preview with an obvious original/processed comparison.
+- [x] Add Preview, Commit as derived worksheet, Save recipe, Cancel, and Help.
+- [x] Refuse lazy/downsampled Origin data until the canonical resolver loads the
   full worksheet; guard against the active worksheet changing during the load.
 
 Implementation status (2026-10-06):
@@ -121,19 +122,20 @@ Implementation status (2026-10-06):
 Update (2026-10-07):
 
 - [x] Added explicit, opt-in X-range controls to the shared workbench.
-- [ ] Technique-workspace launch, included/excluded row counts, Save Recipe,
-  and contextual Help still remain.
+- [x] Added technique-workspace launch, included/excluded row counts, named
+  Recipe Library saving, and contextual Help. Preview and commit requests are
+  abortable; cancelling cannot publish a hidden late output.
 
 ### A2. Time/domain operations
 
-- [ ] Smoothing: moving average, Gaussian, and Savitzky-Golay; odd-window and
+- [x] Smoothing: moving average, Gaussian, and Savitzky-Golay; odd-window and
   polynomial-order validation; clear edge behavior.
-- [ ] Normalization: range, peak, area, Z-score, and a user-specified reference
+- [x] Normalization: range, peak, area, Z-score, and a user-specified reference
   value/range.
-- [ ] Calculus: first derivative, second derivative, cumulative integral, and
+- [x] Calculus: first derivative, second derivative, cumulative integral, and
   log-log derivative with units derived and displayed.
-- [ ] Detrending: constant, linear, and polynomial with previewed residual.
-- [ ] Resampling: uniform-grid helper when an operation requires even spacing;
+- [x] Detrending: constant, linear, and polynomial with previewed residual.
+- [x] Resampling: uniform-grid helper when an operation requires even spacing;
   never silently interpolate.
 
 Implementation status (2026-10-06):
@@ -148,8 +150,9 @@ Implementation status (2026-10-06):
   normalizations, while unsupported nonlinear propagation fails closed.
 - [x] Added an API-level `signalChannels` contract so transforming one column
   cannot silently transform every numeric column.
-- [ ] Add reference-value/range normalization, polynomial order, detrending,
-  and explicit resampling before checking A2 complete.
+- [x] Added reference-value/range normalization with bound-error scaling,
+  editable Savitzky–Golay polynomial order, polynomial detrending (orders
+  0–5), optional X-range output, and the explicit spectral resampling gate.
 
 ### A3. Frequency and correlation operations
 
@@ -185,14 +188,14 @@ Implementation status (2026-10-07, ChatGPT/Codex):
 
 ### A4. Persistence and real-data acceptance
 
-- [ ] Record every operation as a replayable Pipeline Studio step.
-- [ ] Save/load recipes with column rebinding and unit compatibility checks.
-- [ ] Mark output stale when source values, row state, channels, or parameters
+- [x] Record every operation as a replayable Pipeline Studio step.
+- [x] Save/load recipes with column rebinding and unit compatibility checks.
+- [x] Mark output stale when source values, row state, channels, or parameters
   change; rerun deterministically.
-- [ ] Exercise at least: an XRD pattern (smoothing/derivative), a SIMS profile
+- [x] Exercise at least: an XRD pattern (smoothing/derivative), a SIMS profile
   (normalization/smoothing), a reflectivity trace (FFT/filter), and a
   magnetometry loop (closed/non-monotonic-axis refusal where appropriate).
-- [ ] Confirm raw data remains byte-identical through preview, cancel, commit,
+- [x] Confirm raw data remains byte-identical through preview, cancel, commit,
   undo, save/reopen, and rerun.
 
 Qualification log (2026-10-07, ChatGPT/Codex):
@@ -210,9 +213,17 @@ Qualification log (2026-10-07, ChatGPT/Codex):
 - [x] Automated round trips cover valid recipes, malformed/future recipes,
   workbook transfer, label rebinding/ambiguity, linked recalculation, and
   source-error-role removal.
-- [ ] Pipeline Studio step integration, unit-compatibility checks on rebind,
-  saved user-named recipes, and full GUI undo/save/reopen/rerun acceptance
-  remain before A4 is complete.
+- [x] Every correction and spectral operation now commits through one recorded
+  `signal` transform. Save/load JSON round trips, Pipeline Studio replay,
+  source-change refusal, unit-aware rebinding, named Recipe Library templates,
+  cancellation, undo, and project reopen are covered by focused tests.
+- [x] A local-corpus regression now exercises XRD smoothing with polynomial
+  order and X trim, SIMS reference-range normalization, two-channel
+  reflectometry reference normalization, and magnetometry detrending while
+  checking both in-memory arrays and source-file hashes remain unchanged.
+- [ ] Cross-worksheet correlation remains the one deliberately deferred A3
+  item; it requires Workstream D's multi-source dependency contract rather
+  than an unsafe second ad-hoc source edge.
 
 ## Workstream B — Durable analysis result artifacts
 
@@ -303,9 +314,9 @@ menu names.
 
 ## Recommended implementation sequence
 
-1. [ ] A1 + A2: Signal Processing workbench using existing processing code.
+1. [x] A1 + A2: Signal Processing workbench using existing processing code.
 2. [ ] A3: expose the existing spectral/filter/correlation engines.
-3. [ ] A4: pipeline replay, persistence, and real-corpus qualification.
+3. [x] A4: pipeline replay, persistence, and real-corpus qualification.
 4. [ ] B: introduce the durable result envelope and migrate signal results.
 5. [ ] C: build the Analysis Center on canonical commands and result inventory.
 6. [ ] D: unify selection and batch behavior, then migrate curve fit/peaks.
@@ -340,6 +351,7 @@ menu names.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-10-07 | Project team | Completed A1, A2, and A4 around the existing A3 spectral work: technique-workspace launch, row-scope disclosure, X-range controls, reference normalization, editable smoothing/detrend polynomial order, contextual Help, named Recipe Library templates, one replayable `signal` transform path, unit-aware rebinding, source-race refusal, cancellation, undo, and project persistence. Cross-worksheet correlation remains explicitly deferred to Workstream D. | Focused frontend workbench/pipeline/workspace checks passed (including record → save → reload → replay); focused correction API/calc checks passed (121). Real corpus passed on `La2NiO4_1.xrdml`, `sims_depth_profile.xlsx`, `S3_650Oe_From700mT.refl`, and `vsm_mh_perp_a.dat`, with source arrays and file hashes unchanged. |
 | 2026-10-07 | ChatGPT-Sol (Codex) | Completed the single-worksheet A3 spectral tranche: FFT/PSD/phase, four frequency filters, transfer-function and before/after previews, two-channel cross-correlation, linked plottable outputs, versioned recipe persistence/rebinding, and explicit irregular-grid resampling. Cross-worksheet correlation remains explicitly deferred to the multi-source dependency workstream. Two adversarial passes fixed filter detrending semantics, stale metadata/error-role leakage, malformed recipe/orphan transfer handling, duplicate-label rebinding, event-loop decoding, cutoff provenance, reciprocal-unit display, large-array handling, startup-bundle loading, oversized Welch provenance, unbounded transfer previews, zero-energy correlation, implicit-notch provenance, hidden-setting recipe corruption, stale previews, and async source-change/orphan races. | Focused frontend: 311 passed; focused backend/API/off-loop: 131 passed; Ruff, focused mypy, TypeScript, ESLint, architecture ratchets, production build, and 814.5 kB eager-bundle gate passed. Full frontend before the second focused hardening pass: 16,824 passed / 2 expected failures; three unrelated lazy-workspace timing tests failed under the 322-second full run and then passed 4/4 in isolation. Real corpus: XRD PSD, SIMS resampled correlation, reflectivity filtering/transfer diagnostic, and correct refusal of a non-monotonic magnetometry loop, with source bytes unchanged. |
 | 2026-10-06 | ChatGPT-Sol (Codex) | Completed the first A1/A2 tranche: channel-targeted correction API, unit/error semantics, general Signal Processing workbench, linked-output uncertainty retention, and Savitzky-Golay compatibility fix. The adversarial pass added strict channel indices, stale-preview and duplicate-commit guards, no-finite-output and invalid-area refusal, shared preview scaling, and deterministic workspace-busy tests. | Full backend: 8,139 passed / 101 skipped / 13 expected failures; focused post-review backend/API: 109 passed. Full frontend: 1,163 files, 16,806 passed / 2 expected failures. Ruff, mypy, TypeScript, ESLint, architecture ratchets, production build, and 834,392 B eager-bundle gate passed. Real corpus: `La2NiO4_1.xrdml` (6,474 rows, smoothing), `rohanisaac_raman.spc` (3,632 rows, derivative with reciprocal-axis units), and `YIG_Py_S7.raw` (15,385 rows, peak normalization), all finite with source arrays unchanged. |
 | 2026-10-06 | ChatGPT-Sol (Codex) | Created the GUI/backend capability audit and roadmap; selected General Signal Processing as the first coherent tranche. | Inspected current Analyze/Data commands, technique workflows, workshops, routes, calculation modules, derived worksheets, pipeline replay, and existing PRIMARY/JMP plans on `origin/main` after PR #550. |

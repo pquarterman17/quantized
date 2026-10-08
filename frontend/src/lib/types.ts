@@ -3,11 +3,13 @@
 // The error-role model lives in ./errorRoles (it owns the inference too);
 // imported type-only, so there is no runtime cycle with this contract file.
 import type { ErrorBinding } from "./errorRoles";
+import type { CorrectionParams } from "./correctionTypes";
 import type { DerivedSpec } from "./formulaTypes";
 import type { DatasetSource } from "./datasetSource";
 import type { PeakTable } from "./peakTable";
 import type { RecodeSpec } from "./recode";
 import type { FactorSpec } from "./metadataFactor";
+export type { CorrectionParams } from "./correctionTypes";
 /** DataStruct as serialized by `datastruct_payload` / `DataStruct.to_dict`. */
 export interface DataStruct {
   time: number[];
@@ -864,52 +866,6 @@ export interface ConstantEntry {
   value: number;
   unit: string;
 }
-/** Correction-pipeline params (camelCase wire keys; all optional).
- *  Mirrors `routes/corrections.CorrectionParams` / MATLAB `correctionParams`. */
-export interface CorrectionParams {
-  xOff?: number;
-  yOff?: number;
-  bgSlope?: number;
-  bgInt?: number;
-  bgPoly?: number[];
-  xTrimMin?: number;
-  xTrimMax?: number;
-  isNeutron?: boolean;
-  isMag?: boolean;
-  fieldUnit?: string;
-  momentUnit?: string;
-  sampleMass?: number;
-  sampleVolume?: number;
-  smoothEnabled?: boolean;
-  smoothWindow?: number;
-  smoothMethod?: string;
-  normMethod?: string;
-  derivativeMode?: string;
-  /** Signal-stage subset; absent preserves all channels. */
-  signalChannels?: number[];
-  /** GOTO #2 anchor-point baseline subtraction: user-picked (x, y) anchor
-   *  pairs + the interpolation method (linear/pchip/spline). Present with
-   *  >=2 anchors = subtracted in pipeline step 3 (beats bgPoly/slope). */
-  bgAnchors?: [number, number][];
-  bgAnchorMethod?: string;
-  /** GOTO #7b XRR/NR beam-footprint correction: beam width + sample length
-   *  (any one shared length unit — only w/L enters the geometry) and whether
-   *  x is the detector angle 2θ (then θ = x/2). Both > 0 = enabled
-   *  (pipeline step 2b; `dq` channels are skipped). */
-  footprintW?: number;
-  footprintL?: number;
-  footprintTwoTheta?: boolean;
-  /** MAIN_PLAN #37 arbitrary rescaling — the literal MULTIPLIER for x / y.
-   *  The Corrections card offers ×/÷ but stores 1/v for a division, so this is
-   *  the single stored representation (see `lib/rescale.ts`). Applied FIRST in
-   *  the backend pipeline (step 0), so every other correction on this object —
-   *  trims, offsets, bg slope/intercept, anchors — is expressed in the SCALED
-   *  units the user sees on the plot. Absent or 1 = no-op; the backend rejects
-   *  zero/non-finite with a 422. */
-  xScale?: number;
-  yScale?: number;
-}
-
 // ── Import wizard (ORIGIN_GAP_PLAN #40) ─────────────────────────────────────
 // Definitions live in lib/importTypes.ts (extracted, P1.6 PR 1 — see that
 // file's header); re-exported here so existing import paths keep working.

@@ -3,9 +3,9 @@ import { recomputeFromBaseOrEmpty } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import {
-  rebindSpectralRecipe,
   type SpectralAnalysisRecipe,
 } from "../lib/spectralWorkbench";
+import { rebindLinkedSpectralRecipe } from "../lib/signalTransform";
 import type { Dataset } from "../lib/types";
 import { nextDatasetId } from "./idSeq";
 import type { AppState } from "./useApp";
@@ -19,7 +19,7 @@ export async function recomputeSpectralWorksheet(
   sheet: Dataset,
   recipeInput: SpectralAnalysisRecipe,
 ): Promise<{ sheet: Dataset; shift: null }> {
-  const recipe = rebindSpectralRecipe(recipeInput, source.data.labels);
+  const recipe = rebindLinkedSpectralRecipe(recipeInput, source.data);
   const analyzed = await runSpectralWorkbench(source.data, recipe);
   const { data, formulaErrors } = recomputeFromBaseOrEmpty(analyzed, sheet.formulas);
   return {
@@ -58,7 +58,7 @@ export async function createSpectralWorksheet(
     return null;
   }
   try {
-    const rebound = rebindSpectralRecipe(recipe, source.data.labels);
+    const rebound = rebindLinkedSpectralRecipe(recipe, source.data);
     const data = await runSpectralWorkbench(source.data, rebound);
     const currentSource = get().datasets.find((dataset) => dataset.id === sourceId);
     if (!currentSource || currentSource.pending || currentSource.data !== source.data) {

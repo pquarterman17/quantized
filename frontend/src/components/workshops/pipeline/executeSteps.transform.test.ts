@@ -18,6 +18,10 @@ vi.mock("../../../store/toasts", () => ({ toast: vi.fn() }));
 vi.mock("../../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api")>()),
   fitModel: vi.fn(async () => ({ params: [1, 0], R2: 1 })),
+  applyCorrections: vi.fn(async ({ dataset, params }: { dataset: DataStruct; params: Record<string, unknown> }) => ({
+    ...structuredClone(dataset),
+    metadata: { ...dataset.metadata, replayed_signal: params },
+  })),
 }));
 // Dataset math is a backend call; a deterministic stand-in (A - B on A's grid,
 // B looked up by x) keeps the replay comparison meaningful offline.
@@ -138,6 +142,16 @@ const cases: [string, TransformParams][] = [
   ["resample (points)", { op: "resample", mode: "n_points", nPoints: 5, method: "linear", outOfRange: "nan", sortUnsorted: false }],
   ["resample (range)", { op: "resample", mode: "range", start: 0, stop: 6, step: 0.5, method: "makima", outOfRange: "clip", sortUnsorted: false }],
   ["resample (match)", { op: "resample", mode: "match", with: { id: "oth", name: "oth.dat" }, method: "pchip", outOfRange: "clip", sortUnsorted: true, acceptedXUnits: ["s", "Oe"] }],
+  ["signal processing", {
+    op: "signal",
+    recipe: {
+      kind: "signal-correction",
+      version: 1,
+      operation: "Detrend",
+      channels: [{ index: 2, label: "v", unit: "emu" }],
+      params: { signalChannels: [2], detrendOrder: 1 },
+    },
+  }],
 ];
 
 describe("transform steps replay to the same output", () => {

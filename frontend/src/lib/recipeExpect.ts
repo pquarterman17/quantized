@@ -153,6 +153,13 @@ export function inputColumnRefs(
         case "unstack": add([p.key, p.category, p.value]); break;
         case "join": add(p.leftKey); break; // a text key is a sidecar name, not a channel
         case "split": add(p.col); break;
+        case "signal": {
+          const recipe = p.recipe as { channels?: unknown } | undefined;
+          if (Array.isArray(recipe?.channels)) {
+            add(recipe.channels.map((channel) => (channel as { index?: unknown } | null)?.index));
+          }
+          break;
+        }
         // resample reads every channel but needs none of them.
         case "sims":
         case "simscompare":

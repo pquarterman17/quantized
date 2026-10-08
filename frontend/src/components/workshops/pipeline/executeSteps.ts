@@ -222,7 +222,7 @@ export async function executeSteps(
         case "transform": {
           // Lazy: only a pipeline that recorded a transform pays for it.
           const { replayTransform } = await import("../../../lib/transformReplay");
-          const out = await replayTransform(store, step.params, target, produced);
+          const out = await replayTransform(store, step.params, target, produced, signal);
           target = out.id;
           // Finding #3: EVERY dataset any step created, cumulative (a
           // split's children, not just the one `target` continues on) — an

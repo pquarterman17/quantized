@@ -108,6 +108,12 @@ function problem(
       : columnCount;
     const channelOnly = [step.params.col];
     if (Array.isArray(step.params.channels)) channelOnly.push(...step.params.channels);
+    const signalRecipe = step.params.op === "signal"
+      ? step.params.recipe as { channels?: unknown } | undefined
+      : undefined;
+    if (Array.isArray(signalRecipe?.channels)) {
+      channelOnly.push(...signalRecipe.channels.map((channel) => (channel as { index?: unknown } | null)?.index));
+    }
     const withX = [step.params.key, step.params.category, step.params.value, step.params.leftKey];
     const stale = [...channelOnly, ...withX].find((value, index) => {
       if (typeof value !== "number") return false;

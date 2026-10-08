@@ -6469,6 +6469,8 @@ export interface components {
             bgSlope?: number | null;
             /** Derivativemode */
             derivativeMode?: string | null;
+            /** Detrendorder */
+            detrendOrder?: number | null;
             /** Fieldunit */
             fieldUnit?: string | null;
             /** Footprintl */
@@ -6485,6 +6487,12 @@ export interface components {
             momentUnit?: string | null;
             /** Normmethod */
             normMethod?: string | null;
+            /** Normreferencemax */
+            normReferenceMax?: number | null;
+            /** Normreferencemin */
+            normReferenceMin?: number | null;
+            /** Normreferencevalue */
+            normReferenceValue?: number | null;
             /** Samplemass */
             sampleMass?: number | null;
             /** Samplevolume */
@@ -6495,6 +6503,8 @@ export interface components {
             smoothEnabled?: boolean | null;
             /** Smoothmethod */
             smoothMethod?: string | null;
+            /** Smoothpolyorder */
+            smoothPolyOrder?: number | null;
             /** Smoothwindow */
             smoothWindow?: number | null;
             /** Xoff */

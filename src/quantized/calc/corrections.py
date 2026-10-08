@@ -33,6 +33,7 @@ from .processing import (
     normalize,
     smooth_data,
 )
+from .signal_corrections import detrend_channels, reference_divisors
 from .units import convert_units
 
 __all__ = ["apply_corrections"]
@@ -370,12 +371,34 @@ def apply_corrections(
         # using the canonical processing-layer spelling internally.
         if method == "savgol":
             method = "savitzky-golay"
+        poly_order = params.get("smoothPolyOrder", 2)
+        if isinstance(poly_order, bool) or not isinstance(poly_order, int):
+            raise ValueError("smoothPolyOrder must be a non-negative integer")
+        if poly_order < 0:
+            raise ValueError("smoothPolyOrder must be a non-negative integer")
         smoothed = smooth_data(
             values[:, signal_numeric],
             method=method,
             window=win,
+            poly_order=poly_order,
         )
         values[:, signal_numeric] = smoothed
+
+    # 6b. Detrending. This is an analysis transform, not the correction
+    # pipeline's physical background model: fit only the selected signal and
+    # subtract its constant/linear/polynomial trend. Bound uncertainty is not
+    # propagated through the fitted trend, so refuse rather than implying it
+    # remained exact.
+    detrend_order = params.get("detrendOrder")
+    if detrend_order is not None:
+        detrend_channels(
+            time,
+            values,
+            signal_numeric,
+            labels,
+            detrend_order,
+            has_y_errors=has_y_errors,
+        )
 
     # 7. Normalization.
     norm = params.get("normMethod", "None")
@@ -411,6 +434,20 @@ def apply_corrections(
             values[:, k] = values[:, k] / area
             scale_errors("y", 1.0 / area, k)
             set_signal_unit(k, normalized_unit)
+    elif norm == "Reference":
+        divisors = reference_divisors(
+            time,
+            values,
+            signal_numeric,
+            labels,
+            explicit=params.get("normReferenceValue"),
+            lower=params.get("normReferenceMin"),
+            upper=params.get("normReferenceMax"),
+        )
+        for k, divisor in divisors.items():
+            values[:, k] = values[:, k] / divisor
+            scale_errors("y", 1.0 / divisor, k)
+            set_signal_unit(k, "")
 
     # 8. Derivative / integral transforms.
     deriv = params.get("derivativeMode", "None")
