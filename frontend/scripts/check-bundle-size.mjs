@@ -1834,8 +1834,17 @@ import { fileURLToPath } from "node:url";
  *   + encodings' facet/export wire                     834,555  (-1,092)
  *   + book-switcher helpers, fit-step decoder          833,639  (-916)
  * Net: -7,366 B, leaving 1,000 B of headroom.
+ *
+ * 2026-10-08 (bundle diet slice 24, `plans/BUNDLE_HEADROOM.md`) - pin
+ * LOWERED 834,639 -> 834,257 (`measured + 2,000`). Nine halves of eager
+ * modules that only lazy modules call moved out, each imported by its own
+ * path; no `import()` was added. Exact bytes, `npm ci`-fresh, `.vite` wiped:
+ * `cd6b941b` (main after PR #554) measured 834,605; merged with this slice,
+ * 832,257 (-2,348 B). The 2,000 B of headroom is BANKED on purpose for the
+ * queued Dependabot #548 (vite 8.3.2, +165 B preload helper) and the
+ * pending plot batch (~+223 B); do not spend it on anything else.
  */
-const EAGER_JS_BUDGET = 834_639;
+const EAGER_JS_BUDGET = 834_257;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to
