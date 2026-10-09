@@ -21,6 +21,8 @@ import {
   exportAnalysisFitTable,
   prepareAnalysisResultPlot,
   recalculateFitAnalysisResult,
+  renameAnalysisResult,
+  resolveAnalysisResultPlot,
 } from "./analysisResultActions";
 import { useApp } from "./useApp";
 
@@ -86,6 +88,14 @@ describe("curve-fit analysis result actions", () => {
     expect(useApp.getState().status).toContain("saved fit is missing");
   });
 
+  it("still resolves the recorded source curve for figure building after the fit is removed", async () => {
+    useApp.setState({ datasets: [{ ...source, fitSpec: undefined }] });
+    expect(await resolveAnalysisResultPlot("analysis-fit-source", 0, true)).toMatchObject({
+      dataset: { id: "source" }, channels: [0], xChannel: null,
+    });
+    expect(mocks.fitBands).not.toHaveBeenCalled();
+  });
+
   it("recalculates only this saved fit, clears staleness, and is undoable", async () => {
     useApp.setState({ fitOverlay: { datasetId: "source", y: [9, 9, 9] } });
     expect(await recalculateFitAnalysisResult("analysis-fit-source")).toBe(true);
@@ -98,6 +108,14 @@ describe("curve-fit analysis result actions", () => {
     useApp.getState().undo();
     expect(useApp.getState().datasets[0].fitSpec?.recomputedAt).toBeUndefined();
     expect(useApp.getState().fitOverlay).toBeNull();
+  });
+
+  it("keeps a visible fit overlay through an unrelated result rename undo", () => {
+    const overlay = { datasetId: "source", y: [1, 3, 5] };
+    useApp.setState({ fitOverlay: overlay });
+    renameAnalysisResult("analysis-fit-source", "Renamed fit");
+    useApp.getState().undo();
+    expect(useApp.getState().fitOverlay).toBe(overlay);
   });
 
   it("keeps the old fit stale when the backend omits finite parameters", async () => {

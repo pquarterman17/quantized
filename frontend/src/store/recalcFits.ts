@@ -54,13 +54,10 @@ export async function recomputeStaleFits(set: SliceSet, get: SliceGet): Promise<
       // Validate the complete result before updating even the transient
       // overlay. A malformed response must leave the old fit visibly stale,
       // not show a new curve beside old parameters and provenance.
-      const { recomputedFitPatch, stampRecompute } = await import("../lib/fitRecompute");
-      const updatedSpec = stampRecompute(spec, r);
-      const current = get().datasets.find((item) => item.id === id);
-      if (current !== d) throw new Error("source or fit changed while recalculating");
+      const { commitRecomputedFit } = await import("../lib/fitRecompute");
       // #30: stamp the re-run so the workspace distinguishes a HISTORICAL
       // result from one the recalc graph regenerated over changed data.
-      set((s) => recomputedFitPatch(s, d, spec, updatedSpec, pairs, r.yFit));
+      commitRecomputedFit(set, get, d, spec, pairs, r);
       refreshFitRefsLater(id, get); // P2.5: fit() columns follow the refit
     } catch (e) {
       get().setStatus(

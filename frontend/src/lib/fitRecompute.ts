@@ -50,6 +50,24 @@ export function recomputedFitPatch(
   };
 }
 
+type StoreSet = (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void;
+
+/** Validate and commit the async response after this module is loaded. */
+export function commitRecomputedFit(
+  set: StoreSet,
+  get: () => AppState,
+  dataset: Dataset,
+  spec: FitSpec,
+  pairs: FinitePairs,
+  result: CalcResult,
+): void {
+  const updatedSpec = stampRecompute(spec, result);
+  if (get().datasets.find((item) => item.id === dataset.id) !== dataset) {
+    throw new Error("source or fit changed while recalculating");
+  }
+  set((state) => recomputedFitPatch(state, dataset, spec, updatedSpec, pairs, result.yFit));
+}
+
 /** Replace a saved fit's result snapshot and mark when it was regenerated. */
 export function stampRecompute(
   spec: FitSpec,

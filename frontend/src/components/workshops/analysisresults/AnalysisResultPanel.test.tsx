@@ -282,6 +282,21 @@ describe("AnalysisResultPanel", () => {
     expect(screen.getByText("The source data changed after this fit. Recalculate or re-fit before using these values.")).toBeInTheDocument();
   });
 
+  it("does not judge a lazy Origin preview stale before its worksheet loads", () => {
+    const fitted = {
+      ...source, fitSpec: { model: "Linear", xKey: null, yKey: 0, params: [2, 1] },
+    } satisfies Dataset;
+    const fitResult = fitAnalysisResult(fitted, fitted.fitSpec);
+    const pending: Dataset = {
+      ...fitted,
+      pending: { kind: "path", path: "/source.opju", bookId: "Book1", rows: 2, cols: 1 },
+      data: { ...fitted.data, values: [[99], [100]] },
+    };
+    useApp.setState({ datasets: [pending], analysisResults: [fitResult], openAnalysisResultId: fitResult.id, staleFits: [] });
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Current")).toBeInTheDocument();
+  });
+
   it("keeps source-figure editing available but disables fitted output when the fit is missing", () => {
     const fitted = { ...source, fitSpec: { model: "Linear", xKey: null, yKey: 0, params: [2, 1] } } satisfies Dataset;
     const fitResult = fitAnalysisResult(fitted, fitted.fitSpec);

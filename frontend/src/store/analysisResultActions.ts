@@ -13,16 +13,19 @@ import { csvBlob } from "../lib/csvCell";
 import { saveBlob } from "../lib/download";
 import { stemFromName } from "../lib/exportActive";
 import { fullPlottedX } from "../lib/fitselectionActions";
-import { liveFitPlotBinding } from "../lib/fitAnalysisResultLive";
 import { boundsFromWire } from "../lib/fitBoundsWire";
 import { fitOverlayValues, stampRecompute } from "../lib/fitRecompute";
 import { fitDataForSpec } from "../lib/fitselection";
 import type { Dataset } from "../lib/types";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
+import { resolveAnalysisResultPlot, type PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
 import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
 import { commitDerivedRecompute } from "./recalcDatasets";
 import { publishFitAnalysisResult } from "./publishFitAnalysisResult";
 import { useApp } from "./useApp";
+
+export { resolveAnalysisResultPlot } from "./analysisResultPlotResolve";
+export type { PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
 
 export function registerAnalysisResult(result: AnalysisResult, open = true): void {
   const current = useApp.getState().analysisResults;
@@ -154,75 +157,6 @@ export function freezeAnalysisResult(id: string): string | null {
   const frozenId = state.freezeCopy(output.id);
   if (frozenId) useApp.getState().setStatus(`froze ${result.name} as independent data`);
   return frozenId;
-}
-
-/** Resolve and focus one recorded plot binding. Returns null without changing
- * the active plot when the saved binding is missing or no longer valid. */
-export interface PreparedAnalysisResultPlot {
-  dataset: Dataset;
-  channels: number[];
-  xChannel?: number | null;
-}
-
-/** Resolve and validate a binding without changing the current workspace.
- * Builder callers use this read-only half so Cancel really is a no-op. */
-export async function resolveAnalysisResultPlot(id: string, bindingIndex: number): Promise<PreparedAnalysisResultPlot | null> {
-  const initial = useApp.getState();
-  const result = initial.analysisResults.find((item) => item.id === id);
-  const fitDatasetId = result?.settingsRef?.field === "fitSpec" && bindingIndex === 0
-    ? result.settingsRef.datasetId
-    : null;
-  const binding = result?.plotBindings?.[bindingIndex];
-  const datasetId = fitDatasetId ?? binding?.datasetId;
-  if (!result || !datasetId) {
-    initial.setStatus("can't open result figure: the saved plot binding is unavailable");
-    return null;
-  }
-  try {
-    await initial.resolveDataset(datasetId);
-  } catch (error) {
-    useApp.getState().setStatus(`can't open result figure: ${error instanceof Error ? error.message : "worksheet loading failed"}`);
-    return null;
-  }
-  const state = useApp.getState();
-  // Re-read after lazy loading so a stale click never
-  // opens data the result no longer owns.
-  const currentResult = state.analysisResults.find((item) => item.id === id);
-  const fitDataset = fitDatasetId ? state.datasets.find((item) => item.id === fitDatasetId) : null;
-  if (fitDatasetId) {
-    const liveBinding = currentResult && fitDataset ? liveFitPlotBinding(currentResult, fitDataset) : null;
-    if (!liveBinding || currentResult?.settingsRef?.datasetId !== fitDatasetId) {
-      state.setStatus(`can't open result figure: ${fitDataset && !fitDataset.fitSpec
-        ? "the saved fit is missing"
-        : fitDataset ? "its live fit channels are unavailable" : "its worksheet is missing"}`);
-      return null;
-    }
-    return { dataset: fitDataset!, channels: liveBinding.channels, xChannel: liveBinding.xChannel };
-  }
-  if (!binding) {
-    state.setStatus("can't open result figure: the saved plot binding is unavailable");
-    return null;
-  }
-  const currentBinding = currentResult?.plotBindings?.[bindingIndex];
-  if (!currentBinding || currentBinding.datasetId !== binding.datasetId ||
-      currentBinding.xChannel !== binding.xChannel ||
-      currentBinding.channels.length !== binding.channels.length ||
-      currentBinding.channels.some((channel, index) => channel !== binding.channels[index])) {
-    state.setStatus("can't open result figure: the saved plot binding changed while loading");
-    return null;
-  }
-  const dataset = state.datasets.find((item) => item.id === currentBinding.datasetId);
-  const channels = dataset
-    ? [...new Set(currentBinding.channels)].filter((channel) => Number.isInteger(channel) && channel >= 0 && channel < dataset.data.labels.length)
-    : [];
-  const xChannel = currentBinding.xChannel;
-  const xValid = xChannel === undefined || xChannel === null ||
-    (Number.isInteger(xChannel) && xChannel >= 0 && xChannel < (dataset?.data.labels.length ?? 0));
-  if (!dataset || channels.length === 0 || !xValid) {
-    state.setStatus(`can't open result figure: ${dataset ? "its plotted channels are unavailable" : "its worksheet is missing"}`);
-    return null;
-  }
-  return { dataset, channels, ...(xChannel !== undefined ? { xChannel } : {}) };
 }
 
 export async function prepareAnalysisResultPlot(id: string, bindingIndex: number): Promise<PreparedAnalysisResultPlot | null> {

@@ -118,7 +118,7 @@ export default function AnalysisResultPanel() {
   const isFit = result?.settingsRef?.field === "fitSpec";
   const peakTable = isPeak ? source?.peakTable ?? null : null;
   const fitSpec = isFit ? source?.fitSpec ?? null : null;
-  const fitFingerprintStale = !!(isFit && source && result?.sourceFingerprint &&
+  const fitFingerprintStale = !!(isFit && source && !source.pending && result?.sourceFingerprint &&
     result.sourceFingerprint !== dataFingerprint(source.data));
   const diagnostics = useMemo(() => {
     if (!result) return [];
@@ -234,7 +234,7 @@ export default function AnalysisResultPanel() {
     setBusy("figure");
     try {
       const prepared = await loadActions()
-        .then((m) => m.resolveAnalysisResultPlot(result.id, index), () => { onLoadFailure(); return null; });
+        .then((m) => m.resolveAnalysisResultPlot(result.id, index, true), () => { onLoadFailure(); return null; });
       if (prepared && openQuickFigureBuilder(prepared.dataset.id, mappingForResult(prepared.dataset, prepared.channels, prepared.xChannel))) close();
     } finally { setBusy(null); }
   };
