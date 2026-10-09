@@ -273,8 +273,15 @@ Update (2026-10-09):
   source-figure launch, and Send to report. Recalculation replays recorded
   channels, weighting, starting values, bounds, fixed parameters, and row-gap
   policy as one undoable action.
-- [ ] Statistics and reflectivity-fit history remain to migrate. These are the
-  remaining families covered by the incremental migration checkbox above.
+- [x] Migrated reflectivity-fit history as one Library result per saved fit.
+  Results keep the existing `Dataset.reflFits` record as their only scientific
+  authority, expose live overview/parameter/provenance views, diagnose changed
+  or missing channels, and reopen the exact historical fit in the workbench.
+  Publication and undo are atomic; old projects migrate once; deleted catalog
+  entries stay deleted; bounded-history eviction removes only the matching
+  result; Append Project remaps both envelopes and raw fit-record channels.
+- [ ] Statistics is the remaining family covered by the incremental migration
+  checkbox above.
 - [x] Added a lazy result workspace with Overview, Tables, Figures, Diagnostics,
   Provenance, and Notes views. The first 100 output rows are inspectable
   without creating an unbounded DOM table; the complete worksheet remains
@@ -287,9 +294,10 @@ Update (2026-10-09):
   safe full-table CSV export, linked-output Duplicate, and single-output
   Freeze to an independent worksheet. Lazy-load failure and mid-load result
   changes fail closed; repeated-click guards prevent duplicate side effects.
-- [ ] Still required for the common result workspace: producer-aware Edit and
-  rerun, then adapters for multi-output results where Freeze should offer an
-  explicit output choice. Recalculate/Rerun as new already cover Signal.
+- [ ] Still required for the common result workspace: adapters for multi-output
+  results where Freeze should offer an explicit output choice. Producer-aware
+  Edit/Re-fit is present for peaks, curve fits, and reflectivity fits;
+  Recalculate/Rerun as new cover Signal and exact curve-fit replay.
 - [x] New signal operations create a result in the same undo gesture as their
   linked worksheet. Legacy `.dwk` files with linked signal worksheets migrate
   deterministic records exactly once; an explicitly saved empty result list
@@ -298,9 +306,9 @@ Update (2026-10-09):
 - [x] Result edits participate in undo/redo, dirty-state detection, debounced
   autosave, explicit save/reopen, Remove All/open-replacement protection, and
   the Library's exhaustive icon/accessibility contracts.
-- [ ] Curve fits, statistics, peak tables, and reflectivity-fit history still
-  need adapters into this envelope without replacing their existing durable
-  authorities.
+- [ ] Statistics still needs an adapter into this envelope without replacing
+  its existing durable authority. Signal processing, peak tables, curve fits,
+  and reflectivity-fit history are migrated.
 
 ## Workstream C — Analysis Center and discoverability
 
@@ -375,9 +383,9 @@ menu names.
 2. [x] A3: expose the single-worksheet spectral/filter/correlation engines.
    Cross-worksheet correlation remains intentionally assigned to Workstream D.
 3. [x] A4: pipeline replay, persistence, and real-corpus qualification.
-4. [ ] B: migrate statistics and reflectivity-fit history. The envelope,
-   Library integration, common actions, signal migration, fitted peaks, and
-   curve-fit results are complete.
+4. [ ] B: migrate statistics. The envelope, Library integration, common
+   actions, signal migration, fitted peaks, curve-fit results, and
+   reflectivity-fit history are complete.
 5. [ ] C: build the Analysis Center on canonical commands and result inventory.
 6. [ ] D: unify selection and batch behavior, then migrate curve fit/peaks.
 7. [ ] E: migrate statistical tools into the result workspace.
@@ -411,6 +419,7 @@ menu names.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-10-09 | ChatGPT-Sol (Codex) | Added the Workstream B reflectivity-history adapter on top of the existing `Dataset.reflFits` authority: atomic result publication/undo, one-time project migration with deletion tombstones, current/out-of-date/missing diagnostics from live channel digests, parameter/posterior tables, provenance, and exact historical-fit reopening. The adversarial pass fixed independent-project record-id collisions, Append Project's nested channel-id remap, bounded-history catalog retirement, partial-restoration host selection, already-open workshop mode switching, misleading Signal-result copy, malformed-history catalog entries, and an initial startup-budget regression; publication/UI remain lazy while the irreducible schema/remap path is recorded under the bundle ratchet's measured-raise rule. | Focused persistence, merge, store, live-record, hook, UI, freshness, and architecture suites passed 425/425, followed by 213/213 after the final corruption guard. TypeScript and ESLint passed. Production build/preload verification passed at 834,747 B eager, 1,024 B below the documented 835,771 B pin. Full frontend: 17,034 passed plus 2 expected failures; the only failure was the documented pre-existing Windows flat-autoscale subnormal-float fixture mismatch in untouched code. CI remains the merge gate. |
 | 2026-10-09 | ChatGPT-Sol (Codex) | Added the Workstream B curve-fit adapter on top of the existing `Dataset.fitSpec` authority: producer publication from the full Curve Fit and Quick Fit paths, one-time workspace migration, stale/missing lifecycle, overview/provenance/diagnostics, parameter and uncertainty table with CSV export, Edit / Re-fit, exact one-result recalculation, and fitted-curve regeneration for normal plots and reports. The review pass removed stale-summary carryover when a backend omits a diagnostic, kept startup-only code out of the eager bundle, preserved renamed results and notes across re-fit, and refused malformed refits or legacy recipes without exact channel bindings instead of guessing. | Focused scientific, persistence, producer, UI, workspace, and architecture suites passed 129/129 after review fixes; the final recomputation/lazy-boundary gate passed 116/116. ESLint, TypeScript, preload verification, the production build, and the unchanged 814.7 kB startup limit passed (814.7 kB eager). The full frontend run passed 17,008 tests plus 2 expected failures; the only remaining failure was the documented pre-existing Windows flat-autoscale subnormal-float fixture mismatch in untouched code. CI remains the merge gate. |
 | 2026-10-08 | Project team | Finished the common Workstream B result-output workspace: recorded-series figure previews, exact-binding Open plot and editable-figure launch, Send to report, bounded multi-table preview, safe full-table CSV export, linked-output Duplicate, and Freeze to independent data. Added transient seeded mappings so Build figure does not silently re-add unrelated worksheet channels, plus repeated-click, lazy-load, mid-load mutation, missing-reference, and project-reload guards. | TypeScript, ESLint, production build, architecture ratchets, and bundle gate passed (813.6 kB eager against 814.7 kB budget). Focused result/builder/hydration checks passed 128/128. Full frontend reached 16,955 passed plus 2 expected failures; two unrelated load-sensitive failures passed immediately in isolation, while the pre-existing Windows flat-autoscale fixture has a subnormal-float serialization mismatch in an untouched file. CI remains the merge gate. |
 | 2026-10-08 | Paige | Implemented the first Workstream B vertical slice: durable versioned result envelopes, canonical Library placement, autosave/save/reopen and legacy signal-result migration, generic future/missing-reference diagnostics, and a lazy Signal result workspace with inspect/recalculate/rerun/rename/notes/delete lifecycle. Scientific settings and arrays remain in the linked worksheet authority rather than being duplicated. | TypeScript, ESLint, 56 architecture ratchets, production build, and the eager-bundle gate passed under the unchanged 834,639 B pin (834,526 B measured after the review fixes). A full frontend run passed 16,876 tests plus 2 expected failures and exposed two new-kind completeness omissions (autosave and icon render-site coverage); both were fixed and their focused suites then passed 64/64. Focused result/store/workspace/Library/component regressions also passed. CI remains the merge gate. |

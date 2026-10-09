@@ -96,6 +96,8 @@ export interface WorkshopFlagsSlice {
   // A pending SLD layer seeded by the calculators SLD tab; consumed once by the
   // reflectivity workshop on open, then cleared (cross-panel hook).
   reflectivitySeed: ReflectivitySeed | null;
+  /** Saved fit requested by an Analysis Result; consumed once by fit history. */
+  reflectivityFitRecordId: string | null;
   baselineOpen: boolean; calculatorsOpen: boolean;
   magToolsOpen: boolean;
   rsmOpen: boolean; digitizerOpen: boolean;
@@ -142,6 +144,8 @@ export interface WorkshopFlagsSlice {
   // Send an SLD to the reflectivity workshop as a new layer + open it (SLD→refl).
   seedReflectivityLayer: (seed: ReflectivitySeed) => void;
   clearReflectivitySeed: () => void;
+  openReflectivityFitRecord: (recordId: string) => void;
+  clearReflectivityFitRecord: () => void;
   setBaselineOpen: (open: boolean) => void;
   setCalculatorsOpen: (open: boolean) => void;
   setMagToolsOpen: (open: boolean) => void;
@@ -188,6 +192,7 @@ export function createWorkshopFlagsSlice(set: SliceSet): WorkshopFlagsSlice {
     peaksOpen: false,
     reflectivityOpen: false,
     reflectivitySeed: null,
+    reflectivityFitRecordId: null,
     baselineOpen: false,
     calculatorsOpen: false,
     magToolsOpen: false,
@@ -232,6 +237,8 @@ export function createWorkshopFlagsSlice(set: SliceSet): WorkshopFlagsSlice {
     setReflectivityOpen: (reflectivityOpen) => set({ reflectivityOpen }),
     seedReflectivityLayer: (reflectivitySeed) => set({ reflectivitySeed, reflectivityOpen: true }),
     clearReflectivitySeed: () => set({ reflectivitySeed: null }),
+    openReflectivityFitRecord: (reflectivityFitRecordId) => set({ reflectivityFitRecordId, reflectivityOpen: true }),
+    clearReflectivityFitRecord: () => set({ reflectivityFitRecordId: null }),
     setBaselineOpen: (baselineOpen) => set({ baselineOpen }),
     setCalculatorsOpen: (calculatorsOpen) => set({ calculatorsOpen }),
     setMagToolsOpen: (magToolsOpen) => set({ magToolsOpen }),

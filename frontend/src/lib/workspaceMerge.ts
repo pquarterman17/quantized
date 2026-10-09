@@ -155,6 +155,27 @@ function remapAnalysisResult(
   return mapped;
 }
 
+/** Re-key the dataset references inside the JSON-safe reflectivity records.
+ * Unknown/malformed entries pass through for the established fail-soft reader. */
+function remapReflectivityHistory(
+  records: readonly unknown[],
+  idMap: ReadonlyMap<string, string>,
+): unknown[] {
+  return records.map((stored) => {
+    const record = stored as Record<string, unknown> | null;
+    const request = record?.request as Record<string, unknown> | null;
+    if (!Array.isArray(request?.channels)) return stored;
+    const channels = request.channels.map((value) => {
+      const channel = value as Record<string, unknown> | null;
+      const datasetId = channel && typeof channel.datasetId === "string"
+        ? idMap.get(channel.datasetId)
+        : undefined;
+      return datasetId ? { ...channel, datasetId } : value;
+    });
+    return { ...record, request: { ...request, channels } };
+  });
+}
+
 /** Merge `incoming`'s datasets AND workbooks into `current` (Origin's
  *  "Append Project"). Pure: `genId`/`genWorkbookId` supply fresh ids the
  *  exact same way `foldertree.migrateGroupsToFolders`'s `genId` parameter
@@ -257,6 +278,7 @@ export function mergeWorkspace(
     usedNames.add(name);
 
     const next: Dataset = { ...d, id, name, folderId: undefined, workbookId: undefined };
+    if (Array.isArray(d.reflFits)) next.reflFits = remapReflectivityHistory(d.reflFits, idMap);
     if (d.folderId !== undefined) droppedFolderRefs++;
     if (d.workbookId !== undefined) {
       const newWbId = workbookIdMap.get(d.workbookId);

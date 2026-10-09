@@ -78,6 +78,7 @@ beforeEach(() => {
     reflectivitySeed: null,
     history: [],
     future: [],
+    analysisResults: [],
     resolveDataset: realResolve,
   });
 });
@@ -92,10 +93,12 @@ describe("the live fit and the stored history stay in step", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run fit" }));
     await waitFor(() => expect(screen.getByTestId("refl-fit-objective").textContent).toBe("1.02"));
     expect(recordsFor(useApp.getState().datasets[0]).map((r) => r.seq)).toEqual([2, 1]);
+    expect(useApp.getState().analysisResults).toHaveLength(2);
     expect(useApp.getState().fitOverlay).not.toBeNull();
 
     act(() => useApp.getState().undo());
     expect(recordsFor(useApp.getState().datasets[0]).map((r) => r.seq)).toEqual([1]);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
     // No live result is left that could be taken for #1 or name a gone #2:
     // no live actions (the live-only "Open log-Y plot"), no overlay, and the
     // saved #1 is on show as #1.

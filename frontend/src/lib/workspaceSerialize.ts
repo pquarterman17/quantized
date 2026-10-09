@@ -130,7 +130,7 @@ interface WorkspaceDoc {
   smartFolders: SmartFolder[];
   reports: ReportEntry[];
   analysisResults: AnalysisResult[];
-  analysisResultCatalogVersion: 3;
+  analysisResultCatalogVersion: 4;
   pipeline: PipelineStep[];
   recalcMode: RecalcMode;
   figureDocs: FigureDoc[];
@@ -208,7 +208,7 @@ export function serializeWorkspace(
     analysisResults: stampAnalysisResults(
       ws.analysisResults ?? [], ws.datasets, ws.staleDatasets ?? [], ws.staleFits ?? [],
     ),
-    analysisResultCatalogVersion: 3,
+    analysisResultCatalogVersion: 4,
     pipeline: ws.macroSteps ?? [],
     recalcMode: ws.recalcMode ?? "auto",
     figureDocs: ws.figureDocs ?? [],

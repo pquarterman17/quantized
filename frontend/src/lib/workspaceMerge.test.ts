@@ -127,6 +127,32 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
     })]);
   });
 
+  it("keeps reflectivity result envelopes and their stored record bindings aligned", () => {
+    const source = makeDataset("source", "fit source");
+    source.reflFits = [{
+      version: 1, id: "rfit-1",
+      request: { channels: [{ datasetId: "source", datasetName: "fit source" }] },
+    }];
+    const result: AnalysisResult = {
+      version: 1, id: "analysis-refl-fit-rfit-1", name: "Fit",
+      producer: { id: "reflectivity-fit", label: "Reflectivity Fit", version: 1 },
+      sources: [{ datasetId: "source", role: "input" }], outputs: [],
+      settingsRef: { datasetId: "source", field: "reflFits", recordId: "rfit-1" },
+      warnings: [], createdAt: "2026-10-09T00:00:00Z",
+    };
+    const merged = mergeWorkspace(
+      [makeDataset("source", "existing")], asLoaded([source], [], [result]), genId,
+      noCurrentWorkbookIds, genWorkbookId,
+    );
+    expect(merged.analysisResults[0]).toMatchObject({
+      sources: [{ datasetId: "merged-1" }],
+      settingsRef: { datasetId: "merged-1", field: "reflFits", recordId: "rfit-1" },
+    });
+    expect(merged.datasets[1].reflFits).toEqual([expect.objectContaining({
+      request: { channels: [expect.objectContaining({ datasetId: "merged-1" })] },
+    })]);
+  });
+
   it("appends with no collisions: ids/names untouched, per-dataset fields ride along", () => {
     const current = [makeDataset("a", "first")];
     const incoming = makeDataset("b", "second");

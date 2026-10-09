@@ -1843,8 +1843,19 @@ import { fileURLToPath } from "node:url";
  * 832,257 (-2,348 B). The 2,000 B of headroom is BANKED on purpose for the
  * queued Dependabot #548 (vite 8.3.2, +165 B preload helper) and the
  * pending plot batch (~+223 B); do not spend it on anything else.
+ *
+ * 2026-10-09 — pin RAISED 834,257 -> 835,771 for durable reflectivity-fit
+ * results. Measured eager JS is 834,747 B; the new pin is the required
+ * measured + 1,024 B margin. The added eager portion is the versioned result
+ * reference/store contract and Append Project's record-id remap: both must be
+ * correct before a saved project or appended project becomes visible. The
+ * fit publication path and result UI remain in existing lazy workshop chunks.
+ * A lazy split was tried first; it removed publication code from the startup
+ * graph but could not defer synchronous project migration/remapping. The
+ * remapper was then reduced to its fail-soft minimum before this measured
+ * last-resort raise; the budget was not rounded upward beyond the rule.
  */
-const EAGER_JS_BUDGET = 834_257;
+const EAGER_JS_BUDGET = 835_771;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

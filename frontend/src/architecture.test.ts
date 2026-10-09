@@ -2331,6 +2331,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   // consumed cross-workflow seeds
   figureDocSeed: "seeded figure doc; consumed on use",
   reflectivitySeed: "seeded reflectivity workshop input; consumed on use",
+  reflectivityFitRecordId: "saved reflectivity-fit selection; consumed on use",
   statStageSeed: "seeded stat-stage input; consumed on use",
 
   // analysis working scratch (same class as mapRoi/mapRuler above: survives interaction, cleared on dataset switch, not edit history)

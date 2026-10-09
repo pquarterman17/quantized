@@ -18,6 +18,7 @@ import { curveDatasetFor, curveDatasets, presentIds, savedOverlay } from "./refl
 import { applyBlockedReason, applyResults, fittedGlobals, type FitGlobals } from "./reflFitModel";
 import { nextSeq, recordDatasetIds, recordsFor, withFitRecord, type ReflFitRecord } from "./reflFitRecord";
 import { recordIssues, restoreSetup, type RecordIssues, type RestoredSetup } from "./reflFitRestore";
+import { publishReflectivityFitAnalysisResult } from "./reflFitAnalysisResultPublish";
 import type { ModelLayer, Radiation } from "./useReflectivity";
 import type { ReflModelHandle } from "./useReflFit";
 import { useReflFitFigure } from "./useReflFitFigure";
@@ -77,12 +78,19 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
   const setStatus = useApp((s) => s.setStatus);
   const addDataset = useApp((s) => s.addDataset);
   const setFitOverlay = useApp((s) => s.setFitOverlay);
+  const requestedRecordId = useApp((s) => s.reflectivityFitRecordId);
+  const clearRequestedRecord = useApp((s) => s.clearReflectivityFitRecord);
   // Curve datasets added per saved fit, so the button reads "added" and a
   // second click adds nothing twice.
   const [addedFor, setAddedFor] = useState<Record<string, string[]>>({});
   const host = datasets.find((d) => d.id === hostId);
   const records = recordsFor(host);
   const [pickedId, setPickedId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!requestedRecordId) return;
+    if (records.some((record) => record.id === requestedRecordId)) setPickedId(requestedRecordId);
+    clearRequestedRecord();
+  }, [clearRequestedRecord, records, requestedRecordId]);
   const [reporting, setReporting] = useState(false);
   // After a saved fit is applied, re-applying it stays allowed against the
   // stack it produced (the live fit's `basis` rule in useReflFit).
@@ -140,7 +148,13 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
     if (!now.some((d) => ids.includes(d.id))) return null; // deleted mid-fit
     const numbered = { ...record, seq: nextSeq(now, ids) };
     recordHistory("reflectivity fit");
-    useApp.setState((s) => ({ datasets: withFitRecord(s.datasets, numbered) }));
+    useApp.setState((s) => {
+      const nextDatasets = withFitRecord(s.datasets, numbered);
+      return {
+        datasets: nextDatasets,
+        analysisResults: publishReflectivityFitAnalysisResult(nextDatasets, s.analysisResults, numbered),
+      };
+    });
     return numbered;
   }
 

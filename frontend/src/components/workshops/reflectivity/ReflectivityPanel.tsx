@@ -10,7 +10,7 @@
 // Thin by design — all state/logic lives in the hooks. Both hooks live HERE so
 // switching modes never discards the model or a fit result.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { NumberField } from "../../primitives/NumberField";
@@ -30,7 +30,9 @@ const SpinAsymmetryView = lazyRegion(() => import("./SpinAsymmetryView"), "Spin 
 
 export default function ReflectivityPanel() {
   const setOpen = useApp((s) => s.setReflectivityOpen);
-  const [mode, setMode] = useState<Mode>("model");
+  const requestedFit = useApp((s) => s.reflectivityFitRecordId);
+  const [mode, setMode] = useState<Mode>(requestedFit ? "fit" : "model");
+  useEffect(() => { if (requestedFit) setMode("fit"); }, [requestedFit]);
   const refl = useReflectivity();
   const fit = useReflFit(refl);
   const { presets, layers, radiation, grid, busy, error } = refl;

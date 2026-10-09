@@ -69,6 +69,7 @@ beforeEach(() => {
     fitOverlay: null,
     reflectivitySeed: null,
     reports: [],
+    analysisResults: [],
     resolveDataset: realResolve,
   });
 });
@@ -94,6 +95,10 @@ describe("a finished fit is stored and restored", () => {
     expect(saved.result.objective).toEqual({ label: "reduced χ²", value: 1.25 });
     expect(saved.result.parameters[1].stderr).toBeNull();
     expect("curves" in saved.result).toBe(false);
+    expect(useApp.getState().analysisResults).toEqual([expect.objectContaining({
+      producer: { id: "reflectivity-fit", label: "Reflectivity Fit", version: 1 },
+      settingsRef: { datasetId: "xrr", field: "reflFits", recordId: saved.id },
+    })]);
   });
 
   it("reopening the workshop shows the saved result: table, objective and warnings", async () => {
@@ -117,6 +122,17 @@ describe("a finished fit is stored and restored", () => {
     const first = recordsFor(useApp.getState().datasets[0])[1];
     fireEvent.change(picker, { target: { value: first.id } });
     expect(screen.getByTestId("refl-fit-objective").textContent).toBe("3.5");
+  });
+
+  it("opens the exact saved fit requested by an Analysis Result", async () => {
+    await fitOnce(fitResponse({ reduced_chi2: 3.5 }));
+    await fitOnce(fitResponse({ reduced_chi2: 1.02 }));
+    const older = recordsFor(useApp.getState().datasets[0])[1];
+    useApp.setState({ reflectivityFitRecordId: older.id });
+    render(<Harness />);
+    await waitFor(() => expect((screen.getByLabelText("saved fits") as HTMLSelectElement).value).toBe(older.id));
+    expect(screen.getByTestId("refl-fit-objective").textContent).toBe("3.5");
+    expect(useApp.getState().reflectivityFitRecordId).toBeNull();
   });
 
   it("flags a saved fit whose second channel's dataset has since been deleted", async () => {

@@ -22,8 +22,11 @@ vi.mock("../../overlays/ToolWindow", () => ({
 
 import AnalysisResultPanel from "./AnalysisResultPanel";
 import { fitAnalysisResult } from "../../../lib/fitAnalysisResult";
+import { reflectivityFitAnalysisResult } from "../../../lib/reflFitAnalysisResult";
 import { publishFitResult } from "../../../store/peakTables";
 import { useApp } from "../../../store/useApp";
+import { encodeRecord } from "../reflectivity/reflFitRecord";
+import { makeDataset, makeRecord } from "../reflectivity/reflFit.testkit";
 
 const appState = useApp.getState;
 
@@ -86,6 +89,44 @@ describe("AnalysisResultPanel", () => {
     expect(screen.getByText("1.9")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Provenance" }));
     expect(screen.getByText("output.analysisRecipe")).toBeInTheDocument();
+  });
+
+  it("opens the exact saved reflectivity fit from its durable result", () => {
+    const base = makeRecord({ id: "rfit-selected", seq: 7 }, ["xrr", "other"]);
+    const record = { ...base, request: {
+      ...base.request,
+      channels: base.request.channels.map((channel) => ({ ...channel, digest: "" })),
+    } };
+    // A partially restored project can retain the shared record on only one
+    // of its channels. Opening must target the worksheet that actually owns
+    // the record rather than the first merely-present source.
+    const datasets = [makeDataset("xrr"), makeDataset("other", [encodeRecord(record)])];
+    const reflectivityResult = reflectivityFitAnalysisResult(encodeRecord(record), datasets)!;
+    useApp.setState({
+      datasets,
+      activeId: "xrr",
+      analysisResults: [reflectivityResult],
+      openAnalysisResultId: reflectivityResult.id,
+      reflectivityOpen: false,
+      reflectivityFitRecordId: null,
+      stageTab: "worksheet",
+    });
+
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Current")).toBeInTheDocument();
+    expect(screen.getByText("Reflectivity Fit")).toBeInTheDocument();
+    expect(screen.queryByText(/Rerun as new preserves/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /Diagnostics/ }));
+    expect(screen.getByText(/parameters ended on a bound/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open fit workbench" }));
+
+    expect(useApp.getState()).toMatchObject({
+      activeId: "other",
+      stageTab: "plot",
+      reflectivityOpen: true,
+      reflectivityFitRecordId: "rfit-selected",
+      openAnalysisResultId: null,
+    });
   });
 
   it("Open worksheet leaves the result workspace on the requested table", () => {

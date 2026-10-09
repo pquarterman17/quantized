@@ -25,6 +25,10 @@ export interface AnalysisResultSelection {
   xRange?: [number, number];
 }
 
+export type AnalysisResultSettingsRef =
+  | { datasetId: string; field: "analysisRecipe" | "peakTable" | "fitSpec" }
+  | { datasetId: string; field: "reflFits"; recordId: string };
+
 /** A durable catalog record for an analysis. Scientific output stays in its
  * established authority (for Signal Processing, the linked worksheet and its
  * `analysisRecipe`); this envelope points to that authority instead of
@@ -42,7 +46,7 @@ export interface AnalysisResult {
    *  recipe. New envelopes omit it; the result workspace reads the linked
    *  output's `analysisRecipe` and falls back to this only without one. */
   selection?: AnalysisResultSelection;
-  settingsRef?: { datasetId: string; field: "analysisRecipe" | "peakTable" | "fitSpec" };
+  settingsRef?: AnalysisResultSettingsRef;
   scalarValues?: Record<string, number | string | null>;
   tableRefs?: { datasetId: string; label: string }[];
   plotBindings?: { datasetId: string; channels: number[]; xChannel?: number | null }[];
@@ -113,8 +117,13 @@ function selection(value: unknown): AnalysisResultSelection | undefined {
 
 function settingsRef(value: unknown): AnalysisResult["settingsRef"] {
   const raw = object(value);
-  return raw && typeof raw.datasetId === "string" &&
-    (raw.field === "analysisRecipe" || raw.field === "peakTable" || raw.field === "fitSpec")
+  if (!raw || typeof raw.datasetId !== "string") return undefined;
+  if (raw.field === "reflFits") {
+    return typeof raw.recordId === "string" && raw.recordId
+      ? { datasetId: raw.datasetId, field: raw.field, recordId: raw.recordId }
+      : undefined;
+  }
+  return raw.field === "analysisRecipe" || raw.field === "peakTable" || raw.field === "fitSpec"
     ? { datasetId: raw.datasetId, field: raw.field }
     : undefined;
 }

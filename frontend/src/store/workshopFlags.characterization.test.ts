@@ -2,7 +2,7 @@
 // SIXTH store/useApp.ts domain): every workshop/dialog open flag, the two
 // one-shot cross-panel seeds (`reflectivitySeed`, `statStageSeed`), the three
 // on-plot overlays, the two plot-edit bridges, and the 2-D map/contour
-// settings — 38 fields, 40 actions, none of which writes `datasets` or
+// settings — 39 fields, 42 actions, none of which writes `datasets` or
 // records history.
 //
 // What each spec pins: the EXACT set of top-level store keys a call changes,
@@ -90,6 +90,7 @@ function poison(): void {
     ...flags,
     ...objects,
     reflectivitySeed: { sld: 9.9e-6, label: "STALE" },
+    reflectivityFitRecordId: "stale-fit",
     statStageSeed: { mode: "violin", groupCol: 7, valueCol: 8 },
     mapMethod: "STALE",
     mapRes: 17,
@@ -109,6 +110,7 @@ describe("initial state (moves with the slice)", () => {
     for (const [, f] of FLAG_SETTERS) expect(init[f], f).toBe(false);
     for (const [, f] of OBJECT_SETTERS) expect(init[f], f).toBeNull();
     expect(init.reflectivitySeed).toBeNull();
+    expect(init.reflectivityFitRecordId).toBeNull();
     expect(init.statStageSeed).toBeNull();
     expect(init.mapMethod).toBe("linear");
     expect(init.mapRes).toBe(200);
@@ -181,6 +183,23 @@ describe("reflectivity seed", () => {
     expect(changedSince(before)).toEqual(["reflectivitySeed"]);
     expect(act().reflectivitySeed).toBeNull();
     expect(act().reflectivityOpen).toBe(true);
+  });
+});
+
+describe("reflectivity saved-fit selection", () => {
+  it("stores the exact record id and opens the workshop", () => {
+    useApp.setState({ reflectivityOpen: false });
+    const before = snapshot();
+    act().openReflectivityFitRecord("rfit-2");
+    expect(changedSince(before)).toEqual(["reflectivityFitRecordId", "reflectivityOpen"]);
+    expect(act()).toMatchObject({ reflectivityFitRecordId: "rfit-2", reflectivityOpen: true });
+  });
+
+  it("clears only the consumed selection", () => {
+    const before = snapshot();
+    act().clearReflectivityFitRecord();
+    expect(changedSince(before)).toEqual(["reflectivityFitRecordId"]);
+    expect(act().reflectivityFitRecordId).toBeNull();
   });
 });
 
