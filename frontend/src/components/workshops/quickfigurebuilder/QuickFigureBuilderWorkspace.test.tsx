@@ -92,6 +92,16 @@ describe("QuickFigureBuilderWorkspace — G1 shell", () => {
     expect(screen.getByText("1 Y series against Acquisition axis")).toBeInTheDocument();
   });
 
+  it("restarts the draft when the same worksheet is opened with a different seed", () => {
+    render(<QuickFigureBuilderWorkspace />);
+    expect(screen.getByRole("combobox", { name: "Role for signal" })).toHaveValue("y");
+    act(() => {
+      useApp.getState().openQuickFigureBuilder("d1", { xKey: null, yKeys: [1], errorBindings: [], ignoredKeys: [0] });
+    });
+    expect(screen.getByRole("combobox", { name: "Role for signal" })).toHaveValue("ignore");
+    expect(screen.getByRole("combobox", { name: "Role for error" })).toHaveValue("y");
+  });
+
   it("shows the source facts without creating or mutating a figure", () => {
     render(<QuickFigureBuilderWorkspace />);
     expect(screen.getByRole("heading", { name: "Configure measurement.csv" })).toBeInTheDocument();

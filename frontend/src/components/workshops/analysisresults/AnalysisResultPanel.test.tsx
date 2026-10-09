@@ -4,11 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalysisResult } from "../../../lib/analysisResult";
 import type { Dataset } from "../../../lib/types";
 
-const { rerun, recalculate } = vi.hoisted(() => ({ rerun: vi.fn(), recalculate: vi.fn() }));
+const { rerun, recalculate, sendReport } = vi.hoisted(() => ({
+  rerun: vi.fn(), recalculate: vi.fn(), sendReport: vi.fn(),
+}));
 vi.mock("../../../store/signalWorksheetCommand", () => ({ createSignalWorksheetFromApp: rerun }));
 vi.mock("../../../store/analysisResultActions", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../store/analysisResultActions")>()),
   recalculateAnalysisResult: recalculate,
+  sendAnalysisResultPlotToReport: sendReport,
 }));
 vi.mock("../../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 vi.mock("../../overlays/ParamDialog", () => ({ askParams: vi.fn() }));
@@ -65,6 +68,8 @@ beforeEach(() => {
     future: [],
     quickFigureBuilderDatasetId: null,
     quickFigureBuilderSeed: null,
+    yKeys: null,
+    stageTab: "worksheet",
   });
 });
 
@@ -123,7 +128,8 @@ describe("AnalysisResultPanel", () => {
     await waitFor(() => expect(useApp.getState().quickFigureBuilderDatasetId).toBe("output"));
     expect(useApp.getState().quickFigureBuilderSeed?.yKeys).toEqual([0]);
     expect(useApp.getState().openAnalysisResultId).toBeNull();
-    expect(useApp.getState()).toMatchObject({ activeId: "output", yKeys: [0], stageTab: "plot" });
+    expect(useApp.getState()).toMatchObject({ activeId: "source", yKeys: null, stageTab: "worksheet" });
+    expect(useApp.getState().history).toEqual([]);
   });
 
   it("seeds Build figure with only the result's recorded series", async () => {
@@ -142,13 +148,28 @@ describe("AnalysisResultPanel", () => {
     expect(useApp.getState().quickFigureBuilderSeed).toMatchObject({ yKeys: [1], ignoredKeys: [0] });
   });
 
-  it("duplicates the result record without silently duplicating scientific data", async () => {
+  it("duplicates the result with a separate linked output and guards repeated clicks", async () => {
     render(<AnalysisResultPanel />);
-    fireEvent.click(screen.getByRole("button", { name: "Duplicate" }));
-    fireEvent.click(screen.getByRole("button", { name: "Duplicating…" }));
+    const button = screen.getByRole("button", { name: "Duplicate" });
+    fireEvent.click(button);
+    fireEvent.click(button);
     await waitFor(() => expect(useApp.getState().analysisResults).toHaveLength(2));
-    expect(useApp.getState().datasets.map((dataset) => dataset.id)).toEqual(["source", "output"]);
-    expect(useApp.getState().analysisResults[1].outputs).toEqual(result.outputs);
+    expect(useApp.getState().datasets).toHaveLength(3);
+    expect(useApp.getState().analysisResults[1].outputs[0].datasetId).not.toBe("output");
+  });
+
+  it("guards repeated Send to report clicks while the first send is pending", async () => {
+    let finish!: (value: boolean) => void;
+    sendReport.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Figures" }));
+    const button = screen.getByRole("button", { name: "Send to report…" });
+    fireEvent.click(button);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Duplicate" })).toBeDisabled());
+    fireEvent.click(button);
+    expect(sendReport).toHaveBeenCalledTimes(1);
+    finish(true);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send to report…" })).not.toBeDisabled());
   });
 
   it("Recalculate runs this result's own recompute, never the project-wide recalcNow", async () => {

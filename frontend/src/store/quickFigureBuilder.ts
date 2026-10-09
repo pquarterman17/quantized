@@ -1,7 +1,8 @@
 // Transient launch state for the Quick Figure Builder (LIBRARY_WORKBOOK_UX
-// plan PR G). The builder edits a local draft; this slice deliberately stores
-// only the source worksheet identity. Opening or cancelling therefore cannot
-// mutate raw data, figures, templates, selection, or the surface underneath.
+// plan PR G). The builder edits a local draft; this slice stores the source
+// worksheet identity plus an optional caller-provided draft seed. Opening or
+// cancelling therefore cannot mutate raw data, figures, templates, selection,
+// or the surface underneath.
 
 import type { AppState } from "./useApp";
 import type { QuickFigureMapping } from "../lib/quickFigureMapping";

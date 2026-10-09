@@ -11,7 +11,7 @@ import { saveBlob } from "../lib/download";
 import { stemFromName } from "../lib/exportActive";
 import type { Dataset } from "../lib/types";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
-import { nextAnalysisResultId } from "./idSeq";
+import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
 import { commitDerivedRecompute } from "./recalcDatasets";
 import { useApp } from "./useApp";
 
@@ -69,41 +69,66 @@ export function removeAnalysisResult(id: string): void {
   }));
 }
 
-/** Duplicate the catalog record, not its scientific output. The explicit
- * distinction matters: Rerun creates new computed data; Freeze severs the
- * output link. */
-export function duplicateAnalysisResult(id: string, now = new Date().toISOString()): string | null {
-  const current = useApp.getState().analysisResults.find((result) => result.id === id);
-  if (!current) return null;
-  const copyId = nextAnalysisResultId();
-  const { updatedAt: _updatedAt, ...unchanged } = current;
+/** Duplicate a single-output result and its linked worksheet as one undoable
+ * edit. A second catalog record must never point at the same output: result
+ * freshness and recalculation are output-level facts, so sharing one would
+ * let the records disagree about the same scientific data. */
+export async function duplicateAnalysisResult(id: string, now = new Date().toISOString()): Promise<string | null> {
+  const initial = useApp.getState();
+  const current = initial.analysisResults.find((result) => result.id === id);
+  const outputRef = current?.outputs.length === 1 ? current.outputs[0] : null;
+  if (!current || !outputRef) {
+    initial.setStatus(`can't duplicate ${current?.name ?? "result"}: one output worksheet is required`);
+    return null;
+  }
+  try {
+    await initial.resolveDataset(outputRef.datasetId);
+  } catch (error) {
+    useApp.getState().setStatus(`can't duplicate ${current.name}: ${error instanceof Error ? error.message : "worksheet loading failed"}`);
+    return null;
+  }
+  const state = useApp.getState();
+  const liveResult = state.analysisResults.find((result) => result.id === id);
+  const liveOutputRef = liveResult?.outputs.length === 1 ? liveResult.outputs[0] : null;
+  const output = liveOutputRef?.datasetId === outputRef.datasetId
+    ? state.datasets.find((dataset) => dataset.id === outputRef.datasetId)
+    : null;
+  if (!liveResult || !output) {
+    state.setStatus("can't duplicate analysis result: its output changed while loading");
+    return null;
+  }
+  const outputCopyId = nextDatasetId();
+  const outputCopy: Dataset = { ...structuredClone(output), id: outputCopyId, name: `${output.name} (copy)` };
+  const copyId = liveResult.producer.id === "signal-processing"
+    ? signalResultId(outputCopyId)
+    : nextAnalysisResultId();
+  const remapOutput = (datasetId: string): string => datasetId === output.id ? outputCopyId : datasetId;
   const copy: AnalysisResult = {
-    ...unchanged,
+    ...structuredClone(liveResult),
     id: copyId,
-    name: `${current.name} copy`,
-    producer: { ...current.producer },
-    sources: current.sources.map((source) => ({ ...source })),
-    outputs: current.outputs.map((output) => ({ ...output })),
-    ...(current.selection ? {
-      selection: {
-        ...current.selection,
-        channels: current.selection.channels.map((channel) => ({ ...channel })),
-        ...(current.selection.xRange ? { xRange: [...current.selection.xRange] as [number, number] } : {}),
-      },
-    } : {}),
-    ...(current.settingsRef ? { settingsRef: { ...current.settingsRef } } : {}),
-    ...(current.scalarValues ? { scalarValues: { ...current.scalarValues } } : {}),
-    ...(current.tableRefs ? { tableRefs: current.tableRefs.map((table) => ({ ...table })) } : {}),
-    ...(current.plotBindings ? { plotBindings: current.plotBindings.map((plot) => ({ ...plot, channels: [...plot.channels] })) } : {}),
-    warnings: [...current.warnings],
+    name: `${liveResult.name} copy`,
+    outputs: liveResult.outputs.map((ref) => ({ ...ref, datasetId: remapOutput(ref.datasetId) })),
+    ...(liveResult.selection ? { selection: { ...structuredClone(liveResult.selection), datasetId: remapOutput(liveResult.selection.datasetId) } } : {}),
+    ...(liveResult.settingsRef ? { settingsRef: { ...liveResult.settingsRef, datasetId: remapOutput(liveResult.settingsRef.datasetId) } } : {}),
+    ...(liveResult.tableRefs ? { tableRefs: liveResult.tableRefs.map((ref) => ({ ...ref, datasetId: remapOutput(ref.datasetId) })) } : {}),
+    ...(liveResult.plotBindings ? { plotBindings: liveResult.plotBindings.map((binding) => ({ ...binding, datasetId: remapOutput(binding.datasetId), channels: [...binding.channels] })) } : {}),
     createdAt: now,
   };
-  useApp.getState().recordHistory("duplicate analysis result");
-  useApp.setState((state) => ({
-    analysisResults: [...state.analysisResults, copy],
-    openAnalysisResultId: copyId,
-    status: `duplicated result ${current.name}`,
-  }));
+  state.recordHistory("duplicate analysis result");
+  useApp.setState((latest) => {
+    const outputIndex = latest.datasets.findIndex((dataset) => dataset.id === output.id);
+    const datasets = [...latest.datasets];
+    datasets.splice(outputIndex < 0 ? datasets.length : outputIndex + 1, 0, outputCopy);
+    return {
+      datasets,
+      analysisResults: [...latest.analysisResults, copy],
+      openAnalysisResultId: copyId,
+      staleDatasets: latest.staleDatasets.includes(output.id)
+        ? [...latest.staleDatasets, outputCopyId]
+        : latest.staleDatasets,
+      status: `duplicated result ${liveResult.name}`,
+    };
+  });
   return copyId;
 }
 
@@ -129,7 +154,9 @@ export interface PreparedAnalysisResultPlot {
   channels: number[];
 }
 
-export async function prepareAnalysisResultPlot(id: string, bindingIndex: number): Promise<PreparedAnalysisResultPlot | null> {
+/** Resolve and validate a binding without changing the current workspace.
+ * Builder callers use this read-only half so Cancel really is a no-op. */
+export async function resolveAnalysisResultPlot(id: string, bindingIndex: number): Promise<PreparedAnalysisResultPlot | null> {
   const initial = useApp.getState();
   const result = initial.analysisResults.find((item) => item.id === id);
   const binding = result?.plotBindings?.[bindingIndex];
@@ -162,10 +189,17 @@ export async function prepareAnalysisResultPlot(id: string, bindingIndex: number
     state.setStatus(`can't open result figure: ${dataset ? "its plotted channels are unavailable" : "its worksheet is missing"}`);
     return null;
   }
-  state.setActive(dataset.id);
-  state.setYKeys(channels);
-  useApp.setState({ stageTab: "plot" });
   return { dataset, channels };
+}
+
+export async function prepareAnalysisResultPlot(id: string, bindingIndex: number): Promise<PreparedAnalysisResultPlot | null> {
+  const prepared = await resolveAnalysisResultPlot(id, bindingIndex);
+  if (!prepared) return null;
+  const state = useApp.getState();
+  state.setActive(prepared.dataset.id);
+  state.setYKeys(prepared.channels);
+  useApp.setState({ stageTab: "plot" });
+  return prepared;
 }
 
 /** Use the same prepared binding as Open plot, then hand the live store to
@@ -175,8 +209,7 @@ export async function prepareAnalysisResultPlot(id: string, bindingIndex: number
 export async function sendAnalysisResultPlotToReport(id: string, bindingIndex: number): Promise<boolean> {
   if (!await prepareAnalysisResultPlot(id, bindingIndex)) return false;
   try {
-    await import("../commands/plotCommands").then((module) => module.sendFigureToReport(useApp.getState));
-    return true;
+    return await import("../commands/plotCommands").then((module) => module.sendFigureToReport(useApp.getState));
   } catch (error) {
     useApp.getState().setStatus(`can't send result figure to report: ${error instanceof Error ? error.message : "report tools failed to load"}`);
     return false;
@@ -216,7 +249,7 @@ export async function exportAnalysisResultTable(id: string, datasetId: string): 
   return true;
 }
 
-const recalculating = new Set<string>();
+const recalculatingOutputs = new Set<string>();
 
 /** Recompute THIS result's linked output only — never the project-wide
  *  `recalcNow()`, which would also settle stale datasets and fits the user
@@ -232,11 +265,11 @@ export async function recalculateAnalysisResult(id: string): Promise<boolean> {
     state.setStatus(`can't recalculate ${result.name}: its source or output worksheet is missing`);
     return false;
   }
-  if (recalculating.has(id)) {
-    state.setStatus(`${result.name} is already recalculating`);
+  if (recalculatingOutputs.has(output.id)) {
+    state.setStatus(`${result.name}'s output is already recalculating`);
     return false;
   }
-  recalculating.add(id);
+  recalculatingOutputs.add(output.id);
   try {
     const { sheet, shift } = await recomputeDerivedSheet(useApp.getState, output);
     useApp.getState().recordHistory(`recalculate ${result.name}`);
@@ -245,7 +278,7 @@ export async function recalculateAnalysisResult(id: string): Promise<boolean> {
     // A row-count guard notice from the commit outranks the success line.
     const status = useApp.getState().status === before ? `recalculated ${result.name}` : useApp.getState().status;
     useApp.setState((s) => ({
-      analysisResults: s.analysisResults.map((item) => item.id === id
+      analysisResults: s.analysisResults.map((item) => item.outputs.some((ref) => ref.datasetId === output.id)
         ? { ...item, updatedAt: new Date().toISOString() }
         : item),
       status,
@@ -255,6 +288,6 @@ export async function recalculateAnalysisResult(id: string): Promise<boolean> {
     useApp.getState().setStatus(`couldn't recalculate ${result.name}: ${error instanceof Error ? error.message : "unknown error"}`);
     return false;
   } finally {
-    recalculating.delete(id);
+    recalculatingOutputs.delete(output.id);
   }
 }

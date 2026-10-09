@@ -264,5 +264,8 @@ export default function QuickFigureBuilderWorkspace() {
       </section>
     );
   }
-  return <BuilderForDataset key={dataset.id} dataset={dataset} seed={seed} close={close} />;
+  // The builder owns local draft state. A second launch for the same worksheet
+  // with a different result binding must therefore remount from the new seed.
+  const seedKey = seed ? JSON.stringify(seed) : "inferred";
+  return <BuilderForDataset key={`${dataset.id}:${seedKey}`} dataset={dataset} seed={seed} close={close} />;
 }

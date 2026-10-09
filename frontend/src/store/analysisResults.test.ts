@@ -3,12 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalysisResult } from "../lib/analysisResult";
 import type { Dataset } from "../lib/types";
 
-const { recompute, saveBlob } = vi.hoisted(() => ({ recompute: vi.fn(), saveBlob: vi.fn() }));
+const { recompute, saveBlob, sendFigureToReport } = vi.hoisted(() => ({
+  recompute: vi.fn(), saveBlob: vi.fn(), sendFigureToReport: vi.fn(),
+}));
 vi.mock("./derivedWorksheets", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./derivedWorksheets")>()),
   recomputeDerivedSheet: recompute,
 }));
 vi.mock("../lib/download", () => ({ saveBlob }));
+vi.mock("../commands/plotCommands", () => ({ sendFigureToReport }));
 
 import {
   duplicateAnalysisResult,
@@ -19,6 +22,8 @@ import {
   registerAnalysisResult,
   removeAnalysisResult,
   renameAnalysisResult,
+  resolveAnalysisResultPlot,
+  sendAnalysisResultPlotToReport,
   updateAnalysisResultNotes,
 } from "./analysisResultActions";
 import { useApp } from "./useApp";
@@ -76,18 +81,27 @@ describe("analysis result store lifecycle", () => {
     expect(useApp.getState().analysisResults[0].notes).toBe("first line\n\nsecond line");
   });
 
-  it("duplicates the result record as one undoable edit without copying its output", () => {
-    useApp.setState({ analysisResults: [{ ...RESULT, updatedAt: "old" }] });
-    const id = duplicateAnalysisResult("result-1", "2026-10-09T00:00:00Z");
+  it("duplicates the result and its linked output as one undoable edit", async () => {
+    const output: Dataset = {
+      id: "output", name: "Output",
+      data: { time: [0], values: [[2]], labels: ["Y"], units: ["V"], metadata: {} },
+      derivedFrom: { datasetId: "source", pipeline: "Smooth" },
+    };
+    useApp.setState({ datasets: [output], analysisResults: [{ ...RESULT, updatedAt: "old" }] });
+    const id = await duplicateAnalysisResult("result-1", "2026-10-09T00:00:00Z");
     expect(id).toMatch(/^analysis-/);
+    const clonedOutput = useApp.getState().datasets[1];
+    expect(clonedOutput).toMatchObject({ name: "Output (copy)", derivedFrom: output.derivedFrom });
+    expect(clonedOutput.id).not.toBe("output");
     expect(useApp.getState().analysisResults[1]).toMatchObject({
-      id, name: `${RESULT.name} copy`, outputs: RESULT.outputs,
+      id, name: `${RESULT.name} copy`,
+      outputs: [{ datasetId: clonedOutput.id, role: "linked-worksheet" }],
       createdAt: "2026-10-09T00:00:00Z",
     });
-    expect(useApp.getState().analysisResults[1].updatedAt).toBeUndefined();
-    expect(useApp.getState().datasets).toHaveLength(0);
+    expect(useApp.getState().analysisResults[1].updatedAt).toBe("old");
     useApp.getState().undo();
     expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(useApp.getState().datasets).toEqual([output]);
   });
 });
 
@@ -101,6 +115,7 @@ describe("analysis result output actions", () => {
 
   beforeEach(() => {
     saveBlob.mockReset();
+    sendFigureToReport.mockReset();
     useApp.setState({
       datasets: [source, output], activeId: "source", analysisResults: [rich],
       history: [], future: [], yKeys: null, stageTab: "worksheet",
@@ -111,6 +126,20 @@ describe("analysis result output actions", () => {
     expect(await prepareAnalysisResultPlot("result-1", 0)).toMatchObject({ dataset: { id: "output" }, channels: [1] });
     expect(useApp.getState()).toMatchObject({ activeId: "output", yKeys: [1], stageTab: "plot" });
     expect(await prepareAnalysisResultPlot("result-1", 2)).toBeNull();
+  });
+
+  it("resolves a saved plot for a builder without changing the current surface", async () => {
+    const before = { activeId: useApp.getState().activeId, yKeys: useApp.getState().yKeys, stageTab: useApp.getState().stageTab };
+    expect(await resolveAnalysisResultPlot("result-1", 0)).toMatchObject({ dataset: { id: "output" }, channels: [1] });
+    expect(useApp.getState()).toMatchObject(before);
+    expect(useApp.getState().history).toEqual([]);
+  });
+
+  it("reports the report command's lazy-load outcome instead of claiming success", async () => {
+    sendFigureToReport.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    expect(await sendAnalysisResultPlotToReport("result-1", 0)).toBe(false);
+    expect(await sendAnalysisResultPlotToReport("result-1", 0)).toBe(true);
+    expect(sendFigureToReport).toHaveBeenCalledTimes(2);
   });
 
   it("fails closed when a lazy output cannot load or the result changes during loading", async () => {
@@ -197,9 +226,23 @@ describe("recalculateAnalysisResult", () => {
     }));
     const first = recalculateAnalysisResult("result-1");
     expect(await recalculateAnalysisResult("result-1")).toBe(false);
-    expect(useApp.getState().status).toBe(`${RESULT.name} is already recalculating`);
+    expect(useApp.getState().status).toBe(`${RESULT.name}'s output is already recalculating`);
     finish();
     expect(await first).toBe(true);
+  });
+
+  it("serializes legacy records that share an output and refreshes both timestamps", async () => {
+    const legacyCopy = { ...RESULT, id: "result-legacy", name: "Legacy copy" };
+    useApp.setState({ analysisResults: [RESULT, legacyCopy] });
+    let finish!: () => void;
+    recompute.mockImplementation(() => new Promise((resolve) => {
+      finish = () => resolve({ sheet: { ...OUTPUT, data: data(2) }, shift: null });
+    }));
+    const first = recalculateAnalysisResult("result-1");
+    expect(await recalculateAnalysisResult("result-legacy")).toBe(false);
+    finish();
+    expect(await first).toBe(true);
+    expect(useApp.getState().analysisResults.every((item) => item.updatedAt)).toBe(true);
   });
 
   it("explains a missing source instead of doing nothing", async () => {

@@ -177,7 +177,7 @@ export default function AnalysisResultPanel() {
     setBusy("figure");
     try {
       const prepared = await loadActions()
-        .then((m) => m.prepareAnalysisResultPlot(result.id, index), () => { onLoadFailure(); return null; });
+        .then((m) => m.resolveAnalysisResultPlot(result.id, index), () => { onLoadFailure(); return null; });
       if (prepared && openQuickFigureBuilder(prepared.dataset.id, mappingForResult(prepared.dataset, prepared.channels))) close();
     } finally { setBusy(null); }
   };
@@ -226,7 +226,7 @@ export default function AnalysisResultPanel() {
           <Button disabled={!output} onClick={openOutput}>Open worksheet</Button>
           <Button disabled={!source || !output || busy !== null} title={blocked} onClick={() => void recalculate()}>{busy === "recalculate" ? "Recalculating…" : "Recalculate"}</Button>
           <Button disabled={!source || !output?.analysisRecipe || busy !== null} title={blocked} onClick={() => void rerun()}>{busy === "rerun" ? "Rerunning…" : "Rerun as new"}</Button>
-          <Button disabled={busy !== null} title="Create another result record linked to the same output worksheet." onClick={() => void duplicate()}>{busy === "duplicate" ? "Duplicating…" : "Duplicate"}</Button>
+          <Button disabled={result.outputs.length !== 1 || !output || busy !== null} title="Create a separate linked output worksheet and result." onClick={() => void duplicate()}>{busy === "duplicate" ? "Duplicating…" : "Duplicate"}</Button>
           <Button disabled={result.outputs.length !== 1 || !output?.derivedFrom || busy !== null} title={freezeReason} onClick={() => void freeze()}>{busy === "freeze" ? "Freezing…" : "Freeze data"}</Button>
           <Button disabled={busy !== null} onClick={() => void rename()}>Rename…</Button>
           <Button disabled={busy !== null} variant="danger" onClick={() => void remove()}>Delete…</Button>
