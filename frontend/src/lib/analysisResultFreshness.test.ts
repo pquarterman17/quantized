@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { AnalysisResult } from "./analysisResult";
 import { dataFingerprint, stampAnalysisResults, staleAnalysisOutputs } from "./analysisResultFreshness";
+import type { PeakTable } from "./peakTable";
 import type { DataStruct, Dataset } from "./types";
 
 const data = (cells: number[]): DataStruct => ({
@@ -42,5 +43,35 @@ describe("stamp / stale round trip", () => {
     const [stamped] = stampAnalysisResults([{ ...RESULT, stale: true }], [ds("s", data([1])), ds("o", data([1]))], []);
     expect(stamped.stale).toBeUndefined();
     expect(stamped.sourceFingerprint).toBe(dataFingerprint(data([1])));
+  });
+
+  it("leaves peak freshness to the authoritative peak-table fingerprint", () => {
+    const peak: AnalysisResult = {
+      ...RESULT,
+      outputs: [],
+      settingsRef: { datasetId: "s", field: "peakTable" },
+      sourceFingerprint: "obsolete-generic-fingerprint",
+      stale: true,
+    };
+    const [stamped] = stampAnalysisResults([peak], [ds("s", data([1]))], ["s"]);
+    expect(stamped).not.toHaveProperty("sourceFingerprint");
+    expect(stamped).not.toHaveProperty("stale");
+  });
+
+  it("persists a stale flag when a peak table no longer matches its source", () => {
+    const table: PeakTable = {
+      version: 1, peaks: [],
+      provenance: {
+        datasetId: "s", datasetName: "s", method: "simultaneous", model: "Gaussian",
+        bgDegree: 0, linkMode: "None", constrain: false, bgCoeffs: [], R2: null, rmse: null,
+        wavelengthA: null, xLabel: "x", xUnit: "", fingerprint: "different", fittedAt: "now",
+      },
+    };
+    const peak: AnalysisResult = {
+      ...RESULT, outputs: [], settingsRef: { datasetId: "s", field: "peakTable" },
+    };
+    const [stamped] = stampAnalysisResults([peak], [ds("s", data([1]), { peakTable: table })], []);
+    expect(stamped.stale).toBe(true);
+    expect(stamped).not.toHaveProperty("sourceFingerprint");
   });
 });

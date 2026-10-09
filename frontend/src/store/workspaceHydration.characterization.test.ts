@@ -769,7 +769,7 @@ describe("appendWorkspace — the additive .dwk join", () => {
     // updater spreads a FRESH `[...get().workbooks, ...workbooks]` array
     // unconditionally (workspaceIO.ts's runAppendWorkspace), so its identity
     // changes regardless of content.
-    expect(changedSince(before)).toEqual(["datasets", "future", "history", "status", "workbooks"]);
+    expect(changedSince(before)).toEqual(["analysisResults", "datasets", "future", "history", "status", "workbooks"]);
     expect(labels()).toEqual(["append workspace"]);
     // F5 (review): the header claims the extraction's delegate call is
     // "provably still wired to the same function with the SAME ARGUMENTS" --

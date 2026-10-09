@@ -99,34 +99,31 @@ export function publishPeakTable(
     const dataset = s.datasets.find((d) => d.id === datasetId);
     if (!dataset) return {};
     const updated = { ...dataset, peakTable: table };
-    const id = peakResultId(datasetId);
-    const old = s.analysisResults.find((result) => result.id === id)
-      ?? s.analysisResults.find((result) => peakResultForDataset(result, datasetId));
-    const rememberedY = old?.selection?.channels[0]?.index;
-    const rememberedX = old?.plotBindings?.[0]?.xChannel;
-    const fresh = peakAnalysisResult(
-      updated,
-      table,
-      options.yKey === undefined ? rememberedY : options.yKey,
-      options.xKey === undefined ? rememberedX : options.xKey,
-    );
-    const result = old ? {
-      ...fresh,
-      id: old.id,
-      name: old.name,
-      createdAt: old.createdAt,
-      updatedAt: new Date().toISOString(),
-      ...(old.notes ? { notes: old.notes } : {}),
-    } : fresh;
-    let resultPlaced = false;
-    const analysisResults = old
-      ? s.analysisResults.flatMap((item) => {
-        if (!peakResultForDataset(item, datasetId)) return [item];
-        if (resultPlaced) return [];
-        resultPlaced = true;
-        return [result];
-      })
-      : options.catalogMode !== "existing-only" ? [...s.analysisResults, result] : s.analysisResults;
+    const linked = s.analysisResults.filter((result) => peakResultForDataset(result, datasetId));
+    // A recovered/merged catalog may legitimately contain more than one
+    // envelope linked to the same table. Refresh every envelope in place;
+    // silently collapsing them loses user names, notes and provenance.
+    const refresh = (old: AnalysisResult): AnalysisResult => {
+      const fresh = peakAnalysisResult(
+        updated,
+        table,
+        options.yKey === undefined ? old.selection?.channels[0]?.index : options.yKey,
+        options.xKey === undefined ? old.plotBindings?.[0]?.xChannel : options.xKey,
+      );
+      return {
+        ...fresh,
+        id: old.id,
+        name: old.name,
+        createdAt: old.createdAt,
+        updatedAt: new Date().toISOString(),
+        ...(old.notes ? { notes: old.notes } : {}),
+      };
+    };
+    const analysisResults = linked.length
+      ? s.analysisResults.map((item) => peakResultForDataset(item, datasetId) ? refresh(item) : item)
+      : options.catalogMode !== "existing-only"
+        ? [...s.analysisResults, peakAnalysisResult(updated, table, options.yKey, options.xKey)]
+        : s.analysisResults;
     return {
       datasets: s.datasets.map((d) => (d.id === datasetId ? updated : d)),
       analysisResults,
@@ -258,18 +255,14 @@ export function removePeaks(datasetId: string, peakIds: ReadonlySet<string>): Pe
     return next;
   }
   useApp.setState((s) => {
-    const removedIds = new Set(s.analysisResults
-      .filter((result) => peakResultForDataset(result, datasetId))
-      .map((result) => result.id));
+    const incomplete = (result: AnalysisResult): AnalysisResult => {
+      if (!peakResultForDataset(result, datasetId)) return result;
+      const { stale: _stale, sourceFingerprint: _fingerprint, ...kept } = result;
+      return { ...kept, updatedAt: new Date().toISOString() };
+    };
     return {
       datasets: s.datasets.map((d) => d.id === datasetId ? { ...d, peakTable: undefined } : d),
-      analysisResults: s.analysisResults.filter((result) => !removedIds.has(result.id)),
-      openAnalysisResultId: s.openAnalysisResultId && removedIds.has(s.openAnalysisResultId)
-        ? null
-        : s.openAnalysisResultId,
-      librarySelection: s.librarySelection?.kind === "analysis-result" && removedIds.has(s.librarySelection.id)
-        ? null
-        : s.librarySelection,
+      analysisResults: s.analysisResults.map(incomplete),
     };
   });
   return null;

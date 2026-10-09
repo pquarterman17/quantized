@@ -275,7 +275,8 @@ export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHier
     add(kind, entity, name, owner.parentKey, section, index, owner.source);
   };
   (input.analysisResults ?? []).forEach((result, index) =>
-    place("analysis-result", result, result.name, 2, index, [...result.sources, ...result.outputs].map((ref) => ref.datasetId)));
+    place("analysis-result", result, result.name, 2, index,
+      [...result.sources, ...result.outputs].map((ref) => ref.datasetId)));
   (input.originFigures ?? []).forEach((figure, index) =>
     place("origin-figure", figure, figureLabel(figure), 3, index,
       originSourceIds(figure, input.originFigures ?? [], input.datasets), figure.siblingIds));

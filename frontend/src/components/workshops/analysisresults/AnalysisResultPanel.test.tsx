@@ -214,6 +214,10 @@ describe("AnalysisResultPanel", () => {
     expect(screen.getByRole("columnheader", { name: "Center ± 1σ" })).toBeInTheDocument();
     expect(screen.getByText("31.2")).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("tab", { name: "Figures" }));
+    expect(screen.getByText(/plot the recorded source curve only/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Build source figure" })).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "Edit / Re-fit…" }));
     expect(useApp.getState()).toMatchObject({ activeId: "source", stageTab: "plot", peaksOpen: true, openAnalysisResultId: null });
   });

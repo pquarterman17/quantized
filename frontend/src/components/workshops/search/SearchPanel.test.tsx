@@ -106,4 +106,20 @@ describe("SearchPanel", () => {
     expect(useApp.getState().activeId).toBe("d2");
     expect(useApp.getState().searchOpen).toBe(false);
   });
+
+  it("reveals the source worksheet for a source-only analysis result", () => {
+    useApp.setState({
+      analysisResults: [{
+        version: 1, id: "peaks", name: "Peak analysis · hall.dat",
+        producer: { id: "peak-analysis", label: "Peak Analysis", version: 1 },
+        sources: [{ datasetId: "d1", role: "input" }], outputs: [],
+        settingsRef: { datasetId: "d1", field: "peakTable" },
+        warnings: [], createdAt: "2026-10-08T00:00:00Z",
+      }],
+    });
+    render(<SearchPanel />);
+    type("peak analysis");
+    fireEvent.click(screen.getByText("Peak analysis · hall.dat"));
+    expect(useApp.getState()).toMatchObject({ openAnalysisResultId: "peaks", activeId: "d1" });
+  });
 });

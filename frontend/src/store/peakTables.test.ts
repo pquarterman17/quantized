@@ -139,6 +139,20 @@ describe("publishPeakTable", () => {
     ]);
   });
 
+  it("refreshes duplicate linked records without merging away their user metadata", () => {
+    publishFitResult("d1", RESULT, "simultaneous", { ...OPTS, yKey: 0 });
+    const original = useApp.getState().analysisResults[0];
+    useApp.setState({ analysisResults: [
+      { ...original, id: "legacy-a", name: "First review", notes: "alpha" },
+      { ...original, id: "legacy-b", name: "Second review", notes: "beta" },
+    ] });
+    publishFitResult("d1", { ...RESULT, R2: 0.8 }, "simultaneous", { ...OPTS, yKey: 0 });
+    expect(useApp.getState().analysisResults).toEqual([
+      expect.objectContaining({ id: "legacy-a", name: "First review", notes: "alpha" }),
+      expect.objectContaining({ id: "legacy-b", name: "Second review", notes: "beta" }),
+    ]);
+  });
+
   it("honors a deleted catalog item during table edits but recreates it for a new fit", () => {
     publishFitResult("d1", RESULT, "simultaneous", { ...OPTS, yKey: 0 });
     const peakId = useApp.getState().datasets[0].peakTable!.peaks[0].id;
@@ -281,9 +295,9 @@ describe("manual durable peak edits", () => {
     expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
   });
 
-  it("clears a legacy result selection when removing the final fitted peak", () => {
+  it("keeps a legacy result and its selection as incomplete when removing the final fitted peak", () => {
     fitFresh({ ...RESULT, peaks: [RESULT.peaks[0]], nPeaks: 1 });
-    const legacy = { ...useApp.getState().analysisResults[0], id: "legacy-peaks" };
+    const legacy = { ...useApp.getState().analysisResults[0], id: "legacy-peaks", stale: true as const };
     useApp.setState({
       analysisResults: [legacy],
       openAnalysisResultId: legacy.id,
@@ -291,8 +305,11 @@ describe("manual durable peak edits", () => {
     });
     removePeaks("d1", new Set([useApp.getState().datasets[0].peakTable!.peaks[0].id]));
     expect(useApp.getState()).toMatchObject({
-      analysisResults: [], openAnalysisResultId: null, librarySelection: null,
+      analysisResults: [expect.objectContaining({ id: "legacy-peaks" })],
+      openAnalysisResultId: "legacy-peaks",
+      librarySelection: { kind: "analysis-result", id: "legacy-peaks" },
     });
+    expect(useApp.getState().analysisResults[0].stale).toBeUndefined();
   });
 
   it("undoes and redoes a manual edit as one effective-change-only step", () => {
@@ -326,13 +343,13 @@ describe("manual durable peak edits", () => {
 
     removePeaks("d1", new Set(original.peaks.map((peak) => peak.id)));
     expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
-    expect(useApp.getState().analysisResults).toEqual([]);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
     useApp.getState().undo();
     expect(useApp.getState().datasets[0].peakTable).toEqual(original);
     expect(useApp.getState().analysisResults).toHaveLength(1);
     useApp.getState().redo();
     expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
-    expect(useApp.getState().analysisResults).toEqual([]);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
   });
 });
 

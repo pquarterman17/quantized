@@ -14,6 +14,7 @@
 // Pure: the parser runs this inside lib/workspaceParse.worker.ts too.
 
 import type { AnalysisResult } from "./analysisResult";
+import { peakTableMatchesData } from "./peakTableFreshness";
 import type { DataStruct, Dataset } from "./types";
 
 const fingerprints = new WeakMap<DataStruct, string>();
@@ -68,6 +69,17 @@ export function stampAnalysisResults(
 ): AnalysisResult[] {
   const byId = new Map(datasets.map((dataset) => [dataset.id, dataset]));
   return results.map(({ stale: _wasStale, ...result }) => {
+    // A peak result has no linked output and its Dataset.peakTable carries the
+    // fit-time fingerprint. Do not stamp a second, generic fingerprint that
+    // no load-side path can use and that suggests this source-only result is
+    // governed by the linked-output recalc graph.
+    if (result.settingsRef?.field === "peakTable") {
+      const { sourceFingerprint: _unused, ...peakResult } = result;
+      const source = byId.get(result.settingsRef.datasetId);
+      return source?.peakTable && !peakTableMatchesData(source.peakTable, source)
+        ? { ...peakResult, stale: true }
+        : peakResult;
+    }
     if (result.outputs.some((ref) => staleDatasets.includes(ref.datasetId))) return { ...result, stale: true };
     const fingerprint = sourcesFingerprint(result, byId);
     return fingerprint ? { ...result, sourceFingerprint: fingerprint } : result;
