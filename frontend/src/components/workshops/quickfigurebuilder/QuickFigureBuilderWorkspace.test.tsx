@@ -74,6 +74,7 @@ beforeEach(() => {
   useApp.setState({
     datasets: [dataset],
     quickFigureBuilderDatasetId: "d1",
+    quickFigureBuilderSeed: null,
     editableFigures: [],
     plotWindows: [],
     cmdkOpen: false,
@@ -81,6 +82,16 @@ beforeEach(() => {
 });
 
 describe("QuickFigureBuilderWorkspace — G1 shell", () => {
+  it("uses a caller-provided result mapping instead of re-inferring every worksheet channel", () => {
+    useApp.setState({
+      quickFigureBuilderSeed: { xKey: null, yKeys: [1], errorBindings: [], ignoredKeys: [0] },
+    });
+    render(<QuickFigureBuilderWorkspace />);
+    expect(screen.getByRole("combobox", { name: "Role for signal" })).toHaveValue("ignore");
+    expect(screen.getByRole("combobox", { name: "Role for error" })).toHaveValue("y");
+    expect(screen.getByText("1 Y series against Acquisition axis")).toBeInTheDocument();
+  });
+
   it("shows the source facts without creating or mutating a figure", () => {
     render(<QuickFigureBuilderWorkspace />);
     expect(screen.getByRole("heading", { name: "Configure measurement.csv" })).toBeInTheDocument();

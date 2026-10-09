@@ -5,7 +5,13 @@
 // DRAGGED_OUT list keeps every static importer off the eager graph.
 
 import { signalAnalysisResult, type AnalysisResult } from "../lib/analysisResult";
+import { analysisResultTableCsv } from "../lib/analysisResultTable";
+import { csvBlob } from "../lib/csvCell";
+import { saveBlob } from "../lib/download";
+import { stemFromName } from "../lib/exportActive";
+import type { Dataset } from "../lib/types";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
+import { nextAnalysisResultId } from "./idSeq";
 import { commitDerivedRecompute } from "./recalcDatasets";
 import { useApp } from "./useApp";
 
@@ -61,6 +67,153 @@ export function removeAnalysisResult(id: string): void {
       ? null
       : state.librarySelection,
   }));
+}
+
+/** Duplicate the catalog record, not its scientific output. The explicit
+ * distinction matters: Rerun creates new computed data; Freeze severs the
+ * output link. */
+export function duplicateAnalysisResult(id: string, now = new Date().toISOString()): string | null {
+  const current = useApp.getState().analysisResults.find((result) => result.id === id);
+  if (!current) return null;
+  const copyId = nextAnalysisResultId();
+  const { updatedAt: _updatedAt, ...unchanged } = current;
+  const copy: AnalysisResult = {
+    ...unchanged,
+    id: copyId,
+    name: `${current.name} copy`,
+    producer: { ...current.producer },
+    sources: current.sources.map((source) => ({ ...source })),
+    outputs: current.outputs.map((output) => ({ ...output })),
+    ...(current.selection ? {
+      selection: {
+        ...current.selection,
+        channels: current.selection.channels.map((channel) => ({ ...channel })),
+        ...(current.selection.xRange ? { xRange: [...current.selection.xRange] as [number, number] } : {}),
+      },
+    } : {}),
+    ...(current.settingsRef ? { settingsRef: { ...current.settingsRef } } : {}),
+    ...(current.scalarValues ? { scalarValues: { ...current.scalarValues } } : {}),
+    ...(current.tableRefs ? { tableRefs: current.tableRefs.map((table) => ({ ...table })) } : {}),
+    ...(current.plotBindings ? { plotBindings: current.plotBindings.map((plot) => ({ ...plot, channels: [...plot.channels] })) } : {}),
+    warnings: [...current.warnings],
+    createdAt: now,
+  };
+  useApp.getState().recordHistory("duplicate analysis result");
+  useApp.setState((state) => ({
+    analysisResults: [...state.analysisResults, copy],
+    openAnalysisResultId: copyId,
+    status: `duplicated result ${current.name}`,
+  }));
+  return copyId;
+}
+
+/** Freeze a single linked output into an ordinary independent worksheet. */
+export function freezeAnalysisResult(id: string): string | null {
+  const state = useApp.getState();
+  const result = state.analysisResults.find((item) => item.id === id);
+  const outputId = result?.outputs.length === 1 ? result.outputs[0].datasetId : null;
+  const output = outputId ? state.datasets.find((dataset) => dataset.id === outputId) : null;
+  if (!result || !output?.derivedFrom) {
+    state.setStatus(`can't freeze ${result?.name ?? "result"}: one linked output worksheet is required`);
+    return null;
+  }
+  const frozenId = state.freezeCopy(output.id);
+  if (frozenId) useApp.getState().setStatus(`froze ${result.name} as independent data`);
+  return frozenId;
+}
+
+/** Resolve and focus one recorded plot binding. Returns null without changing
+ * the active plot when the saved binding is missing or no longer valid. */
+export interface PreparedAnalysisResultPlot {
+  dataset: Dataset;
+  channels: number[];
+}
+
+export async function prepareAnalysisResultPlot(id: string, bindingIndex: number): Promise<PreparedAnalysisResultPlot | null> {
+  const initial = useApp.getState();
+  const result = initial.analysisResults.find((item) => item.id === id);
+  const binding = result?.plotBindings?.[bindingIndex];
+  if (!result || !binding) {
+    initial.setStatus("can't open result figure: the saved plot binding is unavailable");
+    return null;
+  }
+  try {
+    await initial.resolveDataset(binding.datasetId);
+  } catch (error) {
+    useApp.getState().setStatus(`can't open result figure: ${error instanceof Error ? error.message : "worksheet loading failed"}`);
+    return null;
+  }
+  const state = useApp.getState();
+  // The user may delete or edit the result while a lazy worksheet is loading.
+  // Re-read the binding before mutating the active plot so a stale click never
+  // opens data the result no longer owns.
+  const currentBinding = state.analysisResults.find((item) => item.id === id)?.plotBindings?.[bindingIndex];
+  if (!currentBinding || currentBinding.datasetId !== binding.datasetId ||
+      currentBinding.channels.length !== binding.channels.length ||
+      currentBinding.channels.some((channel, index) => channel !== binding.channels[index])) {
+    state.setStatus("can't open result figure: the saved plot binding changed while loading");
+    return null;
+  }
+  const dataset = state.datasets.find((item) => item.id === currentBinding.datasetId);
+  const channels = dataset
+    ? [...new Set(currentBinding.channels)].filter((channel) => Number.isInteger(channel) && channel >= 0 && channel < dataset.data.labels.length)
+    : [];
+  if (!dataset || channels.length === 0) {
+    state.setStatus(`can't open result figure: ${dataset ? "its plotted channels are unavailable" : "its worksheet is missing"}`);
+    return null;
+  }
+  state.setActive(dataset.id);
+  state.setYKeys(channels);
+  useApp.setState({ stageTab: "plot" });
+  return { dataset, channels };
+}
+
+/** Use the same prepared binding as Open plot, then hand the live store to
+ * the existing report command. Keeping this in the lazy action module avoids
+ * an imperative store read in the React component and one more UI/backend
+ * behavior fork. */
+export async function sendAnalysisResultPlotToReport(id: string, bindingIndex: number): Promise<boolean> {
+  if (!await prepareAnalysisResultPlot(id, bindingIndex)) return false;
+  try {
+    await import("../commands/plotCommands").then((module) => module.sendFigureToReport(useApp.getState));
+    return true;
+  } catch (error) {
+    useApp.getState().setStatus(`can't send result figure to report: ${error instanceof Error ? error.message : "report tools failed to load"}`);
+    return false;
+  }
+}
+
+/** Export a recorded table through the same safe browser-download primitives
+ * as the focused analysis workshops. */
+export async function exportAnalysisResultTable(id: string, datasetId: string): Promise<boolean> {
+  const initial = useApp.getState();
+  const result = initial.analysisResults.find((item) => item.id === id);
+  const ownsTable = result?.tableRefs?.some((table) => table.datasetId === datasetId)
+    || result?.outputs.some((output) => output.datasetId === datasetId);
+  if (!result || !ownsTable) return false;
+  try {
+    await initial.resolveDataset(datasetId);
+  } catch (error) {
+    useApp.getState().setStatus(`can't export ${result.name}: ${error instanceof Error ? error.message : "worksheet loading failed"}`);
+    return false;
+  }
+  const state = useApp.getState();
+  const current = state.analysisResults.find((item) => item.id === id);
+  const stillOwned = current?.tableRefs?.some((table) => table.datasetId === datasetId)
+    || current?.outputs.some((output) => output.datasetId === datasetId);
+  if (!current || !stillOwned) {
+    state.setStatus("can't export result table: its result changed while loading");
+    return false;
+  }
+  const dataset = state.datasets.find((item) => item.id === datasetId);
+  if (!dataset) {
+    state.setStatus(`can't export ${current.name}: its table worksheet is missing`);
+    return false;
+  }
+  const filename = stemFromName(`${current.name}-${dataset.name}`).replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/, "") || "analysis-result";
+  saveBlob(csvBlob(analysisResultTableCsv(dataset)), `${filename}.csv`);
+  state.setStatus(`exported result table ${dataset.name}`);
+  return true;
 }
 
 const recalculating = new Set<string>();

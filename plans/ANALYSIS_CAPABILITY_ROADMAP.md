@@ -236,7 +236,7 @@ temporary contents of a floating window.
   source references, selection snapshot, parameters, scalar values, tables,
   optional plot bindings, warnings, timestamps, and stale state.
 - [x] Add an Analysis Results section under the appropriate workbook/folder.
-- [ ] Open a result into a result workspace with Overview, Tables, Diagnostics,
+- [x] Open a result into a result workspace with Overview, Tables, Diagnostics,
   Figures, Provenance, and Notes tabs as applicable.
 - [ ] Add Edit and rerun, Recalculate, Duplicate, Freeze, Send to report, Build
   figure, Export tables, Rename, and Delete actions.
@@ -256,15 +256,21 @@ Implementation status (2026-10-08):
   under the source/output workbook with Tree, Tiles, Details, filters,
   selection, rename, context-menu, and missing-source behavior shared with
   other artifacts.
-- [x] Added a lazy result workspace with Overview, Table, Diagnostics,
+- [x] Added a lazy result workspace with Overview, Tables, Figures, Diagnostics,
   Provenance, and Notes views. The first 100 output rows are inspectable
   without creating an unbounded DOM table; the complete worksheet remains
   one click away. Tabs support standard arrow/Home/End keyboard navigation.
 - [x] Added Signal result actions for Open worksheet, Recalculate in place,
   Rerun as new, Rename, Notes, and Delete result. Delete deliberately keeps
   the linked worksheet/data; rerun deliberately creates a new result.
-- [ ] Still required for the common result workspace: a real Figures view,
-  Duplicate/Freeze, Send to report, Build figure, and Export tables.
+- [x] Added the common result-output actions: a recorded-binding Figures view,
+  editable-figure launch seeded from the recorded series, Send to report,
+  safe full-table CSV export, result-record Duplicate, and single-output
+  Freeze to an independent worksheet. Lazy-load failure and mid-load result
+  changes fail closed; repeated-click guards prevent duplicate side effects.
+- [ ] Still required for the common result workspace: producer-aware Edit and
+  rerun, then adapters for multi-output results where Freeze should offer an
+  explicit output choice. Recalculate/Rerun as new already cover Signal.
 - [x] New signal operations create a result in the same undo gesture as their
   linked worksheet. Legacy `.dwk` files with linked signal worksheets migrate
   deterministic records exactly once; an explicitly saved empty result list
@@ -347,7 +353,8 @@ menu names.
 ## Recommended implementation sequence
 
 1. [x] A1 + A2: Signal Processing workbench using existing processing code.
-2. [ ] A3: expose the existing spectral/filter/correlation engines.
+2. [x] A3: expose the single-worksheet spectral/filter/correlation engines.
+   Cross-worksheet correlation remains intentionally assigned to Workstream D.
 3. [x] A4: pipeline replay, persistence, and real-corpus qualification.
 4. [ ] B: finish the common result actions and migrate fit/peak/statistics
    results. The envelope, Library integration, signal migration, and first
@@ -385,6 +392,7 @@ menu names.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-10-08 | ChatGPT-Sol (Codex) | Finished the common Workstream B result-output workspace: recorded-series figure previews, exact-binding Open plot and editable-figure launch, Send to report, bounded multi-table preview, safe full-table CSV export, result-record Duplicate, and Freeze to independent data. Added transient seeded mappings so Build figure does not silently re-add unrelated worksheet channels, plus repeated-click, lazy-load, mid-load mutation, missing-reference, and project-reload guards. | TypeScript, ESLint, production build, architecture ratchets, and bundle gate passed (813.6 kB eager against 814.7 kB budget). Focused result/builder/hydration checks passed 128/128. Full frontend reached 16,955 passed plus 2 expected failures; two unrelated load-sensitive failures passed immediately in isolation, while the pre-existing Windows flat-autoscale fixture has a subnormal-float serialization mismatch in an untouched file. CI remains the merge gate. |
 | 2026-10-08 | Paige | Implemented the first Workstream B vertical slice: durable versioned result envelopes, canonical Library placement, autosave/save/reopen and legacy signal-result migration, generic future/missing-reference diagnostics, and a lazy Signal result workspace with inspect/recalculate/rerun/rename/notes/delete lifecycle. Scientific settings and arrays remain in the linked worksheet authority rather than being duplicated. | TypeScript, ESLint, 56 architecture ratchets, production build, and the eager-bundle gate passed under the unchanged 834,639 B pin (834,526 B measured after the review fixes). A full frontend run passed 16,876 tests plus 2 expected failures and exposed two new-kind completeness omissions (autosave and icon render-site coverage); both were fixed and their focused suites then passed 64/64. Focused result/store/workspace/Library/component regressions also passed. CI remains the merge gate. |
 | 2026-10-07 | Project team | Completed A1, A2, and A4 around the existing A3 spectral work: technique-workspace launch, row-scope disclosure, X-range controls, reference normalization, editable smoothing/detrend polynomial order, contextual Help, named Recipe Library templates, one replayable `signal` transform path, unit-aware rebinding, source-race refusal, cancellation, undo, and project persistence. Cross-worksheet correlation remains explicitly deferred to Workstream D. | Focused frontend workbench/pipeline/workspace checks passed (including record → save → reload → replay); focused correction API/calc checks passed (121). Real corpus passed on `La2NiO4_1.xrdml`, `sims_depth_profile.xlsx`, `S3_650Oe_From700mT.refl`, and `vsm_mh_perp_a.dat`, with source arrays and file hashes unchanged. |
 | 2026-10-07 | ChatGPT-Sol (Codex) | Completed the single-worksheet A3 spectral tranche: FFT/PSD/phase, four frequency filters, transfer-function and before/after previews, two-channel cross-correlation, linked plottable outputs, versioned recipe persistence/rebinding, and explicit irregular-grid resampling. Cross-worksheet correlation remains explicitly deferred to the multi-source dependency workstream. Two adversarial passes fixed filter detrending semantics, stale metadata/error-role leakage, malformed recipe/orphan transfer handling, duplicate-label rebinding, event-loop decoding, cutoff provenance, reciprocal-unit display, large-array handling, startup-bundle loading, oversized Welch provenance, unbounded transfer previews, zero-energy correlation, implicit-notch provenance, hidden-setting recipe corruption, stale previews, and async source-change/orphan races. | Focused frontend: 311 passed; focused backend/API/off-loop: 131 passed; Ruff, focused mypy, TypeScript, ESLint, architecture ratchets, production build, and 814.5 kB eager-bundle gate passed. Full frontend before the second focused hardening pass: 16,824 passed / 2 expected failures; three unrelated lazy-workspace timing tests failed under the 322-second full run and then passed 4/4 in isolation. Real corpus: XRD PSD, SIMS resampled correlation, reflectivity filtering/transfer diagnostic, and correct refusal of a non-monotonic magnetometry loop, with source bytes unchanged. |

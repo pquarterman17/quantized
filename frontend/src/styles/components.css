@@ -651,14 +651,30 @@
 .qz-analysis-summary dd { margin: 3px 0 0; overflow-wrap: anywhere; }
 .qz-analysis-caption, .qz-analysis-empty { color: var(--text-dim); }
 .qz-analysis-caption { margin: 14px 0 0; font-size: 12px; }
+.qz-analysis-subtoolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.qz-analysis-subtoolbar label { display: flex; align-items: center; gap: 6px; margin-right: auto; color: var(--text-dim); }
+.qz-analysis-subtoolbar select { max-width: 280px; }
 .qz-analysis-table-wrap { overflow: auto; }
 .qz-analysis-table { width: max-content; min-width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .qz-analysis-table th, .qz-analysis-table td { padding: 5px 9px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
 .qz-analysis-table th { position: sticky; top: 0; background: var(--surface-2); color: var(--text-dim); }
+.qz-analysis-figures { display: grid; gap: 10px; }
+.qz-analysis-figures > .qz-analysis-caption { margin-top: 0; }
+.qz-analysis-figure-card { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 12px; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-1); }
+.qz-analysis-figure-card.unavailable { opacity: .72; }
+.qz-analysis-figure-preview { display: grid; place-items: center; min-height: 72px; overflow: hidden; border: 1px solid var(--border); border-radius: 4px; background: var(--surface-0); color: var(--text-dim); font-size: 11px; }
+.qz-analysis-figure-preview svg { display: block; width: 100%; height: 72px; }
+.qz-analysis-figure-preview path { fill: none; stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.qz-analysis-figure-info { display: grid; min-width: 0; gap: 5px; }
+.qz-analysis-figure-info > span { overflow: hidden; color: var(--text-dim); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.qz-analysis-figure-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
 .qz-analysis-diagnostics { margin: 0; padding-left: 20px; }
 .qz-analysis-diagnostics li + li { margin-top: 8px; }
 .qz-analysis-notes { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .qz-analysis-notes textarea { width: 100%; min-height: 180px; resize: vertical; }
+@media (max-width: 720px) {
+  .qz-analysis-figure-card { grid-template-columns: 1fr; }
+}
 .qz-spectral-response,
 .qz-spectral-metrics {
   border: 1px solid var(--border);

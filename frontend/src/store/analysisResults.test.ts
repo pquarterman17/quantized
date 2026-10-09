@@ -3,13 +3,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalysisResult } from "../lib/analysisResult";
 import type { Dataset } from "../lib/types";
 
-const { recompute } = vi.hoisted(() => ({ recompute: vi.fn() }));
+const { recompute, saveBlob } = vi.hoisted(() => ({ recompute: vi.fn(), saveBlob: vi.fn() }));
 vi.mock("./derivedWorksheets", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./derivedWorksheets")>()),
   recomputeDerivedSheet: recompute,
 }));
+vi.mock("../lib/download", () => ({ saveBlob }));
 
 import {
+  duplicateAnalysisResult,
+  exportAnalysisResultTable,
+  freezeAnalysisResult,
+  prepareAnalysisResultPlot,
   recalculateAnalysisResult,
   registerAnalysisResult,
   removeAnalysisResult,
@@ -31,6 +36,7 @@ const RESULT: AnalysisResult = {
 
 beforeEach(() => {
   useApp.setState({
+    datasets: [],
     analysisResults: [],
     openAnalysisResultId: null,
     librarySelection: null,
@@ -68,6 +74,82 @@ describe("analysis result store lifecycle", () => {
     useApp.setState({ analysisResults: [RESULT] });
     updateAnalysisResultNotes("result-1", "first line\n\nsecond line");
     expect(useApp.getState().analysisResults[0].notes).toBe("first line\n\nsecond line");
+  });
+
+  it("duplicates the result record as one undoable edit without copying its output", () => {
+    useApp.setState({ analysisResults: [{ ...RESULT, updatedAt: "old" }] });
+    const id = duplicateAnalysisResult("result-1", "2026-10-09T00:00:00Z");
+    expect(id).toMatch(/^analysis-/);
+    expect(useApp.getState().analysisResults[1]).toMatchObject({
+      id, name: `${RESULT.name} copy`, outputs: RESULT.outputs,
+      createdAt: "2026-10-09T00:00:00Z",
+    });
+    expect(useApp.getState().analysisResults[1].updatedAt).toBeUndefined();
+    expect(useApp.getState().datasets).toHaveLength(0);
+    useApp.getState().undo();
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+  });
+});
+
+describe("analysis result output actions", () => {
+  const data: Dataset["data"] = {
+    time: [0, 1], values: [[2, 3], [4, 5]], labels: ["A", "B"], units: ["V", "V"], metadata: { xLabel: "Time" },
+  };
+  const source: Dataset = { id: "source", name: "Source", data };
+  const output: Dataset = { id: "output", name: "Output", data, derivedFrom: { datasetId: "source", pipeline: "Smooth" } };
+  const rich = { ...RESULT, tableRefs: [{ datasetId: "output", label: "Output" }], plotBindings: [{ datasetId: "output", channels: [1, 99] }] };
+
+  beforeEach(() => {
+    saveBlob.mockReset();
+    useApp.setState({
+      datasets: [source, output], activeId: "source", analysisResults: [rich],
+      history: [], future: [], yKeys: null, stageTab: "worksheet",
+    });
+  });
+
+  it("focuses only valid saved plot channels", async () => {
+    expect(await prepareAnalysisResultPlot("result-1", 0)).toMatchObject({ dataset: { id: "output" }, channels: [1] });
+    expect(useApp.getState()).toMatchObject({ activeId: "output", yKeys: [1], stageTab: "plot" });
+    expect(await prepareAnalysisResultPlot("result-1", 2)).toBeNull();
+  });
+
+  it("fails closed when a lazy output cannot load or the result changes during loading", async () => {
+    const realResolve = useApp.getState().resolveDataset;
+    try {
+      useApp.setState({ resolveDataset: () => Promise.reject(new Error("network unavailable")) });
+      expect(await prepareAnalysisResultPlot("result-1", 0)).toBeNull();
+      expect(useApp.getState()).toMatchObject({ activeId: "source", yKeys: null });
+      expect(useApp.getState().status).toContain("network unavailable");
+
+      useApp.setState({
+        analysisResults: [rich], status: "", resolveDataset: async () => {
+          useApp.setState({ analysisResults: [] });
+          return output;
+        },
+      });
+      expect(await prepareAnalysisResultPlot("result-1", 0)).toBeNull();
+      expect(useApp.getState()).toMatchObject({ activeId: "source", yKeys: null });
+      expect(useApp.getState().status).toContain("changed while loading");
+    } finally {
+      useApp.setState({ resolveDataset: realResolve });
+    }
+  });
+
+  it("exports a recorded table and refuses a worksheet the result does not own", async () => {
+    expect(await exportAnalysisResultTable("result-1", "source")).toBe(false);
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(await exportAnalysisResultTable("result-1", "output")).toBe(true);
+    expect(saveBlob).toHaveBeenCalledWith(expect.any(Blob), "Smooth · Trace-Output.csv");
+  });
+
+  it("freezes the linked output as independent data and keeps the result", () => {
+    const frozenId = freezeAnalysisResult("result-1");
+    const frozen = useApp.getState().datasets.find((dataset) => dataset.id === frozenId);
+    expect(frozen).toMatchObject({ name: "Output (frozen)" });
+    expect(frozen?.derivedFrom).toBeUndefined();
+    expect(useApp.getState().analysisResults).toEqual([rich]);
+    useApp.getState().undo();
+    expect(useApp.getState().datasets.map((dataset) => dataset.id)).toEqual(["source", "output"]);
   });
 });
 

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AnalysisResult } from "../../../lib/analysisResult";
@@ -47,6 +47,7 @@ const result: AnalysisResult = {
   selection: { datasetId: "source", channels: [{ index: 0, label: "Signal", unit: "V" }] },
   settingsRef: { datasetId: "output", field: "analysisRecipe" },
   tableRefs: [{ datasetId: "output", label: "Smoothed trace" }],
+  plotBindings: [{ datasetId: "output", channels: [0] }],
   warnings: [],
   createdAt: "2026-10-08T00:00:00Z",
 };
@@ -62,6 +63,8 @@ beforeEach(() => {
     staleDatasets: [],
     history: [],
     future: [],
+    quickFigureBuilderDatasetId: null,
+    quickFigureBuilderSeed: null,
   });
 });
 
@@ -75,6 +78,14 @@ describe("AnalysisResultPanel", () => {
     expect(screen.getByText("1.9")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Provenance" }));
     expect(screen.getByText("output.analysisRecipe")).toBeInTheDocument();
+  });
+
+  it("Open worksheet leaves the result workspace on the requested table", () => {
+    useApp.setState({ stageTab: "plot" });
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Table" }));
+    fireEvent.click(within(screen.getByRole("tabpanel")).getByRole("button", { name: "Open worksheet" }));
+    expect(useApp.getState()).toMatchObject({ activeId: "output", stageTab: "worksheet", openAnalysisResultId: null });
   });
 
   it("shows the selection from the output's recipe (the authority), not a stale envelope copy", () => {
@@ -102,6 +113,42 @@ describe("AnalysisResultPanel", () => {
     fireEvent.keyDown(overview, { key: "ArrowRight" });
     expect(screen.getByRole("tab", { name: "Table" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("columnheader", { name: "Time" })).toBeInTheDocument();
+  });
+
+  it("shows recorded figure bindings and opens the editable figure workflow", async () => {
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Figures" }));
+    expect(screen.getByRole("img", { name: "Preview of Smoothed trace" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Build figure" }));
+    await waitFor(() => expect(useApp.getState().quickFigureBuilderDatasetId).toBe("output"));
+    expect(useApp.getState().quickFigureBuilderSeed?.yKeys).toEqual([0]);
+    expect(useApp.getState().openAnalysisResultId).toBeNull();
+    expect(useApp.getState()).toMatchObject({ activeId: "output", yKeys: [0], stageTab: "plot" });
+  });
+
+  it("seeds Build figure with only the result's recorded series", async () => {
+    const multi = {
+      ...output,
+      data: { ...output.data, values: [[1, 10], [2, 20]], labels: ["Other", "Result"], units: ["V", "V"] },
+    };
+    useApp.setState({
+      datasets: [source, multi],
+      analysisResults: [{ ...result, plotBindings: [{ datasetId: "output", channels: [1] }] }],
+    });
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Figures" }));
+    fireEvent.click(screen.getByRole("button", { name: "Build figure" }));
+    await waitFor(() => expect(useApp.getState().quickFigureBuilderDatasetId).toBe("output"));
+    expect(useApp.getState().quickFigureBuilderSeed).toMatchObject({ yKeys: [1], ignoredKeys: [0] });
+  });
+
+  it("duplicates the result record without silently duplicating scientific data", async () => {
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Duplicate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Duplicating…" }));
+    await waitFor(() => expect(useApp.getState().analysisResults).toHaveLength(2));
+    expect(useApp.getState().datasets.map((dataset) => dataset.id)).toEqual(["source", "output"]);
+    expect(useApp.getState().analysisResults[1].outputs).toEqual(result.outputs);
   });
 
   it("Recalculate runs this result's own recompute, never the project-wide recalcNow", async () => {

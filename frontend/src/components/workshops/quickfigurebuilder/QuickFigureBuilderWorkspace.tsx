@@ -7,6 +7,7 @@ import {
   mappingReady,
   pointLabelBlock,
   roleFilteredYKeys,
+  type QuickFigureMapping,
 } from "../../../lib/quickFigureMapping";
 import {
   assignQuickFigureColumn,
@@ -62,8 +63,8 @@ function promptSaveTemplate(dataset: Dataset): Promise<{ name: string; scope: Qu
   });
 }
 
-function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => void }) {
-  const [mapping, setMapping] = useState(() => initialQuickFigureMapping(dataset));
+function BuilderForDataset({ dataset, seed, close }: { dataset: Dataset; seed: QuickFigureMapping | null; close: () => void }) {
+  const [mapping, setMapping] = useState(() => seed ?? initialQuickFigureMapping(dataset));
   const [style, setStyle] = useState<QuickPlotStyle>("line");
   const [setup, setSetup] = useState<QuickFigureSetup>(DEFAULT_QUICK_FIGURE_SETUP);
   const assign = (channel: number, assignment: QuickColumnAssignment): void => {
@@ -234,6 +235,7 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
 
 export default function QuickFigureBuilderWorkspace() {
   const datasetId = useApp((s) => s.quickFigureBuilderDatasetId);
+  const seed = useApp((s) => s.quickFigureBuilderSeed);
   const dataset = useApp((s) => s.datasets.find((candidate) => candidate.id === datasetId));
   const close = useApp((s) => s.closeQuickFigureBuilder);
 
@@ -262,5 +264,5 @@ export default function QuickFigureBuilderWorkspace() {
       </section>
     );
   }
-  return <BuilderForDataset key={dataset.id} dataset={dataset} close={close} />;
+  return <BuilderForDataset key={dataset.id} dataset={dataset} seed={seed} close={close} />;
 }
