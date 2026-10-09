@@ -222,7 +222,7 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
           // against whatever dataset happens to share its id in the NEW project).
           pendingRecipeApplication: null,
           staleDatasets: ws.staleDatasets ?? [], // results stale when saved (lib/analysisResultFreshness.ts)
-          staleFits: [],
+          staleFits: ws.staleFits ?? [],
           stageTab: activeDs ? nextStageTab(activeDs, s.stageTab) : s.stageTab,
           xKey: restoredView ? restoredView.xKey : null,
           yKeys: restoredView ? restoredView.yKeys : null,

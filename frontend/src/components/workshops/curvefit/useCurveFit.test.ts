@@ -43,7 +43,35 @@ beforeEach(() => {
     yKeys: null,
     seriesOrder: null,
     errKeys: {}, // reset — setState merges, so a prior test's errKeys would leak
+    analysisResults: [],
     fitOverlay: null,
+  });
+});
+
+describe("useCurveFit saved recipe", () => {
+  it("reopens the recorded model, weighting, starts, bounds, and held flags", async () => {
+    vi.mocked(listFitModels).mockResolvedValue({ models: [{
+      name: "Linear", category: "line", paramNames: ["slope", "intercept"], nParams: 2,
+      p0: [1, 0], lb: [null, null], ub: [null, null],
+    }] });
+    useApp.setState({
+      datasets: [{
+        id: "d1", name: "run.dat", data: DATA,
+        fitSpec: {
+          model: "Linear", xKey: null, yKey: 0, weight: { mode: "manual", errKey: 0 },
+          p0: [2, 3], lower: [0, null], upper: [10, 5], fixed: [false, true],
+        },
+      }],
+    });
+    const { result } = renderHook(() => useCurveFit());
+    await waitFor(() => expect(result.current.paramRows).toHaveLength(2));
+    expect(result.current.modelName).toBe("Linear");
+    expect(result.current.weightMode).toBe("manual");
+    expect(result.current.manualKey).toBe(0);
+    expect(result.current.paramRows).toEqual([
+      { name: "slope", start: "2", min: "0", max: "10", fixed: false },
+      { name: "intercept", start: "3", min: "", max: "5", fixed: true },
+    ]);
   });
 });
 

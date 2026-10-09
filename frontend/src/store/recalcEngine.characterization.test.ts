@@ -188,6 +188,15 @@ describe("recalcNow re-entrancy (module-level scheduler state)", () => {
     return { entered, release: () => release() };
   }
 
+  it("keeps a fit stale and its old overlay when a backend result has no finite parameters", async () => {
+    seed({ staleDatasets: [], staleFits: ["a"], fitOverlay: { datasetId: "a", y: [9, 9, 9] } });
+    vi.mocked(fitModel).mockResolvedValueOnce({ params: [Number.NaN], yFit: [2, 4, 6] });
+    await act().recalcNow();
+    expect(act().staleFits).toEqual(["a"]);
+    expect(act().fitOverlay).toEqual({ datasetId: "a", y: [9, 9, 9] });
+    expect(act().status).toContain("finite parameter values");
+  });
+
   it("a touch that arrives mid-pass is ignored (the recalc's own writes never re-mark)", async () => {
     seed({ staleDatasets: [], staleFits: ["a"] });
     const held = holdFit();
@@ -225,7 +234,7 @@ describe("recalcNow re-entrancy (module-level scheduler state)", () => {
 });
 
 describe("setFitSpec", () => {
-  it("writes only datasets: sets the spec on the named dataset, leaves the rest by identity", () => {
+  it("sets the spec while leaving other datasets by identity", () => {
     const before = snapshot();
     const spec: FitSpec = { model: "Gaussian", xKey: null, yKey: 0 };
     act().setFitSpec("lone", spec);
@@ -248,4 +257,5 @@ describe("setFitSpec", () => {
     expect(act().staleDatasets).toEqual(["zz"]);
     expect(act().staleFits).toEqual(["zz"]);
   });
+
 });

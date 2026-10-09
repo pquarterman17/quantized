@@ -24,6 +24,10 @@ function numbers(v: unknown): number[] | undefined {
   return Array.isArray(v) && v.every(isFinite) ? [...v] : undefined;
 }
 
+function nullableNumbers(v: unknown): (number | null)[] | undefined {
+  return Array.isArray(v) && v.every((item) => item === null || isFinite(item)) ? [...v] : undefined;
+}
+
 /** A bound list: finite numbers, `null` where unbounded (the wire form). */
 function bounds(v: unknown): (number | null)[] | undefined {
   return Array.isArray(v) && v.every((b) => b === null || isFinite(b)) ? [...v] : undefined;
@@ -52,6 +56,12 @@ export function parseFitSpec(v: unknown): FitSpec | undefined {
   if (weight) spec.weight = weight;
   const params = numbers(fs.params);
   if (params) spec.params = params;
+  const errors = nullableNumbers(fs.errors);
+  if (errors && (!params || errors.length === params.length)) spec.errors = errors;
+  for (const field of ["R2", "RMSE", "AIC", "chiSqRed"] as const) {
+    if (isFinite(fs[field])) spec[field] = fs[field];
+  }
+  if (Number.isInteger(fs.nFree) && (fs.nFree as number) >= 0) spec.nFree = fs.nFree as number;
   if (typeof fs.exitFlag === "number") spec.exitFlag = fs.exitFlag;
   // MAIN_PLAN #30: the rest of the reproducible recipe.
   const range = numbers(fs.range);

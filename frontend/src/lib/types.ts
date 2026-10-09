@@ -413,6 +413,16 @@ export interface FitSpec {
   weight?: FitWeighting;
   /** Fitted parameters from the last fit/recompute (result snapshot). */
   params?: number[];
+  /** Compact result summary kept beside the authoritative recipe. Full
+   *  fitted curves/residual arrays stay transient and are regenerated from
+   *  `model` + `params` when a result is opened. Null errors represent held
+   *  parameters whose uncertainty was not estimated. */
+  errors?: (number | null)[];
+  R2?: number;
+  RMSE?: number;
+  AIC?: number;
+  chiSqRed?: number;
+  nFree?: number;
   /** Optimizer exit flag (1 = success, 0 = did not converge). */
   exitFlag?: number;
   /** MAIN_PLAN #30 — the rest of the reproducible recipe.

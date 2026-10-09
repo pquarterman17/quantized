@@ -232,6 +232,9 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
         params: fitStepParams(model, spec),
       });
       get().setFitSpec(active.id, spec);
+      // qfitResult is transient and can only land through gadgetRun, so the
+      // runner is already loaded whenever a real quick fit is committed.
+      runner?.publishFitResult(active.id);
     },
     // ── ROI gadget family (#34) — generalizes the frame above ─────────────────
     // Mode switch: re-triggers a live ROI's compute for the new mode (mirrors

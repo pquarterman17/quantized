@@ -433,7 +433,7 @@ const WORKSPACE_DOC_RENAMES: Record<string, string> = { pipeline: "macroSteps" }
 // discipline as architecture.test.ts's HISTORY_EXCLUDED list.
 const AUTOSAVE_EXCLUDED: Record<string, string> = {
   analysisResultCatalogVersion:
-    "serializer-owned schema metadata, always written as v2 and never held " +
+    "serializer-owned schema metadata, always written as v3 and never held " +
     "or changed in AppState; there is no standalone state mutation to track.",
   techniqueViewMemory:
     "every mutation site (store/windows.ts's focusedRebindPatch, and the " +

@@ -261,6 +261,17 @@ describe("durable analysis results", () => {
     legacy.analysisResultCatalogVersion = 2;
     expect(parseWorkspace(JSON.stringify(legacy)).analysisResults).toEqual([]);
   });
+
+  it("migrates saved curve fits into the catalog once and respects a v3 deletion", () => {
+    const dataset = makeDataset("fit", "line.csv");
+    dataset.fitSpec = { model: "Linear", xKey: 0, yKey: 1, params: [2, 1], fittedAt: "2026-10-09T00:00:00Z" };
+    const saved = JSON.parse(serializeWorkspace({ datasets: [dataset], analysisResults: [] }));
+    saved.analysisResultCatalogVersion = 2;
+    expect(parseWorkspace(JSON.stringify(saved)).analysisResults?.map((result) => result.id)).toEqual(["analysis-fit-fit"]);
+
+    saved.analysisResultCatalogVersion = 3;
+    expect(parseWorkspace(JSON.stringify(saved)).analysisResults).toEqual([]);
+  });
 });
 
 // LIBRARY_WORKBOOK_UX_PLAN PR K (K2): deps/derivedFrom/formulaErrors round

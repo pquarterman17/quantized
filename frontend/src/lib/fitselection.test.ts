@@ -3,7 +3,8 @@
 import { describe, expect, it } from "vitest";
 
 import type { CalcResult, Dataset } from "./types";
-import { fitDataForSpec, fitStepParams, selectedFitData, stampRecompute } from "./fitselection";
+import { stampRecompute } from "./fitRecompute";
+import { fitDataForSpec, fitStepParams, selectedFitData } from "./fitselection";
 import { fitSpecFromStepParams } from "./fitStepDecode";
 import { activeCorrectionNames, fitSpecFrom, fullPlottedX } from "./fitselectionActions";
 
@@ -250,12 +251,63 @@ describe("stampRecompute (MAIN #30)", () => {
 
   it("keeps the original fittedAt, so both times are readable", () => {
     const spec = { model: "g", fittedAt: "orig" };
-    expect(stampRecompute(spec, {}, now).fittedAt).toBe("orig");
+    expect(stampRecompute(spec, { params: [1] }, now).fittedAt).toBe("orig");
   });
 
-  it("leaves params alone when the recompute returned none", () => {
+  it("refuses to put a fresh timestamp beside old parameters", () => {
     const spec = { model: "g", params: [1] };
-    expect(stampRecompute(spec, {}, now).params).toEqual([1]);
+    expect(() => stampRecompute(spec, {}, now)).toThrow("finite parameter values");
+  });
+
+  it("clears result summaries that the recompute did not return", () => {
+    const spec = {
+      model: "g",
+      errors: [0.1],
+      R2: 0.99,
+      RMSE: 0.1,
+      AIC: 12,
+      chiSqRed: 1.1,
+      nFree: 1,
+      uncertainty: "covariance" as const,
+    };
+    const updated = stampRecompute(spec, { params: [2] }, now);
+    expect(updated).not.toHaveProperty("errors");
+    expect(updated).not.toHaveProperty("R2");
+    expect(updated).not.toHaveProperty("RMSE");
+    expect(updated).not.toHaveProperty("AIC");
+    expect(updated).not.toHaveProperty("chiSqRed");
+    expect(updated).not.toHaveProperty("nFree");
+    expect(updated.uncertainty).toBe("none");
+  });
+
+  it("replaces result summaries and uncertainty together", () => {
+    const updated = stampRecompute(
+      { model: "g", R2: 0.1, uncertainty: "none" },
+      { params: [2], errors: [0.2], R2: 0.98, RMSE: 0.3, AIC: 4, chiSqRed: 1, nFree: 1 },
+      now,
+    );
+    expect(updated).toMatchObject({
+      errors: [0.2], R2: 0.98, RMSE: 0.3, AIC: 4, chiSqRed: 1, nFree: 1,
+      uncertainty: "covariance",
+    });
+  });
+
+  it("rejects non-finite parameters instead of retaining the old result", () => {
+    expect(() => stampRecompute(
+      { model: "g", params: [1], errors: [0.1], uncertainty: "covariance" },
+      { params: [Number.NaN], errors: [Number.POSITIVE_INFINITY] },
+      now,
+    )).toThrow("finite parameter values");
+  });
+
+  it("does not attach a mismatched uncertainty vector to fresh parameters", () => {
+    const updated = stampRecompute(
+      { model: "g", params: [1], errors: [0.1], uncertainty: "covariance" },
+      { params: [2, 3], errors: [0.2] },
+      now,
+    );
+    expect(updated.errors).toBeUndefined();
+    expect(updated.uncertainty).toBe("none");
   });
 });
 
@@ -300,5 +352,8 @@ describe("starts/bounds in the recipe (MAIN #30)", () => {
     expect(withErrors.uncertainty).toBe("covariance");
     const without = fitSpecFrom("g", null, sel, {}, undefined, undefined, undefined, at);
     expect(without.uncertainty).toBe("none");
+    const malformed = fitSpecFrom("g", null, sel, { errors: [Number.NaN] }, undefined, undefined, undefined, at);
+    expect(malformed.uncertainty).toBe("none");
+    expect(malformed.errors).toBeUndefined();
   });
 });

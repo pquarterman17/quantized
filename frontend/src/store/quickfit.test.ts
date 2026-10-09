@@ -151,6 +151,9 @@ describe("quick-fit gadget (#33)", () => {
     expect(useApp.getState().macroSteps.at(-1)).toEqual(
       expect.objectContaining({ kind: "fit", params: { model: "Linear", xKey: null, yKey: 0 } }),
     );
+    expect(useApp.getState().analysisResults).toEqual([
+      expect.objectContaining({ settingsRef: { datasetId: "a", field: "fitSpec" } }),
+    ]);
   });
 
   it("commit is a no-op without an active result", () => {

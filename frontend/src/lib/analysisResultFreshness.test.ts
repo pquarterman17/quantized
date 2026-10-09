@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import type { AnalysisResult } from "./analysisResult";
-import { dataFingerprint, stampAnalysisResults, staleAnalysisOutputs } from "./analysisResultFreshness";
+import { staleAnalysisFits } from "./analysisFitFreshness";
+import { dataFingerprint, stampAnalysisResults } from "./analysisResultFreshness";
+import { staleAnalysisOutputs } from "./analysisResultStaleLoad";
 import type { PeakTable } from "./peakTable";
 import type { DataStruct, Dataset } from "./types";
 
@@ -73,5 +75,19 @@ describe("stamp / stale round trip", () => {
     const [stamped] = stampAnalysisResults([peak], [ds("s", data([1]), { peakTable: table })], []);
     expect(stamped.stale).toBe(true);
     expect(stamped).not.toHaveProperty("sourceFingerprint");
+  });
+
+  it("round-trips fit freshness independently of linked output freshness", () => {
+    const fit: AnalysisResult = {
+      ...RESULT, outputs: [],
+      settingsRef: { datasetId: "s", field: "fitSpec" },
+    };
+    const source = ds("s", data([1]), { fitSpec: { model: "Linear", yKey: 0 } });
+    const [current] = stampAnalysisResults([fit], [source], [], []);
+    expect(staleAnalysisFits([current], [source])).toEqual([]);
+    expect(staleAnalysisFits([current], [{ ...source, data: data([2]) }])).toEqual(["s"]);
+    const [marked] = stampAnalysisResults([current], [source], [], ["s"]);
+    expect(marked.stale).toBe(true);
+    expect(staleAnalysisFits([marked], [source])).toEqual(["s"]);
   });
 });

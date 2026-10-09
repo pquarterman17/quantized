@@ -51,6 +51,11 @@ export function libraryTileSummary(node: LibraryNode): LibraryTileSummary {
         secondary: node.entity.stale ? "Peak table · Out of date" : "Peak table",
         warning: missing,
       };
+      if (node.entity.settingsRef?.field === "fitSpec") return {
+        primary: node.entity.producer.label,
+        secondary: node.entity.stale ? "Fit parameters · Out of date" : "Fit parameters",
+        warning: missing,
+      };
       return {
         primary: node.entity.producer.label,
         secondary: `${count(node.entity.outputs.length, "output")} · ${count(node.entity.warnings.length, "warning")}`,

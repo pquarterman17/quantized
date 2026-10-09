@@ -16,6 +16,7 @@ import { centralDifference, sortByX } from "../lib/differentiate";
 import { effectiveChannels } from "../lib/plotdata";
 import { firstVisiblePlottedChannel, selectRoiRows } from "../lib/quickfit";
 import { expandToFull } from "../lib/rowstate";
+import { publishFitAnalysisResult } from "./publishFitAnalysisResult";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -40,6 +41,7 @@ export interface GadgetRunner {
   runGadgetStats: () => Promise<void>;
   runGadgetDifferentiate: () => void;
   runGadgetFft: () => Promise<void>;
+  publishFitResult: (datasetId: string) => void;
 }
 
 export function createGadgetRun({ set, get, nextSeq, seq: currentSeq, dropQfitResult }: GadgetRunCtx): GadgetRunner {
@@ -164,5 +166,6 @@ export function createGadgetRun({ set, get, nextSeq, seq: currentSeq, dropQfitRe
       const sorted = sortByX(sel.x, sel.y);
       await runRegion(active.id, () => fftSpectral({ x: sorted.x, y: sorted.y }), (r) => ({ gadgetFftPreview: r }), "FFT");
     },
+    publishFitResult: publishFitAnalysisResult,
   };
 }
