@@ -5,6 +5,7 @@
 // DRAGGED_OUT list keeps every static importer off the eager graph.
 
 import { signalAnalysisResult, type AnalysisResult } from "../lib/analysisResult";
+import { analysisPeakTableCsv } from "../lib/analysisPeakTable";
 import { analysisResultTableCsv } from "../lib/analysisResultTable";
 import { csvBlob } from "../lib/csvCell";
 import { saveBlob } from "../lib/download";
@@ -152,6 +153,7 @@ export function freezeAnalysisResult(id: string): string | null {
 export interface PreparedAnalysisResultPlot {
   dataset: Dataset;
   channels: number[];
+  xChannel?: number | null;
 }
 
 /** Resolve and validate a binding without changing the current workspace.
@@ -176,6 +178,7 @@ export async function resolveAnalysisResultPlot(id: string, bindingIndex: number
   // opens data the result no longer owns.
   const currentBinding = state.analysisResults.find((item) => item.id === id)?.plotBindings?.[bindingIndex];
   if (!currentBinding || currentBinding.datasetId !== binding.datasetId ||
+      currentBinding.xChannel !== binding.xChannel ||
       currentBinding.channels.length !== binding.channels.length ||
       currentBinding.channels.some((channel, index) => channel !== binding.channels[index])) {
     state.setStatus("can't open result figure: the saved plot binding changed while loading");
@@ -185,11 +188,14 @@ export async function resolveAnalysisResultPlot(id: string, bindingIndex: number
   const channels = dataset
     ? [...new Set(currentBinding.channels)].filter((channel) => Number.isInteger(channel) && channel >= 0 && channel < dataset.data.labels.length)
     : [];
-  if (!dataset || channels.length === 0) {
+  const xChannel = currentBinding.xChannel;
+  const xValid = xChannel === undefined || xChannel === null ||
+    (Number.isInteger(xChannel) && xChannel >= 0 && xChannel < (dataset?.data.labels.length ?? 0));
+  if (!dataset || channels.length === 0 || !xValid) {
     state.setStatus(`can't open result figure: ${dataset ? "its plotted channels are unavailable" : "its worksheet is missing"}`);
     return null;
   }
-  return { dataset, channels };
+  return { dataset, channels, ...(xChannel !== undefined ? { xChannel } : {}) };
 }
 
 export async function prepareAnalysisResultPlot(id: string, bindingIndex: number): Promise<PreparedAnalysisResultPlot | null> {
@@ -197,6 +203,7 @@ export async function prepareAnalysisResultPlot(id: string, bindingIndex: number
   if (!prepared) return null;
   const state = useApp.getState();
   state.setActive(prepared.dataset.id);
+  if (prepared.xChannel !== undefined) state.setXKey(prepared.xChannel);
   state.setYKeys(prepared.channels);
   useApp.setState({ stageTab: "plot" });
   return prepared;
@@ -246,6 +253,23 @@ export async function exportAnalysisResultTable(id: string, datasetId: string): 
   const filename = stemFromName(`${current.name}-${dataset.name}`).replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/, "") || "analysis-result";
   saveBlob(csvBlob(analysisResultTableCsv(dataset)), `${filename}.csv`);
   state.setStatus(`exported result table ${dataset.name}`);
+  return true;
+}
+
+/** Export a source-only Peak Analysis result from its live peak-table
+ * authority. The envelope owns no copied numbers. */
+export function exportAnalysisPeakTable(id: string): boolean {
+  const state = useApp.getState();
+  const result = state.analysisResults.find((item) => item.id === id);
+  const sourceId = result?.settingsRef?.field === "peakTable" ? result.settingsRef.datasetId : null;
+  const dataset = sourceId ? state.datasets.find((item) => item.id === sourceId) : null;
+  if (!result || !dataset?.peakTable) {
+    state.setStatus(`can't export ${result?.name ?? "peak result"}: its fitted peak table is missing`);
+    return false;
+  }
+  const filename = stemFromName(`${result.name}-peaks`).replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/, "") || "peak-analysis";
+  saveBlob(csvBlob(analysisPeakTableCsv(dataset.peakTable)), `${filename}.csv`);
+  state.setStatus(`exported ${dataset.peakTable.peaks.length} fitted peaks`);
   return true;
 }
 

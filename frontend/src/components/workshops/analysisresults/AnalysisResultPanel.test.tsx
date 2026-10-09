@@ -20,6 +20,7 @@ vi.mock("../../overlays/ToolWindow", () => ({
 }));
 
 import AnalysisResultPanel from "./AnalysisResultPanel";
+import { publishFitResult } from "../../../store/peakTables";
 import { useApp } from "../../../store/useApp";
 
 const appState = useApp.getState;
@@ -195,5 +196,25 @@ describe("AnalysisResultPanel", () => {
     fireEvent.click(screen.getByRole("tab", { name: /Diagnostics/ }));
     expect(screen.getByText("Saved warning")).toBeInTheDocument();
     expect(screen.getByText(/Source worksheet source is missing/)).toBeInTheDocument();
+  });
+
+  it("presents a source-only peak result with its fitted values and an Edit / Re-fit path", () => {
+    useApp.setState({ datasets: [source], activeId: "source", analysisResults: [], openAnalysisResultId: null });
+    publishFitResult("source", {
+      peaks: [{ center: 31.2, fwhm: 0.18, height: 120, bg: 4, eta: null, area: 23, status: "fitted", model: "Gaussian" }],
+      bgCoeffs: [4], R2: 0.998, rmse: 0.2, nPeaks: 1, model: "Gaussian",
+    }, "simultaneous", { bgDegree: 0, linkMode: "None", constrain: false, xKey: null, yKey: 0 });
+    useApp.setState({ openAnalysisResultId: "analysis-peaks-source", peaksOpen: false });
+
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Current")).toBeInTheDocument();
+    expect(screen.getByText("1 total · 0 excluded")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Recalculate" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Table" }));
+    expect(screen.getByRole("columnheader", { name: "Center ± 1σ" })).toBeInTheDocument();
+    expect(screen.getByText("31.2")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit / Re-fit…" }));
+    expect(useApp.getState()).toMatchObject({ activeId: "source", stageTab: "plot", peaksOpen: true, openAnalysisResultId: null });
   });
 });

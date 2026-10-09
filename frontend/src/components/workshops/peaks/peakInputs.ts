@@ -31,6 +31,9 @@ export interface PeakInputs {
    *  the label and unit of the plotted column — the exact misattribution the
    *  provenance field exists to prevent. */
   xKeyUsed: number | null;
+  /** The value channel the fit actually consumed. Null only when the dataset
+   * has no value column; persisted into the result's exact plot binding. */
+  yKeyUsed: number | null;
   gapCount: number;
   sourceCount: number;
 }
@@ -54,6 +57,7 @@ export function peakInputs(
       y: pairs.y,
       fullX,
       xKeyUsed: xKey,
+      yKeyUsed: sel.yKey,
       gapCount: pairs.n - pairs.keep.length,
       sourceCount: pairs.n,
     };
@@ -65,6 +69,7 @@ export function peakInputs(
     y: pairs.y,
     fullX,
     xKeyUsed: null,
+    yKeyUsed: d.values[0]?.length ? 0 : null,
     gapCount: pairs.n - pairs.keep.length,
     sourceCount: pairs.n,
   };

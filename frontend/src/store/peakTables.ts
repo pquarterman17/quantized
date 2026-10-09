@@ -22,6 +22,7 @@
 // re-fit → undo" threw the re-fit away under an "Undo exclude" label.
 // Recording every writer makes undo step back through them in order.
 
+import type { AnalysisResult } from "../lib/analysisResult";
 import type { MultiFitResult, PeakTable } from "../lib/peakTable";
 import {
   peakDataFingerprint,
@@ -34,6 +35,7 @@ import {
   type PeakManualPatch,
 } from "../lib/peakTableFit";
 import { plural } from "../lib/plural";
+import { peakAnalysisResult, peakResultId } from "../lib/peakAnalysisResult";
 import type { Dataset } from "../lib/types";
 import { wavelengthFromMetadata } from "../lib/xrdWavelength";
 import { askConfirm } from "./confirmDialog";
@@ -78,12 +80,58 @@ export function confirmPeaksRefit(datasetId: string, n: number): true | Promise<
 /** Why a superseded publish wrote nothing. */
 export const PUBLISH_SUPERSEDED = "a newer fit, reset or dataset change superseded it — publish again";
 
+const peakResultForDataset = (result: AnalysisResult, datasetId: string): boolean =>
+  result.id === peakResultId(datasetId)
+  || (result.settingsRef?.field === "peakTable" && result.settingsRef.datasetId === datasetId);
+
 /** Attach (or replace) a dataset's peak table. A no-op for an unknown id — the
  *  dataset can be removed while a fit is in flight. */
-export function publishPeakTable(datasetId: string, table: PeakTable): void {
-  useApp.setState((s) => ({
-    datasets: s.datasets.map((d) => (d.id === datasetId ? { ...d, peakTable: table } : d)),
-  }));
+export function publishPeakTable(
+  datasetId: string,
+  table: PeakTable,
+  options: {
+    yKey?: number | null;
+    xKey?: number | null;
+    catalogMode?: "upsert" | "existing-only";
+  } = {},
+): void {
+  useApp.setState((s) => {
+    const dataset = s.datasets.find((d) => d.id === datasetId);
+    if (!dataset) return {};
+    const updated = { ...dataset, peakTable: table };
+    const id = peakResultId(datasetId);
+    const old = s.analysisResults.find((result) => result.id === id)
+      ?? s.analysisResults.find((result) => peakResultForDataset(result, datasetId));
+    const rememberedY = old?.selection?.channels[0]?.index;
+    const rememberedX = old?.plotBindings?.[0]?.xChannel;
+    const fresh = peakAnalysisResult(
+      updated,
+      table,
+      options.yKey === undefined ? rememberedY : options.yKey,
+      options.xKey === undefined ? rememberedX : options.xKey,
+    );
+    const result = old ? {
+      ...fresh,
+      id: old.id,
+      name: old.name,
+      createdAt: old.createdAt,
+      updatedAt: new Date().toISOString(),
+      ...(old.notes ? { notes: old.notes } : {}),
+    } : fresh;
+    let resultPlaced = false;
+    const analysisResults = old
+      ? s.analysisResults.flatMap((item) => {
+        if (!peakResultForDataset(item, datasetId)) return [item];
+        if (resultPlaced) return [];
+        resultPlaced = true;
+        return [result];
+      })
+      : options.catalogMode !== "existing-only" ? [...s.analysisResults, result] : s.analysisResults;
+    return {
+      datasets: s.datasets.map((d) => (d.id === datasetId ? updated : d)),
+      analysisResults,
+    };
+  });
 }
 
 /** Turn a just-finished fit into this dataset's durable peak table.
@@ -96,7 +144,7 @@ export function publishFitResult(
   datasetId: string,
   result: MultiFitResult,
   method: "simultaneous" | "independent",
-  opts: { bgDegree: number; linkMode: string; constrain: boolean; xKey: number | null },
+  opts: { bgDegree: number; linkMode: string; constrain: boolean; xKey: number | null; yKey?: number | null },
 ): void {
   const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
   if (!ds) return;
@@ -128,6 +176,7 @@ export function publishFitResult(
       },
       ds.peakTable ?? null,
     ),
+    { yKey: opts.yKey, xKey: opts.xKey },
   );
 }
 
@@ -153,6 +202,8 @@ export async function publishBuiltPeakTable(
   fitDataset: Dataset,
   build: (ds: Dataset, fingerprint: string) => PeakTable,
   stillCurrent: () => boolean = () => true,
+  yKey?: number | null,
+  xKey?: number | null,
 ): Promise<{ table: PeakTable } | { reason: string }> {
   await useApp.getState().resolveDataset(fitDataset.id);
   const ds = useApp.getState().datasets.find((d) => d.id === fitDataset.id);
@@ -164,7 +215,7 @@ export async function publishBuiltPeakTable(
   if (!stillCurrent()) return { reason: PUBLISH_SUPERSEDED };
   const table = build(ds, fingerprint);
   useApp.getState().recordHistory("publish model fit to peak table");
-  publishPeakTable(ds.id, table);
+  publishPeakTable(ds.id, table, { yKey, xKey });
   return { table };
 }
 
@@ -180,7 +231,7 @@ export function setPeakExcluded(datasetId: string, peakId: string, excluded: boo
   const next = withPeakExcluded(ds.peakTable, peakId, excluded);
   if (next === ds.peakTable) return;
   useApp.getState().recordHistory(excluded ? "exclude fitted peak" : "include fitted peak");
-  publishPeakTable(datasetId, next);
+  publishPeakTable(datasetId, next, { catalogMode: "existing-only" });
 }
 
 
@@ -192,7 +243,7 @@ export function editPeak(datasetId: string, peakId: string, patch: PeakManualPat
   const next = withPeakManualEdit(ds.peakTable, peakId, patch);
   if (next === ds.peakTable) return ds.peakTable;
   useApp.getState().recordHistory("edit fitted peak");
-  publishPeakTable(datasetId, next);
+  publishPeakTable(datasetId, next, { catalogMode: "existing-only" });
   return next;
 }
 
@@ -202,10 +253,24 @@ export function removePeaks(datasetId: string, peakIds: ReadonlySet<string>): Pe
   const next = withoutPeaks(ds.peakTable, peakIds);
   if (next === ds.peakTable) return ds.peakTable;
   useApp.getState().recordHistory("remove fitted peaks");
-  useApp.setState((s) => ({
-    datasets: s.datasets.map((d) =>
-      d.id === datasetId ? { ...d, peakTable: next ?? undefined } : d
-    ),
-  }));
-  return next;
+  if (next) {
+    publishPeakTable(datasetId, next, { catalogMode: "existing-only" });
+    return next;
+  }
+  useApp.setState((s) => {
+    const removedIds = new Set(s.analysisResults
+      .filter((result) => peakResultForDataset(result, datasetId))
+      .map((result) => result.id));
+    return {
+      datasets: s.datasets.map((d) => d.id === datasetId ? { ...d, peakTable: undefined } : d),
+      analysisResults: s.analysisResults.filter((result) => !removedIds.has(result.id)),
+      openAnalysisResultId: s.openAnalysisResultId && removedIds.has(s.openAnalysisResultId)
+        ? null
+        : s.openAnalysisResultId,
+      librarySelection: s.librarySelection?.kind === "analysis-result" && removedIds.has(s.librarySelection.id)
+        ? null
+        : s.librarySelection,
+    };
+  });
+  return null;
 }

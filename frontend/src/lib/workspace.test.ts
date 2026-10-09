@@ -238,6 +238,29 @@ describe("durable analysis results", () => {
     legacy.analysisResults = [];
     expect(parseWorkspace(JSON.stringify(legacy)).analysisResults).toEqual([]);
   });
+
+  it("migrates peak tables into the catalog once and respects a later deletion", () => {
+    const dataset = makeDataset("xrd", "film.xrdml");
+    dataset.peakTable = {
+      version: 1,
+      peaks: [{
+        id: "peak-1", center: 30, centerErr: null, fwhm: 0.2, fwhmErr: null,
+        height: 100, heightErr: null, area: 20, bg: 2, eta: null,
+        model: "Gaussian", status: "fitted", excluded: false,
+      }],
+      provenance: {
+        datasetId: "xrd", datasetName: "film.xrdml", method: "simultaneous", model: "Gaussian",
+        bgDegree: 0, linkMode: "None", constrain: false, bgCoeffs: [], R2: null, rmse: null,
+        wavelengthA: null, xLabel: "2Theta", xUnit: "deg", fingerprint: null, fittedAt: "2026-10-08T00:00:00Z",
+      },
+    };
+    const legacy = JSON.parse(serializeWorkspace({ datasets: [dataset], analysisResults: [] }));
+    delete legacy.analysisResultCatalogVersion;
+    expect(parseWorkspace(JSON.stringify(legacy)).analysisResults?.map((result) => result.id)).toEqual(["analysis-peaks-xrd"]);
+
+    legacy.analysisResultCatalogVersion = 2;
+    expect(parseWorkspace(JSON.stringify(legacy)).analysisResults).toEqual([]);
+  });
 });
 
 // LIBRARY_WORKBOOK_UX_PLAN PR K (K2): deps/derivedFrom/formulaErrors round

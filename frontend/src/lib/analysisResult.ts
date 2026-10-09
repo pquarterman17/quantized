@@ -42,10 +42,10 @@ export interface AnalysisResult {
    *  recipe. New envelopes omit it; the result workspace reads the linked
    *  output's `analysisRecipe` and falls back to this only without one. */
   selection?: AnalysisResultSelection;
-  settingsRef?: { datasetId: string; field: "analysisRecipe" };
+  settingsRef?: { datasetId: string; field: "analysisRecipe" | "peakTable" };
   scalarValues?: Record<string, number | string | null>;
   tableRefs?: { datasetId: string; label: string }[];
-  plotBindings?: { datasetId: string; channels: number[] }[];
+  plotBindings?: { datasetId: string; channels: number[]; xChannel?: number | null }[];
   warnings: string[];
   createdAt: string;
   updatedAt?: string;
@@ -113,8 +113,8 @@ function selection(value: unknown): AnalysisResultSelection | undefined {
 
 function settingsRef(value: unknown): AnalysisResult["settingsRef"] {
   const raw = object(value);
-  return raw && typeof raw.datasetId === "string" && raw.field === "analysisRecipe"
-    ? { datasetId: raw.datasetId, field: "analysisRecipe" }
+  return raw && typeof raw.datasetId === "string" && (raw.field === "analysisRecipe" || raw.field === "peakTable")
+    ? { datasetId: raw.datasetId, field: raw.field }
     : undefined;
 }
 
@@ -148,7 +148,16 @@ function plotBindings(value: unknown): AnalysisResult["plotBindings"] {
     const entry = object(item);
     if (!entry || typeof entry.datasetId !== "string" || !Array.isArray(entry.channels) ||
         !entry.channels.every((channel) => typeof channel === "number" && Number.isInteger(channel) && channel >= 0)) return undefined;
-    out.push({ datasetId: entry.datasetId, channels: [...new Set(entry.channels as number[])] });
+    const xChannel = entry.xChannel === null
+      ? null
+      : typeof entry.xChannel === "number" && Number.isInteger(entry.xChannel) && entry.xChannel >= 0
+        ? entry.xChannel
+        : undefined;
+    out.push({
+      datasetId: entry.datasetId,
+      channels: [...new Set(entry.channels as number[])],
+      ...(xChannel !== undefined || entry.xChannel === null ? { xChannel } : {}),
+    });
   }
   return out;
 }

@@ -60,7 +60,7 @@ export default function AnalysisResultFigures({ result, onOpen, onBuild, onRepor
 }) {
   if (!result.plotBindings?.length) return <p className="qz-analysis-empty">No figure bindings were recorded for this result.</p>;
   return <div className="qz-analysis-figures">
-    <p className="qz-analysis-caption">Figures use the result’s recorded output and channels. Build figure opens an editable draft; Send to report captures the configured plot.</p>
+    <p className="qz-analysis-caption">Figures use the result’s recorded {result.outputs.length ? "output" : "source"} and channels. Build figure opens an editable draft; Send to report captures the configured plot.</p>
     {result.plotBindings.map((binding, index) => <FigureCard key={`${binding.datasetId}-${index}`} result={result} index={index} onOpen={onOpen} onBuild={onBuild} onReport={onReport} />)}
   </div>;
 }
