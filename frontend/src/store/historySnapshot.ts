@@ -204,6 +204,8 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
       w.datasetId && !live.has(w.datasetId) ? { ...w, datasetId: null } : w,
     ),
     ...focusTransientReset(),
+    // A fit overlay is derived scratch; restored parameters invalidate it.
+    fitOverlay: null,
     // After the reset, which nulls `composition`: a snapshotted break or
     // spatial arrangement comes back.
     composition: carriedComposition,

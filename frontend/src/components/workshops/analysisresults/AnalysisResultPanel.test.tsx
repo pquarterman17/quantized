@@ -254,6 +254,34 @@ describe("AnalysisResultPanel", () => {
     });
   });
 
+  it("shows live fit warnings once rather than repeating envelope snapshots", () => {
+    const fitted = {
+      ...source, fitSpec: { model: "Linear", xKey: null, yKey: 0, exitFlag: 0 },
+    } satisfies Dataset;
+    const fitResult = fitAnalysisResult(fitted, fitted.fitSpec);
+    useApp.setState({ datasets: [fitted], analysisResults: [fitResult], openAnalysisResultId: fitResult.id });
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Diagnostics (2)" }));
+    expect(screen.getAllByText("The optimizer did not report convergence.")).toHaveLength(1);
+    expect(screen.getAllByText("This legacy fit does not include fitted parameter values.")).toHaveLength(1);
+  });
+
+  it("detects edited fit data as out of date even when automatic recalculation is off", () => {
+    const fitted = {
+      ...source, fitSpec: { model: "Linear", xKey: null, yKey: 0, params: [2, 1] },
+    } satisfies Dataset;
+    const fitResult = fitAnalysisResult(fitted, fitted.fitSpec);
+    const edited = { ...fitted, data: { ...fitted.data, values: [[1], [99]] } };
+    useApp.setState({
+      datasets: [edited], analysisResults: [fitResult], openAnalysisResultId: fitResult.id,
+      staleFits: [], recalcMode: "off",
+    });
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Out of date")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Diagnostics (1)" }));
+    expect(screen.getByText("The source data changed after this fit. Recalculate or re-fit before using these values.")).toBeInTheDocument();
+  });
+
   it("keeps source-figure editing available but disables fitted output when the fit is missing", () => {
     const fitted = { ...source, fitSpec: { model: "Linear", xKey: null, yKey: 0, params: [2, 1] } } satisfies Dataset;
     const fitResult = fitAnalysisResult(fitted, fitted.fitSpec);

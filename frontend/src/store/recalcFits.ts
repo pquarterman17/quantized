@@ -11,10 +11,9 @@
 // found in the first place.
 
 import { fitModel } from "../lib/api";
-import { dropGapRows, restoreGapRows } from "../lib/api/finitePairs";
+import { dropGapRows } from "../lib/api/finitePairs";
 import { boundsFromWire } from "../lib/fitBoundsWire";
 import { fitDataForSpec } from "../lib/fitselection";
-import { activeRowIndices, droppedRows, expandToFull } from "../lib/rowstate";
 import { refreshFitRefsLater } from "./computedColumns";
 import type { AppState } from "./useApp";
 
@@ -55,27 +54,13 @@ export async function recomputeStaleFits(set: SliceSet, get: SliceGet): Promise<
       // Validate the complete result before updating even the transient
       // overlay. A malformed response must leave the old fit visibly stale,
       // not show a new curve beside old parameters and provenance.
-      const { stampRecompute } = await import("../lib/fitRecompute");
+      const { recomputedFitPatch, stampRecompute } = await import("../lib/fitRecompute");
       const updatedSpec = stampRecompute(spec, r);
       const current = get().datasets.find((item) => item.id === id);
       if (current !== d) throw new Error("source or fit changed while recalculating");
-      const yFit = r.yFit as (number | null)[] | undefined;
-      // Refresh the overlay only if this dataset's fit is the one shown.
-      if (Array.isArray(yFit) && get().fitOverlay?.datasetId === id) {
-        const n = d.data.time.length;
-        const kept = activeRowIndices(n, droppedRows(d));
-        const aligned = restoreGapRows(yFit, pairs);
-        const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
-        set({ fitOverlay: { datasetId: id, y } });
-      }
       // #30: stamp the re-run so the workspace distinguishes a HISTORICAL
       // result from one the recalc graph regenerated over changed data.
-      set((s) => ({
-        staleFits: s.staleFits.filter((x) => x !== id),
-        datasets: s.datasets.map((d2) =>
-          d2.id === id && d2.fitSpec === spec ? { ...d2, fitSpec: updatedSpec } : d2,
-        ),
-      }));
+      set((s) => recomputedFitPatch(s, d, spec, updatedSpec, pairs, r.yFit));
       refreshFitRefsLater(id, get); // P2.5: fit() columns follow the refit
     } catch (e) {
       get().setStatus(

@@ -1,4 +1,5 @@
 import type { AnalysisResult } from "./analysisResult";
+import { dataFingerprint } from "./analysisResultFreshness";
 import type { Dataset, FitSpec } from "./types";
 
 /** Small eager half of the curve-fit adapter. setFitSpec is a synchronous
@@ -19,6 +20,22 @@ function xKeyFor(dataset: Dataset, spec: FitSpec): number | null | undefined {
     return spec.xKey;
   }
   return spec.xKey === undefined ? undefined : null;
+}
+
+/** The current plot binding comes from the live FitSpec authority. Persisted
+ * envelope indices are only a launch snapshot and may be stale after columns
+ * are inserted, removed, or remapped. */
+export function liveFitPlotBinding(result: AnalysisResult, dataset: Dataset): {
+  datasetId: string;
+  channels: number[];
+  xChannel: number | null;
+} | null {
+  if (result.settingsRef?.field !== "fitSpec" || result.settingsRef.datasetId !== dataset.id || !dataset.fitSpec) return null;
+  const yKey = yKeyFor(dataset, dataset.fitSpec);
+  const xKey = xKeyFor(dataset, dataset.fitSpec);
+  return yKey === null || xKey === undefined
+    ? null
+    : { datasetId: dataset.id, channels: [yKey], xChannel: xKey };
 }
 
 export function fitAnalysisResult(
@@ -59,11 +76,33 @@ export function fitAnalysisResult(
       }] }),
     }),
     warnings,
+    sourceFingerprint: dataFingerprint(dataset.data),
     createdAt,
     ...(spec.recomputedAt
       ? { updatedAt: spec.recomputedAt }
       : spec.fittedAt && spec.fittedAt !== createdAt ? { updatedAt: spec.fittedAt } : {}),
   };
+}
+
+/** Refresh the presentation envelope after a fit changes while preserving
+ * user-owned identity, name, notes, and creation time. */
+export function refreshFitAnalysisResults(
+  existing: readonly AnalysisResult[],
+  dataset: Dataset,
+  createIfMissing = true,
+): AnalysisResult[] {
+  const linked = existing.filter((result) => isFitResultForDataset(result, dataset.id));
+  const spec = dataset.fitSpec;
+  if (!spec) return [...existing];
+  if (!linked.length) return createIfMissing ? [...existing, fitAnalysisResult(dataset, spec)] : [...existing];
+  return existing.map((result) => {
+    if (!isFitResultForDataset(result, dataset.id)) return result;
+    const fresh = fitAnalysisResult(dataset, spec, result.createdAt);
+    return {
+      ...fresh, id: result.id, name: result.name, createdAt: result.createdAt,
+      ...(result.notes ? { notes: result.notes } : {}),
+    };
+  });
 }
 
 export const isFitResultForDataset = (result: AnalysisResult, datasetId: string): boolean =>

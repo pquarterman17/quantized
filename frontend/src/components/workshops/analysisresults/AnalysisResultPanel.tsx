@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import type { QuickFigureMapping } from "../../../lib/quickFigureMapping";
 import { initialQuickFigureMapping } from "../../../lib/quickFigureMappingActions";
+import { dataFingerprint } from "../../../lib/analysisResultFreshness";
+import { fitAnalysisResult } from "../../../lib/fitAnalysisResultLive";
 import { peakTableMatchesData } from "../../../lib/peakTableFit";
 import { signalRecipeChannels, signalRecipeXRange } from "../../../lib/signalRecipe";
 import type { Dataset } from "../../../lib/types";
@@ -116,10 +118,15 @@ export default function AnalysisResultPanel() {
   const isFit = result?.settingsRef?.field === "fitSpec";
   const peakTable = isPeak ? source?.peakTable ?? null : null;
   const fitSpec = isFit ? source?.fitSpec ?? null : null;
+  const fitFingerprintStale = !!(isFit && source && result?.sourceFingerprint &&
+    result.sourceFingerprint !== dataFingerprint(source.data));
   const diagnostics = useMemo(() => {
     if (!result) return [];
-    return [
-      ...result.warnings,
+    const liveWarnings = isFit && source && fitSpec
+      ? fitAnalysisResult(source, fitSpec, result.createdAt).warnings
+      : result.warnings;
+    return [...new Set([
+      ...liveWarnings,
       ...result.sources.filter((ref) => !datasets.some((dataset) => dataset.id === ref.datasetId))
         .map((ref) => `Source worksheet ${ref.datasetId} is missing.`),
       ...result.outputs.filter((ref) => !datasets.some((dataset) => dataset.id === ref.datasetId))
@@ -131,13 +138,11 @@ export default function AnalysisResultPanel() {
         : []),
       ...(isPeak && source && !peakTable ? ["The fitted peak table is no longer available on the source worksheet."] : []),
       ...(isFit && source && !fitSpec ? ["The saved curve fit is no longer available on the source worksheet."] : []),
-      ...(isFit && source && staleFits.includes(source.id)
+      ...(isFit && source && (staleFits.includes(source.id) || fitFingerprintStale)
         ? ["The source data changed after this fit. Recalculate or re-fit before using these values."]
         : []),
-      ...(fitSpec?.exitFlag === 0 ? ["The optimizer did not report convergence."] : []),
-      ...(isFit && fitSpec && !fitSpec.params?.length ? ["This legacy fit does not include fitted parameter values."] : []),
-    ];
-  }, [datasets, fitSpec, isFit, isPeak, output, peakTable, result, source, staleDatasets, staleFits]);
+    ])];
+  }, [datasets, fitFingerprintStale, fitSpec, isFit, isPeak, output, peakTable, result, source, staleDatasets, staleFits]);
 
   if (!result) return null;
   const close = () => useApp.setState({ openAnalysisResultId: null });
@@ -272,7 +277,7 @@ export default function AnalysisResultPanel() {
       ? "The linked output is already independent or unavailable."
       : "Create an independent worksheet from the current linked output.";
   const peakStale = !!(isPeak && source && peakTable && !peakTableMatchesData(peakTable, source));
-  const fitStale = !!(isFit && source && staleFits.includes(source.id));
+  const fitStale = !!(isFit && source && (staleFits.includes(source.id) || fitFingerprintStale));
   const fitReplayable = !!(fitSpec && fitSpec.xKey !== undefined && fitSpec.yKey !== undefined);
   const status = isFit
     ? !source ? "Source missing" : !fitSpec ? "Incomplete" : fitStale ? "Out of date" : "Current"

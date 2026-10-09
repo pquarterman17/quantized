@@ -22,6 +22,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset, DataStruct, FitSpec } from "../lib/types";
+import { fitAnalysisResult } from "../lib/fitAnalysisResult";
 import { useToasts } from "./toasts";
 import { useApp, type AppState } from "./useApp";
 
@@ -195,6 +196,18 @@ describe("recalcNow re-entrancy (module-level scheduler state)", () => {
     expect(act().staleFits).toEqual(["a"]);
     expect(act().fitOverlay).toEqual({ datasetId: "a", y: [9, 9, 9] });
     expect(act().status).toContain("finite parameter values");
+  });
+
+  it("refreshes the durable result warnings and update time after recompute", async () => {
+    const failedSpec: FitSpec = { ...LINEAR, params: [1, 0], exitFlag: 0, fittedAt: "original" };
+    const fitted = ds("a", { fitSpec: failedSpec });
+    const oldResult = { ...fitAnalysisResult(fitted, failedSpec), name: "Reviewed fit", notes: "keep" };
+    seed({ datasets: [fitted], analysisResults: [oldResult], staleDatasets: [], staleFits: ["a"] });
+    vi.mocked(fitModel).mockResolvedValueOnce({ params: [2, 0], exitFlag: 1, yFit: [2, 4, 6] });
+    await act().recalcNow();
+    expect(act().analysisResults[0]).toMatchObject({
+      name: "Reviewed fit", notes: "keep", updatedAt: expect.any(String), warnings: [],
+    });
   });
 
   it("a touch that arrives mid-pass is ignored (the recalc's own writes never re-mark)", async () => {

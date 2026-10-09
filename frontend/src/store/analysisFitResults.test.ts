@@ -56,6 +56,22 @@ describe("curve-fit analysis result actions", () => {
     expect(useApp.getState().fitOverlay).toEqual({ datasetId: "source", y: [1, 3, 5] });
   });
 
+  it("derives plot channels from the live fit after an earlier column is removed", async () => {
+    const oldSpec: FitSpec = { ...spec, xKey: 1, yKey: 2 };
+    const oldSource: Dataset = {
+      ...source, fitSpec: oldSpec,
+      data: { ...source.data, values: [[9, 0, 1], [9, 1, 3], [9, 2, 5]], labels: ["Removed", "X", "Y"], units: ["", "s", "V"] },
+    };
+    const shifted: Dataset = {
+      ...source, fitSpec: { ...spec, xKey: 0, yKey: 1 },
+      data: { ...source.data, values: [[0, 1], [1, 3], [2, 5]], labels: ["X", "Y"], units: ["s", "V"] },
+    };
+    useApp.setState({ datasets: [shifted], analysisResults: [fitAnalysisResult(oldSource, oldSpec)] });
+    expect(await prepareAnalysisResultPlot("analysis-fit-source", 0)).toMatchObject({ channels: [1], xChannel: 0 });
+    expect(mocks.fitBands).toHaveBeenCalledWith(expect.objectContaining({ x: [0, 1, 2] }));
+    expect(useApp.getState()).toMatchObject({ xKey: 0, yKeys: [1] });
+  });
+
   it("refuses a malformed model-evaluation response without replacing the plot", async () => {
     mocks.fitBands.mockResolvedValueOnce({ yFit: [1], ciLo: [], ciHi: [], piLo: [], piHi: [], level: 0.95 });
     useApp.setState({ activeId: null, fitOverlay: null });
@@ -71,14 +87,17 @@ describe("curve-fit analysis result actions", () => {
   });
 
   it("recalculates only this saved fit, clears staleness, and is undoable", async () => {
+    useApp.setState({ fitOverlay: { datasetId: "source", y: [9, 9, 9] } });
     expect(await recalculateFitAnalysisResult("analysis-fit-source")).toBe(true);
     expect(mocks.fitModel).toHaveBeenCalledTimes(1);
     expect(useApp.getState().staleFits).toEqual([]);
     expect(useApp.getState().datasets[0].fitSpec).toMatchObject({ R2: 1, RMSE: 0, recomputedAt: expect.any(String) });
     expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "source", y: [1, 3, 5] });
     expect(useApp.getState().history).toHaveLength(1);
     useApp.getState().undo();
     expect(useApp.getState().datasets[0].fitSpec?.recomputedAt).toBeUndefined();
+    expect(useApp.getState().fitOverlay).toBeNull();
   });
 
   it("keeps the old fit stale when the backend omits finite parameters", async () => {

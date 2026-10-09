@@ -1,8 +1,5 @@
-// Lazy lifecycle actions for durable analysis results. The store's catalog
-// fields stay deliberately tiny and eager; result editing/recalculation is
-// reached only from lazy code — the result workspace, lib/transformRun.ts, and
-// the Library through store/analysisResultLazy.ts. architecture.test.ts's
-// DRAGGED_OUT list keeps every static importer off the eager graph.
+// Lazy lifecycle actions for durable analysis results. Keep static importers
+// off the eager graph enforced by architecture.test.ts's DRAGGED_OUT list.
 
 import { signalAnalysisResult, type AnalysisResult } from "../lib/analysisResult";
 import { analysisFitTableCsv } from "../lib/analysisFitTable";
@@ -16,8 +13,9 @@ import { csvBlob } from "../lib/csvCell";
 import { saveBlob } from "../lib/download";
 import { stemFromName } from "../lib/exportActive";
 import { fullPlottedX } from "../lib/fitselectionActions";
+import { liveFitPlotBinding } from "../lib/fitAnalysisResultLive";
 import { boundsFromWire } from "../lib/fitBoundsWire";
-import { stampRecompute } from "../lib/fitRecompute";
+import { fitOverlayValues, stampRecompute } from "../lib/fitRecompute";
 import { fitDataForSpec } from "../lib/fitselection";
 import type { Dataset } from "../lib/types";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
@@ -171,22 +169,41 @@ export interface PreparedAnalysisResultPlot {
 export async function resolveAnalysisResultPlot(id: string, bindingIndex: number): Promise<PreparedAnalysisResultPlot | null> {
   const initial = useApp.getState();
   const result = initial.analysisResults.find((item) => item.id === id);
+  const fitDatasetId = result?.settingsRef?.field === "fitSpec" && bindingIndex === 0
+    ? result.settingsRef.datasetId
+    : null;
   const binding = result?.plotBindings?.[bindingIndex];
-  if (!result || !binding) {
+  const datasetId = fitDatasetId ?? binding?.datasetId;
+  if (!result || !datasetId) {
     initial.setStatus("can't open result figure: the saved plot binding is unavailable");
     return null;
   }
   try {
-    await initial.resolveDataset(binding.datasetId);
+    await initial.resolveDataset(datasetId);
   } catch (error) {
     useApp.getState().setStatus(`can't open result figure: ${error instanceof Error ? error.message : "worksheet loading failed"}`);
     return null;
   }
   const state = useApp.getState();
-  // The user may delete or edit the result while a lazy worksheet is loading.
-  // Re-read the binding before mutating the active plot so a stale click never
+  // Re-read after lazy loading so a stale click never
   // opens data the result no longer owns.
-  const currentBinding = state.analysisResults.find((item) => item.id === id)?.plotBindings?.[bindingIndex];
+  const currentResult = state.analysisResults.find((item) => item.id === id);
+  const fitDataset = fitDatasetId ? state.datasets.find((item) => item.id === fitDatasetId) : null;
+  if (fitDatasetId) {
+    const liveBinding = currentResult && fitDataset ? liveFitPlotBinding(currentResult, fitDataset) : null;
+    if (!liveBinding || currentResult?.settingsRef?.datasetId !== fitDatasetId) {
+      state.setStatus(`can't open result figure: ${fitDataset && !fitDataset.fitSpec
+        ? "the saved fit is missing"
+        : fitDataset ? "its live fit channels are unavailable" : "its worksheet is missing"}`);
+      return null;
+    }
+    return { dataset: fitDataset!, channels: liveBinding.channels, xChannel: liveBinding.xChannel };
+  }
+  if (!binding) {
+    state.setStatus("can't open result figure: the saved plot binding is unavailable");
+    return null;
+  }
+  const currentBinding = currentResult?.plotBindings?.[bindingIndex];
   if (!currentBinding || currentBinding.datasetId !== binding.datasetId ||
       currentBinding.xChannel !== binding.xChannel ||
       currentBinding.channels.length !== binding.channels.length ||
@@ -419,12 +436,15 @@ export async function recalculateFitAnalysisResult(id: string): Promise<boolean>
     const currentResult = current.analysisResults.find((item) => item.id === id);
     const currentSource = current.datasets.find((dataset) => dataset.id === sourceId);
     if (currentResult?.settingsRef?.field !== "fitSpec" || currentResult.settingsRef.datasetId !== sourceId ||
-        currentSource?.fitSpec !== spec || currentSource.data !== source.data) {
+        currentSource !== source) {
       current.setStatus(`can't apply recalculation: ${result.name} changed while fitting`);
       return false;
     }
+    const overlayWasVisible = current.fitOverlay?.datasetId === sourceId;
+    const nextOverlay = overlayWasVisible ? fitOverlayValues(source, pairs, fitted.yFit) : null;
     current.recordHistory(`recalculate ${result.name}`);
     current.setFitSpec(sourceId, stampRecompute(spec, fitted));
+    if (overlayWasVisible) useApp.setState({ fitOverlay: nextOverlay ? { datasetId: sourceId, y: nextOverlay } : null });
     publishFitAnalysisResult(sourceId);
     useApp.getState().setStatus(`recalculated ${result.name}`);
     return true;

@@ -1,4 +1,5 @@
 import type { AnalysisResult } from "../../../lib/analysisResult";
+import { liveFitPlotBinding } from "../../../lib/fitAnalysisResultLive";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { Button } from "../../primitives";
@@ -27,16 +28,22 @@ function FigureCard({ result, index, onOpen, onBuild, onReport }: {
   onReport: (index: number) => void;
 }) {
   const datasets = useApp((state) => state.datasets);
-  const binding = result.plotBindings![index];
-  const dataset = datasets.find((item) => item.id === binding.datasetId);
-  const channels = dataset
+  const savedBinding = result.plotBindings![index];
+  const fitRef = result.settingsRef?.field === "fitSpec" ? result.settingsRef : null;
+  const fitted = fitRef !== null;
+  const datasetId = fitRef?.datasetId ?? savedBinding.datasetId;
+  const dataset = datasets.find((item) => item.id === datasetId);
+  const liveBinding = fitted && dataset ? liveFitPlotBinding(result, dataset) : null;
+  // The recorded source curve remains useful for editable figure building
+  // even when a fit was removed. Fitted-output actions require live binding.
+  const binding = liveBinding ?? savedBinding;
+  const channels = dataset && binding
     ? binding.channels.filter((channel) => Number.isInteger(channel) && channel >= 0 && channel < dataset.data.labels.length)
     : [];
   const path = dataset && channels.length ? previewPath(dataset, channels[0]) : null;
   const unavailable = !dataset || channels.length === 0;
   const sourceOnly = result.settingsRef?.field === "peakTable";
-  const fitted = result.settingsRef?.field === "fitSpec";
-  const fittedPlotUnavailable = unavailable || (fitted && !dataset?.fitSpec?.params?.length);
+  const fittedPlotUnavailable = unavailable || (fitted && (!liveBinding || !dataset?.fitSpec?.params?.length));
   return <article className={`qz-analysis-figure-card${unavailable ? " unavailable" : ""}`}>
     <div className="qz-analysis-figure-preview">
       {path ? <svg viewBox="0 0 200 64" role="img" aria-label={`Preview of ${dataset!.name}`} preserveAspectRatio="none">
@@ -44,7 +51,7 @@ function FigureCard({ result, index, onOpen, onBuild, onReport }: {
       </svg> : <span>{dataset ? "No plottable channels" : "Worksheet unavailable"}</span>}
     </div>
     <div className="qz-analysis-figure-info">
-      <strong>{dataset?.name ?? binding.datasetId}</strong>
+      <strong>{dataset?.name ?? datasetId}</strong>
       <span>{channels.map((channel) => dataset!.data.labels[channel]).join(", ") || "Saved binding unavailable"}</span>
       <div className="qz-analysis-figure-actions">
         <Button size="sm" disabled={fittedPlotUnavailable} onClick={() => onOpen(index)}>{sourceOnly ? "Open source plot" : fitted ? "Open fitted plot" : "Open plot"}</Button>
