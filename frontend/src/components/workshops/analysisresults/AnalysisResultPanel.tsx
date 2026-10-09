@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 
-import type { AnalysisResult } from "../../../lib/analysisResult";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
+import type { QuickFigureMapping } from "../../../lib/quickFigureMapping";
+import { initialQuickFigureMapping } from "../../../lib/quickFigureMappingActions";
 import { signalRecipeChannels, signalRecipeXRange } from "../../../lib/signalRecipe";
+import type { Dataset } from "../../../lib/types";
 import { createSignalWorksheetFromApp } from "../../../store/signalWorksheetCommand";
 import { useApp } from "../../../store/useApp";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import { askParams } from "../../overlays/ParamDialog";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button } from "../../primitives";
+import AnalysisResultFigures from "./AnalysisResultFigures";
+import AnalysisResultTables from "./AnalysisResultTables";
 
-type Tab = "overview" | "table" | "diagnostics" | "provenance" | "notes";
-const TABS: readonly Tab[] = ["overview", "table", "diagnostics", "provenance", "notes"];
+type Tab = "overview" | "table" | "figures" | "diagnostics" | "provenance" | "notes";
+const TABS: readonly Tab[] = ["overview", "table", "figures", "diagnostics", "provenance", "notes"];
 // One sentence for the missing-source state: the notice AND the disabled
 // actions' reason. Derived from the refs, so it clears when the source returns.
 const SOURCE_MISSING = "Source data not found — results can't be recalculated.";
@@ -35,31 +39,46 @@ function formatDate(value: string): string {
   return Number.isNaN(date.valueOf()) ? value : date.toLocaleString();
 }
 
-function ResultTable({ result }: { result: AnalysisResult }) {
-  const datasets = useApp((state) => state.datasets);
-  const output = datasets.find((dataset) => dataset.id === result.tableRefs?.[0]?.datasetId)
-    ?? datasets.find((dataset) => dataset.id === result.outputs[0]?.datasetId);
-  if (!output) return <p className="qz-analysis-empty">The output worksheet is unavailable.</p>;
-  const rows = Math.min(output.data.time.length, 100);
-  return (
-    <div className="qz-analysis-table-wrap">
-      <table className="qz-analysis-table">
-        <thead><tr>
-          <th>{String(output.data.metadata.xLabel ?? "X")}</th>
-          {output.data.labels.map((label, index) => <th key={`${label}-${index}`}>{label}</th>)}
-        </tr></thead>
-        <tbody>
-          {Array.from({ length: rows }, (_, row) => (
-            <tr key={row}>
-              <td>{formatValue(output.data.time[row])}</td>
-              {output.data.labels.map((_, column) => <td key={column}>{formatValue(output.data.values[row]?.[column] ?? NaN)}</td>)}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {output.data.time.length > rows && <p className="qz-analysis-caption">Showing the first {rows.toLocaleString()} of {output.data.time.length.toLocaleString()} rows. Open the worksheet for the complete table.</p>}
-    </div>
+/** Start the figure builder from the result's recorded series, not from a
+ * fresh whole-worksheet guess. Inferred uncertainty stays attached only when
+ * it belongs to one of those series; every other ordinary channel starts as
+ * ignored so opening the builder cannot silently add curves to the result. */
+function mappingForResult(dataset: Dataset, recorded: readonly number[]): QuickFigureMapping {
+  const base = initialQuickFigureMapping(dataset);
+  const yKeys = [...new Set(recorded)].filter((channel) =>
+    Number.isInteger(channel) && channel >= 0 && channel < dataset.data.labels.length,
   );
+  const ySet = new Set(yKeys);
+  const xKey = base.xKey !== null && ySet.has(base.xKey) ? null : base.xKey;
+  const xChanged = xKey !== base.xKey;
+  const xKeyByY = base.xKeyByY
+    ? Object.fromEntries(Object.entries(base.xKeyByY).filter(([channel]) => ySet.has(Number(channel))))
+    : undefined;
+  const errorBindings = base.errorBindings.filter((binding) =>
+    !ySet.has(binding.channel) && (binding.axis === "y" ? ySet.has(binding.target) : !xChanged),
+  );
+  const reserved = new Set([
+    ...(xKey === null ? [] : [xKey]),
+    ...Object.values(xKeyByY ?? {}).filter((channel): channel is number => channel !== null),
+    ...errorBindings.map((binding) => binding.channel),
+    ...(base.groupKey == null || ySet.has(base.groupKey) ? [] : [base.groupKey]),
+    ...(base.labelKey == null || ySet.has(base.labelKey) ? [] : [base.labelKey]),
+  ]);
+  const ignoredKeys = dataset.data.labels
+    .map((_, channel) => channel)
+    .filter((channel) => !ySet.has(channel) && !reserved.has(channel));
+  const mapping: QuickFigureMapping = {
+    ...base,
+    xKey,
+    yKeys,
+    errorBindings,
+    ignoredKeys,
+    ...(base.groupKey != null && ySet.has(base.groupKey) ? { groupKey: null } : {}),
+    ...(base.labelKey != null && ySet.has(base.labelKey) ? { labelKey: null } : {}),
+  };
+  if (xKeyByY && Object.keys(xKeyByY).length) mapping.xKeyByY = xKeyByY;
+  else delete mapping.xKeyByY;
+  return mapping;
 }
 
 export default function AnalysisResultPanel() {
@@ -68,8 +87,10 @@ export default function AnalysisResultPanel() {
   const datasets = useApp((state) => state.datasets);
   const staleDatasets = useApp((state) => state.staleDatasets);
   const setActive = useApp((state) => state.setActive);
+  const setStageTab = useApp((state) => state.setStageTab);
+  const openQuickFigureBuilder = useApp((state) => state.openQuickFigureBuilder);
   const [tab, setTab] = useState<Tab>("overview");
-  const [busy, setBusy] = useState<"recalculate" | "rerun" | null>(null);
+  const [busy, setBusy] = useState<"recalculate" | "rerun" | "duplicate" | "freeze" | "figure" | "report" | "export" | null>(null);
   const [notes, setNotes] = useState(result?.notes ?? "");
   useEffect(() => setNotes(result?.notes ?? ""), [result?.id, result?.notes]);
 
@@ -92,6 +113,12 @@ export default function AnalysisResultPanel() {
   const openOutput = () => {
     if (!output) return;
     setActive(output.id);
+    setStageTab("worksheet");
+    close();
+  };
+  const openTable = (datasetId: string) => {
+    setActive(datasetId);
+    setStageTab("worksheet");
     close();
   };
   const recalculate = async () => {
@@ -124,6 +151,49 @@ export default function AnalysisResultPanel() {
     const yes = await askConfirm(`Delete "${result.name}"?`, "This removes the result record from the Library. Its linked worksheet and scientific data are kept.", "Delete", true);
     if (yes) withActions((m) => m.removeAnalysisResult(result.id));
   };
+  const duplicate = async () => {
+    if (busy) return;
+    setBusy("duplicate");
+    try { await loadActions().then((m) => m.duplicateAnalysisResult(result.id), onLoadFailure); }
+    finally { setBusy(null); }
+  };
+  const freeze = async () => {
+    if (busy) return;
+    setBusy("freeze");
+    try {
+      const frozenId = await loadActions().then((m) => m.freezeAnalysisResult(result.id), () => { onLoadFailure(); return null; });
+      if (frozenId) setActive(frozenId);
+    } finally { setBusy(null); }
+  };
+  const preparePlot = async (index: number) => loadActions()
+    .then((m) => m.prepareAnalysisResultPlot(result.id, index), () => { onLoadFailure(); return null; });
+  const openPlot = async (index: number) => {
+    if (busy) return;
+    setBusy("figure");
+    try { if (await preparePlot(index)) close(); } finally { setBusy(null); }
+  };
+  const buildFigure = async (index: number) => {
+    if (busy) return;
+    setBusy("figure");
+    try {
+      const prepared = await loadActions()
+        .then((m) => m.resolveAnalysisResultPlot(result.id, index), () => { onLoadFailure(); return null; });
+      if (prepared && openQuickFigureBuilder(prepared.dataset.id, mappingForResult(prepared.dataset, prepared.channels))) close();
+    } finally { setBusy(null); }
+  };
+  const sendReport = async (index: number) => {
+    if (busy) return;
+    setBusy("report");
+    try {
+      await loadActions().then((m) => m.sendAnalysisResultPlotToReport(result.id, index), onLoadFailure);
+    } finally { setBusy(null); }
+  };
+  const exportTable = async (datasetId: string) => {
+    if (busy) return;
+    setBusy("export");
+    try { await loadActions().then((m) => m.exportAnalysisResultTable(result.id, datasetId), onLoadFailure); }
+    finally { setBusy(null); }
+  };
   // The linked recipe is the authority; an old envelope's copy is a fallback.
   const recipe = output?.analysisRecipe;
   const channels = recipe ? signalRecipeChannels(recipe) : result.selection?.channels;
@@ -132,6 +202,11 @@ export default function AnalysisResultPanel() {
   // own state: still openable, never recalculable.
   const sourceMissing = !!output && !source && result.sources.length > 0;
   const blocked = sourceMissing ? SOURCE_MISSING : undefined;
+  const freezeReason = result.outputs.length !== 1
+    ? "Freeze is available when a result has one linked output worksheet."
+    : !output?.derivedFrom
+      ? "The linked output is already independent or unavailable."
+      : "Create an independent worksheet from the current linked output.";
   const status = sourceMissing ? "Source missing" : !source || !output ? "Incomplete" : staleDatasets.includes(output.id) ? "Out of date" : "Current";
   const moveTab = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     const offset = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
@@ -144,15 +219,17 @@ export default function AnalysisResultPanel() {
   };
 
   return (
-    <ToolWindow id="analysis-result" title={result.name} width={680} x={210} y={100} onClose={close}>
+    <ToolWindow id="analysis-result" title={result.name} width={760} x={210} y={100} onClose={close}>
       <div className="qz-analysis-result">
         <div className="qz-analysis-toolbar">
           <span className={`qz-analysis-status status-${status.toLowerCase().replaceAll(" ", "-")}`}>{status}</span>
           <Button disabled={!output} onClick={openOutput}>Open worksheet</Button>
           <Button disabled={!source || !output || busy !== null} title={blocked} onClick={() => void recalculate()}>{busy === "recalculate" ? "Recalculating…" : "Recalculate"}</Button>
           <Button disabled={!source || !output?.analysisRecipe || busy !== null} title={blocked} onClick={() => void rerun()}>{busy === "rerun" ? "Rerunning…" : "Rerun as new"}</Button>
-          <Button onClick={() => void rename()}>Rename…</Button>
-          <Button variant="danger" onClick={() => void remove()}>Delete…</Button>
+          <Button disabled={result.outputs.length !== 1 || !output || busy !== null} title="Create a separate linked output worksheet and result." onClick={() => void duplicate()}>{busy === "duplicate" ? "Duplicating…" : "Duplicate"}</Button>
+          <Button disabled={result.outputs.length !== 1 || !output?.derivedFrom || busy !== null} title={freezeReason} onClick={() => void freeze()}>{busy === "freeze" ? "Freezing…" : "Freeze data"}</Button>
+          <Button disabled={busy !== null} onClick={() => void rename()}>Rename…</Button>
+          <Button disabled={busy !== null} variant="danger" onClick={() => void remove()}>Delete…</Button>
         </div>
         {sourceMissing && <p className="qz-analysis-missing" role="note">{SOURCE_MISSING}</p>}
         <div className="qz-analysis-tabs" role="tablist" aria-label="Analysis result views">
@@ -172,7 +249,8 @@ export default function AnalysisResultPanel() {
             </dl>
             {!sourceMissing && <p className="qz-analysis-caption">This result stays linked to its source. Recalculate updates this output; Rerun as new preserves it and creates another result.</p>}
           </>}
-          {tab === "table" && <ResultTable result={result} />}
+          {tab === "table" && <AnalysisResultTables result={result} onOpen={openTable} onExport={(datasetId) => void exportTable(datasetId)} />}
+          {tab === "figures" && <AnalysisResultFigures result={result} onOpen={(index) => void openPlot(index)} onBuild={(index) => void buildFigure(index)} onReport={(index) => void sendReport(index)} />}
           {tab === "diagnostics" && (diagnostics.length
             ? <ul className="qz-analysis-diagnostics">{diagnostics.map((message, index) => <li key={`${message}-${index}`}>{message}</li>)}</ul>
             : <p className="qz-analysis-empty">No warnings or missing references.</p>)}

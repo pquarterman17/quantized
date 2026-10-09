@@ -10,7 +10,7 @@ const dataset: Dataset = {
 };
 
 beforeEach(() => {
-  useApp.setState({ datasets: [dataset], quickFigureBuilderDatasetId: null, status: "ready" });
+  useApp.setState({ datasets: [dataset], quickFigureBuilderDatasetId: null, quickFigureBuilderSeed: null, status: "ready" });
 });
 
 describe("QuickFigureBuilderSlice", () => {
@@ -19,6 +19,16 @@ describe("QuickFigureBuilderSlice", () => {
     expect(useApp.getState().quickFigureBuilderDatasetId).toBe("d1");
     useApp.getState().closeQuickFigureBuilder();
     expect(useApp.getState().quickFigureBuilderDatasetId).toBeNull();
+    expect(useApp.getState().quickFigureBuilderSeed).toBeNull();
+  });
+
+  it("keeps a caller-provided mapping as an isolated transient draft", () => {
+    const seed = { xKey: null, yKeys: [0], errorBindings: [], ignoredKeys: [] };
+    expect(useApp.getState().openQuickFigureBuilder("d1", seed)).toBe(true);
+    expect(useApp.getState().quickFigureBuilderSeed).toEqual(seed);
+    expect(useApp.getState().quickFigureBuilderSeed).not.toBe(seed);
+    useApp.getState().closeQuickFigureBuilder();
+    expect(useApp.getState().quickFigureBuilderSeed).toBeNull();
   });
 
   it("fails closed when the worksheet vanished", () => {
@@ -39,5 +49,6 @@ describe("QuickFigureBuilderSlice", () => {
     useApp.getState().loadWorkspace({ datasets: [{ id: "w1", name: "first", data: dataset.data }] });
 
     expect(useApp.getState().quickFigureBuilderDatasetId).toBeNull();
+    expect(useApp.getState().quickFigureBuilderSeed).toBeNull();
   });
 });

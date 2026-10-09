@@ -1,14 +1,17 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AnalysisResult } from "../../../lib/analysisResult";
 import type { Dataset } from "../../../lib/types";
 
-const { rerun, recalculate } = vi.hoisted(() => ({ rerun: vi.fn(), recalculate: vi.fn() }));
+const { rerun, recalculate, sendReport } = vi.hoisted(() => ({
+  rerun: vi.fn(), recalculate: vi.fn(), sendReport: vi.fn(),
+}));
 vi.mock("../../../store/signalWorksheetCommand", () => ({ createSignalWorksheetFromApp: rerun }));
 vi.mock("../../../store/analysisResultActions", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../store/analysisResultActions")>()),
   recalculateAnalysisResult: recalculate,
+  sendAnalysisResultPlotToReport: sendReport,
 }));
 vi.mock("../../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 vi.mock("../../overlays/ParamDialog", () => ({ askParams: vi.fn() }));
@@ -47,6 +50,7 @@ const result: AnalysisResult = {
   selection: { datasetId: "source", channels: [{ index: 0, label: "Signal", unit: "V" }] },
   settingsRef: { datasetId: "output", field: "analysisRecipe" },
   tableRefs: [{ datasetId: "output", label: "Smoothed trace" }],
+  plotBindings: [{ datasetId: "output", channels: [0] }],
   warnings: [],
   createdAt: "2026-10-08T00:00:00Z",
 };
@@ -62,6 +66,10 @@ beforeEach(() => {
     staleDatasets: [],
     history: [],
     future: [],
+    quickFigureBuilderDatasetId: null,
+    quickFigureBuilderSeed: null,
+    yKeys: null,
+    stageTab: "worksheet",
   });
 });
 
@@ -75,6 +83,14 @@ describe("AnalysisResultPanel", () => {
     expect(screen.getByText("1.9")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Provenance" }));
     expect(screen.getByText("output.analysisRecipe")).toBeInTheDocument();
+  });
+
+  it("Open worksheet leaves the result workspace on the requested table", () => {
+    useApp.setState({ stageTab: "plot" });
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Table" }));
+    fireEvent.click(within(screen.getByRole("tabpanel")).getByRole("button", { name: "Open worksheet" }));
+    expect(useApp.getState()).toMatchObject({ activeId: "output", stageTab: "worksheet", openAnalysisResultId: null });
   });
 
   it("shows the selection from the output's recipe (the authority), not a stale envelope copy", () => {
@@ -102,6 +118,58 @@ describe("AnalysisResultPanel", () => {
     fireEvent.keyDown(overview, { key: "ArrowRight" });
     expect(screen.getByRole("tab", { name: "Table" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("columnheader", { name: "Time" })).toBeInTheDocument();
+  });
+
+  it("shows recorded figure bindings and opens the editable figure workflow", async () => {
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Figures" }));
+    expect(screen.getByRole("img", { name: "Preview of Smoothed trace" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Build figure" }));
+    await waitFor(() => expect(useApp.getState().quickFigureBuilderDatasetId).toBe("output"));
+    expect(useApp.getState().quickFigureBuilderSeed?.yKeys).toEqual([0]);
+    expect(useApp.getState().openAnalysisResultId).toBeNull();
+    expect(useApp.getState()).toMatchObject({ activeId: "source", yKeys: null, stageTab: "worksheet" });
+    expect(useApp.getState().history).toEqual([]);
+  });
+
+  it("seeds Build figure with only the result's recorded series", async () => {
+    const multi = {
+      ...output,
+      data: { ...output.data, values: [[1, 10], [2, 20]], labels: ["Other", "Result"], units: ["V", "V"] },
+    };
+    useApp.setState({
+      datasets: [source, multi],
+      analysisResults: [{ ...result, plotBindings: [{ datasetId: "output", channels: [1] }] }],
+    });
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Figures" }));
+    fireEvent.click(screen.getByRole("button", { name: "Build figure" }));
+    await waitFor(() => expect(useApp.getState().quickFigureBuilderDatasetId).toBe("output"));
+    expect(useApp.getState().quickFigureBuilderSeed).toMatchObject({ yKeys: [1], ignoredKeys: [0] });
+  });
+
+  it("duplicates the result with a separate linked output and guards repeated clicks", async () => {
+    render(<AnalysisResultPanel />);
+    const button = screen.getByRole("button", { name: "Duplicate" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(useApp.getState().analysisResults).toHaveLength(2));
+    expect(useApp.getState().datasets).toHaveLength(3);
+    expect(useApp.getState().analysisResults[1].outputs[0].datasetId).not.toBe("output");
+  });
+
+  it("guards repeated Send to report clicks while the first send is pending", async () => {
+    let finish!: (value: boolean) => void;
+    sendReport.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Figures" }));
+    const button = screen.getByRole("button", { name: "Send to report…" });
+    fireEvent.click(button);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Duplicate" })).toBeDisabled());
+    fireEvent.click(button);
+    expect(sendReport).toHaveBeenCalledTimes(1);
+    finish(true);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send to report…" })).not.toBeDisabled());
   });
 
   it("Recalculate runs this result's own recompute, never the project-wide recalcNow", async () => {

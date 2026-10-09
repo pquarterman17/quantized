@@ -40,10 +40,10 @@ function openPageSetup(s: StoreGet): void {
  *  onLoadFailure)` shape as `openPageSetup` above. Exported so the plot
  *  context menu's "Send to report…" (components/Stage/PlotContextMenu.tsx)
  *  runs this exact path — same busy indicator, same load-failure toast. */
-export function sendFigureToReport(s: StoreGet): Promise<void> {
+export function sendFigureToReport(s: StoreGet): Promise<boolean> {
   return runLazy("Loading report tools…", () => import("../lib/sendFigureToReport")).then(
-    (m) => m.runSendFigureToReportCommand(s),
-    onLoadFailure,
+    async (m) => { await m.runSendFigureToReportCommand(s); return true; },
+    () => { onLoadFailure(); return false; },
   );
 }
 
