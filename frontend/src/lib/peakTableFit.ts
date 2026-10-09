@@ -18,8 +18,8 @@
 // lazy, lib/workspaceCodecLazy.ts; the split now keeps that chunk small.)
 
 import { ERR_COLUMNS, PEAK_TABLE_VERSION, type MultiFitResult, type PeakTable, type PeakTableEntry } from "./peakTable";
-import { analysisData } from "./rowstate";
-import type { DataStruct, Dataset } from "./types";
+import type { DataStruct } from "./types";
+export { peakDataFingerprint, peakTableMatchesData } from "./peakTableFreshness";
 
 let _peakSeq = 0;
 
@@ -53,8 +53,10 @@ export interface PeakTableSource {
 }
 
 // ── Data fingerprint (review round 2, 2026-09-14) ─────────────────────
-// See lib/peakTable.ts's module header for WHY a durable fit needs one and why
-// it is not a recalc-graph node. WHAT it digests, in ONE FNV-1a pass over
+// The implementation now lives in peakTableFreshness.ts and is re-exported
+// above, so render-only Library code need not pull this complete fit module
+// into startup. See lib/peakTable.ts's module header for WHY a durable fit
+// needs one and why it is not a recalc-graph node. WHAT it digests, in one pass over
 // `analysisData(ds) ?? ds.data` — the dataset's ANALYSIS VIEW, i.e. the rows a
 // fit actually runs on (both `lib/fitselection`'s `selectedFitData` and the
 // Peaks workshop's `peakInputs` fallback read that view, never the raw data):
@@ -105,55 +107,6 @@ export interface PeakTableSource {
 // the fail-safe direction only (a false MISMATCH costs a redundant re-fit
 // prompt, never a false match), never checked for a false match: a cell is
 // always minted by one code path and re-minted the same way.
-const FNV_OFFSET_BASIS = 0x811c9dc5;
-const FNV_PRIME = 0x01000193;
-
-function fnvFloat(h: number, view: DataView, v: number): number {
-  view.setFloat64(0, v); // big-endian by default, read byte by byte — platform-independent
-  let acc = h;
-  for (let i = 0; i < 8; i++) acc = Math.imul(acc ^ view.getUint8(i), FNV_PRIME) >>> 0;
-  return acc;
-}
-
-/** Fold one string in, then a terminator so `["ab"]` and `["a","b"]` differ. */
-function fnvText(h: number, s: string): number {
-  let acc = h;
-  for (let i = 0; i < s.length; i++) acc = Math.imul(acc ^ s.charCodeAt(i), FNV_PRIME) >>> 0;
-  return Math.imul(acc ^ 0xff, FNV_PRIME) >>> 0;
-}
-
-/** A digest of `ds`'s ANALYSIS VIEW — see the block comment above. Pure and
- *  deterministic: the same dataset always yields the same string, and any edit
- *  to any measured value, column label, column unit or row-state changes it.
- *
- *  The `2:` prefix is the digest's OWN version. A fingerprint written by the
- *  round-2 composition reads as a mismatch under this one, which asks for a
- *  re-fit — the safe direction — rather than trusting a digest whose fields
- *  meant something else. */
-export function peakDataFingerprint(ds: Dataset): string {
-  const data = analysisData(ds) ?? ds.data;
-  const view = new DataView(new ArrayBuffer(8));
-  let h = FNV_OFFSET_BASIS >>> 0;
-  for (const v of data.time) h = fnvFloat(h, view, v);
-  for (const row of data.values) {
-    for (const v of row) h = fnvFloat(h, view, v);
-  }
-  for (const s of data.labels) h = fnvText(h, s);
-  for (const s of data.units) h = fnvText(h, s);
-  const cols = data.values[0]?.length ?? 0;
-  return `2:${data.time.length}:${data.values.length}:${cols}:${ds.data.time.length}:${h}`;
-}
-
-/** Does `table` still describe `ds`? A record with NO fingerprint (written
- *  before the field existed, or by a caller that could not supply one) is
- *  "unknown", and unknown reads as YES — the same additive-optional, fail-soft
- *  contract `sanitizePeakTable` applies to every other field, so reopening a
- *  pre-round-2 `.dwk` still shows its saved fit. */
-export function peakTableMatchesData(table: PeakTable, ds: Dataset): boolean {
-  const fp = table.provenance.fingerprint;
-  return fp === null || fp === peakDataFingerprint(ds);
-}
-
 // ── The "x is 2θ in degrees" rule (review round 3) ────────────────────────
 // Williamson-Hall reads `PeakTableEntry.center` AS 2-theta in degrees, so a
 // table fit on a q or d-spacing axis must be refused. The EXACT rule, two

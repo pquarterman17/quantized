@@ -210,7 +210,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         const ds = await useApp.getState().resolveDataset(active.id);
         if (!ds || stale()) return;
         const st = useApp.getState();
-        const { x, y, fullX, xKeyUsed } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
+        const { x, y, fullX, xKeyUsed, yKeyUsed } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
         const res = await fitMultiPeak({
           x, y, peaks: seedsFrom(peaks), model: opts.model,
           bg_degree: opts.bgDegree, constrain: opts.constrain, link_mode: opts.linkMode,
@@ -219,7 +219,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         setFitResult(res);
         // P2.1: the fit becomes this dataset's durable peak table (survives a
         // panel close, a dataset switch, and a `.dwk` save/reopen).
-        publishFitResult(ds.id, res, "simultaneous", { ...opts, xKey: xKeyUsed });
+        publishFitResult(ds.id, res, "simultaneous", { ...opts, xKey: xKeyUsed, yKey: yKeyUsed });
         overlayFitted(ds, res.peaks, fullX);
       } catch (e: unknown) {
         if (!stale()) setFitError(e instanceof Error ? e.message : "simultaneous fit failed");
@@ -254,7 +254,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         const ds = await useApp.getState().resolveDataset(active.id);
         if (!ds || stale()) return;
         const st = useApp.getState();
-        const { x, y, fullX, xKeyUsed } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
+        const { x, y, fullX, xKeyUsed, yKeyUsed } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
         const fitted: FittedPeak[] = [];
         for (let i = 0; i < peaks.length; i++) {
           if (cancelled || stale()) break;
@@ -281,7 +281,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         // P2.1, same as fitTogether — but only when something was actually fit:
         // a cancel that produced zero peaks must not replace a good saved table
         // with an empty one.
-        if (fitted.length > 0) publishFitResult(ds.id, result, "independent", { ...opts, xKey: xKeyUsed });
+        if (fitted.length > 0) publishFitResult(ds.id, result, "independent", { ...opts, xKey: xKeyUsed, yKey: yKeyUsed });
         if (fitted.length > 0) overlayFitted(ds, fitted, fullX);
         // A deliberate cancel with zero completed peaks isn't a failure to report.
         if (fitted.length === 0 && !cancelled) {

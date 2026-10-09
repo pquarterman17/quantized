@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
+import type { AnalysisResult } from "./analysisResult";
 import type { Dataset } from "./types";
 import type { LoadedWorkspace } from "./workspace";
 import { mergeWorkspace } from "./workspaceMerge";
@@ -33,7 +34,11 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
   // A minimal LoadedWorkspace wrapper — mergeWorkspace only ever reads
   // `.datasets` and (as of PR A4) `.workbooks` (see the module's doc for why
   // every other field is ignored).
-  function asLoaded(datasets: Dataset[], workbooks: WorkbookNode[] = []): LoadedWorkspace {
+  function asLoaded(
+    datasets: Dataset[],
+    workbooks: WorkbookNode[] = [],
+    analysisResults: AnalysisResult[] = [],
+  ): LoadedWorkspace {
     return {
       datasets,
       folders: [],
@@ -65,6 +70,7 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       visibleDetailsColumns: [],
       plotRecipes: [],
       recipeSourcesComplete: true,
+      analysisResults,
     };
   }
 
@@ -81,6 +87,45 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
   // the destination — the vast majority of the dataset-focused tests below
   // predate PR A4 and never touch a workbook.
   const noCurrentWorkbookIds = new Set<string>();
+
+  it("transfers analysis results and remaps every dataset reference without id collisions", () => {
+    const source = makeDataset("source", "source");
+    const output = makeDataset("output", "output");
+    const result: AnalysisResult = {
+      version: 1,
+      id: "result",
+      name: "Analysis",
+      producer: { id: "signal-processing", label: "Signal Processing", version: 1 },
+      sources: [{ datasetId: "source", role: "input" }],
+      outputs: [{ datasetId: "output", role: "linked-worksheet" }],
+      settingsRef: { datasetId: "output", field: "analysisRecipe" },
+      selection: { datasetId: "source", channels: [{ index: 0, label: "A", unit: "emu" }] },
+      tableRefs: [{ datasetId: "output", label: "Filtered data" }],
+      plotBindings: [{ datasetId: "output", channels: [0], xChannel: null }],
+      warnings: [],
+      createdAt: "2026-10-09T00:00:00Z",
+    };
+    const current = [makeDataset("source", "existing")];
+    const currentResult = { ...result, id: "result" };
+    const incoming = asLoaded([source, output], [], [result]);
+    const merged = mergeWorkspace(
+      current,
+      incoming,
+      genId,
+      noCurrentWorkbookIds,
+      genWorkbookId,
+      [currentResult],
+    );
+    expect(merged.analysisResults).toEqual([expect.objectContaining({
+      id: "result-2",
+      sources: [{ datasetId: "merged-1", role: "input" }],
+      outputs: [{ datasetId: "output", role: "linked-worksheet" }],
+      settingsRef: { datasetId: "output", field: "analysisRecipe" },
+      selection: expect.objectContaining({ datasetId: "merged-1" }),
+      tableRefs: [{ datasetId: "output", label: "Filtered data" }],
+      plotBindings: [{ datasetId: "output", channels: [0], xChannel: null }],
+    })]);
+  });
 
   it("appends with no collisions: ids/names untouched, per-dataset fields ride along", () => {
     const current = [makeDataset("a", "first")];

@@ -132,7 +132,7 @@ export interface ModelFitState {
 
 export interface ModelFitInputs {
   active: Dataset | null;
-  segment: { x: number[]; kept: number[] } | null;
+  segment: { x: number[]; kept: number[]; yKey: number } | null;
   workingY: number[] | null;
   /** 1σ per segment point (the designated error column), or null = unweighted. */
   yErr?: number[] | null;
@@ -157,6 +157,7 @@ interface Ran {
   /** The dataset record the fit ran on (immutable). */
   dataset: Dataset;
   xKey: number | null;
+  yKey: number;
   recipe: string | null;
   baseline: string;
   bgAtCenter: number[];
@@ -307,7 +308,8 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
       if (seq.current !== id) return; // superseded — a newer run/cancel/reset owns this panel
       dropOverlays(false);
       setRan({
-        result: res, setup: sent, dataset: active, xKey: inp.xKey ?? null, recipe: inp.recipeName || null,
+        result: res, setup: sent, dataset: active, xKey: inp.xKey ?? null, yKey: segment.yKey,
+        recipe: inp.recipeName || null,
         // What was really subtracted: a failed or pending baseline leaves workingY raw.
         baseline: baselineOn && baseline ? inp.baselineMethod ?? "on" : "none",
         bgAtCenter: peakBackgrounds(res, segment.x, baselineOn ? baseline : null),
@@ -354,7 +356,7 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
       const out = await publishBuiltPeakTable(ran.dataset, (ds, fingerprint) =>
         peakTableFromModelFit(ran.result, ds, {
           xKey: ran.xKey, recipe: ran.recipe, baseline: ran.baseline, bgAtCenter: ran.bgAtCenter, fingerprint,
-        }, ds.peakTable), () => seq.current === id);
+        }, ds.peakTable), () => seq.current === id, ran.yKey, ran.xKey);
       if ("reason" in out) {
         fail(out.reason);
       } else {

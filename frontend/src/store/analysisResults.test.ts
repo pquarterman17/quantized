@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AnalysisResult } from "../lib/analysisResult";
+import type { PeakTable } from "../lib/peakTable";
 import type { Dataset } from "../lib/types";
 
 const { recompute, saveBlob, sendFigureToReport } = vi.hoisted(() => ({
@@ -15,6 +16,7 @@ vi.mock("../commands/plotCommands", () => ({ sendFigureToReport }));
 
 import {
   duplicateAnalysisResult,
+  exportAnalysisPeakTable,
   exportAnalysisResultTable,
   freezeAnalysisResult,
   prepareAnalysisResultPlot,
@@ -128,6 +130,15 @@ describe("analysis result output actions", () => {
     expect(await prepareAnalysisResultPlot("result-1", 2)).toBeNull();
   });
 
+  it("restores a recorded alternate X channel with the fitted Y channel", async () => {
+    useApp.setState({
+      xKey: null,
+      analysisResults: [{ ...rich, plotBindings: [{ datasetId: "output", channels: [1], xChannel: 0 }] }],
+    });
+    expect(await prepareAnalysisResultPlot("result-1", 0)).toMatchObject({ channels: [1], xChannel: 0 });
+    expect(useApp.getState()).toMatchObject({ activeId: "output", xKey: 0, yKeys: [1], stageTab: "plot" });
+  });
+
   it("resolves a saved plot for a builder without changing the current surface", async () => {
     const before = { activeId: useApp.getState().activeId, yKeys: useApp.getState().yKeys, stageTab: useApp.getState().stageTab };
     expect(await resolveAnalysisResultPlot("result-1", 0)).toMatchObject({ dataset: { id: "output" }, channels: [1] });
@@ -169,6 +180,32 @@ describe("analysis result output actions", () => {
     expect(saveBlob).not.toHaveBeenCalled();
     expect(await exportAnalysisResultTable("result-1", "output")).toBe(true);
     expect(saveBlob).toHaveBeenCalledWith(expect.any(Blob), "Smooth · Trace-Output.csv");
+  });
+
+  it("exports a peak result only through its live peak-table authority", () => {
+    const peakTable: PeakTable = {
+      version: 1,
+      peaks: [],
+      provenance: {
+        datasetId: "source", datasetName: "Source", method: "simultaneous", model: "Gaussian",
+        bgDegree: 0, linkMode: "None", constrain: false, bgCoeffs: [], R2: null, rmse: null,
+        wavelengthA: null, xLabel: "Time", xUnit: "", fingerprint: null, fittedAt: "2026-10-08T00:00:00Z",
+      },
+    };
+    const peakResult: AnalysisResult = {
+      version: 1, id: "peaks", name: "Reviewed peaks",
+      producer: { id: "peak-analysis", label: "Peak Analysis", version: 1 },
+      sources: [{ datasetId: "source", role: "input" }], outputs: [],
+      settingsRef: { datasetId: "source", field: "peakTable" }, warnings: [],
+      createdAt: "2026-10-08T00:00:00Z",
+    };
+    useApp.setState({ datasets: [{ ...source, peakTable }], analysisResults: [peakResult] });
+    expect(exportAnalysisPeakTable("peaks")).toBe(true);
+    expect(saveBlob).toHaveBeenCalledWith(expect.any(Blob), "Reviewed peaks-peaks.csv");
+
+    useApp.setState({ datasets: [source] });
+    expect(exportAnalysisPeakTable("peaks")).toBe(false);
+    expect(saveBlob).toHaveBeenCalledTimes(1);
   });
 
   it("freezes the linked output as independent data and keeps the result", () => {

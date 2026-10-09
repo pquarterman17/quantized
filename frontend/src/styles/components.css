@@ -658,6 +658,7 @@
 .qz-analysis-table { width: max-content; min-width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .qz-analysis-table th, .qz-analysis-table td { padding: 5px 9px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
 .qz-analysis-table th { position: sticky; top: 0; background: var(--surface-2); color: var(--text-dim); }
+.qz-analysis-table tr.excluded td { color: var(--text-dim); text-decoration: line-through; }
 .qz-analysis-figures { display: grid; gap: 10px; }
 .qz-analysis-figures > .qz-analysis-caption { margin-top: 0; }
 .qz-analysis-figure-card { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 12px; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-1); }

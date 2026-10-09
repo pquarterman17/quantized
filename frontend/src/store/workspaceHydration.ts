@@ -358,12 +358,13 @@ function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorkspace): 
   }
   get().recordHistory("append workspace");
   const currentWorkbookIds = new Set(get().workbooks.map((w) => w.id));
-  const { datasets, renamed, workbooks } = mergeWorkspace(
+  const { datasets, renamed, workbooks, analysisResults } = mergeWorkspace(
     get().datasets,
     ws,
     nextDatasetId,
     currentWorkbookIds,
     nextWorkbookId,
+    get().analysisResults,
   );
   const wbNote =
     workbooks.length > 0
@@ -377,6 +378,7 @@ function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorkspace): 
   set({
     datasets,
     workbooks: [...get().workbooks, ...workbooks],
+    analysisResults: [...get().analysisResults, ...analysisResults],
     status: msg,
     ...(carry.length ? { fitModelCarry: grownCarry(get().fitModelCarry, carry) } : {}),
   });

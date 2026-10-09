@@ -57,7 +57,13 @@ export default function SearchPanel() {
         datasets,
         folders,
         reports: reports?.map((r) => ({ id: r.id, name: r.name, datasetId: r.datasetId })),
-        results: analysisResults.map((r) => ({ id: r.id, name: r.name, datasetId: r.outputs[0]?.datasetId ?? null })),
+        results: analysisResults.map((r) => ({
+          id: r.id,
+          name: r.name,
+          // Linked-output results reveal their output; source-only results
+          // (notably peak tables) reveal the worksheet that owns the result.
+          datasetId: r.outputs[0]?.datasetId ?? r.sources[0]?.datasetId ?? null,
+        })),
         // An Origin figure has no display `name` of its own — it is identified
         // by the project stem it came from, which is what a user would search.
         figures: originFigures?.map((f) => ({ id: f.id, name: f.stem })),

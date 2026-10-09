@@ -11,7 +11,8 @@
 // library — additive, never a replace (that's `loadWorkspace`). The flat
 // `datasets[]` list AND the incoming `workbooks[]` are merged in
 // (LIBRARY_WORKBOOK_UX_PLAN PR A4 — see the `Dataset.workbookId` row below);
-// every OTHER workspace-LEVEL structure on the incoming doc (folders,
+// analysis-result envelopes linked to those datasets are remapped and merged
+// too. Every OTHER workspace-LEVEL structure on the incoming doc (folders,
 // originFigures, smartFolders, reports, macroSteps, figureDocs, plotWindows,
 // activeId, selectedIds, expandedFolders, recalcMode, focusedWindowId,
 // savedPlotSpecs, savedRois, collections, mapViews) is still deliberately never read
@@ -74,6 +75,11 @@
 //     `.selectedIds` — all live in workspace-level structures that are never
 //     merged in at all (see above); dropped as whole structures, not
 //     field-by-field, alongside the rest of the incoming doc's view state.
+//   - `AnalysisResult` dataset references — `sources`, `outputs`,
+//     `settingsRef`, `selection`, `tableRefs`, and `plotBindings` — are all
+//     remapped through the appended-dataset id table. References outside the
+//     incoming batch are dropped rather than accidentally binding to a
+//     same-named destination id; result ids are de-duplicated independently.
 //   - `smartFolders`, `macroSteps` (pipeline) — audited and carry NO
 //     dataset-id references (a smart folder is a saved TEXT query; a
 //     pipeline step replays against "the active dataset" at run time), so
@@ -83,6 +89,7 @@
 // `order`, `pending`) is self-contained — no id references — and rides
 // along untouched onto the merged dataset.
 
+import type { AnalysisResult } from "./analysisResult";
 import type { Dataset } from "./types";
 import type { LoadedWorkspace } from "./workspace";
 import type { WorkbookNode } from "./workbooks";
@@ -121,6 +128,31 @@ export interface WorkspaceMergeResult {
    *  datasets reference it) is dropped, not transferred. See the field
    *  matrix above for the full transfer contract. */
   workbooks: WorkbookNode[];
+  /** Incoming analysis-result envelopes, with every dataset reference
+   * remapped through the same table as the appended worksheets. */
+  analysisResults: AnalysisResult[];
+}
+
+function remapAnalysisResult(
+  result: AnalysisResult,
+  idMap: ReadonlyMap<string, string>,
+  usedResultIds: Set<string>,
+): AnalysisResult {
+  let id = result.id;
+  for (let suffix = 2; usedResultIds.has(id); suffix++) id = `${result.id}-${suffix}`;
+  usedResultIds.add(id);
+  const refs = <T extends { datasetId: string }>(items: readonly T[]): T[] => items.flatMap((item) => {
+    const datasetId = idMap.get(item.datasetId);
+    return datasetId ? [{ ...item, datasetId }] : [];
+  });
+  const mapped: AnalysisResult = {
+    ...result, id, sources: refs(result.sources), outputs: refs(result.outputs),
+  };
+  if (result.settingsRef) mapped.settingsRef = refs([result.settingsRef])[0];
+  if (result.selection) mapped.selection = refs([result.selection])[0];
+  if (result.tableRefs) mapped.tableRefs = refs(result.tableRefs);
+  if (result.plotBindings) mapped.plotBindings = refs(result.plotBindings);
+  return mapped;
 }
 
 /** Merge `incoming`'s datasets AND workbooks into `current` (Origin's
@@ -146,6 +178,7 @@ export function mergeWorkspace(
   genId: () => string,
   currentWorkbookIds: ReadonlySet<string>,
   genWorkbookId: () => string,
+  currentAnalysisResults: readonly AnalysisResult[] = [],
 ): WorkspaceMergeResult {
   const usedIds = new Set(current.map((d) => d.id));
   const usedNames = new Set(current.map((d) => d.name));
@@ -245,6 +278,10 @@ export function mergeWorkspace(
     return next;
   });
 
+  const usedResultIds = new Set(currentAnalysisResults.map((result) => result.id));
+  const analysisResults = (incoming.analysisResults ?? []).map((result) =>
+    remapAnalysisResult(result, idMap, usedResultIds));
+
   return {
     datasets: [...current, ...merged],
     remapped,
@@ -253,5 +290,6 @@ export function mergeWorkspace(
     droppedFolderRefs,
     droppedWorkbookRefs,
     workbooks,
+    analysisResults,
   };
 }

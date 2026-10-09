@@ -46,6 +46,11 @@ export function libraryTileSummary(node: LibraryNode): LibraryTileSummary {
     case "report":
       return { primary: count(node.entity.report.sections.length, "section"), secondary: "Analysis report", warning: missing };
     case "analysis-result":
+      if (node.entity.settingsRef?.field === "peakTable") return {
+        primary: node.entity.producer.label,
+        secondary: node.entity.stale ? "Peak table · Out of date" : "Peak table",
+        warning: missing,
+      };
       return {
         primary: node.entity.producer.label,
         secondary: `${count(node.entity.outputs.length, "output")} · ${count(node.entity.warnings.length, "warning")}`,

@@ -47,11 +47,8 @@ import type { CustomFitModel } from "./fitmodels";
 import type { AnalysisTemplate } from "./template";
 import { splitProjectTemplates } from "./templatesProject";
 import type { Dataset, FolderNode } from "./types";
-import {
-  migrateLegacySignalResults,
-  sanitizeAnalysisResults,
-  type AnalysisResult,
-} from "./analysisResult";
+import type { AnalysisResult } from "./analysisResult";
+import { workspaceAnalysisResults } from "./analysisResultWorkspace";
 import { staleAnalysisOutputs } from "./analysisResultFreshness";
 
 export const WORKSPACE_FORMAT = "quantized-workspace";
@@ -382,9 +379,10 @@ export function parseWorkspace(
   const originFidelity = parseOriginFidelity(o.originFidelity, dsIds);
   const smartFolders = sanitizeSmartFolders(o.smartFolders);
   const reports = sanitizeReports(o.reports, dsIds, migrationWarnings, legacyNulls);
-  const analysisResults = o.analysisResults === undefined
-    ? migrateLegacySignalResults(datasets, typeof o.savedAt === "string" && o.savedAt ? o.savedAt : new Date(0).toISOString())
-    : sanitizeAnalysisResults(o.analysisResults, migrationWarnings);
+  const createdAt = typeof o.savedAt === "string" && o.savedAt ? o.savedAt : new Date(0).toISOString();
+  const analysisResults = workspaceAnalysisResults(
+    o.analysisResults, o.analysisResultCatalogVersion, datasets, createdAt, migrationWarnings,
+  );
   const nullWarning = legacyNullWarning(legacyNulls);
   if (nullWarning) migrationWarnings.unshift(nullWarning); // first: the status line shows only [0]
   if (mapXWarning) migrationWarnings.push(mapXWarning);

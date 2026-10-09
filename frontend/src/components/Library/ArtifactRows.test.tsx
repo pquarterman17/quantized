@@ -16,6 +16,7 @@ import {
   type LibraryNodeKey,
 } from "../../lib/libraryHierarchy";
 import { createPageDocument } from "../../lib/pageDocumentActions";
+import { libraryTileSummary } from "../../lib/libraryTileSummary";
 import { defaultPlotView } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -118,6 +119,36 @@ describe("ArtifactRow — open + workbookLastChild recording", () => {
     fireEvent.doubleClick(screen.getByRole("button", { name: /My Result/ }));
     expect(useApp.getState().openAnalysisResultId).toBe("result1");
     expect(useApp.getState().workbookLastChild.w1).toBe("analysis-result:result1");
+  });
+
+  it("shows a source-only peak result as a peak table instead of '0 outputs'", () => {
+    const peakResult = {
+      version: 1 as const, id: "result1", name: "Peak analysis",
+      producer: { id: "peak-analysis", label: "Peak Analysis", version: 1 },
+      sources: [{ datasetId: "d1", role: "input" as const }], outputs: [],
+      settingsRef: { datasetId: "d1", field: "peakTable" as const },
+      warnings: [], createdAt: "now",
+    };
+    const node = nodeOf("analysis-result", "analysis-result:result1", { analysisResults: [peakResult] });
+    render(<ArtifactRow node={node} depth={0} />);
+    expect(screen.getByText("Peak Analysis")).toBeInTheDocument();
+    expect(libraryTileSummary(node)).toMatchObject({
+      primary: "Peak Analysis", secondary: "Peak table", warning: null,
+    });
+  });
+
+  it("surfaces a persisted out-of-date peak result in tree and tile views", () => {
+    const peakResult = {
+      version: 1 as const, id: "result1", name: "Peak analysis",
+      producer: { id: "peak-analysis", label: "Peak Analysis", version: 1 },
+      sources: [{ datasetId: "d1", role: "input" as const }], outputs: [],
+      settingsRef: { datasetId: "d1", field: "peakTable" as const },
+      warnings: [], createdAt: "now", stale: true as const,
+    };
+    const node = nodeOf("analysis-result", "analysis-result:result1", { analysisResults: [peakResult] });
+    render(<ArtifactRow node={node} depth={0} />);
+    expect(screen.getByText("Peak Analysis · Out of date")).toBeInTheDocument();
+    expect(libraryTileSummary(node).secondary).toBe("Peak table · Out of date");
   });
 
   it("an unbound editable figure shows 'unbound'", () => {

@@ -68,7 +68,7 @@ function metaOf(node: ArtifactNode, datasetName: string): string {
     case "report":
       return datasetName;
     case "analysis-result":
-      return node.entity.producer.label;
+      return `${node.entity.producer.label}${node.entity.stale ? " · Out of date" : ""}`;
   }
 }
 

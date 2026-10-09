@@ -34,18 +34,25 @@ beforeEach(() => {
     activeId: "d1",
     history: [],
     future: [],
+    analysisResults: [],
+    openAnalysisResultId: null,
   });
 });
 
 describe("publishFitResult", () => {
   it("attaches a durable table to the source dataset, with its instrument wavelength", () => {
-    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    publishFitResult("d1", RESULT, "simultaneous", { ...OPTS, yKey: 0 });
     const t = useApp.getState().datasets[0].peakTable;
     expect(t?.peaks.map((p) => p.center)).toEqual([30.1, 43.2]);
     expect(t?.provenance.datasetId).toBe("d1");
     expect(t?.provenance.datasetName).toBe("film.xrdml");
     expect(t?.provenance.method).toBe("simultaneous");
     expect(t?.provenance.wavelengthA).toBe(1.5406);
+    expect(useApp.getState().analysisResults).toEqual([expect.objectContaining({
+      id: "analysis-peaks-d1",
+      settingsRef: { datasetId: "d1", field: "peakTable" },
+      plotBindings: [{ datasetId: "d1", channels: [0], xChannel: null }],
+    })]);
   });
 
   it("records a null wavelength when the file carried no instrument metadata", () => {
@@ -110,6 +117,51 @@ describe("publishPeakTable", () => {
     const t = useApp.getState().datasets[0].peakTable!;
     publishPeakTable("d1", { ...t, peaks: [t.peaks[0]] });
     expect(useApp.getState().datasets[0].peakTable?.peaks).toHaveLength(1);
+  });
+
+  it("updates one catalog record without losing its user name or notes", () => {
+    publishFitResult("d1", RESULT, "simultaneous", { ...OPTS, yKey: 0 });
+    useApp.setState((s) => ({
+      analysisResults: s.analysisResults.map((result) => ({ ...result, name: "Reviewed peaks", notes: "check phase" })),
+    }));
+    publishFitResult("d1", { ...RESULT, R2: 0.8 }, "simultaneous", { ...OPTS, yKey: 0 });
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(useApp.getState().analysisResults[0]).toMatchObject({ name: "Reviewed peaks", notes: "check phase" });
+  });
+
+  it("updates a legacy-linked result without creating a second catalog record", () => {
+    publishFitResult("d1", RESULT, "simultaneous", { ...OPTS, yKey: 0 });
+    const legacy = { ...useApp.getState().analysisResults[0], id: "legacy-peaks", name: "Reviewed legacy peaks" };
+    useApp.setState({ analysisResults: [legacy] });
+    publishFitResult("d1", { ...RESULT, R2: 0.8 }, "simultaneous", { ...OPTS, yKey: 0 });
+    expect(useApp.getState().analysisResults).toEqual([
+      expect.objectContaining({ id: "legacy-peaks", name: "Reviewed legacy peaks" }),
+    ]);
+  });
+
+  it("refreshes duplicate linked records without merging away their user metadata", () => {
+    publishFitResult("d1", RESULT, "simultaneous", { ...OPTS, yKey: 0 });
+    const original = useApp.getState().analysisResults[0];
+    useApp.setState({ analysisResults: [
+      { ...original, id: "legacy-a", name: "First review", notes: "alpha" },
+      { ...original, id: "legacy-b", name: "Second review", notes: "beta" },
+    ] });
+    publishFitResult("d1", { ...RESULT, R2: 0.8 }, "simultaneous", { ...OPTS, yKey: 0 });
+    expect(useApp.getState().analysisResults).toEqual([
+      expect.objectContaining({ id: "legacy-a", name: "First review", notes: "alpha" }),
+      expect.objectContaining({ id: "legacy-b", name: "Second review", notes: "beta" }),
+    ]);
+  });
+
+  it("honors a deleted catalog item during table edits but recreates it for a new fit", () => {
+    publishFitResult("d1", RESULT, "simultaneous", { ...OPTS, yKey: 0 });
+    const peakId = useApp.getState().datasets[0].peakTable!.peaks[0].id;
+    useApp.setState({ analysisResults: [] });
+    setPeakExcluded("d1", peakId, true);
+    expect(useApp.getState().analysisResults).toEqual([]);
+
+    publishFitResult("d1", RESULT, "simultaneous", { ...OPTS, yKey: 0 });
+    expect(useApp.getState().analysisResults).toHaveLength(1);
   });
 });
 
@@ -243,6 +295,23 @@ describe("manual durable peak edits", () => {
     expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
   });
 
+  it("keeps a legacy result and its selection as incomplete when removing the final fitted peak", () => {
+    fitFresh({ ...RESULT, peaks: [RESULT.peaks[0]], nPeaks: 1 });
+    const legacy = { ...useApp.getState().analysisResults[0], id: "legacy-peaks", stale: true as const };
+    useApp.setState({
+      analysisResults: [legacy],
+      openAnalysisResultId: legacy.id,
+      librarySelection: { kind: "analysis-result", id: legacy.id },
+    });
+    removePeaks("d1", new Set([useApp.getState().datasets[0].peakTable!.peaks[0].id]));
+    expect(useApp.getState()).toMatchObject({
+      analysisResults: [expect.objectContaining({ id: "legacy-peaks" })],
+      openAnalysisResultId: "legacy-peaks",
+      librarySelection: { kind: "analysis-result", id: "legacy-peaks" },
+    });
+    expect(useApp.getState().analysisResults[0].stale).toBeUndefined();
+  });
+
   it("undoes and redoes a manual edit as one effective-change-only step", () => {
     fitFresh();
     const original = useApp.getState().datasets[0].peakTable!;
@@ -274,10 +343,13 @@ describe("manual durable peak edits", () => {
 
     removePeaks("d1", new Set(original.peaks.map((peak) => peak.id)));
     expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
+    expect(useApp.getState().analysisResults).toHaveLength(1);
     useApp.getState().undo();
     expect(useApp.getState().datasets[0].peakTable).toEqual(original);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
     useApp.getState().redo();
     expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
+    expect(useApp.getState().analysisResults).toHaveLength(1);
   });
 });
 

@@ -34,6 +34,7 @@ function FigureCard({ result, index, onOpen, onBuild, onReport }: {
     : [];
   const path = dataset && channels.length ? previewPath(dataset, channels[0]) : null;
   const unavailable = !dataset || channels.length === 0;
+  const sourceOnly = result.settingsRef?.field === "peakTable";
   return <article className={`qz-analysis-figure-card${unavailable ? " unavailable" : ""}`}>
     <div className="qz-analysis-figure-preview">
       {path ? <svg viewBox="0 0 200 64" role="img" aria-label={`Preview of ${dataset!.name}`} preserveAspectRatio="none">
@@ -44,9 +45,9 @@ function FigureCard({ result, index, onOpen, onBuild, onReport }: {
       <strong>{dataset?.name ?? binding.datasetId}</strong>
       <span>{channels.map((channel) => dataset!.data.labels[channel]).join(", ") || "Saved binding unavailable"}</span>
       <div className="qz-analysis-figure-actions">
-        <Button size="sm" disabled={unavailable} onClick={() => onOpen(index)}>Open plot</Button>
-        <Button size="sm" disabled={unavailable} onClick={() => onBuild(index)}>Build figure</Button>
-        <Button size="sm" disabled={unavailable} onClick={() => onReport(index)}>Send to report…</Button>
+        <Button size="sm" disabled={unavailable} onClick={() => onOpen(index)}>{sourceOnly ? "Open source plot" : "Open plot"}</Button>
+        <Button size="sm" disabled={unavailable} onClick={() => onBuild(index)}>{sourceOnly ? "Build source figure" : "Build figure"}</Button>
+        <Button size="sm" disabled={unavailable} onClick={() => onReport(index)}>{sourceOnly ? "Send source to report…" : "Send to report…"}</Button>
       </div>
     </div>
   </article>;
@@ -59,8 +60,11 @@ export default function AnalysisResultFigures({ result, onOpen, onBuild, onRepor
   onReport: (index: number) => void;
 }) {
   if (!result.plotBindings?.length) return <p className="qz-analysis-empty">No figure bindings were recorded for this result.</p>;
+  const sourceOnly = result.settingsRef?.field === "peakTable";
   return <div className="qz-analysis-figures">
-    <p className="qz-analysis-caption">Figures use the result’s recorded output and channels. Build figure opens an editable draft; Send to report captures the configured plot.</p>
+    <p className="qz-analysis-caption">{sourceOnly
+      ? "These actions plot the recorded source curve only. The peak table and CSV preserve fitted values; a reusable fitted curve is not stored in this result."
+      : `Figures use the result’s recorded ${result.outputs.length ? "output" : "source"} and channels. Build figure opens an editable draft; Send to report captures the configured plot.`}</p>
     {result.plotBindings.map((binding, index) => <FigureCard key={`${binding.datasetId}-${index}`} result={result} index={index} onOpen={onOpen} onBuild={onBuild} onReport={onReport} />)}
   </div>;
 }
