@@ -1,20 +1,31 @@
-// Lazy lifecycle actions for durable analysis results. The store's catalog
-// fields stay deliberately tiny and eager; result editing/recalculation is
-// reached only from lazy code — the result workspace, lib/transformRun.ts, and
-// the Library through store/analysisResultLazy.ts. architecture.test.ts's
-// DRAGGED_OUT list keeps every static importer off the eager graph.
+// Lazy lifecycle actions for durable analysis results. Keep static importers
+// off the eager graph enforced by architecture.test.ts's DRAGGED_OUT list.
 
 import { signalAnalysisResult, type AnalysisResult } from "../lib/analysisResult";
+import { analysisFitTableCsv } from "../lib/analysisFitTable";
 import { analysisPeakTableCsv } from "../lib/analysisPeakTable";
+import { fitModel } from "../lib/api";
+import { listFitModels } from "../lib/api/curvefit";
+import { dropGapRows } from "../lib/api/finitePairs";
+import { fitBands } from "../lib/api/fitStats";
 import { analysisResultTableCsv } from "../lib/analysisResultTable";
 import { csvBlob } from "../lib/csvCell";
 import { saveBlob } from "../lib/download";
 import { stemFromName } from "../lib/exportActive";
+import { fullPlottedX } from "../lib/fitselectionActions";
+import { boundsFromWire } from "../lib/fitBoundsWire";
+import { fitOverlayValues, stampRecompute } from "../lib/fitRecompute";
+import { fitDataForSpec } from "../lib/fitselection";
 import type { Dataset } from "../lib/types";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
+import { resolveAnalysisResultPlot, type PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
 import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
 import { commitDerivedRecompute } from "./recalcDatasets";
+import { publishFitAnalysisResult } from "./publishFitAnalysisResult";
 import { useApp } from "./useApp";
+
+export { resolveAnalysisResultPlot } from "./analysisResultPlotResolve";
+export type { PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
 
 export function registerAnalysisResult(result: AnalysisResult, open = true): void {
   const current = useApp.getState().analysisResults;
@@ -148,64 +159,68 @@ export function freezeAnalysisResult(id: string): string | null {
   return frozenId;
 }
 
-/** Resolve and focus one recorded plot binding. Returns null without changing
- * the active plot when the saved binding is missing or no longer valid. */
-export interface PreparedAnalysisResultPlot {
-  dataset: Dataset;
-  channels: number[];
-  xChannel?: number | null;
-}
-
-/** Resolve and validate a binding without changing the current workspace.
- * Builder callers use this read-only half so Cancel really is a no-op. */
-export async function resolveAnalysisResultPlot(id: string, bindingIndex: number): Promise<PreparedAnalysisResultPlot | null> {
-  const initial = useApp.getState();
-  const result = initial.analysisResults.find((item) => item.id === id);
-  const binding = result?.plotBindings?.[bindingIndex];
-  if (!result || !binding) {
-    initial.setStatus("can't open result figure: the saved plot binding is unavailable");
-    return null;
-  }
-  try {
-    await initial.resolveDataset(binding.datasetId);
-  } catch (error) {
-    useApp.getState().setStatus(`can't open result figure: ${error instanceof Error ? error.message : "worksheet loading failed"}`);
-    return null;
-  }
-  const state = useApp.getState();
-  // The user may delete or edit the result while a lazy worksheet is loading.
-  // Re-read the binding before mutating the active plot so a stale click never
-  // opens data the result no longer owns.
-  const currentBinding = state.analysisResults.find((item) => item.id === id)?.plotBindings?.[bindingIndex];
-  if (!currentBinding || currentBinding.datasetId !== binding.datasetId ||
-      currentBinding.xChannel !== binding.xChannel ||
-      currentBinding.channels.length !== binding.channels.length ||
-      currentBinding.channels.some((channel, index) => channel !== binding.channels[index])) {
-    state.setStatus("can't open result figure: the saved plot binding changed while loading");
-    return null;
-  }
-  const dataset = state.datasets.find((item) => item.id === currentBinding.datasetId);
-  const channels = dataset
-    ? [...new Set(currentBinding.channels)].filter((channel) => Number.isInteger(channel) && channel >= 0 && channel < dataset.data.labels.length)
-    : [];
-  const xChannel = currentBinding.xChannel;
-  const xValid = xChannel === undefined || xChannel === null ||
-    (Number.isInteger(xChannel) && xChannel >= 0 && xChannel < (dataset?.data.labels.length ?? 0));
-  if (!dataset || channels.length === 0 || !xValid) {
-    state.setStatus(`can't open result figure: ${dataset ? "its plotted channels are unavailable" : "its worksheet is missing"}`);
-    return null;
-  }
-  return { dataset, channels, ...(xChannel !== undefined ? { xChannel } : {}) };
-}
-
 export async function prepareAnalysisResultPlot(id: string, bindingIndex: number): Promise<PreparedAnalysisResultPlot | null> {
   const prepared = await resolveAnalysisResultPlot(id, bindingIndex);
   if (!prepared) return null;
-  const state = useApp.getState();
+  let state = useApp.getState();
+  const result = state.analysisResults.find((item) => item.id === id);
+  const fitDatasetId = result?.settingsRef?.field === "fitSpec" ? result.settingsRef.datasetId : null;
+  const fitDataset = fitDatasetId === prepared.dataset.id ? prepared.dataset : null;
+  const fitSpec = fitDataset?.fitSpec;
+  let fitY: (number | null)[] | null = null;
+  if (fitDatasetId && (!fitDataset || !fitSpec)) {
+    state.setStatus("can't open fitted plot: the saved fit is missing");
+    return null;
+  }
+  if (fitDataset && fitSpec) {
+    if (!fitSpec.params?.length) {
+      state.setStatus("can't open fitted plot: the saved fit has no parameter values");
+      return null;
+    }
+    // `null` deliberately means the independent/time axis; unlike `undefined`
+    // it must not fall through to the FitSpec channel.
+    const savedX = prepared.xChannel !== undefined ? prepared.xChannel : fitSpec.xKey ?? null;
+    const xs = fullPlottedX(fitDataset.data, savedX);
+    const finite = xs.flatMap((value, index) => Number.isFinite(value) ? [{ value, index }] : []);
+    if (!finite.length) {
+      state.setStatus("can't open fitted plot: the saved X channel has no finite values");
+      return null;
+    }
+    try {
+      const evaluated = await fitBands({
+        model: fitSpec.model,
+        params: fitSpec.params,
+        covar: null,
+        x: finite.map((entry) => entry.value),
+        n_points: finite.length,
+        dof: Math.max(1, (fitSpec.nPoints ?? finite.length) - (fitSpec.nFree ?? fitSpec.params.length)),
+      });
+      if (!Array.isArray(evaluated.yFit) || evaluated.yFit.length !== finite.length ||
+          !evaluated.yFit.every((value) => value === null || (typeof value === "number" && Number.isFinite(value)))) {
+        throw new Error("model evaluation returned the wrong number of fitted values");
+      }
+      fitY = Array.from({ length: xs.length }, () => null);
+      finite.forEach((entry, index) => { fitY![entry.index] = evaluated.yFit[index] ?? null; });
+    } catch (error) {
+      useApp.getState().setStatus(`can't open fitted plot: ${error instanceof Error ? error.message : "model evaluation failed"}`);
+      return null;
+    }
+    state = useApp.getState();
+    const current = state.analysisResults.find((item) => item.id === id);
+    const currentDataset = state.datasets.find((item) => item.id === fitDataset.id);
+    if (current?.settingsRef?.field !== "fitSpec" || current.settingsRef.datasetId !== fitDataset.id ||
+        currentDataset?.fitSpec !== fitSpec || currentDataset.data !== fitDataset.data) {
+      state.setStatus("can't open fitted plot: the fit changed while its curve was loading");
+      return null;
+    }
+  }
   state.setActive(prepared.dataset.id);
   if (prepared.xChannel !== undefined) state.setXKey(prepared.xChannel);
   state.setYKeys(prepared.channels);
-  useApp.setState({ stageTab: "plot" });
+  useApp.setState({
+    stageTab: "plot",
+    fitOverlay: fitY ? { datasetId: prepared.dataset.id, y: fitY } : null,
+  });
   return prepared;
 }
 
@@ -273,7 +288,107 @@ export function exportAnalysisPeakTable(id: string): boolean {
   return true;
 }
 
+/** Export the compact parameter table from the live Dataset.fitSpec authority. */
+export async function exportAnalysisFitTable(id: string): Promise<boolean> {
+  const state = useApp.getState();
+  const result = state.analysisResults.find((item) => item.id === id);
+  const sourceId = result?.settingsRef?.field === "fitSpec" ? result.settingsRef.datasetId : null;
+  const dataset = sourceId ? state.datasets.find((item) => item.id === sourceId) : null;
+  const spec = dataset?.fitSpec;
+  if (!result || !dataset || !spec) {
+    state.setStatus(`can't export ${result?.name ?? "fit result"}: its saved fit is missing`);
+    return false;
+  }
+  let names: string[] = [];
+  try {
+    names = (await listFitModels()).models.find((model) => model.name === spec.model)?.paramNames ?? [];
+  } catch {
+    // Offline export remains useful with stable p1..pN fallback names.
+  }
+  const current = useApp.getState();
+  const liveResult = current.analysisResults.find((item) => item.id === id);
+  const liveDataset = current.datasets.find((item) => item.id === sourceId);
+  if (liveResult?.settingsRef?.field !== "fitSpec" || liveDataset?.fitSpec !== spec) {
+    current.setStatus("can't export fit parameters: the fit changed while model metadata was loading");
+    return false;
+  }
+  const filename = stemFromName(`${result.name}-parameters`).replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/, "") || "curve-fit";
+  saveBlob(csvBlob(analysisFitTableCsv(spec, names)), `${filename}.csv`);
+  current.setStatus(`exported ${spec.params?.length ?? 0} fitted parameters`);
+  return true;
+}
+
 const recalculatingOutputs = new Set<string>();
+const recalculatingFits = new Set<string>();
+
+/** Re-run one durable curve-fit result from its recorded recipe. This updates
+ * the Dataset.fitSpec authority in place; it does not rewrite source data or
+ * silently recalculate unrelated stale work. */
+export async function recalculateFitAnalysisResult(id: string): Promise<boolean> {
+  const initial = useApp.getState();
+  const result = initial.analysisResults.find((item) => item.id === id);
+  const sourceId = result?.settingsRef?.field === "fitSpec" ? result.settingsRef.datasetId : null;
+  if (!result || !sourceId) return false;
+  if (recalculatingFits.has(sourceId)) {
+    initial.setStatus(`${result.name} is already recalculating`);
+    return false;
+  }
+  recalculatingFits.add(sourceId);
+  try {
+    await initial.resolveDataset(sourceId);
+    const state = useApp.getState();
+    const liveResult = state.analysisResults.find((item) => item.id === id);
+    const source = state.datasets.find((dataset) => dataset.id === sourceId);
+    const spec = source?.fitSpec;
+    if (liveResult?.settingsRef?.field !== "fitSpec" || liveResult.settingsRef.datasetId !== sourceId || !source || !spec) {
+      state.setStatus(`can't recalculate ${result.name}: its source or saved fit is missing`);
+      return false;
+    }
+    if (spec.xKey === undefined || spec.yKey === undefined) {
+      throw new Error("the legacy fit does not record exact X/Y channels; use Edit / Re-fit first");
+    }
+    const selection = fitDataForSpec(source, spec, state.xKey, state.yKeys, state.seriesOrder);
+    if (!selection) throw new Error("the saved fit's channels are unavailable");
+    const pairs = dropGapRows(selection.x, selection.y);
+    if (!pairs.x.length) throw new Error("no finite X/Y pairs are available to fit");
+    const dy = selection.dy ? pairs.keep.map((index) => selection.dy![index]!) : undefined;
+    const fitted = await fitModel({
+      model: spec.model,
+      x: pairs.x,
+      y: pairs.y,
+      ...(dy ? { dy } : {}),
+      ...(spec.p0 ? { p0: spec.p0 } : {}),
+      ...(spec.lower ? { lower: boundsFromWire(spec.lower, -1) } : {}),
+      ...(spec.upper ? { upper: boundsFromWire(spec.upper, 1) } : {}),
+      ...(spec.fixed ? { fixed: spec.fixed } : {}),
+    });
+    if (!Array.isArray(fitted.params) ||
+        !fitted.params.every((value) => typeof value === "number" && Number.isFinite(value))) {
+      throw new Error("the fitter did not return finite parameter values");
+    }
+    const current = useApp.getState();
+    const currentResult = current.analysisResults.find((item) => item.id === id);
+    const currentSource = current.datasets.find((dataset) => dataset.id === sourceId);
+    if (currentResult?.settingsRef?.field !== "fitSpec" || currentResult.settingsRef.datasetId !== sourceId ||
+        currentSource !== source) {
+      current.setStatus(`can't apply recalculation: ${result.name} changed while fitting`);
+      return false;
+    }
+    const overlayWasVisible = current.fitOverlay?.datasetId === sourceId;
+    const nextOverlay = overlayWasVisible ? fitOverlayValues(source, pairs, fitted.yFit) : null;
+    current.recordHistory(`recalculate ${result.name}`);
+    current.setFitSpec(sourceId, stampRecompute(spec, fitted));
+    if (overlayWasVisible) useApp.setState({ fitOverlay: nextOverlay ? { datasetId: sourceId, y: nextOverlay } : null });
+    publishFitAnalysisResult(sourceId);
+    useApp.getState().setStatus(`recalculated ${result.name}`);
+    return true;
+  } catch (error) {
+    useApp.getState().setStatus(`couldn't recalculate ${result.name}: ${error instanceof Error ? error.message : "unknown error"}`);
+    return false;
+  } finally {
+    recalculatingFits.delete(sourceId);
+  }
+}
 
 /** Recompute THIS result's linked output only — never the project-wide
  *  `recalcNow()`, which would also settle stale datasets and fits the user

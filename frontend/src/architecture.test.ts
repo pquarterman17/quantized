@@ -3390,6 +3390,11 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // `boundsFromWire`, now in lib/fitBoundsWire.ts.
     "/lib/fitParams.ts",
     "/lib/paramRowCheck.ts",
+    // Curve-fit result adapter: stale-fit replay imports the result-snapshot
+    // stamper after its backend request, while the lazy Analysis Result action
+    // module imports it statically. The quick-fit startup path must not pull
+    // this recompute-only code back through lib/fitselection.ts.
+    "/lib/fitRecompute.ts",
     // P2.5 box 4 (saved transformation recipes): the template library left
     // the entry chunk (lib/contextActions.ts reads the storage slot for its
     // one visibility check), which funded the recipe modules below — reached

@@ -4,13 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalysisResult } from "../../../lib/analysisResult";
 import type { Dataset } from "../../../lib/types";
 
-const { rerun, recalculate, sendReport } = vi.hoisted(() => ({
-  rerun: vi.fn(), recalculate: vi.fn(), sendReport: vi.fn(),
+const { rerun, recalculate, recalculateFit, sendReport } = vi.hoisted(() => ({
+  rerun: vi.fn(), recalculate: vi.fn(), recalculateFit: vi.fn(), sendReport: vi.fn(),
 }));
 vi.mock("../../../store/signalWorksheetCommand", () => ({ createSignalWorksheetFromApp: rerun }));
 vi.mock("../../../store/analysisResultActions", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../store/analysisResultActions")>()),
   recalculateAnalysisResult: recalculate,
+  recalculateFitAnalysisResult: recalculateFit,
   sendAnalysisResultPlotToReport: sendReport,
 }));
 vi.mock("../../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
@@ -20,6 +21,7 @@ vi.mock("../../overlays/ToolWindow", () => ({
 }));
 
 import AnalysisResultPanel from "./AnalysisResultPanel";
+import { fitAnalysisResult } from "../../../lib/fitAnalysisResult";
 import { publishFitResult } from "../../../store/peakTables";
 import { useApp } from "../../../store/useApp";
 
@@ -220,5 +222,102 @@ describe("AnalysisResultPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit / Re-fit…" }));
     expect(useApp.getState()).toMatchObject({ activeId: "source", stageTab: "plot", peaksOpen: true, openAnalysisResultId: null });
+  });
+
+  it("presents a saved curve fit with live status, recipe controls, and re-fit setup", async () => {
+    const fitted = {
+      ...source,
+      fitSpec: {
+        model: "Linear", xKey: null, yKey: 0, params: [2, 1], errors: [0.1, 0.2],
+        R2: 0.99, nPoints: 2, fittedAt: "2026-10-09T00:00:00Z",
+      },
+    } satisfies Dataset;
+    const fitResult = fitAnalysisResult(fitted, fitted.fitSpec);
+    useApp.setState({
+      datasets: [fitted], analysisResults: [fitResult], openAnalysisResultId: fitResult.id,
+      staleFits: ["source"], curveFitOpen: false,
+    });
+    recalculateFit.mockImplementation(async () => {
+      useApp.setState({ staleFits: [] });
+      return true;
+    });
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Out of date")).toBeInTheDocument();
+    expect(screen.getByText("Linear")).toBeInTheDocument();
+    expect(screen.getByText("0.99")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Recalculate" }));
+    await waitFor(() => expect(screen.getByText("Current")).toBeInTheDocument());
+    expect(recalculateFit).toHaveBeenCalledWith(fitResult.id);
+    fireEvent.click(screen.getByRole("button", { name: "Edit / Re-fit…" }));
+    expect(useApp.getState()).toMatchObject({
+      activeId: "source", stageTab: "plot", xKey: null, yKeys: [0], curveFitOpen: true, openAnalysisResultId: null,
+    });
+  });
+
+  it("shows live fit warnings once rather than repeating envelope snapshots", () => {
+    const fitted = {
+      ...source, fitSpec: { model: "Linear", xKey: null, yKey: 0, exitFlag: 0 },
+    } satisfies Dataset;
+    const fitResult = fitAnalysisResult(fitted, fitted.fitSpec);
+    useApp.setState({ datasets: [fitted], analysisResults: [fitResult], openAnalysisResultId: fitResult.id });
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Diagnostics (2)" }));
+    expect(screen.getAllByText("The optimizer did not report convergence.")).toHaveLength(1);
+    expect(screen.getAllByText("This legacy fit does not include fitted parameter values.")).toHaveLength(1);
+  });
+
+  it("detects edited fit data as out of date even when automatic recalculation is off", () => {
+    const fitted = {
+      ...source, fitSpec: { model: "Linear", xKey: null, yKey: 0, params: [2, 1] },
+    } satisfies Dataset;
+    const fitResult = fitAnalysisResult(fitted, fitted.fitSpec);
+    const edited = { ...fitted, data: { ...fitted.data, values: [[1], [99]] } };
+    useApp.setState({
+      datasets: [edited], analysisResults: [fitResult], openAnalysisResultId: fitResult.id,
+      staleFits: [], recalcMode: "off",
+    });
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Out of date")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Diagnostics (1)" }));
+    expect(screen.getByText("The source data changed after this fit. Recalculate or re-fit before using these values.")).toBeInTheDocument();
+  });
+
+  it("does not judge a lazy Origin preview stale before its worksheet loads", () => {
+    const fitted = {
+      ...source, fitSpec: { model: "Linear", xKey: null, yKey: 0, params: [2, 1] },
+    } satisfies Dataset;
+    const fitResult = fitAnalysisResult(fitted, fitted.fitSpec);
+    const pending: Dataset = {
+      ...fitted,
+      pending: { kind: "path", path: "/source.opju", bookId: "Book1", rows: 2, cols: 1 },
+      data: { ...fitted.data, values: [[99], [100]] },
+    };
+    useApp.setState({ datasets: [pending], analysisResults: [fitResult], openAnalysisResultId: fitResult.id, staleFits: [] });
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Current")).toBeInTheDocument();
+  });
+
+  it("keeps source-figure editing available but disables fitted output when the fit is missing", () => {
+    const fitted = { ...source, fitSpec: { model: "Linear", xKey: null, yKey: 0, params: [2, 1] } } satisfies Dataset;
+    const fitResult = fitAnalysisResult(fitted, fitted.fitSpec);
+    useApp.setState({
+      datasets: [source], analysisResults: [fitResult], openAnalysisResultId: fitResult.id,
+    });
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Figures" }));
+    expect(screen.getByRole("button", { name: "Open fitted plot" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Build source figure" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Send fitted plot to report…" })).toBeDisabled();
+  });
+
+  it("requires Edit / Re-fit when a legacy recipe has no exact channel bindings", () => {
+    const fitted = { ...source, fitSpec: { model: "Linear", params: [2, 1] } } satisfies Dataset;
+    const fitResult = fitAnalysisResult(fitted, fitted.fitSpec);
+    useApp.setState({ datasets: [fitted], analysisResults: [fitResult], openAnalysisResultId: fitResult.id });
+    render(<AnalysisResultPanel />);
+    expect(screen.getByRole("button", { name: "Recalculate" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Edit / Re-fit…" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("tab", { name: "Diagnostics (1)" }));
+    expect(screen.getByText("The fitted X axis is not recorded unambiguously.")).toBeInTheDocument();
   });
 });

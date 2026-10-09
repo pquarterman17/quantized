@@ -22,6 +22,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset, DataStruct, FitSpec } from "../lib/types";
+import { fitAnalysisResult } from "../lib/fitAnalysisResult";
 import { useToasts } from "./toasts";
 import { useApp, type AppState } from "./useApp";
 
@@ -188,6 +189,27 @@ describe("recalcNow re-entrancy (module-level scheduler state)", () => {
     return { entered, release: () => release() };
   }
 
+  it("keeps a fit stale and its old overlay when a backend result has no finite parameters", async () => {
+    seed({ staleDatasets: [], staleFits: ["a"], fitOverlay: { datasetId: "a", y: [9, 9, 9] } });
+    vi.mocked(fitModel).mockResolvedValueOnce({ params: [Number.NaN], yFit: [2, 4, 6] });
+    await act().recalcNow();
+    expect(act().staleFits).toEqual(["a"]);
+    expect(act().fitOverlay).toEqual({ datasetId: "a", y: [9, 9, 9] });
+    expect(act().status).toContain("finite parameter values");
+  });
+
+  it("refreshes the durable result warnings and update time after recompute", async () => {
+    const failedSpec: FitSpec = { ...LINEAR, params: [1, 0], exitFlag: 0, fittedAt: "original" };
+    const fitted = ds("a", { fitSpec: failedSpec });
+    const oldResult = { ...fitAnalysisResult(fitted, failedSpec), name: "Reviewed fit", notes: "keep" };
+    seed({ datasets: [fitted], analysisResults: [oldResult], staleDatasets: [], staleFits: ["a"] });
+    vi.mocked(fitModel).mockResolvedValueOnce({ params: [2, 0], exitFlag: 1, yFit: [2, 4, 6] });
+    await act().recalcNow();
+    expect(act().analysisResults[0]).toMatchObject({
+      name: "Reviewed fit", notes: "keep", updatedAt: expect.any(String), warnings: [],
+    });
+  });
+
   it("a touch that arrives mid-pass is ignored (the recalc's own writes never re-mark)", async () => {
     seed({ staleDatasets: [], staleFits: ["a"] });
     const held = holdFit();
@@ -225,7 +247,7 @@ describe("recalcNow re-entrancy (module-level scheduler state)", () => {
 });
 
 describe("setFitSpec", () => {
-  it("writes only datasets: sets the spec on the named dataset, leaves the rest by identity", () => {
+  it("sets the spec while leaving other datasets by identity", () => {
     const before = snapshot();
     const spec: FitSpec = { model: "Gaussian", xKey: null, yKey: 0 };
     act().setFitSpec("lone", spec);
@@ -248,4 +270,5 @@ describe("setFitSpec", () => {
     expect(act().staleDatasets).toEqual(["zz"]);
     expect(act().staleFits).toEqual(["zz"]);
   });
+
 });

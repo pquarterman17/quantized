@@ -126,6 +126,12 @@ describe("Dataset.fitSpec: the MAIN_PLAN #30 recipe survives save/reopen", () =>
     yKey: 1,
     weight: { mode: "manual", errKey: 2 },
     params: [1, 2, 3],
+    errors: [0.1, null, 0.3],
+    R2: 0.99,
+    RMSE: 0.25,
+    AIC: 12.5,
+    chiSqRed: 1.1,
+    nFree: 2,
     exitFlag: 1,
     range: [0, 2],
     nPoints: 3,
@@ -158,6 +164,12 @@ describe("Dataset.fitSpec: the MAIN_PLAN #30 recipe survives save/reopen", () =>
       recomputedAt: "2026-01-02T00:00:00.000Z",
       preprocessing: ["smooth", 4],
       p0: [1, "2"],
+      errors: [0.1, "bad"],
+      R2: "high",
+      RMSE: 0.2,
+      AIC: null,
+      chiSqRed: Number.POSITIVE_INFINITY,
+      nFree: -1,
       lower: [0, null],
       upper: "none",
       fixed: [true, 1],
@@ -167,6 +179,7 @@ describe("Dataset.fitSpec: the MAIN_PLAN #30 recipe survives save/reopen", () =>
       model: "gauss",
       recomputedAt: "2026-01-02T00:00:00.000Z",
       lower: [0, null],
+      RMSE: 0.2,
     });
   });
 });

@@ -151,6 +151,20 @@ describe("ArtifactRow — open + workbookLastChild recording", () => {
     expect(libraryTileSummary(node).secondary).toBe("Peak table · Out of date");
   });
 
+  it("describes a source-only curve fit as parameters instead of '0 outputs'", () => {
+    const fitResult = {
+      version: 1 as const, id: "result1", name: "Linear fit",
+      producer: { id: "curve-fit", label: "Curve Fit", version: 1 },
+      sources: [{ datasetId: "d1", role: "input" as const }], outputs: [],
+      settingsRef: { datasetId: "d1", field: "fitSpec" as const },
+      warnings: [], createdAt: "now",
+    };
+    const node = nodeOf("analysis-result", "analysis-result:result1", { analysisResults: [fitResult] });
+    expect(libraryTileSummary(node)).toMatchObject({
+      primary: "Curve Fit", secondary: "Fit parameters", warning: null,
+    });
+  });
+
   it("an unbound editable figure shows 'unbound'", () => {
     const node = nodeOf("editable-figure", "editable-figure:fig1", {
       workbooks: [], datasets: [],

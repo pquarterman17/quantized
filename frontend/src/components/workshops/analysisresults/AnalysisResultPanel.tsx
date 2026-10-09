@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import type { QuickFigureMapping } from "../../../lib/quickFigureMapping";
 import { initialQuickFigureMapping } from "../../../lib/quickFigureMappingActions";
+import { dataFingerprint } from "../../../lib/analysisResultFreshness";
+import { fitAnalysisResult } from "../../../lib/fitAnalysisResultLive";
 import { peakTableMatchesData } from "../../../lib/peakTableFit";
 import { signalRecipeChannels, signalRecipeXRange } from "../../../lib/signalRecipe";
 import type { Dataset } from "../../../lib/types";
@@ -12,6 +14,8 @@ import { askConfirm } from "../../overlays/ConfirmDialog";
 import { askParams } from "../../overlays/ParamDialog";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button } from "../../primitives";
+import AnalysisResultFitOverview from "./AnalysisResultFitOverview";
+import AnalysisResultFitTable from "./AnalysisResultFitTable";
 import AnalysisResultFigures from "./AnalysisResultFigures";
 import AnalysisResultPeakTable from "./AnalysisResultPeakTable";
 import AnalysisResultTables from "./AnalysisResultTables";
@@ -22,6 +26,7 @@ const TABS: readonly Tab[] = ["overview", "table", "figures", "diagnostics", "pr
 // actions' reason. Derived from the refs, so it clears when the source returns.
 const SOURCE_MISSING = "Source data not found — results can't be recalculated.";
 const PEAK_SOURCE_MISSING = "Source data not found — the fitted peak table is unavailable until that worksheet is restored.";
+const FIT_SOURCE_MISSING = "Source data not found — the saved fit is unavailable until that worksheet is restored.";
 
 // Its own seam, not store/analysisResultLazy.ts: importing that from this
 // chunk would split it into a separate eagerly-named chunk (measured).
@@ -94,9 +99,13 @@ export default function AnalysisResultPanel() {
   const result = useApp((state) => state.analysisResults.find((item) => item.id === openId));
   const datasets = useApp((state) => state.datasets);
   const staleDatasets = useApp((state) => state.staleDatasets);
+  const staleFits = useApp((state) => state.staleFits);
   const setActive = useApp((state) => state.setActive);
+  const setXKey = useApp((state) => state.setXKey);
+  const setYKeys = useApp((state) => state.setYKeys);
   const setStageTab = useApp((state) => state.setStageTab);
   const setPeaksOpen = useApp((state) => state.setPeaksOpen);
+  const setCurveFitOpen = useApp((state) => state.setCurveFitOpen);
   const openQuickFigureBuilder = useApp((state) => state.openQuickFigureBuilder);
   const [tab, setTab] = useState<Tab>("overview");
   const [busy, setBusy] = useState<"recalculate" | "rerun" | "duplicate" | "freeze" | "figure" | "report" | "export" | null>(null);
@@ -106,11 +115,18 @@ export default function AnalysisResultPanel() {
   const source = datasets.find((dataset) => dataset.id === result?.sources[0]?.datasetId);
   const output = datasets.find((dataset) => dataset.id === result?.outputs[0]?.datasetId);
   const isPeak = result?.settingsRef?.field === "peakTable";
+  const isFit = result?.settingsRef?.field === "fitSpec";
   const peakTable = isPeak ? source?.peakTable ?? null : null;
+  const fitSpec = isFit ? source?.fitSpec ?? null : null;
+  const fitFingerprintStale = !!(isFit && source && !source.pending && result?.sourceFingerprint &&
+    result.sourceFingerprint !== dataFingerprint(source.data));
   const diagnostics = useMemo(() => {
     if (!result) return [];
-    return [
-      ...result.warnings,
+    const liveWarnings = isFit && source && fitSpec
+      ? fitAnalysisResult(source, fitSpec, result.createdAt).warnings
+      : result.warnings;
+    return [...new Set([
+      ...liveWarnings,
       ...result.sources.filter((ref) => !datasets.some((dataset) => dataset.id === ref.datasetId))
         .map((ref) => `Source worksheet ${ref.datasetId} is missing.`),
       ...result.outputs.filter((ref) => !datasets.some((dataset) => dataset.id === ref.datasetId))
@@ -121,8 +137,12 @@ export default function AnalysisResultPanel() {
         ? ["The source data changed after this peak fit. Re-fit before using these values."]
         : []),
       ...(isPeak && source && !peakTable ? ["The fitted peak table is no longer available on the source worksheet."] : []),
-    ];
-  }, [datasets, isPeak, output, peakTable, result, source, staleDatasets]);
+      ...(isFit && source && !fitSpec ? ["The saved curve fit is no longer available on the source worksheet."] : []),
+      ...(isFit && source && (staleFits.includes(source.id) || fitFingerprintStale)
+        ? ["The source data changed after this fit. Recalculate or re-fit before using these values."]
+        : []),
+    ])];
+  }, [datasets, fitFingerprintStale, fitSpec, isFit, isPeak, output, peakTable, result, source, staleDatasets, staleFits]);
 
   if (!result) return null;
   const close = () => useApp.setState({ openAnalysisResultId: null });
@@ -144,11 +164,22 @@ export default function AnalysisResultPanel() {
     setPeaksOpen(true);
     close();
   };
+  const editFit = () => {
+    if (!source || !fitSpec) return;
+    setActive(source.id);
+    setStageTab("plot");
+    if (fitSpec.xKey !== undefined) setXKey(fitSpec.xKey);
+    if (fitSpec.yKey !== undefined) setYKeys([fitSpec.yKey]);
+    setCurveFitOpen(true);
+    close();
+  };
   const recalculate = async () => {
-    if (!source || !output || busy) return;
+    if (!source || (!isFit && !output) || busy) return;
     setBusy("recalculate");
     try {
-      await loadActions().then((m) => m.recalculateAnalysisResult(result.id), onLoadFailure);
+      await loadActions().then((m) => isFit
+        ? m.recalculateFitAnalysisResult(result.id)
+        : m.recalculateAnalysisResult(result.id), onLoadFailure);
     } finally {
       setBusy(null);
     }
@@ -171,7 +202,9 @@ export default function AnalysisResultPanel() {
     if (name) withActions((m) => m.renameAnalysisResult(result.id, name));
   };
   const remove = async () => {
-    const kept = isPeak ? "Its fitted peak table and source data are kept." : "Its linked worksheet and scientific data are kept.";
+    const kept = isPeak ? "Its fitted peak table and source data are kept."
+      : isFit ? "Its saved fit and source data are kept."
+      : "Its linked worksheet and scientific data are kept.";
     const yes = await askConfirm(`Delete "${result.name}"?`, `This removes the result record from the Library. ${kept}`, "Delete", true);
     if (yes) withActions((m) => m.removeAnalysisResult(result.id));
   };
@@ -201,7 +234,7 @@ export default function AnalysisResultPanel() {
     setBusy("figure");
     try {
       const prepared = await loadActions()
-        .then((m) => m.resolveAnalysisResultPlot(result.id, index), () => { onLoadFailure(); return null; });
+        .then((m) => m.resolveAnalysisResultPlot(result.id, index, true), () => { onLoadFailure(); return null; });
       if (prepared && openQuickFigureBuilder(prepared.dataset.id, mappingForResult(prepared.dataset, prepared.channels, prepared.xChannel))) close();
     } finally { setBusy(null); }
   };
@@ -224,6 +257,12 @@ export default function AnalysisResultPanel() {
     try { await loadActions().then((m) => m.exportAnalysisPeakTable(result.id), onLoadFailure); }
     finally { setBusy(null); }
   };
+  const exportFit = async () => {
+    if (busy) return;
+    setBusy("export");
+    try { await loadActions().then((m) => m.exportAnalysisFitTable(result.id), onLoadFailure); }
+    finally { setBusy(null); }
+  };
   // The linked recipe is the authority; an old envelope's copy is a fallback.
   const recipe = output?.analysisRecipe;
   const channels = recipe ? signalRecipeChannels(recipe) : result.selection?.channels;
@@ -238,7 +277,11 @@ export default function AnalysisResultPanel() {
       ? "The linked output is already independent or unavailable."
       : "Create an independent worksheet from the current linked output.";
   const peakStale = !!(isPeak && source && peakTable && !peakTableMatchesData(peakTable, source));
-  const status = isPeak
+  const fitStale = !!(isFit && source && (staleFits.includes(source.id) || fitFingerprintStale));
+  const fitReplayable = !!(fitSpec && fitSpec.xKey !== undefined && fitSpec.yKey !== undefined);
+  const status = isFit
+    ? !source ? "Source missing" : !fitSpec ? "Incomplete" : fitStale ? "Out of date" : "Current"
+    : isPeak
     ? !source ? "Source missing" : !peakTable ? "Incomplete" : peakStale ? "Out of date" : "Current"
     : sourceMissing ? "Source missing" : !source || !output ? "Incomplete" : staleDatasets.includes(output.id) ? "Out of date" : "Current";
   const moveTab = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
@@ -259,6 +302,12 @@ export default function AnalysisResultPanel() {
           {isPeak ? <>
             <Button disabled={!source || busy !== null} onClick={() => source && openTable(source.id)}>Open data</Button>
             <Button disabled={!source || busy !== null} onClick={editPeaks}>Edit / Re-fit…</Button>
+          </> : isFit ? <>
+            <Button disabled={!source || busy !== null} onClick={() => source && openTable(source.id)}>Open data</Button>
+            <Button disabled={!source || !fitSpec || busy !== null} onClick={editFit}>Edit / Re-fit…</Button>
+            <Button disabled={!source || !fitReplayable || busy !== null}
+              title={!fitReplayable && fitSpec ? "This legacy fit does not record exact X/Y channels; use Edit / Re-fit first." : undefined}
+              onClick={() => void recalculate()}>{busy === "recalculate" ? "Recalculating…" : "Recalculate"}</Button>
           </> : <>
             <Button disabled={!output} onClick={openOutput}>Open worksheet</Button>
             <Button disabled={!source || !output || busy !== null} title={blocked} onClick={() => void recalculate()}>{busy === "recalculate" ? "Recalculating…" : "Recalculate"}</Button>
@@ -269,8 +318,8 @@ export default function AnalysisResultPanel() {
           <Button disabled={busy !== null} onClick={() => void rename()}>Rename…</Button>
           <Button disabled={busy !== null} variant="danger" onClick={() => void remove()}>Delete…</Button>
         </div>
-        {(sourceMissing || (isPeak && !source)) && <p className="qz-analysis-missing" role="note">
-          {isPeak ? PEAK_SOURCE_MISSING : SOURCE_MISSING}
+        {(sourceMissing || ((isPeak || isFit) && !source)) && <p className="qz-analysis-missing" role="note">
+          {isPeak ? PEAK_SOURCE_MISSING : isFit ? FIT_SOURCE_MISSING : SOURCE_MISSING}
         </p>}
         <div className="qz-analysis-tabs" role="tablist" aria-label="Analysis result views">
           {TABS.map((value, index) => (
@@ -288,7 +337,7 @@ export default function AnalysisResultPanel() {
               <div><dt>X axis</dt><dd>{peakTable ? `${peakTable.provenance.xLabel || "Unknown"}${peakTable.provenance.xUnit ? ` (${peakTable.provenance.xUnit})` : ""}` : "Unavailable"}</dd></div>
               <div><dt>R²</dt><dd>{peakTable?.provenance.R2 == null ? "Not reported" : formatValue(peakTable.provenance.R2)}</dd></div>
               <div><dt>Fitted</dt><dd>{peakTable ? formatDate(peakTable.provenance.fittedAt) : "Unavailable"}</dd></div>
-            </dl> : <dl className="qz-analysis-summary">
+            </dl> : isFit ? <AnalysisResultFitOverview result={result} source={source} spec={fitSpec} /> : <dl className="qz-analysis-summary">
               <div><dt>Analysis</dt><dd>{result.producer.label}</dd></div>
               <div><dt>Source</dt><dd>{source?.name ?? "Missing source"}</dd></div>
               <div><dt>Output</dt><dd>{output?.name ?? "Missing output"}</dd></div>
@@ -298,16 +347,19 @@ export default function AnalysisResultPanel() {
             </dl>}
             {isPeak
               ? <p className="qz-analysis-caption">Values are read live from the source worksheet’s fitted peak table. Editing or re-fitting updates this result; deleting this Library item keeps the scientific table.</p>
-              : !sourceMissing && <p className="qz-analysis-caption">This result stays linked to its source. Recalculate updates this output; Rerun as new preserves it and creates another result.</p>}
+              : !isFit && !sourceMissing && <p className="qz-analysis-caption">This result stays linked to its source. Recalculate updates this output; Rerun as new preserves it and creates another result.</p>}
           </>}
           {tab === "table" && (isPeak
             ? <AnalysisResultPeakTable table={peakTable} onExport={() => void exportPeaks()} />
+            : isFit ? <AnalysisResultFitTable spec={fitSpec} onExport={() => void exportFit()} />
             : <AnalysisResultTables result={result} onOpen={openTable} onExport={(datasetId) => void exportTable(datasetId)} />)}
           {tab === "figures" && <AnalysisResultFigures result={result} onOpen={(index) => void openPlot(index)} onBuild={(index) => void buildFigure(index)} onReport={(index) => void sendReport(index)} />}
           {tab === "diagnostics" && (diagnostics.length
             ? <ul className="qz-analysis-diagnostics">{diagnostics.map((message, index) => <li key={`${message}-${index}`}>{message}</li>)}</ul>
             : <p className="qz-analysis-empty">No warnings or missing references.</p>)}
-          {tab === "provenance" && <dl className="qz-analysis-summary">
+          {tab === "provenance" && (isFit
+            ? <AnalysisResultFitOverview result={result} source={source} spec={fitSpec} provenance />
+            : <dl className="qz-analysis-summary">
             <div><dt>Producer</dt><dd>{result.producer.id} · v{result.producer.version}</dd></div>
             <div><dt>Result schema</dt><dd>v{result.version}</dd></div>
             <div><dt>Source ID</dt><dd>{result.sources.map((item) => item.datasetId).join(", ") || "None"}</dd></div>
@@ -320,7 +372,7 @@ export default function AnalysisResultPanel() {
               <div><dt>RMSE</dt><dd>{peakTable.provenance.rmse == null ? "Not reported" : formatValue(peakTable.provenance.rmse)}</dd></div>
               <div><dt>Fingerprint</dt><dd>{peakTable.provenance.fingerprint ?? "Not recorded"}</dd></div>
             </>}
-          </dl>}
+          </dl>)}
           {tab === "notes" && <div className="qz-analysis-notes">
             <label htmlFor="analysis-result-notes">Notes</label>
             <textarea id="analysis-result-notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Record interpretation, assumptions, or follow-up work…" />

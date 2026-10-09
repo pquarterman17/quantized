@@ -4,13 +4,13 @@
 // split feeds). `lib/fitselection.ts` keeps `FitSelection` + the functions
 // `store/useApp.ts`/`store/recalcFits.ts`/
 // `components/workshops/pipeline/executeSteps.ts` need EAGERLY
-// (`fitStepParams`/`fitSpecFromStepParams`/`fitDataForSpec`/`stampRecompute`,
+// (`fitStepParams`/`fitSpecFromStepParams`/`fitDataForSpec`,
 // plus `selectedFitData` — which `fitDataForSpec` calls internally, so it
 // stays put too). Everything below is reached only from the interactive fit
 // workshops (curve fit, baseline, peaks, peak wizard, mag tools) — all
 // already lazy `workshops/` panels, never the eager recompute path. Verified
 // before moving: none of `fitStepParams`/`fitSpecFromStepParams`/
-// `fitDataForSpec`/`stampRecompute`/`selectedFitData` calls any export below,
+// `fitDataForSpec`/`selectedFitData` calls any export below,
 // and every real (non-test) importer of what moved is one of those lazy
 // workshop hooks. (Slice 22 later moved `fitSpecFromStepParams` to
 // `lib/fitStepDecode.ts`: its only caller, the pipeline executor, is lazy.)
@@ -94,13 +94,29 @@ export function fitSpecFrom(
   // Errors come from the fitter's covariance matrix whenever it returned
   // any — recording WHICH method produced them is the audit's point, since
   // "±0.02" means different things depending on its origin.
-  spec.uncertainty = Array.isArray(result.errors) ? "covariance" : "none";
+  const params = result.params;
+  const validParams = Array.isArray(params) &&
+    params.every((v) => typeof v === "number" && Number.isFinite(v));
+  const errors = result.errors;
+  const validErrors = Array.isArray(errors) &&
+    (!validParams || errors.length === params.length) &&
+    errors.every((v) => v === null || (typeof v === "number" && Number.isFinite(v)));
+  spec.uncertainty = validErrors ? "covariance" : "none";
   // Record the weighting so recompute + pipeline reproduce it (audit P1 #3);
   // `none` is the default, so it stays absent to keep specs minimal.
   if (weight && weight.mode !== "none") spec.weight = weight;
-  const params = result.params;
-  if (Array.isArray(params) && params.every((v) => typeof v === "number")) {
+  if (validParams) {
     spec.params = params as number[];
+  }
+  if (validErrors) {
+    spec.errors = errors as (number | null)[];
+  }
+  for (const field of ["R2", "RMSE", "AIC", "chiSqRed"] as const) {
+    const value = result[field];
+    if (typeof value === "number" && Number.isFinite(value)) spec[field] = value;
+  }
+  if (typeof result.nFree === "number" && Number.isInteger(result.nFree) && result.nFree >= 0) {
+    spec.nFree = result.nFree;
   }
   if (typeof result.exitFlag === "number") spec.exitFlag = result.exitFlag;
   return spec;

@@ -6,6 +6,7 @@ import {
   parseFitParams,
   resetRows,
   rowsAreDefault,
+  rowsFromFitSpec,
   rowsForModel,
   rowsFromModel,
   type FitParamRow,
@@ -42,6 +43,18 @@ describe("rowsFromModel", () => {
 
   it("is empty with no model", () => {
     expect(rowsFromModel(undefined)).toEqual([]);
+  });
+});
+
+describe("rowsFromFitSpec", () => {
+  it("restores recorded starts, bounds, and held parameters over model defaults", () => {
+    expect(rowsFromFitSpec(gauss, {
+      model: "Gaussian", p0: [9, 4, 2], lower: [0, null, 0.5], upper: [10, 5, null], fixed: [false, true, false],
+    })).toEqual([
+      { name: "amp", start: "9", min: "0", max: "10", fixed: false },
+      { name: "center", start: "4", min: "", max: "5", fixed: true },
+      { name: "sigma", start: "2", min: "0.5", max: "", fixed: false },
+    ]);
   });
 });
 

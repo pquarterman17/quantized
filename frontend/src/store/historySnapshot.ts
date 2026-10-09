@@ -204,6 +204,9 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
       w.datasetId && !live.has(w.datasetId) ? { ...w, datasetId: null } : w,
     ),
     ...focusTransientReset(),
+    // Preserve scratch across unrelated edits, but clear it when restored
+    // worksheet state may no longer match the rendered fit curve.
+    fitOverlay: snap.datasets === s.datasets ? s.fitOverlay : null,
     // After the reset, which nulls `composition`: a snapshotted break or
     // spatial arrangement comes back.
     composition: carriedComposition,

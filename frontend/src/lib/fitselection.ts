@@ -6,7 +6,7 @@
 // SCOPE (narrowed 2026-08-23, C2 bundle pass): this file keeps `FitSelection`
 // + the functions `store/useApp.ts`/`store/recalcFits.ts`/
 // `components/workshops/pipeline/executeSteps.ts` need EAGERLY
-// (`fitStepParams`/`fitSpecFromStepParams`/`fitDataForSpec`/`stampRecompute`,
+// (`fitStepParams`/`fitSpecFromStepParams`/`fitDataForSpec`,
 // plus `selectedFitData` below, which `fitDataForSpec` calls internally).
 // The plotted-channel column helpers (`fullPlottedX`/`plottedYKey`) and the
 // fit-recipe builder (`fitSpecFrom` + its `finiteRange`/`activeCorrectionNames`
@@ -19,7 +19,7 @@ import { dropGapRows } from "./api/finitePairs";
 import { dyForFit } from "./fitweights";
 import { effectiveChannels } from "./plotdata";
 import { analysisData } from "./rowstate";
-import type { CalcResult, Dataset, FitSpec } from "./types";
+import type { Dataset, FitSpec } from "./types";
 
 export interface FitSelection {
   x: number[];
@@ -106,26 +106,4 @@ export function fitDataForSpec(
   // a missing/invalid error column refits unweighted (dyForFit returns null).
   // σ is checked only over the rows the fit keeps, as in useCurveFit.
   return { x, y, yKey, dy: dyForFit(dataset, yKey, spec.weight, dropGapRows(x, y).keep).dy };
-}
-
-/** Stamp a spec with the result of a RECOMPUTE (MAIN_PLAN #30).
- *
- *  Params are refreshed together with the timestamp on purpose: leaving the
- *  original numbers beside a fresh `recomputedAt` would claim the fit was
- *  re-run while showing the values it produced last time, which is worse than
- *  either alone. Pure, so the recalc path stays a thin caller. */
-export function stampRecompute(
-  spec: FitSpec,
-  result: CalcResult,
-  now: () => string = () => new Date().toISOString(),
-): FitSpec {
-  const params = result.params;
-  return {
-    ...spec,
-    recomputedAt: now(),
-    ...(Array.isArray(params) && params.every((v) => typeof v === "number")
-      ? { params: params as number[] }
-      : {}),
-    ...(typeof result.exitFlag === "number" ? { exitFlag: result.exitFlag } : {}),
-  };
 }

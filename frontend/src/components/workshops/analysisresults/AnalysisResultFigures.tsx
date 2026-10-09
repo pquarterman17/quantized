@@ -1,4 +1,5 @@
 import type { AnalysisResult } from "../../../lib/analysisResult";
+import { liveFitPlotBinding } from "../../../lib/fitAnalysisResultLive";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { Button } from "../../primitives";
@@ -27,14 +28,22 @@ function FigureCard({ result, index, onOpen, onBuild, onReport }: {
   onReport: (index: number) => void;
 }) {
   const datasets = useApp((state) => state.datasets);
-  const binding = result.plotBindings![index];
-  const dataset = datasets.find((item) => item.id === binding.datasetId);
-  const channels = dataset
+  const savedBinding = result.plotBindings![index];
+  const fitRef = result.settingsRef?.field === "fitSpec" ? result.settingsRef : null;
+  const fitted = fitRef !== null;
+  const datasetId = fitRef?.datasetId ?? savedBinding.datasetId;
+  const dataset = datasets.find((item) => item.id === datasetId);
+  const liveBinding = fitted && dataset ? liveFitPlotBinding(result, dataset) : null;
+  // The recorded source curve remains useful for editable figure building
+  // even when a fit was removed. Fitted-output actions require live binding.
+  const binding = liveBinding ?? savedBinding;
+  const channels = dataset && binding
     ? binding.channels.filter((channel) => Number.isInteger(channel) && channel >= 0 && channel < dataset.data.labels.length)
     : [];
   const path = dataset && channels.length ? previewPath(dataset, channels[0]) : null;
   const unavailable = !dataset || channels.length === 0;
   const sourceOnly = result.settingsRef?.field === "peakTable";
+  const fittedPlotUnavailable = unavailable || (fitted && (!liveBinding || !dataset?.fitSpec?.params?.length));
   return <article className={`qz-analysis-figure-card${unavailable ? " unavailable" : ""}`}>
     <div className="qz-analysis-figure-preview">
       {path ? <svg viewBox="0 0 200 64" role="img" aria-label={`Preview of ${dataset!.name}`} preserveAspectRatio="none">
@@ -42,12 +51,12 @@ function FigureCard({ result, index, onOpen, onBuild, onReport }: {
       </svg> : <span>{dataset ? "No plottable channels" : "Worksheet unavailable"}</span>}
     </div>
     <div className="qz-analysis-figure-info">
-      <strong>{dataset?.name ?? binding.datasetId}</strong>
+      <strong>{dataset?.name ?? datasetId}</strong>
       <span>{channels.map((channel) => dataset!.data.labels[channel]).join(", ") || "Saved binding unavailable"}</span>
       <div className="qz-analysis-figure-actions">
-        <Button size="sm" disabled={unavailable} onClick={() => onOpen(index)}>{sourceOnly ? "Open source plot" : "Open plot"}</Button>
-        <Button size="sm" disabled={unavailable} onClick={() => onBuild(index)}>{sourceOnly ? "Build source figure" : "Build figure"}</Button>
-        <Button size="sm" disabled={unavailable} onClick={() => onReport(index)}>{sourceOnly ? "Send source to report…" : "Send to report…"}</Button>
+        <Button size="sm" disabled={fittedPlotUnavailable} onClick={() => onOpen(index)}>{sourceOnly ? "Open source plot" : fitted ? "Open fitted plot" : "Open plot"}</Button>
+        <Button size="sm" disabled={unavailable} onClick={() => onBuild(index)}>{sourceOnly || fitted ? "Build source figure" : "Build figure"}</Button>
+        <Button size="sm" disabled={fittedPlotUnavailable} onClick={() => onReport(index)}>{sourceOnly ? "Send source to report…" : fitted ? "Send fitted plot to report…" : "Send to report…"}</Button>
       </div>
     </div>
   </article>;
@@ -61,9 +70,12 @@ export default function AnalysisResultFigures({ result, onOpen, onBuild, onRepor
 }) {
   if (!result.plotBindings?.length) return <p className="qz-analysis-empty">No figure bindings were recorded for this result.</p>;
   const sourceOnly = result.settingsRef?.field === "peakTable";
+  const fitted = result.settingsRef?.field === "fitSpec";
   return <div className="qz-analysis-figures">
     <p className="qz-analysis-caption">{sourceOnly
       ? "These actions plot the recorded source curve only. The peak table and CSV preserve fitted values; a reusable fitted curve is not stored in this result."
+      : fitted
+        ? "Open plot and Send to report regenerate the fitted curve from the saved model and parameters. Build source figure starts an editable draft from the recorded source curve; editable figures do not yet store fit overlays."
       : `Figures use the result’s recorded ${result.outputs.length ? "output" : "source"} and channels. Build figure opens an editable draft; Send to report captures the configured plot.`}</p>
     {result.plotBindings.map((binding, index) => <FigureCard key={`${binding.datasetId}-${index}`} result={result} index={index} onOpen={onOpen} onBuild={onBuild} onReport={onReport} />)}
   </div>;

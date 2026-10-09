@@ -3,7 +3,7 @@
 **Source:** ChatGPT-Sol (Codex)
 **Status:** Active
 **Created:** 2026-10-06
-**Last updated:** 2026-10-06
+**Last updated:** 2026-10-09
 
 ## Goal
 
@@ -240,7 +240,7 @@ temporary contents of a floating window.
   Figures, Provenance, and Notes tabs as applicable.
 - [x] Add Recalculate, Rerun as new, Duplicate, Freeze, Send to report, Build
   figure, Export tables, Rename, and Delete actions.
-- [ ] Add producer-aware Edit and rerun without creating a second settings
+- [x] Add producer-aware Edit and rerun without creating a second settings
   authority beside the linked worksheet.
 - [ ] Migrate curve fits, statistics, peak outputs, and signal-processing
   results incrementally; do not create a second authority beside existing
@@ -258,6 +258,23 @@ Implementation status (2026-10-08):
   under the source/output workbook with Tree, Tiles, Details, filters,
   selection, rename, context-menu, and missing-source behavior shared with
   other artifacts.
+
+Update (2026-10-09):
+
+- [x] Signal results recalculate their linked output or rerun as a new result;
+  fitted peak results reopen the existing peak authority for Edit / Re-fit;
+  curve-fit results reopen the saved recipe or recalculate that one fit.
+- [x] Migrated source-owned fitted peak tables and curve fits without copying
+  scientific arrays into result envelopes. Both use durable references to the
+  source worksheet authority, survive project save/reopen, display stale and
+  missing-source states, and preserve a user's result name/notes across re-fit.
+- [x] Curve-fit results provide diagnostics, provenance, a parameter and
+  uncertainty table, CSV export, regenerated fitted-curve plotting, editable
+  source-figure launch, and Send to report. Recalculation replays recorded
+  channels, weighting, starting values, bounds, fixed parameters, and row-gap
+  policy as one undoable action.
+- [ ] Statistics and reflectivity-fit history remain to migrate. These are the
+  remaining families covered by the incremental migration checkbox above.
 - [x] Added a lazy result workspace with Overview, Tables, Figures, Diagnostics,
   Provenance, and Notes views. The first 100 output rows are inspectable
   without creating an unbounded DOM table; the complete worksheet remains
@@ -358,9 +375,9 @@ menu names.
 2. [x] A3: expose the single-worksheet spectral/filter/correlation engines.
    Cross-worksheet correlation remains intentionally assigned to Workstream D.
 3. [x] A4: pipeline replay, persistence, and real-corpus qualification.
-4. [ ] B: finish the common result actions and migrate fit/peak/statistics
-   results. The envelope, Library integration, signal migration, and first
-   result workspace are complete.
+4. [ ] B: migrate statistics and reflectivity-fit history. The envelope,
+   Library integration, common actions, signal migration, fitted peaks, and
+   curve-fit results are complete.
 5. [ ] C: build the Analysis Center on canonical commands and result inventory.
 6. [ ] D: unify selection and batch behavior, then migrate curve fit/peaks.
 7. [ ] E: migrate statistical tools into the result workspace.
@@ -394,6 +411,7 @@ menu names.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-10-09 | ChatGPT-Sol (Codex) | Added the Workstream B curve-fit adapter on top of the existing `Dataset.fitSpec` authority: producer publication from the full Curve Fit and Quick Fit paths, one-time workspace migration, stale/missing lifecycle, overview/provenance/diagnostics, parameter and uncertainty table with CSV export, Edit / Re-fit, exact one-result recalculation, and fitted-curve regeneration for normal plots and reports. The review pass removed stale-summary carryover when a backend omits a diagnostic, kept startup-only code out of the eager bundle, preserved renamed results and notes across re-fit, and refused malformed refits or legacy recipes without exact channel bindings instead of guessing. | Focused scientific, persistence, producer, UI, workspace, and architecture suites passed 129/129 after review fixes; the final recomputation/lazy-boundary gate passed 116/116. ESLint, TypeScript, preload verification, the production build, and the unchanged 814.7 kB startup limit passed (814.7 kB eager). The full frontend run passed 17,008 tests plus 2 expected failures; the only remaining failure was the documented pre-existing Windows flat-autoscale subnormal-float fixture mismatch in untouched code. CI remains the merge gate. |
 | 2026-10-08 | Project team | Finished the common Workstream B result-output workspace: recorded-series figure previews, exact-binding Open plot and editable-figure launch, Send to report, bounded multi-table preview, safe full-table CSV export, linked-output Duplicate, and Freeze to independent data. Added transient seeded mappings so Build figure does not silently re-add unrelated worksheet channels, plus repeated-click, lazy-load, mid-load mutation, missing-reference, and project-reload guards. | TypeScript, ESLint, production build, architecture ratchets, and bundle gate passed (813.6 kB eager against 814.7 kB budget). Focused result/builder/hydration checks passed 128/128. Full frontend reached 16,955 passed plus 2 expected failures; two unrelated load-sensitive failures passed immediately in isolation, while the pre-existing Windows flat-autoscale fixture has a subnormal-float serialization mismatch in an untouched file. CI remains the merge gate. |
 | 2026-10-08 | Paige | Implemented the first Workstream B vertical slice: durable versioned result envelopes, canonical Library placement, autosave/save/reopen and legacy signal-result migration, generic future/missing-reference diagnostics, and a lazy Signal result workspace with inspect/recalculate/rerun/rename/notes/delete lifecycle. Scientific settings and arrays remain in the linked worksheet authority rather than being duplicated. | TypeScript, ESLint, 56 architecture ratchets, production build, and the eager-bundle gate passed under the unchanged 834,639 B pin (834,526 B measured after the review fixes). A full frontend run passed 16,876 tests plus 2 expected failures and exposed two new-kind completeness omissions (autosave and icon render-site coverage); both were fixed and their focused suites then passed 64/64. Focused result/store/workspace/Library/component regressions also passed. CI remains the merge gate. |
 | 2026-10-07 | Project team | Completed A1, A2, and A4 around the existing A3 spectral work: technique-workspace launch, row-scope disclosure, X-range controls, reference normalization, editable smoothing/detrend polynomial order, contextual Help, named Recipe Library templates, one replayable `signal` transform path, unit-aware rebinding, source-race refusal, cancellation, undo, and project persistence. Cross-worksheet correlation remains explicitly deferred to Workstream D. | Focused frontend workbench/pipeline/workspace checks passed (including record → save → reload → replay); focused correction API/calc checks passed (121). Real corpus passed on `La2NiO4_1.xrdml`, `sims_depth_profile.xlsx`, `S3_650Oe_From700mT.refl`, and `vsm_mh_perp_a.dat`, with source arrays and file hashes unchanged. |

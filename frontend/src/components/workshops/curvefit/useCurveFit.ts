@@ -2,7 +2,7 @@
 // pattern). Owns model selection + fit result; calls /api/fitting and pushes
 // the fitted curve into the store as a plot overlay. The view stays thin.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { autoGuess, bootstrapFit, listFitModels } from "../../../lib/api/curvefit";
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
@@ -11,6 +11,7 @@ import { fitModel } from "../../../lib/api";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitWeighting, WeightMode } from "../../../lib/types";
 import { runCancellable } from "../../../store/pendingOpActions";
+import { publishFitAnalysisResult } from "../../../store/publishFitAnalysisResult";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { toast } from "../../../store/toasts";
 import { fitStepParams, selectedFitData } from "../../../lib/fitselection";
@@ -20,6 +21,7 @@ import {
   parseFitParams,
   resetRows,
   rowsAreDefault,
+  rowsFromFitSpec,
   rowsForModel,
   type FitParamRow,
 } from "../../../lib/fitParams";
@@ -98,8 +100,10 @@ export function useCurveFit(): CurveFitState {
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
   const errKeys = useApp((s) => s.errKeys);
+  const savedSpec = active?.fitSpec;
+  const restoredRecipe = useRef(false);
   const [models, setModels] = useState<FitModel[]>([]);
-  const [modelName, setModelName] = useState("Linear");
+  const [modelName, setModelName] = useState(savedSpec?.model ?? "Linear");
   // #30: the editable parameter table. Re-seeded on a model change, KEEPING
   // edits for parameters whose name survives — models share names (amp,
   // center), and discarding a hand-tuned start on every model flip would
@@ -122,8 +126,10 @@ export function useCurveFit(): CurveFitState {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cornerBusy, setCornerBusy] = useState(false);
-  const [weightMode, setWeightMode] = useState<WeightMode>("none");
-  const [manualKey, setManualKey] = useState<number | null>(null);
+  const [weightMode, setWeightMode] = useState<WeightMode>(savedSpec?.weight?.mode ?? "none");
+  const [manualKey, setManualKey] = useState<number | null>(
+    savedSpec?.weight?.mode === "manual" ? savedSpec.weight.errKey ?? null : null,
+  );
   // The manual weight column follows its label too (../useFollowColumnPicks).
   useFollowColumnPicks(active, (follow) => {
     const next = manualKey === null ? null : follow(manualKey);
@@ -198,7 +204,12 @@ export function useCurveFit(): CurveFitState {
   const result = current?.result ?? null;
   const fitData = current?.fitData ?? null;
   useEffect(() => {
-    setParamRows((prev) => rowsForModel(model, prev));
+    if (!restoredRecipe.current && savedSpec?.model === modelName && model) {
+      setParamRows(rowsFromFitSpec(model, savedSpec));
+      restoredRecipe.current = true;
+    } else {
+      setParamRows((prev) => rowsForModel(model, prev));
+    }
     // Keyed on the model identity, not the object, so a models[] refetch
     // does not wipe the user's edits.
   }, [modelName, models.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -321,6 +332,7 @@ export function useCurveFit(): CurveFitState {
           params: fitStepParams(modelName, spec),
         });
         useApp.getState().setFitSpec(ds.id, spec);
+        publishFitAnalysisResult(ds.id);
         const yFit = r.yFit as (number | null)[] | undefined;
         if (Array.isArray(yFit)) {
           // yFit aligns to the pruned analysis x; expand it back to the full row
@@ -346,7 +358,10 @@ export function useCurveFit(): CurveFitState {
     setError(null);
     setWeightNote(null);
     setFitOverlay(null);
-    if (active) useApp.getState().setFitSpec(active.id, null);
+    if (active) {
+      useApp.getState().setFitSpec(active.id, null);
+      useApp.setState((state) => ({ staleFits: state.staleFits.filter((id) => id !== active.id) }));
+    }
   }
 
   async function runCornerPlot(): Promise<void> {

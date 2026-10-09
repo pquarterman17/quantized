@@ -49,7 +49,6 @@ export function dataFingerprint(data: DataStruct): string {
   fingerprints.set(data, out);
   return out;
 }
-
 /** The result's sources' fingerprint, or null when it can't be judged (a
  *  source or output missing, or a lazily loaded book still pending, whose
  *  data is only a preview). */
@@ -66,6 +65,7 @@ export function stampAnalysisResults(
   results: readonly AnalysisResult[],
   datasets: readonly Dataset[],
   staleDatasets: readonly string[],
+  staleFits: readonly string[] = [],
 ): AnalysisResult[] {
   const byId = new Map(datasets.map((dataset) => [dataset.id, dataset]));
   return results.map(({ stale: _wasStale, ...result }) => {
@@ -80,20 +80,13 @@ export function stampAnalysisResults(
         ? { ...peakResult, stale: true }
         : peakResult;
     }
+    if (result.settingsRef?.field === "fitSpec") {
+      if (staleFits.includes(result.settingsRef.datasetId)) {
+        return { ...result, stale: true };
+      }
+    }
     if (result.outputs.some((ref) => staleDatasets.includes(ref.datasetId))) return { ...result, stale: true };
     const fingerprint = sourcesFingerprint(result, byId);
     return fingerprint ? { ...result, sourceFingerprint: fingerprint } : result;
   });
-}
-
-/** Load side: the output ids that are out of date in the file just parsed. */
-export function staleAnalysisOutputs(results: readonly AnalysisResult[], datasets: readonly Dataset[]): string[] {
-  const byId = new Map(datasets.map((dataset) => [dataset.id, dataset]));
-  const stale = new Set<string>();
-  for (const result of results) {
-    const now = result.stale === true || result.sourceFingerprint === undefined ? null : sourcesFingerprint(result, byId);
-    if (result.stale !== true && (now === null || now === result.sourceFingerprint)) continue;
-    for (const ref of result.outputs) if (byId.has(ref.datasetId)) stale.add(ref.datasetId);
-  }
-  return [...stale];
 }

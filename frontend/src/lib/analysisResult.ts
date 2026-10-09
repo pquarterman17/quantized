@@ -42,7 +42,7 @@ export interface AnalysisResult {
    *  recipe. New envelopes omit it; the result workspace reads the linked
    *  output's `analysisRecipe` and falls back to this only without one. */
   selection?: AnalysisResultSelection;
-  settingsRef?: { datasetId: string; field: "analysisRecipe" | "peakTable" };
+  settingsRef?: { datasetId: string; field: "analysisRecipe" | "peakTable" | "fitSpec" };
   scalarValues?: Record<string, number | string | null>;
   tableRefs?: { datasetId: string; label: string }[];
   plotBindings?: { datasetId: string; channels: number[]; xChannel?: number | null }[];
@@ -113,7 +113,8 @@ function selection(value: unknown): AnalysisResultSelection | undefined {
 
 function settingsRef(value: unknown): AnalysisResult["settingsRef"] {
   const raw = object(value);
-  return raw && typeof raw.datasetId === "string" && (raw.field === "analysisRecipe" || raw.field === "peakTable")
+  return raw && typeof raw.datasetId === "string" &&
+    (raw.field === "analysisRecipe" || raw.field === "peakTable" || raw.field === "fitSpec")
     ? { datasetId: raw.datasetId, field: raw.field }
     : undefined;
 }

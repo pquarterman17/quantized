@@ -13,7 +13,7 @@
 // validation happen once, at fit time.
 
 import { ALL_HELD_ERROR, allHeld, checkParamRow } from "./paramRowCheck";
-import type { FitModel } from "./types";
+import type { FitModel, FitSpec } from "./types";
 
 export interface FitParamRow {
   name: string;
@@ -48,6 +48,19 @@ export function rowsFromModel(model: FitModel | undefined): FitParamRow[] {
     min: model.lb[i] == null ? "" : String(model.lb[i]),
     max: model.ub[i] == null ? "" : String(model.ub[i]),
     fixed: false,
+  }));
+}
+
+/** Reopen a durable fit recipe in the editable parameter table. Missing
+ * values deliberately fall back to registry defaults so legacy specs remain
+ * editable without inventing constraints. */
+export function rowsFromFitSpec(model: FitModel | undefined, spec: FitSpec): FitParamRow[] {
+  return rowsFromModel(model).map((row, index) => ({
+    ...row,
+    ...(spec.p0?.[index] !== undefined ? { start: String(spec.p0[index]) } : {}),
+    ...(spec.lower?.[index] !== undefined ? { min: spec.lower[index] === null ? "" : String(spec.lower[index]) } : {}),
+    ...(spec.upper?.[index] !== undefined ? { max: spec.upper[index] === null ? "" : String(spec.upper[index]) } : {}),
+    fixed: spec.fixed?.[index] ?? false,
   }));
 }
 
