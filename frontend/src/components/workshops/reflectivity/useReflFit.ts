@@ -120,6 +120,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
   const addDataset = useApp((s) => s.addDataset);
   const createWindow = useApp((s) => s.createWindow);
   const setStatus = useApp((s) => s.setStatus);
+  const requestedRecordId = useApp((s) => s.reflectivityFitRecordId);
 
   const [channels, setChannels] = useState<ChannelBinding[]>(() =>
     initialChannels(datasets.find((d) => d.id === activeId)),
@@ -364,6 +365,24 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     setChannels(setup.channels);
     setSettingsState(setup.settings);
   }
+
+  // An Analysis Result can target dataset B while this long-lived workshop
+  // is still bound to dataset A. Rebind the host before the history hook
+  // consumes the request; the history hook deliberately leaves a request
+  // pending until this host actually contains the requested record.
+  useEffect(() => {
+    if (!requestedRecordId || !activeId || channels[0]?.datasetId === activeId) return;
+    const ds = datasets.find((candidate) => candidate.id === activeId);
+    if (!ds) return;
+    selectSeqRef.current++;
+    invalidateRun();
+    prefill(ds);
+    clearResult();
+    // These helpers intentionally read the latest render. The request and
+    // target id are the transition boundary; channel edits alone must not
+    // repeatedly reset the fit form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, datasets, requestedRecordId]);
 
   const dream = useReflDream(datasets);
   const history = useReflFitHistory({

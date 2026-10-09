@@ -286,7 +286,7 @@ describe("per-action-class undo/redo coverage", () => {
     expect(useApp.getState().datasets).toEqual(post);
   });
 
-  it("append workspace (appendWorkspace, MAIN_PLAN #16)", () => {
+  it("append workspace (appendWorkspace, MAIN_PLAN #16)", async () => {
     useApp.setState({
       datasets: [{ id: "d1", name: "a", data: raw }],
       activeId: "d1",
@@ -325,7 +325,7 @@ describe("per-action-class undo/redo coverage", () => {
       recipeSourcesComplete: true,
     };
 
-    useApp.getState().appendWorkspace(incoming);
+    await useApp.getState().appendWorkspace(incoming);
     expect(useApp.getState().datasets).toHaveLength(2); // a, + the appended b
     const post = useApp.getState().datasets;
 

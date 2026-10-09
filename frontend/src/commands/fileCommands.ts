@@ -236,10 +236,11 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // `replaceWorkspace` chokepoint (append doesn't call it) so it gets
       // its own push at its own commit point instead.
       run: openWorkspaceCommand(s, "append", (ws, native) =>
-        replaceHalf().then(({ recordNativeOpen }) => {
-          s().appendWorkspace(ws);
-          recordNativeOpen(native);
-        }),
+        replaceHalf().then(({ recordNativeOpen }) =>
+          s().appendWorkspace(ws).then((appended) => {
+            if (appended) recordNativeOpen(native);
+          }),
+        ),
       ),
     },
     {

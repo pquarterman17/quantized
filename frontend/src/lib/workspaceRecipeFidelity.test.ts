@@ -155,7 +155,7 @@ describe("store — recipeSourcesComplete travels with the project", () => {
     expect(useApp.getState().recipeSourcesComplete).toBe(true);
   });
 
-  it("Append Project leaves the flag alone — it brings no recipes in", () => {
+  it("Append Project leaves the flag alone — it brings no recipes in", async () => {
     // `mergeWorkspace` returns only datasets/renamed/workbooks, so appending
     // cannot add or lose a recipe and must not restate a verdict it never
     // assessed. (My own round-5 review called this blocking on the assumption
@@ -172,7 +172,7 @@ describe("store — recipeSourcesComplete travels with the project", () => {
     expect("plotRecipes" in merged).toBe(false);
     expect("recipeSourcesComplete" in merged).toBe(false);
 
-    useApp.getState().appendWorkspace(incoming);
+    await useApp.getState().appendWorkspace(incoming);
     expect(useApp.getState().recipeSourcesComplete).toBe(true);
     expect(useApp.getState().plotRecipes).toEqual([]);
   });

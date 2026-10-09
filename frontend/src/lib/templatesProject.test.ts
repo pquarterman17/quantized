@@ -53,13 +53,13 @@ describe("save → open round trip", () => {
     saveTemplate(recipe("Stack M"));
     const text = serializeWorkspace({ datasets: [ds] });
     localStorage.clear();
-    useApp.getState().appendWorkspace(parseWorkspace(text));
+    await useApp.getState().appendWorkspace(parseWorkspace(text));
     await vi.waitFor(() => expect(loadTemplates().map((t) => t.name)).toEqual(["Stack M"]));
     // Again, plus one new recipe: its arrival proves this merge RAN, and
     // "Stack M" (the same definition) is still there once.
     const again = JSON.parse(text) as { analysisTemplates: unknown[] };
     again.analysisTemplates.push(JSON.parse(JSON.stringify(recipe("Other"))));
-    useApp.getState().appendWorkspace(parseWorkspace(JSON.stringify(again)));
+    await useApp.getState().appendWorkspace(parseWorkspace(JSON.stringify(again)));
     await vi.waitFor(() => expect(loadTemplates().map((t) => t.name)).toEqual(["Stack M", "Other"]));
   });
 

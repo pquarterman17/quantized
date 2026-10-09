@@ -746,28 +746,28 @@ describe("loadWorkspace — mapPaintedLimits / mapViews (P2.8)", () => {
 
 // ── appendWorkspace ─────────────────────────────────────────────────────────
 //
-// A one-line delegate to `runAppendWorkspace` (store/workspaceIO.ts) — not
-// moving. Characterized here anyway (per the domain's own contract: every
+// A one-line delegate to `runAppendWorkspace` in the same slice.
+// Characterized here (per the domain's own contract: every
 // action, every branch) so the extraction's byte-identical delegate call is
 // provably still wired to the same function with the same arguments.
 
 describe("appendWorkspace — the additive .dwk join", () => {
-  it("an empty incoming workspace changes NOTHING and toasts, pushing no undo entry", () => {
+  it("an empty incoming workspace changes NOTHING and toasts, pushing no undo entry", async () => {
     useApp.setState({ datasets: [ds("d1")], activeId: "d1" });
     const before = snapshot();
-    useApp.getState().appendWorkspace(asLoaded([]));
+    await useApp.getState().appendWorkspace(asLoaded([]));
     expect(changedSince(before)).toEqual([]);
     expect(toastTexts()).toEqual(["workspace has no datasets to append"]);
     expect(labels()).toEqual([]);
   });
 
-  it("a non-empty incoming workspace writes exactly this key set and pushes ONE undo entry", () => {
+  it("a non-empty incoming workspace writes exactly this key set and pushes ONE undo entry", async () => {
     useApp.setState({ datasets: [ds("d1")], activeId: "d1" });
     const before = snapshot();
-    useApp.getState().appendWorkspace(asLoaded([ds("n1"), ds("n2")]));
+    await useApp.getState().appendWorkspace(asLoaded([ds("n1"), ds("n2")]));
     // `workbooks` always shows up too, even with none joining -- the
     // updater spreads a FRESH `[...get().workbooks, ...workbooks]` array
-    // unconditionally (workspaceIO.ts's runAppendWorkspace), so its identity
+    // unconditionally (runAppendWorkspace), so its identity
     // changes regardless of content.
     expect(changedSince(before)).toEqual(["analysisResults", "datasets", "future", "history", "status", "workbooks"]);
     expect(labels()).toEqual(["append workspace"]);
@@ -780,19 +780,19 @@ describe("appendWorkspace — the additive .dwk join", () => {
     expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["d1", "n1", "n2"]);
   });
 
-  // Ordering pin (workspaceIO.ts's own doc: "`recordHistory` runs BEFORE the
+  // Ordering pin (runAppendWorkspace's own doc: "`recordHistory` runs BEFORE the
   // mutation ... so undo restores the pre-append workbook list for free").
   // Swapping the two calls is invisible to every OTHER spec in this block —
   // they only assert the POST-append state — so this is the one place that
   // would catch `recordHistory` moving after the `set()`.
-  it("recordHistory runs BEFORE the mutation — the pushed snapshot is the PRE-append dataset list", () => {
+  it("recordHistory runs BEFORE the mutation — the pushed snapshot is the PRE-append dataset list", async () => {
     useApp.setState({ datasets: [ds("d1")], activeId: "d1" });
-    useApp.getState().appendWorkspace(asLoaded([ds("n1"), ds("n2")]));
+    await useApp.getState().appendWorkspace(asLoaded([ds("n1"), ds("n2")]));
     const snap = useApp.getState().history[0]!.snapshot as unknown as { datasets: Dataset[] };
     expect(snap.datasets.map((d) => d.id)).toEqual(["d1"]);
   });
 
-  it("leaves activeId, plotWindows, and every view-state field completely untouched", () => {
+  it("leaves activeId, plotWindows, and every view-state field completely untouched", async () => {
     useApp.setState({
       datasets: [ds("d1")],
       activeId: "d1",
@@ -800,7 +800,7 @@ describe("appendWorkspace — the additive .dwk join", () => {
       xLim: [1, 2],
     });
     const pre = useApp.getState();
-    useApp.getState().appendWorkspace(asLoaded([ds("n1")]));
+    await useApp.getState().appendWorkspace(asLoaded([ds("n1")]));
     const s = useApp.getState();
     expect(s.activeId).toBe(pre.activeId);
     expect(s.yKeys).toBe(pre.yKeys);
@@ -808,20 +808,20 @@ describe("appendWorkspace — the additive .dwk join", () => {
     expect(s.plotWindows).toBe(pre.plotWindows);
   });
 
-  it("remaps a colliding dataset id, reports the renamed count in status/toast", () => {
+  it("remaps a colliding dataset id, reports the renamed count in status/toast", async () => {
     useApp.setState({ datasets: [ds("d1", "sample")], activeId: "d1" });
-    useApp.getState().appendWorkspace(asLoaded([ds("d1", "sample")]));
+    await useApp.getState().appendWorkspace(asLoaded([ds("d1", "sample")]));
     const s = useApp.getState();
     expect(s.datasets).toHaveLength(2);
     expect(s.status).toBe("appended 1 dataset (1 renamed)");
     expect(toastTexts()).toEqual(["appended 1 dataset (1 renamed)"]);
   });
 
-  it("joins a referenced workbook and notes the count", () => {
+  it("joins a referenced workbook and notes the count", async () => {
     useApp.setState({ datasets: [ds("d1")], activeId: "d1", workbooks: [] });
     const incoming = asLoaded([{ ...ds("n1"), workbookId: "wb-in" }]);
     incoming.workbooks = [{ id: "wb-in", name: "Imported Book" }];
-    useApp.getState().appendWorkspace(incoming);
+    await useApp.getState().appendWorkspace(incoming);
     const s = useApp.getState();
     expect(s.workbooks).toHaveLength(1);
     expect(s.workbooks[0].name).toBe("Imported Book");

@@ -153,6 +153,24 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
     })]);
   });
 
+  it("drops an unmapped reflectivity channel instead of binding it to a destination id", () => {
+    const source = makeDataset("source", "fit source");
+    source.reflFits = [{
+      version: 1, id: "rfit-external",
+      request: { channels: [
+        { datasetId: "source", datasetName: "fit source" },
+        { datasetId: "external", datasetName: "not in appended project" },
+      ] },
+    }];
+    const merged = mergeWorkspace(
+      [makeDataset("external", "unrelated destination dataset")],
+      asLoaded([source]), genId, noCurrentWorkbookIds, genWorkbookId,
+    );
+    expect(merged.datasets[1].reflFits).toEqual([expect.objectContaining({
+      request: { channels: [expect.objectContaining({ datasetId: "source" })] },
+    })]);
+  });
+
   it("appends with no collisions: ids/names untouched, per-dataset fields ride along", () => {
     const current = [makeDataset("a", "first")];
     const incoming = makeDataset("b", "second");

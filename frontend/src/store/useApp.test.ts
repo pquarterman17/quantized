@@ -4100,7 +4100,7 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
     };
   }
 
-  it("appends the incoming datasets without touching activeId, plotWindows, or view state", () => {
+  it("appends the incoming datasets without touching activeId, plotWindows, or view state", async () => {
     useApp.setState({
       datasets: [{ id: "d1", name: "existing", data: raw }],
       activeId: "d1",
@@ -4110,7 +4110,7 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
     const pre = useApp.getState();
     const preExisting = pre.datasets[0];
 
-    useApp.getState().appendWorkspace(
+    await useApp.getState().appendWorkspace(
       asLoaded([
         { id: "n1", name: "new one", data: raw },
         { id: "n2", name: "new two", data: raw },
@@ -4127,10 +4127,10 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
     expect(s.status).toBe("appended 2 datasets (0 renamed)");
   });
 
-  it("remaps a colliding id and suffixes a colliding name, reporting the renamed count", () => {
+  it("remaps a colliding id and suffixes a colliding name, reporting the renamed count", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "sample", data: raw }], activeId: "d1" });
 
-    useApp.getState().appendWorkspace(asLoaded([{ id: "d1", name: "sample", data: raw }]));
+    await useApp.getState().appendWorkspace(asLoaded([{ id: "d1", name: "sample", data: raw }]));
 
     const s = useApp.getState();
     expect(s.datasets).toHaveLength(2);
@@ -4140,10 +4140,10 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
     expect(s.status).toBe("appended 1 dataset (1 renamed)");
   });
 
-  it("is a no-op (no history entry, no status change) for a workspace with no datasets", () => {
+  it("is a no-op (no history entry, no status change) for a workspace with no datasets", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "a", data: raw }], history: [], status: "" });
 
-    useApp.getState().appendWorkspace(asLoaded([]));
+    await useApp.getState().appendWorkspace(asLoaded([]));
 
     expect(useApp.getState().datasets).toHaveLength(1);
     expect(useApp.getState().history).toHaveLength(0);

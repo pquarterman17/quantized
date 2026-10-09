@@ -135,6 +135,30 @@ describe("a finished fit is stored and restored", () => {
     expect(useApp.getState().reflectivityFitRecordId).toBeNull();
   });
 
+  it("rebinds an already-open workshop before consuming a fit request from another dataset", async () => {
+    const first = makeRecord({ id: "fit-a", seq: 1 }, ["a"]);
+    const second = makeRecord({ id: "fit-b", seq: 4 }, ["b"]);
+    useApp.setState({
+      datasets: [
+        xrrDataset("a", { reflFits: [encodeRecord(first)] }),
+        xrrDataset("b", { reflFits: [encodeRecord(second)] }),
+      ],
+      activeId: "a",
+      reflectivityFitRecordId: null,
+    });
+    render(<Harness />);
+    expect(await screen.findByLabelText("saved fits")).toHaveValue("fit-a");
+
+    act(() => {
+      useApp.getState().setActive("b");
+      useApp.getState().openReflectivityFitRecord("fit-b");
+    });
+
+    await waitFor(() => expect(screen.getByLabelText("saved fits")).toHaveValue("fit-b"));
+    expect(useApp.getState().reflectivityFitRecordId).toBeNull();
+    expect(screen.getByText(/Saved fit/)).toHaveTextContent("#4");
+  });
+
   it("flags a saved fit whose second channel's dataset has since been deleted", async () => {
     const rec = makeRecord({}, ["xrr", "gone"]);
     useApp.setState({ datasets: [xrrDataset("xrr", { reflFits: [encodeRecord(rec)] })] });

@@ -88,7 +88,11 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
   const [pickedId, setPickedId] = useState<string | null>(null);
   useEffect(() => {
     if (!requestedRecordId) return;
-    if (records.some((record) => record.id === requestedRecordId)) setPickedId(requestedRecordId);
+    // A mounted workshop may still be switching from the previously-bound
+    // dataset. Do not consume the cross-panel request until the requested
+    // record is present on this host.
+    if (!records.some((record) => record.id === requestedRecordId)) return;
+    setPickedId(requestedRecordId);
     clearRequestedRecord();
   }, [clearRequestedRecord, records, requestedRecordId]);
   const [reporting, setReporting] = useState(false);

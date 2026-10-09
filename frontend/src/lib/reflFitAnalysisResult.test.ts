@@ -87,4 +87,16 @@ describe("reflectivity fit analysis catalog", () => {
       .toEqual(["rfit-1"]);
     expect(published.some((result) => result.id.includes("deleted"))).toBe(false);
   });
+
+  it("does not retire a catalog entry whose stored record is from a future version", () => {
+    const future = { ...stored, version: 2, id: "future-fit" };
+    const existing = {
+      ...reflectivityFitAnalysisResult(stored, [dataset("a")])!,
+      id: "analysis-refl-fit-a-future-fit",
+      settingsRef: { datasetId: "a", field: "reflFits" as const, recordId: "future-fit" },
+    };
+    const nextDatasets = [{ ...dataset("a"), reflFits: [stored, future] }];
+    const published = publishReflectivityFitAnalysisResult(nextDatasets, [existing], stored);
+    expect(published).toContainEqual(existing);
+  });
 });

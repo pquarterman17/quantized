@@ -7,8 +7,8 @@
 // `saveWorkspaceToFile` were thin delegates to it and both were ALREADY
 // `async` (`Promise<void>`), so these two functions keep that exact shape and
 // fetch the real ones on first use; `useApp.ts` only changed its import path.
-// (`appendWorkspace`, which is synchronous, no longer lives in that module —
-// see store/workspaceHydration.ts.)
+// (`appendWorkspace` no longer lives in that module — see
+// store/workspaceHydration.ts and its separate lazy merge engine.)
 //
 // FAILURE CONTRACT. A chunk that will not load settles the save (it never
 // rejects, like the real functions) with the "save failed" status + danger
