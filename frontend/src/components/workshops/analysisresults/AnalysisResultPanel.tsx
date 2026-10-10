@@ -1,13 +1,10 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
-import type { QuickFigureMapping } from "../../../lib/quickFigureMapping";
-import { initialQuickFigureMapping } from "../../../lib/quickFigureMappingActions";
 import { dataFingerprint } from "../../../lib/analysisResultFreshness";
 import { fitAnalysisResult } from "../../../lib/fitAnalysisResultLive";
 import { peakTableMatchesData } from "../../../lib/peakTableFit";
 import { signalRecipeChannels, signalRecipeXRange } from "../../../lib/signalRecipe";
-import type { Dataset } from "../../../lib/types";
 import { createSignalWorksheetFromApp } from "../../../store/signalWorksheetCommand";
 import { useApp } from "../../../store/useApp";
 import { askConfirm } from "../../overlays/ConfirmDialog";
@@ -18,7 +15,10 @@ import AnalysisResultFitOverview from "./AnalysisResultFitOverview";
 import AnalysisResultFitTable from "./AnalysisResultFitTable";
 import AnalysisResultFigures from "./AnalysisResultFigures";
 import AnalysisResultPeakTable from "./AnalysisResultPeakTable";
+import AnalysisResultRefl, { liveReflectivityFit, reflectivityFitIssues } from "./AnalysisResultRefl";
 import AnalysisResultTables from "./AnalysisResultTables";
+import { mappingForResult } from "./analysisResultFigureMapping";
+import { recordsFor } from "../reflectivity/reflFitRecord";
 
 type Tab = "overview" | "table" | "figures" | "diagnostics" | "provenance" | "notes";
 const TABS: readonly Tab[] = ["overview", "table", "figures", "diagnostics", "provenance", "notes"];
@@ -47,53 +47,6 @@ function formatDate(value: string): string {
   return Number.isNaN(date.valueOf()) ? value : date.toLocaleString();
 }
 
-/** Start the figure builder from the result's recorded series, not from a
- * fresh whole-worksheet guess. Inferred uncertainty stays attached only when
- * it belongs to one of those series; every other ordinary channel starts as
- * ignored so opening the builder cannot silently add curves to the result. */
-function mappingForResult(
-  dataset: Dataset,
-  recorded: readonly number[],
-  recordedX?: number | null,
-): QuickFigureMapping {
-  const base = initialQuickFigureMapping(dataset);
-  const yKeys = [...new Set(recorded)].filter((channel) =>
-    Number.isInteger(channel) && channel >= 0 && channel < dataset.data.labels.length,
-  );
-  const ySet = new Set(yKeys);
-  const candidateX = recordedX === undefined ? base.xKey : recordedX;
-  const xKey = candidateX !== null && ySet.has(candidateX) ? null : candidateX;
-  const xChanged = xKey !== base.xKey;
-  const xKeyByY = base.xKeyByY
-    ? Object.fromEntries(Object.entries(base.xKeyByY).filter(([channel]) => ySet.has(Number(channel))))
-    : undefined;
-  const errorBindings = base.errorBindings.filter((binding) =>
-    !ySet.has(binding.channel) && (binding.axis === "y" ? ySet.has(binding.target) : !xChanged),
-  );
-  const reserved = new Set([
-    ...(xKey === null ? [] : [xKey]),
-    ...Object.values(xKeyByY ?? {}).filter((channel): channel is number => channel !== null),
-    ...errorBindings.map((binding) => binding.channel),
-    ...(base.groupKey == null || ySet.has(base.groupKey) ? [] : [base.groupKey]),
-    ...(base.labelKey == null || ySet.has(base.labelKey) ? [] : [base.labelKey]),
-  ]);
-  const ignoredKeys = dataset.data.labels
-    .map((_, channel) => channel)
-    .filter((channel) => !ySet.has(channel) && !reserved.has(channel));
-  const mapping: QuickFigureMapping = {
-    ...base,
-    xKey,
-    yKeys,
-    errorBindings,
-    ignoredKeys,
-    ...(base.groupKey != null && ySet.has(base.groupKey) ? { groupKey: null } : {}),
-    ...(base.labelKey != null && ySet.has(base.labelKey) ? { labelKey: null } : {}),
-  };
-  if (xKeyByY && Object.keys(xKeyByY).length) mapping.xKeyByY = xKeyByY;
-  else delete mapping.xKeyByY;
-  return mapping;
-}
-
 export default function AnalysisResultPanel() {
   const openId = useApp((state) => state.openAnalysisResultId);
   const result = useApp((state) => state.analysisResults.find((item) => item.id === openId));
@@ -106,6 +59,7 @@ export default function AnalysisResultPanel() {
   const setStageTab = useApp((state) => state.setStageTab);
   const setPeaksOpen = useApp((state) => state.setPeaksOpen);
   const setCurveFitOpen = useApp((state) => state.setCurveFitOpen);
+  const openReflectivityFitRecord = useApp((state) => state.openReflectivityFitRecord);
   const openQuickFigureBuilder = useApp((state) => state.openQuickFigureBuilder);
   const [tab, setTab] = useState<Tab>("overview");
   const [busy, setBusy] = useState<"recalculate" | "rerun" | "duplicate" | "freeze" | "figure" | "report" | "export" | null>(null);
@@ -116,8 +70,11 @@ export default function AnalysisResultPanel() {
   const output = datasets.find((dataset) => dataset.id === result?.outputs[0]?.datasetId);
   const isPeak = result?.settingsRef?.field === "peakTable";
   const isFit = result?.settingsRef?.field === "fitSpec";
+  const isRefl = result?.settingsRef?.field === "reflFits";
   const peakTable = isPeak ? source?.peakTable ?? null : null;
   const fitSpec = isFit ? source?.fitSpec ?? null : null;
+  const reflFit = isRefl ? liveReflectivityFit(result, datasets) : null;
+  const reflIssues = reflectivityFitIssues(reflFit, datasets);
   const fitFingerprintStale = !!(isFit && source && !source.pending && result?.sourceFingerprint &&
     result.sourceFingerprint !== dataFingerprint(source.data));
   const diagnostics = useMemo(() => {
@@ -141,8 +98,13 @@ export default function AnalysisResultPanel() {
       ...(isFit && source && (staleFits.includes(source.id) || fitFingerprintStale)
         ? ["The source data changed after this fit. Recalculate or re-fit before using these values."]
         : []),
+      ...reflIssues.missing,
+      ...reflIssues.changed,
+      ...(isRefl ? reflFit?.result.warnings ?? [] : []),
+      ...(isRefl && reflFit && !reflFit.result.success ? ["The optimizer did not report a successful fit."] : []),
+      ...(isRefl && !reflFit ? ["The saved reflectivity fit record is missing from its source worksheets."] : []),
     ])];
-  }, [datasets, fitFingerprintStale, fitSpec, isFit, isPeak, output, peakTable, result, source, staleDatasets, staleFits]);
+  }, [datasets, fitFingerprintStale, fitSpec, isFit, isPeak, isRefl, output, peakTable, reflFit, reflIssues, result, source, staleDatasets, staleFits]);
 
   if (!result) return null;
   const close = () => useApp.setState({ openAnalysisResultId: null });
@@ -171,6 +133,17 @@ export default function AnalysisResultPanel() {
     if (fitSpec.xKey !== undefined) setXKey(fitSpec.xKey);
     if (fitSpec.yKey !== undefined) setYKeys([fitSpec.yKey]);
     setCurveFitOpen(true);
+    close();
+  };
+  const editReflFit = () => {
+    const recordId = result.settingsRef?.field === "reflFits" ? result.settingsRef.recordId : null;
+    const live = recordId && result.sources.find((ref) => {
+      const dataset = datasets.find((item) => item.id === ref.datasetId);
+      return recordsFor(dataset).some((record) => record.id === recordId);
+    });
+    if (!live) return;
+    setActive(live.datasetId); setStageTab("plot");
+    openReflectivityFitRecord(recordId);
     close();
   };
   const recalculate = async () => {
@@ -204,6 +177,7 @@ export default function AnalysisResultPanel() {
   const remove = async () => {
     const kept = isPeak ? "Its fitted peak table and source data are kept."
       : isFit ? "Its saved fit and source data are kept."
+      : isRefl ? "Its saved reflectivity fit and source data are kept."
       : "Its linked worksheet and scientific data are kept.";
     const yes = await askConfirm(`Delete "${result.name}"?`, `This removes the result record from the Library. ${kept}`, "Delete", true);
     if (yes) withActions((m) => m.removeAnalysisResult(result.id));
@@ -279,7 +253,9 @@ export default function AnalysisResultPanel() {
   const peakStale = !!(isPeak && source && peakTable && !peakTableMatchesData(peakTable, source));
   const fitStale = !!(isFit && source && (staleFits.includes(source.id) || fitFingerprintStale));
   const fitReplayable = !!(fitSpec && fitSpec.xKey !== undefined && fitSpec.yKey !== undefined);
-  const status = isFit
+  const status = isRefl
+    ? !reflFit || reflIssues.missing.length ? "Source missing" : reflIssues.changed.length ? "Out of date" : "Current"
+    : isFit
     ? !source ? "Source missing" : !fitSpec ? "Incomplete" : fitStale ? "Out of date" : "Current"
     : isPeak
     ? !source ? "Source missing" : !peakTable ? "Incomplete" : peakStale ? "Out of date" : "Current"
@@ -299,7 +275,9 @@ export default function AnalysisResultPanel() {
       <div className="qz-analysis-result">
         <div className="qz-analysis-toolbar">
           <span className={`qz-analysis-status status-${status.toLowerCase().replaceAll(" ", "-")}`}>{status}</span>
-          {isPeak ? <>
+          {isRefl ? <>
+            <Button disabled={!reflFit || busy !== null} onClick={editReflFit}>Open fit workbench</Button>
+          </> : isPeak ? <>
             <Button disabled={!source || busy !== null} onClick={() => source && openTable(source.id)}>Open data</Button>
             <Button disabled={!source || busy !== null} onClick={editPeaks}>Edit / Re-fit…</Button>
           </> : isFit ? <>
@@ -318,8 +296,8 @@ export default function AnalysisResultPanel() {
           <Button disabled={busy !== null} onClick={() => void rename()}>Rename…</Button>
           <Button disabled={busy !== null} variant="danger" onClick={() => void remove()}>Delete…</Button>
         </div>
-        {(sourceMissing || ((isPeak || isFit) && !source)) && <p className="qz-analysis-missing" role="note">
-          {isPeak ? PEAK_SOURCE_MISSING : isFit ? FIT_SOURCE_MISSING : SOURCE_MISSING}
+        {(sourceMissing || ((isPeak || isFit) && !source) || (isRefl && !reflFit)) && <p className="qz-analysis-missing" role="note">
+          {isPeak ? PEAK_SOURCE_MISSING : isFit ? FIT_SOURCE_MISSING : isRefl ? "Saved reflectivity fit not found — restore one of its source worksheets to inspect it." : SOURCE_MISSING}
         </p>}
         <div className="qz-analysis-tabs" role="tablist" aria-label="Analysis result views">
           {TABS.map((value, index) => (
@@ -328,7 +306,7 @@ export default function AnalysisResultPanel() {
         </div>
         <div id="analysis-result-tabpanel" className="qz-analysis-body" role="tabpanel" aria-labelledby={`analysis-result-tab-${tab}`}>
           {tab === "overview" && <>
-            {isPeak ? <dl className="qz-analysis-summary">
+            {isRefl ? <AnalysisResultRefl result={result} record={reflFit} datasets={datasets} view="overview" /> : isPeak ? <dl className="qz-analysis-summary">
               <div><dt>Analysis</dt><dd>{result.producer.label}</dd></div>
               <div><dt>Source</dt><dd>{source?.name ?? "Missing source"}</dd></div>
               <div><dt>Peaks</dt><dd>{peakTable ? `${peakTable.peaks.length} total · ${peakTable.peaks.filter((peak) => peak.excluded).length} excluded` : "Table unavailable"}</dd></div>
@@ -347,9 +325,11 @@ export default function AnalysisResultPanel() {
             </dl>}
             {isPeak
               ? <p className="qz-analysis-caption">Values are read live from the source worksheet’s fitted peak table. Editing or re-fitting updates this result; deleting this Library item keeps the scientific table.</p>
-              : !isFit && !sourceMissing && <p className="qz-analysis-caption">This result stays linked to its source. Recalculate updates this output; Rerun as new preserves it and creates another result.</p>}
+              : !isFit && !isRefl && !sourceMissing && <p className="qz-analysis-caption">This result stays linked to its source. Recalculate updates this output; Rerun as new preserves it and creates another result.</p>}
           </>}
-          {tab === "table" && (isPeak
+          {tab === "table" && (isRefl
+            ? <AnalysisResultRefl result={result} record={reflFit} datasets={datasets} view="table" />
+            : isPeak
             ? <AnalysisResultPeakTable table={peakTable} onExport={() => void exportPeaks()} />
             : isFit ? <AnalysisResultFitTable spec={fitSpec} onExport={() => void exportFit()} />
             : <AnalysisResultTables result={result} onOpen={openTable} onExport={(datasetId) => void exportTable(datasetId)} />)}
@@ -357,7 +337,9 @@ export default function AnalysisResultPanel() {
           {tab === "diagnostics" && (diagnostics.length
             ? <ul className="qz-analysis-diagnostics">{diagnostics.map((message, index) => <li key={`${message}-${index}`}>{message}</li>)}</ul>
             : <p className="qz-analysis-empty">No warnings or missing references.</p>)}
-          {tab === "provenance" && (isFit
+          {tab === "provenance" && (isRefl
+            ? <AnalysisResultRefl result={result} record={reflFit} datasets={datasets} view="provenance" />
+            : isFit
             ? <AnalysisResultFitOverview result={result} source={source} spec={fitSpec} provenance />
             : <dl className="qz-analysis-summary">
             <div><dt>Producer</dt><dd>{result.producer.id} · v{result.producer.version}</dd></div>

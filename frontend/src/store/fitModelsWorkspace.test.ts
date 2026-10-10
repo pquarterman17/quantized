@@ -94,8 +94,9 @@ describe("store load/append merge the project's fit models", () => {
   it("append: merges under the same rule and GROWS the carry in the same set() as its datasets", async () => {
     useApp.getState().loadWorkspace(parseWorkspace(projectText([FUTURE], "d1")));
     const other = { version: 7, name: "Other" };
-    useApp.getState().appendWorkspace(parseWorkspace(projectText([model("Line", "y = a*x"), other], "d2")));
-    // Synchronous: a crash (or a second open) before the async merge cannot lose it.
+    await useApp.getState().appendWorkspace(parseWorkspace(projectText([model("Line", "y = a*x"), other], "d2")));
+    // The append commits its carry atomically with its datasets before the
+    // separate model-library adoption can finish.
     expect(useApp.getState().fitModelCarry).toEqual([FUTURE, other]);
     expect(recipeSourcesWhole(useApp.getState())).toBe(false);
     await vi.waitFor(() => expect(names()).toEqual(["Line"]));
@@ -132,10 +133,11 @@ describe("store load/append merge the project's fit models", () => {
       useApp.getState().loadWorkspace(parseWorkspace(projectText([], "base")));
       const refused = model("FromA", "y = a");
       const other = { version: 7, name: "B's unreadable" };
-      // Both appends run synchronously; B's set() GROWS the carry before A's
-      // async merge resolves — the same project, so A's records still belong.
-      useApp.getState().appendWorkspace(parseWorkspace(projectText([refused], "a1")));
-      useApp.getState().appendWorkspace(parseWorkspace(projectText([other], "b1")));
+      // Both append requests share the lazy module load; each commit GROWS
+      // the live carry, so the later one cannot overwrite the earlier one.
+      const first = useApp.getState().appendWorkspace(parseWorkspace(projectText([refused], "a1")));
+      const second = useApp.getState().appendWorkspace(parseWorkspace(projectText([other], "b1")));
+      await Promise.all([first, second]);
       await vi.waitFor(() => expect(useApp.getState().fitModelCarry).toEqual([other, refused]));
       const msg = useToasts.getState().toasts.find((t) => t.msg.includes('"FromA"'))!.msg;
       expect(msg).toContain("kept in the project");

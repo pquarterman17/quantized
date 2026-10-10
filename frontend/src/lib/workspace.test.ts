@@ -272,6 +272,22 @@ describe("durable analysis results", () => {
     saved.analysisResultCatalogVersion = 3;
     expect(parseWorkspace(JSON.stringify(saved)).analysisResults).toEqual([]);
   });
+
+  it("migrates reflectivity fit history once and respects a v4 deletion", () => {
+    const dataset = makeDataset("refl", "film.refl");
+    dataset.reflFits = [{
+      version: 1, id: "rfit-1", seq: 1, fittedAt: "2026-10-09T00:00:00Z",
+      request: { parameters: [], settings: {}, channels: [{ datasetId: "refl", datasetName: "film.refl" }] },
+      model: { layers: [{}, {}], radiation: "xray" },
+      result: { parameters: [], free: [], success: true, warnings: [] },
+    }];
+    const saved = JSON.parse(serializeWorkspace({ datasets: [dataset], analysisResults: [] }));
+    saved.analysisResultCatalogVersion = 3;
+    expect(parseWorkspace(JSON.stringify(saved)).analysisResults?.map((result) => result.id)).toEqual(["analysis-refl-fit-refl-rfit-1"]);
+
+    saved.analysisResultCatalogVersion = 4;
+    expect(parseWorkspace(JSON.stringify(saved)).analysisResults).toEqual([]);
+  });
 });
 
 // LIBRARY_WORKBOOK_UX_PLAN PR K (K2): deps/derivedFrom/formulaErrors round

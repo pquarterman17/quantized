@@ -17,11 +17,9 @@
 // the existing datasets are left completely alone).
 //
 // `appendWorkspace` itself is a ONE-LINE delegate to `runAppendWorkspace`,
-// at the bottom of this module. It lived in store/workspaceIO.ts until bundle
-// headroom slice 9 made that module (the save half of the same MAIN_PLAN #16
-// work) a lazy chunk: `appendWorkspace` is synchronous and keeps its
-// synchronous contract, so its body moved here, next to `loadWorkspace` —
-// its additive opposite — rather than behind the save chunk's fetch.
+// at the bottom of this module. Its pure merge engine is click-deferred: an
+// append is an explicit File-menu action, so making every launch parse that
+// uncommon path would spend eager bytes for no startup benefit.
 //
 // WHAT IT DOES NOT OWN, deliberately:
 //   - the FIELDS themselves. They stay declared (and initialized) on
@@ -56,12 +54,12 @@ import { defaultErrKeys, originHiddenChannels } from "../lib/errorbars";
 import { migrateGroupsToFolders } from "../lib/foldertree";
 import { sanitizeVisibleDetailsColumns } from "../lib/libraryDetailsColumns";
 import { hydrateView } from "../lib/plotview";
+import { runLazy } from "../lib/runLazy";
 import { sanitizeTechniqueViewMemory } from "../lib/techniqueViewMemory";
 import { nextStageTab } from "../lib/stagetab";
 import type { LoadedWorkspace, WorkspaceState } from "../lib/workspace";
 import { sanitizeDocumentBackedPlotWindows } from "../lib/windowDocumentPersistence";
 import { workspaceCodecOrReport } from "../lib/workspaceCodecLazy";
-import { mergeWorkspace } from "../lib/workspaceMerge";
 import { nextDatasetId, nextFolderId } from "./idSeq";
 import { carryGrewFrom, grownCarry } from "./recipeFidelity";
 import { loadedMapViews } from "./rois"; // loadedMapViews: P2.8, see store/mapView.ts
@@ -88,7 +86,7 @@ export interface WorkspaceHydrationSlice {
   // loadWorkspace: only the flat dataset list joins (collision-free ids +
   // names, see lib/workspace.mergeWorkspace); activeId, plotWindows, every
   // view-state field, and the existing datasets are left completely alone.
-  appendWorkspace: (ws: LoadedWorkspace) => void;
+  appendWorkspace: (ws: LoadedWorkspace) => Promise<boolean>;
   // Wipe the whole library (datasets + folders + figures + selection + view
   // state) — the File ▸ Remove all command. Moved here from useApp.ts
   // (2026-09-25, P2.5) because it IS loadWorkspace with an empty workspace.
@@ -350,12 +348,18 @@ const noop = (): void => {};
  *  the mutation, and `workbooks` is already part of `HistorySnapshot`
  *  (history.ts), so undo restores the pre-append workbook list for free —
  *  same as it already does for `datasets`. */
-function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorkspace): void {
+async function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorkspace): Promise<boolean> {
   const n = ws.datasets.length;
   if (n === 0) {
     toast("workspace has no datasets to append", "danger");
-    return;
+    return false;
   }
+  // Load before recording history: a rotated/missing lazy chunk must leave
+  // the project and its undo stack completely untouched.
+  const { mergeWorkspace } = await runLazy(
+    "Loading project append…",
+    () => import("../lib/workspaceMerge"),
+  );
   get().recordHistory("append workspace");
   const currentWorkbookIds = new Set(get().workbooks.map((w) => w.id));
   const { datasets, renamed, workbooks, analysisResults } = mergeWorkspace(
@@ -388,4 +392,5 @@ function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorkspace): 
   // parsed) has no status-line fold here at all — this never routes through
   // loadWorkspace — so the toast is its only surface.
   notifyMigrationWarnings(ws.migrationWarnings);
+  return true;
 }

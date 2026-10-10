@@ -75,12 +75,12 @@ beforeEach(() => {
 });
 
 describe("useApp appendWorkspace — workbook transfer (LIBRARY_WORKBOOK_UX_PLAN PR A4)", () => {
-  it("grows store workbooks by exactly the transferred set, remaps each appended dataset's workbookId, and lands them at the Library root", () => {
+  it("grows store workbooks by exactly the transferred set, remaps each appended dataset's workbookId, and lands them at the Library root", async () => {
     const wb: WorkbookNode = { id: "src-wb", name: "Book9", originBook: "Book9", folderId: "f1" };
     const sheet1 = { id: "s1", name: "sheet1", data: raw, workbookId: "src-wb" };
     const sheet2 = { id: "s2", name: "sheet2", data: raw, workbookId: "src-wb" };
 
-    useApp.getState().appendWorkspace(asLoaded([sheet1, sheet2], [wb]));
+    await useApp.getState().appendWorkspace(asLoaded([sheet1, sheet2], [wb]));
 
     const s = useApp.getState();
     expect(s.workbooks).toHaveLength(1); // grew by exactly the one transferred workbook
@@ -95,7 +95,7 @@ describe("useApp appendWorkspace — workbook transfer (LIBRARY_WORKBOOK_UX_PLAN
     expect(s.status).toMatch(/1 workbook landed at Library root/);
   });
 
-  it("undo restores the pre-append workbook list (workbooks already ride HistorySnapshot)", () => {
+  it("undo restores the pre-append workbook list (workbooks already ride HistorySnapshot)", async () => {
     useApp.setState({
       workbooks: [{ id: "existing-wb", name: "already here" }],
     });
@@ -103,7 +103,7 @@ describe("useApp appendWorkspace — workbook transfer (LIBRARY_WORKBOOK_UX_PLAN
     const sheet = { id: "s1", name: "sheet", data: raw, workbookId: "src-wb" };
 
     const preWorkbooks = useApp.getState().workbooks;
-    useApp.getState().appendWorkspace(asLoaded([sheet], [wb]));
+    await useApp.getState().appendWorkspace(asLoaded([sheet], [wb]));
 
     expect(useApp.getState().workbooks).toHaveLength(2); // existing + transferred
     useApp.getState().undo();
@@ -114,14 +114,14 @@ describe("useApp appendWorkspace — workbook transfer (LIBRARY_WORKBOOK_UX_PLAN
     expect(useApp.getState().workbooks).toHaveLength(2);
   });
 
-  it("never mints an id already used by an existing store workbook, even on an exact id collision", () => {
+  it("never mints an id already used by an existing store workbook, even on an exact id collision", async () => {
     useApp.setState({
       workbooks: [{ id: "shared-id", name: "destination's own book" }],
     });
     const wb: WorkbookNode = { id: "shared-id", name: "incoming book" }; // collides with the store's
     const sheet = { id: "s1", name: "sheet", data: raw, workbookId: "shared-id" };
 
-    useApp.getState().appendWorkspace(asLoaded([sheet], [wb]));
+    await useApp.getState().appendWorkspace(asLoaded([sheet], [wb]));
 
     const s = useApp.getState();
     expect(s.workbooks).toHaveLength(2);
@@ -130,13 +130,13 @@ describe("useApp appendWorkspace — workbook transfer (LIBRARY_WORKBOOK_UX_PLAN
     expect(ids).toContain("shared-id"); // the destination's own workbook, untouched
   });
 
-  it("existing dataset-append behavior (rename, bgRef remap) is unchanged by workbook transfer", () => {
+  it("existing dataset-append behavior (rename, bgRef remap) is unchanged by workbook transfer", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "sample", data: raw }], activeId: "d1" });
 
     const data = { id: "data", name: "sample", data: raw, bgRef: { datasetId: "bg", interp: "pchip" } };
     const bg = { id: "bg", name: "background", data: raw };
 
-    useApp.getState().appendWorkspace(asLoaded([data, bg])); // no workbooks in this batch
+    await useApp.getState().appendWorkspace(asLoaded([data, bg])); // no workbooks in this batch
 
     const s = useApp.getState();
     expect(s.datasets).toHaveLength(3);
@@ -149,9 +149,9 @@ describe("useApp appendWorkspace — workbook transfer (LIBRARY_WORKBOOK_UX_PLAN
     expect(s.status).toBe("appended 2 datasets (1 renamed)"); // no workbook note appended
   });
 
-  it("a workspace with no transferable workbooks appends datasets without touching the status/toast workbook note", () => {
+  it("a workspace with no transferable workbooks appends datasets without touching the status/toast workbook note", async () => {
     const d = { id: "n1", name: "new", data: raw }; // no workbookId
-    useApp.getState().appendWorkspace(asLoaded([d]));
+    await useApp.getState().appendWorkspace(asLoaded([d]));
     expect(useApp.getState().status).toBe("appended 1 dataset (0 renamed)");
     expect(useApp.getState().workbooks).toEqual([]);
   });
@@ -159,13 +159,13 @@ describe("useApp appendWorkspace — workbook transfer (LIBRARY_WORKBOOK_UX_PLAN
   // BUG-010: runAppendWorkspace never routes through loadWorkspace at all, so
   // the appended workspace's own migrationWarnings had NO status-line fold
   // to begin with — the toast is the only surface it can reach.
-  it("toasts a migrationWarnings notice from the appended workspace (BUG-010)", () => {
+  it("toasts a migrationWarnings notice from the appended workspace (BUG-010)", async () => {
     useToasts.setState({ toasts: [] });
     const d = { id: "n1", name: "new", data: raw };
     const ws = asLoaded([d]);
     ws.migrationWarnings = ['skipped saved FigureDocument "future-fig" with unsupported version 99'];
 
-    useApp.getState().appendWorkspace(ws);
+    await useApp.getState().appendWorkspace(ws);
 
     expect(useApp.getState().status).toBe("appended 1 dataset (0 renamed)");
     expect(useToasts.getState().toasts.some((t) => /unsupported version 99/.test(t.msg))).toBe(true);

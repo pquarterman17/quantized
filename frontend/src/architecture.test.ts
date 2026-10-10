@@ -454,9 +454,9 @@ const STORE_PINS: Record<string, number> = {
   // (WorkspaceHydrationSlice), composed exactly like plotViewSettings.ts,
   // reportsFigureDocs.ts and viewAppliers.ts: one import line, one word on
   // the extends clause, one creator-spread line. `appendWorkspace`'s own
-  // body (`runAppendWorkspace`) stays in store/workspaceIO.ts — that module
-  // is not moving, it is already its own file below this pin — so only the
-  // action's one-line delegate travelled. The FIELDS stay declared and
+  // body (`runAppendWorkspace`) now lives in workspaceHydration.ts too; its
+  // pure merge engine is click-deferred because Append Project is an explicit
+  // user action. The FIELDS stay declared and
   // initialized on AppState here, same shape as all three earlier
   // extractions: `loadWorkspace` writes nearly all of them (a full-library
   // replace has to), but plenty of OTHER actions read and write them too, so
@@ -2331,6 +2331,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   // consumed cross-workflow seeds
   figureDocSeed: "seeded figure doc; consumed on use",
   reflectivitySeed: "seeded reflectivity workshop input; consumed on use",
+  reflectivityFitRecordId: "saved reflectivity-fit selection; consumed on use",
   statStageSeed: "seeded stat-stage input; consumed on use",
 
   // analysis working scratch (same class as mapRoi/mapRuler above: survives interaction, cleared on dataset switch, not edit history)
@@ -3014,7 +3015,7 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // ALREADY async, composed into `useApp.ts` through thin eager loaders
     // that keep the slice types identical: Save / Save As
     // (`store/workspaceIO.ts`, via `store/workspaceIOLazy.ts`; the
-    // synchronous `appendWorkspace` body moved to workspaceHydration.ts) and
+    // `appendWorkspace` orchestration moved to workspaceHydration.ts) and
     // the Origin graph-recovery fallbacks (`store/originFallback.ts`, via
     // `store/originFallbackLazy.ts`). The slice's other three seams —
     // the `.dwk` codec, its parse core, and single-dataset re-import — have

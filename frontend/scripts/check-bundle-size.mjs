@@ -1843,6 +1843,7 @@ import { fileURLToPath } from "node:url";
  * 832,257 (-2,348 B). The 2,000 B of headroom is BANKED on purpose for the
  * queued Dependabot #548 (vite 8.3.2, +165 B preload helper) and the
  * pending plot batch (~+223 B); do not spend it on anything else.
+ *
  */
 const EAGER_JS_BUDGET = 834_257;
 

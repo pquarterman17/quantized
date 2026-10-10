@@ -9,8 +9,9 @@
 // restart.
 //
 // Bundle headroom slice 9: this module is fetched on the first Save (store/workspaceIOLazy.ts), the
-// serializer on top of it (lib/workspaceCodecLazy.ts), and `appendWorkspace`'s synchronous body
-// (`runAppendWorkspace`) moved to store/workspaceHydration.ts so it stays eager.
+// serializer on top of it (lib/workspaceCodecLazy.ts). `appendWorkspace`'s
+// orchestration lives in store/workspaceHydration.ts; its pure merge engine
+// is independently click-deferred from there.
 //
 // P1.1 C3: "Save workspace" now tries a NATIVE Save As first — a real dialog, a real path, a direct
 // in-process write (desktopBridge.ts's `pickSaveDestination` + `saveProjectTo` — split from the
