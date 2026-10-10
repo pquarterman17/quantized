@@ -34,3 +34,14 @@ updates:
       npm-minor-patch:
         patterns: ["*"]
         update-types: [minor, patch]
+
+  # Desktop shell (Tauri / Cargo.lock) — security fixes otherwise land only
+  # when someone notices an alert.
+  - package-ecosystem: cargo
+    directory: /src-tauri
+    schedule:
+      interval: weekly
+    groups:
+      cargo-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
