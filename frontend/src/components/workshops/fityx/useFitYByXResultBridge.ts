@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 
 import type { FitYByXMode, FitYByXRecipe, FitYByXSnapshot } from "../../../lib/fitYByXAnalysisResult";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { Dataset } from "../../../lib/types";
 import { useFitYByXStore } from "../../../store/fitYByX";
-import { hasFitYByXResult, publishFitYByXResult } from "../../../store/fitYByXResults";
+import { matchesFitYByXResult, publishFitYByXResult } from "../../../store/fitYByXResults";
 import { useApp } from "../../../store/useApp";
 import type { BivariateResult, ContingencyResult, FitYByXKind, FitYByXLevelResult, OnewayResult } from "./useFitYByX";
 
@@ -62,11 +62,10 @@ export function useFitYByXResultBridge(args: BridgeArgs): { canSaveResult: boole
     [args.active],
   );
   const mode: FitYByXMode | null = args.kind === "unsupported" ? null : args.kind;
-  const snapshotKey = sourceFingerprint && args.active && mode
-    ? JSON.stringify({ source: args.active.id, fingerprint: sourceFingerprint, recipe, mode }) : null;
-  const [saved, setSaved] = useState<{ id: string; key: string } | null>(null);
-  const savedRef = useRef<{ id: string; key: string } | null>(null);
-  const savedResultExists = useApp((state) => !!saved && state.analysisResults.some((result) => result.id === saved.id));
+  const savedResultExists = useApp((state) => !!args.active && !!sourceFingerprint && !!mode &&
+    state.analysisResults.some((result) => matchesFitYByXResult(
+      result, args.active!.id, sourceFingerprint, recipe, mode,
+    )));
   const directComplete = mode === "oneway" ? args.oneway !== null
     : mode === "bivariate" ? args.bivariate !== null
       : mode === "contingency" ? args.contingency !== null : false;
@@ -77,14 +76,14 @@ export function useFitYByXResultBridge(args: BridgeArgs): { canSaveResult: boole
     ? args.byLevels.length > 0 && args.byResults.length === args.byLevels.length && hasLandedLevel
     : directComplete;
   const canSaveResult = !!args.active && !args.active.pending && !!mode && complete &&
-    !args.busy && !args.byBusy && !(savedResultExists && snapshotKey !== null && saved?.key === snapshotKey);
+    !args.busy && !args.byBusy && !savedResultExists;
 
   const saveResult = (): string | null => {
-    if (snapshotKey !== null && savedRef.current?.key === snapshotKey && hasFitYByXResult(savedRef.current.id)) {
+    if (savedResultExists) {
       setStatus("this Fit Y by X result is already saved");
       return null;
     }
-    if (!args.active || !mode || !canSaveResult || snapshotKey === null) {
+    if (!args.active || !mode || !canSaveResult || sourceFingerprint === null) {
       setStatus("wait for the full Fit Y by X analysis before saving a result");
       return null;
     }
@@ -95,13 +94,7 @@ export function useFitYByXResultBridge(args: BridgeArgs): { canSaveResult: boole
       contingency: partitioned ? null : args.contingency,
       levels: partitioned ? args.byResults : [], totalLevels: partitioned ? args.byTotalLevels : 0,
     };
-    const id = publishFitYByXResult(args.active, recipe, snapshot);
-    if (id) {
-      const record = { id, key: snapshotKey };
-      savedRef.current = record;
-      setSaved(record);
-    }
-    return id;
+    return publishFitYByXResult(args.active, recipe, snapshot);
   };
   return { canSaveResult, saveResult };
 }

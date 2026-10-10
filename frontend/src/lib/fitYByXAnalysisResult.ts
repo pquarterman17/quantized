@@ -1,5 +1,6 @@
 import { analysisDataFingerprint } from "./analysisResultFreshness";
-import { ANALYSIS_RESULT_VERSION, type AnalysisResult, type AnalysisResultTable } from "./analysisResult";
+import { ANALYSIS_RESULT_VERSION, INLINE_TABLE_LIMITS, type AnalysisResult, type AnalysisResultTable } from "./analysisResult";
+import { BY_MAX_LEVELS } from "./byPartition";
 import type { Recommendation } from "./statschooser";
 import type { CalcResult, Dataset } from "./types";
 
@@ -66,8 +67,7 @@ export interface FitYByXSnapshot extends FitYByXLegSnapshot {
   totalLevels: number;
 }
 
-const MAX_LEVELS = 30;
-const MAX_DETAIL_ROWS = 5_000;
+const FIT_CURVE_POINTS = 128;
 const number = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
 
@@ -110,6 +110,29 @@ function sd(values: readonly number[]): number | null {
   return Math.sqrt(finite.reduce((sum, value) => sum + (value - avg) ** 2, 0) / (finite.length - 1));
 }
 
+/** Apply the envelope's shared aggregate limits after every producer table is
+ * assembled. This makes all truncation explicit and prevents a future table
+ * addition from silently pushing the saved result past the sanitizer budget. */
+function boundedTables(input: AnalysisResultTable[]): { tables: AnalysisResultTable[]; warnings: string[] } {
+  const tables: AnalysisResultTable[] = [];
+  const warnings: string[] = [];
+  let cells = 0;
+  input.forEach((table, index) => {
+    const name = table.title ? `"${table.title}"` : `Table ${index + 1}`;
+    if (tables.length >= INLINE_TABLE_LIMITS.tables || table.columns.length > INLINE_TABLE_LIMITS.columns) {
+      warnings.push(`${name} was too large to save and was omitted.`);
+      return;
+    }
+    const remaining = Math.max(0, INLINE_TABLE_LIMITS.cells - cells);
+    const fit = Math.min(table.rows.length, INLINE_TABLE_LIMITS.rows,
+      table.columns.length ? Math.floor(remaining / table.columns.length) : 0);
+    if (fit < table.rows.length) warnings.push(`${name} was saved with ${fit} of ${table.rows.length} rows.`);
+    cells += fit * table.columns.length;
+    tables.push({ ...table, rows: table.rows.slice(0, fit) });
+  });
+  return { tables, warnings };
+}
+
 function scalarTable(mode: FitYByXMode, legs: { level: string | null; leg: FitYByXLegSnapshot }[]): AnalysisResultTable {
   if (mode === "oneway") return {
     title: "Oneway tests",
@@ -149,7 +172,7 @@ function detailTable(mode: FitYByXMode, legs: { level: string | null; leg: FitYB
     columns: ["level", "group", "N", "mean", "sd"],
     rows: legs.flatMap(({ level, leg }) => (leg.oneway?.groups ?? []).map((group) => [
       level ?? "All", group.label, group.values.filter(Number.isFinite).length, mean(group.values), sd(group.values),
-    ])).slice(0, MAX_DETAIL_ROWS),
+    ])),
   };
   if (mode === "bivariate") return {
     title: "Regression coefficients",
@@ -161,7 +184,7 @@ function detailTable(mode: FitYByXMode, legs: { level: string | null; leg: FitYB
       const p = Array.isArray(leg.bivariate?.regression.pValues) ? leg.bivariate!.regression.pValues as unknown[] : [];
       return coeffs.map((value, index) => [level ?? "All", index === 0 ? "intercept" : `x^${index}`,
         number(value), number(se[index]), number(t[index]), number(p[index])]);
-    }).slice(0, MAX_DETAIL_ROWS),
+    }),
   };
   return {
     title: "Contingency cells",
@@ -175,7 +198,7 @@ function detailTable(mode: FitYByXMode, legs: { level: string | null; leg: FitYB
         leg.contingency!.colLabels[columnIndex] ?? String(columnIndex), number(observed),
         number(expected[rowIndex]?.[columnIndex]),
       ]));
-    }).slice(0, MAX_DETAIL_ROWS),
+    }),
   };
 }
 
@@ -201,25 +224,41 @@ function extraTables(
       leg.oneway.recommend.endpoint, leg.oneway.recommend.reasons.join("; "),
     ]] : []);
     return { warnings, tables: [
-      ...(comparisons.length ? [{ title: "Tukey HSD", columns: ["level", "A", "B", "difference", "p", "CI low", "CI high", "significant"], rows: comparisons.slice(0, MAX_DETAIL_ROWS) }] : []),
+      ...(comparisons.length ? [{ title: "Tukey HSD", columns: ["level", "A", "B", "difference", "p", "CI low", "CI high", "significant"], rows: comparisons }] : []),
       ...(recommendations.length ? [{ title: "Test chooser", columns: ["level", "recommendation", "parametric", "endpoint", "reasons"], rows: recommendations }] : []),
     ] };
   }
   if (mode !== "bivariate") return { tables: [], warnings };
-  const points: AnalysisResultTable["rows"] = [];
+  const curves: AnalysisResultTable["rows"] = [];
   const bands: AnalysisResultTable["rows"] = [];
   for (const { level, leg } of legs) {
     const fit = leg.bivariate;
     if (!fit) continue;
-    const yFit = Array.isArray(fit.regression.yFit) ? fit.regression.yFit as unknown[] : [];
-    if (fit.x.length !== fit.y.length) {
-      warnings.push(`${level ? `${level}: ` : ""}fit points were not saved because X and Y lengths differ.`);
+    const coeffs = Array.isArray(fit.regression.coeffs)
+      ? (fit.regression.coeffs as unknown[]).map(number) : [];
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const x of fit.x) if (Number.isFinite(x)) {
+      lo = Math.min(lo, x);
+      hi = Math.max(hi, x);
+    }
+    if (!Number.isFinite(lo) || !coeffs.length || coeffs.some((value) => value === null)) {
+      warnings.push(`${level ? `${level}: ` : ""}fitted curve was not saved because its domain or coefficients were incomplete.`);
     } else {
-      const fittedValid = yFit.length === fit.x.length;
-      if (!fittedValid) warnings.push(`${level ? `${level}: ` : ""}fitted values were incomplete and were saved as unavailable.`);
-      fit.x.forEach((x, index) => points.push([
-        level ?? "All", number(x), number(fit.y[index]), fittedValid ? number(yFit[index]) : null,
-      ]));
+      const finiteCoeffs = coeffs as number[];
+      const grid = hi > lo
+        ? Array.from({ length: FIT_CURVE_POINTS }, (_, index) => {
+          const fraction = index / (FIT_CURVE_POINTS - 1);
+          return lo * (1 - fraction) + hi * fraction;
+        })
+        : [lo];
+      let invalid = false;
+      grid.forEach((x) => {
+        const fitted = number(finiteCoeffs.reduce((sum, coefficient, power) => sum + coefficient * x ** power, 0));
+        if (fitted === null) invalid = true;
+        curves.push([level ?? "All", x, fitted]);
+      });
+      if (invalid) warnings.push(`${level ? `${level}: ` : ""}non-finite fitted-curve values were saved as unavailable.`);
     }
     if (fit.band) {
       const valid = fit.band.x.length > 0 && fit.band.x.length === fit.band.ciLo.length &&
@@ -231,11 +270,9 @@ function extraTables(
       ]));
     }
   }
-  if (points.length > MAX_DETAIL_ROWS) warnings.push(`Fit points were limited to ${MAX_DETAIL_ROWS} rows.`);
-  if (bands.length > MAX_DETAIL_ROWS) warnings.push(`Band points were limited to ${MAX_DETAIL_ROWS} rows.`);
   return { warnings, tables: [
-    ...(points.length ? [{ title: "Fit points", columns: ["level", "X", "Y", "fitted Y"], rows: points.slice(0, MAX_DETAIL_ROWS) }] : []),
-    ...(bands.length ? [{ title: "Regression band", columns: ["level", "X", "lower", "upper", "alpha"], rows: bands.slice(0, MAX_DETAIL_ROWS) }] : []),
+    ...(curves.length ? [{ title: "Fitted curve", columns: ["level", "X", "fitted Y"], rows: curves }] : []),
+    ...(bands.length ? [{ title: "Regression band", columns: ["level", "X", "lower", "upper", "alpha"], rows: bands }] : []),
   ] };
 }
 
@@ -267,12 +304,6 @@ function warnings(snapshot: FitYByXSnapshot, legs: { level: string | null; leg: 
     for (const [test, reason] of Object.entries(leg.oneway?.failed ?? {})) out.push(`${prefix}${test} failed: ${reason}`);
     for (const [test, reason] of Object.entries(leg.contingency?.failed ?? {})) out.push(`${prefix}${test} failed: ${reason}`);
   }
-  const detailRows = legs.reduce((count, { leg }) => count + (snapshot.mode === "oneway"
-    ? (leg.oneway?.groups.length ?? 0)
-    : snapshot.mode === "bivariate"
-      ? (Array.isArray(leg.bivariate?.regression.coeffs) ? leg.bivariate!.regression.coeffs.length : 0)
-      : (leg.contingency?.table.reduce((sum, row) => sum + row.length, 0) ?? 0)), 0);
-  if (detailRows > MAX_DETAIL_ROWS) out.push(`Detail table was limited to ${MAX_DETAIL_ROWS} rows.`);
   return out;
 }
 
@@ -283,7 +314,7 @@ export function fitYByXAnalysisResult(
   snapshot: FitYByXSnapshot,
   createdAt = new Date().toISOString(),
 ): AnalysisResult {
-  const savedLevels = snapshot.levels.slice(0, MAX_LEVELS);
+  const savedLevels = snapshot.levels.slice(0, BY_MAX_LEVELS);
   const savedSnapshot = { ...snapshot, levels: savedLevels };
   const legs = savedLevels.length
     ? savedLevels.filter((level) => !level.error).map((level) => ({ level: level.label, leg: level as FitYByXLegSnapshot }))
@@ -294,7 +325,7 @@ export function fitYByXAnalysisResult(
   const selected = [channel(recipe.xCol, snapshot.xLabel), channel(recipe.yCol, snapshot.yLabel),
     recipe.byCol === null ? null : channel(recipe.byCol, snapshot.byLabel ?? "By")].filter((item) => item !== null);
   const extras = extraTables(snapshot.mode, legs);
-  const tables = [scalarTable(snapshot.mode, legs), detailTable(snapshot.mode, legs), ...extras.tables];
+  const bounded = boundedTables([scalarTable(snapshot.mode, legs), detailTable(snapshot.mode, legs), ...extras.tables]);
   return {
     version: ANALYSIS_RESULT_VERSION,
     id,
@@ -312,8 +343,8 @@ export function fitYByXAnalysisResult(
       xCol: recipe.xCol, yCol: recipe.yCol, byCol: recipe.byCol, order: recipe.order,
       bandInterval: recipe.bandInterval,
     }, mode: snapshot.mode },
-    tables,
-    warnings: [...warnings(savedSnapshot, legs), ...extras.warnings],
+    tables: bounded.tables,
+    warnings: [...warnings(savedSnapshot, legs), ...extras.warnings, ...bounded.warnings],
     createdAt,
   };
 }

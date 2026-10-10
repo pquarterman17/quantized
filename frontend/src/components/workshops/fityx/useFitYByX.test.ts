@@ -529,7 +529,8 @@ describe("useFitYByX — report while recomputing", () => {
 
 describe("useFitYByX — durable result", () => {
   it("saves the settled analysis once as an undoable Library snapshot", async () => {
-    const { result } = renderHook(() => useFitYByX());
+    const first = renderHook(() => useFitYByX());
+    const { result } = first;
     await waitFor(() => expect(result.current.canSaveResult).toBe(true));
     act(() => {
       result.current.saveResult();
@@ -541,9 +542,17 @@ describe("useFitYByX — durable result", () => {
       parameters: { recipe: { xCol: 0, yCol: 2, byCol: null, order: 1, bandInterval: "confidence" } },
       tables: expect.arrayContaining([expect.objectContaining({ title: "Oneway tests" })]),
     });
+    first.unmount();
+    const reopened = renderHook(() => useFitYByX());
+    await waitFor(() => expect(reopened.result.current.oneway).not.toBeNull());
+    expect(reopened.result.current.canSaveResult).toBe(false);
+    useApp.setState((state) => ({
+      analysisResults: state.analysisResults.map((saved) => ({ ...saved, stale: true })),
+    }));
+    await waitFor(() => expect(reopened.result.current.canSaveResult).toBe(true));
     useApp.getState().undo();
     expect(useApp.getState().analysisResults).toEqual([]);
-    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+    await waitFor(() => expect(reopened.result.current.canSaveResult).toBe(true));
   });
 
   it("restores and consumes the exact saved controls", async () => {

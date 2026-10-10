@@ -32,6 +32,7 @@ import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { colValues, groupsForOneway, InsufficientDataError, runLeg } from "./runLeg";
 import type { BivariateResult, ContingencyResult, FitYByXKind, OnewayResult } from "./runLeg";
+import { fitYByXLegRecords } from "./fitYByXReport";
 import { useFitYByXResultBridge } from "./useFitYByXResultBridge";
 import { type ByColumnOption, type ByLevel, useByPartition } from "../useByPartition";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
@@ -96,17 +97,6 @@ export interface FitYByXState {
 }
 
 const NO_RESULTS: FitYByXLevelResult[] = [];
-
-function mean(xs: number[]): number {
-  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN;
-}
-
-function sd(xs: number[]): number {
-  if (xs.length < 2) return NaN;
-  const m = mean(xs);
-  const ss = xs.reduce((a, b) => a + (b - m) ** 2, 0);
-  return Math.sqrt(ss / (xs.length - 1));
-}
 
 /** First channel that reads as categorical (nominal/ordinal), or null. */
 function firstCategorical(active: ReturnType<typeof useActiveDataset>): number | null {
@@ -315,48 +305,6 @@ export function useFitYByX(): FitYByXState {
     return true;
   }
 
-  /** One leg's result -> {title, columns?, records, caption?} for report
-   *  emission — shared by the single-view and per-level (By) paths so the
-   *  per-level records use exactly the same column shape, just with a
-   *  leading `level` key. */
-  function legRecords(
-    leg: { oneway?: OnewayResult | null; bivariate?: BivariateResult | null; contingency?: ContingencyResult | null },
-    level?: string,
-  ): Record<string, unknown>[] {
-    const withLevel = (r: Record<string, unknown>) => (level != null ? { level, ...r } : r);
-    if (kind === "oneway" && leg.oneway) {
-      return leg.oneway.groups.map((g) =>
-        withLevel({ group: g.label, n: g.values.length, mean: mean(g.values), sd: sd(g.values) }),
-      );
-    }
-    if (kind === "bivariate" && leg.bivariate) {
-      const r = leg.bivariate.regression;
-      const coeffs = (r.coeffs as number[] | undefined) ?? [];
-      return [
-        withLevel({
-          N: r.N,
-          order: leg.bivariate.order,
-          intercept: coeffs[0],
-          slope: coeffs[1],
-          R2: r.R2,
-          fStat: r.fStat,
-          fPvalue: r.fPvalue,
-        }),
-      ];
-    }
-    if (kind === "contingency" && leg.contingency) {
-      const expected = (leg.contingency.chiSquare.expected as number[][] | undefined) ?? [];
-      const out: Record<string, unknown>[] = [];
-      leg.contingency.rowLabels.forEach((rl, i) => {
-        leg.contingency!.colLabels.forEach((cl, j) => {
-          out.push(withLevel({ row: rl, col: cl, observed: leg.contingency!.table[i][j], expected: expected[i]?.[j] }));
-        });
-      });
-      return out;
-    }
-    return [];
-  }
-
   async function toReport(recompute = false): Promise<void> {
     if (!active) return;
     if (queuePendingReport()) return;
@@ -396,21 +344,21 @@ export function useFitYByX(): FitYByXState {
       if (byPartition.levels.length > 0) {
         const byLabel = byPartition.byOptions.find((c) => c.index === byPartition.byCol)?.label ?? "level";
         title = `${yLabel} by ${xLabel} — ${kind} — by ${byLabel}`;
-        records = reportByResults.flatMap((r) => (r.error ? [] : legRecords(r, r.label)));
+        records = reportByResults.flatMap((r) => (r.error ? [] : fitYByXLegRecords(kind, r, r.label)));
         if (records.length === 0) {
           setReportBusy(false);
           return;
         }
       } else if (kind === "oneway" && reportOneway) {
         title = `${yLabel} by ${xLabel} — oneway`;
-        records = legRecords({ oneway: reportOneway });
+        records = fitYByXLegRecords(kind, { oneway: reportOneway });
         caption = `ANOVA F=${fmtNum(reportOneway.anova.fStat)}, p=${fmtNum(reportOneway.anova.pValue)}`;
       } else if (kind === "bivariate" && reportBivariate) {
         title = `${yLabel} by ${xLabel} — bivariate fit`;
-        records = legRecords({ bivariate: reportBivariate });
+        records = fitYByXLegRecords(kind, { bivariate: reportBivariate });
       } else if (kind === "contingency" && reportContingency) {
         title = `${xLabel} x ${yLabel} — contingency`;
-        records = legRecords({ contingency: reportContingency });
+        records = fitYByXLegRecords(kind, { contingency: reportContingency });
         caption = `chi2=${fmtNum(reportContingency.chiSquare.chi2)}, p=${fmtNum(reportContingency.chiSquare.p_value)}`;
       } else {
         setReportBusy(false);

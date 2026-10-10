@@ -69,12 +69,49 @@ describe("fitYByXAnalysisResult", () => {
         band: { x: [1, 2], ciLo: [1.8, 3.8], ciHi: [2.2, 4.2], alpha: 0.05, interval: "confidence" } },
     });
     expect(result.tables?.map((table) => table.title)).toEqual([
-      "Regression summary", "Regression coefficients", "Fit points", "Regression band",
+      "Regression summary", "Regression coefficients", "Fitted curve", "Regression band",
     ]);
-    expect(result.tables?.[2].rows).toEqual([["All", 1, 2, 2], ["All", 2, 4, 4], ["All", 3, 6, 6]]);
+    expect(result.tables?.[2]).toMatchObject({ columns: ["level", "X", "fitted Y"] });
+    expect(result.tables?.[2].rows).toHaveLength(128);
+    expect(result.tables?.[2].rows[0]).toEqual(["All", 1, 2]);
+    expect(result.tables?.[2].rows.at(-1)).toEqual(["All", 3, 6]);
+    expect(result.tables?.some((table) => table.columns.includes("Y"))).toBe(false);
     expect(fitYByXRecipe({ ...result, parameters: { recipe: { ...recipe, xCol: 1, yCol: 1 } } })).toBeNull();
     expect(fitYByXRecipe({ ...result, parameters: { recipe: { ...recipe, order: 4 } } })).toBeNull();
     expect(fitYByXRecipe({ ...result, parameters: { recipe: { ...recipe, bandInterval: "future" } } })).toBeNull();
     expect(fitYByXRecipe({ ...result, parameters: { recipe: { ...recipe, yCol: 7 } } }, source)).toBeNull();
+
+    const overflow = fitYByXAnalysisResult("overflow", source, recipe, {
+      mode: "bivariate", xLabel: "x", yLabel: "y", byLabel: null, levels: [], totalLevels: 0,
+      bivariate: { x: [1e308, 1e308], y: [1, 2], order: 1,
+        regression: { N: 2, coeffs: [0, 2], se: [0, 0], R2: 1, fPvalue: 0 }, band: null },
+    });
+    expect(overflow.tables?.find((table) => table.title === "Fitted curve")?.rows).toEqual([["All", 1e308, null]]);
+    expect(overflow.warnings).toContain("non-finite fitted-curve values were saved as unavailable.");
+    expect(sanitizeAnalysisResults(JSON.parse(JSON.stringify([overflow])))).toEqual([overflow]);
+  });
+
+  it("bounds a large Tukey table with an explicit row-count warning", () => {
+    const manyGroups = Array.from({ length: 30 }, (_, index) => ({ label: `g${index}`, values: [index, index + 1] }));
+    const pairs = manyGroups.flatMap((_, i) => manyGroups.slice(i + 1).map((__, offset) => ({
+      i, j: i + offset + 1, diff: offset + 1, p: 0.5, ciLow: 0, ciHigh: 1, significant: false,
+    })));
+    const levels = Array.from({ length: 30 }, (_, index) => ({
+      label: `level ${index}`, n: 60, error: null,
+      oneway: {
+        groups: manyGroups, anova: { fStat: 1, df1: 29, df2: 30, pValue: 0.5, reject: false },
+        levene: null, recommend: null, tukey: { pairs },
+      },
+    }));
+    const result = fitYByXAnalysisResult("large", {
+      ...source,
+      data: { ...source.data, labels: ["group", "signal", "batch"], units: ["", "V", ""] },
+    }, { ...recipe, byCol: 2 }, {
+      mode: "oneway", xLabel: "group", yLabel: "signal", byLabel: "batch", levels, totalLevels: 30,
+    });
+    const tukey = result.tables?.find((table) => table.title === "Tukey HSD");
+    expect(tukey?.rows).toHaveLength(10_000);
+    expect(result.warnings).toContain('"Tukey HSD" was saved with 10000 of 13050 rows.');
+    expect(sanitizeAnalysisResults(JSON.parse(JSON.stringify([result])))).toEqual([result]);
   });
 });
