@@ -133,6 +133,9 @@ export interface WorkspaceMergeResult {
   analysisResults: AnalysisResult[];
 }
 
+const UNMAPPED_SOURCE_WARNING =
+  "A source worksheet of this result was not in the appended project, so its values can't be checked against their data.";
+
 function remapAnalysisResult(
   result: AnalysisResult,
   idMap: ReadonlyMap<string, string>,
@@ -145,9 +148,17 @@ function remapAnalysisResult(
     const datasetId = idMap.get(item.datasetId);
     return datasetId ? [{ ...item, datasetId }] : [];
   });
+  const sources = refs(result.sources);
   const mapped: AnalysisResult = {
-    ...result, id, sources: refs(result.sources), outputs: refs(result.outputs),
+    ...result, id, sources, outputs: refs(result.outputs),
   };
+  // A source the appended file didn't carry is dropped (never re-bound to a
+  // same-id destination worksheet). Say so on the envelope: a source-only
+  // snapshot with zero sources would otherwise look like a result that never
+  // needed one, while its numbers came from data that is no longer here.
+  if (sources.length < result.sources.length && !result.warnings.includes(UNMAPPED_SOURCE_WARNING)) {
+    mapped.warnings = [...result.warnings, UNMAPPED_SOURCE_WARNING];
+  }
   if (result.settingsRef) mapped.settingsRef = refs([result.settingsRef])[0];
   if (result.selection) mapped.selection = refs([result.selection])[0];
   if (result.tableRefs) mapped.tableRefs = refs(result.tableRefs);

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { AnalysisResult } from "./analysisResult";
 import type { Dataset } from "./types";
 import type { LoadedWorkspace } from "./workspace";
+import { statisticalSnapshotState } from "./analysisResultFreshness";
 import { mergeWorkspace } from "./workspaceMerge";
 import type { WorkbookNode } from "./workbooks";
 
@@ -125,6 +126,24 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       tableRefs: [{ datasetId: "output", label: "Filtered data" }],
       plotBindings: [{ datasetId: "output", channels: [0], xChannel: null }],
     })]);
+  });
+
+  it("drops an unmapped result source with a warning so the result reads source-missing", () => {
+    const stat: AnalysisResult = {
+      version: 1, id: "stat", name: "Anderson-Darling",
+      producer: { id: "statistical-test", label: "Statistical Test", version: 1 },
+      sources: [{ datasetId: "gone", role: "input" }], outputs: [],
+      parameters: { testId: "anderson" }, sourceFingerprint: "abc",
+      warnings: [], createdAt: "2026-10-10T00:00:00Z",
+    };
+    const merged = mergeWorkspace(
+      [makeDataset("gone", "same id in destination")], asLoaded([makeDataset("other", "other")], [], [stat]),
+      genId, noCurrentWorkbookIds, genWorkbookId,
+    );
+    const [result] = merged.analysisResults;
+    expect(result.sources).toEqual([]);
+    expect(result.warnings).toEqual([expect.stringContaining("was not in the appended project")]);
+    expect(statisticalSnapshotState(result, merged.datasets)).toBe("source-missing");
   });
 
   it("keeps reflectivity result envelopes and their stored record bindings aligned", () => {

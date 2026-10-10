@@ -189,17 +189,23 @@ function parameters(value: unknown): AnalysisResult["parameters"] {
   return parsed && !Array.isArray(parsed) && typeof parsed === "object" ? parsed : undefined;
 }
 
+/** Bounds on envelope-owned tables. Producers must cap to these (see
+ *  statisticalTestAnalysisResult): the sanitizer rejects the whole list on
+ *  reopen when any bound is exceeded. */
+export const INLINE_TABLE_LIMITS = { tables: 32, columns: 256, rows: 10_000, cells: 100_000 } as const;
+
 function tables(value: unknown): AnalysisResult["tables"] {
-  if (!Array.isArray(value) || value.length > 32) return undefined;
+  const limits = INLINE_TABLE_LIMITS;
+  if (!Array.isArray(value) || value.length > limits.tables) return undefined;
   const out: NonNullable<AnalysisResult["tables"]> = [];
   let cells = 0;
   for (const item of value) {
     const raw = object(item);
-    if (!raw || !Array.isArray(raw.columns) || raw.columns.length > 256 ||
+    if (!raw || !Array.isArray(raw.columns) || raw.columns.length > limits.columns ||
         !raw.columns.every((column) => typeof column === "string") ||
-        !Array.isArray(raw.rows) || raw.rows.length > 10_000) return undefined;
+        !Array.isArray(raw.rows) || raw.rows.length > limits.rows) return undefined;
     cells += raw.columns.length * raw.rows.length;
-    if (cells > 100_000) return undefined;
+    if (cells > limits.cells) return undefined;
     const rows: AnalysisResultTable["rows"] = [];
     for (const row of raw.rows) {
       if (!Array.isArray(row) || row.length !== raw.columns.length ||

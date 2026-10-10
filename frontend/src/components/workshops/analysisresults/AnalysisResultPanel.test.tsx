@@ -302,6 +302,31 @@ describe("AnalysisResultPanel", () => {
     expect(screen.getByText(/source data changed after this statistical test/)).toBeInTheDocument();
   });
 
+  it("never reads a pending, unfingerprinted, or source-dropped statistical result as Current", () => {
+    const stat = statisticalTestAnalysisResult(
+      "stat", source, "anderson", { ...DEFAULT_SELECTION, x: 0 }, DEFAULT_PARAMS, ["Signal"],
+      { sentence: "s", tables: [{ columns: ["statistic", "value"], rows: [["A²", 0.2]] }] },
+    );
+    const pending = { ...source, pending: { kind: "path", path: "p", book: "b" } } as unknown as Dataset;
+    const { sourceFingerprint: _unused, ...unfingerprinted } = stat;
+    const cases: [AnalysisResult, Dataset[], string, boolean, RegExp][] = [
+      [{ ...stat, stale: true }, [pending], "Pending", false, /Load the full worksheet/],
+      [unfingerprinted, [source], "Out of date", true, /no saved source fingerprint/],
+      [{ ...stat, sources: [] }, [source], "Source missing", true, /no longer references its source/],
+    ];
+    for (const [item, datasets, status, editDisabled, diagnostic] of cases) {
+      useApp.setState({ datasets, analysisResults: [item], openAnalysisResultId: item.id });
+      const { unmount } = render(<AnalysisResultPanel />);
+      expect(screen.getByText(status, { selector: ".qz-analysis-status" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Send to report" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Edit / rerun…" }).hasAttribute("disabled")).toBe(editDisabled);
+      expect(screen.queryByText("No worksheet required")).toBeNull();
+      fireEvent.click(screen.getByRole("tab", { name: /Diagnostics/ }));
+      expect(screen.getByText(diagnostic)).toBeInTheDocument();
+      unmount();
+    }
+  });
+
   it("reopens a current statistical result with its exact saved question", () => {
     const stat = statisticalTestAnalysisResult(
       "stat", source, "anderson", { ...DEFAULT_SELECTION, x: 0 }, DEFAULT_PARAMS, ["Signal"],
