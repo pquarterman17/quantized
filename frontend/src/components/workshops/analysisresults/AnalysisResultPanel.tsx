@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
-import { SNAPSHOT_RESULT_STATUS, dataFingerprint, snapshotResultState } from "../../../lib/analysisResultFreshness";
+import { SNAPSHOT_RESULT_STATUS, dataFingerprint, isSnapshotResult, snapshotResultState } from "../../../lib/analysisResultFreshness";
 import { distributionRecipe } from "../../../lib/distributionAnalysisResult";
+import { fitYByXRecipe } from "../../../lib/fitYByXAnalysisResult";
 import { peakTableMatchesData } from "../../../lib/peakTableFit";
 import { signalRecipeChannels, signalRecipeXRange } from "../../../lib/signalRecipe";
 import { statisticalTestRecipe } from "../../../lib/statisticalTestAnalysisResult";
@@ -9,6 +10,7 @@ import { createSignalWorksheetFromApp } from "../../../store/signalWorksheetComm
 import { useApp } from "../../../store/useApp";
 import { useStatsTestsStore } from "../../../store/statsTests";
 import { useDistributionRequestStore } from "../../../store/distribution";
+import { useFitYByXStore } from "../../../store/fitYByX";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import { askParams } from "../../overlays/ParamDialog";
 import ToolWindow from "../../overlays/ToolWindow";
@@ -59,9 +61,11 @@ export default function AnalysisResultPanel() {
   const isRefl = result?.settingsRef?.field === "reflFits";
   const isStats = result?.producer.id === "statistical-test";
   const isDistribution = result?.producer.id === "distribution-analysis";
-  const isSnapshot = isStats || isDistribution;
+  const isFitYByX = result?.producer.id === "fit-y-by-x";
+  const isSnapshot = !!result && isSnapshotResult(result);
   const statsRecipe = result && isStats ? statisticalTestRecipe(result) : null;
   const savedDistributionRecipe = result && isDistribution ? distributionRecipe(result, source) : null;
+  const savedFitYByXRecipe = result && isFitYByX ? fitYByXRecipe(result, source) : null;
   const peakTable = isPeak ? source?.peakTable ?? null : null;
   const fitSpec = isFit ? source?.fitSpec ?? null : null;
   const reflFit = isRefl ? liveReflectivityFit(result, datasets) : null;
@@ -122,7 +126,8 @@ export default function AnalysisResultPanel() {
     else if (savedDistributionRecipe) {
       useDistributionRequestStore.getState().openWith(savedDistributionRecipe);
       useApp.setState({ distributionOpen: true });
-    } else return;
+    } else if (savedFitYByXRecipe) useFitYByXStore.getState().openWith(savedFitYByXRecipe);
+    else return;
     close();
   };
   const recalculate = async () => {
@@ -268,7 +273,7 @@ export default function AnalysisResultPanel() {
       <div className="qz-analysis-result">
         <div className="qz-analysis-toolbar">
           <span className={`qz-analysis-status status-${status.toLowerCase().replaceAll(" ", "-")}`}>{status}</span>
-          {isSnapshot ? <AnalysisResultSnapshotToolbar result={result} source={source} recipeReady={!!(statsRecipe || savedDistributionRecipe)}
+          {isSnapshot ? <AnalysisResultSnapshotToolbar result={result} source={source} recipeReady={!!(statsRecipe || savedDistributionRecipe || savedFitYByXRecipe)}
             state={snapshotState ?? "source-missing"} busy={busy} onOpen={() => source && openTable(source.id)} onEdit={editSnapshot}
             onDuplicate={() => void duplicate()} onReport={() => void sendInlineReport()} /> : isRefl ? <>
             <Button disabled={!reflFit || busy !== null} onClick={editReflFit}>Open fit workbench</Button>

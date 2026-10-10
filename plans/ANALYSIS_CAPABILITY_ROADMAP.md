@@ -3,7 +3,7 @@
 **Source:** ChatGPT-Sol (Codex)
 **Status:** Active
 **Created:** 2026-10-06
-**Last updated:** 2026-10-09
+**Last updated:** 2026-10-10
 
 ## Goal
 
@@ -293,11 +293,17 @@ Update (2026-10-09):
   freshness, bounded persistence, CSV/report actions, and save/reopen support.
   Reports and saves fail closed if their source or workbench question changes;
   repeated actions do not create duplicate artifacts.
-- [ ] Fit Y by X, Variability, Outlier Screening, and Multivariate outputs
-  still need producer adapters before the broad
+- [ ] Variability, Outlier Screening, and Multivariate outputs still need
+  producer adapters before the broad
   statistics-migration checkbox is complete. Workstream E remains the later
   unified statistical workspace rather than a prerequisite for preserving
   these focused-workbench results.
+- [x] Fit Y by X now saves explicit, undoable Library snapshots for oneway,
+  bivariate, and contingency analyses, including bounded By-level output,
+  assumption/subtest warnings, Tukey comparisons, fitted points and bands,
+  contingency cells, and the exact controls needed to reopen the workbench.
+  Source fingerprints prevent stale values from being reported as current;
+  malformed detail geometry is diagnosed instead of silently truncated.
 - [x] Added a lazy result workspace with Overview, Tables, Figures, Diagnostics,
   Provenance, and Notes views. The first 100 output rows are inspectable
   without creating an unbounded DOM table; the complete worksheet remains
@@ -322,10 +328,10 @@ Update (2026-10-09):
 - [x] Result edits participate in undo/redo, dirty-state detection, debounced
   autosave, explicit save/reopen, Remove All/open-replacement protection, and
   the Library's exhaustive icon/accessibility contracts.
-- [ ] The focused-statistics migration is incomplete: Statistical Tests and
-  Distribution are migrated, while Fit Y by X, Variability, Outlier Screening,
-  and Multivariate still need adapters. Signal processing, peak tables, curve
-  fits, and reflectivity-fit history are also migrated.
+- [ ] The focused-statistics migration is incomplete: Statistical Tests,
+  Distribution, and Fit Y by X are migrated, while Variability, Outlier
+  Screening, and Multivariate still need adapters. Signal processing, peak
+  tables, curve fits, and reflectivity-fit history are also migrated.
 
 ## Workstream C — Analysis Center and discoverability
 

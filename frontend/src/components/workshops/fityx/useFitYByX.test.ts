@@ -5,6 +5,7 @@ import { fetchBookData, reportEmit, statsAnova, statsChiSquareIndependence, stat
 import { resetBookTransportForTests } from "../../../lib/bookData";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { useFitYByXStore } from "../../../store/fitYByX";
 import { useFitYByX } from "./useFitYByX";
 
 vi.mock("../../../lib/api", async (importOriginal) => ({
@@ -101,7 +102,8 @@ beforeEach(() => {
   vi.mocked(statsRegression).mockResolvedValue(REGRESSION);
   vi.mocked(statsChiSquareIndependence).mockResolvedValue(CHI2);
   vi.mocked(statsFisherExact).mockResolvedValue(FISHER);
-  useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1", status: "", reports: [] });
+  useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1", status: "", reports: [], analysisResults: [], history: [], future: [] });
+  useFitYByXStore.setState({ open: true, request: null });
 });
 
 describe("useFitYByX — dispatch + defaults", () => {
@@ -522,5 +524,79 @@ describe("useFitYByX — report while recomputing", () => {
     expect(result.current.byResults).toEqual([]);
     await act(async () => result.current.toReport());
     expect(reportEmit).not.toHaveBeenCalled();
+  });
+});
+
+describe("useFitYByX — durable result", () => {
+  it("saves the settled analysis once as an undoable Library snapshot", async () => {
+    const first = renderHook(() => useFitYByX());
+    const { result } = first;
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+    act(() => {
+      result.current.saveResult();
+      result.current.saveResult();
+    });
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(useApp.getState().analysisResults[0]).toMatchObject({
+      producer: { id: "fit-y-by-x" }, sources: [{ datasetId: "d1" }],
+      parameters: { recipe: { xCol: 0, yCol: 2, byCol: null, order: 1, bandInterval: "confidence" } },
+      tables: expect.arrayContaining([expect.objectContaining({ title: "Oneway tests" })]),
+    });
+    first.unmount();
+    const reopened = renderHook(() => useFitYByX());
+    await waitFor(() => expect(reopened.result.current.oneway).not.toBeNull());
+    expect(reopened.result.current.canSaveResult).toBe(false);
+    useApp.setState((state) => ({
+      analysisResults: state.analysisResults.map((saved) => ({ ...saved, stale: true })),
+    }));
+    await waitFor(() => expect(reopened.result.current.canSaveResult).toBe(true));
+    useApp.getState().undo();
+    expect(useApp.getState().analysisResults).toEqual([]);
+    await waitFor(() => expect(reopened.result.current.canSaveResult).toBe(true));
+  });
+
+  it("restores and consumes the exact saved controls", async () => {
+    useFitYByXStore.getState().openWith({
+      xCol: 3, yCol: 2, byCol: null, order: 2, bandInterval: "prediction",
+    });
+    const { result } = renderHook(() => useFitYByX());
+    await waitFor(() => expect(result.current).toMatchObject({
+      xCol: 3, yCol: 2, order: 2, bandInterval: "prediction", kind: "bivariate",
+    }));
+    expect(useFitYByXStore.getState().request).toBeNull();
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+  });
+
+  it("does not enable Save for an unsupported question", async () => {
+    const { result } = renderHook(() => useFitYByX());
+    await waitFor(() => expect(result.current.oneway).not.toBeNull());
+    act(() => {
+      result.current.setXCol(2);
+      result.current.setYCol(1);
+    });
+    expect(result.current.kind).toBe("unsupported");
+    expect(result.current.canSaveResult).toBe(false);
+  });
+
+  it("does not enable Save when every By level is too sparse to analyze", async () => {
+    const allSparseBy: DataStruct = {
+      time: Array.from({ length: 12 }, (_, index) => index),
+      values: [
+        [0, 0, 10], [0, 0, 11], [0, 0, 12], [0, 0, 13],
+        [1, 1, 20], [1, 1, 21], [1, 1, 22], [1, 1, 23],
+        [2, 2, 30], [2, 2, 31], [2, 2, 32], [2, 2, 33],
+      ],
+      labels: ["byc", "xcat", "yval"], units: ["", "", ""], metadata: {},
+    };
+    useApp.setState({ datasets: [{ id: "d1", name: "sparse.dat", data: allSparseBy }], activeId: "d1" });
+    const { result } = renderHook(() => useFitYByX());
+    act(() => {
+      result.current.setXCol(1);
+      result.current.setYCol(2);
+      result.current.setByCol(0);
+    });
+    await waitFor(() => expect(result.current.byResults).toHaveLength(3));
+    expect(result.current.byResults.every((level) => level.error !== null)).toBe(true);
+    expect(result.current.canSaveResult).toBe(false);
   });
 });

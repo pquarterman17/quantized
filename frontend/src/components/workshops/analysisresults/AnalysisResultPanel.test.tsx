@@ -27,10 +27,12 @@ import { fitAnalysisResult } from "../../../lib/fitAnalysisResult";
 import { reflectivityFitAnalysisResult } from "../../../lib/reflFitAnalysisResult";
 import { statisticalTestAnalysisResult } from "../../../lib/statisticalTestAnalysisResult";
 import { distributionAnalysisResult } from "../../../lib/distributionAnalysisResult";
+import { fitYByXAnalysisResult } from "../../../lib/fitYByXAnalysisResult";
 import { DEFAULT_PARAMS, DEFAULT_SELECTION } from "../../../lib/statsTests";
 import { publishFitResult } from "../../../store/peakTables";
 import { useStatsTestsStore } from "../../../store/statsTests";
 import { useDistributionRequestStore } from "../../../store/distribution";
+import { useFitYByXStore } from "../../../store/fitYByX";
 import { useApp } from "../../../store/useApp";
 import { encodeRecord } from "../reflectivity/reflFitRecord";
 import { makeDataset, makeRecord } from "../reflectivity/reflFit.testkit";
@@ -73,6 +75,7 @@ beforeEach(() => {
   rerun.mockResolvedValue("copy");
   useStatsTestsStore.setState({ open: false, request: null });
   useDistributionRequestStore.setState({ request: null });
+  useFitYByXStore.setState({ open: false, request: null });
   useApp.setState({
     datasets: [source, output],
     activeId: "source",
@@ -384,6 +387,26 @@ describe("AnalysisResultPanel", () => {
     expect(screen.getByRole("button", { name: "Send summary to report" })).toBeDisabled();
     fireEvent.click(screen.getByRole("tab", { name: /Diagnostics/ }));
     expect(screen.getByText(/Load the full source worksheet to verify this distribution analysis/)).toBeInTheDocument();
+  });
+
+  it("inspects and reopens a current Fit Y by X snapshot with its saved controls", () => {
+    const fitYByX = fitYByXAnalysisResult(
+      "fit-y-by-x", source,
+      { xCol: -1, yCol: 0, byCol: null, order: 2, bandInterval: "prediction" },
+      { mode: "bivariate", xLabel: "Time", yLabel: "Signal", byLabel: null, levels: [], totalLevels: 0,
+        bivariate: { x: [0, 1], y: [1, 2], order: 2,
+          regression: { N: 2, coeffs: [1, 1, 0], R2: 1, fPvalue: 0 }, band: null } },
+    );
+    useApp.setState({ datasets: [source], analysisResults: [fitYByX], openAnalysisResultId: fitYByX.id });
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Current")).toBeInTheDocument();
+    expect(screen.getByText("Fit Y by X")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Edit / rerun…" }));
+    expect(useFitYByXStore.getState()).toMatchObject({
+      open: true,
+      request: { xCol: -1, yCol: 0, byCol: null, order: 2, bandInterval: "prediction" },
+    });
+    expect(useApp.getState()).toMatchObject({ activeId: "source", openAnalysisResultId: null });
   });
 
   it("presents a saved curve fit with live status, recipe controls, and re-fit setup", async () => {

@@ -179,4 +179,17 @@ describe("stamp / stale round trip", () => {
     // lost its source reference is source-missing.
     expect(snapshotResultState({ ...current, sources: [] }, [source])).toBe("source-missing");
   });
+
+  it("applies the snapshot freshness contract to Fit Y by X results", () => {
+    const source = ds("s", data([1, 2]));
+    const fitYByX: AnalysisResult = {
+      ...RESULT, outputs: [], producer: { id: "fit-y-by-x", label: "Fit Y by X", version: 1 },
+      sourceFingerprint: analysisDataFingerprint(source),
+    };
+    expect(snapshotResultState(fitYByX, [source])).toBe("current");
+    const [changed] = stampAnalysisResults([fitYByX], [ds("s", data([1, 3]))], []);
+    expect(changed).toMatchObject({ sourceFingerprint: fitYByX.sourceFingerprint, stale: true });
+    expect(snapshotResultState(changed, [source])).toBe("out-of-date");
+    expect(snapshotResultState({ ...fitYByX, sources: [] }, [source])).toBe("source-missing");
+  });
 });
