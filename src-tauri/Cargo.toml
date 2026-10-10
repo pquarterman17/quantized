@@ -22,7 +22,7 @@ tauri-plugin-updater = "2"
 tauri-plugin-dialog = "2"
 # the per-launch API token handed to the sidecar (docs/api_auth.md); the
 # version already in the lock via tauri's own dependency tree
-getrandom = "0.2"
+getrandom = "0.4"
 
 [profile.release]
 strip = true
