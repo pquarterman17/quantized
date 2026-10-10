@@ -24,8 +24,11 @@ import { statsDixonQ, statsGrubbs, statsMadOutliers, statsRosner, type OutlierDi
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { activeRowIndices, analysisData, droppedRows } from "../../../lib/rowstate";
 import type { DataStruct } from "../../../lib/types";
+import type { OutlierScreeningRecipe, OutlierScreeningSnapshot } from "../../../lib/outlierScreeningAnalysisResult";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
+import { useOutlierScreeningResultBridge } from "./useOutlierScreeningResultBridge";
 
 export type OutlierMethod = "grubbs" | "rosner" | "dixon-q" | "mad";
 
@@ -76,6 +79,9 @@ export interface OutlierScreeningState {
   /** Writes `flaggedRowIndices` to the shared #50 selection (never excludes
    *  or deletes anything itself — a no-op when nothing is flagged). */
   selectFlaggedRows: () => void;
+  canSaveResult: boolean;
+  saveResultDisabledReason: string | null;
+  saveResult: () => string | null;
 }
 
 const colValues = (data: DataStruct, index: number): number[] =>
@@ -115,6 +121,7 @@ export function useOutlierScreening(): OutlierScreeningState {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<OutlierResult | null>(null);
+  const [resultKey, setResultKey] = useState<string | null>(null);
 
   // Re-derive the default column whenever the active dataset changes — a
   // channel index from the PREVIOUS dataset would silently screen the wrong
@@ -122,6 +129,7 @@ export function useOutlierScreening(): OutlierScreeningState {
   useEffect(() => {
     setCol(firstContinuous(active));
     setResult(null);
+    setResultKey(null);
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
@@ -132,10 +140,16 @@ export function useOutlierScreening(): OutlierScreeningState {
   });
 
   const values = useMemo(() => (data ? colValues(data, col) : []), [data, col]);
+  const recipe = useMemo<OutlierScreeningRecipe>(() => ({ col, method, alpha, k, threshold }),
+    [alpha, col, k, method, threshold]);
+  const sourceFingerprint = useMemo(() => active && !active.pending ? analysisDataFingerprint(active) : "pending",
+    [active]);
+  const runKey = `${sourceFingerprint}:${col}:${method}:${method === "mad" ? threshold : alpha}:${method === "rosner" ? k : ""}`;
 
   useEffect(() => {
     if (!data || values.length === 0) {
       setResult(null);
+      setResultKey(null);
       setError(null);
       return;
     }
@@ -147,20 +161,21 @@ export function useOutlierScreening(): OutlierScreeningState {
       try {
         if (method === "grubbs") {
           const r = await statsGrubbs(values, alpha);
-          if (!cancelled) setResult({ method: "grubbs", data: r });
+          if (!cancelled) { setResult({ method: "grubbs", data: r }); setResultKey(runKey); }
         } else if (method === "rosner") {
           const r = await statsRosner(values, k, alpha);
-          if (!cancelled) setResult({ method: "rosner", data: r });
+          if (!cancelled) { setResult({ method: "rosner", data: r }); setResultKey(runKey); }
         } else if (method === "dixon-q") {
           const r = await statsDixonQ(values, alpha);
-          if (!cancelled) setResult({ method: "dixon-q", data: r });
+          if (!cancelled) { setResult({ method: "dixon-q", data: r }); setResultKey(runKey); }
         } else {
           const r = await statsMadOutliers(values, threshold);
-          if (!cancelled) setResult({ method: "mad", data: r });
+          if (!cancelled) { setResult({ method: "mad", data: r }); setResultKey(runKey); }
         }
       } catch (e) {
         if (!cancelled) {
           setResult(null);
+          setResultKey(null);
           setError(e instanceof Error ? e.message : "outlier screening failed");
         }
       } finally {
@@ -171,7 +186,7 @@ export function useOutlierScreening(): OutlierScreeningState {
     return () => {
       cancelled = true;
     };
-  }, [data, values, method, k, threshold, alpha]);
+  }, [data, values, method, k, threshold, alpha, runKey]);
 
   // Pruned-row -> ORIGINAL-row index map (the useDistribution.rowsInBins
   // technique): `kept[prunedIndex] === originalRowIndex`.
@@ -181,9 +196,9 @@ export function useOutlierScreening(): OutlierScreeningState {
   );
 
   const prunedFlagged = useMemo<number[]>(() => {
-    if (!result) return [];
+    if (!result || resultKey !== runKey) return [];
     return result.data.flagged_indices;
-  }, [result]);
+  }, [result, resultKey, runKey]);
 
   const flaggedRowIndices = useMemo(
     () => prunedFlagged.map((i) => kept[i]).filter((i): i is number => i != null),
@@ -197,6 +212,30 @@ export function useOutlierScreening(): OutlierScreeningState {
         .filter((p): p is { rowIndex: number; value: number } => p.rowIndex != null),
     [prunedFlagged, kept, values],
   );
+
+  const resultCurrent = !!result && resultKey === runKey;
+  const snapshot = useMemo<OutlierScreeningSnapshot | null>(() => {
+    if (!result || !resultCurrent) return null;
+    const scoreAt = (i: number): number | null => result.method === "mad"
+      ? result.data.modified_z_scores[i] ?? null : null;
+    return {
+      channelLabel: columns.find((column) => column.index === col)?.label ?? `column ${col}`,
+      result,
+      flaggedRows: prunedFlagged.map((i) => ({ rowIndex: kept[i], value: values[i], score: scoreAt(i) }))
+        .filter((row): row is { rowIndex: number; value: number; score: number | null } =>
+          row.rowIndex != null && Number.isFinite(row.value)),
+      omittedRows: result.data.excluded_indices.map((i) => kept[i]).filter((i): i is number => i != null),
+      rosnerSteps: result.method === "rosner" ? result.data.table.map((row) => ({
+        step: row.i, statistic: row.R, critical: row.lambda_critical,
+        rowIndex: kept[row.index] ?? null, value: row.value, exceeds: row.exceeds,
+      })) : [],
+    };
+  }, [col, columns, kept, prunedFlagged, result, resultCurrent, values]);
+
+  const resultBridge = useOutlierScreeningResultBridge({
+    active, recipe, setCol, setMethod, setAlpha, setK, setThreshold,
+    snapshot, busy, resultCurrent,
+  });
 
   function selectFlaggedRows(): void {
     if (flaggedRowIndices.length === 0) return;
@@ -218,9 +257,10 @@ export function useOutlierScreening(): OutlierScreeningState {
     setAlpha,
     busy,
     error,
-    result,
+    result: resultCurrent ? result : null,
     flaggedRowIndices,
     flaggedRowValues,
     selectFlaggedRows,
+    ...resultBridge,
   };
 }

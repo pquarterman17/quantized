@@ -132,7 +132,7 @@ export default function OutlierScreeningPanel() {
                 )}
               </div>
 
-              <div style={{ marginTop: 12 }}>
+              <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                 <Button
                   size="sm"
                   disabled={o.flaggedRowIndices.length === 0}
@@ -141,6 +141,14 @@ export default function OutlierScreeningPanel() {
                 >
                   Select flagged rows
                 </Button>
+                <Button size="sm" disabled={!o.canSaveResult} title={o.saveResultDisabledReason ?? undefined} onClick={o.saveResult}>
+                  Save result
+                </Button>
+                {o.saveResultDisabledReason && (
+                  <span className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+                    {o.saveResultDisabledReason}
+                  </span>
+                )}
               </div>
             </>
           )}

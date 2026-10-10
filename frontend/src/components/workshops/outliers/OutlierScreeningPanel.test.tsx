@@ -42,7 +42,8 @@ const GRUBBS_RESULT = {
 beforeEach(() => {
   vi.clearAllMocks();
   grubbsMock.mockResolvedValue(GRUBBS_RESULT);
-  useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1", status: "", selection: null });
+  useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1", status: "", selection: null,
+    analysisResults: [], history: [], future: [] });
   useOutlierScreeningStore.setState({ open: true });
 });
 
@@ -81,5 +82,16 @@ describe("OutlierScreeningPanel", () => {
     await waitFor(() => expect(grubbsMock).toHaveBeenCalled());
     expect(await screen.findByText("none flagged")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Select flagged rows" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save result" })).toBeEnabled();
+  });
+
+  it("saves an explicit result and explains why another copy is disabled", async () => {
+    render(<OutlierScreeningPanel />);
+    const save = await screen.findByRole("button", { name: "Save result" });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(save).toBeDisabled();
+    expect(screen.getByText("This outlier-screening result is already saved.")).toBeInTheDocument();
   });
 });
