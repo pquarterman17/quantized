@@ -26,9 +26,11 @@ import AnalysisResultPanel from "./AnalysisResultPanel";
 import { fitAnalysisResult } from "../../../lib/fitAnalysisResult";
 import { reflectivityFitAnalysisResult } from "../../../lib/reflFitAnalysisResult";
 import { statisticalTestAnalysisResult } from "../../../lib/statisticalTestAnalysisResult";
+import { distributionAnalysisResult } from "../../../lib/distributionAnalysisResult";
 import { DEFAULT_PARAMS, DEFAULT_SELECTION } from "../../../lib/statsTests";
 import { publishFitResult } from "../../../store/peakTables";
 import { useStatsTestsStore } from "../../../store/statsTests";
+import { useDistributionRequestStore } from "../../../store/distribution";
 import { useApp } from "../../../store/useApp";
 import { encodeRecord } from "../reflectivity/reflFitRecord";
 import { makeDataset, makeRecord } from "../reflectivity/reflFit.testkit";
@@ -70,6 +72,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   rerun.mockResolvedValue("copy");
   useStatsTestsStore.setState({ open: false, request: null });
+  useDistributionRequestStore.setState({ request: null });
   useApp.setState({
     datasets: [source, output],
     activeId: "source",
@@ -314,6 +317,46 @@ describe("AnalysisResultPanel", () => {
       open: true, request: { testId: "anderson", selection: { x: 0 }, params: { alpha: 0.05 } },
     });
     expect(useApp.getState()).toMatchObject({ activeId: "source", openAnalysisResultId: null });
+  });
+
+  it("inspects and reopens a current Distribution snapshot with its saved controls", () => {
+    const distribution = distributionAnalysisResult(
+      "distribution", source,
+      { col: 0, byCol: null, fitDist: "none", compareOpen: false, percentileInput: 90 },
+      { label: "Signal", byLabel: null, hist: { counts: [1], centers: [1.5], edges: [1, 2] },
+        desc: { N: 2, mean: 1.5, median: 1.5, std: 0.5, min: 1, q1: 1.25, q3: 1.75, max: 2 },
+        norm: null, normNote: "need ≥ 3 values", levels: [], totalLevels: 0, rankedFits: [],
+        rankingMetric: "ks_p", quantiles: null, percentileValue: null, skipped: [] },
+    );
+    useApp.setState({ datasets: [source], analysisResults: [distribution], openAnalysisResultId: distribution.id, distributionOpen: false });
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Current")).toBeInTheDocument();
+    expect(screen.getByText("Distribution")).toBeInTheDocument();
+    expect(screen.queryByText(/Recalculate updates this output/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Edit / rerun…" }));
+    expect(useDistributionRequestStore.getState().request).toEqual({
+      col: 0, byCol: null, fitDist: "none", compareOpen: false, percentileInput: 90,
+    });
+    expect(useApp.getState()).toMatchObject({ activeId: "source", distributionOpen: true, openAnalysisResultId: null });
+  });
+
+  it("does not present a lazy Distribution source as verified current", () => {
+    const distribution = distributionAnalysisResult(
+      "distribution", source,
+      { col: 0, byCol: null, fitDist: "none", compareOpen: false, percentileInput: 90 },
+      { label: "Signal", byLabel: null, hist: { counts: [1], centers: [1.5], edges: [1, 2] },
+        desc: { N: 2, mean: 1.5, median: 1.5, std: 0.5, min: 1, q1: 1.25, q3: 1.75, max: 2 },
+        norm: null, normNote: "need ≥ 3 values", levels: [], totalLevels: 0, rankedFits: [],
+        rankingMetric: "ks_p", quantiles: null, percentileValue: null, skipped: [] },
+    );
+    useApp.setState({
+      datasets: [{ ...source, pending: { kind: "path", path: "source.opju", bookId: "source", rows: 2, cols: 1 } }],
+      analysisResults: [distribution], openAnalysisResultId: distribution.id,
+    });
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Out of date")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /Diagnostics/ }));
+    expect(screen.getByText(/Load the full source worksheet to verify this distribution analysis/)).toBeInTheDocument();
   });
 
   it("presents a saved curve fit with live status, recipe controls, and re-fit setup", async () => {

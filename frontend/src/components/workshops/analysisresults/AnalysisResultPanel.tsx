@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { analysisDataFingerprint, dataFingerprint } from "../../../lib/analysisResultFreshness";
+import { distributionRecipe } from "../../../lib/distributionAnalysisResult";
 import { fitAnalysisResult } from "../../../lib/fitAnalysisResultLive";
 import { peakTableMatchesData } from "../../../lib/peakTableFit";
 import { signalRecipeChannels, signalRecipeXRange } from "../../../lib/signalRecipe";
@@ -8,6 +9,7 @@ import { statisticalTestRecipe } from "../../../lib/statisticalTestAnalysisResul
 import { createSignalWorksheetFromApp } from "../../../store/signalWorksheetCommand";
 import { useApp } from "../../../store/useApp";
 import { useStatsTestsStore } from "../../../store/statsTests";
+import { useDistributionRequestStore } from "../../../store/distribution";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import { askParams } from "../../overlays/ParamDialog";
 import ToolWindow from "../../overlays/ToolWindow";
@@ -17,34 +19,20 @@ import AnalysisResultFitTable from "./AnalysisResultFitTable";
 import AnalysisResultFigures from "./AnalysisResultFigures";
 import AnalysisResultPeakTable from "./AnalysisResultPeakTable";
 import AnalysisResultRefl, { liveReflectivityFit, reflectivityFitIssues } from "./AnalysisResultRefl";
-import AnalysisResultStatsToolbar from "./AnalysisResultStatsToolbar";
-import AnalysisResultStatisticalTest from "./AnalysisResultStatisticalTest";
+import AnalysisResultSnapshotToolbar from "./AnalysisResultSnapshotToolbar";
+import AnalysisResultSnapshot from "./AnalysisResultSnapshot";
 import AnalysisResultTables from "./AnalysisResultTables";
 import { mappingForResult } from "./analysisResultFigureMapping";
 import { recordsFor } from "../reflectivity/reflFitRecord";
+import { FIT_SOURCE_MISSING, formatDate, formatValue, PEAK_SOURCE_MISSING, SOURCE_MISSING } from "./analysisResultPanelText";
 type Tab = "overview" | "table" | "figures" | "diagnostics" | "provenance" | "notes";
 const TABS: readonly Tab[] = ["overview", "table", "figures", "diagnostics", "provenance", "notes"];
-// One sentence for the missing-source state: the notice AND the disabled
-// actions' reason. Derived from the refs, so it clears when the source returns.
-const SOURCE_MISSING = "Source data not found — results can't be recalculated.";
-const PEAK_SOURCE_MISSING = "Source data not found — the fitted peak table is unavailable until that worksheet is restored.";
-const FIT_SOURCE_MISSING = "Source data not found — the saved fit is unavailable until that worksheet is restored.";
 // Its own seam, not store/analysisResultLazy.ts: importing that from this
 // chunk would split it into a separate eagerly-named chunk (measured).
 const loadActions = () => runLazy("Loading analysis result actions…", () => import("../../../store/analysisResultActions"));
 const withActions = (run: (m: Awaited<ReturnType<typeof loadActions>>) => void): void => {
   void loadActions().then(run, onLoadFailure);
 };
-function formatValue(value: number): string {
-  if (!Number.isFinite(value)) return String(value);
-  const magnitude = Math.abs(value);
-  if (magnitude !== 0 && (magnitude >= 1e5 || magnitude < 1e-4)) return value.toExponential(6);
-  return value.toLocaleString(undefined, { maximumSignificantDigits: 8 });
-}
-function formatDate(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.valueOf()) ? value : date.toLocaleString();
-}
 export default function AnalysisResultPanel() {
   const openId = useApp((state) => state.openAnalysisResultId);
   const result = useApp((state) => state.analysisResults.find((item) => item.id === openId));
@@ -70,16 +58,21 @@ export default function AnalysisResultPanel() {
   const isFit = result?.settingsRef?.field === "fitSpec";
   const isRefl = result?.settingsRef?.field === "reflFits";
   const isStats = result?.producer.id === "statistical-test";
+  const isDistribution = result?.producer.id === "distribution-analysis";
+  const isSnapshot = isStats || isDistribution;
   const statsRecipe = result && isStats ? statisticalTestRecipe(result) : null;
+  const savedDistributionRecipe = result && isDistribution ? distributionRecipe(result, source) : null;
   const peakTable = isPeak ? source?.peakTable ?? null : null;
   const fitSpec = isFit ? source?.fitSpec ?? null : null;
   const reflFit = isRefl ? liveReflectivityFit(result, datasets) : null;
   const reflIssues = reflectivityFitIssues(reflFit, datasets);
   const fitFingerprintStale = !!(isFit && source && !source.pending && result?.sourceFingerprint &&
     result.sourceFingerprint !== dataFingerprint(source.data));
-  const statsFingerprintStale = !!(isStats && source && !source.pending && result?.sourceFingerprint &&
+  const snapshotFingerprintStale = !!(isSnapshot && source && !source.pending && result?.sourceFingerprint &&
     result.sourceFingerprint !== analysisDataFingerprint(source));
-  const statsOutdated = !!(isStats && (statsFingerprintStale || (result?.stale && !result.sourceFingerprint)));
+  const snapshotUnverified = !!(isSnapshot && result?.sources.length && source && (source.pending || !result.sourceFingerprint));
+  const snapshotOutdated = !!(isSnapshot && (snapshotFingerprintStale || snapshotUnverified ||
+    (result?.stale && !result.sourceFingerprint)));
   const diagnostics = useMemo(() => {
     if (!result) return [];
     const liveWarnings = isFit && source && fitSpec
@@ -106,11 +99,14 @@ export default function AnalysisResultPanel() {
       ...(isRefl ? reflFit?.result.warnings ?? [] : []),
       ...(isRefl && reflFit && !reflFit.result.success ? ["The optimizer did not report a successful fit."] : []),
       ...(isRefl && !reflFit ? ["The saved reflectivity fit record is missing from its source worksheets."] : []),
-      ...(statsOutdated
-        ? ["The source data changed after this statistical test. Run the test again before using these values."]
+      ...(snapshotUnverified ? [source?.pending
+          ? `Load the full source worksheet to verify this ${isDistribution ? "distribution analysis" : "statistical test"}.`
+          : `This saved ${isDistribution ? "distribution analysis" : "statistical test"} has no source fingerprint and cannot be verified.`]
+        : snapshotOutdated
+          ? [`The source data changed after this ${isDistribution ? "distribution analysis" : "statistical test"}. Run it again before using these values.`]
         : []),
     ])];
-  }, [datasets, fitFingerprintStale, fitSpec, isFit, isPeak, isRefl, output, peakTable, reflFit, reflIssues, result, source, staleDatasets, staleFits, statsOutdated]);
+  }, [datasets, fitFingerprintStale, fitSpec, isDistribution, isFit, isPeak, isRefl, output, peakTable, reflFit, reflIssues, result, snapshotOutdated, snapshotUnverified, source, staleDatasets, staleFits]);
 
   if (!result) return null;
   const close = () => useApp.setState({ openAnalysisResultId: null });
@@ -152,10 +148,14 @@ export default function AnalysisResultPanel() {
     openReflectivityFitRecord(recordId);
     close();
   };
-  const editStats = () => {
-    if (!statsRecipe || statsOutdated || (result.sources.length > 0 && !source)) return;
+  const editSnapshot = () => {
+    if (snapshotOutdated || (result.sources.length > 0 && !source)) return;
     if (source) setActive(source.id);
-    useStatsTestsStore.getState().openWith(statsRecipe);
+    if (statsRecipe) useStatsTestsStore.getState().openWith(statsRecipe);
+    else if (savedDistributionRecipe) {
+      useDistributionRequestStore.getState().openWith(savedDistributionRecipe);
+      useApp.setState({ distributionOpen: true });
+    } else return;
     close();
   };
   const recalculate = async () => {
@@ -279,8 +279,8 @@ export default function AnalysisResultPanel() {
   const fitReplayable = !!(fitSpec && fitSpec.xKey !== undefined && fitSpec.yKey !== undefined);
   const status = isRefl
     ? !reflFit || reflIssues.missing.length ? "Source missing" : reflIssues.changed.length ? "Out of date" : "Current"
-    : isStats
-    ? result.sources.length && !source ? "Source missing" : statsOutdated ? "Out of date" : "Current"
+    : isSnapshot
+    ? result.sources.length && !source ? "Source missing" : snapshotOutdated ? "Out of date" : "Current"
     : isFit
     ? !source ? "Source missing" : !fitSpec ? "Incomplete" : fitStale ? "Out of date" : "Current"
     : isPeak
@@ -301,8 +301,8 @@ export default function AnalysisResultPanel() {
       <div className="qz-analysis-result">
         <div className="qz-analysis-toolbar">
           <span className={`qz-analysis-status status-${status.toLowerCase().replaceAll(" ", "-")}`}>{status}</span>
-          {isStats ? <AnalysisResultStatsToolbar result={result} source={source} recipeReady={!!statsRecipe}
-            outdated={statsOutdated} busy={busy} onOpen={() => source && openTable(source.id)} onEdit={editStats}
+          {isSnapshot ? <AnalysisResultSnapshotToolbar result={result} source={source} recipeReady={!!(statsRecipe || savedDistributionRecipe)}
+            outdated={snapshotOutdated} busy={busy} onOpen={() => source && openTable(source.id)} onEdit={editSnapshot}
             onDuplicate={() => void duplicate()} onReport={() => void sendInlineReport()} /> : isRefl ? <>
             <Button disabled={!reflFit || busy !== null} onClick={editReflFit}>Open fit workbench</Button>
           </> : isPeak ? <>
@@ -324,7 +324,7 @@ export default function AnalysisResultPanel() {
           <Button disabled={busy !== null} onClick={() => void rename()}>Rename…</Button>
           <Button disabled={busy !== null} variant="danger" onClick={() => void remove()}>Delete…</Button>
         </div>
-        {(sourceMissing || ((isPeak || isFit || isStats) && result.sources.length > 0 && !source) || (isRefl && !reflFit)) && <p className="qz-analysis-missing" role="note">
+        {(sourceMissing || ((isPeak || isFit || isSnapshot) && result.sources.length > 0 && !source) || (isRefl && !reflFit)) && <p className="qz-analysis-missing" role="note">
           {isPeak ? PEAK_SOURCE_MISSING : isFit ? FIT_SOURCE_MISSING : isRefl ? "Saved reflectivity fit not found — restore one of its source worksheets to inspect it." : SOURCE_MISSING}
         </p>}
         <div className="qz-analysis-tabs" role="tablist" aria-label="Analysis result views">
@@ -334,7 +334,7 @@ export default function AnalysisResultPanel() {
         </div>
         <div id="analysis-result-tabpanel" className="qz-analysis-body" role="tabpanel" aria-labelledby={`analysis-result-tab-${tab}`}>
           {tab === "overview" && <>
-            {isStats ? <AnalysisResultStatisticalTest result={result} source={source} view="overview" onExport={() => void exportInlineTables()} /> : isRefl ? <AnalysisResultRefl result={result} record={reflFit} datasets={datasets} view="overview" /> : isPeak ? <dl className="qz-analysis-summary">
+            {isSnapshot ? <AnalysisResultSnapshot result={result} source={source} view="overview" onExport={() => void exportInlineTables()} /> : isRefl ? <AnalysisResultRefl result={result} record={reflFit} datasets={datasets} view="overview" /> : isPeak ? <dl className="qz-analysis-summary">
               <div><dt>Analysis</dt><dd>{result.producer.label}</dd></div>
               <div><dt>Source</dt><dd>{source?.name ?? "Missing source"}</dd></div>
               <div><dt>Peaks</dt><dd>{peakTable ? `${peakTable.peaks.length} total · ${peakTable.peaks.filter((peak) => peak.excluded).length} excluded` : "Table unavailable"}</dd></div>
@@ -353,10 +353,10 @@ export default function AnalysisResultPanel() {
             </dl>}
             {isPeak
               ? <p className="qz-analysis-caption">Values are read live from the source worksheet’s fitted peak table. Editing or re-fitting updates this result; deleting this Library item keeps the scientific table.</p>
-              : !isFit && !isRefl && !sourceMissing && <p className="qz-analysis-caption">This result stays linked to its source. Recalculate updates this output; Rerun as new preserves it and creates another result.</p>}
+              : !isSnapshot && !isFit && !isRefl && !sourceMissing && <p className="qz-analysis-caption">This result stays linked to its source. Recalculate updates this output; Rerun as new preserves it and creates another result.</p>}
           </>}
-          {tab === "table" && (isStats
-            ? <AnalysisResultStatisticalTest result={result} source={source} view="table" disabled={busy !== null} onExport={() => void exportInlineTables()} />
+          {tab === "table" && (isSnapshot
+            ? <AnalysisResultSnapshot result={result} source={source} view="table" disabled={busy !== null} onExport={() => void exportInlineTables()} />
             : isRefl
             ? <AnalysisResultRefl result={result} record={reflFit} datasets={datasets} view="table" />
             : isPeak
@@ -367,8 +367,8 @@ export default function AnalysisResultPanel() {
           {tab === "diagnostics" && (diagnostics.length
             ? <ul className="qz-analysis-diagnostics">{diagnostics.map((message, index) => <li key={`${message}-${index}`}>{message}</li>)}</ul>
             : <p className="qz-analysis-empty">No warnings or missing references.</p>)}
-          {tab === "provenance" && (isStats
-            ? <AnalysisResultStatisticalTest result={result} source={source} view="provenance" onExport={() => void exportInlineTables()} />
+          {tab === "provenance" && (isSnapshot
+            ? <AnalysisResultSnapshot result={result} source={source} view="provenance" onExport={() => void exportInlineTables()} />
             : isRefl
             ? <AnalysisResultRefl result={result} record={reflFit} datasets={datasets} view="provenance" />
             : isFit

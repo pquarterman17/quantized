@@ -268,7 +268,10 @@ export default function DistributionPanel() {
           )}
 
           {(byActive ? d.byResults.length > 0 : !!d.desc) && (
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+              <Button size="sm" disabled={!d.canSaveResult} onClick={() => d.saveResult()}>
+                Save result
+              </Button>
               <Button size="sm" disabled={d.reportBusy} onClick={() => void d.toReport()}>
                 {d.reportBusy ? "Reporting…" : "→ Report"}
               </Button>

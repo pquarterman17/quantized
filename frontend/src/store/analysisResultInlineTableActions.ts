@@ -25,8 +25,8 @@ export function exportAnalysisInlineTables(id: string): boolean {
   return true;
 }
 
-function statisticalSnapshotCurrent(result: AnalysisResult, datasets: readonly Dataset[]): boolean {
-  if (result.producer.id !== "statistical-test" || result.stale) return false;
+function snapshotCurrent(result: AnalysisResult, datasets: readonly Dataset[]): boolean {
+  if (!result.tables?.length || result.outputs.length > 0 || result.stale) return false;
   if (result.sources.length === 0) return true;
   if (!result.sourceFingerprint) return false;
   const sources = result.sources.map((source) => datasets.find((dataset) => dataset.id === source.datasetId));
@@ -43,7 +43,7 @@ export async function sendAnalysisInlineTableToReport(id: string): Promise<boole
   const tables = result?.tables;
   const table = tables?.[0];
   if (!result || !tables || !table) return false;
-  if (!statisticalSnapshotCurrent(result, initial.datasets)) {
+  if (!snapshotCurrent(result, initial.datasets)) {
     initial.setStatus(`can't add ${result.name} to report: its source is missing or out of date`);
     return false;
   }
@@ -59,14 +59,14 @@ export async function sendAnalysisInlineTableToReport(id: string): Promise<boole
     });
     const current = useApp.getState();
     const live = current.analysisResults.find((item) => item.id === id);
-    if (!live || live.tables !== tables || !statisticalSnapshotCurrent(live, current.datasets)) {
-      current.setStatus("can't add statistics result to report: the result or its source changed while rendering");
+    if (!live || live.tables !== tables || !snapshotCurrent(live, current.datasets)) {
+      current.setStatus("can't add analysis result to report: the result or its source changed while rendering");
       return false;
     }
     addReportWithProvenance(result.name, report, result.sources[0]?.datasetId ?? null);
     return true;
   } catch (error) {
-    useApp.getState().setStatus(`could not add statistics result to report — ${error instanceof Error ? error.message : "unknown error"}`);
+    useApp.getState().setStatus(`could not add analysis result to report — ${error instanceof Error ? error.message : "unknown error"}`);
     return false;
   }
 }

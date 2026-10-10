@@ -124,4 +124,16 @@ describe("stamp / stale round trip", () => {
     const [changed] = stampAnalysisResults([current], [relabeled], []);
     expect(changed.stale).toBe(true);
   });
+
+  it("applies the same source-only freshness contract to Distribution snapshots", () => {
+    const source = ds("s", data([1, 2]));
+    const [current] = stampAnalysisResults([{
+      ...RESULT, outputs: [], producer: { id: "distribution-analysis", label: "Distribution", version: 1 },
+    }], [source], []);
+    const [changed] = stampAnalysisResults([current], [{ ...source, excludedRows: [] }], []);
+    expect(changed.sourceFingerprint).toBe(current.sourceFingerprint);
+    expect(changed.stale).toBeUndefined();
+    const [edited] = stampAnalysisResults([current], [{ ...source, data: data([1, 3]) }], []);
+    expect(edited.stale).toBe(true);
+  });
 });

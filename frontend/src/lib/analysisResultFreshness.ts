@@ -78,7 +78,7 @@ function sourcesFingerprint(result: AnalysisResult, byId: ReadonlyMap<string, Da
   return result.sources.map((ref) => dataFingerprint(byId.get(ref.datasetId)!.data)).join(":");
 }
 
-function statisticalSourcesFingerprint(result: AnalysisResult, byId: ReadonlyMap<string, Dataset>): string | null {
+function snapshotSourcesFingerprint(result: AnalysisResult, byId: ReadonlyMap<string, Dataset>): string | null {
   if (result.sources.length === 0) return null;
   const sources = result.sources.map((ref) => byId.get(ref.datasetId));
   if (sources.some((dataset) => !dataset || dataset.pending)) return null;
@@ -96,13 +96,13 @@ export function stampAnalysisResults(
 ): AnalysisResult[] {
   const byId = new Map(datasets.map((dataset) => [dataset.id, dataset]));
   return results.map(({ stale: wasStale, ...result }) => {
-    // Statistical tables are source-only snapshots: there is no linked
+    // Inline tables are source-only snapshots: there is no linked
     // output for the recalc graph to mark. Never refresh their fingerprint
     // merely because the project is being saved; that would silently bless
     // old numbers after the source changed. Only running the test again
     // creates a new current result.
-    if (result.producer.id === "statistical-test") {
-      const fingerprint = statisticalSourcesFingerprint(result, byId);
+    if (result.producer.id === "statistical-test" || result.producer.id === "distribution-analysis") {
+      const fingerprint = snapshotSourcesFingerprint(result, byId);
       const changed = !!(result.sourceFingerprint && fingerprint && result.sourceFingerprint !== fingerprint);
       if (changed) return { ...result, stale: true as const };
       if (fingerprint && result.sourceFingerprint === fingerprint) return result;
