@@ -81,7 +81,8 @@ function sourcesFingerprint(result: AnalysisResult, byId: ReadonlyMap<string, Da
 /** Producers whose envelope owns its result tables outright (no linked
  *  output worksheet): their freshness is judged by `snapshotResultState`. */
 export function isSnapshotResult(result: AnalysisResult): boolean {
-  return result.producer.id === "statistical-test" || result.producer.id === "distribution-analysis";
+  return result.producer.id === "statistical-test" || result.producer.id === "distribution-analysis" ||
+    result.producer.id === "fit-y-by-x";
 }
 
 /** A snapshot needs no worksheet only when its saved question is a
@@ -123,7 +124,8 @@ export const SNAPSHOT_RESULT_STATUS: Readonly<Record<SnapshotResultState, string
 /** Diagnostics for a non-current snapshot. A present-but-deleted source is
  *  already reported generically by its reference, so it adds nothing here. */
 export function snapshotResultDiagnostics(result: AnalysisResult, state: SnapshotResultState): string[] {
-  const noun = result.producer.id === "distribution-analysis" ? "distribution analysis" : "statistical test";
+  const noun = result.producer.id === "distribution-analysis" ? "distribution analysis"
+    : result.producer.id === "fit-y-by-x" ? "Fit Y by X analysis" : "statistical test";
   if (state === "pending") return [`Load the full source worksheet to verify this ${noun}.`];
   if (state === "source-missing") {
     return result.sources.length ? [] : [`This saved ${noun} no longer references its source worksheet and cannot be verified.`];

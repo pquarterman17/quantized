@@ -32,6 +32,7 @@ import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { colValues, groupsForOneway, InsufficientDataError, runLeg } from "./runLeg";
 import type { BivariateResult, ContingencyResult, FitYByXKind, OnewayResult } from "./runLeg";
+import { useFitYByXResultBridge } from "./useFitYByXResultBridge";
 import { type ByColumnOption, type ByLevel, useByPartition } from "../useByPartition";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 
@@ -80,6 +81,8 @@ export interface FitYByXState {
   contingency: ContingencyResult | null;
   reportBusy: boolean;
   toReport: () => Promise<void>;
+  canSaveResult: boolean;
+  saveResult: () => string | null;
   // ── "By" grouping (JMP_GAP J7) ──────────────────────────────────────────
   byOptions: ByColumnOption[];
   byCol: number | null;
@@ -181,6 +184,7 @@ export function useFitYByX(): FitYByXState {
   const labelOf = (i: number) => columns.find((c) => c.index === i)?.label ?? (i < 0 ? "x" : `col ${i}`);
   const xLabel = labelOf(xCol);
   const yLabel = labelOf(yCol);
+  const byLabel = byPartition.byOptions.find((column) => column.index === byPartition.byCol)?.label ?? null;
 
   const xType = colType(active, xCol);
   const yType = colType(active, yCol);
@@ -446,6 +450,13 @@ export function useFitYByX(): FitYByXState {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, queuedReport, reportKey]);
 
+  const resultBridge = useFitYByXResultBridge({
+    active, xCol, setXCol, yCol, setYCol, byCol: byPartition.byCol, setByCol: byPartition.setByCol,
+    order, setOrder, bandInterval, setBandInterval, kind, xLabel, yLabel, byLabel,
+    oneway, bivariate, contingency, byLevels: byPartition.levels, byResults,
+    byTotalLevels: byPartition.totalLevels, busy, byBusy,
+  });
+
   return {
     hasData: !!active,
     datasetId: active?.id ?? null,
@@ -468,6 +479,7 @@ export function useFitYByX(): FitYByXState {
     contingency,
     reportBusy,
     toReport: () => toReport(),
+    ...resultBridge,
     byOptions: byPartition.byOptions,
     byCol: byPartition.byCol,
     setByCol: byPartition.setByCol,

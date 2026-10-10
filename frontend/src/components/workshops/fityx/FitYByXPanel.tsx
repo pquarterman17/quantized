@@ -136,7 +136,10 @@ export default function FitYByXPanel() {
           )}
 
           {(byActive ? f.byResults.length > 0 : !!(f.oneway || f.bivariate || f.contingency)) && (
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+              <Button size="sm" disabled={!f.canSaveResult} onClick={() => f.saveResult()}>
+                Save result
+              </Button>
               <Button size="sm" disabled={f.reportBusy} onClick={() => void f.toReport()}>
                 {f.reportBusy ? "Reporting…" : "→ Report"}
               </Button>
