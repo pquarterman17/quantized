@@ -75,6 +75,24 @@ describe("analysis result envelope", () => {
     ]);
   });
 
+  it("round-trips bounded producer parameters and inline tables", () => {
+    const base = signalAnalysisResult("inline", source(), output(), "now")!;
+    const [result] = sanitizeAnalysisResults([{
+      ...base,
+      parameters: { testId: "anderson", selection: { x: 0, cols: [0, 1] }, enabled: true },
+      tables: [{ title: "Statistics", columns: ["name", "value"], rows: [["A²", 0.42], ["p", null]] }],
+    }]);
+    expect(result.parameters).toEqual({ testId: "anderson", selection: { x: 0, cols: [0, 1] }, enabled: true });
+    expect(result.tables).toEqual([{ title: "Statistics", columns: ["name", "value"], rows: [["A²", 0.42], ["p", null]] }]);
+
+    const [malformed] = sanitizeAnalysisResults([{ ...base, tables: [{ columns: ["only"], rows: [[1, 2]] }] }]);
+    expect(malformed.tables).toBeUndefined();
+
+    const wideTree = { branches: Array.from({ length: 101 }, () => Array(1_000).fill(1)) };
+    const [overBudget] = sanitizeAnalysisResults([{ ...base, parameters: wideTree }]);
+    expect(overBudget.parameters).toBeUndefined();
+  });
+
   it("migrates only linked worksheets carrying a valid signal recipe with deterministic ids", () => {
     const migrated = migrateLegacySignalResults([source(), output(), { ...output(), id: "plain", derivedFrom: undefined }], "saved");
     expect(migrated).toHaveLength(1);

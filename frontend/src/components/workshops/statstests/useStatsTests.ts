@@ -27,6 +27,8 @@ import { describeResult, outputToCSV, outputToTSV, type TestOutput } from "../..
 import type { Dataset } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { withResolved } from "../../../store/pendingEdit";
+import { publishStatisticalTestResult } from "../../../store/statisticalTestResults";
+import { useStatsTestsStore } from "../../../store/statsTests";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -74,6 +76,8 @@ function defaultSelection(columns: TestColumn[]): TestSelection {
 export function useStatsTests(): StatsTestsState {
   const active = useActiveDataset();
   const setStatus = useApp((s) => s.setStatus);
+  const requested = useStatsTestsStore((s) => s.request);
+  const consumeRequest = useStatsTestsStore((s) => s.consumeRequest);
 
   const columns = useMemo<TestColumn[]>(() => {
     if (!active) return [];
@@ -112,19 +116,35 @@ export function useStatsTests(): StatsTestsState {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
 
+  useEffect(() => {
+    if (!requested) return;
+    setTestIdRaw(requested.testId);
+    setSelRaw({ ...requested.selection, cols: [...requested.selection.cols] });
+    setParamsRaw({ ...requested.params });
+    seq.current++;
+    setBusy(false);
+    setOutput(null);
+    setError(null);
+    consumeRequest();
+  }, [consumeRequest, requested]);
+
   async function run(): Promise<void> {
     const request = ++seq.current;
     const id = testId;
+    const runSelection = { ...sel, cols: [...sel.cols] };
+    const runParams = { ...params };
+    let resultSource: Dataset | null = null;
     setBusy(true);
     setError(null);
     setOutput(null);
     let built;
     if (id === "power" || !active) {
-      built = buildTestRequest(id, null, sel, params);
+      built = buildTestRequest(id, null, runSelection, runParams);
     } else {
-      const resolved = await withResolved(useApp.getState, active.id, "the statistical test", (ds) =>
-        buildTestRequest(id, analysisData(ds), sel, params),
-      );
+      const resolved = await withResolved(useApp.getState, active.id, "the statistical test", (ds) => {
+        resultSource = ds;
+        return buildTestRequest(id, analysisData(ds), runSelection, runParams);
+      });
       if (request !== seq.current) return;
       built = resolved.ok ? resolved.value : { ok: false as const, error: resolved.error };
     }
@@ -136,8 +156,10 @@ export function useStatsTests(): StatsTestsState {
     try {
       const result = await runStatsTest(built.request);
       if (request !== seq.current) return;
-      setOutput(describeResult(result, built.labels, params.alpha));
+      const described = describeResult(result, built.labels, runParams.alpha);
+      setOutput(described);
       setRanTest(id);
+      publishStatisticalTestResult(resultSource, id, runSelection, runParams, built.labels, described);
     } catch (e) {
       if (request !== seq.current) return;
       setError(e instanceof Error ? e.message : "the test failed");

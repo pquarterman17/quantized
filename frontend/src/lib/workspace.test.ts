@@ -2,6 +2,8 @@ import type { ErrorBinding } from "./errorRoles";
 import { describe, expect, it } from "vitest";
 
 import { signalAnalysisResult } from "./analysisResult";
+import { statisticalTestAnalysisResult } from "./statisticalTestAnalysisResult";
+import { DEFAULT_PARAMS, DEFAULT_SELECTION } from "./statsTests";
 import { isCategoricalChannel, levelLabel } from "./categorical";
 import { createFigureDocument } from "./figureDocument";
 import { renameLevelIn } from "./levelRename";
@@ -57,6 +59,17 @@ describe("serializeWorkspace / parseWorkspace round-trip", () => {
     expect(restored[0].name).toBe("first");
     expect(restored[0].data).toEqual(datasets[0].data);
     expect(restored[1].data).toEqual(datasets[1].data);
+  });
+
+  it("preserves a statistical result's tables and exact question", () => {
+    const dataset = makeDataset("stats", "measurements.csv");
+    const result = statisticalTestAnalysisResult(
+      "analysis-stats", dataset, "anderson", { ...DEFAULT_SELECTION, x: 0 }, DEFAULT_PARAMS, ["A"],
+      { sentence: "No evidence A departs from normal.", tables: [{ columns: ["statistic", "value"], rows: [["A²", 0.3]] }] },
+      "2026-10-10T00:00:00Z",
+    );
+    const restored = parseWorkspace(serializeWorkspace({ datasets: [dataset], analysisResults: [result] }));
+    expect(restored.analysisResults).toEqual([result]);
   });
 
   it("preserves raw, corrections, and bgRef when present", () => {

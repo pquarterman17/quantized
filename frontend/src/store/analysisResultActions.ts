@@ -26,6 +26,7 @@ import { useApp } from "./useApp";
 
 export { resolveAnalysisResultPlot } from "./analysisResultPlotResolve";
 export type { PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
+export { exportAnalysisInlineTables, sendAnalysisInlineTableToReport } from "./analysisResultInlineTableActions";
 
 export function registerAnalysisResult(result: AnalysisResult, open = true): void {
   const current = useApp.getState().analysisResults;
@@ -81,13 +82,23 @@ export function removeAnalysisResult(id: string): void {
   }));
 }
 
-/** Duplicate a single-output result and its linked worksheet as one undoable
- * edit. A second catalog record must never point at the same output: result
- * freshness and recalculation are output-level facts, so sharing one would
- * let the records disagree about the same scientific data. */
+/** Duplicate a snapshot result directly, or a single-output result together
+ * with its linked worksheet, as one undoable edit. A second linked catalog
+ * record must never point at the same output: freshness and recalculation are
+ * output-level facts, so sharing one would let the records disagree. */
 export async function duplicateAnalysisResult(id: string, now = new Date().toISOString()): Promise<string | null> {
   const initial = useApp.getState();
   const current = initial.analysisResults.find((result) => result.id === id);
+  if (current?.outputs.length === 0 && current.tables?.length) {
+    const copyId = nextAnalysisResultId();
+    const copy = { ...structuredClone(current), id: copyId, name: `${current.name} copy`, createdAt: now };
+    initial.recordHistory("duplicate analysis result");
+    useApp.setState((state) => ({
+      analysisResults: [...state.analysisResults, copy], openAnalysisResultId: copyId,
+      status: `duplicated result ${current.name}`,
+    }));
+    return copyId;
+  }
   const outputRef = current?.outputs.length === 1 ? current.outputs[0] : null;
   if (!current || !outputRef) {
     initial.setStatus(`can't duplicate ${current?.name ?? "result"}: one output worksheet is required`);

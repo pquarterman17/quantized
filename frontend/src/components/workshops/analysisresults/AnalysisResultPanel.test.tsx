@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalysisResult } from "../../../lib/analysisResult";
 import type { Dataset } from "../../../lib/types";
 
-const { rerun, recalculate, recalculateFit, sendReport } = vi.hoisted(() => ({
-  rerun: vi.fn(), recalculate: vi.fn(), recalculateFit: vi.fn(), sendReport: vi.fn(),
+const { rerun, recalculate, recalculateFit, sendReport, exportInline, reportInline } = vi.hoisted(() => ({
+  rerun: vi.fn(), recalculate: vi.fn(), recalculateFit: vi.fn(), sendReport: vi.fn(), exportInline: vi.fn(), reportInline: vi.fn(),
 }));
 vi.mock("../../../store/signalWorksheetCommand", () => ({ createSignalWorksheetFromApp: rerun }));
 vi.mock("../../../store/analysisResultActions", async (importOriginal) => ({
@@ -13,6 +13,8 @@ vi.mock("../../../store/analysisResultActions", async (importOriginal) => ({
   recalculateAnalysisResult: recalculate,
   recalculateFitAnalysisResult: recalculateFit,
   sendAnalysisResultPlotToReport: sendReport,
+  exportAnalysisInlineTables: exportInline,
+  sendAnalysisInlineTableToReport: reportInline,
 }));
 vi.mock("../../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 vi.mock("../../overlays/ParamDialog", () => ({ askParams: vi.fn() }));
@@ -23,7 +25,10 @@ vi.mock("../../overlays/ToolWindow", () => ({
 import AnalysisResultPanel from "./AnalysisResultPanel";
 import { fitAnalysisResult } from "../../../lib/fitAnalysisResult";
 import { reflectivityFitAnalysisResult } from "../../../lib/reflFitAnalysisResult";
+import { statisticalTestAnalysisResult } from "../../../lib/statisticalTestAnalysisResult";
+import { DEFAULT_PARAMS, DEFAULT_SELECTION } from "../../../lib/statsTests";
 import { publishFitResult } from "../../../store/peakTables";
+import { useStatsTestsStore } from "../../../store/statsTests";
 import { useApp } from "../../../store/useApp";
 import { encodeRecord } from "../reflectivity/reflFitRecord";
 import { makeDataset, makeRecord } from "../reflectivity/reflFit.testkit";
@@ -64,6 +69,7 @@ const result: AnalysisResult = {
 beforeEach(() => {
   vi.clearAllMocks();
   rerun.mockResolvedValue("copy");
+  useStatsTestsStore.setState({ open: false, request: null });
   useApp.setState({
     datasets: [source, output],
     activeId: "source",
@@ -263,6 +269,76 @@ describe("AnalysisResultPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit / Re-fit…" }));
     expect(useApp.getState()).toMatchObject({ activeId: "source", stageTab: "plot", peaksOpen: true, openAnalysisResultId: null });
+  });
+
+  it("keeps statistical interpretation and tables inspectable and flags edited source data", async () => {
+    const stat = statisticalTestAnalysisResult(
+      "stat", source, "anderson", { ...DEFAULT_SELECTION, x: 0 }, DEFAULT_PARAMS, ["Signal"],
+      { sentence: "Signal is consistent with a normal distribution.", tables: [{ title: "Statistics", columns: ["statistic", "value"], rows: [["A²", 0.2]] }] },
+      "2026-10-10T00:00:00Z",
+    );
+    const edited = { ...source, data: { ...source.data, values: [[1], [99]] } };
+    useApp.setState({ datasets: [source], analysisResults: [stat], openAnalysisResultId: stat.id });
+    exportInline.mockReturnValue(true);
+    reportInline.mockResolvedValue(true);
+
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Current")).toBeInTheDocument();
+    expect(screen.getByText("Signal is consistent with a normal distribution.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Table" }));
+    expect(screen.getByRole("cell", { name: "A²" })).toBeInTheDocument();
+    const exportButton = screen.getByRole("button", { name: "Export all tables…" });
+    fireEvent.click(exportButton);
+    expect(exportButton).toBeDisabled();
+    await waitFor(() => expect(exportButton).toBeEnabled());
+    expect(exportInline).toHaveBeenCalledWith("stat");
+    fireEvent.click(screen.getByRole("button", { name: "Send to report" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send to report" })).toBeEnabled());
+    expect(reportInline).toHaveBeenCalledWith("stat");
+    useApp.setState({ datasets: [edited] });
+    expect(await screen.findByText("Out of date")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send to report" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("tab", { name: /Diagnostics/ }));
+    expect(screen.getByText(/source data changed after this statistical test/)).toBeInTheDocument();
+  });
+
+  it("never reads a pending, unfingerprinted, or source-dropped statistical result as Current", () => {
+    const stat = statisticalTestAnalysisResult(
+      "stat", source, "anderson", { ...DEFAULT_SELECTION, x: 0 }, DEFAULT_PARAMS, ["Signal"],
+      { sentence: "s", tables: [{ columns: ["statistic", "value"], rows: [["A²", 0.2]] }] },
+    );
+    const pending = { ...source, pending: { kind: "path", path: "p", book: "b" } } as unknown as Dataset;
+    const { sourceFingerprint: _unused, ...unfingerprinted } = stat;
+    const cases: [AnalysisResult, Dataset[], string, boolean, RegExp][] = [
+      [{ ...stat, stale: true }, [pending], "Pending", false, /Load the full worksheet/],
+      [unfingerprinted, [source], "Out of date", true, /no saved source fingerprint/],
+      [{ ...stat, sources: [] }, [source], "Source missing", true, /no longer references its source/],
+    ];
+    for (const [item, datasets, status, editDisabled, diagnostic] of cases) {
+      useApp.setState({ datasets, analysisResults: [item], openAnalysisResultId: item.id });
+      const { unmount } = render(<AnalysisResultPanel />);
+      expect(screen.getByText(status, { selector: ".qz-analysis-status" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Send to report" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Edit / rerun…" }).hasAttribute("disabled")).toBe(editDisabled);
+      expect(screen.queryByText("No worksheet required")).toBeNull();
+      fireEvent.click(screen.getByRole("tab", { name: /Diagnostics/ }));
+      expect(screen.getByText(diagnostic)).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("reopens a current statistical result with its exact saved question", () => {
+    const stat = statisticalTestAnalysisResult(
+      "stat", source, "anderson", { ...DEFAULT_SELECTION, x: 0 }, DEFAULT_PARAMS, ["Signal"],
+      { sentence: "Current result.", tables: [{ columns: ["statistic", "value"], rows: [["A²", 0.2]] }] },
+    );
+    useApp.setState({ datasets: [source], analysisResults: [stat], openAnalysisResultId: stat.id });
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit / rerun…" }));
+    expect(useStatsTestsStore.getState()).toMatchObject({
+      open: true, request: { testId: "anderson", selection: { x: 0 }, params: { alpha: 0.05 } },
+    });
+    expect(useApp.getState()).toMatchObject({ activeId: "source", openAnalysisResultId: null });
   });
 
   it("presents a saved curve fit with live status, recipe controls, and re-fit setup", async () => {

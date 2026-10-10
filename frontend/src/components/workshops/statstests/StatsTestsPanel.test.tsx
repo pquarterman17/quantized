@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildAnalysisCommands } from "../../../commands/analysisCommands";
 import { resetBookTransportForTests } from "../../../lib/bookData";
+import { DEFAULT_PARAMS, DEFAULT_SELECTION } from "../../../lib/statsTests";
 import type { Dataset } from "../../../lib/types";
 import { useStatsTestsStore } from "../../../store/statsTests";
 import { useApp } from "../../../store/useApp";
@@ -60,8 +61,11 @@ beforeEach(() => {
   resetBookTransportForTests();
   vi.clearAllMocks();
   fetchBookDataMock.mockReset().mockReturnValue(new Promise(() => {}));
-  useApp.setState({ datasets: [ds], activeId: "d1", status: "", reports: [], openReportId: null });
-  useStatsTestsStore.setState({ open: true });
+  useApp.setState({
+    datasets: [ds], activeId: "d1", status: "", reports: [], openReportId: null,
+    analysisResults: [], openAnalysisResultId: null, history: [], future: [],
+  });
+  useStatsTestsStore.setState({ open: true, request: null });
 });
 
 describe("StatsTestsPanel", () => {
@@ -71,6 +75,19 @@ describe("StatsTestsPanel", () => {
     expect(cmd?.section).toBe("Statistics");
     cmd?.run();
     expect(useStatsTestsStore.getState().open).toBe(true);
+  });
+
+  it("consumes an exact saved question when reopened from a result", async () => {
+    useStatsTestsStore.getState().openWith({
+      testId: "ks-two-sample",
+      selection: { ...DEFAULT_SELECTION, x: 1, y: 2 },
+      params: { ...DEFAULT_PARAMS, alpha: 0.01 },
+    });
+    render(<StatsTestsPanel />);
+    await waitFor(() => expect((screen.getByLabelText("Test") as HTMLSelectElement).value).toBe("ks-two-sample"));
+    expect((screen.getByLabelText("First column") as HTMLSelectElement).value).toBe("1");
+    expect((screen.getByLabelText("Second column") as HTMLSelectElement).value).toBe("2");
+    expect(useStatsTestsStore.getState().request).toBeNull();
   });
 
   it("runs a two-sample KS test on the picked columns and interprets it in one sentence", async () => {
@@ -88,6 +105,14 @@ describe("StatsTestsPanel", () => {
       body: { x: [10, 11, 12, 13, 14], y: [20, 21, 22, 23, 24], alternative: "two-sided" },
     });
     expect(screen.getByRole("cell", { name: "D" })).toBeInTheDocument();
+    expect(useApp.getState().analysisResults).toEqual([expect.objectContaining({
+      producer: { id: "statistical-test", label: "Statistical Test", version: 1 },
+      sources: [{ datasetId: "d1", role: "input" }],
+      parameters: expect.objectContaining({ testId: "ks-two-sample" }),
+      tables: [{ columns: ["statistic", "value"], rows: expect.arrayContaining([["D", 1], ["p", 0.008]]) }],
+    })]);
+    useApp.getState().undo();
+    expect(useApp.getState().analysisResults).toEqual([]);
   });
 
   it("copies the results as TSV and exports them as CSV", async () => {
@@ -147,6 +172,9 @@ describe("StatsTestsPanel", () => {
     expect(runMock).toHaveBeenCalledWith({
       id: "power",
       body: { effect_size: 0.8, power: 0.8, kind: "two-sample", alpha: 0.05, tails: 2 },
+    });
+    expect(useApp.getState().analysisResults[0]).toMatchObject({
+      producer: { id: "statistical-test" }, sources: [], outputs: [],
     });
   });
 
