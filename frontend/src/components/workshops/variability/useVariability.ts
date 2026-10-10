@@ -58,6 +58,7 @@ export interface VariabilityState {
   reportBusy: boolean;
   toReport: () => Promise<void>;
   canSaveResult: boolean;
+  saveResultDisabledReason: string | null;
   saveResult: () => string | null;
 }
 

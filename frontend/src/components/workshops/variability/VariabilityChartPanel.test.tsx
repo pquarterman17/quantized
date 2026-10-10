@@ -129,6 +129,7 @@ describe("VariabilityChartPanel", () => {
     fireEvent.click(save);
     expect(useApp.getState().analysisResults).toHaveLength(1);
     expect(save).toBeDisabled();
+    expect(screen.getByText("This variability result is already saved.")).toBeInTheDocument();
   });
 
   it("shows the not-estimable note instead of a variance-components table when B(A) can't be estimated", async () => {

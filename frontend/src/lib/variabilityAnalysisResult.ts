@@ -1,6 +1,7 @@
 import type { NestedAnovaResponse, VarianceComponentsResponse, VariabilitySummaryResponse } from "./api";
 import { ANALYSIS_RESULT_VERSION, INLINE_TABLE_LIMITS, type AnalysisResult, type AnalysisResultTable } from "./analysisResult";
 import { analysisDataFingerprint } from "./analysisResultFreshness";
+import { fmtNum } from "./format";
 import type { Dataset } from "./types";
 
 export interface VariabilityRecipe {
@@ -119,8 +120,10 @@ export function variabilityAnalysisResult(
     .filter(([, value]) => value).map(([key]) => key === "B_within_A" ? "B(A)" : key) : [];
   const warnings = [
     ...(snapshot.varCompNote ? [snapshot.varCompNote] : []),
+    ...(!snapshot.anova.b_within_a_estimable ? ["The B(A) component is not estimable for this design."] : []),
+    ...(!snapshot.anova.error_estimable ? ["The Error component is not estimable for this design."] : []),
     ...(clamped.length ? [`Negative raw variance estimate${clamped.length === 1 ? "" : "s"} for ${clamped.join(", ")} ${clamped.length === 1 ? "was" : "were"} clamped to zero.`] : []),
-    ...(!snapshot.anova.balanced ? ["The nested design is unbalanced; review the reported test denominator and variance-component method."] : []),
+    ...(!snapshot.anova.balanced ? ["The nested design is unbalanced. The A test is approximate: the B(A) coefficient in E[MS_A] is not n1, and no Satterthwaite denominator-df correction is applied."] : []),
     ...bounded.warnings,
   ];
   const channel = (index: number, fallback: string) => index < 0 ? null : ({
@@ -129,7 +132,7 @@ export function variabilityAnalysisResult(
   return {
     version: ANALYSIS_RESULT_VERSION,
     id,
-    name: `${snapshot.responseLabel} variability · ${source.name}`,
+    name: `${snapshot.responseLabel} by ${snapshot.factorALabel} / ${snapshot.factorBLabel} · ${source.name}`,
     producer: { id: "variability-analysis", label: "Variability", version: 1 },
     sources: [{ datasetId: source.id, role: "input" }], outputs: [],
     selection: {
@@ -142,11 +145,13 @@ export function variabilityAnalysisResult(
     },
     sourceFingerprint: analysisDataFingerprint(source),
     scalarValues: {
-      Test: "Nested variability", Interpretation: `${grandN ?? "unknown"} observations; grand mean ${grandMean ?? "unavailable"}.`,
+      Test: "Nested variability", Interpretation: `${grandN ?? "unknown"} observations; grand mean ${fmtNum(grandMean)}.`,
       Response: snapshot.responseLabel, "Factor A": snapshot.factorALabel, "Factor B (nested)": snapshot.factorBLabel,
       "A test denominator": snapshot.anova.a_tested_against,
       N: grandN, "Grand mean": grandMean, Alpha: finite(snapshot.anova.alpha),
       Balanced: snapshot.anova.balanced ? "yes" : "no",
+      "B(A) estimable": snapshot.anova.b_within_a_estimable ? "yes" : "no",
+      "Error estimable": snapshot.anova.error_estimable ? "yes" : "no",
       ...(snapshot.varComp ? {
         "Variance method": snapshot.varComp.method,
         "n1 coefficient": finite(snapshot.varComp.n1_coefficient),

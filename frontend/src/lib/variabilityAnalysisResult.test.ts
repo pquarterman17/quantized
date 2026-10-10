@@ -18,7 +18,7 @@ const anova: NestedAnovaResponse = {
   ],
   a_levels: 2, b_per_a: [2, 2], n_per_cell: [[1, 1], [1, 1]], n_total: 4,
   grand_mean: 5, alpha: 0.05, a_tested_against: "B(A)", b_within_a_estimable: true,
-  error_estimable: false, balanced: true,
+  error_estimable: true, balanced: true,
 };
 const summary: VariabilitySummaryResponse = {
   cells: [
@@ -51,7 +51,8 @@ describe("variabilityAnalysisResult", () => {
       producer: { id: "variability-analysis" }, sources: [{ datasetId: "source" }], outputs: [],
       parameters: { recipe }, sourceFingerprint: analysisDataFingerprint(source),
       selection: { channels: [{ index: 2, label: "measurement", unit: "nm" }, { index: 0 }, { index: 1 }] },
-      scalarValues: { N: 4, "Grand mean": 5, "Variance method": "ANOVA/EMS", "n1 coefficient": 1 },
+      scalarValues: { N: 4, "Grand mean": 5, "Variance method": "ANOVA/EMS", "n1 coefficient": 1,
+        "B(A) estimable": "yes", "Error estimable": "yes" },
     });
     expect(result.tables).toEqual(expect.arrayContaining([
       expect.objectContaining({ title: "Nested ANOVA" }),
@@ -59,6 +60,7 @@ describe("variabilityAnalysisResult", () => {
       expect.objectContaining({ title: "Cell summaries", rows: expect.arrayContaining([["lot A", "w1", 1, 2, null]]) }),
     ]));
     expect(result.warnings).toContain("Negative raw variance estimate for B(A) was clamped to zero.");
+    expect(result.name).toBe("measurement by lot / wafer · wafers.csv");
     expect(variabilityRecipe(result, source)).toEqual(recipe);
     expect(JSON.stringify(result)).not.toContain('"values"');
     expect(sanitizeAnalysisResults(JSON.parse(JSON.stringify([result])))).toEqual([result]);
@@ -67,10 +69,14 @@ describe("variabilityAnalysisResult", () => {
   it("preserves a valid non-estimable result and rejects malformed saved questions", () => {
     const recipe = { responseCol: 2, factorACol: 0, factorBCol: 1 };
     const result = variabilityAnalysisResult("result", source, recipe, {
-      ...snapshot, varComp: null, varCompNote: "variance components are not estimable",
+      ...snapshot, anova: { ...anova, b_within_a_estimable: false, error_estimable: false, balanced: false },
+      varComp: null, varCompNote: "variance components are not estimable",
     });
     expect(result.tables?.some((table) => table.title === "Variance components")).toBe(false);
     expect(result.warnings).toContain("variance components are not estimable");
+    expect(result.warnings).toContain("The B(A) component is not estimable for this design.");
+    expect(result.warnings).toContain("The Error component is not estimable for this design.");
+    expect(result.warnings).toContain("The nested design is unbalanced. The A test is approximate: the B(A) coefficient in E[MS_A] is not n1, and no Satterthwaite denominator-df correction is applied.");
     expect(variabilityRecipe({ ...result, parameters: { recipe: { ...recipe, factorACol: 2 } } })).toBeNull();
     expect(variabilityRecipe({ ...result, parameters: { recipe: { ...recipe, responseCol: 9 } } }, source)).toBeNull();
     expect(variabilityRecipe({ ...result, parameters: { recipe: { ...recipe, responseCol: 1.5 } } })).toBeNull();

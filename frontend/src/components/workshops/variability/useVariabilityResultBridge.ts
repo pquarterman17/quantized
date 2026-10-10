@@ -28,7 +28,11 @@ interface BridgeArgs {
   busy: boolean;
 }
 
-export function useVariabilityResultBridge(args: BridgeArgs): { canSaveResult: boolean; saveResult: () => string | null } {
+export function useVariabilityResultBridge(args: BridgeArgs): {
+  canSaveResult: boolean;
+  saveResultDisabledReason: string | null;
+  saveResult: () => string | null;
+} {
   const request = useVariabilityStore((state) => state.request);
   const consumeRequest = useVariabilityStore((state) => state.consumeRequest);
   const setStatus = useApp((state) => state.setStatus);
@@ -56,6 +60,12 @@ export function useVariabilityResultBridge(args: BridgeArgs): { canSaveResult: b
     state.analysisResults.some((result) => matchesVariabilityResult(result, args.active!.id, fingerprint, recipe)));
   const canSaveResult = !!args.active && !args.active.pending && recipeValid && !args.busy &&
     !!args.anova && !!args.summary && !savedResultExists;
+  const saveResultDisabledReason = canSaveResult ? null
+    : !args.active ? "Select a dataset before saving."
+      : args.active.pending ? "Load the full worksheet before saving this result."
+        : !recipeValid ? "Response, Factor A, and Factor B must use three different valid columns."
+          : args.busy || !args.anova || !args.summary ? "Wait for the variability analysis to finish."
+            : savedResultExists ? "This variability result is already saved." : "This result cannot be saved yet.";
   const saveResult = (): string | null => {
     if (savedResultExists) {
       setStatus("this variability result is already saved");
@@ -74,5 +84,5 @@ export function useVariabilityResultBridge(args: BridgeArgs): { canSaveResult: b
       anova, summary, varComp: args.varComp, varCompNote: args.varCompNote,
     });
   };
-  return { canSaveResult, saveResult };
+  return { canSaveResult, saveResultDisabledReason, saveResult };
 }
