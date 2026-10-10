@@ -28,11 +28,13 @@ import { reflectivityFitAnalysisResult } from "../../../lib/reflFitAnalysisResul
 import { statisticalTestAnalysisResult } from "../../../lib/statisticalTestAnalysisResult";
 import { distributionAnalysisResult } from "../../../lib/distributionAnalysisResult";
 import { fitYByXAnalysisResult } from "../../../lib/fitYByXAnalysisResult";
+import { variabilityAnalysisResult } from "../../../lib/variabilityAnalysisResult";
 import { DEFAULT_PARAMS, DEFAULT_SELECTION } from "../../../lib/statsTests";
 import { publishFitResult } from "../../../store/peakTables";
 import { useStatsTestsStore } from "../../../store/statsTests";
 import { useDistributionRequestStore } from "../../../store/distribution";
 import { useFitYByXStore } from "../../../store/fitYByX";
+import { useVariabilityStore } from "../../../store/variability";
 import { useApp } from "../../../store/useApp";
 import { encodeRecord } from "../reflectivity/reflFitRecord";
 import { makeDataset, makeRecord } from "../reflectivity/reflFit.testkit";
@@ -76,6 +78,7 @@ beforeEach(() => {
   useStatsTestsStore.setState({ open: false, request: null });
   useDistributionRequestStore.setState({ request: null });
   useFitYByXStore.setState({ open: false, request: null });
+  useVariabilityStore.setState({ open: false, request: null });
   useApp.setState({
     datasets: [source, output],
     activeId: "source",
@@ -405,6 +408,30 @@ describe("AnalysisResultPanel", () => {
     expect(useFitYByXStore.getState()).toMatchObject({
       open: true,
       request: { xCol: -1, yCol: 0, byCol: null, order: 2, bandInterval: "prediction" },
+    });
+    expect(useApp.getState()).toMatchObject({ activeId: "source", openAnalysisResultId: null });
+  });
+
+  it("reopens a current Variability snapshot with its exact response and factor columns", () => {
+    const variabilitySource: Dataset = {
+      ...source,
+      data: { ...source.data, values: [[1, 10], [2, 20]], labels: ["Signal", "Batch"], units: ["V", ""] },
+    };
+    const variability = variabilityAnalysisResult(
+      "variability", variabilitySource, { responseCol: 0, factorACol: -1, factorBCol: 1 }, {
+        responseLabel: "Signal", factorALabel: "Time", factorBLabel: "Batch", levelLabels: [],
+        anova: { table: [], a_levels: 2, b_per_a: [], n_per_cell: [], n_total: 2, grand_mean: 1.5,
+          alpha: 0.05, a_tested_against: "Error", b_within_a_estimable: false,
+          error_estimable: false, balanced: false },
+        summary: { cells: [], a_groups: [], grand_mean: 1.5, grand_n: 2, a_levels: 2, balanced: false },
+        varComp: null, varCompNote: "not estimable",
+      },
+    );
+    useApp.setState({ datasets: [variabilitySource], analysisResults: [variability], openAnalysisResultId: variability.id });
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit / rerun…" }));
+    expect(useVariabilityStore.getState()).toMatchObject({
+      open: true, request: { responseCol: 0, factorACol: -1, factorBCol: 1 },
     });
     expect(useApp.getState()).toMatchObject({ activeId: "source", openAnalysisResultId: null });
   });

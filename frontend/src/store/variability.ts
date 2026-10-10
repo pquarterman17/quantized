@@ -5,13 +5,20 @@
 // the main app store.
 
 import { create } from "zustand";
+import type { VariabilityRecipe } from "../lib/variabilityAnalysisResult";
 
 interface VariabilityStoreState {
   open: boolean;
+  request: VariabilityRecipe | null;
   setOpen: (open: boolean) => void;
+  openWith: (request: VariabilityRecipe) => void;
+  consumeRequest: () => void;
 }
 
 export const useVariabilityStore = create<VariabilityStoreState>((set) => ({
   open: false,
+  request: null,
   setOpen: (open) => set({ open }),
+  openWith: (request) => set({ open: true, request }),
+  consumeRequest: () => set({ request: null }),
 }));

@@ -192,4 +192,16 @@ describe("stamp / stale round trip", () => {
     expect(snapshotResultState(changed, [source])).toBe("out-of-date");
     expect(snapshotResultState({ ...fitYByX, sources: [] }, [source])).toBe("source-missing");
   });
+
+  it("applies the snapshot freshness contract to Variability results", () => {
+    const source = ds("s", data([1, 2]));
+    const variability: AnalysisResult = {
+      ...RESULT, outputs: [], producer: { id: "variability-analysis", label: "Variability", version: 1 },
+      sourceFingerprint: analysisDataFingerprint(source),
+    };
+    expect(snapshotResultState(variability, [source])).toBe("current");
+    const [changed] = stampAnalysisResults([variability], [ds("s", data([1, 3]))], []);
+    expect(changed).toMatchObject({ sourceFingerprint: variability.sourceFingerprint, stale: true });
+    expect(snapshotResultState(changed, [source])).toBe("out-of-date");
+  });
 });

@@ -77,10 +77,18 @@ export default function VariabilityChartPanel() {
           )}
 
           {v.anova && v.summary && (
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+              <Button size="sm" disabled={!v.canSaveResult} title={v.saveResultDisabledReason ?? undefined} onClick={v.saveResult}>
+                Save result
+              </Button>
               <Button size="sm" disabled={v.reportBusy} onClick={() => void v.toReport()}>
                 {v.reportBusy ? "Reporting…" : "→ Report"}
               </Button>
+              {v.saveResultDisabledReason && (
+                <span className="qzk-ds-meta" style={{ alignSelf: "center", color: "var(--text-faint)" }}>
+                  {v.saveResultDisabledReason}
+                </span>
+              )}
             </div>
           )}
         </>
