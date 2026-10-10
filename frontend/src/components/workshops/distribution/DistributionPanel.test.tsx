@@ -50,6 +50,7 @@ beforeEach(() => {
     distributionOpen: true,
     reports: [],
     status: "",
+    analysisResults: [], history: [], future: [],
   });
 });
 
@@ -121,6 +122,15 @@ describe("DistributionPanel", () => {
     fireEvent.click(await screen.findByRole("button", { name: "→ Report" }));
     await waitFor(() => expect(useApp.getState().reports).toHaveLength(1));
     expect(reportEmit).toHaveBeenCalledWith(expect.objectContaining({ kind: "stats_table" }));
+  });
+
+  it("offers an explicit Save result action after the analysis settles", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
+    render(<DistributionPanel />);
+    const save = await screen.findByRole("button", { name: "Save result" });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
   });
 });
 

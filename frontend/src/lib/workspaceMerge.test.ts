@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { AnalysisResult } from "./analysisResult";
 import type { Dataset } from "./types";
 import type { LoadedWorkspace } from "./workspace";
-import { statisticalSnapshotState } from "./analysisResultFreshness";
+import { snapshotResultState } from "./analysisResultFreshness";
 import { mergeWorkspace } from "./workspaceMerge";
 import type { WorkbookNode } from "./workbooks";
 
@@ -143,7 +143,7 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
     const [result] = merged.analysisResults;
     expect(result.sources).toEqual([]);
     expect(result.warnings).toEqual([expect.stringContaining("was not in the appended project")]);
-    expect(statisticalSnapshotState(result, merged.datasets)).toBe("source-missing");
+    expect(snapshotResultState(result, merged.datasets)).toBe("source-missing");
   });
 
   it("keeps reflectivity result envelopes and their stored record bindings aligned", () => {

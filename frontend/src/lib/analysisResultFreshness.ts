@@ -78,27 +78,33 @@ function sourcesFingerprint(result: AnalysisResult, byId: ReadonlyMap<string, Da
   return result.sources.map((ref) => dataFingerprint(byId.get(ref.datasetId)!.data)).join(":");
 }
 
-/** A statistical-test result needs no worksheet only when its saved question
- *  is a power analysis. Every other test was run on a source worksheet, so a
- *  result that has lost (or never carried) its source reference is
- *  source-missing — never "current" by default. */
-export function statisticalResultSourceless(result: AnalysisResult): boolean {
-  return result.parameters?.["testId"] === "power";
+/** Producers whose envelope owns its result tables outright (no linked
+ *  output worksheet): their freshness is judged by `snapshotResultState`. */
+export function isSnapshotResult(result: AnalysisResult): boolean {
+  return result.producer.id === "statistical-test" || result.producer.id === "distribution-analysis";
 }
 
-export type StatisticalSnapshotState = "current" | "out-of-date" | "pending" | "source-missing";
+/** A snapshot needs no worksheet only when its saved question is a
+ *  statistical power analysis. Every other snapshot was computed from a source
+ *  worksheet, so one that has lost (or never carried) its source reference is
+ *  source-missing — never "current" by default. */
+export function snapshotResultSourceless(result: AnalysisResult): boolean {
+  return result.producer.id === "statistical-test" && result.parameters?.["testId"] === "power";
+}
 
-/** The single freshness authority for statistical-test snapshots, shared by
- *  the result panel's status/gates and the report handoff. A result is current
- *  only when every source is present and fully loaded, the envelope carries a
- *  fingerprint, it was not saved stale, and that fingerprint matches the exact
- *  analysis view now. A lazily loaded source is only a preview, so it can't be
- *  judged: `pending`, not current. */
-export function statisticalSnapshotState(
+export type SnapshotResultState = "current" | "out-of-date" | "pending" | "source-missing";
+
+/** The single freshness authority for snapshot results, shared by the result
+ *  panel's status/gates/diagnostics and the report handoff. A result is
+ *  current only when every source is present and fully loaded, the envelope
+ *  carries a fingerprint, it was not saved stale, and that fingerprint matches
+ *  the exact analysis view now. A lazily loaded source is only a preview, so
+ *  it can't be judged: `pending`, not current. */
+export function snapshotResultState(
   result: AnalysisResult,
   datasets: readonly Dataset[],
-): StatisticalSnapshotState {
-  if (statisticalResultSourceless(result) && result.sources.length === 0) {
+): SnapshotResultState {
+  if (snapshotResultSourceless(result) && result.sources.length === 0) {
     return result.stale ? "out-of-date" : "current";
   }
   if (result.sources.length === 0) return "source-missing";
@@ -110,26 +116,25 @@ export function statisticalSnapshotState(
   return now === result.sourceFingerprint ? "current" : "out-of-date";
 }
 
-export const STATISTICAL_SNAPSHOT_STATUS: Readonly<Record<StatisticalSnapshotState, string>> = {
+export const SNAPSHOT_RESULT_STATUS: Readonly<Record<SnapshotResultState, string>> = {
   "current": "Current", "out-of-date": "Out of date", "pending": "Pending", "source-missing": "Source missing",
 };
 
 /** Diagnostics for a non-current snapshot. A present-but-deleted source is
  *  already reported generically by its reference, so it adds nothing here. */
-export function statisticalSnapshotDiagnostics(result: AnalysisResult, state: StatisticalSnapshotState): string[] {
-  if (state === "pending") {
-    return ["The source worksheet is not fully loaded. Load the full worksheet to check whether these values are current."];
-  }
+export function snapshotResultDiagnostics(result: AnalysisResult, state: SnapshotResultState): string[] {
+  const noun = result.producer.id === "distribution-analysis" ? "distribution analysis" : "statistical test";
+  if (state === "pending") return [`Load the full source worksheet to verify this ${noun}.`];
   if (state === "source-missing") {
-    return result.sources.length ? [] : ["This statistical result no longer references its source worksheet, so its values can't be checked."];
+    return result.sources.length ? [] : [`This saved ${noun} no longer references its source worksheet and cannot be verified.`];
   }
   if (state !== "out-of-date") return [];
   return [result.sourceFingerprint
-    ? "The source data changed after this statistical test. Run the test again before using these values."
-    : "This statistical result has no saved source fingerprint, so it can't be checked against the data. Run the test again before using these values."];
+    ? `The source data changed after this ${noun}. Run it again before using these values.`
+    : `This saved ${noun} has no source fingerprint and cannot be verified.`];
 }
 
-function statisticalSourcesFingerprint(result: AnalysisResult, byId: ReadonlyMap<string, Dataset>): string | null {
+function snapshotSourcesFingerprint(result: AnalysisResult, byId: ReadonlyMap<string, Dataset>): string | null {
   if (result.sources.length === 0) return null;
   const sources = result.sources.map((ref) => byId.get(ref.datasetId));
   if (sources.some((dataset) => !dataset || dataset.pending)) return null;
@@ -147,21 +152,21 @@ export function stampAnalysisResults(
 ): AnalysisResult[] {
   const byId = new Map(datasets.map((dataset) => [dataset.id, dataset]));
   return results.map(({ stale: wasStale, ...result }) => {
-    // Statistical tables are source-only snapshots: there is no linked
+    // Inline tables are source-only snapshots: there is no linked
     // output for the recalc graph to mark. Never refresh their fingerprint
     // merely because the project is being saved; that would silently bless
     // old numbers after the source changed. Only running the test again
     // creates a new current result.
-    if (result.producer.id === "statistical-test") {
+    if (isSnapshotResult(result)) {
       // Once stale, always stale: only a new run creates a current result.
       if (wasStale) return { ...result, stale: true as const };
       // No fingerprint means the numbers were never tied to a data state;
       // stamping today's would bless them against whatever the data is now.
       if (!result.sourceFingerprint) {
-        return statisticalResultSourceless(result) && result.sources.length === 0
+        return snapshotResultSourceless(result) && result.sources.length === 0
           ? result : { ...result, stale: true as const };
       }
-      const fingerprint = statisticalSourcesFingerprint(result, byId);
+      const fingerprint = snapshotSourcesFingerprint(result, byId);
       return fingerprint && fingerprint !== result.sourceFingerprint ? { ...result, stale: true as const } : result;
     }
     // A peak result has no linked output and its Dataset.peakTable carries the

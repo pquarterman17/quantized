@@ -6,6 +6,7 @@ import { statsDescriptive } from "../../../lib/api/statsDescriptive";
 import { type DistFitAllResponse, reportEmit, statsFitDistributions, statsHistogram, statsShapiro } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { useDistributionRequestStore } from "../../../store/distribution";
 import { useDistribution } from "./useDistribution";
 
 vi.mock("../../../lib/api", () => ({
@@ -51,7 +52,9 @@ beforeEach(() => {
     selection: null,
     reports: [],
     status: "",
+    analysisResults: [], history: [], future: [],
   });
+  useDistributionRequestStore.setState({ request: null });
 });
 
 describe("useDistribution", () => {
@@ -99,6 +102,66 @@ describe("useDistribution", () => {
     act(() => result.current.setCol(-1));
     await waitFor(() => expect(statsHistogram).toHaveBeenLastCalledWith([0, 1, 2, 3, 4, 5]));
     expect(result.current.label).toBe("T");
+  });
+
+  it("saves the settled result as one undoable Library snapshot", async () => {
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+    act(() => { result.current.saveResult(); });
+    expect(useApp.getState().analysisResults[0]).toMatchObject({
+      producer: { id: "distribution-analysis" },
+      sources: [{ datasetId: "d1", role: "input" }],
+      parameters: { recipe: expect.objectContaining({ col: 0, byCol: null, fitDist: "none" }) },
+      tables: expect.arrayContaining([expect.objectContaining({ title: "Summary" }), expect.objectContaining({ title: "Histogram" })]),
+    });
+    useApp.getState().undo();
+    expect(useApp.getState().analysisResults).toEqual([]);
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+  });
+
+  it("does not duplicate the same settled snapshot on repeated Save actions", async () => {
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+    act(() => {
+      result.current.saveResult();
+      result.current.saveResult();
+    });
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    await waitFor(() => expect(result.current.canSaveResult).toBe(false));
+  });
+
+  it("keys the duplicate guard on data and question, not object identity", async () => {
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+    act(() => { result.current.saveResult(); });
+    await waitFor(() => expect(result.current.canSaveResult).toBe(false));
+    // An unrelated edit rebuilds the dataset object (every identity the old
+    // guard keyed on), but the same data + question must stay saved.
+    act(() => {
+      useApp.setState((s) => ({ datasets: s.datasets.map((d) => ({ ...d, name: "renamed.dat" })) }));
+    });
+    await waitFor(() => expect(result.current.busy).toBe(false));
+    expect(result.current.desc).not.toBeNull();
+    expect(result.current.canSaveResult).toBe(false);
+    act(() => { expect(result.current.saveResult()).toBeNull(); });
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    // A real data change is a new analysis: Save re-enables.
+    act(() => {
+      useApp.setState((s) => ({ datasets: s.datasets.map((d) => ({
+        ...d, data: { ...d.data, values: d.data.values.map(([v]) => [v + 1]) },
+      })) }));
+    });
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+    act(() => { result.current.saveResult(); });
+    expect(useApp.getState().analysisResults).toHaveLength(2);
+  });
+
+  it("restores the exact saved controls and consumes the request", async () => {
+    useDistributionRequestStore.getState().openWith({ col: -1, byCol: null, fitDist: "normal", compareOpen: true, percentileInput: 95 });
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.col).toBe(-1));
+    expect(result.current).toMatchObject({ fitDist: "normal", compareOpen: true, percentileInput: 95 });
+    expect(useDistributionRequestStore.getState().request).toBeNull();
   });
 });
 
@@ -344,6 +407,39 @@ describe("useDistribution — report emission", () => {
       }),
     );
     expect(useApp.getState().reports).toHaveLength(1);
+  });
+
+  it("blocks repeated sends and discards a rendered report if its source changes in flight", async () => {
+    let resolveReport!: (value: { report: { title: string; sections: never[] } }) => void;
+    vi.mocked(reportEmit).mockReturnValue(new Promise((resolve) => { resolveReport = resolve; }));
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.desc).not.toBeNull());
+    let first!: Promise<void>;
+    act(() => {
+      first = result.current.toReport();
+      void result.current.toReport();
+    });
+    expect(reportEmit).toHaveBeenCalledTimes(1);
+    act(() => useApp.setState({
+      datasets: [{ id: "d1", name: "run.dat", data: { ...DATA, values: [[999], ...DATA.values.slice(1)] } }],
+    }));
+    resolveReport({ report: { title: "stale", sections: [] } });
+    await act(async () => { await first; });
+    expect(useApp.getState().reports).toEqual([]);
+    expect(useApp.getState().status).toContain("changed");
+  });
+
+  it("discards a rendered report if the selected Distribution question changes in flight", async () => {
+    let resolveReport!: (value: { report: { title: string; sections: never[] } }) => void;
+    vi.mocked(reportEmit).mockReturnValue(new Promise((resolve) => { resolveReport = resolve; }));
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.desc).not.toBeNull());
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.toReport(); });
+    act(() => result.current.setCol(-1));
+    resolveReport({ report: { title: "stale", sections: [] } });
+    await act(async () => { await pending; });
+    expect(useApp.getState().reports).toEqual([]);
   });
 });
 

@@ -1,5 +1,5 @@
 import type { AnalysisResult } from "../lib/analysisResult";
-import { statisticalSnapshotState } from "../lib/analysisResultFreshness";
+import { isSnapshotResult, snapshotResultState } from "../lib/analysisResultFreshness";
 import { reportEmit } from "../lib/api";
 import { csvBlob } from "../lib/csvCell";
 import { saveBlob } from "../lib/download";
@@ -25,8 +25,9 @@ export function exportAnalysisInlineTables(id: string): boolean {
   return true;
 }
 
-function statisticalSnapshotCurrent(result: AnalysisResult, datasets: readonly Dataset[]): boolean {
-  return result.producer.id === "statistical-test" && statisticalSnapshotState(result, datasets) === "current";
+function snapshotCurrent(result: AnalysisResult, datasets: readonly Dataset[]): boolean {
+  return !!result.tables?.length && result.outputs.length === 0 && isSnapshotResult(result) &&
+    snapshotResultState(result, datasets) === "current";
 }
 
 /** Send the primary saved statistics table through the established report
@@ -38,7 +39,7 @@ export async function sendAnalysisInlineTableToReport(id: string): Promise<boole
   const tables = result?.tables;
   const table = tables?.[0];
   if (!result || !tables || !table) return false;
-  if (!statisticalSnapshotCurrent(result, initial.datasets)) {
+  if (!snapshotCurrent(result, initial.datasets)) {
     initial.setStatus(`can't add ${result.name} to report: its source is missing or out of date`);
     return false;
   }
@@ -57,14 +58,14 @@ export async function sendAnalysisInlineTableToReport(id: string): Promise<boole
     // The rendered sheet embeds the pre-await title, so a rename in flight is a
     // change too: publishing would label the Report list and sheet differently.
     if (!live || live.tables !== tables || live.name !== result.name ||
-        !statisticalSnapshotCurrent(live, current.datasets)) {
-      current.setStatus("can't add statistics result to report: the result or its source changed while rendering");
+        !snapshotCurrent(live, current.datasets)) {
+      current.setStatus("can't add analysis result to report: the result or its source changed while rendering");
       return false;
     }
     addReportWithProvenance(live.name, report, live.sources[0]?.datasetId ?? null);
     return true;
   } catch (error) {
-    useApp.getState().setStatus(`could not add statistics result to report — ${error instanceof Error ? error.message : "unknown error"}`);
+    useApp.getState().setStatus(`could not add analysis result to report — ${error instanceof Error ? error.message : "unknown error"}`);
     return false;
   }
 }

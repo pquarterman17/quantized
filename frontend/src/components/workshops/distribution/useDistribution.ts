@@ -38,14 +38,12 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { statsDescriptive } from "../../../lib/api/statsDescriptive";
-import { type DistFitAllResponse, type DistFitResult, reportEmit, statsFitDistributions, statsHistogram, statsShapiro } from "../../../lib/api";
+import { type DistFitAllResponse, type DistFitResult, statsFitDistributions, statsHistogram, statsShapiro } from "../../../lib/api";
 import { type DistFamily, distPdfCurve, distQuantile } from "../../../lib/distpdf";
 import { rowsInBins } from "../../../lib/distribution";
 import { activeRowIndices, analysisData, droppedRows } from "../../../lib/rowstate";
 import type { CalcResult } from "../../../lib/types";
-import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-import { toast } from "../../../store/toasts";
 import type { ByColumnOption, ByLevel } from "../useByPartition";
 import {
   type DistributionLevelResult,
@@ -57,10 +55,14 @@ import {
   useDistributionByLevels,
 } from "./useDistributionByLevels";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
+import { useDistributionResultBridge } from "./useDistributionResultBridge";
+import { useDistributionReport } from "./useDistributionReport";
 
 // Re-exported so the panel components (HistogramStrip, DistributionLevelSection)
 // and their tests keep one import site for the hook and its result shapes.
 export type { DistributionLevelResult, HistBins, Normality };
+
+const NO_SKIPPED_FITS: { dist: string; reason: string }[] = [];
 
 export interface DistributionColumn {
   index: number;
@@ -163,6 +165,8 @@ export interface DistributionState {
   /** True while any per-level fetch in `byResults` is still in flight. */
   byBusy: boolean;
   reportBusy: boolean;
+  canSaveResult: boolean;
+  saveResult: () => string | null;
   /** Emit a #36 stats_table report: one record per By level when a By
    *  column is active, else one record for the whole current column. */
   toReport: () => Promise<void>;
@@ -173,7 +177,6 @@ export function useDistribution(): DistributionState {
   const data = useMemo(() => analysisData(active), [active]);
   const setRowSelection = useApp((s) => s.setRowSelection);
   const clearRowSelection = useApp((s) => s.clearRowSelection);
-  const setStatus = useApp((s) => s.setStatus);
 
   const columns = useMemo<DistributionColumn[]>(() => {
     if (!active) return [];
@@ -199,7 +202,6 @@ export function useDistribution(): DistributionState {
   // degenerate (every level would just be that one homogeneous value).
   const byColumns = useMemo(() => columns.filter((c) => c.index !== col), [columns, col]);
   const by = useDistributionByLevels(active, data, byColumns, col);
-  const [reportBusy, setReportBusy] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -389,58 +391,17 @@ export function useDistribution(): DistributionState {
     if (!useShiftExtend) setAnchorBin(i0);
   }
 
-  async function toReport(): Promise<void> {
-    if (!active) return;
-    setReportBusy(true);
-    try {
-      const refs = [{ kind: "dataset", id: active.id, name: active.name }];
-      const byLabel = by.byOptions.find((c) => c.index === by.byCol)?.label;
-      let title: string;
-      let records: Record<string, unknown>[];
-      if (by.levels.length > 0) {
-        if (by.results.length === 0) return; // still computing for the current picks
-        title = `${label} distribution by ${byLabel ?? "level"}`;
-        records = by.results.map((r) => ({
-          level: r.label,
-          n: r.n,
-          mean: r.desc?.mean,
-          median: r.desc?.median,
-          std: r.desc?.std,
-          min: r.desc?.min,
-          max: r.desc?.max,
-          shapiro_W: r.norm?.W,
-          shapiro_p: r.norm?.p,
-        }));
-      } else {
-        if (!desc) {
-          setReportBusy(false);
-          return;
-        }
-        title = `${label} distribution`;
-        records = [
-          {
-            n: desc.N,
-            mean: desc.mean,
-            median: desc.median,
-            std: desc.std,
-            min: desc.min,
-            max: desc.max,
-            shapiro_W: norm?.W,
-            shapiro_p: norm?.p,
-          },
-        ];
-      }
-      const { report } = await reportEmit({ kind: "stats_table", records, title, source_refs: refs });
-      addReportWithProvenance(title, report, active.id);
-      setStatus(`emitted ${title} report`);
-    } catch (e) {
-      toast(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`, "danger");
-    } finally {
-      setReportBusy(false);
-    }
-  }
-
   const label = columns.find((c) => c.index === col)?.label ?? "x";
+  const byLabel = by.byOptions.find((column) => column.index === by.byCol)?.label ?? null;
+  const report = useDistributionReport({ active, label, byLabel, byLevels: by.levels,
+    byResults: by.results, desc, norm });
+  const resultBridge = useDistributionResultBridge({
+    active, col, setCol, byCol: by.byCol, setByCol: by.setByCol,
+    fitDist, setFitDist, compareOpen, setCompareOpen, percentileInput, setPercentileInput,
+    label, byLabel, hist, desc, norm, normNote, byLevels: by.levels, byResults: by.results,
+    byTotalLevels: by.totalLevels, rankedFits, rankingMetric, quantiles, percentileValue,
+    skipped: fits?.skipped ?? NO_SKIPPED_FITS, busy, fitBusy, fitsReady: fits !== null, byBusy: by.busy,
+  });
 
   return {
     hasData: !!active,
@@ -481,7 +442,7 @@ export function useDistribution(): DistributionState {
     byTotalLevels: by.totalLevels,
     byResults: by.results,
     byBusy: by.busy,
-    reportBusy,
-    toReport,
+    ...report,
+    ...resultBridge,
   };
 }
