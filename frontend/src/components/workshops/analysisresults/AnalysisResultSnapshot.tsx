@@ -1,4 +1,5 @@
 import type { AnalysisResult, AnalysisResultValue } from "../../../lib/analysisResult";
+import { snapshotResultSourceless } from "../../../lib/analysisResultFreshness";
 import { fmtNum } from "../../../lib/format";
 import type { Dataset } from "../../../lib/types";
 import { Button } from "../../primitives";
@@ -28,7 +29,7 @@ export default function AnalysisResultSnapshot({ result, source, view, onExport,
   if (view === "overview") return <>
     <dl className="qz-analysis-summary">
       <div><dt>Analysis</dt><dd>{String(result.scalarValues?.Test ?? result.producer.label)}</dd></div>
-      <div><dt>Source</dt><dd>{source?.name ?? (result.sources.length ? "Missing source" : "No worksheet required")}</dd></div>
+      <div><dt>Source</dt><dd>{source?.name ?? (snapshotResultSourceless(result) && !result.sources.length ? "No worksheet required" : "Missing source")}</dd></div>
       <div><dt>Tables</dt><dd>{result.tables?.length ?? 0}</dd></div>
       <div><dt>Created</dt><dd>{date(result.createdAt)}</dd></div>
     </dl>

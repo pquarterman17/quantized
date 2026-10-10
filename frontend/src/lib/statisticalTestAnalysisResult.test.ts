@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { sanitizeAnalysisResults } from "./analysisResult";
 import { analysisDataFingerprint } from "./analysisResultFreshness";
 import { statisticalTestAnalysisResult, statisticalTestRecipe } from "./statisticalTestAnalysisResult";
 import { DEFAULT_PARAMS, DEFAULT_SELECTION } from "./statsTests";
@@ -44,6 +45,25 @@ describe("statisticalTestAnalysisResult", () => {
     expect(result.sources).toEqual([]);
     expect(result).not.toHaveProperty("sourceFingerprint");
     expect(result.tables?.[0].rows).toEqual([[64, null]]);
+  });
+
+  it("caps saved tables to the envelope bounds with a warning instead of a silent drop on reopen", () => {
+    const wide = { title: "Partial r", columns: Array.from({ length: 300 }, (_, i) => `c${i}`), rows: [Array(300).fill(1)] };
+    const tall = { title: "Comparisons", columns: ["pair", "p"], rows: Array.from({ length: 12_000 }, (_, i) => [`g${i}`, 0.5]) };
+    const result = statisticalTestAnalysisResult(
+      "result", source, "anderson", DEFAULT_SELECTION, DEFAULT_PARAMS, ["A"],
+      { sentence: "ok", tables: [{ columns: ["statistic", "value"], rows: [["A²", 0.2]] }, wide, tall] },
+    );
+    expect(result.tables?.map((table) => table.title ?? "main")).toEqual(["main", "Comparisons"]);
+    expect(result.tables?.[1].rows).toHaveLength(10_000);
+    expect(result.warnings).toEqual([
+      expect.stringContaining('"Partial r" was too large'),
+      expect.stringContaining('"Comparisons" was saved with 10000 of 12000 rows'),
+    ]);
+    // The bounded envelope survives the reopen sanitizer intact.
+    const [reopened] = sanitizeAnalysisResults([JSON.parse(JSON.stringify(result))]);
+    expect(reopened.tables).toEqual(result.tables);
+    expect(reopened.warnings).toEqual(result.warnings);
   });
 
   it("refuses to rerun an incomplete or future saved question", () => {

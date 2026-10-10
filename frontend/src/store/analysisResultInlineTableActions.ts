@@ -1,5 +1,5 @@
 import type { AnalysisResult } from "../lib/analysisResult";
-import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
+import { isSnapshotResult, snapshotResultState } from "../lib/analysisResultFreshness";
 import { reportEmit } from "../lib/api";
 import { csvBlob } from "../lib/csvCell";
 import { saveBlob } from "../lib/download";
@@ -26,12 +26,8 @@ export function exportAnalysisInlineTables(id: string): boolean {
 }
 
 function snapshotCurrent(result: AnalysisResult, datasets: readonly Dataset[]): boolean {
-  if (!result.tables?.length || result.outputs.length > 0 || result.stale) return false;
-  if (result.sources.length === 0) return true;
-  if (!result.sourceFingerprint) return false;
-  const sources = result.sources.map((source) => datasets.find((dataset) => dataset.id === source.datasetId));
-  return sources.every((source) => source && !source.pending) &&
-    sources.map((source) => analysisDataFingerprint(source!)).join(":") === result.sourceFingerprint;
+  return !!result.tables?.length && result.outputs.length === 0 && isSnapshotResult(result) &&
+    snapshotResultState(result, datasets) === "current";
 }
 
 /** Send the primary saved statistics table through the established report
@@ -59,11 +55,14 @@ export async function sendAnalysisInlineTableToReport(id: string): Promise<boole
     });
     const current = useApp.getState();
     const live = current.analysisResults.find((item) => item.id === id);
-    if (!live || live.tables !== tables || !snapshotCurrent(live, current.datasets)) {
+    // The rendered sheet embeds the pre-await title, so a rename in flight is a
+    // change too: publishing would label the Report list and sheet differently.
+    if (!live || live.tables !== tables || live.name !== result.name ||
+        !snapshotCurrent(live, current.datasets)) {
       current.setStatus("can't add analysis result to report: the result or its source changed while rendering");
       return false;
     }
-    addReportWithProvenance(result.name, report, result.sources[0]?.datasetId ?? null);
+    addReportWithProvenance(live.name, report, live.sources[0]?.datasetId ?? null);
     return true;
   } catch (error) {
     useApp.getState().setStatus(`could not add analysis result to report — ${error instanceof Error ? error.message : "unknown error"}`);

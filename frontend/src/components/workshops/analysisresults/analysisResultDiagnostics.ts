@@ -1,4 +1,5 @@
 import type { AnalysisResult } from "../../../lib/analysisResult";
+import { snapshotResultDiagnostics, type SnapshotResultState } from "../../../lib/analysisResultFreshness";
 import { fitAnalysisResult } from "../../../lib/fitAnalysisResultLive";
 import { peakTableMatchesData } from "../../../lib/peakTableFit";
 import type { Dataset, FitSpec } from "../../../lib/types";
@@ -15,21 +16,20 @@ export interface AnalysisResultDiagnosticsInput {
   isPeak: boolean;
   isFit: boolean;
   isRefl: boolean;
-  isDistribution: boolean;
   peakTable: Dataset["peakTable"] | null;
   fitSpec: FitSpec | null;
   fitFingerprintStale: boolean;
   reflFit: ReflFitRecord | null;
   reflIssues: RecordIssues;
-  snapshotUnverified: boolean;
-  snapshotOutdated: boolean;
+  /** From snapshotResultState; null for results that are not snapshots. */
+  snapshotState: SnapshotResultState | null;
 }
 
 /** The result workspace's Diagnostics list: live producer warnings plus
  *  missing/stale reference notes, de-duplicated. Pure; the panel memoizes it. */
 export function analysisResultDiagnostics({
-  result, datasets, source, output, staleDatasets, staleFits, isPeak, isFit, isRefl, isDistribution,
-  peakTable, fitSpec, fitFingerprintStale, reflFit, reflIssues, snapshotUnverified, snapshotOutdated,
+  result, datasets, source, output, staleDatasets, staleFits, isPeak, isFit, isRefl,
+  peakTable, fitSpec, fitFingerprintStale, reflFit, reflIssues, snapshotState,
 }: AnalysisResultDiagnosticsInput): string[] {
   const liveWarnings = isFit && source && fitSpec
     ? fitAnalysisResult(source, fitSpec, result.createdAt).warnings
@@ -55,11 +55,6 @@ export function analysisResultDiagnostics({
     ...(isRefl ? reflFit?.result.warnings ?? [] : []),
     ...(isRefl && reflFit && !reflFit.result.success ? ["The optimizer did not report a successful fit."] : []),
     ...(isRefl && !reflFit ? ["The saved reflectivity fit record is missing from its source worksheets."] : []),
-    ...(snapshotUnverified ? [source?.pending
-        ? `Load the full source worksheet to verify this ${isDistribution ? "distribution analysis" : "statistical test"}.`
-        : `This saved ${isDistribution ? "distribution analysis" : "statistical test"} has no source fingerprint and cannot be verified.`]
-      : snapshotOutdated
-        ? [`The source data changed after this ${isDistribution ? "distribution analysis" : "statistical test"}. Run it again before using these values.`]
-      : []),
+    ...(snapshotState ? snapshotResultDiagnostics(result, snapshotState) : []),
   ])];
 }

@@ -1,6 +1,6 @@
 import type { StatsTestId } from "./api/statsTests";
 import { analysisDataFingerprint } from "./analysisResultFreshness";
-import { ANALYSIS_RESULT_VERSION, type AnalysisResult } from "./analysisResult";
+import { ANALYSIS_RESULT_VERSION, INLINE_TABLE_LIMITS, type AnalysisResult, type AnalysisResultTable } from "./analysisResult";
 import { STATS_TESTS, testDef, type TestParams, type TestSelection } from "./statsTests";
 import type { TestOutput } from "./statsTestsResults";
 import type { Dataset } from "./types";
@@ -72,6 +72,37 @@ function selectedColumns(testId: StatsTestId, selection: TestSelection): number[
   }
 }
 
+/** Fit the result tables inside the envelope's saved-table bounds, saying
+ * what was left out. Without this the sanitizer would discard every table on
+ * reopen with no trace (e.g. partial correlation over >255 columns, or
+ * pairwise comparisons across >141 groups). Rows are cut, never columns: a
+ * table with too many columns is omitted whole rather than shown misaligned. */
+function boundedTables(output: TestOutput): { tables: AnalysisResultTable[]; warnings: string[] } {
+  const limits = INLINE_TABLE_LIMITS;
+  const tables: AnalysisResultTable[] = [];
+  const warnings: string[] = [];
+  let cells = 0;
+  output.tables.forEach((table, index) => {
+    const name = table.title ? `"${table.title}"` : `Table ${index + 1}`;
+    if (tables.length >= limits.tables || table.columns.length > limits.columns) {
+      warnings.push(`${name} was too large to save with this result and was omitted. Export it from the Statistical Tests workshop.`);
+      return;
+    }
+    const fit = Math.min(table.rows.length, limits.rows, Math.floor((limits.cells - cells) / table.columns.length));
+    if (fit < table.rows.length) {
+      warnings.push(`${name} was saved with ${fit} of ${table.rows.length} rows. Export the complete table from the Statistical Tests workshop.`);
+    }
+    cells += fit * table.columns.length;
+    tables.push({
+      ...(table.title ? { title: table.title } : {}),
+      columns: [...table.columns],
+      rows: table.rows.slice(0, fit).map((row) => row.map((cell) =>
+        typeof cell === "number" && !Number.isFinite(cell) ? null : cell)),
+    });
+  });
+  return { tables, warnings };
+}
+
 /** Create the durable authority for a completed statistical test. Raw source
  * samples are deliberately excluded: the source worksheet plus its fit-time
  * fingerprint owns those, while this envelope owns the compact result tables
@@ -87,6 +118,7 @@ export function statisticalTestAnalysisResult(
   createdAt = new Date().toISOString(),
 ): AnalysisResult {
   const def = testDef(testId);
+  const bounded = boundedTables(output);
   const indices = [...new Set(selectedColumns(testId, selection).filter((index) => index >= 0))];
   return {
     version: ANALYSIS_RESULT_VERSION,
@@ -117,13 +149,8 @@ export function statisticalTestAnalysisResult(
       params: { ...params },
       labels: [...labels],
     },
-    tables: output.tables.map((table) => ({
-      ...(table.title ? { title: table.title } : {}),
-      columns: [...table.columns],
-      rows: table.rows.map((row) => row.map((cell) =>
-        typeof cell === "number" && !Number.isFinite(cell) ? null : cell)),
-    })),
-    warnings: [],
+    tables: bounded.tables,
+    warnings: bounded.warnings,
     createdAt,
   };
 }

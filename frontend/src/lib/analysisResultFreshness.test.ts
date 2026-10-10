@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { AnalysisResult } from "./analysisResult";
 import { staleAnalysisFits } from "./analysisFitFreshness";
-import { analysisDataFingerprint, dataFingerprint, stampAnalysisResults } from "./analysisResultFreshness";
+import { analysisDataFingerprint, dataFingerprint, stampAnalysisResults, snapshotResultState } from "./analysisResultFreshness";
 import { staleAnalysisOutputs } from "./analysisResultStaleLoad";
 import type { PeakTable } from "./peakTable";
 import type { DataStruct, Dataset } from "./types";
@@ -101,16 +101,52 @@ describe("stamp / stale round trip", () => {
     const [changed] = stampAnalysisResults([stat], [ds("s", data([2]))], []);
     expect(changed).toMatchObject({ sourceFingerprint: analysisDataFingerprint(ds("s", original)), stale: true });
 
+    // Once stale, always stale — even after the data is reverted. Only a new
+    // run creates a current result; the shared predicate agrees.
     const [savedAgain] = stampAnalysisResults([changed], [ds("s", original)], []);
-    expect(savedAgain).toMatchObject({ sourceFingerprint: analysisDataFingerprint(ds("s", original)) });
-    expect(savedAgain.stale).toBeUndefined();
+    expect(savedAgain).toMatchObject({ sourceFingerprint: analysisDataFingerprint(ds("s", original)), stale: true });
+    expect(snapshotResultState(savedAgain, [ds("s", original)])).toBe("out-of-date");
+  });
+
+  it("never stamps a fingerprint onto a statistical snapshot that lacks one", () => {
+    const stat: AnalysisResult = {
+      ...RESULT, outputs: [], producer: { id: "statistical-test", label: "Statistical Test", version: 1 },
+      parameters: { testId: "anderson" },
+    };
+    const [saved] = stampAnalysisResults([stat], [ds("s", data([2]))], []);
+    expect(saved).not.toHaveProperty("sourceFingerprint");
+    expect(saved.stale).toBe(true);
+    expect(snapshotResultState(stat, [ds("s", data([2]))])).toBe("out-of-date");
+    const power: AnalysisResult = { ...stat, sources: [], parameters: { testId: "power" } };
+    expect(stampAnalysisResults([power], [], [])[0]).toEqual(power);
+    expect(snapshotResultState(power, [])).toBe("current");
+  });
+
+  it("judges a statistical snapshot through one shared predicate", () => {
+    const source = ds("s", data([1, 2]));
+    const stat: AnalysisResult = {
+      ...RESULT, outputs: [], producer: { id: "statistical-test", label: "Statistical Test", version: 1 },
+      parameters: { testId: "anderson" }, sourceFingerprint: analysisDataFingerprint(source),
+    };
+    expect(snapshotResultState(stat, [source])).toBe("current");
+    expect(snapshotResultState(stat, [ds("s", data([1, 3]))])).toBe("out-of-date");
+    // A lazily loaded book's data is only a preview: it can't be judged.
+    const pending = { ...source, pending: { kind: "path", path: "p", book: "b" } } as unknown as Dataset;
+    expect(snapshotResultState(stat, [pending])).toBe("pending");
+    expect(snapshotResultState(stat, [])).toBe("source-missing");
+    // A non-power result that lost its source reference is source-missing,
+    // not a sourceless "current" result.
+    expect(snapshotResultState({ ...stat, sources: [] }, [source])).toBe("source-missing");
+    expect(snapshotResultState({ ...stat, stale: true }, [source])).toBe("out-of-date");
   });
 
   it("marks statistics stale when row exclusions change their analysis input", () => {
     const source = ds("s", data([1, 2]));
     const [current] = stampAnalysisResults([{
       ...RESULT, outputs: [], producer: { id: "statistical-test", label: "Statistical Test", version: 1 },
+      sourceFingerprint: analysisDataFingerprint(source),
     }], [source], []);
+    expect(current.stale).toBeUndefined();
     const [changed] = stampAnalysisResults([current], [{ ...source, excludedRows: [1] }], []);
     expect(changed.stale).toBe(true);
   });
@@ -119,7 +155,9 @@ describe("stamp / stale round trip", () => {
     const source = ds("s", { ...data([0, 1]), cat_levels: { 0: ["control", "film"] } });
     const [current] = stampAnalysisResults([{
       ...RESULT, outputs: [], producer: { id: "statistical-test", label: "Statistical Test", version: 1 },
+      sourceFingerprint: analysisDataFingerprint(source),
     }], [source], []);
+    expect(current.stale).toBeUndefined();
     const relabeled = { ...source, data: { ...source.data, cat_levels: { 0: ["reference", "film"] } } };
     const [changed] = stampAnalysisResults([current], [relabeled], []);
     expect(changed.stale).toBe(true);
@@ -129,11 +167,16 @@ describe("stamp / stale round trip", () => {
     const source = ds("s", data([1, 2]));
     const [current] = stampAnalysisResults([{
       ...RESULT, outputs: [], producer: { id: "distribution-analysis", label: "Distribution", version: 1 },
+      sourceFingerprint: analysisDataFingerprint(source),
     }], [source], []);
+    expect(current.stale).toBeUndefined();
     const [changed] = stampAnalysisResults([current], [{ ...source, excludedRows: [] }], []);
     expect(changed.sourceFingerprint).toBe(current.sourceFingerprint);
     expect(changed.stale).toBeUndefined();
     const [edited] = stampAnalysisResults([current], [{ ...source, data: data([1, 3]) }], []);
     expect(edited.stale).toBe(true);
+    // Only a statistical power test is sourceless; a Distribution result that
+    // lost its source reference is source-missing.
+    expect(snapshotResultState({ ...current, sources: [] }, [source])).toBe("source-missing");
   });
 });

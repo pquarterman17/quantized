@@ -260,6 +260,38 @@ describe("analysis result output actions", () => {
     expect(useApp.getState().reports).toHaveLength(1);
   });
 
+  it("refuses statistical report handoff unless the shared predicate says current", async () => {
+    const inline: AnalysisResult = {
+      ...RESULT, producer: { id: "statistical-test", label: "Statistical Test", version: 1 },
+      sources: [{ datasetId: source.id, role: "input" }], parameters: { testId: "anderson" },
+      sourceFingerprint: analysisDataFingerprint(source), outputs: [],
+      tables: [{ columns: ["statistic", "value"], rows: [["p", 0.2]] }],
+    };
+    const pendingSource = { ...source, pending: { kind: "path", path: "p", book: "b" } } as unknown as Dataset;
+    const cases: [AnalysisResult, Dataset[]][] = [
+      [inline, [pendingSource]],
+      [{ ...inline, sourceFingerprint: undefined }, [source]],
+      [{ ...inline, stale: true }, [source]],
+      // An appended non-power result whose source was dropped is not sourceless.
+      [{ ...inline, sources: [] }, [source]],
+    ];
+    for (const [result, datasets] of cases) {
+      useApp.setState({ analysisResults: [result], datasets, reports: [] });
+      expect(await sendAnalysisInlineTableToReport(result.id)).toBe(false);
+    }
+    expect(reportEmit).not.toHaveBeenCalled();
+
+    // A rename while rendering: the sheet carries the old title, so refuse.
+    useApp.setState({ analysisResults: [inline], datasets: [source], reports: [] });
+    let finish!: (value: unknown) => void;
+    reportEmit.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const renamed = sendAnalysisInlineTableToReport(inline.id);
+    useApp.setState({ analysisResults: [{ ...inline, name: "Renamed" }] });
+    finish({ report: { title: inline.name, sections: [] } });
+    expect(await renamed).toBe(false);
+    expect(useApp.getState().reports).toHaveLength(0);
+  });
+
   it("freezes the linked output as independent data and keeps the result", () => {
     const frozenId = freezeAnalysisResult("result-1");
     const frozen = useApp.getState().datasets.find((dataset) => dataset.id === frozenId);
