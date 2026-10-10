@@ -293,7 +293,7 @@ Update (2026-10-09):
   freshness, bounded persistence, CSV/report actions, and save/reopen support.
   Reports and saves fail closed if their source or workbench question changes;
   repeated actions do not create duplicate artifacts.
-- [ ] Variability, Outlier Screening, and Multivariate outputs still need
+- [ ] Outlier Screening and Multivariate outputs still need
   producer adapters before the broad
   statistics-migration checkbox is complete. Workstream E remains the later
   unified statistical workspace rather than a prerequisite for preserving
@@ -304,6 +304,14 @@ Update (2026-10-09):
   contingency cells, and the exact controls needed to reopen the workbench.
   Source fingerprints prevent stale values from being reported as current;
   malformed detail geometry is diagnosed instead of silently truncated.
+- [x] Variability now saves an explicit, undoable Library snapshot containing
+  labeled nested-ANOVA, variance-component, cell-summary, and factor-summary
+  tables without copying raw observations. It preserves legitimate
+  non-estimable results and clamping/unbalanced-design disclosures, reopens
+  the exact response and nested-factor columns, follows filtered/excluded
+  analysis-view freshness, bounds oversized tables with an explicit warning,
+  and prevents duplicate saves until the analysis view changes or Undo removes
+  the saved result.
 - [x] Added a lazy result workspace with Overview, Tables, Figures, Diagnostics,
   Provenance, and Notes views. The first 100 output rows are inspectable
   without creating an unbounded DOM table; the complete worksheet remains
@@ -329,8 +337,8 @@ Update (2026-10-09):
   autosave, explicit save/reopen, Remove All/open-replacement protection, and
   the Library's exhaustive icon/accessibility contracts.
 - [ ] The focused-statistics migration is incomplete: Statistical Tests,
-  Distribution, and Fit Y by X are migrated, while Variability, Outlier
-  Screening, and Multivariate still need adapters. Signal processing, peak
+  Distribution, Fit Y by X, and Variability are migrated, while Outlier
+  Screening and Multivariate still need adapters. Signal processing, peak
   tables, curve fits, and reflectivity-fit history are also migrated.
 
 ## Workstream C — Analysis Center and discoverability
@@ -442,6 +450,7 @@ menu names.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-10-10 | ChatGPT-Sol (Codex) | Added the Variability producer adapter: completed nested analyses can now be saved as durable Library snapshots, reopened with exact response/factor controls, checked against filtered/excluded source freshness, duplicated/exported/reported through the shared workspace, and removed with Undo. Saved content is compact labeled output rather than raw observations; non-estimable components, clamped negative estimates, unbalanced designs, and table truncation stay explicit. | Focused adapter/workshop/workspace/freshness/architecture verification passed 115/115; TypeScript, ESLint, preload verification, production build, and the 814.7 kB eager-bundle gate pass at 814.2 kB. The full frontend passed 17,088 tests plus 2 expected failures; its only failure was the documented pre-existing Windows flat-autoscale subnormal-float fixture mismatch in untouched code. CI remains the merge gate. |
 | 2026-10-09 | ChatGPT-Sol (Codex) | Added the Distribution producer adapter: an explicit Save result action records the exact column/By/fit/percentile question plus descriptive, histogram, normality, fit-ranking, quantile, and per-level outputs as a durable Library snapshot. The shared snapshot workspace now inspects and reopens both Statistical Tests and Distribution. The adversarial pass rejects malformed histogram geometry, caps By snapshots, preserves project round-trips, diagnoses lazy/unverifiable sources, blocks stale async report handoffs, and prevents duplicate Save/Report actions while allowing Save again after Undo. | Focused result/workshop/workspace/freshness/schema plus architecture checks pass 150/150, with the final tightened rerun at 111/111 after the Undo guard. Distribution backend checks pass 11/11. Verified on a real SIMS depth profile from the private corpus; all five candidate fits completed. Forced TypeScript, ESLint, production build, preload verification, and the unchanged bundle gate pass at 813.9 kB eager (0.8 kB headroom). CI remains the complete-suite PR gate. |
 | 2026-10-09 | ChatGPT-Sol (Codex) | Added the first statistics producer adapter: completed Statistical Tests runs now create durable Library results with the exact saved question, interpretation, compact tables, provenance, Edit / rerun, duplicate, export, report, undo, save/reopen, missing-source, and out-of-date behavior. The adversarial pass made freshness follow the exact filtered/excluded analysis view plus categorical meaning, bounded serialized tables and DOM previews, refused malformed/future rerun recipes, prevented repeated actions, and blocked stale values from report handoff. | Final focused result/schema/freshness/workspace/store/workshop/UI plus architecture checks pass 313/313; forced TypeScript and ESLint pass. Production build/preload verification passes at 813.8 kB eager under the unchanged 814.7 kB pin. The Windows full-suite runner hit its pre-collection temporary-module failure and was discarded rather than counted; CI remains the complete-suite PR gate. |
 | 2026-10-09 | ChatGPT-Sol (Codex) | Added the Workstream B reflectivity-history adapter on top of the existing `Dataset.reflFits` authority: atomic result publication/undo, one-time project migration with deletion tombstones, current/out-of-date/missing diagnostics from live channel digests, parameter/posterior tables, provenance, and exact historical-fit reopening. The adversarial pass fixed independent-project record-id collisions, Append Project's nested channel-id remap, bounded-history catalog retirement, partial-restoration host selection, already-open workshop mode switching, misleading Signal-result copy, malformed-history catalog entries, and startup-budget regressions. | Focused final hardening passed 138/138 after the broader persistence/result suites; TypeScript, ESLint, architecture, preload, production build, and the restored 814.7 kB startup pin passed. Full frontend passed 17,037 tests plus 2 expected failures apart from the documented pre-existing Windows flat-autoscale subnormal-float fixture mismatch in untouched code. CI passed after rerunning one unrelated Library focus flake; PR #564 merged as `4018103c`. |

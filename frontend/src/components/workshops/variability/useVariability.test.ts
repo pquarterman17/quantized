@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { reportEmit, statsNestedAnova, statsVarianceComponents, statsVariabilitySummary, type NestedAnovaResponse, type VarianceComponentsResponse, type VariabilitySummaryResponse } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { useVariabilityStore } from "../../../store/variability";
 import { useVariability } from "./useVariability";
 
 vi.mock("../../../lib/api", async (importOriginal) => ({
@@ -109,6 +110,8 @@ beforeEach(() => {
   vi.mocked(statsVarianceComponents).mockResolvedValue(VARCOMP);
   vi.mocked(statsVariabilitySummary).mockResolvedValue(SUMMARY);
   useApp.setState({ datasets: [{ id: "d1", name: "wafers.dat", data: DATA }], activeId: "d1", selection: null });
+  useApp.setState({ analysisResults: [], history: [], future: [] });
+  useVariabilityStore.setState({ open: true, request: null });
 });
 
 describe("useVariability — column defaults", () => {
@@ -203,5 +206,53 @@ describe("useVariability — report while recomputing", () => {
     await act(async () => {}); // the new ANOVA + summary land; components stay pending
     await act(async () => result.current.toReport());
     expect(reportEmit).not.toHaveBeenCalled();
+  });
+});
+
+describe("useVariability — durable result", () => {
+  it("saves once, survives workshop remount, and is undoable", async () => {
+    const first = renderHook(() => useVariability());
+    await waitFor(() => expect(first.result.current.canSaveResult).toBe(true));
+    act(() => { first.result.current.saveResult(); });
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(first.result.current.canSaveResult).toBe(false);
+    first.unmount();
+    const reopened = renderHook(() => useVariability());
+    await waitFor(() => expect(reopened.result.current.anova).not.toBeNull());
+    expect(reopened.result.current.canSaveResult).toBe(false);
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().analysisResults).toHaveLength(0);
+  });
+
+  it("restores and consumes the exact saved column recipe", async () => {
+    useVariabilityStore.getState().openWith({ responseCol: 0, factorACol: 1, factorBCol: 2 });
+    const { result } = renderHook(() => useVariability());
+    await waitFor(() => expect(result.current.responseCol).toBe(0));
+    expect(result.current.factorACol).toBe(1);
+    expect(result.current.factorBCol).toBe(2);
+    expect(useVariabilityStore.getState().request).toBeNull();
+  });
+
+  it("allows a fresh result after the analysis view changes", async () => {
+    const { result, rerender } = renderHook(() => useVariability());
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+    act(() => { result.current.saveResult(); });
+    useApp.setState({ datasets: [{ id: "d1", name: "wafers.dat", data: DATA, excludedRows: [0] }] });
+    rerender();
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+  });
+
+  it("refuses colliding column roles and lazily loaded preview data", async () => {
+    const { result, rerender } = renderHook(() => useVariability());
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+    act(() => result.current.setResponseCol(result.current.factorACol));
+    await waitFor(() => expect(result.current.canSaveResult).toBe(false));
+
+    useApp.setState({ datasets: [{
+      id: "d1", name: "wafers.dat", data: DATA,
+      pending: { kind: "path", path: "source.opju", bookId: "book", rows: 18, cols: 3 },
+    }] });
+    rerender();
+    expect(result.current.canSaveResult).toBe(false);
   });
 });

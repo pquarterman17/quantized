@@ -77,7 +77,10 @@ export default function VariabilityChartPanel() {
           )}
 
           {v.anova && v.summary && (
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+              <Button size="sm" disabled={!v.canSaveResult} onClick={v.saveResult}>
+                Save result
+              </Button>
               <Button size="sm" disabled={v.reportBusy} onClick={() => void v.toReport()}>
                 {v.reportBusy ? "Reporting…" : "→ Report"}
               </Button>

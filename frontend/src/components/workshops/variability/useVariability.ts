@@ -24,6 +24,7 @@ import { buildNestedLevels, toWireGroups, type VariabilityFactorLevel } from "..
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
+import { useVariabilityResultBridge } from "./useVariabilityResultBridge";
 
 export interface VariabilityColumn {
   index: number;
@@ -56,6 +57,8 @@ export interface VariabilityState {
 
   reportBusy: boolean;
   toReport: () => Promise<void>;
+  canSaveResult: boolean;
+  saveResult: () => string | null;
 }
 
 function errMsg(e: unknown, fallback: string): string {
@@ -259,6 +262,11 @@ export function useVariability(): VariabilityState {
     }
   }
 
+  const resultBridge = useVariabilityResultBridge({
+    active, responseCol, setResponseCol, factorACol, setFactorACol, factorBCol, setFactorBCol,
+    responseLabel, factorALabel, factorBLabel, levels, anova, summary, varComp, varCompNote, busy,
+  });
+
   return {
     hasData: !!active,
     columns,
@@ -281,6 +289,7 @@ export function useVariability(): VariabilityState {
     summary,
     reportBusy,
     toReport,
+    ...resultBridge,
   };
 }
 

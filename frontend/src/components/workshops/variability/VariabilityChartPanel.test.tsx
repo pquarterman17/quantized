@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { statsNestedAnova, statsVarianceComponents, statsVariabilitySummary, type NestedAnovaResponse, type VarianceComponentsResponse, type VariabilitySummaryResponse } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { useVariabilityStore } from "../../../store/variability";
 import VariabilityChartPanel from "./VariabilityChartPanel";
 
 vi.mock("../../../lib/api", async (importOriginal) => ({
@@ -99,7 +100,8 @@ beforeEach(() => {
   vi.mocked(statsNestedAnova).mockResolvedValue(ANOVA);
   vi.mocked(statsVarianceComponents).mockResolvedValue(VARCOMP);
   vi.mocked(statsVariabilitySummary).mockResolvedValue(SUMMARY);
-  useApp.setState({ datasets: [], activeId: null, selection: null });
+  useApp.setState({ datasets: [], activeId: null, selection: null, analysisResults: [], history: [], future: [] });
+  useVariabilityStore.setState({ open: true, request: null });
 });
 
 describe("VariabilityChartPanel", () => {
@@ -122,6 +124,11 @@ describe("VariabilityChartPanel", () => {
     expect(screen.getByText("Nested ANOVA")).toBeInTheDocument();
     expect(screen.getByText(/Variance components/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Report/ })).toBeInTheDocument();
+    const save = screen.getByRole("button", { name: "Save result" });
+    expect(save).toBeEnabled();
+    fireEvent.click(save);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(save).toBeDisabled();
   });
 
   it("shows the not-estimable note instead of a variance-components table when B(A) can't be estimated", async () => {
@@ -139,7 +146,6 @@ describe("VariabilityChartPanel", () => {
     render(<VariabilityChartPanel />);
     await waitFor(() => expect(statsNestedAnova).toHaveBeenCalled());
     vi.mocked(statsNestedAnova).mockClear();
-    const { fireEvent } = await import("@testing-library/react");
     fireEvent.change(screen.getByLabelText("Factor A (outer)"), { target: { value: "1" } });
     await waitFor(() => expect(statsNestedAnova).toHaveBeenCalled());
   });
