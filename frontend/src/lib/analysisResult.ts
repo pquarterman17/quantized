@@ -25,6 +25,14 @@ export interface AnalysisResultSelection {
   xRange?: [number, number];
 }
 
+export type AnalysisResultValue = string | number | boolean | null | AnalysisResultValue[] | { [key: string]: AnalysisResultValue };
+
+export interface AnalysisResultTable {
+  title?: string;
+  columns: string[];
+  rows: (string | number | null)[][];
+}
+
 export type AnalysisResultSettingsRef =
   | { datasetId: string; field: "analysisRecipe" | "peakTable" | "fitSpec" }
   | { datasetId: string; field: "reflFits"; recordId: string };
@@ -48,6 +56,14 @@ export interface AnalysisResult {
   selection?: AnalysisResultSelection;
   settingsRef?: AnalysisResultSettingsRef;
   scalarValues?: Record<string, number | string | null>;
+  /** Producer settings that are themselves the durable authority. Unlike a
+   *  settingsRef this contains no source arrays; statistical results use it
+   *  to retain the exact question that produced their saved tables. */
+  parameters?: Record<string, AnalysisResultValue>;
+  /** Small, immutable result tables whose established authority is this
+   *  envelope. Large numerical outputs remain linked worksheets via
+   *  tableRefs so project files and the DOM stay bounded. */
+  tables?: AnalysisResultTable[];
   tableRefs?: { datasetId: string; label: string }[];
   plotBindings?: { datasetId: string; channels: number[]; xChannel?: number | null }[];
   warnings: string[];
@@ -140,6 +156,65 @@ function scalarValues(value: unknown): AnalysisResult["scalarValues"] {
   return out;
 }
 
+function resultValue(value: unknown, budget: { remaining: number }, depth = 0): AnalysisResultValue | undefined {
+  if (depth > 8 || --budget.remaining < 0) return undefined;
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (Array.isArray(value)) {
+    if (value.length > 10_000) return undefined;
+    const out: AnalysisResultValue[] = [];
+    for (const item of value) {
+      const parsed = resultValue(item, budget, depth + 1);
+      if (parsed === undefined) return undefined;
+      out.push(parsed);
+    }
+    return out;
+  }
+  const raw = object(value);
+  if (!raw || Object.keys(raw).length > 256) return undefined;
+  const out: Record<string, AnalysisResultValue> = {};
+  for (const [key, item] of Object.entries(raw)) {
+    const parsed = resultValue(item, budget, depth + 1);
+    if (parsed === undefined) return undefined;
+    out[key] = parsed;
+  }
+  return out;
+}
+
+function parameters(value: unknown): AnalysisResult["parameters"] {
+  // Cap the aggregate tree as well as each collection. Without a shared
+  // budget, a hand-edited project could stay below the per-object limit while
+  // expanding into millions of nested values during sanitization.
+  const parsed = resultValue(value, { remaining: 100_000 });
+  return parsed && !Array.isArray(parsed) && typeof parsed === "object" ? parsed : undefined;
+}
+
+function tables(value: unknown): AnalysisResult["tables"] {
+  if (!Array.isArray(value) || value.length > 32) return undefined;
+  const out: NonNullable<AnalysisResult["tables"]> = [];
+  let cells = 0;
+  for (const item of value) {
+    const raw = object(item);
+    if (!raw || !Array.isArray(raw.columns) || raw.columns.length > 256 ||
+        !raw.columns.every((column) => typeof column === "string") ||
+        !Array.isArray(raw.rows) || raw.rows.length > 10_000) return undefined;
+    cells += raw.columns.length * raw.rows.length;
+    if (cells > 100_000) return undefined;
+    const rows: AnalysisResultTable["rows"] = [];
+    for (const row of raw.rows) {
+      if (!Array.isArray(row) || row.length !== raw.columns.length ||
+          !row.every((cell) => cell === null || typeof cell === "string" ||
+            (typeof cell === "number" && Number.isFinite(cell)))) return undefined;
+      rows.push([...row] as AnalysisResultTable["rows"][number]);
+    }
+    out.push({
+      ...(typeof raw.title === "string" && raw.title ? { title: raw.title } : {}),
+      columns: [...raw.columns] as string[], rows,
+    });
+  }
+  return out;
+}
+
 function tableRefs(value: unknown): AnalysisResult["tableRefs"] {
   if (!Array.isArray(value)) return undefined;
   const out: NonNullable<AnalysisResult["tableRefs"]> = [];
@@ -198,7 +273,9 @@ export function sanitizeAnalysisResults(value: unknown, warnings?: string[]): An
     const selected = selection(raw.selection);
     const settings = settingsRef(raw.settingsRef);
     const scalars = scalarValues(raw.scalarValues);
-    const tables = tableRefs(raw.tableRefs);
+    const savedParameters = parameters(raw.parameters);
+    const inlineTables = tables(raw.tables);
+    const savedTableRefs = tableRefs(raw.tableRefs);
     const plots = plotBindings(raw.plotBindings);
     out.push({
       version: ANALYSIS_RESULT_VERSION,
@@ -210,7 +287,9 @@ export function sanitizeAnalysisResults(value: unknown, warnings?: string[]): An
       ...(selected ? { selection: selected } : {}),
       ...(settings ? { settingsRef: settings } : {}),
       ...(scalars ? { scalarValues: scalars } : {}),
-      ...(tables ? { tableRefs: tables } : {}),
+      ...(savedParameters ? { parameters: savedParameters } : {}),
+      ...(inlineTables ? { tables: inlineTables } : {}),
+      ...(savedTableRefs ? { tableRefs: savedTableRefs } : {}),
       ...(plots ? { plotBindings: plots } : {}),
       warnings: warningList,
       createdAt: raw.createdAt,

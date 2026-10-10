@@ -15,6 +15,7 @@
 
 import type { AnalysisResult } from "./analysisResult";
 import { peakTableMatchesData } from "./peakTableFreshness";
+import { analysisData } from "./rowstate";
 import type { DataStruct, Dataset } from "./types";
 
 const fingerprints = new WeakMap<DataStruct, string>();
@@ -49,6 +50,25 @@ export function dataFingerprint(data: DataStruct): string {
   fingerprints.set(data, out);
   return out;
 }
+
+/** Statistical tools run on the analysis view, not raw worksheet arrays.
+ * Include exclusions and filters by hashing that exact derived view. */
+export function analysisDataFingerprint(dataset: Dataset): string {
+  const view = analysisData(dataset) ?? dataset.data;
+  const semantics = JSON.stringify({
+    labels: view.labels,
+    units: view.units,
+    catLevels: view.cat_levels ?? null,
+    levelOrder: view.level_order ?? null,
+    xName: view.metadata?.["x_column_name"] ?? null,
+    channelTypes: dataset.channelTypes ?? null,
+  });
+  let schema = 0x811c9dc5;
+  for (let index = 0; index < semantics.length; index++) {
+    schema = Math.imul(schema ^ semantics.charCodeAt(index), 0x01000193);
+  }
+  return `${dataFingerprint(view)}:${(schema >>> 0).toString(16).padStart(8, "0")}`;
+}
 /** The result's sources' fingerprint, or null when it can't be judged (a
  *  source or output missing, or a lazily loaded book still pending, whose
  *  data is only a preview). */
@@ -56,6 +76,13 @@ function sourcesFingerprint(result: AnalysisResult, byId: ReadonlyMap<string, Da
   const refs = [...result.sources, ...result.outputs].map((ref) => byId.get(ref.datasetId));
   if (result.sources.length === 0 || refs.some((dataset) => !dataset || dataset.pending)) return null;
   return result.sources.map((ref) => dataFingerprint(byId.get(ref.datasetId)!.data)).join(":");
+}
+
+function statisticalSourcesFingerprint(result: AnalysisResult, byId: ReadonlyMap<string, Dataset>): string | null {
+  if (result.sources.length === 0) return null;
+  const sources = result.sources.map((ref) => byId.get(ref.datasetId));
+  if (sources.some((dataset) => !dataset || dataset.pending)) return null;
+  return sources.map((dataset) => analysisDataFingerprint(dataset!)).join(":");
 }
 
 /** Save side: stamp each envelope with the freshness the reopened file needs.
@@ -68,7 +95,20 @@ export function stampAnalysisResults(
   staleFits: readonly string[] = [],
 ): AnalysisResult[] {
   const byId = new Map(datasets.map((dataset) => [dataset.id, dataset]));
-  return results.map(({ stale: _wasStale, ...result }) => {
+  return results.map(({ stale: wasStale, ...result }) => {
+    // Statistical tables are source-only snapshots: there is no linked
+    // output for the recalc graph to mark. Never refresh their fingerprint
+    // merely because the project is being saved; that would silently bless
+    // old numbers after the source changed. Only running the test again
+    // creates a new current result.
+    if (result.producer.id === "statistical-test") {
+      const fingerprint = statisticalSourcesFingerprint(result, byId);
+      const changed = !!(result.sourceFingerprint && fingerprint && result.sourceFingerprint !== fingerprint);
+      if (changed) return { ...result, stale: true as const };
+      if (fingerprint && result.sourceFingerprint === fingerprint) return result;
+      if (wasStale) return { ...result, stale: true as const };
+      return fingerprint ? { ...result, sourceFingerprint: fingerprint } : result;
+    }
     // A peak result has no linked output and its Dataset.peakTable carries the
     // fit-time fingerprint. Do not stamp a second, generic fingerprint that
     // no load-side path can use and that suggests this source-only result is

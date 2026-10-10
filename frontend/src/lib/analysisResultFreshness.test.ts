@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { AnalysisResult } from "./analysisResult";
 import { staleAnalysisFits } from "./analysisFitFreshness";
-import { dataFingerprint, stampAnalysisResults } from "./analysisResultFreshness";
+import { analysisDataFingerprint, dataFingerprint, stampAnalysisResults } from "./analysisResultFreshness";
 import { staleAnalysisOutputs } from "./analysisResultStaleLoad";
 import type { PeakTable } from "./peakTable";
 import type { DataStruct, Dataset } from "./types";
@@ -89,5 +89,39 @@ describe("stamp / stale round trip", () => {
     const [marked] = stampAnalysisResults([current], [source], [], ["s"]);
     expect(marked.stale).toBe(true);
     expect(staleAnalysisFits([marked], [source])).toEqual(["s"]);
+  });
+
+  it("never blesses a stale source-only statistical snapshot during save", () => {
+    const original = data([1]);
+    const stat: AnalysisResult = {
+      ...RESULT,
+      producer: { id: "statistical-test", label: "Statistical Test", version: 1 },
+      outputs: [], sourceFingerprint: analysisDataFingerprint(ds("s", original)),
+    };
+    const [changed] = stampAnalysisResults([stat], [ds("s", data([2]))], []);
+    expect(changed).toMatchObject({ sourceFingerprint: analysisDataFingerprint(ds("s", original)), stale: true });
+
+    const [savedAgain] = stampAnalysisResults([changed], [ds("s", original)], []);
+    expect(savedAgain).toMatchObject({ sourceFingerprint: analysisDataFingerprint(ds("s", original)) });
+    expect(savedAgain.stale).toBeUndefined();
+  });
+
+  it("marks statistics stale when row exclusions change their analysis input", () => {
+    const source = ds("s", data([1, 2]));
+    const [current] = stampAnalysisResults([{
+      ...RESULT, outputs: [], producer: { id: "statistical-test", label: "Statistical Test", version: 1 },
+    }], [source], []);
+    const [changed] = stampAnalysisResults([current], [{ ...source, excludedRows: [1] }], []);
+    expect(changed.stale).toBe(true);
+  });
+
+  it("marks statistics stale when categorical meaning changes without numeric edits", () => {
+    const source = ds("s", { ...data([0, 1]), cat_levels: { 0: ["control", "film"] } });
+    const [current] = stampAnalysisResults([{
+      ...RESULT, outputs: [], producer: { id: "statistical-test", label: "Statistical Test", version: 1 },
+    }], [source], []);
+    const relabeled = { ...source, data: { ...source.data, cat_levels: { 0: ["reference", "film"] } } };
+    const [changed] = stampAnalysisResults([current], [relabeled], []);
+    expect(changed.stale).toBe(true);
   });
 });

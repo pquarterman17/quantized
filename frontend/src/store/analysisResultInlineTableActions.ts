@@ -1,0 +1,72 @@
+import type { AnalysisResult } from "../lib/analysisResult";
+import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
+import { reportEmit } from "../lib/api";
+import { csvBlob } from "../lib/csvCell";
+import { saveBlob } from "../lib/download";
+import { stemFromName } from "../lib/exportActive";
+import { outputToCSV } from "../lib/statsTestsResults";
+import type { Dataset } from "../lib/types";
+import { addReportWithProvenance } from "./addReportWithProvenance";
+import { useApp } from "./useApp";
+
+/** Export the compact tables owned directly by a snapshot-style result. */
+export function exportAnalysisInlineTables(id: string): boolean {
+  const state = useApp.getState();
+  const result = state.analysisResults.find((item) => item.id === id);
+  if (!result?.tables?.length) {
+    state.setStatus(`can't export ${result?.name ?? "analysis result"}: it has no saved tables`);
+    return false;
+  }
+  const sentence = typeof result.scalarValues?.Interpretation === "string"
+    ? result.scalarValues.Interpretation : result.name;
+  const filename = stemFromName(result.name).replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/, "") || "analysis-result";
+  saveBlob(csvBlob(outputToCSV({ sentence, tables: result.tables })), `${filename}.csv`);
+  state.setStatus(`exported ${result.tables.length} result table${result.tables.length === 1 ? "" : "s"}`);
+  return true;
+}
+
+function statisticalSnapshotCurrent(result: AnalysisResult, datasets: readonly Dataset[]): boolean {
+  if (result.producer.id !== "statistical-test" || result.stale) return false;
+  if (result.sources.length === 0) return true;
+  if (!result.sourceFingerprint) return false;
+  const sources = result.sources.map((source) => datasets.find((dataset) => dataset.id === source.datasetId));
+  return sources.every((source) => source && !source.pending) &&
+    sources.map((source) => analysisDataFingerprint(source!)).join(":") === result.sourceFingerprint;
+}
+
+/** Send the primary saved statistics table through the established report
+ * renderer. Re-check source freshness and result identity after the request so
+ * an edit or deletion in flight cannot publish stale numbers. */
+export async function sendAnalysisInlineTableToReport(id: string): Promise<boolean> {
+  const initial = useApp.getState();
+  const result = initial.analysisResults.find((item) => item.id === id);
+  const tables = result?.tables;
+  const table = tables?.[0];
+  if (!result || !tables || !table) return false;
+  if (!statisticalSnapshotCurrent(result, initial.datasets)) {
+    initial.setStatus(`can't add ${result.name} to report: its source is missing or out of date`);
+    return false;
+  }
+  try {
+    const { report } = await reportEmit({
+      kind: "stats_table",
+      records: table.rows.map((row) => Object.fromEntries(table.columns.map((column, index) => [column || "row", row[index]]))),
+      columns: table.columns.map((column) => column || "row"),
+      title: result.name,
+      caption: typeof result.scalarValues?.Interpretation === "string" ? result.scalarValues.Interpretation : "",
+      source_refs: result.sources.map((source) => ({ kind: "dataset" as const, id: source.datasetId,
+        name: initial.datasets.find((dataset) => dataset.id === source.datasetId)?.name ?? source.datasetId })),
+    });
+    const current = useApp.getState();
+    const live = current.analysisResults.find((item) => item.id === id);
+    if (!live || live.tables !== tables || !statisticalSnapshotCurrent(live, current.datasets)) {
+      current.setStatus("can't add statistics result to report: the result or its source changed while rendering");
+      return false;
+    }
+    addReportWithProvenance(result.name, report, result.sources[0]?.datasetId ?? null);
+    return true;
+  } catch (error) {
+    useApp.getState().setStatus(`could not add statistics result to report — ${error instanceof Error ? error.message : "unknown error"}`);
+    return false;
+  }
+}

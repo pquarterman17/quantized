@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AnalysisResult } from "../lib/analysisResult";
+import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import type { PeakTable } from "../lib/peakTable";
 import type { Dataset } from "../lib/types";
 
-const { recompute, saveBlob, sendFigureToReport } = vi.hoisted(() => ({
-  recompute: vi.fn(), saveBlob: vi.fn(), sendFigureToReport: vi.fn(),
+const { recompute, saveBlob, sendFigureToReport, reportEmit } = vi.hoisted(() => ({
+  recompute: vi.fn(), saveBlob: vi.fn(), sendFigureToReport: vi.fn(), reportEmit: vi.fn(),
 }));
 vi.mock("./derivedWorksheets", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./derivedWorksheets")>()),
@@ -13,9 +14,13 @@ vi.mock("./derivedWorksheets", async (importOriginal) => ({
 }));
 vi.mock("../lib/download", () => ({ saveBlob }));
 vi.mock("../commands/plotCommands", () => ({ sendFigureToReport }));
+vi.mock("../lib/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/api")>()), reportEmit,
+}));
 
 import {
   duplicateAnalysisResult,
+  exportAnalysisInlineTables,
   exportAnalysisPeakTable,
   exportAnalysisResultTable,
   freezeAnalysisResult,
@@ -26,6 +31,7 @@ import {
   renameAnalysisResult,
   resolveAnalysisResultPlot,
   sendAnalysisResultPlotToReport,
+  sendAnalysisInlineTableToReport,
   updateAnalysisResultNotes,
 } from "./analysisResultActions";
 import { useApp } from "./useApp";
@@ -105,6 +111,18 @@ describe("analysis result store lifecycle", () => {
     expect(useApp.getState().analysisResults).toHaveLength(1);
     expect(useApp.getState().datasets).toEqual([output]);
   });
+
+  it("duplicates a source-only table snapshot without inventing a worksheet", async () => {
+    const stat = { ...RESULT, outputs: [], tables: [{ columns: ["p"], rows: [[0.2]] }] };
+    useApp.setState({ analysisResults: [stat] });
+    const id = await duplicateAnalysisResult(stat.id, "2026-10-10T00:00:00Z");
+    expect(useApp.getState().datasets).toEqual([]);
+    expect(useApp.getState().analysisResults[1]).toMatchObject({
+      id, name: `${stat.name} copy`, tables: stat.tables, createdAt: "2026-10-10T00:00:00Z",
+    });
+    useApp.getState().undo();
+    expect(useApp.getState().analysisResults).toEqual([stat]);
+  });
 });
 
 describe("analysis result output actions", () => {
@@ -118,9 +136,10 @@ describe("analysis result output actions", () => {
   beforeEach(() => {
     saveBlob.mockReset();
     sendFigureToReport.mockReset();
+    reportEmit.mockReset();
     useApp.setState({
       datasets: [source, output], activeId: "source", analysisResults: [rich],
-      history: [], future: [], yKeys: null, stageTab: "worksheet",
+      reports: [], history: [], future: [], yKeys: null, stageTab: "worksheet",
     });
   });
 
@@ -206,6 +225,39 @@ describe("analysis result output actions", () => {
     useApp.setState({ datasets: [source] });
     expect(exportAnalysisPeakTable("peaks")).toBe(false);
     expect(saveBlob).toHaveBeenCalledTimes(1);
+  });
+
+  it("exports and reports inline result tables, failing closed if the result changes", async () => {
+    const inline: AnalysisResult = {
+      ...RESULT, producer: { id: "statistical-test", label: "Statistical Test", version: 1 },
+      sources: [{ datasetId: source.id, role: "input" }],
+      sourceFingerprint: analysisDataFingerprint(source),
+      outputs: [], scalarValues: { Interpretation: "No difference." },
+      tables: [{ columns: ["statistic", "value"], rows: [["p", 0.2]] }],
+    };
+    useApp.setState({ analysisResults: [inline] });
+    expect(exportAnalysisInlineTables(inline.id)).toBe(true);
+    expect(saveBlob).toHaveBeenCalledWith(expect.any(Blob), "Smooth · Trace.csv");
+
+    reportEmit.mockResolvedValueOnce({ report: { title: "test", sections: [] } });
+    expect(await sendAnalysisInlineTableToReport(inline.id)).toBe(true);
+    expect(useApp.getState().reports).toHaveLength(1);
+
+    let finish!: (value: unknown) => void;
+    reportEmit.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const pending = sendAnalysisInlineTableToReport(inline.id);
+    useApp.setState({ analysisResults: [] });
+    finish({ report: { title: "stale", sections: [] } });
+    expect(await pending).toBe(false);
+    expect(useApp.getState().reports).toHaveLength(1);
+
+    useApp.setState({ analysisResults: [inline], datasets: [source] });
+    reportEmit.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const sourceRace = sendAnalysisInlineTableToReport(inline.id);
+    useApp.setState({ datasets: [{ ...source, data: { ...source.data, values: [[99], [2]] } }] });
+    finish({ report: { title: "stale", sections: [] } });
+    expect(await sourceRace).toBe(false);
+    expect(useApp.getState().reports).toHaveLength(1);
   });
 
   it("freezes the linked output as independent data and keeps the result", () => {
