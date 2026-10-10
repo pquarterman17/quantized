@@ -130,6 +130,32 @@ describe("useDistribution", () => {
     await waitFor(() => expect(result.current.canSaveResult).toBe(false));
   });
 
+  it("keys the duplicate guard on data and question, not object identity", async () => {
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+    act(() => { result.current.saveResult(); });
+    await waitFor(() => expect(result.current.canSaveResult).toBe(false));
+    // An unrelated edit rebuilds the dataset object (every identity the old
+    // guard keyed on), but the same data + question must stay saved.
+    act(() => {
+      useApp.setState((s) => ({ datasets: s.datasets.map((d) => ({ ...d, name: "renamed.dat" })) }));
+    });
+    await waitFor(() => expect(result.current.busy).toBe(false));
+    expect(result.current.desc).not.toBeNull();
+    expect(result.current.canSaveResult).toBe(false);
+    act(() => { expect(result.current.saveResult()).toBeNull(); });
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    // A real data change is a new analysis: Save re-enables.
+    act(() => {
+      useApp.setState((s) => ({ datasets: s.datasets.map((d) => ({
+        ...d, data: { ...d.data, values: d.data.values.map(([v]) => [v + 1]) },
+      })) }));
+    });
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+    act(() => { result.current.saveResult(); });
+    expect(useApp.getState().analysisResults).toHaveLength(2);
+  });
+
   it("restores the exact saved controls and consumes the request", async () => {
     useDistributionRequestStore.getState().openWith({ col: -1, byCol: null, fitDist: "normal", compareOpen: true, percentileInput: 95 });
     const { result } = renderHook(() => useDistribution());

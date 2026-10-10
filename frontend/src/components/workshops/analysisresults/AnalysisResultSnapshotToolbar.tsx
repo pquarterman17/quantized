@@ -14,6 +14,8 @@ export default function AnalysisResultSnapshotToolbar({ result, source, recipeRe
   onReport: () => void;
 }) {
   const sourceMissing = result.sources.length > 0 && !source;
+  // Report handoff sends the primary (first) table only — say so.
+  const summaryTitle = result.tables?.[0]?.title ?? (result.tables?.length ? "first" : null);
   return <>
     {result.sources.length > 0 && <Button disabled={sourceMissing || busy !== null} onClick={onOpen}>Open data</Button>}
     <Button disabled={!recipeReady || outdated || sourceMissing || busy !== null}
@@ -21,7 +23,8 @@ export default function AnalysisResultSnapshotToolbar({ result, source, recipeRe
       onClick={onEdit}>Edit / rerun…</Button>
     <Button disabled={!result.tables?.length || busy !== null} onClick={onDuplicate}>{busy === "duplicate" ? "Duplicating…" : "Duplicate"}</Button>
     <Button disabled={!result.tables?.length || outdated || busy !== null}
-      title={outdated ? "Run the analysis again before adding these values to a report." : undefined}
-      onClick={onReport}>{busy === "report" ? "Adding…" : "Send to report"}</Button>
+      title={outdated ? "Run the analysis again before adding these values to a report."
+        : summaryTitle ? `Adds only the “${summaryTitle}” table to the report; Export all tables includes every table.` : undefined}
+      onClick={onReport}>{busy === "report" ? "Adding…" : "Send summary to report"}</Button>
   </>;
 }

@@ -295,12 +295,13 @@ describe("AnalysisResultPanel", () => {
     expect(exportButton).toBeDisabled();
     await waitFor(() => expect(exportButton).toBeEnabled());
     expect(exportInline).toHaveBeenCalledWith("stat");
-    fireEvent.click(screen.getByRole("button", { name: "Send to report" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Send to report" })).toBeEnabled());
+    expect(screen.getByRole("button", { name: "Send summary to report" }).getAttribute("title")).toMatch(/Adds only the “.+” table/);
+    fireEvent.click(screen.getByRole("button", { name: "Send summary to report" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send summary to report" })).toBeEnabled());
     expect(reportInline).toHaveBeenCalledWith("stat");
     useApp.setState({ datasets: [edited] });
     expect(await screen.findByText("Out of date")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Send to report" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send summary to report" })).toBeDisabled();
     fireEvent.click(screen.getByRole("tab", { name: /Diagnostics/ }));
     expect(screen.getByText(/source data changed after this statistical test/)).toBeInTheDocument();
   });
