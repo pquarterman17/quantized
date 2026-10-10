@@ -293,7 +293,12 @@ Update (2026-10-09):
   freshness, bounded persistence, CSV/report actions, and save/reopen support.
   Reports and saves fail closed if their source or workbench question changes;
   repeated actions do not create duplicate artifacts.
-- [ ] Outlier Screening and Multivariate outputs still need
+- [x] Outlier Screening now saves compact, undoable Library snapshots with
+  exact method settings, flagged source rows, method-specific statistics,
+  freshness checks, and a reopen path. The snapshot explicitly records that
+  screening never excludes or deletes data and discloses non-finite rows
+  omitted by the calculation.
+- [ ] Multivariate outputs still need
   producer adapters before the broad
   statistics-migration checkbox is complete. Workstream E remains the later
   unified statistical workspace rather than a prerequisite for preserving
@@ -337,8 +342,8 @@ Update (2026-10-09):
   autosave, explicit save/reopen, Remove All/open-replacement protection, and
   the Library's exhaustive icon/accessibility contracts.
 - [ ] The focused-statistics migration is incomplete: Statistical Tests,
-  Distribution, Fit Y by X, and Variability are migrated, while Outlier
-  Screening and Multivariate still need adapters. Signal processing, peak
+  Distribution, Fit Y by X, Variability, and Outlier Screening are migrated, while
+  Multivariate still needs an adapter. Signal processing, peak
   tables, curve fits, and reflectivity-fit history are also migrated.
 
 ## Workstream C — Analysis Center and discoverability
@@ -450,6 +455,7 @@ menu names.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-10-10 | ChatGPT-Sol (Codex) | Added the Outlier Screening producer adapter: Grubbs, Rosner ESD, Dixon Q, and robust MAD screens can now be explicitly saved as durable Library snapshots, reopened with exact controls, checked against the filtered/excluded analysis view, exported/reported, duplicated, and removed with Undo. Snapshots retain original source-row identities, compact method-specific statistics, bounded Rosner sequences, and non-finite-row disclosure without persisting raw score arrays; screening remains non-destructive. | Focused workshop/adapter/workspace/freshness/architecture/preload verification passed 131/131; TypeScript, ESLint, production build, and the unchanged 814.7 kB eager-bundle gate passed at 814.4 kB. The full frontend passed 17,098 tests plus 2 expected failures; its sole failure was the documented pre-existing Windows flat-autoscale subnormal-float fixture mismatch in untouched code. The adversarial pass added a source-fingerprint run key to prevent an old asynchronous result being saved after an in-place worksheet edit, bounded diagnostics, guarded same-render duplicate saves, and fixed the row-state architecture naming collision. CI remains the merge gate. |
 | 2026-10-10 | ChatGPT-Sol (Codex) | Added the Variability producer adapter: completed nested analyses can now be saved as durable Library snapshots, reopened with exact response/factor controls, checked against filtered/excluded source freshness, duplicated/exported/reported through the shared workspace, and removed with Undo. Saved content is compact labeled output rather than raw observations; non-estimable components, clamped negative estimates, unbalanced designs, and table truncation stay explicit. | Focused adapter/workshop/workspace/freshness/architecture verification passed 115/115; TypeScript, ESLint, preload verification, production build, and the 814.7 kB eager-bundle gate pass at 814.2 kB. The full frontend passed 17,088 tests plus 2 expected failures; its only failure was the documented pre-existing Windows flat-autoscale subnormal-float fixture mismatch in untouched code. CI remains the merge gate. |
 | 2026-10-09 | ChatGPT-Sol (Codex) | Added the Distribution producer adapter: an explicit Save result action records the exact column/By/fit/percentile question plus descriptive, histogram, normality, fit-ranking, quantile, and per-level outputs as a durable Library snapshot. The shared snapshot workspace now inspects and reopens both Statistical Tests and Distribution. The adversarial pass rejects malformed histogram geometry, caps By snapshots, preserves project round-trips, diagnoses lazy/unverifiable sources, blocks stale async report handoffs, and prevents duplicate Save/Report actions while allowing Save again after Undo. | Focused result/workshop/workspace/freshness/schema plus architecture checks pass 150/150, with the final tightened rerun at 111/111 after the Undo guard. Distribution backend checks pass 11/11. Verified on a real SIMS depth profile from the private corpus; all five candidate fits completed. Forced TypeScript, ESLint, production build, preload verification, and the unchanged bundle gate pass at 813.9 kB eager (0.8 kB headroom). CI remains the complete-suite PR gate. |
 | 2026-10-09 | ChatGPT-Sol (Codex) | Added the first statistics producer adapter: completed Statistical Tests runs now create durable Library results with the exact saved question, interpretation, compact tables, provenance, Edit / rerun, duplicate, export, report, undo, save/reopen, missing-source, and out-of-date behavior. The adversarial pass made freshness follow the exact filtered/excluded analysis view plus categorical meaning, bounded serialized tables and DOM previews, refused malformed/future rerun recipes, prevented repeated actions, and blocked stale values from report handoff. | Final focused result/schema/freshness/workspace/store/workshop/UI plus architecture checks pass 313/313; forced TypeScript and ESLint pass. Production build/preload verification passes at 813.8 kB eager under the unchanged 814.7 kB pin. The Windows full-suite runner hit its pre-collection temporary-module failure and was discarded rather than counted; CI remains the complete-suite PR gate. |

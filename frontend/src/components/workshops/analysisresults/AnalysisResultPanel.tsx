@@ -4,6 +4,7 @@ import { SNAPSHOT_RESULT_STATUS, dataFingerprint, isSnapshotResult, snapshotResu
 import { distributionRecipe } from "../../../lib/distributionAnalysisResult";
 import { fitYByXRecipe } from "../../../lib/fitYByXAnalysisResult";
 import { variabilityRecipe } from "../../../lib/variabilityAnalysisResult";
+import { outlierScreeningRecipe } from "../../../lib/outlierScreeningAnalysisResult";
 import { peakTableMatchesData } from "../../../lib/peakTableFit";
 import { signalRecipeChannels, signalRecipeXRange } from "../../../lib/signalRecipe";
 import { statisticalTestRecipe } from "../../../lib/statisticalTestAnalysisResult";
@@ -13,6 +14,7 @@ import { useStatsTestsStore } from "../../../store/statsTests";
 import { useDistributionRequestStore } from "../../../store/distribution";
 import { useFitYByXStore } from "../../../store/fitYByX";
 import { useVariabilityStore } from "../../../store/variability";
+import { useOutlierScreeningStore } from "../../../store/outlierScreening";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import { askParams } from "../../overlays/ParamDialog";
 import ToolWindow from "../../overlays/ToolWindow";
@@ -65,11 +67,13 @@ export default function AnalysisResultPanel() {
   const isDistribution = result?.producer.id === "distribution-analysis";
   const isFitYByX = result?.producer.id === "fit-y-by-x";
   const isVariability = result?.producer.id === "variability-analysis";
+  const isOutlierScreening = result?.producer.id === "outlier-screening";
   const isSnapshot = !!result && isSnapshotResult(result);
   const statsRecipe = result && isStats ? statisticalTestRecipe(result) : null;
   const savedDistributionRecipe = result && isDistribution ? distributionRecipe(result, source) : null;
   const savedFitYByXRecipe = result && isFitYByX ? fitYByXRecipe(result, source) : null;
   const savedVariabilityRecipe = result && isVariability ? variabilityRecipe(result, source) : null;
+  const savedOutlierRecipe = result && isOutlierScreening ? outlierScreeningRecipe(result, source) : null;
   const peakTable = isPeak ? source?.peakTable ?? null : null;
   const fitSpec = isFit ? source?.fitSpec ?? null : null;
   const reflFit = isRefl ? liveReflectivityFit(result, datasets) : null;
@@ -132,6 +136,7 @@ export default function AnalysisResultPanel() {
       useApp.setState({ distributionOpen: true });
     } else if (savedFitYByXRecipe) useFitYByXStore.getState().openWith(savedFitYByXRecipe);
     else if (savedVariabilityRecipe) useVariabilityStore.getState().openWith(savedVariabilityRecipe);
+    else if (savedOutlierRecipe) useOutlierScreeningStore.getState().openWith(savedOutlierRecipe);
     else return;
     close();
   };
@@ -278,7 +283,7 @@ export default function AnalysisResultPanel() {
       <div className="qz-analysis-result">
         <div className="qz-analysis-toolbar">
           <span className={`qz-analysis-status status-${status.toLowerCase().replaceAll(" ", "-")}`}>{status}</span>
-          {isSnapshot ? <AnalysisResultSnapshotToolbar result={result} source={source} recipeReady={!!(statsRecipe || savedDistributionRecipe || savedFitYByXRecipe || savedVariabilityRecipe)}
+          {isSnapshot ? <AnalysisResultSnapshotToolbar result={result} source={source} recipeReady={!!(statsRecipe || savedDistributionRecipe || savedFitYByXRecipe || savedVariabilityRecipe || savedOutlierRecipe)}
             state={snapshotState ?? "source-missing"} busy={busy} onOpen={() => source && openTable(source.id)} onEdit={editSnapshot}
             onDuplicate={() => void duplicate()} onReport={() => void sendInlineReport()} /> : isRefl ? <>
             <Button disabled={!reflFit || busy !== null} onClick={editReflFit}>Open fit workbench</Button>

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { statsDixonQ, statsGrubbs, statsMadOutliers, statsRosner } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { useOutlierScreeningStore } from "../../../store/outlierScreening";
 import { useOutlierScreening } from "./useOutlierScreening";
 
 vi.mock("../../../lib/api", async (importOriginal) => ({
@@ -49,7 +50,9 @@ beforeEach(() => {
     status: "",
     reports: [],
     selection: null,
+    analysisResults: [], history: [], future: [],
   });
+  useOutlierScreeningStore.setState({ open: true, request: null });
 });
 
 describe("useOutlierScreening — defaults + dispatch", () => {
@@ -136,5 +139,68 @@ describe("useOutlierScreening — errors", () => {
     const { result } = renderHook(() => useOutlierScreening());
     await waitFor(() => expect(result.current.error).toBe("zero variance"));
     expect(result.current.result).toBeNull();
+  });
+});
+
+describe("useOutlierScreening — durable results", () => {
+  it("saves once, guards a same-render double save, survives remount, and is undoable", async () => {
+    const first = renderHook(() => useOutlierScreening());
+    await waitFor(() => expect(first.result.current.canSaveResult).toBe(true));
+    act(() => {
+      first.result.current.saveResult();
+      first.result.current.saveResult();
+    });
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(first.result.current.canSaveResult).toBe(false);
+    first.unmount();
+    const reopened = renderHook(() => useOutlierScreening());
+    await waitFor(() => expect(reopened.result.current.result).not.toBeNull());
+    expect(reopened.result.current.canSaveResult).toBe(false);
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().analysisResults).toHaveLength(0);
+  });
+
+  it("restores and consumes the exact saved controls", async () => {
+    useOutlierScreeningStore.getState().openWith({ col: -1, method: "mad", alpha: 0.01, k: 4, threshold: 4.5 });
+    const { result } = renderHook(() => useOutlierScreening());
+    await waitFor(() => expect(result.current.col).toBe(-1));
+    expect(result.current).toMatchObject({ method: "mad", alpha: 0.01, k: 4, threshold: 4.5 });
+    expect(useOutlierScreeningStore.getState().request).toBeNull();
+  });
+
+  it("never offers a stale result while a changed method is running", async () => {
+    let finish!: (value: Awaited<ReturnType<typeof statsMadOutliers>>) => void;
+    vi.mocked(statsMadOutliers).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const { result } = renderHook(() => useOutlierScreening());
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+    act(() => result.current.setMethod("mad"));
+    expect(result.current.canSaveResult).toBe(false);
+    expect(result.current.result).toBeNull();
+    act(() => finish({
+      modified_z_scores: [0, 0, 0, 0, 10, 0, 0], median: 12, mad: 1, scale_method: "MAD",
+      threshold: 3.5, flagged_indices: [4], N: 7, excluded_indices: [], method: "modified z-score",
+    }));
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+  });
+
+  it("allows a fresh result after the analysis view changes", async () => {
+    const { result, rerender } = renderHook(() => useOutlierScreening());
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+    act(() => { result.current.saveResult(); });
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA, excludedRows: [2, 3] }] });
+    rerender();
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+  });
+
+  it("invalidates the landed result immediately when the active worksheet changes in place", async () => {
+    const { result, rerender } = renderHook(() => useOutlierScreening());
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: {
+      ...DATA, values: DATA.values.map((row, index) => index === 0 ? [20] : row),
+    }, excludedRows: [2] }] });
+    rerender();
+    expect(result.current.result).toBeNull();
+    expect(result.current.canSaveResult).toBe(false);
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
   });
 });

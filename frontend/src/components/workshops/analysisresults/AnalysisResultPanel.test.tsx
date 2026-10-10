@@ -29,12 +29,14 @@ import { statisticalTestAnalysisResult } from "../../../lib/statisticalTestAnaly
 import { distributionAnalysisResult } from "../../../lib/distributionAnalysisResult";
 import { fitYByXAnalysisResult } from "../../../lib/fitYByXAnalysisResult";
 import { variabilityAnalysisResult } from "../../../lib/variabilityAnalysisResult";
+import { outlierScreeningAnalysisResult } from "../../../lib/outlierScreeningAnalysisResult";
 import { DEFAULT_PARAMS, DEFAULT_SELECTION } from "../../../lib/statsTests";
 import { publishFitResult } from "../../../store/peakTables";
 import { useStatsTestsStore } from "../../../store/statsTests";
 import { useDistributionRequestStore } from "../../../store/distribution";
 import { useFitYByXStore } from "../../../store/fitYByX";
 import { useVariabilityStore } from "../../../store/variability";
+import { useOutlierScreeningStore } from "../../../store/outlierScreening";
 import { useApp } from "../../../store/useApp";
 import { encodeRecord } from "../reflectivity/reflFitRecord";
 import { makeDataset, makeRecord } from "../reflectivity/reflFit.testkit";
@@ -79,6 +81,7 @@ beforeEach(() => {
   useDistributionRequestStore.setState({ request: null });
   useFitYByXStore.setState({ open: false, request: null });
   useVariabilityStore.setState({ open: false, request: null });
+  useOutlierScreeningStore.setState({ open: false, request: null });
   useApp.setState({
     datasets: [source, output],
     activeId: "source",
@@ -432,6 +435,26 @@ describe("AnalysisResultPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit / rerun…" }));
     expect(useVariabilityStore.getState()).toMatchObject({
       open: true, request: { responseCol: 0, factorACol: -1, factorBCol: 1 },
+    });
+    expect(useApp.getState()).toMatchObject({ activeId: "source", openAnalysisResultId: null });
+  });
+
+  it("reopens a current Outlier Screening snapshot with its exact method controls", () => {
+    const outlier = outlierScreeningAnalysisResult(
+      "outlier", source, { col: 0, method: "mad", alpha: 0.01, k: 4, threshold: 4.5 }, {
+        channelLabel: "Signal", flaggedRows: [], omittedRows: [], rosnerSteps: [],
+        result: { method: "mad", data: {
+          modified_z_scores: [0, 0], median: 1.5, mad: 0.5, scale_method: "MAD", threshold: 4.5,
+          flagged_indices: [], N: 2, excluded_indices: [], method: "modified z-score",
+        } },
+      },
+    );
+    useApp.setState({ datasets: [source], analysisResults: [outlier], openAnalysisResultId: outlier.id });
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Current")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Edit / rerun…" }));
+    expect(useOutlierScreeningStore.getState()).toMatchObject({
+      open: true, request: { col: 0, method: "mad", alpha: 0.01, k: 4, threshold: 4.5 },
     });
     expect(useApp.getState()).toMatchObject({ activeId: "source", openAnalysisResultId: null });
   });
