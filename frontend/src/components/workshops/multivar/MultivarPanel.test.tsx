@@ -80,7 +80,7 @@ beforeEach(() => {
   vi.mocked(exportSplomFigure).mockResolvedValue(undefined);
   vi.mocked(exportPcaFigure).mockResolvedValue(undefined);
   vi.mocked(exportPcaScreeFigure).mockResolvedValue(undefined);
-  useApp.setState({ datasets: [], activeId: null, selection: null });
+  useApp.setState({ datasets: [], activeId: null, selection: null, analysisResults: [] });
 });
 
 describe("MultivarPanel", () => {
@@ -96,6 +96,18 @@ describe("MultivarPanel", () => {
     await waitFor(() => expect(statsCorrelation).toHaveBeenCalledWith([DATA.values.map((r) => r[0]), DATA.values.map((r) => r[1])], "pearson"));
     expect(await screen.findByTitle("a × b: r=0.87, p=0.02")).toBeInTheDocument();
     expect(screen.getByText(/N = 6 complete rows/)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Save result" })).toBeEnabled();
+  });
+
+  it("saves a durable result once and explains the duplicate guard", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
+    render(<MultivarPanel />);
+    const save = await screen.findByRole("button", { name: "Save result" });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(save).toBeDisabled();
+    expect(screen.getByText("This multivariate result is already saved.")).toBeInTheDocument();
   });
 
   it("unchecking a column below 2 shows the picker's warning and clears the matrix", async () => {

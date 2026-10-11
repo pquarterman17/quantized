@@ -6,6 +6,7 @@ import {
   defaultContinuousColumns,
   downsampleIndices,
   listwiseComplete,
+  listwiseCompleteWithIndices,
   miniHistogram,
   multivarColumns,
   multivarColumnValues,
@@ -86,6 +87,11 @@ describe("listwiseComplete", () => {
       [1, 3],
       [2, 4],
     ]);
+  });
+  it("retains the input positions of complete rows", () => {
+    expect(listwiseCompleteWithIndices([[1, NaN, 3], [10, 20, 30]])).toEqual({
+      rows: [[1, 10], [3, 30]], rowIndices: [0, 2],
+    });
   });
 });
 

@@ -50,9 +50,20 @@ export function multivarColumnValues(data: DataStruct, index: number): number[] 
  *  the SPLOM scatter all agree on the same N). Empty for <2 columns or no
  *  complete rows. */
 export function listwiseComplete(columns: readonly (readonly number[])[]): number[][] {
-  if (columns.length < 2) return [];
+  return listwiseCompleteWithIndices(columns).rows;
+}
+
+/** Listwise-complete rows plus their zero-based row positions in the input
+ * analysis view. Durable PCA score tables use the positions to retain source
+ * row identity without copying the source observations into the result. */
+export function listwiseCompleteWithIndices(columns: readonly (readonly number[])[]): {
+  rows: number[][];
+  rowIndices: number[];
+} {
+  if (columns.length < 2) return { rows: [], rowIndices: [] };
   const n = columns[0]?.length ?? 0;
   const rows: number[][] = [];
+  const rowIndices: number[] = [];
   for (let r = 0; r < n; r++) {
     const row: number[] = new Array(columns.length);
     let ok = true;
@@ -64,9 +75,12 @@ export function listwiseComplete(columns: readonly (readonly number[])[]): numbe
       }
       row[c] = v;
     }
-    if (ok) rows.push(row);
+    if (ok) {
+      rows.push(row);
+      rowIndices.push(r);
+    }
   }
-  return rows;
+  return { rows, rowIndices };
 }
 
 /** Column-major transpose of a row-major matrix (the shape

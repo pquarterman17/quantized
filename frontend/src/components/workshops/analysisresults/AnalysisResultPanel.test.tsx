@@ -30,6 +30,7 @@ import { distributionAnalysisResult } from "../../../lib/distributionAnalysisRes
 import { fitYByXAnalysisResult } from "../../../lib/fitYByXAnalysisResult";
 import { variabilityAnalysisResult } from "../../../lib/variabilityAnalysisResult";
 import { outlierScreeningAnalysisResult } from "../../../lib/outlierScreeningAnalysisResult";
+import { multivariateAnalysisResult } from "../../../lib/multivariateAnalysisResult";
 import { DEFAULT_PARAMS, DEFAULT_SELECTION } from "../../../lib/statsTests";
 import { publishFitResult } from "../../../store/peakTables";
 import { useStatsTestsStore } from "../../../store/statsTests";
@@ -37,6 +38,7 @@ import { useDistributionRequestStore } from "../../../store/distribution";
 import { useFitYByXStore } from "../../../store/fitYByX";
 import { useVariabilityStore } from "../../../store/variability";
 import { useOutlierScreeningStore } from "../../../store/outlierScreening";
+import { useMultivarStore } from "../../../store/multivar";
 import { useApp } from "../../../store/useApp";
 import { encodeRecord } from "../reflectivity/reflFitRecord";
 import { makeDataset, makeRecord } from "../reflectivity/reflFit.testkit";
@@ -82,6 +84,7 @@ beforeEach(() => {
   useFitYByXStore.setState({ open: false, request: null });
   useVariabilityStore.setState({ open: false, request: null });
   useOutlierScreeningStore.setState({ open: false, request: null });
+  useMultivarStore.setState({ open: false, request: null });
   useApp.setState({
     datasets: [source, output],
     activeId: "source",
@@ -455,6 +458,28 @@ describe("AnalysisResultPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit / rerun…" }));
     expect(useOutlierScreeningStore.getState()).toMatchObject({
       open: true, request: { col: 0, method: "mad", alpha: 0.01, k: 4, threshold: 4.5 },
+    });
+    expect(useApp.getState()).toMatchObject({ activeId: "source", openAnalysisResultId: null });
+  });
+
+  it("reopens a current Multivariate snapshot with its exact columns and method controls", () => {
+    const multivariate = multivariateAnalysisResult(
+      "multivariate", source,
+      { columns: [-1, 0], method: "spearman", standardize: true, pcX: 1, pcY: 0 },
+      {
+        labels: ["Time", "Signal"], sourceRows: [1, 2], inputRows: 2,
+        correlation: { r: [[1, 1], [1, 1]], p: [[0, 0], [0, 0]], N: 2, method: "spearman" },
+        pca: { coeff: [[0.7, 0.7], [0.7, -0.7]], score: [[-1, 0], [1, 0]],
+          latent: [2, 0], explained: [100, 0], cumulative: [100, 100], mu: [0.5, 1.5],
+          sigma: [0.5, 0.5], singular: [1, 0] },
+      },
+    );
+    useApp.setState({ datasets: [source], analysisResults: [multivariate], openAnalysisResultId: multivariate.id });
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Current")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Edit / rerun…" }));
+    expect(useMultivarStore.getState()).toMatchObject({
+      open: true, request: { columns: [-1, 0], method: "spearman", standardize: true, pcX: 1, pcY: 0 },
     });
     expect(useApp.getState()).toMatchObject({ activeId: "source", openAnalysisResultId: null });
   });

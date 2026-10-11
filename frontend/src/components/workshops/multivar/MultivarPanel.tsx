@@ -11,6 +11,7 @@
 import { useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
+import { Button } from "../../primitives";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { useMultivarStore } from "../../../store/multivar";
 import ColumnPicker from "./ColumnPicker";
@@ -46,6 +47,16 @@ export default function MultivarPanel() {
           {tab === "correlation" && <CorrelationView m={m} />}
           {tab === "splom" && <SplomTabView m={m} />}
           {tab === "pca" && <PcaView m={m} />}
+          <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8 }}>
+            <Button size="sm" disabled={!m.canSaveResult} title={m.saveResultDisabledReason ?? undefined} onClick={m.saveResult}>
+              Save result
+            </Button>
+            {m.saveResultDisabledReason && (
+              <span className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+                {m.saveResultDisabledReason}
+              </span>
+            )}
+          </div>
         </>
       )}
     </ToolWindow>

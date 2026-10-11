@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type CorrelationResponse, type PCAResponse, statsCorrelation, statsPCA } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { useMultivarStore } from "../../../store/multivar";
 import { useMultivar } from "./useMultivar";
 
 vi.mock("../../../lib/api", () => ({
@@ -69,7 +70,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(statsCorrelation).mockResolvedValue(CORR);
   vi.mocked(statsPCA).mockResolvedValue(PCA);
-  useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1", selection: null });
+  useMultivarStore.setState({ open: false, request: null });
+  useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1", selection: null, analysisResults: [] });
 });
 
 describe("useMultivar — column selection", () => {
@@ -213,5 +215,67 @@ describe("useMultivar — dataset switch", () => {
     useApp.setState({ datasets: [{ id: "d2", name: "other.dat", data: OTHER }], activeId: "d2" });
     rerender();
     expect(result.current.selected).toEqual([0, 1]);
+  });
+});
+
+describe("useMultivar — durable result", () => {
+  it("saves once, survives a workshop remount, and is undoable", async () => {
+    const first = renderHook(() => useMultivar());
+    await waitFor(() => expect(first.result.current.canSaveResult).toBe(true));
+    act(() => { first.result.current.saveResult(); });
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(first.result.current.canSaveResult).toBe(false);
+    first.unmount();
+    const reopened = renderHook(() => useMultivar());
+    await waitFor(() => expect(reopened.result.current.pca).not.toBeNull());
+    expect(reopened.result.current.canSaveResult).toBe(false);
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().analysisResults).toHaveLength(0);
+  });
+
+  it("restores and consumes the exact saved question", async () => {
+    useMultivarStore.getState().openWith({
+      columns: [-1, 0], method: "spearman", standardize: true, pcX: 1, pcY: 0,
+    });
+    const { result } = renderHook(() => useMultivar());
+    await waitFor(() => expect(result.current.selected).toEqual([-1, 0]));
+    expect(result.current).toMatchObject({ method: "spearman", standardize: true, pcX: 1, pcY: 0 });
+    expect(useMultivarStore.getState().request).toBeNull();
+  });
+
+  it("never exposes a previous response as saveable under changed settings", async () => {
+    const { result } = renderHook(() => useMultivar());
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+    vi.mocked(statsCorrelation).mockReturnValueOnce(new Promise(() => {}));
+    act(() => result.current.setMethod("spearman"));
+    expect(result.current.corr).toBeNull();
+    expect(result.current.canSaveResult).toBe(false);
+    expect(result.current.saveResultDisabledReason).toMatch(/current correlation and PCA/);
+
+    vi.mocked(statsPCA).mockReturnValueOnce(new Promise(() => {}));
+    act(() => result.current.setStandardize(true));
+    expect(result.current.pca).toBeNull();
+    expect(result.current.canSaveResult).toBe(false);
+  });
+
+  it("allows a new snapshot after the analysis view changes and rejects pending preview data", async () => {
+    const { result, rerender } = renderHook(() => useMultivar());
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+    act(() => { result.current.saveResult(); });
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA, excludedRows: [0] }] });
+    vi.mocked(statsCorrelation).mockResolvedValue({ ...CORR, N: 4 });
+    vi.mocked(statsPCA).mockResolvedValue({ ...PCA, score: PCA.score.slice(0, 4) });
+    rerender();
+    await waitFor(() => expect(result.current.canSaveResult).toBe(true));
+    act(() => { result.current.saveResult(); });
+    const scores = useApp.getState().analysisResults[1].tables?.find((table) => table.title === "PCA scores");
+    expect(scores?.rows.map((row) => row[0])).toEqual([2, 3, 4, 6]);
+
+    useApp.setState({ datasets: [{
+      id: "d1", name: "run.dat", data: DATA,
+      pending: { kind: "path", path: "source.opju", bookId: "book", rows: 6, cols: 3 },
+    }] });
+    rerender();
+    expect(result.current.canSaveResult).toBe(false);
   });
 });
