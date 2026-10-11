@@ -7,6 +7,7 @@ import { stampRecompute } from "./fitRecompute";
 import { fitDataForSpec, fitStepParams, selectedFitData } from "./fitselection";
 import { parseFitSpec } from "./fitSpecParse";
 import { fitSpecFromStepParams } from "./fitStepDecode";
+import { fitRowXFingerprint } from "./fitRowFingerprint";
 import { activeCorrectionNames, fitSpecFrom, fullPlottedX } from "./fitselectionActions";
 
 const dataset: Dataset = {
@@ -102,7 +103,7 @@ describe("fitDataForSpec (recompute reproduces the recorded channels)", () => {
   it("reproduces a saved explicit row/range subset with original-row mapping", () => {
     expect(fitDataForSpec(dataset, {
       model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 2, 3], sourceRowCount: 4,
-      range: [250, 400], nPoints: 2,
+      rowXFingerprint: fitRowXFingerprint([300, 400]), range: [250, 400], nPoints: 2,
     }, null, null, null)).toEqual({
       x: [300, 400], y: [30, 40], yKey: 1,
       analysisRows: [1, 2], sourceRows: [2, 3], sourceRowCount: 4,
@@ -112,6 +113,7 @@ describe("fitDataForSpec (recompute reproduces the recorded channels)", () => {
   it("fails closed when a positional subset's worksheet structure changed", () => {
     const spec = {
       model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 2, 3], sourceRowCount: 4, nPoints: 3,
+      rowXFingerprint: fitRowXFingerprint([100, 300, 400]),
     };
     const deleted = {
       ...dataset,
@@ -124,8 +126,38 @@ describe("fitDataForSpec (recompute reproduces the recorded channels)", () => {
   it("fails closed when a saved finite-point count no longer matches", () => {
     expect(fitDataForSpec(dataset, {
       model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 1, 2, 3], sourceRowCount: 4,
-      range: [100, 400], nPoints: 4,
+      rowXFingerprint: fitRowXFingerprint([100, 200, 300, 400]), range: [100, 400], nPoints: 4,
     }, null, null, null)).toBeNull();
+  });
+
+  it("fails closed after same-length delete-plus-append or sorting edits", () => {
+    const clean = { ...dataset, excludedRows: [] };
+    const spec = {
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 1, 2, 3], sourceRowCount: 4, nPoints: 4,
+      rowXFingerprint: fitRowXFingerprint([100, 200, 300, 400]),
+    };
+    const replaced = {
+      ...clean,
+      data: { ...clean.data, time: [1, 2, 3, 4], values: [...clean.data.values.slice(1), [500, 50, 9]] },
+    };
+    const sorted = {
+      ...clean,
+      data: { ...clean.data, time: [...clean.data.time].reverse(), values: [...clean.data.values].reverse() },
+    };
+    expect(fitDataForSpec(replaced, spec, null, null, null)).toBeNull();
+    expect(fitDataForSpec(sorted, spec, null, null, null)).toBeNull();
+  });
+
+  it("allows Y-value edits when the selected X observations are unchanged", () => {
+    const spec = {
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 2, 3], sourceRowCount: 4, nPoints: 3,
+      rowXFingerprint: fitRowXFingerprint([100, 300, 400]),
+    };
+    const changedY = {
+      ...dataset,
+      data: { ...dataset.data, values: dataset.data.values.map((row) => [row[0], row[1] * 2, row[2]]) },
+    };
+    expect(fitDataForSpec(changedY, spec, null, null, null)?.y).toEqual([20, 60, 80]);
   });
 
   it("still recomputes a whole-view fit after ordinary source edits", () => {
@@ -246,10 +278,13 @@ describe("fit recipe residual fields (MAIN #30)", () => {
   });
 
   it("records and pipeline-round-trips exact original rows for a subset fit", () => {
-    const spec = fitSpecFrom("gauss", null, { ...sel, sourceRows: [1, 3, 7], sourceRowCount: 10 }, result);
+    const spec = fitSpecFrom("gauss", null, {
+      ...sel, x: [1, 2, 3], y: [1, 2, 3], sourceRows: [1, 3, 7], sourceRowCount: 10,
+    }, result);
     expect(spec.rowIds).toEqual([1, 3, 7]);
     expect(fitSpecFromStepParams(fitStepParams("gauss", spec))).toMatchObject({
-      rowIds: [1, 3, 7], sourceRowCount: 10, nPoints: 4,
+      rowIds: [1, 3, 7], sourceRowCount: 10, nPoints: 3,
+      rowXFingerprint: fitRowXFingerprint([1, 2, 3]),
     });
   });
 

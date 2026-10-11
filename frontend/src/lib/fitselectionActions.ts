@@ -13,6 +13,7 @@
 
 import { effectiveChannels } from "./plotdata";
 import type { FitSelection } from "./fitselection";
+import { fitRowXFingerprint } from "./fitRowFingerprint";
 import type { CalcResult, CorrectionParams, Dataset, DataStruct, FitSpec, FitWeighting } from "./types";
 
 /** The FULL plotted-X column (not analysis-pruned): `time` when `xKey` is null,
@@ -86,6 +87,7 @@ export function fitSpecFrom(
   if (sel.sourceRows) {
     spec.rowIds = [...new Set(sel.sourceRows)].sort((a, b) => a - b);
     if (sel.sourceRowCount !== undefined) spec.sourceRowCount = sel.sourceRowCount;
+    spec.rowXFingerprint = fitRowXFingerprint(sel.x);
   }
   if (preprocessing && preprocessing.length > 0) spec.preprocessing = preprocessing;
   if (starts?.p0) spec.p0 = starts.p0;

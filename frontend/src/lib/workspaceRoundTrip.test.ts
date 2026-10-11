@@ -135,6 +135,8 @@ describe("Dataset.fitSpec: the MAIN_PLAN #30 recipe survives save/reopen", () =>
     exitFlag: 1,
     range: [0, 2],
     rowIds: [0, 2],
+    sourceRowCount: 3,
+    rowXFingerprint: "x1:2:0123456789abcdef",
     nPoints: 3,
     fittedAt: "2026-01-01T00:00:00.000Z",
     recomputedAt: "2026-01-02T00:00:00.000Z",
@@ -160,6 +162,7 @@ describe("Dataset.fitSpec: the MAIN_PLAN #30 recipe survives save/reopen", () =>
     doc.datasets[0].fitSpec = {
       model: "gauss",
       range: [0, "x"],
+      rowXFingerprint: "not-a-fingerprint",
       nPoints: -3,
       fittedAt: 7,
       recomputedAt: "2026-01-02T00:00:00.000Z",

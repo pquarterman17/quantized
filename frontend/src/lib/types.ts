@@ -438,6 +438,9 @@ export interface FitSpec {
   /** Raw worksheet row count when positional `rowIds` were recorded. A
    * structural insert/delete invalidates those positions and must fail closed. */
   sourceRowCount?: number;
+  /** Ordered X-value digest for the finite rows consumed by an explicit
+   * positional subset. Detects reorder/replace edits that preserve row count. */
+  rowXFingerprint?: string;
   /** Points the fit consumed — the cheap corroborator for `range`: same window,
    *  different count means the underlying rows changed. */
   nPoints?: number;

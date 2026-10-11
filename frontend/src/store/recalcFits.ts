@@ -28,11 +28,13 @@ export async function recomputeStaleFits(set: SliceSet, get: SliceGet): Promise<
       continue;
     }
     try {
-      const { fitDataForSpec } = await import("../lib/fitselection");
+      const { FIT_SUBSET_MISMATCH, fitDataForSpec } = await import("../lib/fitselection");
       // Reproduce the fit's RECORDED channels (audit P1 #3), falling back
       // to the live plotted selection for legacy specs — not time/values[0].
       const sel = fitDataForSpec(d, d.fitSpec, get().xKey, get().yKeys, get().seriesOrder);
-      if (!sel || sel.x.length === 0) throw new Error("no data");
+      if (!sel || sel.x.length === 0) {
+        throw new Error(d.fitSpec.rowIds !== undefined ? FIT_SUBSET_MISMATCH : "no data");
+      }
       const pairs = dropGapRows(sel.x, sel.y);
       if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
       const dy = sel.dy ? pairs.keep.map((i) => sel.dy![i]!) : undefined;

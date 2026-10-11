@@ -114,7 +114,7 @@ export default function AnalysisInputReview({ toolId, singleY = false, allowFact
                   </label>}
                 </div>
                 <div className="qzk-analysis-input-summary">
-                  <span>{item.rowIds ? `${item.rowIds.length} explicitly selected rows` : "Active row filters honored"}</span>
+                  <span>{item.rowIds ? `${item.rowIds.length} explicitly selected rows` : "Active row filters and manual exclusions honored"}</span>
                   <span>{item.range ? `X range ${item.range.lo.toPrecision(5)}–${item.range.hi.toPrecision(5)}` : "Full X range"}</span>
                   {index > 0 && <span>Batch item</span>}
                 </div>

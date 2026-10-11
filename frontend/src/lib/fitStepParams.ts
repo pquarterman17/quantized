@@ -14,6 +14,7 @@ export function fitStepParams(model: string, spec: FitSpec): Record<string, unkn
   if (spec.range) params.range = spec.range;
   if (spec.rowIds) params.rowIds = spec.rowIds;
   if (spec.sourceRowCount !== undefined) params.sourceRowCount = spec.sourceRowCount;
+  if (spec.rowXFingerprint !== undefined) params.rowXFingerprint = spec.rowXFingerprint;
   if (spec.nPoints !== undefined) params.nPoints = spec.nPoints;
   if (spec.weight && spec.weight.mode !== "none") params.weight = spec.weight;
   return params;

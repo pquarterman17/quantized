@@ -47,6 +47,9 @@ export function fitSpecFromStepParams(params: Record<string, unknown>): FitSpec 
   if (Number.isInteger(params.sourceRowCount) && (params.sourceRowCount as number) >= 0) {
     spec.sourceRowCount = params.sourceRowCount as number;
   }
+  if (typeof params.rowXFingerprint === "string" && /^x1:\d{1,7}:[0-9a-f]{16}$/.test(params.rowXFingerprint)) {
+    spec.rowXFingerprint = params.rowXFingerprint;
+  }
   if (Number.isInteger(params.nPoints) && (params.nPoints as number) >= 0) {
     spec.nPoints = params.nPoints as number;
   }

@@ -17,9 +17,12 @@ import { dropGapRows } from "./api/finitePairs";
 import { dyForFit } from "./fitweights";
 import { effectiveChannels } from "./plotdata";
 import { analysisData, analysisView } from "./rowstate";
+import { fitRowXFingerprint } from "./fitRowFingerprint";
 import type { AnalysisSelectionItem } from "./analysisSelection";
 import type { Dataset, FitSpec } from "./types";
 export { fitStepParams } from "./fitStepParams";
+
+export const FIT_SUBSET_MISMATCH = "saved row subset no longer matches the worksheet";
 
 export interface FitSelection {
   x: number[];
@@ -107,13 +110,15 @@ export function fitDataForSpec(
     range: spec.range ? { lo: spec.range[0], hi: spec.range[1], source: "manual" } : null,
   });
   if (!selected) return null;
-  // Explicit row subsets use worksheet positions. A structural row edit
-  // invalidates those positions, so refuse replay instead of silently fitting
-  // different observations. The finite-point check also catches range or gap
-  // changes that leave the raw row count unchanged.
+  // Explicit row subsets use worksheet positions. Refuse replay unless the
+  // source length, finite count, and ordered X digest still identify the same
+  // observations; sorting and delete-plus-append can preserve row count while
+  // silently moving every positional id.
   if (spec.rowIds !== undefined) {
     if (spec.sourceRowCount === undefined || spec.sourceRowCount !== dataset.data.time.length) return null;
-    if (spec.nPoints !== undefined && dropGapRows(selected.x, selected.y).x.length !== spec.nPoints) return null;
+    const finite = dropGapRows(selected.x, selected.y);
+    if (spec.nPoints !== undefined && finite.x.length !== spec.nPoints) return null;
+    if (spec.rowXFingerprint === undefined || fitRowXFingerprint(finite.x) !== spec.rowXFingerprint) return null;
   }
   if (!spec.weight) return selected;
   // Reproduce the recorded weighting over the same analysis rows (Sol audit);

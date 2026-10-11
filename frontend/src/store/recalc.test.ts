@@ -14,6 +14,7 @@ vi.mock("../lib/api", async (importOriginal) => ({
 }));
 
 import { applyCorrections as applyCorrectionsApi, fitModel } from "../lib/api";
+import { fitRowXFingerprint } from "../lib/fitRowFingerprint";
 
 const data = (): DataStruct => ({
   time: [1, 2, 3],
@@ -184,6 +185,23 @@ describe("recalc engine (#1)", () => {
     await useApp.getState().recalcNow();
     expect(useApp.getState().staleFits).toEqual(["a"]);
     expect(useApp.getState().status).toContain("recalc fit failed");
+  });
+
+  it("explains when an edited worksheet no longer matches a saved row subset", async () => {
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [ds("a", {
+        fitSpec: {
+          model: "Linear", xKey: null, yKey: 0, rowIds: [0, 1, 2], sourceRowCount: 3,
+          nPoints: 3, rowXFingerprint: fitRowXFingerprint([3, 2, 1]),
+        },
+      })],
+      staleFits: ["a"],
+    });
+    await useApp.getState().recalcNow();
+    expect(fitModel).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toContain("saved row subset no longer matches the worksheet");
+    expect(useApp.getState().staleFits).toEqual(["a"]);
   });
 });
 
