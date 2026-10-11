@@ -27,7 +27,7 @@ test.describe("Curve Fit custom equation authoring (P2.7)", () => {
     await runPaletteCommand(page, "Curve fit…");
     const panel = page.locator(".qzk-win").filter({ has: page.getByText("Curve Fit", { exact: true }) });
     await expect(panel).toBeVisible();
-    await panel.locator("select").first().selectOption({ label: "Custom equation…" });
+    await panel.getByRole("combobox", { name: "Model", exact: true }).selectOption({ label: "Custom equation…" });
 
     // ── inline syntax feedback from the real parser ────────────────────────
     const field = panel.getByRole("textbox", { name: "Equation" });
@@ -97,6 +97,8 @@ test.describe("Curve Fit custom equation authoring (P2.7)", () => {
     await panel.getByPlaceholder("model name").fill("Ramp");
     await panel.getByRole("textbox", { name: "model description" }).fill("straight line through zero");
     await panel.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(panel.locator("select").first().locator("option", { hasText: "ƒ Ramp — straight line" })).toHaveCount(1);
+    await expect(
+      panel.getByRole("combobox", { name: "Model", exact: true }).locator("option", { hasText: "ƒ Ramp — straight line" }),
+    ).toHaveCount(1);
   });
 });

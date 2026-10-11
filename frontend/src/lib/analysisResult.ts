@@ -1,3 +1,4 @@
+import { ANALYSIS_SELECTION_VERSION } from "./analysisSelectionVersion";
 import { signalRecipeLabel } from "./signalRecipe";
 import type { Dataset } from "./types";
 
@@ -283,6 +284,9 @@ export function sanitizeAnalysisResults(value: unknown, warnings?: string[]): An
     const inlineTables = tables(raw.tables);
     const savedTableRefs = tableRefs(raw.tableRefs);
     const plots = plotBindings(raw.plotBindings);
+    const batchSelection = producer.id === "analysis-batch" ? object(savedParameters?.["selection"]) : null;
+    const unsupportedBatchSelection = producer.id === "analysis-batch" &&
+      batchSelection?.version !== ANALYSIS_SELECTION_VERSION;
     out.push({
       version: ANALYSIS_RESULT_VERSION,
       id: raw.id,
@@ -297,12 +301,14 @@ export function sanitizeAnalysisResults(value: unknown, warnings?: string[]): An
       ...(inlineTables ? { tables: inlineTables } : {}),
       ...(savedTableRefs ? { tableRefs: savedTableRefs } : {}),
       ...(plots ? { plotBindings: plots } : {}),
-      warnings: warningList,
+      warnings: unsupportedBatchSelection
+        ? [...warningList, "The saved batch selection version is unsupported; rerun the batch before using its values."]
+        : warningList,
       createdAt: raw.createdAt,
       ...(typeof raw.updatedAt === "string" && raw.updatedAt ? { updatedAt: raw.updatedAt } : {}),
       ...(typeof raw.notes === "string" && raw.notes.trim() ? { notes: raw.notes } : {}),
       ...(typeof raw.sourceFingerprint === "string" && raw.sourceFingerprint ? { sourceFingerprint: raw.sourceFingerprint } : {}),
-      ...(raw.stale === true ? { stale: true as const } : {}),
+      ...(raw.stale === true || unsupportedBatchSelection ? { stale: true as const } : {}),
     });
   }
   return out;

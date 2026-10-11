@@ -5,6 +5,7 @@ import type { Dataset } from "../lib/types";
 import { launchAnalysisCenterTool } from "./analysisCenterRun";
 import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
+import { seedWorksheetAnalysisSelection, useAnalysisSelection } from "./analysisSelection";
 
 function dataset(id = "d1"): Dataset {
   return {
@@ -44,6 +45,7 @@ beforeEach(() => {
     status: "",
     resolveDataset: realResolveDataset,
   });
+  useAnalysisSelection.setState({ toolId: null, selection: null });
 });
 
 describe("Analysis Center launch bridge", () => {
@@ -58,6 +60,20 @@ describe("Analysis Center launch bridge", () => {
     expect(beforeRun).toHaveBeenCalledOnce();
     expect(selected.action.run).toHaveBeenCalledOnce();
     expect(useApp.getState().stageTab).toBe("plot");
+  });
+
+  it("adopts an exact worksheet handoff instead of replacing it with plot state", async () => {
+    const source = dataset();
+    const selected = tool();
+    useApp.setState({ datasets: [source], activeId: source.id, selection: { datasetId: source.id, rows: [1] } });
+    seedWorksheetAnalysisSelection(source.id, [0], [1]);
+
+    await launchAnalysisCenterTool(selected, source.id, vi.fn());
+
+    expect(useAnalysisSelection.getState()).toMatchObject({
+      toolId: "curvefit",
+      selection: { source: "worksheet", items: [{ datasetId: source.id, rowIds: [1] }] },
+    });
   });
 
   it("does not launch against a different active worksheet after lazy data resolves", async () => {

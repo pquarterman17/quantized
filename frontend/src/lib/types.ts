@@ -432,6 +432,15 @@ export interface FitSpec {
    *  which part of them, so "fit the peak" and "fit the whole scan" are
    *  indistinguishable on reopening. */
   range?: [number, number];
+  /** Original worksheet row ids used by an explicit AnalysisSelection.
+   * Absent means the whole current analysis view (legacy behavior). */
+  rowIds?: number[];
+  /** Raw row count; structural insert/delete invalidates positional `rowIds`. */
+  sourceRowCount?: number;
+  /** Ordered X digest; detects reorder/replace edits preserving row count. */
+  rowXFingerprint?: string;
+  /** Ordered digest of persistent worksheet-row identities (duplicate-X safe). */
+  rowIdentityFingerprint?: string;
   /** Points the fit consumed — the cheap corroborator for `range`: same window,
    *  different count means the underlying rows changed. */
   nPoints?: number;

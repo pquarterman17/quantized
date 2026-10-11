@@ -6,7 +6,7 @@
 // are unchanged, and Rollup bundles this file with the lazy chunks that use
 // it. architecture.test.ts ("re-exported lazy half") keeps eager modules off it.
 
-import { PREVIEW_SOURCE_ROWS, ROW_INDEXED_SIDECARS } from "./rowSidecars";
+import { FIT_ROW_IDENTITIES, PREVIEW_SOURCE_ROWS, ROW_INDEXED_SIDECARS } from "./rowSidecars";
 
 /** A copy of `metadata` with every row-indexed sidecar key REMOVED — and
  *  `PREVIEW_SOURCE_ROWS` with them.
@@ -28,6 +28,7 @@ export function withoutRowSidecars(metadata: Record<string, unknown>): Record<st
   const out: Record<string, unknown> = { ...metadata };
   for (const key of ROW_INDEXED_SIDECARS) delete out[key];
   delete out[PREVIEW_SOURCE_ROWS];
+  delete out[FIT_ROW_IDENTITIES];
   return out;
 }
 

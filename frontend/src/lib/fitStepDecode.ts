@@ -34,5 +34,24 @@ export function fitSpecFromStepParams(params: Record<string, unknown>): FitSpec 
       : null;
   const weight = decodeWeight(params.weight);
   if (weight) spec.weight = weight;
+  if (Array.isArray(params.range) && params.range.length === 2 &&
+      params.range.every((value) => typeof value === "number" && Number.isFinite(value)) && params.range[0] <= params.range[1]) {
+    spec.range = [params.range[0] as number, params.range[1] as number];
+  }
+  if (Object.hasOwn(params, "rowIds")) {
+    spec.rowIds = Array.isArray(params.rowIds) && params.rowIds.length <= 1_000_000 &&
+      params.rowIds.every((row) => Number.isInteger(row) && (row as number) >= 0)
+      ? [...new Set(params.rowIds as number[])].sort((a, b) => a - b)
+      : [];
+  }
+  if (Number.isInteger(params.sourceRowCount) && (params.sourceRowCount as number) >= 0) {
+    spec.sourceRowCount = params.sourceRowCount as number;
+  }
+  if (typeof params.rowXFingerprint === "string" && /^x1:\d{1,7}:[0-9a-f]{16}$/.test(params.rowXFingerprint)) {
+    spec.rowXFingerprint = params.rowXFingerprint;
+  }
+  if (Number.isInteger(params.nPoints) && (params.nPoints as number) >= 0) {
+    spec.nPoints = params.nPoints as number;
+  }
   return spec;
 }

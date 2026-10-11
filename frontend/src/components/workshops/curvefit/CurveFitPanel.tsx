@@ -28,6 +28,9 @@ import { useCurveFit } from "./useCurveFit";
 import { useModelScan } from "./useModelScan";
 import { useSavedFitModels } from "./useSavedFitModels";
 import { xErrorChannel } from "./xErrorChannel";
+import AnalysisInputReview from "../analysisselection/AnalysisInputReview";
+import { clearSelectionForTool, useAnalysisSelection } from "../../../store/analysisSelection";
+import CurveFitBatchSection from "./CurveFitBatchSection";
 
 // Fit-statistics sections: each its own chunk, fetched only when shown.
 const FitBandsSection = lazyRegion(() => import("./FitBandsSection"), "Bands");
@@ -54,6 +57,7 @@ function customLabel(m: CustomFitModel): string {
 
 export default function CurveFitPanel() {
   const setOpen = useApp((s) => s.setCurveFitOpen);
+  const updateAnalysisItem = useAnalysisSelection((state) => state.updateItem);
   const [reporting, setReporting] = useState(false);
   const [globalMode, setGlobalMode] = useState(false);
   const {
@@ -146,6 +150,7 @@ export default function CurveFitPanel() {
 
   const close = () => {
     clear();
+    clearSelectionForTool("curvefit");
     setOpen(false);
   };
 
@@ -172,6 +177,7 @@ export default function CurveFitPanel() {
   };
 
   const paramNames = models.find((m) => m.name === modelName)?.paramNames ?? [];
+  const registryModel = models.find((m) => m.name === modelName);
   const params = (result?.params as number[] | undefined) ?? [];
   const errors = (result?.errors as (number | null)[] | undefined) ?? [];
 
@@ -220,6 +226,7 @@ export default function CurveFitPanel() {
       : (reg ?? null);
     return (
       <ToolWindow id="curvefit" title="Curve Fit" width={360} onClose={close}>
+        <AnalysisInputReview toolId="curvefit" singleY />
         {modelPicker}
         <GlobalFitSection model={globalModel} />
       </ToolWindow>
@@ -231,6 +238,7 @@ export default function CurveFitPanel() {
   if (isCustom) {
     return (
       <ToolWindow id="curvefit" title="Curve Fit" width={340} onClose={close}>
+        <AnalysisInputReview toolId="curvefit" singleY />
         {modelPicker}
         <EquationModelPanel
           key={modelName}
@@ -243,10 +251,12 @@ export default function CurveFitPanel() {
 
   return (
     <ToolWindow id="curvefit" title="Curve Fit" width={340} onClose={close}>
+      <AnalysisInputReview toolId="curvefit" singleY allowFactor supportsBatch />
       {modelPicker}
 
       {weighting}
       {fitParams}
+      <CurveFitBatchSection modelName={modelName} model={registryModel} paramRows={paramInputs} weightMode={weightMode} manualKey={manualKey} />
 
       {/* "By" grouping (JMP_GAP_PLAN J7 residual): re-runs this SAME model
           fit once per level of an optional categorical column, display-only
@@ -258,7 +268,11 @@ export default function CurveFitPanel() {
             aria-label="By (optional)"
             options={[{ value: "", label: "None" }, ...byOptions.map((c) => ({ value: String(c.index), label: c.label }))]}
             value={byCol == null ? "" : String(byCol)}
-            onChange={(e) => setByCol(e.target.value === "" ? null : Number(e.target.value))}
+            onChange={(e) => {
+              const factor = e.target.value === "" ? null : Number(e.target.value);
+              setByCol(factor);
+              if (active) updateAnalysisItem(active.id, { factorKeys: factor === null ? [] : [factor] });
+            }}
           />
           {byActive && weightMode !== "none" && (
             <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>

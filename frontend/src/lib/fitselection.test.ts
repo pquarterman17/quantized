@@ -5,7 +5,11 @@ import { describe, expect, it } from "vitest";
 import type { CalcResult, Dataset } from "./types";
 import { stampRecompute } from "./fitRecompute";
 import { fitDataForSpec, fitStepParams, selectedFitData } from "./fitselection";
+import { parseFitSpec } from "./fitSpecParse";
 import { fitSpecFromStepParams } from "./fitStepDecode";
+import { fitRowXFingerprint } from "./fitRowFingerprint";
+import { fitRowIdentityFingerprint } from "./fitRowIdentity";
+import { FIT_ROW_IDENTITIES } from "./rowSidecars";
 import { activeCorrectionNames, fitSpecFrom, fullPlottedX } from "./fitselectionActions";
 
 const dataset: Dataset = {
@@ -33,6 +37,15 @@ describe("selectedFitData", () => {
   it("does not select an ignored or X-role channel as Y", () => {
     const roled = { ...dataset, channelRoles: { 1: "ignore" as const } };
     expect(selectedFitData(roled, 0, [0, 1, 2], null)?.yKey).toBe(2);
+  });
+
+  it("intersects original row ids with an inclusive X range", () => {
+    expect(selectedFitData(dataset, 0, [1], null, {
+      rowIds: [0, 2, 3], range: { lo: 250, hi: 400, source: "manual" },
+    })).toEqual({
+      x: [300, 400], y: [30, 40], yKey: 1,
+      analysisRows: [1, 2], sourceRows: [2, 3], sourceRowCount: 4,
+    });
   });
 });
 
@@ -89,6 +102,107 @@ describe("fitDataForSpec (recompute reproduces the recorded channels)", () => {
     expect(sel).toEqual({ x: [100, 300, 400], y: [10, 30, 40], yKey: 1 });
   });
 
+  it("reproduces a saved explicit row/range subset with original-row mapping", () => {
+    expect(fitDataForSpec(dataset, {
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 2, 3], sourceRowCount: 4,
+      rowXFingerprint: fitRowXFingerprint([300, 400]), range: [250, 400], nPoints: 2,
+    }, null, null, null)).toEqual({
+      x: [300, 400], y: [30, 40], yKey: 1,
+      analysisRows: [1, 2], sourceRows: [2, 3], sourceRowCount: 4,
+    });
+  });
+
+  it("fails closed when a positional subset's worksheet structure changed", () => {
+    const spec = {
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 2, 3], sourceRowCount: 4, nPoints: 3,
+      rowXFingerprint: fitRowXFingerprint([100, 300, 400]),
+    };
+    const deleted = {
+      ...dataset,
+      excludedRows: [],
+      data: { ...dataset.data, time: [0, 1, 2], values: dataset.data.values.slice(1) },
+    };
+    expect(fitDataForSpec(deleted, spec, null, null, null)).toBeNull();
+  });
+
+  it("fails closed when a saved finite-point count no longer matches", () => {
+    expect(fitDataForSpec(dataset, {
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 1, 2, 3], sourceRowCount: 4,
+      rowXFingerprint: fitRowXFingerprint([100, 200, 300, 400]), range: [100, 400], nPoints: 4,
+    }, null, null, null)).toBeNull();
+  });
+
+  it("fails closed after same-length delete-plus-append or sorting edits", () => {
+    const clean = { ...dataset, excludedRows: [] };
+    const spec = {
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 1, 2, 3], sourceRowCount: 4, nPoints: 4,
+      rowXFingerprint: fitRowXFingerprint([100, 200, 300, 400]),
+    };
+    const replaced = {
+      ...clean,
+      data: { ...clean.data, time: [1, 2, 3, 4], values: [...clean.data.values.slice(1), [500, 50, 9]] },
+    };
+    const sorted = {
+      ...clean,
+      data: { ...clean.data, time: [...clean.data.time].reverse(), values: [...clean.data.values].reverse() },
+    };
+    expect(fitDataForSpec(replaced, spec, null, null, null)).toBeNull();
+    expect(fitDataForSpec(sorted, spec, null, null, null)).toBeNull();
+  });
+
+  it("allows Y-value edits when the selected X observations are unchanged", () => {
+    const spec = {
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 2, 3], sourceRowCount: 4, nPoints: 3,
+      rowXFingerprint: fitRowXFingerprint([100, 300, 400]),
+    };
+    const changedY = {
+      ...dataset,
+      data: { ...dataset.data, values: dataset.data.values.map((row) => [row[0], row[1] * 2, row[2]]) },
+    };
+    expect(fitDataForSpec(changedY, spec, null, null, null)?.y).toEqual([20, 60, 80]);
+  });
+
+  it("detects reordered repeated-X observations without blocking ordinary Y edits", () => {
+    const repeated: Dataset = {
+      id: "repeat", name: "repeat.dat",
+      data: {
+        time: [0, 1], values: [[5, 10], [5, 20]], labels: ["x", "y"], units: ["", ""],
+        metadata: { [FIT_ROW_IDENTITIES]: { 0: "r1:0", 1: "r1:1" } },
+      },
+    };
+    const spec = {
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 1], sourceRowCount: 2, nPoints: 2,
+      rowXFingerprint: fitRowXFingerprint([5, 5]),
+      rowIdentityFingerprint: fitRowIdentityFingerprint(["r1:0", "r1:1"]),
+    };
+    const editedY = { ...repeated, data: { ...repeated.data, values: [[5, 11], [5, 22]] } };
+    const reordered = {
+      ...repeated,
+      data: {
+        ...repeated.data,
+        values: [...repeated.data.values].reverse(),
+        metadata: { [FIT_ROW_IDENTITIES]: { 0: "r1:1", 1: "r1:0" } },
+      },
+    };
+    expect(fitDataForSpec(editedY, spec, null, null, null)?.y).toEqual([11, 22]);
+    expect(fitDataForSpec(reordered, spec, null, null, null)).toBeNull();
+  });
+
+  it("fails closed when a saved identity binding is missing or malformed", () => {
+    const spec = {
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 2, 3], sourceRowCount: 4, nPoints: 3,
+      rowXFingerprint: fitRowXFingerprint([100, 300, 400]),
+      rowIdentityFingerprint: fitRowIdentityFingerprint(["r1:0", "r1:2", "r1:3"]),
+    };
+    expect(fitDataForSpec(dataset, spec, null, null, null)).toBeNull();
+  });
+
+  it("still recomputes a whole-view fit after ordinary source edits", () => {
+    expect(fitDataForSpec(dataset, {
+      model: "Linear", xKey: 0, yKey: 1, range: [100, 400], nPoints: 4,
+    }, null, null, null)).toMatchObject({ x: [100, 300, 400], y: [10, 30, 40] });
+  });
+
   it("falls back to the live plotted selection for a legacy {model} spec", () => {
     // No xKey/yKey recorded -> use the live selection (xKey 0, yKeys [2]).
     const sel = fitDataForSpec(dataset, { model: "Linear" }, 0, [2], null);
@@ -136,6 +250,8 @@ describe("fitStepParams / fitSpecFromStepParams (pipeline fit-step recipe #6)", 
       model: "Gaussian",
       xKey: 0,
       yKey: 1,
+      range: [1, 1],
+      nPoints: 1,
       weight: { mode: "yerr", errKey: 2 },
     });
   });
@@ -143,8 +259,8 @@ describe("fitStepParams / fitSpecFromStepParams (pipeline fit-step recipe #6)", 
   it("omits weight when mode is none and round-trips a null xKey (time axis)", () => {
     const spec = fitSpecFrom("Linear", null, { x: [1], y: [2], yKey: 0 }, { params: [1] });
     const params = fitStepParams("Linear", spec);
-    expect(params).toEqual({ model: "Linear", xKey: null, yKey: 0 });
-    expect(fitSpecFromStepParams(params)).toEqual({ model: "Linear", xKey: null, yKey: 0 });
+    expect(params).toEqual({ model: "Linear", xKey: null, yKey: 0, range: [1, 1], nPoints: 1 });
+    expect(fitSpecFromStepParams(params)).toEqual({ model: "Linear", xKey: null, yKey: 0, range: [1, 1], nPoints: 1 });
   });
 
   it("decodes a legacy {model}-only step to a channel-less recipe", () => {
@@ -170,6 +286,19 @@ describe("fitStepParams / fitSpecFromStepParams (pipeline fit-step recipe #6)", 
       fitSpecFromStepParams({ model: "Linear", yKey: 0, xKey: 0, weight: { mode: "bogus" } }).weight,
     ).toBeUndefined();
   });
+
+  it("preserves malformed persisted subsets as fail-closed sentinels", () => {
+    const workspace = parseFitSpec({
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, "bad"], sourceRowCount: 4, nPoints: 1,
+    })!;
+    const pipeline = fitSpecFromStepParams({
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, -1], sourceRowCount: 4, nPoints: 1,
+    });
+    expect(workspace.rowIds).toEqual([]);
+    expect(pipeline.rowIds).toEqual([]);
+    expect(fitDataForSpec(dataset, workspace, null, null, null)).toBeNull();
+    expect(fitDataForSpec(dataset, pipeline, null, null, null)).toBeNull();
+  });
 });
 
 describe("fit recipe residual fields (MAIN #30)", () => {
@@ -183,6 +312,22 @@ describe("fit recipe residual fields (MAIN #30)", () => {
     const spec = fitSpecFrom("gauss", null, sel, result, undefined, undefined, undefined, at);
     expect(spec.range).toEqual([1, 4]);
     expect(spec.nPoints).toBe(4);
+  });
+
+  it("records and pipeline-round-trips exact original rows for a subset fit", () => {
+    const spec = fitSpecFrom("gauss", null, {
+      ...sel, x: [1, 2, 3], y: [1, 2, 3], sourceRows: [1, 3, 7], sourceRowCount: 10,
+    }, result);
+    spec.rowIdentityFingerprint = fitRowIdentityFingerprint(["r1:0", "r1:1", "r1:2"]);
+    expect(spec.rowIds).toEqual([1, 3, 7]);
+    const pipelineSpec = fitSpecFromStepParams(fitStepParams("gauss", spec));
+    expect(pipelineSpec).toMatchObject({
+      rowIds: [1, 3, 7], sourceRowCount: 10, nPoints: 3,
+      rowXFingerprint: fitRowXFingerprint([1, 2, 3]),
+    });
+    // Row tokens belong to THIS worksheet; a pipeline replay on another
+    // dataset keeps the value guards but must not inherit dataset-local IDs.
+    expect(pipelineSpec.rowIdentityFingerprint).toBeUndefined();
   });
 
   it("ignores non-finite x when computing the range", () => {

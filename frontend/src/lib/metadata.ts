@@ -2,7 +2,7 @@
 // sample, temperature, comments, raw header keys…) for the Inspector card. Pure
 // + testable; the card just renders these rows.
 
-import { PREVIEW_SOURCE_ROWS } from "./rowSidecars";
+import { FIT_ROW_IDENTITIES, PREVIEW_SOURCE_ROWS } from "./rowSidecars";
 
 /** Format a metadata value for display: scalars as-is, objects/arrays as compact
  *  JSON, null/undefined as a dash. */
@@ -41,6 +41,7 @@ const HIDDEN_METADATA_KEYS = new Set([
   "origin_report_sheets",
   "origin_text_columns",
   PREVIEW_SOURCE_ROWS,
+  FIT_ROW_IDENTITIES,
 ]);
 
 export function isHiddenMetadataKey(key: string): boolean {

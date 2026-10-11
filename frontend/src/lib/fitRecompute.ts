@@ -16,12 +16,14 @@ export function fitOverlayValues(
   dataset: Dataset,
   pairs: FinitePairs,
   values: unknown,
+  sourceRows?: readonly number[],
 ): (number | null)[] | null {
   if (!Array.isArray(values) || values.length !== pairs.x.length ||
       !values.every((value) => value === null || (typeof value === "number" && Number.isFinite(value)))) {
     return null;
   }
   const aligned = restoreGapRows(values as (number | null)[], pairs);
+  if (sourceRows) return expandToFull(aligned, sourceRows, dataset.data.time.length);
   const kept = activeRowIndices(dataset.data.time.length, droppedRows(dataset));
   return kept.length === dataset.data.time.length
     ? aligned
@@ -38,10 +40,11 @@ export function recomputedFitPatch(
   updatedSpec: FitSpec,
   pairs: FinitePairs,
   yFit: unknown,
+  sourceRows?: readonly number[],
 ): Partial<AppState> {
   const updatedDataset = { ...dataset, fitSpec: updatedSpec };
   const overlayVisible = state.fitOverlay?.datasetId === dataset.id;
-  const overlayY = overlayVisible ? fitOverlayValues(dataset, pairs, yFit) : null;
+  const overlayY = overlayVisible ? fitOverlayValues(dataset, pairs, yFit, sourceRows) : null;
   return {
     staleFits: state.staleFits.filter((id) => id !== dataset.id),
     datasets: state.datasets.map((item) => item.id === dataset.id && item.fitSpec === previousSpec ? updatedDataset : item),
@@ -60,12 +63,13 @@ export function commitRecomputedFit(
   spec: FitSpec,
   pairs: FinitePairs,
   result: CalcResult,
+  sourceRows?: readonly number[],
 ): void {
   const updatedSpec = stampRecompute(spec, result);
   if (get().datasets.find((item) => item.id === dataset.id) !== dataset) {
     throw new Error("source or fit changed while recalculating");
   }
-  set((state) => recomputedFitPatch(state, dataset, spec, updatedSpec, pairs, result.yFit));
+  set((state) => recomputedFitPatch(state, dataset, spec, updatedSpec, pairs, result.yFit, sourceRows));
 }
 
 /** Replace a saved fit's result snapshot and mark when it was regenerated. */

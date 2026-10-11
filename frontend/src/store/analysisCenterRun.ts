@@ -3,6 +3,7 @@ import { analysisTools, type AnalysisTool } from "../lib/analysisCenter";
 import { plotIntentStageTab } from "../lib/stagetab";
 import type { Action } from "./commands";
 import { runAction } from "./commands";
+import { seedAnalysisSelection, useAnalysisSelection } from "./analysisSelection";
 import { withResolved } from "./pendingEdit";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
@@ -54,6 +55,12 @@ export async function launchAnalysisCenterTool(
         return;
       }
       state.setStageTab(plotIntentStageTab(resolved));
+      const handoff = useAnalysisSelection.getState();
+      if (handoff.toolId === "analysis-center" && handoff.selection?.source === "worksheet") {
+        handoff.setSelection(tool.action.id, handoff.selection);
+      } else {
+        seedAnalysisSelection(tool.action.id, "analysis-center");
+      }
       beforeRun();
       runAction(tool.action);
     });

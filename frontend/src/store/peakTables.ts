@@ -141,7 +141,10 @@ export function publishFitResult(
   datasetId: string,
   result: MultiFitResult,
   method: "simultaneous" | "independent",
-  opts: { bgDegree: number; linkMode: string; constrain: boolean; xKey: number | null; yKey?: number | null },
+  opts: {
+    bgDegree: number; linkMode: string; constrain: boolean; xKey: number | null;
+    yKey?: number | null; rowIds?: number[];
+  },
 ): void {
   const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
   if (!ds) return;
@@ -169,7 +172,8 @@ export function publishFitResult(
         // fallen back from (lib/fitselection's `selectedFitData` returns null
         // when no y channel is effective, and the fit then runs on `time`).
         ...xChannelIdentity(ds.data, opts.xKey),
-        fingerprint: peakDataFingerprint(ds),
+        fingerprint: peakDataFingerprint(ds, opts.rowIds),
+        ...(opts.rowIds ? { rowIds: opts.rowIds } : {}),
       },
       ds.peakTable ?? null,
     ),

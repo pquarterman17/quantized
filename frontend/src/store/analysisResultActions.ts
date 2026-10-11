@@ -386,7 +386,7 @@ export async function recalculateFitAnalysisResult(id: string): Promise<boolean>
       return false;
     }
     const overlayWasVisible = current.fitOverlay?.datasetId === sourceId;
-    const nextOverlay = overlayWasVisible ? fitOverlayValues(source, pairs, fitted.yFit) : null;
+    const nextOverlay = overlayWasVisible ? fitOverlayValues(source, pairs, fitted.yFit, selection.sourceRows) : null;
     current.recordHistory(`recalculate ${result.name}`);
     current.setFitSpec(sourceId, stampRecompute(spec, fitted));
     if (overlayWasVisible) useApp.setState({ fitOverlay: nextOverlay ? { datasetId: sourceId, y: nextOverlay } : null });

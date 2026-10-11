@@ -124,6 +124,22 @@ function sliceOneSidecar(raw: unknown, rowIndexes: readonly number[]): unknown {
  *  above — this exemption is about this key's shape, not a loosening. */
 export const PREVIEW_SOURCE_ROWS = "preview_source_rows";
 
+/** Sparse private row identities installed for rows in a saved fit subset.
+ * Keys are worksheet row numbers and values are opaque tokens. Sparse storage
+ * keeps a 10-row selection on a million-row file to 10 entries, not a million. */
+export const FIT_ROW_IDENTITIES = "__quantized_fit_row_ids";
+
+function sliceFitRowIdentities(raw: unknown, rowIndexes: readonly number[]): Record<string, string> | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const source = raw as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (let next = 0; next < rowIndexes.length; next += 1) {
+    const id = source[String(rowIndexes[next])];
+    if (typeof id === "string" && /^r1:[0-9a-z]{1,10}$/.test(id)) out[String(next)] = id;
+  }
+  return out;
+}
+
 /** `raw` as a usable preview->source row map, or `null` if it is anything else.
  *
  *  ONE validator, shared by the producer (`store/importDatasets.ts`, against the
@@ -233,6 +249,11 @@ export function sliceRowSidecars(
   rowIndexes: readonly number[],
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...metadata };
+  if (FIT_ROW_IDENTITIES in out) {
+    const identities = sliceFitRowIdentities(out[FIT_ROW_IDENTITIES], rowIndexes);
+    if (identities === null) delete out[FIT_ROW_IDENTITIES];
+    else out[FIT_ROW_IDENTITIES] = identities;
+  }
   if (PREVIEW_SOURCE_ROWS in out) {
     const composed = composePreviewSourceRows(out[PREVIEW_SOURCE_ROWS], rowIndexes);
     if (composed === null) delete out[PREVIEW_SOURCE_ROWS];

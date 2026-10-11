@@ -5,7 +5,7 @@
 
 import { fitModel } from "../../../lib/api";
 import { dropGapRows } from "../../../lib/api/finitePairs";
-import { fitDataForSpec } from "../../../lib/fitselection";
+import { FIT_SUBSET_MISMATCH, fitDataForSpec } from "../../../lib/fitselection";
 import { fitSpecFromStepParams } from "../../../lib/fitStepDecode";
 import { dyForFit } from "../../../lib/fitweights";
 import { validateExpression, type PipelineStep } from "../../../lib/pipeline";
@@ -198,7 +198,9 @@ export async function executeSteps(
             // recalc-graph recompute (store.recalc, fitDataForSpec).
             const st = store();
             const sel = fitDataForSpec(ds, spec, st.xKey, st.yKeys, st.seriesOrder);
-            if (!sel || sel.x.length === 0) throw new Error("no data to fit");
+            if (!sel || sel.x.length === 0) {
+              throw new Error(spec.rowIds !== undefined ? FIT_SUBSET_MISMATCH : "no data to fit");
+            }
             x = sel.x;
             y = sel.y;
             dy = sel.dy;

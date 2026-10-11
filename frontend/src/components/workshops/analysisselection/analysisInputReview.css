@@ -1,0 +1,45 @@
+.qzk-analysis-input-review {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  margin-bottom: var(--space-3);
+}
+
+.qzk-analysis-input-review-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.qzk-analysis-input-review-body { padding: 0 var(--space-3) var(--space-3); }
+.qzk-analysis-input-review-actions,
+.qzk-analysis-input-title,
+.qzk-analysis-input-summary {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.qzk-analysis-input-review-actions { color: var(--text-dim); margin-bottom: var(--space-2); }
+.qzk-analysis-input-card { border-top: 1px solid var(--border); padding-top: var(--space-2); margin-top: var(--space-2); }
+.qzk-analysis-input-card.invalid { border-left: 2px solid var(--danger); padding-left: var(--space-2); }
+.qzk-analysis-input-title span,
+.qzk-analysis-input-summary { color: var(--text-dim); font-size: var(--font-size-sm); }
+.qzk-analysis-input-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: var(--space-2); margin: var(--space-2) 0; }
+.qzk-analysis-input-fields label { display: grid; gap: var(--space-1); color: var(--text-dim); font-size: var(--font-size-sm); }
+.qzk-analysis-input-fields select { min-width: 0; }
+.qzk-analysis-input-issue { margin: var(--space-1) 0 0; font-size: var(--font-size-sm); }
+.qzk-analysis-input-issue.error { color: var(--danger); }
+.qzk-analysis-input-issue.warning { color: var(--warning); }
+
+.qzk-analysis-batch { margin-top: 8px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.qzk-analysis-batch-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
+.qzk-analysis-batch-table th, .qzk-analysis-batch-table td { padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--border); }
+.qzk-analysis-batch-table th { color: var(--text-faint); font-weight: 600; }

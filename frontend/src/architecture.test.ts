@@ -1185,6 +1185,12 @@ const PENDING_EDIT_EXEMPT = new Map<string, string>([
     "REPLACES data deliberately with freshly fetched bytes and clears `pending` in " +
       "the same updater — the resolve-and-replace pattern, same as installBookData.",
   ],
+  [
+    "recalcEngine.ts",
+    "setFitSpec writes private row identities only when useCurveFit supplies them after " +
+      "resolveDataset completed; its post-fit object-identity guard refuses a late result if " +
+      "that resolved dataset was replaced while fitting. Other setFitSpec calls write no data.",
+  ],
 ]);
 
 // Per-ACTION exemptions for the `excludedRows`/`filter` keys the list above

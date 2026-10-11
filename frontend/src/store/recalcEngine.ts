@@ -30,6 +30,7 @@
 
 import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
 import type { FitSpec } from "../lib/types";
+import { FIT_ROW_IDENTITIES } from "../lib/rowSidecars";
 import { refreshFitRefsLater } from "./computedColumns";
 import { recomputeStaleDatasets } from "./recalcDatasets";
 import { recomputeStaleFits } from "./recalcFits";
@@ -59,7 +60,7 @@ export interface RecalcEngineSlice {
   setRecalcMode: (mode: RecalcMode) => void;
   touchDataset: (id: string) => void;
   recalcNow: () => Promise<void>;
-  setFitSpec: (id: string, spec: FitSpec | null) => void;
+  setFitSpec: (id: string, spec: FitSpec | null, rowIdentities?: Record<string, string>) => void;
 }
 
 export function createRecalcEngineSlice(set: SliceSet, get: SliceGet): RecalcEngineSlice {
@@ -111,8 +112,22 @@ export function createRecalcEngineSlice(set: SliceSet, get: SliceGet): RecalcEng
         if (_recalcPending) void ((_recalcPending = false), get().recalcNow());
       }
     },
-    setFitSpec: (id, spec) => {
-      set((s) => ({ datasets: s.datasets.map((d) => (d.id === id ? { ...d, fitSpec: spec ?? undefined } : d)) }));
+    setFitSpec: (id, spec, rowIdentities) => {
+      set((s) => ({ datasets: s.datasets.map((d) => {
+        if (d.id !== id) return d;
+        if (!spec) return { ...d, fitSpec: undefined };
+        const raw = d.raw && d.raw.time.length === d.data.time.length && rowIdentities
+          ? { ...d.raw, metadata: { ...d.raw.metadata, [FIT_ROW_IDENTITIES]: rowIdentities } }
+          : d.raw;
+        return {
+          ...d,
+          data: rowIdentities
+            ? { ...d.data, metadata: { ...d.data.metadata, [FIT_ROW_IDENTITIES]: rowIdentities } }
+            : d.data,
+          ...(raw !== d.raw ? { raw } : {}),
+          fitSpec: spec,
+        };
+      }) }));
       refreshFitRefsLater(id, get); // P2.5: fit() columns follow the fit
     },
   };

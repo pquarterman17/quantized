@@ -13,7 +13,6 @@
 import { fitModel } from "../lib/api";
 import { dropGapRows } from "../lib/api/finitePairs";
 import { boundsFromWire } from "../lib/fitBoundsWire";
-import { fitDataForSpec } from "../lib/fitselection";
 import { refreshFitRefsLater } from "./computedColumns";
 import type { AppState } from "./useApp";
 
@@ -29,10 +28,13 @@ export async function recomputeStaleFits(set: SliceSet, get: SliceGet): Promise<
       continue;
     }
     try {
+      const { FIT_SUBSET_MISMATCH, fitDataForSpec } = await import("../lib/fitselection");
       // Reproduce the fit's RECORDED channels (audit P1 #3), falling back
       // to the live plotted selection for legacy specs — not time/values[0].
       const sel = fitDataForSpec(d, d.fitSpec, get().xKey, get().yKeys, get().seriesOrder);
-      if (!sel || sel.x.length === 0) throw new Error("no data");
+      if (!sel || sel.x.length === 0) {
+        throw new Error(d.fitSpec.rowIds !== undefined ? FIT_SUBSET_MISMATCH : "no data");
+      }
       const pairs = dropGapRows(sel.x, sel.y);
       if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
       const dy = sel.dy ? pairs.keep.map((i) => sel.dy![i]!) : undefined;
@@ -57,7 +59,7 @@ export async function recomputeStaleFits(set: SliceSet, get: SliceGet): Promise<
       const { commitRecomputedFit } = await import("../lib/fitRecompute");
       // #30: stamp the re-run so the workspace distinguishes a HISTORICAL
       // result from one the recalc graph regenerated over changed data.
-      commitRecomputedFit(set, get, d, spec, pairs, r);
+      commitRecomputedFit(set, get, d, spec, pairs, r, sel.sourceRows);
       refreshFitRefsLater(id, get); // P2.5: fit() columns follow the refit
     } catch (e) {
       get().setStatus(

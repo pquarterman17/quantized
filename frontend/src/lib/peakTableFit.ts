@@ -48,6 +48,8 @@ export interface PeakTableSource {
    *  caller that CAN supply it (store/peakTables.ts's `publishFitResult`)
    *  always should. */
   fingerprint?: string | null;
+  /** Exact original rows consumed by an explicit row/range subset. */
+  rowIds?: number[];
   /** Injected so tests are deterministic; defaults to `new Date()`. */
   now?: Date;
 }
@@ -289,6 +291,7 @@ export function peakTableFromFit(
       xLabel: source.xLabel ?? "",
       xUnit: source.xUnit ?? "",
       fingerprint: source.fingerprint ?? null,
+      ...(source.rowIds ? { rowIds: [...source.rowIds] } : {}),
       fittedAt: (source.now ?? new Date()).toISOString(),
     },
   };

@@ -3,11 +3,9 @@
 // Also the provenance bridge (audit P1 #3): `fitSpecFrom` records the fit's
 // recipe and `fitDataForSpec` reproduces it on recompute.
 //
-// SCOPE (narrowed 2026-08-23, C2 bundle pass): this file keeps `FitSelection`
-// + the functions `store/useApp.ts`/`store/recalcFits.ts`/
-// `components/workshops/pipeline/executeSteps.ts` need EAGERLY
-// (`fitStepParams`/`fitSpecFromStepParams`/`fitDataForSpec`,
-// plus `selectedFitData` below, which `fitDataForSpec` calls internally).
+// SCOPE (narrowed 2026-10-11): this file owns subset selection and saved-fit
+// replay. The eager quick-fit encoder lives in tiny `fitStepParams.ts`, while
+// recomputation loads this module only after the user starts recalculation.
 // The plotted-channel column helpers (`fullPlottedX`/`plottedYKey`) and the
 // fit-recipe builder (`fitSpecFrom` + its `finiteRange`/`activeCorrectionNames`
 // helpers) now live in `lib/fitselectionActions.ts`, reached only from the
@@ -18,13 +16,26 @@
 import { dropGapRows } from "./api/finitePairs";
 import { dyForFit } from "./fitweights";
 import { effectiveChannels } from "./plotdata";
-import { analysisData } from "./rowstate";
+import { analysisData, analysisView } from "./rowstate";
+import { fitRowXFingerprint } from "./fitRowFingerprint";
+import { fitRowIdentities, fitRowIdentityFingerprint } from "./fitRowIdentity";
+import type { AnalysisSelectionItem } from "./analysisSelection";
 import type { Dataset, FitSpec } from "./types";
+export { fitStepParams } from "./fitStepParams";
+
+export const FIT_SUBSET_MISMATCH = "saved row subset no longer matches the worksheet";
 
 export interface FitSelection {
   x: number[];
   y: number[];
   yKey: number;
+  /** Positions in analysisData(dataset) retained by an explicit row/range
+   * selection. Absent for the historical full-analysis-view path. */
+  analysisRows?: number[];
+  /** Original worksheet row ids corresponding to x/y. */
+  sourceRows?: number[];
+  /** Raw worksheet length that gives positional sourceRows their meaning. */
+  sourceRowCount?: number;
   /** 1-sigma errors for the recorded weighting (recompute path only); null/
    *  absent = unweighted. Only `fitDataForSpec` populates it — the interactive
    *  hook resolves weighting from the live UI state instead. */
@@ -36,8 +47,10 @@ export function selectedFitData(
   xKey: number | null,
   yKeys: number[] | null,
   seriesOrder: number[] | null,
+  subset?: Pick<AnalysisSelectionItem, "rowIds" | "range">,
 ): FitSelection | null {
-  const data = analysisData(dataset);
+  const view = analysisView(dataset);
+  const data = view.data;
   if (!dataset || !data) return null;
   const channels = effectiveChannels(
     data,
@@ -48,34 +61,29 @@ export function selectedFitData(
   );
   const yKey = channels[0];
   if (yKey === undefined) return null;
-  const x = xKey == null ? data.time : data.values.map((row) => row[xKey]);
-  const y = data.values.map((row) => row[yKey]);
-  return { x, y, yKey };
+  const allX = xKey == null ? data.time : data.values.map((row) => row[xKey]);
+  const allY = data.values.map((row) => row[yKey]);
+  if (!subset || (subset.rowIds === null && subset.range === null)) return { x: allX, y: allY, yKey };
+  const sourceRows = view.rowIds ?? data.time.map((_value, index) => index);
+  const selectedRows = subset.rowIds === null ? null : new Set(subset.rowIds);
+  const analysisRows: number[] = [];
+  for (let index = 0; index < sourceRows.length; index++) {
+    if (selectedRows && !selectedRows.has(sourceRows[index])) continue;
+    const x = allX[index];
+    if (subset.range && (!Number.isFinite(x) || x < subset.range.lo || x > subset.range.hi)) continue;
+    analysisRows.push(index);
+  }
+  return {
+    x: analysisRows.map((index) => allX[index]),
+    y: analysisRows.map((index) => allY[index]),
+    yKey,
+    analysisRows,
+    sourceRows: analysisRows.map((index) => sourceRows[index]),
+    sourceRowCount: dataset.data.time.length,
+  };
 }
 
 // ── Pipeline fit-step params bridge (#6) ───────────────────────────────────
-// A recorded "fit" step must carry the SAME recipe as the FitSpec so a template
-// batch reproduces the interactive fit's channels + weighting, not time/
-// values[0]. These are the pure encoder/decoder between a FitSpec and the
-// step's untrusted `params` bag (round-trips through localStorage
-// `qz.analysisTemplates` + saved .dwk workspaces — validate, never cast).
-// The decoder (`fitSpecFromStepParams`) lives in ./fitStepDecode.ts (bundle
-// diet slice 22): only the lazy pipeline executor calls it.
-
-/** Encode a FitSpec into a fit step's `params` object. Minimal + mirrors
- *  `fitSpecFrom`: the channels the fit used plus a non-`none` weighting; the
- *  result snapshot (`params`/`exitFlag`) is NEVER encoded — a step is a recipe,
- *  not a result. Absent channels are omitted (legacy `{model}` shape). */
-export function fitStepParams(model: string, spec: FitSpec): Record<string, unknown> {
-  const params: Record<string, unknown> = { model };
-  if (spec.yKey !== undefined) {
-    params.yKey = spec.yKey;
-    if (spec.xKey !== undefined) params.xKey = spec.xKey; // `null` (time axis) round-trips
-  }
-  if (spec.weight && spec.weight.mode !== "none") params.weight = spec.weight;
-  return params;
-}
-
 /** Fit inputs for a SAVED spec on recompute: reproduce the spec's recorded
  *  channels (provenance) over the current analysis rows (#50/#53). Legacy specs
  *  without channels — or a stored channel that no longer exists after a column
@@ -98,12 +106,37 @@ export function fitDataForSpec(
     return selectedFitData(dataset, liveXKey, liveYKeys, liveSeriesOrder);
   }
   const xKey = spec.xKey ?? null;
-  const x =
-    xKey == null || xKey < 0 || xKey >= width ? data.time : data.values.map((row) => row[xKey]);
-  const y = data.values.map((row) => row[yKey]);
-  if (!spec.weight) return { x, y, yKey };
+  const selected = selectedFitData(dataset, xKey, [yKey], null, {
+    rowIds: spec.rowIds ?? null,
+    range: spec.range ? { lo: spec.range[0], hi: spec.range[1], source: "manual" } : null,
+  });
+  if (!selected) return null;
+  // Explicit row subsets use worksheet positions. Refuse replay unless the
+  // source length, finite count, and ordered X digest still identify the same
+  // observations; sorting and delete-plus-append can preserve row count while
+  // silently moving every positional id.
+  if (spec.rowIds !== undefined) {
+    if (spec.sourceRowCount === undefined || spec.sourceRowCount !== dataset.data.time.length) return null;
+    const finite = dropGapRows(selected.x, selected.y);
+    if (spec.nPoints !== undefined && finite.x.length !== spec.nPoints) return null;
+    if (spec.rowXFingerprint === undefined || fitRowXFingerprint(finite.x) !== spec.rowXFingerprint) return null;
+    if (spec.rowIdentityFingerprint !== undefined) {
+      const identities = fitRowIdentities(dataset.data.metadata, dataset.data.time.length);
+      const rows = selected.sourceRows;
+      if (!identities || !rows) return null;
+      const selectedIdentities = finite.keep.map((index) => identities.get(rows[index])).filter((id): id is string => id !== undefined);
+      if (selectedIdentities.length !== finite.keep.length ||
+          fitRowIdentityFingerprint(selectedIdentities) !== spec.rowIdentityFingerprint) return null;
+    }
+  }
+  if (!spec.weight) return selected;
   // Reproduce the recorded weighting over the same analysis rows (Sol audit);
   // a missing/invalid error column refits unweighted (dyForFit returns null).
   // σ is checked only over the rows the fit keeps, as in useCurveFit.
-  return { x, y, yKey, dy: dyForFit(dataset, yKey, spec.weight, dropGapRows(x, y).keep).dy };
+  const keep = dropGapRows(selected.x, selected.y).keep.map((index) => selected.analysisRows?.[index] ?? index);
+  const resolved = dyForFit(dataset, yKey, spec.weight, keep).dy;
+  return {
+    ...selected,
+    dy: resolved && selected.analysisRows ? selected.analysisRows.map((index) => resolved[index]) : resolved,
+  };
 }

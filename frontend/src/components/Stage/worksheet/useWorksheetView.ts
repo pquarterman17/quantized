@@ -44,7 +44,7 @@ import type { TextColumn } from "../../../lib/originTextColumns";
 import { textColumnRowCount, worksheetTextColumns } from "./textColumns";
 import { autofitColWidth, clampColWidth } from "../../../lib/gridwindow";
 import { excludedSet, filteredOutSet } from "../../../lib/rowstate";
-import { resolveSelectionPlot, selectionToSpec } from "../../../lib/selectionplot";
+import { resolveSelectionPlot } from "../../../lib/selectionplot";
 import { useWorksheetBlockOps, type BlockOpsApi } from "./useWorksheetBlockOps";
 import { useWorksheetStats } from "./useWorksheetStats";
 import type { CalcResult, ChannelRole, Dataset, DataStruct } from "../../../lib/types";
@@ -53,6 +53,7 @@ import { askParams } from "../../overlays/ParamDialog";
 import { describeExtract, planExtract } from "./extractRows";
 import { gridFormatters } from "./cellFormat";
 import { resolvePendingEdit } from "../../../store/pendingEdit";
+import { openWorksheetAnalysisSelection, openWorksheetGraphBuilder } from "../../../store/worksheetAnalysisHandoff";
 import {
   analysisWorksheetRows,
   resolvedSourceRow,
@@ -165,6 +166,7 @@ export interface WorksheetView {
   openInGraphBuilder: (cols: number[]) => void;
   /** Toolbar wrapper over the CURRENT column selection. */
   openSelectionInGraphBuilder: () => void;
+  openSelectionInAnalysisCenter: () => void;
 
   // Text-sheet rendering (item 8) — read-only, appended after numeric/computed
   // columns; never editable, never in stats, never a selection→plot candidate.
@@ -525,15 +527,13 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   // dataset and its explicit Graph Builder plot action lands the intent instead. (Contrast
   // plotCols above, where "Plot selection" IS the explicit plot intent.)
   function openInGraphBuilder(cols: number[]) {
-    const spec = selectionToSpec(ds.data, ds.id, cols);
-    if (!spec) {
-      setStatus("nothing plottable in the selection");
-      return;
-    }
-    useApp.getState().openGraphBuilderSeeded(spec);
-    setStatus("opened the selection in the Graph Builder");
+    setStatus(openWorksheetGraphBuilder(ds.data, ds.id, cols)
+      ? "opened the selection in the Graph Builder" : "nothing plottable in the selection");
   }
   const openSelectionInGraphBuilder = () => openInGraphBuilder([...selectedCols]);
+  const openSelectionInAnalysisCenter = () => openWorksheetAnalysisSelection(
+    ds.id, [...selectedCols], selection?.datasetId === ds.id ? selection.rows : [],
+  );
 
   const vars = ["x", ...labels.map((_, c) => channelLetter(c))].join(" · ");
 
@@ -607,6 +607,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     autofitCol,
     openInGraphBuilder,
     openSelectionInGraphBuilder,
+    openSelectionInAnalysisCenter,
     textCols,
   };
 }

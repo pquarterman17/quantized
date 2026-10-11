@@ -137,10 +137,12 @@ describe("saved model description + units (P2.7 slice 3)", () => {
     const first = render(<CurveFitPanel />);
     await waitFor(() => expect(useToasts.getState().toasts).toHaveLength(1));
     expect(useToasts.getState().toasts[0].msg).toContain('"Future"');
-    expect(await screen.findByRole("option", { name: /Decay/ })).toBeInTheDocument();
+    const firstModel = within(first.container).getByRole("combobox", { name: /^Model$/ });
+    expect(await within(firstModel).findByRole("option", { name: /Decay/ })).toBeInTheDocument();
     first.unmount();
-    render(<CurveFitPanel />);
-    await screen.findByRole("option", { name: /Decay/ });
+    const second = render(<CurveFitPanel />);
+    const secondModel = within(second.container).getByRole("combobox", { name: /^Model$/ });
+    await within(secondModel).findByRole("option", { name: /Decay/ });
     expect(useToasts.getState().toasts).toHaveLength(1);
   });
 });

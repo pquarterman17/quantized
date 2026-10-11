@@ -40,6 +40,11 @@ describe("metadataRows", () => {
     expect(rows.map(([k]) => k)).toEqual(["sample"]);
   });
 
+  it("hides persistent fit-row identities — internal wiring, not sample metadata", () => {
+    const rows = metadataRows({ __quantized_fit_row_ids: { 0: "r1:0", 1: "r1:1" }, sample: "Si" });
+    expect(rows.map(([k]) => k)).toEqual(["sample"]);
+  });
+
   it("hides the Origin provenance keys (they have a dedicated card)", () => {
     const rows = metadataRows({
       origin_results_log: "log text",

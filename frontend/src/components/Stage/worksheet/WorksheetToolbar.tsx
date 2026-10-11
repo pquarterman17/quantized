@@ -53,6 +53,7 @@ export interface WorksheetToolbarProps {
   /** Selection → Graph Builder handoff (MAIN_PLAN #4) — same cluster, so it
    *  is only offered (and thus never enabled) with a non-empty selection. */
   onOpenInGraphBuilder: () => void;
+  onAnalyzeSelection: () => void;
   onClearColSelection: () => void;
   /** GUI_INTERACTION #14: is THIS worksheet linked to the live plot (row
    *  selection highlights plotted points; "Set as X axis"/"Plot as Y" edit it
@@ -82,6 +83,7 @@ export default function WorksheetToolbar({
   onPlotSelection,
   onAddSelectionToPlot,
   onOpenInGraphBuilder,
+  onAnalyzeSelection,
   onClearColSelection,
   plotLinked,
 }: WorksheetToolbarProps) {
@@ -227,6 +229,9 @@ export default function WorksheetToolbar({
             title="Open the selected columns in the Graph Builder (prefills the X/Y wells)"
           >
             Graph Builder
+          </button>
+          <button className="qz-btn" onClick={onAnalyzeSelection} title="Review these columns and rows in the Analysis Center">
+            Analyze…
           </button>
           <button className="qz-btn" onClick={onClearColSelection} title="Clear the column selection">
             Deselect columns
