@@ -46,7 +46,8 @@ export function multivariateRecipe(result: AnalysisResult, source?: Dataset): Mu
 }
 
 export function sameMultivariateQuestion(a: MultivariateRecipe, b: MultivariateRecipe): boolean {
-  return a.method === b.method && a.standardize === b.standardize && a.pcX === b.pcX && a.pcY === b.pcY &&
+  // The displayed score axes are a view choice, not a different analysis.
+  return a.method === b.method && a.standardize === b.standardize &&
     a.columns.length === b.columns.length && a.columns.every((column, index) => column === b.columns[index]);
 }
 
@@ -80,6 +81,16 @@ export function multivariateSnapshotMatchesRecipe(
 
 function finite(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value + 0 : null;
+}
+
+function constantVariables(source: Dataset, recipe: MultivariateRecipe, snapshot: MultivariateSnapshot): string[] {
+  if (!recipe.standardize) return [];
+  return recipe.columns.flatMap((column, index) => {
+    const values = snapshot.sourceRows.map((row) => column < 0
+      ? source.data.time[row - 1]
+      : source.data.values[row - 1]?.[column]).filter((value): value is number => Number.isFinite(value));
+    return values.length > 0 && values.every((value) => value === values[0]) ? [snapshot.labels[index]] : [];
+  });
 }
 
 interface TableSource {
@@ -157,8 +168,12 @@ export function multivariateAnalysisResult(
   const n = Math.min(snapshot.sourceRows.length, snapshot.correlation.N, snapshot.pca.score.length);
   const omitted = Math.max(0, snapshot.inputRows - n);
   const explained = finite(snapshot.pca.explained[0]);
+  const constants = constantVariables(source, recipe, snapshot);
+  const undefinedCorrelations = snapshot.correlation.r.some((row) => row.some((value) => !Number.isFinite(value)));
   const warnings = [
     ...(omitted ? [`${omitted} row${omitted === 1 ? " was" : "s were"} omitted by listwise deletion.`] : []),
+    ...(constants.length ? [`Constant variable${constants.length === 1 ? "" : "s"}: ${constants.join(", ")}. PCA records a scale of 1 as a zero-variance fallback; correlations involving ${constants.length === 1 ? "it are" : "them are"} undefined.`] : []),
+    ...(!constants.length && undefinedCorrelations ? ["Undefined correlations were saved as null."] : []),
     ...(snapshot.correlation.N !== snapshot.sourceRows.length || snapshot.pca.score.length !== snapshot.sourceRows.length
       ? ["The returned correlation/PCA row counts differ from the shared listwise-complete input."] : []),
     ...bounded.warnings,
@@ -181,8 +196,10 @@ export function multivariateAnalysisResult(
     scalarValues: {
       Test: "Multivariate", Interpretation: `${n} listwise-complete rows across ${snapshot.labels.length} variables${explained === null ? "." : `; PC1 explains ${fmtNum(explained)}%.`}`,
       Variables: variableSummary, N: n, "Input rows": snapshot.inputRows,
-      "Rows omitted": omitted, Correlation: recipe.method,
+      "Rows omitted by listwise deletion": omitted, Correlation: recipe.method,
+      "Correlation p-values": "two-sided t approximation",
       "PCA standardized": recipe.standardize ? "yes" : "no",
+      "PCA loading signs": "largest-magnitude loading positive",
       "Displayed score axes": `PC${recipe.pcX + 1} / PC${recipe.pcY + 1}`,
     },
     parameters: { recipe: { ...recipe, columns: [...recipe.columns] } },

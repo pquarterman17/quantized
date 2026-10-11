@@ -305,9 +305,12 @@ Update (2026-10-09):
   score rows tied back to original worksheet row numbers. The adapter rejects
   stale or structurally mismatched async responses, follows filtered/excluded
   source freshness, discloses listwise deletion and truncation, and reopens
-  the exact workbench question. Workstream E remains the later unified
-  statistical workspace rather than a prerequisite for preserving these
-  focused-workbench results.
+  the exact workbench question. PCA scores are intentionally retained as
+  useful derived observations; together with loadings and scaling they can
+  reconstruct the selected numeric inputs, so this result is bounded for
+  responsiveness rather than intended as privacy-minimized output. Workstream
+  E remains the later unified statistical workspace rather than a prerequisite
+  for preserving these focused-workbench results.
 - [x] Fit Y by X now saves explicit, undoable Library snapshots for oneway,
   bivariate, and contingency analyses, including bounded By-level output,
   assumption/subtest warnings, Tukey comparisons, fitted points and bands,

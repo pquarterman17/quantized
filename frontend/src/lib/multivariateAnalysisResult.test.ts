@@ -30,13 +30,17 @@ const snapshot: MultivariateSnapshot = {
 };
 
 describe("multivariateAnalysisResult", () => {
-  it("saves correlation, PCA, source-row identity, recipe, and freshness without source observations", () => {
+  it("saves correlation, derived PCA scores, source-row identity, recipe, and freshness without embedding the source table", () => {
     const result = multivariateAnalysisResult("result", source, recipe, snapshot, "2026-10-10T00:00:00Z");
     expect(result).toMatchObject({
       producer: { id: "multivariate-analysis" }, sources: [{ datasetId: "source" }], outputs: [],
       parameters: { recipe }, sourceFingerprint: analysisDataFingerprint(source),
       selection: { channels: [{ index: 0, label: "temperature", unit: "K" }, { index: 2, label: "yield", unit: "%" }] },
-      scalarValues: { N: 3, "Input rows": 4, "Rows omitted": 1, Correlation: "spearman", "PCA standardized": "yes" },
+      scalarValues: {
+        N: 3, "Input rows": 4, "Rows omitted by listwise deletion": 1, Correlation: "spearman",
+        "Correlation p-values": "two-sided t approximation", "PCA standardized": "yes",
+        "PCA loading signs": "largest-magnitude loading positive",
+      },
     });
     expect(result.tables).toEqual(expect.arrayContaining([
       expect.objectContaining({ title: "Correlation coefficients", rows: expect.arrayContaining([["run", 1, 0.9, 0.8]]) }),
@@ -58,6 +62,7 @@ describe("multivariateAnalysisResult", () => {
     expect(multivariateRecipe({ ...result, parameters: { recipe: { ...recipe, columns: [0, 9] } } }, source)).toBeNull();
     expect(multivariateRecipe({ ...result, producer: { id: "future", label: "Future", version: 1 } })).toBeNull();
     expect(sameMultivariateQuestion(recipe, { ...recipe, columns: [...recipe.columns] })).toBe(true);
+    expect(sameMultivariateQuestion(recipe, { ...recipe, pcX: 1, pcY: 0 })).toBe(true);
     expect(sameMultivariateQuestion(recipe, { ...recipe, standardize: false })).toBe(false);
     expect(multivariateSnapshotMatchesRecipe(recipe, snapshot)).toBe(true);
     expect(multivariateSnapshotMatchesRecipe(recipe, {
@@ -66,6 +71,26 @@ describe("multivariateAnalysisResult", () => {
     expect(multivariateSnapshotMatchesRecipe(recipe, {
       ...snapshot, pca: { ...snapshot.pca, score: [[1], [2], [3]] },
     })).toBe(false);
+  });
+
+  it("discloses constant-variable scale fallback and undefined correlations", () => {
+    const constantSource: Dataset = {
+      ...source, data: { ...source.data, values: source.data.values.map((row) => [row[0], 7]) },
+    };
+    const result = multivariateAnalysisResult("constant", constantSource, {
+      columns: [0, 1], method: "pearson", standardize: true, pcX: 0, pcY: 1,
+    }, {
+      labels: ["temperature", "pressure"], sourceRows: [1, 2, 3], inputRows: 3,
+      correlation: { r: [[1, NaN], [NaN, NaN]], p: [[0, NaN], [NaN, NaN]], N: 3, method: "pearson" },
+      pca: {
+        coeff: [[1, 0], [0, 1]], score: [[-1, 0], [0, 0], [1, 0]], latent: [1, 0],
+        explained: [100, 0], cumulative: [100, 100], mu: [2, 7], sigma: [1, 1], singular: [1, 0],
+      },
+    });
+    expect(result.warnings).toContain(
+      "Constant variable: pressure. PCA records a scale of 1 as a zero-variance fallback; correlations involving it are undefined.",
+    );
+    expect(result.tables?.find((table) => table.title === "Correlation coefficients")?.rows[1][1]).toBeNull();
   });
 
   it("bounds large PCA score output and discloses truncation", () => {
