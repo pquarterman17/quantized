@@ -43,7 +43,7 @@ fn app_url(port: u16) -> String {
 /// A fresh 256-bit API token, hex-encoded (URL- and cookie-safe as-is).
 fn new_api_token() -> std::io::Result<String> {
     let mut bytes = [0u8; 32];
-    getrandom::getrandom(&mut bytes).map_err(|e| std::io::Error::other(e.to_string()))?;
+    getrandom::fill(&mut bytes).map_err(|e| std::io::Error::other(e.to_string()))?;
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 
