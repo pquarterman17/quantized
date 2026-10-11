@@ -22,7 +22,7 @@ function dataset(id = "d1"): Dataset {
 
 function tool(run = vi.fn()): AnalysisTool {
   return {
-    action: { id: "test-tool", group: "Analyze", label: "Test tool…", run },
+    action: { id: "curvefit", group: "Analyze", label: "Test tool…", run },
     category: "Fit",
     requiredInputs: "one numeric response",
     datasetRequired: true,
@@ -80,6 +80,59 @@ describe("Analysis Center launch bridge", () => {
     expect(beforeRun).not.toHaveBeenCalled();
     expect(selected.action.run).not.toHaveBeenCalled();
     expect(useApp.getState().status).toMatch(/skipped: the active worksheet changed/);
+  });
+
+  it("does not launch after the user leaves the Analysis Center while data resolves", async () => {
+    const preview = {
+      ...dataset(),
+      pending: { kind: "path" as const, path: "C:/project.opju", bookId: "b1", rows: 3000, cols: 1 },
+    };
+    const full = { ...preview, pending: undefined };
+    let finish!: (value: Dataset) => void;
+    const resolveDataset = vi.fn(() => new Promise<Dataset>((resolve) => { finish = resolve; }));
+    const selected = tool();
+    const beforeRun = vi.fn();
+    useApp.setState({ datasets: [preview], activeId: preview.id, resolveDataset });
+
+    const launch = launchAnalysisCenterTool(selected, preview.id, beforeRun);
+    useApp.setState({ stageTab: "plot" });
+    finish(full);
+    await launch;
+
+    expect(beforeRun).not.toHaveBeenCalled();
+    expect(selected.action.run).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toMatch(/skipped: the Analysis Center was closed/);
+  });
+
+  it("rechecks compatibility against full Origin data before opening the tool", async () => {
+    const preview = {
+      ...dataset(),
+      pending: { kind: "path" as const, path: "C:/project.opju", bookId: "b1", rows: 3000, cols: 1 },
+    };
+    const full: Dataset = { ...preview, pending: undefined, data: { time: [], values: [], labels: [], units: [], metadata: {} } };
+    const resolveDataset = vi.fn(async () => full);
+    const selected = tool();
+    const beforeRun = vi.fn();
+    useApp.setState({ datasets: [preview], activeId: preview.id, resolveDataset });
+
+    await launchAnalysisCenterTool(selected, preview.id, beforeRun);
+
+    expect(beforeRun).not.toHaveBeenCalled();
+    expect(selected.action.run).not.toHaveBeenCalled();
+    expect(useApp.getState().stageTab).toBe("analysis");
+    expect(useApp.getState().status).toMatch(/was not opened: At least two data rows/);
+  });
+
+  it("reports when the selected worksheet was removed before launch", async () => {
+    const selected = tool();
+    const beforeRun = vi.fn();
+
+    await launchAnalysisCenterTool(selected, "removed", beforeRun);
+
+    expect(beforeRun).not.toHaveBeenCalled();
+    expect(selected.action.run).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toMatch(/dataset is no longer open/);
+    expect(useToasts.getState().toasts.at(-1)?.kind).toBe("danger");
   });
 
   it("keeps the Center open and never runs an action when full Origin data fails to load", async () => {

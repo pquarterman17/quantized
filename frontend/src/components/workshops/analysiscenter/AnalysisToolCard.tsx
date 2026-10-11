@@ -33,7 +33,7 @@ export default function AnalysisToolCard({ tool, favorite, busy, blocked, onFavo
       <h3>{label}</h3>
       <p>{tool.action.description}</p>
       <p className="qzk-analysis-requires"><strong>Needs:</strong> {tool.requiredInputs}.</p>
-      {!tool.available && <p className="qzk-analysis-unavailable" role="status">{tool.unavailableReason}</p>}
+      {!tool.available && <p className="qzk-analysis-unavailable">{tool.unavailableReason}</p>}
       <Button size="sm" variant={tool.available ? "primary" : "default"} disabled={!tool.available || blocked} title={tool.unavailableReason} onClick={onOpen}>
         {busy ? "Loading…" : "Open tool"}
       </Button>

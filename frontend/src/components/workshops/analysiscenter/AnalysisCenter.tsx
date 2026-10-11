@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ANALYSIS_CATEGORIES, analysisTools, matchesAnalysisSearch, type AnalysisCategory } from "../../../lib/analysisCenter";
 import { useEscapeSurface } from "../../../lib/escapeStack";
@@ -32,13 +32,16 @@ export default function AnalysisCenter({ onClose, onBack }: { onClose: () => voi
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<AnalysisCategory | "all">("all");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const actions = useMemo(() => analysisCenterActions(), []);
   const tools = useMemo(() => analysisTools(actions, dataset), [actions, dataset]);
 
   useEscapeSurface("workspace", () => {
-    onClose();
+    onBack();
     return true;
   });
+
+  useEffect(() => titleRef.current?.focus(), []);
 
   const rank = new Map(recent.map((id, index) => [id, index]));
   const visible = tools
@@ -66,7 +69,7 @@ export default function AnalysisCenter({ onClose, onBack }: { onClose: () => voi
       <header className="qzk-analysis-head">
         <div>
           <div className="qzk-analysis-eyebrow">Workflow</div>
-          <h1 id="analysis-center-title">Analysis Center</h1>
+          <h1 id="analysis-center-title" ref={titleRef} tabIndex={-1}>Analysis Center</h1>
           <p>Find the right analysis without guessing. Nothing runs until you explicitly open a tool.</p>
         </div>
         <div className="qzk-analysis-head-actions">
@@ -125,7 +128,8 @@ export default function AnalysisCenter({ onClose, onBack }: { onClose: () => voi
         </div>
       ) : (
         <div className="qzk-analysis-empty">
-          {view === "recommended" ? "No tools can be recommended from the worksheet's declared technique and structure. Browse All tools to choose explicitly." :
+          {query.trim() ? "No tools match this search and category." :
+            view === "recommended" ? "No tools can be recommended from the worksheet's declared technique and structure. Browse All tools to choose explicitly." :
             view === "recent" ? "Tools you open from this center will appear here." :
               view === "favorites" ? "Use the star on a tool to keep it here." : "No tools match this search and category."}
         </div>

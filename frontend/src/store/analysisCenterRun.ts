@@ -1,5 +1,5 @@
 import { buildAnalysisCommands } from "../commands/analysisCommands";
-import type { AnalysisTool } from "../lib/analysisCenter";
+import { analysisTools, type AnalysisTool } from "../lib/analysisCenter";
 import { plotIntentStageTab } from "../lib/stagetab";
 import type { Action } from "./commands";
 import { runAction } from "./commands";
@@ -36,16 +36,35 @@ export async function launchAnalysisCenterTool(
 
   const name = tool.action.label.replace(/…$/, "");
   try {
-    await withResolved(useApp.getState, sourceId, name, (resolved) => {
+    const outcome = await withResolved(useApp.getState, sourceId, name, (resolved) => {
       const state = useApp.getState();
       if (state.activeId !== resolved.id) {
         state.setStatus(`${name} skipped: the active worksheet changed while data loaded`);
+        return;
+      }
+      if (state.stageTab !== "analysis") {
+        state.setStatus(`${name} skipped: the Analysis Center was closed while data loaded`);
+        return;
+      }
+      const refreshed = analysisTools([tool.action], resolved)[0];
+      if (!refreshed?.available) {
+        const message = `${name} was not opened: ${refreshed?.unavailableReason ?? "the loaded worksheet is not compatible"}`;
+        state.setStatus(message);
+        toast(message, "info");
         return;
       }
       state.setStageTab(plotIntentStageTab(resolved));
       beforeRun();
       runAction(tool.action);
     });
+    if (!outcome.ok && useApp.getState().status !== outcome.error) {
+      // `withResolved` reports fetch/replacement failures itself. The only
+      // silent outcome is an id removed before it starts; cover that without
+      // double-toasting the detailed load failure path.
+      const message = `${name} was not opened: ${outcome.error}.`;
+      useApp.getState().setStatus(message);
+      toast(message, "danger");
+    }
   } catch (error) {
     const message = `${name} failed: ${error instanceof Error ? error.message : "error"}`;
     useApp.getState().setStatus(message);

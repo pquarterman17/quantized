@@ -20,18 +20,34 @@ function dataset(technique = "generic"): Dataset {
 
 beforeEach(() => {
   resetAnalysisCenterPreferencesForTests();
-  useApp.setState({ datasets: [], activeId: null, selectedIds: [], analysisResults: [], openAnalysisResultId: null, curveFitOpen: false, stageTab: "technique" });
+  useApp.setState({ datasets: [], activeId: null, selectedIds: [], analysisResults: [], openAnalysisResultId: null, curveFitOpen: false, stageTab: "analysis" });
 });
 
 describe("AnalysisCenter", () => {
   it("is useful without a worksheet and gives a reason for disabled tools", () => {
     render(<AnalysisCenter onClose={() => {}} onBack={() => {}} />);
-    expect(screen.getByRole("heading", { name: "Analysis Center" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Analysis Center" })).toHaveFocus();
     expect(screen.getByRole("heading", { name: /DiraCulator/ })).toBeInTheDocument();
     const fit = screen.getByRole("heading", { name: "Curve fit" }).closest("article");
     expect(fit).not.toBeNull();
     expect(within(fit!).getByText("Select a worksheet first.")).toBeInTheDocument();
     expect(within(fit!).getByRole("button", { name: "Open tool" })).toBeDisabled();
+  });
+
+  it("returns to Workflow on Escape", async () => {
+    const back = vi.fn(() => useApp.setState({ stageTab: "technique" }));
+    const close = vi.fn();
+    render(<AnalysisCenter onClose={close} onBack={back} />);
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(useApp.getState().stageTab).toBe("technique"));
+    expect(back).toHaveBeenCalledOnce();
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it("uses the search-empty message instead of the current section's empty message", () => {
+    render(<AnalysisCenter onClose={() => {}} onBack={() => {}} />);
+    fireEvent.change(screen.getByLabelText("Search tools and results"), { target: { value: "definitely-no-such-tool" } });
+    expect(screen.getByText("No tools match this search and category.")).toBeInTheDocument();
   });
 
   it("searches tools, records a recent launch, and invokes the canonical command once", async () => {

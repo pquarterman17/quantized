@@ -43,12 +43,36 @@ describe("analysisTools", () => {
     expect(tools.find((tool) => tool.action.id === "curvefit")).toMatchObject({ available: true, recommended: false });
   });
 
-  it("uses modeling types to guard multivariate and nested variability inputs", () => {
+  it("keeps explicit reflectometry tools available for lab XRR tagged as an XRD line scan", () => {
+    const tools = analysisTools([
+      action("reflectivity"), action("reflview"), action("reductions-reflfft"),
+    ], dataset("xrd.powder"));
+    expect(tools.map((tool) => [tool.available, tool.recommended])).toEqual([
+      [true, false], [true, false], [true, false],
+    ]);
+  });
+
+  it("counts the x column for multivariate work and still guards incomplete variability inputs", () => {
     const oneNumeric = dataset("generic", ["Signal"]);
     oneNumeric.data.values = oneNumeric.data.values.map((row) => [row[0]]);
     const tools = analysisTools([action("multivar"), action("variability-chart")], oneNumeric);
-    expect(tools[0]).toMatchObject({ available: false, unavailableReason: "At least two numeric columns are required." });
+    expect(tools[0]).toMatchObject({ available: true });
     expect(tools[1]).toMatchObject({ available: false });
+  });
+
+  it("does not mistake an x-only worksheet for a numeric response", () => {
+    const xOnly = dataset("generic", []);
+    xOnly.data.values = xOnly.data.values.map(() => []);
+    const tools = analysisTools([action("curvefit"), action("multivar")], xOnly);
+    expect(tools[0]).toMatchObject({ available: false, unavailableReason: "No numeric response column is available." });
+    expect(tools[1]).toMatchObject({ available: false, unavailableReason: "At least two numeric columns are required." });
+  });
+
+  it("accepts numeric-coded factor columns for variability analysis", () => {
+    const coded = dataset("generic", ["Response", "Lot", "Wafer"]);
+    coded.data.values = Array.from({ length: 8 }, (_, index) => [index * 0.25, Math.floor(index / 4) + 1, (index % 4) + 1]);
+    const [tool] = analysisTools([action("variability-chart")], coded);
+    expect(tool).toMatchObject({ available: true });
   });
 
   it("respects the canonical command's dynamic disabled state and explanation", () => {

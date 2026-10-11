@@ -37,15 +37,17 @@ export const ANALYSIS_TOOL_METADATA: Readonly<Record<string, AnalysisToolMetadat
   peaks: { category: "Peaks & baseline", requiredInputs: "one numeric signal with at least three rows", requirement: "continuous", recommendedFor: ["xrd.powder", "spectroscopy"] },
   baseline: { category: "Peaks & baseline", requiredInputs: "one numeric signal with at least three rows", requirement: "continuous", recommendedFor: ["xrd.powder", "spectroscopy"] },
   "peak-wizard": { category: "Peaks & baseline", requiredInputs: "one numeric signal with at least three rows", requirement: "continuous", recommendedFor: ["xrd.powder", "spectroscopy"] },
-  reflectivity: { category: "XRD & reflectivity", requiredInputs: "a reflectometry curve", requirement: "continuous", techniques: ["reflectometry"], recommendedFor: ["reflectometry"] },
-  reflview: { category: "XRD & reflectivity", requiredInputs: "reflectometry data plus a model or SLD profile", requirement: "continuous", techniques: ["reflectometry"], recommendedFor: ["reflectometry"] },
+  // Lab XRR line scans arrive through XRDML/Bruker RAW as xrd.powder; keep
+  // these explicit tools available without recommending them for powder XRD.
+  reflectivity: { category: "XRD & reflectivity", requiredInputs: "a reflectometry curve", requirement: "continuous", techniques: ["reflectometry", "xrd.powder"], recommendedFor: ["reflectometry"] },
+  reflview: { category: "XRD & reflectivity", requiredInputs: "reflectometry data plus a model or SLD profile", requirement: "continuous", techniques: ["reflectometry", "xrd.powder"], recommendedFor: ["reflectometry"] },
   rsm: { category: "XRD & reflectivity", requiredInputs: "a 2-D reciprocal-space map", requirement: "map", techniques: ["xrd.rsm"], recommendedFor: ["xrd.rsm"] },
   "roi-cuts": { category: "XRD & reflectivity", requiredInputs: "a 2-D map with x, y, and intensity columns", requirement: "map", techniques: ["xrd.rsm"], recommendedFor: ["xrd.rsm"] },
   "reductions-wh": { category: "XRD & reflectivity", requiredInputs: "powder XRD peak positions and widths", requirement: "continuous", techniques: ["xrd.powder"], recommendedFor: ["xrd.powder"] },
   "reductions-pawley": { category: "XRD & reflectivity", requiredInputs: "a powder XRD pattern and starting unit cell", requirement: "continuous", techniques: ["xrd.powder"], recommendedFor: ["xrd.powder"] },
   "signal-processing": { category: "Signal processing", requiredInputs: "one numeric signal with at least three rows", requirement: "continuous", recommendedFor: GENERAL_RECOMMENDED },
   "reductions-fft": { category: "Signal processing", requiredInputs: "a numeric fringe signal", requirement: "continuous", recommendedFor: ["reflectometry"] },
-  "reductions-reflfft": { category: "Signal processing", requiredInputs: "an X-ray or neutron reflectivity curve", requirement: "continuous", techniques: ["reflectometry"], recommendedFor: ["reflectometry"] },
+  "reductions-reflfft": { category: "Signal processing", requiredInputs: "an X-ray or neutron reflectivity curve", requirement: "continuous", techniques: ["reflectometry", "xrd.powder"], recommendedFor: ["reflectometry"] },
   sims: { category: "SIMS", requiredInputs: "a SIMS depth profile", requirement: "continuous", techniques: ["sims"], recommendedFor: ["sims"] },
   distribution: { category: "Statistics", requiredInputs: "one numeric column; an optional grouping column", requirement: "continuous", recommendedFor: GENERAL_RECOMMENDED },
   multivar: { category: "Statistics", requiredInputs: "at least two numeric columns", requirement: "two-continuous", recommendedFor: GENERAL_RECOMMENDED },
@@ -69,15 +71,21 @@ export interface AnalysisTool {
   searchText: string;
 }
 
-function dimensions(dataset: Dataset): { rows: number; continuous: number; categorical: number } {
+function dimensions(dataset: Dataset): { rows: number; columns: number; numericColumns: number; numericResponses: number } {
   const rows = dataset.pending?.rows ?? Math.max(dataset.data.time.length, dataset.data.values.length);
-  let continuous = 0;
-  let categorical = 0;
+  // Every analysis selector exposes the x/time column as index -1. Count it
+  // when populated so X + one response correctly enables multivariate work.
+  let numericResponses = 0;
   dataset.data.labels.forEach((_label, index) => {
-    if (isCategorical(channelModelingType(dataset, index))) categorical += 1;
-    else continuous += 1;
+    if (!isCategorical(channelModelingType(dataset, index))) numericResponses += 1;
   });
-  return { rows, continuous, categorical };
+  const hasX = dataset.data.time.length > 0;
+  return {
+    rows,
+    columns: dataset.data.labels.length + (hasX ? 1 : 0),
+    numericColumns: numericResponses + (hasX ? 1 : 0),
+    numericResponses,
+  };
 }
 
 function compatibility(meta: AnalysisToolMetadata, dataset: Dataset | undefined): { available: boolean; reason?: string } {
@@ -92,10 +100,10 @@ function compatibility(meta: AnalysisToolMetadata, dataset: Dataset | undefined)
   const size = dimensions(dataset);
   if (size.rows < 2) return { available: false, reason: "At least two data rows are required." };
   if (meta.requirement !== "dataset" && size.rows < 3) return { available: false, reason: "At least three data rows are required." };
-  if (meta.requirement === "continuous" && size.continuous < 1) return { available: false, reason: "No numeric response column is available." };
-  if (meta.requirement === "two-continuous" && size.continuous < 2) return { available: false, reason: "At least two numeric columns are required." };
-  if (meta.requirement === "variability" && (size.continuous < 1 || size.categorical < 2)) {
-    return { available: false, reason: "Choose data with one numeric response and two categorical factors." };
+  if (meta.requirement === "continuous" && size.numericResponses < 1) return { available: false, reason: "No numeric response column is available." };
+  if (meta.requirement === "two-continuous" && size.numericColumns < 2) return { available: false, reason: "At least two numeric columns are required." };
+  if (meta.requirement === "variability" && (size.numericColumns < 1 || size.columns < 3)) {
+    return { available: false, reason: "Choose data with one numeric response and two factor columns." };
   }
   if (meta.requirement === "map") {
     if (!canRenderMap(dataset.data)) return { available: false, reason: "A 2-D map with x, y, and intensity columns is required." };
