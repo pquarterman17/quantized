@@ -338,8 +338,9 @@ export function statsPCA(body: {
  *  verbatim: pairwise `r` and its 2-tailed p-value (n×n each), the complete-row
  *  count `N` after listwise deletion, and the method actually used. */
 export interface CorrelationResponse {
-  r: number[][];
-  p: number[][];
+  /** null means undefined, e.g. a zero-variance variable. */
+  r: (number | null)[][];
+  p: (number | null)[][];
   N: number;
   method: string;
 }

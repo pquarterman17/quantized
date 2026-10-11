@@ -94,6 +94,17 @@ def test_correlation_perfect_pair() -> None:
     assert out["p"][0][1] < 1e-300 or out["p"][0][1] == 0.0
 
 
+@pytest.mark.parametrize("method", ["pearson", "spearman"])
+def test_correlation_constant_column_is_undefined(method: str) -> None:
+    out = correlation_matrix([_X1, np.full(_X1.shape, 7.0)], method=method)
+    np.testing.assert_allclose(out["r"][0, 0], 1.0)
+    np.testing.assert_allclose(out["p"][0, 0], 1.0)
+    assert np.all(np.isnan(out["r"][1, :]))
+    assert np.all(np.isnan(out["r"][:, 1]))
+    assert np.all(np.isnan(out["p"][1, :]))
+    assert np.all(np.isnan(out["p"][:, 1]))
+
+
 def test_partial_correlation_closed_form() -> None:
     cols = [_X1, _X2, _Y]
     out = partial_correlation(cols)

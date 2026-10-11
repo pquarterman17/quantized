@@ -6,6 +6,7 @@ import {
   defaultContinuousColumns,
   downsampleIndices,
   listwiseComplete,
+  listwiseCompleteWithIndices,
   miniHistogram,
   multivarColumns,
   multivarColumnValues,
@@ -87,6 +88,11 @@ describe("listwiseComplete", () => {
       [2, 4],
     ]);
   });
+  it("retains the input positions of complete rows", () => {
+    expect(listwiseCompleteWithIndices([[1, NaN, 3], [10, 20, 30]])).toEqual({
+      rows: [[1, 10], [3, 30]], rowIndices: [0, 2],
+    });
+  });
 });
 
 describe("transposeRows", () => {
@@ -149,5 +155,10 @@ describe("correlationToTSV", () => {
     expect(lines[0]).toBe("\ta\tb");
     expect(lines[1]).toBe("a\t1.0000\t0.5000");
     expect(lines[2]).toBe("b\t0.5000\t1.0000");
+  });
+
+  it("leaves undefined constant-variable cells blank", () => {
+    expect(correlationToTSV(["a", "constant"], [[1, null], [null, null]]))
+      .toBe("\ta\tconstant\na\t1.0000\t\nconstant\t\t");
   });
 });

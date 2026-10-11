@@ -18,7 +18,7 @@ import { postDownload } from "./http";
 
 export interface CorrelationHeatmapFigureSpec {
   labels: string[];
-  r: number[][];
+  r: (number | null)[][];
   title?: string;
   fmt?: string;
   style?: string;

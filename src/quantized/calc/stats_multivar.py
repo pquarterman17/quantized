@@ -129,7 +129,9 @@ def correlation_matrix(
 
     ``method='pearson'`` (linear) or ``'spearman'`` (rank). p-values from the
     exact t-transform ``t = r·sqrt((n-2)/(1-r²))`` with n-2 dof (the classic
-    test, as in MATLAB corrcoef); the diagonal is r=1, p=1 by convention.
+    test, as in MATLAB corrcoef); the diagonal is r=1, p=1 by convention for
+    variables with non-zero variance. A constant variable has undefined r and
+    p against every variable, including itself, and is returned as NaN.
     Rows containing any non-finite value are dropped (listwise deletion).
     """
     if method not in ("pearson", "spearman"):
@@ -144,7 +146,13 @@ def correlation_matrix(
     if method == "spearman":
         data = np.column_stack([_rankdata(data[:, j]) for j in range(k)])
 
-    r = np.asarray(np.corrcoef(data, rowvar=False), dtype=float)
+    constant = np.all(data == data[0], axis=0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        r = np.asarray(np.corrcoef(data, rowvar=False), dtype=float)
+    # Make the degenerate contract explicit rather than inheriting whatever a
+    # numpy version happens to emit for zero / zero covariance normalization.
+    r[constant, :] = np.nan
+    r[:, constant] = np.nan
     # t-transform off-diagonal; clamp so |r|=1 gives p=0 instead of a 0-division.
     rr = np.clip(r, -1.0, 1.0)
     denom = np.maximum(1.0 - rr**2, _EPS)
@@ -156,7 +164,9 @@ def correlation_matrix(
     with np.errstate(over="ignore", divide="ignore"):
         t = np.abs(rr) * np.sqrt((n - 2) / denom)
     p = np.asarray(2.0 * (1.0 - _t_cdf(t, n - 2)), dtype=float)
-    np.fill_diagonal(p, 1.0)
+    diagonal = np.arange(k)
+    p[diagonal[~constant], diagonal[~constant]] = 1.0
+    p[diagonal[constant], diagonal[constant]] = np.nan
 
     return {"r": r, "p": p, "N": n, "method": method}
 

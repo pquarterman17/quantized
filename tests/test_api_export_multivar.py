@@ -23,6 +23,15 @@ def test_correlation_heatmap_download() -> None:
     assert resp.content[:4] == b"%PDF"
 
 
+def test_correlation_heatmap_accepts_undefined_cells() -> None:
+    resp = client.post(
+        "/api/export/correlation-heatmap-figure",
+        json={"labels": ["signal", "constant"], "r": [[1.0, None], [None, None]], "fmt": "svg"},
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/svg+xml"
+
+
 def test_correlation_heatmap_bad_shape_is_422_not_500() -> None:
     resp = client.post(
         "/api/export/correlation-heatmap-figure",

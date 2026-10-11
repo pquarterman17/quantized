@@ -20,14 +20,15 @@ import { type CorrelationResponse, type PCAResponse, statsCorrelation, statsPCA 
 import {
   correlationToTSV,
   defaultContinuousColumns,
-  listwiseComplete,
+  listwiseCompleteWithIndices,
   multivarColumns,
   multivarColumnValues,
   transposeRows,
   type MultivarColumn,
 } from "../../../lib/multivar";
-import { analysisData } from "../../../lib/rowstate";
+import { analysisView } from "../../../lib/rowstate";
 import { useActiveDataset } from "../../../store/useApp";
+import { useMultivarResultBridge } from "./useMultivarResultBridge";
 
 export type CorrMethod = "pearson" | "spearman";
 
@@ -61,6 +62,9 @@ export interface MultivarState {
   pcY: number;
   setPcX: (i: number) => void;
   setPcY: (i: number) => void;
+  canSaveResult: boolean;
+  saveResultDisabledReason: string | null;
+  saveResult: () => string | null;
 }
 
 function errMsg(e: unknown, fallback: string): string {
@@ -69,7 +73,8 @@ function errMsg(e: unknown, fallback: string): string {
 
 export function useMultivar(): MultivarState {
   const active = useActiveDataset();
-  const data = useMemo(() => analysisData(active), [active]);
+  const view = useMemo(() => analysisView(active), [active]);
+  const data = view.data;
 
   const columns = useMemo<MultivarColumn[]>(() => multivarColumns(active), [active]);
 
@@ -97,23 +102,29 @@ export function useMultivar(): MultivarState {
     [selected, columns],
   );
 
-  const rows = useMemo(() => {
-    if (!data || selected.length < 2) return [];
+  const complete = useMemo(() => {
+    if (!data || selected.length < 2) return { rows: [], rowIndices: [] };
     const cols = selected.map((i) => multivarColumnValues(data, i));
-    return listwiseComplete(cols);
+    return listwiseCompleteWithIndices(cols);
   }, [data, selected]);
+  const rows = complete.rows;
+  const sourceRows = useMemo(() => complete.rowIndices.map((row) => (view.rowIds?.[row] ?? row) + 1),
+    [complete.rowIndices, view.rowIds]);
 
   const tooFewColumns = selected.length < 2;
 
   // ── Correlation ────────────────────────────────────────────────────────
   const [method, setMethod] = useState<CorrMethod>("pearson");
-  const [corr, setCorr] = useState<CorrelationResponse | null>(null);
+  const [corrRun, setCorrRun] = useState<{
+    rows: number[][]; method: CorrMethod; value: CorrelationResponse;
+  } | null>(null);
   const [corrBusy, setCorrBusy] = useState(false);
   const [corrError, setCorrError] = useState<string | null>(null);
+  const corr = corrRun?.rows === rows && corrRun.method === method ? corrRun.value : null;
 
   useEffect(() => {
     if (tooFewColumns || rows.length < 3) {
-      setCorr(null);
+      setCorrRun(null);
       setCorrError(tooFewColumns ? "select at least 2 columns" : "need at least 3 complete rows");
       setCorrBusy(false);
       return;
@@ -124,11 +135,11 @@ export function useMultivar(): MultivarState {
     statsCorrelation(transposeRows(rows), method)
       .then((res) => {
         if (cancelled) return;
-        setCorr(res);
+        setCorrRun({ rows, method, value: res });
       })
       .catch((e: unknown) => {
         if (cancelled) return;
-        setCorr(null);
+        setCorrRun(null);
         setCorrError(errMsg(e, "correlation failed"));
       })
       .finally(() => {
@@ -146,15 +157,18 @@ export function useMultivar(): MultivarState {
 
   // ── PCA ────────────────────────────────────────────────────────────────
   const [standardize, setStandardize] = useState(false);
-  const [pca, setPca] = useState<PCAResponse | null>(null);
+  const [pcaRun, setPcaRun] = useState<{
+    rows: number[][]; standardize: boolean; value: PCAResponse;
+  } | null>(null);
   const [pcaBusy, setPcaBusy] = useState(false);
   const [pcaError, setPcaError] = useState<string | null>(null);
   const [pcX, setPcX] = useState(0);
   const [pcY, setPcY] = useState(1);
+  const pca = pcaRun?.rows === rows && pcaRun.standardize === standardize ? pcaRun.value : null;
 
   useEffect(() => {
     if (tooFewColumns || rows.length < 2) {
-      setPca(null);
+      setPcaRun(null);
       setPcaError(tooFewColumns ? "select at least 2 columns" : "need at least 2 complete rows");
       setPcaBusy(false);
       return;
@@ -165,11 +179,11 @@ export function useMultivar(): MultivarState {
     statsPCA({ data: rows, center: true, scale: standardize })
       .then((res) => {
         if (cancelled) return;
-        setPca(res);
+        setPcaRun({ rows, standardize, value: res });
       })
       .catch((e: unknown) => {
         if (cancelled) return;
-        setPca(null);
+        setPcaRun(null);
         setPcaError(errMsg(e, "PCA failed"));
       })
       .finally(() => {
@@ -188,6 +202,12 @@ export function useMultivar(): MultivarState {
     if (pcY >= k) setPcY(Math.min(1, k - 1));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pca]);
+
+  const resultBridge = useMultivarResultBridge({
+    active, selected, setSelected, method, setMethod, standardize, setStandardize,
+    pcX, setPcX, pcY, setPcY, labels, sourceRows, inputRows: data?.time.length ?? 0,
+    correlation: corr, pca, busy: corrBusy || pcaBusy,
+  });
 
   return {
     hasData: !!active,
@@ -214,5 +234,6 @@ export function useMultivar(): MultivarState {
     pcY,
     setPcX,
     setPcY,
+    ...resultBridge,
   };
 }

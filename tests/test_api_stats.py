@@ -245,6 +245,17 @@ def test_correlation_roundtrip_and_422() -> None:
     assert bad.status_code == 422
 
 
+def test_correlation_constant_column_serializes_undefined_as_null() -> None:
+    resp = client.post(
+        "/api/stats/correlation",
+        json={"columns": [[1, 2, 3, 4], [7, 7, 7, 7]]},
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["r"] == [[1.0, None], [None, None]]
+    assert out["p"] == [[1.0, None], [None, None]]
+
+
 def test_fit_distribution_roundtrip() -> None:
     x = [float(v) for v in np.exp(np.linspace(-1, 1, 25))]
     resp = client.post("/api/stats/fit-distribution", json={"x": x})

@@ -6560,7 +6560,7 @@ export interface components {
             /** Labels */
             labels: string[];
             /** R */
-            r: number[][];
+            r: (number | null)[][];
             /**
              * Style
              * @default default
