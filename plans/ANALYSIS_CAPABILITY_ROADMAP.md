@@ -379,14 +379,14 @@ menu names.
 
 **Priority:** P1
 
-- [ ] Define a versioned `AnalysisSelection` contract for dataset(s), X/Y/error
+- [x] Define a versioned `AnalysisSelection` contract for dataset(s), X/Y/error
   roles, analysis-row ids, factor/By roles, and optional ranges/ROIs.
-- [ ] Let plot-range, worksheet-column, Library multi-selection, and factor
+- [x] Let plot-range, worksheet-column, Library multi-selection, and factor
   grouping create that same contract.
-- [ ] Add a standard Review inputs panel to every migrated workbench.
-- [ ] Add Run by factor level and Run over selected worksheets where the
+- [x] Add a standard Review inputs panel to every migrated workbench.
+- [x] Add Run by factor level and Run over selected worksheets where the
   algorithm supports it; show a preflight matrix before a batch begins.
-- [ ] Produce one navigable batch result with per-input status, warnings,
+- [x] Produce one navigable batch result with per-input status, warnings,
   comparable summary columns, and a clear partial-cancellation state.
 
 ## Workstream E — Statistical result workspace
@@ -432,7 +432,7 @@ menu names.
    actions, all focused-statistics producers, signal migration, fitted peaks,
    curve-fit results, and reflectivity-fit history are complete.
 5. [x] C: build the Analysis Center on canonical commands and result inventory.
-6. [ ] D: unify selection and batch behavior, then migrate curve fit/peaks.
+6. [x] D: unify selection and batch behavior, then migrate curve fit/peaks.
 7. [ ] E: migrate statistical tools into the result workspace.
 8. [ ] F: expand technique-specific depth according to real use.
 
@@ -464,6 +464,7 @@ menu names.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-10-11 | ChatGPT-Sol (Codex) | Completed Workstream D with a shared versioned `AnalysisSelection` contract and migrated Curve Fit and Peaks. Plot ranges, exact worksheet column/row selections, Library multi-selection, uncertainty bindings, and categorical factors now converge on one reviewable input model. Both workbenches expose Review inputs, preserve exact row/range provenance through save/reopen and recalculation, support Run By and selected-worksheet batches where scientifically valid, and publish one durable batch result with preflight, comparable summaries, per-input warnings/status, bounded input count, and explicit partial cancellation. The adversarial pass fixed stale tool-default selection on reopen, asymmetric-error replacement, subset/full-view result mixing, source-fingerprint drift, lazy Origin inputs, repeat-click races, row-id expansion limits, and architecture/bundle regressions. | Focused selection/Curve Fit/Peaks/batch verification passed 214/214; architecture ratchets passed 56/56; focused backend fit/peak checks passed 61 with 2 skips. A complete frontend pass reached 17,171 passing tests plus 2 expected failures; its three Workstream D failures exposed the stale-remount bug and passed after the fix, leaving only the documented pre-existing Windows flat-autoscale subnormal-float fixture mismatch in untouched code. Forced TypeScript, ESLint, preload verification, production build, and the 816.2 kB eager-bundle gate passed at 815.2 kB. The local real-data import sweep plus `panalytical/xrd/La2NiO4_1.xrdml` peak regression passed 21/21. CI remains the final PR gate. |
 | 2026-10-11 | Project team | Completed Workstream C with a lazy full-stage Analysis Center reachable from Analyze and Workflow. It searches the canonical tool catalog, groups tools by scientific purpose, explains structural, command-state, and declared-technique compatibility, offers Recommended/Recent/Favorites/All/Existing Results views, and preserves each existing command as the sole launch authority. Pending Origin previews resolve before launch and fail closed if the source disappears, fails to load, or the active worksheet changes. Preferences are bounded session UI state; the Center never changes scientific data or runs a tool by itself. | Final focused Center/navigation/store/Help/command/architecture/preload coverage passed 575/575 after the adversarial pass added active-worksheet race, offline-source, disabled-command, corrupted-preference, and Library-retarget guards. A complete serial frontend run excluding the documented Windows flat-autoscale fixture passed 17,115 tests plus 2 expected failures and exposed five Help aliases shortened during bundle work; all original aliases were restored and their exact suite reran green. Forced TypeScript, full ESLint, preload verification, and the production build passed, including the unchanged 814.7 kB startup budget at 814.3 kB eager. CI remains the final PR gate. |
 | 2026-10-10 | ChatGPT-Sol (Codex) | Completed the focused-statistics migration with a Multivariate producer adapter. Correlation, SPLOM/PCA inputs, correlation matrices, PCA summaries/loadings/scaling/scores, exact controls, source row identities, and listwise-deletion disclosure now participate in the durable result lifecycle. Results reopen the exact workbench question and use the common inspect/export/report/duplicate/delete/Undo workspace. The adversarial pass prevents prior async correlation/PCA responses, wrong-method payloads, or dimensionally inconsistent responses from being saved under changed controls; large inline tables are bounded and constructed without first copying oversized score/matrix output. | Final focused multivariate/adapter/workspace/freshness verification passed 98/98. The full frontend passed 17,109 tests plus 2 expected failures; its only failure was the documented pre-existing Windows flat-autoscale subnormal-float fixture mismatch in untouched code. Forced TypeScript, full ESLint, preload verification, production build, and the unchanged 814.7 kB eager-bundle gate passed at 814.5 kB. CI remains the merge gate. |
 | 2026-10-10 | ChatGPT-Sol (Codex) | Added the Outlier Screening producer adapter: Grubbs, Rosner ESD, Dixon Q, and robust MAD screens can now be explicitly saved as durable Library snapshots, reopened with exact controls, checked against the filtered/excluded analysis view, exported/reported, duplicated, and removed with Undo. Snapshots retain original source-row identities, compact method-specific statistics, bounded Rosner sequences, and non-finite-row disclosure without persisting raw score arrays; screening remains non-destructive. | Focused workshop/adapter/workspace/freshness/architecture/preload verification passed 131/131; TypeScript, ESLint, production build, and the unchanged 814.7 kB eager-bundle gate passed at 814.4 kB. The full frontend passed 17,098 tests plus 2 expected failures; its sole failure was the documented pre-existing Windows flat-autoscale subnormal-float fixture mismatch in untouched code. The adversarial pass added a source-fingerprint run key to prevent an old asynchronous result being saved after an in-place worksheet edit, bounded diagnostics, guarded same-render duplicate saves, and fixed the row-state architecture naming collision. CI remains the merge gate. |

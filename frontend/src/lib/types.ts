@@ -432,6 +432,9 @@ export interface FitSpec {
    *  which part of them, so "fit the peak" and "fit the whole scan" are
    *  indistinguishable on reopening. */
   range?: [number, number];
+  /** Original worksheet row ids used by an explicit AnalysisSelection.
+   * Absent means the whole current analysis view (legacy behavior). */
+  rowIds?: number[];
   /** Points the fit consumed — the cheap corroborator for `range`: same window,
    *  different count means the underlying rows changed. */
   nPoints?: number;

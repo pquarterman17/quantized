@@ -34,6 +34,15 @@ describe("selectedFitData", () => {
     const roled = { ...dataset, channelRoles: { 1: "ignore" as const } };
     expect(selectedFitData(roled, 0, [0, 1, 2], null)?.yKey).toBe(2);
   });
+
+  it("intersects original row ids with an inclusive X range", () => {
+    expect(selectedFitData(dataset, 0, [1], null, {
+      rowIds: [0, 2, 3], range: { lo: 250, hi: 400, source: "manual" },
+    })).toEqual({
+      x: [300, 400], y: [30, 40], yKey: 1,
+      analysisRows: [1, 2], sourceRows: [2, 3],
+    });
+  });
 });
 
 describe("fullPlottedX", () => {
@@ -89,6 +98,15 @@ describe("fitDataForSpec (recompute reproduces the recorded channels)", () => {
     expect(sel).toEqual({ x: [100, 300, 400], y: [10, 30, 40], yKey: 1 });
   });
 
+  it("reproduces a saved explicit row/range subset with original-row mapping", () => {
+    expect(fitDataForSpec(dataset, {
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 2, 3], range: [250, 400],
+    }, null, null, null)).toEqual({
+      x: [300, 400], y: [30, 40], yKey: 1,
+      analysisRows: [1, 2], sourceRows: [2, 3],
+    });
+  });
+
   it("falls back to the live plotted selection for a legacy {model} spec", () => {
     // No xKey/yKey recorded -> use the live selection (xKey 0, yKeys [2]).
     const sel = fitDataForSpec(dataset, { model: "Linear" }, 0, [2], null);
@@ -136,6 +154,7 @@ describe("fitStepParams / fitSpecFromStepParams (pipeline fit-step recipe #6)", 
       model: "Gaussian",
       xKey: 0,
       yKey: 1,
+      range: [1, 1],
       weight: { mode: "yerr", errKey: 2 },
     });
   });
@@ -143,8 +162,8 @@ describe("fitStepParams / fitSpecFromStepParams (pipeline fit-step recipe #6)", 
   it("omits weight when mode is none and round-trips a null xKey (time axis)", () => {
     const spec = fitSpecFrom("Linear", null, { x: [1], y: [2], yKey: 0 }, { params: [1] });
     const params = fitStepParams("Linear", spec);
-    expect(params).toEqual({ model: "Linear", xKey: null, yKey: 0 });
-    expect(fitSpecFromStepParams(params)).toEqual({ model: "Linear", xKey: null, yKey: 0 });
+    expect(params).toEqual({ model: "Linear", xKey: null, yKey: 0, range: [1, 1] });
+    expect(fitSpecFromStepParams(params)).toEqual({ model: "Linear", xKey: null, yKey: 0, range: [1, 1] });
   });
 
   it("decodes a legacy {model}-only step to a channel-less recipe", () => {
@@ -183,6 +202,12 @@ describe("fit recipe residual fields (MAIN #30)", () => {
     const spec = fitSpecFrom("gauss", null, sel, result, undefined, undefined, undefined, at);
     expect(spec.range).toEqual([1, 4]);
     expect(spec.nPoints).toBe(4);
+  });
+
+  it("records and pipeline-round-trips exact original rows for a subset fit", () => {
+    const spec = fitSpecFrom("gauss", null, { ...sel, sourceRows: [1, 3, 7] }, result);
+    expect(spec.rowIds).toEqual([1, 3, 7]);
+    expect(fitSpecFromStepParams(fitStepParams("gauss", spec)).rowIds).toEqual([1, 3, 7]);
   });
 
   it("ignores non-finite x when computing the range", () => {

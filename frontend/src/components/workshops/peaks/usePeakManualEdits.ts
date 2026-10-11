@@ -3,9 +3,10 @@ import { useCallback, useEffect, useRef } from "react";
 import type { PeakTable, PeakTableEntry } from "../../../lib/peakTable";
 import { peakTableMatchesData, peakTableToFitResult } from "../../../lib/peakTableFit";
 import type { Dataset, FittedPeak, MultiFitResult } from "../../../lib/types";
+import type { AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import { editPeak, removePeaks } from "../../../store/peakTables";
 import { useApp } from "../../../store/useApp";
-import { peakInputs } from "./peakInputs";
+import { peakInputs, peakTableMatchesInputs } from "./peakInputs";
 
 /** Two tables that differ only in which rows are excluded. Exclusion is read
  *  straight off the table by the panel, so it needs no refresh; refreshing
@@ -19,6 +20,7 @@ function sameIgnoringExclusion(a: PeakTable, b: PeakTable): boolean {
 
 interface Args {
   activeId: string | null;
+  selection?: AnalysisSelectionItem;
   setFitResult: (value: MultiFitResult | null) => void;
   setPeakOverlay: (value: ReturnType<typeof useApp.getState>["peakOverlay"]) => void;
   overlayFitted: (ds: Dataset, fitted: FittedPeak[], fullX: number[]) => void;
@@ -26,6 +28,7 @@ interface Args {
 
 export function usePeakManualEdits({
   activeId,
+  selection,
   setFitResult,
   setPeakOverlay,
   overlayFitted,
@@ -63,11 +66,17 @@ export function usePeakManualEdits({
       setPeakOverlay(null);
       return;
     }
-    const { fullX } = peakInputs(ds, xKey, yKeys, seriesOrder);
+    const inputs = peakInputs(ds, xKey, yKeys, seriesOrder, selection);
+    if (!peakTableMatchesInputs(table, inputs, selection)) {
+      setFitResult(null);
+      setPeakOverlay(null);
+      return;
+    }
+    const { fullX } = inputs;
     if (!stillCurrent()) return;
     setFitResult(next);
     overlayFitted(ds, next.peaks, fullX);
-  }, [activeId, overlayFitted, resolveDataset, seriesOrder, setFitResult, setPeakOverlay, xKey, yKeys]);
+  }, [activeId, overlayFitted, resolveDataset, selection, seriesOrder, setFitResult, setPeakOverlay, xKey, yKeys]);
 
   useEffect(() => {
     const last = refreshed.current;

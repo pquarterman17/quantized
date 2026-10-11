@@ -18,13 +18,19 @@
 import { dropGapRows } from "./api/finitePairs";
 import { dyForFit } from "./fitweights";
 import { effectiveChannels } from "./plotdata";
-import { analysisData } from "./rowstate";
+import { analysisData, analysisView } from "./rowstate";
+import type { AnalysisSelectionItem } from "./analysisSelection";
 import type { Dataset, FitSpec } from "./types";
 
 export interface FitSelection {
   x: number[];
   y: number[];
   yKey: number;
+  /** Positions in analysisData(dataset) retained by an explicit row/range
+   * selection. Absent for the historical full-analysis-view path. */
+  analysisRows?: number[];
+  /** Original worksheet row ids corresponding to x/y. */
+  sourceRows?: number[];
   /** 1-sigma errors for the recorded weighting (recompute path only); null/
    *  absent = unweighted. Only `fitDataForSpec` populates it — the interactive
    *  hook resolves weighting from the live UI state instead. */
@@ -36,8 +42,10 @@ export function selectedFitData(
   xKey: number | null,
   yKeys: number[] | null,
   seriesOrder: number[] | null,
+  subset?: Pick<AnalysisSelectionItem, "rowIds" | "range">,
 ): FitSelection | null {
-  const data = analysisData(dataset);
+  const view = analysisView(dataset);
+  const data = view.data;
   if (!dataset || !data) return null;
   const channels = effectiveChannels(
     data,
@@ -48,9 +56,25 @@ export function selectedFitData(
   );
   const yKey = channels[0];
   if (yKey === undefined) return null;
-  const x = xKey == null ? data.time : data.values.map((row) => row[xKey]);
-  const y = data.values.map((row) => row[yKey]);
-  return { x, y, yKey };
+  const allX = xKey == null ? data.time : data.values.map((row) => row[xKey]);
+  const allY = data.values.map((row) => row[yKey]);
+  if (!subset || (subset.rowIds === null && subset.range === null)) return { x: allX, y: allY, yKey };
+  const sourceRows = view.rowIds ?? data.time.map((_value, index) => index);
+  const selectedRows = subset.rowIds === null ? null : new Set(subset.rowIds);
+  const analysisRows: number[] = [];
+  for (let index = 0; index < sourceRows.length; index++) {
+    if (selectedRows && !selectedRows.has(sourceRows[index])) continue;
+    const x = allX[index];
+    if (subset.range && (!Number.isFinite(x) || x < subset.range.lo || x > subset.range.hi)) continue;
+    analysisRows.push(index);
+  }
+  return {
+    x: analysisRows.map((index) => allX[index]),
+    y: analysisRows.map((index) => allY[index]),
+    yKey,
+    analysisRows,
+    sourceRows: analysisRows.map((index) => sourceRows[index]),
+  };
 }
 
 // ── Pipeline fit-step params bridge (#6) ───────────────────────────────────
@@ -72,6 +96,8 @@ export function fitStepParams(model: string, spec: FitSpec): Record<string, unkn
     params.yKey = spec.yKey;
     if (spec.xKey !== undefined) params.xKey = spec.xKey; // `null` (time axis) round-trips
   }
+  if (spec.range) params.range = spec.range;
+  if (spec.rowIds) params.rowIds = spec.rowIds;
   if (spec.weight && spec.weight.mode !== "none") params.weight = spec.weight;
   return params;
 }
@@ -98,12 +124,19 @@ export function fitDataForSpec(
     return selectedFitData(dataset, liveXKey, liveYKeys, liveSeriesOrder);
   }
   const xKey = spec.xKey ?? null;
-  const x =
-    xKey == null || xKey < 0 || xKey >= width ? data.time : data.values.map((row) => row[xKey]);
-  const y = data.values.map((row) => row[yKey]);
-  if (!spec.weight) return { x, y, yKey };
+  const selected = selectedFitData(dataset, xKey, [yKey], null, {
+    rowIds: spec.rowIds ?? null,
+    range: spec.range ? { lo: spec.range[0], hi: spec.range[1], source: "manual" } : null,
+  });
+  if (!selected) return null;
+  if (!spec.weight) return selected;
   // Reproduce the recorded weighting over the same analysis rows (Sol audit);
   // a missing/invalid error column refits unweighted (dyForFit returns null).
   // σ is checked only over the rows the fit keeps, as in useCurveFit.
-  return { x, y, yKey, dy: dyForFit(dataset, yKey, spec.weight, dropGapRows(x, y).keep).dy };
+  const keep = dropGapRows(selected.x, selected.y).keep.map((index) => selected.analysisRows?.[index] ?? index);
+  const resolved = dyForFit(dataset, yKey, spec.weight, keep).dy;
+  return {
+    ...selected,
+    dy: resolved && selected.analysisRows ? selected.analysisRows.map((index) => resolved[index]) : resolved,
+  };
 }

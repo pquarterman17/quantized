@@ -34,5 +34,13 @@ export function fitSpecFromStepParams(params: Record<string, unknown>): FitSpec 
       : null;
   const weight = decodeWeight(params.weight);
   if (weight) spec.weight = weight;
+  if (Array.isArray(params.range) && params.range.length === 2 &&
+      params.range.every((value) => typeof value === "number" && Number.isFinite(value)) && params.range[0] <= params.range[1]) {
+    spec.range = [params.range[0] as number, params.range[1] as number];
+  }
+  if (Array.isArray(params.rowIds) && params.rowIds.length <= 1_000_000 &&
+      params.rowIds.every((row) => Number.isInteger(row) && (row as number) >= 0)) {
+    spec.rowIds = [...new Set(params.rowIds as number[])].sort((a, b) => a - b);
+  }
   return spec;
 }

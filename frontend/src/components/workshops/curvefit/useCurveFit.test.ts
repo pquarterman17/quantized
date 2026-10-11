@@ -9,6 +9,8 @@ import type { DataStruct } from "../../../lib/types";
 import { usePendingOps } from "../../../store/pendingOps";
 import { useToasts } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
+import { useAnalysisSelection } from "../../../store/analysisSelection";
+import { captureAnalysisSelection } from "../../../lib/analysisSelection";
 import { useCurveFit } from "./useCurveFit";
 
 vi.mock("../../../lib/api", () => ({
@@ -36,6 +38,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(listFitModels).mockResolvedValue({ models: [] });
   useToasts.setState({ toasts: [] });
+  useAnalysisSelection.setState({ toolId: null, selection: null });
   useApp.setState({
     datasets: [{ id: "d1", name: "run.dat", data: DATA }],
     activeId: "d1",
@@ -76,6 +79,25 @@ describe("useCurveFit saved recipe", () => {
 });
 
 describe("useCurveFit exclusion honoring (#50/#53)", () => {
+  it("fits an explicit shared-selection row/range subset and records its original rows", async () => {
+    const dataset = { id: "d1", name: "run.dat", data: DATA };
+    useApp.setState({ datasets: [dataset], activeId: "d1" });
+    useAnalysisSelection.setState({
+      toolId: "curvefit",
+      selection: captureAnalysisSelection({
+        datasets: [dataset], activeId: "d1", selectedIds: ["d1"], xKey: null, yKeys: [0],
+        seriesOrder: null, errKeys: {}, selection: { datasetId: "d1", rows: [1, 3] },
+        range: { lo: 1, hi: 3, source: "manual" },
+      }, "analysis-center"),
+    });
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [21, 41] });
+    const { result } = renderHook(() => useCurveFit());
+    await act(async () => result.current.run("fit"));
+    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [1, 3], y: [20, 40] });
+    expect(useApp.getState().datasets[0].fitSpec?.rowIds).toEqual([1, 3]);
+    expect(useApp.getState().fitOverlay?.y).toEqual([null, 21, null, 41]);
+  });
+
   it("fits the FULL data and overlays it 1:1 when nothing is excluded", async () => {
     vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41] });
     const { result } = renderHook(() => useCurveFit());

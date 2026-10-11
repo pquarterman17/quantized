@@ -86,6 +86,8 @@ export function fitSpecFrom(
     spec.range = range;
     spec.nPoints = sel.x.length;
   }
+  // levels-allowlist: these are original worksheet row ids, not categorical levels.
+  if (sel.sourceRows) spec.rowIds = [...new Set(sel.sourceRows)].sort((a, b) => a - b);
   if (preprocessing && preprocessing.length > 0) spec.preprocessing = preprocessing;
   if (starts?.p0) spec.p0 = starts.p0;
   if (starts?.lower) spec.lower = starts.lower;

@@ -62,8 +62,9 @@ export function useCurveFitByLevel(
   xKey: number | null,
   yKey: number | null,
   start: CurveFitByLevelStart | undefined,
+  initialByCol: number | null = null,
 ): CurveFitByLevelState {
-  const byPartition = useByPartition(active, data, columns);
+  const byPartition = useByPartition(active, data, columns, initialByCol);
   const [results, setResults] = useState<CurveFitLevelResult[]>([]);
   const [busy, setBusy] = useState(false);
 

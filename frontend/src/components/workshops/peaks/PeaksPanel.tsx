@@ -9,7 +9,6 @@
 
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-
 import PeakFitControls from "./PeakFitControls";
 import DetectedPeakActions from "./DetectedPeakActions";
 import PeakTable from "./PeakTable";
@@ -29,10 +28,10 @@ import type { FittedPeak } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
-
+import { clearSelectionForTool } from "../../../store/analysisSelection";
+import PeakAnalysisInputs from "./PeakAnalysisInputs";
 // Stable fallback: a fresh [] would needlessly reset selection each render.
 const NO_FITTED_PEAKS: FittedPeak[] = [];
-
 // Opened on demand only: its chunk loads on the first "Batch integrate…".
 const BatchIntegrateWindow = lazyRegion(() => import("./BatchIntegrateWindow"), "Batch integrate");
 // Lazy for the same reason the Peak Analyzer's step ② loads it lazily
@@ -41,7 +40,6 @@ const BatchIntegrateWindow = lazyRegion(() => import("./BatchIntegrateWindow"), 
 // preload of this panel, i.e. one more chunk name in the entry's manifest
 // (measured +42 eager bytes, 2026-09-30).
 const PeakFindAdvanced = lazyRegion(() => import("./PeakFindAdvanced"), "Advanced");
-
 export default function PeaksPanel() {
   const setOpen = useApp((s) => s.setPeaksOpen);
   const setPeakOverlay = useApp((s) => s.setPeakOverlay);
@@ -71,6 +69,7 @@ export default function PeaksPanel() {
 
   const close = () => {
     setPeakOverlay(null); // remove the markers when the panel closes
+    clearSelectionForTool("peaks");
     setOpen(false);
   };
 
@@ -251,6 +250,7 @@ export default function PeaksPanel() {
   return (
     <>
     <ToolWindow id="peaks" title="Peaks" width={360} onClose={close}>
+      <PeakAnalysisInputs params={find.params} />
       {!active && (
         <div className="qzk-ds-meta" style={faint}>
           Select a dataset to find peaks.

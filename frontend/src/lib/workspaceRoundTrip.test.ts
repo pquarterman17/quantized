@@ -134,6 +134,7 @@ describe("Dataset.fitSpec: the MAIN_PLAN #30 recipe survives save/reopen", () =>
     nFree: 2,
     exitFlag: 1,
     range: [0, 2],
+    rowIds: [0, 2],
     nPoints: 3,
     fittedAt: "2026-01-01T00:00:00.000Z",
     recomputedAt: "2026-01-02T00:00:00.000Z",

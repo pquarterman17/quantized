@@ -288,6 +288,14 @@ describe("peakDataFingerprint", () => {
       peakDataFingerprint(scan({}, { excludedRows: [1] })),
     );
   });
+
+  it("fingerprints an exact original-row subset without treating other rows as inputs", () => {
+    const original = scan();
+    const subset = peakDataFingerprint(original, [1, 3]);
+    expect(subset).toBe(peakDataFingerprint(original, [1, 3]));
+    expect(subset).not.toBe(peakDataFingerprint(original, [0, 2]));
+    expect(subset).toBe(peakDataFingerprint(scan({ values: [[999], [9], [999], [1]] }), [1, 3]));
+  });
 });
 
 describe("peakTableMatchesData", () => {
@@ -318,6 +326,16 @@ describe("peakTableMatchesData", () => {
 
   it("does NOT match once a row is excluded", () => {
     expect(peakTableMatchesData(fitted(scan()), scan({}, { excludedRows: [2] }))).toBe(false);
+  });
+
+  it("matches a subset table only while every recorded source row is unchanged and available", () => {
+    const ds = scan();
+    const table = peakTableFromFit(fitResult([30.1]), {
+      ...SOURCE, rowIds: [1, 3], fingerprint: peakDataFingerprint(ds, [1, 3]),
+    });
+    expect(peakTableMatchesData(table, ds)).toBe(true);
+    expect(peakTableMatchesData(table, scan({ values: [[1], [500], [2], [1]] }))).toBe(false);
+    expect(peakTableMatchesData(table, scan({}, { excludedRows: [3] }))).toBe(false);
   });
 
   it("treats a record with no fingerprint as unknown, which reads as still valid", () => {
@@ -487,15 +505,26 @@ describe("sanitizePeakTable — the round-2 provenance fields", () => {
     doc.provenance.xUnit = 7;
     expect(sanitizePeakTable(doc)?.provenance.xUnit).toBe("");
   });
+
+  it("round-trips exact subset rows and drops a malformed row list", () => {
+    const t = peakTableFromFit(fitResult([30.1]), { ...SOURCE, rowIds: [7, 2, 3] });
+    const back = sanitizePeakTable(JSON.parse(JSON.stringify(serializePeakTable(t))));
+    expect(back?.provenance.rowIds).toEqual([2, 3, 7]);
+
+    const malformed = JSON.parse(JSON.stringify(t)) as { provenance: Record<string, unknown> };
+    malformed.provenance.rowIds = [2, -1, "3"];
+    expect(sanitizePeakTable(malformed)?.provenance.rowIds).toBeUndefined();
+  });
 });
 
 describe("serializePeakTable", () => {
   it("copies rather than aliasing the live record", () => {
-    const t = peakTableFromFit(fitResult([30.1, 43.2]), SOURCE);
+    const t = peakTableFromFit(fitResult([30.1, 43.2]), { ...SOURCE, rowIds: [1, 3] });
     const out = serializePeakTable(t);
     expect(out).toEqual(t);
     expect(out.peaks[0]).not.toBe(t.peaks[0]);
     expect(out.provenance.bgCoeffs).not.toBe(t.provenance.bgCoeffs);
+    expect(out.provenance.rowIds).not.toBe(t.provenance.rowIds);
   });
 
   it("survives a JSON round trip through the sanitizer unchanged", () => {

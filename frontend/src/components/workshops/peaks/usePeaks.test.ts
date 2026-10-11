@@ -4,11 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { findPeaks, fitMultiPeak, fitPeak } from "../../../lib/api/peaks";
 import { fetchBookData } from "../../../lib/api";
 import { askParams } from "../../overlays/ParamDialog";
-import { peakDataFingerprint, peakTableFromFit } from "../../../lib/peakTableFit";
+import { peakDataFingerprint, peakTableFromFit, peakTableMatchesData } from "../../../lib/peakTableFit";
 import type { Annotation, DataStruct, MultiFitResult, Peak, SinglePeakFit } from "../../../lib/types";
 import { usePendingOps } from "../../../store/pendingOps";
 import { useToasts } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
+import { useAnalysisSelection } from "../../../store/analysisSelection";
+import { captureAnalysisSelection } from "../../../lib/analysisSelection";
 import { usePeaks } from "./usePeaks";
 
 vi.mock("../../../lib/api", () => ({
@@ -70,6 +72,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   usePendingOps.setState({ ops: [] });
   useToasts.setState({ toasts: [] });
+  useAnalysisSelection.setState({ toolId: null, selection: null });
   useApp.setState({
     datasets: [{ id: "d1", name: "x.dat", data: DATA }],
     activeId: "d1",
@@ -186,6 +189,43 @@ describe("usePeaks find — round-2 review L2: detected-peak marker overlay heig
 });
 
 describe("usePeaks exclusion honoring (#50/#53)", () => {
+  it("detects only the explicit shared-selection rows and range", async () => {
+    const dataset = { id: "d1", name: "x.dat", data: DATA };
+    useApp.setState({ datasets: [dataset], activeId: "d1" });
+    useAnalysisSelection.setState({
+      toolId: "peaks",
+      selection: captureAnalysisSelection({
+        datasets: [dataset], activeId: "d1", selectedIds: ["d1"], xKey: null, yKeys: [0],
+        seriesOrder: null, errKeys: {}, selection: { datasetId: "d1", rows: [1, 3, 5] },
+        range: { lo: 2, hi: 5, source: "manual" },
+      }, "analysis-center"),
+    });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    expect(findPeaks).toHaveBeenCalledWith({ x: [3, 5], y: [6, 1] });
+  });
+
+  it("records the exact original rows when fitting an explicit subset", async () => {
+    const dataset = { id: "d1", name: "x.dat", data: DATA };
+    useApp.setState({ datasets: [dataset], activeId: "d1" });
+    useAnalysisSelection.setState({
+      toolId: "peaks",
+      selection: captureAnalysisSelection({
+        datasets: [dataset], activeId: "d1", selectedIds: ["d1"], xKey: null, yKeys: [0],
+        seriesOrder: null, errKeys: {}, selection: { datasetId: "d1", rows: [1, 3, 5] },
+        range: { lo: 2, hi: 5, source: "manual" },
+      }, "analysis-center"),
+    });
+    vi.mocked(fitMultiPeak).mockResolvedValue(fitted(3.02));
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    await act(async () => result.current.fitTogether(OPTS));
+
+    const table = useApp.getState().datasets[0].peakTable;
+    expect(table?.provenance.rowIds).toEqual([3, 5]);
+    expect(table && peakTableMatchesData(table, useApp.getState().datasets[0])).toBe(true);
+  });
+
   it("detects on the pruned analysis view but builds a full-length overlay", async () => {
     useApp.setState({
       datasets: [{ id: "d1", name: "x.dat", data: DATA, excludedRows: [1, 3] }],
@@ -1137,6 +1177,35 @@ describe("usePeaks durable peak table (PRIMARY_SOFTWARE_AUDIT_PLAN P2.1)", () =>
     await waitFor(() => expect(result.current.fitResult).not.toBeNull());
     expect(result.current.fitResult).toEqual(fitted(1.02));
     expect(fitMultiPeak).not.toHaveBeenCalled();
+  });
+
+  it("does not present a saved full-view fit beside an explicit subset analysis", async () => {
+    const dataset = { id: "d1", name: "x.dat", data: DATA };
+    const saved = peakTableFromFit(fitted(1.02), {
+      datasetId: "d1",
+      datasetName: "x.dat",
+      method: "simultaneous",
+      bgDegree: 1,
+      linkMode: "None",
+      constrain: false,
+      wavelengthA: null,
+    });
+    useApp.setState({ datasets: [{ ...dataset, peakTable: saved }], activeId: "d1", peakOverlay: null });
+    useAnalysisSelection.setState({
+      toolId: "peaks",
+      selection: captureAnalysisSelection({
+        datasets: [dataset], activeId: "d1", selectedIds: ["d1"], xKey: null, yKeys: [0],
+        seriesOrder: null, errKeys: {}, selection: { datasetId: "d1", rows: [1, 3, 5] }, range: null,
+      }, "analysis-center"),
+    });
+    expect(useAnalysisSelection.getState().selection?.items[0].rowIds).toEqual([1, 3, 5]);
+
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    expect(useAnalysisSelection.getState().selection?.items[0].rowIds).toEqual([1, 3, 5]);
+    expect(result.current.fitResult).toBeNull();
+    expect(result.current.peakTable).toBe(saved);
+    expect(findPeaks).toHaveBeenCalledWith({ x: [1, 3, 5], y: [5, 6, 1] });
   });
 
   it("does NOT rehydrate a table whose data moved under it (review round 2)", async () => {

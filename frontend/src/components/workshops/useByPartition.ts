@@ -47,23 +47,24 @@ export function useByPartition(
   active: Dataset | null,
   data: DataStruct | null,
   columns: readonly ByColumnOption[],
+  initialByCol: number | null = null,
 ): ByPartitionState {
   const [byCol, setByCol] = useState<number | null>(null);
+
+  const byOptions = useMemo(() => byColumnOptions(active, columns), [active, columns]);
 
   // A dataset switch invalidates any By column picked on the previous one —
   // mirrors useDistribution's brush-reset-on-dataset-switch convention
   // rather than silently partitioning by a column index that may not even
   // exist (or means something else) on the newly active dataset.
   useEffect(() => {
-    setByCol(null);
-  }, [active?.id]);
+    setByCol(byOptions.some((option) => option.index === initialByCol) ? initialByCol : null);
+  }, [active?.id, initialByCol]); // eslint-disable-line react-hooks/exhaustive-deps
   // A column added/removed under the pick follows it by label (./useFollowColumnPicks).
   useFollowColumnPicks(active, (follow) => {
     const next = byCol === null ? null : follow(byCol);
     if (next !== byCol) setByCol(next);
   });
-
-  const byOptions = useMemo(() => byColumnOptions(active, columns), [active, columns]);
 
   const partition = useMemo(() => {
     if (!data || byCol == null) return { levels: [], totalLevels: 0 };

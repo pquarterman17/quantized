@@ -65,7 +65,9 @@ export function parseFitSpec(v: unknown): FitSpec | undefined {
   if (typeof fs.exitFlag === "number") spec.exitFlag = fs.exitFlag;
   // MAIN_PLAN #30: the rest of the reproducible recipe.
   const range = numbers(fs.range);
-  if (range && range.length === 2) spec.range = [range[0], range[1]];
+  if (range && range.length === 2 && range[0] <= range[1]) spec.range = [range[0], range[1]];
+  const rowIds = numbers(fs.rowIds);
+  if (rowIds && rowIds.length <= 1_000_000 && rowIds.every((row) => Number.isInteger(row) && row >= 0)) spec.rowIds = rowIds;
   if (Number.isInteger(fs.nPoints) && (fs.nPoints as number) >= 0) spec.nPoints = fs.nPoints as number;
   if (typeof fs.fittedAt === "string" && fs.fittedAt) spec.fittedAt = fs.fittedAt;
   if (typeof fs.recomputedAt === "string" && fs.recomputedAt) spec.recomputedAt = fs.recomputedAt;

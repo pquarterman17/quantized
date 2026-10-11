@@ -83,7 +83,8 @@ function sourcesFingerprint(result: AnalysisResult, byId: ReadonlyMap<string, Da
 export function isSnapshotResult(result: AnalysisResult): boolean {
   return result.producer.id === "statistical-test" || result.producer.id === "distribution-analysis" ||
     result.producer.id === "fit-y-by-x" || result.producer.id === "variability-analysis" ||
-    result.producer.id === "outlier-screening" || result.producer.id === "multivariate-analysis";
+    result.producer.id === "outlier-screening" || result.producer.id === "multivariate-analysis" ||
+    result.producer.id === "analysis-batch";
 }
 
 /** A snapshot needs no worksheet only when its saved question is a
@@ -129,7 +130,8 @@ export function snapshotResultDiagnostics(result: AnalysisResult, state: Snapsho
     : result.producer.id === "fit-y-by-x" ? "Fit Y by X analysis"
       : result.producer.id === "variability-analysis" ? "variability analysis"
         : result.producer.id === "outlier-screening" ? "outlier screen"
-          : result.producer.id === "multivariate-analysis" ? "multivariate analysis" : "statistical test";
+          : result.producer.id === "multivariate-analysis" ? "multivariate analysis"
+            : result.producer.id === "analysis-batch" ? "analysis batch" : "statistical test";
   if (state === "pending") return [`Load the full source worksheet to verify this ${noun}.`];
   if (state === "source-missing") {
     return result.sources.length ? [] : [`This saved ${noun} no longer references its source worksheet and cannot be verified.`];

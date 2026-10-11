@@ -237,6 +237,9 @@ export interface PeakTableProvenance {
    *  contract `sanitizePeakTable` applies everywhere else. See the module
    *  header for what compares it and why it is not a recalc-graph node. */
   fingerprint: string | null;
+  /** Exact original worksheet rows consumed by a row/range-subset fit.
+   * Absent means the ordinary full analysis view (legacy records included). */
+  rowIds?: number[];
   /** ISO-8601 instant the fit completed. */
   fittedAt: string;
   // ── model-fit tables only ──────────────────────────────────────────────
@@ -385,6 +388,10 @@ export function sanitizePeakTable(v: unknown): PeakTable | undefined {
       xLabel: str(p.xLabel),
       xUnit: str(p.xUnit),
       fingerprint: str(p.fingerprint) || null,
+      ...(Array.isArray(p.rowIds) && p.rowIds.length <= 1_000_000 &&
+        p.rowIds.every((row) => Number.isInteger(row) && (row as number) >= 0)
+        ? { rowIds: [...new Set(p.rowIds as number[])].sort((a, b) => a - b) }
+        : {}),
       fittedAt: str(p.fittedAt),
       ...modelFitProvenance(p),
     },
@@ -401,6 +408,7 @@ export function serializePeakTable(table: PeakTable): PeakTable {
     provenance: {
       ...table.provenance,
       bgCoeffs: [...table.provenance.bgCoeffs],
+      ...(table.provenance.rowIds ? { rowIds: [...table.provenance.rowIds] } : {}),
       ...(table.provenance.warnings ? { warnings: [...table.provenance.warnings] } : {}),
     },
   };

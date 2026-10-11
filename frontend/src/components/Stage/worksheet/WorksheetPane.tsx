@@ -168,6 +168,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         onPlotSelection={view.plotSelection}
         onAddSelectionToPlot={view.addSelectionToPlot}
         onOpenInGraphBuilder={view.openSelectionInGraphBuilder}
+        onAnalyzeSelection={view.openSelectionInAnalysisCenter}
         onClearColSelection={view.clearColSelection}
         plotLinked={view.plotLinked}
       />

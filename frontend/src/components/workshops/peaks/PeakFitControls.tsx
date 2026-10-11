@@ -8,7 +8,7 @@ import { useState } from "react";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
-import type { PeakFitOptions } from "./usePeaks";
+import type { PeakFitOptions } from "./peakTypes";
 
 const MODEL_OPTIONS = [
   { value: "Lorentzian", label: "Lorentzian" },

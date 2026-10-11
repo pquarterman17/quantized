@@ -1844,8 +1844,19 @@ import { fileURLToPath } from "node:url";
  * queued Dependabot #548 (vite 8.3.2, +165 B preload helper) and the
  * pending plot batch (~+223 B); do not spend it on anything else.
  *
+ * 2026-10-11 (analysis Workstream D) - pin RAISED 834,257 -> 835,781 under
+ * rule 2 (`measured + 1,024`). On the same lockfile-fresh Vite 8.3.3 install:
+ *   `e334df58` (parent)                                833,789
+ *   + shared AnalysisSelection lifecycle              834,757  (+968)
+ * The increase is the synchronous selection/subset provenance required by
+ * worksheet handoff, exact saved-fit replay, and Library freshness. Moving
+ * the selection import behind the Analysis Center action did not lower the
+ * eager set; moving fit selection behind `import()` made Vite preload an
+ * extra shared chunk and grew the total instead. Both experiments were
+ * reverted. This is the minimal measured pin after exhausting those seams.
+ *
  */
-const EAGER_JS_BUDGET = 834_257;
+const EAGER_JS_BUDGET = 835_781;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

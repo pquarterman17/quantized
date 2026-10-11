@@ -9,6 +9,8 @@ import { dropGapRows } from "../../../lib/api/finitePairs";
 import { fullPlottedX } from "../../../lib/fitselectionActions";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset } from "../../../lib/types";
+import type { AnalysisSelectionItem } from "../../../lib/analysisSelection";
+import type { PeakTable } from "../../../lib/peakTable";
 
 export interface PeakInputs {
   x: number[];
@@ -36,6 +38,9 @@ export interface PeakInputs {
   yKeyUsed: number | null;
   gapCount: number;
   sourceCount: number;
+  /** Exact original rows after row/range selection and finite-pair pruning.
+   * Absent means the ordinary full analysis view. */
+  sourceRows?: number[];
 }
 
 /** The (x, y) the peak tools DETECT/FIT on — the PLOTTED X + primary Y over the
@@ -47,9 +52,10 @@ export function peakInputs(
   xKey: number | null,
   yKeys: number[] | null,
   seriesOrder: number[] | null,
+  selection?: Pick<AnalysisSelectionItem, "rowIds" | "range">,
 ): PeakInputs {
   const fullX = fullPlottedX(ds.data, xKey);
-  const sel = selectedFitData(ds, xKey, yKeys, seriesOrder);
+  const sel = selectedFitData(ds, xKey, yKeys, seriesOrder, selection);
   if (sel) {
     const pairs = dropGapRows(sel.x, sel.y);
     return {
@@ -60,6 +66,7 @@ export function peakInputs(
       yKeyUsed: sel.yKey,
       gapCount: pairs.n - pairs.keep.length,
       sourceCount: pairs.n,
+      ...(sel.sourceRows ? { sourceRows: pairs.keep.map((index) => sel.sourceRows![index]) } : {}),
     };
   }
   const d = analysisData(ds) ?? ds.data;
@@ -73,4 +80,18 @@ export function peakInputs(
     gapCount: pairs.n - pairs.keep.length,
     sourceCount: pairs.n,
   };
+}
+
+/** A saved peak table may be shown only beside the exact input contract it
+ * was fit from. Legacy/full-view tables intentionally carry no rowIds. */
+export function peakTableMatchesInputs(
+  table: PeakTable,
+  inputs: PeakInputs,
+  selection?: Pick<AnalysisSelectionItem, "rowIds" | "range">,
+): boolean {
+  const explicit = !!selection && (selection.rowIds !== null || selection.range !== null);
+  const saved = table.provenance.rowIds;
+  if (!explicit) return saved === undefined;
+  if (!saved || !inputs.sourceRows || saved.length !== inputs.sourceRows.length) return false;
+  return saved.every((row, index) => row === inputs.sourceRows![index]);
 }
