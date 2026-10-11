@@ -11,6 +11,7 @@ import { facetSlices } from "./facet";
 import {
   asPreviewSourceRows,
   concatRowSidecars,
+  FIT_ROW_IDENTITIES,
   insertRowIndexes,
   PREVIEW_SOURCE_ROWS,
   ROW_INDEXED_SIDECARS,
@@ -72,6 +73,17 @@ describe("sidecarRowCount", () => {
 });
 
 describe("sliceRowSidecars", () => {
+  it("moves sparse fit-row identities with a permutation or insertion", () => {
+    const metadata = { [FIT_ROW_IDENTITIES]: { 0: "r1:0", 2: "r1:2" } };
+    expect(sliceRowSidecars(metadata, [2, 0, 1])[FIT_ROW_IDENTITIES]).toEqual({ 0: "r1:2", 1: "r1:0" });
+    expect(sliceRowSidecars(metadata, [0, -1, 1])[FIT_ROW_IDENTITIES]).toEqual({ 0: "r1:0" });
+  });
+
+  it("does not carry malformed private identity tokens into a slice", () => {
+    expect(sliceRowSidecars({ [FIT_ROW_IDENTITIES]: { 0: "r1:0", 1: "bad" } }, [0, 1])[FIT_ROW_IDENTITIES])
+      .toEqual({ 0: "r1:0" });
+  });
+
   it("drops TRAILING misses instead of padding the column out", () => {
     // A column shorter than the grid stays short: it already reads as blank for
     // the rows it doesn't cover, and padding grows the saved file on every edit.

@@ -18,6 +18,7 @@ import { dyForFit } from "./fitweights";
 import { effectiveChannels } from "./plotdata";
 import { analysisData, analysisView } from "./rowstate";
 import { fitRowXFingerprint } from "./fitRowFingerprint";
+import { fitRowIdentities, fitRowIdentityFingerprint } from "./fitRowIdentity";
 import type { AnalysisSelectionItem } from "./analysisSelection";
 import type { Dataset, FitSpec } from "./types";
 export { fitStepParams } from "./fitStepParams";
@@ -119,6 +120,14 @@ export function fitDataForSpec(
     const finite = dropGapRows(selected.x, selected.y);
     if (spec.nPoints !== undefined && finite.x.length !== spec.nPoints) return null;
     if (spec.rowXFingerprint === undefined || fitRowXFingerprint(finite.x) !== spec.rowXFingerprint) return null;
+    if (spec.rowIdentityFingerprint !== undefined) {
+      const identities = fitRowIdentities(dataset.data.metadata, dataset.data.time.length);
+      const rows = selected.sourceRows;
+      if (!identities || !rows) return null;
+      const selectedIdentities = finite.keep.map((index) => identities.get(rows[index])).filter((id): id is string => id !== undefined);
+      if (selectedIdentities.length !== finite.keep.length ||
+          fitRowIdentityFingerprint(selectedIdentities) !== spec.rowIdentityFingerprint) return null;
+    }
   }
   if (!spec.weight) return selected;
   // Reproduce the recorded weighting over the same analysis rows (Sol audit);

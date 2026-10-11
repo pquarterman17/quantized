@@ -8,6 +8,8 @@ import { fitDataForSpec, fitStepParams, selectedFitData } from "./fitselection";
 import { parseFitSpec } from "./fitSpecParse";
 import { fitSpecFromStepParams } from "./fitStepDecode";
 import { fitRowXFingerprint } from "./fitRowFingerprint";
+import { fitRowIdentityFingerprint } from "./fitRowIdentity";
+import { FIT_ROW_IDENTITIES } from "./rowSidecars";
 import { activeCorrectionNames, fitSpecFrom, fullPlottedX } from "./fitselectionActions";
 
 const dataset: Dataset = {
@@ -160,6 +162,41 @@ describe("fitDataForSpec (recompute reproduces the recorded channels)", () => {
     expect(fitDataForSpec(changedY, spec, null, null, null)?.y).toEqual([20, 60, 80]);
   });
 
+  it("detects reordered repeated-X observations without blocking ordinary Y edits", () => {
+    const repeated: Dataset = {
+      id: "repeat", name: "repeat.dat",
+      data: {
+        time: [0, 1], values: [[5, 10], [5, 20]], labels: ["x", "y"], units: ["", ""],
+        metadata: { [FIT_ROW_IDENTITIES]: { 0: "r1:0", 1: "r1:1" } },
+      },
+    };
+    const spec = {
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 1], sourceRowCount: 2, nPoints: 2,
+      rowXFingerprint: fitRowXFingerprint([5, 5]),
+      rowIdentityFingerprint: fitRowIdentityFingerprint(["r1:0", "r1:1"]),
+    };
+    const editedY = { ...repeated, data: { ...repeated.data, values: [[5, 11], [5, 22]] } };
+    const reordered = {
+      ...repeated,
+      data: {
+        ...repeated.data,
+        values: [...repeated.data.values].reverse(),
+        metadata: { [FIT_ROW_IDENTITIES]: { 0: "r1:1", 1: "r1:0" } },
+      },
+    };
+    expect(fitDataForSpec(editedY, spec, null, null, null)?.y).toEqual([11, 22]);
+    expect(fitDataForSpec(reordered, spec, null, null, null)).toBeNull();
+  });
+
+  it("fails closed when a saved identity binding is missing or malformed", () => {
+    const spec = {
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 2, 3], sourceRowCount: 4, nPoints: 3,
+      rowXFingerprint: fitRowXFingerprint([100, 300, 400]),
+      rowIdentityFingerprint: fitRowIdentityFingerprint(["r1:0", "r1:2", "r1:3"]),
+    };
+    expect(fitDataForSpec(dataset, spec, null, null, null)).toBeNull();
+  });
+
   it("still recomputes a whole-view fit after ordinary source edits", () => {
     expect(fitDataForSpec(dataset, {
       model: "Linear", xKey: 0, yKey: 1, range: [100, 400], nPoints: 4,
@@ -281,11 +318,16 @@ describe("fit recipe residual fields (MAIN #30)", () => {
     const spec = fitSpecFrom("gauss", null, {
       ...sel, x: [1, 2, 3], y: [1, 2, 3], sourceRows: [1, 3, 7], sourceRowCount: 10,
     }, result);
+    spec.rowIdentityFingerprint = fitRowIdentityFingerprint(["r1:0", "r1:1", "r1:2"]);
     expect(spec.rowIds).toEqual([1, 3, 7]);
-    expect(fitSpecFromStepParams(fitStepParams("gauss", spec))).toMatchObject({
+    const pipelineSpec = fitSpecFromStepParams(fitStepParams("gauss", spec));
+    expect(pipelineSpec).toMatchObject({
       rowIds: [1, 3, 7], sourceRowCount: 10, nPoints: 3,
       rowXFingerprint: fitRowXFingerprint([1, 2, 3]),
     });
+    // Row tokens belong to THIS worksheet; a pipeline replay on another
+    // dataset keeps the value guards but must not inherit dataset-local IDs.
+    expect(pipelineSpec.rowIdentityFingerprint).toBeUndefined();
   });
 
   it("ignores non-finite x when computing the range", () => {

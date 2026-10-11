@@ -83,6 +83,9 @@ export function parseFitSpec(v: unknown): FitSpec | undefined {
   if (typeof fs.rowXFingerprint === "string" && /^x1:\d{1,7}:[0-9a-f]{16}$/.test(fs.rowXFingerprint)) {
     spec.rowXFingerprint = fs.rowXFingerprint;
   }
+  if (typeof fs.rowIdentityFingerprint === "string" && /^r1:\d{1,7}:[0-9a-f]{16}$/.test(fs.rowIdentityFingerprint)) {
+    spec.rowIdentityFingerprint = fs.rowIdentityFingerprint;
+  }
   if (Number.isInteger(fs.nPoints) && (fs.nPoints as number) >= 0) spec.nPoints = fs.nPoints as number;
   if (typeof fs.fittedAt === "string" && fs.fittedAt) spec.fittedAt = fs.fittedAt;
   if (typeof fs.recomputedAt === "string" && fs.recomputedAt) spec.recomputedAt = fs.recomputedAt;

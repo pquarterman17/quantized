@@ -16,6 +16,7 @@ import { useActiveDataset, useApp } from "../../../store/useApp";
 import { toast } from "../../../store/toasts";
 import { fitStepParams, selectedFitData } from "../../../lib/fitselection";
 import { activeCorrectionNames, fitSpecFrom } from "../../../lib/fitselectionActions";
+import { bindFitRowIdentity } from "../../../lib/fitRowIdentity";
 import {
   boundsForWire,
   parseFitParams,
@@ -316,6 +317,11 @@ export function useCurveFit(): CurveFitState {
               }
             : {}),
         });
+        // A fit request can outlive an edit/reimport. Never attach its result
+        // or row tokens to the replacement worksheet object it did not fit.
+        if (useApp.getState().datasets.find((dataset) => dataset.id === ds.id) !== ds) {
+          throw new Error("worksheet changed while fitting; run the fit again");
+        }
         setFitted({
           result: r,
           fitData: { x: pairs.x, y: pairs.y, xKey: runXKey, yKey: localXy.yKey },
@@ -334,7 +340,14 @@ export function useCurveFit(): CurveFitState {
         const spec = fitSpecFrom(
           modelName,
           runXKey,
-          { ...localXy, x: pairs.x, y: pairs.y },
+          {
+            ...localXy,
+            x: pairs.x,
+            y: pairs.y,
+            sourceRows: localXy.sourceRows
+              ? pairs.keep.map((index) => localXy.sourceRows![index])
+              : undefined,
+          },
           r,
           effWeight,
           activeCorrectionNames(ds.corrections),
@@ -350,11 +363,12 @@ export function useCurveFit(): CurveFitState {
         // Same recipe into the typed step (#6) so a template/pipeline batch
         // replays THESE channels + weighting, and the pipeline view can edit
         // the model without losing the provenance.
+        const bound = bindFitRowIdentity(ds, spec);
         useApp.getState().recordMacro(`Fit ${modelName}`, `qz.fit("${modelName}")`, {
           kind: "fit",
-          params: fitStepParams(modelName, spec),
+          params: fitStepParams(modelName, bound.spec),
         });
-        useApp.getState().setFitSpec(ds.id, spec);
+        useApp.getState().setFitSpec(ds.id, bound.spec, bound.rowIdentities);
         publishFitAnalysisResult(ds.id);
         const yFit = r.yFit as (number | null)[] | undefined;
         if (Array.isArray(yFit)) {

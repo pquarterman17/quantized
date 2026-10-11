@@ -94,8 +94,31 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
     const { result } = renderHook(() => useCurveFit());
     await act(async () => result.current.run("fit"));
     expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [1, 3], y: [20, 40] });
-    expect(useApp.getState().datasets[0].fitSpec?.rowIds).toEqual([1, 3]);
+    const saved = useApp.getState().datasets[0];
+    expect(saved.fitSpec?.rowIds).toEqual([1, 3]);
+    expect(saved.fitSpec?.rowIdentityFingerprint).toMatch(/^r1:2:[0-9a-f]{16}$/);
+    expect(saved.data.metadata["__quantized_fit_row_ids"]).toEqual({ 1: "r1:0", 3: "r1:1" });
     expect(useApp.getState().fitOverlay?.y).toEqual([null, 21, null, 41]);
+  });
+
+  it("does not attach a late fit or row identities after the worksheet changes", async () => {
+    let finish!: (value: { params: number[]; yFit: number[] }) => void;
+    vi.mocked(fitModel).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const { result } = renderHook(() => useCurveFit());
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.run("fit"); });
+    await waitFor(() => expect(finish).toBeTypeOf("function"));
+    act(() => useApp.setState((state) => ({
+      datasets: state.datasets.map((dataset) => ({
+        ...dataset,
+        data: { ...dataset.data, values: [[11], [20], [30], [40]] },
+      })),
+    })));
+    finish({ params: [1], yFit: [10, 20, 30, 40] });
+    await act(async () => pending);
+    expect(useApp.getState().datasets[0].fitSpec).toBeUndefined();
+    expect(useApp.getState().datasets[0].data.metadata["__quantized_fit_row_ids"]).toBeUndefined();
+    expect(result.current.error).toBe("worksheet changed while fitting; run the fit again");
   });
 
   it("fits the FULL data and overlays it 1:1 when nothing is excluded", async () => {

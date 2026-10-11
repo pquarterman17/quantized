@@ -23,6 +23,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset, DataStruct, FitSpec } from "../lib/types";
 import { fitAnalysisResult } from "../lib/fitAnalysisResult";
+import { bindFitRowIdentity } from "../lib/fitRowIdentity";
 import { useToasts } from "./toasts";
 import { useApp, type AppState } from "./useApp";
 
@@ -68,7 +69,7 @@ function seed(over: Partial<AppState> = {}): void {
     datasets: [
       ds("a", { fitSpec: LINEAR }),
       ds("b", { raw: data(), corrections: { yOff: 1 }, bgRef: { datasetId: "a", interp: "linear" } }),
-      ds("lone"),
+      ds("lone", { raw: data() }),
     ],
     activeId: "a",
     recalcMode: "manual",
@@ -263,6 +264,18 @@ describe("setFitSpec", () => {
   it("null clears the spec", () => {
     act().setFitSpec("a", null);
     expect(act().datasets[0]!.fitSpec).toBeUndefined();
+  });
+
+  it("binds an explicit subset to hidden persistent row identities", () => {
+    const lone = act().datasets.find((d) => d.id === "lone")!;
+    const bound = bindFitRowIdentity(lone, {
+      model: "Gaussian", xKey: null, yKey: 0, rowIds: [0], sourceRowCount: 3,
+    });
+    act().setFitSpec("lone", bound.spec, bound.rowIdentities);
+    const saved = act().datasets.find((d) => d.id === "lone")!;
+    expect(saved.data.metadata["__quantized_fit_row_ids"]).toEqual({ 0: "r1:0" });
+    expect(saved.raw?.metadata["__quantized_fit_row_ids"]).toEqual({ 0: "r1:0" });
+    expect(saved.fitSpec?.rowIdentityFingerprint).toMatch(/^r1:1:[0-9a-f]{16}$/);
   });
 
   it("does not mark anything stale (it is not a data change)", () => {
