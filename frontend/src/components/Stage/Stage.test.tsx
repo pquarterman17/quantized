@@ -16,8 +16,9 @@ vi.mock("../windows/WindowCanvas", () => ({ default: () => <div>plot-canvas</div
 vi.mock("./MapStage", () => ({ default: () => <div>map-canvas</div> }));
 vi.mock("./Worksheet", () => ({ default: () => <div>worksheet</div> }));
 vi.mock("../workshops/techniqueworkspace/TechniqueWorkspace", () => ({
-  default: ({ onClose }: { onClose: () => void }) => <button onClick={onClose}>technique-workspace</button>,
+  default: ({ onClose, analysis }: { onClose: () => void; analysis?: boolean }) => <button onClick={onClose}>{analysis ? "analysis-center" : "technique-workspace"}</button>,
 }));
+vi.mock("../windows/WindowWorkspaceControls", () => ({ default: () => null }));
 vi.mock("../windows/useWindowCommands", () => ({ useWindowCommands: () => {} }));
 vi.mock("../history/useHistoryCommands", () => ({ useHistoryCommands: () => {} }));
 // The empty-workspace view is a lazy chunk. Cold, under load, it resolved
@@ -58,6 +59,21 @@ describe("Map tab visibility", () => {
     expect(screen.queryByText("Map")).not.toBeInTheDocument();
     expect(screen.queryByText("Plot")).not.toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "No data loaded" })).toBeInTheDocument();
+  });
+
+  it("can host the Workflow discovery surface before data is loaded", async () => {
+    useApp.setState({ stageTab: "technique" });
+    render(<Stage />);
+    expect(await screen.findByRole("button", { name: "technique-workspace" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Workflow" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("shows the Analysis Center inside the selected Workflow stage", async () => {
+    useApp.setState({ stageTab: "analysis" });
+    render(<Stage />);
+    expect(await screen.findByRole("button", { name: "analysis-center" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Workflow" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel", { name: "Workflow" })).toBeInTheDocument();
   });
 
   it("keeps the plot canvas mounted when a snapshot window clears activeId", () => {

@@ -4485,6 +4485,13 @@ describe("stage routing — plot-intent forces the Plot tab off Worksheet (item 
     expect(useApp.getState().activeId).toBe("d1");
   });
 
+  it("a passive Library activation keeps the Analysis Center open on the new worksheet", () => {
+    useApp.setState({ stageTab: "analysis" });
+    useApp.getState().activateFromLibrary("m1");
+    expect(useApp.getState().stageTab).toBe("analysis");
+    expect(useApp.getState().activeId).toBe("m1");
+  });
+
   it("setActive remains explicit plot intent when invoked from Workflow", () => {
     useApp.setState({ stageTab: "technique" });
     useApp.getState().setActive("d1");

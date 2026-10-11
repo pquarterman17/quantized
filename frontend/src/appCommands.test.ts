@@ -52,6 +52,14 @@ describe("Workflow view command", () => {
     cmd.run();
     expect(useApp.getState().stageTab).toBe("technique");
   });
+
+  it("opens the Analysis Center on the Workflow stage", () => {
+    useApp.setState({ stageTab: "plot" });
+    const cmd = findCommand("analysis-center");
+    expect(cmd.group).toBe("Analyze");
+    cmd.run();
+    expect(useApp.getState().stageTab).toBe("analysis");
+  });
 });
 
 describe("Insert commands (MAIN #27 drawing shapes — the menu-driven counterpart of the dock flyout)", () => {

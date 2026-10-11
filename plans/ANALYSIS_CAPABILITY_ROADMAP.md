@@ -242,7 +242,7 @@ temporary contents of a floating window.
   figure, Export tables, Rename, and Delete actions.
 - [x] Add producer-aware Edit and rerun without creating a second settings
   authority beside the linked worksheet.
-- [ ] Migrate curve fits, statistics, peak outputs, and signal-processing
+- [x] Migrate curve fits, statistics, peak outputs, and signal-processing
   results incrementally; do not create a second authority beside existing
   durable `fitSpec`, peak tables, or reflectivity-fit history.
 - [x] Preserve old `.dwk` files and tolerate unknown future result kinds.
@@ -280,8 +280,9 @@ Update (2026-10-09):
   Publication and undo are atomic; old projects migrate once; deleted catalog
   entries stay deleted; bounded-history eviction removes only the matching
   result; Append Project remaps both envelopes and raw fit-record channels.
-- [ ] Statistics is the remaining family covered by the incremental migration
-  checkbox above.
+- [x] Statistics completes the incremental migration checkbox above through
+  durable Statistical Tests, Distribution, Outlier Screening, Multivariate,
+  Fit Y by X, and Variability results.
 - [x] Statistical Tests workshop runs now publish one durable, undoable result
   containing the exact saved question, interpretation, and bounded tables.
   Results survive save/reopen, detect numeric, row-scope, categorical-label,
@@ -361,17 +362,17 @@ Update (2026-10-09):
 **Goal:** answer "what can I do with this data?" without requiring knowledge of
 menu names.
 
-- [ ] Add a searchable full-stage Analysis Center reachable from Analyze and
+- [x] Add a searchable full-stage Analysis Center reachable from Analyze and
   the Workflow view.
-- [ ] Organize tools by Fit, Peaks/Baseline, Signal Processing, Statistics,
+- [x] Organize tools by Fit, Peaks/Baseline, Signal Processing, Statistics,
   XRD/Reflectivity, Magnetometry, SIMS, and Data Preparation.
-- [ ] For each tool show a one-sentence purpose, required inputs, compatibility
+- [x] For each tool show a one-sentence purpose, required inputs, compatibility
   with the active worksheet, and why it is unavailable.
-- [ ] Show Recommended for this data, Recent, Favorites, All tools, and Existing
+- [x] Show Recommended for this data, Recent, Favorites, All tools, and Existing
   results without auto-running or making scientific guesses.
-- [ ] Seed a tool with the current dataset, plotted channels, selected rows, and
+- [x] Seed a tool with the current dataset, plotted channels, selected rows, and
   range when compatible.
-- [ ] Keep command-palette and menu actions canonical; the Center launches the
+- [x] Keep command-palette and menu actions canonical; the Center launches the
   same implementations rather than duplicating them.
 
 ## Workstream D — Shared selection, batch, and `By` behavior
@@ -430,7 +431,7 @@ menu names.
 4. [x] B: migrate statistics. The envelope, Library integration, common
    actions, all focused-statistics producers, signal migration, fitted peaks,
    curve-fit results, and reflectivity-fit history are complete.
-5. [ ] C: build the Analysis Center on canonical commands and result inventory.
+5. [x] C: build the Analysis Center on canonical commands and result inventory.
 6. [ ] D: unify selection and batch behavior, then migrate curve fit/peaks.
 7. [ ] E: migrate statistical tools into the result workspace.
 8. [ ] F: expand technique-specific depth according to real use.
@@ -463,6 +464,7 @@ menu names.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-10-11 | Project team | Completed Workstream C with a lazy full-stage Analysis Center reachable from Analyze and Workflow. It searches the canonical tool catalog, groups tools by scientific purpose, explains structural, command-state, and declared-technique compatibility, offers Recommended/Recent/Favorites/All/Existing Results views, and preserves each existing command as the sole launch authority. Pending Origin previews resolve before launch and fail closed if the source disappears, fails to load, or the active worksheet changes. Preferences are bounded session UI state; the Center never changes scientific data or runs a tool by itself. | Final focused Center/navigation/store/Help/command/architecture/preload coverage passed 575/575 after the adversarial pass added active-worksheet race, offline-source, disabled-command, corrupted-preference, and Library-retarget guards. A complete serial frontend run excluding the documented Windows flat-autoscale fixture passed 17,115 tests plus 2 expected failures and exposed five Help aliases shortened during bundle work; all original aliases were restored and their exact suite reran green. Forced TypeScript, full ESLint, preload verification, and the production build passed, including the unchanged 814.7 kB startup budget at 814.3 kB eager. CI remains the final PR gate. |
 | 2026-10-10 | ChatGPT-Sol (Codex) | Completed the focused-statistics migration with a Multivariate producer adapter. Correlation, SPLOM/PCA inputs, correlation matrices, PCA summaries/loadings/scaling/scores, exact controls, source row identities, and listwise-deletion disclosure now participate in the durable result lifecycle. Results reopen the exact workbench question and use the common inspect/export/report/duplicate/delete/Undo workspace. The adversarial pass prevents prior async correlation/PCA responses, wrong-method payloads, or dimensionally inconsistent responses from being saved under changed controls; large inline tables are bounded and constructed without first copying oversized score/matrix output. | Final focused multivariate/adapter/workspace/freshness verification passed 98/98. The full frontend passed 17,109 tests plus 2 expected failures; its only failure was the documented pre-existing Windows flat-autoscale subnormal-float fixture mismatch in untouched code. Forced TypeScript, full ESLint, preload verification, production build, and the unchanged 814.7 kB eager-bundle gate passed at 814.5 kB. CI remains the merge gate. |
 | 2026-10-10 | ChatGPT-Sol (Codex) | Added the Outlier Screening producer adapter: Grubbs, Rosner ESD, Dixon Q, and robust MAD screens can now be explicitly saved as durable Library snapshots, reopened with exact controls, checked against the filtered/excluded analysis view, exported/reported, duplicated, and removed with Undo. Snapshots retain original source-row identities, compact method-specific statistics, bounded Rosner sequences, and non-finite-row disclosure without persisting raw score arrays; screening remains non-destructive. | Focused workshop/adapter/workspace/freshness/architecture/preload verification passed 131/131; TypeScript, ESLint, production build, and the unchanged 814.7 kB eager-bundle gate passed at 814.4 kB. The full frontend passed 17,098 tests plus 2 expected failures; its sole failure was the documented pre-existing Windows flat-autoscale subnormal-float fixture mismatch in untouched code. The adversarial pass added a source-fingerprint run key to prevent an old asynchronous result being saved after an in-place worksheet edit, bounded diagnostics, guarded same-render duplicate saves, and fixed the row-state architecture naming collision. CI remains the merge gate. |
 | 2026-10-10 | ChatGPT-Sol (Codex) | Added the Variability producer adapter: completed nested analyses can now be saved as durable Library snapshots, reopened with exact response/factor controls, checked against filtered/excluded source freshness, duplicated/exported/reported through the shared workspace, and removed with Undo. Saved content is compact labeled output rather than raw observations; non-estimable components, clamped negative estimates, unbalanced designs, and table truncation stay explicit. | Focused adapter/workshop/workspace/freshness/architecture verification passed 115/115; TypeScript, ESLint, preload verification, production build, and the 814.7 kB eager-bundle gate pass at 814.2 kB. The full frontend passed 17,088 tests plus 2 expected failures; its only failure was the documented pre-existing Windows flat-autoscale subnormal-float fixture mismatch in untouched code. CI remains the merge gate. |

@@ -28,6 +28,7 @@
 /** Every `localStorage` slot this app writes, as of the ratchet's last run.
  *  Sorted to match the report's own ordering, and to keep diffs minimal. */
 export const KNOWN_STORAGE_KEYS: readonly string[] = [
+  "qz.analysis-center.v1",
   "qz.analysisTemplates",
   "qz.autosave",
   "qz.calcHistory",

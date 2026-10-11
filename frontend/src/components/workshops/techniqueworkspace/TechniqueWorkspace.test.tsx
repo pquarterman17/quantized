@@ -43,6 +43,24 @@ describe("TechniqueWorkspace", () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
+  it("opens the full Analysis Center from Workflow and returns without changing data", async () => {
+    const ds = dataset("s1", "sims");
+    useApp.setState({ datasets: [ds], activeId: ds.id });
+    const { rerender } = render(<TechniqueWorkspace onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Browse analysis tools" }));
+    rerender(<TechniqueWorkspace analysis onClose={() => {}} />);
+    expect(await screen.findByRole("heading", { name: "Analysis Center" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Technique workflow" }));
+    rerender(<TechniqueWorkspace onClose={() => {}} />);
+    expect(screen.getByRole("heading", { name: "SIMS depth profile" })).toBeInTheDocument();
+    expect(useApp.getState().datasets[0]).toBe(ds);
+  });
+
+  it("honors a direct Analysis Center navigation request", async () => {
+    render(<TechniqueWorkspace analysis onClose={() => {}} />);
+    expect(await screen.findByRole("heading", { name: "Analysis Center" })).toBeInTheDocument();
+  });
+
   it("routes an explicit Origin review into the same uncluttered Workflow surface", () => {
     useApp.setState({
       originFidelity: [{
