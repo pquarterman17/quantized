@@ -88,9 +88,28 @@ describe("multivariateAnalysisResult", () => {
       },
     });
     expect(result.warnings).toContain(
-      "Constant variable: pressure. PCA records a scale of 1 as a zero-variance fallback; correlations involving it are undefined.",
+      "Constant variable: pressure. Correlations involving it are undefined. PCA records a scale of 1 as a zero-variance fallback.",
     );
     expect(result.tables?.find((table) => table.title === "Correlation coefficients")?.rows[1][1]).toBeNull();
+  });
+
+  it("warns about constant-variable correlations without PCA standardization", () => {
+    const constantSource: Dataset = {
+      ...source, data: { ...source.data, values: source.data.values.map((row) => [row[0], 7]) },
+    };
+    const result = multivariateAnalysisResult("constant-unscaled", constantSource, {
+      columns: [0, 1], method: "pearson", standardize: false, pcX: 0, pcY: 1,
+    }, {
+      labels: ["temperature", "pressure"], sourceRows: [1, 2, 3], inputRows: 3,
+      correlation: { r: [[1, null], [null, null]], p: [[1, null], [null, null]], N: 3, method: "pearson" },
+      pca: {
+        coeff: [[1, 0], [0, 1]], score: [[-1, 0], [0, 0], [1, 0]], latent: [1, 0],
+        explained: [100, 0], cumulative: [100, 100], mu: [2, 7], sigma: [1, 1], singular: [1, 0],
+      },
+    });
+    expect(result.warnings).toContain(
+      "Constant variable: pressure. Correlations involving it are undefined.",
+    );
   });
 
   it("bounds large PCA score output and discloses truncation", () => {

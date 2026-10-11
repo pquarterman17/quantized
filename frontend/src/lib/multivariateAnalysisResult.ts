@@ -60,7 +60,7 @@ export function multivariateSnapshotMatchesRecipe(
 ): boolean {
   const p = snapshot.labels.length;
   const k = snapshot.pca.explained.length;
-  const matrixIs = (matrix: readonly (readonly number[])[]) =>
+  const matrixIs = (matrix: readonly (readonly unknown[])[]) =>
     matrix.length === p && matrix.every((row) => row.length === p);
   const recipeValid = recipe.columns.length >= 2 && new Set(recipe.columns).size === recipe.columns.length &&
     recipe.columns.every((column) => Number.isInteger(column) && column >= -1) &&
@@ -84,7 +84,6 @@ function finite(value: unknown): number | null {
 }
 
 function constantVariables(source: Dataset, recipe: MultivariateRecipe, snapshot: MultivariateSnapshot): string[] {
-  if (!recipe.standardize) return [];
   return recipe.columns.flatMap((column, index) => {
     const values = snapshot.sourceRows.map((row) => column < 0
       ? source.data.time[row - 1]
@@ -100,7 +99,7 @@ interface TableSource {
   row: (index: number) => AnalysisResultTable["rows"][number];
 }
 
-function matrixTable(title: string, labels: readonly string[], matrix: readonly (readonly number[])[]): TableSource {
+function matrixTable(title: string, labels: readonly string[], matrix: readonly (readonly (number | null)[])[]): TableSource {
   return { title, columns: ["variable", ...labels], rowCount: labels.length,
     row: (row) => [labels[row], ...labels.map((_, column) => finite(matrix[row]?.[column]))] };
 }
@@ -169,10 +168,12 @@ export function multivariateAnalysisResult(
   const omitted = Math.max(0, snapshot.inputRows - n);
   const explained = finite(snapshot.pca.explained[0]);
   const constants = constantVariables(source, recipe, snapshot);
-  const undefinedCorrelations = snapshot.correlation.r.some((row) => row.some((value) => !Number.isFinite(value)));
+  const undefinedCorrelations = snapshot.correlation.r.some((row) => row.some(
+    (value) => typeof value !== "number" || !Number.isFinite(value),
+  ));
   const warnings = [
     ...(omitted ? [`${omitted} row${omitted === 1 ? " was" : "s were"} omitted by listwise deletion.`] : []),
-    ...(constants.length ? [`Constant variable${constants.length === 1 ? "" : "s"}: ${constants.join(", ")}. PCA records a scale of 1 as a zero-variance fallback; correlations involving ${constants.length === 1 ? "it are" : "them are"} undefined.`] : []),
+    ...(constants.length ? [`Constant variable${constants.length === 1 ? "" : "s"}: ${constants.join(", ")}. Correlations involving ${constants.length === 1 ? "it are" : "them are"} undefined.${recipe.standardize ? " PCA records a scale of 1 as a zero-variance fallback." : ""}`] : []),
     ...(!constants.length && undefinedCorrelations ? ["Undefined correlations were saved as null."] : []),
     ...(snapshot.correlation.N !== snapshot.sourceRows.length || snapshot.pca.score.length !== snapshot.sourceRows.length
       ? ["The returned correlation/PCA row counts differ from the shared listwise-complete input."] : []),

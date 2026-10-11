@@ -42,7 +42,9 @@ def _check_fmt(fmt: str) -> None:
 
 class CorrelationHeatmapFigureRequest(BaseModel):
     labels: list[str]
-    r: list[list[float]]
+    # The stats route serializes undefined constant-variable correlations as
+    # null; convert them back to NaN at this rendering boundary.
+    r: list[list[float | None]]
     title: str = ""
     fmt: str = "pdf"
     style: str = "default"
@@ -62,8 +64,9 @@ def export_correlation_heatmap_figure(req: CorrelationHeatmapFigureRequest) -> R
         with heavy_imports("quantized.calc.figure_multivar"):
             from quantized.calc.figure_multivar import render_correlation_heatmap_figure  # lazy
 
+        r = [[float("nan") if value is None else value for value in row] for row in req.r]
         img = render_correlation_heatmap_figure(
-            req.labels, req.r, title=req.title, fmt=req.fmt, style=req.style,
+            req.labels, r, title=req.title, fmt=req.fmt, style=req.style,
             dpi=_clamp_dpi(req.dpi), width_in=req.width_in, height_in=req.height_in,
         )
     except CALC_ERRORS_WITH_LOCK as exc:

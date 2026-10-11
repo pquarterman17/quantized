@@ -156,4 +156,9 @@ describe("correlationToTSV", () => {
     expect(lines[1]).toBe("a\t1.0000\t0.5000");
     expect(lines[2]).toBe("b\t0.5000\t1.0000");
   });
+
+  it("leaves undefined constant-variable cells blank", () => {
+    expect(correlationToTSV(["a", "constant"], [[1, null], [null, null]]))
+      .toBe("\ta\tconstant\na\t1.0000\t\nconstant\t\t");
+  });
 });

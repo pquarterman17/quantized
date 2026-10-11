@@ -135,8 +135,8 @@ export function miniHistogram(values: readonly number[], bins = 12): MiniHist {
 
 /** Copy-TSV for the correlation matrix: a header row of labels, then one row
  *  per column with its `r` against every other (4 decimal places). */
-export function correlationToTSV(labels: readonly string[], r: readonly (readonly number[])[]): string {
+export function correlationToTSV(labels: readonly string[], r: readonly (readonly (number | null)[])[]): string {
   const header = ["", ...labels].join("\t");
-  const body = labels.map((lab, i) => [lab, ...(r[i] ?? []).map((v) => (Number.isFinite(v) ? v.toFixed(4) : ""))].join("\t"));
+  const body = labels.map((lab, i) => [lab, ...(r[i] ?? []).map((v) => (v !== null && Number.isFinite(v) ? v.toFixed(4) : ""))].join("\t"));
   return [header, ...body].join("\n");
 }
