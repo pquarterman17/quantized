@@ -105,7 +105,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       group: "View",
       section: "Panels & workspace",
       label: "Show workflow",
-      checked: () => s().stageTab === "technique",
+      checked: () => s().stageTab === "technique" || s().stageTab === "analysis",
       disabled: () => !s().activeId,
       disabledReason: "Import or select a dataset first",
       description: "Show analysis steps for the active worksheet.",

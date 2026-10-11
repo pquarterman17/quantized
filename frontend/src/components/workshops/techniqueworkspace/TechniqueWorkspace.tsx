@@ -15,8 +15,15 @@ import { runTechniqueWorkspaceAction, techniqueActionDefinition } from "../../..
 import { useApp } from "../../../store/useApp";
 import { useRecipeManager } from "../../../store/recipeManager";
 import { Badge, Button } from "../../primitives";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import { useWorkflowWorkspaceView } from "../../../lib/workflowWorkspace";
 import OriginMigrationCockpit from "../originmigration/OriginMigrationCockpit";
+
+const AnalysisCenter = lazyRegion(
+  () => import("../analysiscenter/AnalysisCenter"),
+  "Analysis Center",
+  ({ onClose }) => <div className="qzk-technique-empty"><Button onClick={onClose}>Back to plot</Button></div>,
+);
 
 function sourceName(ds: Dataset): string {
   const parser = ds.data.metadata.parser_name;
@@ -48,15 +55,19 @@ function ActionButton({ action, disabled, title, onRun }: { action: Pick<Action,
   );
 }
 
-export default function TechniqueWorkspace({ onClose }: { onClose: () => void }) {
+export default function TechniqueWorkspace({ onClose, analysis = false }: { onClose: () => void; analysis?: boolean }) {
+  const setStageTab = useApp((state) => state.setStageTab);
   const workspaceView = useWorkflowWorkspaceView();
+  if (analysis) {
+    return <AnalysisCenter onClose={onClose} onBack={() => setStageTab("technique")} />;
+  }
   if (workspaceView.kind === "origin") {
     return <OriginMigrationCockpit key={workspaceView.requestId} initialFidelityId={workspaceView.fidelityId} onClose={onClose} />;
   }
-  return <TechniqueWorkspaceContent onClose={onClose} />;
+  return <TechniqueWorkspaceContent onClose={onClose} onAnalysis={() => setStageTab("analysis")} />;
 }
 
-function TechniqueWorkspaceContent({ onClose }: { onClose: () => void }) {
+function TechniqueWorkspaceContent({ onClose, onAnalysis }: { onClose: () => void; onAnalysis: () => void }) {
   const activeId = useApp((s) => s.activeId);
   const dataset = useApp((s) => s.datasets.find((d) => d.id === s.activeId));
   const hasFigure = useApp((s) => s.editableFigures.some((f) => f.bindings.datasetId === s.activeId));
@@ -78,7 +89,10 @@ function TechniqueWorkspaceContent({ onClose }: { onClose: () => void }) {
             <h1 id="technique-workspace-title">Choose a worksheet</h1>
             <p>Select a worksheet in the Library, then return here for a technique-aware workflow.</p>
           </div>
-          <Button onClick={onClose}>Back to plot</Button>
+          <div className="qzk-technique-head-actions">
+            <Button variant="primary" onClick={onAnalysis}>Browse analysis tools</Button>
+            <Button onClick={onClose}>Back to plot</Button>
+          </div>
         </header>
         <div className="qzk-technique-empty">No active worksheet. Nothing was changed.</div>
       </section>
@@ -105,7 +119,10 @@ function TechniqueWorkspaceContent({ onClose }: { onClose: () => void }) {
           <h1 id="technique-workspace-title">{workflow.label}</h1>
           <p>{workflow.summary}</p>
         </div>
-        <Button onClick={onClose}>Back to plot</Button>
+        <div className="qzk-technique-head-actions">
+          <Button variant="primary" onClick={onAnalysis}>Browse analysis tools</Button>
+          <Button onClick={onClose}>Back to plot</Button>
+        </div>
       </header>
 
       <div className="qzk-technique-dataset" aria-label="Active worksheet summary">

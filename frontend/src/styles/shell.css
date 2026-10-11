@@ -1321,6 +1321,7 @@ body {
 /* Quick Figure Builder: a focused main-workspace transaction, not a modal. */
 .qzk-technique-workspace { container-type: inline-size; flex: 1; min-width: 0; min-height: 0; overflow: auto; padding: clamp(18px, 2.4vw, 34px); background: var(--surface-0); }
 .qzk-technique-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
+.qzk-technique-head-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .qzk-technique-eyebrow { margin-bottom: 4px; color: var(--accent); font-size: var(--type-label); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-label); text-transform: uppercase; }
 .qzk-technique-workspace h1 { margin: 0 0 6px; overflow-wrap: anywhere; font-size: clamp(20px, 2.2vw, 30px); font-weight: var(--weight-semibold); }
 .qzk-technique-workspace h2 { margin: 0 0 5px; font-size: var(--type-body); }

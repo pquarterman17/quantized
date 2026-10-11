@@ -100,9 +100,10 @@ export default function Stage() {
   // A fresh/cleared project keeps the command-registration hooks above
   // mounted. Do not key this on `active`: focusing a frozen snapshot clears
   // activeId, and a snapshot-only workspace remains fully renderable.
-  if (!hasRenderableContent) return <EmptyProjectStage />;
+  if (!hasRenderableContent && stageTab !== "technique" && stageTab !== "analysis") return <EmptyProjectStage />;
   // The view actually on screen: a stranded Map (pre-fallback) shows the plot.
   const shown = stageTab === "map" && !mappable ? "plot" : stageTab;
+  const selectedTab = shown === "analysis" ? "technique" : shown;
 
   return (
     <section className="qzk-stage-cell">
@@ -116,10 +117,10 @@ export default function Stage() {
               key={t.id}
               role="tab"
               id={`qz-stage-${t.id}`}
-              aria-selected={shown === t.id}
+              aria-selected={selectedTab === t.id}
               aria-controls="qz-stage-panel"
-              tabIndex={shown === t.id ? 0 : -1}
-              className={`qzk-tab${shown === t.id ? " active" : ""}`}
+              tabIndex={selectedTab === t.id ? 0 : -1}
+              className={`qzk-tab${selectedTab === t.id ? " active" : ""}`}
               onClick={() => setStageTab(t.id)}
             >
               {t.label}
@@ -128,13 +129,13 @@ export default function Stage() {
         </div>
         <WindowWorkspaceControls />
       </div>
-      <div className="qzk-stage-panel" role="tabpanel" id="qz-stage-panel" aria-labelledby={`qz-stage-${shown}`}>
+      <div className="qzk-stage-panel" role="tabpanel" id="qz-stage-panel" aria-labelledby={`qz-stage-${selectedTab}`}>
         {shown === "map" ? (
           <MapStage />
         ) : shown === "worksheet" ? (
           <Worksheet />
-        ) : shown === "technique" ? (
-          <TechniqueWorkspace onClose={() => setStageTab(active ? plotIntentStageTab(active) : "plot")} />
+        ) : shown === "technique" || shown === "analysis" ? (
+          <TechniqueWorkspace analysis={shown === "analysis"} onClose={() => setStageTab(active ? plotIntentStageTab(active) : "plot")} />
         ) : (
           <WindowCanvas />
         )}

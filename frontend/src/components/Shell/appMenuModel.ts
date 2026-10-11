@@ -8,7 +8,7 @@ const COMMON_IDS: Record<string, ReadonlySet<string>> = {
   Edit: new Set(["undo", "redo", "paste-data", "palette"]),
   Data: new Set(["merge", "duplicate", "reimport"]),
   Plot: new Set(["autoscale", "legend", "grid", "plot-in-new-window"]),
-  Analyze: new Set(["curvefit", "peak-wizard"]),
+  Analyze: new Set(["analysis-center", "curvefit", "peak-wizard"]),
   Window: new Set(["window-new", "window-close", "window-tile"]),
   View: new Set(["plot", "worksheet", "left", "right"]),
 };

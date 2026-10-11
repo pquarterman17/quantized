@@ -1,10 +1,10 @@
-// View smoke tests + the Analyze-menu command-registry checks (source-scan
-// pattern, same as TextFormatHelp.test.tsx — the App tree is too heavy to
-// render in jsdom).
+// View smoke tests + Analyze-menu command-registry checks against the real
+// builder (the helper-shaped registry no longer exposes object-literal text).
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { buildAnalysisCommands } from "../../../commands/analysisCommands";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import ReductionsPanel from "./ReductionsPanel";
@@ -71,36 +71,36 @@ describe("ReductionsPanel", () => {
 describe("Analyze-menu command registry entries (MAIN_PLAN #11)", () => {
   // Reductions moved from appCommands.ts to commands/analysisCommands.ts
   // when that module was decomposed by menu domain (2026-07-17).
-  const commandsSrc = Object.values(
-    import.meta.glob("../../../commands/analysisCommands.ts", {
-      query: "?raw",
-      import: "default",
-      eager: true,
-    }),
-  )[0] as string;
   const overlaysSrc = Object.values(
     import.meta.glob("../../../AppOverlays.tsx", { query: "?raw", import: "default", eager: true }),
   )[0] as string;
 
   it("registers Williamson-Hall in the Analyze group", () => {
-    expect(commandsSrc).toContain('id: "reductions-wh"');
-    expect(commandsSrc).toContain('group: "Analyze"');
-    expect(commandsSrc).toContain('openReductions("williamson-hall")');
+    const command = buildAnalysisCommands(useApp.getState).find((entry) => entry.id === "reductions-wh");
+    expect(command).toMatchObject({ group: "Analyze", section: "XRD & reflectivity" });
+    command?.run();
+    expect(useApp.getState().reductionsMethod).toBe("williamson-hall");
   });
 
   it("registers Pawley refinement in the Analyze group", () => {
-    expect(commandsSrc).toContain('id: "reductions-pawley"');
-    expect(commandsSrc).toContain('openReductions("pawley")');
+    const command = buildAnalysisCommands(useApp.getState).find((entry) => entry.id === "reductions-pawley");
+    expect(command?.group).toBe("Analyze");
+    command?.run();
+    expect(useApp.getState().reductionsMethod).toBe("pawley");
   });
 
   it("registers Film thickness (FFT) in the Analyze group", () => {
-    expect(commandsSrc).toContain('id: "reductions-fft"');
-    expect(commandsSrc).toContain('openReductions("fft-thickness")');
+    const command = buildAnalysisCommands(useApp.getState).find((entry) => entry.id === "reductions-fft");
+    expect(command?.group).toBe("Analyze");
+    command?.run();
+    expect(useApp.getState().reductionsMethod).toBe("fft-thickness");
   });
 
   it("registers Reflectivity FFT in the Analyze group", () => {
-    expect(commandsSrc).toContain('id: "reductions-reflfft"');
-    expect(commandsSrc).toContain('openReductions("reflectivity-fft")');
+    const command = buildAnalysisCommands(useApp.getState).find((entry) => entry.id === "reductions-reflfft");
+    expect(command?.group).toBe("Analyze");
+    command?.run();
+    expect(useApp.getState().reductionsMethod).toBe("reflectivity-fft");
   });
 
   it("AppOverlays.tsx mounts the panel behind reductionsOpen", () => {
