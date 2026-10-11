@@ -11,7 +11,9 @@
 //
 // Additive and tolerant: every field is validated on its own and simply left
 // absent when missing or malformed, so an older file (`{model}` only, or the
-// audit-P1 #3 subset) reads exactly as it did before.
+// audit-P1 #3 subset) reads exactly as it did before. `rowIds` is the exception:
+// an explicitly present but invalid subset becomes an empty, fail-closed
+// selection so corruption cannot silently widen a fit to the full dataset.
 
 import type { FitSpec, FitWeighting, WeightMode } from "./types";
 
@@ -66,8 +68,18 @@ export function parseFitSpec(v: unknown): FitSpec | undefined {
   // MAIN_PLAN #30: the rest of the reproducible recipe.
   const range = numbers(fs.range);
   if (range && range.length === 2 && range[0] <= range[1]) spec.range = [range[0], range[1]];
-  const rowIds = numbers(fs.rowIds);
-  if (rowIds && rowIds.length <= 1_000_000 && rowIds.every((row) => Number.isInteger(row) && row >= 0)) spec.rowIds = rowIds;
+  if (Object.hasOwn(fs, "rowIds")) {
+    const rowIds = numbers(fs.rowIds);
+    // An explicit but unreadable subset must remain explicit and fail closed;
+    // dropping it would replay a saved subset over the whole worksheet.
+    spec.rowIds = rowIds && rowIds.length <= 1_000_000 &&
+      rowIds.every((row) => Number.isInteger(row) && row >= 0)
+      ? [...new Set(rowIds)].sort((a, b) => a - b)
+      : [];
+  }
+  if (Number.isInteger(fs.sourceRowCount) && (fs.sourceRowCount as number) >= 0) {
+    spec.sourceRowCount = fs.sourceRowCount as number;
+  }
   if (Number.isInteger(fs.nPoints) && (fs.nPoints as number) >= 0) spec.nPoints = fs.nPoints as number;
   if (typeof fs.fittedAt === "string" && fs.fittedAt) spec.fittedAt = fs.fittedAt;
   if (typeof fs.recomputedAt === "string" && fs.recomputedAt) spec.recomputedAt = fs.recomputedAt;

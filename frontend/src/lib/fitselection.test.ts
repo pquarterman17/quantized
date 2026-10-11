@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { CalcResult, Dataset } from "./types";
 import { stampRecompute } from "./fitRecompute";
 import { fitDataForSpec, fitStepParams, selectedFitData } from "./fitselection";
+import { parseFitSpec } from "./fitSpecParse";
 import { fitSpecFromStepParams } from "./fitStepDecode";
 import { activeCorrectionNames, fitSpecFrom, fullPlottedX } from "./fitselectionActions";
 
@@ -40,7 +41,7 @@ describe("selectedFitData", () => {
       rowIds: [0, 2, 3], range: { lo: 250, hi: 400, source: "manual" },
     })).toEqual({
       x: [300, 400], y: [30, 40], yKey: 1,
-      analysisRows: [1, 2], sourceRows: [2, 3],
+      analysisRows: [1, 2], sourceRows: [2, 3], sourceRowCount: 4,
     });
   });
 });
@@ -100,11 +101,37 @@ describe("fitDataForSpec (recompute reproduces the recorded channels)", () => {
 
   it("reproduces a saved explicit row/range subset with original-row mapping", () => {
     expect(fitDataForSpec(dataset, {
-      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 2, 3], range: [250, 400],
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 2, 3], sourceRowCount: 4,
+      range: [250, 400], nPoints: 2,
     }, null, null, null)).toEqual({
       x: [300, 400], y: [30, 40], yKey: 1,
-      analysisRows: [1, 2], sourceRows: [2, 3],
+      analysisRows: [1, 2], sourceRows: [2, 3], sourceRowCount: 4,
     });
+  });
+
+  it("fails closed when a positional subset's worksheet structure changed", () => {
+    const spec = {
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 2, 3], sourceRowCount: 4, nPoints: 3,
+    };
+    const deleted = {
+      ...dataset,
+      excludedRows: [],
+      data: { ...dataset.data, time: [0, 1, 2], values: dataset.data.values.slice(1) },
+    };
+    expect(fitDataForSpec(deleted, spec, null, null, null)).toBeNull();
+  });
+
+  it("fails closed when a saved finite-point count no longer matches", () => {
+    expect(fitDataForSpec(dataset, {
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 1, 2, 3], sourceRowCount: 4,
+      range: [100, 400], nPoints: 4,
+    }, null, null, null)).toBeNull();
+  });
+
+  it("still recomputes a whole-view fit after ordinary source edits", () => {
+    expect(fitDataForSpec(dataset, {
+      model: "Linear", xKey: 0, yKey: 1, range: [100, 400], nPoints: 4,
+    }, null, null, null)).toMatchObject({ x: [100, 300, 400], y: [10, 30, 40] });
   });
 
   it("falls back to the live plotted selection for a legacy {model} spec", () => {
@@ -155,6 +182,7 @@ describe("fitStepParams / fitSpecFromStepParams (pipeline fit-step recipe #6)", 
       xKey: 0,
       yKey: 1,
       range: [1, 1],
+      nPoints: 1,
       weight: { mode: "yerr", errKey: 2 },
     });
   });
@@ -162,8 +190,8 @@ describe("fitStepParams / fitSpecFromStepParams (pipeline fit-step recipe #6)", 
   it("omits weight when mode is none and round-trips a null xKey (time axis)", () => {
     const spec = fitSpecFrom("Linear", null, { x: [1], y: [2], yKey: 0 }, { params: [1] });
     const params = fitStepParams("Linear", spec);
-    expect(params).toEqual({ model: "Linear", xKey: null, yKey: 0, range: [1, 1] });
-    expect(fitSpecFromStepParams(params)).toEqual({ model: "Linear", xKey: null, yKey: 0, range: [1, 1] });
+    expect(params).toEqual({ model: "Linear", xKey: null, yKey: 0, range: [1, 1], nPoints: 1 });
+    expect(fitSpecFromStepParams(params)).toEqual({ model: "Linear", xKey: null, yKey: 0, range: [1, 1], nPoints: 1 });
   });
 
   it("decodes a legacy {model}-only step to a channel-less recipe", () => {
@@ -189,6 +217,19 @@ describe("fitStepParams / fitSpecFromStepParams (pipeline fit-step recipe #6)", 
       fitSpecFromStepParams({ model: "Linear", yKey: 0, xKey: 0, weight: { mode: "bogus" } }).weight,
     ).toBeUndefined();
   });
+
+  it("preserves malformed persisted subsets as fail-closed sentinels", () => {
+    const workspace = parseFitSpec({
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, "bad"], sourceRowCount: 4, nPoints: 1,
+    })!;
+    const pipeline = fitSpecFromStepParams({
+      model: "Linear", xKey: 0, yKey: 1, rowIds: [0, -1], sourceRowCount: 4, nPoints: 1,
+    });
+    expect(workspace.rowIds).toEqual([]);
+    expect(pipeline.rowIds).toEqual([]);
+    expect(fitDataForSpec(dataset, workspace, null, null, null)).toBeNull();
+    expect(fitDataForSpec(dataset, pipeline, null, null, null)).toBeNull();
+  });
 });
 
 describe("fit recipe residual fields (MAIN #30)", () => {
@@ -205,9 +246,11 @@ describe("fit recipe residual fields (MAIN #30)", () => {
   });
 
   it("records and pipeline-round-trips exact original rows for a subset fit", () => {
-    const spec = fitSpecFrom("gauss", null, { ...sel, sourceRows: [1, 3, 7] }, result);
+    const spec = fitSpecFrom("gauss", null, { ...sel, sourceRows: [1, 3, 7], sourceRowCount: 10 }, result);
     expect(spec.rowIds).toEqual([1, 3, 7]);
-    expect(fitSpecFromStepParams(fitStepParams("gauss", spec)).rowIds).toEqual([1, 3, 7]);
+    expect(fitSpecFromStepParams(fitStepParams("gauss", spec))).toMatchObject({
+      rowIds: [1, 3, 7], sourceRowCount: 10, nPoints: 4,
+    });
   });
 
   it("ignores non-finite x when computing the range", () => {

@@ -435,6 +435,9 @@ export interface FitSpec {
   /** Original worksheet row ids used by an explicit AnalysisSelection.
    * Absent means the whole current analysis view (legacy behavior). */
   rowIds?: number[];
+  /** Raw worksheet row count when positional `rowIds` were recorded. A
+   * structural insert/delete invalidates those positions and must fail closed. */
+  sourceRowCount?: number;
   /** Points the fit consumed — the cheap corroborator for `range`: same window,
    *  different count means the underlying rows changed. */
   nPoints?: number;

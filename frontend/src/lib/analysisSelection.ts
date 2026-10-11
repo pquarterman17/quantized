@@ -6,8 +6,9 @@ import { columnMetaList } from "./columnmeta";
 import { channelModelingType, isCategorical } from "./modeling";
 import type { RoiRect, RoiRuler, RoiSector } from "./roi";
 import type { Dataset, DataStruct } from "./types";
+import { ANALYSIS_SELECTION_VERSION } from "./analysisSelectionVersion";
 
-export const ANALYSIS_SELECTION_VERSION = 1 as const;
+export { ANALYSIS_SELECTION_VERSION } from "./analysisSelectionVersion";
 
 export type AnalysisSelectionSource =
   | "analysis-center"
@@ -221,6 +222,16 @@ export function resolveAnalysisSelection(
   selection: AnalysisSelection,
   datasets: readonly Dataset[],
 ): { items: AnalysisSelectionResolvedItem[]; issues: AnalysisSelectionIssue[] } {
+  if ((selection as { version: unknown }).version !== ANALYSIS_SELECTION_VERSION) {
+    return {
+      items: [],
+      issues: selection.items.map((item) => ({
+        datasetId: item.datasetId,
+        severity: "error" as const,
+        message: "This analysis selection was saved by an unsupported version.",
+      })),
+    };
+  }
   const live = new Map(datasets.map((dataset) => [dataset.id, dataset]));
   const items: AnalysisSelectionResolvedItem[] = [];
   const issues: AnalysisSelectionIssue[] = [];

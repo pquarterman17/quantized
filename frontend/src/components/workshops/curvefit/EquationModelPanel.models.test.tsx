@@ -139,8 +139,8 @@ describe("saved model description + units (P2.7 slice 3)", () => {
     expect(useToasts.getState().toasts[0].msg).toContain('"Future"');
     expect(await screen.findByRole("option", { name: /Decay/ })).toBeInTheDocument();
     first.unmount();
-    render(<CurveFitPanel />);
-    await screen.findByRole("option", { name: /Decay/ });
+    const second = render(<CurveFitPanel />);
+    await within(second.container).findByRole("option", { name: /Decay/ });
     expect(useToasts.getState().toasts).toHaveLength(1);
   });
 });

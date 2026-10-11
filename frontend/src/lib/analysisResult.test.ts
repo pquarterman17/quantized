@@ -93,6 +93,22 @@ describe("analysis result envelope", () => {
     expect(overBudget.parameters).toBeUndefined();
   });
 
+  it("keeps but marks an unsupported batch-selection version out of date", () => {
+    const [result] = sanitizeAnalysisResults([{
+      version: 1,
+      id: "batch",
+      name: "Old batch",
+      producer: { id: "analysis-batch", label: "Batch", version: 1 },
+      sources: [{ datasetId: "source", role: "input" }],
+      outputs: [],
+      parameters: { selection: { version: 99, items: [] } },
+      warnings: [],
+      createdAt: "now",
+    }]);
+    expect(result.stale).toBe(true);
+    expect(result.warnings[0]).toContain("selection version is unsupported");
+  });
+
   it("migrates only linked worksheets carrying a valid signal recipe with deterministic ids", () => {
     const migrated = migrateLegacySignalResults([source(), output(), { ...output(), id: "plain", derivedFrom: undefined }], "saved");
     expect(migrated).toHaveLength(1);

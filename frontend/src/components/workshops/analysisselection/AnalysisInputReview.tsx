@@ -51,7 +51,11 @@ export default function AnalysisInputReview({ toolId, singleY = false, allowFact
       {open && (
         <div className="qzk-analysis-input-review-body">
           <div className="qzk-analysis-input-review-actions">
-            <span>{selection.items.length > 1 && !supportsBatch ? "This tool will use the first worksheet." : "Nothing runs until you confirm the tool action."}</span>
+            <span>{selection.source === "tool-default"
+              ? "Direct launch follows the current plot, selected rows, and active X range."
+              : selection.items.length > 1 && !supportsBatch
+                ? "This tool will use the first worksheet."
+                : "Nothing runs until you confirm the tool action."}</span>
             <Button size="sm" onClick={() => seedAnalysisSelection(toolId, "library")}>Refresh from current selection</Button>
           </div>
           {selection.items.map((item, index) => {
@@ -110,7 +114,7 @@ export default function AnalysisInputReview({ toolId, singleY = false, allowFact
                   </label>}
                 </div>
                 <div className="qzk-analysis-input-summary">
-                  <span>{item.rowIds ? `${item.rowIds.length} explicitly selected rows` : "Filtered/excluded rows honored"}</span>
+                  <span>{item.rowIds ? `${item.rowIds.length} explicitly selected rows` : "Active row filters honored"}</span>
                   <span>{item.range ? `X range ${item.range.lo.toPrecision(5)}–${item.range.hi.toPrecision(5)}` : "Full X range"}</span>
                   {index > 0 && <span>Batch item</span>}
                 </div>

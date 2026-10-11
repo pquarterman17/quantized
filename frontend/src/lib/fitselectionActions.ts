@@ -1,16 +1,12 @@
 // Plotted-channel helpers + the fit-provenance recipe builder, split out of
 // `lib/fitselection.ts` (2026-08-23, C2 bundle pass — see
 // `frontend/scripts/check-bundle-size.mjs`'s header for the ratchet this
-// split feeds). `lib/fitselection.ts` keeps `FitSelection` + the functions
-// `store/useApp.ts`/`store/recalcFits.ts`/
-// `components/workshops/pipeline/executeSteps.ts` need EAGERLY
-// (`fitStepParams`/`fitSpecFromStepParams`/`fitDataForSpec`,
-// plus `selectedFitData` — which `fitDataForSpec` calls internally, so it
-// stays put too). Everything below is reached only from the interactive fit
+// split feeds). `lib/fitselection.ts` keeps `FitSelection`, subset selection,
+// and saved-fit replay; the quick-fit encoder is isolated in
+// `lib/fitStepParams.ts`. Everything below is reached only from interactive fit
 // workshops (curve fit, baseline, peaks, peak wizard, mag tools) — all
 // already lazy `workshops/` panels, never the eager recompute path. Verified
-// before moving: none of `fitStepParams`/`fitSpecFromStepParams`/
-// `fitDataForSpec`/`selectedFitData` calls any export below,
+// before moving: neither `fitDataForSpec` nor `selectedFitData` calls an export below,
 // and every real (non-test) importer of what moved is one of those lazy
 // workshop hooks. (Slice 22 later moved `fitSpecFromStepParams` to
 // `lib/fitStepDecode.ts`: its only caller, the pipeline executor, is lazy.)
@@ -87,7 +83,10 @@ export function fitSpecFrom(
     spec.nPoints = sel.x.length;
   }
   // levels-allowlist: these are original worksheet row ids, not categorical levels.
-  if (sel.sourceRows) spec.rowIds = [...new Set(sel.sourceRows)].sort((a, b) => a - b);
+  if (sel.sourceRows) {
+    spec.rowIds = [...new Set(sel.sourceRows)].sort((a, b) => a - b);
+    if (sel.sourceRowCount !== undefined) spec.sourceRowCount = sel.sourceRowCount;
+  }
   if (preprocessing && preprocessing.length > 0) spec.preprocessing = preprocessing;
   if (starts?.p0) spec.p0 = starts.p0;
   if (starts?.lower) spec.lower = starts.lower;

@@ -38,9 +38,17 @@ export function fitSpecFromStepParams(params: Record<string, unknown>): FitSpec 
       params.range.every((value) => typeof value === "number" && Number.isFinite(value)) && params.range[0] <= params.range[1]) {
     spec.range = [params.range[0] as number, params.range[1] as number];
   }
-  if (Array.isArray(params.rowIds) && params.rowIds.length <= 1_000_000 &&
-      params.rowIds.every((row) => Number.isInteger(row) && (row as number) >= 0)) {
-    spec.rowIds = [...new Set(params.rowIds as number[])].sort((a, b) => a - b);
+  if (Object.hasOwn(params, "rowIds")) {
+    spec.rowIds = Array.isArray(params.rowIds) && params.rowIds.length <= 1_000_000 &&
+      params.rowIds.every((row) => Number.isInteger(row) && (row as number) >= 0)
+      ? [...new Set(params.rowIds as number[])].sort((a, b) => a - b)
+      : [];
+  }
+  if (Number.isInteger(params.sourceRowCount) && (params.sourceRowCount as number) >= 0) {
+    spec.sourceRowCount = params.sourceRowCount as number;
+  }
+  if (Number.isInteger(params.nPoints) && (params.nPoints as number) >= 0) {
+    spec.nPoints = params.nPoints as number;
   }
   return spec;
 }

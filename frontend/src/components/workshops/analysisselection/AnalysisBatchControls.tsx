@@ -75,6 +75,7 @@ export default function AnalysisBatchControls({ toolId, label, summaryColumns, r
     runningRef.current = true;
     setRunning(true);
     const warnings: string[] = [];
+    const runFingerprints = new Map<string, string>();
     const rows: RunRow[] = start.items.map(({ dataset, rowCount }) => {
       const selectionWarnings = start.issues
         .filter((issue) => issue.datasetId === dataset.id && issue.severity === "warning")
@@ -98,6 +99,9 @@ export default function AnalysisBatchControls({ toolId, label, summaryColumns, r
         try {
           const live = await analysisBatchRuntime().resolveDataset(selected.dataset.id);
           if (!live) throw new Error("The full worksheet could not be loaded.");
+          // Capture what this row actually ran on. A later worksheet must not
+          // let an earlier, edited input inherit an end-of-batch fingerprint.
+          runFingerprints.set(live.id, analysisDataFingerprint(live));
           const outcome = await runItem(live, selected.selection);
           rows[index].status = "completed";
           rows[index].values = outcome.values;
@@ -114,20 +118,27 @@ export default function AnalysisBatchControls({ toolId, label, summaryColumns, r
       }
       const cancelled = rows.filter((row) => row.status === "cancelled").length;
       if (cancelled) warnings.unshift(`Batch cancelled: ${cancelled} of ${rows.length} inputs were not started.`);
-      const liveDatasets = analysisBatchRuntime().datasets;
-      const liveSources = snapshot.items
-        .map((item) => liveDatasets.find((dataset) => dataset.id === item.datasetId))
-        .filter((dataset): dataset is Dataset => !!dataset && !dataset.pending);
-      const sourceFingerprint = liveSources.length === snapshot.items.length
-        ? liveSources.map((dataset) => analysisDataFingerprint(dataset)).join(":")
+      const executedIds = snapshot.items
+        .map((item) => item.datasetId)
+        .filter((id) => runFingerprints.has(id));
+      const sourceFingerprint = executedIds.length
+        ? executedIds.map((id) => runFingerprints.get(id)!).join(":")
         : undefined;
+      const liveDatasets = analysisBatchRuntime().datasets;
+      const changedDuringRun = executedIds.some((id) => {
+        const live = liveDatasets.find((dataset) => dataset.id === id);
+        return !live || !!live.pending || analysisDataFingerprint(live) !== runFingerprints.get(id);
+      });
       analysisBatchRuntime().recordHistory(`run ${label.toLowerCase()}`);
       registerAnalysisResult({
         version: ANALYSIS_RESULT_VERSION,
         id: nextAnalysisResultId(),
         name: `${label} — ${new Date().toLocaleString()}`,
         producer: { id: "analysis-batch", label, version: 1 },
-        sources: snapshot.items.map((item) => ({ datasetId: item.datasetId, role: "input" as const })),
+        // Unstarted cancelled inputs are status rows, not scientific sources.
+        // Excluding them keeps a pending preview from making an otherwise
+        // valid partial result permanently out of date.
+        sources: executedIds.map((datasetId) => ({ datasetId, role: "input" as const })),
         outputs: [],
         parameters: { toolId, selection: analysisSelectionSnapshot(snapshot) as unknown as AnalysisResultValue },
         tables: [{
@@ -140,7 +151,8 @@ export default function AnalysisBatchControls({ toolId, label, summaryColumns, r
         }],
         warnings: [...new Set(warnings)],
         createdAt: new Date().toISOString(),
-        ...(sourceFingerprint ? { sourceFingerprint } : { stale: true as const }),
+        ...(sourceFingerprint ? { sourceFingerprint } : {}),
+        ...(!sourceFingerprint || changedDuringRun ? { stale: true as const } : {}),
       });
     } finally {
       endOp(opId);
@@ -177,7 +189,8 @@ export default function AnalysisBatchControls({ toolId, label, summaryColumns, r
       <div className="qzk-analysis-input-review-actions">
         <span>{exceedsBatchLimit
           ? `Select ${MAX_BATCH_INPUTS.toLocaleString()} or fewer worksheets for one batch.`
-          : blocked ? "Fix blocked inputs above before running." : "Failures do not discard completed inputs."}</span>
+          : blocked ? "Fix blocked inputs above before running."
+            : "Cancel finishes the current worksheet, then marks the remaining inputs Cancelled."}</span>
         <Button variant="primary" size="sm" disabled={blocked || running} onClick={() => void runBatch()}>
           {running ? "Running…" : `Run ${label} batch`}
         </Button>

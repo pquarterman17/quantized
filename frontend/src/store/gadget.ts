@@ -28,7 +28,7 @@
 
 import type { FftSpectralResult, IntegrateResponse } from "../lib/api";
 import type { DerivativeResult } from "../lib/differentiate";
-import { fitStepParams } from "../lib/fitselection";
+import { fitStepParams } from "../lib/fitStepParams";
 import { computeCursorReadout } from "../lib/gadgetCursors";
 import { lit } from "../lib/macro";
 import type { Measurement } from "../lib/measure";

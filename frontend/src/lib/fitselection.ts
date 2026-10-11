@@ -3,11 +3,9 @@
 // Also the provenance bridge (audit P1 #3): `fitSpecFrom` records the fit's
 // recipe and `fitDataForSpec` reproduces it on recompute.
 //
-// SCOPE (narrowed 2026-08-23, C2 bundle pass): this file keeps `FitSelection`
-// + the functions `store/useApp.ts`/`store/recalcFits.ts`/
-// `components/workshops/pipeline/executeSteps.ts` need EAGERLY
-// (`fitStepParams`/`fitSpecFromStepParams`/`fitDataForSpec`,
-// plus `selectedFitData` below, which `fitDataForSpec` calls internally).
+// SCOPE (narrowed 2026-10-11): this file owns subset selection and saved-fit
+// replay. The eager quick-fit encoder lives in tiny `fitStepParams.ts`, while
+// recomputation loads this module only after the user starts recalculation.
 // The plotted-channel column helpers (`fullPlottedX`/`plottedYKey`) and the
 // fit-recipe builder (`fitSpecFrom` + its `finiteRange`/`activeCorrectionNames`
 // helpers) now live in `lib/fitselectionActions.ts`, reached only from the
@@ -21,6 +19,7 @@ import { effectiveChannels } from "./plotdata";
 import { analysisData, analysisView } from "./rowstate";
 import type { AnalysisSelectionItem } from "./analysisSelection";
 import type { Dataset, FitSpec } from "./types";
+export { fitStepParams } from "./fitStepParams";
 
 export interface FitSelection {
   x: number[];
@@ -31,6 +30,8 @@ export interface FitSelection {
   analysisRows?: number[];
   /** Original worksheet row ids corresponding to x/y. */
   sourceRows?: number[];
+  /** Raw worksheet length that gives positional sourceRows their meaning. */
+  sourceRowCount?: number;
   /** 1-sigma errors for the recorded weighting (recompute path only); null/
    *  absent = unweighted. Only `fitDataForSpec` populates it — the interactive
    *  hook resolves weighting from the live UI state instead. */
@@ -74,34 +75,11 @@ export function selectedFitData(
     yKey,
     analysisRows,
     sourceRows: analysisRows.map((index) => sourceRows[index]),
+    sourceRowCount: dataset.data.time.length,
   };
 }
 
 // ── Pipeline fit-step params bridge (#6) ───────────────────────────────────
-// A recorded "fit" step must carry the SAME recipe as the FitSpec so a template
-// batch reproduces the interactive fit's channels + weighting, not time/
-// values[0]. These are the pure encoder/decoder between a FitSpec and the
-// step's untrusted `params` bag (round-trips through localStorage
-// `qz.analysisTemplates` + saved .dwk workspaces — validate, never cast).
-// The decoder (`fitSpecFromStepParams`) lives in ./fitStepDecode.ts (bundle
-// diet slice 22): only the lazy pipeline executor calls it.
-
-/** Encode a FitSpec into a fit step's `params` object. Minimal + mirrors
- *  `fitSpecFrom`: the channels the fit used plus a non-`none` weighting; the
- *  result snapshot (`params`/`exitFlag`) is NEVER encoded — a step is a recipe,
- *  not a result. Absent channels are omitted (legacy `{model}` shape). */
-export function fitStepParams(model: string, spec: FitSpec): Record<string, unknown> {
-  const params: Record<string, unknown> = { model };
-  if (spec.yKey !== undefined) {
-    params.yKey = spec.yKey;
-    if (spec.xKey !== undefined) params.xKey = spec.xKey; // `null` (time axis) round-trips
-  }
-  if (spec.range) params.range = spec.range;
-  if (spec.rowIds) params.rowIds = spec.rowIds;
-  if (spec.weight && spec.weight.mode !== "none") params.weight = spec.weight;
-  return params;
-}
-
 /** Fit inputs for a SAVED spec on recompute: reproduce the spec's recorded
  *  channels (provenance) over the current analysis rows (#50/#53). Legacy specs
  *  without channels — or a stored channel that no longer exists after a column
@@ -129,6 +107,14 @@ export function fitDataForSpec(
     range: spec.range ? { lo: spec.range[0], hi: spec.range[1], source: "manual" } : null,
   });
   if (!selected) return null;
+  // Explicit row subsets use worksheet positions. A structural row edit
+  // invalidates those positions, so refuse replay instead of silently fitting
+  // different observations. The finite-point check also catches range or gap
+  // changes that leave the raw row count unchanged.
+  if (spec.rowIds !== undefined) {
+    if (spec.sourceRowCount === undefined || spec.sourceRowCount !== dataset.data.time.length) return null;
+    if (spec.nPoints !== undefined && dropGapRows(selected.x, selected.y).x.length !== spec.nPoints) return null;
+  }
   if (!spec.weight) return selected;
   // Reproduce the recorded weighting over the same analysis rows (Sol audit);
   // a missing/invalid error column refits unweighted (dyForFit returns null).

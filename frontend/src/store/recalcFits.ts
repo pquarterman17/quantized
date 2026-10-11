@@ -13,7 +13,6 @@
 import { fitModel } from "../lib/api";
 import { dropGapRows } from "../lib/api/finitePairs";
 import { boundsFromWire } from "../lib/fitBoundsWire";
-import { fitDataForSpec } from "../lib/fitselection";
 import { refreshFitRefsLater } from "./computedColumns";
 import type { AppState } from "./useApp";
 
@@ -29,6 +28,7 @@ export async function recomputeStaleFits(set: SliceSet, get: SliceGet): Promise<
       continue;
     }
     try {
+      const { fitDataForSpec } = await import("../lib/fitselection");
       // Reproduce the fit's RECORDED channels (audit P1 #3), falling back
       // to the live plotted selection for legacy specs — not time/values[0].
       const sel = fitDataForSpec(d, d.fitSpec, get().xKey, get().yKeys, get().seriesOrder);
