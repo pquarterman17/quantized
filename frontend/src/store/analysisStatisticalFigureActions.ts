@@ -1,4 +1,5 @@
 import type { AnalysisResultTable } from "../lib/analysisResult";
+import { snapshotResultState } from "../lib/analysisResultFreshness";
 import { createFigureDocument } from "../lib/figureDocument";
 import { dedupeWindowTitle } from "../lib/plotview";
 import type { StatisticalResultFigureDraft } from "../lib/statisticalResultFigures";
@@ -20,6 +21,15 @@ export function createAnalysisStatisticalFigure(
     state.setStatus("can't create statistical figure: the saved result changed while loading");
     return null;
   }
+  const freshness = snapshotResultState(result, state.datasets);
+  if (result.stale || freshness === "out-of-date") {
+    state.setStatus(`can't create ${result.name}: recalculate the out-of-date result first`);
+    return null;
+  }
+  if (freshness === "pending") {
+    state.setStatus(`can't create ${result.name}: load the full source worksheet first`);
+    return null;
+  }
   if (draft.data.metadata?.analysisResultId !== result.id) {
     state.setStatus("can't create statistical figure: the saved figure data is unavailable");
     return null;
@@ -29,6 +39,11 @@ export function createAnalysisStatisticalFigure(
   // Construct before mutating the store: an unexpected invalid snapshot must
   // not strand a blank window. createWindow then owns the gesture's single
   // history snapshot and every later mutation joins that same undo unit.
+  const snapshot = { ...draft.data, metadata: {
+    ...draft.data.metadata,
+    snapshotResultState: freshness,
+    sourceFingerprint: result.sourceFingerprint ?? null,
+  } };
   const document = createFigureDocument({
     id,
     name,
@@ -36,7 +51,7 @@ export function createAnalysisStatisticalFigure(
     view: draft.view,
     mark: draft.mark,
     errors: draft.errors,
-    data: { mode: "frozen", snapshot: draft.data },
+    data: { mode: "frozen", snapshot },
   });
   const windowId = state.createWindow(null, draft.view, name);
   useApp.setState((current) => ({

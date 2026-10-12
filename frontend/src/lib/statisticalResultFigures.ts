@@ -61,6 +61,9 @@ function categoricalData(
 
 function distributionFigures(result: AnalysisResult): StatisticalResultFigureDraft[] {
   const column = text(result.scalarValues?.Column) || "Value";
+  const unit = result.selection?.channels.find((channel) => channel.label === column)?.unit ??
+    result.selection?.channels[0]?.unit ?? "";
+  const xLabel = unit ? `${column} (${unit})` : column;
   return (result.tables ?? []).flatMap((candidate, index) => {
     if (!(candidate.title === "Histogram" || candidate.title?.startsWith("Histogram · ")) ||
         !columnsAre(candidate, ["bin left", "center", "bin right", "count"])) return [];
@@ -74,7 +77,7 @@ function distributionFigures(result: AnalysisResult): StatisticalResultFigureDra
       name,
       description: `Histogram saved with this result${level ? ` for ${level}` : ""}.`,
       data,
-      view: view(name, column, "Count", null, [0]),
+      view: view(name, xLabel, "Count", null, [0]),
       mark: "bar",
     }];
   });
@@ -98,7 +101,7 @@ function onewayFigures(result: AnalysisResult, source: AnalysisResultTable): Sta
     return [{
       key: `fit-y-by-x-oneway-${index}`,
       name,
-      description: "Saved group means with standard-deviation error bars.",
+      description: hasSd ? "Saved group means with standard-deviation error bars." : "Saved group means; standard deviation was unavailable.",
       data,
       view: view(name, data.labels[0], yLabel, 0, [1]),
       mark: "bar",
@@ -123,22 +126,48 @@ function bivariateFigures(result: AnalysisResult, source: AnalysisResultTable): 
   });
 }
 
-function regressionBandFigures(result: AnalysisResult, source: AnalysisResultTable): StatisticalResultFigureDraft[] {
+function regressionBandFigures(
+  result: AnalysisResult,
+  source: AnalysisResultTable,
+  fittedSource?: AnalysisResultTable,
+): StatisticalResultFigureDraft[] {
   if (!columnsAre(source, ["level", "X", "lower", "upper", "alpha"])) return [];
   const levels = [...new Set(source.rows.map((row) => text(row[0])))];
   const xLabel = text(result.scalarValues?.["X column"]) || "X";
   const yLabel = text(result.scalarValues?.["Y column"]) || "Y";
+  const savedRecipe = result.parameters?.recipe;
+  const recipe = typeof savedRecipe === "object" && savedRecipe !== null && !Array.isArray(savedRecipe) ? savedRecipe : {};
+  const interval = recipe.bandInterval === "prediction" || recipe.bandInterval === "confidence"
+    ? recipe.bandInterval : null;
+  const fittedValid = fittedSource && columnsAre(fittedSource, ["level", "X", "fitted Y"]);
   return levels.flatMap((level, index) => {
-    const rows = source.rows.filter((row) => text(row[0]) === level && finite(row[1]) && finite(row[2]) && finite(row[3]));
+    const rows = source.rows.filter((row) => text(row[0]) === level && finite(row[1]) && finite(row[2]) && finite(row[3]) && finite(row[4]));
     if (!rows.length) return [];
-    const data = xyData(rows.map((row) => row[1] as number), [
+    const firstAlpha = rows[0][4] as number;
+    const alpha = rows.every((row) => row[4] === firstAlpha) ? firstAlpha : null;
+    const coverage = alpha !== null && alpha >= 0 && alpha <= 1
+      ? `${((1 - alpha) * 100).toFixed(1).replace(/\.0$/, "")}% ` : "";
+    const x = rows.map((row) => row[1] as number);
+    const fitted = fittedValid ? x.map((value) => {
+      const match = fittedSource.rows.find((row) => text(row[0]) === level && row[1] === value && finite(row[2]));
+      return match ? match[2] as number : Number.NaN;
+    }) : [];
+    // A FigureDocument uses one shared X grid. Include the saved fitted line
+    // only when every band-grid X has an exact saved counterpart; never
+    // interpolate or recompute values merely to make the overlay convenient.
+    const hasFitted = fitted.length === x.length && fitted.every(Number.isFinite);
+    const data = xyData(x, [
+      ...(hasFitted ? [{ label: "Fitted Y", values: fitted }] : []),
       { label: "Lower bound", values: rows.map((row) => row[2] as number) },
       { label: "Upper bound", values: rows.map((row) => row[3] as number) },
     ]);
-    const name = `${yLabel} regression interval${level === "All" ? "" : ` · ${level}`}`;
+    const intervalLabel = `${coverage}${interval ? `${interval} interval` : "regression interval"}`;
+    const name = `${yLabel} ${intervalLabel}${level === "All" ? "" : ` · ${level}`}`;
     return [{ key: `fit-y-by-x-band-${index}`, name,
-      description: "Lower and upper regression-interval bounds saved with this result.",
-      data, view: view(name, xLabel, yLabel, null, [0, 1]), mark: "line" }];
+      description: hasFitted
+        ? `Fitted curve plus lower and upper ${intervalLabel} bounds saved with this result.`
+        : `Lower and upper ${intervalLabel} bounds saved with this result.`,
+      data, view: view(name, xLabel, yLabel, null, data.labels.map((_, series) => series)), mark: "line" }];
   });
 }
 
@@ -171,7 +200,7 @@ function fitYByXFigures(result: AnalysisResult): StatisticalResultFigureDraft[] 
   if (mode === "bivariate") {
     const source = table(result, "Fitted curve");
     const band = table(result, "Regression band");
-    return [...(source ? bivariateFigures(result, source) : []), ...(band ? regressionBandFigures(result, band) : [])];
+    return [...(source ? bivariateFigures(result, source) : []), ...(band ? regressionBandFigures(result, band, source) : [])];
   }
   if (mode === "contingency") {
     const source = table(result, "Contingency cells");
@@ -208,12 +237,14 @@ function multivariateFigures(result: AnalysisResult): StatisticalResultFigureDra
     ? scores.rows.filter((row) => finite(row[xColumn]) && finite(row[yColumn])) : [];
   if (scores && validScoreColumns && pcX !== pcY && scores.columns[xColumn] && scores.columns[yColumn] && scoreRows.length) {
     const xLabel = scores.columns[xColumn], yLabel = scores.columns[yColumn];
+    const explained = new Map(componentRows.map((row) => [text(row[0]), row[2] as number]));
+    const axisLabel = (label: string) => finite(explained.get(label)) ? `${label} (${explained.get(label)!.toFixed(1)}%)` : label;
     const data = xyData(scoreRows.map((row) => row[xColumn] as number), [
       { label: yLabel, values: scoreRows.map((row) => row[yColumn] as number) },
     ]);
     out.push({ key: "multivariate-scores", name: `PCA scores · ${xLabel} / ${yLabel}`,
       description: "Score coordinates saved with this result; omitted source rows remain omitted.",
-      data, view: view(`PCA scores · ${xLabel} / ${yLabel}`, xLabel, yLabel, null, [0]), mark: "scatter" });
+      data, view: view(`PCA scores · ${xLabel} / ${yLabel}`, axisLabel(xLabel), axisLabel(yLabel), null, [0]), mark: "scatter" });
   }
   return out;
 }
@@ -246,7 +277,7 @@ function variabilityFigures(result: AnalysisResult): StatisticalResultFigureDraf
       { label: yLabel, values: means }, ...(hasSd ? [{ label: `${yLabel} SD`, values: sd }] : []),
     ]);
     out.push({ key: "variability-cells", name: `${yLabel} cell means`,
-      description: "Saved nested-cell means with standard-deviation error bars.", data,
+      description: hasSd ? "Saved nested-cell means with standard-deviation error bars." : "Saved nested-cell means; standard deviation was unavailable.", data,
       view: view(`${yLabel} cell means`, data.labels[0], yLabel, 0, [1]), mark: "bar",
       ...(hasSd ? { errors: [{ channel: 2, target: 1, axis: "y", side: "both" } as const] } : {}) });
   }
