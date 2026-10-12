@@ -1,24 +1,27 @@
 import type { AnalysisResult } from "../../../lib/analysisResult";
 import { liveFitPlotBinding } from "../../../lib/fitAnalysisResultLive";
-import type { Dataset } from "../../../lib/types";
+import { statisticalResultFigureDrafts, type StatisticalResultFigureDraft } from "../../../lib/statisticalResultFigures";
+import type { DataStruct, Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { Button } from "../../primitives";
 
-function previewPath(dataset: Dataset, channel: number): string | null {
-  const all = dataset.data.values.map((row, index) => ({ index, value: row?.[channel] }))
+function previewDataPath(data: DataStruct, channel: number): string | null {
+  const all = data.values.map((row, index) => ({ index, value: row?.[channel] }))
     .filter((point): point is { index: number; value: number } => Number.isFinite(point.value));
   if (all.length < 2) return null;
   const step = Math.max(1, Math.ceil(all.length / 120));
   const points = all.filter((_, index) => index % step === 0 || index === all.length - 1);
   const values = points.map((point) => point.value);
   const lo = Math.min(...values), hi = Math.max(...values), span = hi - lo || 1;
-  const xSpan = Math.max(1, dataset.data.time.length - 1);
+  const xSpan = Math.max(1, data.time.length - 1);
   return points.map((point, index) => {
     const x = 4 + (point.index / xSpan) * 192;
     const y = hi === lo ? 32 : 58 - ((point.value - lo) / span) * 52;
     return `${index ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(" ");
 }
+
+const previewPath = (dataset: Dataset, channel: number): string | null => previewDataPath(dataset.data, channel);
 
 function FigureCard({ result, index, onOpen, onBuild, onReport }: {
   result: AnalysisResult;
@@ -62,21 +65,51 @@ function FigureCard({ result, index, onOpen, onBuild, onReport }: {
   </article>;
 }
 
-export default function AnalysisResultFigures({ result, onOpen, onBuild, onReport }: {
+function StatisticalFigureCard({ draft, disabled, onCreate }: {
+  draft: StatisticalResultFigureDraft;
+  disabled: boolean;
+  onCreate: (key: string) => void;
+}) {
+  const channel = draft.view.yKeys?.[0] ?? 0;
+  const path = previewDataPath(draft.data, channel);
+  return <article className="qz-analysis-figure-card">
+    <div className="qz-analysis-figure-preview">
+      {path ? <svg viewBox="0 0 200 64" role="img" aria-label={`Preview of ${draft.name}`} preserveAspectRatio="none">
+        <path d={path} />
+      </svg> : <span>No plottable saved rows</span>}
+    </div>
+    <div className="qz-analysis-figure-info">
+      <strong>{draft.name}</strong>
+      <span>{draft.description}</span>
+      <div className="qz-analysis-figure-actions">
+        <Button size="sm" variant="primary" disabled={disabled} onClick={() => onCreate(draft.key)}>Create editable figure</Button>
+      </div>
+    </div>
+  </article>;
+}
+
+export default function AnalysisResultFigures({ result, disabled = false, onOpen, onBuild, onReport, onCreateStatistical }: {
   result: AnalysisResult;
+  disabled?: boolean;
   onOpen: (index: number) => void;
   onBuild: (index: number) => void;
   onReport: (index: number) => void;
+  onCreateStatistical: (key: string) => void;
 }) {
-  if (!result.plotBindings?.length) return <p className="qz-analysis-empty">No figure bindings were recorded for this result.</p>;
+  const drafts = statisticalResultFigureDrafts(result);
+  if (!result.plotBindings?.length && !drafts.length) return <p className="qz-analysis-empty">No figure-ready output was saved for this result.</p>;
   const sourceOnly = result.settingsRef?.field === "peakTable";
   const fitted = result.settingsRef?.field === "fitSpec";
   return <div className="qz-analysis-figures">
-    <p className="qz-analysis-caption">{sourceOnly
+    {!!drafts.length && <>
+      <p className="qz-analysis-caption">These figures are frozen from the saved statistical tables. They remain reproducible if the source changes, and open as ordinary editable Quantized figures.</p>
+      {drafts.map((draft) => <StatisticalFigureCard key={draft.key} draft={draft} disabled={disabled} onCreate={onCreateStatistical} />)}
+    </>}
+    {!!result.plotBindings?.length && <><p className="qz-analysis-caption">{sourceOnly
       ? "These actions plot the recorded source curve only. The peak table and CSV preserve fitted values; a reusable fitted curve is not stored in this result."
       : fitted
         ? "Open plot and Send to report regenerate the fitted curve from the saved model and parameters. Build source figure starts an editable draft from the recorded source curve; editable figures do not yet store fit overlays."
       : `Figures use the result’s recorded ${result.outputs.length ? "output" : "source"} and channels. Build figure opens an editable draft; Send to report captures the configured plot.`}</p>
-    {result.plotBindings.map((binding, index) => <FigureCard key={`${binding.datasetId}-${index}`} result={result} index={index} onOpen={onOpen} onBuild={onBuild} onReport={onReport} />)}
+    {result.plotBindings.map((binding, index) => <FigureCard key={`${binding.datasetId}-${index}`} result={result} index={index} onOpen={onOpen} onBuild={onBuild} onReport={onReport} />)}</>}
   </div>;
 }

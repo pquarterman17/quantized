@@ -19,6 +19,7 @@ export function useAnalysisResultInlineTableActions(
   result: AnalysisResult | undefined,
   busy: AnalysisResultBusy,
   setBusy: Dispatch<SetStateAction<AnalysisResultBusy>>,
+  onFigureCreated?: () => void,
 ) {
   const running = useRef(false);
   const run = async (kind: "copy" | "export", tableIndex?: number): Promise<void> => {
@@ -35,8 +36,25 @@ export function useAnalysisResultInlineTableActions(
       setBusy(null);
     }
   };
+  const createStatisticalFigure = async (draftKey: string): Promise<void> => {
+    if (!result || busy || running.current) return;
+    running.current = true;
+    setBusy("figure");
+    try {
+      const tables = result.tables;
+      const windowId = await loadActions().then(
+        (actions) => actions.createAnalysisStatisticalFigure(result.id, draftKey, tables),
+        () => { onLoadFailure(); return null; },
+      );
+      if (windowId) onFigureCreated?.();
+    } finally {
+      running.current = false;
+      setBusy(null);
+    }
+  };
   return {
     copyInlineTables: (tableIndex?: number) => run("copy", tableIndex),
     exportInlineTables: (tableIndex?: number) => run("export", tableIndex),
+    createStatisticalFigure,
   };
 }

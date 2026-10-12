@@ -1,0 +1,51 @@
+import type { AnalysisResultTable } from "../lib/analysisResult";
+import { createFigureDocument } from "../lib/figureDocument";
+import { dedupeWindowTitle } from "../lib/plotview";
+import { statisticalResultFigureDrafts } from "../lib/statisticalResultFigures";
+import { nextFigureId } from "./figureLifecycle";
+import { useApp } from "./useApp";
+import { withPlotWindowDocument } from "./windowDocuments";
+
+/** Materialize one saved statistical table view as a normal editable frozen
+ * figure. The table-array identity is an optimistic-concurrency token: notes
+ * may change during lazy loading, but changed scientific output refuses. */
+export function createAnalysisStatisticalFigure(
+  resultId: string,
+  draftKey: string,
+  expectedTables?: AnalysisResultTable[],
+): string | null {
+  const state = useApp.getState();
+  const result = state.analysisResults.find((item) => item.id === resultId);
+  if (!result || (expectedTables !== undefined && result.tables !== expectedTables)) {
+    state.setStatus("can't create statistical figure: the saved result changed while loading");
+    return null;
+  }
+  const draft = statisticalResultFigureDrafts(result).find((candidate) => candidate.key === draftKey);
+  if (!draft) {
+    state.setStatus("can't create statistical figure: the saved figure data is unavailable");
+    return null;
+  }
+  const id = nextFigureId();
+  const name = dedupeWindowTitle(draft.name, state.editableFigures.map((figure) => figure.name));
+  // Construct before mutating the store: an unexpected invalid snapshot must
+  // not strand a blank window. createWindow then owns the gesture's single
+  // history snapshot and every later mutation joins that same undo unit.
+  const document = createFigureDocument({
+    id,
+    name,
+    datasetId: null,
+    view: draft.view,
+    mark: draft.mark,
+    errors: draft.errors,
+    data: { mode: "frozen", snapshot: draft.data },
+  });
+  const windowId = state.createWindow(null, draft.view, name);
+  useApp.setState((current) => ({
+    editableFigures: [...current.editableFigures, document],
+    plotWindows: current.plotWindows.map((window) =>
+      window.id === windowId ? withPlotWindowDocument(window, document) : window),
+    status: `created editable figure "${name}" from ${result.name}`,
+  }));
+  useApp.getState().focusWindow(windowId);
+  return windowId;
+}

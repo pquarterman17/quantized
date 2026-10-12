@@ -91,10 +91,10 @@ export default function AnalysisResultPanel() {
     result, datasets, source, output, staleDatasets, staleFits, isPeak, isFit, isRefl,
     peakTable, fitSpec, fitFingerprintStale, reflFit, reflIssues, snapshotState,
   }) : [], [datasets, fitFingerprintStale, fitSpec, isFit, isPeak, isRefl, output, peakTable, reflFit, reflIssues, result, snapshotState, source, staleDatasets, staleFits]);
-  const { copyInlineTables, exportInlineTables } = useAnalysisResultInlineTableActions(result, busy, setBusy);
+  const close = () => useApp.setState({ openAnalysisResultId: null });
+  const { copyInlineTables, exportInlineTables, createStatisticalFigure } = useAnalysisResultInlineTableActions(result, busy, setBusy, close);
 
   if (!result) return null;
-  const close = () => useApp.setState({ openAnalysisResultId: null });
   const openOutput = () => {
     if (!output) return;
     setActive(output.id);
@@ -346,7 +346,7 @@ export default function AnalysisResultPanel() {
             ? <AnalysisResultPeakTable table={peakTable} onExport={() => void exportPeaks()} />
             : isFit ? <AnalysisResultFitTable spec={fitSpec} onExport={() => void exportFit()} />
             : <AnalysisResultTables result={result} onOpen={openTable} onExport={(datasetId) => void exportTable(datasetId)} />)}
-          {tab === "figures" && <AnalysisResultFigures result={result} onOpen={(index) => void openPlot(index)} onBuild={(index) => void buildFigure(index)} onReport={(index) => void sendReport(index)} />}
+          {tab === "figures" && <AnalysisResultFigures result={result} disabled={busy !== null} onOpen={(index) => void openPlot(index)} onBuild={(index) => void buildFigure(index)} onReport={(index) => void sendReport(index)} onCreateStatistical={(key) => void createStatisticalFigure(key)} />}
           {tab === "diagnostics" && (diagnostics.length
             ? <ul className="qz-analysis-diagnostics">{diagnostics.map((message, index) => <li key={`${message}-${index}`}>{message}</li>)}</ul>
             : <p className="qz-analysis-empty">No warnings or missing references.</p>)}

@@ -96,6 +96,9 @@ beforeEach(() => {
     future: [],
     quickFigureBuilderDatasetId: null,
     quickFigureBuilderSeed: null,
+    editableFigures: [],
+    plotWindows: [],
+    focusedWindowId: null,
     yKeys: null,
     stageTab: "worksheet",
   });
@@ -377,6 +380,30 @@ describe("AnalysisResultPanel", () => {
       col: 0, byCol: null, fitDist: "none", compareOpen: false, percentileInput: 90,
     });
     expect(useApp.getState()).toMatchObject({ activeId: "source", distributionOpen: true, openAnalysisResultId: null });
+  });
+
+  it("creates a reproducible editable figure from a saved statistical table", async () => {
+    const distribution = distributionAnalysisResult(
+      "distribution", source,
+      { col: 0, byCol: null, fitDist: "none", compareOpen: false, percentileInput: 90 },
+      { label: "Signal", byLabel: null, hist: { counts: [2, 1], centers: [1, 2], edges: [0.5, 1.5, 2.5] },
+        desc: { N: 3, mean: 1.3, median: 1, std: 0.5, min: 1, q1: 1, q3: 1.5, max: 2 },
+        norm: null, normNote: "need more values", levels: [], totalLevels: 0, rankedFits: [],
+        rankingMetric: "ks_p", quantiles: null, percentileValue: null, skipped: [] },
+    );
+    useApp.setState({ datasets: [], analysisResults: [distribution], openAnalysisResultId: distribution.id });
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Figures" }));
+    expect(screen.getByText(/frozen from the saved statistical tables/)).toBeInTheDocument();
+    const create = screen.getByRole("button", { name: "Create editable figure" });
+    fireEvent.click(create);
+    fireEvent.click(create);
+
+    await waitFor(() => expect(useApp.getState().editableFigures).toHaveLength(1));
+    const document = useApp.getState().editableFigures[0];
+    expect(document.data).toMatchObject({ mode: "frozen", snapshot: { time: [1, 2], values: [[2], [1]] } });
+    expect(useApp.getState().openAnalysisResultId).toBeNull();
+    expect(useApp.getState().plotWindows.some((window) => window.document?.id === document.id)).toBe(true);
   });
 
   it("copies one table or the complete table set from a snapshot result", async () => {
