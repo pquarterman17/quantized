@@ -40,6 +40,7 @@ export default function StatisticalResultsWorkspace({
   tools, results, datasets, activeId, query, busyId, onLaunch, onOpen,
 }: Props) {
   const [currentOnly, setCurrentOnly] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [tableAction, setTableAction] = useState<string | null>(null);
   const tableActionRef = useRef<string | null>(null);
   const visible = useMemo(
@@ -54,7 +55,7 @@ export default function StatisticalResultsWorkspace({
     setTableAction(key);
     try {
       await runLazy("Loading result table…", () => import("../../../store/analysisResultActions"))
-        .then((module) => module.copyAnalysisInlineTables(result.id, tableIndex, result), onLoadFailure);
+        .then((module) => module.copyAnalysisInlineTables(result.id, tableIndex, result.tables), onLoadFailure);
     } finally {
       tableActionRef.current = null;
       setTableAction(null);
@@ -68,7 +69,7 @@ export default function StatisticalResultsWorkspace({
     setTableAction(key);
     try {
       await runLazy("Loading result table…", () => import("../../../store/analysisResultActions"))
-        .then((module) => module.exportAnalysisInlineTables(result.id, tableIndex, result), onLoadFailure);
+        .then((module) => module.exportAnalysisInlineTables(result.id, tableIndex, result.tables), onLoadFailure);
     } finally {
       tableActionRef.current = null;
       setTableAction(null);
@@ -125,10 +126,24 @@ export default function StatisticalResultsWorkspace({
         </div>
 
         {visible.length > 0 ? visible.map(({ result, sourceNames, state, activeSource }) => {
-          const previews = statisticalTablePreviews(result);
+          const open = expanded.has(result.id);
+          const previews = open ? statisticalTablePreviews(result) : [];
           const interpretation = result.scalarValues?.Interpretation;
           return (
-            <details key={result.id} className="qzk-stats-result">
+            <details
+              key={result.id}
+              className="qzk-stats-result"
+              open={open}
+              onToggle={(event) => {
+                const nextOpen = event.currentTarget.open;
+                setExpanded((current) => {
+                  if (current.has(result.id) === nextOpen) return current;
+                  const next = new Set(current);
+                  if (nextOpen) next.add(result.id); else next.delete(result.id);
+                  return next;
+                });
+              }}
+            >
               <summary>
                 <span className="qzk-stats-result-title">
                   <strong>{result.name}</strong>
@@ -140,7 +155,7 @@ export default function StatisticalResultsWorkspace({
                   <small>{date(result.updatedAt ?? result.createdAt)}</small>
                 </span>
               </summary>
-              <div className="qzk-stats-result-body">
+              {open && <div className="qzk-stats-result-body">
                 {typeof interpretation === "string" && <p className="qzk-stats-interpretation">{interpretation}</p>}
                 {result.warnings.length > 0 && (
                   <div className="qzk-stats-warnings" role="note">
@@ -187,7 +202,7 @@ export default function StatisticalResultsWorkspace({
                     onClick={() => void exportTables(result)}
                   >{tableAction === `export:${result.id}:all` ? "Exporting…" : "Export all tables…"}</Button>
                 </div>
-              </div>
+              </div>}
             </details>
           );
         }) : (

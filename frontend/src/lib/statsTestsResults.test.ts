@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { MultiRegressionResult } from "./api/statsTests";
-import { describeResult, fmtP, outputToCSV, outputToTSV } from "./statsTestsResults";
+import { describeResult, fmtP, outputToCSV, outputToTSV, tablesToCSV, tablesToTSV } from "./statsTestsResults";
 
 const KS2 = { D: 0.5, p: 0.03, n1: 8, n2: 9, alternative: "two-sided", method: "Kolmogorov-Smirnov (two-sample)" };
 
@@ -214,5 +214,23 @@ describe("table export", () => {
     expect(tsv).toContain("thick, nm\t1.52\t0.43\t3.55\t0.016\t0.42\t2.62");
     const csv = outputToCSV(out);
     expect(csv).toContain('"thick, nm",1.52,0.43,3.55,0.016,0.42,2.62');
+  });
+
+  it("makes imported TSV labels spreadsheet-safe without changing numeric cells", () => {
+    const table = {
+      title: "Unsafe\ttitle",
+      columns: ["=HYPERLINK(\"bad\")", "line\nbreak"],
+      rows: [["+SUM(A1:A2)", -1.5], ["@cmd\rnext", 2]],
+    };
+    expect(tablesToTSV([table])).toBe(
+      "Unsafe title\n'=HYPERLINK(\"bad\")\tline break\n'+SUM(A1:A2)\t-1.5\n'@cmd next\t2",
+    );
+    expect(outputToTSV({ sentence: "=unsafe\ninterpretation", tables: [table] })).toMatch(/^'=unsafe interpretation/);
+  });
+
+  it("serializes a single table without a synthetic blank first line", () => {
+    const tables = [{ title: "Summary", columns: ["label", "value"], rows: [["a", 1]] }];
+    expect(tablesToTSV(tables)).toBe("Summary\nlabel\tvalue\na\t1");
+    expect(tablesToCSV(tables)).toBe("Summary\nlabel,value\na,1");
   });
 });

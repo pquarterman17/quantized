@@ -307,7 +307,7 @@ describe("AnalysisResultPanel", () => {
     fireEvent.click(exportButton);
     expect(exportButton).toBeDisabled();
     await waitFor(() => expect(exportButton).toBeEnabled());
-    expect(exportInline).toHaveBeenCalledWith("stat", undefined, stat);
+    expect(exportInline).toHaveBeenCalledWith("stat", undefined, stat.tables);
     expect(screen.getByRole("button", { name: "Send summary to report" }).getAttribute("title")).toMatch(/Adds only the “.+” table/);
     fireEvent.click(screen.getByRole("button", { name: "Send summary to report" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Send summary to report" })).toBeEnabled());
@@ -396,16 +396,16 @@ describe("AnalysisResultPanel", () => {
     fireEvent.click(copyTable);
     fireEvent.click(copyTable);
     await waitFor(() => expect(copyTable).toBeEnabled());
-    expect(copyInline).toHaveBeenCalledWith(distribution.id, 0, distribution);
+    expect(copyInline).toHaveBeenCalledWith(distribution.id, 0, distribution.tables);
     expect(copyInline).toHaveBeenCalledTimes(1);
     const exportTable = screen.getAllByRole("button", { name: "Export table…" })[0];
     fireEvent.click(exportTable);
     await waitFor(() => expect(exportTable).toBeEnabled());
-    expect(exportInline).toHaveBeenCalledWith(distribution.id, 0, distribution);
+    expect(exportInline).toHaveBeenCalledWith(distribution.id, 0, distribution.tables);
     const copyAll = screen.getByRole("button", { name: "Copy all tables" });
     fireEvent.click(copyAll);
     await waitFor(() => expect(copyAll).toBeEnabled());
-    expect(copyInline).toHaveBeenCalledWith(distribution.id, undefined, distribution);
+    expect(copyInline).toHaveBeenCalledWith(distribution.id, undefined, distribution.tables);
   });
 
   it("does not present a lazy Distribution source as verified current", () => {

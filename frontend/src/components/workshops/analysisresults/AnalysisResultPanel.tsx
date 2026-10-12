@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { SNAPSHOT_RESULT_STATUS, dataFingerprint, isSnapshotResult, snapshotResultState } from "../../../lib/analysisResultFreshness";
 import { distributionRecipe } from "../../../lib/distributionAnalysisResult";
@@ -33,6 +33,7 @@ import { analysisResultDiagnostics } from "./analysisResultDiagnostics";
 import { mappingForResult } from "./analysisResultFigureMapping";
 import { recordsFor } from "../reflectivity/reflFitRecord";
 import { FIT_SOURCE_MISSING, formatDate, formatValue, PEAK_SOURCE_MISSING, SOURCE_MISSING } from "./analysisResultPanelText";
+import { useAnalysisResultInlineTableActions, type AnalysisResultBusy } from "./useAnalysisResultInlineTableActions";
 type Tab = "overview" | "table" | "figures" | "diagnostics" | "provenance" | "notes";
 const TABS: readonly Tab[] = ["overview", "table", "figures", "diagnostics", "provenance", "notes"];
 // Its own seam, not store/analysisResultLazy.ts: importing that from this
@@ -56,8 +57,7 @@ export default function AnalysisResultPanel() {
   const openReflectivityFitRecord = useApp((state) => state.openReflectivityFitRecord);
   const openQuickFigureBuilder = useApp((state) => state.openQuickFigureBuilder);
   const [tab, setTab] = useState<Tab>("overview");
-  const [busy, setBusy] = useState<"recalculate" | "rerun" | "duplicate" | "freeze" | "figure" | "report" | "copy" | "export" | null>(null);
-  const inlineTableActionRef = useRef(false);
+  const [busy, setBusy] = useState<AnalysisResultBusy>(null);
   const [notes, setNotes] = useState(result?.notes ?? "");
   useEffect(() => setNotes(result?.notes ?? ""), [result?.id, result?.notes]);
 
@@ -91,6 +91,7 @@ export default function AnalysisResultPanel() {
     result, datasets, source, output, staleDatasets, staleFits, isPeak, isFit, isRefl,
     peakTable, fitSpec, fitFingerprintStale, reflFit, reflIssues, snapshotState,
   }) : [], [datasets, fitFingerprintStale, fitSpec, isFit, isPeak, isRefl, output, peakTable, reflFit, reflIssues, result, snapshotState, source, staleDatasets, staleFits]);
+  const { copyInlineTables, exportInlineTables } = useAnalysisResultInlineTableActions(result, busy, setBusy);
 
   if (!result) return null;
   const close = () => useApp.setState({ openAnalysisResultId: null });
@@ -236,24 +237,6 @@ export default function AnalysisResultPanel() {
     setBusy("export");
     try { await loadActions().then((m) => m.exportAnalysisFitTable(result.id), onLoadFailure); }
     finally { setBusy(null); }
-  };
-  const exportInlineTables = async (tableIndex?: number) => {
-    if (busy || inlineTableActionRef.current) return;
-    inlineTableActionRef.current = true;
-    setBusy("export");
-    try {
-      await loadActions().then((m) => m.exportAnalysisInlineTables(result.id, tableIndex, result), onLoadFailure);
-    }
-    finally { inlineTableActionRef.current = false; setBusy(null); }
-  };
-  const copyInlineTables = async (tableIndex?: number) => {
-    if (busy || inlineTableActionRef.current) return;
-    inlineTableActionRef.current = true;
-    setBusy("copy");
-    try {
-      await loadActions().then((m) => m.copyAnalysisInlineTables(result.id, tableIndex, result), onLoadFailure);
-    }
-    finally { inlineTableActionRef.current = false; setBusy(null); }
   };
   const sendInlineReport = async () => {
     if (busy) return;

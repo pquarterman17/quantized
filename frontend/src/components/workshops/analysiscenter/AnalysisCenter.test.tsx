@@ -106,7 +106,7 @@ describe("AnalysisCenter", () => {
     expect(useApp.getState().openAnalysisResultId).toBe("r1");
   });
 
-  it("collects focused launchers and saved tables in the expandable statistics workspace", () => {
+  it("collects focused launchers and saved tables in the expandable statistics workspace", async () => {
     const ds = dataset();
     const result: AnalysisResult = {
       version: 1, id: "stats-1", name: "ANOVA · measurements.csv",
@@ -124,9 +124,10 @@ describe("AnalysisCenter", () => {
     expect(screen.getByRole("heading", { name: "Start an analysis" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /^Distribution/ })).toBeInTheDocument();
     expect(screen.getByText("ANOVA · measurements.csv")).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "term" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("ANOVA · measurements.csv"));
-    expect(screen.getByText("The groups differ.")).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "term" })).toBeInTheDocument();
+    expect(await screen.findByText("The groups differ.")).toBeInTheDocument();
+    expect(await screen.findByRole("columnheader", { name: "term" })).toBeInTheDocument();
     expect(screen.getByText("Review residuals.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open full result" }));
     expect(useApp.getState().openAnalysisResultId).toBe("stats-1");

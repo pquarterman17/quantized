@@ -286,9 +286,13 @@ describe("analysis result output actions", () => {
     expect(await copyAnalysisInlineTables(inline.id, 8)).toBe(false);
     expect(exportAnalysisInlineTables(inline.id, 8)).toBe(false);
     useApp.setState({ analysisResults: [{ ...inline, tables: inline.tables?.map((table) => ({ ...table })) }] });
-    expect(await copyAnalysisInlineTables(inline.id, 0, inline)).toBe(false);
-    expect(exportAnalysisInlineTables(inline.id, 0, inline)).toBe(false);
-    expect(copyText).toHaveBeenCalledTimes(2);
+    expect(await copyAnalysisInlineTables(inline.id, 0, inline.tables)).toBe(false);
+    expect(exportAnalysisInlineTables(inline.id, 0, inline.tables)).toBe(false);
+
+    useApp.setState({ analysisResults: [inline] });
+    updateAnalysisResultNotes(inline.id, "reviewed");
+    expect(await copyAnalysisInlineTables(inline.id, 0, inline.tables)).toBe(true);
+    expect(copyText).toHaveBeenCalledTimes(3);
   });
 
   it("refuses statistical report handoff unless the shared predicate says current", async () => {
