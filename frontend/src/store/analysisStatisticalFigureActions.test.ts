@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { AnalysisResult } from "../lib/analysisResult";
+import { statisticalResultFigureDrafts } from "../lib/statisticalResultFigures";
 import { createAnalysisStatisticalFigure } from "./analysisStatisticalFigureActions";
 import { useApp } from "./useApp";
 
@@ -19,6 +20,8 @@ function savedResult(): AnalysisResult {
   };
 }
 
+const savedDraft = () => statisticalResultFigureDrafts(useApp.getState().analysisResults[0])[0];
+
 beforeEach(() => {
   useApp.setState({
     datasets: [],
@@ -35,7 +38,7 @@ beforeEach(() => {
 describe("createAnalysisStatisticalFigure", () => {
   it("creates and opens one frozen editable document as one undoable gesture", () => {
     const tables = useApp.getState().analysisResults[0].tables;
-    const windowId = createAnalysisStatisticalFigure("distribution-1", "distribution-histogram-0", tables);
+    const windowId = createAnalysisStatisticalFigure("distribution-1", savedDraft(), tables);
 
     expect(windowId).toBeTruthy();
     const state = useApp.getState();
@@ -54,24 +57,28 @@ describe("createAnalysisStatisticalFigure", () => {
 
   it("allows harmless envelope edits when the scientific table reference is unchanged", () => {
     const current = useApp.getState().analysisResults[0];
+    const draft = savedDraft();
     useApp.setState({ analysisResults: [{ ...current, notes: "new interpretation" }] });
-    expect(createAnalysisStatisticalFigure(current.id, "distribution-histogram-0", current.tables)).toBeTruthy();
+    expect(createAnalysisStatisticalFigure(current.id, draft, current.tables)).toBeTruthy();
   });
 
   it("refuses stale lazy actions after tables change without creating history", () => {
     const current = useApp.getState().analysisResults[0];
+    const draft = savedDraft();
     const expected = current.tables;
     useApp.setState({ analysisResults: [{ ...current, tables: current.tables?.map((entry) => ({ ...entry })) }] });
 
-    expect(createAnalysisStatisticalFigure(current.id, "distribution-histogram-0", expected)).toBeNull();
+    expect(createAnalysisStatisticalFigure(current.id, draft, expected)).toBeNull();
     expect(useApp.getState().editableFigures).toHaveLength(0);
     expect(useApp.getState().plotWindows).toHaveLength(0);
     expect(useApp.getState().history).toHaveLength(0);
     expect(useApp.getState().status).toContain("changed while loading");
   });
 
-  it("refuses an unknown draft key without mutating the workspace", () => {
-    expect(createAnalysisStatisticalFigure("distribution-1", "missing")).toBeNull();
+  it("refuses a draft from another saved result without mutating the workspace", () => {
+    const draft = savedDraft();
+    const foreign = { ...draft, data: { ...draft.data, metadata: { ...draft.data.metadata, analysisResultId: "other" } } };
+    expect(createAnalysisStatisticalFigure("distribution-1", foreign)).toBeNull();
     expect(useApp.getState().editableFigures).toHaveLength(0);
     expect(useApp.getState().history).toHaveLength(0);
   });

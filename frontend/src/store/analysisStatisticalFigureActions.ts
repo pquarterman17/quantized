@@ -1,7 +1,7 @@
 import type { AnalysisResultTable } from "../lib/analysisResult";
 import { createFigureDocument } from "../lib/figureDocument";
 import { dedupeWindowTitle } from "../lib/plotview";
-import { statisticalResultFigureDrafts } from "../lib/statisticalResultFigures";
+import type { StatisticalResultFigureDraft } from "../lib/statisticalResultFigures";
 import { nextFigureId } from "./figureLifecycle";
 import { useApp } from "./useApp";
 import { withPlotWindowDocument } from "./windowDocuments";
@@ -11,7 +11,7 @@ import { withPlotWindowDocument } from "./windowDocuments";
  * may change during lazy loading, but changed scientific output refuses. */
 export function createAnalysisStatisticalFigure(
   resultId: string,
-  draftKey: string,
+  draft: StatisticalResultFigureDraft,
   expectedTables?: AnalysisResultTable[],
 ): string | null {
   const state = useApp.getState();
@@ -20,8 +20,7 @@ export function createAnalysisStatisticalFigure(
     state.setStatus("can't create statistical figure: the saved result changed while loading");
     return null;
   }
-  const draft = statisticalResultFigureDrafts(result).find((candidate) => candidate.key === draftKey);
-  if (!draft) {
+  if (draft.data.metadata?.analysisResultId !== result.id) {
     state.setStatus("can't create statistical figure: the saved figure data is unavailable");
     return null;
   }

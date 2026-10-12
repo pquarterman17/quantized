@@ -68,7 +68,7 @@ function FigureCard({ result, index, onOpen, onBuild, onReport }: {
 function StatisticalFigureCard({ draft, disabled, onCreate }: {
   draft: StatisticalResultFigureDraft;
   disabled: boolean;
-  onCreate: (key: string) => void;
+  onCreate: (draft: StatisticalResultFigureDraft) => void;
 }) {
   const channel = draft.view.yKeys?.[0] ?? 0;
   const path = previewDataPath(draft.data, channel);
@@ -82,7 +82,7 @@ function StatisticalFigureCard({ draft, disabled, onCreate }: {
       <strong>{draft.name}</strong>
       <span>{draft.description}</span>
       <div className="qz-analysis-figure-actions">
-        <Button size="sm" variant="primary" disabled={disabled} onClick={() => onCreate(draft.key)}>Create editable figure</Button>
+        <Button size="sm" variant="primary" disabled={disabled} onClick={() => onCreate(draft)}>Create editable figure</Button>
       </div>
     </div>
   </article>;
@@ -94,7 +94,7 @@ export default function AnalysisResultFigures({ result, disabled = false, onOpen
   onOpen: (index: number) => void;
   onBuild: (index: number) => void;
   onReport: (index: number) => void;
-  onCreateStatistical: (key: string) => void;
+  onCreateStatistical: (draft: StatisticalResultFigureDraft) => void;
 }) {
   const drafts = statisticalResultFigureDrafts(result);
   if (!result.plotBindings?.length && !drafts.length) return <p className="qz-analysis-empty">No figure-ready output was saved for this result.</p>;
