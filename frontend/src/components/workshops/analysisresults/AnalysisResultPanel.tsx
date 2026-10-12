@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { SNAPSHOT_RESULT_STATUS, dataFingerprint, isSnapshotResult, snapshotResultState } from "../../../lib/analysisResultFreshness";
 import { distributionRecipe } from "../../../lib/distributionAnalysisResult";
@@ -56,7 +56,8 @@ export default function AnalysisResultPanel() {
   const openReflectivityFitRecord = useApp((state) => state.openReflectivityFitRecord);
   const openQuickFigureBuilder = useApp((state) => state.openQuickFigureBuilder);
   const [tab, setTab] = useState<Tab>("overview");
-  const [busy, setBusy] = useState<"recalculate" | "rerun" | "duplicate" | "freeze" | "figure" | "report" | "export" | null>(null);
+  const [busy, setBusy] = useState<"recalculate" | "rerun" | "duplicate" | "freeze" | "figure" | "report" | "copy" | "export" | null>(null);
+  const inlineTableActionRef = useRef(false);
   const [notes, setNotes] = useState(result?.notes ?? "");
   useEffect(() => setNotes(result?.notes ?? ""), [result?.id, result?.notes]);
 
@@ -236,11 +237,23 @@ export default function AnalysisResultPanel() {
     try { await loadActions().then((m) => m.exportAnalysisFitTable(result.id), onLoadFailure); }
     finally { setBusy(null); }
   };
-  const exportInlineTables = async () => {
-    if (busy) return;
+  const exportInlineTables = async (tableIndex?: number) => {
+    if (busy || inlineTableActionRef.current) return;
+    inlineTableActionRef.current = true;
     setBusy("export");
-    try { await loadActions().then((m) => m.exportAnalysisInlineTables(result.id), onLoadFailure); }
-    finally { setBusy(null); }
+    try {
+      await loadActions().then((m) => m.exportAnalysisInlineTables(result.id, tableIndex, result), onLoadFailure);
+    }
+    finally { inlineTableActionRef.current = false; setBusy(null); }
+  };
+  const copyInlineTables = async (tableIndex?: number) => {
+    if (busy || inlineTableActionRef.current) return;
+    inlineTableActionRef.current = true;
+    setBusy("copy");
+    try {
+      await loadActions().then((m) => m.copyAnalysisInlineTables(result.id, tableIndex, result), onLoadFailure);
+    }
+    finally { inlineTableActionRef.current = false; setBusy(null); }
   };
   const sendInlineReport = async () => {
     if (busy) return;
@@ -343,7 +356,7 @@ export default function AnalysisResultPanel() {
               : !isSnapshot && !isFit && !isRefl && !sourceMissing && <p className="qz-analysis-caption">This result stays linked to its source. Recalculate updates this output; Rerun as new preserves it and creates another result.</p>}
           </>}
           {tab === "table" && (isSnapshot
-            ? <AnalysisResultSnapshot result={result} source={source} view="table" disabled={busy !== null} onExport={() => void exportInlineTables()} />
+            ? <AnalysisResultSnapshot result={result} source={source} view="table" disabled={busy !== null} onCopy={(index) => void copyInlineTables(index)} onExport={(index) => void exportInlineTables(index)} />
             : isRefl
             ? <AnalysisResultRefl result={result} record={reflFit} datasets={datasets} view="table" />
             : isPeak

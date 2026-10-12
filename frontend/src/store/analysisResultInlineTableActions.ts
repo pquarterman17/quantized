@@ -1,28 +1,58 @@
 import type { AnalysisResult } from "../lib/analysisResult";
 import { isSnapshotResult, snapshotResultState } from "../lib/analysisResultFreshness";
 import { reportEmit } from "../lib/api";
+import { copyText } from "../lib/clipboard";
 import { csvBlob } from "../lib/csvCell";
 import { saveBlob } from "../lib/download";
 import { stemFromName } from "../lib/exportActive";
-import { outputToCSV } from "../lib/statsTestsResults";
+import { outputToCSV, outputToTSV } from "../lib/statsTestsResults";
 import type { Dataset } from "../lib/types";
 import { addReportWithProvenance } from "./addReportWithProvenance";
 import { useApp } from "./useApp";
 
-/** Export the compact tables owned directly by a snapshot-style result. */
-export function exportAnalysisInlineTables(id: string): boolean {
+/** Export one or all compact tables owned directly by a snapshot result. */
+export function exportAnalysisInlineTables(id: string, tableIndex?: number, expected?: AnalysisResult): boolean {
   const state = useApp.getState();
   const result = state.analysisResults.find((item) => item.id === id);
-  if (!result?.tables?.length) {
-    state.setStatus(`can't export ${result?.name ?? "analysis result"}: it has no saved tables`);
+  const tables = result?.tables;
+  const oneTable = tableIndex === undefined ? undefined
+    : Number.isInteger(tableIndex) && tableIndex >= 0 ? tables?.[tableIndex] : undefined;
+  if (!result || (expected && result !== expected) || !tables?.length || (tableIndex !== undefined && !oneTable)) {
+    state.setStatus(`can't export ${result?.name ?? "analysis result"}: the saved table is unavailable`);
     return false;
   }
-  const sentence = typeof result.scalarValues?.Interpretation === "string"
-    ? result.scalarValues.Interpretation : result.name;
-  const filename = stemFromName(result.name).replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/, "") || "analysis-result";
-  saveBlob(csvBlob(outputToCSV({ sentence, tables: result.tables })), `${filename}.csv`);
-  state.setStatus(`exported ${result.tables.length} result table${result.tables.length === 1 ? "" : "s"}`);
+  const sentence = tableIndex === undefined && typeof result.scalarValues?.Interpretation === "string"
+    ? result.scalarValues.Interpretation : tableIndex === undefined ? result.name : "";
+  const selectedTables = oneTable ? [oneTable] : tables;
+  const suffix = oneTable ? `-${oneTable.title || `table-${tableIndex! + 1}`}` : "";
+  const filename = stemFromName(`${result.name}${suffix}`).replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/, "") || "analysis-result";
+  const csv = outputToCSV({ sentence, tables: selectedTables }).replace(/^\n+/, "");
+  saveBlob(csvBlob(csv), `${filename}.csv`);
+  state.setStatus(`exported ${oneTable ? oneTable.title || "result table" : `${tables.length} result table${tables.length === 1 ? "" : "s"}`}`);
   return true;
+}
+
+/** Copy either one saved result table or the complete table set as TSV. The
+ * table index is validated against the live result at click time so a stale
+ * accordion cannot copy a different result after deletion or replacement. */
+export async function copyAnalysisInlineTables(id: string, tableIndex?: number, expected?: AnalysisResult): Promise<boolean> {
+  const state = useApp.getState();
+  const result = state.analysisResults.find((item) => item.id === id);
+  const tables = result?.tables;
+  const oneTable = tableIndex === undefined ? undefined
+    : Number.isInteger(tableIndex) && tableIndex >= 0 ? tables?.[tableIndex] : undefined;
+  if (!result || (expected && result !== expected) || !tables?.length || (tableIndex !== undefined && !oneTable)) {
+    state.setStatus(`can't copy ${result?.name ?? "analysis result"}: the saved table is unavailable`);
+    return false;
+  }
+  const sentence = tableIndex === undefined && typeof result.scalarValues?.Interpretation === "string"
+    ? result.scalarValues.Interpretation : tableIndex === undefined ? result.name : "";
+  const text = outputToTSV({ sentence, tables: oneTable ? [oneTable] : tables }).replace(/^\n+/, "");
+  const copied = await copyText(text);
+  useApp.getState().setStatus(copied
+    ? `copied ${oneTable ? oneTable.title || "result table" : `${tables.length} result table${tables.length === 1 ? "" : "s"}`}`
+    : "clipboard unavailable — use Export instead");
+  return copied;
 }
 
 function snapshotCurrent(result: AnalysisResult, datasets: readonly Dataset[]): boolean {

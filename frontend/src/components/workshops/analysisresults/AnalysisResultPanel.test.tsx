@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalysisResult } from "../../../lib/analysisResult";
 import type { Dataset } from "../../../lib/types";
 
-const { rerun, recalculate, recalculateFit, sendReport, exportInline, reportInline } = vi.hoisted(() => ({
-  rerun: vi.fn(), recalculate: vi.fn(), recalculateFit: vi.fn(), sendReport: vi.fn(), exportInline: vi.fn(), reportInline: vi.fn(),
+const { rerun, recalculate, recalculateFit, sendReport, copyInline, exportInline, reportInline } = vi.hoisted(() => ({
+  rerun: vi.fn(), recalculate: vi.fn(), recalculateFit: vi.fn(), sendReport: vi.fn(), copyInline: vi.fn(), exportInline: vi.fn(), reportInline: vi.fn(),
 }));
 vi.mock("../../../store/signalWorksheetCommand", () => ({ createSignalWorksheetFromApp: rerun }));
 vi.mock("../../../store/analysisResultActions", async (importOriginal) => ({
@@ -13,6 +13,7 @@ vi.mock("../../../store/analysisResultActions", async (importOriginal) => ({
   recalculateAnalysisResult: recalculate,
   recalculateFitAnalysisResult: recalculateFit,
   sendAnalysisResultPlotToReport: sendReport,
+  copyAnalysisInlineTables: copyInline,
   exportAnalysisInlineTables: exportInline,
   sendAnalysisInlineTableToReport: reportInline,
 }));
@@ -306,7 +307,7 @@ describe("AnalysisResultPanel", () => {
     fireEvent.click(exportButton);
     expect(exportButton).toBeDisabled();
     await waitFor(() => expect(exportButton).toBeEnabled());
-    expect(exportInline).toHaveBeenCalledWith("stat");
+    expect(exportInline).toHaveBeenCalledWith("stat", undefined, stat);
     expect(screen.getByRole("button", { name: "Send summary to report" }).getAttribute("title")).toMatch(/Adds only the “.+” table/);
     fireEvent.click(screen.getByRole("button", { name: "Send summary to report" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Send summary to report" })).toBeEnabled());
@@ -376,6 +377,35 @@ describe("AnalysisResultPanel", () => {
       col: 0, byCol: null, fitDist: "none", compareOpen: false, percentileInput: 90,
     });
     expect(useApp.getState()).toMatchObject({ activeId: "source", distributionOpen: true, openAnalysisResultId: null });
+  });
+
+  it("copies one table or the complete table set from a snapshot result", async () => {
+    const distribution = distributionAnalysisResult(
+      "distribution", source,
+      { col: 0, byCol: null, fitDist: "none", compareOpen: false, percentileInput: 90 },
+      { label: "Signal", byLabel: null, hist: { counts: [1], centers: [1.5], edges: [1, 2] },
+        desc: { N: 2, mean: 1.5, median: 1.5, std: 0.5, min: 1, q1: 1.25, q3: 1.75, max: 2 },
+        norm: null, normNote: "need ≥ 3 values", levels: [], totalLevels: 0, rankedFits: [],
+        rankingMetric: "ks_p", quantiles: null, percentileValue: null, skipped: [] },
+    );
+    copyInline.mockResolvedValue(true);
+    useApp.setState({ datasets: [source], analysisResults: [distribution], openAnalysisResultId: distribution.id });
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Table" }));
+    const copyTable = screen.getAllByRole("button", { name: "Copy table" })[0];
+    fireEvent.click(copyTable);
+    fireEvent.click(copyTable);
+    await waitFor(() => expect(copyTable).toBeEnabled());
+    expect(copyInline).toHaveBeenCalledWith(distribution.id, 0, distribution);
+    expect(copyInline).toHaveBeenCalledTimes(1);
+    const exportTable = screen.getAllByRole("button", { name: "Export table…" })[0];
+    fireEvent.click(exportTable);
+    await waitFor(() => expect(exportTable).toBeEnabled());
+    expect(exportInline).toHaveBeenCalledWith(distribution.id, 0, distribution);
+    const copyAll = screen.getByRole("button", { name: "Copy all tables" });
+    fireEvent.click(copyAll);
+    await waitFor(() => expect(copyAll).toBeEnabled());
+    expect(copyInline).toHaveBeenCalledWith(distribution.id, undefined, distribution);
   });
 
   it("does not present a lazy Distribution source as verified current", () => {

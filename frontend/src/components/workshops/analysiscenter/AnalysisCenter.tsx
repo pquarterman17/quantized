@@ -2,20 +2,23 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ANALYSIS_CATEGORIES, analysisTools, matchesAnalysisSearch, type AnalysisCategory } from "../../../lib/analysisCenter";
 import { useEscapeSurface } from "../../../lib/escapeStack";
+import { isStatisticalResult } from "../../../lib/statisticalResultWorkspace";
 import { useAnalysisCenter } from "../../../store/analysisCenter";
 import { analysisCenterActions, launchAnalysisCenterTool, openAnalysisResult } from "../../../store/analysisCenterRun";
 import { useApp } from "../../../store/useApp";
 import { Button } from "../../primitives";
 import AnalysisResultsList from "./AnalysisResultsList";
 import AnalysisToolCard from "./AnalysisToolCard";
+import StatisticalResultsWorkspace from "./StatisticalResultsWorkspace";
 import "./analysisCenter.css";
 
-type View = "recommended" | "recent" | "favorites" | "all" | "results";
+type View = "recommended" | "recent" | "favorites" | "all" | "statistics" | "results";
 const VIEWS: readonly { id: View; label: string }[] = [
   { id: "recommended", label: "Recommended" },
   { id: "recent", label: "Recent" },
   { id: "favorites", label: "Favorites" },
   { id: "all", label: "All tools" },
+  { id: "statistics", label: "Statistics workspace" },
   { id: "results", label: "Existing results" },
 ];
 
@@ -47,7 +50,7 @@ export default function AnalysisCenter({ onClose, onBack }: { onClose: () => voi
   const visible = tools
     .filter((tool) => category === "all" || tool.category === category)
     .filter((tool) => matchesAnalysisSearch(tool, query))
-    .filter((tool) => view === "all" || view === "results" || (view === "recommended" ? tool.recommended : view === "favorites" ? favorites.includes(tool.action.id) : rank.has(tool.action.id)))
+    .filter((tool) => view === "all" || view === "statistics" || view === "results" || (view === "recommended" ? tool.recommended : view === "favorites" ? favorites.includes(tool.action.id) : rank.has(tool.action.id)))
     .sort((a, b) => view === "recent" ? (rank.get(a.action.id) ?? 999) - (rank.get(b.action.id) ?? 999) : a.action.label.localeCompare(b.action.label));
 
   const launch = async (toolId: string): Promise<void> => {
@@ -89,7 +92,7 @@ export default function AnalysisCenter({ onClose, onBack }: { onClose: () => voi
           <span>Search tools and results</span>
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="e.g. peaks, PCA, reflectivity…" />
         </label>
-        {view !== "results" && (
+        {view !== "results" && view !== "statistics" && (
           <label>
             <span>Category</span>
             <select value={category} onChange={(event) => setCategory(event.target.value as AnalysisCategory | "all")}>
@@ -105,12 +108,24 @@ export default function AnalysisCenter({ onClose, onBack }: { onClose: () => voi
           <button key={entry.id} type="button" className={view === entry.id ? "active" : ""} aria-current={view === entry.id ? "page" : undefined} onClick={() => setView(entry.id)}>
             {entry.label}
             {entry.id === "favorites" && favorites.length > 0 ? ` (${favorites.length})` : ""}
+            {entry.id === "statistics" && results.some(isStatisticalResult) ? ` (${results.filter(isStatisticalResult).length})` : ""}
             {entry.id === "results" && results.length > 0 ? ` (${results.length})` : ""}
           </button>
         ))}
       </nav>
 
-      {view === "results" ? (
+      {view === "statistics" ? (
+        <StatisticalResultsWorkspace
+          tools={tools.filter((tool) => tool.category === "Statistics" && matchesAnalysisSearch(tool, query))}
+          results={results}
+          datasets={datasets}
+          activeId={activeId}
+          query={query}
+          busyId={busyId}
+          onLaunch={(toolId) => void launch(toolId)}
+          onOpen={openAnalysisResult}
+        />
+      ) : view === "results" ? (
         <AnalysisResultsList results={results} datasets={datasets} activeId={activeId} query={query} onOpen={openAnalysisResult} />
       ) : visible.length > 0 ? (
         <div className="qzk-analysis-grid">

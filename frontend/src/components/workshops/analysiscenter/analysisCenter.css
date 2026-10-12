@@ -35,4 +35,35 @@
 .qzk-analysis-result p { font-size: var(--type-small); }
 .qzk-analysis-result span { color: var(--text-faint); font-size: var(--type-nano); }
 .qzk-analysis-result-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px; }
-@container (max-width: 640px) { .qzk-analysis-head { flex-direction: column; } .qzk-analysis-controls { grid-template-columns: 1fr; } .qzk-analysis-context { grid-template-columns: 1fr; } .qzk-analysis-context p { grid-column: auto; } .qzk-analysis-result { align-items: flex-start; flex-direction: column; } .qzk-analysis-result-actions { justify-content: flex-start; } }
+.qzk-stats-workspace { display: grid; gap: 22px; }
+.qzk-stats-launchers, .qzk-stats-results { display: grid; gap: 10px; }
+.qzk-stats-section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.qzk-stats-section-head h2 { margin: 0 0 4px; font-size: var(--type-title); }
+.qzk-stats-section-head p { margin: 0; color: var(--text-dim); font-size: var(--type-small); }
+.qzk-stats-launcher-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.qzk-stats-launcher { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 11px 12px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-1); }
+.qzk-stats-launcher.unavailable { background: color-mix(in srgb, var(--surface-1) 70%, var(--surface-0)); }
+.qzk-stats-launcher h3 { margin: 0 0 3px; font-size: var(--type-small); }
+.qzk-stats-launcher p, .qzk-stats-launcher span { display: block; margin: 0; color: var(--text-dim); font-size: var(--type-nano); line-height: 1.4; }
+.qzk-stats-launcher span { margin-top: 4px; color: var(--warn); }
+.qzk-stats-launcher .qz-btn { flex: none; }
+.qzk-stats-current-only { display: flex; flex: none; align-items: center; gap: 7px; color: var(--text-dim); font-size: var(--type-small); }
+.qzk-stats-result { overflow: clip; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-1); }
+.qzk-stats-result > summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 14px; cursor: pointer; list-style-position: inside; }
+.qzk-stats-result > summary:hover { background: var(--surface-2); }
+.qzk-stats-result-title { display: inline-flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; vertical-align: middle; }
+.qzk-stats-result-title strong { overflow-wrap: anywhere; }
+.qzk-stats-result-title small, .qzk-stats-result-meta small { color: var(--text-faint); }
+.qzk-stats-result-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
+.qzk-stats-result-body { display: grid; gap: 12px; padding: 14px; border-top: 1px solid var(--border); }
+.qzk-stats-interpretation { margin: 0; padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--surface-2); line-height: 1.5; }
+.qzk-stats-warnings { color: var(--warn); font-size: var(--type-small); }
+.qzk-stats-warnings ul { margin: 5px 0 0; padding-left: 20px; }
+.qzk-stats-table { min-width: 0; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.qzk-stats-table header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.qzk-stats-table h3 { margin: 0; font-size: var(--type-small); }
+.qzk-stats-table-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.qzk-stats-table > p, .qzk-stats-more { margin: 7px 0 0; color: var(--text-faint); font-size: var(--type-nano); }
+.qzk-stats-table-scroll { overflow: auto; max-height: 360px; }
+.qzk-stats-result-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+@container (max-width: 640px) { .qzk-analysis-head { flex-direction: column; } .qzk-analysis-controls { grid-template-columns: 1fr; } .qzk-analysis-context { grid-template-columns: 1fr; } .qzk-analysis-context p { grid-column: auto; } .qzk-analysis-result { align-items: flex-start; flex-direction: column; } .qzk-analysis-result-actions { justify-content: flex-start; } .qzk-stats-section-head, .qzk-stats-result > summary { align-items: flex-start; flex-direction: column; } .qzk-stats-result-meta { justify-content: flex-start; } }

@@ -5,14 +5,17 @@ import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import type { PeakTable } from "../lib/peakTable";
 import type { Dataset } from "../lib/types";
 
-const { recompute, saveBlob, sendFigureToReport, reportEmit } = vi.hoisted(() => ({
-  recompute: vi.fn(), saveBlob: vi.fn(), sendFigureToReport: vi.fn(), reportEmit: vi.fn(),
+const { recompute, saveBlob, sendFigureToReport, reportEmit, copyText } = vi.hoisted(() => ({
+  recompute: vi.fn(), saveBlob: vi.fn(), sendFigureToReport: vi.fn(), reportEmit: vi.fn(), copyText: vi.fn(),
 }));
 vi.mock("./derivedWorksheets", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./derivedWorksheets")>()),
   recomputeDerivedSheet: recompute,
 }));
 vi.mock("../lib/download", () => ({ saveBlob }));
+vi.mock("../lib/clipboard", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/clipboard")>()), copyText,
+}));
 vi.mock("../commands/plotCommands", () => ({ sendFigureToReport }));
 vi.mock("../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/api")>()), reportEmit,
@@ -20,6 +23,7 @@ vi.mock("../lib/api", async (importOriginal) => ({
 
 import {
   duplicateAnalysisResult,
+  copyAnalysisInlineTables,
   exportAnalysisInlineTables,
   exportAnalysisPeakTable,
   exportAnalysisResultTable,
@@ -137,6 +141,8 @@ describe("analysis result output actions", () => {
     saveBlob.mockReset();
     sendFigureToReport.mockReset();
     reportEmit.mockReset();
+    copyText.mockReset();
+    copyText.mockResolvedValue(true);
     useApp.setState({
       datasets: [source, output], activeId: "source", analysisResults: [rich],
       reports: [], history: [], future: [], yKeys: null, stageTab: "worksheet",
@@ -258,6 +264,31 @@ describe("analysis result output actions", () => {
     finish({ report: { title: "stale", sections: [] } });
     expect(await sourceRace).toBe(false);
     expect(useApp.getState().reports).toHaveLength(1);
+  });
+
+  it("copies one or every inline result table and rejects a stale table index", async () => {
+    const inline: AnalysisResult = {
+      ...RESULT, producer: { id: "statistical-test", label: "Statistical Test", version: 1 },
+      outputs: [], scalarValues: { Interpretation: "No difference." },
+      tables: [
+        { title: "Summary", columns: ["statistic", "value"], rows: [["p", 0.2]] },
+        { title: "Effects", columns: ["effect"], rows: [[0.1]] },
+      ],
+    };
+    useApp.setState({ analysisResults: [inline] });
+
+    expect(exportAnalysisInlineTables(inline.id, 1)).toBe(true);
+    expect(saveBlob).toHaveBeenLastCalledWith(expect.any(Blob), "Smooth · Trace-Effects.csv");
+    expect(await copyAnalysisInlineTables(inline.id, 1)).toBe(true);
+    expect(copyText).toHaveBeenLastCalledWith("Effects\neffect\n0.1");
+    expect(await copyAnalysisInlineTables(inline.id)).toBe(true);
+    expect(copyText).toHaveBeenLastCalledWith(expect.stringContaining("No difference.\n\nSummary"));
+    expect(await copyAnalysisInlineTables(inline.id, 8)).toBe(false);
+    expect(exportAnalysisInlineTables(inline.id, 8)).toBe(false);
+    useApp.setState({ analysisResults: [{ ...inline, tables: inline.tables?.map((table) => ({ ...table })) }] });
+    expect(await copyAnalysisInlineTables(inline.id, 0, inline)).toBe(false);
+    expect(exportAnalysisInlineTables(inline.id, 0, inline)).toBe(false);
+    expect(copyText).toHaveBeenCalledTimes(2);
   });
 
   it("refuses statistical report handoff unless the shared predicate says current", async () => {

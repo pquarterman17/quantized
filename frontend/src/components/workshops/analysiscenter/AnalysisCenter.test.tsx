@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AnalysisResult } from "../../../lib/analysisResult";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { Dataset } from "../../../lib/types";
 import { resetAnalysisCenterPreferencesForTests, useAnalysisCenter } from "../../../store/analysisCenter";
 import { useApp } from "../../../store/useApp";
@@ -103,5 +104,31 @@ describe("AnalysisCenter", () => {
     expect(screen.getByText("Current worksheet")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open result" }));
     expect(useApp.getState().openAnalysisResultId).toBe("r1");
+  });
+
+  it("collects focused launchers and saved tables in the expandable statistics workspace", () => {
+    const ds = dataset();
+    const result: AnalysisResult = {
+      version: 1, id: "stats-1", name: "ANOVA · measurements.csv",
+      producer: { id: "statistical-test", label: "Statistical Test", version: 1 },
+      sources: [{ datasetId: ds.id, role: "input" }], outputs: [],
+      scalarValues: { Interpretation: "The groups differ." },
+      tables: [{ title: "Effect", columns: ["term", "p"], rows: [["Group", 0.02]] }],
+      sourceFingerprint: analysisDataFingerprint(ds), warnings: ["Review residuals."],
+      createdAt: "2026-10-10T12:00:00Z",
+    };
+    useApp.setState({ datasets: [ds], activeId: ds.id, analysisResults: [result] });
+    render(<AnalysisCenter onClose={() => {}} onBack={() => {}} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Statistics workspace/ }));
+    expect(screen.getByRole("heading", { name: "Start an analysis" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Distribution/ })).toBeInTheDocument();
+    expect(screen.getByText("ANOVA · measurements.csv")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("ANOVA · measurements.csv"));
+    expect(screen.getByText("The groups differ.")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "term" })).toBeInTheDocument();
+    expect(screen.getByText("Review residuals.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open full result" }));
+    expect(useApp.getState().openAnalysisResultId).toBe("stats-1");
   });
 });
