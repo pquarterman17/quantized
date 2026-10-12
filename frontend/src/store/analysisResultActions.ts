@@ -26,7 +26,7 @@ import { useApp } from "./useApp";
 
 export { resolveAnalysisResultPlot } from "./analysisResultPlotResolve";
 export type { PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
-export { exportAnalysisInlineTables, sendAnalysisInlineTableToReport } from "./analysisResultInlineTableActions";
+export { copyAnalysisInlineTables, exportAnalysisInlineTables, sendAnalysisInlineTableToReport } from "./analysisResultInlineTableActions";
 
 export function registerAnalysisResult(result: AnalysisResult, open = true): void {
   const current = useApp.getState().analysisResults;

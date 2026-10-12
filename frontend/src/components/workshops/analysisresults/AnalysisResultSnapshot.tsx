@@ -18,11 +18,12 @@ function display(value: AnalysisResultValue): string {
   return JSON.stringify(value);
 }
 
-export default function AnalysisResultSnapshot({ result, source, view, onExport, disabled = false }: {
+export default function AnalysisResultSnapshot({ result, source, view, onExport, onCopy, disabled = false }: {
   result: AnalysisResult;
   source: Dataset | undefined;
   view: "overview" | "table" | "provenance";
-  onExport: () => void;
+  onExport: (tableIndex?: number) => void;
+  onCopy?: (tableIndex?: number) => void;
   disabled?: boolean;
 }) {
   const interpretation = result.scalarValues?.Interpretation;
@@ -37,13 +38,22 @@ export default function AnalysisResultSnapshot({ result, source, view, onExport,
   </>;
 
   if (view === "table") return result.tables?.length ? <div>
-    {result.tables.map((table, index) => <section key={`${table.title ?? "table"}-${index}`} style={{ marginBottom: 12 }}>
-      {table.title && <h4>{table.title}</h4>}
+    {result.tables.map((table, index) => <section key={`${table.title ?? "table"}-${index}`} className="qz-analysis-snapshot-table">
+      <header>
+        <h4>{table.title || `Table ${index + 1}`}</h4>
+        <span className="qz-analysis-snapshot-table-actions">
+          {onCopy && <Button size="sm" disabled={disabled} onClick={() => onCopy(index)}>Copy table</Button>}
+          <Button size="sm" disabled={disabled} onClick={() => onExport(index)}>Export table…</Button>
+        </span>
+      </header>
       <DataTable columns={table.columns} rows={table.rows.slice(0, 100).map((row) => row.map((cell) =>
         typeof cell === "number" ? fmtNum(cell) : (cell ?? "—")))} />
       {table.rows.length > 100 && <p className="qz-analysis-caption">Showing 100 of {table.rows.length} rows. Export includes the complete table.</p>}
     </section>)}
-    <Button disabled={disabled} onClick={onExport}>Export all tables…</Button>
+    <div className="qz-analysis-snapshot-actions">
+      {onCopy && <Button disabled={disabled} onClick={() => onCopy()}>Copy all tables</Button>}
+      <Button disabled={disabled} onClick={() => onExport()}>Export all tables…</Button>
+    </div>
   </div> : <p className="qz-analysis-empty">No saved tables are available.</p>;
 
   const params = result.parameters ?? {};

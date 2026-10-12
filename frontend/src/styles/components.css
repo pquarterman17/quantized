@@ -651,6 +651,11 @@
 .qz-analysis-summary dd { margin: 3px 0 0; overflow-wrap: anywhere; }
 .qz-analysis-caption, .qz-analysis-empty { color: var(--text-dim); }
 .qz-analysis-caption { margin: 14px 0 0; font-size: 12px; }
+.qz-analysis-snapshot-table { margin-bottom: 12px; }
+.qz-analysis-snapshot-table > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.qz-analysis-snapshot-table > header h4 { margin: 0; }
+.qz-analysis-snapshot-table-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.qz-analysis-snapshot-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .qz-analysis-subtoolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .qz-analysis-subtoolbar label { display: flex; align-items: center; gap: 6px; margin-right: auto; color: var(--text-dim); }
 .qz-analysis-subtoolbar select { max-width: 280px; }

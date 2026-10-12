@@ -8,7 +8,7 @@
 // same request, so rows name the user's columns, not "group 1" or "x2".
 
 import type { AnovaTableRow, MultiRegressionResult, StatsTestResult } from "./api/statsTests";
-import { csvTextCell } from "./csvCell";
+import { csvTextCell, neutralizeFormula } from "./csvCell";
 
 export type Cell = string | number | null;
 
@@ -310,10 +310,10 @@ export function describeResult(result: StatsTestResult, labels: string[], alpha:
   }
 }
 
-function serialize(out: TestOutput, sep: string, cell: (v: Cell) => string): string {
-  const lines = [cell(out.sentence)];
-  for (const t of out.tables) {
-    lines.push("");
+function serialize(sentence: string | null, tables: readonly ResultTable[], sep: string, cell: (v: Cell) => string): string {
+  const lines = sentence === null ? [] : [cell(sentence)];
+  for (const t of tables) {
+    if (lines.length) lines.push("");
     if (t.title) lines.push(cell(t.title));
     lines.push(t.columns.map(cell).join(sep));
     for (const row of t.rows) lines.push(row.map(cell).join(sep));
@@ -322,14 +322,28 @@ function serialize(out: TestOutput, sep: string, cell: (v: Cell) => string): str
 }
 
 const plain = (v: Cell): string => (v == null ? "" : String(v));
+/** Spreadsheet-safe TSV cell. Tabs/newlines cannot be quoted in a paste, so
+ * flatten them; formula-like imported labels get the same OWASP guard as CSV. */
+const tsvCell = (v: Cell): string => typeof v === "string"
+  ? neutralizeFormula(v).replace(/[\t\r\n]+/g, " ") : plain(v);
 
 /** The sentence and every table as tab-separated text (for the clipboard). */
 export function outputToTSV(out: TestOutput): string {
-  return serialize(out, "\t", plain);
+  return serialize(out.sentence, out.tables, "\t", tsvCell);
+}
+
+/** One or more tables without an artificial blank interpretation line. */
+export function tablesToTSV(tables: readonly ResultTable[]): string {
+  return serialize(null, tables, "\t", tsvCell);
 }
 
 /** The sentence and every table as RFC-4180 CSV (for Export). */
 export function outputToCSV(out: TestOutput): string {
   // Text cells may carry file-derived labels: formula-neutralized (OWASP).
-  return serialize(out, ",", (v) => (typeof v === "string" ? csvTextCell(v) : plain(v)));
+  return serialize(out.sentence, out.tables, ",", (v) => (typeof v === "string" ? csvTextCell(v) : plain(v)));
+}
+
+/** One or more RFC-4180 tables without an artificial blank sentence line. */
+export function tablesToCSV(tables: readonly ResultTable[]): string {
+  return serialize(null, tables, ",", (v) => (typeof v === "string" ? csvTextCell(v) : plain(v)));
 }
