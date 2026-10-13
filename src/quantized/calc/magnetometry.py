@@ -166,10 +166,10 @@ def _moment_factor(
         if mass_g <= 0:
             return 1.0, False, "Cannot convert moment to emu/g: sample mass is 0."
         return 1.0 / mass_g, True, ""
-    if to_u in ("emu/cm³", "kA/m"):
+    if to_u in ("emu/cm³", "A/m", "kA/m"):
         if vol_cm3 <= 0:
             return 1.0, False, f"Cannot convert moment to {to_u}: sample volume is 0."
-        return 1.0 / vol_cm3, True, ""
+        return (1000.0 if to_u == "A/m" else 1.0) / vol_cm3, True, ""
     return 1.0, False, f'Unknown target moment unit "{to_u}"'
 
 
@@ -193,9 +193,9 @@ def convert_mag_units(
     """Convert field (x) and moment (y) units. Port of convertMagUnits.
 
     Returns ``(x_out, y_out, x_unit, y_unit, warning)``. Moment conversions are
-    sample-aware (emu/g needs mass, emu/cm³ and kA/m need volume) and only from
-    ``emu``. On a failed conversion the data is left unchanged, the unit label
-    reverts to the source, and a message is appended to ``warning``.
+    sample-aware (emu/g needs mass; emu/cm³, A/m, and kA/m need volume) and
+    only from ``emu``. On a failed conversion the data is left unchanged, the
+    unit label reverts to the source, and a message is appended to ``warning``.
     """
     x_out = np.asarray(x, dtype=float)
     y_out = np.asarray(y, dtype=float)

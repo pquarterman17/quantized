@@ -52,6 +52,7 @@ export default function AnalysisResultPanel() {
   const setXKey = useApp((state) => state.setXKey);
   const setYKeys = useApp((state) => state.setYKeys);
   const setStageTab = useApp((state) => state.setStageTab);
+  const setRowSelection = useApp((state) => state.setRowSelection);
   const setPeaksOpen = useApp((state) => state.setPeaksOpen);
   const setCurveFitOpen = useApp((state) => state.setCurveFitOpen);
   const openReflectivityFitRecord = useApp((state) => state.openReflectivityFitRecord);
@@ -105,6 +106,12 @@ export default function AnalysisResultPanel() {
     setActive(datasetId);
     setStageTab("worksheet");
     close();
+  };
+  const selectSourceRows = (rows: number[]) => {
+    if (!source || snapshotState !== "current" || !rows.length) return;
+    setActive(source.id);
+    setRowSelection(rows);
+    setStageTab("worksheet");
   };
   const editPeaks = () => {
     if (!source) return;
@@ -339,7 +346,9 @@ export default function AnalysisResultPanel() {
               : !isSnapshot && !isFit && !isRefl && !sourceMissing && <p className="qz-analysis-caption">This result stays linked to its source. Recalculate updates this output; Rerun as new preserves it and creates another result.</p>}
           </>}
           {tab === "table" && (isSnapshot
-            ? <AnalysisResultSnapshot result={result} source={source} view="table" disabled={busy !== null} onCopy={(index) => void copyInlineTables(index)} onExport={(index) => void exportInlineTables(index)} />
+            ? <AnalysisResultSnapshot result={result} source={source} view="table" disabled={busy !== null}
+              selectionEnabled={snapshotState === "current"} onSelectRows={selectSourceRows}
+              onCopy={(index) => void copyInlineTables(index)} onExport={(index) => void exportInlineTables(index)} />
             : isRefl
             ? <AnalysisResultRefl result={result} record={reflFit} datasets={datasets} view="table" />
             : isPeak

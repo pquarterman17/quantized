@@ -139,7 +139,11 @@ export default function PawleySection() {
               ],
             ]}
           />
-          <Button size="sm" style={{ marginTop: 8 }} onClick={s.toLibrary}>→ Library</Button>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+            <Button size="sm" onClick={s.toLibrary}>→ Library</Button>
+            <Button size="sm" title="Add calculated reflection positions as vertical lines on the current plot."
+              onClick={s.addReferenceLines}>Add phase reference lines</Button>
+          </div>
         </div>
       )}
     </div>

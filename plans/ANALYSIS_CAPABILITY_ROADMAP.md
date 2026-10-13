@@ -396,11 +396,18 @@ menu names.
 - [x] Combine Distribution, Fit Y by X, Test Chooser, Statistical Tests,
   Multivariate, Variability, and Outlier Screening into one expandable result
   workspace while retaining focused launch shortcuts.
-- [ ] Standardize effect sizes, confidence intervals, assumption checks,
+- [x] Standardize effect sizes, confidence intervals, assumption checks,
   multiple-comparison adjustment, missing-data policy, and plain-language
-  interpretation.
+  interpretation. The common result overview now indexes the evidence saved by
+  every statistical producer under the same five headings and explicitly says
+  when a producer did not record an item; absence is never presented as a
+  passed assumption.
 - [ ] Add linked result tables/plots whose row and group selections highlight
   the source worksheet and plot.
+  - [x] Exact saved source rows plus Distribution, Fit Y by X, and Variability
+    aggregate rows can highlight their originating worksheet rows. The action
+    is disabled when the saved result is stale, pending, or missing its source.
+  - [ ] Carry that linked selection into result figures and plot-side brushing.
 - [x] Make every saved statistical table directly copyable and exportable,
   individually or as a complete result.
 - [x] Make saved statistical figures open as normal editable Quantized figures.
@@ -421,10 +428,20 @@ menu names.
 
 - [ ] XRD: phase/reference overlays, better search/match handoff, crystallite
   analysis history, and batch comparison after the current peak/Pawley tools.
+  - [x] First reference-overlay slice: a completed Pawley refinement can add
+    its calculated in-range reflection positions to the current plot as
+    deduplicated vertical reference lines in one undoable action. External
+    phase-library search/match and labeled reference-stick patterns remain.
 - [ ] Reflectometry: parameter-correlation and posterior-diagnostic workspace,
   linked fit families, and constrained batch series.
 - [ ] Magnetometry: unit-aware sample geometry normalization, temperature/field
   series comparison, and derived magnetic quantities.
+  - [x] First normalization slice: mass, direct volume, rectangular-film,
+    direct-area-film, and circular-film inputs accept independent laboratory
+    units; the UI previews canonical volume, blocks incomplete normalized
+    conversions, supports emu/g, emu/cm³, A/m, and kA/m, and records the entered
+    geometry plus canonical divisor on the derived worksheet without changing
+    the source.
 - [ ] SIMS: multi-profile alignment, interfaces/junction comparison, and batch
   region tables.
 - [ ] Spectroscopy: peak-family presets, component area/ratio tables, and batch
@@ -473,6 +490,7 @@ menu names.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-10-12 | ChatGPT-Sol (Codex) | Completed Workstream E's standardized-reporting slice and the worksheet half of linked result selection, then began two orthogonal Workstream F depth slices. Statistical result overviews now use one evidence-first reporting structure for effect sizes, intervals, assumptions, multiple comparisons, and missing-data handling. Saved outlier/PCA source rows and grouped Distribution/Fit Y by X/Variability rows can select their exact current source rows, but stale results cannot drive selection. Magnetometry normalization now accepts mass and four geometry paths with per-field units and records reproducible derived-data provenance; A/m volume magnetization is supported. Pawley results can add calculated reflection positions as deduplicated plot reference lines. | Focused frontend reporting/selection/geometry/magnetometry/Pawley checks pass 260/260 and architecture passes 56/56; forced TypeScript, full ESLint, Ruff, mypy, production build, and the unchanged 834,257-byte eager-bundle gate pass at 834,253 bytes. The complete backend passes 7,672 tests with 240 skips and 25 expected failures. Real-corpus qualification imported a Quantum Design VSM loop and a Panalytical XRD scan, verified the 5 cm × 5 cm × 30 nm A/m conversion without changing the source array, and produced 54 finite Pawley reference positions. The monolithic Windows frontend runner entered its documented zero-test pre-collection failure state; every changed frontend suite passed individually, and CI remains the complete-suite PR gate. |
 | 2026-10-11 | ChatGPT-Sol (Codex) | Completed Workstream E's editable-statistical-figure slice. Saved Distribution, all three Fit Y by X modes (including saved regression-interval bounds), PCA, Variability, and Outlier outputs now offer figure-ready cards in the result workspace and create normal frozen editable figures. The figures derive strictly from the result envelope's saved tables, carry compact result/producer/draft provenance, preserve categorical labels and saved SD uncertainty, remain usable without the source worksheet, and refuse creation if scientific tables change during lazy loading. Observed bivariate points intentionally remain in the source worksheet because the durable result stores the fitted curve rather than duplicating raw observations. | Focused adapters, creation lifecycle, result UI, frozen persistence, render-contract, workspace round-trip, and architecture verification pass 210/210; the final review-fix regression gate passes 98/98. The full local frontend run reached 17,122 passing tests plus 2 expected failures, and the complete clean-install CI matrix subsequently passed. Changed-file ESLint, forced TypeScript, preload verification, production build, and the unchanged 834,257-byte eager-bundle gate pass at exactly 834,256 bytes. The adversarial and external review passes added table-identity concurrency guards, same-render double-click protection, one-gesture Undo, malformed/non-finite-row refusal, explicit empty-outlier behavior, provenance metadata, visible busy-state locking, named confidence/prediction intervals, truthful missing-SD descriptions, histogram units, PCA variance labels, stale-result refusal, frozen freshness/fingerprint stamps, removal of entirely empty SD bindings, and a click-only action boundary that leaves the eager graph unchanged from the base. |
 | 2026-10-11 | ChatGPT-Sol (Codex) | Began Workstream E with a unified Statistics workspace inside the Analysis Center. Distribution, Fit Y by X, Test Chooser, Statistical Tests, Multivariate, Variability, and Outlier Screening retain their canonical focused launchers, while all six result-producing families now collect in one searchable, expandable inventory. Each result shows its source, shared freshness state, interpretation, warnings, and bounded inline table previews; active-worksheet filtering is explicit rather than automatic. Every saved table can now be copied or exported individually, and each result can be copied/exported as a complete set from either the unified workspace or the full result window. At the end of this slice, standardized statistical semantics, linked table/plot selection, and editable statistical figures remained. | Focused helper/store/Analysis Center/full-result verification passes 59/59; architecture/preload verification passes 67/67; forced TypeScript, full ESLint, production build, preload verification, and the unchanged 814.7 kB eager-bundle gate pass. The adversarial pass bounded mounted tables/rows, kept non-statistical and batch results out of the workspace, handled missing/invalid timestamps, synchronously guarded double-clicks, refused a table action when its result changed during lazy loading, validated stale table indexes, and preserved existing all-table export behavior. CI remains the final PR gate. |
 | 2026-10-11 | ChatGPT-Sol (Codex) | Completed Workstream D with a shared versioned `AnalysisSelection` contract and migrated Curve Fit and Peaks. Plot ranges, exact worksheet column/row selections, Library multi-selection, uncertainty bindings, and categorical factors now converge on one reviewable input model. Both workbenches expose Review inputs, preserve exact row/range provenance through save/reopen and recalculation, support Run By and selected-worksheet batches where scientifically valid, and publish one durable batch result with preflight, comparable summaries, per-input warnings/status, bounded input count, and explicit partial cancellation. A direct tool launch intentionally follows the visible plot's selected rows and X range; Review inputs discloses that scope before a run. Cancellation finishes the in-flight worksheet and marks every not-yet-started input Cancelled. The adversarial pass fixed stale tool-default selection on reopen, asymmetric-error replacement, subset/full-view result mixing, source-fingerprint drift, lazy Origin inputs, repeat-click races, row-id expansion limits, and architecture/bundle regressions. | Focused selection/Curve Fit/Peaks/batch verification passed 214/214; architecture ratchets passed 56/56; focused backend fit/peak checks passed 61 with 2 skips. A complete frontend pass reached 17,171 passing tests plus 2 expected failures; its three Workstream D failures exposed the stale-remount bug and passed after the fix, leaving only the documented pre-existing Windows flat-autoscale subnormal-float fixture mismatch in untouched code. Forced TypeScript, ESLint, preload verification, production build, and the eager-bundle gate passed. The local import sweep and a representative XRD peak regression from the private corpus passed 21/21. CI remains the final PR gate. |

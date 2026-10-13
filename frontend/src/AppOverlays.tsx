@@ -95,12 +95,10 @@ import { lazyRegion } from "./lib/lazyRegion";
  *  flash more than it informs. `label` names the panel in the fallback and
  *  the console log (review finding #6: 52 panels sharing one "Panel" label
  *  left no way to tell which one failed). */
-function lazyPanel(
+const lazyPanel: (
   load: () => Promise<{ default: ComponentType }>,
   label: string,
-): ComponentType {
-  return lazyRegion(load, label);
-}
+) => ComponentType = lazyRegion;
 
 /** Load an on-demand dialog only after its first opening, then leave it mounted
  * while closed. That preserves local dialog state (for example Preferences'
@@ -143,7 +141,7 @@ const HysteresisPanel = lazyPanel(() => import("./components/workshops/hysteresi
 const MagToolsPanel = lazyPanel(() => import("./components/workshops/magtools/MagToolsPanel"), "MagToolsPanel");
 const PeaksPanel = lazyPanel(() => import("./components/workshops/peaks/PeaksPanel"), "PeaksPanel");
 const ReflectivityPanel = lazyPanel(() => import("./components/workshops/reflectivity/ReflectivityPanel"), "ReflectivityPanel");
-const ReductionsPanel = lazyPanel(() => import("./components/workshops/reductions/ReductionsPanel"), "ReductionsPanel");
+const ReductionsPanel = lazyPanel(() => import("./components/workshops/reductions/ReductionsPanel"), "Reductions");
 const RsmPanel = lazyPanel(() => import("./components/workshops/rsm/RsmPanel"), "RsmPanel");
 const RoiCutsPanel = lazyPanel(() => import("./components/workshops/roicuts/RoiCutsPanel"), "RoiCutsPanel");
 const DigitizerView = lazyPanel(() => import("./components/workshops/digitizer/DigitizerView"), "DigitizerView");
@@ -215,7 +213,7 @@ const WorkbookPropertiesDialog = lazyPanel(() => import("./components/Library/Wo
 // ternary/lazyMount.test.ts.
 const AuxFigurePanels = lazyPanel(() => import("./components/workshops/ternary/AuxFigurePanels"), "AuxFigurePanels");
 // Signal Processing and its durable results share one lazy host chunk.
-const SignalAnalysisPanels = lazyPanel(() => import("./components/workshops/analysisresults/SignalAnalysisPanels"), "SignalAnalysisPanels");
+const SignalAnalysisPanels = lazyPanel(() => import("./components/workshops/analysisresults/SignalAnalysisPanels"), "Analysis");
 
 export default function AppOverlays() {
   const helpOpen = useHelp((s) => s.open);

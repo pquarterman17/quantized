@@ -25,6 +25,7 @@ import type { PawleyResult } from "../../../lib/reductionTypes";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { wavelengthFromMetadata } from "../../../lib/xrdWavelength";
+import { nextPlotObjectId } from "../../../store/idSeq";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 import {
   PAWLEY_DEFAULT_FIELDS,
@@ -69,6 +70,7 @@ export interface PawleyState {
   canCompute: boolean;
   compute: () => Promise<void>;
   toLibrary: () => void;
+  addReferenceLines: () => void;
   /** Fill the cell, tie and centering from a CIF's lattice preset. */
   applyLattice: (p: LatticePreset, source: CrystalStructure) => void;
 }
@@ -310,6 +312,29 @@ export function usePawley(): PawleyState {
     setStatus("added Pawley observed/model/background/residual dataset");
   }
 
+  function addReferenceLines(): void {
+    if (!result || !fitInput) return;
+    const app = useApp.getState();
+    const saved = app.refLines.filter((line) => line.axis === "x").map((line) => line.value);
+    const values: number[] = [];
+    for (const peak of result.peaks) {
+      const value = peak.two_theta;
+      if (!Number.isFinite(value) || value < fitInput.range.min || value > fitInput.range.max) continue;
+      if ([...saved, ...values].some((other) =>
+        Math.abs(other - value) <= 1e-8 * Math.max(1, Math.abs(other), Math.abs(value)))) continue;
+      values.push(value);
+    }
+    if (values.length) {
+      app.recordHistory("add phase reference lines");
+      useApp.setState((state) => ({
+        refLines: [...state.refLines, ...values.map((value) => ({ id: nextPlotObjectId("ref"), axis: "x" as const, value }))],
+      }));
+    }
+    setStatus(values.length
+      ? `added ${values.length} calculated reflection position${values.length === 1 ? "" : "s"} to the plot`
+      : "calculated reflection positions are already on the plot");
+  }
+
   const wavelengthFromFile = fileWavelength != null && parseField(fields.wavelength) === fileWavelength;
 
   return {
@@ -319,6 +344,6 @@ export function usePawley(): PawleyState {
     wavelengthFromFile,
     refineCell, setRefineCell,
     result, fitRange: fitInput?.range ?? null, fitRefined: fitInput?.refineCell ?? false,
-    busy, error, blockedReason, canCompute, compute, toLibrary, applyLattice,
+    busy, error, blockedReason, canCompute, compute, toLibrary, addReferenceLines, applyLattice,
   };
 }

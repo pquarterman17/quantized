@@ -368,13 +368,13 @@ of being booked here.)*
           a canonical value for calculation. Keep magnetic-film thickness
           visibly distinct from substrate or total-sample thickness; never
           guess which thickness the user meant.
-    - [ ] Use a reusable `value | unit` row for every quantity. Minimum unit
+    - [x] Use a reusable `value | unit` row for every quantity. Minimum unit
           sets: mass (µg, mg, g, kg); length/thickness (nm, µm, mm, cm, m);
           thin-film length/thickness also includes Å; area (mm², cm², m²);
           volume (mm³, cm³, m³, µL, mL). Each field
           converts to one canonical internal unit while preserving the value
           and unit the user entered for later editing.
-    - [ ] Support the owner's common geometry paths without forcing algebra:
+    - [x] Support the owner's common geometry paths without forcing algebra:
           width × length + thickness; direct area + thickness; direct volume;
           circular diameter × thickness; or sample mass. Width, length,
           diameter, and thickness may each use different units (for example
@@ -383,6 +383,9 @@ of being booked here.)*
           area/volume, normalization divisor, source moment unit, requested
           output unit, and the equation used. Invalid, missing, zero, or
           negative dimensions disable Apply and identify the exact field.
+          **Partial 2026-10-12:** canonical volume is shown live and incomplete
+          mass/volume normalization disables Convert with a concise reason.
+          The expanded equation/divisor summary and per-field error text remain.
     - [ ] Offer output units appropriate to the selected basis, rather than
           one mixed list: raw moment (emu, A·m²); mass-normalized (emu/g,
           A·m²/kg); volume magnetization (emu/cm³, A/m, kA/m); and an

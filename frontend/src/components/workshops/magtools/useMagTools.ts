@@ -36,6 +36,10 @@ import {
   type MagXDetection,
 } from "../../../lib/magDataKind";
 import type { Dataset, DataStruct } from "../../../lib/types";
+import {
+  DEFAULT_MAG_NORMALIZATION, normalizationMetadata, normalizationProblem,
+  resolvedSampleMass, resolvedSampleVolume, type MagNormalizationParams,
+} from "../../../lib/sampleGeometry";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 
 /** The plotted X (independent variable — T or field) + primary Y (moment)
@@ -90,7 +94,7 @@ function sourceUnits(
 }
 
 export const FIELD_UNITS = ["Oe", "T", "mT", "A/m"];
-export const MOMENT_UNITS = ["emu", "emu/g", "emu/cm³", "A·m²", "kA/m"];
+export const MOMENT_UNITS = ["emu", "emu/g", "emu/cm³", "A·m²", "A/m", "kA/m"];
 
 /** The two paths' natural defaults. They are NOT the same number and must
  *  never be sent to the other route: 10% of the temperature span is the high-T
@@ -98,23 +102,7 @@ export const MOMENT_UNITS = ["emu", "emu/g", "emu/cm³", "A·m²", "kA/m"];
 export const DEFAULT_AUTO_FRACTION = 0.1;
 export const DEFAULT_HI_FRACTION = 0.7;
 
-export interface UnitParams {
-  fromField: string; // read from the data (sourceUnits), never chosen
-  toField: string;
-  fromMoment: string; // read from the data (sourceUnits); the backend converts from "emu" only
-  toMoment: string;
-  sampleMass: number; // g (for emu/g)
-  sampleVolume: number; // cm³ (for emu/cm³, kA/m)
-}
-
-const DEFAULT_UNITS: UnitParams = {
-  fromField: "Oe",
-  toField: "T",
-  fromMoment: "emu",
-  toMoment: "emu",
-  sampleMass: 0,
-  sampleVolume: 0,
-};
+export type UnitParams = MagNormalizationParams;
 
 /** The panel's result line, tagged with the dataset ids it is ABOUT — the
  *  source it was computed from and the corrected dataset it wrote. Shown only
@@ -163,7 +151,7 @@ export function useMagTools(): MagToolsState {
   const [bgMode, setBgModeState] = useState<MagBgMode>("auto");
   const [autoFraction, setAutoFraction] = useState(DEFAULT_AUTO_FRACTION);
   const [hiFraction, setHiFraction] = useState(DEFAULT_HI_FRACTION);
-  const [units, setUnitsState] = useState<UnitParams>(DEFAULT_UNITS);
+  const [units, setUnitsState] = useState<UnitParams>(DEFAULT_MAG_NORMALIZATION);
   const [busy, setBusy] = useState(false);
   // The readout (fit + warning + error) BELONGS to the datasets it was
   // computed from and wrote. Selecting a different dataset re-labels the
@@ -375,6 +363,13 @@ export function useMagTools(): MagToolsState {
       // through unchanged (from == to) instead of being scaled as oersteds.
       const from = sourceUnits(ds, st.xKey, st.yKeys, st.seriesOrder);
       if (from.fromField == null) warnings.push(`x (${from.xLabel || "unnamed"}) is not a field, so only the moment was converted.`);
+      const problem = normalizationProblem({ ...units, fromMoment: from.fromMoment });
+      if (problem) {
+        setReadout({ owners, fit: null, warning: null, error: problem });
+        return;
+      }
+      const sampleMass = resolvedSampleMass(units);
+      const sampleVolume = resolvedSampleVolume(units);
       const res = await convertMagUnits({
         x: xs.safe,
         y: ys.safe,
@@ -382,8 +377,8 @@ export function useMagTools(): MagToolsState {
         to_field: from.fromField == null ? from.xUnit : units.toField,
         from_moment: from.fromMoment,
         to_moment: units.toMoment,
-        sample_mass: units.sampleMass,
-        sample_volume: units.sampleVolume,
+        sample_mass: sampleMass,
+        sample_volume: sampleVolume,
       });
       const data: DataStruct = {
         time: restoreSubstituted(res.x, xs.finite),
@@ -393,7 +388,10 @@ export function useMagTools(): MagToolsState {
         // Stamps `x_column_long` too: the new unit-precedence rule reads it
         // FIRST, so leaving a stale inherited long name here would have the
         // converted dataset described by the wrong axis.
-        metadata: stampXIdentity({ ...ds.data.metadata }, ds.data, st.xKey, res.x_unit),
+        metadata: stampXIdentity({
+          ...ds.data.metadata,
+          magnetometry_normalization: normalizationMetadata(units, from.fromMoment),
+        }, ds.data, st.xKey, res.x_unit),
       };
       const outId = nextDatasetId();
       addDataset({ id: outId, name: `${stem()} (${res.y_unit})`, data });

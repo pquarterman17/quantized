@@ -256,6 +256,26 @@ describe("usePawley input checks disable Refine", () => {
 });
 
 describe("usePawley → Library", () => {
+  it("adds calculated reflections to the plot as one deduplicated action", async () => {
+    vi.mocked(pawleyRefine).mockResolvedValue({
+      ...result,
+      peaks: [result.peaks[0], { ...result.peaks[0], hkl: [2, 0, 0], two_theta: 35.2 },
+        { ...result.peaks[0], hkl: [2, 0, 1], two_theta: 35.200000001 }],
+      n_peaks: 3,
+    });
+    useApp.setState({ refLines: [{ id: "existing", axis: "x", value: 28.4 }], history: [], future: [] });
+    const { result: hook } = renderHook(() => usePawley());
+    await act(async () => { await hook.current.compute(); });
+    act(() => hook.current.addReferenceLines());
+    expect(useApp.getState().refLines).toEqual(expect.arrayContaining([
+      expect.objectContaining({ axis: "x", value: 28.4 }),
+      expect.objectContaining({ axis: "x", value: 35.2 }),
+    ]));
+    expect(useApp.getState().refLines).toHaveLength(2);
+    expect(useApp.getState().history).toHaveLength(1);
+    expect(useApp.getState().status).toMatch(/added 1 calculated reflection/);
+  });
+
   it("adds observed, model, background and residual on the exact fitted rows", async () => {
     vi.mocked(pawleyRefine).mockResolvedValue(result);
     setActive({ ...scan, metadata: { ...scan.metadata, wavelength_a: 1.540598 } });

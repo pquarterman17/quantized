@@ -519,6 +519,42 @@ describe("AnalysisResultPanel", () => {
     expect(useApp.getState()).toMatchObject({ activeId: "source", openAnalysisResultId: null });
   });
 
+  it("links a saved outlier row back to the source worksheet selection", () => {
+    const outlier = outlierScreeningAnalysisResult(
+      "outlier", source, { col: 0, method: "mad", alpha: 0.01, k: 4, threshold: 3.5 }, {
+        channelLabel: "Signal", flaggedRows: [{ rowIndex: 1, value: 2, score: 4 }], omittedRows: [], rosnerSteps: [],
+        result: { method: "mad", data: {
+          modified_z_scores: [0, 4], median: 1.5, mad: 0.5, scale_method: "MAD", threshold: 3.5,
+          flagged_indices: [1], N: 2, excluded_indices: [], method: "modified z-score",
+        } },
+      },
+    );
+    useApp.setState({ datasets: [source], analysisResults: [outlier], openAnalysisResultId: outlier.id, selection: null });
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Table" }));
+    fireEvent.click(screen.getByRole("button", { name: "Highlight source row" }));
+    expect(useApp.getState()).toMatchObject({
+      activeId: "source", stageTab: "worksheet", selection: { datasetId: "source", rows: [1] },
+    });
+  });
+
+  it("refuses row linking from an out-of-date statistical result", () => {
+    const outlier = outlierScreeningAnalysisResult(
+      "outlier", source, { col: 0, method: "mad", alpha: 0.01, k: 4, threshold: 3.5 }, {
+        channelLabel: "Signal", flaggedRows: [{ rowIndex: 1, value: 2, score: 4 }], omittedRows: [], rosnerSteps: [],
+        result: { method: "mad", data: {
+          modified_z_scores: [0, 4], median: 1.5, mad: 0.5, scale_method: "MAD", threshold: 3.5,
+          flagged_indices: [1], N: 2, excluded_indices: [], method: "modified z-score",
+        } },
+      },
+    );
+    const changed = { ...source, data: { ...source.data, values: [[1], [99]] } };
+    useApp.setState({ datasets: [changed], analysisResults: [outlier], openAnalysisResultId: outlier.id });
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Table" }));
+    expect(screen.getByRole("button", { name: "Highlight source row" })).toBeDisabled();
+  });
+
   it("reopens a current Multivariate snapshot with its exact columns and method controls", () => {
     const multivariate = multivariateAnalysisResult(
       "multivariate", source,

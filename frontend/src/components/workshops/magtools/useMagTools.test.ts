@@ -568,21 +568,15 @@ describe("useMagTools units", () => {
     expect(ds[1].data.time).toEqual([2e-4, 0.01, 0.03]);
   });
 
-  it("surfaces the backend warning (e.g. emu/g needs mass)", async () => {
-    vi.mocked(convertMagUnits).mockResolvedValue({
-      x: [2, 100, 300],
-      y: [5, 2, 1],
-      x_unit: "Oe",
-      y_unit: "emu",
-      warning: "Cannot convert moment to emu/g: sample mass is 0.",
-    });
+  it("refuses emu/g before the request when sample mass is missing", async () => {
     const { result } = renderHook(() => useMagTools());
     act(() => result.current.setTab("units"));
     act(() => result.current.setUnits({ toMoment: "emu/g" }));
     await act(async () => {
       await result.current.convert();
     });
-    expect(result.current.warning).toContain("sample mass is 0");
+    expect(convertMagUnits).not.toHaveBeenCalled();
+    expect(result.current.error).toContain("positive sample mass");
   });
 
   // The Units tab must NOT pair the coordinates the way the fit path does: a

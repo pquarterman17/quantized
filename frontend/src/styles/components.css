@@ -651,11 +651,25 @@
 .qz-analysis-summary dd { margin: 3px 0 0; overflow-wrap: anywhere; }
 .qz-analysis-caption, .qz-analysis-empty { color: var(--text-dim); }
 .qz-analysis-caption { margin: 14px 0 0; font-size: 12px; }
+.qz-analysis-reporting { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.qz-analysis-reporting > h3, .qz-analysis-reporting-section > h4 { margin: 0; }
+.qz-analysis-reporting > .qz-analysis-caption { margin-top: 4px; }
+.qz-analysis-reporting-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.qz-analysis-reporting-section { min-width: 0; padding: 9px 10px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-1); }
+.qz-analysis-reporting-section h4 { color: var(--text-dim); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
+.qz-analysis-reporting-section ul { margin: 7px 0 0; padding-left: 18px; }
+.qz-analysis-reporting-section li { margin: 3px 0; overflow-wrap: anywhere; }
 .qz-analysis-snapshot-table { margin-bottom: 12px; }
 .qz-analysis-snapshot-table > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
 .qz-analysis-snapshot-table > header h4 { margin: 0; }
 .qz-analysis-snapshot-table-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .qz-analysis-snapshot-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@container (max-width: 620px) { .qz-analysis-reporting-grid { grid-template-columns: 1fr; } }
+.qz-mag-quantity { display: flex; align-items: center; gap: 5px; }
+.qz-mag-geometry { display: grid; gap: 6px; margin-top: 8px; }
+.qz-mag-geometry-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px; margin-top: 8px; }
+.qz-mag-geometry-row .qzk-field-lbl { margin: 0; }
+.qz-mag-volume-readout { margin-top: 8px; color: var(--text-faint); }
 .qz-analysis-subtoolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .qz-analysis-subtoolbar label { display: flex; align-items: center; gap: 6px; margin-right: auto; color: var(--text-dim); }
 .qz-analysis-subtoolbar select { max-width: 280px; }
