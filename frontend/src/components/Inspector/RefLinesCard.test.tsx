@@ -36,4 +36,16 @@ describe("RefLinesCard — remove", () => {
     document.activeElement?.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
   });
+
+  it("shows generated-line identity and removes a generated group in one action", () => {
+    useApp.setState({ refLines: [
+      { id: "r1", axis: "x", value: 28.4, label: "(111)", groupId: "p1", groupLabel: "scan · Pawley reflections" },
+      { id: "r2", axis: "x", value: 35.2, label: "(200)", groupId: "p1", groupLabel: "scan · Pawley reflections" },
+    ], history: [], future: [] });
+    render(<RefLinesCard />);
+    expect(screen.getByText(/\(111\).*X =/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remove group" }));
+    expect(useApp.getState().refLines).toEqual([]);
+    expect(useApp.getState().history).toHaveLength(1);
+  });
 });

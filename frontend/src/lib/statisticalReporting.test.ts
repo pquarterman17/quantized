@@ -44,4 +44,17 @@ describe("statisticalReporting", () => {
     }));
     expect(summary.assumptions).toEqual([expect.stringMatching(/No assumption check/)]);
   });
+
+  it("recognizes R² without confusing regression labels with other evidence", () => {
+    const summary = statisticalReporting(result({
+      scalarValues: { "adjusted R²": 0.91 },
+      tables: [
+        { title: "Multiple regression", columns: ["term", "beta"], rows: [["dose", 1.2]] },
+      ],
+      warnings: ['Table "Pairwise results" was too large to save and was omitted.'],
+    }));
+    expect(summary.effectSizes).toEqual(["adjusted R²: 0.91"]);
+    expect(summary.adjustments).toEqual([expect.stringMatching(/No multiple-comparison adjustment/)]);
+    expect(summary.missingData).toEqual([expect.stringMatching(/not recorded/)]);
+  });
 });

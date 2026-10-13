@@ -66,6 +66,8 @@ def test_convert_mag_units_matches_matlab(
 
 
 def test_convert_moment_to_amperes_per_metre_uses_volume() -> None:
+    # Deliberate SI extension beyond the frozen legacy MATLAB cases above:
+    # 1 emu/cm³ = 1000 A/m, so 2 emu / 4 cm³ = 500 A/m.
     _, converted, _, unit, warning = convert_mag_units(
         [0.0], [2.0], from_moment="emu", to_moment="A/m", sample_volume=4.0
     )

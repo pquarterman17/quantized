@@ -72,7 +72,6 @@ export default function MagToolsPanel() {
               Data type
             </label>
             <Select
-              aria-label="Target field unit"
               id="magbg-mode"
               options={BG_MODE_OPTS}
               value={m.bgMode}

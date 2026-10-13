@@ -19,9 +19,15 @@ function sourceCandidates(source: Dataset): number[] {
   return analysisRowIds(source) ?? Array.from({ length: source.data.time.length }, (_, row) => row);
 }
 
-function rowsMatching(source: Dataset, candidates: readonly number[], terms: readonly [number, unknown][]): number[] {
+function rowsMatching(
+  source: Dataset,
+  candidates: readonly number[],
+  responseColumn: number,
+  terms: readonly [number, unknown][],
+): number[] {
   const rows: number[] = [];
   for (const row of candidates) {
+    if (!Number.isFinite(valueAt(source, responseColumn, row))) continue;
     const match = terms.every(([column, wanted]) => {
       const value = valueAt(source, column, row);
       return Number.isFinite(value) && groupLevelLabel(source.data, column, value) === String(wanted);
@@ -60,7 +66,7 @@ export function statisticalResultRowSelection(
 
   const distribution = distributionRecipe(result, source);
   if (distribution?.byCol != null && table.title?.startsWith("Summary by ")) {
-    const rows = rowsMatching(source, candidates, [[distribution.byCol, row[0]]]);
+    const rows = rowsMatching(source, candidates, distribution.col, [[distribution.byCol, row[0]]]);
     return { rows, label: `Highlight ${rows.length} source row${rows.length === 1 ? "" : "s"}` };
   }
 
@@ -68,7 +74,7 @@ export function statisticalResultRowSelection(
   if (fit && table.title === "Group summaries") {
     const terms: [number, unknown][] = [[fit.xCol, row[1]]];
     if (fit.byCol != null && row[0] !== "All") terms.push([fit.byCol, row[0]]);
-    const rows = rowsMatching(source, candidates, terms);
+    const rows = rowsMatching(source, candidates, fit.yCol, terms);
     return { rows, label: `Highlight ${rows.length} source row${rows.length === 1 ? "" : "s"}` };
   }
 
@@ -76,7 +82,7 @@ export function statisticalResultRowSelection(
   if (variability && (table.title === "Cell summaries" || table.title === "Factor A summaries")) {
     const terms: [number, unknown][] = [[variability.factorACol, row[0]]];
     if (table.title === "Cell summaries") terms.push([variability.factorBCol, row[1]]);
-    const rows = rowsMatching(source, candidates, terms);
+    const rows = rowsMatching(source, candidates, variability.responseCol, terms);
     return { rows, label: `Highlight ${rows.length} source row${rows.length === 1 ? "" : "s"}` };
   }
 

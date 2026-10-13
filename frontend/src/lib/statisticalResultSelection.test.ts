@@ -40,6 +40,26 @@ describe("statisticalResultRowSelection", () => {
     expect(statisticalResultRowSelection(saved, { ...source, excludedRows: [3] }, 0, 0)?.rows).toEqual([2]);
   });
 
+  it("does not link grouped summaries to rows with a non-finite response", () => {
+    const invalidResponse: Dataset = {
+      ...source,
+      data: { ...source.data, values: source.data.values.map((row, index) =>
+        index === 3 ? [Number.NaN, row[1], row[2]] : row) },
+    };
+    const distribution = result("distribution-analysis", "Summary by lot", ["level", "N"], ["B", 1], {
+      col: 0, byCol: 1, fitDist: "none", compareOpen: false, percentileInput: 95,
+    });
+    const fit = result("fit-y-by-x", "Group summaries", ["level", "group", "N", "mean", "sd"], ["All", "B", 1, 12, 0], {
+      xCol: 1, yCol: 0, byCol: null, order: 1, bandInterval: "confidence",
+    });
+    const variability = result("variability-analysis", "Factor A summaries", ["lot", "N"], ["B", 1], {
+      responseCol: 0, factorACol: 1, factorBCol: 2,
+    });
+    expect(statisticalResultRowSelection(distribution, invalidResponse, 0, 0)?.rows).toEqual([2]);
+    expect(statisticalResultRowSelection(fit, invalidResponse, 0, 0)?.rows).toEqual([2]);
+    expect(statisticalResultRowSelection(variability, invalidResponse, 0, 0)?.rows).toEqual([2]);
+  });
+
   it("maps nested variability cells using their display labels", () => {
     const saved = result("variability-analysis", "Cell summaries", ["lot", "wafer", "N"], ["A", "W2", 1], {
       responseCol: 0, factorACol: 1, factorBCol: 2,

@@ -34,6 +34,7 @@ import { mappingForResult } from "./analysisResultFigureMapping";
 import { recordsFor } from "../reflectivity/reflFitRecord";
 import { FIT_SOURCE_MISSING, formatDate, formatValue, PEAK_SOURCE_MISSING, SOURCE_MISSING } from "./analysisResultPanelText";
 import { useAnalysisResultInlineTableActions, type AnalysisResultBusy } from "./useAnalysisResultInlineTableActions";
+import { openAnalysisSourceRows } from "../../../store/analysisResultRowNavigation";
 type Tab = "overview" | "table" | "figures" | "diagnostics" | "provenance" | "notes";
 const TABS: readonly Tab[] = ["overview", "table", "figures", "diagnostics", "provenance", "notes"];
 // Its own seam, not store/analysisResultLazy.ts: importing that from this
@@ -52,7 +53,6 @@ export default function AnalysisResultPanel() {
   const setXKey = useApp((state) => state.setXKey);
   const setYKeys = useApp((state) => state.setYKeys);
   const setStageTab = useApp((state) => state.setStageTab);
-  const setRowSelection = useApp((state) => state.setRowSelection);
   const setPeaksOpen = useApp((state) => state.setPeaksOpen);
   const setCurveFitOpen = useApp((state) => state.setCurveFitOpen);
   const openReflectivityFitRecord = useApp((state) => state.openReflectivityFitRecord);
@@ -109,9 +109,7 @@ export default function AnalysisResultPanel() {
   };
   const selectSourceRows = (rows: number[]) => {
     if (!source || snapshotState !== "current" || !rows.length) return;
-    setActive(source.id);
-    setRowSelection(rows);
-    setStageTab("worksheet");
+    openAnalysisSourceRows(source.id, rows);
   };
   const editPeaks = () => {
     if (!source) return;
@@ -355,7 +353,9 @@ export default function AnalysisResultPanel() {
             ? <AnalysisResultPeakTable table={peakTable} onExport={() => void exportPeaks()} />
             : isFit ? <AnalysisResultFitTable spec={fitSpec} onExport={() => void exportFit()} />
             : <AnalysisResultTables result={result} onOpen={openTable} onExport={(datasetId) => void exportTable(datasetId)} />)}
-          {tab === "figures" && <AnalysisResultFigures result={result} disabled={busy !== null} onOpen={(index) => void openPlot(index)} onBuild={(index) => void buildFigure(index)} onReport={(index) => void sendReport(index)} onCreateStatistical={(key) => void createStatisticalFigure(key)} />}
+          {tab === "figures" && <AnalysisResultFigures result={result}
+            disabled={busy !== null || snapshotState === "out-of-date" || snapshotState === "pending"}
+            onOpen={(index) => void openPlot(index)} onBuild={(index) => void buildFigure(index)} onReport={(index) => void sendReport(index)} onCreateStatistical={(key) => void createStatisticalFigure(key)} />}
           {tab === "diagnostics" && (diagnostics.length
             ? <ul className="qz-analysis-diagnostics">{diagnostics.map((message, index) => <li key={`${message}-${index}`}>{message}</li>)}</ul>
             : <p className="qz-analysis-empty">No warnings or missing references.</p>)}

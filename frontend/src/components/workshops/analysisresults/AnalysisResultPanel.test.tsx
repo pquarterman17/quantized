@@ -395,7 +395,7 @@ describe("AnalysisResultPanel", () => {
     render(<AnalysisResultPanel />);
     fireEvent.click(screen.getByRole("tab", { name: "Figures" }));
     expect(screen.getByText(/frozen from the saved statistical tables/)).toBeInTheDocument();
-    const create = screen.getByRole("button", { name: "Create editable figure" });
+    const create = screen.getByRole("button", { name: /Create editable figure: Signal distribution/ });
     fireEvent.click(create);
     fireEvent.click(create);
 
@@ -404,6 +404,40 @@ describe("AnalysisResultPanel", () => {
     expect(document.data).toMatchObject({ mode: "frozen", snapshot: { time: [1, 2], values: [[2], [1]] } });
     expect(useApp.getState().openAnalysisResultId).toBeNull();
     expect(useApp.getState().plotWindows.some((window) => window.document?.id === document.id)).toBe(true);
+  });
+
+  it("does not offer figure creation from a stale statistical snapshot", () => {
+    const distribution = distributionAnalysisResult(
+      "distribution", source,
+      { col: 0, byCol: null, fitDist: "none", compareOpen: false, percentileInput: 90 },
+      { label: "Signal", byLabel: null, hist: { counts: [2], centers: [1], edges: [0.5, 1.5] },
+        desc: null, norm: null, normNote: null, levels: [], totalLevels: 0, rankedFits: [],
+        rankingMetric: "ks_p", quantiles: null, percentileValue: null, skipped: [] },
+    );
+    useApp.setState({
+      datasets: [source], analysisResults: [{ ...distribution, stale: true }],
+      openAnalysisResultId: distribution.id,
+    });
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Figures" }));
+    expect(screen.getByRole("button", { name: /Create editable figure: Signal distribution/ })).toBeDisabled();
+  });
+
+  it("does not offer figure creation while a statistical source is only a lazy preview", () => {
+    const distribution = distributionAnalysisResult(
+      "distribution", source,
+      { col: 0, byCol: null, fitDist: "none", compareOpen: false, percentileInput: 90 },
+      { label: "Signal", byLabel: null, hist: { counts: [2], centers: [1], edges: [0.5, 1.5] },
+        desc: null, norm: null, normNote: null, levels: [], totalLevels: 0, rankedFits: [],
+        rankingMetric: "ks_p", quantiles: null, percentileValue: null, skipped: [] },
+    );
+    const pending = { ...source, pending: {
+      kind: "path", path: "source.opju", bookId: "source", rows: 2, cols: 1,
+    } } as typeof source;
+    useApp.setState({ datasets: [pending], analysisResults: [distribution], openAnalysisResultId: distribution.id });
+    render(<AnalysisResultPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Figures" }));
+    expect(screen.getByRole("button", { name: /Create editable figure: Signal distribution/ })).toBeDisabled();
   });
 
   it("copies one table or the complete table set from a snapshot result", async () => {

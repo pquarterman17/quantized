@@ -54,7 +54,7 @@
 // null`), so its conversion adds one — a behavior-preserving change, not a
 // violation of that byte-identical rule.
 
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useState } from "react";
 import ConfirmDialog from "./components/overlays/ConfirmDialog";
 import ParamDialog from "./components/overlays/ParamDialog";
 import Toaster from "./components/overlays/Toaster";
@@ -83,7 +83,7 @@ import { useTransformPreviewDialog } from "./store/transformPreviewDialog";
 import { useRecipeManager } from "./store/recipeManager";
 import { useWorkbookPropertiesDialog } from "./store/workbookPropertiesDialog";
 import { useAuxFigureStore } from "./components/workshops/ternary/auxFigureStore";
-import { lazyRegion } from "./lib/lazyRegion";
+import { lazyRegion as lazyPanel } from "./lib/lazyRegion";
 
 /** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
  *  error boundary + Suspense (lazyRegion — UX-003). The per-panel boundary
@@ -95,11 +95,6 @@ import { lazyRegion } from "./lib/lazyRegion";
  *  flash more than it informs. `label` names the panel in the fallback and
  *  the console log (review finding #6: 52 panels sharing one "Panel" label
  *  left no way to tell which one failed). */
-const lazyPanel: (
-  load: () => Promise<{ default: ComponentType }>,
-  label: string,
-) => ComponentType = lazyRegion;
-
 /** Load an on-demand dialog only after its first opening, then leave it mounted
  * while closed. That preserves local dialog state (for example Preferences'
  * active tab) exactly as the former eager mount did. */
@@ -141,7 +136,7 @@ const HysteresisPanel = lazyPanel(() => import("./components/workshops/hysteresi
 const MagToolsPanel = lazyPanel(() => import("./components/workshops/magtools/MagToolsPanel"), "MagToolsPanel");
 const PeaksPanel = lazyPanel(() => import("./components/workshops/peaks/PeaksPanel"), "PeaksPanel");
 const ReflectivityPanel = lazyPanel(() => import("./components/workshops/reflectivity/ReflectivityPanel"), "ReflectivityPanel");
-const ReductionsPanel = lazyPanel(() => import("./components/workshops/reductions/ReductionsPanel"), "Reductions");
+const ReductionsPanel = lazyPanel(() => import("./components/workshops/reductions/ReductionsPanel"), "ReductionsPanel");
 const RsmPanel = lazyPanel(() => import("./components/workshops/rsm/RsmPanel"), "RsmPanel");
 const RoiCutsPanel = lazyPanel(() => import("./components/workshops/roicuts/RoiCutsPanel"), "RoiCutsPanel");
 const DigitizerView = lazyPanel(() => import("./components/workshops/digitizer/DigitizerView"), "DigitizerView");
@@ -213,7 +208,7 @@ const WorkbookPropertiesDialog = lazyPanel(() => import("./components/Library/Wo
 // ternary/lazyMount.test.ts.
 const AuxFigurePanels = lazyPanel(() => import("./components/workshops/ternary/AuxFigurePanels"), "AuxFigurePanels");
 // Signal Processing and its durable results share one lazy host chunk.
-const SignalAnalysisPanels = lazyPanel(() => import("./components/workshops/analysisresults/SignalAnalysisPanels"), "Analysis");
+const SignalAnalysisPanels = lazyPanel(() => import("./components/workshops/analysisresults/SignalAnalysisPanels"), "SignalAnalysisPanels");
 
 export default function AppOverlays() {
   const helpOpen = useHelp((s) => s.open);

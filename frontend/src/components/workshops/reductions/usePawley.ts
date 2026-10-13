@@ -71,6 +71,8 @@ export interface PawleyState {
   compute: () => Promise<void>;
   toLibrary: () => void;
   addReferenceLines: () => void;
+  /** Why the saved reflections cannot be applied to the current plot. */
+  referenceLinesBlockedReason: string | null;
   /** Fill the cell, tie and centering from a CIF's lattice preset. */
   applyLattice: (p: LatticePreset, source: CrystalStructure) => void;
 }
@@ -101,12 +103,29 @@ interface PawleyFitInput {
   measured: Record<string, unknown>;
 }
 
+function reflectionTolerance(x: readonly number[], profileFwhm: number): number {
+  // levels-allowlist: these are unique numeric scan coordinates, not categorical levels.
+  const sorted = [...new Set(x.filter(Number.isFinite))].sort((a, b) => a - b);
+  const steps = sorted.slice(1).map((value, index) => value - sorted[index]).filter((value) => value > 0);
+  steps.sort((a, b) => a - b);
+  const step = steps.length ? steps[Math.floor(steps.length / 2)] : 0;
+  // Half a sampling step or one tenth of the profile width represents the
+  // same drawable reflection; cap at 0.05° so coarse preview arrays do not
+  // merge physically distinct lines.
+  return Math.min(0.05, Math.max(1e-6, step * 0.5, profileFwhm * 0.1));
+}
+
+function hklLabel(hkl: readonly number[]): string {
+  return `(${hkl.join("")})`;
+}
+
 const MEASURED_WAVELENGTH_KEYS = ["wavelength_a", "alpha_average"] as const;
 
 export function usePawley(): PawleyState {
   const active = useActiveDataset();
   const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
+  const plotXKey = useApp((s) => s.xKey);
   const columns = active
     ? active.data.labels.map((label, index) => ({ index, label: label || `Column ${index + 1}` }))
     : [];
@@ -313,27 +332,42 @@ export function usePawley(): PawleyState {
   }
 
   function addReferenceLines(): void {
-    if (!result || !fitInput) return;
+    if (!result || !fitInput || referenceLinesBlockedReason) return;
     const app = useApp.getState();
     const saved = app.refLines.filter((line) => line.axis === "x").map((line) => line.value);
-    const values: number[] = [];
+    const tolerance = reflectionTolerance(fitInput.x, fitInput.profileFwhm);
+    const grouped: { value: number; labels: string[] }[] = [];
     for (const peak of result.peaks) {
       const value = peak.two_theta;
       if (!Number.isFinite(value) || value < fitInput.range.min || value > fitInput.range.max) continue;
-      if ([...saved, ...values].some((other) =>
-        Math.abs(other - value) <= 1e-8 * Math.max(1, Math.abs(other), Math.abs(value)))) continue;
-      values.push(value);
+      if (saved.some((other) => Math.abs(other - value) <= tolerance)) continue;
+      const existing = grouped.find((item) => Math.abs(item.value - value) <= tolerance);
+      if (existing) existing.labels.push(hklLabel(peak.hkl));
+      else grouped.push({ value, labels: [hklLabel(peak.hkl)] });
     }
-    if (values.length) {
+    if (grouped.length) {
+      const groupId = nextPlotObjectId("pawley");
+      const groupLabel = `${fitInput.sourceName} · Pawley reflections`;
       app.recordHistory("add phase reference lines");
       useApp.setState((state) => ({
-        refLines: [...state.refLines, ...values.map((value) => ({ id: nextPlotObjectId("ref"), axis: "x" as const, value }))],
+        refLines: [...state.refLines, ...grouped.map(({ value, labels }) => ({
+          id: nextPlotObjectId("ref"), axis: "x" as const, value,
+          label: labels.join(", "), groupId, groupLabel,
+        }))],
       }));
     }
-    setStatus(values.length
-      ? `added ${values.length} calculated reflection position${values.length === 1 ? "" : "s"} to the plot`
+    setStatus(grouped.length
+      ? `added ${grouped.length} calculated reflection position${grouped.length === 1 ? "" : "s"} to the plot`
       : "calculated reflection positions are already on the plot");
   }
+
+  const referenceLinesBlockedReason = result && fitInput
+    ? active?.id !== fitInput.sourceId
+      ? "Show the fitted source dataset before adding its reflection lines."
+      : plotXKey !== null
+        ? "Use the fitted dataset's 2θ time axis before adding its reflection lines."
+        : null
+    : null;
 
   const wavelengthFromFile = fileWavelength != null && parseField(fields.wavelength) === fileWavelength;
 
@@ -344,6 +378,7 @@ export function usePawley(): PawleyState {
     wavelengthFromFile,
     refineCell, setRefineCell,
     result, fitRange: fitInput?.range ?? null, fitRefined: fitInput?.refineCell ?? false,
-    busy, error, blockedReason, canCompute, compute, toLibrary, addReferenceLines, applyLattice,
+    busy, error, blockedReason, canCompute, compute, toLibrary, addReferenceLines,
+    referenceLinesBlockedReason, applyLattice,
   };
 }

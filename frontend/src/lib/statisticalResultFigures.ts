@@ -22,6 +22,21 @@ const text = (value: unknown): string => typeof value === "string" ? value : Str
 const columnsAre = (source: AnalysisResultTable, expected: readonly string[]): boolean =>
   source.columns.length === expected.length && expected.every((label, index) => source.columns[index] === label);
 
+function recipeColumn(result: AnalysisResult, key: string): number | null {
+  const recipe = result.parameters?.recipe;
+  if (typeof recipe !== "object" || recipe === null || Array.isArray(recipe)) return null;
+  const value = recipe[key];
+  return typeof value === "number" && Number.isInteger(value) ? value : null;
+}
+
+function selectedUnit(result: AnalysisResult, recipeKey: string, label: string): string {
+  const index = recipeColumn(result, recipeKey);
+  return result.selection?.channels.find((channel) => index !== null && channel.index === index)?.unit ??
+    result.selection?.channels.find((channel) => channel.label === label)?.unit ?? "";
+}
+
+const withUnit = (label: string, unit: string): string => unit ? `${label} (${unit})` : label;
+
 function view(name: string, xLabel: string, yLabel: string, xKey: number | null, yKeys: number[]): PlotView {
   return {
     ...defaultPlotView(),
@@ -61,9 +76,7 @@ function categoricalData(
 
 function distributionFigures(result: AnalysisResult): StatisticalResultFigureDraft[] {
   const column = text(result.scalarValues?.Column) || "Value";
-  const unit = result.selection?.channels.find((channel) => channel.label === column)?.unit ??
-    result.selection?.channels[0]?.unit ?? "";
-  const xLabel = unit ? `${column} (${unit})` : column;
+  const xLabel = withUnit(column, selectedUnit(result, "col", column));
   return (result.tables ?? []).flatMap((candidate, index) => {
     if (!(candidate.title === "Histogram" || candidate.title?.startsWith("Histogram · ")) ||
         !columnsAre(candidate, ["bin left", "center", "bin right", "count"])) return [];
@@ -86,7 +99,9 @@ function distributionFigures(result: AnalysisResult): StatisticalResultFigureDra
 function onewayFigures(result: AnalysisResult, source: AnalysisResultTable): StatisticalResultFigureDraft[] {
   if (!columnsAre(source, ["level", "group", "N", "mean", "sd"])) return [];
   const levels = [...new Set(source.rows.map((row) => text(row[0])))];
-  const yLabel = text(result.scalarValues?.["Y column"]) || "Mean";
+  const yName = text(result.scalarValues?.["Y column"]) || "Mean";
+  const yUnit = selectedUnit(result, "yCol", yName);
+  const yLabel = withUnit(yName, yUnit);
   return levels.flatMap((level, index) => {
     const rows = source.rows.filter((row) => text(row[0]) === level && finite(row[3]));
     if (!rows.length) return [];
@@ -95,9 +110,9 @@ function onewayFigures(result: AnalysisResult, source: AnalysisResultTable): Sta
     const sd = rows.map((row) => finite(row[4]) ? row[4] as number : Number.NaN);
     const hasSd = sd.some(Number.isFinite);
     const data = categoricalData(groups, text(result.scalarValues?.["X column"]) || "Group", [
-      { label: yLabel, values: means }, ...(hasSd ? [{ label: `${yLabel} SD`, values: sd }] : []),
+      { label: yName, values: means, unit: yUnit }, ...(hasSd ? [{ label: `${yName} SD`, values: sd, unit: yUnit }] : []),
     ]);
-    const name = `${yLabel} by group${level === "All" ? "" : ` · ${level}`}`;
+    const name = `${yName} by group${level === "All" ? "" : ` · ${level}`}`;
     return [{
       key: `fit-y-by-x-oneway-${index}`,
       name,
@@ -113,13 +128,16 @@ function onewayFigures(result: AnalysisResult, source: AnalysisResultTable): Sta
 function bivariateFigures(result: AnalysisResult, source: AnalysisResultTable): StatisticalResultFigureDraft[] {
   if (!columnsAre(source, ["level", "X", "fitted Y"])) return [];
   const levels = [...new Set(source.rows.map((row) => text(row[0])))];
-  const xLabel = text(result.scalarValues?.["X column"]) || "X";
-  const yLabel = text(result.scalarValues?.["Y column"]) || "Fitted Y";
+  const xName = text(result.scalarValues?.["X column"]) || "X";
+  const yName = text(result.scalarValues?.["Y column"]) || "Fitted Y";
+  const xLabel = withUnit(xName, selectedUnit(result, "xCol", xName));
+  const yUnit = selectedUnit(result, "yCol", yName);
+  const yLabel = withUnit(yName, yUnit);
   return levels.flatMap((level, index) => {
     const rows = source.rows.filter((row) => text(row[0]) === level && finite(row[1]) && finite(row[2]));
     if (!rows.length) return [];
-    const name = `${yLabel} fitted curve${level === "All" ? "" : ` · ${level}`}`;
-    const data = xyData(rows.map((row) => row[1] as number), [{ label: "Fitted Y", values: rows.map((row) => row[2] as number) }]);
+    const name = `${yName} fitted curve${level === "All" ? "" : ` · ${level}`}`;
+    const data = xyData(rows.map((row) => row[1] as number), [{ label: "Fitted Y", values: rows.map((row) => row[2] as number), unit: yUnit }]);
     return [{ key: `fit-y-by-x-curve-${index}`, name,
       description: "Fitted curve saved with this result. Observations remain in the source worksheet.",
       data, view: view(name, xLabel, yLabel, null, [0]), mark: "line" }];
@@ -133,8 +151,11 @@ function regressionBandFigures(
 ): StatisticalResultFigureDraft[] {
   if (!columnsAre(source, ["level", "X", "lower", "upper", "alpha"])) return [];
   const levels = [...new Set(source.rows.map((row) => text(row[0])))];
-  const xLabel = text(result.scalarValues?.["X column"]) || "X";
-  const yLabel = text(result.scalarValues?.["Y column"]) || "Y";
+  const xName = text(result.scalarValues?.["X column"]) || "X";
+  const yName = text(result.scalarValues?.["Y column"]) || "Y";
+  const xLabel = withUnit(xName, selectedUnit(result, "xCol", xName));
+  const yUnit = selectedUnit(result, "yCol", yName);
+  const yLabel = withUnit(yName, yUnit);
   const savedRecipe = result.parameters?.recipe;
   const recipe = typeof savedRecipe === "object" && savedRecipe !== null && !Array.isArray(savedRecipe) ? savedRecipe : {};
   const interval = recipe.bandInterval === "prediction" || recipe.bandInterval === "confidence"
@@ -157,12 +178,12 @@ function regressionBandFigures(
     // interpolate or recompute values merely to make the overlay convenient.
     const hasFitted = fitted.length === x.length && fitted.every(Number.isFinite);
     const data = xyData(x, [
-      ...(hasFitted ? [{ label: "Fitted Y", values: fitted }] : []),
-      { label: "Lower bound", values: rows.map((row) => row[2] as number) },
-      { label: "Upper bound", values: rows.map((row) => row[3] as number) },
+      ...(hasFitted ? [{ label: "Fitted Y", values: fitted, unit: yUnit }] : []),
+      { label: "Lower bound", values: rows.map((row) => row[2] as number), unit: yUnit },
+      { label: "Upper bound", values: rows.map((row) => row[3] as number), unit: yUnit },
     ]);
     const intervalLabel = `${coverage}${interval ? `${interval} interval` : "regression interval"}`;
-    const name = `${yLabel} ${intervalLabel}${level === "All" ? "" : ` · ${level}`}`;
+    const name = `${yName} ${intervalLabel}${level === "All" ? "" : ` · ${level}`}`;
     return [{ key: `fit-y-by-x-band-${index}`, name,
       description: hasFitted
         ? `Fitted curve plus lower and upper ${intervalLabel} bounds saved with this result.`
@@ -272,11 +293,13 @@ function variabilityFigures(result: AnalysisResult): StatisticalResultFigureDraf
     const means = cellRows.map((row) => row[3] as number);
     const sd = cellRows.map((row) => finite(row[4]) ? row[4] as number : Number.NaN);
     const hasSd = sd.some(Number.isFinite);
-    const yLabel = text(result.scalarValues?.Response) || "Mean";
+    const yName = text(result.scalarValues?.Response) || "Mean";
+    const yUnit = selectedUnit(result, "responseCol", yName);
+    const yLabel = withUnit(yName, yUnit);
     const data = categoricalData(labels, `${cells.columns[0]} / ${cells.columns[1]}`, [
-      { label: yLabel, values: means }, ...(hasSd ? [{ label: `${yLabel} SD`, values: sd }] : []),
+      { label: yName, values: means, unit: yUnit }, ...(hasSd ? [{ label: `${yName} SD`, values: sd, unit: yUnit }] : []),
     ]);
-    out.push({ key: "variability-cells", name: `${yLabel} cell means`,
+    out.push({ key: "variability-cells", name: `${yName} cell means`,
       description: hasSd ? "Saved nested-cell means with standard-deviation error bars." : "Saved nested-cell means; standard deviation was unavailable.", data,
       view: view(`${yLabel} cell means`, data.labels[0], yLabel, 0, [1]), mark: "bar",
       ...(hasSd ? { errors: [{ channel: 2, target: 1, axis: "y", side: "both" } as const] } : {}) });
@@ -290,11 +313,13 @@ function outlierFigures(result: AnalysisResult): StatisticalResultFigureDraft[] 
   const flaggedRows = flagged && columnsAre(flagged, ["source row", "value", "statistic"])
     ? flagged.rows.filter((row) => finite(row[0]) && finite(row[1])) : [];
   if (flaggedRows.length) {
-    const label = text(result.scalarValues?.Channel) || "Value";
+    const name = text(result.scalarValues?.Channel) || "Value";
+    const unit = selectedUnit(result, "col", name);
+    const label = withUnit(name, unit);
     const data = xyData(flaggedRows.map((row) => row[0] as number), [
-      { label, values: flaggedRows.map((row) => row[1] as number) },
+      { label: name, values: flaggedRows.map((row) => row[1] as number), unit },
     ]);
-    out.push({ key: "outlier-flagged", name: `${label} flagged observations`,
+    out.push({ key: "outlier-flagged", name: `${name} flagged observations`,
       description: "Only observations flagged by the saved screening result are shown.", data,
       view: view(`${label} flagged observations`, "Source row", label, null, [0]), mark: "scatter" });
   }

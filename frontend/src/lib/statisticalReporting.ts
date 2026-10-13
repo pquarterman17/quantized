@@ -9,11 +9,14 @@ export interface StatisticalReportingSummary {
   missingData: string[];
 }
 
-const EFFECT = /effect|cohen|cram[eé]r|eta|omega|odds ratio|\br²\b|adjusted r²/i;
+// Match evidence labels as labels, not arbitrary substrings.  Loose matches
+// made "beta" look like eta, "adjusted R²" look like a p-value adjustment,
+// and "Multiple regression" look like a multiple-comparisons table.
+const EFFECT = /\b(?:effect(?: size)?|cohen(?:'s)? d|cram[eé]r(?:'s)? v|omega(?: squared)?)\b|(?:^|\W)eta(?: squared)?(?:\W|$)|(?:^|\W)(?:adjusted\s+)?r(?:²|\^2)(?:\W|$)|\bodds ratio\b/i;
 const INTERVAL = /confidence|prediction|\bci\b|\blower\b|\bupper\b/i;
 const ASSUMPTION = /assumption|normal|shapiro|levene|homosced|equal variances|balanced|estimable|constant variable|approximate/i;
-const ADJUSTMENT = /adjust|multiple|tukey|dunnett|bonferroni|holm|fdr|benjamini/i;
-const MISSING = /missing|omitted|listwise|non-finite|complete rows/i;
+const ADJUSTMENT = /\b(?:multiple comparisons?|adjusted p(?:-value)?|p(?:-value)? adjustment|tukey|dunnett|bonferroni|holm|fdr|benjamini(?:-hochberg)?)\b/i;
+const MISSING = /\b(?:missing data|missing values?|listwise deletion|non-finite (?:rows?|values?)|complete rows?)\b/i;
 
 function shown(value: string | number | null): string {
   if (value === null) return "unavailable";

@@ -82,7 +82,9 @@ function StatisticalFigureCard({ draft, disabled, onCreate }: {
       <strong>{draft.name}</strong>
       <span>{draft.description}</span>
       <div className="qz-analysis-figure-actions">
-        <Button size="sm" variant="primary" disabled={disabled} onClick={() => onCreate(draft)}>Create editable figure</Button>
+        <Button size="sm" variant="primary" disabled={disabled}
+          aria-label={`Create editable figure: ${draft.name}`}
+          onClick={() => onCreate(draft)}>Create editable figure</Button>
       </div>
     </div>
   </article>;
