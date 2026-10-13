@@ -102,7 +102,11 @@ function sanitizeRefLines(v: unknown): RefLine[] {
     if (typeof o.value !== "number" || !Number.isFinite(o.value)) continue;
     if (seenIds.has(o.id)) continue;
     seenIds.add(o.id);
-    out.push({ id: o.id, axis: o.axis, value: o.value });
+    const line: RefLine = { id: o.id, axis: o.axis, value: o.value };
+    if (typeof o.label === "string" && o.label) line.label = o.label.slice(0, 256);
+    if (typeof o.groupId === "string" && o.groupId) line.groupId = o.groupId.slice(0, 128);
+    if (typeof o.groupLabel === "string" && o.groupLabel) line.groupLabel = o.groupLabel.slice(0, 256);
+    out.push(line);
   }
   return out;
 }

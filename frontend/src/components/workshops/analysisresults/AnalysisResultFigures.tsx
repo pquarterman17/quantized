@@ -65,9 +65,10 @@ function FigureCard({ result, index, onOpen, onBuild, onReport }: {
   </article>;
 }
 
-function StatisticalFigureCard({ draft, disabled, onCreate }: {
+function StatisticalFigureCard({ draft, disabled, disabledReason, onCreate }: {
   draft: StatisticalResultFigureDraft;
   disabled: boolean;
+  disabledReason?: string;
   onCreate: (draft: StatisticalResultFigureDraft) => void;
 }) {
   const channel = draft.view.yKeys?.[0] ?? 0;
@@ -83,6 +84,7 @@ function StatisticalFigureCard({ draft, disabled, onCreate }: {
       <span>{draft.description}</span>
       <div className="qz-analysis-figure-actions">
         <Button size="sm" variant="primary" disabled={disabled}
+          title={disabledReason}
           aria-label={`Create editable figure: ${draft.name}`}
           onClick={() => onCreate(draft)}>Create editable figure</Button>
       </div>
@@ -90,9 +92,10 @@ function StatisticalFigureCard({ draft, disabled, onCreate }: {
   </article>;
 }
 
-export default function AnalysisResultFigures({ result, disabled = false, onOpen, onBuild, onReport, onCreateStatistical }: {
+export default function AnalysisResultFigures({ result, disabled = false, disabledReason, onOpen, onBuild, onReport, onCreateStatistical }: {
   result: AnalysisResult;
   disabled?: boolean;
+  disabledReason?: string;
   onOpen: (index: number) => void;
   onBuild: (index: number) => void;
   onReport: (index: number) => void;
@@ -105,7 +108,8 @@ export default function AnalysisResultFigures({ result, disabled = false, onOpen
   return <div className="qz-analysis-figures">
     {!!drafts.length && <>
       <p className="qz-analysis-caption">These figures are frozen from the saved statistical tables. They remain reproducible if the source changes, and open as ordinary editable Quantized figures.</p>
-      {drafts.map((draft) => <StatisticalFigureCard key={draft.key} draft={draft} disabled={disabled} onCreate={onCreateStatistical} />)}
+      {disabledReason && <p className="qz-analysis-missing" role="note">{disabledReason}</p>}
+      {drafts.map((draft) => <StatisticalFigureCard key={draft.key} draft={draft} disabled={disabled} disabledReason={disabledReason} onCreate={onCreateStatistical} />)}
     </>}
     {!!result.plotBindings?.length && <><p className="qz-analysis-caption">{sourceOnly
       ? "These actions plot the recorded source curve only. The peak table and CSV preserve fitted values; a reusable fitted curve is not stored in this result."

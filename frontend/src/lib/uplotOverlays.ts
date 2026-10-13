@@ -3,10 +3,8 @@
 // Pixels are re-derived from data coords on every draw, so overlays stay pinned
 // across zoom/pan. refLinePlugin is optionally interactive (drag to move a line);
 // the rest are pure draw hooks. The active drag-gesture tools live in uplotTools.
-
 import type uPlot from "uplot";
 import type { ErrorSpan } from "./errorbars";
-
 import {
   canvasToOverCss,
   claimCursor,
@@ -20,13 +18,12 @@ import { colorScatterFill, paintColorPoint, type ColorScatterSpec } from "./colo
 import { richLabelAst, type RichNode } from "./richtext";
 import { DESCENT_EM, drawRich, measureRich, type RichFont } from "./richtextCanvas";
 import type { Annotation, RefLine, RegionShade } from "./types";
-
+const MOVE = "mousemove", UP = "mouseup";
 /** A reference line the pointer is over (for drag hit-testing). */
 export interface RefLineHit {
   id: string;
   axis: "x" | "y";
 }
-
 /** Pick the reference line nearest the pointer within `tol` px, or null. Each
  *  candidate carries its on-axis pixel: x-lines are vertical (compare pointer.x),
  *  y-lines horizontal (compare pointer.y). Ties resolve to the closest. */
@@ -81,7 +78,7 @@ export function refLinePlugin(
                 return pickRefLine(cands, { x: clientX - rect.left, y: clientY - rect.top });
               };
 
-              over.addEventListener("mousemove", (e: MouseEvent) => {
+              over.addEventListener(MOVE, (e: MouseEvent) => {
                 if (dragId) return; // cursor managed during drag
                 const h = hit(e.clientX, e.clientY);
                 over.style.cursor = h ? (h.axis === "x" ? "ew-resize" : "ns-resize") : "";
@@ -109,14 +106,14 @@ export function refLinePlugin(
                   };
                   const up = (ev: MouseEvent) => {
                     const v = valAt(ev);
-                    document.removeEventListener("mousemove", move);
-                    document.removeEventListener("mouseup", up);
+                    document.removeEventListener(MOVE, move);
+                    document.removeEventListener(UP, up);
                     dragId = null;
                     over.style.cursor = "";
                     onMove(h.id, v); // commit once
                   };
-                  document.addEventListener("mousemove", move);
-                  document.addEventListener("mouseup", up);
+                  document.addEventListener(MOVE, move);
+                  document.addEventListener(UP, up);
                 },
                 { capture: true },
               );
@@ -126,7 +123,7 @@ export function refLinePlugin(
         const { ctx } = u;
         const { left, top, width, height } = u.bbox;
         ctx.save();
-        ctx.strokeStyle = color;
+        ctx.fillStyle = ctx.strokeStyle = color;
         ctx.lineWidth = 1;
         ctx.setLineDash([5, 4]);
         for (const ln of lines) {
@@ -134,18 +131,22 @@ export function refLinePlugin(
           const value = ln.id === dragId ? dragValue : ln.value;
           if (!Number.isFinite(value)) continue;
           ctx.beginPath();
+          let labelX = left + 4, labelY = top + 11;
           if (ln.axis === "x") {
             const px = u.valToPos(value, "x", true);
             if (px < left || px > left + width) continue;
             ctx.moveTo(px, top);
             ctx.lineTo(px, top + height);
+            labelX = px + 3;
           } else {
             const py = u.valToPos(value, "y", true);
             if (py < top || py > top + height) continue;
             ctx.moveTo(left, py);
             ctx.lineTo(left + width, py);
+            labelY = py - 3;
           }
           ctx.stroke();
+          if (ln.label) ctx.fillText(ln.label, labelX, labelY);
         }
         ctx.restore();
       },
@@ -648,7 +649,7 @@ export function annotationPlugin(
                 over.style.cursor = c;
               };
 
-              root.addEventListener("mousemove", (e: MouseEvent) => {
+              root.addEventListener(MOVE, (e: MouseEvent) => {
                 if (dragMove || dragResize) return; // cursor fixed while a drag owns the pointer
                 const rect = root.getBoundingClientRect();
                 const p = canvasPointer(rect, e.clientX - rect.left, e.clientY - rect.top);
@@ -706,8 +707,8 @@ export function annotationPlugin(
                       u.redraw();
                     };
                     const onUp = (ev: MouseEvent) => {
-                      document.removeEventListener("mousemove", onMoveEv);
-                      document.removeEventListener("mouseup", onUp);
+                      document.removeEventListener(MOVE, onMoveEv);
+                      document.removeEventListener(UP, onUp);
                       const up = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
                       // A plain click on the handle (no drag) commits nothing —
                       // same no-op-avoidance as the move gesture below.
@@ -718,8 +719,8 @@ export function annotationPlugin(
                       u.redraw();
                       redrawSoon(u);
                     };
-                    document.addEventListener("mousemove", onMoveEv);
-                    document.addEventListener("mouseup", onUp);
+                    document.addEventListener(MOVE, onMoveEv);
+                    document.addEventListener(UP, onUp);
                     return;
                   }
 
@@ -734,7 +735,7 @@ export function annotationPlugin(
                     // fixed ranges) clear too, which uPlot's own internal
                     // dblclick-autoscale cannot do.
                     const onUp = (ev: MouseEvent) => {
-                      document.removeEventListener("mouseup", onUp);
+                      document.removeEventListener(UP, onUp);
                       const up = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
                       if (Math.hypot(up.x - down.x, up.y - down.y) >= CLICK_PX) return;
                       const now = Date.now();
@@ -749,7 +750,7 @@ export function annotationPlugin(
                         o.onSelect?.(null);
                       }
                     };
-                    document.addEventListener("mouseup", onUp);
+                    document.addEventListener(UP, onUp);
                     return;
                   }
 
@@ -822,8 +823,8 @@ export function annotationPlugin(
                     u.redraw();
                   };
                   const onUp = (ev: MouseEvent) => {
-                    document.removeEventListener("mousemove", onMoveEv);
-                    document.removeEventListener("mouseup", onUp);
+                    document.removeEventListener(MOVE, onMoveEv);
+                    document.removeEventListener(UP, onUp);
                     const up = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
                     // A plain click (already selected via onSelect above, no
                     // actual drag) commits nothing — avoids a no-op store write
@@ -835,8 +836,8 @@ export function annotationPlugin(
                     u.redraw();
                     redrawSoon(u);
                   };
-                  document.addEventListener("mousemove", onMoveEv);
-                  document.addEventListener("mouseup", onUp);
+                  document.addEventListener(MOVE, onMoveEv);
+                  document.addEventListener(UP, onUp);
                 },
                 { capture: true },
               );

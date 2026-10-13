@@ -54,7 +54,7 @@
 // null`), so its conversion adds one — a behavior-preserving change, not a
 // violation of that byte-identical rule.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import ConfirmDialog from "./components/overlays/ConfirmDialog";
 import ParamDialog from "./components/overlays/ParamDialog";
 import Toaster from "./components/overlays/Toaster";
@@ -99,11 +99,7 @@ import { lazyRegion as lazyPanel } from "./lib/lazyRegion";
  * while closed. That preserves local dialog state (for example Preferences'
  * active tab) exactly as the former eager mount did. */
 function useKeepMountedAfterOpen(open: boolean): boolean {
-  const [mounted, setMounted] = useState(open);
-  useEffect(() => {
-    if (open) setMounted(true);
-  }, [open]);
-  return mounted;
+  return useRef(open).current ||= open;
 }
 
 const SqliteQueryDialog = lazyPanel(() => import("./components/workshops/database/SqliteQueryDialog"), "SqliteQueryDialog");

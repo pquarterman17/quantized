@@ -511,6 +511,24 @@ describe("sanitizeView — annotations (MAIN #21 — page/data anchor)", () => {
   });
 });
 
+describe("sanitizeView — reference-line identity", () => {
+  it("keeps scientific labels and strips malformed optional identity", () => {
+    const lines = [
+      { id: "r1", axis: "x", value: 28.4, label: "(1 1 0)", groupId: "phase-1", groupLabel: "Phase reflections" },
+      { id: "r2", axis: "x", value: 35.2, label: 7, groupId: {}, groupLabel: null },
+      null,
+    ];
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), refLines: lines } as unknown as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.refLines).toEqual([
+      { id: "r1", axis: "x", value: 28.4, label: "(1 1 0)", groupId: "phase-1", groupLabel: "Phase reflections" },
+      { id: "r2", axis: "x", value: 35.2 },
+    ]);
+  });
+});
+
 describe("sanitizeView — shapes (MAIN #27 drawn shapes)", () => {
   it("round-trips a data-anchored shape unchanged", () => {
     const shape = { id: "s1", kind: "arrow" as const, x1: 1, y1: 2, x2: 3, y2: 4 };

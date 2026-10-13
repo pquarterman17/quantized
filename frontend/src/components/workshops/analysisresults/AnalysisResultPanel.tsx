@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { SNAPSHOT_RESULT_STATUS, dataFingerprint, isSnapshotResult, snapshotResultState } from "../../../lib/analysisResultFreshness";
 import { distributionRecipe } from "../../../lib/distributionAnalysisResult";
@@ -26,17 +26,16 @@ import AnalysisResultFitTable from "./AnalysisResultFitTable";
 import AnalysisResultFigures from "./AnalysisResultFigures";
 import AnalysisResultPeakTable from "./AnalysisResultPeakTable";
 import AnalysisResultRefl, { liveReflectivityFit, reflectivityFitIssues } from "./AnalysisResultRefl";
-import AnalysisResultSnapshotToolbar from "./AnalysisResultSnapshotToolbar";
 import AnalysisResultSnapshot from "./AnalysisResultSnapshot";
 import AnalysisResultTables from "./AnalysisResultTables";
+import AnalysisResultTabs, { type AnalysisResultTab } from "./AnalysisResultTabs";
+import AnalysisResultToolbar from "./AnalysisResultToolbar";
 import { analysisResultDiagnostics } from "./analysisResultDiagnostics";
 import { mappingForResult } from "./analysisResultFigureMapping";
 import { recordsFor } from "../reflectivity/reflFitRecord";
 import { FIT_SOURCE_MISSING, formatDate, formatValue, PEAK_SOURCE_MISSING, SOURCE_MISSING } from "./analysisResultPanelText";
 import { useAnalysisResultInlineTableActions, type AnalysisResultBusy } from "./useAnalysisResultInlineTableActions";
 import { openAnalysisSourceRows } from "../../../store/analysisResultRowNavigation";
-type Tab = "overview" | "table" | "figures" | "diagnostics" | "provenance" | "notes";
-const TABS: readonly Tab[] = ["overview", "table", "figures", "diagnostics", "provenance", "notes"];
 // Its own seam, not store/analysisResultLazy.ts: importing that from this
 // chunk would split it into a separate eagerly-named chunk (measured).
 const loadActions = () => runLazy("Loading analysis result actions…", () => import("../../../store/analysisResultActions"));
@@ -57,7 +56,7 @@ export default function AnalysisResultPanel() {
   const setCurveFitOpen = useApp((state) => state.setCurveFitOpen);
   const openReflectivityFitRecord = useApp((state) => state.openReflectivityFitRecord);
   const openQuickFigureBuilder = useApp((state) => state.openQuickFigureBuilder);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<AnalysisResultTab>("overview");
   const [busy, setBusy] = useState<AnalysisResultBusy>(null);
   const [notes, setNotes] = useState(result?.notes ?? "");
   useEffect(() => setNotes(result?.notes ?? ""), [result?.id, result?.notes]);
@@ -274,52 +273,33 @@ export default function AnalysisResultPanel() {
     : isPeak
     ? !source ? "Source missing" : !peakTable ? "Incomplete" : peakStale ? "Out of date" : "Current"
     : sourceMissing ? "Source missing" : !source || !output ? "Incomplete" : staleDatasets.includes(output.id) ? "Out of date" : "Current";
-  const moveTab = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    const offset = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
-    const next = event.key === "Home" ? 0 : event.key === "End" ? TABS.length - 1
-      : offset ? (index + offset + TABS.length) % TABS.length : -1;
-    if (next < 0) return;
-    event.preventDefault();
-    setTab(TABS[next]);
-    event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("[role=tab]")[next]?.focus();
-  };
+  const figureDisabledReason = busy !== null
+    ? "Finish the current result action before creating an editable figure."
+    : snapshotState === "out-of-date"
+      ? "This result is out of date. Run the analysis again from its source before creating an editable figure."
+      : snapshotState === "pending"
+        ? "Load the full source worksheet before creating an editable figure."
+        : undefined;
 
   return (
     <ToolWindow id="analysis-result" title={result.name} width={760} x={210} y={100} onClose={close}>
       <div className="qz-analysis-result">
-        <div className="qz-analysis-toolbar">
-          <span className={`qz-analysis-status status-${status.toLowerCase().replaceAll(" ", "-")}`}>{status}</span>
-          {isSnapshot ? <AnalysisResultSnapshotToolbar result={result} source={source} recipeReady={!!(statsRecipe || savedDistributionRecipe || savedFitYByXRecipe || savedVariabilityRecipe || savedOutlierRecipe || savedMultivariateRecipe)}
-            state={snapshotState ?? "source-missing"} busy={busy} onOpen={() => source && openTable(source.id)} onEdit={editSnapshot}
-            onDuplicate={() => void duplicate()} onReport={() => void sendInlineReport()} /> : isRefl ? <>
-            <Button disabled={!reflFit || busy !== null} onClick={editReflFit}>Open fit workbench</Button>
-          </> : isPeak ? <>
-            <Button disabled={!source || busy !== null} onClick={() => source && openTable(source.id)}>Open data</Button>
-            <Button disabled={!source || busy !== null} onClick={editPeaks}>Edit / Re-fit…</Button>
-          </> : isFit ? <>
-            <Button disabled={!source || busy !== null} onClick={() => source && openTable(source.id)}>Open data</Button>
-            <Button disabled={!source || !fitSpec || busy !== null} onClick={editFit}>Edit / Re-fit…</Button>
-            <Button disabled={!source || !fitReplayable || busy !== null}
-              title={!fitReplayable && fitSpec ? "This legacy fit does not record exact X/Y channels; use Edit / Re-fit first." : undefined}
-              onClick={() => void recalculate()}>{busy === "recalculate" ? "Recalculating…" : "Recalculate"}</Button>
-          </> : <>
-            <Button disabled={!output} onClick={openOutput}>Open worksheet</Button>
-            <Button disabled={!source || !output || busy !== null} title={blocked} onClick={() => void recalculate()}>{busy === "recalculate" ? "Recalculating…" : "Recalculate"}</Button>
-            <Button disabled={!source || !output?.analysisRecipe || busy !== null} title={blocked} onClick={() => void rerun()}>{busy === "rerun" ? "Rerunning…" : "Rerun as new"}</Button>
-            <Button disabled={result.outputs.length !== 1 || !output || busy !== null} title="Create a separate linked output worksheet and result." onClick={() => void duplicate()}>{busy === "duplicate" ? "Duplicating…" : "Duplicate"}</Button>
-            <Button disabled={result.outputs.length !== 1 || !output?.derivedFrom || busy !== null} title={freezeReason} onClick={() => void freeze()}>{busy === "freeze" ? "Freezing…" : "Freeze data"}</Button>
-          </>}
-          <Button disabled={busy !== null} onClick={() => void rename()}>Rename…</Button>
-          <Button disabled={busy !== null} variant="danger" onClick={() => void remove()}>Delete…</Button>
-        </div>
+        <AnalysisResultToolbar result={result} source={source} status={status} busy={busy}
+          mode={isSnapshot ? "snapshot" : isRefl ? "reflectivity" : isPeak ? "peaks" : isFit ? "fit" : "linked"}
+          snapshotState={snapshotState ?? "source-missing"}
+          recipeReady={!!(statsRecipe || savedDistributionRecipe || savedFitYByXRecipe || savedVariabilityRecipe || savedOutlierRecipe || savedMultivariateRecipe)}
+          hasReflFit={!!reflFit} hasFitSpec={!!fitSpec} fitReplayable={fitReplayable}
+          hasOutput={!!output} outputHasRecipe={!!output?.analysisRecipe} outputDerived={!!output?.derivedFrom}
+          blocked={blocked} freezeReason={freezeReason}
+          onOpenSource={() => { if (source) openTable(source.id); }} onOpenOutput={openOutput}
+          onEdit={isSnapshot ? editSnapshot : isRefl ? editReflFit : isPeak ? editPeaks : editFit}
+          onRecalculate={() => void recalculate()} onRerun={() => void rerun()}
+          onDuplicate={() => void duplicate()} onFreeze={() => void freeze()} onReport={() => void sendInlineReport()}
+          onRename={() => void rename()} onRemove={() => void remove()} />
         {(sourceMissing || ((isPeak || isFit) && !source) || snapshotState === "source-missing" || (isRefl && !reflFit)) && <p className="qz-analysis-missing" role="note">
           {isPeak ? PEAK_SOURCE_MISSING : isFit ? FIT_SOURCE_MISSING : isRefl ? "Saved reflectivity fit not found — restore one of its source worksheets to inspect it." : SOURCE_MISSING}
         </p>}
-        <div className="qz-analysis-tabs" role="tablist" aria-label="Analysis result views">
-          {TABS.map((value, index) => (
-            <button key={value} id={`analysis-result-tab-${value}`} role="tab" aria-controls="analysis-result-tabpanel" aria-selected={tab === value} tabIndex={tab === value ? 0 : -1} className={tab === value ? "active" : ""} onKeyDown={(event) => moveTab(event, index)} onClick={() => setTab(value)}>{value[0].toUpperCase() + value.slice(1)}{value === "diagnostics" && diagnostics.length ? ` (${diagnostics.length})` : ""}</button>
-          ))}
-        </div>
+        <AnalysisResultTabs active={tab} diagnostics={diagnostics.length} onChange={setTab} />
         <div id="analysis-result-tabpanel" className="qz-analysis-body" role="tabpanel" aria-labelledby={`analysis-result-tab-${tab}`}>
           {tab === "overview" && <>
             {isSnapshot ? <AnalysisResultSnapshot result={result} source={source} view="overview" onExport={() => void exportInlineTables()} /> : isRefl ? <AnalysisResultRefl result={result} record={reflFit} datasets={datasets} view="overview" /> : isPeak ? <dl className="qz-analysis-summary">
@@ -354,7 +334,7 @@ export default function AnalysisResultPanel() {
             : isFit ? <AnalysisResultFitTable spec={fitSpec} onExport={() => void exportFit()} />
             : <AnalysisResultTables result={result} onOpen={openTable} onExport={(datasetId) => void exportTable(datasetId)} />)}
           {tab === "figures" && <AnalysisResultFigures result={result}
-            disabled={busy !== null || snapshotState === "out-of-date" || snapshotState === "pending"}
+            disabled={figureDisabledReason !== undefined} disabledReason={figureDisabledReason}
             onOpen={(index) => void openPlot(index)} onBuild={(index) => void buildFigure(index)} onReport={(index) => void sendReport(index)} onCreateStatistical={(key) => void createStatisticalFigure(key)} />}
           {tab === "diagnostics" && (diagnostics.length
             ? <ul className="qz-analysis-diagnostics">{diagnostics.map((message, index) => <li key={`${message}-${index}`}>{message}</li>)}</ul>

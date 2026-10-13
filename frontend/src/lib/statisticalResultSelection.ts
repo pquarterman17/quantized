@@ -43,7 +43,8 @@ function directSourceRow(result: AnalysisResult, source: Dataset, table: Analysi
   if (column < 0) return null;
   const saved = table.rows[row]?.[column];
   if (typeof saved !== "number" || !Number.isInteger(saved)) return [];
-  const index = result.producer.id === "multivariate-analysis" ? saved - 1 : saved;
+  const oneBased = result.producer.id === "multivariate-analysis" || result.producer.version >= 2;
+  const index = oneBased ? saved - 1 : saved;
   return index >= 0 && index < source.data.time.length ? [index] : [];
 }
 

@@ -16,7 +16,7 @@ const EFFECT = /\b(?:effect(?: size)?|cohen(?:'s)? d|cram[eé]r(?:'s)? v|omega(?
 const INTERVAL = /confidence|prediction|\bci\b|\blower\b|\bupper\b/i;
 const ASSUMPTION = /assumption|normal|shapiro|levene|homosced|equal variances|balanced|estimable|constant variable|approximate/i;
 const ADJUSTMENT = /\b(?:multiple comparisons?|adjusted p(?:-value)?|p(?:-value)? adjustment|tukey|dunnett|bonferroni|holm|fdr|benjamini(?:-hochberg)?)\b/i;
-const MISSING = /\b(?:missing data|missing values?|listwise deletion|non-finite (?:rows?|values?)|complete rows?)\b/i;
+const MISSING = /\b(?:missing data|missing values?|listwise deletion|non-finite (?:source )?(?:rows?|values?)|complete rows?)\b/i;
 
 function shown(value: string | number | null): string {
   if (value === null) return "unavailable";

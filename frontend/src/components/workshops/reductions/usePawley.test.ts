@@ -269,7 +269,7 @@ describe("usePawley → Library", () => {
     act(() => hook.current.addReferenceLines());
     expect(useApp.getState().refLines).toEqual(expect.arrayContaining([
       expect.objectContaining({ axis: "x", value: 28.4 }),
-      expect.objectContaining({ axis: "x", value: 35.2, label: "(200), (201)", groupLabel: "powder.xrdml · Pawley reflections" }),
+      expect.objectContaining({ axis: "x", value: 35.2, label: "(2 0 0), (2 0 1)", groupLabel: "powder.xrdml · Pawley reflections" }),
     ]));
     expect(useApp.getState().refLines).toHaveLength(2);
     expect(useApp.getState().history).toHaveLength(1);

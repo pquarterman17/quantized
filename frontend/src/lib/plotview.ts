@@ -344,11 +344,11 @@ export interface PlotWindow {
 // ── .dwk / untrusted-boundary sanitizer (wired by item 7) ──────────────────
 
 export function num(v: unknown, d: number): number {
-  return typeof v === "number" && Number.isFinite(v) ? v : d;
+  return Number.isFinite(v as number) ? v as number : d;
 }
 
 function numOrNull(v: unknown): number | null {
-  return typeof v === "number" && Number.isFinite(v) ? v : null;
+  return Number.isFinite(v as number) ? v as number : null;
 }
 
 export function strOrDefault(v: unknown, d: string): string {
@@ -357,12 +357,19 @@ export function strOrDefault(v: unknown, d: string): string {
 
 
 function isAxisFormat(v: unknown): v is AxisFormat {
-  if (typeof v !== "object" || v === null) return false;
-  const candidate = v as { mode?: unknown; digits?: unknown };
-  return typeof candidate.mode === "string"
-    && (VALID_TICK_MODES as readonly string[]).includes(candidate.mode)
-    && typeof candidate.digits === "number"
+  const candidate = v as { mode?: TickMode; digits?: unknown } | null;
+  return !!candidate && typeof candidate === "object"
+    && VALID_TICK_MODES.includes(candidate.mode as TickMode)
     && Number.isFinite(candidate.digits);
+}
+
+function sanitizeRefLineIdentity(value: unknown): RefLine[] {
+  if (!value || typeof value !== "object") return [];
+  const line = { ...value } as RefLine;
+  if (!isString(line.label)) delete line.label;
+  if (!isString(line.groupId)) delete line.groupId;
+  if (!isString(line.groupLabel)) delete line.groupLabel;
+  return [line];
 }
 
 
@@ -406,7 +413,7 @@ export function sanitizePlotView(v: unknown): PlotView {
     y2Scale: y2ScaleOrDefault(o.y2Scale, o.y2Log),
     y2Step: numOrNull(o.y2Step),
     y2AxisLabel: strOrDefault(o.y2AxisLabel, fb.y2AxisLabel),
-    refLines: uniqueIds(Array.isArray(o.refLines) ? (o.refLines as RefLine[]) : []),
+    refLines: uniqueIds(Array.isArray(o.refLines) ? o.refLines.flatMap(sanitizeRefLineIdentity) : []),
     annotations: uniqueIds(sanitizeAnnotations(o.annotations)),
     regionShades: uniqueIds(sanitizeRegionShades(o.regionShades)),
     shapes: uniqueIds(sanitizeShapes(o.shapes)),

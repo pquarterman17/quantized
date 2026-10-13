@@ -29,6 +29,7 @@ import type { RegionShade } from "./types";
 /** Minimal uPlot stub: a recording 2D context + a linear valToPos. */
 function fakeU() {
   const segs: { from: [number, number]; to: [number, number] }[] = [];
+  const labels: string[] = [];
   let pen: [number, number] = [0, 0];
   const ctx = {
     save() {},
@@ -42,13 +43,15 @@ function fakeU() {
     lineTo(x: number, y: number) {
       segs.push({ from: pen, to: [x, y] });
     },
+    fillText(text: string) { labels.push(text); },
     strokeStyle: "",
+    fillStyle: "",
     lineWidth: 0,
   };
   // x: identity; y: 100 - value (so y grows downward like a real plot)
   const valToPos = (v: number, scale: string) => (scale === "x" ? v : 100 - v);
   const u = { ctx, bbox: { left: 10, top: 5, width: 100, height: 80 }, valToPos };
-  return { u, segs };
+  return { u, segs, labels };
 }
 
 function draw(lines: RefLine[]) {
@@ -83,6 +86,14 @@ describe("refLinePlugin", () => {
 
   it("skips non-finite values", () => {
     expect(draw([{ id: "a", axis: "x", value: Number.NaN }])).toHaveLength(0);
+  });
+
+  it("renders a persisted scientific identity beside its reference line", () => {
+    const { u, labels } = fakeU();
+    const plugin = refLinePlugin([{ id: "r1", axis: "x", value: 50, label: "(1 1 10)" }], "#abc");
+    // @ts-expect-error — minimal stub stands in for a real uPlot instance
+    plugin.hooks.draw?.(u);
+    expect(labels).toEqual(["(1 1 10)"]);
   });
 });
 

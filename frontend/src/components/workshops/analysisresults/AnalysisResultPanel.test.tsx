@@ -420,7 +420,10 @@ describe("AnalysisResultPanel", () => {
     });
     render(<AnalysisResultPanel />);
     fireEvent.click(screen.getByRole("tab", { name: "Figures" }));
-    expect(screen.getByRole("button", { name: /Create editable figure: Signal distribution/ })).toBeDisabled();
+    const create = screen.getByRole("button", { name: /Create editable figure: Signal distribution/ });
+    expect(create).toBeDisabled();
+    expect(create).toHaveAttribute("title", expect.stringMatching(/out of date/i));
+    expect(screen.getByRole("note")).toHaveTextContent(/run the analysis again/i);
   });
 
   it("does not offer figure creation while a statistical source is only a lazy preview", () => {
@@ -437,7 +440,10 @@ describe("AnalysisResultPanel", () => {
     useApp.setState({ datasets: [pending], analysisResults: [distribution], openAnalysisResultId: distribution.id });
     render(<AnalysisResultPanel />);
     fireEvent.click(screen.getByRole("tab", { name: "Figures" }));
-    expect(screen.getByRole("button", { name: /Create editable figure: Signal distribution/ })).toBeDisabled();
+    const create = screen.getByRole("button", { name: /Create editable figure: Signal distribution/ });
+    expect(create).toBeDisabled();
+    expect(create).toHaveAttribute("title", expect.stringMatching(/full source worksheet/i));
+    expect(screen.getByRole("note")).toHaveTextContent(/full source worksheet/i);
   });
 
   it("copies one table or the complete table set from a snapshot result", async () => {

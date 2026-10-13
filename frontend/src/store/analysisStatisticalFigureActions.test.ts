@@ -100,6 +100,6 @@ describe("createAnalysisStatisticalFigure", () => {
     expect(useApp.getState().editableFigures).toHaveLength(0);
     expect(useApp.getState().plotWindows).toHaveLength(0);
     expect(useApp.getState().history).toHaveLength(0);
-    expect(useApp.getState().status).toContain("run the analysis again from its source first");
+    expect(useApp.getState().status).toBe("can't create a figure from Saved distribution: run the analysis again from its source first");
   });
 });

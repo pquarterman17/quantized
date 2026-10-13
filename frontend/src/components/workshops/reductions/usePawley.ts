@@ -116,7 +116,10 @@ function reflectionTolerance(x: readonly number[], profileFwhm: number): number 
 }
 
 function hklLabel(hkl: readonly number[]): string {
-  return `(${hkl.join("")})`;
+  // Separators are required: (1 1 10), (11 1 0), and (1 -1 0) must remain
+  // distinct scientific identities rather than all collapsing into a run of
+  // digits whose signs and multi-digit indices are ambiguous.
+  return `(${hkl.join(" ")})`;
 }
 
 const MEASURED_WAVELENGTH_KEYS = ["wavelength_a", "alpha_average"] as const;

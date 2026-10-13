@@ -21,8 +21,11 @@ function result(producer: string, title: string, columns: string[], row: (string
 }
 
 describe("statisticalResultRowSelection", () => {
-  it("resolves zero-based outlier and one-based PCA source rows", () => {
+  it("keeps legacy zero-based Outlier rows while resolving one-based current rows and PCA rows", () => {
     expect(statisticalResultRowSelection(result("outlier-screening", "Flagged rows", ["source row"], [2]), source, 0, 0)?.rows).toEqual([2]);
+    const current = result("outlier-screening", "Flagged rows", ["source row"], [3]);
+    current.producer.version = 2;
+    expect(statisticalResultRowSelection(current, source, 0, 0)?.rows).toEqual([2]);
     expect(statisticalResultRowSelection(result("multivariate-analysis", "PCA scores", ["source row"], [2]), source, 0, 0)?.rows).toEqual([1]);
   });
 

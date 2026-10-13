@@ -203,7 +203,7 @@ describe("sanitizeRecipes — refLines (additive field, P2.1)", () => {
       visual: {
         ...good.visual,
         refLines: [
-          { id: "ok", axis: "x", value: 5 },
+          { id: "ok", axis: "x", value: 5, label: "(1 1 0)", groupId: "phase-1", groupLabel: "Phase reflections" },
           { id: "bad-axis", axis: "z", value: 1 },
           { id: "bad-value", axis: "y", value: "not a number" },
           { axis: "y", value: 2 }, // missing id
@@ -211,7 +211,9 @@ describe("sanitizeRecipes — refLines (additive field, P2.1)", () => {
       },
     };
     const [out] = sanitizeRecipes([corrupt]);
-    expect(out.visual.refLines).toEqual([{ id: "ok", axis: "x", value: 5 }]);
+    expect(out.visual.refLines).toEqual([{
+      id: "ok", axis: "x", value: 5, label: "(1 1 0)", groupId: "phase-1", groupLabel: "Phase reflections",
+    }]);
   });
 
   it("a non-array refLines value degrades to [] rather than dropping the recipe", () => {

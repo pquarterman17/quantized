@@ -26,16 +26,16 @@ describe("outlierScreeningAnalysisResult", () => {
   it("saves a compact, labeled audit snapshot without the raw score array", () => {
     const result = outlierScreeningAnalysisResult("result", source, recipe, snapshot, "2026-10-10T00:00:00Z");
     expect(result).toMatchObject({
-      producer: { id: "outlier-screening" }, sources: [{ datasetId: "source" }], outputs: [],
+      producer: { id: "outlier-screening", version: 2 }, sources: [{ datasetId: "source" }], outputs: [],
       parameters: { recipe }, sourceFingerprint: analysisDataFingerprint(source),
       selection: { channels: [{ index: 0, label: "signal", unit: "V" }] },
       scalarValues: { N: 3, "Flagged rows": 1, "Non-finite rows omitted": 1, Median: 2, MAD: 1, Threshold: 3.5 },
     });
     expect(result.tables).toEqual([expect.objectContaining({
-      title: "Flagged rows", rows: [[2, 99, 65.4]],
+      title: "Flagged rows", rows: [[3, 99, 65.4]],
     })]);
     expect(result.warnings).toContain("Screening only: no rows were excluded or deleted.");
-    expect(result.warnings).toContain("1 non-finite source row was omitted from the test: 3.");
+    expect(result.warnings).toContain("1 non-finite source row was omitted from the test: 4.");
     expect(JSON.stringify(result)).not.toContain("modified_z_scores");
     expect(outlierScreeningRecipe(result, source)).toEqual(recipe);
     expect(sanitizeAnalysisResults(JSON.parse(JSON.stringify([result])))).toEqual([result]);

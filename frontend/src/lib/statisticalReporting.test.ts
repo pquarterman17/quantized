@@ -57,4 +57,11 @@ describe("statisticalReporting", () => {
     expect(summary.adjustments).toEqual([expect.stringMatching(/No multiple-comparison adjustment/)]);
     expect(summary.missingData).toEqual([expect.stringMatching(/not recorded/)]);
   });
+
+  it("recognizes the producer's non-finite source-row disclosure", () => {
+    const summary = statisticalReporting(result({
+      warnings: ["2 non-finite source rows were omitted from the test: 4, 9."],
+    }));
+    expect(summary.missingData).toEqual(["2 non-finite source rows were omitted from the test: 4, 9."]);
+  });
 });
