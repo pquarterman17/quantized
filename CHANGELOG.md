@@ -6,6 +6,48 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-10-13
+
+A **minor** analysis release. Analysis output becomes durable: fits, peaks,
+signal, reflectivity, and statistical results are saved in the project Library,
+track whether their source data has changed, and can be reopened, re-run,
+exported, reported, or turned into editable figures. A searchable Analysis
+Center and shared input selection tie the tools together.
+
+### Added
+
+- **Durable analysis results** for Curve Fit, Peak Analysis, Signal
+  Processing, Reflectivity, Statistical Tests, Distribution, Fit Y by X,
+  Variability, Outlier Screening, and Multivariate (correlation/PCA). Results
+  persist with the project, show Current / Out of date / Pending / Source
+  missing, and refuse to report or recompute against changed data.
+- **Analysis Center:** searchable launcher with Recommended, Recent, Favorites,
+  All tools, and Existing results views, plus a unified Statistics workspace
+  that collects saved statistical results with copy/export.
+- **Shared analysis selection and batch runs:** a standard Review inputs panel,
+  Run By and multi-worksheet batches with per-input status and cancellation,
+  and exact saved row subsets for Curve Fit and Peaks.
+- **Editable figures from saved statistical results** (histograms, group means
+  with SD error bars, regression fits and intervals, PCA scree/scores,
+  variance components, outlier screens).
+- **Signal Processing and spectral analysis workbenches** with recipe replay.
+- Improved XRD peak detection with manual peak curation.
+
+### Changed
+
+- Dependabot now also proposes updates for the desktop shell's Rust crates.
+
+### Fixed
+
+- Fortran-style `D` exponents parse correctly in imports.
+- A flat channel autoscales the same on screen and in export.
+- Clipboard copies of result tables neutralize spreadsheet formulas.
+
+### Security
+
+- Bumped `rustls` to 0.23.45 (GHSA-2mjx-qc3c-rqvc, TLS 1.3 handshake messages
+  accepted across encryption-level boundaries) in the desktop updater.
+
 ## [0.30.0] - 2026-10-05
 
 A **minor** usability and plotting release focused on making Quantized behave
