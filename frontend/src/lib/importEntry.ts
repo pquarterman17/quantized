@@ -19,7 +19,7 @@
 
 import { hasDesktopShell, pickNativeFiles } from "./desktopBridge";
 import { IMPORT_ACCEPT, openFilePicker } from "./openFilePicker";
-import { useWorkingPaths } from "../store/workingPaths";
+import { onLoadFailure, runLazy } from "./runLazy";
 
 export interface ImportEntryStore {
   // Promise<unknown> (not <void>): the real store actions now resolve with
@@ -39,11 +39,15 @@ export async function chooseAndImport(
   accept: string = IMPORT_ACCEPT,
 ): Promise<void> {
   if (hasDesktopShell()) {
+    const working = await runLazy("Loading working folders…", () =>
+      import("../store/workingPaths"),
+    ).then((module) => module.useWorkingPaths, onLoadFailure);
+    if (!working) return;
     // MAIN #31: open where the user already works. This is the half that
     // actually removes the pain of a long network path — a native dialog
     // only fixes picking a file ONCE; starting in the right folder is what
     // makes the second and tenth time fast.
-    const paths = await pickNativeFiles(useWorkingPaths.getState().current || undefined);
+    const paths = await pickNativeFiles(working.getState().current || undefined);
     if (paths !== null) {
       // Includes the empty (cancelled) case — deliberately NOT a fallback.
       if (paths.length > 0) {
@@ -51,7 +55,7 @@ export async function chooseAndImport(
         // Remember the folder they actually picked from, so it floats to
         // the top of the working-path list next time.
         const dir = parentDirectory(paths[0]);
-        if (dir) useWorkingPaths.getState().use(dir);
+        if (dir) working.getState().use(dir);
       }
       return;
     }

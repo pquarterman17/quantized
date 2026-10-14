@@ -51,7 +51,7 @@ describe("createAnalysisStatisticalFigure", () => {
     expect(document.data.mode).toBe("frozen");
     expect(document.data.snapshot?.values).toEqual([[4], [2]]);
     expect(document.data.snapshot?.metadata).toMatchObject({
-      snapshotResultState: "source-missing", sourceFingerprint: "saved-fingerprint",
+      snapshotResultState: "source-missing", sourceDatasetId: "missing-source", sourceFingerprint: "saved-fingerprint",
     });
     expect(state.plotWindows.find((window) => window.id === windowId)?.document?.id).toBe(document.id);
 

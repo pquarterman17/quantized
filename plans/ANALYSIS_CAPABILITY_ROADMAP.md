@@ -3,7 +3,7 @@
 **Source:** ChatGPT-Sol (Codex)
 **Status:** Active
 **Created:** 2026-10-06
-**Last updated:** 2026-10-12
+**Last updated:** 2026-10-14
 
 ## Goal
 
@@ -402,12 +402,26 @@ menu names.
   every statistical producer under the same five headings and explicitly says
   when a producer did not record an item; absence is never presented as a
   passed assumption.
-- [ ] Add linked result tables/plots whose row and group selections highlight
+- [x] Add linked result tables/plots whose row and group selections highlight
   the source worksheet and plot.
   - [x] Exact saved source rows plus Distribution, Fit Y by X, and Variability
     aggregate rows can highlight their originating worksheet rows. The action
     is disabled when the saved result is stale, pending, or missing its source.
-  - [ ] Carry that linked selection into result figures and plot-side brushing.
+  - [x] Carry that linked selection into result figures and plot-side brushing.
+    Frozen saved-result figures now render from their own snapshot when focused
+    or in the background, so they remain visible if the source is missing.
+    Histogram bins, grouped summaries, contingency bars, variability cells,
+    PCA scores, and outlier rows map a brush to the exact current analysis
+    rows; synthetic fitted curves and interval bands map to the full observation
+    group that produced them rather than pretending their generated grid points
+    are raw observations. The same worksheet selection is highlighted in source
+    and result plots. Missing, pending, changed, legacy, or malformed sources
+    disable only the live link—the frozen figure remains editable and exportable.
+    The source row mapping is rebuilt from current worksheet state and its
+    fingerprint rechecked when a brush commits, closing both value-edit and
+    duplicate-row exclusion races between pointer-down and pointer-up.
+    Literal `All` and blank factor labels remain distinct real groups; missing
+    or invalid grouping metadata disables the link instead of guessing.
 - [x] Make every saved statistical table directly copyable and exportable,
   individually or as a complete result.
 - [x] Make saved statistical figures open as normal editable Quantized figures.
@@ -490,6 +504,7 @@ menu names.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-10-14 | ChatGPT-Sol (Codex) | Completed Workstream E's linked-figure slice and fixed the blank saved-statistical-figure workspace. Frozen result figures now render from their own immutable snapshot in focused and background windows, while bounded source-link descriptors carry shared selection between supported saved figures, worksheets, and source plots. Links fail closed for missing, pending, stale, legacy, or malformed sources; synthetic regression geometry selects its complete contributing observation group instead of claiming grid points are observations. Unlinked frozen figures intercept brushes so snapshot row numbers can never be applied to an unrelated active worksheet. To keep startup performance inside its unchanged ratchet, the focused adapter and linked-selection action load only with frozen figures, and desktop working-folder state now loads only when a native Open/Import action requests it. | Focused result-adapter, link-resolution, selection, window, plotting-action, native Open/Import, working-folder, architecture, and preload checks pass; TypeScript, full ESLint, production build, preload verification, and the unchanged 814.7 kB eager-bundle gate pass at 814.2 kB. The full frontend reached 17,261 passing tests plus 2 expected failures; its two failures were the documented Windows flat-autoscale numeric fixture mismatch and a load-sensitive Origin retry test that passed immediately in isolation. The Windows worker-path tests required an unsandboxed rerun after Vite hit its known `realpath` EPERM; both passed there. CI remains the complete-suite PR gate. |
 | 2026-10-12 | ChatGPT-Sol (Codex) | Closed the independent review of Workstreams E/F and its follow-up re-review. Reporting now recognizes non-finite source-row omissions; figure refusals and disabled result actions explain how to recover; grouped row links exclude non-finite responses. Pawley lines are limited to the fitted source/2θ axis, resolution-deduplicated, carry unambiguous spaced hkl labels on both the HiDPI plot canvas and Inspector, survive recipe/project persistence through one strict shared field sanitizer with boundary-specific collision handling, and remain removable as one group. New Outlier results use one-based worksheet row numbers, and legacy version-1 results are migrated on load so their tables, warnings, figures, and copy/export paths use that same convention. The result workspace was split into dedicated tabs and toolbar modules, while its remaining 368-line coordinator stays below the architecture ceiling. Statistical figure bands retain matching saved fit points, use the selected channel units, and refuse stale or lazy-preview creation up front. Restored precise lazy-load diagnostics, corrected a duplicated accessible name, and removed private corpus values from this log. | The final review gate passes 232 focused frontend checks and all 56 architecture checks; 14 focused magnetometry and 13 repository-integrity checks also pass. Forced TypeScript, full ESLint, Ruff, mypy, preload verification, and production build pass. The unchanged 834,257-byte eager-bundle gate passes at 834,226 bytes. CI remains the full-suite gate. |
 | 2026-10-12 | ChatGPT-Sol (Codex) | Completed Workstream E's standardized-reporting slice and the worksheet half of linked result selection, then began two orthogonal Workstream F depth slices. Statistical result overviews now use one evidence-first reporting structure for effect sizes, intervals, assumptions, multiple comparisons, and missing-data handling. Saved outlier/PCA source rows and grouped Distribution/Fit Y by X/Variability rows can select their exact current source rows, but stale results cannot drive selection. Magnetometry normalization now accepts mass and four geometry paths with per-field units and records reproducible derived-data provenance; A/m volume magnetization is supported. Pawley results can add calculated reflection positions as deduplicated plot reference lines. | Focused frontend reporting/selection/geometry/magnetometry/Pawley checks pass 260/260 and architecture passes 56/56; forced TypeScript, full ESLint, Ruff, mypy, production build, and the unchanged 834,257-byte eager-bundle gate pass. The complete backend passes 7,672 tests with 240 skips and 25 expected failures. Representative private-corpus qualification covered a real magnetometry loop and a powder-XRD scan, verified a mixed-unit thin-film A/m conversion without changing the source array, and produced finite Pawley reference positions. The monolithic Windows frontend runner entered its documented zero-test pre-collection failure state; every changed frontend suite passed individually, and CI remains the complete-suite PR gate. |
 | 2026-10-11 | ChatGPT-Sol (Codex) | Completed Workstream E's editable-statistical-figure slice. Saved Distribution, all three Fit Y by X modes (including saved regression-interval bounds), PCA, Variability, and Outlier outputs now offer figure-ready cards in the result workspace and create normal frozen editable figures. The figures derive strictly from the result envelope's saved tables, carry compact result/producer/draft provenance, preserve categorical labels and saved SD uncertainty, remain usable without the source worksheet, and refuse creation if scientific tables change during lazy loading. Observed bivariate points intentionally remain in the source worksheet because the durable result stores the fitted curve rather than duplicating raw observations. | Focused adapters, creation lifecycle, result UI, frozen persistence, render-contract, workspace round-trip, and architecture verification pass 210/210; the final review-fix regression gate passes 98/98. The full local frontend run reached 17,122 passing tests plus 2 expected failures, and the complete clean-install CI matrix subsequently passed. Changed-file ESLint, forced TypeScript, preload verification, production build, and the unchanged 834,257-byte eager-bundle gate pass at exactly 834,256 bytes. The adversarial and external review passes added table-identity concurrency guards, same-render double-click protection, one-gesture Undo, malformed/non-finite-row refusal, explicit empty-outlier behavior, provenance metadata, visible busy-state locking, named confidence/prediction intervals, truthful missing-SD descriptions, histogram units, PCA variance labels, stale-result refusal, frozen freshness/fingerprint stamps, removal of entirely empty SD bindings, and a click-only action boundary that leaves the eager graph unchanged from the base. |

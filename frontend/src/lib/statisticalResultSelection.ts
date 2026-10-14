@@ -74,7 +74,7 @@ export function statisticalResultRowSelection(
   const fit = fitYByXRecipe(result, source);
   if (fit && table.title === "Group summaries") {
     const terms: [number, unknown][] = [[fit.xCol, row[1]]];
-    if (fit.byCol != null && row[0] !== "All") terms.push([fit.byCol, row[0]]);
+    if (fit.byCol != null) terms.push([fit.byCol, row[0]]);
     const rows = rowsMatching(source, candidates, fit.yCol, terms);
     return { rows, label: `Highlight ${rows.length} source row${rows.length === 1 ? "" : "s"}` };
   }

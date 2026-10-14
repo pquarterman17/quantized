@@ -132,6 +132,23 @@ describe("WindowCanvas — single maximized window (migration guarantee)", () =>
     expect(created).toHaveLength(1); // exactly one live plot instance
   });
 
+  it("renders a focused frozen editable figure from its document snapshot", async () => {
+    const view = { ...defaultPlotView(), yKeys: [0] };
+    const document = createFigureDocument({
+      id: "frozen-figure", name: "Saved result", datasetId: null, view,
+      data: { mode: "frozen", snapshot: { ...DATA, values: [[91], [92], [93], [94]] } },
+    });
+    useApp.setState({
+      datasets: [], activeId: null,
+      plotWindows: [win({ id: "w1", winState: "maximized", datasetId: null, view, document })],
+      focusedWindowId: "w1", yKeys: [0],
+    });
+    render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(1));
+    expect((created[0].data as (number | null)[][])[1]).toEqual([91, 92, 93, 94]);
+    expect(useApp.getState().datasets).toEqual([]); // never masquerades as a worksheet
+  });
+
   it("still reports the stage size (its tab panel's), so the FIRST new window fits the stage", async () => {
     const seen: { el: Element; cb: ResizeObserverCallback }[] = [];
     class CapturingRO {
@@ -202,6 +219,22 @@ describe("WindowCanvas — ≥2 windows (MDI chrome + focused-window routing)", 
     for (const c of latest) {
       const data = c.data as (number | null)[][];
       expect(data[1][0]).toBeNull(); // row 0 dropped in every window's payload
+    }
+  });
+
+  it("shows one shared row brush in focused and background source plots", async () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "normal" })],
+      focusedWindowId: "w1",
+    });
+    render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(2));
+    act(() => useApp.getState().setRowSelection([1]));
+    await waitFor(() => expect(created.length).toBe(4));
+    for (const plot of created.slice(2)) {
+      const data = plot.data as (number | null)[][];
+      expect(data).toHaveLength(3); // x, source series, selected-points companion
+      expect(data[2]).toEqual([null, 20, null, null]);
     }
   });
 

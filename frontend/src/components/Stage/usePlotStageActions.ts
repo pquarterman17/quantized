@@ -79,6 +79,7 @@ export function usePlotStageActions(
   plotRef: RefObject<uPlot | null>,
   displayPayload: PlotPayload | null,
   active: Dataset | null | undefined,
+  onRowsSelected?: (rows: number[]) => void,
 ): PlotStageActions & {
   onRegionSelect: (x0: number, x1: number, y0?: number, y1?: number) => void;
   onRangeSelect: (x0: number, x1: number) => void;
@@ -181,7 +182,9 @@ export function usePlotStageActions(
     if (!displayPayload) return;
     // An X-offset (waterfall) payload repeats each row once per x block: map back to dataset rows.
     const rows = rowsInXRange(displayPayload.data[0] as (number | null)[], x0, x1);
-    useApp.getState().setRowSelection(waterfallSourceRows(displayPayload, rows));
+    const sourceRows = waterfallSourceRows(displayPayload, rows);
+    if (onRowsSelected) onRowsSelected(sourceRows);
+    else useApp.getState().setRowSelection(sourceRows);
   }
 
   // P2.8 residual (b): a half-open limit crossed the data, so the axis is on auto;

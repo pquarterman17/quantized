@@ -12,6 +12,7 @@ import type uPlot from "uplot";
 
 import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
+import type { Dataset } from "../../lib/types";
 import { canvasLineWidth, resolveTemplate } from "../../lib/plotTemplates";
 import { useStageSeriesCycle } from "./useStageSeriesCycle";
 import { resolvePlotBg } from "../../lib/uplotOpts";
@@ -42,9 +43,12 @@ import { usePlotStageActions } from "./usePlotStageActions";
 import { useShapeDraw } from "./useShapeDraw";
 import { useShapeEdit } from "./useShapeEdit";
 import { useStageContextMenu } from "./useStageContextMenu";
-
-export default function PlotStage() {
-  const active = useActiveDataset();
+export type PlotStageProps = { activeDataset?: Dataset | null; rowSelection?: { datasetId: string; rows: number[] } | null; onRowsSelected?: (rows: number[]) => void };
+export default function PlotStage({ activeDataset, rowSelection, onRowsSelected }: PlotStageProps = {}) {
+  const liveActive = useActiveDataset(), focusedDocument = useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.document);
+  const storeSelection = useApp((s) => s.selection);
+  const active = activeDataset === undefined ? liveActive : activeDataset;
+  const displaySelection = rowSelection === undefined ? storeSelection : rowSelection;
   const yScale = useApp((s) => s.yScale);
   const xScale = useApp((s) => s.xScale);
   const xLim = useApp((s) => s.xLim);
@@ -104,9 +108,7 @@ export default function PlotStage() {
   const winLinkGroup = useApp(
     (s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.linkGroup ?? null,
   );
-  // G4 / P1.4: the focused window's own document errors and encodings (see
-  // usePlotPayload's doc), looked up the same derived-selector way as `winBg`.
-  const focusedBindings = useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.document?.bindings);
+  const focusedBindings = focusedDocument?.bindings;
   const tool = useApp((s) => s.plotTool);
   // MAIN #18: pointer-mode annotation select/drag/resize/edit/menu bridge.
   const { bridge: annotationEdit, menu: annotationMenu, closeMenu: closeAnnotationMenu } = useAnnotationEdit(tool);
@@ -115,7 +117,6 @@ export default function PlotStage() {
   // drag-to-draw-a-new-shape mode bridge.
   const { bridge: shapeEdit, menu: shapeMenu, closeMenu: closeShapeMenu } = useShapeEdit(tool);
   const { shapeDraw } = useShapeDraw();
-  const selection = useApp((s) => s.selection);
   const integral = useApp((s) => s.integral);
   const fwhmResult = useApp((s) => s.fwhmResult);
   const setIntegral = useApp((s) => s.setIntegral);
@@ -186,7 +187,7 @@ export default function PlotStage() {
     baselineOverlay,
     peakOverlay,
     derivOverlay,
-    selection,
+    selection: displaySelection,
     defaultTrace,
     // P3.4 zoom-refetch residual: the committed X view window — a committed
     // zoom/pan on a server-decimated payload triggers a windowed re-fetch
@@ -228,7 +229,7 @@ export default function PlotStage() {
   // (One-per-line -> wrapped: P3.3 needed two prop lines in the JSX below and
   // this file is on the 400-line component ceiling. Ten names: + onLimCrossed.)
   const { resetView, smartScale, savePng, copyData, copyFigure, copyFigureSvg, snapshot, onRegionSelect, onRangeSelect, onLimCrossed } =
-    usePlotStageActions(plotRef, displayPayload, active);
+    usePlotStageActions(plotRef, displayPayload, active, onRowsSelected);
 
   // Item 11 / MAIN #27 offset: the live-snapshot publish (see
   // useLiveSnapshotPublish's header).

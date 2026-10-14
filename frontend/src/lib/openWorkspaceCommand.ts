@@ -7,7 +7,7 @@
 import { openFilePicker } from "./openFilePicker";
 import { CANCELLED, hasDesktopShell, openProject } from "./desktopBridge";
 import { baseName, parentDirectory } from "./importEntry";
-import { useWorkingPaths } from "../store/workingPaths";
+import { onLoadFailure, runLazy } from "./runLazy";
 import type { StoreGet } from "./exportActive";
 import { currentViewport, parseWorkspaceFile } from "./parseWorkspaceFile";
 import type { LoadedWorkspace } from "./workspace";
@@ -102,25 +102,34 @@ export function openWorkspaceCommand(
     // chokepoint (openWorkspaceReplace.ts's `recordNativeOpen`), not here
     // — a pick the user then declines to load must not move the working
     // path any more than it records a Recent Projects entry (DEFECT A).
-    void openProject(useWorkingPaths.getState().current || undefined).then((native) => {
-      if (native === CANCELLED) return; // the user backed out — never fall back
-      if (native === null) {
-        viaPicker();
-        return;
-      }
-      // The codec is a lazy chunk (lib/workspaceCodecLazy.ts); a load failure
-      // lands in the same "open failed" status as a parse failure.
-      void withOp(label, () =>
-        workspaceCodec().then(({ parseWorkspace }) =>
-          parseWorkspace(native.content, currentViewport(), {
-            projectDir: parentDirectory(native.path) || undefined,
-          }),
-        ),
+    void runLazy("Loading working folders…", () => import("../store/workingPaths"))
+      .then(
+        (module) => openProject(module.useWorkingPaths.getState().current || undefined),
+        onLoadFailure,
       )
-        .then((ws) => dispatch(ws, { name: baseName(native.path), path: native.path }))
-        .catch((e: unknown) =>
-          s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`),
-        );
-    });
+      .then((native) => {
+        if (native === undefined) return;
+        if (native === CANCELLED) return; // the user backed out — never fall back
+        if (native === null) {
+          viaPicker();
+          return;
+        }
+        // The codec is a lazy chunk (lib/workspaceCodecLazy.ts); a load failure
+        // lands in the same "open failed" status as a parse failure.
+        void withOp(label, () =>
+          workspaceCodec().then(({ parseWorkspace }) =>
+            parseWorkspace(native.content, currentViewport(), {
+              projectDir: parentDirectory(native.path) || undefined,
+            }),
+          ),
+        )
+          .then((ws) => dispatch(ws, { name: baseName(native.path), path: native.path }))
+          .catch((e: unknown) =>
+            s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`),
+          );
+      })
+      .catch((e: unknown) =>
+        s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`),
+      );
   };
 }

@@ -35,7 +35,7 @@ import { forceHydrate, pruneHydration, useWindowHydration } from "../../store/wi
 import { plotWindowDatasetId, plotWindowView } from "../../store/windowDocuments";
 import { lazyRegion } from "../../lib/lazyRegion";
 import { DATASET_DND } from "../Library/dnd";
-import PlotStage from "../Stage/PlotStage";
+import PlotStage, { type PlotStageProps } from "../Stage/PlotStage";
 import { MapWindow, WorksheetWindow } from "./DocumentWindow";
 import PlotWindowFrame from "./PlotWindowFrame";
 // E-c1 bundle pass: a fresh session has exactly one (focused) window, so the
@@ -57,6 +57,8 @@ const PanelPlotWindow = lazyRegion(() => import("./PanelPlotWindow"), "Window");
 // that already held one (a persisted window field, so that restore pays the
 // chunk fetch on its first paint) — never on the default first paint.
 const SnapshotPlotWindow = lazyRegion(() => import("./SnapshotPlotWindow"), "Window");
+const FrozenStatisticalFigureStage = lazyRegion(() => import("./FrozenStatisticalFigureStage"), "Plot");
+const renderFrozenStage = (props: PlotStageProps) => <PlotStage {...props} />;
 
 export default function WindowCanvas() {
   const plotWindows = useWindowsStore((s) => s.plotWindows);
@@ -144,7 +146,10 @@ export default function WindowCanvas() {
   // no extra host div — PlotStage keeps rendering directly into the
   // `.qzk-stage-cell` tab slot exactly as it did before this plan).
   if (plotWindows.length === 1 && plotWindows[0].winState === "maximized") {
-    return <PlotStage />;
+    const document = plotWindows[0].document;
+    return document?.data.mode === "frozen"
+      ? <FrozenStatisticalFigureStage figureDocument={document} render={renderFrozenStage} />
+      : <PlotStage />;
   }
 
   const visible = plotWindows.filter((w) => w.winState !== "minimized");
@@ -182,9 +187,10 @@ export default function WindowCanvas() {
         {visible.map((win) => {
           const focused = win.id === focusedWindowId;
           const datasetId = plotWindowDatasetId(win);
-          const dataset = datasetId ? (datasets.find((d) => d.id === datasetId) ?? null) : null;
-          const datasetMeta = dataset
-            ? { channels: dataset.data.labels.length, rows: dataset.data.time.length }
+          const dataset = datasetId ? datasets.find((candidate) => candidate.id === datasetId) ?? null : null;
+          const frozenData = win.document?.data.mode === "frozen" ? win.document.data.snapshot : undefined;
+          const datasetMeta = frozenData || dataset
+            ? { channels: (frozenData ?? dataset!.data).labels.length, rows: (frozenData ?? dataset!.data).time.length }
             : undefined;
           // P3.4 slice 4: a staged, not-yet-hydrated background window skips
           // the whole kind dispatch below for an inert placeholder — no
@@ -223,7 +229,9 @@ export default function WindowCanvas() {
                 // before the focused dispatch.
                 <PanelPlotWindow win={win} datasets={datasets} />
               ) : focused ? (
-                <PlotStage />
+                win.document?.data.mode === "frozen"
+                  ? <FrozenStatisticalFigureStage figureDocument={win.document} render={renderFrozenStage} />
+                  : <PlotStage />
               ) : (
                 <BackgroundPlotWindow
                   dataset={dataset}
@@ -242,7 +250,7 @@ export default function WindowCanvas() {
         <div className="qzk-winstrip">
           {minimized.map((win) => {
             const datasetId = plotWindowDatasetId(win);
-            const dataset = datasetId ? (datasets.find((d) => d.id === datasetId) ?? null) : null;
+            const dataset = datasetId ? datasets.find((candidate) => candidate.id === datasetId) ?? null : null;
             const title = win.title || dataset?.name || "Untitled graph";
             return (
               <button

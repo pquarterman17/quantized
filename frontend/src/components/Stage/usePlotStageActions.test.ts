@@ -4,7 +4,7 @@
 // the pre-existing behavior and must stay byte-identical.
 
 import { renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PlotPayload } from "../../lib/plotdata";
 import { useApp } from "../../store/useApp";
@@ -71,6 +71,17 @@ describe("usePlotStageActions onRegionSelect", () => {
     result.current.onRegionSelect(1, 3, 15, 35);
     expect(useApp.getState().regionPicked).toBeNull();
     expect(useApp.getState().plotTool).toBe("region"); // never exited
+  });
+});
+
+describe("usePlotStageActions linked row brushing", () => {
+  it("routes display rows to a linked figure callback instead of the active worksheet", () => {
+    const linked = vi.fn();
+    useApp.setState({ activeId: null, selection: null });
+    const { result } = renderHook(() => usePlotStageActions({ current: null }, payload, null, linked));
+    result.current.onRangeSelect(1, 2);
+    expect(linked).toHaveBeenCalledWith([1, 2]);
+    expect(useApp.getState().selection).toBeNull();
   });
 });
 

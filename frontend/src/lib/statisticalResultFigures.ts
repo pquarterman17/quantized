@@ -3,6 +3,7 @@ import type { ErrorBinding } from "./errorRoles";
 import type { PlotMark } from "./plotMarks";
 import { defaultPlotView, type PlotView } from "./plotview";
 import type { DataStruct } from "./types";
+import type { StatisticalFigureLinkDescriptor } from "./statisticalFigureLinkTypes";
 
 export interface StatisticalResultFigureDraft {
   key: string;
@@ -12,6 +13,7 @@ export interface StatisticalResultFigureDraft {
   view: PlotView;
   mark: PlotMark;
   errors?: ErrorBinding[];
+  sourceLink?: StatisticalFigureLinkDescriptor;
 }
 
 const table = (result: AnalysisResult, title: string): AnalysisResultTable | undefined =>
@@ -27,6 +29,14 @@ function recipeColumn(result: AnalysisResult, key: string): number | null {
   if (typeof recipe !== "object" || recipe === null || Array.isArray(recipe)) return null;
   const value = recipe[key];
   return typeof value === "number" && Number.isInteger(value) ? value : null;
+}
+
+function recipeByColumn(result: AnalysisResult): number | null | undefined {
+  const recipe = result.parameters?.recipe;
+  if (typeof recipe !== "object" || recipe === null || Array.isArray(recipe)) return undefined;
+  const value = recipe.byCol;
+  return value === null ? null
+    : typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
 }
 
 function selectedUnit(result: AnalysisResult, recipeKey: string, label: string): string {
@@ -82,16 +92,26 @@ function distributionFigures(result: AnalysisResult): StatisticalResultFigureDra
         !columnsAre(candidate, ["bin left", "center", "bin right", "count"])) return [];
     const rows = candidate.rows.filter((row) => finite(row[1]) && finite(row[3]));
     if (!rows.length) return [];
-    const level = candidate.title === "Histogram" ? "" : candidate.title!.slice("Histogram · ".length);
-    const name = `${column} distribution${level ? ` · ${level}` : ""}`;
+    const grouped = candidate.title !== "Histogram";
+    const level = grouped ? candidate.title!.slice("Histogram · ".length) : "";
+    const name = `${column} distribution${grouped ? ` · ${level || "(blank)"}` : ""}`;
     const data = xyData(rows.map((row) => row[1] as number), [{ label: "Count", values: rows.map((row) => row[3] as number) }]);
+    const responseColumn = recipeColumn(result, "col");
+    const byColumn = recipeByColumn(result);
+    const linkScopeValid = grouped ? typeof byColumn === "number" : byColumn === null;
     return [{
       key: `distribution-histogram-${index}`,
       name,
-      description: `Histogram saved with this result${level ? ` for ${level}` : ""}.`,
+      description: `Histogram saved with this result${grouped ? ` for ${level || "(blank)"}` : ""}.`,
       data,
       view: view(name, xLabel, "Count", null, [0]),
       mark: "bar",
+      ...(responseColumn === null || !linkScopeValid ? {} : { sourceLink: {
+        kind: "histogram" as const,
+        responseColumn,
+        ...(grouped && typeof byColumn === "number" ? { level: { column: byColumn, label: level } } : {}),
+        bins: rows.map((row): [number, number] => [row[0] as number, row[2] as number]),
+      } }),
     }];
   });
 }
@@ -102,6 +122,8 @@ function onewayFigures(result: AnalysisResult, source: AnalysisResultTable): Sta
   const yName = text(result.scalarValues?.["Y column"]) || "Mean";
   const yUnit = selectedUnit(result, "yCol", yName);
   const yLabel = withUnit(yName, yUnit);
+  const xColumn = recipeColumn(result, "xCol"), yColumn = recipeColumn(result, "yCol");
+  const byColumn = recipeByColumn(result);
   return levels.flatMap((level, index) => {
     const rows = source.rows.filter((row) => text(row[0]) === level && finite(row[3]));
     if (!rows.length) return [];
@@ -112,7 +134,7 @@ function onewayFigures(result: AnalysisResult, source: AnalysisResultTable): Sta
     const data = categoricalData(groups, text(result.scalarValues?.["X column"]) || "Group", [
       { label: yName, values: means, unit: yUnit }, ...(hasSd ? [{ label: `${yName} SD`, values: sd, unit: yUnit }] : []),
     ]);
-    const name = `${yName} by group${level === "All" ? "" : ` · ${level}`}`;
+    const name = `${yName} by group${typeof byColumn === "number" || level !== "All" ? ` · ${level}` : ""}`;
     return [{
       key: `fit-y-by-x-oneway-${index}`,
       name,
@@ -121,6 +143,14 @@ function onewayFigures(result: AnalysisResult, source: AnalysisResultTable): Sta
       view: view(name, data.labels[0], yLabel, 0, [1]),
       mark: "bar",
       ...(hasSd ? { errors: [{ channel: 2, target: 1, axis: "y", side: "both" } as const] } : {}),
+      ...(xColumn === null || yColumn === null || byColumn === undefined ||
+        (level !== "All" && byColumn === null) ? {} : { sourceLink: {
+        kind: "match" as const, responseColumn: yColumn,
+        rows: rows.map((row) => ({
+          levels: [[xColumn, text(row[1])] as [number, string],
+            ...(typeof byColumn === "number" ? [[byColumn, level] as [number, string]] : [])],
+        })),
+      } }),
     }];
   });
 }
@@ -133,14 +163,26 @@ function bivariateFigures(result: AnalysisResult, source: AnalysisResultTable): 
   const xLabel = withUnit(xName, selectedUnit(result, "xCol", xName));
   const yUnit = selectedUnit(result, "yCol", yName);
   const yLabel = withUnit(yName, yUnit);
+  const yColumn = recipeColumn(result, "yCol");
+  const byColumn = recipeByColumn(result);
   return levels.flatMap((level, index) => {
     const rows = source.rows.filter((row) => text(row[0]) === level && finite(row[1]) && finite(row[2]));
     if (!rows.length) return [];
-    const name = `${yName} fitted curve${level === "All" ? "" : ` · ${level}`}`;
+    const name = `${yName} fitted curve${typeof byColumn === "number" || level !== "All" ? ` · ${level}` : ""}`;
     const data = xyData(rows.map((row) => row[1] as number), [{ label: "Fitted Y", values: rows.map((row) => row[2] as number), unit: yUnit }]);
     return [{ key: `fit-y-by-x-curve-${index}`, name,
       description: "Fitted curve saved with this result. Observations remain in the source worksheet.",
-      data, view: view(name, xLabel, yLabel, null, [0]), mark: "line" }];
+      data, view: view(name, xLabel, yLabel, null, [0]), mark: "line",
+      ...(yColumn === null || byColumn === undefined ||
+        (level !== "All" && byColumn === null) ? {} : { sourceLink: {
+        kind: "match" as const, responseColumn: yColumn,
+        rows: rows.map(() => ({
+          levels: typeof byColumn === "number" ? [[byColumn, level] as [number, string]] : [],
+          // These are synthetic fit-grid points, not observations. Every
+          // point represents the complete fit group; exact X matching would
+          // falsely select only observations that happen to land on the grid.
+        })),
+      } }) }];
   });
 }
 
@@ -161,6 +203,8 @@ function regressionBandFigures(
   const interval = recipe.bandInterval === "prediction" || recipe.bandInterval === "confidence"
     ? recipe.bandInterval : null;
   const fittedValid = fittedSource && columnsAre(fittedSource, ["level", "X", "fitted Y"]);
+  const yColumn = recipeColumn(result, "yCol");
+  const byColumn = recipeByColumn(result);
   return levels.flatMap((level, index) => {
     const rows = source.rows.filter((row) => text(row[0]) === level && finite(row[1]) && finite(row[2]) && finite(row[3]) && finite(row[4]));
     if (!rows.length) return [];
@@ -183,18 +227,27 @@ function regressionBandFigures(
       { label: "Upper bound", values: rows.map((row) => row[3] as number), unit: yUnit },
     ]);
     const intervalLabel = `${coverage}${interval ? `${interval} interval` : "regression interval"}`;
-    const name = `${yName} ${intervalLabel}${level === "All" ? "" : ` · ${level}`}`;
+    const name = `${yName} ${intervalLabel}${typeof byColumn === "number" || level !== "All" ? ` · ${level}` : ""}`;
     return [{ key: `fit-y-by-x-band-${index}`, name,
       description: hasFitted
         ? `Fitted curve plus lower and upper ${intervalLabel} bounds saved with this result.`
         : `Lower and upper ${intervalLabel} bounds saved with this result.`,
-      data, view: view(name, xLabel, yLabel, null, data.labels.map((_, series) => series)), mark: "line" }];
+      data, view: view(name, xLabel, yLabel, null, data.labels.map((_, series) => series)), mark: "line",
+      ...(yColumn === null || byColumn === undefined ||
+        (level !== "All" && byColumn === null) ? {} : { sourceLink: {
+        kind: "match" as const, responseColumn: yColumn,
+        rows: rows.map(() => ({
+          levels: typeof byColumn === "number" ? [[byColumn, level] as [number, string]] : [],
+        })),
+      } }) }];
   });
 }
 
 function contingencyFigures(result: AnalysisResult, source: AnalysisResultTable): StatisticalResultFigureDraft[] {
   if (!columnsAre(source, ["level", "row", "column", "observed", "expected"])) return [];
   const levels = [...new Set(source.rows.map((row) => text(row[0])))];
+  const xColumn = recipeColumn(result, "xCol"), yColumn = recipeColumn(result, "yCol");
+  const byColumn = recipeByColumn(result);
   return levels.flatMap((level, index) => {
     const rows = source.rows.filter((row) => text(row[0]) === level && finite(row[3]));
     const rowLevels = [...new Set(rows.map((row) => text(row[1])))];
@@ -205,10 +258,18 @@ function contingencyFigures(result: AnalysisResult, source: AnalysisResultTable)
       return match && finite(match[3]) ? match[3] : Number.NaN;
     }) }));
     const data = categoricalData(rowLevels, text(result.scalarValues?.["X column"]) || "Category", series);
-    const name = `Observed counts${level === "All" ? "" : ` · ${level}`}`;
+    const name = `Observed counts${typeof byColumn === "number" || level !== "All" ? ` · ${level}` : ""}`;
     return [{ key: `fit-y-by-x-contingency-${index}`, name,
       description: "Observed contingency-table counts saved with this result.",
-      data, view: view(name, data.labels[0], "Count", 0, series.map((_, i) => i + 1)), mark: "bar" }];
+      data, view: view(name, data.labels[0], "Count", 0, series.map((_, i) => i + 1)), mark: "bar",
+      ...(xColumn === null || yColumn === null || byColumn === undefined ||
+        (level !== "All" && byColumn === null) ? {} : { sourceLink: {
+        kind: "match" as const, responseColumn: yColumn,
+        rows: rowLevels.map((rowLevel) => ({
+          levels: [[xColumn, rowLevel] as [number, string],
+            ...(typeof byColumn === "number" ? [[byColumn, level] as [number, string]] : [])],
+        })),
+      } }) }];
   });
 }
 
@@ -265,7 +326,8 @@ function multivariateFigures(result: AnalysisResult): StatisticalResultFigureDra
     ]);
     out.push({ key: "multivariate-scores", name: `PCA scores · ${xLabel} / ${yLabel}`,
       description: "Score coordinates saved with this result; omitted source rows remain omitted.",
-      data, view: view(`PCA scores · ${xLabel} / ${yLabel}`, axisLabel(xLabel), axisLabel(yLabel), null, [0]), mark: "scatter" });
+      data, view: view(`PCA scores · ${xLabel} / ${yLabel}`, axisLabel(xLabel), axisLabel(yLabel), null, [0]), mark: "scatter",
+      sourceLink: { kind: "direct", rows: scoreRows.map((row) => (row[0] as number) - 1) } });
   }
   return out;
 }
@@ -296,13 +358,21 @@ function variabilityFigures(result: AnalysisResult): StatisticalResultFigureDraf
     const yName = text(result.scalarValues?.Response) || "Mean";
     const yUnit = selectedUnit(result, "responseCol", yName);
     const yLabel = withUnit(yName, yUnit);
+    const responseColumn = recipeColumn(result, "responseCol");
+    const factorAColumn = recipeColumn(result, "factorACol"), factorBColumn = recipeColumn(result, "factorBCol");
     const data = categoricalData(labels, `${cells.columns[0]} / ${cells.columns[1]}`, [
       { label: yName, values: means, unit: yUnit }, ...(hasSd ? [{ label: `${yName} SD`, values: sd, unit: yUnit }] : []),
     ]);
     out.push({ key: "variability-cells", name: `${yName} cell means`,
       description: hasSd ? "Saved nested-cell means with standard-deviation error bars." : "Saved nested-cell means; standard deviation was unavailable.", data,
       view: view(`${yLabel} cell means`, data.labels[0], yLabel, 0, [1]), mark: "bar",
-      ...(hasSd ? { errors: [{ channel: 2, target: 1, axis: "y", side: "both" } as const] } : {}) });
+      ...(hasSd ? { errors: [{ channel: 2, target: 1, axis: "y", side: "both" } as const] } : {}),
+      ...(responseColumn === null || factorAColumn === null || factorBColumn === null ? {} : { sourceLink: {
+        kind: "match" as const, responseColumn,
+        rows: cellRows.map((row) => ({ levels: [
+          [factorAColumn, text(row[0])] as [number, string], [factorBColumn, text(row[1])] as [number, string],
+        ] })),
+      } }) });
   }
   return out;
 }
@@ -321,7 +391,9 @@ function outlierFigures(result: AnalysisResult): StatisticalResultFigureDraft[] 
     ]);
     out.push({ key: "outlier-flagged", name: `${name} flagged observations`,
       description: "Only observations flagged by the saved screening result are shown.", data,
-      view: view(`${label} flagged observations`, "Source row", label, null, [0]), mark: "scatter" });
+      view: view(`${label} flagged observations`, "Source row", label, null, [0]), mark: "scatter",
+      sourceLink: { kind: "direct", rows: flaggedRows.map((row) =>
+        (row[0] as number) - (result.producer.version >= 2 ? 1 : 0)) } });
   }
   const rosner = table(result, "Rosner sequence");
   const rosnerRows = rosner && columnsAre(rosner,
@@ -334,7 +406,9 @@ function outlierFigures(result: AnalysisResult): StatisticalResultFigureDraft[] 
     ]);
     out.push({ key: "outlier-rosner", name: "Rosner outlier sequence",
       description: "Saved Rosner statistic and critical threshold by test step.", data,
-      view: view("Rosner outlier sequence", "Step", "Statistic", null, [0, 1]), mark: "line" });
+      view: view("Rosner outlier sequence", "Step", "Statistic", null, [0, 1]), mark: "line",
+      sourceLink: { kind: "direct", rows: rosnerRows.map((row) => finite(row[3])
+        ? (row[3] as number) - (result.producer.version >= 2 ? 1 : 0) : -1) } });
   }
   return out;
 }
@@ -355,5 +429,6 @@ export function statisticalResultFigureDrafts(result: AnalysisResult): Statistic
     analysisResultId: result.id,
     analysisProducer: result.producer.id,
     analysisFigureKey: draft.key,
+    ...(draft.sourceLink ? { analysisSourceLink: draft.sourceLink } : {}),
   } } }));
 }
