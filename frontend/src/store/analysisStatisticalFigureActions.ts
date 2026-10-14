@@ -42,6 +42,7 @@ export function createAnalysisStatisticalFigure(
   const snapshot = { ...draft.data, metadata: {
     ...draft.data.metadata,
     snapshotResultState: freshness,
+    sourceDatasetId: result.sources[0]?.datasetId ?? null,
     sourceFingerprint: result.sourceFingerprint ?? null,
   } };
   const document = createFigureDocument({

@@ -42,6 +42,7 @@ import type uPlot from "uplot";
 import type { ErrorBinding } from "../../lib/errorRoles";
 import { durableComposition } from "../../lib/facet";
 import type { FigureDocument } from "../../lib/figureDocument";
+import { frozenFigureDataset } from "../../lib/frozenFigureDataset";
 import { effectiveChannels } from "../../lib/plotdata";
 import type { PlotBg, PlotView } from "../../lib/plotview";
 import { canvasLineWidth, resolveTemplate } from "../../lib/plotTemplates";
@@ -54,6 +55,7 @@ import PlotViewport from "../Stage/PlotViewport";
 import { multiPanelShowing } from "../Stage/useEffectiveComposition";
 import { usePlotPayload } from "../Stage/usePlotPayload";
 import { useWindowSeriesCycle } from "../Stage/useStageSeriesCycle";
+import { figureRowsForSourceRows, resolveStatisticalFigureLink } from "../../lib/statisticalFigureLink";
 import {
   BackgroundPolarWindow,
   BackgroundStackWindow,
@@ -98,6 +100,8 @@ export default function BackgroundPlotWindow({
   document,
   windowId,
 }: BackgroundPlotWindowProps) {
+  const frozen = useMemo(() => frozenFigureDataset(document), [document]);
+  const renderDataset = frozen ?? dataset;
   // L2: derived unconditionally (before the `!dataset` early return) so this
   // component's hook order never varies across renders — `dataset` can flip
   // null/non-null across renders of the SAME mounted instance (its dataset
@@ -111,10 +115,10 @@ export default function BackgroundPlotWindow({
   // in a refactor and this comment silently became false for every plain XY
   // figure in every background window (round 3, finding 2).
   const composition = useMemo(
-    () => durableComposition(dataset, view.facetKey, document?.plot.axisBreaks.x, view.xKey, view.yKeys),
-    [dataset, view.facetKey, document?.plot.axisBreaks.x, view.xKey, view.yKeys],
+    () => durableComposition(renderDataset, view.facetKey, document?.plot.axisBreaks.x, view.xKey, view.yKeys),
+    [renderDataset, view.facetKey, document?.plot.axisBreaks.x, view.xKey, view.yKeys],
   );
-  if (!dataset) {
+  if (!renderDataset) {
     return (
       <div
         className="qzk-ds-meta"
@@ -132,23 +136,23 @@ export default function BackgroundPlotWindow({
   // that had no break clause, so a workspace reopened with several break
   // figures drew the break in the focused window and one continuous line in
   // every other one: BUG-012's original symptom, per window).
-  if (view.polarMode) return <BackgroundPolarWindow dataset={dataset} view={view} />;
-  if (view.statMode) return <BackgroundStatWindow dataset={dataset} view={view} />;
+  if (view.polarMode) return <BackgroundPolarWindow dataset={renderDataset} view={view} />;
+  if (view.statMode) return <BackgroundStatWindow dataset={renderDataset} view={view} />;
   if (
     multiPanelShowing(
       composition,
       view.stackMode,
-      effectiveChannels(dataset.data, view.yKeys, view.xKey, dataset.channelRoles, view.seriesOrder).length,
+      effectiveChannels(renderDataset.data, view.yKeys, view.xKey, renderDataset.channelRoles, view.seriesOrder).length,
     )
   )
     return (
       <BackgroundStackWindow
-        dataset={dataset} view={view} bg={bg} composition={composition} encoding={document?.bindings.encoding}
+        dataset={renderDataset} view={view} bg={bg} composition={composition} encoding={document?.bindings.encoding}
         document={document}
       />
     );
   return (
-    <BackgroundXYWindow dataset={dataset} view={view} bg={bg} linkGroup={linkGroup} document={document} windowId={windowId} />
+    <BackgroundXYWindow dataset={renderDataset} view={view} bg={bg} linkGroup={linkGroup} document={document} windowId={windowId} />
   );
 }
 
@@ -182,8 +186,17 @@ function BackgroundXYWindow({
   const defaultTrace = useApp((s) => s.defaultTrace);
   const defaultLineWidth = useApp((s) => s.defaultLineWidth);
   const excludedDisplay = useApp((s) => s.excludedDisplay);
+  const selection = useApp((s) => s.selection);
+  const datasets = useApp((s) => s.datasets);
   const plotRef = useRef<uPlot | null>(null);
   const documentErrors: readonly ErrorBinding[] | undefined = document?.bindings.errors;
+  const statisticalLink = useMemo(
+    () => resolveStatisticalFigureLink(document, datasets, dataset.id),
+    [dataset.id, datasets, document],
+  );
+  const displaySelection = useMemo(() => statisticalLink && selection?.datasetId === statisticalLink.sourceId
+    ? { datasetId: statisticalLink.figureDatasetId, rows: figureRowsForSourceRows(statisticalLink, selection.rows) }
+    : selection, [selection, statisticalLink]);
 
   const { displayPayload, plotted, styleList, labelList, errorBars, errorSpans, colorByColumns, hidden } =
     usePlotPayload({
@@ -210,7 +223,9 @@ function BackgroundXYWindow({
       baselineOverlay: null,
       peakOverlay: null,
       derivOverlay: null,
-      selection: null,
+      // A background source plot should show the same shared worksheet brush;
+      // a frozen statistical result maps that brush onto its saved rows.
+      selection: displaySelection,
       defaultTrace,
     });
 

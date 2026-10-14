@@ -41,6 +41,10 @@ describe("statisticalResultFigureDrafts", () => {
       analysisResultId: "result-1", analysisProducer: "distribution-analysis",
       analysisFigureKey: "distribution-histogram-0",
     });
+    // This malformed fixture names grouped tables but omits the grouping
+    // column from its recipe. The figure remains useful, but linking must
+    // fail closed rather than selecting rows from every group.
+    expect(drafts[0].sourceLink).toBeUndefined();
     expect(drafts[0].view.xAxisLabel).toBe("Resistance (Ω)");
   });
 
@@ -87,12 +91,23 @@ describe("statisticalResultFigureDrafts", () => {
     expect(draft.data.time).toEqual([0, 1]);
     expect(draft.data.values).toEqual([[1], [3]]);
     expect(draft.description).toContain("Observations remain in the source worksheet");
+    expect(draft.data.metadata.analysisSourceLink).toEqual({
+      kind: "match", responseColumn: 1,
+      rows: [
+        { levels: [] },
+        { levels: [] },
+      ],
+    });
     expect(band.key).toBe("fit-y-by-x-band-0");
     expect(band.name).toBe("Signal 95% prediction interval");
     expect(band.view.xAxisLabel).toBe("Dose (s)");
     expect(band.view.yAxisLabel).toBe("Signal (V)");
     expect(band.data.values).toEqual([[1, 0.5, 1.5], [3, 2, 4]]);
     expect(band.description).toContain("Fitted curve plus lower and upper 95% prediction interval bounds");
+    expect(band.data.metadata.analysisSourceLink).toMatchObject({
+      kind: "match", responseColumn: 1,
+      rows: [{ levels: [] }, { levels: [] }],
+    });
   });
 
   it("does not interpolate a fitted line onto a different saved interval grid", () => {
@@ -124,6 +139,7 @@ describe("statisticalResultFigureDrafts", () => {
     expect(drafts[1].view.yAxisLabel).toBe("PC2 (30.0%)");
     expect(drafts[1].data.time).toEqual([30, 31, 32]);
     expect(drafts[1].data.values).toEqual([[20], [21], [22]]);
+    expect(drafts[1].data.metadata.analysisSourceLink).toEqual({ kind: "direct", rows: [0, 1, 2] });
   });
 
   it("creates variability components and nested cell means with SD errors", () => {
