@@ -51,6 +51,15 @@ import {
   sanitizeTransformRef,
 } from "./plotRecipeMigrate";
 
+function sanitizeRecipeRefLines(value: unknown) {
+  const ids = new Set<string>();
+  return sanitizeRefLines(value).filter(({ id }) => {
+    if (ids.has(id)) return false;
+    ids.add(id);
+    return true;
+  });
+}
+
 const ROLES: readonly RecipeChannelRole[] = ["x", "y", "y2", "group", "facet", "error"];
 const ERROR_ROLES: readonly SignatureErrorRole[] = [
   "value", "error-x", "error-x+", "error-x-", "error-y", "error-y+", "error-y-",
@@ -273,7 +282,7 @@ function sanitizeVisual(v: unknown): RecipeVisual {
     yFmt: isAxisFormat(o.yFmt) ? o.yFmt : fb.yFmt,
     y2Fmt: isAxisFormat(o.y2Fmt) ? o.y2Fmt : null,
     axisBreaks: sanitizeAxisBreaks(o.axisBreaks),
-    refLines: sanitizeRefLines(o.refLines),
+    refLines: sanitizeRecipeRefLines(o.refLines),
     showLegend: typeof o.showLegend === "boolean" ? o.showLegend : fb.showLegend,
     legendPos: (LEGEND_POS as readonly string[]).includes(o.legendPos as string) ? (o.legendPos as LegendPos) : fb.legendPos,
     legendXY: legendXYOrNull(o.legendXY),

@@ -40,14 +40,12 @@ const VALID_TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "d
 export function sanitizeRefLines(value: unknown): RefLine[] {
   if (!Array.isArray(value)) return [];
   const lines: RefLine[] = [];
-  const ids = new Set<string>();
   for (const entry of value) {
     if (!entry || typeof entry !== "object") continue;
     const raw = entry as Record<string, unknown>;
     const { id, axis, value: position } = raw;
-    if (typeof id !== "string" || !id || ids.has(id) || (axis !== "x" && axis !== "y") ||
+    if (typeof id !== "string" || !id || (axis !== "x" && axis !== "y") ||
         typeof position !== "number" || !Number.isFinite(position)) continue;
-    ids.add(id);
     const line: RefLine = { id, axis, value: position };
     const bounded = (key: "label" | "groupId" | "groupLabel", length: number) => {
       const text = raw[key];
@@ -430,7 +428,7 @@ export function sanitizePlotView(v: unknown): PlotView {
     y2Scale: y2ScaleOrDefault(o.y2Scale, o.y2Log),
     y2Step: numOrNull(o.y2Step),
     y2AxisLabel: strOrDefault(o.y2AxisLabel, fb.y2AxisLabel),
-    refLines: sanitizeRefLines(o.refLines),
+    refLines: uniqueIds(sanitizeRefLines(o.refLines)),
     annotations: uniqueIds(sanitizeAnnotations(o.annotations)),
     regionShades: uniqueIds(sanitizeRegionShades(o.regionShades)),
     shapes: uniqueIds(sanitizeShapes(o.shapes)),
