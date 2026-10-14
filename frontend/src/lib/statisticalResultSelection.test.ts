@@ -36,6 +36,21 @@ describe("statisticalResultRowSelection", () => {
     expect(statisticalResultRowSelection(saved, source, 0, 0)?.rows).toEqual([2, 3]);
   });
 
+  it("treats a literal All by-factor level as a group, not the ungrouped sentinel", () => {
+    const grouped: Dataset = {
+      ...source,
+      data: {
+        ...source.data,
+        cat_levels: { ...source.data.cat_levels, 2: ["All", "Other"] },
+      },
+    };
+    const saved = result("fit-y-by-x", "Group summaries",
+      ["level", "group", "N", "mean", "sd"], ["All", "A", 1, 10, 0], {
+        xCol: 1, yCol: 0, byCol: 2, order: 1, bandInterval: "confidence",
+      });
+    expect(statisticalResultRowSelection(saved, grouped, 0, 0)?.rows).toEqual([0]);
+  });
+
   it("does not select excluded source rows that did not participate", () => {
     const saved = result("distribution-analysis", "Summary by lot", ["level", "N"], ["B", 1], {
       col: 0, byCol: 1, fitDist: "none", compareOpen: false, percentileInput: 95,

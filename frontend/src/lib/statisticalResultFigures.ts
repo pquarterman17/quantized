@@ -31,6 +31,14 @@ function recipeColumn(result: AnalysisResult, key: string): number | null {
   return typeof value === "number" && Number.isInteger(value) ? value : null;
 }
 
+function recipeByColumn(result: AnalysisResult): number | null | undefined {
+  const recipe = result.parameters?.recipe;
+  if (typeof recipe !== "object" || recipe === null || Array.isArray(recipe)) return undefined;
+  const value = recipe.byCol;
+  return value === null ? null
+    : typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
 function selectedUnit(result: AnalysisResult, recipeKey: string, label: string): string {
   const index = recipeColumn(result, recipeKey);
   return result.selection?.channels.find((channel) => index !== null && channel.index === index)?.unit ??
@@ -84,22 +92,24 @@ function distributionFigures(result: AnalysisResult): StatisticalResultFigureDra
         !columnsAre(candidate, ["bin left", "center", "bin right", "count"])) return [];
     const rows = candidate.rows.filter((row) => finite(row[1]) && finite(row[3]));
     if (!rows.length) return [];
-    const level = candidate.title === "Histogram" ? "" : candidate.title!.slice("Histogram · ".length);
-    const name = `${column} distribution${level ? ` · ${level}` : ""}`;
+    const grouped = candidate.title !== "Histogram";
+    const level = grouped ? candidate.title!.slice("Histogram · ".length) : "";
+    const name = `${column} distribution${grouped ? ` · ${level || "(blank)"}` : ""}`;
     const data = xyData(rows.map((row) => row[1] as number), [{ label: "Count", values: rows.map((row) => row[3] as number) }]);
     const responseColumn = recipeColumn(result, "col");
-    const byColumn = recipeColumn(result, "byCol");
+    const byColumn = recipeByColumn(result);
+    const linkScopeValid = grouped ? typeof byColumn === "number" : byColumn === null;
     return [{
       key: `distribution-histogram-${index}`,
       name,
-      description: `Histogram saved with this result${level ? ` for ${level}` : ""}.`,
+      description: `Histogram saved with this result${grouped ? ` for ${level || "(blank)"}` : ""}.`,
       data,
       view: view(name, xLabel, "Count", null, [0]),
       mark: "bar",
-      ...(responseColumn === null || (level !== "" && byColumn === null) ? {} : { sourceLink: {
+      ...(responseColumn === null || !linkScopeValid ? {} : { sourceLink: {
         kind: "histogram" as const,
         responseColumn,
-        ...(level && byColumn !== null ? { level: { column: byColumn, label: level } } : {}),
+        ...(grouped && typeof byColumn === "number" ? { level: { column: byColumn, label: level } } : {}),
         bins: rows.map((row): [number, number] => [row[0] as number, row[2] as number]),
       } }),
     }];
@@ -113,7 +123,7 @@ function onewayFigures(result: AnalysisResult, source: AnalysisResultTable): Sta
   const yUnit = selectedUnit(result, "yCol", yName);
   const yLabel = withUnit(yName, yUnit);
   const xColumn = recipeColumn(result, "xCol"), yColumn = recipeColumn(result, "yCol");
-  const byColumn = recipeColumn(result, "byCol");
+  const byColumn = recipeByColumn(result);
   return levels.flatMap((level, index) => {
     const rows = source.rows.filter((row) => text(row[0]) === level && finite(row[3]));
     if (!rows.length) return [];
@@ -124,7 +134,7 @@ function onewayFigures(result: AnalysisResult, source: AnalysisResultTable): Sta
     const data = categoricalData(groups, text(result.scalarValues?.["X column"]) || "Group", [
       { label: yName, values: means, unit: yUnit }, ...(hasSd ? [{ label: `${yName} SD`, values: sd, unit: yUnit }] : []),
     ]);
-    const name = `${yName} by group${level === "All" ? "" : ` · ${level}`}`;
+    const name = `${yName} by group${typeof byColumn === "number" || level !== "All" ? ` · ${level}` : ""}`;
     return [{
       key: `fit-y-by-x-oneway-${index}`,
       name,
@@ -133,11 +143,12 @@ function onewayFigures(result: AnalysisResult, source: AnalysisResultTable): Sta
       view: view(name, data.labels[0], yLabel, 0, [1]),
       mark: "bar",
       ...(hasSd ? { errors: [{ channel: 2, target: 1, axis: "y", side: "both" } as const] } : {}),
-      ...(xColumn === null || yColumn === null || (level !== "All" && byColumn === null) ? {} : { sourceLink: {
+      ...(xColumn === null || yColumn === null || byColumn === undefined ||
+        (level !== "All" && byColumn === null) ? {} : { sourceLink: {
         kind: "match" as const, responseColumn: yColumn,
         rows: rows.map((row) => ({
           levels: [[xColumn, text(row[1])] as [number, string],
-            ...(level !== "All" && byColumn !== null ? [[byColumn, level] as [number, string]] : [])],
+            ...(typeof byColumn === "number" ? [[byColumn, level] as [number, string]] : [])],
         })),
       } }),
     }];
@@ -153,19 +164,20 @@ function bivariateFigures(result: AnalysisResult, source: AnalysisResultTable): 
   const yUnit = selectedUnit(result, "yCol", yName);
   const yLabel = withUnit(yName, yUnit);
   const yColumn = recipeColumn(result, "yCol");
-  const byColumn = recipeColumn(result, "byCol");
+  const byColumn = recipeByColumn(result);
   return levels.flatMap((level, index) => {
     const rows = source.rows.filter((row) => text(row[0]) === level && finite(row[1]) && finite(row[2]));
     if (!rows.length) return [];
-    const name = `${yName} fitted curve${level === "All" ? "" : ` · ${level}`}`;
+    const name = `${yName} fitted curve${typeof byColumn === "number" || level !== "All" ? ` · ${level}` : ""}`;
     const data = xyData(rows.map((row) => row[1] as number), [{ label: "Fitted Y", values: rows.map((row) => row[2] as number), unit: yUnit }]);
     return [{ key: `fit-y-by-x-curve-${index}`, name,
       description: "Fitted curve saved with this result. Observations remain in the source worksheet.",
       data, view: view(name, xLabel, yLabel, null, [0]), mark: "line",
-      ...(yColumn === null || (level !== "All" && byColumn === null) ? {} : { sourceLink: {
+      ...(yColumn === null || byColumn === undefined ||
+        (level !== "All" && byColumn === null) ? {} : { sourceLink: {
         kind: "match" as const, responseColumn: yColumn,
         rows: rows.map(() => ({
-          levels: level !== "All" && byColumn !== null ? [[byColumn, level] as [number, string]] : [],
+          levels: typeof byColumn === "number" ? [[byColumn, level] as [number, string]] : [],
           // These are synthetic fit-grid points, not observations. Every
           // point represents the complete fit group; exact X matching would
           // falsely select only observations that happen to land on the grid.
@@ -192,7 +204,7 @@ function regressionBandFigures(
     ? recipe.bandInterval : null;
   const fittedValid = fittedSource && columnsAre(fittedSource, ["level", "X", "fitted Y"]);
   const yColumn = recipeColumn(result, "yCol");
-  const byColumn = recipeColumn(result, "byCol");
+  const byColumn = recipeByColumn(result);
   return levels.flatMap((level, index) => {
     const rows = source.rows.filter((row) => text(row[0]) === level && finite(row[1]) && finite(row[2]) && finite(row[3]) && finite(row[4]));
     if (!rows.length) return [];
@@ -215,16 +227,17 @@ function regressionBandFigures(
       { label: "Upper bound", values: rows.map((row) => row[3] as number), unit: yUnit },
     ]);
     const intervalLabel = `${coverage}${interval ? `${interval} interval` : "regression interval"}`;
-    const name = `${yName} ${intervalLabel}${level === "All" ? "" : ` · ${level}`}`;
+    const name = `${yName} ${intervalLabel}${typeof byColumn === "number" || level !== "All" ? ` · ${level}` : ""}`;
     return [{ key: `fit-y-by-x-band-${index}`, name,
       description: hasFitted
         ? `Fitted curve plus lower and upper ${intervalLabel} bounds saved with this result.`
         : `Lower and upper ${intervalLabel} bounds saved with this result.`,
       data, view: view(name, xLabel, yLabel, null, data.labels.map((_, series) => series)), mark: "line",
-      ...(yColumn === null || (level !== "All" && byColumn === null) ? {} : { sourceLink: {
+      ...(yColumn === null || byColumn === undefined ||
+        (level !== "All" && byColumn === null) ? {} : { sourceLink: {
         kind: "match" as const, responseColumn: yColumn,
         rows: rows.map(() => ({
-          levels: level !== "All" && byColumn !== null ? [[byColumn, level] as [number, string]] : [],
+          levels: typeof byColumn === "number" ? [[byColumn, level] as [number, string]] : [],
         })),
       } }) }];
   });
@@ -234,7 +247,7 @@ function contingencyFigures(result: AnalysisResult, source: AnalysisResultTable)
   if (!columnsAre(source, ["level", "row", "column", "observed", "expected"])) return [];
   const levels = [...new Set(source.rows.map((row) => text(row[0])))];
   const xColumn = recipeColumn(result, "xCol"), yColumn = recipeColumn(result, "yCol");
-  const byColumn = recipeColumn(result, "byCol");
+  const byColumn = recipeByColumn(result);
   return levels.flatMap((level, index) => {
     const rows = source.rows.filter((row) => text(row[0]) === level && finite(row[3]));
     const rowLevels = [...new Set(rows.map((row) => text(row[1])))];
@@ -245,15 +258,16 @@ function contingencyFigures(result: AnalysisResult, source: AnalysisResultTable)
       return match && finite(match[3]) ? match[3] : Number.NaN;
     }) }));
     const data = categoricalData(rowLevels, text(result.scalarValues?.["X column"]) || "Category", series);
-    const name = `Observed counts${level === "All" ? "" : ` · ${level}`}`;
+    const name = `Observed counts${typeof byColumn === "number" || level !== "All" ? ` · ${level}` : ""}`;
     return [{ key: `fit-y-by-x-contingency-${index}`, name,
       description: "Observed contingency-table counts saved with this result.",
       data, view: view(name, data.labels[0], "Count", 0, series.map((_, i) => i + 1)), mark: "bar",
-      ...(xColumn === null || yColumn === null || (level !== "All" && byColumn === null) ? {} : { sourceLink: {
+      ...(xColumn === null || yColumn === null || byColumn === undefined ||
+        (level !== "All" && byColumn === null) ? {} : { sourceLink: {
         kind: "match" as const, responseColumn: yColumn,
         rows: rowLevels.map((rowLevel) => ({
           levels: [[xColumn, rowLevel] as [number, string],
-            ...(level !== "All" && byColumn !== null ? [[byColumn, level] as [number, string]] : [])],
+            ...(typeof byColumn === "number" ? [[byColumn, level] as [number, string]] : [])],
         })),
       } }) }];
   });

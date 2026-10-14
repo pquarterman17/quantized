@@ -5,10 +5,9 @@ import { frozenFigureDataset } from "../../lib/frozenFigureDataset";
 import {
   figureRowsForSourceRows,
   resolveStatisticalFigureLink,
-  sourceRowsForFigureRows,
 } from "../../lib/statisticalFigureLink";
 import type { Dataset } from "../../lib/types";
-import { setLinkedFigureSourceSelection } from "../../store/linkedFigureSelection";
+import { selectLinkedFigureRows } from "../../store/linkedFigureSelection";
 import { useApp } from "../../store/useApp";
 
 /** Give a focused frozen statistical FigureDocument its immutable render
@@ -35,12 +34,18 @@ export function useStatisticalFigurePlot(
       setStatus("this saved figure has no current source-row link");
       return;
     }
-    const sourceRows = sourceRowsForFigureRows(link, rows);
-    setLinkedFigureSourceSelection(link.sourceId, sourceRows);
-    setStatus(sourceRows.length
-      ? `highlighted ${sourceRows.length} source row${sourceRows.length === 1 ? "" : "s"}`
+    // Re-resolve at pointer-up: two identical rows can exchange excluded/
+    // included state without changing the value fingerprint, but their source
+    // row identities still differ. Never commit the pointer-down row map.
+    const selectedCount = selectLinkedFigureRows(figure, link.figureDatasetId, rows);
+    if (selectedCount === null) {
+      setStatus("the source changed; reopen or recreate this saved result link");
+      return;
+    }
+    setStatus(selectedCount
+      ? `highlighted ${selectedCount} source row${selectedCount === 1 ? "" : "s"}`
       : "no source rows contribute to that saved result range");
-  }, [link, setStatus]);
+  }, [figure, link, setStatus]);
   // Always intercept frozen-figure brushes. Falling back to PlotStage's
   // worksheet action would apply snapshot row numbers to an unrelated live
   // worksheet when this figure is old, unlinked, or has a missing source.

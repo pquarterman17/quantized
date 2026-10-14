@@ -417,6 +417,11 @@ menu names.
     are raw observations. The same worksheet selection is highlighted in source
     and result plots. Missing, pending, changed, legacy, or malformed sources
     disable only the live link—the frozen figure remains editable and exportable.
+    The source row mapping is rebuilt from current worksheet state and its
+    fingerprint rechecked when a brush commits, closing both value-edit and
+    duplicate-row exclusion races between pointer-down and pointer-up.
+    Literal `All` and blank factor labels remain distinct real groups; missing
+    or invalid grouping metadata disables the link instead of guessing.
 - [x] Make every saved statistical table directly copyable and exportable,
   individually or as a complete result.
 - [x] Make saved statistical figures open as normal editable Quantized figures.

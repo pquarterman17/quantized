@@ -41,4 +41,41 @@ describe("useStatisticalFigurePlot", () => {
     act(() => result.current.onRowsSelected([1]));
     expect(useApp.getState().selection).toEqual({ datasetId: source.id, rows: [0] });
   });
+
+  it("refuses a brush callback retained across a source edit", () => {
+    const { result } = renderHook(() => useStatisticalFigurePlot(source, figure(true)));
+    const staleBrush = result.current.onRowsSelected;
+    act(() => useApp.setState({ datasets: [{
+      ...source, data: { ...source.data, values: [[200], [400]] },
+    }] }));
+    act(() => staleBrush([1]));
+    expect(useApp.getState().selection).toBeNull();
+    expect(useApp.getState().status).toContain("source changed");
+  });
+
+  it("rebuilds row identities when identical rows exchange exclusion state", () => {
+    const duplicate: Dataset = {
+      ...source, excludedRows: [0],
+      data: { ...source.data, time: [0, 0], values: [[2], [2]] },
+    };
+    const fingerprint = analysisDataFingerprint(duplicate);
+    const saved = createFigureDocument({
+      id: "duplicate-figure", name: "Duplicate result", datasetId: null,
+      view: { ...defaultPlotView(), yKeys: [0] },
+      data: { mode: "frozen", snapshot: {
+        time: [0], values: [[2]], labels: ["Y"], units: [""], metadata: {
+          sourceDatasetId: duplicate.id, sourceFingerprint: fingerprint,
+          analysisSourceLink: { kind: "direct", rows: [1] },
+        },
+      } },
+    });
+    useApp.setState({ datasets: [duplicate], activeId: duplicate.id, selection: null });
+    const { result } = renderHook(() => useStatisticalFigurePlot(duplicate, saved));
+    const staleBrush = result.current.onRowsSelected;
+    act(() => useApp.setState({ datasets: [{ ...duplicate, excludedRows: [1] }] }));
+    expect(analysisDataFingerprint(useApp.getState().datasets[0])).toBe(fingerprint);
+    act(() => staleBrush([0]));
+    expect(useApp.getState().selection).toBeNull();
+    expect(useApp.getState().status).toContain("no source rows");
+  });
 });

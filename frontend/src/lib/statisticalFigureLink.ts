@@ -7,6 +7,7 @@ import type { Dataset } from "./types";
 
 export interface StatisticalFigureLink {
   sourceId: string;
+  sourceFingerprint: string;
   figureDatasetId: string;
   rowsByFigureRow: number[][];
 }
@@ -106,7 +107,12 @@ export function resolveStatisticalFigureLink(
   if (!source || source.pending || analysisDataFingerprint(source) !== sourceFingerprint) return null;
   const descriptor = descriptorFrom(analysisSourceLink, source, snapshot.time.length);
   if (!descriptor) return null;
-  return { sourceId: source.id, figureDatasetId, rowsByFigureRow: rowsForDescriptor(source, descriptor) };
+  return {
+    sourceId: source.id,
+    sourceFingerprint,
+    figureDatasetId,
+    rowsByFigureRow: rowsForDescriptor(source, descriptor),
+  };
 }
 
 export function sourceRowsForFigureRows(link: StatisticalFigureLink, figureRows: readonly number[]): number[] {

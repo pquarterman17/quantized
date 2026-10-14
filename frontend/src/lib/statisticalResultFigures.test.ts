@@ -48,12 +48,43 @@ describe("statisticalResultFigureDrafts", () => {
     expect(drafts[0].view.xAxisLabel).toBe("Resistance (Ω)");
   });
 
+  it("keeps blank and literal All grouping levels distinct from ungrouped results", () => {
+    const histogram = result("distribution-analysis", [{
+      title: "Histogram · ", columns: ["bin left", "center", "bin right", "count"],
+      rows: [[0, 1, 2, 4]],
+    }], { parameters: { recipe: { col: 0, byCol: 1 } } });
+    const blank = statisticalResultFigureDrafts(histogram)[0];
+    expect(blank.name).toBe("Value distribution · (blank)");
+    expect(blank.data.metadata.analysisSourceLink).toMatchObject({
+      kind: "histogram", level: { column: 1, label: "" },
+    });
+
+    const fit = result("fit-y-by-x", [{
+      title: "Group summaries", columns: ["level", "group", "N", "mean", "sd"],
+      rows: [["All", "A", 2, 3, 1]],
+    }], {
+      parameters: { mode: "oneway", recipe: { xCol: 0, yCol: 1, byCol: 2 } },
+      scalarValues: { "X column": "Treatment", "Y column": "Response" },
+    });
+    const all = statisticalResultFigureDrafts(fit)[0];
+    expect(all.name).toBe("Response by group · All");
+    expect(all.data.metadata.analysisSourceLink).toMatchObject({
+      kind: "match", rows: [{ levels: [[0, "A"], [2, "All"]] }],
+    });
+
+    const malformed = { ...fit, parameters: { mode: "oneway", recipe: { xCol: 0, yCol: 1 } } };
+    expect(statisticalResultFigureDrafts(malformed)[0].sourceLink).toBeUndefined();
+
+    const invalidIndex = { ...fit, parameters: { mode: "oneway", recipe: { xCol: 0, yCol: 1, byCol: -1 } } };
+    expect(statisticalResultFigureDrafts(invalidIndex)[0].sourceLink).toBeUndefined();
+  });
+
   it("creates per-level one-way means with SD bound only as an error channel", () => {
     const saved = result("fit-y-by-x", [{
       title: "Group summaries", columns: ["level", "group", "N", "mean", "sd"],
       rows: [["field 1", "A", 3, 10, 2], ["field 1", "B", 3, 20, 4], ["field 2", "A", 3, 30, null]],
     }], {
-      parameters: { mode: "oneway", recipe: { xCol: 0, yCol: 1 } },
+      parameters: { mode: "oneway", recipe: { xCol: 0, yCol: 1, byCol: null } },
       scalarValues: { "X column": "Treatment", "Y column": "Response" },
       selection: { datasetId: "source-1", channels: [
         { index: 0, label: "Treatment", unit: "" }, { index: 1, label: "Response", unit: "mV" },
@@ -79,7 +110,7 @@ describe("statisticalResultFigureDrafts", () => {
       title: "Regression band", columns: ["level", "X", "lower", "upper", "alpha"],
       rows: [["All", 0, 0.5, 1.5, 0.05], ["All", 1, 2, 4, 0.05]],
     }], {
-      parameters: { mode: "bivariate", recipe: { xCol: 0, yCol: 1, bandInterval: "prediction" } },
+      parameters: { mode: "bivariate", recipe: { xCol: 0, yCol: 1, byCol: null, bandInterval: "prediction" } },
       scalarValues: { "X column": "Dose", "Y column": "Signal" },
       selection: { datasetId: "source-1", channels: [
         { index: 0, label: "Dose", unit: "s" }, { index: 1, label: "Signal", unit: "V" },
