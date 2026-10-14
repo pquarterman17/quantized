@@ -19,6 +19,11 @@ export function readShellCss(): string {
   return readFileSync(join(dirname(fileURLToPath(import.meta.url)), "shell.css"), "utf8");
 }
 
+/** `styles/components.css` as text, for component-level layout contracts. */
+export function readComponentsCss(): string {
+  return readFileSync(join(dirname(fileURLToPath(import.meta.url)), "components.css"), "utf8");
+}
+
 /** Every style rule in the sheet, flattened out of its `@media`/`@container`
  *  blocks. Parsed from the text rather than through jsdom's CSSOM so an
  *  unsupported modern property can never silently drop a rule these tests are

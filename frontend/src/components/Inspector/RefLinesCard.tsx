@@ -73,7 +73,8 @@ export default function RefLinesCard() {
         {groups.map(([groupId, groupLabel]) => <div key={groupId} className="qz-meta-row"
           style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <strong className="qz-k">{groupLabel}</strong>
-          <Button size="sm" onClick={() => removeRowSafely(containerRef.current, () => removeGroup(groupId))}>Remove group</Button>
+          <Button size="sm" aria-label={`Remove ${groupLabel}`} title={`Remove ${groupLabel}`}
+            onClick={() => removeRowSafely(containerRef.current, () => removeGroup(groupId))}>Remove group</Button>
         </div>)}
         {refLines.map((r) => (
           <div

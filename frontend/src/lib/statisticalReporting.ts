@@ -14,7 +14,7 @@ export interface StatisticalReportingSummary {
 // and "Multiple regression" look like a multiple-comparisons table.
 const EFFECT = /\b(?:effect(?: size)?|cohen(?:'s)? d|cram[eé]r(?:'s)? v|omega(?: squared)?)\b|(?:^|\W)eta(?: squared)?(?:\W|$)|(?:^|\W)(?:adjusted\s+)?r(?:²|\^2)(?:\W|$)|\bodds ratio\b/i;
 const INTERVAL = /confidence|prediction|\bci\b|\blower\b|\bupper\b/i;
-const ASSUMPTION = /assumption|normal|shapiro|levene|homosced|equal variances|balanced|estimable|constant variable|approximate/i;
+const ASSUMPTION = /assumption|\bnormal(?:ity| distribution)?\b|shapiro|levene|homosced|equal variances|balanced|estimable|constant variable|approximate/i;
 const ADJUSTMENT = /\b(?:multiple comparisons?|adjusted p(?:-value)?|p(?:-value)? adjustment|tukey|dunnett|bonferroni|holm|fdr|benjamini(?:-hochberg)?)\b/i;
 const MISSING = /\b(?:missing data|missing values?|listwise deletion|non-finite (?:source )?(?:rows?|values?)|complete rows?)\b/i;
 

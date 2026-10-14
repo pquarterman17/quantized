@@ -634,7 +634,7 @@
 .qz-signal-preview-key strong { color: var(--accent); font-weight: 500; }
 .qz-signal-preview-name { margin-right: auto; color: var(--text-dim); }
 
-.qz-analysis-result { display: flex; flex-direction: column; min-height: 430px; max-height: min(72vh, 720px); }
+.qz-analysis-result { container-type: inline-size; display: flex; flex-direction: column; min-height: 430px; max-height: min(72vh, 720px); }
 .qz-analysis-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px; border-bottom: 1px solid var(--border); }
 .qz-analysis-status { margin-right: auto; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-dim); }
 .qz-analysis-status.status-current { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); }

@@ -287,6 +287,33 @@ describe("usePawley → Library", () => {
     expect(useApp.getState().history).toEqual([]);
   });
 
+  it("refuses to add fitted reflections after the source data changes in place", async () => {
+    vi.mocked(pawleyRefine).mockResolvedValue(result);
+    const { result: hook } = renderHook(() => usePawley());
+    await act(async () => { await hook.current.compute(); });
+    act(() => useApp.setState({
+      datasets: [{ id: "d1", name: "powder.xrdml", data: {
+        ...scan, values: [[101, 9], ...scan.values.slice(1)],
+      } }],
+    }));
+    expect(hook.current.referenceLinesBlockedReason).toMatch(/source data or included rows changed/i);
+    act(() => hook.current.addReferenceLines());
+    expect(useApp.getState().refLines).toEqual([]);
+    expect(useApp.getState().history).toEqual([]);
+  });
+
+  it("refuses to add fitted reflections after the analysis rows change", async () => {
+    vi.mocked(pawleyRefine).mockResolvedValue(result);
+    const { result: hook } = renderHook(() => usePawley());
+    await act(async () => { await hook.current.compute(); });
+    act(() => useApp.setState({
+      datasets: [{ id: "d1", name: "powder.xrdml", data: scan, excludedRows: [0] }],
+    }));
+    expect(hook.current.referenceLinesBlockedReason).toMatch(/source data or included rows changed/i);
+    act(() => hook.current.addReferenceLines());
+    expect(useApp.getState().refLines).toEqual([]);
+  });
+
   it("adds observed, model, background and residual on the exact fitted rows", async () => {
     vi.mocked(pawleyRefine).mockResolvedValue(result);
     setActive({ ...scan, metadata: { ...scan.metadata, wavelength_a: 1.540598 } });

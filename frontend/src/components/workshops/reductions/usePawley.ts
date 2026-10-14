@@ -22,7 +22,7 @@ import type { Cell, LatticePreset } from "../../../lib/crystalStructure";
 import { pawleyRefine } from "../../../lib/api/reductions";
 import { xAxisIsTwoThetaDegrees, xChannelIdentity } from "../../../lib/peakTableFit";
 import type { PawleyResult } from "../../../lib/reductionTypes";
-import { analysisData } from "../../../lib/rowstate";
+import { analysisData, rowStateIdentity } from "../../../lib/rowstate";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { wavelengthFromMetadata } from "../../../lib/xrdWavelength";
 import { nextPlotObjectId } from "../../../store/idSeq";
@@ -101,6 +101,12 @@ interface PawleyFitInput {
   startCellFrom: LatticeSource["ref"] | null;
   /** The source's own measured-wavelength keys, carried to the derived set. */
   measured: Record<string, unknown>;
+  /** Exact source-data/exclusion/filter identity used by this fit. */
+  sourceIdentity: readonly [unknown, unknown, unknown];
+}
+
+function sameSourceIdentity(a: readonly unknown[], b: readonly unknown[]): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
 function reflectionTolerance(x: readonly number[], profileFwhm: number): number {
@@ -277,6 +283,7 @@ export function usePawley(): PawleyState {
         startCellFrom: latticeSource && (["a", "b", "c", "alpha", "beta", "gamma"] as const)
           .every((k) => n[k] === latticeSource.cell[k]) ? latticeSource.ref : null,
         measured,
+        sourceIdentity: rowStateIdentity(ds),
       });
     } catch (e) {
       if (token !== runToken.current) return;
@@ -367,6 +374,8 @@ export function usePawley(): PawleyState {
   const referenceLinesBlockedReason = result && fitInput
     ? active?.id !== fitInput.sourceId
       ? "Show the fitted source dataset before adding its reflection lines."
+      : !sameSourceIdentity(rowStateIdentity(active), fitInput.sourceIdentity)
+        ? "The source data or included rows changed after this fit. Refine again before adding reflection lines."
       : plotXKey !== null
         ? "Use the fitted dataset's 2θ time axis before adding its reflection lines."
         : null

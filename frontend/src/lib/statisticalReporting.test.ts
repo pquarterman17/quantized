@@ -45,6 +45,21 @@ describe("statisticalReporting", () => {
     expect(summary.assumptions).toEqual([expect.stringMatching(/No assumption check/)]);
   });
 
+  it("does not mislabel normalized scientific columns as assumption checks", () => {
+    const summary = statisticalReporting(result({
+      tables: [{
+        title: "Cell summaries", columns: ["Normalized signal", "lot", "N", "mean", "sd"],
+        rows: [[0.82, "A", 4, 0.81, 0.03]],
+      }],
+    }));
+    expect(summary.assumptions).toEqual([expect.stringMatching(/No assumption check/)]);
+  });
+
+  it("still recognizes explicit normality evidence", () => {
+    const summary = statisticalReporting(result({ warnings: ["Normality was not rejected."] }));
+    expect(summary.assumptions).toEqual(["Normality was not rejected."]);
+  });
+
   it("recognizes R² without confusing regression labels with other evidence", () => {
     const summary = statisticalReporting(result({
       scalarValues: { "adjusted R²": 0.91 },
