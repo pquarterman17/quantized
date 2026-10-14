@@ -14,36 +14,13 @@ import {
   overPointerToCanvas,
 } from "./annotationHit";
 import { CLICK_PX } from "./pointGesture";
+import { pickRefLine, type RefLineHit } from "./refLineHit";
 import { colorScatterFill, paintColorPoint, type ColorScatterSpec } from "./colorscatter";
 import { richLabelAst, type RichNode } from "./richtext";
 import { DESCENT_EM, drawRich, measureRich, type RichFont } from "./richtextCanvas";
 import type { Annotation, RefLine, RegionShade } from "./types";
 const MOVE = "mousemove", UP = "mouseup";
-/** A reference line the pointer is over (for drag hit-testing). */
-export interface RefLineHit {
-  id: string;
-  axis: "x" | "y";
-}
-/** Pick the reference line nearest the pointer within `tol` px, or null. Each
- *  candidate carries its on-axis pixel: x-lines are vertical (compare pointer.x),
- *  y-lines horizontal (compare pointer.y). Ties resolve to the closest. */
-export function pickRefLine(
-  candidates: { id: string; axis: "x" | "y"; px: number }[],
-  pointer: { x: number; y: number },
-  tol = 6,
-): RefLineHit | null {
-  let best: RefLineHit | null = null;
-  let bestDist = tol;
-  for (const c of candidates) {
-    if (!Number.isFinite(c.px)) continue;
-    const d = Math.abs((c.axis === "x" ? pointer.x : pointer.y) - c.px);
-    if (d <= bestDist) {
-      bestDist = d;
-      best = { id: c.id, axis: c.axis };
-    }
-  }
-  return best;
-}
+export { pickRefLine, type RefLineHit } from "./refLineHit";
 
 /** Draw dashed reference lines at fixed X/Y values, clipped to the plot area.
  *  When `opts.interactive` and `opts.onMove` are given, lines become draggable:
@@ -53,7 +30,7 @@ export function pickRefLine(
 export function refLinePlugin(
   lines: RefLine[],
   color: string,
-  opts?: { onMove?: (id: string, value: number) => void; interactive?: boolean },
+  opts?: { onMove?: (id: string, value: number) => void; interactive?: boolean; font?: string },
 ): uPlot.Plugin {
   // Live override for the line being dragged (null = nothing dragging).
   let dragId: string | null = null;
@@ -124,29 +101,36 @@ export function refLinePlugin(
         const { left, top, width, height } = u.bbox;
         ctx.save();
         ctx.fillStyle = ctx.strokeStyle = color;
+        ctx.font = opts?.font ?? ctx.font;
         ctx.lineWidth = 1;
         ctx.setLineDash([5, 4]);
+        const lineHeight = parseFloat(ctx.font) * 1.25;
+        let labelRight = -Infinity;
+        let labelRow = 0;
         for (const ln of lines) {
           // Use the live drag value for the line under the cursor.
           const value = ln.id === dragId ? dragValue : ln.value;
           if (!Number.isFinite(value)) continue;
           ctx.beginPath();
-          let labelX = left + 4, labelY = top + 11;
           if (ln.axis === "x") {
             const px = u.valToPos(value, "x", true);
             if (px < left || px > left + width) continue;
             ctx.moveTo(px, top);
             ctx.lineTo(px, top + height);
-            labelX = px + 3;
+            if (ln.label) {
+              labelRow = px < labelRight ? labelRow + 1 : 0;
+              const y = top + (labelRow + 1) * lineHeight;
+              if (y <= top + height) ctx.fillText(ln.label, px + 3, y);
+              labelRight = Math.max(labelRight, px + ctx.measureText(ln.label).width + 3);
+            }
           } else {
             const py = u.valToPos(value, "y", true);
             if (py < top || py > top + height) continue;
             ctx.moveTo(left, py);
             ctx.lineTo(left + width, py);
-            labelY = py - 3;
+            if (ln.label) ctx.fillText(ln.label, left + 4, py - 3);
           }
           ctx.stroke();
-          if (ln.label) ctx.fillText(ln.label, labelX, labelY);
         }
         ctx.restore();
       },

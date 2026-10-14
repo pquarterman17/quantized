@@ -36,6 +36,31 @@ export { cascadeGeometry, cascadeLayout, cycleWindow, dedupeWindowTitle, display
 
 const VALID_TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "date", "time", "datetime"];
 
+/** Shared untrusted-boundary decoder for project and recipe reference lines. */
+export function sanitizeRefLines(value: unknown): RefLine[] {
+  if (!Array.isArray(value)) return [];
+  const lines: RefLine[] = [];
+  const ids = new Set<string>();
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const raw = entry as Record<string, unknown>;
+    const { id, axis, value: position } = raw;
+    if (typeof id !== "string" || !id || ids.has(id) || (axis !== "x" && axis !== "y") ||
+        typeof position !== "number" || !Number.isFinite(position)) continue;
+    ids.add(id);
+    const line: RefLine = { id, axis, value: position };
+    const bounded = (key: "label" | "groupId" | "groupLabel", length: number) => {
+      const text = raw[key];
+      if (typeof text === "string" && text) line[key] = text.slice(0, length);
+    };
+    bounded("label", 256);
+    bounded("groupId", 128);
+    bounded("groupLabel", 256);
+    lines.push(line);
+  }
+  return lines;
+}
+
 // Re-exported: PlotWindow.panel (below) is the only reason this module
 // depends on panelWindowModel.ts at all — callers that just need the window-record
 // shape (store/panels.ts, PanelPlotWindow.tsx, lib/contextActions.ts) import
@@ -344,11 +369,11 @@ export interface PlotWindow {
 // ── .dwk / untrusted-boundary sanitizer (wired by item 7) ──────────────────
 
 export function num(v: unknown, d: number): number {
-  return Number.isFinite(v as number) ? v as number : d;
+  return typeof v === "number" && Number.isFinite(v) ? v : d;
 }
 
 function numOrNull(v: unknown): number | null {
-  return Number.isFinite(v as number) ? v as number : null;
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
 export function strOrDefault(v: unknown, d: string): string {
@@ -357,21 +382,13 @@ export function strOrDefault(v: unknown, d: string): string {
 
 
 function isAxisFormat(v: unknown): v is AxisFormat {
-  const candidate = v as { mode?: TickMode; digits?: unknown } | null;
-  return !!candidate && typeof candidate === "object"
-    && VALID_TICK_MODES.includes(candidate.mode as TickMode)
+  if (typeof v !== "object" || v === null) return false;
+  const candidate = v as { mode?: unknown; digits?: unknown };
+  return typeof candidate.mode === "string"
+    && (VALID_TICK_MODES as readonly string[]).includes(candidate.mode)
+    && typeof candidate.digits === "number"
     && Number.isFinite(candidate.digits);
 }
-
-function sanitizeRefLineIdentity(value: unknown): RefLine[] {
-  if (!value || typeof value !== "object") return [];
-  const line = { ...value } as RefLine;
-  if (!isString(line.label)) delete line.label;
-  if (!isString(line.groupId)) delete line.groupId;
-  if (!isString(line.groupLabel)) delete line.groupLabel;
-  return [line];
-}
-
 
 /** Validate a persisted view (or drop back to `defaultPlotView()` field by
  *  field) — the same per-field-fallback discipline as `loadPrefs`/
@@ -413,7 +430,7 @@ export function sanitizePlotView(v: unknown): PlotView {
     y2Scale: y2ScaleOrDefault(o.y2Scale, o.y2Log),
     y2Step: numOrNull(o.y2Step),
     y2AxisLabel: strOrDefault(o.y2AxisLabel, fb.y2AxisLabel),
-    refLines: uniqueIds(Array.isArray(o.refLines) ? o.refLines.flatMap(sanitizeRefLineIdentity) : []),
+    refLines: sanitizeRefLines(o.refLines),
     annotations: uniqueIds(sanitizeAnnotations(o.annotations)),
     regionShades: uniqueIds(sanitizeRegionShades(o.regionShades)),
     shapes: uniqueIds(sanitizeShapes(o.shapes)),

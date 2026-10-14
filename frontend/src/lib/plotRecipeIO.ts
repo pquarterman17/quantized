@@ -18,6 +18,7 @@ import {
   sanitizeShapes,
   LEGEND_POS,
   isAxisScale,
+  sanitizeRefLines,
   type LegendPos,
 } from "./plotview";
 import { sanitizeLegendSize, sanitizeRegionShades } from "./plotviewSanitize";
@@ -26,7 +27,7 @@ import { PLOT_MARKS, type PlotMark } from "./plotspec";
 import { isString, keyedRecord } from "./sanitizeRecord";
 import type { SignatureErrorRole } from "./quickPlotTemplates";
 import { isValidTechnique } from "./techniqueDefaults";
-import type { AxisFormat, RefLine, SeriesStyle, TickMode } from "./types";
+import type { AxisFormat, SeriesStyle, TickMode } from "./types";
 import {
   PLOT_RECIPE_SCHEMA_VERSION,
   type PlotRecipe,
@@ -75,40 +76,6 @@ function isRange(v: unknown): v is [number, number] {
     typeof v[0] === "number" && typeof v[1] === "number" &&
     Number.isFinite(v[0]) && Number.isFinite(v[1])
   );
-}
-
-function isRefLineAxis(v: unknown): v is "x" | "y" {
-  return v === "x" || v === "y";
-}
-
-/** Validate a persisted `refLines` list -- an entry missing a string `id`,
- *  a valid `axis`, or a finite `value` is dropped (nothing sane to fall
- *  back to for one bad entry), same "drop the bad one, keep the rest"
- *  convention `sanitizeShapes`/`sanitizeAnnotations` (`plotview.ts`) use.
- *  FINDING 4 (code-review): also drops any entry whose `id` repeats one
- *  already kept -- a duplicate id makes `removeRefLine`/`updateRefLine`
- *  (both keyed by id) act on every line sharing it at once instead of the
- *  one the caller meant, so a corrupt/hand-edited persisted list with a
- *  collision is defused here rather than reproducing the ambiguity live. */
-function sanitizeRefLines(v: unknown): RefLine[] {
-  if (!Array.isArray(v)) return [];
-  const out: RefLine[] = [];
-  const seenIds = new Set<string>();
-  for (const e of v) {
-    if (typeof e !== "object" || e === null) continue;
-    const o = e as Record<string, unknown>;
-    if (typeof o.id !== "string" || !o.id) continue;
-    if (!isRefLineAxis(o.axis)) continue;
-    if (typeof o.value !== "number" || !Number.isFinite(o.value)) continue;
-    if (seenIds.has(o.id)) continue;
-    seenIds.add(o.id);
-    const line: RefLine = { id: o.id, axis: o.axis, value: o.value };
-    if (typeof o.label === "string" && o.label) line.label = o.label.slice(0, 256);
-    if (typeof o.groupId === "string" && o.groupId) line.groupId = o.groupId.slice(0, 128);
-    if (typeof o.groupLabel === "string" && o.groupLabel) line.groupLabel = o.groupLabel.slice(0, 256);
-    out.push(line);
-  }
-  return out;
 }
 
 function isAxisFormat(v: unknown): v is AxisFormat {

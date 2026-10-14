@@ -817,7 +817,9 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // legibly bigger than its own ticks instead of a fixed size that would
   // look mismatched at those templates' more extreme fontSize choices.
   const tickPx = args.fontSize ?? 12;
-  const font = `${tickPx}px ${cssVar("--font-mono") || "monospace"}`;
+  const monoFamily = cssVar("--font-mono") || "monospace", pxr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+  const font = `${tickPx}px ${monoFamily}`;
+  const canvasFont = `${tickPx * pxr}px ${monoFamily}`;
   const titlePx = tickPx + 2;
   const uiFamily = cssVar("--font-ui") || "system-ui, sans-serif";
   const labelFont = `600 ${titlePx}px ${uiFamily}`;
@@ -955,6 +957,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       refLinePlugin(refLines, inkDimColor, {
         onMove: args.onRefLineMove,
         interactive: tool === "pointer" || tool === "zoom" || tool === "cursor",
+        font: canvasFont,
       }),
     );
   }
@@ -1154,9 +1157,8 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const yAxisSize: uPlot.Axis["size"] = (self, values) => {
     if (!values || values.length === 0) return yGutterFloor;
     const ctx = self.ctx;
-    const pxr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
     const prevFont = ctx.font;
-    ctx.font = `${tickPx * pxr}px ${cssVar("--font-mono") || "monospace"}`;
+    ctx.font = canvasFont;
     let maxW = 0;
     for (const v of values) {
       // Log minor splits deliberately format to null/blank. They draw grid

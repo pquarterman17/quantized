@@ -515,7 +515,11 @@ describe("sanitizeView — reference-line identity", () => {
   it("keeps scientific labels and strips malformed optional identity", () => {
     const lines = [
       { id: "r1", axis: "x", value: 28.4, label: "(1 1 0)", groupId: "phase-1", groupLabel: "Phase reflections" },
-      { id: "r2", axis: "x", value: 35.2, label: 7, groupId: {}, groupLabel: null },
+      { id: "r2", axis: "x", value: 35.2, label: "x".repeat(300), groupId: "g".repeat(160), groupLabel: "p".repeat(300) },
+      { id: "r1", axis: "y", value: 2 },
+      { id: "bad-axis", axis: "q", value: 2 },
+      { id: "bad-value", axis: "x", value: "z" },
+      { axis: "x", value: 2 },
       null,
     ];
     const out = sanitizePlotWindows(
@@ -524,7 +528,7 @@ describe("sanitizeView — reference-line identity", () => {
     );
     expect(out[0].view.refLines).toEqual([
       { id: "r1", axis: "x", value: 28.4, label: "(1 1 0)", groupId: "phase-1", groupLabel: "Phase reflections" },
-      { id: "r2", axis: "x", value: 35.2 },
+      { id: "r2", axis: "x", value: 35.2, label: "x".repeat(256), groupId: "g".repeat(128), groupLabel: "p".repeat(256) },
     ]);
   });
 });
