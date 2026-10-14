@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { flatRules, readShellCss } from "./cssRules.testkit";
+import { flatRules, readComponentsCss, readShellCss } from "./cssRules.testkit";
 
 const css = readShellCss();
 const rules = flatRules(css);
@@ -74,5 +74,15 @@ describe("Quick Figure Builder", () => {
     expect(bodiesFor(".qzk-quick-builder")).toMatch(/container-type:\s*inline-size/);
     expect(css).not.toMatch(/@media[^{]*\{[^}]*\.qzk-quick-builder-grid/);
     expect(css).toMatch(/@container[^{]*\{[^}]*\.qzk-quick-builder-grid/);
+  });
+});
+
+describe("Analysis reporting", () => {
+  it("makes the result body the container for its narrow reporting layout", () => {
+    const components = readComponentsCss();
+    const componentRules = flatRules(components);
+    const resultBody = componentRules.find((rule) => rule.selector.trim() === ".qz-analysis-result")?.body ?? "";
+    expect(resultBody).toMatch(/container-type:\s*inline-size/);
+    expect(components).toMatch(/@container[^\{]*max-width:\s*620px[^\{]*\{[^}]*\.qz-analysis-reporting-grid/);
   });
 });

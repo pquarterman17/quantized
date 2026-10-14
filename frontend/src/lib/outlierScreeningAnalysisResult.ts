@@ -100,17 +100,21 @@ export function outlierScreeningAnalysisResult(
   const details = resultDetails(snapshot);
   const flagged = bounded({
     title: "Flagged rows", columns: ["source row", "value", "statistic"],
-    rows: snapshot.flaggedRows.map((row) => [row.rowIndex, finite(row.value), finite(row.score)]),
+    rows: snapshot.flaggedRows.map((row) => [row.rowIndex + 1, finite(row.value), finite(row.score)]),
   });
   const rosner = snapshot.rosnerSteps.length ? bounded({
     title: "Rosner sequence", columns: ["step", "R", "critical lambda", "source row", "value", "exceeds"],
-    rows: snapshot.rosnerSteps.map((row) => [row.step, finite(row.statistic), finite(row.critical), row.rowIndex, finite(row.value), row.exceeds ? "yes" : "no"]),
+    rows: snapshot.rosnerSteps.map((row) => [row.step, finite(row.statistic), finite(row.critical),
+      row.rowIndex == null ? null : row.rowIndex + 1, finite(row.value), row.exceeds ? "yes" : "no"]),
   }) : null;
   const methodLabel = snapshot.result.data.method;
   return {
     version: ANALYSIS_RESULT_VERSION, id,
     name: `${snapshot.channelLabel} · ${recipe.method === "mad" ? "MAD outlier screening" : methodLabel} · ${source.name}`,
-    producer: { id: "outlier-screening", label: "Outlier screening", version: 1 },
+    // v2 makes every user-facing "source row" value one-based, matching the
+    // worksheet gutter and Multivariate results. Selection still reads v1's
+    // zero-based snapshots for backward compatibility.
+    producer: { id: "outlier-screening", label: "Outlier screening", version: 2 },
     sources: [{ datasetId: source.id, role: "input" }], outputs: [],
     selection: {
       datasetId: source.id,
@@ -125,7 +129,7 @@ export function outlierScreeningAnalysisResult(
     parameters: { recipe: { ...recipe } }, tables: [flagged.table, ...(rosner ? [rosner.table] : [])],
     warnings: [
       "Screening only: no rows were excluded or deleted.",
-      ...(snapshot.omittedRows.length ? [`${snapshot.omittedRows.length} non-finite source row${snapshot.omittedRows.length === 1 ? " was" : "s were"} omitted from the test: ${rowList(snapshot.omittedRows)}.`] : []),
+      ...(snapshot.omittedRows.length ? [`${snapshot.omittedRows.length} non-finite source row${snapshot.omittedRows.length === 1 ? " was" : "s were"} omitted from the test: ${rowList(snapshot.omittedRows.map((row) => row + 1))}.`] : []),
       ...[flagged.warning, rosner?.warning].filter((value): value is string => !!value),
     ],
     createdAt,

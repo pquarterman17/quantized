@@ -692,6 +692,11 @@ export interface RefLine {
   id: string;
   axis: "x" | "y";
   value: number;
+  /** Optional scientific identity for generated lines (for example hkl). */
+  label?: string;
+  /** Lines created by one analysis action can be removed as one undo step. */
+  groupId?: string;
+  groupLabel?: string;
 }
 
 /** A filled rectangular region pinned at data coordinates (Origin `Rect*`

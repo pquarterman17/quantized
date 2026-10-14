@@ -109,6 +109,26 @@ describe("analysis result envelope", () => {
     expect(result.warnings[0]).toContain("selection version is unsupported");
   });
 
+  it("migrates legacy Outlier row evidence to the worksheet's one-based numbering", () => {
+    const [result] = sanitizeAnalysisResults([{
+      version: 1, id: "old-outlier", name: "Old outlier screen",
+      producer: { id: "outlier-screening", label: "Outlier screening", version: 1 },
+      sources: [{ datasetId: "source", role: "input" }], outputs: [],
+      tables: [
+        { title: "Flagged rows", columns: ["source row", "value"], rows: [[2, 99]] },
+        { title: "Rosner sequence", columns: ["step", "source row"], rows: [[1, 0], [2, null]] },
+      ],
+      warnings: ["2 non-finite source rows were omitted from the test: 3, 8."],
+      createdAt: "then",
+    }]);
+    expect(result.producer.version).toBe(2);
+    expect(result.tables).toEqual([
+      { title: "Flagged rows", columns: ["source row", "value"], rows: [[3, 99]] },
+      { title: "Rosner sequence", columns: ["step", "source row"], rows: [[1, 1], [2, null]] },
+    ]);
+    expect(result.warnings).toEqual(["2 non-finite source rows were omitted from the test: 4, 9."]);
+  });
+
   it("migrates only linked worksheets carrying a valid signal recipe with deterministic ids", () => {
     const migrated = migrateLegacySignalResults([source(), output(), { ...output(), id: "plain", derivedFrom: undefined }], "saved");
     expect(migrated).toHaveLength(1);

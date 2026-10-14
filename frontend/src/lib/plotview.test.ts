@@ -511,6 +511,29 @@ describe("sanitizeView — annotations (MAIN #21 — page/data anchor)", () => {
   });
 });
 
+describe("sanitizeView — reference-line identity", () => {
+  it("keeps bounded scientific labels, drops malformed lines, and re-keys collisions", () => {
+    const lines = [
+      { id: "r1", axis: "x", value: 28.4, label: "(1 1 0)", groupId: "phase-1", groupLabel: "Phase reflections" },
+      { id: "r2", axis: "x", value: 35.2, label: "x".repeat(300), groupId: "g".repeat(160), groupLabel: "p".repeat(300) },
+      { id: "r1", axis: "y", value: 2 },
+      { id: "bad-axis", axis: "q", value: 2 },
+      { id: "bad-value", axis: "x", value: "z" },
+      { axis: "x", value: 2 },
+      null,
+    ];
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), refLines: lines } as unknown as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.refLines).toEqual([
+      { id: "r1", axis: "x", value: 28.4, label: "(1 1 0)", groupId: "phase-1", groupLabel: "Phase reflections" },
+      { id: "r2", axis: "x", value: 35.2, label: "x".repeat(256), groupId: "g".repeat(128), groupLabel: "p".repeat(256) },
+      { id: "r1~2", axis: "y", value: 2 },
+    ]);
+  });
+});
+
 describe("sanitizeView — shapes (MAIN #27 drawn shapes)", () => {
   it("round-trips a data-anchored shape unchanged", () => {
     const shape = { id: "s1", kind: "arrow" as const, x1: 1, y1: 2, x2: 3, y2: 4 };

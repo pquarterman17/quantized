@@ -12,12 +12,12 @@
 // propagation, so it never steals Escape from a dialog/menu that's also
 // listening for it.
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef, useState } from "react";
 
+import { lazyRegion } from "../../lib/lazyRegion";
 import { useHelp } from "../../store/help";
 
-interface Tip {
+export interface Tip {
   name: string;
   desc: string | null;
   hint: string | null;
@@ -25,6 +25,8 @@ interface Tip {
   y: number;
   below: boolean;
 }
+
+const TooltipBubble = lazyRegion(() => import("./TooltipBubble"), "Tooltip");
 
 const DWELL_MS = 400;
 
@@ -97,35 +99,5 @@ export default function TooltipLayer() {
     };
   }, []);
 
-  // Centred on its control, a tip at the window's edge (the Inspector's "?"
-  // buttons, the search pill) was cut off: shift it back inside, 8px clear.
-  const tipRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const el = tipRef.current;
-    if (!el) return;
-    el.style.marginLeft = "";
-    const r = el.getBoundingClientRect();
-    el.style.marginLeft = `${Math.min(0, window.innerWidth - 8 - r.right) || Math.max(0, 8 - r.left)}px`;
-  }, [tip]);
-
-  if (!tip) return null;
-  return createPortal(
-    <div
-      ref={tipRef}
-      className="qz-tip"
-      role="tooltip"
-      style={{
-        left: tip.x,
-        top: tip.y,
-        transform: tip.below ? "translate(-50%, 0)" : "translate(-50%, -100%)",
-      }}
-    >
-      <div className="qz-tip-head">
-        <span className="qz-tip-name">{tip.name}</span>
-        {tip.hint && <kbd className="qz-tip-key">{tip.hint}</kbd>}
-      </div>
-      {tip.desc && <div className="qz-tip-desc">{tip.desc}</div>}
-    </div>,
-    document.body,
-  );
+  return tip ? <TooltipBubble tip={tip} /> : null;
 }

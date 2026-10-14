@@ -36,6 +36,29 @@ export { cascadeGeometry, cascadeLayout, cycleWindow, dedupeWindowTitle, display
 
 const VALID_TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "date", "time", "datetime"];
 
+/** Shared untrusted-boundary decoder for project and recipe reference lines. */
+export function sanitizeRefLines(value: unknown): RefLine[] {
+  if (!Array.isArray(value)) return [];
+  const lines: RefLine[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const raw = entry as Record<string, unknown>;
+    const { id, axis, value: position } = raw;
+    if (typeof id !== "string" || !id || (axis !== "x" && axis !== "y") ||
+        typeof position !== "number" || !Number.isFinite(position)) continue;
+    const line: RefLine = { id, axis, value: position };
+    const bounded = (key: "label" | "groupId" | "groupLabel", length: number) => {
+      const text = raw[key];
+      if (typeof text === "string" && text) line[key] = text.slice(0, length);
+    };
+    bounded("label", 256);
+    bounded("groupId", 128);
+    bounded("groupLabel", 256);
+    lines.push(line);
+  }
+  return lines;
+}
+
 // Re-exported: PlotWindow.panel (below) is the only reason this module
 // depends on panelWindowModel.ts at all — callers that just need the window-record
 // shape (store/panels.ts, PanelPlotWindow.tsx, lib/contextActions.ts) import
@@ -365,7 +388,6 @@ function isAxisFormat(v: unknown): v is AxisFormat {
     && Number.isFinite(candidate.digits);
 }
 
-
 /** Validate a persisted view (or drop back to `defaultPlotView()` field by
  *  field) — the same per-field-fallback discipline as `loadPrefs`/
  *  `sanitizeFigureDocs`. Never throws on malformed input. */
@@ -406,7 +428,7 @@ export function sanitizePlotView(v: unknown): PlotView {
     y2Scale: y2ScaleOrDefault(o.y2Scale, o.y2Log),
     y2Step: numOrNull(o.y2Step),
     y2AxisLabel: strOrDefault(o.y2AxisLabel, fb.y2AxisLabel),
-    refLines: uniqueIds(Array.isArray(o.refLines) ? (o.refLines as RefLine[]) : []),
+    refLines: uniqueIds(sanitizeRefLines(o.refLines)),
     annotations: uniqueIds(sanitizeAnnotations(o.annotations)),
     regionShades: uniqueIds(sanitizeRegionShades(o.regionShades)),
     shapes: uniqueIds(sanitizeShapes(o.shapes)),

@@ -65,6 +65,17 @@ def test_convert_mag_units_matches_matlab(
     assert warn == (out["warn"] if out["warn"] else "")
 
 
+def test_convert_moment_to_amperes_per_metre_uses_volume() -> None:
+    # Deliberate SI extension beyond the frozen legacy MATLAB cases above:
+    # 1 emu/cm³ = 1000 A/m, so 2 emu / 4 cm³ = 500 A/m.
+    _, converted, _, unit, warning = convert_mag_units(
+        [0.0], [2.0], from_moment="emu", to_moment="A/m", sample_volume=4.0
+    )
+    assert converted == pytest.approx([500.0])
+    assert unit == "A/m"
+    assert warning == ""
+
+
 def test_subtract_mag_background_removes_linear() -> None:
     t = np.linspace(2.0, 300.0, 100)
     m = 0.05 * t + 3.0  # pure linear background

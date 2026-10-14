@@ -36,4 +36,26 @@ describe("RefLinesCard — remove", () => {
     document.activeElement?.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
   });
+
+  it("shows generated-line identity and removes a generated group in one action", () => {
+    useApp.setState({ refLines: [
+      { id: "r1", axis: "x", value: 28.4, label: "(111)", groupId: "p1", groupLabel: "scan · Pawley reflections" },
+      { id: "r2", axis: "x", value: 35.2, label: "(200)", groupId: "p1", groupLabel: "scan · Pawley reflections" },
+    ], history: [], future: [] });
+    render(<RefLinesCard />);
+    expect(screen.getByText(/\(111\).*X =/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remove scan · Pawley reflections" }));
+    expect(useApp.getState().refLines).toEqual([]);
+    expect(useApp.getState().history).toHaveLength(1);
+  });
+
+  it("names each generated-group removal control for its own group", () => {
+    useApp.setState({ refLines: [
+      { id: "r1", axis: "x", value: 28.4, groupId: "p1", groupLabel: "phase A" },
+      { id: "r2", axis: "x", value: 35.2, groupId: "p2", groupLabel: "phase B" },
+    ] });
+    render(<RefLinesCard />);
+    expect(screen.getByRole("button", { name: "Remove phase A" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove phase B" })).toBeInTheDocument();
+  });
 });

@@ -10,6 +10,7 @@ import { NumberField } from "../../primitives/NumberField";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Button, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
+import { AREA_UNITS, LENGTH_UNITS, MASS_UNITS, VOLUME_UNITS, normalizationProblem, resolvedSampleVolume, type AreaUnit, type LengthUnit, type MassUnit, type VolumeUnit } from "../../../lib/sampleGeometry";
 import { useApp } from "../../../store/useApp";
 import {
   DEFAULT_AUTO_FRACTION,
@@ -148,6 +149,7 @@ export default function MagToolsPanel() {
               Field {m.units.fromField} →
             </label>
             <Select
+              aria-label="Target field unit"
               options={unitOpts(FIELD_UNITS)}
               value={m.units.toField}
               disabled={m.detection.kind !== "field"}
@@ -158,37 +160,67 @@ export default function MagToolsPanel() {
               Moment {m.units.fromMoment} →
             </label>
             <Select
+              aria-label="Target moment unit"
               options={unitOpts(MOMENT_UNITS)}
               value={m.units.toMoment}
               onChange={(e) => m.setUnits({ toMoment: e.target.value })}
             />
-            <label className="qzk-field-lbl" style={{ margin: 0 }}>
-              Sample mass (g)
-            </label>
-            <NumberField
-              value={m.units.sampleMass}
-              width={80}
-              onChange={(v) => m.setUnits({ sampleMass: Number(v) || 0 })}
-            />
-            <label className="qzk-field-lbl" style={{ margin: 0 }}>
-              Volume (cm³)
-            </label>
-            <NumberField
-              value={m.units.sampleVolume}
-              width={80}
-              onChange={(v) => m.setUnits({ sampleVolume: Number(v) || 0 })}
-            />
+            <label className="qzk-field-lbl" style={{ margin: 0 }}>Sample mass</label>
+            <span className="qz-mag-quantity"><NumberField aria-label="Sample mass" value={m.units.sampleMass} width={80}
+              onChange={(v) => m.setUnits({ sampleMass: Number(v) || 0 })} />
+              <Select aria-label="Sample mass unit" options={unitOpts([...MASS_UNITS])} value={m.units.massUnit}
+                onChange={(e) => m.setUnits({ massUnit: e.target.value as MassUnit })} /></span>
+            <label className="qzk-field-lbl" style={{ margin: 0 }}>Volume from</label>
+            <Select options={[{ value: "direct", label: "Direct volume" }, { value: "film", label: "Width × height × thickness" },
+              { value: "area", label: "Area × thickness" }, { value: "circle", label: "Diameter × thickness" }]}
+              aria-label="Volume geometry"
+              value={m.units.volumeMode} onChange={(e) => m.setUnits({ volumeMode: e.target.value as typeof m.units.volumeMode })} />
           </div>
+          {m.units.volumeMode === "direct" ? <div className="qz-mag-geometry-row">
+            <label className="qzk-field-lbl">Volume</label>
+            <NumberField aria-label="Sample volume" value={m.units.sampleVolume} width={80} onChange={(v) => m.setUnits({ sampleVolume: Number(v) || 0 })} />
+            <Select aria-label="Sample volume unit" options={unitOpts([...VOLUME_UNITS])} value={m.units.volumeUnit}
+              onChange={(e) => m.setUnits({ volumeUnit: e.target.value as VolumeUnit })} />
+          </div> : m.units.volumeMode === "film" ? <div className="qz-mag-geometry">
+            {(["Width", "Height", "Thickness"] as const).map((label) => {
+              const prefix = label === "Width" ? "width" : label === "Height" ? "height" : "thickness";
+              const valueKey = label === "Width" ? "sampleWidth" : label === "Height" ? "sampleHeight" : "sampleThickness";
+              const unitKey = `${prefix}Unit` as "widthUnit" | "heightUnit" | "thicknessUnit";
+              return <div className="qz-mag-geometry-row" key={label}><label className="qzk-field-lbl">{label}</label>
+                <NumberField aria-label={label} value={m.units[valueKey]} width={80} onChange={(v) => m.setUnits({ [valueKey]: Number(v) || 0 })} />
+                <Select aria-label={`${label} unit`} options={unitOpts([...LENGTH_UNITS])} value={m.units[unitKey]}
+                  onChange={(e) => m.setUnits({ [unitKey]: e.target.value as LengthUnit })} /></div>;
+            })}
+          </div> : <div className="qz-mag-geometry">
+            <div className="qz-mag-geometry-row"><label className="qzk-field-lbl">{m.units.volumeMode === "area" ? "Area" : "Diameter"}</label>
+              <NumberField aria-label={m.units.volumeMode === "area" ? "Area" : "Diameter"} value={m.units.volumeMode === "area" ? m.units.sampleArea : m.units.sampleDiameter} width={80}
+                onChange={(v) => m.setUnits(m.units.volumeMode === "area" ? { sampleArea: Number(v) || 0 } : { sampleDiameter: Number(v) || 0 })} />
+              {m.units.volumeMode === "area" ? <Select aria-label="Area unit" options={unitOpts([...AREA_UNITS])} value={m.units.areaUnit}
+                onChange={(e) => m.setUnits({ areaUnit: e.target.value as AreaUnit })} />
+                : <Select aria-label="Diameter unit" options={unitOpts([...LENGTH_UNITS])} value={m.units.diameterUnit}
+                  onChange={(e) => m.setUnits({ diameterUnit: e.target.value as LengthUnit })} />}
+            </div>
+            <div className="qz-mag-geometry-row"><label className="qzk-field-lbl">Thickness</label>
+              <NumberField aria-label="Thickness" value={m.units.sampleThickness} width={80} onChange={(v) => m.setUnits({ sampleThickness: Number(v) || 0 })} />
+              <Select aria-label="Thickness unit" options={unitOpts([...LENGTH_UNITS])} value={m.units.thicknessUnit}
+                onChange={(e) => m.setUnits({ thicknessUnit: e.target.value as LengthUnit })} /></div>
+          </div>}
+          {resolvedSampleVolume(m.units) > 0 && <div className="qzk-ds-meta qz-mag-volume-readout">
+            Calculated volume: {fmtNum(resolvedSampleVolume(m.units))} cm³
+          </div>}
           <div style={{ marginTop: 12 }}>
             <Button
               variant="primary"
               size="sm"
-              disabled={!m.active || m.busy}
+              disabled={!m.active || m.busy || normalizationProblem(m.units) !== null}
               onClick={() => void m.convert()}
             >
               {m.busy ? "Converting…" : "Convert →"}
             </Button>
           </div>
+          {normalizationProblem(m.units) && <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--warn, #c90)" }}>
+            {normalizationProblem(m.units)}
+          </div>}
         </div>
       )}
 

@@ -254,6 +254,30 @@ function plotBindings(value: unknown): AnalysisResult["plotBindings"] {
   return out;
 }
 
+function oneBaseLegacyOutlierTables(value: AnalysisResult["tables"]): AnalysisResult["tables"] {
+  return value?.map((table) => {
+    const column = table.columns.findIndex((name) => name.toLowerCase() === "source row");
+    if (column < 0) return table;
+    return { ...table, rows: table.rows.map((row) => {
+      const next = [...row];
+      if (typeof next[column] === "number" && Number.isInteger(next[column])) next[column]++;
+      return next;
+    }) };
+  });
+}
+
+function oneBaseLegacyOutlierWarning(value: string): string {
+  if (!/non-finite source rows?/.test(value)) return value;
+  const separator = value.lastIndexOf(": ");
+  if (separator < 0) return value;
+  const list = value.slice(separator + 2);
+  const ellipsis = list.indexOf(", …");
+  const end = ellipsis >= 0 ? ellipsis : list.endsWith(".") ? list.length - 1 : list.length;
+  const rows = list.slice(0, end).split(", ");
+  if (!rows.length || rows.some((row) => !/^\d+$/.test(row))) return value;
+  return value.slice(0, separator + 2) + rows.map((row) => Number(row) + 1).join(", ") + list.slice(end);
+}
+
 /** Drop malformed records, preserve records from unknown producers, and never
  * clamp missing source ids: missing inputs are a diagnostic state the result
  * workspace must be able to explain. */
@@ -287,23 +311,24 @@ export function sanitizeAnalysisResults(value: unknown, warnings?: string[]): An
     const batchSelection = producer.id === "analysis-batch" ? object(savedParameters?.["selection"]) : null;
     const unsupportedBatchSelection = producer.id === "analysis-batch" &&
       batchSelection?.version !== ANALYSIS_SELECTION_VERSION;
+    const legacyOutlier = producer.id === "outlier-screening" && producer.version === 1;
     out.push({
       version: ANALYSIS_RESULT_VERSION,
       id: raw.id,
       name: raw.name.trim(),
-      producer: { id: producer.id, label: producer.label, version: producer.version },
+      producer: { id: producer.id, label: producer.label, version: legacyOutlier ? 2 : producer.version },
       sources: sourceRefs,
       outputs: outputRefs,
       ...(selected ? { selection: selected } : {}),
       ...(settings ? { settingsRef: settings } : {}),
       ...(scalars ? { scalarValues: scalars } : {}),
       ...(savedParameters ? { parameters: savedParameters } : {}),
-      ...(inlineTables ? { tables: inlineTables } : {}),
+      ...(inlineTables ? { tables: legacyOutlier ? oneBaseLegacyOutlierTables(inlineTables) : inlineTables } : {}),
       ...(savedTableRefs ? { tableRefs: savedTableRefs } : {}),
       ...(plots ? { plotBindings: plots } : {}),
       warnings: unsupportedBatchSelection
         ? [...warningList, "The saved batch selection version is unsupported; rerun the batch before using its values."]
-        : warningList,
+        : legacyOutlier ? warningList.map(oneBaseLegacyOutlierWarning) : warningList,
       createdAt: raw.createdAt,
       ...(typeof raw.updatedAt === "string" && raw.updatedAt ? { updatedAt: raw.updatedAt } : {}),
       ...(typeof raw.notes === "string" && raw.notes.trim() ? { notes: raw.notes } : {}),

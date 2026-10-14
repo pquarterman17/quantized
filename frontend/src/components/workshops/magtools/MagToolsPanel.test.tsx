@@ -135,3 +135,23 @@ describe("MagToolsPanel — the fit readout names its units (round-3 plot audit)
     expect(await screen.findByText(/emu\/K/)).toHaveTextContent(/intercept .* emu$/);
   });
 });
+
+describe("MagToolsPanel — sample geometry", () => {
+  it("blocks incomplete volume normalization and previews mixed-unit film volume", () => {
+    load("loop.dat", "Magnetic Field", "Oe");
+    render(<MagToolsPanel />);
+    fireEvent.click(screen.getByRole("radio", { name: "Units" }));
+    expect(screen.getByText(/Moment emu/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Target moment unit"), { target: { value: "A/m" } });
+    expect(screen.getByLabelText("Target moment unit")).toHaveValue("A/m");
+    expect(screen.getByRole("button", { name: /Convert/ })).toBeDisabled();
+    expect(screen.getByText(/positive sample geometry/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Volume geometry"), { target: { value: "film" } });
+    fireEvent.change(screen.getByLabelText("Width"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Height"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Thickness"), { target: { value: "30" } });
+    expect(screen.getByText(/Calculated volume:/)).toHaveTextContent(/7\.5.*(?:e-5|10)|0\.000075/i);
+    expect(screen.getByRole("button", { name: /Convert/ })).toBeEnabled();
+  });
+});

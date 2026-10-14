@@ -17,6 +17,7 @@ export default function RefLinesCard() {
   const refLines = useApp((s) => s.refLines);
   const addRefLine = useApp((s) => s.addRefLine);
   const removeRefLine = useApp((s) => s.removeRefLine);
+  const recordHistory = useApp((s) => s.recordHistory);
   const [axis, setAxis] = useState<"x" | "y">("x");
   const [value, setValue] = useState("0");
   // Focus-safety anchor (lib/focusGuard) — the per-line ✕ below unmounts
@@ -28,6 +29,13 @@ export default function RefLinesCard() {
     const v = Number(value);
     if (Number.isFinite(v)) addRefLine(axis, v);
   };
+  const removeGroup = (groupId: string) => {
+    recordHistory("delete reference-line group");
+    useApp.setState((state) => ({ refLines: state.refLines.filter((line) => line.groupId !== groupId) }));
+  };
+  const groups = [...new Map(refLines.flatMap((line) => typeof line.groupId === "string" && line.groupId
+    ? [[line.groupId, typeof line.groupLabel === "string" && line.groupLabel
+      ? line.groupLabel : "Generated reference lines"] as const] : [])).entries()];
 
   return (
     <Card title="Reference lines" count={refLines.length || undefined} defaultOpen={false}>
@@ -62,6 +70,12 @@ export default function RefLinesCard() {
        *  Delete/Backspace that lands here right after a removal, before it
        *  can bubble to useGlobalShortcuts' window listener. */}
       <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer}>
+        {groups.map(([groupId, groupLabel]) => <div key={groupId} className="qz-meta-row"
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <strong className="qz-k">{groupLabel}</strong>
+          <Button size="sm" aria-label={`Remove ${groupLabel}`} title={`Remove ${groupLabel}`}
+            onClick={() => removeRowSafely(containerRef.current, () => removeGroup(groupId))}>Remove group</Button>
+        </div>)}
         {refLines.map((r) => (
           <div
             key={r.id}
@@ -69,7 +83,7 @@ export default function RefLinesCard() {
             style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
           >
             <span className="qz-k">
-              {r.axis.toUpperCase()} = <span style={{ fontFamily: "var(--font-mono)" }}>{fmtNum(r.value)}</span>
+              {typeof r.label === "string" && r.label ? `${r.label} · ` : ""}{r.axis.toUpperCase()} = <span style={{ fontFamily: "var(--font-mono)" }}>{fmtNum(r.value)}</span>
             </span>
             <IconButton aria-label="Remove line" title="Remove" onClick={() => removeRowSafely(containerRef.current, () => removeRefLine(r.id))}>
               ✕

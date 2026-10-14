@@ -36,6 +36,10 @@ import {
   type MagXDetection,
 } from "../../../lib/magDataKind";
 import type { Dataset, DataStruct } from "../../../lib/types";
+import {
+  DEFAULT_MAG_NORMALIZATION, normalizationMetadata, normalizationProblem,
+  resolvedSampleMass, resolvedSampleVolume, type MagNormalizationParams,
+} from "../../../lib/sampleGeometry";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 
 /** The plotted X (independent variable — T or field) + primary Y (moment)
@@ -90,7 +94,7 @@ function sourceUnits(
 }
 
 export const FIELD_UNITS = ["Oe", "T", "mT", "A/m"];
-export const MOMENT_UNITS = ["emu", "emu/g", "emu/cm³", "A·m²", "kA/m"];
+export const MOMENT_UNITS = ["emu", "emu/g", "emu/cm³", "A·m²", "A/m", "kA/m"];
 
 /** The two paths' natural defaults. They are NOT the same number and must
  *  never be sent to the other route: 10% of the temperature span is the high-T
@@ -98,23 +102,39 @@ export const MOMENT_UNITS = ["emu", "emu/g", "emu/cm³", "A·m²", "kA/m"];
 export const DEFAULT_AUTO_FRACTION = 0.1;
 export const DEFAULT_HI_FRACTION = 0.7;
 
-export interface UnitParams {
-  fromField: string; // read from the data (sourceUnits), never chosen
-  toField: string;
-  fromMoment: string; // read from the data (sourceUnits); the backend converts from "emu" only
-  toMoment: string;
-  sampleMass: number; // g (for emu/g)
-  sampleVolume: number; // cm³ (for emu/cm³, kA/m)
+export type UnitParams = MagNormalizationParams;
+
+interface MagRequestView {
+  sourceId: string;
+  xKey: number | null;
+  yKeys: number[] | null;
+  seriesOrder: number[] | null;
 }
 
-const DEFAULT_UNITS: UnitParams = {
-  fromField: "Oe",
-  toField: "T",
-  fromMoment: "emu",
-  toMoment: "emu",
-  sampleMass: 0,
-  sampleVolume: 0,
-};
+function sameNumbers(a: readonly number[] | null, b: readonly number[] | null): boolean {
+  return a === b || (!!a && !!b && a.length === b.length && a.every((value, index) => value === b[index]));
+}
+
+function requestView(sourceId: string, xKey: number | null, yKeys: number[] | null, seriesOrder: number[] | null): MagRequestView {
+  return { sourceId, xKey, yKeys: yKeys ? [...yKeys] : null, seriesOrder: seriesOrder ? [...seriesOrder] : null };
+}
+
+/** A lazy Origin-book resolution or backend call must never combine the
+ * dataset captured by the click with a later dataset's plot bindings. */
+function requestStillCurrent(request: MagRequestView): boolean {
+  const state = useApp.getState();
+  return state.activeId === request.sourceId && state.xKey === request.xKey &&
+    sameNumbers(state.yKeys, request.yKeys) && sameNumbers(state.seriesOrder, request.seriesOrder);
+}
+
+/** After resolution, also require the exact source data that was sent to the
+ * backend. A same-id reimport or correction while the call is in flight must
+ * not receive an output derived from the superseded rows. */
+function resolvedSourceStillCurrent(request: MagRequestView, source: DataStruct): boolean {
+  const state = useApp.getState();
+  return requestStillCurrent(request) &&
+    state.datasets.find((dataset) => dataset.id === request.sourceId)?.data === source;
+}
 
 /** The panel's result line, tagged with the dataset ids it is ABOUT — the
  *  source it was computed from and the corrected dataset it wrote. Shown only
@@ -163,7 +183,7 @@ export function useMagTools(): MagToolsState {
   const [bgMode, setBgModeState] = useState<MagBgMode>("auto");
   const [autoFraction, setAutoFraction] = useState(DEFAULT_AUTO_FRACTION);
   const [hiFraction, setHiFraction] = useState(DEFAULT_HI_FRACTION);
-  const [units, setUnitsState] = useState<UnitParams>(DEFAULT_UNITS);
+  const [units, setUnitsState] = useState<UnitParams>(DEFAULT_MAG_NORMALIZATION);
   const [busy, setBusy] = useState(false);
   // The readout (fit + warning + error) BELONGS to the datasets it was
   // computed from and wrote. Selecting a different dataset re-labels the
@@ -212,7 +232,8 @@ export function useMagTools(): MagToolsState {
 
   async function subtractBackground(): Promise<void> {
     if (!active) return;
-    const owners = [active.id];
+    const request = requestView(active.id, xKey, yKeys, seriesOrder);
+    const owners = [request.sourceId];
     if (!bgPath) {
       setReadout({
         owners,
@@ -226,10 +247,9 @@ export function useMagTools(): MagToolsState {
     setReadout(EMPTY_READOUT);
     try {
       // #38 deferred edge: resolve the active dataset's full data first.
-      const ds = await useApp.getState().resolveDataset(active.id);
-      if (!ds) return;
-      const st = useApp.getState();
-      const { x, y, yKey } = magXY(ds, st.xKey, st.yKeys, st.seriesOrder);
+      const ds = await useApp.getState().resolveDataset(request.sourceId);
+      if (!ds || !requestStillCurrent(request)) return;
+      const { x, y, yKey } = magXY(ds, request.xKey, request.yKeys, request.seriesOrder);
       // Gaps out (a `null` in the body is a 422 per element), gaps back in at
       // the same rows afterwards — lib/api/finitePairs.ts.
       const pairs = dropGapRows(x, y);
@@ -259,6 +279,7 @@ export function useMagTools(): MagToolsState {
           m: pairs.y,
           hi_fraction: hiFraction,
         });
+        if (!resolvedSourceStillCurrent(request, ds.data)) return;
         corrected = restoreGapRows(res.corrected, pairs);
         fit = { kind: "mh", slope: res.slope, offset: res.offset };
         // `subtract_hysteresis_background` is a documented NO-OP — it returns
@@ -292,6 +313,7 @@ export function useMagTools(): MagToolsState {
           moment: pairs.y,
           auto_fraction: autoFraction,
         });
+        if (!resolvedSourceStillCurrent(request, ds.data)) return;
         corrected = restoreGapRows(res.corrected, pairs);
         fit = { kind: "mt", slope: res.slope, intercept: res.intercept };
         setStatus(`subtracted high-T background (slope ${res.slope.toExponential(2)})`);
@@ -309,7 +331,7 @@ export function useMagTools(): MagToolsState {
               : { mag_bg_subtracted: true }),
           },
           ds.data,
-          st.xKey,
+          request.xKey,
         ),
       };
       const suffix = bgPath === "mh" ? "loop bg-sub" : "bg-sub";
@@ -335,15 +357,15 @@ export function useMagTools(): MagToolsState {
 
   async function convert(): Promise<void> {
     if (!active) return;
-    const owners = [active.id];
+    const request = requestView(active.id, xKey, yKeys, seriesOrder);
+    const owners = [request.sourceId];
     setBusy(true);
     setReadout(EMPTY_READOUT);
     try {
       // #38 deferred edge: resolve the active dataset's full data first.
-      const ds = await useApp.getState().resolveDataset(active.id);
-      if (!ds) return;
-      const st = useApp.getState();
-      const { x, y, yKey } = magXY(ds, st.xKey, st.yKeys, st.seriesOrder);
+      const ds = await useApp.getState().resolveDataset(request.sourceId);
+      if (!ds || !requestStillCurrent(request)) return;
+      const { x, y, yKey } = magXY(ds, request.xKey, request.yKeys, request.seriesOrder);
       // NOT `dropGapRows`. A unit conversion is a scalar multiply per axis, so
       // no row can influence another — pairing the coordinates here would
       // discard a perfectly good FIELD value just because that row's moment
@@ -373,8 +395,15 @@ export function useMagTools(): MagToolsState {
       if (!anyY) warnings.push("Every moment value is a gap; the converted y column is all gaps.");
       // Source units come from the data; a non-field x (an M(T) curve) passes
       // through unchanged (from == to) instead of being scaled as oersteds.
-      const from = sourceUnits(ds, st.xKey, st.yKeys, st.seriesOrder);
+      const from = sourceUnits(ds, request.xKey, request.yKeys, request.seriesOrder);
       if (from.fromField == null) warnings.push(`x (${from.xLabel || "unnamed"}) is not a field, so only the moment was converted.`);
+      const problem = normalizationProblem({ ...units, fromMoment: from.fromMoment });
+      if (problem) {
+        setReadout({ owners, fit: null, warning: null, error: problem });
+        return;
+      }
+      const sampleMass = resolvedSampleMass(units);
+      const sampleVolume = resolvedSampleVolume(units);
       const res = await convertMagUnits({
         x: xs.safe,
         y: ys.safe,
@@ -382,9 +411,19 @@ export function useMagTools(): MagToolsState {
         to_field: from.fromField == null ? from.xUnit : units.toField,
         from_moment: from.fromMoment,
         to_moment: units.toMoment,
-        sample_mass: units.sampleMass,
-        sample_volume: units.sampleVolume,
+        sample_mass: sampleMass,
+        sample_volume: sampleVolume,
       });
+      if (!resolvedSourceStillCurrent(request, ds.data)) return;
+      const metadata = { ...ds.data.metadata };
+      // A field-only conversion must preserve an earlier sample basis, and a
+      // backend refusal must not claim that its requested moment conversion
+      // happened. The returned unit is the authority for what was written.
+      if (from.fromMoment !== res.y_unit && res.y_unit === units.toMoment) {
+        metadata.magnetometry_normalization = normalizationMetadata(
+          { ...units, toMoment: res.y_unit }, from.fromMoment,
+        );
+      }
       const data: DataStruct = {
         time: restoreSubstituted(res.x, xs.finite),
         values: restoreSubstituted(res.y, ys.finite).map((v) => [v]),
@@ -393,7 +432,7 @@ export function useMagTools(): MagToolsState {
         // Stamps `x_column_long` too: the new unit-precedence rule reads it
         // FIRST, so leaving a stale inherited long name here would have the
         // converted dataset described by the wrong axis.
-        metadata: stampXIdentity({ ...ds.data.metadata }, ds.data, st.xKey, res.x_unit),
+        metadata: stampXIdentity(metadata, ds.data, request.xKey, res.x_unit),
       };
       const outId = nextDatasetId();
       addDataset({ id: outId, name: `${stem()} (${res.y_unit})`, data });

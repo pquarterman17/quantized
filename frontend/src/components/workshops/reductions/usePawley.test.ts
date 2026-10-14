@@ -43,7 +43,7 @@ function setActive(data: DataStruct, name = "powder.xrdml"): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useApp.setState({ status: "" });
+  useApp.setState({ status: "", xKey: null, refLines: [], history: [], future: [] });
   setActive(scan);
 });
 
@@ -256,6 +256,64 @@ describe("usePawley input checks disable Refine", () => {
 });
 
 describe("usePawley → Library", () => {
+  it("adds calculated reflections to the plot as one deduplicated action", async () => {
+    vi.mocked(pawleyRefine).mockResolvedValue({
+      ...result,
+      peaks: [result.peaks[0], { ...result.peaks[0], hkl: [2, 0, 0], two_theta: 35.2 },
+        { ...result.peaks[0], hkl: [2, 0, 1], two_theta: 35.200000001 }],
+      n_peaks: 3,
+    });
+    useApp.setState({ refLines: [{ id: "existing", axis: "x", value: 28.4 }], history: [], future: [] });
+    const { result: hook } = renderHook(() => usePawley());
+    await act(async () => { await hook.current.compute(); });
+    act(() => hook.current.addReferenceLines());
+    expect(useApp.getState().refLines).toEqual(expect.arrayContaining([
+      expect.objectContaining({ axis: "x", value: 28.4 }),
+      expect.objectContaining({ axis: "x", value: 35.2, label: "(2 0 0), (2 0 1)", groupLabel: "powder.xrdml · Pawley reflections" }),
+    ]));
+    expect(useApp.getState().refLines).toHaveLength(2);
+    expect(useApp.getState().history).toHaveLength(1);
+    expect(useApp.getState().status).toMatch(/added 1 calculated reflection/);
+  });
+
+  it("refuses to add fitted reflections while another X binding is plotted", async () => {
+    vi.mocked(pawleyRefine).mockResolvedValue(result);
+    const { result: hook } = renderHook(() => usePawley());
+    await act(async () => { await hook.current.compute(); });
+    act(() => useApp.setState({ xKey: 1 }));
+    expect(hook.current.referenceLinesBlockedReason).toMatch(/2θ time axis/);
+    act(() => hook.current.addReferenceLines());
+    expect(useApp.getState().refLines).toEqual([]);
+    expect(useApp.getState().history).toEqual([]);
+  });
+
+  it("refuses to add fitted reflections after the source data changes in place", async () => {
+    vi.mocked(pawleyRefine).mockResolvedValue(result);
+    const { result: hook } = renderHook(() => usePawley());
+    await act(async () => { await hook.current.compute(); });
+    act(() => useApp.setState({
+      datasets: [{ id: "d1", name: "powder.xrdml", data: {
+        ...scan, values: [[101, 9], ...scan.values.slice(1)],
+      } }],
+    }));
+    expect(hook.current.referenceLinesBlockedReason).toMatch(/source data or included rows changed/i);
+    act(() => hook.current.addReferenceLines());
+    expect(useApp.getState().refLines).toEqual([]);
+    expect(useApp.getState().history).toEqual([]);
+  });
+
+  it("refuses to add fitted reflections after the analysis rows change", async () => {
+    vi.mocked(pawleyRefine).mockResolvedValue(result);
+    const { result: hook } = renderHook(() => usePawley());
+    await act(async () => { await hook.current.compute(); });
+    act(() => useApp.setState({
+      datasets: [{ id: "d1", name: "powder.xrdml", data: scan, excludedRows: [0] }],
+    }));
+    expect(hook.current.referenceLinesBlockedReason).toMatch(/source data or included rows changed/i);
+    act(() => hook.current.addReferenceLines());
+    expect(useApp.getState().refLines).toEqual([]);
+  });
+
   it("adds observed, model, background and residual on the exact fitted rows", async () => {
     vi.mocked(pawleyRefine).mockResolvedValue(result);
     setActive({ ...scan, metadata: { ...scan.metadata, wavelength_a: 1.540598 } });

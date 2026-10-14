@@ -18,16 +18,16 @@ export function createAnalysisStatisticalFigure(
   const state = useApp.getState();
   const result = state.analysisResults.find((item) => item.id === resultId);
   if (!result || (expectedTables !== undefined && result.tables !== expectedTables)) {
-    state.setStatus("can't create statistical figure: the saved result changed while loading");
+    state.setStatus("can't create statistical figure: the saved result changed while loading; reopen the result and try again");
     return null;
   }
   const freshness = snapshotResultState(result, state.datasets);
   if (result.stale || freshness === "out-of-date") {
-    state.setStatus(`can't create ${result.name}: recalculate the out-of-date result first`);
+    state.setStatus(`can't create a figure from ${result.name}: run the analysis again from its source first`);
     return null;
   }
   if (freshness === "pending") {
-    state.setStatus(`can't create ${result.name}: load the full source worksheet first`);
+    state.setStatus(`can't create a figure from ${result.name}: load the full source worksheet first`);
     return null;
   }
   if (draft.data.metadata?.analysisResultId !== result.id) {

@@ -1,9 +1,11 @@
 import type { AnalysisResult, AnalysisResultValue } from "../../../lib/analysisResult";
 import { snapshotResultSourceless } from "../../../lib/analysisResultFreshness";
 import { fmtNum } from "../../../lib/format";
+import { statisticalResultTableSelections } from "../../../lib/statisticalResultSelection";
 import type { Dataset } from "../../../lib/types";
 import { Button } from "../../primitives";
 import { DataTable } from "../../primitives/DataTable";
+import StatisticalReportingCard from "./StatisticalReportingCard";
 
 function date(value: string): string {
   const parsed = new Date(value);
@@ -18,12 +20,16 @@ function display(value: AnalysisResultValue): string {
   return JSON.stringify(value);
 }
 
-export default function AnalysisResultSnapshot({ result, source, view, onExport, onCopy, disabled = false }: {
+export default function AnalysisResultSnapshot({
+  result, source, view, onExport, onCopy, onSelectRows, selectionEnabled = false, disabled = false,
+}: {
   result: AnalysisResult;
   source: Dataset | undefined;
   view: "overview" | "table" | "provenance";
   onExport: (tableIndex?: number) => void;
   onCopy?: (tableIndex?: number) => void;
+  onSelectRows?: (rows: number[]) => void;
+  selectionEnabled?: boolean;
   disabled?: boolean;
 }) {
   const interpretation = result.scalarValues?.Interpretation;
@@ -35,6 +41,7 @@ export default function AnalysisResultSnapshot({ result, source, view, onExport,
       <div><dt>Created</dt><dd>{date(result.createdAt)}</dd></div>
     </dl>
     {typeof interpretation === "string" && <p className="qz-analysis-caption">{interpretation}</p>}
+    <StatisticalReportingCard result={result} />
   </>;
 
   if (view === "table") return result.tables?.length ? <div>
@@ -46,8 +53,18 @@ export default function AnalysisResultSnapshot({ result, source, view, onExport,
           <Button size="sm" disabled={disabled} onClick={() => onExport(index)}>Export table…</Button>
         </span>
       </header>
-      <DataTable columns={table.columns} rows={table.rows.slice(0, 100).map((row) => row.map((cell) =>
-        typeof cell === "number" ? fmtNum(cell) : (cell ?? "—")))} />
+      {(() => {
+        const rows = table.rows.slice(0, 100);
+        const links = source ? statisticalResultTableSelections(result, source, index, rows.length) : [];
+        const linked = links.some((link) => link !== null);
+        return <DataTable columns={linked ? [...table.columns, "Source"] : table.columns} rows={rows.map((row, rowIndex) => [
+          ...row.map((cell) => typeof cell === "number" ? fmtNum(cell) : (cell ?? "—")),
+          ...(linked ? [links[rowIndex] ? <Button key="source" size="sm"
+            disabled={disabled || !selectionEnabled || !links[rowIndex]!.rows.length}
+            title={!selectionEnabled ? "Run the analysis again before linking rows from an out-of-date result." : links[rowIndex]!.label}
+            onClick={() => onSelectRows?.(links[rowIndex]!.rows)}>{links[rowIndex]!.label}</Button> : "—"] : []),
+        ])} />;
+      })()}
       {table.rows.length > 100 && <p className="qz-analysis-caption">Showing 100 of {table.rows.length} rows. Export includes the complete table.</p>}
     </section>)}
     <div className="qz-analysis-snapshot-actions">

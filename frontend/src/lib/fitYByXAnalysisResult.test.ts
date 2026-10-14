@@ -72,8 +72,9 @@ describe("fitYByXAnalysisResult", () => {
       "Regression summary", "Regression coefficients", "Fitted curve", "Regression band",
     ]);
     expect(result.tables?.[2]).toMatchObject({ columns: ["level", "X", "fitted Y"] });
-    expect(result.tables?.[2].rows).toHaveLength(128);
+    expect(result.tables?.[2].rows).toHaveLength(129);
     expect(result.tables?.[2].rows[0]).toEqual(["All", 1, 2]);
+    expect(result.tables?.[2].rows).toContainEqual(["All", 2, 4]);
     expect(result.tables?.[2].rows.at(-1)).toEqual(["All", 3, 6]);
     expect(result.tables?.some((table) => table.columns.includes("Y"))).toBe(false);
     expect(fitYByXRecipe({ ...result, parameters: { recipe: { ...recipe, xCol: 1, yCol: 1 } } })).toBeNull();

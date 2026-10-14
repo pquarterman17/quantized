@@ -246,12 +246,18 @@ function extraTables(
       warnings.push(`${level ? `${level}: ` : ""}fitted curve was not saved because its domain or coefficients were incomplete.`);
     } else {
       const finiteCoeffs = coeffs as number[];
-      const grid = hi > lo
+      const baseGrid = hi > lo
         ? Array.from({ length: FIT_CURVE_POINTS }, (_, index) => {
           const fraction = index / (FIT_CURVE_POINTS - 1);
           return lo * (1 - fraction) + hi * fraction;
         })
         : [lo];
+      // Preserve the dense display curve and ALSO save every interval-grid X.
+      // The frozen figure adapter can then overlay the exact saved fitted Y on
+      // the exact saved band without interpolation or recomputation.
+      // levels-allowlist: these are unique numeric regression-grid coordinates, not categorical levels.
+      const grid = [...new Set([...baseGrid, ...(fit.band?.x ?? [])
+        .filter((x) => Number.isFinite(x) && x >= lo && x <= hi)])].sort((a, b) => a - b);
       let invalid = false;
       grid.forEach((x) => {
         const fitted = number(finiteCoeffs.reduce((sum, coefficient, power) => sum + coefficient * x ** power, 0));

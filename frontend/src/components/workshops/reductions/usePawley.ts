@@ -22,9 +22,10 @@ import type { Cell, LatticePreset } from "../../../lib/crystalStructure";
 import { pawleyRefine } from "../../../lib/api/reductions";
 import { xAxisIsTwoThetaDegrees, xChannelIdentity } from "../../../lib/peakTableFit";
 import type { PawleyResult } from "../../../lib/reductionTypes";
-import { analysisData } from "../../../lib/rowstate";
+import { analysisData, rowStateIdentity } from "../../../lib/rowstate";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { wavelengthFromMetadata } from "../../../lib/xrdWavelength";
+import { nextPlotObjectId } from "../../../store/idSeq";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 import {
   PAWLEY_DEFAULT_FIELDS,
@@ -69,6 +70,9 @@ export interface PawleyState {
   canCompute: boolean;
   compute: () => Promise<void>;
   toLibrary: () => void;
+  addReferenceLines: () => void;
+  /** Why the saved reflections cannot be applied to the current plot. */
+  referenceLinesBlockedReason: string | null;
   /** Fill the cell, tie and centering from a CIF's lattice preset. */
   applyLattice: (p: LatticePreset, source: CrystalStructure) => void;
 }
@@ -97,6 +101,31 @@ interface PawleyFitInput {
   startCellFrom: LatticeSource["ref"] | null;
   /** The source's own measured-wavelength keys, carried to the derived set. */
   measured: Record<string, unknown>;
+  /** Exact source-data/exclusion/filter identity used by this fit. */
+  sourceIdentity: readonly [unknown, unknown, unknown];
+}
+
+function sameSourceIdentity(a: readonly unknown[], b: readonly unknown[]): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+function reflectionTolerance(x: readonly number[], profileFwhm: number): number {
+  // levels-allowlist: these are unique numeric scan coordinates, not categorical levels.
+  const sorted = [...new Set(x.filter(Number.isFinite))].sort((a, b) => a - b);
+  const steps = sorted.slice(1).map((value, index) => value - sorted[index]).filter((value) => value > 0);
+  steps.sort((a, b) => a - b);
+  const step = steps.length ? steps[Math.floor(steps.length / 2)] : 0;
+  // Half a sampling step or one tenth of the profile width represents the
+  // same drawable reflection; cap at 0.05° so coarse preview arrays do not
+  // merge physically distinct lines.
+  return Math.min(0.05, Math.max(1e-6, step * 0.5, profileFwhm * 0.1));
+}
+
+function hklLabel(hkl: readonly number[]): string {
+  // Separators are required: (1 1 10), (11 1 0), and (1 -1 0) must remain
+  // distinct scientific identities rather than all collapsing into a run of
+  // digits whose signs and multi-digit indices are ambiguous.
+  return `(${hkl.join(" ")})`;
 }
 
 const MEASURED_WAVELENGTH_KEYS = ["wavelength_a", "alpha_average"] as const;
@@ -105,6 +134,7 @@ export function usePawley(): PawleyState {
   const active = useActiveDataset();
   const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
+  const plotXKey = useApp((s) => s.xKey);
   const columns = active
     ? active.data.labels.map((label, index) => ({ index, label: label || `Column ${index + 1}` }))
     : [];
@@ -253,6 +283,7 @@ export function usePawley(): PawleyState {
         startCellFrom: latticeSource && (["a", "b", "c", "alpha", "beta", "gamma"] as const)
           .every((k) => n[k] === latticeSource.cell[k]) ? latticeSource.ref : null,
         measured,
+        sourceIdentity: rowStateIdentity(ds),
       });
     } catch (e) {
       if (token !== runToken.current) return;
@@ -310,6 +341,46 @@ export function usePawley(): PawleyState {
     setStatus("added Pawley observed/model/background/residual dataset");
   }
 
+  function addReferenceLines(): void {
+    if (!result || !fitInput || referenceLinesBlockedReason) return;
+    const app = useApp.getState();
+    const saved = app.refLines.filter((line) => line.axis === "x").map((line) => line.value);
+    const tolerance = reflectionTolerance(fitInput.x, fitInput.profileFwhm);
+    const grouped: { value: number; labels: string[] }[] = [];
+    for (const peak of result.peaks) {
+      const value = peak.two_theta;
+      if (!Number.isFinite(value) || value < fitInput.range.min || value > fitInput.range.max) continue;
+      if (saved.some((other) => Math.abs(other - value) <= tolerance)) continue;
+      const existing = grouped.find((item) => Math.abs(item.value - value) <= tolerance);
+      if (existing) existing.labels.push(hklLabel(peak.hkl));
+      else grouped.push({ value, labels: [hklLabel(peak.hkl)] });
+    }
+    if (grouped.length) {
+      const groupId = nextPlotObjectId("pawley");
+      const groupLabel = `${fitInput.sourceName} · Pawley reflections`;
+      app.recordHistory("add phase reference lines");
+      useApp.setState((state) => ({
+        refLines: [...state.refLines, ...grouped.map(({ value, labels }) => ({
+          id: nextPlotObjectId("ref"), axis: "x" as const, value,
+          label: labels.join(", "), groupId, groupLabel,
+        }))],
+      }));
+    }
+    setStatus(grouped.length
+      ? `added ${grouped.length} calculated reflection position${grouped.length === 1 ? "" : "s"} to the plot`
+      : "calculated reflection positions are already on the plot");
+  }
+
+  const referenceLinesBlockedReason = result && fitInput
+    ? active?.id !== fitInput.sourceId
+      ? "Show the fitted source dataset before adding its reflection lines."
+      : !sameSourceIdentity(rowStateIdentity(active), fitInput.sourceIdentity)
+        ? "The source data or included rows changed after this fit. Refine again before adding reflection lines."
+      : plotXKey !== null
+        ? "Use the fitted dataset's 2θ time axis before adding its reflection lines."
+        : null
+    : null;
+
   const wavelengthFromFile = fileWavelength != null && parseField(fields.wavelength) === fileWavelength;
 
   return {
@@ -319,6 +390,7 @@ export function usePawley(): PawleyState {
     wavelengthFromFile,
     refineCell, setRefineCell,
     result, fitRange: fitInput?.range ?? null, fitRefined: fitInput?.refineCell ?? false,
-    busy, error, blockedReason, canCompute, compute, toLibrary, applyLattice,
+    busy, error, blockedReason, canCompute, compute, toLibrary, addReferenceLines,
+    referenceLinesBlockedReason, applyLattice,
   };
 }
