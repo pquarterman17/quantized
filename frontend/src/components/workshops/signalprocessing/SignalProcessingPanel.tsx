@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { applyCorrections } from "../../../lib/api";
 import { runSpectralWorkbench } from "../../../lib/api/spectralWorkbench";
 import { xUnitOf } from "../../../lib/transformResample";
-import { droppedRows } from "../../../lib/rowstate";
 import { saveSignalRecipeTemplate } from "../../../lib/signalRecipeTemplate";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
@@ -20,6 +19,7 @@ import SignalChannelInputs from "./SignalChannelInputs";
 import SignalOperationPicker from "./SignalOperationPicker";
 import SpectralControls from "./SpectralControls";
 import SpectralReadout from "./SpectralReadout";
+import SignalScopeNote from "./SignalScopeNote";
 import {
   DEFAULT_SIGNAL_SETTINGS,
   buildCorrectionRecipe,
@@ -44,6 +44,7 @@ function enteredFinite(value: string): boolean {
 export default function SignalProcessingPanel() {
   const setSignalProcessingOpen = useApp((s) => s.setSignalProcessingOpen);
   const datasets = useApp((s) => s.datasets);
+  const workbooks = useApp((s) => s.workbooks);
   const activeId = useApp((s) => s.activeId);
   const plotChannels = useApp((s) => s.yKeys);
   const setActive = useApp((s) => s.setActive);
@@ -137,6 +138,9 @@ export default function SignalProcessingPanel() {
   );
   const displayedPreview = previewCurrent ? preview : null;
   const boundTargets = active ? selectedBoundErrorTargets(active, channels) : [];
+  const secondaryBoundTargets = secondary && secondaryChannel !== null
+    ? selectedBoundErrorTargets(secondary, [secondaryChannel])
+    : [];
   const emptyOutputs = displayedPreview
     ? spectral
       ? displayedPreview.labels.flatMap((_, channel) => displayedPreview.values.some((row) => Number.isFinite(row[channel])) ? [] : [channel])
@@ -259,8 +263,6 @@ export default function SignalProcessingPanel() {
     }
   };
 
-  const dropped = active ? droppedRows(active).size : 0;
-  const totalRows = active?.data.time.length ?? 0;
   const xLabel = typeof active?.data.metadata.xLabel === "string" && active.data.metadata.xLabel.trim()
     ? active.data.metadata.xLabel.trim()
     : "X";
@@ -280,6 +282,7 @@ export default function SignalProcessingPanel() {
               <CorrelationInputs
                 active={active}
                 datasets={datasets}
+                workbooks={workbooks}
                 available={available}
                 channels={channels}
                 setChannels={setChannels}
@@ -372,10 +375,8 @@ export default function SignalProcessingPanel() {
             {spectralOperation && <SpectralControls operation={spectralOperation} settings={spectralSettings} setSettings={setSpectralSettings} xUnit={xUnitOf(active.data)} />}
             <SignalPreview source={active.data} result={displayedPreview} channel={channels[0] ?? available[0] ?? 0} resultChannel={spectral ? 0 : channels[0] ?? available[0] ?? 0} showOriginal={!spectral || settings.operation === "filter"} />
             {spectral && <SpectralReadout result={displayedPreview} />}
-            <div className="qz-signal-note">
-              Scope: {totalRows.toLocaleString()} total rows ({(totalRows - dropped).toLocaleString()} included, {dropped.toLocaleString()} excluded or filtered). Signal Processing uses the full worksheet, including those {dropped.toLocaleString()} rows. The output stays linked to <strong>{active.name}</strong>{secondary ? <> and <strong>{secondary.name}</strong></> : null} and can be recalculated.
-            </div>
-            {spectral && boundTargets.length > 0 && <div className="qz-signal-note">Bound uncertainties are not propagated into spectral outputs; the linked source and full recipe remain recorded.</div>}
+            <SignalScopeNote source={active} secondary={secondary} />
+            {spectral && (boundTargets.length > 0 || secondaryBoundTargets.length > 0) && <div className="qz-signal-note">Bound uncertainties are not propagated into spectral outputs; the linked source and full recipe remain recorded.</div>}
             {(validation || previewError || outputError) && <p className="qz-error" role="alert">{validation || previewError || outputError}</p>}
             <div className="qz-dialog-actions">
               <Button onClick={close}>Cancel</Button>

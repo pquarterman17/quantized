@@ -96,9 +96,12 @@ export async function createSpectralWorksheet(
       get().setStatus("Can't create a spectral worksheet: source data changed while analysis was running.");
       return null;
     }
+    const sourceName = secondary
+      ? `${currentSource.name} vs ${currentSecondary!.name}`
+      : currentSource.name;
     const created: Dataset = {
       id: newId,
-      name: `${currentSource.name} (${rebound.operation})`,
+      name: `${sourceName} (${rebound.operation})`,
       data,
       raw: source.data,
       analysisRecipe: rebound,

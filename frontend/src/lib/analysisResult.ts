@@ -358,7 +358,13 @@ function signalEnvelope(
 ): AnalysisResult | null {
   const recipe = output.analysisRecipe;
   if (!recipe) return null;
-  const sourceLabel = secondary ? `${source.name} vs ${secondary.name}` : source.name;
+  const secondaryRef = recipe.kind === "spectral" ? recipe.secondarySource : undefined;
+  const recordedSecondary = secondary?.id === secondaryRef?.datasetId
+    ? secondary
+    : secondaryRef
+      ? { id: secondaryRef.datasetId, name: secondaryRef.datasetName }
+      : undefined;
+  const sourceLabel = recordedSecondary ? `${source.name} vs ${recordedSecondary.name}` : source.name;
   return {
     version: ANALYSIS_RESULT_VERSION,
     id,
@@ -366,7 +372,7 @@ function signalEnvelope(
     producer: { id: "signal-processing", label: "Signal Processing", version: 1 },
     sources: [
       { datasetId: source.id, role: "input" },
-      ...(secondary ? [{ datasetId: secondary.id, role: "input" as const }] : []),
+      ...(recordedSecondary ? [{ datasetId: recordedSecondary.id, role: "input" as const }] : []),
     ],
     outputs: [{ datasetId: output.id, role: "linked-worksheet" }],
     settingsRef: { datasetId: output.id, field: "analysisRecipe" },

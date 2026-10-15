@@ -186,11 +186,12 @@ describe("SignalProcessingPanel", () => {
       name: "reference scan",
       data: {
         time: [1, 2, 3],
-        values: [[2], [5], [10]],
-        labels: ["reference"],
-        units: ["A"],
+        values: [[2, 0.2], [5, 0.3], [10, 0.4]],
+        labels: ["reference", "reference error"],
+        units: ["A", "A"],
         metadata: { xUnit: "s" },
       },
+      errorRoles: [{ channel: 1, target: 0, axis: "y", side: "both" }],
     };
     useApp.setState({ datasets: [dataset, reference] });
     createSignalMock.mockResolvedValue("correlation-output");
@@ -216,6 +217,7 @@ describe("SignalProcessingPanel", () => {
       reference.data,
     );
     expect(screen.getByRole("button", { name: "Save recipe…" })).toBeDisabled();
+    expect(screen.getByText(/Bound uncertainties are not propagated/)).toBeInTheDocument();
     fireEvent.click(create);
     await waitFor(() => expect(useApp.getState().activeId).toBe("correlation-output"));
     expect(createSignalMock).toHaveBeenCalledWith(

@@ -47,6 +47,21 @@ describe("stamp / stale round trip", () => {
     expect(stamped.sourceFingerprint).toBe(dataFingerprint(data([1])));
   });
 
+  it("marks a linked result stale when either of its two sources changes", () => {
+    const result: AnalysisResult = {
+      ...RESULT,
+      sources: [
+        { datasetId: "s", role: "input" },
+        { datasetId: "second", role: "input" },
+      ],
+    };
+    const datasets = [ds("s", data([1])), ds("second", data([2])), ds("o", data([3]))];
+    const [stamped] = stampAnalysisResults([result], datasets, []);
+    expect(staleAnalysisOutputs([stamped], datasets)).toEqual([]);
+    expect(staleAnalysisOutputs([stamped], [datasets[0], ds("second", data([9])), datasets[2]]))
+      .toEqual(["o"]);
+  });
+
   it("leaves peak freshness to the authoritative peak-table fingerprint", () => {
     const peak: AnalysisResult = {
       ...RESULT,

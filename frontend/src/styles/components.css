@@ -589,6 +589,15 @@
   color: var(--text-faint);
   font-size: var(--font-size-xs);
 }
+.qz-signal-channels.qz-correlation-inputs {
+  max-height: none;
+  flex-direction: column;
+  align-items: stretch;
+}
+.qz-correlation-inputs .qz-signal-smooth {
+  width: 100%;
+  grid-template-columns: 1fr;
+}
 .qz-signal-smooth {
   display: grid;
   grid-template-columns: 1fr 1fr;

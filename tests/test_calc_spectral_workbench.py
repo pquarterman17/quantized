@@ -249,6 +249,63 @@ def test_cross_worksheet_correlation_refuses_incompatible_axes() -> None:
         )
 
 
+def test_cross_worksheet_alignment_uses_original_coarser_median_spacing() -> None:
+    left_x = np.asarray([0, 1, 2, 3, 4, 10], dtype=float)
+    right_x = np.arange(0, 10.5, 1.5)
+    left = DataStruct.create(
+        left_x,
+        np.sin(left_x)[:, None],
+        labels=["left"],
+        units=["V"],
+        metadata={"xUnit": "s"},
+    )
+    right = DataStruct.create(
+        right_x,
+        np.sin(right_x)[:, None],
+        labels=["right"],
+        units=["V"],
+        metadata={"xUnit": "s"},
+    )
+    out = spectral_workbench(
+        left,
+        operation="correlation",
+        channels=[0],
+        secondary_ds=right,
+        secondary_channel=0,
+        resample=True,
+    )
+    assert np.allclose(np.diff(out.time), 1.5)
+    assert out.metadata["spectralAnalysis"]["resampled"] is True
+
+
+def test_cross_worksheet_alignment_does_not_fill_a_large_gap_with_fake_rows() -> None:
+    left_x = np.asarray([0, 1, 2, 3, 1_000_000], dtype=float)
+    right_x = np.asarray([0, 1, 2, 4, 1_000_000], dtype=float)
+    left = DataStruct.create(
+        left_x,
+        np.arange(left_x.size, dtype=float)[:, None],
+        labels=["left"],
+        units=["V"],
+        metadata={"xUnit": "s"},
+    )
+    right = DataStruct.create(
+        right_x,
+        np.arange(right_x.size, dtype=float)[:, None],
+        labels=["right"],
+        units=["V"],
+        metadata={"xUnit": "s"},
+    )
+    out = spectral_workbench(
+        left,
+        operation="correlation",
+        channels=[0],
+        secondary_ds=right,
+        secondary_channel=0,
+        resample=True,
+    )
+    assert out.n_points == 2 * max(left.n_points, right.n_points) - 1
+
+
 def test_cross_correlation_refuses_a_zero_energy_signal() -> None:
     source = _dataset()
     constant = DataStruct.create(

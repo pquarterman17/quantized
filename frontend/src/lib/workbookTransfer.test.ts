@@ -410,6 +410,8 @@ describe("pasteTransferPackage — fresh-id rewrite core", () => {
 
   it("freezes a copied correlation output when its second source is outside the workbook", () => {
     const pkg = fullPackage();
+    pkg.datasets[1].raw = pkg.datasets[0].data;
+    pkg.datasets[1].corrections = { signalChannels: [0] };
     pkg.datasets[1].analysisRecipe = {
       kind: "spectral", version: 1, operation: "correlation",
       channels: [{ index: 0, label: "A" }],
@@ -425,6 +427,8 @@ describe("pasteTransferPackage — fresh-id rewrite core", () => {
     const output = result.datasets.find((dataset) => dataset.name === "Sheet 2")!;
     expect(output.analysisRecipe).toBeUndefined();
     expect(output.derivedFrom).toBeUndefined();
+    expect(output.raw).toBeUndefined();
+    expect(output.corrections).toBeUndefined();
     expect(output.data).toEqual(pkg.datasets[1].data);
     expect(result.droppedExternalRefs).toBeGreaterThan(0);
   });

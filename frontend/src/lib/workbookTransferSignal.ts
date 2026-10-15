@@ -26,6 +26,13 @@ export function rewriteTransferredDatasetRefs(
   next.analysisRecipe = next.derivedFrom
     ? rewriteTransferredSignalRecipe(source.analysisRecipe, (id) => rewrite(id))
     : undefined;
-  if (source.analysisRecipe && next.derivedFrom && !next.analysisRecipe) next.derivedFrom = undefined;
+  const lostPrimary = Boolean(source.derivedFrom && !next.derivedFrom);
+  const lostRecipeInput = Boolean(source.analysisRecipe && next.derivedFrom && !next.analysisRecipe);
+  if (lostPrimary || lostRecipeInput) {
+    next.derivedFrom = undefined;
+    next.analysisRecipe = undefined;
+    next.raw = undefined;
+    next.corrections = undefined;
+  }
   next.versionOf = rewrite(source.versionOf);
 }
