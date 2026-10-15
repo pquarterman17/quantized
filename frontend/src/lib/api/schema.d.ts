@@ -1970,6 +1970,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/magnetic/curie-weiss-data-fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Curie Weiss Loaded Data
+         * @description Fit loaded M(T) or molar-chi(T) data with explicit sample context.
+         */
+        post: operations["curie_weiss_loaded_data_api_magnetic_curie_weiss_data_fit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/magnetic/curie-weiss-fit": {
         parameters: {
             query?: never;
@@ -6662,6 +6682,36 @@ export interface components {
             source_name: string;
             /** Space Group */
             space_group: string;
+        };
+        /** CurieWeissDataFitRequest */
+        CurieWeissDataFitRequest: {
+            /** Field */
+            field?: number[] | null;
+            /**
+             * Field Unit
+             * @default Oe
+             */
+            field_unit?: string;
+            /** Fit Range */
+            fit_range: [
+                number,
+                number
+            ];
+            /** Molar Mass G Mol */
+            molar_mass_g_mol?: number | null;
+            /** Response */
+            response: number[];
+            /**
+             * Response Basis
+             * @enum {string}
+             */
+            response_basis: "molar_susceptibility" | "total_moment" | "mass_moment";
+            /** Response Errors */
+            response_errors?: number[][];
+            /** Sample Mass G */
+            sample_mass_g?: number | null;
+            /** Temperature */
+            temperature: number[];
         };
         /** CurieWeissFitRequest */
         CurieWeissFitRequest: {
@@ -14190,6 +14240,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CurieWeissRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    curie_weiss_loaded_data_api_magnetic_curie_weiss_data_fit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CurieWeissDataFitRequest"];
             };
         };
         responses: {

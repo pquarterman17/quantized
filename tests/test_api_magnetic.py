@@ -35,6 +35,38 @@ def test_curie_weiss_fit_requires_three_points(client: TestClient) -> None:
     assert r.status_code == 422
 
 
+def test_curie_weiss_loaded_data_route_is_json_safe(client: TestClient) -> None:
+    response = client.post(
+        "/api/magnetic/curie-weiss-data-fit",
+        json={
+            "temperature": [100.0, 150.0, 200.0, 250.0],
+            "response": [0.08, 0.04, -1.0, 0.02],
+            "response_basis": "molar_susceptibility",
+            "fit_range": [100.0, 250.0],
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["inv_chi"] == [12.5, 25.0, None, 50.0]
+    assert body["fit_mask"] == [True, True, False, True]
+
+
+def test_curie_weiss_loaded_data_rejects_missing_sample_context(client: TestClient) -> None:
+    response = client.post(
+        "/api/magnetic/curie-weiss-data-fit",
+        json={
+            "temperature": [100.0, 200.0, 300.0],
+            "response": [1.0, 0.5, 0.25],
+            "response_basis": "total_moment",
+            "field": [1000.0, 1000.0, 1000.0],
+            "fit_range": [100.0, 300.0],
+            "molar_mass_g_mol": 100.0,
+        },
+    )
+    assert response.status_code == 422
+    assert "sample mass" in response.text
+
+
 def test_langevin_extreme_finite_input_is_422_not_500(client: TestClient) -> None:
     """Regression: a huge field with a near-zero temperature drove
     calc.magnetic.langevin's saturation-argument division to

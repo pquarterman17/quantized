@@ -250,7 +250,7 @@ export default function MagneticTab() {
                   throw new Error("paste at least 3 valid T, χ rows");
                 }
                 const r = await magneticCurieWeissFit({ temperature, susceptibility });
-                return dual`θ_CW = ${r.theta_cw} K · C = ${r.C} emu·K/mol · µ_eff = ${r.mu_eff} µ_B · R² = ${r.r2}`;
+                return dual`θ_CW = ${r.theta_cw} K · C = ${r.C} emu·K/mol · µ_eff = ${r.mu_eff ?? "undefined"} µ_B · R² = ${r.r2}`;
               })
             }
           >

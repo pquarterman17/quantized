@@ -3341,6 +3341,106 @@
         "title": "CrystalStructure",
         "type": "object"
       },
+      "CurieWeissDataFitRequest": {
+        "properties": {
+          "field": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "field_unit": {
+            "default": "Oe",
+            "title": "Field Unit",
+            "type": "string"
+          },
+          "fit_range": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Fit Range",
+            "type": "array"
+          },
+          "molar_mass_g_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Molar Mass G Mol"
+          },
+          "response": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Response",
+            "type": "array"
+          },
+          "response_basis": {
+            "enum": [
+              "molar_susceptibility",
+              "total_moment",
+              "mass_moment"
+            ],
+            "title": "Response Basis",
+            "type": "string"
+          },
+          "response_errors": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Response Errors",
+            "type": "array"
+          },
+          "sample_mass_g": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Mass G"
+          },
+          "temperature": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Temperature",
+            "type": "array"
+          }
+        },
+        "required": [
+          "temperature",
+          "response",
+          "response_basis",
+          "fit_range"
+        ],
+        "title": "CurieWeissDataFitRequest",
+        "type": "object"
+      },
       "CurieWeissFitRequest": {
         "properties": {
           "fit_range": {
@@ -18654,6 +18754,50 @@
           }
         },
         "summary": "Curie Weiss",
+        "tags": [
+          "magnetic"
+        ]
+      }
+    },
+    "/api/magnetic/curie-weiss-data-fit": {
+      "post": {
+        "description": "Fit loaded M(T) or molar-chi(T) data with explicit sample context.",
+        "operationId": "curie_weiss_loaded_data_api_magnetic_curie_weiss_data_fit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CurieWeissDataFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Curie Weiss Loaded Data Api Magnetic Curie Weiss Data Fit Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Curie Weiss Loaded Data",
         "tags": [
           "magnetic"
         ]
