@@ -6,6 +6,7 @@ import { fitYByXRecipe } from "../../../lib/fitYByXAnalysisResult";
 import { variabilityRecipe } from "../../../lib/variabilityAnalysisResult";
 import { outlierScreeningRecipe } from "../../../lib/outlierScreeningAnalysisResult";
 import { multivariateRecipe } from "../../../lib/multivariateAnalysisResult";
+import { williamsonHallRecipe } from "../../../lib/williamsonHallRecipe";
 import { peakTableMatchesData } from "../../../lib/peakTableFit";
 import { signalRecipeChannels, signalRecipeXRange } from "../../../lib/signalRecipe";
 import { statisticalTestRecipe } from "../../../lib/statisticalTestAnalysisResult";
@@ -17,6 +18,7 @@ import { useFitYByXStore } from "../../../store/fitYByX";
 import { useVariabilityStore } from "../../../store/variability";
 import { useOutlierScreeningStore } from "../../../store/outlierScreening";
 import { useMultivarStore } from "../../../store/multivar";
+import { useWilliamsonHallRequestStore } from "../../../store/williamsonHall";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import { askParams } from "../../overlays/ParamDialog";
 import ToolWindow from "../../overlays/ToolWindow";
@@ -56,6 +58,7 @@ export default function AnalysisResultPanel() {
   const setCurveFitOpen = useApp((state) => state.setCurveFitOpen);
   const openReflectivityFitRecord = useApp((state) => state.openReflectivityFitRecord);
   const openQuickFigureBuilder = useApp((state) => state.openQuickFigureBuilder);
+  const openReductions = useApp((state) => state.openReductions);
   const [tab, setTab] = useState<AnalysisResultTab>("overview");
   const [busy, setBusy] = useState<AnalysisResultBusy>(null);
   const [notes, setNotes] = useState(result?.notes ?? "");
@@ -72,6 +75,7 @@ export default function AnalysisResultPanel() {
   const isVariability = result?.producer.id === "variability-analysis";
   const isOutlierScreening = result?.producer.id === "outlier-screening";
   const isMultivariate = result?.producer.id === "multivariate-analysis";
+  const isWilliamsonHall = result?.producer.id === "williamson-hall";
   const isSnapshot = !!result && isSnapshotResult(result);
   const statsRecipe = result && isStats ? statisticalTestRecipe(result) : null;
   const savedDistributionRecipe = result && isDistribution ? distributionRecipe(result, source) : null;
@@ -79,6 +83,7 @@ export default function AnalysisResultPanel() {
   const savedVariabilityRecipe = result && isVariability ? variabilityRecipe(result, source) : null;
   const savedOutlierRecipe = result && isOutlierScreening ? outlierScreeningRecipe(result, source) : null;
   const savedMultivariateRecipe = result && isMultivariate ? multivariateRecipe(result, source) : null;
+  const savedWilliamsonHallRecipe = result && isWilliamsonHall ? williamsonHallRecipe(result) : null;
   const peakTable = isPeak ? source?.peakTable ?? null : null;
   const fitSpec = isFit ? source?.fitSpec ?? null : null;
   const reflFit = isRefl ? liveReflectivityFit(result, datasets) : null;
@@ -148,6 +153,10 @@ export default function AnalysisResultPanel() {
     else if (savedVariabilityRecipe) useVariabilityStore.getState().openWith(savedVariabilityRecipe);
     else if (savedOutlierRecipe) useOutlierScreeningStore.getState().openWith(savedOutlierRecipe);
     else if (savedMultivariateRecipe) useMultivarStore.getState().openWith(savedMultivariateRecipe);
+    else if (savedWilliamsonHallRecipe) {
+      useWilliamsonHallRequestStore.getState().openWith(savedWilliamsonHallRecipe);
+      openReductions("williamson-hall");
+    }
     else return;
     close();
   };
@@ -183,6 +192,7 @@ export default function AnalysisResultPanel() {
     const kept = isPeak ? "Its fitted peak table and source data are kept."
       : isFit ? "Its saved fit and source data are kept."
       : isRefl ? "Its saved reflectivity fit and source data are kept."
+      : isSnapshot ? "Its source worksheet is kept; the saved result tables are deleted."
       : "Its linked worksheet and scientific data are kept.";
     const yes = await askConfirm(`Delete "${result.name}"?`, `This removes the result record from the Library. ${kept}`, "Delete", true);
     if (yes) withActions((m) => m.removeAnalysisResult(result.id));
@@ -287,7 +297,7 @@ export default function AnalysisResultPanel() {
         <AnalysisResultToolbar result={result} source={source} status={status} busy={busy}
           mode={isSnapshot ? "snapshot" : isRefl ? "reflectivity" : isPeak ? "peaks" : isFit ? "fit" : "linked"}
           snapshotState={snapshotState ?? "source-missing"}
-          recipeReady={!!(statsRecipe || savedDistributionRecipe || savedFitYByXRecipe || savedVariabilityRecipe || savedOutlierRecipe || savedMultivariateRecipe)}
+          recipeReady={!!(statsRecipe || savedDistributionRecipe || savedFitYByXRecipe || savedVariabilityRecipe || savedOutlierRecipe || savedMultivariateRecipe || savedWilliamsonHallRecipe)}
           hasReflFit={!!reflFit} hasFitSpec={!!fitSpec} fitReplayable={fitReplayable}
           hasOutput={!!output} outputHasRecipe={!!output?.analysisRecipe} outputDerived={!!output?.derivedFrom}
           blocked={blocked} freezeReason={freezeReason}

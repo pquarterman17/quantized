@@ -42,6 +42,8 @@ export default function WilliamsonHallSection() {
     setInstrumentalBroadening,
     compute,
     clear,
+    canSaveResult,
+    saveResult,
   } = useWilliamsonHall();
 
   return (
@@ -183,6 +185,10 @@ export default function WilliamsonHallSection() {
           />
           <Button size="sm" style={{ marginTop: 8 }} onClick={clear}>
             Clear result
+          </Button>
+          <Button variant="primary" size="sm" style={{ marginTop: 8, marginLeft: 6 }}
+            disabled={!canSaveResult} onClick={saveResult}>
+            Save result
           </Button>
         </div>
       )}

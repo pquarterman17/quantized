@@ -4,6 +4,7 @@ import type { PlotMark } from "./plotMarks";
 import { defaultPlotView, type PlotView } from "./plotview";
 import type { DataStruct } from "./types";
 import type { StatisticalFigureLinkDescriptor } from "./statisticalFigureLinkTypes";
+import { williamsonHallResultFigure } from "./williamsonHallResultFigure";
 
 export interface StatisticalResultFigureDraft {
   key: string;
@@ -423,6 +424,7 @@ export function statisticalResultFigureDrafts(result: AnalysisResult): Statistic
     : result.producer.id === "multivariate-analysis" ? multivariateFigures(result)
     : result.producer.id === "variability-analysis" ? variabilityFigures(result)
     : result.producer.id === "outlier-screening" ? outlierFigures(result)
+    : result.producer.id === "williamson-hall" ? williamsonHallResultFigure(result)
     : [];
   return drafts.map((draft) => ({ ...draft, data: { ...draft.data, metadata: {
     ...draft.data.metadata,
