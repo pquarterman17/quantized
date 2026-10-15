@@ -152,9 +152,20 @@ function request(c: Case) {
 // The rule's own numbers, for the backend's port (`flat_auto_range`) to match
 // bit for bit: flat spans across magnitudes and signs, and near-flat ones
 // (uPlot calls a span 11+ decades below the values flat).
+// Parse the scientific notation directly instead of computing `m * 10 ** e`.
+// V8 22 and 24 can round that constant-folded multiplication to adjacent
+// doubles at extreme exponents, which made this cross-language fixture differ
+// by one ULP even though rangeNum returned the same limits. Number parsing is
+// correctly rounded by the ECMAScript contract and therefore stable across
+// the pinned and Node-current CI jobs.
+const scientific = (mantissa: number, exponent: number) => Number(`${mantissa}e${exponent}`);
+
 const SPANS: [number, number][] = [
   ...[1, 1.234, 2.5, 3, 4.56789, 9.99].flatMap((m) =>
-    [-24, -9, -7, -6, -3, 0, 2, 3, 8, 21].flatMap((e): [number, number][] => [[m * 10 ** e, m * 10 ** e], [-m * 10 ** e, -m * 10 ** e]]),
+    [-24, -9, -7, -6, -3, 0, 2, 3, 8, 21].flatMap((e): [number, number][] => {
+      const value = scientific(m, e);
+      return [[value, value], [-value, -value]];
+    }),
   ),
   [0, 0], [299.99, 299.99], [1e8, 1e8 + 1e-3], [1000, 1000.00000001], [-2.5, -2.5 + 1e-12], [0, 5e-25], [-5e-25, 0],
 ];

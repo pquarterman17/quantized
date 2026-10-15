@@ -6,6 +6,52 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-10-15
+
+A **minor** scientific-analysis release focused on comparing measurements
+across worksheets and turning technique-specific results into durable,
+editable figures. It also expands magnetometry from unit preparation into
+sample-aware normalization and loaded-data analysis.
+
+### Added
+
+- **Cross-worksheet comparison:** correlate signals from two worksheets with
+  explicit overlap/resampling review; compare Williamson–Hall crystallite
+  results and hysteresis metrics across reviewed worksheet sets; and create
+  editable trend figures from the resulting tables.
+- **Magnetometry analysis:** normalize moment by mass or sample geometry,
+  correct loaded M(H) data for internal field using an explicit demagnetizing
+  geometry, and fit loaded χ(T), total-moment M(T), or mass-normalized M(T)
+  data in a visible Curie–Weiss range with required field and sample context.
+- **XRD references and durability:** import bounded text reference patterns as
+  wavelength-aware, grouped, editable stick overlays; save Williamson–Hall
+  calculations as durable results with exact peak inputs, diagnostics, and
+  observed-versus-fit figures.
+- **Reflectometry posterior diagnostics:** labeled correlation heatmaps,
+  ranked parameter trade-offs, and complete matrix copy/export for DREAM
+  results.
+- Statistical result tables and figures now link supported rows and marks to
+  the exact current source rows while retaining a frozen editable snapshot.
+
+### Changed
+
+- Saved statistical reporting now records effect sizes, intervals,
+  assumptions, multiple-comparison handling, and missing-data evidence more
+  consistently.
+- Analysis workflows preserve multi-source freshness, exclusions, units,
+  partial failures, cancellation, and the exact reviewed inputs used to make
+  each result.
+
+### Fixed
+
+- Stale, missing, ambiguous, or changed source data now fail closed across the
+  new multi-worksheet and technique workflows instead of silently replaying
+  against different rows.
+- The Node-current compatibility probe no longer fails because extreme
+  autoscale fixture inputs round to adjacent floating-point values in
+  different V8 versions; the shared frontend/backend fixture now constructs
+  those inputs deterministically.
+
 ## [0.31.0] - 2026-10-13
 
 A **minor** analysis release. Analysis output becomes durable: fits, peaks,
