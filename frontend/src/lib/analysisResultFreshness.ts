@@ -17,6 +17,7 @@ import type { AnalysisResult } from "./analysisResult";
 import { peakTableMatchesData } from "./peakTableFreshness";
 import { analysisData } from "./rowstate";
 import type { DataStruct, Dataset } from "./types";
+import { williamsonHallBatchPeakBindingsMatch } from "./williamsonHallBatchBinding";
 import { williamsonHallPeakBindingMatches } from "./williamsonHallRecipe";
 
 const fingerprints = new WeakMap<DataStruct, string>();
@@ -85,7 +86,8 @@ export function isSnapshotResult(result: AnalysisResult): boolean {
   return result.producer.id === "statistical-test" || result.producer.id === "distribution-analysis" ||
     result.producer.id === "fit-y-by-x" || result.producer.id === "variability-analysis" ||
     result.producer.id === "outlier-screening" || result.producer.id === "multivariate-analysis" ||
-    result.producer.id === "analysis-batch" || result.producer.id === "williamson-hall";
+    result.producer.id === "analysis-batch" || result.producer.id === "williamson-hall" ||
+    result.producer.id === "williamson-hall-batch";
 }
 
 /** A snapshot needs no worksheet only when its saved question is a
@@ -121,6 +123,9 @@ export function snapshotResultState(
   if (result.producer.id === "williamson-hall" && !williamsonHallPeakBindingMatches(result, sources[0]!)) {
     return "out-of-date";
   }
+  if (result.producer.id === "williamson-hall-batch" && !williamsonHallBatchPeakBindingsMatch(result, sources as Dataset[])) {
+    return "out-of-date";
+  }
   return "current";
 }
 
@@ -137,14 +142,15 @@ export function snapshotResultDiagnostics(result: AnalysisResult, state: Snapsho
         : result.producer.id === "outlier-screening" ? "outlier screen"
           : result.producer.id === "multivariate-analysis" ? "multivariate analysis"
             : result.producer.id === "analysis-batch" ? "analysis batch" : "statistical test";
-  const namedNoun = result.producer.id === "williamson-hall" ? "Williamson–Hall result" : noun;
+  const namedNoun = result.producer.id === "williamson-hall" ? "Williamson–Hall result"
+    : result.producer.id === "williamson-hall-batch" ? "Williamson–Hall comparison" : noun;
   if (state === "pending") return [`Load the full source worksheet to verify this ${namedNoun}.`];
   if (state === "source-missing") {
     return result.sources.length ? [] : [`This saved ${namedNoun} no longer references its source worksheet and cannot be verified.`];
   }
   if (state !== "out-of-date") return [];
   return [result.sourceFingerprint
-    ? `The source data${result.producer.id === "williamson-hall" ? " or fitted peak table" : ""} changed after this ${namedNoun}. Run it again before using these values.`
+    ? `The source data${result.producer.id === "williamson-hall" || result.producer.id === "williamson-hall-batch" ? " or fitted peak table" : ""} changed after this ${namedNoun}. Run it again before using these values.`
     : `This saved ${namedNoun} has no source fingerprint and cannot be verified.`];
 }
 

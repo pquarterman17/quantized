@@ -10,12 +10,16 @@
 // the data moved under the fit, or the fit ran on an axis that is not 2-theta
 // in degrees (useWilliamsonHall's `fittedBlockedReason`).
 
+import { lazy, Suspense } from "react";
+
 import { DataTable } from "../../primitives/DataTable";
 import { IconButton } from "../../primitives/IconButton";
 import { NumberField } from "../../primitives/NumberField";
 import { Button } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
 import { useWilliamsonHall } from "./useWilliamsonHall";
+
+const WilliamsonHallBatchSection = lazy(() => import("./WilliamsonHallBatchSection"));
 
 const ROW_COLS = "1fr 1fr 20px";
 
@@ -192,6 +196,10 @@ export default function WilliamsonHallSection() {
           </Button>
         </div>
       )}
+      <Suspense fallback={<div className="qzk-ds-meta" style={{ marginTop: 12 }}>Loading comparison tools…</div>}>
+        <WilliamsonHallBatchSection fallbackWavelengthA={wavelength} kFactor={kFactor}
+          instrumentalBroadeningDeg={instrumentalBroadening} />
+      </Suspense>
     </div>
   );
 }
