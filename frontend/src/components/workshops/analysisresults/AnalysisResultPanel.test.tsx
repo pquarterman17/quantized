@@ -32,6 +32,7 @@ import { fitYByXAnalysisResult } from "../../../lib/fitYByXAnalysisResult";
 import { variabilityAnalysisResult } from "../../../lib/variabilityAnalysisResult";
 import { outlierScreeningAnalysisResult } from "../../../lib/outlierScreeningAnalysisResult";
 import { multivariateAnalysisResult } from "../../../lib/multivariateAnalysisResult";
+import { williamsonHallAnalysisResult } from "../../../lib/williamsonHallAnalysisResult";
 import { DEFAULT_PARAMS, DEFAULT_SELECTION } from "../../../lib/statsTests";
 import { publishFitResult } from "../../../store/peakTables";
 import { useStatsTestsStore } from "../../../store/statsTests";
@@ -40,6 +41,7 @@ import { useFitYByXStore } from "../../../store/fitYByX";
 import { useVariabilityStore } from "../../../store/variability";
 import { useOutlierScreeningStore } from "../../../store/outlierScreening";
 import { useMultivarStore } from "../../../store/multivar";
+import { useWilliamsonHallRequestStore } from "../../../store/williamsonHall";
 import { useApp } from "../../../store/useApp";
 import { encodeRecord } from "../reflectivity/reflFitRecord";
 import { makeDataset, makeRecord } from "../reflectivity/reflFit.testkit";
@@ -86,6 +88,7 @@ beforeEach(() => {
   useVariabilityStore.setState({ open: false, request: null });
   useOutlierScreeningStore.setState({ open: false, request: null });
   useMultivarStore.setState({ open: false, request: null });
+  useWilliamsonHallRequestStore.setState({ request: null });
   useApp.setState({
     datasets: [source, output],
     activeId: "source",
@@ -712,5 +715,22 @@ describe("AnalysisResultPanel", () => {
     expect(screen.getByRole("button", { name: "Edit / Re-fit…" })).toBeEnabled();
     fireEvent.click(screen.getByRole("tab", { name: "Diagnostics (1)" }));
     expect(screen.getByText("The fitted X axis is not recorded unambiguously.")).toBeInTheDocument();
+  });
+
+  it("reopens a saved Williamson–Hall result with the exact peak-width recipe", () => {
+    const recipe = { rows: [{ twoTheta: 30, fwhm: 0.2 }, { twoTheta: 45, fwhm: 0.3 }],
+      wavelengthA: 1.5406, kFactor: 0.9, instrumentalBroadeningDeg: 0.05, sourceKind: "manual" as const };
+    const saved = williamsonHallAnalysisResult("wh", source, recipe, {
+      grain_size_nm: 24, microstrain: 0.001, r2: 0.98,
+      plot_x: [1, 2], plot_y: [0.01, 0.02], fit_line: [0.01, 0.001],
+    });
+    useApp.setState({ datasets: [source], analysisResults: [saved], openAnalysisResultId: saved.id, reductionsOpen: false });
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Current")).toBeInTheDocument();
+    expect(screen.getByText(/Crystallite size 24.00 nm/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Edit / rerun…" }));
+    expect(useWilliamsonHallRequestStore.getState().request).toEqual(recipe);
+    expect(useApp.getState()).toMatchObject({ activeId: "source", reductionsOpen: true,
+      reductionsMethod: "williamson-hall", openAnalysisResultId: null });
   });
 });

@@ -20,12 +20,15 @@
 // feeding it any would be new, ungoldened numerics. The caption says so when
 // the loaded table has them. See P2.1's plan entry.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { williamsonHall } from "../../../lib/api/reductions";
 import { includedPeaks, manualEditCount, peakTableMatchesData, peakTableXIsDegrees } from "../../../lib/peakTableFit";
 import type { WilliamsonHallResult } from "../../../lib/reductionTypes";
 import { useActiveDataset } from "../../../store/useApp";
+import { useWilliamsonHallRequestStore } from "../../../store/williamsonHall";
+import { publishWilliamsonHallResult } from "../../../store/williamsonHallResults";
+import { williamsonHallPeakTableFingerprint, type WilliamsonHallRecipe } from "../../../lib/williamsonHallRecipe";
 
 export interface WHPeakRow {
   twoTheta: number;
@@ -80,6 +83,8 @@ export interface WilliamsonHallState {
   setInstrumentalBroadening: (v: number) => void;
   compute: () => Promise<void>;
   clear: () => void;
+  canSaveResult: boolean;
+  saveResult: () => string | null;
 }
 
 export function useWilliamsonHall(): WilliamsonHallState {
@@ -91,6 +96,14 @@ export function useWilliamsonHall(): WilliamsonHallState {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fittedSource, setFittedSource] = useState<string | null>(null);
+  const [peakTableFingerprint, setPeakTableFingerprint] = useState<string | null>(null);
+  const [completed, setCompleted] = useState<{ source: NonNullable<ReturnType<typeof useActiveDataset>>; recipe: WilliamsonHallRecipe } | null>(null);
+  const savedRef = useRef(false);
+  const requestSeq = useRef(0);
+  const [saved, setSaved] = useState(false);
+  const activeIdRef = useRef<string | undefined>(undefined);
+  const request = useWilliamsonHallRequestStore((state) => state.request);
+  const consumeRequest = useWilliamsonHallRequestStore((state) => state.consumeRequest);
   const active = useActiveDataset();
   const table = active?.peakTable ?? null;
   const included = table ? includedPeaks(table) : [];
@@ -120,19 +133,34 @@ export function useWilliamsonHall(): WilliamsonHallState {
     wavelength > 0 &&
     kFactor > 0;
 
+  const invalidate = (): void => {
+    requestSeq.current++;
+    setResult(null);
+    setCompleted(null);
+    setError(null);
+    savedRef.current = false;
+    setSaved(false);
+  };
+
   // Any hand edit invalidates the provenance label: the rows are then no longer
   // the fit's output, and claiming otherwise would be the exact kind of
   // untraceable result P2.1 exists to remove.
   const addRow = (): void => {
     setFittedSource(null);
+    setPeakTableFingerprint(null);
+    invalidate();
     setRows((r) => [...r, emptyRow()]);
   };
   const removeRow = (index: number): void => {
     setFittedSource(null);
+    setPeakTableFingerprint(null);
+    invalidate();
     setRows((r) => r.filter((_, i) => i !== index));
   };
   const updateRow = (index: number, patch: Partial<WHPeakRow>): void => {
     setFittedSource(null);
+    setPeakTableFingerprint(null);
+    invalidate();
     setRows((r) => r.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   };
 
@@ -144,6 +172,8 @@ export function useWilliamsonHall(): WilliamsonHallState {
   // label it is in the middle of setting.
   const setWavelength = (v: number): void => {
     setFittedSource(null);
+    setPeakTableFingerprint(null);
+    invalidate();
     setWavelengthRaw(v);
   };
 
@@ -162,6 +192,10 @@ export function useWilliamsonHall(): WilliamsonHallState {
     // the NEW provenance line, which is the exact untraceable pairing this
     // feature exists to remove.
     setResult(null);
+    setCompleted(null);
+    requestSeq.current++;
+    savedRef.current = false;
+    setSaved(false);
     const { datasetName, model, method, producer } = table.provenance;
     const excluded = table.peaks.length - included.length;
     const edited = manualEditCount(included);
@@ -173,13 +207,49 @@ export function useWilliamsonHall(): WilliamsonHallState {
         // Honest about what the reduction does with the errors: nothing yet.
         (producer === "model_fit" ? " · per-peak errors not used (unweighted fit)" : ""),
     );
+    setPeakTableFingerprint(williamsonHallPeakTableFingerprint(table));
   }
+
+  useEffect(() => {
+    if (!request) return;
+    // AnalysisResultPanel selects the saved source and queues this request in
+    // the same interaction. Mark that source as observed before the separate
+    // active-dataset effect runs, otherwise it clears the peak-table binding
+    // that this restore is about to re-establish.
+    activeIdRef.current = active?.id;
+    setRows(request.rows.map((row) => ({ ...row })));
+    setWavelengthRaw(request.wavelengthA);
+    setKFactor(request.kFactor);
+    setInstrumentalBroadening(request.instrumentalBroadeningDeg);
+    setPeakTableFingerprint(request.sourceKind === "peak-table" ? request.peakTableFingerprint ?? null : null);
+    setFittedSource(request.sourceKind === "peak-table" ? "Inputs restored from the saved fitted-peak binding" : null);
+    requestSeq.current++;
+    setResult(null); setCompleted(null); setError(null); savedRef.current = false; setSaved(false);
+    consumeRequest();
+  }, [active?.id, consumeRequest, request]);
+
+  useEffect(() => {
+    if (activeIdRef.current !== undefined && activeIdRef.current !== active?.id) {
+      requestSeq.current++;
+      setResult(null); setCompleted(null); setError(null); setFittedSource(null);
+      setPeakTableFingerprint(null); savedRef.current = false; setSaved(false);
+    }
+    activeIdRef.current = active?.id;
+  }, [active?.id]);
 
   async function compute(): Promise<void> {
     if (!canCompute) {
       setError("enter at least 2 valid peaks (0 < 2θ < 180, FWHM > 0)");
       return;
     }
+    const source = active;
+    const recipe: WilliamsonHallRecipe = {
+      rows: rows.map((row) => ({ ...row })), wavelengthA: wavelength, kFactor,
+      instrumentalBroadeningDeg: instrumentalBroadening,
+      sourceKind: peakTableFingerprint ? "peak-table" : "manual",
+      ...(peakTableFingerprint ? { peakTableFingerprint } : {}),
+    };
+    const seq = ++requestSeq.current;
     setBusy(true);
     setError(null);
     try {
@@ -190,17 +260,31 @@ export function useWilliamsonHall(): WilliamsonHallState {
         k_factor: kFactor,
         instrumental_broadening_deg: instrumentalBroadening,
       });
-      setResult(res);
+      if (seq === requestSeq.current) {
+        setResult(res);
+        setCompleted(source ? { source, recipe } : null);
+        savedRef.current = false;
+        setSaved(false);
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Williamson-Hall fit failed");
+      if (seq === requestSeq.current) setError(e instanceof Error ? e.message : "Williamson-Hall fit failed");
     } finally {
       setBusy(false);
     }
   }
 
   function clear(): void {
-    setResult(null);
+    invalidate();
     setError(null);
+  }
+
+  function saveResult(): string | null {
+    if (!result || !completed || savedRef.current) return null;
+    savedRef.current = true;
+    const id = publishWilliamsonHallResult(completed.source, completed.recipe, result);
+    if (!id) savedRef.current = false;
+    else setSaved(true);
+    return id;
   }
 
   return {
@@ -221,9 +305,11 @@ export function useWilliamsonHall(): WilliamsonHallState {
     removeRow,
     updateRow,
     setWavelength,
-    setKFactor,
-    setInstrumentalBroadening,
+    setKFactor: (value) => { setFittedSource(null); setPeakTableFingerprint(null); invalidate(); setKFactor(value); },
+    setInstrumentalBroadening: (value) => { setFittedSource(null); setPeakTableFingerprint(null); invalidate(); setInstrumentalBroadening(value); },
     compute,
     clear,
+    canSaveResult: !!result && !!completed && !saved,
+    saveResult,
   };
 }

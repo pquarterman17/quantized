@@ -33,6 +33,9 @@ export default function AnalysisResultSnapshot({
   disabled?: boolean;
 }) {
   const interpretation = result.scalarValues?.Interpretation;
+  const scientificValues = result.producer.id === "williamson-hall"
+    ? Object.entries(result.scalarValues ?? {}).filter(([key]) => !["Analysis", "Test", "Interpretation"].includes(key))
+    : [];
   if (view === "overview") return <>
     <dl className="qz-analysis-summary">
       <div><dt>Analysis</dt><dd>{String(result.scalarValues?.Test ?? result.producer.label)}</dd></div>
@@ -40,8 +43,11 @@ export default function AnalysisResultSnapshot({
       <div><dt>Tables</dt><dd>{result.tables?.length ?? 0}</dd></div>
       <div><dt>Created</dt><dd>{date(result.createdAt)}</dd></div>
     </dl>
+    {!!scientificValues.length && <dl className="qz-analysis-summary">
+      {scientificValues.map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{display(value)}</dd></div>)}
+    </dl>}
     {typeof interpretation === "string" && <p className="qz-analysis-caption">{interpretation}</p>}
-    <StatisticalReportingCard result={result} />
+    {result.producer.id !== "williamson-hall" && <StatisticalReportingCard result={result} />}
   </>;
 
   if (view === "table") return result.tables?.length ? <div>

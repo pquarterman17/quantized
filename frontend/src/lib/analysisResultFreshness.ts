@@ -17,6 +17,7 @@ import type { AnalysisResult } from "./analysisResult";
 import { peakTableMatchesData } from "./peakTableFreshness";
 import { analysisData } from "./rowstate";
 import type { DataStruct, Dataset } from "./types";
+import { williamsonHallPeakBindingMatches } from "./williamsonHallRecipe";
 
 const fingerprints = new WeakMap<DataStruct, string>();
 const scratch = new Float64Array(1);
@@ -84,7 +85,7 @@ export function isSnapshotResult(result: AnalysisResult): boolean {
   return result.producer.id === "statistical-test" || result.producer.id === "distribution-analysis" ||
     result.producer.id === "fit-y-by-x" || result.producer.id === "variability-analysis" ||
     result.producer.id === "outlier-screening" || result.producer.id === "multivariate-analysis" ||
-    result.producer.id === "analysis-batch";
+    result.producer.id === "analysis-batch" || result.producer.id === "williamson-hall";
 }
 
 /** A snapshot needs no worksheet only when its saved question is a
@@ -116,7 +117,11 @@ export function snapshotResultState(
   if (sources.some((dataset) => dataset!.pending)) return "pending";
   if (result.stale || !result.sourceFingerprint) return "out-of-date";
   const now = sources.map((dataset) => analysisDataFingerprint(dataset!)).join(":");
-  return now === result.sourceFingerprint ? "current" : "out-of-date";
+  if (now !== result.sourceFingerprint) return "out-of-date";
+  if (result.producer.id === "williamson-hall" && !williamsonHallPeakBindingMatches(result, sources[0]!)) {
+    return "out-of-date";
+  }
+  return "current";
 }
 
 export const SNAPSHOT_RESULT_STATUS: Readonly<Record<SnapshotResultState, string>> = {
@@ -132,14 +137,15 @@ export function snapshotResultDiagnostics(result: AnalysisResult, state: Snapsho
         : result.producer.id === "outlier-screening" ? "outlier screen"
           : result.producer.id === "multivariate-analysis" ? "multivariate analysis"
             : result.producer.id === "analysis-batch" ? "analysis batch" : "statistical test";
-  if (state === "pending") return [`Load the full source worksheet to verify this ${noun}.`];
+  const namedNoun = result.producer.id === "williamson-hall" ? "Williamson–Hall result" : noun;
+  if (state === "pending") return [`Load the full source worksheet to verify this ${namedNoun}.`];
   if (state === "source-missing") {
-    return result.sources.length ? [] : [`This saved ${noun} no longer references its source worksheet and cannot be verified.`];
+    return result.sources.length ? [] : [`This saved ${namedNoun} no longer references its source worksheet and cannot be verified.`];
   }
   if (state !== "out-of-date") return [];
   return [result.sourceFingerprint
-    ? `The source data changed after this ${noun}. Run it again before using these values.`
-    : `This saved ${noun} has no source fingerprint and cannot be verified.`];
+    ? `The source data${result.producer.id === "williamson-hall" ? " or fitted peak table" : ""} changed after this ${namedNoun}. Run it again before using these values.`
+    : `This saved ${namedNoun} has no source fingerprint and cannot be verified.`];
 }
 
 function snapshotSourcesFingerprint(result: AnalysisResult, byId: ReadonlyMap<string, Dataset>): string | null {

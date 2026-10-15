@@ -2,7 +2,11 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { williamsonHall } from "../../../lib/api/reductions";
+import type { PeakTable } from "../../../lib/peakTable";
+import { williamsonHallPeakTableFingerprint } from "../../../lib/williamsonHallRecipe";
 import { useWilliamsonHall } from "./useWilliamsonHall";
+import { useApp } from "../../../store/useApp";
+import { useWilliamsonHallRequestStore } from "../../../store/williamsonHall";
 
 vi.mock("../../../lib/api/reductions", () => ({
   williamsonHall: vi.fn(),
@@ -10,6 +14,12 @@ vi.mock("../../../lib/api/reductions", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useApp.setState({
+    datasets: [{ id: "xrd", name: "film.xrdml", data: {
+      time: [30, 45], values: [[100], [80]], labels: ["Intensity"], units: ["cps"], metadata: {},
+    } }], activeId: "xrd", analysisResults: [], openAnalysisResultId: null, history: [], future: [],
+  });
+  useWilliamsonHallRequestStore.setState({ request: null });
 });
 
 describe("useWilliamsonHall", () => {
@@ -112,5 +122,84 @@ describe("useWilliamsonHall", () => {
     expect(result.current.result).not.toBeNull();
     act(() => result.current.clear());
     expect(result.current.result).toBeNull();
+  });
+
+  it("invalidates a completed fit on every input edit and ignores a late response", async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof williamsonHall>>) => void;
+    vi.mocked(williamsonHall).mockReturnValue(new Promise((done) => { resolve = done; }));
+    const { result } = renderHook(() => useWilliamsonHall());
+    act(() => {
+      result.current.updateRow(0, { twoTheta: 30, fwhm: 0.2 });
+      result.current.updateRow(1, { twoTheta: 45, fwhm: 0.3 });
+    });
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.compute(); });
+    act(() => result.current.setKFactor(0.95));
+    await act(async () => {
+      resolve({ grain_size_nm: 12, microstrain: 0.01, r2: 0.9,
+        plot_x: [1, 2], plot_y: [1, 2], fit_line: [1, 0] });
+      await pending;
+    });
+    expect(result.current.result).toBeNull();
+    expect(result.current.canSaveResult).toBe(false);
+  });
+
+  it("publishes one durable result and restores its exact recipe for editing", async () => {
+    vi.mocked(williamsonHall).mockResolvedValue({ grain_size_nm: 42, microstrain: 0.001, r2: 0.98,
+      plot_x: [1, 2], plot_y: [0.01, 0.02], fit_line: [0.01, 0.001] });
+    const { result, unmount } = renderHook(() => useWilliamsonHall());
+    act(() => {
+      result.current.updateRow(0, { twoTheta: 30, fwhm: 0.2 });
+      result.current.updateRow(1, { twoTheta: 45, fwhm: 0.3 });
+      result.current.setInstrumentalBroadening(0.05);
+    });
+    await act(async () => { await result.current.compute(); });
+    act(() => { result.current.saveResult(); result.current.saveResult(); });
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(useApp.getState().analysisResults[0]).toMatchObject({
+      producer: { id: "williamson-hall" }, parameters: { recipe: { instrumentalBroadeningDeg: 0.05 } },
+    });
+    const recipe = useApp.getState().analysisResults[0].parameters!.recipe as never;
+    unmount();
+    useWilliamsonHallRequestStore.getState().openWith(recipe);
+    const reopened = renderHook(() => useWilliamsonHall());
+    expect(reopened.result.current.rows).toEqual([{ twoTheta: 30, fwhm: 0.2 }, { twoTheta: 45, fwhm: 0.3 }]);
+    expect(reopened.result.current.instrumentalBroadening).toBe(0.05);
+  });
+
+  it("keeps a saved peak-table binding when reopening onto another source", async () => {
+    const peakTable: PeakTable = {
+      version: 1,
+      peaks: [
+        { id: "p1", center: 30, centerErr: null, fwhm: 0.2, fwhmErr: null, height: 10,
+          heightErr: null, area: 2, bg: 1, eta: null, model: "Gaussian", status: "fit", excluded: false },
+        { id: "p2", center: 45, centerErr: null, fwhm: 0.3, fwhmErr: null, height: 8,
+          heightErr: null, area: 2, bg: 1, eta: null, model: "Gaussian", status: "fit", excluded: false },
+      ],
+      provenance: { datasetId: "other", datasetName: "other.xrdml", method: "simultaneous",
+        model: "Gaussian", bgDegree: 0, linkMode: "None", constrain: false, bgCoeffs: [],
+        R2: 0.99, rmse: 0.1, xLabel: "2θ", xUnit: "deg", wavelengthA: 1.5406,
+        fingerprint: "other-data", fittedAt: "2026-10-15T00:00:00Z" },
+    };
+    const other = { id: "other", name: "other.xrdml", peakTable, data: {
+      time: [30, 45], values: [[50], [40]], labels: ["Intensity"], units: ["cps"], metadata: {},
+    } };
+    const { result } = renderHook(() => useWilliamsonHall());
+    act(() => {
+      useApp.setState((state) => ({ datasets: [...state.datasets, other], activeId: other.id }));
+      useWilliamsonHallRequestStore.getState().openWith({
+        rows: [{ twoTheta: 30, fwhm: 0.2 }, { twoTheta: 45, fwhm: 0.3 }],
+        wavelengthA: 1.5406, kFactor: 0.9, instrumentalBroadeningDeg: 0,
+        sourceKind: "peak-table", peakTableFingerprint: williamsonHallPeakTableFingerprint(peakTable),
+      });
+    });
+    expect(result.current.fittedSource).toMatch(/restored/);
+    vi.mocked(williamsonHall).mockResolvedValue({ grain_size_nm: 42, microstrain: 0.001, r2: 0.98,
+      plot_x: [1, 2], plot_y: [0.01, 0.02], fit_line: [0.01, 0.001] });
+    await act(async () => { await result.current.compute(); });
+    act(() => { result.current.saveResult(); });
+    expect(useApp.getState().analysisResults[0]).toMatchObject({
+      parameters: { recipe: { sourceKind: "peak-table" } },
+    });
   });
 });
