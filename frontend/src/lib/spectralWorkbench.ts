@@ -10,12 +10,21 @@ export interface SpectralChannelRef {
   unit?: string;
 }
 
+export interface SpectralSecondarySource {
+  datasetId: string;
+  datasetName: string;
+  channel: SpectralChannelRef;
+  xUnit: string;
+}
+
 /** Versioned, JSON-safe recipe stored on a linked spectral worksheet. */
 export interface SpectralAnalysisRecipe {
   kind: "spectral";
   version: 1;
   operation: SpectralOperation;
   channels: SpectralChannelRef[];
+  /** Explicit second input for cross-worksheet correlation. */
+  secondarySource?: SpectralSecondarySource;
   /** X-axis unit at recipe creation. Optional for pre-feature saved sheets. */
   xUnit?: string;
   xMin?: number;
@@ -57,9 +66,18 @@ export function spectralRequest(
   dataset: DataStruct,
   recipe: SpectralAnalysisRecipe,
   includeDiagnostics = false,
+  secondaryDataset?: DataStruct,
 ) {
+  if (Boolean(recipe.secondarySource) !== Boolean(secondaryDataset)) {
+    throw new Error("cross-worksheet correlation requires its recorded second source data");
+  }
   return {
     dataset,
+    ...(recipe.secondarySource && secondaryDataset ? {
+      secondary_dataset: secondaryDataset,
+      secondary_channel: recipe.secondarySource.channel.index,
+      secondary_name: recipe.secondarySource.datasetName,
+    } : {}),
     operation: recipe.operation,
     channels: recipe.channels.map((channel) => channel.index),
     x_min: recipe.xMin,
@@ -104,6 +122,32 @@ export function rebindSpectralRecipe(
     : { ...recipe, channels };
 }
 
+/** Rebind the recorded second source independently from the primary source. */
+export function rebindSpectralSecondarySource(
+  recipe: SpectralAnalysisRecipe,
+  labels: string[],
+  units: string[] = [],
+  xUnit = "",
+): SpectralAnalysisRecipe {
+  const source = recipe.secondarySource;
+  if (!source) return recipe;
+  const matches = labels.flatMap((label, index) => label === source.channel.label ? [index] : []);
+  if (matches.length !== 1) throw new Error(`second-source signal column "${source.channel.label}" changed or is ambiguous`);
+  const index = matches[0];
+  const actualUnit = (units[index] ?? "").trim();
+  const expectedUnit = source.channel.unit?.trim();
+  if (expectedUnit && expectedUnit !== actualUnit) {
+    throw new Error(`second-source signal column "${source.channel.label}" changed units from ${expectedUnit} to ${actualUnit || "unknown"}`);
+  }
+  if (source.xUnit.trim() !== xUnit.trim()) {
+    throw new Error(`second-source X axis changed units from ${source.xUnit || "unknown"} to ${xUnit || "unknown"}`);
+  }
+  return {
+    ...recipe,
+    secondarySource: { ...source, channel: { ...source.channel, index, unit: actualUnit } },
+  };
+}
+
 function finite(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
 }
@@ -136,7 +180,27 @@ export function sanitizeSpectralRecipe(value: unknown): SpectralAnalysisRecipe |
   });
   if (channels.length !== r.channels.length) return undefined;
   if (new Set(channels.map((channel) => channel.index)).size !== channels.length) return undefined;
-  if (r.operation === "correlation" ? channels.length !== 2 : channels.length < 1) return undefined;
+  const secondaryRaw = r.secondarySource;
+  let secondarySource: SpectralSecondarySource | undefined;
+  if (secondaryRaw !== undefined) {
+    if (!secondaryRaw || typeof secondaryRaw !== "object") return undefined;
+    const source = secondaryRaw as Record<string, unknown>;
+    const channel = source.channel as Record<string, unknown> | undefined;
+    if (r.operation !== "correlation" || channels.length !== 1 || typeof source.datasetId !== "string" || !source.datasetId ||
+        typeof source.datasetName !== "string" || typeof source.xUnit !== "string" || !channel ||
+        !Number.isInteger(channel.index) || Number(channel.index) < 0 || typeof channel.label !== "string") return undefined;
+    secondarySource = {
+      datasetId: source.datasetId,
+      datasetName: source.datasetName,
+      xUnit: source.xUnit.trim(),
+      channel: {
+        index: Number(channel.index),
+        label: channel.label,
+        ...(typeof channel.unit === "string" ? { unit: channel.unit } : {}),
+      },
+    };
+  }
+  if (r.operation === "correlation" ? channels.length !== (secondarySource ? 1 : 2) : channels.length < 1) return undefined;
   if (!Array.isArray(r.cutoff) || !r.cutoff.every((value) => finite(value) && value > 0)) return undefined;
   if ((r.filterType === "bandpass" ? 2 : 1) !== r.cutoff.length) return undefined;
   if (![r.zeroPad, r.segmentLen, r.order].every(Number.isInteger)) return undefined;
@@ -151,6 +215,7 @@ export function sanitizeSpectralRecipe(value: unknown): SpectralAnalysisRecipe |
     version: 1,
     operation: r.operation as SpectralOperation,
     channels,
+    ...(secondarySource ? { secondarySource } : {}),
     ...(typeof r.xUnit === "string" ? { xUnit: r.xUnit.trim() } : {}),
     ...(finite(r.xMin) ? { xMin: r.xMin } : {}),
     ...(finite(r.xMax) ? { xMax: r.xMax } : {}),

@@ -30,8 +30,25 @@ export async function runDerivedWorksheetRecompute(
   };
   if (sheet.analysisRecipe) {
     if (sheet.analysisRecipe.kind === "spectral") {
+      const secondaryId = sheet.analysisRecipe.secondarySource?.datasetId;
+      const secondary = secondaryId
+        ? get().datasets.find((dataset) => dataset.id === secondaryId)
+        : undefined;
+      if (secondaryId && !secondary) throw new Error(`second source dataset "${secondaryId}" no longer exists`);
+      if (secondary?.pending) throw new Error(`second source dataset "${secondary.name}" hasn't fully loaded yet`);
+      const secondaryData = secondary?.data;
+      const secondaryErrorRoles = JSON.stringify(secondary?.errorRoles ?? []);
       const { recomputeSpectralWorksheet } = await import("./spectralWorksheetsRun");
-      const result = await recomputeSpectralWorksheet(source, sheet, sheet.analysisRecipe);
+      const result = await recomputeSpectralWorksheet(source, sheet, sheet.analysisRecipe, secondary);
+      const currentSecondary = secondaryId
+        ? get().datasets.find((dataset) => dataset.id === secondaryId)
+        : undefined;
+      if (secondaryId && (
+        currentSecondary?.data !== secondaryData ||
+        JSON.stringify(currentSecondary?.errorRoles ?? []) !== secondaryErrorRoles
+      )) {
+        throw new Error("second source worksheet changed while recalculation was running");
+      }
       assertInputsUnchanged();
       return result;
     }

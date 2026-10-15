@@ -3,11 +3,13 @@ import { runSpectralWorkbench } from "./api/spectralWorkbench";
 import { lit } from "./macro";
 import {
   bindSignalRecipe,
+  dataXUnit,
   signalRecipeLabel,
   type SignalAnalysisRecipe,
   type SignalBindOptions,
   type SignalTransformParams,
 } from "./signalRecipe";
+import { rebindSpectralSecondarySource } from "./spectralWorkbench";
 import type { DataStruct, Dataset } from "./types";
 
 export {
@@ -37,7 +39,13 @@ export interface SignalTransformResult {
 }
 
 export function signalTransformStepText(params: SignalTransformParams): { label: string; code: string } {
-  const label = `${signalRecipeLabel(params.recipe)} · ${params.recipe.channels.map((channel) => channel.label).join(", ")}`;
+  const labels = [
+    ...params.recipe.channels.map((channel) => channel.label),
+    ...(params.recipe.kind === "spectral" && params.recipe.secondarySource
+      ? [params.recipe.secondarySource.channel.label]
+      : []),
+  ];
+  const label = `${signalRecipeLabel(params.recipe)} · ${labels.join(", ")}`;
   return { label, code: `qz.transform("signal", "<active>", ${lit({ recipe: params.recipe })})` };
 }
 
@@ -47,14 +55,32 @@ export async function computeSignalTransform(
   source: Dataset,
   signal?: AbortSignal,
   options?: SignalBindOptions,
+  secondary?: Dataset,
 ): Promise<SignalTransformResult> {
-  const recipe = bindSignalRecipe(params.recipe, source.data, options);
+  let recipe = bindSignalRecipe(params.recipe, source.data, options);
+  if (recipe.kind === "spectral" && recipe.secondarySource) {
+    if (!secondary || secondary.id !== recipe.secondarySource.datasetId) {
+      throw new Error(`the recorded second input "${recipe.secondarySource.datasetName}" is unavailable`);
+    }
+    if (secondary.id === source.id) {
+      throw new Error("cross-worksheet correlation requires two different worksheets");
+    }
+    recipe = rebindSpectralSecondarySource(
+      recipe,
+      secondary.data.labels,
+      secondary.data.units,
+      dataXUnit(secondary.data),
+    );
+  }
   const label = signalRecipeLabel(recipe);
   if (recipe.kind === "spectral") {
-    const data = await runSpectralWorkbench(source.data, recipe, signal);
+    const data = secondary
+      ? await runSpectralWorkbench(source.data, recipe, signal, false, secondary.data)
+      : await runSpectralWorkbench(source.data, recipe, signal);
+    const sourceName = secondary ? `${source.name} vs ${secondary.name}` : source.name;
     return {
       data,
-      name: `${source.name} (${recipe.operation})`,
+      name: `${sourceName} (${recipe.operation})`,
       recipe,
       datasetPatch: {
         raw: source.data,

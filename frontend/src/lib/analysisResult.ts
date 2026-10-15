@@ -344,8 +344,9 @@ export function signalAnalysisResult(
   source: Dataset,
   output: Dataset,
   createdAt = new Date().toISOString(),
+  secondary?: Dataset,
 ): AnalysisResult | null {
-  return output.derivedFrom?.datasetId === source.id ? signalEnvelope(id, source, output, createdAt) : null;
+  return output.derivedFrom?.datasetId === source.id ? signalEnvelope(id, source, output, createdAt, secondary) : null;
 }
 
 function signalEnvelope(
@@ -353,20 +354,27 @@ function signalEnvelope(
   source: Pick<Dataset, "id" | "name" | "errorRoles">,
   output: Dataset,
   createdAt: string,
+  secondary?: Pick<Dataset, "id" | "name" | "errorRoles">,
 ): AnalysisResult | null {
   const recipe = output.analysisRecipe;
   if (!recipe) return null;
+  const sourceLabel = secondary ? `${source.name} vs ${secondary.name}` : source.name;
   return {
     version: ANALYSIS_RESULT_VERSION,
     id,
-    name: `${signalRecipeLabel(recipe)} · ${source.name}`,
+    name: `${signalRecipeLabel(recipe)} · ${sourceLabel}`,
     producer: { id: "signal-processing", label: "Signal Processing", version: 1 },
-    sources: [{ datasetId: source.id, role: "input" }],
+    sources: [
+      { datasetId: source.id, role: "input" },
+      ...(secondary ? [{ datasetId: secondary.id, role: "input" as const }] : []),
+    ],
     outputs: [{ datasetId: output.id, role: "linked-worksheet" }],
     settingsRef: { datasetId: output.id, field: "analysisRecipe" },
     tableRefs: [{ datasetId: output.id, label: output.name }],
     plotBindings: [{ datasetId: output.id, channels: output.data.labels.map((_, index) => index) }],
-    warnings: recipe.kind === "spectral" && (source.errorRoles?.length ?? 0) > 0
+    warnings: recipe.kind === "spectral" && (
+      (source.errorRoles?.length ?? 0) > 0 || (secondary?.errorRoles?.length ?? 0) > 0
+    )
       ? ["Bound uncertainties were not propagated into this spectral output."]
       : [],
     createdAt,
@@ -384,7 +392,13 @@ export function migrateLegacySignalResults(datasets: readonly Dataset[], created
   return datasets.flatMap((output) => {
     const sourceId = output.derivedFrom?.datasetId;
     const source = sourceId === undefined ? undefined : byId.get(sourceId) ?? { id: sourceId, name: output.name };
-    const result = source ? signalEnvelope(`analysis-${output.id}`, source, output, createdAt) : null;
+    const secondaryRef = output.analysisRecipe?.kind === "spectral"
+      ? output.analysisRecipe.secondarySource
+      : undefined;
+    const secondary = secondaryRef
+      ? byId.get(secondaryRef.datasetId) ?? { id: secondaryRef.datasetId, name: secondaryRef.datasetName }
+      : undefined;
+    const result = source ? signalEnvelope(`analysis-${output.id}`, source, output, createdAt, secondary) : null;
     return result ? [result] : [];
   });
 }

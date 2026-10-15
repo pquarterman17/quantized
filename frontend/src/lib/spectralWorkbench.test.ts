@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SPECTRAL_RECIPE,
   rebindSpectralRecipe,
+  rebindSpectralSecondarySource,
   sanitizeSpectralRecipe,
   spectralRequest,
   type SpectralAnalysisRecipe,
@@ -61,5 +62,27 @@ describe("spectral workbench recipe", () => {
     expect(sanitizeSpectralRecipe({ ...valid, order: 0 })).toBeUndefined();
     expect(sanitizeSpectralRecipe({ ...valid, xMin: 4, xMax: 2 })).toBeUndefined();
     expect(sanitizeSpectralRecipe({ ...valid, operation: "correlation" })).toBeUndefined();
+  });
+
+  it("round-trips, sends, and independently rebinds a cross-worksheet source", () => {
+    const secondary = {
+      datasetId: "second",
+      datasetName: "Reference scan",
+      xUnit: "s",
+      channel: { index: 1, label: "reference", unit: "V" },
+    };
+    const cross = recipe({ operation: "correlation", channels: [{ index: 1, label: "signal", unit: "V" }], secondarySource: secondary });
+    expect(sanitizeSpectralRecipe(structuredClone(cross))).toEqual(cross);
+    expect(spectralRequest(data, cross, false, data)).toMatchObject({
+      channels: [1],
+      secondary_dataset: data,
+      secondary_channel: 1,
+      secondary_name: "Reference scan",
+    });
+    expect(() => spectralRequest(data, cross)).toThrow("requires its recorded second source");
+    expect(rebindSpectralSecondarySource(cross, ["reference", "other"], ["V", ""], "s"))
+      .toMatchObject({ secondarySource: { channel: { index: 0, label: "reference", unit: "V" } } });
+    expect(() => rebindSpectralSecondarySource(cross, ["reference"], ["V"], "ms")).toThrow("changed units");
+    expect(sanitizeSpectralRecipe({ ...cross, secondarySource: { ...secondary, datasetId: "" } })).toBeUndefined();
   });
 });

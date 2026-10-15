@@ -15,6 +15,9 @@ import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import SignalPreview from "./SignalPreview";
+import CorrelationInputs, { type CorrelationSourceMode } from "./CorrelationInputs";
+import SignalChannelInputs from "./SignalChannelInputs";
+import SignalOperationPicker from "./SignalOperationPicker";
 import SpectralControls from "./SpectralControls";
 import SpectralReadout from "./SpectralReadout";
 import {
@@ -26,7 +29,6 @@ import {
   operationLabel,
   selectedBoundErrorTargets,
   settingsToParams,
-  type SignalOperation,
   type SignalSettings,
 } from "./signalProcessingModel";
 import {
@@ -34,23 +36,6 @@ import {
   buildSpectralRecipe,
   validateSpectralSettings,
 } from "./spectralSettings";
-
-const OPERATION_OPTIONS: { value: SignalOperation; label: string }[] = [
-  { value: "smooth", label: "Smooth" },
-  { value: "normalize-range", label: "Normalize · 0–1" },
-  { value: "normalize-peak", label: "Normalize · peak = 1" },
-  { value: "normalize-zscore", label: "Normalize · Z-score" },
-  { value: "normalize-area", label: "Normalize · area = 1" },
-  { value: "normalize-reference", label: "Normalize · reference" },
-  { value: "detrend", label: "Detrend" },
-  { value: "derivative-first", label: "Derivative · dY/dX" },
-  { value: "derivative-second", label: "Derivative · d²Y/dX²" },
-  { value: "integral", label: "Integral · cumulative ∫Y dx" },
-  { value: "log-derivative", label: "Derivative · dlog(Y)/dlog(X)" },
-  { value: "fft", label: "Spectrum · FFT / PSD / phase" },
-  { value: "filter", label: "Filter · frequency domain" },
-  { value: "correlation", label: "Cross-correlation" },
-];
 
 function enteredFinite(value: string): boolean {
   return value.trim() !== "" && Number.isFinite(Number(value));
@@ -68,10 +53,14 @@ export default function SignalProcessingPanel() {
   const [channels, setChannels] = useState<number[]>([]);
   const [settings, setSettings] = useState<SignalSettings>(DEFAULT_SIGNAL_SETTINGS);
   const [spectralSettings, setSpectralSettings] = useState(DEFAULT_SPECTRAL_SETTINGS);
+  const [correlationMode, setCorrelationMode] = useState<CorrelationSourceMode>("same");
+  const [secondaryId, setSecondaryId] = useState("");
+  const [secondaryChannel, setSecondaryChannel] = useState<number | null>(null);
   const [preview, setPreview] = useState<DataStruct | null>(null);
   const [previewFor, setPreviewFor] = useState<{
     datasetId: string;
     data: DataStruct;
+    secondaryData?: DataStruct;
     request: object;
   } | null>(null);
   const [previewError, setPreviewError] = useState("");
@@ -85,11 +74,18 @@ export default function SignalProcessingPanel() {
   };
   const spectralOperation = isSpectralOperation(settings.operation) ? settings.operation : null;
   const spectral = spectralOperation !== null;
+  const crossWorksheet = settings.operation === "correlation" && correlationMode === "two";
+  const secondary = crossWorksheet ? datasets.find((dataset) => dataset.id === secondaryId) ?? null : null;
 
   useEffect(() => {
     const plotted = (plotChannels ?? []).filter((channel) => available.includes(channel));
     setChannels(plotted.length ? plotted : available.slice(0, 1));
   }, [activeId, available, plotChannels]);
+
+  useEffect(() => {
+    setSecondaryId("");
+    setSecondaryChannel(null);
+  }, [activeId]);
 
   useEffect(() => {
     const x = active?.data.time ?? [];
@@ -117,9 +113,17 @@ export default function SignalProcessingPanel() {
     () => !active
       ? null
       : spectralOperation
-        ? buildSpectralRecipe(spectralOperation, spectralSettings, channels, active)
+        ? buildSpectralRecipe(
+            spectralOperation,
+            spectralSettings,
+            channels,
+            active,
+            crossWorksheet && secondary && secondaryChannel !== null
+              ? { dataset: secondary, channel: secondaryChannel }
+              : undefined,
+          )
         : buildCorrectionRecipe(settings, channels, active),
-    [active, channels, settings, spectralOperation, spectralSettings],
+    [active, channels, crossWorksheet, secondary, secondaryChannel, settings, spectralOperation, spectralSettings],
   );
   const requestSpec = recipe;
   const previewCurrent = Boolean(
@@ -128,6 +132,7 @@ export default function SignalProcessingPanel() {
     && requestSpec
     && previewFor?.datasetId === active.id
     && previewFor.data === active.data
+    && previewFor.secondaryData === secondary?.data
     && previewFor.request === requestSpec,
   );
   const displayedPreview = previewCurrent ? preview : null;
@@ -148,7 +153,7 @@ export default function SignalProcessingPanel() {
     settings.operation === "integral"
   );
   const operationValidation = spectralOperation
-    ? validateSpectralSettings(spectralOperation, spectralSettings, channels)
+    ? validateSpectralSettings(spectralOperation, spectralSettings, channels, crossWorksheet)
     : settings.operation === "smooth" && (!Number.isInteger(settings.smoothWindow) || settings.smoothWindow < 1)
       ? "Smoothing half-window must be a positive integer."
       : settings.operation === "smooth" && settings.smoothMethod === "savitzky-golay" &&
@@ -173,6 +178,8 @@ export default function SignalProcessingPanel() {
       ? "Wait for the full dataset to load."
       : channels.length === 0
         ? "Select at least one signal column."
+        : crossWorksheet && (!secondary || secondary.pending || secondaryChannel === null)
+          ? "Choose a loaded second worksheet and signal column."
         : operationValidation;
 
   useEffect(() => {
@@ -185,7 +192,9 @@ export default function SignalProcessingPanel() {
     if (!active || validation || !recipe || (!spectral && !params)) return;
     const timer = window.setTimeout(() => {
       const request = spectral
-        ? runSpectralWorkbench(active.data, recipe as ReturnType<typeof buildSpectralRecipe>, controller.signal, true)
+        ? secondary
+          ? runSpectralWorkbench(active.data, recipe as ReturnType<typeof buildSpectralRecipe>, controller.signal, true, secondary.data)
+          : runSpectralWorkbench(active.data, recipe as ReturnType<typeof buildSpectralRecipe>, controller.signal, true)
         : applyCorrections({
             dataset: active.data,
             params: params!,
@@ -194,7 +203,7 @@ export default function SignalProcessingPanel() {
       void request.then((result) => {
         if (!cancelled && previewSequence.current === sequence) {
           setPreview(result);
-          setPreviewFor({ datasetId: active.id, data: active.data, request: recipe });
+          setPreviewFor({ datasetId: active.id, data: active.data, secondaryData: secondary?.data, request: recipe });
         }
       }).catch((error: unknown) => {
         const aborted = typeof error === "object" && error !== null && "name" in error && error.name === "AbortError";
@@ -208,7 +217,7 @@ export default function SignalProcessingPanel() {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [active, params, recipe, spectral, validation]);
+  }, [active, params, recipe, secondary, spectral, validation]);
 
   const commit = async () => {
     if (!active || !displayedPreview || validation || outputError || commitInFlight.current) return;
@@ -266,28 +275,25 @@ export default function SignalProcessingPanel() {
             <div className="qz-signal-note">
               Source: <strong>{active.name}</strong> · X: {xLabel}{xUnit ? ` (${xUnit})` : ""}
             </div>
-            <label className="qz-signal-field">Operation
-              <Select
-                value={settings.operation}
-                onChange={(event) => setSettings((current) => ({ ...current, operation: event.target.value as SignalOperation }))}
-                options={OPERATION_OPTIONS}
+            <SignalOperationPicker value={settings.operation} onChange={(operation) => setSettings((current) => ({ ...current, operation }))} />
+            {settings.operation === "correlation" ? (
+              <CorrelationInputs
+                active={active}
+                datasets={datasets}
+                available={available}
+                channels={channels}
+                setChannels={setChannels}
+                mode={correlationMode}
+                setMode={(mode) => {
+                  setCorrelationMode(mode);
+                  setChannels((current) => mode === "two" ? current.slice(0, 1) : current);
+                }}
+                secondaryId={secondaryId}
+                setSecondaryId={setSecondaryId}
+                secondaryChannel={secondaryChannel}
+                setSecondaryChannel={setSecondaryChannel}
               />
-            </label>
-            <fieldset className="qz-signal-channels">
-              <legend>{settings.operation === "correlation" ? "Signal columns (choose two)" : "Signal columns"}</legend>
-              {available.map((channel) => (
-                <Checkbox
-                  key={channel}
-                  checked={channels.includes(channel)}
-                  onChange={(checked) => setChannels((current) => checked
-                    ? [...current, channel].sort((a, b) => a - b)
-                    : current.filter((item) => item !== channel))}
-                >
-                  {active.data.labels[channel]}{active.data.units[channel] ? ` (${active.data.units[channel]})` : ""}
-                </Checkbox>
-              ))}
-              {available.length === 0 && <span className="qz-muted">No measured signal columns are available.</span>}
-            </fieldset>
+            ) : <SignalChannelInputs dataset={active} available={available} channels={channels} setChannels={setChannels} />}
             {!spectral && (
               <div className="qz-signal-smooth">
                 <Checkbox checked={settings.useRange} onChange={(checked) => setSettings((current) => ({ ...current, useRange: checked }))}>
@@ -367,13 +373,13 @@ export default function SignalProcessingPanel() {
             <SignalPreview source={active.data} result={displayedPreview} channel={channels[0] ?? available[0] ?? 0} resultChannel={spectral ? 0 : channels[0] ?? available[0] ?? 0} showOriginal={!spectral || settings.operation === "filter"} />
             {spectral && <SpectralReadout result={displayedPreview} />}
             <div className="qz-signal-note">
-              Scope: {totalRows.toLocaleString()} total rows ({(totalRows - dropped).toLocaleString()} included, {dropped.toLocaleString()} excluded or filtered). Signal Processing uses the full worksheet, including those {dropped.toLocaleString()} rows. The output stays linked to <strong>{active.name}</strong> and can be recalculated.
+              Scope: {totalRows.toLocaleString()} total rows ({(totalRows - dropped).toLocaleString()} included, {dropped.toLocaleString()} excluded or filtered). Signal Processing uses the full worksheet, including those {dropped.toLocaleString()} rows. The output stays linked to <strong>{active.name}</strong>{secondary ? <> and <strong>{secondary.name}</strong></> : null} and can be recalculated.
             </div>
             {spectral && boundTargets.length > 0 && <div className="qz-signal-note">Bound uncertainties are not propagated into spectral outputs; the linked source and full recipe remain recorded.</div>}
             {(validation || previewError || outputError) && <p className="qz-error" role="alert">{validation || previewError || outputError}</p>}
             <div className="qz-dialog-actions">
               <Button onClick={close}>Cancel</Button>
-              <Button disabled={Boolean(validation) || !recipe} onClick={() => void saveRecipe()}>Save recipe…</Button>
+              <Button disabled={Boolean(validation) || !recipe || crossWorksheet} title={crossWorksheet ? "Cross-worksheet recipes retain project-specific source links and cannot yet be saved as reusable templates." : undefined} onClick={() => void saveRecipe()}>Save recipe…</Button>
               <Button variant="primary" disabled={Boolean(validation || outputError) || !displayedPreview || busy} onClick={() => void commit()}>
                 {busy ? "Creating…" : "Create linked worksheet"}
               </Button>

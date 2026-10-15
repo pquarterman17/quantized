@@ -8,10 +8,11 @@ export function runSpectralWorkbench(
   recipe: SpectralAnalysisRecipe,
   signal?: AbortSignal,
   includeDiagnostics = false,
+  secondaryDataset?: DataStruct,
 ): Promise<DataStruct> {
   return postJSON(
     "/api/spectral/workbench",
-    spectralRequest(dataset, recipe, includeDiagnostics),
+    spectralRequest(dataset, recipe, includeDiagnostics, secondaryDataset),
     signal,
   );
 }

@@ -3,9 +3,10 @@ import { recomputeFromBaseOrEmpty } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import {
+  rebindSpectralSecondarySource,
   type SpectralAnalysisRecipe,
 } from "../lib/spectralWorkbench";
-import { bindSignalRecipe } from "../lib/signalRecipe";
+import { bindSignalRecipe, dataXUnit } from "../lib/signalRecipe";
 import type { Dataset } from "../lib/types";
 import { nextDatasetId } from "./idSeq";
 import type { AppState } from "./useApp";
@@ -18,9 +19,21 @@ export async function recomputeSpectralWorksheet(
   source: Dataset,
   sheet: Dataset,
   recipeInput: SpectralAnalysisRecipe,
+  secondary?: Dataset,
 ): Promise<{ sheet: Dataset; shift: null }> {
-  const recipe = bindSignalRecipe(recipeInput, source.data) as SpectralAnalysisRecipe;
-  const analyzed = await runSpectralWorkbench(source.data, recipe);
+  let recipe = bindSignalRecipe(recipeInput, source.data) as SpectralAnalysisRecipe;
+  if (recipe.secondarySource) {
+    if (!secondary || secondary.id !== recipe.secondarySource.datasetId) {
+      throw new Error(`the recorded second input "${recipe.secondarySource.datasetName}" is unavailable`);
+    }
+    if (secondary.id === source.id) {
+      throw new Error("cross-worksheet correlation requires two different worksheets");
+    }
+    recipe = rebindSpectralSecondarySource(recipe, secondary.data.labels, secondary.data.units, dataXUnit(secondary.data));
+  }
+  const analyzed = secondary
+    ? await runSpectralWorkbench(source.data, recipe, undefined, false, secondary.data)
+    : await runSpectralWorkbench(source.data, recipe);
   const { data, formulaErrors } = recomputeFromBaseOrEmpty(analyzed, sheet.formulas);
   return {
     sheet: {
@@ -58,10 +71,28 @@ export async function createSpectralWorksheet(
     return null;
   }
   try {
-    const rebound = bindSignalRecipe(recipe, source.data) as SpectralAnalysisRecipe;
-    const data = await runSpectralWorkbench(source.data, rebound);
+    let rebound = bindSignalRecipe(recipe, source.data) as SpectralAnalysisRecipe;
+    const secondary = rebound.secondarySource
+      ? get().datasets.find((dataset) => dataset.id === rebound.secondarySource?.datasetId)
+      : undefined;
+    if (rebound.secondarySource && (!secondary || secondary.pending)) {
+      throw new Error(`the recorded second input "${rebound.secondarySource.datasetName}" is unavailable`);
+    }
+    if (secondary?.id === source.id) {
+      throw new Error("cross-worksheet correlation requires two different worksheets");
+    }
+    if (secondary) {
+      rebound = rebindSpectralSecondarySource(rebound, secondary.data.labels, secondary.data.units, dataXUnit(secondary.data));
+    }
+    const data = secondary
+      ? await runSpectralWorkbench(source.data, rebound, undefined, false, secondary.data)
+      : await runSpectralWorkbench(source.data, rebound);
     const currentSource = get().datasets.find((dataset) => dataset.id === sourceId);
-    if (!currentSource || currentSource.pending || currentSource.data !== source.data) {
+    const currentSecondary = secondary
+      ? get().datasets.find((dataset) => dataset.id === secondary.id)
+      : undefined;
+    if (!currentSource || currentSource.pending || currentSource.data !== source.data ||
+        (secondary && (!currentSecondary || currentSecondary.pending || currentSecondary.data !== secondary.data))) {
       get().setStatus("Can't create a spectral worksheet: source data changed while analysis was running.");
       return null;
     }

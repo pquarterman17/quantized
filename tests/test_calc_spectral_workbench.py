@@ -191,6 +191,64 @@ def test_cross_correlation_reports_lag_in_x_units() -> None:
     assert float(out.metadata["peakCorrelation"]) > 0.9
 
 
+def test_cross_worksheet_correlation_aligns_only_with_explicit_resampling() -> None:
+    left = _dataset()
+    x = np.linspace(0.02, 2.52, 201)
+    right = DataStruct.create(
+        x,
+        np.sin(2 * np.pi * 5 * (x - 0.03))[:, None],
+        labels=["remote reference"],
+        units=["V"],
+        metadata={"xLabel": "Time", "xUnit": "s"},
+    )
+    with pytest.raises(ValueError, match="grids differ"):
+        spectral_workbench(
+            left,
+            operation="correlation",
+            channels=[0],
+            secondary_ds=right,
+            secondary_channel=0,
+        )
+    out = spectral_workbench(
+        left,
+        operation="correlation",
+        channels=[0],
+        secondary_ds=right,
+        secondary_channel=0,
+        secondary_name="reference scan",
+        resample=True,
+    )
+    assert out.labels == ("Correlation · signal vs remote reference",)
+    assert out.metadata["xUnit"] == "s"
+    assert out.metadata["spectralAnalysis"]["resampled"] is True
+    assert out.metadata["spectralAnalysis"]["secondarySource"] == {
+        "name": "reference scan",
+        "channel": 0,
+        "label": "remote reference",
+    }
+    assert abs(float(out.metadata["peakLag"])) < 0.1
+
+
+def test_cross_worksheet_correlation_refuses_incompatible_axes() -> None:
+    right = _dataset()
+    right = DataStruct.create(
+        right.time,
+        right.values[:, :1],
+        labels=["reference"],
+        units=["V"],
+        metadata={"xLabel": "Distance", "xUnit": "mm"},
+    )
+    with pytest.raises(ValueError, match="same units"):
+        spectral_workbench(
+            _dataset(),
+            operation="correlation",
+            channels=[0],
+            secondary_ds=right,
+            secondary_channel=0,
+            resample=True,
+        )
+
+
 def test_cross_correlation_refuses_a_zero_energy_signal() -> None:
     source = _dataset()
     constant = DataStruct.create(

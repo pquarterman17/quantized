@@ -10316,6 +10316,14 @@ export interface components {
              * @default false
              */
             resample?: boolean;
+            /** Secondary Channel */
+            secondary_channel?: number | null;
+            /** Secondary Dataset */
+            secondary_dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Secondary Name */
+            secondary_name?: string | null;
             /**
              * Segment Len
              * @default 0

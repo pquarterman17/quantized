@@ -388,6 +388,47 @@ describe("pasteTransferPackage — fresh-id rewrite core", () => {
     expect(result.droppedExternalRefs).toBe(0);
   });
 
+  it("rewrites an internal cross-worksheet correlation source", () => {
+    const pkg = fullPackage();
+    pkg.datasets[1].analysisRecipe = {
+      kind: "spectral", version: 1, operation: "correlation",
+      channels: [{ index: 0, label: "A" }],
+      secondarySource: {
+        datasetId: "ds-1", datasetName: "Sheet 1", xUnit: "",
+        channel: { index: 0, label: "A" },
+      },
+      resample: false, outputType: "magnitude", sided: "one", window: "none",
+      detrend: "mean", zeroPad: 0, segmentLen: 0, overlap: 0.5,
+      filterType: "lowpass", cutoff: [1], order: 4, correlationDemean: true,
+    };
+    const result = pasteTransferPackage(pkg, emptyExisting(), generators("g"), undefined);
+    const ids = new Set(result.datasets.map((dataset) => dataset.id));
+    const secondary = result.datasets.find((dataset) => dataset.name === "Sheet 2")?.analysisRecipe;
+    expect(secondary?.kind === "spectral" && secondary.secondarySource?.datasetId).not.toBe("ds-1");
+    expect(secondary?.kind === "spectral" && ids.has(secondary.secondarySource?.datasetId ?? "")).toBe(true);
+  });
+
+  it("freezes a copied correlation output when its second source is outside the workbook", () => {
+    const pkg = fullPackage();
+    pkg.datasets[1].analysisRecipe = {
+      kind: "spectral", version: 1, operation: "correlation",
+      channels: [{ index: 0, label: "A" }],
+      secondarySource: {
+        datasetId: "external-reference", datasetName: "Another workbook", xUnit: "",
+        channel: { index: 0, label: "A" },
+      },
+      resample: false, outputType: "magnitude", sided: "one", window: "none",
+      detrend: "mean", zeroPad: 0, segmentLen: 0, overlap: 0.5,
+      filterType: "lowpass", cutoff: [1], order: 4, correlationDemean: true,
+    };
+    const result = pasteTransferPackage(pkg, emptyExisting(), generators("g"), undefined);
+    const output = result.datasets.find((dataset) => dataset.name === "Sheet 2")!;
+    expect(output.analysisRecipe).toBeUndefined();
+    expect(output.derivedFrom).toBeUndefined();
+    expect(output.data).toEqual(pkg.datasets[1].data);
+    expect(result.droppedExternalRefs).toBeGreaterThan(0);
+  });
+
   it("rewrites figure/report datasetId and template scope.workbookId to land INSIDE the pasted set", () => {
     const result = pasteTransferPackage(fullPackage(), emptyExisting(), generators("g"), undefined);
     const pastedIds = new Set(result.datasets.map((d) => d.id));

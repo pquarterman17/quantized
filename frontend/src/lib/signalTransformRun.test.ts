@@ -4,11 +4,12 @@ import type { Dataset } from "./types";
 import { useApp } from "../store/useApp";
 import { parseWorkspace, serializeWorkspace } from "./workspace";
 
-const { applyMock } = vi.hoisted(() => ({ applyMock: vi.fn() }));
+const { applyMock, spectralMock } = vi.hoisted(() => ({ applyMock: vi.fn(), spectralMock: vi.fn() }));
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
   applyCorrections: applyMock,
 }));
+vi.mock("./api/spectralWorkbench", () => ({ runSpectralWorkbench: spectralMock }));
 
 const { runTransform } = await import("./transformRun");
 
@@ -41,6 +42,7 @@ const params = {
 beforeEach(() => {
   vi.clearAllMocks();
   applyMock.mockResolvedValue({ ...source.data, values: [[-1], [0], [1]] });
+  spectralMock.mockResolvedValue({ ...source.data, labels: ["Correlation · Y vs R"], values: [[1], [0], [-1]] });
   useApp.setState({
     datasets: [source],
     activeId: source.id,
@@ -112,6 +114,82 @@ describe("Signal Processing transform commit", () => {
     useApp.getState().undo();
     expect(useApp.getState().datasets).toEqual([source]);
     expect(useApp.getState().analysisResults).toEqual([]);
+  });
+
+  it("records and resolves both sources for cross-worksheet correlation", async () => {
+    const secondary: Dataset = {
+      ...source,
+      id: "second",
+      name: "reference",
+      data: { ...source.data, labels: ["R"] },
+      errorRoles: [{ channel: 0, target: 0, axis: "y", side: "both" }],
+    };
+    const cross = {
+      op: "signal" as const,
+      recipe: {
+        kind: "spectral" as const, version: 1 as const, operation: "correlation" as const,
+        channels: [{ index: 0, label: "Y", unit: "V" }], xUnit: "",
+        secondarySource: {
+          datasetId: secondary.id, datasetName: secondary.name, xUnit: "",
+          channel: { index: 0, label: "R", unit: "V" },
+        },
+        resample: true, outputType: "magnitude" as const, sided: "one" as const,
+        window: "none" as const, detrend: "mean" as const, zeroPad: 0,
+        segmentLen: 0, overlap: 0.5, filterType: "lowpass" as const,
+        cutoff: [1], order: 4, correlationDemean: true,
+      },
+    };
+    useApp.setState({ datasets: [source, secondary] });
+    const result = await runTransform(useApp.getState, cross, source.id);
+    expect(useApp.getState().datasets.find((dataset) => dataset.id === result?.id)?.name)
+      .toBe("scan vs reference (correlation)");
+    expect(spectralMock).toHaveBeenCalledWith(
+      source.data,
+      expect.objectContaining({ secondarySource: expect.objectContaining({ datasetId: secondary.id }) }),
+      undefined,
+      false,
+      secondary.data,
+    );
+    expect(useApp.getState().analysisResults[0]).toMatchObject({
+      name: "Cross-correlation · scan vs reference",
+      sources: [
+        { datasetId: source.id, role: "input" },
+        { datasetId: secondary.id, role: "input" },
+      ],
+      outputs: [{ datasetId: result?.id, role: "linked-worksheet" }],
+      warnings: ["Bound uncertainties were not propagated into this spectral output."],
+    });
+    const reopened = parseWorkspace(serializeWorkspace({
+      datasets: useApp.getState().datasets,
+      analysisResults: useApp.getState().analysisResults,
+    }));
+    expect(reopened.datasets.find((dataset) => dataset.id === result?.id)?.analysisRecipe).toMatchObject({
+      secondarySource: { datasetId: secondary.id, channel: { label: "R" } },
+    });
+    expect(reopened.analysisResults?.[0].sources).toEqual([
+      { datasetId: source.id, role: "input" },
+      { datasetId: secondary.id, role: "input" },
+    ]);
+  });
+
+  it("remaps a recorded second source produced by an earlier replay step", async () => {
+    const { resolveRecorded } = await import("./transformReplay");
+    const recorded = {
+      ...params,
+      recipe: {
+        kind: "spectral", version: 1, operation: "correlation",
+        channels: [{ index: 0, label: "Y", unit: "V" }], xUnit: "",
+        secondarySource: {
+          datasetId: "recorded-output", datasetName: "reference", xUnit: "",
+          channel: { index: 0, label: "R", unit: "V" },
+        },
+      },
+      inputIsTarget: true,
+    };
+    const resolved = resolveRecorded(recorded, new Map([["recorded-output", "replayed-output"]]), source.id);
+    expect(resolved.params.recipe).toMatchObject({
+      secondarySource: { datasetId: "replayed-output", datasetName: "reference" },
+    });
   });
 
   it("fails closed without publishing an output when the source changes during compute", async () => {

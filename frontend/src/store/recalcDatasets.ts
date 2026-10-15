@@ -55,11 +55,15 @@ const message = (e: unknown): string => (e instanceof Error ? e.message : "error
  *  has already propagated into `failed` via the intermediate node by the
  *  time we reach `d`. */
 function failedUpstream(
-  d: { bgRef?: { datasetId: string }; derivedFrom?: { datasetId: string } },
+  d: Pick<Dataset, "bgRef" | "derivedFrom" | "analysisRecipe">,
   failed: ReadonlyMap<string, string>,
 ): string | null {
   if (d.bgRef != null && failed.has(d.bgRef.datasetId)) return d.bgRef.datasetId;
   if (d.derivedFrom != null && failed.has(d.derivedFrom.datasetId)) return d.derivedFrom.datasetId;
+  const secondaryId = d.analysisRecipe?.kind === "spectral"
+    ? d.analysisRecipe.secondarySource?.datasetId
+    : undefined;
+  if (secondaryId && failed.has(secondaryId)) return secondaryId;
   return null;
 }
 

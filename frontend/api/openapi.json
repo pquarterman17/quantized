@@ -12755,6 +12755,41 @@
             "title": "Resample",
             "type": "boolean"
           },
+          "secondary_channel": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secondary Channel"
+          },
+          "secondary_dataset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secondary Dataset"
+          },
+          "secondary_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secondary Name"
+          },
           "segment_len": {
             "default": 0,
             "minimum": 0.0,

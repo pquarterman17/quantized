@@ -72,6 +72,12 @@ export function resolveRecorded(
   const out: Record<string, unknown> = { ...params };
   if (Array.isArray(params.with)) out.with = params.with.map((r) => mapRef(map, r));
   else if (params.with !== undefined) out.with = mapRef(map, params.with);
+  const recipe = params.recipe as Record<string, unknown> | undefined;
+  const secondary = recipe?.secondarySource as Record<string, unknown> | undefined;
+  if (recipe?.kind === "spectral" && secondary && typeof secondary.datasetId === "string" && map.has(secondary.datasetId)) {
+    const mapped = mapRef(map, { id: secondary.datasetId, name: secondary.datasetName }) as { id: string };
+    out.recipe = { ...recipe, secondarySource: { ...secondary, datasetId: mapped.id } };
+  }
   let primaryId = target;
   if (params.inputIsTarget === false) {
     const input = mapRef(map, params.input) as { id?: unknown } | undefined;

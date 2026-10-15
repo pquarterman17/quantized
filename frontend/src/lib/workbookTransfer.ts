@@ -106,6 +106,7 @@ import type { ReportEntry } from "./report";
 import type { Dataset } from "./types";
 import { parseWorkspace, WORKSPACE_FORMAT, WORKSPACE_VERSION } from "./workspace";
 import type { WorkbookNode } from "./workbooks";
+import { rewriteTransferredDatasetRefs } from "./workbookTransferSignal";
 import { lastBookError, truncateReason } from "./bookData";
 import { fetchReferencedPackage, MAX_STORED_TRANSFER_BYTES, readTransferRef, storeAsReference } from "./workbookTransferRef";
 export const WORKBOOK_TRANSFER_FORMAT = "quantized-workbook-transfer";
@@ -452,12 +453,7 @@ export function pasteTransferPackage(
     }
     usedNames.add(name);
     const next: Dataset = { ...d, id, name, workbookId, folderId: targetFolderId };
-    const bgTarget = rewriteRef(d.bgRef?.datasetId, true);
-    next.bgRef = d.bgRef && bgTarget ? { ...d.bgRef, datasetId: bgTarget } : undefined;
-    const derivedTarget = rewriteRef(d.derivedFrom?.datasetId);
-    next.derivedFrom = d.derivedFrom && derivedTarget ? { ...d.derivedFrom, datasetId: derivedTarget } : undefined;
-    next.analysisRecipe = next.derivedFrom ? d.analysisRecipe : undefined;
-    next.versionOf = rewriteRef(d.versionOf);
+    rewriteTransferredDatasetRefs(next, d, rewriteRef);
     return next;
   });
 

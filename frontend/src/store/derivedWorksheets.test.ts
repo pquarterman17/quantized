@@ -279,6 +279,40 @@ describe("linked spectral worksheets", () => {
     );
   });
 
+  it("recalculates a cross-worksheet correlation from both recorded sources", async () => {
+    const output = { ...data(), labels: ["Correlation · A vs B"] };
+    vi.mocked(runSpectralWorkbench).mockResolvedValue(output);
+    const secondaryData = { ...data(), labels: ["other", "B"], units: ["", "u"], values: [[0, 3], [0, 2], [0, 1]], metadata: { xUnit: "s" } };
+    const recipe = spectralRecipe({
+      operation: "correlation",
+      channels: [{ index: 0, label: "A", unit: "u" }],
+      xUnit: "s",
+      secondarySource: {
+        datasetId: "second", datasetName: "reference", xUnit: "s",
+        channel: { index: 0, label: "B", unit: "u" },
+      },
+    });
+    const source = ds("src", { data: { ...data(), metadata: { xUnit: "s" } } });
+    const second = ds("second", { name: "reference", data: secondaryData });
+    const sheet = ds("derived", {
+      derivedFrom: { datasetId: "src", pipeline: "Cross-correlation" },
+      analysisRecipe: recipe,
+    });
+    useApp.setState({ datasets: [source, second, sheet] });
+
+    const { sheet: result } = await recomputeDerivedSheet(useApp.getState, sheet);
+    expect(result.analysisRecipe?.kind === "spectral" && result.analysisRecipe.secondarySource?.channel.index).toBe(1);
+    expect(runSpectralWorkbench).toHaveBeenCalledWith(
+      source.data,
+      expect.objectContaining({ secondarySource: expect.objectContaining({ channel: expect.objectContaining({ index: 1 }) }) }),
+      undefined,
+      false,
+      secondaryData,
+    );
+    useApp.setState({ datasets: [source, sheet] });
+    await expect(recomputeDerivedSheet(useApp.getState, sheet)).rejects.toThrow("second source dataset");
+  });
+
   it("fails closed instead of guessing when a source label becomes ambiguous", async () => {
     const sourceData = { ...data(), values: [[1, 10], [2, 20], [3, 30]], labels: ["A", "A"], units: ["u", "u"] };
     const sheet = ds("derived", {

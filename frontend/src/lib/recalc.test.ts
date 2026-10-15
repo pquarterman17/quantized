@@ -85,6 +85,26 @@ describe("downstreamOf — generalizes over derived worksheets (K3)", () => {
     const down = downstreamOf(datasets, "a");
     expect(down.datasets).toEqual(["b", "c"]);
   });
+
+  it("marks a cross-worksheet correlation downstream of either recorded source", () => {
+    const output = ds("out", {
+      derivedFrom: { datasetId: "left", pipeline: "Cross-correlation" },
+      analysisRecipe: {
+        kind: "spectral", version: 1, operation: "correlation",
+        channels: [{ index: 0, label: "A" }],
+        secondarySource: {
+          datasetId: "right", datasetName: "right", xUnit: "s",
+          channel: { index: 0, label: "B" },
+        },
+        resample: true, outputType: "magnitude", sided: "one", window: "none",
+        detrend: "mean", zeroPad: 0, segmentLen: 0, overlap: 0.5,
+        filterType: "lowpass", cutoff: [1], order: 4, correlationDemean: true,
+      },
+    });
+    const datasets = [ds("left"), ds("right"), output];
+    expect(downstreamOf(datasets, "left").datasets).toEqual(["out"]);
+    expect(downstreamOf(datasets, "right").datasets).toEqual(["out"]);
+  });
 });
 
 // LIBRARY_WORKBOOK_UX_PLAN PR K, K4: write-time cycle rejection.

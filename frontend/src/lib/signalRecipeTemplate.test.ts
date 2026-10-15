@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { inputColumnRefs } from "./recipeExpect";
 import { saveSignalRecipeTemplate } from "./signalRecipeTemplate";
 import type { SignalCorrectionRecipe } from "./signalTransform";
+import { DEFAULT_SPECTRAL_RECIPE, type SpectralAnalysisRecipe } from "./spectralWorkbench";
 import { loadTemplates } from "./template";
 import { TEMPLATES_KEY } from "./templateKey";
 import type { Dataset } from "./types";
@@ -49,5 +50,19 @@ describe("Signal Processing Recipe Library integration", () => {
     saveSignalRecipeTemplate("Clean trend", source, recipe);
     expect(saveSignalRecipeTemplate("Clean trend", source, recipe).revision).toBe(2);
     expect(loadTemplates()).toHaveLength(1);
+  });
+
+  it("refuses to save a project-specific cross-worksheet source as a reusable recipe", () => {
+    const cross: SpectralAnalysisRecipe = {
+      ...DEFAULT_SPECTRAL_RECIPE,
+      operation: "correlation",
+      channels: [{ index: 0, label: "A", unit: "V" }],
+      secondarySource: {
+        datasetId: "second", datasetName: "reference", xUnit: "",
+        channel: { index: 0, label: "B", unit: "A" },
+      },
+    };
+    expect(() => saveSignalRecipeTemplate("Cross", source, cross)).toThrow("project-specific");
+    expect(loadTemplates()).toEqual([]);
   });
 });

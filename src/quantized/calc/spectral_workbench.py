@@ -14,76 +14,12 @@ import numpy as np
 from numpy.typing import NDArray
 
 from quantized.calc.spectral import cross_correlation, fft_filter, fft_spectral
+from quantized.calc.spectral_grid import aligned_correlation_arrays, selected_arrays, uniform_grid
 from quantized.datastruct import DataStruct
 from quantized.row_sidecars import drop_row_sidecars
 from quantized.x_units import x_unit_of
 
 __all__ = ["spectral_workbench"]
-
-
-def _selected_arrays(
-    ds: DataStruct,
-    channels: list[int],
-    x_min: float | None,
-    x_max: float | None,
-) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    if not channels:
-        raise ValueError("select at least one signal channel")
-    if len(set(channels)) != len(channels):
-        raise ValueError("signal channels must be unique")
-    if any(
-        isinstance(c, (bool, np.bool_))
-        or not isinstance(c, (int, np.integer))
-        or c < 0
-        or c >= ds.n_channels
-        for c in channels
-    ):
-        raise ValueError(f"signal channel out of range for {ds.n_channels} columns")
-    x = np.asarray(ds.time, dtype=float)
-    y = np.asarray(ds.values[:, channels], dtype=float)
-    mask = np.isfinite(x) & np.all(np.isfinite(y), axis=1)
-    if x_min is not None:
-        mask &= x >= x_min
-    if x_max is not None:
-        mask &= x <= x_max
-    x = x[mask]
-    y = y[mask]
-    if x.size < 4:
-        raise ValueError("need at least 4 finite rows in the selected X range")
-    return x, y
-
-
-def _uniform_grid(
-    x: NDArray[np.float64],
-    y: NDArray[np.float64],
-    *,
-    resample: bool,
-) -> tuple[NDArray[np.float64], NDArray[np.float64], bool]:
-    dx = np.diff(x)
-    ascending = bool(np.all(dx > 0))
-    descending = bool(np.all(dx < 0))
-    if not ascending and not descending:
-        raise ValueError(
-            "X must be strictly monotonic for spectral analysis; "
-            "split closed or repeated sweeps first"
-        )
-    if descending:
-        x = x[::-1]
-        y = y[::-1]
-        dx = -dx[::-1]
-    spacing = float(np.median(dx))
-    uniform = bool(np.allclose(dx, spacing, rtol=1e-3, atol=max(abs(spacing) * 1e-9, 1e-15)))
-    if uniform:
-        return x, y, False
-    if not resample:
-        spread = float(np.max(np.abs(dx - spacing)) / abs(spacing))
-        raise ValueError(
-            f"X spacing is not uniform (maximum relative deviation {spread:.3g}); "
-            "enable resampling explicitly"
-        )
-    grid = np.linspace(float(x[0]), float(x[-1]), x.size)
-    values = np.column_stack([np.interp(grid, x, y[:, col]) for col in range(y.shape[1])])
-    return np.asarray(grid, dtype=float), np.asarray(values, dtype=float), True
 
 
 def _x_label(ds: DataStruct) -> str:
@@ -198,6 +134,9 @@ def spectral_workbench(
     order: int = 4,
     correlation_demean: bool = True,
     include_diagnostics: bool = False,
+    secondary_ds: DataStruct | None = None,
+    secondary_channel: int | None = None,
+    secondary_name: str | None = None,
 ) -> DataStruct:
     """Run one workbench operation and return a plottable dataset."""
     if operation not in {"fft", "filter", "correlation"}:
@@ -208,11 +147,36 @@ def spectral_workbench(
         raise ValueError("X maximum must be finite")
     if x_min is not None and x_max is not None and x_min >= x_max:
         raise ValueError("X minimum must be less than X maximum")
-    x, values = _selected_arrays(ds, channels, x_min, x_max)
-    x, values, was_resampled = _uniform_grid(x, values, resample=resample)
     xu = x_unit_of(ds)
     source_x_label = _x_label(ds)
     common = {"xMin": x_min, "xMax": x_max, "resample": resample}
+
+    if secondary_ds is not None:
+        if operation != "correlation":
+            raise ValueError("a second worksheet is supported only for cross-correlation")
+        if len(channels) != 1 or secondary_channel is None:
+            raise ValueError("cross-worksheet correlation requires one channel from each worksheet")
+        secondary_xu = x_unit_of(secondary_ds)
+        if secondary_xu != xu:
+            raise ValueError(
+                "the two X axes must use the same units "
+                f"({xu or 'unknown'} vs {secondary_xu or 'unknown'})"
+            )
+        x, left, right, was_resampled = aligned_correlation_arrays(
+            ds,
+            channels[0],
+            secondary_ds,
+            secondary_channel,
+            x_min=x_min,
+            x_max=x_max,
+            resample=resample,
+        )
+        values = np.column_stack([left, right])
+    else:
+        if secondary_channel is not None:
+            raise ValueError("secondary_channel requires secondary_dataset")
+        x, values = selected_arrays(ds, channels, x_min, x_max)
+        x, values, was_resampled = uniform_grid(x, values, resample=resample)
 
     if operation == "fft":
         effective_window = "hanning" if window is None else window
@@ -370,7 +334,7 @@ def spectral_workbench(
         )
 
     if operation == "correlation":
-        if len(channels) != 2:
+        if secondary_ds is None and len(channels) != 2:
             raise ValueError("cross-correlation requires exactly two signal channels")
         left = values[:, 0]
         right = values[:, 1]
@@ -394,10 +358,21 @@ def spectral_workbench(
         )
         metadata["peakLag"] = float(out["peakLag"]) * spacing
         metadata["peakCorrelation"] = float(out["peakValue"])
+        right_label = (
+            secondary_ds.labels[secondary_channel]
+            if secondary_ds is not None and secondary_channel is not None
+            else ds.labels[channels[1]]
+        )
+        if secondary_ds is not None and secondary_channel is not None:
+            metadata["spectralAnalysis"]["secondarySource"] = {
+                "name": secondary_name or "Second worksheet",
+                "channel": secondary_channel,
+                "label": right_label,
+            }
         return DataStruct.create(
             lag,
             np.asarray(out["xcorr"], dtype=float)[:, None],
-            labels=[f"Correlation · {ds.labels[channels[0]]} vs {ds.labels[channels[1]]}"],
+            labels=[f"Correlation · {ds.labels[channels[0]]} vs {right_label}"],
             units=[""],
             metadata=metadata,
         )
