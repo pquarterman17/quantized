@@ -9,8 +9,10 @@
 // (the 2026-08-11 figure_decor.py slice); before this panel they were the
 // only visible element of the figure with no way to adjust them from inside
 // the preview -- and reaching for the Stage's own card is the one action that
-// invalidates the open session (see the drift-subscription fix). That is the
-// gap this closes.
+// invalidates the open session (see the drift-subscription fix). Imported XRD
+// stick patterns are the deliberate exception: thousands of scientifically
+// linked positions are summarized as one overlay instead of exposed as
+// thousands of independent numeric fields.
 //
 // AXIS is read-only per row, shown in the row label. Nothing in this app
 // flips an existing line's axis after it is created -- RefLinesCard picks an
@@ -61,7 +63,20 @@ export default function RefLinePropertiesPanel({
       : !Number.isFinite(parsed)
         ? "value must be a number"
         : null;
-  const rows = deriveRefLineRows(refLines);
+  // Imported XRD patterns can contain thousands of sticks. They render and
+  // export as one scientific overlay, but exposing each stick as an ordinary
+  // editable reference-line row freezes this narrow panel and makes it easy
+  // to corrupt a pattern accidentally. Keep ordinary lines editable and show
+  // a compact pattern summary; group styling belongs to the live Inspector.
+  const editableLines = refLines.filter((line) => !line.stick);
+  const patternGroups = [...new Map(refLines.flatMap((line) => line.stick
+    ? [[line.groupId ?? "ungrouped-sticks", line.groupLabel ?? "Imported reference pattern"] as const]
+    : [])).entries()].map(([id, label]) => ({
+      id,
+      label,
+      count: refLines.filter((line) => line.stick && (line.groupId ?? "ungrouped-sticks") === id).length,
+    }));
+  const rows = deriveRefLineRows(editableLines);
   const commitAdd = () => {
     if (addReason !== null) return;
     onAdd(axis, parsed);
@@ -74,7 +89,7 @@ export default function RefLinePropertiesPanel({
     // Tab stop.
     <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer} style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
       {rows.map((row, index) => {
-        const line = refLines[index];
+        const line = editableLines[index];
         if (!line) return null;
         return (
           // One field per row, so the group title ("Reference lines") plus the
@@ -99,6 +114,12 @@ export default function RefLinePropertiesPanel({
           </div>
         );
       })}
+
+      {patternGroups.map((pattern) => (
+        <div key={pattern.id} className="qzk-ds-meta" style={{ color: "var(--text-dim)" }}>
+          {pattern.label} · {pattern.count} stick{pattern.count === 1 ? "" : "s"}. Edit the grouped pattern in the live plot Inspector.
+        </div>
+      ))}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "end" }}>
         {/* Labelled, unlike the Stage card's bare X/Y pair: in a panel list

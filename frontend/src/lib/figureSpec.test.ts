@@ -1081,6 +1081,23 @@ describe("viewOverrides — reference lines and region shades", () => {
     expect(ov?.region_shades?.[0]).not.toHaveProperty("id");
   });
 
+  it("carries reference-stick geometry, style, label, and visibility to publication export", () => {
+    const ov = viewOverrides({
+      ...defaultPlotView(),
+      refLines: [{
+        id: "screen-only", axis: "x", value: 28.44, label: "(111)",
+        stick: {
+          intensity: 0.75, baseline: 0.03, height: 0.18, color: "#d97706",
+          visible: true, showLabel: true,
+        },
+      }],
+    });
+    expect(ov?.ref_lines).toEqual([{
+      axis: "x", value: 28.44, label: "(111)",
+      stick: { intensity: 0.75, baseline: 0.03, height: 0.18, color: "#d97706", visible: true, show_label: true },
+    }]);
+  });
+
   it("filters non-finite ref line values and region shade coordinates", () => {
     const ov = viewOverrides({
       ...defaultPlotView(),

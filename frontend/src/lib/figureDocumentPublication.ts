@@ -40,7 +40,21 @@ export function figureDocumentFromLegacyFigureDoc(legacy: FigureDoc): FigureDocu
   }));
   const refLines: RefLine[] = (wireRefLines ?? []).map((wire, i) => ({
     id: `legacyref-${legacy.id}-${i}`,
-    ...wire,
+    axis: wire.axis,
+    value: wire.value,
+    ...(wire.label ? { label: wire.label } : {}),
+    ...(wire.stick ? {
+      groupId: `legacyrefgroup-${legacy.id}`,
+      groupLabel: `${legacy.name} · reference pattern`,
+      stick: {
+        intensity: wire.stick.intensity,
+        baseline: wire.stick.baseline,
+        height: wire.stick.height,
+        color: wire.stick.color,
+        visible: wire.stick.visible,
+        showLabel: wire.stick.show_label,
+      },
+    } : {}),
   }));
   const regionShades: RegionShade[] = (wireRegionShades ?? []).map((wire, i) => ({
     id: `legacyshade-${legacy.id}-${i}`,

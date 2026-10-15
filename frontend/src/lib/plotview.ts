@@ -26,7 +26,7 @@ import { LEGEND_POS, axisLabelOffsetsOrDefault, axisLabelStylesOrDefault, isRang
 import { isString, keyedRecord } from "./sanitizeRecord";
 import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { FigureDocument } from "./figureDocument";
-import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
+import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, ReferenceStick, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
 
 // Moved-out siblings (module-size ratchet), re-exported so no importer changed.
 export { cycleAxisScale, cycleTickMode, isAxisScale, scaleFromLog } from "./plotviewAxis";
@@ -54,6 +54,28 @@ export function sanitizeRefLines(value: unknown): RefLine[] {
     bounded("label", 256);
     bounded("groupId", 128);
     bounded("groupLabel", 256);
+    const rawStick = raw.stick;
+    if (rawStick !== undefined) {
+      if (axis !== "x" || !rawStick || typeof rawStick !== "object") continue;
+      const stick = rawStick as Record<string, unknown>;
+      const intensity = stick.intensity;
+      const baseline = stick.baseline;
+      const height = stick.height;
+      const color = stick.color;
+      if (!(
+        typeof intensity === "number" && Number.isFinite(intensity) && intensity >= 0 && intensity <= 1 &&
+        typeof baseline === "number" && Number.isFinite(baseline) && baseline >= 0 && baseline < 1 &&
+        typeof height === "number" && Number.isFinite(height) && height > 0 && baseline + height <= 1 &&
+        typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color) &&
+        typeof stick.visible === "boolean" && typeof stick.showLabel === "boolean"
+      )) continue;
+      const next: ReferenceStick = {
+        intensity, baseline, height, color,
+        visible: stick.visible,
+        showLabel: stick.showLabel,
+      };
+      line.stick = next;
+    }
     lines.push(line);
   }
   return lines;

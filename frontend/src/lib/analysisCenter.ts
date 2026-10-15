@@ -45,6 +45,7 @@ export const ANALYSIS_TOOL_METADATA: Readonly<Record<string, AnalysisToolMetadat
   "roi-cuts": { category: "XRD & reflectivity", requiredInputs: "a 2-D map with x, y, and intensity columns", requirement: "map", techniques: ["xrd.rsm"], recommendedFor: ["xrd.rsm"] },
   "reductions-wh": { category: "XRD & reflectivity", requiredInputs: "powder XRD peak positions and widths", requirement: "continuous", techniques: ["xrd.powder"], recommendedFor: ["xrd.powder"] },
   "reductions-pawley": { category: "XRD & reflectivity", requiredInputs: "a powder XRD pattern and starting unit cell", requirement: "continuous", techniques: ["xrd.powder"], recommendedFor: ["xrd.powder"] },
+  "reductions-reference": { category: "XRD & reflectivity", requiredInputs: "a powder XRD pattern and a trusted 2θ/intensity reference file", requirement: "continuous", techniques: ["xrd.powder"], recommendedFor: ["xrd.powder"] },
   "signal-processing": { category: "Signal processing", requiredInputs: "one numeric signal with at least three rows", requirement: "continuous", recommendedFor: GENERAL_RECOMMENDED },
   "reductions-fft": { category: "Signal processing", requiredInputs: "a numeric fringe signal", requirement: "continuous", recommendedFor: ["reflectometry"] },
   "reductions-reflfft": { category: "Signal processing", requiredInputs: "an X-ray or neutron reflectivity curve", requirement: "continuous", techniques: ["reflectometry", "xrd.powder"], recommendedFor: ["reflectometry"] },

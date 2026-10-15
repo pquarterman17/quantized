@@ -69,6 +69,43 @@ def test_validate_overrides_accepts_a_well_formed_ref_line() -> None:
     _validate_overrides({"ref_lines": [{"axis": "y", "value": 3.5}]})  # no raise
 
 
+def _stick(**updates):
+    value = {
+        "intensity": 0.5,
+        "baseline": 0.1,
+        "height": 0.3,
+        "color": "#d97706",
+        "visible": True,
+        "show_label": True,
+    }
+    value.update(updates)
+    return value
+
+
+def test_validate_overrides_accepts_a_well_formed_reference_stick() -> None:
+    _validate_overrides({"ref_lines": [{"axis": "x", "value": 3.5, "stick": _stick()}]})
+
+
+@pytest.mark.parametrize(
+    ("patch", "message"),
+    [
+        ({"intensity": 1.1}, "intensity"),
+        ({"baseline": -0.1}, "baseline"),
+        ({"height": 0.95}, "height"),
+        ({"color": "orange"}, "color"),
+        ({"visible": 1}, "visible"),
+    ],
+)
+def test_validate_overrides_rejects_a_malformed_reference_stick(patch, message) -> None:
+    with pytest.raises(ValueError, match=message):
+        _validate_overrides({"ref_lines": [{"axis": "x", "value": 3.5, "stick": _stick(**patch)}]})
+
+
+def test_validate_overrides_rejects_a_stick_on_the_y_axis() -> None:
+    with pytest.raises(ValueError, match="stick"):
+        _validate_overrides({"ref_lines": [{"axis": "y", "value": 3.5, "stick": _stick()}]})
+
+
 def test_validate_overrides_rejects_a_non_finite_region_shade_coordinate() -> None:
     with pytest.raises(ValueError, match="region_shades x1"):
         _validate_overrides(
@@ -154,6 +191,32 @@ def test_multiple_ref_lines_all_draw() -> None:
         }
     )
     assert len(_ref_lines(ax)) == 3
+    plt.close(fig)
+
+
+def test_reference_stick_uses_relative_height_color_label_and_no_autoscale() -> None:
+    fig, ax = _draw(
+        {"ref_lines": [{"axis": "x", "value": 4.0, "label": "(111)", "stick": _stick()}]}
+    )
+    line = _ref_lines(ax)[0]
+    assert list(line.get_ydata()) == pytest.approx([0.1, 0.25])
+    assert line.get_color() == "#d97706"
+    assert line.get_linestyle() == "-"
+    assert [text.get_text() for text in ax.texts] == ["(111)"]
+    assert ax.get_xlim()[1] < 12
+    plt.close(fig)
+
+
+def test_hidden_reference_stick_draws_neither_line_nor_label() -> None:
+    fig, ax = _draw(
+        {
+            "ref_lines": [
+                {"axis": "x", "value": 4.0, "label": "(111)", "stick": _stick(visible=False)}
+            ]
+        }
+    )
+    assert _ref_lines(ax) == []
+    assert len(ax.texts) == 0
     plt.close(fig)
 
 

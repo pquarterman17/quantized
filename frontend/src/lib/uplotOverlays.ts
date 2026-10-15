@@ -47,7 +47,13 @@ export function refLinePlugin(
               // match pointer coords measured from over's top-left.
               const hit = (clientX: number, clientY: number): RefLineHit | null => {
                 const rect = over.getBoundingClientRect();
-                const cands = lines.map((ln) => ({
+                // A reference stick is only a short mark at the bottom of the
+                // plot, but pickRefLine's X-line contract intentionally spans
+                // the full plot height. Feeding a dense stick pattern into it
+                // would therefore steal zoom/cursor gestures almost
+                // everywhere. Pattern positions stay fixed; group styling is
+                // edited in the Reference lines Inspector instead.
+                const cands = lines.filter((ln) => !ln.stick).map((ln) => ({
                   id: ln.id,
                   axis: ln.axis,
                   px: u.valToPos(ln.value, ln.axis === "x" ? "x" : "y"),
@@ -115,15 +121,32 @@ export function refLinePlugin(
           if (ln.axis === "x") {
             const px = u.valToPos(value, "x", true);
             if (px < left || px > left + width) continue;
-            ctx.moveTo(px, top);
-            ctx.lineTo(px, top + height);
-            if (ln.label) {
+            if (ln.stick) {
+              if (!ln.stick.visible) continue;
+              const baseline = top + height * (1 - ln.stick.baseline);
+              const tip = baseline - height * ln.stick.height * ln.stick.intensity;
+              ctx.strokeStyle = ctx.fillStyle = ln.stick.color;
+              ctx.setLineDash([]);
+              ctx.moveTo(px, baseline); ctx.lineTo(px, tip);
+              if (ln.label && ln.stick.showLabel) {
+                ctx.save(); ctx.translate(px + 3, tip - 3); ctx.rotate(-Math.PI / 2);
+                ctx.fillText(ln.label, 0, 0); ctx.restore();
+              }
+            } else {
+              ctx.strokeStyle = ctx.fillStyle = color;
+              ctx.setLineDash([5, 4]);
+              ctx.moveTo(px, top);
+              ctx.lineTo(px, top + height);
+            }
+            if (!ln.stick && ln.label) {
               labelRow = px < labelRight ? labelRow + 1 : 0;
               const y = top + (labelRow + 1) * lineHeight;
               if (y <= top + height) ctx.fillText(ln.label, px + 3, y);
               labelRight = Math.max(labelRight, px + ctx.measureText(ln.label).width + 3);
             }
           } else {
+            ctx.strokeStyle = ctx.fillStyle = color;
+            ctx.setLineDash([5, 4]);
             const py = u.valToPos(value, "y", true);
             if (py < top || py > top + height) continue;
             ctx.moveTo(left, py);

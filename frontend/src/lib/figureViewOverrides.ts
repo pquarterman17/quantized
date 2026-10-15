@@ -107,7 +107,19 @@ export function viewOverrides(st: Pick<
   // markers…), wire-shaped (no `id` — same reasoning as `shapes` above).
   const refLines = st.refLines
     .filter((r) => Number.isFinite(r.value))
-    .map((r) => ({ axis: r.axis, value: r.value }));
+    .map((r) => ({
+      axis: r.axis,
+      value: r.value,
+      ...(r.label ? { label: r.label } : {}),
+      ...(r.stick ? { stick: {
+        intensity: r.stick.intensity,
+        baseline: r.stick.baseline,
+        height: r.stick.height,
+        color: r.stick.color,
+        visible: r.stick.visible,
+        show_label: r.stick.showLabel,
+      } } : {}),
+    }));
   // Filled region bands (Origin `Rect*` shading, decode-plan #41). `axis: 1`
   // rides through explicitly; 0/absent are equivalent (both mean primary to
   // every consumer, screen and backend alike) so both are omitted the same

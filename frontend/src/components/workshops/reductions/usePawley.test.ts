@@ -276,6 +276,21 @@ describe("usePawley → Library", () => {
     expect(useApp.getState().status).toMatch(/added 1 calculated reflection/);
   });
 
+  it("does not mistake imported pattern sticks for manually saved Pawley peaks", async () => {
+    vi.mocked(pawleyRefine).mockResolvedValue(result);
+    useApp.setState({ refLines: [{
+      id: "pattern", axis: "x", value: result.peaks[0].two_theta,
+      stick: { intensity: 1, baseline: 0, height: 0.2, color: "#d97706", visible: true, showLabel: false },
+    }], history: [], future: [] });
+    const { result: hook } = renderHook(() => usePawley());
+    await act(async () => { await hook.current.compute(); });
+    act(() => hook.current.addReferenceLines());
+    expect(useApp.getState().refLines).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stick: expect.any(Object) }),
+      expect.objectContaining({ value: result.peaks[0].two_theta, groupLabel: "powder.xrdml · Pawley reflections" }),
+    ]));
+  });
+
   it("refuses to add fitted reflections while another X binding is plotted", async () => {
     vi.mocked(pawleyRefine).mockResolvedValue(result);
     const { result: hook } = renderHook(() => usePawley());

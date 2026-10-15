@@ -123,7 +123,27 @@ export function sanitizeFigureOverrides(value: unknown): FigureOverrides | null 
       const axis = rl?.axis;
       const v = rl ? finite(rl.value) : undefined;
       if (!rl || (axis !== "x" && axis !== "y") || v === undefined) return [];
-      return [{ axis, value: v }];
+      const next: NonNullable<FigureOverrides["ref_lines"]>[number] = { axis, value: v };
+      if (typeof rl.label === "string" && rl.label) next.label = rl.label.slice(0, 256);
+      const rawStick = record(rl.stick);
+      if (rl.stick !== undefined) {
+        if (axis !== "x" || !rawStick) return [];
+        const intensity = finite(rawStick.intensity);
+        const baseline = finite(rawStick.baseline);
+        const height = finite(rawStick.height);
+        if (!(
+          intensity !== undefined && intensity >= 0 && intensity <= 1 &&
+          baseline !== undefined && baseline >= 0 && baseline < 1 &&
+          height !== undefined && height > 0 && baseline + height <= 1 &&
+          typeof rawStick.color === "string" && /^#[0-9a-f]{6}$/i.test(rawStick.color) &&
+          typeof rawStick.visible === "boolean" && typeof rawStick.show_label === "boolean"
+        )) return [];
+        next.stick = {
+          intensity, baseline, height, color: rawStick.color,
+          visible: rawStick.visible, show_label: rawStick.show_label,
+        };
+      }
+      return [next];
     });
   }
   if (Array.isArray(raw.region_shades)) {

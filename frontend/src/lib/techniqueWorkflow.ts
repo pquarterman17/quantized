@@ -16,6 +16,7 @@ export type TechniqueActionId =
   | "roi-cuts"
   | "reductions-wh"
   | "reductions-pawley"
+  | "reductions-reference"
   | "reductions-fft"
   | "reductions-reflfft"
   | "stats-chooser"
@@ -67,7 +68,7 @@ export const TECHNIQUE_WORKFLOWS: Record<Technique, TechniqueWorkflow> = {
     stages: [
       inspect(),
       { title: "Prepare and fit peaks", description: "Remove background and use the guided peak workflow.", actions: ["baseline", "peak-wizard"] },
-      { title: "Reduce", description: "Estimate crystallite size or refine the unit cell.", actions: ["reductions-wh", "reductions-pawley"] },
+      { title: "Identify and reduce", description: "Compare a reference pattern, estimate crystallite size, or refine the unit cell.", actions: ["reductions-reference", "reductions-wh", "reductions-pawley"] },
       finish(),
     ],
   },

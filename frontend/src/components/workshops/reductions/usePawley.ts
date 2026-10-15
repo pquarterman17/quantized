@@ -344,7 +344,10 @@ export function usePawley(): PawleyState {
   function addReferenceLines(): void {
     if (!result || !fitInput || referenceLinesBlockedReason) return;
     const app = useApp.getState();
-    const saved = app.refLines.filter((line) => line.axis === "x").map((line) => line.value);
+    // Imported phase-pattern sticks are comparison data, not manually
+    // accepted Pawley peaks. Treating them as `saved` would silently suppress
+    // calculated reflections at matching positions.
+    const saved = app.refLines.filter((line) => line.axis === "x" && !line.stick).map((line) => line.value);
     const tolerance = reflectionTolerance(fitInput.x, fitInput.profileFwhm);
     const grouped: { value: number; labels: string[] }[] = [];
     for (const peak of result.peaks) {
