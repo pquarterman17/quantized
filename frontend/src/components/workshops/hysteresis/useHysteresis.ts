@@ -11,25 +11,27 @@ import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { hysteresisAnalysis, subtractHysteresisBackground } from "../../../lib/api/magnetometry";
 import { selectedFitData } from "../../../lib/fitselection";
 import { plottedYKey } from "../../../lib/fitselectionActions";
-import { magXAxis, stampXIdentity } from "../../../lib/magDataKind";
-import { analysisData } from "../../../lib/rowstate";
+import { detectMagXKind, magXAxis, stampXIdentity } from "../../../lib/magDataKind";
+import type { AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import type { CalcResult, Dataset, DataStruct } from "../../../lib/types";
+import { selectionItemForTool, useAnalysisSelection } from "../../../store/analysisSelection";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { useToolAnalysisSelection } from "../analysisselection/useToolAnalysisSelection";
 
 /** H = plotted X, M = primary plotted Y over the analysis view (excluded/
  *  filtered rows dropped, #50/#53) so a masked outlier doesn't skew Hc/Mr/Ms.
- *  `yKey` labels the corrected dataset the background-subtract writes. Falls
- *  back to the first channel vs time when nothing is plotted. */
-function hm(
+ *  `yKey` labels the corrected dataset the background-subtract writes. An
+ *  explicit selection with no usable response fails closed: silently choosing
+ *  column zero would analyze data the user did not review. */
+export function hysteresisInputs(
   ds: Dataset,
   xKey: number | null,
   yKeys: number[] | null,
   seriesOrder: number[] | null,
-): { h: number[]; m: number[]; yKey: number } {
-  const sel = selectedFitData(ds, xKey, yKeys, seriesOrder);
-  if (sel) return { h: sel.x, m: sel.y, yKey: sel.yKey };
-  const src = analysisData(ds) ?? ds.data;
-  return { h: src.time, m: src.values.map((row) => row[0]), yKey: 0 };
+  selection?: Pick<AnalysisSelectionItem, "rowIds" | "range">,
+): { h: number[]; m: number[]; yKey: number } | null {
+  const sel = selectedFitData(ds, xKey, yKeys, seriesOrder, selection);
+  return sel ? { h: sel.x, m: sel.y, yKey: sel.yKey } : null;
 }
 
 export interface HysteresisState {
@@ -49,11 +51,21 @@ export interface HysteresisState {
 }
 
 export function useHysteresis(): HysteresisState {
-  const active = useActiveDataset();
+  const fallbackActive = useActiveDataset();
+  const analysisSelection = useToolAnalysisSelection("hysteresis");
+  const selected = analysisSelection?.items[0] ?? null;
+  const datasets = useApp((s) => s.datasets);
+  // An explicit reviewed source that disappeared is missing, not permission
+  // to analyze whichever unrelated worksheet happens to be active now.
+  const active = selected
+    ? datasets.find((dataset) => dataset.id === selected.datasetId) ?? null
+    : fallbackActive;
   const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
-  const xKey = useApp((s) => s.xKey);
-  const yKeys = useApp((s) => s.yKeys);
+  const liveXKey = useApp((s) => s.xKey);
+  const liveYKeys = useApp((s) => s.yKeys);
+  const xKey = selected?.xKey ?? liveXKey;
+  const yKeys = selected?.yKeys ?? liveYKeys;
   const seriesOrder = useApp((s) => s.seriesOrder);
   const [result, setResult] = useState<CalcResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -81,7 +93,14 @@ export function useHysteresis(): HysteresisState {
         // preview — resolve the active dataset's full data first.
         const ds = await useApp.getState().resolveDataset(activeId);
         if (cancelled || !ds) return;
-        const { h, m } = hm(ds, xKey, yKeys, seriesOrder);
+        const axis = magXAxis(ds.data, xKey);
+        const kind = detectMagXKind(axis.label, axis.unit);
+        if (kind.kind !== "field") {
+          throw new Error(`The selected X axis is not a declared magnetic field (${kind.reason}).`);
+        }
+        const input = hysteresisInputs(ds, xKey, yKeys, seriesOrder, selected ?? undefined);
+        if (!input) throw new Error("No response column is available to analyze.");
+        const { h, m } = input;
         // A measured loop's gaps are NaN, `JSON.stringify` writes them as
         // `null`, and `list[float]` rejects each one — so this effect, which
         // fires automatically on dataset activation, 422'd on any gapped loop
@@ -106,22 +125,77 @@ export function useHysteresis(): HysteresisState {
     return () => {
       cancelled = true;
     };
-  }, [active, xKey, yKeys, seriesOrder]);
+  }, [active, xKey, yKeys, seriesOrder, selected]);
 
   // Remove the linear dia/paramagnetic background fit to the high-field tails
   // and vertically centre the loop (per-tail slope + saturation-midpoint offset,
   // so no vertical shift remains). Writes an "(bg-sub)" dataset, never mutates.
   async function subtractBackground(): Promise<void> {
     if (!active) return;
+    const sourceId = active.id;
+    const startApp = useApp.getState();
+    const startSelectionState = useAnalysisSelection.getState();
+    const startSelection = selectionItemForTool("hysteresis", sourceId);
+    const startXKey = startSelection?.xKey ?? startApp.xKey;
+    const startYKeys = startSelection?.yKeys ?? startApp.yKeys;
+    const startSeriesOrder = startApp.seriesOrder;
+    const inputSignature = JSON.stringify({
+      sourceId,
+      activeId: startApp.activeId,
+      reviewedTargetId: startSelectionState.toolId === "hysteresis"
+        ? startSelectionState.selection?.items[0]?.datasetId ?? null
+        : null,
+      xKey: startXKey,
+      yKeys: startYKeys,
+      seriesOrder: startSeriesOrder,
+      rowIds: startSelection?.rowIds ?? null,
+      range: startSelection?.range ?? null,
+    });
     setBgBusy(true);
     setError(null);
     setWarning(null);
     try {
       // #38 deferred edge: resolve the active dataset's full data first.
-      const ds = await useApp.getState().resolveDataset(active.id);
+      const ds = await startApp.resolveDataset(sourceId);
       if (!ds) return;
-      const st = useApp.getState();
-      const { h, m, yKey } = hm(ds, st.xKey, st.yKeys, st.seriesOrder);
+      const liveApp = useApp.getState();
+      const liveSelectionState = useAnalysisSelection.getState();
+      const liveSelection = selectionItemForTool("hysteresis", sourceId);
+      const liveTargetId = liveSelectionState.toolId === "hysteresis"
+        ? liveSelectionState.selection?.items[0]?.datasetId ?? null
+        : null;
+      const liveSignature = JSON.stringify({
+        sourceId,
+        activeId: liveApp.activeId,
+        reviewedTargetId: liveTargetId,
+        xKey: liveSelection?.xKey ?? liveApp.xKey,
+        yKeys: liveSelection?.yKeys ?? liveApp.yKeys,
+        seriesOrder: liveApp.seriesOrder,
+        rowIds: liveSelection?.rowIds ?? null,
+        range: liveSelection?.range ?? null,
+      });
+      if (inputSignature !== liveSignature) {
+        setError("The hysteresis inputs changed while the worksheet was loading; review them and run background subtraction again.");
+        return;
+      }
+      const currentXKey = startXKey;
+      const axis = magXAxis(ds.data, currentXKey);
+      const kind = detectMagXKind(axis.label, axis.unit);
+      if (kind.kind !== "field") {
+        setError(`The selected X axis is not a declared magnetic field (${kind.reason}).`);
+        return;
+      }
+      const input = hysteresisInputs(
+        ds,
+        currentXKey,
+        startYKeys,
+        startSeriesOrder,
+      );
+      if (!input) {
+        setError("No response column is available to analyze.");
+        return;
+      }
+      const { h, m, yKey } = input;
       // Gaps out of the request, gaps back in on the SAME rows — so `time: h`
       // (the full original x) still lines up with `corrected`.
       const pairs = dropGapRows(h, m);
@@ -148,7 +222,7 @@ export function useHysteresis(): HysteresisState {
         metadata: stampXIdentity(
           { ...ds.data.metadata, hysteresis_bg_subtracted: true },
           ds.data,
-          st.xKey,
+          currentXKey,
         ),
       };
       const stem = ds.name.replace(/\.[^.]+$/, "");

@@ -491,6 +491,22 @@ menu names.
     conversions, supports emu/g, emu/cm³, A/m, and kA/m, and records the entered
     geometry plus canonical divisor on the derived worksheet without changing
     the source.
+  - [x] First series-comparison slice: Hysteresis consumes the shared reviewed
+    multi-worksheet selection, resolves lazy Origin worksheets before running,
+    and saves one durable status table containing Hc, Mr, Ms, squareness, loop
+    area, SFD peak, per-row units, warnings, gaps, partial failures, and
+    cancellation state. Every selected X axis must be explicitly identifiable
+    as magnetic field; M(T), conflicting, and unlabeled axes fail closed rather
+    than being interpreted as loops. The focused single-loop view and its
+    background subtraction now enforce the same field-axis rule.
+  - [ ] Promote a reviewed comparison table into editable trend figures once a
+    series variable (temperature, field, angle, thickness, or user-selected
+    metadata) is explicit. Never infer the independent variable from a filename
+    without confirmation, and never plot mixed field/moment units on one scale
+    until the user converts them.
+  - [ ] Add the remaining derived magnetic quantities with unit-aware
+    provenance and uncertainty propagation; do not duplicate calculations that
+    already belong to the normalization or hysteresis authorities.
 - [ ] SIMS: multi-profile alignment, interfaces/junction comparison, and batch
   region tables.
 - [ ] Spectroscopy: peak-family presets, component area/ratio tables, and batch

@@ -8,6 +8,7 @@ import {
   subtractHysteresisBackground,
 } from "../../../lib/api/magnetometry";
 import type { DataStruct } from "../../../lib/types";
+import { seedAnalysisSelection, useAnalysisSelection } from "../../../store/analysisSelection";
 import { useApp } from "../../../store/useApp";
 import { useHysteresis } from "./useHysteresis";
 
@@ -21,18 +22,22 @@ const DATA: DataStruct = {
   values: [[-1], [-0.5], [0], [0.5], [1]], // M
   labels: ["M"],
   units: ["emu"],
-  metadata: {},
+  metadata: { x_column_name: "Magnetic Field", x_column_unit: "Oe" },
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useAnalysisSelection.getState().clear();
   vi.mocked(hysteresisAnalysis).mockResolvedValue({ Hc: 0.1, Mr: 0.2, Ms: 1.0 });
+  const datasets = [{ id: "d1", name: "mvsh.dat", data: DATA }];
   useApp.setState({
-    datasets: [{ id: "d1", name: "mvsh.dat", data: DATA }],
+    datasets,
     activeId: "d1",
+    selectedIds: [],
     xKey: null,
     yKeys: null,
     seriesOrder: null,
+    resolveDataset: async (id: string) => useApp.getState().datasets.find((dataset) => dataset.id === id),
   });
 });
 
@@ -82,6 +87,72 @@ describe("useHysteresis", () => {
       m: [-1, -0.5, 0.5, 1],
     });
   });
+
+  it("refuses a temperature axis instead of running hysteresis math on M(T)", async () => {
+    useApp.setState({
+      datasets: [{
+        id: "d1",
+        name: "mvst.dat",
+        data: {
+          ...DATA,
+          metadata: { technique: "magnetometry.mvst", x_column_name: "Temperature", x_column_unit: "K" },
+        },
+      }],
+      activeId: "d1",
+    });
+    const { result } = renderHook(() => useHysteresis());
+    await waitFor(() => expect(result.current.error).toContain("not a declared magnetic field"));
+    expect(hysteresisAnalysis).not.toHaveBeenCalled();
+    await act(async () => { await result.current.subtractBackground(); });
+    expect(subtractHysteresisBackground).not.toHaveBeenCalled();
+  });
+
+  it("refuses background subtraction when the reviewed source changes during lazy loading", async () => {
+    const other = { id: "d2", name: "other.dat", data: DATA };
+    useApp.setState({ datasets: [{ id: "d1", name: "mvsh.dat", data: DATA }, other], activeId: "d1" });
+    const { result } = renderHook(() => useHysteresis());
+    await waitFor(() => expect(result.current.result).not.toBeNull());
+
+    let release!: () => void;
+    useApp.setState({
+      resolveDataset: (id: string) => id === "d1"
+        ? new Promise((resolve) => { release = () => resolve(useApp.getState().datasets[0]); })
+        : Promise.resolve(other),
+    });
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.subtractBackground(); });
+    await waitFor(() => expect(result.current.bgBusy).toBe(true));
+    act(() => { useApp.getState().setActive("d2"); });
+    release();
+    await act(async () => { await pending; });
+
+    expect(subtractHysteresisBackground).not.toHaveBeenCalled();
+    expect(result.current.error).toContain("inputs changed");
+    expect(useApp.getState().datasets).toHaveLength(2);
+  });
+
+  it("does not fall back to an unrelated active worksheet when the reviewed source disappears", async () => {
+    const other = { id: "d2", name: "other.dat", data: DATA };
+    useApp.setState({ datasets: [{ id: "d1", name: "mvsh.dat", data: DATA }, other], activeId: "d1" });
+    seedAnalysisSelection("hysteresis", "library");
+    useApp.setState({ datasets: [other], activeId: "d2" });
+
+    const { result } = renderHook(() => useHysteresis());
+    expect(result.current.active).toBeNull();
+    expect(hysteresisAnalysis).not.toHaveBeenCalled();
+  });
+
+  it("does not silently analyze column zero when the reviewed response is empty", async () => {
+    const selection = seedAnalysisSelection("hysteresis", "library");
+    useAnalysisSelection.getState().setSelection("hysteresis", {
+      ...selection,
+      items: selection.items.map((item) => ({ ...item, yKeys: [] })),
+    });
+
+    const { result } = renderHook(() => useHysteresis());
+    await waitFor(() => expect(result.current.error).toBe("No response column is available to analyze."));
+    expect(hysteresisAnalysis).not.toHaveBeenCalled();
+  });
 });
 
 // BUG-021 finding 2: the owner's gapped loop 422'd here too. `JSON.stringify`
@@ -93,7 +164,7 @@ const GAPPED: DataStruct = {
   values: [[-1], [Number.NaN], [0], [0.5], [1]],
   labels: ["M"],
   units: ["emu"],
-  metadata: {},
+  metadata: { x_column_name: "Magnetic Field", x_column_unit: "Oe" },
 };
 
 describe("useHysteresis — gaps (NaN) never reach the wire", () => {
