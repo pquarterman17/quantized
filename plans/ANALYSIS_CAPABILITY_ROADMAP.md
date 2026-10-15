@@ -3,7 +3,7 @@
 **Source:** ChatGPT-Sol (Codex)
 **Status:** Active
 **Created:** 2026-10-06
-**Last updated:** 2026-10-14
+**Last updated:** 2026-10-15
 
 ## Goal
 
@@ -499,11 +499,17 @@ menu names.
     as magnetic field; M(T), conflicting, and unlabeled axes fail closed rather
     than being interpreted as loops. The focused single-loop view and its
     background subtraction now enforce the same field-axis rule.
-  - [ ] Promote a reviewed comparison table into editable trend figures once a
+  - [x] Promote a reviewed comparison table into editable trend figures once a
     series variable (temperature, field, angle, thickness, or user-selected
     metadata) is explicit. Never infer the independent variable from a filename
     without confirmation, and never plot mixed field/moment units on one scale
-    until the user converts them.
+    until the user converts them. Hysteresis comparison now offers table-only,
+    numeric-metadata, and manual series-axis modes; records the exact axis and
+    per-dataset values; offers nearly constant scientific companion columns
+    such as Temperature while hiding parser bookkeeping; blocks incomplete or
+    mixed-unit axes; and
+    creates frozen editable Hc/SFD, Mr/Ms, squareness, and loop-area trends from
+    completed saved rows, split into separate figures by result unit.
   - [ ] Add the remaining derived magnetic quantities with unit-aware
     provenance and uncertainty propagation; do not duplicate calculations that
     already belong to the normalization or hysteresis authorities.
@@ -555,6 +561,7 @@ menu names.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-10-15 | Project team | Completed the first magnetometry comparison-to-figure slice. Hysteresis batch analysis can now record an explicit numeric sweep variable from reviewed metadata, a nearly constant scientific companion column, or manual values. It never infers a value from a filename, excludes parser bookkeeping, requires at least two finite values, and refuses mixed declared axis units until the user explicitly converts them. The durable batch result stores the exact per-worksheet values and promotes completed Hc/SFD, Mr/Ms, squareness, and loop-area summaries into ordinary frozen editable figures; incompatible result units are split onto separate scales. | Focused hysteresis, batch, result-figure, freshness, and architecture checks pass 170/170; forced TypeScript, full ESLint, preload verification, production build, and the unchanged 817.9 kB eager-bundle gate pass at 817.1 kB. The adversarial pass removed array-sized candidate-scan allocations, bounded candidate presentation, hid internal parser coordinates, guarded colliding unit-derived figure keys, made shared selection provenance authoritative over tool parameters, and required an exact saved series axis before any figure is offered. Representative Quantum Design M(H) imports exposed and verified the constant Temperature-companion path without changing source data. CI remains the complete-suite PR gate. |
 | 2026-10-15 | ChatGPT-Sol (Codex) | Added the first reflectometry posterior-diagnostic slice. DREAM summaries now preserve the backend's exact free-parameter ordering instead of leaving the stored correlation matrix unlabeled. Finished fits expose a collapsible diverging heatmap, ranked |r| ≥ 0.7 parameter trade-offs with a model-identifiability explanation, full-matrix clipboard copy, and publication heatmap export. Inline rendering is bounded at 30 parameters while Copy/Export retain the complete validated matrix. Legacy summaries infer labels only from untied sampled parameters; malformed, duplicate, non-square, asymmetric, out-of-range, or non-unit-diagonal matrices fail closed, and one-parameter fits explain why no pairwise diagnostic exists. | Focused posterior persistence, decoder, diagnostic, component, and full DREAM-hook tests pass 25/25. The adversarial pass added strict legacy/corrupt label discrimination, symmetry/diagonal validation, bounded quadratic rendering, and a synchronous repeated-export guard. Forced TypeScript, full ESLint, 56/56 architecture ratchets, preload verification, and the 817.0/817.9 kB eager-bundle gate pass; the UI remains in the lazy Reflectivity chunk. The complete CI matrix remains the PR gate. |
 | 2026-10-15 | ChatGPT-Sol (Codex) | Completed the selected-worksheet crystallite comparison slice. Library multi-selection now drives a visible preflight of each published fitted-peak table; valid worksheets run sequentially with their own recorded wavelength plus shared K/instrument settings, invalid inputs are named and skipped, and cancellation stops between fits. One durable result records exact per-source peak rows/bindings, completion/failure/cancellation status, scientific warnings, and editable categorical figures for crystallite size, microstrain, and R². The Scherrer calculator remains explicitly separate because a single-reflection size estimate is not the same scientific model as a multi-peak Williamson–Hall fit. | Focused batch helper and UI tests cover mixed wavelengths, fallback disclosure, partial backend failure persistence, status persistence, exact fitted inputs, freshness after peak-table drift, one undoable result, and all three figure drafts. Forced TypeScript, full ESLint, 56/56 architecture ratchets, preload verification, and the 816.9/817.9 kB eager-bundle gate pass; the batch runner remains an 8.36 kB lazy chunk. Real-corpus qualification imported independent `La2NiO4_1.xrdml` (6,474 points/24 strict peaks) and `peakpo_feooh.xrdml` (7,822 points/9 strict peaks) patterns and exercised both through the unchanged Williamson–Hall backend; their deliberately weak fits produced low R²/negative-strain values that this UI surfaces as warnings rather than silently presenting as trustworthy. The complete CI matrix remains the PR gate. |
 | 2026-10-15 | ChatGPT-Sol (Codex) | Added durable Williamson–Hall crystallite-analysis history. A completed reduction now saves exact included peak rows and fit settings as a Library result, binds fitted-peak inputs to the precise peak-table revision, refuses save-after-source-change races, survives project sanitization, reopens the exact controls, exports/copies/reports bounded tables, and promotes the saved observed-plus-fit values to a normal editable figure. Diagnostics disclose the unweighted fit, two-point fits, weak R², negative strain, undefined size, and instrument-width clamping. | Focused result, store, hook, workspace, and result-panel tests pass; forced TypeScript, full ESLint, Ruff, architecture ratchets, clean-install production build, preload verification, and the 816.9/817.9 kB eager-bundle gate pass. Real-corpus qualification imported `test-data/panalytical/xrd/La2NiO4_1.xrdml` (6,474 points), found 24 strict-prominence peaks, and ran eight strongest included widths through the unchanged golden backend: 94.636 nm, microstrain 0.0011035, R² 0.2584. The deliberately weak R² is surfaced as a review warning rather than hidden. CI remains the complete-suite PR gate. |

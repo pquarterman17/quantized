@@ -107,7 +107,11 @@ export default function AnalysisResultFigures({ result, disabled = false, disabl
   const fitted = result.settingsRef?.field === "fitSpec";
   return <div className="qz-analysis-figures">
     {!!drafts.length && <>
-      <p className="qz-analysis-caption">These figures are frozen from the saved {result.producer.id.startsWith("williamson-hall") ? "result" : "statistical"} tables. They remain reproducible if the source changes, and open as ordinary editable Quantized figures.</p>
+      <p className="qz-analysis-caption">These figures are frozen from the saved {
+        result.producer.id.startsWith("williamson-hall") ||
+        (result.producer.id === "analysis-batch" && result.parameters?.toolId === "hysteresis")
+          ? "result" : "statistical"
+      } tables. They remain reproducible if the source changes, and open as ordinary editable Quantized figures.</p>
       {disabledReason && <p className="qz-analysis-missing" role="note">{disabledReason}</p>}
       {drafts.map((draft) => <StatisticalFigureCard key={draft.key} draft={draft} disabled={disabled} disabledReason={disabledReason} onCreate={onCreateStatistical} />)}
     </>}

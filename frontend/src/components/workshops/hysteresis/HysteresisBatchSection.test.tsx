@@ -94,6 +94,74 @@ describe("HysteresisBatchSection", () => {
     expect(result.warnings).toContain("room-temperature.dat: 1 gap rows were omitted.");
   });
 
+  it("records an explicit metadata series axis for editable trend figures", async () => {
+    const datasets = useApp.getState().datasets.map((source, index) => ({
+      ...source,
+      data: { ...source.data, metadata: { ...source.data.metadata, temperature: 100 + index * 100, temperature_unit: "K" } },
+    }));
+    useApp.setState({
+      datasets,
+      activeId: datasets[0].id,
+      selectedIds: datasets.map((dataset) => dataset.id),
+      resolveDataset: async (id: string) => datasets.find((dataset) => dataset.id === id),
+    });
+    useAnalysisSelection.getState().setSelection("hysteresis", captureAnalysisSelection({
+      datasets, activeId: datasets[0].id, selectedIds: datasets.map((dataset) => dataset.id),
+      xKey: null, yKeys: [0], seriesOrder: null, errKeys: {}, selection: null, range: null,
+    }, "library"));
+
+    render(<HysteresisBatchSection />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Trend axis source" }), { target: { value: "metadata:temperature" } });
+    expect(screen.getByRole("textbox", { name: "Trend axis label" })).toHaveValue("Temperature");
+    expect(screen.getByRole("textbox", { name: "Trend axis unit" })).toHaveValue("K");
+    expect(screen.getByRole("spinbutton", { name: "room-temperature.dat series value" })).toHaveValue(100);
+    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Run Hysteresis comparison batch" }));
+    await waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
+
+    const saved = register.mock.calls[0][0] as {
+      parameters: { hysteresisTrend: unknown };
+      tables: { columns: string[]; rows: unknown[][] }[];
+    };
+    expect(saved.parameters.hysteresisTrend).toEqual({
+      label: "Temperature", unit: "K", column: "Series value", source: "metadata:temperature",
+      values: { "room-temperature": 100, cold: 200 },
+    });
+    expect(saved.tables[0].columns[3]).toBe("Series value");
+    expect(saved.tables[0].rows.map((row: unknown[]) => row[3])).toEqual([100, 200]);
+  });
+
+  it("blocks a requested trend until two finite values are explicit", () => {
+    render(<HysteresisBatchSection />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Trend axis source" }), { target: { value: "__manual__" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "room-temperature.dat series value" }), { target: { value: "100" } });
+    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
+
+    expect(screen.getByText("Enter finite series values for at least two selected worksheets.")).toBeInTheDocument();
+    expect(screen.getByText("Fix the configuration issue above before running.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run Hysteresis comparison batch" })).toBeDisabled();
+  });
+
+  it("refuses metadata values declared in incompatible axis units", () => {
+    const datasets = useApp.getState().datasets.map((source, index) => ({
+      ...source,
+      data: { ...source.data, metadata: {
+        ...source.data.metadata, temperature: 100 + index * 100, temperature_unit: index ? "°C" : "K",
+      } },
+    }));
+    useApp.setState({ datasets, activeId: datasets[0].id, selectedIds: datasets.map((dataset) => dataset.id) });
+    useAnalysisSelection.getState().setSelection("hysteresis", captureAnalysisSelection({
+      datasets, activeId: datasets[0].id, selectedIds: datasets.map((dataset) => dataset.id),
+      xKey: null, yKeys: [0], seriesOrder: null, errKeys: {}, selection: null, range: null,
+    }, "library"));
+
+    render(<HysteresisBatchSection />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Trend axis source" }), { target: { value: "metadata:temperature" } });
+    expect(screen.getByText(/Selected series source mixes units/)).toHaveTextContent("°C, K");
+    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
+    expect(screen.getByRole("button", { name: "Run Hysteresis comparison batch" })).toBeDisabled();
+  });
+
   it("records a too-short loop as failed instead of aborting the comparison", async () => {
     const datasets = [loop("good", "Oe", "emu"), {
       ...loop("short", "Oe", "emu"),

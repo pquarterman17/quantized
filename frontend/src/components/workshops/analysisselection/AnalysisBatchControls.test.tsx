@@ -58,6 +58,21 @@ describe("AnalysisBatchControls", () => {
     expect(result.warnings).toContain("b.csv: bad calibration");
   });
 
+  it("stores bounded tool-specific result parameters without letting them replace shared provenance", async () => {
+    render(<AnalysisBatchControls toolId="batch-test" label="Test batch" summaryColumns={["N"]}
+      resultParameters={{ toolId: "wrong", axis: { label: "Temperature", unit: "K" } }}
+      runItem={async () => ({ values: [2] })} />);
+    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Run Test batch batch" }));
+    await waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
+
+    expect(register.mock.calls[0][0].parameters).toMatchObject({
+      toolId: "batch-test",
+      axis: { label: "Temperature", unit: "K" },
+      selection: { source: "library" },
+    });
+  });
+
   it("guards a rapid repeated Run click", async () => {
     let release!: () => void;
     let first = true;

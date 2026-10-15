@@ -4,6 +4,7 @@ import type { PlotMark } from "./plotMarks";
 import { defaultPlotView, type PlotView } from "./plotview";
 import type { DataStruct } from "./types";
 import type { StatisticalFigureLinkDescriptor } from "./statisticalFigureLinkTypes";
+import { hysteresisBatchResultFigures } from "./hysteresisTrend";
 import { williamsonHallBatchResultFigures, williamsonHallResultFigure } from "./williamsonHallResultFigure";
 
 export interface StatisticalResultFigureDraft {
@@ -426,6 +427,8 @@ export function statisticalResultFigureDrafts(result: AnalysisResult): Statistic
     : result.producer.id === "outlier-screening" ? outlierFigures(result)
     : result.producer.id === "williamson-hall" ? williamsonHallResultFigure(result)
     : result.producer.id === "williamson-hall-batch" ? williamsonHallBatchResultFigures(result)
+    : result.producer.id === "analysis-batch" && result.parameters?.toolId === "hysteresis"
+      ? hysteresisBatchResultFigures(result)
     : [];
   return drafts.map((draft) => ({ ...draft, data: { ...draft.data, metadata: {
     ...draft.data.metadata,

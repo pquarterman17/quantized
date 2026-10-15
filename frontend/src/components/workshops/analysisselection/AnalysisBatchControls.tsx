@@ -21,6 +21,10 @@ interface Props {
   label: string;
   summaryColumns: string[];
   runItem: (dataset: Dataset, selection: AnalysisSelectionItem) => Promise<AnalysisBatchOutcome>;
+  /** Small, JSON-safe settings needed to interpret this tool's saved table.
+   * Source arrays remain in their worksheets; this is provenance only. */
+  resultParameters?: Record<string, AnalysisResultValue>;
+  blockedReason?: string | null;
 }
 
 type RunStatus = "ready" | "completed" | "failed" | "cancelled";
@@ -41,7 +45,9 @@ const displayStatus = (status: RunStatus): string => status[0].toUpperCase() + s
 /** Shared batch shell: honest preflight first, sequential execution so cancel
  * has a deterministic boundary, and one durable result even after a partial
  * failure/cancel. Scientific algorithms remain tool-owned via runItem. */
-export default function AnalysisBatchControls({ toolId, label, summaryColumns, runItem }: Props) {
+export default function AnalysisBatchControls({
+  toolId, label, summaryColumns, runItem, resultParameters, blockedReason,
+}: Props) {
   const owner = useAnalysisSelection((state) => state.toolId);
   const selection = useAnalysisSelection((state) => state.selection);
   const datasets = useApp((state) => state.datasets);
@@ -64,7 +70,7 @@ export default function AnalysisBatchControls({ toolId, label, summaryColumns, r
   const errorById = new Map(resolved.issues.filter((issue) => issue.severity === "error").map((issue) => [issue.datasetId, issue.message]));
   const readyById = new Map(resolved.items.map((item) => [item.selection.datasetId, item]));
   const exceedsBatchLimit = current.items.length > MAX_BATCH_INPUTS;
-  const blocked = errorById.size > 0 || resolved.items.length === 0 || exceedsBatchLimit;
+  const blocked = errorById.size > 0 || resolved.items.length === 0 || exceedsBatchLimit || !!blockedReason;
 
   const runBatch = async (): Promise<void> => {
     if (runningRef.current || blocked) return;
@@ -140,7 +146,11 @@ export default function AnalysisBatchControls({ toolId, label, summaryColumns, r
         // valid partial result permanently out of date.
         sources: executedIds.map((datasetId) => ({ datasetId, role: "input" as const })),
         outputs: [],
-        parameters: { toolId, selection: analysisSelectionSnapshot(snapshot) as unknown as AnalysisResultValue },
+        parameters: {
+          ...resultParameters,
+          toolId,
+          selection: analysisSelectionSnapshot(snapshot) as unknown as AnalysisResultValue,
+        },
         tables: [{
           title: "Batch status",
           columns: ["Worksheet", "Status", "Rows", ...summaryColumns, "Warnings"],
@@ -189,7 +199,9 @@ export default function AnalysisBatchControls({ toolId, label, summaryColumns, r
       <div className="qzk-analysis-input-review-actions">
         <span>{exceedsBatchLimit
           ? `Select ${MAX_BATCH_INPUTS.toLocaleString()} or fewer worksheets for one batch.`
-          : blocked ? "Fix blocked inputs above before running."
+          : errorById.size > 0 || resolved.items.length === 0
+            ? "Fix blocked inputs above before running."
+          : blockedReason ? "Fix the configuration issue above before running."
             : "Cancel finishes the current worksheet, then marks the remaining inputs Cancelled."}</span>
         <Button variant="primary" size="sm" disabled={blocked || running} onClick={() => void runBatch()}>
           {running ? "Running…" : `Run ${label} batch`}
