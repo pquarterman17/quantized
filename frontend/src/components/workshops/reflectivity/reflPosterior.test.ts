@@ -16,6 +16,7 @@ const RAN = "2026-09-24T12:00:00.000Z";
 describe("the posterior summary", () => {
   it("keeps intervals, R-hat and counts — not the chains or the bands", () => {
     const s = posteriorSummary(dreamResult(), DREAM_DEFAULTS, RAN);
+    expect(s.free).toEqual(["L1.thickness", "background"]);
     expect(s.parameters[0].interval95).toEqual([185.9, 189]);
     expect(s.convergence).toMatchObject({ n_draws: 10000, n_chains: 10, burn: 200, thin: 1, rhat_max: 1.4, flagged: ["background"] });
     expect(s.settings).toEqual(DREAM_DEFAULTS);
@@ -38,6 +39,20 @@ describe("the posterior summary", () => {
     const back = decodeRecord(legacy);
     expect(back).not.toBeNull();
     expect(back!.posterior).toBeUndefined();
+  });
+
+  it("recovers correlation labels for older summaries and hides a malformed optional matrix", () => {
+    const current = posteriorSummary(dreamResult(), DREAM_DEFAULTS, RAN);
+    const { free: _free, ...legacy } = current;
+    expect(decodePosterior(legacy)).toMatchObject({
+      free: ["L1.thickness", "background"], correlation: [[1, -0.3], [-0.3, 1]],
+    });
+    expect(decodePosterior({ ...current, correlation: [[1, 0.2]] })).toMatchObject({
+      free: [], correlation: [], parameters: current.parameters,
+    });
+    expect(decodePosterior({ ...current, free: ["L1.thickness", 4, "background"] })).toMatchObject({
+      free: [], correlation: [], parameters: current.parameters,
+    });
   });
 
   it("a malformed posterior costs the record its posterior, never the record", () => {

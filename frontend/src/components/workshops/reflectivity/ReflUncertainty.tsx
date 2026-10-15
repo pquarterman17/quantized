@@ -7,6 +7,7 @@
 
 import { Button } from "../../primitives";
 import BufferedNumberField from "../../primitives/BufferedNumberField";
+import PosteriorCorrelation from "./PosteriorCorrelation";
 import PosteriorTable from "./PosteriorTable";
 import type { ReflFitRecord } from "./reflFitRecord";
 import { posteriorCaveat, type DreamSettings } from "./reflPosterior";
@@ -105,6 +106,7 @@ export default function ReflUncertainty({ dream, record }: { dream: ReflDreamSta
             </div>
           )}
           <PosteriorTable posterior={post} ls={record.result.parameters} />
+          <PosteriorCorrelation posterior={post} />
           <div className="qzk-ds-meta" style={FAINT} data-testid="refl-dream-run">
             <span style={MONO}>{c.n_draws}</span> draws · <span style={MONO}>{c.n_chains}</span> chains · burn-in{" "}
             <span style={MONO}>{c.burn}</span> · thin <span style={MONO}>{c.thin}</span> · R-hat max{" "}
