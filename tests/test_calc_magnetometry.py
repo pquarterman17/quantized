@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -14,6 +15,8 @@ from quantized.calc.magnetometry import (
     subtract_hysteresis_background,
     subtract_mag_background,
 )
+from quantized.calc.magnetometry_demag import demag_correct_field
+from quantized.io.registry import import_auto
 
 
 @pytest.mark.golden
@@ -74,6 +77,78 @@ def test_convert_moment_to_amperes_per_metre_uses_volume() -> None:
     assert converted == pytest.approx([500.0])
     assert unit == "A/m"
     assert warning == ""
+
+
+def test_demag_correction_matches_si_and_cgs_forms() -> None:
+    h_si, sigma_si = demag_correct_field(
+        [10_000.0], [2_000.0], n_factor=0.25,
+        field_unit="A/m", magnetization_unit="A/m", magnetization_errors=[[40.0]],
+    )
+    assert h_si == pytest.approx([9_500.0])
+    assert sigma_si[0] == pytest.approx([10.0])
+
+    h_cgs, sigma_cgs = demag_correct_field(
+        [10_000.0], [2.0], n_factor=0.25,
+        field_unit="Oe", magnetization_unit="emu/cm³", magnetization_errors=[[-0.04]],
+    )
+    assert h_cgs == pytest.approx([10_000.0 - 4.0 * np.pi * 0.25 * 2.0])
+    assert sigma_cgs[0] == pytest.approx([4.0 * np.pi * 0.25 * 0.04])
+
+
+@pytest.mark.parametrize("unit", ["emu", "emu/g", "A·m²"])
+def test_demag_correction_rejects_nonvolumetric_moment(unit: str) -> None:
+    with pytest.raises(ValueError, match="volume-normalized"):
+        demag_correct_field(
+            [1.0], [1.0], n_factor=1 / 3, field_unit="Oe", magnetization_unit=unit
+        )
+
+
+def test_demag_correction_rejects_invalid_factor_and_lengths() -> None:
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        demag_correct_field(
+            [1.0], [1.0], n_factor=1.1, field_unit="Oe", magnetization_unit="emu/cm³"
+        )
+    with pytest.raises(ValueError, match="same length"):
+        demag_correct_field(
+            [1.0, 2.0], [1.0], n_factor=0.5, field_unit="Oe", magnetization_unit="emu/cm³"
+        )
+
+
+@pytest.mark.realdata
+def test_demag_correction_preserves_real_qd_loop_order_and_source(corpus_dir: Path) -> None:
+    path = corpus_dir / "quantum-design/magnetometry/vsm_mh_perp_a.dat"
+    if not path.exists():
+        pytest.skip("real Quantum Design loop is not installed")
+    source = import_auto(path)
+    field_before = source.time.copy()
+    values_before = source.values.copy()
+    moment = source.values[:, 0]
+    _, magnetization, _, unit, warning = convert_mag_units(
+        source.time,
+        moment,
+        from_field=str(source.metadata["x_column_unit"]),
+        to_field=str(source.metadata["x_column_unit"]),
+        from_moment=source.units[0],
+        to_moment="emu/cm³",
+        sample_volume=1.0,
+    )
+    corrected, _ = demag_correct_field(
+        source.time,
+        magnetization,
+        n_factor=1.0,
+        field_unit=str(source.metadata["x_column_unit"]),
+        magnetization_unit=unit,
+    )
+    assert warning == ""
+    assert corrected.shape == source.time.shape
+    assert np.isfinite(corrected).sum() == np.isfinite(source.time).sum()
+    # A loop is non-monotonic acquisition data: verify the transform row by
+    # row rather than accepting a sorted set of scientifically plausible values.
+    expected = source.time - 4.0 * np.pi * magnetization
+    np.testing.assert_allclose(corrected, expected, equal_nan=True)
+    assert np.any(np.diff(source.time[np.isfinite(source.time)]) < 0)
+    np.testing.assert_array_equal(source.time, field_before)
+    np.testing.assert_array_equal(source.values, values_before)
 
 
 def test_subtract_mag_background_removes_linear() -> None:

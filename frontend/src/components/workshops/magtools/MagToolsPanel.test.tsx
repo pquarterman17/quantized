@@ -16,6 +16,7 @@ vi.mock("../../../lib/api/magnetometry", () => ({
   subtractMagBackground: vi.fn(),
   subtractHysteresisBackground: vi.fn(),
   convertMagUnits: vi.fn(),
+  demagCorrectField: vi.fn(),
 }));
 
 function load(name: string, xName: string, xUnit: string): void {
@@ -74,6 +75,18 @@ describe("MagToolsPanel — Background tab labelling follows the selected path",
     load("mt.dat", "Temperature", "K");
     render(<MagToolsPanel />);
     expect((screen.getByLabelText("High-T fraction") as HTMLInputElement).value).toBe("0.1");
+  });
+});
+
+describe("MagToolsPanel — internal-field correction is explicit", () => {
+  it("requires a geometry and explains the volume-normalization prerequisite", () => {
+    load("loop.dat", "Magnetic Field", "Oe");
+    render(<MagToolsPanel />);
+    fireEvent.click(screen.getByRole("radio", { name: "Internal field" }));
+
+    expect(screen.getByLabelText("Sample geometry and field direction")).toHaveValue("");
+    expect(screen.getByRole("button", { name: /Create internal-field dataset/ })).toBeDisabled();
+    expect(screen.getByText(/must already be normalized by sample volume/)).toBeInTheDocument();
   });
 });
 

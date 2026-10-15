@@ -3684,6 +3684,55 @@
         "title": "DeletedResponse",
         "type": "object"
       },
+      "DemagCorrectRequest": {
+        "properties": {
+          "field": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Field",
+            "type": "array"
+          },
+          "field_unit": {
+            "title": "Field Unit",
+            "type": "string"
+          },
+          "magnetization": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Magnetization",
+            "type": "array"
+          },
+          "magnetization_errors": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Magnetization Errors",
+            "type": "array"
+          },
+          "magnetization_unit": {
+            "title": "Magnetization Unit",
+            "type": "string"
+          },
+          "shape": {
+            "title": "Shape",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "magnetization",
+          "shape",
+          "field_unit",
+          "magnetization_unit"
+        ],
+        "title": "DemagCorrectRequest",
+        "type": "object"
+      },
       "DemagCustomRequest": {
         "description": "A geometry by its dimensions: a cylinder's length and diameter (same\nunit), or a spheroid's axis ratio (prolate c/a, oblate a/c, both > 1).",
         "properties": {
@@ -19001,6 +19050,50 @@
           }
         },
         "summary": "Convert Units",
+        "tags": [
+          "magnetometry"
+        ]
+      }
+    },
+    "/api/magnetometry/demag-correct": {
+      "post": {
+        "description": "Apply a named-geometry demagnetization correction to an M(H) dataset.",
+        "operationId": "demag_correct_api_magnetometry_demag_correct_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemagCorrectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Demag Correct Api Magnetometry Demag Correct Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Demag Correct",
         "tags": [
           "magnetometry"
         ]

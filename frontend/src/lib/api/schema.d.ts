@@ -2150,6 +2150,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/magnetometry/demag-correct": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Demag Correct
+         * @description Apply a named-geometry demagnetization correction to an M(H) dataset.
+         */
+        post: operations["demag_correct_api_magnetometry_demag_correct_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/magnetometry/hysteresis": {
         parameters: {
             query?: never;
@@ -6787,6 +6807,21 @@ export interface components {
         DeletedResponse: {
             /** Deleted */
             deleted: boolean;
+        };
+        /** DemagCorrectRequest */
+        DemagCorrectRequest: {
+            /** Field */
+            field: number[];
+            /** Field Unit */
+            field_unit: string;
+            /** Magnetization */
+            magnetization: number[];
+            /** Magnetization Errors */
+            magnetization_errors?: number[][];
+            /** Magnetization Unit */
+            magnetization_unit: string;
+            /** Shape */
+            shape: string;
         };
         /**
          * DemagCustomRequest
@@ -14470,6 +14505,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ConvertUnitsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    demag_correct_api_magnetometry_demag_correct_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DemagCorrectRequest"];
             };
         };
         responses: {

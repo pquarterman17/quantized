@@ -47,7 +47,7 @@ import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
  *  no analysis-row pruning), plus the Y channel index for labelling the output
  *  dataset. Follows the plot (audit P1 #1) instead of assuming time/values[0].
  *  Falls back to the first channel vs time when nothing is plotted. */
-function magXY(
+export function magXY(
   ds: Dataset,
   xKey: number | null,
   yKeys: number[] | null,
@@ -61,7 +61,7 @@ function magXY(
   };
 }
 
-export type MagTab = "background" | "units";
+export type MagTab = "background" | "units" | "demag";
 
 /** Which background routine runs: `mt` = one-sided high-T fit, `mh` = both
  *  saturated tails + re-centre. `auto` follows {@link detectMagXKind}. */
@@ -79,7 +79,7 @@ export type MagBgFit =
 /** The Units tab's SOURCE units, read from the data: the plotted x's own unit
  *  when it is a field (blank = QD's "Oe"), else `null` (never convert it), and
  *  the plotted moment channel's unit (blank = "emu"). */
-function sourceUnits(
+export function sourceUnits(
   ds: Dataset, xKey: number | null, yKeys: number[] | null, seriesOrder: number[] | null,
 ): { fromField: string | null; xLabel: string; xUnit: string; fromMoment: string } {
   const axis = magXAxis(ds.data, xKey);
@@ -104,7 +104,7 @@ export const DEFAULT_HI_FRACTION = 0.7;
 
 export type UnitParams = MagNormalizationParams;
 
-interface MagRequestView {
+export interface MagRequestView {
   sourceId: string;
   xKey: number | null;
   yKeys: number[] | null;
@@ -115,22 +115,28 @@ function sameNumbers(a: readonly number[] | null, b: readonly number[] | null): 
   return a === b || (!!a && !!b && a.length === b.length && a.every((value, index) => value === b[index]));
 }
 
-function requestView(sourceId: string, xKey: number | null, yKeys: number[] | null, seriesOrder: number[] | null): MagRequestView {
+export function requestView(sourceId: string, xKey: number | null, yKeys: number[] | null, seriesOrder: number[] | null): MagRequestView {
   return { sourceId, xKey, yKeys: yKeys ? [...yKeys] : null, seriesOrder: seriesOrder ? [...seriesOrder] : null };
 }
 
 /** A lazy Origin-book resolution or backend call must never combine the
  * dataset captured by the click with a later dataset's plot bindings. */
-function requestStillCurrent(request: MagRequestView): boolean {
+export function requestStillCurrent(request: MagRequestView): boolean {
   const state = useApp.getState();
   return state.activeId === request.sourceId && state.xKey === request.xKey &&
     sameNumbers(state.yKeys, request.yKeys) && sameNumbers(state.seriesOrder, request.seriesOrder);
 }
 
+/** Resolve a lazy source, then reject it if selection changed while loading. */
+export async function resolveCurrentRequest(request: MagRequestView): Promise<Dataset | undefined> {
+  const ds = await useApp.getState().resolveDataset(request.sourceId);
+  return ds && requestStillCurrent(request) ? ds : undefined;
+}
+
 /** After resolution, also require the exact source data that was sent to the
  * backend. A same-id reimport or correction while the call is in flight must
  * not receive an output derived from the superseded rows. */
-function resolvedSourceStillCurrent(request: MagRequestView, source: DataStruct): boolean {
+export function resolvedSourceStillCurrent(request: MagRequestView, source: DataStruct): boolean {
   const state = useApp.getState();
   return requestStillCurrent(request) &&
     state.datasets.find((dataset) => dataset.id === request.sourceId)?.data === source;
