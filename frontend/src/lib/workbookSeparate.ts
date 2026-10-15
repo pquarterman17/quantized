@@ -36,6 +36,10 @@ function structuralDeps(d: Dataset): string[] {
   const deps: string[] = [];
   if (d.bgRef && d.corrections && d.raw) deps.push(d.bgRef.datasetId);
   if (d.derivedFrom) deps.push(d.derivedFrom.datasetId);
+  const secondaryId = d.analysisRecipe?.kind === "spectral"
+    ? d.analysisRecipe.secondarySource?.datasetId
+    : undefined;
+  if (secondaryId) deps.push(secondaryId);
   return deps;
 }
 

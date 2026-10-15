@@ -180,6 +180,53 @@ describe("SignalProcessingPanel", () => {
     expect(screen.getByRole("button", { name: "Create linked worksheet" })).toBeDisabled();
   });
 
+  it("previews and commits a correlation linked to two worksheets", async () => {
+    const reference: Dataset = {
+      id: "reference-source",
+      name: "reference scan",
+      data: {
+        time: [1, 2, 3],
+        values: [[2, 0.2], [5, 0.3], [10, 0.4]],
+        labels: ["reference", "reference error"],
+        units: ["A", "A"],
+        metadata: { xUnit: "s" },
+      },
+      errorRoles: [{ channel: 1, target: 0, axis: "y", side: "both" }],
+    };
+    useApp.setState({ datasets: [dataset, reference] });
+    createSignalMock.mockResolvedValue("correlation-output");
+    render(<SignalProcessingPanel />);
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "correlation" } });
+    fireEvent.click(screen.getByLabelText("One column from each of two worksheets"));
+    fireEvent.change(screen.getByLabelText("Second worksheet"), { target: { value: reference.id } });
+
+    const create = screen.getByRole("button", { name: "Create linked worksheet" });
+    await waitFor(() => expect(create).toBeEnabled());
+    expect(spectralMock).toHaveBeenLastCalledWith(
+      dataset.data,
+      expect.objectContaining({
+        operation: "correlation",
+        channels: [{ index: 1, label: "secondary", unit: "A" }],
+        secondarySource: expect.objectContaining({
+          datasetId: reference.id,
+          channel: { index: 0, label: "reference", unit: "A" },
+        }),
+      }),
+      expect.any(AbortSignal),
+      true,
+      reference.data,
+    );
+    expect(screen.getByRole("button", { name: "Save recipe…" })).toBeDisabled();
+    expect(screen.getByText(/Bound uncertainties are not propagated/)).toBeInTheDocument();
+    fireEvent.click(create);
+    await waitFor(() => expect(useApp.getState().activeId).toBe("correlation-output"));
+    expect(createSignalMock).toHaveBeenCalledWith(
+      dataset.id,
+      expect.objectContaining({ secondarySource: expect.objectContaining({ datasetId: reference.id }) }),
+      expect.any(AbortSignal),
+    );
+  });
+
   it("does not silently interpret a blank reference bound as zero", () => {
     render(<SignalProcessingPanel />);
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "normalize-reference" } });

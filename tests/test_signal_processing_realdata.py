@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 
 from quantized.calc.corrections import apply_corrections
+from quantized.calc.spectral_workbench import spectral_workbench
 from quantized.io.registry import import_auto
 
 pytestmark = pytest.mark.realdata
@@ -81,3 +82,33 @@ def test_real_instrument_signal_transform_is_non_destructive(
     assert result.values.shape[1] == source.values.shape[1]
     assert np.isfinite(result.values[:, params["signalChannels"]]).any()
     assert result is not source
+
+
+def test_real_xrd_cross_worksheet_correlation_uses_the_shared_overlap(corpus_dir: Path) -> None:
+    paths = [
+        corpus_dir / "panalytical/xrd/La2NiO4_1.xrdml",
+        corpus_dir / "panalytical/xrd/peakpo_feooh.xrdml",
+    ]
+    if not all(path.exists() for path in paths):
+        pytest.skip("representative XRD pair is not present")
+    left, right = (import_auto(path) for path in paths)
+    before = [(dataset.time.copy(), dataset.values.copy()) for dataset in (left, right)]
+
+    result = spectral_workbench(
+        left,
+        operation="correlation",
+        channels=[0],
+        secondary_ds=right,
+        secondary_channel=0,
+        secondary_name=paths[1].name,
+        resample=True,
+    )
+
+    assert result.n_points > 100
+    assert result.metadata["xUnit"] == "deg"
+    assert result.metadata["spectralAnalysis"]["resampled"] is True
+    assert np.isfinite(result.values).all()
+    assert -1.0 <= float(result.metadata["peakCorrelation"]) <= 1.0
+    for dataset, (time_before, values_before) in zip((left, right), before, strict=True):
+        assert np.array_equal(dataset.time, time_before, equal_nan=True)
+        assert np.array_equal(dataset.values, values_before, equal_nan=True)

@@ -46,7 +46,11 @@ export function registerSignalResult(sourceId: string, outputId: string): void {
   const { datasets } = useApp.getState();
   const source = datasets.find((dataset) => dataset.id === sourceId);
   const output = datasets.find((dataset) => dataset.id === outputId);
-  const result = source && output ? signalAnalysisResult(signalResultId(outputId), source, output) : null;
+  const secondaryId = output?.analysisRecipe?.kind === "spectral"
+    ? output.analysisRecipe.secondarySource?.datasetId
+    : undefined;
+  const secondary = secondaryId ? datasets.find((dataset) => dataset.id === secondaryId) : undefined;
+  const result = source && output ? signalAnalysisResult(signalResultId(outputId), source, output, undefined, secondary) : null;
   if (result) registerAnalysisResult(result, false);
 }
 

@@ -38,6 +38,9 @@ class FftRequest(BaseModel):
 
 class SpectralWorkbenchRequest(BaseModel):
     dataset: dict[str, Any]
+    secondary_dataset: dict[str, Any] | None = None
+    secondary_channel: StrictInt | None = Field(default=None, ge=0)
+    secondary_name: str | None = None
     operation: str
     channels: list[StrictInt]
     x_min: float | None = None
@@ -85,6 +88,11 @@ def workbench(req: SpectralWorkbenchRequest) -> DataStructResponse:
     """Run a dataset-level FFT, filter, or cross-correlation workflow."""
     try:
         ds = DataStruct.from_dict(req.dataset)
+        secondary_ds = (
+            DataStruct.from_dict(req.secondary_dataset)
+            if req.secondary_dataset is not None
+            else None
+        )
         out = spectral_workbench(
             ds,
             operation=req.operation,
@@ -105,6 +113,9 @@ def workbench(req: SpectralWorkbenchRequest) -> DataStructResponse:
             order=req.order,
             correlation_demean=req.correlation_demean,
             include_diagnostics=req.include_diagnostics,
+            secondary_ds=secondary_ds,
+            secondary_channel=req.secondary_channel,
+            secondary_name=req.secondary_name,
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

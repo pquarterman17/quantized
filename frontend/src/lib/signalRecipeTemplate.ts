@@ -15,6 +15,9 @@ export function saveSignalRecipeTemplate(
 ): { name: string; revision: number } {
   const name = nameInput.trim();
   if (!name) throw new Error("Recipe name cannot be blank.");
+  if (recipe.kind === "spectral" && recipe.secondarySource) {
+    throw new Error("Cross-worksheet correlation recipes cannot yet be saved because their second input is project-specific.");
+  }
   const params = { op: "signal" as const, recipe };
   const text = signalTransformStepText(params);
   const step = makeStep("transform", text.label, text.code, params);

@@ -74,6 +74,10 @@ function buildEdges(datasets: readonly Dataset[]): Map<NodeId, NodeId[]> {
     }
     if (d.derivedFrom) {
       addEdge(dsNode(d.derivedFrom.datasetId), sheetNode(d.id));
+      const secondaryId = d.analysisRecipe?.kind === "spectral"
+        ? d.analysisRecipe.secondarySource?.datasetId
+        : undefined;
+      if (secondaryId) addEdge(dsNode(secondaryId), sheetNode(d.id));
       addEdge(sheetNode(d.id), dsNode(d.id));
     }
     const baseCount = Math.max(0, d.data.labels.length - (d.formulas?.length ?? 0));
@@ -242,7 +246,13 @@ export function sortForRecalc(datasets: readonly Dataset[], ids: readonly string
   };
   for (const d of datasets) {
     if (d.bgRef && d.corrections && d.raw) addEdge(d.bgRef.datasetId, d.id);
-    if (d.derivedFrom) addEdge(d.derivedFrom.datasetId, d.id);
+    if (d.derivedFrom) {
+      addEdge(d.derivedFrom.datasetId, d.id);
+      const secondaryId = d.analysisRecipe?.kind === "spectral"
+        ? d.analysisRecipe.secondarySource?.datasetId
+        : undefined;
+      if (secondaryId) addEdge(secondaryId, d.id);
+    }
   }
   const order: string[] = [];
   const visited = new Set<string>();

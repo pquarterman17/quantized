@@ -5,6 +5,7 @@ import {
   sanitizeAnalysisResults,
   signalAnalysisResult,
 } from "./analysisResult";
+import { DEFAULT_SPECTRAL_RECIPE } from "./spectralWorkbench";
 import type { Dataset } from "./types";
 
 function source(): Dataset {
@@ -46,6 +47,28 @@ describe("analysis result envelope", () => {
     expect(result).not.toHaveProperty("parameters");
     // No snapshot of the recipe's channels/range: they drift on rebind.
     expect(result).not.toHaveProperty("selection");
+  });
+
+  it("retains a recorded second source even when that worksheet is currently missing", () => {
+    const cross: Dataset = {
+      ...output(),
+      analysisRecipe: {
+        ...DEFAULT_SPECTRAL_RECIPE,
+        operation: "correlation",
+        channels: [{ index: 0, label: "A", unit: "V" }],
+        secondarySource: {
+          datasetId: "missing-reference", datasetName: "Reference trace", xUnit: "s",
+          channel: { index: 0, label: "B", unit: "V" },
+        },
+      },
+    };
+    expect(signalAnalysisResult("cross", source(), cross, "now")).toMatchObject({
+      name: "Cross-correlation · Trace vs Reference trace",
+      sources: [
+        { datasetId: "source", role: "input" },
+        { datasetId: "missing-reference", role: "input" },
+      ],
+    });
   });
 
   it("keeps an unknown producer and missing dataset references for future-compatible diagnostics", () => {

@@ -104,9 +104,9 @@ export default function SpectralControls({
         </div>
       )}
       <Checkbox checked={settings.resample} onChange={(checked) => set("resample", checked)}>
-        Resample an irregular monotonic X grid
+        {operation === "correlation" ? "Align/resample X grids when needed" : "Resample an irregular monotonic X grid"}
       </Checkbox>
-      <p className="qz-signal-note">Resampling is never automatic. Closed or repeated sweeps must be split before spectral analysis.</p>
+      <p className="qz-signal-note">Resampling is never automatic. {operation === "correlation" ? "Different worksheet grids require this explicit opt-in; the coarser spacing is used over their overlap. " : ""}Closed or repeated sweeps must be split before spectral analysis.</p>
     </div>
   );
 }

@@ -141,6 +141,9 @@ function refsOf(p: TransformParams): DatasetRef[] {
   if (p.op === "join" || p.op === "algebra") return [p.with];
   if (p.op === "merge" || p.op === "simscompare") return p.with;
   if (p.op === "resample") return p.with ? [p.with] : [];
+  if (p.op === "signal" && p.recipe.kind === "spectral" && p.recipe.secondarySource) {
+    return [{ id: p.recipe.secondarySource.datasetId, name: p.recipe.secondarySource.datasetName }];
+  }
   return [];
 }
 
@@ -287,11 +290,15 @@ export async function computeTransform(
       // discloses included/excluded counts and the full-row scope; unlike
       // statistical transforms, row state is not silently baked into the
       // linked output.
-      const r = await computeSignalTransform(p, primary, signal, options);
+      const secondary = others[0];
+      const r = await computeSignalTransform(p, primary, signal, options, secondary);
       return {
         data: r.data,
         name: r.name,
-        preview: preview(signalTransformStepText(p).label, r.data, [], [[primary.name, primary.data]]),
+        preview: preview(signalTransformStepText(p).label, r.data, [], [
+          [primary.name, primary.data],
+          ...(secondary ? [[secondary.name, secondary.data] as [string, DataStruct]] : []),
+        ]),
         datasetPatch: r.datasetPatch,
       };
     }
@@ -403,16 +410,26 @@ export async function runTransform(
   }
   const primary = await s().resolveDataset(primaryId);
   if (!primary) throw new Error("the input dataset is unavailable");
-  const signalErrorRoles = p.op === "signal" ? JSON.stringify(primary.errorRoles ?? []) : null;
+  const refs = refsOf(p);
+  const others = await resolveRefs(s, refs);
+  const signalSnapshots = p.op === "signal"
+    ? [primary, ...others].map((dataset) => ({
+        id: dataset.id,
+        data: dataset.data,
+        errorRoles: JSON.stringify(dataset.errorRoles ?? []),
+      }))
+    : [];
   const assertSignalSourceUnchanged = (): void => {
     if (p.op !== "signal") return;
-    const current = s().datasets.find((dataset) => dataset.id === primary.id);
-    if (!current || current.pending || current.data !== primary.data ||
-        JSON.stringify(current.errorRoles ?? []) !== signalErrorRoles) {
+    const changed = signalSnapshots.some((snapshot) => {
+      const current = s().datasets.find((dataset) => dataset.id === snapshot.id);
+      return !current || current.pending || current.data !== snapshot.data ||
+        JSON.stringify(current.errorRoles ?? []) !== snapshot.errorRoles;
+    });
+    if (changed) {
       throw new Error("the source worksheet changed while Signal Processing was running");
     }
   };
-  const others = await resolveRefs(s, refsOf(p));
   const c = await computeTransform(p, primary, others, signal, options);
   assertSignalSourceUnchanged();
   if (review && !(await review(c.preview))) {

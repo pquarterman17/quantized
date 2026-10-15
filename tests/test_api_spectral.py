@@ -143,6 +143,32 @@ def test_workbench_returns_a_datastruct_and_provenance() -> None:
     assert out["metadata"]["spectralAnalysis"]["channels"] == [1]
 
 
+def test_workbench_accepts_an_explicit_second_correlation_source() -> None:
+    x, y = _sine(freq=7.0)
+    dataset = {
+        "time": x,
+        "values": [[value, 2 * value] for value in y],
+        "labels": ["A", "B"],
+        "units": ["V", "V"],
+        "metadata": {"xLabel": "Time", "xUnit": "s"},
+    }
+    resp = client.post(
+        "/api/spectral/workbench",
+        json={
+            "dataset": dataset,
+            "secondary_dataset": dataset,
+            "secondary_channel": 1,
+            "secondary_name": "second scan",
+            "operation": "correlation",
+            "channels": [0],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    out = resp.json()
+    assert out["labels"] == ["Correlation · A vs B"]
+    assert out["metadata"]["spectralAnalysis"]["secondarySource"]["name"] == "second scan"
+
+
 def test_workbench_rejects_irregular_x_without_explicit_resampling() -> None:
     x, y = _sine()
     x[50] += 0.002

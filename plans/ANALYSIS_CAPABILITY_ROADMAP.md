@@ -160,7 +160,7 @@ Implementation status (2026-10-06):
   windows; optional Welch averaging; frequency-axis units.
 - [x] Low-pass, high-pass, band-pass, and notch filters with cutoff validation,
   transfer-function preview, and before/after comparison.
-- [ ] Cross-correlation between two channels or two compatible worksheets,
+- [x] Cross-correlation between two channels or two compatible worksheets,
   including peak lag and correlation readout.
 - [x] Create ordinary plottable output worksheets for spectra, filtered data,
   and correlation traces.
@@ -173,10 +173,13 @@ Implementation status (2026-10-07, ChatGPT/Codex):
 - [x] Added low/high/band-pass and notch filtering with cutoff, Nyquist,
   bandwidth, and order validation; before/after preview; and a live transfer-
   function diagnostic that is deliberately omitted from persisted outputs.
-- [ ] Cross-correlation now supports exactly two columns in one worksheet and
-  displays peak lag/correlation. Cross-worksheet correlation remains blocked
-  on Workstream D's multi-dataset selection/dependency contract; do not fake a
-  second source through the current single `derivedFrom` edge.
+- [x] Cross-correlation supports either two columns in one worksheet or one
+  column from each of two compatible worksheets, with peak lag/correlation.
+  The second worksheet is an explicit persisted dependency: edits to either
+  source mark the output stale, save/reopen and pipeline replay retain the
+  relationship, and missing or changed inputs fail visibly. Different grids
+  are refused unless the user explicitly enables overlap-only resampling at
+  the coarser spacing.
 - [x] FFT, filtered, and correlation outputs are ordinary linked worksheets.
   They save/load a versioned label-bound recipe, rebind only an unambiguous
   moved label, fail closed on a missing/duplicated label, recalculate through
@@ -221,9 +224,10 @@ Qualification log (2026-10-07, ChatGPT/Codex):
   order and X trim, SIMS reference-range normalization, two-channel
   reflectometry reference normalization, and magnetometry detrending while
   checking both in-memory arrays and source-file hashes remain unchanged.
-- [ ] Cross-worksheet correlation remains the one deliberately deferred A3
-  item; it requires Workstream D's multi-source dependency contract rather
-  than an unsafe second ad-hoc source edge.
+- [x] Cross-worksheet correlation uses Workstream D's multi-source dependency
+  contract. Both inputs remain explicit through result freshness, pipeline
+  replay, linked recalculation, workbook transfer, and project persistence;
+  missing or incompatible sources fail closed.
 
 ## Workstream B — Durable analysis result artifacts
 
@@ -465,8 +469,8 @@ menu names.
 ## Recommended implementation sequence
 
 1. [x] A1 + A2: Signal Processing workbench using existing processing code.
-2. [x] A3: expose the single-worksheet spectral/filter/correlation engines.
-   Cross-worksheet correlation remains intentionally assigned to Workstream D.
+2. [x] A3: expose the spectral/filter/correlation engines, including explicit
+   cross-worksheet correlation on Workstream D's multi-source contract.
 3. [x] A4: pipeline replay, persistence, and real-corpus qualification.
 4. [x] B: migrate statistics. The envelope, Library integration, common
    actions, all focused-statistics producers, signal migration, fitted peaks,
@@ -504,6 +508,7 @@ menu names.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-10-14 | ChatGPT-Sol (Codex) | Completed A3's deferred cross-worksheet correlation slice. The workbench can correlate one named channel from each of two worksheets; the second source is an explicit versioned recipe dependency rather than hidden UI state. Both source worksheets participate in stale detection, recalculation, pipeline replay, result provenance, save/reopen, and workbook copy. Missing, ambiguous, pending, changed, or unit-incompatible inputs fail closed. Unequal monotonic X grids require explicit overlap-only resampling at the coarser measured spacing, while exact uniform grids are never interpolated. Cross-workbook copies that cannot carry either source retain their computed values but are deliberately frozen instead of keeping dangling live or raw-data references. The self-review removed double interpolation, bounded pathological shared grids, made recipe provenance authoritative during registration races, checked both sources for freshness, disclosed exclusions and uncertainty limits for both inputs, and made workbook-qualified selectors usable at normal dialog widths. | Focused backend/API/OpenAPI/repository checks pass 51/51; Ruff and focused mypy pass. The reviewed frontend durability and architecture subsets pass 334/334 (including every changed persistence, replay, result, recalculation, transfer, and workbench surface); the original 406-test pre-review gate also passed. TypeScript, full ESLint, production build, preload verification, and the unchanged bundle gate pass at 814.6 kB eager against 814.7 kB. Real-corpus qualification correlated two independent powder-XRD scans into 12,945 finite lag/correlation points with explicit resampling, and a deliberately unit-unknown CSV pairing was correctly refused rather than guessed. Both source arrays remain unchanged. |
 | 2026-10-14 | ChatGPT-Sol (Codex) | Completed Workstream E's linked-figure slice and fixed the blank saved-statistical-figure workspace. Frozen result figures now render from their own immutable snapshot in focused and background windows, while bounded source-link descriptors carry shared selection between supported saved figures, worksheets, and source plots. Links fail closed for missing, pending, stale, legacy, or malformed sources; synthetic regression geometry selects its complete contributing observation group instead of claiming grid points are observations. Unlinked frozen figures intercept brushes so snapshot row numbers can never be applied to an unrelated active worksheet. To keep startup performance inside its unchanged ratchet, the focused adapter and linked-selection action load only with frozen figures, and desktop working-folder state now loads only when a native Open/Import action requests it. | Focused result-adapter, link-resolution, selection, window, plotting-action, native Open/Import, working-folder, architecture, and preload checks pass; TypeScript, full ESLint, production build, preload verification, and the unchanged 814.7 kB eager-bundle gate pass at 814.2 kB. The full frontend reached 17,261 passing tests plus 2 expected failures; its two failures were the documented Windows flat-autoscale numeric fixture mismatch and a load-sensitive Origin retry test that passed immediately in isolation. The Windows worker-path tests required an unsandboxed rerun after Vite hit its known `realpath` EPERM; both passed there. CI remains the complete-suite PR gate. |
 | 2026-10-12 | ChatGPT-Sol (Codex) | Closed the independent review of Workstreams E/F and its follow-up re-review. Reporting now recognizes non-finite source-row omissions; figure refusals and disabled result actions explain how to recover; grouped row links exclude non-finite responses. Pawley lines are limited to the fitted source/2θ axis, resolution-deduplicated, carry unambiguous spaced hkl labels on both the HiDPI plot canvas and Inspector, survive recipe/project persistence through one strict shared field sanitizer with boundary-specific collision handling, and remain removable as one group. New Outlier results use one-based worksheet row numbers, and legacy version-1 results are migrated on load so their tables, warnings, figures, and copy/export paths use that same convention. The result workspace was split into dedicated tabs and toolbar modules, while its remaining 368-line coordinator stays below the architecture ceiling. Statistical figure bands retain matching saved fit points, use the selected channel units, and refuse stale or lazy-preview creation up front. Restored precise lazy-load diagnostics, corrected a duplicated accessible name, and removed private corpus values from this log. | The final review gate passes 232 focused frontend checks and all 56 architecture checks; 14 focused magnetometry and 13 repository-integrity checks also pass. Forced TypeScript, full ESLint, Ruff, mypy, preload verification, and production build pass. The unchanged 834,257-byte eager-bundle gate passes at 834,226 bytes. CI remains the full-suite gate. |
 | 2026-10-12 | ChatGPT-Sol (Codex) | Completed Workstream E's standardized-reporting slice and the worksheet half of linked result selection, then began two orthogonal Workstream F depth slices. Statistical result overviews now use one evidence-first reporting structure for effect sizes, intervals, assumptions, multiple comparisons, and missing-data handling. Saved outlier/PCA source rows and grouped Distribution/Fit Y by X/Variability rows can select their exact current source rows, but stale results cannot drive selection. Magnetometry normalization now accepts mass and four geometry paths with per-field units and records reproducible derived-data provenance; A/m volume magnetization is supported. Pawley results can add calculated reflection positions as deduplicated plot reference lines. | Focused frontend reporting/selection/geometry/magnetometry/Pawley checks pass 260/260 and architecture passes 56/56; forced TypeScript, full ESLint, Ruff, mypy, production build, and the unchanged 834,257-byte eager-bundle gate pass. The complete backend passes 7,672 tests with 240 skips and 25 expected failures. Representative private-corpus qualification covered a real magnetometry loop and a powder-XRD scan, verified a mixed-unit thin-film A/m conversion without changing the source array, and produced finite Pawley reference positions. The monolithic Windows frontend runner entered its documented zero-test pre-collection failure state; every changed frontend suite passed individually, and CI remains the complete-suite PR gate. |

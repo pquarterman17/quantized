@@ -45,6 +45,7 @@ export default function SpectralReadout({ result }: { result: DataStruct | null 
   const xUnit = typeof result.metadata.x_column_unit === "string"
     ? result.metadata.x_column_unit
     : "";
+  const analysis = result.metadata.spectralAnalysis as Record<string, unknown> | undefined;
   return (
     <>
       {points && (
@@ -60,6 +61,7 @@ export default function SpectralReadout({ result }: { result: DataStruct | null 
         <div className="qz-spectral-metrics" aria-label="Cross-correlation peak">
           <span>Peak lag <strong>{numberText(peakLag)}{xUnit ? ` ${xUnit}` : ""}</strong></span>
           <span>Correlation <strong>{numberText(peakCorrelation)}</strong></span>
+          {analysis?.resampled === true && <span>Aligned by interpolation</span>}
         </div>
       )}
     </>

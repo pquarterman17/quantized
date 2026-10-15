@@ -65,10 +65,11 @@ export function validateSpectralSettings(
   operation: SpectralOperation,
   settings: SpectralUiSettings,
   channels: number[],
+  crossWorksheet = false,
 ): string {
-  if (operation === "correlation" ? channels.length !== 2 : channels.length === 0) {
+  if (operation === "correlation" ? channels.length !== (crossWorksheet ? 1 : 2) : channels.length === 0) {
     return operation === "correlation"
-      ? "Cross-correlation requires exactly two signal columns."
+      ? `Cross-correlation requires ${crossWorksheet ? "one signal column from each worksheet" : "exactly two signal columns"}.`
       : "Select at least one signal column.";
   }
   if (settings.useRange) {
@@ -113,6 +114,7 @@ export function buildSpectralRecipe(
   settings: SpectralUiSettings,
   channels: number[],
   dataset: Dataset,
+  secondary?: { dataset: Dataset; channel: number },
 ): SpectralAnalysisRecipe {
   const recipe: SpectralAnalysisRecipe = {
     ...DEFAULT_SPECTRAL_RECIPE,
@@ -123,6 +125,18 @@ export function buildSpectralRecipe(
       label: dataset.data.labels[index],
       unit: dataset.data.units[index] ?? "",
     })),
+    ...(secondary ? {
+      secondarySource: {
+        datasetId: secondary.dataset.id,
+        datasetName: secondary.dataset.name,
+        xUnit: dataXUnit(secondary.dataset.data),
+        channel: {
+          index: secondary.channel,
+          label: secondary.dataset.data.labels[secondary.channel],
+          unit: secondary.dataset.data.units[secondary.channel] ?? "",
+        },
+      },
+    } : {}),
     ...(settings.useRange ? { xMin: number(settings.xMin), xMax: number(settings.xMax) } : {}),
     resample: settings.resample,
   };
