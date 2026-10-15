@@ -21,6 +21,7 @@ import {
   type MagBgMode,
   type MagTab,
 } from "./useMagTools";
+import DemagCorrectionPane from "./DemagCorrectionPane";
 
 const unitOpts = (xs: string[]) => xs.map((v) => ({ value: v, label: v }));
 
@@ -54,6 +55,7 @@ export default function MagToolsPanel() {
         options={[
           { value: "background", label: "Background" },
           { value: "units", label: "Units" },
+          { value: "demag", label: "Internal field" },
         ]}
         value={m.tab}
         onChange={m.setTab}
@@ -135,7 +137,7 @@ export default function MagToolsPanel() {
             </div>
           )}
         </div>
-      ) : (
+      ) : m.tab === "units" ? (
         <div style={{ marginTop: 12 }}>
           <div
             style={{
@@ -222,14 +224,14 @@ export default function MagToolsPanel() {
             {normalizationProblem(m.units)}
           </div>}
         </div>
-      )}
+      ) : <DemagCorrectionPane />}
 
-      {m.warning && (
+      {m.tab !== "demag" && m.warning && (
         <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--warn, #c90)" }}>
           {m.warning}
         </div>
       )}
-      {m.error && (
+      {m.tab !== "demag" && m.error && (
         <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--danger)" }}>
           {m.error}
         </div>

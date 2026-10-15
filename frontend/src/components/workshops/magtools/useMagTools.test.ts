@@ -14,6 +14,7 @@ vi.mock("../../../lib/api/magnetometry", () => ({
   subtractMagBackground: vi.fn(),
   subtractHysteresisBackground: vi.fn(),
   convertMagUnits: vi.fn(),
+  demagCorrectField: vi.fn(),
 }));
 
 const mvt: DataStruct = {

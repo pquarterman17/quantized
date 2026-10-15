@@ -5,6 +5,7 @@ and that a known synthetic loop yields the expected coercivity."""
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -59,6 +60,37 @@ def test_convert_units_oe_to_tesla(client: TestClient) -> None:
     out = resp.json()
     assert abs(out["x"][0] - 1.0) < 1e-9  # 10000 Oe = 1 T
     assert out["x_unit"] == "T"
+
+
+def test_demag_correct_route_returns_factor_and_propagated_errors(client: TestClient) -> None:
+    resp = client.post(
+        "/api/magnetometry/demag-correct",
+        json={
+            "field": [0.0, 1000.0],
+            "magnetization": [0.0, 10.0],
+            "shape": "Sphere",
+            "field_unit": "Oe",
+            "magnetization_unit": "emu/cm³",
+            "magnetization_errors": [[0.1, 0.2]],
+        },
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["n_factor"] == pytest.approx(1 / 3)
+    assert out["n_cgs"] == pytest.approx(4 * np.pi / 3)
+    assert out["field"][1] == pytest.approx(1000.0 - (4 * np.pi / 3) * 10.0)
+    assert out["field_errors"][0][1] == pytest.approx((4 * np.pi / 3) * 0.2)
+
+
+def test_demag_correct_route_rejects_unknown_shape(client: TestClient) -> None:
+    resp = client.post(
+        "/api/magnetometry/demag-correct",
+        json={
+            "field": [1.0], "magnetization": [1.0], "shape": "Cube",
+            "field_unit": "Oe", "magnetization_unit": "emu/cm³",
+        },
+    )
+    assert resp.status_code == 422
 
 
 def test_null_series_element_is_422_with_one_entry_per_null(client: TestClient) -> None:

@@ -3,8 +3,8 @@ hysteresis-loop analysis, background subtraction (TWO distinct routines --
 ``subtract-background`` is the one-sided high-T fit for M-vs-T,
 ``subtract-hysteresis-background`` is the two-tail susceptibility removal plus
 re-centring for an M-vs-H loop; they are not interchangeable, see the calc
-docstrings), sample-aware unit conversion. Validate -> call the pure fn ->
-serialize; no analysis here.
+docstrings), sample-aware unit conversion, and named-geometry internal-field
+correction. Validate -> call the pure fn -> serialize; no analysis here.
 
 Every series field here is ``list[float]``: a JSON ``null`` (what a JavaScript
 NaN stringifies to) is REJECTED with one validation error per element. Callers
@@ -18,14 +18,16 @@ from typing import Any
 
 import numpy as np
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from quantized.calc.magnetic import demag_named
 from quantized.calc.magnetometry import (
     convert_mag_units,
     hysteresis_analysis,
     subtract_hysteresis_background,
     subtract_mag_background,
 )
+from quantized.calc.magnetometry_demag import demag_correct_field
 from quantized.routes._errors import call_calc
 from quantized.routes._payload import to_jsonable
 
@@ -63,6 +65,15 @@ class ConvertUnitsRequest(BaseModel):
     to_moment: str = "emu"
     sample_mass: float = 0.0
     sample_volume: float = 0.0
+
+
+class DemagCorrectRequest(BaseModel):
+    field: list[float]
+    magnetization: list[float]
+    shape: str
+    field_unit: str
+    magnetization_unit: str
+    magnetization_errors: list[list[float]] = Field(default_factory=list)
 
 
 @router.post("/hysteresis")
@@ -128,4 +139,28 @@ def convert_units(req: ConvertUnitsRequest) -> dict[str, Any]:
         "x_unit": x_unit,
         "y_unit": y_unit,
         "warning": warning,
+    }
+
+
+@router.post("/demag-correct")
+def demag_correct(req: DemagCorrectRequest) -> dict[str, Any]:
+    """Apply a named-geometry demagnetization correction to an M(H) dataset."""
+    factor = call_calc(demag_named, req.shape)
+    corrected, errors = call_calc(
+        demag_correct_field,
+        req.field,
+        req.magnetization,
+        n_factor=float(factor["Nz"]),
+        field_unit=req.field_unit,
+        magnetization_unit=req.magnetization_unit,
+        magnetization_errors=req.magnetization_errors,
+    )
+    return {
+        "field": to_jsonable(corrected),
+        "field_errors": to_jsonable(errors),
+        "field_unit": req.field_unit,
+        "magnetization_unit": req.magnetization_unit,
+        "shape": factor["shape"],
+        "n_factor": factor["Nz"],
+        "n_cgs": factor["n_cgs"],
     }

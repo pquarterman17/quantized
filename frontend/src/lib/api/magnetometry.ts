@@ -65,3 +65,25 @@ export function convertMagUnits(body: {
 }> {
   return postJSON("/api/magnetometry/convert-units", body);
 }
+
+/** Convert applied field to internal field for a named sample geometry.
+ * Magnetization must already be volume-normalized.  Returned error arrays
+ * contain only the propagated contribution from their matching M uncertainty. */
+export function demagCorrectField(body: {
+  field: number[];
+  magnetization: number[];
+  shape: string;
+  field_unit: string;
+  magnetization_unit: string;
+  magnetization_errors?: number[][];
+}): Promise<{
+  field: (number | null)[];
+  field_errors: (number | null)[][];
+  field_unit: string;
+  magnetization_unit: string;
+  shape: string;
+  n_factor: number;
+  n_cgs: number;
+}> {
+  return postJSON("/api/magnetometry/demag-correct", body);
+}
