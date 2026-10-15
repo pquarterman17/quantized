@@ -1844,8 +1844,20 @@ import { fileURLToPath } from "node:url";
  * queued Dependabot #548 (vite 8.3.2, +165 B preload helper) and the
  * pending plot batch (~+223 B); do not spend it on anything else.
  *
+ * 2026-10-14 — pin RAISED 834,257 -> 837,509 for editable XRD reference
+ * patterns. Clean-install measured eager JS is 836,485 B; the new pin is the required
+ * measured + 1,024 B margin. The file parser, preview table, wavelength
+ * conversion, and controls already live in the existing lazy Reductions
+ * chunk. The remaining growth is irreducible first-paint contract code:
+ * PlotView must synchronously validate a persisted stick before a project is
+ * exposed, and the always-eager plot renderer must draw a reopened stick on
+ * its first frame. Deferring either would publish unvalidated state or flash
+ * a saved plot without its scientific overlay. The review pass removed
+ * repeated per-stick provenance (one durable group label now carries it),
+ * reducing the measured overage before this minimal raise.
+ *
  */
-const EAGER_JS_BUDGET = 834_257;
+const EAGER_JS_BUDGET = 837_509;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

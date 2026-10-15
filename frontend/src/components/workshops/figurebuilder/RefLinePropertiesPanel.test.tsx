@@ -25,6 +25,18 @@ describe("RefLinePropertiesPanel", () => {
     expect(screen.getByText("X 2")).toBeInTheDocument();
   });
 
+  it("summarizes an imported pattern instead of rendering one editor per stick", () => {
+    const stick = { intensity: 1, baseline: 0, height: 0.2, color: "#d97706", visible: true, showLabel: false };
+    renderPanel([
+      X_LINE,
+      { id: "s1", axis: "x", value: 20, groupId: "phase", groupLabel: "Silicon", stick },
+      { id: "s2", axis: "x", value: 30, groupId: "phase", stick },
+    ]);
+    expect(screen.getByText(/Silicon · 2 sticks/)).toBeInTheDocument();
+    expect(screen.getAllByLabelText(/reference \d+ value/)).toHaveLength(1);
+    expect(screen.queryByDisplayValue("20")).not.toBeInTheDocument();
+  });
+
   it("still exposes the FULL phrase to assistive tech, not just the compact text", () => {
     renderPanel([X_LINE]);
     expect(screen.getByLabelText("X reference 1 value")).toBeInTheDocument();

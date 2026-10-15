@@ -686,8 +686,23 @@ export interface SldPreset {
   [key: string]: unknown;
 }
 
+/** Display and provenance carried by an XRD reference-pattern stick. Fractions
+ * are relative to the plot frame, so the overlay remains readable on linear
+ * and logarithmic intensity axes without pretending the stick intensity is a
+ * measured Y value. */
+export interface ReferenceStick {
+  /** Relative intensity normalized to the strongest imported reflection. */ intensity: number;
+  /** Baseline and maximum stick height as fractions of the plot height. */
+  baseline: number;
+  height: number;
+  color: string;
+  visible: boolean;
+  showLabel: boolean;
+}
+
 /** A reference line drawn across the plot at a fixed X or Y value (mark Hc, Tc,
- *  zero, a critical edge…). Rendered by the uPlot refLinePlugin. */
+ * zero, a critical edge…), or an XRD reference stick when `stick` is present.
+ * Rendered by the uPlot refLinePlugin. */
 export interface RefLine {
   id: string;
   axis: "x" | "y";
@@ -697,6 +712,7 @@ export interface RefLine {
   /** Lines created by one analysis action can be removed as one undo step. */
   groupId?: string;
   groupLabel?: string;
+  stick?: ReferenceStick;
 }
 
 /** A filled rectangular region pinned at data coordinates (Origin `Rect*`

@@ -113,6 +113,33 @@ def _validate_ref_lines(ref_lines: Sequence[Mapping[str, Any]] | None) -> None:
         )
         if bad_value:
             raise ValueError("ref_lines value must be a finite number")
+        stick = rl.get("stick")
+        if stick is not None:
+            if axis != "x" or not isinstance(stick, Mapping):
+                raise ValueError("ref_lines stick must be an object on the x axis")
+            for key in ("intensity", "baseline", "height"):
+                number = stick.get(key)
+                if (
+                    not isinstance(number, (int, float))
+                    or isinstance(number, bool)
+                    or not math.isfinite(number)
+                ):
+                    raise ValueError(f"ref_lines stick {key} must be a finite number")
+            intensity = float(stick["intensity"])
+            baseline = float(stick["baseline"])
+            height = float(stick["height"])
+            if not 0 <= intensity <= 1:
+                raise ValueError("ref_lines stick intensity must be between 0 and 1")
+            if not 0 <= baseline < 1:
+                raise ValueError("ref_lines stick baseline must be between 0 and 1")
+            if height <= 0 or baseline + height > 1:
+                raise ValueError("ref_lines stick height must fit inside the plot")
+            color = stick.get("color")
+            if not isinstance(color, str) or not _HEX_COLOR_RE.match(color):
+                raise ValueError("ref_lines stick color must be a '#RRGGBB' color string")
+            for key in ("visible", "show_label"):
+                if not isinstance(stick.get(key), bool):
+                    raise ValueError(f"ref_lines stick {key} must be boolean")
 
 
 def _validate_region_shades(shades: Sequence[Mapping[str, Any]] | None) -> None:
@@ -163,6 +190,37 @@ def _apply_ref_lines(ax: Any, ref_lines: Sequence[Mapping[str, Any]] | None) -> 
         return
     for index, rl in enumerate(ref_lines):
         value = float(rl["value"])
+        stick = rl.get("stick")
+        if isinstance(stick, Mapping):
+            if not stick["visible"]:
+                continue
+            bottom = float(stick["baseline"])
+            top = bottom + float(stick["height"]) * float(stick["intensity"])
+            with _outside_autoscale(ax):
+                ax.axvline(
+                    value,
+                    ymin=bottom,
+                    ymax=top,
+                    color=str(stick["color"]),
+                    linewidth=1.2,
+                    linestyle="-",
+                    gid=f"refline:{index}",
+                )
+                label = rl.get("label")
+                if stick["show_label"] and isinstance(label, str) and label:
+                    ax.text(
+                        value,
+                        top,
+                        label,
+                        transform=ax.get_xaxis_transform(),
+                        rotation=90,
+                        ha="center",
+                        va="bottom",
+                        fontsize="x-small",
+                        color=str(stick["color"]),
+                        clip_on=True,
+                    )
+            continue
         # ``gid`` is matplotlib's own artist-identity slot and is the ONLY
         # thing ``figure_hitmap.collect_map`` uses to tell a reference line
         # apart from a series ``Line2D`` -- both land in ``ax.lines``, and

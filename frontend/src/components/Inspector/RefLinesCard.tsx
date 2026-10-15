@@ -18,6 +18,7 @@ export default function RefLinesCard() {
   const addRefLine = useApp((s) => s.addRefLine);
   const removeRefLine = useApp((s) => s.removeRefLine);
   const recordHistory = useApp((s) => s.recordHistory);
+  const recordHistoryCoalesced = useApp((s) => s.recordHistoryCoalesced);
   const [axis, setAxis] = useState<"x" | "y">("x");
   const [value, setValue] = useState("0");
   // Focus-safety anchor (lib/focusGuard) — the per-line ✕ below unmounts
@@ -33,12 +34,26 @@ export default function RefLinesCard() {
     recordHistory("delete reference-line group");
     useApp.setState((state) => ({ refLines: state.refLines.filter((line) => line.groupId !== groupId) }));
   };
-  const groups = [...new Map(refLines.flatMap((line) => typeof line.groupId === "string" && line.groupId
-    ? [[line.groupId, typeof line.groupLabel === "string" && line.groupLabel
-      ? line.groupLabel : "Generated reference lines"] as const] : [])).entries()];
+  const groupLabels = new Map<string, string>();
+  for (const line of refLines) {
+    if (!line.groupId) continue;
+    if (!groupLabels.has(line.groupId) || line.groupLabel) {
+      groupLabels.set(line.groupId, line.groupLabel || "Generated reference lines");
+    }
+  }
+  const groups = [...groupLabels.entries()];
+  const objectCount = groups.length + refLines.filter((line) => !line.groupId).length;
+  const updateStickGroup = (groupId: string, patch: Partial<NonNullable<(typeof refLines)[number]["stick"]>>, key: string) => {
+    recordHistoryCoalesced("style reference pattern", `reference-pattern:${groupId}:${key}`);
+    useApp.setState((state) => ({
+      refLines: state.refLines.map((line) => line.groupId === groupId && line.stick
+        ? { ...line, stick: { ...line.stick, ...patch } }
+        : line),
+    }));
+  };
 
   return (
-    <Card title="Reference lines" count={refLines.length || undefined} defaultOpen={false}>
+    <Card title="Reference lines" count={objectCount || undefined} defaultOpen={false}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <SegmentedControl<"x" | "y">
           options={[
@@ -70,13 +85,37 @@ export default function RefLinesCard() {
        *  Delete/Backspace that lands here right after a removal, before it
        *  can bubble to useGlobalShortcuts' window listener. */}
       <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer}>
-        {groups.map(([groupId, groupLabel]) => <div key={groupId} className="qz-meta-row"
-          style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <strong className="qz-k">{groupLabel}</strong>
-          <Button size="sm" aria-label={`Remove ${groupLabel}`} title={`Remove ${groupLabel}`}
-            onClick={() => removeRowSafely(containerRef.current, () => removeGroup(groupId))}>Remove group</Button>
-        </div>)}
-        {refLines.map((r) => (
+        {groups.map(([groupId, groupLabel]) => {
+          const members = refLines.filter((line) => line.groupId === groupId);
+          const stick = members.find((line) => line.stick)?.stick;
+          return <div key={groupId} className="qz-meta-row" style={{ display: "grid", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+              <strong className="qz-k">{groupLabel}{stick ? ` · ${members.length} sticks` : ""}</strong>
+              <Button size="sm" aria-label={`Remove ${groupLabel}`} title={`Remove ${groupLabel}`}
+                onClick={() => removeRowSafely(containerRef.current, () => removeGroup(groupId))}>Remove group</Button>
+            </div>
+            {stick && <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "5px 8px" }}>
+              <label className="qz-k" style={{ display: "flex", gap: 4 }}>
+                <input type="checkbox" checked={stick.visible} onChange={(e) => updateStickGroup(groupId, { visible: e.target.checked }, "visible")} /> Show
+              </label>
+              <label className="qz-k" style={{ display: "flex", gap: 4 }}>
+                <input type="checkbox" checked={stick.showLabel} onChange={(e) => updateStickGroup(groupId, { showLabel: e.target.checked }, "labels")} /> Labels
+              </label>
+              <input type="color" value={stick.color} aria-label={`${groupLabel} color`} onChange={(e) => updateStickGroup(groupId, { color: e.target.value }, "color")} />
+              <label className="qz-k">Offset <NumberField value={stick.baseline} width={55} step={0.01}
+                aria-label={`${groupLabel} offset`} onChange={(value) => {
+                  const number = Number(value);
+                  if (Number.isFinite(number) && number >= 0 && number < 1 && number + stick.height <= 1) updateStickGroup(groupId, { baseline: number }, "offset");
+                }} /></label>
+              <label className="qz-k">Height <NumberField value={stick.height} width={55} step={0.01}
+                aria-label={`${groupLabel} height`} onChange={(value) => {
+                  const number = Number(value);
+                  if (Number.isFinite(number) && number > 0 && stick.baseline + number <= 1) updateStickGroup(groupId, { height: number }, "height");
+                }} /></label>
+            </div>}
+          </div>;
+        })}
+        {refLines.filter((line) => !line.stick || !line.groupId).map((r) => (
           <div
             key={r.id}
             className="qz-meta-row"

@@ -75,7 +75,23 @@ export interface FigureOverrides {
    *  `shapes` above). Always the PRIMARY axes — `RefLine` has no
    *  secondary-axis concept, unlike `RegionShade` below. See
    *  `calc.figure_decor._apply_ref_lines`. */
-  ref_lines?: { axis: "x" | "y"; value: number }[];
+  ref_lines?: {
+    axis: "x" | "y";
+    value: number;
+    label?: string;
+    /** UI-only identity retained when a saved export is reopened as an
+     * editable FigureDocument. The backend renderer safely ignores both. */
+    group_id?: string;
+    group_label?: string;
+    stick?: {
+      intensity: number;
+      baseline: number;
+      height: number;
+      color: string;
+      visible: boolean;
+      show_label: boolean;
+    };
+  }[];
   /** Export-fidelity gap (2026-08-11): filled rectangular region bands
    *  (Origin `Rect*` film-stack shading, decode-plan #41) —
    *  `lib/uplotOverlays.ts`'s regionShadePlugin. Mirrors `RegionShade`

@@ -40,6 +40,13 @@ describe("ReductionsPanel", () => {
     expect(screen.getByText(/Select a powder XRD dataset/)).toBeInTheDocument();
   });
 
+  it("shows the reference-pattern importer and its fail-closed dataset hint", () => {
+    useApp.getState().setReductionsMethod("xrd-reference");
+    render(<ReductionsPanel />);
+    expect(screen.getByRole("button", { name: "Choose reference file…" })).toBeInTheDocument();
+    expect(screen.getByText(/Select a powder XRD dataset/)).toBeInTheDocument();
+  });
+
   it("shows the FFT-thickness section's no-dataset hint when preset to that method", () => {
     useApp.getState().setReductionsMethod("fft-thickness");
     render(<ReductionsPanel />);
@@ -87,6 +94,13 @@ describe("Analyze-menu command registry entries (MAIN_PLAN #11)", () => {
     expect(command?.group).toBe("Analyze");
     command?.run();
     expect(useApp.getState().reductionsMethod).toBe("pawley");
+  });
+
+  it("registers XRD reference patterns in the Analyze group", () => {
+    const command = buildAnalysisCommands(useApp.getState).find((entry) => entry.id === "reductions-reference");
+    expect(command).toMatchObject({ group: "Analyze", section: "XRD & reflectivity" });
+    command?.run();
+    expect(useApp.getState().reductionsMethod).toBe("xrd-reference");
   });
 
   it("registers Film thickness (FFT) in the Analyze group", () => {

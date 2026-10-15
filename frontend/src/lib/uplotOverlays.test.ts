@@ -38,6 +38,8 @@ function fakeU() {
     beginPath() {},
     stroke() {},
     setLineDash() {},
+    translate() {},
+    rotate() {},
     moveTo(x: number, y: number) {
       pen = [x, y];
     },
@@ -105,6 +107,33 @@ describe("refLinePlugin", () => {
     expect(labels).toEqual(["(1 1 10)", "x", "(1 1 12)"]);
     expect(new Set(labelPositions.map((position) => position[1])).size).toBe(3);
     expect(u.ctx.font).toBe("18px Test Mono");
+  });
+
+  it("draws a relative-intensity reference stick in plot-frame coordinates", () => {
+    const segs = draw([{
+      id: "stick", axis: "x", value: 50, label: "(111)",
+      stick: { intensity: 0.5, baseline: 0.1, height: 0.4, color: "#d97706", visible: true, showLabel: false },
+    }]);
+    // bbox bottom = 85; baseline 10% above it = 77; half of a 40%-height
+    // band is 16 px, so the stick tip is 61. Neither y data nor y scale is
+    // involved, which is what keeps this valid on log-intensity plots.
+    expect(segs).toEqual([{ from: [50, 77], to: [50, 61] }]);
+  });
+
+  it("hides a reference stick completely and only labels when requested", () => {
+    const hidden = draw([{
+      id: "hidden", axis: "x", value: 50, label: "(111)",
+      stick: { intensity: 1, baseline: 0, height: 0.2, color: "#d97706", visible: false, showLabel: true },
+    }]);
+    expect(hidden).toEqual([]);
+    const { u, labels } = fakeU();
+    const plugin = refLinePlugin([{
+      id: "shown", axis: "x", value: 50, label: "(111)",
+      stick: { intensity: 1, baseline: 0, height: 0.2, color: "#d97706", visible: true, showLabel: true },
+    }], "#abc");
+    // @ts-expect-error — minimal stub stands in for a real uPlot instance
+    plugin.hooks.draw?.(u);
+    expect(labels).toEqual(["(111)"]);
   });
 });
 

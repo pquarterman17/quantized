@@ -107,6 +107,11 @@ describe("legacy Publication Preview -> FigureDocument adapter", () => {
           ref_lines: [
             { axis: "x", value: 5 },
             { axis: "y", value: -2 },
+            {
+              axis: "x", value: 28.44, label: "(111)", group_id: "silicon",
+              group_label: "Silicon · λ 1.54060 Å",
+              stick: { intensity: 1, baseline: 0.03, height: 0.18, color: "#d97706", visible: true, show_label: false },
+            },
           ],
           region_shades: [
             { x1: 0, x2: 1, y1: 0, y2: 1, fill: "#336699" },
@@ -126,6 +131,11 @@ describe("legacy Publication Preview -> FigureDocument adapter", () => {
       expect(document.plot.view.refLines).toEqual([
         { id: "legacyref-legacy-decor-0", axis: "x", value: 5 },
         { id: "legacyref-legacy-decor-1", axis: "y", value: -2 },
+        {
+          id: "legacyref-legacy-decor-2", axis: "x", value: 28.44, label: "(111)",
+          groupId: "silicon", groupLabel: "Silicon · λ 1.54060 Å",
+          stick: { intensity: 1, baseline: 0.03, height: 0.18, color: "#d97706", visible: true, showLabel: false },
+        },
       ]);
       expect(document.plot.view.regionShades).toEqual([
         { id: "legacyshade-legacy-decor-0", x1: 0, x2: 1, y1: 0, y2: 1, fill: "#336699" },
@@ -156,6 +166,11 @@ describe("legacy Publication Preview -> FigureDocument adapter", () => {
       expect(spec.overrides?.ref_lines).toEqual([
         { axis: "x", value: 5 },
         { axis: "y", value: -2 },
+        {
+          axis: "x", value: 28.44, label: "(111)", group_id: "silicon",
+          group_label: "Silicon · λ 1.54060 Å",
+          stick: { intensity: 1, baseline: 0.03, height: 0.18, color: "#d97706", visible: true, show_label: false },
+        },
       ]);
       expect(spec.overrides?.region_shades).toEqual([
         { x1: 0, x2: 1, y1: 0, y2: 1, fill: "#336699" },

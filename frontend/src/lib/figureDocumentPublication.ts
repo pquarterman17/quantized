@@ -38,10 +38,31 @@ export function figureDocumentFromLegacyFigureDoc(legacy: FigureDoc): FigureDocu
     id: `legacyshape-${legacy.id}-${i}`,
     ...wire,
   }));
-  const refLines: RefLine[] = (wireRefLines ?? []).map((wire, i) => ({
-    id: `legacyref-${legacy.id}-${i}`,
-    ...wire,
-  }));
+  const seenStickGroups = new Set<string>();
+  const refLines: RefLine[] = (wireRefLines ?? []).map((wire, i) => {
+    const groupId = wire.stick ? wire.group_id ?? `legacyrefgroup-${legacy.id}` : undefined;
+    const firstInGroup = groupId ? !seenStickGroups.has(groupId) : false;
+    if (groupId) seenStickGroups.add(groupId);
+    return {
+      id: `legacyref-${legacy.id}-${i}`,
+      axis: wire.axis,
+      value: wire.value,
+      ...(wire.label ? { label: wire.label } : {}),
+      ...(wire.stick ? {
+        groupId,
+        ...(wire.group_label || firstInGroup
+          ? { groupLabel: wire.group_label ?? `${legacy.name} · reference pattern` } : {}),
+        stick: {
+          intensity: wire.stick.intensity,
+          baseline: wire.stick.baseline,
+          height: wire.stick.height,
+          color: wire.stick.color,
+          visible: wire.stick.visible,
+          showLabel: wire.stick.show_label,
+        },
+      } : {}),
+    };
+  });
   const regionShades: RegionShade[] = (wireRegionShades ?? []).map((wire, i) => ({
     id: `legacyshade-${legacy.id}-${i}`,
     ...wire,
