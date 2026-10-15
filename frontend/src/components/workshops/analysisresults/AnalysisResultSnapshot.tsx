@@ -33,7 +33,8 @@ export default function AnalysisResultSnapshot({
   disabled?: boolean;
 }) {
   const interpretation = result.scalarValues?.Interpretation;
-  const scientificValues = result.producer.id === "williamson-hall"
+  const isCrystallite = result.producer.id.startsWith("williamson-hall");
+  const scientificValues = isCrystallite
     ? Object.entries(result.scalarValues ?? {}).filter(([key]) => !["Analysis", "Test", "Interpretation"].includes(key))
     : [];
   if (view === "overview") return <>
@@ -47,7 +48,7 @@ export default function AnalysisResultSnapshot({
       {scientificValues.map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{display(value)}</dd></div>)}
     </dl>}
     {typeof interpretation === "string" && <p className="qz-analysis-caption">{interpretation}</p>}
-    {result.producer.id !== "williamson-hall" && <StatisticalReportingCard result={result} />}
+    {!isCrystallite && <StatisticalReportingCard result={result} />}
   </>;
 
   if (view === "table") return result.tables?.length ? <div>

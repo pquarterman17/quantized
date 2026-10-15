@@ -33,3 +33,34 @@ export function williamsonHallResultFigure(result: AnalysisResult): StatisticalR
     },
   }];
 }
+
+export function williamsonHallBatchResultFigures(result: AnalysisResult): StatisticalResultFigureDraft[] {
+  if (result.producer.id !== "williamson-hall-batch") return [];
+  const table = result.tables?.find((candidate) => candidate.title === "Crystallite comparison");
+  if (!table || table.columns.slice(0, 4).join("\0") !==
+      ["Worksheet", "Crystallite size (nm)", "Microstrain", "R²"].join("\0")) return [];
+  const rows = table.rows.filter((row) => typeof row[0] === "string");
+  const drafts: StatisticalResultFigureDraft[] = [];
+  for (const [key, column, label, unit] of [
+    ["crystallite-size", 1, "Crystallite size", "nm"],
+    ["microstrain", 2, "Microstrain", ""],
+    ["fit-quality", 3, "Williamson–Hall R²", ""],
+  ] as const) {
+    const usable = rows.filter((row) => finite(row[column]));
+    if (!usable.length) continue;
+    const levels = usable.map((row) => row[0] as string);
+    const data: DataStruct = {
+      time: levels.map((_, index) => index),
+      values: usable.map((row, index) => [index, row[column] as number]),
+      labels: ["Worksheet", label], units: ["", unit],
+      metadata: { frozenFromAnalysisResult: true }, cat_levels: { 0: levels },
+    };
+    drafts.push({
+      key: `williamson-hall-${key}`, name: `${label} comparison`,
+      description: `${label} across the completed selected worksheets.`, data, mark: "bar",
+      view: { ...defaultPlotView(), plotTitle: `${label} comparison`, xAxisLabel: "Worksheet",
+        yAxisLabel: unit ? `${label} (${unit})` : label, xKey: 0, yKeys: [1], showLegend: false },
+    });
+  }
+  return drafts;
+}
