@@ -32,6 +32,7 @@ export default function ReferencePatternSection() {
   const recordHistory = useApp((s) => s.recordHistory);
   const setStatus = useApp((s) => s.setStatus);
   const fileRef = useRef<HTMLInputElement>(null);
+  const lastFileRef = useRef<File | null>(null);
   const readToken = useRef(0);
   const commitLocked = useRef(false);
   const [pattern, setPattern] = useState<ParsedReferencePattern | null>(null);
@@ -73,13 +74,14 @@ export default function ReferencePatternSection() {
   );
   const canAdd = pattern != null && !axisProblem && !geometryProblem && !sourceProblem && converted.reflections.length > 0;
 
-  async function openFile(file: File): Promise<void> {
+  async function openFile(file: File, mode: ReferenceAxisMode = axisMode): Promise<void> {
+    lastFileRef.current = file;
     const token = ++readToken.current;
     setBusy(true);
     setError(null);
     try {
       if (file.size > MAX_REFERENCE_FILE_BYTES) throw new Error("Reference file is larger than 2 MiB.");
-      const parsed = parseReferencePatternText(await file.text(), file.name, axisMode);
+      const parsed = parseReferencePatternText(await file.text(), file.name, mode);
       if (token !== readToken.current) return;
       commitLocked.current = false;
       setPattern(parsed);
@@ -103,10 +105,10 @@ export default function ReferencePatternSection() {
     const h = Number(height);
     const groupId = nextPlotObjectId("reference-pattern");
     const sourceName = name.trim() || pattern.name;
-    const wavelengthLabel = source != null && targetWavelength != null
-      ? Math.abs(source - targetWavelength) < 1e-9
-        ? ` · λ ${source.toFixed(5)} Å`
-        : ` · λ ${source.toFixed(5)}→${targetWavelength.toFixed(5)} Å`
+    const wavelengthLabel = source != null
+      ? targetWavelength != null && Math.abs(source - targetWavelength) >= 1e-9
+        ? ` · λ ${source.toFixed(5)}→${targetWavelength.toFixed(5)} Å`
+        : ` · λ ${source.toFixed(5)} Å`
       : " · λ unknown";
     // Group label is durable, human-readable scientific provenance. Keeping
     // it once per pattern avoids repeating identical source metadata on every
@@ -114,14 +116,14 @@ export default function ReferencePatternSection() {
     const groupLabel = `${sourceName}${wavelengthLabel}`;
     recordHistory("add XRD reference pattern");
     useApp.setState((state) => ({
-      refLines: [...state.refLines, ...converted.reflections.map((row) => {
+      refLines: [...state.refLines, ...converted.reflections.map((row, index) => {
         return {
           id: nextPlotObjectId("ref"),
           axis: "x" as const,
           value: row.twoTheta,
           label: row.label,
           groupId,
-          groupLabel,
+          ...(index === 0 ? { groupLabel } : {}),
           stick: {
             intensity: row.intensity,
             baseline: b,
@@ -141,6 +143,7 @@ export default function ReferencePatternSection() {
     // cannot append the same pattern twice before React disables the button.
     setPattern(null);
     setRows([]);
+    lastFileRef.current = null;
   }
 
   const wavelengthWarning = pattern && source == null
@@ -155,7 +158,11 @@ export default function ReferencePatternSection() {
         Import a trusted 2θ/intensity stick pattern (CSV, TSV, XY, or text). Raw data are not changed.
       </div>
       <label className="qzk-field-lbl" style={{ display: "flex", gap: 6, marginTop: 10 }}>
-        <input type="checkbox" checked={axisMode === "two-theta"} onChange={(e) => setAxisMode(e.target.checked ? "two-theta" : "auto")} />
+        <input type="checkbox" checked={axisMode === "two-theta"} onChange={(e) => {
+          const mode = e.target.checked ? "two-theta" : "auto";
+          setAxisMode(mode);
+          if (lastFileRef.current) void openFile(lastFileRef.current, mode);
+        }} />
         Treat first column as 2θ when its header is unknown
       </label>
       <input
@@ -198,6 +205,9 @@ export default function ReferencePatternSection() {
             {converted.converted ? ` · ${converted.reflections.length} positions will be converted` : ""}
           </div>
           {wavelengthWarning && <div className="qzk-ds-meta" style={{ ...hint, color: "var(--warning, #d97706)" }}>{wavelengthWarning}</div>}
+          {converted.dropped > 0 && <div className="qzk-ds-meta" style={{ ...hint, color: "var(--warning, #d97706)" }}>
+            {converted.dropped} reflection{converted.dropped === 1 ? " is" : "s are"} impossible at the target wavelength and will be omitted.
+          </div>}
           {sourceProblem && <div className="qzk-ds-meta" style={{ ...hint, color: "var(--danger)" }}>{sourceProblem}</div>}
           {pattern.warnings.map((warning) => <div key={warning} className="qzk-ds-meta" style={hint}>{warning}</div>)}
           {geometryProblem && <div className="qzk-ds-meta" style={{ ...hint, color: "var(--danger)" }}>{geometryProblem}</div>}

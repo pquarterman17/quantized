@@ -1844,8 +1844,8 @@ import { fileURLToPath } from "node:url";
  * queued Dependabot #548 (vite 8.3.2, +165 B preload helper) and the
  * pending plot batch (~+223 B); do not spend it on anything else.
  *
- * 2026-10-14 — pin RAISED 834,257 -> 837,181 for editable XRD reference
- * patterns. Final measured eager JS is 836,157 B; the new pin is the required
+ * 2026-10-14 — pin RAISED 834,257 -> 837,509 for editable XRD reference
+ * patterns. Clean-install measured eager JS is 836,485 B; the new pin is the required
  * measured + 1,024 B margin. The file parser, preview table, wavelength
  * conversion, and controls already live in the existing lazy Reductions
  * chunk. The remaining growth is irreducible first-paint contract code:
@@ -1857,7 +1857,7 @@ import { fileURLToPath } from "node:url";
  * reducing the measured overage before this minimal raise.
  *
  */
-const EAGER_JS_BUDGET = 837_181;
+const EAGER_JS_BUDGET = 837_509;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

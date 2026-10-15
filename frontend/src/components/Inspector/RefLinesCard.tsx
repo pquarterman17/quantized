@@ -34,9 +34,15 @@ export default function RefLinesCard() {
     recordHistory("delete reference-line group");
     useApp.setState((state) => ({ refLines: state.refLines.filter((line) => line.groupId !== groupId) }));
   };
-  const groups = [...new Map(refLines.flatMap((line) => typeof line.groupId === "string" && line.groupId
-    ? [[line.groupId, typeof line.groupLabel === "string" && line.groupLabel
-      ? line.groupLabel : "Generated reference lines"] as const] : [])).entries()];
+  const groupLabels = new Map<string, string>();
+  for (const line of refLines) {
+    if (!line.groupId) continue;
+    if (!groupLabels.has(line.groupId) || line.groupLabel) {
+      groupLabels.set(line.groupId, line.groupLabel || "Generated reference lines");
+    }
+  }
+  const groups = [...groupLabels.entries()];
+  const objectCount = groups.length + refLines.filter((line) => !line.groupId).length;
   const updateStickGroup = (groupId: string, patch: Partial<NonNullable<(typeof refLines)[number]["stick"]>>, key: string) => {
     recordHistoryCoalesced("style reference pattern", `reference-pattern:${groupId}:${key}`);
     useApp.setState((state) => ({
@@ -47,7 +53,7 @@ export default function RefLinesCard() {
   };
 
   return (
-    <Card title="Reference lines" count={refLines.length || undefined} defaultOpen={false}>
+    <Card title="Reference lines" count={objectCount || undefined} defaultOpen={false}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <SegmentedControl<"x" | "y">
           options={[

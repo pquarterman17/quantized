@@ -42,6 +42,8 @@ describe("ReferencePatternSection", () => {
     expect(useApp.getState().history).toHaveLength(1);
     expect(useApp.getState().status).toContain("added 2 reference sticks");
     expect(screen.queryByRole("button", { name: /Add 2 reference sticks/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Treat first column/ }));
+    expect(screen.queryByDisplayValue("silicon")).not.toBeInTheDocument();
   });
 
   it("does not add a reference to an incompatible active axis", async () => {
@@ -50,5 +52,26 @@ describe("ReferencePatternSection", () => {
     fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [new File(["20 100\n"], "phase.xy")] } });
     await waitFor(() => expect(screen.getByRole("button", { name: /Add 1 reference stick/ })).toBeDisabled());
     expect(screen.getByText(/not 2θ in degrees/)).toBeInTheDocument();
+  });
+
+  it("re-parses the selected file immediately when the wrong-axis override changes", async () => {
+    const { container } = render(<ReferencePatternSection />);
+    const file = new File(["q,intensity\n20,100\n"], "mislabeled.csv", { type: "text/csv" });
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
+    expect(await screen.findByText(/declares a non-2θ axis/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Treat first column/ }));
+    expect(await screen.findByDisplayValue("mislabeled")).toBeInTheDocument();
+    expect(screen.queryByText(/declares a non-2θ axis/)).not.toBeInTheDocument();
+  });
+
+  it("retains a known source wavelength when the active target wavelength is unknown", async () => {
+    useApp.setState({ datasets: [{ id: "xrd", name: "scan.xy", data: {
+      ...data, metadata: { x_column_name: "2-Theta", x_column_unit: "deg" },
+    } }], activeId: "xrd" });
+    const { container } = render(<ReferencePatternSection />);
+    const file = new File(["# wavelength = 1.5406\n20 100\n"], "phase.xy");
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
+    fireEvent.click(await screen.findByRole("button", { name: /Add 1 reference stick/ }));
+    expect(useApp.getState().refLines[0].groupLabel).toBe("phase · λ 1.54060 Å");
   });
 });

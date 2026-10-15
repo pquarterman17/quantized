@@ -28,6 +28,33 @@ describe("parseReferencePatternText", () => {
     expect(parsed.reflections[0]).toEqual({ twoTheta: 20, intensity: 1, label: "(1, 1, 1)" });
   });
 
+  it("accepts Unicode 2θ and reconstructs an unquoted comma-separated hkl tail", () => {
+    const parsed = parseReferencePatternText("2θ,intensity,hkl\n28.44,100,(1,1,1)", "silicon.csv");
+    expect(parsed.reflections[0]).toMatchObject({ twoTheta: 28.44, label: "(1,1,1)" });
+  });
+
+  it("normalizes wavelength metadata recorded in nanometres", () => {
+    const parsed = parseReferencePatternText("# wavelength (nm) = 0.15406\n20 100", "phase.xy");
+    expect(parsed.sourceWavelengthA).toBeCloseTo(1.5406, 10);
+  });
+
+  it("does not mistake an uncommented wavelength metadata row for the data axis", () => {
+    const parsed = parseReferencePatternText(
+      "Wavelength,1.5406\n2theta,intensity,hkl\n28.44,100,(1 1 1)",
+      "phase.csv",
+    );
+    expect(parsed.sourceWavelengthA).toBeCloseTo(1.5406, 10);
+    expect(parsed.reflections).toEqual([{ twoTheta: 28.44, intensity: 1, label: "(1 1 1)" }]);
+  });
+
+  it("keeps a semicolon header delimiter when an unquoted HKL tail contains commas", () => {
+    const parsed = parseReferencePatternText(
+      "2theta;intensity;hkl\n28.44;100;(1,1,1)",
+      "phase.csv",
+    );
+    expect(parsed.reflections).toEqual([{ twoTheta: 28.44, intensity: 1, label: "(1,1,1)" }]);
+  });
+
   it("preserves reflection identities from separate h, k, and l columns", () => {
     const parsed = parseReferencePatternText("2theta intensity h k l\n28.44 100 1 1 1", "silicon.xy");
     expect(parsed.reflections[0].label).toBe("(1 1 1)");

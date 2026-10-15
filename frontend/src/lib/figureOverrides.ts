@@ -79,6 +79,10 @@ export interface FigureOverrides {
     axis: "x" | "y";
     value: number;
     label?: string;
+    /** UI-only identity retained when a saved export is reopened as an
+     * editable FigureDocument. The backend renderer safely ignores both. */
+    group_id?: string;
+    group_label?: string;
     stick?: {
       intensity: number;
       baseline: number;

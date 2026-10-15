@@ -27,10 +27,10 @@ describe("sanitizeRefLines reference sticks", () => {
 describe("publication reference-stick sanitizer", () => {
   it("retains only renderer-safe wire fields", () => {
     expect(sanitizeFigureOverrides({ ref_lines: [{
-      axis: "x", value: 28.44, label: "(111)", ignored: "no",
+      axis: "x", value: 28.44, label: "(111)", group_id: "phase", group_label: "Silicon", ignored: "no",
       stick: { intensity: 1, baseline: 0.03, height: 0.18, color: "#d97706", visible: true, show_label: true, ignored: "no" },
     }] })).toEqual({ ref_lines: [{
-      axis: "x", value: 28.44, label: "(111)",
+      axis: "x", value: 28.44, label: "(111)", group_id: "phase", group_label: "Silicon",
       stick: { intensity: 1, baseline: 0.03, height: 0.18, color: "#d97706", visible: true, show_label: true },
     }] });
   });

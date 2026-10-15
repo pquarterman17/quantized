@@ -111,6 +111,8 @@ export function viewOverrides(st: Pick<
       axis: r.axis,
       value: r.value,
       ...(r.label ? { label: r.label } : {}),
+      ...(r.groupId ? { group_id: r.groupId } : {}),
+      ...(r.groupLabel ? { group_label: r.groupLabel } : {}),
       ...(r.stick ? { stick: {
         intensity: r.stick.intensity,
         baseline: r.stick.baseline,

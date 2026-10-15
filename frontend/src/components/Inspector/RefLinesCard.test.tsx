@@ -63,10 +63,11 @@ describe("RefLinesCard — remove", () => {
     const stick = { intensity: 1, baseline: 0.03, height: 0.18, color: "#d97706", visible: true, showLabel: false };
     useApp.setState({ refLines: [
       { id: "r1", axis: "x", value: 28.4, groupId: "p1", groupLabel: "phase A", stick },
-      { id: "r2", axis: "x", value: 35.2, groupId: "p1", groupLabel: "phase A", stick: { ...stick, intensity: 0.5 } },
+      { id: "r2", axis: "x", value: 35.2, groupId: "p1", stick: { ...stick, intensity: 0.5 } },
     ], history: [], future: [] });
-    render(<RefLinesCard />);
+    const { container } = render(<RefLinesCard />);
     expect(screen.getByText("phase A · 2 sticks")).toBeInTheDocument();
+    expect(container.querySelector(".qz-badge")).toHaveTextContent("1");
     // The two generated lines are deliberately not repeated as individual
     // Inspector rows; a 2,000-stick pattern must not create 2,000 controls.
     expect(screen.queryByText(/X =/)).not.toBeInTheDocument();

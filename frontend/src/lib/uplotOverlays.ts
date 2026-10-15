@@ -18,6 +18,7 @@ import { pickRefLine, type RefLineHit } from "./refLineHit";
 import { colorScatterFill, paintColorPoint, type ColorScatterSpec } from "./colorscatter";
 import { richLabelAst, type RichNode } from "./richtext";
 import { DESCENT_EM, drawRich, measureRich, type RichFont } from "./richtextCanvas";
+import { drawReferenceStick } from "./referenceStickOverlay";
 import type { Annotation, RefLine, RegionShade } from "./types";
 const MOVE = "mousemove", UP = "mouseup";
 export { pickRefLine, type RefLineHit } from "./refLineHit";
@@ -122,16 +123,7 @@ export function refLinePlugin(
             const px = u.valToPos(value, "x", true);
             if (px < left || px > left + width) continue;
             if (ln.stick) {
-              if (!ln.stick.visible) continue;
-              const baseline = top + height * (1 - ln.stick.baseline);
-              const tip = baseline - height * ln.stick.height * ln.stick.intensity;
-              ctx.strokeStyle = ctx.fillStyle = ln.stick.color;
-              ctx.setLineDash([]);
-              ctx.moveTo(px, baseline); ctx.lineTo(px, tip);
-              if (ln.label && ln.stick.showLabel) {
-                ctx.save(); ctx.translate(px + 3, tip - 3); ctx.rotate(-Math.PI / 2);
-                ctx.fillText(ln.label, 0, 0); ctx.restore();
-              }
+              if (!drawReferenceStick(ctx, ln, px, top, height)) continue;
             } else {
               ctx.strokeStyle = ctx.fillStyle = color;
               ctx.setLineDash([5, 4]);

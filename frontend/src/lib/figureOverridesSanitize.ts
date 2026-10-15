@@ -125,6 +125,8 @@ export function sanitizeFigureOverrides(value: unknown): FigureOverrides | null 
       if (!rl || (axis !== "x" && axis !== "y") || v === undefined) return [];
       const next: NonNullable<FigureOverrides["ref_lines"]>[number] = { axis, value: v };
       if (typeof rl.label === "string" && rl.label) next.label = rl.label.slice(0, 256);
+      if (typeof rl.group_id === "string" && rl.group_id) next.group_id = rl.group_id.slice(0, 128);
+      if (typeof rl.group_label === "string" && rl.group_label) next.group_label = rl.group_label.slice(0, 256);
       const rawStick = record(rl.stick);
       if (rl.stick !== undefined) {
         if (axis !== "x" || !rawStick) return [];

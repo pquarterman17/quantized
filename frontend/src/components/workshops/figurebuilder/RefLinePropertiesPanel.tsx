@@ -69,9 +69,15 @@ export default function RefLinePropertiesPanel({
   // to corrupt a pattern accidentally. Keep ordinary lines editable and show
   // a compact pattern summary; group styling belongs to the live Inspector.
   const editableLines = refLines.filter((line) => !line.stick);
-  const patternGroups = [...new Map(refLines.flatMap((line) => line.stick
-    ? [[line.groupId ?? "ungrouped-sticks", line.groupLabel ?? "Imported reference pattern"] as const]
-    : [])).entries()].map(([id, label]) => ({
+  const patternLabels = new Map<string, string>();
+  for (const line of refLines) {
+    if (!line.stick) continue;
+    const id = line.groupId ?? "ungrouped-sticks";
+    if (!patternLabels.has(id) || line.groupLabel) {
+      patternLabels.set(id, line.groupLabel || "Imported reference pattern");
+    }
+  }
+  const patternGroups = [...patternLabels.entries()].map(([id, label]) => ({
       id,
       label,
       count: refLines.filter((line) => line.stick && (line.groupId ?? "ungrouped-sticks") === id).length,

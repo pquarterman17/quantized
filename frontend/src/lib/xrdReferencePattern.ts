@@ -20,10 +20,11 @@ export interface ParsedReferencePattern {
 
 export type ReferenceAxisMode = "auto" | "two-theta";
 
-const TWO_THETA = /^(?:2\s*theta|two\s*theta|2th|2-theta|position|pos(?:ition)?\s*\(?deg(?:rees?)?\)?|angle\s*\(?deg(?:rees?)?\)?)$/i;
+const TWO_THETA = /^(?:2\s*(?:theta|θ)|two\s*theta|2th|2-theta|position|pos(?:ition)?\s*\(?deg(?:rees?)?\)?|angle\s*\(?deg(?:rees?)?\)?)$/i;
 const INTENSITY = /^(?:int(?:ensity)?|relative\s*intensity|rel(?:ative)?\.?\s*int(?:ensity)?|i\/i0|counts?)$/i;
 const LABEL = /^(?:hkl|label|reflection|phase)$/i;
 const WRONG_AXIS = /^(?:q(?:\s*[([]\s*(?:1\/)?(?:a|å|angstrom)(?:\^-?1|-1)?\s*[)\]])?|d(?:\s*-?spacing)?(?:\s*[([]\s*(?:a|å|angstrom)\s*[)\]])?|tof|time|wavelength|energy|omega|chi|phi)$/i;
+const WAVELENGTH_METADATA = /(?:wavelength|lambda|λ)\s*(?:\(([^)]*)\))?\s*[:=,]\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)/i;
 
 function cleanHeader(value: string): string {
   return value.trim().replace(/^['"]|['"]$/g, "").replace(/[_]+/g, " ")
@@ -49,10 +50,34 @@ function splitDelimited(line: string, delimiter: string): string[] {
   return cells;
 }
 
-function splitLine(line: string): string[] {
-  if (line.includes("\t")) return line.split("\t").map((v) => v.trim());
-  if (line.includes(",")) return splitDelimited(line, ",");
-  if (line.includes(";")) return splitDelimited(line, ";");
+type Delimiter = "\t" | "," | ";";
+
+function delimiterIn(line: string): Delimiter | null {
+  const delimiters: readonly Delimiter[] = ["\t", ";", ","];
+  const counts = new Map<Delimiter, number>(delimiters.map((delimiter) => [delimiter, 0]));
+  let quote = "";
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (quote) {
+      if (char === quote && line[i + 1] === quote) i += 1;
+      else if (char === quote) quote = "";
+    } else if (char === '"' || char === "'") quote = char;
+    else if (char === "\t" || char === "," || char === ";") {
+      counts.set(char, (counts.get(char) ?? 0) + 1);
+    }
+  }
+  let best: Delimiter | null = null;
+  let bestCount = 0;
+  for (const delimiter of delimiters) {
+    const count = counts.get(delimiter) ?? 0;
+    if (count > bestCount) { best = delimiter; bestCount = count; }
+  }
+  return best;
+}
+
+function splitLine(line: string, delimiter?: Delimiter | null): string[] {
+  const actual = delimiter === undefined ? delimiterIn(line) : delimiter;
+  if (actual) return splitDelimited(line, actual);
   return line.trim().split(/\s+/);
 }
 
@@ -64,9 +89,9 @@ function finiteNumber(value: string | undefined): number | null {
 
 function wavelengthIn(lines: readonly string[]): number | null {
   for (const line of lines.slice(0, 100)) {
-    const match = /(?:wavelength|lambda|λ)\s*(?:\([^)]*\))?\s*[:=,]\s*([0-9]+(?:\.[0-9]+)?)/i.exec(line);
+    const match = WAVELENGTH_METADATA.exec(line);
     if (!match) continue;
-    const value = Number(match[1]);
+    const value = Number(match[2]) * (/^\s*nm\s*$/i.test(match[1] ?? "") ? 10 : 1);
     if (value >= 0.2 && value <= 10) return value;
   }
   return null;
@@ -92,11 +117,17 @@ export function parseReferencePatternText(
   let xIndex = -1;
   let intensityIndex = -1;
   let labelIndex = -1;
+  let headerWidth = 0;
   let hklIndices: [number, number, number] | null = null;
+  let dataDelimiter: Delimiter | null | undefined;
   let dataStart = 0;
   let headerless = false;
 
   for (let i = 0; i < Math.min(lines.length, 100); i += 1) {
+    // Metadata rows such as `Wavelength,1.5406` are not column headers.
+    // Without this guard the same token that supplies source wavelength is
+    // subsequently mistaken for a declared wavelength X axis and refused.
+    if (WAVELENGTH_METADATA.test(lines[i])) continue;
     const cells = splitLine(lines[i]);
     const headers = cells.map(cleanHeader);
     const possibleX = headers.findIndex((v) => TWO_THETA.test(v));
@@ -110,8 +141,10 @@ export function parseReferencePatternText(
       xIndex = possibleX >= 0 ? possibleX : axisMode === "two-theta" ? 0 : -1;
       intensityIndex = possibleI;
       labelIndex = headers.findIndex((v) => LABEL.test(v));
+      headerWidth = headers.length;
       const h = headers.indexOf("h"), k = headers.indexOf("k"), l = headers.indexOf("l");
       if (h >= 0 && k >= 0 && l >= 0) hklIndices = [h, k, l];
+      dataDelimiter = delimiterIn(lines[i]);
       dataStart = i + 1;
       break;
     }
@@ -122,6 +155,7 @@ export function parseReferencePatternText(
       headerless = true;
       xIndex = 0;
       intensityIndex = 1;
+      dataDelimiter = delimiterIn(lines[i]);
       dataStart = i;
       break;
     }
@@ -136,7 +170,7 @@ export function parseReferencePatternText(
   const parsed: ReferenceReflection[] = [];
   let skipped = 0;
   for (const line of lines.slice(dataStart)) {
-    const cells = splitLine(line);
+    const cells = splitLine(line, dataDelimiter);
     const twoTheta = finiteNumber(cells[xIndex]);
     const intensity = finiteNumber(cells[intensityIndex]);
     if (twoTheta == null || intensity == null || twoTheta <= 0 || twoTheta >= 180 || intensity < 0) {
@@ -144,7 +178,9 @@ export function parseReferencePatternText(
       continue;
     }
     const label = labelIndex >= 0
-      ? (cells[labelIndex] ?? "").trim().replace(/^['"]|['"]$/g, "")
+      ? (labelIndex === headerWidth - 1 && cells.length > headerWidth
+          ? cells.slice(labelIndex).join(",") : (cells[labelIndex] ?? ""))
+        .trim().replace(/^['"]|['"]$/g, "")
       : hklIndices && hklIndices.every((index) => cells[index]?.trim())
         ? `(${hklIndices.map((index) => cells[index].trim()).join(" ")})`
         : "";

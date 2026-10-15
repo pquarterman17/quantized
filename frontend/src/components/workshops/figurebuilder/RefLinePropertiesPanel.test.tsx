@@ -30,7 +30,7 @@ describe("RefLinePropertiesPanel", () => {
     renderPanel([
       X_LINE,
       { id: "s1", axis: "x", value: 20, groupId: "phase", groupLabel: "Silicon", stick },
-      { id: "s2", axis: "x", value: 30, groupId: "phase", groupLabel: "Silicon", stick },
+      { id: "s2", axis: "x", value: 30, groupId: "phase", stick },
     ]);
     expect(screen.getByText(/Silicon · 2 sticks/)).toBeInTheDocument();
     expect(screen.getAllByLabelText(/reference \d+ value/)).toHaveLength(1);
