@@ -6,7 +6,10 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { DataTable } from "../../primitives/DataTable";
 import { Button } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
+import { clearSelectionForTool } from "../../../store/analysisSelection";
 import { useApp } from "../../../store/useApp";
+import AnalysisInputReview from "../analysisselection/AnalysisInputReview";
+import HysteresisBatchSection from "./HysteresisBatchSection";
 import { useHysteresis } from "./useHysteresis";
 
 export default function HysteresisPanel() {
@@ -31,7 +34,11 @@ export default function HysteresisPanel() {
     : [];
 
   return (
-    <ToolWindow id="hysteresis" title="Hysteresis" width={320} onClose={() => setOpen(false)}>
+    <ToolWindow id="hysteresis" title="Hysteresis" width={560} onClose={() => {
+      clearSelectionForTool("hysteresis");
+      setOpen(false);
+    }}>
+      <AnalysisInputReview toolId="hysteresis" singleY supportsBatch />
       {!active && (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           Select an M-H dataset.
@@ -67,12 +74,13 @@ export default function HysteresisPanel() {
             size="sm"
             disabled={bgBusy}
             onClick={() => void subtractBackground()}
-            title="Subtract the high-field linear background and centre the loop into a new (bg-sub) dataset."
+            title="Subtract the high-field linear background over the full filtered worksheet and centre the loop into a new (bg-sub) dataset."
           >
             {bgBusy ? "Subtracting…" : "Subtract linear background"}
           </Button>
         </div>
       )}
+      <HysteresisBatchSection />
     </ToolWindow>
   );
 }

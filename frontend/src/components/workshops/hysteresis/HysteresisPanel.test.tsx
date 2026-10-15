@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { hysteresisAnalysis } from "../../../lib/api/magnetometry";
 import type { DataStruct } from "../../../lib/types";
+import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { useApp } from "../../../store/useApp";
 import HysteresisPanel from "./HysteresisPanel";
 
@@ -25,6 +26,7 @@ const LOOP: DataStruct = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useAnalysisSelection.getState().clear();
   vi.mocked(hysteresisAnalysis).mockResolvedValue({
     HcMean: 721.3,
     MrMean: 7.5e-5,
