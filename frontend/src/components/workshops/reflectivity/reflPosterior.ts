@@ -48,6 +48,9 @@ export interface SavedPosterior {
   ranAt: string;
   settings: DreamSettings;
   parameters: ReflPosteriorParam[];
+  /** Exact backend order for the square correlation matrix. Tied parameters
+   * remain in `parameters`, but are not independent correlation axes. */
+  free: string[];
   correlation: (number | null)[][];
   convergence: SavedConvergence;
   map_chi2: number | null;
@@ -61,6 +64,7 @@ export function posteriorSummary(res: ReflPosteriorResult, settings: DreamSettin
     ranAt,
     settings: { ...settings },
     parameters: res.parameters.map((p) => ({ ...p, interval68: [...p.interval68], interval95: [...p.interval95] })),
+    free: [...res.free],
     correlation: res.correlation.map((row) => [...row]),
     convergence: {
       converged: c.converged,
@@ -161,11 +165,22 @@ export function decodePosterior(v: unknown): SavedPosterior | undefined {
   try {
     const parameters = list(v.parameters, decodeParam);
     if (parameters.length === 0) return undefined;
+    const rawCorrelation = Array.isArray(v.correlation)
+      ? list(v.correlation, (row) => list(row, (x) => numOrNull(x) ?? null)) : [];
+    const hasStoredFree = v.free !== undefined;
+    const storedFree = Array.isArray(v.free) && v.free.every((name) => typeof name === "string" && name.length > 0)
+      ? v.free as string[] : null;
+    const inferredFree = parameters.filter((parameter) => !parameter.tie).map((parameter) => parameter.name);
+    const free = hasStoredFree ? storedFree ?? [] : inferredFree;
+    const labelsAreUsable = free.length === rawCorrelation.length && new Set(free).size === free.length;
+    const correlation = labelsAreUsable && rawCorrelation.every((row) => row.length === free.length)
+      ? rawCorrelation : [];
     return {
       ranAt: str(v.ranAt) ?? "",
       settings: decodeSettings(v.settings),
       parameters,
-      correlation: Array.isArray(v.correlation) ? list(v.correlation, (row) => list(row, (x) => numOrNull(x) ?? null)) : [],
+      free: correlation.length ? free : [],
+      correlation,
       convergence: decodeConvergence(v.convergence),
       map_chi2: numOrNull(v.map_chi2) ?? null,
       warnings: Array.isArray(v.warnings) ? v.warnings.filter((w): w is string => typeof w === "string") : [],
