@@ -107,8 +107,8 @@ export const TECHNIQUE_WORKFLOWS: Record<Technique, TechniqueWorkflow> = {
     summary: "Standardize magnetic units, inspect temperature dependence, and fit a model.",
     stages: [
       inspect(),
-      { title: "Prepare", description: "Convert field or moment units using the sample context.", actions: ["magtools"] },
-      { title: "Analyze", description: "Fit the temperature-dependent response with a chosen model.", actions: ["curvefit"] },
+      { title: "Prepare", description: "Convert units or fit molar susceptibility in the Curie–Weiss regime with explicit sample context.", actions: ["magtools"] },
+      { title: "Analyze", description: "Fit the temperature-dependent response with a general model when Curie–Weiss is not appropriate.", actions: ["curvefit"] },
       finish(),
     ],
   },

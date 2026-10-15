@@ -22,6 +22,7 @@ import {
   type MagTab,
 } from "./useMagTools";
 import DemagCorrectionPane from "./DemagCorrectionPane";
+import CurieWeissPane from "./CurieWeissPane";
 
 const unitOpts = (xs: string[]) => xs.map((v) => ({ value: v, label: v }));
 
@@ -50,12 +51,13 @@ export default function MagToolsPanel() {
   const inM = mU ? ` ${mU}` : "";
 
   return (
-    <ToolWindow id="magtools" title="Magnetometry" width={330} onClose={() => setOpen(false)}>
+    <ToolWindow id="magtools" title="Magnetometry" width={400} onClose={() => setOpen(false)}>
       <SegmentedControl<MagTab>
         options={[
           { value: "background", label: "Background" },
           { value: "units", label: "Units" },
           { value: "demag", label: "Internal field" },
+          { value: "curie-weiss", label: "Curie–Weiss" },
         ]}
         value={m.tab}
         onChange={m.setTab}
@@ -224,14 +226,14 @@ export default function MagToolsPanel() {
             {normalizationProblem(m.units)}
           </div>}
         </div>
-      ) : <DemagCorrectionPane />}
+      ) : m.tab === "demag" ? <DemagCorrectionPane /> : <CurieWeissPane />}
 
-      {m.tab !== "demag" && m.warning && (
+      {m.tab !== "demag" && m.tab !== "curie-weiss" && m.warning && (
         <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--warn, #c90)" }}>
           {m.warning}
         </div>
       )}
-      {m.tab !== "demag" && m.error && (
+      {m.tab !== "demag" && m.tab !== "curie-weiss" && m.error && (
         <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--danger)" }}>
           {m.error}
         </div>

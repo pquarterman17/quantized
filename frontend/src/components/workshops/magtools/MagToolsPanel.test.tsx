@@ -90,6 +90,17 @@ describe("MagToolsPanel — internal-field correction is explicit", () => {
   });
 });
 
+describe("MagToolsPanel — loaded-data Curie-Weiss fit", () => {
+  it("is a first-class tab and refuses raw moment without sample context", () => {
+    load("mt.dat", "Temperature", "K");
+    render(<MagToolsPanel />);
+    fireEvent.click(screen.getByRole("radio", { name: "Curie–Weiss" }));
+    expect(screen.getByText(/editable inverse-susceptibility worksheet/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Create Curie–Weiss fit/ })).toBeDisabled();
+    expect(screen.getByText(/positive molar mass/)).toBeInTheDocument();
+  });
+});
+
 describe("MagToolsPanel — ambiguous data fails closed in the UI", () => {
   it("disables the action and says what it could not determine", () => {
     load("mystery.dat", "col 1", "");

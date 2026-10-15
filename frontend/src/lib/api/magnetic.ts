@@ -79,10 +79,48 @@ export function magneticCurieWeissFit(body: {
 }): Promise<{
   theta_cw: number;
   C: number;
-  mu_eff: number;
+  mu_eff: number | null;
   fit_line: [number, number];
   r2: number;
-  inv_chi: number[];
+  inv_chi: (number | null)[];
 }> {
   return postJSON("/api/magnetic/curie-weiss-fit", body);
+}
+
+export type CurieWeissResponseBasis =
+  | "molar_susceptibility"
+  | "total_moment"
+  | "mass_moment";
+
+export interface CurieWeissDataFitResult {
+  theta_cw: number;
+  C: number;
+  mu_eff: number | null;
+  fit_line: [number, number];
+  r2: number;
+  inv_chi: (number | null)[];
+  susceptibility_molar: (number | null)[];
+  susceptibility_errors_molar: (number | null)[][];
+  inverse_errors: (number | null)[][];
+  fit_inv_chi: (number | null)[];
+  fit_mask: boolean[];
+  n_fit: number;
+  fit_range_used: [number, number];
+  excluded_nonpositive: number;
+}
+
+/** Loaded-data Curie-Weiss fit. Raw moment is converted to molar
+ * susceptibility only with explicit field and sample context. */
+export function magneticCurieWeissDataFit(body: {
+  temperature: number[];
+  response: number[];
+  response_basis: CurieWeissResponseBasis;
+  fit_range: [number, number];
+  field?: number[] | null;
+  field_unit?: string;
+  sample_mass_g?: number | null;
+  molar_mass_g_mol?: number | null;
+  response_errors?: number[][];
+}): Promise<CurieWeissDataFitResult> {
+  return postJSON("/api/magnetic/curie-weiss-data-fit", body);
 }

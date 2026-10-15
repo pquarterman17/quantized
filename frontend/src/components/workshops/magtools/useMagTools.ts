@@ -61,7 +61,7 @@ export function magXY(
   };
 }
 
-export type MagTab = "background" | "units" | "demag";
+export type MagTab = "background" | "units" | "demag" | "curie-weiss";
 
 /** Which background routine runs: `mt` = one-sided high-T fit, `mh` = both
  *  saturated tails + re-centre. `auto` follows {@link detectMagXKind}. */
@@ -131,6 +131,13 @@ export function requestStillCurrent(request: MagRequestView): boolean {
 export async function resolveCurrentRequest(request: MagRequestView): Promise<Dataset | undefined> {
   const ds = await useApp.getState().resolveDataset(request.sourceId);
   return ds && requestStillCurrent(request) ? ds : undefined;
+}
+
+/** Read the live dataset only from an imperative action. Kept beside the
+ * other getState-based request guards so workshop hooks do not become new
+ * render-body getState sites. */
+export function currentRequestDataset(sourceId: string): Dataset | undefined {
+  return useApp.getState().datasets.find((dataset) => dataset.id === sourceId);
 }
 
 /** After resolution, also require the exact source data that was sent to the
