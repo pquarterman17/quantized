@@ -43,3 +43,10 @@
 .qzk-analysis-batch-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
 .qzk-analysis-batch-table th, .qzk-analysis-batch-table td { padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--border); }
 .qzk-analysis-batch-table th { color: var(--text-faint); font-weight: 600; }
+
+.qzk-analysis-trend-axis { padding-top: var(--space-3); }
+.qzk-analysis-trend-axis > p:first-child { margin-top: 0; }
+.qzk-analysis-trend-values { display: grid; gap: var(--space-1); max-height: 11rem; overflow: auto; }
+.qzk-analysis-trend-values label { display: grid; grid-template-columns: minmax(0, 1fr) 8rem; gap: var(--space-2); align-items: center; }
+.qzk-analysis-trend-values span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); font-size: var(--font-size-sm); }
+.qzk-analysis-trend-values input { min-width: 0; }
