@@ -11,6 +11,6 @@
     "origin:matrix": "node acceptance_matrix.mjs"
   },
   "dependencies": {
-    "puppeteer-core": "^25.8.0"
+    "puppeteer-core": "^25.16.0"
   }
 }
