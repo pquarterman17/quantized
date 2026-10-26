@@ -18,7 +18,12 @@ serde_json = "1"
 # native dialog, install + restart (driven from Rust — the frontend loads from
 # a remote 127.0.0.1 URL, so JS-side Tauri APIs would need remote-IPC grants we
 # deliberately avoid).
-tauri-plugin-updater = "2"
+# Default features minus `zip`: that feature only unpacks Tauri-v1 `.zip` /
+# `.tar.gz` updater bundles, and this app ships v2 artifacts (the signed NSIS
+# `-setup.exe` itself, see release.yml), so it was dead code that pinned the
+# vulnerable zip 4.x crate into the lock (RUSTSEC-2026-0367/0368/0369).
+# tests/test_updater_artifacts.py keeps the release on v2 artifacts.
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }
 tauri-plugin-dialog = "2"
 # the per-launch API token handed to the sidecar (docs/api_auth.md); the
 # version already in the lock via tauri's own dependency tree

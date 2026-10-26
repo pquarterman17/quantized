@@ -125,15 +125,20 @@ jobs:
       # (read from the lockfile, so a Playwright bump is a new key and never
       # reuses a mismatched revision). OS libraries cannot be cached, so the
       # install step always runs: on a hit it finds the binary present and
-      # only installs the system dependencies.
+      # only installs the system dependencies. The key also carries the OS
+      # release: Playwright ships per-release WebKit builds (ubuntu24.04 vs
+      # ubuntu26.04), and a build restored onto a newer runner image is seen
+      # as installed but cannot load its libicu/libxml2 sonames.
       - name: Resolve Playwright version
         id: pw
-        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+          . /etc/os-release && echo "os=${ID}${VERSION_ID}" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright browser
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ matrix.engine }}-${{ steps.pw.outputs.version }}
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.pw.outputs.os }}-${{ matrix.engine }}-${{ steps.pw.outputs.version }}
       - name: Install Playwright (${{ matrix.engine }})
         # Own budget: a slow apt mirror (webkit's system deps are the largest)
         # twice ran this past the old 25-minute JOB limit. A step limit fails
