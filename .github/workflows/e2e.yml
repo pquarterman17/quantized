@@ -138,7 +138,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.os }}-${{ matrix.engine }}-${{ steps.pw.outputs.version }}
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.pw.outputs.os }}-${{ matrix.engine }}-${{ steps.pw.outputs.version }}
       - name: Install Playwright (${{ matrix.engine }})
         # Own budget: a slow apt mirror (webkit's system deps are the largest)
         # twice ran this past the old 25-minute JOB limit. A step limit fails
