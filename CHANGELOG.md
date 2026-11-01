@@ -6,6 +6,39 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-11-01
+
+A **minor** security and maintenance release. It is the first published
+release since 0.31.0: version 0.32.0 below was prepared but never tagged, so
+its additions reach users for the first time in this release.
+
+### Security
+
+- Cleared the dependency advisories reported by the weekly vulnerability
+  sweep: aiohttp, Pillow 13, certifi, opentelemetry-api, setuptools and
+  msgpack (Python); rustls, rustls-webpki, tokio and webpki-root-certs
+  (desktop shell); undici, zod and puppeteer-core (development tooling).
+- The desktop auto-updater is built without its `zip` feature, which only
+  unpacked Tauri v1 update bundles and pulled in a vulnerable `zip` crate.
+  Updates still install from the signed NSIS installer, and a test now fails
+  if the release config moves to a format the updater can no longer install.
+- Recorded a dated accepted-risk entry for a minimatch denial-of-service
+  advisory that affects only frontend development tooling and has no
+  compatible fix (re-checked by 2027-01-31), and removed 15 stale entries
+  from the advisory ignore list.
+
+### Changed
+
+- Dependency updates, including FastAPI 0.162, pydantic 2.14, React 19.3.1,
+  Vite 8.3.5, Vitest 5.0.5, ESLint 10.13, Playwright 1.64,
+  tauri-plugin-updater 2.14 and tauri-plugin-dialog 2.8.3.
+
+### Fixed
+
+- The WebKit cross-browser end-to-end tests run on CI again: the Playwright
+  browser cache is keyed by OS release and CPU architecture, so a browser
+  built for an older runner image is no longer reused on a newer one.
+
 ## [0.32.0] - 2026-10-15
 
 A **minor** scientific-analysis release focused on comparing measurements
