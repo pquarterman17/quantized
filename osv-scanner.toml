@@ -4,27 +4,23 @@
 # Every entry is a dated, deliberate decision. A red sweep run means a NEW
 # advisory appeared that no entry covers — triage it (fix / book a plan row /
 # add an entry here with a dated rationale), never leave the sweep red.
-# The entries clear on TWO INDEPENDENT upstream conditions — do not treat one
-# as retiring all 17 (2026-09-08, corrected after this file's own dependency
-# tracing contradicted the previous blanket claim):
+# The entries clear on TWO INDEPENDENT upstream conditions:
 #
-#   1. The twelve GTK/glib entries (RUSTSEC-2024-0429 and RUSTSEC-2024-0411
-#      through -0420, plus RUSTSEC-2024-0370 proc-macro-error, which is
-#      reached only via glib-macros/gtk3-macros) clear when Tauri's Linux
+#   1. RUSTSEC-2024-0429 (glib) and RUSTSEC-2024-0370 (proc-macro-error, which
+#      is reached only via glib-macros/gtk3-macros) clear when Tauri's Linux
 #      stack moves off the gtk3 / glib 0.18 line (gtk-rs 0.20+): the ordinary
 #      lockfile bump drops the affected crates.
-#   2. The five unic-* entries (RUSTSEC-2025-0075, -0080, -0081, -0098,
-#      -0100) do NOT clear with that migration. They are reached only through
-#      urlpattern 0.3.0, pinned by `tauri-utils`'s `urlpattern = "^0.3"`;
-#      urlpattern dropped the unic-* dependencies in 0.4.0. They clear when
-#      tauri-utils widens that requirement — independently of the GTK move,
-#      and not by any `cargo update` this repo can run.
+#   2. GHSA-g3hv-75wg-m249 (minimatch, frontend dev tooling) clears when the
+#      eslint chain and openapi-typescript move to minimatch 11; its
+#      ignoreUntil re-raises it for triage regardless.
 #
-# So a future GTK/gtk-rs upgrade retires group 1 only; re-check group 2
-# against tauri-utils' published `urlpattern` requirement separately.
-#
-# 2026-10-31: a third, independent npm entry (GHSA-g3hv-75wg-m249, frontend
-# dev tooling) sits at the end of this file, with its own ignoreUntil.
+# 2026-10-31: removed 15 entries the sweep had been reporting as unused.
+#   - The ten gtk3-rs "unmaintained" notices (RUSTSEC-2024-0411 through -0420)
+#     were withdrawn by RustSec on 2026-08-14; the crates themselves are still
+#     locked at 0.18.2.
+#   - The five unic-* notices (RUSTSEC-2025-0075, -0080, -0081, -0098, -0100)
+#     no longer apply: tauri-utils 2.10.1 locks urlpattern 0.6.0, which has no
+#     unic-* dependencies, so those crates left the lock.
 
 # glib unsoundness (VariantStrIter Iterator/DoubleEndedIterator impls).
 # Mirrors the 2026-07-25 Dependabot dismissal as tolerable_risk: patched in
@@ -41,86 +37,14 @@
 id = "RUSTSEC-2024-0429"
 reason = "2026-08-01 (re-checked 2026-09-02 and 2026-09-08, unchanged): mirrors the dated Dependabot dismissal — unreachable gtk3-stack unsoundness, no compatible fix while Tauri v2 pins gtk-rs 0.18; re-eval when Tauri adopts gtk-rs 0.20"
 
-# gtk3-rs bindings are unmaintained upstream (announced 2024) — advisory
-# notices, not vulnerabilities. They are Tauri v2's Linux backend, reached
-# only through tauri = "2" (current latest), shipped only in the .deb.
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0411"
-reason = "2026-08-01: gdkwayland-sys — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0412"
-reason = "2026-08-01: gdk — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0413"
-reason = "2026-08-01: atk — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0414"
-reason = "2026-08-01: gdkx11-sys — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0415"
-reason = "2026-08-01: gtk — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0416"
-reason = "2026-08-01: atk-sys — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0417"
-reason = "2026-08-01: gdkx11 — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0418"
-reason = "2026-08-01: gdk-sys — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0419"
-reason = "2026-08-01: gtk3-macros — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0420"
-reason = "2026-08-01: gtk-sys — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
-
-# Unmaintained-crate notices deeper in Tauri's tree — build-time or
-# pattern-matching helpers, no known vulnerability, no fix released.
-#
-# 2026-09-08: traced each to the dependency that actually pins it, so a future
-# re-evaluation does not have to re-derive it.
-#   - proc-macro-error is reached ONLY through glib-macros and gtk3-macros, so
-#     it clears with the same gtk-rs 0.20 move as the block above — it is not a
-#     separate piece of work.
-#   - every unic-* crate below is reached ONLY through urlpattern 0.3.0, which
-#     is pinned by tauri-utils; the newest tauri-utils (2.9.3, the version
-#     locked here) still declares `urlpattern = "^0.3"`, and urlpattern dropped
-#     the unic-* dependencies after 0.3. So these five are blocked on a
-#     tauri-utils release that widens that requirement, NOT on anything this
-#     repo controls — `cargo update` cannot clear them.
+# Unmaintained build-time proc-macro crate deeper in Tauri's tree, no known
+# vulnerability, no fix released. 2026-09-08: traced to the dependency that
+# actually pins it — proc-macro-error is reached ONLY through glib-macros and
+# gtk3-macros, so it clears with the same gtk-rs 0.20 move as glib above; it
+# is not a separate piece of work.
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0370"
 reason = "2026-08-01 (re-checked 2026-09-08): proc-macro-error — unmaintained build-time proc-macro crate reached only via glib-macros/gtk3-macros; no vulnerability; clears with the gtk-rs 0.20 move"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2025-0075"
-reason = "2026-08-01 (re-checked 2026-09-08): unic-char-range — unmaintained unic project crate, reached only via urlpattern 0.3.0 which tauri-utils 2.9.3 (newest) still pins at ^0.3; no vulnerability, not clearable by cargo update"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2025-0080"
-reason = "2026-08-01 (re-checked 2026-09-08): unic-common — unmaintained unic project crate, reached only via urlpattern 0.3.0 which tauri-utils 2.9.3 (newest) still pins at ^0.3; no vulnerability, not clearable by cargo update"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2025-0081"
-reason = "2026-08-01 (re-checked 2026-09-08): unic-char-property — unmaintained unic project crate, reached only via urlpattern 0.3.0 which tauri-utils 2.9.3 (newest) still pins at ^0.3; no vulnerability, not clearable by cargo update"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2025-0098"
-reason = "2026-08-01 (re-checked 2026-09-08): unic-ucd-version — unmaintained unic project crate, reached only via urlpattern 0.3.0 which tauri-utils 2.9.3 (newest) still pins at ^0.3; no vulnerability, not clearable by cargo update"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2025-0100"
-reason = "2026-08-01 (re-checked 2026-09-08): unic-ucd-ident — unmaintained unic project crate, reached only via urlpattern 0.3.0 which tauri-utils 2.9.3 (newest) still pins at ^0.3; no vulnerability, not clearable by cargo update"
 
 # minimatch "globparts amplification" DoS (moderate; fixed only in 11.0.1, so
 # every 10.x/5.x is affected). Two dev-only copies in frontend/package-lock.json:
