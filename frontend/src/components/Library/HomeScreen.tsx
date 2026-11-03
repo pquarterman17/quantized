@@ -28,6 +28,7 @@ import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGu
 import { nextDatasetId, useApp } from "../../store/useApp";
 import { useRecentProjects } from "../../store/recentProjects";
 import { useWorkingPaths } from "../../store/workingPaths";
+import { IconButton } from "../primitives/IconButton";
 
 /** Short badge for a source's reachability. `ok`/`unknown` render nothing —
  *  a badge on every healthy row is noise, and "unknown" (no desktop bridge to
@@ -187,18 +188,19 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
                   </span>
                 )}
                 <span className="qz-shortcut">{relativeTime(r.at, Date.now())}</span>
-                {/* Retrospective-audit P2 fix: no tabIndex — a click on a
-                    tabindex'd span focuses it, and this click unmounts the
-                    span: focus fell to <body>, arming the global Delete. */}
-                <span
-                  role="button"
+                {/* A real button, so it is keyboard-reachable. Removing the
+                    entry unmounts the button itself, so removeRowSafely
+                    moves focus to homeRef first; homeRef absorbs a stray
+                    Delete. Without that, focus would fall to <body> and arm
+                    the global Delete shortcut (Retrospective-audit P2). */}
+                <IconButton
+                  type="button"
                   aria-label={`Remove ${r.name} from recent`}
                   title="Remove from recent"
-                  className="qz-shortcut"
                   onClick={() => removeRowSafely(homeRef.current, () => removeRecent(r))}
                 >
                   ✕
-                </span>
+                </IconButton>
               </div>
             );
           })}
@@ -225,16 +227,14 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
               >
                 <span className="qzk-menu-trunc">{p.label}</span>
               </button>
-              <span
-                role="button"
-                tabIndex={-1}
+              <IconButton
+                type="button"
                 aria-label={p.pinned ? `Unpin ${p.label}` : `Pin ${p.label}`}
                 title={p.pinned ? "Unpin" : "Pin so it is never evicted"}
-                className="qz-shortcut"
                 onClick={() => setPinned(p.path, !p.pinned)}
               >
                 {p.pinned ? "★" : "☆"}
-              </span>
+              </IconButton>
             </div>
           ))}
         </div>

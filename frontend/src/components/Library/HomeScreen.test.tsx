@@ -3,6 +3,7 @@
 // about it staying non-destructive and never inventing a signal it cannot know.
 
 import { act, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import HomeScreen, { stateBadge } from "./HomeScreen";
@@ -189,6 +190,42 @@ describe("HomeScreen", () => {
     expect(screen.getByText("xrd")).toBeInTheDocument();
     screen.getByRole("button", { name: "Pin xrd" }).click();
     expect(useWorkingPaths.getState().paths[0].pinned).toBe(true);
+  });
+
+  // The recent ✕ and the working-path ☆ were <span role="button"> with no
+  // (or a -1) tabIndex, so neither could be reached from the keyboard.
+  describe("keyboard access to the row controls", () => {
+    const tabTo = async (user: ReturnType<typeof userEvent.setup>, target: HTMLElement) => {
+      for (let k = 0; k < 60 && document.activeElement !== target; k++) await user.tab();
+    };
+
+    it("Tab reaches the recent-file remove control, and removing keeps focus off <body>", async () => {
+      // Removing the entry unmounts the focused button. Focus left on <body>
+      // arms the global Delete shortcut, which removes the active dataset.
+      const user = userEvent.setup();
+      useApp.setState({ recent });
+      render(<HomeScreen onImport={noop} />);
+      const remove = screen.getByRole("button", { name: "Remove scan.dat from recent" });
+      await tabTo(user, remove);
+      expect(remove).toHaveFocus();
+      await user.keyboard("{Enter}");
+      expect(useApp.getState().recent).toEqual([]);
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
+    it("Tab reaches the pin toggle and Enter pins the path", async () => {
+      const user = userEvent.setup();
+      useWorkingPaths.setState({
+        paths: [{ path: "/data/xrd", label: "xrd", pinned: false, usedAt: 1 }],
+        current: "",
+      });
+      render(<HomeScreen onImport={noop} />);
+      const pin = screen.getByRole("button", { name: "Pin xrd" });
+      await tabTo(user, pin);
+      expect(pin).toHaveFocus();
+      await user.keyboard("{Enter}");
+      expect(useWorkingPaths.getState().paths[0].pinned).toBe(true);
+    });
   });
 
   it("reports autosave health, and shouts when it is failing", () => {

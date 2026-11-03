@@ -3,6 +3,7 @@
 // than silently drawing nothing, and removing a binding leaves the column alone.
 
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import ErrorRolesCard from "./ErrorRolesCard";
@@ -127,5 +128,40 @@ describe("ErrorRolesCard", () => {
     const axis = screen.getByTitle(/horizontally/) as HTMLSelectElement;
     fireEvent.change(axis, { target: { value: "x" } });
     expect(useApp.getState().datasets[0].errorRoles?.[0].axis).toBe("x");
+  });
+
+  // The row's ✕ and ✓ were <span role="button">: ✕ had tabIndex={-1} and no
+  // key handler, so a keyboard user could not remove a binding at all.
+  describe("keyboard access to the row controls", () => {
+    const live = () => useApp.getState().datasets[0];
+    const tabTo = async (user: ReturnType<typeof userEvent.setup>, target: HTMLElement) => {
+      for (let k = 0; k < 30 && document.activeElement !== target; k++) await user.tab();
+    };
+
+    it("Tab reaches the remove control and Enter removes the binding", async () => {
+      const user = userEvent.setup();
+      useApp.setState({ datasets: [ds(["M", "dM"], [{ channel: 1, target: 0, axis: "y", side: "both" }])] });
+      render(<ErrorRolesCard active={live()} />);
+      const remove = screen.getByRole("button", { name: /Remove error role/ });
+      await tabTo(user, remove);
+      expect(remove).toHaveFocus();
+      await user.keyboard("{Enter}");
+      expect(live().errorRoles).toEqual([]);
+    });
+
+    it("confirming from the keyboard does not drop focus to <body> when ✓ disappears", async () => {
+      // ✓ removes itself once the pairing is confirmed. Focus left on <body>
+      // arms the global Delete shortcut, which removes the active dataset.
+      const user = userEvent.setup();
+      useApp.setState({ datasets: [ds(["R", "err"], [{ channel: 1, target: 0, axis: "y", side: "both" }])] });
+      const { rerender } = render(<ErrorRolesCard active={live()} />);
+      const confirm = screen.getByRole("button", { name: "Confirm error role for err" });
+      await tabTo(user, confirm);
+      expect(confirm).toHaveFocus();
+      await user.keyboard(" ");
+      rerender(<ErrorRolesCard active={live()} />);
+      expect(screen.queryByRole("button", { name: /Confirm error role/ })).toBeNull();
+      expect(document.activeElement).not.toBe(document.body);
+    });
   });
 });

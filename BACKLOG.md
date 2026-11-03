@@ -167,8 +167,10 @@ PlotView↔sanitize is compile-time complete; promotion decomposition has no
 double-apply; export field semantics match the Stage (incl. shade alpha);
 zero console errors across the whole adversarial run; JSON.parse/floating-
 promise/cleanup classes all clean. Follow-ups booked, NOT fixed:
-`ErrorRolesCard`'s remove control is a `<span role="button">`, not
-keyboard-reachable (a11y gap, pre-existing); `SavedFiguresSection`'s delete
+~~`ErrorRolesCard`'s remove control is a `<span role="button">`, not
+keyboard-reachable (a11y gap, pre-existing)~~ (FIXED 2026-11-03, together
+with the same gap in its ✓ and in the home screen's recent ✕ / pin ☆; see
+`BUGS_AND_ISSUES.md` Completed); `SavedFiguresSection`'s delete
 button still ~31 px past the panel edge at the 160 px MINIMUM width
 (pre-existing "Editable" label-width constraint; fine at default);
 F2.1e's detached-session fallback branch in `fileCommands.ts` may be dead

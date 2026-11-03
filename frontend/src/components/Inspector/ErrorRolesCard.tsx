@@ -19,6 +19,7 @@ import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { Button, Select } from "../primitives";
 import Card from "../primitives/Card";
+import { IconButton } from "../primitives/IconButton";
 
 const SIDES: { value: ErrorSide; label: string }[] = [
   { value: "both", label: "± symmetric" },
@@ -118,30 +119,27 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
               title="Symmetric, or one half of an asymmetric pair"
               options={SIDES}
             />
-            <span
-              role="button"
-              tabIndex={-1}
+            {/* Real buttons, so both are in the Tab order and fire on
+                Enter/Space natively. Each one removes ITSELF (✕ drops the row,
+                ✓ disappears once the pairing is confirmed), so both go
+                through removeRowSafely to keep focus off <body>. */}
+            <IconButton
+              type="button"
               aria-label={`Remove error role for ${labels[r.channel]}`}
               title="Remove this binding (the column itself is untouched)"
-              className="qz-shortcut"
               onClick={() => removeRowSafely(containerRef.current, () => remove(i))}
             >
               ✕
-            </span>
+            </IconButton>
             {needsConfirm(r) && (
-              <span
-                role="button"
-                tabIndex={0}
+              <IconButton
+                type="button"
                 aria-label={`Confirm error role for ${labels[r.channel]}`}
                 title="Only column position suggests this pairing; confirm it so new figures apply it without asking."
-                className="qz-shortcut"
-                onClick={() => confirmRow(r)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") confirmRow(r);
-                }}
+                onClick={() => removeRowSafely(containerRef.current, () => confirmRow(r))}
               >
                 ✓
-              </span>
+              </IconButton>
             )}
           </div>
         ))
