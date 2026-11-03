@@ -2,7 +2,7 @@
 // working-path stores and the #32 recovery health — so the tests care most
 // about it staying non-destructive and never inventing a signal it cannot know.
 
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -225,6 +225,41 @@ describe("HomeScreen", () => {
       expect(pin).toHaveFocus();
       await user.keyboard("{Enter}");
       expect(useWorkingPaths.getState().paths[0].pinned).toBe(true);
+    });
+
+    it("unpinning a path that drops out of the shown six keeps focus off <body>", async () => {
+      // Unpinned paths sort by recency; the oldest one falls past the six shown,
+      // so the focused Unpin button unmounts.
+      const user = userEvent.setup();
+      const newer = Array.from({ length: 6 }, (_, k) => ({
+        path: `/data/p${k}`, label: `p${k}`, pinned: false, usedAt: 10 + k,
+      }));
+      useWorkingPaths.setState({
+        paths: [{ path: "/data/old", label: "old", pinned: true, usedAt: 1 }, ...newer],
+        current: "",
+      });
+      render(<HomeScreen onImport={noop} />);
+      const unpin = screen.getByRole("button", { name: "Unpin old" });
+      await tabTo(user, unpin);
+      expect(unpin).toHaveFocus();
+      await user.keyboard("{Enter}");
+      expect(screen.queryByRole("button", { name: /pin old$/i })).toBeNull();
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
+    it("absorbs Delete on a focused row control instead of letting it remove the dataset", () => {
+      useApp.setState({ recent });
+      useWorkingPaths.setState({
+        paths: [{ path: "/data/xrd", label: "xrd", pinned: false, usedAt: 1 }],
+        current: "",
+      });
+      render(<HomeScreen onImport={noop} />);
+      for (const name of ["Remove scan.dat from recent", "Pin xrd"]) {
+        const control = screen.getByRole("button", { name });
+        control.focus();
+        expect(fireEvent.keyDown(control, { key: "Delete" })).toBe(false); // defaultPrevented
+      }
+      expect(useApp.getState().recent).toHaveLength(1);
     });
   });
 

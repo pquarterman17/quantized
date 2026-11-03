@@ -170,7 +170,15 @@ promise/cleanup classes all clean. Follow-ups booked, NOT fixed:
 ~~`ErrorRolesCard`'s remove control is a `<span role="button">`, not
 keyboard-reachable (a11y gap, pre-existing)~~ (FIXED 2026-11-03, together
 with the same gap in its ✓ and in the home screen's recent ✕ / pin ☆; see
-`BUGS_AND_ISSUES.md` Completed); `SavedFiguresSection`'s delete
+`BUGS_AND_ISSUES.md` Completed). Booked by that fix, NOT fixed: the ✕
+`IconButton`s in the Region shades, Shapes, Reference lines and Annotations
+cards (and their Publication Preview panel equivalents) are focusable, and
+Delete/Backspace on one reaches the global Delete shortcut, which removes the
+active DATASET. `absorbStrayDeleteOnContainer` only absorbs a Delete aimed at
+the container itself. Widening that shared helper is not a safe one-liner: it
+also guards `Toaster`, `SmartFoldersSection` and `CollectionsSection`, where a
+Delete may be intended; per-button absorption, as in `ErrorRolesCard`, is the
+proven pattern. `SavedFiguresSection`'s delete
 button still ~31 px past the panel edge at the 160 px MINIMUM width
 (pre-existing "Editable" label-width constraint; fine at default);
 F2.1e's detached-session fallback branch in `fileCommands.ts` may be dead

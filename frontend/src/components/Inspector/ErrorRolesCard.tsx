@@ -122,21 +122,25 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
             {/* Real buttons, so both are in the Tab order and fire on
                 Enter/Space natively. Each one removes ITSELF (✕ drops the row,
                 ✓ disappears once the pairing is confirmed), so both go
-                through removeRowSafely to keep focus off <body>. */}
+                through removeRowSafely to keep focus off <body>. Delete or
+                Backspace on a focused one is absorbed: otherwise it reaches
+                the global Delete shortcut and removes the whole dataset. */}
             <IconButton
               type="button"
-              aria-label={`Remove error role for ${labels[r.channel]}`}
+              aria-label={`Remove error role for ${labels[r.channel] ?? `ch ${r.channel}`}`}
               title="Remove this binding (the column itself is untouched)"
               onClick={() => removeRowSafely(containerRef.current, () => remove(i))}
+              onKeyDown={absorbStrayDeleteOnContainer}
             >
               ✕
             </IconButton>
             {needsConfirm(r) && (
               <IconButton
                 type="button"
-                aria-label={`Confirm error role for ${labels[r.channel]}`}
+                aria-label={`Confirm error role for ${labels[r.channel] ?? `ch ${r.channel}`}`}
                 title="Only column position suggests this pairing; confirm it so new figures apply it without asking."
                 onClick={() => removeRowSafely(containerRef.current, () => confirmRow(r))}
+                onKeyDown={absorbStrayDeleteOnContainer}
               >
                 ✓
               </IconButton>

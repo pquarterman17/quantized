@@ -138,15 +138,36 @@ describe("ErrorRolesCard", () => {
       for (let k = 0; k < 30 && document.activeElement !== target; k++) await user.tab();
     };
 
-    it("Tab reaches the remove control and Enter removes the binding", async () => {
+    it("Tab reaches the remove control, Enter removes the binding, and focus stays off <body>", async () => {
       const user = userEvent.setup();
       useApp.setState({ datasets: [ds(["M", "dM"], [{ channel: 1, target: 0, axis: "y", side: "both" }])] });
-      render(<ErrorRolesCard active={live()} />);
+      const { rerender } = render(<ErrorRolesCard active={live()} />);
       const remove = screen.getByRole("button", { name: /Remove error role/ });
       await tabTo(user, remove);
       expect(remove).toHaveFocus();
       await user.keyboard("{Enter}");
       expect(live().errorRoles).toEqual([]);
+      rerender(<ErrorRolesCard active={live()} />);
+      expect(screen.queryByRole("button", { name: /Remove error role/ })).toBeNull();
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
+    it("absorbs Delete on a focused remove control instead of letting it remove the dataset", () => {
+      // Now that ✕ takes focus, an unabsorbed Delete would reach the global
+      // Delete shortcut and remove the active DATASET, not this one binding.
+      useApp.setState({ datasets: [ds(["M", "dM"], [{ channel: 1, target: 0, axis: "y", side: "both" }])] });
+      render(<ErrorRolesCard active={live()} />);
+      const remove = screen.getByRole("button", { name: /Remove error role/ });
+      remove.focus();
+      expect(fireEvent.keyDown(remove, { key: "Delete" })).toBe(false); // defaultPrevented
+      expect(fireEvent.keyDown(remove, { key: "Backspace" })).toBe(false);
+      expect(live().errorRoles).toHaveLength(1);
+    });
+
+    it("names a binding whose column is gone the way the row shows it", () => {
+      useApp.setState({ datasets: [ds(["M", "dM"], [{ channel: 5, target: 0, axis: "y", side: "both" }])] });
+      render(<ErrorRolesCard active={live()} />);
+      expect(screen.getByRole("button", { name: "Remove error role for ch 5" })).toBeInTheDocument();
     });
 
     it("confirming from the keyboard does not drop focus to <body> when ✓ disappears", async () => {

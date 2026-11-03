@@ -192,12 +192,15 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
                     entry unmounts the button itself, so removeRowSafely
                     moves focus to homeRef first; homeRef absorbs a stray
                     Delete. Without that, focus would fall to <body> and arm
-                    the global Delete shortcut (Retrospective-audit P2). */}
+                    the global Delete shortcut (Retrospective-audit P2). The
+                    button absorbs Delete/Backspace aimed at itself for the
+                    same reason. */}
                 <IconButton
                   type="button"
                   aria-label={`Remove ${r.name} from recent`}
                   title="Remove from recent"
                   onClick={() => removeRowSafely(homeRef.current, () => removeRecent(r))}
+                  onKeyDown={absorbStrayDeleteOnContainer}
                 >
                   ✕
                 </IconButton>
@@ -227,11 +230,15 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
               >
                 <span className="qzk-menu-trunc">{p.label}</span>
               </button>
+              {/* Unpinning re-sorts the list and can push this path out of the
+                  six shown (or evict it), unmounting the focused button, so it
+                  goes through removeRowSafely like the recent ✕ above. */}
               <IconButton
                 type="button"
                 aria-label={p.pinned ? `Unpin ${p.label}` : `Pin ${p.label}`}
                 title={p.pinned ? "Unpin" : "Pin so it is never evicted"}
-                onClick={() => setPinned(p.path, !p.pinned)}
+                onClick={() => removeRowSafely(homeRef.current, () => setPinned(p.path, !p.pinned))}
+                onKeyDown={absorbStrayDeleteOnContainer}
               >
                 {p.pinned ? "★" : "☆"}
               </IconButton>
