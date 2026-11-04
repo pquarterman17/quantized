@@ -225,6 +225,8 @@ describe("HomeScreen", () => {
       expect(pin).toHaveFocus();
       await user.keyboard("{Enter}");
       expect(useWorkingPaths.getState().paths[0].pinned).toBe(true);
+      // The row is still shown, so focus comes back to the toggle itself.
+      expect(screen.getByRole("button", { name: "Unpin xrd" })).toHaveFocus();
     });
 
     it("unpinning a path that drops out of the shown six keeps focus off <body>", async () => {
@@ -259,7 +261,9 @@ describe("HomeScreen", () => {
         control.focus();
         expect(fireEvent.keyDown(control, { key: "Delete" })).toBe(false); // defaultPrevented
       }
-      expect(useApp.getState().recent).toHaveLength(1);
+      // No dataset to check here: Home only shows over an empty Library. The
+      // end-to-end check against the real global listener is in
+      // ErrorRolesCard.test.tsx.
     });
   });
 

@@ -2,12 +2,13 @@
 // happens when ASKED (never silently), a one-sided binding is called out rather
 // than silently drawing nothing, and removing a binding leaves the column alone.
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, renderHook, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import ErrorRolesCard from "./ErrorRolesCard";
 import { useApp } from "../../store/useApp";
+import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 import type { Dataset } from "../../lib/types";
 
 const ds = (labels: string[], errorRoles?: Dataset["errorRoles"]): Dataset => ({
@@ -155,13 +156,22 @@ describe("ErrorRolesCard", () => {
     it("absorbs Delete on a focused remove control instead of letting it remove the dataset", () => {
       // Now that ✕ takes focus, an unabsorbed Delete would reach the global
       // Delete shortcut and remove the active DATASET, not this one binding.
-      useApp.setState({ datasets: [ds(["M", "dM"], [{ channel: 1, target: 0, axis: "y", side: "both" }])] });
+      // The real global listener is mounted, so this checks that outcome.
+      useApp.setState({
+        datasets: [ds(["M", "dM"], [{ channel: 1, target: 0, axis: "y", side: "both" }])],
+        confirmRemove: false,
+      });
+      renderHook(() => useGlobalShortcuts());
       render(<ErrorRolesCard active={live()} />);
       const remove = screen.getByRole("button", { name: /Remove error role/ });
       remove.focus();
       expect(fireEvent.keyDown(remove, { key: "Delete" })).toBe(false); // defaultPrevented
       expect(fireEvent.keyDown(remove, { key: "Backspace" })).toBe(false);
+      expect(useApp.getState().datasets).toHaveLength(1);
       expect(live().errorRoles).toHaveLength(1);
+      // Control: the same key from <body> does remove it, so the listener is live.
+      fireEvent.keyDown(document.body, { key: "Delete" });
+      expect(useApp.getState().datasets).toHaveLength(0);
     });
 
     it("names a binding whose column is gone the way the row shows it", () => {

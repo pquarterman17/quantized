@@ -15,6 +15,7 @@
 // share that is merely unmounted must never be treated as a deleted file.
 
 import { useEffect, useId, useState, useRef } from "react";
+import { flushSync } from "react-dom";
 import { plural } from "../../lib/plural";
 
 import { pathState, type PathState } from "../../lib/desktopBridge";
@@ -230,14 +231,21 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
               >
                 <span className="qzk-menu-trunc">{p.label}</span>
               </button>
-              {/* Unpinning re-sorts the list and can push this path out of the
+              {/* Toggling re-sorts the list and can push this path out of the
                   six shown (or evict it), unmounting the focused button, so it
-                  goes through removeRowSafely like the recent ✕ above. */}
+                  goes through removeRowSafely like the recent ✕ above. The
+                  toggle is committed synchronously so that, when the row is
+                  still shown (the usual case), focus goes straight back to
+                  this button instead of staying on the whole home screen. */}
               <IconButton
                 type="button"
                 aria-label={p.pinned ? `Unpin ${p.label}` : `Pin ${p.label}`}
                 title={p.pinned ? "Unpin" : "Pin so it is never evicted"}
-                onClick={() => removeRowSafely(homeRef.current, () => setPinned(p.path, !p.pinned))}
+                onClick={(e) => {
+                  const pin = e.currentTarget;
+                  removeRowSafely(homeRef.current, () => flushSync(() => setPinned(p.path, !p.pinned)));
+                  if (pin.isConnected) pin.focus();
+                }}
                 onKeyDown={absorbStrayDeleteOnContainer}
               >
                 {p.pinned ? "★" : "☆"}
