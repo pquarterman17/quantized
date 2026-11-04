@@ -15,6 +15,7 @@
 // share that is merely unmounted must never be treated as a deleted file.
 
 import { useEffect, useId, useState, useRef } from "react";
+import { flushSync } from "react-dom";
 import { plural } from "../../lib/plural";
 
 import { pathState, type PathState } from "../../lib/desktopBridge";
@@ -28,6 +29,7 @@ import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGu
 import { nextDatasetId, useApp } from "../../store/useApp";
 import { useRecentProjects } from "../../store/recentProjects";
 import { useWorkingPaths } from "../../store/workingPaths";
+import { IconButton } from "../primitives/IconButton";
 
 /** Short badge for a source's reachability. `ok`/`unknown` render nothing —
  *  a badge on every healthy row is noise, and "unknown" (no desktop bridge to
@@ -187,18 +189,22 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
                   </span>
                 )}
                 <span className="qz-shortcut">{relativeTime(r.at, Date.now())}</span>
-                {/* Retrospective-audit P2 fix: no tabIndex — a click on a
-                    tabindex'd span focuses it, and this click unmounts the
-                    span: focus fell to <body>, arming the global Delete. */}
-                <span
-                  role="button"
+                {/* A real button, so it is keyboard-reachable. Removing the
+                    entry unmounts the button itself, so removeRowSafely
+                    moves focus to homeRef first; homeRef absorbs a stray
+                    Delete. Without that, focus would fall to <body> and arm
+                    the global Delete shortcut (Retrospective-audit P2). The
+                    button absorbs Delete/Backspace aimed at itself for the
+                    same reason. */}
+                <IconButton
+                  type="button"
                   aria-label={`Remove ${r.name} from recent`}
                   title="Remove from recent"
-                  className="qz-shortcut"
                   onClick={() => removeRowSafely(homeRef.current, () => removeRecent(r))}
+                  onKeyDown={absorbStrayDeleteOnContainer}
                 >
                   ✕
-                </span>
+                </IconButton>
               </div>
             );
           })}
@@ -225,16 +231,25 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
               >
                 <span className="qzk-menu-trunc">{p.label}</span>
               </button>
-              <span
-                role="button"
-                tabIndex={-1}
+              {/* Toggling re-sorts the list and can push this path out of the
+                  six shown (or evict it), unmounting the focused button, so it
+                  goes through removeRowSafely like the recent ✕ above. The
+                  toggle is committed synchronously so that, when the row is
+                  still shown (the usual case), focus goes straight back to
+                  this button instead of staying on the whole home screen. */}
+              <IconButton
+                type="button"
                 aria-label={p.pinned ? `Unpin ${p.label}` : `Pin ${p.label}`}
                 title={p.pinned ? "Unpin" : "Pin so it is never evicted"}
-                className="qz-shortcut"
-                onClick={() => setPinned(p.path, !p.pinned)}
+                onClick={(e) => {
+                  const pin = e.currentTarget;
+                  removeRowSafely(homeRef.current, () => flushSync(() => setPinned(p.path, !p.pinned)));
+                  if (pin.isConnected) pin.focus();
+                }}
+                onKeyDown={absorbStrayDeleteOnContainer}
               >
                 {p.pinned ? "★" : "☆"}
-              </span>
+              </IconButton>
             </div>
           ))}
         </div>

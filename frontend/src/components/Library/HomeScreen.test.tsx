@@ -2,7 +2,8 @@
 // working-path stores and the #32 recovery health — so the tests care most
 // about it staying non-destructive and never inventing a signal it cannot know.
 
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import HomeScreen, { stateBadge } from "./HomeScreen";
@@ -189,6 +190,81 @@ describe("HomeScreen", () => {
     expect(screen.getByText("xrd")).toBeInTheDocument();
     screen.getByRole("button", { name: "Pin xrd" }).click();
     expect(useWorkingPaths.getState().paths[0].pinned).toBe(true);
+  });
+
+  // The recent ✕ and the working-path ☆ were <span role="button"> with no
+  // (or a -1) tabIndex, so neither could be reached from the keyboard.
+  describe("keyboard access to the row controls", () => {
+    const tabTo = async (user: ReturnType<typeof userEvent.setup>, target: HTMLElement) => {
+      for (let k = 0; k < 60 && document.activeElement !== target; k++) await user.tab();
+    };
+
+    it("Tab reaches the recent-file remove control, and removing keeps focus off <body>", async () => {
+      // Removing the entry unmounts the focused button. Focus left on <body>
+      // arms the global Delete shortcut, which removes the active dataset.
+      const user = userEvent.setup();
+      useApp.setState({ recent });
+      render(<HomeScreen onImport={noop} />);
+      const remove = screen.getByRole("button", { name: "Remove scan.dat from recent" });
+      await tabTo(user, remove);
+      expect(remove).toHaveFocus();
+      await user.keyboard("{Enter}");
+      expect(useApp.getState().recent).toEqual([]);
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
+    it("Tab reaches the pin toggle and Enter pins the path", async () => {
+      const user = userEvent.setup();
+      useWorkingPaths.setState({
+        paths: [{ path: "/data/xrd", label: "xrd", pinned: false, usedAt: 1 }],
+        current: "",
+      });
+      render(<HomeScreen onImport={noop} />);
+      const pin = screen.getByRole("button", { name: "Pin xrd" });
+      await tabTo(user, pin);
+      expect(pin).toHaveFocus();
+      await user.keyboard("{Enter}");
+      expect(useWorkingPaths.getState().paths[0].pinned).toBe(true);
+      // The row is still shown, so focus comes back to the toggle itself.
+      expect(screen.getByRole("button", { name: "Unpin xrd" })).toHaveFocus();
+    });
+
+    it("unpinning a path that drops out of the shown six keeps focus off <body>", async () => {
+      // Unpinned paths sort by recency; the oldest one falls past the six shown,
+      // so the focused Unpin button unmounts.
+      const user = userEvent.setup();
+      const newer = Array.from({ length: 6 }, (_, k) => ({
+        path: `/data/p${k}`, label: `p${k}`, pinned: false, usedAt: 10 + k,
+      }));
+      useWorkingPaths.setState({
+        paths: [{ path: "/data/old", label: "old", pinned: true, usedAt: 1 }, ...newer],
+        current: "",
+      });
+      render(<HomeScreen onImport={noop} />);
+      const unpin = screen.getByRole("button", { name: "Unpin old" });
+      await tabTo(user, unpin);
+      expect(unpin).toHaveFocus();
+      await user.keyboard("{Enter}");
+      expect(screen.queryByRole("button", { name: /pin old$/i })).toBeNull();
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
+    it("absorbs Delete on a focused row control instead of letting it remove the dataset", () => {
+      useApp.setState({ recent });
+      useWorkingPaths.setState({
+        paths: [{ path: "/data/xrd", label: "xrd", pinned: false, usedAt: 1 }],
+        current: "",
+      });
+      render(<HomeScreen onImport={noop} />);
+      for (const name of ["Remove scan.dat from recent", "Pin xrd"]) {
+        const control = screen.getByRole("button", { name });
+        control.focus();
+        expect(fireEvent.keyDown(control, { key: "Delete" })).toBe(false); // defaultPrevented
+      }
+      // No dataset to check here: Home only shows over an empty Library. The
+      // end-to-end check against the real global listener is in
+      // ErrorRolesCard.test.tsx.
+    });
   });
 
   it("reports autosave health, and shouts when it is failing", () => {

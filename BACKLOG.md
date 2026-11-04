@@ -167,8 +167,23 @@ PlotView↔sanitize is compile-time complete; promotion decomposition has no
 double-apply; export field semantics match the Stage (incl. shade alpha);
 zero console errors across the whole adversarial run; JSON.parse/floating-
 promise/cleanup classes all clean. Follow-ups booked, NOT fixed:
-`ErrorRolesCard`'s remove control is a `<span role="button">`, not
-keyboard-reachable (a11y gap, pre-existing); `SavedFiguresSection`'s delete
+~~`ErrorRolesCard`'s remove control is a `<span role="button">`, not
+keyboard-reachable (a11y gap, pre-existing)~~ (FIXED 2026-11-03, together
+with the same gap in its ✓ and in the home screen's recent ✕ / pin ☆; see
+`BUGS_AND_ISSUES.md` Completed). Booked by that fix, NOT fixed: the ✕
+`IconButton`s in the Inspector's Region shades, Shapes, Reference lines and
+Annotations cards are focusable, and Delete/Backspace on one reaches the
+global Delete shortcut, which removes the active DATASET. (Their Publication
+Preview panel equivalents are safe: that window is a `ToolWindow`, where the
+global Delete stands down.) `absorbStrayDeleteOnContainer` on the card's
+container only absorbs a Delete aimed at the container itself. Widening that
+shared helper is not a safe one-liner: it also guards `Toaster`,
+`SmartFoldersSection` and `CollectionsSection`, where a Delete may be
+intended; per-button absorption, as in `ErrorRolesCard`, is the proven
+pattern. The root-cause alternative is to narrow the global Delete so that a
+focused control never triggers it (only `<body>` or the Library would); that
+needs an audit of every flow that relies on the current behaviour first.
+`SavedFiguresSection`'s delete
 button still ~31 px past the panel edge at the 160 px MINIMUM width
 (pre-existing "Editable" label-width constraint; fine at default);
 F2.1e's detached-session fallback branch in `fileCommands.ts` may be dead
