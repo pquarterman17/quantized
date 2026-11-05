@@ -29,9 +29,11 @@ const data: DataStruct = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(statsDescriptive).mockResolvedValue({
-    mean: 5, std: 1, min: 1, max: 9, median: 5, N: 3,
-  });
+  // N is the length of the array asked about, so the footer's N row shows
+  // which subset each column's stats were fetched for (see footerCounts).
+  vi.mocked(statsDescriptive).mockImplementation(async (values: number[]) => ({
+    mean: 5, std: 1, min: 1, max: 9, median: 5, N: values.length,
+  }));
   useApp.setState({
     datasets: [{ id: "d1", name: "scan.dat", data }],
     activeId: "d1",
@@ -96,6 +98,14 @@ describe("Worksheet context menus", () => {
   });
 });
 
+/** The stats footer's N row, one entry per column (x first). It renders only
+ *  once every column's fetch has resolved, so waiting on it waits on the
+ *  fetched STATE rather than on the statsDescriptive mock being called. */
+function footerCounts(): string[] {
+  const row = screen.queryByRole("rowheader", { name: "N" })?.closest('[role="row"]');
+  return [...(row?.querySelectorAll('[role="gridcell"]') ?? [])].map((c) => c.textContent ?? "");
+}
+
 describe("Worksheet column statistics", () => {
   it("shows no stats footer until toggled", () => {
     render(<Worksheet />);
@@ -106,7 +116,8 @@ describe("Worksheet column statistics", () => {
     render(<Worksheet />);
     fireEvent.click(screen.getByRole("button", { name: /Stats/ }));
 
-    await waitFor(() => expect(statsDescriptive).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(footerCounts()).toEqual(["3", "3", "3"]));
+    expect(statsDescriptive).toHaveBeenCalledTimes(3);
     expect(statsDescriptive).toHaveBeenCalledWith([1, 2, 3]); // x column
     expect(statsDescriptive).toHaveBeenCalledWith([10, 40, 11]); // channel A
     expect(statsDescriptive).toHaveBeenCalledWith([20, 50, 12]); // channel B
@@ -159,7 +170,8 @@ describe("Worksheet row filter", () => {
     render(<Worksheet />);
     fireEvent.click(screen.getByRole("button", { name: /Stats/ }));
     applyFilter("0", "15"); // keep only row index 1 → x=[2], A=[40], B=[50]
-    await waitFor(() => expect(statsDescriptive).toHaveBeenCalledWith([40]));
+    await waitFor(() => expect(footerCounts()).toEqual(["1", "1", "1"]));
+    expect(statsDescriptive).toHaveBeenCalledWith([40]);
     expect(statsDescriptive).toHaveBeenCalledWith([2]);
     expect(statsDescriptive).toHaveBeenCalledWith([50]);
   });
@@ -228,7 +240,8 @@ describe("Worksheet row masking", () => {
     render(<Worksheet />);
     fireEvent.click(screen.getByRole("button", { name: /Stats/ }));
     maskRow1(); // leaves rows 0, 2
-    await waitFor(() => expect(statsDescriptive).toHaveBeenCalledWith([10, 11])); // A minus masked
+    await waitFor(() => expect(footerCounts()).toEqual(["2", "2", "2"]));
+    expect(statsDescriptive).toHaveBeenCalledWith([10, 11]); // A minus masked
     expect(statsDescriptive).toHaveBeenCalledWith([1, 3]); // x minus masked
     expect(statsDescriptive).toHaveBeenCalledWith([20, 12]); // B minus masked
   });

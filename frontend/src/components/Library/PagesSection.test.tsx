@@ -150,12 +150,13 @@ describe("PagesSection", () => {
       });
       render(<PagesSection />);
       fireEvent.click(screen.getByTitle('export "Ready page" without reopening it'));
-      await waitFor(() => expect(exportFigurePage).toHaveBeenCalledTimes(1));
+      // Done once the export reports itself; then check what was sent.
+      await waitFor(() => expect(useApp.getState().status).toBe("exported figure_page.svg"));
+      expect(exportFigurePage).toHaveBeenCalledTimes(1);
       const body = vi.mocked(exportFigurePage).mock.calls[0][0];
       expect(body.fmt).toBe("svg");
       expect(body.dpi).toBe(450);
       expect(body.panels).toHaveLength(1);
-      await waitFor(() => expect(useApp.getState().status).toBe("exported figure_page.svg"));
     });
 
     it("shows a status instead of exporting when the page has no assigned panels", async () => {
