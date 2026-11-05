@@ -1805,7 +1805,6 @@ const WEAK_WAIT_PINS: Record<string, number> = {
   "/components/workshops/figurepage/useFigurePage.test.ts": 12,
   "/components/workshops/multivar/MultivarPanel.test.tsx": 13,
   "/components/workshops/fityx/FitYByXPanel.test.tsx": 8,
-  "/components/Inspector/CorrectionsCard.test.tsx": 9,
   "/components/workshops/graphbuilder/PlotSpecBar.test.tsx": 3,
   "/components/workshops/outliers/OutlierScreeningPanel.test.tsx": 5,
   "/components/workshops/distribution/useDistribution.test.ts": 5,
