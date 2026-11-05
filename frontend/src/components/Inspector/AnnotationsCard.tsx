@@ -65,7 +65,9 @@ export default function AnnotationsCard() {
       {/* tabIndex=-1: an invisible, programmatic-only focus anchor — see
        *  lib/focusGuard's doc. Not a new Tab stop. onKeyDown absorbs a stray
        *  Delete/Backspace that lands here right after a removal, before it
-       *  can bubble to useGlobalShortcuts' window listener. */}
+       *  can bubble to useGlobalShortcuts' window listener. Each remove
+       *  button absorbs a Delete aimed at itself the same way: a focused
+       *  button is not an editing target either. */}
       <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer}>
         {annotations.map((a) => (
           <div key={a.id} className="qz-meta-row" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -113,6 +115,7 @@ export default function AnnotationsCard() {
                 aria-label="Remove annotation"
                 title="Remove"
                 onClick={() => removeRowSafely(containerRef.current, () => removeAnnotation(a.id))}
+                onKeyDown={absorbStrayDeleteOnContainer}
               >
                 ✕
               </IconButton>

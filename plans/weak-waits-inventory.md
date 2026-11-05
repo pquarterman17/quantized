@@ -15,14 +15,22 @@ commit.
 
 | Metric | Count at triage (2026-08-10) | Now |
 |--------|------------------------------|-----|
-| Total matches found | 124 | 104 |
-| SAFE (final assertion or mock-only checks) | 26 | 26 |
-| SUSPECT (depends on awaited call's resolved value) | 98 | 78 |
-| **% SUSPECT** | **79%** | **75%** |
+| Total matches found | 124 | 92 (sum of the ratchet pins, 2026-11-05) |
+| SAFE (final assertion or mock-only checks) | 26 | 22\* |
+| SUSPECT (depends on awaited call's resolved value) | 98 | 73\* |
+| **% SUSPECT** | **79%** | **~77%\*** |
+
+\*Last classified split, minus `CorrectionsCard.test.tsx`'s 4 SAFE and 5
+SUSPECT sites. It adds up to 95, three more than the measured total: three
+sites were removed elsewhere without this table being updated, and they
+have not been re-classified.
 
 **Progress under task 5's standing rule:** `components/workshops/figurebuilder`
 cleared 2026-08-12 (22 → 0) while that file was being edited for the
-Publication Preview drift-subscription fix. No directory has been scheduled
+Publication Preview drift-subscription fix. `components/Inspector`'s
+`CorrectionsCard.test.tsx` cleared 2026-11-05 (9 → 0, pin removed): every
+site now waits for Apply to re-enable, which happens only after the API call
+and any relabel have finished. No directory has been scheduled
 as a campaign; this is opportunistic clearing only, which is the whole design
 of task 5.
 
@@ -33,15 +41,11 @@ of task 5.
 
 ## SUSPECT entries by directory
 
-### components/Inspector (5 suspect)
+### components/Inspector (0 suspect; cleared 2026-11-05)
 
-| File | Line | Mock | Context |
-|------|------|------|---------|
-| CorrectionsCard.test.tsx | 136 | applyCorrectionsApi | `expect(params.yScale).toBe(1000);` |
-| CorrectionsCard.test.tsx | 146 | applyCorrectionsApi | `expect(vi.mocked(applyCorrectionsApi).mock.calls[0][0].params.xScale).toBe(0.1);` |
-| CorrectionsCard.test.tsx | 153 | applyCorrectionsApi | `expect(params.xScale).toBeUndefined();` |
-| CorrectionsCard.test.tsx | 223 | applyCorrectionsApi | `await waitFor(() => expect(useApp.getState().yAxisLabel).toBe(...));` |
-| CorrectionsCard.test.tsx | 234 | applyCorrectionsApi | `expect(useApp.getState().yAxisLabel).toBe("original");` |
+All five `CorrectionsCard.test.tsx` entries, plus its four SAFE sites, now
+wait on the Apply button re-enabling instead of on the `applyCorrectionsApi`
+mock.
 
 ### components/Library (2 suspect)
 
