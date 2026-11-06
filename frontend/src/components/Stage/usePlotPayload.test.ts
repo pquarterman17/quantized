@@ -178,7 +178,8 @@ describe("usePlotPayload — P3.4 zoom-refetch residual", () => {
         }),
     );
     rerender(baseParams({ xLim: [1, 2] }));
-    await waitFor(() => expect(fetchPlotMock).toHaveBeenCalledTimes(2));
+    // The slow windowed request is in flight once its resolver exists.
+    await waitFor(() => expect(resolveWindowed).toBeDefined());
 
     // The user resets to full view BEFORE the slow windowed response arrives.
     rerender(baseParams({ xLim: null }));
@@ -206,7 +207,8 @@ describe("usePlotPayload — P3.4 zoom-refetch residual", () => {
         }),
     );
     rerender(baseParams({ xLim: [1, 2] }));
-    await waitFor(() => expect(fetchPlotMock).toHaveBeenCalledTimes(2));
+    // The first windowed request is in flight once its resolver exists.
+    await waitFor(() => expect(resolveFirstWindow).toBeDefined());
 
     // The user zooms again before the first windowed response lands.
     fetchPlotMock.mockResolvedValueOnce(payloadFor("second-window", true, [3, 4]));

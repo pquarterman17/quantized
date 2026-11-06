@@ -514,8 +514,8 @@ describe("useBaseline anchor method (GOTO #2)", () => {
     expect(baselineAnchor).not.toHaveBeenCalled(); // 1 anchor: no preview yet
     act(() => useApp.getState().baselineAnchorEdit!.addAnchor(4, 13));
 
-    await waitFor(() => expect(baselineAnchor).toHaveBeenCalledTimes(1));
-    expect(useApp.getState().baselineOverlay).not.toBeNull();
+    await waitFor(() => expect(useApp.getState().baselineOverlay).toEqual({ datasetId: "d1", y: [10, 11, 12, 13] }));
+    expect(baselineAnchor).toHaveBeenCalledTimes(1);
   });
 
   it("compute with fewer than 2 anchors errors without calling the API", async () => {

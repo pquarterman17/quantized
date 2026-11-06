@@ -134,3 +134,20 @@ def test_adjust_pvalues_errors() -> None:
         adjust_pvalues([1.5])
     with pytest.raises(ValueError, match="at least one"):
         adjust_pvalues([])
+
+
+def test_anova2_zero_error_variance_says_why_instead_of_dividing_by_zero() -> None:
+    # Identical replicates in every cell leave MS_error = 0, so every F is
+    # undefined. This used to raise ZeroDivisionError, which reached the user
+    # as "float division by zero".
+    cells = [[[1.0, 1.0], [2.0, 2.0]], [[3.0, 3.0], [5.0, 5.0]]]
+    with pytest.raises(ValueError, match="error variance is zero"):
+        anova2(cells)
+
+
+def test_anova2_additive_data_without_replicates_also_says_why() -> None:
+    # n = 1 moves the interaction into the error; perfectly additive data
+    # leaves that error at zero too.
+    cells = [[[1.0], [2.0]], [[3.0], [4.0]]]
+    with pytest.raises(ValueError, match="error variance is zero"):
+        anova2(cells)

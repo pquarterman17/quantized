@@ -38,6 +38,12 @@ import type { KeyboardEvent } from "react";
 //     selected block, a Figure Page slot); a post-removal focus anchor is
 //     just one more such component, its "own selection" being empty.
 //
+// The same absorber also goes directly on a focusable row control, such as
+// ErrorRolesCard's ✕ and ✓ buttons. There, `e.target === e.currentTarget`
+// means "Delete pressed while this button has focus". A focused button is
+// not an editing target either, so without it that Delete removes the active
+// dataset.
+//
 // `container` needs `tabIndex={-1}` so `.focus()` is legal (it stays out of
 // the normal Tab order — a safety-net landing spot, not a new stop). Neither
 // helper touches useGlobalShortcuts' global Delete semantics — Delete-on-body

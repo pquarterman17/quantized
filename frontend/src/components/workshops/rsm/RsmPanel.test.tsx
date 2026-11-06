@@ -2,7 +2,7 @@
 // eps_parallel (near-symmetric reflection) must render the backend's
 // reason, not a bare "—" that reads as "not computed yet".
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DataStruct, RsmPeak, RsmStrainResponse } from "../../../lib/types";
@@ -89,10 +89,10 @@ beforeEach(() => {
 async function findPeaksAndComputeStrain(): Promise<void> {
   render(<RsmPanel />);
   fireEvent.click(screen.getByRole("button", { name: "Find peaks" }));
-  await waitFor(() => expect(analyzeRsmMock).toHaveBeenCalled());
+  // The strain button appears once the peak analysis has resolved; callers
+  // then wait on the rendered strain result itself.
   const strainButton = await screen.findByRole("button", { name: "Compute strain →" });
   fireEvent.click(strainButton);
-  await waitFor(() => expect(rsmStrainMock).toHaveBeenCalled());
 }
 
 describe("RsmPanel — degenerate eps_parallel (RSM_CUTS_PLAN #23)", () => {

@@ -97,12 +97,16 @@ describe("PlotSpecBar — Save / Save As", () => {
   });
 
   it("Save As always prompts, even with an active spec, and cancel is a no-op", async () => {
-    vi.mocked(askParams).mockResolvedValueOnce(null);
+    // A cancel changes nothing, so there is no state to wait on for it alone.
+    // Save As again with a real name and wait for THAT: the two runs settle in
+    // order, so by then the cancelled one has finished too.
+    vi.mocked(askParams).mockResolvedValueOnce(null).mockResolvedValueOnce({ name: "Beta" });
     const props = baseProps();
     const { getByText } = render(<PlotSpecBar {...props} activeSpec={specA} />);
     fireEvent.click(getByText("Save As…"));
-    await waitFor(() => expect(askParams).toHaveBeenCalled());
-    expect(props.onSaveAs).not.toHaveBeenCalled();
+    fireEvent.click(getByText("Save As…"));
+    await waitFor(() => expect(props.onSaveAs).toHaveBeenCalledWith("Beta"));
+    expect(props.onSaveAs).toHaveBeenCalledTimes(1);
   });
 
   it("Save As prefills the active spec's name as the dialog default", async () => {
@@ -110,7 +114,7 @@ describe("PlotSpecBar — Save / Save As", () => {
     const props = baseProps();
     const { getByText } = render(<PlotSpecBar {...props} activeSpec={specA} />);
     fireEvent.click(getByText("Save As…"));
-    await waitFor(() => expect(askParams).toHaveBeenCalled());
+    await waitFor(() => expect(props.onSaveAs).toHaveBeenCalledWith("Alpha"));
     const fields = vi.mocked(askParams).mock.calls[0][1];
     expect(fields[0].default).toBe("Alpha");
   });
@@ -161,12 +165,14 @@ describe("PlotSpecBar — saved list", () => {
   });
 
   it("Delete confirms before calling onDelete; cancel keeps the entry", async () => {
-    vi.mocked(askConfirm).mockResolvedValueOnce(false);
+    // Same settle-on-a-following-real-action pattern as the Save As cancel.
+    vi.mocked(askConfirm).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
     const props = baseProps();
     const { getByLabelText } = render(<PlotSpecBar {...props} specs={[specA]} />);
     fireEvent.click(getByLabelText("Delete Alpha"));
-    await waitFor(() => expect(askConfirm).toHaveBeenCalled());
-    expect(props.onDelete).not.toHaveBeenCalled();
+    fireEvent.click(getByLabelText("Delete Alpha"));
+    await waitFor(() => expect(props.onDelete).toHaveBeenCalledWith("a"));
+    expect(props.onDelete).toHaveBeenCalledTimes(1);
   });
 
   it("Delete calls onDelete once confirmed", async () => {
