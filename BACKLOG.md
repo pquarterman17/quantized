@@ -194,6 +194,17 @@ tests in `figureBuilderCommand.test.ts` reach it by mocking
 
 ### Backend hardening rounds (standing — re-sweep as routes land)
 
+**Fourth round (2026-11-05).** A generated probe instead of a reading
+audit: every POST `/api` route (241) received bodies built from its own
+OpenAPI request schema in nine shapes (empty arrays, one row, all zeros,
+negatives, 1e300, and malformed datasets: ragged rows, row/time length
+mismatch, wrong-typed fields, duplicate labels and X). 2,133 requests, zero
+HTTP 500s; malformed input came back 4xx everywhere. Coverage limit: only 133
+routes ever returned a 200, so the other 108 rejected every generated body at
+validation and their internals were not exercised by this round. The probe
+was a throwaway script (scratch, not committed); rebuild it from this
+description for the next round.
+
 **Third round (2026-08-12, `872a26f`).** Audited ~29 route/calc modules added
 or substantially changed since the second round (RSM, outliers/varcomp,
 dataset/upload caches, database/sqlite, multivar/statplot exports,

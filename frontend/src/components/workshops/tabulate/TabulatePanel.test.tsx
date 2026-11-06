@@ -161,7 +161,9 @@ describe("TabulatePanel", () => {
     emitMock.mockRejectedValue(new Error("boom"));
     render(<TabulatePanel />);
     fireEvent.click(screen.getByRole("button", { name: "→ Report" }));
-    await waitFor(() => expect(emitMock).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(useToasts.getState().toasts.some((t) => t.kind === "danger" && t.msg.includes("boom"))).toBe(true),
+    );
     expect(useApp.getState().reports).toHaveLength(0);
   });
 });

@@ -148,8 +148,12 @@ describe("useVariability — nested grouping + fetch", () => {
     const { result } = renderHook(() => useVariability());
     await waitFor(() => expect(result.current.anova).not.toBeNull());
     vi.mocked(statsNestedAnova).mockClear();
+    // A distinguishable result, so the wait is on the re-fetched STATE.
+    const refetched = { ...ANOVA, grand_mean: 42 };
+    vi.mocked(statsNestedAnova).mockResolvedValue(refetched);
     act(() => result.current.setFactorACol(1));
-    await waitFor(() => expect(statsNestedAnova).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.anova).toEqual(refetched));
+    expect(statsNestedAnova).toHaveBeenCalled();
   });
 
   it("reports tooFewLevels and skips fetching when Factor A has under 2 levels", async () => {
