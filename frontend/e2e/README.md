@@ -131,6 +131,13 @@ matrix leg per engine. A manual run (`workflow_dispatch`) with
 macOS WKWebView the desktop app ships, so a green `webkit` leg is strong
 evidence for WKWebView, not proof.
 
+That job runs inside Microsoft's Playwright container image
+(`mcr.microsoft.com/playwright`), which already has every browser and its
+system libraries, so it never installs from the Ubuntu apt mirror. When a
+Playwright upgrade lands in `package-lock.json`, bump the image tag and
+`PW_IMAGE_VERSION` in `e2e.yml` to match: the job warns on a mismatch and
+still runs, downloading only the browser binary.
+
 ## Journeys shipped
 
 | # | Spec | Tag |
