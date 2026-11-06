@@ -34,16 +34,27 @@ permissions:
 
 jobs:
   e2e:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    needs: playwright-version
     runs-on: ubuntu-latest
+    # The same Playwright image, user and fallback as e2e-xbrowser (see the
+    # notes there). The bare-runner `install --with-deps chromium` this
+    # replaces spent 11 minutes on the apt mirror on 2026-11-06.
+    container:
+      image: mcr.microsoft.com/playwright:${{ needs.playwright-version.outputs.tag }}
+      options: ${{ needs.playwright-version.outputs.exact == 'true' && '--user 1001' || '--user 0' }}
     defaults:
       run:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          # The firefox leg of e2e-xbrowser saves this key; jobs sharing it
+          # only restore, so they never race to reserve the same cache.
+          save-cache: false
       - name: Sync backend deps (webServer runs `uv run qz`)
         working-directory: .
         run: uv sync --group dev
@@ -56,8 +67,16 @@ jobs:
         # npm ci, not npm install — see ci.yml; the floating install here is
         # exactly what let CI's Playwright drift off the lockfile.
         run: npm ci
-      - name: Install Playwright (chromium only)
-        run: npx playwright install --with-deps chromium
+      - name: Install the locked chromium (image predates the lockfile)
+        # As in e2e-xbrowser: only on the fallback, and apt only if the
+        # browser cannot launch without it.
+        if: needs.playwright-version.outputs.exact != 'true'
+        timeout-minutes: 15
+        run: |
+          npx playwright install chromium
+          if ! node -e "require('@playwright/test').chromium.launch().then((b) => b.close())"; then
+            npx playwright install-deps chromium
+          fi
       - name: Build the SPA (what the backend serves)
         run: npm run build
       - name: Run the interaction-journey suite
@@ -71,14 +90,23 @@ jobs:
           path: frontend/test-results
           retention-days: 7
 
-  # The Playwright version pinned in package-lock.json, so the cross-browser
-  # job's container image is chosen by the lockfile instead of a hand-edited
-  # tag. A Playwright bump (Dependabot or manual) moves both together.
+  # Picks the cross-browser job's container image from the Playwright version
+  # pinned in package-lock.json, so a Playwright bump (Dependabot or manual)
+  # moves the image with it and no tag is hand-edited. The bare `vX.Y.Z` tag
+  # follows whatever Ubuntu base Microsoft currently ships, so a base switch
+  # (noble -> resolute) needs no edit either.
+  #
+  # A lockfile bump can land before Microsoft publishes the matching image
+  # (the registry answers 404 for the tag). Then this picks the newest
+  # published version below the locked one, and e2e-xbrowser installs the
+  # locked browser on top of it. Any other registry answer (an outage) keeps
+  # the exact tag, as the pull would hit the same registry.
   playwright-version:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.lock.outputs.version }}
+      tag: ${{ steps.lock.outputs.tag }}
+      exact: ${{ steps.lock.outputs.exact }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -91,7 +119,27 @@ jobs:
             echo "::error::No @playwright/test version in frontend/package-lock.json (got '$version')"
             exit 1
           fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          registry=https://mcr.microsoft.com/v2/playwright
+          tag="v$version"
+          exact=true
+          status=$(curl -sS -o /dev/null -w '%{http_code}' -I --retry 3 \
+            -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
+            "$registry/manifests/$tag") || true
+          if [ "$status" = 404 ]; then
+            older=$({ curl -fsSL --retry 3 "$registry/tags/list" | jq -r '.tags[]' | grep -xE 'v[0-9]+\.[0-9]+\.[0-9]+'; echo "$tag"; } \
+              | sort -uV | grep -x -B1 -- "$tag" | sed -n 1p) || older=""
+            if [ -n "$older" ] && [ "$older" != "$tag" ]; then
+              echo "::warning::No Playwright image for $version yet; using $older and installing the $version browser in the job."
+              tag=$older
+              exact=false
+            else
+              echo "::warning::No Playwright image for $version and no older one listed; using $tag."
+            fi
+          elif [ "$status" != 200 ]; then
+            echo "::warning::Registry answered '$status' for $tag; using it as is."
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "exact=$exact" >> "$GITHUB_OUTPUT"
 
   # Cross-browser coverage (PRIMARY_SOFTWARE_AUDIT_PLAN R12 / R16): the
   # background `inert` modality in src/lib/modalInert.ts, and the Escape /
@@ -100,11 +148,11 @@ jobs:
   # the SPA is also opened in any browser. This job runs the engine-sensitive
   # journeys on Firefox and WebKit: e2e/playwright.config.ts's XBROWSER_SPECS
   # (modal-inert, workshop-escape-ladder, region-tool-escape,
-  # quick-figure-builder, library-tiles, details-keyboard, keyboard-only; 16
-  # tests per engine). A manual run with `xbrowser_full` runs every spec.
+  # quick-figure-builder, library-tiles, details-keyboard, keyboard-only). A
+  # manual run with `xbrowser_full` runs every spec.
   #
-  # A SEPARATE job from `e2e` above, which is left byte-for-byte as it was
-  # (Chromium only, no QZ_E2E_XBROWSER, so its project list is unchanged).
+  # A SEPARATE job from `e2e` above, which stays Chromium only with no
+  # QZ_E2E_XBROWSER, so its project list is unchanged.
   # Like the rest of this workflow it is NOT a required check. Before adding
   # its two contexts to branch protection, give it a run history: Linux
   # WebKit is WebKitGTK-family, not the macOS WKWebView the desktop ships, so
@@ -118,14 +166,18 @@ jobs:
     # ~185 apt packages per run, and a slow Ubuntu mirror ran that step past
     # its 30-minute limit three times on 2026-11-05/06 (PRs #620 and #616)
     # before any test started. The tag comes from the lockfile (job above),
-    # so the image's browsers always match the installed @playwright/test.
+    # so the image's browsers match the installed @playwright/test.
     #
     # `--user 1001` runs as the hosted runner's own user, the setup
     # Playwright documents for this image. As root, Firefox refuses to start
-    # under the HOME Actions provides (/github/home, owned by 1001).
+    # under the HOME Actions provides (/github/home, owned by 1001). Only the
+    # fallback (an image older than the lockfile) runs as root, because it may
+    # need to install system libraries the newer browser wants; the test step
+    # then points HOME at /root inside its own script, never through `env:`,
+    # which the runner would also hand to its docker CLI.
     container:
-      image: mcr.microsoft.com/playwright:v${{ needs.playwright-version.outputs.version }}-noble
-      options: --user 1001
+      image: mcr.microsoft.com/playwright:${{ needs.playwright-version.outputs.tag }}
+      options: ${{ needs.playwright-version.outputs.exact == 'true' && '--user 1001' || '--user 0' }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -139,11 +191,14 @@ jobs:
       QZ_E2E_XBROWSER_FULL: ${{ inputs.xbrowser_full && '1' || '' }}
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.13"
           enable-cache: true
           cache-dependency-glob: "uv.lock"
+          # One leg saves; two saving the same key at once warn "Unable to
+          # reserve cache".
+          save-cache: ${{ matrix.engine == 'firefox' }}
       - name: Sync backend deps (webServer runs `uv run qz`)
         working-directory: .
         run: uv sync --group dev
@@ -154,10 +209,24 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend deps
         run: npm ci
+      - name: Install the locked ${{ matrix.engine }} (image predates the lockfile)
+        # Only when playwright-version fell back to an older image. The
+        # browser goes into the image's /ms-playwright (root, see above).
+        # System libraries are installed only if the browser cannot launch
+        # without them, so the usual case never touches the apt mirror.
+        if: needs.playwright-version.outputs.exact != 'true'
+        timeout-minutes: 15
+        run: |
+          npx playwright install ${{ matrix.engine }}
+          if ! HOME=/root node -e "require('@playwright/test')['${{ matrix.engine }}'].launch().then((b) => b.close())"; then
+            npx playwright install-deps ${{ matrix.engine }}
+          fi
       - name: Build the SPA (what the backend serves)
         run: npm run build
       - name: Run the cross-browser journeys (${{ matrix.engine }})
-        run: npx playwright test --config=e2e/playwright.config.ts --project=${{ matrix.engine }}
+        run: |
+          if [ "$(id -u)" = 0 ]; then export HOME=/root; fi  # fallback only, see the container note
+          npx playwright test --config=e2e/playwright.config.ts --project=${{ matrix.engine }}
       - name: Upload failure artifacts
         if: failure()
         uses: actions/upload-artifact@v7
