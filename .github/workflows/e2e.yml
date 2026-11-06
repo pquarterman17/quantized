@@ -71,14 +71,21 @@ jobs:
           path: frontend/test-results
           retention-days: 7
 
-  # The Playwright version pinned in package-lock.json, so the cross-browser
-  # job's container image is chosen by the lockfile instead of a hand-edited
-  # tag. A Playwright bump (Dependabot or manual) moves both together.
+  # Picks the cross-browser job's container image from the Playwright version
+  # pinned in package-lock.json, so a Playwright bump (Dependabot or manual)
+  # moves the image with it and no tag is hand-edited.
+  #
+  # A lockfile bump can land before Microsoft publishes the matching image.
+  # Then this falls back to the newest published image below the locked
+  # version, and e2e-xbrowser installs the locked browser on top of it (a
+  # browser download, no apt). If the tag list itself cannot be fetched, the
+  # exact tag is used, as the registry would be down for the pull anyway.
   playwright-version:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.lock.outputs.version }}
+      tag: ${{ steps.lock.outputs.tag }}
+      exact: ${{ steps.lock.outputs.exact }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -91,7 +98,22 @@ jobs:
             echo "::error::No @playwright/test version in frontend/package-lock.json (got '$version')"
             exit 1
           fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          tag="v$version-noble"
+          exact=true
+          if tags=$(curl -fsSL --retry 3 https://mcr.microsoft.com/v2/playwright/tags/list | jq -r '.tags[]'); then
+            if ! grep -qx "$tag" <<<"$tags"; then
+              older=$(grep -xE 'v[0-9]+\.[0-9]+\.[0-9]+-noble' <<<"$tags" | { cat; echo "$tag"; } | sort -uV | grep -x -B1 "$tag" | sed -n 1p)
+              if [ "$older" != "$tag" ]; then
+                echo "::warning::No Playwright image for $version yet; using $older and installing the $version browser in the job."
+                tag=$older
+                exact=false
+              fi
+            fi
+          else
+            echo "::warning::Could not list Playwright image tags; using $tag."
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "exact=$exact" >> "$GITHUB_OUTPUT"
 
   # Cross-browser coverage (PRIMARY_SOFTWARE_AUDIT_PLAN R12 / R16): the
   # background `inert` modality in src/lib/modalInert.ts, and the Escape /
@@ -118,13 +140,13 @@ jobs:
     # ~185 apt packages per run, and a slow Ubuntu mirror ran that step past
     # its 30-minute limit three times on 2026-11-05/06 (PRs #620 and #616)
     # before any test started. The tag comes from the lockfile (job above),
-    # so the image's browsers always match the installed @playwright/test.
+    # so the image's browsers match the installed @playwright/test.
     #
     # `--user 1001` runs as the hosted runner's own user, the setup
     # Playwright documents for this image. As root, Firefox refuses to start
     # under the HOME Actions provides (/github/home, owned by 1001).
     container:
-      image: mcr.microsoft.com/playwright:v${{ needs.playwright-version.outputs.version }}-noble
+      image: mcr.microsoft.com/playwright:${{ needs.playwright-version.outputs.tag }}
       options: --user 1001
     timeout-minutes: 25
     strategy:
@@ -154,6 +176,16 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend deps
         run: npm ci
+      - name: Install the locked ${{ matrix.engine }} (image predates the lockfile)
+        # Only when playwright-version fell back to an older image. Its
+        # /ms-playwright is not writable here, so the browser goes under HOME
+        # and later steps are pointed at it. No --with-deps: the image has
+        # the system libraries and the job has no root.
+        if: needs.playwright-version.outputs.exact != 'true'
+        timeout-minutes: 10
+        run: |
+          echo "PLAYWRIGHT_BROWSERS_PATH=$HOME/pw-browsers" >> "$GITHUB_ENV"
+          PLAYWRIGHT_BROWSERS_PATH="$HOME/pw-browsers" npx playwright install ${{ matrix.engine }}
       - name: Build the SPA (what the backend serves)
         run: npm run build
       - name: Run the cross-browser journeys (${{ matrix.engine }})
