@@ -94,14 +94,16 @@ describe("useImportWizard", () => {
     });
     await waitFor(() => expect(result.current.preview).toEqual(PREVIEW));
     vi.mocked(importPreview).mockClear();
+    // A distinguishable re-preview, so the wait is on the refreshed STATE.
+    const repreviewed = { ...PREVIEW, n_lines: 99 };
+    vi.mocked(importPreview).mockResolvedValue(repreviewed);
 
     act(() => result.current.patchSettings({ data_start_line: 5 }));
-    await waitFor(() =>
-      expect(importPreview).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({ data_start_line: 5 }),
-        30,
-      ),
+    await waitFor(() => expect(result.current.preview).toEqual(repreviewed));
+    expect(importPreview).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ data_start_line: 5 }),
+      30,
     );
   });
 

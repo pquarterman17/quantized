@@ -99,7 +99,7 @@ describe("useMultivar — column selection", () => {
 
   it("fewer than 2 selected columns reports tooFewColumns and skips both fetches", async () => {
     const { result } = renderHook(() => useMultivar());
-    await waitFor(() => expect(statsCorrelation).toHaveBeenCalled()); // the initial 3-column fetch
+    await waitFor(() => expect(result.current.corr).not.toBeNull()); // the initial 3-column fetch
     vi.mocked(statsCorrelation).mockClear();
     vi.mocked(statsPCA).mockClear();
     act(() => {
@@ -144,7 +144,7 @@ describe("useMultivar — listwise-complete rows shared by correlation/PCA/SPLOM
   it("labels follow the selected columns in order", async () => {
     const { result } = renderHook(() => useMultivar());
     act(() => result.current.toggleColumn(1)); // drop b -> [a, c]
-    await waitFor(() => expect(statsCorrelation).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.corr).not.toBeNull());
     expect(result.current.labels).toEqual(["a", "c"]);
   });
 });

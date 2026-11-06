@@ -202,8 +202,10 @@ mismatch, wrong-typed fields, duplicate labels and X). 2,133 requests, zero
 HTTP 500s; malformed input came back 4xx everywhere. Coverage limit: only 133
 routes ever returned a 200, so the other 108 rejected every generated body at
 validation and their internals were not exercised by this round. The probe
-was a throwaway script (scratch, not committed); rebuild it from this
-description for the next round.
+is now `tools/route_probe.py` (one command; exits 1 on any 5xx; `--verbose`
+lists the routes never exercised past validation, which as of 2026-11-06 are
+104, led by stats 15, export 12, fitting 11 and rsm 9). Hand-written bodies
+for those are the next round's coverage gap.
 
 **Third round (2026-08-12, `872a26f`).** Audited ~29 route/calc modules added
 or substantially changed since the second round (RSM, outliers/varcomp,
