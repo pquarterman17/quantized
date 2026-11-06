@@ -15,16 +15,13 @@ commit.
 
 | Metric | Count at triage (2026-08-10) | Now |
 |--------|------------------------------|-----|
-| Total matches found | 124 | 65 (sum of the ratchet pins, 2026-11-06) |
-| SAFE (final assertion or mock-only checks) | 26 | 15\* |
-| SUSPECT (depends on awaited call's resolved value) | 98 | 55\* |
-| **% SUSPECT** | **79%** | **~79%\*** |
+| Total matches found | 124 | 45 (sum of the ratchet pins, 2026-11-06) |
+| SAFE (final assertion or mock-only checks) | 26 | not re-classified |
+| SUSPECT (depends on awaited call's resolved value) | 98 | not re-classified |
 
-\*Last classified split, minus the classified sites cleared since: 11 SAFE
-and 23 SUSPECT. It adds up to 70, five more than the measured total, because
-some sites were removed or added without this table being updated (the
-`importwizard` site, for one, was never classified). The pin sum is the
-authoritative count.
+The SAFE/SUSPECT split is no longer tracked: sites were added and removed
+without re-classification, so only the pin sum in `architecture.test.ts` is
+authoritative.
 
 **Progress under task 5's standing rule:** `components/workshops/figurebuilder`
 cleared 2026-08-12 (22 → 0) while that file was being edited for the
@@ -44,6 +41,10 @@ A third pass on 2026-11-06 cleared 10 more in `PlotSpecBar`, `RsmPanel`,
 `useMultivar`, `useCurveFit` and `useImportWizard`. As with the blank-tag
 test, PlotSpecBar's two cancel tests asserted before the cancel was handled;
 they now settle on a following real action and fail if a cancel goes ahead.
+A fourth pass the same day cleared the outliers, variability and
+distribution workshops (20 sites; pins 65 to 45). Most were a wait on the call directly
+followed by a wait on what it rendered, so the call check became a plain
+assertion after the state wait.
 `windows/WindowCanvas.test.tsx`'s one SAFE site stays pinned: the call is
 the assertion there, and waiting on real state would mean mocking the whole
 API module for that file. No directory has been scheduled
@@ -106,7 +107,7 @@ mock.
 | useCurveFit.test.ts | 130 | listFitModels | `await act(async () => {` |
 | useModelScan.test.ts | 166 | scanFitModelsJob | `await act(async () => {` |
 
-### components/workshops/distribution (8 suspect)
+### components/workshops/distribution (0; cleared 2026-11-06)
 
 | File | Line | Mock | Context |
 |------|------|------|---------|
@@ -185,7 +186,7 @@ assertion, which is the SAFE category, not a synchronisation barrier.
 | useMultivar.test.ts | 100 | statsCorrelation | `act(() => {` |
 | useMultivar.test.ts | 145 | statsCorrelation | `expect(result.current.labels).toEqual(["a", "c"]);` |
 
-### components/workshops/outliers (6 suspect)
+### components/workshops/outliers (0; cleared 2026-11-06)
 
 | File | Line | Mock | Context |
 |------|------|------|---------|
@@ -223,7 +224,7 @@ assertion, which is the SAFE category, not a synchronisation barrier.
 |------|------|------|---------|
 | TabulatePanel.test.tsx | 164 | emitMock | `expect(useApp.getState().reports).toHaveLength(0);` |
 
-### components/workshops/variability (3 suspect)
+### components/workshops/variability (0; cleared 2026-11-06)
 
 | File | Line | Mock | Context |
 |------|------|------|---------|

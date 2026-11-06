@@ -74,7 +74,7 @@ describe("useDistribution", () => {
       activeId: "d1",
     });
     const { result } = renderHook(() => useDistribution());
-    await waitFor(() => expect(statsHistogram).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.hist).not.toBeNull());
     expect(statsHistogram).toHaveBeenCalledWith([30, 40, 50, 60]);
     expect(result.current).toBeTruthy();
   });
@@ -177,8 +177,8 @@ describe("useDistribution — distribution-fit overlay (item 6b)", () => {
     const { result } = renderHook(() => useDistribution());
     await waitFor(() => expect(result.current.hist).not.toBeNull());
     act(() => result.current.setFitDist("normal"));
-    await waitFor(() => expect(statsFitDistributions).toHaveBeenCalledWith([10, 20, 30, 40, 50, 60]));
     await waitFor(() => expect(result.current.currentFit).not.toBeNull());
+    expect(statsFitDistributions).toHaveBeenCalledWith([10, 20, 30, 40, 50, 60]);
     expect(result.current.currentFit!.dist).toBe("normal");
     expect(result.current.currentFit!.aic).toBe(24);
     expect(result.current.bestFit!.dist).toBe("normal"); // fits[0] is AIC-best
@@ -202,7 +202,6 @@ describe("useDistribution — distribution-fit overlay (item 6b)", () => {
     const { result } = renderHook(() => useDistribution());
     await waitFor(() => expect(result.current.hist).not.toBeNull());
     act(() => result.current.setFitDist("lognormal"));
-    await waitFor(() => expect(statsFitDistributions).toHaveBeenCalled());
     await waitFor(() => expect(result.current.skippedReason).not.toBeNull());
     expect(result.current.skippedReason).toContain("positive");
     expect(result.current.currentFit).toBeNull();
@@ -241,8 +240,8 @@ describe("useDistribution — compare distributions (JMP_GAP J12 items 1-2)", ()
     const { result } = renderHook(() => useDistribution());
     await waitFor(() => expect(result.current.hist).not.toBeNull());
     act(() => result.current.setCompareOpen(true));
-    await waitFor(() => expect(statsFitDistributions).toHaveBeenCalledWith([10, 20, 30, 40, 50, 60]));
     await waitFor(() => expect(result.current.rankedFits.length).toBe(2));
+    expect(statsFitDistributions).toHaveBeenCalledWith([10, 20, 30, 40, 50, 60]);
     expect(result.current.rankingMetric).toBe("aicc");
     // normal: aic=24,k=2,N=6 -> aicc=24+2*2*3/3=28; gamma: aic=26 -> aicc=30.
     expect(result.current.rankedFits[0].dist).toBe("normal");
@@ -373,8 +372,8 @@ describe("useDistribution — histogram bar brushing (item 6c)", () => {
     });
     const { result } = renderHook(() => useDistribution());
     // analysis column drops row 0 (value 10); pruned column = [20,30,40,50,60]
-    await waitFor(() => expect(statsHistogram).toHaveBeenCalledWith([20, 30, 40, 50, 60]));
     await waitFor(() => expect(result.current.hist).not.toBeNull());
+    expect(statsHistogram).toHaveBeenCalledWith([20, 30, 40, 50, 60]);
     // bin 0 = [10,30): only pruned value 20 (pruned index 0) -> original row 1
     act(() => result.current.brushBins(0, 0, false));
     expect(useApp.getState().selection).toEqual({ datasetId: "d1", rows: [1] });

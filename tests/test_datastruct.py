@@ -464,3 +464,20 @@ def test_create_still_raises_loudly_on_a_bad_channel_index() -> None:
         DataStruct.create(time=[1.0], values=[[0.0]], cat_levels={5: ("a",)})
     with pytest.raises(ValueError, match="out of range"):
         DataStruct.create(time=[1.0], values=[[0.0]], level_order={9: (1, 0)})
+
+
+@pytest.mark.parametrize("missing", ["time", "values"])
+def test_from_dict_names_a_missing_required_field(missing: str) -> None:
+    # A route turns the raised error's text into its 422 message. The bare
+    # KeyError text used to be just "'time'".
+    payload = {"time": [0.0, 1.0], "values": [[1.0], [2.0]], "labels": ["a"], "units": [""]}
+    del payload[missing]
+    with pytest.raises(ValueError, match=f"dataset is missing required field '{missing}'"):
+        DataStruct.from_dict(payload)
+
+
+def test_ragged_values_rows_get_a_plain_message() -> None:
+    # numpy's message for this ("setting an array element with a sequence")
+    # used to be the whole 422 a user saw.
+    with pytest.raises(ValueError, match=r"same number of channels \(found row widths \[1, 2\]\)"):
+        DataStruct.create(time=[0.0, 1.0, 2.0], values=[[1.0, 2.0], [1.0], [1.0, 2.0]])

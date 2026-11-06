@@ -74,7 +74,6 @@ describe("DistributionPanel", () => {
     render(<DistributionPanel />);
     await screen.findByLabelText("histogram");
     fireEvent.change(screen.getByDisplayValue("None"), { target: { value: "normal" } });
-    await waitFor(() => expect(statsFitDistributions).toHaveBeenCalled());
     expect(await screen.findByText(/AIC 24/)).toBeInTheDocument();
     expect(screen.getByText(/KS p=0.9/)).toBeInTheDocument();
   });
@@ -84,7 +83,7 @@ describe("DistributionPanel", () => {
     render(<DistributionPanel />);
     await screen.findByLabelText("histogram");
     fireEvent.click(screen.getByText("Compare distributions"));
-    await waitFor(() => expect(statsFitDistributions).toHaveBeenCalled());
+    expect(await screen.findByText("winner")).toBeInTheDocument(); // the ranked fits have landed
     // "normal" appears both as a <select> option and the table's row button.
     expect(await screen.findAllByText("normal")).not.toHaveLength(0);
     expect(screen.getByText("winner")).toBeInTheDocument();
@@ -97,7 +96,6 @@ describe("DistributionPanel", () => {
     render(<DistributionPanel />);
     await screen.findByLabelText("histogram");
     fireEvent.change(screen.getByDisplayValue("None"), { target: { value: "normal" } });
-    await waitFor(() => expect(statsFitDistributions).toHaveBeenCalled());
     expect(await screen.findByText(/Percentiles \(normal fit\)/)).toBeInTheDocument();
     expect(screen.getAllByText("median").length).toBeGreaterThan(0);
     expect(screen.getByText("q1")).toBeInTheDocument();

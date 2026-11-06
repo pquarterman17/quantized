@@ -203,9 +203,20 @@ HTTP 500s; malformed input came back 4xx everywhere. Coverage limit: only 133
 routes ever returned a 200, so the other 108 rejected every generated body at
 validation and their internals were not exercised by this round. The probe
 is now `tools/route_probe.py` (one command; exits 1 on any 5xx; `--verbose`
-lists the routes never exercised past validation, which as of 2026-11-06 are
-104, led by stats 15, export 12, fitting 11 and rsm 9). Hand-written bodies
-for those are the next round's coverage gap.
+lists the routes never exercised past validation). On 2026-11-06 it gained a
+"plausible" shape (in-bounds numbers, 30-row non-constant arrays and
+datasets, real names for free-text vocabularies), tuple sizes and real
+dataset-field detection: coverage rose from 133 to 167 of 237 routes, still
+zero 5xx. The remaining 70 need hand-written bodies (exactly-one-of field
+pairs, files on disk, dataset handles, domain-specific values). The same day
+fixed three messages the probe surfaced: a dataset missing `time`/`values`
+said only `'time'`, ragged `values` rows said numpy's "setting an array
+element with a sequence", and a zero-error-variance `anova2` said "float
+division by zero". Booked, NOT fixed: for extreme inputs (1e300) several
+calculators still show Python's overflow text, e.g. "(34, 'Numerical result
+out of range')" or "complex division by zero". 127 route sites build their
+422 with `detail=str(exc)`, so the clean fix is one shared message helper
+used by all of them, not per-route patches.
 
 **Third round (2026-08-12, `872a26f`).** Audited ~29 route/calc modules added
 or substantially changed since the second round (RSM, outliers/varcomp,

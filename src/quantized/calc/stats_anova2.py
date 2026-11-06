@@ -65,6 +65,13 @@ def anova2(cells: list[list[list[float]]], *, alpha: float = 0.05) -> dict[str, 
         ss_ab, df_ab = 0.0, 0
     else:
         df_e = a * b * (n - 1)
+    if df_e > 0 and ss_e == 0.0:
+        # Every F below divides by MS_error; with zero error variance F is
+        # undefined (it used to surface as "float division by zero").
+        raise ValueError(
+            "anova2: the error variance is zero (replicates identical within every "
+            "cell, or no interaction left when n = 1), so F is undefined"
+        )
 
     def _row(name: str, ss: float, df: int) -> dict[str, Any]:
         if df <= 0:
