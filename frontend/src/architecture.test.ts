@@ -1805,7 +1805,6 @@ const WEAK_WAIT_PINS: Record<string, number> = {
   "/components/workshops/figurepage/useFigurePage.test.ts": 12,
   "/components/workshops/multivar/MultivarPanel.test.tsx": 13,
   "/components/workshops/fityx/FitYByXPanel.test.tsx": 8,
-  "/components/workshops/graphbuilder/PlotSpecBar.test.tsx": 3,
   "/components/workshops/outliers/OutlierScreeningPanel.test.tsx": 5,
   "/components/workshops/distribution/useDistribution.test.ts": 5,
   "/components/workshops/variability/VariabilityChartPanel.test.tsx": 4,
@@ -1813,12 +1812,8 @@ const WEAK_WAIT_PINS: Record<string, number> = {
   "/components/workshops/outliers/useOutlierScreening.test.ts": 3,
   "/components/workshops/fityx/useFitYByX.test.ts": 3,
   "/components/workshops/distribution/DistributionPanel.test.tsx": 3,
-  "/components/workshops/rsm/RsmPanel.test.tsx": 2,
-  "/components/workshops/multivar/useMultivar.test.ts": 2,
-  "/components/workshops/curvefit/useCurveFit.test.ts": 2,
   "/components/windows/WindowCanvas.test.tsx": 1,
   "/components/workshops/importwizard/ImportWizardPanel.test.tsx": 3,
-  "/components/workshops/importwizard/useImportWizard.test.ts": 1,
 };
 
 // BUG-009: `lib/bookData.ts` keeps the reason the last lazy-book fetch failed in
