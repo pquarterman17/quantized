@@ -180,7 +180,9 @@ describe("useModelScan", () => {
       p = result.current.scan();
     });
     // The job exists once its status-bar op offers Cancel: wait on that state.
-    await waitFor(() => expect(usePendingOps.getState().ops[0]?.cancel).toBeDefined());
+    await waitFor(() =>
+      expect(usePendingOps.getState().ops.find((o) => o.label.startsWith("Fit model scan"))?.cancel).toBeDefined(),
+    );
 
     await act(async () => {
       await result.current.cancel();
