@@ -34,8 +34,14 @@ permissions:
 
 jobs:
   e2e:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    needs: playwright-version
     runs-on: ubuntu-latest
+    # The same Playwright image, user and fallback as e2e-xbrowser (see the
+    # notes there). The bare-runner `install --with-deps chromium` this
+    # replaces spent 11 minutes on the apt mirror on 2026-11-06.
+    container:
+      image: mcr.microsoft.com/playwright:${{ needs.playwright-version.outputs.tag }}
+      options: ${{ needs.playwright-version.outputs.exact == 'true' && '--user 1001' || '--user 0' }}
     defaults:
       run:
         working-directory: frontend
@@ -44,6 +50,11 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          # The firefox leg of e2e-xbrowser saves this key; jobs sharing it
+          # only restore, so they never race to reserve the same cache.
+          save-cache: false
       - name: Sync backend deps (webServer runs `uv run qz`)
         working-directory: .
         run: uv sync --group dev
@@ -56,8 +67,16 @@ jobs:
         # npm ci, not npm install — see ci.yml; the floating install here is
         # exactly what let CI's Playwright drift off the lockfile.
         run: npm ci
-      - name: Install Playwright (chromium only)
-        run: npx playwright install --with-deps chromium
+      - name: Install the locked chromium (image predates the lockfile)
+        # As in e2e-xbrowser: only on the fallback, and apt only if the
+        # browser cannot launch without it.
+        if: needs.playwright-version.outputs.exact != 'true'
+        timeout-minutes: 15
+        run: |
+          npx playwright install chromium
+          if ! node -e "require('@playwright/test').chromium.launch().then((b) => b.close())"; then
+            npx playwright install-deps chromium
+          fi
       - name: Build the SPA (what the backend serves)
         run: npm run build
       - name: Run the interaction-journey suite
@@ -132,8 +151,8 @@ jobs:
   # quick-figure-builder, library-tiles, details-keyboard, keyboard-only). A
   # manual run with `xbrowser_full` runs every spec.
   #
-  # A SEPARATE job from `e2e` above, which is left byte-for-byte as it was
-  # (Chromium only, no QZ_E2E_XBROWSER, so its project list is unchanged).
+  # A SEPARATE job from `e2e` above, which stays Chromium only with no
+  # QZ_E2E_XBROWSER, so its project list is unchanged.
   # Like the rest of this workflow it is NOT a required check. Before adding
   # its two contexts to branch protection, give it a run history: Linux
   # WebKit is WebKitGTK-family, not the macOS WKWebView the desktop ships, so
@@ -177,6 +196,9 @@ jobs:
           python-version: "3.13"
           enable-cache: true
           cache-dependency-glob: "uv.lock"
+          # One leg saves; two saving the same key at once warn "Unable to
+          # reserve cache".
+          save-cache: ${{ matrix.engine == 'firefox' }}
       - name: Sync backend deps (webServer runs `uv run qz`)
         working-directory: .
         run: uv sync --group dev
