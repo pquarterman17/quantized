@@ -60,12 +60,12 @@ describe("useOutlierScreening — defaults + dispatch", () => {
     const { result } = renderHook(() => useOutlierScreening());
     expect(result.current.col).toBe(0);
     expect(result.current.method).toBe("grubbs");
-    await waitFor(() => expect(statsGrubbs).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.result?.method).toBe("grubbs"));
   });
 
   it("sends the pruned column (excluded row 2 dropped) to the backend", async () => {
-    renderHook(() => useOutlierScreening());
-    await waitFor(() => expect(statsGrubbs).toHaveBeenCalled());
+    const { result } = renderHook(() => useOutlierScreening());
+    await waitFor(() => expect(result.current.result?.method).toBe("grubbs"));
     // Pruned order: rows 0,1,3,4,5,6,7 -> values 10,11,12,13,999,14,15.
     expect(statsGrubbs).toHaveBeenCalledWith([10, 11, 12, 13, 999, 14, 15], 0.05);
   });
@@ -85,7 +85,7 @@ describe("useOutlierScreening — defaults + dispatch", () => {
     });
 
     const { result } = renderHook(() => useOutlierScreening());
-    await waitFor(() => expect(statsGrubbs).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.result?.method).toBe("grubbs"));
 
     act(() => result.current.setMethod("rosner"));
     await waitFor(() => expect(result.current.result?.method).toBe("rosner"));
