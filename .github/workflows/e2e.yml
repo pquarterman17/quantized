@@ -71,6 +71,28 @@ jobs:
           path: frontend/test-results
           retention-days: 7
 
+  # The Playwright version pinned in package-lock.json, so the cross-browser
+  # job's container image is chosen by the lockfile instead of a hand-edited
+  # tag. A Playwright bump (Dependabot or manual) moves both together.
+  playwright-version:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.lock.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: frontend/package-lock.json
+          sparse-checkout-cone-mode: false
+      - id: lock
+        run: |
+          version=$(jq -r '.packages["node_modules/@playwright/test"].version' frontend/package-lock.json)
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::No @playwright/test version in frontend/package-lock.json (got '$version')"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
   # Cross-browser coverage (PRIMARY_SOFTWARE_AUDIT_PLAN R12 / R16): the
   # background `inert` modality in src/lib/modalInert.ts, and the Escape /
   # focus / Tab behaviour around it, had been measured in Chromium only. The
@@ -89,19 +111,21 @@ jobs:
   # a red leg here needs reading, not an automatic merge block.
   e2e-xbrowser:
     name: e2e cross-browser (${{ matrix.engine }})
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    needs: playwright-version
     runs-on: ubuntu-latest
     # Microsoft's Playwright image already holds every engine and its system
     # libraries. `playwright install --with-deps` on the bare runner fetched
     # ~185 apt packages per run, and a slow Ubuntu mirror ran that step past
     # its 30-minute limit three times on 2026-11-05/06 (PRs #620 and #616)
-    # before any test started. In the image the install is a no-op.
+    # before any test started. The tag comes from the lockfile (job above),
+    # so the image's browsers always match the installed @playwright/test.
     #
-    # Keep the tag on the Playwright version in frontend/package-lock.json
-    # (PW_IMAGE_VERSION below). On a mismatch the "Check" step warns and
-    # `playwright install` fetches only the browser binary, still no apt.
+    # `--user 1001` runs as the hosted runner's own user, the setup
+    # Playwright documents for this image. As root, Firefox refuses to start
+    # under the HOME Actions provides (/github/home, owned by 1001).
     container:
-      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      image: mcr.microsoft.com/playwright:v${{ needs.playwright-version.outputs.version }}-noble
+      options: --user 1001
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -113,10 +137,6 @@ jobs:
     env:
       QZ_E2E_XBROWSER: "1"
       QZ_E2E_XBROWSER_FULL: ${{ inputs.xbrowser_full && '1' || '' }}
-      PW_IMAGE_VERSION: "1.64.1"
-      # The container runs as root while Actions points HOME at a directory
-      # it does not own, which Firefox refuses to start under.
-      HOME: /root
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v5
@@ -134,17 +154,6 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend deps
         run: npm ci
-      - name: Check the image matches the locked Playwright
-        run: |
-          locked=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")
-          if [ "$locked" != "$PW_IMAGE_VERSION" ]; then
-            echo "::warning::Playwright is $locked in package-lock.json but the e2e-xbrowser image is v$PW_IMAGE_VERSION; bump the container tag in e2e.yml."
-          fi
-      - name: Install Playwright (${{ matrix.engine }})
-        # A no-op when the image matches; otherwise downloads the browser
-        # binary only. Never --with-deps: the image already has the libraries.
-        timeout-minutes: 10
-        run: npx playwright install ${{ matrix.engine }}
       - name: Build the SPA (what the backend serves)
         run: npm run build
       - name: Run the cross-browser journeys (${{ matrix.engine }})

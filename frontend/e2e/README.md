@@ -133,10 +133,9 @@ evidence for WKWebView, not proof.
 
 That job runs inside Microsoft's Playwright container image
 (`mcr.microsoft.com/playwright`), which already has every browser and its
-system libraries, so it never installs from the Ubuntu apt mirror. When a
-Playwright upgrade lands in `package-lock.json`, bump the image tag and
-`PW_IMAGE_VERSION` in `e2e.yml` to match: the job warns on a mismatch and
-still runs, downloading only the browser binary.
+system libraries, so it never installs from the Ubuntu apt mirror. The
+image tag is read from the `@playwright/test` version in `package-lock.json`,
+so a Playwright upgrade needs no workflow edit.
 
 ## Journeys shipped
 
