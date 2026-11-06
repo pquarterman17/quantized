@@ -83,7 +83,9 @@ export default function RefLinesCard() {
       {/* tabIndex=-1: an invisible, programmatic-only focus anchor — see
        *  lib/focusGuard's doc. Not a new Tab stop. onKeyDown absorbs a stray
        *  Delete/Backspace that lands here right after a removal, before it
-       *  can bubble to useGlobalShortcuts' window listener. */}
+       *  can bubble to useGlobalShortcuts' window listener. Each remove
+       *  button absorbs a Delete aimed at itself the same way: a focused
+       *  button is not an editing target either. */}
       <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer}>
         {groups.map(([groupId, groupLabel]) => {
           const members = refLines.filter((line) => line.groupId === groupId);
@@ -92,7 +94,8 @@ export default function RefLinesCard() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
               <strong className="qz-k">{groupLabel}{stick ? ` · ${members.length} sticks` : ""}</strong>
               <Button size="sm" aria-label={`Remove ${groupLabel}`} title={`Remove ${groupLabel}`}
-                onClick={() => removeRowSafely(containerRef.current, () => removeGroup(groupId))}>Remove group</Button>
+                onClick={() => removeRowSafely(containerRef.current, () => removeGroup(groupId))}
+                onKeyDown={absorbStrayDeleteOnContainer}>Remove group</Button>
             </div>
             {stick && <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "5px 8px" }}>
               <label className="qz-k" style={{ display: "flex", gap: 4 }}>
@@ -124,7 +127,8 @@ export default function RefLinesCard() {
             <span className="qz-k">
               {typeof r.label === "string" && r.label ? `${r.label} · ` : ""}{r.axis.toUpperCase()} = <span style={{ fontFamily: "var(--font-mono)" }}>{fmtNum(r.value)}</span>
             </span>
-            <IconButton aria-label="Remove line" title="Remove" onClick={() => removeRowSafely(containerRef.current, () => removeRefLine(r.id))}>
+            <IconButton aria-label="Remove line" title="Remove" onClick={() => removeRowSafely(containerRef.current, () => removeRefLine(r.id))}
+              onKeyDown={absorbStrayDeleteOnContainer}>
               ✕
             </IconButton>
           </div>

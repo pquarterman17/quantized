@@ -15,14 +15,39 @@ commit.
 
 | Metric | Count at triage (2026-08-10) | Now |
 |--------|------------------------------|-----|
-| Total matches found | 124 | 104 |
-| SAFE (final assertion or mock-only checks) | 26 | 26 |
-| SUSPECT (depends on awaited call's resolved value) | 98 | 78 |
-| **% SUSPECT** | **79%** | **75%** |
+| Total matches found | 124 | 45 (sum of the ratchet pins, 2026-11-06) |
+| SAFE (final assertion or mock-only checks) | 26 | not re-classified |
+| SUSPECT (depends on awaited call's resolved value) | 98 | not re-classified |
+
+The SAFE/SUSPECT split is no longer tracked: sites were added and removed
+without re-classification, so only the pin sum in `architecture.test.ts` is
+authoritative.
 
 **Progress under task 5's standing rule:** `components/workshops/figurebuilder`
 cleared 2026-08-12 (22 → 0) while that file was being edited for the
-Publication Preview drift-subscription fix. No directory has been scheduled
+Publication Preview drift-subscription fix. `components/Inspector`'s
+`CorrectionsCard.test.tsx` cleared 2026-11-05 (9 → 0, pin removed): every
+site now waits for Apply to re-enable, which happens only after the API call
+and any relabel have finished. A second pass the same day cleared 17 more
+sites in 11 files (every remaining pin of 1–3 outside the large workshop
+suites, plus the single-site workshop files): `store/useApp.test.ts`,
+`Stage/Worksheet.test.tsx`, `Stage/usePlotPayload.test.ts`,
+`Stage/worksheet/useWorksheetBlockOps.test.tsx`,
+`Library/MultiSelectBar.test.tsx`, `Library/PagesSection.test.tsx`, and the
+baseline, calculators, curvefit (`useModelScan`), tabulate and variability
+(`useVariability`) files. Each now waits on what the call produces (a toast,
+the stats footer, the installed data, the outcome status, an op's Cancel).
+A third pass on 2026-11-06 cleared 10 more in `PlotSpecBar`, `RsmPanel`,
+`useMultivar`, `useCurveFit` and `useImportWizard`. As with the blank-tag
+test, PlotSpecBar's two cancel tests asserted before the cancel was handled;
+they now settle on a following real action and fail if a cancel goes ahead.
+A fourth pass the same day cleared the outliers, variability and
+distribution workshops (20 sites; pins 65 to 45). Most were a wait on the call directly
+followed by a wait on what it rendered, so the call check became a plain
+assertion after the state wait.
+`windows/WindowCanvas.test.tsx`'s one SAFE site stays pinned: the call is
+the assertion there, and waiting on real state would mean mocking the whole
+API module for that file. No directory has been scheduled
 as a campaign; this is opportunistic clearing only, which is the whole design
 of task 5.
 
@@ -33,24 +58,20 @@ of task 5.
 
 ## SUSPECT entries by directory
 
-### components/Inspector (5 suspect)
+### components/Inspector (0 suspect; cleared 2026-11-05)
 
-| File | Line | Mock | Context |
-|------|------|------|---------|
-| CorrectionsCard.test.tsx | 136 | applyCorrectionsApi | `expect(params.yScale).toBe(1000);` |
-| CorrectionsCard.test.tsx | 146 | applyCorrectionsApi | `expect(vi.mocked(applyCorrectionsApi).mock.calls[0][0].params.xScale).toBe(0.1);` |
-| CorrectionsCard.test.tsx | 153 | applyCorrectionsApi | `expect(params.xScale).toBeUndefined();` |
-| CorrectionsCard.test.tsx | 223 | applyCorrectionsApi | `await waitFor(() => expect(useApp.getState().yAxisLabel).toBe(...));` |
-| CorrectionsCard.test.tsx | 234 | applyCorrectionsApi | `expect(useApp.getState().yAxisLabel).toBe("original");` |
+All five `CorrectionsCard.test.tsx` entries, plus its four SAFE sites, now
+wait on the Apply button re-enabling instead of on the `applyCorrectionsApi`
+mock.
 
-### components/Library (2 suspect)
+### components/Library (0 suspect; cleared 2026-11-05)
 
 | File | Line | Mock | Context |
 |------|------|------|---------|
 | MultiSelectBar.test.tsx | 95 | askParams | `expect(useApp.getState().datasets.find(...).tags ?? []).toEqual(...)` |
 | PagesSection.test.tsx | 139 | exportFigurePage | `expect(body.fmt).toBe("svg");` |
 
-### components/Stage (4 suspect)
+### components/Stage (0 suspect; cleared by 2026-11-05)
 
 | File | Line | Mock | Context |
 |------|------|------|---------|
@@ -59,7 +80,7 @@ of task 5.
 | usePlotPayload.test.ts | 207 | fetchPlotMock | `await waitFor(() => expect(result.current.payload?.series[0].label).toBe(...)` |
 | useShapeDraw.test.ts | 119 | mockAskAnnotationText | `await act(async () => {` |
 
-### components/Stage/worksheet (3 suspect)
+### components/Stage/worksheet (0 suspect; cleared by 2026-11-05)
 
 | File | Line | Mock | Context |
 |------|------|------|---------|
@@ -67,26 +88,26 @@ of task 5.
 | useWorksheetBlockOps.test.tsx | 56 | setStatus | `expect(setStatus.mock.calls.some(...includes("pasting"))).toBe(...)` |
 | useWorksheetBlockOps.test.tsx | 66 | setStatus | `expect(setStatus.mock.calls.some(...includes("pasting"))).toBe(...)` |
 
-### components/workshops/baseline (1 suspect)
+### components/workshops/baseline (0 suspect; cleared 2026-11-05)
 
 | File | Line | Mock | Context |
 |------|------|------|---------|
 | useBaseline.test.ts | 441 | baselineAnchor | `expect(useApp.getState().baselineOverlay).not.toBeNull();` |
 
-### components/workshops/calculators (1 suspect)
+### components/workshops/calculators (0 suspect; cleared 2026-11-05)
 
 | File | Line | Mock | Context |
 |------|------|------|---------|
 | UnitsTab.test.tsx | 141 | convertUnits | `expect(screen.getByText("1239.84")).toBeInTheDocument();` |
 
-### components/workshops/curvefit (2 suspect)
+### components/workshops/curvefit (0 suspect; cleared 2026-11-05/06)
 
 | File | Line | Mock | Context |
 |------|------|------|---------|
 | useCurveFit.test.ts | 130 | listFitModels | `await act(async () => {` |
 | useModelScan.test.ts | 166 | scanFitModelsJob | `await act(async () => {` |
 
-### components/workshops/distribution (8 suspect)
+### components/workshops/distribution (0; cleared 2026-11-06)
 
 | File | Line | Mock | Context |
 |------|------|------|---------|
@@ -142,13 +163,13 @@ assertion, which is the SAFE category, not a synchronisation barrier.
 | FitYByXPanel.test.tsx | 189 | anovaMock | `fireEvent.change(screen.getByLabelText("By (optional)")...)` |
 | FitYByXPanel.test.tsx | 199 | anovaMock | `fireEvent.change(screen.getByLabelText("By (optional)")...)` |
 
-### components/workshops/graphbuilder (1 suspect)
+### components/workshops/graphbuilder (0 suspect; cleared 2026-11-06)
 
 | File | Line | Mock | Context |
 |------|------|------|---------|
 | PlotSpecBar.test.tsx | 113 | askParams | `expect(fields[0].default).toBe("Alpha");` |
 
-### components/workshops/multivar (12 suspect)
+### components/workshops/multivar (10 suspect; `useMultivar` cleared 2026-11-06)
 
 | File | Line | Mock | Context |
 |------|------|------|---------|
@@ -165,7 +186,7 @@ assertion, which is the SAFE category, not a synchronisation barrier.
 | useMultivar.test.ts | 100 | statsCorrelation | `act(() => {` |
 | useMultivar.test.ts | 145 | statsCorrelation | `expect(result.current.labels).toEqual(["a", "c"]);` |
 
-### components/workshops/outliers (6 suspect)
+### components/workshops/outliers (0; cleared 2026-11-06)
 
 | File | Line | Mock | Context |
 |------|------|------|---------|
@@ -190,20 +211,20 @@ assertion, which is the SAFE category, not a synchronisation barrier.
 | PeakWizardPanel.test.tsx | 112 | findMock | `fireEvent.click(screen.getByText("Report"...))` |
 | PeakWizardPanel.test.tsx | 132 | alsMock | `expect(useApp.getState().baselineOverlay?.datasetId)...` |
 
-### components/workshops/rsm (2 suspect)
+### components/workshops/rsm (0 suspect; cleared 2026-11-06)
 
 | File | Line | Mock | Context |
 |------|------|------|---------|
 | RsmPanel.test.tsx | 92 | analyzeRsmMock | `const strainButton = await screen.findByRole("button"...)` |
 | RsmPanel.test.tsx | 95 | rsmStrainMock | `const value = await screen.findByText("not measurable");` |
 
-### components/workshops/tabulate (1 suspect)
+### components/workshops/tabulate (0 suspect; cleared 2026-11-05)
 
 | File | Line | Mock | Context |
 |------|------|------|---------|
 | TabulatePanel.test.tsx | 164 | emitMock | `expect(useApp.getState().reports).toHaveLength(0);` |
 
-### components/workshops/variability (3 suspect)
+### components/workshops/variability (0; cleared 2026-11-06)
 
 | File | Line | Mock | Context |
 |------|------|------|---------|
@@ -211,7 +232,7 @@ assertion, which is the SAFE category, not a synchronisation barrier.
 | VariabilityChartPanel.test.tsx | 138 | statsNestedAnova | `expect(await screen.findByText(/variance components...))...` |
 | VariabilityChartPanel.test.tsx | 147 | statsNestedAnova | `const { fireEvent } = await import(...react...);` |
 
-### store (1 suspect)
+### store (0 suspect; cleared 2026-11-05)
 
 | File | Line | Mock | Context |
 |------|------|------|---------|

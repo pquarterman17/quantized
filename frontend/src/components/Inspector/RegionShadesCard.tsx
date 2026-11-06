@@ -79,7 +79,9 @@ export default function RegionShadesCard() {
       {/* tabIndex=-1: an invisible, programmatic-only focus anchor — see
        *  lib/focusGuard's doc. Not a new Tab stop. onKeyDown absorbs a stray
        *  Delete/Backspace that lands here right after a removal, before it
-       *  can bubble to useGlobalShortcuts' window listener. */}
+       *  can bubble to useGlobalShortcuts' window listener. Each remove
+       *  button absorbs a Delete aimed at itself the same way: a focused
+       *  button is not an editing target either. */}
       <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer}>
         {regionShades.map((sh) => (
           <div key={sh.id} className="qz-meta-row" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -101,6 +103,7 @@ export default function RegionShadesCard() {
                 title="Remove"
                 aria-label="Remove region shade"
                 onClick={() => removeRowSafely(containerRef.current, () => removeRegionShade(sh.id))}
+                onKeyDown={absorbStrayDeleteOnContainer}
               >
                 ✕
               </IconButton>

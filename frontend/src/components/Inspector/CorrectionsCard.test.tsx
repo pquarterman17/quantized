@@ -27,6 +27,13 @@ function selectOwning(optionText: string): HTMLSelectElement {
   return sel as HTMLSelectElement;
 }
 
+/** Apply has fully returned: the button re-enables only in onApply's
+ *  `finally`, after the API call and any relabel. Wait on that STATE, not on
+ *  the API mock having been called (TEST_DETERMINISM_PLAN task 5). */
+async function applied(): Promise<void> {
+  await waitFor(() => expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled());
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(applyCorrectionsApi).mockResolvedValue({ ...sample, values: [[9], [19], [29]] });
@@ -50,20 +57,19 @@ describe("CorrectionsCard background picker", () => {
     fireEvent.change(selectOwning("pchip"), { target: { value: "pchip" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
-    await waitFor(() =>
-      expect(applyCorrectionsApi).toHaveBeenCalledWith({
-        dataset: sample,
-        params: {},
-        bg_dataset: bg,
-        bg_interp: "pchip",
-      }),
-    );
+    await applied();
+    expect(applyCorrectionsApi).toHaveBeenCalledWith({
+      dataset: sample,
+      params: {},
+      bg_dataset: bg,
+      bg_interp: "pchip",
+    });
   });
 
   it("sends no background when left at none", async () => {
     render(<CorrectionsCard active={d1} />);
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
-    await waitFor(() => expect(applyCorrectionsApi).toHaveBeenCalled());
+    await applied();
     expect(applyCorrectionsApi).toHaveBeenCalledWith({ dataset: sample, params: {} });
   });
 
@@ -92,12 +98,11 @@ describe("CorrectionsCard beam footprint (GOTO #7b)", () => {
     fireEvent.click(screen.getByLabelText("X axis is 2θ"));
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
-    await waitFor(() =>
-      expect(applyCorrectionsApi).toHaveBeenCalledWith({
-        dataset: sample,
-        params: { footprintW: 0.2, footprintL: 10, footprintTwoTheta: true },
-      }),
-    );
+    await applied();
+    expect(applyCorrectionsApi).toHaveBeenCalledWith({
+      dataset: sample,
+      params: { footprintW: 0.2, footprintL: 10, footprintTwoTheta: true },
+    });
   });
 
   it("omits the footprint params when the geometry is incomplete", async () => {
@@ -107,7 +112,7 @@ describe("CorrectionsCard beam footprint (GOTO #7b)", () => {
     fireEvent.change(wField, { target: { value: "0.2" } }); // no sample length
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
-    await waitFor(() => expect(applyCorrectionsApi).toHaveBeenCalled());
+    await applied();
     expect(applyCorrectionsApi).toHaveBeenCalledWith({ dataset: sample, params: {} });
   });
 });
@@ -133,7 +138,7 @@ describe("CorrectionsCard rescaling (MAIN #37)", () => {
     render(<CorrectionsCard active={d1} />);
     fireEvent.change(scaleInput("Y scale"), { target: { value: "1000" } });
     apply();
-    await waitFor(() => expect(applyCorrectionsApi).toHaveBeenCalled());
+    await applied();
     const { params } = vi.mocked(applyCorrectionsApi).mock.calls[0][0];
     expect(params.yScale).toBe(1000);
   });
@@ -143,14 +148,14 @@ describe("CorrectionsCard rescaling (MAIN #37)", () => {
     fireEvent.change(opSelect("X scale"), { target: { value: "÷" } });
     fireEvent.change(scaleInput("X scale"), { target: { value: "10" } });
     apply();
-    await waitFor(() => expect(applyCorrectionsApi).toHaveBeenCalled());
+    await applied();
     expect(vi.mocked(applyCorrectionsApi).mock.calls[0][0].params.xScale).toBe(0.1);
   });
 
   it("omits the scale entirely when the field is blank", async () => {
     render(<CorrectionsCard active={d1} />);
     apply();
-    await waitFor(() => expect(applyCorrectionsApi).toHaveBeenCalled());
+    await applied();
     const { params } = vi.mocked(applyCorrectionsApi).mock.calls[0][0];
     expect(params.xScale).toBeUndefined();
     expect(params.yScale).toBeUndefined();
@@ -220,8 +225,8 @@ describe("CorrectionsCard rescale relabel (MAIN #37)", () => {
     fireEvent.change(scaleInput("Y scale"), { target: { value: "1000" } });
     fireEvent.change(labelInput("Y label"), { target: { value: "Moment (memu)" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
-    await waitFor(() => expect(applyCorrectionsApi).toHaveBeenCalled());
-    await waitFor(() => expect(useApp.getState().yAxisLabel).toBe("Moment (memu)"));
+    await applied();
+    expect(useApp.getState().yAxisLabel).toBe("Moment (memu)");
     // …and the scale still went with it.
     expect(vi.mocked(applyCorrectionsApi).mock.calls[0][0].params.yScale).toBe(1000);
   });
@@ -248,7 +253,7 @@ describe("CorrectionsCard rescale relabel (MAIN #37)", () => {
     render(<CorrectionsCard active={d1} />);
     fireEvent.change(scaleInput("Y scale"), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
-    await waitFor(() => expect(applyCorrectionsApi).toHaveBeenCalled());
+    await applied();
     expect(useApp.getState().yAxisLabel).toBe("original");
   });
 });

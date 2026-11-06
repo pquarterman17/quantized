@@ -167,15 +167,56 @@ PlotView↔sanitize is compile-time complete; promotion decomposition has no
 double-apply; export field semantics match the Stage (incl. shade alpha);
 zero console errors across the whole adversarial run; JSON.parse/floating-
 promise/cleanup classes all clean. Follow-ups booked, NOT fixed:
-`ErrorRolesCard`'s remove control is a `<span role="button">`, not
-keyboard-reachable (a11y gap, pre-existing); `SavedFiguresSection`'s delete
-button still ~31 px past the panel edge at the 160 px MINIMUM width
-(pre-existing "Editable" label-width constraint; fine at default);
-F2.1e's detached-session fallback branch in `fileCommands.ts` may be dead
-code (`focusWindow` invariant seems to make it unreachable — verify before
-deleting, it is a deliberate fallback).
+~~`ErrorRolesCard`'s remove control is a `<span role="button">`, not
+keyboard-reachable (a11y gap, pre-existing)~~ (FIXED 2026-11-03, together
+with the same gap in its ✓ and in the home screen's recent ✕ / pin ☆; see
+`BUGS_AND_ISSUES.md` Completed). ~~Booked by that fix: the ✕
+`IconButton`s in the Inspector's Region shades, Shapes, Reference lines and
+Annotations cards pass Delete/Backspace through to the global Delete
+shortcut, which removes the active DATASET~~ (FIXED 2026-11-05: each of them,
+and Reference lines' "Remove group", absorbs a Delete aimed at itself; their
+Publication Preview panel equivalents were never affected, because that
+window is a `ToolWindow`). The root-cause alternative, still open as a design
+option, is to narrow the global Delete so that a focused control never
+triggers it (only `<body>` or the Library would); that needs an audit of
+every flow that relies on the current behaviour first. ~~`SavedFiguresSection`'s
+delete button ~31 px past the panel edge at the 160 px MINIMUM width~~
+(OBSOLETE, verified in the real app 2026-11-05: publication figures now render
+as Library Tree rows, whose actions live in the context menu, and the flat
+`SavedFiguresSection` mounts only when the hierarchy is empty, which a saved
+figure itself prevents). ~~F2.1e's detached-session fallback branch in
+`fileCommands.ts` may be dead code~~ (VERIFIED 2026-11-05, KEPT: in a
+consistent store it is unreachable, because focus can only rest on a plot
+window and every plot window carries a document, including legacy ones
+migrated on load. It stays as the deliberate fallback it was written as; its
+tests in `figureBuilderCommand.test.ts` reach it by mocking
+`beginFigurePublicationEdit`).
 
 ### Backend hardening rounds (standing — re-sweep as routes land)
+
+**Fourth round (2026-11-05).** A generated probe instead of a reading
+audit: every POST `/api` route (241) received bodies built from its own
+OpenAPI request schema in nine shapes (empty arrays, one row, all zeros,
+negatives, 1e300, and malformed datasets: ragged rows, row/time length
+mismatch, wrong-typed fields, duplicate labels and X). 2,133 requests, zero
+HTTP 500s; malformed input came back 4xx everywhere. Coverage limit: only 133
+routes ever returned a 200, so the other 108 rejected every generated body at
+validation and their internals were not exercised by this round. The probe
+is now `tools/route_probe.py` (one command; exits 1 on any 5xx; `--verbose`
+lists the routes never exercised past validation). On 2026-11-06 it gained a
+"plausible" shape (in-bounds numbers, 30-row non-constant arrays and
+datasets, real names for free-text vocabularies), tuple sizes and real
+dataset-field detection: coverage rose from 133 to 167 of 237 routes, still
+zero 5xx. The remaining 70 need hand-written bodies (exactly-one-of field
+pairs, files on disk, dataset handles, domain-specific values). The same day
+fixed three messages the probe surfaced: a dataset missing `time`/`values`
+said only `'time'`, ragged `values` rows said numpy's "setting an array
+element with a sequence", and a zero-error-variance `anova2` said "float
+division by zero". Booked, NOT fixed: for extreme inputs (1e300) several
+calculators still show Python's overflow text, e.g. "(34, 'Numerical result
+out of range')" or "complex division by zero". 127 route sites build their
+422 with `detail=str(exc)`, so the clean fix is one shared message helper
+used by all of them, not per-route patches.
 
 **Third round (2026-08-12, `872a26f`).** Audited ~29 route/calc modules added
 or substantially changed since the second round (RSM, outliers/varcomp,

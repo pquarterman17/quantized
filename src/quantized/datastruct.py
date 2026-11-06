@@ -325,6 +325,17 @@ class DataStruct:
             time_arr = np.asarray(time, dtype=float)
             values_arr = np.asarray(values, dtype=float)
         except (TypeError, ValueError) as exc:
+            # Ragged rows are the common malformed case, and numpy's message
+            # for them ("setting an array element with a sequence...") means
+            # nothing to a user. Checked only after the conversion failed, so
+            # a well-formed dataset pays nothing for it.
+            if isinstance(values, (list, tuple)):
+                widths = {len(row) for row in values if isinstance(row, (list, tuple))}
+                if len(widths) > 1:
+                    raise ValueError(
+                        "dataset values rows must all have the same number of channels "
+                        f"(found row widths {sorted(widths)})"
+                    ) from exc
             raise ValueError(f"dataset time/values must be numeric arrays: {exc}") from exc
         return cls(
             time=time_arr,
@@ -398,6 +409,11 @@ class DataStruct:
         # vestigial out-of-range entry deserves a 422 or a silent drop is a
         # real product question; it is not this commit's, and answering it by
         # accident cost real data.
+        # A missing required key used to surface as the bare KeyError text
+        # ("'time'") in the 422 a route returns; name the field instead.
+        for key in ("time", "values"):
+            if key not in payload:
+                raise ValueError(f"dataset is missing required field {key!r}")
         return cls.create(
             time=payload["time"],
             values=payload["values"],

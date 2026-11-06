@@ -217,7 +217,8 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
     });
     vi.mocked(autoGuess).mockResolvedValue({ p0: [1] });
     const { result } = renderHook(() => useCurveFit());
-    await waitFor(() => expect(listFitModels).toHaveBeenCalled());
+    // No wait needed first: the guess uses the default model, and act flushes
+    // the model-list fetch (same as the gap-rows test below).
     await act(async () => {
       await result.current.run("guess");
     });
@@ -551,10 +552,16 @@ describe("useCurveFit — By grouping (JMP_GAP_PLAN J7 residual)", () => {
     act(() => result.current.setByCol(0));
     await waitFor(() => expect(result.current.byResults).toHaveLength(2));
     vi.mocked(fitModel).mockClear();
+    // A distinguishable result, so the wait is on every level's re-fitted STATE.
+    vi.mocked(fitModel).mockResolvedValue({ params: [7], yFit: [0] });
     act(() => result.current.setModelName("Quadratic"));
     await waitFor(() =>
-      expect(fitModel).toHaveBeenCalledWith(expect.objectContaining({ model: "Quadratic" })),
+      expect(result.current.byResults.map((r) => r.result)).toEqual([
+        expect.objectContaining({ params: [7] }),
+        expect.objectContaining({ params: [7] }),
+      ]),
     );
+    expect(fitModel).toHaveBeenCalledWith(expect.objectContaining({ model: "Quadratic" }));
   });
 
   it("clears byResults when By is set back to none", async () => {

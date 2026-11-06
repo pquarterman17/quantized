@@ -2,11 +2,13 @@
 // happens when ASKED (never silently), a one-sided binding is called out rather
 // than silently drawing nothing, and removing a binding leaves the column alone.
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, renderHook, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import ErrorRolesCard from "./ErrorRolesCard";
 import { useApp } from "../../store/useApp";
+import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 import type { Dataset } from "../../lib/types";
 
 const ds = (labels: string[], errorRoles?: Dataset["errorRoles"]): Dataset => ({
@@ -127,5 +129,70 @@ describe("ErrorRolesCard", () => {
     const axis = screen.getByTitle(/horizontally/) as HTMLSelectElement;
     fireEvent.change(axis, { target: { value: "x" } });
     expect(useApp.getState().datasets[0].errorRoles?.[0].axis).toBe("x");
+  });
+
+  // The row's ✕ and ✓ were <span role="button">: ✕ had tabIndex={-1} and no
+  // key handler, so a keyboard user could not remove a binding at all.
+  describe("keyboard access to the row controls", () => {
+    const live = () => useApp.getState().datasets[0];
+    const tabTo = async (user: ReturnType<typeof userEvent.setup>, target: HTMLElement) => {
+      for (let k = 0; k < 30 && document.activeElement !== target; k++) await user.tab();
+    };
+
+    it("Tab reaches the remove control, Enter removes the binding, and focus stays off <body>", async () => {
+      const user = userEvent.setup();
+      useApp.setState({ datasets: [ds(["M", "dM"], [{ channel: 1, target: 0, axis: "y", side: "both" }])] });
+      const { rerender } = render(<ErrorRolesCard active={live()} />);
+      const remove = screen.getByRole("button", { name: /Remove error role/ });
+      await tabTo(user, remove);
+      expect(remove).toHaveFocus();
+      await user.keyboard("{Enter}");
+      expect(live().errorRoles).toEqual([]);
+      rerender(<ErrorRolesCard active={live()} />);
+      expect(screen.queryByRole("button", { name: /Remove error role/ })).toBeNull();
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
+    it("absorbs Delete on a focused remove control instead of letting it remove the dataset", () => {
+      // Now that ✕ takes focus, an unabsorbed Delete would reach the global
+      // Delete shortcut and remove the active DATASET, not this one binding.
+      // The real global listener is mounted, so this checks that outcome.
+      useApp.setState({
+        datasets: [ds(["M", "dM"], [{ channel: 1, target: 0, axis: "y", side: "both" }])],
+        confirmRemove: false,
+      });
+      renderHook(() => useGlobalShortcuts());
+      render(<ErrorRolesCard active={live()} />);
+      const remove = screen.getByRole("button", { name: /Remove error role/ });
+      remove.focus();
+      expect(fireEvent.keyDown(remove, { key: "Delete" })).toBe(false); // defaultPrevented
+      expect(fireEvent.keyDown(remove, { key: "Backspace" })).toBe(false);
+      expect(useApp.getState().datasets).toHaveLength(1);
+      expect(live().errorRoles).toHaveLength(1);
+      // Control: the same key from <body> does remove it, so the listener is live.
+      fireEvent.keyDown(document.body, { key: "Delete" });
+      expect(useApp.getState().datasets).toHaveLength(0);
+    });
+
+    it("names a binding whose column is gone the way the row shows it", () => {
+      useApp.setState({ datasets: [ds(["M", "dM"], [{ channel: 5, target: 0, axis: "y", side: "both" }])] });
+      render(<ErrorRolesCard active={live()} />);
+      expect(screen.getByRole("button", { name: "Remove error role for ch 5" })).toBeInTheDocument();
+    });
+
+    it("confirming from the keyboard does not drop focus to <body> when ✓ disappears", async () => {
+      // ✓ removes itself once the pairing is confirmed. Focus left on <body>
+      // arms the global Delete shortcut, which removes the active dataset.
+      const user = userEvent.setup();
+      useApp.setState({ datasets: [ds(["R", "err"], [{ channel: 1, target: 0, axis: "y", side: "both" }])] });
+      const { rerender } = render(<ErrorRolesCard active={live()} />);
+      const confirm = screen.getByRole("button", { name: "Confirm error role for err" });
+      await tabTo(user, confirm);
+      expect(confirm).toHaveFocus();
+      await user.keyboard(" ");
+      rerender(<ErrorRolesCard active={live()} />);
+      expect(screen.queryByRole("button", { name: /Confirm error role/ })).toBeNull();
+      expect(document.activeElement).not.toBe(document.body);
+    });
   });
 });

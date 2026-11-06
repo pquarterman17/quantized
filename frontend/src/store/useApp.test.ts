@@ -1794,10 +1794,14 @@ describe("useApp lazy per-book import (ORIGIN_FILE_DECODE_PLAN #38)", () => {
         },
       ],
     });
+    useToasts.setState({ toasts: [] });
     vi.mocked(fetchBookData).mockRejectedValue(new Error("network down"));
     useApp.getState().ensureBookData(id);
-    await vi.waitFor(() => expect(fetchBookData).toHaveBeenCalled());
-    await new Promise((r) => setTimeout(r, 0)); // let the rejection settle
+    // Settled once the failure is announced: wait on that toast, not on the
+    // fetch mock having been called.
+    await vi.waitFor(() =>
+      expect(useToasts.getState().toasts.some((t) => t.msg.includes("network down"))).toBe(true),
+    );
     expect(useApp.getState().datasets[0].pending).toBeDefined(); // still pending — retryable
   });
 
@@ -1817,7 +1821,9 @@ describe("useApp lazy per-book import (ORIGIN_FILE_DECODE_PLAN #38)", () => {
     });
     vi.mocked(fetchBookData).mockResolvedValue(raw);
     useApp.getState().setActive("b");
-    await vi.waitFor(() => expect(fetchBookData).toHaveBeenCalled());
+    // The fetched book is installed: wait on that state, then check the fetch.
+    await vi.waitFor(() => expect(useApp.getState().datasets.find((d) => d.id === "b")?.pending).toBeUndefined());
+    expect(fetchBookData).toHaveBeenCalled();
   });
 
   it("resolvePendingDatasets awaits every pending dataset and lets a failure propagate", async () => {
