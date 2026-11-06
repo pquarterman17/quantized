@@ -91,9 +91,18 @@ jobs:
     name: e2e cross-browser (${{ matrix.engine }})
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    # 50, not 25: the install step below may take up to 30 on its own when
-    # apt is slow, which leaves 20 for everything else (it all fit in 25).
-    timeout-minutes: 50
+    # Microsoft's Playwright image already holds every engine and its system
+    # libraries. `playwright install --with-deps` on the bare runner fetched
+    # ~185 apt packages per run, and a slow Ubuntu mirror ran that step past
+    # its 30-minute limit three times on 2026-11-05/06 (PRs #620 and #616)
+    # before any test started. In the image the install is a no-op.
+    #
+    # Keep the tag on the Playwright version in frontend/package-lock.json
+    # (PW_IMAGE_VERSION below). On a mismatch the "Check" step warns and
+    # `playwright install` fetches only the browser binary, still no apt.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -104,6 +113,10 @@ jobs:
     env:
       QZ_E2E_XBROWSER: "1"
       QZ_E2E_XBROWSER_FULL: ${{ inputs.xbrowser_full && '1' || '' }}
+      PW_IMAGE_VERSION: "1.64.1"
+      # The container runs as root while Actions points HOME at a directory
+      # it does not own, which Firefox refuses to start under.
+      HOME: /root
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v5
@@ -121,30 +134,17 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend deps
         run: npm ci
-      # Browser binaries are cached per engine AND per Playwright version
-      # (read from the lockfile, so a Playwright bump is a new key and never
-      # reuses a mismatched revision). OS libraries cannot be cached, so the
-      # install step always runs: on a hit it finds the binary present and
-      # only installs the system dependencies. The key also carries the OS
-      # release: Playwright ships per-release WebKit builds (ubuntu24.04 vs
-      # ubuntu26.04), and a build restored onto a newer runner image is seen
-      # as installed but cannot load its libicu/libxml2 sonames.
-      - name: Resolve Playwright version
-        id: pw
+      - name: Check the image matches the locked Playwright
         run: |
-          echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
-          . /etc/os-release && echo "os=${ID}${VERSION_ID}" >> "$GITHUB_OUTPUT"
-      - name: Cache Playwright browser
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.pw.outputs.os }}-${{ matrix.engine }}-${{ steps.pw.outputs.version }}
+          locked=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")
+          if [ "$locked" != "$PW_IMAGE_VERSION" ]; then
+            echo "::warning::Playwright is $locked in package-lock.json but the e2e-xbrowser image is v$PW_IMAGE_VERSION; bump the container tag in e2e.yml."
+          fi
       - name: Install Playwright (${{ matrix.engine }})
-        # Own budget: a slow apt mirror (webkit's system deps are the largest)
-        # twice ran this past the old 25-minute JOB limit. A step limit fails
-        # here, by name, instead of cancelling the whole job.
-        timeout-minutes: 30
-        run: npx playwright install --with-deps ${{ matrix.engine }}
+        # A no-op when the image matches; otherwise downloads the browser
+        # binary only. Never --with-deps: the image already has the libraries.
+        timeout-minutes: 10
+        run: npx playwright install ${{ matrix.engine }}
       - name: Build the SPA (what the backend serves)
         run: npm run build
       - name: Run the cross-browser journeys (${{ matrix.engine }})
