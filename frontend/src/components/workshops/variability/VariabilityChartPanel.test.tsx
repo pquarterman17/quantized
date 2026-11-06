@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { statsNestedAnova, statsVarianceComponents, statsVariabilitySummary, type NestedAnovaResponse, type VarianceComponentsResponse, type VariabilitySummaryResponse } from "../../../lib/api";
@@ -113,14 +113,12 @@ describe("VariabilityChartPanel", () => {
   it("defaults to lot/wafer/measurement and renders the chart + ANOVA + variance-components tables", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "wafers.dat", data: DATA }], activeId: "d1" });
     render(<VariabilityChartPanel />);
-    await waitFor(() =>
-      expect(statsNestedAnova).toHaveBeenCalledWith([
-        [[2, 4, 6], [4, 6, 8]],
-        [[6, 8, 10], [8, 10, 12]],
-        [[10, 12, 14], [12, 14, 16]],
-      ]),
-    );
     expect(await screen.findByRole("img", { name: "variability chart" })).toBeInTheDocument();
+    expect(statsNestedAnova).toHaveBeenCalledWith([
+      [[2, 4, 6], [4, 6, 8]],
+      [[6, 8, 10], [8, 10, 12]],
+      [[10, 12, 14], [12, 14, 16]],
+    ]);
     expect(screen.getByText("Nested ANOVA")).toBeInTheDocument();
     expect(screen.getByText(/Variance components/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Report/ })).toBeInTheDocument();
@@ -136,7 +134,6 @@ describe("VariabilityChartPanel", () => {
     vi.mocked(statsNestedAnova).mockResolvedValue({ ...ANOVA, b_within_a_estimable: false, a_tested_against: "Error" });
     useApp.setState({ datasets: [{ id: "d1", name: "wafers.dat", data: DATA }], activeId: "d1" });
     render(<VariabilityChartPanel />);
-    await waitFor(() => expect(statsNestedAnova).toHaveBeenCalled());
     expect(await screen.findByText(/variance components need/)).toBeInTheDocument();
     expect(screen.queryByText(/Variance components \(/)).not.toBeInTheDocument();
     expect(statsVarianceComponents).not.toHaveBeenCalled();
@@ -145,9 +142,12 @@ describe("VariabilityChartPanel", () => {
   it("switching Factor A re-fetches with the new grouping", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "wafers.dat", data: DATA }], activeId: "d1" });
     render(<VariabilityChartPanel />);
-    await waitFor(() => expect(statsNestedAnova).toHaveBeenCalled());
+    await screen.findByText(/Variance components \(/); // the first result has landed
     vi.mocked(statsNestedAnova).mockClear();
+    // A distinguishable re-fetch result, so the wait is on what it renders.
+    vi.mocked(statsNestedAnova).mockResolvedValue({ ...ANOVA, b_within_a_estimable: false, a_tested_against: "Error" });
     fireEvent.change(screen.getByLabelText("Factor A (outer)"), { target: { value: "1" } });
-    await waitFor(() => expect(statsNestedAnova).toHaveBeenCalled());
+    expect(await screen.findByText(/variance components need/)).toBeInTheDocument();
+    expect(statsNestedAnova).toHaveBeenCalled();
   });
 });

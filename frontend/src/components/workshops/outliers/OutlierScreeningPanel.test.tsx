@@ -50,8 +50,8 @@ beforeEach(() => {
 describe("OutlierScreeningPanel", () => {
   it("defaults to Grubbs and renders the statistic summary + flagged row", async () => {
     render(<OutlierScreeningPanel />);
-    await waitFor(() => expect(grubbsMock).toHaveBeenCalled());
     expect(await screen.findByText(/G = 3\.5/)).toBeInTheDocument();
+    expect(grubbsMock).toHaveBeenCalled();
     expect(screen.getByText("4")).toBeInTheDocument(); // flagged row index
     expect(screen.getByText("999")).toBeInTheDocument(); // flagged value
   });
@@ -62,16 +62,16 @@ describe("OutlierScreeningPanel", () => {
       N: 7, excluded_indices: [], method: "generalized ESD (Rosner)",
     });
     render(<OutlierScreeningPanel />);
-    await waitFor(() => expect(grubbsMock).toHaveBeenCalled());
+    await screen.findByText(/G = 3\.5/); // the default Grubbs result has landed
     fireEvent.change(screen.getByLabelText("Method"), { target: { value: "rosner" } });
-    await waitFor(() => expect(rosnerMock).toHaveBeenCalled());
     expect(await screen.findByText(/1 of up to 2 tested/)).toBeInTheDocument();
+    expect(rosnerMock).toHaveBeenCalled();
   });
 
   it("'Select flagged rows' writes the shared selection without excluding anything", async () => {
     render(<OutlierScreeningPanel />);
-    await waitFor(() => expect(grubbsMock).toHaveBeenCalled());
-    fireEvent.click(await screen.findByRole("button", { name: "Select flagged rows" }));
+    await screen.findByText(/G = 3\.5/); // the flagged result has landed
+    fireEvent.click(screen.getByRole("button", { name: "Select flagged rows" }));
     expect(useApp.getState().selection).toEqual({ datasetId: "d1", rows: [4] });
     expect(useApp.getState().datasets[0].excludedRows ?? []).toEqual([]);
   });
@@ -79,7 +79,6 @@ describe("OutlierScreeningPanel", () => {
   it("disables 'Select flagged rows' when nothing is flagged", async () => {
     grubbsMock.mockResolvedValue({ ...GRUBBS_RESULT, flagged: false, flagged_indices: [] });
     render(<OutlierScreeningPanel />);
-    await waitFor(() => expect(grubbsMock).toHaveBeenCalled());
     expect(await screen.findByText("none flagged")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Select flagged rows" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Save result" })).toBeEnabled();

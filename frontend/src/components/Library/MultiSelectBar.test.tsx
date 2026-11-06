@@ -118,18 +118,27 @@ describe("MultiSelectBar actions dispatch the existing bulk operations", () => {
   });
 
   it("a blank tag entry does nothing", async () => {
-    vi.mocked(askParams).mockResolvedValue({ tag: "   " });
+    // A blank entry changes nothing, so there is no state to wait on for it
+    // alone. Tag again with a real value and wait for THAT to land: the two
+    // runs settle in order, so by then the blank one has finished too.
+    useToasts.setState({ toasts: [] });
+    vi.mocked(askParams).mockResolvedValueOnce({ tag: "   " }).mockResolvedValueOnce({ tag: "MvsH" });
     render(<MultiSelectBar />);
     fireEvent.click(screen.getByText("Tag"));
-    await waitFor(() => expect(askParams).toHaveBeenCalled());
-    expect(useApp.getState().datasets.find((d) => d.id === "a")!.tags ?? []).toEqual([]);
+    fireEvent.click(screen.getByText("Tag"));
+    await waitFor(() => expect(useApp.getState().history).toHaveLength(1));
+    expect(useApp.getState().datasets.find((d) => d.id === "a")!.tags).toEqual(["MvsH"]);
+    expect(useToasts.getState().toasts.map((t) => t.msg)).toEqual(['tagged 2 dataset(s) "MvsH"']);
   });
 
   it("Export sends the selected ids to the consolidated exporter", async () => {
     vi.mocked(exportConsolidated).mockResolvedValue(undefined);
     render(<MultiSelectBar />);
     fireEvent.click(screen.getByText("Export"));
-    await waitFor(() => expect(exportConsolidated).toHaveBeenCalled());
+    // Done once the export reports itself; then check what was sent.
+    await waitFor(() =>
+      expect(useToasts.getState().toasts.some((t) => t.msg.startsWith("exported 2 dataset(s)"))).toBe(true),
+    );
     expect(exportConsolidated).toHaveBeenCalledWith({
       datasets: [
         { dataset: raw, name: "a.dat" },

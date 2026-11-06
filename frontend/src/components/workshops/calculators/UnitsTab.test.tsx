@@ -4,7 +4,7 @@
 // "units" tab is the default) so the category Select from useCalculators'
 // fetch effect is exercised end to end, matching the SldTab.test.tsx pattern.
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { copyText } from "../../../lib/clipboard";
@@ -229,7 +229,7 @@ describe("UnitsTab", () => {
       target: { value: "photon_energy" },
     });
     fireEvent.click(screen.getByText("="));
-    await waitFor(() => expect(convertUnits).toHaveBeenCalledTimes(4));
-    expect(screen.getByText("1239.84")).toBeInTheDocument();
+    expect(await screen.findByText("1239.84")).toBeInTheDocument();
+    expect(convertUnits).toHaveBeenCalledTimes(4);
   });
 });

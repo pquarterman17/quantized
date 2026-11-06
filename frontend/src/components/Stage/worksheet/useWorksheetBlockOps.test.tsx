@@ -54,11 +54,17 @@ beforeEach(() => {
 });
 
 describe("large-paste feedback", () => {
+  /** The paste has finished: its outcome line ("pasted N cells", not
+   *  "nothing pasted") is the resolved state. Waiting on the FIRST status instead would settle on the
+   *  "pasting…" announcement, before the outcome. */
+  const pasteOutcome = () =>
+    vi.waitFor(() => expect(setStatus.mock.calls.some((c) => /^pasted \d/.test(String(c[0])))).toBe(true));
+
   it("stays SILENT for an ordinary paste", async () => {
     // A message that flashes for 3 ms is noise, not feedback.
     const { result } = renderHook(() => useWorksheetBlockOps(source([0], [0])));
     result.current.pasteBlock();
-    await vi.waitFor(() => expect(setStatus).toHaveBeenCalled());
+    await pasteOutcome();
     expect(setStatus.mock.calls.some((c) => String(c[0]).includes("pasting"))).toBe(false);
   });
 
@@ -68,7 +74,7 @@ describe("large-paste feedback", () => {
     });
     const { result } = renderHook(() => useWorksheetBlockOps(source([0], [0])));
     result.current.pasteBlock();
-    await vi.waitFor(() => expect(setStatus).toHaveBeenCalled());
+    await pasteOutcome();
     expect(setStatus.mock.calls.some((c) => String(c[0]).includes("pasting"))).toBe(true);
   });
 
@@ -78,9 +84,7 @@ describe("large-paste feedback", () => {
     });
     const { result } = renderHook(() => useWorksheetBlockOps(source([0], [0])));
     result.current.pasteBlock();
-    await vi.waitFor(() =>
-      expect(setStatus.mock.calls.some((c) => String(c[0]).includes("pasted"))).toBe(true),
-    );
+    await pasteOutcome();
   });
 });
 
