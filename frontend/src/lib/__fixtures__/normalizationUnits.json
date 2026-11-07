@@ -1,0 +1,65 @@
+{
+  "_comment": "Unit tables shared by calc/magnetometry_normalization.py + calc/sample_geometry.py and the frontend preview (lib/sampleNormalization.ts, lib/sampleGeometry.ts). Both sides are tested against this file; regenerate it from the Python tables when they change.",
+  "raw_moment_to_emu": {
+    "emu": 1.0,
+    "A·m²": 1000.0
+  },
+  "basis_output_units": {
+    "none": [
+      "emu",
+      "A·m²"
+    ],
+    "mass": [
+      "emu/g",
+      "A·m²/kg"
+    ],
+    "volume": [
+      "emu/cm³",
+      "A/m",
+      "kA/m"
+    ],
+    "area": [
+      "emu/cm²",
+      "A·m²/m²"
+    ]
+  },
+  "output_per_emu": {
+    "emu": 1.0,
+    "A·m²": 0.001,
+    "emu/g": 1.0,
+    "A·m²/kg": 1.0,
+    "emu/cm³": 1.0,
+    "A/m": 1000.0,
+    "kA/m": 1.0,
+    "emu/cm²": 1.0,
+    "A·m²/m²": 10.0
+  },
+  "mass_to_g": {
+    "µg": 1e-06,
+    "mg": 0.001,
+    "g": 1.0,
+    "kg": 1000.0
+  },
+  "length_to_cm": {
+    "Å": 1e-08,
+    "nm": 1e-07,
+    "µm": 0.0001,
+    "mm": 0.1,
+    "cm": 1.0,
+    "m": 100.0
+  },
+  "area_to_cm2": {
+    "µm²": 1e-08,
+    "mm²": 0.01,
+    "cm²": 1.0,
+    "m²": 10000.0
+  },
+  "volume_to_cm3": {
+    "µm³": 1e-12,
+    "mm³": 0.001,
+    "cm³": 1.0,
+    "µL": 0.001,
+    "mL": 1.0,
+    "m³": 1000000.0
+  }
+}
