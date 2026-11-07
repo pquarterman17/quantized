@@ -66,3 +66,25 @@ export function convertUnits(
 ): Promise<{ result: number | (number | null)[]; info: CalcResult }> {
   return postJSON("/api/reference/convert", { value, from, to });
 }
+
+/** One built-in reference phase (calc.phase_database, port of MATLAB
+ *  calc.crystal.phaseDatabase). `basis` rows are [symbol, x, y, z]. */
+export interface PhaseInfo {
+  name: string;
+  formula: string;
+  a: number;
+  b: number;
+  c: number;
+  alpha: number;
+  beta: number;
+  gamma: number;
+  centering: "P" | "F" | "I" | "A" | "B" | "C" | "R";
+  system: string;
+  category: string;
+  icsd: number;
+  basis: [string, number, number, number][];
+}
+
+export function getPhases(): Promise<{ phases: PhaseInfo[] }> {
+  return getJSON("/api/reference/phases");
+}

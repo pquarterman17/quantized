@@ -1,4 +1,5 @@
-"""Thin reference-data routes: physical constants, element table, unit convert.
+"""Thin reference-data routes: physical constants, element table, phase table,
+unit convert.
 
 Wraps the finished W4 backend helpers (``calc.constants``, ``calc.element_data``,
 ``calc.unit_convert``). Pure lookups + a unit-expression converter; no logic here.
@@ -13,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from quantized.calc.constants import constants, constants_by_system
 from quantized.calc.element_data import by_symbol, element_data
+from quantized.calc.phase_database import list_phases
 from quantized.calc.unit_convert import unit_convert
 from quantized.calc.units_data import UNIT_CATEGORIES
 from quantized.routes._errors import call_calc
@@ -43,6 +45,13 @@ def get_constants() -> dict[str, Any]:
         "constants": to_jsonable(constants()),
         "systems": to_jsonable(constants_by_system()),
     }
+
+
+@router.get("/phases")
+def get_phases(category: str | None = None) -> dict[str, Any]:
+    """The built-in reference phase table (``calc.phase_database``), optionally
+    one category; each phase carries its cell, centering, system and basis."""
+    return {"phases": call_calc(list_phases, category)}
 
 
 @router.get("/elements")

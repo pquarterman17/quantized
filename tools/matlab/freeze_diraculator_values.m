@@ -1002,6 +1002,14 @@ function freeze_diraculator_values()
         'sources', {{'La2O3','SrO','MnO'}}), 'output', rmfield(r, 'latex')), ...
         fullfile(goldenDir, 'calc_dira_xray_co_deposition_b.json'));
 
+    % phaseDatabase — the 52-phase reference table (THIN_FILM_STACK_PLANNING_PLAN
+    % G2), frozen whole. Python: calc/phase_database.json, transcribed from the
+    % .m source with the basis helpers expanded; this freeze proves the
+    % transcription. Class (a): direct +calc call.
+    db = calc.crystal.phaseDatabase();
+    writeJson(struct('output', {db}), ...
+        fullfile(goldenDir, 'calc_dira_crystal_phase_database.json'));
+
     fprintf('Done.\n');
 end
 

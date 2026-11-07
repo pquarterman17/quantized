@@ -23,6 +23,7 @@ vi.mock("../../../lib/api/reference", () => ({
   // partial mock must cover it too, or the call throws instead of the
   // original real-fetch-rejects-and-is-caught behavior.
   getUnitCategories: vi.fn().mockRejectedValue(new Error("offline")),
+  getPhases: vi.fn().mockRejectedValue(new Error("offline")),
 }));
 
 vi.mock("../../../lib/api/crystallography", () => ({
