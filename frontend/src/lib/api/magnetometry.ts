@@ -46,24 +46,40 @@ export function subtractHysteresisBackground(body: {
   return postJSON("/api/magnetometry/subtract-hysteresis-background", body);
 }
 
-/** Convert field (x) + moment (y) units, sample-aware (emu→emu/g needs mass). */
-export function convertMagUnits(body: {
+/** Explicit-basis sample normalization (MAIN_PLAN #42): converts the field
+ *  axis and divides the raw moment by the chosen basis's divisor, which the
+ *  backend computes itself from the entered profile values + units. Returns
+ *  the full calculation record for provenance. A missing/invalid profile
+ *  field is a 422 naming that field. */
+export function normalizeMagMoment(body: {
   x: number[];
   y: number[];
-  from_field?: string;
-  to_field?: string;
-  from_moment?: string;
-  to_moment?: string;
-  sample_mass?: number;
-  sample_volume?: number;
+  from_field: string;
+  to_field: string;
+  from_moment: string;
+  basis: string;
+  to_moment: string;
+  geometry: string;
+  profile: Record<string, { value: number | null; unit: string }>;
 }): Promise<{
   x: (number | null)[];
   y: (number | null)[];
   x_unit: string;
   y_unit: string;
   warning: string;
+  basis: string;
+  geometry: string;
+  factor: number;
+  divisor: number;
+  divisor_unit: string;
+  mass_g: number | null;
+  area_cm2: number | null;
+  volume_cm3: number | null;
+  canonical: Record<string, number>;
+  equation: string;
+  geometry_equation: string;
 }> {
-  return postJSON("/api/magnetometry/convert-units", body);
+  return postJSON("/api/magnetometry/normalize", body);
 }
 
 /** Convert applied field to internal field for a named sample geometry.

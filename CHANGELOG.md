@@ -6,6 +6,39 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Added
+
+- Magnetometry ▸ Units now normalizes the moment on a basis you choose:
+  none (raw moment), mass, area, or volume. Each basis offers only its own
+  output units: emu and A·m² for raw moment, emu/g and A·m²/kg for mass,
+  emu/cm³, A/m and kA/m for volume, and emu/cm² and A·m²/m² for area. The
+  basis is never inferred from metadata.
+- The sample is described with value-and-unit rows for mass, volume, area,
+  width, length, diameter and magnetic-film thickness. The magnetic-film
+  thickness is labelled as distinct from the substrate. Changing a unit
+  converts the entered number, so the physical value stays the same.
+- A live, read-only calculation summary shows the computed area or volume,
+  the divisor, the source and output units, the factor and the equation
+  before you apply. A missing, zero, negative or non-numeric field disables
+  Apply, and the panel names that field.
+- Apply creates a new dataset and never changes the imported values. The new
+  dataset's provenance records every input with its entered unit and
+  canonical value, the basis, the output unit, the factor and the formula,
+  so a reopened project reproduces the result exactly.
+- A "Use metadata values" button fills the profile from the dataset's
+  metadata, for example a Quantum Design `SAMPLE_MASS` header. It runs only
+  when you press it, fills only the fields the metadata states, and does not
+  choose a basis.
+- Sample profiles can be saved by name and loaded into the form for other
+  measurements. A saved profile is applied only when you load it. Saved
+  profiles are stored in the workspace (`.dwk`), and saving or deleting one
+  can be undone.
+- New backend route `POST /api/magnetometry/normalize`, backed by the pure
+  `calc.sample_geometry` and `calc.magnetometry_normalization` modules.
+  Tests check its conversion factors dimensionally, including
+  1 emu/cm³ = 1000 A/m. The A/m, A·m²/kg and area-normalized units are
+  documented SI extensions beyond the MATLAB `convertMagUnits`.
+
 ## [0.33.0] - 2026-11-01
 
 A **minor** security and maintenance release. It is the first published

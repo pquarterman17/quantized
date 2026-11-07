@@ -369,7 +369,7 @@ export type AutosaveState = Pick<
   // collections/quickPlotTemplates above. Was already serialized by the
   // whole-state-spread save path with no trigger here — a recipe CRUD edit
   // left the title bar showing clean right up to a crash.
-  | "plotRecipes"
+  | "plotRecipes" | "savedSampleProfiles" // MAIN_PLAN #42: named sample profiles (store/sampleProfiles.ts)
   | "fitModelCarry" // P2.7: a refused fit-model merge grows it on its own (store/workspaceHydration.ts)
 >;
 
@@ -400,7 +400,7 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.workbooks === prev.workbooks &&
     state.savedRois === prev.savedRois &&
     state.mapViews === prev.mapViews &&
-    state.collections === prev.collections &&
+    state.collections === prev.collections && state.savedSampleProfiles === prev.savedSampleProfiles &&
     state.visibleDetailsColumns === prev.visibleDetailsColumns &&
     state.plotRecipes === prev.plotRecipes && state.fitModelCarry === prev.fitModelCarry
   );

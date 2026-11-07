@@ -35,6 +35,7 @@ import type { RecalcMode } from "./recalc";
 import { sanitizeReports, type ReportEntry } from "./report";
 import { sanitizeSmartFolders, type SmartFolder } from "./smartfolders";
 import { sanitizeCollections, type Collection } from "./collections";
+import { sanitizeSavedSampleProfiles, type SavedSampleProfile } from "./sampleGeometry";
 import { sanitizeVisibleDetailsColumns, type LibraryDetailsColumnKey } from "./libraryDetailsColumns";
 import { sanitizeToolWindowLayout, type ToolWindowLayout } from "./toolwindow";
 import { applyWorkbookMigration, sanitizeWorkbooks, type WorkbookNode } from "./workbooks";
@@ -150,6 +151,7 @@ export interface WorkspaceState {
   expandedWorkbookIds?: string[];
   /** PR L (L0.48/L0.49) — saved-search/metadata-filter Collections; additive-optional, absent = none (lib/collections.ts). */
   collections?: Collection[];
+  savedSampleProfiles?: SavedSampleProfile[]; // MAIN_PLAN #42 — explicitly saved named sample profiles; additive-optional, absent = none
   visibleDetailsColumns?: LibraryDetailsColumnKey[]; // PR L slice 2 (L0.56) — additive-optional, absent = seven-column default
   /** P1.3 — every saved PlotRecipe scoped to this workspace (project scope); additive-optional, absent = none. */
   plotRecipes?: PlotRecipe[];
@@ -213,6 +215,7 @@ export interface LoadedWorkspace {
   workbookLastChild: Record<string, string>;
   expandedWorkbookIds: string[];
   collections: Collection[]; // PR L — always populated
+  savedSampleProfiles?: SavedSampleProfile[]; // MAIN_PLAN #42 — parser always populates; optional for hand-built fixtures, like mapViews
   visibleDetailsColumns: LibraryDetailsColumnKey[]; // PR L slice 2 — always populated
   plotRecipes: PlotRecipe[]; // P1.3 — always populated
   /** Were `plotRecipes` and `quickPlotTemplates` read from this file WHOLE?
@@ -472,6 +475,7 @@ export function parseWorkspace(
     workbookLastChild,
     expandedWorkbookIds,
     collections,
+    savedSampleProfiles: sanitizeSavedSampleProfiles(o.savedSampleProfiles),
     visibleDetailsColumns: sanitizeVisibleDetailsColumns(o.visibleDetailsColumns),
     plotRecipes,
     recipeSourcesComplete,
@@ -481,16 +485,12 @@ export function parseWorkspace(
   };
 }
 
-// Append-a-second-workspace ("Append Project") — `mergeWorkspace` +
-// `WorkspaceMergeResult` — lives in ./workspaceMerge.ts (moved out under the
-// RSM_CUTS_PLAN item 13 size ratchet: it was already fully self-contained,
-// with store/workspaceIO.ts as its only external caller, so extracting it
-// funds the named-ROI hook-in below without that caller needing to change).
+// Append Project (`mergeWorkspace` + `WorkspaceMergeResult`) lives in ./workspaceMerge.ts — moved
+// out, self-contained, under the RSM_CUTS_PLAN item 13 size ratchet (store/workspaceIO.ts calls it).
 export * from "./workspaceMerge";
 
-// The .dwk WRITE side (`serializeWorkspace` + the private `WorkspaceDoc`) —
-// extracted to ./workspaceSerialize.ts under this file's size pin, re-exported
-// here so every caller keeps importing it from `lib/workspace`.
+// The .dwk WRITE side (`serializeWorkspace` + the private `WorkspaceDoc`) — extracted to
+// ./workspaceSerialize.ts under this file's size pin, re-exported so callers import `lib/workspace`.
 export * from "./workspaceSerialize";
 
 // The store's load/append reach the fit-model merge through this (already
