@@ -22,7 +22,8 @@ reciprocal metric tensor (covers every system as a special case).
 ``V = abc·sqrt(1 − cos²α − cos²β − cos²γ + 2 cosα cosβ cosγ)``.
 
 **Theoretical (X-ray) density** — ``ρ = Z·M / (N_A · V)`` from the formula molar
-mass ``M`` and formula units per cell ``Z``.
+mass ``M`` and formula units per cell ``Z``; **atomic number density**
+``n = Z / V`` (atoms/cm³) from atoms per cell ``Z``.
 
 **Miller-Bravais indices (hexagonal/trigonal)** — hexagonal planes and
 directions are conventionally expressed on 4 axes (a1, a2, a3, c) with the
@@ -67,6 +68,7 @@ from quantized.calc.plane_spacings import plane_spacings
 # calc.plane_spacings modules — see each module's docstring for why).
 __all__ = [
     "CRYSTAL_SYSTEMS",
+    "atomic_density",
     "bond_angle",
     "cell_volume",
     "d_spacing",
@@ -153,6 +155,31 @@ def theoretical_density(molar_mass: float, z: int, volume_a3: float) -> float:
         raise ValueError("cell volume must be positive and finite")
     na = constants()["NA"]
     return z * molar_mass / (na * volume_a3 * 1e-24)
+
+
+def atomic_density(
+    a: float,
+    z: float,
+    *,
+    b: float | None = None,
+    c: float | None = None,
+    alpha: float = 90.0,
+    beta: float = 90.0,
+    gamma: float = 90.0,
+) -> dict[str, float]:
+    """Atomic number density ``n = Z / V`` in atoms/cm³ (``atomicDensity.m``).
+
+    ``z`` is atoms per unit cell (positive; need not be an integer, as in
+    MATLAB). ``b``/``c`` default to ``a``; angles in degrees. Returns
+    ``density`` (atoms/cm³), ``z``, and ``volume`` (Å³, via :func:`cell_volume`).
+
+    >>> f"{atomic_density(2.87, 2)['density']:.3e}"   # BCC Fe
+    '8.460e+22'
+    """
+    if not (math.isfinite(z) and z > 0):
+        raise ValueError("atoms per cell Z must be positive and finite")
+    volume = cell_volume(a, a if b is None else b, a if c is None else c, alpha, beta, gamma)
+    return {"density": z / (volume * 1e-24), "z": z, "volume": volume}
 
 
 # ── per-system 1/d² forms (all take the full cell; simple systems ignore angles)

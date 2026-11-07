@@ -92,3 +92,59 @@ export function crystalBondAngle(body: {
 }> {
   return postJSON("/api/crystallography/bond-angle", body);
 }
+
+/** Allowed (hkl) reflections with d, 2θ and multiplicity (calc.crystal.planeSpacings).
+ *  `two_theta` entries are `null` for reflections unreachable at `wavelength`
+ *  (λ/2d > 1). `max_hkl` is 1–10, as on the MATLAB card. */
+export function crystalPlaneSpacings(body: {
+  a: number;
+  b?: number;
+  c?: number;
+  alpha?: number;
+  beta?: number;
+  gamma?: number;
+  max_hkl: number;
+  wavelength: number;
+  centering: string;
+}): Promise<{
+  hkl: [number, number, number][];
+  d: number[];
+  two_theta: (number | null)[];
+  multiplicity: number[];
+  centering: string;
+  system: string;
+  n_reflections: number;
+}> {
+  return postJSON("/api/crystallography/plane-spacings", body);
+}
+
+/** Atomic number density n = Z/V in atoms/cm³ (calc.crystallography.atomic_density). */
+export function crystalAtomicDensity(body: {
+  a: number;
+  z: number;
+  b?: number;
+  c?: number;
+  alpha?: number;
+  beta?: number;
+  gamma?: number;
+}): Promise<{ density: number; z: number; volume: number }> {
+  return postJSON("/api/crystallography/atomic-density", body);
+}
+
+/** Film c/a and tetragonal distortion (calc.epitaxial_strain). `c_relaxed`
+ *  defaults to `a_relaxed` (cubic bulk) server-side. */
+export function crystalTetragonalDistortion(body: {
+  a_relaxed: number;
+  c_measured: number;
+  c_relaxed?: number;
+}): Promise<{ c_over_a: number; distortion_pct: number; a_relaxed: number; c_measured: number; c_relaxed: number }> {
+  return postJSON("/api/crystallography/tetragonal-distortion", body);
+}
+
+/** Out-of-plane strain from biaxial in-plane strain, ε⊥ = −2ν/(1−ν)·ε∥ (calc.epitaxial_strain). */
+export function crystalPoissonStrain(body: {
+  eps_parallel: number;
+  nu: number;
+}): Promise<{ eps_perp: number; eps_parallel: number; nu: number }> {
+  return postJSON("/api/crystallography/poisson-strain", body);
+}

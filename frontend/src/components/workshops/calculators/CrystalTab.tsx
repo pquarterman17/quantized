@@ -1,5 +1,8 @@
 // Calculators ▸ Crystal tab — interplanar d-spacing (all 7 systems) + unit-cell
-// volume & theoretical density (calc.crystallography + calc.formula).
+// volume & theoretical density (calc.crystallography + calc.formula), then the
+// lattice-dependent cards (interplanar angle, bond angle, plane spacing table)
+// and the self-contained film cards (tetragonal distortion, Poisson strain,
+// atomic density — FilmStrainCards).
 // Presentational; state in useCalculators. Hexagonal additionally offers the
 // 4-index Miller-Bravais (hkil) plane notation alongside the ordinary 3-index
 // (hkl) form — see calc.crystallography.hkl_to_hkil for the i = -(h+k) rule.
@@ -13,6 +16,8 @@ import { fmtNum } from "../../../lib/format";
 import { crystalInterplanarAngle } from "../../../lib/api/crystallography";
 import StructurePresetPicker from "../structures/StructurePresetPicker";
 import BondAngleCard from "./BondAngleCard";
+import { AtomicDensityCard, PoissonStrainCard, TetragonalDistortionCard } from "./FilmStrainCards";
+import PlaneSpacingTableCard from "./PlaneSpacingTableCard";
 import { Card, CopyButton, ROW, dual, resultLine, useCard, withTouch } from "./shared";
 import { latticeFormPatch } from "./useCrystalCalc";
 import {
@@ -52,6 +57,8 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
   // card on this tab synchronously, rather than each card independently
   // diffing the lattice via its own effect.
   const bondCard = useCard("Crystal");
+  // The plane-spacing table reads the shared lattice too — same touch path.
+  const planeCard = useCard("Crystal");
   // Both cards consume the shared lattice as well as their own local
   // inputs (hkl pairs / fractional coordinates). Keep that dependency
   // explicit so a lattice edit clears a completed result and disowns an
@@ -60,6 +67,7 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
     c.updCrystal(patch);
     angleCard.touch();
     bondCard.touch();
+    planeCard.touch();
   };
   const show4Index = isHex && millerMode === "4";
   const hNum = Number(c.crystal.h);
@@ -307,6 +315,10 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
         {resultLine(angleCard.result)}
       </Card>
       <BondAngleCard crystal={c.crystal} card={bondCard} />
+      <PlaneSpacingTableCard crystal={c.crystal} card={planeCard} />
+      <TetragonalDistortionCard />
+      <PoissonStrainCard />
+      <AtomicDensityCard />
     </div>
   );
 }

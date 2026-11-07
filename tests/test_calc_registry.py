@@ -38,6 +38,14 @@ _EXPECTED_OPERATIONS_BY_DOMAIN = {
         "plane_spacings",
         "interplanar_angle",
         "bond_angle",
+        "atomic_density",
+        "tetragonal_distortion",
+        "strain_from_poisson",
+    },
+    "composition": {
+        "atomic_to_weight_percent",
+        "weight_to_atomic_percent",
+        "co_deposition_ratio",
     },
     "sld": {"sld_from_formula"},
     "electrical": {

@@ -149,3 +149,59 @@ def test_bond_angle_wrong_coordinate_length_is_422() -> None:
         },
     )
     assert response.status_code == 422
+
+
+def test_plane_spacings_fcc_si_first_reflection_and_null_two_theta() -> None:
+    r = client.post(
+        "/api/crystallography/plane-spacings",
+        json={"a": 5.431, "centering": "F", "max_hkl": 3, "wavelength": 1.5406},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["hkl"][0] == [1, 1, 1]
+    assert body["d"][0] == pytest.approx(3.1356, abs=1e-4)
+    assert body["n_reflections"] == len(body["hkl"])
+    # A long wavelength makes every reflection unreachable: 2θ is null, not NaN.
+    far = client.post(
+        "/api/crystallography/plane-spacings",
+        json={"a": 3.0, "max_hkl": 1, "wavelength": 9.0},
+    ).json()
+    assert all(t is None for t in far["two_theta"])
+
+
+def test_plane_spacings_validates_max_hkl_and_centering() -> None:
+    too_big = client.post("/api/crystallography/plane-spacings", json={"a": 4.0, "max_hkl": 11})
+    assert too_big.status_code == 422
+    bad = client.post("/api/crystallography/plane-spacings", json={"a": 4.0, "centering": "X"})
+    assert bad.status_code == 422
+
+
+def test_atomic_density_route() -> None:
+    r = client.post("/api/crystallography/atomic-density", json={"a": 2.87, "z": 2})
+    assert r.status_code == 200
+    assert r.json()["density"] == pytest.approx(2 / (2.87**3 * 1e-24), rel=1e-12)
+    bad = client.post("/api/crystallography/atomic-density", json={"a": 2.87, "z": 0})
+    assert bad.status_code == 422
+
+
+def test_tetragonal_distortion_route() -> None:
+    r = client.post(
+        "/api/crystallography/tetragonal-distortion",
+        json={"a_relaxed": 3.905, "c_measured": 3.92, "c_relaxed": 3.905},
+    )
+    assert r.status_code == 200
+    assert r.json()["distortion_pct"] == pytest.approx((3.92 - 3.905) / 3.905 * 100, rel=1e-12)
+    bad = client.post(
+        "/api/crystallography/tetragonal-distortion", json={"a_relaxed": 0, "c_measured": 3.9}
+    )
+    assert bad.status_code == 422
+
+
+def test_poisson_strain_route() -> None:
+    r = client.post("/api/crystallography/poisson-strain", json={"eps_parallel": 0.01, "nu": 0.3})
+    assert r.status_code == 200
+    assert r.json()["eps_perp"] == pytest.approx(-0.6 / 0.7 * 0.01, rel=1e-12)
+    singular = client.post(
+        "/api/crystallography/poisson-strain", json={"eps_parallel": 0.01, "nu": 1}
+    )
+    assert singular.status_code == 422

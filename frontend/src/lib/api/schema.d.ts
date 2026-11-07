@@ -267,6 +267,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/composition/atomic-to-weight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Atomic To Weight
+         * @description Atomic percent -> weight percent (inputs normalised to 100 first).
+         */
+        post: operations["atomic_to_weight_api_composition_atomic_to_weight_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/composition/co-deposition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Co Deposition
+         * @description Relative source fluxes (smallest = 1) to co-deposit the target formula.
+         */
+        post: operations["co_deposition_api_composition_co_deposition_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/composition/weight-to-atomic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Weight To Atomic
+         * @description Weight percent -> atomic percent (inputs normalised to 100 first).
+         */
+        post: operations["weight_to_atomic_api_composition_weight_to_atomic_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/corrections/apply": {
         parameters: {
             query?: never;
@@ -302,6 +362,26 @@ export interface paths {
          *     seven crystal systems, via the reciprocal metric tensor.
          */
         post: operations["angle_api_crystallography_angle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/crystallography/atomic-density": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Atomic Number Density
+         * @description Atomic number density n = Z/V (atoms/cm³) from the cell and atoms per cell.
+         */
+        post: operations["atomic_number_density_api_crystallography_atomic_density_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -363,6 +443,68 @@ export interface paths {
          *     given crystal system.
          */
         post: operations["dspacing_api_crystallography_dspacing_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/crystallography/plane-spacings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Plane Spacing Table
+         * @description Allowed (hkl) reflections with d, 2θ and multiplicity (``planeSpacings``).
+         *
+         *     Unreachable reflections (λ/2d > 1) carry a ``null`` 2θ.
+         */
+        post: operations["plane_spacing_table_api_crystallography_plane_spacings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/crystallography/poisson-strain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Poisson Strain
+         * @description Out-of-plane strain from biaxial in-plane strain: ε⊥ = −2ν/(1−ν)·ε∥.
+         */
+        post: operations["poisson_strain_api_crystallography_poisson_strain_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/crystallography/tetragonal-distortion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Film Tetragonal Distortion
+         * @description Film c/a ratio and tetragonal distortion (c_meas − c_relaxed)/c_relaxed.
+         */
+        post: operations["film_tetragonal_distortion_api_crystallography_tetragonal_distortion_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5652,6 +5794,32 @@ export interface components {
             /** Z */
             z: number | null;
         };
+        /** AtomicDensityRequest */
+        AtomicDensityRequest: {
+            /** A */
+            a: number;
+            /**
+             * Alpha
+             * @default 90
+             */
+            alpha?: number;
+            /** B */
+            b?: number | null;
+            /**
+             * Beta
+             * @default 90
+             */
+            beta?: number;
+            /** C */
+            c?: number | null;
+            /**
+             * Gamma
+             * @default 90
+             */
+            gamma?: number;
+            /** Z */
+            z: number;
+        };
         /**
          * AucRequest
          * @description Request for AUC computation.
@@ -6304,6 +6472,13 @@ export interface components {
             expected?: number[] | null;
             /** Observed */
             observed: number[];
+        };
+        /** CoDepositionRequest */
+        CoDepositionRequest: {
+            /** Formula */
+            formula: string;
+            /** Sources */
+            sources: string[];
         };
         /** CoherenceRequest */
         CoherenceRequest: {
@@ -9198,6 +9373,53 @@ export interface components {
             /** Wavelength */
             wavelength: number;
         };
+        /** PercentRequest */
+        PercentRequest: {
+            /** Elements */
+            elements: string[];
+            /** Values */
+            values: number[];
+        };
+        /** PlaneSpacingsRequest */
+        PlaneSpacingsRequest: {
+            /** A */
+            a: number;
+            /**
+             * Alpha
+             * @default 90
+             */
+            alpha?: number;
+            /** B */
+            b?: number | null;
+            /**
+             * Beta
+             * @default 90
+             */
+            beta?: number;
+            /** C */
+            c?: number | null;
+            /**
+             * Centering
+             * @default P
+             * @enum {string}
+             */
+            centering?: "P" | "F" | "I" | "A" | "B" | "C" | "R";
+            /**
+             * Gamma
+             * @default 90
+             */
+            gamma?: number;
+            /**
+             * Max Hkl
+             * @default 5
+             */
+            max_hkl?: number;
+            /**
+             * Wavelength
+             * @default 1.5406
+             */
+            wavelength?: number;
+        };
         /**
          * PlotRequest
          * @description ``dataset``/``dataset_handle`` (P3.5 dataset-handle-cache parity with
@@ -9243,6 +9465,13 @@ export interface components {
              * @default false
              */
             y_log?: boolean;
+        };
+        /** PoissonStrainRequest */
+        PoissonStrainRequest: {
+            /** Eps Parallel */
+            eps_parallel: number;
+            /** Nu */
+            nu: number;
         };
         /**
          * PolarFigureSpec
@@ -10858,6 +11087,15 @@ export interface components {
             /** Values */
             values?: number[] | null;
         };
+        /** TetragonalDistortionRequest */
+        TetragonalDistortionRequest: {
+            /** A Relaxed */
+            a_relaxed: number;
+            /** C Measured */
+            c_measured: number;
+            /** C Relaxed */
+            c_relaxed?: number | null;
+        };
         /** ThermalMismatchRequest */
         ThermalMismatchRequest: {
             /** Alpha Film */
@@ -11582,6 +11820,111 @@ export interface operations {
             };
         };
     };
+    atomic_to_weight_api_composition_atomic_to_weight_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PercentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    co_deposition_api_composition_co_deposition_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoDepositionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    weight_to_atomic_api_composition_weight_to_atomic_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PercentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     apply_api_corrections_apply_post: {
         parameters: {
             query?: never;
@@ -11627,6 +11970,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["InterplanarAngleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    atomic_number_density_api_crystallography_atomic_density_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AtomicDensityRequest"];
             };
         };
         responses: {
@@ -11732,6 +12110,111 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DSpacingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    plane_spacing_table_api_crystallography_plane_spacings_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaneSpacingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    poisson_strain_api_crystallography_poisson_strain_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PoissonStrainRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    film_tetragonal_distortion_api_crystallography_tetragonal_distortion_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TetragonalDistortionRequest"];
             };
         };
         responses: {

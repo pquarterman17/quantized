@@ -30,6 +30,7 @@ from quantized.routes import (
     baseline,
     books,
     calc,
+    composition,
     corrections,
     crystallography,
     database,
@@ -245,6 +246,7 @@ def create_app(
     application.include_router(sld.router)
     application.include_router(spectral.router)
     application.include_router(crystallography.router)
+    application.include_router(composition.router)
     application.include_router(structures.router)
     application.include_router(electrical.router)
     application.include_router(optics.router)
