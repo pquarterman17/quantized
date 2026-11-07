@@ -9,8 +9,8 @@
 //      dataset recorded when it was normalized;
 //   3. Quantum Design `INFO,<value>,SAMPLE_MASS` header lines (parsed into
 //      `metadata.instrument.SAMPLE_MASS`, a bare string). The file states NO
-//      unit for it. MultiVu's sample-info dialog takes mass in mg, so it is
-//      filled as mg — an ASSUMPTION, not a fact from the file, and the status
+//      unit for it. It is filled as mg (believed to be MultiVu's sample-info
+//      unit; no source in this repo confirms it) — an ASSUMPTION, and the status
 //      line says so and asks the user to verify. It is refused outright when
 //      the header's MOMENT_UNITS line is present and not "0" (the value in
 //      emu files) or the moment channel is already SI (A·m²), because then
