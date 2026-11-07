@@ -1,8 +1,6 @@
 // Central app store (Zustand). Mirrors fermiviewer's single-hook convention.
 // Holds loaded datasets, the active selection, panel + theme view state.
 import { create } from "zustand";
-import { recomputeWithErrors } from "../lib/formula";
-import { asAlreadyComputed } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
 import type { WorkbookNode } from "../lib/workbooks";
 import { snapshotView } from "../lib/plotview";
@@ -81,25 +79,10 @@ import { createRecipeFidelitySlice, type RecipeFidelitySlice } from "./recipeFid
 import { createOriginFallbackSlice, type OriginFallbackSlice } from "./originFallbackLazy";
 import { createPlotViewSettingsSlice, type PlotViewSettingsSlice } from "./plotViewSettings";
 import type { ChannelRole, Dataset, ModelingType } from "../lib/types";
-/** Recompute a dataset's computed columns from its current base (no-op without
- *  formulas). Routed through after any base-data mutation (cell edit, corrections).
- *  Exported for store/corrections.ts (nextDatasetId/split.ts precedent) — the
- *  corrections slice re-derives computed columns after every apply/reset from
- *  the SAME formula-recompute logic every other base-data mutation here uses.
- *  LIBRARY_WORKBOOK_UX_PLAN PR K (K5b): also refreshes `formulaErrors` in the
- *  same pass, so a base-data edit that fixes (or breaks) a formula's
- *  evaluation keeps the visible error state in sync everywhere `recompute`
- *  is the chokepoint — not just at the store/computedColumns.ts authoring
- *  sites. `asAlreadyComputed` (SILENT_STATE_CORRUPTION_PLAN #2) is sound
- *  HERE ONLY because `d.data` is a Dataset's OWN table — by construction it
- *  already carries `d.formulas`' stale columns. A caller with base-only data
- *  must NOT route through `recompute` — see derivedWorksheets.ts's
- *  `recomputeFromBase` (the #4 fix). */
-export const recompute = (d: Dataset): Dataset => {
-  if (!d.formulas?.length) return d;
-  const { data, errors } = recomputeWithErrors(asAlreadyComputed(d.data), d.formulas);
-  return { ...d, data, formulaErrors: Object.keys(errors).length ? errors : undefined };
-};
+// `recompute` (a dataset's computed columns from its base) lives in
+// store/recompute.ts — moved out under this module's size pin for MAIN_PLAN
+// #42's sample-profiles slice; re-exported so every importer is unchanged.
+export { recompute } from "./recompute";
 // The shared `<prefix>-<t36>-<n>` object-id sequence moved to store/idSeq.ts
 // (P4.1): a module-level `let` cannot be incremented across a module boundary,
 // and store/reportsFigureDocs.ts mints `rep-`/`figd-` ids from it. Re-exported
@@ -119,7 +102,9 @@ export { nextDatasetId, nextFolderId } from "./idSeq";
 // datasetViewDefaults / retargetPassiveRebind stay imported above for
 // addDataset; setActive's focusedRebindPatch moved with it.)
 
-// (the recalc scheduler's timer/guard state moved to store/recalcEngine.ts; the quick-fit debounce timer to store/gadget.ts.)
+// (the recalc scheduler's timer/guard state moved to store/recalcEngine.ts.)
+
+// (the quick-fit debounce timer moved to store/gadget.ts with the slice.)
 
 // Theme … PrefKey moved with the pref fields to store/appearancePrefs.ts.
 export type { Accent, Density, ExcludedDisplay, OriginBookClickOpens, PrefKey, Theme } from "./appearancePrefs";

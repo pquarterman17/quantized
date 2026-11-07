@@ -9,7 +9,12 @@
 // dataset's existing normalization can never be overwritten by a profile.
 
 import { dedupeWindowTitle } from "../../../lib/plotWindows";
-import { sanitizeSampleProfile, type SampleProfile, type SavedSampleProfile } from "../../../lib/sampleGeometry";
+import {
+  MAX_SAVED_SAMPLE_PROFILES,
+  sanitizeSampleProfile,
+  type SampleProfile,
+  type SavedSampleProfile,
+} from "../../../lib/sampleGeometry";
 import { useApp } from "../../../store/useApp";
 
 let seq = 0;
@@ -18,8 +23,10 @@ const nextProfileId = (): string => `sprof-${Date.now().toString(36)}-${++seq}`;
 export interface SampleProfilesApi {
   saved: SavedSampleProfile[];
   /** Save `profile` under `name` (deduped against existing names, never
-   *  replacing one). Returns the stored name, or null for a blank name. */
-  save: (name: string, profile: SampleProfile) => string | null;
+   *  replacing one). Refuses a blank name, and a list already at the
+   *  `.dwk` cap ({@link MAX_SAVED_SAMPLE_PROFILES}) — a save the next load
+   *  would silently truncate is not a save. */
+  save: (name: string, profile: SampleProfile) => { ok: true; name: string } | { ok: false; reason: string };
   /** The saved profile, re-sanitized, or null for an unknown id. */
   get: (id: string) => SampleProfile | null;
   remove: (id: string) => void;
@@ -33,13 +40,16 @@ export function useSampleProfiles(): SampleProfilesApi {
     save: (name, profile) => {
       const clean = sanitizeSampleProfile(profile);
       const base = name.trim().slice(0, 120);
-      if (!base || !clean) return null;
-      let stored: string | null = null;
+      if (!base || !clean) return { ok: false, reason: "Name the profile before saving it." };
+      if (saved.length >= MAX_SAVED_SAMPLE_PROFILES) {
+        return { ok: false, reason: `At most ${MAX_SAVED_SAMPLE_PROFILES} sample profiles can be saved; delete one first.` };
+      }
+      let stored = base;
       setSaved((list) => {
         stored = dedupeWindowTitle(base, list.map((p) => p.name));
         return [...list, { id: nextProfileId(), name: stored, savedAt: new Date().toISOString(), profile: clean }];
       }, "Save sample profile");
-      return stored;
+      return { ok: true, name: stored };
     },
     get: (id) => sanitizeSampleProfile(saved.find((p) => p.id === id)?.profile),
     remove: (id) => setSaved((list) => (list.some((p) => p.id === id) ? list.filter((p) => p.id !== id) : list), "Delete sample profile"),

@@ -216,6 +216,26 @@ describe("MagToolsPanel — Units tab: explicit-basis sample normalization (MAIN
     expect(summary).toHaveTextContent(/Computed area\s*25 cm²/);
   });
 
+  it("keeps the basis, profile, output unit and readout across a tab switch", () => {
+    openUnits();
+    fireEvent.change(screen.getByLabelText("Normalization basis"), { target: { value: "volume" } });
+    fireEvent.change(screen.getByLabelText("Output moment unit"), { target: { value: "kA/m" } });
+    fireEvent.change(screen.getByLabelText("Width"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Width unit"), { target: { value: "mm" } });
+    fireEvent.click(screen.getByRole("button", { name: "Use metadata values" })); // sets a readout
+    expect(screen.getByText(/states no sample mass or geometry/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Background" }));
+    expect(screen.queryByLabelText("Normalization basis")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "Units" }));
+
+    expect(screen.getByLabelText("Normalization basis")).toHaveValue("volume");
+    expect(screen.getByLabelText("Output moment unit")).toHaveValue("kA/m");
+    expect(screen.getByLabelText("Width")).toHaveValue("50");
+    expect(screen.getByLabelText("Width unit")).toHaveValue("mm");
+    expect(screen.getByText(/states no sample mass or geometry/)).toBeInTheDocument();
+  });
+
   it("labels the magnetic-film thickness as distinct from the substrate", () => {
     openUnits();
     fireEvent.change(screen.getByLabelText("Normalization basis"), { target: { value: "volume" } });

@@ -121,6 +121,7 @@ function asLoaded(datasets: Dataset[]): LoadedWorkspace {
     workbookLastChild: {},
     expandedWorkbookIds: [],
     collections: [],
+    savedSampleProfiles: [],
     visibleDetailsColumns: [],
     plotRecipes: [],
     recipeSourcesComplete: true,

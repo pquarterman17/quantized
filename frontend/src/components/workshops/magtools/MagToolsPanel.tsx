@@ -22,6 +22,7 @@ import {
 import DemagCorrectionPane from "./DemagCorrectionPane";
 import CurieWeissPane from "./CurieWeissPane";
 import NormalizationPane from "./NormalizationPane";
+import { useMagNormalization } from "./useMagNormalization";
 
 const BG_MODE_OPTS: { value: MagBgMode; label: string }[] = [
   { value: "auto", label: "Auto-detect" },
@@ -42,6 +43,9 @@ function bgDescription(path: "mt" | "mh" | null, reason: string): string {
 export default function MagToolsPanel() {
   const setOpen = useApp((s) => s.setMagToolsOpen);
   const m = useMagTools();
+  // Owned here, not inside the pane: the pane unmounts on every tab switch,
+  // and the user's basis, profile, output unit and readout must survive it.
+  const norm = useMagNormalization();
   // The readout's units: a slope/χ is moment per x, an intercept/offset is moment.
   const xU = m.source ? (m.source.fromField ?? m.source.xUnit) : "";
   const mU = m.source?.fromMoment ?? "";
@@ -138,7 +142,7 @@ export default function MagToolsPanel() {
           )}
         </div>
       ) : m.tab === "units" ? (
-        <NormalizationPane />
+        <NormalizationPane n={norm} />
       ) : m.tab === "demag" ? <DemagCorrectionPane /> : <CurieWeissPane />}
 
       {m.tab === "background" && m.warning && (

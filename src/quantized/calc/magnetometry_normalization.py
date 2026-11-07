@@ -43,6 +43,7 @@ __all__ = [
     "BASIS_OUTPUT_UNITS",
     "OUTPUT_PER_EMU",
     "RAW_MOMENT_TO_EMU",
+    "check_moment_request",
     "moment_normalization_factor",
     "normalize_mag_moment",
 ]
@@ -74,6 +75,30 @@ def _fmt(v: float) -> str:
     return f"{v:.6g}"
 
 
+def check_moment_request(from_moment: str, basis: str, to_moment: str) -> bool:
+    """Validate the unit side of a request; ``True`` means "keep as-is".
+
+    Raises ``ValueError`` for an unknown basis, an already-normalized source
+    (checked before anything else about the sample, so that is the reason a
+    caller is given), or an output outside the basis's family.
+    """
+    if basis not in BASIS_OUTPUT_UNITS:
+        raise ValueError(f'Unknown normalization basis "{basis}"')
+    if basis == "none" and to_moment == from_moment:
+        return True
+    if from_moment not in RAW_MOMENT_TO_EMU:
+        raise ValueError(
+            f'The source moment is already normalized ("{from_moment}"); only a raw moment '
+            f"({', '.join(RAW_MOMENT_TO_EMU)}) can be normalized or re-expressed here."
+        )
+    if to_moment not in BASIS_OUTPUT_UNITS[basis]:
+        raise ValueError(
+            f'"{to_moment}" is not a {basis}-basis unit (choose one of '
+            f"{', '.join(BASIS_OUTPUT_UNITS[basis])})"
+        )
+    return False
+
+
 def moment_normalization_factor(
     from_moment: str, basis: str, to_moment: str, divisor: float = 1.0
 ) -> float:
@@ -83,20 +108,8 @@ def moment_normalization_factor(
     ``none``). Raises ``ValueError`` for an output outside the basis's family,
     an already-normalized source, or a non-positive divisor.
     """
-    if basis not in BASIS_OUTPUT_UNITS:
-        raise ValueError(f'Unknown normalization basis "{basis}"')
-    if basis == "none" and to_moment == from_moment:
+    if check_moment_request(from_moment, basis, to_moment):
         return 1.0
-    if to_moment not in BASIS_OUTPUT_UNITS[basis]:
-        raise ValueError(
-            f'"{to_moment}" is not a {basis}-basis unit (choose one of '
-            f"{', '.join(BASIS_OUTPUT_UNITS[basis])})"
-        )
-    if from_moment not in RAW_MOMENT_TO_EMU:
-        raise ValueError(
-            f'The source moment is already in "{from_moment}"; only a raw moment '
-            f"({', '.join(RAW_MOMENT_TO_EMU)}) can be normalized or re-expressed here."
-        )
     scale = RAW_MOMENT_TO_EMU[from_moment] * OUTPUT_PER_EMU[to_moment]
     if basis == "none":
         return scale
@@ -141,6 +154,9 @@ def normalize_mag_moment(
     """
     x_in = np.asarray(x, dtype=float)
     y_in = np.asarray(y, dtype=float)
+    # Units first: an already-normalized source must be refused as such, not
+    # as "Sample mass is required" for a profile it could never use.
+    check_moment_request(from_moment, basis, to_moment)
     geo = resolve_divisor(profile or {}, basis, geometry)
     factor = moment_normalization_factor(from_moment, basis, to_moment, geo.divisor)
 

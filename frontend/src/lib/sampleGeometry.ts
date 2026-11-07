@@ -138,6 +138,28 @@ export function convertQuantityUnit(field: ProfileField, q: ProfileQuantity, uni
 
 const GEOMETRIES: readonly SampleGeometry[] = ["rectangle", "area", "circle", "volume"];
 
+export const isSampleGeometry = (v: unknown): v is SampleGeometry => GEOMETRIES.includes(v as SampleGeometry);
+
+/** The fields that DESCRIBE each geometry path's in-plane size (or volume). */
+export const GEOMETRY_FIELDS: Readonly<Record<SampleGeometry, readonly ProfileField[]>> = {
+  rectangle: ["width", "length"],
+  area: ["area"],
+  circle: ["diameter"],
+  volume: ["volume"],
+};
+
+/** Load-time bounds for the `.dwk` `savedSampleProfiles` list. Far above any
+ *  real lab's set of samples; a larger list is truncated, never trusted. */
+export const MAX_SAVED_SAMPLE_PROFILES = 200;
+const MAX_PROFILE_ID_LENGTH = 64;
+const MAX_PROFILE_NAME_LENGTH = 120;
+const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/;
+
+/** A valid ISO-8601 UTC/offset timestamp, or "" for anything else. */
+function sanitizeSavedAt(v: unknown): string {
+  return typeof v === "string" && ISO_TIMESTAMP.test(v) && !Number.isNaN(Date.parse(v)) ? v : "";
+}
+
 function sanitizeQuantity(field: ProfileField, raw: unknown): ProfileQuantity {
   const spec = FIELD_SPECS[field];
   if (typeof raw !== "object" || raw === null) return makeQuantity(field, null, spec.defaultUnit);
@@ -145,7 +167,9 @@ function sanitizeQuantity(field: ProfileField, raw: unknown): ProfileQuantity {
   const unit = typeof r.unit === "string" ? normalizeUnitSpelling(r.unit) : "";
   // An unknown unit is never guessed at: the value is dropped with it.
   if (!spec.units.includes(unit)) return makeQuantity(field, null, spec.defaultUnit);
-  const value = typeof r.value === "number" && Number.isFinite(r.value) ? r.value : null;
+  // Only a positive finite number is a usable entry; zero, negative and
+  // non-finite values are dropped (the field becomes blank), never kept.
+  const value = typeof r.value === "number" && Number.isFinite(r.value) && r.value > 0 ? r.value : null;
   return makeQuantity(field, value, unit);
 }
 
@@ -156,14 +180,17 @@ export function sanitizeSampleProfile(raw: unknown): SampleProfile | null {
   if (typeof raw !== "object" || raw === null) return null;
   const r = raw as Record<string, unknown>;
   if (r.version !== SAMPLE_PROFILE_VERSION) return null;
-  const geometry = GEOMETRIES.includes(r.geometry as SampleGeometry) ? (r.geometry as SampleGeometry) : "rectangle";
+  const geometry = isSampleGeometry(r.geometry) ? r.geometry : "rectangle";
   const out = { version: SAMPLE_PROFILE_VERSION, geometry } as SampleProfile;
   for (const f of PROFILE_FIELDS) out[f] = sanitizeQuantity(f, r[f]);
   return out;
 }
 
 /** Drop-malformed-never-throw sanitizer for the `.dwk` `savedSampleProfiles`
- *  field (the `sanitizeCollections` convention). Duplicate ids keep the first. */
+ *  field (the `sanitizeCollections` convention). Duplicate ids keep the first;
+ *  ids longer than 64 characters are dropped; names are trimmed to 120
+ *  characters; a `savedAt` that is not an ISO-8601 timestamp becomes ""; and
+ *  at most {@link MAX_SAVED_SAMPLE_PROFILES} entries are kept. */
 export function sanitizeSavedSampleProfiles(raw: unknown): SavedSampleProfile[] {
   if (!Array.isArray(raw)) return [];
   const seen = new Set<string>();
@@ -172,9 +199,11 @@ export function sanitizeSavedSampleProfiles(raw: unknown): SavedSampleProfile[] 
     if (typeof entry !== "object" || entry === null) continue;
     const e = entry as Record<string, unknown>;
     const profile = sanitizeSampleProfile(e.profile);
-    if (typeof e.id !== "string" || !e.id || seen.has(e.id) || typeof e.name !== "string" || !e.name.trim() || !profile) continue;
+    if (typeof e.id !== "string" || !e.id || e.id.length > MAX_PROFILE_ID_LENGTH || seen.has(e.id)) continue;
+    if (typeof e.name !== "string" || !e.name.trim() || !profile) continue;
     seen.add(e.id);
-    out.push({ id: e.id, name: e.name.trim().slice(0, 120), savedAt: typeof e.savedAt === "string" ? e.savedAt : "", profile });
+    out.push({ id: e.id, name: e.name.trim().slice(0, MAX_PROFILE_NAME_LENGTH), savedAt: sanitizeSavedAt(e.savedAt), profile });
+    if (out.length >= MAX_SAVED_SAMPLE_PROFILES) break;
   }
   return out;
 }

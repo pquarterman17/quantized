@@ -151,10 +151,22 @@ def test_basis_unit_lists_are_disjoint_families() -> None:
 
 def test_already_normalized_source_is_never_divided_again() -> None:
     assert moment_normalization_factor("emu/g", "none", "emu/g") == 1.0
-    with pytest.raises(ValueError, match="already"):
+    with pytest.raises(ValueError, match="already normalized"):
         moment_normalization_factor("emu/g", "mass", "emu/g", 2.0)
-    with pytest.raises(ValueError, match="already"):
+    with pytest.raises(ValueError, match="already normalized"):
         moment_normalization_factor("emu/cm³", "none", "emu")
+
+
+@pytest.mark.parametrize(("basis", "to_unit"), [("mass", "emu/g"), ("none", "emu")])
+def test_already_normalized_is_the_reported_reason_even_with_no_profile(
+    basis: str, to_unit: str
+) -> None:
+    # The unit check runs before the geometry check, so the caller is told the
+    # real reason rather than "Sample mass is required".
+    with pytest.raises(ValueError, match="already normalized") as info:
+        normalize_mag_moment([0.0], [1.0], from_field="Oe", to_field="Oe",
+                             from_moment="emu/g", basis=basis, to_moment=to_unit, profile={})
+    assert "required" not in str(info.value)
 
 
 @pytest.mark.parametrize(

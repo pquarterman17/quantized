@@ -5,6 +5,7 @@ import {
   emptySampleProfile,
   makeQuantity,
   massInGrams,
+  MAX_SAVED_SAMPLE_PROFILES,
   profileWire,
   sanitizeSampleProfile,
   sanitizeSavedSampleProfiles,
@@ -98,6 +99,28 @@ describe("sanitizeSavedSampleProfiles", () => {
     ]);
     expect(out).toEqual([{ id: "a", name: "Film A", savedAt: "2026-11-07T00:00:00.000Z", profile }]);
     expect(sanitizeSavedSampleProfiles({})).toEqual([]);
+  });
+
+  it("bounds ids, timestamps and list length", () => {
+    const profile = emptySampleProfile();
+    const out = sanitizeSavedSampleProfiles([
+      { id: "x".repeat(65), name: "too-long id", savedAt: "2026-11-07T00:00:00Z", profile },
+      { id: "ok", name: "bad time", savedAt: "yesterday", profile },
+      { id: "ok2", name: "huge time", savedAt: "9".repeat(5000), profile },
+      { id: "ok3", name: "offset time", savedAt: "2026-11-07T08:30:00+05:30", profile },
+    ]);
+    expect(out.map((p) => [p.id, p.savedAt])).toEqual([["ok", ""], ["ok2", ""], ["ok3", "2026-11-07T08:30:00+05:30"]]);
+    const many = Array.from({ length: MAX_SAVED_SAMPLE_PROFILES + 5 }, (_, i) => ({ id: `p${i}`, name: `P${i}`, profile }));
+    expect(MAX_SAVED_SAMPLE_PROFILES).toBe(200);
+    expect(sanitizeSavedSampleProfiles(many)).toHaveLength(MAX_SAVED_SAMPLE_PROFILES);
+  });
+
+  it("drops zero and negative values (the field becomes blank)", () => {
+    const raw = { ...emptySampleProfile(), width: { value: 0, unit: "cm" }, length: { value: -2, unit: "cm" }, mass: { value: 3, unit: "mg" } };
+    const out = sanitizeSampleProfile(raw)!;
+    expect(out.width).toEqual({ value: null, unit: "cm", canonical: null });
+    expect(out.length).toEqual({ value: null, unit: "cm", canonical: null });
+    expect(out.mass.value).toBe(3);
   });
 });
 

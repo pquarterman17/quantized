@@ -1,7 +1,8 @@
 // Explicit-basis moment normalization: the live, read-only calculation
-// summary shown before Apply, and the provenance a derived dataset records
-// (MAIN_PLAN #42). Mirrors `quantized.calc.magnetometry_normalization` (the
-// backend does the actual conversion; this side only previews and validates).
+// summary shown before Apply (the provenance a derived dataset records is
+// in lib/normalizationProvenance.ts; MAIN_PLAN #42). Mirrors
+// `quantized.calc.magnetometry_normalization` (the backend does the actual
+// conversion; this side only previews and validates).
 //
 // The basis is ALWAYS the user's explicit choice — none/raw, mass, area or
 // volume. Nothing here looks at metadata to pick one.
@@ -155,7 +156,7 @@ export function summarizeNormalization(
   };
   const allowed = outputUnitsFor(basis, fromMoment);
   if (basis !== "none" && !isRawMoment(fromMoment)) {
-    return { ...base, problem: `The moment is already in ${fromMoment}; normalize the raw-moment (emu or A·m²) dataset instead.` };
+    return { ...base, problem: `The moment is already normalized (${fromMoment}); normalize the raw-moment (emu or A·m²) dataset instead.` };
   }
   if (!allowed.includes(toMoment)) {
     return { ...base, problem: `Choose an output unit for the ${basis === "none" ? "raw" : basis} basis (${allowed.join(", ")}).` };
@@ -178,63 +179,4 @@ export function summarizeNormalization(
     return { ...base, ...g, problem: `The computed sample ${basis} is out of range.` };
   }
   return { ...base, massG: g.massG, areaCm2: g.areaCm2, volumeCm3: g.volumeCm3, geometryEquation: g.text, divisor, factor: scale / divisor };
-}
-
-/** The `/api/magnetometry/normalize` response fields provenance records. */
-export interface NormalizeRecord {
-  factor: number;
-  divisor: number;
-  divisor_unit: string;
-  mass_g: number | null;
-  area_cm2: number | null;
-  volume_cm3: number | null;
-  canonical: Record<string, number>;
-  equation: string;
-  geometry_equation: string;
-}
-
-export const NORMALIZATION_PROVENANCE_VERSION = 1;
-
-/** Everything a save/reopen/recompute needs to reproduce the derived values
- *  exactly: the source, every entered geometry input with its original unit
- *  and canonical value, the basis, the output unit, the factor and formula.
- *  The numbers are the BACKEND's (the authority that produced the data). */
-export function normalizationProvenance(args: {
-  profile: SampleProfile;
-  summary: NormalizationSummary;
-  record: NormalizeRecord;
-  source: { datasetId: string; datasetName: string; channel: string; xUnit: string };
-  toField: string;
-}): Record<string, unknown> {
-  const { profile, summary, record, source } = args;
-  const inputs: Record<string, unknown> = {};
-  for (const f of summary.fields) {
-    const q = profile[f];
-    inputs[FIELD_SPECS[f].wire] = {
-      label: FIELD_SPECS[f].label, value: q.value, unit: q.unit,
-      canonical: record.canonical[FIELD_SPECS[f].wire] ?? q.canonical, canonical_unit: FIELD_SPECS[f].canonicalUnit,
-    };
-  }
-  return {
-    version: NORMALIZATION_PROVENANCE_VERSION,
-    basis: summary.basis,
-    geometry: summary.geometry,
-    from_moment: summary.fromMoment,
-    to_moment: summary.toMoment,
-    from_field: source.xUnit,
-    to_field: args.toField,
-    factor: record.factor,
-    divisor: summary.basis === "none" ? null : record.divisor,
-    divisor_unit: record.divisor_unit,
-    sample_mass_g: record.mass_g,
-    sample_area_cm2: record.area_cm2,
-    sample_volume_cm3: record.volume_cm3,
-    equation: record.equation,
-    geometry_equation: record.geometry_equation,
-    inputs,
-    profile,
-    source_dataset_id: source.datasetId,
-    source_dataset_name: source.datasetName,
-    source_channel: source.channel,
-  };
 }

@@ -26,13 +26,17 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   canonical value, the basis, the output unit, the factor and the formula,
   so a reopened project reproduces the result exactly.
 - A "Use metadata values" button fills the profile from the dataset's
-  metadata, for example a Quantum Design `SAMPLE_MASS` header. It runs only
-  when you press it, fills only the fields the metadata states, and does not
-  choose a basis.
+  metadata. It runs only when you press it, fills only the fields the
+  metadata states, and does not choose a basis. A Quantum Design
+  `SAMPLE_MASS` header carries no unit, so it is filled as mg only as an
+  assumption, and the panel asks you to verify it. It is not filled at all
+  when the header's `MOMENT_UNITS` is not "0" or the moment is in A·m².
 - Sample profiles can be saved by name and loaded into the form for other
   measurements. A saved profile is applied only when you load it. Saved
-  profiles are stored in the workspace (`.dwk`), and saving or deleting one
-  can be undone.
+  profiles are stored in the workspace (`.dwk`), up to 200 of them, and
+  saving or deleting one can be undone.
+- The Units tab keeps its basis, profile and output unit when you switch to
+  another Magnetometry tab and back.
 - New backend route `POST /api/magnetometry/normalize`, backed by the pure
   `calc.sample_geometry` and `calc.magnetometry_normalization` modules.
   Tests check its conversion factors dimensionally, including

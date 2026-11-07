@@ -1,7 +1,8 @@
 // Magnetometry Units tab — state hook for explicit-basis sample normalization
 // (MAIN_PLAN #42). Owns the SampleProfile form, the basis/output-unit choice,
 // the live calculation summary, the explicit "Use metadata values" fill, the
-// saved-profile actions, and Apply.
+// saved-profile actions, and Apply. MagToolsPanel calls it (not the pane,
+// which unmounts on every tab switch), so the user's choices survive tabs.
 //
 // Rules this hook enforces (the item's contract):
 //  - The basis is only ever the user's choice. Nothing reads metadata to pick
@@ -31,9 +32,9 @@ import {
   type SampleGeometry,
   type SampleProfile,
 } from "../../../lib/sampleGeometry";
+import { normalizationProvenance, withFieldConversion } from "../../../lib/normalizationProvenance";
 import {
   geometriesFor,
-  normalizationProvenance,
   outputUnitsFor,
   summarizeNormalization,
   type NormalizationBasis,
@@ -175,18 +176,22 @@ export function useMagNormalization(): MagNormalizationState {
 
   const fillFromMetadata = (): void => {
     if (!active) return;
-    const fill = profileFromMetadata(active.data.metadata, form.profile);
+    const fill = profileFromMetadata(active.data.metadata, form.profile, fromMoment);
     if (!fill) {
       note(null, "This dataset's metadata states no sample mass or geometry; nothing was filled.");
+      return;
+    }
+    if (fill.kind === "refused") {
+      note(null, fill.reason);
       return;
     }
     replaceProfile(fill.profile);
     note(`Filled from metadata: ${fill.filled.join("; ")}. Check the units before applying.`);
   };
   const saveProfile = (name: string): void => {
-    const stored = profiles.save(name, form.profile);
-    if (stored === null) note(null, "Name the profile before saving it.");
-    else note(`Saved sample profile "${stored}".`);
+    const saved = profiles.save(name, form.profile);
+    if (saved.ok) note(`Saved sample profile "${saved.name}".`);
+    else note(null, saved.reason);
   };
   const loadProfile = (id: string): void => {
     const p = profiles.get(id);
@@ -238,13 +243,28 @@ export function useMagNormalization(): MagNormalizationState {
       });
       if (!resolvedSourceStillCurrent(request, ds.data)) return;
       const metadata = { ...ds.data.metadata };
-      // A field-only change (basis none, moment unit kept) preserves an
-      // earlier normalization record instead of claiming a new one.
-      if (basis !== "none" || res.y_unit !== from.fromMoment) {
+      const fromX = from.fromField ?? from.xUnit;
+      // The returned unit is the authority for what was written: a new record
+      // only when the backend really produced the requested moment unit.
+      const momentRequested = basis !== "none" || outUnit !== from.fromMoment;
+      if (momentRequested && res.y_unit === outUnit) {
         metadata.magnetometry_normalization = normalizationProvenance({
           profile, summary: plan, record: res, toField: res.x_unit,
-          source: { datasetId: ds.id, datasetName: ds.name, channel: ds.data.labels[yKey] ?? "", xUnit: from.fromField ?? from.xUnit },
+          source: {
+            datasetId: ds.id, datasetName: ds.name, xKey: request.xKey, yKey,
+            channel: ds.data.labels[yKey] ?? "", xUnit: fromX,
+          },
         });
+      } else {
+        if (momentRequested) warnings.push(`The moment stayed in ${res.y_unit}; no normalization was recorded.`);
+        // Field-only: an earlier normalization record keeps its moment part,
+        // but its field part must follow the x axis it now describes.
+        const chained = res.x_unit !== fromX
+          ? withFieldConversion(metadata.magnetometry_normalization, {
+            from_field: fromX, to_field: res.x_unit, source_dataset_id: ds.id, source_dataset_name: ds.name,
+          })
+          : null;
+        if (chained) metadata.magnetometry_normalization = chained;
       }
       const data: DataStruct = {
         time: restoreSubstituted(res.x, xs.finite),
@@ -257,7 +277,7 @@ export function useMagNormalization(): MagNormalizationState {
       addDataset({ id: outId, name: `${ds.name.replace(/\.[^.]+$/, "")} (${res.y_unit})`, data });
       if (res.warning) warnings.push(res.warning);
       setReadout({ owners: [...owners, outId], warning: warnings.length ? warnings.join(" ") : null, error: null, notice: null });
-      setStatus(`normalized to ${res.x_unit} / ${res.y_unit}`);
+      setStatus(`converted to ${res.x_unit} / ${res.y_unit}`);
     } catch (e) {
       fail(e instanceof Error ? e.message : "normalization failed");
     } finally {

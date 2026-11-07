@@ -5,7 +5,6 @@ import {
   BASIS_OUTPUT_UNITS,
   fieldsFor,
   geometriesFor,
-  normalizationProvenance,
   OUTPUT_PER_EMU,
   outputUnitsFor,
   summarizeNormalization,
@@ -34,7 +33,7 @@ describe("basis-dependent output units", () => {
     expect(outputUnitsFor("none", "emu/g")).toEqual(["emu/g"]);
     expect(outputUnitsFor("volume", "A/m")).toEqual([]);
     const s = summarizeNormalization(film(), "volume", "emu/cm³", "A/m");
-    expect(s.problem).toMatch(/already in emu\/cm³/);
+    expect(s.problem).toMatch(/already normalized \(emu\/cm³\)/);
   });
 
   it("matches the backend's dimensional factors", () => {
@@ -116,32 +115,5 @@ describe("live calculation summary", () => {
 
   it("refuses an output unit outside the basis family", () => {
     expect(summarizeNormalization(film(), "volume", "emu", "emu/g").problem).toMatch(/Choose an output unit/);
-  });
-});
-
-describe("normalization provenance", () => {
-  it("records every used input with its entered unit and canonical value", () => {
-    const profile = film();
-    const summary = summarizeNormalization(profile, "volume", "emu", "A/m");
-    const prov = normalizationProvenance({
-      profile, summary, toField: "T",
-      record: {
-        factor: summary.factor!, divisor: 7.5e-5, divisor_unit: "cm³", mass_g: null, area_cm2: 25, volume_cm3: 7.5e-5,
-        canonical: { width: 5, length: 5, film_thickness: 3e-6 }, equation: summary.equation, geometry_equation: "g",
-      },
-      source: { datasetId: "d1", datasetName: "film.dat", channel: "Moment", xUnit: "Oe" },
-    });
-    expect(prov).toMatchObject({
-      version: 1, basis: "volume", geometry: "rectangle", from_moment: "emu", to_moment: "A/m",
-      from_field: "Oe", to_field: "T", divisor: 7.5e-5, sample_volume_cm3: 7.5e-5, source_dataset_id: "d1",
-    });
-    expect(prov.inputs).toEqual({
-      width: { label: "Width", value: 5, unit: "cm", canonical: 5, canonical_unit: "cm" },
-      length: { label: "Length", value: 5, unit: "cm", canonical: 5, canonical_unit: "cm" },
-      film_thickness: { label: "Magnetic-film thickness", value: 30, unit: "nm", canonical: 3e-6, canonical_unit: "cm" },
-    });
-    // Reopen + recompute: the recorded profile alone reproduces the factor.
-    const reopened = JSON.parse(JSON.stringify(prov)) as { profile: SampleProfile; factor: number };
-    expect(summarizeNormalization(reopened.profile, "volume", "emu", "A/m").factor).toBe(reopened.factor);
   });
 });

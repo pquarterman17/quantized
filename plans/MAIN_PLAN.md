@@ -420,20 +420,29 @@ of being booked here.)*
           provenance so save/reopen/recompute reproduce the result exactly.
           **Done 2026-11-07:** Apply adds a new dataset. Its
           `magnetometry_normalization` (version 1) records the used inputs
-          (entered value, unit, canonical value and canonical unit), the full
-          profile, basis, geometry, source and output units, field units,
-          factor, divisor, equations and source dataset/channel. A
-          save/reopen test reproduces the factor from the recorded profile.
+          (entered value, unit, canonical value and canonical unit), the
+          sanitized profile reduced to the used fields, basis, geometry,
+          source and output units, field units, factor, divisor, equations,
+          and the source dataset, channel label and x/y channel indices. A
+          later field-only conversion updates the record's `to_field` and
+          appends to `field_conversions`. Tests check that a record from a
+          real Apply compares equal after a `.dwk` save and reopen, and that
+          the reopened profile alone recomputes the hand-calculated factor.
     - [x] Reuse sample geometry stored in metadata only through a visible
           “Use metadata values” action. Never overwrite already customized
           plot settings when the derived dataset opens.
           **Done 2026-11-07:** `lib/sampleProfileMetadata.ts` reads a stored
           `sample_profile`, a derived dataset's recorded profile, or a QD
-          `SAMPLE_MASS` header (mg). The unitless QD volume/size lines are not
-          read. It fills only the form, never the basis, datasets or plot
-          state, and a test checks this. The derived dataset opens through
-          the same `addDataset` path as every other derived dataset; that path
-          is unchanged here.
+          `SAMPLE_MASS` header. The QD header states **no unit**: the mass is
+          filled as mg only as an **unverified assumption** (MultiVu's
+          sample-info dialog uses mg), the status line says "mg is assumed;
+          verify it", and the fill is refused when `MOMENT_UNITS` is present
+          and not "0" or the moment is A·m². The unitless QD volume/size lines
+          are not read. A stored profile's geometry is adopted only when it
+          states that geometry's own size fields. It fills only the form,
+          never the basis, datasets or plot state, and a test checks this.
+          The derived dataset opens through the same `addDataset` path as
+          every other derived dataset; that path is unchanged here.
     - [x] Let the user explicitly save a named sample profile and deliberately
           apply it to related measurements. Never auto-apply a saved profile
           by technique, filename, or similarity, and never overwrite a
@@ -442,7 +451,9 @@ of being booked here.)*
           `magtools/useSampleProfiles.ts`. A profile is saved under a deduped
           name and loaded only into the form. Saved profiles are undoable,
           autosave-triggering and `.dwk`-persisted as additive-optional
-          `savedSampleProfiles` (sanitized, and omitted when empty). No
+          `savedSampleProfiles` (sanitized: ids capped at 64 characters,
+          ISO-only `savedAt`, non-positive values dropped, at most 200
+          profiles; omitted when empty). No
           existing dataset is ever edited.
     - [x] Add focused backend tests for mixed-unit geometry and every output
           family; frontend tests for unit changes preserving the physical
@@ -450,7 +461,8 @@ of being booked here.)*
           real workflow test for 5 cm × 5 cm × 30 nm → emu/cm³ and A/m.
           **Done 2026-11-07:** backend `tests/test_calc_magnetometry_normalization.py`.
           Frontend: `lib/sampleGeometry.test.ts`, `lib/sampleNormalization.test.ts`,
-          `lib/sampleProfileMetadata.test.ts`, `lib/workspaceSampleProfiles.test.ts`,
+          `lib/sampleProfileMetadata.test.ts`, `lib/normalizationProvenance.test.ts`,
+          `lib/workspaceSampleProfiles.test.ts`,
           `magtools/useMagNormalization.test.ts` and `MagToolsPanel.test.tsx`.
           The 5 cm × 5 cm × 30 nm workflow (20 emu/cm³ = 20 000 A/m for
           1.5e-3 emu, worked by hand in the test comments) runs on both sides

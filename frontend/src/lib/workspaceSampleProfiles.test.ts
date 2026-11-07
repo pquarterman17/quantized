@@ -6,7 +6,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { useApp } from "../store/useApp";
 import { shouldAutosave } from "../useWorkspaceAutosave";
 import { emptySampleProfile, makeQuantity, type SavedSampleProfile } from "./sampleGeometry";
-import { normalizationProvenance, summarizeNormalization } from "./sampleNormalization";
+import { normalizationProvenance } from "./normalizationProvenance";
+import { summarizeNormalization } from "./sampleNormalization";
 import type { Dataset } from "./types";
 import { parseWorkspace, serializeWorkspace } from "./workspace";
 
@@ -61,21 +62,28 @@ describe("saved sample profiles in the .dwk", () => {
 });
 
 describe("normalization provenance survives save and reopen", () => {
-  it("reproduces the recorded factor from the reopened profile", () => {
+  it("reopens equal, and the reopened profile alone gives the HAND-COMPUTED factor", () => {
+    // Profile: 5 cm × 50 mm × 30 nm. A = 5 cm × 5 cm = 25 cm²; t = 3e-6 cm;
+    // V = 7.5e-5 cm³. 1 emu/cm³ = 1000 A/m, so emu -> A/m is ×1000 / 7.5e-5
+    // = 1.3333…e7. This number is written by hand, never read back from the
+    // summary under test.
+    const HAND_FACTOR = 1000 / 7.5e-5;
     const summary = summarizeNormalization(profile, "volume", "emu", "A/m");
     const provenance = normalizationProvenance({
       profile, summary, toField: "T",
       record: {
-        factor: summary.factor!, divisor: summary.divisor!, divisor_unit: "cm³", mass_g: null,
-        area_cm2: summary.areaCm2, volume_cm3: summary.volumeCm3,
-        canonical: { width: 5, length: 5, film_thickness: 3e-6 }, equation: summary.equation, geometry_equation: summary.geometryEquation,
+        factor: HAND_FACTOR, divisor: 7.5e-5, divisor_unit: "cm³", mass_g: null, area_cm2: 25, volume_cm3: 7.5e-5,
+        canonical: { width: 5, length: 5, film_thickness: 3e-6 }, equation: "M [A/m] = m [emu] × 1000 / V [cm³]", geometry_equation: "g",
       },
-      source: { datasetId: "d0", datasetName: "film.dat", channel: "Moment", xUnit: "Oe" },
+      source: { datasetId: "d0", datasetName: "film.dat", xKey: null, yKey: 0, channel: "Moment", xUnit: "Oe" },
     });
     const derived = { ...ds, data: { ...ds.data, metadata: { magnetometry_normalization: provenance } } };
     const reopened = parseWorkspace(serializeWorkspace({ datasets: [derived] })).datasets[0];
     const rec = reopened.data.metadata.magnetometry_normalization as typeof provenance & { profile: typeof profile; factor: number };
     expect(rec).toEqual(provenance);
-    expect(summarizeNormalization(rec.profile, "volume", "emu", "A/m").factor).toBe(rec.factor);
+    expect(rec.factor).toBe(HAND_FACTOR);
+    // Recompute from the reopened record alone (the entered values + units).
+    const recomputed = summarizeNormalization(rec.profile, "volume", "emu", "A/m").factor!;
+    expect(Math.abs(recomputed / HAND_FACTOR - 1)).toBeLessThan(1e-12);
   });
 });

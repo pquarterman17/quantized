@@ -2,7 +2,8 @@
 // explicit-basis sample normalization: pick a basis (none/raw, mass, area,
 // volume), an output unit from THAT basis's family, describe the sample with
 // `value | unit` rows, read the live calculation summary, then Apply — which
-// writes a new derived dataset. All state/logic lives in useMagNormalization.
+// writes a new derived dataset. All state/logic lives in useMagNormalization,
+// which MagToolsPanel owns so the tab's choices survive switching tabs.
 
 import { Button, Select } from "../../primitives";
 import {
@@ -15,13 +16,12 @@ import type { SampleGeometry } from "../../../lib/sampleGeometry";
 import { NormalizationSummaryView } from "./NormalizationSummaryView";
 import { QuantityRow } from "./QuantityRow";
 import { SavedProfilesRow } from "./SavedProfilesRow";
-import { useMagNormalization } from "./useMagNormalization";
+import type { MagNormalizationState } from "./useMagNormalization";
 
 const opts = (xs: readonly string[]) => xs.map((v) => ({ value: v, label: v }));
 const REASON_ID = "mag-norm-apply-reason";
 
-export default function NormalizationPane() {
-  const n = useMagNormalization();
+export default function NormalizationPane({ n }: { n: MagNormalizationState }) {
   const isField = n.fromField !== null;
   const notField = n.active !== null && !isField;
   const geometries = geometriesFor(n.basis);

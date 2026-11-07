@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { normalizeMagMoment } from "../../../lib/api/magnetometry";
 import type { Dataset, DataStruct } from "../../../lib/types";
+import { parseWorkspace, serializeWorkspace } from "../../../lib/workspace";
 import { useApp } from "../../../store/useApp";
 import { useMagNormalization } from "./useMagNormalization";
 
@@ -149,9 +150,45 @@ describe("useMagNormalization — Apply is non-destructive and fully recorded", 
       version: 1, basis: "volume", geometry: "rectangle", from_moment: "emu", to_moment: "A/m",
       from_field: "Oe", to_field: "Oe", divisor: 7.5e-5, divisor_unit: "cm³", sample_volume_cm3: 7.5e-5,
       source_dataset_id: "d1", source_dataset_name: "film.dat", source_channel: "Moment",
+      source_x_key: null, source_y_key: 0,
     });
     expect(prov.inputs).toMatchObject({ film_thickness: { value: 30, unit: "nm", canonical: 3e-6, canonical_unit: "cm" } });
     expect((prov.profile as { filmThickness: unknown }).filmThickness).toEqual({ value: 30, unit: "nm", canonical: expect.closeTo(3e-6, 18) });
+
+    // The record written by a REAL apply survives save + reopen unchanged.
+    const reopened = parseWorkspace(serializeWorkspace({ datasets: useApp.getState().datasets }));
+    expect(reopened.datasets[1].data.metadata.magnetometry_normalization).toEqual(prov);
+  });
+
+  it("records the plotted channel indices, not just the label", async () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "multi.dat", data: {
+        time: [0, 1], values: [[-1000, 7, -1e-3], [1000, 8, 1e-3]], labels: ["Magnetic Field", "Temperature", "Moment"],
+        units: ["Oe", "K", "emu"], metadata: {},
+      } }],
+      activeId: "d1", xKey: 0, yKeys: [2], seriesOrder: null,
+    });
+    const { result } = renderHook(() => useMagNormalization());
+    act(() => result.current.setBasis("mass"));
+    act(() => result.current.setFieldText("mass", "2"));
+    await act(async () => { await result.current.apply(); });
+    expect(useApp.getState().datasets[1].data.metadata.magnetometry_normalization).toMatchObject({
+      source_x_key: 0, source_y_key: 2, source_channel: "Moment",
+    });
+  });
+
+  it("does not claim a requested normalization when the backend keeps the source unit", async () => {
+    const prior = { basis: "mass", to_moment: "emu/g", note: "earlier" };
+    load(curve("Magnetic Field", "Oe", "emu", { magnetometry_normalization: prior }));
+    vi.mocked(normalizeMagMoment).mockImplementationOnce(async (b) => ({ ...(await fakeBackend(1)(b)), y_unit: "emu" }));
+    const { result } = renderHook(() => useMagNormalization());
+    act(() => result.current.setBasis("mass"));
+    act(() => result.current.setFieldText("mass", "2"));
+    await act(async () => { await result.current.apply(); });
+    const out = useApp.getState().datasets[1];
+    expect(out.data.units).toEqual(["emu"]);
+    expect(out.data.metadata.magnetometry_normalization).toEqual(prior);
+    expect(result.current.warning).toContain("no normalization was recorded");
   });
 
   it("refuses before the request when a field is invalid, even if called directly", async () => {
@@ -167,16 +204,71 @@ describe("useMagNormalization — Apply is non-destructive and fully recorded", 
     const { result } = renderHook(() => useMagNormalization());
     act(() => result.current.setBasis("mass"));
     act(() => result.current.setFieldText("mass", "2"));
-    expect(result.current.applyBlocked).toMatch(/already in emu\/g/);
+    expect(result.current.applyBlocked).toMatch(/already normalized \(emu\/g\)/);
   });
 
-  it("preserves an earlier normalization record when only the field unit changes", async () => {
-    const provenance = { basis: "mass", to_moment: "emu/g", sample_mass_g: 0.002 };
+  it("a field-only follow-up keeps the moment record but updates its field part", async () => {
+    const provenance = { basis: "mass", to_moment: "emu/g", sample_mass_g: 0.002, from_field: "Oe", to_field: "Oe" };
     load(curve("Magnetic Field", "Oe", "emu/g", { magnetometry_normalization: provenance }));
     const { result } = renderHook(() => useMagNormalization());
     act(() => result.current.setToField("T"));
     await act(async () => { await result.current.apply(); });
-    expect(useApp.getState().datasets[1].data.metadata.magnetometry_normalization).toEqual(provenance);
+    const out = useApp.getState().datasets[1].data;
+    expect(out.metadata.x_column_unit).toBe("T");
+    expect(out.metadata.magnetometry_normalization).toEqual({
+      ...provenance, to_field: "T",
+      field_conversions: [{ from_field: "Oe", to_field: "T", source_dataset_id: "d1", source_dataset_name: "film.dat" }],
+    });
+  });
+
+  it("a field-only conversion of a raw dataset records no normalization", async () => {
+    const { result } = renderHook(() => useMagNormalization());
+    act(() => result.current.setToField("T"));
+    await act(async () => { await result.current.apply(); });
+    expect(useApp.getState().datasets[1].data.metadata.magnetometry_normalization).toBeUndefined();
+  });
+
+  it("keeps a moment whose FIELD is a gap, and drops only that row's x", async () => {
+    load({ ...curve("Magnetic Field", "Oe"), time: [-1000, Number.NaN, 1000], values: [[5], [7], [1]] });
+    vi.mocked(normalizeMagMoment).mockImplementationOnce(async (b) => ({ ...(await fakeBackend(1)(b)), x: [-0.1, 0, 0.1] }));
+    const { result } = renderHook(() => useMagNormalization());
+    act(() => result.current.setToField("T"));
+    await act(async () => { await result.current.apply(); });
+    expect(vi.mocked(normalizeMagMoment).mock.calls[0][0].x).toEqual([-1000, 0, 1000]);
+    const out = useApp.getState().datasets[1].data;
+    expect(out.time[0]).toBe(-0.1);
+    expect(Number.isNaN(out.time[1])).toBe(true);
+    expect(out.values).toEqual([[5], [7], [1]]); // every moment kept
+  });
+
+  it("stamps x_column_long too, so the new precedence cannot read a stale one", async () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "loop.dat", data: {
+        time: [0, 1], values: [[-15000, -1], [15000, 1]], labels: ["Magnetic Field", "Moment"], units: ["Oe", "emu"],
+        metadata: { x_column_name: "Time", x_column_long: "Elapsed Time", x_column_unit: "s" },
+      } }],
+      activeId: "d1", xKey: 0, yKeys: [1], seriesOrder: null,
+    });
+    const { result } = renderHook(() => useMagNormalization());
+    act(() => result.current.setToField("T"));
+    await act(async () => { await result.current.apply(); });
+    const out = useApp.getState().datasets[1].data;
+    expect(out.metadata.x_column_long).toBe("Magnetic Field");
+    expect(out.metadata.x_column_name).toBe("Magnetic Field");
+    expect(out.metadata.x_column_unit).toBe("T"); // the CONVERTED unit
+  });
+
+  it("converts the good axis and WARNS when only one axis is all gaps", async () => {
+    load({ ...curve("Magnetic Field", "Oe"), time: [0, 100], values: [[Number.NaN], [Number.NaN]] });
+    vi.mocked(normalizeMagMoment).mockImplementationOnce(async (b) => ({ ...(await fakeBackend(1)(b)), x: [0, 0.01] }));
+    const { result } = renderHook(() => useMagNormalization());
+    act(() => result.current.setToField("T"));
+    await act(async () => { await result.current.apply(); });
+    expect(normalizeMagMoment).toHaveBeenCalledTimes(1); // not refused
+    expect(result.current.warning).toContain("Every moment value is a gap");
+    const out = useApp.getState().datasets[1].data;
+    expect(out.time).toEqual([0, 0.01]);
+    expect(out.values.every((r) => Number.isNaN(r[0]))).toBe(true);
   });
 
   it("never converts a temperature axis as a field", async () => {
@@ -272,9 +364,28 @@ describe("useMagNormalization — metadata fill and saved profiles are explicit"
     act(() => result.current.fillFromMetadata());
     expect(result.current.texts.mass).toBe("7.2");
     expect(result.current.texts.width).toBe("4");
-    expect(result.current.notice).toMatch(/SAMPLE_MASS/);
+    expect(result.current.notice).toMatch(/SAMPLE_MASS.*mg is assumed; verify/);
     expect(useApp.getState().datasets[0]).toBe(before);
     expect(useApp.getState().yKeys).toEqual([0]);
+  });
+
+  it("refuses an unverifiable QD mass and says why", () => {
+    load(curve("Magnetic Field", "Oe", "emu", { instrument: { SAMPLE_MASS: "7.2", MOMENT_UNITS: "1" } }));
+    const { result } = renderHook(() => useMagNormalization());
+    act(() => result.current.fillFromMetadata());
+    expect(result.current.texts.mass).toBe("");
+    expect(result.current.error).toMatch(/MOMENT_UNITS is "1".*cannot be assumed/);
+  });
+
+  it("refuses a save past the persisted cap", () => {
+    const profile = useApp.getState().savedSampleProfiles;
+    expect(profile).toEqual([]);
+    const { result } = renderHook(() => useMagNormalization());
+    const full = Array.from({ length: 200 }, (_, i) => ({ id: `p${i}`, name: `P${i}`, savedAt: "", profile: result.current.profile }));
+    act(() => useApp.setState({ savedSampleProfiles: full }));
+    act(() => result.current.saveProfile("one more"));
+    expect(useApp.getState().savedSampleProfiles).toHaveLength(200);
+    expect(result.current.error).toMatch(/At most 200 sample profiles/);
   });
 
   it("says so when the metadata states nothing", () => {
