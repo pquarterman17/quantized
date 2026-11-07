@@ -8204,6 +8204,63 @@
         "title": "NeutronCalcRequest",
         "type": "object"
       },
+      "NormalizeRequest": {
+        "properties": {
+          "basis": {
+            "default": "none",
+            "title": "Basis",
+            "type": "string"
+          },
+          "from_field": {
+            "default": "Oe",
+            "title": "From Field",
+            "type": "string"
+          },
+          "from_moment": {
+            "default": "emu",
+            "title": "From Moment",
+            "type": "string"
+          },
+          "geometry": {
+            "default": "",
+            "title": "Geometry",
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/SampleProfileIn"
+          },
+          "to_field": {
+            "default": "Oe",
+            "title": "To Field",
+            "type": "string"
+          },
+          "to_moment": {
+            "default": "emu",
+            "title": "To Moment",
+            "type": "string"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "NormalizeRequest",
+        "type": "object"
+      },
       "OdrRequest": {
         "properties": {
           "lambda": {
@@ -10615,6 +10672,29 @@
         "title": "QQRequest",
         "type": "object"
       },
+      "QuantityIn": {
+        "description": "One entered sample quantity: the value as typed (``None`` = blank) and\nits unit. Canonical conversion happens in ``calc.sample_geometry``.",
+        "properties": {
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "title": "QuantityIn",
+        "type": "object"
+      },
       "RecommendRequest": {
         "properties": {
           "alpha": {
@@ -11775,6 +11855,82 @@
           "k"
         ],
         "title": "RosnerRequest",
+        "type": "object"
+      },
+      "SampleProfileIn": {
+        "properties": {
+          "area": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuantityIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "diameter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuantityIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "film_thickness": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuantityIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "length": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuantityIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mass": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuantityIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "volume": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuantityIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "width": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuantityIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "SampleProfileIn",
         "type": "object"
       },
       "SauerbreyRequest": {
@@ -19818,6 +19974,50 @@
           }
         },
         "summary": "Hysteresis",
+        "tags": [
+          "magnetometry"
+        ]
+      }
+    },
+    "/api/magnetometry/normalize": {
+      "post": {
+        "description": "Explicit-basis moment normalization (none/mass/area/volume) + field\nconversion, returning the full calculation record for provenance.",
+        "operationId": "normalize_api_magnetometry_normalize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NormalizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Normalize Api Magnetometry Normalize Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Normalize",
         "tags": [
           "magnetometry"
         ]

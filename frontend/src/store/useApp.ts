@@ -1,8 +1,6 @@
 // Central app store (Zustand). Mirrors fermiviewer's single-hook convention.
 // Holds loaded datasets, the active selection, panel + theme view state.
 import { create } from "zustand";
-import { recomputeWithErrors } from "../lib/formula";
-import { asAlreadyComputed } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
 import type { WorkbookNode } from "../lib/workbooks";
 import { snapshotView } from "../lib/plotview";
@@ -51,6 +49,7 @@ import { createQuickPlotTemplatesSlice, type QuickPlotTemplatesSlice } from "./q
 import { createPlotRecipesSlice, type PlotRecipesSlice } from "./plotRecipes";
 import { createCollectionsSlice, type CollectionsSlice } from "./collections";
 import { createLibraryDetailsColumnsSlice, type LibraryDetailsColumnsSlice } from "./libraryDetailsColumns";
+import { createSampleProfilesSlice, type SampleProfilesSlice } from "./sampleProfiles";
 import { createQuickFigureBuilderSlice, type QuickFigureBuilderSlice } from "./quickFigureBuilder";
 import { createPageDocumentsSlice, type PageDocumentSlice } from "./pageDocuments";
 // RSM_CUTS_PLAN item 4: rsmPeaks/setRsmPeaks relocated here (see rois.ts's
@@ -80,25 +79,10 @@ import { createRecipeFidelitySlice, type RecipeFidelitySlice } from "./recipeFid
 import { createOriginFallbackSlice, type OriginFallbackSlice } from "./originFallbackLazy";
 import { createPlotViewSettingsSlice, type PlotViewSettingsSlice } from "./plotViewSettings";
 import type { ChannelRole, Dataset, ModelingType } from "../lib/types";
-/** Recompute a dataset's computed columns from its current base (no-op without
- *  formulas). Routed through after any base-data mutation (cell edit, corrections).
- *  Exported for store/corrections.ts (nextDatasetId/split.ts precedent) — the
- *  corrections slice re-derives computed columns after every apply/reset from
- *  the SAME formula-recompute logic every other base-data mutation here uses.
- *  LIBRARY_WORKBOOK_UX_PLAN PR K (K5b): also refreshes `formulaErrors` in the
- *  same pass, so a base-data edit that fixes (or breaks) a formula's
- *  evaluation keeps the visible error state in sync everywhere `recompute`
- *  is the chokepoint — not just at the store/computedColumns.ts authoring
- *  sites. `asAlreadyComputed` (SILENT_STATE_CORRUPTION_PLAN #2) is sound
- *  HERE ONLY because `d.data` is a Dataset's OWN table — by construction it
- *  already carries `d.formulas`' stale columns. A caller with base-only data
- *  must NOT route through `recompute` — see derivedWorksheets.ts's
- *  `recomputeFromBase` (the #4 fix). */
-export const recompute = (d: Dataset): Dataset => {
-  if (!d.formulas?.length) return d;
-  const { data, errors } = recomputeWithErrors(asAlreadyComputed(d.data), d.formulas);
-  return { ...d, data, formulaErrors: Object.keys(errors).length ? errors : undefined };
-};
+// `recompute` (a dataset's computed columns from its base) lives in
+// store/recompute.ts — moved out under this module's size pin for MAIN_PLAN
+// #42's sample-profiles slice; re-exported so every importer is unchanged.
+export { recompute } from "./recompute";
 // The shared `<prefix>-<t36>-<n>` object-id sequence moved to store/idSeq.ts
 // (P4.1): a module-level `let` cannot be incremented across a module boundary,
 // and store/reportsFigureDocs.ts mints `rep-`/`figd-` ids from it. Re-exported
@@ -152,7 +136,7 @@ export type LegendPos = "auto" | "ne" | "nw" | "se" | "sw";
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice, WorkshopFlagsSlice, DatasetListEditsSlice, DatasetSelectionSlice, RecalcEngineSlice, PlotViewFieldsSlice, ImportAppendSlice, AppearancePrefsSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, SampleProfilesSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice, WorkshopFlagsSlice, DatasetListEditsSlice, DatasetSelectionSlice, RecalcEngineSlice, PlotViewFieldsSlice, ImportAppendSlice, AppearancePrefsSlice {
   datasets: Dataset[];
   // activeId / selectedIds / worksheetId: declared on DatasetSelectionSlice
   // (store/datasetSelection.ts) with the actions that move them.
@@ -311,6 +295,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createWorkbookActionsSlice(set, get),
   ...createCollectionsSlice(set, get),
   ...createLibraryDetailsColumnsSlice(set),
+  ...createSampleProfilesSlice(set, get),
   ...createWorkbookCombineSlice(set, get),
   ...createWorkbookSeparateSlice(set, get),
   ...createWorkbookTransferSlice(set, get),

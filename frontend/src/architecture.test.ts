@@ -571,7 +571,10 @@ const STORE_PINS: Record<string, number> = {
   // store/appearancePrefs.characterization.test.ts (poisoned whole-getState()
   // diff per writer and per setPref key, persist + <html> apply, the
   // persisted seed) were green before the move and are unchanged after it.
-  "/store/useApp.ts": 486,
+  // 486 -> 471 (2026-11-07, MAIN_PLAN #42): `recompute` moved verbatim to
+  // store/recompute.ts (re-exported here), which funds the sample-profiles
+  // slice's import + creator-spread lines; ratcheted down to the new size.
+  "/store/useApp.ts": 471,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).

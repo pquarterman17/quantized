@@ -32,6 +32,7 @@ import type { AnalysisResult } from "./analysisResult";
 import { stampAnalysisResults } from "./analysisResultFreshness";
 import type { SmartFolder } from "./smartfolders";
 import type { Collection } from "./collections";
+import type { SavedSampleProfile } from "./sampleGeometry";
 import type { LibraryDetailsColumnKey } from "./libraryDetailsColumns";
 import type { ToolWindowLayout } from "./toolwindow";
 import { serializeComputedColumnsExtras } from "./workspaceComputedColumns";
@@ -150,6 +151,8 @@ interface WorkspaceDoc {
   workbookLastChild: Record<string, string>;
   expandedWorkbookIds: string[];
   collections: Collection[];
+  /** MAIN_PLAN #42 — omitted when empty, so a project with no saved profile round-trips byte-identically. */
+  savedSampleProfiles?: SavedSampleProfile[];
   visibleDetailsColumns: LibraryDetailsColumnKey[];
   plotRecipes: PlotRecipe[];
   /** P2.7 follow-up — absent when there are none (lib/fitModelsProject.ts). */
@@ -246,6 +249,7 @@ export function serializeWorkspace(
     workbookLastChild: ws.workbookLastChild ?? {},
     expandedWorkbookIds: ws.expandedWorkbookIds ?? [],
     collections: ws.collections ?? [],
+    ...(ws.savedSampleProfiles?.length ? { savedSampleProfiles: ws.savedSampleProfiles } : {}),
     visibleDetailsColumns: ws.visibleDetailsColumns ?? [], // PR L slice 2 — verbatim; sanitizeVisibleDetailsColumns defaults on PARSE
     plotRecipes: ws.plotRecipes ?? [], // P1.3 — verbatim, same convention as savedPlotSpecs/quickPlotTemplates
     // P2.7 follow-up: the saved fit models (the local library) plus the

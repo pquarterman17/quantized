@@ -10,7 +10,7 @@ vi.mock("../../../lib/api/magnetometry", () => ({
   demagCorrectField: vi.fn(),
   subtractMagBackground: vi.fn(),
   subtractHysteresisBackground: vi.fn(),
-  convertMagUnits: vi.fn(),
+  normalizeMagMoment: vi.fn(),
 }));
 
 const realResolveDataset = useApp.getState().resolveDataset;

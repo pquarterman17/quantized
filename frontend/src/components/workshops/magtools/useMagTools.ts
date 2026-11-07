@@ -1,7 +1,8 @@
-// Magnetometry tools workshop — state hook. Two transforms backed by golden
-// calc.magnetometry helpers that had no frontend: linear background removal
-// and sample-aware field/moment unit conversion (convert_mag_units). Each
-// writes a new dataset to the library.
+// Magnetometry tools workshop — state hook for the Background tab (linear
+// background removal, backed by golden calc.magnetometry helpers) plus the
+// request guards every MagTools hook shares. The Units tab's explicit-basis
+// sample normalization lives in ./useMagNormalization.ts (MAIN_PLAN #42).
+// Each transform writes a new dataset to the library.
 //
 // The Background tab DISPATCHES on what the x axis actually is (BUG-021):
 // M(T) goes to the one-sided high-T fit (`subtract_mag_background`), an M(H)
@@ -15,19 +16,13 @@
 // `JSON.stringify` writes them as `null`, which pydantic's `list[float]`
 // rejects one element at a time. The Background tab DROPS those rows before
 // the fit and puts them back at their original row indices; the Units tab
-// SUBSTITUTES per axis instead, because a unit conversion is elementwise and
-// dropping would throw away a good field value over a gap in the moment. See
-// `lib/api/finitePairs.ts` for both contracts and why they differ.
+// (useMagNormalization.ts) SUBSTITUTES per axis instead, because a unit
+// conversion is elementwise. See `lib/api/finitePairs.ts` for both contracts.
 
 import { useMemo, useState } from "react";
 
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
-import { restoreSubstituted, substituteGaps } from "../../../lib/api/finiteSubstitute";
-import {
-  convertMagUnits,
-  subtractHysteresisBackground,
-  subtractMagBackground,
-} from "../../../lib/api/magnetometry";
+import { subtractHysteresisBackground, subtractMagBackground } from "../../../lib/api/magnetometry";
 import { fullPlottedX, plottedYKey } from "../../../lib/fitselectionActions";
 import {
   detectMagXKind,
@@ -36,10 +31,6 @@ import {
   type MagXDetection,
 } from "../../../lib/magDataKind";
 import type { Dataset, DataStruct } from "../../../lib/types";
-import {
-  DEFAULT_MAG_NORMALIZATION, normalizationMetadata, normalizationProblem,
-  resolvedSampleMass, resolvedSampleVolume, type MagNormalizationParams,
-} from "../../../lib/sampleGeometry";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 
 /** The plotted X (independent variable — T or field) + primary Y (moment)
@@ -94,15 +85,12 @@ export function sourceUnits(
 }
 
 export const FIELD_UNITS = ["Oe", "T", "mT", "A/m"];
-export const MOMENT_UNITS = ["emu", "emu/g", "emu/cm³", "A·m²", "A/m", "kA/m"];
 
 /** The two paths' natural defaults. They are NOT the same number and must
  *  never be sent to the other route: 10% of the temperature span is the high-T
  *  tail; 70% of max|H| is where a loop is saturated. */
 export const DEFAULT_AUTO_FRACTION = 0.1;
 export const DEFAULT_HI_FRACTION = 0.7;
-
-export type UnitParams = MagNormalizationParams;
 
 export interface MagRequestView {
   sourceId: string;
@@ -175,14 +163,13 @@ export interface MagToolsState {
   setAutoFraction: (v: number) => void;
   hiFraction: number;
   setHiFraction: (v: number) => void;
-  units: UnitParams;
-  setUnits: (patch: Partial<UnitParams>) => void;
+  /** The plotted data's own units, for labelling the fit readout. */
+  source: { fromField: string | null; xUnit: string; fromMoment: string } | null;
   fit: MagBgFit | null;
   warning: string | null;
   busy: boolean;
   error: string | null;
   subtractBackground: () => Promise<void>;
-  convert: () => Promise<void>;
 }
 
 export function useMagTools(): MagToolsState {
@@ -196,7 +183,6 @@ export function useMagTools(): MagToolsState {
   const [bgMode, setBgModeState] = useState<MagBgMode>("auto");
   const [autoFraction, setAutoFraction] = useState(DEFAULT_AUTO_FRACTION);
   const [hiFraction, setHiFraction] = useState(DEFAULT_HI_FRACTION);
-  const [units, setUnitsState] = useState<UnitParams>(DEFAULT_MAG_NORMALIZATION);
   const [busy, setBusy] = useState(false);
   // The readout (fit + warning + error) BELONGS to the datasets it was
   // computed from and wrote. Selecting a different dataset re-labels the
@@ -237,9 +223,6 @@ export function useMagTools(): MagToolsState {
     setBgModeState(m);
     setReadout(EMPTY_READOUT);
   };
-
-  const setUnits = (patch: Partial<UnitParams>): void =>
-    setUnitsState((u) => ({ ...u, ...patch }));
 
   const stem = (): string => (active ? active.name.replace(/\.[^.]+$/, "") : "data");
 
@@ -368,107 +351,6 @@ export function useMagTools(): MagToolsState {
     }
   }
 
-  async function convert(): Promise<void> {
-    if (!active) return;
-    const request = requestView(active.id, xKey, yKeys, seriesOrder);
-    const owners = [request.sourceId];
-    setBusy(true);
-    setReadout(EMPTY_READOUT);
-    try {
-      // #38 deferred edge: resolve the active dataset's full data first.
-      const ds = await useApp.getState().resolveDataset(request.sourceId);
-      if (!ds || !requestStillCurrent(request)) return;
-      const { x, y, yKey } = magXY(ds, request.xKey, request.yKeys, request.seriesOrder);
-      // NOT `dropGapRows`. A unit conversion is a scalar multiply per axis, so
-      // no row can influence another — pairing the coordinates here would
-      // discard a perfectly good FIELD value just because that row's moment
-      // was a gap. `substituteGaps` sends a placeholder per gap, per axis, and
-      // throws its converted result away on the way back; each axis keeps
-      // exactly the gaps it started with. See finitePairs.ts's
-      // "ELEMENTWISE case" note for why this is safe here and nowhere near a
-      // fit.
-      const xs = substituteGaps(x);
-      const ys = substituteGaps(y);
-      const anyX = xs.finite.includes(true);
-      const anyY = ys.finite.includes(true);
-      if (x.length === 0 || (!anyX && !anyY)) {
-        setReadout({
-          owners,
-          fit: null,
-          warning: null,
-          error: "No finite field or moment values to convert.",
-        });
-        return;
-      }
-      // One all-gap axis is not a reason to refuse — the other axis converts
-      // perfectly well, and that is the whole point of converting per axis —
-      // but the user should be told the output column is empty.
-      const warnings: string[] = [];
-      if (!anyX) warnings.push("Every field value is a gap; the converted x column is all gaps.");
-      if (!anyY) warnings.push("Every moment value is a gap; the converted y column is all gaps.");
-      // Source units come from the data; a non-field x (an M(T) curve) passes
-      // through unchanged (from == to) instead of being scaled as oersteds.
-      const from = sourceUnits(ds, request.xKey, request.yKeys, request.seriesOrder);
-      if (from.fromField == null) warnings.push(`x (${from.xLabel || "unnamed"}) is not a field, so only the moment was converted.`);
-      const problem = normalizationProblem({ ...units, fromMoment: from.fromMoment });
-      if (problem) {
-        setReadout({ owners, fit: null, warning: null, error: problem });
-        return;
-      }
-      const sampleMass = resolvedSampleMass(units);
-      const sampleVolume = resolvedSampleVolume(units);
-      const res = await convertMagUnits({
-        x: xs.safe,
-        y: ys.safe,
-        from_field: from.fromField ?? from.xUnit,
-        to_field: from.fromField == null ? from.xUnit : units.toField,
-        from_moment: from.fromMoment,
-        to_moment: units.toMoment,
-        sample_mass: sampleMass,
-        sample_volume: sampleVolume,
-      });
-      if (!resolvedSourceStillCurrent(request, ds.data)) return;
-      const metadata = { ...ds.data.metadata };
-      // A field-only conversion must preserve an earlier sample basis, and a
-      // backend refusal must not claim that its requested moment conversion
-      // happened. The returned unit is the authority for what was written.
-      if (from.fromMoment !== res.y_unit && res.y_unit === units.toMoment) {
-        metadata.magnetometry_normalization = normalizationMetadata(
-          { ...units, toMoment: res.y_unit }, from.fromMoment,
-        );
-      }
-      const data: DataStruct = {
-        time: restoreSubstituted(res.x, xs.finite),
-        values: restoreSubstituted(res.y, ys.finite).map((v) => [v]),
-        labels: [ds.data.labels[yKey] ?? "Moment"],
-        units: [res.y_unit],
-        // Stamps `x_column_long` too: the new unit-precedence rule reads it
-        // FIRST, so leaving a stale inherited long name here would have the
-        // converted dataset described by the wrong axis.
-        metadata: stampXIdentity(metadata, ds.data, request.xKey, res.x_unit),
-      };
-      const outId = nextDatasetId();
-      addDataset({ id: outId, name: `${stem()} (${res.y_unit})`, data });
-      if (res.warning) warnings.push(res.warning);
-      setReadout({
-        owners: [...owners, outId],
-        fit: null,
-        warning: warnings.length ? warnings.join(" ") : null,
-        error: null,
-      });
-      setStatus(`converted to ${res.x_unit} / ${res.y_unit}`);
-    } catch (e) {
-      setReadout({
-        owners,
-        fit: null,
-        warning: null,
-        error: e instanceof Error ? e.message : "unit conversion failed",
-      });
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return {
     active,
     tab,
@@ -481,13 +363,11 @@ export function useMagTools(): MagToolsState {
     setAutoFraction,
     hiFraction,
     setHiFraction,
-    units: src ? { ...units, fromField: src.fromField ?? src.xUnit, fromMoment: src.fromMoment } : units,
-    setUnits,
+    source: src,
     fit: visible.fit,
     warning: visible.warning,
     busy,
     error: visible.error,
     subtractBackground,
-    convert,
   };
 }

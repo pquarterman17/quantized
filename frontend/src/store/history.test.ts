@@ -320,6 +320,7 @@ describe("per-action-class undo/redo coverage", () => {
       workbookLastChild: {},
       expandedWorkbookIds: [],
       collections: [],
+      savedSampleProfiles: [],
       visibleDetailsColumns: [],
       plotRecipes: [],
       recipeSourcesComplete: true,

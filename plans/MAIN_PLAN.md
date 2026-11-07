@@ -359,15 +359,24 @@ of being booked here.)*
     wiring after the dimensional model and tests are settled. **This item is
     the authoritative implementation contract; do not create a parallel
     unchecked normalization checklist in another plan.**
-    - [ ] Provide an explicit normalization basis selector: none/raw moment,
+    - [x] Provide an explicit normalization basis selector: none/raw moment,
           mass, area, or volume. Do not infer and silently apply a basis from
           whatever metadata happens to be present.
-    - [ ] Define one persisted `SampleProfile` contract with optional mass,
+          **Done 2026-11-07:** Units tab "Normalization basis" select
+          (`magtools/NormalizationPane.tsx`); defaults to none and is never
+          changed by a metadata fill or a loaded profile.
+    - [x] Define one persisted `SampleProfile` contract with optional mass,
           direct volume, area, width, length, diameter, and **magnetic-film
           thickness**. Preserve the entered value and unit for editing, plus
           a canonical value for calculation. Keep magnetic-film thickness
           visibly distinct from substrate or total-sample thickness; never
           guess which thickness the user meant.
+          **Done 2026-11-07:** versioned `SampleProfile` in
+          `lib/sampleGeometry.ts` (value + unit + canonical per field, plus
+          the explicit geometry path); `sanitizeSampleProfile` recomputes
+          canonical values on load and drops unknown units/versions. The
+          backend twin is `calc/sample_geometry.py`. The thickness row is
+          labelled "Magnetic-film thickness" with a "not the substrate" hint.
     - [x] Use a reusable `value | unit` row for every quantity. Minimum unit
           sets: mass (µg, mg, g, kg); length/thickness (nm, µm, mm, cm, m);
           thin-film length/thickness also includes Å; area (mm², cm², m²);
@@ -379,35 +388,85 @@ of being booked here.)*
           circular diameter × thickness; or sample mass. Width, length,
           diameter, and thickness may each use different units (for example
           cm, cm, and nm).
-    - [ ] Show a live read-only calculation summary before Apply: computed
+    - [x] Show a live read-only calculation summary before Apply: computed
           area/volume, normalization divisor, source moment unit, requested
           output unit, and the equation used. Invalid, missing, zero, or
           negative dimensions disable Apply and identify the exact field.
           **Partial 2026-10-12:** canonical volume is shown live and incomplete
           mass/volume normalization disables Convert with a concise reason.
           The expanded equation/divisor summary and per-field error text remain.
-    - [ ] Offer output units appropriate to the selected basis, rather than
+          **Done 2026-11-07:** `NormalizationSummaryView.tsx` (area, volume or
+          mass, divisor, factor, source/output units, moment and geometry
+          equations), derived every render from `summarizeNormalization`.
+          Each row shows its own error text (`aria-invalid` +
+          `aria-describedby`), and the disabled Apply button is described by
+          a visible reason.
+    - [x] Offer output units appropriate to the selected basis, rather than
           one mixed list: raw moment (emu, A·m²); mass-normalized (emu/g,
           A·m²/kg); volume magnetization (emu/cm³, A/m, kA/m); and an
           explicitly labelled area-normalized set (at minimum emu/cm² and
           A·m²/m²) when area is selected.
           Conversion factors must be dimensionally tested, including the
           emu/cm³ ↔ A/m relationship.
-    - [ ] Apply non-destructively: create a derived/corrected dataset, never
+          **Done 2026-11-07:** `calc/magnetometry_normalization.py`
+          (`POST /api/magnetometry/normalize`). Tests derive each SI factor
+          from SI quantities, check 1 emu/cm³ = 1000 A/m exactly, and check
+          the emu, emu/g, emu/cm³ and A·m² factors against the MATLAB-golden
+          `convert_mag_units`. An already-normalized source is never divided
+          again.
+    - [x] Apply non-destructively: create a derived/corrected dataset, never
           rewrite imported raw values. Record all geometry inputs, original
           units, canonical values, selected basis, output unit, and formula in
           provenance so save/reopen/recompute reproduce the result exactly.
-    - [ ] Reuse sample geometry stored in metadata only through a visible
+          **Done 2026-11-07:** Apply adds a new dataset. Its
+          `magnetometry_normalization` (version 1) records the used inputs
+          (entered value, unit, canonical value and canonical unit), the
+          sanitized profile reduced to the used fields, basis, geometry,
+          source and output units, field units, factor, divisor, equations,
+          and the source dataset, channel label and x/y channel indices. A
+          later field-only conversion updates the record's `to_field` and
+          appends to `field_conversions`. Tests check that a record from a
+          real Apply compares equal after a `.dwk` save and reopen, and that
+          the reopened profile alone recomputes the hand-calculated factor.
+    - [x] Reuse sample geometry stored in metadata only through a visible
           “Use metadata values” action. Never overwrite already customized
           plot settings when the derived dataset opens.
-    - [ ] Let the user explicitly save a named sample profile and deliberately
+          **Done 2026-11-07:** `lib/sampleProfileMetadata.ts` reads a stored
+          `sample_profile`, a derived dataset's recorded profile, or a QD
+          `SAMPLE_MASS` header. The QD header states **no unit**: the mass is
+          filled as mg only as an **unverified assumption** (MultiVu's
+          sample-info dialog uses mg), the status line says "mg is assumed;
+          verify it", and the fill is refused when `MOMENT_UNITS` is present
+          and not "0" or the moment is A·m². The unitless QD volume/size lines
+          are not read. A stored profile's geometry is adopted only when it
+          states that geometry's own size fields. It fills only the form,
+          never the basis, datasets or plot state, and a test checks this.
+          The derived dataset opens through the same `addDataset` path as
+          every other derived dataset; that path is unchanged here.
+    - [x] Let the user explicitly save a named sample profile and deliberately
           apply it to related measurements. Never auto-apply a saved profile
           by technique, filename, or similarity, and never overwrite a
           dataset's already customized normalization.
-    - [ ] Add focused backend tests for mixed-unit geometry and every output
+          **Done 2026-11-07:** `store/sampleProfiles.ts` and
+          `magtools/useSampleProfiles.ts`. A profile is saved under a deduped
+          name and loaded only into the form. Saved profiles are undoable,
+          autosave-triggering and `.dwk`-persisted as additive-optional
+          `savedSampleProfiles` (sanitized: ids capped at 64 characters,
+          ISO-only `savedAt`, non-positive values dropped, at most 200
+          profiles; omitted when empty). No
+          existing dataset is ever edited.
+    - [x] Add focused backend tests for mixed-unit geometry and every output
           family; frontend tests for unit changes preserving the physical
           value, validation, basis-dependent choices, and live summary; and a
           real workflow test for 5 cm × 5 cm × 30 nm → emu/cm³ and A/m.
+          **Done 2026-11-07:** backend `tests/test_calc_magnetometry_normalization.py`.
+          Frontend: `lib/sampleGeometry.test.ts`, `lib/sampleNormalization.test.ts`,
+          `lib/sampleProfileMetadata.test.ts`, `lib/normalizationProvenance.test.ts`,
+          `lib/workspaceSampleProfiles.test.ts`,
+          `magtools/useMagNormalization.test.ts` and `MagToolsPanel.test.tsx`.
+          The 5 cm × 5 cm × 30 nm workflow (20 emu/cm³ = 20 000 A/m for
+          1.5e-3 emu, worked by hand in the test comments) runs on both sides
+          and through the panel DOM.
     - [ ] **Deferred follow-up, not part of the first implementation:** add
           optional uncertainty fields for dimensions/mass and propagate their
           contribution separately from measurement uncertainty. The first

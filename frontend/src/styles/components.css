@@ -674,11 +674,22 @@
 .qz-analysis-snapshot-table-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .qz-analysis-snapshot-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 @container (max-width: 620px) { .qz-analysis-reporting-grid { grid-template-columns: 1fr; } }
-.qz-mag-quantity { display: flex; align-items: center; gap: 5px; }
-.qz-mag-geometry { display: grid; gap: 6px; margin-top: 8px; }
-.qz-mag-geometry-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px; margin-top: 8px; }
+.qz-mag-norm { margin-top: 12px; display: grid; gap: 8px; }
+.qz-mag-norm-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; }
+.qz-mag-norm-grid .qzk-field-lbl { margin: 0; }
+.qz-mag-geometry { display: grid; gap: 6px; }
+.qz-mag-geometry-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px; }
 .qz-mag-geometry-row .qzk-field-lbl { margin: 0; }
-.qz-mag-volume-readout { margin-top: 8px; color: var(--text-faint); }
+.qz-mag-field-hint, .qz-mag-muted { color: var(--text-faint); }
+.qz-mag-field-error, .qz-mag-warn { color: var(--warn); }
+.qz-mag-error { color: var(--danger); }
+.qz-mag-profile-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.qz-mag-profile-row .qz-input { flex: 1 1 120px; min-width: 0; }
+.qz-mag-profiles { display: grid; gap: 6px; margin: 0; padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: 4px; }
+.qz-mag-profiles legend { padding: 0 4px; }
+.qz-mag-summary dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: 4px; font-size: var(--font-size-sm); }
+.qz-mag-summary dt { color: var(--text-faint); }
+.qz-mag-summary dd { margin: 0; font-family: var(--font-mono); overflow-wrap: anywhere; }
 .qz-analysis-subtoolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .qz-analysis-subtoolbar label { display: flex; align-items: center; gap: 6px; margin-right: auto; color: var(--text-dim); }
 .qz-analysis-subtoolbar select { max-width: 280px; }

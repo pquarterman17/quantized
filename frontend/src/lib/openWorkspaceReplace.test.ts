@@ -61,6 +61,7 @@ function emptyWorkspace(): LoadedWorkspace {
     workbookLastChild: {},
     expandedWorkbookIds: [],
     collections: [],
+    savedSampleProfiles: [],
     visibleDetailsColumns: [],
     plotRecipes: [],
     recipeSourcesComplete: true,

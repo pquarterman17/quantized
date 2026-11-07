@@ -2352,6 +2352,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/magnetometry/normalize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Normalize
+         * @description Explicit-basis moment normalization (none/mass/area/volume) + field
+         *     conversion, returning the full calculation record for provenance.
+         */
+        post: operations["normalize_api_magnetometry_normalize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/magnetometry/subtract-background": {
         parameters: {
             query?: never;
@@ -8768,6 +8789,44 @@ export interface components {
             /** Value */
             value: number;
         };
+        /** NormalizeRequest */
+        NormalizeRequest: {
+            /**
+             * Basis
+             * @default none
+             */
+            basis?: string;
+            /**
+             * From Field
+             * @default Oe
+             */
+            from_field?: string;
+            /**
+             * From Moment
+             * @default emu
+             */
+            from_moment?: string;
+            /**
+             * Geometry
+             * @default
+             */
+            geometry?: string;
+            profile?: components["schemas"]["SampleProfileIn"];
+            /**
+             * To Field
+             * @default Oe
+             */
+            to_field?: string;
+            /**
+             * To Moment
+             * @default emu
+             */
+            to_moment?: string;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
         /** OdrRequest */
         OdrRequest: {
             /**
@@ -9667,6 +9726,20 @@ export interface components {
              */
             dist?: string;
         };
+        /**
+         * QuantityIn
+         * @description One entered sample quantity: the value as typed (``None`` = blank) and
+         *     its unit. Canonical conversion happens in ``calc.sample_geometry``.
+         */
+        QuantityIn: {
+            /**
+             * Unit
+             * @default
+             */
+            unit?: string;
+            /** Value */
+            value?: number | null;
+        };
         /** RecommendRequest */
         RecommendRequest: {
             /**
@@ -10116,6 +10189,16 @@ export interface components {
             k: number;
             /** X */
             x: number[];
+        };
+        /** SampleProfileIn */
+        SampleProfileIn: {
+            area?: components["schemas"]["QuantityIn"] | null;
+            diameter?: components["schemas"]["QuantityIn"] | null;
+            film_thickness?: components["schemas"]["QuantityIn"] | null;
+            length?: components["schemas"]["QuantityIn"] | null;
+            mass?: components["schemas"]["QuantityIn"] | null;
+            volume?: components["schemas"]["QuantityIn"] | null;
+            width?: components["schemas"]["QuantityIn"] | null;
         };
         /** SauerbreyRequest */
         SauerbreyRequest: {
@@ -15143,6 +15226,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["HysteresisRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    normalize_api_magnetometry_normalize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NormalizeRequest"];
             };
         };
         responses: {

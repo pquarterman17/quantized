@@ -3,7 +3,8 @@ hysteresis-loop analysis, background subtraction (TWO distinct routines --
 ``subtract-background`` is the one-sided high-T fit for M-vs-T,
 ``subtract-hysteresis-background`` is the two-tail susceptibility removal plus
 re-centring for an M-vs-H loop; they are not interchangeable, see the calc
-docstrings), sample-aware unit conversion, and named-geometry internal-field
+docstrings), sample-aware unit conversion, explicit-basis sample normalization
+(``/normalize``, MAIN_PLAN #42), and named-geometry internal-field
 correction. Validate -> call the pure fn -> serialize; no analysis here.
 
 Every series field here is ``list[float]``: a JSON ``null`` (what a JavaScript
@@ -28,6 +29,7 @@ from quantized.calc.magnetometry import (
     subtract_mag_background,
 )
 from quantized.calc.magnetometry_demag import demag_correct_field
+from quantized.calc.magnetometry_normalization import normalize_mag_moment
 from quantized.routes._errors import call_calc
 from quantized.routes._payload import to_jsonable
 
@@ -65,6 +67,36 @@ class ConvertUnitsRequest(BaseModel):
     to_moment: str = "emu"
     sample_mass: float = 0.0
     sample_volume: float = 0.0
+
+
+class QuantityIn(BaseModel):
+    """One entered sample quantity: the value as typed (``None`` = blank) and
+    its unit. Canonical conversion happens in ``calc.sample_geometry``."""
+
+    value: float | None = None
+    unit: str = ""
+
+
+class SampleProfileIn(BaseModel):
+    mass: QuantityIn | None = None
+    volume: QuantityIn | None = None
+    area: QuantityIn | None = None
+    width: QuantityIn | None = None
+    length: QuantityIn | None = None
+    diameter: QuantityIn | None = None
+    film_thickness: QuantityIn | None = None
+
+
+class NormalizeRequest(BaseModel):
+    x: list[float]
+    y: list[float]
+    from_field: str = "Oe"
+    to_field: str = "Oe"
+    from_moment: str = "emu"
+    basis: str = "none"
+    to_moment: str = "emu"
+    geometry: str = ""
+    profile: SampleProfileIn = Field(default_factory=SampleProfileIn)
 
 
 class DemagCorrectRequest(BaseModel):
@@ -140,6 +172,24 @@ def convert_units(req: ConvertUnitsRequest) -> dict[str, Any]:
         "y_unit": y_unit,
         "warning": warning,
     }
+
+
+@router.post("/normalize")
+def normalize(req: NormalizeRequest) -> dict[str, Any]:
+    """Explicit-basis moment normalization (none/mass/area/volume) + field
+    conversion, returning the full calculation record for provenance."""
+    out = call_calc(normalize_mag_moment,
+        req.x,
+        req.y,
+        from_field=req.from_field,
+        to_field=req.to_field,
+        from_moment=req.from_moment,
+        basis=req.basis,
+        to_moment=req.to_moment,
+        profile=req.profile.model_dump(exclude_none=True),
+        geometry=req.geometry,
+    )
+    return to_jsonable(out)  # type: ignore[no-any-return]
 
 
 @router.post("/demag-correct")

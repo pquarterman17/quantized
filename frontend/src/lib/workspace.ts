@@ -6,12 +6,8 @@ import { parseFolders, pruneOrphans } from "./foldertree";
 import type { OriginFidelityEntry } from "./originFidelity";
 import type { OriginFigureEntry } from "./originFigures";
 import { sanitizeFigureDocs, type FigureDoc } from "./figuredoc";
-import {
-  FIGURE_DOCUMENT_VERSION,
-  figureDocumentVersion,
-  sanitizeFigureDocument,
-  type FigureDocument,
-} from "./figureDocument";
+import type { FigureDocument } from "./figureDocument";
+import { parseEditableFigures } from "./workspaceEditableFigures";
 import { sanitizePageDocuments, type PageDocument } from "./pageDocument";
 import { sanitizeSteps, type PipelineStep } from "./pipeline";
 import { sanitizeSavedPlotSpecs, type SavedPlotSpec } from "./plotspec";
@@ -35,6 +31,7 @@ import type { RecalcMode } from "./recalc";
 import { sanitizeReports, type ReportEntry } from "./report";
 import { sanitizeSmartFolders, type SmartFolder } from "./smartfolders";
 import { sanitizeCollections, type Collection } from "./collections";
+import { sanitizeSavedSampleProfiles, type SavedSampleProfile } from "./sampleGeometry";
 import { sanitizeVisibleDetailsColumns, type LibraryDetailsColumnKey } from "./libraryDetailsColumns";
 import { sanitizeToolWindowLayout, type ToolWindowLayout } from "./toolwindow";
 import { applyWorkbookMigration, sanitizeWorkbooks, type WorkbookNode } from "./workbooks";
@@ -150,6 +147,9 @@ export interface WorkspaceState {
   expandedWorkbookIds?: string[];
   /** PR L (L0.48/L0.49) — saved-search/metadata-filter Collections; additive-optional, absent = none (lib/collections.ts). */
   collections?: Collection[];
+  /** MAIN_PLAN #42 — explicitly saved, named sample profiles (store/sampleProfiles.ts).
+   *  Additive-optional: absent = none; written only when non-empty (lib/workspaceSerialize.ts). */
+  savedSampleProfiles?: SavedSampleProfile[];
   visibleDetailsColumns?: LibraryDetailsColumnKey[]; // PR L slice 2 (L0.56) — additive-optional, absent = seven-column default
   /** P1.3 — every saved PlotRecipe scoped to this workspace (project scope); additive-optional, absent = none. */
   plotRecipes?: PlotRecipe[];
@@ -213,6 +213,7 @@ export interface LoadedWorkspace {
   workbookLastChild: Record<string, string>;
   expandedWorkbookIds: string[];
   collections: Collection[]; // PR L — always populated
+  savedSampleProfiles: SavedSampleProfile[]; // MAIN_PLAN #42 — always populated (sanitizeSavedSampleProfiles)
   visibleDetailsColumns: LibraryDetailsColumnKey[]; // PR L slice 2 — always populated
   plotRecipes: PlotRecipe[]; // P1.3 — always populated
   /** Were `plotRecipes` and `quickPlotTemplates` read from this file WHOLE?
@@ -244,33 +245,8 @@ export interface LoadedWorkspace {
 }
 
 
-/** Future editable schemas are skipped; malformed v1 and duplicate ids are dropped. */
-function parseEditableFigures(value: unknown, datasetIds: ReadonlySet<string>, migrationWarnings: string[]): FigureDocument[] {
-  if (!Array.isArray(value)) return [];
-  const seen = new Set<string>();
-  const documents: FigureDocument[] = [];
-  for (const candidate of value) {
-    const version = figureDocumentVersion(candidate);
-    if (version !== null && version > FIGURE_DOCUMENT_VERSION) {
-      const candidateId =
-        typeof candidate === "object" && candidate !== null
-          ? (candidate as Record<string, unknown>).id
-          : undefined;
-      const id = typeof candidateId === "string" ? ` "${candidateId}"` : "";
-      migrationWarnings.push(`skipped saved FigureDocument${id} with unsupported version ${version}`);
-      continue;
-    }
-    const document = sanitizeFigureDocument(candidate);
-    if (!document || seen.has(document.id)) continue;
-    seen.add(document.id);
-    documents.push(
-      document.bindings.datasetId && !datasetIds.has(document.bindings.datasetId)
-        ? { ...document, bindings: { ...document.bindings, datasetId: null } }
-        : document,
-    );
-  }
-  return documents;
-}
+// `parseEditableFigures` lives in ./workspaceEditableFigures.ts (moved out
+// under this file's size ceiling for MAIN_PLAN #42).
 
 /** Did one .dwk recipe array survive its sanitizer intact?
  *
@@ -472,6 +448,7 @@ export function parseWorkspace(
     workbookLastChild,
     expandedWorkbookIds,
     collections,
+    savedSampleProfiles: sanitizeSavedSampleProfiles(o.savedSampleProfiles),
     visibleDetailsColumns: sanitizeVisibleDetailsColumns(o.visibleDetailsColumns),
     plotRecipes,
     recipeSourcesComplete,

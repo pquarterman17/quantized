@@ -1,3 +1,22 @@
+// Sample profile contract for unit-aware normalization (MAIN_PLAN #42).
+//
+// A `SampleProfile` holds every optional physical quantity a magnetometry
+// normalization can use — mass, direct volume, direct area, width, length,
+// diameter, and the MAGNETIC-FILM thickness — each as the value and unit the
+// user entered (for editing) plus its canonical value (g, cm, cm², cm³) for
+// calculation. `filmThickness` is the magnetic layer only, never the substrate
+// or total-sample thickness; nothing here guesses which one was meant.
+//
+// The profile is VERSIONED and persisted (saved named profiles in the .dwk,
+// and inside every derived dataset's provenance). `sanitizeSampleProfile`
+// re-derives each canonical value from the entered value + unit on load, so a
+// hand-edited canonical number can never disagree with what the form shows. A
+// later uncertainty field can be added as an optional sibling of `value`
+// without changing what a version-1 profile means.
+//
+// The backend twin is `quantized.calc.sample_geometry` — the unit tables and
+// field labels below must stay identical to it.
+
 export const MASS_UNITS = ["µg", "mg", "g", "kg"] as const;
 export const LENGTH_UNITS = ["Å", "nm", "µm", "mm", "cm", "m"] as const;
 export const AREA_UNITS = ["µm²", "mm²", "cm²", "m²"] as const;
@@ -8,130 +27,194 @@ export type LengthUnit = typeof LENGTH_UNITS[number];
 export type AreaUnit = typeof AREA_UNITS[number];
 export type VolumeUnit = typeof VOLUME_UNITS[number];
 
-export interface MagNormalizationParams {
-  fromField: string;
-  toField: string;
-  fromMoment: string;
-  toMoment: string;
-  sampleMass: number;
-  massUnit: MassUnit;
-  volumeMode: "direct" | "film" | "area" | "circle";
-  sampleVolume: number;
-  volumeUnit: VolumeUnit;
-  sampleWidth: number;
-  widthUnit: LengthUnit;
-  sampleHeight: number;
-  heightUnit: LengthUnit;
-  sampleThickness: number;
-  thicknessUnit: LengthUnit;
-  sampleArea: number;
-  areaUnit: AreaUnit;
-  sampleDiameter: number;
-  diameterUnit: LengthUnit;
-}
-
-export const DEFAULT_MAG_NORMALIZATION: MagNormalizationParams = {
-  fromField: "Oe", toField: "T", fromMoment: "emu", toMoment: "emu",
-  sampleMass: 0, massUnit: "mg", volumeMode: "direct", sampleVolume: 0, volumeUnit: "cm³",
-  sampleWidth: 0, widthUnit: "cm", sampleHeight: 0, heightUnit: "cm",
-  sampleThickness: 0, thicknessUnit: "nm", sampleArea: 0, areaUnit: "cm²",
-  sampleDiameter: 0, diameterUnit: "mm",
-};
-
 const MASS_TO_G: Record<MassUnit, number> = { "µg": 1e-6, mg: 1e-3, g: 1, kg: 1e3 };
 const LENGTH_TO_CM: Record<LengthUnit, number> = { "Å": 1e-8, nm: 1e-7, "µm": 1e-4, mm: 0.1, cm: 1, m: 100 };
 const AREA_TO_CM2: Record<AreaUnit, number> = { "µm²": 1e-8, "mm²": 1e-2, "cm²": 1, "m²": 1e4 };
 const VOLUME_TO_CM3: Record<VolumeUnit, number> = { "µm³": 1e-12, "mm³": 1e-3, "cm³": 1, "µL": 1e-3, "mL": 1, "m³": 1e6 };
 
-function positive(value: number): number | null {
-  return Number.isFinite(value) && value > 0 ? value : null;
-}
-
+/** Mass in grams, or null for a missing / non-positive / non-finite value. */
 export function massInGrams(value: number, unit: MassUnit): number | null {
-  const clean = positive(value);
-  return clean === null ? null : clean * MASS_TO_G[unit];
+  return Number.isFinite(value) && value > 0 ? value * MASS_TO_G[unit] : null;
 }
 
-export function directVolumeInCm3(value: number, unit: VolumeUnit): number | null {
-  const clean = positive(value);
-  return clean === null ? null : clean * VOLUME_TO_CM3[unit];
+export const SAMPLE_PROFILE_VERSION = 1;
+
+export type ProfileField = "mass" | "volume" | "area" | "width" | "length" | "diameter" | "filmThickness";
+export const PROFILE_FIELDS: readonly ProfileField[] = ["mass", "volume", "area", "width", "length", "diameter", "filmThickness"];
+
+/** How the in-plane size (and so area/volume) is described. Chosen explicitly
+ *  by the user; never inferred from which fields happen to be filled in. */
+export type SampleGeometry = "rectangle" | "area" | "circle" | "volume";
+
+interface FieldSpec {
+  label: string;
+  units: readonly string[];
+  toCanonical: Readonly<Record<string, number>>;
+  canonicalUnit: string;
+  defaultUnit: string;
+  /** Wire name used by the backend (`calc.sample_geometry`). */
+  wire: string;
 }
 
-export function rectangularVolumeInCm3(
-  width: number, widthUnit: LengthUnit,
-  height: number, heightUnit: LengthUnit,
-  thickness: number, thicknessUnit: LengthUnit,
-): number | null {
-  const clean = [positive(width), positive(height), positive(thickness)];
-  if (clean.some((value) => value === null)) return null;
-  const volume = clean[0]! * LENGTH_TO_CM[widthUnit] * clean[1]! * LENGTH_TO_CM[heightUnit] * clean[2]! * LENGTH_TO_CM[thicknessUnit];
-  return Number.isFinite(volume) && volume > 0 ? volume : null;
+export const FIELD_SPECS: Readonly<Record<ProfileField, FieldSpec>> = {
+  mass: { label: "Sample mass", units: MASS_UNITS, toCanonical: MASS_TO_G, canonicalUnit: "g", defaultUnit: "mg", wire: "mass" },
+  volume: { label: "Sample volume", units: VOLUME_UNITS, toCanonical: VOLUME_TO_CM3, canonicalUnit: "cm³", defaultUnit: "cm³", wire: "volume" },
+  area: { label: "Sample area", units: AREA_UNITS, toCanonical: AREA_TO_CM2, canonicalUnit: "cm²", defaultUnit: "cm²", wire: "area" },
+  width: { label: "Width", units: LENGTH_UNITS, toCanonical: LENGTH_TO_CM, canonicalUnit: "cm", defaultUnit: "cm", wire: "width" },
+  length: { label: "Length", units: LENGTH_UNITS, toCanonical: LENGTH_TO_CM, canonicalUnit: "cm", defaultUnit: "cm", wire: "length" },
+  diameter: { label: "Diameter", units: LENGTH_UNITS, toCanonical: LENGTH_TO_CM, canonicalUnit: "cm", defaultUnit: "mm", wire: "diameter" },
+  filmThickness: { label: "Magnetic-film thickness", units: LENGTH_UNITS, toCanonical: LENGTH_TO_CM, canonicalUnit: "cm", defaultUnit: "nm", wire: "film_thickness" },
+};
+
+/** One entered quantity. `value` is null when the field is blank; it may be
+ *  NaN in memory while the user is mid-typing garbage (validation names it),
+ *  but a sanitized/persisted profile never carries NaN. */
+export interface ProfileQuantity {
+  value: number | null;
+  unit: string;
+  /** `value` in the field's canonical unit, or null when value is unusable. */
+  canonical: number | null;
 }
 
-export function areaThicknessVolumeInCm3(
-  area: number, areaUnit: AreaUnit, thickness: number, thicknessUnit: LengthUnit,
-): number | null {
-  const a = positive(area);
-  const t = positive(thickness);
-  if (a === null || t === null) return null;
-  const volume = a * AREA_TO_CM2[areaUnit] * t * LENGTH_TO_CM[thicknessUnit];
-  return Number.isFinite(volume) && volume > 0 ? volume : null;
+export interface SampleProfile {
+  version: typeof SAMPLE_PROFILE_VERSION;
+  geometry: SampleGeometry;
+  mass: ProfileQuantity;
+  volume: ProfileQuantity;
+  area: ProfileQuantity;
+  width: ProfileQuantity;
+  length: ProfileQuantity;
+  diameter: ProfileQuantity;
+  filmThickness: ProfileQuantity;
 }
 
-export function circularVolumeInCm3(
-  diameter: number, diameterUnit: LengthUnit, thickness: number, thicknessUnit: LengthUnit,
-): number | null {
-  const d = positive(diameter);
-  const t = positive(thickness);
-  if (d === null || t === null) return null;
-  const radiusCm = d * LENGTH_TO_CM[diameterUnit] / 2;
-  const volume = Math.PI * radiusCm ** 2 * t * LENGTH_TO_CM[thicknessUnit];
-  return Number.isFinite(volume) && volume > 0 ? volume : null;
+/** An explicitly saved, named profile (store/sampleProfiles.ts). */
+export interface SavedSampleProfile {
+  id: string;
+  name: string;
+  savedAt: string;
+  profile: SampleProfile;
 }
 
-export function resolvedSampleMass(units: MagNormalizationParams): number {
-  return massInGrams(units.sampleMass, units.massUnit) ?? 0;
+/** Fold the Greek mu (U+03BC) onto the micro sign (U+00B5) — both are typed. */
+export function normalizeUnitSpelling(unit: string): string {
+  return unit.trim().replace(/μ/g, "µ");
 }
 
-export function resolvedSampleVolume(units: MagNormalizationParams): number {
-  const volume = units.volumeMode === "film"
-    ? rectangularVolumeInCm3(units.sampleWidth, units.widthUnit, units.sampleHeight, units.heightUnit, units.sampleThickness, units.thicknessUnit)
-    : units.volumeMode === "area"
-      ? areaThicknessVolumeInCm3(units.sampleArea, units.areaUnit, units.sampleThickness, units.thicknessUnit)
-      : units.volumeMode === "circle"
-        ? circularVolumeInCm3(units.sampleDiameter, units.diameterUnit, units.sampleThickness, units.thicknessUnit)
-        : directVolumeInCm3(units.sampleVolume, units.volumeUnit);
-  return volume ?? 0;
+/** `value` in `unit` -> the field's canonical unit; null if either is unusable. */
+export function canonicalValue(field: ProfileField, value: number | null, unit: string): number | null {
+  if (value === null || !Number.isFinite(value)) return null;
+  const k = FIELD_SPECS[field].toCanonical[normalizeUnitSpelling(unit)];
+  if (k === undefined) return null;
+  const v = value * k;
+  return Number.isFinite(v) ? v : null;
 }
 
-export function normalizationProblem(units: MagNormalizationParams): string | null {
-  if (units.fromMoment === units.toMoment) return null;
-  if (units.toMoment === "emu/g" && resolvedSampleMass(units) <= 0) return "Enter a positive sample mass before converting to emu/g.";
-  if (["emu/cm³", "A/m", "kA/m"].includes(units.toMoment) && resolvedSampleVolume(units) <= 0) {
-    return "Enter positive sample geometry before converting to a volume-normalized unit.";
-  }
-  return null;
+export function makeQuantity(field: ProfileField, value: number | null, unit: string): ProfileQuantity {
+  return { value, unit, canonical: canonicalValue(field, value, unit) };
 }
 
-export function normalizationMetadata(units: MagNormalizationParams, fromMoment: string): Record<string, unknown> {
-  const massBasis = fromMoment !== units.toMoment && units.toMoment === "emu/g";
-  const volumeBasis = fromMoment !== units.toMoment && ["emu/cm³", "A/m", "kA/m"].includes(units.toMoment);
-  const volumeDefinition = units.volumeMode === "film" ? {
-    mode: "rectangular-film", width: units.sampleWidth, width_unit: units.widthUnit,
-    height: units.sampleHeight, height_unit: units.heightUnit,
-    thickness: units.sampleThickness, thickness_unit: units.thicknessUnit,
-  } : units.volumeMode === "area" ? {
-    mode: "area-and-thickness", area: units.sampleArea, area_unit: units.areaUnit,
-    thickness: units.sampleThickness, thickness_unit: units.thicknessUnit,
-  } : units.volumeMode === "circle" ? {
-    mode: "circular-film", diameter: units.sampleDiameter, diameter_unit: units.diameterUnit,
-    thickness: units.sampleThickness, thickness_unit: units.thicknessUnit,
-  } : { mode: "direct", value: units.sampleVolume, unit: units.volumeUnit };
+export function emptySampleProfile(): SampleProfile {
+  const q = (f: ProfileField): ProfileQuantity => makeQuantity(f, null, FIELD_SPECS[f].defaultUnit);
   return {
-    from_moment: fromMoment, to_moment: units.toMoment,
-    basis: massBasis ? "mass" : volumeBasis ? "volume" : "none",
-    sample_mass_g: massBasis ? resolvedSampleMass(units) : null,
-    sample_volume_cm3: volumeBasis ? resolvedSampleVolume(units) : null,
-    volume_definition: volumeBasis ? volumeDefinition : null,
+    version: SAMPLE_PROFILE_VERSION, geometry: "rectangle",
+    mass: q("mass"), volume: q("volume"), area: q("area"), width: q("width"),
+    length: q("length"), diameter: q("diameter"), filmThickness: q("filmThickness"),
   };
+}
+
+/** Re-express `q` in `unit` so the PHYSICAL quantity is unchanged (5 cm ->
+ *  50 mm). Rounded to 12 significant figures so a round trip through several
+ *  units does not accumulate binary noise into what the user sees. */
+export function convertQuantityUnit(field: ProfileField, q: ProfileQuantity, unit: string): ProfileQuantity {
+  const table = FIELD_SPECS[field].toCanonical;
+  const from = table[normalizeUnitSpelling(q.unit)];
+  const to = table[normalizeUnitSpelling(unit)];
+  if (q.value === null || !Number.isFinite(q.value) || from === undefined || to === undefined) {
+    return makeQuantity(field, q.value, unit);
+  }
+  return makeQuantity(field, Number((q.value * from / to).toPrecision(12)), unit);
+}
+
+const GEOMETRIES: readonly SampleGeometry[] = ["rectangle", "area", "circle", "volume"];
+
+export const isSampleGeometry = (v: unknown): v is SampleGeometry => GEOMETRIES.includes(v as SampleGeometry);
+
+/** The fields that DESCRIBE each geometry path's in-plane size (or volume). */
+export const GEOMETRY_FIELDS: Readonly<Record<SampleGeometry, readonly ProfileField[]>> = {
+  rectangle: ["width", "length"],
+  area: ["area"],
+  circle: ["diameter"],
+  volume: ["volume"],
+};
+
+/** Load-time bounds for the `.dwk` `savedSampleProfiles` list. Far above any
+ *  real lab's set of samples; a larger list is truncated, never trusted. */
+export const MAX_SAVED_SAMPLE_PROFILES = 200;
+const MAX_PROFILE_ID_LENGTH = 64;
+const MAX_PROFILE_NAME_LENGTH = 120;
+const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/;
+
+/** A valid ISO-8601 UTC/offset timestamp, or "" for anything else. */
+function sanitizeSavedAt(v: unknown): string {
+  return typeof v === "string" && ISO_TIMESTAMP.test(v) && !Number.isNaN(Date.parse(v)) ? v : "";
+}
+
+function sanitizeQuantity(field: ProfileField, raw: unknown): ProfileQuantity {
+  const spec = FIELD_SPECS[field];
+  if (typeof raw !== "object" || raw === null) return makeQuantity(field, null, spec.defaultUnit);
+  const r = raw as Record<string, unknown>;
+  const unit = typeof r.unit === "string" ? normalizeUnitSpelling(r.unit) : "";
+  // An unknown unit is never guessed at: the value is dropped with it.
+  if (!spec.units.includes(unit)) return makeQuantity(field, null, spec.defaultUnit);
+  // Only a positive finite number is a usable entry; zero, negative and
+  // non-finite values are dropped (the field becomes blank), never kept.
+  const value = typeof r.value === "number" && Number.isFinite(r.value) && r.value > 0 ? r.value : null;
+  return makeQuantity(field, value, unit);
+}
+
+/** Load-time sanitizer: null for anything that is not a profile of a version
+ *  this build understands; otherwise every field is re-validated and its
+ *  canonical value recomputed from the entered value + unit. */
+export function sanitizeSampleProfile(raw: unknown): SampleProfile | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+  if (r.version !== SAMPLE_PROFILE_VERSION) return null;
+  const geometry = isSampleGeometry(r.geometry) ? r.geometry : "rectangle";
+  const out = { version: SAMPLE_PROFILE_VERSION, geometry } as SampleProfile;
+  for (const f of PROFILE_FIELDS) out[f] = sanitizeQuantity(f, r[f]);
+  return out;
+}
+
+/** Drop-malformed-never-throw sanitizer for the `.dwk` `savedSampleProfiles`
+ *  field (the `sanitizeCollections` convention). Duplicate ids keep the first;
+ *  ids longer than 64 characters are dropped; names are trimmed to 120
+ *  characters; a `savedAt` that is not an ISO-8601 timestamp becomes ""; and
+ *  at most {@link MAX_SAVED_SAMPLE_PROFILES} entries are kept. */
+export function sanitizeSavedSampleProfiles(raw: unknown): SavedSampleProfile[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: SavedSampleProfile[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const e = entry as Record<string, unknown>;
+    const profile = sanitizeSampleProfile(e.profile);
+    if (typeof e.id !== "string" || !e.id || e.id.length > MAX_PROFILE_ID_LENGTH || seen.has(e.id)) continue;
+    if (typeof e.name !== "string" || !e.name.trim() || !profile) continue;
+    seen.add(e.id);
+    out.push({ id: e.id, name: e.name.trim().slice(0, MAX_PROFILE_NAME_LENGTH), savedAt: sanitizeSavedAt(e.savedAt), profile });
+    if (out.length >= MAX_SAVED_SAMPLE_PROFILES) break;
+  }
+  return out;
+}
+
+/** The backend request shape (`SampleProfileIn`): entered values + units only
+ *  — the server recomputes the canonical values itself. */
+export function profileWire(profile: SampleProfile): Record<string, { value: number | null; unit: string }> {
+  const out: Record<string, { value: number | null; unit: string }> = {};
+  for (const f of PROFILE_FIELDS) {
+    const q = profile[f];
+    out[FIELD_SPECS[f].wire] = { value: q.value !== null && Number.isFinite(q.value) ? q.value : null, unit: q.unit };
+  }
+  return out;
 }

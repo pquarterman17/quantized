@@ -15,7 +15,7 @@ import MagToolsPanel from "./MagToolsPanel";
 vi.mock("../../../lib/api/magnetometry", () => ({
   subtractMagBackground: vi.fn(),
   subtractHysteresisBackground: vi.fn(),
-  convertMagUnits: vi.fn(),
+  normalizeMagMoment: vi.fn(),
   demagCorrectField: vi.fn(),
 }));
 
@@ -160,22 +160,94 @@ describe("MagToolsPanel — the fit readout names its units (round-3 plot audit)
   });
 });
 
-describe("MagToolsPanel — sample geometry", () => {
-  it("blocks incomplete volume normalization and previews mixed-unit film volume", () => {
+describe("MagToolsPanel — Units tab: explicit-basis sample normalization (MAIN_PLAN #42)", () => {
+  function openUnits(): void {
     load("loop.dat", "Magnetic Field", "Oe");
     render(<MagToolsPanel />);
     fireEvent.click(screen.getByRole("radio", { name: "Units" }));
-    expect(screen.getByText(/Moment emu/)).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Target moment unit"), { target: { value: "A/m" } });
-    expect(screen.getByLabelText("Target moment unit")).toHaveValue("A/m");
-    expect(screen.getByRole("button", { name: /Convert/ })).toBeDisabled();
-    expect(screen.getByText(/positive sample geometry/)).toBeInTheDocument();
+  }
+  const apply = (): HTMLButtonElement => screen.getByRole("button", { name: /Apply/ });
+  const optionsOf = (label: string): string[] =>
+    Array.from((screen.getByLabelText(label) as HTMLSelectElement).options).map((o) => o.value);
 
-    fireEvent.change(screen.getByLabelText("Volume geometry"), { target: { value: "film" } });
+  it("output units follow the selected basis", () => {
+    openUnits();
+    expect(screen.getByLabelText("Normalization basis")).toHaveValue("none");
+    expect(optionsOf("Output moment unit")).toEqual(["emu", "A·m²"]);
+    fireEvent.change(screen.getByLabelText("Normalization basis"), { target: { value: "mass" } });
+    expect(optionsOf("Output moment unit")).toEqual(["emu/g", "A·m²/kg"]);
+    fireEvent.change(screen.getByLabelText("Normalization basis"), { target: { value: "area" } });
+    expect(optionsOf("Output moment unit")).toEqual(["emu/cm²", "A·m²/m²"]);
+    expect(optionsOf("Sample geometry")).not.toContain("volume");
+    fireEvent.change(screen.getByLabelText("Normalization basis"), { target: { value: "volume" } });
+    expect(optionsOf("Output moment unit")).toEqual(["emu/cm³", "A/m", "kA/m"]);
+  });
+
+  it("5 cm × 5 cm × 30 nm: per-field errors until valid, then a live summary", () => {
+    openUnits();
+    fireEvent.change(screen.getByLabelText("Normalization basis"), { target: { value: "volume" } });
+    fireEvent.change(screen.getByLabelText("Output moment unit"), { target: { value: "A/m" } });
+    expect(apply()).toBeDisabled();
+    expect(screen.getByText("Width is required.")).toBeInTheDocument();
+    expect(screen.getByText("Magnetic-film thickness is required.")).toBeInTheDocument();
+    // The disabled button carries its visible reason.
+    expect(apply()).toHaveAccessibleDescription("Apply is disabled: Width is required.");
+
     fireEvent.change(screen.getByLabelText("Width"), { target: { value: "5" } });
-    fireEvent.change(screen.getByLabelText("Height"), { target: { value: "5" } });
-    fireEvent.change(screen.getByLabelText("Thickness"), { target: { value: "30" } });
-    expect(screen.getByText(/Calculated volume:/)).toHaveTextContent(/7\.5.*(?:e-5|10)|0\.000075/i);
-    expect(screen.getByRole("button", { name: /Convert/ })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText("Length"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Magnetic-film thickness"), { target: { value: "0" } });
+    expect(screen.getByLabelText("Magnetic-film thickness")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("Magnetic-film thickness")).toHaveAccessibleDescription(/greater than zero/);
+    expect(apply()).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Magnetic-film thickness"), { target: { value: "30" } });
+    expect(screen.getByLabelText("Magnetic-film thickness unit")).toHaveValue("nm");
+    expect(apply()).toBeEnabled();
+
+    const summary = screen.getByRole("region", { name: "Calculation summary" });
+    expect(summary).toHaveTextContent(/Computed area\s*25 cm²/);
+    expect(summary).toHaveTextContent(/Computed volume\s*7\.5\d*e-5 cm³/);
+    expect(summary).toHaveTextContent(/Output unit\s*A\/m/);
+    expect(summary).toHaveTextContent("M [A/m] = m [emu] × 1000 / V [cm³]");
+    expect(summary).toHaveTextContent(/Source moment\s*emu/);
+
+    // Changing a unit keeps the physical value: the summary does not move.
+    fireEvent.change(screen.getByLabelText("Width unit"), { target: { value: "mm" } });
+    expect(screen.getByLabelText("Width")).toHaveValue("50");
+    expect(summary).toHaveTextContent(/Computed area\s*25 cm²/);
+  });
+
+  it("keeps the basis, profile, output unit and readout across a tab switch", () => {
+    openUnits();
+    fireEvent.change(screen.getByLabelText("Normalization basis"), { target: { value: "volume" } });
+    fireEvent.change(screen.getByLabelText("Output moment unit"), { target: { value: "kA/m" } });
+    fireEvent.change(screen.getByLabelText("Width"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Width unit"), { target: { value: "mm" } });
+    fireEvent.click(screen.getByRole("button", { name: "Use metadata values" })); // sets a readout
+    expect(screen.getByText(/states no sample mass or geometry/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Background" }));
+    expect(screen.queryByLabelText("Normalization basis")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "Units" }));
+
+    expect(screen.getByLabelText("Normalization basis")).toHaveValue("volume");
+    expect(screen.getByLabelText("Output moment unit")).toHaveValue("kA/m");
+    expect(screen.getByLabelText("Width")).toHaveValue("50");
+    expect(screen.getByLabelText("Width unit")).toHaveValue("mm");
+    expect(screen.getByText(/states no sample mass or geometry/)).toBeInTheDocument();
+  });
+
+  it("labels the magnetic-film thickness as distinct from the substrate", () => {
+    openUnits();
+    fireEvent.change(screen.getByLabelText("Normalization basis"), { target: { value: "volume" } });
+    expect(screen.getByLabelText("Magnetic-film thickness")).toHaveAccessibleDescription(/not the substrate/);
+  });
+
+  it("every control has a unique accessible name", () => {
+    openUnits();
+    fireEvent.change(screen.getByLabelText("Normalization basis"), { target: { value: "volume" } });
+    const names = [...screen.getAllByRole("combobox"), ...screen.getAllByRole("textbox"), ...screen.getAllByRole("button")]
+      .map((el) => el.getAttribute("aria-label") ?? (el.id ? document.querySelector(`label[for="${el.id}"]`)?.textContent : null) ?? el.textContent);
+    expect(names.every(Boolean)).toBe(true);
+    expect(new Set(names).size).toBe(names.length);
   });
 });
