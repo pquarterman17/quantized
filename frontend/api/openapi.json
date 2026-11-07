@@ -10051,6 +10051,7 @@
           },
           "wavelength": {
             "default": 1.5406,
+            "exclusiveMinimum": 0.0,
             "title": "Wavelength",
             "type": "number"
           }

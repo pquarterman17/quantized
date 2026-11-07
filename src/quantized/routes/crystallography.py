@@ -171,7 +171,8 @@ class PlaneSpacingsRequest(BaseModel):
     gamma: float = 90.0
     # MATLAB's card limits Max hkl to 1-10; the enumeration is (2n+1)^3 planes.
     max_hkl: int = Field(default=5, ge=1, le=10)
-    wavelength: float = 1.5406  # Å
+    # Å. Must be positive: λ <= 0 would give 2θ = 0 or negative angles, not an error.
+    wavelength: float = Field(default=1.5406, gt=0, allow_inf_nan=False)
     centering: Literal["P", "F", "I", "A", "B", "C", "R"] = "P"
 
 

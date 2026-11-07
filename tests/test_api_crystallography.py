@@ -174,6 +174,11 @@ def test_plane_spacings_validates_max_hkl_and_centering() -> None:
     assert too_big.status_code == 422
     bad = client.post("/api/crystallography/plane-spacings", json={"a": 4.0, "centering": "X"})
     assert bad.status_code == 422
+    for wavelength in (0.0, -1.5406):
+        r = client.post(
+            "/api/crystallography/plane-spacings", json={"a": 4.0, "wavelength": wavelength}
+        )
+        assert r.status_code == 422
 
 
 def test_atomic_density_route() -> None:

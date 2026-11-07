@@ -223,7 +223,9 @@ the full conventional cell.
   coincidence search and Wulff in pure numpy/scipy in `calc/`; these are small,
   published algorithms. Use pymatgen (MIT) only as a **dev-group oracle** in
   tests to cross-check matches, not as a runtime dependency. ASE is LGPL and
-  must not become a runtime dependency (`test_repo_integrity` license guard).
+  must not become a runtime dependency under the repo's no-GPL rule. Note that
+  `test_repo_integrity`'s GPL list does not name ASE, so the test would not catch
+  it.
 - **D4 — Elastic constants source** for the ε⊥ predictions: a curated, cited
   table, user entry, or both.
 
