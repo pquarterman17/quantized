@@ -147,6 +147,12 @@ def _element_data_loads() -> None:
     assert len(element_data()) == 118
 
 
+def _phase_database_loads() -> None:
+    from quantized.calc.phase_database import phase_database
+
+    assert len(phase_database()) == 52
+
+
 def _refl_sld_presets_loads() -> None:
     from quantized.calc.sld import refl_sld_presets
 
@@ -161,6 +167,7 @@ def _demo_sample_exists() -> None:
 
 DATA_FILE_LOADERS = {
     SRC / "calc" / "element_data.json": _element_data_loads,
+    SRC / "calc" / "phase_database.json": _phase_database_loads,
     SRC / "calc" / "refl_sld_presets.json": _refl_sld_presets_loads,
     SRC / "samples" / "demo_vsm.csv": _demo_sample_exists,
 }
