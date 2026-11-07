@@ -33,11 +33,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from quantized.calc import (
+    composition,
     constants,
     crystallography,
     diffusion,
     electrical,
     electrochemistry,
+    epitaxial_strain,
     magnetic,
     optics,
     semiconductor,
@@ -112,7 +114,14 @@ _OPS: list[CalcOp] = [
             "plane_spacings",
             "interplanar_angle",
             "bond_angle",
+            "atomic_density",
         ],
+    ),
+    *_ops("crystal", epitaxial_strain, ["tetragonal_distortion", "strain_from_poisson"]),
+    *_ops(
+        "composition",
+        composition,
+        ["atomic_to_weight_percent", "weight_to_atomic_percent", "co_deposition_ratio"],
     ),
     *_ops("sld", sld_formula, ["sld_from_formula"]),
     *_ops(

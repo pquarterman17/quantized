@@ -1,7 +1,8 @@
 # Thin-Film Stack Planning Plan (DiraCulator)
 
-**Status:** PROPOSED — read-only audit complete; no implementation yet
+**Status:** ACTIVE — G3 ported (MATLAB golden freeze pending); G1, G2, G4–G6 open
 **Created:** 2026-11-07
+**Updated:** 2026-11-07 — G3 parity ports (six cards, routes, freeze cases)
 **Audited baseline:** `main` @ `9da2bb6` (2026-11-06)
 **Scope:** `calc/substrates.py`, `calc/crystallography.py`, `calc/thin_film.py`,
 `io/cif.py` + `routes/structures.py`, `frontend/src/components/workshops/calculators/`,
@@ -138,13 +139,18 @@ peaks to phases against `phaseDatabase`), which BosonPlotter's peak tools use.
 
 #### Required work
 
-- [ ] Port each function to `calc/`, add a thin route and a card, freeze a golden
-  case, and add a `PORT_CHECKLIST.md` entry. Follow the existing parity loop in
-  `CLAUDE.md`.
+- [x] Port each function to `calc/`, add a thin route and a card, add the
+  golden freeze cases, and add a `PORT_CHECKLIST.md` entry. Follow the existing
+  parity loop in `CLAUDE.md`.
+- [ ] Run `tools/matlab/freeze_diraculator_values.m` against `../quantized_matlab`
+  to write the 13 G3 fixtures (`calc_dira_crystal_*`,
+  `calc_dira_xray_{atomic_to_weight,weight_to_atomic,co_deposition}_*`), confirm
+  the golden tests pass, extend the `diraculator_w4` campaign entry in
+  `tests/golden/manifest.json`, and tick the two `[~]` `PORT_CHECKLIST.md` entries.
 - [ ] Wire `tetragonal_distortion` and `strain_from_poisson` into the
   orientation-aware mismatch result (G1), so the predicted out-of-plane strain
   appears next to the in-plane strain.
-- [ ] Log `matchPhases` as a separate checklist item. It depends on the
+- [x] Log `matchPhases` as a separate checklist item. It depends on the
   `phaseDatabase` port.
 
 ### P2 — G4: No stack model; strain is not carried through layers
@@ -217,7 +223,9 @@ the full conventional cell.
   coincidence search and Wulff in pure numpy/scipy in `calc/`; these are small,
   published algorithms. Use pymatgen (MIT) only as a **dev-group oracle** in
   tests to cross-check matches, not as a runtime dependency. ASE is LGPL and
-  must not become a runtime dependency (`test_repo_integrity` license guard).
+  must not become a runtime dependency under the repo's no-GPL rule. Note that
+  `test_repo_integrity`'s GPL list does not name ASE, so the test would not catch
+  it.
 - **D4 — Elastic constants source** for the ε⊥ predictions: a curated, cited
   table, user entry, or both.
 
@@ -236,9 +244,9 @@ The G2 `phaseDatabase` port and every G3 port follow the golden-freeze loop.
 
 ## Recommended implementation order (to-do)
 
-1. [ ] **G3 parity ports**: tetragonal distortion, strain from Poisson, atomic
+1. [x] **G3 parity ports**: tetragonal distortion, strain from Poisson, atomic
    density, Plane Spacing Table card, wt%↔at%, co-deposition flux ratio.
-   Low risk, golden-backed, and useful right away.
+   Low risk, golden-backed, and useful right away. (MATLAB freeze still to run.)
 2. [ ] **G2 data**: port `phaseDatabase`, define the material record, add Miller
    indices for orientation, feed film/substrate inputs from the database and
    CIF presets.
@@ -273,3 +281,13 @@ cd frontend && npm run build
   `9da2bb6` and `quantized_matlab` (`DiraCulator.m`, `+calc/+crystal`,
   `+calc/+xrayNeutron`, `+calc/+substrates`). Gaps G1–G6 identified; no code
   changes.
+- 2026-11-07 — **G3 parity ports.** `calc/epitaxial_strain.py`
+  (tetragonal distortion, Poisson strain), `calc.crystallography.atomic_density`,
+  `calc/composition.py` (wt%↔at%, co-deposition), routes under
+  `/api/crystallography/*` and `/api/composition/*`, registry ops, and five
+  cards: Plane Spacing Table and three film cards on the Crystal tab, two
+  composition cards on the X-ray / Neutron tab. Reference-value and API tests
+  added. 13 MATLAB freeze cases added; their golden tests skip until frozen (no
+  MATLAB in the porting session). Found while porting: the MATLAB docstring
+  examples for `coDepositionRatio` and `weightToAtomicPercent` do not match the
+  MATLAB code; the code is what is ported and frozen.

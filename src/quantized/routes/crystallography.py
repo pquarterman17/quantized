@@ -1,27 +1,33 @@
 """Thin crystallography route. Wraps ``calc.crystallography`` (pure formulas).
 
 Computes interplanar d-spacing from lattice parameters + Miller indices, atomic
-bond angles from fractional coordinates, and unit-cell volume + theoretical
-density (from a chemical formula + Z); the math lives in calc, this only
-validates + serializes.
+bond angles from fractional coordinates, unit-cell volume + theoretical
+density (from a chemical formula + Z), the allowed-reflection table, atomic
+number density, and the epitaxial-film strain helpers (tetragonal distortion,
+Poisson coupling — ``calc.epitaxial_strain``); the math lives in calc, this
+only validates + serializes.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from quantized.calc.crystallography import (
+    atomic_density,
     bond_angle,
     cell_volume,
     d_spacing,
     interplanar_angle,
+    plane_spacings,
     theoretical_density,
 )
+from quantized.calc.epitaxial_strain import strain_from_poisson, tetragonal_distortion
 from quantized.calc.formula import formula_mass
 from quantized.routes._errors import CALC_ERRORS, call_calc
+from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/crystallography", tags=["crystallography"])
 
@@ -154,3 +160,88 @@ def cell(req: CellRequest) -> dict[str, Any]:
         return out
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class PlaneSpacingsRequest(BaseModel):
+    a: float
+    b: float | None = None  # None -> a
+    c: float | None = None  # None -> a
+    alpha: float = 90.0
+    beta: float = 90.0
+    gamma: float = 90.0
+    # MATLAB's card limits Max hkl to 1-10; the enumeration is (2n+1)^3 planes.
+    max_hkl: int = Field(default=5, ge=1, le=10)
+    # Å. Must be positive: λ <= 0 would give 2θ = 0 or negative angles, not an error.
+    wavelength: float = Field(default=1.5406, gt=0, allow_inf_nan=False)
+    centering: Literal["P", "F", "I", "A", "B", "C", "R"] = "P"
+
+
+@router.post("/plane-spacings")
+def plane_spacing_table(req: PlaneSpacingsRequest) -> dict[str, Any]:
+    """Allowed (hkl) reflections with d, 2θ and multiplicity (``planeSpacings``).
+
+    Unreachable reflections (λ/2d > 1) carry a ``null`` 2θ."""
+    result = call_calc(
+        plane_spacings,
+        req.a,
+        b=req.b,
+        c=req.c,
+        alpha=req.alpha,
+        beta=req.beta,
+        gamma=req.gamma,
+        max_hkl=req.max_hkl,
+        lambda_=req.wavelength,
+        centering=req.centering,
+    )
+    payload: dict[str, Any] = to_jsonable(result)
+    return payload
+
+
+class AtomicDensityRequest(BaseModel):
+    a: float
+    z: float  # atoms per unit cell
+    b: float | None = None  # None -> a
+    c: float | None = None  # None -> a
+    alpha: float = 90.0
+    beta: float = 90.0
+    gamma: float = 90.0
+
+
+@router.post("/atomic-density")
+def atomic_number_density(req: AtomicDensityRequest) -> dict[str, Any]:
+    """Atomic number density n = Z/V (atoms/cm³) from the cell and atoms per cell."""
+    return call_calc(
+        atomic_density,
+        req.a,
+        req.z,
+        b=req.b,
+        c=req.c,
+        alpha=req.alpha,
+        beta=req.beta,
+        gamma=req.gamma,
+    )
+
+
+class TetragonalDistortionRequest(BaseModel):
+    a_relaxed: float  # Å
+    c_measured: float  # Å
+    c_relaxed: float | None = None  # Å; None -> a_relaxed (cubic bulk)
+
+
+@router.post("/tetragonal-distortion")
+def film_tetragonal_distortion(req: TetragonalDistortionRequest) -> dict[str, Any]:
+    """Film c/a ratio and tetragonal distortion (c_meas − c_relaxed)/c_relaxed."""
+    return call_calc(
+        tetragonal_distortion, req.a_relaxed, req.c_measured, c_relaxed=req.c_relaxed
+    )
+
+
+class PoissonStrainRequest(BaseModel):
+    eps_parallel: float  # dimensionless
+    nu: float  # Poisson ratio
+
+
+@router.post("/poisson-strain")
+def poisson_strain(req: PoissonStrainRequest) -> dict[str, Any]:
+    """Out-of-plane strain from biaxial in-plane strain: ε⊥ = −2ν/(1−ν)·ε∥."""
+    return call_calc(strain_from_poisson, req.eps_parallel, req.nu)

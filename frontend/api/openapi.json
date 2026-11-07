@@ -404,6 +404,61 @@
         "title": "AtomSite",
         "type": "object"
       },
+      "AtomicDensityRequest": {
+        "properties": {
+          "a": {
+            "title": "A",
+            "type": "number"
+          },
+          "alpha": {
+            "default": 90.0,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "b": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "B"
+          },
+          "beta": {
+            "default": 90.0,
+            "title": "Beta",
+            "type": "number"
+          },
+          "c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "C"
+          },
+          "gamma": {
+            "default": 90.0,
+            "title": "Gamma",
+            "type": "number"
+          },
+          "z": {
+            "title": "Z",
+            "type": "number"
+          }
+        },
+        "required": [
+          "a",
+          "z"
+        ],
+        "title": "AtomicDensityRequest",
+        "type": "object"
+      },
       "AucRequest": {
         "description": "Request for AUC computation.",
         "properties": {
@@ -2197,6 +2252,29 @@
           "observed"
         ],
         "title": "ChiSquareGofRequest",
+        "type": "object"
+      },
+      "CoDepositionRequest": {
+        "properties": {
+          "formula": {
+            "maxLength": 200,
+            "title": "Formula",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "formula",
+          "sources"
+        ],
+        "title": "CoDepositionRequest",
         "type": "object"
       },
       "CoherenceRequest": {
@@ -9881,6 +9959,109 @@
         "title": "PenetrationDepthRequest",
         "type": "object"
       },
+      "PercentRequest": {
+        "properties": {
+          "elements": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Elements",
+            "type": "array"
+          },
+          "values": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 32,
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "elements",
+          "values"
+        ],
+        "title": "PercentRequest",
+        "type": "object"
+      },
+      "PlaneSpacingsRequest": {
+        "properties": {
+          "a": {
+            "title": "A",
+            "type": "number"
+          },
+          "alpha": {
+            "default": 90.0,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "b": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "B"
+          },
+          "beta": {
+            "default": 90.0,
+            "title": "Beta",
+            "type": "number"
+          },
+          "c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "C"
+          },
+          "centering": {
+            "default": "P",
+            "enum": [
+              "P",
+              "F",
+              "I",
+              "A",
+              "B",
+              "C",
+              "R"
+            ],
+            "title": "Centering",
+            "type": "string"
+          },
+          "gamma": {
+            "default": 90.0,
+            "title": "Gamma",
+            "type": "number"
+          },
+          "max_hkl": {
+            "default": 5,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Max Hkl",
+            "type": "integer"
+          },
+          "wavelength": {
+            "default": 1.5406,
+            "exclusiveMinimum": 0.0,
+            "title": "Wavelength",
+            "type": "number"
+          }
+        },
+        "required": [
+          "a"
+        ],
+        "title": "PlaneSpacingsRequest",
+        "type": "object"
+      },
       "PlotRequest": {
         "description": "``dataset``/``dataset_handle`` (P3.5 dataset-handle-cache parity with\n``/api/plot/map`` + every ``/api/rsm/*`` endpoint): a zoom/pan commit on\nan already-decimated series re-POSTs the full DataStruct on every step\n(measured 1M x 7 rows -> ~80 MB/request) even though the underlying\ndataset never changed -- see ``CachedDatasetRequest``'s own doc. The\n``dataset`` field name is unchanged (inherited from the mixin), so every\nexisting caller (which only ever sent ``dataset``) keeps working with no\nrequest-shape change.",
         "properties": {
@@ -10015,6 +10196,24 @@
           }
         },
         "title": "PlotRequest",
+        "type": "object"
+      },
+      "PoissonStrainRequest": {
+        "properties": {
+          "eps_parallel": {
+            "title": "Eps Parallel",
+            "type": "number"
+          },
+          "nu": {
+            "title": "Nu",
+            "type": "number"
+          }
+        },
+        "required": [
+          "eps_parallel",
+          "nu"
+        ],
+        "title": "PoissonStrainRequest",
         "type": "object"
       },
       "PolarFigureSpec": {
@@ -14196,6 +14395,35 @@
         "title": "TernaryFigureRequest",
         "type": "object"
       },
+      "TetragonalDistortionRequest": {
+        "properties": {
+          "a_relaxed": {
+            "title": "A Relaxed",
+            "type": "number"
+          },
+          "c_measured": {
+            "title": "C Measured",
+            "type": "number"
+          },
+          "c_relaxed": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "C Relaxed"
+          }
+        },
+        "required": [
+          "a_relaxed",
+          "c_measured"
+        ],
+        "title": "TetragonalDistortionRequest",
+        "type": "object"
+      },
       "ThermalMismatchRequest": {
         "properties": {
           "alpha_film": {
@@ -15412,6 +15640,138 @@
         ]
       }
     },
+    "/api/composition/atomic-to-weight": {
+      "post": {
+        "description": "Atomic percent -> weight percent (inputs normalised to 100 first).",
+        "operationId": "atomic_to_weight_api_composition_atomic_to_weight_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PercentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Atomic To Weight Api Composition Atomic To Weight Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Atomic To Weight",
+        "tags": [
+          "composition"
+        ]
+      }
+    },
+    "/api/composition/co-deposition": {
+      "post": {
+        "description": "Relative source fluxes (smallest = 1) to co-deposit the target formula.",
+        "operationId": "co_deposition_api_composition_co_deposition_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CoDepositionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Co Deposition Api Composition Co Deposition Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Co Deposition",
+        "tags": [
+          "composition"
+        ]
+      }
+    },
+    "/api/composition/weight-to-atomic": {
+      "post": {
+        "description": "Weight percent -> atomic percent (inputs normalised to 100 first).",
+        "operationId": "weight_to_atomic_api_composition_weight_to_atomic_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PercentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Weight To Atomic Api Composition Weight To Atomic Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Weight To Atomic",
+        "tags": [
+          "composition"
+        ]
+      }
+    },
     "/api/corrections/apply": {
       "post": {
         "description": "Apply the correction pipeline to a posted DataStruct.",
@@ -15495,6 +15855,50 @@
           }
         },
         "summary": "Angle",
+        "tags": [
+          "crystallography"
+        ]
+      }
+    },
+    "/api/crystallography/atomic-density": {
+      "post": {
+        "description": "Atomic number density n = Z/V (atoms/cm\u00b3) from the cell and atoms per cell.",
+        "operationId": "atomic_number_density_api_crystallography_atomic_density_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AtomicDensityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Atomic Number Density Api Crystallography Atomic Density Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Atomic Number Density",
         "tags": [
           "crystallography"
         ]
@@ -15627,6 +16031,138 @@
           }
         },
         "summary": "Dspacing",
+        "tags": [
+          "crystallography"
+        ]
+      }
+    },
+    "/api/crystallography/plane-spacings": {
+      "post": {
+        "description": "Allowed (hkl) reflections with d, 2\u03b8 and multiplicity (``planeSpacings``).\n\nUnreachable reflections (\u03bb/2d > 1) carry a ``null`` 2\u03b8.",
+        "operationId": "plane_spacing_table_api_crystallography_plane_spacings_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaneSpacingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Plane Spacing Table Api Crystallography Plane Spacings Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Plane Spacing Table",
+        "tags": [
+          "crystallography"
+        ]
+      }
+    },
+    "/api/crystallography/poisson-strain": {
+      "post": {
+        "description": "Out-of-plane strain from biaxial in-plane strain: \u03b5\u22a5 = \u22122\u03bd/(1\u2212\u03bd)\u00b7\u03b5\u2225.",
+        "operationId": "poisson_strain_api_crystallography_poisson_strain_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PoissonStrainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Poisson Strain Api Crystallography Poisson Strain Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Poisson Strain",
+        "tags": [
+          "crystallography"
+        ]
+      }
+    },
+    "/api/crystallography/tetragonal-distortion": {
+      "post": {
+        "description": "Film c/a ratio and tetragonal distortion (c_meas \u2212 c_relaxed)/c_relaxed.",
+        "operationId": "film_tetragonal_distortion_api_crystallography_tetragonal_distortion_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TetragonalDistortionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Film Tetragonal Distortion Api Crystallography Tetragonal Distortion Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Film Tetragonal Distortion",
         "tags": [
           "crystallography"
         ]

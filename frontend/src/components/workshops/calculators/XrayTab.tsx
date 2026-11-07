@@ -1,6 +1,8 @@
 // Calculators ▸ X-ray tab — Bragg / Q-space / energy↔wavelength conversions
 // (golden calc.xray) plus a neutron wavelength↔energy↔velocity↔temperature
 // converter (calc.xray.neutron_calc — new, no MATLAB counterpart).
+// The composition cards (wt% ↔ at%, co-deposition — MATLAB Cards 5-6) are
+// self-contained, in CompositionCards.
 // Bragg/Q card is presentational (state in useCalculators, so Crystal's
 // "→ X-ray" cross-panel hand-off keeps working); the Neutron card is
 // self-contained, following the newer per-tab-owns-its-state convention.
@@ -18,6 +20,7 @@ import {
   XRAY_MODES,
   type CalculatorsState,
 } from "./useCalculators";
+import { CoDepositionCard, WeightAtomicCard } from "./CompositionCards";
 import { Card, CopyButton, ROW, dual, resultLine, useCard, withTouch } from "./shared";
 
 const NEUTRON_QUANTITIES: { value: string; label: string; unit: string }[] = [
@@ -200,6 +203,8 @@ export default function XrayTab({ c }: { c: CalculatorsState }) {
         )}
         {resultLine(nCard.result)}
       </Card>
+      <WeightAtomicCard />
+      <CoDepositionCard />
     </div>
   );
 }
