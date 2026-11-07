@@ -21312,6 +21312,58 @@
         ]
       }
     },
+    "/api/reference/phases": {
+      "get": {
+        "description": "The built-in reference phase table (``calc.phase_database``), optionally\none category; each phase carries its cell, centering, system and basis.",
+        "operationId": "get_phases_api_reference_phases_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Phases Api Reference Phases Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Phases",
+        "tags": [
+          "reference"
+        ]
+      }
+    },
     "/api/reference/unit-categories": {
       "get": {
         "description": "Curated unit categories for the units-converter UI (category -> units).\n\nPurely a UI-curation index -- the conversion math (factors, temperature\naffine offsets, photon-energy/H-B bridges) lives in ``calc.unit_convert``;\nevery unit string listed here is guaranteed parseable by it.",

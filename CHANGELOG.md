@@ -8,6 +8,13 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- Calculators ▸ Crystal and Calculators ▸ Substrates can now fill a lattice
+  from a built-in table of 52 reference phases (substrates, metals, oxides,
+  perovskites, semiconductors and others), ported from the MATLAB toolbox.
+  On the Crystal tab the phase sets the crystal system and the whole cell; on
+  the Substrates tab it sets the film's a for the mismatch and
+  critical-thickness cards. The table is also served at
+  `GET /api/reference/phases`.
 - Magnetometry ▸ Units now normalizes the moment on a basis you choose:
   none (raw moment), mass, area, or volume. Each basis offers only its own
   output units: emu and A·m² for raw moment, emu/g and A·m²/kg for mass,

@@ -3054,6 +3054,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reference/phases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Phases
+         * @description The built-in reference phase table (``calc.phase_database``), optionally
+         *     one category; each phase carries its cell, centering, system and basis.
+         */
+        get: operations["get_phases_api_reference_phases_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reference/unit-categories": {
         parameters: {
             query?: never;
@@ -16280,6 +16301,39 @@ export interface operations {
             path: {
                 symbol: string;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_phases_api_reference_phases_get: {
+        parameters: {
+            query?: {
+                category?: string | null;
+            };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;

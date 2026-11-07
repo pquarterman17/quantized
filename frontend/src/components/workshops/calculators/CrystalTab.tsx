@@ -14,6 +14,7 @@ import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Button, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import { crystalInterplanarAngle } from "../../../lib/api/crystallography";
+import PhasePresetPicker from "../structures/PhasePresetPicker";
 import StructurePresetPicker from "../structures/StructurePresetPicker";
 import BondAngleCard from "./BondAngleCard";
 import { AtomicDensityCard, PoissonStrainCard, TetragonalDistortionCard } from "./FilmStrainCards";
@@ -86,6 +87,9 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
       />
       <div style={{ marginTop: 8 }}>
         <StructurePresetPicker onApply={(p) => updateLattice(latticeFormPatch(p))} />
+      </div>
+      <div style={{ marginTop: 6 }}>
+        <PhasePresetPicker onApply={(p) => updateLattice(latticeFormPatch(p))} />
       </div>
 
       {/* Lattice lengths (a always; b/c per system) */}

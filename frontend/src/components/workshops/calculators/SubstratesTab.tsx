@@ -15,6 +15,7 @@ import {
 } from "../../../lib/api/substrates";
 import { fmtNum } from "../../../lib/format";
 import { Card, dual, resultLine, useCard } from "./shared";
+import PhasePresetPicker from "../structures/PhasePresetPicker";
 
 // Detail rows: [label, key, unit]. Lattice rows are skipped for amorphous.
 const LATTICE_FIELDS: [string, keyof SubstrateInfo, string][] = [
@@ -195,6 +196,16 @@ export default function SubstratesTab() {
 
           {!isAmorphous && (
             <Card title={`Lattice mismatch vs ${selected.name}`}>
+              <div style={{ marginBottom: 6 }}>
+                <PhasePresetPicker
+                  label="film phase"
+                  onApply={(p) => {
+                    setAFilm(String(p.cell.a));
+                    mm.touch();
+                    mb.touch();
+                  }}
+                />
+              </div>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <span className="qzk-field-lbl" style={{ margin: 0 }}>
                   a_film

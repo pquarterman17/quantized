@@ -7,8 +7,10 @@ import {
   substratesCriticalThickness,
   type SubstrateInfo,
 } from "../../../lib/api/substrates";
+import { getPhases } from "../../../lib/api/reference";
 import SubstratesTab from "./SubstratesTab";
 
+vi.mock("../../../lib/api/reference", () => ({ getPhases: vi.fn() }));
 vi.mock("../../../lib/api/substrates", () => ({
   getSubstrates: vi.fn(),
   substrateMismatch: vi.fn(),
@@ -66,6 +68,15 @@ const SUBS: SubstrateInfo[] = [
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getSubstrates).mockResolvedValue({ substrates: SUBS });
+  vi.mocked(getPhases).mockResolvedValue({
+    phases: [
+      {
+        name: "La0.7Sr0.3MnO3", formula: "LSMO", a: 3.876, b: 3.876, c: 3.876,
+        alpha: 90, beta: 90, gamma: 90, centering: "P", system: "cubic",
+        category: "perovskite", icsd: 0, basis: [],
+      },
+    ],
+  });
   vi.mocked(substrateMismatch).mockResolvedValue({
     mismatch: -0.0074264,
     mismatchPct: -0.74264,
@@ -105,6 +116,19 @@ describe("SubstratesTab", () => {
 
     await waitFor(() => expect(screen.getByText(/compressive/)).toBeInTheDocument());
     expect(substrateMismatch).toHaveBeenCalledWith(3.876, 3.905);
+  });
+
+  it("fills a_film from a reference phase and clears the stale mismatch", async () => {
+    render(<SubstratesTab />);
+    fireEvent.click(await screen.findByText("SrTiO3(100)"));
+    fireEvent.change(screen.getByLabelText("a_film"), { target: { value: "4.0" } });
+    fireEvent.click(screen.getByText("Mismatch"));
+    expect(await screen.findByText(/f = .* %/)).toBeInTheDocument();
+
+    await screen.findByRole("option", { name: /La0\.7Sr0\.3MnO3/ });
+    fireEvent.change(screen.getByLabelText("film phase"), { target: { value: "La0.7Sr0.3MnO3" } });
+    expect(screen.getByLabelText("a_film")).toHaveValue("3.876");
+    expect(screen.queryByText(/f = .* %/)).not.toBeInTheDocument();
   });
 
   it("hides the lattice + mismatch card for amorphous substrates", async () => {

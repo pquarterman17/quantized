@@ -23,6 +23,7 @@ vi.mock("../../../lib/api", () => ({
 vi.mock("../../../lib/api/reference", () => ({
   getConstants: vi.fn(),
   getUnitCategories: vi.fn().mockRejectedValue(new Error("offline")),
+  getPhases: vi.fn().mockRejectedValue(new Error("offline")),
 }));
 vi.mock("../../../lib/api/crystallography", () => ({
   crystalBondAngle: vi.fn(),

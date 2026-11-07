@@ -106,9 +106,12 @@ cases. Si(100) and Si(111) give different answers.
 
 #### Required work
 
-- [ ] Port `phaseDatabase` verbatim as a JSON data file plus a loader (the same
+- [x] Port `phaseDatabase` verbatim as a JSON data file plus a loader (the same
   pattern as `element_data.json`, to stay under the 500-line ceiling). Golden
-  freeze of the table. Add it to `PORT_CHECKLIST.md`.
+  freeze case added (fixture pending a MATLAB run). Add it to `PORT_CHECKLIST.md`.
+- [ ] Decide what to do with the MATLAB data issues found while porting: anatase
+  TiO2 carries rutile's ICSD number (44882), and La0.7Sr0.3MnO3 has the
+  formula `"LSMO"` and a basis with no Sr. Ported verbatim for now.
 - [ ] Define one material record: full cell, system, centering, CTE, optional
   elastic constants (C11/C12/C13/C33/C44, or E and ν), and source/citation.
   Values ported from MATLAB stay verbatim. New fields and rows are marked as
@@ -117,8 +120,11 @@ cases. Si(100) and Si(111) give different answers.
   so the surface net is computed, not implied.
 - [ ] Add common substrates missing from the table (scandates, NdGaO3, KTaO3,
   YAlO3, ZnO, …) as cited extensions, without editing the MATLAB rows.
-- [ ] Let phase-database entries and imported CIF presets fill both the film and
-  the substrate inputs.
+- [~] Let phase-database entries and imported CIF presets fill both the film and
+  the substrate inputs. Done for phases: the Crystal tab lattice and the
+  Substrates tab film a. Still open: CIF presets on the Substrates tab, and a
+  phase or CIF as the *substrate* (the substrate is still a row of the
+  14-entry table).
 
 ### P2 — G3: Unported MATLAB DiraCulator cards relevant to growth
 
@@ -291,3 +297,8 @@ cd frontend && npm run build
   MATLAB in the porting session). Found while porting: the MATLAB docstring
   examples for `coDepositionRatio` and `weightToAtomicPercent` do not match the
   MATLAB code; the code is what is ported and frozen.
+- 2026-11-07 — **G2 slice 1: phase database.** `calc/phase_database.json` (52
+  phases transcribed from `phaseDatabase.m`, basis helpers expanded),
+  `calc/phase_database.py`, `GET /api/reference/phases`, and a reference-phase
+  picker on the Crystal tab (whole cell) and the Substrates tab (film a).
+  Structure tests added; one golden freeze case added (fixture pending).
