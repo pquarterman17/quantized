@@ -111,7 +111,11 @@ cases. Si(100) and Si(111) give different answers.
   freeze case added (fixture pending a MATLAB run). Add it to `PORT_CHECKLIST.md`.
 - [ ] Decide what to do with the MATLAB data issues found while porting: anatase
   TiO2 carries rutile's ICSD number (44882), and La0.7Sr0.3MnO3 has the
-  formula `"LSMO"` and a basis with no Sr. Ported verbatim for now.
+  formula `"LSMO"` and a basis with no Sr. Also, the two MATLAB tables disagree
+  for the same materials: the 14-row substrate table vs the phase table give Si
+  5.431 vs 5.4309 Å, MgO 4.212 vs 4.2112 Å, sapphire 4.758 vs 4.7589 Å. All
+  ported verbatim for now; the fix depends on the reference decision (MATLAB vs
+  published values).
 - [ ] Define one material record: full cell, system, centering, CTE, optional
   elastic constants (C11/C12/C13/C33/C44, or E and ν), and source/citation.
   Values ported from MATLAB stay verbatim. New fields and rows are marked as
@@ -124,7 +128,9 @@ cases. Si(100) and Si(111) give different answers.
   the substrate inputs. Done for phases: the Crystal tab lattice and the
   Substrates tab film a. Still open: CIF presets on the Substrates tab, and a
   phase or CIF as the *substrate* (the substrate is still a row of the
-  14-entry table).
+  14-entry table). A phase's centering now also sets the Crystal tab's
+  plane-spacing table (CIF presets too), and a non-cubic film phase on the
+  Substrates tab shows a warning that its a may not be the in-plane repeat.
 
 ### P2 — G3: Unported MATLAB DiraCulator cards relevant to growth
 

@@ -75,6 +75,11 @@ beforeEach(() => {
         alpha: 90, beta: 90, gamma: 90, centering: "P", system: "cubic",
         category: "perovskite", icsd: 0, basis: [],
       },
+      {
+        name: "SrRuO3", formula: "SrRuO3", a: 5.567, b: 5.5304, c: 7.8446,
+        alpha: 90, beta: 90, gamma: 90, centering: "P", system: "orthorhombic",
+        category: "perovskite", icsd: 0, basis: [],
+      },
     ],
   });
   vi.mocked(substrateMismatch).mockResolvedValue({
@@ -129,6 +134,25 @@ describe("SubstratesTab", () => {
     fireEvent.change(screen.getByLabelText("film phase"), { target: { value: "La0.7Sr0.3MnO3" } });
     expect(screen.getByLabelText("a_film")).toHaveValue("3.876");
     expect(screen.queryByText(/f = .* %/)).not.toBeInTheDocument();
+  });
+
+  it("warns that a non-cubic film phase's a may not be its in-plane repeat", async () => {
+    render(<SubstratesTab />);
+    fireEvent.click(await screen.findByText("SrTiO3(100)"));
+    await screen.findByRole("option", { name: /SrRuO3/ });
+    const picker = screen.getByLabelText("film phase");
+
+    fireEvent.change(picker, { target: { value: "La0.7Sr0.3MnO3" } });
+    expect(screen.queryByRole("note")).not.toBeInTheDocument(); // cubic: no warning
+
+    fireEvent.change(picker, { target: { value: "SrRuO3" } });
+    expect(screen.getByLabelText("a_film")).toHaveValue("5.567");
+    expect(screen.getByRole("note")).toHaveTextContent(/SrRuO3 is orthorhombic.*pseudocubic/);
+
+    // A hand edit: the value no longer comes from the phase, so both go.
+    fireEvent.change(screen.getByLabelText("a_film"), { target: { value: "3.93" } });
+    expect(picker).toHaveValue("");
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 
   it("hides the lattice + mismatch card for amorphous substrates", async () => {

@@ -16,6 +16,7 @@ import {
 import { fmtNum } from "../../../lib/format";
 import { Card, dual, resultLine, useCard } from "./shared";
 import PhasePresetPicker from "../structures/PhasePresetPicker";
+import type { PhaseInfo } from "../../../lib/api/reference";
 
 // Detail rows: [label, key, unit]. Lattice rows are skipped for amorphous.
 const LATTICE_FIELDS: [string, keyof SubstrateInfo, string][] = [
@@ -40,6 +41,8 @@ export default function SubstratesTab() {
 
   // Lattice-mismatch mini-calculator (substrate a_sub = selected.a).
   const [aFilm, setAFilm] = useState("3.876");
+  // The reference phase a_film came from; a hand edit clears it.
+  const [filmPhase, setFilmPhase] = useState<PhaseInfo | null>(null);
   const mm = useCard("Substrates");
 
   // MATLAB criticalThickness derives mismatch and b from a_film/a_sub.
@@ -199,7 +202,9 @@ export default function SubstratesTab() {
               <div style={{ marginBottom: 6 }}>
                 <PhasePresetPicker
                   label="film phase"
-                  onApply={(p) => {
+                  selected={filmPhase?.name ?? ""}
+                  onApply={(p, phase) => {
+                    setFilmPhase(phase);
                     setAFilm(String(p.cell.a));
                     mm.touch();
                     mb.touch();
@@ -216,6 +221,7 @@ export default function SubstratesTab() {
                   value={aFilm}
                   onChange={(e) => {
                     setAFilm(e.target.value);
+                    setFilmPhase(null);
                     mm.touch();
                     mb.touch();
                   }}
@@ -228,6 +234,14 @@ export default function SubstratesTab() {
                   Mismatch
                 </button>
               </span>
+              {filmPhase && filmPhase.system !== "cubic" && (
+                <div className="qzk-ds-meta" role="note" style={{ marginTop: 6, color: "var(--warning)" }}>
+                  ⚠ {filmPhase.name} is {filmPhase.system}: a = {filmPhase.a} Å is its conventional cell&apos;s a,
+                  which may not be the in-plane repeat the film matches on (orthorhombic and rhombohedral
+                  perovskites, for example, match on a pseudocubic ≈ a/√2). This scalar mismatch assumes a
+                  cube-on-cube match; check the epitaxial relationship before trusting it.
+                </div>
+              )}
               {resultLine(mm.result)}
             </Card>
           )}

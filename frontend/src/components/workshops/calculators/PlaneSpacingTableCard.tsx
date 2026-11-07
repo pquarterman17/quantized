@@ -7,7 +7,8 @@
 // `updateLattice()` touch path invalidates — so a lattice edit clears the
 // table exactly as it clears the interplanar- and bond-angle results. The
 // rows are shown only while `card.result` is a success; they are written only
-// by a completion that is still current.
+// by a completion that is still current. The centering is owned by CrystalTab
+// too, so a CIF or reference-phase preset can set it with the cell (Si → F).
 
 import { useState } from "react";
 
@@ -50,11 +51,14 @@ function tableTsv(rows: Row[]): string {
 export default function PlaneSpacingTableCard({
   crystal,
   card,
+  centering,
+  onCenteringChange,
 }: {
   crystal: CrystalForm;
   card: PlaneSpacingCardApi;
+  centering: string;
+  onCenteringChange: (centering: string) => void;
 }) {
-  const [centering, setCentering] = useState("P");
   const [maxHkl, setMaxHkl] = useState("5");
   const [wavelength, setWavelength] = useState("1.5406");
   const [rows, setRows] = useState<Row[]>([]);
@@ -94,7 +98,7 @@ export default function PlaneSpacingTableCard({
           value={centering}
           options={CENTERINGS}
           onChange={(event) => {
-            setCentering(event.target.value);
+            onCenteringChange(event.target.value);
             touch();
           }}
         />

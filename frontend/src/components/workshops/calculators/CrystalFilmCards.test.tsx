@@ -6,7 +6,8 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getConstants } from "../../../lib/api/reference";
+import { getConstants, getPhases } from "../../../lib/api/reference";
+import { resetPhaseCacheForTests } from "../structures/PhasePresetPicker";
 import {
   crystalAtomicDensity,
   crystalPlaneSpacings,
@@ -57,6 +58,7 @@ function openCrystalTab(): void {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getConstants).mockResolvedValue({ constants: {}, systems: { SI: [], CGS: [], eV: [] } });
+  resetPhaseCacheForTests();
 });
 
 describe("Plane spacing table", () => {
@@ -111,6 +113,32 @@ describe("Plane spacing table", () => {
 
     expect(screen.queryByRole("table", { name: "plane spacing table" })).not.toBeInTheDocument();
     expect(screen.queryByText(/reflections \[/)).not.toBeInTheDocument();
+  });
+});
+
+describe("Reference-phase preset on the Crystal tab", () => {
+  const SILICON = {
+    name: "Silicon", formula: "Si", a: 5.4309, b: 5.4309, c: 5.4309, alpha: 90, beta: 90, gamma: 90,
+    centering: "F" as const, system: "cubic", category: "substrate", icsd: 51688, basis: [],
+  };
+
+  it("sets the plane table's centering with the cell, and a hand edit clears the shown phase", async () => {
+    vi.mocked(getPhases).mockResolvedValue({ phases: [SILICON] });
+    vi.mocked(crystalPlaneSpacings).mockResolvedValue(SI_TABLE);
+    openCrystalTab();
+    await screen.findByRole("option", { name: /Silicon/ });
+    const picker = screen.getByLabelText("reference phase");
+    fireEvent.change(picker, { target: { value: "Silicon" } });
+    expect(picker).toHaveValue("Silicon");
+    expect(screen.getByLabelText("Bravais centering")).toHaveValue("F");
+
+    fireEvent.click(screen.getByText("Generate"));
+    await screen.findByText(/reflections \[/);
+    expect(crystalPlaneSpacings).toHaveBeenCalledWith(expect.objectContaining({ a: 5.4309, centering: "F" }));
+
+    // The cubic cell shows only "a"; typing over it is a hand edit.
+    fireEvent.change(screen.getByDisplayValue("5.4309"), { target: { value: "5.5" } });
+    expect(picker).toHaveValue("");
   });
 });
 

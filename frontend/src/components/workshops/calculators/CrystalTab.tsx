@@ -16,6 +16,7 @@ import { fmtNum } from "../../../lib/format";
 import { crystalInterplanarAngle } from "../../../lib/api/crystallography";
 import PhasePresetPicker from "../structures/PhasePresetPicker";
 import StructurePresetPicker from "../structures/StructurePresetPicker";
+import type { LatticePreset } from "../../../lib/crystalStructure";
 import BondAngleCard from "./BondAngleCard";
 import { AtomicDensityCard, PoissonStrainCard, TetragonalDistortionCard } from "./FilmStrainCards";
 import PlaneSpacingTableCard from "./PlaneSpacingTableCard";
@@ -60,6 +61,11 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
   const bondCard = useCard("Crystal");
   // The plane-spacing table reads the shared lattice too — same touch path.
   const planeCard = useCard("Crystal");
+  // Owned here so a preset can set it with the cell (a CIF or phase knows its
+  // Bravais centering; the plane table must not stay on P for Si).
+  const [planeCentering, setPlaneCentering] = useState("P");
+  // The reference phase currently shown as chosen; a hand edit clears it.
+  const [phaseName, setPhaseName] = useState("");
   // Both cards consume the shared lattice as well as their own local
   // inputs (hkl pairs / fractional coordinates). Keep that dependency
   // explicit so a lattice edit clears a completed result and disowns an
@@ -69,6 +75,18 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
     angleCard.touch();
     bondCard.touch();
     planeCard.touch();
+  };
+  // A hand edit of the lattice: the shown preset no longer describes it.
+  const editLattice = (patch: Partial<CrystalForm>): void => {
+    setPhaseName("");
+    updateLattice(patch);
+  };
+  // A CIF or reference-phase preset sets the cell and, when it knows one, the
+  // plane table's centering.
+  const applyPreset = (p: LatticePreset, phase: string): void => {
+    setPhaseName(phase);
+    if (p.centering) setPlaneCentering(p.centering);
+    updateLattice(latticeFormPatch(p));
   };
   const show4Index = isHex && millerMode === "4";
   const hNum = Number(c.crystal.h);
@@ -82,14 +100,14 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
       <Select
         options={CRYSTAL_SYSTEMS.map((s) => ({ value: s.value, label: s.label }))}
         value={c.crystal.system}
-        onChange={(e) => updateLattice({ system: e.target.value })}
+        onChange={(e) => editLattice({ system: e.target.value })}
         aria-label="crystal system"
       />
       <div style={{ marginTop: 8 }}>
-        <StructurePresetPicker onApply={(p) => updateLattice(latticeFormPatch(p))} />
+        <StructurePresetPicker onApply={(p) => applyPreset(p, "")} />
       </div>
       <div style={{ marginTop: 6 }}>
-        <PhasePresetPicker onApply={(p) => updateLattice(latticeFormPatch(p))} />
+        <PhasePresetPicker selected={phaseName} onApply={(p, phase) => applyPreset(p, phase.name)} />
       </div>
 
       {/* Lattice lengths (a always; b/c per system) */}
@@ -97,13 +115,13 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
         <span className="qzk-field-lbl" style={{ margin: 0 }}>
           a
         </span>
-        <NumberField value={c.crystal.a} width={64} onChange={(v) => updateLattice({ a: v })} />
+        <NumberField value={c.crystal.a} width={64} onChange={(v) => editLattice({ a: v })} />
         {lengths.includes("b") && (
           <>
             <span className="qzk-field-lbl" style={{ margin: 0 }}>
               b
             </span>
-            <NumberField value={c.crystal.b} width={64} onChange={(v) => updateLattice({ b: v })} />
+            <NumberField value={c.crystal.b} width={64} onChange={(v) => editLattice({ b: v })} />
           </>
         )}
         {lengths.includes("c") && (
@@ -111,7 +129,7 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
             <span className="qzk-field-lbl" style={{ margin: 0 }}>
               c
             </span>
-            <NumberField value={c.crystal.c} width={64} onChange={(v) => updateLattice({ c: v })} />
+            <NumberField value={c.crystal.c} width={64} onChange={(v) => editLattice({ c: v })} />
           </>
         )}
         <span style={{ color: "var(--text-faint)" }}>Å</span>
@@ -128,7 +146,7 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
               <NumberField
                 value={c.crystal[ang]}
                 width={64}
-                onChange={(v) => updateLattice({ [ang]: v })}
+                onChange={(v) => editLattice({ [ang]: v })}
               />
             </span>
           ))}
@@ -319,7 +337,12 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
         {resultLine(angleCard.result)}
       </Card>
       <BondAngleCard crystal={c.crystal} card={bondCard} />
-      <PlaneSpacingTableCard crystal={c.crystal} card={planeCard} />
+      <PlaneSpacingTableCard
+        crystal={c.crystal}
+        card={planeCard}
+        centering={planeCentering}
+        onCenteringChange={setPlaneCentering}
+      />
       <TetragonalDistortionCard />
       <PoissonStrainCard />
       <AtomicDensityCard />
