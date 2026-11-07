@@ -273,3 +273,16 @@ def test_route_names_the_bad_field(client: TestClient) -> None:
     })
     assert resp.status_code == 422
     assert "Magnetic-film thickness must be greater than zero" in resp.text
+
+
+def test_mismatched_x_y_lengths_are_refused(client: TestClient) -> None:
+    with pytest.raises(ValueError, match="same length"):
+        normalize_mag_moment(
+            [0.0, 1.0], [1.0], from_field="Oe", to_field="Oe",
+            from_moment="emu", basis="none", to_moment="A·m²",
+        )
+    resp = client.post("/api/magnetometry/normalize", json={
+        "x": [0.0, 1.0, 2.0], "y": [1.0, 2.0], "to_moment": "A·m²",
+    })
+    assert resp.status_code == 422
+    assert "same length" in resp.text

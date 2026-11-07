@@ -154,6 +154,11 @@ def normalize_mag_moment(
     """
     x_in = np.asarray(x, dtype=float)
     y_in = np.asarray(y, dtype=float)
+    if x_in.shape != y_in.shape:
+        raise ValueError(
+            f"x and y must have the same length (got {x_in.size} field and "
+            f"{y_in.size} moment values)"
+        )
     # Units first: an already-normalized source must be refused as such, not
     # as "Sample mass is required" for a profile it could never use.
     check_moment_request(from_moment, basis, to_moment)
