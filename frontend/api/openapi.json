@@ -2323,6 +2323,50 @@
         "title": "CoherenceRequest",
         "type": "object"
       },
+      "CoincidenceRequest": {
+        "properties": {
+          "film": {
+            "$ref": "#/components/schemas/PlaneRequest"
+          },
+          "max_angle": {
+            "default": 1.0,
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Max Angle",
+            "type": "number"
+          },
+          "max_area": {
+            "default": 200.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 2000.0,
+            "title": "Max Area",
+            "type": "number"
+          },
+          "max_results": {
+            "default": 10,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Max Results",
+            "type": "integer"
+          },
+          "max_strain": {
+            "default": 0.05,
+            "exclusiveMinimum": 0.0,
+            "maximum": 0.5,
+            "title": "Max Strain",
+            "type": "number"
+          },
+          "substrate": {
+            "$ref": "#/components/schemas/PlaneRequest"
+          }
+        },
+        "required": [
+          "film",
+          "substrate"
+        ],
+        "title": "CoincidenceRequest",
+        "type": "object"
+      },
       "CompareEquation": {
         "properties": {
           "equation": {
@@ -17288,6 +17332,50 @@
         "summary": "Tafel Slope",
         "tags": [
           "electrochemistry"
+        ]
+      }
+    },
+    "/api/epitaxy/coincidence": {
+      "post": {
+        "description": "Coincidence-lattice (supercell) matches of a film plane on a substrate plane.",
+        "operationId": "coincidence_api_epitaxy_coincidence_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CoincidenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Coincidence Api Epitaxy Coincidence Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Coincidence",
+        "tags": [
+          "epitaxy"
         ]
       }
     },

@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from quantized.calc import (
+    coincidence,
     composition,
     constants,
     crystallography,
@@ -120,6 +121,7 @@ _OPS: list[CalcOp] = [
     ),
     *_ops("crystal", epitaxial_strain, ["tetragonal_distortion", "strain_from_poisson"]),
     *_ops("epitaxy", surface_net, ["surface_net", "net_mismatch"]),
+    *_ops("epitaxy", coincidence, ["coincidence_search"]),
     *_ops(
         "composition",
         composition,

@@ -8,6 +8,13 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- The orientation-aware mismatch card can now search supercells: it lists
+  coincidence-lattice matches of the film plane on the substrate plane within
+  a chosen strain and area, each with the cell counts, the strain along both
+  axes, the in-plane rotation and the epitaxial relationship (film [uvw] ∥
+  substrate [uvw]; 4-index for hexagonal cells). GaN on c-plane sapphire now
+  finds the √3×√3 R30° match; TiN on Si(001) finds the 4:3 domain match. Also
+  at `POST /api/epitaxy/coincidence`.
 - Calculators ▸ Substrates has an orientation-aware mismatch card. Pick a
   film phase and a substrate phase with their planes (hkl or hkil); it
   compares their in-plane lattices, Bravais centering included, along both
