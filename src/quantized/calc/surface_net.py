@@ -17,7 +17,8 @@ an F, I or R lattice gives its true net, not the conventional cell's:
   a·√3/2 = 2.482 Å at 109.47°.
 
 Miller indices refer to the conventional cell; a 4-index (hkil) plane is
-accepted for any cell and reduced with ``i = -(h+k)``. Indices are reduced by
+accepted only for a hexagonal-axes cell (a = b, gamma = 120°) and reduced with
+``i = -(h+k)``. Indices are reduced by
 their gcd, so (200) gives the (100) net. Rhombohedral ``R`` centering is the
 obverse setting on **hexagonal** axes.
 
@@ -131,7 +132,10 @@ def surface_net(
     >>> round(r["u"], 4), round(r["v"], 4), round(r["gamma"], 6)
     (3.8403, 3.8403, 90.0)
     """
-    cell = _cell_matrix(a, a if b is None else b, a if c is None else c, alpha, beta, gamma)
+    bb = a if b is None else b
+    cell = _cell_matrix(a, bb, a if c is None else c, alpha, beta, gamma)
+    if len(hkl) == 4 and not (abs(gamma - 120.0) < 1e-6 and abs(a - bb) < 1e-9 * a):
+        raise ValueError("4-index (h k i l) planes need a hexagonal-axes cell (a = b, gamma = 120)")
     plane = _plane_indices(hkl)
     cen = centering.strip().upper()
     frac = _in_plane_translations(plane, cen)

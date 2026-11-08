@@ -93,11 +93,18 @@ def test_equivalent_and_scaled_planes_give_the_same_net() -> None:
     assert surface_net(3.905, (2, 0, 0))["hkl"] == [1, 0, 0]
 
 
+def test_four_index_plane_needs_hexagonal_axes() -> None:
+    with pytest.raises(ValueError, match="hexagonal-axes cell"):
+        surface_net(3.905, (1, 1, -2, 0))
+    with pytest.raises(ValueError, match="hexagonal-axes cell"):
+        surface_net(3.0, (0, 0, 0, 1), b=3.1, c=5.0, gamma=120.0)
+
+
 @pytest.mark.parametrize(
     ("hkl", "kwargs", "message"),
     [
         ((0, 0, 0), {}, "not all be zero"),
-        ((1, 1, 1, 1), {}, "i = -\\(h\\+k\\)"),
+        ((1, 1, 1, 1), {"gamma": 120.0}, "i = -\\(h\\+k\\)"),
         ((7, 0, 0), {}, "above 6"),
         ((1, 0), {}, "\\(h k l\\)"),
         ((1, 0, 0), {"centering": "Q"}, "unknown centering"),
