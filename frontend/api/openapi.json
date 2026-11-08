@@ -13881,6 +13881,22 @@
             "title": "Room Temperature",
             "type": "number"
           },
+          "rsm_reflection": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsm Reflection"
+          },
           "substrate": {
             "$ref": "#/components/schemas/SubstrateIn"
           },
@@ -14564,6 +14580,17 @@
           "a": {
             "title": "A",
             "type": "number"
+          },
+          "c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "C"
           },
           "cte": {
             "default": 0.0,

@@ -81,6 +81,44 @@ def test_metal_on_silicon_is_tensile_after_cooling() -> None:
     assert lay["eps_thermal"] > 0
 
 
+def test_rsm_points_coherent_layer_shares_the_substrate_qx() -> None:
+    bto = {"name": "BTO", "a": 3.9945, "c": 4.0335, "thickness": 100}
+    r = evaluate_stack(STO, [LSMO, bto], rsm_reflection=(1, 3))
+    sub, lsmo, top = r["substrate_rsm"], r["layers"][0]["rsm"], r["layers"][1]["rsm"]
+    assert sub["qx"] == pytest.approx(2 * math.pi / 3.905)
+    assert sub["qz"] == pytest.approx(2 * math.pi * 3 / 3.905)
+    assert sub["two_theta"] == pytest.approx(77.19, abs=0.01)  # SrTiO3 (103), Cu Kα1
+    assert lsmo["qx"] == pytest.approx(sub["qx"])  # coherent: same in-plane Q
+    assert lsmo["qz"] == pytest.approx(2 * math.pi * 3 / r["layers"][0]["c_strained"])
+    assert top["qx"] == pytest.approx(2 * math.pi / 3.9945)  # relaxed: its own a
+    for p in (sub, lsmo, top):
+        theta = p["two_theta"] / 2
+        assert p["tilt"] == pytest.approx(math.degrees(math.atan2(p["qx"], p["qz"])))
+        assert p["omega_gi"] == pytest.approx(theta - p["tilt"])
+        assert p["omega_ge"] == pytest.approx(theta + p["tilt"])
+
+
+def test_rsm_point_out_of_reach_and_inaccessible_geometry() -> None:
+    from quantized.calc.film_stack import rsm_point
+
+    far = rsm_point(3.905, 3.905, 4, 4, 1.5406)  # (404): |Q| too large for Cu Kα
+    assert far["two_theta"] is None and far["omega_gi"] is None
+    # (201): tilt ψ > θ, so neither grazing incidence (θ − ψ < 0) nor grazing
+    # exit (θ + ψ > 2θ) is possible in reflection; it needs transmission.
+    steep = rsm_point(3.905, 3.905, 2, 1, 1.5406)
+    assert steep["two_theta"] is not None
+    assert steep["omega_gi"] is None and steep["omega_ge"] is None
+    for bad_l in (0, -3):
+        with pytest.raises(ValueError, match="L must be >= 1"):
+            rsm_point(3.905, 3.905, 1, bad_l, 1.5406)
+
+
+def test_rsm_reflection_validation() -> None:
+    for bad in ((1,), (1, 0), (1, -3), (20, 1)):
+        with pytest.raises(ValueError, match="rsm_reflection"):
+            evaluate_stack(STO, [LSMO], rsm_reflection=bad)
+
+
 def test_matched_layer_has_infinite_critical_thickness() -> None:
     lay = evaluate_stack(STO, [{"a": 3.905, "thickness": 500}])["layers"][0]
     assert lay["state"] == "coherent" and math.isinf(lay["h_c_nm"])

@@ -89,6 +89,7 @@ def coincidence(req: CoincidenceRequest) -> dict[str, Any]:
 
 class SubstrateIn(BaseModel):
     a: float  # Å, in-plane
+    c: float | None = None  # Å, out-of-plane (None -> a); used for the RSM point
     cte: float = 0.0  # 1e-6/K
 
 
@@ -108,6 +109,8 @@ class StackRequest(BaseModel):
     room_temperature: float = 300.0  # K
     wavelength: float = 1.5406  # Å
     max_order: int = Field(default=4, ge=1, le=10)
+    # (H, L) of an asymmetric reflection for predicted RSM peaks; None = skip.
+    rsm_reflection: list[int] | None = Field(default=None, min_length=2, max_length=2)
 
 
 @router.post("/stack")
@@ -115,12 +118,13 @@ def stack(req: StackRequest) -> dict[str, Any]:
     """Layer-by-layer strain, critical thickness, thermal strain and (00L) 2-theta."""
     out = call_calc(
         evaluate_stack,
-        req.substrate.model_dump(),
+        req.substrate.model_dump(exclude_none=True),
         [layer.model_dump() for layer in req.layers],
         growth_temperature=req.growth_temperature,
         room_temperature=req.room_temperature,
         wavelength=req.wavelength,
         max_order=req.max_order,
+        rsm_reflection=req.rsm_reflection,
     )
     payload: dict[str, Any] = to_jsonable(out)
     return payload

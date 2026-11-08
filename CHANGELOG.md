@@ -8,6 +8,11 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- Calculators ▸ Film stack also predicts where each layer and the substrate
+  appear in a reciprocal-space map for a chosen asymmetric reflection
+  (H 0 L), default (103): Qx, Qz (Q = 2π/d, as in the RSM workshop), 2θ, and
+  ω for grazing incidence and grazing exit. Coherent layers line up with the
+  substrate in Qx; relaxed layers sit at their own.
 - Calculators ▸ Film stack: build a layer stack on a substrate (add layers by
   hand or from the reference phases, reorder, remove) and get, per layer, the
   mismatch to the layer below, the Matthews–Blakeslee critical thickness,

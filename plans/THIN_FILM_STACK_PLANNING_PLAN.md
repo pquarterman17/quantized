@@ -205,7 +205,9 @@ Each card stands alone. Missing:
 - [~] **Predicted diffraction**: for each strained layer, the (00l) 2θ and the
   asymmetric-RSM (Qx, Qz) positions, which can be overlaid in the RSM workshop
   and compared with `rsm_strain`. This links planning to measurement. The
-  (00L) 2θ for L = 1-4 is done; RSM positions and the overlay are open.
+  (00L) 2θ for L = 1-4 and the predicted (H 0 L) RSM peaks (Qx, Qz, 2θ, ω in
+  grazing incidence and exit, for the substrate and every layer) are done;
+  the overlay in the RSM workshop is open.
 - [ ] **Hand-off to Reflectivity**: send the planned thicknesses and SLDs (via
   `sld_formula`) to seed a Parratt model, reusing the existing
   `reflectivitySeed` bridge.
@@ -349,3 +351,9 @@ cd frontend && npm run build
   grown, Matthews–Blakeslee h_c, coherent vs fully relaxed, ε∥, ε⊥ (ν), strained
   c, (00L) 2θ and the cool-down thermal strain. Checked against the golden
   pieces it composes and the published LSMO/SrTiO3 c ≈ 3.85 Å.
+- 2026-11-08 — **G4 slice 2: predicted RSM peaks.** `film_stack.rsm_point`
+  and an optional `rsm_reflection = (H, L)` on `evaluate_stack` /
+  `POST /api/epitaxy/stack`, giving each layer's and the substrate's (H 0 L)
+  peak in the RSM workshop's Q = 2π/d convention, with 2θ, tilt and ω for
+  grazing incidence and exit. Shown as a second table on the Film stack tab.
+  Checked against SrTiO3 (103) at 2θ = 77.19° (Cu Kα1).

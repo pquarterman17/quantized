@@ -1,6 +1,6 @@
 // Film stack results table (plan G4): one row per layer, bottom to top.
 
-import type { StackResult } from "../../../../lib/api/filmStack";
+import type { RsmPoint, StackResult } from "../../../../lib/api/filmStack";
 import { Card, fmtNum } from "../shared";
 
 /** Strain as a percentage with a sign, e.g. "+0.748 %". */
@@ -12,8 +12,25 @@ function hcText(l: StackResult["layers"][number]): string {
   return fmtNum(l.h_c_nm);
 }
 
-export default function StackResults({ result }: { result: StackResult }) {
+const deg = (x: number | null): string => (x == null ? "–" : fmtNum(x));
+
+function RsmRow({ name, p }: { name: string; p: RsmPoint }) {
   return (
+    <tr>
+      <td>{name}</td>
+      <td>{fmtNum(p.qx)}</td>
+      <td>{fmtNum(p.qz)}</td>
+      <td>{deg(p.two_theta)}</td>
+      <td>{deg(p.omega_gi)}</td>
+      <td>{deg(p.omega_ge)}</td>
+    </tr>
+  );
+}
+
+export default function StackResults({ result }: { result: StackResult }) {
+  const hl = result.rsm_reflection;
+  return (
+    <>
     <Card title="Strain by layer">
       <div style={{ overflowX: "auto" }}>
         <table className="qz-table" aria-label="stack results">
@@ -51,5 +68,32 @@ export default function StackResults({ result }: { result: StackResult }) {
         ε &lt; 0 is compressive. f = (a − a_below)/a_below. 2θ lists L = 1…4; “–” is out of reach at this λ.
       </div>
     </Card>
+    {hl && result.substrate_rsm && (
+      <Card title={`Predicted RSM peaks, (${hl[0]} 0 ${hl[1]})`}>
+        <div style={{ overflowX: "auto" }}>
+          <table className="qz-table" aria-label="predicted rsm peaks">
+            <thead>
+              <tr>
+                <th />
+                <th>Qx (Å⁻¹)</th>
+                <th>Qz (Å⁻¹)</th>
+                <th>2θ (°)</th>
+                <th>ω, grazing in (°)</th>
+                <th>ω, grazing out (°)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <RsmRow name="substrate" p={result.substrate_rsm} />
+              {result.layers.map((l, i) => l.rsm && <RsmRow key={i} name={l.name} p={l.rsm} />)}
+            </tbody>
+          </table>
+        </div>
+        <div className="qzk-ds-meta" style={{ marginTop: 6 }}>
+          Q = 2π/d, as in the RSM workshop. A coherent layer shares the substrate&apos;s Qx; a relaxed one sits at
+          its own. “–” means out of reach at this λ or not reachable in that geometry.
+        </div>
+      </Card>
+    )}
+    </>
   );
 }
