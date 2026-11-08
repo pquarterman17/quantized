@@ -42,7 +42,7 @@ _EXPECTED_OPERATIONS_BY_DOMAIN = {
         "tetragonal_distortion",
         "strain_from_poisson",
     },
-    "epitaxy": {"surface_net", "net_mismatch", "coincidence_search"},
+    "epitaxy": {"surface_net", "net_mismatch", "coincidence_search", "evaluate_stack"},
     "composition": {
         "atomic_to_weight_percent",
         "weight_to_atomic_percent",

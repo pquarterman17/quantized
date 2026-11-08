@@ -950,6 +950,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/epitaxy/stack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stack
+         * @description Layer-by-layer strain, critical thickness, thermal strain and (00L) 2-theta.
+         */
+        post: operations["stack_api_epitaxy_stack_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/epitaxy/surface-net": {
         parameters: {
             query?: never;
@@ -8459,6 +8479,30 @@ export interface components {
             /** Temperature */
             temperature: number;
         };
+        /** LayerIn */
+        LayerIn: {
+            /** A */
+            a: number;
+            /** C */
+            c?: number | null;
+            /**
+             * Cte
+             * @default 0
+             */
+            cte?: number;
+            /**
+             * Name
+             * @default
+             */
+            name?: string;
+            /**
+             * Nu
+             * @default 0.3
+             */
+            nu?: number;
+            /** Thickness */
+            thickness: number;
+        };
         /** LeveneRequest */
         LeveneRequest: {
             /**
@@ -11003,6 +11047,32 @@ export interface components {
             /** X Column */
             x_column?: string | null;
         };
+        /** StackRequest */
+        StackRequest: {
+            /**
+             * Growth Temperature
+             * @default 973
+             */
+            growth_temperature?: number;
+            /** Layers */
+            layers: components["schemas"]["LayerIn"][];
+            /**
+             * Max Order
+             * @default 4
+             */
+            max_order?: number;
+            /**
+             * Room Temperature
+             * @default 300
+             */
+            room_temperature?: number;
+            substrate: components["schemas"]["SubstrateIn"];
+            /**
+             * Wavelength
+             * @default 1.5406
+             */
+            wavelength?: number;
+        };
         /**
          * StatplotFacet
          * @description One box/violin small-multiple panel (GUI_INTERACTION #12 slice 4b —
@@ -11214,6 +11284,16 @@ export interface components {
         StructurePathRequest: {
             /** Path */
             path: string;
+        };
+        /** SubstrateIn */
+        SubstrateIn: {
+            /** A */
+            a: number;
+            /**
+             * Cte
+             * @default 0
+             */
+            cte?: number;
         };
         /** SubtractBgRequest */
         SubtractBgRequest: {
@@ -13209,6 +13289,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["NetMismatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stack_api_epitaxy_stack_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StackRequest"];
             };
         };
         responses: {

@@ -48,6 +48,7 @@ export type CalcTab =
   | "semiconductor"
   | "superconductor"
   | "thinfilm"
+  | "filmstack"
   | "magnetic";
 
 export interface CalculatorsState

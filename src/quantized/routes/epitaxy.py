@@ -12,8 +12,10 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from quantized.calc.coincidence import coincidence_search
+from quantized.calc.film_stack import evaluate_stack
 from quantized.calc.surface_net import net_mismatch, surface_net
 from quantized.routes._errors import call_calc
+from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/epitaxy", tags=["epitaxy"])
 
@@ -83,3 +85,42 @@ def coincidence(req: CoincidenceRequest) -> dict[str, Any]:
         max_area=req.max_area,
         max_results=req.max_results,
     )
+
+
+class SubstrateIn(BaseModel):
+    a: float  # Å, in-plane
+    cte: float = 0.0  # 1e-6/K
+
+
+class LayerIn(BaseModel):
+    name: str = Field(default="", max_length=80)
+    a: float  # Å, relaxed in-plane
+    c: float | None = None  # Å, relaxed out-of-plane (None -> a)
+    thickness: float  # nm
+    nu: float = 0.3
+    cte: float = 0.0  # 1e-6/K
+
+
+class StackRequest(BaseModel):
+    substrate: SubstrateIn
+    layers: list[LayerIn] = Field(min_length=1, max_length=20)
+    growth_temperature: float = 973.0  # K
+    room_temperature: float = 300.0  # K
+    wavelength: float = 1.5406  # Å
+    max_order: int = Field(default=4, ge=1, le=10)
+
+
+@router.post("/stack")
+def stack(req: StackRequest) -> dict[str, Any]:
+    """Layer-by-layer strain, critical thickness, thermal strain and (00L) 2-theta."""
+    out = call_calc(
+        evaluate_stack,
+        req.substrate.model_dump(),
+        [layer.model_dump() for layer in req.layers],
+        growth_temperature=req.growth_temperature,
+        room_temperature=req.room_temperature,
+        wavelength=req.wavelength,
+        max_order=req.max_order,
+    )
+    payload: dict[str, Any] = to_jsonable(out)
+    return payload

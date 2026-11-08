@@ -7283,6 +7283,51 @@
         "title": "LangevinRequest",
         "type": "object"
       },
+      "LayerIn": {
+        "properties": {
+          "a": {
+            "title": "A",
+            "type": "number"
+          },
+          "c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "C"
+          },
+          "cte": {
+            "default": 0.0,
+            "title": "Cte",
+            "type": "number"
+          },
+          "name": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Name",
+            "type": "string"
+          },
+          "nu": {
+            "default": 0.3,
+            "title": "Nu",
+            "type": "number"
+          },
+          "thickness": {
+            "title": "Thickness",
+            "type": "number"
+          }
+        },
+        "required": [
+          "a",
+          "thickness"
+        ],
+        "title": "LayerIn",
+        "type": "object"
+      },
       "LeveneRequest": {
         "properties": {
           "center": {
@@ -13808,6 +13853,50 @@
         "title": "SqliteQueryRequest",
         "type": "object"
       },
+      "StackRequest": {
+        "properties": {
+          "growth_temperature": {
+            "default": 973.0,
+            "title": "Growth Temperature",
+            "type": "number"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/LayerIn"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Layers",
+            "type": "array"
+          },
+          "max_order": {
+            "default": 4,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Max Order",
+            "type": "integer"
+          },
+          "room_temperature": {
+            "default": 300.0,
+            "title": "Room Temperature",
+            "type": "number"
+          },
+          "substrate": {
+            "$ref": "#/components/schemas/SubstrateIn"
+          },
+          "wavelength": {
+            "default": 1.5406,
+            "title": "Wavelength",
+            "type": "number"
+          }
+        },
+        "required": [
+          "substrate",
+          "layers"
+        ],
+        "title": "StackRequest",
+        "type": "object"
+      },
       "StatplotFacet": {
         "description": "One box/violin small-multiple panel (GUI_INTERACTION #12 slice 4b \u2014\nStatStage's faceted export). ``kind`` is per-facet MODE FIDELITY: the\ninteractive StatStage computes each facet slice independently and a\nviolin slice whose OWN ``/api/statplots/violin`` call failed degrades to\na box plot for just that slice (never fabricating a KDE) \u2014 an explicit\nper-facet ``kind`` reproduces that same mixed grid on export; omitted\nfalls back to the request's own top-level ``kind``.",
         "properties": {
@@ -14468,6 +14557,24 @@
           "path"
         ],
         "title": "StructurePathRequest",
+        "type": "object"
+      },
+      "SubstrateIn": {
+        "properties": {
+          "a": {
+            "title": "A",
+            "type": "number"
+          },
+          "cte": {
+            "default": 0.0,
+            "title": "Cte",
+            "type": "number"
+          }
+        },
+        "required": [
+          "a"
+        ],
+        "title": "SubstrateIn",
         "type": "object"
       },
       "SubtractBgRequest": {
@@ -17418,6 +17525,50 @@
           }
         },
         "summary": "Plane Net Mismatch",
+        "tags": [
+          "epitaxy"
+        ]
+      }
+    },
+    "/api/epitaxy/stack": {
+      "post": {
+        "description": "Layer-by-layer strain, critical thickness, thermal strain and (00L) 2-theta.",
+        "operationId": "stack_api_epitaxy_stack_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Stack Api Epitaxy Stack Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stack",
         "tags": [
           "epitaxy"
         ]
