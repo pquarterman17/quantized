@@ -42,7 +42,9 @@ reflection (H 0 L) in the coplanar geometry, using the same convention as
 as-grown in-plane parameter, so a coherent layer shares the substrate's Qx)
 and ``Qz = 2πL/c``. Also ``2θ`` from ``|Q|``, the tilt ``ψ = atan(Qx/Qz)``, and
 the incidence angle ``ω = θ − ψ`` (grazing incidence) or ``θ + ψ`` (grazing
-exit), each ``None`` when it falls outside ``0 < ω < 2θ``.
+exit), each ``None`` when it falls outside ``0 < ω < 2θ``. ``L >= 1`` (Qz out of
+the surface); H may have either sign. Thermal strain is not applied to the
+predicted Qx of a relaxed layer (a ~1e-4 shift at room temperature).
 
 **Critical thickness caveat.** ``h_c`` is the MATLAB-parity Matthews–Blakeslee
 form, which takes 60° dislocations with ``b = a/√2`` (FCC-type slip). Perovskites
@@ -103,8 +105,8 @@ def rsm_point(
     or the geometry puts ω outside (0, 2θ)."""
     if not (math.isfinite(a_parallel) and a_parallel > 0 and math.isfinite(c) and c > 0):
         raise ValueError("lattice parameters must be positive and finite")
-    if l == 0:
-        raise ValueError("L must be non-zero for a coplanar reflection")
+    if l < 1:
+        raise ValueError("L must be >= 1: in coplanar reflection Qz points out of the surface")
     qx = 2 * math.pi * h / a_parallel
     qz = 2 * math.pi * l / c
     q = math.hypot(qx, qz)
@@ -173,8 +175,10 @@ def evaluate_stack(
     if rsm_reflection is not None:
         if len(rsm_reflection) != 2 or any(int(x) != x for x in rsm_reflection):
             raise ValueError("rsm_reflection must be two integers (H, L)")
-        if abs(rsm_reflection[0]) > 10 or not (1 <= abs(rsm_reflection[1]) <= 10):
-            raise ValueError("rsm_reflection needs |H| <= 10 and 1 <= |L| <= 10")
+        if abs(rsm_reflection[0]) > 10 or not (1 <= rsm_reflection[1] <= 10):
+            raise ValueError(
+                "rsm_reflection needs |H| <= 10 and 1 <= L <= 10 (Qz points out of the surface)"
+            )
     a_sub = _pos(substrate, "a", "substrate")
     c_sub = _pos(substrate, "c", "substrate") if substrate.get("c") is not None else a_sub
     cte_sub = _num(substrate, "cte", "substrate", 0.0) * 1e-6

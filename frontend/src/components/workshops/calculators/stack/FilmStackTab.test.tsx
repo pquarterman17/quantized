@@ -110,10 +110,11 @@ describe("FilmStackTab", () => {
 });
 
 describe("parseHL", () => {
-  it("parses H L and refuses L = 0 or junk", () => {
+  it("parses H L and refuses L < 1 or junk", () => {
     expect(parseHL("1 3")).toEqual([1, 3]);
     expect(parseHL("-1,2")).toEqual([-1, 2]);
-    expect(() => parseHL("1 0")).toThrow(/non-zero L/);
+    expect(() => parseHL("1 0")).toThrow(/L ≥ 1/);
+    expect(() => parseHL("1 -3")).toThrow(/L ≥ 1/);
     expect(() => parseHL("1")).toThrow(/H L/);
   });
 });

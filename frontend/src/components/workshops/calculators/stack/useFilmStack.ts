@@ -40,8 +40,8 @@ function num(text: string, label: string): number {
 /** "1 3" or "1,3" → [H, L]; blank skips the RSM prediction. */
 export function parseHL(text: string): number[] {
   const parts = text.trim().split(/[\s,]+/).filter(Boolean).map(Number);
-  if (parts.length !== 2 || parts.some((n) => !Number.isInteger(n)) || parts[1] === 0) {
-    throw new Error(`RSM reflection: enter "H L" with integer H and non-zero L (got "${text}")`);
+  if (parts.length !== 2 || parts.some((n) => !Number.isInteger(n)) || parts[1] < 1) {
+    throw new Error(`RSM reflection: enter "H L" with integer H and L ≥ 1 (got "${text}")`);
   }
   return parts;
 }

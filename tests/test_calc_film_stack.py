@@ -108,12 +108,13 @@ def test_rsm_point_out_of_reach_and_inaccessible_geometry() -> None:
     steep = rsm_point(3.905, 3.905, 2, 1, 1.5406)
     assert steep["two_theta"] is not None
     assert steep["omega_gi"] is None and steep["omega_ge"] is None
-    with pytest.raises(ValueError, match="L must be non-zero"):
-        rsm_point(3.905, 3.905, 1, 0, 1.5406)
+    for bad_l in (0, -3):
+        with pytest.raises(ValueError, match="L must be >= 1"):
+            rsm_point(3.905, 3.905, 1, bad_l, 1.5406)
 
 
 def test_rsm_reflection_validation() -> None:
-    for bad in ((1,), (1, 0), (20, 1)):
+    for bad in ((1,), (1, 0), (1, -3), (20, 1)):
         with pytest.raises(ValueError, match="rsm_reflection"):
             evaluate_stack(STO, [LSMO], rsm_reflection=bad)
 
