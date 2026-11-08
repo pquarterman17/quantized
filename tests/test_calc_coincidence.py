@@ -59,6 +59,29 @@ def test_tin_on_si_includes_the_4_to_3_cube_on_cube_domain_match() -> None:
     )
 
 
+def test_bcc110_on_fcc111_gives_kurdjumov_sachs() -> None:
+    # Fe(110) on Cu(111): the best matches put Fe <111> parallel to Cu <110>.
+    fe110 = {"a": 2.8665, "centering": "I", "hkl": [1, 1, 0]}
+    cu111 = {"a": 3.6149, "centering": "F", "hkl": [1, 1, 1]}
+    best = coincidence_search(fe110, cu111, max_strain=0.12, max_area=60)["matches"][0]
+    assert sorted(abs(x) for x in best["film_direction"]) == [1, 1, 1]
+    assert sorted(abs(x) for x in best["substrate_direction"]) == [0, 1, 1]
+
+
+def test_rhombic_net_keeps_the_sign_of_the_rotation() -> None:
+    # BCC (110) is rhombic: its mirrors are not along the reference axis, so
+    # +θ and −θ are distinct and must not be folded into |θ|.
+    fe110 = {"a": 2.8665, "centering": "I", "hkl": [1, 1, 0]}
+    cu111 = {"a": 3.6149, "centering": "F", "hkl": [1, 1, 1]}
+    rots = [
+        m["rotation"]
+        for m in coincidence_search(fe110, cu111, max_strain=0.12, max_area=60, max_results=100)[
+            "matches"
+        ]
+    ]
+    assert any(r < 0 for r in rots)
+
+
 def test_results_are_ranked_by_area_then_strain_and_respect_the_limits() -> None:
     r = coincidence_search(TIN, SI, max_strain=0.05, max_area=160)
     areas = [m["area"] for m in r["matches"]]

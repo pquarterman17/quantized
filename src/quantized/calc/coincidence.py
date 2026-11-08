@@ -17,9 +17,10 @@ case of two aligned diagonal supercells.
 Rotations are folded into ``(-P/2, P/2]`` where ``P`` (``rotation_period``)
 is the rotation period the two nets share (60° for two hexagonal nets, 90°
 for two square nets, 30° for hexagonal on square, otherwise 180°), so
-symmetry-equivalent orientations print the same angle; when both nets have a
-mirror line (every net but the oblique one), +θ and −θ are the same interface
-and the angle is reported as |θ|. Each match reports the
+symmetry-equivalent orientations print the same angle; when the reference
+axis of both nets is a mirror line (square, rectangular and hexagonal nets),
++θ and −θ are the same interface and the angle is reported as |θ|. Rhombic and
+oblique nets keep the sign. Each match reports the
 two supercell indices, the strain needed along both
 reduced axes as ``f = (film − substrate)/substrate`` (the repo's mismatch
 convention), the area and angle mismatch, the in-plane **rotation** of the film
@@ -34,7 +35,8 @@ For a hexagonal-axes cell the directions are also given in 4-index
 Examples (tested): Fe(001) on MgO(001) is the 1×1 match at −3.7 % with
 Fe[100] ∥ MgO[110]; GaN(0001) on c-plane sapphire within 17 % is GaN √3×√3
 R30° on sapphire 1×1 at +16.1 %; TiN(001) on Si(001) includes the cube-on-cube
-4:3 domain match (16 TiN cells on 9 Si cells, +4.1 %).
+4:3 domain match (16 TiN cells on 9 Si cells, +4.1 %); Fe(110) on Cu(111)
+gives the Kurdjumov–Sachs relationship Fe⟨111⟩ ∥ Cu⟨110⟩.
 """
 
 from __future__ import annotations
@@ -121,10 +123,18 @@ def _symmetry(net: dict[str, Any]) -> int:
     return 180
 
 
-def _has_mirror(net: dict[str, Any]) -> bool:
-    """Every 2D net except the oblique one (u != v and gamma != 90) has a mirror line."""
-    return math.isclose(net["u"], net["v"], rel_tol=1e-6) or math.isclose(
-        net["gamma"], 90.0, abs_tol=1e-4
+def _u_is_mirror(net: dict[str, Any]) -> bool:
+    """True when the reduced u axis is a mirror line of the net.
+
+    That holds for the rectangular and square nets (gamma = 90) and the
+    hexagonal one (u = v, gamma = 120). A rhombic (centred rectangular) net,
+    e.g. BCC (110), has its mirrors along u ± v instead, and an oblique net has
+    none, so for them a rotation of +θ from u is not equivalent to −θ.
+    """
+    if math.isclose(net["gamma"], 90.0, abs_tol=1e-4):
+        return True
+    return math.isclose(net["u"], net["v"], rel_tol=1e-6) and math.isclose(
+        net["gamma"], 120.0, abs_tol=1e-4
     )
 
 
@@ -222,8 +232,10 @@ def coincidence_search(
         )
     f_net, s_net = nets
     period = math.gcd(_symmetry(f_net), _symmetry(s_net))
-    # With a mirror line in both nets, +θ and −θ are the same interface.
-    mirrored = _has_mirror(f_net) and _has_mirror(s_net)
+    # When the reference axis (u) of both nets is a mirror line, +θ and −θ are
+    # the same interface. (Folding about any other axis would merge
+    # orientations that are not equivalent.)
+    mirrored = _u_is_mirror(f_net) and _u_is_mirror(s_net)
     f_max = int(max_area // f_net["area"])
     s_max = int(max_area // s_net["area"])
     if f_max < 1 or s_max < 1:
