@@ -77,12 +77,17 @@ passes `selected.a`. The orientation column is only a text label. Consequences:
   the angle difference and the area mismatch. Still open: user-chosen in-plane
   directions and a proper shear term. Keep the scalar `lattice_mismatch` unchanged: it is a
   golden MATLAB-parity function.
-- [ ] **Coincidence-lattice search** (Zur–McGill style): enumerate film and
+- [x] **Coincidence-lattice search** (Zur–McGill style): enumerate film and
   substrate supercells up to a maximum area across in-plane rotations. Rank the
   matches by strain, area and rotation, returning ε₁, ε₂, shear, the supercell
-  matrices and the rotation angle.
-- [ ] **Domain-matching mode** (m·a_f ≈ n·a_s, e.g. TiN/Si(001) 4:3) for
-  large-mismatch systems, as a 1D special case of the same search.
+  matrices and the rotation angle. Done in `calc/coincidence.py`: Hermite-normal-
+  form supercells, Gauss reduction, rotations folded by the nets' shared
+  symmetry (and mirror), multiples of a smaller match dropped, ranked by area
+  then strain, with the epitaxial relationship (film [uvw] ∥ substrate [uvw],
+  4-index for hexagonal axes). The shear is reported as the angle mismatch.
+- [x] **Domain-matching mode** (m·a_f ≈ n·a_s, e.g. TiN/Si(001) 4:3) for
+  large-mismatch systems, as a 1D special case of the same search. Covered by
+  the coincidence search (TiN/Si gives the 16:9 cube-on-cube match at +4.1 %).
 - [ ] Reference tests against published epitaxial relationships: GaN/c-sapphire
   30°, Fe/MgO 45°, cube-on-cube perovskites on STO/LSAT/LAO, Si(111)
   hexagonal net. Add invariant tests: identical lattices give zero strain;
@@ -321,3 +326,11 @@ cd frontend && npm run build
   (001)/(110), hexagonal and R-centred basal planes), the primitive-lattice
   area identity, and Fe/MgO (−3.7 %). The coincidence search is the next
   slice; until then GaN on c-plane sapphire reads −33 %, and the card says so.
+- 2026-11-08 — **G1 search: coincidence lattices.** `calc/coincidence.py`
+  (`coincidence_search`), `POST /api/epitaxy/coincidence`, registry op, and a
+  "Search supercells" table on the Substrates tab's orientation-aware card.
+  Tested against Fe/MgO (1×1, −3.7 %, Fe[100] ∥ MgO[110]), GaN/c-sapphire
+  (√3×√3 R30° at +16 % within a 17 % tolerance) and TiN/Si (16:9 cube-on-cube,
+  +4.1 %), plus ranking, limits, duplicate and mirror folding. Still open in G1:
+  the reference tests against more published relationships, and the Epitaxy
+  workshop UI (D1).

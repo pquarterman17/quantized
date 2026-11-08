@@ -910,6 +910,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/epitaxy/coincidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Coincidence
+         * @description Coincidence-lattice (supercell) matches of a film plane on a substrate plane.
+         */
+        post: operations["coincidence_api_epitaxy_coincidence_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/epitaxy/net-mismatch": {
         parameters: {
             query?: never;
@@ -6572,6 +6592,31 @@ export interface components {
             tc?: number | null;
             /** Xi0 */
             xi0?: number | null;
+        };
+        /** CoincidenceRequest */
+        CoincidenceRequest: {
+            film: components["schemas"]["PlaneRequest"];
+            /**
+             * Max Angle
+             * @default 1
+             */
+            max_angle?: number;
+            /**
+             * Max Area
+             * @default 200
+             */
+            max_area?: number;
+            /**
+             * Max Results
+             * @default 10
+             */
+            max_results?: number;
+            /**
+             * Max Strain
+             * @default 0.05
+             */
+            max_strain?: number;
+            substrate: components["schemas"]["PlaneRequest"];
         };
         /** CompareEquation */
         CompareEquation: {
@@ -13094,6 +13139,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TafelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    coincidence_api_epitaxy_coincidence_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoincidenceRequest"];
             };
         };
         responses: {
