@@ -203,7 +203,7 @@ def coincidence_search(
     if not (0 <= max_angle <= 10):
         raise ValueError("max_angle must be in [0, 10] degrees")
     if not (0 < max_area <= 2000):
-        raise ValueError("max_area must be in (0, 2000] Å²")
+        raise ValueError("max_area must be in (0, 2000] A^2")
     if not (1 <= max_results <= 100):
         raise ValueError("max_results must be in 1..100")
     nets = []
