@@ -23,6 +23,7 @@ export default function FilmStackTab() {
           <Field label="CTE" ariaLabel="substrate CTE" value={s.subCte} onChange={s.setSubCte} unit="10⁻⁶/K" width={52} />
           <Field label="T_growth" ariaLabel="growth temperature" value={s.growthT} onChange={s.setGrowthT} unit="K" width={56} />
           <Field label="λ" ariaLabel="wavelength" value={s.wavelength} onChange={s.setWavelength} unit="Å" width={64} />
+          <Field label="RSM (H 0 L)" ariaLabel="RSM reflection" value={s.rsmHL} onChange={s.setRsmHL} numeric={false} width={48} />
         </div>
       </Card>
 

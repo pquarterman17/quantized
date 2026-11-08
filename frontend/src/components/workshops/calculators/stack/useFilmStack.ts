@@ -37,6 +37,15 @@ function num(text: string, label: string): number {
   return v;
 }
 
+/** "1 3" or "1,3" → [H, L]; blank skips the RSM prediction. */
+export function parseHL(text: string): number[] {
+  const parts = text.trim().split(/[\s,]+/).filter(Boolean).map(Number);
+  if (parts.length !== 2 || parts.some((n) => !Number.isInteger(n)) || parts[1] === 0) {
+    throw new Error(`RSM reflection: enter "H L" with integer H and non-zero L (got "${text}")`);
+  }
+  return parts;
+}
+
 export function useFilmStack() {
   const [subA, setSubA] = useState("3.905");
   const [subCte, setSubCte] = useState("11");
@@ -45,6 +54,7 @@ export function useFilmStack() {
   ]);
   const [growthT, setGrowthT] = useState("973");
   const [wavelength, setWavelength] = useState("1.5406");
+  const [rsmHL, setRsmHL] = useState("1 3");
   const [result, setResult] = useState<StackResult | null>(null);
   const card = useCard("Film stack");
 
@@ -81,7 +91,7 @@ export function useFilmStack() {
   const run = (): void => {
     void card.run(
       "Film stack",
-      `substrate a=${subA} Å, CTE=${subCte}; layers=${JSON.stringify(layers.map(({ id: _id, ...l }) => l))}; T_growth=${growthT} K; λ=${wavelength} Å`,
+      `substrate a=${subA} Å, CTE=${subCte}; layers=${JSON.stringify(layers.map(({ id: _id, ...l }) => l))}; T_growth=${growthT} K; λ=${wavelength} Å; RSM (H 0 L)=${rsmHL || "none"}`,
       async (isCurrent) => {
         if (layers.length === 0) throw new Error("add at least one layer");
         const body = {
@@ -101,6 +111,7 @@ export function useFilmStack() {
           room_temperature: 300,
           wavelength: num(wavelength, "λ"),
           max_order: 4,
+          ...(rsmHL.trim() ? { rsm_reflection: parseHL(rsmHL) } : {}),
         };
         const r = await evaluateStack(body);
         if (isCurrent()) setResult(r);
@@ -115,6 +126,7 @@ export function useFilmStack() {
   return {
     subA, setSubA: edit(setSubA), subCte, setSubCte: edit(setSubCte),
     growthT, setGrowthT: edit(setGrowthT), wavelength, setWavelength: edit(setWavelength),
+    rsmHL, setRsmHL: edit(setRsmHL),
     layers, updateLayer, addLayer, addPhase, removeLayer, moveLayer,
     run, card, shown,
   };

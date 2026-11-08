@@ -12,6 +12,15 @@ export interface StackLayerIn {
   cte: number;
 }
 
+export interface RsmPoint {
+  qx: number;
+  qz: number;
+  two_theta: number | null;
+  tilt: number | null;
+  omega_gi: number | null;
+  omega_ge: number | null;
+}
+
 export interface StackLayerOut {
   name: string;
   template_a: number;
@@ -28,11 +37,14 @@ export interface StackLayerOut {
   two_theta_00l: (number | null)[];
   eps_thermal: number;
   eps_parallel_total: number;
+  rsm: RsmPoint | null;
 }
 
 export interface StackResult {
   layers: StackLayerOut[];
   warnings: string[];
+  substrate_rsm: RsmPoint | null;
+  rsm_reflection: number[] | null;
 }
 
 export function evaluateStack(body: {
@@ -42,6 +54,7 @@ export function evaluateStack(body: {
   room_temperature: number;
   wavelength: number;
   max_order: number;
+  rsm_reflection?: number[];
 }): Promise<StackResult> {
   return postJSON("/api/epitaxy/stack", body);
 }

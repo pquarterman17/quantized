@@ -11066,6 +11066,8 @@ export interface components {
              * @default 300
              */
             room_temperature?: number;
+            /** Rsm Reflection */
+            rsm_reflection?: number[] | null;
             substrate: components["schemas"]["SubstrateIn"];
             /**
              * Wavelength
@@ -11289,6 +11291,8 @@ export interface components {
         SubstrateIn: {
             /** A */
             a: number;
+            /** C */
+            c?: number | null;
             /**
              * Cte
              * @default 0

@@ -9,6 +9,7 @@ import { evaluateStack, type StackResult } from "../../../../lib/api/filmStack";
 import { getPhases } from "../../../../lib/api/reference";
 import { resetPhaseCacheForTests } from "../../structures/PhasePresetPicker";
 import FilmStackTab from "./FilmStackTab";
+import { parseHL } from "./useFilmStack";
 
 vi.mock("../../../../lib/api/filmStack", () => ({ evaluateStack: vi.fn() }));
 vi.mock("../../../../lib/api/reference", () => ({ getPhases: vi.fn() }));
@@ -19,10 +20,13 @@ const RESULT: StackResult = {
       name: "LSMO", template_a: 3.905, mismatch_pct: -0.7426, h_c_nm: 50.4, h_c_kind: "finite",
       thickness_nm: 20, state: "coherent", in_plane_a: 3.905, eps_parallel: 0.00748, eps_perp: -0.00737,
       c_relaxed: 3.876, c_strained: 3.8474, two_theta_00l: [23.099, 47.209, null, null],
-      eps_thermal: -0.000337, eps_parallel_total: 0.00714,
+      eps_thermal: 0.000337, eps_parallel_total: 0.00782,
+      rsm: { qx: 1.609, qz: 4.8993, two_theta: 78.4248, tilt: 18.1812, omega_gi: 21.0312, omega_ge: 57.3936 },
     },
   ],
   warnings: ["BTO: 100 nm exceeds h_c (13.6 nm); treated as fully relaxed"],
+  substrate_rsm: { qx: 1.609, qz: 4.827, two_theta: 77.187, tilt: 18.4349, omega_gi: 20.1585, omega_ge: 57.0284 },
+  rsm_reflection: [1, 3],
 };
 
 beforeEach(() => {
@@ -50,12 +54,27 @@ describe("FilmStackTab", () => {
       room_temperature: 300,
       wavelength: 1.5406,
       max_order: 4,
+      rsm_reflection: [1, 3],
     });
     const table = screen.getByRole("table", { name: "stack results" });
     expect(table.textContent).toContain("coherent");
     expect(table.textContent).toContain("+0.748 %");
     expect(table.textContent).toContain("23.099, 47.209, –, –");
     expect(screen.getByRole("note")).toHaveTextContent(/BTO: 100 nm exceeds h_c/);
+    const rsm = screen.getByRole("table", { name: "predicted rsm peaks" });
+    expect(screen.getByText("Predicted RSM peaks, (1 0 3)")).toBeInTheDocument();
+    expect(rsm.textContent).toContain("substrate");
+    expect(rsm.textContent).toContain("77.187");
+  });
+
+  it("skips the RSM prediction when the reflection is blank", async () => {
+    vi.mocked(evaluateStack).mockResolvedValue({ ...RESULT, substrate_rsm: null, rsm_reflection: null });
+    render(<FilmStackTab />);
+    fireEvent.change(screen.getByLabelText("RSM reflection"), { target: { value: "" } });
+    fireEvent.click(screen.getByText("Evaluate stack"));
+    await screen.findByRole("table", { name: "stack results" });
+    expect(vi.mocked(evaluateStack).mock.calls[0][0]).not.toHaveProperty("rsm_reflection");
+    expect(screen.queryByRole("table", { name: "predicted rsm peaks" })).not.toBeInTheDocument();
   });
 
   it("adds a layer from a phase (with its c), reorders and removes layers", async () => {
@@ -87,5 +106,14 @@ describe("FilmStackTab", () => {
     await screen.findByRole("table", { name: "stack results" });
     fireEvent.change(screen.getByLabelText("layer 1 thickness"), { target: { value: "60" } });
     expect(screen.queryByRole("table", { name: "stack results" })).not.toBeInTheDocument();
+  });
+});
+
+describe("parseHL", () => {
+  it("parses H L and refuses L = 0 or junk", () => {
+    expect(parseHL("1 3")).toEqual([1, 3]);
+    expect(parseHL("-1,2")).toEqual([-1, 2]);
+    expect(() => parseHL("1 0")).toThrow(/non-zero L/);
+    expect(() => parseHL("1")).toThrow(/H L/);
   });
 });

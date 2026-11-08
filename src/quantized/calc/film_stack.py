@@ -35,6 +35,15 @@ in yet. Elasticity is isotropic, through a Poisson ratio ``nu`` per layer
    the MATLAB-parity card, reports ``(α_f − α_s)·ΔT`` and calls a positive value
    tensile; that is the opposite physical sign and is left as ported.)
 
+**Reciprocal-space map (optional).** With ``rsm_reflection = (H, L)`` each
+layer and the substrate also get the predicted peak of the asymmetric
+reflection (H 0 L) in the coplanar geometry, using the same convention as
+:mod:`quantized.calc.rsm` (``Q = 2π/d``): ``Qx = 2πH/a∥`` (``a∥`` the
+as-grown in-plane parameter, so a coherent layer shares the substrate's Qx)
+and ``Qz = 2πL/c``. Also ``2θ`` from ``|Q|``, the tilt ``ψ = atan(Qx/Qz)``, and
+the incidence angle ``ω = θ − ψ`` (grazing incidence) or ``θ + ψ`` (grazing
+exit), each ``None`` when it falls outside ``0 < ω < 2θ``.
+
 **Critical thickness caveat.** ``h_c`` is the MATLAB-parity Matthews–Blakeslee
 form, which takes 60° dislocations with ``b = a/√2`` (FCC-type slip). Perovskites
 and other lattices relax on different slip systems, so treat ``h_c`` as an
@@ -50,7 +59,7 @@ from typing import Any
 from quantized.calc.substrates import critical_thickness
 from quantized.calc.xray import bragg_two_theta
 
-__all__ = ["evaluate_stack"]
+__all__ = ["evaluate_stack", "rsm_point"]
 
 _MAX_LAYERS = 20
 
@@ -81,6 +90,45 @@ def _two_thetas(c: float, wavelength: float, max_order: int) -> list[float | Non
     return out
 
 
+def rsm_point(
+    a_parallel: float,
+    c: float,
+    h: int,
+    l: int,  # noqa: E741 -- Miller index
+    wavelength: float,
+) -> dict[str, float | None]:
+    """Predicted (H 0 L) peak: ``qx``, ``qz`` (Å⁻¹, Q = 2π/d), ``two_theta``,
+    ``tilt`` (ψ), ``omega_gi`` (θ − ψ) and ``omega_ge`` (θ + ψ), in degrees.
+    Angles are ``None`` when the reflection is out of reach at ``wavelength``
+    or the geometry puts ω outside (0, 2θ)."""
+    if not (math.isfinite(a_parallel) and a_parallel > 0 and math.isfinite(c) and c > 0):
+        raise ValueError("lattice parameters must be positive and finite")
+    if l == 0:
+        raise ValueError("L must be non-zero for a coplanar reflection")
+    qx = 2 * math.pi * h / a_parallel
+    qz = 2 * math.pi * l / c
+    q = math.hypot(qx, qz)
+    out: dict[str, float | None] = {
+        "qx": qx,
+        "qz": qz,
+        "two_theta": None,
+        "tilt": None,
+        "omega_gi": None,
+        "omega_ge": None,
+    }
+    s = wavelength * q / (4 * math.pi)
+    if s > 1:
+        return out
+    theta = math.degrees(math.asin(s))
+    tilt = math.degrees(math.atan2(abs(qx), abs(qz)))
+    out["two_theta"] = 2 * theta
+    out["tilt"] = tilt
+    gi, ge = theta - tilt, theta + tilt
+    out["omega_gi"] = gi if 0 < gi < 2 * theta else None
+    out["omega_ge"] = ge if 0 < ge < 2 * theta else None
+    return out
+
+
 def evaluate_stack(
     substrate: Mapping[str, Any],
     layers: Sequence[Mapping[str, Any]],
@@ -89,6 +137,7 @@ def evaluate_stack(
     room_temperature: float = 300.0,
     wavelength: float = 1.5406,
     max_order: int = 4,
+    rsm_reflection: Sequence[int] | None = None,
 ) -> dict[str, Any]:
     """Layer-by-layer strain of a cube-on-cube stack (see the module docstring).
 
@@ -96,7 +145,9 @@ def evaluate_stack(
     ``layers`` (bottom to top): ``a`` (Å), optional ``c`` (Å, default ``a``),
     ``thickness`` (nm), optional ``nu`` (default 0.3), ``cte`` (1e-6/K,
     default 0), ``name``. Temperatures in K, ``wavelength`` in Å; ``max_order``
-    is the highest (00L) order reported.
+    is the highest (00L) order reported. ``rsm_reflection = (H, L)`` adds the
+    predicted (H 0 L) reciprocal-space peak per layer (``rsm``) and for the
+    substrate (``substrate_rsm``; optional substrate ``c``, default ``a``).
 
     Returns ``layers``, one record per layer with ``template_a``, ``mismatch``
     (f), ``h_c_nm`` (``None`` when the film relaxes at once, ``inf`` when
@@ -119,7 +170,13 @@ def evaluate_stack(
     ):
         if not (math.isfinite(t) and t > 0):
             raise ValueError(f"{name} must be positive and finite (K)")
+    if rsm_reflection is not None:
+        if len(rsm_reflection) != 2 or any(int(x) != x for x in rsm_reflection):
+            raise ValueError("rsm_reflection must be two integers (H, L)")
+        if abs(rsm_reflection[0]) > 10 or not (1 <= abs(rsm_reflection[1]) <= 10):
+            raise ValueError("rsm_reflection needs |H| <= 10 and 1 <= |L| <= 10")
     a_sub = _pos(substrate, "a", "substrate")
+    c_sub = _pos(substrate, "c", "substrate") if substrate.get("c") is not None else a_sub
     cte_sub = _num(substrate, "cte", "substrate", 0.0) * 1e-6
     d_t = room_temperature - growth_temperature
 
@@ -178,11 +235,24 @@ def evaluate_stack(
                 "two_theta_00l": _two_thetas(c, wavelength, max_order),
                 "eps_thermal": eps_th,
                 "eps_parallel_total": eps_par + eps_th,
+                "rsm": (
+                    rsm_point(
+                        in_plane, c, int(rsm_reflection[0]), int(rsm_reflection[1]), wavelength
+                    )
+                    if rsm_reflection is not None
+                    else None
+                ),
             }
         )
         template = in_plane
     return {
         "layers": records,
+        "substrate_rsm": (
+            rsm_point(a_sub, c_sub, int(rsm_reflection[0]), int(rsm_reflection[1]), wavelength)
+            if rsm_reflection is not None
+            else None
+        ),
+        "rsm_reflection": list(rsm_reflection) if rsm_reflection is not None else None,
         "warnings": warnings,
         "substrate_a": a_sub,
         "wavelength": wavelength,
