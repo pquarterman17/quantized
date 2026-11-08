@@ -82,8 +82,9 @@ export default function FilmStackTab() {
         <div className="qzk-ds-meta" style={{ marginTop: 6 }}>
           The first row sits on the substrate. Blank c means c = a. Each layer matches the in-plane lattice
           of the one below as grown (cube-on-cube, scalar a); a layer thicker than its Matthews–Blakeslee h_c
-          is shown fully relaxed, a simple limit. Elasticity is isotropic (ν). CTE in 10⁻⁶/K; the thermal
-          strain is for cooling to 300 K.
+          is shown fully relaxed, a simple limit. h_c uses 60° dislocations with b = a/√2 (FCC-type slip), so
+          for perovskites read it as an order of magnitude. Elasticity is isotropic (ν). CTE in 10⁻⁶/K; the
+          thermal strain is the clamped film's on cooling to 300 K (a higher-CTE layer ends up tensile).
         </div>
         {resultLine(s.card.result)}
       </Card>

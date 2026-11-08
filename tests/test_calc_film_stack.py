@@ -64,8 +64,21 @@ def test_coherent_layer_passes_the_substrate_lattice_up() -> None:
 
 def test_thermal_strain_uses_the_substrate_cte_and_cool_down() -> None:
     lay = evaluate_stack(STO, [LSMO], growth_temperature=1023.0)["layers"][0]
-    assert lay["eps_thermal"] == pytest.approx((11.5 - 11.0) * 1e-6 * (300 - 1023))
+    # Clamped film: (α_sub − α_film)·ΔT. LSMO expands more than STO, so cooling
+    # leaves it in tension (positive).
+    assert lay["eps_thermal"] == pytest.approx((11.0 - 11.5) * 1e-6 * (300 - 1023))
+    assert lay["eps_thermal"] > 0
     assert lay["eps_parallel_total"] == pytest.approx(lay["eps_parallel"] + lay["eps_thermal"])
+
+
+def test_metal_on_silicon_is_tensile_after_cooling() -> None:
+    # Textbook case: a high-CTE metal (Al, ~23e-6/K) on Si (~2.6e-6/K) cooled
+    # from deposition is in biaxial tension.
+    si = {"a": 5.431, "cte": 2.6}
+    al = {"name": "Al", "a": 5.431, "thickness": 100, "cte": 23.0}
+    lay = evaluate_stack(si, [al], growth_temperature=600.0)["layers"][0]
+    assert lay["eps_thermal"] == pytest.approx((2.6 - 23.0) * 1e-6 * (300 - 600))
+    assert lay["eps_thermal"] > 0
 
 
 def test_matched_layer_has_infinite_critical_thickness() -> None:

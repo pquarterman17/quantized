@@ -26,10 +26,19 @@ in yet. Elasticity is isotropic, through a Poisson ratio ``nu`` per layer
    simple limit; real films relax partially, and the result says so.
 4. ``ε⊥ = −2ν/(1−ν)·ε∥`` and the strained ``c = c₀(1 + ε⊥)``.
 5. The predicted symmetric (00L) Bragg angles from ``d = c/L``.
-6. Cool-down from the growth temperature: ``ε_th = (α_layer − α_sub)(T_room −
-   T_growth)`` (the substrate sets the in-plane thermal contraction of a thin
-   stack), reported separately and as ``ε∥ + ε_th``. ``ε_th`` is not fed back
-   into the coherence decision.
+6. Cool-down from the growth temperature: the clamped film's in-plane strain
+   is ``ε_th = (α_sub − α_layer)(T_room − T_growth)``: a layer that expands more
+   than its substrate ends up in tension after cooling (positive), as metal
+   films on Si do. The substrate sets the in-plane contraction of a thin stack.
+   ``ε_th`` is reported separately and as ``ε∥ + ε_th``; it is not fed back
+   into the coherence decision. (Note: ``calc.thin_film.thermal_mismatch_strain``,
+   the MATLAB-parity card, reports ``(α_f − α_s)·ΔT`` and calls a positive value
+   tensile; that is the opposite physical sign and is left as ported.)
+
+**Critical thickness caveat.** ``h_c`` is the MATLAB-parity Matthews–Blakeslee
+form, which takes 60° dislocations with ``b = a/√2`` (FCC-type slip). Perovskites
+and other lattices relax on different slip systems, so treat ``h_c`` as an
+order-of-magnitude guide there.
 """
 
 from __future__ import annotations
@@ -147,7 +156,9 @@ def evaluate_stack(
                 )
         eps_perp = -2 * nu / (1 - nu) * eps_par
         c = c0 * (1 + eps_perp)
-        eps_th = (cte - cte_sub) * d_t
+        # The film is clamped to the substrate: its strain is the substrate's
+        # free contraction minus its own, (α_sub − α_layer)·ΔT (ΔT < 0 on cooling).
+        eps_th = (cte_sub - cte) * d_t
         records.append(
             {
                 "name": label,
