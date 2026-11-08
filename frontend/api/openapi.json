@@ -8186,6 +8186,22 @@
         "title": "NestedGroupsRequest",
         "type": "object"
       },
+      "NetMismatchRequest": {
+        "properties": {
+          "film": {
+            "$ref": "#/components/schemas/PlaneRequest"
+          },
+          "substrate": {
+            "$ref": "#/components/schemas/PlaneRequest"
+          }
+        },
+        "required": [
+          "film",
+          "substrate"
+        ],
+        "title": "NetMismatchRequest",
+        "type": "object"
+      },
       "NeutronCalcRequest": {
         "properties": {
           "quantity": {
@@ -10040,6 +10056,80 @@
           "values"
         ],
         "title": "PercentRequest",
+        "type": "object"
+      },
+      "PlaneRequest": {
+        "properties": {
+          "a": {
+            "title": "A",
+            "type": "number"
+          },
+          "alpha": {
+            "default": 90.0,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "b": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "B"
+          },
+          "beta": {
+            "default": 90.0,
+            "title": "Beta",
+            "type": "number"
+          },
+          "c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "C"
+          },
+          "centering": {
+            "default": "P",
+            "enum": [
+              "P",
+              "F",
+              "I",
+              "A",
+              "B",
+              "C",
+              "R"
+            ],
+            "title": "Centering",
+            "type": "string"
+          },
+          "gamma": {
+            "default": 90.0,
+            "title": "Gamma",
+            "type": "number"
+          },
+          "hkl": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "title": "Hkl",
+            "type": "array"
+          }
+        },
+        "required": [
+          "a",
+          "hkl"
+        ],
+        "title": "PlaneRequest",
         "type": "object"
       },
       "PlaneSpacingsRequest": {
@@ -17198,6 +17288,94 @@
         "summary": "Tafel Slope",
         "tags": [
           "electrochemistry"
+        ]
+      }
+    },
+    "/api/epitaxy/net-mismatch": {
+      "post": {
+        "description": "Film-on-substrate mismatch with the two reduced nets aligned.",
+        "operationId": "plane_net_mismatch_api_epitaxy_net_mismatch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NetMismatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Plane Net Mismatch Api Epitaxy Net Mismatch Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Plane Net Mismatch",
+        "tags": [
+          "epitaxy"
+        ]
+      }
+    },
+    "/api/epitaxy/surface-net": {
+      "post": {
+        "description": "Reduced 2D lattice (u, v, gamma, area) of the plane (hkl).",
+        "operationId": "plane_net_api_epitaxy_surface_net_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Plane Net Api Epitaxy Surface Net Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Plane Net",
+        "tags": [
+          "epitaxy"
         ]
       }
     },

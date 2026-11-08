@@ -8,6 +8,13 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- Calculators ▸ Substrates has an orientation-aware mismatch card. Pick a
+  film phase and a substrate phase with their planes (hkl or hkil); it
+  compares their in-plane lattices, Bravais centering included, along both
+  axes, with the area and angle mismatch. Si(100) and Si(111) now differ, and
+  Fe(001) on MgO(001) gives the rotated −3.7 % match. Supercell (coincidence)
+  matches are not searched yet. Also at `POST /api/epitaxy/surface-net` and
+  `POST /api/epitaxy/net-mismatch`.
 - Calculators ▸ Crystal and Calculators ▸ Substrates can now fill a lattice
   from a built-in table of 52 reference phases (substrates, metals, oxides,
   perovskites, semiconductors and others), ported from the MATLAB toolbox.

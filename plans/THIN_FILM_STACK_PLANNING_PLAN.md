@@ -65,12 +65,17 @@ passes `selected.a`. The orientation column is only a text label. Consequences:
 
 #### Required work
 
-- [ ] **Surface-net calculator** (pure numpy, `calc/`): from (a, b, c, α, β, γ)
+- [x] **Surface-net calculator** (pure numpy, `calc/`): from (a, b, c, α, β, γ)
   and (hkl) or (hkil), return the reduced 2D in-plane cell: |u|, |v|, angle,
-  area, and the 3D directions they correspond to.
-- [ ] **Orientation-aware mismatch**: from a film plane and direction and a
+  area, and the 3D directions they correspond to. Done in `calc/surface_net.py`,
+  Bravais centering included (Si(100) is a 3.840 Å square, not 5.431 Å).
+- [~] **Orientation-aware mismatch**: from a film plane and direction and a
   substrate plane and direction, return ε along both in-plane axes, the shear,
-  and the area mismatch. Keep the scalar `lattice_mismatch` unchanged: it is a
+  and the area mismatch. First version done (`net_mismatch`, the Substrates
+  tab's orientation-aware card): the two reduced nets are compared with their
+  axes aligned (or swapped, whichever fits better), giving f along both axes,
+  the angle difference and the area mismatch. Still open: user-chosen in-plane
+  directions and a proper shear term. Keep the scalar `lattice_mismatch` unchanged: it is a
   golden MATLAB-parity function.
 - [ ] **Coincidence-lattice search** (Zur–McGill style): enumerate film and
   substrate supercells up to a maximum area across in-plane rotations. Rank the
@@ -308,3 +313,11 @@ cd frontend && npm run build
   `calc/phase_database.py`, `GET /api/reference/phases`, and a reference-phase
   picker on the Crystal tab (whole cell) and the Substrates tab (film a).
   Structure tests added; one golden freeze case added (fixture pending).
+- 2026-11-08 — **G1 core: surface nets.** `calc/surface_net.py`
+  (`surface_net`, `net_mismatch`), `/api/epitaxy/{surface-net,net-mismatch}`,
+  registry domain `epitaxy`, and an orientation-aware mismatch card on the
+  Substrates tab (film and substrate from the reference phases, which carry
+  the centering). Tested against textbook nets (FCC (100)/(111)/(110), BCC
+  (001)/(110), hexagonal and R-centred basal planes), the primitive-lattice
+  area identity, and Fe/MgO (−3.7 %). The coincidence search is the next
+  slice; until then GaN on c-plane sapphire reads −33 %, and the card says so.

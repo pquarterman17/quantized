@@ -910,6 +910,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/epitaxy/net-mismatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Plane Net Mismatch
+         * @description Film-on-substrate mismatch with the two reduced nets aligned.
+         */
+        post: operations["plane_net_mismatch_api_epitaxy_net_mismatch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/epitaxy/surface-net": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Plane Net
+         * @description Reduced 2D lattice (u, v, gamma, area) of the plane (hkl).
+         */
+        post: operations["plane_net_api_epitaxy_surface_net_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/export/categorical-figure": {
         parameters: {
             query?: never;
@@ -8803,6 +8843,11 @@ export interface components {
             /** Groups */
             groups: number[][][];
         };
+        /** NetMismatchRequest */
+        NetMismatchRequest: {
+            film: components["schemas"]["PlaneRequest"];
+            substrate: components["schemas"]["PlaneRequest"];
+        };
         /** NeutronCalcRequest */
         NeutronCalcRequest: {
             /** Quantity */
@@ -9459,6 +9504,38 @@ export interface components {
             elements: string[];
             /** Values */
             values: number[];
+        };
+        /** PlaneRequest */
+        PlaneRequest: {
+            /** A */
+            a: number;
+            /**
+             * Alpha
+             * @default 90
+             */
+            alpha?: number;
+            /** B */
+            b?: number | null;
+            /**
+             * Beta
+             * @default 90
+             */
+            beta?: number;
+            /** C */
+            c?: number | null;
+            /**
+             * Centering
+             * @default P
+             * @enum {string}
+             */
+            centering?: "P" | "F" | "I" | "A" | "B" | "C" | "R";
+            /**
+             * Gamma
+             * @default 90
+             */
+            gamma?: number;
+            /** Hkl */
+            hkl: number[];
         };
         /** PlaneSpacingsRequest */
         PlaneSpacingsRequest: {
@@ -13017,6 +13094,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TafelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    plane_net_mismatch_api_epitaxy_net_mismatch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NetMismatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    plane_net_api_epitaxy_surface_net_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaneRequest"];
             };
         };
         responses: {
