@@ -179,24 +179,33 @@ peaks to phases against `phaseDatabase`), which BosonPlotter's peak tools use.
 
 Each card stands alone. Missing:
 
-- [ ] **Stack definition**: an ordered list of layers (material, orientation,
+- [x] **Stack definition**: an ordered list of layers (material, orientation,
   thickness, growth temperature) on a substrate. The reflectivity `LayerTable`
-  is a UI precedent.
-- [ ] **Per-interface evaluation**: mismatch against the layer below, using
+  is a UI precedent. Done as the Calculators ▸ Film stack tab (layers can be
+  added from the reference phases, reordered and removed). Orientation is not
+  per layer yet: the model is cube-on-cube on the scalar a.
+- [x] **Per-interface evaluation**: mismatch against the layer below, using
   either a pseudomorphic or a relaxed in-plane reference; a critical-thickness
   check for each layer, flagged when thickness > h_c; accumulated strain.
-- [ ] **Elastic response**: ε⊥ from ε∥ using the elastic constants for the
+  Done in `calc/film_stack.py`: the template is the layer below as grown, and a
+  layer beyond h_c is taken as fully relaxed (a stated limit; partial
+  relaxation is not modelled).
+- [~] **Elastic response**: ε⊥ from ε∥ using the elastic constants for the
   orientation, e.g. −2·C12/C11·ε∥ for cubic (001), with ν as the fallback.
-- [ ] **Thermal step**: strain from cooling from growth temperature to room
+  The ν fallback is done (per layer); elastic constants wait on D4.
+- [~] **Thermal step**: strain from cooling from growth temperature to room
   temperature for each layer, plus total-stack curvature and stress (Stoney).
+  The per-layer thermal strain is done; stack curvature/stress needs moduli
+  (D4).
 - [ ] **Further critical-thickness models** as labeled extensions: People–Bean,
   and Matthews–Blakeslee with a configurable slip system and Burgers vector.
   The MATLAB-parity `critical_thickness` keeps its fixed 60°, `a/√2`
   assumptions, which do not hold for wurtzite basal slip or perovskite a⟨100⟩
   dislocations.
-- [ ] **Predicted diffraction**: for each strained layer, the (00l) 2θ and the
+- [~] **Predicted diffraction**: for each strained layer, the (00l) 2θ and the
   asymmetric-RSM (Qx, Qz) positions, which can be overlaid in the RSM workshop
-  and compared with `rsm_strain`. This links planning to measurement.
+  and compared with `rsm_strain`. This links planning to measurement. The
+  (00L) 2θ for L = 1-4 is done; RSM positions and the overlay are open.
 - [ ] **Hand-off to Reflectivity**: send the planned thicknesses and SLDs (via
   `sld_formula`) to seed a Parratt model, reusing the existing
   `reflectivitySeed` bridge.
@@ -334,3 +343,9 @@ cd frontend && npm run build
   +4.1 %), plus ranking, limits, duplicate and mirror folding. Still open in G1:
   the reference tests against more published relationships, and the Epitaxy
   workshop UI (D1).
+- 2026-11-08 — **G4 slice 1: film stack.** `calc/film_stack.py`
+  (`evaluate_stack`), `POST /api/epitaxy/stack`, registry op, and the
+  Calculators ▸ Film stack tab. Per layer: mismatch to the layer below as
+  grown, Matthews–Blakeslee h_c, coherent vs fully relaxed, ε∥, ε⊥ (ν), strained
+  c, (00L) 2θ and the cool-down thermal strain. Checked against the golden
+  pieces it composes and the published LSMO/SrTiO3 c ≈ 3.85 Å.

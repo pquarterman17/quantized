@@ -10,6 +10,7 @@ import DiffusionTab from "./DiffusionTab";
 import ElectricalTab from "./ElectricalTab";
 import ElectrochemistryTab from "./ElectrochemistryTab";
 import ElementsTab from "./ElementsTab";
+import FilmStackTab from "./stack/FilmStackTab";
 import FavoritesTab from "./FavoritesTab";
 import HistoryTab from "./HistoryTab";
 import HomeTab from "./HomeTab";
@@ -76,6 +77,7 @@ export const TAB_GROUPS: { group: string; tabs: { value: CalcTab; label: string 
       { value: "semiconductor", label: "Semiconductor" },
       { value: "superconductor", label: "Superconductor" },
       { value: "thinfilm", label: "Thin Film" },
+      { value: "filmstack", label: "Film stack" },
     ],
   },
   {
@@ -130,6 +132,7 @@ export default function CalculatorsContent() {
       {c.tab === "semiconductor" && <SemiconductorTab />}
       {c.tab === "superconductor" && <SuperconductorTab />}
       {c.tab === "thinfilm" && <ThinFilmTab />}
+      {c.tab === "filmstack" && <FilmStackTab />}
       {c.tab === "magnetic" && <MagneticTab />}
     </>
   );

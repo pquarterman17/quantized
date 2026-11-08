@@ -53,9 +53,9 @@ describe("CalculatorsPanel default size", () => {
 });
 
 describe("CalculatorsContent tab inventory", () => {
-  it("covers all 20 calculator domains across the 8 domain groups", () => {
+  it("covers all 21 calculator domains across the 8 domain groups", () => {
     const total = TAB_GROUPS.reduce((n, g) => n + g.tabs.length, 0);
-    expect(total).toBe(20);
+    expect(total).toBe(21);
   });
 
   it("includes every domain group Home through Electrochemistry, in order", () => {

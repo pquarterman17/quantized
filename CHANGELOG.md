@@ -8,6 +8,12 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- Calculators ▸ Film stack: build a layer stack on a substrate (add layers by
+  hand or from the reference phases, reorder, remove) and get, per layer, the
+  mismatch to the layer below, the Matthews–Blakeslee critical thickness,
+  whether it stays coherent, the in- and out-of-plane strain, the strained c
+  with its (00L) 2θ, and the cool-down thermal strain. Cube-on-cube stacks
+  with a Poisson ratio per layer for now. Also at `POST /api/epitaxy/stack`.
 - The orientation-aware mismatch card can now search supercells: it lists
   coincidence-lattice matches of the film plane on the substrate plane within
   a chosen strain and area, each with the cell counts, the strain along both

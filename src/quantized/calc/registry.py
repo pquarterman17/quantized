@@ -41,6 +41,7 @@ from quantized.calc import (
     electrical,
     electrochemistry,
     epitaxial_strain,
+    film_stack,
     magnetic,
     optics,
     semiconductor,
@@ -122,6 +123,7 @@ _OPS: list[CalcOp] = [
     *_ops("crystal", epitaxial_strain, ["tetragonal_distortion", "strain_from_poisson"]),
     *_ops("epitaxy", surface_net, ["surface_net", "net_mismatch"]),
     *_ops("epitaxy", coincidence, ["coincidence_search"]),
+    *_ops("epitaxy", film_stack, ["evaluate_stack"]),
     *_ops(
         "composition",
         composition,
