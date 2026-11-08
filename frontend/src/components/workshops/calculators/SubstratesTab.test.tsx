@@ -130,7 +130,7 @@ describe("SubstratesTab", () => {
     fireEvent.click(screen.getByText("Mismatch"));
     expect(await screen.findByText(/f = .* %/)).toBeInTheDocument();
 
-    await screen.findByRole("option", { name: /La0\.7Sr0\.3MnO3/ });
+    await screen.findAllByRole("option", { name: /La0\.7Sr0\.3MnO3/ });
     fireEvent.change(screen.getByLabelText("film phase"), { target: { value: "La0.7Sr0.3MnO3" } });
     expect(screen.getByLabelText("a_film")).toHaveValue("3.876");
     expect(screen.queryByText(/f = .* %/)).not.toBeInTheDocument();
@@ -139,7 +139,7 @@ describe("SubstratesTab", () => {
   it("warns that a non-cubic film phase's a may not be its in-plane repeat", async () => {
     render(<SubstratesTab />);
     fireEvent.click(await screen.findByText("SrTiO3(100)"));
-    await screen.findByRole("option", { name: /SrRuO3/ });
+    await screen.findAllByRole("option", { name: /SrRuO3/ });
     const picker = screen.getByLabelText("film phase");
 
     fireEvent.change(picker, { target: { value: "La0.7Sr0.3MnO3" } });

@@ -38,6 +38,7 @@ from quantized.routes import (
     diffusion,
     electrical,
     electrochemistry,
+    epitaxy,
     export,
     export_figure_batch,
     export_figures,
@@ -247,6 +248,7 @@ def create_app(
     application.include_router(spectral.router)
     application.include_router(crystallography.router)
     application.include_router(composition.router)
+    application.include_router(epitaxy.router)
     application.include_router(structures.router)
     application.include_router(electrical.router)
     application.include_router(optics.router)

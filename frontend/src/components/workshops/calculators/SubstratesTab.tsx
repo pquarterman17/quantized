@@ -16,6 +16,7 @@ import {
 import { fmtNum } from "../../../lib/format";
 import { Card, dual, resultLine, useCard } from "./shared";
 import PhasePresetPicker from "../structures/PhasePresetPicker";
+import OrientedMismatchCard from "./OrientedMismatchCard";
 import type { PhaseInfo } from "../../../lib/api/reference";
 
 // Detail rows: [label, key, unit]. Lattice rows are skipped for amorphous.
@@ -274,6 +275,7 @@ export default function SubstratesTab() {
           )}
         </div>
       )}
+      <OrientedMismatchCard />
     </div>
   );
 }

@@ -46,6 +46,7 @@ from quantized.calc import (
     sld_formula,
     substrates,
     superconductor,
+    surface_net,
     thermal,
     thin_film,
     unit_convert,
@@ -118,6 +119,7 @@ _OPS: list[CalcOp] = [
         ],
     ),
     *_ops("crystal", epitaxial_strain, ["tetragonal_distortion", "strain_from_poisson"]),
+    *_ops("epitaxy", surface_net, ["surface_net", "net_mismatch"]),
     *_ops(
         "composition",
         composition,
