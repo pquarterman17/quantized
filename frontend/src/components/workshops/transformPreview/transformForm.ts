@@ -91,6 +91,7 @@ export function defaultCategory(data: DataStruct | undefined): string {
   let best = -1;
   let fewest = 21;
   for (let c = 0; c < n; c += 1) {
+    // levels-allowlist: a COUNT of distinct values, to choose a default category — not a level table.
     const distinct = new Set(data.values.map((row) => row[c]).filter(Number.isFinite)).size;
     if (distinct >= 2 && distinct < fewest) [best, fewest] = [c, distinct];
   }

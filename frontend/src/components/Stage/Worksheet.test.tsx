@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { statsDescriptive } from "../../lib/api/statsDescriptive";
@@ -592,15 +592,27 @@ describe("Worksheet column selection (item 6)", () => {
     expect(header(2).textContent).not.toMatch(/[▲▼]/); // no sort glyph either
   });
 
-  it("sort is still reachable via the column context menu (relocated, not removed)", () => {
+  it("the column menu's Sort ascending sorts the DATA (Origin), with a status, as one undo step", async () => {
     render(<Worksheet />);
     fireEvent.contextMenu(header(2)); // channel A
     fireEvent.click(screen.getByText("Sort ascending"));
-    // A's values are 10, 40, 11 -> ascending order is original rows [0, 2, 1].
-    expect(dataRow(0).textContent).toContain("10.0000");
+    // A's values are 10, 40, 11 -> ascending order is original rows [0, 2, 1],
+    // and the ROWS move: the dataset itself is reordered (lazy chunk).
+    await waitFor(() => expect(useApp.getState().status).toMatch(/sorted 3 rows by/));
+    expect(useApp.getState().datasets[0].data.values.map((r) => r[0])).toEqual([10, 11, 40]);
     expect(dataRow(1).textContent).toContain("11.0000");
-    expect(dataRow(2).textContent).toContain("40.0000");
+    expect(header(2).textContent).not.toMatch(/▲/); // not a view sort
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().datasets[0].data.values.map((r) => r[0])).toEqual([10, 40, 11]);
+  });
+
+  it("the view-only sort is labelled as such and leaves the data alone", () => {
+    render(<Worksheet />);
+    fireEvent.contextMenu(header(2));
+    fireEvent.click(screen.getByText("View sorted ascending (data unchanged)"));
+    expect(dataRow(1).textContent).toContain("11.0000");
     expect(header(2).textContent).toMatch(/▲/); // the sort-direction glyph shows
+    expect(useApp.getState().datasets[0].data.values.map((r) => r[0])).toEqual([10, 40, 11]);
   });
 
   it("right-click still opens the column context menu regardless of the click-selects change", () => {

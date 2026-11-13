@@ -24,8 +24,13 @@ export interface ColumnMenuContext {
   labelCount: number;
   setXKey: (col: number) => void;
   setYKeys: (cols: number[]) => void;
+  /** Sort the worksheet's DATA by the column (Origin's Sort; one undo step). */
   sortAsc: (col: number) => void;
   sortDesc: (col: number) => void;
+  /** The display-only sort: its glyph for this column ("", " ▲", " ▼"), and
+   *  the cycle ascending → descending → off. Rows and data are unchanged. */
+  viewSortMark: (col: number) => string;
+  toggleViewSort: (col: number) => void;
   onNewColumn: () => void;
   showStats: boolean;
   onToggleStats: () => void;
@@ -59,6 +64,18 @@ const worksheetSortDescAction: ContextAction<WorksheetColumnTarget> = {
   id: "worksheet.sortDesc",
   label: "Sort descending",
   run: (t) => t.ctx.sortDesc(t.col),
+};
+
+// The two entries above move the rows (Origin's Sort). This one only orders
+// the DISPLAY — row numbers and data stay — and says so in its label, so it
+// is never mistaken for a sort that Undo would take back.
+const worksheetViewSortAction: ContextAction<WorksheetColumnTarget> = {
+  id: "worksheet.viewSort",
+  label: (t) => {
+    const mark = t.ctx.viewSortMark(t.col);
+    return mark === "" ? "View sorted ascending (data unchanged)" : mark.includes("▲") ? "View sorted descending (data unchanged)" : "Clear view sort";
+  },
+  run: (t) => t.ctx.toggleViewSort(t.col),
 };
 
 // Sort lives here ONLY (owner decision D1, item 6) — the header click gesture
@@ -122,6 +139,7 @@ const worksheetStatsToggleAction: ContextAction<WorksheetColumnTarget> = {
 export const worksheetColumnActions: ContextAction<WorksheetColumnTarget>[] = [
   worksheetSortAscAction,
   worksheetSortDescAction,
+  worksheetViewSortAction,
   worksheetSetXAction,
   worksheetPlotToggleAction,
   worksheetPlotSelectionAction,
@@ -135,7 +153,7 @@ export const worksheetColumnActions: ContextAction<WorksheetColumnTarget>[] = [
 export function columnMenuItems(col: number, ctx: ColumnMenuContext): ContextMenuItem[] {
   const target: WorksheetColumnTarget = { col, ctx };
   return [
-    ...buildMenuItems([worksheetSortAscAction, worksheetSortDescAction], target),
+    ...buildMenuItems([worksheetSortAscAction, worksheetSortDescAction, worksheetViewSortAction], target),
     // The set-X/plot-toggle pair (and its leading separator) only applies to
     // a real column — both entries self-hide for col < 0 too, but the
     // separator itself must not appear on its own.

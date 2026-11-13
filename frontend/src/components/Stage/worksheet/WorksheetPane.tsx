@@ -71,6 +71,14 @@ function DerivedWorksheetBanner({ ds }: { ds: Dataset }) {
   );
 }
 
+/** Sort the worksheet's rows by a column — one undo step (lazy chunk). */
+function sortRows(id: string, col: number, dir: 1 | -1): void {
+  void import("../../../store/sortRows").then(
+    (m) => m.sortWorksheetRows(id, col, dir),
+    () => useApp.getState().setStatus("couldn't load sorting — try again"),
+  );
+}
+
 export default function WorksheetPane({ datasetId, windowId }: WorksheetPaneProps) {
   const ds = useApp((s) => s.datasets.find((d) => d.id === datasetId));
   if (!ds) {
@@ -265,8 +273,11 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
                     labelCount: view.data.labels.length,
                     setXKey: view.setXKey,
                     setYKeys: view.setYKeys,
-                    sortAsc: (col) => view.setSort({ col, dir: 1 }),
-                    sortDesc: (col) => view.setSort({ col, dir: -1 }),
+                    // A DATA sort, as Origin's column Sort is (store/sortRows.ts).
+                    sortAsc: (col) => sortRows(ds.id, col, 1),
+                    sortDesc: (col) => sortRows(ds.id, col, -1),
+                    viewSortMark: view.sortMark,
+                    toggleViewSort: view.toggleSort,
                     onNewColumn: () => void view.promptColumn(),
                     showStats: view.showStats,
                     onToggleStats: () => view.setShowStats((v) => !v),
