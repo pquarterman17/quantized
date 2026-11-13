@@ -4,10 +4,11 @@
 // up-scale instead of nx·ny rects. NaN cells (outside the data hull) are
 // transparent (gaps), matching uPlot's null = gap for 1-D.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { COLORMAPS } from "../../lib/colormap";
 import { cutSpaceForKeys } from "../../lib/mapcuts";
+import { defaultMapKeys, mapColumns } from "../../lib/mapdata";
 import { mapViewFor } from "../../lib/mapView";
 import { hasQSpace, rsmAxisKeys } from "../../lib/mapdataFetch";
 import type { Dataset } from "../../lib/types";
@@ -90,10 +91,17 @@ export default function MapStage({ dataset }: MapStageProps) {
   // x/y/z channel picks, local to this view (default the first three channels).
   const [keys, setKeys] = useState<[number, number, number]>([0, 1, 2]);
 
-  const labels = active?.data.labels ?? [];
+  // Figures-audit #13: the X/Y/Z pickers choose among EVERY file column,
+  // the first (axis) column included (`mapColumns`); a parser 2-D map keeps
+  // its own channels, which its cut/ROI tools index.
+  const mapActive = useMemo(
+    () => (active ? { ...active, data: mapColumns(active.data) } : null),
+    [active],
+  );
+  const labels = mapActive?.data.labels ?? [];
   const enoughChannels = labels.length >= 3;
   // Fetch + regrid on dataset/channel changes; `fresh` gates the export.
-  const { payload, fresh: payloadFresh } = useMapPayload(active, enoughChannels, keys, method, res, setStatus);
+  const { payload, fresh: payloadFresh } = useMapPayload(mapActive, enoughChannels, keys, method, res, setStatus);
 
   // RSM (XRDML 2D) datasets carry Qx/Qz columns -> offer an angular⇄Q toggle.
   const axis1Name = String(active?.data.metadata?.axis1_name ?? "Omega");
@@ -153,9 +161,10 @@ export default function MapStage({ dataset }: MapStageProps) {
   });
   const hostSize = { w, h };
 
-  // Reset the channel picks to 0/1/2 when the active dataset changes.
+  // Reset the channel picks when the active dataset changes: the grid-like
+  // X/Y columns and the first remaining value (`defaultMapKeys`).
   useEffect(() => {
-    setKeys([0, 1, Math.min(2, Math.max(0, labels.length - 1))]);
+    setKeys(active ? defaultMapKeys(active.data) : [0, 1, 2]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
 

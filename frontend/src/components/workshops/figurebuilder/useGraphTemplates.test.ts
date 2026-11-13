@@ -6,6 +6,7 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { loadGraphTemplates, saveGraphTemplate } from "../../../lib/figuredoc";
+import { sanitizeGraphFormat } from "../../../lib/graphFormat";
 import { defaultPlotView } from "../../../lib/plotview";
 import type { LegacyFigureState } from "./legacyFigure";
 import { useGraphTemplates, type CanonicalTemplateTarget } from "./useGraphTemplates";
@@ -45,8 +46,9 @@ describe("canonical graph templates", () => {
     const saved = loadGraphTemplates().find((t) => t.name === "House");
     expect(saved?.style).toBe("nature");
     expect(saved?.overrides).toEqual({ font_size: 7 });
-    expect(saved?.format?.yScale).toBe("log");
-    expect(saved?.format?.series).toEqual([{ color: "#ff0000", width: 2 }]);
+    const format = sanitizeGraphFormat(saved?.format);
+    expect(format?.yScale).toBe("log");
+    expect(format?.series).toEqual([{ color: "#ff0000", width: 2 }]);
   });
 
   it("applies a template onto another draft's series by position, through the draft setters", () => {

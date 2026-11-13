@@ -13,7 +13,8 @@ import { useRef } from "react";
 
 import { reviewSeedErrorBindings } from "../../lib/errorBindingConfidence";
 import { confirmErrorBindings, withdrawErrorBindingConfirmation } from "../../lib/errorRoleConfirm";
-import { asymmetricPair, type ErrorBinding, type ErrorSide } from "../../lib/errorRoles";
+import { asymmetricPair, nextManualErrorBindings, type ErrorBinding, type ErrorSide } from "../../lib/errorRoles";
+import { effectiveChannels } from "../../lib/plotdata";
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -38,7 +39,10 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
   const detectErrorRoles = useApp((s) => s.detectErrorRoles);
   const setStatus = useApp((s) => s.setStatus);
   const recordHistory = useApp((s) => s.recordHistory);
+  const yKeys = useApp((s) => s.yKeys);
+  const xKey = useApp((s) => s.xKey);
   if (!active || active.data.labels.length < 2) return null;
+  const plottedY = effectiveChannels(active.data, yKeys, xKey, active.channelRoles);
 
   const labels = active.data.labels;
   const roles = active.errorRoles ?? [];
@@ -64,6 +68,19 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
   const needsConfirm = (r: ErrorBinding) =>
     unconfirmed.some((u) => u.channel === r.channel && u.target === r.target && u.axis === r.axis && u.side === r.side);
 
+  // Manual Add: the next column(s) not yet bound as an error, against the
+  // first plotted series (or the first other column). Confirmed, like any
+  // explicit edit here, so new figures apply it without asking.
+  const add = (pair: boolean) => {
+    const added = nextManualErrorBindings(active, roles, pair, plottedY);
+    if (added.length === 0) {
+      setStatus(pair ? "Add ± pair needs two unbound columns" : "every column is already bound");
+      return;
+    }
+    setErrorRoles(active.id, [...roles, ...added]);
+    confirmErrorBindings(active.id, added);
+  };
+
   // Warn about a half-pair: it is legal to have one and drawn as nothing, so
   // saying so beats leaving the user to wonder why no bars appeared.
   const halfPairs = roles.filter(
@@ -85,39 +102,18 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
         </div>
       ) : (
         roles.map((r, i) => (
-          <div
-            key={`${r.channel}-${r.axis}-${r.side}`}
-            style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: 2 }}
-          >
-            <span className="qzk-menu-trunc" style={{ flex: 1 }} title={labels[r.channel]}>
-              {labels[r.channel] ?? `ch ${r.channel}`}
-            </span>
+          // Figures-audit #14: the column name gets its own line and the
+          // three selects share the line below, so neither the name nor
+          // "± symmetric" is clipped at the Inspector's default width.
+          <div key={`${r.channel}-${r.axis}-${r.side}`} style={{ marginBottom: 4 }}>
+          <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
             <Select
-              style={{ maxWidth: 96, minWidth: 0 }}
-              value={String(r.target)}
-              onChange={(e) => patch(i, { target: Number(e.target.value) })}
-              title="The series (or axis) this error describes"
-              options={[
-                { value: "-1", label: "→ x axis" },
-                ...labels.map((l, j) => ({ value: String(j), label: `→ ${l}` })),
-              ]}
-            />
-            <Select
-              style={{ maxWidth: 64, minWidth: 0 }}
-              value={r.axis}
-              onChange={(e) => patch(i, { axis: e.target.value as "x" | "y" })}
-              title="Draw the whisker horizontally (x) or vertically (y)"
-              options={[
-                { value: "y", label: "y" },
-                { value: "x", label: "x" },
-              ]}
-            />
-            <Select
-              style={{ maxWidth: 108, minWidth: 0 }}
-              value={r.side}
-              onChange={(e) => patch(i, { side: e.target.value as ErrorSide })}
-              title="Symmetric, or one half of an asymmetric pair"
-              options={SIDES}
+              style={{ flex: 1, minWidth: 0 }}
+              aria-label={`Error column ${i + 1}`}
+              value={String(r.channel)}
+              onChange={(e) => patch(i, { channel: Number(e.target.value) })}
+              title="The column holding the error values"
+              options={labels.map((l, j) => ({ value: String(j), label: l }))}
             />
             {/* Real buttons, so both are in the Tab order and fire on
                 Enter/Space natively. Each one removes ITSELF (✕ drops the row,
@@ -146,6 +142,39 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
               </IconButton>
             )}
           </div>
+          <div style={{ display: "flex", gap: 4, alignItems: "center", paddingLeft: 8 }}>
+            <Select
+              style={{ flex: "1.4 1 0", minWidth: 0 }}
+              aria-label={`Error column ${i + 1} describes`}
+              value={String(r.target)}
+              onChange={(e) => patch(i, { target: Number(e.target.value) })}
+              title="The series (or axis) this error describes"
+              options={[
+                { value: "-1", label: "→ x axis" },
+                ...labels.map((l, j) => ({ value: String(j), label: `→ ${l}` })),
+              ]}
+            />
+            <Select
+              style={{ flex: "0.6 1 0", minWidth: 0 }}
+              aria-label={`Error column ${i + 1} direction`}
+              value={r.axis}
+              onChange={(e) => patch(i, { axis: e.target.value as "x" | "y" })}
+              title="Draw the whisker horizontally (x) or vertically (y)"
+              options={[
+                { value: "y", label: "y" },
+                { value: "x", label: "x" },
+              ]}
+            />
+            <Select
+              style={{ flex: "1.2 1 0", minWidth: 0 }}
+              aria-label={`Error column ${i + 1} side`}
+              value={r.side}
+              onChange={(e) => patch(i, { side: e.target.value as ErrorSide })}
+              title="Symmetric, or one half of an asymmetric pair"
+              options={SIDES}
+            />
+          </div>
+          </div>
         ))
       )}
       {halfPairs.length > 0 && (
@@ -154,7 +183,20 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
           an asymmetric pair needs BOTH halves, so nothing is drawn for these.
         </div>
       )}
-      <div style={{ marginTop: 6 }}>
+      <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {/* Manual Add (figures-audit #10: only the Publication preview had
+            one). Seeds the next unbound column against the first plotted
+            series; every field is editable on the new row. */}
+        <Button size="sm" onClick={() => add(false)} title="Bind another column as a symmetric (±) error">
+          Add
+        </Button>
+        <Button
+          size="sm"
+          onClick={() => add(true)}
+          title="Bind two columns as the upper (+) and lower (−) halves of an asymmetric error"
+        >
+          Add ± pair
+        </Button>
         <Button
           size="sm"
           onClick={() => {

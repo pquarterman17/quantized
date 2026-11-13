@@ -75,6 +75,11 @@ const CASES: CaseSpec[] = [
   { note: "both halves of an asymmetric +/- pair", labels: ["M", "M_err+", "M_err-"] },
   { note: "asymmetric hi/lo suffixes", labels: ["M", "M_hi", "M_lo"] },
   { note: "asymmetric upper/lower suffixes", labels: ["M", "M_upper", "M_lower"] },
+  {
+    note: "asymmetric plus/minus word suffixes, both axes (figures-audit #10)",
+    labels: ["y", "yerr_minus", "yerr_plus", "xerr_minus", "xerr_plus"], // x is the file's first (axis) column
+  },
+  { note: "asymmetric pos/neg word suffixes", labels: ["M", "M_err_pos", "M_err_neg"] },
   { note: "leading error column has nothing defensible preceding it -> unbound", labels: ["err", "M"] },
   { note: "no error columns at all -> nothing", labels: ["Temp", "Moment"] },
   {

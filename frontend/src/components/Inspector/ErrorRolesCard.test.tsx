@@ -26,6 +26,49 @@ const ds = (labels: string[], errorRoles?: Dataset["errorRoles"]): Dataset => ({
 
 beforeEach(() => useApp.setState({ datasets: [], activeId: "d1", status: "" }));
 
+describe("ErrorRolesCard — manual Add on the Stage (figures-audit #10/#14)", () => {
+  it("Add binds the next free column as a symmetric error of the first plotted series", () => {
+    const d = ds(["Signal", "Noise", "Other"]);
+    useApp.setState({ datasets: [d], yKeys: null, xKey: null });
+    render(<ErrorRolesCard active={d} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
+  });
+
+  it("Add ± pair binds two columns as the + and − halves (asymmetric)", () => {
+    const d = ds(["Signal", "Up", "Down"]);
+    useApp.setState({ datasets: [d], yKeys: null, xKey: null });
+    render(<ErrorRolesCard active={d} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add ± pair" }));
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([
+      { channel: 1, target: 0, axis: "y", side: "+" },
+      { channel: 2, target: 0, axis: "y", side: "-" },
+    ]);
+  });
+
+  it("says so when no column is left to add", () => {
+    const d = ds(["Signal", "dSignal"], [{ channel: 1, target: 0, axis: "y", side: "both" }]);
+    useApp.setState({ datasets: [d], yKeys: null, xKey: null });
+    render(<ErrorRolesCard active={d} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(useApp.getState().status).toMatch(/already bound/);
+  });
+
+  it("names every row control, and gives the column name its own line", () => {
+    const d = ds(["Signal", "dSignal"], [{ channel: 1, target: 0, axis: "y", side: "both" }]);
+    useApp.setState({ datasets: [d] });
+    render(<ErrorRolesCard active={d} />);
+    const column = screen.getByRole("combobox", { name: "Error column 1" });
+    const side = screen.getByRole("combobox", { name: "Error column 1 side" });
+    expect(screen.getByRole("combobox", { name: "Error column 1 describes" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Error column 1 direction" })).toBeInTheDocument();
+    // Before the fix the name and all three selects shared one 296px line
+    // and "± symmetric" clipped; the side select now lives on its own line.
+    expect(column.parentElement).not.toBe(side.parentElement);
+    expect(side.style.maxWidth).toBe("");
+  });
+});
+
 describe("ErrorRolesCard", () => {
   it("is hidden for a single-channel dataset", () => {
     const d = ds(["M"]);

@@ -110,6 +110,64 @@
       "bindings": []
     },
     {
+      "note": "asymmetric plus/minus word suffixes, both axes (figures-audit #10)",
+      "labels": [
+        "y",
+        "yerr_minus",
+        "yerr_plus",
+        "xerr_minus",
+        "xerr_plus"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "-"
+        },
+        {
+          "channel": 2,
+          "target": 0,
+          "axis": "y",
+          "side": "+"
+        },
+        {
+          "channel": 3,
+          "target": -1,
+          "axis": "x",
+          "side": "-"
+        },
+        {
+          "channel": 4,
+          "target": -1,
+          "axis": "x",
+          "side": "+"
+        }
+      ]
+    },
+    {
+      "note": "asymmetric pos/neg word suffixes",
+      "labels": [
+        "M",
+        "M_err_pos",
+        "M_err_neg"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "+"
+        },
+        {
+          "channel": 2,
+          "target": 0,
+          "axis": "y",
+          "side": "-"
+        }
+      ]
+    },
+    {
       "note": "leading error column has nothing defensible preceding it -> unbound",
       "labels": [
         "err",

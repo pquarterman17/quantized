@@ -30,6 +30,7 @@ import {
   annotationPlugin,
   axisBoxPlugin,
   colorScatterPlugin,
+  ERROR_CAP_HALF_PX,
   errorBarsPlugin,
   errorSpansPlugin,
   refLinePlugin,
@@ -1003,13 +1004,13 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   if (args.errorSpans && args.errorSpans.size > 0) {
     // The richer payload supersedes the legacy one for every column it
     // covers; anything it does not cover still falls through below.
-    plugins.push(errorSpansPlugin(args.errorSpans, inkDimColor));
+    plugins.push(errorSpansPlugin(args.errorSpans, inkDimColor, ERROR_CAP_HALF_PX));
   }
   const legacyBars = args.errorBars
     ? new Map([...args.errorBars].filter(([col]) => !args.errorSpans?.has(col)))
     : undefined;
   if (legacyBars && legacyBars.size > 0) {
-    plugins.push(errorBarsPlugin(legacyBars, inkDimColor));
+    plugins.push(errorBarsPlugin(legacyBars, inkDimColor, ERROR_CAP_HALF_PX));
   }
   if (args.colorByColumns && args.colorByColumns.size > 0) {
     plugins.push(colorScatterPlugin(args.colorByColumns));

@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { loadGraphTemplates, saveGraphTemplate } from "./figuredoc";
+import { sanitizeGraphFormat } from "./graphFormat";
 import {
   applyStageGraphTemplate,
   copyStageFormat,
@@ -76,7 +77,7 @@ describe("Stage graph templates", () => {
     vi.mocked(askParams).mockResolvedValueOnce({ name: "Lab style" });
     await saveStageGraphTemplate(s);
     const saved = loadGraphTemplates().find((t) => t.name === "Lab style");
-    expect(saved?.format?.series).toHaveLength(2);
+    expect(sanitizeGraphFormat(saved?.format)?.series).toHaveLength(2);
 
     switchToB();
     vi.mocked(askParams).mockResolvedValueOnce({ name: "Lab style" });

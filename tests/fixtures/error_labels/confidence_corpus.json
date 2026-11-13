@@ -680,6 +680,82 @@
       "scored": []
     },
     {
+      "note": "asymmetric plus/minus word suffixes, both axes (figures-audit #10)",
+      "labels": [
+        "y",
+        "yerr_minus",
+        "yerr_plus",
+        "xerr_minus",
+        "xerr_plus"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "-",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        },
+        {
+          "channel": 2,
+          "target": 0,
+          "axis": "y",
+          "side": "+",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        },
+        {
+          "channel": 3,
+          "target": -1,
+          "axis": "x",
+          "side": "-",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        },
+        {
+          "channel": 4,
+          "target": -1,
+          "axis": "x",
+          "side": "+",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "asymmetric pos/neg word suffixes",
+      "labels": [
+        "M",
+        "M_err_pos",
+        "M_err_neg"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "+",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        },
+        {
+          "channel": 2,
+          "target": 0,
+          "axis": "y",
+          "side": "-",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
       "note": "leading error column has nothing defensible preceding it -> unbound",
       "labels": [
         "err",

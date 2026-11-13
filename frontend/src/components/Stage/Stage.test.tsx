@@ -30,17 +30,26 @@ vi.mock("./EmptyProjectStage", async (importOriginal) => {
   return importOriginal();
 });
 
-const ds = (nChannels: number): Dataset => ({
-  id: "d1",
-  name: "d.dat",
-  data: {
-    time: [0, 1],
-    values: [Array(nChannels).fill(1), Array(nChannels).fill(2)],
-    labels: Array.from({ length: nChannels }, (_, i) => `c${i}`),
-    units: Array(nChannels).fill(""),
-    metadata: {},
-  },
-});
+// Figures-audit #13: the Map tab needs a map-shaped dataset, not merely
+// three channels. `ds(n >= 3)` is long-form gridded XYZ (the axis column and
+// c0 repeat like grid axes); `ds(2)` is an ordinary 1-D sweep.
+const ds = (nChannels: number): Dataset => {
+  const gridded = nChannels >= 3;
+  const time = gridded ? [0, 0, 1, 1] : [0, 1, 2, 3];
+  return {
+    id: "d1",
+    name: "d.dat",
+    data: {
+      time,
+      values: time.map((t, r) =>
+        Array.from({ length: nChannels }, (_, c) => (gridded && c === 0 ? r % 2 : 10 * r + c + t)),
+      ),
+      labels: Array.from({ length: nChannels }, (_, i) => `c${i}`),
+      units: Array(nChannels).fill(""),
+      metadata: {},
+    },
+  };
+};
 
 beforeEach(() => {
   useApp.setState({
@@ -122,7 +131,7 @@ describe("Map tab visibility", () => {
     expect(screen.queryByText("Map")).not.toBeInTheDocument();
   });
 
-  it("APPEARS once the dataset has the three channels a map needs", () => {
+  it("APPEARS once the dataset is map-shaped (gridded x/y columns + a value)", () => {
     useApp.setState({ datasets: [ds(3)], activeId: "d1" });
     render(<Stage />);
     expect(screen.getByText("Map")).toBeInTheDocument();

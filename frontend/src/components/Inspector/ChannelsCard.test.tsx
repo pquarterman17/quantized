@@ -160,3 +160,33 @@ describe("ChannelsCard waterfall X offset", () => {
     expect(useApp.getState().history).toHaveLength(2);
   });
 });
+
+describe("ChannelsCard layout + error consistency (figures-audit #10/#14)", () => {
+  const withErr: Dataset = {
+    id: "d2",
+    name: "mt",
+    data: { ...DATA, values: DATA.values.map((r) => [...r, 0.1]), labels: ["Moment", "Resistance", "Moment err"], units: ["emu", "Ohm", "emu"] },
+    errorRoles: [{ channel: 2, target: 0, axis: "y", side: "both" }],
+  };
+
+  it("gives each channel name its own line and names every control uniquely", () => {
+    render(<ChannelsCard active={dataset} />);
+    const type = screen.getByRole("combobox", { name: "Moment modeling type" });
+    expect(screen.getByRole("combobox", { name: "Field modeling type" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Moment column role" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Draw Moment on the secondary Y axis" })).toBeInTheDocument();
+    // The name's label and the selects no longer share a flex line.
+    const name = screen.getByText("Moment (emu)", { selector: "span" });
+    expect(name.closest("label")?.parentElement).not.toBe(type.parentElement);
+  });
+
+  it("shows the error the dataset's roles actually draw, and a pick writes the roles too", () => {
+    useApp.setState({ datasets: [withErr], activeId: "d2" });
+    render(<ChannelsCard active={withErr} />);
+    const pick = screen.getByRole("combobox", { name: "Moment error column" }) as HTMLSelectElement;
+    expect(pick.value).toBe("2"); // was "± none" while the role drew the bars
+    fireEvent.change(pick, { target: { value: "" } });
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([]);
+    expect(useApp.getState().errKeys[0]).toBeUndefined();
+  });
+});

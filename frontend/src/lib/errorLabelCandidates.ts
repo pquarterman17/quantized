@@ -33,8 +33,8 @@ export interface Candidate {
 
 /** Suffixes that mark an asymmetric half, checked before token matching so
  *  `err+` is not first read with "+" as part of the base. */
-const PLUS = ["+", "up", "hi", "high", "upper"];
-const MINUS = ["-", "dn", "down", "lo", "low", "lower"];
+const PLUS = ["+", "up", "hi", "high", "upper", "plus", "pos"];
+const MINUS = ["-", "dn", "down", "lo", "low", "lower", "minus", "neg"];
 
 /** The token table. New spellings are added HERE ONLY -- ranking and
  *  selection (`errorLabelClassify.ts`) are independent of this list, so

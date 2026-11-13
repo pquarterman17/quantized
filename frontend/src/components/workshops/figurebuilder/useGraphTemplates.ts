@@ -28,7 +28,7 @@ import {
 import { buildExportStyles, type ExportSeriesStyle } from "../../../lib/exportStyles";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
 import type { FigureViewState } from "../../../lib/figureDocument";
-import { captureGraphFormat, graphFormatPatch, seriesStyleFromExport } from "../../../lib/graphFormat";
+import { captureGraphFormat, graphFormatPatch, sanitizeGraphFormat, seriesStyleFromExport } from "../../../lib/graphFormat";
 import type { PlotView } from "../../../lib/plotview";
 import { recordUse } from "../../../lib/recipeIndex";
 import type { LegacyFigureState } from "./legacyFigure";
@@ -106,7 +106,7 @@ export function useGraphTemplates(deps: {
       target.setOverrides(template.overrides ?? {});
       // A template saved before `format` existed (or from an Origin .otp)
       // still restyles the series, from its publication styles.
-      const format = template.format ?? {
+      const format = sanitizeGraphFormat(template.format) ?? {
         ...captureGraphFormat(target.view, target.plotted),
         series: (template.seriesStyles ?? []).map(seriesStyleFromExport),
       };

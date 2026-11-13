@@ -18,6 +18,7 @@ import { loadGraphTemplates, saveGraphTemplate, type GraphTemplate } from "./fig
 import {
   captureGraphFormat,
   graphFormatPatch,
+  sanitizeGraphFormat,
   seriesStyleFromExport,
   type GraphFormat,
 } from "./graphFormat";
@@ -74,7 +75,8 @@ export function pasteStageFormat(s: StoreGet): void {
  *  from its publication series styles (a template saved before `format`
  *  existed, or imported from an Origin .otp) over the CURRENT chrome. */
 export function templateFormat(template: GraphTemplate, s: StoreGet, plotted: readonly number[]): GraphFormat {
-  if (template.format) return template.format;
+  const own = sanitizeGraphFormat(template.format);
+  if (own) return own;
   const base = captureGraphFormat(s(), plotted);
   return { ...base, series: (template.seriesStyles ?? []).map(seriesStyleFromExport) };
 }
