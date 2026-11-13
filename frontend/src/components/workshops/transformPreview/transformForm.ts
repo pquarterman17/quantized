@@ -4,7 +4,7 @@
 // the commit run (lib/transformRun.computeTransform). No React, no store.
 
 import { isCategoricalChannel } from "../../../lib/categorical";
-import { originTextColumnNames } from "../../../lib/originTextColumnCells";
+import { originTextColumnNames, textColumnCells } from "../../../lib/originTextColumnCells";
 import type { AppendMatch } from "../../../lib/mergeByName";
 import type { TransformParams } from "../../../lib/transformRun";
 import type { DataStruct } from "../../../lib/types";
@@ -77,25 +77,30 @@ export function seedForm(op: PreviewOp, seed: readonly string[], datasets: reado
   };
 }
 
-/** Unstack's default category: what a long-form table pivots on — a text
- *  column, else a categorical channel, else the channel with the FEWEST
- *  distinct values when that is a handful (≤ 20). Picking the first numeric
- *  channel turned a 20-row sheet into 20 one-cell "Category 0.327…" columns. */
+/** Unstack's default category: what a long-form table pivots on — the
+ *  column with the FEWEST distinct values (2–20), a text column or a
+ *  categorical channel winning a tie over a numeric one. Picking the first
+ *  numeric channel turned a 20-row sheet into 20 one-cell "Category 0.327…"
+ *  columns; picking the first text column picked a unique timestamp. */
 export function defaultCategory(data: DataStruct | undefined): string {
   if (!data) return "0";
-  const text = originTextColumnNames(data)[0];
-  if (text !== undefined) return `t:${text}`;
   const n = data.labels.length;
-  const categorical = Array.from({ length: n }, (_, i) => i).find((i) => isCategoricalChannel(data, i));
-  if (categorical !== undefined) return String(categorical);
-  let best = -1;
-  let fewest = 21;
+  const candidates: { value: string; distinct: number; text: boolean }[] = [];
+  for (const name of originTextColumnNames(data)) {
+    const cells = textColumnCells(data, name) ?? [];
+    // levels-allowlist: a COUNT of distinct values, to choose a default category — not a level table.
+    const distinct = new Set(cells.map((c) => String(c ?? "").trim()).filter(Boolean)).size;
+    candidates.push({ value: `t:${name}`, distinct, text: true });
+  }
   for (let c = 0; c < n; c += 1) {
     // levels-allowlist: a COUNT of distinct values, to choose a default category — not a level table.
     const distinct = new Set(data.values.map((row) => row[c]).filter(Number.isFinite)).size;
-    if (distinct >= 2 && distinct < fewest) [best, fewest] = [c, distinct];
+    candidates.push({ value: String(c), distinct, text: isCategoricalChannel(data, c) });
   }
-  return String(best >= 0 ? best : Math.min(0, n - 1));
+  const best = candidates
+    .filter((k) => k.distinct >= 2 && k.distinct <= 20)
+    .sort((a, b) => a.distinct - b.distinct || Number(b.text) - Number(a.text))[0];
+  return best ? best.value : String(Math.min(0, n - 1));
 }
 
 /** The first channel that is not the category (the values being spread). */

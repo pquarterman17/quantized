@@ -43,6 +43,14 @@ describe("unstack on a text category", () => {
     expect(typeof run !== "string" && run.params).toMatchObject({ op: "unstack", category: "Sample", value: 0 });
   });
 
+  it("a unique-per-row text column (a timestamp) is not the default; the low-cardinality one is", () => {
+    const withDate: DataStruct = {
+      ...long,
+      metadata: { text_columns: { Date: ["d1", "d2", "d3", "d4", "d5"], Sample: ["S0", "S1", "S0", "S1", "S0"] } },
+    };
+    expect(defaultCategory(withDate)).toBe("t:Sample");
+  });
+
   it("without a text column, the default is the channel with the fewest distinct values, not the first", () => {
     const wide: DataStruct = {
       time: [1, 2, 3, 4, 5, 6],
