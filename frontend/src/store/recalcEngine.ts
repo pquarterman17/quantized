@@ -59,7 +59,9 @@ export interface RecalcEngineSlice {
   // record/clear a dataset's re-runnable fit spec.
   setRecalcMode: (mode: RecalcMode) => void;
   touchDataset: (id: string) => void;
-  recalcNow: () => Promise<void>;
+  // `everything` (worksheet audit #22): mark EVERY derived node stale first —
+  // how "Recalculate now" works in "off" mode, which tracks no staleness.
+  recalcNow: (options?: { everything?: boolean }) => Promise<void>;
   setFitSpec: (id: string, spec: FitSpec | null, rowIdentities?: Record<string, string>) => void;
 }
 
@@ -98,7 +100,22 @@ export function createRecalcEngineSlice(set: SliceSet, get: SliceGet): RecalcEng
         }, 400);
       }
     },
-    recalcNow: async () => {
+    recalcNow: async (options) => {
+      // Worksheet audit #22: "off" (Origin's "None") never marks anything
+      // stale, so a plain pass had nothing to run and "Recalculate now" did
+      // nothing. An explicit everything-pass marks every node downstream of
+      // every dataset first, so the manual request still recalculates.
+      if (options?.everything) {
+        const s = get();
+        let staleDatasets = s.staleDatasets;
+        let staleFits = s.staleFits;
+        for (const d of s.datasets) {
+          const down = downstreamOf(s.datasets, d.id);
+          staleDatasets = markStale(staleDatasets, down.datasets);
+          staleFits = markStale(staleFits, down.fits);
+        }
+        if (staleDatasets !== s.staleDatasets || staleFits !== s.staleFits) set({ staleDatasets, staleFits });
+      }
       // #3: a request that arrives mid-pass (refreshFitRefsFor's own call,
       // reached from inside recomputeStaleFits below) sets the pending flag
       // for a follow-up pass below, rather than the silent no-op it used to be.

@@ -6,6 +6,7 @@
 
 import type { StoreGet } from "../lib/exportActive";
 import type { Action } from "../store/commands";
+import type { RecalcMode } from "../lib/recalc";
 import { openMetaFactors } from "../store/metaFactorsDialog";
 import { openResampleDialog } from "../store/resampleDialog";
 import { SHOW_SQLITE_QUERY } from "../store/sqliteQueryDialog";
@@ -19,6 +20,14 @@ function openReshape(s: StoreGet, op: PreviewOp): void {
   const ids = seedIds(s);
   openTransformPreview(op, active ? [active, ...ids.filter((id) => id !== active)] : ids);
 }
+
+/** Origin's names for the three modes (worksheet audit #22): "off" is
+ *  Origin's "None" — and the status says what "Recalculate now" does there. */
+const RECALC_MODE_STATUS: Record<RecalcMode, string> = {
+  auto: "Auto (stale results rerun automatically)",
+  manual: "Manual (results are marked stale; Recalculate now reruns them)",
+  off: "None (nothing is tracked; Recalculate now reruns every derived result)",
+};
 
 /** Build the Data-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build
@@ -100,21 +109,27 @@ export function buildDataCommands(s: StoreGet): Action[] {
       group: "Data",
       section: "Recalculation",
       label: "Recalculate now (run stale corrections + fits)",
-      description: "Immediately rerun corrections and fits whose inputs or settings have changed.",
-      run: () => void s().recalcNow(),
+      description: "Immediately rerun corrections and fits whose inputs or settings have changed. In mode None (off), which tracks no changes, this reruns every derived worksheet and fit.",
+      run: () => {
+        // Worksheet audit #22: "off" tracks nothing, so the request must
+        // recalculate everything derived rather than an (always empty) stale set.
+        const everything = s().recalcMode === "off";
+        void s().recalcNow({ everything });
+        if (everything) s().setStatus("recalculating every derived worksheet and fit (mode None tracks no changes)");
+      },
     },
     {
       id: "recalc-mode",
       group: "Data",
       section: "Recalculation",
-      label: "Recalc mode (cycle auto → manual → off)",
-      description: "Choose whether stale calculations rerun automatically, on request, or not at all.",
+      label: "Recalc mode (cycle auto → manual → None)",
+      description: "Choose whether stale calculations rerun automatically (Auto), are marked stale and rerun on request (Manual), or are not tracked at all (None — Recalculate now then reruns everything derived).",
       run: () => {
         const order = ["auto", "manual", "off"] as const;
         const cur = s().recalcMode;
         const next = order[(order.indexOf(cur) + 1) % order.length];
         s().setRecalcMode(next);
-        s().setStatus(`recalc mode: ${next}`);
+        s().setStatus(`recalc mode: ${RECALC_MODE_STATUS[next]}`);
       },
     },
     {
