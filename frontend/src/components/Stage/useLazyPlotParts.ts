@@ -10,7 +10,7 @@
 // so a first plot never keeps literal escapes or misses its shades. A no-op
 // for every plot needing none of these.
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import {
   axisExtrasApplier,
@@ -76,4 +76,16 @@ export function useLazyPlotParts(
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `onReady` is a fresh closure each render; only the needs decide.
   }, [needExtras, needGadgets, needEscapes, needDecor]);
+}
+
+/** `useLazyPlotParts` for a renderer that rebuilds on a counter (the
+ *  multi-panel stage): the counter, bumped each time a needed part lands. */
+export function useLazyPlotEpoch(
+  fmts: readonly (AxisFormat | null | undefined)[],
+  tool: string,
+  decor?: LazyDecorNeeds,
+): number {
+  const [epoch, setEpoch] = useState(0);
+  useLazyPlotParts(fmts, tool, () => setEpoch((e) => e + 1), decor);
+  return epoch;
 }

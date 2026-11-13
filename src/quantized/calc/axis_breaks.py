@@ -24,6 +24,7 @@ Pure (matplotlib + numpy in, nothing returned).
 from __future__ import annotations
 
 import math
+import weakref
 from collections.abc import Sequence
 from typing import Any
 
@@ -41,6 +42,7 @@ __all__ = [
     "break_gap",
     "break_ticks",
     "elide",
+    "is_broken_axis",
     "nice_break_step",
     "normalize_breaks",
     "unelide",
@@ -53,6 +55,18 @@ BREAK_GAP_FRACTION = 0.04
 # Major ticks aimed at across the kept span when no increment is typed.
 BREAK_TARGET_TICKS = 6
 MAX_AXIS_BREAKS = 4
+
+# Every matplotlib Axis this module has broken. A broken axis is a
+# "function" scale, as the reciprocal one is, but unlike it takes values
+# <= 0: ``calc.figure_scale.drawable_lim`` asks here before dropping a typed
+# limit. Weak, so a closed figure's axes are never kept alive.
+_BROKEN: weakref.WeakSet[Any] = weakref.WeakSet()
+
+
+def is_broken_axis(axis: Any) -> bool:
+    """Whether :func:`apply_y_breaks` turned ``axis`` (a matplotlib Axis) into
+    a broken linear axis."""
+    return axis in _BROKEN
 
 
 def normalize_breaks(raw: Any) -> list[tuple[float, float]]:
@@ -281,4 +295,5 @@ def apply_y_breaks(ax: Any, raw_breaks: Any, minor: Any = None) -> bool:
     ax.set_ylim(*lim)
     right = axis.get_ticks_position() == "right"
     _draw_marks(ax, breaks, right)
+    _BROKEN.add(axis)
     return True

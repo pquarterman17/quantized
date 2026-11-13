@@ -157,6 +157,22 @@ def test_a_typed_limit_and_increment_survive_the_break(monkeypatch: pytest.Monke
     assert [float(t) for t in ax.get_yticks()] == break_ticks(0.0, 1012.0, [(12.0, 990.0)], 4.0)
 
 
+def test_a_typed_limit_at_or_below_zero_survives_the_break(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A broken axis is a matplotlib "function" scale, like the reciprocal one,
+    but takes any limit: a typed lower limit of -50 (or 0) is the screen's
+    range too, never dropped to auto."""
+    (ax,) = _axes(monkeypatch, _body(overrides={"y_lim": [-50.0, 1012.0]}))
+    assert ax.get_ylim() == pytest.approx((-50.0, 1012.0))
+    body = _body(y2_keys=[1])
+    body["y_fmt"] = {"mode": "auto", "digits": 2}
+    body["y2_fmt"] = {"mode": "auto", "digits": 2, "breaks": [[1002, 1008]]}
+    body["overrides"] = {"y2_lim": [-10.0, 1012.0]}
+    _ax, ax2 = _axes(monkeypatch, body)
+    assert ax2.get_ylim() == pytest.approx((-10.0, 1012.0))
+
+
 def test_the_tick_formatter_survives_the_break(monkeypatch: pytest.MonkeyPatch) -> None:
     body = _body()
     body["y_fmt"] = {"mode": "fixed", "digits": 1, "breaks": [[12, 990]]}

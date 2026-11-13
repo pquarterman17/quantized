@@ -24,6 +24,7 @@ import numpy as np
 from matplotlib.ticker import Locator
 from numpy.typing import NDArray
 
+from quantized.calc.axis_breaks import is_broken_axis
 from quantized.calc.figure_autoscale import mask_nonpositive, shared_autoscale
 from quantized.calc.figure_log_ticks import LogMajorLocator, LogMinorLocator, LogTickLabels
 
@@ -115,10 +116,13 @@ def drawable_lim(
     ``ax``'s ``axis`` is log or reciprocal. matplotlib's log ``set_ylim``
     already ignores such a side, but the reciprocal FuncScale keeps it, and
     1/x then maps every point to NaN (a blank export). The screen's rule is
-    ``frontend/src/lib/canvasLims.ts``'s ``drawableLim``. The only
-    ``"function"`` scale this package sets is the reciprocal one."""
+    ``frontend/src/lib/canvasLims.ts``'s ``drawableLim``. The other
+    ``"function"`` scale this package sets is a broken linear Y axis
+    (``calc.axis_breaks``), which takes any limit, as the screen's does."""
     scale = ax.get_xscale() if axis == "x" else ax.get_yscale()
     if scale not in ("log", "function"):
+        return lo, hi
+    if scale == "function" and is_broken_axis(ax.xaxis if axis == "x" else ax.yaxis):
         return lo, hi
     return (None if lo is None or lo <= 0 else lo), (None if hi is None or hi <= 0 else hi)
 

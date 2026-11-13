@@ -18,7 +18,7 @@
 // facet/break arrangements are transient singleton state and stay
 // focused-only). ZERO store value imports (types only).
 
-import { type CSSProperties, type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import uPlot from "uplot";
 
 import type { HalfLim } from "../../lib/axisLim";
@@ -69,7 +69,10 @@ import { fetchSpatialPanel, type SpatialFetch } from "./spatialPanelFetch";
 import { renderFacetGrid, resizeFacetGrid } from "./facetGridRender";
 import type { FacetEncodingRender } from "./useFacetEncoding";
 import { renderStackPanels, resizeStackPanels } from "./stackPanelRender";
-import type { SpatialLegendEntry } from "./SpatialPanelLegend";
+import { plotDecorNeeds, useLazyPlotEpoch } from "./useLazyPlotParts";
+import type { MultiPanelStageState, SpatialLegendPortal } from "./useMultiPanelStageTypes";
+
+export type { MultiPanelStageState, SpatialLegendPortal } from "./useMultiPanelStageTypes";
 
 /** The focused stage's uPlot cursor-sync group (all its panels crosshair
  *  together). A background stack window passes its OWN per-window key instead
@@ -81,22 +84,6 @@ const GRID_GAP = 8;
  *  would be referentially new on every render and re-run the render effect
  *  (which depends on `seriesLabels`) for nothing. */
 const EMPTY_LABELS: Record<number, string> = {};
-
-export interface SpatialLegendPortal {
-  key: string;
-  target: HTMLDivElement;
-  entries: SpatialLegendEntry[];
-  title?: string;
-  frameXY?: [number, number];
-}
-
-export interface MultiPanelStageState {
-  hostRef: RefObject<HTMLDivElement | null>;
-  hostStyle: CSSProperties;
-  readout: Readout | null;
-  tool: string;
-  spatialLegends: SpatialLegendPortal[];
-}
 
 export interface MultiPanelStageParams {
   /** The dataset under the plain per-channel stack (the focused view passes
@@ -367,6 +354,9 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     };
   }, [spatial, panels, datasets, defaultTrace, excludedDisplay]); // eslint-disable-line react-hooks/exhaustive-deps -- `ensureBookData` deliberately excluded: stable store-action reference, see its param doc above (R9).
 
+  // The on-demand axis extras (breaks, divide-by, minor ticks ...) and the
+  // startup chunks reach every panel too: rebuild once they land.
+  const lazyEpoch = useLazyPlotEpoch([xFmt, yFmt], tool, plotDecorNeeds(Object.values(seriesLabels), payload?.payload, null, refLines.length));
   useEffect(() => {
     const host = hostRef.current;
     const destroyAll = () => {
@@ -669,7 +659,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     seriesLabels, seriesStyles, breakSeriesStyles, breakHidden, // FEATURE-001: the facet leg reads the channel-keyed map directly
     autoSeriesStyles,
     errorBarsList, errKeys, // errKeys: the break panels' bars
-    tool,
+    tool, lazyEpoch, // lazyEpoch: an on-demand plot part landed
     theme,
     accent,
     // Item 15 additions — constant for the focused stage (MULTIPANEL_SYNC_KEY
