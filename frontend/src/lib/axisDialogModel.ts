@@ -9,10 +9,13 @@
 //   format, digits   xFmt / yFmt / y2Fmt (the existing tick-label format)
 //   minor, ticks,    the same AxisFormat's figures-audit #6 extras
 //   divide, size
+//   breakFrom/To     the same AxisFormat's `breaks[0]` (Y and Y2 only: a
+//                    linear axis with that stretch elided, lib/axisBreaks.ts)
 //   titleSize        axisLabelStyles[axis].size (the axis title font, px)
 
 import type { AxisId } from "../store/figureDialogs";
 import type { PlotView } from "./plotview";
+import { inheritedAxisFormat, normalizeBreaks } from "./axisFormat";
 import type { AxisFormat, AxisScale, TickMode } from "./types";
 
 export type AxisScaleChoice = AxisScale | "ln";
@@ -29,6 +32,9 @@ export interface AxisDraft {
   divide: string;
   size: string;
   titleSize: string;
+  /** The elided stretch of a broken Y / Y2 axis; both blank = no break. */
+  breakFrom: string;
+  breakTo: string;
 }
 
 export type AxisView = Pick<
@@ -42,7 +48,7 @@ const str = (v: number | null | undefined): string => (v == null || !Number.isFi
 function parts(view: AxisView, axis: AxisId): { scale: AxisScale; lim: readonly (number | null)[] | null; step: number | null; fmt: AxisFormat } {
   if (axis === "x") return { scale: view.xScale, lim: view.xLim, step: view.xStep, fmt: view.xFmt };
   if (axis === "y") return { scale: view.yScale, lim: view.yLim, step: view.yStep, fmt: view.yFmt };
-  return { scale: view.y2Scale ?? view.yScale, lim: view.y2Lim, step: view.y2Step, fmt: view.y2Fmt ?? view.yFmt };
+  return { scale: view.y2Scale ?? view.yScale, lim: view.y2Lim, step: view.y2Step, fmt: view.y2Fmt ?? inheritedAxisFormat(view.yFmt) };
 }
 
 export function axisDraft(view: AxisView, axis: AxisId): AxisDraft {
@@ -59,6 +65,8 @@ export function axisDraft(view: AxisView, axis: AxisId): AxisDraft {
     divide: str(fmt.divide),
     size: str(fmt.size),
     titleSize: str(view.axisLabelStyles[axis]?.size),
+    breakFrom: axis === "x" ? "" : str(fmt.breaks?.[0]?.[0]),
+    breakTo: axis === "x" ? "" : str(fmt.breaks?.[0]?.[1]),
   };
 }
 
@@ -73,7 +81,7 @@ const num = (s: string): number | null => {
 export function axisDraftErrors(d: AxisDraft, axis: AxisId): string[] {
   const out: string[] = [];
   const bad = (s: string) => s.trim() !== "" && num(s) === null;
-  for (const [label, v] of [["From", d.from], ["To", d.to], ["Major increment", d.increment], ["Divide by", d.divide], ["Tick label size", d.size], ["Title size", d.titleSize], ["Minor ticks", d.minor], ["Digits", d.digits]] as const) {
+  for (const [label, v] of [["From", d.from], ["To", d.to], ["Major increment", d.increment], ["Divide by", d.divide], ["Tick label size", d.size], ["Title size", d.titleSize], ["Minor ticks", d.minor], ["Digits", d.digits], ["Break from", d.breakFrom], ["Break to", d.breakTo]] as const) {
     if (bad(v)) out.push(`${label} must be a number.`);
   }
   const lo = num(d.from);
@@ -89,6 +97,13 @@ export function axisDraftErrors(d: AxisDraft, axis: AxisId): string[] {
   if (div !== null && div <= 0) out.push("Divide by must be positive.");
   const minor = num(d.minor);
   if (minor !== null && (!Number.isInteger(minor) || minor < 0 || minor > 20)) out.push("Minor ticks must be a whole number from 0 to 20.");
+  const bLo = num(d.breakFrom);
+  const bHi = num(d.breakTo);
+  if (axis !== "x" && (d.breakFrom.trim() !== "" || d.breakTo.trim() !== "")) {
+    if (bLo === null || bHi === null) out.push("An axis break needs both Break from and Break to.");
+    else if (bLo >= bHi) out.push("Break from must be below Break to.");
+    if (d.scale !== "linear") out.push("An axis break needs a linear scale.");
+  }
   return out;
 }
 
@@ -98,6 +113,11 @@ export function axisPatch(view: AxisView, axis: AxisId, d: AxisDraft): Partial<P
   const div = num(d.divide);
   const minor = num(d.minor);
   const size = num(d.size);
+  const bLo = num(d.breakFrom);
+  const bHi = num(d.breakTo);
+  // The dialog edits the FIRST break; any further ones a file or template
+  // carried stay, as long as they still sit clear of it.
+  const breaks = axis === "x" ? base.breaks : bLo !== null && bHi !== null ? normalizeBreaks([[bLo, bHi], ...(base.breaks ?? []).slice(1)]) : undefined;
   const fmt: AxisFormat = {
     mode: d.mode,
     digits: num(d.digits) ?? base.digits,
@@ -106,6 +126,7 @@ export function axisPatch(view: AxisView, axis: AxisId, d: AxisDraft): Partial<P
     ...(d.ticks !== "out" ? { ticks: d.ticks } : {}),
     ...(size !== null ? { size } : {}),
     ...(d.scale === "ln" ? { base: "e" as const } : {}),
+    ...(breaks ? { breaks } : {}),
   };
   const scale: AxisScale = d.scale === "ln" ? "log" : d.scale;
   const lo = num(d.from);

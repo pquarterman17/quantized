@@ -45,6 +45,7 @@
 // rule to live, so the next one cannot be half-applied.
 
 import { scaleFromLog } from "./plotview";
+import { inheritedAxisFormat } from "./axisFormat";
 import { axisFmtParam, type AxisFormat, type AxisScale } from "./types";
 import type { SpatialPanel } from "./multipanel";
 
@@ -117,7 +118,7 @@ export function resolveSecondaryAxis(
     keys,
     lim: spec.lim,
     scale: spec.scale ?? primary.scale,
-    fmt: spec.fmt ?? primary.fmt,
+    fmt: spec.fmt ?? inheritedAxisFormat(primary.fmt),
     step: spec.step,
     label: label || null,
   };

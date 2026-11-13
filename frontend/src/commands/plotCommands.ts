@@ -251,6 +251,17 @@ export function buildPlotCommands(s: StoreGet): Action[] {
         ),
     },
     {
+      // A Y break is an axis property (one frame, the stretch elided), so it
+      // lives on the Axis dialog's Y tab; this is the menu's way there.
+      id: "break-y-axis",
+      group: "Plot",
+      section: "Layout",
+      label: "Break y-axis…",
+      description: "Hide a stretch of the vertical axis (Break from / Break to) so two separated ranges share one graph.",
+      keywords: "axis break gap discontinuous",
+      run: () => openFigureDialog({ kind: "axis", axis: "y" }),
+    },
+    {
       // Multi-plot discoverability: the palette counterpart of the Library
       // row's "Plot in new window" (lib/contextActions.ts's
       // `dataset.plotInNewWindow`) — a plain Library click only REBINDS the
@@ -328,8 +339,8 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Axes",
       label: "Axis…",
-      description: "Edit an axis: scale, limits, ticks, number format, divide-by, fonts. Or double-click the axis.",
-      keywords: "scale limits ticks minor divide font",
+      description: "Edit an axis: scale, limits, break, ticks, number format, divide-by, fonts. Or double-click the axis.",
+      keywords: "scale limits ticks minor divide font break",
       run: () => openFigureDialog({ kind: "axis", axis: "x" }),
     },
     {

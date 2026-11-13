@@ -16,6 +16,8 @@ published figure reads like the canvas:
 * ``size`` -- tick-label font size in points.
 * ``base`` -- ``"e"`` on a log axis: Origin's "Ln" scale, majors at powers of
   e labelled ``e^n``.
+* ``breaks`` -- ``[lo, hi]`` stretches elided from a linear Y axis
+  (``calc.axis_breaks``); ignored on X, whose breaks are paneled.
 
 Pure (matplotlib objects in, nothing returned); every field is optional and
 validated, so an absent or malformed one leaves matplotlib's own behaviour.
@@ -28,6 +30,8 @@ from collections.abc import Mapping
 from typing import Any
 
 from matplotlib.ticker import AutoMinorLocator, Formatter, FuncFormatter, LogLocator, NullFormatter
+
+from quantized.calc.axis_breaks import apply_y_breaks
 
 __all__ = ["apply_axis_extras", "divide_offset_text"]
 
@@ -100,6 +104,9 @@ def _apply_one(ax: Any, which: str, axis: Any, scale: str, fmt: Mapping[str, Any
     if size is not None and size <= 72:
         ax.tick_params(axis=which, labelsize=size)
         axis.get_offset_text().set_fontsize(size)
+    # Last: the break keeps the formatter and typed increment set above.
+    if which == "y" and scale == "linear" and fmt.get("breaks"):
+        apply_y_breaks(ax, fmt.get("breaks"), minor)
 
 
 def apply_axis_extras(

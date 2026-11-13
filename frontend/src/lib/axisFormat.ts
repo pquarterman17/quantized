@@ -30,12 +30,34 @@ export interface AxisFormat {
   size?: number;
   /** "e" on a log axis = Origin's "Ln" scale: majors at powers of e. */
   base?: "e";
+  /** Axis breaks on a LINEAR Y / Y2 axis: each `[lo, hi]` stretch is elided
+   *  and a break mark drawn in its place (`lib/axisBreaks.ts`,
+   *  `calc/axis_breaks.py`). Sorted, non-overlapping, at most `MAX_AXIS_BREAKS`.
+   *  The X axis breaks as side-by-side panels instead (`lib/facet.ts`). */
+  breaks?: [number, number][];
+}
+
+export const MAX_AXIS_BREAKS = 4;
+
+/** `raw` as a valid break list -- finite `[lo, hi]` pairs with `lo < hi`,
+ *  sorted and non-overlapping, at most `MAX_AXIS_BREAKS` -- or `undefined`
+ *  when nothing valid is left. An invalid entry is dropped, never repaired. */
+export function normalizeBreaks(raw: unknown): [number, number][] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const pairs = raw
+    .filter((b): b is [number, number] => Array.isArray(b) && b.length === 2 && Number.isFinite(b[0]) && Number.isFinite(b[1]) && b[0] < b[1])
+    .map(([lo, hi]) => [lo, hi] as [number, number])
+    .sort((a, b) => a[0] - b[0]);
+  const out: [number, number][] = [];
+  for (const b of pairs) if (out.length < MAX_AXIS_BREAKS && (out.length === 0 || b[0] >= out[out.length - 1][1])) out.push(b);
+  return out.length ? out : undefined;
 }
 
 /** `fmt` with only its VALID Axis-dialog extras kept -- a file/template
  *  value is untrusted, and the renderer and export assume these shapes. */
 export function sanitizeAxisExtras(fmt: AxisFormat): AxisFormat {
   const { mode, digits, divide, minor, ticks, size, base } = fmt;
+  const breaks = normalizeBreaks(fmt.breaks);
   const pos = (v: unknown, max: number): v is number => typeof v === "number" && v > 0 && v <= max;
   return {
     mode,
@@ -45,12 +67,22 @@ export function sanitizeAxisExtras(fmt: AxisFormat): AxisFormat {
     ...(ticks === "in" || ticks === "out" || ticks === "both" ? { ticks } : {}),
     ...(pos(size, 72) ? { size } : {}),
     ...(base === "e" ? { base } : {}),
+    ...(breaks ? { breaks } : {}),
   };
+}
+
+/** The format a Y2 axis with none of its own inherits from the primary Y
+ *  axis: everything but the breaks, whose `[lo, hi]` are in Y's units. */
+export function inheritedAxisFormat(fmt: AxisFormat): AxisFormat {
+  if (!fmt.breaks) return fmt;
+  const { breaks: _breaks, ...rest } = fmt;
+  void _breaks;
+  return rest;
 }
 
 /** True when `fmt` carries any Axis-dialog extra (figures-audit #6). */
 export function hasAxisExtras(fmt: AxisFormat | null | undefined): boolean {
-  return !!fmt && (fmt.divide !== undefined || !!fmt.minor || fmt.ticks !== undefined || fmt.size !== undefined || fmt.base !== undefined);
+  return !!fmt && (fmt.divide !== undefined || !!fmt.minor || fmt.ticks !== undefined || fmt.size !== undefined || fmt.base !== undefined || !!fmt.breaks?.length);
 }
 
 /** MAIN #24: an export request's `x_fmt`/`y_fmt` wire field — `undefined`

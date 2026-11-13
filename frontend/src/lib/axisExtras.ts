@@ -3,7 +3,8 @@
 // agree. Each lives on the axis' `AxisFormat` (see that type): `divide`
 // (labels show value ÷ factor, "×factor" at the axis end), `minor` (minor
 // ticks between majors), `ticks` (in/out/both), `size` (tick-label pt) and
-// `base: "e"` (Origin's "Ln" scale on a log axis).
+// `base: "e"` (Origin's "Ln" scale on a log axis) and `breaks` (a broken
+// linear Y / Y2 axis -- `lib/axisBreakExtras.ts`).
 //
 // `applyAxisExtras` edits the uPlot axes `uplotOpts.buildOpts` built and
 // returns a draw plugin for what uPlot cannot draw itself (inward and minor
@@ -14,6 +15,8 @@
 
 import type uPlot from "uplot";
 
+import { activeBreaks, applyAxisBreaks, drawBreakMarks, insideBreak, type AxisExtrasContext } from "./axisBreakExtras";
+import type { AxisBreak } from "./axisBreaks";
 import { hasAxisExtras, type AxisFormat, type AxisScale } from "./types";
 
 type TickValues = NonNullable<uPlot.Axis["values"]>;
@@ -50,15 +53,20 @@ interface Extra {
   idx: number;
   fmt: AxisFormat;
   scale: AxisScale;
+  /** The breaks this axis draws (null on x, off a linear scale, inherited). */
+  breaks: readonly AxisBreak[] | null;
 }
 
 /** Apply each axis' extras to `axes` (index-aligned with `fmts`/`scales`)
- *  and return the draw plugin, or null when there is nothing to draw. */
+ *  and return the draw plugin, or null when there is nothing to draw. `ctx`
+ *  (the scales and payload `buildOpts` is assembling) is what an axis BREAK
+ *  needs; without it breaks are skipped and every other extra still applies. */
 export function applyAxisExtras(
   axes: uPlot.Axis[],
   fmts: readonly (AxisFormat | null | undefined)[],
   scales: readonly AxisScale[],
   ink: string,
+  ctx?: AxisExtrasContext,
 ): uPlot.Plugin | null {
   const extras: Extra[] = [];
   axes.forEach((axis, idx) => {
@@ -70,12 +78,15 @@ export function applyAxisExtras(
       axis.values = lnValues;
       delete axis.filter;
     }
+    // Before divide-by, so the divided labels wrap the break's own formatter.
+    const breaks = activeBreaks(idx, fmt.breaks, scale, ctx);
+    if (breaks && ctx) applyAxisBreaks(axis, idx, breaks, ctx);
     if (fmt.divide && fmt.divide > 0 && fmt.divide !== 1) axis.values = divided(axis.values, fmt.divide);
     if (fmt.size && fmt.size > 0 && typeof axis.font === "string") {
       axis.font = axis.font.replace(/[\d.]+px/, `${Math.round((fmt.size * 96) / 72)}px`);
     }
     if (fmt.ticks === "in") axis.ticks = { ...axis.ticks, show: false };
-    extras.push({ idx, fmt, scale });
+    extras.push({ idx, fmt, scale, breaks });
   });
   return extras.length ? axisExtrasPlugin(extras, ink) : null;
 }
@@ -91,7 +102,7 @@ function axisExtrasPlugin(extras: readonly Extra[], ink: string): uPlot.Plugin {
         ctx.strokeStyle = ink;
         ctx.fillStyle = ink;
         ctx.lineWidth = pr;
-        for (const { idx, fmt, scale } of extras) {
+        for (const { idx, fmt, scale, breaks } of extras) {
           const axis = u.axes[idx] as uPlot.Axis & { _splits?: number[] };
           const key = axis.scale ?? (idx === 0 ? "x" : "y");
           // uPlot's Side enum as plain numbers: 0 top, 1 right, 2 bottom, 3 left.
@@ -121,10 +132,12 @@ function axisExtrasPlugin(extras: readonly Extra[], ink: string): uPlot.Plugin {
             const lo = majors[0] - step * fmt.minor;
             for (let v = lo; v <= majors[majors.length - 1] + step * fmt.minor; v += step) {
               if (majors.some((m) => Math.abs(m - v) < step / 2)) continue;
+              if (breaks && insideBreak(v, breaks)) continue; // no tick in the elided stretch
               if (wantIn) tick(v, 3, inward);
               if (wantOut) tick(v, 3, -inward);
             }
           }
+          if (breaks && !horizontal) drawBreakMarks(u, key, edge, breaks, pr);
           if (fmt.divide && fmt.divide > 0 && fmt.divide !== 1) {
             ctx.font = typeof axis.font === "string" ? axis.font.replace(/(\d+(?:\.\d+)?)px/, (_m, n) => `${Number(n) * pr}px`) : `${11 * pr}px sans-serif`;
             const text = divideLabel(fmt.divide);

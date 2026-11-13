@@ -1,7 +1,8 @@
 // Origin's Axis dialog (figures-audit #6): double-click an axis on the Stage
 // (or Plot ▸ "Axis…") to edit its scale, limits, major increment, minor
-// tick count, tick direction, tick-label number format, divide-by factor and
-// fonts in one place -- for X, Y and the secondary Y2 axis. Every field is
+// tick count, tick direction, tick-label number format, divide-by factor,
+// fonts and (Y / Y2) an axis break in one place -- for X, Y and the secondary
+// Y2 axis. Every field is
 // an existing view field (axisDialogModel.ts), and the export carries the
 // same values (`axisFmtParam` -> `calc/axis_extras.py`), so screen and
 // export agree. Apply commits ONE undo step.
@@ -102,6 +103,17 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
       {select("scale", "Type", SCALES)}
       {text("from", "From")}
       {text("to", "To")}
+      {current === "x" ? (
+        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+          To break the X axis, use Plot ▸ Layout ▸ Break x-axis at gaps…
+        </div>
+      ) : (
+        <>
+          <h3 style={{ margin: "4px 0" }}>Break</h3>
+          {text("breakFrom", "Break from", "none")}
+          {text("breakTo", "Break to", "none")}
+        </>
+      )}
       <h3 style={{ margin: "4px 0" }}>Ticks</h3>
       {text("increment", "Major increment")}
       {text("minor", "Minor ticks", "0")}

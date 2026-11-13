@@ -11464,6 +11464,11 @@ export interface components {
         TickFormatSpec: {
             /** Base */
             base?: "e" | null;
+            /** Breaks */
+            breaks?: [
+                number,
+                number
+            ][] | null;
             /**
              * Digits
              * @default 2

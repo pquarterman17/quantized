@@ -1207,7 +1207,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // tick font, Ln) -- null, and nothing changed, when no axis has one. y2
   // inherits yFmt exactly as its tick formatter above does.
   // The module loads on demand (axisExtrasHook.ts): absent = none drawn yet.
-  const extrasPlugin = axisExtrasApplier()?.(axes, [xFmt, yFmt, y2Fmt ?? yFmt], [xScale, yScale, y2ScaleEff], axisColor);
+  const extrasPlugin = axisExtrasApplier()?.(axes, [xFmt, yFmt, y2Fmt ?? yFmt], [xScale, yScale, y2ScaleEff], axisColor, { scales, payload, typed: [!!xLim, !!yLim, !!args.y2Lim], steps: [args.xStep, args.yStep, args.y2Step], scan: !xAscending, y2Own: !!y2Fmt, hidden: args.hidden });
   if (extrasPlugin) plugins.push(extrasPlugin);
 
   // The same colour read a live repaint uses (seriesColorsFor), so the two agree.

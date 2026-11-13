@@ -14920,6 +14920,31 @@
             ],
             "title": "Base"
           },
+          "breaks": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breaks"
+          },
           "digits": {
             "default": 2,
             "title": "Digits",
