@@ -34,6 +34,7 @@ export function ParamFieldRow({
       {f.type === "number" && (
         <input
           {...a11y}
+          placeholder={f.placeholder}
           autoFocus={autoFocus}
           value={String(value ?? "")}
           onChange={(e) => onChange(e.target.value)}
