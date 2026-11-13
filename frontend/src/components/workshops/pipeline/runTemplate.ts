@@ -138,7 +138,9 @@ export interface ApplyPlan {
 export interface ApplyResult {
   datasetId: string;
   name: string;
-  status: "ok" | "refused" | "failed";
+  /** "cancelled": the run was cancelled before or while this dataset ran
+   *  (worksheet audit #15) — anything it had created was removed. */
+  status: "ok" | "refused" | "failed" | "cancelled";
   /** The derived output (status "ok"). */
   outputId?: string;
   outputName?: string;
@@ -191,20 +193,31 @@ export async function asOneUndoStep<T>(label: string, fn: () => Promise<T>): Pro
   }
 }
 
-/** Apply `recipe` to every plan's dataset, in order, as one undo step. */
+/** Apply `recipe` to every plan's dataset, in order, as one undo step.
+ *  `signal` cancels (worksheet audit #15): the dataset in flight is rolled
+ *  back and every later one is reported "cancelled" — what already finished
+ *  stays, inside the same one undo step. `onProgress` gets the results so far
+ *  after each dataset, for a live per-item status. */
 export async function applyRecipe(
   recipe: AnalysisTemplate,
   plans: readonly ApplyPlan[],
-  opts: { ackUnits: boolean },
+  opts: { ackUnits: boolean; signal?: AbortSignal; onProgress?: (results: readonly ApplyResult[]) => void },
 ): Promise<ApplyResult[]> {
   const s = useApp.getState;
   s().setPipelineRunning(true);
   try {
     return await asOneUndoStep(`apply recipe “${recipe.name}”`, async () => {
       const results: ApplyResult[] = [];
-      for (const plan of plans) results.push(await applyOne(recipe, plan, opts.ackUnits));
+      for (const plan of plans) {
+        const name = s().datasets.find((d) => d.id === plan.datasetId)?.name ?? plan.datasetId;
+        results.push(opts.signal?.aborted
+          ? { datasetId: plan.datasetId, name, status: "cancelled", note: "cancelled — not run" }
+          : await applyOne(recipe, plan, opts.ackUnits, opts.signal));
+        opts.onProgress?.([...results]);
+      }
       const ok = results.filter((r) => r.status === "ok").length;
-      s().setStatus(`applied “${recipe.name}” to ${ok}/${results.length} dataset${results.length === 1 ? "" : "s"}`);
+      const cancelled = results.some((r) => r.status === "cancelled") ? " (cancelled)" : "";
+      s().setStatus(`applied “${recipe.name}” to ${ok}/${results.length} dataset${results.length === 1 ? "" : "s"}${cancelled}`);
       return results;
     });
   } finally {
@@ -212,7 +225,7 @@ export async function applyRecipe(
   }
 }
 
-async function applyOne(recipe: AnalysisTemplate, plan: ApplyPlan, ackUnits: boolean): Promise<ApplyResult> {
+async function applyOne(recipe: AnalysisTemplate, plan: ApplyPlan, ackUnits: boolean, signal?: AbortSignal): Promise<ApplyResult> {
   const s = useApp.getState;
   const listed = s().datasets.find((d) => d.id === plan.datasetId);
   const base = { datasetId: plan.datasetId, name: listed?.name ?? plan.datasetId };
@@ -254,13 +267,17 @@ async function applyOne(recipe: AnalysisTemplate, plan: ApplyPlan, ackUnits: boo
       ...(errorRoles ? { errorRoles } : {}),
     });
   }
-  const run = await executeSteps(
-    recipe.steps,
-    start,
-    undefined,
-    undefined,
-    conformed ? { allowPositionFallback: true } : undefined,
-  );
+  let run: Awaited<ReturnType<typeof executeSteps>>;
+  try {
+    run = await executeSteps(recipe.steps, start, undefined, signal, conformed ? { allowPositionFallback: true } : undefined);
+  } catch (e) {
+    if (!(e instanceof PipelineCancelledError)) throw e;
+    // Cancelled mid-dataset: take back exactly what THIS dataset's run made.
+    const made = [...(start !== ds.id ? [start] : []), ...e.created];
+    if (made.length) useApp.setState((st) => removeDatasetsPatch(st, made));
+    if (active && active !== s().activeId && s().datasets.some((d) => d.id === active)) s().setActive(active);
+    return { ...base, status: "cancelled", note: "cancelled while running — nothing kept" };
+  }
   const failed = Object.values(run.log).filter((l) => l.status === "failed");
   const output = run.target;
   // Finding #3: exactly what THIS run created — the working copy (if one was

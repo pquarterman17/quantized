@@ -17,7 +17,10 @@ vi.mock("../../../lib/api", async (importOriginal) => ({
 vi.mock("../../../lib/api/spectralWorkbench", () => ({ runSpectralWorkbench: spectralMock }));
 vi.mock("../../../store/signalWorksheetCommand", () => ({ createSignalWorksheetFromApp: createSignalMock }));
 vi.mock("../../overlays/ParamDialog", () => ({ askParams: askParamsMock }));
-vi.mock("../../../lib/signalRecipeTemplate", () => ({ saveSignalRecipeTemplate: saveRecipeMock }));
+vi.mock("../../../lib/signalRecipeTemplate", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/signalRecipeTemplate")>()),
+  saveSignalRecipeTemplate: saveRecipeMock,
+}));
 
 vi.mock("../../overlays/ToolWindow", () => ({
   default: ({ title, children }: { title: string; children: ReactNode }) => (
@@ -248,6 +251,31 @@ describe("SignalProcessingPanel", () => {
       expect.objectContaining({ secondarySource: expect.objectContaining({ datasetId: reference.id }) }),
       expect.any(AbortSignal),
     );
+  });
+
+  it("Apply to selected sheets… opens the batch apply on the CURRENT setup, seeded with the Library selection (worksheet audit #15)", async () => {
+    const other: Dataset = { ...dataset, id: "other", name: "scan 2" };
+    useApp.setState({ datasets: [dataset, other], selectedIds: [dataset.id, other.id] });
+    render(<SignalProcessingPanel />);
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "derivative-first" } });
+    const launch = screen.getByRole("button", { name: "Apply to selected sheets…" });
+    await waitFor(() => expect(launch).toBeEnabled());
+    fireEvent.click(launch);
+    const region = await screen.findByRole("region", { name: "Apply recipe First derivative (Signal Processing)" });
+    expect(region).toHaveTextContent("1 step: First derivative · secondary");
+    // A preflight per picked sheet, before anything runs.
+    expect(screen.getByRole("group", { name: "Preflight scan" })).toHaveTextContent("ready");
+    expect(screen.getByRole("group", { name: "Preflight scan 2" })).toHaveTextContent("ready");
+    expect(screen.getByRole("button", { name: "Apply to 2 datasets" })).toBeEnabled();
+  });
+
+  it("Apply to selected sheets… is disabled, with the reason, while the setup is invalid", () => {
+    render(<SignalProcessingPanel />);
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "normalize-reference" } });
+    fireEvent.change(screen.getByLabelText("Reference"), { target: { value: "range" } });
+    const launch = screen.getByRole("button", { name: "Apply to selected sheets…" });
+    expect(launch).toBeDisabled();
+    expect(launch).toHaveAttribute("title", "Reference X range must be finite and increasing.");
   });
 
   it("does not silently interpret a blank reference bound as zero", () => {

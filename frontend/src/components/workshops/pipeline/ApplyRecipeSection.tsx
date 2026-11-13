@@ -114,9 +114,20 @@ export default function ApplyRecipeSection({
         </div>
       )}
       <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
-        <Button variant="primary" size="sm" disabled={a.running || a.ready === 0 || disabled} onClick={() => void a.apply()}>
-          {a.running ? "Applying…" : `Apply to ${a.ready} dataset${a.ready === 1 ? "" : "s"}`}
+        <Button
+          variant="primary"
+          size="sm"
+          disabled={a.running || a.ready === 0 || disabled}
+          title={a.ready === 0 ? "No picked dataset passes the preflight" : disabled ? "Another recipe or batch is running" : undefined}
+          onClick={() => void a.apply()}
+        >
+          {a.running ? `Applying ${Math.min((a.results?.length ?? 0) + 1, a.picks.length)} of ${a.picks.length}…` : `Apply to ${a.ready} dataset${a.ready === 1 ? "" : "s"}`}
         </Button>
+        {a.running && (
+          <Button size="sm" onClick={a.cancel}>
+            Cancel run
+          </Button>
+        )}
         {a.picks.length > a.ready && (
           <span className="qzk-ds-meta">{a.picks.length - a.ready} refused — not applied</span>
         )}
@@ -128,8 +139,8 @@ export default function ApplyRecipeSection({
       {a.results && (
         <ul aria-label="Apply results" className="qzk-ds-meta" style={{ margin: "6px 0 0", paddingLeft: 16 }}>
           {a.results.map((r) => (
-            <li key={r.datasetId} data-status={r.status} style={r.status === "ok" ? undefined : { color: "var(--danger)" }}>
-              {r.name}: {r.status === "ok" ? r.note : `${r.status} — ${r.note}`}
+            <li key={r.datasetId} data-status={r.status} style={r.status === "ok" ? undefined : r.status === "cancelled" ? { color: "var(--text-faint)" } : { color: "var(--danger)" }}>
+              {r.name}: {r.status === "ok" || r.status === "cancelled" ? r.note : `${r.status} — ${r.note}`}
             </li>
           ))}
         </ul>

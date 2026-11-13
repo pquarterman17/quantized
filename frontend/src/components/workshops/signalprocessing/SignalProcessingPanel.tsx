@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { applyCorrections } from "../../../lib/api";
 import { runSpectralWorkbench } from "../../../lib/api/spectralWorkbench";
 import { xUnitOf } from "../../../lib/transformResample";
-import { saveSignalRecipeTemplate } from "../../../lib/signalRecipeTemplate";
+import { buildSignalRecipeTemplate, saveSignalRecipeTemplate } from "../../../lib/signalRecipeTemplate";
+import BatchApplyLauncher from "../pipeline/BatchApplyLauncher";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { createSignalWorksheetFromApp } from "../../../store/signalWorksheetCommand";
@@ -382,6 +383,8 @@ export default function SignalProcessingPanel() {
                 {busy ? "Creating…" : "Create linked worksheet"}
               </Button>
             </div>
+            {/* Worksheet audit #15: the same setup on each selected Library sheet. */}
+            <BatchApplyLauncher build={() => buildSignalRecipeTemplate(`${operationLabel(settings.operation)} (Signal Processing)`, active, recipe!)} disabledReason={crossWorksheet ? "A cross-worksheet correlation is tied to its two worksheets." : validation || (recipe ? "" : "Set up the operation first.")} />
           </>
         )}
       </div>
