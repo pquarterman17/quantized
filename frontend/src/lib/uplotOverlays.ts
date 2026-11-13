@@ -1003,6 +1003,7 @@ export function errorBarsPlugin(
         ctx.rect(left, top, width, height);
         ctx.clip();
         ctx.lineWidth = 1;
+        ctx.setLineDash([]); // a dashed series (a fit band) leaves its dash on the shared context
         for (const [col, errs] of errorsByCol) {
           const ys = u.data[col];
           if (!ys || u.series[col]?.show === false) continue;
@@ -1112,6 +1113,7 @@ export function errorSpansPlugin(
         ctx.rect(left, top, width, height);
         ctx.clip();
         ctx.lineWidth = 1;
+        ctx.setLineDash([]); // as errorBarsPlugin: never inherit a series' dash
         for (const [col, spans] of spansByCol) {
           const ys = u.data[col];
           if (!ys || u.series[col]?.show === false) continue;
