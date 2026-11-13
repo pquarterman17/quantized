@@ -15,7 +15,7 @@
 // breaks) a formula keeps both in sync.
 
 import { applyFormulasWithErrors, baseColumns, channelLetter, referencedColumns } from "../lib/formula";
-import { EXTENSION_PENDING, formulaExtension, loadFormulaExtension } from "../lib/formulaExt";
+import { EXTENSION_PENDING, formulaExtension, loadFormulaExtension, onFormulaExtension } from "../lib/formulaExt";
 import { remapSurvivingFormulas } from "../lib/formulaRename";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
@@ -23,6 +23,7 @@ import type { ComputedColumn, DataStruct, Dataset, SheetBinding } from "../lib/t
 import { remapDatasetChannels } from "../lib/channelRemap";
 import { columnRemovalRefsPatch } from "./columnRemovalRefs";
 import { resolvePendingEdit } from "./pendingEdit";
+import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 
 export interface ComputedColumnsSlice {
@@ -151,13 +152,21 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
   // load it now, then recalculate any formula that needed it before it came.
   // `sheet("Name", A)` reads the worksheet a column is LINKED to, from the
   // store's live dataset list.
-  void loadFormulaExtension().then(
-    (m) => {
+  onFormulaExtension({
+    loaded: (m) => {
       m.setFormulaSheetSource(() => get().datasets);
       set((s) => ({ datasets: m.recomputeExtensionPending(s.datasets) }));
     },
-    () => undefined, // offline: the formulas keep saying why they cannot run
-  );
+    // A chunk that would not download: say so once, with a way to retry; the
+    // automatic retries (lib/formulaExt.ts) stay quiet.
+    failed: (quiet) => {
+      if (quiet) return;
+      const msg = "The formula module didn't load, so Origin-style formulas (col(), A[i], cumsum, sheet(), text comparison, row statistics) can't be evaluated yet";
+      get().setStatus(msg);
+      toast(msg, "danger", { action: { label: "Retry", onClick: () => void loadFormulaExtension().catch(() => undefined) } });
+    },
+  });
+  void loadFormulaExtension().catch(() => undefined);
   return {
     addFormula: (id, name, rawExpr) => {
       const ds = get().datasets.find((d) => d.id === id);

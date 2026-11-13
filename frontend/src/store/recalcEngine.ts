@@ -14,8 +14,9 @@
 // (corrections + derived worksheets) and ./recalcFits (saved fits), both
 // loaded lazily by the pass.
 //
-// Contract: none of the four records an undo step, toasts or records a macro
-// step. `touchDataset` only ever ADDS ids to the stale lists, never mutates
+// Contract: none of the four records an undo step or a macro step, and none
+// toasts — except `recalcNow` when its lazy pass module fails to load, which
+// must not pass silently. `touchDataset` only ever ADDS ids to the stale lists, never mutates
 // data. The scheduler state is per MODULE, not per call, on purpose: the
 // guard is what stops a pass's own writes from re-marking (the loop would
 // feed itself), and the pending flag is what turns a mid-pass `recalcNow`
@@ -33,6 +34,7 @@ import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
 import type { FitSpec } from "../lib/types";
 import { FIT_ROW_IDENTITIES } from "../lib/rowSidecars";
 import { refreshFitRefsLater } from "./computedColumns";
+import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -116,7 +118,20 @@ export function createRecalcEngineSlice(set: SliceSet, get: SliceGet): RecalcEng
         // asynchronously, after an edit's debounce or on request, so nothing
         // on first paint needs it. The in-progress flag is set BEFORE this
         // await, so the re-entrancy contract above is unchanged.
-        const [{ markEverythingStale, recomputeStaleDatasets }, { recomputeStaleFits }] = await Promise.all([import("./recalcDatasets"), import("./recalcFits")]);
+        const pass = await Promise.all([import("./recalcDatasets"), import("./recalcFits")]).catch(() => null);
+        if (!pass) {
+          // The chunk would not download: nothing ran, everything that was
+          // stale still is. Say so, offer the same request again, and drop
+          // the everything-latch (Retry re-states it) so a LATER ordinary
+          // pass does not inherit a recalculate-everything nobody asked for.
+          const everything = _recalcEverything;
+          _recalcEverything = false;
+          const msg = "Recalculation didn't start: its module failed to load — stale results are unchanged";
+          get().setStatus(msg);
+          toast(msg, "danger", { action: { label: "Retry", onClick: () => void get().recalcNow({ everything }) } });
+          return;
+        }
+        const [{ markEverythingStale, recomputeStaleDatasets }, { recomputeStaleFits }] = pass;
         if (_recalcEverything) {
           _recalcEverything = false;
           markEverythingStale(set, get);

@@ -4,7 +4,9 @@
 // registers itself here when it loads. The store starts that load at creation
 // (store/computedColumns.ts), so in practice it is there before anyone types
 // a formula; until then a formula using the new syntax reports
-// EXTENSION_PENDING and is recalculated the moment the module arrives.
+// EXTENSION_PENDING and is recalculated the moment the module arrives. If the
+// chunk FAILS to load, the store says so (status + a toast with Retry), and
+// the next formula evaluation retries it on its own.
 //
 // Telling every new shape apart before the module arrives would cost eager
 // bytes, so only `A[…]` and `c ? a : b` say EXTENSION_PENDING; cumsum/sheet/
@@ -46,7 +48,13 @@ export interface FormulaExtension {
 
 let ext: FormulaExtension | null = null;
 
-export const formulaExtension = (): FormulaExtension | null => ext;
+/** The loaded extension, or null. Asking while it is NOT loaded and no load
+ *  is in flight starts one (quietly, at most every RETRY_MS): a formula
+ *  evaluation is the natural moment to retry a chunk that failed to load. */
+export function formulaExtension(): FormulaExtension | null {
+  if (!ext && !loading && Date.now() - lastFailure >= RETRY_MS) void loadFormulaExtension(true).catch(() => undefined);
+  return ext;
+}
 
 export function registerFormulaExtension(e: FormulaExtension): void {
   ext = e;
@@ -60,6 +68,36 @@ export function requireExtension(): FormulaExtension {
   return ext;
 }
 
-export function loadFormulaExtension(): Promise<typeof import("./formulaRefs")> {
-  return import("./formulaRefs");
+type FormulaModule = typeof import("./formulaRefs");
+
+/** Minimum gap between automatic reload attempts after a failure. */
+export const RETRY_MS = 3000;
+let loading: Promise<FormulaModule> | null = null;
+let lastFailure = -Infinity;
+let hooks: { loaded: (m: FormulaModule) => void; failed: (quiet: boolean) => void } | null = null;
+
+/** What the store does when the module arrives (register its dataset list,
+ *  recompute the formulas that were waiting) and when a load fails (say so,
+ *  with a Retry) — set once, at store creation (store/computedColumns.ts). */
+export function onFormulaExtension(h: typeof hooks): void {
+  hooks = h;
+}
+
+/** Load the lazy formula module (one load in flight at a time). A failure —
+ *  a chunk that would not download — is reported through the `failed` hook
+ *  and leaves the next call free to try again; `quiet` marks an automatic
+ *  retry, which the hook does not announce a second time. */
+export function loadFormulaExtension(quiet = false): Promise<FormulaModule> {
+  return (loading ??= import("./formulaRefs").then(
+    (m) => {
+      hooks?.loaded(m);
+      return m;
+    },
+    (e: unknown) => {
+      loading = null;
+      lastFailure = Date.now();
+      hooks?.failed(quiet);
+      throw e;
+    },
+  ));
 }
