@@ -40,7 +40,8 @@ overlay with automatic dual-Y by unit family), linked row selection and
 masking across every view, worksheet with formulas and filters, and
 app-wide **undo/redo**.
 
-**Analyze with domain depth** — 29+ fit models plus a no-eval custom
+**Analyze with domain depth** — 70+ fit models (the MATLAB set plus
+Origin's built-in functions — [list](docs/fit_models.md)) plus a no-eval custom
 equation builder, AICc model scanning, global/batch/ODR fits, an optional
 [bumps](https://github.com/bumps/bumps) engine with DREAM posterior
 sampling; a Peak Analyzer wizard; baselines from ALS to Shirley to

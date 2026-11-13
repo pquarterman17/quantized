@@ -8,6 +8,25 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- Curve fitting now includes 33 of Origin's built-in fit functions, with
+  Origin's names, parameter order, formulas and default bounds:
+  - Peak Functions: Gauss, GaussAmp, Lorentz, a true Voigt, PsdVoigt1/2,
+    LogNormal and Asym2Sig.
+  - Exponential: ExpDec1/2/3, ExpDecay1/2/3, ExpGro1/2 and ExpGrow1/2.
+  - Growth/Sigmoidal: Boltzmann, DoseResp, Hill, Hill1, MichaelisMenten,
+    Logistic, Logistic5, SLogistic1, SGompertz and SWeibull1.
+  - Polynomial, Power and Waveform: Poly5, the 9th-order Poly, Allometric1,
+    Sine and SineDamp.
+
+  Polynomials of order 6, 7 and 8 and a line through the origin
+  (Proportional) are added alongside them.
+
+  Each one has a starting guess computed from the data, so most fits work
+  without hand-tuned starting values. Origin's `Logistic` appears as
+  "Logistic (Origin)" because the original Logistic model keeps its name.
+  `docs/fit_models.md` lists every model with its formula and its Origin Help
+  page. A model scan with no model list fits the original models plus nine
+  of the new ones; the rest can be added to the scan by name.
 - Calculators ▸ Film stack also predicts where each layer and the substrate
   appear in a reciprocal-space map for a chosen asymmetric reflection
   (H 0 L), default (103): Qx, Qz (Q = 2π/d, as in the RSM workshop), 2θ, and

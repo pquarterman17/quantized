@@ -308,8 +308,8 @@ class ScanRequest(BaseModel):
     y: list[float]
     # Optional per-point 1-sigma errors -> fit weights 1/dy^2.
     dy: list[float] | None = None
-    # None -> the default candidate set: every registry model with
-    # nParams < n/3 (calc.fit_scan.default_candidates explains the cut).
+    # None -> the default candidate set: registry models with nParams < n/3,
+    # minus the slow Origin built-ins (calc.fit_scan.default_candidates).
     models: list[str] | None = None
     # Saved custom equation models ride along as extra candidates.
     equations: list[ScanEquationCandidate] | None = None
