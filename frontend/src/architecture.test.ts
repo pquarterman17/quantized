@@ -891,12 +891,12 @@ const TS_MODULE_PINS: Record<string, number> = {
   // filtered-figure types moved verbatim to lib/originFidelityTypes.ts (re-
   // exported, no importer changed); funds the manifest's new
   // `container_integrity` field and ratchets down by the balance.
-  // 915 -> 907 (2026-11, Origin interchange integration): the saved-preview
+  // 915 -> 908 (2026-11, Origin interchange integration): the saved-preview
   // diagnostic types (OriginSavedPreview/OriginPreviewDiagnostic) joined them
   // verbatim in lib/originFidelityTypes.ts (re-exported, no importer changed);
   // funds the worksheet "Set As" `Dataset.columnDesignations` field and
   // ratchets down by the balance.
-  "/lib/types.ts": 907,
+  "/lib/types.ts": 908,
   // 893 -> 863 (P1.4 Graph Builder encodings): the error-well helpers
   // (specErrorBindings/prefillErrorZones) moved verbatim to lib/plotspecErrors.ts
   // (re-exported, no importer moved), funding the three optional encoding zones;

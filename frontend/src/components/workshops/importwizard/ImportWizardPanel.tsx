@@ -139,7 +139,7 @@ export default function ImportWizardPanel() {
                 width={56}
               />
             </label>
-            <label className="qzk-field" title="The row that names the columns — the Long Name row of an Origin ASCII export. Choosing a row re-reads the column names from it.">
+            <label className="qzk-field" title="The row that names the columns (the Long Name row of an Origin ASCII export); choosing a row re-reads the column names from it">
               <span>Header line</span>
               <NumberField
                 value={w.settings?.header_line ?? ""}
@@ -151,7 +151,7 @@ export default function ImportWizardPanel() {
                 width={56}
               />
             </label>
-            <label className="qzk-field" title="The row that gives each column's unit — the Units row of an Origin ASCII export. Any other row above the data start (an Origin Comments row) is kept as a comment in the dataset's metadata.">
+            <label className="qzk-field" title="The row that gives each column's unit (the Units row of an Origin ASCII export); any other row above the data start, such as an Origin Comments row, is kept as a comment in the dataset's metadata">
               <span>Units line</span>
               <NumberField
                 value={w.settings?.units_line ?? ""}
