@@ -3,6 +3,7 @@
 // The error-role model lives in ./errorRoles (it owns the inference too);
 // imported type-only, so there is no runtime cycle with this contract file.
 import type { ErrorBinding } from "./errorRoles";
+import type { FitBandEdges } from "./fitBandOverlay";
 import type { CorrectionParams } from "./correctionTypes";
 import type { DerivedSpec } from "./formulaTypes";
 import type { DatasetSource } from "./datasetSource";
@@ -654,11 +655,8 @@ export type CalcResult = Record<string, unknown>;
 export interface FitOverlay {
   datasetId: string;
   y: (number | null)[];
-  /** Curve Fit's confidence (and optional prediction) band, shaded around the
-   *  curve on the plot; edges align to `y` the same way. Rides on the overlay
-   *  so anything that clears or replaces the curve clears the band with it. */
-  /** Edges in order: CI low, CI high, then optionally PI low, PI high. */
-  band?: { label: string; y: (number | null)[] }[];
+  /** Curve Fit's shaded band around this curve (lib/fitBandOverlay.ts). */
+  band?: FitBandEdges;
 }
 
 /** Peak markers to overlay (points only). `y` is sparse — null except at the

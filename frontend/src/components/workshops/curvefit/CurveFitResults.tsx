@@ -89,7 +89,7 @@ export default function CurveFitResults(p: Props) {
           <Button
             size="sm"
             variant="ghost"
-            title="Delete this fit: its curve, saved recipe and Library result (Undo restores it). Closing the window keeps the fit."
+            title="Delete this fit, its curve, saved recipe and Library result (closing the window keeps them; Undo restores)"
             onClick={p.onRemoveFit}
           >
             Remove fit

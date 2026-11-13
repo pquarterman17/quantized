@@ -76,10 +76,10 @@ test.describe("Curve Fit workflow (fitting audit)", () => {
 
   test("Batch · N worksheets has a usable height and opens", async ({ page }) => {
     await gotoApp(page);
-    for (const f of ["dataset-a.csv", "dataset-b.csv"]) {
+    for (const [i, f] of ["dataset-a.csv", "dataset-b.csv"].entries()) {
       await dropFileOnto(page, page.locator(".qzk-library"), fixturePath(f));
+      await waitForDatasetCount(page, i + 1);
     }
-    await waitForDatasetCount(page, 2);
     const rows = page.locator("[data-ds-id]");
     await rows.nth(0).click();
     await rows.nth(1).click({ modifiers: ["Control"] });
