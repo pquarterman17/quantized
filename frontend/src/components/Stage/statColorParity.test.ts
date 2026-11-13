@@ -195,7 +195,7 @@ describe("Color-by on box / violin / bar — the Stat Stage draws and exports th
     expect(current).toEqual(fixture[which]);
   });
 
-  it("without a Color pick nothing changes: no levels on the draw, none on the wire", async () => {
+  it("without a Color pick: no levels on the draw or the wire, only the palette (colour by position)", async () => {
     const { result } = renderHook(() =>
       useStatStage({ active: DS, yKeys: Y_KEYS, xKey: null, seriesOrder: null, seed: null, onSeedConsumed: onConsumed }),
     );
@@ -207,7 +207,9 @@ describe("Color-by on box / violin / bar — the Stat Stage draws and exports th
     });
     const req = vi.mocked(exportStatplotFigure).mock.calls.at(-1)![0];
     expect(req.color_levels).toBeUndefined();
-    expect(req.palette).toBeUndefined();
+    // The palette always rides, so the export colours each box by position as
+    // the canvas does (statStageExport.ts paletteWire).
+    expect(req.palette).toHaveLength(8);
   });
 
   it("a colour pick that is neither the group nor the nest colours nothing", async () => {

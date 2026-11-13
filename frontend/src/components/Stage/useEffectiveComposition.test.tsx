@@ -270,7 +270,10 @@ describe("clearing an authored break (review F3/F4)", () => {
     const after = useApp.getState();
     expect(after.stackMode).toBe(true); // the toggle still did its job
     expect(after.plotWindows).toBe(before.plotWindows);
-    expect(shouldAutosave(after, before)).toBe(false);
+    // The toggle itself is a live-view edit, and those now autosave so a
+    // reload keeps them (store/autosaveTrigger.ts liveViewChanged) — what
+    // the guard protects is plotWindows' identity, above.
+    expect(shouldAutosave(after, before)).toBe(true);
   });
 
   it("F3: clearing a real break DOES change plotWindows (the guard is not over-eager)", () => {

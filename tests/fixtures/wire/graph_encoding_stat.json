@@ -38,7 +38,6 @@
         "lot = L2 / wafer = W2"
       ],
       "fmt": "svg",
-      "title": "y by lot / wafer",
       "x_label": "lot / wafer",
       "y_label": "y",
       "filename": "box_y",
@@ -50,14 +49,6 @@
       "show_points": false,
       "show_mean_ci": false,
       "show_connect_means": false,
-      "color_levels": [
-        0,
-        1,
-        0,
-        1,
-        0,
-        null
-      ],
       "palette": [
         "#0b6e4f",
         "#c3423f",
@@ -67,6 +58,14 @@
         "#1b998b",
         "#e84855",
         "#3e2f5b"
+      ],
+      "color_levels": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        null
       ],
       "show_n": true,
       "caveat": "Caveat: n < 3 in 2 groups - summaries and intervals are unreliable",
@@ -150,7 +149,6 @@
         "lot = L2"
       ],
       "fmt": "svg",
-      "title": "y by lot",
       "x_label": "lot",
       "y_label": "y",
       "filename": "violin_y",
@@ -159,11 +157,6 @@
       "point_row_indices": null,
       "summary": "none",
       "error_bars": "ci95",
-      "color_levels": [
-        0,
-        1,
-        2
-      ],
       "palette": [
         "#0b6e4f",
         "#c3423f",
@@ -173,6 +166,11 @@
         "#1b998b",
         "#e84855",
         "#3e2f5b"
+      ],
+      "color_levels": [
+        0,
+        1,
+        2
       ],
       "show_n": true,
       "caveat": null,
@@ -262,7 +260,6 @@
       "caveat": null,
       "error_note": "Error bars: SE of the mean",
       "fmt": "svg",
-      "title": "y by lot",
       "x_label": "lot",
       "y_label": "y",
       "filename": "bar_y"
@@ -310,7 +307,6 @@
         "lot = L2 / wafer = W2"
       ],
       "fmt": "svg",
-      "title": "y by lot / wafer, faceted",
       "x_label": "lot / wafer",
       "y_label": "y",
       "filename": "box_y_faceted",

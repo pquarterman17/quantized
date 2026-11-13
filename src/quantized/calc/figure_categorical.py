@@ -40,6 +40,7 @@ def _draw_categorical_bars(
     raw_groups: list[str] | None = None,
     bar_marks: dict[str, Any] | None = None,
     colors: list[str | None] | None = None,
+    palette: list[str] | None = None,
 ) -> Any | None:
     """Draw one grouped/stacked bar panel into `ax` — shared by the flat
     single-panel path below and `figure_facets.render_categorical_facets_figure`
@@ -69,7 +70,8 @@ def _draw_categorical_bars(
     panel is given its own cells' (``figure_facets``, JMP_GAP J5 residual).
 
     ``colors`` (P1.4 Color-by, one per category): every series' bar in its
-    category's colour (``calc.figure_stat_colors.bar_colors``)."""
+    category's colour (``calc.figure_stat_colors.bar_colors``); ``palette``
+    the series' own colours otherwise (the canvas' ``seriesColor(i)``)."""
     n_groups, n_series = len(groups), len(series)
     check_aligned(colors, n_groups, "category")
     x = np.arange(n_groups, dtype=float)
@@ -79,7 +81,7 @@ def _draw_categorical_bars(
             yerr = errs[:, si] if errs is not None and si == n_series - 1 else None
             ax.bar(
                 x, vals[:, si], 0.68, bottom=bottom, yerr=yerr, capsize=3,
-                label=series[si], **bar_colors(colors, si),
+                label=series[si], **bar_colors(colors, si, palette),
             )
             bottom = bottom + np.nan_to_num(vals[:, si])
     else:
@@ -91,7 +93,7 @@ def _draw_categorical_bars(
             yerr = errs[:, si] if errs is not None else None
             ax.bar(
                 x + offset, vals[:, si], width * 0.85, yerr=yerr, capsize=3,
-                label=series[si], **bar_colors(colors, si),
+                label=series[si], **bar_colors(colors, si, palette),
             )
         if bar_marks:
             overlay_bar_marks(
@@ -186,6 +188,7 @@ def render_categorical_figure(
     axis_style: dict[str, Any] | None = None,
     bar_marks: dict[str, Any] | None = None,
     colors: list[str | None] | None = None,
+    palette: list[str] | None = None,
     title: str = "",
     x_label: str = "",
     y_label: str = "",
@@ -251,7 +254,7 @@ def render_categorical_figure(
         ax = fig.subplots()
         outer = _draw_categorical_bars(
             ax, groups, series, vals, errs, stacked, cnts, axis_style, raw_groups, bar_marks,
-            colors,
+            colors, palette,
         )
         layout_rect = add_caveat(fig, caveat)
         if title:

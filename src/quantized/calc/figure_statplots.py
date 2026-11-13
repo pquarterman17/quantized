@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+from matplotlib.colors import to_rgba
 from numpy.typing import ArrayLike
 
 from quantized.calc.figure_category_axis import style_category_axis
@@ -405,11 +406,14 @@ def _draw_statplot(
         )
 
     sample = np.asarray(data, dtype=float).ravel()
+    # One glyph colour (``colors[0]``): the canvas' ``seriesColor(0)``, when
+    # the client sent its palette; matplotlib's own otherwise, as before.
+    one: str | None = colors[0] if colors else None
     if kind in ("qq", "probability"):
         q = _qq_plot(sample, dist=dist)
         theo = np.asarray(q["theoretical_quantiles"])
         obs = np.asarray(q["sample_quantiles"])
-        ax.scatter(theo, obs, s=12, color=st.accent if hasattr(st, "accent") else None)
+        ax.scatter(theo, obs, s=12, color=one or (st.accent if hasattr(st, "accent") else None))
         line = q["slope"] * theo + q["intercept"]
         ax.plot(theo, line, color="0.4", linewidth=st.line_width)
         ax.set_xlabel(ax.get_xlabel() or f"Theoretical quantiles ({dist})")
@@ -419,8 +423,12 @@ def _draw_statplot(
     # histogram
     h = _histogram(sample, bins=bins, density=fit is not None, fit=fit)
     edges = np.asarray(h["edges"])
-    ax.hist(sample, bins=edges, density=fit is not None,
-            color="0.6", edgecolor="white", linewidth=0.5)
+    # The canvas: each bin filled at alpha 0.45, edged opaque, in that colour.
+    hist_colors: dict[str, Any] = (
+        {"color": to_rgba(one, 0.45), "edgecolor": one} if one
+        else {"color": "0.6", "edgecolor": "white"}
+    )
+    ax.hist(sample, bins=edges, density=fit is not None, linewidth=0.5, **hist_colors)
     if fit is not None and "fit" in h:
         ax.plot(h["fit"]["x"], h["fit"]["pdf"], color="0.1", linewidth=st.line_width)
     return None

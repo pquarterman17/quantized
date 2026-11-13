@@ -214,14 +214,14 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
             ):
                 from quantized.calc.figure_facets import render_stat_facets_figure  # lazy
                 from quantized.calc.figure_group_notes import footnote_text
-                from quantized.calc.figure_stat_colors import level_colors
+                from quantized.calc.figure_stat_colors import position_colors
 
             panels: list[dict[str, Any]] = [
                 {
                     "label": f.label, "kind": f.kind, "data": f.data, "labels": f.labels,
                     "y_domain": f.y_domain, "tiers": f.tiers,
                     "point_row_indices": f.point_row_indices, "connect_breaks": f.connect_breaks,
-                    "colors": level_colors(f.color_levels, req.palette),
+                    "colors": position_colors(f.color_levels, req.palette, len(f.data)),
                 }
                 for f in req.facets
             ]
@@ -240,7 +240,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 "quantized.calc.figure_stat_colors",
             ):
                 from quantized.calc.figure_group_notes import footnote_text
-                from quantized.calc.figure_stat_colors import level_colors
+                from quantized.calc.figure_stat_colors import position_colors
                 from quantized.calc.figure_statplots import render_statplot_figure  # lazy
 
             data: Any = req.data
@@ -254,7 +254,11 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 show_n=req.show_n, caveat=footnote_text(req.error_note, req.caveat),
                 connect_breaks=req.connect_breaks,
                 marks=req.marks(), axis_style=_axis_style(req.axis_style), y_domain=req.y_domain,
-                colors=level_colors(req.color_levels, req.palette),
+                # qq / histogram: one glyph colour, the canvas' seriesColor(0).
+                colors=position_colors(
+                    req.color_levels, req.palette,
+                    len(data) if req.kind in ("box", "violin", "strip") else 1,
+                ),
                 svg_text_as_paths=req.svg_text_as_paths,
             )
     except CALC_ERRORS_WITH_LOCK as exc:
@@ -385,6 +389,7 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
                     "label": f.label, "groups": f.groups, "series": f.series,
                     "values": f.values, "errors": f.errors, "counts": f.counts,
                     "bar_marks": f.bar_marks(), "colors": level_colors(f.color_levels, req.palette),
+                    "palette": req.palette,
                 }
                 for f in req.facets
             ]
@@ -410,7 +415,7 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
                 y_label=req.y_label, dpi=dpi, counts=req.counts,
                 caveat=footnote_text(req.error_note, req.caveat),
                 axis_style=_axis_style(req.axis_style), bar_marks=req.bar_marks(),
-                colors=level_colors(req.color_levels, req.palette),
+                colors=level_colors(req.color_levels, req.palette), palette=req.palette,
                 svg_text_as_paths=req.svg_text_as_paths,
             )
     except CALC_ERRORS_WITH_LOCK as exc:
