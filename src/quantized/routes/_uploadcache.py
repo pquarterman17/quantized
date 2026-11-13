@@ -130,9 +130,13 @@ class UploadCache:
         fails closed here instead of escaping the cache."""
         base = os.path.normpath(self.root)
         candidate = os.path.normpath(os.path.join(base, token, entry.name))
-        if not candidate.startswith(base + os.sep):
+        prefix = base if base.endswith(os.sep) else base + os.sep  # "/" or "C:\\" root
+        if not candidate.startswith(prefix):
             raise ValueError(f"upload cache path escapes {base}: {token!r}/{entry.name!r}")
-        if os.path.dirname(os.path.dirname(candidate)) != base:
+        token_dir = os.path.dirname(candidate)
+        # Exactly <base>/<token>/<name>: the depth check refuses a token with
+        # a separator, the token-dir check a ".." name at a filesystem root.
+        if os.path.dirname(token_dir) != base or token_dir != os.path.join(base, token):
             raise ValueError(f"malformed upload cache path: {token!r}/{entry.name!r}")
         return Path(candidate)
 
@@ -162,7 +166,14 @@ class UploadCache:
             return
         disk, ok = fs.read_index(self.root)
         merged: dict[str, fs.Entry] = {}
-        for token in {*disk, *self._entries}:
+        # Deterministic merge order: the index's rows as written (LRU order,
+        # oldest first), then tokens only this process knows (also LRU). The
+        # sort below is stable, so this order is the tie-break for equal
+        # ``last_used`` -- which a coarse clock produces routinely (Windows
+        # time.time() on Python < 3.13 ticks every ~15.6 ms). It used to be a
+        # SET, so ties fell back to hash-seed order and a restart could evict
+        # the most recently used entry instead of the least.
+        for token in dict.fromkeys([*disk, *self._entries]):
             mine, theirs = self._entries.get(token), disk.get(token)
             entry = theirs or mine
             assert entry is not None

@@ -349,6 +349,82 @@ def test_resolved_path_is_exactly_token_dir_and_name(tmp_path: Path) -> None:
     assert cache.resolve(token) == dest
 
 
+@pytest.mark.parametrize(
+    "root",
+    [
+        r"C:\Users\RUNNER~1\AppData\Local\Temp\pytest-0\cache",  # 8.3 short name
+        r"C:/Users/runneradmin/AppData/Local/Temp/mixed\cache",  # mixed separators
+        "C:\\",  # a drive root: the prefix must not become "C:\\\\"
+    ],
+)
+def test_path_containment_under_windows_path_semantics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, root: str
+) -> None:
+    """``_path`` with ``ntpath`` standing in for ``os.path`` (CI's Windows
+    runner, simulated on any host): a contained path is accepted and comes back
+    as ``<root>\\<token>\\<name>``; an escape is still refused."""
+    import ntpath
+    from pathlib import PureWindowsPath
+    from types import SimpleNamespace
+
+    cache = UploadCache(tmp_path)
+    cache.root = PureWindowsPath(root)  # type: ignore[assignment]
+    monkeypatch.setattr(cache_mod, "os", SimpleNamespace(path=ntpath, sep="\\"))
+    token = "a" * 64
+    got = str(cache._path(token, fs.Entry("proj.opj", 1, 1.0)))
+    assert got == ntpath.join(ntpath.normpath(root), token, "proj.opj")
+    with pytest.raises(ValueError):
+        cache._path(token, fs.Entry("..\\..\\escape.opj", 1, 1.0))
+
+
+def test_path_containment_at_a_posix_filesystem_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """At ``/`` (as at ``C:\\``) a ``..`` name normalizes to a path that is
+    still under the root and two levels down from nothing -- only the exact
+    token-directory check refuses it."""
+    import posixpath
+    from pathlib import PurePosixPath
+    from types import SimpleNamespace
+
+    cache = UploadCache(tmp_path)
+    cache.root = PurePosixPath("/")  # type: ignore[assignment]
+    monkeypatch.setattr(cache_mod, "os", SimpleNamespace(path=posixpath, sep="/"))
+    token = "a" * 64
+    assert str(cache._path(token, fs.Entry("p.opj", 1, 1.0))) == f"/{token}/p.opj"
+    with pytest.raises(ValueError):
+        cache._path(token, fs.Entry("../../escape.opj", 1, 1.0))
+
+
+def test_equal_timestamps_keep_lru_order_across_a_restart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Windows' time.time() on Python < 3.13 ticks every ~15.6 ms, so entries
+    staged and used back to back share one ``last_used``. Freeze the clock to
+    force that tie: the restarted cache must keep the index's LRU order (it
+    used to merge through a set, so ties fell back to hash-seed order and the
+    restart evicted the most recently used entry about half the time --
+    ``test_lru_order_survives_a_restart`` failing on windows/3.11). Eight
+    entries make a hash order that happens to match vanishingly unlikely."""
+    monkeypatch.setattr(time, "time", lambda: 1_700_000_000.0)
+    cache = UploadCache(tmp_path, max_bytes=10_000)
+    tokens = [cache.stage(f"f{i}.opj", f"content{i}".encode())[1] for i in range(8)]
+    cache.resolve(tokens[0])  # now the most recently used
+    expected = [*tokens[1:], tokens[0]]
+    restarted = UploadCache(tmp_path, max_bytes=10_000, foreign_grace_s=0)
+    with restarted._lock:
+        restarted._sync()
+    assert list(restarted._entries) == expected
+
+    small = UploadCache(tmp_path / "lru", max_bytes=250)
+    _, a = small.stage("a.opj", b"a" * 100)
+    _, b = small.stage("b.opj", b"b" * 100)
+    small.resolve(a)
+    again = UploadCache(tmp_path / "lru", max_bytes=250, foreign_grace_s=0)
+    again.stage("c.opj", b"c" * 100)
+    assert again.resolve(b) is None and again.resolve(a) is not None
+
+
 # ── review item 8: never touch files it did not create ──────────────────────
 
 
