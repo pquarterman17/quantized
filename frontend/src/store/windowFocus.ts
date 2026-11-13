@@ -5,7 +5,7 @@
 
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { dedupeWindowTitle, defaultPlotView, displayedWindowTitle, hydrateView, snapshotView, type PlotView, type PlotWindow, type WinState, type WindowGeometry } from "../lib/plotview";
-import { reboundWindowTitle } from "../lib/plotWindows";
+import { cascadeLayout, reboundWindowTitle, tileLayout } from "../lib/plotWindows";
 import { plotIntentStageTab } from "../lib/stagetab";
 import { workbookDisclosurePatch } from "./libraryPanel";
 import { toast } from "./toasts";
@@ -38,6 +38,24 @@ export function _relayoutVisible(s: AppState, geoms: readonly WindowGeometry[]):
       return placed;
     }),
   };
+}
+/** Tile/Cascade's patch, or null when there is nothing to arrange: no
+ *  visible window (or fewer than 2 for Cascade — nothing to stagger), or a
+ *  layout identical to the current one (the windows are already arranged).
+ *  A null means the action records no undo step (review finding: an empty
+ *  Tile/Cascade left a no-op entry on the undo stack). */
+export function arrangedWindowsPatch(s: AppState, kind: "tile" | "cascade"): Partial<AppState> | null {
+  const visible = s.plotWindows.filter((w) => w.winState !== "minimized");
+  if (visible.length < (kind === "tile" ? 1 : 2)) return null;
+  const bounds = s.plotCanvasBounds ?? { width: 1200, height: 800 };
+  const geoms = kind === "tile" ? tileLayout(visible.length, bounds) : cascadeLayout(visible.length);
+  const patch = _relayoutVisible(s, geoms);
+  const next = patch.plotWindows ?? s.plotWindows;
+  const same = next.every((w, i) => {
+    const was = s.plotWindows[i];
+    return w.winState === was.winState && w.z === was.z && JSON.stringify(w.geometry) === JSON.stringify(was.geometry);
+  });
+  return same ? null : patch;
 }
 /** Shared "make `id` the live focus" tail for closeWindow/focusWindow/
  *  minimizeWindow/restoreWindow: hydrate `view` onto the singleton fields

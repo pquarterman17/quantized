@@ -19,7 +19,6 @@
 
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import {
-  cascadeLayout,
   defaultPlotView,
   displayedWindowTitle,
   dropGeometry,
@@ -34,7 +33,7 @@ import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { createPlotWindowDocument, plotWindowDatasetId, plotWindowView, syncPlotWindow } from "./windowDocuments";
 import { datasetViewDefaults } from "./windowDefaults";
-import { _focusHandoff, _relayoutVisible, dedupeAgainstDisplayed, focusedRebindPatch, mainWindow, maxZ, nextWindowId } from "./windowFocus";
+import { _focusHandoff, _relayoutVisible, arrangedWindowsPatch, dedupeAgainstDisplayed, focusedRebindPatch, mainWindow, maxZ, nextWindowId } from "./windowFocus";
 import type { WindowsSlice } from "./windowsSliceTypes";
 import { dropWorksheetSelection } from "./worksheetSelection";
 
@@ -363,20 +362,20 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
     // bounds aren't known yet (e.g. invoked from the palette before the Plot
     // tab ever mounted). Tile on ONE visible window fills the stage (figures
     // audit #15: it used to be a no-op, leaving a small window in a corner);
-    // Cascade stays a no-op below 2 (nothing to stagger).
-    tileWindows: () => (get().recordHistory("tile windows"),
-      set((s) => {
-        const visible = s.plotWindows.filter((w) => w.winState !== "minimized");
-        if (visible.length < 1) return {};
-        const bounds = s.plotCanvasBounds ?? { width: 1200, height: 800 };
-        return _relayoutVisible(s, tileLayout(visible.length, bounds));
-      })),
-    cascadeWindows: () => (get().recordHistory("cascade windows"),
-      set((s) => {
-        const visible = s.plotWindows.filter((w) => w.winState !== "minimized");
-        if (visible.length < 2) return {};
-        return _relayoutVisible(s, cascadeLayout(visible.length));
-      })),
+    // Cascade stays a no-op below 2 (nothing to stagger). A no-op records no
+    // undo step (store/windowFocus.ts arrangedWindowsPatch).
+    tileWindows: () => {
+      const patch = arrangedWindowsPatch(get(), "tile");
+      if (!patch) return;
+      get().recordHistory("tile windows");
+      set(patch);
+    },
+    cascadeWindows: () => {
+      const patch = arrangedWindowsPatch(get(), "cascade");
+      if (!patch) return;
+      get().recordHistory("cascade windows");
+      set(patch);
+    },
     // Minimizing the FOCUSED window hands focus to the top-z remaining VISIBLE
     // window — `closeWindow`'s exact refocus formula, but the window stays IN
     // `plotWindows` (docked in the strip) rather than being removed. A no-op

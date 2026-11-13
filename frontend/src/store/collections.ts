@@ -51,7 +51,7 @@ export function createCollectionsSlice(set: SliceSet, get: SliceGet): Collection
 
     renameCollection: (id, name) => {
       const nm = name.trim();
-      if (!nm || !get().collections.some((c) => c.id === id)) return;
+      if (!nm || !get().collections.some((c) => c.id === id && c.name !== nm)) return; // no-op: no undo step
       get().recordHistory("rename Collection");
       set((s) => ({
         collections: s.collections.map((c) => (c.id === id ? { ...c, name: nm } : c)),

@@ -232,6 +232,10 @@ export function createDatasetListEditsSlice(set: SliceSet, get: SliceGet): Datas
       });
     },
     renameDataset: (id, name) => {
+      // A rename that changes nothing (same name, blank, unknown id) records no
+      // undo step (review finding: a no-op Library rename did).
+      const d = get().datasets.find((x) => x.id === id);
+      if (!d || (name.trim() || d.name) === d.name) return;
       get().recordHistory("rename dataset");
       set((s) => ({
         datasets: s.datasets.map((d) =>
@@ -249,7 +253,12 @@ export function createDatasetListEditsSlice(set: SliceSet, get: SliceGet): Datas
       set((s) => ({ folders: treeCreateFolder(s.folders, parentId, name, id) }));
       return id;
     },
-    renameFolder: (id, name) => (get().recordHistory("rename folder"), set((s) => ({ folders: treeRenameFolder(s.folders, id, name) }))),
+    renameFolder: (id, name) => {
+      const f = get().folders.find((x) => x.id === id);
+      if (!f || !name.trim() || name.trim() === f.name) return; // no-op: no undo step
+      get().recordHistory("rename folder");
+      set((s) => ({ folders: treeRenameFolder(s.folders, id, name) }));
+    },
     updateFolder: (id, patch) => (get().recordHistory("edit folder properties"), set((s) => ({ folders: treeUpdateFolder(s.folders, id, patch) }))),
     deleteFolder: (id, mode = "reparent") => deleteFolderWithTrash(get, set, id, mode),
     moveFolder: (id, newParentId, beforeId) => (get().recordHistory("move folder"), set((s) => ({ folders: treeMoveFolder(s.folders, id, newParentId, beforeId) }))),

@@ -406,10 +406,10 @@ describe("moveDataset / renameDataset", () => {
     expectUndoRedo(pre, ["datasets"]);
   });
 
-  it("renameDataset to blank keeps the old name (a new datasets array all the same)", () => {
+  it("renameDataset to blank keeps the old name and records nothing (no no-op undo step)", () => {
     const before = snapshot();
     act().renameDataset("d2", "   ");
-    expect(changedSince(before)).toEqual(["datasets", "future", "history"]);
+    expect(changedSince(before)).toEqual([]);
     expect(act().datasets[1].name).toBe("d2");
   });
 });
@@ -432,7 +432,7 @@ describe("folder tree", () => {
     expect(act().folders.find((f) => f.id === id)?.name).toBe("New Folder");
   });
 
-  it("renameFolder writes folders (+ history); a blank name keeps the same array", () => {
+  it("renameFolder writes folders (+ history); a blank name changes nothing, history included", () => {
     const pre = pick(["folders"]);
     let before = snapshot();
     act().renameFolder("f2", " Kids ");
@@ -442,7 +442,7 @@ describe("folder tree", () => {
     expectUndoRedo(pre, ["folders"]);
     before = snapshot();
     act().renameFolder("f2", "  ");
-    expect(changedSince(before)).toEqual(["future", "history"]);
+    expect(changedSince(before)).toEqual([]);
   });
 
   it("deleteFolder (reparent) re-homes members, drops expanded ids, retargets the selection, sends a folder entry to Trash", () => {
