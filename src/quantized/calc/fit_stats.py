@@ -55,7 +55,8 @@ def fit_compare(
     the fit result agree for the same fit (fitting audit, finding 16).
     MATLAB fitCompare used ``n·ln(RSS/n) + 2k``, a constant ``n(1 + ln 2π)``
     lower, on the unweighted RSS; the golden test documents the departure.
-    ``rmse`` stays the unweighted ``√(RSS/n)`` in data units.
+    ``rmse`` stays the unweighted ``√(RSS/n)`` in data units. ``adjR2`` uses
+    the residual dof ``n - p`` (Origin / statsmodels), not MATLAB's ``n - p - 1``.
     """
     yv = np.asarray(y, dtype=float).ravel()
     res = np.asarray(residuals, dtype=float).ravel()
@@ -80,7 +81,11 @@ def fit_compare(
         r2 = adj_r2 = float("nan")
     else:
         r2 = 1 - rss / tss
-        dof_denom = n - p - 1
+        # n - p, with p counting EVERY fitted parameter (intercept included):
+        # Origin's NLFit, statsmodels and calc.fit_report. MATLAB fitCompare's
+        # n - p - 1 treated p as the non-intercept count; the golden test
+        # documents the departure (integration review item 1).
+        dof_denom = n - p
         adj_r2 = 1 - (1 - r2) * (n - 1) / dof_denom if dof_denom > 0 else float("nan")
 
     chi_sq = rss if wv is None else float(np.sum(wv * res**2))
@@ -109,9 +114,19 @@ def fit_compare(
     }
 
 
-def residual_diagnostics(residuals: ArrayLike) -> dict[str, Any]:
-    """Residual diagnostics (QQ/DW/runs/skew/kurtosis). Port of residualDiagnostics."""
+def residual_diagnostics(residuals: ArrayLike, weights: ArrayLike | None = None) -> dict[str, Any]:
+    """Residual diagnostics (QQ/DW/runs/skew/kurtosis). Port of residualDiagnostics.
+
+    With the fit's ``weights``, only the points the fit used (w > 0) count:
+    a zero-weight point was not fitted, so its residual is not evidence about
+    the fit (integration review item 2; the same rule as ``fit_compare``).
+    """
     r = np.asarray(residuals, dtype=float).ravel()
+    if weights is not None:
+        wv = np.asarray(weights, dtype=float).ravel()
+        if wv.size != r.size:
+            raise ValueError(f"weights must have {r.size} entries (one per point), got {wv.size}")
+        r = r[wv > 0]
     n = r.size
     nan = float("nan")
     if n < 3:

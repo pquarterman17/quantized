@@ -20,7 +20,7 @@ import type { CalcResult } from "../../../lib/types";
 
 interface Props {
   result: CalcResult;
-  fitData: { x: number[]; y: number[] };
+  fitData: { x: number[]; y: number[]; dy?: number[] | null; weights?: number[] | null };
 }
 
 /** The fit's own metric when it has one, else the diagnostics route's. */
@@ -35,7 +35,9 @@ function rowsFor(d: DiagnosticsResult, result: CalcResult): string[][] {
   const runs = r.runsTestZ == null ? "—" : `${fmt(r.runsTestZ)} (p ${fmt(r.runsTestP)})`;
   const weighted = typeof result.chiSq === "number" && typeof result.SSR === "number" && result.chiSq !== result.SSR;
   const r2 = own(result, "R2", c.R2);
-  const dofAdj = c.n - c.p - 1;
+  // Residual dof n - p (Origin / statsmodels / the fit report), p = every
+  // fitted parameter (integration review item 1).
+  const dofAdj = c.n - c.p;
   const adjR2 = typeof result.R2 === "number"
     ? (dofAdj > 0 ? 1 - ((1 - result.R2) * (c.n - 1)) / dofAdj : null)
     : c.adjR2;
@@ -68,8 +70,17 @@ export default function FitDiagnosticsSection({ result, fitData }: Props) {
     if (!open || !Array.isArray(residuals)) return;
     const ctrl = new AbortController();
     const nParams = Number(result.nFree ?? (result.params as number[] | undefined)?.length ?? 0);
+    // The fit's own weights (a direct column as given, or 1/dy²), so n, AIC
+    // and the residual statistics cover the points the fit used — a
+    // zero-weight outlier was being counted (integration review item 2).
+    const weights = fitData.weights ?? (fitData.dy ? fitData.dy.map((d) => 1 / (d * d)) : null);
     fitDiagnostics(
-      { y: fitData.y, residuals: residuals.map((v) => v ?? Number.NaN), n_params: nParams },
+      {
+        y: fitData.y,
+        residuals: residuals.map((v) => v ?? Number.NaN),
+        n_params: nParams,
+        ...(weights && weights.length === fitData.y.length ? { weights } : {}),
+      },
       ctrl.signal,
     )
       .then(setDiag)

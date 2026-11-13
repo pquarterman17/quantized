@@ -37,6 +37,13 @@ def test_fit_compare_matches_matlab(
     assert shift == pytest.approx(227.03016531, rel=1e-9)
     for key in ("aic", "aicc", "bic"):
         ref[key] = ref[key] + shift
+    # DEPARTURE 2 (integration review item 1): adjusted R² on the residual dof
+    # n - p (p = every fitted parameter), as Origin's NLFit, statsmodels and
+    # the fit report compute it; MATLAB fitCompare divided by n - p - 1. The
+    # intended value is frozen from the golden R² (n = 80, p = 3).
+    n, p = ref["n"], ref["p"]
+    ref["adjR2"] = 1 - (1 - ref["R2"]) * (n - 1) / (n - p)
+    assert ref["adjR2"] == pytest.approx(0.99962052, rel=1e-6)
     compare_calc(out, ref, rtol=1e-6, atol=1e-9)
 
 
@@ -115,3 +122,21 @@ def test_fit_bands_ci_inside_pi() -> None:
     assert np.all(b["ciHi"] <= b["piHi"] + 1e-12)  # CI band inside PI band
     assert np.all(b["ciLo"] >= b["piLo"] - 1e-12)
     assert np.all(b["ciHi"] >= b["ciLo"])
+
+
+def test_adjusted_r2_matches_statsmodels_and_the_fit_report() -> None:
+    """Integration review item 1: one adjusted R² (n - p), equal to statsmodels'
+    OLS rsquared_adj and to calc.fit_report's for the same fit."""
+    import statsmodels.api as sm
+
+    from quantized.calc.fit_report import fit_report
+
+    rng = np.random.default_rng(3)
+    x = np.linspace(0.0, 10.0, 25)
+    y = 1.3 * x + 0.4 + rng.normal(0.0, 1.0, x.size)
+    res = sm.OLS(y, sm.add_constant(x)).fit()
+    resid = y - res.fittedvalues
+    out = fit_compare(y, resid, 2)
+    rep = fit_report(list(res.params), list(res.bse), None, list(y), list(resid), 2)
+    assert out["adjR2"] == pytest.approx(res.rsquared_adj, rel=1e-12)
+    assert rep["stats"]["adjR2"] == pytest.approx(out["adjR2"], rel=1e-12)

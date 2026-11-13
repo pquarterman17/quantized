@@ -52,9 +52,25 @@ describe("FitDiagnosticsSection", () => {
     expect(valueOf("RMSE (y units)")).toContain("0.158");
     expect(valueOf("weighted χ²")).toContain("3");
     // R² is the fit's own (weighted), not the route's unweighted 0.9; adj. R²
-    // follows from it: 1 - (1 - 0.5)(4 - 1)/(4 - 2 - 1) = -0.5.
+    // follows from it on the residual dof n - p (Origin / statsmodels / the
+    // fit report): 1 - (1 - 0.5)(4 - 1)/(4 - 2) = 0.25 (was n - p - 1: -0.5).
     expect(valueOf("R² (weighted)")).toContain("0.5");
-    expect(valueOf("adj. R²")).toContain("-0.5");
+    expect(valueOf("adj. R²")).toContain("0.25");
+  });
+
+  it("sends the fit's weights: a direct column as given, error bars as 1/dy²", async () => {
+    const result = { residuals: [0.1, -0.1, 20, -0.2], nFree: 2 };
+    const { unmount } = render(
+      <FitDiagnosticsSection result={result} fitData={{ x: [0, 1, 2, 3], y: [1, 2, 3, 4], dy: null, weights: [1, 1, 0, 2] }} />,
+    );
+    await open();
+    await screen.findByText("AIC");
+    expect(vi.mocked(fitDiagnostics).mock.calls[0]![0]).toMatchObject({ weights: [1, 1, 0, 2] });
+    unmount();
+    render(<FitDiagnosticsSection result={result} fitData={{ x: [0, 1, 2, 3], y: [1, 2, 3, 4], dy: [0.5, 1, 2, 1] }} />);
+    await open();
+    await screen.findByText("AIC");
+    expect(vi.mocked(fitDiagnostics).mock.calls[1]![0]).toMatchObject({ weights: [4, 1, 0.25, 1] });
   });
 
   it("falls back to the route's values for a result without them, and lists no weighted χ² unweighted", async () => {

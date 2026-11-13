@@ -124,7 +124,7 @@ def diagnostics(req: DiagnosticsRequest) -> dict[str, Any]:
         "compare": to_jsonable(
             call_calc(fit_compare, req.y, req.residuals, req.n_params, weights=req.weights)
         ),
-        "residuals": to_jsonable(call_calc(residual_diagnostics, req.residuals)),
+        "residuals": to_jsonable(call_calc(residual_diagnostics, req.residuals, req.weights)),
     }
 
 

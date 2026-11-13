@@ -281,3 +281,28 @@ def test_stats_version_1_reproduces_the_pre_2026_11_statistics() -> None:
     n = x.size
     legacy_aic = 2 * 3 + n * np.log(2 * np.pi * old["chiSq"] / n) + n
     assert old["AIC"] == pytest.approx(legacy_aic, rel=1e-10)
+
+
+def test_diagnostics_leave_zero_weight_points_out() -> None:
+    """Integration review item 2: a zero-weight outlier was not fitted, so it
+    counts neither in n nor in the residual statistics."""
+    rng = np.random.default_rng(5)
+    x = np.linspace(0.0, 10.0, 25)
+    y = 2.0 * x + 1.0 + rng.normal(0.0, 0.5, x.size)
+    y[7] += 20.0
+    w = np.ones_like(x)
+    w[[7, 15]] = 0.0
+    fit = client.post("/api/fitting/fit", json={"model": "Linear", "x": x.tolist(), "y": y.tolist(),
+                                                "weights": w.tolist()}).json()
+    resp = client.post("/api/fitting/diagnostics", json={
+        "y": y.tolist(), "residuals": fit["residuals"], "n_params": fit["nFree"],
+        "weights": w.tolist(),
+    })
+    assert resp.status_code == 200
+    out = resp.json()
+    keep = w > 0
+    used = residual_diagnostics(np.asarray(fit["residuals"])[keep])
+    assert out["compare"]["n"] == 23
+    assert out["residuals"]["skewness"] == pytest.approx(used["skewness"], rel=1e-12)
+    assert out["residuals"]["durbinWatson"] == pytest.approx(used["durbinWatson"], rel=1e-12)
+    assert abs(out["residuals"]["skewness"]) < 2  # the +20 outlier would push it past 4
