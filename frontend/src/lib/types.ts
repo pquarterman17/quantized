@@ -56,13 +56,6 @@ export interface OriginFigureFidelity {
   omissions: string[];
 }
 
-export interface OriginFilteredFigure {
-  index: number;
-  name: string;
-  layer: number | null;
-  reason: string;
-}
-
 export interface OriginSavedPreview {
   format: "png";
   mime: "image/png";
@@ -81,28 +74,10 @@ export interface OriginPreviewDiagnostic {
   assets?: OriginSavedPreview[];
 }
 
-export interface OriginFidelityManifest {
-  version: 1;
-  container: "opj" | "opju";
-  status: OriginFidelityStatus;
-  graph_records_total: number;
-  graph_records_actionable: number;
-  graph_records_filtered: number;
-  omissions: string[];
-  filtered_figures: OriginFilteredFigure[];
-  /** Optional for backward compatibility with #49 workspaces. */
-  preview_diagnostics?: OriginPreviewDiagnostic[];
-  /** File length vs the size its header records (backend
-   *  io/origin_project/integrity.py). A truncated file also lists the
-   *  `file_truncated` omission. Optional: older workspaces lack it. */
-  container_integrity?: {
-    checked: boolean;
-    complete: boolean | null;
-    file_bytes: number;
-    declared_bytes: number | null;
-    detail: string;
-  };
-}
+// The fidelity manifest + its filtered-figure records live in a sibling
+// (types.ts module-size ceiling); re-exported so every importer is unchanged.
+import type { OriginFidelityManifest } from "./originFidelityTypes";
+export type { OriginContainerIntegrity, OriginFidelityManifest, OriginFilteredFigure } from "./originFidelityTypes";
 
 /** The `books[]` entry for the book already returned in full at the payload's
  *  top level (ORIGIN_FILE_DECODE_PLAN #38) — carries no data of its own; the

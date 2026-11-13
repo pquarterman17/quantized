@@ -110,8 +110,8 @@ export function announceBookFailure(get: () => OfferState, ds: Dataset, msg: str
   if (src?.token && isExpiredUpload(src, e)) {
     if (!claimExpiredUploadNotice(src.token)) return;
     toast(
-      `The uploaded Origin project behind "${ds.name}" is no longer in the server's upload cache, ` +
-        "so its books can't load. Re-import the file to continue.",
+      `The uploaded project behind "${ds.name}" is no longer in the server's upload cache. ` +
+        "Re-import the file to load its books.",
       "danger",
       reimportOffer(get, ds),
     );
