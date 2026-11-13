@@ -317,6 +317,52 @@ describe("ensureBookData — a failed load offers the same recovery", () => {
   });
 });
 
+describe("an expired upload — one toast while it shows, however many books hit it", () => {
+  const UP: BookSource = { kind: "upload", token: "a".repeat(64), bookId: "b1", rows: 4000, cols: 1 };
+  const expired = () => new Error("upload expired -- re-import the file to fetch this book");
+  const FULL_TEXT =
+    'The uploaded Origin project behind "book0" is no longer in the server\'s upload cache, ' +
+    "so its books can't load. Re-import the file to continue.";
+  const threeBooks = () =>
+    ["d1", "d2", "d3"].map((id, i) => pendingDataset({ id, name: `book${i}`, pending: { ...UP, bookId: `b${i}` } }));
+
+  it("three books of one upload, each failing with its own rejection, raise ONE Re-import toast", async () => {
+    vi.mocked(fetchBookData).mockImplementation(() => Promise.reject(expired()));
+    useApp.setState({ datasets: threeBooks() });
+
+    for (const id of ["d1", "d2", "d3"]) useApp.getState().ensureBookData(id);
+    await vi.waitFor(() => expect(dangerToasts()).toHaveLength(1));
+    const out = await withResolved(useApp.getState, "d2", "excluding rows", () => 1);
+    await settle();
+    await settle();
+
+    expect(out.ok).toBe(false);
+    expect(fetchBookData).toHaveBeenCalledTimes(4);
+    expect(dangerToasts()).toHaveLength(1);
+    // The full wording (shortened once to fit a bundle budget — never again).
+    expect(dangerToasts()[0]).toMatchObject({ msg: FULL_TEXT, action: { label: "Re-import" } });
+  });
+
+  it("a later attempt, after the toast has gone, shows the Re-import action AGAIN", async () => {
+    vi.mocked(fetchBookData).mockImplementation(() => Promise.reject(expired()));
+    const reimport = vi.fn<(id: string) => Promise<void>>(async () => {});
+    useApp.setState({ datasets: threeBooks(), reimportDataset: reimport });
+    useApp.getState().ensureBookData("d1");
+    await vi.waitFor(() => expect(dangerToasts()).toHaveLength(1));
+
+    useToasts.getState().dismiss(dangerToasts()[0].id); // timed out / dismissed
+    expect(dangerToasts()).toHaveLength(0);
+
+    // The user clicks another book of the same project minutes later.
+    const out = await withResolved(useApp.getState, "d2", "excluding rows", () => 1);
+    expect(out.ok).toBe(false);
+    await vi.waitFor(() => expect(dangerToasts()).toHaveLength(1));
+    expect(dangerToasts()[0].action?.label).toBe("Re-import");
+    dangerToasts()[0].action!.onClick();
+    expect(reimport).toHaveBeenCalledWith("d2");
+  });
+});
+
 describe("lastBookError — the record itself", () => {
   it("records WHY a failed fetch failed, and leaves `pending` set so a retry is possible", async () => {
     await failOnce(new Error("source not found"));

@@ -1,30 +1,39 @@
-// Curve Fit workshop — view. A draggable ToolWindow: pick a model, auto-guess
-// or fit the active dataset, see params (± errors) and goodness-of-fit. The
-// fitted curve overlays on the plot via the store (see useCurveFit). Thin by
-// design — all state/logic lives in the hook. "→ Report" lands the fit as a
-// #36 report sheet in the library (emitted server-side, one source of truth).
+// Curve Fit workshop — view. A draggable, resizable ToolWindow: pick a model,
+// auto-guess or fit the active dataset, see params (± errors) and goodness-of-
+// fit. The fitted curve overlays on the plot via the store (see useCurveFit).
+// Thin by design — all state/logic lives in the hook, the result area in
+// CurveFitResults. "→ Report" lands the fit as a #36 report sheet in the
+// library (emitted server-side, one source of truth).
+//
+// Closing the window only HIDES it: the fit, its curve, its recipe (so auto
+// re-fit) and its Library result stay, and reopening shows the result again
+// (store/curveFitSession.ts). Deleting a fit is the explicit, confirmed, undoable
+// "Remove fit". The window opens docked at the RIGHT edge so it never covers
+// the plot's Y axis.
 
 import { useEffect, useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
-import { DataTable } from "../../primitives/DataTable";
+import { dockedX } from "../../overlays/dockedX";
 import { Button, Select } from "../../primitives";
 import { reportEmit } from "../../../lib/api";
 import type { CustomFitModel } from "../../../lib/fitmodels";
-import { fmtNum as fmt } from "../../../lib/format";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
+import { askConfirm } from "../../../store/confirmDialog";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import BumpsSection from "./BumpsSection";
 import CurveFitByLevelSection from "./CurveFitByLevelSection";
 import EquationModelPanel from "./EquationModelPanel";
+import CurveFitResults from "./CurveFitResults";
 import FitConvergenceWarning from "./FitConvergenceWarning";
-import FindXYSection from "./FindXYSection";
 import ModelScanSection from "./ModelScanSection";
 import FitParamsSection from "./FitParamsSection";
 import WeightingSection from "./WeightingSection";
+import { reportPrefs } from "../../../store/curveFitSession";
 import { useCurveFit } from "./useCurveFit";
+import { useFitTemplateBinding } from "./useFitTemplateBinding";
 import { useModelScan } from "./useModelScan";
 import { useSavedFitModels } from "./useSavedFitModels";
 import { xErrorChannel } from "./xErrorChannel";
@@ -32,9 +41,8 @@ import AnalysisInputReview from "../analysisselection/AnalysisInputReview";
 import { clearSelectionForTool, useAnalysisSelection } from "../../../store/analysisSelection";
 import CurveFitBatchSection from "./CurveFitBatchSection";
 
-// Fit-statistics sections: each its own chunk, fetched only when shown.
-const FitBandsSection = lazyRegion(() => import("./FitBandsSection"), "Bands");
-const FitDiagnosticsSection = lazyRegion(() => import("./FitDiagnosticsSection"), "Diagnostics");
+// Each its own chunk, fetched only when shown.
+const FitTemplatesSection = lazyRegion(() => import("./FitTemplatesSection"), "Templates");
 const CompareModelsSection = lazyRegion(() => import("./CompareModelsSection"), "Compare models");
 const OdrSection = lazyRegion(() => import("./OdrSection"), "ODR");
 // Global (shared-parameter) fit mode: replaces the single-fit body while on.
@@ -57,6 +65,7 @@ function customLabel(m: CustomFitModel): string {
 
 export default function CurveFitPanel() {
   const setOpen = useApp((s) => s.setCurveFitOpen);
+  const recordHistory = useApp((s) => s.recordHistory);
   const updateAnalysisItem = useAnalysisSelection((state) => state.updateItem);
   const [reporting, setReporting] = useState(false);
   const [globalMode, setGlobalMode] = useState(false);
@@ -67,6 +76,7 @@ export default function CurveFitPanel() {
     setModelName,
     result,
     fitData,
+    resultStale,
     guessOnly,
     busy,
     error,
@@ -79,12 +89,15 @@ export default function CurveFitPanel() {
     setWeightMode,
     manualKey,
     setManualKey,
+    scaleErrors,
+    setScaleErrors,
     hasYErr,
     weightNote,
     // Renamed on destructure: `paramRows` below is the RESULTS table (fitted
     // value + error per parameter). This is the INPUT table.
     paramRows: paramInputs,
     setParamRow,
+    replaceParamRows,
     resetParamRows,
     // JMP_GAP J7 residual — "By" grouping (display-only, unweighted; see
     // useCurveFitByLevel's header doc).
@@ -109,6 +122,8 @@ export default function CurveFitPanel() {
       setWeightMode={setWeightMode}
       manualKey={manualKey}
       setManualKey={setManualKey}
+      scaleErrors={scaleErrors}
+      setScaleErrors={setScaleErrors}
       hasYErr={hasYErr}
       weightNote={weightNote}
     />
@@ -148,11 +163,29 @@ export default function CurveFitPanel() {
     if (orphaned) setModelName(CUSTOM_PREFIX);
   }, [orphaned, setModelName]);
 
+  // Hide, never delete (see the header).
   const close = () => {
-    clear();
     clearSelectionForTool("curvefit");
     setOpen(false);
   };
+
+  const removeFit = async () => {
+    if (!active) return;
+    const ok = await askConfirm(
+      "Remove this fit?",
+      `Deletes the ${modelName} fit of ${active.name}: its curve, its saved recipe (it stops re-fitting when the data change) and its Library result. Undo restores it.`,
+      "Remove fit",
+      true,
+    );
+    if (!ok) return;
+    recordHistory("remove fit");
+    clear();
+  };
+
+  const template = useFitTemplateBinding({
+    active, models, modelName, setModelName, weightMode, setWeightMode, manualKey, setManualKey,
+    scaleErrors, setScaleErrors, paramRows: paramInputs, replaceParamRows,
+  });
 
   const toReport = async () => {
     if (!result || !active) return;
@@ -160,9 +193,17 @@ export default function CurveFitPanel() {
     try {
       const names = models.find((m) => m.name === modelName)?.paramNames ?? [];
       const nParams = (result.params as number[] | undefined)?.length ?? 0;
+      // `dy` (or a direct fit's `weights`) + `ciLevel` let the report sheet
+      // carry the NLFit inference/ANOVA tables on the fit's own weighting
+      // (calc/report_emit_fit.py).
       const { report } = await reportEmit({
         kind: "curve_fit",
-        result: result as Record<string, unknown>,
+        result: {
+          ...result,
+          ...(fitData?.dy ? { dy: fitData.dy } : {}),
+          ...(fitData?.weights ? { weights: fitData.weights } : {}),
+          ciLevel: reportPrefs.level,
+        } as Record<string, unknown>,
         param_names: names.length === nParams ? names : Array.from({ length: nParams }, (_, i) => `p${i}`),
         model_name: modelName,
         title: `${modelName} fit — ${active.name}`,
@@ -178,23 +219,6 @@ export default function CurveFitPanel() {
 
   const paramNames = models.find((m) => m.name === modelName)?.paramNames ?? [];
   const registryModel = models.find((m) => m.name === modelName);
-  const params = (result?.params as number[] | undefined) ?? [];
-  const errors = (result?.errors as (number | null)[] | undefined) ?? [];
-
-  const paramRows = params.map((p, i) => [
-    paramNames[i] ?? `p${i}`,
-    fmt(p),
-    guessOnly ? "—" : fmt(errors[i]),
-  ]);
-
-  const statRows: (string | number)[][] =
-    guessOnly || !result
-      ? []
-      : [
-          ["R²", fmt(result.R2)],
-          ["RMSE", fmt(result.RMSE)],
-          ["AIC", fmt(result.AIC)],
-        ];
 
   const modelPicker = (
     <>
@@ -222,10 +246,10 @@ export default function CurveFitPanel() {
   if (globalMode) {
     const reg = models.find((m) => m.name === modelName);
     const globalModel = currentCustom
-      ? { name: currentCustom.name, paramNames: currentCustom.params, p0: currentCustom.guesses, lb: currentCustom.lower, ub: currentCustom.upper, equation: currentCustom.equation }
+      ? { name: currentCustom.name, paramNames: currentCustom.params, p0: currentCustom.guesses.map((g) => g ?? 1), lb: currentCustom.lower, ub: currentCustom.upper, equation: currentCustom.equation }
       : (reg ?? null);
     return (
-      <ToolWindow id="curvefit" title="Curve Fit" width={360} onClose={close}>
+      <ToolWindow id="curvefit" title="Curve Fit" width={360} x={dockedX(360)} dock="right" onClose={close}>
         <AnalysisInputReview toolId="curvefit" singleY />
         {modelPicker}
         <GlobalFitSection model={globalModel} />
@@ -237,7 +261,7 @@ export default function CurveFitPanel() {
   // (new sub-component — the registry-model body stays untouched).
   if (isCustom) {
     return (
-      <ToolWindow id="curvefit" title="Curve Fit" width={340} onClose={close}>
+      <ToolWindow id="curvefit" title="Curve Fit" width={340} x={dockedX(340)} dock="right" onClose={close}>
         <AnalysisInputReview toolId="curvefit" singleY />
         {modelPicker}
         <EquationModelPanel
@@ -250,13 +274,12 @@ export default function CurveFitPanel() {
   }
 
   return (
-    <ToolWindow id="curvefit" title="Curve Fit" width={340} onClose={close}>
+    <ToolWindow id="curvefit" title="Curve Fit" width={340} x={dockedX(340)} dock="right" onClose={close}>
       <AnalysisInputReview toolId="curvefit" singleY allowFactor supportsBatch />
       {modelPicker}
 
       {weighting}
       {fitParams}
-      <CurveFitBatchSection modelName={modelName} model={registryModel} paramRows={paramInputs} weightMode={weightMode} manualKey={manualKey} />
 
       {/* "By" grouping (JMP_GAP_PLAN J7 residual): re-runs this SAME model
           fit once per level of an optional categorical column, display-only
@@ -321,47 +344,31 @@ export default function CurveFitPanel() {
           )}
         </>
       ) : (
-        <>
-          {paramRows.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <DataTable columns={["param", "value", "± err"]} rows={paramRows} />
-            </div>
-          )}
-          {statRows.length > 0 && (
-            <div style={{ marginTop: 8 }}>
-              <DataTable columns={["stat", "value"]} rows={statRows} />
-            </div>
-          )}
-          {result && !guessOnly && (
-            <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
-              <Button size="sm" disabled={reporting} onClick={() => void toReport()}>
-                {reporting ? "Reporting…" : "→ Report"}
-              </Button>
-              <Button
-                size="sm"
-                disabled={cornerBusy}
-                title="Bootstrap the fit and export a pairwise parameter-uncertainty corner plot"
-                onClick={() => void runCornerPlot()}
-              >
-                {cornerBusy ? "Bootstrapping…" : "Corner plot…"}
-              </Button>
-            </div>
-          )}
-
-          {/* Find X from Y / Y from X (MAIN #15) — inverse-evaluate the fit. */}
-          {result && !guessOnly && xRange && (
-            <FindXYSection target={{ model: modelName, params, xMin: xRange.min, xMax: xRange.max }} />
-          )}
-
-          {/* Confidence/prediction band and goodness-of-fit diagnostics. */}
-          {result && !guessOnly && active && fitData && (
-            <>
-              <FitBandsSection target={{ dataset: active, model: modelName, result, fitData }} />
-              <FitDiagnosticsSection result={result} fitData={fitData} />
-            </>
-          )}
-        </>
+        <CurveFitResults
+          active={active}
+          modelName={modelName}
+          paramNames={paramNames}
+          result={result}
+          fitData={fitData}
+          guessOnly={guessOnly}
+          stale={resultStale}
+          xRange={xRange}
+          reporting={reporting}
+          onReport={() => void toReport()}
+          cornerBusy={cornerBusy}
+          onCornerPlot={() => void runCornerPlot()}
+          onRemoveFit={() => void removeFit()}
+        />
       )}
+
+      {/* Batch across worksheets (below the results, which come first). */}
+      <CurveFitBatchSection
+        modelName={modelName} model={registryModel} paramRows={paramInputs}
+        weightMode={weightMode} manualKey={manualKey} scaleErrors={scaleErrors}
+      />
+
+      {/* Save / apply named fit settings. */}
+      <FitTemplatesSection current={template.current} apply={template.apply} />
 
       {/* Fit 2+ models to this selection and compare them. */}
       <CompareModelsSection options={modelOptions} current={modelName} customModels={customModels} />

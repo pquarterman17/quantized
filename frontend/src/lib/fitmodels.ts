@@ -35,8 +35,9 @@ export interface CustomFitModel {
   equation: string;
   /** Parameter names from the last successful validate, in equation order. */
   params: string[];
-  /** Last-used starting guesses, aligned with params. */
-  guesses: number[];
+  /** Last-used starting guesses, aligned with params; null = blank ("auto":
+   *  the fit derives that start from the data). */
+  guesses: (number | null)[];
   /** Last-used bounds, aligned with params; null = unbounded on that side. */
   lower: (number | null)[];
   upper: (number | null)[];
@@ -44,6 +45,14 @@ export interface CustomFitModel {
   description?: string;
   /** v2: unit of each parameter, aligned with params; "" = none. */
   units?: string[];
+}
+
+/** The `guesses` a scan/compare candidate sends for a saved model: its
+ *  numbers when every start was typed, else nothing — the route then derives
+ *  ALL of that candidate's starts from the data (those routes take a full
+ *  numeric list or none). */
+export function candidateGuesses(m: CustomFitModel): { guesses?: number[] } {
+  return m.guesses.every((g): g is number => g !== null) ? { guesses: m.guesses as number[] } : {};
 }
 
 function isBoundList(v: unknown, n: number): v is (number | null)[] {
@@ -59,7 +68,7 @@ export function isCustomFitModel(v: unknown): v is CustomFitModel {
   if (!Array.isArray(o.params) || !o.params.every((p) => typeof p === "string")) return false;
   const n = o.params.length;
   if (!Array.isArray(o.guesses) || o.guesses.length !== n) return false;
-  if (!o.guesses.every((g) => typeof g === "number" && Number.isFinite(g))) return false;
+  if (!o.guesses.every((g) => g === null || (typeof g === "number" && Number.isFinite(g)))) return false;
   if (!isBoundList(o.lower, n) || !isBoundList(o.upper, n)) return false;
   // v1 never wrote the v2 fields, so for every record an older build wrote
   // these two checks are no-ops; they only keep a bogus field from reaching
@@ -105,7 +114,7 @@ function checkFitModelFields(m: CustomFitModel, bad: (field: string) => never): 
     if ((lo !== null && !Number.isFinite(lo)) || (hi !== null && !Number.isFinite(hi))) bad(`bounds[${name}]`);
     if (lo !== null && hi !== null && lo > hi) bad(`bounds[${name}]: lower > upper`);
     const g = m.guesses[i];
-    if ((lo !== null && g < lo) || (hi !== null && g > hi)) bad(`guess[${name}]: outside its bounds`);
+    if (g !== null && ((lo !== null && g < lo) || (hi !== null && g > hi))) bad(`guess[${name}]: outside its bounds`);
   });
 }
 

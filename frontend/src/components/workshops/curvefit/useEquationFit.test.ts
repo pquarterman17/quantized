@@ -47,7 +47,7 @@ beforeEach(() => {
 });
 
 describe("useEquationFit validation", () => {
-  it("debounced validate populates the parameter table with neutral guesses", async () => {
+  it("debounced validate populates the parameter table with blank (auto) guesses", async () => {
     vi.mocked(validateEquation).mockResolvedValue({ ok: true, params: ["a", "t", "c"] });
     const { result } = renderHook(() => useEquationFit(null, NO_DEBOUNCE));
     act(() => {
@@ -56,9 +56,9 @@ describe("useEquationFit validation", () => {
     await waitFor(() => expect(result.current.status).toBe("ok"));
     expect(validateEquation).toHaveBeenCalledWith("a*exp(-x/t)+c");
     expect(result.current.rows).toEqual([
-      { name: "a", guess: "1", min: "", max: "", fixed: false, unit: "" },
-      { name: "t", guess: "1", min: "", max: "", fixed: false, unit: "" },
-      { name: "c", guess: "1", min: "", max: "", fixed: false, unit: "" },
+      { name: "a", guess: "", min: "", max: "", fixed: false, unit: "" },
+      { name: "t", guess: "", min: "", max: "", fixed: false, unit: "" },
+      { name: "c", guess: "", min: "", max: "", fixed: false, unit: "" },
     ]);
   });
 
@@ -94,7 +94,7 @@ describe("useEquationFit validation", () => {
     await waitFor(() =>
       expect(result.current.rows).toEqual([
         { name: "a", guess: "5", min: "", max: "", fixed: false, unit: "" }, // survived, edit kept
-        { name: "c", guess: "1", min: "", max: "", fixed: false, unit: "" }, // new, neutral guess
+        { name: "c", guess: "", min: "", max: "", fixed: false, unit: "" }, // new: blank = auto start
       ]),
     );
   });
@@ -145,7 +145,7 @@ describe("useEquationFit fitting", () => {
       equation: "m*x + b",
       x: [0, 2, 3],
       y: [10, 30, 40],
-      guesses: [1, 1],
+      guesses: [null, null], // untouched rows are blank = auto start
     });
     expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", y: [11, null, 31, 41] });
     expect(result.current.result?.params).toEqual([10, 1]);
@@ -162,7 +162,7 @@ describe("useEquationFit fitting", () => {
       equation: "m*x + b",
       x: [0, 2, 3],
       y: [10, 30, 40],
-      guesses: [1, 1],
+      guesses: [null, null], // untouched rows are blank = auto start
     });
     expect(useApp.getState().fitOverlay?.y).toEqual([11, Number.NaN, 31, 41]);
     expect(useToasts.getState().toasts.at(-1)?.msg).toContain("1 of 4 rows are gaps");
@@ -194,7 +194,7 @@ describe("useEquationFit fitting", () => {
       equation: "m*x + b",
       x: [100, 200, 300, 400],
       y: [10, 20, 30, 40],
-      guesses: [1, 1],
+      guesses: [null, null], // untouched rows are blank = auto start
     });
   });
 
@@ -281,7 +281,7 @@ describe("useEquationFit saved models", () => {
         name: "MyDecay",
         equation: "a*exp(-x/t)",
         params: ["a", "t"],
-        guesses: [2.5, 1],
+        guesses: [2.5, null], // t untouched: blank = auto, saved as such
         lower: [null, 0],
         upper: [null, null],
       },
@@ -306,16 +306,17 @@ describe("useEquationFit saved models", () => {
     return { saved: saved as CustomFitModel[] | null, error: hook.result.current.error };
   }
 
-  it("a BLANK start is saved as 1 clamped into its bounds — never refused for a guess the user did not type (PR #432 review)", async () => {
-    // Was: blank -> 1, then refused as "guess[t]: outside its bounds". (A new
-    // row SHOWS "1"; blank means the user cleared the field.)
+  it("a BLANK start is saved as null (auto) and round-trips blank — never frozen as 1 (review item 4)", async () => {
+    // Was: blank -> 1 on save, so a model saved with auto starts reloaded
+    // with "1" in every row and the auto start was unreachable.
     const above = await decayWithRows([[1, "guess", ""], [1, "min", "5"]]);
     expect(above.error).toBeNull();
-    expect(above.saved?.[0]).toMatchObject({ name: "Decay", guesses: [1, 5], lower: [null, 5], upper: [null, null] });
-    const below = await decayWithRows([[0, "guess", "2"], [1, "guess", " "], [1, "max", "0.5"]]);
-    expect(below.saved?.[0]).toMatchObject({ guesses: [2, 0.5], upper: [null, 0.5] });
-    const inside = await decayWithRows([[1, "guess", ""], [1, "min", "-3"], [1, "max", "3"]]);
-    expect(inside.saved?.[0]).toMatchObject({ guesses: [1, 1] });
+    expect(above.saved?.[0]).toMatchObject({ name: "Decay", guesses: [null, null], lower: [null, 5], upper: [null, null] });
+    const mixed = await decayWithRows([[0, "guess", "2"], [1, "guess", " "], [1, "max", "0.5"]]);
+    expect(mixed.saved?.[0]).toMatchObject({ guesses: [2, null], upper: [null, 0.5] });
+    // Reloading the saved model shows the blank row blank again.
+    const reloaded = renderHook(() => useEquationFit(mixed.saved![0], NO_DEBOUNCE));
+    expect(reloaded.result.current.rows.map((r) => r.guess)).toEqual(["2", ""]);
   });
 
   it("save refuses what a project/import would refuse — min > max, or a TYPED start outside its bounds", async () => {
@@ -367,7 +368,7 @@ describe("useEquationFit saved models", () => {
     } finally {
       spy.mockRestore();
     }
-    expect(loadCustomModels()[0].guesses).toEqual([1, 1]);
+    expect(loadCustomModels()[0].guesses).toEqual([null, null]);
   });
 
   it("save is a no-op without a name or a valid equation", () => {

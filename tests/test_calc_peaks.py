@@ -8,11 +8,9 @@ from typing import Any
 import numpy as np
 import pytest
 
-from quantized.calc.peaks import (
-    _compute_prominence,
-    _prominence_bruteforce,
-    find_peaks_robust,
-)
+from quantized.calc.peak_prominence import compute_prominence as _compute_prominence
+from quantized.calc.peak_prominence import prominence_bruteforce as _prominence_bruteforce
+from quantized.calc.peaks import find_peaks_robust
 
 
 @pytest.mark.golden

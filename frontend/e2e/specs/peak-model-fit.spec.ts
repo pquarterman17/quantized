@@ -90,6 +90,10 @@ test.describe("Peak Analyzer mixed-shape model fit", () => {
     expect(Math.abs((await centre(0)) - 36)).toBeLessThan(0.01);
     expect(Math.abs((await centre(1)) - 44)).toBeLessThan(0.01);
     await expect(rows.nth(0).locator("td").nth(2)).toContainText("±");
+    // Every column fits the docked 420 px window: no sideways scroll to reach
+    // height and area (fitting live check — they were cut off).
+    const box = panel.getByTestId("peak-results");
+    expect(await box.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
 
     // the model curve is on the plot, over every fitted row
     const store = await readStore(page);

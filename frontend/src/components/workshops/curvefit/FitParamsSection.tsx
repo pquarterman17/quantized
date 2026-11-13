@@ -62,6 +62,7 @@ export default function FitParamsSection({ rows, setRow, reset }: FitParamsSecti
                 value={row.start}
                 width={72}
                 placeholder="auto"
+                aria-label={`Start value of ${row.name}`}
                 title="Starting value — blank uses the model default"
                 onChange={(v) => setRow(i, { start: v })}
               />
@@ -69,6 +70,7 @@ export default function FitParamsSection({ rows, setRow, reset }: FitParamsSecti
                 value={row.min}
                 width={72}
                 placeholder="−∞"
+                aria-label={`Lower bound of ${row.name}`}
                 title="Lower bound — blank is unbounded"
                 onChange={(v) => setRow(i, { min: v })}
               />
@@ -76,6 +78,7 @@ export default function FitParamsSection({ rows, setRow, reset }: FitParamsSecti
                 value={row.max}
                 width={72}
                 placeholder="∞"
+                aria-label={`Upper bound of ${row.name}`}
                 title="Upper bound — blank is unbounded"
                 onChange={(v) => setRow(i, { max: v })}
               />

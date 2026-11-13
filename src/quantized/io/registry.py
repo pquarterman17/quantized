@@ -320,6 +320,26 @@ _UNSUPPORTED_HINTS: dict[str, str] = {
     ".xls": "legacy Excel 97-2003 workbooks cannot be read; re-save it as .xlsx",
 }
 
+# Origin's single-window and template files share the project family but are
+# not projects: Quantized reads .opj/.opju projects only (audit 2026-11 -- these
+# used to get the generic "no parser registered").
+_ORIGIN_WINDOW_HINT = (
+    "Origin window/template files can't be opened directly; open it in Origin "
+    "and save the project as .opj, or open it in the free Origin Viewer and "
+    "export the worksheet to CSV/ASCII, then import that file"
+)
+for _ext in (".ogw", ".ogwu", ".ogg", ".oggu", ".ogm", ".ogmu", ".otw", ".otwu", ".otm", ".otmu"):
+    _UNSUPPORTED_HINTS[_ext] = _ORIGIN_WINDOW_HINT
+_UNSUPPORTED_HINTS[".opx"] = (
+    "an Origin package (.opx) installs an Origin App or add-on and holds no data; "
+    "install it in Origin, or import the data files it works on"
+)
+for _ext in (".otp", ".otpu"):
+    _UNSUPPORTED_HINTS[_ext] = (
+        "an Origin graph template holds no data; use File > Import Origin template "
+        "(.otp/.otpu) to apply it to a plot"
+    )
+
 
 def resolve_parser(path: Path) -> Parser:
     """Pick the parser for ``path``: unambiguous extension, else a saved

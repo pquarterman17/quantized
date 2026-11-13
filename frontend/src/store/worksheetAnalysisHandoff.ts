@@ -1,3 +1,4 @@
+import { seedDesignatedErrorZones } from "../lib/plotspecDesignatedErrors";
 import { selectionToSpec } from "../lib/selectionplot";
 import type { DataStruct } from "../lib/types";
 import { seedWorksheetAnalysisSelection } from "./analysisSelection";
@@ -6,7 +7,9 @@ import { useApp } from "./useApp";
 export function openWorksheetGraphBuilder(data: DataStruct, datasetId: string, columns: readonly number[]): boolean {
   const spec = selectionToSpec(data, datasetId, columns);
   if (!spec) return false;
-  useApp.getState().openGraphBuilderSeeded(spec);
+  // The selected Ys carry their bound error columns (Y-error designations).
+  const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
+  useApp.getState().openGraphBuilderSeeded(ds ? seedDesignatedErrorZones(spec, ds) : spec);
   return true;
 }
 

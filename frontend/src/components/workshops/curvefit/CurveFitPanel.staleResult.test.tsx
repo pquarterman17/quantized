@@ -11,6 +11,7 @@ import { fitModel, reportEmit } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import CurveFitPanel from "./CurveFitPanel";
+import { reportPrefs } from "../../../store/curveFitSession";
 
 vi.mock("../../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api")>()),
@@ -81,6 +82,19 @@ describe("CurveFitPanel — a result follows the dataset and model it was fit fo
     fireEvent.click(screen.getByRole("button", { name: "→ Report" }));
     await act(async () => {});
     expect(vi.mocked(reportEmit).mock.calls[0]![0]).toMatchObject({ model_name: "Linear", title: "Linear fit — first.dat" });
+  });
+
+  it("→ Report emits the confidence level the Fit report section shows", async () => {
+    reportPrefs.level = 0.99;
+    try {
+      await fitFirst();
+      fireEvent.click(screen.getByRole("button", { name: "→ Report" }));
+      await act(async () => {});
+      // Before the fix: always 0.95, whatever the panel's level was.
+      expect(vi.mocked(reportEmit).mock.calls[0]![0].result).toMatchObject({ ciLevel: 0.99 });
+    } finally {
+      reportPrefs.level = 0.95;
+    }
   });
 
   it("a fit that lands after a dataset switch is not shown for the new dataset", async () => {

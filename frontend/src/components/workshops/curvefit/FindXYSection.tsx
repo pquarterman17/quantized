@@ -7,8 +7,12 @@
 // fitted x-range) is all either caller needs to provide.
 
 import { NumberField } from "../../primitives/NumberField";
+import { DataTable } from "../../primitives/DataTable";
 import { Button } from "../../primitives";
+import { copyText } from "../../../lib/clipboard";
 import { fmtNum as fmt } from "../../../lib/format";
+import { useApp } from "../../../store/useApp";
+import { findXYTable } from "./findXYTable";
 import { useFindXY, type FindXYTarget } from "./useFindXY";
 
 interface Props {
@@ -17,6 +21,11 @@ interface Props {
 
 export default function FindXYSection({ target }: Props) {
   const s = useFindXY(target);
+  const setStatus = useApp((st) => st.setStatus);
+  const copy = async () => {
+    const ok = await copyText(findXYTable(s.history, "tsv"));
+    setStatus(ok ? `copied ${s.history.length} Find X/Y result${s.history.length === 1 ? "" : "s"}` : "clipboard unavailable");
+  };
 
   return (
     <div style={{ marginTop: 12 }}>
@@ -60,6 +69,26 @@ export default function FindXYSection({ target }: Props) {
             ? "no crossings in the fitted range"
             : `X = ${s.xResults.map((v) => fmt(v)).join(", ")}`}
         </div>
+      )}
+      {s.history.length > 0 && (
+        <section style={{ marginTop: 6 }} aria-label="Find X/Y results">
+          <DataTable
+            columns={["find", "at", "result"]}
+            rows={s.history.map((e) => [
+              e.find === "y" ? "Y at X" : "X at Y",
+              fmt(e.input),
+              e.results.length ? e.results.map((v) => fmt(v)).join(", ") : "none",
+            ])}
+          />
+          <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+            <Button size="sm" onClick={() => void copy()} title="Copy every query and result as tab-separated text">
+              Copy Find X/Y results
+            </Button>
+            <Button size="sm" variant="ghost" onClick={s.clearHistory} title="Forget these queries">
+              Clear Find X/Y results
+            </Button>
+          </div>
+        </section>
       )}
     </div>
   );

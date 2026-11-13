@@ -3,12 +3,16 @@
 // The error-role model lives in ./errorRoles (it owns the inference too);
 // imported type-only, so there is no runtime cycle with this contract file.
 import type { ErrorBinding } from "./errorRoles";
+import type { FitSpec } from "./fitTypes";
 import type { CorrectionParams } from "./correctionTypes";
 import type { DerivedSpec } from "./formulaTypes";
 import type { DatasetSource } from "./datasetSource";
 import type { PeakTable } from "./peakTable";
 import type { RecodeSpec } from "./recode";
 import type { FactorSpec } from "./metadataFactor";
+
+// Re-exported so every existing `from "./types"` import keeps working.
+export type { FitOverlay, FitSpec, FitWeighting, WeightMode } from "./fitTypes";
 export type { CorrectionParams } from "./correctionTypes";
 /** DataStruct as serialized by `datastruct_payload` / `DataStruct.to_dict`. */
 export interface DataStruct {
@@ -56,43 +60,17 @@ export interface OriginFigureFidelity {
   omissions: string[];
 }
 
-export interface OriginFilteredFigure {
-  index: number;
-  name: string;
-  layer: number | null;
-  reason: string;
-}
-
-export interface OriginSavedPreview {
-  format: "png";
-  mime: "image/png";
-  width: number;
-  height: number;
-  sha256: string;
-  data: string;
-  confidence: "exact_page" | "ambiguous_page";
-  page_name: string;
-}
-
-export interface OriginPreviewDiagnostic {
-  page_name: string;
-  status: "no_preview" | "ambiguous" | "workbook_thumbnail";
-  asset_count: number;
-  assets?: OriginSavedPreview[];
-}
-
-export interface OriginFidelityManifest {
-  version: 1;
-  container: "opj" | "opju";
-  status: OriginFidelityStatus;
-  graph_records_total: number;
-  graph_records_actionable: number;
-  graph_records_filtered: number;
-  omissions: string[];
-  filtered_figures: OriginFilteredFigure[];
-  /** Optional for backward compatibility with #49 workspaces. */
-  preview_diagnostics?: OriginPreviewDiagnostic[];
-}
+// The fidelity manifest, its filtered-figure records and the saved-preview
+// diagnostics live in a sibling (types.ts module-size ceiling); re-exported
+// so every importer is unchanged.
+import type { OriginFidelityManifest, OriginSavedPreview } from "./originFidelityTypes";
+export type {
+  OriginContainerIntegrity,
+  OriginFidelityManifest,
+  OriginFilteredFigure,
+  OriginPreviewDiagnostic,
+  OriginSavedPreview,
+} from "./originFidelityTypes";
 
 /** The `books[]` entry for the book already returned in full at the payload's
  *  top level (ORIGIN_FILE_DECODE_PLAN #38) — carries no data of its own; the
@@ -383,93 +361,8 @@ export interface AxisLabelStyle {
 }
 export type AxisLabelStyles = Partial<Record<AxisKey, AxisLabelStyle>>;
 
-/** Fit weighting mode (Sol GUI audit — weighting connected to error columns):
- *  - `none`    — unweighted least squares (default)
- *  - `yerr`    — 1-sigma errors from the plotted Y's designated error column
- *  - `poisson` — counting statistics, dy = sqrt(max(|y|, 1))
- *  - `manual`  — a user-picked channel holding per-point sigma
- *  All non-`none` modes resolve to a `dy` vector (backend applies 1/dy^2). */
-export type WeightMode = "none" | "yerr" | "poisson" | "manual";
-
-/** Reproducible weighting choice, stored in FitSpec provenance so recompute +
- *  pipeline reproduce it. `errKey` is the sigma-column channel index for `yerr`
- *  (resolved from `errKeys` at fit time) and `manual`; absent for none/poisson. */
-export interface FitWeighting {
-  mode: WeightMode;
-  errKey?: number;
-}
-
-/** A reproducible fit recipe + result snapshot saved on a dataset (audit P1 #3).
- *  `xKey`/`yKey` capture the channels fit at record time so a recompute
- *  reproduces the original analysis; they're absent on legacy `{model}` specs
- *  (recompute then falls back to the live plotted selection). */
-export interface FitSpec {
-  model: string;
-  /** Plotted X channel at fit time (`null` = the dataset's `time` axis). */
-  xKey?: number | null;
-  /** Primary plotted Y channel that was fit. */
-  yKey?: number;
-  /** Weighting used at fit time; absent = unweighted (legacy + `none`). */
-  weight?: FitWeighting;
-  /** Fitted parameters from the last fit/recompute (result snapshot). */
-  params?: number[];
-  /** Compact result summary kept beside the authoritative recipe. Full
-   *  fitted curves/residual arrays stay transient and are regenerated from
-   *  `model` + `params` when a result is opened. Null errors represent held
-   *  parameters whose uncertainty was not estimated. */
-  errors?: (number | null)[];
-  R2?: number;
-  RMSE?: number;
-  AIC?: number;
-  chiSqRed?: number;
-  nFree?: number;
-  /** Optimizer exit flag (1 = success, 0 = did not converge). */
-  exitFlag?: number;
-  /** MAIN_PLAN #30 — the rest of the reproducible recipe.
-   *
-   *  The x-window the fit actually consumed, AFTER row exclusions and filters
-   *  pruned it. Without this a recipe says which channels were fit but not
-   *  which part of them, so "fit the peak" and "fit the whole scan" are
-   *  indistinguishable on reopening. */
-  range?: [number, number];
-  /** Original worksheet row ids used by an explicit AnalysisSelection.
-   * Absent means the whole current analysis view (legacy behavior). */
-  rowIds?: number[];
-  /** Raw row count; structural insert/delete invalidates positional `rowIds`. */
-  sourceRowCount?: number;
-  /** Ordered X digest; detects reorder/replace edits preserving row count. */
-  rowXFingerprint?: string;
-  /** Ordered digest of persistent worksheet-row identities (duplicate-X safe). */
-  rowIdentityFingerprint?: string;
-  /** Points the fit consumed — the cheap corroborator for `range`: same window,
-   *  different count means the underlying rows changed. */
-  nPoints?: number;
-  /** ISO time the fit was first produced. */
-  fittedAt?: string;
-  /** ISO time the recalc graph last RE-ran it. Present = the numbers on screen
-   *  came from a recompute over changed data, not from the original fit — the
-   *  historical-vs-recomputed distinction the audit asked for. */
-  recomputedAt?: string;
-  /** Which corrections were active on the source when the fit ran (names only,
-   *  e.g. ["smooth", "bgPoly"]). Preprocessing changes what was fit, so a
-   *  recipe that omits it can look reproducible while silently not being. */
-  preprocessing?: string[];
-  /** Starting values actually used. Absent = the model's registry defaults, so
-   *  an untouched fit records nothing and stays lean. */
-  p0?: number[];
-  /** Parameter bounds, `null` where unbounded — JSON has no Infinity literal,
-   *  and leaning on `JSON.stringify`'s silent Infinity→null is how a bound
-   *  turns into garbage on the round trip. */
-  lower?: (number | null)[];
-  upper?: (number | null)[];
-  /** Parameters held at their start value instead of being fitted. */
-  fixed?: boolean[];
-  /** How the reported parameter errors were derived. `covariance` = from the
-   *  fitter's covariance matrix (`calc_errors`); `none` = not computed. The
-   *  audit asked for the uncertainty METHOD because "±0.02" means different
-   *  things depending on where it came from. */
-  uncertainty?: "covariance" | "none";
-}
+// The fit recipe types (WeightMode / FitWeighting / FitSpec) live in
+// lib/fitTypes.ts; re-exported at the top of this file.
 
 /** A dataset held client-side: the parsed DataStruct + a stable id + name.
  *  `data` is the currently displayed (corrected + formula-recomputed) view;
@@ -540,6 +433,10 @@ export interface Dataset {
    *  dataset (persist across dataset switches + round-trip .dwk), not in the
    *  transient view state. */
   channelRoles?: Record<number, ChannelRole>;
+  /** The worksheet's "Set As" designations (channel → Origin designation), overlaying
+   *  the book's own for every plotting default (lib/columnmeta.ts); round-trips
+   *  .dwk. store/columnDesignationActions.ts also writes channelRoles/errorRoles. */
+  columnDesignations?: Record<number, import("./columnmeta").OriginDesignation>;
   /** MAIN_PLAN #33: the canonical error-column roles — X±, Y±, and the two
    *  halves of an asymmetric pair. Supersedes the store's `errKeys` map,
    *  which expressed only symmetric-vertical-Y and is now DERIVED from this
@@ -648,13 +545,7 @@ export interface FitModel {
  *  documented per endpoint; values may be scalars, arrays, or null (NaN/Inf). */
 export type CalcResult = Record<string, unknown>;
 
-/** A fit curve to overlay on the plot, tagged with the dataset it was fit to
- *  (so it only renders while that dataset is active). `y` aligns to the
- *  dataset's plotted x (null = gap). */
-export interface FitOverlay {
-  datasetId: string;
-  y: (number | null)[];
-}
+// FitOverlay (the fit curve on the plot) lives in ./fitTypes; re-exported above.
 
 /** Peak markers to overlay (points only). `y` is sparse — null except at the
  *  data points nearest each peak center. Tagged with the source dataset. */

@@ -83,6 +83,9 @@ describe("EquationModelPanel — before-run summary + hold (P2.7)", () => {
 
   it("disables Fit and says why when every parameter is held", async () => {
     typeEquation("A*exp(-x/t)");
+    // A held row needs a value to hold; a new row's guess is blank ("auto").
+    fireEvent.change(await screen.findByLabelText("guess A"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("guess t"), { target: { value: "1" } });
     fireEvent.click(await screen.findByLabelText("Hold A fixed"));
     fireEvent.click(screen.getByLabelText("Hold t fixed"));
     expect(screen.getByRole("alert")).toHaveTextContent("every parameter is held");

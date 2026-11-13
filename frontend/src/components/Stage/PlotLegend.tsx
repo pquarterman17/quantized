@@ -25,6 +25,8 @@ import { waterfallLegendOrder } from "../../lib/waterfallOffset";
 /** The canvas' excluded companion: line-free 5px hollow circles. */
 const EXCLUDED_SAMPLE: SeriesStyle = { width: 0, marker: true, markerShape: "circle", markerSize: 5 };
 /** The canvas' selected-row companion: line-free 7px accent-filled circles. */
+/** A fit band's legend sample: the dashed edge `uplotSeries` draws. */
+const BAND_SAMPLE: SeriesStyle = { width: 1, line: "dashed" };
 const SELECTED_SAMPLE: SeriesStyle = { width: 0, marker: true, markerShape: "circle", markerSize: 7 };
 
 const LegendResizeHandles = lazyRegion(() => import("./LegendResizeHandles"), "Legend resize handles");
@@ -123,7 +125,7 @@ export default function PlotLegend({
       ? colorScaleLegendEntries(active.data, colorByColumns)
       : [];
 
-  const defaultLabel = (s: PlotSeriesSpec) => withUnit(s.label, s.unit);
+  const defaultLabel = (s: PlotSeriesSpec) => s.legend ?? withUnit(s.label, s.unit);
   // A row's finished text. An EMPTY one has no legend row (the series stays
   // plotted), exactly as the export's matplotlib legend drops a zero-length label.
   const rowText = (s: PlotSeriesSpec, i: number) =>
@@ -183,7 +185,9 @@ export default function PlotLegend({
         // the canvas stroke uses (`buildOpts`'s `resolveDrawColor` call), so
         // a literal black swatch on our dark canvas doesn't go invisible in
         // the legend even though the plotted line itself was substituted.
-        const override = styleList?.[i]?.color;
+        // A fit band's entry takes its curve's colour (as the canvas draws it).
+        const ci = i - (s.band ?? 0);
+        const override = styleList?.[ci]?.color;
         // A greyed "(excluded)" companion (`maskExcludedPayload`) is drawn in
         // the plot's dim ink as hollow markers, and exported as a grey marker
         // entry (`EXCLUDED_GHOST_STYLE`) — so its row is a dim marker, never
@@ -197,12 +201,14 @@ export default function PlotLegend({
               ? resolveDrawColor(override, isDarkBg, inkColor)
               : override
                 ? `var(${override})`
-                : `var(--series-${(i % 8) + 1})`;
+                : `var(--series-${(ci % 8) + 1})`;
         const sampleStyle = s.selected
           ? SELECTED_SAMPLE
           : s.muted
             ? EXCLUDED_SAMPLE
-            : resolveSeriesStyle(styleList?.[i], i, seriesCycle ?? null);
+            : s.band
+              ? BAND_SAMPLE
+              : resolveSeriesStyle(styleList?.[i], i, seriesCycle ?? null);
         // Plotted channels are click-to-toggle + double-click-to-rename; overlays
         // (i ≥ plotted.length) are not. Refuse to hide the last visible series.
         const isChannel = i < plotted.length;

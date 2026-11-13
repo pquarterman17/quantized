@@ -63,15 +63,20 @@ test("dense recovered Origin graphs stay inside the Library and reveal one actio
   await expect(rows).toHaveCount(25);
   expect(await library.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
 
+  // The strip is out of the row's flow until revealed, then sits BESIDE the
+  // graph name rather than over it (Origin-replacement audit: the overlay
+  // covered the name and swallowed the row click).
   const actions = page.locator(".qzk-origin-figure-actions");
-  await expect(actions.first()).toHaveCSS("visibility", "hidden");
+  await expect(actions.first()).toBeHidden();
   await rows.first().hover();
-  await expect(actions.first()).toHaveCSS("visibility", "visible");
-  await expect(actions.nth(1)).toHaveCSS("visibility", "hidden");
+  await expect(actions.first()).toBeVisible();
+  await expect(actions.nth(1)).toBeHidden();
+  const [nameBox, stripBox] = await Promise.all([rows.first().locator(".qzk-fig-item").boundingBox(), actions.first().boundingBox()]);
+  expect(nameBox!.x + nameBox!.width).toBeLessThanOrEqual(stripBox!.x + 1);
 
   // The whole row (name + action strip) is the graph's treeitem.
   await rows.first().focus();
-  await expect(actions.first()).toHaveCSS("visibility", "visible");
+  await expect(actions.first()).toBeVisible();
   await page.keyboard.press("Tab");
   await expect(actions.first().getByTitle("Open in a new graph window")).toBeFocused();
 
@@ -79,7 +84,12 @@ test("dense recovered Origin graphs stay inside the Library and reveal one actio
   const unresolvedItem = unresolved.locator(".qzk-fig-item");
   const unresolvedActions = unresolved.locator(".qzk-origin-figure-actions");
   await expect(unresolvedActions).toHaveCSS("position", "static");
-  await expect(unresolvedActions.getByRole("button", { name: /Recover unresolved Origin bindings/ })).toBeVisible();
+  // Recover… is the unresolved row's one action: visible AND enabled (the row
+  // is described as unresolved, never aria-disabled, which would disable it).
+  const recover = unresolvedActions.getByRole("button", { name: /Recover unresolved Origin bindings/ });
+  await expect(recover).toBeVisible();
+  await expect(recover).toBeEnabled();
+  await expect(unresolved).not.toHaveAttribute("aria-disabled", "true");
   const [itemBox, actionBox] = await Promise.all([unresolvedItem.boundingBox(), unresolvedActions.boundingBox()]);
   expect(itemBox).not.toBeNull();
   expect(actionBox).not.toBeNull();

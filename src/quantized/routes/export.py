@@ -30,7 +30,7 @@ from quantized.io.origin_com import com_available, send_to_origin
 from quantized.io.origin_project.writer import opj_bytes
 from quantized.io.xrd_csv import format_xrd_csv
 from quantized.routes._errors import CALC_ERRORS, CALC_ERRORS_IO
-from quantized.routes._export_common import _attachment, _safe_name
+from quantized.routes._export_common import _attachment, _attachment_named, _safe_name
 from quantized.routes._offloop import OffloopJSONRoute
 
 router = APIRouter(prefix="/api/export", tags=["export"], route_class=OffloopJSONRoute)
@@ -181,7 +181,7 @@ def export_origin(req: OriginRequest) -> Response:
     return Response(
         content=buf.getvalue(),
         media_type="application/zip",
-        headers=_attachment(_safe_name(stem, ".zip")),
+        headers=_attachment_named(req.filename, ".zip"),
     )
 
 
@@ -222,11 +222,11 @@ def export_opj(req: OpjRequest) -> Response:
         payload = opj_bytes(books)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    stem = _safe_name(req.filename, "")
     return Response(
         content=payload,
         media_type="application/octet-stream",
-        headers=_attachment(f"{stem}.opj"),
+        # ASCII fallback + RFC 5987 filename* so "Ångström θ.opj" keeps its name.
+        headers=_attachment_named(req.filename, ".opj"),
     )
 
 
@@ -248,7 +248,7 @@ def export_origin_project(req: OpjRequest) -> Response:
     return Response(
         content=buf.getvalue(),
         media_type="application/zip",
-        headers=_attachment(_safe_name(stem, ".zip")),
+        headers=_attachment_named(req.filename, ".zip"),
     )
 
 

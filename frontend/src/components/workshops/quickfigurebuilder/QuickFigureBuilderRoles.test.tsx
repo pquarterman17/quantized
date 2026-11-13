@@ -38,6 +38,20 @@ beforeEach(() => {
 
 const role = (label: string) => screen.getByRole("combobox", { name: `Role for ${label}` });
 
+describe("QuickFigureBuilderWorkspace — an X error that belongs to one series", () => {
+  it("shows and offers the per-series X error binding instead of reading as Unassigned", () => {
+    // Origin-replacement audit item 1: an Origin X-error column binds to the Y
+    // it follows ({ target: that Y, axis: "x" }); the role menu must name it.
+    useApp.setState({
+      datasets: [{ ...dataset, errorRoles: [{ channel: 3, target: 0, axis: "x", side: "both" }] }],
+    });
+    render(<QuickFigureBuilderWorkspace />);
+    expect(role("R_err")).toHaveValue("error:x:0:both");
+    const options = Array.from(role("R_err").querySelectorAll("option")).map((o) => o.textContent);
+    expect(options).toContain("X error (±) for R");
+  });
+});
+
 describe("QuickFigureBuilderWorkspace — Group by and Point labels roles", () => {
   it("every column's role menu offers Group by and Point labels", () => {
     render(<QuickFigureBuilderWorkspace />);

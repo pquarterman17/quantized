@@ -248,6 +248,10 @@ export async function fetchMap(
     return fromResponse(r);
   } catch (err) {
     if (signal?.aborted) throw err;
+    // 422 = the backend is up and REFUSED these columns (constant axis, no
+    // row with finite x, y and z): an offline grid of the same data would
+    // only hide why. The caller shows the backend's message instead.
+    if ((err as { status?: unknown } | null)?.status === 422) throw err;
     // Honour a LOWER requested resolution as-is (buildMapColumns's own 60
     // default applies when unset); only clamp DOWN past the freeze-risk cap.
     const nx = opts.nx != null ? Math.min(opts.nx, OFFLINE_FALLBACK_MAX_RES) : undefined;

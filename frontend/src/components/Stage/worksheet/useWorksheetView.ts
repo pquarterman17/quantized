@@ -377,7 +377,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
 
   const { time, values, labels, units, metadata } = ds.data;
   const baseCount = labels.length - (ds.formulas?.length ?? 0);
-  const xName = String(metadata?.["x_column_name"] ?? "x");
+  const xName = String(metadata?.["x_column_long"] || metadata?.["x_column_name"] || "x"); // long name, not Origin's "A"
   const xUnit = String(metadata?.["x_column_unit"] ?? "");
   const filterActive = filtered.length !== Math.max(time.length, textRowCount);
   const canExtract = analysisRows.length > 0 && analysisRows.length !== Math.max(time.length, textRowCount);

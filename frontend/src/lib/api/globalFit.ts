@@ -34,12 +34,17 @@ export interface GlobalFitResult {
   /** Per dataset: the fitted curve at that dataset's x. */
   yFit: Num[][];
   R2: Num[];
+  /** Per dataset: UNWEIGHTED root-mean-square residual, in the units of y. */
   RMSE: Num[];
+  /** Per dataset: the weighted sum of squares the fit minimised. */
+  chiSq?: Num[];
   chiSqRed: Num;
   nTotal: number;
   nFree: number;
-  /** 1 = the simplex converged; 0 = it hit the iteration limit. */
+  /** 1 = the simplex converged; 0 = it hit the iteration limit or stalled. */
   exitFlag: number;
+  /** Why exitFlag is 0, when the fitter can say (e.g. a stalled parameter). */
+  warnings?: string[];
 }
 
 /** Queue a global fit; answers { job_id } at once. */

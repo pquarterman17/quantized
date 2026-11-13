@@ -145,19 +145,32 @@ export function originBookErrorRoles(
   // secondary "X" has been seen. An "X-error" that precedes any secondary
   // "X" is unambiguous (nothing else has claimed to be an X yet) and keeps
   // binding to the shared axis exactly as before.
+  //
+  // Audit fix (Origin-replacement sprint): the render pipeline CAN now say
+  // "this series' own X" -- an X binding whose `target` is a channel draws on
+  // that series only (`buildErrorSpans`). Origin itself attaches an X-error
+  // column to the Y it FOLLOWS (X, Y, yErr, xErr: the xErr is that Y's), so
+  // that is the binding: an X-error after a Y in the same X block binds to
+  // that Y, which also covers an X-error after a secondary X (that loop's own
+  // uncertainty). Only an X-error with no Y before it in its block falls back
+  // to the shared-axis rule above. Binding it to the axis drew its whiskers on
+  // EVERY curve, including ones on a different X.
   const roles: ErrorBinding[] = [];
   let lastY: number | null = null;
+  let blockY: number | null = null; // the last Y since the most recent X
   let sawSecondaryX = false;
   for (let i = 0; i < list.length; i++) {
     const designation = list[i]?.designation;
     if (designation === "Y") {
       lastY = i;
+      blockY = i;
     } else if (designation === "X") {
       sawSecondaryX = true;
+      blockY = null;
     } else if (designation === "Y-error" && lastY !== null) {
       roles.push({ channel: i, target: lastY, axis: "y", side: "both" });
-    } else if (designation === "X-error" && !skipXError && !sawSecondaryX) {
-      roles.push({ channel: i, target: -1, axis: "x", side: "both" });
+    } else if (designation === "X-error" && !skipXError && (blockY !== null || !sawSecondaryX)) {
+      roles.push({ channel: i, target: blockY ?? -1, axis: "x", side: "both" });
     }
   }
   return { errorRoles: roles }; // possibly [] -- see the O1 note above

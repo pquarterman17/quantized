@@ -249,6 +249,29 @@ describe("ContextMenu", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it("clicking a hover-opened submenu parent keeps the flyout open", () => {
+    // Origin-replacement live check: the click toggled the flyout shut, so
+    // "Set As" (and every other submenu) closed under the pointer.
+    render(<ContextMenu x={0} y={0} onClose={vi.fn()} items={[{ label: "More", submenu: [{ label: "Deep", run: vi.fn() }] }]} />);
+    const parent = screen.getByText("More").closest("button")!;
+    fireEvent.mouseEnter(parent.closest(".qzk-ctx-subwrap")!);
+    fireEvent.click(parent);
+    expect(screen.getByText("Deep")).toBeInTheDocument();
+    fireEvent.click(parent); // and a second click still does not close it
+    expect(screen.getByText("Deep")).toBeInTheDocument();
+    expect(parent).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("a click (or Enter) on a closed submenu parent opens it and focuses its first item", () => {
+    const onClose = vi.fn();
+    render(<ContextMenu x={0} y={0} onClose={onClose} items={[{ label: "More", submenu: [{ label: "Deep", run: vi.fn() }] }]} />);
+    fireEvent.click(screen.getByText("More").closest("button")!); // no hover first: touch, or Enter's native click
+    expect(document.activeElement).toBe(screen.getByText("Deep").closest("button"));
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
+    expect(screen.queryByText("Deep")).toBeNull();
+  });
+
   // Stacking order regression (2026-08-02): an OPEN context menu must paint
   // over every other overlay layer, or its "Got it" button / dwell tooltip
   // can visually occlude — or, worse, intercept clicks on — the menu. The

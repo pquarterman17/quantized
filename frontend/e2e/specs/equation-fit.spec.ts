@@ -88,8 +88,12 @@ test.describe("Curve Fit custom equation authoring (P2.7)", () => {
     await expect(rows.nth(1).locator("td").nth(2)).toHaveText("held");
 
     // ── every parameter held: Fit refuses before any request ───────────────
+    // m's guess is blank (auto, the data-driven start): holding it first says
+    // there is no value to hold; with a guess it is the all-held refusal.
     await panel.getByRole("checkbox", { name: "Hold m fixed" }).check();
     await expect(panel.getByRole("button", { name: "Fit", exact: true })).toBeDisabled();
+    await expect(summary.getByRole("alert")).toContainText("m: a held parameter needs a guess");
+    await panel.getByRole("textbox", { name: "guess m" }).fill("1");
     await expect(summary.getByRole("alert")).toContainText("every parameter is held");
     await panel.getByRole("checkbox", { name: "Hold m fixed" }).uncheck();
 

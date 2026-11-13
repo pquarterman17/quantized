@@ -16,6 +16,8 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from .baseline import estimate_background
+from .peak_noise import estimate_noise, matched_filter_keep, noise_floor, noise_floor_offset
+from .peak_prominence import compute_prominence
 from .processing import _matlab_gradient
 
 __all__ = ["find_peaks_robust"]
@@ -25,109 +27,6 @@ _EPS = float(np.finfo(float).eps)
 
 def _matlab_round(x: float) -> int:
     return int(math.copysign(math.floor(abs(x) + 0.5), x))
-
-
-def _estimate_noise(y: NDArray[np.float64]) -> float:
-    """Robust noise estimate from first differences (MAD/sqrt(2)), floored."""
-    diffs = np.diff(y)
-    sigma = 1.4826 * float(np.median(np.abs(diffs - np.median(diffs)))) / math.sqrt(2.0)
-    return max(sigma, float(np.max(y)) * 1e-6)
-
-
-def _prominence_bruteforce(
-    residual: NDArray[np.float64], max_idx: NDArray[np.intp]
-) -> NDArray[np.float64]:
-    """Reference O(M·walk) prominence: walk out each side until a higher sample.
-
-    Kept as the parity reference and the fallback for non-finite residuals
-    (NaN/Inf comparison semantics differ from the fast path)."""
-    n = residual.size
-    prom = np.zeros(max_idx.size)
-    for k in range(max_idx.size):
-        idx = int(max_idx[k])
-        pk_height = residual[idx]
-        left_min = pk_height
-        for j in range(idx - 1, -1, -1):
-            if residual[j] < left_min:
-                left_min = residual[j]
-            if residual[j] > pk_height:
-                break
-        right_min = pk_height
-        for j in range(idx + 1, n):
-            if residual[j] < right_min:
-                right_min = residual[j]
-            if residual[j] > pk_height:
-                break
-        prom[k] = pk_height - max(left_min, right_min)
-    return prom
-
-
-def _nearest_greater(a: NDArray[np.float64], *, forward: bool) -> NDArray[np.intp]:
-    """Index of the nearest strictly-greater element to each position.
-
-    ``forward=False`` scans left (previous-greater, sentinel -1); ``forward=True``
-    scans right (next-greater, sentinel n). O(n) via a monotonic stack."""
-    n = a.size
-    res = np.empty(n, dtype=np.intp)
-    rng = range(n) if not forward else range(n - 1, -1, -1)
-    sentinel = -1 if not forward else n
-    stack: list[int] = []
-    for i in rng:
-        ai = a[i]
-        while stack and a[stack[-1]] <= ai:
-            stack.pop()
-        res[i] = stack[-1] if stack else sentinel
-        stack.append(i)
-    return res
-
-
-class _RangeMin:
-    """Sparse table for static inclusive range-minimum (O(n log n) build, O(1) query)."""
-
-    def __init__(self, a: NDArray[np.float64]) -> None:
-        n = a.size
-        self.table: list[NDArray[np.float64]] = [np.asarray(a, dtype=float)]
-        j = 1
-        while (1 << j) <= n:
-            prev = self.table[j - 1]
-            span = 1 << (j - 1)
-            width = n - (1 << j) + 1
-            self.table.append(np.minimum(prev[:width], prev[span : span + width]))
-            j += 1
-
-    def query(self, lo: int, hi: int) -> float:
-        """Minimum over the inclusive range ``[lo, hi]``; ``+inf`` if empty (lo>hi)."""
-        if lo > hi:
-            return float("inf")
-        j = (hi - lo + 1).bit_length() - 1
-        return float(min(self.table[j][lo], self.table[j][hi - (1 << j) + 1]))
-
-
-def _compute_prominence(
-    residual: NDArray[np.float64], max_idx: NDArray[np.intp]
-) -> NDArray[np.float64]:
-    """Topographic prominence for each candidate maximum.
-
-    For a peak at ``idx`` the prominence is ``residual[idx] - max(left_min,
-    right_min)`` where each side-min is taken over the run from the nearest
-    strictly-greater sample up to the peak. Computing the nearest-greater indices
-    (monotonic stacks) and the run-minima (sparse table) is O(n log n) instead of
-    the O(n²) per-candidate walk that bites on large, noisy data with many local
-    maxima. Bit-for-bit identical to :func:`_prominence_bruteforce` on finite
-    data (verified); non-finite residuals fall back to the brute force."""
-    if not bool(np.isfinite(residual).all()):
-        return _prominence_bruteforce(residual, max_idx)
-    pge = _nearest_greater(residual, forward=False)
-    nge = _nearest_greater(residual, forward=True)
-    rmin = _RangeMin(residual)
-    prom = np.zeros(max_idx.size)
-    for k in range(max_idx.size):
-        idx = int(max_idx[k])
-        pk = float(residual[idx])
-        left_min = min(pk, rmin.query(int(pge[idx]) + 1, idx - 1))
-        right_min = min(pk, rmin.query(idx + 1, int(nge[idx]) - 1))
-        prom[k] = pk - max(left_min, right_min)
-    return prom
 
 
 def _estimate_fwhm(
@@ -227,8 +126,15 @@ def find_peaks_robust(
         xv, yv, method=bg_method, max_window_deg=max(max_window_deg, x_span * 0.05),
         poly_degree=bg_poly_degree, iterative=bg_iterative,
     )
+    global_noise = estimate_noise(yv)
+    # With measurable noise (not on noise-free data such as the MATLAB golden
+    # case), heights are measured from the centre of the noise band rather
+    # than the lower envelope SNIP follows -- the returned background carries
+    # the shift -- and candidates must survive a matched filter (peak_noise).
+    noisy = global_noise > noise_floor(yv)
+    if noisy:
+        bg = bg + noise_floor_offset(yv - bg, global_noise)
     residual = yv - bg
-    global_noise = _estimate_noise(yv)
     local_noise = global_noise * np.ones(n)
 
     is_max = np.zeros(n, dtype=bool)
@@ -238,7 +144,7 @@ def find_peaks_robust(
     if max_idx.size == 0:
         return [], bg
 
-    prom = _compute_prominence(residual, max_idx)
+    prom = compute_prominence(residual, max_idx)
     abs_prom_thresh = max(min_prom * float(residual.max()), 4 * global_noise)
     rel_prom_ratio = prom / np.maximum(residual[max_idx], _EPS)
     keep = prom >= abs_prom_thresh
@@ -265,6 +171,8 @@ def find_peaks_robust(
         pk_fwhm[k] = fw
         if fw < min_width_deg or fw > max_width_deg or n_above < min_width_pts:
             valid[k] = False
+    if noisy:
+        valid &= matched_filter_keep(residual, max_idx, global_noise, min_width_pts, snr_thr)
     max_idx, prom, pk_fwhm = max_idx[valid], prom[valid], pk_fwhm[valid]
     if max_idx.size == 0:
         return [], bg

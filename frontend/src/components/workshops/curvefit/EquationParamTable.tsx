@@ -34,6 +34,8 @@ export default function EquationParamTable({ rows, setRow, setHeld }: Props) {
             value={r.guess}
             onChange={(v) => setRow(i, "guess", v)}
             aria-label={`guess ${r.name}`}
+            placeholder="auto"
+            title="Leave blank to derive the start from the data"
           />,
           <NumberField
             key="lo"

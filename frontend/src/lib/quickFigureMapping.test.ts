@@ -32,6 +32,16 @@ describe("Quick Figure Builder mapping draft", () => {
     expect(mappingReady(mapping)).toBe(true);
   });
 
+  it("a never-filled column starts as Ignore, not as an empty legend entry", () => {
+    const withEmpty: Dataset = {
+      ...dataset,
+      data: { ...dataset.data, values: [[2, .1, 4, NaN], [3, .2, 5, NaN]], labels: [...dataset.data.labels, "spare"], units: [...dataset.data.units, ""] },
+    };
+    const mapping = initialQuickFigureMapping(withEmpty);
+    expect(mapping.yKeys).toEqual([0, 2]);
+    expect(assignmentFor(mapping, 3).role).toBe("ignore");
+  });
+
   it("keeps roles exclusive and drops bindings whose target stops being Y", () => {
     const initial = initialQuickFigureMapping(dataset);
     const x = assignQuickFigureColumn(initial, 0, { role: "x" });

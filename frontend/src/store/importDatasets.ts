@@ -25,13 +25,14 @@
 // line, so it's the chokepoint for the batch-overlay offer — see
 // `batchOverlayOffer` below.
 
-import { plural } from "../lib/plural";
 
 import type { HistoryBatchToken } from "./history";
 import { lit } from "../lib/macro";
 import { revealAncestorChain } from "../lib/foldertree";
 import { originBookErrorRoles } from "../lib/originBookRoles";
 import { planOriginImport } from "../lib/originFolders";
+import { importSummary } from "../lib/importFailureHint";
+import { originImportNotice } from "../lib/originImportNotice";
 import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "../lib/rowSidecars";
 import {
   isLazyBookEntry,
@@ -46,7 +47,7 @@ import { presentBatchOutcome } from "./importBatchOffers";
 import { createErrorRolesActions, seedErrorRoles, type ErrorRolesActions } from "./importErrorRoles";
 import type { StructurePreset } from "./crystalStructures";
 import { loadPath, loadUpload, pathBasename, presentStructures, type ImportLoad, type ImportOrigin } from "./importLoaders";
-import { notifyParserNotes, parserNotes } from "./importNotes";
+import { notifyOwnXSeries, notifyParserNotes, parserNotes, parserNotesSummary } from "./importNotes";
 import { resolveImportTargetFolderId } from "./importTargetFolder";
 import { beginOp, endOp, updateOp, type OpId } from "./pendingOps";
 import { toast } from "./toasts";
@@ -155,6 +156,7 @@ function addFromPayload(
     // on first activation — `pending` records how), or — only under the
     // `full_books` escape hatch, never requested here — a full inline DataStruct.
     const bookSource = data.book_source;
+    let primaryId: string | null = null; // the book the backend chose as primary
     // FU-1: every book gets `importedAt` + designation-derived error roles
     // (never the label guess) — see `originBookErrorRoles`'s doc. `?? {}`
     // here: unlike the single-file branch below, this NEVER falls back to
@@ -168,6 +170,7 @@ function addFromPayload(
       const name = `${stem}:${label}`;
       const roles = originBookErrorRoles(book) ?? {};
       if (isPrimaryBookMarker(book)) {
+        primaryId = id;
         const bookData = { time: data.time, values: data.values, labels: book.labels, units: book.units, metadata: book.metadata };
         get().addDataset({ id, name, data: bookData, ...src, ...roles, importedAt }, historyToken);
       } else if (isLazyBookEntry(book)) {
@@ -226,6 +229,8 @@ function addFromPayload(
       }
       newIds.push(id);
     }
+    // Open on the primary book (Origin's active window), not the last one added.
+    if (primaryId) get().setActive(primaryId);
     // item 4 / LIBRARY_WORKBOOK_UX_PLAN PR A3: organize the imported books
     // into a project folder that mirrors Origin's Project Explorer
     // (origin_folder_path), and give each book its own workbook (L0.1/L0.2)
@@ -297,6 +302,7 @@ function addFromPayload(
       }
       newIds.push(dsInput.id);
     }
+    if (inputs.length > 1) get().setActive(inputs[0].id); // sheet 0, not the last sheet
     // LIBRARY_WORKBOOK_UX_PLAN PR A3: one workbook per imported source file
     // (L0.2), or per book for a single-book Origin project (its origin_book
     // metadata already survived onto dsInput.data.metadata — the `books`
@@ -320,13 +326,12 @@ function addFromPayload(
       datasets: s.datasets.map((d) => (mine.has(d.id) ? { ...d, workbookId } : d)),
     }));
   }
+  set({ worksheetId: null }); // the Worksheet tab shows the import, not a book opened earlier
   if (figures?.length) get().addOriginFigures(stem, figures, newIds);
   if (fidelity) {
     get().addOriginFidelity(stem, fidelity, newIds);
-    toast(
-      `${stem}: ${fidelity.graph_records_actionable}/${fidelity.graph_records_total} Origin graph records are editable; fidelity details saved`,
-      "info",
-    );
+    const notice = originImportNotice(stem, fidelity); // truncated file -> danger
+    toast(notice.msg, notice.kind, notice.ttlMs ? { ttlMs: notice.ttlMs } : undefined);
   }
   get().recordMacro(`Import ${origin.name}`, `qz.import(${lit(origin.name)})`, {
     kind: "import",
@@ -395,6 +400,7 @@ async function runImport<T>(
 
   let added = 0;
   let lastError = "";
+  let lastFailed = ""; // its file name/path: picks the follow-up hint below
   let cancelled = false;
   const createdIds: string[] = [];
   const structures: StructurePreset[] = []; // .cif: lattice presets, not datasets
@@ -425,7 +431,8 @@ async function runImport<T>(
           cancelled = true;
           break;
         }
-        lastError = `${describe(item)}: ${e instanceof Error ? e.message : "error"}`;
+        lastFailed = describe(item);
+        lastError = `${lastFailed}: ${e instanceof Error ? e.message : "error"}`;
       }
     }
   } finally {
@@ -441,14 +448,12 @@ async function runImport<T>(
     return createdIds; // files already fully imported STAY — see this function's own doc
   }
 
-  // A parse failure is the wizard's second front door (#40): the auto-detect
-  // path gave up, so point at the manual guess/preview/parse one instead of
-  // just reporting the error.
-  const hint = " — try the Import wizard (⌘K → Import wizard…)";
-  const summary = lastError
-    ? `imported ${added}/${items.length} — failed ${lastError}${hint}`
-    : `imported ${added} file${plural(added)}`;
-  get().setStatus(summary);
+  // With the wizard hint for a failed text file (lib/importFailureHint).
+  const summary = importSummary(added, items.length, lastError, lastFailed);
+  // A parser note (a skipped workbook sheet, dropped rows) rides on the status
+  // line too -- the toast is transient; the danger toast below keeps `summary`.
+  const notes = parserNotesSummary(noted);
+  get().setStatus(notes ? `${summary} — ${notes}` : summary);
   // P2 review fix: `added` (files actually imported), not createdIds.length
   // (datasets created) — a multi-book Origin file inflates the latter. The
   // toast cascade itself (overlay / folder / P1.3 wave-3 recipe-suggestion /
@@ -469,6 +474,7 @@ async function runImport<T>(
   // above to this exact string, rather than re-interpolating it.
   if (lastError) toast(summary, "danger");
   notifyParserNotes(noted);
+  notifyOwnXSeries(get().datasets.filter((d) => createdIds.includes(d.id)));
   return createdIds;
 }
 
