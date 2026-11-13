@@ -136,9 +136,20 @@ describe("equationToLatex: functions and constants", () => {
     for (const name of backend) expect(body(`${name}(x)`), name).not.toBeNull();
   });
 
+  it("keeps a bare gamma/step a parameter, as the backend does", () => {
+    expect(body("gamma^2")).toBe("\\gamma^{2}");
+    expect(body("step*x")).not.toBeNull();
+    // Multi-argument functions and comparisons get no preview (never a wrong one).
+    expect(body("min(x, a)")).toBeNull();
+    expect(body("x < a")).toBeNull();
+  });
+
   it("uses the conventional notation for each function", () => {
     expect(body("exp(x)")).toBe("e^{x}");
     expect(body("log(x)")).toBe("\\ln\\left(x\\right)"); // natural log (np.log)
+    expect(body("ln(x)")).toBe("\\ln\\left(x\\right)");
+    expect(body("gamma(x)")).toBe("\\Gamma\\left(x\\right)");
+    expect(body("heaviside(x)")).toBe("H\\left(x\\right)");
     expect(body("log10(x)")).toBe("\\log_{10}\\left(x\\right)");
     expect(body("sqrt(x)")).toBe("\\sqrt{x}");
     expect(body("abs(x)")).toBe("\\left|x\\right|");

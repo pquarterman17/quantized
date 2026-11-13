@@ -93,7 +93,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
         : { mode: "yerr", errKey: selection.errorKeys[selected.yKey] }, keep);
       if (weighted.dy) request.dy = keep.map((index) => weighted.dy![index]!);
       if (weighted.issue) warnings.push(weighted.issue);
-    } else if (weightMode === "manual") {
+    } else if (weightMode === "manual" || weightMode === "direct") {
       warnings.push(manualKey === null
         ? "Manual weighting was not configured; this input ran unweighted."
         : "Manual weight columns are worksheet-specific; this batch input ran unweighted.");

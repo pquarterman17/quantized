@@ -39,7 +39,8 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.fit_autoguess import auto_guess
-from quantized.calc.fit_equation import default_guesses, equation_model
+from quantized.calc.fit_equation import equation_model
+from quantized.calc.fit_equation_init import auto_start
 from quantized.calc.fit_models import FIT_MODELS
 from quantized.calc.fitting import curve_fit, weights_from_dy
 
@@ -180,7 +181,8 @@ def _equation_runner(
     fcn, names = equation_model(equation)
     if not names:
         raise ValueError("equation has no free parameters to fit")
-    p0 = list(guesses) if guesses is not None else default_guesses(names)
+    # No guesses -> data-driven starts (finding 14), not 1.0 per parameter.
+    p0 = list(guesses) if guesses is not None else auto_start(fcn, names, xv, yv)
     if len(p0) != len(names):
         raise ValueError(f"expected {len(names)} guesses, got {len(p0)}")
     result = curve_fit(xv, yv, fcn, p0, weights=weights)

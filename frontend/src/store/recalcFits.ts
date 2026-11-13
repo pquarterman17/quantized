@@ -28,7 +28,8 @@ export async function recomputeStaleFits(set: SliceSet, get: SliceGet): Promise<
       continue;
     }
     try {
-      const { FIT_SUBSET_MISMATCH, fitDataForSpec } = await import("../lib/fitselection");
+      const { FIT_SUBSET_MISMATCH, fitDataForSpec, statsVersionField, weightRequestFields } =
+        await import("../lib/fitselection");
       // Reproduce the fit's RECORDED channels (audit P1 #3), falling back
       // to the live plotted selection for legacy specs — not time/values[0].
       const sel = fitDataForSpec(d, d.fitSpec, get().xKey, get().yKeys, get().seriesOrder);
@@ -47,11 +48,13 @@ export async function recomputeStaleFits(set: SliceSet, get: SliceGet): Promise<
         model: spec.model,
         x: pairs.x,
         y: pairs.y,
-        ...(dy ? { dy } : {}),
+        ...(dy ? weightRequestFields(spec.weight, dy) : {}),
         ...(spec.p0 ? { p0: spec.p0 } : {}),
         ...(spec.lower ? { lower: boundsFromWire(spec.lower, -1) } : {}),
         ...(spec.upper ? { upper: boundsFromWire(spec.upper, 1) } : {}),
         ...(spec.fixed ? { fixed: spec.fixed } : {}),
+        // A legacy spec keeps its own statistics definitions on recompute.
+        ...statsVersionField(spec),
       });
       // Validate the complete result before updating even the transient
       // overlay. A malformed response must leave the old fit visibly stale,

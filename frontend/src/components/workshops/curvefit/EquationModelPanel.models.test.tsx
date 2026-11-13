@@ -113,7 +113,7 @@ describe("saved model description + units (P2.7 slice 3)", () => {
         name: "Mine",
         equation: "a*exp(-x/t)",
         params: ["a", "t"],
-        guesses: [1, 1],
+        guesses: [null, null], // untouched = auto start, saved as such
         lower: [null, null],
         upper: [null, null],
         description: "my decay",

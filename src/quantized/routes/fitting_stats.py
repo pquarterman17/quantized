@@ -22,7 +22,13 @@ from quantized.calc.fit_equation import equation_model
 from quantized.calc.fit_model_compare import compare_models
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fit_odr import odr_fit
-from quantized.calc.fit_stats import ModelFn, fit_bands, fit_compare, residual_diagnostics
+from quantized.calc.fit_stats import (
+    ModelFn,
+    fit_bands,
+    fit_compare,
+    observation_variance_on_grid,
+    residual_diagnostics,
+)
 from quantized.routes._errors import call_calc
 from quantized.routes._payload import to_jsonable
 
@@ -39,10 +45,22 @@ class BandsRequest(BaseModel):
     covar: list[list[float]] | None = None
     # Grid the bands are evaluated on.
     x: list[float]
+    # The fit's point and free-parameter counts; the band's Student-t
+    # quantile uses the residual dof n_points - n_free.
     n_points: int
-    # Student-t degrees of freedom for the band quantile. ``fit_bands`` uses
-    # its ``n_free`` argument only as this dof, so it is passed straight in.
-    dof: int
+    n_free: int
+    # The fit's observation variance (curve_fit's ``MSE``), which the
+    # prediction band adds to the curve's own variance. null -> the
+    # prediction limits come back null (the confidence band is unaffected).
+    mse: float | None = Field(default=None, ge=0.0)
+    # A WEIGHTED fit's observations do not share a variance: send the fitted
+    # x values and curve_fit's per-point ``obsVar`` instead of ``mse`` and the
+    # prediction band uses each grid point's own variance (interpolated
+    # between data points, held at the end values outside them --
+    # calc.fit_stats.observation_variance_on_grid). null entries = zero-weight
+    # points, which are skipped. Takes precedence over ``mse``.
+    x_data: list[float] | None = None
+    obs_var: list[float | None] | None = None
     level: float = Field(default=0.95, gt=0.0, lt=1.0)
 
 
@@ -73,8 +91,16 @@ def _model_fcn(model: str | None, equation: str | None, n_params: int) -> ModelF
 def bands(req: BandsRequest) -> dict[str, Any]:
     """Confidence and prediction bands around a fitted curve (fitting.fitBands)."""
     fcn = _model_fcn(req.model, req.equation, len(req.params))
+    mse: Any = req.mse
+    if req.x_data is not None and req.obs_var is not None:
+        if len(req.x_data) != len(req.obs_var):
+            raise HTTPException(
+                status_code=422, detail="x_data and obs_var must be the same length")
+        var = [float("inf") if v is None else v for v in req.obs_var]
+        mse = call_calc(observation_variance_on_grid, req.x_data, var, req.x)
     out = call_calc(
-        fit_bands, req.x, fcn, req.params, req.covar, req.n_points, req.dof, level=req.level
+        fit_bands, req.x, fcn, req.params, req.covar, req.n_points, req.n_free,
+        level=req.level, mse=mse,
     )
     return to_jsonable(out)  # type: ignore[no-any-return]
 
@@ -84,6 +110,9 @@ class DiagnosticsRequest(BaseModel):
     residuals: list[float]
     # Free (fitted) parameter count of the model the residuals came from.
     n_params: int
+    # The fit's least-squares weights (1/dy^2, or a direct weight column), so
+    # AIC/AICc/BIC are computed on the same weighted chi^2 as the fit's own.
+    weights: list[float] | None = None
 
 
 @router.post("/diagnostics")
@@ -92,7 +121,9 @@ def diagnostics(req: DiagnosticsRequest) -> dict[str, Any]:
     if len(req.y) != len(req.residuals):
         raise HTTPException(status_code=422, detail="y and residuals must have the same length")
     return {
-        "compare": to_jsonable(call_calc(fit_compare, req.y, req.residuals, req.n_params)),
+        "compare": to_jsonable(
+            call_calc(fit_compare, req.y, req.residuals, req.n_params, weights=req.weights)
+        ),
         "residuals": to_jsonable(call_calc(residual_diagnostics, req.residuals)),
     }
 

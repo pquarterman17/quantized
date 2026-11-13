@@ -67,6 +67,17 @@ describe("EquationPreview", () => {
     expect(screen.getByTestId("equation-preview")).toBeInTheDocument();
   });
 
+  it("says why there is no picture for a multi-argument function or a comparison", () => {
+    const { rerender } = render(<EquationPreview equation="A*voigt(x-x0, s, g) + if(x<120, b, c)" suppressed={false} />);
+    const note = "No preview for multi-argument functions or comparisons; the fit uses the text above.";
+    expect(screen.getByText(note)).toBeInTheDocument();
+    expect(renderToString).not.toHaveBeenCalled();
+    rerender(<EquationPreview equation="A*exp(" suppressed={false} />); // mid-typing: no caption
+    expect(screen.queryByText(note)).toBeNull();
+    rerender(<EquationPreview equation="max(a, x" suppressed={true} />); // rejected text: no caption
+    expect(screen.queryByText(note)).toBeNull();
+  });
+
   it("renders no box at all for an empty equation", () => {
     render(<EquationPreview equation="   " suppressed={false} />);
     expect(screen.queryByTestId("equation-preview")).toBeNull();

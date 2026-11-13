@@ -1,5 +1,5 @@
-// Curve Fit "Bands" hook: the band request carries the fit's residual dof
-// and the merged x grid, and "Plot with band" lands a dataset + plot whose CI
+// Curve Fit "Bands" hook: the band request carries the fit's point/free
+// counts and observation variance (MSE) and the merged x grid, and "Plot with band" lands a dataset + plot whose CI
 // columns are a real fill (so the export carries the band).
 
 import { act, renderHook, waitFor } from "@testing-library/react";
@@ -23,7 +23,7 @@ const DS: Dataset = {
 const TARGET: FitBandsTarget = {
   dataset: DS,
   model: "Linear",
-  result: { params: [2, 1], covar: [[0.01, 0], [0, 0.02]], nPoints: 5, nFree: 2 },
+  result: { params: [2, 1], covar: [[0.01, 0], [0, 0.02]], nPoints: 5, nFree: 2, MSE: 0.04 },
   fitData: { x: [0, 1, 2, 3, 4], y: [1, 3, 5, 7, 9], xKey: null, yKey: 0 },
 };
 
@@ -53,16 +53,45 @@ describe("useFitBands", () => {
     expect(fitBands).not.toHaveBeenCalled();
   });
 
-  it("sends the fit's residual dof and the data+grid rows, then reports the median half-width", async () => {
+  it("sends the fit's counts, its MSE and the data+grid rows, then reports the median half-width", async () => {
     const { result } = renderHook(() => useFitBands(TARGET));
     act(() => result.current.setOn(true));
     await waitFor(() => expect(result.current.halfWidth).toBe(0.5));
     const req = vi.mocked(fitBands).mock.calls[0]![0];
-    expect(req.dof).toBe(3);
+    expect(req.n_free).toBe(2);
+    expect(req.mse).toBe(0.04); // finding 1: the prediction band needs the fit's own scatter
     expect(req.n_points).toBe(5);
     expect(req.level).toBe(0.95);
     expect(req.x.length).toBe(5 + 256);
     expect(req.x).toEqual([...req.x].sort((a, b) => a - b));
+  });
+
+  it("sends a null MSE for a result that carries none (no prediction limits, not a wrong band)", async () => {
+    const { result } = renderHook(() =>
+      useFitBands({ ...TARGET, result: { params: [2, 1], covar: [[0.01, 0], [0, 0.02]], nPoints: 5, nFree: 2 } }),
+    );
+    act(() => result.current.setOn(true));
+    await waitFor(() => expect(result.current.halfWidth).toBe(0.5));
+    expect(vi.mocked(fitBands).mock.calls[0]![0].mse).toBeNull();
+  });
+
+  it("sends a weighted fit's per-point variance with the fitted x (review item 1)", async () => {
+    const obsVar = [0.01, 0.04, null, 0.16, 0.25]; // null = a zero-weight point
+    const { result } = renderHook(() =>
+      useFitBands({ ...TARGET, result: { ...TARGET.result, obsVar } }),
+    );
+    act(() => result.current.setOn(true));
+    await waitFor(() => expect(result.current.halfWidth).toBe(0.5));
+    const req = vi.mocked(fitBands).mock.calls[0]![0];
+    expect(req.x_data).toEqual([0, 1, 2, 3, 4]);
+    expect(req.obs_var).toEqual(obsVar);
+  });
+
+  it("sends no per-point variance for an unweighted fit", async () => {
+    const { result } = renderHook(() => useFitBands(TARGET));
+    act(() => result.current.setOn(true));
+    await waitFor(() => expect(result.current.halfWidth).toBe(0.5));
+    expect(vi.mocked(fitBands).mock.calls[0]![0]).not.toHaveProperty("obs_var");
   });
 
   it("re-asks at the new level", async () => {

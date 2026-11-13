@@ -15,7 +15,7 @@ export default function GlobalFitResults({ s }: { s: GlobalFitState }) {
 
   return (
     <div style={{ marginTop: 10 }}>
-      <FitConvergenceWarning result={{ exitFlag: fit.exitFlag }} />
+      <FitConvergenceWarning result={{ exitFlag: fit.exitFlag, warnings: fit.warnings }} />
       <div style={{ maxHeight: 220, overflowY: "auto", marginTop: 6 }}>
         <table className="qz-table" aria-label="Global fit parameters">
           <thead>
@@ -43,7 +43,7 @@ export default function GlobalFitResults({ s }: { s: GlobalFitState }) {
           <tr>
             <th>series</th>
             <th>R²</th>
-            <th>RMSE</th>
+            <th title="Unweighted root-mean-square residual, in the units of y">RMSE (y units)</th>
             <th />
           </tr>
         </thead>

@@ -29,8 +29,9 @@ def test_batch_fit_matches_matlab(load_golden: Callable[[str], dict[str, Any]]) 
     datasets = [(x, np.asarray(yi, dtype=float)) for yi in g["y"]]
     lower = _inf_bounds(g["lb"], -1.0)
     upper = _inf_bounds(g["ub"], 1.0)
+    # covariance="hessian": MATLAB's error method (the default is now jtj).
     s = batch_fit(datasets, _EXP, g["p0"], lower=lower, upper=upper,
-                  model_name="Exponential Decay")
+                  model_name="Exponential Decay", covariance="hessian")
     ref = g["summary"]
     assert_allclose(np.asarray(s["params"]), np.asarray(ref["params"], dtype=float),
                     rtol=1e-6, atol=1e-8)

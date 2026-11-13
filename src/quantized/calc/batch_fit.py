@@ -62,6 +62,7 @@ def batch_fit(
     meta_field: str = "",
     x_range: Sequence[float] | None = None,
     weights: str = "none",
+    covariance: str = "jtj",
 ) -> dict[str, Any]:
     """Fit ``model_fcn`` to every dataset; return a per-dataset summary.
 
@@ -70,7 +71,8 @@ def batch_fit(
     output ``paramNames``. ``weights`` ∈ {``none``, ``1/y``, ``1/y2``}. Returns a
     dict with ``params``/``errors`` (N×M), ``R2``/``chiSqRed``/``RMSE``/``AIC``/
     ``exitFlags``/``metaValues`` (length N, NaN where a fit was skipped/failed),
-    ``paramNames``, ``modelName``, ``nDatasets``, ``converged``.
+    ``paramNames``, ``modelName``, ``nDatasets``, ``converged``. ``covariance``
+    is passed to ``curve_fit`` (``"hessian"`` reproduces MATLAB's errors).
     """
     if weights not in ("none", "1/y", "1/y2"):
         raise ValueError(f'weights must be "none", "1/y", or "1/y2", got "{weights}"')
@@ -79,6 +81,8 @@ def batch_fit(
     nan = float("nan")
     params = np.full((n, m), nan)
     errors = np.full((n, m), nan)
+    errors_jtj = np.full((n, m), nan)
+    errors_hess = np.full((n, m), nan)
     r2 = [nan] * n
     chi_sq_red = [nan] * n
     rmse = [nan] * n
@@ -115,12 +119,14 @@ def batch_fit(
 
         try:
             r = curve_fit(x_data, y_data, model_fcn, p0i, lower=lower, upper=upper,
-                          fixed=fixed, weights=w)
+                          fixed=fixed, weights=w, covariance=covariance)
         except Exception:  # noqa: BLE001 — a failed fit leaves the NaN row (like MATLAB)
             continue
 
         params[i, :] = np.asarray(r["params"], dtype=float)
         errors[i, :] = np.asarray(r["errors"], dtype=float)
+        errors_jtj[i, :] = np.asarray(r["errorsJtj"], dtype=float)
+        errors_hess[i, :] = np.asarray(r["errorsHessian"], dtype=float)
         r2[i] = float(r["R2"])
         chi_sq_red[i] = float(r["chiSqRed"])
         rmse[i] = float(r["RMSE"])
@@ -135,6 +141,8 @@ def batch_fit(
     return {
         "params": params,
         "errors": errors,
+        "errorsJtj": errors_jtj,
+        "errorsHessian": errors_hess,
         "R2": r2,
         "chiSqRed": chi_sq_red,
         "RMSE": rmse,

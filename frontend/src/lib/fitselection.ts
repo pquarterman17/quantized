@@ -22,6 +22,11 @@ import { fitRowIdentities, fitRowIdentityFingerprint } from "./fitRowIdentity";
 import type { AnalysisSelectionItem } from "./analysisSelection";
 import type { Dataset, FitSpec } from "./types";
 export { fitStepParams } from "./fitStepParams";
+// Replay-only request helpers, re-exported so the eager recompute runner
+// (store/recalcFits.ts) reaches them through the ONE dynamic import it
+// already makes for this module instead of paying for two more.
+export { statsVersionField } from "./fitStatsVersion";
+export { weightRequestFields } from "./fitweights";
 
 export const FIT_SUBSET_MISMATCH = "saved row subset no longer matches the worksheet";
 

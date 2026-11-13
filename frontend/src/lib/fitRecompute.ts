@@ -97,8 +97,14 @@ export function stampRecompute(
     chiSqRed: _oldChiSqRed,
     nFree: _oldNFree,
     uncertainty: _oldUncertainty,
+    statsVersion: _oldStatsVersion,
     ...recipe
   } = spec;
+  // The statistics version is part of the RESULT, not the recipe: it is
+  // whatever the fitter just used. A response that names none (an older
+  // backend) keeps the spec's own, so nothing is relabelled on a guess.
+  const declared = result.statsVersion === 2 ? 2 : result.statsVersion === 1 ? 1 : undefined;
+  const statsVersion = declared === undefined ? spec.statsVersion : declared === 2 ? 2 : undefined;
   const params = result.params;
   if (!Array.isArray(params) ||
       !params.every((value) => typeof value === "number" && Number.isFinite(value))) {
@@ -122,6 +128,7 @@ export function stampRecompute(
       ? { errors: errors as (number | null)[] }
       : {}),
     uncertainty: validErrors ? "covariance" : "none",
+    ...(statsVersion === 2 ? { statsVersion } : {}),
     ...summaries,
     ...(typeof result.nFree === "number" && Number.isInteger(result.nFree) && result.nFree >= 0
       ? { nFree: result.nFree }

@@ -1,9 +1,11 @@
 """Fit-quality statistics: model comparison, residual diagnostics, error bands.
 
 Ports of fitting.fitCompare / residualDiagnostics / fitBands. Pure calc layer,
-all closed-form. The F-test p-value and the Student-t quantile use the
-regularized incomplete beta (scipy.special.betainc); ``fit_bands`` replicates
-MATLAB's Cornish-Fisher + bisection t-quantile for exact parity.
+all closed-form. The F-test p-value uses the regularized incomplete beta
+(scipy.special.betainc). ``fit_bands`` takes its Student-t quantile from
+``scipy.stats.t.ppf``: MATLAB's Cornish-Fisher approximation (built on a
+4.5e-4-accurate normal quantile) was ~2e-4 off, and the band no longer has a
+MATLAB golden to stay bit-compatible with (see ``fit_bands``).
 """
 
 from __future__ import annotations
@@ -15,8 +17,11 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.special import betainc
+from scipy.stats import t as student_t
 
-__all__ = ["fit_bands", "fit_compare", "residual_diagnostics"]
+from .fit_metrics import information_criteria
+
+__all__ = ["fit_bands", "fit_compare", "observation_variance_on_grid", "residual_diagnostics"]
 
 _EPS = float(np.finfo(float).eps)
 ModelFn = Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
@@ -40,10 +45,31 @@ def fit_compare(
     *,
     resid_ref: ArrayLike | None = None,
     n_params_ref: float = float("nan"),
+    weights: ArrayLike | None = None,
 ) -> dict[str, Any]:
-    """Model-comparison metrics (R2/adjR2/AIC/AICc/BIC + nested F-test). Port of fitCompare."""
+    """Model-comparison metrics (R2/adjR2/AIC/AICc/BIC + nested F-test). Port of fitCompare.
+
+    AIC/AICc/BIC follow ``calc.fit_metrics`` -- the SAME definition as
+    ``curve_fit``'s (statsmodels' ``-2 llf + 2k``), computed on the weighted
+    chi² when the fit's ``weights`` are passed -- so the Diagnostics panel and
+    the fit result agree for the same fit (fitting audit, finding 16).
+    MATLAB fitCompare used ``n·ln(RSS/n) + 2k``, a constant ``n(1 + ln 2π)``
+    lower, on the unweighted RSS; the golden test documents the departure.
+    ``rmse`` stays the unweighted ``√(RSS/n)`` in data units.
+    """
     yv = np.asarray(y, dtype=float).ravel()
     res = np.asarray(residuals, dtype=float).ravel()
+    wv = None if weights is None else np.asarray(weights, dtype=float).ravel()
+    ref_in = None if resid_ref is None else np.asarray(resid_ref, dtype=float).ravel()
+    if wv is not None:
+        if wv.size != yv.size:
+            raise ValueError(
+                f"weights must have {yv.size} entries (one per point), got {wv.size}")
+        # A zero-weight point was not fitted: it is not an observation here either.
+        used = wv > 0
+        if ref_in is not None and ref_in.size == yv.size:
+            ref_in = ref_in[used]
+        yv, res, wv = yv[used], res[used], wv[used]
     n = yv.size
     p = n_params
     rss = float(np.sum(res**2))
@@ -57,20 +83,14 @@ def fit_compare(
         dof_denom = n - p - 1
         adj_r2 = 1 - (1 - r2) * (n - 1) / dof_denom if dof_denom > 0 else float("nan")
 
-    if rss < _EPS:
-        aic = aicc = bic = float("-inf")
-    elif n < 2:
-        aic = aicc = bic = float("nan")
-    else:
-        log_rss_n = math.log(rss / n)
-        aic = n * log_rss_n + 2 * p
-        bic = n * log_rss_n + p * math.log(n)
-        dof_aicc = n - p - 1
-        aicc = aic + 2 * p * (p + 1) / dof_aicc if dof_aicc > 0 else float("inf")
+    chi_sq = rss if wv is None else float(np.sum(wv * res**2))
+    sum_log_w = 0.0 if wv is None else float(np.sum(np.log(wv)))
+    ic = information_criteria(chi_sq if chi_sq >= _EPS else 0.0, n, p, sum_log_w)
+    aic, aicc, bic = ic["AIC"], ic["AICc"], ic["BIC"]
 
     f_stat = f_pvalue = float("nan")
-    if resid_ref is not None and not math.isnan(n_params_ref):
-        ref = np.asarray(resid_ref, dtype=float).ravel()
+    if ref_in is not None and not math.isnan(n_params_ref):
+        ref = ref_in
         p_ref = n_params_ref
         rss_ref = float(np.sum(ref**2))
         if ref.size == n and p_ref < p and p < n:
@@ -134,35 +154,37 @@ def residual_diagnostics(residuals: ArrayLike) -> dict[str, Any]:
     }
 
 
-def _t_cdf(t: float, dof: float) -> float:
-    return 1 - 0.5 * float(betainc(dof / 2, 0.5, dof / (dof + t**2)))
+def observation_variance_on_grid(
+    x_data: ArrayLike, var_data: ArrayLike, x_grid: ArrayLike
+) -> NDArray[np.float64]:
+    """Carry a weighted fit's per-point observation variance to a band grid.
 
+    ``var_data[i]`` is the variance of the observation at ``x_data[i]``
+    (``curve_fit``'s ``obsVar`` = ``s²/wᵢ``; for an error-column fit the
+    squared error bar, times the reduced chi² when errors are scaled). The
+    fit knows that variance only AT the data points, so the band needs an
+    assumption everywhere else, and this is it:
 
-def _t_inv_bisection(p: float, dof: float) -> float:
-    a, b = 0.0, 1000.0
-    for _ in range(80):
-        mid = (a + b) / 2
-        if _t_cdf(mid, dof) < p:
-            a = mid
-        else:
-            b = mid
-        if (b - a) < 1e-8:
-            break
-    return (a + b) / 2
+    * between data points the variance is linearly interpolated in x;
+    * outside the data range it is held at the nearest end point's value (no
+      extrapolation of an error model the data cannot support);
+    * repeated x values are averaged; zero-weight points (infinite variance)
+      are not observations and are skipped.
 
-
-def _t_inv_two_tail(alpha: float, dof: float) -> float:
-    p = 1 - alpha / 2
-    z = float(_norm_inv(np.asarray(p)))
-    if dof >= 1e6:
-        return z
-    if dof <= 5:
-        return _t_inv_bisection(p, dof)
-    g1 = (z**3 + z) / (4 * dof)
-    g2 = (5 * z**5 + 16 * z**3 + 3 * z) / (96 * dof**2)
-    g3 = (3 * z**7 + 19 * z**5 + 17 * z**3 - 15 * z) / (384 * dof**3)
-    g4 = (79 * z**9 + 776 * z**7 + 1482 * z**5 - 1920 * z**3 - 945 * z) / (92160 * dof**4)
-    return z + g1 + g2 + g3 + g4
+    At a data point the result is exactly that point's variance, which is
+    what statsmodels' ``get_prediction(..., weights=w)`` uses.
+    """
+    xd = np.asarray(x_data, dtype=float).ravel()
+    vd = np.asarray(var_data, dtype=float).ravel()
+    xg = np.asarray(x_grid, dtype=float).ravel()
+    if xd.size != vd.size:
+        raise ValueError("x_data and var_data must be the same length")
+    ok = np.isfinite(xd) & np.isfinite(vd) & (vd >= 0)
+    if not bool(np.any(ok)):
+        return np.full(xg.size, np.nan)
+    ux, inv = np.unique(xd[ok], return_inverse=True)
+    mean_v = np.bincount(inv, weights=vd[ok]) / np.bincount(inv)
+    return np.asarray(np.interp(xg, ux, mean_v), dtype=float)
 
 
 def fit_bands(
@@ -174,8 +196,26 @@ def fit_bands(
     n_free: int,
     *,
     level: float = 0.95,
+    mse: float | ArrayLike | None = None,
 ) -> dict[str, Any]:
-    """Confidence + prediction bands from a fit (numerical Jacobian). Port of fitBands."""
+    """Confidence + prediction bands from a fit (numerical Jacobian). Port of
+    fitBands, with two latent MATLAB bugs fixed (docs/fitting_statistics.md):
+
+    * prediction variance = ``var_ci + mse``, where ``mse`` is the variance
+      of a NEW observation: one number for an unweighted fit (``curve_fit``'s
+      ``MSE`` = the reduced chi²), or one value PER GRID POINT for a weighted
+      fit, whose observations do not share a variance (``s²/wᵢ``; see
+      ``observation_variance_on_grid`` for how ``curve_fit``'s ``obsVar`` is
+      carried from the data points to the grid). MATLAB used
+      ``Σ var_ci / tr(JᵀJ)`` -- a curve-variance average, not the residual
+      scatter -- which made the band ~7x too narrow. ``mse=None`` (unknown)
+      returns NaN prediction limits rather than a wrong band.
+    * the Student-t quantile uses the residual dof ``n_points - n_free``;
+      MATLAB used ``n_free`` (3 dof for a Gaussian: a CI ~1.6x too wide).
+
+    Both now match statsmodels ``get_prediction`` (linear) and the delta
+    method on scipy's ``pcov`` (nonlinear).
+    """
     xg = np.asarray(x_grid, dtype=float).ravel()
     pp = np.asarray(params, dtype=float).ravel()
     m, p_count = xg.size, pp.size
@@ -186,7 +226,8 @@ def fit_bands(
         return {"yFit": np.asarray(model_fcn(xg, pp), dtype=float), "ciLo": nan_col,
                 "ciHi": nan_col, "piLo": nan_col, "piHi": nan_col, "level": level}
     try:
-        np.linalg.cholesky(cov)
+        # Positive SEMI-definite is enough: a held parameter's row/column is 0.
+        np.linalg.cholesky(cov + np.eye(p_count) * _EPS * max(float(np.max(np.abs(cov))), _EPS))
     except np.linalg.LinAlgError:
         return {"yFit": np.asarray(model_fcn(xg, pp), dtype=float), "ciLo": nan_col,
                 "ciHi": nan_col, "piLo": nan_col, "piHi": nan_col, "level": level}
@@ -200,16 +241,23 @@ def fit_bands(
         jac[:, j] = (np.asarray(model_fcn(xg, p_plus), dtype=float) - y_fit) / dp[j]
 
     var_ci = np.maximum(np.sum((jac @ cov) * jac, axis=1), 0.0)
-    tr_jtj = max(float(np.trace(jac.T @ jac)), _EPS)
-    s2 = float(np.sum(var_ci)) / tr_jtj
-    var_pi = var_ci + s2
-    t_crit = _t_inv_two_tail(1 - level, max(n_free, 1))
+    t_crit = float(student_t.ppf(1 - (1 - level) / 2, max(n_points - n_free, 1)))
     half_ci = t_crit * np.sqrt(var_ci)
-    half_pi = t_crit * np.sqrt(var_pi)
+    if mse is None:
+        pi_lo, pi_hi = nan_col, nan_col
+    else:
+        obs = np.asarray(mse, dtype=float)
+        if obs.ndim > 0 and obs.shape != (m,):
+            raise ValueError(f"a per-point mse needs one value per grid point ({m})")
+        # A point whose observation variance is unknown or invalid has no
+        # prediction limit (NaN), never a made-up one.
+        obs_ok = np.where(np.isfinite(obs) & (obs >= 0), obs, np.nan) * np.ones(m)
+        half_pi = t_crit * np.sqrt(var_ci + obs_ok)
+        pi_lo, pi_hi = y_fit - half_pi, y_fit + half_pi
 
     return {
         "yFit": y_fit,
         "ciLo": y_fit - half_ci, "ciHi": y_fit + half_ci,
-        "piLo": y_fit - half_pi, "piHi": y_fit + half_pi,
+        "piLo": pi_lo, "piHi": pi_hi,
         "level": level,
     }

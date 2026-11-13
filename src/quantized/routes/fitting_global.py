@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
@@ -27,10 +27,17 @@ from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 
 from quantized.calc.fit_autoguess import auto_guess
-from quantized.calc.fit_equation import default_guesses, equation_model
+from quantized.calc.fit_equation import equation_model
+from quantized.calc.fit_equation_init import auto_start
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fitting import weights_from_dy
-from quantized.calc.global_curve_fit import GlobalFitCancelled, global_curve_fit, share_groups
+from quantized.calc.global_curve_fit import (
+    GlobalFitCancelled,
+    global_curve_fit,
+    held_slots,
+    share_groups,
+    slot_layout,
+)
 from quantized.jobs import AbortFn, JobCancelled, JobQueueFullError, ProgressFn, jobs
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._offloop import OffloopJSONRoute
@@ -62,11 +69,17 @@ class GlobalFitRequest(BaseModel):
     datasets: list[GlobalSeries]
     constraints: list[ShareGroup] = []
     # One start vector (broadcast to every dataset) or one per dataset.
-    # Omitted -> auto-guessed per dataset (registry) / 1.0 each (equation).
+    # Omitted -> auto-guessed per dataset (registry) / derived from each
+    # dataset's data (equation: calc.fit_equation_init.auto_start).
     p0: list[list[float]] | list[float] | None = None
     # Bounds apply to every dataset; null = unbounded on that side.
     lower: list[float | None] | None = None
     upper: list[float | None] | None = None
+    # Held (fixed) parameters: one flag vector (every dataset) or one per
+    # dataset. A shared parameter is held in all of its datasets or none.
+    fixed: list[list[bool]] | list[bool] | None = None
+    # Parameter errors: "jtj" (Origin / scipy, default) or "hessian" (MATLAB).
+    covariance: Literal["jtj", "hessian"] = "jtj"
     max_iter: int = Field(default=20000, ge=1, le=200_000)
 
 
@@ -80,6 +93,8 @@ class _Problem:
     lower: list[float] | None
     upper: list[float] | None
     weights: list[Any] | None
+    fixed: list[list[bool]] | list[bool] | None
+    covariance: str
     max_iter: int
 
 
@@ -89,6 +104,18 @@ def _bounds(v: list[float | None] | None, fill: float, n: int, side: str) -> lis
     if len(v) != n:
         raise ValueError(f"{side} must have {n} values (one per parameter), got {len(v)}")
     return [fill if b is None else float(b) for b in v]
+
+
+def _held_rows(fixed: list[list[bool]] | list[bool] | None, k: int, n: int) -> list[list[bool]]:
+    """``fixed`` as K rows of n flags (broadcast a single row); shape errors
+    are left to ``held_slots`` -- this only feeds start derivation."""
+    if fixed is None:
+        return [[False] * n for _ in range(k)]
+    if all(isinstance(v, list) for v in fixed):
+        rows = [list(r) for r in fixed if isinstance(r, list)]
+    else:
+        rows = [[bool(v) for v in fixed if not isinstance(v, list)]] * k
+    return [r if len(r) == n else [False] * n for r in rows[:k]] + [[False] * n] * (k - len(rows))
 
 
 def _prepare(req: GlobalFitRequest) -> _Problem:
@@ -120,13 +147,19 @@ def _prepare(req: GlobalFitRequest) -> _Problem:
         if not names:
             raise ValueError("equation has no free parameters to fit")
     n_par, k = len(names), len(req.datasets)
+    lower = _bounds(req.lower, -math.inf, n_par, "lower")
+    upper = _bounds(req.upper, math.inf, n_par, "upper")
 
     p0: list[list[float]]
     if req.p0 is None:
         if req.model is not None:
             p0 = [[float(v) for v in auto_guess(req.model, s.x, s.y)] for s in req.datasets]
         else:
-            p0 = [default_guesses(names) for _ in req.datasets]
+            # Data-driven starts per dataset (blank guesses, finding 14);
+            # held parameters keep the legacy 1.0.
+            held = _held_rows(req.fixed, k, n_par)
+            p0 = [auto_start(fcn, names, s.x, s.y, lower=lower, upper=upper, fixed=held[i])
+                  for i, s in enumerate(req.datasets)]
     elif all(isinstance(v, list) for v in req.p0):
         p0 = [[float(v) for v in row] for row in req.p0 if isinstance(row, list)]
         if len(p0) != k:
@@ -147,9 +180,11 @@ def _prepare(req: GlobalFitRequest) -> _Problem:
         series=[(s.x, s.y) for s in req.datasets],
         constraints=[{"param_name": c.param_name, "datasets": c.datasets} for c in req.constraints],
         p0=p0,
-        lower=_bounds(req.lower, -math.inf, n_par, "lower"),
-        upper=_bounds(req.upper, math.inf, n_par, "upper"),
+        lower=lower,
+        upper=upper,
         weights=weights,
+        fixed=req.fixed,
+        covariance=req.covariance,
         max_iter=req.max_iter,
     )
 
@@ -162,7 +197,8 @@ def _solve(
     result = global_curve_fit(
         list(prob.series), prob.fcn, prob.names, prob.constraints,
         init_guess=prob.p0, lower=prob.lower, upper=prob.upper, weights=prob.weights,
-        max_iter=prob.max_iter, progress_callback=progress, abort_check=abort_check,
+        fixed=prob.fixed, covariance=prob.covariance, max_iter=prob.max_iter,
+        progress_callback=progress, abort_check=abort_check,
     )
     out: dict[str, Any] = to_jsonable(result)
     out["paramNames"] = prob.names
@@ -170,14 +206,25 @@ def _solve(
 
 
 def _checked(req: GlobalFitRequest) -> _Problem:
-    """``_prepare`` plus the sharing-group checks (unknown parameter,
-    out-of-range dataset), so both routes 422 before any fitting starts."""
+    """``_prepare`` plus the sharing-group and held-parameter checks (unknown
+    parameter, out-of-range dataset, a shared parameter held in only some of
+    its datasets), so both routes 422 before any fitting starts."""
     try:
         prob = _prepare(req)
-        share_groups(prob.constraints, prob.names, len(prob.series))
+        groups = share_groups(prob.constraints, prob.names, len(prob.series))
+        _check_held(prob, groups)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return prob
+
+
+def _check_held(prob: _Problem, groups: list[dict[str, Any]]) -> None:
+    """Validate ``fixed`` against the sharing layout without fitting."""
+    if prob.fixed is None:
+        return
+    k, p = len(prob.series), len(prob.names)
+    _, super_idx, n_super = slot_layout(groups, k, p)
+    held_slots(prob.fixed, k, p, super_idx, n_super)
 
 
 @router.post("/global")

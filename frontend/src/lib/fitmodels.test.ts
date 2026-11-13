@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildCustomFitModel,
+  candidateGuesses,
   DAMAGED_BACKUP_KEY,
   deleteCustomModel,
   isCustomFitModel,
@@ -83,6 +84,21 @@ describe("fitmodels persistence", () => {
   it("tolerates non-JSON storage content", () => {
     localStorage.setItem(KEY, "{nope");
     expect(loadCustomModels()).toEqual([]);
+  });
+});
+
+describe("blank (auto) guesses in a saved model (review item 4)", () => {
+  it("accepts null guesses, stores and reloads them, and never bound-checks a blank", () => {
+    const auto = model({ guesses: [null, 1.5, null], lower: [5, 0, null] });
+    expect(isCustomFitModel(auto)).toBe(true);
+    saveCustomModel(auto);
+    expect(loadCustomModels()[0].guesses).toEqual([null, 1.5, null]);
+    expect(isCustomFitModel(model({ guesses: [Number.NaN, 1, 1] }))).toBe(false);
+  });
+
+  it("a scan/compare candidate sends guesses only when every start was typed", () => {
+    expect(candidateGuesses(model())).toEqual({ guesses: [2, 1.5, 0.5] });
+    expect(candidateGuesses(model({ guesses: [2, null, 0.5] }))).toEqual({});
   });
 });
 

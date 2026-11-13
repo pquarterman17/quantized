@@ -36,7 +36,9 @@ def test_curvefit_gaussian_matches_matlab(
     x = np.asarray(g["input"]["x"], dtype=float)
     y = np.asarray(g["input"]["y"], dtype=float)
     m = FIT_MODELS["Gaussian"]
-    out = curve_fit(x, y, m["fcn"], g["p0"], lower=m["lb"], upper=m["ub"])
+    # MATLAB derives errors from the SSR Hessian; the default is now the
+    # Origin/scipy (JᵀJ)⁻¹·MSE, so parity pins the MATLAB method explicitly.
+    out = curve_fit(x, y, m["fcn"], g["p0"], lower=m["lb"], upper=m["ub"], covariance="hessian")
     # scipy Nelder-Mead mirrors fminsearch bit-for-bit here; allow a small margin.
     compare_calc(
         {k: out[k] for k in ("params", "R2", "chiSqRed", "RMSE", "AIC", "errors")},
