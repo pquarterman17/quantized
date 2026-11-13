@@ -286,6 +286,117 @@ Key discriminations (all COM `app.Load` on Origin 2026b):
   a silent expASC failure must not read stale bytes (a trap hit twice
   this session).
 
+## 2026-11-13 (`.opj` reader handoff — header-driven decode, public oracle corpus)
+
+No Origin license involved: this entry records a validation against
+**independent open readers' test suites** instead of COM. The owner handed
+the `.opj` reader over for repair (OriginPro no longer available at work),
+after an audit of 49 public `.opj` projects found 13 that would not import
+and wrong values in several that did.
+
+**Oracles** (all in the public specimen corpus,
+`../test-data/origin/public/`; third-party, never committed; expected
+VALUES read from tests, no reader code consulted):
+
+- Altaxo LibOriginCSharp — 14 `.opj` specimens + `OriginAnyParserTest.cs`
+  (cell values, strings, long names, units, comments, begin/end rows,
+  designations, matrix shapes / coordinates / cells);
+- liborigin — `*.dat.orig` ASCII exports and `*.out.orig` summaries
+  (5 books; window `Label:`);
+- LabPlot — `ProjectImportTest.cpp` (Origin 8 workbook cell by cell).
+
+**What was proven** (details + tables: `docs/origin_project_format.md`
+§3.1, §3.1.1, §3.2, §4.1):
+
+1. **The dataset header states the cell type.** Kind = low nibble of
+   `0x17` (+ `0x20` of `0x16` for Text), bytes per row at `0x3D`, unsigned
+   at `0x3F & 8`. double 8 / float 4 / int 1-2-4 / complex 16 / Text N /
+   Text & Numeric 10+ with a `<u16 tag>` (0 number, 1 string). The standing
+   doc claim that no header byte discriminates the type was wrong; it had
+   compared columns that were all Text & Numeric.
+2. **Allocation is not data.** u32 allocated / first-used / used-end rows
+   at `0x19` / `0x1D` / `0x21`. Corpus: of ~88,000 cells past a used-row
+   end, none holds a value. The reader returned the whole allocation
+   (blank tag-1 cells as `0.0`). The used range is applied as a claim that
+   can only remove blank cells, so a wrong one cannot cost a value.
+3. **Older headers** (115 bytes at CPYA 4.2656, 123 at 4.2673, 140 at
+   4.2878-4.2946 — the Origin 7 and Origin 8 eras) use the same offsets.
+   The 140-byte one is a multiple of 10 and was read as data: none of the
+   corpus's seven Origin 8 projects imported at all.
+4. **Window label** starts where the header's 195-byte fixed region ends.
+   The old "last printable run" fallback returned `"BA"` — the tail bytes
+   of the header's float64 timestamps — for 37 of the 64 books the old
+   reader imported.
+5. **Column-property blocks**: 482-519 bytes by version; `0x25`-`0x26`
+   are the column's type bytes, not a marker. The old detector knew only
+   Text & Numeric columns of CPYA ≥ 4.3116 files, so Numeric / Date / Time
+   columns lost designation, long name, unit and comment. Designation
+   codes 7 (Group) and 8 (Subject) confirmed. Sheet sub-header size varies
+   255-409 bytes; only `Pd` at `0xD0` is constant.
+6. **Matrix sheets**: dataset named after the window, row-major;
+   `0x80` in sub-header byte 2, u16 columns at `0x2B`, u32 rows at `0x52`;
+   `X1/X2/Y1/Y2` records. Decoded into the map point cloud.
+
+**Controls.** Positive: `len(data) == rows × bytes_per_row` holds for all
+1338 worksheet/matrix datasets (48 files, 14 CPYA versions). Negative: the
+8 function datasets fail it and are omitted + named; all 38 same-sized
+look-alikes of a property block (graph curve records) are rejected, all
+1297 accepted blocks sit under a worksheet sheet and 1295 name an existing
+dataset; a kind outside the table (`SBin_`, kind nibble 4) is omitted.
+
+**Whole-corpus before / after** (323 files; before = `main` 9da2bb6e):
+
+| | before | after |
+|---|---:|---:|
+| `.opj` files importing (of 49) | 36 | 48 |
+| `.opj` books | 64 | 103 |
+| `.opj` numeric columns | 1050 | 1300 |
+| `.opj` text columns | 1 | 47 |
+| `.opj` matrix books | 0 | 16 |
+| `.opj` books titled `"BA"` | 37 | 0 |
+| `.opju` files with byte-identical reader output (of 274) | — | 274 |
+
+Of the 1050 columns the old reader produced: 120 identical; 845 identical
+over the used rows and shorter (the dropped tail was all `0`/NaN); 70
+additionally have blank cells that were `0.0` and are now NaN; 15 changed
+value — all 15 in Altaxo specimens where the oracle proves the old value
+was a wrong-stride reinterpretation; 0 lost. No file that imported before
+fails now. One file's primary book changed, on purpose: liborigin's
+`crash.opj`, whose sheet-1 book is allocated but empty (30 blank rows
+before, 0 used rows now) — the primary is now the sheet that holds the
+data. The one `.opj` still not importing is a third-party synthetic stub
+(`CPYA` magic, no blocks). Decode time on an 80 MB synthetic project
+(8M cells) is unchanged within noise (0.79 s vs 0.78 s).
+
+**Not proven / left open** (also in the format doc):
+
+- The owner's own `.opj` corpus (Moke, XRD, XMCD, PNR, hc2convert,
+  SuperlatticeFits) was **not available** on the machine this was done on.
+  The legacy `hc2convert` "NaN" cell shape and the report-sheet bucket are
+  preserved by construction, but the realdata pins in
+  `tests/test_io_origin_project.py` / `test_io_origin_ground_truth.py` /
+  `test_io_origin_fuzz.py` have not been re-run against the new reader.
+  Run them first; expect row counts to shrink to used rows and blank
+  cells to turn from `0.0` to NaN.
+- Matrix sheets with more than one matrix object; matrix values in the
+  one CPYA 4.2673 file that has a matrix (shape-exact, no oracle).
+- Which Origin release each CPYA build number is. The corpus names two
+  (a file called `…-7.0.opj` is 4.2656; LabPlot's `origin8_…` files are
+  4.2878); the rest is left as build numbers on purpose.
+- Text code page (latin-1 assumed); Date/Time as raw day counts.
+- Group / Subject designations are recovered but not surfaced (the
+  designation vocabulary shared with the frontend has no such members).
+- **Native `.opj` writer:** `writer_blocks.col_header` never sets the
+  used-row end (`0x21` stays at the template's 161). Origin loads the
+  files regardless and the reader copes (a value past a used-row end is
+  never dropped), but the field should be the row count — to be changed
+  and re-probed against a real loader, not changed blind.
+- `0x3F` values `0x10`/`0x20`/`0x30` and the other `0x16` bits.
+
+**How to re-run:** `uv run pytest -m realdata tests/test_io_origin_opj_corpus.py`
+(needs the public corpus; it replays 147 Altaxo assertions, 5 liborigin
+exports, LabPlot's workbook test and four corpus-wide invariants).
+
 ## How to re-run
 
 `tools/origin_trial/export_ground_truth.py` (skips completed stems);

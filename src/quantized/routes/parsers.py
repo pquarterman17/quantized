@@ -27,7 +27,9 @@ from quantized.io.origin_project import (
 )
 from quantized.io.origin_project.fidelity import (
     assess_origin_figures,
+    book_source_names,
     origin_figure_decode_failure,
+    with_data_diagnostics,
 )
 from quantized.io.origin_project.figures import extract_figures
 from quantized.io.origin_project.figures_opju import extract_figures_opju
@@ -259,19 +261,10 @@ def _import_with_books(
             else:
                 raw_figs = extract_figures_opju(raw)
                 raw_figs, preview_diagnostics = attach_opju_graph_previews(raw_figs, raw)
-            source_names = {
-                str(name)
-                for book in books
-                for name in (
-                    book.metadata.get("origin_book", ""),
-                    book.metadata.get("origin_book_long", ""),
-                )
-                if name
-            }
             figs, fidelity = assess_origin_figures(
                 raw_figs,
                 container="opj" if suffix == ".opj" else "opju",
-                source_names=source_names,
+                source_names=book_source_names(books),
                 preview_diagnostics=preview_diagnostics,
             )
         except (IndexError, ValueError, ArithmeticError, KeyError, struct.error):
@@ -284,7 +277,10 @@ def _import_with_books(
             )
         if figs:
             payload["figures"] = figs
-        payload["origin_fidelity"] = fidelity
+        # Data the reader could not import (an undecoded dataset, a matrix
+        # book) joins the same manifest the graph omissions are listed in.
+        diagnostics = ds.metadata.get("origin_data_diagnostics")
+        payload["origin_fidelity"] = with_data_diagnostics(fidelity, diagnostics)
         return payload, None
 
     payload, ds = plain_import_payload(path, upload_name)

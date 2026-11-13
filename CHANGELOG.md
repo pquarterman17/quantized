@@ -74,6 +74,27 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   Tests check its conversion factors dimensionally, including
   1 emu/cm³ = 1000 A/m. The A/m, A·m²/kg and area-normalized units are
   documented SI extensions beyond the MATLAB `convertMagUnits`.
+- Origin `.opj` matrix books open in the Map view, with Origin's X/Y
+  coordinate mapping. A project holding only matrices used to fail to import.
+- Origin `.opj` projects saved by Origin 7 and Origin 8 import. Origin 8
+  projects used to fail entirely.
+
+### Fixed
+
+- Origin `.opj` Numeric columns (double, float, short, long, byte, complex)
+  and Date/Time columns read their real values. Some used to come in as
+  nonsense numbers, and others were dropped.
+- Origin `.opj` worksheets import only the rows that were used. The blank
+  rows Origin pre-allocates used to come in as zeros.
+- Origin `.opj` text cells are kept: Text columns, and Text & Numeric columns
+  holding text, appear as the worksheet's text columns. A workbook made only
+  of text used to import empty.
+- Origin `.opj` workbooks without a long name are titled by their short name
+  (`Book1`). Many used to be titled "BA".
+- Origin `.opj` Numeric, Date and Time columns keep their long name, unit,
+  comment and X/Y designation; multi-line comments are kept whole.
+- Origin `.opj` data that cannot be read is named in the import's fidelity
+  summary instead of being left out silently.
 
 ## [0.33.0] - 2026-11-01
 

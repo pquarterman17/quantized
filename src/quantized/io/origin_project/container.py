@@ -89,6 +89,11 @@ def walk_blocks(b: bytes) -> Iterator[tuple[int, bytes]]:
 def decode_doubles(data: bytes) -> NDArray[np.float64]:
     """Decode a data block of 10-byte ``<uint16 mask><float64>`` records → values.
 
+    LEGACY path only (``opj._columns``, a project with no parseable dataset
+    header): 10 bytes is the row width of a Text & Numeric column, not of
+    every column — a real project's header states the width and the cell
+    type, and ``opj_datasets`` decodes from that.
+
     Byte-offset explicit (slice cols 2:10 of each record and view as float64) so
     it is independent of numpy structured-dtype alignment.
     """
@@ -115,11 +120,21 @@ def decode_inline_text(data: bytes) -> list[str] | None:
     dropped "text" columns is exactly this shape, ``prefix="NaN"`` (Origin's
     literal text sentinel for a fit that produced no critical-field value),
     tag byte at value-offset 3 — 112,887 matching records, zero
-    counter-examples in a 6-file real-corpus scan. No header type-field byte
-    was found that reliably discriminates this from a double column (every
-    offset in the 147-byte column-storage header matches between the two);
-    this is a content-shape detector, same spirit as ``plausible_column`` and
-    the existing ``_looks_textual`` gate.
+    counter-examples in a 6-file real-corpus scan. This is a content-shape
+    detector, same spirit as ``plausible_column`` and the existing
+    ``_looks_textual`` gate.
+
+    CORRECTION (2026-11): the claim that used to stand here — that no header
+    byte discriminates a text column from a double one — was wrong in
+    general. The header's 0x17 low nibble and 0x3D row width DO state the
+    cell type (``opj_datasets``). The hc2convert comparison is consistent
+    with that, not against it: identical headers mean those "NaN" columns
+    are ordinary Text & Numeric columns, the same declared type as their
+    numeric neighbours, whose cells hold text in the slot of a tag-0 number
+    (not re-measured — that file is not in the public specimen corpus). The
+    header-driven reader keeps this exact cell shape as
+    ``opj_datasets._legacy_inline_text``; this function now serves only the
+    legacy walk.
 
     A record with no NUL in its 8-byte value area (a string longer than 7
     chars, overflowing into the next record — seen in Origin's FitLinear/
@@ -214,13 +229,17 @@ def decode_report_strings(data: bytes) -> list[str] | None:
 def plausible_column(vals: NDArray[np.float64], *, allow_all_nan: bool = False) -> bool:
     """Reject a decoded column whose values betray a non-double payload.
 
-    Text / integer / float32 columns (the 147-byte column header carries a
-    type field the readers don't decode yet — plan item 4) reinterpret as
-    float64 garbage: subnormals (|v| ≲ 1e-300) and absurd magnitudes
+    Text / integer / float32 payloads read as float64 are garbage:
+    subnormals (|v| ≲ 1e-300) and absurd magnitudes
     (|v| ≳ 1e290) that real instrument data never contains. Dropping the whole
     column on the first such value is honest-absent; silent garbage is worse
     than a gap. ``allow_all_nan`` keeps genuinely empty columns (the ``.opj``
     reader pads ragged books with them).
+
+    The ``.opj`` reader now decodes each column as its header declares
+    (``opj_datasets``), so there this is a backstop on float64 cells, not
+    the type detector it had to be; the legacy walk and ``.opju`` still use
+    it as before.
     """
     finite = vals[np.isfinite(vals)]
     if finite.size == 0:
