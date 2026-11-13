@@ -99,6 +99,22 @@ def test_live_error_roles_override_designations() -> None:
     assert channel_designations(meta, ["b", "c", "d"]) == ["Y", "Y", "Y-error"]
 
 
+def test_unbound_set_as_error_designation_survives_empty_live_roles() -> None:
+    # Integration review: Set As Y Error on a column with no Y before it (and
+    # X Error after a secondary X) has no binding to make; the worksheet badge
+    # says yErr/xErr and the plot hides the column, so the export must not
+    # call it a Y.
+    meta = {"error_roles": [], "user_column_designations": {"0": "Y-error", "2": "X-error"}}
+    assert channel_designations(meta, ["a", "b", "c"]) == ["Y-error", "Y", "X-error"]
+    # A FILE-declared error column the user unbound is still demoted.
+    meta = {
+        "origin_column_names": ["B", "C"],
+        "column_designations": {"B": "Y", "C": "Y-error"},
+        "error_roles": [],
+    }
+    assert channel_designations(meta, ["b", "c"]) == ["Y", "Y"]
+
+
 def test_default_graph_plots_every_y_against_nearest_preceding_x_with_errors() -> None:
     # Multi-X worksheet: X,Y,yErr,X,Y,Y — each Y binds to its own X group.
     meta = {

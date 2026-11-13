@@ -19,7 +19,8 @@ Two dataset fields carry them:
 * ``metadata["user_column_designations"]`` (``_error_roles.user_designations``)
   -- the worksheet's "Set As" map, keyed by value channel. It overrides
   ``column_designations`` for that channel; the live ``error_roles`` still
-  decide error status.
+  bind error columns, but a Set As Y-/X-error with no live binding stays an
+  (unbound) error column rather than being demoted to Y.
 
 ``column_comments`` uses the same short-name keys.
 
@@ -167,13 +168,19 @@ def channel_designations(
         desig = declared.get(short, "") if short is not None else ""
         if desig not in ORIGIN_DESIGNATIONS:
             desig = ""
-        desig = user.get(j, desig)
+        mine = user.get(j)
+        desig = mine or desig
         if err is not None:
             axis = err.get(j)
             if axis is not None:
                 desig = "Y-error" if axis == "y" else "X-error"
-            elif desig in ("Y-error", "X-error"):
-                desig = "Y"  # the live bindings unbound it
+            elif desig in ("Y-error", "X-error") and mine is None:
+                # The FILE called it an error column and the live bindings
+                # unbound it. A worksheet Set As error designation is the
+                # user's own word and stays -- an unbound error column, which
+                # is what the worksheet badge and the plot (it is hidden as
+                # an error column) show too.
+                desig = "Y"
         elif not desig and may_guess and is_error_label(labels[j]):
             desig = "Y-error"
         out.append(desig or "Y")

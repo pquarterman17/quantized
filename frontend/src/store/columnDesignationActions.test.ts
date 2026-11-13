@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
 import type { Dataset } from "../lib/types";
+import { bookDefaultHiddenChannels } from "../lib/errorbars";
+import { withLiveErrorRoles } from "../lib/liveErrorRoles";
 import { applyDesignation, setColumnDesignation } from "./columnDesignationActions";
 import { useApp } from "./useApp";
 
@@ -84,5 +86,24 @@ describe("setColumnDesignation", () => {
     const tampered = JSON.parse(serializeWorkspace({ datasets: [saved] })) as { datasets: Record<string, unknown>[] };
     tampered.datasets[0].columnDesignations = { 1: "Y-error", 2: "nonsense", 99: "X" };
     expect(parseWorkspace(JSON.stringify(tampered)).datasets[0].columnDesignations).toEqual({ 1: "Y-error" });
+  });
+});
+
+describe("an unpaired Set As error column: worksheet, plot and export agree", () => {
+  // Integration review: Y Error with no Y before it has no binding to make.
+  // The worksheet badge says yErr and the plot hides it as an error column;
+  // the export carries the Set As map, which the writers keep as an
+  // (unbound) error column (io/_column_roles.channel_designations).
+  it("stays a Y-error designation, hidden from the plot, sent to the writers", () => {
+    let d = ds();
+    const out = applyDesignation(d, 0, "Y-error");
+    expect(out.paired).toBe(false);
+    d = { ...d, ...out };
+    expect(d.columnDesignations).toEqual({ 0: "Y-error" });
+    expect(d.errorRoles?.some((b) => b.channel === 0)).toBe(false);
+    expect(bookDefaultHiddenChannels(d)).toContain(0);
+    const sent = withLiveErrorRoles(d).metadata;
+    expect(sent.user_column_designations).toEqual({ 0: "Y-error" });
+    expect(sent.error_roles).toEqual(d.errorRoles);
   });
 });
