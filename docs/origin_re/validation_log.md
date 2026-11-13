@@ -680,6 +680,25 @@ Rules: `docs/origin_project_format.md` §3.5 "Fail-closed rules added by the
   check. What would settle it: a paired project whose second sheet has a
   non-default designation (e.g. a Y-error or Label column).
 
+## 2026-11-13 (graph windows, plot types, multi-sheet export)
+
+- **Window kind @0x42.** Census of every real window header in the 49
+  unique public `.opj`: 77/77 worksheet/matrix/notes windows read `2`,
+  43/43 recovered graph windows read `0`/`6`. Used only to REPORT graph
+  windows the layer gate skips; the one such window is `3dband-origin.opj`
+  `Graph2` (first block head `0x47`, 58-block span with a curve anchor like
+  its recovered sibling). Not decoded: no layout is established for that
+  head.
+- **Plot type @76.** `203` column, `215` bar, `219` histogram, matched to
+  LabPlot `ProjectImportTest` (bar-column.opj Graph1 vertical / Graph2
+  horizontal; histogram.opj). `extract_figures` over 361 public
+  `.opj`/`.opju`: only `bar-column.opj` and `histogram.opj` change (the
+  added `plotType`).
+- **Sheet sub-header @0x12D = sheet id − 1** on 75/75 bound sheets; the
+  writer now emits it for multi-sheet books. Re-import of a two-sheet book
+  plus a matrix book gives `Book1`, `Book1@2`, `MBook1` (X/Y/Z).
+  Not yet re-verified by loading in real Origin.
+
 ## How to re-run
 
 `tools/origin_trial/export_ground_truth.py` (skips completed stems);
