@@ -35,6 +35,13 @@ describe("labelRows", () => {
     expect(labelRows(ds({ label_rows: mixed }))).toHaveLength(1);
   });
 
+  it("keeps an Origin ASCII Comments row's 'comment' role and marks it", () => {
+    const origin = [{ index: 2, role: "comment", x: "300 K", cells: ["sample A", ""] }];
+    const [row] = labelRows(ds({ label_rows: origin }));
+    expect(row.role).toBe("comment");
+    expect(describeLabelRow(row)).toBe("sample A (comments)");
+  });
+
   it("normalizes an unknown role to 'label'", () => {
     const odd = [{ index: 0, role: "banana", x: "", cells: ["a"] }];
     expect(labelRows(ds({ label_rows: odd }))[0].role).toBe("label");

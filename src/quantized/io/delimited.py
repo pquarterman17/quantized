@@ -24,11 +24,14 @@ from quantized.io._delimited_fast import (
     _tokens_to_columns,
     try_fast_parse_matrix,
 )
+from quantized.io._delimiter_vote import COMMENT_CHARS, vote_lines
+from quantized.io._header_units import _extract_units as _extract_units  # re-export
+from quantized.io._origin_ascii_header import OriginAsciiRows, origin_ascii_rows
 from quantized.io.base import read_text, resolve_column
 
 __all__ = ["import_csv"]
 
-_COMMENT_CHARS = "#%"
+_COMMENT_CHARS = COMMENT_CHARS
 
 
 def _read_raw_lines(text: str) -> list[str]:
@@ -57,72 +60,6 @@ def _split_lines(text: str) -> tuple[list[str], list[str]]:
     return data, comments
 
 
-def _split_trailing_bracket(header: str, opener: str, closer: str) -> tuple[str, str] | None:
-    """``('Temp (C)', '(', ')')`` -> ``('C', 'Temp')``; ``None`` if no match.
-
-    A hand-rolled scan, not a regex. The regexes this replaces --
-    ``(.+?)\\s*\\(([^)]+)\\)\\s*$`` and its ``[...]`` twin -- were quadratic
-    (CodeQL ``py/polynomial-redos``): ``.`` also matches a space, so ``.+?``
-    and ``\\s*`` can split the same run of blanks in as many ways as it is
-    long, and every one of them is retried before a header with no bracket is
-    rejected. Column headers come straight out of an untrusted instrument file,
-    so a row of long blank-padded headers was enough to stall a parse. This
-    scan is linear and allocation-free apart from the two returned slices.
-
-    Behaviour is preserved exactly, including the awkward corners:
-
-    * the closer must be the LAST character (bar trailing whitespace), and the
-      unit may not itself contain one -- so ``'a (b) c (d)'`` yields ``'d'``;
-    * the unit must be non-empty and something must precede the opener, so
-      ``'Temp ()'`` and ``'(C)'`` both fail and leave the header alone;
-    * the opener is the FIRST one that can still satisfy the above, which is
-      why ``'a ((b)'`` yields the unit ``'(b'`` rather than ``'b'``;
-    * ``.`` never matched a newline, so a label spanning lines still fails.
-    """
-    body = header.rstrip()
-    if not body.endswith(closer):
-        return None
-    before_closer = body[:-1]
-    newline = body.find("\n")
-    # The unit may not contain a closer, so the opener must sit after the last
-    # one; and something must precede it, so index 0 is never a candidate.
-    start = max(1, before_closer.rfind(closer) + 1)
-    limit = len(before_closer) - 1  # the opener must leave a non-empty unit
-    while start < limit:
-        start = before_closer.find(opener, start)
-        if start < 0 or start >= limit:
-            return None
-        if newline < 0 or newline >= _label_length(body, start):
-            return before_closer[start + 1 :].strip(), body[:start].strip()
-        # A newline inside the label itself is fatal (``.`` never matched one),
-        # but one in the run of blanks before the opener is not -- so keep
-        # looking rather than giving up on the header.
-        start += 1
-    return None
-
-
-def _label_length(body: str, start: int) -> int:
-    """Length of the shortest ``(.+?)`` that can precede the opener at ``start``.
-
-    ``.+?`` is non-greedy and ``\\s*`` mops up the rest, so the label proper
-    ends at the last non-blank before the opener -- but it must be at least one
-    character even when everything before the opener is blank.
-    """
-    end = start
-    while end > 1 and body[end - 1].isspace():
-        end -= 1
-    return end
-
-
-def _extract_units(header: str) -> tuple[str, str]:
-    """``'Temp (C)'`` -> ``('C', 'Temp')`` (also ``[...]``). Returns (unit, label)."""
-    for opener, closer in (("(", ")"), ("[", "]")):
-        found = _split_trailing_bracket(header, opener, closer)
-        if found is not None:
-            return found
-    return "", header
-
-
 def _convert_column(cells: Sequence[str]) -> np.ndarray:
     """Vectorized ``str`` -> ``float64`` conversion matching ``_to_float``'s
     per-cell semantics (an NA token or anything ``float()`` rejects becomes
@@ -143,6 +80,15 @@ def _convert_column(cells: Sequence[str]) -> np.ndarray:
         return np.asarray(cells, dtype=np.float64)
     except (ValueError, TypeError):
         return np.asarray([layout._to_float(c) for c in cells], dtype=np.float64)
+
+
+def _label_row_role(i: int, header: int, units: int, origin: OriginAsciiRows | None) -> str:
+    """A preserved descriptive row's role in ``metadata["label_rows"]``."""
+    if i == header:
+        return "header"
+    if i == units:
+        return "units"
+    return "comment" if origin is not None and i == origin.comments else "label"
 
 
 def _encode_categorical(cells: Sequence[str]) -> tuple[np.ndarray, tuple[str, ...]]:
@@ -193,7 +139,8 @@ def import_csv(
     raw_lines, comment_lines = _split_lines(text)
     if not raw_lines:
         raise ValueError(f"file empty or only comments: {path.name}")
-    delim = layout._detect_delimiter(raw_lines)
+    # Voted on UNSTRIPPED lines: a trailing empty cell's tab is real evidence.
+    delim = layout._detect_delimiter(vote_lines(text))
     comma_path = dc.uses_decimal_path(dc.check_decimal(decimal, delim), delim, "," in text)
 
     # P0.4-perf4: layout detection scores rows in fixed-size chunks
@@ -206,13 +153,16 @@ def import_csv(
     # (measured ~2.8s of a 7.3s import on a 1M-row file) just to find
     # where the header ends.
     lazy_tokens = LazyTokenRows(raw_lines, delim)
+    scoring_rows = dc.layout_rows(lazy_tokens) if comma_path else lazy_tokens
     try:
-        header_row, data_start, units_row = layout._detect_layout(
-            dc.layout_rows(lazy_tokens) if comma_path else lazy_tokens
-        )
+        header_row, data_start, units_row = layout._detect_layout(scoring_rows)
     except ValueError as exc:  # header-only file
         raise ValueError(f"{exc} ({path.name})") from exc
     n_data_cols = len(lazy_tokens[data_start])
+    # Origin's own ASCII export: Long Name / Units / Comments above the data.
+    origin_rows = origin_ascii_rows(scoring_rows, data_start, n_data_cols)
+    if origin_rows is not None:
+        header_row, units_row = origin_rows.header, origin_rows.units
     if header_row >= 0:
         col_headers = [c.strip() for c in lazy_tokens[header_row]]
     else:
@@ -410,7 +360,7 @@ def import_csv(
             label_rows.append(
                 {
                     "index": i,
-                    "role": "header" if i == header_row else "units" if i == units_row else "label",
+                    "role": _label_row_role(i, header_row, units_row, origin_rows),
                     "x": at(time_idx) if time_idx >= 0 and not time_promoted else "",
                     # Aligned to the FINAL channel order (numeric, then any
                     # P1.4 categorical channels appended after) -- same

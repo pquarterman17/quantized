@@ -28,6 +28,8 @@ import numpy as np
 
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
+from quantized.io._delimiter_vote import vote_lines
+from quantized.io._origin_ascii_header import origin_ascii_rows
 from quantized.io.delimited import _extract_units, _split_lines
 
 if TYPE_CHECKING:  # ImportSettings lives in import_preview, which imports THIS
@@ -111,9 +113,10 @@ def _resolve_delim(lines: list[str], setting: str) -> str:
     d = _NAMED_DELIMS.get(setting.lower(), setting)
     if d != "auto":
         return d
-    # The same sample direct import votes on (stripped, blank and comment
-    # lines skipped), so the wizard and `import_csv` pick one delimiter.
-    sample = _split_lines("\n".join(lines))[0]
+    # The same sample direct import votes on (blank and comment lines
+    # skipped, NOT stripped -- `vote_lines`), so the wizard and `import_csv`
+    # pick one delimiter.
+    sample = vote_lines("\n".join(lines))
     return layout._detect_delimiter(sample) if sample else ","
 
 
@@ -124,6 +127,43 @@ def _resolve_names(tokens: list[list[str]], header_line: int | None, n_cols: int
         raw = []
     names = [raw[k] if k < len(raw) and raw[k] else f"Col{k + 1}" for k in range(n_cols)]
     return names
+
+
+def _guess_layout(text: str) -> tuple[int | None, int | None, int, list[str]]:
+    """``guess_settings``' layout guess: (header_line, units_line,
+    data_start_line, column names) for ``text`` under an auto delimiter.
+
+    Origin's own ASCII export (Long Name / Units / Comments above the data,
+    `_origin_ascii_header`) is recognised first; otherwise a units row just
+    above the data with a header above that, else a header directly above.
+    """
+    lines = text.removeprefix("\ufeff").splitlines()  # a BOM is not cell text
+    delim = _resolve_delim(lines, "auto")
+    tokens = [_split(ln, delim) for ln in lines]
+    scored = _scoring_rows(text, tokens, delim)
+    scores = [
+        layout._numeric_score(t) if ln.strip() else 0.0
+        for t, ln in zip(scored, lines, strict=True)
+    ]
+    data_start = next((i for i, s in enumerate(scores) if s > 0.5), 0)
+
+    header_line: int | None = None
+    units_line: int | None = None
+    data_rows = [t for t in tokens[data_start:] if any(c.strip() for c in t)]
+    n_cols = _effective_ncols(data_rows)
+    origin = origin_ascii_rows(scored, data_start, n_cols)
+    if origin is not None:
+        header_line, units_line = origin.header, origin.units
+    # a units row just above the data, and a header above that
+    elif data_start >= 2 and scores[data_start - 1] < 0.5 and layout._looks_like_units_row(
+        tokens[data_start - 1], n_cols
+    ):
+        units_line = data_start - 1
+        header_line = data_start - 2 if scores[data_start - 2] < 0.5 else None
+    elif data_start >= 1 and scores[data_start - 1] < 0.5:
+        header_line = data_start - 1
+    header_line, units_line = (_uncommented(lines, i) for i in (header_line, units_line))
+    return header_line, units_line, data_start, _resolve_names(tokens, header_line, n_cols)
 
 
 def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
