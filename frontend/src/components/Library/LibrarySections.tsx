@@ -52,6 +52,12 @@ export interface LibrarySectionsProps {
   focusActive?: boolean;
 }
 
+/** Re-audit #9: in the tree (Library.tsx renders these AFTER `body`) the
+ *  project-wide sections -- Origin fidelity, book families, smart folders,
+ *  collections -- come after the rows. An Origin import used to insert them
+ *  ABOVE the tree (two jumps of ~22 and ~96 px within half a second), so a
+ *  double-click aimed at a row landed on whatever slid under the pointer.
+ *  The flat list keeps them above its rows, as before. */
 export default function LibrarySections(p: LibrarySectionsProps) {
   // Subscribe to the COUNT, not the array, so a section's chunk is requested
   // exactly when that section would stop rendering null and never re-fetched
