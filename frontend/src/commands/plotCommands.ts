@@ -339,7 +339,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Axes",
       label: "Axis…",
-      description: "Edit an axis: scale, limits, break, ticks, number format, divide-by, fonts. Or double-click the axis.",
+      description: "Edit an axis (scale, limits, break, ticks, number format, divide-by, fonts), or double-click the axis.",
       keywords: "scale limits ticks minor divide font break",
       run: () => openFigureDialog({ kind: "axis", axis: "x" }),
     },
