@@ -41,6 +41,12 @@ export default function OriginRecoveryWindow({
         return bCompatible - aCompatible || a.dataset.name.localeCompare(b.dataset.name, undefined, { numeric: true });
       });
   }, [datasets, entry, figures]);
+  // A workbook whose data sits only on `Book@N` sheets: say which sheets once.
+  const splitBooks = [
+    ...new Map(
+      resolution.unresolved.filter((b) => b.sheets?.length).map((b) => [b.book, b.sheets ?? []] as const),
+    ),
+  ];
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const visibleCandidates = normalizedQuery
     ? candidates.filter(({ dataset, inspectSource }) =>
@@ -76,6 +82,12 @@ export default function OriginRecoveryWindow({
           Quantized could not match every saved curve to an imported workbook.
           Choose a compatible workbook to inspect its columns or rebuild an editable plot.
         </p>
+        {splitBooks.map(([book, sheets]) => (
+          <p key={book}>
+            The graph names workbook {book}, but not which of its sheets. This file has {book} sheets{" "}
+            {sheets.join(", ")}: choose one below.
+          </p>
+        ))}
         {resolution.unresolved.length > 0 && (
           <div className="qzk-origin-recovery-hints">
             <strong>Saved references</strong>

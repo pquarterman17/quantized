@@ -23,10 +23,15 @@ export interface UnresolvedOriginBinding {
   y: string;
   reason:
     | "book_not_imported"
+    | "sheet_not_recorded"
     | "x_column_not_decoded"
     | "y_column_not_decoded"
     | "x_column_has_no_numeric_data"
     | "y_column_has_no_numeric_data";
+  /** `sheet_not_recorded` only: the sheet ids (`Book@N`) this import holds
+   *  for the named workbook. The graph names the workbook, not which of its
+   *  sheets; the reader does not guess one, so the user picks. */
+  sheets?: string[];
 }
 
 export interface OriginSourceResolution {
@@ -206,7 +211,10 @@ export function resolveOriginFigureSources(
     for (const curve of member.figure.curves ?? []) {
       const ds = mappedDataset(member, curve.book, candidates);
       if (!ds) {
-        unresolved.push({ ...curveRef(curve), reason: "book_not_imported" });
+        const sheets = sheetIdsOf(curve.book, candidates);
+        unresolved.push(sheets.length
+          ? { ...curveRef(curve), reason: "sheet_not_recorded", sheets }
+          : { ...curveRef(curve), reason: "book_not_imported" });
         continue;
       }
       const problem = curveProblem(ds, curve);
@@ -233,6 +241,19 @@ export function resolveOriginFigureSources(
     }
   }
   return { sources, unresolved };
+}
+
+/** The sheet ids `N` of the `<book>@N` pseudo-books among `candidates`, in
+ *  numeric order: a workbook whose datasets all live on sheets other than its
+ *  first (DO.opj: `Book1@6`, `Book1@7`, no `Book1`). */
+function sheetIdsOf(book: string, candidates: Dataset[]): string[] {
+  if (!book) return [];
+  const prefix = `${book}@`;
+  return candidates
+    .map((ds) => String((ds.data.metadata ?? {}).origin_book ?? ""))
+    .filter((name) => name.startsWith(prefix) && /^\d+$/.test(name.slice(prefix.length)))
+    .map((name) => name.slice(prefix.length))
+    .sort((a, b) => Number(a) - Number(b));
 }
 
 function curveRef(curve: OriginCurve): Pick<UnresolvedOriginBinding, "book" | "x" | "y"> {

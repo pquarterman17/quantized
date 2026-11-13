@@ -457,6 +457,43 @@ column is X); any book with an undecodable column ahead of its first
 decoded one (row-index X); a column the old plausibility gate dropped
 whole (now kept, cells blanked).
 
+### 2026-11-13 (follow-up) — graph curves on a book whose data is on sheets N > 1
+
+**Question.** `DO.opj`'s two graphs name curve book `Book1`, but its data
+imports only as `Book1@6` and `Book1@7` (sheet ids, §5 of the format doc).
+Can a curve be bound to the right sheet?
+
+**What the file shows.** A curve anchor carries the u16 column object id
+it plots (`opj_curves.column_id_map`); a column-property block carries the
+same id at `0x04`, and `opj_sheets` already binds those ids to sheets for
+datasets. Over the 49 unique public `.opj` files, 150 curve anchors: 112
+land on a single-sheet book, 25 resolve to no column, 12 (all `DO.opj`) land
+on sheet position 0 of `Book1`'s window, which the dataset binding gives to
+one of `Book1@6` / `Book1@7`, and 1 (`strings_testing.opj`) lands on
+position 1 of `NLFit1`'s window, which is `NLFit1@2`.
+
+**Why it is not implemented.** No independent oracle states which sheet a
+curve plots: Altaxo and liborigin have no multi-sheet graph test, LabPlot's
+`testImportOriginStrings` asserts the curve COUNT and axis titles of
+`strings_testing.opj` but no column path, and its column-path assertions
+(`2graphs`, `2folder-with-graphs`) are all single-sheet books. One file of
+12 curves with both candidate sheets having the same column letters is not
+a corpus distribution. Under the graph-recovery safety rule this stays
+unbound. `extract_figures` is unchanged.
+
+**What changed instead (frontend).** When a curve's book is not imported
+but `<book>@N` sheets are, the Recover window says so once per workbook:
+"The graph names workbook Book1, but not which of its sheets. This file has
+Book1 sheets 6, 7: choose one below", and lists those sheets as candidates
+(binding reason `sheet_not_recorded`; `originSources.test.ts`).
+
+**Open, for the owner.** The `strings_testing.opj` curve above is bound
+today to `NLFit1` column B, i.e. sheet 1's column B, while its column id is
+on sheet 2. That is the reverse failure (an existing book name, so nothing
+looks unresolved). Fixing it means dropping or re-pointing a curve in
+`extract_figures`, which would change owner-corpus figure pins (`Moke.opj`
+`Book4` has three sheets) that cannot be re-measured here. Not changed.
+
 ## How to re-run
 
 `tools/origin_trial/export_ground_truth.py` (skips completed stems);
