@@ -3,7 +3,9 @@
 // over the stage: one row at a wide window, four or five in a small graph
 // window, where it hid the whole chart -- and at any width it covered the top
 // of the tallest bar or whisker (lane 3's "Stat Stage dock covers tall
-// whisker"). A ResizeObserver tracks the bar's bottom edge as it wraps.
+// whisker"). A ResizeObserver tracks the bar's bottom edge as it wraps; the
+// bar itself is capped at 40% of the stage and scrolls past that
+// (StatStage.tsx), so a small window keeps most of its height for the plot.
 
 import { useCallback, useState } from "react";
 

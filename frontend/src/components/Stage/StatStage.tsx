@@ -193,7 +193,7 @@ export default function StatStage() {
       <div
         ref={toolsRef}
         className="qzk-glass qzk-float-tools"
-        style={{ gap: 10, padding: "6px 10px", flexWrap: "wrap", maxWidth: "92vw", justifyContent: "center" }}
+        style={{ gap: 10, padding: "6px 10px", flexWrap: "wrap", maxWidth: "92vw", justifyContent: "center", maxHeight: "40%", overflowY: "auto" }}
       >
         <button
           aria-label="Cartesian plot"
