@@ -17,6 +17,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from quantized.calc.figure_legend_order import with_waterfall_legend
+
 __all__ = ["AxisLabelStyle", "AxisTitleFields", "request_overrides"]
 
 AxisKey = Literal["x", "y", "y2"]
@@ -50,9 +52,30 @@ class AxisTitleFields(BaseModel):
 
 
 def request_overrides(req: Any) -> dict[str, Any] | None:
+    """The override bag ``req`` renders with: ``req.overrides`` with the
+    axis-title fields folded in as ``axis_titles`` (``calc.figure_axis_titles``'
+    shape), plus the waterfall's legend row order when the request staggers
+    its series (``calc.figure_legend_order`` -- the screen lists the top trace
+    first, so the export must). ``req.overrides`` itself when the request sets
+    none of them."""
+    return with_waterfall_legend(_axis_title_overrides(req), _staggering_offsets(req))
+
+
+def _staggering_offsets(req: Any) -> list[float] | None:
+    """``req.waterfall_offsets`` when the flat resolve path applies them
+    (``export_figures._figure_series``), else ``None``: a ``group_col`` split
+    and an active encoding re-split the rows into synthetic series and never
+    stagger them, so their legends keep draw order."""
+    encoding = getattr(req, "encoding", None)
+    if getattr(req, "group_col", None) is not None or (encoding is not None and encoding.active()):
+        return None
+    offsets: list[float] | None = getattr(req, "waterfall_offsets", None)
+    return offsets
+
+
+def _axis_title_overrides(req: Any) -> dict[str, Any] | None:
     """``req.overrides`` with the axis-title fields folded in as
-    ``axis_titles`` (``calc.figure_axis_titles``' shape); ``req.overrides``
-    itself when the request sets neither."""
+    ``axis_titles``; ``req.overrides`` itself when the request sets neither."""
     styles: dict[str, AxisLabelStyle] = req.axis_label_styles or {}
     offsets: dict[str, tuple[float, float]] = req.axis_label_offsets or {}
     if not styles and not offsets:

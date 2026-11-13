@@ -31,6 +31,7 @@ from quantized.calc.figure_axis_titles import apply_axis_titles
 from quantized.calc.figure_decor import _apply_region_shades, _split_region_shades_by_axis
 from quantized.calc.figure_errorbars import apply_error_bars
 from quantized.calc.figure_inset import apply_inset
+from quantized.calc.figure_legend_order import draw_legend, tag_series_slots
 from quantized.calc.figure_overrides import legend_kwargs
 from quantized.calc.figure_scale import apply_axis_scale, drawable_lim, resolve_axis_scale
 from quantized.calc.figure_styles import FigureStyle
@@ -343,5 +344,6 @@ def _combined_legend(
     if kw is None:
         return
     ordered = _display_order(primary, secondary, y2_mask)
+    tag_series_slots(ordered)  # display slots across BOTH axes (figure_legend_order)
     handles = [h for h in ordered if not str(h.get_label()).startswith("_")]
-    ax.legend(handles, [h.get_label() for h in handles], **kw)
+    draw_legend(ax, ov, kw, handles)

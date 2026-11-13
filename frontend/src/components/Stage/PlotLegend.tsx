@@ -20,7 +20,7 @@ import LegendSample from "./LegendSample";
 import { resolveSeriesStyle, SERIES_VARS, type SeriesCycle } from "../../lib/seriesStyleCycle";
 import { useLegendBox } from "./useLegendBox";
 import { withUnit } from "../../lib/uplotOpts";
-import { waterfallApplies, waterfallLegendOrder } from "../../lib/waterfallOffset";
+import { waterfallLegendOrder } from "../../lib/waterfallOffset";
 
 /** The canvas' excluded companion: line-free 5px hollow circles. */
 const EXCLUDED_SAMPLE: SeriesStyle = { width: 0, marker: true, markerShape: "circle", markerSize: 5 };
@@ -62,6 +62,10 @@ interface PlotLegendProps {
   inkColor?: string;
   /** Global trace fallback when a series has no explicit style. */
   defaultTrace?: DefaultTrace;
+  /** How many leading rows the canvas' waterfall staggered
+   *  (`waterfallStaggeredRows` of the display payload); 0/absent = none. Those
+   *  rows list the TOP trace first, as the export legend does. */
+  staggeredRows?: number;
 }
 
 export default function PlotLegend({
@@ -75,6 +79,7 @@ export default function PlotLegend({
   isDarkBg = true,
   inkColor,
   defaultTrace,
+  staggeredRows = 0,
 }: PlotLegendProps) {
   const active = useActiveDataset();
   const hiddenChannels = useApp((s) => s.hiddenChannels);
@@ -94,8 +99,7 @@ export default function PlotLegend({
   // blank title draws no heading.
   const legendTitle = useApp((s) => s.legendTitle)?.trim() || null;
   // Under a waterfall the rows list the TOP trace first (figures audit #19).
-  const waterfall = useApp((s) => s.waterfall);
-  const up = waterfallApplies(waterfall) ? 1 : -1;
+  const up = staggeredRows >= 2 ? 1 : -1;
   const titleId = useId();
   const tool = useApp((s) => s.plotTool);
   const legendBox = useLegendBox(tool);
@@ -171,7 +175,7 @@ export default function PlotLegend({
           <RichText text={legendTitle} />
         </div>
       ) : null}
-      {waterfallLegendOrder(series.length, plotted.length, waterfall).map((i) => {
+      {waterfallLegendOrder(series.length, staggeredRows).map((i) => {
         const s = series[i];
         // Keep the CSS token for default series (re-themes); use the resolved
         // override color when one is set, so the legend matches the line. A

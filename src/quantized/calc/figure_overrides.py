@@ -30,6 +30,7 @@ from quantized.calc.figure_fonts import validate_typography
 from quantized.calc.figure_inset import validate_inset
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_layout import validate_page_pad
+from quantized.calc.figure_legend_order import draw_legend
 from quantized.calc.figure_scale import drawable_lim
 from quantized.calc.figure_shapes import _apply_shapes, _validate_shapes
 
@@ -206,7 +207,7 @@ def _apply_overrides(
     if legend is not None:
         kw = legend_kwargs(fig, ax, st, legend, n_series=n_series)
         if kw is not None:
-            ax.legend(**kw)
+            draw_legend(ax, ov, kw)  # top trace first under a waterfall
         elif ax.get_legend() is not None:
             ax.get_legend().remove()
 

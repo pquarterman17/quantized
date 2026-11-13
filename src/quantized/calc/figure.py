@@ -26,6 +26,11 @@ from quantized.calc.figure_hitmap import collect_map as _collect_map_impl
 from quantized.calc.figure_inset import apply_inset
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_layout import apply_figure_layout
+from quantized.calc.figure_legend_order import (
+    draw_legend,
+    preset_legend_kwargs,
+    tag_series_slots,
+)
 from quantized.calc.figure_overrides import _apply_overrides, _validate_overrides
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
@@ -187,6 +192,7 @@ def draw_series_axes(
         _apply_fill(ax, xv, yv, series, i, spec, line.get_color())
         artists.append(line)
     apply_error_bars(ax, xv, series, error_spans, artists)
+    tag_series_slots(artists)  # the legend's waterfall row order (figure_legend_order)
     resolved_x_scale = resolve_axis_scale(x_scale, x_log)
     resolved_y_scale = resolve_axis_scale(y_scale, y_log)
     apply_axis_scale(ax, "x", resolved_x_scale)
@@ -205,11 +211,7 @@ def draw_series_axes(
     if len(series) > 1 and "legend" not in ov:
         # legend_location is a plain str (FigureStyle field); every preset's
         # value is one of matplotlib's accepted location strings.
-        ax.legend(
-            frameon=st.legend_box,
-            fontsize=st.legend_font_size,
-            loc=st.legend_location,
-        )
+        draw_legend(ax, ov, preset_legend_kwargs(st))
     if st.grid_alpha > 0:
         ax.grid(True, which="major", alpha=st.grid_alpha)
         ax.grid(True, which="minor", alpha=st.grid_alpha * 0.4)

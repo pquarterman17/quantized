@@ -93,15 +93,31 @@ export function waterfallApplies(fraction: number): boolean {
   return fraction > 0;
 }
 
+/** How many leading value columns of a display payload the waterfall actually
+ *  staggered: one past the last column with a non-zero `yShift`. 0 when the
+ *  canvas staggered nothing (no waterfall, a single series, or an encoded view
+ *  whose canvas refuses the offset). Read off the PAYLOAD rather than the store's fraction so the legend
+ *  cannot list "top trace first" over a canvas that drew no stagger -- and so
+ *  it agrees with the export, whose legend reads the wire's resolved offsets
+ *  the same way (`src/quantized/calc/figure_legend_order.py`). */
+export function waterfallStaggeredRows(payload: { yShift?: readonly number[] } | null | undefined): number {
+  const shift = payload?.yShift;
+  if (!shift) return 0;
+  let last = 0; // column 0 is x
+  for (let col = 1; col < shift.length; col++) if (shift[col]) last = col;
+  return last;
+}
+
 /** The legend's row order under a waterfall (figures audit #19): series `i`
- *  is lifted `i` steps, so the LAST channel is the TOP trace — listing S0
- *  first put the bottom curve's name at the top of the legend. Channel rows
- *  (`0..channelCount-1`) run top trace first; any rows after them (overlay
- *  companions) keep their place. Without a stagger, draw order unchanged. */
-export function waterfallLegendOrder(rowCount: number, channelCount: number, fraction: number): number[] {
+ *  is lifted `i` steps, so the LAST staggered series is the TOP trace --
+ *  listing S0 first put the bottom curve's name at the top of the legend. The
+ *  staggered rows (`0..staggeredRows-1`, see `waterfallStaggeredRows`) run top
+ *  trace first; any rows after them (overlay companions) keep their place.
+ *  Without a stagger, draw order unchanged. */
+export function waterfallLegendOrder(rowCount: number, staggeredRows: number): number[] {
   const rows = Array.from({ length: rowCount }, (_, i) => i);
-  if (!waterfallApplies(fraction)) return rows;
-  const n = Math.min(channelCount, rowCount);
+  const n = Math.min(staggeredRows, rowCount);
+  if (n < 2) return rows;
   return [...rows.slice(0, n).reverse(), ...rows.slice(n)];
 }
 

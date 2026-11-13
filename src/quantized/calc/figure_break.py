@@ -44,6 +44,11 @@ from numpy.typing import ArrayLike, NDArray
 from quantized.calc.figure import _plot_kwargs
 from quantized.calc.figure_errorbars import apply_error_bars
 from quantized.calc.figure_layout import apply_figure_layout
+from quantized.calc.figure_legend_order import (
+    draw_legend,
+    preset_legend_kwargs,
+    tag_series_slots,
+)
 from quantized.calc.figure_overrides import apply_axis_shape_overrides
 from quantized.calc.figure_render import in_render_scope, new_figure, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
@@ -187,7 +192,6 @@ def render_breaks_impl(
     )
     axes = [axes_obj] if n == 1 else list(axes_obj)
     handles: list[Any] = []
-    labels_out: list[str] = []
     for i, ax in enumerate(axes):
         lo, hi = bounds[i]
         shown = (x >= lo) & (x <= hi)
@@ -197,6 +201,7 @@ def render_breaks_impl(
             spec = series_styles[si] if series_styles and si < len(series_styles) else None
             kw = _plot_kwargs(st.line_width, st.marker_size, spec)
             artists.extend(ax.plot(x[shown], yv, label=label, **kw))
+        tag_series_slots(artists)  # the legend's waterfall row order
         panel_spans = _slice_spans(error_spans, np.flatnonzero(shown))
         apply_error_bars(ax, x[shown], cut, panel_spans, artists)
         ax.set_xlim(lo, hi)
@@ -207,7 +212,7 @@ def render_breaks_impl(
         apply_tick_steps(ax, x_step, y_step, resolved_x_scale, resolved_y_scale)
         apply_tick_formats(ax, x_fmt, y_fmt)
         if i == 0:
-            handles, labels_out = ax.get_legend_handles_labels()
+            handles, _ = ax.get_legend_handles_labels()
         if i > 0:
             ax.spines["left"].set_visible(False)
             ax.tick_params(left=False)
@@ -249,10 +254,7 @@ def render_breaks_impl(
     if y_label:
         axes[0].set_ylabel(y_label)
     if len(series) > 1 and "legend" not in ov and handles:
-        axes[-1].legend(
-            handles, labels_out, frameon=st.legend_box, fontsize=st.legend_font_size,
-            loc=st.legend_location,
-        )
+        draw_legend(axes[-1], ov, preset_legend_kwargs(st), handles)
     # Page setup margins (calc.figure_layout): a broken figure never laid
     # itself out, but a padded page must still fit every label inside it.
     apply_figure_layout(fig, ov, default_tight=False)
