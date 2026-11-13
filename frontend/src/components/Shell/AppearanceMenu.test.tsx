@@ -13,8 +13,10 @@ import { useApp } from "../../store/useApp";
 import { pressEscape } from "../../test/pressEscape";
 import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 
-function open(): void {
+/** Open the dropdown and wait for its panel, a lazy chunk (AppearancePanel). */
+async function open(): Promise<void> {
   fireEvent.click(screen.getByTitle("Appearance (theme · accent · density · palette)"));
+  await screen.findByText("Accent");
 }
 
 afterEach(() => {
@@ -27,18 +29,18 @@ describe("AppearanceMenu — full app (default view)", () => {
     window.history.pushState({}, "", "/");
   });
 
-  it("shows the theme/accent/density/palette controls", () => {
+  it("shows the theme/accent/density/palette controls", async () => {
     render(<AppearanceMenu />);
-    open();
+    await open();
     expect(screen.getByText("Theme")).toBeInTheDocument();
     expect(screen.getByText("Accent")).toBeInTheDocument();
     expect(screen.getByText("Density")).toBeInTheDocument();
     expect(screen.getByText("Series palette")).toBeInTheDocument();
   });
 
-  it('shows the "All preferences…" footer', () => {
+  it('shows the "All preferences…" footer', async () => {
     render(<AppearanceMenu />);
-    open();
+    await open();
     expect(screen.getByText("All preferences…")).toBeInTheDocument();
   });
 
@@ -47,9 +49,9 @@ describe("AppearanceMenu — full app (default view)", () => {
   // hand-written rather than `primitives/Checkbox` (bundle — see the comment at
   // the call site), so this also pins that the hand-written version is still a
   // real labelled checkbox wired to `setPref`.
-  it("offers the P3.3 dash/marker switch beside the palette, off by default, and writes the pref", () => {
+  it("offers the P3.3 dash/marker switch beside the palette, off by default, and writes the pref", async () => {
     render(<AppearanceMenu />);
-    open();
+    await open();
     const box = screen.getByLabelText("Vary dash & marker", { selector: "input" });
     expect(box).not.toBeChecked();
     fireEvent.click(box);
@@ -62,16 +64,16 @@ describe("AppearanceMenu — calc-only view (?view=calc)", () => {
     window.history.pushState({}, "", "/?view=calc");
   });
 
-  it("still shows the accent/density controls", () => {
+  it("still shows the accent/density controls", async () => {
     render(<AppearanceMenu />);
-    open();
+    await open();
     expect(screen.getByText("Accent")).toBeInTheDocument();
     expect(screen.getByText("Density")).toBeInTheDocument();
   });
 
-  it('hides the "All preferences…" footer (PreferencesDialog is not mounted there)', () => {
+  it('hides the "All preferences…" footer (PreferencesDialog is not mounted there)', async () => {
     render(<AppearanceMenu />);
-    open();
+    await open();
     expect(screen.queryByText("All preferences…")).not.toBeInTheDocument();
   });
 });
@@ -86,7 +88,7 @@ describe("AppearanceMenu Escape ownership (P3.3 round 4)", () => {
     renderHook(() => useGlobalShortcuts());
     render(<AppearanceMenu />);
     fireEvent.click(screen.getByTitle(/Appearance/));
-    expect(screen.getByText("Theme")).toBeInTheDocument();
+    expect(await screen.findByText("Theme")).toBeInTheDocument();
 
     await pressEscape();
 

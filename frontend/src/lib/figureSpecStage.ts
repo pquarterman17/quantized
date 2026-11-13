@@ -19,7 +19,7 @@ import { buildPolarFigureSpec } from "./polarFigureSpec";
 import { windowCyclesSeriesStyles } from "./seriesStyleCycle";
 import type { Dataset } from "./types";
 import { readLiveWaterfallSpan } from "./waterfallOffset";
-import { withLiveTickSteps } from "./liveTickSteps";
+import { withLiveTickSteps } from "./liveTickStepsSpec";
 import { withLiveLegendCorner } from "./liveLegendCorner";
 
 /** Stage copy/export entry point (F2.5b). Every Stage command that renders

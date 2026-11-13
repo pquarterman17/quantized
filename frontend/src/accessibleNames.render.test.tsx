@@ -117,9 +117,10 @@ describe("rendered controls are named in words (U6)", () => {
     expect(unnamedControls(status.container), FIX).toEqual([]);
   });
 
-  it("the appearance menu, opened", () => {
+  it("the appearance menu, opened", async () => {
     const { container } = render(<AppearanceMenu />);
     fireEvent.click(screen.getByRole("button", { name: "Appearance" }));
+    await screen.findByRole("combobox", { name: "Theme" }); // the panel is a lazy chunk
     expect(unnamedControls(container), FIX).toEqual([]);
   });
 

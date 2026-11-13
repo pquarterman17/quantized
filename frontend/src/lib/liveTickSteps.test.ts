@@ -10,7 +10,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { FigureSpec } from "./api/figures";
 import { buildStageFigureSpec } from "./figureSpecStage";
-import { drawnIncrement, publishLiveTickSteps, withLiveTickSteps } from "./liveTickSteps";
+import { drawnIncrement, publishLiveTickSteps } from "./liveTickSteps";
+import { withLiveTickSteps } from "./liveTickStepsSpec";
 import { useApp } from "../store/useApp";
 
 const FIXTURE = JSON.parse(
