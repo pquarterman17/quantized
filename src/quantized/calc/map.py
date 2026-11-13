@@ -279,7 +279,8 @@ def map_from_datastruct(
     xi = _resolve(ds, x_key)
     yi = _resolve(ds, y_key)
     zi = _resolve(ds, z_key)
-    cols = ds.values[:, [xi, yi, zi]] if ds.values.ndim == 2 and ds.values.size else np.empty((0, 3))
+    has_rows = ds.values.ndim == 2 and ds.values.size > 0
+    cols = ds.values[:, [xi, yi, zi]] if has_rows else np.empty((0, 3))
     if not bool(np.isfinite(cols).all(axis=1).any()):
         # Name the data problem (an Origin book whose chosen columns never
         # overlap) instead of numpy's "zero-size array to reduction".
