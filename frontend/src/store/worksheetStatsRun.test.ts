@@ -57,7 +57,7 @@ describe("row functions", () => {
 
 describe("Row statistics", () => {
   it("adds the ticked statistics as computed columns in ONE undo step, with the shared unit", async () => {
-    askParamsMock.mockResolvedValue({ columns: "A, B", mean: true, sd: false, min: false, max: true, sum: false, n: true });
+    askParamsMock.mockResolvedValue({ "col:0": true, "col:1": true, mean: true, sd: false, min: false, max: true, sum: false, n: true });
     await runRowStatistics();
     const d = useApp.getState().datasets[0];
     expect(d.formulas).toEqual([
@@ -71,11 +71,19 @@ describe("Row statistics", () => {
     expect(useApp.getState().datasets[0].formulas).toBeUndefined();
   });
 
-  it("refuses an error column, and offers only numeric value columns by default", async () => {
-    askParamsMock.mockResolvedValue({ columns: "A, C", mean: true });
+  it("offers a checkbox per numeric value column (named by letter, label, unit), never the error column", async () => {
+    askParamsMock.mockResolvedValue({ "col:0": true, mean: true });
     await runRowStatistics();
-    expect(useApp.getState().status).toMatch(/column C \(dM\) is categorical or an error column/);
-    expect(askParamsMock.mock.calls[0][1][0]).toMatchObject({ default: "A, B" });
+    const fields = askParamsMock.mock.calls[0][1] as { key: string; label: string; type: string; default: unknown }[];
+    const columns = fields.filter((f) => f.key.startsWith("col:"));
+    expect(columns).toEqual([
+      { key: "col:0", label: "A: M1 (emu)", type: "boolean", default: true },
+      { key: "col:1", label: "B: M2 (emu)", type: "boolean", default: true },
+    ]);
+    expect(new Set(fields.map((f) => f.label)).size).toBe(fields.length); // unique accessible names
+    // One ticked column is not enough, and nothing changes.
+    expect(useApp.getState().status).toMatch(/tick at least two columns/);
+    expect(useApp.getState().datasets[0].formulas).toBeUndefined();
   });
 });
 

@@ -46,18 +46,22 @@ function fail(message: string): void {
   toast(message, "danger");
 }
 
-/** Parse "A, B, C" into channel indices, or say which letter is wrong. */
-export function parseColumnList(text: string, ds: Dataset): number[] | string {
-  const allowed = new Set(numericColumns(ds));
-  const out: number[] = [];
-  for (const raw of text.split(/[\s,;]+/).filter(Boolean)) {
-    const letter = raw.toUpperCase();
-    const idx = ds.data.labels.findIndex((_, i) => channelLetter(i) === letter);
-    if (idx < 0) return `there is no column ${raw}`;
-    if (!allowed.has(idx)) return `column ${letter} (${ds.data.labels[idx]}) is categorical or an error column`;
-    if (!out.includes(idx)) out.push(idx);
-  }
-  return out.length >= 2 ? out : "pick at least two columns for row statistics";
+/** The ticked column fields' channel indices (key `col:<index>`), or why
+ *  there are not enough of them. */
+export function pickedColumns(picked: Record<string, unknown>, ds: Dataset): number[] | string {
+  const out = numericColumns(ds).filter((c) => picked[`col:${c}`] === true);
+  return out.length >= 2 ? out : "tick at least two columns for row statistics";
+}
+
+/** The column picker: one checkbox per numeric column, named by its letter,
+ *  label and unit ("A: Signal (mV)") — keyboard reachable, each name unique.
+ *  Typed letters (the first version) made the user look up each letter. */
+function columnFields(ds: Dataset) {
+  const base = ds.data.labels.length - (ds.formulas?.length ?? 0);
+  return numericColumns(ds).map((c) => {
+    const unit = ds.data.units[c] ? ` (${ds.data.units[c]})` : "";
+    return { key: `col:${c}`, label: `${channelLetter(c)}: ${ds.data.labels[c] || `column ${c + 1}`}${unit}`, type: "boolean" as const, default: c < base };
+  });
 }
 
 /** The computed columns Row statistics adds, for `cols` and `stats` keys. */
@@ -79,16 +83,17 @@ export async function runRowStatistics(): Promise<void> {
   const ds = s.datasets.find((d) => d.id === s.activeId);
   if (!ds) return fail("Row statistics: select a worksheet first");
   if (ds.pending) return fail("Row statistics: wait for the full worksheet to load");
-  const defaults = numericColumns(ds).filter((c) => c < ds.data.labels.length - (ds.formulas?.length ?? 0));
+  if (numericColumns(ds).length < 2) return fail("Row statistics: the worksheet needs at least two numeric value columns");
   const picked = await askParams("Row statistics", [
-    { key: "columns", label: "Columns (letters, e.g. A, B, C)", type: "text", default: defaults.map(channelLetter).join(", ") },
+    ...columnFields(ds),
     ...ROW_STATS.map((r) => ({ key: r.key, label: r.name, type: "boolean" as const, default: r.on })),
   ], {
-    message: "Adds one computed column per statistic, across the chosen columns, row by row. Blank cells are skipped.",
+    message:
+      "Tick the columns to combine (categorical and error columns are not offered), then the statistics. Adds one computed column per statistic, row by row. Blank cells are skipped.",
     confirmLabel: "Add columns",
   });
   if (!picked) return;
-  const cols = parseColumnList(String(picked.columns ?? ""), ds);
+  const cols = pickedColumns(picked, ds);
   if (typeof cols === "string") return fail(`Row statistics: ${cols}`);
   const stats = ROW_STATS.filter((r) => picked[r.key] === true).map((r) => r.key);
   if (!stats.length) return fail("Row statistics: tick at least one statistic");
