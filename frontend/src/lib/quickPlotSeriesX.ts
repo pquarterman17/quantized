@@ -15,7 +15,7 @@
 // import it statically.
 
 import { effectiveDesignations } from "./columnmeta";
-import { ownXSeries } from "./ownXSeries";
+import { hasFiniteValue, ownXSeries } from "./ownXSeries";
 import { errKeysFromBindings, type ErrorBinding } from "./errorRoles";
 import { legacyErrorBindings } from "./figureDocument";
 import type { PlotView } from "./plotview";
@@ -47,7 +47,10 @@ export function quickPlotSeriesXSeed(
   const seed = quickPlotFigureSeed(dataset, memory, withhold);
   const own = ownXSeries(effectiveDesignations(dataset.data, dataset.columnDesignations));
   const excluded = new Set([...seed.view.hiddenChannels, ...seed.errors.map((b) => b.channel)]);
-  const yKeys = (seed.view.yKeys ?? dataset.data.labels.map((_, c) => c)).filter((c) => !excluded.has(c));
+  // A never-filled column is no curve (no empty legend entry).
+  const yKeys = (seed.view.yKeys ?? dataset.data.labels.map((_, c) => c)).filter(
+    (c) => !excluded.has(c) && hasFiniteValue(dataset.data.values, c),
+  );
   // Origin's nearest-preceding-X rule over the effective designations (the
   // book's own `column_designations` plus the user's "Set As" overrides).
   const xKeyByY: Record<number, number> = {};

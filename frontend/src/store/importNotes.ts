@@ -9,7 +9,7 @@
 // never from startup code.
 
 import { effectiveDesignations } from "../lib/columnmeta";
-import { ownXSeries } from "../lib/ownXSeries";
+import { hasFiniteValue, ownXSeries } from "../lib/ownXSeries";
 import { plural } from "../lib/plural";
 import { onLoadFailure, runLazy } from "../lib/runLazy";
 import type { DataStruct, Dataset } from "../lib/types";
@@ -52,7 +52,10 @@ export function notifyParserNotes(files: readonly NotedFile[]): void {
  *  X (Quick Plot's per-series-X seed). No-op when no imported book has any. */
 export function notifyOwnXSeries(datasets: readonly Dataset[]): void {
   for (const ds of datasets) {
-    const n = Object.keys(ownXSeries(effectiveDesignations(ds.data, ds.columnDesignations))).length;
+    // An empty column on another X draws nothing and is not counted.
+    const n = Object.keys(ownXSeries(effectiveDesignations(ds.data, ds.columnDesignations))).filter((c) =>
+      hasFiniteValue(ds.data.values, Number(c)),
+    ).length;
     if (!n) continue;
     toast(`${ds.name}: ${n} Y column${plural(n)} belong${n === 1 ? "s" : ""} to another X column and ${n === 1 ? "is" : "are"} hidden from this plot`, "info", {
       ttlMs: TOAST_ACTION_TTL,

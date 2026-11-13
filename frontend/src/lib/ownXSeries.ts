@@ -21,3 +21,11 @@ export function ownXSeries(designations: readonly (OriginDesignation | undefined
   });
   return out;
 }
+
+/** True when value channel `c` holds at least one finite number. A column
+ *  Origin keeps but never filled (a template's spare Y columns) has none: it
+ *  is not a curve, so it is neither offered as one nor counted in the
+ *  "belongs to another X" notice -- it would only add an empty legend row. */
+export function hasFiniteValue(values: readonly (readonly number[])[], c: number): boolean {
+  return values.some((row) => Number.isFinite(row?.[c]));
+}

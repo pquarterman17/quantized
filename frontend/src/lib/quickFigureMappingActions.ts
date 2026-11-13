@@ -19,7 +19,7 @@
 import { reviewSeedErrorBindings } from "./errorBindingConfidence";
 import { figureSeedErrorBindings, type ErrorBinding, type ErrorSide } from "./errorRoles";
 import { effectiveDesignations } from "./columnmeta";
-import { ownXSeries } from "./ownXSeries";
+import { hasFiniteValue, ownXSeries } from "./ownXSeries";
 import { originHiddenChannels } from "./errorbars";
 import type { QuickFigureMapping } from "./quickFigureMapping";
 import type { Dataset } from "./types";
@@ -92,8 +92,15 @@ export function initialQuickFigureMapping(dataset: Dataset): QuickFigureMapping 
     .map((binding) => binding.channel)
     .filter((channel) => !errorChannels.has(channel));
   const hidden = new Set(originHiddenChannels(dataset.data, dataset.columnDesignations));
+  // A column with no finite value (a book's spare, never-filled Y) is not a
+  // curve: it starts as Ignore instead of an empty legend entry.
+  // Only would-be Ys: a designated X stays with `hidden` (its own rule).
+  const empty = dataset.data.labels
+    .map((_, c) => c)
+    .filter((c) => !hidden.has(c) && !hasFiniteValue(dataset.data.values, c));
   const ignored = new Set([
     ...withheld,
+    ...empty.filter((c) => !errorChannels.has(c)),
     ...Object.entries(dataset.channelRoles ?? {})
       .filter(([, role]) => role === "ignore" || role === "label")
       .map(([channel]) => Number(channel)),
