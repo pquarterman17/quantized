@@ -1856,8 +1856,35 @@ import { fileURLToPath } from "node:url";
  * repeated per-stick provenance (one durable group label now carries it),
  * reducing the measured overage before this minimal raise.
  *
+ * 2026-11-13 (bundle diet slice 25, `plans/BUNDLE_HEADROOM.md`) - pin
+ * LOWERED 837,509 -> 827,796 (`measured + 6,000`). No source module moved
+ * and no `import()` was added: `vite.config.ts` now writes every module the
+ * entry runs at startup into the entry chunk (a `codeSplitting` group on
+ * Rolldown's `$initial` tag, with `includeDependenciesRecursively: false`).
+ * Automatic splitting had spread that code over 87 chunks, all of them
+ * preloaded before first paint, and every boundary between two of them cost
+ * an import and an export statement. Exact bytes, `npm ci`-fresh, `.vite`
+ * wiped, `tsc -b --force`, `npm run build`:
+ *   `d5c8ffba` (parent)                 836,984   87 eager chunks, 470 JS files
+ *   + the `$initial` group, defaults    833,354   (-3,630; measured, NOT kept:
+ *                                                 15 re-exported lazy halves
+ *                                                 came back into the chunk)
+ *   + `includeDependenciesRecursively:
+ *      false` (this commit)             821,796   (-15,188)  2 eager chunks
+ *                                                 (entry + Rolldown runtime),
+ *                                                 385 JS files
+ * The eager chunks' sourcemaps list the same source modules before and
+ * after, so what loads at startup is unchanged; only the glue is gone.
+ *
+ * The margin is 6,000, not rule 3's 1,024, ON PURPOSE, the slice-24 form:
+ * the slice exists to fund a named, queued wave of about ten feature
+ * branches that each add a few hundred eager bytes, and under "never raise"
+ * they can only land inside whatever this entry leaves. The other 9,713 B
+ * are locked in. Once that wave has merged, lower the pin to
+ * `measured + 1,024`; do not spend the banked bytes on anything else.
+ *
  */
-const EAGER_JS_BUDGET = 837_509;
+const EAGER_JS_BUDGET = 827_796;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

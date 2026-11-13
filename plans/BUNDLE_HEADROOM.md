@@ -1,6 +1,16 @@
 # Bundle headroom campaign
 
-**Current state (2026-10-08, after slice 24):** nine halves of eager modules
+**Current state (2026-11-13, after slice 25):** no source module moved. The
+startup code is now written as ONE chunk instead of 87 always-preloaded ones
+(`vite.config.ts`, a `codeSplitting` group on Rolldown's `$initial` tag), so
+the import/export glue between those chunks is gone. Main `d5c8ffba` measured
+**836,984 B**, 525 B under the pin; after, **821,796 B** (**−15,188 B**). The
+pin was LOWERED **837,509 → 827,796 B** (`measured + 6,000`): 6,000 B is
+banked for the queued wave of feature branches, the other 9,713 B are locked
+in. See "Slice 25", which also says why the chunk-boundary tax that slices
+16–24 kept measuring no longer exists.
+
+**Previous state (2026-10-08, after slice 24):** nine halves of eager modules
 that only lazy modules call moved out, each imported by its own path. Main
 after PR #554 (`cd6b941b`) measured **834,605 B**, 34 B under the pin; merged
 with the slice, **832,257 B** (**−2,348 B**). The pin was LOWERED to
@@ -3045,6 +3055,157 @@ unchanged. Not measured in a browser (no Playwright browser here).
 **Pin:** lowered to `measured + 2,000` on the merged tree, not
 `measured + 1,000`: 2,000 B is banked for Dependabot #548 and the pending
 plot batch. Do not spend it on other work.
+
+### Slice 25 — the startup code as one chunk, pin ratcheted DOWN — **DONE (2026-11-13)**
+
+**Measured net eager delta −15,188 B — pin LOWERED 837,509 → 827,796 B**
+
+The brief was a measured slice of at least 6 kB that touches none of the
+files about ten concurrent feature branches are editing. Exact bytes, `npm
+ci`, `node_modules/.vite` wiped, `npx tsc -b --force`, then `npm run build`:
+
+| tree | eager B | delta | eager chunks | JS files |
+|---|---:|---:|---:|---:|
+| `d5c8ffba` (parent) | 836,984 | — | 87 | 470 |
+| + `codeSplitting` group on `$initial`, defaults (measured, not kept) | 833,354 | −3,630 | 2 | 377 |
+| + `includeDependenciesRecursively: false` (landed) | 821,796 | **−15,188** | 2 | 385 |
+
+The whole change is one `build.rolldownOptions.output.codeSplitting` entry in
+`frontend/vite.config.ts`. No file under `frontend/src` changed.
+
+#### Where the bytes were
+
+Seams and lazy halves had been ranked by the sourcemap profile for 24 slices.
+This time the profile's own first two lines were the finding:
+
+```
+bytes on disk:       841,097      (836,984 without the sourcemap comments)
+attributed:          798,250  (rest is chunk boilerplate/runtime)
+```
+
+38.7 kB of the eager bundle belonged to no source module. A per-chunk
+breakdown of that remainder (every generated span no mapping segment covers)
+put 23.5 kB in Vite's preload tables (two chunks carry one each; slice 8 had
+already cut them to the chunks that are not loaded yet), 2.2 kB in the
+preload helper and Rolldown's runtime, and the remaining 12.9 kB in
+`import{…}from"./x.js"` and `export{…}` statements at the top and bottom of
+85 chunks.
+
+Those statements exist because Rolldown's automatic splitting gives each
+distinct "which entries reach this module" set a chunk of its own. A startup
+module that a lazy panel also imports is split out of the entry chunk, and it
+stays eager: `index.html` listed all 87 chunks as `<script type="module">` or
+`<link rel="modulepreload">`. Splitting code that always loads together buys
+nothing and costs a pair of statements per boundary.
+
+`tags: ["$initial"]` is Rolldown's built-in name for "statically needed by an
+entry". A group on that tag writes those modules into the entry chunk. The
+lazy chunks then import from the entry chunk the way they imported from its
+86 siblings.
+
+#### Why `includeDependenciesRecursively: false` is not optional
+
+With the group's defaults the total was 833,354 B, and 15 modules that had
+been lazy were in the startup chunk: `lib/api/crystallography.ts`,
+`exportMultivar.ts`, `figurePage.ts`, `report.ts`, `stats.ts` and `xray.ts`,
+`lib/clipboardExtras.ts`, `lib/datafilterSanitize.ts`, the three
+`lib/desktop*Bridge.ts` halves, `lib/foldertreeQueries.ts`,
+`lib/multiSelected.ts`, `lib/recodeMappings.ts` and
+`lib/rowSidecarsConcat.ts`. Every one is reached from an eager module only
+through a re-export (`export * from "./foldertreeQueries"`), the slice-15
+method. `$initial` itself does not tag them. The group's default
+`includeDependenciesRecursively: true` does pull them in, because a re-export
+is a dependency of the captured module. With it off, the eager chunks'
+sourcemaps list exactly the source modules the parent's did (compared file by
+file, no difference either way), and the 11,558 B those halves weigh stay in
+the lazy chunks. Nothing but the ratchet guards the option: without it the
+build is 5,558 B over the new pin and `check-bundle-size.mjs` fails, and
+without the group at all it is 9,188 B over.
+
+#### What it does not change
+
+- **What loads at startup.** Same source modules, checked as above.
+- **When lazy code loads.** The preload lists are still pruned and verified
+  (`preload-verify`: 237 lists, 0 violations, the same count as the parent).
+- **Any test.** No source or test file changed. `architecture.test.ts` and
+  `lazyImportGuard.test.ts` read the source import graph, not the chunks.
+
+A real browser ran it. The whole Playwright suite passed at 100% scale in
+Chrome (95 passed, 1 skipped; `csp-auth` and `modal-inert` included) against
+a build whose entry chunk is byte-identical to this one's
+(`index-C-cuxlg_.js`, which names every lazy chunk by its content hash).
+
+One file of ~821 kB replaces 87 parallel requests. The app is served by `qz`
+from the same machine, so neither the request count nor per-chunk caching
+matters here; a deployment behind a real network would want to look again.
+Vite's "chunk larger than 500 kB" warning now fires on the entry by design,
+so `chunkSizeWarningLimit` is set to 900 (kB) with a comment. That warning
+never gated anything; `check-bundle-size.mjs` does.
+
+#### What this means for later slices
+
+- **The chunk-boundary tax is gone.** Slices 16, 17, 18, 19 and 24 each
+  recorded a move that cost bytes or saved nothing because Rolldown re-split
+  the eager side ("check the chunk count as well as the total"). With one
+  startup chunk there is no eager boundary to create. A module that leaves
+  the startup set now saves about what the profile attributes to it, minus
+  roughly 9 B per name a lazy chunk still imports from the entry (the entry's
+  `export{…}` statement is 4,730 B for 533 names).
+- **Moves reverted for that reason are worth re-measuring**:
+  `sendEditableFigureToReport` (+3,020 B in slice 24, 258 B attributed),
+  `isDeclaredBinding` (+30 B, 160 B), and `lib/figuredoc.ts`'s `.dwk`
+  sanitizer (0 B in slice 17, 1,046 B attributed).
+- **`REEXPORTED_LAZY_HALVES` now carries more weight.** A startup module that
+  starts using a name from one of those halves brings the whole half into the
+  startup chunk, as it always did; the guard in `architecture.test.ts` is
+  unchanged and still the thing that catches it.
+
+#### Measured and not taken
+
+- **A second group for code shared between lazy chunks**, to shorten the
+  preload lists. With `entriesAware: true` and a 2,048 B merge threshold the
+  eager total went UP to about 822.8 kB as the script prints it (above the
+  parent): Rolldown names each such chunk after the entries that share it,
+  and the longer file names cost more in the preload table than the fewer
+  entries saved. With `minShareCount: 24` (one `panel-kit` chunk of ten
+  modules, 19.9 kB) it saved about 1.0 kB on top of the default group. Not taken: the gain is small, and
+  the chunk makes every dialog fetch 8.7 kB of signal-recipe code.
+- **A hand-written walk** (the static import closure with re-exports followed
+  by name) as the group's `test`. Built, unit-tested and validated against
+  the parent's eager set, then deleted: the two options above give the
+  byte-identical output without it. While it existed it excluded the startup
+  stylesheets from the group by mistake. The HTML entry chunk was then CSS
+  only, Vite removed it as a pure-CSS chunk, and the build exited 0 with an
+  `index.html` that loaded no script. `check-bundle-size.mjs` caught it
+  ("found no eager JS"). Worth knowing before anyone adds a `test` to this
+  group.
+
+#### Candidates still not taken
+
+- **The preload tables**: 12,157 B of file names (335 lazy chunks) and
+  8,434 B of index lists (147 `import()` sites) in the entry chunk. They are
+  what lets a panel's chunks download in parallel, so removing them trades
+  first-open latency for bytes. That is the owner's call, not a diet slice's.
+- **Lazy-only declarations still in eager modules**, from the slice-24 kind
+  of scan, rewritten and run on this tree (bytes the declarations own in the
+  eager chunks):
+  `lib/figuredoc.ts` 1,046 (the `.dwk` sanitizer), `lib/categorical.ts` 714
+  and `lib/nonFiniteCells.ts` 551 (workspace-load path), `lib/smartfolders.ts`
+  323, `Button` in `components/primitives/index.tsx` 317, `lib/api.ts` 297
+  and `lib/api/http.ts` 271 (mocked by path in many tests),
+  `components/Library/nodeIcons.ts` 296, `lib/api/finitePairs.ts` 254,
+  `lib/rowstate.ts` 221. About 4.3 kB in all. None taken here: the brief
+  asked for a diff the queued branches cannot conflict with.
+- **Already-async store actions whose bodies are still eager**:
+  `duplicateDataset` 1,318, `createDerivedWorksheet` 1,081,
+  `pasteDataFromClipboard` 763, `previewSeparateWorksheets` 337. Each needs a
+  load-failure path and its test (the slice-17 shape).
+
+**Pin:** lowered to `measured + 6,000`, the slice-24 form, not rule 3's
+`measured + 1,024`. The slice was commissioned to fund a queued wave of about
+ten feature branches that each add a few hundred eager bytes, and nothing may
+raise the pin for them. 9,713 B of the gain are locked in now. When the wave
+has merged, lower the pin to `measured + 1,024`.
 
 ## What this does NOT change
 
