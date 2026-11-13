@@ -81,8 +81,10 @@ def escape_lt(text: str) -> str:
     A file-derived label or free-text comment must land literally, so:
 
     * ``%`` + letter is written ``%%`` + letter -- the documented way to stop
-      register substitution (LabTalk "Language Fundamentals" tutorial:
-      ``%%B`` stores the text ``%B``);
+      register substitution (LabTalk "Language Fundamentals" tutorial,
+      docs.originlab.com/labtalk/tutorials/tutorial-language-fundamental:
+      "by prefixing a % symbol you can stop the substitution"; re-checked
+      against that page's text 2026-11-13);
     * ``%(``, ``%`` + digit (script arguments ``%1``...), ``%@`` and ``$(``
       have no documented escape, so a space is inserted after the sigil
       (``$ (``): the notation requires adjacency and can no longer form.
@@ -195,7 +197,11 @@ def curve_set(designations: list[str], err_targets: dict[int, int]) -> CurveSet:
 
 def _xy_range(x_col: int, y: int, curves: CurveSet) -> str:
     """One XYRange: ``(x,y)``, or ``(x,y,yErr)`` when ``y`` has a bound error
-    column (LabTalk's XYRange triple is X, Y, Y-error -- the error bars)."""
+    column. The triple is X, Y, Y-error per the plotxy X-Function reference
+    (docs.originlab.com/x-function/ref/plotxy, example
+    ``plotxy iy:=(1,2,3); // Plot col(2) with col(3) as error bar``;
+    re-checked against that page's text 2026-11-13). Documented, not
+    live-verified in Origin (no license window since the 2026-11 audit)."""
     err = curves.err_col.get(y)
     return f"({x_col},{_col(y)})" if err is None else f"({x_col},{_col(y)},{err})"
 
