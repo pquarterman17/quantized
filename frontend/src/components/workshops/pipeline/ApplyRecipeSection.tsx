@@ -144,7 +144,7 @@ export default function ApplyRecipeSection({
           Close
         </Button>
       </div>
-      {a.results && (
+      {a.results && a.results.length > 0 && (
         <ul aria-label="Apply results" className="qzk-ds-meta" style={{ margin: "6px 0 0", paddingLeft: 16, whiteSpace: "normal" }}>
           {a.results.map((r) => (
             <li key={r.datasetId} data-status={r.status} style={r.status === "ok" ? undefined : r.status === "cancelled" ? { color: "var(--text-faint)" } : { color: "var(--danger)" }}>

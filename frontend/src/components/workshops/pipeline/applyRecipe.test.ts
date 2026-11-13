@@ -264,6 +264,16 @@ describe("applyRecipe", () => {
     expect(ids()).toEqual(before);
   });
 
+  it("keepActive hands the view back to the worksheet active before the run (a dialog's batch)", async () => {
+    const recipe = await recordRecipe();
+    store().setActive("b");
+    await applyRecipe(recipe, [{ datasetId: "b", bindings: [2, 1, 0] }], { ackUnits: false });
+    expect(store().activeId).not.toBe("b"); // a run's output makes itself active
+    store().setActive("b");
+    await applyRecipe(recipe, [{ datasetId: "b", bindings: [2, 1, 0] }], { ackUnits: false, keepActive: true });
+    expect(store().activeId).toBe("b");
+  });
+
   it("refuses a dataset that fails preflight — nothing created, no undo entry", async () => {
     const recipe = await recordRecipe();
     const before = ids();

@@ -93,12 +93,10 @@ export function useApplyRecipe(recipe: AnalysisTemplate, keepActive = false): Ap
     setResults([]);
     try {
       const plans = picks.map((p) => ({ datasetId: p.ds.id, bindings: p.bindings }));
-      const before = useApp.getState().activeId;
-      setResults(await applyRecipe(recipe, plans, { ackUnits, signal: ctl.signal, onProgress: (r) => setResults([...r]) }));
-      // Launched from a dialog that works on the ACTIVE worksheet: each output
-      // made itself active, which would re-point the dialog at an output.
-      const now = useApp.getState();
-      if (keepActive && before && now.activeId !== before && now.datasets.some((d) => d.id === before)) now.setActive(before);
+      // keepActive: launched from a dialog that works on the ACTIVE worksheet;
+      // each output makes itself active, which would re-point the dialog at an
+      // output, so applyRecipe hands the view back afterwards.
+      setResults(await applyRecipe(recipe, plans, { ackUnits, signal: ctl.signal, onProgress: (r) => setResults([...r]), keepActive }));
     } finally {
       if (controller.current === ctl) controller.current = null;
       setRunning(false);

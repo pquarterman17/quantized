@@ -60,7 +60,6 @@ describe("BatchApplyLauncher", () => {
 
   it("applies the setup as it is AT APPLY TIME, not as it was when the panel was opened", async () => {
     applyMock.mockImplementation(async () => {
-      useApp.setState({ activeId: "b" }); // what a real run does: its output becomes active
       return [{ datasetId: "a", name: "a.dat", status: "ok", note: "created “out”" }];
     });
     const named = (name: string) => () => ({ ...recipe(), name });
@@ -75,9 +74,10 @@ describe("BatchApplyLauncher", () => {
     await waitFor(() => expect(screen.getByRole("list", { name: "Apply results" })).toHaveTextContent("a.dat: created “out”"));
     expect(applyMock).toHaveBeenCalledTimes(1);
     expect(applyMock.mock.calls[0][0]).toMatchObject({ name: "Derivative" });
-    // The dialog's own source stays the active worksheet (an output made
-    // itself active during the run; the dialog must not be re-pointed at it).
-    expect(useApp.getState().activeId).toBe("a");
+    // The dialog's own source stays the active worksheet (an output makes
+    // itself active during the run; the dialog must not be re-pointed at it):
+    // the launcher asks applyRecipe to hand the view back (tested there).
+    expect(applyMock.mock.calls[0][2]).toMatchObject({ keepActive: true });
     // An invalid setup disables Apply, with the dialog's own reason.
     rerender(<BatchApplyLauncher setup="bad" build={named("Bad")} disabledReason="Half-window must be a positive integer." />);
     const apply = screen.getByRole("button", { name: /^Apply to \d+ dataset/ });

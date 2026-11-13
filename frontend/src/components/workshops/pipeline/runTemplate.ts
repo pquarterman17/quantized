@@ -201,10 +201,11 @@ export async function asOneUndoStep<T>(label: string, fn: () => Promise<T>): Pro
 export async function applyRecipe(
   recipe: AnalysisTemplate,
   plans: readonly ApplyPlan[],
-  opts: { ackUnits: boolean; signal?: AbortSignal; onProgress?: (results: readonly ApplyResult[]) => void },
+  opts: { ackUnits: boolean; signal?: AbortSignal; onProgress?: (results: readonly ApplyResult[]) => void; keepActive?: boolean },
 ): Promise<ApplyResult[]> {
   const s = useApp.getState;
   s().setPipelineRunning(true);
+  const before = s().activeId;
   try {
     return await asOneUndoStep(`apply recipe “${recipe.name}”`, async () => {
       const results: ApplyResult[] = [];
@@ -221,6 +222,9 @@ export async function applyRecipe(
       return results;
     });
   } finally {
+    // `keepActive`: hand the view back to the worksheet active before the run.
+    const now = s();
+    if (opts.keepActive && before && now.activeId !== before && now.datasets.some((d) => d.id === before)) now.setActive(before);
     s().setPipelineRunning(false);
   }
 }
