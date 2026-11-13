@@ -11,14 +11,22 @@ import type { TextColumn } from "../../../lib/originTextColumns";
 import type { CalcResult, ChannelRole } from "../../../lib/types";
 import { fmtNum } from "../../../lib/format";
 
-// The descriptive-stats keys surfaced in the footer (matches StatsCard's set).
-const STAT_ROWS: [string, string][] = [
+// The descriptive-stats keys surfaced in the footer (StatsCard's set, plus
+// Origin's sum / SE of mean / variance / range / missing — worksheet audit
+// #19; `sum` and `missing` come from useWorksheetStats, the rest from the
+// route).
+export const STAT_ROWS: [string, string][] = [
   ["Mean", "mean"],
   ["Std", "std"],
+  ["SE mean", "sem"],
+  ["Variance", "var"],
   ["Min", "min"],
   ["Max", "max"],
+  ["Range", "range"],
   ["Median", "median"],
+  ["Sum", "sum"],
   ["N", "N"],
+  ["Missing", "missing"],
 ];
 
 export interface GridStatsFooterProps {
