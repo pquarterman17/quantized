@@ -130,11 +130,12 @@ def owned_root(root: Path) -> bool:
     directory: only then does the cache lock, sweep or write in it."""
     if not regular_file(root / MARKER):
         return False
+    if sys.platform == "win32":
+        return True
     try:
-        check_ok = sys.platform == "win32" or (real_dir(root) and root.lstat().st_uid == os.getuid())
+        return real_dir(root) and root.lstat().st_uid == os.getuid()
     except OSError:
         return False
-    return check_ok
 
 
 def private_file(path: Path, data: bytes = b"") -> None:
