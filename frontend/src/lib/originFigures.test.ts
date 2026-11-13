@@ -6,14 +6,13 @@ import { describe, expect, it } from "vitest";
 // not behaviour, and a test file that moved at the same time would have hidden
 // that. Eager half: `./originFigures`. Lazy apply half:
 // `./originFigureSelection` + `./originSpatialPanels` + `./originCurveText`
-// (slice 18).
+// (slice 18). Import-time entry building: `./originFigureEntries`.
 import { curveDisplayName, legendCaption, originCurveSeriesStyle, resolveLegendTemplate } from "./originCurveText";
+import { buildOriginFigureEntries, resolveFigureDataset } from "./originFigureEntries";
 import {
-  buildOriginFigureEntries,
   figureLabel,
   figureLayerFamily,
   type OriginFigureEntry,
-  resolveFigureDataset,
 } from "./originFigures";
 import {
   doubleYPartner,

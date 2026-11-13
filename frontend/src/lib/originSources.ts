@@ -3,7 +3,6 @@
 // the same import, and every missing book/column is retained as diagnostics.
 
 import { originErrKeys } from "./errorbars";
-import { recordedSheetOf } from "./originCurveSheets";
 import { figureLayerFamily, type OriginFigureEntry } from "./originFigures";
 import type { Dataset, OriginCurve } from "./types";
 
@@ -217,8 +216,10 @@ export function resolveOriginFigureSources(
       const ds = mappedDataset(member, curve.book, candidates);
       if (!ds) {
         // The file does record a sheet for this curve: say that one, never
-        // also "sheet not recorded" (lib/originCurveSheets.ts words it).
-        const recorded = recordedSheetOf(member.figure, curve.book, curve.y);
+        // also "sheet not recorded" (lib/originCurveSheets.ts words it;
+        // read inline here so that module stays out of the eager bundle).
+        const recorded = (member.figure.curve_sheet_notes ?? [])
+          .find((note) => note.book === curve.book && note.y === curve.y)?.recorded;
         const sheets = recorded ? [] : sheetIdsOf(curve.book, candidates);
         unresolved.push(recorded
           ? { ...curveRef(curve), reason: "recorded_on_other_sheet", recorded }

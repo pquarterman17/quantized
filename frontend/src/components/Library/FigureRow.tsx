@@ -13,7 +13,6 @@ import { plural } from "../../lib/plural";
 
 import { recordWorkbookOpen } from "./libraryOpen";
 import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
-import { curveSheetGroups, curveSheetLine } from "../../lib/originCurveSheets";
 import { originFidelityLabel, originFidelityStatusLabel } from "../../lib/originFidelity";
 import { figureLabel, type OriginFigureEntry } from "../../lib/originFigures";
 import { originPreviewDataUrl } from "../../lib/originPreview";
@@ -110,17 +109,12 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
   // Curves whose column the file records on another sheet: the binding is
   // kept, so the row is not "unresolved", but Recover is how to pick that sheet.
   const sheetNotes = entry.figure.curve_sheet_notes?.length ?? 0;
-  const sheetLines = sheetNotes
-    ? curveSheetGroups(
-      [entry.figure],
-      new Set(datasets.filter((d) => entry.siblingIds.includes(d.id))
-        .map((d) => String((d.data.metadata ?? {}).origin_book ?? ""))),
-    ).map(curveSheetLine)
-    : [];
   const needsReview = sourceResolution.unresolved.length + sheetNotes;
   const title = resolved
     ? `${entry.stem} — restore axis ranges (${n} curve${plural(n)}); ${fidelityText}`
-      + (sheetLines.length ? `. ${sheetLines.join(". ")}` : "")
+      // The worded, grouped lines live in the lazy Recover window
+      // (lib/originCurveSheets.ts); the row only counts them.
+      + (sheetNotes ? `. ${sheetNotes} curve${plural(sheetNotes)} recorded on another sheet: see Recover` : "")
     : `unresolved source "${entry.figure.source_hint || "unknown"}" — no matching imported book`;
   return (
     <div className="qzk-origin-figure-row">
