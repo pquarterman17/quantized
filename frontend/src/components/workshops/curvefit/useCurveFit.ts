@@ -26,7 +26,7 @@ import {
   rowsForModel,
   type FitParamRow,
 } from "../../../lib/fitParams";
-import { dyForFit, scaleErrorsField } from "../../../lib/fitweights";
+import { dyForFit, weightRequestFields } from "../../../lib/fitweights";
 import type { ByColumnOption } from "../useByPartition";
 import { useCurveFitByLevel, type CurveFitByLevelStart, type CurveFitLevelResult } from "./useCurveFitByLevel";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
@@ -143,7 +143,9 @@ export function useCurveFit(): CurveFitState {
   const [cornerBusy, setCornerBusy] = useState(false);
   const [weightMode, setWeightMode] = useState<WeightMode>(savedSpec?.weight?.mode ?? "none");
   const [manualKey, setManualKey] = useState<number | null>(
-    savedSpec?.weight?.mode === "manual" ? savedSpec.weight.errKey ?? null : null,
+    savedSpec?.weight?.mode === "manual" || savedSpec?.weight?.mode === "direct"
+      ? savedSpec.weight.errKey ?? null
+      : null,
   );
   // The manual weight column follows its label too (../useFollowColumnPicks).
   useFollowColumnPicks(active, (follow) => {
@@ -158,8 +160,8 @@ export function useCurveFit(): CurveFitState {
   function weightingFor(yKey: number): FitWeighting {
     const scale = scaleErrors ? {} : { scaleErrors: false as const };
     if (weightMode === "yerr") return { mode: "yerr", errKey: errKeys[yKey], ...scale };
-    if (weightMode === "manual")
-      return manualKey != null ? { mode: "manual", errKey: manualKey, ...scale } : { mode: "manual", ...scale };
+    if (weightMode === "manual" || weightMode === "direct")
+      return manualKey != null ? { mode: weightMode, errKey: manualKey, ...scale } : { mode: weightMode, ...scale };
     return weightMode === "none" ? { mode: "none" } : { mode: weightMode, ...scale };
   }
 
@@ -313,7 +315,7 @@ export function useCurveFit(): CurveFitState {
           model: modelName,
           x: pairs.x,
           y: pairs.y,
-          ...(finiteDy ? { dy: finiteDy, ...scaleErrorsField(weight) } : {}),
+          ...(finiteDy ? weightRequestFields(weight, finiteDy) : {}),
           ...(custom
             ? {
                 p0: parsed.p0,

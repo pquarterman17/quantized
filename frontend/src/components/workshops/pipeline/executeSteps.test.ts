@@ -119,6 +119,7 @@ describe("executeSteps fit replay (#6)", () => {
   it("reproduces the recorded xKey/yKey channels (not time/values[0])", async () => {
     await runFit(fitStep({ model: "Linear", xKey: 0, yKey: 1 }));
     expect(fitModel).toHaveBeenCalledWith({
+      stats_version: 1, // a spec without statsVersion replays under the legacy statistics
       model: "Linear",
       x: [100, 200, 300, 400],
       y: [10, 20, 30, 40],
@@ -128,10 +129,24 @@ describe("executeSteps fit replay (#6)", () => {
   it("passes dy when the recorded weighting resolves against a valid error column", async () => {
     await runFit(fitStep({ model: "Linear", xKey: 0, yKey: 1, weight: { mode: "yerr", errKey: 2 } }));
     expect(fitModel).toHaveBeenCalledWith({
+      stats_version: 1, // a spec without statsVersion replays under the legacy statistics
       model: "Linear",
       x: [100, 200, 300, 400],
       y: [10, 20, 30, 40],
       dy: [0.5, 0.6, 0.7, 0.8],
+    });
+  });
+
+  it("a step recorded under the current statistics replays under them; a direct weight column goes as `weights`", async () => {
+    await runFit(fitStep({
+      model: "Linear", xKey: 0, yKey: 1, statsVersion: 2, weight: { mode: "direct", errKey: 2, scaleErrors: false },
+    }));
+    expect(fitModel).toHaveBeenCalledWith({
+      model: "Linear",
+      x: [100, 200, 300, 400],
+      y: [10, 20, 30, 40],
+      weights: [0.5, 0.6, 0.7, 0.8],
+      scale_errors: false,
     });
   });
 
@@ -144,6 +159,7 @@ describe("executeSteps fit replay (#6)", () => {
     );
 
     expect(fitModel).toHaveBeenCalledWith({
+      stats_version: 1, // a spec without statsVersion replays under the legacy statistics
       model: "Linear",
       x: [100, 300, 400],
       y: [10, 30, 40],
@@ -156,6 +172,7 @@ describe("executeSteps fit replay (#6)", () => {
     useApp.setState({ datasets: [ds({ excludedRows: [1] })] });
     await runFit(fitStep({ model: "Linear", xKey: 0, yKey: 1, weight: { mode: "yerr", errKey: 2 } }));
     expect(fitModel).toHaveBeenCalledWith({
+      stats_version: 1, // a spec without statsVersion replays under the legacy statistics
       model: "Linear",
       x: [100, 300, 400],
       y: [10, 30, 40],
@@ -169,6 +186,7 @@ describe("executeSteps fit replay (#6)", () => {
     );
     // errKey 9 is out of range on the target -> no dy passed.
     expect(fitModel).toHaveBeenCalledWith({
+      stats_version: 1, // a spec without statsVersion replays under the legacy statistics
       model: "Linear",
       x: [100, 200, 300, 400],
       y: [10, 20, 30, 40],
@@ -183,6 +201,7 @@ describe("executeSteps fit replay (#6)", () => {
     useApp.setState({ xKey: null, yKeys: [1], seriesOrder: null });
     await runFit(fitStep({ model: "Linear", xKey: 0, yKey: 9 }));
     expect(fitModel).toHaveBeenCalledWith({
+      stats_version: 1, // a spec without statsVersion replays under the legacy statistics
       model: "Linear",
       x: [0, 1, 2, 3],
       y: [10, 20, 30, 40],
@@ -194,6 +213,7 @@ describe("executeSteps fit replay (#6)", () => {
     // change under the new channel-aware path.
     await runFit(fitStep({ model: "Linear" }));
     expect(fitModel).toHaveBeenCalledWith({
+      stats_version: 1, // a spec without statsVersion replays under the legacy statistics
       model: "Linear",
       x: [0, 1, 2, 3],
       y: [100, 200, 300, 400],

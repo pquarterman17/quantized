@@ -7,7 +7,7 @@
 
 import type { FitSpec, FitWeighting, WeightMode } from "./types";
 
-const WEIGHT_MODES: readonly WeightMode[] = ["none", "yerr", "poisson", "manual"];
+const WEIGHT_MODES: readonly WeightMode[] = ["none", "yerr", "poisson", "manual", "direct"];
 
 function decodeWeight(v: unknown): FitWeighting | undefined {
   if (typeof v !== "object" || v === null) return undefined;
@@ -35,6 +35,9 @@ export function fitSpecFromStepParams(params: Record<string, unknown>): FitSpec 
       : null;
   const weight = decodeWeight(params.weight);
   if (weight) spec.weight = weight;
+  // A step recorded before the field existed replays with the statistics it
+  // was recorded under (lib/fitStatsVersion.ts).
+  if (params.statsVersion === 2) spec.statsVersion = 2;
   if (Array.isArray(params.range) && params.range.length === 2 &&
       params.range.every((value) => typeof value === "number" && Number.isFinite(value)) && params.range[0] <= params.range[1]) {
     spec.range = [params.range[0] as number, params.range[1] as number];

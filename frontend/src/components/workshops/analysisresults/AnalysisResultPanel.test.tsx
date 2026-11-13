@@ -643,11 +643,50 @@ describe("AnalysisResultPanel", () => {
     expect(screen.getByText("0.99")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Recalculate" }));
     await waitFor(() => expect(screen.getByText("Current")).toBeInTheDocument());
-    expect(recalculateFit).toHaveBeenCalledWith(fitResult.id);
+    expect(recalculateFit).toHaveBeenCalledWith(fitResult.id, { updateStatistics: false });
     fireEvent.click(screen.getByRole("button", { name: "Edit / Re-fit…" }));
     expect(useApp.getState()).toMatchObject({
       activeId: "source", stageTab: "plot", xKey: null, yKeys: [0], curveFitOpen: true, openAnalysisResultId: null,
     });
+  });
+
+  it("labels a legacy fit's statistics and offers an explicit Update statistics (review item 10)", async () => {
+    const legacy = {
+      ...source,
+      fitSpec: {
+        model: "Linear", xKey: null, yKey: 0, params: [2, 1], errors: [0.1, 0.2], RMSE: 1.25,
+        uncertainty: "covariance", weight: { mode: "yerr", errKey: 0 }, nPoints: 2,
+      },
+    } satisfies Dataset;
+    const fitResult = fitAnalysisResult(legacy, legacy.fitSpec);
+    useApp.setState({ datasets: [legacy], analysisResults: [fitResult], openAnalysisResultId: fitResult.id });
+    recalculateFit.mockImplementation(async () => {
+      useApp.setState({ status: "updated statistics" });
+      return true;
+    });
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Legacy (v1, before 2026-11)")).toBeInTheDocument();
+    expect(screen.getByText("RMSE (weighted, unitless)")).toBeInTheDocument();
+    expect(screen.getByText("Hessian of the weighted SSR")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Update statistics" }));
+    await waitFor(() => expect(useApp.getState().status).toBe("updated statistics"));
+    expect(recalculateFit).toHaveBeenCalledWith(fitResult.id, { updateStatistics: true });
+  });
+
+  it("labels a current fit's statistics and offers no update", () => {
+    const current = {
+      ...source,
+      fitSpec: {
+        model: "Linear", xKey: null, yKey: 0, params: [2, 1], errors: [0.1, 0.2], RMSE: 1.25,
+        uncertainty: "covariance", statsVersion: 2, weight: { mode: "yerr", errKey: 0 }, nPoints: 2,
+      },
+    } satisfies Dataset;
+    const fitResult = fitAnalysisResult(current, current.fitSpec);
+    useApp.setState({ datasets: [current], analysisResults: [fitResult], openAnalysisResultId: fitResult.id });
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Current (v2)")).toBeInTheDocument();
+    expect(screen.getByText("RMSE (y units)")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Update statistics" })).toBeNull();
   });
 
   it("shows live fit warnings once rather than repeating envelope snapshots", () => {

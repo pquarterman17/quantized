@@ -1,5 +1,6 @@
 // Curve Fit — weighting control (Sol GUI audit: connect fitting to the plotted
-// error columns). Compact: a mode selector + a column picker for `manual`, plus
+// error columns). Compact: a mode selector + a column picker for `manual`
+// (a 1-sigma column) and `direct` (a weight column, used as w as given), plus
 // a non-fatal note when the chosen error column can't be used, and (when
 // weighted) Origin's "Scale errors with sqrt(reduced chi^2)" switch. State lives in
 // useCurveFit; this is a thin view (workshop pattern, like BumpsSection).
@@ -28,7 +29,10 @@ export default function WeightingSection(p: Props) {
     { value: "yerr", label: p.hasYErr ? "Y error column" : "Y error column (none designated)" },
     { value: "poisson", label: "Poisson (√N)" },
     { value: "manual", label: "Manual error column" },
+    { value: "direct", label: "Direct (weight column)" },
   ];
+  const picksColumn = p.weightMode === "manual" || p.weightMode === "direct";
+  const direct = p.weightMode === "direct";
   const cols = p.active
     ? p.active.data.labels.map((lbl, i) => ({ value: String(i), label: lbl }))
     : [];
@@ -43,10 +47,10 @@ export default function WeightingSection(p: Props) {
         disabled={!p.active}
         onChange={(e) => p.setWeightMode(e.target.value as WeightMode)}
       />
-      {p.weightMode === "manual" && (
+      {picksColumn && (
         <Select
-          aria-label="Manual error column"
-          options={[{ value: "", label: "— pick error column —" }, ...cols]}
+          aria-label={direct ? "Weight column" : "Manual error column"}
+          options={[{ value: "", label: direct ? "— pick weight column —" : "— pick error column —" }, ...cols]}
           value={p.manualKey == null ? "" : String(p.manualKey)}
           disabled={!p.active}
           onChange={(e) => p.setManualKey(e.target.value === "" ? null : Number(e.target.value))}
@@ -58,7 +62,9 @@ export default function WeightingSection(p: Props) {
             checked={p.scaleErrors}
             disabled={!p.active}
             onChange={p.setScaleErrors}
-            title="Off treats the error column as absolute 1σ uncertainties instead of scaling the errors (Origin's default)"
+            title={direct
+              ? "Off treats the weights as absolute 1/σ² instead of scaling the errors (Origin's default)"
+              : "Off treats the error column as absolute 1σ uncertainties instead of scaling the errors (Origin's default)"}
           >
             Scale errors with √(reduced χ²)
           </Checkbox>

@@ -396,6 +396,44 @@ describe("useCurveFit weighting (Sol audit — connect fitting to error columns)
     expect(useApp.getState().datasets[0].fitSpec?.weight).toEqual({ mode: "poisson", scaleErrors: false });
   });
 
+  it("direct weighting sends the picked column as `weights` and records it (review item 11)", async () => {
+    const multi: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [[10, 4], [20, 0], [30, 1], [40, 0.25]],
+      labels: ["moment", "w"],
+      units: ["emu", ""],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run.dat", data: multi }],
+      activeId: "d1", xKey: null, yKeys: [0], seriesOrder: null, errKeys: {}, fitOverlay: null,
+    });
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41], exitFlag: 1, statsVersion: 2 });
+    const { result } = renderHook(() => useCurveFit());
+    act(() => result.current.setWeightMode("direct"));
+    act(() => result.current.setManualKey(1));
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    expect(fitModel).toHaveBeenCalledWith({
+      model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40], weights: [4, 0, 1, 0.25],
+    });
+    const spec = useApp.getState().datasets[0].fitSpec;
+    expect(spec?.weight).toEqual({ mode: "direct", errKey: 1 });
+    expect(spec?.statsVersion).toBe(2); // the fitter declared the current statistics
+  });
+
+  it("direct weighting with no column picked fits unweighted and says so", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41] });
+    const { result } = renderHook(() => useCurveFit());
+    act(() => result.current.setWeightMode("direct"));
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
+    expect(result.current.weightNote).toMatch(/pick a column of weights/);
+  });
+
   it("scale-errors off is not sent for an unweighted fit (it always scales)", async () => {
     vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41] });
     const { result } = renderHook(() => useCurveFit());

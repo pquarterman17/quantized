@@ -7,7 +7,8 @@ import { fitModel } from "../../../lib/api";
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import { FIT_SUBSET_MISMATCH, fitDataForSpec } from "../../../lib/fitselection";
 import { fitSpecFromStepParams } from "../../../lib/fitStepDecode";
-import { dyForFit, scaleErrorsField } from "../../../lib/fitweights";
+import { statsVersionField } from "../../../lib/fitStatsVersion";
+import { dyForFit, weightRequestFields } from "../../../lib/fitweights";
 import { validateExpression, type PipelineStep } from "../../../lib/pipeline";
 import { analysisData } from "../../../lib/rowstate";
 import type { SignalBindOptions } from "../../../lib/signalRecipe";
@@ -216,7 +217,9 @@ export async function executeSteps(
           const gapNote = pairs.complete ? "" : ` (${pairs.n - pairs.keep.length} gap rows excluded)`;
           const request = {
             model: spec.model, x: pairs.x, y: pairs.y,
-            ...(finiteDy ? { dy: finiteDy, ...scaleErrorsField(spec.weight) } : {}),
+            ...(finiteDy ? weightRequestFields(spec.weight, finiteDy) : {}),
+            // A step recorded under the old statistics replays under them.
+            ...statsVersionField(spec),
           };
           const r = signal ? await fitModel(request, signal) : await fitModel(request);
           throwIfCancelled();

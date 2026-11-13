@@ -16,7 +16,8 @@ import { fullPlottedX } from "../lib/fitselectionActions";
 import { boundsFromWire } from "../lib/fitBoundsWire";
 import { fitOverlayValues, stampRecompute } from "../lib/fitRecompute";
 import { fitDataForSpec } from "../lib/fitselection";
-import { scaleErrorsField } from "../lib/fitweights";
+import { statsVersionField } from "../lib/fitStatsVersion";
+import { weightRequestFields } from "../lib/fitweights";
 import type { Dataset } from "../lib/types";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 import { resolveAnalysisResultPlot, type PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
@@ -341,7 +342,13 @@ const recalculatingFits = new Set<string>();
 /** Re-run one durable curve-fit result from its recorded recipe. This updates
  * the Dataset.fitSpec authority in place; it does not rewrite source data or
  * silently recalculate unrelated stale work. */
-export async function recalculateFitAnalysisResult(id: string): Promise<boolean> {
+export async function recalculateFitAnalysisResult(
+  id: string,
+  /** The explicit "Update statistics" action: recompute a legacy result
+   *  with the CURRENT definitions (lib/fitStatsVersion.ts). Without it a
+   *  legacy result keeps the definitions it was saved under. */
+  opts: { updateStatistics?: boolean } = {},
+): Promise<boolean> {
   const initial = useApp.getState();
   const result = initial.analysisResults.find((item) => item.id === id);
   const sourceId = result?.settingsRef?.field === "fitSpec" ? result.settingsRef.datasetId : null;
@@ -373,11 +380,12 @@ export async function recalculateFitAnalysisResult(id: string): Promise<boolean>
       model: spec.model,
       x: pairs.x,
       y: pairs.y,
-      ...(dy ? { dy, ...scaleErrorsField(spec.weight) } : {}),
+      ...(dy ? weightRequestFields(spec.weight, dy) : {}),
       ...(spec.p0 ? { p0: spec.p0 } : {}),
       ...(spec.lower ? { lower: boundsFromWire(spec.lower, -1) } : {}),
       ...(spec.upper ? { upper: boundsFromWire(spec.upper, 1) } : {}),
       ...(spec.fixed ? { fixed: spec.fixed } : {}),
+      ...statsVersionField(spec, opts.updateStatistics === true),
     });
     if (!Array.isArray(fitted.params) ||
         !fitted.params.every((value) => typeof value === "number" && Number.isFinite(value))) {
@@ -397,7 +405,9 @@ export async function recalculateFitAnalysisResult(id: string): Promise<boolean>
     current.setFitSpec(sourceId, stampRecompute(spec, fitted));
     if (overlayWasVisible) useApp.setState({ fitOverlay: nextOverlay ? { datasetId: sourceId, y: nextOverlay } : null });
     publishFitAnalysisResult(sourceId);
-    useApp.getState().setStatus(`recalculated ${result.name}`);
+    useApp.getState().setStatus(opts.updateStatistics
+      ? `updated ${result.name} to the current statistics definitions`
+      : `recalculated ${result.name}`);
     return true;
   } catch (error) {
     useApp.getState().setStatus(`couldn't recalculate ${result.name}: ${error instanceof Error ? error.message : "unknown error"}`);

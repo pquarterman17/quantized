@@ -171,9 +171,11 @@ function compatibilityWarning(step: PipelineStep, columnCount: number | null): s
     return `Recorded X column ${xKey + 1} is missing; the run will use the worksheet X column.`;
   }
   const weight = step.params.weight as { mode?: unknown; errKey?: unknown } | undefined;
-  if ((weight?.mode === "yerr" || weight?.mode === "manual") &&
+  if ((weight?.mode === "yerr" || weight?.mode === "manual" || weight?.mode === "direct") &&
       (typeof weight.errKey !== "number" || weight.errKey < 0 || weight.errKey >= columnCount)) {
-    return "The recorded uncertainty column is missing; this fit will run unweighted.";
+    return weight.mode === "direct"
+      ? "The recorded weight column is missing; this fit will run unweighted."
+      : "The recorded uncertainty column is missing; this fit will run unweighted.";
   }
   return undefined;
 }

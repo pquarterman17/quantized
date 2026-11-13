@@ -18,8 +18,21 @@ export function scaleErrorsField(weight: FitWeighting | undefined): { scale_erro
   return weight?.scaleErrors === false && weight.mode !== "none" ? { scale_errors: false } : {};
 }
 
+/** The `/fit` request fields that carry a resolved weighting vector: `dy`
+ *  (1-sigma errors, backend applies 1/dy^2) for the error modes, `weights`
+ *  (used as w as given) for `direct` — plus the error-scaling switch. */
+export function weightRequestFields(
+  weight: FitWeighting | undefined,
+  vec: number[],
+): { dy?: number[]; weights?: number[]; scale_errors?: false } {
+  return weight?.mode === "direct"
+    ? { weights: vec, ...scaleErrorsField(weight) }
+    : { dy: vec, ...scaleErrorsField(weight) };
+}
+
 export interface DyResolution {
-  /** 1-sigma errors aligned to the analysis rows, or null = fit unweighted. */
+  /** The weighting vector aligned to the analysis rows — 1-sigma errors, or
+   *  for `direct` the weights themselves — or null = fit unweighted. */
   dy: number[] | null;
   /** Set when a required column is missing/invalid; the caller surfaces it and
    *  falls back to an unweighted fit (never fabricates sigmas). */
@@ -30,7 +43,10 @@ export interface DyResolution {
  *  (`yKey`). `none` -> null (unweighted). `poisson` -> sqrt(max(|y|,1)) so
  *  sigma stays > 0. `yerr`/`manual` -> the abs of the `errKey` sigma column,
  *  rejected (issue, unweighted) if that column is missing or not strictly
- *  positive-finite.
+ *  positive-finite. `direct` -> the `errKey` column AS IS (the weights; never
+ *  abs'd — a negative weight is an error, not a typo to repair), rejected if
+ *  any is negative/non-finite or all are zero; a zero weight is allowed and
+ *  switches that point off.
  *
  *  `keep` (optional): the analysis-row indexes the fit actually uses (e.g.
  *  `dropGapRows(x, y).keep`). Validation then covers ONLY those rows — a gap
@@ -61,8 +77,22 @@ export function dyForFit(
       issue:
         weight.mode === "yerr"
           ? "no error column is designated for this channel — fitting unweighted"
-          : "pick a column of per-point errors — fitting unweighted",
+          : weight.mode === "direct"
+            ? "pick a column of weights — fitting unweighted"
+            : "pick a column of per-point errors — fitting unweighted",
     };
+  }
+  if (weight.mode === "direct") {
+    const w = data.values.map((row) => row[errKey]);
+    const used = keep ? keep.map((i) => w[i]) : w;
+    const invalid = (v: number | undefined) => v === undefined || !Number.isFinite(v) || v < 0;
+    if (used.some(invalid) || !used.some((v) => (v as number) > 0)) {
+      return {
+        dy: null,
+        issue: "the weight column has negative or invalid values (or is all zero) — fitting unweighted",
+      };
+    }
+    return { dy: w };
   }
   const dy = data.values.map((row) => Math.abs(row[errKey]));
   const bad = (v: number | undefined) => v === undefined || !Number.isFinite(v) || v <= 0;

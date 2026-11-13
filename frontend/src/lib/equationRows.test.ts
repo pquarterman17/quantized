@@ -8,11 +8,15 @@ import {
   equationRunProblem,
   newEquationRow,
   parseEquationRows,
+  savedModelRows,
   type EquationParamRow,
 } from "./equationRows";
 
+// A row with a TYPED guess of 1 (a new row's guess is blank = auto; the
+// blank cases are spelled out where they are tested).
 const row = (name: string, patch: Partial<EquationParamRow> = {}): EquationParamRow => ({
   ...newEquationRow(name),
+  guess: "1",
   ...patch,
 });
 
@@ -51,6 +55,17 @@ describe("parseEquationRows", () => {
     });
     expect(parseEquationRows([row("a", { guess: "", fixed: true }), row("b")])).toEqual({
       error: "a: a held parameter needs a guess",
+    });
+  });
+
+  it("seeds a new row blank, i.e. auto — the data-driven start is the default (review item 4)", () => {
+    expect(newEquationRow("tau").guess).toBe("");
+    expect(parseEquationRows([newEquationRow("a"), newEquationRow("b")])).toMatchObject({ guesses: [null, null] });
+  });
+
+  it("saves a blank guess as null so it reloads blank, and a typed one as typed", () => {
+    expect(savedModelRows([row("a", { guess: "" }), row("b", { guess: "2", min: "0" })])).toEqual({
+      guesses: [null, 2], lower: [null, 0], upper: [null, null],
     });
   });
 

@@ -1,4 +1,6 @@
 import type { AnalysisResult } from "../../../lib/analysisResult";
+import { fitStatsLabels } from "../../../lib/fitStatsVersion";
+import { Button } from "../../primitives";
 import type { Dataset, FitSpec } from "../../../lib/types";
 
 function number(value: number | undefined): string {
@@ -23,13 +25,18 @@ function channel(dataset: Dataset | undefined, key: number | null | undefined, f
   return `${dataset.data.labels[key]}${unit ? ` (${unit})` : ""}`;
 }
 
-export default function AnalysisResultFitOverview({ result, source, spec, provenance = false }: {
+export default function AnalysisResultFitOverview({ result, source, spec, provenance = false, busy = false, onUpdateStatistics }: {
   result: AnalysisResult;
   source: Dataset | undefined;
   spec: FitSpec | null;
   provenance?: boolean;
+  busy?: boolean;
+  /** Recompute a legacy result with the current statistics definitions. */
+  onUpdateStatistics?: () => void;
 }) {
   if (!spec) return <p className="qz-analysis-empty">The source worksheet no longer has a saved curve fit.</p>;
+  // Old and new numbers are never shown under the same words (lib/fitStatsVersion).
+  const stats = fitStatsLabels(spec);
   if (provenance) return <dl className="qz-analysis-summary">
     <div><dt>Producer</dt><dd>{result.producer.id} · v{result.producer.version}</dd></div>
     <div><dt>Result schema</dt><dd>v{result.version}</dd></div>
@@ -38,7 +45,8 @@ export default function AnalysisResultFitOverview({ result, source, spec, proven
     <div><dt>Starting values</dt><dd>{spec.p0?.map(number).join(", ") || "Model defaults"}</dd></div>
     <div><dt>Bounds</dt><dd>{spec.lower || spec.upper ? "Recorded in fit recipe" : "Model defaults"}</dd></div>
     <div><dt>Preprocessing</dt><dd>{spec.preprocessing?.join(", ") || "None recorded"}</dd></div>
-    <div><dt>Uncertainty</dt><dd>{spec.uncertainty === "covariance" ? "Covariance matrix" : "Not computed"}</dd></div>
+    <div><dt>Uncertainty</dt><dd>{spec.uncertainty === "covariance" ? stats.errors : "Not computed"}</dd></div>
+    <div><dt>Statistics</dt><dd>{stats.method}</dd></div>
     <div><dt>Fitted</dt><dd>{date(spec.fittedAt ?? result.createdAt)}</dd></div>
     <div><dt>Last recomputed</dt><dd>{date(spec.recomputedAt)}</dd></div>
   </dl>;
@@ -54,10 +62,16 @@ export default function AnalysisResultFitOverview({ result, source, spec, proven
       <div><dt>Weighting</dt><dd>{spec.weight?.mode ?? "none"}</dd></div>
       <div><dt>Converged</dt><dd>{spec.exitFlag === undefined ? "Not reported" : spec.exitFlag === 1 ? "Yes" : "No"}</dd></div>
       <div><dt>R²</dt><dd>{number(spec.R2)}</dd></div>
-      <div><dt>RMSE</dt><dd>{number(spec.RMSE)}</dd></div>
+      <div><dt>{stats.rmse}</dt><dd>{number(spec.RMSE)}</dd></div>
       <div><dt>AIC</dt><dd>{number(spec.AIC)}</dd></div>
       <div><dt>Reduced χ²</dt><dd>{number(spec.chiSqRed)}</dd></div>
+      <div><dt>Parameter errors</dt><dd>{spec.uncertainty === "covariance" ? stats.errors : "Not computed"}</dd></div>
+      <div><dt>Statistics</dt><dd>{stats.method}</dd></div>
     </dl>
+    {stats.legacy && <p className="qz-analysis-caption" role="note">
+      This fit was saved before the 2026-11 statistics change, and Recalculate keeps its original definitions. Update statistics recomputes it with the current ones — the fitted values stay the same, the errors{spec.weight && spec.weight.mode !== "none" ? ", RMSE and AIC" : ""} change meaning.{" "}
+      {onUpdateStatistics && <Button size="sm" disabled={busy} onClick={onUpdateStatistics}>Update statistics</Button>}
+    </p>}
     <p className="qz-analysis-caption">Values are read live from the source worksheet’s saved fit. Recalculate updates this result in place; Edit / Re-fit opens the recorded model and channels.</p>
   </>;
 }

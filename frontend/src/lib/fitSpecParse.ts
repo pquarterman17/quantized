@@ -17,7 +17,7 @@
 
 import type { FitSpec, FitWeighting, WeightMode } from "./types";
 
-const WEIGHT_MODES: readonly WeightMode[] = ["yerr", "poisson", "manual"];
+const WEIGHT_MODES: readonly WeightMode[] = ["yerr", "poisson", "manual", "direct"];
 
 const isFinite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
@@ -103,5 +103,7 @@ export function parseFitSpec(v: unknown): FitSpec | undefined {
     spec.fixed = [...(fs.fixed as boolean[])];
   }
   if (fs.uncertainty === "covariance" || fs.uncertainty === "none") spec.uncertainty = fs.uncertainty;
+  // Absent (or anything else) = a pre-2026-11 result: legacy statistics.
+  if (fs.statsVersion === 2) spec.statsVersion = 2;
   return spec;
 }
