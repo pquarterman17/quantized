@@ -84,6 +84,12 @@ def _origin_book_id(ds: DataStruct) -> str:
     return str(ds.metadata.get("origin_book", ""))
 
 
+# ``origin_worksheet_fidelity`` (the primary ``.opju`` book's full worksheet
+# loss report) reaches the client as ``origin_fidelity["worksheet"]``
+# instead (``_originfigures``), so it is not sent a second time.
+_UNSENT_METADATA = frozenset({"origin_books", "origin_worksheet_fidelity"})
+
+
 def _slim_metadata(meta: Any) -> dict[str, Any]:
     """Wire-payload metadata, minus ``origin_books`` — the full per-project
     book inventory ``_build_book`` (io/origin_project/opj.py) embeds in
@@ -92,7 +98,7 @@ def _slim_metadata(meta: Any) -> dict[str, Any]:
     go through the pure Python API, untouched by this trim) — it duplicates
     ~10-15 KB per book project-wide, which is material at PNR.opj's 122-book
     scale (~1.4 MB of dead weight). Trimmed only here, at the HTTP boundary."""
-    return {k: v for k, v in dict(meta).items() if k != "origin_books"}
+    return {k: v for k, v in dict(meta).items() if k not in _UNSENT_METADATA}
 
 
 def _book_payload(ds: DataStruct) -> dict[str, Any]:
@@ -243,7 +249,7 @@ def _import_with_books(
                 ]
                 payload["book_source"] = _book_source_ref(path, upload_token)
                 cache_project_books(path, books)
-        figs, fidelity = origin_figures_and_fidelity(raw, suffix, books)
+        figs, fidelity = origin_figures_and_fidelity(raw, suffix, books, primary=ds)
         if figs:
             payload["figures"] = figs
         # Data the reader could not import (an undecoded dataset, a matrix

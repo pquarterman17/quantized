@@ -4,6 +4,8 @@
 // module-size ceiling; types.ts re-exports every name, so importers are
 // unchanged.
 
+import type { OriginWorksheetFidelity } from "./originWorksheetTypes";
+
 export type OriginFidelityStatus = "exact" | "best_effort" | "reference_only" | "unresolved";
 
 export interface OriginFigureFidelity {
@@ -72,4 +74,6 @@ export interface OriginFidelityManifest {
    *  io/origin_project/integrity.py). A truncated file also lists the
    *  `file_truncated` omission. Optional: older workspaces lack it. */
   container_integrity?: OriginContainerIntegrity;
+  /** `.opju` only (see ./originWorksheetTypes); absent for `.opj`. */
+  worksheet?: OriginWorksheetFidelity;
 }

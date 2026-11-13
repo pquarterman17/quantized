@@ -507,6 +507,179 @@ Graph1 and Graph6 (6 curves each, recorded on `Book1@6`) and
 `strings_testing.opj` Graph1 (1 curve). Every other field of every figure is
 byte-identical to `main` (`tests/test_io_origin_curve_sheets.py`).
 
+## 2026-11-13 — `.opju` structural worksheet reader (no Origin install; third-party oracle)
+
+Owner handoff: Origin is no longer available, so reading existing `.opju`
+files has to stand on evidence that does not need a licence window. This
+entry records what was proven, by which oracle, and what was not. Grammar:
+`docs/origin_project_format.md` §3.5 (records) and §3.6 (matrix books).
+
+**Oracles used (all independent of this reader):**
+
+1. *Paired containers.* 14 third-party test projects that exist as both
+   `X.opj` and `X.opju` (`test-data/origin/public/gh_Altaxo_LibOriginCSharp`).
+   The `.opj` side is read by a ~40-line fixed-width cell reader written for
+   the test (it does not use the shipped `.opj` reader), so the `.opju`
+   decode is compared against cells whose encoding needs no codec.
+2. *Published expectations.* The same project's test source states matrix
+   shapes and X/Y ranges; the test parses them at run time.
+3. *The record's own length field.* Builds from 4.33 store each
+   Text&Numeric / double / complex body's byte length; a decode that does
+   not end exactly there is rejected. This is what extends the proof from
+   the 14 specimens to the corpus.
+
+No GPL reader source was read; no specimen and no value read from one is
+committed (the tests compute every expectation at run time).
+
+**Results — paired specimens:**
+
+- 127 / 127 `.opju` column headers run-length-expand to 147 bytes and equal
+  the paired `.opj` header in every byte the reader uses.
+- 127 / 127 records decode, and every used cell (number, missing value,
+  text) equals the paired `.opj` cell. Storage classes covered:
+  Text&Numeric (numeric, mixed, text-only, empty), double, float32,
+  int8/16/32, uint8/16/32, complex, Text.
+- 12 / 12 matrix objects: shape, row-major cells and (where published) the
+  X/Y ranges match.
+- All 14 import through the public reader; 13 of the 14 raised "no worksheet
+  columns" before.
+
+**Results — 274-file public corpus (before → after):**
+
+| | before | after |
+|---|---|---|
+| files that import | 199 | 258 |
+| files that fail | 75 | 16 (59 of the 75 now import) |
+| books | 2,509 | 3,457 |
+| book columns | 25,356 | 33,413 |
+| value columns carrying a decoded long name | 2,901 | 4,454 |
+
+Per-build table, per-column outcomes and the residual census:
+`docs/origin_project_format.md` §3.5 "Corpus distribution" and "Still unknown".
+
+**Controls.** Positive: every storage class and every value tag has at
+least one length-checked instance (tags n = 3..7: 2,660 values, all
+in length-checked records). Negative: a body with a wrong declared length,
+an unknown cell kind, an unknown cell-run kind, an unknown value tag, a
+missing `ce fa` terminator, a count other than −1 before a literal row, and
+a matrix layer that does not multiply out are each rejected and reported
+(`tests/test_io_origin_opju_records.py`).
+
+**Corrections to previously shipped output** (each a case where the old
+value is shown wrong by the header's used-row extent, which the paired
+oracle pins 127 / 127):
+
+- Trailing allocated rows are no longer data: 140 previously returned
+  columns lose 2,394 cells that lie beyond the used-row extent (e.g. 29
+  rows of `0.0` after a 301-row ramp; 15 stale values behind one live one).
+- Leading and interior empty cells stay in place: 97 previously returned
+  columns gain the rows after their first numeric run (2,714,766 cells in
+  all — the old scan stopped at the first run).
+- Dataset names come from the header: 40 columns that were filed under a
+  truncated or duplicated name are now under their real one.
+- A designated-X column that is text is no longer replaced by the first
+  numeric column: 27 previously returned books now carry a row-index axis
+  with `x_column_recovered: false` and keep that numeric column as a value
+  series, with the text X in `origin_text_columns`.
+- The primary book differs in 33 of the 199 previously importing files: 24
+  because "largest book" is now computed on complete books, 9 because a
+  book with no value series is no longer chosen while one with a value
+  series exists (primaries with no value series: 24 files before, 1 after).
+
+**Not verified here — must be re-run where the files exist:**
+
+- The owner's own oracle suite (`specimens/ground_truth`: XAS, Hc2 data,
+  RockingCurve, UnpolPlots, Fixed Lambdas SI and the trial specimens) is not
+  on the machine this was built on. `uv run pytest -m realdata
+  tests/test_io_origin_ground_truth.py tests/test_io_origin_project.py
+  tests/test_io_origin_figures_opju.py` is the acceptance run. Expected
+  effect of this change on that suite: decoded columns can only gain rows
+  the old scan skipped (cells after the first numeric run) or lose
+  allocated-but-unused tail rows; the soundness matcher compares finite
+  runs, so both are within what it already tolerates — but that is a
+  prediction, not a result.
+- Pre-4.33 builds (4.3268, 17 corpus files) have no length field and no
+  value oracle. They are decoded on grammar alone (exact row count + `ce
+  fa` terminator + magnitude gate) and labelled `grammar_only`.
+- Curve→column binding was deliberately left on the old marker-scan column
+  universe (see §3.5 "What did NOT change").
+
+## 2026-11-13 (review fixes to the `.opju` structural reader)
+
+Seven review findings, each fixed with a synthetic regression test that
+fails on the reviewed commit (`tests/test_io_origin_opju_safety.py`).
+Rules: `docs/origin_project_format.md` §3.5 "Fail-closed rules added by the
+2026-11-13 review". Corpus: the 274 unique public `.opju` files.
+
+- **No regression.** Against the reviewed reader: 0 files lost, 32,953/32,953
+  column comparisons identical, primary book unchanged in every file, raw
+  `extract_figures_opju` output identical in all 274 files (1,587 actionable
+  figures, 5,980 curves). Against the pre-structural reader the picture is
+  the one the reviewed reader already had (199 → 258 importing files, no file
+  regressed). The frozen marker scan's output (`scan_columns` names and
+  values) and `tail_start` are identical to the pre-structural reader on all
+  274 files, so curve→column binding cannot have moved.
+- **Y never promoted to X:** 212 books now carry the row-index axis with a
+  stated reason instead of a guessed X (193 behind an earlier Text column, 6
+  behind an earlier report-form record that was not read, 13 whose first
+  decoded column is designated Y / Y-error); every one of their decoded
+  columns stays a value series. 40 books whose designated X is a Text
+  column now say so instead of "could not be decoded". Header byte `0x17`'s high nibble was measured against the
+  windows-section designation (X: nibbles 4/5/6/7 = 110/1,457/90/10 columns;
+  Y: 2/4/5/6 = 47/100/53/5,262) — it does not determine the designation and
+  is not used.
+- **Losses reported, not silent:** 37 files report worksheet data that was
+  not imported (430 column records not decoded — 324 of them report-form
+  records the report reader does not read, previously counted as read — 139
+  other datasets, 66 complex columns real-part only, 76 columns with stale
+  cells, 4 matrices of unknown shape); 21 more were read without a length
+  check; 31 `Book_Col.Y2` dataset headers were previously skipped without a
+  trace — both are now reported. 0 columns found without a header, 0
+  records without a header in intact files. Text cells beyond the numeric
+  rows: 38 lost before, 0 now.
+- **Resources:** a 164-byte file declaring 2 × 20 M rows: refused in 0.0 s,
+  30 MB RSS (was 1.6 GB; 20 such columns OOM-killed > 8 GB). 2 × 2 M text
+  references: 153 MB; LZ4 200 kB bomb: 0.1 s (was 2 s). Fuzz (22 files ×
+  160 truncations / bit flips / random bytes / fills): 3,493 imports + 27
+  `OriginProjectError`, nothing else, none over 5 s. Truncation/flip probe
+  (720 mutations): every truncation that changes the data is now diagnosed
+  (38 were silent); 2 bit flips remain undiagnosable without the record
+  checksum (a flipped residual byte inside an FPC stream changes values).
+- **Import time:** interleaved per file against the pre-structural reader on
+  the same machine: 151.4 s → 147.4 s over all 274 files (was 186 → 294 s
+  for the reviewed commit). The marker scan runs once, shares its FPC
+  decodes with the structural pass and settles `tail_start` in the same
+  walk; the two label lookups share each book's anchor search.
+
+## 2026-11-13 (record checksum; sheet-2+ designations)
+
+- **Record checksum identified.** The 8 bytes after a 4.33+ record's
+  `body_len` are a Fletcher-style pair over the body as little-endian u32
+  words (§3.5). Search: CRC32, CRC32C, Adler-32, xxHash32, xxHash64, XXH3-64
+  / -128, MurmurHash3-32 / -128, FNV-1 / FNV-1a 32 / 64, over the body, the
+  body with its `0a` lead, length field + body, block + body, header tokens
+  + body and ±1-byte windows, compared as u64 LE/BE and either u32 half — no
+  match on the first 7 records tried. A controlled pair inside one corpus
+  project (bodies equal except four bytes +1 at all four word lanes; the
+  checksum's first u32 differed by `0x01010101`, the checksum was equal for
+  two columns with equal bodies and different headers) pointed to word
+  sums; the pair (Σw, ΣΣw) mod 2^32 then matched 243/243 records of that
+  file and **37,189/37,189** length-checked records of the 274-file corpus.
+  The reader now verifies it: a mismatch is decoded anyway and reported as
+  `checksum_failed`. The truncation/flip probe's two remaining silent
+  mutations (a flipped byte inside an FPC stream) are now diagnosed.
+- **Sheet-2+ designations: not implemented — no discriminating oracle.**
+  The only paired `.opj`/`.opju` multi-sheet book (Altaxo
+  `OneWorksheetWithTwoSheets`, sheet 2) carries the default designations
+  (A = X, B = Y), which any rule — including "sheet N reuses sheet 1's" or
+  "the N-th X-led marker run after the book anchor" — reproduces, so it
+  cannot confirm one; the Altaxo C# tests assert no per-sheet designation,
+  and in that `.opju` the marker scan decodes nothing, so `tail_start` is 0
+  and the designation-marker search covers the data section too. Sheet books
+  therefore stay "designations unknown", protected by the column-order X
+  check. What would settle it: a paired project whose second sheet has a
+  non-default designation (e.g. a Y-error or Label column).
+
 ## How to re-run
 
 `tools/origin_trial/export_ground_truth.py` (skips completed stems);

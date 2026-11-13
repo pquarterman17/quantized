@@ -31,6 +31,8 @@ written (annotated inline below).
    - 3.2 [Non-double column values (`.opj`)](#32-non-double-column-values-opj)
    - 3.3 [`.opju` (CPYUA) worksheet columns — the FPC codec](#33-opju-cpyua-worksheet-columns--the-fpc-codec)
    - 3.4 [Non-double column values (`.opju`) — report-sheet residue](#34-non-double-column-values-opju--report-sheet-residue)
+   - 3.5 [`.opju` (CPYUA) dataset records — the structural grammar](#35-opju-cpyua-dataset-records--the-structural-grammar)
+   - 3.6 [`.opju` matrix books](#36-opju-matrix-books)
 4. [Windows-section metadata (names/units/designations)](#4-windows-section-metadata-namesunitsdesignations)
    - 4.1 [`.opj` windows section](#41-opj-windows-section)
    - 4.2 [`.opju` windows section](#42-opju-windows-section)
@@ -87,6 +89,21 @@ serves both containers). Report-sheet columns decode too (§3.4,
 record) — pinned against a new known-content oracle
 (`specimens/fitreport2.opju`) and confirmed at scale against the real
 `Hc2 data.opju` corpus file (1096 columns, 100% clean).
+
+**`.opju` worksheet reader, 2026-11-13 (§3.5, §3.6):** the worksheet path no
+longer depends on one record signature. Each column is read from its own
+storage header through a record grammar covering Text&Numeric cells (mixed
+text/number, short and gapped columns), plain doubles, float32, the integer
+widths, complex and Text columns, the used-row extent, and builds back to
+4.3268 — proven cell-for-cell against 14 third-party projects that exist in
+both containers (127/127 records), then measured on a 274-file public
+corpus: 59 of 75 previously failing files now import (199 → 258), book
+columns 25,356 → 33,413. Of the columns the old reader returned, 24,787
+are unchanged, 97 gained the rows after their first numeric run, 140 lost
+cells that lie beyond the used-row extent, and one — a mislabelled column —
+changed a value (§3.5 "Corpus distribution"). What is not read is reported
+per import in `metadata["origin_worksheet_fidelity"]`. Matrix books import
+with shape and coordinate ranges (§3.6).
 
 **Known, permanent gaps** (see [§11](#11-open-items) for detail): the
 DataPlot curve→column selector (which exact columns a curve plots) is
@@ -185,8 +202,11 @@ a separate tag/length framing this codebase does not fully parse as a
 generic walker. Instead, each subsystem locates its own records directly in
 the byte stream:
 
-- **Worksheet data** — LEB128-varint-framed records, located by scanning for
-  a `0a 05 <varint> ff ff` header (§3.3).
+- **Worksheet data** — each dataset is a run-length-coded 147-byte column
+  header followed by its record; headers are found by that 147-byte +
+  name gate and the record decoded by storage class (§3.5). The older scan
+  for a `0a 05 <varint> ff ff` signature (§3.3) is kept, frozen, as the
+  column universe the curve binding counts over.
 - **Windows-section metadata** — a 2-byte plot-designation marker per
   column, located directly (no generic block walk) (§4.2).
 - **Figures** — a 4-byte anchor `03 00 00 1f` per graph layer, located
@@ -477,6 +497,12 @@ with the new reader.
 
 ### 3.3 `.opju` (CPYUA) worksheet columns — the FPC codec
 
+> **Scope note (2026-11-13).** This section is the FPC stream codec and the
+> original *marker-anchored* record scan. The codec is unchanged and is what
+> every numeric record uses. The marker scan sees only one record form and
+> only the first numeric run of it; worksheet data is now read through the
+> full record grammar in [§3.5](#35-opju-cpyua-dataset-records--the-structural-grammar).
+
 **Solved and shipping** (`opju_codec.py`). The codec is **canonical
 Burtscher FPC** (Burtscher & Ratanaworabhan, *FPC: A High-Speed Compressor
 for Double-Precision Floating-Point Data*, IEEE TC 2009) — NOT the
@@ -650,6 +676,450 @@ directly against `fitreport2.opju`'s byte range for both the raw and
 FPC-top-N-byte-compact encodings of 9.5/-1.5, no match. The reference
 string only names *which* statistic a report cell represents; Origin's
 cache of the *value* lives somewhere this module does not decode.
+
+### 3.5 `.opju` (CPYUA) dataset records — the structural grammar
+
+**Solved and shipping** (`opju_blocks.py`, `opju_values.py`,
+`opju_records.py`, `opju_worksheet.py`; 2026-11-13). §3.3 describes how a
+column was *originally* found — by scanning for one byte signature,
+`0a 05 <rows> ff ff`. That signature is only the opening of ONE record form
+(an all-numeric Text&Numeric column), so every other form was invisible: a
+public-corpus audit (274 real `.opju` files) found 75 that raised "no
+worksheet columns" and 41 more that loaded while silently missing columns.
+This section is the grammar of the whole record. `opju.py` now reads
+worksheet data through it; the marker scan survives only as a fallback and
+as the frozen column universe the curve binding counts over (see "What did
+NOT change" below).
+
+**Clean-room note.** Nothing here was taken from another reader's source.
+The oracle is the *test side* of two GPL projects kept in the local-only
+corpus (`test-data/origin/public/gh_Altaxo_LibOriginCSharp`): their
+`.opj`/`.opju` specimen pairs and the expected values in their test file.
+Only byte evidence and those expected values were used; no specimen file and
+no value read from one is committed (the tests compute every expectation at
+run time — `tests/test_io_origin_opju_public_corpus.py`).
+
+#### The controlled specimen: the same project in both containers
+
+Fourteen test projects exist as both `X.opj` and `X.opju`. The `.opj` stores
+every cell as a fixed-width record at the width its 147-byte header declares
+(§3.1), so its content is readable without any codec. That makes each pair a
+controlled specimen for the `.opju` encoding of *known* cells:
+
+| check | result |
+|---|---|
+| `.opju` headers that run-length-expand to exactly 147 bytes with the dataset name at `0x58` | 127 / 127 |
+| expanded header = paired `.opj` header in every byte the reader uses (≤ 3 other bytes differ, at `0x3e`, `0x73`, `0x74`, `0x7a`) | 127 / 127 |
+| `.opju` records decoded | 127 / 127 |
+| decoded cells (number, missing, text) = paired `.opj` cells over the used rows | 127 / 127 records |
+| matrix shape and X/Y ranges = the oracle project's published expectations | 12 / 12 matrix objects |
+
+The 127 records cover every storage class below. The corpus then supplies
+scale and the forms the specimens do not exercise.
+
+#### Run-length blocks and the column header
+
+A dataset begins with a run-length block, `80 <clen:varint> <tokens>`:
+
+| token | meaning |
+|---|---|
+| `t < 0x80` | `t` literal bytes follow |
+| `0x80 \| k` (`k` 0..63) | `k + 3` zero bytes |
+| `0xC0 \| k` + one byte | `k + 3` copies of that byte |
+
+A column header expands to exactly the `.opj` 147-byte column-storage header.
+The length-plus-name gate (147 bytes, an identifier NUL-terminated at
+`0x58`) is how headers are found — no signature scan, and no assumption about
+what precedes them. Fields used:
+
+| offset | meaning | pinned by |
+|---|---|---|
+| `0x17` | storage-class bits: `&0x01` Text&Numeric, `&0x02` complex, `&0x08` integer | every storage class of the paired specimens |
+| `0x19` (u32) | allocated rows; equals the record's own row varint | 127 / 127, and every decoded corpus record |
+| `0x21` (u32) | **used-row extent** | the oracle's per-column end row, 127 / 127 |
+| `0x3D` | element width: 10 Text&Numeric, 8 double, 4 float32/int32, 2 int16, 1 int8, 16 complex; anything else a fixed-width Text column | paired specimens |
+| `0x3F` | `&0x08` unsigned (integer classes) | uint8 / uint16 / uint32 columns holding 255 / 65535 / 4294967295 |
+| `0x58` | dataset name — `Book_Col[@sheet]`, or a bare book name for a matrix object | — |
+
+**The header name is the whole name.** A name containing three or more equal
+characters in a row is itself run-length coded (an invented `runQ444z_A`
+is `runQ` + a fill run of three `4` + `z_A`), so its tail becomes a separate
+length-prefixed literal. The marker scan labels a record by the nearest
+preceding length-prefixed name and therefore saw only the tail (`z_A`) — which merged unrelated books under a
+truncated name. The structural path reads the name from the expanded header.
+
+#### Record framing
+
+```
+[18 | u64 24 | u64 body_len | u32 A | u32 B]   absent before build 4.33
+<0a | 00> <mode: 04 | 05> <rows:varint> <body>
+```
+
+`body_len` counts from the mode byte to the body's last byte. It turns a
+decode into a *proof*: a body that does not end exactly where its header
+says is rejected. The 16 bytes after `u64 24` are `0x22`-filled for the
+storage classes that carry no length (float32, the integers, Text). Mode
+`04` marks a record followed by a string-heap attachment, `05` one without.
+
+**The record checksum** (`opju_blocks.record_checksum`). `A` and `B` are a
+Fletcher-style pair over the body (mode byte through its declared end) read
+as little-endian u32 words, the last zero-padded: `A` = Σ words, `B` = Σ of
+the running sums, both mod 2^32. Found by elimination: two report columns
+of one corpus project whose bodies differed in four bytes (+1 each, at
+offsets ≡ 1, 0, 3, 2 mod 4) had `A` differ by exactly `0x01010101` and equal
+checksums wherever the bodies were equal (the header is not covered); CRC32,
+CRC32C, Adler-32, xxHash32/64/XXH3, MurmurHash3 and FNV-1/1a over
+body / lead+body / header+body ranges matched nothing. Verified on all
+37,189 length-checked records of the 274-file public corpus (0 mismatches;
+the 442 length-less records store `0x22` fill there). A mismatch never
+refuses a record: it is decoded and reported as `checksum_failed` ("values
+may be corrupt").
+
+Confidence is recorded per column and surfaced in the fidelity summary:
+
+- **`length_checked`** — the body ended exactly at `body_len`.
+- **`grammar_only`** — no length was available (the `0x22` classes, and
+  every record of a pre-4.33 file). Accepted when the grammar consumes
+  exactly `rows` rows (plus the `ce fa` terminator for Text&Numeric) and the
+  values pass the magnitude gate. The magnitude gate is NOT applied to
+  length-checked columns: real data does go below 1e-290 (measured in the
+  public corpus), and the gate would wrongly drop it.
+
+#### Bodies, by storage class
+
+**Value-spec** — one tag byte, then a payload:
+
+| tag | meaning |
+|---|---|
+| `8 + 9·n`, n = 1..8 (`11 1a 23 2c 35 3e 47 50`) | the double's TOP `n` bytes follow; the low `8 − n` are zero |
+| `64` | 0.0 |
+| `65` | the missing-value sentinel → NaN |
+
+Origin emits the smallest `n` that loses nothing (2.0 = `11 40`, 1.0 =
+`1a f0 3f`). Evidence for the rule, per `n`:
+
+- n = 1, 2 and both bare tags occur in the paired specimens (118 values) and
+  decode to the paired `.opj` cell.
+- n = 8 (`50` + the full double) was already pinned by Origin's own exports
+  (§3.3) and accounts for 82,470 length-checked corpus values.
+- n = 3..7 do not occur in the pairs. They are pinned by the length field:
+  2,660 such values sit in length-checked corpus records, where a
+  wrong payload width would move the body's end off its declared length.
+- Minimality, as an independent check: across the 103,110 tagged
+  values with n > 1 in length-checked records, not one payload begins with a
+  zero byte (the byte a shorter tag would have dropped). Random payload
+  bytes would show about 1 in 256.
+
+Any other tag byte is not a value-spec and rejects the record. (The marker
+scan knew only `11`, `1a`, `50`, `64`; `23` alone accounted for 1,622 dropped
+columns in the audit.)
+
+**Float64 segment list** — repeated until `rows` are covered; each segment
+opens with a ZigZag varint:
+
+- **−m** then `0c` — an FPC stream of m rows (§3.3), fresh predictor state;
+- **−1** then a value-spec tag instead of `0c` — one literal row. Seen only
+  with a count of −1 (73 times, all in length-checked
+  records, none in the paired specimens — e.g. a lone value between two
+  repeat runs); any other count without `0c`
+  is rejected;
+- **+k** — k rows of one repeated value-spec.
+
+**Text&Numeric** (width 10) — a stream of cells until `rows` are consumed,
+then the terminator `ce fa`. A cell opens with a u16:
+
+| cell | meaning |
+|---|---|
+| `00 00` + value-spec | one number |
+| `01 00` + varint | one text reference |
+| `ff ff <n:varint> 00` + float64 segment list | a run of n numbers |
+| `ff ff <n:varint> 01` + reference segment list | a run of n text references (ZigZag varint: −m = m varint references, +k = k copies of one) |
+
+A text reference is 1 + the string's byte offset in the column's string
+heap; **reference 0 is an empty cell**. The record §3.3 describes —
+`ff ff <rows> 00 <segments>` — is simply the one-run case. The "short
+column" form the audit could not read is literal cells followed by an empty
+run: `00 00 1a f0 3f | 00 00 11 40 | 00 00 1a 08 40 | ff ff 1d 01 3a 00 |
+ce fa` is 1, 2, 3 and 29 empty cells.
+
+**String heap** — a mode-`04` record is followed by an attachment block,
+`<length:varint> <entries>`. A column can carry several named entries
+(`SYSTEM`, `_Storage_Cell_Ref_Data_`, …), so the heap is located by its name
+*within the declared length* and never beyond it:
+`"#_MSER_STRINGS_PSET" 05 01 <n:varint> 00 <u32 size>` then an `n − 4`-byte
+raw LZ4 block (the published block format) expanding to `size` bytes: magic
+`77 11 11 11`, 20 header bytes (the u32 at +16 is the heap length), then
+NUL-terminated strings. (`n` is a varint: a one-byte reading resolves the
+small heaps of the paired specimens and fails on every heap over 127 bytes —
+496 corpus columns, all resolved once read as a varint.)
+
+**double** (width 8) — one float64 segment list, no cell framing.
+**complex** (width 16) — the same with two value-specs / two doubles per
+row; only the real part enters `.values`, and the column is listed under
+`complex_imaginary_omitted`.
+
+**float32, int8, int16, uint8, uint16** — ZigZag-counted segments of raw
+little-endian elements: −m = m elements, +k = k copies of one.
+**int32, uint32** — the same counts, each element a varint (ZigZag-coded
+when signed).
+
+**Text** (any other width) — `rows` length-prefixed byte strings, 0 = empty.
+
+**Report-sheet columns** (Text&Numeric bit set, width ≠ 10) are left to
+`opju_reports` (§3.4) and counted as `report_columns`.
+
+#### The used-row extent, and stale cells
+
+Origin allocates rows ahead of the data (a 3-row column is stored as 32) and
+does **not** clear cells when a column shrinks. The decoded cells are
+therefore cut at the header's used-row extent. Two corpus observations show
+why this is a correction and not a preference:
+
+- a ramp column followed by 29 allocated rows of numeric `0.0` — the marker
+  scan returned every allocated row, i.e. 29 fabricated zeros;
+- a sheet whose sibling sheets hold a 16-row ramp, with used = 1 and the
+  same 16 cells of which only the first differs — one live value written
+  over the head of sixteen stale ones.
+
+Columns with filled cells beyond the extent are counted as
+`stale_cells_beyond_extent` rather than silently trimmed.
+
+#### What the reader reports (`metadata["origin_worksheet_fidelity"]`)
+
+The primary book of an `.opju` import (only that one — it is a project-wide
+report) carries the worksheet summary: `datasets_total`, `columns_numeric`,
+`columns_text`, `confidence` (counts of `length_checked` / `grammar_only` /
+`marker_fallback` / `marker_unanchored`), `report_columns`, `undecoded` (one
+entry per `(form, reason)` with a count and example names), `matrix_datasets`,
+`complex_imaginary_omitted`, `stale_cells_beyond_extent`, `text_unresolved`,
+`columns_without_header`, `over_decode_budget`, `records_without_header` and
+`empty_books_omitted`. A project with nothing decodable raises with that
+census in the message instead of a bare "no worksheet columns".
+
+Every book also carries its OWN losses, `metadata["origin_worksheet_losses"]`
+= `{kind: {"count", "columns"}}` (at most 20 short names per kind; the count
+is exact) with kinds `undecoded`, `unread_dataset`, `complex_imaginary`,
+`stale_cells`, `text_unresolved`, `no_header` and `grammar_only` (the last is
+not a loss — read without a length check). The import route folds a bounded
+summary of the project report into `origin_fidelity["worksheet"]`
+(`io/origin_project/worksheet_fidelity.py`: `status` complete / unverified /
+partial, `columns_imported`, `unverified_columns`, `losses[]` of
+`{code, count, examples≤5}`), which the import toast, the Library's Origin
+fidelity entry and each book's Origin provenance card show. An allocated but
+never-filled book is not a loss and is not listed there.
+
+#### Fail-closed rules added by the 2026-11-13 review
+
+- **A Y is never promoted to X** (`opju_book_checks.x_unconfirmed`). With no
+  column designated X, `_build_book` takes the first decoded column as the X
+  — Origin's default. In a `.opju` book that default is applied only when
+  that column is the book's first column: if a Text, undecoded or report
+  column precedes it (in file order, or in short-name order A < B …), or the
+  column's own known designation is not X, the book gets the row-index axis,
+  every decoded column stays a Y series, and
+  `metadata["x_column_unrecovered_reason"]` says why. A sheet book
+  (`Book@N`) has no designations of its own in the windows section (its
+  anchor is never found), and sheet 1's do not describe it, so only the order
+  check protects it. Header byte `0x17`'s high nibble was measured against
+  the windows-section designation over the corpus and does NOT determine it
+  (X columns spread over nibbles 4–7, Y over 2 and 4–6), so it is not used.
+- **Decode budget.** Each walk over a file (structural records, the marker
+  scan, the tail walk) may materialize at most `DECODE_BUDGET_CELLS` = 2^24
+  cells; the largest corpus project declares 2.6 M in total. A record that
+  would cross it is refused before anything is allocated — reported as
+  undecoded with reason "exceeds the import's decode budget" — and a record
+  that is then rejected gives its cells back. A string heap is materialized
+  only when its declared size is ≤ 255 × its compressed bytes (LZ4's
+  ceiling) and ≤ 64 MiB; LZ4 matches copy in slices; a repeated text
+  reference shares one string; used-extent slices are copies, so the unused
+  allocated tail is freed.
+- **No silent header misses.** The marker scan always runs (its FPC decodes
+  are shared with the structural pass, so it costs no second decode), so a
+  numeric record whose header is not recognized is still imported and
+  reported under `columns_without_header`. The block length is read as a
+  varint: one byte (`0x10`..`0x7f`) or the two-byte form `[80-ff] 01`
+  (128..255 — a 147-byte header's token stream is at most 149 bytes). The
+  corpus's longest header stream is 78 bytes, so only the one-byte form is
+  exercised by real files; an acceptance still has to pass the 147-byte +
+  name gate. A 147-byte header whose name is not a dataset name this reader
+  knows (31 corpus records, all `Book_Col.Y2`: a dataset attached to a
+  column) is reported, not read; and a 4.33+ record length block followed by
+  a record lead that follows NO header (a damaged header) is counted as
+  `records_without_header` (0 in every intact corpus file).
+- **Text past the numeric rows.** A Text column longer than every numeric
+  column of its book pads the numeric rows with NaN, so its cells keep their
+  row.
+
+Text never enters `.values`: a Text column, and the text cells of a mixed
+Text&Numeric column, go to `metadata["origin_text_columns"]` (`""` marks a
+numeric or empty cell).
+
+**Which book is primary.** Still the largest first-sheet book, now with one
+refinement: a book with a single numeric column has an X and no value
+series, so it is primary only when no book with a value column exists (a
+lone tick-position column beside its text labels was the "largest" book of
+ten corpus projects whose data books hold one row each). 33 of the 199
+previously importing corpus files present a different primary book than
+before: 24 because "largest" is now computed on complete books, 9 through
+this refinement. A project in which *every* book has exactly one numeric
+column still yields a primary with no value series (1 corpus file; 24
+before) — `_build_book` makes a book's first column its X, and that shared
+builder was not changed here.
+
+#### What did NOT change: the curve-binding column universe
+
+`opju_curves` resolves a curve's `y_ord` as an ordinal over "the columns
+`opju_codec.scan_columns` decoded, in book-appearance order" (§6.2.1). That
+definition was validated against the marker scan's output, so the marker
+scan is **frozen** — it does not learn the new tags or forms, and
+`windows_opju`'s `tail_start` bound is unchanged. Consequences, stated
+plainly:
+
+- figure curves bind to exactly the columns they bound to before;
+- in a file where the marker scan mislabelled a book (the truncated-name
+  case above), a curve still names the truncated book, which no longer
+  exists among the imported books — the reference fails closed instead of
+  resolving to a merged pseudo-book;
+- whether `y_ord` really counts *decoded* columns or *all datasets in stream
+  order* (the `.opj` writer probes in `validation_log.md` found the latter
+  for `.opj`) is now testable — every dataset header is known — but it is a
+  graph-semantics question and needs its own oracle and handoff.
+
+The same care applies to column long-names and units. `windows_opju`
+associates label records with columns positionally, and its answer depends
+on *which* column list it is asked about: handed the fuller list, it settled
+on a different marker run for some books and 80 previously correct labels
+changed or vanished in the corpus run. So `opju.py` asks twice. The lookup
+with the marker scan's list — the one that was validated — wins wherever it
+resolves a book. The lookup with the full list only *adds*: books the old
+lookup never resolved, and, where it agrees with the old lookup on every
+shared column (evidence both read the same marker run), the columns the
+marker scan never saw. Measured after that change: 0 real labels lost,
+value columns with a decoded long name 2,901 → 4,454.
+
+#### Corpus distribution (274 public `.opju` files)
+
+| | before | after |
+|---|---|---|
+| files that import | 199 | 258 |
+| files that fail | 75 | 16 (59 of the 75 now import) |
+| books | 2,509 | 3,457 |
+| book columns | 25,356 | 33,413 |
+| value columns carrying a decoded long name | 2,901 | 4,454 |
+
+Per Origin build (dataset records found, and how each column record was
+accepted):
+
+| build | files | import before | import after | dataset records | length-checked | grammar-only | report family (§3.4) | undecoded |
+|---|---|---|---|---|---|---|---|---|
+| 4.3268 | 17 | 0 | 15 | 1,443 | 0 | 1,141 | 290 | 12 |
+| 4.3318 | 4 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 4.3330 | 4 | 4 | 4 | 708 | 647 | 1 | 60 | 0 |
+| 4.3380 | 15 | 2 | 15 | 215 | 167 | 32 | 0 | 0 |
+| 4.3445 | 36 | 32 | 36 | 2,468 | 2,336 | 81 | 41 | 2 |
+| 4.3522 | 45 | 42 | 45 | 7,843 | 7,326 | 0 | 511 | 6 |
+| 4.3551 | 1 | 1 | 1 | 36 | 36 | 0 | 0 | 0 |
+| 4.3598 | 3 | 3 | 3 | 1,072 | 1,069 | 0 | 0 | 1 |
+| 4.3641 | 4 | 4 | 4 | 5,510 | 2,406 | 0 | 3,104 | 0 |
+| 4.3668 | 38 | 36 | 38 | 12,257 | 11,984 | 85 | 147 | 41 |
+| 4.3683 | 13 | 8 | 13 | 196 | 192 | 3 | 0 | 0 |
+| 4.3721 | 5 | 5 | 5 | 4,201 | 3,803 | 12 | 240 | 146 |
+| 4.3748 | 6 | 0 | 5 | 12 | 2 | 10 | 0 | 0 |
+| 4.3751 | 9 | 9 | 9 | 1,047 | 917 | 9 | 121 | 0 |
+| 4.3778 | 62 | 49 | 61 | 1,408 | 1,408 | 0 | 0 | 0 |
+| 4.3811 | 4 | 4 | 4 | 612 | 377 | 0 | 235 | 0 |
+| not a CPYUA 4.3 file | 8 | 0 | 0 | — | — | — | — | — |
+| **total** | **274** | **199** | **258** | **39,028** | **32,670** | **1,374** | **4,749** | **208** |
+
+The marker scan contributed nothing the structural path did not also decode
+(`marker_fallback` 0, `marker_unanchored` 0), and no text reference was left
+unresolved (0 of 1,004 text columns).
+
+What became of the 25,356 columns the old reader returned (matched by book
+and column name):
+
+| outcome | columns |
+|---|---|
+| every finite value identical | 24,787 |
+| values added only — rows after the first numeric run, which the marker scan never read | 97 (2,714,766 cells) |
+| values blanked only — cells beyond the header's used-row extent | 140 (2,394 cells; 60 columns left empty) |
+| a finite value changed | 1 |
+| no longer present under that name | 69 |
+| report-only pseudo-book placeholder (never a column) | 262 |
+
+The one changed value is a mislabel in the old output: the column the
+marker scan called `…_ZZ` was really the next record, whose own name
+(`…_AAA`) is run-length coded and so was not recognized; the real `…_ZZ`
+opens with a `23` value tag the marker scan could not read. Of the 69 no
+longer present under their old name, 40 are the same data under its correct
+name (24 in books the marker scan had named by a truncated tail, 16
+duplicate-named columns of the same kind) and 29 belong to books in which
+every column has a used extent of 0 — now omitted as empty books and listed
+under `empty_books_omitted`.
+
+#### Still unknown
+
+- **16 files still do not import.** 6 are not CPYUA files at all (Git-LFS
+  pointer text, mock fixtures); 6 are another tool's synthetic test fixtures
+  (`CPYUA 4.3318`, `CPYUA 4.0`) with no dataset record; 2 real 4.3268 files
+  hold no dataset header (graph-only projects); 2 hold only workbooks whose
+  every column has a used extent of 0 and are refused with that diagnosis.
+- **Virtual and function datasets** — 206 records (`VM…` virtual-matrix
+  series, `F…` function plots): the header declares a row count, the record
+  stores one formula/descriptor row. Reported as undecoded; 2 more `VM…`
+  series fail the segment grammar.
+- **Columns with a used extent of 0 that still hold cells** (part of the 76
+  `stale_cells_beyond_extent` columns). The header is treated as
+  authoritative, on the strength of the 127/127 oracle agreement and the two
+  stale-cell observations above; no specimen isolates the used-extent-0 case
+  with non-empty cells, so this specific case rests on inference.
+- **The first-row field** (header `0x1D`) is non-zero in 38 of 39,074
+  headers (report tables). It is not applied; no specimen exercises it.
+- **Pre-4.33 builds** have no length field: 1,141 columns of 4.3268 are
+  accepted on grammar alone, with no value oracle.
+- **Not interpreted:** the of mode `04` vs `05` beyond "an attachment follows", the other
+  attachment entries (`SYSTEM`, `_Storage_Cell_Ref_Data_`), a Text column's
+  category map, and the u32 at +12 of the string heap (0, 1 and 2 seen).
+  Heap strings are decoded as UTF-8 with a latin-1 fallback; the oracle
+  strings are ASCII, so the non-ASCII case is unproven.
+- **Complex columns** (66): only the real part is imported.
+- **The curve-binding column universe** (previous subsection).
+
+### 3.6 `.opju` matrix books
+
+**Solved and shipping** (`opju_matrix.py`). A matrix object's cells are an
+ordinary dataset record whose name is the bare book name (`MBook1`); it
+decodes like any double / float32 / integer / complex column and holds
+`rows × cols` values in row-major order. The shape is not in that record:
+
+- the **window block** is a run-length block expanding to
+  `00 00 <book name> 00 …`;
+- the **layer block** that follows it holds the column count (u16 at `0x2B`)
+  and the row count (u16 at `0x52`). The product must equal the dataset's
+  cell count — the validity gate. A layer that does not multiply out leaves
+  the matrix *reported* (`matrix_datasets`, `imported: false`) and not
+  imported, never given a guessed shape;
+- the **coordinate ranges** are four objects named `X1`, `X2`, `Y1`, `Y2`
+  (name at `0x46` of their block), each followed by `00` and a block whose
+  text is the number.
+
+Oracle: the published expectations for a 71×29 matrix with ranges
+5329..9999 / 731..999, a 137×179 matrix with 13..21 / 17..37, nine 2×3
+matrices (one per element type) and a 3×5 matrix with 1..3 / 1..5 — shape,
+ranges and cells all match, 12 / 12. All four specimens carry all four
+coordinate objects, so nothing is assumed about a matrix that lacks one: its
+ranges are then unknown and its axes fall back to 1-based indices.
+
+A matrix imports as a book: `.time` is the Y coordinate of each row, each
+matrix column is a channel labelled by its X coordinate, and
+`metadata["origin_matrix"]` holds `rows`, `cols`, `x_range`, `y_range`.
+Spacing the coordinates evenly between the two range ends is Origin's
+documented matrix convention, not something the oracle's values test.
+
+**Not covered:** a matrix book with more than one sheet or more than one
+matrix object (no specimen; the dataset naming is unknown), and the corpus's
+"virtual matrix" series (`VM…` datasets, 195 records), which have a
+different record shape and are reported as undecoded.
 
 ---
 
@@ -2531,6 +3001,15 @@ third-party material with mixed or no licences: never committed, and no
 value from it is copied into the repository — `tests/test_io_origin_opj_corpus.py`
 reads its expectations out of the oracle files at test time.
 
+A second local-only corpus, **`../test-data/origin/public/`**, holds real
+projects fetched from public GitHub repositories (274 `.opju`), including
+two reader projects whose test specimens and expected values serve as an
+independent oracle. Licences are unclear or GPL, so nothing from it is
+committed: `tests/test_io_origin_opju_public_corpus.py` computes every
+expectation at run time from the specimen's paired `.opj` and from the
+oracle project's own test source, and skips when the corpus is absent
+(override the location with `QZ_ORIGIN_PUBLIC_CORPUS`).
+
 CI-safe coverage comes from synthetic CPY fixtures built in-test (zero
 private data; `tests/origin_opj_fixtures.py` models the real block layouts) plus a malformed-input/sweep/perf matrix (plan item 29) and
 writer round-trip tests (item 30). Where possible, decoded values are
@@ -2546,9 +3025,12 @@ reverse-engineering efforts and a **format reference only** — their
 existence and general claims (e.g. "Origin files use a block-based
 container") were consulted as pointers, but no GPL source was read into or
 copied by this implementation (Apache-2.0, `.claude/rules/architecture-
-guards.md` #3). `.opju` had no prior open reader; every `.opju` finding
-here is original, derived from local specimens and Origin's own
-COM-generated ground truth.
+guards.md` #3). Every `.opju` finding here is original, derived from local
+specimens and Origin's own COM-generated ground truth — and, for the record
+grammar of §3.5/§3.6, from third-party *test material* used strictly as an
+oracle: the `.opj`/`.opju` specimen pairs and the expected values in the
+test file of a GPL C# reader project. Its reader source was not read; no
+specimen and no value from one is in this repository.
 
 **2026-11-13 addendum.** The header-driven `.opj` reader (§3.1, §3.1.1,
 §4.1 corrections) used the *test suites* of three open readers as
@@ -2579,6 +3061,14 @@ Double-Precision Floating-Point Data*, IEEE Transactions on Computers,
 Tracked in `plans/ORIGIN_FILE_DECODE_PLAN.md`; summarized here for anyone
 reading only this doc:
 
+- **`.opju` worksheet residue after the 2026-11-13 structural reader**
+  (§3.5 "Still unknown", §3.6 "Not covered"): the curve-binding column
+  universe is deliberately frozen on the old marker scan and should be
+  re-derived against dataset stream order under its own handoff; virtual-
+  matrix and function datasets, multi-object matrix books and the
+  imaginary part of complex columns are reported but not imported; the
+  owner's own ground-truth suite (`specimens/ground_truth`) was not
+  available where this was built and must be re-run.
 - **Item 34 — `.opj` writer real-Origin load, CLOSED 2026-07-07.** The
   writer's output loads in real Origin (2026b) and re-exports value-exact;
   the loader requirement set is documented in §8 and

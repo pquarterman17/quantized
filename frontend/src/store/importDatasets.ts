@@ -30,6 +30,7 @@ import type { HistoryBatchToken } from "./history";
 import { lit } from "../lib/macro";
 import { revealAncestorChain } from "../lib/foldertree";
 import { originBookErrorRoles } from "../lib/originBookRoles";
+import { originImportToast } from "../lib/originFidelity";
 import { planOriginImport } from "../lib/originFolders";
 import { importSummary } from "../lib/importFailureHint";
 import { originImportNotice } from "../lib/originImportNotice";
@@ -330,8 +331,22 @@ function addFromPayload(
   if (figures?.length) get().addOriginFigures(stem, figures, newIds);
   if (fidelity) {
     get().addOriginFidelity(stem, fidelity, newIds);
-    const notice = originImportNotice(stem, fidelity); // truncated file -> danger
-    toast(notice.msg, notice.kind, notice.ttlMs ? { ttlMs: notice.ttlMs } : undefined);
+    // A truncated file leads (backend integrity check; long-lived danger),
+    // then worksheet data that did not come in (`.opju` worksheet summary),
+    // else the plain graph count. A danger toast offers a one-click way to
+    // the detail (the Library's Origin fidelity group starts tucked).
+    const note = fidelity.omissions.includes("file_truncated")
+      ? originImportNotice(stem, fidelity)
+      : originImportToast(stem, fidelity);
+    const showDetails = () => {
+      if (!get().originFidelitySectionExpanded) get().toggleOriginFidelitySectionExpanded();
+    };
+    const ttl = "ttlMs" in note && note.ttlMs ? { ttlMs: note.ttlMs } : {};
+    toast(
+      note.msg,
+      note.kind,
+      note.kind === "danger" ? { ...ttl, action: { label: "Show what is missing", onClick: showDetails } } : undefined,
+    );
   }
   get().recordMacro(`Import ${origin.name}`, `qz.import(${lit(origin.name)})`, {
     kind: "import",

@@ -55,6 +55,9 @@ class OriginFidelityManifest(TypedDict):
     # File length vs the size its header records (``integrity.py``); added by
     # ``integrity.apply_container_integrity`` at import time.
     container_integrity: NotRequired[ContainerIntegrity]
+    # The ``.opju`` worksheet decode's loss summary
+    # (``worksheet_fidelity.worksheet_fidelity_summary``), added at import time.
+    worksheet: NotRequired[dict[str, object]]
 
 
 def origin_figure_decode_failure(

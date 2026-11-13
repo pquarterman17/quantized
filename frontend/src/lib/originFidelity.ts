@@ -35,3 +35,20 @@ export function originFidelityStatusLabel(status: OriginFidelityStatus): string 
   if (status === "reference_only") return "Reference only";
   return status === "exact" ? "Exact" : "Unresolved";
 }
+
+/** The import toast for one Origin project. Worksheet data that was NOT
+ *  imported leads (it is data the user may be missing, so the toast is a
+ *  warning); the per-kind detail lives in the Library's Origin fidelity
+ *  entry and each book's Origin provenance card. */
+export function originImportToast(
+  stem: string,
+  m: OriginFidelityManifest,
+): { msg: string; kind: "info" | "danger" } {
+  const graphs = `${m.graph_records_actionable}/${m.graph_records_total} Origin graph records are editable`;
+  const lost = (m.worksheet?.losses ?? []).reduce((n, loss) => n + loss.count, 0);
+  if (lost > 0) {
+    const items = lost === 1 ? "1 worksheet item" : `${lost} worksheet items`;
+    return { msg: `${stem}: ${items} could not be imported. ${graphs}`, kind: "danger" };
+  }
+  return { msg: `${stem}: ${graphs}; fidelity details saved`, kind: "info" };
+}

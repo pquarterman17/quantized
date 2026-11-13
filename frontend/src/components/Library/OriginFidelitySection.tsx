@@ -5,6 +5,7 @@ import {
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import { openOriginMigrationReview } from "../../lib/workflowWorkspace";
+import { worksheetSummaryLine } from "../../lib/originWorksheetFidelity";
 
 export default function OriginFidelitySection({ onStageOpen }: { onStageOpen?: () => void }) {
   const entries = useApp((s) => s.originFidelity);
@@ -37,11 +38,23 @@ export default function OriginFidelitySection({ onStageOpen }: { onStageOpen?: (
       {!collapsed &&
         entries.map((entry) => {
           const m = entry.manifest;
+          const worksheetLost = (m.worksheet?.losses.length ?? 0) > 0;
           return (
             <details className="qzk-fig-item" key={entry.id} style={{ display: "block" }}>
-              <summary className="qzk-fig-name">
+              <summary
+                className="qzk-fig-name"
+                title={worksheetLost ? "Some worksheet data was not imported" : undefined}
+              >
+                {worksheetLost && <span style={{ color: "var(--accent)" }}>⚠ </span>}
                 {entry.stem} · {originFidelityStatusLabel(m.status)}
+                {worksheetLost ? " · worksheet data missing" : ""}
               </summary>
+              {m.worksheet && (
+                // qzk-msg: the losses are the point of this line — wrap, never clip.
+                <div className="qzk-ds-meta qzk-msg" role="note">
+                  {worksheetSummaryLine(m.worksheet)}
+                </div>
+              )}
               <div className="qzk-ds-meta">
                 {m.graph_records_actionable}/{m.graph_records_total} graph records editable
                 {m.graph_records_filtered > 0 ? ` · ${m.graph_records_filtered} internal filtered` : ""}

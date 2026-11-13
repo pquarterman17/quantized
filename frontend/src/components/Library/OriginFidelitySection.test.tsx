@@ -106,4 +106,39 @@ describe("OriginFidelitySection", () => {
     expect(useApp.getState().stageTab).toBe("technique");
     expect(onStageOpen).toHaveBeenCalledOnce();
   });
+
+  it("says when worksheet data was not imported, and what", () => {
+    useApp.setState({
+      originFidelity: [
+        {
+          id: "fidelity-d2",
+          stem: "Lab",
+          siblingIds: ["d2"],
+          manifest: {
+            version: 1,
+            container: "opju",
+            status: "best_effort",
+            graph_records_total: 2,
+            graph_records_actionable: 2,
+            graph_records_filtered: 0,
+            omissions: [],
+            filtered_figures: [],
+            worksheet: {
+              version: 1,
+              status: "partial",
+              columns_imported: 7,
+              unverified_columns: 0,
+              losses: [{ code: "columns_not_decoded", count: 2, examples: ["Book1_C"] }],
+            },
+          },
+        },
+      ],
+    });
+    render(<OriginFidelitySection />);
+    fireEvent.click(screen.getByText("Origin fidelity"));
+    fireEvent.click(screen.getByText(/Lab · Best effort · worksheet data missing/));
+    expect(
+      screen.getByText("Worksheets: 7 columns imported; 2 columns could not be read"),
+    ).toBeInTheDocument();
+  });
 });

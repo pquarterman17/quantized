@@ -155,6 +155,7 @@ def _build_book(
     imag_cols: Columns | None = None,
     sheet_columns: dict[str, ColumnMeta] | None = None,
     lost_columns: bool = False,
+    x_unconfirmed: str | None = None,
 ) -> DataStruct:
     """Assemble one workbook into a DataStruct.
 
@@ -197,6 +198,12 @@ def _build_book(
     the first column is X" is not safe — the first column may be the one
     that was lost — and unless the metadata names a decoded X the axis is
     the row index, flagged like any other unrecovered X.
+
+    ``x_unconfirmed`` (the ``.opju`` reader's X check, ``opju._x_unconfirmed``)
+    is the reason the first decoded column cannot be taken as the X when no
+    column is designated X; the book then gets the row-index axis, exactly
+    like a designated X that failed to decode, with the reason in
+    ``metadata["x_column_unrecovered_reason"]``.
 
     ``imag_cols`` are the imaginary parts of this book's complex columns
     (same short names and row order as their real parts in ``cols``),
@@ -242,7 +249,8 @@ def _build_book(
     declared_x = next((c for c, m in col_meta.items() if m.designation == "X"), None)
     # No numeric column at all (an all-text book): nothing can be the axis.
     x_unrecovered = (
-        decoded_x is None and (declared_x is not None or lost_columns)
+        decoded_x is None
+        and (declared_x is not None or lost_columns or x_unconfirmed is not None)
     ) or not cols
 
     if x_unrecovered:
@@ -324,6 +332,8 @@ def _build_book(
         # was lost (e.g. "Temperature") rather than just that the axis is a row
         # index.
         meta["x_column_unrecovered"] = _label_for(declared_x, col_meta.get(declared_x))
+    elif x_unrecovered and x_unconfirmed is not None:
+        meta["x_column_unrecovered_reason"] = x_unconfirmed
     return DataStruct(
         time=time,
         values=values,
