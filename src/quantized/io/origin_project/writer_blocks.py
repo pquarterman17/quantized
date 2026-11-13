@@ -254,11 +254,21 @@ def window_header(book: str, long_name: str = "") -> bytes:
     return bytes(p)
 
 
-def sheet_subheader(nrows: int) -> bytes:
-    """365-byte sheet sub-header (``Pd`` block, sheet name fixed 'Sheet1'):
-    row count u16 @82."""
+def sheet_subheader(nrows: int, name: str = "Sheet1", sheet_id: int = 1) -> bytes:
+    """365-byte sheet sub-header (``Pd`` block): row count u16 @82, the
+    sheet name after ``Pd`` @0xD2 (a zero field through 0xF7 in the
+    template), and ``sheet_id - 1`` as the u8 @0x12D.
+
+    The u8 @0x12D is the sheet's id minus one: on every one of the 75 sheets
+    of the public corpus whose datasets bind to a sheet (``opj_sheets``) it
+    equals the bound ``@N`` minus one -- including a 24-sheet book whose ids
+    run 1-23 with gaps in a permuted order, and a book with ids 6 and 7.
+    The defaults reproduce the template exactly (``Sheet1``, id 1)."""
     p = bytearray(_SHEET_365)
     struct.pack_into("<H", p, 82, min(nrows, 0xFFFF))
+    enc = name.encode("ascii", errors="strict")[:24]  # sanitized by the writer
+    p[0xD2 : 0xD2 + 25] = (enc + b"\x00").ljust(25, b"\x00")
+    p[0x12D] = (sheet_id - 1) & 0xFF
     return bytes(p)
 
 

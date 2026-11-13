@@ -27,6 +27,11 @@ def test_origin_short_name_rule() -> None:
     used: set[str] = set()
     names = [origin_short_name(n, "x", used) for n in ("Run", "run", "RUN")]
     assert names == ["Run", "run2", "RUN3"]
+    # A name ending in a number counts on, as Origin numbers books.
+    taken: set[str] = set()
+    assert [origin_short_name(n, "x", taken) for n in ("Book1", "Book1", "book1", "Book2")] == [
+        "Book1", "Book2", "book3", "Book4",
+    ]
 
 
 def test_download_name_folds_accents() -> None:

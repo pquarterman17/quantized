@@ -10,6 +10,7 @@ text (``csv_safe.with_excel_bom``) so Excel on Windows reads Å/⁻¹/µ.
 
 from __future__ import annotations
 
+import re
 import tempfile
 import zipfile
 from dataclasses import replace
@@ -124,8 +125,16 @@ class ConsolidatedItem(BaseModel):
     name: str = ""
 
 
+class OpjItem(ConsolidatedItem):
+    # Library workbook the dataset is a worksheet of: items sharing a
+    # non-empty ``group`` are written as the sheets of ONE Origin workbook
+    # named ``book`` (writer.opj_bytes ``groups``).
+    group: str = ""
+    book: str = ""
+
+
 class OpjRequest(BaseModel):
-    datasets: list[ConsolidatedItem]
+    datasets: list[OpjItem]
     filename: str = "project"
 
 
@@ -208,7 +217,15 @@ def export_opj(req: OpjRequest) -> Response:
         books = []
         for item in req.datasets:
             ds = DataStruct.from_dict(item.dataset)
-            if item.name and "origin_book" not in ds.metadata:
+            if item.group and item.book:
+                # A sheet of a Library workbook: the workbook names the Origin
+                # book; the reader's "(sheet N)" title suffix is dropped.
+                meta = dict(ds.metadata)
+                meta["origin_book"] = item.book
+                long_name = str(meta.get("origin_book_long", "") or item.book)
+                meta["origin_book_long"] = re.sub(r" \(sheet \d+\)$", "", long_name)
+                ds = replace(ds, metadata=meta)
+            elif item.name and "origin_book" not in ds.metadata:
                 meta = dict(ds.metadata)
                 meta["origin_book"] = item.name
                 # `replace`, not a hand-listed `DataStruct(...)`: the manual
@@ -219,7 +236,7 @@ def export_opj(req: OpjRequest) -> Response:
                 # io/technique.py and io/origin_project/__init__.py already use.
                 ds = replace(ds, metadata=meta)
             books.append(ds)
-        payload = opj_bytes(books)
+        payload = opj_bytes(books, [item.group for item in req.datasets])
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
