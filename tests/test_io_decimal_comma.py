@@ -350,3 +350,32 @@ def test_clean_and_fully_converted_files_get_no_stray_note(tmp_path: Path) -> No
     eu = "a\tb\n1\t2,5\n2\t3,5\n"
     notes = parse_import(eu, guess_settings(eu)).metadata["notes"]
     assert notes == ["Column(s) read with ',' as the decimal separator: b."]
+
+
+def _notes(column: list[str]) -> list[str]:
+    text = "x\tv\n" + "".join(f"{i}\t{cell}\n" for i, cell in enumerate(column))
+    return list(parse_import(text, guess_settings(text)).metadata.get("notes", []))
+
+
+def test_text_column_holding_a_comma_number_is_not_reported_as_blanked(tmp_path: Path) -> None:
+    text = "x\tlabel\n1\tabc\n2\t1,5\n3\tdef\n"
+    ds = import_csv(_write(tmp_path, text, "text.tsv"))
+    assert ds.cat_levels  # imported intact, as text
+    assert not any("left blank" in note for note in ds.metadata.get("notes", []))
+
+
+def test_thousands_grouped_integer_is_not_called_a_decimal_comma() -> None:
+    (note,) = _notes(["950.5", "1,234", "870.25"])
+    assert "decimal comma" not in note.split("could be")[0]
+    assert "'1,234'" in note and "thousands separator or a decimal comma" in note
+    assert "left blank (NaN)" in note
+
+
+def test_us_thousands_with_decimals_is_never_a_silent_nan() -> None:
+    (note,) = _notes(["950.5", "1,234.5", "870.25"])
+    assert "'1,234.5'" in note and "thousands separators" in note and "left blank (NaN)" in note
+
+
+def test_true_decimal_comma_cell_keeps_its_wording() -> None:
+    (note,) = _notes(["1.5", "2,5", "3.5"])
+    assert "written with a decimal comma (e.g. '2,5')" in note
