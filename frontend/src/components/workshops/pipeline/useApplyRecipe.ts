@@ -4,7 +4,7 @@
 // picks through `applyRecipe`, which preflights again at run time and refuses
 // what no longer passes.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { applyRecipe, type ApplyResult } from "./runTemplate";
 import { defaultBindings, preflightRecipe, type Binding, type Preflight } from "../../../lib/recipePreflight";
@@ -28,11 +28,15 @@ export interface ApplyRecipeState {
   setAckUnits: (v: boolean) => void;
   ready: number;
   running: boolean;
+  /** Per-dataset outcomes — filled in LIVE while a run is in flight. */
   results: ApplyResult[] | null;
   apply: () => Promise<void>;
+  /** Stop the run (worksheet audit #15): the dataset in flight is rolled
+   *  back, later ones are not run; finished ones stay. */
+  cancel: () => void;
 }
 
-export function useApplyRecipe(recipe: AnalysisTemplate): ApplyRecipeState {
+export function useApplyRecipe(recipe: AnalysisTemplate, keepActive = false): ApplyRecipeState {
   const datasets = useApp((s) => s.datasets);
   const selectedIds = useApp((s) => s.selectedIds);
   const activeId = useApp((s) => s.activeId);
@@ -44,6 +48,7 @@ export function useApplyRecipe(recipe: AnalysisTemplate): ApplyRecipeState {
   const [ackUnits, setAckUnits] = useState(false);
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<ApplyResult[] | null>(null);
+  const controller = useRef<AbortController | null>(null);
   const columns = useMemo(() => recipe.expects?.columns ?? [], [recipe]);
 
   const picks = useMemo(() => {
@@ -82,14 +87,24 @@ export function useApplyRecipe(recipe: AnalysisTemplate): ApplyRecipeState {
   );
 
   const apply = useCallback(async () => {
+    const ctl = new AbortController();
+    controller.current = ctl;
     setRunning(true);
+    setResults([]);
     try {
-      setResults(await applyRecipe(recipe, picks.map((p) => ({ datasetId: p.ds.id, bindings: p.bindings })), { ackUnits }));
+      const plans = picks.map((p) => ({ datasetId: p.ds.id, bindings: p.bindings }));
+      // keepActive: launched from a dialog that works on the ACTIVE worksheet;
+      // each output makes itself active, which would re-point the dialog at an
+      // output, so applyRecipe hands the view back afterwards.
+      setResults(await applyRecipe(recipe, plans, { ackUnits, signal: ctl.signal, onProgress: (r) => setResults([...r]), keepActive }));
     } finally {
+      if (controller.current === ctl) controller.current = null;
       setRunning(false);
     }
-  }, [recipe, picks, ackUnits]);
+  }, [recipe, picks, ackUnits, keepActive]);
+
+  const cancel = useCallback(() => controller.current?.abort(), []);
 
   const ready = picks.filter((p) => !p.preflight.blocked).length;
-  return { datasets, picked, togglePick, picks, bind, ackUnits, setAckUnits, ready, running, results, apply };
+  return { datasets, picked, togglePick, picks, bind, ackUnits, setAckUnits, ready, running, results, apply, cancel };
 }

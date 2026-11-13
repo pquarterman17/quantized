@@ -16,6 +16,16 @@ import { ColumnStatsCache } from "./columnStatsCache";
 // serializes as null, which the route rejects (422).
 const finite = (xs: (number | undefined)[]) => xs.filter((v): v is number => Number.isFinite(v));
 
+/** The route's descriptive stats plus the two the footer needs that it does
+ *  not return (worksheet audit #19): the exact SUM of the finite values and
+ *  the MISSING count — analysis rows whose cell is blank/non-finite, which the
+ *  route never sees because only finite values are sent. */
+function withTotals(res: CalcResult, finiteValues: number[], rowCount: number): CalcResult {
+  let sum = 0;
+  for (const v of finiteValues) sum += v;
+  return { ...res, sum: finiteValues.length ? sum : Number.NaN, missing: rowCount - finiteValues.length };
+}
+
 export function useWorksheetStats(data: DataStruct, rows: readonly number[], show: boolean) {
   const [colStats, setColStats] = useState<(CalcResult | null)[] | null>(null);
   const [statsErr, setStatsErr] = useState(false);
@@ -40,7 +50,13 @@ export function useWorksheetStats(data: DataStruct, rows: readonly number[], sho
       // key names the exact column content it was computed from.
       const results = keys.map((key, slot) => {
         const hit = stats.get(key);
-        return hit ? Promise.resolve(hit) : statsDescriptive(column(slot)).then((res) => (stats.set(key, res), res));
+        if (hit) return Promise.resolve(hit);
+        const xs = column(slot);
+        return statsDescriptive(xs).then((res) => {
+          const full = withTotals(res, xs, rows.length);
+          stats.set(key, full);
+          return full;
+        });
       });
       Promise.all(results)
         .then((res) => {

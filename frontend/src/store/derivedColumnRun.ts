@@ -19,7 +19,7 @@ import { baseColumns, referencedColumns } from "../lib/formula";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { ComputedColumn, Dataset } from "../lib/types";
-import { formulaLetter, withRecomputedFormulas } from "./computedColumns";
+import { formulaLetter, linkSheets, withRecomputedFormulas } from "./computedColumns";
 import type { HistoryBatchToken } from "./history";
 import { withResolved } from "./pendingEdit";
 import { useApp } from "./useApp";
@@ -30,36 +30,30 @@ import { syncDatasetWindowDocuments } from "./windowDocuments";
 // own doc) so a bare fit refresh no longer drags in lib/derivedColumn.ts.
 export { refreshFitRefsFor } from "./fitRefsRun";
 
-/** The last formula refused for a unit contradiction (dataset id + expr). */
-let lastUnitRefusal: string | null = null;
-
-export type DerivedColumnResult = { ok: true; message: string } | { ok: false; error: string };
+/** `warning`: the column was added, but something about it needs saying
+ *  where the user is looking (a unit contradiction left it with no unit). */
+export type DerivedColumnResult = { ok: true; message: string; warning?: string } | { ok: false; error: string };
 
 type Step = { name: string; expr: string; propagate: boolean; allowUnitMismatch?: boolean };
-type Analysed = { ok: true; columns: ComputedColumn[]; step: Step; message: string } | { ok: false; error: string };
+type Analysed = { ok: true; columns: ComputedColumn[]; step: Step; message: string; warning?: string } | { ok: false; error: string };
 
 /** Analyse `req` against `ds`: the columns to append, the step to record and the
  *  success message — or the refusal, with why. Writes nothing to the store. */
 function analyse(ds: Dataset, req: DeriveRequest): Analysed {
   let r: ReturnType<typeof deriveColumns>;
-  const key = `${ds.id}\n${req.expr.trim()}`;
   const interactive = req.allowUnitMismatch === undefined;
   try {
-    r = deriveColumns(ds, req);
-    // Interactively (no explicit allowUnitMismatch), a unit contradiction
-    // refuses once; the SAME formula submitted again on the same dataset right
-    // after is the user saying "add it anyway". A recipe step says it itself.
-    if (!r.ok && r.unitMismatch && interactive && lastUnitRefusal === key) r = deriveColumns(ds, { ...req, allowUnitMismatch: true });
+    // Worksheet audit #17: interactively (no explicit allowUnitMismatch), a
+    // unit contradiction no longer refuses the first Add and waits for a
+    // second click — the column is added WITHOUT a unit and the contradiction
+    // is shown inline as a warning. A recipe step still says it itself.
+    r = deriveColumns(ds, interactive ? { ...req, allowUnitMismatch: true } : req);
   } catch (e) {
     // The analysis only runs on text the evaluator accepted; a throw here is
     // a bug, reported as a refusal rather than an unhandled rejection.
     return { ok: false, error: `could not analyse the formula: ${e instanceof Error ? e.message : String(e)}` };
   }
-  if (!r.ok) {
-    lastUnitRefusal = r.unitMismatch && interactive ? key : null;
-    return r.unitMismatch && interactive ? { ok: false, error: `${r.error} (or press Add again to add it without a unit)` } : r;
-  }
-  lastUnitRefusal = null;
+  if (!r.ok) return r;
   const [value, sigma] = r.columns;
   const unit = r.unit ? ` [${r.unit}]` : r.dimensionless ? " [dimensionless]" : "";
   const withSigma = sigma ? ` with "${sigma.name}" bound as its error` : "";
@@ -69,6 +63,7 @@ function analyse(ds: Dataset, req: DeriveRequest): Analysed {
     columns: r.columns,
     step: { name: value.name, expr: value.expr, propagate: req.propagate, allowUnitMismatch: r.unitMismatchAllowed },
     message: `added column "${value.name}"${unit}${withSigma}${notes}`,
+    ...(r.unitMismatchAllowed ? { warning: `added "${value.name}" without a unit: ${r.notes.find((n) => n.includes("WITHOUT a unit")) ?? "its operands' units contradict each other"}` } : {}),
   };
 }
 
@@ -103,15 +98,18 @@ export async function addDerivedColumn(
     if (!a.ok) return a;
     const { columns, step } = a;
     const count = ds.formulas?.length ?? 0;
-    const added = columns.map((c) => ({ ...c, deps: referencedColumns(c.expr).letters }));
+    const added: ComputedColumn[] = [];
+    for (const c of columns) {
+      // sheet("Name", …) is linked to its worksheet by id here, or refused.
+      const linked = linkSheets(get, id, c.expr);
+      if ("error" in linked) return { ok: false, error: linked.error };
+      added.push({ ...c, deps: referencedColumns(c.expr).letters, ...(linked.sheets ? { sheets: linked.sheets } : {}) });
+    }
     for (const [i, c] of added.entries()) {
       const to = recalcNodes.column(id, formulaLetter(ds.data.labels.length, count, count + i));
-      for (const dep of c.deps) {
+      for (const dep of c.deps ?? []) {
         const reason = wouldCreateCycle(get().datasets, { from: recalcNodes.column(id, dep), to });
-        if (reason) {
-          get().setStatus(`Can't add column "${c.name}": ${reason}`);
-          return { ok: false, error: `could not add column "${step.name}" (see the status bar)` };
-        }
+        if (reason) return { ok: false, error: reason };
       }
     }
     const bind = added.length > 1;
@@ -144,7 +142,19 @@ export async function addDerivedColumn(
       },
     );
     get().touchDataset(id); // recalc graph (#1): data changed
-    return { ok: true, message: a.message };
+    // A column that was added but errors on evaluation (a range outside the
+    // rows, a cut sheet() link…) must say so where the user is looking — the
+    // header badge alone is easy to miss next to a status reading "added".
+    const errors = get().datasets.find((d) => d.id === id)?.formulaErrors;
+    const failed = added.find((c) => errors?.[c.name]);
+    const warning = failed ? `"${failed.name}" was added, but it has an error: ${errors![failed.name]}` : a.warning;
+    return { ok: true, message: failed ? `${a.message} — but it has an error: ${errors![failed.name]}` : a.message, ...(warning ? { warning } : {}) };
   });
-  return out.ok ? out.value : { ok: false, error: out.error };
+  const r: DerivedColumnResult = out.ok ? out.value : { ok: false, error: out.error };
+  // Every refusal replaces the status, so it never goes on reading the
+  // previous column's "added …" while the formula row shows this error
+  // (live check). The inline message carries the same reason.
+  const named = req.name.trim() ? ` "${req.name.trim()}"` : "";
+  if (!r.ok) get().setStatus(`Can't add column${named}: ${r.error}`);
+  return r;
 }

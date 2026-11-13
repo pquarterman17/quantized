@@ -4,6 +4,7 @@
 // enabled only when the replay's own validator accepts the draft, and hands
 // the store the validated params plus the regenerated label and script line.
 
+import { originTextColumnNames } from "../../../lib/originTextColumnCells";
 import { useState } from "react";
 
 import { Button, Select } from "../../primitives";
@@ -57,7 +58,7 @@ function openWorkshop(
 
 const fieldBox = { display: "inline-flex", flexDirection: "column", gap: 2, marginRight: 8, marginTop: 4 } as const;
 
-function Field({ f, draft, labels, set }: { f: FieldSpec; draft: Draft; labels: readonly string[]; set: (k: string, v: unknown) => void }) {
+function Field({ f, draft, labels, textNames, set }: { f: FieldSpec; draft: Draft; labels: readonly string[]; textNames: readonly string[]; set: (k: string, v: unknown) => void }) {
   const v = draft[f.key];
   if (f.type === "bool") {
     return (
@@ -88,8 +89,13 @@ function Field({ f, draft, labels, set }: { f: FieldSpec; draft: Draft; labels: 
     input = <Select aria-label={f.label} options={f.options} value={String(v ?? f.fallback)} onChange={(e) => set(f.key, e.target.value)} />;
   } else if (f.type === "column") {
     const cur = typeof v === "number" ? [v] : [];
-    const options = columnOptions(labels, f.withX === true, cur);
-    input = <Select aria-label={f.label} options={options} value={String(v ?? "")} onChange={(e) => set(f.key, Number(e.target.value))} />;
+    // A text column is recorded by NAME (an unstack category, as a join key
+    // is): keep offering it, and keep it a name when re-picked.
+    const names = f.text ? [...new Set([...textNames, ...(typeof v === "string" && v ? [v] : [])])] : [];
+    const text = names.map((name) => ({ value: `t:${name}`, label: `${name} (text column)` }));
+    const options = [...columnOptions(labels, f.withX === true, cur), ...text];
+    const value = typeof v === "string" && v ? `t:${v}` : String(v ?? "");
+    input = <Select aria-label={f.label} options={options} value={value} onChange={(e) => set(f.key, e.target.value.startsWith("t:") ? e.target.value.slice(2) : Number(e.target.value))} />;
   } else if (f.type === "number") {
     input = (
       <BufferedNumberField aria-label={f.label} width={90} value={typeof v === "number" ? v : undefined} onValue={(n) => set(f.key, n)} />
@@ -117,7 +123,9 @@ export default function TransformStepEditor({
   const activeId = useApp((s) => s.activeId);
   const openMath = useApp((s) => s.setDatasetMathOpen);
   const primary = primaryIdOf(step.params, activeId);
-  const labels = datasets.find((d) => d.id === primary)?.data.labels ?? [];
+  const primaryData = datasets.find((d) => d.id === primary)?.data;
+  const labels = primaryData?.labels ?? [];
+  const textNames = primaryData ? originTextColumnNames(primaryData) : [];
   const form = transformForm(draft);
   const check = checkTransformEdit(draft);
   const set = (k: string, v: unknown) =>
@@ -131,7 +139,7 @@ export default function TransformStepEditor({
   return (
     <div style={{ marginTop: 4 }}>
       {form.fields.map((f) => (
-        <Field key={f.key} f={f} draft={draft} labels={labels} set={set} />
+        <Field key={f.key} f={f} draft={draft} labels={labels} textNames={textNames} set={set} />
       ))}
       {form.note && (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)", marginTop: 4 }}>

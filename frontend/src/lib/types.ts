@@ -5,7 +5,7 @@
 import type { ErrorBinding } from "./errorRoles";
 import type { FitSpec } from "./fitTypes";
 import type { CorrectionParams } from "./correctionTypes";
-import type { DerivedSpec } from "./formulaTypes";
+import type { DerivedSpec, SheetLinked } from "./formulaTypes";
 import type { DatasetSource } from "./datasetSource";
 import type { PeakTable } from "./peakTable";
 import type { RecodeSpec } from "./recode";
@@ -316,7 +316,7 @@ export type { RsmPeak, RsmAnalysisResponse, RsmStrainResponse } from "./reductio
  *  and the channel letters (A, B, …). Stored on the dataset so it recomputes
  *  when the base data changes. The computed columns are always the LAST
  *  `formulas.length` columns of the dataset's `data`. */
-export interface ComputedColumn {
+export interface ComputedColumn extends SheetLinked {
   name: string;
   expr: string;
   unit?: string;

@@ -80,6 +80,7 @@ export interface GridViewportProps {
   colStats: (CalcResult | null)[] | null;
   statsErr: boolean;
   onHeaderContext?: (col: number, e: React.MouseEvent) => void;
+  onTextHeaderContext?: (name: string, e: React.MouseEvent) => void;
   onRowContext?: (row: number, e: React.MouseEvent) => void;
   /** Read-only Origin text columns (item 8) — see module doc above. */
   textCols: TextColumn[];
@@ -145,6 +146,7 @@ export default function GridViewport({
   colStats,
   statsErr,
   onHeaderContext,
+  onTextHeaderContext,
   onRowContext,
   textCols,
   colWidths = {},
@@ -319,6 +321,7 @@ export default function GridViewport({
         onAutofitCol={onAutofitCol}
         onRemoveFormula={onRemoveFormula}
         onHeaderContext={onHeaderContext}
+        onTextHeaderContext={onTextHeaderContext}
         textCols={textCols}
         modelingTypeOf={modelingTypeOf}
         channelTypes={channelTypes}

@@ -15,6 +15,8 @@ vi.mock("../lib/api", async (importOriginal) => ({
 
 import { applyCorrections as applyCorrectionsApi, fitModel } from "../lib/api";
 import { fitRowXFingerprint } from "../lib/fitRowFingerprint";
+import { buildDataCommands } from "../commands/dataCommands";
+import { loadFormulaExtension } from "../lib/formulaExt";
 
 const data = (): DataStruct => ({
   time: [1, 2, 3],
@@ -108,6 +110,51 @@ describe("recalc engine (#1)", () => {
     });
     useApp.getState().setCellValue("a", 0, 0, 5);
     expect(useApp.getState().staleFits).toEqual([]);
+  });
+
+  it("off (Origin None) mode: Recalculate now still recomputes a derived sheet and says so (worksheet audit #22)", async () => {
+    vi.mocked(applyCorrectionsApi).mockResolvedValue({ ...data(), values: [[99]] });
+    useApp.setState({
+      recalcMode: "off",
+      datasets: [
+        ds("a"),
+        ds("b", {
+          derivedFrom: { datasetId: "a", pipeline: "yOff=-1" },
+          corrections: { yOff: -1 },
+          data: { ...data(), values: [[1]] },
+        }),
+      ],
+    });
+    useApp.getState().setCellValue("a", 0, 0, 5);
+    expect(useApp.getState().staleDatasets).toEqual([]); // None tracks nothing
+    const cmd = buildDataCommands(useApp.getState).find((c) => c.id === "recalc-now")!;
+    cmd.run();
+    await vi.waitFor(() => expect(useApp.getState().datasets.find((d) => d.id === "b")?.data.values).toEqual([[99]]));
+    expect(applyCorrectionsApi).toHaveBeenCalledWith(expect.objectContaining({ params: { yOff: -1 } }));
+    expect(useApp.getState().staleDatasets).toEqual([]);
+    expect(useApp.getState().status).toMatch(/recalculating every derived worksheet and fit \(mode None tracks no changes\)/);
+  });
+
+  it("a formula reading another worksheet (sheet(\"Name\", A)) follows that worksheet's edits (worksheet audit #17)", async () => {
+    await loadFormulaExtension(); // sheet() lives in the lazy formula module
+    useApp.setState({ recalcMode: "manual", datasets: [ds("src", { name: "Run 2" }), ds("rd", { name: "reader" })] });
+    expect(useApp.getState().addFormula("rd", "f", 'sheet("Run 2", A) * 10')).toBe(true);
+    const fCol = () => useApp.getState().datasets.find((d) => d.id === "rd")!.data.values.map((r) => r[1]);
+    expect(fCol()).toEqual([20, 40, 60]);
+    useApp.getState().setCellValue("src", 0, 0, 7);
+    expect(useApp.getState().staleDatasets).toContain("rd");
+    await useApp.getState().recalcNow();
+    expect(fCol()).toEqual([70, 40, 60]);
+    expect(useApp.getState().staleDatasets).toEqual([]);
+  });
+
+  it("the recalc-mode cycle names off as Origin's None", () => {
+    useApp.setState({ recalcMode: "manual" });
+    const cmds = buildDataCommands(useApp.getState);
+    expect(cmds.find((c) => c.id === "recalc-mode")!.label).toContain("None");
+    cmds.find((c) => c.id === "recalc-mode")!.run();
+    expect(useApp.getState().recalcMode).toBe("off");
+    expect(useApp.getState().status).toMatch(/^recalc mode: None \(nothing is tracked; Recalculate now reruns every derived result\)/);
   });
 
   it("bg-dependent datasets re-derive their corrections on recalcNow", async () => {

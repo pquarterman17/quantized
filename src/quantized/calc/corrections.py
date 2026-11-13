@@ -26,6 +26,14 @@ from ..datastruct import DataStruct
 from ..row_sidecars import slice_row_sidecars
 from ..x_units import x_unit_of
 from .backgrounds import anchor_baseline, footprint_factor
+from .corrections_errors import (
+    LINEAR_DERIVATIVE_MODES,
+    correlated_mark,
+    drop_bound_y_errors,
+    parse_error_bindings,
+    propagate_linear_errors,
+)
+from .linear_uncertainty import Operator, smoothing_operator
 from .processing import (
     cumulative_integral,
     derivative,
@@ -34,38 +42,11 @@ from .processing import (
     smooth_data,
 )
 from .signal_corrections import detrend_channels, reference_divisors
+from .transform_units import unit_product as _unit_product
+from .transform_units import unit_quotient as _unit_quotient
 from .units import convert_units
 
 __all__ = ["apply_corrections"]
-
-
-def _unit_product(left: str, right: str) -> str:
-    left, right = left.strip(), right.strip()
-    if left and right:
-        return f"{left}*{right}"
-    return left or right
-
-
-def _unit_quotient(numerator: str, denominator: str, power: int = 1) -> str:
-    numerator, denominator = numerator.strip(), denominator.strip()
-    if not denominator:
-        return numerator
-    # Reciprocal x units are common in spectroscopy. ``1/cm^-1`` is
-    # dimensionally valid but visually ambiguous; express the first
-    # derivative as ``cm`` (or ``V*cm``) instead. Higher powers retain an
-    # explicit parenthesized denominator rather than the malformed
-    # ``cm^-1^2``.
-    if power == 1 and denominator.endswith("^-1"):
-        return _unit_product(numerator, denominator[:-3])
-    if power == 1 and denominator.endswith("⁻¹"):
-        return _unit_product(numerator, denominator[:-2])
-    complex_denominator = any(token in denominator for token in ("/", "*", "^", "·"))
-    den = (
-        denominator
-        if power == 1
-        else f"({denominator})^{power}" if complex_denominator else f"{denominator}^{power}"
-    )
-    return f"{numerator}/{den}" if numerator else f"1/{den}"
 
 
 def _finite_scale(raw: Any, name: str) -> float:
@@ -124,7 +105,10 @@ def apply_corrections(
     ``params`` keys (all optional, with sensible defaults): xOff, yOff, bgSlope,
     bgInt, bgPoly, xTrimMin, xTrimMax, isNeutron, isMag, fieldUnit, momentUnit,
     sampleMass, sampleVolume, smoothEnabled, smoothWindow, smoothMethod,
-    normMethod, derivativeMode. GOTO additions (new, beyond MATLAB parity):
+    normMethod, derivativeMode, dropYUncertainty (worksheet audit #9: blank
+    the transformed channels' bound Y errors instead of propagating them).
+    Bound Y errors propagate through smoothing, dY/dX, d2Y/dX2 and the
+    cumulative integral (``corrections_errors``). GOTO additions (new, beyond MATLAB parity):
     bgAnchors + bgAnchorMethod (anchor-point baseline subtraction, #2) and
     footprintW + footprintL + footprintTwoTheta (XRR/NR beam-footprint scale,
     #7b — skips channels labelled ``dq``, like the neutron R-scale). MAIN_PLAN
@@ -145,28 +129,7 @@ def apply_corrections(
     # survive a derivative, normalization, or scale by coincidence while their
     # meaning has still been destroyed.
     categorical = set(data.cat_levels or ())
-    error_roles: dict[int, tuple[int, str, str]] = {}
-    for binding in error_bindings or ():
-        try:
-            channel = int(binding["channel"])
-            target = int(binding["target"])
-            axis = str(binding["axis"])
-            side = str(binding["side"])
-        except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError("invalid error binding") from exc
-        if channel < 0 or channel >= values.shape[1]:
-            raise ValueError(f"error channel {channel} is out of range")
-        if target < -1 or target >= values.shape[1] or target == channel:
-            raise ValueError(f"error target {target} is invalid")
-        if axis not in ("x", "y"):
-            raise ValueError(f"error axis must be x or y, got {axis!r}")
-        if side not in ("both", "+", "-"):
-            raise ValueError(f"error side must be both, +, or -, got {side!r}")
-        prior = error_roles.get(channel)
-        role = (target, axis, side)
-        if prior is not None and prior != role:
-            raise ValueError(f"error channel {channel} has conflicting bindings")
-        error_roles[channel] = role
+    error_roles = parse_error_bindings(error_bindings, values.shape[1])
     error_channels = set(error_roles)
     if categorical & error_channels:
         raise ValueError("a categorical channel cannot also be an uncertainty channel")
@@ -223,6 +186,16 @@ def apply_corrections(
         axis == "y" and target in signal_numeric
         for target, axis, _ in error_roles.values()
     )
+    # Worksheet audit #9: "drop uncertainty for this output" blanks the bound
+    # Y errors of the transformed channels, so no step below has to refuse.
+    dropped: list[int] = []
+    propagated: list[int] = []
+    if has_y_errors and params.get("dropYUncertainty", False):
+        dropped = drop_bound_y_errors(values, error_roles, signal_numeric)
+        has_y_errors = False
+    # The smoothing operator, kept so a later derivative/integral propagates
+    # through ONE composed operator (smoothed points are correlated).
+    smooth_op: Operator | None = None
 
     # 0. Arbitrary X/Y rescaling (MAIN_PLAN #37) — a non-destructive unit
     # re-expression, so it runs FIRST and everything downstream is expressed in
@@ -357,12 +330,7 @@ def apply_corrections(
             values[:, numeric] = values[:, numeric] * 1e-3
             scale_errors("y", 1e-3)
 
-    # 6. Smoothing.
-    if params.get("smoothEnabled", False) and has_y_errors:
-        raise ValueError(
-            "smoothing data with bound Y uncertainty is not supported; "
-            "unassign the error columns or smooth before assigning them"
-        )
+    # 6. Smoothing (linear: bound Y errors propagate, see corrections_errors).
     if params.get("smoothEnabled", False) and signal_numeric:
         win = max(1, _matlab_round(params.get("smoothWindow", 5)))
         method = str(params["smoothMethod"]).lower()
@@ -383,6 +351,10 @@ def apply_corrections(
             poly_order=poly_order,
         )
         values[:, signal_numeric] = smoothed
+        if has_y_errors:
+            smooth_op = smoothing_operator(
+                values.shape[0], method=method, window=win, poly_order=poly_order
+            )
 
     # 6b. Detrending. This is an analysis transform, not the correction
     # pipeline's physical background model: fit only the selected signal and
@@ -449,13 +421,18 @@ def apply_corrections(
             scale_errors("y", 1.0 / divisor, k)
             set_signal_unit(k, "")
 
-    # 8. Derivative / integral transforms.
+    # 8. Derivative / integral transforms. The finite differences and the
+    # trapezoid integral are linear, so bound Y errors propagate; the log
+    # derivative is not, and still refuses.
     deriv = params.get("derivativeMode", "None")
-    if deriv != "None" and has_y_errors:
+    if deriv == "dlog/dlog" and has_y_errors:
         raise ValueError(
-            "derivative/integral transforms with bound Y uncertainty are not "
-            "supported; unassign the error columns or transform before assigning them"
+            "the logarithmic derivative cannot propagate bound Y uncertainty; "
+            "drop the uncertainty for this output or unassign the error columns"
         )
+    integrand = (
+        values[:, signal_numeric].copy() if has_y_errors and deriv == "∫Y dx" else None
+    )
     x_unit = x_unit_of(data)
     if deriv == "dY/dX" and signal_numeric:
         values[:, signal_numeric] = derivative(time, values[:, signal_numeric], order=1)
@@ -473,12 +450,25 @@ def apply_corrections(
         values[:, signal_numeric] = log_derivative(time, values[:, signal_numeric])
         for k in signal_numeric:
             set_signal_unit(k, "")
+    if has_y_errors and (smooth_op is not None or deriv in LINEAR_DERIVATIVE_MODES):
+        propagated = propagate_linear_errors(
+            values,
+            error_roles,
+            signal_numeric,
+            time=time,
+            smooth_op=smooth_op,
+            derivative_mode=deriv,
+            integrand=integrand,
+            labels=labels,
+            correlated=data.metadata,
+        )
 
     metadata = (
         dict(data.metadata)
         if kept_rows is None
         else slice_row_sidecars(data.metadata, kept_rows)
     )
+    metadata = correlated_mark(metadata, labels, propagated=propagated, dropped=dropped)
     return DataStruct.create(
         time,
         values,

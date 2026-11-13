@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { applyCorrections } from "../../../lib/api";
 import { runSpectralWorkbench } from "../../../lib/api/spectralWorkbench";
 import { xUnitOf } from "../../../lib/transformResample";
-import { saveSignalRecipeTemplate } from "../../../lib/signalRecipeTemplate";
+import { buildSignalRecipeTemplate, saveSignalRecipeTemplate } from "../../../lib/signalRecipeTemplate";
+import BatchApplyLauncher from "../pipeline/BatchApplyLauncher";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { createSignalWorksheetFromApp } from "../../../store/signalWorksheetCommand";
@@ -20,8 +21,11 @@ import SignalOperationPicker from "./SignalOperationPicker";
 import SpectralControls from "./SpectralControls";
 import SpectralReadout from "./SpectralReadout";
 import SignalScopeNote from "./SignalScopeNote";
+import SignalUncertaintyControls from "./SignalUncertaintyControls";
 import {
   DEFAULT_SIGNAL_SETTINGS,
+  boundErrorBlock,
+  correlatedBoundErrors,
   buildCorrectionRecipe,
   channelsWithoutFiniteValues,
   isSpectralOperation,
@@ -86,6 +90,7 @@ export default function SignalProcessingPanel() {
   useEffect(() => {
     setSecondaryId("");
     setSecondaryChannel(null);
+    setSettings((current) => ({ ...current, dropUncertainty: false })); // a choice about THIS dataset's errors
   }, [activeId]);
 
   useEffect(() => {
@@ -149,13 +154,8 @@ export default function SignalProcessingPanel() {
   const outputError = displayedPreview && emptyOutputs.length
     ? `No finite output was produced for ${emptyOutputs.map((channel) => spectral ? displayedPreview.labels[channel] : active?.data.labels[channel]).join(", ")}.`
     : "";
-  const nonlinearWithErrors = !spectral && (
-    settings.operation === "smooth" ||
-    settings.operation === "detrend" ||
-    settings.operation.startsWith("derivative") ||
-    settings.operation === "log-derivative" ||
-    settings.operation === "integral"
-  );
+  const correctionOp = isSpectralOperation(settings.operation) ? null : settings.operation;
+  const errorBlock = correctionOp && active ? boundErrorBlock(correctionOp, boundTargets.length, settings.dropUncertainty, correlatedBoundErrors(active, channels)) : "";
   const operationValidation = spectralOperation
     ? validateSpectralSettings(spectralOperation, spectralSettings, channels, crossWorksheet)
     : settings.operation === "smooth" && (!Number.isInteger(settings.smoothWindow) || settings.smoothWindow < 1)
@@ -173,9 +173,7 @@ export default function SignalProcessingPanel() {
         ? "Reference X range must be finite and increasing."
       : settings.useRange && (!enteredFinite(settings.xMin) || !enteredFinite(settings.xMax) || Number(settings.xMin) >= Number(settings.xMax))
         ? "X range must be finite and increasing."
-      : nonlinearWithErrors && boundTargets.length > 0
-        ? "This operation cannot yet propagate bound Y uncertainty. Unassign that error column or use normalization."
-        : "";
+      : errorBlock;
   const validation = !active
     ? "Select a dataset first."
     : active.pending
@@ -375,16 +373,20 @@ export default function SignalProcessingPanel() {
             {spectralOperation && <SpectralControls operation={spectralOperation} settings={spectralSettings} setSettings={setSpectralSettings} xUnit={xUnitOf(active.data)} />}
             <SignalPreview source={active.data} result={displayedPreview} channel={channels[0] ?? available[0] ?? 0} resultChannel={spectral ? 0 : channels[0] ?? available[0] ?? 0} showOriginal={!spectral || settings.operation === "filter"} />
             {spectral && <SpectralReadout result={displayedPreview} />}
+            {correctionOp && <SignalUncertaintyControls operation={correctionOp} boundLabels={boundTargets.map((c) => active.data.labels[c])} blocked={Boolean(errorBlock)} drop={settings.dropUncertainty} setDrop={(dropUncertainty) => setSettings((current) => ({ ...current, dropUncertainty }))} />}
             <SignalScopeNote source={active} secondary={secondary} />
             {spectral && (boundTargets.length > 0 || secondaryBoundTargets.length > 0) && <div className="qz-signal-note">Bound uncertainties are not propagated into spectral outputs; the linked source and full recipe remain recorded.</div>}
             {(validation || previewError || outputError) && <p className="qz-error" role="alert">{validation || previewError || outputError}</p>}
             <div className="qz-dialog-actions">
               <Button onClick={close}>Cancel</Button>
-              <Button disabled={Boolean(validation) || !recipe || crossWorksheet} title={crossWorksheet ? "Cross-worksheet recipes retain project-specific source links and cannot yet be saved as reusable templates." : undefined} onClick={() => void saveRecipe()}>Save recipe…</Button>
-              <Button variant="primary" disabled={Boolean(validation || outputError) || !displayedPreview || busy} onClick={() => void commit()}>
+              <Button disabled={Boolean(validation) || !recipe || crossWorksheet} title={crossWorksheet ? "Cross-worksheet recipes retain project-specific source links and cannot yet be saved as reusable templates." : validation || undefined} onClick={() => void saveRecipe()}>Save recipe…</Button>
+              {/* A disabled control always says why (worksheet audit #9). */}
+              <Button variant="primary" disabled={Boolean(validation || outputError) || !displayedPreview || busy} title={validation || outputError || previewError || (!displayedPreview ? "Waiting for the live preview…" : undefined)} onClick={() => void commit()}>
                 {busy ? "Creating…" : "Create linked worksheet"}
               </Button>
             </div>
+            {/* Worksheet audit #15: the same setup on each selected Library sheet. */}
+            <BatchApplyLauncher setup={recipe} build={() => buildSignalRecipeTemplate(`${operationLabel(settings.operation)} (Signal Processing)`, active, recipe!)} disabledReason={crossWorksheet ? "A cross-worksheet correlation is tied to its two worksheets." : validation || (recipe ? "" : "Set up the operation first.")} />
           </>
         )}
       </div>

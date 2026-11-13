@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { statsDescriptive } from "../../lib/api/statsDescriptive";
@@ -373,15 +373,16 @@ describe("Worksheet computed columns (recompute)", () => {
     useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data: { ...data, units: ["V", "V"] } }] });
   });
 
-  it("derives the new column's unit and refuses mismatched units with the reason (P2.5)", async () => {
+  it("derives the new column's unit; mismatched units add on the FIRST click, without a unit, the reason inline (P2.5, audit #17)", async () => {
     render(<Worksheet />);
     await addColumn("A * B", "P");
     expect(useApp.getState().datasets[0].formulas?.[0]).toMatchObject({ name: "P", unit: "V²", derived: { unitAuto: true } });
     useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data }] }); // u1, u2
     fireEvent.change(screen.getByPlaceholderText("2*A + sqrt(B)"), { target: { value: "A + B" } });
     fireEvent.click(screen.getByRole("button", { name: /Add column/ }));
-    expect(await screen.findByText(/units differ/)).toBeInTheDocument();
-    expect(useApp.getState().datasets[0].formulas).toBeUndefined();
+    expect(await screen.findByText(/without a unit: units differ/)).toBeInTheDocument();
+    expect(useApp.getState().datasets[0].formulas).toHaveLength(1);
+    expect(useApp.getState().datasets[0].formulas![0].unit).toBeUndefined();
   });
 
   it("± errors adds a bound σ column (first-order, uncorrelated) in one undo step (P2.5)", async () => {
@@ -609,15 +610,27 @@ describe("Worksheet column selection (item 6)", () => {
     expect(header(2).textContent).not.toMatch(/[▲▼]/); // no sort glyph either
   });
 
-  it("sort is still reachable via the column context menu (relocated, not removed)", () => {
+  it("the column menu's Sort ascending sorts the DATA (Origin), with a status, as one undo step", async () => {
     render(<Worksheet />);
     fireEvent.contextMenu(header(2)); // channel A
     fireEvent.click(screen.getByText("Sort ascending"));
-    // A's values are 10, 40, 11 -> ascending order is original rows [0, 2, 1].
-    expect(dataRow(0).textContent).toContain("10.0000");
+    // A's values are 10, 40, 11 -> ascending order is original rows [0, 2, 1],
+    // and the ROWS move: the dataset itself is reordered (lazy chunk).
+    await waitFor(() => expect(useApp.getState().status).toMatch(/sorted 3 rows by/));
+    expect(useApp.getState().datasets[0].data.values.map((r) => r[0])).toEqual([10, 11, 40]);
     expect(dataRow(1).textContent).toContain("11.0000");
-    expect(dataRow(2).textContent).toContain("40.0000");
+    expect(header(2).textContent).not.toMatch(/▲/); // not a view sort
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().datasets[0].data.values.map((r) => r[0])).toEqual([10, 40, 11]);
+  });
+
+  it("the view-only sort is labelled as such and leaves the data alone", () => {
+    render(<Worksheet />);
+    fireEvent.contextMenu(header(2));
+    fireEvent.click(screen.getByText("View sorted ascending (data unchanged)"));
+    expect(dataRow(1).textContent).toContain("11.0000");
     expect(header(2).textContent).toMatch(/▲/); // the sort-direction glyph shows
+    expect(useApp.getState().datasets[0].data.values.map((r) => r[0])).toEqual([10, 40, 11]);
   });
 
   it("right-click still opens the column context menu regardless of the click-selects change", () => {

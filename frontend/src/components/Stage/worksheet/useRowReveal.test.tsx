@@ -93,7 +93,10 @@ describe("worksheet row reveal", () => {
   it("maps the dataset row through a SORTED view", async () => {
     render(<WorksheetPane datasetId="big" />);
     fireEvent.contextMenu(screen.getAllByRole("columnheader")[2]); // channel A
-    fireEvent.click(screen.getByText("Sort descending"));
+    // The display-only sort, twice: ascending, then descending.
+    fireEvent.click(screen.getByText("View sorted ascending (data unchanged)"));
+    fireEvent.contextMenu(screen.getAllByRole("columnheader")[2]);
+    fireEvent.click(screen.getByText("View sorted descending (data unchanged)"));
     // Descending: dataset row 10 is display position 489 of 500 — far below
     // the top window (rows 500, 499, …).
     expect(gutter(11)).toBeNull();

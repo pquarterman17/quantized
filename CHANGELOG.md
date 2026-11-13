@@ -95,6 +95,32 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   covariance method.
 - A fit that stalls on a parameter, or whose model is undefined at the
   fitted values, is reported as not converged with the reason.
+- Worksheet column formulas speak more of Origin's language: `col(A)` and
+  `col("Long Name")`, `cond ? a : b`, 1-based indexing and inclusive ranges
+  (`A[1]`, `sum(A[1:10])`), `cumsum`, text comparison in conditions, and
+  `sheet("Name", A)` to read another worksheet. A `sheet()` link follows its
+  worksheet through renames, column changes, Append Project and workbook
+  Duplicate/paste, and errors (never re-points) when the worksheet is
+  deleted; reading itself or closing a circle is refused.
+- Smoothing, the derivatives and the cumulative integral in Signal
+  Processing propagate a bound Y uncertainty (squared weights, independent
+  input points; the result is the diagonal only), with an inline "Drop
+  uncertainty for this output" choice. A further linear step on an output's
+  already-correlated uncertainty is refused with the reason.
+- Data ▸ Rows & summary ▸ Row statistics: mean, SD, min, max, sum and N
+  across ticked columns, per row, as computed columns in one undo step.
+- Data ▸ Rows & summary ▸ Frequency count: bins a column into a new
+  worksheet (bin start/end, count, cumulative count, percent, cumulative
+  percent); values are binned against the table's own published edges.
+- Signal Processing ▸ Apply to selected sheets…: the dialog's current setup
+  on each selected worksheet, with a preflight, per-item status, Cancel and
+  one undo step.
+- The worksheet statistics footer also shows sum, SE of mean, variance,
+  range and the missing count.
+- Unstack can pivot on a text column, and defaults to the column with the
+  fewest distinct values (2–20) rather than the first numeric one.
+- A text column's header offers Sort by text.
+
 - Calculators ▸ Film stack also predicts where each layer and the substrate
   appear in a reciprocal-space map for a chosen asymmetric reflection
   (H 0 L), default (103): Qx, Qz (Q = 2π/d, as in the RSM workshop), 2θ, and
@@ -222,6 +248,24 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   `voigt`, `besselj`, `bessely`, `besseli` and `besselk` are now function
   names when called. A parameter with one of these names still works unless
   it is written with parentheses.
+- A worksheet column's Sort ascending/descending sorts the data, as
+  Origin's column Sort does: rows move together, Undo restores the order, and
+  the status says what happened. Sorting is refused where `sheet()` links
+  rows across worksheets. The display-only sort remains, labelled "View
+  sorted … (data unchanged)".
+- Recalc mode "off" is named None, as in Origin, and Recalculate now reruns
+  every derived worksheet and fit in that mode.
+- A CSV's quoted thousands-grouped numbers (`"1,234.5"`, `"$1,234.50"`,
+  `"(1,234.5)"`) are read as numbers in otherwise numeric columns, with a
+  note; identifiers with leading zeros, phone numbers and dates stay text.
+- Comma cells left blank in a numeric column are always reported (decimal
+  comma, thousands grouping, or neither), and rows the importer skips above
+  the data are named in a note.
+
+### Fixed
+
+- The Reshape preview reports the real result row count when its table is
+  capped.
 
 ### Fixed
 

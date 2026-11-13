@@ -219,6 +219,61 @@ describe("applyRecipe", () => {
     expect(ids()).toHaveLength(before.length + 5);
   });
 
+  it("cancel stops the batch: finished datasets stay, the rest are reported cancelled, still ONE undo entry (worksheet audit #15)", async () => {
+    const recipe = await recordRecipe();
+    const before = ids();
+    const ctl = new AbortController();
+    const seen: string[][] = [];
+    const results = await applyRecipe(
+      recipe,
+      [
+        { datasetId: "b", bindings: [2, 1, 0] },
+        { datasetId: "d", bindings: [0, 1, 2] },
+      ],
+      {
+        ackUnits: false,
+        signal: ctl.signal,
+        // Cancel as soon as the first dataset finishes.
+        onProgress: (r) => {
+          seen.push(r.map((x) => x.status));
+          ctl.abort();
+        },
+      },
+    );
+    expect(results.map((r) => r.status)).toEqual(["ok", "cancelled"]);
+    expect(results[1].note).toBe("cancelled — not run");
+    expect(seen).toEqual([["ok"], ["ok", "cancelled"]]); // live per-item status
+    expect(ids()).toHaveLength(before.length + 3); // b's working copy + 2 outputs only
+    expect(store().history.map((h) => h.label)).toEqual(["apply recipe “stack+transpose”"]);
+    store().undo();
+    expect(ids()).toEqual(before);
+  });
+
+  it("cancel DURING a dataset's run removes what that dataset had created", async () => {
+    const recipe = await recordRecipe();
+    const before = ids();
+    const ctl = new AbortController();
+    // Abort once the first transform of "b" has produced its output.
+    const unsub = useApp.subscribe((s) => {
+      if (s.datasets.length >= before.length + 2) ctl.abort();
+    });
+    const results = await applyRecipe(recipe, [{ datasetId: "b", bindings: [2, 1, 0] }], { ackUnits: false, signal: ctl.signal });
+    unsub();
+    expect(results.map((r) => r.status)).toEqual(["cancelled"]);
+    expect(results[0].note).toMatch(/cancelled while running — nothing kept/);
+    expect(ids()).toEqual(before);
+  });
+
+  it("keepActive hands the view back to the worksheet active before the run (a dialog's batch)", async () => {
+    const recipe = await recordRecipe();
+    store().setActive("b");
+    await applyRecipe(recipe, [{ datasetId: "b", bindings: [2, 1, 0] }], { ackUnits: false });
+    expect(store().activeId).not.toBe("b"); // a run's output makes itself active
+    store().setActive("b");
+    await applyRecipe(recipe, [{ datasetId: "b", bindings: [2, 1, 0] }], { ackUnits: false, keepActive: true });
+    expect(store().activeId).toBe("b");
+  });
+
   it("refuses a dataset that fails preflight — nothing created, no undo entry", async () => {
     const recipe = await recordRecipe();
     const before = ids();

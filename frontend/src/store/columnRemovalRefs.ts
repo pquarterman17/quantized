@@ -8,6 +8,8 @@
 // recalc (store/recalcDatasets.ts) — whose columns shift when its SOURCE loses
 // one — applies the SAME remap instead of leaving every reference stale. The
 // dataset's OWN fields (`remapDatasetChannels`, formulas) stay with each caller.
+// It also covers OTHER datasets' formulas that read this one through
+// `sheet("Name", L)` (lib/sheetRefs.ts) — returned as a `datasets` override.
 
 import {
   type ColumnShift,
@@ -17,7 +19,9 @@ import {
   remapWindowViews,
 } from "../lib/channelRemap";
 import { remapLegacyFigureConfig, remapPlotSpecRefs } from "../lib/channelRemapDocs";
+import { formulaExtension } from "../lib/formulaExt";
 import type { Dataset } from "../lib/types";
+import { recomputeFormulaData } from "./computedColumns";
 import type { AppState } from "./useApp";
 import { syncDatasetWindowDocuments } from "./windowDocuments";
 
@@ -27,7 +31,17 @@ export function columnRemovalRefsPatch(
   removedCol: ColumnShift,
   datasets: readonly Dataset[],
 ): Partial<AppState> {
+  // Other worksheets' formulas that READ this one (`sheet("Name", L)`): the
+  // letter follows its column, and a reference to the removed column itself
+  // becomes an explicit error — evaluated against `datasets` (this update's
+  // result), not the store's pre-update state.
+  const ext = formulaExtension();
+  const shifted = ext?.shiftSheetRefs(datasets, id, removedCol);
+  const readers = new Set(shifted?.changed);
   return {
+    ...(ext && shifted && readers.size
+      ? { datasets: ext.withSheetDatasets(shifted.datasets, () => shifted.datasets.map((d) => (readers.has(d.id) ? recomputeFormulaData(d) : d))) }
+      : {}),
     plotWindows: syncDatasetWindowDocuments(
       remapWindowViews(s.plotWindows, id, removedCol),
       id,

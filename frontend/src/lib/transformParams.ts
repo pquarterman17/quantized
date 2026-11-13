@@ -47,7 +47,8 @@ export function transformParamsOf(raw: Record<string, unknown>): TransformParams
       return {
         op,
         key: num("key"),
-        category: num("category"),
+        // A text column is named (as a join key is); a channel is an index.
+        category: typeof raw.category === "string" && raw.category ? raw.category : num("category"),
         value: num("value"),
         aggregate: aggregate as AggregateMode,
       };
