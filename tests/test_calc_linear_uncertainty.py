@@ -121,3 +121,56 @@ def test_nan_handling_matches_the_transforms() -> None:
     unknown[5] = np.nan  # an unknown uncertainty propagates as unknown
     grad_sigma = linear_sigma(gradient_operator(_X), unknown)
     assert np.isnan(grad_sigma[[4, 6]]).all() and np.isfinite(grad_sigma[5])
+
+
+# --- cost: the propagation must scale like the transform (review item 10) ---
+_BIG = 200_000
+
+
+def test_operators_are_banded_and_built_without_per_row_python_work() -> None:
+    """Shape, not a clock: each operator holds at most one band of entries
+    (n x window), in CSR, however many rows -- the property that makes
+    propagation cost O(n x window) like the transform itself. The Savitzky-
+    Golay operator used to be assembled row by row through ``lil_matrix``
+    (200k rows: seconds) and the smoothed integral walked a Python loop."""
+    for method, window in (("moving", 5), ("gaussian", 5), ("savitzky-golay", 5)):
+        op = smoothing_operator(_BIG, method=method, window=window)
+        assert op.format == "csr" and op.shape == (_BIG, _BIG)
+        assert op.nnz <= _BIG * (2 * window + 1)
+    grad = gradient_operator(np.arange(_BIG, dtype=float))
+    assert grad.format == "csr" and grad.nnz == 2 * _BIG
+
+
+def test_large_propagation_is_fast_enough_loose_backstop() -> None:
+    """A deliberately loose wall-clock backstop (the shape test above is the
+    real guard): every propagation over 200k rows together in well under the
+    7 s the first version took for one."""
+    import time
+
+    x = np.cumsum(np.full(_BIG, 0.5))
+    y = np.sin(x / 50.0)
+    sigma = np.full(_BIG, 0.1)
+    start = time.perf_counter()
+    for method in ("moving", "savitzky-golay"):
+        smooth = smoothing_operator(_BIG, method=method, window=5)
+        linear_sigma(smooth, sigma)
+        linear_sigma(compose(gradient_operator(x), smooth), sigma)
+        cumulative_trapezoid_sigma(x, sigma, smooth @ y, pre=smooth)
+    cumulative_trapezoid_sigma(x, sigma, y)
+    assert time.perf_counter() - start < 6.0
+
+
+def test_vectorised_smoothed_integral_handles_nan_like_the_loop_did() -> None:
+    smooth = smoothing_operator(_N, method="moving", window=2)
+    y = _Y.copy()
+    y[12] = np.nan
+    z = smooth @ y
+    got = cumulative_trapezoid_sigma(_X, _SIGMA, z, pre=smooth)
+    live = ~np.isnan(z)
+    assert np.isnan(got[~live]).all() and np.isfinite(got[live]).all()
+    # Dense reference with the NaN rows integrated as zero.
+    eye = np.eye(_N)
+    trap = np.stack([cumulative_integral(_X, eye[:, j]) for j in range(_N)], axis=1)
+    dense = trap @ (smooth.toarray() * live[:, None])
+    want = np.sqrt((dense**2) @ _SIGMA**2)[live]
+    np.testing.assert_allclose(got[live], want, rtol=1e-9, atol=1e-13)

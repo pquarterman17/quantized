@@ -66,34 +66,52 @@ def _convolution_operator(n: int, kernel: NDArray[np.float64]) -> Operator:
 
 
 def _savgol_operator(n: int, hwc: int, poly_ord: int) -> Operator:
-    """Mirror ``processing._savgol_column`` row for row, overwrites included."""
+    """Mirror ``processing._savgol_column`` row for row, overwrites included.
+
+    Assembled as one COO triplet list: the interior band is ``w`` vectorised
+    diagonals, and only the ``2 * hwc`` edge rows (a handful, whatever ``n``)
+    are built one by one.
+    """
     t = np.arange(-hwc, hwc + 1, dtype=float)
     vand = np.vander(t, poly_ord + 1, increasing=True)
     kernel = np.linalg.solve(vand.T @ vand, vand.T)[0, :]
-    out = sparse.lil_matrix((n, n))
-    if n > 2 * hwc:
-        # np.convolve(col, kernel[::-1], "same"): out[i] = sum_q col[i+q-h] k[q]
-        # with zero padding (those rows are overwritten by the edge fits).
-        for q, weight in enumerate(kernel):
-            shift = q - hwc
-            lo, hi = max(0, -shift), min(n, n - shift)
-            idx = np.arange(lo, hi)
-            out[idx, idx + shift] = weight
-    else:
-        out.setdiag(1.0)
     n_pts = min(2 * hwc + 1, n)
     vand_local = np.vander(np.arange(n_pts, dtype=float), poly_ord + 1, increasing=True)
     # lstsq's (minimum-norm) solution is the pseudoinverse applied to b.
     pinv = np.linalg.pinv(vand_local)
+    # Edge rows, written in the SAME order as the source loop so a later write
+    # to the same row wins exactly as it does there (short columns overlap).
+    edges: dict[int, tuple[int, np.ndarray]] = {}
     for i in range(1, hwc + 1):
         left = np.vander([float(i - 1)], poly_ord + 1, increasing=True)[0] @ pinv
         right_t = float(n_pts - 1 - (i - 1))
         right = np.vander([right_t], poly_ord + 1, increasing=True)[0] @ pinv
-        out[i - 1, :] = 0.0
-        out[i - 1, :n_pts] = left
-        out[n - i, :] = 0.0
-        out[n - i, n - n_pts:] = right
-    return sparse.csr_matrix(out)
+        edges[i - 1] = (0, left)
+        edges[n - i] = (n - n_pts, right)
+    rows: list[np.ndarray] = []
+    cols: list[np.ndarray] = []
+    data: list[np.ndarray] = []
+    if n > 2 * hwc:
+        # np.convolve(col, kernel[::-1], "same"): out[i] = sum_q col[i+q-h] k[q].
+        # Interior rows only -- every column index is in range there.
+        inner = np.arange(hwc, n - hwc)
+        for q, weight in enumerate(kernel):
+            rows.append(inner)
+            cols.append(inner + (q - hwc))
+            data.append(np.full(inner.size, weight))
+    else:
+        # Too short for the convolution: the source keeps the column as is
+        # (identity) wherever an edge fit does not overwrite it.
+        keep = np.array([r for r in range(n) if r not in edges], dtype=int)
+        rows.append(keep)
+        cols.append(keep)
+        data.append(np.ones(keep.size))
+    for row, (start, weights) in edges.items():
+        rows.append(np.full(weights.size, row))
+        cols.append(start + np.arange(weights.size))
+        data.append(np.asarray(weights, dtype=float))
+    triplet = (np.concatenate(data), (np.concatenate(rows), np.concatenate(cols)))
+    return sparse.csr_matrix(triplet, shape=(n, n))
 
 
 def smoothing_operator(
@@ -202,20 +220,21 @@ def cumulative_trapezoid_sigma(
         prefix = np.concatenate([[0.0], np.cumsum(a[:-1] ** 2 * terms[:-1])])
         out = prefix + b**2 * terms
     else:
-        csr = sparse.csr_matrix(pre)
-        q = np.zeros(n)
-        norm_q = 0.0
-        for i in range(n):
-            lo, hi = csr.indptr[i], csr.indptr[i + 1]
-            cols, w = csr.indices[lo:hi], csr.data[lo:hi]
-            ws2 = w * s2[cols]
-            if i > 0 and b[i] != 0.0:
-                out[i] = norm_q + 2.0 * b[i] * float(q[cols] @ ws2) + b[i] ** 2 * float(w @ ws2)
-            else:
-                out[i] = norm_q
-            if a[i] != 0.0 and i < n - 1:
-                norm_q += 2.0 * a[i] * float(q[cols] @ ws2) + a[i] ** 2 * float(w @ ws2)
-                q[cols] += a[i] * w
+        # Rows of S whose integrand is NaN carry no weight (a = b = 0 there);
+        # dropping them keeps their NaNs out of every product below.
+        s_live = sparse.csr_matrix(sparse.diags(live.astype(float)) @ sparse.csr_matrix(pre))
+        s_live.eliminate_zeros()
+        # M[k, l] = <S_k, S_l>_sigma -- banded (twice the smoothing band).
+        gram = sparse.csr_matrix(s_live @ sparse.diags(s2) @ s_live.T)
+        diag = np.asarray(gram.diagonal(), dtype=float)
+        a_tail = a.copy()
+        a_tail[-1] = 0.0  # no row comes after the last
+        # g[i] = <Q_{i-1}, S_i>_sigma = sum_{k<i} a_k M[k, i].
+        g = np.asarray(sparse.tril(gram, k=-1) @ a_tail, dtype=float)
+        # N(Q_m) = N(Q_{m-1}) + 2 a_m g_m + a_m^2 M[m, m].
+        norm_q = np.cumsum(2.0 * a_tail * g + a_tail**2 * diag)
+        before = np.concatenate([[0.0], norm_q[:-1]])
+        out = before + 2.0 * b * g + b**2 * diag
     result = np.sqrt(out)
     result[~live] = np.nan
     return np.asarray(result, dtype=float)

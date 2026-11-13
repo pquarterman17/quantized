@@ -230,6 +230,68 @@ def test_bound_y_uncertainty_propagates_through_linear_transforms(params: dict[s
     assert out.units[1] == out.units[0]  # the error column follows the signal unit
 
 
+_SMOOTH = {"smoothEnabled": True, "smoothMethod": "moving", "smoothWindow": 2}
+
+
+_SECOND_STEPS = [{"derivativeMode": "∫Y dx"}, {"derivativeMode": "dY/dX"}, _SMOOTH]
+
+
+@pytest.mark.parametrize("second", _SECOND_STEPS)
+def test_chained_linear_steps_refuse_to_treat_correlated_errors_as_independent(
+    second: dict[str, Any],
+) -> None:
+    """A smoothed column's errors are correlated between neighbours. Feeding
+    them to a second linear step as if independent understated an integral's
+    sigma (0.30x) and overstated a derivative's (2.33x) -- so the output is
+    MARKED and the second step refuses, pointing at the one-pass route."""
+    first = apply_corrections(_with_sigma(41), _SMOOTH, error_bindings=_SIGMA_BINDING)
+    assert first.metadata["correlated_y_errors"] == ["dM"]
+    with pytest.raises(ValueError, match="correlated.*one pass.*drop the uncertainty"):
+        apply_corrections(first, second, error_bindings=_SIGMA_BINDING)
+    # A scalar step (normalization) is still exact, and keeps the mark.
+    scaled = apply_corrections(first, {"normMethod": "Peak (max=1)"}, error_bindings=_SIGMA_BINDING)
+    assert scaled.metadata["correlated_y_errors"] == ["dM"]
+    with pytest.raises(ValueError, match="correlated"):
+        apply_corrections(scaled, second, error_bindings=_SIGMA_BINDING)
+    # Dropping the uncertainty is the stated way on, and clears the mark.
+    dropped = apply_corrections(
+        first, {**second, "dropYUncertainty": True}, error_bindings=_SIGMA_BINDING
+    )
+    assert "correlated_y_errors" not in dropped.metadata
+    assert np.isnan(dropped.values[:, 1]).all()
+
+
+@pytest.mark.parametrize("deriv", ["∫Y dx", "dY/dX"])
+def test_one_pass_chain_matches_monte_carlo_where_two_passes_would_not(deriv: str) -> None:
+    """The sanctioned route -- both steps in ONE call, one composed operator --
+    against a Monte Carlo of the real pipeline; and the size of the error the
+    refused two-pass route would have made (so the refusal is not theoretical)."""
+    data = _with_sigma(41)
+    params = {**_SMOOTH, "derivativeMode": deriv}
+    got = apply_corrections(data, params, error_bindings=_SIGMA_BINDING).values[:, 1]
+    rng = np.random.default_rng(3)
+    base = np.asarray(data.values)
+    draws = []
+    for _ in range(4000):
+        noisy = base.copy()
+        noisy[:, 0] += rng.standard_normal(41) * base[:, 1]
+        probe = DataStruct.create(data.time, noisy, labels=data.labels, units=data.units)
+        draws.append(apply_corrections(probe, params).values[:, 0])
+    mc = np.std(np.stack(draws), axis=0, ddof=1)
+    assert_allclose(got[5:-5], mc[5:-5], rtol=0.08)
+    # The naive chain: sigma after smoothing, propagated again as independent.
+    from quantized.calc.corrections_errors import propagate_linear_errors
+
+    smoothed = np.asarray(apply_corrections(data, _SMOOTH, error_bindings=_SIGMA_BINDING).values)
+    naive = smoothed.copy()
+    propagate_linear_errors(
+        naive, {1: (0, "y", "both")}, [0], time=np.asarray(data.time), smooth_op=None,
+        derivative_mode=deriv, integrand=smoothed[:, [0]], labels=list(data.labels),
+    )
+    ratio = float(np.median(naive[5:-5, 1] / mc[5:-5]))
+    assert ratio < 0.7 if deriv == "∫Y dx" else ratio > 1.5
+
+
 def test_drop_y_uncertainty_blanks_the_bound_error_instead_of_refusing() -> None:
     data = _with_sigma()
     params = {"derivativeMode": "dlog/dlog", "dropYUncertainty": True}

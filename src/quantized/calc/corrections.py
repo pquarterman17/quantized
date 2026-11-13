@@ -28,6 +28,7 @@ from ..x_units import x_unit_of
 from .backgrounds import anchor_baseline, footprint_factor
 from .corrections_errors import (
     LINEAR_DERIVATIVE_MODES,
+    correlated_mark,
     drop_bound_y_errors,
     parse_error_bindings,
     propagate_linear_errors,
@@ -187,8 +188,10 @@ def apply_corrections(
     )
     # Worksheet audit #9: "drop uncertainty for this output" blanks the bound
     # Y errors of the transformed channels, so no step below has to refuse.
+    dropped: list[int] = []
+    propagated: list[int] = []
     if has_y_errors and params.get("dropYUncertainty", False):
-        drop_bound_y_errors(values, error_roles, signal_numeric)
+        dropped = drop_bound_y_errors(values, error_roles, signal_numeric)
         has_y_errors = False
     # The smoothing operator, kept so a later derivative/integral propagates
     # through ONE composed operator (smoothed points are correlated).
@@ -448,7 +451,7 @@ def apply_corrections(
         for k in signal_numeric:
             set_signal_unit(k, "")
     if has_y_errors and (smooth_op is not None or deriv in LINEAR_DERIVATIVE_MODES):
-        propagate_linear_errors(
+        propagated = propagate_linear_errors(
             values,
             error_roles,
             signal_numeric,
@@ -456,6 +459,8 @@ def apply_corrections(
             smooth_op=smooth_op,
             derivative_mode=deriv,
             integrand=integrand,
+            labels=labels,
+            correlated=data.metadata,
         )
 
     metadata = (
@@ -463,6 +468,7 @@ def apply_corrections(
         if kept_rows is None
         else slice_row_sidecars(data.metadata, kept_rows)
     )
+    metadata = correlated_mark(metadata, labels, propagated=propagated, dropped=dropped)
     return DataStruct.create(
         time,
         values,
