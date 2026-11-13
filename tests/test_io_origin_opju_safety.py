@@ -499,3 +499,33 @@ def test_a_designated_text_x_is_explained_as_text() -> None:
     assert reason is not None and "holds text, not numbers" in reason
     assert text_x_reason("Lab", meta, [("C", ["s1"])]) is None  # the X is not a text column
     assert text_x_reason("Lab@2", meta, [("A", ["s1"])]) is None  # sheet 1's X says nothing here
+
+
+# ── record checksum ──────────────────────────────────────────────────────────
+
+
+def test_record_checksum_is_the_fletcher_pair_of_u32_words() -> None:
+    from quantized.io.origin_project.opju_blocks import record_checksum
+
+    body = b"\x01\x00\x00\x00\x02\x00\x00\x00\x03"  # words 1, 2, 3 (last padded)
+    assert record_checksum(body) == (6).to_bytes(4, "little") + (10).to_bytes(4, "little")
+    big = b"\xff\xff\xff\xff" * 3  # sums wrap mod 2^32
+    a, b = (3 * 0xFFFFFFFF) & 0xFFFFFFFF, (6 * 0xFFFFFFFF) & 0xFFFFFFFF
+    assert record_checksum(big) == a.to_bytes(4, "little") + b.to_bytes(4, "little")
+
+
+def test_a_record_failing_its_checksum_is_read_and_flagged(tmp_path: Path) -> None:
+    """A corrupted byte inside compressed data still decodes — to wrong
+    values. The checksum says so; the import is partial, never refused."""
+    good = _num("Sum_B", [1.5, 2.5, 3.5])
+    tampered = bytearray(good)
+    tampered[-4] ^= 0x01  # the last residual byte of the FPC stream (before ce fa 00)
+    blob = project(_num("Sum_A", [1.0, 2.0, 3.0]), bytes(tampered))
+    (rec_a, rec_b) = scan_records(blob)
+    assert rec_a.checksum_ok is True and rec_b.checksum_ok is False
+    assert rec_b.decoded  # never refused on a checksum alone
+    scan = scan_worksheet(blob)
+    assert scan.fidelity["checksum_failed"] == {"count": 1, "examples": ["Sum_B"]}
+    assert scan.losses["Sum"]["checksum_failed"] == ["B"]
+    (book,) = read_origin_books(_write(tmp_path, blob))
+    assert book.metadata["origin_worksheet_losses"]["checksum_failed"]["columns"] == ["B"]

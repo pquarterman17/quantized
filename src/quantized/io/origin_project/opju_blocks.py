@@ -50,7 +50,16 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-__all__ = ["HEADER_LEN", "DatasetHeader", "find_headers", "lz4_block", "rle_expand"]
+import numpy as np
+
+__all__ = [
+    "HEADER_LEN",
+    "DatasetHeader",
+    "find_headers",
+    "lz4_block",
+    "record_checksum",
+    "rle_expand",
+]
 
 HEADER_LEN = 147  # identical to the `.opj` column-storage header length
 _NAME_OFF = 0x58
@@ -231,3 +240,25 @@ def find_headers(
         )
         cursor = end
     return out
+
+
+def record_checksum(body: bytes) -> bytes:
+    """The 8-byte checksum a 4.33+ record stores in its length block
+    (``18 | u64 24 | u64 body_len | <checksum>``), over the body from the
+    mode byte to its declared end.
+
+    Identified empirically (docs/origin_re/validation_log.md, 2026-11-13):
+    the body is read as little-endian u32 words (the last one zero-padded);
+    ``A`` is their sum and ``B`` the sum of the running sums, both mod 2^32
+    — a Fletcher-style pair — stored as ``A`` then ``B``, little-endian. It
+    matched all 37,189 length-checked records of the 274-file public corpus
+    (the 442 records of the length-less classes store ``0x22`` fill instead).
+    """
+    words = np.frombuffer(body + b"\x00" * (-len(body) % 4), dtype="<u4").astype(np.uint64)
+    if not words.size:
+        return bytes(8)
+    with np.errstate(over="ignore"):  # uint64 wraps mod 2^64; 2^32 divides it
+        running = np.cumsum(words, dtype=np.uint64)
+        a = int(running[-1]) & 0xFFFFFFFF
+        b = int(running.sum(dtype=np.uint64)) & 0xFFFFFFFF
+    return a.to_bytes(4, "little") + b.to_bytes(4, "little")

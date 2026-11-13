@@ -47,14 +47,19 @@ are cut at ``used_rows`` and an unfilled tail never becomes data.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
 
 from quantized.io.origin_project.container import plausible_column
-from quantized.io.origin_project.opju_blocks import DatasetHeader, find_headers, lz4_block
+from quantized.io.origin_project.opju_blocks import (
+    DatasetHeader,
+    find_headers,
+    lz4_block,
+    record_checksum,
+)
 from quantized.io.origin_project.opju_codec import (
     CodecError,
     DecodeBudget,
@@ -99,6 +104,8 @@ class DatasetRecord:
     confidence: Confidence = "grammar_only"
     reason: str | None = None
     extra: dict[str, object] = field(default_factory=dict)
+    # None: the record stores no checksum (pre-4.33, or a length-less class)
+    checksum_ok: bool | None = None
 
     @property
     def decoded(self) -> bool:
@@ -329,6 +336,21 @@ def _resolve(
 
 
 def decode_record(b: bytes, h: DatasetHeader, budget: DecodeBudget | None = None) -> DatasetRecord:
+    """Decode the record that follows header ``h`` (never raises), and check
+    its stored checksum (``opju_blocks.record_checksum``). A failed checksum
+    never refuses the record: it is decoded as usual and flagged
+    (``checksum_ok=False``) so the import can say its values may be corrupt."""
+    rec = _decode_record(b, h, budget)
+    p = h.end
+    if b[p : p + 9] != _B18 or b[p + 9 : p + 17] == _NO_LEN:
+        return rec
+    end = p + 26 + int.from_bytes(b[p + 9 : p + 17], "little")
+    if end > len(b):
+        return replace(rec, checksum_ok=False)
+    return replace(rec, checksum_ok=record_checksum(b[p + 26 : end]) == b[p + 17 : p + 25])
+
+
+def _decode_record(b: bytes, h: DatasetHeader, budget: DecodeBudget | None) -> DatasetRecord:
     """Decode the record that follows header ``h`` (never raises).
 
     With a ``budget``, a record whose declared cells do not fit what is left

@@ -154,6 +154,7 @@ def scan_worksheet(
     stale_cols: list[str] = []
     text_unresolved: list[str] = []
     over_budget: list[str] = []
+    bad_checksum: list[str] = []  # read, but the stored checksum disagrees
     report_columns = 0
     status: dict[str, list[tuple[str, str]]] = {}
     losses: dict[str, dict[str, list[str]]] = {}
@@ -164,6 +165,12 @@ def scan_worksheet(
     for rec in records:
         h = rec.header
         pos = h.start
+        if rec.checksum_ok is False and (rec.decoded or pos in fallback):
+            bad_checksum.append(h.name)
+            if h.is_column:
+                lose("checksum_failed", h.name)
+            else:
+                losses.setdefault(h.name, {}).setdefault("checksum_failed", []).append(h.name)
         if not h.is_column:
             if rec.decoded and rec.values is not None:
                 cells = h.total_rows
@@ -279,6 +286,7 @@ def scan_worksheet(
         "text_unresolved": _names(text_unresolved),
         "columns_without_header": _names(unanchored_names),
         "over_decode_budget": _names(over_budget),
+        "checksum_failed": _names(bad_checksum),
         "records_without_header": orphans,
         "empty_books_omitted": empty_books,
     }

@@ -10,6 +10,10 @@ import type { OriginWorksheetFidelity, OriginWorksheetLoss } from "./originWorks
 
 // Project-summary codes — [one, many] phrasing.
 const WORKSHEET_LOSSES: Record<string, [string, string]> = {
+  checksum_failed: [
+    "record failed its checksum (values may be corrupt)",
+    "records failed their checksum (values may be corrupt)",
+  ],
   columns_not_decoded: ["column could not be read", "columns could not be read"],
   datasets_not_decoded: ["other dataset was not read", "other datasets were not read"],
   matrices_not_imported: ["matrix was not imported (shape unknown)", "matrices were not imported (shape unknown)"],
@@ -46,6 +50,7 @@ export function worksheetSummaryLine(ws: OriginWorksheetFidelity): string {
 /** Per-book loss kinds (`metadata.origin_worksheet_losses`, from
  *  io/origin_project/opju_worksheet.py) → the provenance card's wording. */
 const BOOK_LOSSES: Record<string, string> = {
+  checksum_failed: "Failed its checksum — values may be corrupt",
   undecoded: "Not read",
   unread_dataset: "Attached datasets not read",
   complex_imaginary: "Complex — imaginary part not imported",

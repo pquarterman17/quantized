@@ -15,6 +15,8 @@ Loss codes (each ``{"code", "count", "examples"}``, examples at most
 * ``datasets_not_decoded`` — other dataset records (loose datasets, function
   plots, matrix objects) that were not read;
 * ``matrices_not_imported`` — matrix data read but whose shape was not found;
+* ``checksum_failed`` — records that were read but fail their stored
+  checksum (``opju_blocks.record_checksum``): their values may be corrupt;
 * ``over_decode_budget`` — records refused because the project declares more
   cells than one import materializes (``opju_codec.DECODE_BUDGET_CELLS``);
 * ``complex_imaginary_omitted`` — complex columns, real part imported only;
@@ -39,6 +41,7 @@ __all__ = ["MAX_EXAMPLES", "worksheet_fidelity_summary"]
 MAX_EXAMPLES = 5
 
 _NAMED = (
+    ("checksum_failed", "checksum_failed"),
     ("over_decode_budget", "over_decode_budget"),
     ("complex_imaginary_omitted", "complex_imaginary_omitted"),
     ("stale_cells_beyond_extent", "stale_cells_dropped"),

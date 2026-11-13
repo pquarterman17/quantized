@@ -9,7 +9,7 @@ Layout modelled::
 
     80 <clen:varint> <token stream>          the 147-byte column header,
                                              run-length coded
-    18 <u64 24> <u64 body_len> <u64 0>       the length block (omitted for
+    18 <u64 24> <u64 body_len> <checksum>    the length block (omitted for
                                              the pre-4.33 form; 0x22-filled
                                              for the length-less classes)
     0a <mode 04|05> <rows:varint> <body>     the record
@@ -147,8 +147,20 @@ def dataset(
         fields = b"\x22" * 16
     else:
         n = len(rec) if length is True else int(length)
-        fields = n.to_bytes(8, "little") + bytes(8)
+        fields = n.to_bytes(8, "little") + checksum(rec)
     return out + b"\x18" + (24).to_bytes(8, "little") + fields + b"\x0a" + rec + attach
+
+
+def checksum(body: bytes) -> bytes:
+    """The record checksum (the documented Fletcher-style pair over
+    little-endian u32 words, the last zero-padded), written independently of
+    the reader's numpy version."""
+    padded = body + bytes(-len(body) % 4)
+    a = b = 0
+    for i in range(0, len(padded), 4):
+        a = (a + int.from_bytes(padded[i : i + 4], "little")) & 0xFFFFFFFF
+        b = (b + a) & 0xFFFFFFFF
+    return a.to_bytes(4, "little") + b.to_bytes(4, "little")
 
 
 def spec(x: float) -> bytes:
