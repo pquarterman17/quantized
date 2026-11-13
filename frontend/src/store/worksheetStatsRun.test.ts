@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { applyFormulas } from "../lib/formula";
+import "../lib/formulaRefs"; // registers rowmean() & co. (lib/formulaExt.ts)
 import { frequencyTable } from "../lib/frequencyCount";
 import type { Dataset } from "../lib/types";
 import { useApp } from "./useApp";

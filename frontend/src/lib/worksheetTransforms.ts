@@ -211,6 +211,7 @@ export function unstackRowCount(ds: DataStruct, keyColumn: number, categoryColum
   const keys = column(ds, keyColumn);
   const categories = column(ds, categoryColumn);
   const values = column(ds, valueColumn);
+  // levels-allowlist: a COUNT of distinct pivot keys (the result's row count), never a level table.
   const seen = new Set<string>();
   for (let i = 0; i < keys.length; i += 1) {
     const key = finiteKey(keys[i]);

@@ -16,6 +16,7 @@ vi.mock("../lib/api", async (importOriginal) => ({
 import { applyCorrections as applyCorrectionsApi, fitModel } from "../lib/api";
 import { fitRowXFingerprint } from "../lib/fitRowFingerprint";
 import { buildDataCommands } from "../commands/dataCommands";
+import { loadFormulaExtension } from "../lib/formulaExt";
 
 const data = (): DataStruct => ({
   time: [1, 2, 3],
@@ -131,10 +132,11 @@ describe("recalc engine (#1)", () => {
     await vi.waitFor(() => expect(useApp.getState().datasets.find((d) => d.id === "b")?.data.values).toEqual([[99]]));
     expect(applyCorrectionsApi).toHaveBeenCalledWith(expect.objectContaining({ params: { yOff: -1 } }));
     expect(useApp.getState().staleDatasets).toEqual([]);
-    expect(useApp.getState().status).toMatch(/mode None tracks no changes/);
+    expect(useApp.getState().status).toMatch(/recalculating everything \(mode None tracks nothing\)/);
   });
 
   it("a formula reading another worksheet (sheet(\"Name\", A)) follows that worksheet's edits (worksheet audit #17)", async () => {
+    await loadFormulaExtension(); // sheet() lives in the lazy formula module
     useApp.setState({ recalcMode: "manual", datasets: [ds("src", { name: "Run 2" }), ds("rd", { name: "reader" })] });
     expect(useApp.getState().addFormula("rd", "f", 'sheet("Run 2", A) * 10')).toBe(true);
     const fCol = () => useApp.getState().datasets.find((d) => d.id === "rd")!.data.values.map((r) => r[1]);
@@ -152,7 +154,7 @@ describe("recalc engine (#1)", () => {
     expect(cmds.find((c) => c.id === "recalc-mode")!.label).toContain("None");
     cmds.find((c) => c.id === "recalc-mode")!.run();
     expect(useApp.getState().recalcMode).toBe("off");
-    expect(useApp.getState().status).toMatch(/^recalc mode: None \(nothing is tracked/);
+    expect(useApp.getState().status).toMatch(/^recalc mode: None \(untracked; Recalculate now reruns all\)/);
   });
 
   it("bg-dependent datasets re-derive their corrections on recalcNow", async () => {

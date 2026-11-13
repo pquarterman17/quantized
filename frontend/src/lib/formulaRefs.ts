@@ -1,12 +1,15 @@
 // Origin-like references for the worksheet formula language (worksheet audit
-// #17). formula.ts sits at its line ceiling, so the new forms live here and
-// plug into its parser through the same `ParserOps` capability interface the
-// row-aware forms use (lib/formulaRowFns.ts).
+// #17). formula.ts sits at its line ceiling — and the eager bundle at its
+// budget — so the new forms live here, in a LAZY chunk that registers itself
+// with lib/formulaExt.ts on load, and plug into formula.ts's parser through
+// the same `ParserOps` capability interface the row-aware forms use
+// (lib/formulaRowFns.ts).
 //
 // What is added (every one was a syntax error before, so no formula that
 // already parsed changes meaning):
 //
-//   col(A)               the same as A (lib/formulaTokenize.ts collapses it).
+//   col(A)               the same as A (a reference to A, for the column-shift
+//                        rewrite and the dependency list alike).
 //   col("Long Name")     the column whose NAME is "Long Name". Resolved to its
 //                        letter when the formula is added (`resolveColumnNames`),
 //                        so a later rename or move follows the column like any
@@ -34,21 +37,28 @@
 //                        cell. Only == and != compare text (case-sensitive,
 //                        surrounding spaces ignored); the result is 1/0, NaN
 //                        for a missing categorical code.
+//   rowmean(A, B, …)     row statistics ACROSS columns (worksheet audit #19):
+//   rowsd rowmin rowmax  blank (NaN) cells are skipped; with none left the
+//   rowsum rown          result is NaN (rown is then 0); rowsd is the sample
+//                        SD (n − 1), NaN below 2 values.
 
+import { applyFormulasWithErrors, baseColumns, channelLetter } from "./formula";
 import { AGGREGATE_NAMES, computeAggregate, type AggregateName } from "./formulaAggregates";
+import { registerFormulaExtension } from "./formulaExt";
 import { tokenize } from "./formulaTokenize";
 import type { FormulaFn, FormulaRowContext, Tok } from "./formulaTypes";
 import type { ParserOps } from "./formulaRowFns";
+import { textColumnEntries } from "./originTextColumnCells";
+import type { DataStruct, Dataset } from "./types";
 
 const isOp = (t: Tok | undefined, v: string): boolean => !!t && t.t === "op" && t.v === v;
 
 // ── col("Long Name") -> letter ──────────────────────────────────────────
 
 /** `expr` with every `col("Name")` naming a value column replaced by that
- *  column's letter. `letterOf(i)` is formula.ts's `channelLetter` (passed in
- *  to keep this module import-cycle free). Unmatched names — a text column,
- *  or a typo the evaluator will then report — are left as written. */
-export function resolveColumnNames(expr: string, labels: readonly string[], letterOf: (i: number) => string): string {
+ *  column's letter. Unmatched names — a text column, or a typo the evaluator
+ *  will then report — are left as written. */
+export function resolveColumnNames(expr: string, labels: readonly string[]): string {
   let toks: Tok[];
   try {
     toks = tokenize(expr);
@@ -61,7 +71,7 @@ export function resolveColumnNames(expr: string, labels: readonly string[], lett
     if (!(t.t === "name" && t.v === "col" && isOp(open, "(") && name.t === "str" && isOp(close, ")"))) continue;
     const idx = indexOfName(labels, name.v);
     if (idx < 0 || t.p === undefined || close.p === undefined) continue;
-    edits.push({ from: t.p, to: close.p + 1, text: letterOf(idx) });
+    edits.push({ from: t.p, to: close.p + 1, text: channelLetter(idx) });
   }
   let out = expr;
   for (const e of edits.reverse()) out = out.slice(0, e.from) + e.text + out.slice(e.to);
@@ -106,6 +116,10 @@ export function tryParseTextCompare(ops: ParserOps): FormulaFn | undefined {
   } else {
     return undefined;
   }
+  // Reads the row's level table / text cells, which a single-row incremental
+  // recompute (lib/formulaIncremental.ts) does not supply: report it as not
+  // row-local so that path falls back to a full recompute.
+  ops.nonLocal("aggregate");
   const want = value.trim();
   return (c, ex) => {
     const got = textAt(ref, c, ex);
@@ -166,7 +180,7 @@ export function parseIndexSuffix(col: string, ops: ParserOps): FormulaFn {
 
 /** Inside `agg(`: a bare column with a `[i:j]` range, then `)`. Returns
  *  undefined (nothing consumed) when the argument is not that shape. */
-export function tryParseAggregateRange(fname: string, ops: ParserOps, consts: Record<string, number>): FormulaFn | undefined {
+function tryParseAggregateRange(fname: string, ops: ParserOps, consts: Record<string, number>): FormulaFn | undefined {
   const first = ops.peek();
   if (!AGGREGATE_NAMES.has(fname) || first?.t !== "name" || first.v in consts || !isOp(ops.peekAt(1), "[")) return undefined;
   ops.nonLocal("aggregate");
@@ -200,7 +214,7 @@ export function tryParseAggregateRange(fname: string, ops: ParserOps, consts: Re
 // ── cumsum(A), sheet("Name", A), and a col("…") left unresolved ────────
 
 /** `cumsum(`, `sheet(` or `col(` after the name and `(` were eaten. */
-export function tryParseRefCall(fname: string, ops: ParserOps): FormulaFn | undefined {
+function tryParseRefCall(fname: string, ops: ParserOps): FormulaFn | undefined {
   if (fname === "cumsum") {
     ops.nonLocal("aggregate");
     const t = ops.eat();
@@ -229,6 +243,7 @@ export function tryParseRefCall(fname: string, ops: ParserOps): FormulaFn | unde
     const col = ops.eat();
     if (col?.t !== "name") throw new Error('sheet() expects a column letter after the name, e.g. sheet("Run 2", A)');
     ops.expectOp(")");
+    ops.nonLocal("aggregate"); // reads another worksheet: never incremental
     // NOT ops.ref(): the letter names a column of ANOTHER worksheet, so the
     // column-shift rewrite and this sheet's dependency list must not see it.
     return (_c, ex) => {
@@ -241,6 +256,16 @@ export function tryParseRefCall(fname: string, ops: ParserOps): FormulaFn | unde
   }
   if (fname === "col") {
     const t = ops.peek();
+    if (t?.t === "name" && isOp(ops.peekAt(1), ")")) {
+      ops.eat();
+      ops.ref(t.v);
+      ops.expectOp(")");
+      return (c) => {
+        const v = c[t.v];
+        if (v === undefined) throw new Error(`unknown variable "${t.v}"`);
+        return v;
+      };
+    }
     throw new Error(t?.t === "str" ? `no column named "${t.v}"` : 'col() expects a column letter or a name in quotes, e.g. col(A) or col("Moment")');
   }
   return undefined;
@@ -248,31 +273,35 @@ export function tryParseRefCall(fname: string, ops: ParserOps): FormulaFn | unde
 
 // ── the evaluation context ──────────────────────────────────────────────
 
-let sheetResolver: ((name: string) => { time: readonly number[]; values: readonly (readonly number[])[]; labels: readonly string[] } | undefined) | null = null;
+type SheetData = Pick<DataStruct, "time" | "values" | "labels">;
+let sheetResolver: ((name: string) => SheetData | undefined) | null = null;
 
-/** The store registers how `sheet("Name", …)` finds a worksheet (by its
- *  Library name) — set once, at store creation (store/computedColumns.ts). */
-export function setFormulaSheetResolver(resolve: typeof sheetResolver): void {
+/** How `sheet("Name", …)` finds a worksheet (by its Library name): the store
+ *  registers it when this module loads (store/computedColumns.ts). */
+export function setFormulaSheetResolver(resolve: ((name: string) => SheetData | undefined) | null): void {
   sheetResolver = resolve;
 }
 
 /** The text/level/other-sheet parts of a formula's row context. */
 export function rowContextExtras(
+  metadata: DataStruct["metadata"],
   labels: readonly string[],
   catLevels: Record<number, readonly string[]>,
-  textColumns: readonly { shortName: string; rows: readonly string[] }[],
-  letterOf: (i: number) => string,
 ): Pick<FormulaRowContext, "levels" | "text" | "sheet"> {
   const levels: Record<string, readonly string[]> = {};
-  for (const [i, table] of Object.entries(catLevels)) if (Number(i) < labels.length) levels[letterOf(Number(i))] = table;
+  for (const [i, table] of Object.entries(catLevels)) if (Number(i) < labels.length) levels[channelLetter(Number(i))] = table;
   const text: Record<string, readonly string[]> = {};
-  for (const t of textColumns) text[t.shortName] = t.rows;
+  // Converted on first read only: most formulas never compare text.
+  for (const [name, cells] of textColumnEntries({ metadata })) {
+    let rows: readonly string[] | undefined;
+    Object.defineProperty(text, name, { enumerable: true, get: () => (rows ??= cells.map((c) => String(c ?? ""))) });
+  }
   const cache = new Map<string, Record<string, readonly number[]> | undefined>();
   const sheet = (name: string) => {
     if (!cache.has(name)) {
       const ds = sheetResolver?.(name);
       const cols: Record<string, readonly number[]> | undefined = ds ? { x: ds.time } : undefined;
-      if (ds && cols) ds.labels.forEach((_, c) => (cols[letterOf(c)] = ds.values.map((row) => row[c])));
+      if (ds && cols) ds.labels.forEach((_, c) => (cols[channelLetter(c)] = ds.values.map((row) => row[c])));
       cache.set(name, cols);
     }
     return cache.get(name);
@@ -280,18 +309,49 @@ export function rowContextExtras(
   return { levels, text, sheet };
 }
 
-/** The worksheet names a formula reads through `sheet("Name", …)`. */
-export function sheetNamesRead(expr: string): string[] {
-  let toks: Tok[];
-  try {
-    toks = tokenize(expr);
-  } catch {
-    return [];
-  }
-  const out = new Set<string>();
-  for (let i = 0; i + 2 < toks.length; i++) {
-    const [t, open, name] = [toks[i], toks[i + 1], toks[i + 2]];
-    if (t.t === "name" && t.v === "sheet" && isOp(open, "(") && name.t === "str") out.add(name.v);
-  }
-  return [...out];
+// ── row statistics across columns (audit #19) ───────────────────────────
+
+const finiteOf = (a: number[]): number[] => a.filter((v) => Number.isFinite(v));
+const sumOf = (a: number[]): number => a.reduce((s, v) => s + v, 0);
+
+export const ROW_FUNCS: Record<string, (...a: number[]) => number> = {
+  rowmean: (...a) => ((f) => (f.length ? sumOf(f) / f.length : NaN))(finiteOf(a)),
+  rowsd: (...a) => {
+    const f = finiteOf(a);
+    if (f.length < 2) return NaN;
+    const m = sumOf(f) / f.length;
+    return Math.sqrt(sumOf(f.map((v) => (v - m) ** 2)) / (f.length - 1));
+  },
+  rowmin: (...a) => ((f) => (f.length ? Math.min(...f) : NaN))(finiteOf(a)),
+  rowmax: (...a) => ((f) => (f.length ? Math.max(...f) : NaN))(finiteOf(a)),
+  rowsum: (...a) => ((f) => (f.length ? sumOf(f) : NaN))(finiteOf(a)),
+  rown: (...a) => finiteOf(a).length,
+};
+
+/** Every dataset with a formula error — one compiled before this module
+ *  loaded reports EXTENSION_PENDING, or a plain syntax error for a text
+ *  comparison (lib/formulaExt.ts) — recomputed; the others unchanged (same
+ *  object). The store calls it once, when this module has loaded. */
+export function recomputeExtensionPending(datasets: Dataset[]): Dataset[] {
+  return datasets.map((d) => {
+    if (!d.formulas || !Object.keys(d.formulaErrors ?? {}).length) return d;
+    const { data, errors } = applyFormulasWithErrors(baseColumns(d.data, d.formulas.length), d.formulas);
+    return { ...d, data, formulaErrors: Object.keys(errors).length ? errors : undefined };
+  });
 }
+
+registerFormulaExtension({
+  parseConditional: (cond, ops) => {
+    ops.expectOp("?");
+    const a = ops.parseExpr(); // right-associative: a branch may itself be `c ? x : y`
+    ops.expectOp(":");
+    const b = ops.parseExpr();
+    return (c, ex) => ((cv) => (Number.isNaN(cv) ? NaN : cv !== 0 ? a(c, ex) : b(c, ex)))(cond(c, ex));
+  },
+  tryParseTextCompare,
+  parseIndexSuffix,
+  tryParseCall: (fname, ops, consts) => tryParseRefCall(fname, ops) ?? tryParseAggregateRange(fname, ops, consts),
+  resolveColumnNames,
+  rowContextExtras,
+  funcs: ROW_FUNCS,
+});

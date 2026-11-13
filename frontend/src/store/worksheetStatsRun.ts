@@ -12,6 +12,7 @@
 //   (lib/frequencyCount.ts states the binning rules).
 
 import { askParams } from "./paramDialog";
+import { loadFormulaExtension } from "../lib/formulaExt";
 import { baseColumns, channelLetter } from "../lib/formula";
 import { frequencyTable, frequencyWorksheet } from "../lib/frequencyCount";
 import { lit } from "../lib/macro";
@@ -92,6 +93,7 @@ export async function runRowStatistics(): Promise<void> {
   const stats = ROW_STATS.filter((r) => picked[r.key] === true).map((r) => r.key);
   if (!stats.length) return fail("Row statistics: tick at least one statistic");
   const added = rowStatisticColumns(ds, cols, stats);
+  await loadFormulaExtension(); // rowmean() & co. live in the lazy formula module
   const get = useApp.getState;
   get().recordHistory("add row statistics");
   useApp.setState((st) => ({

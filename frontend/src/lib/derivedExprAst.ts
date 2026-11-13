@@ -13,6 +13,7 @@
 
 import { AGGREGATE_NAMES } from "./formulaAggregates";
 import { CONSTS, FUNCS } from "./formulaFuncs";
+import { ROW_FUNCS } from "./formulaRefs";
 import { syntaxError, tokenize } from "./formulaTokenize";
 import { COMPARE_OPS, type Tok } from "./formulaTypes";
 
@@ -239,6 +240,11 @@ export function parseExpr(src: string): Node {
       expect(")");
       return { k: "agg", fn, col: first.v, range: [from, to] };
     }
+    if (fn === "col") {
+      const name = bare(); // col(A) is A; col("Name") was resolved to a letter
+      expect(")");
+      return { k: "var", name };
+    }
     if (fn === "cumsum") {
       const col = bare();
       expect(")");
@@ -272,7 +278,7 @@ export function parseExpr(src: string): Node {
       expect(")");
       return { k: "fitval", model, arg };
     }
-    if (!Object.hasOwn(FUNCS, fn)) throw syntaxError(`unknown function "${fn}"`, toks[pos - 2]?.p ?? 0);
+    if (!Object.hasOwn(FUNCS, fn) && !Object.hasOwn(ROW_FUNCS, fn)) throw syntaxError(`unknown function "${fn}"`, toks[pos - 2]?.p ?? 0);
     return { k: "call", fn, args: args() };
   }
 

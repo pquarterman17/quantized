@@ -11,7 +11,8 @@
 // module-level state (debounce timer, in-progress guard, pending follow-up
 // flag), and the four actions — `setRecalcMode`, `touchDataset`, `recalcNow`,
 // `setFitSpec`. The work a pass does stays where it was: ./recalcDatasets
-// (corrections + derived worksheets) and ./recalcFits (saved fits).
+// (corrections + derived worksheets) and ./recalcFits (saved fits), both
+// loaded lazily by the pass.
 //
 // Contract: none of the four records an undo step, toasts or records a macro
 // step. `touchDataset` only ever ADDS ids to the stale lists, never mutates
@@ -32,8 +33,6 @@ import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
 import type { FitSpec } from "../lib/types";
 import { FIT_ROW_IDENTITIES } from "../lib/rowSidecars";
 import { refreshFitRefsLater } from "./computedColumns";
-import { recomputeStaleDatasets } from "./recalcDatasets";
-import { recomputeStaleFits } from "./recalcFits";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -45,6 +44,7 @@ type SliceGet = () => AppState;
 let _recalcTimer: ReturnType<typeof setTimeout> | null = null;
 let _recalcInProgress = false;
 let _recalcPending = false; // #3: request mid-pass -> follow-up pass, not a no-op
+let _recalcEverything = false; // audit #22: the next pass marks everything first
 
 export interface RecalcEngineSlice {
   // Recalc engine (#1): auto re-runs downstream corrections/fits when data
@@ -105,23 +105,22 @@ export function createRecalcEngineSlice(set: SliceSet, get: SliceGet): RecalcEng
       // stale, so a plain pass had nothing to run and "Recalculate now" did
       // nothing. An explicit everything-pass marks every node downstream of
       // every dataset first, so the manual request still recalculates.
-      if (options?.everything) {
-        const s = get();
-        let staleDatasets = s.staleDatasets;
-        let staleFits = s.staleFits;
-        for (const d of s.datasets) {
-          const down = downstreamOf(s.datasets, d.id);
-          staleDatasets = markStale(staleDatasets, down.datasets);
-          staleFits = markStale(staleFits, down.fits);
-        }
-        if (staleDatasets !== s.staleDatasets || staleFits !== s.staleFits) set({ staleDatasets, staleFits });
-      }
+      if (options?.everything) _recalcEverything = true; // done by the pass, below
       // #3: a request that arrives mid-pass (refreshFitRefsFor's own call,
       // reached from inside recomputeStaleFits below) sets the pending flag
       // for a follow-up pass below, rather than the silent no-op it used to be.
       if (_recalcInProgress) return void (_recalcPending = true);
       _recalcInProgress = true;
       try {
+        // The pass itself is a lazy chunk (bundle budget): it only ever runs
+        // asynchronously, after an edit's debounce or on request, so nothing
+        // on first paint needs it. The in-progress flag is set BEFORE this
+        // await, so the re-entrancy contract above is unchanged.
+        const [{ markEverythingStale, recomputeStaleDatasets }, { recomputeStaleFits }] = await Promise.all([import("./recalcDatasets"), import("./recalcFits")]);
+        if (_recalcEverything) {
+          _recalcEverything = false;
+          markEverythingStale(set, get);
+        }
         await recomputeStaleDatasets(set, get);
         await recomputeStaleFits(set, get);
       } finally {

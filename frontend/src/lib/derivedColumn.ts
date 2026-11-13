@@ -103,7 +103,7 @@ function upstreamOf(ds: Dataset, letter: string): Set<string> {
 
 export function deriveColumns(ds: Dataset, req: DeriveRequest): DeriveOutcome {
   // col("Long Name") is stored as the column's letter (lib/formulaRefs.ts).
-  const expr = resolveColumnNames(req.expr.trim(), ds.data.labels, channelLetter);
+  const expr = resolveColumnNames(req.expr.trim(), ds.data.labels);
   const name = req.name.trim() || expr;
   try {
     compileFormula(expr);

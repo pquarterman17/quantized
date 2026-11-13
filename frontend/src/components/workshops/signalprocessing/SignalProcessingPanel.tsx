@@ -89,6 +89,7 @@ export default function SignalProcessingPanel() {
   useEffect(() => {
     setSecondaryId("");
     setSecondaryChannel(null);
+    setSettings((current) => ({ ...current, dropUncertainty: false })); // a choice about THIS dataset's errors
   }, [activeId]);
 
   useEffect(() => {

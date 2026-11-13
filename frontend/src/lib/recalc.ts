@@ -44,7 +44,7 @@
 //                            to deriving it on demand rather than throwing).
 
 import { referencedColumns, channelLetter } from "./formula";
-import { sheetNamesRead } from "./formulaRefs";
+import { sheetNamesRead } from "./formulaExt";
 import type { Dataset } from "./types";
 
 export type RecalcMode = "auto" | "manual" | "off";

@@ -18,10 +18,6 @@
 // Origin-like additions (worksheet audit #17, lib/formulaRefs.ts):
 //   - `?` `:` (the conditional `c ? a : b`) and `[` `]` (`A[3]`, `A[1:10]`)
 //     are operator tokens.
-//   - `col(A)` IS `A`: the four tokens collapse to the bare name token (at
-//     the name's own offset, so the column-shift rewrite still finds it).
-//     `col("Long Name")` is left for `resolveColumnNames` to turn into a
-//     letter against the worksheet's labels.
 
 import type { Tok } from "./formulaTypes";
 
@@ -91,21 +87,5 @@ export function tokenize(src: string): Tok[] {
       throw syntaxError(`unexpected character "${c}"`, p);
     }
   }
-  return collapseColRefs(toks);
-}
-
-/** `col ( A )` -> `A` (see the module header). */
-function collapseColRefs(toks: Tok[]): Tok[] {
-  const out: Tok[] = [];
-  for (let i = 0; i < toks.length; i++) {
-    const [t, open, name, close] = [toks[i], toks[i + 1], toks[i + 2], toks[i + 3]];
-    const isOp = (x: Tok | undefined, v: string) => !!x && x.t === "op" && x.v === v;
-    if (t.t === "name" && t.v === "col" && isOp(open, "(") && name?.t === "name" && isOp(close, ")")) {
-      out.push(name);
-      i += 3;
-    } else {
-      out.push(t);
-    }
-  }
-  return out;
+  return toks;
 }

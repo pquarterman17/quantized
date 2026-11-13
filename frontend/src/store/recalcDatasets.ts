@@ -39,11 +39,11 @@
 import { columnRemovalRefsPatch } from "./columnRemovalRefs";
 import { withRecomputedFormulas } from "./computedColumns";
 import { baseColumns } from "../lib/formula";
-import { sheetNamesRead } from "../lib/formulaRefs";
+import { sheetNamesRead } from "../lib/formulaExt";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 import { rowsChangedGuard } from "./corrections";
 import { plural } from "../lib/plural";
-import { sortForRecalc } from "../lib/recalc";
+import { downstreamOf, markStale, sortForRecalc } from "../lib/recalc";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
 
@@ -183,4 +183,20 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
     const why = [...failed].map(([id, reason]) => `${nameOf(id)}: ${reason}`).join("; ");
     get().setStatus(`recalculated ${n - failed.size} of ${n} dataset${plural(n)} — ${why}`);
   }
+}
+
+/** Mark every node downstream of every dataset stale — how "Recalculate now"
+ *  works in mode None ("off"), which tracks no staleness (worksheet audit
+ *  #22). Lives in this lazy module with the pass it feeds. */
+export function markEverythingStale(set: SliceSet, get: SliceGet): void {
+  get().setStatus("recalculating everything (mode None tracks nothing)");
+  const s = get();
+  let staleDatasets = s.staleDatasets;
+  let staleFits = s.staleFits;
+  for (const d of s.datasets) {
+    const down = downstreamOf(s.datasets, d.id);
+    staleDatasets = markStale(staleDatasets, down.datasets);
+    staleFits = markStale(staleFits, down.fits);
+  }
+  if (staleDatasets !== s.staleDatasets || staleFits !== s.staleFits) set({ staleDatasets, staleFits });
 }

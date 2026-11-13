@@ -6,8 +6,10 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { parseExpr, printExpr } from "./derivedExprAst";
 import { deriveUnit } from "./derivedUnits";
-import { applyFormulas, applyFormulasWithErrors, channelLetter, compileFormula, referencedColumns } from "./formula";
-import { resolveColumnNames, setFormulaSheetResolver, sheetNamesRead } from "./formulaRefs";
+import { applyFormulas, applyFormulasWithErrors, compileFormula, referencedColumns } from "./formula";
+import { sheetNamesRead } from "./formulaExt";
+import { isRowLocalFormula } from "./formulaIncremental";
+import { resolveColumnNames, setFormulaSheetResolver } from "./formulaRefs";
 import { downstreamOf } from "./recalc";
 import type { DataStruct, Dataset } from "./types";
 
@@ -37,14 +39,17 @@ describe("col() references", () => {
   it("col(A) is A, and col(\"Long Name\") resolves to the named column's letter", () => {
     expect(col("col(A) * 2")).toEqual(col("A * 2"));
     expect(referencedColumns("col(A) + 1").letters).toEqual(["A"]);
-    expect(resolveColumnNames('col("Moment") / 2', base.labels, channelLetter)).toBe("A / 2");
-    expect(resolveColumnNames('col("moment") / 2', base.labels, channelLetter)).toBe("A / 2"); // unique case-insensitive
+    expect(resolveColumnNames('col("Moment") / 2', base.labels)).toBe("A / 2");
+    expect(resolveColumnNames('col("moment") / 2', base.labels)).toBe("A / 2"); // unique case-insensitive
     expect(col('col("Moment") / 2')).toEqual([5, 10, Number.NaN, 20]);
   });
 
   it("an unknown name is an error that names it", () => {
     const out = applyFormulasWithErrors(base, [{ name: "f", expr: 'col("Nope") + 1' }]);
     expect(out.errors.f).toMatch(/no column named "Nope"/);
+    // The row-function table is looked up by OWN key only.
+    expect(() => compileFormula("constructor(1)")).toThrow(/unknown function "constructor"/);
+    expect(() => compileFormula("toString(1)")).toThrow(/unknown function "toString"/);
   });
 });
 
@@ -77,6 +82,12 @@ describe("text comparison", () => {
     expect(col('B == "B"')).toEqual([0, 1, 0, 1]);
     expect(col('"A" == B')).toEqual([1, 0, 1, 0]);
     expect(col('if(col("Note") != "a", A, 0)')).toEqual([0, 20, 0, 40]);
+  });
+
+  it("text comparison and sheet() are never evaluated by the single-row incremental path (it has no level/text/sheet context)", () => {
+    expect(isRowLocalFormula({ name: "f", expr: 'B == "B"' })).toBe(false);
+    expect(isRowLocalFormula({ name: "f", expr: 'sheet("Run 2", A)' })).toBe(false);
+    expect(isRowLocalFormula({ name: "f", expr: "A > 1 ? A : 0" })).toBe(true); // the conditional is row-local
   });
 
   it("refuses text against a numeric column", () => {
