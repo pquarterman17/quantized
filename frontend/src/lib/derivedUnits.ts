@@ -59,7 +59,7 @@ const SAME_UNIT = new Set(["abs", "absolute", "floor", "ceil"]);
 // (audit #17) — short on purpose: "min", "deg" or "a.u." never get one.
 const PREFIX: Record<number, string> = { [-24]: "y", [-21]: "z", [-18]: "a", [-15]: "f", [-12]: "p", [-9]: "n", [-6]: "µ", [-3]: "m", 3: "k", 6: "M", 9: "G", 12: "T", 15: "P", 18: "E", 21: "Z", 24: "Y" };
 const PREFIXABLE = new Set(["K", "Oe", "T", "G", "emu", "A", "V", "W", "Hz", "s", "g", "m", "Pa", "eV", "J", "N", "Ω", "F", "C", "S", "mol", "L", "bar", "Wb", "H", "rad"]);
-const MATCHING = new Set(["min", "max", "hypot"]);
+const MATCHING = new Set(["min", "max", "hypot", "rowmean", "rowsd", "rowmin", "rowmax", "rowsum"]);
 
 const clean = (e: number): number => {
   const r = Math.round(e * 1e9) / 1e9;
@@ -357,7 +357,7 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
         if (f === "sqrt") return power(n.args[0], { k: "num", v: 0.5 }, `"${printExpr(n)}"`);
         if (f === "pow" || f === "power") return power(n.args[0], n.args[1], `"${printExpr(n)}"`);
         const us = n.args.map(u);
-        if (f === "sign") return LIT;
+        if (f === "sign" || f === "rown") return LIT;
         if (SAME_UNIT.has(f)) return us[0];
         if (MATCHING.has(f)) return unify(n.args, us, `"${printExpr(n)}"`);
         if (f === "atan2") {

@@ -95,6 +95,25 @@ export function buildDataCommands(s: StoreGet): Action[] {
       keywords: "jmp tabulate group summary statistics aggregate",
       run: () => s().setTabulateOpen(true),
     },
+    // Worksheet audit #19 — lazy bodies (store/worksheetStatsRun.ts).
+    {
+      id: "row-statistics",
+      group: "Data",
+      section: "Rows & summary",
+      label: "Row statistics (mean, SD, min, max, sum, N across columns)…",
+      description: "Add computed columns holding each row's mean, standard deviation, minimum, maximum, sum or count across chosen columns.",
+      keywords: "origin row statistics across columns per row average",
+      run: () => void import("../store/worksheetStatsRun").then((m) => m.runRowStatistics(), () => s().setStatus("couldn't load Row statistics — try again")),
+    },
+    {
+      id: "frequency-count",
+      group: "Data",
+      section: "Rows & summary",
+      label: "Frequency count (bin a column into a table)…",
+      description: "Bin one column into a new worksheet with bin edges and centers, counts, cumulative counts and percentages.",
+      keywords: "origin frequency count histogram bins table cumulative percent",
+      run: () => void import("../store/worksheetStatsRun").then((m) => m.runFrequencyCount(), () => s().setStatus("couldn't load Frequency count — try again")),
+    },
     {
       id: "pipeline",
       group: "Data",
