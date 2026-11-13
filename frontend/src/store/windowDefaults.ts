@@ -1,6 +1,7 @@
 // Dataset-aware defaults and the invariant main plot window, extracted from
 // the pinned window-management slice.
 import { defaultErrKeys, errorRoleViewDefaults, originHiddenChannels } from "../lib/errorbars";
+import { textAxisFallbackChannel } from "../lib/modeling";
 import { isTechniqueChange, techniqueViewDefaults } from "../lib/techniqueDefaults";
 import { applyTechniqueMemory, type TechniqueViewMemoryMap } from "../lib/techniqueViewMemory";
 import { cascadeGeometry, defaultPlotView, type PlotView, type PlotWindow } from "../lib/plotview";
@@ -59,7 +60,9 @@ export function datasetViewDefaults(
   if (dataset?.data.metadata?.default_trace === "Scatter")
     dataset.data.labels.forEach((_, i) => (seriesStyles[i] = { marker: true, width: 0 }));
   return {
-    xKey: null,
+    // Figures-audit #8: a text first column (Sample,Value,SD) plots as its
+    // category labels, not as codes against a 1..N row index.
+    xKey: dataset ? textAxisFallbackChannel(dataset) : null,
     yKeys: null,
     // P1.5 review P1: groupKey indexes the active dataset's columns exactly
     // like xKey/yKeys -- omitted here, it rode a stale index into a

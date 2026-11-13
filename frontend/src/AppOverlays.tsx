@@ -74,6 +74,7 @@ import { useStatsTestsStore } from "./store/statsTests";
 import { useVariabilityStore } from "./store/variability";
 import { useRelinkPanel } from "./store/relinkPanel";
 import { useRecodePanel } from "./store/recodePanel";
+import { useFigureDialog } from "./store/figureDialogs";
 import { useLevelOrderPanel } from "./store/levelOrderPanel";
 import { useCombineDialog } from "./store/combineDialog";
 import { useResampleDialog } from "./store/resampleDialog";
@@ -168,6 +169,9 @@ const RecipeManagerPanel = lazyPanel(() => import("./components/workshops/recipe
 // P3.5: the cross-kind Recipe Library is a separate, browse-first surface.
 // The existing Plot Recipe Manager remains the advanced plot-specific editor.
 const RecipeLibraryPanel = lazyPanel(() => import("./components/workshops/recipelibrary/RecipeLibraryPanel"), "RecipeLibraryPanel");
+// Figures-audit #6/#8: the Axis dialog and the Plot-type gallery, one lazy
+// chunk gated by the dependency-free store/figureDialogs.ts flag.
+const FigureDialogs = lazyPanel(() => import("./components/overlays/figuredialogs/FigureDialogs"), "FigureDialogs");
 const AnnotationTextDialog = lazyPanel(() => import("./components/overlays/AnnotationTextDialog"), "AnnotationTextDialog");
 const ShortcutsDialog = lazyPanel(() => import("./components/overlays/ShortcutsDialog"), "ShortcutsDialog");
 const TextFormatHelp = lazyPanel(() => import("./components/overlays/TextFormatHelp"), "TextFormatHelp");
@@ -277,6 +281,7 @@ export default function AppOverlays() {
   const relinkOpen = useRelinkPanel((s) => s.open);
   const packProjectOpen = usePackProjectPanel((s) => s.open);
   const recodeOpen = useRecodePanel((s) => s.open);
+  const figureDialogOpen = useFigureDialog((s) => s.open !== null);
   const levelOrderOpen = useLevelOrderPanel((s) => s.open);
   const workbookPropertiesOpen = useWorkbookPropertiesDialog((s) => s.properties !== null);
   const auxFigureOpen = useAuxFigureStore((s) => s.ternaryOpen || s.fieldOpen);
@@ -354,6 +359,7 @@ export default function AppOverlays() {
       {relinkOpen && <RelinkPanel />}
       {packProjectOpen && <PackProjectPanel />}
       {recodeOpen && <RecodePanel />}
+      {figureDialogOpen && <FigureDialogs />}
       {levelOrderOpen && <LevelOrderPanel />}
       {workbookPropertiesOpen && <WorkbookPropertiesDialog />}
       {auxFigureOpen && <AuxFigurePanels />}

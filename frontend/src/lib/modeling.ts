@@ -75,3 +75,18 @@ export function channelModelingType(ds: Dataset, channel: number): ModelingType 
 export function isCategorical(t: ModelingType): boolean {
   return t !== "continuous";
 }
+
+/** The categorical channel a text FIRST column became (figures-audit #8).
+ *  The delimited/Excel importers cannot use a text column as the numeric
+ *  axis, so they fall back to a 1..N row index named "Sample Index" and keep
+ *  the text column as a categorical channel -- which left a Sample,Value,SD
+ *  table plotted against 1..4 with category CODES as a series. This finds
+ *  that channel (the file's first column, now categorical) so a fresh view can
+ *  use it as X and draw the A/B/C/D level labels. Null for anything else. */
+export function textAxisFallbackChannel(ds: Dataset): number | null {
+  const meta = ds.data.metadata ?? {};
+  const first = Array.isArray(meta["all_column_names"]) ? meta["all_column_names"][0] : undefined;
+  if (meta["x_column_name"] !== "Sample Index" || typeof first !== "string") return null;
+  const ch = ds.data.labels.indexOf(first);
+  return ch >= 0 && isCategoricalChannel(ds.data, ch) ? ch : null;
+}

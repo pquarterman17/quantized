@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { gadgetPlugins, loadGadgetPlugins } from "./axisExtrasHook";
 import { buildOpts, categoricalTickFormatter, fixedLinearAxisSplits, fixedLogAxisSplits, logMajorTickFilter, niceLinearStep, reciprocalAxisSplits, reciprocalTransform, resolvePlotBg, tickFormatter, utcTzDate, xIsAscending } from "./uplotOpts";
 import type { PlotPayload } from "./plotdata";
 import { isFixedXRange } from "./uplotXRange";
@@ -245,14 +246,18 @@ describe("buildOpts", () => {
     ).toHaveLength(1);
   });
 
-  it("the qfit tool adds the ROI-band gadget plugin by default (fit/integrate/stats/differentiate/fft)", () => {
+  it("the qfit tool adds the ROI-band gadget plugin by default (fit/integrate/stats/differentiate/fft)", async () => {
+    // The gadget plugins load on demand (lib/axisExtrasHook.ts): none until the chunk arrives.
+    if (!gadgetPlugins()) expect(buildOpts(payload, { ...base, yScale: "linear", tool: "qfit" }).plugins).toHaveLength(0);
+    await loadGadgetPlugins();
     expect(buildOpts(payload, { ...base, yScale: "linear", tool: "qfit" }).plugins).toHaveLength(1);
     expect(
       buildOpts(payload, { ...base, yScale: "linear", tool: "qfit", gadgetMode: "integrate" }).plugins,
     ).toHaveLength(1);
   });
 
-  it("the qfit tool swaps to the paired-cursors plugin in cursors mode (gap #34)", () => {
+  it("the qfit tool swaps to the paired-cursors plugin in cursors mode (gap #34)", async () => {
+    await loadGadgetPlugins();
     expect(
       buildOpts(payload, { ...base, yScale: "linear", tool: "qfit", gadgetMode: "cursors" }).plugins,
     ).toHaveLength(1);

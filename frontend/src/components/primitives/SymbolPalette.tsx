@@ -20,6 +20,9 @@ export interface PaletteEntry {
   /** Caret offset back from the end of the raw snippet (before any `$`
    *  wrapping) — e.g. 1 for `_{}` lands the caret between the braces. */
   caretBack?: number;
+  /** A click WRAPS the current selection (an Origin escape around the text
+   *  it formats) instead of inserting at the caret. */
+  wrap?: boolean;
 }
 
 /** Unescaped `$` count — odd means "inside a math region". */
@@ -95,7 +98,9 @@ export function wrapLabelSelection(
   const splitAt = entry.caretBack != null ? raw.length - entry.caretBack : raw.length;
   const open = raw.slice(0, splitAt);
   const close = raw.slice(splitAt);
-  const body = inMath ? `${open}${sel}${close}` : `$${open}${sel}${close}$`;
+  // A plain-text entry (an Origin escape) is never put inside `$...$`.
+  const plain = entry.math == null && entry.text != null;
+  const body = inMath || plain ? `${open}${sel}${close}` : `$${open}${sel}${close}$`;
   return { value: before + body + after, cursor: before.length + body.length };
 }
 
@@ -113,6 +118,16 @@ const UPRIGHT_ENTRY: PaletteEntry = {
 };
 
 const SCRIPTS: PaletteEntry[] = [SUBSCRIPT_ENTRY, SUPERSCRIPT_ENTRY, ITALIC_ENTRY, UPRIGHT_ENTRY];
+
+/** Origin's rich-text escapes (figures-audit #17) -- what an Origin label
+ *  holds, rendered by the export (and kept verbatim on Origin round-trips).
+ *  Each WRAPS the selection: select "2" then x² gives `\+(2)`. Plain text,
+ *  never `$...$`; the mathtext entries above stay for `$...$` labels. */
+export const ORIGIN_ESCAPES: PaletteEntry[] = [
+  { glyph: "x⁺", text: "\\+()", caretBack: 1, wrap: true, title: "Origin superscript  \\+( )" },
+  { glyph: "x₋", text: "\\-()", caretBack: 1, wrap: true, title: "Origin subscript  \\-( )" },
+  { glyph: "\\g", text: "\\g()", caretBack: 1, wrap: true, title: "Origin Greek  \\g( )  — \\g(a) is α" },
+];
 
 const GREEK_NAMES: [string, string][] = [
   ["α", "alpha"], ["β", "beta"], ["γ", "gamma"], ["δ", "delta"], ["ε", "varepsilon"],
@@ -270,6 +285,7 @@ export default function SymbolPalette({ x, y, onInsert, onClose }: SymbolPalette
       style={{ position: "fixed", left: pos.x, top: pos.y, zIndex: 1000, width: 248 }}
     >
       <Section label="Insert" entries={SCRIPTS} onInsert={onInsert} cols={4} />
+      <Section label="Origin escapes" entries={ORIGIN_ESCAPES} onInsert={onInsert} cols={3} />
       <Section label="Greek" entries={GREEK} onInsert={onInsert} cols={8} />
       <Section label="Symbols" entries={SYMBOLS} onInsert={onInsert} cols={6} />
       <Section label="Structures" entries={STRUCTURES} onInsert={onInsert} cols={6} />

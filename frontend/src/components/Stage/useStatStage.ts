@@ -52,7 +52,9 @@ import {
 import type { StatMarksByMode, StatMarksMode } from "../../lib/plotviewSanitize";
 import type { StatMarks } from "../../lib/statMarks";
 import { statColorOf } from "../../lib/statColor";
+import { withColumnErrors } from "../../lib/barMatrix";
 import { needsBarRaw } from "./statBarMarks";
+import { useStatBarSeries } from "./useStatBarSeries";
 import { figureErrorNote } from "./statErrorNote";
 import { applyLevels, levelAxes } from "./statStageLevels";
 import { needsPoints, stageMarks, withMarks, withNestLabel } from "./statStageMarks";
@@ -197,31 +199,20 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   // label's own text (`lib/statMarks.nestedTiers`'s doc).
   const nestLabel = nestCol != null ? labelOf(nestCol) : null;
 
-  // Bar mode (gap #20): a category x series matrix, not a 1-D group list —
-  // when a categorical column is picked, every PLOTTED channel becomes its
-  // own clustered/stacked series within each category (buildBarMatrix);
-  // otherwise fall back to one category per plotted channel (mirrors box/
-  // violin's own fallback), each holding a single series. Purely local math
-  // (lib/barlayout), no backend round-trip needed.
-  const barValueChannels = useMemo(
-    () => (plotted.length ? plotted : [valueCol]),
-    [plotted, valueCol],
-  );
-  const barValueLabel = useMemo(() => {
-    if (barValueChannels.length > 1) return "value";
-    return columns.find((c) => c.index === barValueChannels[0])?.label ?? valueLabel;
-  }, [barValueChannels, columns, valueLabel]);
-  const barLabels = useMemo(
-    () => barValueChannels.map((c) => columns.find((col) => col.index === c)?.label ?? `col ${c}`),
-    [barValueChannels, columns],
+  // Bar mode (gap #20): a category x series matrix (lib/barlayout), purely
+  // local math. Which channels become bars, and their error columns: see
+  // useStatBarSeries.ts (figures-audit #8).
+  const { barValueChannels, barLabels, barValueLabel, barErrorChannels } = useStatBarSeries(
+    active, plotted, valueCol, effectiveGroupCol, nestCol, columns, valueLabel,
   );
   // P2.6 box 1: a grouped bar's points / median need each cell's raw rows.
   const barRaw = mode === "bar" && needsBarRaw(rm);
   const barData = useMemo<BarChartData | null>(() => {
     if (!data || mode !== "bar") return null;
     const raw = barRaw ? { rowIds } : null;
-    return computeBarData(data, effectiveGroupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel, raw);
-  }, [data, rowIds, barRaw, mode, effectiveGroupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel]);
+    const bd = computeBarData(data, effectiveGroupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel, raw);
+    return withColumnErrors(bd, data, effectiveGroupCol, barValueChannels, barErrorChannels);
+  }, [data, rowIds, barRaw, mode, effectiveGroupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel, barErrorChannels]);
 
   // P2.6 box 2: facet slices computed ONCE, shared by the compute effect and
   // the level axes; and every draw keyed to the grouping inputs it was
@@ -286,6 +277,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
             barStack,
             groupLabel,
             barRaw ? { rowIds } : null,
+            barErrorChannels,
           ),
         );
         return () => {
@@ -420,6 +412,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     plotted,
     barValueChannels,
     barLabels,
+    barErrorChannels,
     slices,
     setDrawData,
     setDrawFacets,

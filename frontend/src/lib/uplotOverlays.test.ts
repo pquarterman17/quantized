@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { ERROR_CAP_HALF_PX } from "./uplotErrorRange";
 import type uPlot from "uplot";
 
 import type { ColorScatterSpec } from "./colorscatter";
@@ -14,7 +15,6 @@ import {
   clampAnnotationSize,
   clampPageXY,
   colorScatterPlugin,
-  ERROR_CAP_HALF_PX,
   errorBarsPlugin,
   errorSpansPlugin,
   MAX_ANNOTATION_SIZE,

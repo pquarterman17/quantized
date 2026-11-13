@@ -4,11 +4,10 @@
 // up-scale instead of nx·ny rects. NaN cells (outside the data hull) are
 // transparent (gaps), matching uPlot's null = gap for 1-D.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { COLORMAPS } from "../../lib/colormap";
 import { cutSpaceForKeys } from "../../lib/mapcuts";
-import { defaultMapKeys, mapColumns } from "../../lib/mapdata";
 import { mapViewFor } from "../../lib/mapView";
 import { hasQSpace, rsmAxisKeys } from "../../lib/mapdataFetch";
 import type { Dataset } from "../../lib/types";
@@ -21,6 +20,7 @@ import { armExclusively, routedTool } from "./mapToolArming";
 import { fmt } from "./mapRender";
 import { runMapExport } from "./mapFigureExport";
 import { useMapPaint } from "./useMapPaint";
+import { useMapColumnPicks } from "./useMapColumnPicks";
 import { useMapPayload } from "./useMapPayload";
 import { useDockClearance } from "./useDockClearance";
 import { useMapCuts } from "./useMapCuts";
@@ -88,16 +88,8 @@ export default function MapStage({ dataset }: MapStageProps) {
   const contourScale = useApp((s) => s.contourScale);
   const setContourOn = useApp((s) => s.setContourOn);
   const setStatus = useApp((s) => s.setStatus);
-  // x/y/z channel picks, local to this view (default the first three channels).
-  const [keys, setKeys] = useState<[number, number, number]>([0, 1, 2]);
-
-  // Figures-audit #13: the X/Y/Z pickers choose among EVERY file column,
-  // the first (axis) column included (`mapColumns`); a parser 2-D map keeps
-  // its own channels, which its cut/ROI tools index.
-  const mapActive = useMemo(
-    () => (active ? { ...active, data: mapColumns(active.data) } : null),
-    [active],
-  );
+  // x/y/z channel picks over every file column (useMapColumnPicks.ts, #13).
+  const { mapActive, keys, setKeys } = useMapColumnPicks(active);
   const labels = mapActive?.data.labels ?? [];
   const enoughChannels = labels.length >= 3;
   // Fetch + regrid on dataset/channel changes; `fresh` gates the export.
@@ -160,13 +152,6 @@ export default function MapStage({ dataset }: MapStageProps) {
     reportToStore: dataset === undefined,
   });
   const hostSize = { w, h };
-
-  // Reset the channel picks when the active dataset changes: the grid-like
-  // X/Y columns and the first remaining value (`defaultMapKeys`).
-  useEffect(() => {
-    setKeys(active ? defaultMapKeys(active.data) : [0, 1, 2]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.id]);
 
   // Box, ruler, and the sector wedge take precedence over the cut tool while
   // armed — all four drive the same canvas pointer gestures, so only one may

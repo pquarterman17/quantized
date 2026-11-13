@@ -7,7 +7,8 @@
 
 import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
 import { describeLabelRow, labelRows, labelsFromRow, type LabelRow } from "../../lib/labelRows";
-import { symmetricBinding, withSymmetricYError } from "../../lib/errorRoles";
+import { withSymmetricYError } from "../../lib/errorRoleEdits";
+import { symmetricBinding } from "../../lib/errorRoles";
 import { channelModelingType } from "../../lib/modeling";
 import { defaultDenseChannels } from "../../lib/plotdata";
 import type { ChannelRole, Dataset, ModelingType } from "../../lib/types";

@@ -12,6 +12,7 @@ import { plotInNewWindow } from "../lib/plotInNewWindow";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { cycleAxisScale, cycleTickMode } from "../lib/plotview";
 import type { Action } from "../store/commands";
+import { openFigureDialog } from "../store/figureDialogs";
 import { useRecipeManager } from "../store/recipeManager";
 import { toast } from "../store/toasts";
 import { onLoadFailure, runLazy } from "./fileCommands";
@@ -320,6 +321,26 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       keywords: "report figure embed word powerpoint docx pptx html",
       run: () => void sendFigureToReport(s),
     },
+    // ── Figures audit #6 / #8: the Axis dialog and the plot-type gallery
+    // (one lazy chunk, store/figureDialogs.ts). ──
+    {
+      id: "axis-dialog",
+      group: "Plot",
+      section: "Axes",
+      label: "Axis…",
+      description: "Edit an axis: scale, limits, ticks, number format, divide-by, fonts. Or double-click the axis.",
+      keywords: "scale limits ticks minor divide font",
+      run: () => openFigureDialog({ kind: "axis", axis: "x" }),
+    },
+    {
+      id: "plot-type",
+      group: "Plot",
+      section: "Display",
+      label: "Plot type…",
+      description: "Switch the graph to line, scatter, area, column, box, histogram or contour.",
+      keywords: "gallery bar histogram heatmap",
+      run: () => openFigureDialog({ kind: "plotType" }),
+    },
     // ── Graph format (figures-audit B2; filed under "Display"): style-only templates and Origin-style
     // Copy/Paste Format. Style travels; data, limits and titles never do. ──
     {
@@ -327,8 +348,8 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Display",
       label: "Save Graph Template…",
-      description: "Save the active graph's style (axis scales and formats, legend, frame, series styles by position) as a reusable template.",
-      keywords: "style template origin otp save format",
+      description: "Save this graph's style (not its data) as a reusable template.",
+      keywords: "style otp",
       run: () => graphFormatCommand(s, (m) => m.saveStageGraphTemplate),
     },
     {
@@ -336,8 +357,8 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Display",
       label: "Apply Graph Template…",
-      description: "Restyle the active graph with a saved graph template; its data, limits and titles are kept.",
-      keywords: "style template origin otp apply format",
+      description: "Restyle this graph with a saved template; its data is kept.",
+      keywords: "style otp",
       run: () => graphFormatCommand(s, (m) => m.applyStageGraphTemplate),
     },
     {
@@ -345,8 +366,8 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Display",
       label: "Copy Format",
-      description: "Copy the active graph's style (not its data) so it can be pasted onto another graph.",
-      keywords: "style copy format origin",
+      description: "Copy this graph's style (not its data).",
+      keywords: "style",
       run: () => graphFormatCommand(s, (m) => m.copyStageFormat),
     },
     {
@@ -354,8 +375,8 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Display",
       label: "Paste Format",
-      description: "Apply the copied graph style to the active graph; its data, limits and titles are kept.",
-      keywords: "style paste format origin",
+      description: "Apply the copied style to this graph; its data is kept.",
+      keywords: "style",
       run: () => graphFormatCommand(s, (m) => m.pasteStageFormat),
     },
     // ── Insert (MAIN #27: drawing shapes on plots — the menu-driven

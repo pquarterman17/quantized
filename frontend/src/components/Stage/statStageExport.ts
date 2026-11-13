@@ -250,7 +250,7 @@ export function onAxis<T>(
  *  (`statBarMarks.barMarksWire`; `marksOn` false for stacked). */
 function barWire(d: BarChartData, showN: boolean, m: ResolvedStatMarks | null = null, marksOn = false) {
   const kind = m?.errorBars ?? "se";
-  const half = (s: { sem: number; n: number }) => errorHalfWidth(kind, s.sem, s.n);
+  const half = (s: { sem: number; n: number; err?: number }) => errorHalfWidth(kind, s.sem, s.n, s.err);
   return {
     groups: d.groups.map((g) => g.label),
     series: d.seriesLabels,

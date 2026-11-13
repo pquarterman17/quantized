@@ -4,6 +4,10 @@
 import type { ErrorSpan } from "./errorbars";
 import type uPlot from "uplot";
 
+import { axisExtrasApplier, gadgetPlugins } from "./axisExtrasHook";
+import { categoricalTickFormatter } from "./categoricalTicks"; // moved out (line pin); re-exported
+export { categoricalTickFormatter };
+
 import type { ColorScatterSpec } from "./colorscatter";
 // The palette (cssVar / SERIES_VARS / seriesColor) now lives beside the P3.3
 // cycle in ./seriesStyleCycle: hue by display position there, dash and glyph by
@@ -23,14 +27,13 @@ import { sharedAxisTitle } from "./sharedAxisTitle";
 import { logDecadeLabels, logGridSplits, logMajorTickFilter, spansDecade } from "./logTicks";
 export { logMajorTickFilter };
 import { decimalsForIncrement, pow10 } from "./ticks";
-import { errorRange, errorReach, fullYExtents, withXBarRows } from "./uplotErrorRange";
+import { ERROR_CAP_HALF_PX, errorRange, errorReach, fullYExtents, withXBarRows } from "./uplotErrorRange";
 import { fixedXRange, fullXExtents, scannedXRange } from "./uplotXRange";
 import type { Annotation, AxisFormat, AxisScale, DefaultTrace, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
 import {
   annotationPlugin,
   axisBoxPlugin,
   colorScatterPlugin,
-  ERROR_CAP_HALF_PX,
   errorBarsPlugin,
   errorSpansPlugin,
   refLinePlugin,
@@ -41,7 +44,6 @@ import { regionLiveBoxHook, regionSelectPick } from "./uplotRegionBox";
 import { richLabelsPlugin, type AxisLabelEditOpts } from "./uplotRichLabels";
 import { buildSeriesDefs, type SeriesColors } from "./uplotSeries";
 import { shapesPlugin, type ShapeEditOpts } from "./uplotShapes";
-import { gadgetCursorsPlugin, quickFitPlugin } from "./uplotGadgets";
 import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit";
 import { anchorEditPlugin, type AnchorPoint } from "./uplotAnchors";
 import { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
@@ -372,21 +374,6 @@ export function tickFormatter(fmt?: AxisFormat, scale: AxisScale = "linear"): Ti
     const d = Math.max(digits, decimalsForIncrement(incr));
     return splits.map((v) => (v == null ? null : stripNegZero(v.toFixed(Math.min(20, d)))));
   };
-}
-
-/** Build a uPlot axis `values` formatter for a categorical x-axis
- *  (`PlotPayload.xCategories`, gap #20): `data[0]` holds ORDINAL positions
- *  (0, 1, 2, …), so a tick maps to its label only when it lands exactly on an
- *  in-range integer index — a fractional split (uPlot may propose one
- *  between categories at some zoom levels) or an out-of-range one renders
- *  blank rather than a misleading label. */
-export function categoricalTickFormatter(categories: readonly string[]): TickValues {
-  return (_u, splits) =>
-    splits.map((v) => {
-      if (v == null) return null;
-      const i = Math.round(v);
-      return i >= 0 && i < categories.length && Math.abs(v - i) < 1e-6 ? categories[i] : "";
-    });
 }
 
 /** A "nice" linear tick step (1/2/5 × 10^n) for a span with no decoded Origin
@@ -934,17 +921,20 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // mode swaps the ROI band for two independent draggable lines; every other
   // mode (fit/integrate/stats/differentiate/fft) shares the same band — only
   // what the store computes from it differs.
-  if (tool === "qfit") {
+  // The gadget plugins load on demand (axisExtrasHook.ts): until the chunk
+  // arrives (the tool's first activation) no frame is drawn yet.
+  const g = tool === "qfit" ? gadgetPlugins() : null;
+  if (g) {
     if (args.gadgetMode === "cursors") {
       plugins.push(
-        gadgetCursorsPlugin(args.gadgetCursors ?? null, accentColor, {
+        g.gadgetCursorsPlugin(args.gadgetCursors ?? null, accentColor, {
           onCursorsChange: args.onCursorsChange,
           interactive: true,
         }),
       );
     } else {
       plugins.push(
-        quickFitPlugin(args.qfitRoi ?? null, accentColor, accentSoftColor, {
+        g.quickFitPlugin(args.qfitRoi ?? null, accentColor, accentSoftColor, {
           onRoiChange: args.onRoiChange,
           interactive: true,
         }),
@@ -1212,6 +1202,13 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       ...(y2ScaleEff === "log" ? { filter: logMajorTickFilter } : {}),
     });
   }
+
+  // Figures-audit #6: the Axis dialog's extras (minor/inward ticks, divide-by,
+  // tick font, Ln) -- null, and nothing changed, when no axis has one. y2
+  // inherits yFmt exactly as its tick formatter above does.
+  // The module loads on demand (axisExtrasHook.ts): absent = none drawn yet.
+  const extrasPlugin = axisExtrasApplier()?.(axes, [xFmt, yFmt, y2Fmt ?? yFmt], [xScale, yScale, y2ScaleEff], axisColor);
+  if (extrasPlugin) plugins.push(extrasPlugin);
 
   // The same colour read a live repaint uses (seriesColorsFor), so the two agree.
   const { series: seriesArr, bands } = buildSeriesDefs(payload, args, labels, xAscending, seriesColorsFor(args.bg));

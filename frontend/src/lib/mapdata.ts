@@ -19,36 +19,12 @@ export function is2DMap(ds: DataStruct): boolean {
   return ds.metadata["is2D"] === true && ds.labels.length >= 3;
 }
 
-/** The columns a map may pick from (figures-audit #13). A parser-flagged 2-D
- *  map (`is2D`) keeps its own channels -- its ROI/cut tooling indexes them.
- *  Every other dataset gets its FILE'S FIRST COLUMN back as channel 0: a
- *  plain long-form `X,Y,Z` CSV stores X as the axis (`time`), not as a
- *  channel, so without this its map could never use X -- and a 3-column
- *  file looked like it had only two. Pure; the result is cached per
- *  DataStruct so a re-render never re-allocates it. */
-const withAxisCache = new WeakMap<DataStruct, DataStruct>();
-export function mapColumns(ds: DataStruct): DataStruct {
-  if (ds.metadata["is2D"] === true) return ds;
-  const hit = withAxisCache.get(ds);
-  if (hit) return hit;
-  const meta = ds.metadata;
-  // The same x-label rule the line plot uses (`plotdata.ts`).
-  const xLabel = String(meta["x_column_long"] || meta["x_column_name"] || "X (first column)");
-  const xUnit = typeof meta["x_column_unit"] === "string" ? meta["x_column_unit"] : "";
-  const out: DataStruct = {
-    ...ds,
-    labels: [xLabel, ...ds.labels],
-    units: [xUnit, ...ds.units],
-    values: ds.values.map((row, i) => [ds.time[i], ...row]),
-  };
-  withAxisCache.set(ds, out);
-  return out;
-}
-
 /** True when `col` repeats values the way a gridded axis does: at most half
  *  as many distinct finite values as rows. A swept axis (every value new) or
  *  a continuous measured signal never does. */
-function repeats(col: (number | null | undefined)[]): boolean {
+export function repeats(col: (number | null | undefined)[]): boolean {
+  // levels-allowlist: counts DISTINCT values of a numeric axis to tell a
+  // gridded axis from a sweep -- not a column's category levels.
   const seen = new Set<number>();
   const limit = col.length / 2;
   for (const v of col) {
@@ -68,7 +44,7 @@ const mappableCache = new WeakMap<DataStruct, boolean>();
  *
  *  Since figures-audit #13: a parser-flagged 2-D map always qualifies; any
  *  other dataset needs three columns -- the file's first (axis) column
- *  counts, see `mapColumns` -- of which at least TWO repeat like gridded
+ *  counts, see `mapdataFetch.mapColumns` -- of which at least TWO repeat like gridded
  *  axes (`repeats`). That admits long-form XYZ (`X,Y,Z`, or `i,X,Y,Z`) and
  *  stops offering a Map tab for a 1-D sweep (`Energy,S0..S7`: a swept
  *  axis plus continuous signals), which could only ever draw nonsense.
@@ -88,27 +64,4 @@ export function canRenderMap(data: DataStruct | null | undefined): boolean {
   const ok = gridAxes >= 2;
   mappableCache.set(data, ok);
   return ok;
-}
-
-/** The map's starting X/Y/Z picks among `mapColumns(ds)` (figures-audit
- *  #13): the first two columns that repeat like grid axes become X and Y,
- * 
- *  the first column after them Z -- so `i,X,Y,Z` (a row-index first column)
- *  maps X/Y/Z, not i/X/Y. A parser 2-D map, or data with no two grid-like
- *  columns, keeps the plain first three. The user can re-pick any of them in
- *  the map toolbar. */
-export function defaultMapKeys(ds: DataStruct): [number, number, number] {
-  const cols = mapColumns(ds);
-  const n = cols.labels.length;
-  const fallback: [number, number, number] = [0, Math.min(1, n - 1), Math.min(2, Math.max(0, n - 1))];
-  if (ds.metadata["is2D"] === true) return fallback;
-  const grid: number[] = [];
-  for (let c = 0; c < n && grid.length < 2; c++) {
-    if (repeats(cols.values.map((row) => row[c]))) grid.push(c);
-  }
-  if (grid.length < 2) return fallback;
-  // Z: the first column after the two axes (the long-form X,Y,Z order), else any other.
-  const others = Array.from({ length: n }, (_, c) => c).filter((c) => !grid.includes(c));
-  const z = others.find((c) => c > grid[1]) ?? others[0];
-  return z === undefined ? fallback : [grid[0], grid[1], z];
 }

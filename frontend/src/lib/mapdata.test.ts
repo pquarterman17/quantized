@@ -2,9 +2,11 @@
 // detection half) and `mapdataFetch.ts` (lazy fetch/grid half).
 import { describe, expect, it, vi } from "vitest";
 
-import { canRenderMap, defaultMapKeys, is2DMap, mapColumns } from "./mapdata";
+import { canRenderMap, is2DMap } from "./mapdata";
 import {
   buildMapColumns,
+  defaultMapKeys,
+  mapColumns,
   fetchMap,
   hasQSpace,
   regridNearest,

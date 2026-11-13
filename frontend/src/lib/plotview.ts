@@ -27,6 +27,7 @@ import { isString, keyedRecord } from "./sanitizeRecord";
 import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { FigureDocument } from "./figureDocument";
 import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, ReferenceStick, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
+import { sanitizeAxisExtras } from "./axisFormat";
 
 // Moved-out siblings (module-size ratchet), re-exported so no importer changed.
 export { cycleAxisScale, cycleTickMode, isAxisScale, scaleFromLog } from "./plotviewAxis";
@@ -435,9 +436,9 @@ export function sanitizePlotView(v: unknown): PlotView {
     xLim: sanitizeHalfLim(o.xLim), yLim: sanitizeHalfLim(o.yLim), // half-open survives reopen
     xStep: numOrNull(o.xStep),
     yStep: numOrNull(o.yStep),
-    xFmt: isAxisFormat(o.xFmt) ? o.xFmt : fb.xFmt,
-    yFmt: isAxisFormat(o.yFmt) ? o.yFmt : fb.yFmt,
-    y2Fmt: isAxisFormat(o.y2Fmt) ? o.y2Fmt : fb.y2Fmt,
+    xFmt: isAxisFormat(o.xFmt) ? sanitizeAxisExtras(o.xFmt) : fb.xFmt, // #6 extras validated
+    yFmt: isAxisFormat(o.yFmt) ? sanitizeAxisExtras(o.yFmt) : fb.yFmt,
+    y2Fmt: isAxisFormat(o.y2Fmt) ? sanitizeAxisExtras(o.y2Fmt) : fb.y2Fmt,
     plotTitle: strOrDefault(o.plotTitle, fb.plotTitle),
     xAxisLabel: strOrDefault(o.xAxisLabel, fb.xAxisLabel),
     yAxisLabel: strOrDefault(o.yAxisLabel, fb.yAxisLabel),

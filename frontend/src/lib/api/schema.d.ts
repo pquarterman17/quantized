@@ -11462,17 +11462,27 @@ export interface components {
          *     see `calc.figure_ticks.axis_tick_formatter`.
          */
         TickFormatSpec: {
+            /** Base */
+            base?: "e" | null;
             /**
              * Digits
              * @default 2
              */
             digits?: number;
+            /** Divide */
+            divide?: number | null;
+            /** Minor */
+            minor?: number | null;
             /**
              * Mode
              * @default auto
              * @enum {string}
              */
             mode?: "auto" | "fixed" | "sci" | "eng" | "date" | "time" | "datetime";
+            /** Size */
+            size?: number | null;
+            /** Ticks */
+            ticks?: ("in" | "out" | "both") | null;
         };
         /** TwoSampleRequest */
         TwoSampleRequest: {

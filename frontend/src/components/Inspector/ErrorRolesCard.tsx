@@ -13,7 +13,8 @@ import { useRef } from "react";
 
 import { reviewSeedErrorBindings } from "../../lib/errorBindingConfidence";
 import { confirmErrorBindings, withdrawErrorBindingConfirmation } from "../../lib/errorRoleConfirm";
-import { asymmetricPair, nextManualErrorBindings, type ErrorBinding, type ErrorSide } from "../../lib/errorRoles";
+import { nextManualErrorBindings } from "../../lib/errorRoleEdits";
+import { asymmetricPair, type ErrorBinding, type ErrorSide } from "../../lib/errorRoles";
 import { effectiveChannels } from "../../lib/plotdata";
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import type { Dataset } from "../../lib/types";

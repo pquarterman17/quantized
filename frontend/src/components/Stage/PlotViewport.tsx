@@ -9,11 +9,10 @@
 // actions (reset view, save PNG, copy data, …) over the same uPlot instance —
 // see `usePlotStageActions`.
 
-import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 
-import type { PlotPayload } from "../../lib/plotdata";
 import {
   buildDecimatedData,
   decimatePlugin,
@@ -22,11 +21,10 @@ import {
   shouldDecimate,
   xExtent,
 } from "../../lib/plotDecimate";
-import type { HalfLim } from "../../lib/axisLim";
 import { classifyLimChange, type Lim } from "../../lib/plotLimApply";
 import { frameVarsPlugin } from "../../lib/uplotFrameVars";
 import type { LivePaintRef } from "../../lib/uplotLivePaint";
-import { buildOpts, xIsAscending, type BuildOptsArgs } from "../../lib/uplotOpts";
+import { buildOpts, xIsAscending } from "../../lib/uplotOpts";
 import { useStableByEquality } from "../../lib/useStableByEquality";
 import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
 // loadPlotPerfPrefs is a plain localStorage read (like uplotOpts.ts's cssVar()
@@ -34,62 +32,14 @@ import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
 // file's "driven entirely by props, NO store reads" contract (same reasoning
 // PreferencesDialog.tsx documents for the store-independent prefs it reads).
 import { loadPlotPerfPrefs } from "../../store/prefs";
-import type { Accent, AnchorEditBridge, PeakWizardEditBridge, Theme } from "../../store/useApp";
+import { useLazyPlotParts } from "./useLazyPlotParts";
 import { useLivePaint } from "./useLivePaint";
 import { useResolvedLims } from "./useResolvedLims";
 
-export interface PlotViewportProps
-  extends Omit<BuildOptsArgs, "width" | "height" | "peakWizardEdit" | "anchorEdit" | "xLim" | "yLim"> {
-  displayPayload: PlotPayload | null;
-  /** Committed X/Y limits; a null side is auto for that side (`useResolvedLims`). */
-  xLim?: HalfLim | null;
-  yLim?: HalfLim | null;
-  onLimCrossed?: (axis: "x" | "y", why?: "log") => void; // a half-open limit fell back to full auto, or "log": a side <= 0 was dropped
-  /** The live uPlot instance, exposed as a controlled ref so the caller can
-   *  drive toolbar/context-menu actions over it (see `usePlotStageActions`). */
-  plotRef: RefObject<uPlot | null>;
-  /** Force a rebuild on theme/accent change: `buildOpts` reads `--accent` /
-   *  `--series-*` CSS custom properties at BUILD time (via `seriesColor()`),
-   *  so a token change needs a fresh instance even though neither value is a
-   *  literal `buildOpts` argument. */
-  theme: Theme;
-  accent: Accent;
-  /** Peak Analyzer wizard click-on-plot marker editing (RAW bridge, not yet
-   *  wrapped into `buildOpts`'s `{markers,onAdd,onRemove}` shape). Kept as its
-   *  own prop rather than folded into the spread below so the effect's
-   *  dependency array can key off this STABLE store-selected reference,
-   *  instead of a fresh wrapper object that would otherwise be reconstructed
-   *  (and compare unequal) on every render. */
-  peakWizardEdit: PeakWizardEditBridge | null;
-  /** Anchor-point baseline editing (GOTO #2) — RAW store bridge, same
-   *  stable-reference reasoning as `peakWizardEdit` above, but STRONGER
-   *  (MAIN #8f): the bridge is identity-stable across anchor edits (anchors
-   *  flow through its `getAnchors` getter), so this dependency only rebuilds
-   *  the plot on anchor-mode activation/deactivation — never per gesture. */
-  anchorEdit: AnchorEditBridge | null;
-  /** Cross-window link group (MULTI_PLOT_PLAN item 13): when set, this
-   *  instance joins the uPlot cursor-sync group `syncKey` AND the module
-   *  x-range sync registry (`lib/windowsync`) — the MultiPanelStage sync
-   *  idiom, patched onto `buildOpts`'s result rather than widening
-   *  `buildOpts` itself, so its other callers (MultiPanelStage,
-   *  WaterfallView, ReflPanel, InsetPlot) are untouched. Undefined (the
-   *  default, and every pre-item-13 caller) applies no patch at all. */
-  syncKey?: string;
-  /** Top inset (px) of the plot host, default 8. The MAIN stage passes a
-   *  larger value to reserve the floating tool-dock's band — the dock is an
-   *  overlay at top-center, and without the reservation a centered plot
-   *  title rendered exactly behind it (owner report 2026-07-11: "titles get
-   *  lost, covered by the top menu"). Window consumers (panel cells,
-   *  snapshot/background windows) have title bars instead of docks and keep
-   *  the default; a taller dock pushes it down (`--qz-dock-clear`, audit #15). */
-  insetTop?: number;
-  /** Publish the plot-frame rect as CSS vars on the enclosing `.qzk-stage`
-   *  (decode #52), so a frame-anchored `PlotLegend` sibling can place itself
-   *  via calc(). Only the main interactive stage (PlotStage) mounts that
-   *  legend, so background / snapshot / panel windows leave this off (default)
-   *  and keep their plugin-free data pipeline. */
-  frameVars?: boolean;
-}
+// The props interface lives in plotViewportProps.ts (moved verbatim to keep
+// this component under its 400-line ceiling); re-exported for importers.
+import type { PlotViewportProps } from "./plotViewportProps";
+export type { PlotViewportProps };
 
 /** The uPlot host + its create/resize/destroy effect. Renders a single
  *  absolutely-positioned div (matches today's Stage layout byte-for-byte);
@@ -394,6 +344,7 @@ export default function PlotViewport(props: PlotViewportProps) {
 
   // Display-only edits patch the live instance (after the create effect: see useLivePaint).
   useLivePaint(plotRef, paintRef, displayPayload, args, xAscending, limsRef, () => setRebuildEpoch((e) => e + 1));
+  useLazyPlotParts([args.xFmt, args.yFmt, args.y2Fmt], args.tool, () => setRebuildEpoch((e) => e + 1)); // on-demand plugins
 
   return <div ref={hostRef} style={{ position: "absolute", inset: 8, top: insetTop === undefined ? 8 : `max(${insetTop}px, var(--qz-dock-clear, 0px))`, right: "var(--qz-plot-right,8px)" }} />;
 }

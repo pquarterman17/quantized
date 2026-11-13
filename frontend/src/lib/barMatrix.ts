@@ -90,3 +90,41 @@ export function stackedTotal(series: readonly BarSeriesStat[]): number {
   const segs = stackedSegments(series);
   return segs.length ? segs[segs.length - 1].top : 0;
 }
+
+/** Figures-audit #8: attach each one-row cell's PRECOMPUTED error -- the
+ *  value of the series' bound error column (`errChannels[i]` for
+ *  `valueChannels[i]`, null = none) on that row -- so an already-summarized
+ *  table (Sample,Value,SD: one row per category) draws its own SD as the
+ *  whisker instead of an SE nobody can compute from n = 1. Cells with more
+ *  rows keep their statistics. `errorColumn` names the column(s) used. Pure;
+ *  returns `bd` itself when nothing applies. */
+export function withColumnErrors(
+  bd: BarChartData,
+  data: DataStruct,
+  groupCol: number | null,
+  valueChannels: readonly number[],
+  errChannels: readonly (number | null)[],
+): BarChartData {
+  if (groupCol == null || !errChannels.some((c) => c != null)) return bd;
+  const by = columnOf(data, groupCol);
+  const levels = categoryLevels(data, groupCol);
+  // levels-allowlist: the NAMES of the error columns used, not category levels.
+  const used = new Set<string>();
+  const groups = bd.groups.map((g, gi) => ({
+    ...g,
+    series: g.series.map((s, si) => {
+      const ec = errChannels[si];
+      if (ec == null || s.n !== 1) return s;
+      const vc = valueChannels[si];
+      for (let r = 0; r < by.length; r++) {
+        if (by[r] !== levels[gi] || !Number.isFinite(data.values[r]?.[vc])) continue;
+        const e = Math.abs(data.values[r]?.[ec] ?? NaN);
+        if (!Number.isFinite(e)) return s;
+        used.add(data.labels[ec] ?? `col ${ec}`);
+        return { ...s, err: e };
+      }
+      return s;
+    }),
+  }));
+  return used.size ? { ...bd, groups, errorColumn: [...used].join(", ") } : bd;
+}

@@ -15,7 +15,7 @@ import { isAxisScale } from "./plotviewAxis";
 import type { LegendPos, PlotView } from "./plotview";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./seriesStyleTypes";
-import type { AxisFormat, AxisScale } from "./types";
+import { sanitizeAxisExtras, type AxisFormat, type AxisScale } from "./types";
 
 export const GRAPH_FORMAT_VERSION = 1;
 
@@ -128,7 +128,7 @@ export function sanitizeGraphFormat(v: unknown): GraphFormat | null {
   if (o.version !== GRAPH_FORMAT_VERSION || !Array.isArray(o.series)) return null;
   const scale = (x: unknown): AxisScale => (isAxisScale(x) ? x : "linear");
   const bool = (x: unknown, d: boolean): boolean => (typeof x === "boolean" ? x : d);
-  const fmt = (x: unknown): AxisFormat => (isFmt(x) ? { ...x } : { mode: "auto", digits: 2 });
+  const fmt = (x: unknown): AxisFormat => (isFmt(x) ? sanitizeAxisExtras(x) : { mode: "auto", digits: 2 });
   return {
     version: GRAPH_FORMAT_VERSION,
     xScale: scale(o.xScale),
@@ -137,7 +137,7 @@ export function sanitizeGraphFormat(v: unknown): GraphFormat | null {
     xReversed: bool(o.xReversed, false),
     xFmt: fmt(o.xFmt),
     yFmt: fmt(o.yFmt),
-    y2Fmt: isFmt(o.y2Fmt) ? { ...o.y2Fmt } : null,
+    y2Fmt: isFmt(o.y2Fmt) ? sanitizeAxisExtras(o.y2Fmt) : null,
     showGrid: bool(o.showGrid, true),
     showAxisBox: bool(o.showAxisBox, true),
     showLegend: bool(o.showLegend, true),

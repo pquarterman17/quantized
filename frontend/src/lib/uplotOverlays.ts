@@ -959,14 +959,6 @@ export function annotationPlugin(
   };
 }
 
-/** The on-screen error-bar cap half-width (CSS px), so the canvas matches the
- *  publication export: `calc/figure_errorbars.py` draws every bound bar with
- *  matplotlib `capsize=2` (a 4 pt cap, i.e. 2 pt ≈ 2.7 px each side). The
- *  2026-07-09 "caps default to zero" choice (item 3) predates the export
- *  growing caps and left screen and export disagreeing; figures-audit #10
- *  ("draw bound errors with caps") settles it in favour of agreement. */
-export const ERROR_CAP_HALF_PX = 3;
-
 /** Draw vertical error-bar whiskers (y ± e) for selected data columns, with
  *  optional end caps. `errorsByCol` is keyed by uPlot data-column index
  *  (1-based); each value is the per-point error magnitude (null = no bar
@@ -975,8 +967,7 @@ export const ERROR_CAP_HALF_PX = 3;
  *  into the axes.
  *
  *  `capHalfWidth` (CSS px) defaults to 0 — bars only. The interactive plot
- *  (`uplotOpts.buildOpts`) passes `ERROR_CAP_HALF_PX` so it agrees with the
- *  export's caps (see that constant); other callers keep the bare default. */
+ *  passes `uplotErrorRange.ERROR_CAP_HALF_PX` to match the export's caps. */
 /** The fixed render alpha for Origin region shades: Origin's own
  *  fill-transparency field is UNDECODED (decode-plan #41 — no byte could be
  *  isolated across the corpus, see docs/origin_project_format.md §6.1), so

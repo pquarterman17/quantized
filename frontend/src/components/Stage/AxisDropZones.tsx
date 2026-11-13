@@ -15,6 +15,8 @@
 import { useRef, useState } from "react";
 
 import { CHANNEL_DND, decodeChannelDrag, resolveAxisZone, type AxisZone } from "../../lib/dragaxis";
+import { openFigureDialog, type AxisId } from "../../store/figureDialogs";
+import { useApp } from "../../store/useApp";
 
 interface Props {
   className: string;
@@ -31,6 +33,22 @@ interface Props {
   children: React.ReactNode;
 }
 
+type Box = Pick<DOMRect, "left" | "right" | "top" | "bottom">;
+
+/** Figures-audit #6: which axis a double-click at (x, y) landed on -- the
+ *  band between the plot area (uPlot's `.u-over`) and the chart's outer
+ *  box: below it = X, left = Y, right = Y2 (only when one is drawn). Null
+ *  inside the plot area or in a corner. */
+export function axisAtPoint(over: Box, root: Box, x: number, y: number, hasY2: boolean): AxisId | null {
+  if (x < root.left || x > root.right || y < root.top || y > root.bottom) return null;
+  const inX = x >= over.left && x <= over.right;
+  const inY = y >= over.top && y <= over.bottom;
+  if (inX && y > over.bottom) return "x";
+  if (inY && x < over.left) return "y";
+  if (inY && x > over.right && hasY2) return "y2";
+  return null;
+}
+
 export default function AxisDropZones({ className, style, onContextMenu, onAxisDrop, children }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   // Nested-element enter/leave counter (the standard DnD pattern): entering
@@ -38,6 +56,7 @@ export default function AxisDropZones({ className, style, onContextMenu, onAxisD
   // the pointer truly leaves the whole stage subtree.
   const [depth, setDepth] = useState(0);
   const [zone, setZone] = useState<AxisZone | null>(null);
+  const hasY2 = useApp((s) => (s.y2Keys?.length ?? 0) > 0); // #6: Y2's band opens its dialog only when drawn
 
   const isChannelDrag = (e: React.DragEvent): boolean => e.dataTransfer.types.includes(CHANNEL_DND);
 
@@ -56,6 +75,14 @@ export default function AxisDropZones({ className, style, onContextMenu, onAxisD
       className={className}
       style={style}
       onContextMenu={onContextMenu}
+      // Origin's "double-click an axis" opens the Axis dialog (#6).
+      onDoubleClick={(e) => {
+        const root = (e.target as Element).closest?.(".uplot");
+        const over = root?.querySelector(".u-over");
+        if (!root || !over) return;
+        const axis = axisAtPoint(over.getBoundingClientRect(), root.getBoundingClientRect(), e.clientX, e.clientY, hasY2);
+        if (axis) openFigureDialog({ kind: "axis", axis });
+      }}
       onDragEnter={(e) => {
         if (!isChannelDrag(e)) return;
         e.preventDefault();

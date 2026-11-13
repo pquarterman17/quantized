@@ -79,7 +79,8 @@ export default function RichLabelInput({ value, onCommit, placeholder, labelledB
     });
   };
 
-  const insert = (entry: PaletteEntry): void => apply(entry, insertLabelToken);
+  // An Origin escape (#17) wraps the selection; everything else inserts.
+  const insert = (entry: PaletteEntry): void => apply(entry, entry.wrap ? wrapLabelSelection : insertLabelToken);
 
   const togglePalette = (): void => {
     if (palette) {

@@ -2739,6 +2739,14 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/commands/plotCommands.ts",
       call: 'import("../lib/pageSetupCommand")',
     },
+    // Figures audit (2026-11-13): on-demand uPlot plugin families, so the
+    // Axis dialog's extras (#6) cost a plain plot nothing, funded by moving
+    // the qfit gadget frame (a tool-activation-only plugin) behind the same
+    // getter seam. Plus the Plot menu's graph-template and dialog bodies.
+    { module: "/lib/axisExtras.ts", loader: "/lib/axisExtrasHook.ts", call: 'import("./axisExtras")' },
+    { module: "/lib/uplotGadgets.ts", loader: "/lib/axisExtrasHook.ts", call: 'import("./uplotGadgets")' },
+    { module: "/lib/graphTemplateCommands.ts", loader: "/commands/plotCommands.ts", call: 'import("../lib/graphTemplateCommands")' },
+    { module: "/lib/plotLayoutDialogs.ts", loader: "/commands/plotCommands.ts", call: 'import("../lib/plotLayoutDialogs")' },
     {
       // SLICE 17: Paste and Duplicate load their bodies, which import the
       // core statically, so the core itself moved to DRAGGED_OUT below.

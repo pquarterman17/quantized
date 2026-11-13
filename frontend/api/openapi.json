@@ -14908,10 +14908,47 @@
       "TickFormatSpec": {
         "description": "Wire model for the screen's `AxisFormat` (MAIN #24,\n`frontend/src/lib/types.ts`): the tick-label number format for one axis.\n`\"auto\"` (the default) leaves matplotlib's own formatter untouched --\nsee `calc.figure_ticks.axis_tick_formatter`.",
         "properties": {
+          "base": {
+            "anyOf": [
+              {
+                "const": "e",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base"
+          },
           "digits": {
             "default": 2,
             "title": "Digits",
             "type": "number"
+          },
+          "divide": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Divide"
+          },
+          "minor": {
+            "anyOf": [
+              {
+                "maximum": 20.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minor"
           },
           "mode": {
             "default": "auto",
@@ -14926,6 +14963,35 @@
             ],
             "title": "Mode",
             "type": "string"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 72.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "ticks": {
+            "anyOf": [
+              {
+                "enum": [
+                  "in",
+                  "out",
+                  "both"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticks"
           }
         },
         "title": "TickFormatSpec",

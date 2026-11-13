@@ -830,32 +830,12 @@ export interface Shape {
   dash?: boolean;
 }
 
-/** Axis tick number format. `auto` = increment-aware locale-grouped labels
- *  (MAIN #20: overrides uPlot's own default formatter, which caps at 3
- *  fraction digits regardless of the actual tick spacing — see
- *  `uplotOpts.ts`'s `autoTickValues` doc for the owner bug this fixes);
- *  `fixed` = `toFixed(digits)`; `sci` = `toExponential(digits)`; `eng` =
- *  engineering notation (mantissa in [1,1000), exponent a multiple of 3,
- *  e.g. `12.3e-6`). `digits` is the decimal/mantissa count for
- *  fixed/sci/eng — ignored (uPlot-style adaptive) for `auto`. Every
- *  non-auto mode still FLOORS its decimal/mantissa count at whatever the
- *  actual tick increment needs, so `digits` sets a minimum, not an exact
- *  count (`tickFormatter`'s `Math.max(digits, decimalsForIncrement(...))`). */
-export type TickMode = "auto" | "fixed" | "sci" | "eng" | "date" | "time" | "datetime";
-
-export interface AxisFormat {
-  mode: TickMode;
-  digits: number;
-}
-
-/** MAIN #24: an export request's `x_fmt`/`y_fmt` wire field — `undefined`
- *  for `auto` (the default; omitting it keeps requests lean and matches
- *  every caller that predates this field) or the format itself for an
- *  explicit fixed/sci/eng override, mirroring `tickFormatter`'s own
- *  `auto` short-circuit. */
-export function axisFmtParam(fmt: AxisFormat): AxisFormat | undefined {
-  return fmt.mode === "auto" ? undefined : fmt;
-}
+// The axis tick-format contract (`TickMode`, `AxisFormat` + the figures-audit
+// #6 Axis-dialog extras, `axisFmtParam`) lives in axisFormat.ts -- moved
+// verbatim when the extras outgrew this file's line pin; re-exported here so
+// no importer changed.
+export type { AxisFormat, TickMode } from "./axisFormat";
+export { axisFmtParam, hasAxisExtras, sanitizeAxisExtras } from "./axisFormat";
 
 /** How an axis maps data values to pixel position (MAIN #12): `"linear"`
  *  (default) positions values proportionally; `"log"` positions by

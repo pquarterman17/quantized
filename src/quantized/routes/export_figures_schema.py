@@ -32,7 +32,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 __all__ = [
     "SERIES_STYLES_DOC",
@@ -242,6 +242,12 @@ class TickFormatSpec(BaseModel):
 
     mode: Literal["auto", "fixed", "sci", "eng", "date", "time", "datetime"] = "auto"
     digits: float = 2
+    # Figures-audit #6: the Axis dialog's optional extras (``calc.axis_extras``).
+    divide: float | None = Field(default=None, gt=0)
+    minor: int | None = Field(default=None, ge=0, le=20)
+    ticks: Literal["in", "out", "both"] | None = None
+    size: float | None = Field(default=None, gt=0, le=72)
+    base: Literal["e"] | None = None
 
 
 @dataclass(frozen=True)
