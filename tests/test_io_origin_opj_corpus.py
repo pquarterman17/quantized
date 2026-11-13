@@ -393,3 +393,31 @@ def test_graph_windows_are_recovered_or_named_never_silent() -> None:
             assert missed == ["Graph2"]  # first layer block head 0x47
         else:
             assert missed == [], path.name
+
+
+def test_bar_column_and_histogram_plot_types_match_labplot() -> None:
+    """Re-audit #2: the plot type of each curve (anchor u8 @76) against
+    LabPlot's testOriginBarPlot / testOriginHistogram, read at test time: a
+    BarPlot with Vertical orientation is Origin's "column", Horizontal its
+    "bar"; a Histogram is "histogram" (``opj_curves._PLOT_TYPES``)."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    source = _find("ProjectImportTest.cpp").read_text(encoding="utf-8")
+    cases = {"testOriginBarPlot()": "bar-column.opj", "testOriginHistogram()": "histogram.opj"}
+    checked = 0
+    for test, file in cases.items():
+        body = source.split(test, 1)[1].split("\nvoid ", 1)[0]
+        figs = {f["name"]: f for f in extract_figures(_find(file).read_bytes())}
+        for chunk in body.split("worksheet->name(), QLatin1String(\"")[1:]:
+            graph = chunk.split('"', 1)[0]
+            if "BarPlot::Orientation::Vertical" in chunk:
+                want = "column"
+            elif "BarPlot::Orientation::Horizontal" in chunk:
+                want = "bar"
+            elif "Histogram*>" in chunk:
+                want = "histogram"
+            else:
+                continue
+            assert [c.get("plotType") for c in figs[graph]["curves"]] == [want], (file, graph)
+            checked += 1
+    assert checked == 4

@@ -172,6 +172,35 @@ def test_extract_curves_resolves_single_curve() -> None:
     assert curves == [{"book": "Book1", "x": "A", "y": "B"}]
 
 
+@pytest.mark.parametrize(
+    ("byte76", "expected"),
+    [(203, "column"), (215, "bar"), (219, "histogram"), (200, None), (206, None), (231, None)],
+)
+def test_extract_curves_names_only_oracle_proven_plot_types(
+    byte76: int, expected: str | None
+) -> None:
+    """u8 @76 of the anchor is the plot type; 203/215/219 are named on
+    LabPlot's bar-column / histogram oracle, anything else carries no
+    ``plotType`` (200 is the line ``style`` decoded elsewhere)."""
+    anchor = bytearray(519)
+    anchor[0:4] = b"\x01\x00\x00\x00"
+    struct.pack_into("<H", anchor, 4, 7)
+    anchor[76] = byte76
+    data = _synthetic_opj(
+        _window_header("Book1"),
+        _column_block("A", 6, designation=3),
+        _column_block("B", 7),
+        _block(bytes(anchor)) + _dataplot_block(),
+    )
+    blocks = _blocks_of(data)
+    curves = extract_curves(
+        blocks, 0, len(blocks), column_id_map(blocks), book_x_columns(blocks),
+        book_column_designations(blocks),
+    )
+    assert len(curves) == 1
+    assert curves[0].get("plotType") == expected
+
+
 def test_extract_curves_multiple_curves_one_layer() -> None:
     blob = _synthetic_opj(
         _window_header("Book1"),
