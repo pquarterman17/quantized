@@ -13,7 +13,7 @@ import type { DataStruct } from "../../../lib/types";
 import { askConfirm } from "../../../store/confirmDialog";
 import { useApp } from "../../../store/useApp";
 import CurveFitPanel from "./CurveFitPanel";
-import { retainFitted } from "./curveFitSession";
+import { retainFitted } from "../../../store/curveFitSession";
 
 vi.mock("../../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api")>()),
@@ -153,6 +153,43 @@ describe("CurveFitPanel — closing hides, Remove fit deletes", () => {
   });
 });
 
+describe("CurveFitPanel — one retained fit per worksheet", () => {
+  const SECOND = { ...DATA, values: [[2], [4], [6], [8], [10]] };
+
+  it("going back to a worksheet fitted earlier shows its result and draws its curve again", async () => {
+    await fitOnce();
+    const first = useApp.getState().fitOverlay;
+    // A second worksheet, fitted in the same panel.
+    act(() => useApp.setState((s) => ({ datasets: [...s.datasets, { id: "d2", name: "second.dat", data: SECOND }], activeId: "d2", fitOverlay: null })));
+    vi.mocked(fitModel).mockResolvedValueOnce({
+      params: [2, 2], errors: [0.1, 0.2], R2: 0.55, RMSE: 0.5, chiSqRed: 0.3, nPoints: 5, nFree: 2,
+      yFit: [2, 4, 6, 8, 10], residuals: [0, 0, 0, 0, 0],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Fit" }));
+    expect(await screen.findByText("0.55")).toBeInTheDocument();
+    // Back to the first (a dataset switch clears the drawn curve).
+    act(() => useApp.setState({ activeId: "d1", fitOverlay: null }));
+    // Before the fix: an empty panel and no curve — the second fit had
+    // replaced the only retained result.
+    expect(await screen.findByText("0.98")).toBeInTheDocument();
+    expect(screen.queryByText("0.55")).toBeNull();
+    await waitFor(() => expect(useApp.getState().fitOverlay).toEqual(first));
+    // And the second worksheet's is still there.
+    act(() => useApp.setState({ activeId: "d2", fitOverlay: null }));
+    expect(await screen.findByText("0.55")).toBeInTheDocument();
+    await waitFor(() => expect(useApp.getState().fitOverlay?.datasetId).toBe("d2"));
+  });
+
+  it("does not draw a retained curve the data has moved away from", async () => {
+    await fitOnce();
+    const before = useApp.getState().datasets[0]!;
+    const edited = { ...before, data: { ...before.data, values: before.data.values.map((r, i) => (i === 2 ? [50] : r)) } };
+    act(() => useApp.setState({ datasets: [edited], fitOverlay: null }));
+    expect(screen.getByText(/The data selected for fitting changed after this fit/)).toBeInTheDocument();
+    expect(useApp.getState().fitOverlay).toBeNull();
+  });
+});
+
 describe("CurveFitPanel — a result whose data changed", () => {
   const NOTE = /The data selected for fitting changed after this fit/;
 
@@ -235,6 +272,13 @@ describe("CurveFitPanel — window placement and key results", () => {
     render(<CurveFitPanel />);
     const frame = await screen.findByRole("dialog");
     expect(parseFloat(frame.style.left)).toBe(window.innerWidth - 340 - 16);
+  });
+
+  it("reports a finished fit in the status line", async () => {
+    useApp.setState({ status: 'applied fit template "t" — press Fit to run it' });
+    await fitOnce();
+    // Before the fix the earlier message stayed after the fit had run.
+    expect(useApp.getState().status).toBe("fitted Linear to run.dat");
   });
 
   it("shows N and reduced χ² with the headline statistics", async () => {

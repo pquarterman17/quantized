@@ -24,9 +24,18 @@ interface PlotProps {
   refLines?: RefLine[];
   /** Plots sharing the Q axis: the cursor is synced and an x zoom is copied. */
   link?: { key: string; group: Set<uPlot>; onScale: (u: uPlot, key: string) => void };
+  /** A diagnostic plot in a narrow panel: smaller text, thin axis bands and
+   *  small markers, so the data area keeps most of a ~160 px height. */
+  compact?: boolean;
 }
 
-export default function SmallUPlot({ payload, label, height, yLog = false, refLines, link }: PlotProps) {
+/** Compact axis bands (px): the x tick row and an axis title. `buildOpts`
+ *  reserves at least 50 + 30 px below the plot for the main graph's fonts,
+ *  which left a 110 px residual plot under 20 px of data area — a flat line of
+ *  markers with one tick. */
+const COMPACT = { fontSize: 10, xTicks: 28, title: 18, marker: 4 } as const;
+
+export default function SmallUPlot({ payload, label, height, yLog = false, refLines, link, compact = false }: PlotProps) {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -46,7 +55,17 @@ export default function SmallUPlot({ payload, label, height, yLog = false, refLi
       refLines,
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
+      ...(compact ? { fontSize: COMPACT.fontSize } : {}),
     });
+    if (compact) {
+      opts.axes?.forEach((a, i) => {
+        a.labelSize = COMPACT.title;
+        if (i === 0) a.size = COMPACT.xTicks;
+      });
+      opts.series.forEach((sr, i) => {
+        if (i > 0 && payload.series[i - 1]?.kind === "points" && sr.points) sr.points = { ...sr.points, size: COMPACT.marker };
+      });
+    }
     // A model line crosses the Q points only another channel has.
     opts.series.forEach((s, i) => {
       if (i > 0 && payload.series[i - 1]?.kind !== "points") s.spanGaps = true;
@@ -64,7 +83,7 @@ export default function SmallUPlot({ payload, label, height, yLog = false, refLi
       link?.group.delete(plot);
       plot.destroy();
     };
-  }, [payload, label, height, yLog, refLines, link, theme, accent]);
+  }, [payload, label, height, yLog, refLines, link, compact, theme, accent]);
 
   return <div ref={hostRef} role="img" aria-label={label} style={{ width: "100%", height }} />;
 }

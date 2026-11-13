@@ -59,4 +59,24 @@ describe("FitOutputSection", () => {
     expect(vi.mocked(fitBands).mock.calls[0]![0]).toMatchObject({ model: "Pseudo-Voigt", x: [0, 1, 2], dof: 1 });
     expect(addDerivedColumn).not.toHaveBeenCalled();
   });
+
+  it("adds the result worksheet without leaving the fitted one, as one undo step", async () => {
+    const curve = { datasetId: "d1", y: [1, 3, 5] };
+    const ds = { ...DS, fitSpec: { model: "Pseudo-Voigt", params: [1, 1, 1, 0.5] } };
+    useApp.setState({ datasets: [ds], activeId: "d1", selectedIds: ["d1"], fitOverlay: curve, history: [], future: [] });
+    render(<FitOutputSection dataset={ds} model="Pseudo-Voigt" paramNames={["A", "x0", "w", "eta"]} result={RESULT} fitData={FIT} />);
+    fireEvent.click(screen.getByText("Output to worksheet"));
+    fireEvent.click(screen.getByRole("button", { name: "Write to worksheet" }));
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(2));
+    const s = useApp.getState();
+    // Before the fix the new sheet became active: the plot rebound to it, the
+    // fit curve was cleared and the panel re-targeted the sheet it had written.
+    expect(s.activeId).toBe("d1");
+    expect(s.selectedIds).toEqual(["d1"]);
+    expect(s.fitOverlay).toBe(curve);
+    expect(s.status).toBe('added the worksheet "run.dat — Pseudo-Voigt fit results" to the Library (Undo removes)');
+    s.undo();
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(useApp.getState().fitOverlay).toBe(curve);
+  });
 });

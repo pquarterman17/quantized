@@ -9,6 +9,7 @@ import { parseFitParams, rowsAreDefault, type FitParamRow } from "../../../lib/f
 import { dyForFit } from "../../../lib/fitweights";
 import type { CalcResult, Dataset, FitModel, WeightMode } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { addWorksheetQuietly } from "../../../store/addWorksheetQuietly";
 import { nextDatasetId } from "../../../store/idSeq";
 import AnalysisBatchControls, { type AnalysisBatchOutcome, type AnalysisBatchRow } from "../analysisselection/AnalysisBatchControls";
 import { batchColumns, batchSummaryData, fitSummaryValues } from "./curveFitBatchSummary";
@@ -29,8 +30,8 @@ const median = (values: number[]): number | null => {
 };
 
 export default function CurveFitBatchSection({ modelName, model, paramRows, weightMode, manualKey }: Props) {
-  const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
+  const datasets = useApp((s) => s.datasets);
   const names = model?.paramNames ?? paramRows.map((r) => r.name);
   const columns = batchColumns(names);
   // What the LAST RUN fitted. The summary worksheet is built from the run's
@@ -101,11 +102,17 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     return { values: [1, 1, ...fitSummaryValues(result, names.length)], warnings };
   }, [manualKey, model, modelName, paramRows, weightMode, names.length]);
 
-  const summarySheet = (rows: readonly AnalysisBatchRow[]) => {
+  const summarySheet = (ranRows: readonly AnalysisBatchRow[]) => {
     const run = ran.current ?? { model: modelName, columns };
+    // In Library order, not run order: the batch starts with the active
+    // worksheet, so selecting b1, b2, b3 with b3 active ran (and listed) b3
+    // first — and "parameter against input" plotted the samples out of order.
+    const position = new Map(datasets.map((d, i) => [d.id, i]));
+    const rows = [...ranRows].sort((a, b) => (position.get(a.datasetId) ?? Infinity) - (position.get(b.datasetId) ?? Infinity));
     const name = `Curve Fit summary — ${run.model} (${rows.length} worksheet${rows.length === 1 ? "" : "s"})`;
-    addDataset({ id: nextDatasetId(), name, data: batchSummaryData(rows, run.columns, run.model) });
-    setStatus(`added ${name}`);
+    // Not activated: the batch selection and the plot stay as they are.
+    addWorksheetQuietly({ id: nextDatasetId(), name, data: batchSummaryData(rows, run.columns, run.model) }, "add curve fit summary worksheet");
+    setStatus(`added the worksheet "${name}" to the Library (Undo removes)`);
   };
 
   return <AnalysisBatchControls

@@ -100,7 +100,10 @@ export function withAnalysisOverlays(
   const present = candidates.flatMap(([label, o, points]) => {
     if (!o || o.datasetId !== ds.id || o.y.length < n) return [];
     const edges = (o.band ?? []).every((e) => e.y.length >= n) ? (o.band ?? []) : [];
-    return [{ label, y: o.y, points, band: 0 }, ...edges.map((e, k) => ({ label: e.label, y: e.y, points: false, band: k + 1 }))];
+    return [
+      { label, legend: label, y: o.y, points, band: 0 },
+      ...edges.map((e, k) => ({ label: e.label, legend: e.legend ?? e.label, y: e.y, points: false, band: k + 1 })),
+    ];
   });
   if (present.length === 0) return spec;
   const rows = wireRows(spec, ds, grey.wire);
@@ -119,13 +122,14 @@ export function withAnalysisOverlays(
   // their grey companions when any row is greyed, then the overlays.
   const before = canvasSeries * (grey.screen && droppedRows(ds).size > 0 ? 2 : 1);
   const lineKeys = present.map((_p, i) => width + i);
-  const base: ExportSeriesStyle[] = present.map(({ label, points, band }, i) => {
+  const base: ExportSeriesStyle[] = present.map(({ legend, points, band }, i) => {
     // A band edge takes its curve's colour (the canvas does the same), though
     // it still occupies its own display position for whatever follows it.
     const color = resolveToHex(seriesColor(before + i - band));
     return {
       ...(color ? { color } : {}),
-      legend: label,
+      // "" = no legend entry (a band's upper edge): matplotlib drops it.
+      legend,
       ...(points ? { line: "none" as const, marker: true, marker_size: PEAK_MARKER_PX } : {}),
       ...(band ? { line: "dashed" as const, width: BAND_EDGE_PX, ...(band % 2 ? { fill: { vs: width + i + 1 } } : {}) } : {}),
     };

@@ -11,9 +11,9 @@
 // adopted (matched by the FitSpec object the re-fit replaced): another tool's
 // fit on the same worksheet is not this panel's result.
 
-import { onFitRecomputed } from "../../../lib/fitRecomputeEvents";
-import { rememberCurveFitOverlay } from "../../../store/curveFitOverlay";
-import { useApp } from "../../../store/useApp";
+import { onFitRecomputed } from "../lib/fitRecomputeEvents";
+import { rememberCurveFitOverlay } from "./curveFitOverlay";
+import { useApp } from "./useApp";
 import { replaceRetainedFit, retainedFit } from "./curveFitSession";
 
 let following = false;
@@ -23,17 +23,22 @@ export function followRefits(): void {
   if (following) return;
   following = true;
   onFitRecomputed((e) => {
-    const kept = retainedFit();
-    if (!kept || kept.removed || kept.fitted.datasetId !== e.datasetId || kept.dataset.fitSpec !== e.previousSpec) return;
+    const kept = retainedFit(e.datasetId);
+    if (!kept || kept.removed || kept.dataset.fitSpec !== e.previousSpec) return;
     const s = useApp.getState();
     const live = s.datasets.find((d) => d.id === e.datasetId);
     if (!live?.fitSpec) return;
     const f = kept.fitted;
-    // The re-fit redrew the curve as a new overlay object: it is still this fit's.
-    if (s.fitOverlay?.datasetId === e.datasetId) rememberCurveFitOverlay(s.fitOverlay);
+    // The re-fit redrew a visible curve as a new overlay object: it is still
+    // this fit's. With no curve on the plot, keep the re-fitted one to draw
+    // later — never the superseded curve.
+    const drawn = s.fitOverlay?.datasetId === e.datasetId ? s.fitOverlay : null;
+    if (drawn) rememberCurveFitOverlay(drawn);
+    const curve = drawn ?? (e.curve ? { datasetId: e.datasetId, y: e.curve } : null);
     replaceRetainedFit(
       { ...f, result: e.result, fitData: { x: e.x, y: e.y, xKey: f.xKey, yKey: f.yKey, dy: e.dy } },
       live,
+      curve,
     );
   });
 }

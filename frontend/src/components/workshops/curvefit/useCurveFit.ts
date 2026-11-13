@@ -34,11 +34,11 @@ import { analysisSelectionData } from "../../../lib/analysisSelection";
 
 import { rememberCurveFitOverlay } from "../../../store/curveFitOverlay";
 import { exportCornerPlot } from "./curveFitCornerPlot";
-import { followRefits } from "./curveFitRefit";
-import { removeCurveFit } from "./curveFitRemove";
-import { fitInputsChanged, onRetainedFitChange, restoreFitted, retainFitted, type Fitted, type FittedData } from "./curveFitSession";
+import { followRefits } from "../../../store/curveFitRefit";
+import { removeCurveFit, showRetainedCurve } from "../../../store/curveFitRemove";
+import { fitInputsChanged, onRetainedFitChange, restoreFitted, retainFitted, type Fitted, type FittedData } from "../../../store/curveFitSession";
 
-export type { FittedData } from "./curveFitSession";
+export type { FittedData } from "../../../store/curveFitSession";
 
 export interface CurveFitState {
   active: Dataset | null;
@@ -129,15 +129,19 @@ export function useCurveFit(): CurveFitState {
   // the CURRENT x/y, so a dataset/model/channel change (or a fit landing
   // after one) would otherwise ship or seed with another fit's parameters.
   // Restored from the session on mount: closing the panel only hides it.
-  const [fitted, setFitted] = useState<Fitted | null>(() => restoreFitted(useApp.getState().datasets));
-  const [guessOnly, setGuessOnly] = useState(false);
+  // `fitted` is what THIS mount computed (a guess or a fit). Each worksheet's
+  // last fit is also kept in the session (store/curveFitSession.ts), which is
+  // what shows after a reopen, on coming back to a worksheet fitted earlier,
+  // and after an Undo of "Remove fit".
+  const [fitted, setFitted] = useState<Fitted | null>(null);
+  const [, sessionChanged] = useState(0);
   // Undo of "Remove fit" shows the result again, Redo drops it
   // (curveFitRemove.ts); a background re-fit replaces it (curveFitRefit.ts).
   useEffect(() => {
     followRefits();
     return onRetainedFitChange((kept, present, replaces) => {
-      setFitted((f) => (!present ? (f === kept ? null : f) : replaces && f !== replaces ? f : kept));
-      if (present && !replaces) setGuessOnly(false);
+      setFitted((f) => (f === kept && !present ? null : f === replaces ? kept : f));
+      sessionChanged((v) => v + 1);
     });
   }, []);
   const [busy, setBusy] = useState(false);
@@ -213,17 +217,26 @@ export function useCurveFit(): CurveFitState {
   }, [active, xKey, plottedYKeyNow]);
 
   const model = models.find((m) => m.name === modelName);
+  const shown = fitted?.datasetId === active?.id ? fitted : restoreFitted(datasets, active?.id ?? null);
   const current =
-    fitted &&
-    fitted.datasetId === active?.id &&
-    fitted.model === modelName &&
-    fitted.xKey === xKey &&
-    fitted.yKey === plottedYKeyNow
-      ? fitted
+    shown &&
+    shown.datasetId === active?.id &&
+    shown.model === modelName &&
+    shown.xKey === xKey &&
+    shown.yKey === plottedYKeyNow
+      ? shown
       : null;
+  // A guess carries no fitted pairs; a completed fit always does.
+  const guessOnly = current != null && current.fitData === null;
   const result = current?.result ?? null;
   const fitData = current?.fitData ?? null;
   const resultStale = useMemo(() => !!fitData && !!xy && fitInputsChanged(xy, fitData), [xy, fitData]);
+  const plotId = useApp((s) => s.activeId);
+  // Back on a worksheet fitted earlier: its curve is drawn again (never a
+  // curve the data has since moved away from).
+  useEffect(() => {
+    if (fitData && !resultStale && plotId === current?.datasetId) showRetainedCurve(plotId);
+  }, [current, fitData, resultStale, plotId]);
   useEffect(() => {
     if (!restoredRecipe.current && savedSpec?.model === modelName && model) {
       setParamRows(rowsFromFitSpec(model, savedSpec));
@@ -290,7 +303,6 @@ export function useCurveFit(): CurveFitState {
           xKey: runXKey,
           yKey: localXy.yKey,
         });
-        setGuessOnly(true);
       } else {
         // Resolve weighting -> dy over the SAME analysis rows as the fit; a
         // missing/invalid error column refits unweighted with a surfaced note.
@@ -338,7 +350,6 @@ export function useCurveFit(): CurveFitState {
           yKey: localXy.yKey,
         };
         setFitted(done);
-        setGuessOnly(false);
         // Durable fit spec (audit P1 #3): records the plotted channels + the
         // weighting ACTUALLY used (unweighted if dy couldn't resolve) so the
         // recalc graph (#1) reproduces the original fit, not time/values[0].
@@ -378,6 +389,9 @@ export function useCurveFit(): CurveFitState {
         });
         useApp.getState().setFitSpec(ds.id, bound.spec, bound.rowIdentities);
         publishFitAnalysisResult(ds.id);
+        // Say so: the status line otherwise kept its previous message (after
+        // a template, "press Fit to run it" — with the fit already done).
+        useApp.getState().setStatus(`fitted ${modelName} to ${ds.name}`);
         retainFitted(done, useApp.getState().datasets.find((d) => d.id === ds.id) ?? null);
         const yFit = r.yFit as (number | null)[] | undefined;
         if (Array.isArray(yFit)) {
@@ -391,6 +405,7 @@ export function useCurveFit(): CurveFitState {
           const overlay = { datasetId: ds.id, y };
           rememberCurveFitOverlay(overlay);
           setFitOverlay(overlay);
+          retainFitted(done, useApp.getState().datasets.find((d) => d.id === ds.id) ?? null, overlay);
         }
       }
     } catch (e) {
@@ -402,7 +417,6 @@ export function useCurveFit(): CurveFitState {
 
   function clear(): void {
     setFitted(null);
-    setGuessOnly(false);
     setError(null);
     setWeightNote(null);
     removeCurveFit(active?.id ?? null);
@@ -415,7 +429,8 @@ export function useCurveFit(): CurveFitState {
     setCornerBusy(true);
     setError(null);
     try {
-      await exportCornerPlot({ dataset: active, model: modelName, paramNames: model?.paramNames ?? [], x: xy.x, y: xy.y, p0 });
+      const done = await exportCornerPlot({ dataset: active, model: modelName, paramNames: model?.paramNames ?? [], x: xy.x, y: xy.y, p0 });
+      if (!done) useApp.getState().setStatus("corner plot cancelled");
     } catch (e) {
       setError(e instanceof Error ? e.message : "corner plot failed");
     } finally {

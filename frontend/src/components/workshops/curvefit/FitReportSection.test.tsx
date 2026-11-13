@@ -10,7 +10,7 @@ import { fitReport, type FitReportResult } from "../../../lib/api/fitReport";
 import { copyText } from "../../../lib/clipboard";
 import { saveBlob } from "../../../lib/download";
 import { useApp } from "../../../store/useApp";
-import { reportPrefs } from "./curveFitSession";
+import { reportPrefs } from "../../../store/curveFitSession";
 import FitReportSection from "./FitReportSection";
 
 vi.mock("../../../lib/api/fitReport", () => ({ fitReport: vi.fn() }));

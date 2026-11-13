@@ -9,7 +9,6 @@ import { exportCornerFigure } from "../../../lib/api/figures";
 import type { Dataset } from "../../../lib/types";
 import { runCancellable } from "../../../store/pendingOpActions";
 import { toast } from "../../../store/toasts";
-import { useApp } from "../../../store/useApp";
 
 export interface CornerPlotInput {
   dataset: Dataset;
@@ -22,8 +21,9 @@ export interface CornerPlotInput {
   p0: number[];
 }
 
-/** Bootstrap and export; throws with the message the panel shows. */
-export async function exportCornerPlot(i: CornerPlotInput): Promise<void> {
+/** Bootstrap and export; throws with the message the panel shows. Resolves
+ *  false when the user cancelled (nothing was saved). */
+export async function exportCornerPlot(i: CornerPlotInput): Promise<boolean> {
   const pairs = dropGapRows(i.x, i.y);
   if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to bootstrap");
   if (!pairs.complete) {
@@ -47,5 +47,5 @@ export async function exportCornerPlot(i: CornerPlotInput): Promise<void> {
       filename: `${stem}-corner`,
     }, signal);
   });
-  if (!done) useApp.getState().setStatus("corner plot cancelled");
+  return done;
 }

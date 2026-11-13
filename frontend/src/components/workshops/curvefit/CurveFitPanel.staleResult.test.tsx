@@ -11,7 +11,7 @@ import { fitModel, reportEmit } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import CurveFitPanel from "./CurveFitPanel";
-import { reportPrefs } from "./curveFitSession";
+import { reportPrefs } from "../../../store/curveFitSession";
 
 vi.mock("../../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api")>()),

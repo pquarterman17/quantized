@@ -103,6 +103,7 @@ export function analysisBatchRuntime() {
     datasets: state.datasets,
     resolveDataset: state.resolveDataset,
     recordHistory: state.recordHistory,
+    setStatus: state.setStatus,
   };
 }
 

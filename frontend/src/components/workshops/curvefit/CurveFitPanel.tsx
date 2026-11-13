@@ -7,7 +7,7 @@
 //
 // Closing the window only HIDES it: the fit, its curve, its recipe (so auto
 // re-fit) and its Library result stay, and reopening shows the result again
-// (curveFitSession.ts). Deleting a fit is the explicit, confirmed, undoable
+// (store/curveFitSession.ts). Deleting a fit is the explicit, confirmed, undoable
 // "Remove fit". The window opens docked at the RIGHT edge so it never covers
 // the plot's Y axis.
 
@@ -30,7 +30,7 @@ import FitConvergenceWarning from "./FitConvergenceWarning";
 import ModelScanSection from "./ModelScanSection";
 import FitParamsSection from "./FitParamsSection";
 import WeightingSection from "./WeightingSection";
-import { reportPrefs } from "./curveFitSession";
+import { reportPrefs } from "../../../store/curveFitSession";
 import { useCurveFit } from "./useCurveFit";
 import { useFitTemplateBinding } from "./useFitTemplateBinding";
 import { useModelScan } from "./useModelScan";

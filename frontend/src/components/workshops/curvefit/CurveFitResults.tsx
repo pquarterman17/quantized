@@ -13,7 +13,7 @@ import { fmtNum as fmt } from "../../../lib/format";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import type { CalcResult, Dataset } from "../../../lib/types";
 import FindXYSection from "./FindXYSection";
-import type { FittedData } from "./curveFitSession";
+import type { FittedData } from "../../../store/curveFitSession";
 
 const FitBandsSection = lazyRegion(() => import("./FitBandsSection"), "Bands");
 const FitDiagnosticsSection = lazyRegion(() => import("./FitDiagnosticsSection"), "Diagnostics");

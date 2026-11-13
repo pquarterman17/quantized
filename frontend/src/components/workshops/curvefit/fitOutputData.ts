@@ -23,7 +23,7 @@ import { FIT_MODEL_EXPRS } from "../../../lib/derivedFitModels";
 import type { BandsResult } from "../../../lib/api/fitStats";
 import type { CalcResult, DataStruct, Dataset } from "../../../lib/types";
 import { levelLabel } from "./fitBandData";
-import type { FittedData } from "./curveFitSession";
+import type { FittedData } from "../../../store/curveFitSession";
 
 /** Worksheet formula letter of channel `i` (0 -> "A", 26 -> "AA"). */
 export function colLetter(i: number): string {

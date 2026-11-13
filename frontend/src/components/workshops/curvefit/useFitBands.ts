@@ -16,7 +16,7 @@ import { fitBands, type BandsResult } from "../../../lib/api/fitStats";
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { nextDatasetId, useApp } from "../../../store/useApp";
 import { ownCurveFitOverlay, setCurveFitOverlayBand } from "../../../store/curveFitOverlay";
-import { bandPrefs, type FittedData } from "./curveFitSession";
+import { bandPrefs, type FittedData } from "../../../store/curveFitSession";
 import {
   bandDataStruct,
   bandIsEmpty,

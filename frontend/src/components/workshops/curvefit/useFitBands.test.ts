@@ -9,7 +9,7 @@ import { fitBands, type BandsResult } from "../../../lib/api/fitStats";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { rememberCurveFitOverlay } from "../../../store/curveFitOverlay";
-import { bandPrefs } from "./curveFitSession";
+import { bandPrefs } from "../../../store/curveFitSession";
 import { useFitBands, type FitBandsTarget } from "./useFitBands";
 
 vi.mock("../../../lib/api/fitStats", () => ({ fitBands: vi.fn() }));
@@ -132,14 +132,14 @@ describe("useFitBands", () => {
     expect(vi.mocked(fitBands).mock.calls[0]![0].x.slice(-4)).toEqual([0, 1, 3, 4]);
     const band = useApp.getState().fitOverlay!.band!;
     expect(band).toEqual([
-      { label: "95% CI low", y: [0.5, 2.5, null, 6.5, 8.5] },
-      { label: "95% CI high", y: [1.5, 3.5, null, 7.5, 9.5] },
+      { label: "95% CI low", y: [0.5, 2.5, null, 6.5, 8.5], legend: "95% confidence band" },
+      { label: "95% CI high", y: [1.5, 3.5, null, 7.5, 9.5], legend: "" },
     ]);
     // Still the band plot's numbers for the panel: the grid half-width.
     expect(result.current.halfWidth).toBe(0.5);
 
     act(() => result.current.setPrediction(true));
-    await waitFor(() => expect(useApp.getState().fitOverlay?.band?.[2]).toEqual({ label: "95% PI low", y: [0, 2, null, 6, 8] }));
+    await waitFor(() => expect(useApp.getState().fitOverlay?.band?.[2]).toEqual({ label: "95% PI low", y: [0, 2, null, 6, 8], legend: "95% prediction band" }));
     act(() => result.current.setOn(false));
     await waitFor(() => expect(useApp.getState().fitOverlay?.band).toBeUndefined());
     expect(useApp.getState().fitOverlay?.y).toEqual(overlay.y);

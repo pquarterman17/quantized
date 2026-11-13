@@ -396,7 +396,10 @@ export async function recalculateFitAnalysisResult(id: string): Promise<boolean>
     current.setFitSpec(sourceId, stampRecompute(spec, fitted));
     if (overlayWasVisible) useApp.setState({ fitOverlay: nextOverlay ? { datasetId: sourceId, y: nextOverlay } : null });
     publishFitAnalysisResult(sourceId);
-    announceFitRecomputed({ datasetId: sourceId, previousSpec: spec, result: fitted, x: pairs.x, y: pairs.y, dy: dy ?? null });
+    announceFitRecomputed({
+      datasetId: sourceId, previousSpec: spec, result: fitted, x: pairs.x, y: pairs.y, dy: dy ?? null,
+      curve: fitOverlayValues(source, pairs, fitted.yFit, selection.sourceRows),
+    });
     useApp.getState().setStatus(`recalculated ${result.name}`);
     return true;
   } catch (error) {

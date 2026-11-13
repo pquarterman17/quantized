@@ -156,10 +156,16 @@ export function overlayBand(
     return out;
   };
   const lv = levelLabel(band.level);
+  // One legend entry per band, on its lower edge (lib/fitBandOverlay.ts).
   const edges = [
-    { label: `${lv} CI low`, y: col(band.ciLo) },
-    { label: `${lv} CI high`, y: col(band.ciHi) },
+    { label: `${lv} CI low`, y: col(band.ciLo), legend: `${lv} confidence band` },
+    { label: `${lv} CI high`, y: col(band.ciHi), legend: "" },
   ];
-  if (prediction) edges.push({ label: `${lv} PI low`, y: col(band.piLo) }, { label: `${lv} PI high`, y: col(band.piHi) });
+  if (prediction) {
+    edges.push(
+      { label: `${lv} PI low`, y: col(band.piLo), legend: `${lv} prediction band` },
+      { label: `${lv} PI high`, y: col(band.piHi), legend: "" },
+    );
+  }
   return edges;
 }

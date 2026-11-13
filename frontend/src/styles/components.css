@@ -502,6 +502,14 @@
   padding-left: 3px;
   padding-right: 3px;
 }
+/* A numeric report table (the Curve Fit report's parameter / ANOVA / matrix
+   tables) scrolls sideways in its own box rather than wrap: wrapped, a
+   p-value read "4.15951e-" over "110" and "Standard Error" pushed the limit
+   columns out of step with their numbers. */
+.qzk-nowrap-table .qz-table th,
+.qzk-nowrap-table .qz-table td {
+  white-space: nowrap;
+}
 /* N2 (peaks-workshop row selection): excludes a PeakTable selected row
  * (aria-selected="true" — the only consumer of that attribute on a
  * .qz-table row today) so the selected highlight — an inline style on the

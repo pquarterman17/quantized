@@ -849,3 +849,30 @@ describe("PlotLegend selected-row highlight companions (audit follow-up)", () =>
     }
   });
 });
+
+describe("PlotLegend — a Curve Fit band (fitting review)", () => {
+  // `withFitOverlay` appends the fit curve and its band edges. The canvas
+  // draws every edge in the FIT's colour; the legend used to give each of the
+  // four edges its own row in the next four palette colours.
+  const withBand: PlotSeriesSpec[] = [
+    { label: "signal", unit: "" },
+    { label: "fit", unit: "" },
+    { label: "95% CI low", unit: "", band: 1, legend: "95% confidence band" },
+    { label: "95% CI high", unit: "", band: 2, legend: "" },
+    { label: "95% PI low", unit: "", band: 3, legend: "95% prediction band" },
+    { label: "95% PI high", unit: "", band: 4, legend: "" },
+  ];
+
+  it("lists one row per band, in the fit curve's colour", () => {
+    const { container } = render(<PlotLegend series={withBand} plotted={[0]} isDarkBg />);
+    const rows = [...container.querySelectorAll(".qzk-legend .it")];
+    expect(rows.map((r) => r.textContent)).toEqual(["signal", "fit", "95% confidence band", "95% prediction band"]);
+    const fit = rows[1]!.querySelector(".qzk-legend-sample")!.outerHTML;
+    expect(fit).toMatch(/--series-2\b/);
+    for (const row of rows.slice(2)) {
+      const sample = row.querySelector(".qzk-legend-sample")!.outerHTML;
+      expect(sample).toMatch(/--series-2\b/);
+      expect(sample).not.toMatch(/--series-[3-8]\b/);
+    }
+  });
+});

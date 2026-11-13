@@ -11,6 +11,7 @@ import { useState } from "react";
 
 import { fitBands } from "../../../lib/api/fitStats";
 import type { CalcResult, Dataset } from "../../../lib/types";
+import { addWorksheetQuietly } from "../../../store/addWorksheetQuietly";
 import { addDerivedColumn } from "../../../store/derivedColumnRun";
 import { nextDatasetId } from "../../../store/idSeq";
 import { useApp } from "../../../store/useApp";
@@ -18,7 +19,7 @@ import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { BAND_LEVELS, levelLabel } from "./fitBandData";
 import { canLinkModel, linkedColumns, resultSheetData } from "./fitOutputData";
-import type { FittedData } from "./curveFitSession";
+import type { FittedData } from "../../../store/curveFitSession";
 
 interface Props {
   dataset: Dataset;
@@ -32,7 +33,7 @@ type Destination = "source" | "sheet";
 
 export default function FitOutputSection({ dataset, model, paramNames, result, fitData }: Props) {
   const setStatus = useApp((s) => s.setStatus);
-  const addDataset = useApp((s) => s.addDataset);
+  const withHistoryBatch = useApp((s) => s.withHistoryBatch);
   const linkable = canLinkModel(model) && dataset.fitSpec?.model === model;
   const [dest, setDest] = useState<Destination>(linkable ? "source" : "sheet");
   const [fitted, setFitted] = useState(true);
@@ -50,7 +51,7 @@ export default function FitOutputSection({ dataset, model, paramNames, result, f
       if (toSource) {
         const cols = linkedColumns(dataset, model, fitData.xKey, fitData.yKey, { fitted, residual });
         // ONE undo step for both columns: the status promises "Undo removes".
-        await useApp.getState().withHistoryBatch("add fit columns", async (token) => {
+        await withHistoryBatch("add fit columns", async (token) => {
           for (const c of cols) {
             const r = await addDerivedColumn(dataset.id, { name: c.name, expr: c.expr, propagate: false }, token);
             if (!r.ok) throw new Error(r.error);
@@ -74,14 +75,19 @@ export default function FitOutputSection({ dataset, model, paramNames, result, f
         : null;
       const data = resultSheetData({ source: dataset, model, paramNames, result, fitData, band, want: { fitted, residual, ci, pi } });
       const name = `${dataset.name} — ${model} fit results`;
-      addDataset({
-        id: nextDatasetId(),
-        name,
-        data,
-        ...(dataset.workbookId ? { workbookId: dataset.workbookId } : {}),
-        ...(dataset.folderId ? { folderId: dataset.folderId } : {}),
-      });
-      setStatus(`added ${name}`);
+      // Beside the source, without leaving it: the plot, the curve and this
+      // panel stay on the fitted worksheet (store/addWorksheetQuietly.ts).
+      addWorksheetQuietly(
+        {
+          id: nextDatasetId(),
+          name,
+          data,
+          ...(dataset.workbookId ? { workbookId: dataset.workbookId } : {}),
+          ...(dataset.folderId ? { folderId: dataset.folderId } : {}),
+        },
+        "add fit results worksheet",
+      );
+      setStatus(`added the worksheet "${name}" to the Library (Undo removes)`);
     } catch (e) {
       setStatus(`could not write the fit results — ${e instanceof Error ? e.message : "unknown error"}`);
     } finally {

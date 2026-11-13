@@ -169,6 +169,12 @@ export default function AnalysisBatchControls({
         ...(sourceFingerprint ? { sourceFingerprint } : {}),
         ...(!sourceFingerprint || changedDuringRun ? { stale: true as const } : {}),
       });
+      // The run's outcome in the status line (it used to end silently: the
+      // table below showed "Completed" but nothing said where the numbers went).
+      const completed = rows.filter((row) => row.status === "completed").length;
+      analysisBatchRuntime().setStatus(
+        `${label} batch finished: ${completed} of ${rows.length} worksheet${rows.length === 1 ? "" : "s"} completed — the results are in the Library`,
+      );
     } finally {
       endOp(opId);
       runningRef.current = false;

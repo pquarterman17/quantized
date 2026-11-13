@@ -49,10 +49,10 @@ const col = (spec: FigureSpec, k: number) => spec.dataset.values.map((r) => r[k]
 describe("withAnalysisOverlays", () => {
   it("exports the Curve Fit band with its curve: dashed edges, each low edge filled to its high edge", () => {
     const band = [
-      { label: "95% CI low", y: [1, 4.7, 2, 0.8] },
-      { label: "95% CI high", y: [1.2, 5.1, 2.2, 1] },
-      { label: "95% PI low", y: [0.5, 4, 1.5, 0.3] },
-      { label: "95% PI high", y: [1.7, 5.8, 2.7, 1.5] },
+      { label: "95% CI low", y: [1, 4.7, 2, 0.8], legend: "95% confidence band" },
+      { label: "95% CI high", y: [1.2, 5.1, 2.2, 1], legend: "" },
+      { label: "95% PI low", y: [0.5, 4, 1.5, 0.3], legend: "95% prediction band" },
+      { label: "95% PI high", y: [1.7, 5.8, 2.7, 1.5], legend: "" },
     ];
     const view: OverlayView = { ...VIEW, fitOverlay: { datasetId: "d1", y: [1.1, 4.9, 2.1, 0.9], band } };
     const out = withAnalysisOverlays(flat(), DS, view, 1);
@@ -64,10 +64,11 @@ describe("withAnalysisOverlays", () => {
     const styles = out.series_styles ?? [];
     const fitColor = resolveToHex(seriesColor(1));
     expect(styles[1]).toMatchObject({ legend: "fit", color: fitColor });
-    expect(styles[2]).toEqual({ color: fitColor, legend: "95% CI low", line: "dashed", width: 1, fill: { vs: 3 } });
-    expect(styles[3]).toEqual({ color: fitColor, legend: "95% CI high", line: "dashed", width: 1 });
-    expect(styles[4]).toEqual({ color: fitColor, legend: "95% PI low", line: "dashed", width: 1, fill: { vs: 5 } });
-    expect(styles[5]).toEqual({ color: fitColor, legend: "95% PI high", line: "dashed", width: 1 });
+    // One legend entry per band (its lower edge); the upper edge has none.
+    expect(styles[2]).toEqual({ color: fitColor, legend: "95% confidence band", line: "dashed", width: 1, fill: { vs: 3 } });
+    expect(styles[3]).toEqual({ color: fitColor, legend: "", line: "dashed", width: 1 });
+    expect(styles[4]).toEqual({ color: fitColor, legend: "95% prediction band", line: "dashed", width: 1, fill: { vs: 5 } });
+    expect(styles[5]).toEqual({ color: fitColor, legend: "", line: "dashed", width: 1 });
     // The peaks keep the palette slot of their canvas display position (after the edges).
     expect(styles[6]).toMatchObject({ legend: "peaks", color: resolveToHex(seriesColor(6)) });
   });

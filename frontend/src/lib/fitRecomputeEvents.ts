@@ -1,7 +1,7 @@
 // A background re-fit of a worksheet's saved fit — the recalc graph after a
 // data edit (store/recalcFits.ts) or the Library result's "Recalculate"
 // (store/analysisResultActions.ts) — announced to whoever is showing that
-// fit's numbers. The Curve Fit panel listens (curvefit/curveFitRefit.ts): it
+// fit's numbers. The Curve Fit panel listens (store/curveFitRefit.ts): it
 // used to keep the ORIGINAL fit's parameters, report, residual plots and
 // worksheet output on screen, unmarked, beside a curve that had already been
 // re-fitted to the changed data.
@@ -18,6 +18,9 @@ export interface FitRecomputed {
   x: number[];
   y: number[];
   dy: number[] | null;
+  /** The re-fitted curve on the worksheet's full rows (null where it has no
+   *  value), or null when the fitter's curve could not be aligned. */
+  curve: (number | null)[] | null;
 }
 
 type Listener = (e: FitRecomputed) => void;

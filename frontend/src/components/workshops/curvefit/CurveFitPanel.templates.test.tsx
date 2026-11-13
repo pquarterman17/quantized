@@ -3,7 +3,7 @@
 // (explicitly — nothing auto-applies) loads them into the panel for another
 // dataset, the user then presses Fit.
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fitModel } from "../../../lib/api";
@@ -16,7 +16,7 @@ import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { askConfirm } from "../../../store/confirmDialog";
 import { useApp } from "../../../store/useApp";
 import CurveFitPanel from "./CurveFitPanel";
-import { retainFitted } from "./curveFitSession";
+import { retainFitted } from "../../../store/curveFitSession";
 
 vi.mock("../../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api")>()),
@@ -98,8 +98,11 @@ describe("CurveFitPanel — fit templates", () => {
     expect(screen.getByRole("button", { name: "Delete template" })).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Saved fit template"), { target: { value: "old" } });
     vi.mocked(askConfirm).mockResolvedValueOnce(false);
-    fireEvent.click(screen.getByRole("button", { name: "Delete template" }));
-    await waitFor(() => expect(askConfirm).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Delete template" }));
+      await Promise.resolve();
+    });
+    expect(askConfirm).toHaveBeenCalledTimes(1);
     expect(loadTemplates()).toHaveLength(1);
     vi.mocked(askConfirm).mockResolvedValueOnce(true);
     fireEvent.click(screen.getByRole("button", { name: "Delete template" }));

@@ -134,12 +134,27 @@ def correlation_matrix(covar: ArrayLike | None) -> list[list[float | None]] | No
     """
     if covar is None:
         return None
+    c = _symmetric(covar)
+    sd = np.sqrt(np.where(np.diag(c) > 0, np.diag(c), np.nan))
+    corr = np.asarray(np.clip(c / np.outer(sd, sd), -1.0, 1.0), dtype=float)
+    # A parameter correlates with itself exactly: sd*sd need not round back to
+    # the variance, which printed a diagonal of 1.0000000000000002.
+    corr[np.diag_indices_from(corr)] = np.where(np.isfinite(sd), 1.0, np.nan)
+    return [[_finite(float(v)) for v in r] for r in corr]
+
+
+def _symmetric(covar: ArrayLike) -> NDArray[np.float64]:
+    """``covar`` as a square array, made exactly symmetric.
+
+    A covariance is symmetric by definition, but the fitter's is a product of
+    floating-point matrices (``J C J^T``) whose two triangles differ in the
+    last digit; reported as-is, cov(A, tau) and cov(tau, A) disagree in the
+    exported table. The mean of the two triangles is the reported value.
+    """
     c = np.asarray(covar, dtype=float)
     if c.ndim != 2 or c.shape[0] != c.shape[1]:
         raise ValueError("covar must be a square matrix")
-    sd = np.sqrt(np.where(np.diag(c) > 0, np.diag(c), np.nan))
-    corr = np.asarray(c / np.outer(sd, sd), dtype=float)
-    return [[_finite(float(v)) for v in r] for r in corr]
+    return np.asarray((c + c.T) / 2.0, dtype=float)
 
 
 def fit_report(
@@ -165,9 +180,7 @@ def fit_report(
     red_chi = ss_res / dof if dof > 0 else math.nan
     r2 = 1.0 - ss_res / ss_cor if ss_cor else math.nan
     adj = 1.0 - (1.0 - r2) * (n - 1) / dof if dof > 0 and math.isfinite(r2) else math.nan
-    cov_arr: NDArray[np.float64] | None = (
-        None if covar is None else np.asarray(covar, dtype=float)
-    )
+    cov_arr: NDArray[np.float64] | None = None if covar is None else _symmetric(covar)
     return {
         "level": level,
         "parameters": parameter_inference(params, err, dof, level),

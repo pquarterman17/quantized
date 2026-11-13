@@ -22,7 +22,7 @@ import { useApp } from "../../../store/useApp";
 import { Button, Select } from "../../primitives";
 import { DataTable } from "../../primitives/DataTable";
 import { parameterTable, pctLabel, REPORT_LEVELS, reportTables } from "./fitReportTables";
-import { reportPrefs, type FittedData } from "./curveFitSession";
+import { reportPrefs, type FittedData } from "../../../store/curveFitSession";
 
 interface Props {
   result: CalcResult;
@@ -36,7 +36,7 @@ const cellText = (v: string | number | null): string => (typeof v === "number" ?
 
 function TableView({ table }: { table: ResultTable }) {
   return (
-    <div className="qzk-dense-table" style={{ marginTop: 8, overflowX: "auto" }}>
+    <div className="qzk-dense-table qzk-nowrap-table" style={{ marginTop: 8, overflowX: "auto" }}>
       <div className="qzk-field-lbl">{table.title}</div>
       <DataTable columns={table.columns} rows={table.rows.map((row) => row.map(cellText))} />
     </div>

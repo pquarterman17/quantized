@@ -56,6 +56,8 @@ describe("AnalysisBatchControls", () => {
       ["b.csv", "Failed", 2, null, "bad calibration"],
     ]);
     expect(result.warnings).toContain("b.csv: bad calibration");
+    // The run says how it ended and where its numbers are.
+    expect(useApp.getState().status).toBe("Test batch batch finished: 1 of 2 worksheets completed — the results are in the Library");
   });
 
   // Audit #10: a tool can turn a finished run into a plottable worksheet.

@@ -74,6 +74,57 @@ test.describe("Curve Fit workflow (fitting audit)", () => {
     await expect(curveFit(page).getByText("reduced χ²")).toBeVisible();
   });
 
+  // Integration review (layout is the point — jsdom has none): the report's
+  // numbers wrapped mid-value, the residual plots had ~20 px of data area, and
+  // writing a result worksheet took the plot, the curve and the panel's own
+  // result away from the fitted worksheet.
+  test("report tables, residual plots and the result worksheet are usable", async ({ page }) => {
+    await gotoApp(page);
+    await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("decay-err.csv"));
+    await waitForDatasetCount(page, 1);
+    await runPaletteCommand(page, "Curve fit…");
+    const panel = curveFit(page);
+    await panel.getByRole("combobox", { name: "Model", exact: true }).selectOption({ label: "Exponential Decay" });
+    await panel.getByRole("button", { name: "Fit", exact: true }).click();
+    await expect(panel.getByText("reduced χ²")).toBeVisible({ timeout: 15_000 });
+
+    // Fit report: every cell of a table is one line tall (a wrapped p-value
+    // made its row taller than its neighbours).
+    await panel.getByText("Fit report", { exact: true }).click();
+    await expect(panel.getByText("ANOVA", { exact: true })).toBeVisible({ timeout: 15_000 });
+    const rowHeights = await panel
+      .locator(".qzk-nowrap-table")
+      .first()
+      .locator("tbody tr")
+      .evaluateAll((rows) => rows.map((r) => Math.round(r.getBoundingClientRect().height)));
+    expect(rowHeights.length).toBe(3);
+    expect(Math.max(...rowHeights) - Math.min(...rowHeights)).toBeLessThanOrEqual(1);
+    await panel.getByText("Fit report", { exact: true }).click(); // collapse again
+
+    // Residual plots: each of the four has a real data area.
+    await panel.getByText("Residual plots", { exact: true }).click();
+    const plots = panel.getByRole("img", { name: /residual/ });
+    await expect(plots).toHaveCount(4, { timeout: 15_000 });
+    const areas = await plots.evaluateAll((hosts) =>
+      hosts.map((h) => Math.round(h.querySelector(".u-over")?.getBoundingClientRect().height ?? 0)),
+    );
+    for (const height of areas) expect(height).toBeGreaterThanOrEqual(90);
+    await panel.getByText("Residual plots", { exact: true }).click();
+
+    // Output to a result worksheet: it lands in the Library; the plot, the
+    // curve and the panel's result stay on the fitted worksheet.
+    const before = await snapshot(page);
+    await panel.getByText("Output to worksheet", { exact: true }).click();
+    await panel.getByLabel("Fit output destination").selectOption("sheet");
+    await panel.getByRole("button", { name: "Write to worksheet" }).click();
+    await waitForDatasetCount(page, 2);
+    const after = await snapshot(page);
+    expect(after.overlayFor).toBe(before.overlayFor);
+    expect(after.hiddenChannels).toEqual(before.hiddenChannels);
+    await expect(panel.getByText("reduced χ²")).toBeVisible();
+    await expect(page.locator(".qzk-statusbar")).toContainText("fit results");
+  });
+
   test("Batch · N worksheets has a usable height and opens", async ({ page }) => {
     await gotoApp(page);
     for (const [i, f] of ["dataset-a.csv", "dataset-b.csv"].entries()) {

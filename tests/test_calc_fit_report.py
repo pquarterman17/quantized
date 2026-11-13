@@ -101,3 +101,29 @@ def test_rejects_bad_inputs() -> None:
     with pytest.raises(ValueError, match="square"):
         correlation_matrix([[1.0, 2.0]])
     assert correlation_matrix(None) is None
+
+
+def test_matrices_are_exactly_symmetric_with_a_unit_diagonal() -> None:
+    """Round-off in the fitter's covariance must not reach the report.
+
+    A real fit's covariance (measured on an exponential-decay fit) had
+    cov[0][1] != cov[1][0] in the last digit and a correlation diagonal of
+    1.0000000000000002; both were shown and exported as such.
+    """
+    cov = [
+        [0.0005607170894883239, -0.000356408668903772, 0.000026880329928692114],
+        [-0.00035640866890377206, 0.0005383669239246253, -0.0000871333440642158],
+        [0.000026880329928692145, -0.00008713334406421582, 0.000023755302985321835],
+    ]
+    out = fit_report([3.0, 2.0, 0.2], [0.02, 0.02, 0.005], cov, [1.0, 2.0, 3.0, 4.0, 5.0],
+                     [0.1, -0.1, 0.1, -0.1, 0.0], 3)
+    for key in ("covariance", "correlation"):
+        m = np.asarray(out[key], dtype=float)
+        assert np.array_equal(m, m.T), key
+    corr = np.asarray(out["correlation"], dtype=float)
+    assert corr.diagonal().tolist() == [1.0, 1.0, 1.0]
+    assert np.all(np.abs(corr) <= 1.0)
+    assert corr[0][1] == pytest.approx(-0.6486899618472536, rel=1e-12)
+    # A held parameter still has no correlation, itself included.
+    held = correlation_matrix([[0.01, 0.0], [0.0, 0.0]])
+    assert held is not None and held[1] == [None, None] and held[0][1] is None

@@ -73,7 +73,10 @@ export function commitRecomputedFit(
     throw new Error("source or fit changed while recalculating");
   }
   set((state) => recomputedFitPatch(state, dataset, spec, updatedSpec, pairs, result.yFit, sourceRows));
-  announceFitRecomputed({ datasetId: dataset.id, previousSpec: spec, result, x: pairs.x, y: pairs.y, dy: dy ? [...dy] : null });
+  announceFitRecomputed({
+    datasetId: dataset.id, previousSpec: spec, result, x: pairs.x, y: pairs.y, dy: dy ? [...dy] : null,
+    curve: fitOverlayValues(dataset, pairs, result.yFit, sourceRows),
+  });
 }
 
 /** Replace a saved fit's result snapshot and mark when it was regenerated. */
