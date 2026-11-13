@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from quantized.io._delimited_layout import _detect_delimiter
@@ -127,3 +128,37 @@ def test_tab_wins_when_header_has_most_tabs_and_rows_drop_trailing_cells() -> No
 def test_space_aligned_file_keeps_the_space_vote() -> None:
     lines = ["T    M    R", "1.0  2.0  3.0", "2.0  3.0\t4.0"]  # a stray tab, not tab data
     assert _detect_delimiter(lines) == " "
+
+
+# -- tab rows keep their empty edge cells (direct import) --------------------
+
+
+@pytest.mark.parametrize("force_slow", [False, True])
+def test_leading_empty_cell_in_a_tab_row_stays_under_its_own_header(
+    tmp_path: Path, force_slow: bool
+) -> None:
+    """Stripping the row whole deleted the leading empty cell, so 5 and 6 sat
+    under Field and Kerr -- silently wrong data."""
+    text = "Field\tKerr\tErr\n1\t2\t3\n\t5\t6\n7\t8\t9\n"
+    ds = import_csv(_write(tmp_path, text), _force_slow=force_slow)
+    assert ds.labels == ("Kerr", "Err")
+    assert np.isnan(ds.time[1])
+    np.testing.assert_array_equal(ds.values[1], [5.0, 6.0])
+    np.testing.assert_array_equal(ds.values[2], [8.0, 9.0])
+
+
+def test_trailing_empty_cell_on_the_first_data_row_keeps_the_last_column(tmp_path: Path) -> None:
+    text = "Field\tKerr\tErr\n1\t2\t\n4\t5\t6\n7\t8\t9\n"
+    ds = import_csv(_write(tmp_path, text))
+    assert ds.labels == ("Kerr", "Err")
+    assert np.isnan(ds.values[0, 1]) and ds.values[1, 1] == 6.0
+
+
+def test_a_trailing_tab_on_every_line_is_still_padding(tmp_path: Path) -> None:
+    text = "Field\tKerr\t\n1\t2\t\n4\t5\t\n"
+    ds = import_csv(_write(tmp_path, text))
+    assert ds.labels == ("Kerr",)
+    assert ds.metadata["all_column_names"] == ["Field", "Kerr"]
+    # data rows padded, header not: still two columns
+    ds = import_csv(_write(tmp_path, "Field\tKerr\n1\t2\t\n4\t5\t\n"))
+    assert ds.metadata["all_column_names"] == ["Field", "Kerr"]

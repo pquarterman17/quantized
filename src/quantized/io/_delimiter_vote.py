@@ -121,3 +121,26 @@ def _semicolon_over_comma(lines: Sequence[str]) -> bool:
     if len({ln.count(",") for ln in lines}) > 1:
         return any(numbers)  # ragged alone is no evidence: "a, b;1" / "c, d, e;2"
     return all(numbers)
+
+
+def tab_cell_lines(lines: Sequence[str]) -> list[str]:
+    """Tab-delimited data lines with their EMPTY EDGE CELLS intact.
+
+    ``lines`` are `vote_lines` output (unstripped). Stripping a tab line
+    whole deleted a leading empty cell -- every value on that row then sat
+    one column to the left, under the wrong header, with no warning -- and a
+    trailing one, which on the first data row shortened the whole table by a
+    column. Here only non-tab padding is stripped; leading tabs are kept, and
+    trailing tabs are kept up to the file's effective width (the widest line
+    once trailing tabs are ignored), so the trailing tab some writers put on
+    EVERY line stays what it always was: padding, not an extra blank column.
+    """
+    pad = " \r\n\x0b\x0c"
+    bare = [ln.strip(pad).rstrip("\t" + pad) for ln in lines]
+    width = max((b.count("\t") for b in bare), default=0)
+    out: list[str] = []
+    for raw, b in zip(lines, bare, strict=True):
+        kept = raw.strip(pad)
+        trailing = kept[len(kept.rstrip("\t" + pad)) :].count("\t")
+        out.append(b + "\t" * max(min(trailing, width - b.count("\t")), 0))
+    return out

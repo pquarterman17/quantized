@@ -24,7 +24,7 @@ from quantized.io._delimited_fast import (
     _tokens_to_columns,
     try_fast_parse_matrix,
 )
-from quantized.io._delimiter_vote import COMMENT_CHARS, vote_lines
+from quantized.io._delimiter_vote import COMMENT_CHARS, tab_cell_lines, vote_lines
 from quantized.io._header_units import _extract_units as _extract_units  # re-export
 from quantized.io._origin_ascii_header import OriginAsciiRows, origin_ascii_rows
 from quantized.io.base import read_text, resolve_column
@@ -140,7 +140,10 @@ def import_csv(
     if not raw_lines:
         raise ValueError(f"file empty or only comments: {path.name}")
     # Voted on UNSTRIPPED lines: a trailing empty cell's tab is real evidence.
-    delim = layout._detect_delimiter(vote_lines(text))
+    voted = vote_lines(text)
+    delim = layout._detect_delimiter(voted)
+    if delim == "\t":  # keep a tab row's empty edge cells (`tab_cell_lines`)
+        raw_lines = tab_cell_lines(voted)
     comma_path = dc.uses_decimal_path(dc.check_decimal(decimal, delim), delim, "," in text)
 
     # P0.4-perf4: layout detection scores rows in fixed-size chunks
