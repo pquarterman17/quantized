@@ -29,6 +29,7 @@ import { isCategoricalChannel } from "../../../lib/categorical";
 import { effectiveDesignations, type OriginDesignation } from "../../../lib/columnmeta";
 import { hasOriginReportSheets } from "../../../lib/originTextColumns";
 import { isRederived } from "../../../lib/rederived";
+import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { channelModelingType } from "../../../lib/modeling";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
@@ -280,8 +281,9 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
                       : {
                           designationOf: (col: number) => effectiveDesignations(ds.data, ds.columnDesignations)[col],
                           setDesignation: (col: number, d: OriginDesignation) =>
-                            void import("../../../store/columnDesignationActions").then((m) =>
-                              m.setColumnDesignation(ds.id, col, d),
+                            void runLazy("Loading Set As…", () => import("../../../store/columnDesignationActions")).then(
+                              (m) => m.setColumnDesignation(ds.id, col, d),
+                              onLoadFailure,
                             ),
                         }),
                   }),

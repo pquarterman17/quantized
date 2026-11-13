@@ -11,6 +11,7 @@
 import { effectiveDesignations } from "../lib/columnmeta";
 import { ownXSeries } from "../lib/ownXSeries";
 import { plural } from "../lib/plural";
+import { onLoadFailure, runLazy } from "../lib/runLazy";
 import type { DataStruct, Dataset } from "../lib/types";
 import { toast, TOAST_ACTION_TTL } from "./toasts";
 
@@ -57,7 +58,11 @@ export function notifyOwnXSeries(datasets: readonly Dataset[]): void {
       ttlMs: TOAST_ACTION_TTL,
       action: {
         label: "Plot each Y against its own X",
-        onClick: () => void import("./quickPlotRun").then((m) => m.plotEachAgainstOwnX(ds.id)),
+        onClick: () =>
+          void runLazy("Loading Quick Plot…", () => import("./quickPlotRun")).then(
+            (m) => m.plotEachAgainstOwnX(ds.id),
+            onLoadFailure,
+          ),
       },
     });
     return;
