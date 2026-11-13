@@ -190,9 +190,10 @@ def cumulative_trapezoid_sigma(
 
     With ``pre`` absent the output is a running sum of independent terms and
     the variance is a cumulative sum of variances. With a smoothing ``pre``
-    the integrated samples are correlated; the composed row
-    ``r_i = Q_{i-1} + b_i S_i`` (``Q_m = sum_{k<=m} a_k S_k``) is accumulated
-    one row at a time, touching only the smoothing band, so this stays
+    the integrated samples are correlated; the composed row is
+    ``r_i = Q_{i-1} + b_i S_i`` (``Q_m = sum_{k<=m} a_k S_k``). Its squared
+    norm follows from the banded Gram matrix ``M = S diag(sigma**2) S^T`` and
+    one cumulative sum (no Python loop over rows), so this stays
     ``O(n * window)`` without forming the dense ``C @ S``.
     """
     xv = np.asarray(x, dtype=float).ravel()
