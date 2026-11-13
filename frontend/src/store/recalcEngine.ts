@@ -34,7 +34,7 @@ import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
 import type { FitSpec } from "../lib/types";
 import { FIT_ROW_IDENTITIES } from "../lib/rowSidecars";
 import { refreshFitRefsLater } from "./computedColumns";
-import { toast } from "./toasts";
+import { failWithRetry } from "./toasts";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -127,9 +127,7 @@ export function createRecalcEngineSlice(set: SliceSet, get: SliceGet): RecalcEng
           const everything = _recalcEverything;
           _recalcEverything = false;
           const msg = "Recalculation didn't start: its module failed to load — stale results are unchanged";
-          get().setStatus(msg);
-          toast(msg, "danger", { action: { label: "Retry", onClick: () => void get().recalcNow({ everything }) } });
-          return;
+          return failWithRetry(get().setStatus, msg, () => void get().recalcNow({ everything }));
         }
         const [{ markEverythingStale, recomputeStaleDatasets }, { recomputeStaleFits }] = pass;
         if (_recalcEverything) {

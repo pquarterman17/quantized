@@ -30,6 +30,7 @@ import { channelLetter } from "./formula";
 import { channelIndexOf } from "./formulaRename";
 import { tokenize } from "./formulaTokenize";
 import type { SheetBinding, Tok } from "./formulaTypes";
+import { recalcNodes, wouldCreateCycle } from "./recalc";
 import type { ComputedColumn, Dataset } from "./types";
 
 /** The placeholder letter a reference to a removed column is rewritten to. */
@@ -94,6 +95,24 @@ export function bindSheets(
   return { sheets };
 }
 
+/** `bindSheets`, then refuse a link that would close a circle of worksheets
+ *  (lib/recalc.ts's graph). `sheets` is undefined when nothing is linked.
+ *  The store's `linkSheets` (store/computedColumns.ts) is a thin wrapper. */
+export function linkSheets(
+  expr: string,
+  datasets: readonly Dataset[],
+  selfId: string,
+  prior?: readonly SheetBinding[],
+): { sheets: SheetBinding[] | undefined } | { error: string } {
+  const bound = bindSheets(expr, datasets, selfId, prior);
+  if ("error" in bound) return bound;
+  for (const link of bound.sheets) {
+    const reason = wouldCreateCycle(datasets, { from: recalcNodes.dataset(link.id!), to: recalcNodes.dataset(selfId) });
+    if (reason) return { error: reason };
+  }
+  return { sheets: bound.sheets.length ? bound.sheets : undefined };
+}
+
 const quoted = (name: string): string | null => (!name.includes('"') ? `"${name}"` : !name.includes("'") ? `'${name}'` : null);
 
 function mapFormulas(datasets: readonly Dataset[], fn: (f: ComputedColumn, d: Dataset) => ComputedColumn): { datasets: Dataset[]; changed: string[] } {
@@ -106,6 +125,15 @@ function mapFormulas(datasets: readonly Dataset[], fn: (f: ComputedColumn, d: Da
     return { ...d, formulas };
   });
   return { datasets: changed.length ? out : (datasets as Dataset[]), changed };
+}
+
+/** Why worksheet `id` may not take `newName`, or null. A name holding BOTH
+ *  quote kinds cannot be written inside sheet("…") in either quoting, so a
+ *  linked worksheet would keep showing its old name in the readers'
+ *  formulas (review #2). Refused, and said so. */
+export function renameRefusal(datasets: readonly Dataset[], id: string, newName: string): string | null {
+  if (quoted(newName) !== null || !datasets.some((d) => d.formulas?.some((f) => f.sheets?.some((b) => b.id === id)))) return null;
+  return `Can't rename to ${newName}: other worksheets read this one through sheet("…"), and a name with both ' and " cannot be written there — drop one kind of quote`;
 }
 
 /** Worksheet `id` was renamed: every formula linked to it shows the new name.

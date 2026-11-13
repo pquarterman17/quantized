@@ -7,7 +7,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Dataset } from "../lib/types";
 
 const { toastMock } = vi.hoisted(() => ({ toastMock: vi.fn() }));
-vi.mock("./toasts", async (orig) => ({ ...(await orig<typeof import("./toasts")>()), toast: toastMock }));
+// failWithRetry (store/toasts.ts) is status + a danger toast with Retry; it is
+// routed through the mock so the toast it raises is observable here.
+vi.mock("./toasts", async (orig) => ({
+  ...(await orig<typeof import("./toasts")>()),
+  toast: toastMock,
+  failWithRetry: (setStatus: (m: string) => void, msg: string, retry: () => void) => {
+    setStatus(msg);
+    toastMock(msg, "danger", { action: { label: "Retry", onClick: retry } });
+  },
+}));
 vi.mock("../lib/api", async (orig) => ({
   ...(await orig<typeof import("../lib/api")>()),
   applyCorrections: vi.fn(async ({ dataset }: { dataset: Dataset["data"] }) => ({ ...dataset, values: [[99]] })),
@@ -77,5 +86,20 @@ describe("the formula module fails to load", () => {
     await vi.waitFor(() => expect(useApp.getState().datasets[0].formulaErrors).toBeUndefined());
     expect(useApp.getState().datasets[0].data.values).toEqual([[1, 1]]);
     now.mockRestore();
+  });
+});
+
+describe("failWithRetry", () => {
+  it("puts the message in the status line and in a danger toast whose Retry re-asks", async () => {
+    const { failWithRetry: real, useToasts } = await vi.importActual<typeof import("./toasts")>("./toasts");
+    const status = vi.fn();
+    const again = vi.fn();
+    useToasts.setState({ toasts: [] });
+    real(status, "chunk failed", again);
+    expect(status).toHaveBeenCalledWith("chunk failed");
+    const [t] = useToasts.getState().toasts;
+    expect(t).toMatchObject({ msg: "chunk failed", kind: "danger", action: { label: "Retry" } });
+    t.action!.onClick();
+    expect(again).toHaveBeenCalledTimes(1);
   });
 });

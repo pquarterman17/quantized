@@ -24,7 +24,7 @@ import type { ComputedColumn, DataStruct, Dataset } from "../lib/types";
 import { remapDatasetChannels } from "../lib/channelRemap";
 import { columnRemovalRefsPatch } from "./columnRemovalRefs";
 import { resolvePendingEdit } from "./pendingEdit";
-import { toast } from "./toasts";
+import { failWithRetry } from "./toasts";
 import type { AppState } from "./useApp";
 
 export interface ComputedColumnsSlice {
@@ -133,14 +133,7 @@ export function linkSheets(
 ): { sheets: SheetBinding[] | undefined } | { error: string } {
   if (!/\bsheet\s*\(/.test(expr)) return { sheets: undefined };
   const ext = formulaExtension();
-  if (!ext) return { error: EXTENSION_PENDING };
-  const bound = ext.bindSheets(expr, get().datasets, id, prior);
-  if ("error" in bound) return bound;
-  for (const link of bound.sheets) {
-    const reason = wouldCreateCycle(get().datasets, { from: recalcNodes.dataset(link.id!), to: recalcNodes.dataset(id) });
-    if (reason) return { error: reason };
-  }
-  return { sheets: bound.sheets.length ? bound.sheets : undefined };
+  return ext ? ext.linkSheets(expr, get().datasets, id, prior) : { error: EXTENSION_PENDING };
 }
 
 /** `d` with its computed columns re-evaluated (values + `formulaErrors`). */
@@ -154,18 +147,13 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
   // `sheet("Name", A)` reads the worksheet a column is LINKED to, from the
   // store's live dataset list.
   onFormulaExtension({
-    loaded: (m) => {
-      m.setFormulaSheetSource(() => get().datasets);
-      const datasets = m.recomputeExtensionPending(get().datasets);
-      if (datasets !== get().datasets) set({ datasets });
-    },
+    loaded: (m) => m.attachStore(() => get().datasets, (datasets) => set({ datasets })),
     // A chunk that would not download: say so once, with a way to retry; the
     // automatic retries (lib/formulaExt.ts) stay quiet.
     failed: (quiet) => {
       if (quiet) return;
       const msg = "The formula module didn't load, so Origin-style formulas (col(), A[i], cumsum, sheet(), text comparison, row statistics) can't be evaluated yet";
-      get().setStatus(msg);
-      toast(msg, "danger", { action: { label: "Retry", onClick: () => void loadFormulaExtension().catch(() => undefined) } });
+      failWithRetry(get().setStatus, msg, () => void loadFormulaExtension().catch(() => undefined));
     },
   });
   void loadFormulaExtension().catch(() => undefined);

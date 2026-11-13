@@ -36,8 +36,9 @@ export interface FormulaExtension {
     sheets?: readonly SheetBinding[],
   ): Pick<FormulaRowContext, "levels" | "text" | "sheet">;
   /** Cross-worksheet links (lib/sheetRefs.ts). */
-  bindSheets(expr: string, datasets: readonly Dataset[], selfId: string, prior?: readonly SheetBinding[]): { sheets: SheetBinding[] } | { error: string };
+  linkSheets(expr: string, datasets: readonly Dataset[], selfId: string, prior?: readonly SheetBinding[]): { sheets: SheetBinding[] | undefined } | { error: string };
   renameSheetRefs(datasets: readonly Dataset[], id: string, newName: string): { datasets: Dataset[]; changed: string[] };
+  renameRefusal(datasets: readonly Dataset[], id: string, newName: string): string | null;
   shiftSheetRefs(datasets: readonly Dataset[], id: string, shift: ColumnShift): { datasets: Dataset[]; changed: string[] };
   /** Evaluate `fn` with `sheet()` reading `datasets` instead of the live
    *  store — for a recompute inside a store update, before it is committed. */

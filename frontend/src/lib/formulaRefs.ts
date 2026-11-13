@@ -55,7 +55,7 @@ import { tokenize } from "./formulaTokenize";
 import type { FormulaFn, FormulaRowContext, SheetBinding, Tok } from "./formulaTypes";
 import type { ParserOps } from "./formulaRowFns";
 import { textColumnEntries } from "./originTextColumnCells";
-import { bindSheets, REMOVED_COLUMN, renameSheetRefs, shiftSheetRefs } from "./sheetRefs";
+import { linkSheets, REMOVED_COLUMN, renameRefusal, renameSheetRefs, shiftSheetRefs } from "./sheetRefs";
 import type { DataStruct, Dataset } from "./types";
 
 const isOp = (t: Tok | undefined, v: string): boolean => !!t && t.t === "op" && t.v === v;
@@ -385,6 +385,15 @@ export function recomputeExtensionPending(datasets: Dataset[]): Dataset[] {
   });
 }
 
+/** What the store does when this module arrives (store/computedColumns.ts's
+ *  load hook): `sheet()` reads its live dataset list, and the formulas that
+ *  were waiting for this module are recomputed. */
+export function attachStore(getDatasets: () => Dataset[], setDatasets: (datasets: Dataset[]) => void): void {
+  setFormulaSheetSource(getDatasets);
+  const datasets = recomputeExtensionPending(getDatasets());
+  if (datasets !== getDatasets()) setDatasets(datasets);
+}
+
 registerFormulaExtension({
   parseConditional: (cond, ops) => {
     ops.expectOp("?");
@@ -399,8 +408,9 @@ registerFormulaExtension({
   resolveColumnNames,
   rowContextExtras,
   funcs: ROW_FUNCS,
-  bindSheets,
+  linkSheets,
   renameSheetRefs,
+  renameRefusal,
   shiftSheetRefs,
   withSheetDatasets,
 });

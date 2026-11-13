@@ -41,7 +41,6 @@
 // steps. Written green against the pre-extraction useApp.ts and unchanged by
 // the move.
 
-import { sheetIdsRead } from "../lib/sheetBindings";
 import { formulaExtension } from "../lib/formulaExt";
 import { cloneDataStruct } from "../lib/dataset";
 import {
@@ -235,14 +234,9 @@ export function createDatasetListEditsSlice(set: SliceSet, get: SliceGet): Datas
       });
     },
     renameDataset: (id, name) => {
-      // A name holding BOTH quote kinds cannot be written inside sheet("…")
-      // in either quoting, so a linked worksheet would keep showing its old
-      // name in the readers' formulas. Refused, and said so (review #2).
-      const trimmed = name.trim();
-      if (trimmed.includes('"') && trimmed.includes("'") && get().datasets.some((d) => d.formulas?.some((f) => sheetIdsRead(f).includes(id)))) {
-        get().setStatus(`Can't rename to ${trimmed}: other worksheets read this one through sheet("…"), and a name with both ' and " cannot be written there — drop one kind of quote`);
-        return;
-      }
+      // A name sheet("…") links could not show is refused (lib/sheetRefs.ts).
+      const refusal = formulaExtension()?.renameRefusal(get().datasets, id, name.trim());
+      if (refusal) return get().setStatus(refusal);
       get().recordHistory("rename dataset");
       set((s) => {
         const datasets = s.datasets.map((d) =>
