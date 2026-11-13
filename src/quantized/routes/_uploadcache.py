@@ -77,6 +77,7 @@ _INDEX = "index.json"
 _TMP_PREFIX = ".tmp-"
 _TOKEN_RE = re.compile(r"[0-9a-f]{64}")
 _HASH_CHUNK = 1 << 20
+_TMP_GRACE_S = 3600  # a .tmp-* file older than this is a crashed stage
 
 
 @dataclass
@@ -126,7 +127,7 @@ class UploadCache:
     def _load(self) -> None:
         """Read the index, keeping only entries whose file is still there
         with its recorded size; then sweep token dirs the index no longer
-        names and stale ``.tmp-*`` files (a crash mid-stage)."""
+        names and stale (>1 h old) ``.tmp-*`` files (a crash mid-stage)."""
         try:
             raw = json.loads((self.root / _INDEX).read_text("utf-8"))
         except (OSError, ValueError):
@@ -157,8 +158,11 @@ class UploadCache:
             if child.is_dir() and orphan:
                 self._remove_dir(child)
             elif child.is_file() and child.name.startswith(_TMP_PREFIX):
+                # Only STALE temp files: a fresh one may be an upload still
+                # streaming in another app instance sharing this directory.
                 with contextlib.suppress(OSError):
-                    child.unlink()
+                    if time.time() - child.stat().st_mtime > _TMP_GRACE_S:
+                        child.unlink()
 
     def _save(self) -> None:
         """Write the index atomically (temp file + ``os.replace``)."""

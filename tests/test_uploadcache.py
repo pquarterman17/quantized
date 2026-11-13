@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -141,12 +142,15 @@ def test_corrupt_index_and_orphans_are_swept(tmp_path: Path) -> None:
     _, token = cache.stage("a.opj", b"abc")
     (tmp_path / "index.json").write_text("{not json")
     (tmp_path / ".tmp-deadbeef").write_bytes(b"partial")
+    os.utime(tmp_path / ".tmp-deadbeef", (1.0, 1.0))  # a crash long ago
+    (tmp_path / ".tmp-fresh").write_bytes(b"another instance, still streaming")
     unrelated = tmp_path / "keep-me.txt"
     unrelated.write_text("not ours")
     restarted = UploadCache(tmp_path)
     assert restarted.resolve(token) is None
     assert not (tmp_path / token).exists()
     assert not (tmp_path / ".tmp-deadbeef").exists()
+    assert (tmp_path / ".tmp-fresh").exists()  # never yank a live upload
     assert unrelated.exists()  # never touches what it did not create
 
 
