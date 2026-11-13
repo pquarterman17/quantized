@@ -63,18 +63,21 @@ export default function FigureBuilderView() {
             </div>
             <label className="qzk-field-lbl">Format</label>
             <Select
+              aria-label="Figure format"
               options={FIGURE_FORMATS.map((v) => ({ value: v, label: v.toUpperCase() }))}
               value={f.fmt}
               onChange={(e) => f.setFmt(e.target.value)}
             />
             <label className="qzk-field-lbl">Style</label>
             <Select
+              aria-label="Figure style"
               options={FIGURE_STYLES.map((v) => ({ value: v, label: v }))}
               value={f.style}
               onChange={(e) => f.setStyle(e.target.value)}
             />
             <label className="qzk-field-lbl">DPI (raster)</label>
             <NumberField
+              aria-label="Figure DPI (raster)"
               value={dpiText}
               onChange={(v) => {
                 setDpiText(v);

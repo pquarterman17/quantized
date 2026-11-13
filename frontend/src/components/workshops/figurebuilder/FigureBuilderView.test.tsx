@@ -97,6 +97,15 @@ beforeEach(() => {
   cancelPublicationPreview.mockReset();
 });
 
+describe("Publication Preview control names (review finding)", () => {
+  it("names the Format and Style pickers and the DPI field", () => {
+    render(<FigureBuilderView />);
+    expect(screen.getByRole("combobox", { name: "Figure format" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Figure style" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Figure DPI (raster)" })).toBeInTheDocument();
+  });
+});
+
 describe("Publication Preview role cues", () => {
   it("names the surface and explains that it does not edit the Stage plot", () => {
     render(<FigureBuilderView />);

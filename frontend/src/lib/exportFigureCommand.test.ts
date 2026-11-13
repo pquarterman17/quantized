@@ -389,6 +389,14 @@ describe("runExportFigureCommand — MAIN #24 x_fmt/y_fmt wiring", () => {
     expect(fields.find((f) => f.key === "y_label")?.default).toBe("Reflectivity");
   });
 
+  it("leaves Width / Height blank on a window with no page (blank = the style preset's size; lib/pageGeometry doc)", async () => {
+    useApp.setState({ pageSetup: null });
+    await runExportFigureCommand(useApp.getState);
+    const fields = vi.mocked(askParams).mock.calls[0][1];
+    expect(fields.find((f) => f.key === "width")?.default).toBe("");
+    expect(fields.find((f) => f.key === "height")?.default).toBe("");
+  });
+
   it("confirms with Export, not the generic Run (live check)", async () => {
     await runExportFigureCommand(useApp.getState);
     expect(vi.mocked(askParams).mock.calls[0][2]).toEqual({ confirmLabel: "Export" });

@@ -49,8 +49,12 @@ function defaultMargins(inches = DEFAULT_MARGIN_IN): PageMargins {
 /** The default page — the "default" style preset's own 6 x 4 in, i.e. the size
  *  an export already uses before Page setup is ever opened (audit #5: the
  *  dialog used to open at 6 x 4.5 in). The seed when the user opens Page
- *  Setup, the Export dialog or the preview's canvas section on a window with
- *  no page model yet. Not aspect-derived (the user is defining it). */
+ *  Setup or the preview's canvas section on a window with no page model yet,
+ *  and the margins a size typed into the Export dialog starts from. The
+ *  Export dialog itself leaves Width / Height BLANK on such a window -- blank
+ *  means "the chosen style preset's own size", which differs per preset
+ *  (lib/pageSizeFields.ts), so seeding 6 x 4 there would override it. Not
+ *  aspect-derived (the user is defining it). */
 export function defaultPageSetup(): PageSetup {
   return {
     width: DEFAULT_PAGE_WIDTH_IN,

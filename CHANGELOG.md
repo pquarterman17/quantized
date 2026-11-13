@@ -23,7 +23,27 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 - Region shades span the full plot height by default, with a per-shade
   toggle; they show on log axes. A reference line or shade outside the axis
   range is marked "(off-scale)" on screen and reported by the export.
-
+- Graph windows are independent: importing data or opening a Library item
+  never restyles a window you have styled (it opens in an unedited or a new
+  window), each window keeps its own plot mode, and double-clicking a Library
+  dataset another window already shows brings that window forward. Windows
+  maximize, tile and cascade, and closing a styled window asks first.
+- Axis dialog (double-click an axis, or Plot ▸ Axis…): scale (linear, log,
+  ln, reciprocal), limits, major increment, minor ticks, tick direction,
+  number format, divide-by factor (its "×10ⁿ" sits at the axis end, as in the
+  export) and font sizes, for X, Y and Y2.
+- Y-axis breaks: Break from / Break to on the Axis dialog's Y and Y2 tabs
+  (or Plot ▸ Break y-axis…) elide a stretch of the axis, with break marks, on
+  screen and in every export.
+- Plot ▸ Plot type… gallery (line, scatter, line + symbol, area, column,
+  stacked column, box, histogram, contour); Column / Bar charts from a
+  summary table draw a bound error column as the whiskers ("from column").
+- Style templates, recipes and Copy / Paste Format apply to plain CSV
+  datasets, carrying style only (never another graph's limits, breaks or
+  annotations); error columns are bound consistently across the Channels and
+  Error columns cards; an XYZ map picks its X, Y and Z columns.
+- The exported legend of a waterfall lists the top trace first, as the
+  screen does, and an export marks the same tick positions the screen drew.
 - Calculators ▸ Film stack also predicts where each layer and the substrate
   appear in a reciprocal-space map for a chosen asymmetric reflection
   (H 0 L), default (103): Qx, Qz (Q = 2π/d, as in the RSM workshop), 2θ, and
