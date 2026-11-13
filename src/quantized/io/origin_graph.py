@@ -30,6 +30,7 @@ __all__ = [
 # C0/C1 controls plus the Unicode line/paragraph separators (see escape_lt).
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
 # LabTalk substitution sigils (see escape_lt).
+_PERCENT_RUN = re.compile(r"%{2,}(?=[A-Za-z(@0-9])")
 _REGISTER_SUB = re.compile(r"%(?=[A-Za-z])")
 _OPEN_SUB = re.compile(r"(%(?=[(@0-9])|\$(?=\())")
 # A run of Unicode superscript digits/signs (display_unit's exponent output).
@@ -89,6 +90,9 @@ def escape_lt(text: str) -> str:
 
     Not live-verified in Origin (no license window since the 2026-11 audit)."""
     text = _CONTROL_CHARS.sub(" ", text)
+    # A RUN of percents before a sigil target ("%%A") cannot be doubled
+    # unambiguously ("%%%A" may read as "%%" + "%A"): break it with a space.
+    text = _PERCENT_RUN.sub(r"\g<0> ", text)
     text = _REGISTER_SUB.sub("%%", text)
     text = _OPEN_SUB.sub(r"\1 ", text)
     return text.replace('"', "'")

@@ -193,3 +193,11 @@ def test_labtalk_substitution_is_neutralised_in_free_text() -> None:
     for ln in ogs.splitlines():
         for quoted in re.findall(r'"([^"]*)"', ln):
             assert not re.search(r"(?<!%)%[A-Za-z(@0-9]|\$\(", quoted), ln
+
+
+def test_percent_runs_are_broken_not_doubled() -> None:
+    from quantized.io.origin_graph import escape_lt
+
+    assert escape_lt("%%A") == "%% A"  # never "%%%A" (= "%%" + a live "%A")
+    assert escape_lt("%%%(x)") == "%%% (x)"
+    assert escape_lt("50 %") == "50 %" and escape_lt("a%%") == "a%%"
