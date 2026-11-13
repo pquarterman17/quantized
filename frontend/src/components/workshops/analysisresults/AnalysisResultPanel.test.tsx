@@ -687,6 +687,23 @@ describe("AnalysisResultPanel", () => {
     expect(screen.getByText("Current (v2)")).toBeInTheDocument();
     expect(screen.getByText("RMSE (y units)")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Update statistics" })).toBeNull();
+    // The weighting reads in the Curve Fit panel's words, not the wire enum.
+    expect(screen.getByText("Y error column")).toBeInTheDocument();
+    expect(screen.queryByText("yerr")).toBeNull();
+  });
+
+  it("names unscaled errors and direct weighting in the overview", () => {
+    const direct = {
+      ...source,
+      fitSpec: {
+        model: "Linear", xKey: null, yKey: 0, params: [2, 1], statsVersion: 2,
+        weight: { mode: "direct", errKey: 0, scaleErrors: false }, nPoints: 2,
+      },
+    } satisfies Dataset;
+    const fitResult = fitAnalysisResult(direct, direct.fitSpec);
+    useApp.setState({ datasets: [direct], analysisResults: [fitResult], openAnalysisResultId: fitResult.id });
+    render(<AnalysisResultPanel />);
+    expect(screen.getByText("Direct (weight column) · errors not scaled by √(reduced χ²)")).toBeInTheDocument();
   });
 
   it("shows live fit warnings once rather than repeating envelope snapshots", () => {
