@@ -70,6 +70,7 @@ export default function ApplyRecipeSection({
   recipe,
   onClose,
   disabled = false,
+  disabledReason,
 }: {
   recipe: AnalysisTemplate;
   onClose: () => void;
@@ -77,6 +78,9 @@ export default function ApplyRecipeSection({
    *  elsewhere — the SAME store-wide flag both set — so this section's own
    *  Apply button stays disabled even if it was opened before that started. */
   disabled?: boolean;
+  /** Why `disabled` (shown on the Apply button) when it is not another run:
+   *  e.g. the launching dialog's setup is invalid right now. */
+  disabledReason?: string;
 }) {
   const a = useApplyRecipe(recipe);
   const columns = recipe.expects?.columns ?? [];
@@ -118,7 +122,7 @@ export default function ApplyRecipeSection({
           variant="primary"
           size="sm"
           disabled={a.running || a.ready === 0 || disabled}
-          title={a.ready === 0 ? "No picked dataset passes the preflight" : disabled ? "Another recipe or batch is running" : undefined}
+          title={disabledReason ?? (a.ready === 0 ? "No picked dataset passes the preflight" : disabled ? "Another recipe or batch is running" : undefined)}
           onClick={() => void a.apply()}
         >
           {a.running ? `Applying ${Math.min((a.results?.length ?? 0) + 1, a.picks.length)} of ${a.picks.length}…` : `Apply to ${a.ready} dataset${a.ready === 1 ? "" : "s"}`}

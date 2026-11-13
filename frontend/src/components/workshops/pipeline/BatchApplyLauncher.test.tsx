@@ -40,7 +40,7 @@ describe("BatchApplyLauncher", () => {
       progress = opts.onProgress;
       return new Promise((resolve) => (finish = resolve));
     });
-    render(<BatchApplyLauncher build={recipe} disabledReason="" />);
+    render(<BatchApplyLauncher setup="s" build={recipe} disabledReason="" />);
     fireEvent.click(screen.getByRole("button", { name: "Apply to selected sheets…" }));
     fireEvent.click(await screen.findByRole("button", { name: "Apply to 2 datasets" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Cancel run" })).toBeInTheDocument());
@@ -58,10 +58,29 @@ describe("BatchApplyLauncher", () => {
     expect(screen.queryByRole("button", { name: "Cancel run" })).toBeNull();
   });
 
+  it("applies the setup as it is AT APPLY TIME, not as it was when the panel was opened", async () => {
+    applyMock.mockResolvedValue([]);
+    const named = (name: string) => () => ({ ...recipe(), name });
+    const { rerender } = render(<BatchApplyLauncher setup="smooth" build={named("Smooth")} disabledReason="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Apply to selected sheets…" }));
+    expect(await screen.findByRole("region", { name: "Apply recipe Smooth" })).toBeInTheDocument();
+    // The user changes the dialog's setup while the batch panel is open.
+    rerender(<BatchApplyLauncher setup="derivative" build={named("Derivative")} disabledReason="" />);
+    expect(screen.getByRole("region", { name: "Apply recipe Derivative" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Apply to 2 datasets" }));
+    await waitFor(() => expect(applyMock).toHaveBeenCalledTimes(1));
+    expect(applyMock.mock.calls[0][0]).toMatchObject({ name: "Derivative" });
+    // An invalid setup disables Apply, with the dialog's own reason.
+    rerender(<BatchApplyLauncher setup="bad" build={named("Bad")} disabledReason="Half-window must be a positive integer." />);
+    const apply = screen.getByRole("button", { name: /^Apply to \d+ dataset/ });
+    expect(apply).toBeDisabled();
+    expect(apply).toHaveAttribute("title", "Half-window must be a positive integer.");
+  });
+
   it("is disabled with the dialog's reason, and a refused setup says why", async () => {
-    const { rerender } = render(<BatchApplyLauncher build={() => toTemplate("r", [], [])} disabledReason="Set up the operation first." />);
+    const { rerender } = render(<BatchApplyLauncher setup={1} build={() => toTemplate("r", [], [])} disabledReason="Set up the operation first." />);
     expect(screen.getByRole("button", { name: "Apply to selected sheets…" })).toHaveAttribute("title", "Set up the operation first.");
-    rerender(<BatchApplyLauncher build={() => { throw new Error("cannot batch this"); }} disabledReason="" />);
+    rerender(<BatchApplyLauncher setup={2} build={() => { throw new Error("cannot batch this"); }} disabledReason="" />);
     fireEvent.click(screen.getByRole("button", { name: "Apply to selected sheets…" }));
     expect(screen.getByRole("alert")).toHaveTextContent("cannot batch this");
   });

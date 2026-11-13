@@ -386,7 +386,7 @@ export default function SignalProcessingPanel() {
               </Button>
             </div>
             {/* Worksheet audit #15: the same setup on each selected Library sheet. */}
-            <BatchApplyLauncher build={() => buildSignalRecipeTemplate(`${operationLabel(settings.operation)} (Signal Processing)`, active, recipe!)} disabledReason={crossWorksheet ? "A cross-worksheet correlation is tied to its two worksheets." : validation || (recipe ? "" : "Set up the operation first.")} />
+            <BatchApplyLauncher setup={recipe} build={() => buildSignalRecipeTemplate(`${operationLabel(settings.operation)} (Signal Processing)`, active, recipe!)} disabledReason={crossWorksheet ? "A cross-worksheet correlation is tied to its two worksheets." : validation || (recipe ? "" : "Set up the operation first.")} />
           </>
         )}
       </div>
