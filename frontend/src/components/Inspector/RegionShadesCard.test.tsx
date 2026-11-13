@@ -37,6 +37,20 @@ describe("RegionShadesCard — empty state + Add", () => {
     ]);
   });
 
+  it("a full-height shade with blank y fields keeps a 0..1 span, so unticking it later still shows it", () => {
+    render(<RegionShadesCard />);
+    fireEvent.click(screen.getByLabelText("New shade full height")); // reveal y
+    fireEvent.change(screen.getByPlaceholderText("y1"), { target: { value: "" } });
+    fireEvent.change(screen.getByPlaceholderText("y2"), { target: { value: "" } });
+    fireEvent.click(screen.getByLabelText("New shade full height")); // full height again
+    fireEvent.change(screen.getByPlaceholderText("x1"), { target: { value: "2" } });
+    fireEvent.change(screen.getByPlaceholderText("x2"), { target: { value: "4" } });
+    fireEvent.click(screen.getByText("Add"));
+    expect(useApp.getState().regionShades).toEqual([
+      expect.objectContaining({ x1: 2, x2: 4, y1: 0, y2: 1, fullHeight: true }),
+    ]);
+  });
+
   it("Add commits a new shade via addRegionShade with the entered coordinates + fill", () => {
     render(<RegionShadesCard />);
     fireEvent.click(screen.getByLabelText("New shade full height"));

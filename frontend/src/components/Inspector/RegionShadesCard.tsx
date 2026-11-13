@@ -57,7 +57,12 @@ export default function RegionShadesCard() {
 
   const add = () => {
     if (addReason !== null) return;
-    const [nx1, ny1, nx2, ny2] = coords.map((n, k) => (Number.isFinite(n) ? n : k % 2)); // a blank full-height y: 0 / 1
+    // A full-height shade needs no y, but keeps a usable 0..1 span (blank or
+    // invalid y1 -> 0, y2 -> 1) so unticking "full height" later still shows
+    // it. `Number("")` is 0, so a blank field is caught by its TEXT.
+    const yOr = (text: string, fallback: number) => (text.trim() !== "" && Number.isFinite(Number(text)) ? Number(text) : fallback);
+    const [nx1, nx2] = [coords[0], coords[2]];
+    const [ny1, ny2] = [yOr(y1, 0), yOr(y2, 1)];
     addRegionShade({ x1: nx1, y1: ny1, x2: nx2, y2: ny2, fill, ...(axis === "y2" ? { axis: 1 } : {}), ...(fullHeight ? { fullHeight: true } : {}) });
   };
 
