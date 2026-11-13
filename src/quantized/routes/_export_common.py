@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from urllib.parse import quote
 
+from quantized.io._origin_names import ascii_fold
+
 _FIGURE_MIME = {
     "pdf": "application/pdf",
     "svg": "image/svg+xml",
@@ -18,7 +20,8 @@ def _safe_name(name: str, ext: str) -> str:
     """Filename safe for a Content-Disposition header: keep only word chars,
     dot, dash; guarantee the extension. Prevents CRLF/quote injection +
     path traversal."""
-    base = re.sub(r"[^A-Za-z0-9._-]", "_", name).strip("._") or "export"
+    # Accents fold first ("Ångström run" -> "Angstrom_run", not "ngstr_m_run").
+    base = re.sub(r"[^A-Za-z0-9._-]", "_", ascii_fold(name)).strip("._") or "export"
     if not base.lower().endswith(ext):
         base += ext
     return base

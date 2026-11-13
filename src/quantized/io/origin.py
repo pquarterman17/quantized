@@ -25,7 +25,6 @@ deterministic (the route passes the wall-clock time; tests pass a fixed value).
 from __future__ import annotations
 
 import math
-import re
 from typing import Any
 
 import numpy as np
@@ -39,6 +38,7 @@ from quantized.io._column_roles import (
     error_targets,
     x_column_comment,
 )
+from quantized.io._origin_names import origin_short_name
 from quantized.io.origin_graph import (
     GraphSpec,
     curve_set,
@@ -84,8 +84,11 @@ def _num_cell(v: float) -> str:
 
 
 def _sanitize(name: str) -> str:
-    """LabTalk-safe identifier: non-word chars -> underscore (MATLAB \\W)."""
-    return re.sub(r"\W", "_", name)
+    """A book/sheet name Origin accepts as a short name: the .opj writer's
+    rule (io/_origin_names.origin_short_name -- ASCII letters/digits, a
+    leading letter, accents folded). The MATLAB port's ``\\W -> _`` kept
+    underscores, non-ASCII letters and leading digits, which Origin rejects."""
+    return origin_short_name(name, "data")
 
 
 def format_origin_script(
@@ -235,13 +238,9 @@ def format_origin_project_script(
     used: set[str] = set()
     for i, (ds, name) in enumerate(items):
         meta = dict(ds.metadata)
-        book = _sanitize(str(name or meta.get("origin_book", "") or f"data{i + 1}"))
-        base = book
-        n = 1
-        while book in used:
-            n += 1
-            book = f"{base}{n}"
-        used.add(book)
+        # Unique ignoring case, as Origin compares short names.
+        raw = str(name or meta.get("origin_book", "") or f"data{i + 1}")
+        book = origin_short_name(raw, f"data{i + 1}", used)
         long_name = str(meta.get("origin_book_long", "") or "")
         csv_name = f"{book}_data.csv"
         csv_text, ogs_text = format_origin_script(

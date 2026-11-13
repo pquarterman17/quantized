@@ -36,7 +36,6 @@ opened in Origin yet.
 
 from __future__ import annotations
 
-import re
 import struct
 from pathlib import Path
 
@@ -49,6 +48,7 @@ from quantized.io._column_roles import (
     column_letter,
     x_column_comment,
 )
+from quantized.io._origin_names import origin_short_name
 from quantized.io.origin_project import writer_blocks as wb
 from quantized.io.origin_project.container import ORIGIN_MISSING
 
@@ -59,12 +59,7 @@ _DESIGNATION_CODE = {"Y": 0, "disregard": 1, "Y-error": 2, "X": 3, "label": 4, "
 _NULL = struct.pack("<I", 0) + b"\n"
 
 
-# Origin short (window) names: ASCII letters/digits only, starting with a
-# letter -- no spaces or punctuation (Origin's Short Name rule). Capped so
-# the ``<book>_<column>`` dataset name fits the 147B header's 23-byte field
-# even for a 3-letter column (AAA): 16 + 1 + 3 + NUL < 23.
-_SHORT_MAX = 16
-_NOT_ALNUM = re.compile(r"[^A-Za-z0-9]")
+# Origin short (window) names: io/_origin_names.origin_short_name.
 
 
 def _col_short(i: int) -> str:
@@ -99,16 +94,7 @@ def _book_name(ds: DataStruct, index: int, used: set[str]) -> tuple[str, str]:
     (Origin names are case-insensitive); the long name keeps the original
     text, so a renamed short name loses nothing the user sees."""
     raw = str(ds.metadata.get("origin_book", "") or f"Book{index + 1}")
-    short = _NOT_ALNUM.sub("", raw)
-    if short and not short[0].isalpha():
-        short = "B" + short
-    short = (short or f"Book{index + 1}")[:_SHORT_MAX]
-    base = short
-    n = 1
-    while short.lower() in used:
-        n += 1
-        short = f"{base[: _SHORT_MAX - len(str(n))]}{n}"
-    used.add(short.lower())
+    short = origin_short_name(raw, f"Book{index + 1}", used)
     long_name = str(ds.metadata.get("origin_book_long", "") or raw)
     return short, long_name
 
