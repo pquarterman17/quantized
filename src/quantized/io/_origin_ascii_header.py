@@ -28,7 +28,9 @@ merely has three text rows above its data keeps the generic reading:
 
 KNOWN LIMIT: a Comments row whose every cell is a short unit-like word
 ("RT", "fit") is indistinguishable from a units row under these rules, so
-that file keeps the generic two-row reading.
+that file keeps the generic two-row reading -- and `origin_ascii_ambiguous`
+reports it, so the importer can SAY the header was read conservatively
+(`AMBIGUOUS_HEADER_NOTE`) instead of leaving the user to find out.
 
 Pure layer: token rows in -> row indices out.
 """
@@ -49,6 +51,33 @@ class OriginAsciiRows(NamedTuple):
     comments: int
 
 
+#: The import note for a header `origin_ascii_ambiguous` flags. ``{names}`` and
+#: ``{units}`` are 1-based line numbers of the rows that WERE used.
+AMBIGUOUS_HEADER_NOTE = (
+    "Three text rows sit above the data and the last two both look like units, so they "
+    "could be Origin's Long Name / Units / Comments or a title / names / units. Read as "
+    "names on row {names} and units on row {units}; if that is wrong, re-import with the "
+    "Import wizard and set the Header line and Units line by hand."
+)
+
+
+def _classify(
+    rows: Sequence[Sequence[str]], data_start: int, n_data_cols: int
+) -> str | None:
+    """``"origin"``, ``"ambiguous"`` (the Origin shape but for a unit-like
+    Comments row) or ``None`` for the three rows above ``data_start``."""
+    if data_start < 3:
+        return None
+    header, units, comments = rows[data_start - 3], rows[data_start - 2], rows[data_start - 1]
+    if any(_numeric_score(r) >= 0.5 for r in (header, units, comments)):
+        return None
+    if not _looks_like_units_row(units, n_data_cols):
+        return None
+    if _looks_like_units_row(header, n_data_cols) or len(header) < len(units):
+        return None
+    return "ambiguous" if _looks_like_units_row(comments, n_data_cols) else "origin"
+
+
 def origin_ascii_rows(
     rows: Sequence[Sequence[str]], data_start: int, n_data_cols: int
 ) -> OriginAsciiRows | None:
@@ -58,15 +87,15 @@ def origin_ascii_rows(
     scored (blank and comment lines already removed by the caller, or
     skipped by its own scoring), ``n_data_cols`` the data block's width.
     """
-    if data_start < 3:
-        return None
-    header, units, comments = rows[data_start - 3], rows[data_start - 2], rows[data_start - 1]
-    if any(_numeric_score(r) >= 0.5 for r in (header, units, comments)):
-        return None
-    if not _looks_like_units_row(units, n_data_cols):
-        return None
-    if _looks_like_units_row(comments, n_data_cols) or _looks_like_units_row(header, n_data_cols):
-        return None
-    if len(header) < len(units):
+    if _classify(rows, data_start, n_data_cols) != "origin":
         return None
     return OriginAsciiRows(data_start - 3, data_start - 2, data_start - 1)
+
+
+def origin_ascii_ambiguous(
+    rows: Sequence[Sequence[str]], data_start: int, n_data_cols: int
+) -> bool:
+    """Whether the three rows above ``data_start`` have Origin's shape EXCEPT
+    that the would-be Comments row also looks like a units row -- the case the
+    rules cannot decide, which keeps the generic names/units reading."""
+    return _classify(rows, data_start, n_data_cols) == "ambiguous"

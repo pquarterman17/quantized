@@ -26,7 +26,12 @@ from quantized.io._delimited_fast import (
 )
 from quantized.io._delimiter_vote import COMMENT_CHARS, tab_cell_lines, vote_lines
 from quantized.io._header_units import _extract_units as _extract_units  # re-export
-from quantized.io._origin_ascii_header import OriginAsciiRows, origin_ascii_rows
+from quantized.io._origin_ascii_header import (
+    AMBIGUOUS_HEADER_NOTE,
+    OriginAsciiRows,
+    origin_ascii_ambiguous,
+    origin_ascii_rows,
+)
 from quantized.io.base import read_text, resolve_column
 
 __all__ = ["import_csv"]
@@ -166,6 +171,7 @@ def import_csv(
     origin_rows = origin_ascii_rows(scoring_rows, data_start, n_data_cols)
     if origin_rows is not None:
         header_row, units_row = origin_rows.header, origin_rows.units
+    header_unclear = origin_ascii_ambiguous(scoring_rows, data_start, n_data_cols)
     if header_row >= 0:
         col_headers = [c.strip() for c in lazy_tokens[header_row]]
     else:
@@ -408,6 +414,8 @@ def import_csv(
     if time_is_datetime:
         metadata.update({"time_is_datetime": True, "time_timezone": "UTC"})
     notes: list[str] = []
+    if header_unclear:  # say so: the rows were read conservatively
+        notes.append(AMBIGUOUS_HEADER_NOTE.format(names=header_row + 1, units=units_row + 1))
     if comma_cols:
         # Named as the dataset shows them: the header with its unit split off.
         shown = [_extract_units(col_headers[c])[1] for c in comma_cols]

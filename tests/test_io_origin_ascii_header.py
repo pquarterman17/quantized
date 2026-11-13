@@ -162,3 +162,40 @@ def test_a_trailing_tab_on_every_line_is_still_padding(tmp_path: Path) -> None:
     # data rows padded, header not: still two columns
     ds = import_csv(_write(tmp_path, "Field\tKerr\n1\t2\t\n4\t5\t\n"))
     assert ds.metadata["all_column_names"] == ["Field", "Kerr"]
+
+
+# -- an undecidable header says so ------------------------------------------
+
+
+def test_ambiguous_three_row_header_is_read_conservatively_and_says_so(tmp_path: Path) -> None:
+    """A Comments row of short words ("RT", "fit") looks like units, so the
+    rules cannot tell Origin's Long Name / Units / Comments from title /
+    names / units. The generic reading stands, with a note naming the rows."""
+    text = "Field Strength,Kerr Signal,Kerr err\nOe,mdeg,mdeg\nRT,fit,raw\n1,2,3\n2,3,4\n"
+    ds = import_csv(_write(tmp_path, text, "f.csv"))
+    assert ds.labels == ("mdeg", "mdeg (2)")  # the generic reading: row 2 names, row 3 units
+    notes = ds.metadata["notes"]
+    assert len(notes) == 1
+    assert "Long Name / Units / Comments" in notes[0]
+    assert "names on row 2 and units on row 3" in notes[0]
+    assert "Import wizard" in notes[0]
+
+
+@pytest.mark.parametrize("text", [*ORIGIN_CASES, "Temp,Moment\nK,emu\n1,2\n2,3\n"])
+def test_a_decidable_header_carries_no_ambiguity_note(tmp_path: Path, text: str) -> None:
+    ds = import_csv(_write(tmp_path, text))
+    assert not any("Long Name" in n for n in ds.metadata.get("notes", []))
+
+
+def test_wizard_can_assign_the_three_rows_by_hand() -> None:
+    """The user's fix for the ambiguous file: Header line 0, Units line 1 --
+    with `column_names` cleared so the names re-read from the header line."""
+    import dataclasses
+
+    text = "Field Strength,Kerr Signal,Kerr err\nOe,mdeg,mdeg\nRT,fit,raw\n1,2,3\n2,3,4\n"
+    guessed = guess_settings(text)
+    fixed = dataclasses.replace(guessed, header_line=0, units_line=1, column_names=None)
+    ds = parse_import(text, fixed)
+    assert ds.labels == ("Kerr Signal", "Kerr err")
+    assert ds.units == ("mdeg", "mdeg")
+    assert any("RT" in c for c in ds.metadata["comments"])
