@@ -13,7 +13,7 @@
 // curve style and legend-template helpers are `./originCurveText` (slice 18).
 
 import { originErrKeys, originHiddenChannels } from "./errorbars";
-import { curveDisplayName, originCurveSeriesStyle, resolveLegendTemplate } from "./originCurveText";
+import { curveDisplayName, legendCaption, originCurveSeriesStyle } from "./originCurveText";
 import { figureLayerFamily, type OriginFigureEntry } from "./originFigures";
 import type {
   Annotation,
@@ -127,7 +127,8 @@ export function figureChannelSelection(
   yKeys: number[];
   styles: Record<number, SeriesStyle>;
   /** Per-curve legend captions (`legend_labels`, resolved via
-   *  `resolveLegendTemplate` — `%(n)` -> the nth curve's display name,
+   *  `legendCaption` — `%(n)` -> the nth curve's display name, no caption
+   *  at all when a code cannot be resolved,
    *  `\l(n)` swatch stripped), mapped onto the bound channel that curve
    *  plots — see the loop below for the mapping rule. Ready for the store's
    *  `seriesLabels`. */
@@ -204,9 +205,10 @@ export function figureChannelSelection(
     if (curve.x && curve.x !== xLetter) {
       if (requestedX >= 0) xKey = requestedX; // plot against a non-default x channel
     }
-    if (curveIdx < legend.length && legend[curveIdx]) {
-      labels[yIdx] = resolveLegendTemplate(legend[curveIdx], curveNames);
-    }
+    const caption = curveIdx < legend.length && legend[curveIdx]
+      ? legendCaption(legend[curveIdx], curveNames)
+      : undefined;
+    if (caption !== undefined) labels[yIdx] = caption;
     curveIdx++;
   }
   if (yKeys.length === 0) return null;

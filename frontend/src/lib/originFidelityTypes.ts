@@ -1,9 +1,28 @@
-// Origin project-level fidelity manifest types (backend
-// io/origin_project/fidelity.py + integrity.py) and the saved-preview
-// diagnostics they carry, split out of lib/types.ts
-// under its module-size ceiling and re-exported from there.
+// Origin import-fidelity wire types (backend io/origin_project/fidelity.py
+// + integrity.py): the per-figure and per-project decode report and the
+// saved-preview diagnostics it carries. Split out of lib/types.ts under its
+// module-size ceiling; types.ts re-exports every name, so importers are
+// unchanged.
 
-import type { OriginFidelityStatus } from "./types";
+import type { OriginWorksheetFidelity } from "./originWorksheetTypes";
+
+export type OriginFidelityStatus = "exact" | "best_effort" | "reference_only" | "unresolved";
+
+export interface OriginFigureFidelity {
+  status: OriginFidelityStatus;
+  recovered: string[];
+  omissions: string[];
+}
+
+/** A curve whose column the `.opj` records on sheet `recorded` (`Book@N`),
+ *  while its binding names `book` (`opj_curve_sheets`). The binding is kept;
+ *  `lib/originCurveSheets.ts` words it against the books actually imported. */
+export interface OriginCurveSheetNote {
+  book: string;
+  x: string;
+  y: string;
+  recorded: string;
+}
 
 export interface OriginSavedPreview {
   format: "png";
@@ -55,4 +74,6 @@ export interface OriginFidelityManifest {
    *  io/origin_project/integrity.py). A truncated file also lists the
    *  `file_truncated` omission. Optional: older workspaces lack it. */
   container_integrity?: OriginContainerIntegrity;
+  /** `.opju` only (see ./originWorksheetTypes); absent for `.opj`. */
+  worksheet?: OriginWorksheetFidelity;
 }

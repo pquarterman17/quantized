@@ -56,6 +56,33 @@ describe("resolveOriginFigureSources", () => {
     expect(result.unresolved[0]).toMatchObject({ book: "Book2", reason: "book_not_imported" });
   });
 
+  it("names the sheets a workbook's data lives on, and never binds one of them itself", () => {
+    // DO.opj: the graph names Book1, but the import holds only sheets 6 and 7
+    // (Book1@6, Book1@7). Both have columns A/B, so neither is guessed.
+    const e = entry(figure([{ book: "Book1", x: "A", y: "B" }]), ["d7", "d6", "d9"]);
+    const result = resolveOriginFigureSources(e, [e], [
+      dataset("d7", "Book1@7"),
+      dataset("d6", "Book1@6"),
+      dataset("d9", "Book10@2"), // a different workbook whose name starts the same
+    ]);
+    expect(result.sources).toEqual([]);
+    expect(result.unresolved).toEqual([
+      { book: "Book1", x: "A", y: "B", reason: "sheet_not_recorded", sheets: ["6", "7"] },
+    ]);
+  });
+
+  it("names the sheet the file records a curve on instead of 'sheet not recorded'", () => {
+    const fig = figure([{ book: "Book1", x: "A", y: "B" }, { book: "Book1", x: "A", y: "C" }]);
+    fig.curve_sheet_notes = [{ book: "Book1", x: "A", y: "B", recorded: "Book1@6" }];
+    const e = entry(fig, ["d6", "d7"]);
+    const result = resolveOriginFigureSources(e, [e], [dataset("d6", "Book1@6"), dataset("d7", "Book1@7")]);
+    expect(result.unresolved).toEqual([
+      { book: "Book1", x: "A", y: "B", reason: "recorded_on_other_sheet", recorded: "Book1@6" },
+      // Decoy: C has no note, so the file names no sheet for it.
+      { book: "Book1", x: "A", y: "C", reason: "sheet_not_recorded", sheets: ["6", "7"] },
+    ]);
+  });
+
   it("retains raw letters when a decoded column is absent", () => {
     const e = entry(figure([{ book: "Book1", x: "A", y: "Z" }]));
     const result = resolveOriginFigureSources(e, [e], [dataset("d1", "Book1")]);

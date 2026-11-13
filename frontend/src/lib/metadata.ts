@@ -21,7 +21,8 @@ export function formatMetaValue(v: unknown): string {
  *  hints (`x_column_name`/`x_column_unit`) are wiring, not instrument
  *  metadata, and already shown as the X column; the Origin provenance keys
  *  (`origin_results_log[_records]`, `origin_notes`, `origin_report_sheets`,
- *  `origin_text_columns`) have their own dedicated Inspector card
+ *  `origin_text_columns`, the `.opju` worksheet losses / fidelity report and
+ *  the X-axis reason) have their own dedicated Inspector card
  *  (OriginProvenanceCard) that renders them readably instead of as raw
  *  text/JSON rows; `preview_source_rows` (`lib/rowSidecars.PREVIEW_SOURCE_ROWS`)
  *  is WIRING — which source row each row of a still-loading book's preview is
@@ -40,6 +41,9 @@ const HIDDEN_METADATA_KEYS = new Set([
   "origin_notes",
   "origin_report_sheets",
   "origin_text_columns",
+  "origin_worksheet_losses",
+  "origin_worksheet_fidelity",
+  "x_column_unrecovered_reason",
   PREVIEW_SOURCE_ROWS,
   FIT_ROW_IDENTITIES,
 ]);

@@ -150,7 +150,7 @@ describe("buildOverlayDataset", () => {
     expect(overlayCurveLabels(ds)).toEqual({ 0: "B-long", 1: "B-long" });
   });
 
-  it("leaves a %(n) template unresolved (raw) when it references a curve whose book/channel never bound", () => {
+  it("never shows a %(n) template that references a curve whose book/channel never bound: that column keeps its default label", () => {
     const fig = {
       ...figure([
         { book: "Book2", x: "A", y: "B" }, // curveIdx 0 -> overlay col 0
@@ -160,8 +160,9 @@ describe("buildOverlayDataset", () => {
       legend_labels: ["%(1)", "", "%(2)"], // curve 3's caption cross-references curve 2 (unresolved)
     };
     const ds = buildOverlayDataset(fig, [b1, b2]);
-    expect(ds!.metadata.origin_curve_labels).toEqual(["B-long", "%(2)"]);
-    expect(overlayCurveLabels(ds)).toEqual({ 0: "B-long", 1: "%(2)" });
+    // Was ["B-long", "%(2)"]: the raw code reached the legend.
+    expect(ds!.metadata.origin_curve_labels).toEqual(["B-long", null]);
+    expect(overlayCurveLabels(ds)).toEqual({ 0: "B-long" });
   });
 
   it("overlayCurveLabels is empty for a non-overlay dataset or an absent legend", () => {

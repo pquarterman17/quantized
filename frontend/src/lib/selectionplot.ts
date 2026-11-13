@@ -84,6 +84,7 @@ export function resolveSelectionPlot(
     if (c === resolvedXKey) continue; // never also a Y
     const d = meta[c]?.designation;
     if (d === "label" || d === "disregard" || d === "X-error" || d === "X") continue; // never plotted
+    if (d === "group" || d === "subject") continue; // factor columns: never a series
     if (d === "Y-error") {
       if (lastY !== null) errActions.push({ kind: "setErrKey", channel: lastY, errChannel: c });
       continue; // an error column is never itself a Y series
@@ -139,6 +140,7 @@ export function selectionToSpec(
     .filter((c) => c >= 0)
     .filter((c) => {
       const d = meta[c]?.designation;
+      if (d === "group" || d === "subject") return false; // factor columns
       return d !== "label" && d !== "disregard" && d !== "X-error" && d !== "Y-error";
     })
     .sort((a, b) => a - b);

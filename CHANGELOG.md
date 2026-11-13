@@ -187,6 +187,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   Tests check its conversion factors dimensionally, including
   1 emu/cm³ = 1000 A/m. The A/m, A·m²/kg and area-normalized units are
   documented SI extensions beyond the MATLAB `convertMagUnits`.
+- Origin `.opj` matrix books open in the Map view, with Origin's X/Y
+  coordinate mapping. A project holding only matrices used to fail to import.
+- Origin `.opj` projects saved by Origin 7 and Origin 8 import. Origin 8
+  projects used to fail entirely.
 
 ### Changed
 
@@ -264,11 +268,38 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Fixed
 
+- Origin `.opj` Numeric columns (double, float, short, long, byte, complex)
+  and Date/Time columns read their real values. Some used to come in as
+  nonsense numbers, and others were dropped.
+- Origin `.opj` worksheets import only the rows that were used. The blank
+  rows Origin pre-allocates used to come in as zeros.
+- Origin `.opj` text cells are kept: Text columns, and Text & Numeric columns
+  holding text, appear as the worksheet's text columns. A workbook made only
+  of text used to import empty.
+- Origin `.opj` workbooks without a long name are titled by their short name
+  (`Book1`). Many used to be titled "BA".
+- Origin `.opj` Numeric, Date and Time columns keep their long name, unit,
+  comment and X/Y designation; multi-line comments are kept whole.
+- Origin `.opj` columns designated Group or Subject are labelled as such in
+  the worksheet header and are no longer plotted as data series.
+- Origin `.opj` files written by quantized state each column's real row
+  count. Files written earlier still open in full.
+- Origin `.opj` sheets other than the first keep their column names, units,
+  comments and X/Y designations, and a workbook whose sheets were deleted or
+  reordered no longer picks up another sheet's column names.
+- An Origin `.opj` column is no longer dropped because one cell holds an
+  implausibly small or large number; that cell is blanked and reported.
+- An Origin `.opj` text column wider than ten characters is shown as text
+  instead of being filed away as a fit-report sheet.
+- Origin `.opj` imports say so when a dataset could not be recognised, when
+  a matrix's X/Y coordinates were not found, and when an old-style file had
+  to be read by inspecting its bytes.
+- Deleting or filtering rows keeps the imaginary part of an Origin complex
+  column on the same row as its real part.
+- Origin `.opj` data that cannot be read is named in the import's fidelity
+  summary instead of being left out silently.
 - The Reshape preview reports the real result row count when its table is
   capped.
-
-### Fixed
-
 - Paste and import keep a row's empty edge cells and a short first data
   row: values no longer shift under the wrong header or lose a column, and
   direct import and the Import wizard read such files the same way.

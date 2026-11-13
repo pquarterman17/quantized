@@ -189,4 +189,49 @@ describe("OriginProvenanceCard", () => {
     );
     expect(container.firstChild).toBeNull();
   });
+
+  it("lists what this worksheet did not import, with the affected columns, and opens itself", () => {
+    const { container } = render(
+      <OriginProvenanceCard
+        active={ds({
+          origin_worksheet_losses: {
+            undecoded: { count: 23, columns: ["C", "D"] },
+            complex_imaginary: { count: 1, columns: ["F"] },
+            grammar_only: { count: 2, columns: ["A", "B"] },
+          },
+        })}
+      />,
+    );
+    const group = screen.getByRole("group", { name: "Worksheet import losses" });
+    expect(group).toHaveTextContent("Not read: C, D +21 more");
+    expect(group).toHaveTextContent("Complex — imaginary part not imported: F");
+    // not a loss: shown apart, outside the warning group
+    expect(group).not.toHaveTextContent("older Origin format");
+    expect(screen.getByText(/Read from an older Origin format/)).toHaveTextContent("A, B");
+    expect(container.querySelector("details.qz-card")).toHaveAttribute("open");
+  });
+
+  it("an unverified-only book is not flagged as lossy", () => {
+    const { container } = render(
+      <OriginProvenanceCard active={ds({ origin_worksheet_losses: { grammar_only: { count: 1, columns: ["A"] } } })} />,
+    );
+    expect(screen.queryByRole("group", { name: "Worksheet import losses" })).toBeNull();
+    expect(container.querySelector("details.qz-card")).not.toHaveAttribute("open");
+  });
+
+  it("explains a row-index X axis when the first column could not be confirmed as the X", () => {
+    render(
+      <OriginProvenanceCard
+        active={ds({
+          x_column_recovered: false,
+          x_column_unrecovered_reason:
+            "column A comes before B and is a Text column, so which column is the X is not known",
+        })}
+      />,
+    );
+    expect(
+      screen.getByText(/X axis shows the row index — column A comes before B and is a Text column/),
+    ).toHaveTextContent("Every decoded column is kept as a Y series.");
+    expect(screen.queryByText(/designated X column/)).toBeNull();
+  });
 });

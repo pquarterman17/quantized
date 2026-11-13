@@ -307,7 +307,9 @@ def _find_label(b: bytes, start: int, end: int) -> str | None:
 
 
 def opju_window_metadata(
-    b: bytes, book_columns: Mapping[str, Sequence[str]]
+    b: bytes,
+    book_columns: Mapping[str, Sequence[str]],
+    anchors: dict[str, tuple[int, bytes | None] | None] | None = None,
 ) -> dict[str, BookMeta]:
     """Map book short name -> :class:`~quantized.io.origin_project.windows.BookMeta`.
 
@@ -315,6 +317,11 @@ def opju_window_metadata(
     ordering (see ``opj._group``) — this function never invents a column
     that ``opju_codec.scan_columns`` didn't independently decode; it only
     attaches a label to it when the book's marker run can be confirmed.
+
+    ``anchors`` lets a caller that asks about the same file twice share each
+    book's anchor search (a full-file scan when the book has none): the
+    anchor depends only on the file and the book's name, never on the column
+    list, so sharing it cannot change an answer.
     """
     start = tail_start(b)
     markers = sorted(
@@ -339,7 +346,12 @@ def opju_window_metadata(
     for book, cols in book_columns.items():
         if not cols:
             continue
-        anchored = _book_anchor(b, book, start, filename_hits)
+        if anchors is not None and book in anchors:
+            anchored = anchors[book]
+        else:
+            anchored = _book_anchor(b, book, start, filename_hits)
+            if anchors is not None:
+                anchors[book] = anchored
         if anchored is None:
             continue
         anchor, raw_filename = anchored

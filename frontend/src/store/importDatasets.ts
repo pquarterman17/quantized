@@ -33,6 +33,7 @@ import { originBookErrorRoles } from "../lib/originBookRoles";
 import { planOriginImport } from "../lib/originFolders";
 import { importSummary } from "../lib/importFailureHint";
 import { originImportNotice } from "../lib/originImportNotice";
+import { buildOriginFigureEntries } from "../lib/originFigureEntries";
 import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "../lib/rowSidecars";
 import {
   isLazyBookEntry,
@@ -327,11 +328,14 @@ function addFromPayload(
     }));
   }
   set({ worksheetId: null }); // the Worksheet tab shows the import, not a book opened earlier
-  if (figures?.length) get().addOriginFigures(stem, figures, newIds);
+  const siblings = get().datasets.filter((d) => newIds.includes(d.id));
+  if (figures?.length) get().addOriginFigures(buildOriginFigureEntries(stem, figures, siblings));
   if (fidelity) {
     get().addOriginFidelity(stem, fidelity, newIds);
-    const notice = originImportNotice(stem, fidelity); // truncated file -> danger
-    toast(notice.msg, notice.kind, notice.ttlMs ? { ttlMs: notice.ttlMs } : undefined);
+    const note = originImportNotice(stem, fidelity, () => {
+      if (!get().originFidelitySectionExpanded) get().toggleOriginFidelitySectionExpanded();
+    }); // truncated file / lost worksheet data -> danger with "Show what is missing"
+    toast(note.msg, note.kind, note.opts);
   }
   get().recordMacro(`Import ${origin.name}`, `qz.import(${lit(origin.name)})`, {
     kind: "import",

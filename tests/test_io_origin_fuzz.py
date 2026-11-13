@@ -44,6 +44,20 @@ def _resolve_corpus_dir() -> Path:
 _CORPUS = _resolve_corpus_dir()
 
 
+def _needs(*names: str) -> pytest.MarkDecorator:
+    """Skip unless every named project is in the local Origin corpus.
+
+    Keyed on the FILES, not the corpus directory: ``test-data/origin`` can
+    exist while holding only other material (the public specimen corpus
+    under ``public/``), and a guard that checks the directory then runs the
+    test straight into a FileNotFoundError.
+    """
+    missing = [n for n in names if not (_CORPUS / n).exists()]
+    return pytest.mark.skipif(
+        bool(missing), reason=f"not in the local Origin corpus: {', '.join(missing)}"
+    )
+
+
 def _block(payload: bytes) -> bytes:
     return struct.pack("<I", len(payload)) + b"\n" + payload + b"\n"
 
@@ -152,7 +166,6 @@ pytestmark_real = pytest.mark.realdata
 
 
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
 @pytest.mark.parametrize(
     "fname",
     [
@@ -182,7 +195,7 @@ def test_corpus_sweep_parses_or_raises_cleanly(fname: str) -> None:
 
 
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+@_needs("Moke.opj", "XMCD.opj", "XRD.opj")
 def test_version_anchors_43227_and_43380() -> None:
     """One pinned value per .opj container version in the corpus. (The
     2026-07-06 corpus swap replaced XRD.opj with a CPYA 4.3380 project, so

@@ -154,7 +154,9 @@ def opj_bytes(books: list[DataStruct]) -> bytes:
         for (short, _lng, _unit, _desig, _cmt), arr in zip(cols, arrays, strict=True):
             serial += 1
             out += _NULL
-            out += _block(wb.col_header(f"{short_book}_{short}", len(arr), serial))
+            filled = np.flatnonzero(np.isfinite(arr))
+            used_end = int(filled[-1]) + 1 if filled.size else 0  # one past the last value
+            out += _block(wb.col_header(f"{short_book}_{short}", len(arr), serial, used_end))
             out += _data_block(arr)
 
     out += _NULL * 2  # datasets / windows section separator

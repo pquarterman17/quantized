@@ -33,6 +33,15 @@ you don't need to convert anything first.
   analysis log (the record of every fit/subtract/smooth operation you ran,
   with parameters) are attached as import metadata, visible in the
   Inspector's Metadata card.
+- **Every column type, in projects as old as Origin 7** (`.opj`).
+  Numeric columns stored as double, float, short, long, byte or complex,
+  Text columns, and the default Text & Numeric columns are each read as
+  Origin stored them. Only the rows you actually used come in — not the
+  blank rows Origin pre-allocates. Text cells are kept beside the numbers
+  (the worksheet's text columns), and a complex column's imaginary part is
+  kept in the dataset's metadata.
+- **Matrix books** (`.opj`) open in the Map view, with Origin's X/Y
+  coordinate mapping.
 - **Extra sheets** in a multi-sheet workbook come in as separate
   `"Book@N (sheet N)"` pseudo-datasets so their data isn't lost, even
   though quantized doesn't (yet) show a nested Book→Sheet tree.
@@ -41,6 +50,15 @@ you don't need to convert anything first.
 
 Import is thorough but not lossless. In particular:
 
+- **Anything quantized cannot read is named, never guessed.** A dataset in
+  an unrecognised format (and Origin's function plots, which have no
+  worksheet data) is left out, and the Library's Origin fidelity summary
+  says so — e.g. "1 matrix book(s) not imported".
+- **Date and Time columns come in as Origin's day numbers**, not as
+  formatted dates. The dataset records which columns they are and how to
+  convert them, but the worksheet does not format them yet.
+- **Text in a non-Western code page** (e.g. a project saved on a Chinese
+  Windows) may show garbled characters in text cells and labels.
 - **Report-sheet columns come in as text references, not computed
   numbers.** Origin's auto-generated FitLinear/NLFit "Notes"/"Summary"/
   ANOVA columns store variable-length reference strings (e.g.

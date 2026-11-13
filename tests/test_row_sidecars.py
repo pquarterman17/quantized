@@ -441,3 +441,28 @@ class TestPreviewSampledReachesTheWire:
             payload = _book_preview_payload(ds)
             assert payload["preview_sampled"] is False
             assert "preview_rows" not in payload
+
+
+def test_complex_imaginary_parts_follow_their_rows() -> None:
+    """``origin_complex_imaginary`` is one number per row of a complex Origin
+    column. Left out of the registry, deleting a row left every imaginary
+    part one row off its real part."""
+    meta: dict[str, object] = {"origin_complex_imaginary": {"A": [10.0, None, 30.0, 40.0]}}
+    out = slice_row_sidecars(meta, [0, 2, 3])
+    assert out["origin_complex_imaginary"] == {"A": [10.0, 30.0, 40.0]}
+    assert "origin_complex_imaginary" not in drop_row_sidecars(meta)
+
+
+def test_complex_imaginary_gap_is_none_never_a_string() -> None:
+    """An imaginary part is a number per row; a gap from an inserted row (-1)
+    or a blank kept by a filter stays ``None`` (JSON null), as on the TS side,
+    while a text sidecar's gap stays ``""``."""
+    meta: dict[str, object] = {
+        "origin_complex_imaginary": {"A": [0.5, None, 2.5]},
+        "text_columns": {"T": ["a", "b", "c"]},
+    }
+    out = slice_row_sidecars(meta, [0, -1, 1, 2])
+    assert out["origin_complex_imaginary"] == {"A": [0.5, None, None, 2.5]}
+    assert out["text_columns"] == {"T": ["a", "", "b", "c"]}
+    assert slice_row_sidecars(meta, [1, 2])["origin_complex_imaginary"] == {"A": [None, 2.5]}
+

@@ -12,10 +12,16 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any, Literal, NotRequired, TypedDict
 
+from quantized.datastruct import DataStruct
 from quantized.io.origin_project.graph_preview import PreviewDiagnostic
 from quantized.io.origin_project.integrity import ContainerIntegrity
 
-__all__ = ["assess_origin_figures", "origin_figure_decode_failure"]
+__all__ = [
+    "assess_origin_figures",
+    "book_source_names",
+    "origin_figure_decode_failure",
+    "with_data_diagnostics",
+]
 
 FidelityStatus = Literal["exact", "best_effort", "reference_only", "unresolved"]
 
@@ -43,9 +49,15 @@ class OriginFidelityManifest(TypedDict):
     omissions: list[str]
     filtered_figures: list[FilteredFigure]
     preview_diagnostics: list[PreviewDiagnostic]
+    # Per-dataset reasons behind the DATA omissions (a worksheet dataset or a
+    # matrix that was not imported). Present only when there are any.
+    data_diagnostics: NotRequired[list[dict[str, str]]]
     # File length vs the size its header records (``integrity.py``); added by
     # ``integrity.apply_container_integrity`` at import time.
     container_integrity: NotRequired[ContainerIntegrity]
+    # The ``.opju`` worksheet decode's loss summary
+    # (``worksheet_fidelity.worksheet_fidelity_summary``), added at import time.
+    worksheet: NotRequired[dict[str, object]]
 
 
 def origin_figure_decode_failure(
@@ -70,6 +82,21 @@ _ALWAYS_OMITTED = [
     "rich_text_run_formatting",
     "advanced_axis_types",
 ]
+
+
+def book_source_names(books: Iterable[DataStruct]) -> set[str]:
+    """Every name a figure's source hint may use for an imported book: its
+    Origin short name and its display title (``assess_origin_figures``'s
+    ``source_names``)."""
+    return {
+        str(name)
+        for book in books
+        for name in (
+            book.metadata.get("origin_book", ""),
+            book.metadata.get("origin_book_long", ""),
+        )
+        if name
+    }
 
 
 def _normalized_sources(source_names: Iterable[str]) -> tuple[str, ...]:
@@ -141,13 +168,18 @@ def _figure_fidelity(fig: dict[str, Any]) -> FigureFidelity:
             omissions.append("some_curve_colors")
     if not (fig.get("frame") and fig.get("page")):
         omissions.append("layer_geometry")
-    return {
+    if fig.get("curve_sheet_notes"):
+        # The per-curve detail is the figure's own `curve_sheet_notes`; the
+        # frontend words it against the books that were actually imported.
+        omissions.append("curve_sheet_mismatch")
+    out: FigureFidelity = {
         # No current decoder proves every visual property, so "exact" is
         # deliberately reserved for a future preview/oracle comparison gate.
         "status": "best_effort",
         "recovered": _recovered_groups(fig),
         "omissions": omissions,
     }
+    return out
 
 
 def assess_origin_figures(
@@ -196,3 +228,35 @@ def assess_origin_figures(
         "preview_diagnostics": preview_diagnostics or [],
     }
     return actionable, manifest
+
+
+def with_data_diagnostics(
+    manifest: OriginFidelityManifest, diagnostics: object
+) -> OriginFidelityManifest:
+    """Fold a reader's DATA diagnostics into the project manifest.
+
+    The graph assessment above knows nothing about worksheet or matrix
+    data; a reader that omitted a dataset says so in
+    ``metadata["origin_data_diagnostics"]`` (``{"omissions": [one line per
+    kind of loss], "details": [{category, dataset, reason}]}`` — see
+    ``opj_scan.summarize_problems``). Each omission line joins the
+    manifest's ``omissions`` (so every surface that lists what was not
+    recovered lists it), the details ride along as ``data_diagnostics``.
+    Anything not shaped like that is ignored; a clean read returns
+    ``manifest`` itself, unchanged.
+    """
+    if not isinstance(diagnostics, dict):
+        return manifest
+    lines = [x for x in diagnostics.get("omissions") or [] if isinstance(x, str) and x]
+    details = [
+        {str(k): str(v) for k, v in item.items()}
+        for item in diagnostics.get("details") or []
+        if isinstance(item, dict)
+    ]
+    if not lines and not details:
+        return manifest
+    out: OriginFidelityManifest = {**manifest}
+    out["omissions"] = sorted({*manifest["omissions"], *lines})
+    if details:
+        out["data_diagnostics"] = details
+    return out

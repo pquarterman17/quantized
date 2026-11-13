@@ -4,10 +4,13 @@
 
 import type { ColumnDesignations, OriginDesignation } from "./columnmeta";
 
-// The same seven strings as columnmeta's ORIGIN_DESIGNATIONS (pinned equal by
+// The same nine strings as columnmeta's ORIGIN_DESIGNATIONS (pinned equal by
 // columnDesignations.test.ts); restated so this loader-side module takes no
-// runtime import of the eager columnmeta chunk.
-const KNOWN: readonly string[] = ["X", "Y", "Y-error", "X-error", "label", "disregard", "Z"];
+// runtime import of the eager columnmeta chunk. "group"/"subject" are Origin's
+// factor designations, which an imported .opj column can carry.
+const KNOWN: readonly string[] = [
+  "X", "Y", "Y-error", "X-error", "label", "disregard", "Z", "group", "subject",
+];
 
 /** Keep only integer channel keys inside `[0, width)` mapped to a known
  *  designation; `undefined` when nothing valid remains (the field is then

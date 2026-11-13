@@ -4,7 +4,8 @@
 // as a DANGER: the books and columns past the cut are missing, and the
 // import itself succeeded, so nothing else would tell the user.
 
-import type { ToastKind } from "../store/toasts";
+import type { ToastKind, ToastOptions } from "../store/toasts";
+import { originImportToast } from "./originFidelity";
 import type { OriginFidelityManifest } from "./types";
 
 /** How long the truncated-file warning stays up. The default toast lifetime
@@ -13,7 +14,30 @@ import type { OriginFidelityManifest } from "./types";
  *  does not repeat it (live check 2026-11: it was gone before it could be read). */
 export const TRUNCATED_NOTICE_TTL = 12_000;
 
+export interface OriginImportNotice {
+  msg: string;
+  kind: ToastKind;
+  ttlMs?: number;
+  /** The `toast()` options: a danger notice carries a "Show what is missing"
+   *  action (when `showDetails` was given) and its own lifetime. */
+  opts?: ToastOptions;
+}
+
+/** The import toast: a truncated file leads, then worksheet data that did
+ *  not come in, else the graph count. `showDetails` opens the Library's
+ *  Origin fidelity group (it starts tucked). */
 export function originImportNotice(
+  stem: string,
+  fidelity: OriginFidelityManifest,
+  showDetails?: () => void,
+): OriginImportNotice {
+  const note = baseNotice(stem, fidelity);
+  if (note.kind !== "danger") return note;
+  const action = showDetails ? { label: "Show what is missing", onClick: showDetails } : undefined;
+  return { ...note, opts: { ttlMs: note.ttlMs, action } };
+}
+
+function baseNotice(
   stem: string,
   fidelity: OriginFidelityManifest,
 ): { msg: string; kind: ToastKind; ttlMs?: number } {
@@ -31,8 +55,7 @@ export function originImportNotice(
       ttlMs: TRUNCATED_NOTICE_TTL,
     };
   }
-  return {
-    msg: `${stem}: ${fidelity.graph_records_actionable}/${fidelity.graph_records_total} Origin graph records are editable; fidelity details saved`,
-    kind: "info",
-  };
+  // Not truncated: worksheet data that did not come in leads (`.opju`
+  // worksheet summary, a danger), else the plain graph count.
+  return originImportToast(stem, fidelity);
 }

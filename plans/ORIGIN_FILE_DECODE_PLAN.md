@@ -302,7 +302,10 @@ designations/comments (item 10 — the windows-section marker+label grammar,
 151/151 names + 130/130 units + 17/17 comments across the oracle corpus).
 `.opju` worksheet decode is COMPLETE (32 closed — 210/210 oracle columns;
 segment grammar + canonical FPC widths). Non-double column *values* (item 4)
-is now CLOSED in both containers: garbage-gated, int/float32 needed no work,
+is now CLOSED in both containers: garbage-gated, int/float32 needed no work
+[**wrong for `.opj`** — corrected 2026-11-13: Numeric columns are 8/4/2/1
+bytes per row and were being misread or dropped; the reader is now
+header-driven, see the Completed entry of that date],
 the inline-text sentinel shape decodes, and the FitLinear/NLFit report-sheet
 reference-string family (the item's hardest residue) decodes too —
 `origin_report_sheets` metadata in `.opj` (`decode_report_strings`) and
@@ -1058,6 +1061,60 @@ the shipped contract)
 
 ## Completed
 
+- ~~**`.opj` reader: review round**~~ (2026-11-13) — eleven fail-closed
+  gaps from an independent review of the header-driven reader. `@N` is a
+  sheet ID: sheets are bound by column object id (`opj_sheets.py`;
+  property block `0x04` ↔ dataset header `0x52`), never by position, and
+  every bound sheet keeps its column metadata. The datasets section is
+  walked positionally: an unrecognised header is reported and stepped
+  over. A lost first column no longer promotes the next to X. Report
+  sheets need a `cell://` cell. Implausible float64 cells are blanked, the
+  column kept. The legacy walk and coordinate-less matrices put a line in
+  `origin_fidelity`. Corpus numbers and `extract_figures` output
+  unchanged; evidence in `docs/origin_re/validation_log.md`.
+- ~~**`.opj` reader handoff: header-driven decode**~~ (2026-11-13) — owner
+  handoff after an audit of 49 public `.opj` projects (13 failing, wrong
+  values in others). The dataset header's type / row-width / used-row
+  fields are now decoded (`opj_datasets.py`, `opj_scan.py`): double, float,
+  int8-16-32, complex, Text and Text & Numeric cells read as declared;
+  unused allocated rows are no longer returned; 115/123/140-byte headers
+  (Origin 7 / Origin 8 era) read; matrix books import as maps (`opj_matrix.py`);
+  all-text books keep their cells and labels; window labels no longer come
+  back as `"BA"`; Numeric-typed columns keep designation / long name /
+  unit / comment; undecoded datasets are named in `origin_fidelity`.
+  Corpus: 36 → 48 of 49 `.opj` import, 0 regressions, `.opju` output
+  byte-identical. This supersedes item 4's "int/float32 needed no work" and
+  "no header byte discriminates the type" (both wrong — format doc §3.2
+  note) and closes its `Moke.opj Book3_A` residue by layout. Evidence,
+  before/after table and what stays unproven:
+  `docs/origin_re/validation_log.md` 2026-11-13. **Follow-up owed:** re-run
+  the owner-corpus realdata pins (that corpus was not on the machine).
+
+- ~~**`.opju` structural worksheet reader**~~ (2026-11-13, owner handoff:
+  reading existing projects without an Origin install) — worksheet data is
+  read from each column's own storage header through a full record grammar
+  (`opju_blocks.py`, `opju_values.py`, `opju_records.py`,
+  `opju_worksheet.py`, `opju_matrix.py`) instead of one byte signature:
+  Text&Numeric cells incl. mixed/short/gapped columns, double, float32,
+  integers, complex, Text, the used-row extent, pre-4.33 builds and matrix
+  books. Oracle: 14 third-party projects stored in both containers (127/127
+  records cell-identical) + their published matrix expectations; 274-file
+  public corpus 199 → 258 importing, 25,356 → 33,413 book columns. Every
+  import now carries `metadata["origin_worksheet_fidelity"]`. Grammar and
+  evidence: `docs/origin_project_format.md` §3.5–§3.6; log:
+  `docs/origin_re/validation_log.md` 2026-11-13. **Open follow-ups:** the
+  curve-binding column universe is deliberately frozen on the marker scan
+  (re-derive against dataset stream order under its own handoff); the
+  owner's own ground-truth suite must be re-run where that corpus exists.
+  Review follow-up (2026-11-13): a Y is never promoted to X, a per-walk
+  decode budget bounds memory, the marker scan always runs as a safety net
+  (no second decode), unread/orphan records and unread report records are
+  reported, text past the numeric rows is kept, and the worksheet losses
+  reach `origin_fidelity["worksheet"]` (import toast, Library fidelity
+  entry, provenance card). The record checksum is verified (a Fletcher pair
+  over the body's u32 words; 37,189/37,189 corpus records). Still open:
+  designations of `Book@N` sheet books — no paired specimen has a
+  non-default sheet-2 designation to confirm a rule against.
 - ~~**21. Templates (`.otp`/`.otpu`)**~~ (2026-07-11) — same CPY family; a
   graph template imports as a quantized style preset. Backend shipped
   2026-07-07 via the (now-archived) `GAP_ECOSYSTEM_PLAN.md` item 5

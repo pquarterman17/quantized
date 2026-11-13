@@ -397,8 +397,22 @@ _CORPUS = _resolve_corpus_dir()
 _GT = _CORPUS / "specimens" / "ground_truth"
 
 
+def _needs(*names: str) -> pytest.MarkDecorator:
+    """Skip unless every named project is in the local Origin corpus.
+
+    Keyed on the FILES, not the corpus directory: ``test-data/origin`` can
+    exist while holding only other material (the public specimen corpus
+    under ``public/``), and a guard that checks the directory then runs the
+    test straight into a FileNotFoundError.
+    """
+    missing = [n for n in names if not (_CORPUS / n).exists()]
+    return pytest.mark.skipif(
+        bool(missing), reason=f"not in the local Origin corpus: {', '.join(missing)}"
+    )
+
+
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+@_needs("Moke.opj")
 def test_realdata_moke_field_ramp() -> None:
     ds = import_auto(_CORPUS / "Moke.opj")
     # the largest MOKE book's X column is the field sweep, first point ≈ -6796.22 Oe
@@ -408,7 +422,7 @@ def test_realdata_moke_field_ramp() -> None:
 
 
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+@_needs("Moke.opj")
 def test_realdata_moke_all_books_recovered() -> None:
     from quantized.io.origin_project import read_origin_books
 
@@ -448,7 +462,7 @@ def test_realdata_mnn_diffusion_column_unit_richtext_translated() -> None:
 
 
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+@_needs("Moke.opj")
 def test_realdata_moke_book4_sheet1_metadata_matches_ground_truth() -> None:
     """Regression pin for the report-sheet leak bug: Book4 is a 3-sheet
     workbook (Sheet1 real data / FitLinear1 report / FitLinearCurve1 curve
@@ -489,7 +503,7 @@ def test_realdata_moke_book4_sheet1_metadata_matches_ground_truth() -> None:
 
 
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+@_needs("XRD.opj")
 def test_realdata_xrd_column_names_units_from_windows_section() -> None:
     """The windows-section metadata (RE item 1) reaches the DataStruct.
 
@@ -522,7 +536,7 @@ def test_realdata_xrd_column_names_units_from_windows_section() -> None:
 
 
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+@_needs("XRD.opj")
 def test_realdata_xrd_two_theta_scan() -> None:
     ds = import_auto(_CORPUS / "XRD.opj")
     # a fine θ–2θ scan (Book6, oracle nrows 21154): X starts at 10° and
@@ -537,7 +551,7 @@ def test_realdata_xrd_two_theta_scan() -> None:
 
 
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+@_needs("Moke.opj", "XRD.opj")
 def test_realdata_figures_extracted_as_plot_states() -> None:
     """Plan items 12/13: graph windows -> plot-state snapshots. Multi-layer
     windows (item 36) now yield one dict PER LAYER -- Moke has 12 reachable
@@ -603,7 +617,7 @@ def test_realdata_figures_extracted_as_plot_states() -> None:
 
 
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+@_needs("XRD.opj")
 def test_realdata_xrd_axis_titles_and_legend_labels() -> None:
     """Axis-title/legend-label routing, pinned against the live-Origin COM
     extras oracle (``ground_truth/XRD/graph_extras.json``, 2026-07-06):
@@ -673,7 +687,7 @@ def test_realdata_pnr_merge_windows_recovered() -> None:
 
 
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+@_needs("PNR.opj")
 def test_realdata_pnr_graph1_region_shades_and_composite_legend() -> None:
     """Decode-plan item 41 anchor: PNR.opj Graph1 (the SLD-profile double-Y
     window) carries 6 `Rect*` film-stack bands on layer 1 — extents
@@ -1324,7 +1338,7 @@ def test_extra_sheet_datasets_become_pseudo_books(tmp_path) -> None:
 
 
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+@_needs("Moke.opj")
 def test_realdata_moke_fit_sheets_recovered() -> None:
     from quantized.io.origin_project import read_origin_books
 
@@ -1335,7 +1349,7 @@ def test_realdata_moke_fit_sheets_recovered() -> None:
 
 
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+@_needs("hc2convert.opj")
 def test_realdata_hc2convert_text_columns_recovered() -> None:
     """Plan item 4: non-double "Text & Numeric" columns decode as metadata,
     never garbage. hc2convert.opj holds 58 Hc2-extraction result columns where
@@ -1354,7 +1368,7 @@ def test_realdata_hc2convert_text_columns_recovered() -> None:
 
 
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+@_needs("hc2convert.opj")
 def test_realdata_hc2convert_report_sheets_recovered() -> None:
     """Plan item 4 (report-sheet residue): the 407 FitLinear/NLFit report
     columns that `decode_inline_text` honestly dropped (they overflow its

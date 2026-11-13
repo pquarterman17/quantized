@@ -52,21 +52,19 @@ export interface DataStruct {
   origin_fidelity?: OriginFidelityManifest;
 }
 
-export type OriginFidelityStatus = "exact" | "best_effort" | "reference_only" | "unresolved";
-
-export interface OriginFigureFidelity {
-  status: OriginFidelityStatus;
-  recovered: string[];
-  omissions: string[];
-}
-
-// The fidelity manifest, its filtered-figure records and the saved-preview
-// diagnostics live in a sibling (types.ts module-size ceiling); re-exported
-// so every importer is unchanged.
-import type { OriginFidelityManifest, OriginSavedPreview } from "./originFidelityTypes";
+// Fidelity wire types live in ./originFidelityTypes (size ceiling); re-exported.
+import type {
+  OriginCurveSheetNote,
+  OriginFidelityManifest,
+  OriginFigureFidelity,
+  OriginSavedPreview,
+} from "./originFidelityTypes";
 export type {
   OriginContainerIntegrity,
+  OriginCurveSheetNote,
   OriginFidelityManifest,
+  OriginFidelityStatus,
+  OriginFigureFidelity,
   OriginFilteredFigure,
   OriginPreviewDiagnostic,
   OriginSavedPreview,
@@ -274,6 +272,8 @@ export interface OriginFigure {
   /** Original CRC-validated PNG bytes saved inside this exact Origin graph
    *  page. Shared by every layer of the page; never recompressed. */
   saved_preview?: OriginSavedPreview;
+  /** `.opj` only, present only when non-empty: see `OriginCurveSheetNote`. */
+  curve_sheet_notes?: OriginCurveSheetNote[];
 }
 
 /** Response of POST /api/plot/series — uPlot-ready column data. */

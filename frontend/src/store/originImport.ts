@@ -2,12 +2,9 @@
 // Composed into useApp so diagnostics stay outside scientific DataStruct
 // metadata and the root store remains below its architecture size ratchet.
 
-import {
-  buildOriginFigureEntries,
-  type OriginFigureEntry,
-} from "../lib/originFigures";
+import type { OriginFigureEntry } from "../lib/originFigures";
 import type { OriginFidelityEntry } from "../lib/originFidelity";
-import type { OriginFidelityManifest, OriginFigure } from "../lib/types";
+import type { OriginFidelityManifest } from "../lib/types";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -15,7 +12,9 @@ type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState
 export interface OriginImportSlice {
   originFigures: OriginFigureEntry[];
   originFidelity: OriginFidelityEntry[];
-  addOriginFigures: (stem: string, figures: OriginFigure[], datasetIds: string[]) => void;
+  /** Append one import's figure entries, already matched to its datasets by
+   *  `lib/originFigureEntries.buildOriginFigureEntries` (lazy import path). */
+  addOriginFigures: (entries: OriginFigureEntry[]) => void;
   addOriginFidelity: (
     stem: string,
     manifest: OriginFidelityManifest,
@@ -56,16 +55,7 @@ export function createOriginImportSlice(set: SliceSet): OriginImportSlice {
   return {
     originFigures: [],
     originFidelity: [],
-    addOriginFigures: (stem, figures, datasetIds) =>
-      set((s) => {
-        const candidates = s.datasets.filter((d) => datasetIds.includes(d.id));
-        return {
-          originFigures: [
-            ...s.originFigures,
-            ...buildOriginFigureEntries(stem, figures, candidates),
-          ],
-        };
-      }),
+    addOriginFigures: (entries) => set((s) => ({ originFigures: [...s.originFigures, ...entries] })),
     addOriginFidelity: (stem, manifest, siblingIds) =>
       set((s) => ({
         originFidelity: [

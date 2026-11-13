@@ -906,6 +906,10 @@ const TS_MODULE_PINS: Record<string, number> = {
   // 843 / 908 -> 821 (2026-11-13, merging main's fitting work into the Origin
   // interchange branch): both sides' moves combined; the pin is the merged
   // file's measured size.
+  // 821 (2026-11-13, merging the .opj reader branch): OriginFidelityStatus /
+  // OriginFigureFidelity joined lib/originFidelityTypes.ts (re-exported, no
+  // importer changed), funding `OriginFigure.curve_sheet_notes`; the pin is
+  // unchanged. (The reader branch's own 934 -> 901 move is subsumed.)
   "/lib/types.ts": 821,
   // 893 -> 863 (P1.4 Graph Builder encodings): the error-well helpers
   // (specErrorBindings/prefillErrorZones) moved verbatim to lib/plotspecErrors.ts
