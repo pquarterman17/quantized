@@ -306,7 +306,10 @@ export function createPlotViewSettingsSlice(set: SliceSet, get: SliceGet): PlotV
       });
     },
     setWaterfall: (waterfall) => {
-      get().recordHistory("change waterfall offset");
+      // One undo step per slider GESTURE, not per step of it (live check: 30
+      // arrow presses were 30 undo steps); the card ends the run on focus /
+      // pointer-down, as setWaterfallDx's field does.
+      get().recordHistoryCoalesced("change waterfall offset", "waterfall");
       set({ waterfall });
       get().recordMacro(`Waterfall → ${waterfall}`, `qz.setWaterfall(${waterfall})`);
     },

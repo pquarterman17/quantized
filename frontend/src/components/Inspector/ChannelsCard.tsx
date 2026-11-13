@@ -268,6 +268,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
         max={100}
         step={5}
         onChange={(v) => setWaterfall(v / 100)}
+        onGestureStart={endHistoryRun}
         format={(v) => `${v}%`}
       />
       {/* Origin's waterfall X step: series i slides right by i x this % of the x-range.

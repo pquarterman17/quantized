@@ -161,6 +161,22 @@ describe("ChannelsCard waterfall X offset", () => {
   });
 });
 
+describe("ChannelsCard waterfall slider (live check)", () => {
+  it("one slider gesture is one undo step, however many steps it moves", () => {
+    render(<ChannelsCard active={dataset} />);
+    const slider = screen.getByRole("slider", { name: "Waterfall" });
+    fireEvent.focus(slider);
+    for (const v of ["5", "10", "15", "20"]) fireEvent.change(slider, { target: { value: v } });
+    expect(useApp.getState().waterfall).toBe(0.2);
+    expect(useApp.getState().history.map((h) => h.label)).toEqual(["change waterfall offset"]);
+    fireEvent.pointerDown(slider); // a new drag is a new step
+    fireEvent.change(slider, { target: { value: "40" } });
+    expect(useApp.getState().history).toHaveLength(2);
+    useApp.getState().undo();
+    expect(useApp.getState().waterfall).toBe(0.2);
+  });
+});
+
 describe("ChannelsCard layout + error consistency (figures-audit #10/#14)", () => {
   const withErr: Dataset = {
     id: "d2",
