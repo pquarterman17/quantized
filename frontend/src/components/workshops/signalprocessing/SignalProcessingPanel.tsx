@@ -25,6 +25,7 @@ import SignalUncertaintyControls from "./SignalUncertaintyControls";
 import {
   DEFAULT_SIGNAL_SETTINGS,
   boundErrorBlock,
+  correlatedBoundErrors,
   buildCorrectionRecipe,
   channelsWithoutFiniteValues,
   isSpectralOperation,
@@ -154,7 +155,7 @@ export default function SignalProcessingPanel() {
     ? `No finite output was produced for ${emptyOutputs.map((channel) => spectral ? displayedPreview.labels[channel] : active?.data.labels[channel]).join(", ")}.`
     : "";
   const correctionOp = isSpectralOperation(settings.operation) ? null : settings.operation;
-  const errorBlock = correctionOp ? boundErrorBlock(correctionOp, boundTargets.length, settings.dropUncertainty) : "";
+  const errorBlock = correctionOp && active ? boundErrorBlock(correctionOp, boundTargets.length, settings.dropUncertainty, correlatedBoundErrors(active, channels)) : "";
   const operationValidation = spectralOperation
     ? validateSpectralSettings(spectralOperation, spectralSettings, channels, crossWorksheet)
     : settings.operation === "smooth" && (!Number.isInteger(settings.smoothWindow) || settings.smoothWindow < 1)
@@ -372,7 +373,7 @@ export default function SignalProcessingPanel() {
             {spectralOperation && <SpectralControls operation={spectralOperation} settings={spectralSettings} setSettings={setSpectralSettings} xUnit={xUnitOf(active.data)} />}
             <SignalPreview source={active.data} result={displayedPreview} channel={channels[0] ?? available[0] ?? 0} resultChannel={spectral ? 0 : channels[0] ?? available[0] ?? 0} showOriginal={!spectral || settings.operation === "filter"} />
             {spectral && <SpectralReadout result={displayedPreview} />}
-            {correctionOp && <SignalUncertaintyControls operation={correctionOp} boundLabels={boundTargets.map((c) => active.data.labels[c])} drop={settings.dropUncertainty} setDrop={(dropUncertainty) => setSettings((current) => ({ ...current, dropUncertainty }))} />}
+            {correctionOp && <SignalUncertaintyControls operation={correctionOp} boundLabels={boundTargets.map((c) => active.data.labels[c])} blocked={Boolean(errorBlock)} drop={settings.dropUncertainty} setDrop={(dropUncertainty) => setSettings((current) => ({ ...current, dropUncertainty }))} />}
             <SignalScopeNote source={active} secondary={secondary} />
             {spectral && (boundTargets.length > 0 || secondaryBoundTargets.length > 0) && <div className="qz-signal-note">Bound uncertainties are not propagated into spectral outputs; the linked source and full recipe remain recorded.</div>}
             {(validation || previewError || outputError) && <p className="qz-error" role="alert">{validation || previewError || outputError}</p>}

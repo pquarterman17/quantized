@@ -177,8 +177,35 @@ export function propagatesBoundErrors(operation: CorrectionOperation): boolean {
   return operation !== "detrend" && operation !== "log-derivative";
 }
 
+/** Operations that only SCALE the uncertainty (exact, whatever its
+ *  correlations): the normalizations. */
+function scalesBoundErrors(operation: CorrectionOperation): boolean {
+  return operation.startsWith("normalize");
+}
+
+/** Labels of the selected channels' bound Y-error columns that an earlier
+ *  smoothing / derivative / integral already produced (the backend marks them
+ *  in `metadata.correlated_y_errors`, calc/corrections_errors.py): only the
+ *  diagonal of their covariance is known, so they cannot go through another
+ *  such step as if independent. */
+export function correlatedBoundErrors(dataset: Dataset, channels: number[]): string[] {
+  const marked = dataset.data.metadata?.correlated_y_errors;
+  if (!Array.isArray(marked)) return [];
+  const chosen = new Set(channels);
+  return [...new Set(
+    (dataset.errorRoles ?? [])
+      .filter((binding) => binding.axis === "y" && chosen.has(binding.target))
+      .map((binding) => dataset.data.labels[binding.channel])
+      .filter((label) => marked.includes(label)),
+  )];
+}
+
 /** Why a bound Y uncertainty blocks this operation ("" = it does not). */
-export function boundErrorBlock(operation: CorrectionOperation, boundCount: number, drop: boolean): string {
-  if (!boundCount || drop || propagatesBoundErrors(operation)) return "";
+export function boundErrorBlock(operation: CorrectionOperation, boundCount: number, drop: boolean, correlated: string[] = []): string {
+  if (!boundCount || drop) return "";
+  if (correlated.length && propagatesBoundErrors(operation) && !scalesBoundErrors(operation)) {
+    return `The uncertainty in ${correlated.join(", ")} came out of an earlier smoothing, derivative or integral, so neighbouring points are correlated and it can't be propagated again as if independent. Tick "Drop uncertainty for this output", or apply both steps in one pass from the original data (Corrections).`;
+  }
+  if (propagatesBoundErrors(operation)) return "";
   return `${operationLabel(operation)} can't propagate the bound Y uncertainty. Tick "Drop uncertainty for this output" or unassign the error column.`;
 }

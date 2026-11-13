@@ -90,10 +90,31 @@ describe("SignalProcessingPanel", () => {
     const create = screen.getByRole("button", { name: "Create linked worksheet" });
     await waitFor(() => expect(create).toBeEnabled());
     expect(screen.getByRole("group", { name: "Bound uncertainty" })).toHaveTextContent("propagated through this linear operation");
+    // The caveat is on screen, not only in the code.
+    expect(screen.getByRole("group", { name: "Bound uncertainty" })).toHaveTextContent(/diagonal only.*neighbouring output points are correlated/);
     expect(correctionMock).toHaveBeenLastCalledWith(expect.objectContaining({
       params: expect.not.objectContaining({ dropYUncertainty: true }),
       error_bindings: [{ channel: 1, target: 0, axis: "y", side: "both" }],
     }), expect.any(AbortSignal));
+  });
+
+  it("a second linear step on an already-propagated (correlated) uncertainty is blocked with the reason, before any request", async () => {
+    useApp.setState({
+      datasets: [{
+        ...dataset,
+        data: { ...dataset.data, metadata: { ...dataset.data.metadata, correlated_y_errors: ["secondary"] } },
+        errorRoles: [{ channel: 1, target: 0, axis: "y", side: "both" }],
+      }],
+      yKeys: [0],
+    });
+    render(<SignalProcessingPanel />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Operation" }), { target: { value: "integral" } });
+    expect(screen.getByRole("alert")).toHaveTextContent(/uncertainty in secondary came out of an earlier smoothing, derivative or integral.*correlated/);
+    expect(screen.getByRole("button", { name: "Create linked worksheet" })).toBeDisabled();
+    expect(correctionMock).not.toHaveBeenCalled();
+    // A scalar step is still exact.
+    fireEvent.change(screen.getByRole("combobox", { name: "Operation" }), { target: { value: "normalize-peak" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create linked worksheet" })).toBeEnabled());
   });
 
   it("a nonlinear operation with a bound Y error says why it is blocked, and dropping the uncertainty unblocks it", async () => {
