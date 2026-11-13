@@ -18,7 +18,13 @@ vi.mock("../../../lib/api", async (importOriginal) => ({
   applyCorrections: vi.fn(),
 }));
 
+vi.mock("../../../lib/api/curvefit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/api/curvefit")>()),
+  autoGuess: vi.fn(async () => ({ p0: [9, 7] })),
+}));
+
 import { applyCorrections, fitModel } from "../../../lib/api";
+import { toFitTemplate } from "../../../lib/fitTemplates";
 
 const data = (): DataStruct => ({
   time: [0, 1, 2, 3],
@@ -148,6 +154,31 @@ describe("executeSteps fit replay (#6)", () => {
       weights: [0.5, 0.6, 0.7, 0.8],
       scale_errors: false,
     });
+  });
+
+  it("a Curve Fit template step replays its weighting, starts/bounds/holds and X range (review item 4)", async () => {
+    const t = toFitTemplate("t", {
+      version: 1, model: "Linear", weight: "direct", manualLabel: "sigma", scaleErrors: false,
+      rows: [
+        { name: "m", start: "", min: "0", max: "", fixed: false }, // blank: guessed from the target
+        { name: "b", start: "3", min: "", max: "", fixed: true },
+      ],
+      range: { lo: 1, hi: 3 },
+    });
+    const { entry } = await runFit(t.steps[0]!);
+    // Before: { model: "Linear", x: time, y: field } — unweighted, registry starts, full range.
+    expect(fitModel).toHaveBeenCalledWith({
+      model: "Linear", x: [1, 2, 3], y: [200, 300, 400], weights: [0.6, 0.7, 0.8], scale_errors: false,
+      p0: [9, 3], lower: [0, null], upper: [null, null], fixed: [false, true],
+    });
+    expect(entry.status).toBe("ok");
+  });
+
+  it("a template step whose weight column the target lacks fits unweighted and says so", async () => {
+    const t = toFitTemplate("t", { version: 1, model: "Linear", weight: "manual", manualLabel: "dM", rows: [] });
+    const { entry } = await runFit(t.steps[0]!);
+    expect(vi.mocked(fitModel).mock.calls[0]![0]).not.toHaveProperty("dy");
+    expect(entry.note).toMatch(/no column "dM" — fitting unweighted/);
   });
 
   it("drops gapped pairs and matching weights, and records that in the step log", async () => {

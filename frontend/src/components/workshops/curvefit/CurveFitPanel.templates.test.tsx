@@ -63,6 +63,9 @@ describe("CurveFitPanel — fit templates", () => {
     const saved = fitTemplateOf(loadTemplates()[0]!);
     expect(saved).toMatchObject({ model: "Quadratic", weight: "manual" });
     expect(saved!.rows.map((r) => r.name)).toEqual(["a", "b", "c"]);
+    // Untouched starts are saved blank (auto), so the template guesses them
+    // from the data it is applied to, never the seeded registry default.
+    expect(saved!.rows.map((r) => r.start)).toEqual(["", "", ""]);
 
     // Change everything, then apply: the template's settings come back.
     fireEvent.change(screen.getByLabelText("Model"), { target: { value: "Linear" } });

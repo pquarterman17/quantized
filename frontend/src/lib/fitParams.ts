@@ -74,10 +74,19 @@ export function rowsFromFitSpec(model: FitModel | undefined, spec: FitSpec): Fit
 export function rowsForModel(
   model: FitModel | undefined,
   previous: readonly FitParamRow[],
+  /** The model `previous` was seeded from: a row still equal to ITS seed is
+   *  not an edit, so the new model seeds it fresh. Carrying an untouched
+   *  default across (Linear's b = 0 into Quadratic) made the table look
+   *  edited and froze that default as a typed start (integration review). */
+  previousModel?: FitModel,
 ): FitParamRow[] {
+  const seeded = rowsFromModel(previousModel);
+  const same = (a: FitParamRow, b: FitParamRow | undefined) =>
+    !!b && a.start === b.start && a.min === b.min && a.max === b.max && a.fixed === b.fixed;
   return rowsFromModel(model).map((fresh) => {
     const kept = previous.find((p) => p.name === fresh.name);
-    return kept ? { ...kept } : fresh;
+    if (!kept || (previousModel && same(kept, seeded.find((s) => s.name === kept.name)))) return fresh;
+    return { ...kept };
   });
 }
 

@@ -3,7 +3,7 @@
 // template" captures from the panel as it is now, and how a chosen template is
 // loaded back into it. Applying only LOADS settings; the user presses Fit.
 
-import type { FitParamRow } from "../../../lib/fitParams";
+import { autoStartRows, type FitParamRow } from "../../../lib/fitParams";
 import type { FitTemplateSettings } from "../../../lib/fitTemplates";
 import type { Dataset, FitModel, WeightMode } from "../../../lib/types";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
@@ -37,6 +37,7 @@ export function useFitTemplateBinding(p: PanelSettings): FitTemplateBinding {
     state.toolId === "curvefit" ? (state.selection?.items[0]?.range ?? null) : null,
   );
   const { active } = p;
+  const auto = new Set(autoStartRows(p.paramRows, p.models.find((m) => m.name === p.modelName)));
   const current: FitTemplateSettings = {
     version: 1,
     model: p.modelName,
@@ -45,7 +46,10 @@ export function useFitTemplateBinding(p: PanelSettings): FitTemplateBinding {
       ? { manualLabel: active.data.labels[p.manualKey] ?? "" }
       : {}),
     ...(p.weightMode !== "none" && !p.scaleErrors ? { scaleErrors: false as const } : {}),
-    rows: p.paramRows,
+    // A start the user did not choose is saved BLANK (auto): applied in the
+    // panel or replayed as a pipeline step it is guessed from THAT data, not
+    // frozen at this model's seeded default.
+    rows: p.paramRows.map((r, i) => (auto.has(i) ? { ...r, start: "" } : r)),
     ...(selectionRange ? { range: { lo: selectionRange.lo, hi: selectionRange.hi } } : {}),
   };
   const apply = (t: FitTemplateSettings): boolean => {

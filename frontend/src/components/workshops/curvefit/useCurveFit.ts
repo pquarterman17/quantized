@@ -244,13 +244,16 @@ export function useCurveFit(): CurveFitState {
   useEffect(() => {
     if (fitData && !resultStale && plotId === current?.datasetId) showRetainedCurve(plotId);
   }, [current, fitData, resultStale, plotId]);
+  const rowsModel = useRef<FitModel | undefined>(undefined);
   useEffect(() => {
     if (!restoredRecipe.current && savedSpec?.model === modelName && model) {
       setParamRows(rowsFromFitSpec(model, savedSpec));
       restoredRecipe.current = true;
     } else {
-      setParamRows((prev) => rowsForModel(model, prev));
+      const before = rowsModel.current;
+      setParamRows((prev) => rowsForModel(model, prev, before));
     }
+    rowsModel.current = model;
     // Keyed on the model identity, not the object, so a models[] refetch
     // does not wipe the user's edits.
   }, [modelName, models.length]); // eslint-disable-line react-hooks/exhaustive-deps

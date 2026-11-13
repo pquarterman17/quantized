@@ -70,6 +70,12 @@ describe("rowsForModel", () => {
     expect(next.find((r) => r.name === "amp")?.start).toBe("42");
   });
 
+  it("does not carry the previous model's untouched defaults as if they were edits", () => {
+    const next = rowsForModel(lorentz, rowsFromModel({ ...gauss, p0: [5, 3, 1] }), { ...gauss, p0: [5, 3, 1] });
+    expect(next.find((r) => r.name === "amp")?.start).toBe("2"); // Lorentzian's own seed, not Gaussian's 5
+    expect(rowsAreDefault(next, lorentz)).toBe(true);
+  });
+
   it("seeds a genuinely new parameter from the new model", () => {
     const next = rowsForModel(lorentz, rowsFromModel(gauss));
     expect(next.find((r) => r.name === "gamma")?.min).toBe("0");
