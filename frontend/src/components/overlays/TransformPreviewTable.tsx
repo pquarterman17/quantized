@@ -1,7 +1,8 @@
 // P2.5 live data preview: the first rows of a transform's RESULT, with column
 // names and units, as a small table — shown before anything is created by the
 // Reshape & combine workshop and the Split dialog. Categorical cells show
-// their level text, text columns their strings, blanks "NaN". Only lazy
+// their level text, text columns their strings, blanks "—" — the worksheet's
+// own blank, so the preview and the result read alike (re-audit #19). Only lazy
 // dialogs import this.
 
 import { levelLabel } from "../../lib/categorical";
@@ -12,7 +13,7 @@ import type { DataStruct } from "../../lib/types";
 export const PREVIEW_ROWS = 20;
 
 const num = (v: number | undefined): string =>
-  v === undefined || !Number.isFinite(v) ? "NaN" : String(Number(v.toPrecision(6)));
+  v === undefined || !Number.isFinite(v) ? "—" : String(Number(v.toPrecision(6)));
 
 const head = (name: string, unit: string | undefined) => (unit ? `${name} (${unit})` : name);
 
