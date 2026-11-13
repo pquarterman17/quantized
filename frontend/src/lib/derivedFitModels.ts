@@ -44,8 +44,8 @@ export const FIT_MODEL_EXPRS: Readonly<Record<string, FitModelExpr>> = {
   // 2.220446049250313e-16 is numpy's float eps, as in fit_models._logarithmic.
   Logarithmic: { params: ["a", "b"], expr: "p0*log(abs(x) + 2.220446049250313e-16) + p1" },
   "Square Root": { params: ["a", "b"], expr: "p0*sqrt(abs(x)) + p1" },
-  // Origin built-in functions (calc/fit_models_origin_*). Poly N is written in
-  // Horner form, as fit_models_origin_misc.make_poly evaluates it.
+  // Origin built-in functions (calc/fit_models_origin_*). The polynomials are
+  // written in Horner form, as fit_models_origin_misc.make_poly evaluates them.
   Gauss: { params: ["y0", "xc", "w", "A"], expr: "p0 + p3/(p2*sqrt(pi/2))*exp(-2*((x - p1)/p2)**2)" },
   GaussAmp: { params: ["y0", "xc", "w", "A"], expr: "p0 + p3*exp(-((x - p1)**2)/(2*p2**2))" },
   Lorentz: { params: ["y0", "xc", "w", "A"], expr: "p0 + (2*p3/pi)*p2/(4*(x - p1)**2 + p2**2)" },
@@ -67,16 +67,16 @@ export const FIT_MODEL_EXPRS: Readonly<Record<string, FitModelExpr>> = {
   DoseResp: { params: ["A1", "A2", "LOGx0", "p"], expr: "p0 + (p1 - p0)/(1 + 10**((p2 - x)*p3))" },
   MichaelisMenten: { params: ["Vmax", "Km"], expr: "p0*x/(p1 + x)" },
   SLogistic1: { params: ["a", "xc", "k"], expr: "p0/(1 + exp(-p2*(x - p1)))" },
-  Gompertz: { params: ["a", "xc", "k"], expr: "p0*exp(-exp(-p2*(x - p1)))" },
-  Weibull1: { params: ["A", "y0", "xc", "d", "k"], expr: "p0 - (p0 - p1)*exp(-(max(p4*(x - p2), 0)**p3))" },
-  "Poly 5": { params: ["A0", "A1", "A2", "A3", "A4", "A5"], expr: "(((((p5)*x + p4)*x + p3)*x + p2)*x + p1)*x + p0" },
+  SGompertz: { params: ["a", "xc", "k"], expr: "p0*exp(-exp(-p2*(x - p1)))" },
+  SWeibull1: { params: ["A", "xc", "d", "k"], expr: "p0*(1 - exp(-(max(p3*(x - p1), 0)**p2)))" },
+  Poly5: { params: ["A0", "A1", "A2", "A3", "A4", "A5"], expr: "(((((p5)*x + p4)*x + p3)*x + p2)*x + p1)*x + p0" },
   "Poly 6": { params: ["A0", "A1", "A2", "A3", "A4", "A5", "A6"], expr: "((((((p6)*x + p5)*x + p4)*x + p3)*x + p2)*x + p1)*x + p0" },
   "Poly 7": { params: ["A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7"], expr: "(((((((p7)*x + p6)*x + p5)*x + p4)*x + p3)*x + p2)*x + p1)*x + p0" },
   "Poly 8": { params: ["A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8"], expr: "((((((((p8)*x + p7)*x + p6)*x + p5)*x + p4)*x + p3)*x + p2)*x + p1)*x + p0" },
-  "Poly 9": { params: ["A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9"], expr: "(((((((((p9)*x + p8)*x + p7)*x + p6)*x + p5)*x + p4)*x + p3)*x + p2)*x + p1)*x + p0" },
+  Poly: { params: ["a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9"], expr: "(((((((((p9)*x + p8)*x + p7)*x + p6)*x + p5)*x + p4)*x + p3)*x + p2)*x + p1)*x + p0" },
   Proportional: { params: ["A"], expr: "p0*x" },
   Allometric1: { params: ["a", "b"], expr: "p0*x**p1" },
-  Sine: { params: ["y0", "xc", "w", "A"], expr: "p0 + p3*sin(pi*(x - p1)/p2)" },
+  Sine: { params: ["xc", "w", "A", "y0"], expr: "p3 + p2*sin(pi*(x - p0)/p1)" },
   SineDamp: { params: ["y0", "xc", "w", "t0", "A"], expr: "p0 + p4*exp(-x/p3)*sin(pi*(x - p1)/p2)" },
 };
 

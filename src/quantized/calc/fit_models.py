@@ -4,7 +4,7 @@ Pure calc layer. Each model is ``f(x, p) -> y``; ``FIT_MODELS`` maps a model nam
 to its evaluator plus metadata (p0 / lower / upper bounds / paramNames). Closed-
 form models live here; helper-based magnetic/thermal models (Langevin, Brillouin,
 Stoner-Wohlfarth, Debye, Einstein) are registered in ``fit_models_special``;
-the Origin built-in function library (Gauss, Voigt, ExpDec1, Boltzmann, Poly 9,
+the Origin built-in function library (Gauss, Voigt, ExpDec1, Boltzmann, Poly,
 Sine, ...) in the ``fit_models_origin_*`` modules.
 """
 

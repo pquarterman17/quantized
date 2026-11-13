@@ -31,8 +31,9 @@ ORIGIN_MODELS = {
     "Exponential": ["ExpDec1", "ExpDec2", "ExpDec3", "ExpDecay1", "ExpDecay2", "ExpDecay3",
                     "ExpGro1", "ExpGro2", "ExpGrow1", "ExpGrow2"],
     "Growth/Sigmoidal": ["Boltzmann", "DoseResp", "Hill", "Hill1", "MichaelisMenten",
-                         "Logistic (Origin)", "Logistic5", "SLogistic1", "Gompertz", "Weibull1"],
-    "Polynomial": ["Poly 5", "Poly 6", "Poly 7", "Poly 8", "Poly 9", "Proportional"],
+                         "Logistic (Origin)", "Logistic5", "SLogistic1", "SGompertz",
+                         "SWeibull1"],
+    "Polynomial": ["Poly5", "Poly 6", "Poly 7", "Poly 8", "Poly", "Proportional"],
     "Power": ["Allometric1"],
     "Waveform": ["Sine", "SineDamp"],
 }
@@ -53,8 +54,36 @@ def test_origin_parameter_names_follow_origin() -> None:
     assert FIT_MODELS["Boltzmann"]["paramNames"] == ["A1", "A2", "x0", "dx"]
     assert FIT_MODELS["DoseResp"]["paramNames"] == ["A1", "A2", "LOGx0", "p"]
     assert FIT_MODELS["Hill1"]["paramNames"] == ["START", "END", "k", "n"]
-    assert FIT_MODELS["Poly 9"]["paramNames"] == [f"A{k}" for k in range(10)]
-    assert FIT_MODELS["Sine"]["paramNames"] == ["y0", "xc", "w", "A"]
+    assert FIT_MODELS["Poly5"]["paramNames"] == [f"A{k}" for k in range(6)]
+    assert FIT_MODELS["Poly"]["paramNames"] == [f"a{k}" for k in range(10)]
+    assert FIT_MODELS["Sine"]["paramNames"] == ["xc", "w", "A", "y0"]
+    assert FIT_MODELS["SineDamp"]["paramNames"] == ["y0", "xc", "w", "t0", "A"]
+    assert FIT_MODELS["Logistic5"]["paramNames"] == ["Amin", "Amax", "x0", "h", "s"]
+    assert FIT_MODELS["SWeibull1"]["paramNames"] == ["A", "xc", "d", "k"]
+    assert FIT_MODELS["SGompertz"]["paramNames"] == ["a", "xc", "k"]
+
+
+# Origin's documented default LOWER bounds (it sets no upper bounds); every
+# parameter not listed is unbounded. Source: each function's Origin Help page.
+ORIGIN_LOWER_BOUNDS: dict[str, dict[str, float]] = {
+    "Gauss": {"w": 0}, "GaussAmp": {"w": 0}, "Lorentz": {"w": 0},
+    "Voigt": {"wG": 0, "wL": 0}, "PsdVoigt1": {"w": 0}, "PsdVoigt2": {"wG": 0, "wL": 0},
+    "LogNormal": {"xc": 0, "w": 0}, "Asym2Sig": {"w1": 0, "w2": 0, "w3": 0},
+    "ExpGrow1": {"t1": 0},
+    "Hill": {"Vmax": 0, "k": 0, "n": 0}, "Hill1": {"k": 0, "n": 0},
+    "MichaelisMenten": {"Vmax": 0, "Km": 0}, "Logistic (Origin)": {"p": 0},
+    "Logistic5": {"s": 0}, "SLogistic1": {"xc": 0}, "SGompertz": {"a": 0, "k": 0},
+    "SWeibull1": {"A": 0, "k": 0}, "Sine": {"w": 0}, "SineDamp": {"w": 0, "t0": 0},
+}
+
+
+@pytest.mark.parametrize("name", [n for names in ORIGIN_MODELS.values() for n in names])
+def test_origin_default_bounds_match_origin_docs(name: str) -> None:
+    spec = FIT_MODELS[name]
+    want = ORIGIN_LOWER_BOUNDS.get(name, {})
+    got = {n: lo for n, lo in zip(spec["paramNames"], spec["lb"], strict=True) if lo != -math.inf}
+    assert got == want
+    assert all(hi == math.inf for hi in spec["ub"])
 
 
 def test_matlab_parity_models_untouched() -> None:
@@ -175,17 +204,27 @@ def test_sigmoid_midpoints() -> None:
     assert _at("Hill1", 2.5, [1.0, 5.0, 2.5, 3.0]) == pytest.approx(3.0)
     assert _at("MichaelisMenten", 0.8, [6.0, 0.8]) == pytest.approx(3.0)
     assert _at("Logistic (Origin)", 4.0, [1.0, 5.0, 4.0, 2.0]) == pytest.approx(3.0)
-    # Logistic5 at x0: A2 + (A1-A2)/2^s.
-    assert _at("Logistic5", 4.0, [1.0, 5.0, 4.0, 2.0, 2.0]) == pytest.approx(5 - 4 / 4)
+    # Logistic5 at x0: Amin + (Amax-Amin)/2^s = 1 + 4/4.
+    assert _at("Logistic5", 4.0, [1.0, 5.0, 4.0, 2.0, 2.0]) == pytest.approx(2.0)
+    # h > 0 rises from Amin (x -> 0) to Amax (x -> inf): (x/x0)^(-h) = 4 at x = 2.
+    assert _at("Logistic5", 2.0, [1.0, 5.0, 4.0, 2.0, 1.0]) == pytest.approx(1 + 4 / 5)
+    assert _at("Logistic5", 1e6, [1.0, 5.0, 4.0, 2.0, 2.0]) == pytest.approx(5.0)
     assert _at("SLogistic1", 1.0, [6.0, 1.0, 3.0]) == pytest.approx(3.0)
-    assert _at("Gompertz", 1.0, [6.0, 1.0, 3.0]) == pytest.approx(6 / math.e)
+    assert _at("SGompertz", 1.0, [6.0, 1.0, 3.0]) == pytest.approx(6 / math.e)
 
 
-def test_weibull1_values_and_onset_clamp() -> None:
-    p = [5.0, 1.0, 2.0, 2.0, 0.5]  # A, y0, xc, d, k
-    assert _at("Weibull1", 4.0, p) == pytest.approx(5 - 4 / math.e)  # k(x-xc) = 1
-    assert _at("Weibull1", 2.0, p) == pytest.approx(1.0)
-    assert _at("Weibull1", -3.0, p) == pytest.approx(1.0)  # before onset: flat at y0, not NaN
+def test_logistic5_with_s_one_is_the_four_parameter_logistic() -> None:
+    x = np.linspace(0.2, 30, 25)
+    # Amin + (Amax-Amin)/(1+(x/x0)^-h) == A2 + (A1-A2)/(1+(x/x0)^p), A1=Amin, A2=Amax.
+    assert_allclose(evaluate("Logistic5", x, [1.0, 5.0, 4.0, 2.5, 1.0]),
+                    evaluate("Logistic (Origin)", x, [1.0, 5.0, 4.0, 2.5]), rtol=1e-12)
+
+
+def test_sweibull1_values_and_onset_clamp() -> None:
+    p = [5.0, 2.0, 2.0, 0.5]  # A, xc, d, k
+    assert _at("SWeibull1", 4.0, p) == pytest.approx(5 * (1 - 1 / math.e))  # k(x-xc) = 1
+    assert _at("SWeibull1", 2.0, p) == pytest.approx(0.0)
+    assert _at("SWeibull1", -3.0, p) == pytest.approx(0.0)  # before onset: flat, not NaN
 
 
 def test_logistic_origin_domain() -> None:
@@ -193,12 +232,13 @@ def test_logistic_origin_domain() -> None:
 
 
 # ── polynomial / power / waveform ─────────────────────────────────────────
-@pytest.mark.parametrize("order", range(5, 10))
-def test_poly_matches_ascending_coefficients(order: int) -> None:
+@pytest.mark.parametrize(("order", "name"), [(5, "Poly5"), (6, "Poly 6"), (7, "Poly 7"),
+                                             (8, "Poly 8"), (9, "Poly")])
+def test_poly_matches_ascending_coefficients(order: int, name: str) -> None:
     coef = [0.5 * (k + 1) * (-1) ** k for k in range(order + 1)]
-    assert _at(f"Poly {order}", 1.0, coef) == pytest.approx(sum(coef))
+    assert _at(name, 1.0, coef) == pytest.approx(sum(coef))
     x = np.linspace(-2, 2, 9)
-    assert_allclose(evaluate(f"Poly {order}", x, coef),
+    assert_allclose(evaluate(name, x, coef),
                     np.polynomial.polynomial.polyval(x, coef), rtol=1e-12)
 
 
@@ -209,7 +249,7 @@ def test_proportional_allometric1() -> None:
 
 
 def test_sine_and_sinedamp_values() -> None:
-    p = [0.5, 1.0, 2.0, 3.0]  # period 2w = 4
+    p = [1.0, 2.0, 3.0, 0.5]  # xc, w, A, y0 (Origin's order); period 2w = 4
     assert _at("Sine", 1.0, p) == pytest.approx(0.5)
     assert _at("Sine", 2.0, p) == pytest.approx(3.5)  # quarter period after xc
     assert _at("Sine", 5.0, p) == pytest.approx(0.5, abs=1e-12)  # one full period later
@@ -287,3 +327,11 @@ def test_guess_that_raises_falls_back_to_defaults(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setitem(fit_autoguess._ORIGIN_GUESSES, "Gauss", boom)
     x = np.linspace(0, 10, 50)
     assert auto_guess("Gauss", x, np.exp(-((x - 5) ** 2))) == [0.0, 0.0, 1.0, 1.0]
+
+
+def test_psdvoigt_mu_is_unbounded_like_origin() -> None:
+    # mu = 1.2 is a legal Origin parameter value: evaluates, not clipped.
+    x = np.linspace(-3, 7, 11)
+    want = 1.2 * evaluate("Lorentz", x, [0, 2, 1.3, 4]) - 0.2 * evaluate(
+        "Gauss", x, [0, 2, 1.3 / math.sqrt(2 * math.log(2)), 4])
+    assert_allclose(evaluate("PsdVoigt1", x, [0, 2, 4, 1.3, 1.2]), want, rtol=1e-12)

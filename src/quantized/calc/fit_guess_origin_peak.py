@@ -109,7 +109,7 @@ def _psd_voigt(x: FloatArray, y: FloatArray, two_widths: bool) -> list[float] | 
         return None
     theta, (y0, a_l, a_g) = out
     area = float(a_l + a_g)
-    mu = float(np.clip(a_l / area, 0.0, 1.0)) if area != 0 else 0.5
+    mu = float(a_l / area) if area != 0 else 0.5
     ws = [math.exp(theta[1])] + ([math.exp(theta[2])] if two_widths else [])
     return [float(y0), float(theta[0]), area, *ws, mu]
 
@@ -194,7 +194,7 @@ def _sine_like(x: FloatArray, y: FloatArray, damped: bool) -> list[float] | None
     # s*sin(wx) + c*cos(wx) = amp*sin(w(x - xc)) with xc = -atan2(c, s)/omega.
     xc = -math.atan2(float(c), float(s)) * p_half / math.pi
     if not damped:
-        return [float(y0), xc, p_half, amp]
+        return [xc, p_half, amp, float(y0)]  # Origin Sine order: xc, w, A, y0
     t0 = math.exp(theta[1])
     with np.errstate(over="ignore"):
         amp_origin = amp * math.exp(min(xs / t0, 700.0))  # env referenced to x = 0

@@ -20,7 +20,7 @@ from numpy.typing import NDArray
 from . import fit_models_origin_growth as gr
 from .fit_guess_tools import varpro
 from .fit_models_origin_exp import EXP_FAMILY
-from .fit_models_origin_misc import POLY_ORDERS
+from .fit_models_origin_misc import POLY_MODELS
 
 FloatArray = NDArray[np.float64]
 Guess = Callable[[FloatArray, FloatArray], list[float] | None]
@@ -148,36 +148,54 @@ def _michaelis_menten(x: FloatArray, y: FloatArray) -> list[float] | None:
     return [float(coef[0]), math.exp(th[0])]
 
 
-def _logistic_family(x: FloatArray, y: FloatArray, five: bool) -> list[float] | None:
+def _logistic_origin(x: FloatArray, y: FloatArray) -> list[float] | None:
     if (pos := _positive(x, y)) is None:
         return None
     xp, yp = pos
 
     def design(th: FloatArray) -> FloatArray | None:
-        s = math.exp(th[2]) if five else 1.0
-        u = gr.logistic5(xp, np.array([1.0, 0.0, math.exp(th[0]), th[1], s]))
+        u = gr.logistic_origin(xp, np.array([1.0, 0.0, math.exp(th[0]), math.exp(th[1])]))
         return np.column_stack([u, 1.0 - u])
 
-    s_grid = [math.log(v) for v in (0.5, 1.0, 2.0)] if five else [0.0]
-    grid = [[k, p, s] for k in _k_grid(xp) for p in (1.0, 2.0, 4.0) for s in s_grid]
-    if not five:
-        grid = [g[:2] for g in grid]
+    grid = [[k, p] for k in _k_grid(xp) for p in _N_GRID]
     out = varpro(design, yp, grid, max_iter=600)
     if out is None:
         return None
     th, (a1, a2) = out
-    params = [float(a1), float(a2), math.exp(th[0]), float(th[1])]
-    return params + [math.exp(th[2])] if five else params
+    return [float(a1), float(a2), math.exp(th[0]), math.exp(th[1])]
 
 
-def _one_amp_sigmoid(fcn: Callable[[FloatArray, FloatArray], FloatArray]) -> Guess:
-    """SLogistic1 / Gompertz: y = a*f(x; xc, k), k signed."""
+def _logistic5(x: FloatArray, y: FloatArray) -> list[float] | None:
+    if (pos := _positive(x, y)) is None:
+        return None
+    xp, yp = pos
+
+    def design(th: FloatArray) -> FloatArray | None:
+        v = gr.logistic5(xp, np.array([0.0, 1.0, math.exp(th[0]), th[1], math.exp(th[2])]))
+        return np.column_stack([1.0 - v, v])
+
+    s_grid = [math.log(v) for v in (0.5, 1.0, 2.0)]
+    grid = [[k, h, s] for k in _k_grid(xp) for h in (1.0, 2.0, 4.0) for s in s_grid]
+    out = varpro(design, yp, grid, max_iter=600)
+    if out is None:
+        return None
+    th, (amin, amax) = out
+    return [float(amin), float(amax), math.exp(th[0]), float(th[1]), math.exp(th[2])]
+
+
+def _one_amp_sigmoid(fcn: Callable[[FloatArray, FloatArray], FloatArray],
+                     signs: tuple[float, ...]) -> Guess:
+    """SLogistic1 / SGompertz: y = a*f(x; xc, k).
+
+    ``signs`` lists the signs of k to scan: Origin bounds SGompertz to k > 0
+    but leaves SLogistic1's k free.
+    """
 
     def guess(x: FloatArray, y: FloatArray) -> list[float] | None:
         def design(th: FloatArray) -> FloatArray | None:
             return fcn(x, np.array([1.0, th[0], th[1]]))[:, None]
 
-        ks = [sg / math.exp(w) for w in _width_grid(x) for sg in (1.0, -1.0)]
+        ks = [sg / math.exp(w) for w in _width_grid(x) for sg in signs]
         out = varpro(design, y, [[c, k] for c in _x_grid(x) for k in ks])
         if out is None:
             return None
@@ -187,22 +205,22 @@ def _one_amp_sigmoid(fcn: Callable[[FloatArray, FloatArray], FloatArray]) -> Gue
     return guess
 
 
-def _weibull1(x: FloatArray, y: FloatArray) -> list[float] | None:
+def _sweibull1(x: FloatArray, y: FloatArray) -> list[float] | None:
     span = _span(x)
     if span <= 0:
         return None
 
     def design(th: FloatArray) -> FloatArray | None:
-        e = 1.0 - gr.weibull1(x, np.array([1.0, 0.0, th[0], math.exp(th[1]), math.exp(th[2])]))
-        return np.column_stack([1.0 - e, e])
+        prof = gr.sweibull1(x, np.array([1.0, th[0], math.exp(th[1]), math.exp(th[2])]))
+        return prof[:, None]
 
     xcs = [float(x[0]) - 0.2 * span] + _x_grid(x, 5)[:3]
     grid = [[c, math.log(d), -w] for c in xcs for d in (1.0, 2.0, 3.0) for w in _width_grid(x)]
     out = varpro(design, y, grid, max_iter=600)
     if out is None:
         return None
-    th, (a, y0) = out
-    return [float(a), float(y0), float(th[0]), math.exp(th[1]), math.exp(th[2])]
+    th, coef = out
+    return [float(coef[0]), float(th[0]), math.exp(th[1]), math.exp(th[2])]
 
 
 # ── Polynomial / Power ──────────────────────────────────────────────────
@@ -247,14 +265,6 @@ def _hill1(x: FloatArray, y: FloatArray) -> list[float] | None:
     return _hill_like(x, y, with_start=True)
 
 
-def _logistic_origin(x: FloatArray, y: FloatArray) -> list[float] | None:
-    return _logistic_family(x, y, five=False)
-
-
-def _logistic5(x: FloatArray, y: FloatArray) -> list[float] | None:
-    return _logistic_family(x, y, five=True)
-
-
 CURVE_GUESSES: dict[str, Guess] = {
     **{name: _exp_guess(n, off, gro) for name, (n, off, gro) in EXP_FAMILY.items()},
     "Boltzmann": _boltzmann,
@@ -264,10 +274,10 @@ CURVE_GUESSES: dict[str, Guess] = {
     "MichaelisMenten": _michaelis_menten,
     "Logistic (Origin)": _logistic_origin,
     "Logistic5": _logistic5,
-    "SLogistic1": _one_amp_sigmoid(gr.slogistic1),
-    "Gompertz": _one_amp_sigmoid(gr.gompertz),
-    "Weibull1": _weibull1,
-    **{f"Poly {k}": _poly_guess(k) for k in POLY_ORDERS},
+    "SLogistic1": _one_amp_sigmoid(gr.slogistic1, (1.0, -1.0)),
+    "SGompertz": _one_amp_sigmoid(gr.sgompertz, (1.0,)),
+    "SWeibull1": _sweibull1,
+    **{name: _poly_guess(order) for order, (name, _) in POLY_MODELS.items()},
     "Proportional": _proportional,
     "Allometric1": _allometric1,
 }

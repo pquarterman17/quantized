@@ -1,20 +1,30 @@
 """Origin built-in **Polynomial**, **Power** and **Waveform** functions.
 
 Pure calc layer, imported for its registration side effects (see the bottom of
-``fit_models``). Names, parameter order and formulas follow OriginLab's
-built-in library:
+``fit_models``). Names, parameter order, formulas and default bounds were
+checked against the Origin Help page cited for each function:
 
-* Polynomial — ``Poly 5`` .. ``Poly 9``: Origin's ``Poly`` (polynomial order up
-  to 9), y = A0 + A1*x + ... + An*x^n with Origin's ascending ``A0..An``
-  parameter names. (The MATLAB-parity ``Quadratic``/``Cubic``/``Poly 4`` keep
-  their descending a, b, c... order and golden values.) ``Proportional``:
-  Origin's line through the origin, y = A*x.
-* Power — ``Allometric1``: y = a*x^b (Origin's form; x < 0 with a non-integer
-  b is NaN, as in Origin — the MATLAB-parity ``Allometric`` uses |x|).
-* Waveform — ``Sine``: y = y0 + A*sin(pi*(x-xc)/w) (w is the HALF period);
-  ``SineDamp``: y = y0 + A*exp(-x/t0)*sin(pi*(x-xc)/w). Here ``A >= 0`` and
-  ``w > 0`` are bounded so a fit is unique up to xc mod 2w (a negative A is
-  the same curve shifted by half a period).
+* Polynomial — ``Poly5``: y = A0 + A1*x + ... + A5*x^5, params A0..A5
+  (https://www.originlab.com/doc/Origin-Help/Poly5-FitFunc). ``Poly``:
+  Origin's 9th-order polynomial, params a0..a9 in lowercase as Origin names
+  them (https://www.originlab.com/doc/Origin-Help/Poly-FitFunc).
+  ``Poly 6``/``Poly 7``/``Poly 8`` and ``Proportional`` (y = A*x) are NOT
+  Origin fitting functions: Origin reaches those orders through its Polynomial
+  Fit tool (orders 1-9), and a line through the origin by fixing the intercept
+  of ``Line``. They are quantized conveniences with the same ascending
+  A0..An convention. (The MATLAB-parity ``Quadratic``/``Cubic``/``Poly 4`` keep
+  their descending a, b, c... order and golden values.)
+* Power — ``Allometric1``: y = a*x^b, no bounds (x < 0 with a non-integer b is
+  NaN, as in Origin — the MATLAB-parity ``Allometric`` uses |x|).
+  https://www.originlab.com/doc/Origin-Help/Allometric1-FitFunc
+* Waveform — ``Sine``: y = y0 + A*sin(pi*(x-xc)/w), params in Origin's order
+  (xc, w, A, y0), bound w > 0; w is the HALF period.
+  https://www.originlab.com/doc/Origin-Help/Sine-FitFunc
+  ``SineDamp``: y = y0 + A*exp(-x/t0)*sin(pi*(x-xc)/w), params
+  (y0, xc, w, t0, A), bounds w > 0 and t0 > 0.
+  https://www.originlab.com/doc/Origin-Help/SineDamp-FitFunc
+  Origin does not bound A, so a fit is unique only up to (A, xc) ->
+  (-A, xc + w) and xc mod 2w.
 """
 
 from __future__ import annotations
@@ -35,8 +45,12 @@ POLYNOMIAL = "Polynomial"
 POWER = "Power"
 WAVEFORM = "Waveform"
 
-# Origin's polynomial fit stops at order 9.
-POLY_ORDERS = range(5, 10)
+# Origin's polynomial fit stops at order 9. order -> (registry name, Origin's
+# coefficient prefix): Poly5 uses A0..A5, the 9th-order Poly uses a0..a9.
+POLY_MODELS: dict[int, tuple[str, str]] = {
+    5: ("Poly5", "A"), 6: ("Poly 6", "A"), 7: ("Poly 7", "A"), 8: ("Poly 8", "A"),
+    9: ("Poly", "a"),
+}
 
 
 def make_poly(order: int) -> ModelFn:
@@ -54,7 +68,11 @@ def make_poly(order: int) -> ModelFn:
 
 
 def proportional(x: FloatArray, p: FloatArray) -> FloatArray:
-    """Origin ``Proportional``: y = A*x (line through the origin). Params (A,)."""
+    """y = A*x (line through the origin). Params (A,).
+
+    Not an Origin fitting function: Origin fits this as ``Line`` with the
+    intercept fixed at 0.
+    """
     return np.asarray(np.float64(p[0]) * x, dtype=float)
 
 
@@ -66,8 +84,8 @@ def allometric1(x: FloatArray, p: FloatArray) -> FloatArray:
 
 
 def sine(x: FloatArray, p: FloatArray) -> FloatArray:
-    """Origin ``Sine``: y = y0 + A*sin(pi*(x-xc)/w). Params (y0, xc, w, A); period = 2w."""
-    y0, xc, w, a = (np.float64(v) for v in p[:4])
+    """Origin ``Sine``: y = y0 + A*sin(pi*(x-xc)/w). Params (xc, w, A, y0); period = 2w."""
+    xc, w, a, y0 = (np.float64(v) for v in p[:4])
     return np.asarray(y0 + a * np.sin(math.pi * (x - xc) / w), dtype=float)
 
 
@@ -79,14 +97,14 @@ def sine_damp(x: FloatArray, p: FloatArray) -> FloatArray:
         return np.asarray(y0 + a * env * np.sin(math.pi * (x - xc) / w), dtype=float)
 
 
-for _order in POLY_ORDERS:
+for _order, (_name, _prefix) in POLY_MODELS.items():
     _n = _order + 1
-    register_model(f"Poly {_order}", POLYNOMIAL, make_poly(_order),
-                   [f"A{k}" for k in range(_n)], [0.0] * _n,
+    register_model(_name, POLYNOMIAL, make_poly(_order),
+                   [f"{_prefix}{k}" for k in range(_n)], [0.0] * _n,
                    [-_INF] * _n, [_INF] * _n)
 register_model("Proportional", POLYNOMIAL, proportional, ["A"], [1], [-_INF], [_INF])
 register_model("Allometric1", POWER, allometric1, ["a", "b"], [1, 1], [-_INF] * 2, [_INF] * 2)
-register_model("Sine", WAVEFORM, sine, ["y0", "xc", "w", "A"], [0, 0, 1, 1],
-               [-_INF, -_INF, 0, 0], [_INF] * 4)
+register_model("Sine", WAVEFORM, sine, ["xc", "w", "A", "y0"], [0, 1, 1, 0],
+               [-_INF, 0, -_INF, -_INF], [_INF] * 4)
 register_model("SineDamp", WAVEFORM, sine_damp, ["y0", "xc", "w", "t0", "A"], [0, 0, 1, 1, 1],
-               [-_INF, -_INF, 0, 0, 0], [_INF] * 5)
+               [-_INF, -_INF, 0, 0, -_INF], [_INF] * 5)

@@ -19,6 +19,12 @@ ExpGrow1    y0 + A1*exp((x-x0)/t1)                              y0 x0 A1 t1
 ExpGrow2    y0 + sum_i Ai*exp((x-x0)/ti), i = 1..2              y0 x0 A1 t1 A2 t2
 ==========  ==================================================  ==================
 
+Checked against https://www.originlab.com/doc/Origin-Help/<Name>-FitFunc for
+each name. Origin sets no bounds on any of them except ExpGrow1 (t1 > 0), and
+the registry mirrors that. One naming note: the ExpDec1 help page lists its
+parameters as "y0, A, t" while its own derived-parameter formulas use t1; the
+registry uses y0, A1, t1, consistent with ExpDec2/ExpDec3.
+
 In the ``x0`` variants ``x0`` and the amplitudes are not independent
 (``Ai*exp(x0/ti)`` is all the data can determine). Origin users normally FIX
 ``x0`` at the start of the decay; the auto-guess sets it to min(x), and the
@@ -70,7 +76,7 @@ def _register(name: str, n_terms: int, *, offset: bool, growth: bool) -> None:
     for i in range(1, n_terms + 1):
         names += [f"A{i}", f"t{i}"]
         p0 += [1.0, float(i)]
-        lb += [-_INF, 0.0]
+        lb += [-_INF, 0.0 if name == "ExpGrow1" else -_INF]
     register_model(name, EXPONENTIAL, make_exp_sum(n_terms, offset=offset, growth=growth),
                    names, p0, lb, [_INF] * len(names))
 

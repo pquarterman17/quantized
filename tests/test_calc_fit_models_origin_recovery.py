@@ -62,14 +62,15 @@ def _sine_truth(w_lo: float, w_hi: float, damped: bool) -> Truth:
 
     def gen(r: np.random.Generator) -> list[float]:
         w = float(r.uniform(w_lo, w_hi))
-        head = [float(r.uniform(-1, 1)), float(r.uniform(0, 2 * w)), w]
-        if damped:
-            return head + [float(r.uniform(5, 15)), float(r.uniform(2, 4))]
-        return head + [float(r.uniform(1, 3))]
+        y0, xc = float(r.uniform(-1, 1)), float(r.uniform(0, 2 * w))
+        if damped:  # SineDamp: y0, xc, w, t0, A
+            return [y0, xc, w, float(r.uniform(5, 15)), float(r.uniform(2, 4))]
+        return [xc, w, float(r.uniform(1, 3)), y0]  # Sine: xc, w, A, y0
 
     return gen
 
 
+_POLY_NAMES = {5: "Poly5", 6: "Poly 6", 7: "Poly 7", 8: "Poly 8", 9: "Poly"}
 _PEAK = (-1.0, 1.0), (7.0, 13.0)  # y0, xc
 _DEC2 = (3.0, 6.0), (0.2, 0.6), (3.0, 6.0), (2.0, 5.0)
 _DEC3 = (3.0, 6.0), (0.1, 0.25), (3.0, 6.0), (0.8, 1.5), (3.0, 6.0), (5.0, 10.0)
@@ -105,11 +106,11 @@ CASES: dict[str, Case] = {
     "MichaelisMenten": (_L(0, 20, 201), _truth((2, 5), (0.5, 3)), 0.01),
     "Logistic (Origin)": (_L(0.1, 20, 201), _truth(*_STEP, (2, 8), (1.5, 4)), 0.01),
     "Logistic5": (_L(0.1, 20, 401), _truth(*_STEP, (3, 7), (1.5, 3), (0.5, 2)), 0.001),
-    "SLogistic1": (_L(-10, 10, 201), _truth((3, 6), (-2, 2), (0.5, 2)), 0.01),
-    "Gompertz": (_L(-10, 10, 201), _truth((3, 6), (-2, 2), (0.5, 2)), 0.01),
-    "Weibull1": (_L(0, 15, 301), _truth((4, 6), (0, 1), (1, 3), (1.5, 3), (0.2, 0.5)), 0.005),
-    **{f"Poly {k}": (_L(-1, 1, 201), _truth(*[(-2.0, 2.0)] * (k + 1)), 1e-5)
-       for k in range(5, 10)},
+    "SLogistic1": (_L(0, 20, 201), _truth((3, 6), (8, 12), (0.5, 2)), 0.01),
+    "SGompertz": (_L(-10, 10, 201), _truth((3, 6), (-2, 2), (0.5, 2)), 0.01),
+    "SWeibull1": (_L(0, 15, 301), _truth((4, 6), (1, 3), (1.5, 3), (0.2, 0.5)), 0.005),
+    **{name: (_L(-1, 1, 201), _truth(*[(-2.0, 2.0)] * (k + 1)), 1e-5)
+       for k, name in _POLY_NAMES.items()},
     "Proportional": (_L(-5, 5, 101), _signed(1, 3), 0.01),
     "Allometric1": (_L(0.1, 10, 201), _truth((1, 3), (-1.5, 2.5)), 0.01),
     "Sine": (_L(0, 20, 301), _sine_truth(1, 3, damped=False), 0.01),
@@ -143,10 +144,12 @@ def _synth(name: str, seed: int) -> tuple[NDArray[np.float64], NDArray[np.float6
 
 def _wrap_phase(name: str, fit: NDArray[np.float64], truth: list[float]) -> NDArray[np.float64]:
     """Sine xc is defined modulo the period 2w: move the fit's xc next to truth's."""
+    names = FIT_MODELS[name]["paramNames"]
     if name in ("Sine", "SineDamp"):
-        period = 2 * fit[2]
+        i_xc, i_w = names.index("xc"), names.index("w")
+        period = 2 * fit[i_w]
         fit = fit.copy()
-        fit[1] = truth[1] + (fit[1] - truth[1] + period / 2) % period - period / 2
+        fit[i_xc] = truth[i_xc] + (fit[i_xc] - truth[i_xc] + period / 2) % period - period / 2
     return fit
 
 
@@ -200,13 +203,22 @@ def test_peak_guess_handles_a_dip(name: str) -> None:
     assert guess[1] == pytest.approx(truth[1], abs=0.2)
 
 
+def test_origin_guess_respects_origin_bounds() -> None:
+    """A guess never starts outside Origin's documented default bounds."""
+    for name in CASES:
+        x, _, y, _, _ = _synth(name, 1)
+        spec = FIT_MODELS[name]
+        guess = auto_guess(name, x, y)
+        assert all(lo <= v <= hi for v, lo, hi in zip(guess, spec["lb"], spec["ub"], strict=True))
+
+
 # Families whose formula is invariant under x -> x + b (a centre/onset/x0
 # parameter absorbs the shift). Power laws, Poly, Proportional and the
 # no-x0 exponentials are not — that is the reason Origin has the x0 variants.
 _LOCATION_FAMILIES = {
     "Gauss", "GaussAmp", "Lorentz", "Voigt", "PsdVoigt1", "PsdVoigt2", "Asym2Sig",
     "ExpDecay1", "ExpDecay2", "ExpDecay3", "ExpGrow1", "ExpGrow2", "Boltzmann", "DoseResp",
-    "SLogistic1", "Gompertz", "Weibull1", "Sine", "SineDamp",
+    "SLogistic1", "SGompertz", "SWeibull1", "Sine", "SineDamp",
 }
 _TRANSFORMS = [(1e-6, 0.0), (1e4, 0.0)] + [(1.0, 1e3)]
 
@@ -218,7 +230,7 @@ def test_origin_guess_is_x_scale_and_shift_robust(name: str, scale: float, shift
 
     Regression: the variable-projection polish used scipy's default
     Nelder-Mead start simplex, whose step for a coordinate that is exactly 0
-    (SLogistic1/Gompertz centres on a symmetric x grid) is a fixed 2.5e-4 —
+    (an SGompertz centre on a symmetric x grid) is a fixed 2.5e-4 —
     blind to the x scale, so the polish stalled. Steps now come from the grid.
     """
     if shift and name not in _LOCATION_FAMILIES:
