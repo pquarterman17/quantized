@@ -55,7 +55,7 @@ export default function PeakWizardPanel() {
   ][w.step];
 
   return (
-    <ToolWindow id={PEAK_WIZARD_WINDOW_ID} title="Peak Analyzer" width={420} x={dockedX(420)} onClose={close}>
+    <ToolWindow id={PEAK_WIZARD_WINDOW_ID} title="Peak Analyzer" width={420} x={dockedX(420)} dock="right" onClose={close}>
       {/* Roving tablist, AUTOMATIC activation (lib/tabListKeys): switching is
           cheap, and the batch view stays mounted, so arrows select too. */}
       <div role="tablist" aria-label="Peak Analyzer mode" style={{ display: "flex", gap: 6, marginBottom: 8 }} onKeyDown={(e) => onTabListKeyDown(e, true)}>

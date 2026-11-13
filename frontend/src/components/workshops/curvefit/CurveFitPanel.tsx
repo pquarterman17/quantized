@@ -249,7 +249,7 @@ export default function CurveFitPanel() {
       ? { name: currentCustom.name, paramNames: currentCustom.params, p0: currentCustom.guesses.map((g) => g ?? 1), lb: currentCustom.lower, ub: currentCustom.upper, equation: currentCustom.equation }
       : (reg ?? null);
     return (
-      <ToolWindow id="curvefit" title="Curve Fit" width={360} x={dockedX(360)} onClose={close}>
+      <ToolWindow id="curvefit" title="Curve Fit" width={360} x={dockedX(360)} dock="right" onClose={close}>
         <AnalysisInputReview toolId="curvefit" singleY />
         {modelPicker}
         <GlobalFitSection model={globalModel} />
@@ -261,7 +261,7 @@ export default function CurveFitPanel() {
   // (new sub-component — the registry-model body stays untouched).
   if (isCustom) {
     return (
-      <ToolWindow id="curvefit" title="Curve Fit" width={340} x={dockedX(340)} onClose={close}>
+      <ToolWindow id="curvefit" title="Curve Fit" width={340} x={dockedX(340)} dock="right" onClose={close}>
         <AnalysisInputReview toolId="curvefit" singleY />
         {modelPicker}
         <EquationModelPanel
@@ -274,7 +274,7 @@ export default function CurveFitPanel() {
   }
 
   return (
-    <ToolWindow id="curvefit" title="Curve Fit" width={340} x={dockedX(340)} onClose={close}>
+    <ToolWindow id="curvefit" title="Curve Fit" width={340} x={dockedX(340)} dock="right" onClose={close}>
       <AnalysisInputReview toolId="curvefit" singleY allowFactor supportsBatch />
       {modelPicker}
 

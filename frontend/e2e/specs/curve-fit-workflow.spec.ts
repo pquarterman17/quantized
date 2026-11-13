@@ -63,6 +63,15 @@ test.describe("Curve Fit workflow (fitting audit)", () => {
     await expect(panel.getByText("reduced χ²")).toBeVisible({ timeout: 15_000 });
     // Key results are above the fold: the parameter table is in view.
     await expect(panel.getByRole("cell", { name: "τ" })).toBeInViewport();
+    // Docked beside the graph, not over it: the plot frame and its legend
+    // reflow to the panel's left (store/rightDock.ts).
+    const win = (await panel.boundingBox())!;
+    await expect.poll(async () => {
+      const frame = (await page.locator(".qzk-stage .u-over").first().boundingBox())!;
+      return frame.x + frame.width;
+    }).toBeLessThanOrEqual(win.x);
+    const legendBox = await page.locator(".qzk-stage > .qzk-legend").first().boundingBox();
+    if (legendBox) expect(legendBox.x + legendBox.width).toBeLessThanOrEqual(win.x);
 
     // #5: closing hides; the fit survives and comes back on reopen.
     await panel.getByRole("button", { name: "Close Curve Fit" }).click();
