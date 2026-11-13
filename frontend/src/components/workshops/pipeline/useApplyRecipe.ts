@@ -36,7 +36,7 @@ export interface ApplyRecipeState {
   cancel: () => void;
 }
 
-export function useApplyRecipe(recipe: AnalysisTemplate): ApplyRecipeState {
+export function useApplyRecipe(recipe: AnalysisTemplate, keepActive = false): ApplyRecipeState {
   const datasets = useApp((s) => s.datasets);
   const selectedIds = useApp((s) => s.selectedIds);
   const activeId = useApp((s) => s.activeId);
@@ -93,12 +93,17 @@ export function useApplyRecipe(recipe: AnalysisTemplate): ApplyRecipeState {
     setResults([]);
     try {
       const plans = picks.map((p) => ({ datasetId: p.ds.id, bindings: p.bindings }));
+      const before = useApp.getState().activeId;
       setResults(await applyRecipe(recipe, plans, { ackUnits, signal: ctl.signal, onProgress: (r) => setResults([...r]) }));
+      // Launched from a dialog that works on the ACTIVE worksheet: each output
+      // made itself active, which would re-point the dialog at an output.
+      const now = useApp.getState();
+      if (keepActive && before && now.activeId !== before && now.datasets.some((d) => d.id === before)) now.setActive(before);
     } finally {
       if (controller.current === ctl) controller.current = null;
       setRunning(false);
     }
-  }, [recipe, picks, ackUnits]);
+  }, [recipe, picks, ackUnits, keepActive]);
 
   const cancel = useCallback(() => controller.current?.abort(), []);
 

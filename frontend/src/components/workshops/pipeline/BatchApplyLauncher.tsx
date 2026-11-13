@@ -60,7 +60,7 @@ export default function BatchApplyLauncher({
       {open && built.error && <p className="qz-error" role="alert">{built.error}</p>}
       {open && recipe && (
         <Suspense fallback={<div className="qzk-ds-meta">Loading…</div>}>
-          <ApplyRecipeSection recipe={recipe} onClose={() => setOpen(false)} disabled={running || Boolean(blocked)} disabledReason={blocked || undefined} />
+          <ApplyRecipeSection recipe={recipe} onClose={() => setOpen(false)} disabled={running || Boolean(blocked)} disabledReason={blocked || undefined} keepActive />
         </Suspense>
       )}
       {open && !recipe && !built.error && <Button onClick={() => setOpen(false)}>Close batch panel</Button>}

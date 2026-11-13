@@ -71,6 +71,7 @@ export default function ApplyRecipeSection({
   onClose,
   disabled = false,
   disabledReason,
+  keepActive = false,
 }: {
   recipe: AnalysisTemplate;
   onClose: () => void;
@@ -81,8 +82,11 @@ export default function ApplyRecipeSection({
   /** Why `disabled` (shown on the Apply button) when it is not another run:
    *  e.g. the launching dialog's setup is invalid right now. */
   disabledReason?: string;
+  /** Hand the view back to the worksheet that was active before the run —
+   *  for a launcher whose dialog works on the active worksheet. */
+  keepActive?: boolean;
 }) {
-  const a = useApplyRecipe(recipe);
+  const a = useApplyRecipe(recipe, keepActive);
   const columns = recipe.expects?.columns ?? [];
   const steps = runnableSteps(recipe.steps);
   const anyUnits = a.picks.some((p) => p.preflight.unitMismatch);
