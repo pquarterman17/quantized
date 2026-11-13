@@ -24,11 +24,19 @@ from quantized.io._delimited_fast import (
     _tokens_to_columns,
     try_fast_parse_matrix,
 )
+from quantized.io._delimiter_vote import COMMENT_CHARS, tab_cell_lines, vote_lines
+from quantized.io._header_units import _extract_units as _extract_units  # re-export
+from quantized.io._origin_ascii_header import (
+    AMBIGUOUS_HEADER_NOTE,
+    OriginAsciiRows,
+    origin_ascii_ambiguous,
+    origin_ascii_rows,
+)
 from quantized.io.base import read_text, resolve_column
 
 __all__ = ["import_csv"]
 
-_COMMENT_CHARS = "#%"
+_COMMENT_CHARS = COMMENT_CHARS
 
 
 def _read_raw_lines(text: str) -> list[str]:
@@ -57,72 +65,6 @@ def _split_lines(text: str) -> tuple[list[str], list[str]]:
     return data, comments
 
 
-def _split_trailing_bracket(header: str, opener: str, closer: str) -> tuple[str, str] | None:
-    """``('Temp (C)', '(', ')')`` -> ``('C', 'Temp')``; ``None`` if no match.
-
-    A hand-rolled scan, not a regex. The regexes this replaces --
-    ``(.+?)\\s*\\(([^)]+)\\)\\s*$`` and its ``[...]`` twin -- were quadratic
-    (CodeQL ``py/polynomial-redos``): ``.`` also matches a space, so ``.+?``
-    and ``\\s*`` can split the same run of blanks in as many ways as it is
-    long, and every one of them is retried before a header with no bracket is
-    rejected. Column headers come straight out of an untrusted instrument file,
-    so a row of long blank-padded headers was enough to stall a parse. This
-    scan is linear and allocation-free apart from the two returned slices.
-
-    Behaviour is preserved exactly, including the awkward corners:
-
-    * the closer must be the LAST character (bar trailing whitespace), and the
-      unit may not itself contain one -- so ``'a (b) c (d)'`` yields ``'d'``;
-    * the unit must be non-empty and something must precede the opener, so
-      ``'Temp ()'`` and ``'(C)'`` both fail and leave the header alone;
-    * the opener is the FIRST one that can still satisfy the above, which is
-      why ``'a ((b)'`` yields the unit ``'(b'`` rather than ``'b'``;
-    * ``.`` never matched a newline, so a label spanning lines still fails.
-    """
-    body = header.rstrip()
-    if not body.endswith(closer):
-        return None
-    before_closer = body[:-1]
-    newline = body.find("\n")
-    # The unit may not contain a closer, so the opener must sit after the last
-    # one; and something must precede it, so index 0 is never a candidate.
-    start = max(1, before_closer.rfind(closer) + 1)
-    limit = len(before_closer) - 1  # the opener must leave a non-empty unit
-    while start < limit:
-        start = before_closer.find(opener, start)
-        if start < 0 or start >= limit:
-            return None
-        if newline < 0 or newline >= _label_length(body, start):
-            return before_closer[start + 1 :].strip(), body[:start].strip()
-        # A newline inside the label itself is fatal (``.`` never matched one),
-        # but one in the run of blanks before the opener is not -- so keep
-        # looking rather than giving up on the header.
-        start += 1
-    return None
-
-
-def _label_length(body: str, start: int) -> int:
-    """Length of the shortest ``(.+?)`` that can precede the opener at ``start``.
-
-    ``.+?`` is non-greedy and ``\\s*`` mops up the rest, so the label proper
-    ends at the last non-blank before the opener -- but it must be at least one
-    character even when everything before the opener is blank.
-    """
-    end = start
-    while end > 1 and body[end - 1].isspace():
-        end -= 1
-    return end
-
-
-def _extract_units(header: str) -> tuple[str, str]:
-    """``'Temp (C)'`` -> ``('C', 'Temp')`` (also ``[...]``). Returns (unit, label)."""
-    for opener, closer in (("(", ")"), ("[", "]")):
-        found = _split_trailing_bracket(header, opener, closer)
-        if found is not None:
-            return found
-    return "", header
-
-
 def _convert_column(cells: Sequence[str]) -> np.ndarray:
     """Vectorized ``str`` -> ``float64`` conversion matching ``_to_float``'s
     per-cell semantics (an NA token or anything ``float()`` rejects becomes
@@ -145,6 +87,15 @@ def _convert_column(cells: Sequence[str]) -> np.ndarray:
         return np.asarray([layout._to_float(c) for c in cells], dtype=np.float64)
 
 
+def _label_row_role(i: int, header: int, units: int, origin: OriginAsciiRows | None) -> str:
+    """A preserved descriptive row's role in ``metadata["label_rows"]``."""
+    if i == header:
+        return "header"
+    if i == units:
+        return "units"
+    return "comment" if origin is not None and i == origin.comments else "label"
+
+
 def _encode_categorical(cells: Sequence[str]) -> tuple[np.ndarray, tuple[str, ...]]:
     """P1.4: encode raw text cells as float codes ``0..n-1`` (NaN = a blank
     cell -- missing, not a level of its own) plus the ordered level table
@@ -165,6 +116,39 @@ def _encode_categorical(cells: Sequence[str]) -> tuple[np.ndarray, tuple[str, ..
             levels.append(text)
         codes[i] = idx
     return codes, tuple(levels)
+
+
+_WIDTH_SAMPLE_ROWS = 64
+
+
+def _numeric_column(
+    values: np.ndarray, tokens: Sequence[Sequence[str]], c: int, n_rows: int
+) -> bool:
+    """A data column holds NUMBERS: more than a tenth of its rows parse, and
+    they are most of its non-empty cells (a missing-value spelling such as
+    "n/a" counts as empty). A text column with the odd
+    number-looking cell ("r1, r2, 7, r4") is text -- it used to become a
+    mostly-NaN numeric channel and lose its text."""
+    n_num = int(np.count_nonzero(~np.isnan(values)))
+    if n_num / max(n_rows, 1) <= 0.1:
+        return False
+    if n_num == n_rows:
+        return True  # every row parsed: no need to look at the text
+    n_filled = sum(
+        1 for row in tokens if c < len(row) and row[c].strip().lower() not in layout._MISSING_TOKENS
+    )
+    return 2 * n_num > n_filled
+
+
+def _sample_width(tokens: Sequence[Sequence[str]], data_start: int) -> int:
+    """Widest data row among the first `_WIDTH_SAMPLE_ROWS`, ignoring
+    trailing empty cells (a trailing delimiter is padding, not a column)."""
+    width = 0
+    for i in range(data_start, min(len(tokens), data_start + _WIDTH_SAMPLE_ROWS)):
+        row = tokens[i]
+        last = max((k + 1 for k, cell in enumerate(row) if cell.strip()), default=0)
+        width = max(width, last)
+    return width or len(tokens[data_start])
 
 
 def import_csv(
@@ -193,7 +177,11 @@ def import_csv(
     raw_lines, comment_lines = _split_lines(text)
     if not raw_lines:
         raise ValueError(f"file empty or only comments: {path.name}")
-    delim = layout._detect_delimiter(raw_lines)
+    # Voted on UNSTRIPPED lines: a trailing empty cell's tab is real evidence.
+    voted = vote_lines(text)
+    delim = layout._detect_delimiter(voted)
+    if delim == "\t":  # keep a tab row's empty edge cells (`tab_cell_lines`)
+        raw_lines = tab_cell_lines(voted)
     comma_path = dc.uses_decimal_path(dc.check_decimal(decimal, delim), delim, "," in text)
 
     # P0.4-perf4: layout detection scores rows in fixed-size chunks
@@ -206,13 +194,20 @@ def import_csv(
     # (measured ~2.8s of a 7.3s import on a 1M-row file) just to find
     # where the header ends.
     lazy_tokens = LazyTokenRows(raw_lines, delim)
+    scoring_rows = dc.layout_rows(lazy_tokens) if comma_path else lazy_tokens
     try:
-        header_row, data_start, units_row = layout._detect_layout(
-            dc.layout_rows(lazy_tokens) if comma_path else lazy_tokens
-        )
+        header_row, data_start, units_row = layout._detect_layout(scoring_rows)
     except ValueError as exc:  # header-only file
         raise ValueError(f"{exc} ({path.name})") from exc
-    n_data_cols = len(lazy_tokens[data_start])
+    # The data's EFFECTIVE width over its leading rows (the wizard's
+    # `_effective_ncols` rule): a short first data row ("1<TAB>2" in a
+    # 3-column file) must not drop the columns the rows below fill.
+    n_data_cols = _sample_width(lazy_tokens, data_start)
+    # Origin's own ASCII export: Long Name / Units / Comments above the data.
+    origin_rows = origin_ascii_rows(scoring_rows, data_start, n_data_cols)
+    if origin_rows is not None:
+        header_row, units_row = origin_rows.header, origin_rows.units
+    header_unclear = origin_ascii_ambiguous(scoring_rows, data_start, n_data_cols)
     if header_row >= 0:
         col_headers = [c.strip() for c in lazy_tokens[header_row]]
     else:
@@ -299,9 +294,7 @@ def import_csv(
         reserved = set() if time_promoted else {time_idx}
         candidates = [c for c in range(n_cols) if c not in reserved]
         numeric_idx = [
-            c
-            for c in candidates
-            if (np.count_nonzero(~np.isnan(matrix[:, c])) / n_rows) > 0.1
+            c for c in candidates if _numeric_column(matrix[:, c], data_tokens, c, n_rows)
         ]
         data_idx = numeric_idx
         # P1.4 (f2): a trailing-text-only file used to raise here once
@@ -410,7 +403,7 @@ def import_csv(
             label_rows.append(
                 {
                     "index": i,
-                    "role": "header" if i == header_row else "units" if i == units_row else "label",
+                    "role": _label_row_role(i, header_row, units_row, origin_rows),
                     "x": at(time_idx) if time_idx >= 0 and not time_promoted else "",
                     # Aligned to the FINAL channel order (numeric, then any
                     # P1.4 categorical channels appended after) -- same
@@ -431,9 +424,8 @@ def import_csv(
     for c in range(n_cols):
         if c in used:
             continue
-        numeric_ratio = float(np.count_nonzero(~np.isnan(matrix[:, c]))) / max(n_rows, 1)
-        if numeric_ratio > 0.1:
-            continue  # a sparse NUMERIC column, not text — leave it dropped
+        if data_columns is not None and _numeric_column(matrix[:, c], data_tokens, c, n_rows):
+            continue  # a numeric column the caller did not select: not text
         cells = [row[c].strip() if c < len(row) else "" for row in data_tokens]
         if any(cells):  # an entirely blank column is padding, not data
             text_columns[col_headers[c]] = cells
@@ -455,6 +447,8 @@ def import_csv(
     if time_is_datetime:
         metadata.update({"time_is_datetime": True, "time_timezone": "UTC"})
     notes: list[str] = []
+    if header_unclear:  # say so: the rows were read conservatively
+        notes.append(AMBIGUOUS_HEADER_NOTE.format(names=header_row + 1, units=units_row + 1))
     if comma_cols:
         # Named as the dataset shows them: the header with its unit split off.
         shown = [_extract_units(col_headers[c])[1] for c in comma_cols]
@@ -480,6 +474,13 @@ def import_csv(
     if other_categorical:
         names = ", ".join(col_headers[c] for c in other_categorical)
         notes.append(f"Text column(s) imported as categorical channel(s): {names}.")
+    if text_columns:
+        # Say so: they are not curves, and used to vanish without a word.
+        text_names = ", ".join(f"'{n}'" for n in text_columns)
+        notes.append(
+            f"Text column{'s' if len(text_columns) > 1 else ''} {text_names} kept as text "
+            "(shown in the worksheet, usable for labels and grouping), not plotted."
+        )
     if notes:
         metadata["notes"] = notes
     values_matrix = np.hstack([matrix[:, data_idx], cat_matrix])

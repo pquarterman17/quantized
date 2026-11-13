@@ -2448,3 +2448,27 @@ def test_an_ordinary_unrecognized_style_key_still_renders() -> None:
     )
     assert resp.status_code == 200
     assert resp.content[:5] == b"%PDF-"
+
+
+def test_opj_download_keeps_a_non_ascii_project_name() -> None:
+    """RFC 5987: the ASCII fallback collapses "Ångström θ" to underscores; the
+    real name travels in ``filename*`` (percent-encoded UTF-8)."""
+    body = {"datasets": [{"dataset": _xrd_dataset(), "name": "Scan"}], "filename": "Ångström θ"}
+    resp = client.post("/api/export/opj", json=body)
+    assert resp.status_code == 200
+    cd = resp.headers["content-disposition"]
+    fallback = cd.split('"')[1]
+    assert cd.startswith('attachment; filename="')
+    assert fallback.isascii() and fallback.endswith(".opj")
+    assert "filename*=UTF-8''%C3%85ngstr%C3%B6m%20%CE%B8.opj" in cd
+
+
+def test_named_download_header_is_injection_safe_and_plain_for_ascii() -> None:
+    from quantized.routes._export_common import _attachment_named
+
+    assert _attachment_named("scan1", ".opj") == {
+        "Content-Disposition": 'attachment; filename="scan1.opj"'
+    }
+    cd = _attachment_named('..\\..//évil"\r\nX: y', ".zip")["Content-Disposition"]
+    assert "\r" not in cd and "\n" not in cd and cd.count('"') == 2
+    assert "%2F" not in cd and "%5C" not in cd  # no path separators survive

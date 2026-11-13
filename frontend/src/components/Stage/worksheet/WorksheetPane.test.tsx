@@ -3,9 +3,10 @@
 // "loading full data" banner, and (c) trigger ensureBookData so the full
 // data arrives without the user needing to do anything else.
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { resetBookTransportForTests } from "../../../lib/bookData";
 import type { Dataset } from "../../../lib/types";
 import { useRecode } from "../../../store/recode";
 import { useLevelOrderPanel } from "../../../store/levelOrderPanel";
@@ -39,6 +40,26 @@ describe("WorksheetPane pending lazy book", () => {
     expect(screen.getByText(/Loading full data/)).toBeInTheDocument();
     expect(screen.getByText(/5000 rows/)).toBeInTheDocument();
     expect(spy).toHaveBeenCalledWith("lazy1");
+  });
+
+  it("says the load failed instead of promising 'Loading full data' forever", async () => {
+    // Integration live check: after the upload cache was cleared, a lazy
+    // book's worksheet kept "Loading full data … showing a preview for now"
+    // under the expired-upload toast. The banner now says it failed and why.
+    // The spy above replaced ensureBookData, and setState copies it forward.
+    useApp.setState({ ensureBookData: useApp.getInitialState().ensureBookData });
+    resetBookTransportForTests();
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(new Response(JSON.stringify({ detail: "upload expired — re-import the file" }), { status: 404, headers: { "Content-Type": "application/json" } })),
+    );
+    try {
+      render(<WorksheetPane datasetId="lazy1" />);
+      await waitFor(() => expect(document.body.textContent).toMatch(/Could not load the full data \(5000 rows × 4 channels\): upload expired/));
+      await waitFor(() => expect(screen.queryByText(/Loading full data/)).not.toBeInTheDocument());
+    } finally {
+      vi.unstubAllGlobals();
+      resetBookTransportForTests();
+    }
   });
 
   it("shows no loading banner for a fully-loaded dataset", () => {

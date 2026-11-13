@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { EXCLUDED_DISPLAY_KEY, loadPrefs, LIBRARY_PANEL_WIDTH_MAX, LIBRARY_PANEL_WIDTH_MIN } from "./prefs";
+import {
+  defaultLibraryPanelWidth,
+  EXCLUDED_DISPLAY_KEY,
+  loadPrefs,
+  LIBRARY_PANEL_WIDTH_DEFAULT,
+  LIBRARY_PANEL_WIDTH_MAX,
+  LIBRARY_PANEL_WIDTH_MIN,
+} from "./prefs";
 import { useApp } from "./useApp";
 import { fmtNum } from "../lib/format";
 
@@ -14,7 +21,7 @@ afterEach(() => {
   s.setPref("excludedDisplay", "grey");
   s.setPref("originBookClickOpens", "worksheet");
   s.setPref("defaultPanelFit", "frames");
-  s.setPref("libraryPanelWidth", 210);
+  s.setPref("libraryPanelWidth", LIBRARY_PANEL_WIDTH_DEFAULT);
   s.setPref("autoSeriesStyles", false);
 });
 
@@ -82,12 +89,20 @@ describe("preferences", () => {
     expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").defaultPanelFit).toBe("window");
   });
 
-  it("libraryPanelWidth (#13 sub-item 5) defaults to 210 and persists + applies --lw on change", () => {
-    expect(useApp.getState().libraryPanelWidth).toBe(210);
-    useApp.getState().setPref("libraryPanelWidth", 260);
-    expect(useApp.getState().libraryPanelWidth).toBe(260);
-    expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").libraryPanelWidth).toBe(260);
-    expect(document.documentElement.style.getPropertyValue("--lw")).toBe("260px");
+  it("libraryPanelWidth (#13 sub-item 5): first-run width follows the viewport (210..264)", () => {
+    // Wide screens get room for Origin book names; narrow ones keep the plot's.
+    expect(defaultLibraryPanelWidth(800)).toBe(210);
+    expect(defaultLibraryPanelWidth(1360)).toBe(210);
+    expect(defaultLibraryPanelWidth(1440)).toBe(230);
+    expect(defaultLibraryPanelWidth(1920)).toBe(264);
+  });
+
+  it("libraryPanelWidth (#13 sub-item 5) defaults to the viewport's width and persists + applies --lw on change", () => {
+    expect(useApp.getState().libraryPanelWidth).toBe(LIBRARY_PANEL_WIDTH_DEFAULT);
+    useApp.getState().setPref("libraryPanelWidth", 300);
+    expect(useApp.getState().libraryPanelWidth).toBe(300);
+    expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").libraryPanelWidth).toBe(300);
+    expect(document.documentElement.style.getPropertyValue("--lw")).toBe("300px");
   });
 
   // P3.3 non-colour encodings. Pinned the way every other pref in this blob is.

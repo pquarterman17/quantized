@@ -34,6 +34,15 @@ import { useRightDockRegistration } from "./useRightDockRegistration";
 
 let zTop = 0;
 
+/** A window with no saved position opens clear of the Library panel, not over
+ *  it: the Library is where the user picks what the window acts on (and was
+ *  widened for Origin book names, so the old fixed x=120 covered its rows).
+ *  The usual clamp still keeps a narrow viewport's window on screen. */
+function clearOfLibrary(x: number): number {
+  const right = typeof document === "undefined" ? 0 : (document.querySelector(".qzk-library")?.getBoundingClientRect().right ?? 0);
+  return right > 0 ? Math.max(x, Math.round(right) + 8) : x;
+}
+
 export default function ToolWindow({
   id,
   title,
@@ -70,7 +79,7 @@ export default function ToolWindow({
   const stored = useApp((s) => s.toolWindowLayout[id]);
   const setLayout = useApp((s) => s.setToolWindowLayout);
   const toggleCollapsed = useApp((s) => s.toggleToolWindowCollapsed);
-  const fallback = defaultToolWindowLayout(x, y, width);
+  const fallback = defaultToolWindowLayout(clearOfLibrary(x), y, width);
   const layout = stored ?? fallback;
   useRightDockRegistration(id, dock === "right", layout);
   // P3.1: registry-driven by default (lib/workshopHelp.ts) so no panel needs

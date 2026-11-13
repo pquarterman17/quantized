@@ -14,6 +14,8 @@
 // store-level home (today it only exists inside a mounted `WorksheetPane` —
 // see `lib/paletteContextActions`'s header note on this exact gap).
 
+import type { OriginDesignation } from "../../../lib/columnmeta";
+import { SET_AS_CHOICES } from "../../../lib/setAsChoices";
 import { buildMenuItems, type ContextAction } from "../../../lib/contextActions";
 import type { ContextMenuItem } from "../../overlays/ContextMenu";
 
@@ -38,6 +40,29 @@ export interface ColumnMenuContext {
   /** Selection → Graph Builder handoff (MAIN_PLAN #4): open the Graph
    *  Builder prefilled with a spec built from the same effective columns. */
   onOpenInGraphBuilder: () => void;
+  /** Origin's Column > Set As: the column's EFFECTIVE designation (the
+   *  book's own, or the user's override -- lib/columnmeta.ts) and the
+   *  setter (store/columnDesignationActions.ts, loaded on pick). Both absent
+   *  = no Set As submenu (a read-only re-derived sheet). */
+  designationOf?: (col: number) => OriginDesignation | undefined;
+  setDesignation?: (col: number, designation: OriginDesignation) => void;
+}
+
+/** The "Set As" submenu for a real value column (`col >= 0`). */
+function setAsItems(col: number, ctx: ColumnMenuContext): ContextMenuItem[] {
+  const set = ctx.setDesignation;
+  if (col < 0 || !set) return [];
+  const current = ctx.designationOf?.(col);
+  return [
+    {
+      label: "Set As",
+      submenu: SET_AS_CHOICES.map(([designation, label]) => ({
+        label,
+        checked: current === designation,
+        run: () => set(col, designation),
+      })),
+    },
+  ];
 }
 
 export interface WorksheetColumnTarget {
@@ -140,7 +165,11 @@ export function columnMenuItems(col: number, ctx: ColumnMenuContext): ContextMen
     // a real column — both entries self-hide for col < 0 too, but the
     // separator itself must not appear on its own.
     ...(col >= 0
-      ? ([{ separator: true }, ...buildMenuItems([worksheetSetXAction, worksheetPlotToggleAction], target)] as ContextMenuItem[])
+      ? ([
+          { separator: true },
+          ...buildMenuItems([worksheetSetXAction, worksheetPlotToggleAction], target),
+          ...setAsItems(col, ctx),
+        ] as ContextMenuItem[])
       : []),
     { separator: true },
     ...buildMenuItems(

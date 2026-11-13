@@ -28,6 +28,8 @@ import numpy as np
 
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
+from quantized.io._delimiter_vote import vote_lines
+from quantized.io._origin_ascii_header import origin_ascii_rows
 from quantized.io.delimited import _extract_units, _split_lines
 
 if TYPE_CHECKING:  # ImportSettings lives in import_preview, which imports THIS
@@ -111,9 +113,10 @@ def _resolve_delim(lines: list[str], setting: str) -> str:
     d = _NAMED_DELIMS.get(setting.lower(), setting)
     if d != "auto":
         return d
-    # The same sample direct import votes on (stripped, blank and comment
-    # lines skipped), so the wizard and `import_csv` pick one delimiter.
-    sample = _split_lines("\n".join(lines))[0]
+    # The same sample direct import votes on (blank and comment lines
+    # skipped, NOT stripped -- `vote_lines`), so the wizard and `import_csv`
+    # pick one delimiter.
+    sample = vote_lines("\n".join(lines))
     return layout._detect_delimiter(sample) if sample else ","
 
 
@@ -124,6 +127,76 @@ def _resolve_names(tokens: list[list[str]], header_line: int | None, n_cols: int
         raw = []
     names = [raw[k] if k < len(raw) and raw[k] else f"Col{k + 1}" for k in range(n_cols)]
     return names
+
+
+def _guess_roles(data_rows: list[list[str]], n_cols: int) -> list[str]:
+    """Default role per column: a TEXT column (most of its non-empty sampled
+    cells are not numbers -- direct import's rule, `delimited._numeric_column`)
+    is ``label``, kept as a text column like direct import keeps it, never a
+    NaN-filled ``y``; the first numeric column is ``x``, the rest ``y``. A
+    file with no numeric column keeps the plain ``x, y, …`` start."""
+    sample = data_rows[:64]
+    text: list[bool] = []
+    for c in range(n_cols):
+        cells = [
+            r[c].strip() for r in sample
+            if c < len(r) and r[c].strip().lower() not in layout._MISSING_TOKENS
+        ]
+        text.append(bool(cells) and 2 * sum(map(layout._is_data_cell, cells)) <= len(cells))
+    if all(text):
+        return ["x"] + ["y"] * (n_cols - 1) if n_cols else []
+    first_numeric = text.index(False)
+    return ["label" if t else ("x" if c == first_numeric else "y") for c, t in enumerate(text)]
+
+
+def _guess_layout(text: str) -> tuple[int | None, int | None, int, list[str], list[str]]:
+    """``guess_settings``' layout guess: (header_line, units_line,
+    data_start_line, column names, default roles) for ``text`` under an auto
+    delimiter.
+
+    Origin's own ASCII export (Long Name / Units / Comments above the data,
+    `_origin_ascii_header`) is recognised first; otherwise a units row just
+    above the data with a header above that, else a header directly above.
+    """
+    lines = text.removeprefix("\ufeff").splitlines()  # a BOM is not cell text
+    delim = _resolve_delim(lines, "auto")
+    tokens = [_split(ln, delim) for ln in lines]
+    scored = _scoring_rows(text, tokens, delim)
+    scores = [
+        layout._numeric_score(t) if ln.strip() else 0.0
+        for t, ln in zip(scored, lines, strict=True)
+    ]
+    data_start = next((i for i, s in enumerate(scores) if s > 0.5), None)
+    # Leading data rows with an empty cell ("1<TAB>" in a 2-column paste)
+    # score exactly 0.5; extend over them as direct import does
+    # (`_walk_back_gappy_rows`), or the first row -- and the header above it
+    # -- were lost.
+    if data_start is None:
+        # No numeric-majority row (as many text columns as numbers): the
+        # header is LESS numeric than the data under it -- direct import's
+        # fallback (`_detect_layout`), so the two paths agree.
+        data_start = next((i for i, s in enumerate(scores) if i > 0 and s > scores[0] and s > 0), 0)
+    else:
+        data_start = layout._walk_back_gappy_rows(scored, data_start)
+
+    header_line: int | None = None
+    units_line: int | None = None
+    data_rows = [t for t in tokens[data_start:] if any(c.strip() for c in t)]
+    n_cols = _effective_ncols(data_rows)
+    origin = origin_ascii_rows(scored, data_start, n_cols)
+    if origin is not None:
+        header_line, units_line = origin.header, origin.units
+    # a units row just above the data, and a header above that
+    elif data_start >= 2 and scores[data_start - 1] < 0.5 and layout._looks_like_units_row(
+        tokens[data_start - 1], n_cols
+    ):
+        units_line = data_start - 1
+        header_line = data_start - 2 if scores[data_start - 2] < 0.5 else None
+    elif data_start >= 1 and scores[data_start - 1] < 0.5:
+        header_line = data_start - 1
+    header_line, units_line = (_uncommented(lines, i) for i in (header_line, units_line))
+    names = _resolve_names(tokens, header_line, n_cols)
+    return header_line, units_line, data_start, names, _guess_roles(data_rows, n_cols)
 
 
 def _parse_core(text: str, settings: ImportSettings) -> _Parsed:

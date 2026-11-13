@@ -368,6 +368,31 @@ describe("ImportWizardPanel", () => {
     expect(screen.getByText(/Sample: NbAu bilayer/)).toBeInTheDocument();
   });
 
+  it("choosing the Header line by hand re-reads the column names from that row", async () => {
+    // Origin-replacement follow-up 6: the guessed `column_names` outrank
+    // `header_line`, so assigning the Long Name row by hand changed nothing.
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByDisplayValue("Temp")).toBeInTheDocument());
+    importPreviewMock.mockClear();
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      header_line: 0,
+      columns: [
+        { index: 0, name: "Field", unit: "K", role: "x" },
+        { index: 1, name: "Kerr", unit: "emu", role: "y" },
+      ],
+    });
+    fireEvent.change(screen.getByLabelText(/Header line/), { target: { value: "0" } });
+    await waitFor(() => expect(screen.getByDisplayValue("Kerr")).toBeInTheDocument());
+    const sent = importPreviewMock.mock.calls.at(-1)![1] as ImportSettingsWire;
+    expect(sent.header_line).toBe(0);
+    expect(sent.column_names).toBeNull();
+    // The fields say which Origin row each one is.
+    expect(screen.getByLabelText(/Header line/).closest("label")).toHaveAttribute("title", expect.stringContaining("Long Name"));
+    expect(screen.getByLabelText(/Units line/).closest("label")).toHaveAttribute("title", expect.stringContaining("Comments"));
+  });
+
   it("shows an editable label-line field that carries into the preview highlight", async () => {
     render(<ImportWizardPanel />);
     pickFile();

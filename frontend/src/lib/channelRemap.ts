@@ -68,6 +68,7 @@
 // `remapFigureViewChannels`, which reuses `remapViewChannels` rather than
 // re-deriving the four rules.
 
+import type { OriginDesignation } from "./columnmeta";
 import type { ErrorBinding } from "./errorRoles";
 import type { FigureBindings, FigureViewState } from "./figureDocument";
 import type { FigureEncoding } from "./figureEncoding";
@@ -188,6 +189,7 @@ export function remapFitSpec(spec: FitSpec | undefined, removedCol: ColumnShift)
 export interface DatasetChannelState {
   channelRoles?: Record<number, ChannelRole>;
   channelTypes?: Record<number, ModelingType>;
+  columnDesignations?: Record<number, OriginDesignation>;
   filter?: ColumnFilter[];
   errorRoles?: ErrorBinding[];
   fitSpec?: FitSpec;
@@ -204,6 +206,7 @@ export function remapDatasetChannels(
   return {
     channelRoles: remapKeyedRecord(d.channelRoles, removedCol),
     channelTypes: remapKeyedRecord(d.channelTypes, removedCol),
+    columnDesignations: remapKeyedRecord(d.columnDesignations, removedCol),
     filter: filter && filter.length ? filter : undefined,
     errorRoles: remapErrorRoles(d.errorRoles, removedCol),
     fitSpec: remapFitSpec(d.fitSpec, removedCol),

@@ -279,6 +279,15 @@ def map_from_datastruct(
     xi = _resolve(ds, x_key)
     yi = _resolve(ds, y_key)
     zi = _resolve(ds, z_key)
+    has_rows = ds.values.ndim == 2 and ds.values.size > 0
+    cols = ds.values[:, [xi, yi, zi]] if has_rows else np.empty((0, 3))
+    if not bool(np.isfinite(cols).all(axis=1).any()):
+        # Name the data problem (an Origin book whose chosen columns never
+        # overlap) instead of numpy's "zero-size array to reduction".
+        raise ValueError(
+            f"cannot build a 2-D grid: no row has finite {ds.labels[xi]!r}, "
+            f"{ds.labels[yi]!r} and {ds.labels[zi]!r} values together"
+        )
     return build_map(
         ds.values[:, xi],
         ds.values[:, yi],

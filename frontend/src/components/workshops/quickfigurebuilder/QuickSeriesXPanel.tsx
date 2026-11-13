@@ -70,7 +70,7 @@ export default function QuickSeriesXPanel({ data, mapping, onChange }: Props) {
         ))}
       </ul>
       <p className="qzk-quick-builder-help">
-        Each series plots against its own X in acquisition order. X error columns pair with the shared X only.
+        Each series plots against its own X in acquisition order. An X error column pairs with the shared X, or with the one series it belongs to.
       </p>
     </section>
   );

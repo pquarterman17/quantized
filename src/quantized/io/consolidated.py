@@ -4,7 +4,8 @@ the per-dataset-block path of MATLAB ``+bosonPlotter/saveConsolidatedNeutronCSV.
 
 Each dataset contributes its own X column (``Q`` for a Q axis, as in MATLAB;
 otherwise the dataset's own x name) followed by its value columns,
-each tagged with an Origin designation by role (X / Y / yEr / xEr). Columns may
+each tagged with an Origin designation by role (X / Y / yEr / xEr, or a
+worksheet "Set As" X / Z / Label / Disregard). Columns may
 differ in length; shorter ones leave trailing cells blank (not ``NaN``) so the
 file imports cleanly into Origin / Excel.
 
@@ -27,7 +28,7 @@ import numpy as np
 
 from quantized.csv_safe import csv_text_cell
 from quantized.datastruct import DataStruct, is_categorical, level_labels
-from quantized.io._error_roles import error_axes
+from quantized.io._error_roles import error_axes, user_designations
 from quantized.x_units import x_unit_of
 
 __all__ = ["consolidate_csv"]
@@ -104,6 +105,9 @@ def _dataset_filename(ds: DataStruct, name: str) -> str:
 
 
 _ROLE_OF_AXIS: dict[str | None, str] = {"y": "yEr", "x": "xEr"}
+# A "Set As" designation on a non-error column, by its Origin name
+# (the error kinds come from the declared roles above).
+_ROLE_OF_USER: dict[str, str] = {"X": "X", "Z": "Z", "label": "Label", "disregard": "Disregard"}
 
 
 def _column_role(label: str) -> str:
@@ -131,12 +135,15 @@ def _columns(datasets: list[tuple[DataStruct, str]]) -> list[_Col]:
         cols.append(_Col(_x_name(ds), _resolve_x_unit(ds), file, "X", time))
         # Declared error roles decide; the label keywords are the fallback.
         err_axes = error_axes(ds.metadata, len(ds.labels))
+        user = user_designations(ds.metadata, len(ds.labels))  # worksheet "Set As"
         for i, label in enumerate(ds.labels):
             unit = ds.units[i] if i < len(ds.units) else ""
             if err_axes is None:
                 role = _column_role(label)
             else:
                 role = _ROLE_OF_AXIS.get(err_axes.get(i), "Y")
+            if role == "Y" and user.get(i) in _ROLE_OF_USER:
+                role = _ROLE_OF_USER[user[i]]
             levels = level_labels(ds, i) if is_categorical(ds, i) else ()
             cols.append(_Col(label, unit, file, role, values[:, i], levels))
     return cols

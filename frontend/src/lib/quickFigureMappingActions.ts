@@ -18,7 +18,8 @@
 
 import { reviewSeedErrorBindings } from "./errorBindingConfidence";
 import { figureSeedErrorBindings, type ErrorBinding, type ErrorSide } from "./errorRoles";
-import { columnMetaList } from "./columnmeta";
+import { effectiveDesignations } from "./columnmeta";
+import { hasFiniteValue, ownXSeries } from "./ownXSeries";
 import { originHiddenChannels } from "./errorbars";
 import type { QuickFigureMapping } from "./quickFigureMapping";
 import type { Dataset } from "./types";
@@ -72,16 +73,10 @@ function normalizeSeriesX(mapping: QuickFigureMapping): QuickFigureMapping {
  *  so a Y with no X value column before it keeps the shared X. Explicit
  *  designations are the only evidence -- adjacency alone never pairs. */
 function inferSeriesX(dataset: Dataset, yKeys: readonly number[]): Record<number, number> {
-  const meta = columnMetaList(dataset.data);
+  // The effective designations: the book's own plus the user's "Set As".
+  const own = ownXSeries(effectiveDesignations(dataset.data, dataset.columnDesignations));
   const out: Record<number, number> = {};
-  for (const y of yKeys) {
-    for (let c = y - 1; c >= 0; c--) {
-      if (meta[c]?.designation === "X") {
-        out[y] = c;
-        break;
-      }
-    }
-  }
+  for (const y of yKeys) if (Object.hasOwn(own, y)) out[y] = own[y];
   return out;
 }
 
@@ -96,9 +91,16 @@ export function initialQuickFigureMapping(dataset: Dataset): QuickFigureMapping 
   const withheld = figureSeedErrorBindings(dataset)
     .map((binding) => binding.channel)
     .filter((channel) => !errorChannels.has(channel));
-  const hidden = new Set(originHiddenChannels(dataset.data));
+  const hidden = new Set(originHiddenChannels(dataset.data, dataset.columnDesignations));
+  // A column with no finite value (a book's spare, never-filled Y) is not a
+  // curve: it starts as Ignore instead of an empty legend entry.
+  // Only would-be Ys: a designated X stays with `hidden` (its own rule).
+  const empty = dataset.data.labels
+    .map((_, c) => c)
+    .filter((c) => !hidden.has(c) && !hasFiniteValue(dataset.data.values, c));
   const ignored = new Set([
     ...withheld,
+    ...empty.filter((c) => !errorChannels.has(c)),
     ...Object.entries(dataset.channelRoles ?? {})
       .filter(([, role]) => role === "ignore" || role === "label")
       .map(([channel]) => Number(channel)),

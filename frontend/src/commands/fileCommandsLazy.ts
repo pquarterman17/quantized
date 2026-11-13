@@ -39,10 +39,10 @@
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { exportActive, type StoreGet } from "../lib/exportActive";
 import { rejectIfImportRunning } from "../lib/importRunningGuard";
+import { withLiveErrorRoles } from "../lib/liveErrorRoles";
 import { hasWorkspaceContent } from "../lib/openWorkspaceReplace";
 import { runCancellable } from "../store/pendingOpActions";
 import { closeProjectLock } from "../store/projectLockLifecycle";
-import type { Dataset, DataStruct } from "../lib/types";
 import { toast } from "../store/toasts";
 import type {
   exportConsolidated,
@@ -52,14 +52,6 @@ import type {
   originComStatus,
   sendToOrigin,
 } from "../lib/api";
-
-/** The DataStruct an Origin-designating export sends: the user's LIVE error
- *  bindings (`Dataset.errorRoles`) as `metadata.error_roles`, which the writers
- *  read to mark yErr/xErr columns. Unchanged when there are none. */
-export function withLiveErrorRoles(ds: Dataset): DataStruct {
-  if (!ds.errorRoles) return ds.data;
-  return { ...ds.data, metadata: { ...ds.data.metadata, error_roles: ds.errorRoles } };
-}
 
 export async function runExportXrdCsv(s: StoreGet, exportXrdCsvFn: typeof exportXrdCsv): Promise<void> {
   await exportActive(s, (stem, ds, signal) => exportXrdCsvFn({ dataset: ds.data, filename: stem }, signal));

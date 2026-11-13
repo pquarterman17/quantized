@@ -19,8 +19,9 @@ export interface LabelRow {
   index: number;
   /** What layout detection made of it: the row it used as column names
    *  ("header"), the row it read as units ("units"), or an extra descriptive
-   *  row it would previously have discarded ("label"). */
-  role: "header" | "units" | "label";
+   *  row it would previously have discarded ("label"), or the Comments row
+   *  of Origin's own ASCII export (Long Name / Units / Comments, "comment"). */
+  role: "header" | "units" | "label" | "comment";
   /** This row's cell for the x column ("" when x is a synthesized index). */
   x: string;
   /** One cell per value channel, index-aligned with `DataStruct.labels`. */
@@ -44,7 +45,7 @@ export function labelRows(data: DataStruct): LabelRow[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter(isLabelRow).map((r) => ({
     index: r.index,
-    role: r.role === "header" || r.role === "units" ? r.role : "label",
+    role: r.role === "header" || r.role === "units" || r.role === "comment" ? r.role : "label",
     x: typeof r.x === "string" ? r.x : "",
     cells: r.cells,
   }));
@@ -56,7 +57,14 @@ export function describeLabelRow(row: LabelRow, maxCells = 3): string {
   const shown = row.cells.filter(Boolean).slice(0, maxCells);
   const more = row.cells.filter(Boolean).length - shown.length;
   const preview = shown.join(", ") + (more > 0 ? `, +${more}` : "");
-  const suffix = row.role === "header" ? " (current)" : row.role === "units" ? " (units)" : "";
+  const suffix =
+    row.role === "header"
+      ? " (current)"
+      : row.role === "units"
+        ? " (units)"
+        : row.role === "comment"
+          ? " (comments)"
+          : "";
   return (preview || `row ${row.index + 1}`) + suffix;
 }
 

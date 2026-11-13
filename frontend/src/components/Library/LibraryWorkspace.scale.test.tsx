@@ -202,12 +202,19 @@ describe("LibraryWorkspace — E-c3 large-Library virtualization", () => {
 
     section.scrollTop = 24000; // the focused tile unmounts with its window
     fireEvent.scroll(section);
+    // Focus must NOT be stranded on <body> — the grid takes it, and an arrow
+    // key resumes navigation from the roving tile's model position. Wait on
+    // the END state (tile gone AND focus rescued), as the Delete test below
+    // does: the rescue is a passive effect that runs AFTER the commit that
+    // unmounts the tile, so "tile gone" alone can be observed with focus
+    // still on <body>. Forced 2026-11-13 by running this flow 216 times
+    // under 6 busy-loop CPU hogs: 12 saw <body> the moment the tile was gone,
+    // and in all 12 focus left <body> afterwards (0 stranded) — the old
+    // wait-then-assert was racing that effect, not catching a dead end.
     await waitFor(() => {
       expect(document.querySelector('[data-library-tile="worksheet:d0"]')).toBeNull();
+      expect(document.activeElement).not.toBe(document.body);
     });
-    // Focus must NOT be stranded on <body> — the grid takes it, and an arrow
-    // key resumes navigation from the roving tile's model position.
-    expect(document.activeElement).not.toBe(document.body);
 
     fireEvent.keyDown(document.activeElement!, { key: "ArrowRight" });
     await waitFor(() => {

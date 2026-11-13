@@ -34,12 +34,25 @@ const ORIGIN_BOOK_CLICK_OPENS = ["worksheet", "plot"];
 // The app-wide multi-panel fit DEFAULT is aspect-preserving vs fill only —
 // "page" is a per-window choice (needs a page model), never a global default.
 const PANEL_FIT_DEFAULTS: PanelFit[] = ["frames", "window"];
-// Library panel resize clamp (plan #13 sub-item 5) — matches shell.css's
-// var(--lw, 210px) default; the lower bound keeps the grip handle + a couple
-// characters of a folder name usable, the upper bound leaves the Stage room.
+// Library panel resize clamp (plan #13 sub-item 5) — shell.css's
+// var(--lw, 210px) is only the pre-boot fallback (the pref below always sets
+// --lw); the lower bound keeps the grip handle + a couple characters of a
+// folder name usable, the upper bound leaves the Stage room.
 export const LIBRARY_PANEL_WIDTH_MIN = 160;
 export const LIBRARY_PANEL_WIDTH_MAX = 420;
-export const LIBRARY_PANEL_WIDTH_DEFAULT = 210;
+/** The first-run Library width for a viewport `vw` px wide: 210 up to 1360
+ *  px, growing a quarter of every extra pixel to 264 (reached at 1576 px).
+ *  At 210 an Origin project's book rows truncated their names beside the
+ *  kind chip and count, so a wide screen gives the Library the room; a
+ *  narrow one keeps it for the plot (at 264 an 800 px window's broken-axis
+ *  panels and a 1360 px plot's legend lost the room they need). A width the
+ *  user dragged is a saved pref and always wins. */
+export function defaultLibraryPanelWidth(vw: number): number {
+  return Math.round(Math.min(264, Math.max(210, 210 + (vw - 1360) / 4)));
+}
+export const LIBRARY_PANEL_WIDTH_DEFAULT = defaultLibraryPanelWidth(
+  typeof window === "undefined" ? 1360 : window.innerWidth,
+);
 
 export interface Prefs {
   theme: Theme;

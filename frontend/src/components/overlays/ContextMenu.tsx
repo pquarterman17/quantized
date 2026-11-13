@@ -208,7 +208,12 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, menuRef,
                 aria-expanded={openSub?.i === i}
                 aria-disabled={it.disabled || undefined}
                 title={it.title}
-                onClick={() => setOpenSub((s) => (s?.i === i ? null : { i, via: "key" }))}
+                // A click OPENS the flyout and never closes it: a mouse has
+                // already hover-opened it by the time it clicks, so a toggle
+                // here shut the submenu the user was reaching for. Enter/Space
+                // on the focused parent arrives here too and opens it with
+                // focus on its first item; ArrowLeft collapses it.
+                onClick={() => setOpenSub((s) => (s?.i === i ? s : { i, via: "key" }))}
               >
                 <span>{it.label}</span>
                 <span className="qzk-ctx-arrow" aria-hidden="true">

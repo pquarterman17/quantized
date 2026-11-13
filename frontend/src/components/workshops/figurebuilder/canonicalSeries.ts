@@ -79,8 +79,9 @@ export function describeSeriesErrors(
   bindings: readonly ErrorBinding[],
   channel: number,
   labels: readonly string[],
+  axis: "x" | "y" = "y",
 ): string {
-  const matches = bindings.filter((binding) => binding.axis === "y" && binding.target === channel);
+  const matches = bindings.filter((binding) => binding.axis === axis && binding.target === channel);
   return matches.length ? describeBindings(matches, labels) : "none";
 }
 

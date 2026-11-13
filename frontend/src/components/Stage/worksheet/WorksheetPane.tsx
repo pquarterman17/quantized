@@ -25,11 +25,14 @@
 
 import { useEffect, useState } from "react";
 
+import { bookFetchSettled, lastBookError, truncateReason } from "../../../lib/bookData";
 import { isCategoricalChannel } from "../../../lib/categorical";
+import { effectiveDesignations, type OriginDesignation } from "../../../lib/columnmeta";
 import { hasOriginReportSheets } from "../../../lib/originTextColumns";
 import { isRederived } from "../../../lib/rederived";
+import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { channelModelingType } from "../../../lib/modeling";
-import type { Dataset } from "../../../lib/types";
+import type { BookSource, Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useRecode } from "../../../store/recode";
 import { useLevelOrderPanel } from "../../../store/levelOrderPanel";
@@ -94,9 +97,24 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
   // ORIGIN_FILE_DECODE_PLAN #38: opening the worksheet on a still-lazy Origin
   // book fetches its full data (the grid below renders the preview rows
   // until then — a real DataStruct, just fewer of them, so nothing crashes).
+  // A failed fetch (an expired upload, a moved file) must not leave the
+  // banner below promising "Loading full data" forever: remember which source
+  // failed, and why (`lastBookError`), once the kicked fetch has settled.
+  const [loadFailure, setLoadFailure] = useState<{ source: BookSource; reason: string } | null>(null);
   useEffect(() => {
-    if (ds.pending) useApp.getState().ensureBookData(ds.id);
+    const source = ds.pending;
+    if (!source) return;
+    let live = true;
+    useApp.getState().ensureBookData(ds.id);
+    void bookFetchSettled(ds.id, source)?.then(() => {
+      const reason = lastBookError(ds.id, source);
+      if (live && reason) setLoadFailure({ source, reason });
+    });
+    return () => {
+      live = false;
+    };
   }, [ds.id, ds.pending]);
+  const failedReason = loadFailure && loadFailure.source === ds.pending ? loadFailure.reason : null;
 
   const openMenu = (kind: "col" | "row") => (target: number, e: React.MouseEvent) => {
     e.preventDefault();
@@ -192,10 +210,16 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         onExtract={view.extractSubset}
       />
       <DerivedWorksheetBanner ds={ds} />
-      {ds.pending && (
+      {ds.pending && !failedReason && (
         <div className="qzk-ds-meta" style={{ padding: "4px 8px", color: "var(--text-faint)" }}>
           Loading full data ({ds.pending.rows} rows × {ds.pending.cols} channels) — showing a preview
           for now.
+        </div>
+      )}
+      {ds.pending && failedReason && (
+        <div className="qzk-ds-meta" role="status" style={{ padding: "4px 8px", color: "var(--danger)" }}>
+          Could not load the full data ({ds.pending.rows} rows × {ds.pending.cols} channels): {truncateReason(failedReason)}. Showing
+          the preview rows only; re-import the file to load the rest.
         </div>
       )}
       {view.err && (
@@ -223,6 +247,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         filteredOut={view.filteredOut}
         selected={view.selected}
         channelRoles={view.channelRoles}
+        columnDesignations={ds.columnDesignations}
         sortMark={view.sortMark}
         selectedCols={view.selectedCols}
         onToggleColSelect={view.toggleColSelected}
@@ -273,6 +298,16 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
                     onPlotSelection: () => view.plotCols(effectiveCols(menu.target), "replace"),
                     onAddSelectionToPlot: () => view.plotCols(effectiveCols(menu.target), "add"),
                     onOpenInGraphBuilder: () => view.openInGraphBuilder(effectiveCols(menu.target)),
+                    ...(isRederived(ds)
+                      ? {}
+                      : {
+                          designationOf: (col: number) => effectiveDesignations(ds.data, ds.columnDesignations)[col],
+                          setDesignation: (col: number, d: OriginDesignation) =>
+                            void runLazy("Loading Set As…", () => import("../../../store/columnDesignationActions")).then(
+                              (m) => m.setColumnDesignation(ds.id, col, d),
+                              onLoadFailure,
+                            ),
+                        }),
                   }),
                   // J2: only a real, categorical value column can be recoded
                   // (never the x column or a column with no level table).
