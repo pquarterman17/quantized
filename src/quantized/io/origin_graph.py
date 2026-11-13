@@ -29,6 +29,9 @@ __all__ = [
 
 # C0/C1 controls plus the Unicode line/paragraph separators (see escape_lt).
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
+# LabTalk substitution sigils (see escape_lt).
+_REGISTER_SUB = re.compile(r"%(?=[A-Za-z])")
+_OPEN_SUB = re.compile(r"(%(?=[(@0-9])|\$(?=\())")
 # A run of Unicode superscript digits/signs (display_unit's exponent output).
 _SUPERSCRIPT_RUN = re.compile("[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+")
 _FROM_SUPERSCRIPT = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻", "0123456789+-")
@@ -66,8 +69,28 @@ def escape_lt(text: str) -> str:
     starts a program) when the user runs the script (security audit
     2026-10-01). LabTalk has no backslash escape (``\\"`` lands literally,
     live-verified 2026-07-04, docs/origin_re/validation_log.md), so a double
-    quote becomes ``'``, as in ``origin_com.escape_lt``."""
+    quote becomes ``'``, as in ``origin_com._escape_lt``.
+
+    LabTalk also SUBSTITUTES inside a quoted string before the statement
+    runs: ``%A``-``%Z`` expand to string registers, ``%(...)`` to a string /
+    worksheet-cell lookup and ``$(...)`` to an evaluated expression
+    (OriginLab LabTalk guide, "Substitution Notation",
+    docs.originlab.com/labtalk/guide/labtalk-substitution-notation, and
+    "String Registers", docs.originlab.com/labtalk/guide/string-registers).
+    A file-derived label or free-text comment must land literally, so:
+
+    * ``%`` + letter is written ``%%`` + letter -- the documented way to stop
+      register substitution (LabTalk "Language Fundamentals" tutorial:
+      ``%%B`` stores the text ``%B``);
+    * ``%(``, ``%`` + digit (script arguments ``%1``...), ``%@`` and ``$(``
+      have no documented escape, so a space is inserted after the sigil
+      (``$ (``): the notation requires adjacency and can no longer form.
+      This changes the text by one space, deliberately.
+
+    Not live-verified in Origin (no license window since the 2026-11 audit)."""
     text = _CONTROL_CHARS.sub(" ", text)
+    text = _REGISTER_SUB.sub("%%", text)
+    text = _OPEN_SUB.sub(r"\1 ", text)
     return text.replace('"', "'")
 
 

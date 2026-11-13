@@ -64,11 +64,26 @@ LABTALK_COLUMN_TYPE = {
     "X-error": 7,
 }
 
-# Whole-token error keywords for the LAST-RESORT label guess (a dataset that
-# declares neither designations nor error roles). Token, not substring:
-# "Kerr", "Hydrogen", "Standard" and "Drift" are data columns.
-_ERR_TOKENS = frozenset({"err", "error", "errors", "dr", "std", "stdev", "sigma", "σ", "uncert"})
-_TOKEN_SPLIT = re.compile(r"[^0-9A-Za-zσ]+")
+# Error keywords for the LAST-RESORT label guess (a dataset that declares
+# neither designations nor error roles). Matched against TOKENS, never
+# substrings: "Kerr", "Hydrogen", "Standard" and "Drift" are data columns.
+# A label is tokenised three ways (see ``_label_tokens``): on punctuation /
+# whitespace, at letter<->digit boundaries ("err1"), and at camelCase
+# boundaries ("StdErr", "IntensityError").
+_ERR_TOKENS = frozenset({
+    "err", "error", "errors", "stderr", "stderror",
+    "std", "stdev", "stddev", "sigma", "σ",
+    "unc", "uncert", "uncertainty", "uncertainties",
+    "dr",
+})  # fmt: skip
+# Suffix form: one letter + "err"/"error" names that quantity's error
+# (yerr, xerr, Rerr, Ierr, Qerror). "kerr" is the one physics name of that
+# shape (the magneto-optic Kerr effect) and is a data column.
+_SUFFIX_ERR = re.compile(r"[a-z](?:err|error)")
+_NOT_ERR = frozenset({"kerr"})
+_WORD_SPLIT = re.compile(r"[^0-9A-Za-zσ]+")
+_DIGIT_SPLIT = re.compile(r"(?<=[A-Za-zσ])(?=[0-9])|(?<=[0-9])(?=[A-Za-zσ])")
+_CAMEL_SPLIT = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
 
 
 def column_letter(i: int) -> str:
@@ -82,10 +97,28 @@ def column_letter(i: int) -> str:
     return out
 
 
+def _label_tokens(label: str) -> set[str]:
+    """Lower-cased candidate tokens of ``label``: each punctuation-separated
+    word with digits split off, both whole (``"dR"`` -> ``dr``, ``"StdErr"``
+    -> ``stderr``) and split at camelCase boundaries (``std``, ``err``)."""
+    out: set[str] = set()
+    for word in _WORD_SPLIT.split(label):
+        for piece in _DIGIT_SPLIT.split(word):
+            if not piece or piece.isdigit():
+                continue
+            out.add(piece.lower())
+            out.update(part.lower() for part in _CAMEL_SPLIT.split(piece) if part)
+    return out
+
+
 def is_error_label(label: str) -> bool:
-    """True when ``label`` names an error column by a whole token
-    (``"Kerr err"``, ``"dR"``, ``"R_std"``, ``"σ"``), never by a substring."""
-    return any(tok.lower() in _ERR_TOKENS for tok in _TOKEN_SPLIT.split(label) if tok)
+    """True when ``label`` names an error column by a token (``"Kerr err"``,
+    ``"dR"``, ``"R_std"``, ``"StdErr"``, ``"yerr"``, ``"R uncertainty"``,
+    ``"σ"``), never by a substring (``"Kerr"``, ``"Standard"``)."""
+    return any(
+        tok in _ERR_TOKENS or (tok not in _NOT_ERR and _SUFFIX_ERR.fullmatch(tok) is not None)
+        for tok in _label_tokens(label)
+    )
 
 
 def channel_short_names(metadata: Mapping[str, Any], n_channels: int) -> list[str | None]:
