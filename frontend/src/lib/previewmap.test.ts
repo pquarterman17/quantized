@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { breakAutoRange, breakForward, breakGap } from "./axisBreaks";
 import {
   axesAt,
   groupForElement,
@@ -194,5 +195,28 @@ describe("groupForElement", () => {
   it("stays null for anything it does not recognize", () => {
     expect(groupForElement("mystery:1")).toBeNull();
     expect(groupForElement("")).toBeNull();
+  });
+});
+
+describe("pxToData on a broken Y axis (review finding)", () => {
+  // The hit-map of a Y break 12..990 over data 2..1010: `yscale` reads
+  // "linear", but pixels are linear in the BROKEN coordinate.
+  const breaks: [number, number][] = [[12, 990]];
+  const gap = breakGap(breaks, 2, 1010);
+  const ylim: [number, number] = breakAutoRange(2, 1010, breaks);
+  const axes = { x0: 0, x1: 100, y0: 0, y1: 100, xlim: [0, 1] as [number, number], ylim, xlog: false, ylog: false, yscale: "linear" as const, ybreaks: breaks, ybreak_gap: gap };
+
+  it("a pixel inverts to the data value drawn there, not a linear guess", () => {
+    for (const v of [2, 8, 12, 990, 1000, 1010]) {
+      const f0 = breakForward(ylim[0], breaks, gap);
+      const f1 = breakForward(ylim[1], breaks, gap);
+      const py = 100 - ((breakForward(v, breaks, gap) - f0) / (f1 - f0)) * 100;
+      expect(pxToData(axes, 50, py).y).toBeCloseTo(v, 6);
+    }
+    const { ybreaks: _b, ybreak_gap: _g, ...unbroken } = axes;
+    void _b;
+    void _g;
+    expect(pxToData(unbroken, 50, 75).y).toBeGreaterThan(200); // the linear reading of the same pixel
+    expect(pxToData(axes, 50, 75).y).toBeLessThan(12);
   });
 });

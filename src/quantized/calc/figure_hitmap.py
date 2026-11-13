@@ -38,6 +38,7 @@ import math
 from collections.abc import Sequence
 from typing import Any
 
+from quantized.calc.axis_breaks import axis_break_info
 from quantized.calc.figure_render import savefig_bytes
 from quantized.heavy_import import heavy_imports
 
@@ -264,8 +265,20 @@ def collect_map(
             "ylog": y_scale == "log",
             "xscale": x_scale,
             "yscale": y_scale,
+            **_y_break_fields(ax),
         },
     }
+
+
+def _y_break_fields(ax: Any) -> dict[str, Any]:
+    """A broken Y axis' transform (``calc.axis_breaks``), so the client can
+    invert a preview pixel through it (``previewmap.pxToData``): its
+    ``yscale`` reads "linear", but pixels are not linear in data there."""
+    info = axis_break_info(ax.yaxis)
+    if info is None:
+        return {}
+    breaks, gap = info
+    return {"ybreaks": [[lo, hi] for lo, hi in breaks], "ybreak_gap": gap}
 
 
 def _clip_box(box: dict[str, float], to: dict[str, float]) -> dict[str, float] | None:
@@ -473,6 +486,7 @@ def collect_facet_map(
             "ylog": y_scale == "log",
             "xscale": x_scale,
             "yscale": y_scale,
+            **_y_break_fields(ax),
         })
 
     return {

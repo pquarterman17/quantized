@@ -173,6 +173,26 @@ def test_a_typed_limit_at_or_below_zero_survives_the_break(
     assert ax2.get_ylim() == pytest.approx((-10.0, 1012.0))
 
 
+def test_the_preview_hitmap_reports_the_break_so_a_pixel_inverts_right() -> None:
+    """The preview's drag/drop inverts pixels with the hit-map's axes. A broken
+    axis still reads ``yscale: "linear"``, so it also reports its breaks and
+    gap; the inversion through them lands on the data value that pixel shows
+    (``previewmap.pxToData`` does the same in TypeScript)."""
+    r = client.post("/api/export/figure-hitmap", json=_body())
+    assert r.status_code == 200, r.text
+    axes = r.json()["axes"]
+    assert axes["yscale"] == "linear"
+    assert axes["ybreaks"] == [[12.0, 990.0]]
+    breaks, gap = [(12.0, 990.0)], axes["ybreak_gap"]
+    assert gap == pytest.approx(break_gap(breaks, 2.0, 1010.0))
+    lo, hi = (float(break_forward(v, breaks, gap)) for v in axes["ylim"])
+    # The pixel a quarter of the way up the frame, inverted through the break:
+    frac = 0.25
+    y = float(break_backward(lo + frac * (hi - lo), breaks, gap))
+    linear = axes["ylim"][0] + frac * (axes["ylim"][1] - axes["ylim"][0])
+    assert y < 12.0 < linear  # the low cluster's range, not the linear guess
+
+
 def test_the_tick_formatter_survives_the_break(monkeypatch: pytest.MonkeyPatch) -> None:
     body = _body()
     body["y_fmt"] = {"mode": "fixed", "digits": 1, "breaks": [[12, 990]]}

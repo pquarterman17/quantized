@@ -42,6 +42,7 @@ __all__ = [
     "break_gap",
     "break_ticks",
     "elide",
+    "axis_break_info",
     "is_broken_axis",
     "nice_break_step",
     "normalize_breaks",
@@ -56,17 +57,25 @@ BREAK_GAP_FRACTION = 0.04
 BREAK_TARGET_TICKS = 6
 MAX_AXIS_BREAKS = 4
 
-# Every matplotlib Axis this module has broken. A broken axis is a
-# "function" scale, as the reciprocal one is, but unlike it takes values
-# <= 0: ``calc.figure_scale.drawable_lim`` asks here before dropping a typed
-# limit. Weak, so a closed figure's axes are never kept alive.
-_BROKEN: weakref.WeakSet[Any] = weakref.WeakSet()
+# Every matplotlib Axis this module has broken, with its breaks and gap. A
+# broken axis is a "function" scale, as the reciprocal one is, but unlike it
+# takes values <= 0: ``calc.figure_scale.drawable_lim`` asks here before
+# dropping a typed limit, and the preview hit-map reports the transform so
+# the client can invert a pixel (``calc.figure_hitmap``). Weak, so a closed
+# figure's axes are never kept alive.
+_BreakInfo = tuple[list[tuple[float, float]], float]
+_BROKEN: weakref.WeakKeyDictionary[Any, _BreakInfo] = weakref.WeakKeyDictionary()
 
 
 def is_broken_axis(axis: Any) -> bool:
     """Whether :func:`apply_y_breaks` turned ``axis`` (a matplotlib Axis) into
     a broken linear axis."""
     return axis in _BROKEN
+
+
+def axis_break_info(axis: Any) -> _BreakInfo | None:
+    """The ``(breaks, gap)`` a broken ``axis`` was drawn with, else None."""
+    return _BROKEN.get(axis)
 
 
 def normalize_breaks(raw: Any) -> list[tuple[float, float]]:
@@ -295,5 +304,5 @@ def apply_y_breaks(ax: Any, raw_breaks: Any, minor: Any = None) -> bool:
     ax.set_ylim(*lim)
     right = axis.get_ticks_position() == "right"
     _draw_marks(ax, breaks, right)
-    _BROKEN.add(axis)
+    _BROKEN[axis] = (breaks, gap)
     return True

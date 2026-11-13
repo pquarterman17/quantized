@@ -4,6 +4,7 @@
 // figure fractions (for legend drags). All coords are IMAGE pixels with a
 // top-left origin (the backend already flipped matplotlib's bottom-left).
 
+import { breakBackward, breakForward } from "./axisBreaks";
 import { reciprocalTransform } from "./uplotOpts";
 
 export interface HitElement {
@@ -39,6 +40,10 @@ export interface AxesInfo {
    *  response) falls back to `xlog`/`ylog` — see `axisScaleOf`. */
   xscale?: "linear" | "log" | "reciprocal";
   yscale?: "linear" | "log" | "reciprocal";
+  /** A broken Y axis (`calc.axis_breaks`): its elided stretches and gap, the
+   *  transform pixels are linear in (`yscale` still reads "linear"). */
+  ybreaks?: [number, number][];
+  ybreak_gap?: number;
 }
 
 /** One facet panel's axes geometry (FU-facet-hitmap): everything `AxesInfo`
@@ -151,10 +156,14 @@ const lerpAxis = (
 export function pxToData(axes: AxesInfo, px: number, py: number): { x: number; y: number } {
   const fx = (px - axes.x0) / (axes.x1 - axes.x0);
   const fy = (axes.y1 - py) / (axes.y1 - axes.y0);
-  return {
-    x: lerpAxis(fx, axes.xlim, axisScaleOf(axes.xscale, axes.xlog)),
-    y: lerpAxis(fy, axes.ylim, axisScaleOf(axes.yscale, axes.ylog)),
-  };
+  const breaks = axes.ybreaks;
+  const gap = axes.ybreak_gap ?? 0;
+  // A broken Y axis: pixels are linear in the BROKEN coordinate, so invert
+  // through it (lib/axisBreaks.ts, the export's own math).
+  const y = breaks?.length && gap > 0
+    ? breakBackward(lerpAxis(fy, [breakForward(axes.ylim[0], breaks, gap), breakForward(axes.ylim[1], breaks, gap)], "linear"), breaks, gap)
+    : lerpAxis(fy, axes.ylim, axisScaleOf(axes.yscale, axes.ylog));
+  return { x: lerpAxis(fx, axes.xlim, axisScaleOf(axes.xscale, axes.xlog)), y };
 }
 
 /** FU-facet-hitmap: which facet panel's axes rect CONTAINS (px, py) — the
