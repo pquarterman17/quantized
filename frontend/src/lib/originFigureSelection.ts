@@ -15,6 +15,8 @@
 import { originErrKeys, originHiddenChannels } from "./errorbars";
 import { curveDisplayName, legendCaption, originCurveSeriesStyle } from "./originCurveText";
 import { figureLayerFamily, type OriginFigureEntry } from "./originFigures";
+import type { StatPicks } from "./plotviewSanitize";
+import { statColRefs, type StatCols } from "./statPicks";
 import type {
   Annotation,
   Dataset,
@@ -113,6 +115,42 @@ export function figureSelectionState(
     ? { xKey: sel.xKey, yKeys: sel.yKeys, seriesStyles: sel.styles, seriesLabels: sel.labels }
     : { xKey: null, yKeys: null, seriesStyles: {}, seriesLabels: {} };
 }
+/** The Stat Stage view for a figure whose every curve is an Origin column,
+ *  bar or histogram plot (`OriginCurve.plotType`), or `{}` for any other
+ *  figure (a mix, or line/scatter curves, stays on the XY stage). Column and
+ *  bar draw as the Stat Stage's bar mode, one bar per X level of the first
+ *  bound Y; histogram as its histogram of the curve's column. The app has no
+ *  horizontal bars, so Origin's horizontal "bar" draws vertical
+ *  (`horizontal: true` lets the caller say so). */
+export function figureStatState(
+  figure: OriginFigure,
+  ds: Dataset | undefined,
+): { statMode?: true; statPicks?: StatPicks; horizontal?: boolean } {
+  const curves = figure.curves ?? [];
+  const kinds = new Set(curves.map((c) => c.plotType));
+  if (!ds || curves.length === 0 || kinds.size !== 1) return {};
+  const kind = curves[0].plotType;
+  if (!kind) return {};
+  const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
+  const letters = Array.isArray(meta.origin_column_names) ? (meta.origin_column_names as unknown[]).map(String) : [];
+  const xLetter = String(meta.x_column_name ?? "");
+  const channel = (letter: string): number | null =>
+    letter === xLetter ? -1 : letters.includes(letter) ? letters.indexOf(letter) : null;
+  const value = channel(curves[0].y);
+  if (value === null) return {};
+  const group = kind === "histogram" ? null : channel(curves[0].x) ?? -1;
+  const cols: StatCols = { group, group2: null, value, facet: null, color: null };
+  return {
+    statMode: true,
+    statPicks: {
+      mode: kind === "histogram" ? "histogram" : "bar",
+      ...(kind === "histogram" ? {} : { barStack: false }),
+      cols: statColRefs(ds, cols),
+    },
+    ...(kind === "bar" ? { horizontal: true } : {}),
+  };
+}
+
 /** Channel selection for a figure's decoded curves on its resolved dataset:
  *  maps each curve's Origin column letter through the dataset's
  *  `origin_column_names` metadata (value-channel letters, in channel order)

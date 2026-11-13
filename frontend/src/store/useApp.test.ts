@@ -2406,6 +2406,28 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(s.yScale).toBe("log");
   });
 
+  it("an Origin bar graph opens as bars on the Stat Stage, a line graph does not (re-audit #2)", () => {
+    const meta = { origin_book: "Book2", x_column_name: "A", origin_column_names: ["B"] };
+    const barFig = {
+      ...figureEntry,
+      id: "fig-bar",
+      figure: { ...figureEntry.figure, curves: [{ book: "Book2", x: "A", y: "B", plotType: "bar" as const }] },
+    };
+    useApp.setState({
+      datasets: [{ id: "d2", name: "bar:Book2", data: { ...raw, metadata: meta } }],
+      originFigures: [figureEntry, barFig],
+    });
+    useToasts.setState({ toasts: [] });
+    useApp.getState().applyOriginFigure("fig-bar");
+    expect(useApp.getState().statMode).toBe(true);
+    expect(useApp.getState().statPicks.mode).toBe("bar");
+    expect(useToasts.getState().toasts.map((t) => t.msg)).toContain(
+      "Graph1: Origin's horizontal bars are drawn as vertical columns",
+    );
+    useApp.getState().applyOriginFigure("fig-XRD-0"); // no plot type: back to XY
+    expect(useApp.getState().statMode).toBe(false);
+  });
+
   it("reveals an explicitly applied Origin figure instead of leaving it behind Workflow", () => {
     useApp.setState({ stageTab: "technique" });
     useApp.getState().applyOriginFigure("fig-XRD-0");
