@@ -54,9 +54,18 @@ const INPUTS = [
   '\\+("x") outside the math subset',
   "\\+([1]) inside it",
   "\\+(°C) inside it",
+  // A literal run BESIDE a converted one: the leftover backslash makes the
+  // whole label literal on screen, so the export must not draw M² either.
+  "\\g(\\+(2)) beside M\\+(2)",
+  "\\\\+(2) beside M\\+(2)",
+  "\\+(é) beside M\\+(2)",
+  "C:\\data beside M\\+(2)",
 ];
 
 const fresh = () => INPUTS.map((input) => [input, originEscapesToMarkup(input)]);
+// Which inputs the screen draws literally as a whole (parseRichText on the
+// rewritten label, the in-app path): the export must draw no math for them.
+const screenLiteral = () => INPUTS.filter((input) => !parseRichText(originEscapesToMarkup(input)).ok);
 
 describe("Origin rich-text escapes (screen half)", () => {
   it("rewrites sup / sub / Greek / bold / italic into the mathtext subset", () => {
@@ -75,7 +84,7 @@ describe("Origin rich-text escapes (screen half)", () => {
 
   it("every converted label parses and renders styled runs on the canvas", () => {
     for (const [input, out] of fresh()) {
-      if (out === input) continue;
+      if (out === input || input.includes(" beside ")) continue; // the mixed cases: next test
       expect(hasMarkup(input), input).toBe(true);
       expect(parseRichText(input).ok, input).toBe(true);
     }
@@ -103,8 +112,14 @@ describe("Origin rich-text escapes (screen half)", () => {
     expect(hasOriginEscape("\\\\+(2)")).toBe(false);
   });
 
+  it("a literal run beside a converted one leaves the WHOLE label literal on screen", () => {
+    const mixed = INPUTS.filter((input) => input.includes(" beside "));
+    expect(mixed.length).toBe(4);
+    for (const input of mixed) expect(parseRichText(input), input).toMatchObject({ ok: false, nodes: [{ kind: "text", text: input }] });
+  });
+
   it("matches the committed fixture the export half reads", () => {
-    const now = { cases: fresh() };
+    const now = { cases: fresh(), screen_literal: screenLiteral() };
     if (process.env.ORIGIN_ESCAPES_FIXTURE_WRITE) {
       writeFileSync(FIXTURE, `${JSON.stringify(now, null, 2)}\n`, "utf8");
     }

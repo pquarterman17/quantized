@@ -11,6 +11,7 @@ every converted label must survive the export's mathtext gate as mathtext
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -21,7 +22,9 @@ from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_origin_escapes import origin_escapes_to_mathtext
 
 FIXTURE = Path(__file__).parent / "fixtures" / "wire" / "origin_escapes.json"
-CASES = json.loads(FIXTURE.read_text(encoding="utf-8"))["cases"]
+_FIX = json.loads(FIXTURE.read_text(encoding="utf-8"))
+CASES = _FIX["cases"]
+SCREEN_LITERAL = _FIX["screen_literal"]
 
 
 @pytest.mark.parametrize(("source", "want"), CASES, ids=[c[0] for c in CASES])
@@ -29,9 +32,10 @@ def test_export_rewrite_matches_the_screen(source: str, want: str) -> None:
     assert origin_escapes_to_mathtext(source) == want
 
 
-@pytest.mark.parametrize(
-    "source", [c[0] for c in CASES if c[0] != c[1]], ids=[c[0] for c in CASES if c[0] != c[1]]
-)
+_DRAWN_AS_MATH = [c[0] for c in CASES if c[0] != c[1] and c[0] not in SCREEN_LITERAL]
+
+
+@pytest.mark.parametrize("source", _DRAWN_AS_MATH, ids=_DRAWN_AS_MATH)
 def test_converted_labels_stay_mathtext_through_the_export_gate(source: str) -> None:
     out = safe_mathtext_label(source)
     assert out == origin_escapes_to_mathtext(source)
@@ -70,3 +74,14 @@ def test_a_label_that_cannot_render_falls_back_to_what_was_typed() -> None:
     out = safe_mathtext_label("$\\textbf{x}$ \\+(2)")
     assert out == "\\$\\textbf{x}\\$ \\+(2)"
     assert "^{" not in out
+
+
+@pytest.mark.parametrize("source", SCREEN_LITERAL, ids=SCREEN_LITERAL)
+def test_a_label_the_screen_draws_literally_draws_no_math_in_the_export(source: str) -> None:
+    """Review finding (live check): a literal run left beside a converted one
+    (or any backslash outside $...$ in a math-bearing label) makes the screen
+    draw the whole label as typed; the export drew the converted run as math.
+    Literal here = matplotlib sees no balanced unescaped `$`."""
+    out = safe_mathtext_label(source)
+    n = len(re.findall(r"(?<!\\)\$", out))
+    assert n == 0 or n % 2 == 1, out

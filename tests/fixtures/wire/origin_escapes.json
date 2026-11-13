@@ -95,6 +95,29 @@
     [
       "\\+(°C) inside it",
       "$^{\\mathrm{°C}}$ inside it"
+    ],
+    [
+      "\\g(\\+(2)) beside M\\+(2)",
+      "\\g(\\+(2)) beside M$^{\\mathrm{2}}$"
+    ],
+    [
+      "\\\\+(2) beside M\\+(2)",
+      "\\\\+(2) beside M$^{\\mathrm{2}}$"
+    ],
+    [
+      "\\+(é) beside M\\+(2)",
+      "\\+(é) beside M$^{\\mathrm{2}}$"
+    ],
+    [
+      "C:\\data beside M\\+(2)",
+      "C:\\data beside M$^{\\mathrm{2}}$"
     ]
+  ],
+  "screen_literal": [
+    "odd $ count \\+(3)",
+    "\\g(\\+(2)) beside M\\+(2)",
+    "\\\\+(2) beside M\\+(2)",
+    "\\+(é) beside M\\+(2)",
+    "C:\\data beside M\\+(2)"
   ]
 }

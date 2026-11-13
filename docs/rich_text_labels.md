@@ -37,7 +37,11 @@ Rules a toolbar must respect:
   half-converted, on screen and in the export alike. `\\+(` (an escaped
   backslash) is a literal backslash, not an escape. A label with an odd
   number of `$` is rendered literally as a whole, and a label the export
-  cannot draw as math falls back to the text as typed.
+  cannot draw as math falls back to the text as typed. A run left as typed
+  keeps its backslash, so a label that also converts another run (e.g.
+  `\g(\+(2)) and M\+(2)`) is drawn literally as a whole — any backslash
+  outside a math region makes a math-bearing label literal, on screen and in
+  the export.
 * Spaces inside a run are preserved.
 
 Implementation: both halves rewrite the escapes into the mathtext subset

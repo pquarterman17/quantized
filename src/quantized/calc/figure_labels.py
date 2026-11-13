@@ -174,6 +174,14 @@ def safe_mathtext_label(label: str) -> str:
         # Zero unescaped $ (all \$-escaped) or an odd count: matplotlib
         # already renders the whole string as literal text -- leave it be.
         return label
+    # The screen's rule (richtext.ts parseRichText): in a math-bearing label a
+    # backslash in a TEXT segment (outside $...$; `\$` is a literal dollar)
+    # makes the whole label literal. matplotlib draws such a label part math,
+    # part raw -- e.g. a literal Origin run beside a converted one (review
+    # finding: "\g(\+(2)) M\+(2)" was literal on screen, M² in the export).
+    text_segments = _UNESCAPED_DOLLAR.split(label)[0::2]
+    if any("\\" in seg.replace("\\$", "") for seg in text_segments):
+        return literal
     if not _uses_only_supported_commands(label):
         return literal
     # The trial parse runs on matplotlib's ONE shared mathtext parser, which is
