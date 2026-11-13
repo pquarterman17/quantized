@@ -216,3 +216,21 @@ export function retargetPassiveRebind(
   // Say why a window appeared (live check): the styled graph was kept.
   if (!focused.pinned) toast(`"${displayedWindowTitle(focused, s.datasets)}" keeps its styling — opened in a new window`, "info");
 }
+
+/** Figures leftover f (Origin: double-clicking a Project Explorer item that
+ *  is already open brings ITS window forward): when `datasetId` is shown in
+ *  a plot window OTHER than the focused one -- and the focused one does not
+ *  show it too -- focus that window (the top-z one, restored if minimized)
+ *  and return true. The caller's activation is then a re-activation of the
+ *  same id, which leaves every view alone; nothing is rebound. False when no
+ *  other window shows it (the normal open path applies). */
+export function focusWindowShowing(s: AppState, datasetId: string): boolean {
+  const focused = s.plotWindows.find((w) => w.id === s.focusedWindowId);
+  if (focused && plotWindowDatasetId(focused) === datasetId) return false;
+  const showing = s.plotWindows.filter((w) => w.kind === "plot" && w.id !== s.focusedWindowId && plotWindowDatasetId(w) === datasetId);
+  if (showing.length === 0) return false;
+  const target = showing.reduce((a, b) => (b.z > a.z ? b : a));
+  if (target.winState === "minimized") s.restoreWindow(target.id);
+  s.focusWindow(target.id);
+  return true;
+}

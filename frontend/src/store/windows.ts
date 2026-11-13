@@ -39,7 +39,7 @@ import type { WindowsSlice } from "./windowsSliceTypes";
 import { dropWorksheetSelection } from "./worksheetSelection";
 
 // Moved-out helpers + the slice contract (store-size ratchet), re-exported so no importer changed.
-export { analysisResultReset, datasetViewDefaults, focusedRebindPatch, focusTransientReset, mainWindow, maxZ, nextWindowId, retargetPassiveRebind } from "./windowFocus";
+export { analysisResultReset, datasetViewDefaults, focusedRebindPatch, focusTransientReset, focusWindowShowing, mainWindow, maxZ, nextWindowId, retargetPassiveRebind } from "./windowFocus";
 export type { WindowsSlice } from "./windowsSliceTypes";
 
 // The store-facing handles the slice builds against — the exact subset of
