@@ -15,18 +15,21 @@ import { fmtNum } from "../../../lib/format";
 // Origin's sum / SE of mean / variance / range / missing — worksheet audit
 // #19; `sum` and `missing` come from useWorksheetStats, the rest from the
 // route).
-export const STAT_ROWS: [string, string][] = [
-  ["Mean", "mean"],
-  ["Std", "std"],
-  ["SE mean", "sem"],
-  ["Variance", "var"],
-  ["Min", "min"],
-  ["Max", "max"],
-  ["Range", "range"],
-  ["Median", "median"],
-  ["Sum", "sum"],
-  ["N", "N"],
-  ["Missing", "missing"],
+// Each row is [short label, stat key, full name]. The short label has to fit
+// the 44 px row-number gutter (it was cut to "Me…", "Va…", "SE me…"); the
+// full name is the row header's tooltip and accessible name.
+export const STAT_ROWS: [string, string, string][] = [
+  ["Mean", "mean", "Mean"],
+  ["Std", "std", "Standard deviation"],
+  ["SEM", "sem", "Standard error of the mean"],
+  ["Var", "var", "Variance"],
+  ["Min", "min", "Minimum"],
+  ["Max", "max", "Maximum"],
+  ["Range", "range", "Range (max - min)"],
+  ["Median", "median", "Median"],
+  ["Sum", "sum", "Sum"],
+  ["N", "N", "N"],
+  ["Missing", "missing", "Missing (blank or non-numeric cells)"],
 ];
 
 export interface GridStatsFooterProps {
@@ -77,12 +80,13 @@ export default function GridStatsFooter({
 
   return (
     <div className="qzk-grid-footer" style={{ position: "sticky", bottom: 0, zIndex: 3 }}>
-      {STAT_ROWS.map(([label, key]) => (
+      {STAT_ROWS.map(([label, key, full]) => (
         <div role="row" key={key} className="qzk-grid-row" style={{ height: rowHeight }}>
           <div
             role="rowheader"
             className="qzk-grid-cell qzk-grid-headcell qzk-grid-rownum"
-            title="column statistic"
+            title={`${full} (column statistic)`}
+            aria-label={full}
             style={{ position: "sticky", left: 0, zIndex: 3, width: gutterWidth, flexShrink: 0 }}
           >
             {label}
