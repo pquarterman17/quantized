@@ -8,6 +8,10 @@
 // there is any text, so the panel does not jump as the user types through
 // incomplete expressions (`A*exp(`). aria-hidden: it repeats the field's own
 // content, which is what assistive tech already reads.
+// An equation that uses a function or comparison the preview cannot draw
+// (multi-argument min/max/if/voigt/bessel*, `<`) gets a muted caption saying
+// so instead of a permanently empty box (fitting live check): the cue is the
+// call/comparison itself, so it holds steady while the user is typing.
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
@@ -20,6 +24,9 @@ interface Props {
   suppressed: boolean;
 }
 
+/** A call the preview never draws (multi-argument functions) or a comparison. */
+const UNDRAWN = /\b(min|max|if|voigt|bessel[jyik])\s*\(|[<>]|[=!]=/;
+
 export default function EquationPreview({ equation, suppressed }: Props) {
   const text = useDeferredValue(equation);
   const tex = useMemo(() => (suppressed ? null : equationToLatex(text)), [text, suppressed]);
@@ -27,6 +34,7 @@ export default function EquationPreview({ equation, suppressed }: Props) {
   // KaTeX markup for LaTeX built from a closed grammar (see lib/katexLazy).
   const html = useMemo(() => (tex !== null && renderTex ? renderTex(tex) : null), [tex, renderTex]);
   if (!equation.trim()) return null;
+  const undrawn = tex === null && !suppressed && UNDRAWN.test(text);
   return (
     <div
       aria-hidden
@@ -48,6 +56,11 @@ export default function EquationPreview({ equation, suppressed }: Props) {
       }}
     >
       {html !== null && <span data-testid="equation-preview-math" dangerouslySetInnerHTML={{ __html: html }} />}
+      {undrawn && (
+        <span style={{ color: "var(--text-dim)", fontSize: "var(--font-size-sm)", whiteSpace: "normal" }}>
+          No preview for multi-argument functions or comparisons; the fit uses the text above.
+        </span>
+      )}
     </div>
   );
 }

@@ -88,7 +88,7 @@ export function usePeakBaseline(
         }
         // Shared with the batch runner (./recipeSteps): one meaning of the
         // recipe's baseline. Never null here — "none" returned above.
-        const est = (await runRecipeBaseline(segment.y, b)) ?? [];
+        const est = (await runRecipeBaseline(segment.x, segment.y, b)) ?? [];
         if (cancelled) return;
         setResult({ segment, baseline: est });
         // Segment point i is ANALYSIS row kept[i]; with excluded or

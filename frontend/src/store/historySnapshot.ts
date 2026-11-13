@@ -208,7 +208,7 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
     ...focusTransientReset(),
     // Preserve scratch across unrelated edits, but clear it when restored
     // worksheet state may no longer match the rendered fit curve.
-    fitOverlay: snap.datasets === s.datasets ? s.fitOverlay : null,
+    fitOverlay: fitOverlaySurvives(s, snap) ? s.fitOverlay : null,
     // After the reset, which nulls `composition`: a snapshotted break or
     // spatial arrangement comes back.
     composition: carriedComposition,
@@ -217,6 +217,23 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
     openReportId: hasId(snap.reports, s.openReportId) ? s.openReportId : null,
     openAnalysisResultId: hasId(snap.analysisResults, s.openAnalysisResultId) ? s.openAnalysisResultId : null,
   };
+}
+
+/** Does the drawn fit curve still describe its worksheet after this restore?
+ *  Yes when no dataset changed at all, and also when the curve's worksheet
+ *  comes back with the SAME saved fit (the FitSpec object: not re-fitted,
+ *  removed or replaced in between) and the same number of rows. Undoing an
+ *  edit the fit never depended on — the Curve Fit's own "add fit columns", a
+ *  result worksheet beside it — used to wipe the curve off the plot while the
+ *  fit, its recipe and the panel's numbers all stayed. Any other overlay (one
+ *  with no saved fit behind it) is cleared as before. */
+function fitOverlaySurvives(s: AppState, snap: HistorySnapshot): boolean {
+  if (snap.datasets === s.datasets) return true;
+  const o = s.fitOverlay;
+  if (!o) return false;
+  const live = s.datasets.find((d) => d.id === o.datasetId);
+  const back = snap.datasets.find((d) => d.id === o.datasetId);
+  return !!live?.fitSpec && back?.fitSpec === live.fitSpec && back.data.time.length === o.y.length;
 }
 
 /** Folder disclosure is view state, like zoom/pan above: a toggle records

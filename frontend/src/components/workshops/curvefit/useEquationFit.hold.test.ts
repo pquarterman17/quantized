@@ -83,7 +83,7 @@ describe("useEquationFit hold column + summary (P2.7)", () => {
       equation: "m*x + b",
       x: [0, 1, 2, 3],
       y: [10, 20, 30, 40],
-      guesses: [1, 1],
+      guesses: [null, 1], // m untouched = auto; b held at its typed 1
       fixed: [false, true],
     });
     expect(result.current.fitHeld).toEqual([false, true]);
@@ -97,6 +97,8 @@ describe("useEquationFit hold column + summary (P2.7)", () => {
   it("refuses to run with every parameter held — no request is sent", async () => {
     const { result } = await validated();
     act(() => {
+      result.current.setRow(0, "guess", "1");
+      result.current.setRow(1, "guess", "1");
       result.current.setHeld(0, true);
       result.current.setHeld(1, true);
     });
@@ -106,6 +108,18 @@ describe("useEquationFit hold column + summary (P2.7)", () => {
     });
     expect(fitEquation).not.toHaveBeenCalled();
     expect(result.current.error).toContain("every parameter is held");
+  });
+
+  it("a held row with a blank guess is refused, naming the row — there is no value to hold (review item 4)", async () => {
+    const { result } = await validated();
+    act(() => {
+      result.current.setHeld(1, true);
+    });
+    expect(result.current.runProblem).toBe("b: a held parameter needs a guess");
+    await act(async () => {
+      await result.current.fit();
+    });
+    expect(fitEquation).not.toHaveBeenCalled();
   });
 
   it("refuses to run with min above max — no request is sent", async () => {
@@ -162,6 +176,7 @@ describe("useEquationFit hold column + summary (P2.7)", () => {
     act(() => {
       result.current.setRow(0, "guess", "2");
       result.current.setRow(0, "min", "0");
+      result.current.setRow(1, "guess", "1");
       result.current.setHeld(1, true);
     });
     await act(async () => {

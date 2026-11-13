@@ -3,6 +3,11 @@
 Pure calc layer. Each model name maps to a deterministic heuristic that derives
 starting parameters from the (x, y) data, beginning from the model's default p0
 and overriding specific entries. Replicated verbatim (including MATLAB quirks).
+
+The Origin built-in models (``fit_models_origin_*``) have no MATLAB
+counterpart; their guesses live in ``fit_guess_origin_peak`` /
+``fit_guess_origin_curve`` (variable-projection grid + polish) and are
+dispatched by :func:`_origin_guess` before the MATLAB heuristics.
 """
 
 from __future__ import annotations
@@ -12,6 +17,9 @@ import math
 import numpy as np
 from numpy.typing import ArrayLike
 
+from .fit_guess_origin_curve import CURVE_GUESSES
+from .fit_guess_origin_peak import PEAK_GUESSES
+from .fit_guess_tools import prepare
 from .fit_models import FIT_MODELS
 
 __all__ = ["auto_guess"]
@@ -25,11 +33,41 @@ def _first(mask: np.ndarray) -> int:
     return int(idx[0]) if idx.size else -1
 
 
+_ORIGIN_GUESSES = {**PEAK_GUESSES, **CURVE_GUESSES}
+
+
+def _origin_guess(model_name: str, x: ArrayLike, y: ArrayLike, p0: list[float]) -> list[float]:
+    """Data-driven guess for an Origin built-in; the registry p0 if it cannot run.
+
+    A guess outside the model's domain (e.g. LogNormal on x <= 0), on too few
+    points, one that raises a numerical error, or one that comes out
+    non-finite falls back to the defaults rather than raising: the fitter can
+    still start from p0.
+    """
+    xs, ys = prepare(np.asarray(x, dtype=float), np.asarray(y, dtype=float))
+    if xs.size < 3 or xs[-1] <= xs[0]:  # every guess scales its grids by the x span
+        return p0
+    try:
+        with np.errstate(all="ignore"):
+            guess = _ORIGIN_GUESSES[model_name](xs, ys)
+    except (ValueError, ArithmeticError, np.linalg.LinAlgError):
+        # A heuristic that cannot run on these data must not fail the fit.
+        return p0
+    if guess is None or len(guess) != len(p0) or not all(math.isfinite(v) for v in guess):
+        return p0
+    spec = FIT_MODELS[model_name]
+    # Clamp into the registry bounds (a varpro polish is unbounded).
+    return [float(min(max(v, lo), hi)) for v, lo, hi in zip(guess, spec["lb"], spec["ub"],
+                                                            strict=True)]
+
+
 def auto_guess(model_name: str, x: ArrayLike, y: ArrayLike) -> list[float]:
     """Estimate starting parameters for ``model_name`` from data. Port of autoGuess."""
     if model_name not in FIT_MODELS:
         raise ValueError(f'Model "{model_name}" not found.')
     p0 = [float(v) for v in FIT_MODELS[model_name]["p0"]]
+    if model_name in _ORIGIN_GUESSES:
+        return _origin_guess(model_name, x, y, p0)
     xv = np.asarray(x, dtype=float).ravel()
     yv = np.asarray(y, dtype=float).ravel()
     x_range = float(np.ptp(xv))

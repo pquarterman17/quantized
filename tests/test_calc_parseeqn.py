@@ -11,7 +11,6 @@ from numpy.testing import assert_allclose
 
 from quantized.calc.fit_equation import (
     check_param_vectors,
-    default_guesses,
     describe_equation,
     equation_model,
     parse_equation,
@@ -104,7 +103,7 @@ def test_parse_equation_rejects_empty_parens_function() -> None:
         parse_equation("exp()")
 
 
-# ── equation_model / default_guesses (the fit-path bridge; GOTO #1) ─────────
+# ── equation_model (the fit-path bridge; GOTO #1) ────────────────────────────
 
 
 def test_equation_model_returns_fit_ready_callable() -> None:
@@ -117,11 +116,6 @@ def test_equation_model_returns_fit_ready_callable() -> None:
 def test_equation_model_rejects_underscore_leading_param() -> None:
     with pytest.raises(ValueError, match="invalid parameter name"):
         equation_model("__import__ + x")
-
-
-def test_default_guesses_are_ones() -> None:
-    assert default_guesses(["a", "t", "c"]) == [1.0, 1.0, 1.0]
-    assert default_guesses([]) == []
 
 
 # ── describe_equation / check_param_vectors (P2.7 before-run summary) ───────

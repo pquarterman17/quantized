@@ -12,7 +12,7 @@ import { logGaps } from "./logGaps";
 import { seriesPoints, seriesTrace } from "./markers";
 import type { PlotPayload } from "./plotdata";
 import { DASH, resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
-import { resolveFillBands, seriesFillProps } from "./uplotFill";
+import { resolveFillBands, seriesFillProps, translucent } from "./uplotFill";
 import type { BuildOptsArgs } from "./uplotOpts";
 
 /** The per-series style inputs `buildSeriesDefs` reads (all of them). */
@@ -135,6 +135,11 @@ export function buildSeriesDefs(
       if (s.muted) {
         return { label, scale, stroke: inkDimColor, width: 0, points: loopPoints({ show: true, size: 5 }), show };
       }
+      // Fit band edge: faint dashes in its curve's colour (shaded below).
+      if (s.band) {
+        strokes[i] = strokes[i - s.band]!;
+        return { label, scale, stroke: translucent(strokes[i], 60), width: 1, dash: [4, 4], points: { show: false }, show };
+      }
       // Peak markers: points only, no connecting line.
       if (s.kind === "points") {
         return { label, scale, stroke, fill: stroke, width: 0, points: loopPoints({ show: true, size: 8 }), show };
@@ -194,5 +199,8 @@ export function buildSeriesDefs(
   // `fill: {vs: channel}` — see uplotFill.resolveFillBands's doc for the
   // "vs must be currently plotted" fallback.
   const bands = resolveFillBands(args.plotted ?? [], seriesStyles ?? [], (i) => strokes[i] ?? accentColor);
+  payload.series.forEach((s, i) => {
+    if (s.band && s.band % 2) bands.push({ series: [i + 2, i + 1], fill: translucent(strokes[i]!, s.band > 2 ? 10 : 20) });
+  });
   return { series: seriesArr, bands };
 }

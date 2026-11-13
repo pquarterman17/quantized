@@ -14,6 +14,16 @@ parameter count). Results also carry delta-AICc (vs the best candidate) and
 Akaike weights w_i = exp(-delta_i/2) / sum_j exp(-delta_j/2) — the standard
 "probability this is the best of the set" reading (Burnham & Anderson 2002).
 
+Default candidates: the MATLAB-parity registry (plus any plugin models) and a
+small, fast subset of the Origin built-in library (``DEFAULT_SCAN_ORIGIN_MODELS``).
+The rest of the Origin library (``ORIGIN_MODELS_NOT_IN_DEFAULT_SCAN``) is fitted
+only when named explicitly — scanning all of it made a default scan ~10x
+slower (53 s vs 5.6 s on 2000 points) for candidates that mostly duplicate a
+model already in the set. In a default scan the Origin models also run under
+an iteration budget (``ORIGIN_SCAN_MAX_ITER_PER_PARAM``); one that has not
+converged within it is reported as ``skipped: too slow`` rather than ranked
+on an unfinished fit. Explicitly requested models are never capped.
+
 Per-candidate failures NEVER abort the scan — a model that cannot fit the
 data is itself a scan result. Failed candidates carry an ``error`` string and
 sort after every successful fit.
@@ -29,11 +39,62 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.fit_autoguess import auto_guess
-from quantized.calc.fit_equation import default_guesses, equation_model
+from quantized.calc.fit_equation import equation_model
+from quantized.calc.fit_equation_init import auto_start
 from quantized.calc.fit_models import FIT_MODELS
 from quantized.calc.fitting import curve_fit, weights_from_dy
 
-__all__ = ["aicc_from_aic", "default_candidates", "scan_models"]
+__all__ = [
+    "DEFAULT_SCAN_ORIGIN_MODELS",
+    "ORIGIN_MODELS_NOT_IN_DEFAULT_SCAN",
+    "ORIGIN_SCAN_MAX_ITER_PER_PARAM",
+    "aicc_from_aic",
+    "default_candidates",
+    "scan_models",
+]
+
+# Origin built-ins that join the default scan: one cheap representative per
+# shape family that the MATLAB-parity set does not already cover the same way
+# (peaks WITH a y0 baseline, a true Voigt, a two-asymptote step, a sine, a
+# line through the origin). Each has <= 5 parameters and a variable-projection
+# guess that lands in the right basin, so a matching model converges in
+# ~50 Nelder-Mead iterations per parameter. ("Proportional" lives in the same
+# library modules but is a quantized addition, not an Origin function.)
+DEFAULT_SCAN_ORIGIN_MODELS: tuple[str, ...] = (
+    "Gauss", "Lorentz", "Voigt", "ExpDec1", "Boltzmann", "Hill", "SGompertz", "Sine",
+    "Proportional",
+)
+
+# Origin built-ins left OUT of the default scan (still fitted when listed in
+# ``models``). Every Origin-library model must appear in exactly one of these
+# two tuples — tests/test_calc_fit_scan.py enforces the partition, so adding
+# a model forces the decision.
+ORIGIN_MODELS_NOT_IN_DEFAULT_SCAN: tuple[str, ...] = (
+    # High-order polynomials: 6-10 free parameters under Nelder-Mead take
+    # seconds each, and they fit almost anything (AICc cannot rescue that).
+    "Poly5", "Poly 6", "Poly 7", "Poly 8", "Poly",
+    # Multi-exponentials and the x0 variants: slow to converge on data that
+    # is not multi-exponential; the x0 variants are degenerate unless x0 is held.
+    "ExpDec2", "ExpDec3", "ExpDecay1", "ExpDecay2", "ExpDecay3",
+    "ExpGro2", "ExpGrow1", "ExpGrow2",
+    # Same curve as a model already scanned, in another parameterization.
+    "ExpGro1", "GaussAmp", "PsdVoigt1", "PsdVoigt2", "Allometric1", "MichaelisMenten", "DoseResp",
+    "Hill1", "Logistic (Origin)", "SLogistic1",
+    # 5-6 parameter shapes that are slow off-model.
+    "LogNormal", "Asym2Sig", "Logistic5", "SWeibull1", "SineDamp",
+)
+
+# Default-scan iteration budget for the Origin models, per free parameter
+# (curve_fit's own default is 5000 per parameter). On-model fits need ~50 per
+# parameter (measured); an off-model fit that is still creeping at 400 is not
+# going to win the ranking, so it is cut and reported instead of timed out.
+# An iteration count, not a wall clock: the outcome is the same on a loaded
+# machine.
+ORIGIN_SCAN_MAX_ITER_PER_PARAM = 400
+
+
+class _TooSlowError(RuntimeError):
+    """A capped default-scan fit did not converge within its iteration budget."""
 
 # One candidate's fit runner: () -> (curve_fit result, param names).
 _Runner = Callable[[], tuple[dict[str, Any], list[str]]]
@@ -68,8 +129,15 @@ def default_candidates(n_points: int) -> list[str]:
     parameter: below that a fit is barely constrained, the AICc denominator
     ``n - k - 1`` gets small and the correction noisy, and scan time is
     wasted on models the data cannot distinguish anyway.
+
+    The Origin built-ins in ``ORIGIN_MODELS_NOT_IN_DEFAULT_SCAN`` are left out
+    (see the module docstring); they can still be scanned by name.
     """
-    return [name for name, spec in FIT_MODELS.items() if spec["nParams"] < n_points / 3]
+    skip = frozenset(ORIGIN_MODELS_NOT_IN_DEFAULT_SCAN)
+    return [
+        name for name, spec in FIT_MODELS.items()
+        if name not in skip and spec["nParams"] < n_points / 3
+    ]
 
 
 def _registry_runner(
@@ -77,6 +145,7 @@ def _registry_runner(
     xv: NDArray[np.float64],
     yv: NDArray[np.float64],
     weights: NDArray[np.float64] | None,
+    max_iter_per_param: int | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     spec = FIT_MODELS.get(name)
     if spec is None:
@@ -89,9 +158,16 @@ def _registry_runner(
         p0 = list(auto_guess(name, xv, yv))
     except Exception:  # heuristics can fail on odd data; the registry default still fits
         p0 = list(spec["p0"])
+    max_iter = None if max_iter_per_param is None else max_iter_per_param * int(spec["nParams"])
     result = curve_fit(
-        xv, yv, model_fcn, p0, lower=spec["lb"], upper=spec["ub"], weights=weights
+        xv, yv, model_fcn, p0, lower=spec["lb"], upper=spec["ub"], weights=weights,
+        max_iter=max_iter,
     )
+    if max_iter is not None and int(result["exitFlag"]) != 1:
+        raise _TooSlowError(
+            f"skipped: too slow (no convergence within {max_iter} iterations in a default "
+            "scan; select the model explicitly to fit it fully)"
+        )
     return result, list(spec["paramNames"])
 
 
@@ -105,7 +181,8 @@ def _equation_runner(
     fcn, names = equation_model(equation)
     if not names:
         raise ValueError("equation has no free parameters to fit")
-    p0 = list(guesses) if guesses is not None else default_guesses(names)
+    # No guesses -> data-driven starts (finding 14), not 1.0 per parameter.
+    p0 = list(guesses) if guesses is not None else auto_start(fcn, names, xv, yv)
     if len(p0) != len(names):
         raise ValueError(f"expected {len(names)} guesses, got {len(p0)}")
     result = curve_fit(xv, yv, fcn, p0, weights=weights)
@@ -199,7 +276,11 @@ def scan_models(
     """Fit every candidate model to (x, y) and rank by AICc (ascending).
 
     ``models`` — registry model names; ``None`` selects the default set
-    (``default_candidates``: every registry model with ``nParams < n/3``).
+    (``default_candidates``: registry models with ``nParams < n/3``, minus
+    ``ORIGIN_MODELS_NOT_IN_DEFAULT_SCAN``). Only in that default set, the
+    Origin built-ins run under ``ORIGIN_SCAN_MAX_ITER_PER_PARAM`` and come
+    back as a ``skipped: too slow`` error entry if they have not converged;
+    models named explicitly are always fitted in full.
     ``equations`` — custom-equation candidates ``{"name", "equation",
     "guesses"?}`` (the saved custom fit models); guesses default to 1.0 each.
     ``dy`` — optional per-point 1-sigma errors -> weights ``1/dy**2``.
@@ -236,6 +317,7 @@ def scan_models(
         weights = weights_from_dy(dy, n)
 
     names = list(models) if models is not None else default_candidates(n)
+    capped = frozenset(DEFAULT_SCAN_ORIGIN_MODELS) if models is None else frozenset()
     eq_list = list(equations or [])
     total = len(names) + len(eq_list)
 
@@ -249,8 +331,12 @@ def scan_models(
         if progress_callback is not None:
             progress_callback(done / total, f"Scanning {done + 1}/{total}: {name}")
 
-        def reg_runner(model_name: str = name) -> tuple[dict[str, Any], list[str]]:
-            return _registry_runner(model_name, xv, yv, weights)
+        cap = ORIGIN_SCAN_MAX_ITER_PER_PARAM if name in capped else None
+
+        def reg_runner(
+            model_name: str = name, iter_cap: int | None = cap
+        ) -> tuple[dict[str, Any], list[str]]:
+            return _registry_runner(model_name, xv, yv, weights, iter_cap)
 
         entries.append(_run_candidate(name, "registry", reg_runner, n))
         done += 1

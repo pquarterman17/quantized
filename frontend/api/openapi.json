@@ -546,10 +546,6 @@
             ],
             "title": "Covar"
           },
-          "dof": {
-            "title": "Dof",
-            "type": "integer"
-          },
           "equation": {
             "anyOf": [
               {
@@ -579,9 +575,46 @@
             ],
             "title": "Model"
           },
+          "mse": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mse"
+          },
+          "n_free": {
+            "title": "N Free",
+            "type": "integer"
+          },
           "n_points": {
             "title": "N Points",
             "type": "integer"
+          },
+          "obs_var": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obs Var"
           },
           "params": {
             "items": {
@@ -596,13 +629,27 @@
             },
             "title": "X",
             "type": "array"
+          },
+          "x_data": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Data"
           }
         },
         "required": [
           "params",
           "x",
           "n_points",
-          "dof"
+          "n_free"
         ],
         "title": "BandsRequest",
         "type": "object"
@@ -4163,6 +4210,20 @@
             "title": "Residuals",
             "type": "array"
           },
+          "weights": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weights"
+          },
           "y": {
             "items": {
               "type": "number"
@@ -4353,6 +4414,15 @@
             "title": "Calc Errors",
             "type": "boolean"
           },
+          "covariance": {
+            "default": "jtj",
+            "enum": [
+              "jtj",
+              "hessian"
+            ],
+            "title": "Covariance",
+            "type": "string"
+          },
           "dy": {
             "anyOf": [
               {
@@ -4389,7 +4459,14 @@
             "anyOf": [
               {
                 "items": {
-                  "type": "number"
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "type": "array"
               },
@@ -4419,6 +4496,20 @@
               }
             ],
             "title": "Lower"
+          },
+          "scale_errors": {
+            "default": true,
+            "title": "Scale Errors",
+            "type": "boolean"
+          },
+          "stats_version": {
+            "default": 2,
+            "enum": [
+              1,
+              2
+            ],
+            "title": "Stats Version",
+            "type": "integer"
           },
           "upper": {
             "anyOf": [
@@ -6168,12 +6259,126 @@
         "title": "FitPeakRequest",
         "type": "object"
       },
+      "FitReportRequest": {
+        "properties": {
+          "covar": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Covar"
+          },
+          "dy": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dy"
+          },
+          "errors": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "level": {
+            "default": 0.95,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Level",
+            "type": "number"
+          },
+          "n_free": {
+            "minimum": 0.0,
+            "title": "N Free",
+            "type": "integer"
+          },
+          "params": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Params",
+            "type": "array"
+          },
+          "residuals": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Residuals",
+            "type": "array"
+          },
+          "weights": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weights"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "params",
+          "errors",
+          "y",
+          "residuals",
+          "n_free"
+        ],
+        "title": "FitReportRequest",
+        "type": "object"
+      },
       "FitRequest": {
         "properties": {
           "calc_errors": {
             "default": true,
             "title": "Calc Errors",
             "type": "boolean"
+          },
+          "covariance": {
+            "default": "jtj",
+            "enum": [
+              "jtj",
+              "hessian"
+            ],
+            "title": "Covariance",
+            "type": "string"
           },
           "dy": {
             "anyOf": [
@@ -6207,7 +6412,14 @@
             "anyOf": [
               {
                 "items": {
-                  "type": "number"
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "type": "array"
               },
@@ -6235,11 +6447,32 @@
             ],
             "title": "P0"
           },
+          "scale_errors": {
+            "default": true,
+            "title": "Scale Errors",
+            "type": "boolean"
+          },
+          "stats_version": {
+            "default": 2,
+            "enum": [
+              1,
+              2
+            ],
+            "title": "Stats Version",
+            "type": "integer"
+          },
           "upper": {
             "anyOf": [
               {
                 "items": {
-                  "type": "number"
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "type": "array"
               },
@@ -6440,6 +6673,15 @@
             "title": "Constraints",
             "type": "array"
           },
+          "covariance": {
+            "default": "jtj",
+            "enum": [
+              "jtj",
+              "hessian"
+            ],
+            "title": "Covariance",
+            "type": "string"
+          },
           "datasets": {
             "items": {
               "$ref": "#/components/schemas/GlobalSeries"
@@ -6457,6 +6699,29 @@
               }
             ],
             "title": "Equation"
+          },
+          "fixed": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "boolean"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "items": {
+                  "type": "boolean"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed"
           },
           "lower": {
             "anyOf": [
@@ -19152,6 +19417,50 @@
           }
         },
         "summary": "Posterior",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/report": {
+      "post": {
+        "description": "t / Prob>|t| / confidence limits, ANOVA, covariance and correlation.",
+        "operationId": "report_api_fitting_report_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FitReportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Report Api Fitting Report Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report",
         "tags": [
           "fitting"
         ]

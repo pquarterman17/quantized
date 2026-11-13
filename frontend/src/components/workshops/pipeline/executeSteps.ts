@@ -7,7 +7,10 @@ import { fitModel } from "../../../lib/api";
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import { FIT_SUBSET_MISMATCH, fitDataForSpec } from "../../../lib/fitselection";
 import { fitSpecFromStepParams } from "../../../lib/fitStepDecode";
-import { dyForFit } from "../../../lib/fitweights";
+import { templateFitRequest } from "../../../lib/fitTemplateReplay";
+import { sanitizeFitTemplate } from "../../../lib/fitTemplates";
+import { statsVersionField } from "../../../lib/fitStatsVersion";
+import { dyForFit, weightRequestFields } from "../../../lib/fitweights";
 import { validateExpression, type PipelineStep } from "../../../lib/pipeline";
 import { analysisData } from "../../../lib/rowstate";
 import type { SignalBindOptions } from "../../../lib/signalRecipe";
@@ -178,6 +181,19 @@ export async function executeSteps(
           const ds = store().datasets.find((d) => d.id === target);
           const d = analysisData(ds);
           if (!ds || !d || d.values.length === 0) throw new Error("no data to fit");
+          // A Curve Fit template step replays the template's own weighting,
+          // starts/bounds/holds and X range (lib/fitTemplateReplay.ts).
+          const tmpl = sanitizeFitTemplate(step.params.fitTemplate);
+          if (tmpl) {
+            const { request, notes } = await templateFitRequest(ds, tmpl);
+            const r = signal ? await fitModel(request, signal) : await fitModel(request);
+            throwIfCancelled();
+            fits.push(r);
+            fitTargets.push(target);
+            const r2 = typeof r.R2 === "number" ? ` R²=${r.R2.toFixed(4)}` : "";
+            log[step.id] = { status: "ok", note: `fit${r2}${notes.map((n) => ` (${n})`).join("")}` };
+            break;
+          }
           const spec = fitSpecFromStepParams(step.params);
           let x: number[];
           let y: number[];
@@ -214,7 +230,12 @@ export async function executeSteps(
           if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
           const finiteDy = dy ? pairs.keep.map((i) => dy![i]!) : undefined;
           const gapNote = pairs.complete ? "" : ` (${pairs.n - pairs.keep.length} gap rows excluded)`;
-          const request = { model: spec.model, x: pairs.x, y: pairs.y, ...(finiteDy ? { dy: finiteDy } : {}) };
+          const request = {
+            model: spec.model, x: pairs.x, y: pairs.y,
+            ...(finiteDy ? weightRequestFields(spec.weight, finiteDy) : {}),
+            // A step recorded under the old statistics replays under them.
+            ...statsVersionField(spec),
+          };
           const r = signal ? await fitModel(request, signal) : await fitModel(request);
           throwIfCancelled();
           fits.push(r);

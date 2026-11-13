@@ -9,7 +9,7 @@ import { useState } from "react";
 
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import { compareModels, type CompareResult } from "../../../lib/api/fitStats";
-import type { CustomFitModel } from "../../../lib/fitmodels";
+import { candidateGuesses, type CustomFitModel } from "../../../lib/fitmodels";
 import { selectedFitData } from "../../../lib/fitselection";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -52,7 +52,7 @@ export function useCompareModels(initial: string[], customModels: readonly Custo
         .filter((v) => v.startsWith(CUSTOM_PREFIX))
         .map((v) => customModels.find((m) => m.name === v.slice(CUSTOM_PREFIX.length)))
         .filter((m): m is CustomFitModel => m != null)
-        .map((m) => ({ name: m.name, equation: m.equation, guesses: m.guesses }));
+        .map((m) => ({ name: m.name, equation: m.equation, ...candidateGuesses(m) }));
       setResult(await compareModels({ x: pairs.x, y: pairs.y, models, equations }));
     } catch (e) {
       setResult(null);

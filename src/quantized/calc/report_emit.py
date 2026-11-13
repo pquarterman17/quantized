@@ -21,6 +21,7 @@ from quantized.calc.report import (
     table_block,
     text_block,
 )
+from quantized.calc.report_emit_fit import fit_report_blocks
 
 __all__ = [
     "from_anova",
@@ -51,6 +52,9 @@ def from_curve_fit(
 
     ``result`` carries ``params`` / ``errors`` arrays (whose order matches
     ``param_names``) plus goodness-of-fit scalars (R2, chiSqRed, RMSE, AIC).
+    With ``residuals`` + ``yFit`` (and optionally ``covar``, ``dy`` and
+    ``ciLevel``) it also gets the NLFit report tables
+    (``calc.report_emit_fit``).
     """
     params = list(result.get("params", []))
     errors = list(result.get("errors", []) or [None] * len(params))
@@ -76,6 +80,8 @@ def from_curve_fit(
             ("Free params", "nFree"), ("Points", "nPoints"),
         ])
     )
+    # NLFit-style inference/ANOVA/matrices when the result carries residuals.
+    blocks.extend(fit_report_blocks(result, param_names))
     return ReportSheet(
         title=title,
         sections=(section("Fit results", blocks),),

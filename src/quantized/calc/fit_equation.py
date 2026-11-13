@@ -11,9 +11,9 @@ Tokenizing, the grammar check and shunting-yard live in
 every syntax error is an ``EquationSyntaxError`` carrying the character span
 it is about, so an editor can mark it inline.
 
-``equation_model`` / ``default_guesses`` bridge a parsed equation into the
-standard bounded-NLLS fit path (``calc.fitting.curve_fit``) for the custom
-fit-model builder (GOTO #1).
+``equation_model`` bridges a parsed equation into the standard bounded-NLLS
+fit path (``calc.fitting.curve_fit``) for the custom fit-model builder
+(GOTO #1); blank starting values come from ``calc.fit_equation_init``.
 """
 
 from __future__ import annotations
@@ -24,19 +24,19 @@ from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from scipy.special import erf, erfc
+from scipy.special import erf, erfc, gamma, iv, jv, kv, voigt_profile, yv
 
-from .fit_equation_syntax import FUNCTION_NAMES, EquationSyntaxError, parse_tokens
+from .fit_equation_syntax import FUNCTION_ARITY, EquationSyntaxError, parse_tokens
 from .fit_holds import check_held_starts
 
 __all__ = [
     "EquationInfo",
     "EquationSyntaxError",
     "check_param_vectors",
-    "default_guesses",
     "describe_equation",
     "equation_model",
     "parse_equation",
+    "positive_even_params",
 ]
 
 
@@ -48,15 +48,58 @@ def _matlab_round(a: NDArray[np.float64]) -> NDArray[np.float64]:
     return np.asarray(np.sign(a) * np.floor(np.abs(a) + 0.5), dtype=float)
 
 
-_FUNCS: dict[str, Callable[[Any], Any]] = {
-    "exp": np.exp, "log": np.log, "log10": np.log10, "sqrt": np.sqrt, "abs": np.abs,
-    "sin": np.sin, "cos": np.cos, "tan": np.tan, "asin": np.arcsin, "acos": np.arccos,
-    "atan": np.arctan, "sinh": np.sinh, "cosh": np.cosh, "tanh": np.tanh, "coth": _coth,
-    "erf": erf, "erfc": erfc, "sign": np.sign, "floor": np.floor, "ceil": np.ceil,
-    "round": _matlab_round,
+def _heaviside(a: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Heaviside step with H(0) = 1/2 (the symmetric convention)."""
+    return np.asarray(np.heaviside(a, 0.5), dtype=float)
+
+
+def _step(a: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Unit step, 1 for a >= 0 and 0 below (Origin-style; H(0) = 1)."""
+    return np.asarray(np.heaviside(a, 1.0), dtype=float)
+
+
+def _voigt(x: Any, sigma: Any, gamma_: Any) -> NDArray[np.float64]:
+    """Unit-area Voigt profile of the width MAGNITUDES: ``voigt(x, |sigma|,
+    |gamma|)``. scipy's ``voigt_profile`` returns unphysical values for a
+    negative width and a fit could converge on them (review item 6). Making
+    the function even in each width keeps the optimizer's landscape smooth
+    (a NaN wall at 0 trapped fits that started with a small width), and a
+    fit never REPORTS a negative width: ``positive_even_params`` returns the
+    positive representative of any parameter the model is even in."""
+    return np.asarray(voigt_profile(x, np.abs(sigma), np.abs(gamma_)), dtype=float)
+
+
+def _if(cond: Any, a: Any, b: Any) -> NDArray[np.float64]:
+    """Element-wise conditional: ``a`` where ``cond`` is non-zero, else ``b``
+    (``numpy.where``). Both branches are evaluated, as for any vector code."""
+    return np.asarray(np.where(np.asarray(cond) != 0, a, b), dtype=float)
+
+
+# Every built-in function; each takes FUNCTION_ARITY[name] arguments. Pure
+# numpy/scipy callables -- the RPN interpreter never evaluates code text.
+#   ln = natural log (an alias of log); gamma = Euler Gamma function;
+#   voigt(x, sigma, gamma) = unit-area Voigt profile (Gaussian std sigma,
+#   Lorentzian HWHM gamma; the Faddeeva function via scipy voigt_profile),
+#   of the width magnitudes;
+#   besselj/bessely/besseli/besselk(nu, x) = Bessel J/Y and modified I/K of
+#   order nu (MATLAB argument order).
+_FUNCS: dict[str, Callable[..., Any]] = {
+    "exp": np.exp, "log": np.log, "ln": np.log, "log10": np.log10, "sqrt": np.sqrt,
+    "abs": np.abs, "sin": np.sin, "cos": np.cos, "tan": np.tan, "asin": np.arcsin,
+    "acos": np.arccos, "atan": np.arctan, "sinh": np.sinh, "cosh": np.cosh, "tanh": np.tanh,
+    "coth": _coth, "erf": erf, "erfc": erfc, "sign": np.sign, "floor": np.floor,
+    "ceil": np.ceil, "round": _matlab_round, "gamma": gamma, "heaviside": _heaviside,
+    "step": _step, "min": np.minimum, "max": np.maximum, "if": _if, "voigt": _voigt,
+    "besselj": jv, "bessely": yv, "besseli": iv, "besselk": kv,
 }
-if set(_FUNCS) != set(FUNCTION_NAMES):  # the grammar and the evaluator must agree
-    raise RuntimeError("fit_equation: _FUNCS and FUNCTION_NAMES disagree")
+if set(_FUNCS) != set(FUNCTION_ARITY):  # the grammar and the evaluator must agree
+    raise RuntimeError("fit_equation: _FUNCS and FUNCTION_ARITY disagree")
+
+
+_COMPARE: dict[str, Callable[[Any, Any], Any]] = {
+    "<": np.less, "<=": np.less_equal, ">": np.greater, ">=": np.greater_equal,
+    "==": np.equal, "!=": np.not_equal,
+}
 
 
 def _eval_rpn(rpn: list[dict[str, Any]], x: NDArray[np.float64], p: NDArray[np.float64]) -> Any:
@@ -73,7 +116,9 @@ def _eval_rpn(rpn: list[dict[str, Any]], x: NDArray[np.float64], p: NDArray[np.f
             b = stack.pop()
             a = stack.pop()
             op = tok["value"]
-            if op == "+":
+            if op in _COMPARE:
+                stack.append(np.asarray(_COMPARE[op](a, b), dtype=float))
+            elif op == "+":
                 stack.append(a + b)
             elif op == "-":
                 stack.append(a - b)
@@ -86,7 +131,10 @@ def _eval_rpn(rpn: list[dict[str, Any]], x: NDArray[np.float64], p: NDArray[np.f
         elif ttype == "unary":  # prefix minus after an operator ("3*-2", "2**-1")
             stack.append(-stack.pop())
         elif ttype == "function":
-            stack.append(_FUNCS[tok["value"]](stack.pop()))
+            n_args = FUNCTION_ARITY[tok["value"]]
+            args = stack[-n_args:]
+            del stack[-n_args:]
+            stack.append(_FUNCS[tok["value"]](*args))
     return stack[0]
 
 
@@ -200,7 +248,52 @@ def check_param_vectors(
     check_held_starts(names, p0, held, lo, hi)
 
 
-def default_guesses(param_names: Sequence[str]) -> list[float]:
-    """Default starting guesses for an equation model: 1.0 per parameter
-    (the conventional neutral start when nothing is known about scale)."""
-    return [1.0] * len(param_names)
+def positive_even_params(
+    fcn: EquationFcn,
+    x: ArrayLike,
+    result: dict[str, Any],
+    lower: Sequence[float] | None = None,
+    upper: Sequence[float] | None = None,
+    fixed: Sequence[bool] | None = None,
+) -> list[int]:
+    """Report the positive representative of sign-ambiguous parameters.
+
+    When the model is EVEN in a parameter (a width that only enters squared,
+    ``voigt``'s widths, ``cos(w*x)``) the data cannot tell ``p`` from ``-p``
+    and Nelder-Mead lands on either. A fitted ``sigma = -0.3`` is the same
+    curve as ``0.3`` but reads as nonsense, so each negative parameter whose
+    sign flip leaves the fitted curve unchanged (to 1e-9 of its scale) and
+    stays inside its bounds is flipped in ``result`` IN PLACE (a held
+    parameter keeps the value it was held at): ``params``,
+    and the matching row and column of ``covar`` (the standard errors do not
+    change). Returns the flipped indices.
+    """
+    xv = np.asarray(x, dtype=float).ravel()
+    params = np.asarray(result["params"], dtype=float).copy()
+    base = np.asarray(fcn(xv, params), dtype=float)
+    tol = 1e-9 * max(float(np.max(np.abs(base))) if base.size else 0.0, 1e-300)
+    flipped: list[int] = []
+    for k in range(params.size):
+        if not params[k] < 0 or (fixed is not None and fixed[k]):
+            continue
+        lo = -np.inf if lower is None else float(lower[k])
+        hi = np.inf if upper is None else float(upper[k])
+        if not lo <= -params[k] <= hi:
+            continue
+        trial = params.copy()
+        trial[k] = -trial[k]
+        with np.errstate(all="ignore"):
+            alt = np.asarray(fcn(xv, trial), dtype=float)
+        if bool(np.all(np.isfinite(alt))) and float(np.max(np.abs(alt - base))) <= tol:
+            params = trial
+            flipped.append(k)
+    if flipped:
+        result["params"] = params
+        covar = result.get("covar")
+        if covar is not None:
+            cov = np.asarray(covar, dtype=float).copy()
+            for k in flipped:
+                cov[k, :] *= -1
+                cov[:, k] *= -1
+            result["covar"] = cov
+    return flipped

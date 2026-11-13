@@ -32,6 +32,12 @@ export interface PlotSeriesSpec {
   /** Emphasized rendering (accent, filled larger markers) — the companion series
    *  highlighting rows in the current selection brush (#50 selection). */
   selected?: boolean;
+  /** Edge of a fit band (FitOverlay.band): the curve is `band` series back;
+   *  an odd value is a lower edge, shaded up to the next series. */
+  band?: number;
+  /** Legend text when it is not the label ("" = no legend row); a fit band's
+   *  one entry (lib/fitBandOverlay.ts). */
+  legend?: string;
 }
 
 export interface PlotPayload {
@@ -422,10 +428,15 @@ export function withFitOverlay(
   if (!overlay || overlay.datasetId !== activeId) return payload;
   const y = alignOverlayY(overlay.y, payload.data[0].length, payload.decimated);
   if (y === null) return payload;
+  const aligned = overlay.band?.map((e) => alignOverlayY(e.y, y.length, payload.decimated)) ?? [];
+  const edges = aligned.includes(null) ? [] : aligned; // one unalignable edge drops the band
   return {
     ...payload,
-    data: [...payload.data, y] as uPlot.AlignedData,
-    series: [...payload.series, { label: "fit", unit: "" }],
+    data: [...payload.data, y, ...edges] as uPlot.AlignedData,
+    series: [...payload.series, { label: "fit", unit: "" }, ...edges.map((_, k) => {
+      const e = overlay.band![k]!;
+      return { label: e.label, unit: "", band: k + 1, ...(e.legend !== undefined ? { legend: e.legend } : {}) };
+    })],
   };
 }
 

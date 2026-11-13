@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { makeStep } from "./pipelineStep";
+import { toFitTemplate } from "./fitTemplates";
 import { analyzePipeline, pipelineEditImpact } from "./pipelineStudio";
 import { pipelineStepsAfterEdit } from "./pipelineStructuralEdit";
 import type { Dataset } from "./types";
@@ -9,6 +10,32 @@ const dataset = (id = "d1"): Dataset => ({
   id, name: id,
   data: { time: [0, 1], values: [[1, 2], [3, 4]], labels: ["A", "B"], units: ["", ""], metadata: {} },
 } as Dataset);
+
+describe("analyzePipeline — Curve Fit template steps", () => {
+  it("lists what the template will run: model, weighting column, range, starts, bounds, holds", () => {
+    const step = toFitTemplate("t", {
+      version: 1, model: "Linear", weight: "direct", manualLabel: "B", scaleErrors: false,
+      rows: [
+        { name: "m", start: "", min: "0", max: "", fixed: false },
+        { name: "b", start: "3", min: "", max: "5", fixed: true },
+      ],
+      range: { lo: 1, hi: 3 },
+    }).steps[0]!;
+    const review = analyzePipeline([step], dataset(), [dataset()]);
+    expect(review.steps[0]!.summary).toBe(
+      "Fit template: Linear · weighting direct weights “B”, errors not scaled by √(reduced χ²) · " +
+      "X range 1 to 3 · starts m = auto [≥ 0]; b = 3 (held) [≤ 5].",
+    );
+    expect(review.steps[0]!.issue).toBeUndefined();
+  });
+
+  it("warns when the worksheet lacks the template's weight column", () => {
+    const step = toFitTemplate("t", { version: 1, model: "Linear", weight: "manual", manualLabel: "dM", rows: [] }).steps[0]!;
+    const review = analyzePipeline([step], dataset(), [dataset()]);
+    expect(review.steps[0]!.summary).toContain("all starts auto");
+    expect(review.steps[0]!.issue).toMatch(/weight column “dM” is not in this worksheet/);
+  });
+});
 
 describe("analyzePipeline", () => {
   it("distinguishes runnable, display-only, and broken steps before execution", () => {

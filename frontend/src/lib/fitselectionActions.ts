@@ -105,6 +105,9 @@ export function fitSpecFrom(
     (!validParams || errors.length === params.length) &&
     errors.every((v) => v === null || (typeof v === "number" && Number.isFinite(v)));
   spec.uncertainty = validErrors ? "covariance" : "none";
+  // WHICH definitions those errors (and RMSE/AIC) follow: the fitter says so
+  // (lib/fitStatsVersion.ts); a response that does not is recorded as legacy.
+  if (result.statsVersion === 2) spec.statsVersion = 2;
   // Record the weighting so recompute + pipeline reproduce it (audit P1 #3);
   // `none` is the default, so it stays absent to keep specs minimal.
   if (weight && weight.mode !== "none") spec.weight = weight;
