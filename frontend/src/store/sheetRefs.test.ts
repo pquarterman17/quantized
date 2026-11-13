@@ -53,6 +53,19 @@ describe("1 — a column removed from the referenced worksheet", () => {
   });
 });
 
+describe("a reference to a column the linked worksheet does not have", () => {
+  it("is refused with the reason, never added as an all-blank column (re-audit #7)", async () => {
+    expect(st().addFormula("r", "bad", 'sheet("Target", B)')).toBe(false);
+    expect(st().status).toMatch(/worksheet "Target" has no column B \(it has x and A\)/);
+    expect(get("r").formulas).toBeUndefined();
+    const { addDerivedColumn } = await import("./derivedColumnRun");
+    const r = await addDerivedColumn("r", { name: "bad", expr: 'sheet("Target", B) * 2', propagate: false });
+    expect(r).toMatchObject({ ok: false, error: expect.stringMatching(/has no column B/) });
+    expect(get("r").data.labels).toEqual(["v"]);
+    expect(st().addFormula("r", "ok", 'sheet("Target", x) + sheet("Target", A)')).toBe(true);
+  });
+});
+
 describe("2 — rename and delete of the referenced worksheet", () => {
   it("a rename keeps the link and updates the formula text; values still follow the worksheet", async () => {
     st().addFormula("r", "f", 'sheet("Target", A) + 1');

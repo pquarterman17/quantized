@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import "../lib/formulaRefs"; // registers cumsum() & co. (lib/formulaExt.ts)
 import type { Dataset } from "../lib/types";
 import { sortOrder, sortWorksheetRows } from "./sortRows";
+import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
 
 const sheet = (): Dataset => ({
@@ -26,6 +27,7 @@ const st = () => useApp.getState();
 const ds = () => st().datasets[0];
 
 beforeEach(() => {
+  useToasts.setState({ toasts: [] });
   useApp.setState({ datasets: [sheet()], activeId: "s", history: [], future: [], status: "" });
 });
 
@@ -100,6 +102,11 @@ describe("sort header claims, locked (review #2 items 7, 8, 11)", () => {
     expect(st().status).toMatch(/Can't sort "Reader": "f" reads another worksheet row by row through sheet\(\)/);
     sortWorksheetRows("s", 1, 1);
     expect(st().status).toMatch(/Can't sort "s.csv": "Reader" reads it row by row through sheet\(\)/);
+    // A toast too, not only the status line (re-audit #8).
+    expect(useToasts.getState().toasts.map((t) => [t.kind, t.msg])).toEqual([
+      ["danger", expect.stringMatching(/Can't sort "Reader"/)],
+      ["danger", expect.stringMatching(/Can't sort "s.csv"/)],
+    ]);
     expect(st().history).toEqual([]);
     expect(ds().data.time).toEqual([10, 20, 30, 40]);
   });

@@ -112,9 +112,17 @@ export async function runRowStatistics(): Promise<void> {
     get().recordMacro(`Add column ${c.name}`, `qz.addColumn(${lit(c.name)}, ${lit(c.expr)})`, { kind: "expression", params: { name: c.name, expr: c.expr } });
   }
   get().touchDataset(ds.id);
-  const message = `added ${added.map((c) => `"${c.name}"`).join(", ")} across ${cols.map(channelLetter).join(", ")}`;
+  // Columns in different units are combined as plain numbers — allowed, as
+  // in Origin, but never silently (re-audit #18): the statistics carry no
+  // unit, and the message says which units were mixed.
+  const units = [...new Set(cols.map((c) => ds.data.units[c] ?? ""))];
+  const mixed =
+    units.length > 1
+      ? ` — warning: these columns have different units (${cols.map((c) => `${channelLetter(c)} ${ds.data.units[c] || "no unit"}`).join(", ")}), so the statistics mix them and carry no unit`
+      : "";
+  const message = `added ${added.map((c) => `"${c.name}"`).join(", ")} across ${cols.map(channelLetter).join(", ")}${mixed}`;
   get().setStatus(message);
-  toast(message, "ok");
+  toast(message, mixed ? "info" : "ok");
 }
 
 const optionalNumber = (raw: unknown, what: string): number | undefined | string => {

@@ -388,6 +388,9 @@ body {
 .qzk-ds-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .qzk-ds-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .qzk-ds-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--type-nano); color: var(--text-faint); }
+/* Peak Analyzer's step hints are sentences, not one-line metadata: they wrap
+   in its narrow window rather than ending in an ellipsis (re-audit #16). */
+.qzk-peakwizard div.qzk-ds-meta { white-space: normal; }
 /* Modifier for MESSAGE text (role="alert" / role="note") that borrows
    qzk-ds-meta's typography but must never be clipped. qzk-ds-meta is a
    single-line utility built for a dataset's "201 pts · 1 ch" row, where an

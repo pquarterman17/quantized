@@ -38,6 +38,21 @@ const asSheet = (id: string, data: DataStruct, over: Partial<Dataset> = {}): Dat
 
 afterEach(() => setFormulaSheetSource(null));
 
+describe("bare long names (re-audit #17)", () => {
+  it("a unique bare long name is its column; letters, x, constants, calls and sheet() columns are left alone", () => {
+    expect(resolveColumnNames("Moment * 2", base.labels)).toBe("A * 2");
+    expect(col("Moment * 2")).toEqual(col("A * 2"));
+    expect(resolveColumnNames("A + x + pi + mean(Moment)", base.labels)).toBe("A + x + pi + mean(A)");
+    expect(resolveColumnNames('sheet("Run 2", Moment)', base.labels)).toBe('sheet("Run 2", Moment)');
+    expect(resolveColumnNames("Momentum * 2", base.labels)).toBe("Momentum * 2"); // unknown: the evaluator says so
+  });
+
+  it("a bare name two columns share is refused, listing the letters", () => {
+    expect(() => resolveColumnNames("T * 2", ["T", "T"])).not.toThrow(); // a letter, never a label
+    expect(() => resolveColumnNames("Field + 1", ["Field", "Field"])).toThrow(/"Field" is ambiguous: columns A, B/);
+  });
+});
+
 describe("col() references", () => {
   it("col(A) is A, and col(\"Long Name\") resolves to the named column's letter", () => {
     expect(col("col(A) * 2")).toEqual(col("A * 2"));
