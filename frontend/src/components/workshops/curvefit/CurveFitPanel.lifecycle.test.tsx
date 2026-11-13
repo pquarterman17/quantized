@@ -54,6 +54,7 @@ beforeEach(() => {
     seriesOrder: null,
     errKeys: {},
     fitOverlay: null,
+    analysisResults: [],
     curveFitOpen: true,
     toolWindowLayout: {},
   });
@@ -103,6 +104,52 @@ describe("CurveFitPanel — closing hides, Remove fit deletes", () => {
     expect(screen.queryByText("0.98")).toBeNull();
     useApp.getState().undo();
     expect(useApp.getState().datasets[0]!.fitSpec?.model).toBe("Linear");
+  });
+
+  it("Undo of Remove fit restores the curve and the panel's result at once; Redo removes them again", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    await fitOnce();
+    const curve = useApp.getState().fitOverlay;
+    fireEvent.click(screen.getByRole("button", { name: "Remove fit" }));
+    await waitFor(() => expect(useApp.getState().datasets[0]!.fitSpec).toBeUndefined());
+    act(() => useApp.getState().undo());
+    // Before the fix the FitSpec came back but the curve stayed gone and the
+    // panel stayed empty until the Library result was reopened.
+    expect(useApp.getState().fitOverlay).toEqual(curve);
+    expect(await screen.findByText("0.98")).toBeInTheDocument();
+    act(() => useApp.getState().redo());
+    expect(useApp.getState().datasets[0]!.fitSpec).toBeUndefined();
+    expect(useApp.getState().fitOverlay).toBeNull();
+    await waitFor(() => expect(screen.queryByText("0.98")).toBeNull());
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().fitOverlay).toEqual(curve);
+    expect(await screen.findByText("0.98")).toBeInTheDocument();
+  });
+
+  it("Undo of Remove fit restores the curve while the window is closed; reopening shows the result", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    const unmount = await fitOnce();
+    const curve = useApp.getState().fitOverlay;
+    fireEvent.click(screen.getByRole("button", { name: "Remove fit" }));
+    await waitFor(() => expect(useApp.getState().datasets[0]!.fitSpec).toBeUndefined());
+    unmount();
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().fitOverlay).toEqual(curve);
+    render(<CurveFitPanel />);
+    expect(await screen.findByText("0.98")).toBeInTheDocument();
+  });
+
+  it("Remove fit deletes the fit's Library result, as its confirmation says, and Undo restores it", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    await fitOnce();
+    const results = useApp.getState().analysisResults;
+    expect(results).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Remove fit" }));
+    await waitFor(() => expect(useApp.getState().datasets[0]!.fitSpec).toBeUndefined());
+    // Before the fix the result stayed in the Library as "Incomplete".
+    expect(useApp.getState().analysisResults).toEqual([]);
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().analysisResults).toEqual(results);
   });
 });
 

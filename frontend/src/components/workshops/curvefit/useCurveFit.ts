@@ -34,8 +34,9 @@ import { useToolAnalysisSelection } from "../analysisselection/useToolAnalysisSe
 import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { analysisSelectionData } from "../../../lib/analysisSelection";
 
-import { isCurveFitOverlay, rememberCurveFitOverlay } from "../../../store/curveFitOverlay";
-import { restoreFitted, retainFitted, type Fitted, type FittedData } from "./curveFitSession";
+import { rememberCurveFitOverlay } from "../../../store/curveFitOverlay";
+import { removeCurveFit } from "./curveFitRemove";
+import { onRetainedFitChange, restoreFitted, retainFitted, type Fitted, type FittedData } from "./curveFitSession";
 
 export type { FittedData } from "./curveFitSession";
 
@@ -128,6 +129,11 @@ export function useCurveFit(): CurveFitState {
   // Restored from the session on mount: closing the panel only hides it.
   const [fitted, setFitted] = useState<Fitted | null>(() => restoreFitted(useApp.getState().datasets));
   const [guessOnly, setGuessOnly] = useState(false);
+  // Undo of "Remove fit" shows the result again; Redo drops it (curveFitRemove.ts).
+  useEffect(() => onRetainedFitChange((kept, present) => {
+    setFitted((f) => (present ? kept : f === kept ? null : f));
+    if (present) setGuessOnly(false);
+  }), []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cornerBusy, setCornerBusy] = useState(false);
@@ -392,14 +398,7 @@ export function useCurveFit(): CurveFitState {
     setGuessOnly(false);
     setError(null);
     setWeightNote(null);
-    retainFitted(null, null);
-    const shown = useApp.getState().fitOverlay;
-    if (isCurveFitOverlay(shown) || (active && shown?.datasetId === active.id)) setFitOverlay(null);
-    rememberCurveFitOverlay(null);
-    if (active) {
-      useApp.getState().setFitSpec(active.id, null);
-      useApp.setState((state) => ({ staleFits: state.staleFits.filter((id) => id !== active.id) }));
-    }
+    removeCurveFit(active?.id ?? null);
   }
 
   async function runCornerPlot(): Promise<void> {
