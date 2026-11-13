@@ -195,3 +195,27 @@ export function unstackWorksheet(
     metadata: { ...provenance(ds, "unstack"), unstack_aggregate: aggregate },
   };
 }
+
+/** How many rows `stackWorksheet(ds, channels)` WOULD produce, without
+ *  materializing it — the bounded live preview reports the real result size
+ *  next to its truncated table (worksheet audit #16). Same channel filter. */
+export function stackRowCount(ds: DataStruct, channels: readonly number[]): number {
+  const selected = [...new Set(channels)].filter((i) => i >= 0 && i < ds.labels.length);
+  return ds.time.length * selected.length;
+}
+
+/** How many rows `unstackWorksheet` WOULD produce (its distinct finite keys
+ *  among rows with a finite key, category and value) — the same row filter,
+ *  counted without building the pivot (worksheet audit #16). */
+export function unstackRowCount(ds: DataStruct, keyColumn: number, categoryColumn: number, valueColumn: number): number {
+  const keys = column(ds, keyColumn);
+  const categories = column(ds, categoryColumn);
+  const values = column(ds, valueColumn);
+  const seen = new Set<string>();
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = finiteKey(keys[i]);
+    if (key === null || finiteKey(categories[i]) === null || !Number.isFinite(values[i])) continue;
+    seen.add(key);
+  }
+  return seen.size;
+}

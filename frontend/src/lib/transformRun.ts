@@ -118,6 +118,9 @@ export interface TransformPreview {
    *  always exact). `ReshapePanel.tsx` shows "Preview shows the first N
    *  rows" when this is true. */
   previewCapped?: boolean;
+  /** With `previewCapped`: the row count of the FULL result, so the summary
+   *  states the real size rather than the truncated table's. */
+  resultRows?: number;
 }
 
 /** Returns true to commit. Interactive callers pass `reviewTransform`;
