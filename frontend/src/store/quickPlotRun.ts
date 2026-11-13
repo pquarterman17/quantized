@@ -70,7 +70,8 @@ export function runQuickPlot(datasetId: string, onDone?: () => void): void {
 }
 
 /** "Plot each Y against its own X" (the import notice for a book whose Ys sit
- *  on a secondary X, store/importNotes.ts): Quick Plot's per-series-X seed
+ *  on a secondary X, store/importNotes.ts; and what un-hiding such a Y in the
+ *  one-X plot does instead, store/ownXGuard.ts): Quick Plot's per-series-X seed
  *  where Quick Plot has a profile for the technique; otherwise the Quick
  *  Figure Builder, whose first mapping pairs each Y with its own X the same
  *  way (`initialQuickFigureMapping`) -- generic data has no Quick Plot. */
