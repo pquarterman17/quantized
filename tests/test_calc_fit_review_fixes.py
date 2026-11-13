@@ -277,3 +277,23 @@ def test_batch_and_global_fits_return_both_error_estimates() -> None:
     np.testing.assert_allclose(ch["errors"], c["errorsHessian"], rtol=1e-9)
     assert c["shared"][0]["errorJtj"] == c["shared"][0]["error"]
     assert c["shared"][0]["errorHessian"] == pytest.approx(ch["shared"][0]["error"], rel=1e-9)
+
+
+def test_a_fit_worse_than_a_constant_is_not_reported_converged() -> None:
+    """Found driving the real app: a Gaussian started at centre 0 on data
+    peaked at 10 collapsed to a spike between samples -- R² = -0.85, and the
+    result said exitFlag 1 with no warning."""
+    x = np.linspace(0.0, 20.0, 201)
+    y = 5 * np.exp(-((x - 10.0) ** 2) / (2 * 1.5**2)) + 0.5
+
+    def gauss(xx: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[np.float64]:
+        return np.asarray(p[0] * np.exp(-((xx - p[1]) ** 2) / (2 * p[2] ** 2)), dtype=float)
+
+    out = curve_fit(x, y, gauss, [8.0, 0.0, 1.0], lower=[-np.inf, -np.inf, 0.0],
+                    upper=[8.0, np.inf, np.inf])
+    if out["R2"] < 0:
+        assert out["exitFlag"] == 0 and any("worse than a constant" in w for w in out["warnings"])
+    else:  # if a future optimizer finds the peak, it must simply be right
+        assert out["exitFlag"] == 1 and out["R2"] > 0.9
+    good = curve_fit(x, y, gauss, [4.0, 9.0, 1.0])
+    assert good["exitFlag"] == 1 and good["warnings"] == []

@@ -40,7 +40,7 @@ describe("FitDiagnosticsSection", () => {
   it("shows the fit's own AIC/AICc/BIC/RMSE and the weighted χ² of a weighted fit", async () => {
     const result = {
       residuals: [0.1, -0.1, 0.2, -0.2], nFree: 2, chiSqRed: 1.5, chiSq: 3, SSR: 0.1,
-      RMSE: 0.158, AIC: -7.25, AICc: 4.75, BIC: -8.5,
+      RMSE: 0.158, AIC: -7.25, AICc: 4.75, BIC: -8.5, R2: 0.5,
     };
     render(<FitDiagnosticsSection result={result} fitData={{ x: [0, 1, 2, 3], y: [1, 2, 3, 4] }} />);
     await open();
@@ -51,6 +51,10 @@ describe("FitDiagnosticsSection", () => {
     expect(valueOf("BIC")).toContain("-8.5");
     expect(valueOf("RMSE (y units)")).toContain("0.158");
     expect(valueOf("weighted χ²")).toContain("3");
+    // R² is the fit's own (weighted), not the route's unweighted 0.9; adj. R²
+    // follows from it: 1 - (1 - 0.5)(4 - 1)/(4 - 2 - 1) = -0.5.
+    expect(valueOf("R² (weighted)")).toContain("0.5");
+    expect(valueOf("adj. R²")).toContain("-0.5");
   });
 
   it("falls back to the route's values for a result without them, and lists no weighted χ² unweighted", async () => {
@@ -59,6 +63,8 @@ describe("FitDiagnosticsSection", () => {
     await open();
     await screen.findByText("AIC");
     expect(valueOf("AIC")).toContain("111");
+    expect(valueOf("R²")).toContain("0.9");
+    expect(valueOf("adj. R²")).toContain("0.85");
     expect(screen.queryByText("weighted χ²")).toBeNull();
   });
 });

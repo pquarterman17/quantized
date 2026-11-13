@@ -261,3 +261,19 @@ def test_fit_direct_weighting_uses_the_weight_column_as_is() -> None:
     np.testing.assert_allclose(direct["params"], via_dy["params"], rtol=1e-12)
     bad = client.post("/api/fitting/fit", json={**body, "weights": [-1.0] * dy.size})
     assert bad.status_code == 422
+
+
+def test_fit_accepts_null_for_an_open_bound() -> None:
+    """A browser serialises an open bound (Infinity) as null; /fit answered
+    422 to it, so custom start values with any open bound could not be fit
+    (found driving the real app)."""
+    x = np.linspace(0.0, 20.0, 60)
+    y = 5.0 * np.exp(-((x - 10.0) ** 2) / (2 * 1.5**2))
+    body = {"model": "Gaussian", "x": x.tolist(), "y": y.tolist(), "p0": [8.0, 9.0, 1.0],
+            "lower": [None, None, 0.0], "upper": [8.0, None, None]}
+    resp = client.post("/api/fitting/fit", json=body)
+    assert resp.status_code == 200
+    out = resp.json()
+    # ...and the amplitude, started exactly ON its upper bound, moves (item 3).
+    np.testing.assert_allclose(out["params"], [5.0, 10.0, 1.5], rtol=1e-5)
+    assert out["exitFlag"] == 1

@@ -45,6 +45,17 @@ class FitOptions(BaseModel):
     stats_version: Literal[1, 2] = 2
 
 
+def open_bounds(values: list[float | None] | None, fill: float) -> list[float] | None:
+    """A request's bound list with ``null`` -> ``fill`` (``-inf`` / ``+inf``).
+
+    JSON cannot carry Infinity: a browser serialises an open bound as
+    ``null``. ``/fit`` used to type its bounds ``list[float]`` and answered
+    422 to exactly that -- every registry-model fit with custom start values
+    and one open bound (found in the live check).
+    """
+    return None if values is None else [fill if v is None else v for v in values]
+
+
 def stats_kwargs(opts: FitOptions) -> dict[str, Any]:
     """``curve_fit`` keywords for the request's covariance/scaling/statistics."""
     legacy = opts.stats_version == 1

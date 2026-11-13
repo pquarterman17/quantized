@@ -7,6 +7,9 @@
 // finding 16 -- they used to differ by a constant, and by weighting); the
 // route's values are the fallback for an older result. RMSE is unweighted, in
 // y units; a weighted fit also lists its weighted χ² (the minimised sum).
+// R² is the fit's own too (weighted for a weighted fit, as in the summary
+// above it — the route's is unweighted and read 0.33 beside the summary's
+// 0.69 in the live check), and adj. R² is derived from that same R².
 
 import { useEffect, useState } from "react";
 
@@ -31,10 +34,15 @@ function rowsFor(d: DiagnosticsResult, result: CalcResult): string[][] {
   const r = d.residuals;
   const runs = r.runsTestZ == null ? "—" : `${fmt(r.runsTestZ)} (p ${fmt(r.runsTestP)})`;
   const weighted = typeof result.chiSq === "number" && typeof result.SSR === "number" && result.chiSq !== result.SSR;
+  const r2 = own(result, "R2", c.R2);
+  const dofAdj = c.n - c.p - 1;
+  const adjR2 = typeof result.R2 === "number"
+    ? (dofAdj > 0 ? 1 - ((1 - result.R2) * (c.n - 1)) / dofAdj : null)
+    : c.adjR2;
   return [
     ["n / k", `${c.n} / ${c.p}`],
-    ["R²", fmt(c.R2)],
-    ["adj. R²", fmt(c.adjR2)],
+    [weighted ? "R² (weighted)" : "R²", fmt(r2)],
+    ["adj. R²", fmt(adjR2)],
     ["reduced χ²", fmt(result.chiSqRed)],
     ...(weighted ? [["weighted χ²", fmt(result.chiSq)]] : []),
     ["RMSE (y units)", fmt(own(result, "RMSE", c.rmse))],

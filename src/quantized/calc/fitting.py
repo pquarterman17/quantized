@@ -146,8 +146,9 @@ def curve_fit(
     matters for a weighted fit: off = the weights are absolute 1/sigma²
     (scipy ``absolute_sigma=True``). Metrics follow ``calc.fit_metrics``.
     A free parameter that never left its start while the cost still falls
-    along it is reported in ``warnings`` and forces ``exitFlag`` 0, as does a
-    model that is undefined (NaN/inf) at the fitted parameters.
+    along it is reported in ``warnings`` and forces ``exitFlag`` 0, as do a
+    model that is undefined (NaN/inf) at the fitted parameters and a fit that
+    ends worse than a constant (R² < 0).
 
     Zero-weight points are not observations: they are left out of ``nPoints``,
     the dof and every metric (their residuals are still returned). A free
@@ -273,8 +274,16 @@ def curve_fit(
             "fit residual still falls along it; the optimizer stalled -- try another "
             "start value"
         )
+    if n_free > 0 and math.isfinite(r2) and r2 < 0 and ss_tot > _EPS:
+        # Worse than a horizontal line through the mean: the simplex settled
+        # in a degenerate solution (typically a peak collapsed between two
+        # samples, far from the data's peak). "Converged" would be a lie.
+        warnings.append(
+            "the fit is worse than a constant (R² < 0): it settled in a degenerate solution "
+            "-- try Auto-guess or better start values"
+        )
     if warnings:
-        exit_flag = 0  # never report a stalled fit as converged
+        exit_flag = 0  # never report a stalled or degenerate fit as converged
 
     return {
         "params": p_opt,

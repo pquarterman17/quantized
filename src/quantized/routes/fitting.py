@@ -33,7 +33,12 @@ from quantized.calc.fit_scan import scan_models
 from quantized.calc.fitting import curve_fit
 from quantized.jobs import AbortFn, JobQueueFullError, ProgressFn, jobs
 from quantized.routes._errors import CALC_ERRORS, call_calc
-from quantized.routes._fit_options import FitOptions, resolve_weights, stats_kwargs
+from quantized.routes._fit_options import (
+    FitOptions,
+    open_bounds,
+    resolve_weights,
+    stats_kwargs,
+)
 from quantized.routes._payload import to_jsonable
 
 ModelFn = Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
@@ -53,8 +58,9 @@ class FitRequest(FitOptions):
     x: list[float]
     y: list[float]
     p0: list[float] | None = None
-    lower: list[float] | None = None
-    upper: list[float] | None = None
+    # null entries = unbounded on that side (JSON cannot carry Infinity).
+    lower: list[float | None] | None = None
+    upper: list[float | None] | None = None
     fixed: list[bool] | None = None
     calc_errors: bool = True
 
@@ -102,16 +108,17 @@ def fit(req: FitRequest) -> dict[str, Any]:
 
     try:
         p0 = req.p0 if req.p0 is not None else auto_guess(req.model, req.x, req.y)
+        lower, upper = open_bounds(req.lower, -math.inf), open_bounds(req.upper, math.inf)
         # curve_fit would clip a held start into its bounds and still call it
         # held; refuse instead (P2.7 review, shared with /equation/fit).
-        check_held_starts(FIT_MODELS[req.model]["paramNames"], p0, req.fixed, req.lower, req.upper)
+        check_held_starts(FIT_MODELS[req.model]["paramNames"], p0, req.fixed, lower, upper)
         result = curve_fit(
             req.x,
             req.y,
             model_fcn,
             p0,
-            lower=req.lower,
-            upper=req.upper,
+            lower=lower,
+            upper=upper,
             weights=resolve_weights(req, len(req.x)),
             fixed=req.fixed,
             calc_errors=req.calc_errors,
@@ -256,16 +263,7 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
         fcn, names = equation_model(req.equation)
         if not names:
             raise ValueError("equation has no free parameters to fit")
-        lower = (
-            [-math.inf if v is None else v for v in req.lower]
-            if req.lower is not None
-            else None
-        )
-        upper = (
-            [math.inf if v is None else v for v in req.upper]
-            if req.upper is not None
-            else None
-        )
+        lower, upper = open_bounds(req.lower, -math.inf), open_bounds(req.upper, math.inf)
         given = req.guesses if req.guesses is not None else [1.0] * len(names)
         # A blank start is checked as the legacy neutral 1.0: that is what a
         # HELD blank is held at (auto_start only fills blanks it may fit).

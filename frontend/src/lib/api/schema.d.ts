@@ -8119,7 +8119,7 @@ export interface components {
             /** Fixed */
             fixed?: boolean[] | null;
             /** Lower */
-            lower?: number[] | null;
+            lower?: (number | null)[] | null;
             /** Model */
             model: string;
             /** P0 */
@@ -8136,7 +8136,7 @@ export interface components {
              */
             stats_version?: 1 | 2;
             /** Upper */
-            upper?: number[] | null;
+            upper?: (number | null)[] | null;
             /** Weights */
             weights?: number[] | null;
             /** X */
