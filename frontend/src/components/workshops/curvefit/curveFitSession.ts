@@ -4,8 +4,8 @@
 // recalc graph lost its FitSpec (so auto re-fit stopped) and the Library
 // result went "Incomplete". Closing is now a hide, so the in-memory result
 // the panel shows (`useCurveFit`'s `fitted`) must survive the unmount; it is
-// kept here, module-level, and restored on the next mount only while it still
-// describes the live worksheet (same dataset object, FitSpec still present).
+// kept here, module-level, and restored on the next mount only while the
+// worksheet's saved fit is still that fit (see `restoreFitted`).
 // (Which `fitOverlay` is the Curve Fit's own lives in store/curveFitOverlay.ts.)
 
 import type { CalcResult, Dataset, FitOverlay } from "../../../lib/types";
@@ -40,29 +40,59 @@ export function retainFitted(fitted: Fitted | null, dataset: Dataset | null): vo
   retained = fitted && dataset ? { fitted, dataset, removed: false, overlay: null } : null;
 }
 
-/** The retained fit, if the worksheet it ran on is unchanged and still has its fit. */
+/** The retained fit, while the worksheet's saved fit is still THIS fit (the
+ *  same FitSpec object: not removed, re-fitted or replaced by another tool).
+ *  Deliberately not "the same data object": adding a column — the fit's own
+ *  linked output columns included — replaces the data object without touching
+ *  the fit, and used to make a reopened panel come back empty beside its
+ *  curve. Data the fit would no longer reproduce is `fitInputsChanged`'s job. */
 export function restoreFitted(datasets: readonly Dataset[]): Fitted | null {
   if (!retained) return null;
   const live = datasets.find((d) => d.id === retained!.fitted.datasetId);
-  if (!live?.fitSpec || live.data !== retained.dataset.data) return null;
+  if (!live?.fitSpec || live.fitSpec !== retained.dataset.fitSpec) return null;
   return retained.fitted;
+}
+
+/** True when the (x, y) pairs a fit would run on NOW (gap rows dropped) are
+ *  not the pairs `fitData` ran on — an edited value, a newly excluded row or
+ *  a changed X range — so the result describes earlier data. */
+export function fitInputsChanged(now: { x: readonly number[]; y: readonly number[] }, fitData: FittedData): boolean {
+  let k = 0;
+  for (let i = 0; i < Math.min(now.x.length, now.y.length); i++) {
+    const x = now.x[i]!;
+    const y = now.y[i]!;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (x !== fitData.x[k] || y !== fitData.y[k]) return true;
+    k++;
+  }
+  return k !== fitData.x.length;
 }
 
 /** The retained record itself, for the removal/undo bookkeeping. */
 export const retainedFit = (): typeof retained => retained;
 
-type RetainedListener = (fitted: Fitted, present: boolean) => void;
+type RetainedListener = (fitted: Fitted, present: boolean, replaces?: Fitted) => void;
 const listeners = new Set<RetainedListener>();
 
-/** Told when an Undo brings the removed fit back (`present`) or a Redo removes
- *  it again, so an open panel follows without a remount. */
+/** Told when the retained fit changes behind the panel's back, so an open
+ *  panel follows without a remount: an Undo brings a removed fit back
+ *  (`present`), a Redo removes it again (`!present`), or a background re-fit
+ *  replaced its result (`replaces` = the record it supersedes). */
 export function onRetainedFitChange(fn: RetainedListener): () => void {
   listeners.add(fn);
   return () => void listeners.delete(fn);
 }
 
-export function announceRetainedFit(present: boolean): void {
-  if (retained) for (const fn of listeners) fn(retained.fitted, present);
+export function announceRetainedFit(present: boolean, replaces?: Fitted): void {
+  if (retained) for (const fn of listeners) fn(retained.fitted, present, replaces);
+}
+
+/** Replace the retained fit's result with a background re-fit's (curveFitRefit.ts). */
+export function replaceRetainedFit(fitted: Fitted, dataset: Dataset): void {
+  if (!retained) return;
+  const previous = retained.fitted;
+  retained = { ...retained, fitted, dataset };
+  announceRetainedFit(true, previous);
 }
 
 /** The Bands toggle's choices, kept across a close/reopen like the band they draw. */

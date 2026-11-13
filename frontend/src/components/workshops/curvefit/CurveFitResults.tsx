@@ -28,6 +28,8 @@ interface Props {
   result: CalcResult | null;
   fitData: FittedData | null;
   guessOnly: boolean;
+  /** The fit's input data changed after this fit ran (and no re-fit has landed). */
+  stale: boolean;
   xRange: { min: number; max: number } | null;
   reporting: boolean;
   onReport: () => void;
@@ -63,6 +65,11 @@ export default function CurveFitResults(p: Props) {
 
   return (
     <>
+      {done && p.stale && (
+        <div className="qzk-ds-meta" role="status" style={{ marginTop: 10, color: "var(--warning)" }}>
+          The data selected for fitting changed after this fit, so the results below describe the earlier data. Press Fit to update them.
+        </div>
+      )}
       {paramRows.length > 0 && (
         <div style={{ marginTop: 12 }}>
           <DataTable columns={["param", "value", "± err"]} rows={paramRows} />

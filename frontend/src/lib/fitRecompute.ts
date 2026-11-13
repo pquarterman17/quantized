@@ -6,6 +6,7 @@
 
 import { restoreGapRows, type FinitePairs } from "./api/finitePairs";
 import { refreshFitAnalysisResults } from "./fitAnalysisResultLive";
+import { announceFitRecomputed } from "./fitRecomputeEvents";
 import { activeRowIndices, droppedRows, expandToFull } from "./rowstate";
 import type { CalcResult, Dataset, FitSpec } from "./types";
 import type { AppState } from "../store/useApp";
@@ -64,12 +65,15 @@ export function commitRecomputedFit(
   pairs: FinitePairs,
   result: CalcResult,
   sourceRows?: readonly number[],
+  /** The 1-sigma errors the re-fit was weighted with (aligned to `pairs`). */
+  dy?: readonly number[],
 ): void {
   const updatedSpec = stampRecompute(spec, result);
   if (get().datasets.find((item) => item.id === dataset.id) !== dataset) {
     throw new Error("source or fit changed while recalculating");
   }
   set((state) => recomputedFitPatch(state, dataset, spec, updatedSpec, pairs, result.yFit, sourceRows));
+  announceFitRecomputed({ datasetId: dataset.id, previousSpec: spec, result, x: pairs.x, y: pairs.y, dy: dy ? [...dy] : null });
 }
 
 /** Replace a saved fit's result snapshot and mark when it was regenerated. */

@@ -4,13 +4,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { autoGuess, bootstrapFit, listFitModels } from "../../../lib/api/curvefit";
+import { autoGuess, listFitModels } from "../../../lib/api/curvefit";
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
-import { exportCornerFigure } from "../../../lib/api/figures";
 import { fitModel } from "../../../lib/api";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitWeighting, WeightMode } from "../../../lib/types";
-import { runCancellable } from "../../../store/pendingOpActions";
 import { publishFitAnalysisResult } from "../../../store/publishFitAnalysisResult";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { toast } from "../../../store/toasts";
@@ -35,8 +33,10 @@ import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { analysisSelectionData } from "../../../lib/analysisSelection";
 
 import { rememberCurveFitOverlay } from "../../../store/curveFitOverlay";
+import { exportCornerPlot } from "./curveFitCornerPlot";
+import { followRefits } from "./curveFitRefit";
 import { removeCurveFit } from "./curveFitRemove";
-import { onRetainedFitChange, restoreFitted, retainFitted, type Fitted, type FittedData } from "./curveFitSession";
+import { fitInputsChanged, onRetainedFitChange, restoreFitted, retainFitted, type Fitted, type FittedData } from "./curveFitSession";
 
 export type { FittedData } from "./curveFitSession";
 
@@ -46,6 +46,8 @@ export interface CurveFitState {
   modelName: string;
   setModelName: (name: string) => void;
   result: CalcResult | null;
+  /** The data selected for fitting is no longer what `result` was fitted to. */
+  resultStale: boolean;
   /** The (x, y) pairs the last completed fit ran on — the rows its
    *  `residuals`/`yFit` align to. Null after a guess or clear. */
   fitData: FittedData | null;
@@ -129,11 +131,15 @@ export function useCurveFit(): CurveFitState {
   // Restored from the session on mount: closing the panel only hides it.
   const [fitted, setFitted] = useState<Fitted | null>(() => restoreFitted(useApp.getState().datasets));
   const [guessOnly, setGuessOnly] = useState(false);
-  // Undo of "Remove fit" shows the result again; Redo drops it (curveFitRemove.ts).
-  useEffect(() => onRetainedFitChange((kept, present) => {
-    setFitted((f) => (present ? kept : f === kept ? null : f));
-    if (present) setGuessOnly(false);
-  }), []);
+  // Undo of "Remove fit" shows the result again, Redo drops it
+  // (curveFitRemove.ts); a background re-fit replaces it (curveFitRefit.ts).
+  useEffect(() => {
+    followRefits();
+    return onRetainedFitChange((kept, present, replaces) => {
+      setFitted((f) => (!present ? (f === kept ? null : f) : replaces && f !== replaces ? f : kept));
+      if (present && !replaces) setGuessOnly(false);
+    });
+  }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cornerBusy, setCornerBusy] = useState(false);
@@ -217,6 +223,7 @@ export function useCurveFit(): CurveFitState {
       : null;
   const result = current?.result ?? null;
   const fitData = current?.fitData ?? null;
+  const resultStale = useMemo(() => !!fitData && !!xy && fitInputsChanged(xy, fitData), [xy, fitData]);
   useEffect(() => {
     if (!restoredRecipe.current && savedSpec?.model === modelName && model) {
       setParamRows(rowsFromFitSpec(model, savedSpec));
@@ -408,31 +415,7 @@ export function useCurveFit(): CurveFitState {
     setCornerBusy(true);
     setError(null);
     try {
-      const pairs = dropGapRows(xy.x, xy.y);
-      if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to bootstrap");
-      if (!pairs.complete) {
-        toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the bootstrap.`);
-      }
-      // P3.4: bootstrap + render are one StatusBar op whose Cancel aborts
-      // whichever request is in flight; a cancel saves no file and sets no error.
-      const done = await runCancellable("Exporting corner plot…", async (signal) => {
-        const boot = await bootstrapFit({ model: modelName, x: pairs.x, y: pairs.y, p0, return_samples: true }, signal);
-        if (!boot.boot_samples || boot.boot_samples.length === 0) {
-          throw new Error("bootstrap returned no replicate samples");
-        }
-        const names = models.find((m) => m.name === modelName)?.paramNames ?? [];
-        const paramNames =
-          names.length === boot.params.length ? names : boot.params.map((_, i) => `p${i}`);
-        const stem = active.name.replace(/\.[^.]+$/, "");
-        await exportCornerFigure({
-          samples: boot.boot_samples,
-          param_names: paramNames,
-          truths: boot.params,
-          title: `${modelName} corner — ${active.name}`,
-          filename: `${stem}-corner`,
-        }, signal);
-      });
-      if (!done) useApp.getState().setStatus("corner plot cancelled");
+      await exportCornerPlot({ dataset: active, model: modelName, paramNames: model?.paramNames ?? [], x: xy.x, y: xy.y, p0 });
     } catch (e) {
       setError(e instanceof Error ? e.message : "corner plot failed");
     } finally {
@@ -452,6 +435,7 @@ export function useCurveFit(): CurveFitState {
     setModelName,
     result,
     fitData,
+    resultStale,
     guessOnly,
     busy,
     error,

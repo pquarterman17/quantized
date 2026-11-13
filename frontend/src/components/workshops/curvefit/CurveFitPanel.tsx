@@ -17,7 +17,6 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { Button, Select } from "../../primitives";
 import { reportEmit } from "../../../lib/api";
 import type { CustomFitModel } from "../../../lib/fitmodels";
-import type { FitTemplateSettings } from "../../../lib/fitTemplates";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { askConfirm } from "../../../store/confirmDialog";
@@ -33,6 +32,7 @@ import FitParamsSection from "./FitParamsSection";
 import WeightingSection from "./WeightingSection";
 import { reportPrefs } from "./curveFitSession";
 import { useCurveFit } from "./useCurveFit";
+import { useFitTemplateBinding } from "./useFitTemplateBinding";
 import { useModelScan } from "./useModelScan";
 import { useSavedFitModels } from "./useSavedFitModels";
 import { xErrorChannel } from "./xErrorChannel";
@@ -72,9 +72,6 @@ export default function CurveFitPanel() {
   const setOpen = useApp((s) => s.setCurveFitOpen);
   const recordHistory = useApp((s) => s.recordHistory);
   const updateAnalysisItem = useAnalysisSelection((state) => state.updateItem);
-  const selectionRange = useAnalysisSelection((state) =>
-    state.toolId === "curvefit" ? (state.selection?.items[0]?.range ?? null) : null,
-  );
   const [reporting, setReporting] = useState(false);
   const [globalMode, setGlobalMode] = useState(false);
   const {
@@ -84,6 +81,7 @@ export default function CurveFitPanel() {
     setModelName,
     result,
     fitData,
+    resultStale,
     guessOnly,
     busy,
     error,
@@ -185,27 +183,10 @@ export default function CurveFitPanel() {
     clear();
   };
 
-  const templateSettings: FitTemplateSettings = {
-    version: 1,
-    model: modelName,
-    weight: weightMode,
-    ...(weightMode === "manual" && manualKey != null && active ? { manualLabel: active.data.labels[manualKey] ?? "" } : {}),
-    rows: paramInputs,
-    ...(selectionRange ? { range: { lo: selectionRange.lo, hi: selectionRange.hi } } : {}),
-  };
-  const applyTemplate = (t: FitTemplateSettings): boolean => {
-    if (!models.some((m) => m.name === t.model)) {
-      toast(`fit template needs the model "${t.model}", which this build does not have`, "danger");
-      return false;
-    }
-    setModelName(t.model);
-    setWeightMode(t.weight);
-    const manual = t.manualLabel !== undefined && active ? active.data.labels.indexOf(t.manualLabel) : -1;
-    setManualKey(manual >= 0 ? manual : null);
-    replaceParamRows(t.rows);
-    if (active) updateAnalysisItem(active.id, { range: t.range ? { ...t.range, source: "manual" } : null });
-    return true;
-  };
+  const template = useFitTemplateBinding({
+    active, models, modelName, setModelName, weightMode, setWeightMode, manualKey, setManualKey,
+    paramRows: paramInputs, replaceParamRows,
+  });
 
   const toReport = async () => {
     if (!result || !active) return;
@@ -365,6 +346,7 @@ export default function CurveFitPanel() {
           result={result}
           fitData={fitData}
           guessOnly={guessOnly}
+          stale={resultStale}
           xRange={xRange}
           reporting={reporting}
           onReport={() => void toReport()}
@@ -378,7 +360,7 @@ export default function CurveFitPanel() {
       <CurveFitBatchSection modelName={modelName} model={registryModel} paramRows={paramInputs} weightMode={weightMode} manualKey={manualKey} />
 
       {/* Save / apply named fit settings. */}
-      <FitTemplatesSection current={templateSettings} apply={applyTemplate} />
+      <FitTemplatesSection current={template.current} apply={template.apply} />
 
       {/* Fit 2+ models to this selection and compare them. */}
       <CompareModelsSection options={modelOptions} current={modelName} customModels={customModels} />

@@ -153,6 +153,83 @@ describe("CurveFitPanel — closing hides, Remove fit deletes", () => {
   });
 });
 
+describe("CurveFitPanel — a result whose data changed", () => {
+  const NOTE = /The data selected for fitting changed after this fit/;
+
+  it("is marked until it is re-fitted, and an added column alone does not mark it", async () => {
+    await fitOnce();
+    expect(screen.queryByText(NOTE)).toBeNull();
+    // A new column (the fit's own linked output, say) replaces the data object
+    // but not the fitted pairs.
+    const before = useApp.getState().datasets[0]!;
+    const widened = { ...before.data, values: before.data.values.map((r) => [...r, 0]), labels: ["y", "y fit"], units: ["", ""] };
+    act(() => useApp.setState({ datasets: [{ ...before, data: widened }] }));
+    expect(screen.queryByText(NOTE)).toBeNull();
+    // An edited value: the numbers shown are for the earlier data (recalc may
+    // be off, or the re-fit may have failed) — say so.
+    const edited = { ...widened, values: widened.values.map((r, i) => (i === 2 ? [50, 0] : r)) };
+    act(() => useApp.setState({ datasets: [{ ...before, data: edited }] }));
+    expect(screen.getByText(NOTE)).toBeInTheDocument();
+  });
+
+  it("comes back on reopen after a column was added to the worksheet", async () => {
+    const unmount = await fitOnce();
+    unmount();
+    const before = useApp.getState().datasets[0]!;
+    const widened = { ...before.data, values: before.data.values.map((r) => [...r, 0]), labels: ["y", "y fit"], units: ["", ""] };
+    act(() => useApp.setState({ datasets: [{ ...before, data: widened }] }));
+    render(<CurveFitPanel />);
+    // Before the fix: an empty panel beside the curve (the data object changed).
+    expect(await screen.findByText("0.98")).toBeInTheDocument();
+  });
+});
+
+describe("CurveFitPanel — a background re-fit", () => {
+  const REFIT = {
+    params: [3, 0.5], errors: [0.3, 0.4], R2: 0.75, RMSE: 0.9, chiSqRed: 0.6, nPoints: 5, nFree: 2,
+    yFit: [0.5, 3.5, 6.5, 9.5, 12.5], residuals: [0.5, -0.5, 0.5, -0.5, 0.5],
+  };
+  /** Edit the worksheet, then land the recalc graph's re-fit of its saved fit. */
+  async function refitAfterEdit(): Promise<void> {
+    const { commitRecomputedFit } = await import("../../../lib/fitRecompute");
+    const { dropGapRows } = await import("../../../lib/api/finitePairs");
+    const before = useApp.getState().datasets[0]!;
+    const edited = { ...before, data: { ...before.data, values: [[1], [3], [6], [10], [13]] } };
+    act(() => useApp.setState({ datasets: [edited] }));
+    const pairs = dropGapRows(edited.data.time, edited.data.values.map((r) => r[0]!));
+    act(() => commitRecomputedFit(useApp.setState, useApp.getState, edited, edited.fitSpec!, pairs, REFIT));
+  }
+
+  it("is followed by the open panel: no original-fit numbers beside the re-fitted curve", async () => {
+    await fitOnce();
+    await refitAfterEdit();
+    // Before the fix the panel kept showing R² 0.98 (the fit of the old data).
+    expect(await screen.findByText("0.75")).toBeInTheDocument();
+    expect(screen.queryByText("0.98")).toBeNull();
+    expect(useApp.getState().fitOverlay?.y).toEqual(REFIT.yFit);
+  });
+
+  it("is what a reopened panel shows", async () => {
+    const unmount = await fitOnce();
+    unmount();
+    await refitAfterEdit();
+    render(<CurveFitPanel />);
+    expect(await screen.findByText("0.75")).toBeInTheDocument();
+  });
+
+  it("of another tool's fit on the worksheet is not adopted", async () => {
+    await fitOnce();
+    const { commitRecomputedFit } = await import("../../../lib/fitRecompute");
+    const { dropGapRows } = await import("../../../lib/api/finitePairs");
+    const other = { ...useApp.getState().datasets[0]!, fitSpec: { model: "Linear", params: [9, 9] } };
+    act(() => useApp.setState({ datasets: [other] }));
+    const pairs = dropGapRows(other.data.time, other.data.values.map((r) => r[0]!));
+    act(() => commitRecomputedFit(useApp.setState, useApp.getState, other, other.fitSpec, pairs, REFIT));
+    expect(screen.queryByText("0.75")).toBeNull();
+    expect(screen.getByText("0.98")).toBeInTheDocument();
+  });
+});
+
 describe("CurveFitPanel — window placement and key results", () => {
   it("opens docked at the right edge, not over the plot's Y axis", async () => {
     render(<CurveFitPanel />);

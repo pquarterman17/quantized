@@ -15,6 +15,7 @@ import { stemFromName } from "../lib/exportActive";
 import { fullPlottedX } from "../lib/fitselectionActions";
 import { boundsFromWire } from "../lib/fitBoundsWire";
 import { fitOverlayValues, stampRecompute } from "../lib/fitRecompute";
+import { announceFitRecomputed } from "../lib/fitRecomputeEvents";
 import { fitDataForSpec } from "../lib/fitselection";
 import type { Dataset } from "../lib/types";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
@@ -395,6 +396,7 @@ export async function recalculateFitAnalysisResult(id: string): Promise<boolean>
     current.setFitSpec(sourceId, stampRecompute(spec, fitted));
     if (overlayWasVisible) useApp.setState({ fitOverlay: nextOverlay ? { datasetId: sourceId, y: nextOverlay } : null });
     publishFitAnalysisResult(sourceId);
+    announceFitRecomputed({ datasetId: sourceId, previousSpec: spec, result: fitted, x: pairs.x, y: pairs.y, dy: dy ?? null });
     useApp.getState().setStatus(`recalculated ${result.name}`);
     return true;
   } catch (error) {
