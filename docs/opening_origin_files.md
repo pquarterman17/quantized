@@ -93,11 +93,37 @@ these is either a genuinely auto-generated Origin artifact (report-sheet
 columns), a file type that is not a project, or a scoped, documented UI
 simplification.
 
-**Lazy books after a restart.** A multi-book project opened from the
-browser's file picker loads its non-primary books on demand. The uploaded
-file is kept in quantized's own cache directory (content-addressed, up to
-2 GB, least-recently-used first), so those books still load after an app
-restart; if the cache has since evicted it, one notice offers Re-import.
+## Where an opened project is kept (the upload cache)
+
+A multi-book project opened from the file picker or by drag-and-drop loads
+its non-primary books on demand, so quantized keeps **a copy of the
+project file on disk** until those books are needed — including after you
+quit and restart the app. You should know it is there:
+
+- **Location.** `origin-uploads` inside quantized's per-user cache
+  directory: `~/.cache/quantized/origin-uploads` on Linux,
+  `~/Library/Caches/quantized/origin-uploads` on macOS,
+  `%LOCALAPPDATA%\quantized\Cache\origin-uploads` on Windows. Set the
+  `QZ_UPLOAD_CACHE_DIR` environment variable to keep it elsewhere; the
+  copies then live in an `origin-uploads` subfolder of that directory, and
+  nothing else in the directory is touched.
+- **What is stored.** The uploaded `.opj`/`.opju` files themselves, byte
+  for byte (one folder per file, named by the file's SHA-256), plus a small
+  index. The folder and files are readable only by your user account
+  (`0700`/`0600` on Linux and macOS).
+- **How long.** Until the cache passes **2 GiB**, when the least recently
+  used copies are removed first — there is no time limit. If a project's
+  copy has been removed, its unloaded books show one notice offering
+  Re-import.
+- **Clearing it.** *Preferences ▸ Interaction ▸ Origin upload cache ▸
+  Clear…* deletes every copy after a confirmation that names the folder,
+  the number of files and their size; so does
+  `qz upload-cache clear` from a terminal (`qz upload-cache` shows the
+  location and size). Deleting the `origin-uploads` folder by hand while
+  the app is closed is also safe.
+
+Projects opened by path in the desktop app are read in place and are not
+copied.
 
 ## Exporting back to Origin
 

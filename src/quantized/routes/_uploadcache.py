@@ -1,65 +1,67 @@
 """Persistent, byte-bounded staging for Origin project uploads (lazy per-book
 transport, ``ORIGIN_FILE_DECODE_PLAN`` #38).
 
-``/api/parsers/upload``'s ordinary path stages the file in an ephemeral
-``tempfile.TemporaryDirectory`` that is deleted before the response returns --
-fine for a one-shot full import, but a lazy import needs the bytes to survive
-until the browser later activates a non-primary book and fetches its full
-data (``routes/books.py``). Origin project uploads are staged here instead,
-under an opaque token the frontend echoes back on that fetch.
+``/api/parsers/upload``'s ordinary path stages the file in an ephemeral temp
+dir deleted before the response returns. A lazy Origin import needs the bytes
+to survive until the browser later activates a non-primary book
+(``routes/books.py``), so project uploads are staged here under an opaque
+token the frontend echoes back.
 
-Survives what the old in-memory token map did not (audit 2026-11: a lazy book
-became unrecoverable -- 404 "upload expired" -- after an app restart, or after
-eight more uploads):
+* **Content-hash tokens.** SHA-256 of the bytes plus the lower-cased
+  extension, computed while the upload streams to disk: the same file always
+  gets the same token (one copy), and a token outlives an app restart.
+* **Where.** A DEDICATED directory: ``<user cache dir>/quantized/origin-uploads``
+  (``platformdirs``), or ``$QZ_UPLOAD_CACHE_DIR/origin-uploads``. Layout:
+  ``<token>/<basename>`` + ``index.json`` (name, size, last use) + a
+  ``.quantized-upload-cache`` marker. Directories are created ``0700`` and
+  files ``0600`` -- the uploads are the user's research data.
+* **Bounded by bytes.** At most :data:`MAX_TOTAL_BYTES` (2 GiB); past that the
+  least-recently-USED entries go first (a book fetch is a use). The entry
+  just staged is never evicted by its own commit. Skipped by eviction:
+  entries pinned by a running parse (``mark_in_flight``), and entries this
+  process did not stage itself that were used within the last
+  :data:`FOREIGN_GRACE_S` seconds (another app instance may be parsing them).
+  The cache can therefore sit over budget briefly; the next commit retries.
+* **Shared safely.** Every mutation runs under an OS file lock (``.lock``),
+  re-reads the on-disk index and MERGES it with this process's view before
+  writing, so two app instances on one directory keep each other's uploads.
+* **Fails soft.** The index is a cache of what the token directories hold: if
+  it cannot be written (disk full) the staged file still serves, and if it is
+  missing or corrupt it is rebuilt by re-hashing the token directories.
+* **Touches only its own files.** Nothing is created in, or removed from, a
+  directory that lacks the marker; a non-empty directory without one is
+  refused. Tokens must match ``^[0-9a-f]{64}$`` and names be plain basenames
+  before any path is formed. Cleanup removes only stale (> 1 h) ``.tmp-*``
+  files and token directories that fail their own hash.
 
-* **Content-hash tokens.** The token is the SHA-256 of the file's bytes plus
-  its lower-cased extension, so re-uploading the same file yields the same
-  token (one copy on disk) and a token stays meaningful across restarts.
-* **On disk, with a persisted index.** Files live in Quantized's own per-user
-  CACHE dir (``platformdirs``; ``QZ_UPLOAD_CACHE_DIR`` overrides it, as the
-  tests do) at ``<root>/<token>/<basename>``, and ``index.json`` records
-  each entry's name, size and last use. A new :class:`UploadCache` over the
-  same directory -- the next app start -- resolves every token the previous
-  one staged.
-* **Bounded by bytes, not count.** At most :data:`MAX_TOTAL_BYTES` (2 GiB) of
-  staged uploads are kept; past that the least-recently-USED entries go first
-  (a book fetch counts as a use). The entry just staged is never evicted by
-  its own commit, so one upload larger than the whole budget still lands
-  (and goes when the next upload arrives).
-
-Entries whose parse is still running are pinned (``mark_in_flight``) and
-skipped by eviction -- several uploads can be staged while an earlier one's
-parse is still reading its file (``routes/parsers.py`` runs it in a
-threadpool), and unlinking it then would fail a valid upload.
-
-Never touches anything it did not create: tokens are checked against
-``^[0-9a-f]{64}$`` and names must be plain basenames before any path is
-formed, and cleanup only removes token-named directories and this module's
-own ``.tmp-*`` staging files inside its root.
+``clear()`` (``DELETE /api/parsers/upload-cache``, ``qz upload-cache clear``,
+Preferences > Interaction > "Origin upload cache") removes every staged upload.
 """
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
-import hashlib
-import json
+import logging
 import os
-import re
 import secrets
 import threading
 import time
 from collections import Counter, OrderedDict
-from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import platformdirs
 
+from quantized.routes import _uploadcache_fs as fs
 from quantized.routes._uploadstream import AsyncChunkReader, stream_to_path
 
 __all__ = [
     "ENV_OVERRIDE",
+    "FOREIGN_GRACE_S",
     "MAX_TOTAL_BYTES",
     "UploadCache",
+    "cache_dir",
     "clear_in_flight",
     "get_cache",
     "mark_in_flight",
@@ -69,175 +71,176 @@ __all__ = [
 ]
 
 ENV_OVERRIDE = "QZ_UPLOAD_CACHE_DIR"
-#: Total on-disk budget for staged uploads (documented limit).
+#: Total on-disk budget for staged uploads: 2 GiB (2 * 1024**3 bytes).
 MAX_TOTAL_BYTES = 2 * 1024**3
+#: Eviction leaves another instance's entry alone this long after its last use.
+FOREIGN_GRACE_S = 600.0
 _APP_NAME = "quantized"
 _SUBDIR = "origin-uploads"
-_INDEX = "index.json"
-_TMP_PREFIX = ".tmp-"
-_TOKEN_RE = re.compile(r"[0-9a-f]{64}")
-_HASH_CHUNK = 1 << 20
-_TMP_GRACE_S = 3600  # a .tmp-* file older than this is a crashed stage
-
-
-@dataclass
-class _Entry:
-    name: str
-    size: int
-    last_used: float
-
-
-def _valid_name(name: object) -> bool:
-    return (
-        isinstance(name, str)
-        and name not in ("", ".", "..")
-        and Path(name).name == name
-        and "\x00" not in name
-        and not name.startswith(_TMP_PREFIX)
-    )
-
-
-def _file_token(path: Path, name: str) -> str:
-    """SHA-256 of the file's bytes plus its lower-cased extension (the
-    extension drives format dispatch, so the same bytes under ``.opj`` and
-    ``.opju`` stay distinct entries)."""
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        while chunk := f.read(_HASH_CHUNK):
-            h.update(chunk)
-    h.update(b"\x00" + Path(name).suffix.lower().encode("utf-8", "replace"))
-    return h.hexdigest()
-
-
+_log = logging.getLogger(__name__)
 class UploadCache:
     """One staging directory + its persisted LRU index (module docstring)."""
 
-    def __init__(self, root: Path, max_bytes: int = MAX_TOTAL_BYTES) -> None:
+    def __init__(
+        self,
+        root: Path,
+        max_bytes: int = MAX_TOTAL_BYTES,
+        foreign_grace_s: float = FOREIGN_GRACE_S,
+    ) -> None:
         self.root = Path(root)
         self.max_bytes = max_bytes
+        self.foreign_grace_s = foreign_grace_s
         self._lock = threading.RLock()
-        self._entries: OrderedDict[str, _Entry] = OrderedDict()
+        self._entries: OrderedDict[str, fs.Entry] = OrderedDict()
         self._pins: Counter[str] = Counter()
-        self._load()
+        self._own: set[str] = set()  # tokens this process staged or served
+        with self._lock, fs.file_lock(self.root):
+            self._sync(scan=True)
 
-    # -- persistence ------------------------------------------------------
-    def _path(self, token: str, entry: _Entry) -> Path:
+    # -- ownership + locking ------------------------------------------------
+    def _owned(self) -> bool:
+        return (self.root / fs.MARKER).is_file()
+
+    def _ensure_root(self) -> None:
+        """Create the directory (0700) and its marker, or refuse a non-empty
+        directory this module did not create."""
+        if self._owned():
+            return
+        if self.root.is_dir() and any(self.root.iterdir()):
+            raise OSError(
+                f"refusing to use {self.root} as the Origin upload cache: it is not empty "
+                "and was not created by Quantized"
+            )
+        self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        with contextlib.suppress(OSError):
+            os.chmod(self.root, 0o700)
+        with contextlib.suppress(FileExistsError):
+            fs.private_file(self.root / fs.MARKER, b"Quantized Origin upload cache\n")
+
+    # -- persistence --------------------------------------------------------
+    def _path(self, token: str, entry: fs.Entry) -> Path:
         return self.root / token / entry.name
 
-    def _load(self) -> None:
-        """Read the index, keeping only entries whose file is still there
-        with its recorded size; then sweep token dirs the index no longer
-        names and stale (>1 h old) ``.tmp-*`` files (a crash mid-stage)."""
+    def _present(self, token: str, entry: fs.Entry) -> bool:
+        path = self._path(token, entry)
         try:
-            raw = json.loads((self.root / _INDEX).read_text("utf-8"))
-        except (OSError, ValueError):
-            raw = {}
-        rows = raw.get("entries", {}) if isinstance(raw, dict) else {}
-        loaded: list[tuple[str, _Entry]] = []
-        for token, row in (rows.items() if isinstance(rows, dict) else []):
-            if not (isinstance(token, str) and _TOKEN_RE.fullmatch(token)):
-                continue
-            if not isinstance(row, dict) or not _valid_name(row.get("name")):
-                continue
-            size, used = row.get("size"), row.get("last_used")
-            if not isinstance(size, int) or not isinstance(used, (int, float)):
-                continue
-            entry = _Entry(str(row["name"]), size, float(used))
-            path = self._path(token, entry)
-            if path.is_file() and path.stat().st_size == size:
-                loaded.append((token, entry))
-        loaded.sort(key=lambda te: te[1].last_used)
-        self._entries = OrderedDict(loaded)
-        self._sweep_orphans()
+            return path.is_file() and path.stat().st_size == entry.size
+        except OSError:
+            return False
 
-    def _sweep_orphans(self) -> None:
-        if not self.root.is_dir():
+    def _sync(self, *, scan: bool = False) -> None:
+        """Merge the on-disk index with this process's view (caller holds
+        both locks): an entry either side knows whose file is present is
+        kept, with the later ``last_used``. With ``scan`` -- or whenever the
+        index is missing/corrupt -- token directories the index does not name
+        are re-hashed and adopted, and stale debris is removed."""
+        if not self._owned():
+            self._entries = OrderedDict()
             return
-        for child in self.root.iterdir():
-            orphan = _TOKEN_RE.fullmatch(child.name) and child.name not in self._entries
-            if child.is_dir() and orphan:
-                self._remove_dir(child)
-            elif child.is_file() and child.name.startswith(_TMP_PREFIX):
-                # Only STALE temp files: a fresh one may be an upload still
-                # streaming in another app instance sharing this directory.
-                with contextlib.suppress(OSError):
-                    if time.time() - child.stat().st_mtime > _TMP_GRACE_S:
-                        child.unlink()
+        disk, ok = fs.read_index(self.root)
+        merged: dict[str, fs.Entry] = {}
+        for token in {*disk, *self._entries}:
+            mine, theirs = self._entries.get(token), disk.get(token)
+            entry = theirs or mine
+            assert entry is not None
+            if mine is not None and theirs is not None:
+                entry = fs.Entry(theirs.name, theirs.size, max(mine.last_used, theirs.last_used))
+            if self._present(token, entry):
+                merged[token] = entry
+        if scan or not ok:
+            fs.adopt_and_sweep(self.root, merged)
+        self._entries = OrderedDict(sorted(merged.items(), key=lambda te: te[1].last_used))
 
     def _save(self) -> None:
-        """Write the index atomically (temp file + ``os.replace``)."""
-        self.root.mkdir(parents=True, exist_ok=True)
-        rows = {
-            t: {"name": e.name, "size": e.size, "last_used": e.last_used}
-            for t, e in self._entries.items()
-        }
-        tmp = self.root / f"{_TMP_PREFIX}index-{secrets.token_hex(4)}"
-        tmp.write_text(json.dumps({"version": 1, "entries": rows}), "utf-8")
-        os.replace(tmp, self.root / _INDEX)
+        """Persist the index. NON-FATAL (``fs.write_index``): a staged file
+        still serves from this process's view when the disk is full."""
+        try:
+            self._ensure_root()
+        except OSError:
+            _log.warning("Origin upload cache directory unavailable", exc_info=True)
+            return
+        fs.write_index(self.root, self._entries)
 
-    @staticmethod
-    def _remove_dir(directory: Path) -> None:
-        """Remove a token directory this cache created (its one file)."""
-        for child in directory.iterdir() if directory.is_dir() else []:
-            with contextlib.suppress(OSError):
-                child.unlink()
-        with contextlib.suppress(OSError):
-            directory.rmdir()
-
-    # -- bound ------------------------------------------------------------
+    # -- bound --------------------------------------------------------------
     def total_bytes(self) -> int:
         with self._lock:
             return sum(e.size for e in self._entries.values())
 
     def _evict(self, keep: str | None = None) -> None:
-        """Drop least-recently-used, unpinned entries (never ``keep``) until
-        the total is within :attr:`max_bytes`. Pinned entries may leave the
-        cache briefly over budget; ``clear_in_flight`` retries."""
+        """Drop least-recently-used entries until within :attr:`max_bytes`,
+        skipping ``keep``, pinned entries and another instance's fresh ones."""
         total = sum(e.size for e in self._entries.values())
+        now = time.time()
         for token in list(self._entries):
             if total <= self.max_bytes:
                 break
-            if token == keep or self._pins[token] > 0:
+            entry = self._entries[token]
+            foreign_fresh = (
+                token not in self._own and now - entry.last_used < self.foreign_grace_s
+            )
+            if token == keep or self._pins[token] > 0 or foreign_fresh:
                 continue
-            entry = self._entries.pop(token)
+            del self._entries[token]
+            self._own.discard(token)
             total -= entry.size
-            self._remove_dir(self.root / token)
+            fs.remove_dir(self.root / token)
 
-    # -- public API -------------------------------------------------------
-    def _commit(self, tmp: Path, name: str, *, pinned: bool) -> tuple[Path, str]:
-        """Move a fully written ``tmp`` file into place under its content
-        token (or drop it when that content is already staged), pin it if
-        asked -- atomically with registering it, so its own eviction sweep can
-        never pick it -- then evict and persist."""
-        token = _file_token(tmp, name)
-        with self._lock:
-            entry = self._entries.get(token)
-            if entry is not None and self._path(token, entry).is_file():
-                tmp.unlink(missing_ok=True)
-                entry.last_used = time.time()
-            else:
-                dest_dir = self.root / token
-                dest_dir.mkdir(parents=True, exist_ok=True)
-                entry = _Entry(name, tmp.stat().st_size, time.time())
-                os.replace(tmp, dest_dir / name)
-                self._entries[token] = entry
-            self._entries.move_to_end(token)
-            if pinned:
-                self._pins[token] += 1
-            self._evict(keep=token)
-            self._save()
-            return self._path(token, entry), token
-
+    # -- staging ------------------------------------------------------------
     def _tmp_path(self) -> Path:
-        self.root.mkdir(parents=True, exist_ok=True)
-        return self.root / f"{_TMP_PREFIX}{secrets.token_hex(8)}"
+        self._ensure_root()
+        tmp = self.root / f"{fs.TMP_PREFIX}{secrets.token_hex(8)}"
+        fs.private_file(tmp)
+        return tmp
+
+    def _commit(self, tmp: Path, name: str, token: str, *, pinned: bool) -> tuple[Path, str]:
+        """Move a fully written ``tmp`` into place under ``token`` (or drop it
+        when that content is already staged), pin it if asked -- before the
+        eviction sweep, so its own commit can never pick it -- evict, persist.
+        A failure leaves no temp file and no pin behind."""
+        did_pin = False
+        with self._lock:
+            try:
+                with fs.file_lock(self.root):
+                    self._sync()
+                    entry = self._entries.get(token)
+                    if entry is not None and self._present(token, entry):
+                        tmp.unlink(missing_ok=True)
+                        entry.last_used = time.time()
+                    else:
+                        dest_dir = self.root / token
+                        fs.remove_dir(dest_dir)  # unindexed debris under this token
+                        dest_dir.mkdir(mode=0o700, exist_ok=True)
+                        entry = fs.Entry(name, tmp.stat().st_size, time.time())
+                        os.replace(tmp, dest_dir / name)
+                        self._entries[token] = entry
+                    self._entries.move_to_end(token)
+                    self._own.add(token)
+                    if pinned:
+                        self._pins[token] += 1
+                        did_pin = True
+                    self._evict(keep=token)
+                    self._save()
+                    return self._path(token, entry), token
+            except BaseException:
+                if did_pin:
+                    self._unpin(token)
+                with contextlib.suppress(OSError):
+                    tmp.unlink(missing_ok=True)
+                raise
 
     def stage(self, name: str, content: bytes, *, pinned: bool = False) -> tuple[Path, str]:
         """Stage in-memory ``content`` as ``name``; returns ``(path, token)``."""
-        name = _checked_name(name)
+        name = fs.checked_name(name)
+        digest = fs.new_hash()
+        digest.update(content)
         tmp = self._tmp_path()
-        tmp.write_bytes(content)
-        return self._commit(tmp, name, pinned=pinned)
+        try:
+            tmp.write_bytes(content)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                tmp.unlink(missing_ok=True)
+            raise
+        return self._commit(tmp, name, fs.token_of(digest, name), pinned=pinned)
 
     async def stage_stream(
         self,
@@ -247,35 +250,57 @@ class UploadCache:
         max_bytes: int | None = None,
         pinned: bool = False,
     ) -> tuple[Path, str]:
-        """Streaming :meth:`stage`: chunks go straight to disk; an oversize
-        upload leaves nothing behind and raises ``UploadTooLargeError``."""
-        name = _checked_name(name)
-        tmp = self._tmp_path()
+        """Streaming :meth:`stage`: chunks are hashed as they go to disk, and
+        the commit (file lock + index I/O) runs off the event loop. An
+        oversize or failed upload leaves nothing behind."""
+        name = fs.checked_name(name)
+        digest = fs.new_hash()
+        tmp = await asyncio.to_thread(self._tmp_path)
         try:
-            await stream_to_path(source, tmp, filename=name, max_bytes=max_bytes)
+            reader = fs.HashingReader(source, digest)
+            await stream_to_path(reader, tmp, filename=name, max_bytes=max_bytes)
         except BaseException:
-            tmp.unlink(missing_ok=True)
+            with contextlib.suppress(OSError):
+                tmp.unlink(missing_ok=True)
             raise
-        return self._commit(tmp, name, pinned=pinned)
+        token = fs.token_of(digest, name)
+        commit = asyncio.ensure_future(
+            asyncio.to_thread(self._commit, tmp, name, token, pinned=pinned)
+        )
+        try:
+            return await asyncio.shield(commit)
+        except asyncio.CancelledError:
+            # The worker thread still finishes; nobody will unpin for us.
+            def _release(done: asyncio.Future[tuple[Path, str]]) -> None:
+                if pinned and not done.cancelled() and done.exception() is None:
+                    self._unpin(token)
 
+            commit.add_done_callback(_release)
+            raise
+
+    # -- reads + pins -------------------------------------------------------
     def resolve(self, token: str) -> Path | None:
         """The staged file for ``token`` (and mark it used), or ``None`` when
         unknown, evicted, malformed, or removed out of band."""
-        if not (isinstance(token, str) and _TOKEN_RE.fullmatch(token)):
+        if not (isinstance(token, str) and fs.TOKEN_RE.fullmatch(token)):
             return None
-        with self._lock:
+        with self._lock, fs.file_lock(self.root):
+            self._sync()
             entry = self._entries.get(token)
             if entry is None:
                 return None
-            path = self._path(token, entry)
-            if not path.is_file():
-                del self._entries[token]
-                self._save()
-                return None
             entry.last_used = time.time()
             self._entries.move_to_end(token)
+            self._own.add(token)
             self._save()
-            return path
+            return self._path(token, entry)
+
+    def _unpin(self, token: str) -> None:
+        with self._lock:
+            if self._pins[token] > 1:
+                self._pins[token] -= 1
+            else:
+                self._pins.pop(token, None)
 
     def mark_in_flight(self, token: str) -> None:
         with self._lock:
@@ -285,34 +310,58 @@ class UploadCache:
         """Unpin once its parse finished; re-run eviction, which a pinned
         entry may have held off."""
         with self._lock:
-            if self._pins[token] > 0:
-                self._pins[token] -= 1
-            if self._pins[token] <= 0:
-                del self._pins[token]
-            before = len(self._entries)
-            self._evict()
-            if len(self._entries) != before:
+            self._unpin(token)
+            if sum(e.size for e in self._entries.values()) <= self.max_bytes:
+                return
+            with fs.file_lock(self.root):
+                self._sync()
+                self._evict()
                 self._save()
 
     def is_pinned(self, token: str) -> bool:
         with self._lock:
             return self._pins[token] > 0
 
+    # -- housekeeping -------------------------------------------------------
+    def info(self) -> dict[str, Any]:
+        """Where the cache is and what it holds (for the clear confirmation)."""
+        with self._lock, fs.file_lock(self.root):
+            self._sync()
+            return {
+                "path": str(self.root),
+                "entries": len(self._entries),
+                "bytes": sum(e.size for e in self._entries.values()),
+                "max_bytes": self.max_bytes,
+            }
 
-def _checked_name(name: str) -> str:
-    base = Path(name).name
-    if not _valid_name(base):
-        raise ValueError(f"invalid upload name: {name!r}")
-    return base
+    def clear(self) -> dict[str, int]:
+        """Remove every staged upload except ones a parse is reading right
+        now, plus stale temp files. Returns ``{"removed", "bytes", "kept"}``."""
+        removed = freed = 0
+        with self._lock, fs.file_lock(self.root):
+            self._sync(scan=True)
+            for token in list(self._entries):
+                if self._pins[token] > 0:
+                    continue
+                entry = self._entries.pop(token)
+                self._own.discard(token)
+                fs.remove_dir(self.root / token)
+                removed += 1
+                freed += entry.size
+            if self._owned():
+                self._save()
+            return {"removed": removed, "bytes": freed, "kept": len(self._entries)}
 
 
 def cache_dir() -> Path:
-    """Quantized's per-user cache dir for staged uploads (``QZ_UPLOAD_CACHE_DIR``
-    overrides it)."""
+    """The dedicated staging directory: ``origin-uploads`` under Quantized's
+    per-user cache dir, or under ``$QZ_UPLOAD_CACHE_DIR`` when set (always a
+    subdirectory -- the override itself may hold other files)."""
     override = os.environ.get(ENV_OVERRIDE)
-    if override:
-        return Path(override)
-    return Path(platformdirs.user_cache_dir(_APP_NAME, appauthor=False)) / _SUBDIR
+    base = Path(override) if override else Path(
+        platformdirs.user_cache_dir(_APP_NAME, appauthor=False)
+    )
+    return base / _SUBDIR
 
 
 _default: UploadCache | None = None
@@ -320,7 +369,8 @@ _default_lock = threading.Lock()
 
 
 def get_cache() -> UploadCache:
-    """The process-wide cache (created on first use from :func:`cache_dir`)."""
+    """The process-wide cache (created on first use from :func:`cache_dir`).
+    Construction may re-hash unindexed files: call it off the event loop."""
     global _default
     with _default_lock:
         if _default is None or _default.root != cache_dir():
@@ -343,7 +393,8 @@ async def stage_upload_stream(
     """Stream an upload into the cache (see :meth:`UploadCache.stage_stream`).
     ``pinned=True`` pins the entry atomically with committing it; the caller
     must call :func:`clear_in_flight` once its parse finishes."""
-    return await get_cache().stage_stream(name, source, max_bytes=max_bytes, pinned=pinned)
+    cache = await asyncio.to_thread(get_cache)
+    return await cache.stage_stream(name, source, max_bytes=max_bytes, pinned=pinned)
 
 
 def resolve_upload_token(token: str) -> Path | None:

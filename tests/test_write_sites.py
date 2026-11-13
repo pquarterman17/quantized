@@ -218,10 +218,22 @@ WRITE_SITE_ALLOWLIST: dict[str, str] = {
         "(os.replace) and evicts (unlink/rmdir) entries + its index.json "
         "inside this module's own byte-bounded staging directory (the "
         "per-user cache dir's `origin-uploads/<sha256 token>/<basename>`, "
-        "or QZ_UPLOAD_CACHE_DIR) -- a server-generated content-hash path "
+        "or `$QZ_UPLOAD_CACHE_DIR/origin-uploads`; created 0700 with a "
+        "marker file, and a non-empty directory without the marker is "
+        "refused) -- a server-generated content-hash path "
         "(token checked against ^[0-9a-f]{64}$, name a plain basename), "
         "never a caller-supplied one, and always a COPY of uploaded bytes, "
         "never the original file."
+    ),
+    "routes/_uploadcache_fs.py": (
+        "private_file/file_lock/write_index/adopt_and_sweep/remove_dir: the "
+        "filesystem primitives of routes/_uploadcache.py above -- they "
+        "create (0600, O_EXCL), lock, atomically replace and remove only the "
+        "upload cache's own files inside its dedicated, marker-owned "
+        "`origin-uploads` directory: `.tmp-*` staging files, `.lock`, "
+        "`index.json`, and `<sha256 token>/` directories whose content "
+        "hashes to their name. Never a caller-supplied path, never an "
+        "original data file."
     ),
     "routes/_uploadstream.py": (
         "stream_to_path: on a failed/oversized upload, unlinks the partial "
