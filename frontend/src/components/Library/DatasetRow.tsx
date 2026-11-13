@@ -111,6 +111,7 @@ export default function DatasetRow({
   const stale = staleDs.includes(d.id) || staleFits.includes(d.id);
   const recalcNow = useApp((s) => s.recalcNow);
   const activateFromLibrary = useApp((s) => s.activateFromLibrary);
+  const openFromLibrary = useApp((s) => s.openFromLibrary);
   const toggleSelected = useApp((s) => s.toggleSelected);
   const selectRange = useApp((s) => s.selectRange);
   const selectIds = useApp((s) => s.selectIds);
@@ -142,6 +143,12 @@ export default function DatasetRow({
   // toggleSelected/selectRange/setActive), not re-implemented here.
   const open = () => {
     activateFromLibrary(d.id);
+    recordWorkbookOpen(d.workbookId, `worksheet:${d.id}`);
+  };
+  // The explicit open (double-click): an Origin book's sheet is plotted too
+  // (re-audit #11, store openFromLibrary), as a CSV row's open is.
+  const openExplicit = () => {
+    openFromLibrary(d.id);
     recordWorkbookOpen(d.workbookId, `worksheet:${d.id}`);
   };
   const onRowClick = (e: React.MouseEvent) => {
@@ -255,7 +262,7 @@ export default function DatasetRow({
       onKeyDown={onRowKeyDown}
       onClick={onRowClick}
       // L0.25 tree open gesture; the NAME span's dbl-click rename wins over it.
-      onDoubleClick={treeMode ? open : undefined}
+      onDoubleClick={treeMode ? openExplicit : undefined}
       onContextMenu={onContextMenu}
     >
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} help={{ label: "datasets", query: "dataset" }} onClose={() => setMenu(null)} />}
