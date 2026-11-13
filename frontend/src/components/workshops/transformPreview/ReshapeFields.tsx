@@ -26,7 +26,9 @@ function DatasetSelect({ r, label, value, onChange }: { r: ReshapeState; label: 
 function columnOptions(r: ReshapeState, withX: boolean) {
   const data = r.datasets.find((d) => d.id === r.form.primary)?.data;
   const cols = (data?.labels ?? []).map((l, i) => ({ value: String(i), label: l || `column ${i + 1}` }));
-  return withX ? [{ value: "-1", label: "X (x)" }, ...cols] : cols;
+  // The X column is named as `keyOptions` (the category picker) names it, so
+  // one dialog never calls the same column two things.
+  return withX ? [keyOptions(data)[0] ?? { value: "-1", label: "X (x)" }, ...cols] : cols;
 }
 
 function AppendFields({ r }: { r: ReshapeState }) {

@@ -103,6 +103,14 @@ describe("ReshapePanel — live data preview", () => {
     expect(screen.queryByRole("list", { name: "Transform warnings" })).toBeNull();
   });
 
+  it("unstack names the X column one way in every picker (review #2)", () => {
+    run("unstack-columns");
+    render(<ReshapePanel />);
+    const xLabel = (name: string) =>
+      within(screen.getByRole("combobox", { name })).getAllByRole("option").find((o) => (o as HTMLOptionElement).value === "-1")!.textContent;
+    expect(["Row key", "Category column", "Value column"].map(xLabel)).toEqual(["Field (x)", "Field (x)", "Field (x)"]);
+  });
+
   it("join: N rows, the duplicate-key warning, both inputs' sizes; the key-unit mismatch needs the acknowledgment", async () => {
     useApp.setState({ activeId: "L", selectedIds: ["L", "R"] });
     run("join-by-key");
