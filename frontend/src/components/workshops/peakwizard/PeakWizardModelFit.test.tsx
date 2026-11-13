@@ -162,6 +162,20 @@ describe("Peak Analyzer — model engine setup (step 3)", () => {
     expect(options).toEqual(["", "p1.fwhm"]);
   });
 
+  it("the parameter table fits the 420 px window, and the hint wraps (re-audit #16)", async () => {
+    await findTwoPeaks();
+    step("Model");
+    // Name (~60) + vary (~36) + six cells' padding: the controls must leave
+    // room for them inside the window's ~396 px content width.
+    const widths = ["#1 center start", "#1 center min", "#1 center max"].map((name) =>
+      parseFloat((screen.getByRole("textbox", { name }) as HTMLElement).style.width),
+    );
+    const tie = parseFloat(screen.getByRole("combobox", { name: "#1 center tie" }).style.width);
+    expect(widths.every((w) => w > 0) && tie > 0).toBe(true);
+    expect(widths.reduce((a, b) => a + b, 0) + tie + 60 + 36 + 6 * 6).toBeLessThanOrEqual(396);
+    expect(screen.getByText(/Seeded from the detected peaks/)).toHaveStyle({ whiteSpace: "normal" });
+  });
+
   it("a peak's × in the model table deletes it; the other peak keeps its edit under its new number (slice 3)", async () => {
     await findTwoPeaks();
     step("Model");
