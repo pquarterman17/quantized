@@ -23,6 +23,7 @@ from quantized.calc.fit_equation import (
     check_param_vectors,
     describe_equation,
     equation_model,
+    positive_even_params,
 )
 from quantized.calc.fit_equation_init import auto_start
 from quantized.calc.fit_findxy import find_x, find_y
@@ -32,7 +33,7 @@ from quantized.calc.fit_scan import scan_models
 from quantized.calc.fitting import curve_fit
 from quantized.jobs import AbortFn, JobQueueFullError, ProgressFn, jobs
 from quantized.routes._errors import CALC_ERRORS, call_calc
-from quantized.routes._fit_options import FitOptions, resolve_weights
+from quantized.routes._fit_options import FitOptions, resolve_weights, stats_kwargs
 from quantized.routes._payload import to_jsonable
 
 ModelFn = Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
@@ -114,12 +115,13 @@ def fit(req: FitRequest) -> dict[str, Any]:
             weights=resolve_weights(req, len(req.x)),
             fixed=req.fixed,
             calc_errors=req.calc_errors,
-            covariance=req.covariance,
-            scale_errors=req.scale_errors,
+            **stats_kwargs(req),
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return to_jsonable(result)  # type: ignore[no-any-return]
+    out: dict[str, Any] = to_jsonable(result)
+    out["statsVersion"] = req.stats_version
+    return out
 
 
 class BootstrapRequest(BaseModel):
@@ -279,14 +281,16 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
             weights=resolve_weights(req, len(req.x)),
             fixed=req.fixed,
             calc_errors=req.calc_errors,
-            covariance=req.covariance,
-            scale_errors=req.scale_errors,
+            **stats_kwargs(req),
         )
+        # A free parameter the model is even in (a width) is reported positive.
+        positive_even_params(fcn, req.x, result, lower, upper, req.fixed)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     out: dict[str, Any] = to_jsonable(result)
     out["paramNames"] = names
     out["p0"] = p0  # the starts actually used (auto-derived where blank)
+    out["statsVersion"] = req.stats_version
     return out
 
 

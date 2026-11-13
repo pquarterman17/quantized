@@ -148,6 +148,8 @@ def global_fit(
 
     shared_params = sp_opt[:n_shared]
     shared_errors = sp_err[:n_shared]
+    err_both = {key: np.asarray(fit[key], dtype=float) for key in ("errorsJtj", "errorsHessian")}
+    per_both = {key: np.zeros((n, m)) for key in err_both}
     per_dataset = np.zeros((n, m))
     per_errors = np.zeros((n, m))
     residuals: list[NDArray[np.float64]] = []
@@ -162,6 +164,9 @@ def global_fit(
         e_full[free_idx] = sp_err[off : off + n_free]
         per_dataset[i, :] = p_full
         per_errors[i, :] = e_full
+        for key, vec in err_both.items():
+            per_both[key][i, shared_idx] = vec[:n_shared]
+            per_both[key][i, free_idx] = vec[off : off + n_free]
         res = y_all[i] - model_fcn(x_all[i], p_full)
         residuals.append(np.asarray(res, dtype=float))
         ss_tot = float(np.sum((y_all[i] - np.mean(y_all[i])) ** 2))
@@ -171,6 +176,10 @@ def global_fit(
     return {
         "sharedParams": shared_params,
         "sharedErrors": shared_errors,
+        "sharedErrorsJtj": err_both["errorsJtj"][:n_shared],
+        "sharedErrorsHessian": err_both["errorsHessian"][:n_shared],
+        "perErrorsJtj": per_both["errorsJtj"],
+        "perErrorsHessian": per_both["errorsHessian"],
         "perDataset": per_dataset,
         "perErrors": per_errors,
         "R2": r2_per,

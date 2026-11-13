@@ -36,6 +36,7 @@ __all__ = [
     "describe_equation",
     "equation_model",
     "parse_equation",
+    "positive_even_params",
 ]
 
 
@@ -57,6 +58,17 @@ def _step(a: NDArray[np.float64]) -> NDArray[np.float64]:
     return np.asarray(np.heaviside(a, 1.0), dtype=float)
 
 
+def _voigt(x: Any, sigma: Any, gamma_: Any) -> NDArray[np.float64]:
+    """Unit-area Voigt profile of the width MAGNITUDES: ``voigt(x, |sigma|,
+    |gamma|)``. scipy's ``voigt_profile`` returns unphysical values for a
+    negative width and a fit could converge on them (review item 6). Making
+    the function even in each width keeps the optimizer's landscape smooth
+    (a NaN wall at 0 trapped fits that started with a small width), and a
+    fit never REPORTS a negative width: ``positive_even_params`` returns the
+    positive representative of any parameter the model is even in."""
+    return np.asarray(voigt_profile(x, np.abs(sigma), np.abs(gamma_)), dtype=float)
+
+
 def _if(cond: Any, a: Any, b: Any) -> NDArray[np.float64]:
     """Element-wise conditional: ``a`` where ``cond`` is non-zero, else ``b``
     (``numpy.where``). Both branches are evaluated, as for any vector code."""
@@ -67,7 +79,8 @@ def _if(cond: Any, a: Any, b: Any) -> NDArray[np.float64]:
 # numpy/scipy callables -- the RPN interpreter never evaluates code text.
 #   ln = natural log (an alias of log); gamma = Euler Gamma function;
 #   voigt(x, sigma, gamma) = unit-area Voigt profile (Gaussian std sigma,
-#   Lorentzian HWHM gamma; the Faddeeva function via scipy voigt_profile);
+#   Lorentzian HWHM gamma; the Faddeeva function via scipy voigt_profile),
+#   of the width magnitudes;
 #   besselj/bessely/besseli/besselk(nu, x) = Bessel J/Y and modified I/K of
 #   order nu (MATLAB argument order).
 _FUNCS: dict[str, Callable[..., Any]] = {
@@ -76,7 +89,7 @@ _FUNCS: dict[str, Callable[..., Any]] = {
     "acos": np.arccos, "atan": np.arctan, "sinh": np.sinh, "cosh": np.cosh, "tanh": np.tanh,
     "coth": _coth, "erf": erf, "erfc": erfc, "sign": np.sign, "floor": np.floor,
     "ceil": np.ceil, "round": _matlab_round, "gamma": gamma, "heaviside": _heaviside,
-    "step": _step, "min": np.minimum, "max": np.maximum, "if": _if, "voigt": voigt_profile,
+    "step": _step, "min": np.minimum, "max": np.maximum, "if": _if, "voigt": _voigt,
     "besselj": jv, "bessely": yv, "besseli": iv, "besselk": kv,
 }
 if set(_FUNCS) != set(FUNCTION_ARITY):  # the grammar and the evaluator must agree
@@ -233,3 +246,54 @@ def check_param_vectors(
         if lo[k] > hi[k]:
             raise ValueError(f'parameter "{name}": min is above max')
     check_held_starts(names, p0, held, lo, hi)
+
+
+def positive_even_params(
+    fcn: EquationFcn,
+    x: ArrayLike,
+    result: dict[str, Any],
+    lower: Sequence[float] | None = None,
+    upper: Sequence[float] | None = None,
+    fixed: Sequence[bool] | None = None,
+) -> list[int]:
+    """Report the positive representative of sign-ambiguous parameters.
+
+    When the model is EVEN in a parameter (a width that only enters squared,
+    ``voigt``'s widths, ``cos(w*x)``) the data cannot tell ``p`` from ``-p``
+    and Nelder-Mead lands on either. A fitted ``sigma = -0.3`` is the same
+    curve as ``0.3`` but reads as nonsense, so each negative parameter whose
+    sign flip leaves the fitted curve unchanged (to 1e-9 of its scale) and
+    stays inside its bounds is flipped in ``result`` IN PLACE (a held
+    parameter keeps the value it was held at): ``params``,
+    and the matching row and column of ``covar`` (the standard errors do not
+    change). Returns the flipped indices.
+    """
+    xv = np.asarray(x, dtype=float).ravel()
+    params = np.asarray(result["params"], dtype=float).copy()
+    base = np.asarray(fcn(xv, params), dtype=float)
+    tol = 1e-9 * max(float(np.max(np.abs(base))) if base.size else 0.0, 1e-300)
+    flipped: list[int] = []
+    for k in range(params.size):
+        if not params[k] < 0 or (fixed is not None and fixed[k]):
+            continue
+        lo = -np.inf if lower is None else float(lower[k])
+        hi = np.inf if upper is None else float(upper[k])
+        if not lo <= -params[k] <= hi:
+            continue
+        trial = params.copy()
+        trial[k] = -trial[k]
+        with np.errstate(all="ignore"):
+            alt = np.asarray(fcn(xv, trial), dtype=float)
+        if bool(np.all(np.isfinite(alt))) and float(np.max(np.abs(alt - base))) <= tol:
+            params = trial
+            flipped.append(k)
+    if flipped:
+        result["params"] = params
+        covar = result.get("covar")
+        if covar is not None:
+            cov = np.asarray(covar, dtype=float).copy()
+            for k in flipped:
+                cov[k, :] *= -1
+                cov[:, k] *= -1
+            result["covar"] = cov
+    return flipped

@@ -14,7 +14,7 @@ from numpy.typing import NDArray
 from scipy.optimize import curve_fit as scipy_curve_fit
 from scipy.stats import t as student_t
 
-from quantized.calc.fit_stats import fit_bands
+from quantized.calc.fit_stats import fit_bands, observation_variance_on_grid
 from quantized.calc.fitting import curve_fit, weights_from_dy
 
 
@@ -98,21 +98,27 @@ def test_nonlinear_bands_match_scipy_delta_method() -> None:
     assert 0.9 <= frac <= 1.0
 
 
-def test_weighted_band_uses_mean_sigma_squared_like_wls_with_matching_weight() -> None:
+def test_weighted_band_between_data_points_tracks_statsmodels() -> None:
+    """Per-point prediction variance (review item 1; the exact at-the-data
+    comparison is test_calc_fit_review_fixes). BETWEEN data points the
+    variance is linearly interpolated, which is close to -- not identical
+    with -- the smooth error model statsmodels is handed here."""
     rng = np.random.default_rng(9)
-    x = np.linspace(0, 10, 40)
+    x = np.linspace(0, 10, 201)
     sig = 0.2 + 0.1 * x
     y = 1.0 + 0.5 * x + rng.normal(0, 1, x.size) * sig
     w = weights_from_dy(sig, x.size)
-    grid = np.linspace(0, 10, 9)
-    fit, b = _bands_for(x, y, _line, [0.0, 0.0], grid, weights=w)
-    # Documented convention: a new observation at a grid point carries the
-    # MEAN per-point variance -- statsmodels WLS with weight 1/mean(1/w).
+    fit = curve_fit(x, y, _line, [0.0, 0.0], weights=w)
+    grid = (x[:-1] + x[1:]) / 2  # every midpoint
+    var = observation_variance_on_grid(x, fit["obsVar"], grid)
+    b = fit_bands(grid, _line, fit["params"], fit["covar"], fit["nPoints"], fit["nFree"], mse=var)
     wls = sm.WLS(y, sm.add_constant(x), weights=w).fit()
-    w_new = np.full(grid.size, 1.0 / np.mean(1.0 / w))
-    frame = wls.get_prediction(sm.add_constant(grid), weights=w_new).summary_frame(alpha=0.05)
-    _assert_frame(b, frame, rtol=1e-6)
-    assert fit["MSE"] == np.float64(fit["chiSqRed"] * np.mean(sig**2))
+    w_grid = 1.0 / (0.2 + 0.1 * grid) ** 2
+    frame = wls.get_prediction(sm.add_constant(grid), weights=w_grid).summary_frame(alpha=0.05)
+    _assert_frame(b, frame, rtol=1e-3)
+    # Outside the data the variance is HELD at the end value, not extrapolated.
+    out = observation_variance_on_grid(x, fit["obsVar"], [-5.0, 15.0])
+    np.testing.assert_allclose(out, [fit["obsVar"][0], fit["obsVar"][-1]])
 
 
 def test_bands_without_mse_omit_the_prediction_limits() -> None:

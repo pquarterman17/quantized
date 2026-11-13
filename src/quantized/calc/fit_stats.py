@@ -21,7 +21,7 @@ from scipy.stats import t as student_t
 
 from .fit_metrics import information_criteria
 
-__all__ = ["fit_bands", "fit_compare", "residual_diagnostics"]
+__all__ = ["fit_bands", "fit_compare", "observation_variance_on_grid", "residual_diagnostics"]
 
 _EPS = float(np.finfo(float).eps)
 ModelFn = Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
@@ -59,12 +59,20 @@ def fit_compare(
     """
     yv = np.asarray(y, dtype=float).ravel()
     res = np.asarray(residuals, dtype=float).ravel()
+    wv = None if weights is None else np.asarray(weights, dtype=float).ravel()
+    ref_in = None if resid_ref is None else np.asarray(resid_ref, dtype=float).ravel()
+    if wv is not None:
+        if wv.size != yv.size:
+            raise ValueError(
+                f"weights must have {yv.size} entries (one per point), got {wv.size}")
+        # A zero-weight point was not fitted: it is not an observation here either.
+        used = wv > 0
+        if ref_in is not None and ref_in.size == yv.size:
+            ref_in = ref_in[used]
+        yv, res, wv = yv[used], res[used], wv[used]
     n = yv.size
     p = n_params
     rss = float(np.sum(res**2))
-    wv = None if weights is None else np.asarray(weights, dtype=float).ravel()
-    if wv is not None and wv.size != n:
-        raise ValueError(f"weights must have {n} entries (one per point), got {wv.size}")
     tss = float(np.sum((yv - np.mean(yv)) ** 2))
     rmse = math.sqrt(rss / max(n, 1))
 
@@ -76,13 +84,13 @@ def fit_compare(
         adj_r2 = 1 - (1 - r2) * (n - 1) / dof_denom if dof_denom > 0 else float("nan")
 
     chi_sq = rss if wv is None else float(np.sum(wv * res**2))
-    sum_log_w = 0.0 if wv is None else float(np.sum(np.log(wv[wv > 0])))
+    sum_log_w = 0.0 if wv is None else float(np.sum(np.log(wv)))
     ic = information_criteria(chi_sq if chi_sq >= _EPS else 0.0, n, p, sum_log_w)
     aic, aicc, bic = ic["AIC"], ic["AICc"], ic["BIC"]
 
     f_stat = f_pvalue = float("nan")
-    if resid_ref is not None and not math.isnan(n_params_ref):
-        ref = np.asarray(resid_ref, dtype=float).ravel()
+    if ref_in is not None and not math.isnan(n_params_ref):
+        ref = ref_in
         p_ref = n_params_ref
         rss_ref = float(np.sum(ref**2))
         if ref.size == n and p_ref < p and p < n:
@@ -146,6 +154,39 @@ def residual_diagnostics(residuals: ArrayLike) -> dict[str, Any]:
     }
 
 
+def observation_variance_on_grid(
+    x_data: ArrayLike, var_data: ArrayLike, x_grid: ArrayLike
+) -> NDArray[np.float64]:
+    """Carry a weighted fit's per-point observation variance to a band grid.
+
+    ``var_data[i]`` is the variance of the observation at ``x_data[i]``
+    (``curve_fit``'s ``obsVar`` = ``s²/wᵢ``; for an error-column fit the
+    squared error bar, times the reduced chi² when errors are scaled). The
+    fit knows that variance only AT the data points, so the band needs an
+    assumption everywhere else, and this is it:
+
+    * between data points the variance is linearly interpolated in x;
+    * outside the data range it is held at the nearest end point's value (no
+      extrapolation of an error model the data cannot support);
+    * repeated x values are averaged; zero-weight points (infinite variance)
+      are not observations and are skipped.
+
+    At a data point the result is exactly that point's variance, which is
+    what statsmodels' ``get_prediction(..., weights=w)`` uses.
+    """
+    xd = np.asarray(x_data, dtype=float).ravel()
+    vd = np.asarray(var_data, dtype=float).ravel()
+    xg = np.asarray(x_grid, dtype=float).ravel()
+    if xd.size != vd.size:
+        raise ValueError("x_data and var_data must be the same length")
+    ok = np.isfinite(xd) & np.isfinite(vd) & (vd >= 0)
+    if not bool(np.any(ok)):
+        return np.full(xg.size, np.nan)
+    ux, inv = np.unique(xd[ok], return_inverse=True)
+    mean_v = np.bincount(inv, weights=vd[ok]) / np.bincount(inv)
+    return np.asarray(np.interp(xg, ux, mean_v), dtype=float)
+
+
 def fit_bands(
     x_grid: ArrayLike,
     model_fcn: ModelFn,
@@ -155,15 +196,17 @@ def fit_bands(
     n_free: int,
     *,
     level: float = 0.95,
-    mse: float | None = None,
+    mse: float | ArrayLike | None = None,
 ) -> dict[str, Any]:
     """Confidence + prediction bands from a fit (numerical Jacobian). Port of
     fitBands, with two latent MATLAB bugs fixed (docs/fitting_statistics.md):
 
-    * prediction variance = ``var_ci + mse``, where ``mse`` is the fit's
-      observation variance (``curve_fit``'s ``MSE``: the reduced chi² for an
-      unweighted fit; for a weighted fit the mean per-point sigma², times the
-      reduced chi² when errors are scaled). MATLAB used
+    * prediction variance = ``var_ci + mse``, where ``mse`` is the variance
+      of a NEW observation: one number for an unweighted fit (``curve_fit``'s
+      ``MSE`` = the reduced chi²), or one value PER GRID POINT for a weighted
+      fit, whose observations do not share a variance (``s²/wᵢ``; see
+      ``observation_variance_on_grid`` for how ``curve_fit``'s ``obsVar`` is
+      carried from the data points to the grid). MATLAB used
       ``Σ var_ci / tr(JᵀJ)`` -- a curve-variance average, not the residual
       scatter -- which made the band ~7x too narrow. ``mse=None`` (unknown)
       returns NaN prediction limits rather than a wrong band.
@@ -200,10 +243,16 @@ def fit_bands(
     var_ci = np.maximum(np.sum((jac @ cov) * jac, axis=1), 0.0)
     t_crit = float(student_t.ppf(1 - (1 - level) / 2, max(n_points - n_free, 1)))
     half_ci = t_crit * np.sqrt(var_ci)
-    if mse is None or not math.isfinite(mse) or mse < 0:
+    if mse is None:
         pi_lo, pi_hi = nan_col, nan_col
     else:
-        half_pi = t_crit * np.sqrt(var_ci + mse)
+        obs = np.asarray(mse, dtype=float)
+        if obs.ndim > 0 and obs.shape != (m,):
+            raise ValueError(f"a per-point mse needs one value per grid point ({m})")
+        # A point whose observation variance is unknown or invalid has no
+        # prediction limit (NaN), never a made-up one.
+        obs_ok = np.where(np.isfinite(obs) & (obs >= 0), obs, np.nan) * np.ones(m)
+        half_pi = t_crit * np.sqrt(var_ci + obs_ok)
         pi_lo, pi_hi = y_fit - half_pi, y_fit + half_pi
 
     return {

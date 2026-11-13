@@ -15,7 +15,7 @@ Weighting modes (Origin's names):
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -36,6 +36,23 @@ class FitOptions(BaseModel):
     # weights are absolute 1/sigma^2. Ignored by an unweighted fit, which
     # always scales (there is no other variance estimate).
     scale_errors: bool = True
+    # Statistics definitions. 2 (default) = the current ones
+    # (docs/fitting_statistics.md). 1 = those of results saved before
+    # 2026-11 -- Hessian errors, weighted RMSE, AIC without the weight term --
+    # so recomputing an old saved fit does not silently change what its
+    # numbers mean; the client asks for 1 only for a spec that predates the
+    # version field, until the user updates it.
+    stats_version: Literal[1, 2] = 2
+
+
+def stats_kwargs(opts: FitOptions) -> dict[str, Any]:
+    """``curve_fit`` keywords for the request's covariance/scaling/statistics."""
+    legacy = opts.stats_version == 1
+    return {
+        "covariance": "hessian" if legacy else opts.covariance,
+        "scale_errors": opts.scale_errors,
+        "legacy_metrics": legacy,
+    }
 
 
 def resolve_weights(opts: FitOptions, n: int) -> NDArray[np.float64] | list[float] | None:

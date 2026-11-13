@@ -51,25 +51,33 @@ def information_criteria(chi_sq: float, n: int, k: int, sum_log_w: float = 0.0) 
     return {"logLik": log_lik, "AIC": aic, "AICc": aicc, "BIC": bic}
 
 
-def fit_metrics(residuals: ArrayLike, k: int, weights: ArrayLike | None = None) -> dict[str, Any]:
-    """SSR / RMSE / chiSq / chiSqRed / dof + information criteria (module doc).
+def fit_metrics(
+    residuals: ArrayLike, k: int, weights: ArrayLike | None = None, *, legacy: bool = False
+) -> dict[str, Any]:
+    """SSR / RMSE / chiSq / chiSqRed / dof / n + information criteria (module doc).
 
-    Zero-weight points (direct weighting may carry them) drop out of the
-    ``Σ ln w`` term, as they drop out of ``chiSq``.
+    A zero-weight point is not an observation (direct weighting uses 0 to
+    switch a point off): it is excluded from ``n``, the dof, SSR/RMSE and the
+    information criteria, exactly as if it had been deleted. ``legacy``
+    reproduces the pre-2026-11 curve_fit numbers for recomputing an old saved
+    result: ``RMSE = √(chiSq/n)`` (weighted) and no ``Σ ln w`` in logLik.
     """
-    r = np.asarray(residuals, dtype=float).ravel()
-    n = r.size
-    w = np.ones(n) if weights is None else np.asarray(weights, dtype=float).ravel()
+    r_all = np.asarray(residuals, dtype=float).ravel()
+    w_all = np.ones(r_all.size) if weights is None else np.asarray(weights, dtype=float).ravel()
+    used = w_all > 0
+    r, w = r_all[used], w_all[used]
+    n = int(r.size)
     ssr = float(np.sum(r**2))
     chi_sq = float(np.sum(w * r**2))
     dof = n - k
-    pos = w > 0
-    sum_log_w = float(np.sum(np.log(w[pos]))) if weights is not None else 0.0
+    sum_log_w = float(np.sum(np.log(w))) if weights is not None and not legacy else 0.0
+    mean_sq = (chi_sq if legacy else ssr) / n if n > 0 else float("nan")
     return {
         "SSR": ssr,
-        "RMSE": math.sqrt(ssr / n) if n > 0 else float("nan"),
+        "RMSE": math.sqrt(mean_sq) if n > 0 else float("nan"),
         "chiSq": chi_sq,
         "chiSqRed": chi_sq / max(dof, 1),
         "dof": dof,
+        "n": n,
         **information_criteria(chi_sq, n, k, sum_log_w),
     }

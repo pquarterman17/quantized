@@ -21,6 +21,13 @@ from the data:
 3. **Local polish.** The best few screen samples run a short bounded
    Nelder-Mead (``curve_fit``); the lowest-SSR result becomes the start.
 
+**Bounded work.** This runs synchronously inside a request, so its cost is
+capped by counts, not by hope: the search sees at most ``MAX_POINTS`` data
+points (an evenly spaced, deterministic subsample -- a start only needs the
+shape of the data) and makes at most ``MAX_MODEL_EVALS`` model evaluations
+in total (the polish stops where the budget ends and the best start so far is
+returned). Unbounded, 200k points x 9 blank parameters took 473 s.
+
 Given (non-blank) entries are kept as given during the screen and polish, and
 held parameters are never touched (a blank held one is held at the legacy
 neutral 1.0). Deterministic for a given ``seed``.
@@ -36,7 +43,15 @@ from numpy.typing import ArrayLike, NDArray
 
 from .fitting import curve_fit
 
-__all__ = ["auto_start"]
+__all__ = ["MAX_MODEL_EVALS", "MAX_POINTS", "auto_start"]
+
+MAX_POINTS = 2000
+MAX_MODEL_EVALS = 15000
+_POLISH_MAX_ITER = 1000
+
+
+class _BudgetSpent(Exception):
+    """The model-evaluation budget of one ``auto_start`` call ran out."""
 
 ModelFn = Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
 
@@ -111,6 +126,16 @@ def auto_start(
     xv, yv = xv[ok], yv[ok]
     if not blank or xv.size == 0:
         return [float(v) for v in np.clip(start, lo, hi)]
+    if xv.size > MAX_POINTS:  # deterministic, evenly spaced in row order
+        pick = np.unique(np.round(np.linspace(0, xv.size - 1, MAX_POINTS)).astype(int))
+        xv, yv = xv[pick], yv[pick]
+    spent = [0]
+
+    def budgeted(xa: NDArray[np.float64], pa: NDArray[np.float64]) -> NDArray[np.float64]:
+        if spent[0] >= MAX_MODEL_EVALS:
+            raise _BudgetSpent
+        spent[0] += 1
+        return model_fcn(xa, pa)
 
     scales = _data_scales(xv, yv)
     rng = np.random.default_rng(seed)
@@ -124,7 +149,7 @@ def auto_start(
 
     def ssr(p: NDArray[np.float64]) -> float:
         with np.errstate(all="ignore"):
-            r = yv - np.asarray(model_fcn(xv, p), dtype=float)
+            r = yv - np.asarray(budgeted(xv, p), dtype=float)
             val = float(np.sum(r * r))
         return val if math.isfinite(val) else math.inf
 
@@ -148,13 +173,16 @@ def auto_start(
             break
         try:
             with np.errstate(all="ignore"):
-                res = curve_fit(xv, yv, model_fcn, list(samples[i]), lower=list(lo),
-                                upper=list(hi), fixed=polish_fixed, max_iter=300 * len(blank),
+                res = curve_fit(xv, yv, budgeted, list(samples[i]), lower=list(lo),
+                                upper=list(hi), fixed=polish_fixed,
+                                max_iter=min(300 * len(blank), _POLISH_MAX_ITER),
                                 calc_errors=False)
+                cand = np.asarray(res["params"], dtype=float)
+                val = ssr(cand)
+        except _BudgetSpent:
+            break
         except (ValueError, ArithmeticError, np.linalg.LinAlgError):
             continue
-        cand = np.asarray(res["params"], dtype=float)
-        val = ssr(cand)
         if val < best_ssr:
             best_p, best_ssr = cand, val
     return [float(v) for v in best_p]

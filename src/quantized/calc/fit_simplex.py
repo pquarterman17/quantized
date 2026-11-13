@@ -15,8 +15,9 @@ every other coordinate (so MATLAB golden parity is untouched) and gives a
 near-zero *transformed* coordinate an absolute step instead.
 
 ``stalled_parameters`` is the independent safety net: a parameter reported at
-its exact start, strictly inside its bounds, while a small move of it still
-lowers the cost, was never optimised -- the caller must not report success.
+its exact start while a small in-bounds move of it still lowers the cost was
+never optimised -- the caller must not report success. ``nudge_inside`` keeps
+a start that sits ON a bound from freezing there in the first place.
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ from collections.abc import Callable, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
-__all__ = ["function_tolerance", "initial_simplex", "stalled_parameters"]
+__all__ = ["function_tolerance", "initial_simplex", "nudge_inside", "stalled_parameters"]
 
 # scipy ``_minimize_neldermead`` / MATLAB ``fminsearch`` defaults.
 _NONZDELT = 0.05
@@ -80,6 +81,39 @@ def function_tolerance(tol_fun: float, cost0: float) -> float:
     return max(tol_fun, 10 * float(np.spacing(abs(cost0))))
 
 
+def nudge_inside(
+    p0: NDArray[np.float64],
+    lower: NDArray[np.float64],
+    upper: NDArray[np.float64],
+    free_idx: Sequence[int],
+) -> NDArray[np.float64]:
+    """Move free starts that sit ON (or within a hair of) a bound just inside.
+
+    A start exactly on a bound maps to ``-+log(eps) ~ -+36`` in the free
+    space, where the transform is flat to ~1e-16: the simplex cannot feel the
+    cost and the parameter never leaves the bound, yet Nelder-Mead reports
+    success (review item 3: an offset started on its upper bound stayed there
+    with R² = -2.7 and exitFlag 1). The start is moved in by 0.1 % of the
+    bound interval (two-sided) or of ``max(|bound|, 1)`` (one-sided), which
+    is ~-7 in the free space -- an ordinary coordinate. Starts already
+    further in than that are untouched, so nothing else changes.
+    """
+    out = np.asarray(p0, dtype=float).copy()
+    for k in free_idx:
+        lo, hi = float(lower[k]), float(upper[k])
+        if np.isfinite(lo) and np.isfinite(hi):
+            if hi <= lo:
+                continue
+            step = 1e-3 * (hi - lo)
+        else:
+            step = 1e-3 * max(abs(lo) if np.isfinite(lo) else abs(hi), 1.0)
+        if np.isfinite(lo) and out[k] - lo < step:
+            out[k] = lo + step
+        elif np.isfinite(hi) and hi - out[k] < step:
+            out[k] = hi - step
+    return out
+
+
 def stalled_parameters(
     cost: Callable[[NDArray[np.float64]], float],
     p_opt: NDArray[np.float64],
@@ -92,13 +126,15 @@ def stalled_parameters(
     cost still falls along them.
 
     ``cost`` takes the full *bounded* parameter vector. A parameter counts as
-    stalled when (a) it equals its start to 1e-12 relative, (b) it is not
-    within 1e-9 (relative) of either bound -- sitting on an active bound is a
-    legitimate optimum -- and (c) moving it by 0.1 % (of ``max(|p|, 1)``,
-    either way, kept inside the bounds) actually LOWERS the cost by more than
-    1e-6 relative. Comparing real costs, not a finite-difference slope, keeps
-    a perfect fit (cost ~1e-25, all round-off) from looking stalled: at a true
-    optimum both moves raise the cost.
+    stalled when (a) it equals its start to 1e-12 relative and (b) moving it
+    by 0.1 % (of ``max(|p|, 1)``, either way, clipped into its bounds)
+    actually LOWERS the cost by more than 1e-6 relative. Comparing real
+    costs, not a finite-difference slope, keeps a perfect fit (cost ~1e-25,
+    all round-off) from looking stalled: at a true optimum both moves raise
+    the cost. A parameter on a bound gets no exemption -- the clipping is the
+    test: on a genuinely active bound the outward move is clipped away and
+    the inward one raises the cost, while a parameter merely frozen on its
+    bound is caught by the inward move lowering it.
     """
     c0 = float(cost(p_opt))
     if not np.isfinite(c0) or c0 <= 0:
@@ -109,12 +145,12 @@ def stalled_parameters(
         scale = max(abs(pk), 1.0)
         if abs(pk - p0k) > 1e-12 * max(abs(p0k), 1.0):
             continue
-        if pk - lower[k] <= 1e-9 * scale or upper[k] - pk <= 1e-9 * scale:
-            continue
         best = c0
         for step in (1e-3 * scale, -1e-3 * scale):
             moved = p_opt.copy()
             moved[k] = min(max(pk + step, lower[k]), upper[k])
+            if moved[k] == pk:
+                continue
             val = float(cost(moved))
             if np.isfinite(val):
                 best = min(best, val)

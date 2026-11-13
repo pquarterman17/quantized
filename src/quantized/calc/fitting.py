@@ -26,7 +26,7 @@ from .fit_covariance import (
     residual_jacobian,
 )
 from .fit_metrics import fit_metrics
-from .fit_simplex import function_tolerance, initial_simplex, stalled_parameters
+from .fit_simplex import function_tolerance, initial_simplex, nudge_inside, stalled_parameters
 
 __all__ = ["curve_fit"]
 
@@ -128,6 +128,7 @@ def curve_fit(
     calc_errors: bool = True,
     covariance: str = "jtj",
     scale_errors: bool = True,
+    legacy_metrics: bool = False,
 ) -> dict[str, Any]:
     """Bounded nonlinear least-squares fit. Port of fitting.curveFit.
 
@@ -145,7 +146,18 @@ def curve_fit(
     matters for a weighted fit: off = the weights are absolute 1/sigma²
     (scipy ``absolute_sigma=True``). Metrics follow ``calc.fit_metrics``.
     A free parameter that never left its start while the cost still falls
-    along it is reported in ``warnings`` and forces ``exitFlag`` 0.
+    along it is reported in ``warnings`` and forces ``exitFlag`` 0, as does a
+    model that is undefined (NaN/inf) at the fitted parameters.
+
+    Zero-weight points are not observations: they are left out of ``nPoints``,
+    the dof and every metric (their residuals are still returned). A free
+    start on a bound is moved just inside it (``fit_simplex.nudge_inside``).
+    ``obsVar`` is the per-point observation variance ``s²/wᵢ`` of a weighted
+    fit (``None`` unweighted; ``inf`` at zero weight) -- what a prediction
+    band adds at that point. ``legacy_metrics`` reproduces the statistics of
+    results saved before 2026-11 (``RMSE = √(Σw r²/n)``, AIC without the
+    ``Σ ln w`` term) for recomputing such a result without silently changing
+    what its numbers mean.
     """
     if covariance not in COVARIANCE_METHODS:
         raise ValueError(f"covariance must be one of {COVARIANCE_METHODS}, got {covariance!r}")
@@ -178,8 +190,8 @@ def curve_fit(
     free_idx = [k for k in range(m) if not fixed_mask[k]]
     n_free = len(free_idx)
     max_iter = 5000 * max(n_free, 1) if max_iter is None else max_iter
-    p0_arr: NDArray[np.float64] = np.asarray(
-        np.clip(np.array(p0, dtype=float), lb, ub), dtype=float
+    p0_arr: NDArray[np.float64] = nudge_inside(
+        np.asarray(np.clip(np.array(p0, dtype=float), lb, ub), dtype=float), lb, ub, free_idx
     )
 
     def from_free(p_free: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -192,21 +204,31 @@ def curve_fit(
         return np.asarray((yv - model_fcn(xv, pb)) * sqrt_w, dtype=float)
 
     def cost_bound(pb: NDArray[np.float64]) -> float:
-        return float(np.sum(resid_bound(pb) ** 2))
+        # A model undefined at pb (NaN/inf: a negative Voigt width, log of a
+        # negative) is a wall, not a number Nelder-Mead may sort arbitrarily.
+        with np.errstate(over="ignore", invalid="ignore"):
+            val = float(np.sum(resid_bound(pb) ** 2))
+        return val if math.isfinite(val) else math.inf
 
     def cost(p_free: NDArray[np.float64]) -> float:
         return cost_bound(from_free(p_free))
 
     p_free0 = np.array([_bound_to_free(p0_arr[k], lb[k], ub[k]) for k in free_idx])
-    if n_free > 0:
-        # Explicit simplex: scipy's default except near-zero TRANSFORMED
-        # coordinates (a start at lo + 1 maps to ~2e-16), see fit_simplex.
-        transformed = [bool(lb[k] > -math.inf or ub[k] < math.inf) for k in free_idx]
+    transformed = [bool(lb[k] > -math.inf or ub[k] < math.inf) for k in free_idx]
+    # Explicit simplex: scipy's default except near-zero TRANSFORMED
+    # coordinates (a start at lo + 1 maps to ~2e-16), see fit_simplex.
+    simplex = initial_simplex(p_free0, transformed) if n_free > 0 else np.empty((0, 0))
+    if n_free > 0 and not any(math.isfinite(cost(v)) for v in simplex):
+        # Undefined at the start AND all around it: every vertex is a wall, so
+        # there is nothing to descend. Reported below (exitFlag 0 + warning).
+        x_opt = p_free0
+        exit_flag, n_iter = 0, 0
+    elif n_free > 0:
         res = minimize(
             cost, p_free0, method="Nelder-Mead",
             options={"maxiter": max_iter, "maxfev": max_iter * 2, "xatol": tol_x,
                      "fatol": function_tolerance(tol_fun, cost(p_free0)),
-                     "initial_simplex": initial_simplex(p_free0, transformed)},
+                     "initial_simplex": simplex},
         )
         x_opt = np.asarray(res.x, dtype=float)
         exit_flag = 1 if res.success else 0
@@ -218,18 +240,21 @@ def curve_fit(
     p_opt = from_free(x_opt)
     y_fit = np.asarray(model_fcn(xv, p_opt), dtype=float)
     residuals = yv - y_fit
-    metrics = fit_metrics(residuals, n_free, None if weights is None else w)
+    metrics = fit_metrics(residuals, n_free, None if weights is None else w,
+                          legacy=legacy_metrics)
+    n_obs = int(metrics["n"])  # points with a non-zero weight
     w_mean = float(np.sum(w * yv) / np.sum(w))
     ss_tot = float(np.sum(w * (yv - w_mean) ** 2))
     r2 = 1 - metrics["chiSq"] / max(ss_tot, _EPS)
-    dof = n - n_free
+    dof = n_obs - n_free
     chi_sq_red = float(metrics["chiSqRed"])
     # Error scaling (Origin "Scale Error with sqrt(Reduced Chi-Sqr)"): always
     # on for an unweighted fit -- there is no other variance estimate.
     scaled = scale_errors or weights is None
     s2 = chi_sq_red if scaled else 1.0
     est = calc_errors and n_free > 0 and dof > 0
-    err_jtj, cov_jtj = _jtj_errors(resid_bound, p_opt, free_idx, lb, ub, m, s2, est)
+    y_scale = float(np.linalg.norm(yv * sqrt_w))
+    err_jtj, cov_jtj = _jtj_errors(resid_bound, p_opt, free_idx, lb, ub, m, s2, est, y_scale)
     # The Hessian costs O(n_free^2) model evaluations: always run when it is
     # the selected method, otherwise only as a cheap side-by-side (<= 20 free).
     est_hess = est and (covariance == "hessian" or n_free <= _HESSIAN_SIDE_MAX)
@@ -237,6 +262,11 @@ def curve_fit(
     errors, covar = (err_jtj, cov_jtj) if covariance == "jtj" else (err_hess, cov_hess)
 
     warnings: list[str] = []
+    if not bool(np.all(np.isfinite(y_fit[w > 0]))):
+        warnings.append(
+            "the model is undefined (NaN or infinite) at the fitted parameters -- check the "
+            "start values and bounds (e.g. a negative width)"
+        )
     for k in stalled_parameters(cost_bound, p_opt, p0_arr, lb, ub, free_idx) if n_free else []:
         warnings.append(
             f"parameter {k + 1} never moved from its start value {p0_arr[k]:.6g} although the "
@@ -266,6 +296,7 @@ def curve_fit(
         # fit_bands). Unweighted: SSR/dof. Weighted: s2 * mean(1/w), i.e. the
         # mean per-point sigma^2 (times the reduced chi^2 when scaled).
         "MSE": s2 * float(np.mean(1.0 / w[w > 0])) if weights is not None else chi_sq_red,
+        "obsVar": None if weights is None else _obs_var(w, s2),
         "AIC": metrics["AIC"],
         "AICc": metrics["AICc"],
         "BIC": metrics["BIC"],
@@ -274,8 +305,15 @@ def curve_fit(
         "exitFlag": exit_flag,
         "nIter": n_iter,
         "nFree": n_free,
-        "nPoints": n,
+        "nPoints": n_obs,
     }
+
+
+def _obs_var(w: NDArray[np.float64], s2: float) -> NDArray[np.float64]:
+    """Per-point observation variance ``s2 / w`` (``inf`` at zero weight)."""
+    out = np.full(w.size, math.inf)
+    out[w > 0] = s2 / w[w > 0]
+    return out
 
 
 def _jtj_errors(
@@ -287,12 +325,14 @@ def _jtj_errors(
     m: int,
     s2: float,
     estimate: bool,
+    y_scale: float = 0.0,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64] | None]:
     """Origin/scipy errors: ``(JᵀWJ)⁻¹·s2`` in the bounded parameters."""
     errors = np.full(m, np.nan)
     if not estimate:
         return errors, None
-    cov_free = jtj_covariance(residual_jacobian(resid_bound, p_opt, free_idx, lb, ub), s2)
+    jac = residual_jacobian(resid_bound, p_opt, free_idx, lb, ub, y_scale)
+    cov_free = jtj_covariance(jac, s2)
     if cov_free is None:
         return errors, None
     covar = np.zeros((m, m))

@@ -239,3 +239,45 @@ def test_odr_default_lambda_and_too_few_points() -> None:
     assert ok.status_code == 200 and ok.json()["lambda"] == 1.0
     bad = client.post("/api/fitting/odr", json={"x": [0, 1], "y": [0, 1]})
     assert bad.status_code == 422
+
+
+def test_weighted_bands_use_per_point_variance() -> None:
+    """Review item 1: a weighted fit's prediction band follows its error bars."""
+    x = np.linspace(0.0, 20.0, 41)
+    dy = 0.1 + 0.3 * x
+    y = 1.0 + 0.5 * x + dy * np.sin(9 * x)
+    fit = client.post(
+        "/api/fitting/fit",
+        json={"model": "Linear", "x": x.tolist(), "y": y.tolist(), "dy": dy.tolist()},
+    ).json()
+    assert len(fit["obsVar"]) == 41
+    body = {"model": "Linear", "params": fit["params"], "covar": fit["covar"],
+            "x": x.tolist(), "n_points": fit["nPoints"], "n_free": fit["nFree"],
+            "x_data": x.tolist(), "obs_var": fit["obsVar"]}
+    out = client.post("/api/fitting/bands", json=body).json()
+    half = (np.array(out["piHi"]) - np.array(out["piLo"])) / 2
+    want = fit_bands(x, FIT_MODELS["Linear"]["fcn"], fit["params"], fit["covar"],
+                     fit["nPoints"], fit["nFree"], mse=np.array(fit["obsVar"]))
+    _approx_list(out["piHi"], want["piHi"])
+    assert half[-1] > 10 * half[0]
+    bad = client.post("/api/fitting/bands", json={**body, "obs_var": fit["obsVar"][:-1]})
+    assert bad.status_code == 422
+
+
+def test_stats_version_1_reproduces_the_pre_2026_11_statistics() -> None:
+    """Review item 10: an old saved fit can be recomputed without silently
+    changing what its errors and RMSE mean."""
+    x = np.linspace(0.0, 10.0, 40)
+    dy = 0.1 + 0.05 * x
+    y = 3.0 * np.exp(-x / 2.5) + 0.2 + 0.3 * dy * np.sin(7 * x)
+    body = {"model": "Exponential Decay", "x": x.tolist(), "y": y.tolist(), "dy": dy.tolist()}
+    new = client.post("/api/fitting/fit", json=body).json()
+    old = client.post("/api/fitting/fit", json={**body, "stats_version": 1}).json()
+    assert new["statsVersion"] == 2 and old["statsVersion"] == 1
+    assert old["covariance"] == "hessian" and old["errors"] == new["errorsHessian"]
+    res = np.array(old["residuals"])
+    assert old["RMSE"] == pytest.approx(float(np.sqrt(np.mean(res**2 / dy**2))), rel=1e-10)
+    assert new["RMSE"] == pytest.approx(float(np.sqrt(np.mean(res**2))), rel=1e-10)
+    n = x.size
+    legacy_aic = 2 * 3 + n * np.log(2 * np.pi * old["chiSq"] / n) + n
+    assert old["AIC"] == pytest.approx(legacy_aic, rel=1e-10)

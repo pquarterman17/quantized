@@ -32,7 +32,7 @@ from .fit_covariance import (
     jtj_covariance,
     residual_jacobian,
 )
-from .fit_simplex import function_tolerance, initial_simplex, stalled_parameters
+from .fit_simplex import function_tolerance, initial_simplex, nudge_inside, stalled_parameters
 from .fitting import (
     _bound_jacobian,
     _bound_to_free,
@@ -167,7 +167,9 @@ def global_curve_fit(
     error method as in ``curve_fit`` (``calc.fit_covariance``): ``"jtj"``
     (default; scipy/Origin) or ``"hessian"`` (MATLAB; golden-pinned). Returns
     a dict with per-dataset
-    ``params``/``errors``/``residuals``/``yFit``/``R2``/``RMSE``, a ``shared``
+    ``params``/``errors`` (plus ``errorsJtj``/``errorsHessian``, both
+    estimates)/``residuals``/``yFit``/``R2``/``RMSE`` (unweighted, y units)/
+    ``chiSq`` (weighted), a ``shared``
     summary list, ``chiSqRed``, ``covar``, ``nTotal``, ``nFree``, ``exitFlag``,
     ``warnings`` (a stalled parameter, as in ``curve_fit``; forces exitFlag 0).
 
@@ -206,7 +208,8 @@ def global_curve_fit(
             w_all.append(wi)
         else:
             w_all.append(np.ones(xi.size))
-    n_total = int(sum(n_pts))
+    # Zero-weight points are not observations (as in curve_fit).
+    n_total = int(sum(int(np.count_nonzero(wi > 0)) for wi in w_all))
 
     inf_p = np.full(p, math.inf)
     p0_cell = _per_dataset(init_guess, k, p, np.zeros(p))
@@ -240,6 +243,8 @@ def global_curve_fit(
 
     held = held_slots(fixed, k, p, super_idx, n_super)
     slots = [s for s in range(n_super) if not held[s]]  # optimised super slots
+    # A free start ON a bound would freeze there (fit_simplex.nudge_inside).
+    super_p0 = nudge_inside(super_p0, super_lb, super_ub, slots)
     n_free = len(slots)
     sqrt_w = [np.sqrt(w_all[i]) for i in range(k)]
 
@@ -260,7 +265,9 @@ def global_curve_fit(
                                for ki in range(k)])
 
     def cost_super(sp: NDArray[np.float64]) -> float:
-        return float(np.sum(resid_super(sp) ** 2))
+        with np.errstate(over="ignore", invalid="ignore"):
+            val = float(np.sum(resid_super(sp) ** 2))
+        return val if math.isfinite(val) else math.inf  # undefined model = a wall
 
     def cost(pf: NDArray[np.float64]) -> float:
         return cost_super(from_free_all(pf))
@@ -297,20 +304,29 @@ def global_curve_fit(
     dof = n_total - n_free
     chi_sq_red = ss_res_total / max(dof, 1)
 
-    super_err = np.full(n_super, np.nan)
+    # Both estimates, as curve_fit: the selected one fills errors/covar; the
+    # unselected Hessian (O(n_free^2) evaluations) only up to 20 free slots.
+    err_jtj = np.full(n_super, np.nan)
+    err_hess = np.full(n_super, np.nan)
     covar: NDArray[np.float64] | None = None
     if n_free > 0 and dof > 0:
-        if covariance == "jtj":
-            jac = residual_jacobian(resid_super, sp_opt, slots, super_lb, super_ub)
-            cov_free = jtj_covariance(jac, chi_sq_red)
-        else:
+        y_scale = math.sqrt(sum(float(np.sum(w_all[i] * y_all[i] ** 2)) for i in range(k)))
+        jac = residual_jacobian(resid_super, sp_opt, slots, super_lb, super_ub, y_scale)
+        cov_j = jtj_covariance(jac, chi_sq_red)
+        cov_h: NDArray[np.float64] | None = None
+        if covariance == "hessian" or n_free <= 20:
             bjac = np.array([_bound_jacobian(float(pf_opt[j]), super_lb[s], super_ub[s])
                              for j, s in enumerate(slots)])
-            cov_free = hessian_covariance(_numerical_hessian(cost, pf_opt), chi_sq_red, bjac)
+            cov_h = hessian_covariance(_numerical_hessian(cost, pf_opt), chi_sq_red, bjac)
+        if cov_j is not None:
+            err_jtj[slots] = np.sqrt(np.diag(cov_j))
+        if cov_h is not None:
+            err_hess[slots] = np.sqrt(np.diag(cov_h))
+        cov_free = cov_j if covariance == "jtj" else cov_h
         if cov_free is not None:
-            super_err[slots] = np.sqrt(np.diag(cov_free))
             covar = np.zeros((n_super, n_super))
             covar[np.ix_(slots, slots)] = cov_free
+    super_err = err_jtj if covariance == "jtj" else err_hess
 
     lo_all = np.asarray(super_lb, dtype=float)
     hi_all = np.asarray(super_ub, dtype=float)
@@ -327,6 +343,11 @@ def global_curve_fit(
     y_fit: list[NDArray[np.float64]] = []
     r2 = np.zeros(k)
     rmse = np.zeros(k)
+    chi_sq = np.zeros(k)
+
+    def per_dataset(err: NDArray[np.float64]) -> list[list[float]]:
+        return [[float(err[super_idx[ki, pi]]) for pi in range(p)] for ki in range(k)]
+
     for ki in range(k):
         params.append([float(v) for v in plist_opt[ki]])
         errors.append([float(super_err[super_idx[ki, pi]]) for pi in range(p)])
@@ -338,7 +359,12 @@ def global_curve_fit(
         w_mean = float(np.sum(w_all[ki] * y_all[ki]) / np.sum(w_all[ki]))
         ss_tot = float(np.sum(w_all[ki] * (y_all[ki] - w_mean) ** 2))
         r2[ki] = 1 - ss_res / max(ss_tot, _EPS)
-        rmse[ki] = math.sqrt(ss_res / n_pts[ki])
+        # One metric definition (calc.fit_metrics): RMSE is UNWEIGHTED, in
+        # the units of y, over the points that were fitted; the weighted sum
+        # the fit minimised is reported separately as chiSq.
+        used = w_all[ki] > 0
+        rmse[ki] = math.sqrt(float(np.mean(res_k[used] ** 2))) if bool(np.any(used)) else math.nan
+        chi_sq[ki] = ss_res
 
     shared_out: list[dict[str, Any]] = []
     for g, grp in enumerate(sharing):
@@ -348,16 +374,21 @@ def global_curve_fit(
             "datasets": grp["datasets"],
             "value": float(sp_opt[g]),
             "error": float(super_err[g]),
+            "errorJtj": float(err_jtj[g]),
+            "errorHessian": float(err_hess[g]),
         })
 
     return {
         "params": params,
         "errors": errors,
+        "errorsJtj": per_dataset(err_jtj),
+        "errorsHessian": per_dataset(err_hess),
         "shared": shared_out,
         "residuals": residuals,
         "yFit": y_fit,
         "R2": r2,
         "RMSE": rmse,
+        "chiSq": chi_sq,
         "chiSqRed": float(chi_sq_red),
         "covar": covar,
         "nTotal": n_total,
