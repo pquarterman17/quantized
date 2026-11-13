@@ -33,6 +33,7 @@ from typing import Any
 
 from quantized.calc.figure_styles import FigureStyle
 from quantized.calc.figure_warnings import note_figure_warning
+from quantized.heavy_import import heavy_imports
 
 __all__ = [
     "FONT_ALIASES",
@@ -67,7 +68,8 @@ SIZE_KEYS = ("font_size", "title_size", "label_size", "tick_size", "legend_size"
 def installed_font_families() -> tuple[str, ...]:
     """Every font family matplotlib can render with on this host, sorted
     case-insensitively (the font picker's list)."""
-    from matplotlib import font_manager
+    with heavy_imports("matplotlib.font_manager"):
+        import matplotlib.font_manager as font_manager
 
     names = {f.name for f in font_manager.fontManager.ttflist}
     return tuple(sorted(names, key=str.casefold))

@@ -32,6 +32,8 @@ import numpy as np
 from matplotlib.ticker import AutoMinorLocator, Locator, MultipleLocator, NullLocator
 from numpy.typing import NDArray
 
+from quantized.heavy_import import heavy_imports
+
 __all__ = [
     "BREAK_GAP_FRACTION",
     "MAX_AXIS_BREAKS",
@@ -236,7 +238,10 @@ class _KeptMinorLocator(AutoMinorLocator):
 def _series_values(ax: Any) -> NDArray[np.float64]:
     """Finite y of every drawn series point on ``ax`` (error-bar ends and
     reference lines left out, as the canvas' extent leaves them out)."""
-    from quantized.calc.figure_autoscale import _values  # shares the scan
+    # Function-level: figure_autoscale -> figure_ticks -> axis_extras imports
+    # this module, so a top-level import would be a cycle.
+    with heavy_imports("quantized.calc.figure_autoscale"):
+        from quantized.calc.figure_autoscale import _values  # shares the scan
 
     pts, _ends = _values([ax], 1)
     return pts
