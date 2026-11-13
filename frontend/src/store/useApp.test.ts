@@ -1554,6 +1554,9 @@ describe("useApp importFiles", () => {
     expect(danger.map((t) => t.msg)).toEqual([
       expect.stringMatching(/^multi: the file appears incomplete or truncated \(24568 of 73704 bytes\)/),
     ]);
+    // A two-sentence warning outlives the 1.9 s default toast lifetime.
+    await new Promise((r) => setTimeout(r, 2300));
+    expect(useToasts.getState().toasts.filter((t) => t.kind === "danger")).toHaveLength(1);
   });
 
   it("disables a figure whose loose source hint matches no imported book", async () => {

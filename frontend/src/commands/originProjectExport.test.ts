@@ -58,6 +58,9 @@ describe("runExportOriginProject", () => {
     expect(lastBody().datasets[2].dataset).toEqual({ ...data(3), metadata: { error_roles: [] } });
     expect(lastBody().filename).toBe("project");
     expect(useApp.getState().status).toBe("exported Origin project (3 books)");
+    expect(useToasts.getState().toasts.map((t) => [t.msg, t.kind])).toEqual([
+      ["exported Origin project (3 books)", "ok"],
+    ]);
   });
 
   it("exports only a multi-selection, in Library order", async () => {

@@ -51,6 +51,9 @@ export async function runExportOriginProject(s: StoreGet): Promise<void> {
       );
     });
     s().setStatus(done ? `exported Origin project (${books})` : "export cancelled");
+    // Same visible confirmation the .ogs export gives (live check 2026-11:
+    // the download was the only sign anything had happened).
+    if (done) toast(`exported Origin project (${books})`, "ok");
   } catch (e: unknown) {
     const msg = `export failed: ${e instanceof Error ? e.message : "error"}`;
     s().setStatus(msg);

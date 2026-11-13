@@ -332,7 +332,7 @@ function addFromPayload(
   if (fidelity) {
     get().addOriginFidelity(stem, fidelity, newIds);
     const notice = originImportNotice(stem, fidelity); // truncated file -> danger
-    toast(notice.msg, notice.kind);
+    toast(notice.msg, notice.kind, notice.ttlMs ? { ttlMs: notice.ttlMs } : undefined);
   }
   get().recordMacro(`Import ${origin.name}`, `qz.import(${lit(origin.name)})`, {
     kind: "import",
