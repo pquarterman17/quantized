@@ -5,6 +5,7 @@
 // lines instead of being packed onto a neighbour's. useWorkspaceAutosave.ts
 // re-exports both names, so every importer is unchanged.
 
+import { defaultPlotView, type PlotView } from "../lib/plotview";
 import type { AppState } from "./useApp";
 
 /** Every store field serialized into a .dwk workspace. Keep this list in one
@@ -81,7 +82,25 @@ export type AutosaveState = Pick<
   | "fitModelCarry" // P2.7: a refused fit-model merge grows it on its own (store/workspaceHydration.ts)
 >;
 
+/** The focused window's LIVE view: the singleton PlotView fields (axis
+ *  formats and breaks, titles, reference lines, shades, stat mode, ...). A
+ *  focused-window edit changes only these -- `plotWindows` is not touched
+ *  until focus moves -- so they are part of the trigger too (figures
+ *  integration: a reload lost every view-only edit of the window last in
+ *  focus). The save itself already freezes them in (`windowsForSave()`).
+ *  Comparing ~100 references per store change is cheap; the 800 ms
+ *  debounce in useWorkspaceAutosave.ts keeps a drag or a zoom from writing
+ *  more than once per pause. */
+const LIVE_VIEW_KEYS = Object.keys(defaultPlotView()) as (keyof PlotView)[];
+
+function liveViewChanged(state: object, prev: object): boolean {
+  const s = state as Partial<Record<keyof PlotView, unknown>>;
+  const p = prev as Partial<Record<keyof PlotView, unknown>>;
+  return LIVE_VIEW_KEYS.some((k) => s[k] !== p[k]);
+}
+
 export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boolean {
+  if (liveViewChanged(state, prev)) return true;
   return !(
     state.datasets === prev.datasets &&
     state.folders === prev.folders &&

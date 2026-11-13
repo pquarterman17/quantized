@@ -371,11 +371,15 @@ export function useWorkspaceAutosave(): void {
       // (MULTI_PLOT_PLAN item 7 — geometry/z/winState/dataset-binding changes
       // bump the `plotWindows` array reference; a focus switch bumps
       // `focusedWindowId`). A live-view-only edit on the focused window
-      // WITHOUT any of those structural changes doesn't reset this debounce
-      // by itself — same pre-existing tradeoff `figureDocs`/`reports`/
-      // `macroSteps` already have here (this hook watches a curated subset,
-      // not every persisted field); an explicit File ▸ Save always captures
-      // the live view regardless, via `windowsForSave()` below.
+      // (an axis break, a title, a reference line, stat mode ...) changes
+      // only the singleton PlotView fields, so those are watched too
+      // (`shouldAutosave`'s live-view check, store/autosaveTrigger.ts). This
+      // used to be a documented tradeoff -- the edit waited for an
+      // unrelated structural change, and a reload lost it (figures
+      // integration live check). Resolved by reference checks on the ~100
+      // view fields (cheap) plus this 800 ms debounce, so a drag or a zoom
+      // writes once per pause; the save freezes the live view into the
+      // focused window via `windowsForSave()` below.
       // The helper compares the complete serialized workspace slice, including
       // reports, figure docs, macro steps, Origin figures, and recalc mode.
       if (!shouldAutosave(state, prev)) return;
