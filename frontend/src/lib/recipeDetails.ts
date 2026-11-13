@@ -266,7 +266,7 @@ function fitModelDetails(row: RecipeDescriptor, m: CustomFitModel): RecipeDetail
   const unit = (i: number) => (m.units?.[i] ? ` ${m.units[i]}` : "");
   const params = m.params.map(
     (name, i) =>
-      `${name} = ${m.guesses[i]} [${boundText(m.lower[i], "−∞")}, ${boundText(m.upper[i], "∞")}]${unit(i)}`,
+      `${name} = ${m.guesses[i] ?? "auto"} [${boundText(m.lower[i], "−∞")}, ${boundText(m.upper[i], "∞")}]${unit(i)}`,
   );
   return { fields, sections: [{ title: "Parameters", items: params, mono: true }] };
 }

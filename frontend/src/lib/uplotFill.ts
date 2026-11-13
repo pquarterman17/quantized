@@ -69,8 +69,14 @@ export function resolveFillBands(
     if (!fill || fill === "none" || fill === "under") return;
     const vsIndex = plotted.indexOf(fill.vs);
     if (vsIndex === -1 || vsIndex === i) return;
-    // uPlot series indices are 1-based (0 = the x series).
-    bands.push({ series: [i + 1, vsIndex + 1], fill: translucent(strokeOf(i)) });
+    // uPlot series indices are 1-based (0 = the x series). A uPlot band is
+    // [upper, lower] and fills ONLY where the first edge is above the second,
+    // so the single [from, vs] band drew nothing whenever the styled series
+    // was the LOWER one (a band's "CI low" filled vs "CI high"). Both orders
+    // fill "between" whichever is on top, crossings included — what the
+    // export's matplotlib fill_between does.
+    const tint = translucent(strokeOf(i));
+    bands.push({ series: [i + 1, vsIndex + 1], fill: tint }, { series: [vsIndex + 1, i + 1], fill: tint });
   });
   return bands;
 }

@@ -887,7 +887,12 @@ const TS_MODULE_PINS: Record<string, number> = {
   // contained leaf block — moved verbatim to the new lib/seriesStyleTypes.ts
   // and re-exported from types.ts (no importer changed). Funds the new
   // `SeriesStyle.logOffset` field and ratchets down by the balance.
-  "/lib/types.ts": 934,
+  // 934 -> 849 (2026-11-13): the fit recipe types (WeightMode, FitWeighting,
+  // FitSpec) moved whole to lib/fitTypes.ts when the statistics-version and
+  // direct-weighting fields would have taken this file past its pin.
+  // 849 -> 843 (2026-11-13, fitting integration): FitOverlay moved to
+  // lib/fitTypes.ts when the Curve Fit band field took the merge past the pin.
+  "/lib/types.ts": 843,
   // 893 -> 863 (P1.4 Graph Builder encodings): the error-well helpers
   // (specErrorBindings/prefillErrorZones) moved verbatim to lib/plotspecErrors.ts
   // (re-exported, no importer moved), funding the three optional encoding zones;

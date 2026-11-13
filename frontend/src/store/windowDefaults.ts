@@ -1,6 +1,6 @@
 // Dataset-aware defaults and the invariant main plot window, extracted from
 // the pinned window-management slice.
-import { defaultErrKeys, errorRoleViewDefaults, originHiddenChannels } from "../lib/errorbars";
+import { errorRoleViewDefaults } from "../lib/errorbars";
 import { isTechniqueChange, techniqueViewDefaults } from "../lib/techniqueDefaults";
 import { applyTechniqueMemory, type TechniqueViewMemoryMap } from "../lib/techniqueViewMemory";
 import { cascadeGeometry, defaultPlotView, type PlotView, type PlotWindow } from "../lib/plotview";
@@ -8,11 +8,6 @@ import type { Dataset } from "../lib/types";
 import { createPlotWindowDocument } from "./windowDocuments";
 
 export interface DatasetViewDefaultsOptions {
-  /** Quick Plot's canonical mapping (`lib/quickPlot.ts`) opts in: bind the
-   *  dataset's error-role columns to their series (`errorRoleViewDefaults`)
-   *  instead of plotting them as curves. Off for every silent rebind
-   *  (import/switch/reimport), whose defaults this leaves byte-identical. */
-  errorRoles?: boolean;
   /** The view a GENUINE dataset switch is leaving (setActive to another id,
    *  an import, a window rebind): its coordinate-tied decorations and tick
    *  formats reset too (`switchDecorationReset`). Omitted by split/reimport,
@@ -80,16 +75,22 @@ export function datasetViewDefaults(
     seriesStyles,
     xReversed: dataset?.data.metadata?.x_reversed === true, // IR wavenumber (io/technique.py)
     seriesLabels: {},
-    errKeys: dataset ? defaultErrKeys(dataset.data) : {},
+    // With a dataset, both come from its error layer just below.
+    errKeys: {},
     seriesOrder: null,
-    hiddenChannels: dataset ? originHiddenChannels(dataset.data) : [],
+    hiddenChannels: [],
     xLim: null,
     yLim: null,
     xStep: null,
     yStep: null,
-    // Below memory, like the two error seeds it widens (memory > defaults).
     ...(options.outgoing ? switchDecorationReset(options.outgoing) : {}),
-    ...(dataset && options.errorRoles ? errorRoleViewDefaults(dataset) : {}),
+    // The error layer, below memory (memory > defaults): Origin designations,
+    // parser hints and error ROLES, all bound as whiskers and hidden as curves
+    // (errorRoleViewDefaults widens defaultErrKeys / originHiddenChannels). An
+    // error-role column (a CSV's "err" beside "signal") is hidden on EVERY
+    // rebind — import included, like Origin. It used to apply to Quick Plot
+    // only, so an import drew the error column as its own Y trace.
+    ...(dataset ? errorRoleViewDefaults(dataset) : {}),
     ...(remembered
       ? { ...remembered, seriesStyles: { ...seriesStyles, ...remembered.seriesStyles } }
       : isTechniqueChange(dataset, previous) ? techniqueViewDefaults(dataset) : {}),

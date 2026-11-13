@@ -26,6 +26,13 @@ from scipy.optimize import minimize
 
 from quantized.datastruct import DataStruct
 
+from .fit_covariance import (
+    COVARIANCE_METHODS,
+    hessian_covariance,
+    jtj_covariance,
+    residual_jacobian,
+)
+from .fit_simplex import function_tolerance, initial_simplex, nudge_inside, stalled_parameters
 from .fitting import (
     _bound_jacobian,
     _bound_to_free,
@@ -33,7 +40,13 @@ from .fitting import (
     _numerical_hessian,
 )
 
-__all__ = ["GlobalFitCancelled", "global_curve_fit", "share_groups"]
+__all__ = [
+    "GlobalFitCancelled",
+    "global_curve_fit",
+    "held_slots",
+    "share_groups",
+    "slot_layout",
+]
 
 _EPS = float(np.finfo(float).eps)
 ModelFn = Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
@@ -129,6 +142,8 @@ def global_curve_fit(
     lower: Sequence[Any] | None = None,
     upper: Sequence[Any] | None = None,
     weights: Sequence[Any] | None = None,
+    fixed: Sequence[Any] | None = None,
+    covariance: str = "jtj",
     max_iter: int = 20000,
     tol_fun: float = 1e-12,
     tol_x: float = 1e-10,
@@ -144,9 +159,19 @@ def global_curve_fit(
     [i, ...]}`` (0-based dataset indices); only groups of ≥2 datasets share.
     ``init_guess`` is a list of K length-P start vectors. ``lower``/``upper`` are a
     single length-P vector (broadcast) or a list of K vectors. ``weights`` is an
-    optional list of K length-N weight vectors. Returns a dict with per-dataset
-    ``params``/``errors``/``residuals``/``yFit``/``R2``/``RMSE``, a ``shared``
-    summary list, ``chiSqRed``, ``covar``, ``nTotal``, ``nFree``, ``exitFlag``.
+    optional list of K length-N weight vectors (``1/dy²`` for instrumental
+    error bars). ``fixed`` (not in MATLAB) holds parameters at their start: a
+    single length-P bool vector (broadcast) or K vectors; a shared group must
+    be held in all of its datasets or none (else ``ValueError``). Held slots
+    report NaN errors and do not count as free. ``covariance`` picks the
+    error method as in ``curve_fit`` (``calc.fit_covariance``): ``"jtj"``
+    (default; scipy/Origin) or ``"hessian"`` (MATLAB; golden-pinned). Returns
+    a dict with per-dataset
+    ``params``/``errors`` (plus ``errorsJtj``/``errorsHessian``, both
+    estimates)/``residuals``/``yFit``/``R2``/``RMSE`` (unweighted, y units)/
+    ``chiSq`` (weighted), a ``shared``
+    summary list, ``chiSqRed``, ``covar``, ``nTotal``, ``nFree``, ``exitFlag``,
+    ``warnings`` (a stalled parameter, as in ``curve_fit``; forces exitFlag 0).
 
     Long-run hooks (not in MATLAB; they never change the answer):
     ``progress_callback(fraction, message)`` fires once per Nelder-Mead
@@ -159,6 +184,8 @@ def global_curve_fit(
     k = len(datasets)
     if k < 1:
         raise ValueError("need at least one dataset")
+    if covariance not in COVARIANCE_METHODS:
+        raise ValueError(f"covariance must be one of {COVARIANCE_METHODS}, got {covariance!r}")
     p = len(param_names)
 
     fcns: list[ModelFn] = [model_fcn] * k if callable(model_fcn) else list(model_fcn)
@@ -181,7 +208,8 @@ def global_curve_fit(
             w_all.append(wi)
         else:
             w_all.append(np.ones(xi.size))
-    n_total = int(sum(n_pts))
+    # Zero-weight points are not observations (as in curve_fit).
+    n_total = int(sum(int(np.count_nonzero(wi > 0)) for wi in w_all))
 
     inf_p = np.full(p, math.inf)
     p0_cell = _per_dataset(init_guess, k, p, np.zeros(p))
@@ -191,21 +219,8 @@ def global_curve_fit(
     p0_cell = [np.clip(p0_cell[i], lb_cell[i], ub_cell[i]) for i in range(k)]
 
     sharing = share_groups(constraints, param_names, k)
-    n_groups = len(sharing)
 
-    is_shared = np.zeros((k, p), dtype=bool)
-    super_idx = np.zeros((k, p), dtype=int)
-    for g, grp in enumerate(sharing):
-        for ki in grp["datasets"]:
-            is_shared[ki, grp["param_idx"]] = True
-            super_idx[ki, grp["param_idx"]] = g  # shared slots take positions 0..G-1
-    nxt = n_groups
-    for ki in range(k):
-        for pi in range(p):
-            if not is_shared[ki, pi]:
-                super_idx[ki, pi] = nxt
-                nxt += 1
-    n_super = nxt
+    is_shared, super_idx, n_super = slot_layout(sharing, k, p)
 
     super_p0 = np.zeros(n_super)
     super_lb = np.full(n_super, -math.inf)
@@ -226,28 +241,39 @@ def global_curve_fit(
                 super_lb[si] = lb_cell[ki][pi]
                 super_ub[si] = ub_cell[ki][pi]
 
+    held = held_slots(fixed, k, p, super_idx, n_super)
+    slots = [s for s in range(n_super) if not held[s]]  # optimised super slots
+    # A free start ON a bound would freeze there (fit_simplex.nudge_inside).
+    super_p0 = nudge_inside(super_p0, super_lb, super_ub, slots)
+    n_free = len(slots)
     sqrt_w = [np.sqrt(w_all[i]) for i in range(k)]
 
     def from_free_all(pf: NDArray[np.float64]) -> NDArray[np.float64]:
-        return np.array([_free_to_bound(float(pf[s]), super_lb[s], super_ub[s])
-                         for s in range(n_super)])
+        sp = super_p0.copy()
+        for j, s in enumerate(slots):
+            sp[s] = _free_to_bound(float(pf[j]), super_lb[s], super_ub[s])
+        return sp
 
     def expand(sp: NDArray[np.float64]) -> list[NDArray[np.float64]]:
         return [np.array([sp[super_idx[ki, pi]] for pi in range(p)]) for ki in range(k)]
 
-    def cost(pf: NDArray[np.float64]) -> float:
+    def resid_super(sp: NDArray[np.float64]) -> NDArray[np.float64]:
         if abort_check is not None and abort_check():
             raise GlobalFitCancelled("global fit cancelled")
-        sp = from_free_all(pf)
         plist = expand(sp)
-        total = 0.0
-        for ki in range(k):
-            resid = (y_all[ki] - fcns[ki](x_all[ki], plist[ki])) * sqrt_w[ki]
-            total += float(np.sum(resid**2))
-        return total
+        return np.concatenate([(y_all[ki] - fcns[ki](x_all[ki], plist[ki])) * sqrt_w[ki]
+                               for ki in range(k)])
+
+    def cost_super(sp: NDArray[np.float64]) -> float:
+        with np.errstate(over="ignore", invalid="ignore"):
+            val = float(np.sum(resid_super(sp) ** 2))
+        return val if math.isfinite(val) else math.inf  # undefined model = a wall
+
+    def cost(pf: NDArray[np.float64]) -> float:
+        return cost_super(from_free_all(pf))
 
     pf0 = np.array([_bound_to_free(float(super_p0[s]), super_lb[s], super_ub[s])
-                    for s in range(n_super)])
+                    for s in slots])
     iteration = [0]
 
     def on_iteration(_xk: NDArray[np.float64]) -> None:
@@ -257,11 +283,13 @@ def global_curve_fit(
                 min(iteration[0] / max_iter, 1.0), f"Nelder-Mead iteration {iteration[0]}"
             )
 
-    if n_super > 0:
+    if n_free > 0:
+        transformed = [bool(super_lb[s] > -math.inf or super_ub[s] < math.inf) for s in slots]
         res = minimize(
             cost, pf0, method="Nelder-Mead", callback=on_iteration,
             options={"maxiter": max_iter, "maxfev": max_iter * 4,
-                     "xatol": tol_x, "fatol": tol_fun},
+                     "xatol": tol_x, "fatol": function_tolerance(tol_fun, cost(pf0)),
+                     "initial_simplex": initial_simplex(pf0, transformed)},
         )
         pf_opt = np.asarray(res.x, dtype=float)
         exit_flag = 1 if res.success else 0
@@ -272,28 +300,42 @@ def global_curve_fit(
     sp_opt = from_free_all(pf_opt)
     plist_opt = expand(sp_opt)
 
-    ss_res_total = 0.0
-    for ki in range(k):
-        resid = (y_all[ki] - fcns[ki](x_all[ki], plist_opt[ki])) * sqrt_w[ki]
-        ss_res_total += float(np.sum(resid**2))
-    dof = n_total - n_super
+    ss_res_total = cost_super(sp_opt)
+    dof = n_total - n_free
     chi_sq_red = ss_res_total / max(dof, 1)
 
-    super_err = np.full(n_super, np.nan)
+    # Both estimates, as curve_fit: the selected one fills errors/covar; the
+    # unselected Hessian (O(n_free^2) evaluations) only up to 20 free slots.
+    err_jtj = np.full(n_super, np.nan)
+    err_hess = np.full(n_super, np.nan)
     covar: NDArray[np.float64] | None = None
-    if n_super > 0 and dof > 0:
-        hess = _numerical_hessian(cost, pf_opt)
-        try:
-            cov_free = np.asarray(np.linalg.inv(hess / 2) * chi_sq_red, dtype=float)
-            if np.all(np.diag(cov_free) >= 0):
-                se_free = np.sqrt(np.diag(cov_free))
-                jac = np.array([_bound_jacobian(float(pf_opt[s]), super_lb[s], super_ub[s])
-                                for s in range(n_super)])
-                super_err = se_free * np.abs(jac)
-                jmat = np.diag(jac)
-                covar = np.asarray(jmat @ cov_free @ jmat.T, dtype=float)
-        except np.linalg.LinAlgError:
-            pass
+    if n_free > 0 and dof > 0:
+        y_scale = math.sqrt(sum(float(np.sum(w_all[i] * y_all[i] ** 2)) for i in range(k)))
+        jac = residual_jacobian(resid_super, sp_opt, slots, super_lb, super_ub, y_scale)
+        cov_j = jtj_covariance(jac, chi_sq_red)
+        cov_h: NDArray[np.float64] | None = None
+        if covariance == "hessian" or n_free <= 20:
+            bjac = np.array([_bound_jacobian(float(pf_opt[j]), super_lb[s], super_ub[s])
+                             for j, s in enumerate(slots)])
+            cov_h = hessian_covariance(_numerical_hessian(cost, pf_opt), chi_sq_red, bjac)
+        if cov_j is not None:
+            err_jtj[slots] = np.sqrt(np.diag(cov_j))
+        if cov_h is not None:
+            err_hess[slots] = np.sqrt(np.diag(cov_h))
+        cov_free = cov_j if covariance == "jtj" else cov_h
+        if cov_free is not None:
+            covar = np.zeros((n_super, n_super))
+            covar[np.ix_(slots, slots)] = cov_free
+    super_err = err_jtj if covariance == "jtj" else err_hess
+
+    lo_all = np.asarray(super_lb, dtype=float)
+    hi_all = np.asarray(super_ub, dtype=float)
+    stalled = stalled_parameters(cost_super, sp_opt, super_p0, lo_all, hi_all, slots)
+    warnings = [f"global parameter slot {s + 1} never moved from its start value "
+                f"{super_p0[s]:.6g} although the fit residual still falls along it; "
+                "the optimizer stalled -- try another start value" for s in stalled]
+    if warnings:
+        exit_flag = 0
 
     params: list[list[float]] = []
     errors: list[list[float]] = []
@@ -301,6 +343,11 @@ def global_curve_fit(
     y_fit: list[NDArray[np.float64]] = []
     r2 = np.zeros(k)
     rmse = np.zeros(k)
+    chi_sq = np.zeros(k)
+
+    def per_dataset(err: NDArray[np.float64]) -> list[list[float]]:
+        return [[float(err[super_idx[ki, pi]]) for pi in range(p)] for ki in range(k)]
+
     for ki in range(k):
         params.append([float(v) for v in plist_opt[ki]])
         errors.append([float(super_err[super_idx[ki, pi]]) for pi in range(p)])
@@ -312,7 +359,12 @@ def global_curve_fit(
         w_mean = float(np.sum(w_all[ki] * y_all[ki]) / np.sum(w_all[ki]))
         ss_tot = float(np.sum(w_all[ki] * (y_all[ki] - w_mean) ** 2))
         r2[ki] = 1 - ss_res / max(ss_tot, _EPS)
-        rmse[ki] = math.sqrt(ss_res / n_pts[ki])
+        # One metric definition (calc.fit_metrics): RMSE is UNWEIGHTED, in
+        # the units of y, over the points that were fitted; the weighted sum
+        # the fit minimised is reported separately as chiSq.
+        used = w_all[ki] > 0
+        rmse[ki] = math.sqrt(float(np.mean(res_k[used] ** 2))) if bool(np.any(used)) else math.nan
+        chi_sq[ki] = ss_res
 
     shared_out: list[dict[str, Any]] = []
     for g, grp in enumerate(sharing):
@@ -322,19 +374,74 @@ def global_curve_fit(
             "datasets": grp["datasets"],
             "value": float(sp_opt[g]),
             "error": float(super_err[g]),
+            "errorJtj": float(err_jtj[g]),
+            "errorHessian": float(err_hess[g]),
         })
 
     return {
         "params": params,
         "errors": errors,
+        "errorsJtj": per_dataset(err_jtj),
+        "errorsHessian": per_dataset(err_hess),
         "shared": shared_out,
         "residuals": residuals,
         "yFit": y_fit,
         "R2": r2,
         "RMSE": rmse,
+        "chiSq": chi_sq,
         "chiSqRed": float(chi_sq_red),
         "covar": covar,
         "nTotal": n_total,
-        "nFree": n_super,
+        "nFree": n_free,
+        "held": [[bool(held[super_idx[ki, pi]]) for pi in range(p)] for ki in range(k)],
+        "covariance": covariance,
+        "warnings": warnings,
         "exitFlag": exit_flag,
     }
+
+
+def slot_layout(
+    sharing: Sequence[dict[str, Any]], k: int, p: int
+) -> tuple[NDArray[np.bool_], NDArray[np.int_], int]:
+    """Super-parameter layout: ``(is_shared, super_idx, n_super)``. Shared
+    groups take slots ``0..G-1``; every other (dataset, parameter) pair gets
+    its own slot after them, dataset-major."""
+    is_shared = np.zeros((k, p), dtype=bool)
+    super_idx = np.zeros((k, p), dtype=int)
+    for g, grp in enumerate(sharing):
+        for ki in grp["datasets"]:
+            is_shared[ki, grp["param_idx"]] = True
+            super_idx[ki, grp["param_idx"]] = g  # shared slots take positions 0..G-1
+    nxt = len(sharing)
+    for ki in range(k):
+        for pi in range(p):
+            if not is_shared[ki, pi]:
+                super_idx[ki, pi] = nxt
+                nxt += 1
+    return is_shared, super_idx, nxt
+
+
+def held_slots(
+    fixed: Sequence[Any] | None, k: int, p: int, super_idx: NDArray[np.int_], n_super: int
+) -> NDArray[np.bool_]:
+    """Per-super-slot held flags from a broadcast or per-dataset ``fixed``.
+
+    A shared slot must be held in every dataset that shares it or in none:
+    holding it in one member only has no single meaning, so it is refused.
+    """
+    held = np.zeros(n_super, dtype=bool)
+    if fixed is None:
+        return held
+    arr = np.asarray(fixed, dtype=bool)
+    rows = np.broadcast_to(arr, (k, p)) if arr.ndim == 1 else arr
+    if rows.shape != (k, p):
+        raise ValueError(f"fixed must be {p} flags or {k} vectors of {p} flags")
+    votes: dict[int, set[bool]] = {}
+    for ki in range(k):
+        for pi in range(p):
+            votes.setdefault(int(super_idx[ki, pi]), set()).add(bool(rows[ki, pi]))
+    for s, v in votes.items():
+        if len(v) > 1:
+            raise ValueError("a shared parameter must be held in all of its datasets or in none")
+        held[s] = v.pop()
+    return held

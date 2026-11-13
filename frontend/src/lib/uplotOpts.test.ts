@@ -1713,9 +1713,36 @@ describe("buildOpts fill under/between curves (MAIN #13)", () => {
     });
     expect(opts.bands).toEqual([
       { series: [1, 2], fill: "color-mix(in oklab, #ff0000 25%, transparent)" },
+      { series: [2, 1], fill: "color-mix(in oklab, #ff0000 25%, transparent)" },
     ]);
     // The banding series itself carries no per-series fill (bands are opts-level).
     expect((opts.series?.[1] as { fill?: string }).fill).toBeUndefined();
+  });
+
+  // Audit #9: a Curve Fit band on the main graph — dashed edges in the
+  // curve's colour and a shaded fill [upper, lower] between each pair.
+  it("shades a fit band between its edges in the curve's colour", () => {
+    const banded: PlotPayload = {
+      ...payload,
+      data: [[0, 1, 2], [10, 20, 30], [11, 21, 31], [10, 20, 30], [12, 22, 32], [9, 19, 29], [13, 23, 33]],
+      series: [
+        { label: "M", unit: "emu" },
+        { label: "fit", unit: "" },
+        { label: "95% CI low", unit: "", band: 1 },
+        { label: "95% CI high", unit: "", band: 2 },
+        { label: "95% PI low", unit: "", band: 3 },
+        { label: "95% PI high", unit: "", band: 4 },
+      ],
+    };
+    const opts = buildOpts(banded, { ...base, yScale: "linear", tool: "zoom", plotted: [0] });
+    const fitStroke = opts.series[2]!.stroke as string;
+    expect(opts.series[3]!.stroke).toBe(`color-mix(in oklab, ${fitStroke} 60%, transparent)`);
+    expect(opts.series[3]!.dash).toEqual([4, 4]);
+    expect(opts.series[6]!.points?.show).toBe(false);
+    expect(opts.bands).toEqual([
+      { series: [4, 3], fill: `color-mix(in oklab, ${fitStroke} 20%, transparent)` },
+      { series: [6, 5], fill: `color-mix(in oklab, ${fitStroke} 10%, transparent)` },
+    ]);
   });
 
   it("omits bands entirely when nothing requests one", () => {

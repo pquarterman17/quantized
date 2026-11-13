@@ -10,12 +10,21 @@ and dy/input validation.
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import numpy as np
 import pytest
 
+from quantized.calc import fit_scan
 from quantized.calc.fit_models import FIT_MODELS
-from quantized.calc.fit_scan import aicc_from_aic, default_candidates, scan_models
+from quantized.calc.fit_scan import (
+    DEFAULT_SCAN_ORIGIN_MODELS,
+    ORIGIN_MODELS_NOT_IN_DEFAULT_SCAN,
+    ORIGIN_SCAN_MAX_ITER_PER_PARAM,
+    aicc_from_aic,
+    default_candidates,
+    scan_models,
+)
 
 
 def _gaussian_data() -> tuple[np.ndarray, np.ndarray]:
@@ -60,10 +69,106 @@ def test_default_candidates_applies_n_over_3_cut() -> None:
     assert "Gaussian" not in names  # 3 params, 3 < 3 is false
 
 
-def test_default_candidates_large_n_includes_everything() -> None:
+def test_default_candidates_large_n_includes_everything_but_the_excluded_origin_set() -> None:
     max_k = max(spec["nParams"] for spec in FIT_MODELS.values())
     names = default_candidates(3 * max_k + 3)
-    assert set(names) == set(FIT_MODELS)
+    assert set(names) == set(FIT_MODELS) - set(ORIGIN_MODELS_NOT_IN_DEFAULT_SCAN)
+
+
+# The MATLAB-parity registry: the default scan before the Origin library landed.
+_PARITY_MODELS = [
+    "Linear", "Quadratic", "Cubic", "Poly 4", "Exponential Decay", "Stretched Exponential",
+    "Bi-exponential Decay", "Exponential Growth", "Saturation Growth", "Gaussian", "Lorentzian",
+    "Pseudo-Voigt", "Power Law", "Allometric", "Logistic", "Tanh", "Curie-Weiss", "Bloch T^3/2",
+    "Arrhenius", "VFT", "Langmuir", "Logarithmic", "Square Root", "Tanh Hysteresis",
+    "Two-Component (F+P)", "Linear Background", "Approach to Saturation",
+    "Langevin + Background", "Langevin", "Brillouin", "Stoner-Wohlfarth", "Debye", "Einstein",
+    "Debye+Einstein",
+]
+_ORIGIN_CATEGORIES = {"Peak Functions", "Exponential", "Growth/Sigmoidal", "Polynomial", "Waveform"}
+
+
+def test_default_candidate_list_is_the_parity_set_plus_nine_origin_models() -> None:
+    """Regression: the default scan fitted all 71 models (~10x slower)."""
+    assert DEFAULT_SCAN_ORIGIN_MODELS == (
+        "Gauss", "Lorentz", "Voigt", "ExpDec1", "Boltzmann", "Hill", "SGompertz", "Sine",
+        "Proportional",
+    )
+    names = default_candidates(10_000)
+    assert sorted(names) == sorted(_PARITY_MODELS + list(DEFAULT_SCAN_ORIGIN_MODELS))
+    assert len(names) == 43
+    # No high-order polynomial and no multi-exponential from the Origin library.
+    assert not {"Poly5", "Poly 6", "Poly 7", "Poly 8", "Poly", "ExpDec2", "ExpDec3",
+                "ExpDecay2", "ExpDecay3", "ExpGro2", "ExpGrow2"} & set(names)
+
+
+def test_every_origin_model_has_an_explicit_default_scan_decision() -> None:
+    origin = {n for n, s in FIT_MODELS.items() if s["category"] in _ORIGIN_CATEGORIES}
+    origin.add("Allometric1")  # shares the parity "Power" category
+    included, excluded = set(DEFAULT_SCAN_ORIGIN_MODELS), set(ORIGIN_MODELS_NOT_IN_DEFAULT_SCAN)
+    assert not included & excluded
+    assert included | excluded == origin
+
+
+def test_default_scan_iteration_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Load-invariant scan budget: which fits run, and under what iteration cap.
+
+    Origin models in a default scan get ORIGIN_SCAN_MAX_ITER_PER_PARAM per
+    parameter; parity models keep curve_fit's own default (max_iter=None), so
+    their results are unchanged. The Origin share of the worst case is bounded.
+    """
+    seen: dict[str, int | None] = {}
+    real = fit_scan.curve_fit
+
+    def spy(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        seen[current[0]] = kwargs.get("max_iter")
+        return real(*args, **{**kwargs, "max_iter": 5})  # keep the test itself cheap
+
+    current = [""]
+    monkeypatch.setattr(fit_scan, "curve_fit", spy)
+    x, y = _gaussian_data()
+    scan_models(x, y, progress_callback=lambda _f, msg: current.__setitem__(0, msg.split(": ")[1]))
+
+    assert set(seen) == set(default_candidates(len(x)))
+    origin_caps = {n: seen[n] for n in DEFAULT_SCAN_ORIGIN_MODELS if n in seen}
+    assert origin_caps == {
+        n: ORIGIN_SCAN_MAX_ITER_PER_PARAM * FIT_MODELS[n]["nParams"] for n in origin_caps
+    }
+    assert all(seen[n] is None for n in seen if n not in DEFAULT_SCAN_ORIGIN_MODELS)
+    # 9 models, 31 parameters in total: at most 12,400 capped iterations.
+    worst = sum(ORIGIN_SCAN_MAX_ITER_PER_PARAM * FIT_MODELS[n]["nParams"]
+                for n in DEFAULT_SCAN_ORIGIN_MODELS)
+    assert worst == 12_400
+
+
+def test_capped_origin_model_reports_skipped_too_slow(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(fit_scan, "ORIGIN_SCAN_MAX_ITER_PER_PARAM", 1)
+    x, y = _gaussian_data()
+    out = scan_models(x, y)
+    by_name = {e["name"]: e for e in out["results"]}
+    for name in DEFAULT_SCAN_ORIGIN_MODELS:
+        if name in by_name:
+            assert by_name[name]["error"].startswith("skipped: too slow"), name
+            assert by_name[name]["AICc"] is None
+    # Parity models are not capped, and the skipped entries sort after them.
+    assert by_name["Gaussian"]["error"] is None
+    assert out["results"][0]["error"] is None
+
+
+def test_explicitly_requested_origin_model_is_never_capped(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(fit_scan, "ORIGIN_SCAN_MAX_ITER_PER_PARAM", 1)
+    x, y = _gaussian_data()
+    out = scan_models(x, y, models=["Gauss", "Poly", "ExpDec3"])
+    assert [e["error"] for e in out["results"]] == [None, None, None]
+    assert out["results"][0]["name"] == "Gauss"
+
+
+def test_default_scan_origin_models_converge_within_budget_on_matching_data() -> None:
+    x, y = _gaussian_data()
+    out = scan_models(x, y)
+    by_name = {e["name"]: e for e in out["results"]}
+    assert by_name["Gauss"]["error"] is None
+    assert by_name["Gauss"]["R2"] > 0.99
 
 
 # ── scan_models ranking ──────────────────────────────────────────────────────

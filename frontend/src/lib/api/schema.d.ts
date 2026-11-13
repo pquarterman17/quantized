@@ -1816,6 +1816,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report
+         * @description t / Prob>|t| / confidence limits, ANOVA, covariance and correlation.
+         */
+        post: operations["report_api_fitting_report_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/scan": {
         parameters: {
             query?: never;
@@ -5971,8 +5991,6 @@ export interface components {
         BandsRequest: {
             /** Covar */
             covar?: number[][] | null;
-            /** Dof */
-            dof: number;
             /** Equation */
             equation?: string | null;
             /**
@@ -5982,12 +6000,20 @@ export interface components {
             level?: number;
             /** Model */
             model?: string | null;
+            /** Mse */
+            mse?: number | null;
+            /** N Free */
+            n_free: number;
             /** N Points */
             n_points: number;
+            /** Obs Var */
+            obs_var?: (number | null)[] | null;
             /** Params */
             params: number[];
             /** X */
             x: number[];
+            /** X Data */
+            x_data?: number[] | null;
         };
         /**
          * BatchIntegrateRequest
@@ -7278,6 +7304,8 @@ export interface components {
             n_params: number;
             /** Residuals */
             residuals: number[];
+            /** Weights */
+            weights?: number[] | null;
             /** Y */
             y: number[];
         };
@@ -7361,6 +7389,12 @@ export interface components {
              * @default true
              */
             calc_errors?: boolean;
+            /**
+             * Covariance
+             * @default jtj
+             * @enum {string}
+             */
+            covariance?: "jtj" | "hessian";
             /** Dy */
             dy?: number[] | null;
             /** Equation */
@@ -7368,9 +7402,20 @@ export interface components {
             /** Fixed */
             fixed?: boolean[] | null;
             /** Guesses */
-            guesses?: number[] | null;
+            guesses?: (number | null)[] | null;
             /** Lower */
             lower?: (number | null)[] | null;
+            /**
+             * Scale Errors
+             * @default true
+             */
+            scale_errors?: boolean;
+            /**
+             * Stats Version
+             * @default 2
+             * @enum {integer}
+             */
+            stats_version?: 1 | 2;
             /** Upper */
             upper?: (number | null)[] | null;
             /** Weights */
@@ -8078,6 +8123,30 @@ export interface components {
             /** Y */
             y: number[];
         };
+        /** FitReportRequest */
+        FitReportRequest: {
+            /** Covar */
+            covar?: number[][] | null;
+            /** Dy */
+            dy?: number[] | null;
+            /** Errors */
+            errors: (number | null)[];
+            /**
+             * Level
+             * @default 0.95
+             */
+            level?: number;
+            /** N Free */
+            n_free: number;
+            /** Params */
+            params: number[];
+            /** Residuals */
+            residuals: number[];
+            /** Weights */
+            weights?: number[] | null;
+            /** Y */
+            y: number[];
+        };
         /** FitRequest */
         FitRequest: {
             /**
@@ -8085,18 +8154,35 @@ export interface components {
              * @default true
              */
             calc_errors?: boolean;
+            /**
+             * Covariance
+             * @default jtj
+             * @enum {string}
+             */
+            covariance?: "jtj" | "hessian";
             /** Dy */
             dy?: number[] | null;
             /** Fixed */
             fixed?: boolean[] | null;
             /** Lower */
-            lower?: number[] | null;
+            lower?: (number | null)[] | null;
             /** Model */
             model: string;
             /** P0 */
             p0?: number[] | null;
+            /**
+             * Scale Errors
+             * @default true
+             */
+            scale_errors?: boolean;
+            /**
+             * Stats Version
+             * @default 2
+             * @enum {integer}
+             */
+            stats_version?: 1 | 2;
             /** Upper */
-            upper?: number[] | null;
+            upper?: (number | null)[] | null;
             /** Weights */
             weights?: number[] | null;
             /** X */
@@ -8172,10 +8258,18 @@ export interface components {
              * @default []
              */
             constraints?: components["schemas"]["ShareGroup"][];
+            /**
+             * Covariance
+             * @default jtj
+             * @enum {string}
+             */
+            covariance?: "jtj" | "hessian";
             /** Datasets */
             datasets: components["schemas"]["GlobalSeries"][];
             /** Equation */
             equation?: string | null;
+            /** Fixed */
+            fixed?: boolean[][] | boolean[] | null;
             /** Lower */
             lower?: (number | null)[] | null;
             /**
@@ -14594,6 +14688,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PosteriorRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_api_fitting_report_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FitReportRequest"];
             };
         };
         responses: {

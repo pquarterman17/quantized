@@ -160,12 +160,12 @@ export default function AnalysisResultPanel() {
     else return;
     close();
   };
-  const recalculate = async () => {
+  const recalculate = async (updateStatistics = false) => {
     if (!source || (!isFit && !output) || busy) return;
     setBusy("recalculate");
     try {
       await loadActions().then((m) => isFit
-        ? m.recalculateFitAnalysisResult(result.id)
+        ? m.recalculateFitAnalysisResult(result.id, { updateStatistics })
         : m.recalculateAnalysisResult(result.id), onLoadFailure);
     } finally {
       setBusy(null);
@@ -321,7 +321,7 @@ export default function AnalysisResultPanel() {
               <div><dt>X axis</dt><dd>{peakTable ? `${peakTable.provenance.xLabel || "Unknown"}${peakTable.provenance.xUnit ? ` (${peakTable.provenance.xUnit})` : ""}` : "Unavailable"}</dd></div>
               <div><dt>R²</dt><dd>{peakTable?.provenance.R2 == null ? "Not reported" : formatValue(peakTable.provenance.R2)}</dd></div>
               <div><dt>Fitted</dt><dd>{peakTable ? formatDate(peakTable.provenance.fittedAt) : "Unavailable"}</dd></div>
-            </dl> : isFit ? <AnalysisResultFitOverview result={result} source={source} spec={fitSpec} /> : <dl className="qz-analysis-summary">
+            </dl> : isFit ? <AnalysisResultFitOverview result={result} source={source} spec={fitSpec} busy={!!busy} onUpdateStatistics={source && fitReplayable ? () => void recalculate(true) : undefined} /> : <dl className="qz-analysis-summary">
               <div><dt>Analysis</dt><dd>{result.producer.label}</dd></div>
               <div><dt>Source</dt><dd>{source?.name ?? "Missing source"}</dd></div>
               <div><dt>Output</dt><dd>{output?.name ?? "Missing output"}</dd></div>

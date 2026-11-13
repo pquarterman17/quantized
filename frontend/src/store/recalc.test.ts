@@ -202,10 +202,62 @@ describe("recalc engine (#1)", () => {
     });
     await useApp.getState().recalcNow();
     expect(fitModel).toHaveBeenCalledWith({
+      stats_version: 1, // a spec without statsVersion replays under the legacy statistics
       model: "Linear",
       x: [100, 200, 300], // field (recorded xKey 0), not time
       y: [10, 20, 30], // moment (recorded yKey 1), not values[0]
     });
+  });
+
+  it("a current (statsVersion 2) spec recomputes under the current statistics and stays current", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1, 0], errors: [0.1, 0.2], yFit: [1, 2, 3], statsVersion: 2 });
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [ds("a", { data: multi(), fitSpec: { model: "Linear", xKey: 0, yKey: 1, statsVersion: 2 } })],
+      xKey: null,
+      yKeys: [0],
+      seriesOrder: null,
+      staleFits: ["a"],
+    });
+    await useApp.getState().recalcNow();
+    expect(vi.mocked(fitModel).mock.calls[0]![0]).not.toHaveProperty("stats_version");
+    expect(useApp.getState().datasets[0].fitSpec?.statsVersion).toBe(2);
+  });
+
+  it("a legacy spec stays legacy after a recompute — its errors are not silently redefined (review item 10)", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1, 0], errors: [0.1, 0.2], yFit: [1, 2, 3], statsVersion: 1 });
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [ds("a", { data: multi(), fitSpec: { model: "Linear", xKey: 0, yKey: 1, errors: [9, 9] } })],
+      xKey: null,
+      yKeys: [0],
+      seriesOrder: null,
+      staleFits: ["a"],
+    });
+    await useApp.getState().recalcNow();
+    expect(vi.mocked(fitModel).mock.calls[0]![0]).toMatchObject({ stats_version: 1 });
+    const spec = useApp.getState().datasets[0].fitSpec;
+    expect(spec?.errors).toEqual([0.1, 0.2]);
+    expect(spec?.statsVersion).toBeUndefined();
+  });
+
+  it("replays a direct weight column as `weights`, not dy (review item 11)", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1, 0], yFit: [1, 2, 3], statsVersion: 2 });
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [ds("a", {
+        data: multi(),
+        fitSpec: { model: "Linear", xKey: 0, yKey: 1, statsVersion: 2, weight: { mode: "direct", errKey: 0 } },
+      })],
+      xKey: null,
+      yKeys: [0],
+      seriesOrder: null,
+      staleFits: ["a"],
+    });
+    await useApp.getState().recalcNow();
+    const req = vi.mocked(fitModel).mock.calls[0]![0];
+    expect(req.weights).toEqual([100, 200, 300]);
+    expect(req).not.toHaveProperty("dy");
   });
 
   it("recompute of a legacy {model} spec uses the live plotted selection", async () => {
@@ -219,7 +271,7 @@ describe("recalc engine (#1)", () => {
       staleFits: ["a"],
     });
     await useApp.getState().recalcNow();
-    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [100, 200, 300], y: [10, 20, 30] });
+    expect(fitModel).toHaveBeenCalledWith({ stats_version: 1, model: "Linear", x: [100, 200, 300], y: [10, 20, 30] });
   });
 
   it("a failing fit stays stale instead of vanishing", async () => {

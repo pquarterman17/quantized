@@ -148,14 +148,22 @@ export interface FitRequest {
   x: number[];
   y: number[];
   p0?: number[];
-  lower?: number[];
-  upper?: number[];
+  /** Open bounds as ±Infinity or null (the route takes both; JSON sends null). */
+  lower?: (number | null)[];
+  upper?: (number | null)[];
   /** Per-point 1-sigma errors -> weights 1/dy^2 (canonical). Wins over `weights`.
    *  `null`/absent = unweighted (so a recompute can pass `sel.dy` straight through). */
   dy?: number[] | null;
   weights?: number[];
   fixed?: boolean[];
   calc_errors?: boolean;
+  /** "jtj" (Origin / scipy, default) or "hessian" (MATLAB curveFit). */
+  covariance?: "jtj" | "hessian";
+  /** Origin "Scale Error with sqrt(Reduced Chi-Sqr)"; default true. */
+  scale_errors?: boolean;
+  /** The statistics definitions to report under (lib/fitStatsVersion.ts);
+   *  absent = current. */
+  stats_version?: number;
 }
 
 /** Bounded nonlinear least-squares fit of a named model. */

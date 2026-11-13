@@ -20,6 +20,7 @@ import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { ComputedColumn, Dataset } from "../lib/types";
 import { formulaLetter, linkSheets, withRecomputedFormulas } from "./computedColumns";
+import type { HistoryBatchToken } from "./history";
 import { withResolved } from "./pendingEdit";
 import { useApp } from "./useApp";
 import { syncDatasetWindowDocuments } from "./windowDocuments";
@@ -87,6 +88,9 @@ function analyse(ds: Dataset, req: DeriveRequest): Analysed {
 export async function addDerivedColumn(
   id: string,
   req: DeriveRequest,
+  /** Fold this add into an enclosing `withHistoryBatch` (one undo step for
+   *  several columns, e.g. the Curve Fit's fitted + residual pair). */
+  batchToken?: HistoryBatchToken,
 ): Promise<DerivedColumnResult> {
   const get = useApp.getState;
   const out = await withResolved(get, id, "adding a column", (ds): DerivedColumnResult => {
@@ -109,7 +113,7 @@ export async function addDerivedColumn(
       }
     }
     const bind = added.length > 1;
-    get().recordHistory("add column");
+    get().recordHistory("add column", batchToken);
     useApp.setState((s) => {
       const datasets = s.datasets.map((d) => {
         if (d.id !== id) return d;

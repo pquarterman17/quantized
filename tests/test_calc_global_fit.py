@@ -29,6 +29,7 @@ def test_global_fit_matches_matlab(load_golden: Callable[[str], dict[str, Any]])
     r = global_fit(
         datasets, _exp, g["p0"], [bool(v) for v in g["sharedMask"]],
         lower=_inf_bounds(g["lb"], -1.0), upper=_inf_bounds(g["ub"], 1.0),
+        covariance="hessian",  # MATLAB's error method; the default is now jtj
     )
     ref = g["result"]
     assert_allclose(r["sharedParams"], np.asarray(ref["sharedParams"], dtype=float),
