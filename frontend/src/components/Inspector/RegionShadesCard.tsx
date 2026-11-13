@@ -92,12 +92,12 @@ export default function RegionShadesCard() {
        *  button absorbs a Delete aimed at itself the same way: a focused
        *  button is not an editing target either. */}
       <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer}>
-        {regionShades.map((sh) => (
+        {regionShades.map((sh, i) => (
           <div key={sh.id} className="qz-meta-row" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             <span className="qz-k" style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <input
                 type="color"
-                aria-label="Fill color"
+                aria-label={`Shade ${i + 1} fill color`}
                 value={sh.fill}
                 onChange={(e) => updateRegionShade(sh.id, { fill: e.target.value })}
                 style={{ width: 20, height: 20, padding: 0, border: "1px solid var(--border)" }}
@@ -106,11 +106,12 @@ export default function RegionShadesCard() {
                 options={axisOptions}
                 value={axisOf(sh.axis)}
                 onChange={(next) => updateRegionShade(sh.id, { axis: next === "y2" ? 1 : 0 })}
+                aria-label={`Shade ${i + 1} axis`}
               />
               <span style={{ flex: 1 }} />
               <IconButton
                 title="Remove"
-                aria-label="Remove region shade"
+                aria-label={`Remove shade ${i + 1}`}
                 onClick={() => removeRowSafely(containerRef.current, () => removeRegionShade(sh.id))}
                 onKeyDown={absorbStrayDeleteOnContainer}
               >
@@ -118,11 +119,11 @@ export default function RegionShadesCard() {
               </IconButton>
             </span>
             <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <BufferedNumberField value={sh.x1} width={48} placeholder="x1" required onValue={setCoord(sh.id, "x1")} />
-              {!sh.fullHeight && <BufferedNumberField value={sh.y1} width={48} placeholder="y1" required onValue={setCoord(sh.id, "y1")} />}
+              <BufferedNumberField aria-label={`Shade ${i + 1} x1`} value={sh.x1} width={48} placeholder="x1" required onValue={setCoord(sh.id, "x1")} />
+              {!sh.fullHeight && <BufferedNumberField aria-label={`Shade ${i + 1} y1`} value={sh.y1} width={48} placeholder="y1" required onValue={setCoord(sh.id, "y1")} />}
               <span style={{ color: "var(--text-faint)" }}>→</span>
-              <BufferedNumberField value={sh.x2} width={48} placeholder="x2" required onValue={setCoord(sh.id, "x2")} />
-              {!sh.fullHeight && <BufferedNumberField value={sh.y2} width={48} placeholder="y2" required onValue={setCoord(sh.id, "y2")} />}
+              <BufferedNumberField aria-label={`Shade ${i + 1} x2`} value={sh.x2} width={48} placeholder="x2" required onValue={setCoord(sh.id, "x2")} />
+              {!sh.fullHeight && <BufferedNumberField aria-label={`Shade ${i + 1} y2`} value={sh.y2} width={48} placeholder="y2" required onValue={setCoord(sh.id, "y2")} />}
               <Checkbox ariaLabel={`Shade ${sh.x1} to ${sh.x2} full height`} checked={!!sh.fullHeight} onChange={(on) => updateRegionShade(sh.id, { fullHeight: on || undefined })}>
                 full height
               </Checkbox>
@@ -131,11 +132,11 @@ export default function RegionShadesCard() {
         ))}
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "end", marginTop: regionShades.length ? 6 : 0 }}>
-          <NumberField value={x1} width={48} placeholder="x1" onChange={setX1} />
-          {!fullHeight && <NumberField value={y1} width={48} placeholder="y1" onChange={setY1} />}
+          <NumberField aria-label="New shade x1" value={x1} width={48} placeholder="x1" onChange={setX1} />
+          {!fullHeight && <NumberField aria-label="New shade y1" value={y1} width={48} placeholder="y1" onChange={setY1} />}
           <span style={{ color: "var(--text-faint)" }}>→</span>
-          <NumberField value={x2} width={48} placeholder="x2" onChange={setX2} />
-          {!fullHeight && <NumberField value={y2} width={48} placeholder="y2" onChange={setY2} />}
+          <NumberField aria-label="New shade x2" value={x2} width={48} placeholder="x2" onChange={setX2} />
+          {!fullHeight && <NumberField aria-label="New shade y2" value={y2} width={48} placeholder="y2" onChange={setY2} />}
           <Checkbox ariaLabel="New shade full height" checked={fullHeight} onChange={setFullHeight}>full height</Checkbox>
           <input
             type="color"
@@ -144,7 +145,7 @@ export default function RegionShadesCard() {
             onChange={(e) => setFill(e.target.value)}
             style={{ width: 24, height: 22, padding: 0, border: "1px solid var(--border)" }}
           />
-          <SegmentedControl<AxisChoice> options={axisOptions} value={axis} onChange={setAxis} />
+          <SegmentedControl<AxisChoice> options={axisOptions} value={axis} onChange={setAxis} aria-label="New shade axis" />
           <span title={addReason ?? "Add a filled region shade at these coordinates"}>
             <Button size="sm" disabled={addReason !== null} onClick={add}>
               Add

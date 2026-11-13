@@ -26,7 +26,7 @@ type Case = {
 
 const cases: Case[] = [
   {
-    name: "Remove region shade",
+    name: "Remove shade 1",
     card: () => <RegionShadesCard />,
     state: { regionShades: [{ id: "sh1", x1: 1, y1: 2, x2: 3, y2: 4, fill: "#336699" }] },
     count: () => useApp.getState().regionShades.length,
