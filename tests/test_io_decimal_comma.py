@@ -379,3 +379,18 @@ def test_us_thousands_with_decimals_is_never_a_silent_nan() -> None:
 def test_true_decimal_comma_cell_keeps_its_wording() -> None:
     (note,) = _notes(["1.5", "2,5", "3.5"])
     assert "written with a decimal comma (e.g. '2,5')" in note
+
+
+@pytest.mark.parametrize(
+    ("cell", "kind"), [("2,5", "decimal comma"), ("(2,5)", "no number it reads as")]
+)
+def test_one_text_cell_does_not_hide_a_comma_cell_in_a_numeric_column(
+    tmp_path: Path, cell: str, kind: str
+) -> None:
+    """Review #2 item 5: an ``ERR`` cell used to make the whole column count as
+    text, so the comma cell's NaN went unreported."""
+    text = f"x\ty\n1\t950.5\n2\t{cell}\n3\t870.25\n4\tERR\n5\t3.5\n6\t4.5\n7\t5.5\n"
+    ds = import_csv(_write(tmp_path, text, "err.tsv"))
+    assert np.isnan(ds.values[1, 0])
+    notes = " ".join(ds.metadata["notes"])
+    assert kind in notes and cell in notes

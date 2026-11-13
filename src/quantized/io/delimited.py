@@ -18,7 +18,7 @@ import numpy as np
 from quantized.datastruct import DataStruct
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
-from quantized.io import _delimited_split as split
+from quantized.io import _quoted_numbers as qn
 from quantized.io._delimited_fast import (
     LazyTokenRows,
     _DeferredDataTokens,
@@ -143,13 +143,13 @@ def import_csv(
     # where the header ends.
     lazy_tokens = LazyTokenRows(raw_lines, delim)
     try:
-        header_row, data_start, units_row = layout._detect_layout(
-            # A quoted comma number in a comma-delimited file ("1,234", "1,5")
-            # is still a number-shaped cell: scored as text, it made its row
-            # (and the header above it) preamble, dropped without a word.
-            dc.layout_rows(lazy_tokens)
-            if comma_path or (delim == "," and '"' in text)
-            else lazy_tokens
+        rows = dc.layout_rows(lazy_tokens) if comma_path else lazy_tokens
+        # Quoted grouped numbers ("1,234.5") in a comma-delimited file: the
+        # comma-aware layout, where it is sound (`_quoted_numbers`).
+        quoted = delim == "," and '"' in text
+        detect = layout._detect_layout
+        header_row, data_start, units_row = (
+            qn.choose_layout(rows, detect) if quoted else detect(rows)
         )
     except ValueError as exc:  # header-only file
         raise ValueError(f"{exc} ({path.name})") from exc
@@ -203,19 +203,18 @@ def import_csv(
         comma_cols = dc.resolve_decimal_columns(
             path.name, col_headers, matrix, data_tokens, decimal=decimal
         )
-        comma_notes = dc.stray_comma_notes(
-            col_headers, matrix, data_tokens, converted=comma_cols
-        )
+        comma_notes = dc.stray_comma_notes(col_headers, matrix, data_tokens, converted=comma_cols)
     elif delim != ",":  # with a comma delimiter, "1,5" is already two cells
         layout.reject_comma_numbers(path.name, col_headers, matrix, data_tokens)
-    elif '"' in text:
-        # Unless it is quoted: a quoted grouped number was read as its number
-        # (`_delimited_split`), and one that fits two readings ("1,234") or a
-        # quoted decimal comma ("1,5") was left blank -- both are reported.
-        comma_notes = split.grouped_number_notes(col_headers, raw_lines[data_start:], delim)
+    elif quoted:
+        # Unless it is quoted: grouped numbers in numeric columns are read
+        # (`_quoted_numbers`); any other comma cell left blank is reported.
+        comma_notes = qn.ungroup_columns(col_headers, matrix, data_tokens)
         comma_notes += dc.stray_comma_notes(
             col_headers, matrix, data_tokens, separator_choice=False
         )
+    # Rows the layout skipped between the header and the data are named.
+    comma_notes += qn.skipped_row_notes(lazy_tokens, header_row, units_row, data_start)
 
     if isinstance(time_column, int) and time_column < 0:
         time_idx = -1
@@ -252,9 +251,7 @@ def import_csv(
         reserved = set() if time_promoted else {time_idx}
         candidates = [c for c in range(n_cols) if c not in reserved]
         numeric_idx = [
-            c
-            for c in candidates
-            if (np.count_nonzero(~np.isnan(matrix[:, c])) / n_rows) > 0.1
+            c for c in candidates if (np.count_nonzero(~np.isnan(matrix[:, c])) / n_rows) > 0.1
         ]
         data_idx = numeric_idx
         # P1.4 (f2): a trailing-text-only file used to raise here once

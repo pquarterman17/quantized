@@ -246,7 +246,7 @@ def decimal_metadata(column_names: Sequence[str]) -> tuple[dict[str, Any], str]:
 
 
 #: "1,234" / "1,234.5" / "12,345,678.9e3": US thousands grouping.
-_US_GROUPED_RE = re.compile(r"^[+-]?\d{1,3}(?:,\d{3})+(?:\.\d*)?(?:[eE][+-]?\d+)?$")
+_US_GROUPED_RE = re.compile(r"^[+-]?[1-9]\d{0,2}(?:,\d{3})+(?:\.\d*)?(?:[eE][+-]?\d+)?$")
 
 
 def _comma_kind(cell: str) -> str | None:
@@ -267,6 +267,7 @@ _KIND_TEXT = {
         "decimal comma"
     ),
     "grouped": "written with thousands separators (e.g. '{example}')",
+    "other": "holding a comma but no number it reads as (e.g. '{example}')",
 }
 
 
@@ -288,11 +289,13 @@ def stray_comma_notes(
     shapes need different fixes: a decimal comma (``"2,5"``), US thousands
     grouping (``"1,234.5"``), or a cell that fits both (``"1,234"``).
 
-    Only a column that is otherwise numeric is reported: one holding real
-    text (``abc / 1,5 / def``) is imported as text, intact, and nothing in
-    it was blanked. Only columns with a NaN are inspected, so a clean file
-    pays nothing. ``separator_choice=False`` (a comma-delimited file, where
-    the decimal separator cannot be a comma) drops the Import Wizard hint.
+    Only a numeric column is reported, by the importer's own rule (more than
+    10% of its rows hold a number): a text column (``abc / 1,5 / def``) is
+    imported as text, intact, and nothing in it was blanked. Any other comma
+    cell left blank in a numeric column (``"(2,5)"``) is reported too. Only
+    columns with a NaN are inspected, so a clean file pays nothing.
+    ``separator_choice=False`` (a comma-delimited file, where the decimal
+    separator cannot be a comma) drops the Import Wizard hint.
     """
     fix = ", or pick the decimal separator in the Import Wizard" if separator_choice else ""
     skip = set(converted)
@@ -301,22 +304,16 @@ def stray_comma_notes(
         if c in skip or c >= matrix.shape[1] or not np.isnan(matrix[:, c]).any():
             continue
         cells = _column_cells(data_tokens, c)[: matrix.shape[0]]
-        stray: dict[str, list[str]] = {}
-        numeric = 0
-        is_text = False
-        for r, cell in enumerate(cells):
-            if not cell or cell.lower() in _MISSING_TOKENS:
-                continue
-            if not np.isnan(matrix[r, c]) or _is_numeric_like(cell):
-                numeric += 1
-                continue
-            kind = _comma_kind(cell)
-            if kind is None:
-                is_text = True  # a real text cell: this is a text column
-                break
-            stray.setdefault(kind, []).append(cell)
-        if is_text or not numeric:
+        # The importer's own rule for a numeric column (delimited.py: more
+        # than 10% of its rows hold a number). One stray text cell ("ERR")
+        # used to make the whole column count as text and hide every note.
+        if np.count_nonzero(~np.isnan(matrix[:, c])) <= 0.1 * max(matrix.shape[0], 1):
             continue
+        stray: dict[str, list[str]] = {}
+        for r, cell in enumerate(cells):
+            if "," not in cell or not np.isnan(matrix[r, c]):
+                continue
+            stray.setdefault(_comma_kind(cell) or "other", []).append(cell)
         for kind, found in stray.items():
             count = len(found)
             noun = "cell" if count == 1 else "cells"

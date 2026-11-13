@@ -28,7 +28,7 @@ import numpy as np
 
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
-from quantized.io import _delimited_split as split
+from quantized.io import _quoted_numbers as qn
 from quantized.io._header_units import _extract_units
 from quantized.io.delimited import _split_lines
 
@@ -101,6 +101,8 @@ def _scoring_rows(text: str, tokens: list[list[str]], delim: str) -> Sequence[Se
     (`decimal="auto"`), so a European file's header is not taken for data."""
     if dc.uses_decimal_path("auto", delim, "," in text):
         return dc.layout_rows(tokens)
+    if delim == "," and '"' in text:  # quoted grouped numbers (`_quoted_numbers`)
+        return qn.scoring_rows(tokens)
     return tokens
 
 
@@ -168,8 +170,8 @@ def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
             "this file", names, matrix, data_tokens, decimal=decimal
         )
         notes = dc.stray_comma_notes(names, matrix, data_tokens, converted=comma_cols)
-    elif delim == "," and '"' in text:  # quoted comma numbers (`_delimited_split`)
-        notes = split.grouped_number_notes(names, lines[ds:], delim)
+    elif delim == "," and '"' in text:  # quoted grouped numbers (`_quoted_numbers`)
+        notes = qn.ungroup_columns(names, matrix, data_tokens)
         notes += dc.stray_comma_notes(names, matrix, data_tokens, separator_choice=False)
     return _Parsed(
         lines, delim, names, units, roles, matrix, ds, data_tokens, tokens, comma_cols, notes
