@@ -14,7 +14,7 @@ afterEach(() => {
   s.setPref("excludedDisplay", "grey");
   s.setPref("originBookClickOpens", "worksheet");
   s.setPref("defaultPanelFit", "frames");
-  s.setPref("libraryPanelWidth", 210);
+  s.setPref("libraryPanelWidth", 264);
   s.setPref("autoSeriesStyles", false);
 });
 
@@ -82,12 +82,13 @@ describe("preferences", () => {
     expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").defaultPanelFit).toBe("window");
   });
 
-  it("libraryPanelWidth (#13 sub-item 5) defaults to 210 and persists + applies --lw on change", () => {
-    expect(useApp.getState().libraryPanelWidth).toBe(210);
-    useApp.getState().setPref("libraryPanelWidth", 260);
-    expect(useApp.getState().libraryPanelWidth).toBe(260);
-    expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").libraryPanelWidth).toBe(260);
-    expect(document.documentElement.style.getPropertyValue("--lw")).toBe("260px");
+  it("libraryPanelWidth (#13 sub-item 5) defaults to 264 and persists + applies --lw on change", () => {
+    // 264, not 210: at 210 an Origin project's book names truncated to "M..".
+    expect(useApp.getState().libraryPanelWidth).toBe(264);
+    useApp.getState().setPref("libraryPanelWidth", 300);
+    expect(useApp.getState().libraryPanelWidth).toBe(300);
+    expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").libraryPanelWidth).toBe(300);
+    expect(document.documentElement.style.getPropertyValue("--lw")).toBe("300px");
   });
 
   // P3.3 non-colour encodings. Pinned the way every other pref in this blob is.

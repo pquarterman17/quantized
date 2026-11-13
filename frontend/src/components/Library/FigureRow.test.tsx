@@ -97,13 +97,22 @@ describe("FigureRow — PR C additions", () => {
     const rules = flatRules(readShellCss());
     const resting = rules.find((r) => r.selector === ".qzk-fig-row-tree .qzk-origin-figure-actions");
     expect(resting).toBeDefined();
-    expect(declares(resting!.body, "position", "absolute")).toBe(true);
-    expect(declares(resting!.body, "visibility", "hidden")).toBe(true);
-    expect(declares(resting!.body, "pointer-events", "none")).toBe(true);
+    expect(declares(resting!.body, "display", "none")).toBe(true);
     const reveal = rules.find((r) => r.selector.includes(".qzk-fig-row-tree:hover .qzk-origin-figure-actions"));
     expect(reveal).toBeDefined();
-    expect(declares(reveal!.body, "visibility", "visible")).toBe(true);
-    expect(declares(reveal!.body, "pointer-events", "auto")).toBe(true);
+    expect(reveal!.selector).toContain(":focus-within");
+    expect(declares(reveal!.body, "display", "flex")).toBe(true);
+  });
+
+  it("puts the revealed strip beside the graph name, never over it", () => {
+    // Origin-replacement audit: an absolutely positioned strip covered the
+    // graph name it was revealed for and swallowed the click meant for the
+    // row. In the row's own flex flow the name shrinks instead.
+    const rules = flatRules(readShellCss()).filter((r) => r.selector.includes(".qzk-origin-figure-actions"));
+    expect(rules.length).toBeGreaterThan(0);
+    for (const r of rules) expect(declares(r.body, "position", "absolute")).toBe(false);
+    const row = flatRules(readShellCss()).find((r) => r.selector === ".qzk-fig-row");
+    expect(declares(row!.body, "display", "flex")).toBe(true);
   });
 
   it("keeps source-recovery controls exposed when the unresolved main button cannot receive focus", () => {
@@ -123,8 +132,7 @@ describe("FigureRow — PR C additions", () => {
     expect(screen.getByRole("button", { name: /Recover unresolved Origin bindings/ })).toBeVisible();
     const rules = flatRules(readShellCss());
     const unresolved = rules.find((r) => r.selector === ".qzk-fig-row-tree.unresolved .qzk-origin-figure-actions");
-    expect(declares(unresolved!.body, "position", "static")).toBe(true);
-    expect(declares(unresolved!.body, "transform", "none")).toBe(true);
+    expect(declares(unresolved!.body, "display", "flex")).toBe(true);
   });
 
   it("opens a focused recovery window instead of an inline workbook selector", async () => {

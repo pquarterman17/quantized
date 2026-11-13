@@ -28,7 +28,7 @@
 // double-click autofits to a content sample. Handles stopPropagation so the
 // select-click gesture above never fires from a resize.
 
-import { columnMetaList, type ColumnMeta } from "../../../lib/columnmeta";
+import { columnMetaList, type ColumnMeta, type OriginDesignation } from "../../../lib/columnmeta";
 import { DESIGNATION_BADGE, type TextColumn } from "../../../lib/originTextColumns";
 import { channelLetter } from "../../../lib/formula";
 import type { ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
@@ -44,6 +44,9 @@ export interface GridHeaderProps {
   xName: string;
   xUnit: string;
   channelRoles: Record<number, ChannelRole>;
+  /** The user's "Set As" overrides (`Dataset.columnDesignations`); a badge
+   *  shows the EFFECTIVE designation (lib/columnmeta.ts's effectiveDesignations). */
+  columnDesignations?: Record<number, OriginDesignation>;
   /** Channels at index >= baseCount are computed (formula) columns. */
   baseCount: number;
   visibleCols: number[];
@@ -83,8 +86,10 @@ export interface GridHeaderProps {
 }
 
 /** True short-name-aware role badge for one value channel: computed columns
- *  always show "ƒx"; an explicit channelRole (label/ignore) always wins next
- *  (a stronger, user-set signal); otherwise an Origin designation badge
+ *  always show "ƒx"; a user's "Set As" designation wins next (it also wrote
+ *  the matching channelRole, so badge and role agree); then an explicit
+ *  channelRole (label/ignore) (a stronger, user-set signal); otherwise an
+ *  Origin designation badge
  *  stands in for the bare formula-engine letter when one is decoded (item 4
  *  — the letter can disagree with Origin's own short name once an early
  *  column is consumed as X); plain data falls back to the letter, unchanged
@@ -94,8 +99,10 @@ function roleText(
   computed: boolean,
   role: ChannelRole | undefined,
   meta: ColumnMeta | undefined,
+  userSet?: OriginDesignation,
 ): string {
   if (computed) return "ƒx";
+  if (userSet) return DESIGNATION_BADGE[userSet];
   if (role) return role;
   if (meta?.designation) return DESIGNATION_BADGE[meta.designation];
   return channelLetter(col);
@@ -120,6 +127,7 @@ export default function GridHeader({
   xName,
   xUnit,
   channelRoles,
+  columnDesignations,
   baseCount,
   visibleCols,
   leadingSpacer,
@@ -195,7 +203,9 @@ export default function GridHeader({
       {visibleCols.map((c) => {
         const computed = c >= baseCount;
         const meta = colMeta[c];
-        const dimmed = Boolean(channelRoles[c]) || meta?.designation === "label" || meta?.designation === "disregard";
+        const userSet = columnDesignations?.[c];
+        const shown = userSet ?? meta?.designation;
+        const dimmed = Boolean(channelRoles[c]) || shown === "label" || shown === "disregard";
         return (
           <div
             key={data.labels[c]}
@@ -226,7 +236,7 @@ export default function GridHeader({
               </span>
             )}
             <span className="role">
-              {roleText(c, computed, channelRoles[c], meta)}
+              {roleText(c, computed, channelRoles[c], meta, userSet)}
               {data.units[c] && (
                 <>
                   {" · "}

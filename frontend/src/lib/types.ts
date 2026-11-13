@@ -540,6 +540,10 @@ export interface Dataset {
    *  dataset (persist across dataset switches + round-trip .dwk), not in the
    *  transient view state. */
   channelRoles?: Record<number, ChannelRole>;
+  /** The worksheet's "Set As" designations (channel → Origin designation), overlaying
+   *  the book's own for every plotting default (lib/columnmeta.ts); round-trips
+   *  .dwk. store/columnDesignationActions.ts also writes channelRoles/errorRoles. */
+  columnDesignations?: Record<number, import("./columnmeta").OriginDesignation>;
   /** MAIN_PLAN #33: the canonical error-column roles — X±, Y±, and the two
    *  halves of an asymmetric pair. Supersedes the store's `errKeys` map,
    *  which expressed only symmetric-vertical-Y and is now DERIVED from this

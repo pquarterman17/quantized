@@ -103,12 +103,16 @@ export default function QuickMappingPanel({ data, mapping, onAssign, onUseAcquis
                 <option value="error:x:-1:both">X error (±)</option>
                 <option value="error:x:-1:+">X error (+)</option>
                 <option value="error:x:-1:-">X error (−)</option>
-                {mapping.yKeys.filter((target) => target !== channel).flatMap((target) =>
-                  (["both", "+", "-"] as const).map((side) => (
-                    <option key={`${target}:${side}`} value={`error:y:${target}:${side}`}>
-                      {`Y error ${side === "both" ? "(±)" : `(${side === "-" ? "−" : side})`} for ${data.labels[target]}`}
-                    </option>
-                  )),
+                {/* Y error for a series, and X error for ONE series (an Origin
+                    X-error column belongs to the Y it follows -- lib/originBookRoles.ts). */}
+                {(["y", "x"] as const).flatMap((axis) =>
+                  mapping.yKeys.filter((target) => target !== channel).flatMap((target) =>
+                    (["both", "+", "-"] as const).map((side) => (
+                      <option key={`${axis}:${target}:${side}`} value={`error:${axis}:${target}:${side}`}>
+                        {`${axis.toUpperCase()} error ${side === "both" ? "(±)" : `(${side === "-" ? "−" : side})`} for ${data.labels[target]}`}
+                      </option>
+                    )),
+                  ),
                 )}
               </select>
             </li>

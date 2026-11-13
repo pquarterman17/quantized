@@ -294,6 +294,56 @@ def test_origin_designations_follow_declared_error_roles() -> None:
     ]
 
 
+def test_origin_designations_follow_worksheet_set_as() -> None:
+    # Origin-replacement audit item 9: the worksheet's "Set As" map rides in
+    # as `user_column_designations` (keys arrive as JSON strings); X / Z /
+    # Label / Disregard designate the column, error roles still decide errors.
+    ds = DataStruct.create(
+        [0.0, 1.0],
+        [[1.0, 0.1, 7.0, 2.0, 3.0, 4.0], [2.0, 0.1, 8.0, 3.0, 4.0, 5.0]],
+        labels=["R", "dR", "Tag", "Junk", "H2", "Map"],
+        units=[""] * 6,
+        metadata={
+            "error_roles": [{"channel": 1, "target": 0, "axis": "y", "side": "both"}],
+            "user_column_designations": {
+                "1": "label",  # an error role outranks a Set As
+                "2": "label",
+                "3": "disregard",
+                "4": "X",
+                "5": "Z",
+                "9": "X",  # out of range: ignored
+                "x": "Z",  # not a channel: ignored
+                "\u00b2": "Z",  # a non-ASCII digit: ignored, never int()-ed
+            },
+        },
+    )
+    _, ogs = format_origin_script(ds)
+    types = [ln for ln in ogs.splitlines() if ".type =" in ln]
+    assert types == [
+        "wks.col1.type = 4;  // X",
+        "wks.col2.type = 1;  // Y",
+        "wks.col3.type = 3;  // yErr",
+        "wks.col4.type = 5;  // Label",
+        "wks.col5.type = 2;  // Disregard",
+        "wks.col6.type = 4;  // X",
+        "wks.col7.type = 6;  // Z",
+    ]
+
+
+def test_consolidated_designation_row_follows_worksheet_set_as() -> None:
+    from quantized.io.consolidated import consolidate_csv
+
+    ds = DataStruct.create(
+        [0.0, 1.0],
+        [[1.0, 7.0, 2.0], [2.0, 8.0, 3.0]],
+        labels=["R", "Tag", "Junk"],
+        units=["", "", ""],
+        metadata={"error_roles": [], "user_column_designations": {"1": "label", "2": "disregard"}},
+    )
+    lines = consolidate_csv([(ds, "a.dat")], fmt="origin").splitlines()
+    assert lines[3].split(",") == ["X", "Y", "Label", "Disregard"]
+
+
 def test_origin_designations_keep_keyword_fallback_without_roles() -> None:
     ds = DataStruct.create(
         [1.0, 2.0], [[1.0, 0.1], [2.0, 0.2]], labels=["M", "M err"], units=["", ""]

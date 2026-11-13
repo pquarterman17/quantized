@@ -14,7 +14,8 @@
 // on-demand error review (`lib/quickPlotErrorReview.ts`). Nothing eager may
 // import it statically.
 
-import { columnMetaList } from "./columnmeta";
+import { effectiveDesignations } from "./columnmeta";
+import { ownXSeries } from "./ownXSeries";
 import { errKeysFromBindings, type ErrorBinding } from "./errorRoles";
 import { legacyErrorBindings } from "./figureDocument";
 import type { PlotView } from "./plotview";
@@ -44,19 +45,13 @@ export function quickPlotSeriesXSeed(
   withhold: readonly ErrorBinding[] = [],
 ): QuickPlotSeriesXSeed | null {
   const seed = quickPlotFigureSeed(dataset, memory, withhold);
-  const meta = columnMetaList(dataset.data);
+  const own = ownXSeries(effectiveDesignations(dataset.data, dataset.columnDesignations));
   const excluded = new Set([...seed.view.hiddenChannels, ...seed.errors.map((b) => b.channel)]);
   const yKeys = (seed.view.yKeys ?? dataset.data.labels.map((_, c) => c)).filter((c) => !excluded.has(c));
-  // Origin's nearest-preceding-X rule over `column_designations`.
+  // Origin's nearest-preceding-X rule over the effective designations (the
+  // book's own `column_designations` plus the user's "Set As" overrides).
   const xKeyByY: Record<number, number> = {};
-  for (const y of yKeys) {
-    for (let c = y - 1; c >= 0; c--) {
-      if (meta[c]?.designation === "X") {
-        xKeyByY[y] = c;
-        break;
-      }
-    }
-  }
+  for (const y of yKeys) if (Object.hasOwn(own, y)) xKeyByY[y] = own[y];
   const overlay = quickFigureOverlay(dataset.data, { xKey: null, xKeyByY, yKeys, errorBindings: seed.errors, ignoredKeys: [] });
   if (!overlay) return null;
   // The figure binds to the overlay, so every channel-keyed field is re-keyed

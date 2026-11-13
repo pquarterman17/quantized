@@ -66,6 +66,24 @@ describe("Worksheet worksheetId override (WORKSHEET_PLAN item 15)", () => {
   });
 });
 
+describe("Worksheet X column header (Origin-replacement audit item 10)", () => {
+  it("shows the X column's LONG name like the Y headers, not Origin's short name", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "b.opj", data: { ...data, metadata: { x_column_name: "A", x_column_long: "Field", x_column_unit: "Oe" } } }],
+    });
+    render(<Worksheet />);
+    const x = screen.getAllByRole("columnheader")[1];
+    expect(x.textContent).toContain("Field");
+    expect(x.textContent).not.toMatch(/^A/);
+  });
+
+  it("falls back to the short name when there is no long name", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "s.dat", data: { ...data, metadata: { x_column_name: "time" } } }] });
+    render(<Worksheet />);
+    expect(screen.getAllByRole("columnheader")[1].textContent).toContain("time");
+  });
+});
+
 describe("Worksheet context menus", () => {
   // Header cells in order: [ #, x(time), A, B ].
   const header = (i: number) => screen.getAllByRole("columnheader")[i];

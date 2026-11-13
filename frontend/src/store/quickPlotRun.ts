@@ -15,7 +15,7 @@ import { compareUnits } from "../lib/errorUnitEvidence";
 import { flatNorm } from "../lib/errorLabelCandidates";
 import { classifyErrorLabelInLabels } from "../lib/errorLabelClassify";
 import { figureSeedErrorBindings, isDeclaredBinding, type ErrorBinding } from "../lib/errorRoles";
-import { hasDesignatedSeriesX } from "../lib/quickPlot";
+import { hasDesignatedSeriesX, quickPlotProfile } from "../lib/quickPlot";
 import type { Dataset } from "../lib/types";
 import { useApp } from "./useApp";
 
@@ -67,4 +67,17 @@ export function runQuickPlot(datasetId: string, onDone?: () => void): void {
     },
     () => useApp.setState({ status: "Quick Plot cancelled" }),
   );
+}
+
+/** "Plot each Y against its own X" (the import notice for a book whose Ys sit
+ *  on a secondary X, store/importNotes.ts): Quick Plot's per-series-X seed
+ *  where Quick Plot has a profile for the technique; otherwise the Quick
+ *  Figure Builder, whose first mapping pairs each Y with its own X the same
+ *  way (`initialQuickFigureMapping`) -- generic data has no Quick Plot. */
+export function plotEachAgainstOwnX(datasetId: string): void {
+  const state = useApp.getState();
+  const ds = state.datasets.find((d) => d.id === datasetId);
+  if (!ds) return;
+  if (quickPlotProfile(ds).supported) runQuickPlot(datasetId);
+  else state.openQuickFigureBuilder(datasetId);
 }

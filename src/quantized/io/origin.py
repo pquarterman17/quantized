@@ -22,7 +22,7 @@ from numpy.typing import NDArray
 
 from quantized.csv_safe import csv_text_cell
 from quantized.datastruct import DataStruct, is_categorical, level_of
-from quantized.io._error_roles import error_axes
+from quantized.io._error_roles import error_axes, user_designations
 from quantized.unit_display import display_unit
 
 __all__ = [
@@ -96,6 +96,16 @@ def _escape_lt(text: str) -> str:
 def _sanitize(name: str) -> str:
     """LabTalk-safe identifier: non-word chars -> underscore (MATLAB \\W)."""
     return re.sub(r"\W", "_", name)
+
+
+#: LabTalk ``wks.col.type`` codes for a "Set As" designation that is not an
+#: error column (Y and the two error kinds are written above).
+_USER_TYPE: dict[str, tuple[int, str]] = {
+    "X": (4, "X"),
+    "Z": (6, "Z"),
+    "label": (5, "Label"),
+    "disregard": (2, "Disregard"),
+}
 
 
 def _is_err_label(label: str) -> bool:
@@ -343,6 +353,9 @@ def format_origin_script(
     # Declared error roles (parser / the user's live bindings) decide; the
     # MATLAB label-keyword rule is the fallback when none are declared.
     err_axes = error_axes(meta, len(labels))
+    # The user's worksheet "Set As" (X / Z / Label / Disregard) designates a
+    # non-error column; error columns still follow the declared roles above.
+    user = user_designations(meta, len(labels))
     for k, label in enumerate(labels):
         cn = k + 2
         unit = units[k] if k < len(units) else ""
@@ -351,6 +364,9 @@ def format_origin_script(
             o.append(f"wks.col{cn}.type = 3;  // yErr")
         elif axis == "x":
             o.append(f"wks.col{cn}.type = 7;  // xErr")
+        elif user.get(k) in _USER_TYPE:
+            code, name = _USER_TYPE[user[k]]
+            o.append(f"wks.col{cn}.type = {code};  // {name}")
         else:
             o.append(f"wks.col{cn}.type = 1;  // Y")
         o.append(f'wks.col{cn}.lname$ = "{_escape_lt(label)}";')

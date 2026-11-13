@@ -9,7 +9,8 @@ import ExcludedRowsToggle from "./ExcludedRowsToggle";
 import { useConnection } from "../../lib/lifecycle";
 import { useAutosaveStatus } from "../../store/autosaveStatus";
 import { usePendingOps, type PendingOp } from "../../store/pendingOps";
-import { useActiveDataset, useApp } from "../../store/useApp";
+import { useApp } from "../../store/useApp";
+import { useShownDataset } from "../../store/useShownDataset";
 
 /** Clock time of the last successful autosave, or "" when there isn't one. */
 function savedAtLabel(savedAt: number | null): string {
@@ -45,7 +46,7 @@ export default function StatusBar() {
   const status = useApp((s) => s.status);
   const connected = useConnection((s) => s.connected);
   const count = useApp((s) => s.datasets.length);
-  const active = useActiveDataset();
+  const active = useShownDataset(); // the dataset the Stage shows (worksheet tab: worksheetId)
   const health = useAutosaveStatus((s) => s.health);
   const visibleOps = useVisiblePendingOps();
 

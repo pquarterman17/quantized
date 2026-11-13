@@ -145,6 +145,10 @@ export default function SeriesPropertiesPanel({
               </span>
             </div>
             <div className="qzk-ds-meta">{`Y error: ${describeSeriesErrors(errors, channel, labels)}`}</div>
+            {/* An X error bound to THIS series (an Origin xErr column, lib/originBookRoles.ts). */}
+            {errors.some((b) => b.axis === "x" && b.target === channel) && (
+              <div className="qzk-ds-meta">{`X error: ${describeSeriesErrors(errors, channel, labels, "x")}`}</div>
+            )}
           </div>
         );
       })}

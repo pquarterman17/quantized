@@ -16,9 +16,9 @@ body {
 
 /* ── app grid ── */
 .qzk-app { display: grid; grid-template-rows: 38px 30px 1fr 24px; height: 100%; }
-.qzk-main { display: grid; grid-template-columns: var(--lw, 210px) 1fr var(--rw, 296px); min-height: 0; }
+.qzk-main { display: grid; grid-template-columns: var(--lw, 264px) 1fr var(--rw, 296px); min-height: 0; }
 .qzk-main.lc { grid-template-columns: 0 1fr var(--rw, 296px); }
-.qzk-main.rc { grid-template-columns: var(--lw, 210px) 1fr 0; }
+.qzk-main.rc { grid-template-columns: var(--lw, 264px) 1fr 0; }
 .qzk-main.lc.rc { grid-template-columns: 0 1fr 0; } /* both collapsed: without this .rc won and the library stayed open */
 
 /* ── calc-only shell (?view=calc — MAIN_PLAN #22 standalone DiraCulator) ── */
@@ -570,48 +570,31 @@ body {
    into a wall of repeated marks and steals most of the graph name. Tree mode
    overlays one row's strip only while that row is hovered, keyboard-focused,
    or selected. Flat/search mode keeps its established always-visible actions.
-   Visibility (rather than display:none) lets focusing the row reveal the
-   controls before Tab advances into them. The bounded, scrolling strip also
-   prevents an unusual graph with many decoded source books from widening the
-   Library or reintroducing its horizontal scrollbar. */
+   The revealed strip sits BESIDE the graph name, in the row's own flex flow
+   (not overlaid on it): an overlay covered the name it was revealed for and
+   swallowed the click meant for the row (Origin-replacement audit). The name
+   ellipsizes into what is left and stays clickable. Focusing the row reveals
+   the strip (`:focus-within`) before Tab advances into it. The bounded,
+   scrolling strip also prevents an unusual graph with many decoded source
+   books from widening the Library or reintroducing its horizontal scrollbar. */
 .qzk-fig-row-tree .qzk-origin-figure-actions {
-  position: absolute;
-  z-index: 1;
-  top: 50%;
-  right: 2px;
-  display: flex;
+  display: none;
+  align-self: center;
   align-items: center;
   gap: 2px;
-  max-width: calc(100% - 8px);
-  padding: 2px;
+  max-width: 60%;
   overflow-x: auto;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  box-shadow: var(--shadow-sm);
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transform: translateY(-50%);
 }
 .qzk-fig-row-tree:hover .qzk-origin-figure-actions,
 .qzk-fig-row-tree:focus-within .qzk-origin-figure-actions,
 .qzk-fig-row-tree.selected .qzk-origin-figure-actions {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
+  display: flex;
 }
 /* An unresolved graph has nothing to open (in the tree its row stays a
    focusable aria-disabled treeitem). Keep its recovery controls visible so
    keyboard/touch users can still choose a source. */
 .qzk-fig-row-tree.unresolved .qzk-origin-figure-actions {
-  position: static;
-  align-self: center;
-  max-width: 60%;
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: none;
+  display: flex;
 }
 .qzk-fig-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-width: 0; text-align: left; padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); cursor: default; color: var(--text); font-size: var(--font-size-sm); }
 .qzk-fig-item:hover:not(:disabled):not([aria-disabled="true"]) { border-color: var(--accent); }

@@ -46,7 +46,7 @@ import { presentBatchOutcome } from "./importBatchOffers";
 import { createErrorRolesActions, seedErrorRoles, type ErrorRolesActions } from "./importErrorRoles";
 import type { StructurePreset } from "./crystalStructures";
 import { loadPath, loadUpload, pathBasename, presentStructures, type ImportLoad, type ImportOrigin } from "./importLoaders";
-import { notifyParserNotes, parserNotes } from "./importNotes";
+import { notifyOwnXSeries, notifyParserNotes, parserNotes, parserNotesSummary } from "./importNotes";
 import { resolveImportTargetFolderId } from "./importTargetFolder";
 import { beginOp, endOp, updateOp, type OpId } from "./pendingOps";
 import { toast } from "./toasts";
@@ -155,6 +155,7 @@ function addFromPayload(
     // on first activation — `pending` records how), or — only under the
     // `full_books` escape hatch, never requested here — a full inline DataStruct.
     const bookSource = data.book_source;
+    let primaryId: string | null = null; // the book the backend chose as primary
     // FU-1: every book gets `importedAt` + designation-derived error roles
     // (never the label guess) — see `originBookErrorRoles`'s doc. `?? {}`
     // here: unlike the single-file branch below, this NEVER falls back to
@@ -168,6 +169,7 @@ function addFromPayload(
       const name = `${stem}:${label}`;
       const roles = originBookErrorRoles(book) ?? {};
       if (isPrimaryBookMarker(book)) {
+        primaryId = id;
         const bookData = { time: data.time, values: data.values, labels: book.labels, units: book.units, metadata: book.metadata };
         get().addDataset({ id, name, data: bookData, ...src, ...roles, importedAt }, historyToken);
       } else if (isLazyBookEntry(book)) {
@@ -226,6 +228,9 @@ function addFromPayload(
       }
       newIds.push(id);
     }
+    // Each `addDataset` activated its book, which left the LAST one active;
+    // the project opens on its primary book (Origin's active window) instead.
+    if (primaryId) get().setActive(primaryId);
     // item 4 / LIBRARY_WORKBOOK_UX_PLAN PR A3: organize the imported books
     // into a project folder that mirrors Origin's Project Explorer
     // (origin_folder_path), and give each book its own workbook (L0.1/L0.2)
@@ -297,6 +302,7 @@ function addFromPayload(
       }
       newIds.push(dsInput.id);
     }
+    if (inputs.length > 1) get().setActive(inputs[0].id); // sheet 0, not the last sheet
     // LIBRARY_WORKBOOK_UX_PLAN PR A3: one workbook per imported source file
     // (L0.2), or per book for a single-book Origin project (its origin_book
     // metadata already survived onto dsInput.data.metadata — the `books`
@@ -448,7 +454,10 @@ async function runImport<T>(
   const summary = lastError
     ? `imported ${added}/${items.length} — failed ${lastError}${hint}`
     : `imported ${added} file${plural(added)}`;
-  get().setStatus(summary);
+  // A parser note (a skipped workbook sheet, dropped rows) rides on the status
+  // line too -- the toast is transient; the danger toast below keeps `summary`.
+  const notes = parserNotesSummary(noted);
+  get().setStatus(notes ? `${summary} — ${notes}` : summary);
   // P2 review fix: `added` (files actually imported), not createdIds.length
   // (datasets created) — a multi-book Origin file inflates the latter. The
   // toast cascade itself (overlay / folder / P1.3 wave-3 recipe-suggestion /
@@ -469,6 +478,7 @@ async function runImport<T>(
   // above to this exact string, rather than re-interpolating it.
   if (lastError) toast(summary, "danger");
   notifyParserNotes(noted);
+  notifyOwnXSeries(get().datasets.filter((d) => createdIds.includes(d.id)));
   return createdIds;
 }
 

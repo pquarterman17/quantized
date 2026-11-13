@@ -26,6 +26,7 @@
 import { useEffect, useState } from "react";
 
 import { isCategoricalChannel } from "../../../lib/categorical";
+import { effectiveDesignations, type OriginDesignation } from "../../../lib/columnmeta";
 import { hasOriginReportSheets } from "../../../lib/originTextColumns";
 import { isRederived } from "../../../lib/rederived";
 import { channelModelingType } from "../../../lib/modeling";
@@ -223,6 +224,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         filteredOut={view.filteredOut}
         selected={view.selected}
         channelRoles={view.channelRoles}
+        columnDesignations={ds.columnDesignations}
         sortMark={view.sortMark}
         selectedCols={view.selectedCols}
         onToggleColSelect={view.toggleColSelected}
@@ -273,6 +275,15 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
                     onPlotSelection: () => view.plotCols(effectiveCols(menu.target), "replace"),
                     onAddSelectionToPlot: () => view.plotCols(effectiveCols(menu.target), "add"),
                     onOpenInGraphBuilder: () => view.openInGraphBuilder(effectiveCols(menu.target)),
+                    ...(isRederived(ds)
+                      ? {}
+                      : {
+                          designationOf: (col: number) => effectiveDesignations(ds.data, ds.columnDesignations)[col],
+                          setDesignation: (col: number, d: OriginDesignation) =>
+                            void import("../../../store/columnDesignationActions").then((m) =>
+                              m.setColumnDesignation(ds.id, col, d),
+                            ),
+                        }),
                   }),
                   // J2: only a real, categorical value column can be recoded
                   // (never the x column or a column with no level table).

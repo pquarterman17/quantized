@@ -35,11 +35,13 @@ const ORIGIN_BOOK_CLICK_OPENS = ["worksheet", "plot"];
 // "page" is a per-window choice (needs a page model), never a global default.
 const PANEL_FIT_DEFAULTS: PanelFit[] = ["frames", "window"];
 // Library panel resize clamp (plan #13 sub-item 5) — matches shell.css's
-// var(--lw, 210px) default; the lower bound keeps the grip handle + a couple
+// var(--lw, 264px) default; the lower bound keeps the grip handle + a couple
 // characters of a folder name usable, the upper bound leaves the Stage room.
 export const LIBRARY_PANEL_WIDTH_MIN = 160;
 export const LIBRARY_PANEL_WIDTH_MAX = 420;
-export const LIBRARY_PANEL_WIDTH_DEFAULT = 210;
+// 264, not 210: at 210 an Origin project's book rows ("M.. Origin book 1")
+// truncated to a single letter beside their kind chip and count.
+export const LIBRARY_PANEL_WIDTH_DEFAULT = 264;
 
 export interface Prefs {
   theme: Theme;

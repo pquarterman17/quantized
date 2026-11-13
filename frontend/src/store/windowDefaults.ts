@@ -1,6 +1,6 @@
 // Dataset-aware defaults and the invariant main plot window, extracted from
 // the pinned window-management slice.
-import { defaultErrKeys, errorRoleViewDefaults, originHiddenChannels } from "../lib/errorbars";
+import { bookDefaultHiddenChannels, defaultErrKeys, errorRoleViewDefaults } from "../lib/errorbars";
 import { isTechniqueChange, techniqueViewDefaults } from "../lib/techniqueDefaults";
 import { applyTechniqueMemory, type TechniqueViewMemoryMap } from "../lib/techniqueViewMemory";
 import { cascadeGeometry, defaultPlotView, type PlotView, type PlotWindow } from "../lib/plotview";
@@ -80,9 +80,9 @@ export function datasetViewDefaults(
     seriesStyles,
     xReversed: dataset?.data.metadata?.x_reversed === true, // IR wavenumber (io/technique.py)
     seriesLabels: {},
-    errKeys: dataset ? defaultErrKeys(dataset.data) : {},
+    errKeys: dataset ? defaultErrKeys(dataset.data, dataset.columnDesignations) : {},
     seriesOrder: null,
-    hiddenChannels: dataset ? originHiddenChannels(dataset.data) : [],
+    hiddenChannels: dataset ? bookDefaultHiddenChannels(dataset) : [],
     xLim: null,
     yLim: null,
     xStep: null,
