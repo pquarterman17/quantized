@@ -21,24 +21,8 @@ import { DESCENT_EM, drawRich, measureRich, type RichFont } from "./richtextCanv
 import { drawReferenceStick } from "./referenceStickOverlay";
 import type { Annotation, RefLine } from "./types";
 import type { RegionShade } from "./types";
-// Shade drawing + the off-scale marker are a lazy chunk (lib/uplotRegionShades.ts's header).
-// A plot drawn before it lands misses its shades / off-scale markers, so the
-// viewport waits for `regionDecorSettled` and rebuilds (Stage/useLazyPlotParts.ts).
-let lazyDecor: typeof import("./uplotRegionShades") | null = null;
-let decorSettled = false;
-/** Settles once the shade chunk has loaded -- or failed to (offline: no
- *  shades drawn, never a crash). */
-export const regionDecorSettled: Promise<void> = import("./uplotRegionShades")
-  .then(
-    (m) => {
-      lazyDecor = m;
-    },
-    () => {},
-  )
-  .then(() => {
-    decorSettled = true;
-  });
-export const regionDecorReady = (): boolean => decorSettled;
+// Shade drawing + the off-scale marker are a lazy chunk (lib/regionDecorLoader.ts).
+import { regionDecor } from "./regionDecorLoader";
 const MOVE = "mousemove", UP = "mouseup";
 export { pickRefLine, type RefLineHit } from "./refLineHit";
 
@@ -141,7 +125,7 @@ export function refLinePlugin(
           if (ln.axis === "x") {
             const px = u.valToPos(value, "x", true);
             if (px < left || px > left + width) {
-              if (!ln.stick) lazyDecor?.drawOffScaleRefLine(ctx, ln, value, px < left ? "low" : "high", u.bbox);
+              if (!ln.stick) regionDecor()?.drawOffScaleRefLine(ctx, ln, value, px < left ? "low" : "high", u.bbox);
               continue;
             }
             if (ln.stick) {
@@ -163,7 +147,7 @@ export function refLinePlugin(
             ctx.setLineDash([5, 4]);
             const py = u.valToPos(value, "y", true);
             if (py < top || py > top + height || !Number.isFinite(py)) {
-              lazyDecor?.drawOffScaleRefLine(ctx, ln, value, py < top ? "high" : "low", u.bbox);
+              regionDecor()?.drawOffScaleRefLine(ctx, ln, value, py < top ? "high" : "low", u.bbox);
               continue;
             }
             ctx.moveTo(left, py);
@@ -996,7 +980,7 @@ export const REGION_SHADE_ALPHA = 0.25;
  *  (same fallback rule as annotationPlugin). A `fullHeight` shade spans the
  *  plot height whatever the y scale (see this module's header). */
 export function regionShadePlugin(shades: RegionShade[]): uPlot.Plugin {
-  return { hooks: { drawClear: (u: uPlot) => lazyDecor?.drawRegionShades(u, shades) } };
+  return { hooks: { drawClear: (u: uPlot) => regionDecor()?.drawRegionShades(u, shades) } };
 }
 
 /** A series' stroke once uPlot has initialised it (always a function). A

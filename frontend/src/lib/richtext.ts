@@ -40,45 +40,10 @@
 // literal fallback — see calc/figure_labels.py). A label containing no `$`
 // short-circuits (`hasMarkup`) so it renders byte-identical to before.
 
-// The Origin-escape rewrite is a LAZY chunk (eager-bundle budget): only the
-// one-line detector below stays eager. The import starts the moment this
-// module loads — app startup, before any plot can have data to label — so
-// it is usually in place by the first labelled render. A label parsed in the
-// window before it lands renders literally (the safe fallback every invalid
-// label already takes), so whatever drew one waits for `originEscapesSettled`
-// and draws again: the plot viewport rebuilds
-// (`Stage/useLazyPlotParts.ts`, via `awaitsOriginEscapes`) and `RichText`
-// re-renders (`subscribeOriginEscapes`). A first plot never stays literal.
-const ORIGIN_ESCAPE = /\\[+\-gbi]\(/;
-let originRewrite: ((s: string) => string) | null = null;
-let escapesSettled = false;
-const escapeListeners = new Set<() => void>();
-/** Settles once the escape chunk has loaded -- or failed to (offline): then
- *  escapes stay literal, never a crash. Either way a redraw is final. */
-export const originEscapesSettled: Promise<void> = import("./originEscapes")
-  .then(
-    (m) => {
-      originRewrite = m.originEscapesToMarkup;
-    },
-    () => {},
-  )
-  .then(() => {
-    escapesSettled = true;
-    for (const f of escapeListeners) f();
-  });
+// The Origin-escape rewrite is a LAZY chunk (eager-bundle budget); its
+// detector, loader and redraw signals live in lib/originEscapeLoader.ts.
 
-/** Whether `s` carries an Origin escape that would still render literally
- *  because the rewrite chunk has not settled yet. */
-export function awaitsOriginEscapes(s: string | null | undefined): boolean {
-  return !escapesSettled && !!s && ORIGIN_ESCAPE.test(s);
-}
-
-/** `useSyncExternalStore` pair for a DOM renderer of rich labels. */
-export function subscribeOriginEscapes(onChange: () => void): () => void {
-  escapeListeners.add(onChange);
-  return () => escapeListeners.delete(onChange);
-}
-export const originEscapesReady = (): boolean => escapesSettled;
+import { ORIGIN_ESCAPE, originRewrite } from "./originEscapeLoader";
 
 export type RichNode =
   | { kind: "text"; text: string; italic: boolean; bold?: boolean }
@@ -465,7 +430,8 @@ function splitSegments(source: string): { math: boolean; body: string }[] {
 export function parseRichText(source: string): RichParseResult {
   const literal: RichNode[] = source ? [{ kind: "text", text: source, italic: false }] : [];
   try {
-    const segs = splitSegments(originRewrite ? originRewrite(source) : source);
+    const rewrite = originRewrite();
+    const segs = splitSegments(rewrite ? rewrite(source) : source);
     const anyMath = segs.some((s) => s.math);
     const nodes: RichNode[] = [];
     for (const seg of segs) {

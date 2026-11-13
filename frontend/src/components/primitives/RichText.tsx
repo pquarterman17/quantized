@@ -6,7 +6,8 @@
 
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 
-import { hasMarkup, originEscapesReady, parseRichText, subscribeOriginEscapes, type RichNode } from "../../lib/richtext";
+import { originEscapesReady, subscribeOriginEscapes } from "../../lib/originEscapeLoader";
+import { hasMarkup, parseRichText, type RichNode } from "../../lib/richtext";
 
 // Inline styles (self-contained so the primitive needs no global stylesheet —
 // it renders identically under Testing Library and the visual harness).

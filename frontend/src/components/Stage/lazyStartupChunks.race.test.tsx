@@ -12,8 +12,9 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import RichText from "../primitives/RichText";
-import { awaitsOriginEscapes, richLabelAst } from "../../lib/richtext";
-import { regionDecorReady } from "../../lib/uplotOverlays";
+import { awaitsOriginEscapes } from "../../lib/originEscapeLoader";
+import { regionDecorReady } from "../../lib/regionDecorLoader";
+import { richLabelAst } from "../../lib/richtext";
 import { plotDecorNeeds, useLazyPlotParts } from "./useLazyPlotParts";
 
 const gates = vi.hoisted(() => {

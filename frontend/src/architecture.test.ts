@@ -864,7 +864,9 @@ const TS_MODULE_PINS: Record<string, number> = {
   // 1279 -> 1269 (2026-10-02): log-axis tick labels (decade anchors + the
   // major-tick filter) moved to lib/logTicks.ts.
   "/lib/uplotOpts.ts": 1269,
-  "/lib/uplotOverlays.ts": 1175,
+  // 1175 -> 1164 (2026-11-13, figures integration): the region-shade chunk
+  // loader moved to lib/regionDecorLoader.ts.
+  "/lib/uplotOverlays.ts": 1164,
   // 1090 -> 1040 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR A1): the Reductions
   // wire types (WilliamsonHallResult/FftThicknessResult/SuperlatticeResult/
   // ReflectivityFftResult) — a self-contained leaf block nothing else in this
@@ -2746,7 +2748,9 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     { module: "/lib/axisExtras.ts", loader: "/lib/axisExtrasHook.ts", call: 'import("./axisExtras")' },
     { module: "/lib/uplotGadgets.ts", loader: "/lib/axisExtrasHook.ts", call: 'import("./uplotGadgets")' },
     { module: "/lib/graphTemplateCommands.ts", loader: "/commands/plotCommands.ts", call: 'import("../lib/graphTemplateCommands")' },
-    { module: "/lib/plotLayoutDialogs.ts", loader: "/commands/plotCommands.ts", call: 'import("../lib/plotLayoutDialogs")' },
+    // The facet / x-break dialog bodies (both lanes moved them on demand; the
+    // integration kept one module, commands/plotLayoutCommands.ts).
+    { module: "/commands/plotLayoutCommands.ts", loader: "/commands/plotCommands.ts", call: 'import("./plotLayoutCommands")' },
     {
       // SLICE 17: Paste and Duplicate load their bodies, which import the
       // core statically, so the core itself moved to DRAGGED_OUT below.

@@ -19,9 +19,9 @@ import {
   loadGadgetPlugins,
   needsAxisExtras,
 } from "../../lib/axisExtrasHook";
-import { awaitsOriginEscapes, originEscapesSettled } from "../../lib/richtext";
+import { awaitsOriginEscapes, originEscapesSettled } from "../../lib/originEscapeLoader";
 import type { AxisFormat } from "../../lib/types";
-import { regionDecorReady, regionDecorSettled } from "../../lib/uplotOverlays";
+import { regionDecorReady, regionDecorSettled } from "../../lib/regionDecorLoader";
 
 /** What the startup chunks would change on this plot: every label it draws
  *  (title, axis titles, series and annotation text) and whether it has any
