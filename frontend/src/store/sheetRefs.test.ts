@@ -65,6 +65,26 @@ describe("2 — rename and delete of the referenced worksheet", () => {
     expect(column("r", 1)).toEqual([101, 3, 4]);
   });
 
+  it("a rename to a name with BOTH quote kinds is refused while linked, and changes nothing (review #2)", () => {
+    st().addFormula("r", "f", 'sheet("Target", A)');
+    st().renameDataset("t", `Bob's "best" run`);
+    expect(get("t").name).toBe("Target");
+    expect(st().status).toMatch(/Can't rename .* both ' and "/);
+    expect(st().history.map((h) => h.label)).not.toContain("rename dataset");
+    st().renameDataset("t", "Bob's run"); // one kind of quote is fine
+    expect(get("r").formulas![0].expr).toBe(`sheet("Bob's run", A)`);
+  });
+
+  it("a rename also rewrites the column's notes, which quote the formula (review #2)", async () => {
+    const { addDerivedColumn } = await import("./derivedColumnRun");
+    expect((await addDerivedColumn("r", { name: "g", expr: 'sheet("Target", A) * 2', propagate: false })).ok).toBe(true);
+    expect(get("r").formulas![0].derived?.notes?.join(" ")).toMatch(/sheet\("Target", A\)/);
+    st().renameDataset("t", "Run 7");
+    const notes = get("r").formulas![0].derived?.notes?.join(" ") ?? "";
+    expect(notes).toMatch(/sheet\("Run 7", A\)/);
+    expect(notes).not.toMatch(/Target/);
+  });
+
   it("a delete cuts the link: the column errors, and a NEW worksheet with the old name is not picked up", () => {
     st().addFormula("r", "f", 'sheet("Target", A) + 1');
     st().removeDataset("t");

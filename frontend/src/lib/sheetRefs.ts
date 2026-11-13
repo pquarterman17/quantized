@@ -121,7 +121,12 @@ export function renameSheetRefs(datasets: readonly Dataset[], id: string, newNam
     for (const call of sheetCalls(f.expr).reverse()) {
       if (call.name === binding.name) expr = expr.slice(0, call.nameAt) + text + expr.slice(call.nameEnd);
     }
-    return { ...f, expr, sheets: f.sheets!.map((b) => (b.id === id ? { ...b, name: newName } : b)) };
+    // The column's notes quote the formula ("sheet(\"Old\", C) reads another
+    // worksheet …") — they follow the rename too, never naming the old sheet.
+    const old = [`sheet("${binding.name}"`, `sheet('${binding.name}'`];
+    const notes = f.derived?.notes?.map((n) => old.reduce((acc, o) => acc.split(o).join(`sheet(${text}`), n));
+    const derived = f.derived && notes ? { ...f.derived, notes } : f.derived;
+    return { ...f, expr, ...(derived ? { derived } : {}), sheets: f.sheets!.map((b) => (b.id === id ? { ...b, name: newName } : b)) };
   });
 }
 
