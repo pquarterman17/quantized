@@ -160,6 +160,7 @@ def channel_designations(
     declared = _str_map(metadata, "column_designations")
     user = user_designations(metadata, n)
     err = error_axes(metadata, n)
+    may_guess = keyword_fallback and not declared and not user
     out: list[str] = []
     for j in range(n):
         short = shorts[j]
@@ -173,7 +174,7 @@ def channel_designations(
                 desig = "Y-error" if axis == "y" else "X-error"
             elif desig in ("Y-error", "X-error"):
                 desig = "Y"  # the live bindings unbound it
-        elif not desig and keyword_fallback and not declared and not user and is_error_label(labels[j]):
+        elif not desig and may_guess and is_error_label(labels[j]):
             desig = "Y-error"
         out.append(desig or "Y")
     return out

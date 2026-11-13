@@ -56,28 +56,17 @@ export interface OriginFigureFidelity {
   omissions: string[];
 }
 
-export interface OriginSavedPreview {
-  format: "png";
-  mime: "image/png";
-  width: number;
-  height: number;
-  sha256: string;
-  data: string;
-  confidence: "exact_page" | "ambiguous_page";
-  page_name: string;
-}
-
-export interface OriginPreviewDiagnostic {
-  page_name: string;
-  status: "no_preview" | "ambiguous" | "workbook_thumbnail";
-  asset_count: number;
-  assets?: OriginSavedPreview[];
-}
-
-// The fidelity manifest + its filtered-figure records live in a sibling
-// (types.ts module-size ceiling); re-exported so every importer is unchanged.
-import type { OriginFidelityManifest } from "./originFidelityTypes";
-export type { OriginContainerIntegrity, OriginFidelityManifest, OriginFilteredFigure } from "./originFidelityTypes";
+// The fidelity manifest, its filtered-figure records and the saved-preview
+// diagnostics live in a sibling (types.ts module-size ceiling); re-exported
+// so every importer is unchanged.
+import type { OriginFidelityManifest, OriginSavedPreview } from "./originFidelityTypes";
+export type {
+  OriginContainerIntegrity,
+  OriginFidelityManifest,
+  OriginFilteredFigure,
+  OriginPreviewDiagnostic,
+  OriginSavedPreview,
+} from "./originFidelityTypes";
 
 /** The `books[]` entry for the book already returned in full at the payload's
  *  top level (ORIGIN_FILE_DECODE_PLAN #38) — carries no data of its own; the

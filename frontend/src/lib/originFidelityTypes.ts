@@ -1,8 +1,27 @@
 // Origin project-level fidelity manifest types (backend
-// io/origin_project/fidelity.py + integrity.py), split out of lib/types.ts
+// io/origin_project/fidelity.py + integrity.py) and the saved-preview
+// diagnostics they carry, split out of lib/types.ts
 // under its module-size ceiling and re-exported from there.
 
-import type { OriginFidelityStatus, OriginPreviewDiagnostic } from "./types";
+import type { OriginFidelityStatus } from "./types";
+
+export interface OriginSavedPreview {
+  format: "png";
+  mime: "image/png";
+  width: number;
+  height: number;
+  sha256: string;
+  data: string;
+  confidence: "exact_page" | "ambiguous_page";
+  page_name: string;
+}
+
+export interface OriginPreviewDiagnostic {
+  page_name: string;
+  status: "no_preview" | "ambiguous" | "workbook_thumbnail";
+  asset_count: number;
+  assets?: OriginSavedPreview[];
+}
 
 export interface OriginFilteredFigure {
   index: number;

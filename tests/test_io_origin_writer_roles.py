@@ -66,6 +66,22 @@ def test_live_error_roles_designate_error_columns(tmp_path: Path) -> None:
     }
 
 
+def test_worksheet_set_as_designates_columns_in_the_opj(tmp_path: Path) -> None:
+    # Integration of the worksheet "Set As" map (user_column_designations,
+    # keyed by channel) with the .opj writer: it overrides the book's own
+    # designation, while the live error roles still decide error columns.
+    meta = {
+        "origin_book": "SetAs",
+        "column_designations": {"B": "Y", "C": "Y", "D": "Y", "E": "Y"},
+        "error_roles": [{"channel": 3, "target": 0, "axis": "y", "side": "both"}],
+        "user_column_designations": {"1": "label", "2": "X", "3": "disregard"},
+    }
+    (back,) = _roundtrip(tmp_path, [_ds(4, meta)])
+    assert back.metadata["column_designations"] == {
+        "A": "X", "B": "Y", "C": "label", "D": "X", "E": "Y-error",
+    }
+
+
 def test_designations_keyed_by_origin_column_names(tmp_path: Path) -> None:
     # A re-exported Origin import: channel short names come from the source.
     meta = {

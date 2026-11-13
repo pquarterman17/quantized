@@ -58,6 +58,16 @@ describe("Origin-designating exports carry the live error bindings", () => {
     expect(fn.mock.calls[0][0].dataset.metadata.error_roles).toEqual([]);
   });
 
+  it("adds the Set As map to declared roles without replacing them", async () => {
+    const declared = [{ channel: 1, target: 0, axis: "y", side: "both" }];
+    const withMap: Dataset = { ...ds, errorRoles: undefined, columnDesignations: { 1: "label" }, data: { ...ds.data, metadata: { error_roles: declared } } };
+    useApp.setState({ datasets: [withMap] });
+    const fn = vi.fn(async (_body: { dataset: { metadata: Record<string, unknown> } }) => undefined);
+    await runExportOrigin(useApp.getState, fn as never);
+    expect(fn.mock.calls[0][0].dataset.metadata.error_roles).toEqual(declared);
+    expect(fn.mock.calls[0][0].dataset.metadata.user_column_designations).toEqual({ 1: "label" });
+  });
+
   it("leaves a dataset with no live bindings but declared roles unchanged", async () => {
     const plain: Dataset = { ...ds, errorRoles: undefined };
     useApp.setState({ datasets: [plain] });
