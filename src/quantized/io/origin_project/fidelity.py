@@ -58,6 +58,11 @@ class OriginFidelityManifest(TypedDict):
     # The ``.opju`` worksheet decode's loss summary
     # (``worksheet_fidelity.worksheet_fidelity_summary``), added at import time.
     worksheet: NotRequired[dict[str, object]]
+    # ``.opju`` graph pages present in the file but not recovered as figures
+    # (``opju_graph_pages``): their total, and the first pages with Origin's
+    # saved image where one is attributable. Added at import time.
+    unrecovered_graph_count: NotRequired[int]
+    unrecovered_graphs: NotRequired[list[dict[str, object]]]
 
 
 def origin_figure_decode_failure(

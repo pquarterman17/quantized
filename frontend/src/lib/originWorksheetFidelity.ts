@@ -44,7 +44,7 @@ export function worksheetSummaryLine(ws: OriginWorksheetFidelity): string {
   if (ws.unverified_columns > 0) {
     return `Worksheets: ${imported} imported (${ws.unverified_columns} from an older Origin format, read without a length check)`;
   }
-  return `Worksheets: all ${imported} imported`;
+  return ws.columns_imported === 0 ? "Worksheets: no worksheet columns" : `Worksheets: all ${imported} imported`;
 }
 
 /** Per-book loss kinds (`metadata.origin_worksheet_losses`, from
@@ -52,6 +52,7 @@ export function worksheetSummaryLine(ws: OriginWorksheetFidelity): string {
 const BOOK_LOSSES: Record<string, string> = {
   checksum_failed: "Failed its checksum — values may be corrupt",
   undecoded: "Not read",
+  matrix_coordinates: "X/Y coordinates not recovered — the map axes are cell indices",
   unread_dataset: "Attached datasets not read",
   complex_imaginary: "Complex — imaginary part not imported",
   stale_cells: "Cells past the last used row dropped",

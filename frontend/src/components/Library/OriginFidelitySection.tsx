@@ -6,6 +6,7 @@ import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import { openOriginMigrationReview } from "../../lib/workflowWorkspace";
 import { worksheetSummaryLine } from "../../lib/originWorksheetFidelity";
+import UnrecoveredGraphs from "./UnrecoveredGraphs";
 
 export default function OriginFidelitySection({ onStageOpen }: { onStageOpen?: () => void }) {
   const entries = useApp((s) => s.originFidelity);
@@ -39,15 +40,19 @@ export default function OriginFidelitySection({ onStageOpen }: { onStageOpen?: (
         entries.map((entry) => {
           const m = entry.manifest;
           const worksheetLost = (m.worksheet?.losses.length ?? 0) > 0;
+          const graphsMissed = m.unrecovered_graph_count ?? 0;
+          const unattributed = m.omissions.includes("graph_content_unattributed");
+          const flagged = worksheetLost || graphsMissed > 0 || unattributed;
           return (
             <details className="qzk-fig-item" key={entry.id} style={{ display: "block" }}>
               <summary
                 className="qzk-fig-name"
-                title={worksheetLost ? "Some worksheet data was not imported" : undefined}
+                title={flagged ? "Some of this project was not imported" : undefined}
               >
-                {worksheetLost && <span style={{ color: "var(--accent)" }}>⚠ </span>}
+                {flagged && <span style={{ color: "var(--accent)" }}>⚠ </span>}
                 {entry.stem} · {originFidelityStatusLabel(m.status)}
                 {worksheetLost ? " · worksheet data missing" : ""}
+                {graphsMissed > 0 || unattributed ? " · graphs not recovered" : ""}
               </summary>
               {m.worksheet && (
                 // qzk-msg: the losses are the point of this line — wrap, never clip.
@@ -55,6 +60,7 @@ export default function OriginFidelitySection({ onStageOpen }: { onStageOpen?: (
                   {worksheetSummaryLine(m.worksheet)}
                 </div>
               )}
+              <UnrecoveredGraphs total={graphsMissed} graphs={m.unrecovered_graphs ?? []} />
               <div className="qzk-ds-meta">
                 {m.graph_records_actionable}/{m.graph_records_total} graph records editable
                 {m.graph_records_filtered > 0 ? ` · ${m.graph_records_filtered} internal filtered` : ""}
