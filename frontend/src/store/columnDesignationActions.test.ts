@@ -107,3 +107,29 @@ describe("an unpaired Set As error column: worksheet, plot and export agree", ()
     expect(sent.error_roles).toEqual(d.errorRoles);
   });
 });
+
+describe("an unpaired Set As error choice says so on the status line", () => {
+  // Coordinator follow-up: nothing told the user the column has no Y to
+  // attach to, nor what the export does with it.
+  it("Y Error with no Y before it", () => {
+    setColumnDesignation("d1", 0, "Y-error");
+    expect(useApp.getState().status).toBe(
+      "set R as Y Error — no Y before it to attach to; exported as an unbound error column",
+    );
+  });
+
+  it("X Error after a secondary X", () => {
+    useApp.setState({
+      datasets: [ds({ columnDesignations: { 0: "X" } })],
+    });
+    setColumnDesignation("d1", 1, "X-error");
+    expect(useApp.getState().status).toBe(
+      "set dR as X Error — no Y in its X block to attach to; exported as an unbound error column",
+    );
+  });
+
+  it("a paired choice keeps the plain status", () => {
+    setColumnDesignation("d1", 1, "Y-error");
+    expect(useApp.getState().status).toBe("set dR as Y Error");
+  });
+});

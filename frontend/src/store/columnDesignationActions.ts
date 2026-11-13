@@ -120,7 +120,7 @@ export function setColumnDesignation(id: string, channel: number, designation: O
       errKeys,
       status: paired
         ? `set ${name} as ${label}`
-        : `set ${name} as ${label} — no Y column before it to pair with`,
+        : `set ${name} as ${label} — ${designation === "X-error" ? "no Y in its X block" : "no Y before it"} to attach to; exported as an unbound error column`,
     };
   });
 }
