@@ -14,7 +14,7 @@ vi.mock("../lib/api", async (orig) => ({
 }));
 
 const data = (): Dataset["data"] => ({ time: [1], values: [[1]], labels: ["v"], units: [""], metadata: {} });
-const retry = () => toastMock.mock.calls.at(-1)![2].action;
+const retry = () => (toastMock.mock.calls.at(-1)![2] as { action: { label: string; onClick: () => void } }).action;
 
 beforeEach(() => {
   vi.resetModules();

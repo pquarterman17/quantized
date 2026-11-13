@@ -81,8 +81,8 @@ describe("2 — rename and delete of the referenced worksheet", () => {
 describe("the link is saved with the project", () => {
   it("round-trips { name, id } through the .dwk, dropping a malformed entry", () => {
     st().addFormula("r", "f", 'sheet("Target", A)');
-    const doc = JSON.parse(serializeWorkspace({ datasets: st().datasets }));
-    const saved = doc.datasets.find((d: { id: string }) => d.id === "r").formulas[0];
+    const doc = JSON.parse(serializeWorkspace({ datasets: st().datasets })) as { datasets: { id: string; formulas: { sheets: unknown[] }[] }[] };
+    const saved = doc.datasets.find((d) => d.id === "r")!.formulas[0];
     expect(saved.sheets).toEqual([{ name: "Target", id: "t" }]);
     saved.sheets.push({ name: 5, id: "x" });
     const [, reader] = parseWorkspace(JSON.stringify(doc)).datasets;
