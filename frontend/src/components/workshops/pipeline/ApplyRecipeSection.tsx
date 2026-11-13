@@ -54,7 +54,7 @@ function PickPreflight({
         ) : null,
       )}
       {preflight.issues.length > 0 && (
-        <ul aria-label={`Issues for ${ds.name}`} className="qzk-ds-meta" style={{ margin: "2px 0 0", paddingLeft: 16 }}>
+        <ul aria-label={`Issues for ${ds.name}`} className="qzk-ds-meta" style={{ margin: "2px 0 0", paddingLeft: 16, whiteSpace: "normal" }}>
           {preflight.issues.map((x, k) => (
             <li key={k} data-kind={x.kind} style={x.blocking ? { color: "var(--danger)" } : undefined}>
               {x.text}
@@ -87,8 +87,8 @@ export default function ApplyRecipeSection({
   const steps = runnableSteps(recipe.steps);
   const anyUnits = a.picks.some((p) => p.preflight.unitMismatch);
   return (
-    <div role="region" aria-label={`Apply recipe ${recipe.name}`} style={{ marginTop: 8, padding: 6, border: "1px solid var(--border-soft)", borderRadius: 4 }}>
-      <div className="qzk-ds-meta">
+    <div role="region" aria-label={`Apply recipe ${recipe.name}`} style={{ marginTop: 8, padding: 6, border: "1px solid var(--border-soft)", borderRadius: 4, minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}>
+      <div className="qzk-ds-meta" style={{ whiteSpace: "normal" }}>
         Apply “{recipe.name}”{recipe.revision ? ` (revision ${recipe.revision})` : ""} — {steps.length} step
         {steps.length === 1 ? "" : "s"}: {steps.map((s) => s.label).join(" → ") || "none"}
       </div>
@@ -141,7 +141,7 @@ export default function ApplyRecipeSection({
         </Button>
       </div>
       {a.results && (
-        <ul aria-label="Apply results" className="qzk-ds-meta" style={{ margin: "6px 0 0", paddingLeft: 16 }}>
+        <ul aria-label="Apply results" className="qzk-ds-meta" style={{ margin: "6px 0 0", paddingLeft: 16, whiteSpace: "normal" }}>
           {a.results.map((r) => (
             <li key={r.datasetId} data-status={r.status} style={r.status === "ok" ? undefined : r.status === "cancelled" ? { color: "var(--text-faint)" } : { color: "var(--danger)" }}>
               {r.name}: {r.status === "ok" || r.status === "cancelled" ? r.note : `${r.status} — ${r.note}`}

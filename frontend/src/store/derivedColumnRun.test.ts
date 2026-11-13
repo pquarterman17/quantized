@@ -325,6 +325,14 @@ describe("unit contradictions: added on the FIRST Add, with the warning inline (
     const refused = await executeSteps([makeStep("expression", step.label, step.code, { ...step.params, allowUnitMismatch: false })], "o");
     expect(Object.values(refused.log)[0]).toMatchObject({ status: "failed" });
   });
+  it("a column that is added but cannot be evaluated says so in the result, not only as a header badge", async () => {
+    const { loadFormulaExtension } = await import("../lib/formulaExt");
+    await loadFormulaExtension();
+    const r = await addDerivedColumn("d", { name: "bad", expr: "sum(A[0:2])", propagate: false });
+    expect(r).toMatchObject({ ok: true, warning: expect.stringMatching(/^"bad" was added, but it has an error: A\[0:2\] is outside rows 1\.\./) });
+    expect(state().formulaErrors?.bad).toMatch(/rows are numbered from 1/);
+  });
+
   it("a formula whose units agree carries no warning", async () => {
     expect(await addDerivedColumn("d", { name: "T", expr: "A * 2", propagate: false })).not.toHaveProperty("warning");
   });

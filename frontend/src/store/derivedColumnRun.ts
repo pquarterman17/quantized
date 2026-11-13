@@ -141,7 +141,13 @@ export async function addDerivedColumn(
       },
     );
     get().touchDataset(id); // recalc graph (#1): data changed
-    return { ok: true, message: a.message, ...(a.warning ? { warning: a.warning } : {}) };
+    // A column that was added but errors on evaluation (a range outside the
+    // rows, a cut sheet() link…) must say so where the user is looking — the
+    // header badge alone is easy to miss next to a status reading "added".
+    const errors = get().datasets.find((d) => d.id === id)?.formulaErrors;
+    const failed = added.find((c) => errors?.[c.name]);
+    const warning = failed ? `"${failed.name}" was added, but it has an error: ${errors![failed.name]}` : a.warning;
+    return { ok: true, message: failed ? `${a.message} — but it has an error: ${errors![failed.name]}` : a.message, ...(warning ? { warning } : {}) };
   });
   return out.ok ? out.value : { ok: false, error: out.error };
 }

@@ -30,7 +30,7 @@ export default function SignalUncertaintyControls({
   if (!boundLabels.length) return null;
   const propagates = propagatesBoundErrors(operation);
   return (
-    <div className="qz-signal-smooth" role="group" aria-label="Bound uncertainty">
+    <div role="group" aria-label="Bound uncertainty" style={{ display: "grid", gap: 4, minWidth: 0 }}>
       <Checkbox checked={drop} onChange={setDrop}>
         Drop uncertainty for this output
       </Checkbox>

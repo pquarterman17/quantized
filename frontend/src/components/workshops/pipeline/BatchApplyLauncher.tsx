@@ -50,8 +50,10 @@ export default function BatchApplyLauncher({
   if (!open) shown.current = null;
   const recipe = shown.current;
   const blocked = disabledReason || built.error;
+  // One grid item of the dialog: `minWidth: 0` lets the section's long lines
+  // wrap inside the dialog instead of widening it.
   return (
-    <>
+    <div style={{ display: "grid", gap: 6, justifyItems: "start", minWidth: 0 }}>
       <Button disabled={Boolean(disabledReason) || open} title={disabledReason || (open ? "The batch panel is open below" : "Run this same setup on each selected Library sheet, with a preflight first")} onClick={() => setOpen(true)}>
         Apply to selected sheets…
       </Button>
@@ -62,6 +64,6 @@ export default function BatchApplyLauncher({
         </Suspense>
       )}
       {open && !recipe && !built.error && <Button onClick={() => setOpen(false)}>Close batch panel</Button>}
-    </>
+    </div>
   );
 }

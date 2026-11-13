@@ -199,7 +199,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         </div>
       )}
       {view.err && (
-        <div className="qzk-ds-meta" style={{ padding: "4px 8px", color: "var(--danger)" }}>
+        <div className="qzk-ds-meta" role="alert" style={{ padding: "4px 8px", color: "var(--danger)", whiteSpace: "normal" }}>
           {view.err}
         </div>
       )}
