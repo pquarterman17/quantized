@@ -54,6 +54,7 @@ class MatrixBook:
     name: str
     values: NDArray[np.float64]
     geometry: MatrixGeometry
+    imag: NDArray[np.float64] | None = None  # a complex matrix's imaginary part
 
 
 @dataclass(frozen=True)
@@ -188,12 +189,18 @@ def scan_worksheet(
                     entry["reason"] = "matrix shape not located in the windows section"
                 else:
                     entry.update(rows=geo.rows, cols=geo.cols, ranges_known=geo.x_range is not None)
-                    matrices.append(MatrixBook(h.name, rec.values.reshape(geo.rows, geo.cols), geo))
-                    if rec.form == "complex":
-                        complex_cols.append(h.name)
-                        # a matrix is its own book; its "column" is the whole matrix
-                        matrix_losses = losses.setdefault(h.name, {})
-                        matrix_losses.setdefault("complex_imaginary", []).append(h.name)
+                    shape = (geo.rows, geo.cols)
+                    imag = rec.extra.get("imaginary")
+                    # A complex matrix keeps its imaginary part (its own Z
+                    # column, as for `.opj`), so nothing of it is lost.
+                    matrices.append(
+                        MatrixBook(
+                            h.name,
+                            rec.values.reshape(shape),
+                            geo,
+                            imag.reshape(shape) if isinstance(imag, np.ndarray) else None,
+                        )
+                    )
                 matrix_report.append(entry)
             else:
                 undecoded.setdefault(
