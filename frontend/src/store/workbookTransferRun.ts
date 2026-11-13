@@ -109,8 +109,11 @@ function succeed(get: SliceGet, result: PasteResult, headline: string): void {
  *  text, and every pasted reader is recomputed — against the copy it now
  *  reads, or as an error where the link was cut (lib/workbookTransferSignal). */
 function withRelinkedSheets(datasets: Dataset[], pasted: readonly Dataset[]): Dataset[] {
+  // Only a paste that carries sheet() links touches the formula module:
+  // asking for it starts a lazy load, which nothing else here needs.
+  if (!pasted.some((d) => d.formulas?.some((f) => f.sheets?.length))) return datasets;
   const ext = formulaExtension();
-  if (!ext || !pasted.some((d) => d.formulas?.some((f) => f.sheets?.length))) return datasets;
+  if (!ext) return datasets;
   let out = datasets;
   for (const d of pasted) out = ext.renameSheetRefs(out, d.id, d.name).datasets;
   const readers = new Set(pasted.filter((d) => d.formulas?.some((f) => f.sheets?.length)).map((d) => d.id));
