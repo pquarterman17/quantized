@@ -185,10 +185,10 @@ def _row_range(h: DatasetHeader, blank: NDArray[np.bool_]) -> tuple[int, int]:
 
     In every specimen Origin wrote the claim is exact (no non-blank cell
     past a used-row end anywhere in the public corpus), so this changes
-    nothing there. It matters for a header that is wrong: quantized's own
-    ``.opj`` writer (``writer_blocks.col_header``) fills the allocated-row
-    field and leaves 0x21 at a template constant, so its files claim 161
-    used rows whatever they hold — and real Origin loads them in full.
+    nothing there. It matters for a header that is wrong: until 2026-11
+    quantized's own ``.opj`` writer filled the allocated-row field and left
+    0x21 at a template constant, so the files it wrote claim 161 used rows
+    whatever they hold — and real Origin loads them in full.
     Trusting the field would truncate those; never trusting it would bring
     the allocation padding back. A value is never dropped either way.
     """

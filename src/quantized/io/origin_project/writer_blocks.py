@@ -176,12 +176,24 @@ def fh_size_offset(header_line: bytes) -> int:
     return len(header_line) + 5 + 115
 
 
-def col_header(dataset: str, nrows: int, col_id: int) -> bytes:
-    """147-byte dataset column header: name @88, filled rows u32 @25,
-    allocated rows u32 @6, per-column id u16 @113."""
+def col_header(dataset: str, nrows: int, col_id: int, used_rows: int | None = None) -> bytes:
+    """147-byte dataset column header: name @88, per-column id u16 @113, and
+    the three row fields the reader's header-driven decode pinned
+    (``opj_datasets``): allocated rows u32 @0x19, first used row u32 @0x1D,
+    used-row end u32 @0x21 (one past the last non-blank row; defaults to
+    ``nrows``). The u32 @6 is also written as ``nrows`` — what the loader
+    probes validated; its meaning is not established.
+
+    @0x21 used to be left at the template's own value (161, the used-row
+    end of the Moke column the template was cut from), so every written
+    column claimed 161 used rows whatever it held. Origin loaded those
+    files in full regardless, and the reader copes with them
+    (``opj_datasets._row_range``); the field is simply correct now.
+    """
     p = bytearray(_COL_147)
     struct.pack_into("<I", p, 6, nrows)
-    struct.pack_into("<I", p, 25, nrows)
+    used = nrows if used_rows is None else max(0, min(used_rows, nrows))
+    struct.pack_into("<III", p, 0x19, nrows, 0, used)
     enc = dataset.encode("latin1", errors="replace")[:23]
     p[88 : 88 + len(enc) + 1] = enc + b"\x00"
     struct.pack_into("<H", p, 113, col_id & 0xFFFF)

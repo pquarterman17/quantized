@@ -111,3 +111,35 @@ def test_writer_rejects_empty_and_letters_wide_books(tmp_path) -> None:
     assert back.values.shape == (4, 27)
     assert list(back.metadata["origin_column_names"])[-2:] == ["AA", "AB"]
     assert list(back.values[:, 26]) == list(wide.values[:, 26])
+
+
+def test_column_headers_state_the_real_row_range(tmp_path) -> None:
+    """Each written dataset header carries allocated rows @0x19, first used
+    row @0x1D and the used-row end @0x21 (one past the last value). @0x21
+    used to stay at a template constant (161) for every column."""
+    from quantized.io.origin_project.container import walk_blocks
+    from quantized.io.origin_project.opj_datasets import parse_dataset_header
+
+    t = np.arange(300, dtype=float)
+    tail_blank = np.where(t < 250, t * 2.0, np.nan)  # last 50 rows empty
+    ds = DataStruct(
+        time=t,
+        values=np.column_stack([tail_blank, np.full(300, np.nan)]),
+        labels=("y", "empty"),
+        units=("", ""),
+        metadata={"origin_book": "Rows"},
+    )
+    blob = opj_bytes([ds])
+    headers = {
+        h.name: (h.total_rows, h.first_row, h.used_rows)
+        for size, payload in walk_blocks(blob)
+        if size and (h := parse_dataset_header(payload)) is not None
+    }
+    assert headers == {"Rows_A": (300, 0, 300), "Rows_B": (300, 0, 250), "Rows_C": (300, 0, 0)}
+
+    p = tmp_path / "rows.opj"
+    p.write_bytes(blob)
+    back = read_origin_project(p)
+    np.testing.assert_array_equal(back.time, t)  # 300 rows, well past the old 161
+    np.testing.assert_array_equal(back.values[:, 0], tail_blank)
+    assert np.isnan(back.values[:, 1]).all()

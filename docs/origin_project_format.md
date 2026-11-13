@@ -273,10 +273,12 @@ them. Rows before the first used row are blank. The reader treats the
 range as a claim that may only remove blank cells (`_row_range`): if a
 cell past the used-row end holds a value, the rows run to the last such
 cell instead, and a used-row end past the allocation is clamped to it.
-No Origin-written specimen needs this; **quantized's own `.opj` writer
-does** — `writer_blocks.col_header` fills the allocated-row field and
-leaves `0x21` at the constant its template carries (161), and real Origin
-loads those files in full all the same. Inside the range a blank
+No Origin-written specimen needs this; **files from quantized's own
+`.opj` writer before 2026-11-13 do** — `writer_blocks.col_header` filled
+the allocated-row field and left `0x21` at the constant its template
+carried (161), and real Origin loaded those files in full all the same.
+(The writer now sets all three row fields; the reader keeps the safety
+for the files already written.) Inside the range a blank
 is: the `ORIGIN_MISSING` double (`-1.23456789e-300`, bit pattern
 `0e 2c 13 1c fe 74 aa 81`) in a double or complex cell and in a tag-0 Text
 & Numeric cell; or a tag-1 Text & Numeric cell with an empty string. Both
@@ -334,11 +336,12 @@ and never used for a file the header-driven path recognises.
   not a timestamp.
 - Column order within a book is dataset order in the file, not the sheet's
   display order (§4.1 notes the two can differ).
-- The native writer's stale used-row field (above) is left as it is: the
-  writer's output was validated against a real Origin loader (§8), and
-  changing a header byte without one to re-check is not something this
-  pass could verify. Setting `0x21` to the row count is the obvious fix
-  the next time a license is at hand.
+- The native writer now writes the allocated / first / used-end row
+  fields the way Origin's own files carry them (it used to leave the
+  used-row end at 161). That brings its headers in line with every real
+  specimen, but the change has **not** been re-probed against a real
+  Origin loader (§8's acceptance run predates it) — do that at the next
+  license window.
 
 #### 3.1.1 Matrix books (`.opj`)
 

@@ -386,11 +386,14 @@ data. The one `.opj` still not importing is a third-party synthetic stub
 - Text code page (latin-1 assumed); Date/Time as raw day counts.
 - Group / Subject designations are recovered but not surfaced (the
   designation vocabulary shared with the frontend has no such members).
-- **Native `.opj` writer:** `writer_blocks.col_header` never sets the
-  used-row end (`0x21` stays at the template's 161). Origin loads the
-  files regardless and the reader copes (a value past a used-row end is
-  never dropped), but the field should be the row count — to be changed
-  and re-probed against a real loader, not changed blind.
+- **Native `.opj` writer:** `writer_blocks.col_header` never set the
+  used-row end (`0x21` stayed at the template's 161); Origin loaded the
+  files regardless. Fixed in a follow-up the same day — it now writes
+  allocated / first / used-end rows at `0x19` / `0x1D` / `0x21` as real
+  files carry them, and the reader still never drops a value past a
+  used-row end (for files already written). **Re-run checklist step 5**
+  (`probe_opj_loader.py`) at the next license window: the new header has
+  not been loaded in real Origin.
 - `0x3F` values `0x10`/`0x20`/`0x30` and the other `0x16` bits.
 
 **How to re-run:** `uv run pytest -m realdata tests/test_io_origin_opj_corpus.py`
