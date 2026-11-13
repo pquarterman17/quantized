@@ -140,9 +140,32 @@ def test_auto_start_keeps_given_and_held_values_and_is_deterministic() -> None:
 def test_equation_route_derives_blank_starts() -> None:
     x, y = _peak_far_from_unit_scale()
     body = {"equation": "A*exp(-(x-x0)^2/(2*w^2)) + c", "x": x.tolist(), "y": y.tolist()}
-    out = client.post("/api/fitting/equation/fit", json=body).json()
+    out = client.post("/api/fitting/equation/fit", json={**body, "guesses": [None] * 4}).json()
     assert out["R2"] > 0.999 and abs(out["params"][1] - 150) < 0.1
     part = client.post(
         "/api/fitting/equation/fit", json={**body, "guesses": [None, 148.0, None, None]}
     ).json()
     assert part["p0"][1] == 148.0 and part["R2"] > 0.999
+
+
+def test_equation_route_without_guesses_replays_the_legacy_ones_start() -> None:
+    """Review item 13: an equation-only call recorded before auto starts
+    existed meant "1.0 each" and must still mean exactly that."""
+    x, y = _peak_far_from_unit_scale()
+    body = {"equation": "A*exp(-(x-x0)^2/(2*w^2)) + c", "x": x.tolist(), "y": y.tolist()}
+    legacy = client.post("/api/fitting/equation/fit", json=body).json()
+    ones = client.post("/api/fitting/equation/fit", json={**body, "guesses": [1.0] * 4}).json()
+    assert legacy["p0"] == [1.0, 1.0, 1.0, 1.0]
+    assert legacy["params"] == ones["params"] and legacy["R2"] < 0.5
+
+
+def test_equation_route_reports_even_parameters_positive() -> None:
+    """Review item 6: a width the model is even in is never reported negative."""
+    x = np.linspace(0.0, 10.0, 200)
+    y = 30 * special.voigt_profile(x - 6.2, 0.3, 0.2) + 1
+    out = client.post(
+        "/api/fitting/equation/fit",
+        json={"equation": "A*voigt(x-xc, s, g) + b", "x": x.tolist(), "y": y.tolist(),
+              "guesses": [20.0, 6.0, 0.05, 0.5, 0.0]},
+    ).json()
+    np.testing.assert_allclose(out["params"], [30, 6.2, 0.3, 0.2, 1], atol=1e-4)

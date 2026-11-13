@@ -71,6 +71,25 @@ describe("useFitBands", () => {
     expect(vi.mocked(fitBands).mock.calls[0]![0].mse).toBeNull();
   });
 
+  it("sends a weighted fit's per-point variance with the fitted x (review item 1)", async () => {
+    const obsVar = [0.01, 0.04, null, 0.16, 0.25]; // null = a zero-weight point
+    const { result } = renderHook(() =>
+      useFitBands({ ...TARGET, result: { ...TARGET.result, obsVar } }),
+    );
+    act(() => result.current.setOn(true));
+    await waitFor(() => expect(result.current.halfWidth).toBe(0.5));
+    const req = vi.mocked(fitBands).mock.calls[0]![0];
+    expect(req.x_data).toEqual([0, 1, 2, 3, 4]);
+    expect(req.obs_var).toEqual(obsVar);
+  });
+
+  it("sends no per-point variance for an unweighted fit", async () => {
+    const { result } = renderHook(() => useFitBands(TARGET));
+    act(() => result.current.setOn(true));
+    await waitFor(() => expect(result.current.halfWidth).toBe(0.5));
+    expect(vi.mocked(fitBands).mock.calls[0]![0]).not.toHaveProperty("obs_var");
+  });
+
   it("re-asks at the new level", async () => {
     const { result } = renderHook(() => useFitBands(TARGET));
     act(() => result.current.setOn(true));

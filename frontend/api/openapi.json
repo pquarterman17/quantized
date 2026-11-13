@@ -595,6 +595,27 @@
             "title": "N Points",
             "type": "integer"
           },
+          "obs_var": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obs Var"
+          },
           "params": {
             "items": {
               "type": "number"
@@ -608,6 +629,20 @@
             },
             "title": "X",
             "type": "array"
+          },
+          "x_data": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Data"
           }
         },
         "required": [
@@ -4467,6 +4502,15 @@
             "title": "Scale Errors",
             "type": "boolean"
           },
+          "stats_version": {
+            "default": 2,
+            "enum": [
+              1,
+              2
+            ],
+            "title": "Stats Version",
+            "type": "integer"
+          },
           "upper": {
             "anyOf": [
               {
@@ -6295,6 +6339,15 @@
             "default": true,
             "title": "Scale Errors",
             "type": "boolean"
+          },
+          "stats_version": {
+            "default": 2,
+            "enum": [
+              1,
+              2
+            ],
+            "title": "Stats Version",
+            "type": "integer"
           },
           "upper": {
             "anyOf": [

@@ -184,8 +184,10 @@ class EquationFitRequest(FitOptions):
     equation: str
     x: list[float]
     y: list[float]
-    # Starting values; null entries (or the whole list omitted) are derived
-    # from the data (calc.fit_equation_init.auto_start).
+    # Starting values. A null ENTRY is derived from the data
+    # (calc.fit_equation_init.auto_start). The list OMITTED keeps its
+    # historical meaning, 1.0 per parameter, so an equation-only call
+    # recorded before auto starts existed replays exactly as it ran.
     guesses: list[float | None] | None = None
     # Bounds may hold null entries = unbounded on that side (JSON cannot
     # carry Infinity); mapped to -inf/+inf before curve_fit.
@@ -264,7 +266,7 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
             if req.upper is not None
             else None
         )
-        given = req.guesses if req.guesses is not None else [None] * len(names)
+        given = req.guesses if req.guesses is not None else [1.0] * len(names)
         # A blank start is checked as the legacy neutral 1.0: that is what a
         # HELD blank is held at (auto_start only fills blanks it may fit).
         check_param_vectors(names, [1.0 if g is None else g for g in given], req.fixed,

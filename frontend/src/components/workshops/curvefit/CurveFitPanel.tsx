@@ -226,7 +226,7 @@ export default function CurveFitPanel() {
   if (globalMode) {
     const reg = models.find((m) => m.name === modelName);
     const globalModel = currentCustom
-      ? { name: currentCustom.name, paramNames: currentCustom.params, p0: currentCustom.guesses, lb: currentCustom.lower, ub: currentCustom.upper, equation: currentCustom.equation }
+      ? { name: currentCustom.name, paramNames: currentCustom.params, p0: currentCustom.guesses.map((g) => g ?? 1), lb: currentCustom.lower, ub: currentCustom.upper, equation: currentCustom.equation }
       : (reg ?? null);
     return (
       <ToolWindow id="curvefit" title="Curve Fit" width={360} onClose={close}>

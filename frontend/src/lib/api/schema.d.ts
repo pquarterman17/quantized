@@ -5986,10 +5986,14 @@ export interface components {
             n_free: number;
             /** N Points */
             n_points: number;
+            /** Obs Var */
+            obs_var?: (number | null)[] | null;
             /** Params */
             params: number[];
             /** X */
             x: number[];
+            /** X Data */
+            x_data?: number[] | null;
         };
         /**
          * BatchIntegrateRequest
@@ -7384,6 +7388,12 @@ export interface components {
              * @default true
              */
             scale_errors?: boolean;
+            /**
+             * Stats Version
+             * @default 2
+             * @enum {integer}
+             */
+            stats_version?: 1 | 2;
             /** Upper */
             upper?: (number | null)[] | null;
             /** Weights */
@@ -8119,6 +8129,12 @@ export interface components {
              * @default true
              */
             scale_errors?: boolean;
+            /**
+             * Stats Version
+             * @default 2
+             * @enum {integer}
+             */
+            stats_version?: 1 | 2;
             /** Upper */
             upper?: number[] | null;
             /** Weights */
