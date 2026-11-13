@@ -54,6 +54,7 @@ import { registerFormulaExtension } from "./formulaExt";
 import { tokenize } from "./formulaTokenize";
 import type { FormulaFn, FormulaRowContext, SheetBinding, Tok } from "./formulaTypes";
 import type { ParserOps } from "./formulaRowFns";
+import { CONSTS } from "./formulaFuncs";
 import { textColumnEntries } from "./originTextColumnCells";
 import { linkSheets, REMOVED_COLUMN, renameRefusal, renameSheetRefs, shiftSheetRefs } from "./sheetRefs";
 import type { DataStruct, Dataset } from "./types";
@@ -82,8 +83,31 @@ export function resolveColumnNames(expr: string, labels: readonly string[]): str
     if (idx < 0 || t.p === undefined || close.p === undefined) continue;
     edits.push({ from: t.p, to: close.p + 1, text: channelLetter(idx) });
   }
+  edits.push(...bareNameEdits(toks, labels));
+  edits.sort((a, b) => a.from - b.from);
   let out = expr;
   for (const e of edits.reverse()) out = out.slice(0, e.from) + e.text + out.slice(e.to);
+  return out;
+}
+
+/** A BARE long name (`Moment * 2`) stands for the column of that exact name
+ *  when exactly one column has it (re-audit #17; Origin accepts the long
+ *  name). Never rewritten: a letter (`A`, `AB` — letters win over a label
+ *  spelled the same), `x`, a constant, a function call `name(…)`, and the
+ *  column argument of `sheet("Name", L)`, which names the OTHER worksheet's
+ *  column. Two columns with the name: THROWS, like col("Name"). */
+function bareNameEdits(toks: readonly Tok[], labels: readonly string[]): { from: number; to: number; text: string }[] {
+  const out: { from: number; to: number; text: string }[] = [];
+  toks.forEach((t, i) => {
+    if (t.t !== "name" || t.p === undefined || /^[A-Z]+$/.test(t.v) || ["x", "and", "or", "not"].includes(t.v) || Object.hasOwn(CONSTS, t.v)) return;
+    if (isOp(toks[i + 1], "(") || (isOp(toks[i - 1], ",") && toks[i - 2]?.t === "str" && isOp(toks[i - 3], "(") && toks[i - 4]?.v === "sheet")) return;
+    const hits = labels.flatMap((l, k) => (l === t.v ? [k] : []));
+    if (hits.length > 1) {
+      const letters = hits.map(channelLetter);
+      throw new Error(`"${t.v}" is ambiguous: columns ${letters.join(", ")} are all named "${t.v}" — use the letter, e.g. ${letters[0]}`);
+    }
+    if (hits.length === 1) out.push({ from: t.p, to: t.p + t.v.length, text: channelLetter(hits[0]) });
+  });
   return out;
 }
 
