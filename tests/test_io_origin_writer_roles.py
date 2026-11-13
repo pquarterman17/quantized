@@ -16,7 +16,8 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 from quantized.io.origin_project import read_origin_books
-from quantized.io.origin_project.writer import write_opj
+from quantized.io.origin_project.container import walk_blocks
+from quantized.io.origin_project.writer import opj_bytes, write_opj
 from quantized.io.origin_project.writer_blocks import encode_text
 
 
@@ -126,3 +127,49 @@ def test_book_without_long_name_reads_back_its_short_name(tmp_path: Path) -> Non
     # run fallback, which picked template bytes as the title.
     (back,) = _roundtrip(tmp_path, [_ds(1, {"origin_book": "Moke"})])
     assert back.metadata["origin_book_long"] == "Moke"
+
+
+def test_storage_marker_in_user_text_round_trips(tmp_path: Path) -> None:
+    # "@${" is the reader's storage marker: unescaped, `a@${b` read back as `a`
+    # and took the unit and comment rows with it.
+    meta = {
+        "origin_book": "Mk",
+        "origin_book_long": "run @${1}",
+        "column_comments": {"B": "note @${x} end"},
+    }
+    (back,) = _roundtrip(tmp_path, [_ds(1, meta, labels=["a@${b"], units=["u@${"])])
+    assert back.labels == ("a@${b",)
+    assert back.units == ("u@${",)
+    assert back.metadata["column_comments"] == {"B": "note @${x} end"}
+    assert back.metadata["origin_book_long"] == "run @${1}"
+    assert b"@${" not in encode_text("a@${b")
+
+
+def test_property_blocks_follow_the_corpus_association_model() -> None:
+    """@35 of each 519B property block: a Y points at its X; a Y-error /
+    X-error / label / Z column at the nearest-preceding Y (measured on real
+    Origin files, writer_blocks.prop_block); X and disregard carry 0."""
+    meta = {
+        "origin_book": "Assoc",
+        "column_designations": {
+            "B": "Y", "C": "Y-error", "D": "X-error", "E": "label", "F": "Z",
+            "G": "disregard", "H": "X", "I": "Z", "J": "Y", "K": "Y-error",
+        },
+    }
+    raw = opj_bytes([_ds(10, meta)])
+    props = [p for size, p in walk_blocks(raw) if size == 519]
+    got = {
+        p[0x12:0x14].split(b"\x00")[0].decode(): (
+            int.from_bytes(p[4:6], "little"), int.from_bytes(p[35:37], "little"), p[38], p[51]
+        )
+        for p in props
+    }
+    serial = {name: vals[0] for name, vals in got.items()}
+    assoc = {name: vals[1] for name, vals in got.items()}
+    assert assoc["A"] == 0 and assoc["H"] == 0 and assoc["G"] == 0
+    assert assoc["B"] == serial["A"]
+    assert [assoc[c] for c in "CDEF"] == [serial["B"]] * 4
+    assert assoc["I"] == serial["H"]  # no Y yet in the second X group
+    assert assoc["J"] == serial["H"] and assoc["K"] == serial["J"]
+    assert [got[c][2] for c in "ABCDEFGH"] == [0x51, 0x61, 0x61, 0x61, 0x61, 0x61, 0x41, 0x51]
+    assert [got[c][3] for c in "ABGHJK"] == [1, 1, 1, 2, 2, 2]

@@ -21,9 +21,17 @@ Y, Y-error, X-error, label, disregard, Z, and a second X column (which opens
 a new X group its following Y columns bind to -- the reader's
 nearest-preceding-X rule). Column comments are written to the label block's
 third row. Text is Latin-1 with Origin's ``\\(xHHHH)`` escape for anything
-else (``writer_blocks.encode_text``), never ``?``. Multi-X / non-Y
-designations round-trip through the reader in CI; the live-Origin probe
-series above covered X/Y books only.
+else (``writer_blocks.encode_text``), never ``?``.
+
+**What is verified where.** Loading in REAL Origin was probed live for
+single-X books of X and Y columns with Latin-1 names/units only. Everything
+this module writes beyond that -- a second X group, Y-error / X-error /
+label / disregard / Z columns, column comments, ``\\(xHHHH)`` and
+``\\(64)`` escapes, escaped book titles, sanitized short names -- is
+verified ONLY by round-trip through our own reader (CI) plus, for the
+property-block association fields, agreement with real Origin-written files
+in the local corpus (``writer_blocks.prop_block``). None of it has been
+opened in Origin yet.
 """
 
 from __future__ import annotations
@@ -177,15 +185,21 @@ def opj_bytes(books: list[DataStruct]) -> bytes:
         out += _block(wb.sheet_subheader(len(ds.time)))
         out += wb.sheet_storage_group()
         out += _NULL  # closes the record-group run (real files: group NULL + one)
-        # Each column binds to its nearest-preceding X (column A first; a
-        # later X-designated column opens the next X group).
-        x_serial, x_group = 0, 0
+        # A Y column is associated with its nearest-preceding X (column A
+        # first; a later X-designated column opens the next X group); an
+        # error / label / Z column with the nearest-preceding Y of that
+        # group (the corpus-measured @35 model, writer_blocks.prop_block),
+        # falling back to the X when no Y precedes it.
+        x_serial, x_group, y_serial = 0, 0, 0
         for short, long_name, unit, desig, comment in cols:
             serial += 1
             if desig == "X":
-                x_serial, x_group = serial, x_group + 1
+                x_serial, x_group, y_serial = serial, x_group + 1, 0
+            assoc = x_serial if desig == "Y" else (y_serial or x_serial)
+            if desig == "Y":
+                y_serial = serial
             out += _block(
-                wb.prop_block(serial, short, _DESIGNATION_CODE[desig], x_serial, x_group)
+                wb.prop_block(serial, short, _DESIGNATION_CODE[desig], assoc, x_group)
             )
             out += _label_block(long_name, unit, comment)
     out += _NULL * 3  # closes the windows section (stream end)

@@ -45,9 +45,10 @@ __all__ = [
 ]
 
 
-# Characters with a same-looking Latin-1 twin: the Greek small mu and the
-# Angstrom / Ohm-free SIGN code points users type for units. Mapped to the
-# Latin-1 character Origin's own unit text uses, so a unit stays plain text.
+# Two characters users type in units have a same-looking Latin-1 twin:
+# GREEK SMALL LETTER MU (U+03BC) -> MICRO SIGN (U+00B5), and ANGSTROM SIGN
+# (U+212B) -> LATIN CAPITAL LETTER A WITH RING ABOVE (U+00C5). Mapping them
+# keeps a unit plain Latin-1 text instead of an escape.
 _LATIN1_TWIN = str.maketrans({"\u03bc": "\u00b5", "\u212b": "\u00c5"})
 # C0/C1 controls (a CR/LF would split the LongName/Unit/Comment rows).
 _CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
@@ -61,8 +62,19 @@ def encode_text(text: str, *, ascii_only: bool = False) -> bytes:
     Unicode escape ``\\(xHHHH)``, the form Origin's ``.opj`` Save-As writes
     for non-ANSI characters and ``origin_richtext.clean_richtext`` decodes
     back. ``μ`` (U+03BC) and ``Å`` (U+212B) first map to their Latin-1 twins
-    ``µ``/``Å``. Control characters become spaces."""
-    text = _CONTROL.sub(" ", text.translate(_LATIN1_TWIN))
+    ``µ``/``Å``. Control characters become spaces.
+
+    The three bytes ``@${`` are the reader's storage marker (it cuts a label
+    block and a book title there), so a literal ``@${`` in user text is
+    written ``\\(64)${`` -- the decimal character escape for ``@`` -- which
+    the unchanged reader decodes back to ``@${``.
+
+    ``ascii_only`` (book titles) escapes Latin-1 letters too
+    (``Å`` -> ``\\(x00C5)``). Origin itself stores ANSI characters raw there,
+    but the reader accepts a title only when every byte is printable ASCII
+    (otherwise it falls back to the short name), so the raw form cannot
+    round-trip. How real Origin displays an escaped title is UNVERIFIED."""
+    text = _CONTROL.sub(" ", text.translate(_LATIN1_TWIN)).replace("@${", "\\(64)${")
     limit = 0x7F if ascii_only else 0x100
     return "".join(
         c if ord(c) < limit else f"\\(x{ord(c):04X})" for c in text
@@ -239,7 +251,7 @@ def sheet_subheader(nrows: int) -> bytes:
 
 
 def prop_block(
-    serial: int, short: str, designation: int, x_serial: int, x_group: int = 1
+    serial: int, short: str, designation: int, assoc_serial: int, x_group: int = 1
 ) -> bytes:
     """519-byte column property block — the column-association model measured
     across every corpus workbook (61 columns, 6 books):
@@ -249,9 +261,17 @@ def prop_block(
       file's stream order (the PN/PT probe series' central finding);
     * @30 u16: the constant 9 in every corpus column (semantics unknown —
       cloned, never varied);
-    * @35 u16: the associated X column's serial for Y/Y-error columns,
-      0 for X/disregard columns themselves;
-    * @38: designation flag — X 0x51, Y/Y-error 0x61, disregard 0x41;
+    * @35 u16 (``assoc_serial``): the column this one is associated with --
+      for a Y column its X column's serial; for a Y-error / X-error / label
+      / Z column the nearest-preceding Y column's serial; 0 for X and
+      disregard columns. Measured 2026-11 over every ``.opj`` in the local
+      corpus: Y -> its X in 977/989 columns that have a preceding X (the
+      other 12 carry 0), and Y-error / label / Z / X-error -> the preceding
+      Y in 40/40 (13/8/11/8). X columns carry 0 in 120/149; the 29 nonzero
+      values are not understood and the writer does not emit them;
+    * @38: designation flag — X 0x51, disregard 0x41, everything else 0x61
+      (corpus: Y, Y-error, label, Z and X-error columns all carry 0x61, or
+      0x60 with the low bit clear; X 0x51/0x50; disregard 0x41/0x40);
     * @51: X-group index (1-based): the count of X columns up to and
       including this column's own X, so a second X column (``X,Y,X,Y``)
       opens group 2 and its Y columns carry 2 with @35 = THAT X's serial;
@@ -264,7 +284,7 @@ def prop_block(
     struct.pack_into("<H", p, 4, serial & 0xFFFF)
     struct.pack_into("<H", p, 30, 9)
     is_x = designation in (1, 3)  # X and disregard carry no X-association
-    struct.pack_into("<H", p, 35, 0 if is_x else x_serial & 0xFFFF)
+    struct.pack_into("<H", p, 35, 0 if is_x else assoc_serial & 0xFFFF)
     p[38] = {3: 0x51, 1: 0x41}.get(designation, 0x61)
     p[51] = x_group & 0xFF
     p[0x11] = designation
