@@ -46,7 +46,7 @@ describe("useCurveFit fitData", () => {
     expect(result.current.fitData).toBeNull();
     await act(async () => result.current.run("fit"));
     // dy: the weighting the fit ran with (none here), for the fit report.
-    expect(result.current.fitData).toEqual({ x: [100, 300, 400], y: [10, 30, 40], xKey: 0, yKey: 1, dy: null });
+    expect(result.current.fitData).toEqual({ x: [100, 300, 400], y: [10, 30, 40], xKey: 0, yKey: 1, dy: null, weightMode: "none", scaleErrors: true });
   });
 
   it("drops back to null after an auto-guess", async () => {

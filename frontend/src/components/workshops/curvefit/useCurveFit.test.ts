@@ -445,6 +445,37 @@ describe("useCurveFit weighting (Sol audit — connect fitting to error columns)
     expect(result.current.fitData).toMatchObject({ dy: null, weights: [4, 0, 1, 0.25] });
   });
 
+  it("a weighted result goes stale when its σ column, weight mode or scale switch changes (review item 3)", async () => {
+    const multi: DataStruct = {
+      time: [0, 1, 2, 3], values: [[10, 1], [20, 2], [30, 1], [40, 2]], labels: ["moment", "dM"], units: ["emu", "emu"], metadata: {},
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run.dat", data: multi }],
+      activeId: "d1", xKey: null, yKeys: [0], seriesOrder: null, errKeys: {}, fitOverlay: null,
+    });
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41], exitFlag: 1 });
+    const { result } = renderHook(() => useCurveFit());
+    act(() => result.current.setWeightMode("manual"));
+    act(() => result.current.setManualKey(1));
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    expect(result.current.resultStale).toBe(false);
+    act(() => result.current.setScaleErrors(false));
+    expect(result.current.resultStale).toBe(true);
+    act(() => result.current.setScaleErrors(true));
+    expect(result.current.resultStale).toBe(false);
+    act(() => result.current.setWeightMode("none"));
+    expect(result.current.resultStale).toBe(true);
+    act(() => result.current.setWeightMode("manual"));
+    expect(result.current.resultStale).toBe(false);
+    // An edited σ value (x and y untouched).
+    act(() => useApp.setState((st) => ({
+      datasets: st.datasets.map((d) => ({ ...d, data: { ...d.data, values: [[10, 1], [20, 5], [30, 1], [40, 2]] } })),
+    })));
+    expect(result.current.resultStale).toBe(true);
+  });
+
   it("direct weighting with no column picked fits unweighted and says so", async () => {
     vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41] });
     const { result } = renderHook(() => useCurveFit());

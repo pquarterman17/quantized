@@ -39,7 +39,11 @@ export function followRefits(): void {
       {
         ...f,
         result: e.result,
-        fitData: { x: e.x, y: e.y, xKey: f.xKey, yKey: f.yKey, ...fittedWeighting(e.previousSpec.weight?.mode, e.dy) },
+        fitData: {
+          x: e.x, y: e.y, xKey: f.xKey, yKey: f.yKey, ...fittedWeighting(e.previousSpec.weight?.mode, e.dy),
+          weightMode: e.dy ? (e.previousSpec.weight?.mode ?? "none") : "none",
+          scaleErrors: e.previousSpec.weight?.scaleErrors !== false,
+        },
       },
       live,
       curve,

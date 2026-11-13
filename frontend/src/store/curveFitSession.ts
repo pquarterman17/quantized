@@ -22,6 +22,17 @@ export interface FittedData {
   yKey: number;
   dy?: number[] | null;
   weights?: number[] | null;
+  /** The weighting mode the fit RAN with ("none" when it ran unweighted) and
+   *  its error-scaling switch; absent on a fit recorded before these. */
+  weightMode?: string;
+  scaleErrors?: boolean;
+}
+
+/** The weighting a fit would use now (components/workshops/curvefit/fitWeighting). */
+export interface WeightingNow {
+  mode: string;
+  values: number[] | null;
+  scaleErrors: boolean;
 }
 
 /** `dy` vs `weights` for FittedData from the column a fit was weighted with:
@@ -88,7 +99,15 @@ export function restoreFitted(datasets: readonly Dataset[], datasetId: string | 
 /** True when the (x, y) pairs a fit would run on NOW (gap rows dropped) are
  *  not the pairs `fitData` ran on — an edited value, a newly excluded row or
  *  a changed X range — so the result describes earlier data. */
-export function fitInputsChanged(now: { x: readonly number[]; y: readonly number[] }, fitData: FittedData): boolean {
+export function fitInputsChanged(
+  now: { x: readonly number[]; y: readonly number[] },
+  fitData: FittedData,
+  /** The weighting a fit would use now: an edited σ / weight column, another
+   *  weight mode or the scale switch also make the result describe earlier
+   *  inputs. Ignored for a fit recorded without its weighting. */
+  weighting?: WeightingNow,
+): boolean {
+  if (weighting && fitData.weightMode !== undefined && weightingChanged(weighting, fitData)) return true;
   let k = 0;
   for (let i = 0; i < Math.min(now.x.length, now.y.length); i++) {
     const x = now.x[i]!;
@@ -98,6 +117,15 @@ export function fitInputsChanged(now: { x: readonly number[]; y: readonly number
     k++;
   }
   return k !== fitData.x.length;
+}
+
+function weightingChanged(now: WeightingNow, fitData: FittedData): boolean {
+  if (now.mode !== fitData.weightMode) return true;
+  if (now.mode === "none") return false;
+  if (now.scaleErrors !== (fitData.scaleErrors !== false)) return true;
+  const was = fitData.weights ?? fitData.dy ?? null;
+  const vals = now.values ?? [];
+  return !was || was.length !== vals.length || was.some((v, i) => v !== vals[i]);
 }
 
 /** A worksheet's record itself, for the removal / undo / re-fit bookkeeping. */

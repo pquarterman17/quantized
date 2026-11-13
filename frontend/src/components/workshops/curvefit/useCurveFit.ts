@@ -35,6 +35,7 @@ import { analysisSelectionData } from "../../../lib/analysisSelection";
 import { rememberCurveFitOverlay } from "../../../store/curveFitOverlay";
 import { exportCornerPlot } from "./curveFitCornerPlot";
 import { parseFitStarts } from "./fitStarts";
+import { weightingNow, weightingOf } from "./fitWeighting";
 import { followRefits } from "../../../store/curveFitRefit";
 import { removeCurveFit, showRetainedCurve } from "../../../store/curveFitRemove";
 import { fitInputsChanged, fittedWeighting, onRetainedFitChange, restoreFitted, retainFitted, type Fitted, type FittedData } from "../../../store/curveFitSession";
@@ -166,15 +167,8 @@ export function useCurveFit(): CurveFitState {
   const [weightNote, setWeightNote] = useState<string | null>(null);
   const [scaleErrors, setScaleErrors] = useState(savedSpec?.weight?.scaleErrors !== false);
 
-  /** The weighting choice for a given primary channel: `yerr` resolves its
-   *  sigma column from the view's `errKeys`; `manual` uses the picked column. */
-  function weightingFor(yKey: number): FitWeighting {
-    const scale = scaleErrors ? {} : { scaleErrors: false as const };
-    if (weightMode === "yerr") return { mode: "yerr", errKey: errKeys[yKey], ...scale };
-    if (weightMode === "manual" || weightMode === "direct")
-      return manualKey != null ? { mode: weightMode, errKey: manualKey, ...scale } : { mode: weightMode, ...scale };
-    return weightMode === "none" ? { mode: "none" } : { mode: weightMode, ...scale };
-  }
+  /** The weighting choice for a given primary channel (./fitWeighting). */
+  const weightingFor = (yKey: number): FitWeighting => weightingOf(weightMode, errKeys, manualKey, scaleErrors, yKey);
 
   useEffect(() => {
     let cancelled = false;
@@ -239,7 +233,11 @@ export function useCurveFit(): CurveFitState {
   const guessOnly = current != null && current.fitData === null;
   const result = current?.result ?? null;
   const fitData = current?.fitData ?? null;
-  const resultStale = useMemo(() => !!fitData && !!xy && fitInputsChanged(xy, fitData), [xy, fitData]);
+  const resultStale = useMemo(
+    () => !!fitData && !!xy && !!active &&
+      fitInputsChanged(xy, fitData, weightingNow(active, xy, weightingOf(weightMode, errKeys, manualKey, scaleErrors, xy.yKey))),
+    [xy, fitData, active, weightMode, errKeys, manualKey, scaleErrors],
+  );
   const plotId = useApp((s) => s.activeId);
   // Back on a worksheet fitted earlier: its curve is drawn again (never a
   // curve the data has since moved away from).
@@ -353,7 +351,10 @@ export function useCurveFit(): CurveFitState {
         }
         const done: Fitted = {
           result: r,
-          fitData: { x: pairs.x, y: pairs.y, xKey: runXKey, yKey: localXy.yKey, ...fittedWeighting(weight.mode, finiteDy) },
+          fitData: {
+            x: pairs.x, y: pairs.y, xKey: runXKey, yKey: localXy.yKey, ...fittedWeighting(weight.mode, finiteDy),
+            weightMode: finiteDy ? weight.mode : "none", scaleErrors: weight.scaleErrors !== false,
+          },
           datasetId: ds.id,
           model: modelName,
           xKey: runXKey,
