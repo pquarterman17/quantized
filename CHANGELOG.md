@@ -122,6 +122,21 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   data), so data-anchored text boxes and arrows land in the same place.
 - On screen, a text box is readable on a dark plot, and an inserted arrow
   shows its arrowhead.
+- View-only edits to a graph window (axis scales, limits, stack mode) are
+  autosaved, so a reload no longer loses them.
+- An exported figure uses the same X/Y tick increment as the screen, and a
+  break mark no longer overlaps the tick label at the break edge.
+- X and Y breaks together: every panel keeps its data, on screen and in the
+  export.
+- Dialogs name their action (Rename, Apply, Export, …) instead of "Run".
+- An Origin escape that cannot convert stays as typed, the same on screen
+  and in the export; `\\+(` is a literal backslash.
+- A region shade starting at or below zero on a log (or reciprocal) X axis
+  draws from the left edge on screen and in the export alike.
+- Stat-stage exports (bar, box, violin, strip, Q-Q, histogram) use the
+  screen's theme colours and no longer add a title the screen does not show.
+- Renaming an item to its own name, and Tile / Cascade with nothing to
+  arrange, no longer leave an empty undo step.
 
 ## [0.33.0] - 2026-11-01
 
