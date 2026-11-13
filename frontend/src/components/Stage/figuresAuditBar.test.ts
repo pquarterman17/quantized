@@ -8,7 +8,7 @@ import { errorHalfWidth, errorBarNote } from "../../lib/statMarks";
 import { textAxisFallbackChannel } from "../../lib/modeling";
 import type { Dataset } from "../../lib/types";
 import { datasetViewDefaults } from "../../store/windowDefaults";
-import { axisAtPoint } from "./AxisDropZones";
+import { axisAtPoint } from "./axisAtPoint";
 import { barSeriesChannels } from "./useStatBarSeries";
 
 /** bar.csv as the CSV importer produces it: the text first column became a

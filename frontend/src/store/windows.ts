@@ -93,8 +93,12 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
             s,
             boundId ? (s.datasets.find((d) => d.id === boundId)?.name ?? "Untitled graph") : "Untitled graph",
           );
-        const seedView = view ?? defaultPlotView();
         const dataset = boundId ? s.datasets.find((d) => d.id === boundId) : undefined;
+        // No view given: the bound dataset's own defaults (its error layer, a
+        // text X, technique defaults), as every rebind seeds -- a bare default
+        // view drew a detected error column as a Y curve, and then read as
+        // "styled" against those defaults (windowUserEdits).
+        const seedView = view ?? { ...defaultPlotView(), ...(dataset ? datasetViewDefaults(dataset) : {}) };
         const win: PlotWindow = {
           id,
           kind: "plot",

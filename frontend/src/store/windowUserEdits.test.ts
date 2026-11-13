@@ -9,6 +9,7 @@ import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import { newGraphWindowView } from "../lib/plotWindows";
 import type { Dataset, DataStruct } from "../lib/types";
 import { useApp } from "./useApp";
+import { datasetViewDefaults } from "./windowDefaults";
 import { plotWindowView } from "./windowDocuments";
 import { focusedWindowGuardsAgainst, viewHasUserEdits, windowHasUserEdits } from "./windowUserEdits";
 
@@ -188,7 +189,8 @@ describe("what counts as an edit", () => {
 
   it("the Statistics plot mode is an edit, its auto-written picks are not", () => {
     const d = ds("d");
-    const fresh = { ...defaultPlotView(), statPicks: { mode: "bar" as const } };
+    // The dataset's own fresh view (its "dM" is a detected error column).
+    const fresh = { ...defaultPlotView(), ...datasetViewDefaults(d), statPicks: { mode: "bar" as const } };
     expect(viewHasUserEdits(fresh, d)).toBe(false);
     expect(viewHasUserEdits({ ...fresh, statMode: true }, d)).toBe(true);
   });

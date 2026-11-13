@@ -15,7 +15,8 @@
 import { useRef, useState } from "react";
 
 import { CHANNEL_DND, decodeChannelDrag, resolveAxisZone, type AxisZone } from "../../lib/dragaxis";
-import { openFigureDialog, type AxisId } from "../../store/figureDialogs";
+import { onLoadFailure, runLazy } from "../../lib/runLazy";
+import { openFigureDialog } from "../../store/figureDialogs";
 import { useApp } from "../../store/useApp";
 
 interface Props {
@@ -31,22 +32,6 @@ interface Props {
    *  interior (no zone) or a malformed/foreign payload never reaches here. */
   onAxisDrop: (zone: AxisZone, datasetId: string, channel: number) => void;
   children: React.ReactNode;
-}
-
-type Box = Pick<DOMRect, "left" | "right" | "top" | "bottom">;
-
-/** Figures-audit #6: which axis a double-click at (x, y) landed on -- the
- *  band between the plot area (uPlot's `.u-over`) and the chart's outer
- *  box: below it = X, left = Y, right = Y2 (only when one is drawn). Null
- *  inside the plot area or in a corner. */
-export function axisAtPoint(over: Box, root: Box, x: number, y: number, hasY2: boolean): AxisId | null {
-  if (x < root.left || x > root.right || y < root.top || y > root.bottom) return null;
-  const inX = x >= over.left && x <= over.right;
-  const inY = y >= over.top && y <= over.bottom;
-  if (inX && y > over.bottom) return "x";
-  if (inY && x < over.left) return "y";
-  if (inY && x > over.right && hasY2) return "y2";
-  return null;
 }
 
 export default function AxisDropZones({ className, style, onContextMenu, onAxisDrop, children }: Props) {
@@ -80,8 +65,13 @@ export default function AxisDropZones({ className, style, onContextMenu, onAxisD
         const root = (e.target as Element).closest?.(".uplot");
         const over = root?.querySelector(".u-over");
         if (!root || !over) return;
-        const axis = axisAtPoint(over.getBoundingClientRect(), root.getBoundingClientRect(), e.clientX, e.clientY, hasY2);
-        if (axis) openFigureDialog({ kind: "axis", axis });
+        // The hit test is a lazy piece (axisAtPoint.ts, eager-bundle budget);
+        // the boxes and point are read now, while the event is current.
+        const [o, r, x, y] = [over.getBoundingClientRect(), root.getBoundingClientRect(), e.clientX, e.clientY];
+        void runLazy("Loading the axis dialog…", () => import("./axisAtPoint")).then((m) => {
+          const axis = m.axisAtPoint(o, r, x, y, hasY2);
+          if (axis) openFigureDialog({ kind: "axis", axis });
+        }, onLoadFailure);
       }}
       onDragEnter={(e) => {
         if (!isChannelDrag(e)) return;
