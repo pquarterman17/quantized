@@ -37,6 +37,10 @@ export interface AxisExtrasContext {
    *  them, so each panel's gap -- and so each panel's positions -- agree
    *  (the export sizes its one shared break the same way). */
   extent?: [number, number] | null;
+  /** false: draw no break marks on this plot's y axes -- an inner x-break
+   *  panel, whose y axis is panel 0's. Origin and the export mark the OUTER
+   *  y axis only. */
+  breakMarks?: boolean;
 }
 
 /** Finite min/max of every series riding axis `on` (0 = y, 1 = y2), or null. */

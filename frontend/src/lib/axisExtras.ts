@@ -56,6 +56,8 @@ interface Extra {
   scale: AxisScale;
   /** The breaks this axis draws (null on x, off a linear scale, inherited). */
   breaks: readonly AxisBreak[] | null;
+  /** Draw the break's diagonal marks (false on an inner x-break panel). */
+  marks: boolean;
 }
 
 /** Apply each axis' extras to `axes` (index-aligned with `fmts`/`scales`)
@@ -87,7 +89,7 @@ export function applyAxisExtras(
       axis.font = axis.font.replace(/[\d.]+px/, `${Math.round((fmt.size * 96) / 72)}px`);
     }
     if (fmt.ticks === "in") axis.ticks = { ...axis.ticks, show: false };
-    extras.push({ idx, fmt, scale, breaks });
+    extras.push({ idx, fmt, scale, breaks, marks: ctx?.breakMarks !== false });
   });
   return extras.length ? axisExtrasPlugin(extras, ink) : null;
 }
@@ -106,7 +108,7 @@ function axisExtrasPlugin(extras: readonly Extra[], ink: string): uPlot.Plugin {
         ctx.strokeStyle = ink;
         ctx.fillStyle = ink;
         ctx.lineWidth = pr;
-        for (const { idx, fmt, scale, breaks } of extras) {
+        for (const { idx, fmt, scale, breaks, marks } of extras) {
           const axis = u.axes[idx] as uPlot.Axis & { _splits?: number[] };
           const key = axis.scale ?? (idx === 0 ? "x" : "y");
           // uPlot's Side enum as plain numbers: 0 top, 1 right, 2 bottom, 3 left.
@@ -141,7 +143,7 @@ function axisExtrasPlugin(extras: readonly Extra[], ink: string): uPlot.Plugin {
               if (wantOut) tick(v, 3, -inward);
             }
           }
-          if (breaks && !horizontal) drawBreakMarks(u, key, edge, breaks, pr);
+          if (breaks && marks && !horizontal) drawBreakMarks(u, key, edge, breaks, pr);
           if (fmt.divide && fmt.divide > 0 && fmt.divide !== 1) {
             // Outside the frame, where the export's offset text sits, in the
             // axis' own tick font (lib/axisDivideLabel.ts): inside the corner

@@ -276,3 +276,29 @@ def test_x_and_y_breaks_share_one_broken_y_over_every_panel(
     lo, hi = axes[1].get_ylim()
     assert lo <= 1015.0 and 1020.0 <= hi  # the later panel's data is on-axis
     assert sum(1 for ln in axes[0].lines if ln.get_label() == "_axis_break") == 1
+
+
+def test_y_break_marks_sit_on_the_panels_the_shared_fixture_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The shared contract (axis_breaks.json ``panel_marks``; the screen half is
+    Stage/breakPanelYBreak.test.ts): with X-break panels, the Y break marks
+    sit on the OUTER y axis only, as Origin draws them (review finding: the
+    screen also marked every inner panel's left spine)."""
+    marks = json.loads(FIXTURE.read_text(encoding="utf-8"))["panel_marks"]
+    body = {
+        "dataset": {
+            "time": marks["x"], "values": [[v] for v in marks["y"]],
+            "labels": ["S"], "units": [""], "metadata": {},
+        },
+        "y_keys": [0], "fmt": "svg",
+        "y_fmt": {"mode": "auto", "digits": 2, "breaks": marks["y_breaks"]},
+        "overrides": {"x_breaks": marks["x_breaks"]},
+    }
+    axes = _axes(monkeypatch, body)
+    assert len(axes) == len(marks["x_breaks"]) + 1
+    marked = [
+        i for i, ax in enumerate(axes)
+        if any(ln.get_label() == "_axis_break" for ln in ax.lines)
+    ]
+    assert marked == marks["y_marks_on_panels"]

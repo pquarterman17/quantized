@@ -72,6 +72,17 @@ function compute(c: Case) {
   };
 }
 
+/** X-break panels with a Y break: which panels draw the Y break marks. The
+ *  outer y axis only (panel 0), as Origin draws them -- the screen half is
+ *  Stage/breakPanelYBreak.test.ts, the export half test_axis_breaks.py. */
+export const PANEL_MARKS = {
+  x: [0, 1, 2, 3, 4, 5, 15, 16, 17, 18, 19, 20, 30, 31, 32],
+  y: [0, 1, 2, 3, 4, 5, 1015, 1016, 1017, 1018, 1019, 1020, 1030, 1031, 1032],
+  x_breaks: [[5, 15], [20, 30]],
+  y_breaks: [[15, 995]],
+  y_marks_on_panels: [0],
+};
+
 describe("axis breaks — the shared screen/export wire fixture", () => {
   it("elides the stretch: values above a break slide down by its length", () => {
     const breaks: AxisBreak[] = [[12, 990]];
@@ -113,7 +124,7 @@ describe("axis breaks — the shared screen/export wire fixture", () => {
   });
 
   it("matches the committed fixture the backend half reads", () => {
-    const fresh = { cases: CASES.map(compute) };
+    const fresh = { cases: CASES.map(compute), panel_marks: PANEL_MARKS };
     if (process.env.AXIS_BREAKS_FIXTURE_WRITE) {
       writeFileSync(FIXTURE, `${JSON.stringify(fresh, null, 2)}\n`, "utf8");
     }

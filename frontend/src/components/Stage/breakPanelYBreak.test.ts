@@ -24,7 +24,14 @@ vi.hoisted(() => {
   window.matchMedia ??= (() => mq) as unknown as typeof window.matchMedia;
 });
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import uPlot from "uplot";
+
+const drawBreakMarks = vi.hoisted(() => vi.fn());
+vi.mock("../../lib/axisBreakExtras", async (orig) => ({ ...(await orig<object>()), drawBreakMarks }));
 
 import { breakAutoRange } from "../../lib/axisBreaks";
 import { loadAxisExtras } from "../../lib/axisExtrasHook";
@@ -60,5 +67,37 @@ describe("x-break panels with a Y break", () => {
     const fwd = plots.map((u) => (u.scales.y as uPlot.Scale & { fwd?: (v: number) => number }).fwd?.(1000));
     expect(fwd[0]).toBeDefined();
     expect(fwd[1]).toBe(fwd[0]);
+  });
+});
+
+// The shared contract (tests/fixtures/wire/axis_breaks.json `panel_marks`,
+// asserted by the export in test_axis_breaks.py): the Y break marks sit on
+// the OUTER y axis only, as Origin draws them -- not on every inner panel's
+// left spine as well (review finding).
+const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), "../../../../tests/fixtures/wire/axis_breaks.json");
+const MARKS = (JSON.parse(readFileSync(FIXTURE, "utf8")) as {
+  panel_marks: { x: number[]; y: number[]; x_breaks: [number, number][]; y_breaks: [number, number][]; y_marks_on_panels: number[] };
+}).panel_marks;
+
+describe("x-break panels with a Y break: where the break marks go", () => {
+  it("only the panels the shared fixture names draw Y break marks", async () => {
+    drawBreakMarks.mockClear();
+    const edges = [Math.min(...MARKS.x), ...MARKS.x_breaks.flat(), Math.max(...MARKS.x)];
+    const panels: BreakPanel[] = [];
+    for (let i = 0; i < edges.length; i += 2) {
+      const keep = MARKS.x.map((v, r) => [v, MARKS.y[r]]).filter(([v]) => v >= edges[i] && v <= edges[i + 1]);
+      panels.push(panel(keep.map(([v]) => v), keep.map(([, y]) => y), [edges[i], edges[i + 1]]));
+    }
+    expect(panels.length).toBe(MARKS.x_breaks.length + 1);
+    const host = document.body.appendChild(document.createElement("div"));
+    plots = renderBreakPanels(host, {
+      panels, seriesLabels: {}, seriesStyles: {}, hiddenChannels: [], syncKey: "xy-marks", box: { w: 900, h: 300 },
+      yAuto: true,
+      cell: { xScale: "linear", yScale: "linear", yLim: [Math.min(...MARKS.y), Math.max(...MARKS.y)], tool: "zoom", onReadout: vi.fn(), yFmt: { mode: "auto", digits: 2, breaks: MARKS.y_breaks } },
+    } as Parameters<typeof renderBreakPanels>[1]);
+    plots.forEach((u) => u.redraw());
+    await new Promise((r) => setTimeout(r, 0));
+    const marked = [...new Set(drawBreakMarks.mock.calls.map(([u]) => plots.indexOf(u as uPlot)))].sort();
+    expect(marked).toEqual(MARKS.y_marks_on_panels);
   });
 });

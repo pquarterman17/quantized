@@ -209,6 +209,7 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
       xLim: p.xRange,
       yLim: padded ?? yLim,
       yBreakExtent: yBreaks ? yLim : null, // every panel's gap from the shared extent
+      yBreakMarks: i === 0, // marks on the outer y axis only, as Origin and the export draw them
       // Right of a seam the y axis is panel 0's (`applySeamSides` below), so
       // a y title that would only repeat panel 0's goes; the x title is drawn
       // once, on panel 0, as the export's one `supxlabel` (`null` keeps the
