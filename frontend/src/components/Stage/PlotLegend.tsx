@@ -6,7 +6,7 @@
 
 import { useId, useState } from "react";
 
-import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
+import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenuLazy";
 import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
 import { colorScaleLegendEntries, type ColorScatterSpec } from "../../lib/colorscatter";
 import { resolveDrawColor } from "../../lib/contrastColor";

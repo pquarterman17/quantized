@@ -1,6 +1,16 @@
 # Bundle headroom campaign
 
-**Current state (2026-11-13, after slice 25):** no source module moved. The
+**Current state (2026-11-13, after slice 26):** three on-demand surfaces left
+the startup chunk, each warmed once its eager host has mounted: the
+context-menu body, the ⌘K palette body and the Appearance dropdown's body.
+Main `5748292c` (after PR #643) measured **826,343 B**, 1,453 B under the
+pin; after, **816,111 B** (**−10,232 B**). The pin was LOWERED
+**827,796 → 822,111 B**
+(`measured + 6,000`): 6,000 B is banked again for the queued wave of feature
+branches, the other 5,685 B are locked in. See "Slice 26", which also
+re-argues the slice-5 ruling that had banked the palette seam.
+
+**Previous state (2026-11-13, after slice 25):** no source module moved. The
 startup code is now written as ONE chunk instead of 87 always-preloaded ones
 (`vite.config.ts`, a `codeSplitting` group on Rolldown's `$initial` tag), so
 the import/export glue between those chunks is gone. Main `d5c8ffba` measured
@@ -3206,6 +3216,114 @@ never gated anything; `check-bundle-size.mjs` does.
 ten feature branches that each add a few hundred eager bytes, and nothing may
 raise the pin for them. 9,713 B of the gain are locked in now. When the wave
 has merged, lower the pin to `measured + 1,024`.
+
+### Slice 26 — three on-demand surfaces, warmed after mount, pin ratcheted DOWN — **DONE (2026-11-13)**
+
+**Measured net eager delta −10,232 B — pin LOWERED 827,796 → 822,111 B**
+
+Slice 25's banked 6,000 B had been spent down to 28 B by the merges since
+(1,453 B once PR #643 had moved three more pieces out).
+The brief: at least 8 kB (target 10+) from code that does not run at
+startup, leaving figure export, axis breaks, typography, page setup and
+templates to the branch moving those. Exact bytes, `npm ci`, `.vite` wiped,
+`npx tsc -b --force`, `npm run build`:
+
+| tree | eager B | delta |
+|---|---:|---:|
+| `5748292c` (parent, main after PR #643) | 826,343 | — |
+| this slice | 816,111 | **−10,232** |
+
+The slice was first built on `f182f823`, before #643 merged: 827,768 →
+817,481 B (−10,287). It was rebased onto #643 and re-measured; the rows
+above are the numbers the pin is set from.
+
+Measured one build at a time on the way (plain `vite build`, first cuts
+without the warm-up and failure toasts): the context menu and the palette
+together −9,135 B; the Appearance split another −1,136 B.
+
+#### How it was found
+
+Slice 25 left one startup chunk, so the profile's per-module bytes are now
+close to what a move recovers. A module-graph dump (a throwaway vite plugin
+writing `getModuleInfo().importedIds`) gave, for each eager module, the
+eager bytes only it keeps reachable. Ranked by those bytes, the largest
+subtrees that only render after a click were the three below. The other big
+subtrees (the command registry, the plot stage, the store) run at startup.
+
+#### The three surfaces
+
+- **Context-menu body** (`components/overlays/ContextMenu.tsx`, with
+  `ContextMenuBoxes.tsx`, `contextMenuHelp.ts` and `lib/menuKeyboardNav.ts`).
+  The five startup hosts (MenuBar, WindowTitleButtons, PlotStageMenus,
+  PlotLegend, PlotToolbar) import `ContextMenuLazy.tsx` instead, a wrapper
+  with the same props. It renders nothing until the body is loaded and then
+  commits it through `useRegionLoaded`, the slice-8 gate, so a cold open
+  costs the fetch and never Suspense's ~300 ms retry throttle. Lazy panels
+  keep importing the body directly, so it is guarded by reachability
+  (`DRAGGED_OUT`), not as a SEAMS entry.
+- **⌘K palette body** (`CommandPalette.tsx`, with `lib/fuzzy.ts` and
+  `openerCapture.ts`). App mounts `CommandPaletteGate.tsx`; the shortcut and
+  the `cmdkOpen` flag were already eager. Once loaded the palette stays
+  mounted while closed, as before.
+- **Appearance dropdown body** (`components/Shell/AppearancePanel.tsx`, split
+  out verbatim). The gear button, open flag, outside-click and Escape surface
+  stay in `AppearanceMenu.tsx`, because the title bar is visible from first
+  paint.
+
+#### The slice-5 ruling, re-argued
+
+Slice 5 banked the palette seam because it spent a chunk fetch on the first
+⌘K of a session, and slice 4 flagged the right-click menu as the same
+latency class. The warm-up removes that cost. Each body is fetched from a
+mount effect of its host, the timing `MenuBar` already uses for its menu
+model (and `main.tsx` uses, two seconds later, for Save): `MenuBar` warms
+the context menu, the gate warms the palette, `AppearanceMenu` warms its
+panel. So a first open after first paint renders from the module cache on
+its own frame, the way the eager import did. Only an open in the few
+milliseconds before that fetch lands waits for it. Nothing on screen at first
+paint changes, which is what the `PlotLegend` ruling protects.
+
+In a real browser (headless Chromium against `qz --no-browser`, built tree):
+the File menu, ⌘K with a query and Enter, the Appearance dropdown with a
+theme switch, a legend entry's right-click menu, the toolbar's Options and
+drawing-tool flyouts and the plot canvas's right-click menu all opened, with
+no console error or warning.
+
+#### Load failure
+
+A body whose chunk will not load closes its surface (the host's `onClose`,
+`setCmdk(false)`, or the dropdown's own flag) and shows a danger toast. The
+next open tries again. Nothing throws during render, so no error boundary is
+involved. `onDemandMenus.loadFail.test.tsx` pins all three.
+
+#### Guards and tests
+
+- `architecture.test.ts`: SEAMS entries for the palette and the Appearance
+  panel; `DRAGGED_OUT` entries for the context-menu body, its three helpers,
+  `lib/fuzzy.ts` and `openerCapture.ts`.
+- `onDemandMenus.test.tsx`: cold opens. The menu appears whole, Escape still
+  returns focus to the opener, a ⌘K before the palette has loaded opens it,
+  and a reopen once loaded needs no wait.
+- Suites that open a menu from a startup host and query it synchronously
+  (PlotToolbar, PlotToolbar overflow, PlotLegend keyboard, PlotWindowFrame,
+  the render half of the accessible-names ratchet) warm the body in a
+  `beforeAll`, as the app does when the menu bar mounts. `AppearanceMenu`'s
+  suite and the accessible-names check of the opened dropdown now wait for the
+  panel. Without that wait the accessible-names check would have passed on the
+  bare gear button.
+
+#### Candidates still not taken
+
+Slice 25's list is unchanged: the `lib/figuredoc.ts` `.dwk` sanitizer and the
+other lazy-only declarations (~4.3 kB), and the async store actions whose
+bodies are still eager (`duplicateDataset`, `createDerivedWorksheet`,
+`pasteDataFromClipboard`, `previewSeparateWorksheets`, ~3.5 kB). Smaller
+on-demand bodies also remain: `components/windows/windowMenu.ts` (~1.2 kB,
+the plot-window menu's item registry) and `restoreFromTrash`.
+
+**Pin:** lowered to `measured + 6,000`, the slice-24/25 form, for the same
+queued wave of feature branches. When the wave has merged, lower it to
+`measured + 1,024`.
 
 ## What this does NOT change
 

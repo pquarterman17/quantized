@@ -1883,8 +1883,24 @@ import { fileURLToPath } from "node:url";
  * are locked in. Once that wave has merged, lower the pin to
  * `measured + 1,024`; do not spend the banked bytes on anything else.
  *
+ * 2026-11-13 (bundle diet slice 26, `plans/BUNDLE_HEADROOM.md`) - pin
+ * LOWERED 827,796 -> 822,111 (`measured + 6,000`). Three on-demand surfaces
+ * left the startup chunk, each warmed once its eager host has mounted: the
+ * context-menu body (`components/overlays/ContextMenuLazy.tsx` for the five
+ * startup hosts), the ⌘K palette body (`CommandPaletteGate.tsx`) and the
+ * Appearance dropdown's body (`components/Shell/AppearancePanel.tsx`). Exact
+ * bytes, `npm ci`-fresh, `.vite` wiped, `tsc -b --force`, `npm run build`:
+ *   `5748292c` (parent, main after PR #643)   826,343
+ *   this slice                                816,111   (-10,232)
+ * (First measured on `f182f823`, before #643: 827,768 -> 817,481, -10,287.)
+ * The margin is 6,000, the slice-24/25 form, for the same queued wave of
+ * feature branches; slice 25's banked 6,000 had shrunk to 1,453 B. The
+ * other 5,685 B of the reduction are locked in. Once the wave has merged, lower
+ * the pin to `measured + 1,024`; do not spend the banked bytes on anything
+ * else.
+ *
  */
-const EAGER_JS_BUDGET = 827_796;
+const EAGER_JS_BUDGET = 822_111;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

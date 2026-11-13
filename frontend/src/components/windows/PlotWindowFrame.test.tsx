@@ -5,12 +5,19 @@
 // fires by itself, so the default stub invokes its callback synchronously.
 
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
 import { useApp } from "../../store/useApp";
 import { DATASET_DND } from "../Library/dnd";
 import PlotWindowFrame from "./PlotWindowFrame";
+import { preloadContextMenu } from "../overlays/ContextMenuLazy";
+
+// The app warms the context-menu body once the menu bar mounts (bundle diet
+// slice 26, components/overlays/ContextMenuLazy.tsx). These tests open menus
+// and query them synchronously, so warm it the same way first; a cold open is
+// covered by components/overlays/onDemandMenus.test.tsx.
+beforeAll(() => preloadContextMenu());
 
 const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
   id: "w1",

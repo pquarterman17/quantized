@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
+import ContextMenu, { preloadContextMenu, type ContextMenuItem } from "../overlays/ContextMenuLazy";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcutFormat";
 import {
   mergeCommands,
@@ -67,8 +67,12 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
   // Pointer/focus warming remains as a fallback, but cannot be the only path:
   // a fast click (or an automated click that does not dwell on the trigger)
   // can otherwise set aria-expanded while there are still no items to render.
+  // The menu body itself is on demand too (bundle diet slice 26, see
+  // ../overlays/ContextMenuLazy.tsx): warm it in the same effect, so the
+  // first menu, here or anywhere else in the app, opens on its click's frame.
   useEffect(() => {
     void loadMenuModel().then((builder) => setBuildMenuItems(() => builder));
+    void preloadContextMenu();
   }, []);
 
   const positionFor = (label: string): OpenMenu | null => {

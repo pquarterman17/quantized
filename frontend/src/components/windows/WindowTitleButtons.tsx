@@ -24,7 +24,7 @@ import { useApp } from "../../store/useApp";
 import { useWindowsStore } from "../../store/hooks/useWindowsStore";
 import { forceHydrate } from "../../store/windowHydration";
 import { editableFigureDirty } from "../../store/figureLifecycle";
-import ContextMenu from "../overlays/ContextMenu";
+import ContextMenu from "../overlays/ContextMenuLazy";
 import { lazyRegion } from "../../lib/lazyRegion";
 // The right-click menu loads on first use (bundle diet, figures audit 2026-11-13).
 const WindowTitleMenu = lazyRegion(() => import("./WindowTitleMenu"), "Window menu");

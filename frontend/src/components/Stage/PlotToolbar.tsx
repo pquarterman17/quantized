@@ -52,7 +52,7 @@ import {
 import { stackLayoutOn } from "../../store/plotViewSettings";
 import { loadToolbarPrefs, saveToolbarPrefs } from "../../store/prefs";
 import { useApp } from "../../store/useApp";
-import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
+import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenuLazy";
 import { useToolGroupFit } from "./plotToolbarOverflow";
 import { usePublishDockClearance } from "./useDockClearance";
 import PlotToolbarGroup from "./PlotToolbarGroup";

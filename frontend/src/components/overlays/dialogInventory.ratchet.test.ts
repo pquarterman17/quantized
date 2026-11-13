@@ -25,6 +25,8 @@ const sources = import.meta.glob("../../**/*.tsx", {
 const OWN_FOCUS_CONTRACT: Record<string, string> = {
   // Eager: must not import the lazy hook seam; traps Tab and restores itself,
   // and loads lib/modalInert on first open for the background inert.
+  // (Since bundle diet slice 26 the palette body itself loads on demand behind
+  // CommandPaletteGate.tsx; this contract was kept as it was.)
   "CommandPalette.tsx": "eager palette with its own Tab trap and opener restore",
   // Non-modal: takes focus and restores it (useOpenerRestore), traps nothing.
   "ToolWindow.tsx": "non-modal workshop host",

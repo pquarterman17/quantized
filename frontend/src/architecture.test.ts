@@ -3110,6 +3110,21 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/store/corrections.ts",
       call: 'import("./correctionsRun")',
     },
+    // SLICE 26 (2026-11-13): two on-demand surfaces, each warmed once its
+    // eager host has mounted. The ⌘K palette body (only the tests import it
+    // directly) and the Appearance dropdown's body. The context-menu body is
+    // the third surface of the slice; lazy panels import it statically, so it
+    // is held in DRAGGED_OUT below instead.
+    {
+      module: "/components/overlays/CommandPalette.tsx",
+      loader: "/components/overlays/CommandPaletteGate.tsx",
+      call: 'import("./CommandPalette")',
+    },
+    {
+      module: "/components/Shell/AppearancePanel.tsx",
+      loader: "/components/Shell/AppearanceMenu.tsx",
+      call: 'import("./AppearancePanel")',
+    },
   ];
 
   /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
@@ -3584,6 +3599,18 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/markerShapes.ts",
     "/lib/richtextValidate.ts",
     "/lib/peakMarkersVisible.ts",
+    // SLICE 26 (2026-11-13): the context-menu body. The five startup hosts
+    // import `components/overlays/ContextMenuLazy.tsx`; lazy panels still
+    // import the body directly, which is why it is held by reachability here
+    // rather than as a SEAMS entry. The other four went with it and the
+    // palette (the fuzzy matcher, the opener capture it shares with the
+    // lazy ConfirmDialog body).
+    "/components/overlays/ContextMenu.tsx",
+    "/components/overlays/ContextMenuBoxes.tsx",
+    "/components/overlays/contextMenuHelp.ts",
+    "/lib/menuKeyboardNav.ts",
+    "/lib/fuzzy.ts",
+    "/components/overlays/openerCapture.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

@@ -7,6 +7,11 @@
 // / selected shape — fermiviewer has no such registry yet; see
 // `store/commands.ts`'s MAIN #9 note for the "keep in sync, document
 // divergences" precedent this follows.
+//
+// Bundle diet slice 26 (2026-11-13): App mounts ./CommandPaletteGate.tsx, which
+// loads this module on demand and warms it once the shell has mounted. The
+// "this component is eager" notes below date from before that; their rules
+// were kept unchanged rather than re-derived for a lazy body.
 
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
