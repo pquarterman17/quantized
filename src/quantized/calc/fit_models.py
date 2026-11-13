@@ -3,7 +3,9 @@
 Pure calc layer. Each model is ``f(x, p) -> y``; ``FIT_MODELS`` maps a model name
 to its evaluator plus metadata (p0 / lower / upper bounds / paramNames). Closed-
 form models live here; helper-based magnetic/thermal models (Langevin, Brillouin,
-Stoner-Wohlfarth, Debye, Einstein) are registered in ``fit_models_special``.
+Stoner-Wohlfarth, Debye, Einstein) are registered in ``fit_models_special``;
+the Origin built-in function library (Gauss, Voigt, ExpDec1, Boltzmann, Poly 9,
+Sine, ...) in the ``fit_models_origin_*`` modules.
 """
 
 from __future__ import annotations
@@ -191,5 +193,13 @@ register_model("Logarithmic", "Other", _logarithmic, ["a", "b"], [1, 0], [-_INF,
                [_INF, _INF])
 register_model("Square Root", "Other", _sqrt, ["a", "b"], [1, 0], [-_INF, -_INF], [_INF, _INF])
 
-# Register the helper-based magnetic/heat-capacity models (side-effect import).
-from . import fit_models_special  # noqa: E402, F401
+# Register the helper-based magnetic/heat-capacity models and the Origin
+# built-in function library (Peak Functions, Exponential, Growth/Sigmoidal,
+# Polynomial/Power/Waveform) — side-effect imports.
+from . import (  # noqa: E402, F401
+    fit_models_origin_exp,
+    fit_models_origin_growth,
+    fit_models_origin_misc,
+    fit_models_origin_peak,
+    fit_models_special,
+)
