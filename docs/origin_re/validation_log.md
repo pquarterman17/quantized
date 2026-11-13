@@ -680,6 +680,26 @@ Rules: `docs/origin_project_format.md` §3.5 "Fail-closed rules added by the
   check. What would settle it: a paired project whose second sheet has a
   non-default designation (e.g. a Y-error or Label column).
 
+## 2026-11-14 (`.opju` graphs not recovered; `.opju` matrices as maps)
+
+- **Graph presence vs recovery.** Classifier: non-workbook page (column-id
+  table) whose span holds `_cart_object`. Positive control: 979/980 pages
+  the figure decoder recovers carry it (the miss is a layout page).
+  Negative controls: 0 in the Altaxo worksheet/matrix projects and the
+  synthetic fixtures; workbook pages are excluded by the column-id table
+  however much graph content their span holds. Distribution (274 files):
+  158 recovered ≥ 1 graph; 67 recovered none but have unrecovered graph
+  pages; 52 have both; 17 hold graph objects no page isolates; 32 have no
+  graph content. `fig03_bar_sem_tips` (Graph7) and `Figure_5` (Graph3)
+  are now reported as present-not-recovered, each with Origin's saved
+  image. Not attempted: decoding those graphs' layers (no oracle for their
+  record forms here); curve binding untouched (raw `extract_figures_opju`
+  output identical on all 274 files).
+- **Matrices.** `.opju` matrices now use the `.opj` map builder; all 12
+  paired Altaxo matrices are cell-for-cell identical to their `.opj` twins
+  (labels, X, Y, Z, imaginary Z); the 23 corpus matrix books keep every
+  cell. Matrix books open in the Map tab from the Library.
+
 ## How to re-run
 
 `tools/origin_trial/export_ground_truth.py` (skips completed stems);

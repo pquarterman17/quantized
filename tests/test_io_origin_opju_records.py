@@ -517,16 +517,24 @@ def _coord(name: str, text: str) -> bytes:
 
 
 def _matrix_project(
-    cols: int, rows: int, coords: dict[str, str], *, claim: tuple[int, int]
+    cols: int,
+    rows: int,
+    coords: dict[str, str],
+    *,
+    claim: tuple[int, int],
+    complex_cells: bool = False,
 ) -> bytes:
-    values = [float(v) for v in range(cols * rows)]
+    n = cols * rows
+    values = [float(v) for v in range(n)]
     window = block(b"\x00\x00Mat7\x00" + bytes(40))
     tail = b"\x00\x0a\x00" + window + b"\x00\x02\x01\x00" + _layer(*claim)
     tail += b"".join(b"\x00" + _coord(k, v) for k, v in coords.items())
-    return project(
-        dataset("Mat7", seg_fpc(values), kind=DBL, total=cols * rows, used=cols * rows, size=8),
-        tail=tail,
-    )
+    if complex_cells:  # (real, imaginary) pairs, imaginary = -10 x real
+        pairs = [x for v in values for x in (v, -10.0 * v)]
+        record = dataset("Mat7", zz(-n) + fpc(pairs), kind=CPLX, total=n, used=n, size=16)
+    else:
+        record = dataset("Mat7", seg_fpc(values), kind=DBL, total=n, used=n, size=8)
+    return project(record, tail=tail)
 
 
 def test_matrix_book_shape_ranges_and_row_major_cells(tmp_path: Path) -> None:
@@ -536,15 +544,38 @@ def test_matrix_book_shape_ranges_and_row_major_cells(tmp_path: Path) -> None:
     assert geo is not None and (geo.rows, geo.cols) == (3, 4)
     assert geo.x_range == (13.0, 21.0) and geo.y_range == (17.0, 37.0)
     (book,) = read_origin_books(_write(tmp_path, blob))
-    assert book.values.shape == (3, 4)
-    assert book.values[0].tolist() == [0.0, 1.0, 2.0, 3.0] and book.values[1, 0] == 4.0
-    assert book.time.tolist() == [17.0, 27.0, 37.0]
-    assert book.metadata["origin_matrix"] == {
-        "rows": 3,
-        "cols": 4,
-        "x_range": [13.0, 21.0],
-        "y_range": [17.0, 37.0],
-    }
+    # The same map shape an `.opj` matrix gets: one row per cell, X / Y / Z.
+    assert book.labels == ("X", "Y", "Z")
+    assert book.values.shape == (12, 3)
+    assert book.values[:4, 2].tolist() == [0.0, 1.0, 2.0, 3.0] and book.values[4, 2] == 4.0
+    assert book.values[:4, 0].tolist() == [13.0, 15 + 2 / 3, 18 + 1 / 3, 21.0]  # X across a row
+    assert book.values[::4, 1].tolist() == [17.0, 27.0, 37.0]  # Y down the rows
+    meta = book.metadata
+    assert meta["is2D"] is True and meta["map_shape"] == [3, 4]
+    assert meta["source_format"] == "origin_opju"
+    assert meta["origin_matrix"]["coordinates_recovered"] is True
+    assert meta["origin_matrix"]["x_range"] == [13.0, 21.0]
+    assert meta["origin_matrix"]["y_range"] == [17.0, 37.0]
+    inventory = {e["name"]: e for e in meta["origin_books"]}
+    assert inventory["Mat7"]["matrix"] is True
+
+
+def test_matrix_without_coordinates_uses_cell_indices_and_says_so(tmp_path: Path) -> None:
+    blob = _matrix_project(4, 3, {"X1": "13"}, claim=(4, 3))
+    (book,) = read_origin_books(_write(tmp_path, blob))
+    assert book.metadata["origin_matrix"]["coordinates_recovered"] is False
+    assert book.metadata["origin_worksheet_losses"]["matrix_coordinates"]["columns"] == ["Mat7"]
+    assert book.values[:4, 0].tolist() == [1.0, 2.0, 3.0, 4.0]
+    assert book.values[::4, 1].tolist() == [1.0, 2.0, 3.0]
+
+
+def test_complex_matrix_keeps_its_imaginary_part(tmp_path: Path) -> None:
+    blob = _matrix_project(2, 2, {}, claim=(2, 2), complex_cells=True)
+    (book,) = read_origin_books(_write(tmp_path, blob))
+    assert book.labels == ("X", "Y", "Z", "Z (imaginary)")
+    assert book.values[:, 2].tolist() == [0.0, 1.0, 2.0, 3.0]
+    assert book.values[:, 3].tolist() == [-0.0, -10.0, -20.0, -30.0]
+    assert "complex_imaginary" not in book.metadata["origin_worksheet_losses"]  # nothing lost
 
 
 def test_matrix_without_all_four_coordinates_has_unknown_ranges() -> None:

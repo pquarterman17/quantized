@@ -40,8 +40,6 @@ import dataclasses
 from collections import OrderedDict
 from pathlib import Path
 
-import numpy as np
-
 from quantized.datastruct import DataStruct
 from quantized.io.origin_project.container import fallback
 from quantized.io.origin_project.opj import (
@@ -52,6 +50,7 @@ from quantized.io.origin_project.opj import (
     _group_named,
     _inventory,
 )
+from quantized.io.origin_project.opj_matrix import MatrixSheet, build_matrix_book
 from quantized.io.origin_project.opju_book_checks import (
     book_losses,
     pad_to_text,
@@ -192,7 +191,13 @@ def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
         side_books.setdefault(k, v)
     inventory = _inventory(books, books_meta, side_books)
     inventory += [
-        {"name": m.name, "long_name": m.name, "ncols": m.geometry.cols, "nrows": m.geometry.rows}
+        {
+            "name": m.name,
+            "long_name": m.name,
+            "ncols": m.geometry.cols,
+            "nrows": m.geometry.rows,
+            "matrix": True,
+        }
         for m in scan.matrices
     ]
     return _ParseResult(
@@ -264,55 +269,32 @@ def _book(parsed: _ParseResult, key: str, *, primary: bool = False) -> DataStruc
     return dataclasses.replace(ds, metadata={**ds.metadata, **extra})
 
 
-def _axis(span: tuple[float, float] | None, n: int) -> np.ndarray:
-    """``n`` evenly spaced coordinates over ``span`` (Origin maps a matrix's
-    first/last column and row onto X1/X2 and Y1/Y2), or the 1-based index
-    when the ranges are unknown."""
-    if span is None:
-        return np.arange(1, n + 1, dtype=np.float64)
-    return np.linspace(span[0], span[1], n, dtype=np.float64)
-
-
 def _matrix_book(parsed: _ParseResult, m: MatrixBook, *, primary: bool = False) -> DataStruct:
-    """A matrix object as a DataStruct: ``.time`` is the Y coordinate of each
-    row and every matrix column is one channel, labelled by its X coordinate.
-    ``metadata["origin_matrix"]`` carries the shape and ranges so a consumer
-    can tell a matrix from a worksheet."""
+    """A matrix object as the same map DataStruct an ``.opj`` matrix becomes
+    (``opj_matrix.build_matrix_book``): ``.values`` are X, Y, Z[, Z
+    imaginary] per cell, ``metadata["is2D"]``/``map_shape`` make it open as
+    a map, and ``metadata["origin_matrix"]`` carries the shape and whether
+    Origin's X1/X2/Y1/Y2 coordinates were recovered (1-based cell indices
+    otherwise)."""
     geo = m.geometry
-    xs = _axis(geo.x_range, geo.cols)
-    names = [str(i + 1) for i in range(geo.cols)]
-    meta: dict[str, object] = {
+    x1, x2 = geo.x_range if geo.x_range else (None, None)
+    y1, y2 = geo.y_range if geo.y_range else (None, None)
+    sheet = MatrixSheet(m.name, geo.rows, geo.cols, x1, x2, y1, y2)
+    imag = m.imag.reshape(-1) if m.imag is not None else None
+    ds = build_matrix_book(
+        m.name, m.name, sheet, m.values.reshape(-1), imag, parsed.inventory
+    )
+    losses = dict(parsed.losses.get(m.name, {}))
+    if not ds.metadata["origin_matrix"]["coordinates_recovered"]:
+        # Its X/Y are 1-based cell indices, not Origin's coordinates: say so.
+        losses["matrix_coordinates"] = [m.name]
+    extra: dict[str, object] = {
         "source_format": "origin_opju",
-        "origin_book": m.name,
-        "origin_book_long": m.name,
-        "origin_books": parsed.inventory,
-        "x_column_name": "",
-        "x_column_long": "Y",
-        "x_unit": "",
-        "x_column_unit": "",
-        "x_column_recovered": True,
-        "origin_column_names": names,
-        "column_designations": {},
-        "column_comments": {},
-        "origin_text_columns": {},
-        "origin_report_sheets": {},
-        "origin_matrix": {
-            "rows": geo.rows,
-            "cols": geo.cols,
-            "x_range": list(geo.x_range) if geo.x_range else None,
-            "y_range": list(geo.y_range) if geo.y_range else None,
-        },
-        "origin_worksheet_losses": book_losses(parsed.losses.get(m.name)),
+        "origin_worksheet_losses": book_losses(losses),
     }
     if primary:  # a project of matrices only: its first matrix is the primary
-        meta["origin_worksheet_fidelity"] = parsed.fidelity
-    return DataStruct(
-        time=_axis(geo.y_range, geo.rows),
-        values=m.values,
-        labels=tuple(f"X={x:.10g}" for x in xs),
-        units=("",) * geo.cols,
-        metadata=meta,
-    )
+        extra["origin_worksheet_fidelity"] = parsed.fidelity
+    return dataclasses.replace(ds, metadata={**ds.metadata, **extra})
 
 
 def _book_keys(parsed: _ParseResult) -> list[str]:

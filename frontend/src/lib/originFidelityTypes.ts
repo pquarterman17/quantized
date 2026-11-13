@@ -76,4 +76,14 @@ export interface OriginFidelityManifest {
   container_integrity?: OriginContainerIntegrity;
   /** `.opju` only (see ./originWorksheetTypes); absent for `.opj`. */
   worksheet?: OriginWorksheetFidelity;
+  /** `.opju` graph pages present but not recovered as figures
+   *  (io/origin_project/opju_graph_pages.py): the total, and the first pages
+   *  with Origin's own saved image where one is attributable. */
+  unrecovered_graph_count?: number;
+  unrecovered_graphs?: OriginUnrecoveredGraph[];
+}
+
+export interface OriginUnrecoveredGraph {
+  page_name: string;
+  saved_preview?: OriginSavedPreview;
 }
