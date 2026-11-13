@@ -7,7 +7,9 @@
 // failure-safe contract both bodies keep: build fully, then one
 // `recordHistory` and one `set()`.
 
+import { formulaExtension } from "../lib/formulaExt";
 import { plural } from "../lib/plural";
+import type { Dataset } from "../lib/types";
 import {
   buildTransferPackage,
   parseTransferPackage,
@@ -18,6 +20,7 @@ import {
   type TransferIdGenerators,
 } from "../lib/workbookTransfer";
 import type { AppState } from "./useApp";
+import { recomputeFormulaData } from "./computedColumns";
 import { nextDatasetId } from "./idSeq";
 import { nextWorkbookId } from "./workbookIds";
 import { notifyMigrationWarnings, toast } from "./toasts";
@@ -101,13 +104,27 @@ function succeed(get: SliceGet, result: PasteResult, headline: string): void {
   toast(msg, note ? "info" : "ok");
 }
 
+/** The pasted worksheets' sheet() links, made whole: a copied target that
+ *  was renamed on arrival ("Target (2)") shows its new name in the formula
+ *  text, and every pasted reader is recomputed — against the copy it now
+ *  reads, or as an error where the link was cut (lib/workbookTransferSignal). */
+function withRelinkedSheets(datasets: Dataset[], pasted: readonly Dataset[]): Dataset[] {
+  const ext = formulaExtension();
+  if (!ext || !pasted.some((d) => d.formulas?.some((f) => f.sheets?.length))) return datasets;
+  let out = datasets;
+  for (const d of pasted) out = ext.renameSheetRefs(out, d.id, d.name).datasets;
+  const readers = new Set(pasted.filter((d) => d.formulas?.some((f) => f.sheets?.length)).map((d) => d.id));
+  const relinked = out;
+  return ext.withSheetDatasets(relinked, () => relinked.map((d) => (readers.has(d.id) ? recomputeFormulaData(d) : d)));
+}
+
 /** Merge a paste result into the store's arrays in ONE `set()` — the "swap
  *  once" half of the failure-safe contract; `recordHistory` must already
  *  have been called by the caller, immediately before this. */
 function applyPasteResult(set: SliceSet, result: PasteResult): void {
   set((s) => ({
     workbooks: [...s.workbooks, result.workbook],
-    datasets: [...s.datasets, ...result.datasets],
+    datasets: withRelinkedSheets([...s.datasets, ...result.datasets], result.datasets),
     editableFigures: [...s.editableFigures, ...result.editableFigures],
     reports: [...s.reports, ...result.reports],
     quickPlotTemplates: [...s.quickPlotTemplates, ...result.quickPlotTemplates],

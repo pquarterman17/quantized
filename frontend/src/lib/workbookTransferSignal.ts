@@ -35,4 +35,13 @@ export function rewriteTransferredDatasetRefs(
     next.corrections = undefined;
   }
   next.versionOf = rewrite(source.versionOf);
+  // sheet("Name", L) links (lib/sheetRefs.ts) follow the copy like every other
+  // reference: a link to a worksheet that was copied too points at the COPY;
+  // one to a worksheet outside the copy is cut (`id: null` — the formula
+  // errors) and counted by `rewrite`, never left reading the original.
+  if (source.formulas?.some((f) => f.sheets?.length)) {
+    next.formulas = source.formulas.map((f) =>
+      f.sheets?.length ? { ...f, sheets: f.sheets.map((b) => ({ ...b, id: b.id === null ? null : (rewrite(b.id) ?? null) })) } : f,
+    );
+  }
 }
