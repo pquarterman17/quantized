@@ -604,7 +604,8 @@ body {
   display: flex;
 }
 /* An unresolved graph has nothing to open (in the tree its row stays a
-   focusable aria-disabled treeitem). Keep its recovery controls visible so
+   focusable treeitem that DESCRIBES its state -- never aria-disabled, which
+   would disable its Recover button too). Keep its recovery controls visible so
    keyboard/touch users can still choose a source. */
 .qzk-fig-row-tree.unresolved .qzk-origin-figure-actions {
   display: flex;
@@ -615,8 +616,8 @@ body {
 /* In the tree the whole recovered-graph row is the treeitem (name + action
    strip), so focus and the unresolved dimming key off the row wrapper. */
 .qzk-fig-row-tree:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius-sm); }
-.qzk-fig-row-tree[aria-disabled="true"] > .qzk-fig-item { opacity: 0.45; }
-.qzk-fig-row-tree[aria-disabled="true"] > .qzk-fig-item:hover { border-color: var(--border-soft); }
+.qzk-fig-row-tree.unresolved > .qzk-fig-item { opacity: 0.45; }
+.qzk-fig-row-tree.unresolved > .qzk-fig-item:hover { border-color: var(--border-soft); }
 .qzk-fig-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qzk-fig-meta { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-faint); font-size: var(--type-nano); font-family: var(--font-mono); }
 .qzk-origin-figure-row { min-width: 0; }

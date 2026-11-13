@@ -249,8 +249,14 @@ describe("FigureRow — PR C additions", () => {
       originFigures: [emptyEntry],
     });
     const { container } = render(<FigureRow entry={emptyEntry} treeMode />);
+    // The name part is the (dimmed) unavailable thing, never the row's actions.
     expect(container.querySelector('[data-lib-row="origin-figure:g2"]')).toHaveAttribute("aria-disabled", "true");
-    fireEvent.click(screen.getByRole("button", { name: /Recover unresolved Origin bindings/ }));
+    // Recover… is the row's one action: enabled, a tab stop of the row, and
+    // under no aria-disabled ancestor (which disables descendants for AT).
+    const recover = screen.getByRole("button", { name: /Recover unresolved Origin bindings/ });
+    expect(recover).toBeEnabled();
+    expect(recover.closest('[aria-disabled="true"]')).toBeNull();
+    fireEvent.click(recover);
     expect(await screen.findByText("Saved columns found, but this layer has no numeric data")).toBeVisible();
     expect(screen.getByRole("button", { name: "Inspect columns" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Rebuild plot" })).toBeDisabled();

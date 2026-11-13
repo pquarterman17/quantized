@@ -87,9 +87,12 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
   const treeRowProps = treeItem && {
     ...treeItem,
     "data-lib-row": `origin-figure:${entry.id}`,
-    // An unresolved graph stays FOCUSABLE (aria-disabled, U5): a disabled
-    // button can't take focus, so arrows would skip it. Open is a no-op.
-    "aria-disabled": !resolved ? true : undefined,
+    // An unresolved graph stays FOCUSABLE (U5): a disabled button can't take
+    // focus, so arrows would skip it. Open is a no-op. Its state is DESCRIBED,
+    // not aria-disabled: aria-disabled on the treeitem disables every
+    // descendant too, so its own Recover… button read as unavailable to
+    // screen readers (and to Playwright) — the one action the row offers.
+    "aria-description": !resolved ? "unresolved — no matching imported book; use Recover… to choose a source" : undefined,
     onClick: (e: MouseEvent) => { if (!onAction(e)) select(); },
     onDoubleClick: (e: MouseEvent) => { if (!onAction(e)) openAndRemember(); },
     onContextMenu: select,
