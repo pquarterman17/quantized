@@ -37,6 +37,9 @@
 //    so via `setStatus`. Cite only what a mechanism actually covers.
 
 import { columnRemovalRefsPatch } from "./columnRemovalRefs";
+import { withRecomputedFormulas } from "./computedColumns";
+import { baseColumns } from "../lib/formula";
+import { sheetNamesRead } from "../lib/formulaRefs";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 import { rowsChangedGuard } from "./corrections";
 import { plural } from "../lib/plural";
@@ -161,7 +164,18 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
         failed.set(id, `recalculation failed: ${message(e)}`);
       }
     } else {
-      set((s) => ({ staleDatasets: s.staleDatasets.filter((x) => x !== id) }));
+      // Worksheet audit #17: a worksheet whose formulas read ANOTHER
+      // worksheet (`sheet("Name", A)`) re-evaluates them against its current
+      // contents; anything else stale here has nothing of its own to re-run.
+      const readsSheets = d?.formulas?.some((f) => sheetNamesRead(f.expr).length > 0);
+      set((s) => ({
+        staleDatasets: s.staleDatasets.filter((x) => x !== id),
+        ...(readsSheets ? {
+          datasets: s.datasets.map((x) => (x.id === id && x.formulas
+            ? { ...x, ...withRecomputedFormulas(baseColumns(x.data, x.formulas.length), x.formulas) }
+            : x)),
+        } : {}),
+      }));
     }
   }
   if (failed.size > 0) {

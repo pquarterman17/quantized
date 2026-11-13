@@ -15,10 +15,11 @@ import type { BlockOpsApi } from "./useWorksheetBlockOps";
 const FORMULA_HELP = [
   "Operators: + - * / // % ^ **   Comparisons: < <= > >= == !=   Logic: and or not",
   "Functions: sin cos tan asin acos atan atan2 sinh cosh tanh exp log log10 log2 sqrt abs sign floor ceil hypot pow min max",
-  "if(cond, a, b) or where — NaN cond -> NaN · fit(\"Model\", \"A\") fitval(\"Model\", x)",
-  "Aggregates (scalar, same value every row): mean(A) sd(A) min(A) max(A) median(A) sum(A) count(A)",
-  "Row: row() is 1-based · lag(A, k) — NaN past the edge · diff(A) = A - lag(A, 1)",
-  "Variables: x and the channel letters A, B, C, …",
+  "if(cond, a, b), where, or cond ? a : b — NaN cond -> NaN · fit(\"Model\", \"A\") fitval(\"Model\", x)",
+  "Aggregates (scalar, same value every row): mean(A) sd(A) min(A) max(A) median(A) sum(A) count(A) — over rows i..j: sum(A[i:j])",
+  "Row: row() is 1-based · A[i] = row i (1-based) · lag(A, k) — NaN past the edge · diff(A) = A - lag(A, 1) · cumsum(A)",
+  "Variables: x and the channel letters A, B, C, … · col(A) · col(\"Long Name\") · another sheet: sheet(\"Name\", A)",
+  "Text: B == \"label\" (categorical) · col(\"Text column\") != \"a\" — == and != only",
 ].join("\n");
 
 export interface WorksheetToolbarProps {

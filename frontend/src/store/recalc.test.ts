@@ -134,6 +134,18 @@ describe("recalc engine (#1)", () => {
     expect(useApp.getState().status).toMatch(/mode None tracks no changes/);
   });
 
+  it("a formula reading another worksheet (sheet(\"Name\", A)) follows that worksheet's edits (worksheet audit #17)", async () => {
+    useApp.setState({ recalcMode: "manual", datasets: [ds("src", { name: "Run 2" }), ds("rd", { name: "reader" })] });
+    expect(useApp.getState().addFormula("rd", "f", 'sheet("Run 2", A) * 10')).toBe(true);
+    const fCol = () => useApp.getState().datasets.find((d) => d.id === "rd")!.data.values.map((r) => r[1]);
+    expect(fCol()).toEqual([20, 40, 60]);
+    useApp.getState().setCellValue("src", 0, 0, 7);
+    expect(useApp.getState().staleDatasets).toContain("rd");
+    await useApp.getState().recalcNow();
+    expect(fCol()).toEqual([70, 40, 60]);
+    expect(useApp.getState().staleDatasets).toEqual([]);
+  });
+
   it("the recalc-mode cycle names off as Origin's None", () => {
     useApp.setState({ recalcMode: "manual" });
     const cmds = buildDataCommands(useApp.getState);

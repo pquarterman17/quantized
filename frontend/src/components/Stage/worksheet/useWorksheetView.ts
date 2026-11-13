@@ -453,7 +453,10 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     const { addDerivedColumn } = await import("../../../store/derivedColumnRun");
     const r = await addDerivedColumn(ds.id, { name, expr, propagate: errors });
     if (r.ok) setStatus(r.message);
-    else setErr(r.error);
+    // Added, but with a warning (a unit contradiction): shown inline, where
+    // the Add happened, not only in the status bar (worksheet audit #17).
+    if (r.ok && r.warning) setErr(r.warning);
+    if (!r.ok) setErr(r.error);
     return r.ok;
   }
 

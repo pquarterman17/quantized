@@ -88,7 +88,9 @@ describe("commit", () => {
     ]);
   });
   it("a refusal changes nothing and records nothing", async () => {
-    const r = await addDerivedColumn("d", { name: "bad", expr: "A + C", propagate: false });
+    // A recorded step that does not allow the mismatch still refuses (an
+    // interactive Add adds it without a unit — worksheet audit #17).
+    const r = await addDerivedColumn("d", { name: "bad", expr: "A + C", propagate: false, allowUnitMismatch: false });
     expect(r).toMatchObject({ ok: false, error: /units differ/ });
     expect(state().formulas).toBeUndefined();
     expect(useApp.getState().macroSteps).toEqual([]);
@@ -305,12 +307,15 @@ describe("review round: edits, copies, refresh side effects", () => {
   });
 });
 
-describe("unit contradictions: refused once, added on a second ask", () => {
-  it("the same formula submitted again is added with no unit, and the step replays that choice", async () => {
+describe("unit contradictions: added on the FIRST Add, with the warning inline (worksheet audit #17)", () => {
+  it("is added with no unit and a warning, and the step replays that choice", async () => {
     const first = await addDerivedColumn("d", { name: "S", expr: "A + C", propagate: false });
-    expect(first).toMatchObject({ ok: false, error: /units differ .* \(or press Add again to add it without a unit\)/ });
-    const second = await addDerivedColumn("d", { name: "S", expr: "A + C", propagate: false });
-    expect(second).toMatchObject({ ok: true, message: expect.stringMatching(/added WITHOUT a unit, as asked/) });
+    expect(first).toMatchObject({
+      ok: true,
+      message: expect.stringMatching(/added WITHOUT a unit/),
+      warning: expect.stringMatching(/^added "S" without a unit: units differ/),
+    });
+    expect(state().formulas).toHaveLength(1);
     expect(state().formulas![0].unit).toBeUndefined();
     const step = useApp.getState().macroSteps.at(-1)!;
     expect(step.params).toMatchObject({ allowUnitMismatch: true });
@@ -320,10 +325,8 @@ describe("unit contradictions: refused once, added on a second ask", () => {
     const refused = await executeSteps([makeStep("expression", step.label, step.code, { ...step.params, allowUnitMismatch: false })], "o");
     expect(Object.values(refused.log)[0]).toMatchObject({ status: "failed" });
   });
-  it("a different formula in between resets the second-ask", async () => {
-    await addDerivedColumn("d", { name: "S", expr: "A + C", propagate: false });
-    await addDerivedColumn("d", { name: "T", expr: "A * 2", propagate: false });
-    expect(await addDerivedColumn("d", { name: "S", expr: "A + C", propagate: false })).toMatchObject({ ok: false });
+  it("a formula whose units agree carries no warning", async () => {
+    expect(await addDerivedColumn("d", { name: "T", expr: "A * 2", propagate: false })).not.toHaveProperty("warning");
   });
 });
 

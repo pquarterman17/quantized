@@ -14,6 +14,7 @@
 // numbers (GridRow.tsx renders `{r + 1}` for the 0-based original row index).
 
 import { AGGREGATE_NAMES, computeAggregate, type AggregateName } from "./formulaAggregates";
+import { tryParseAggregateRange, tryParseRefCall } from "./formulaRefs";
 import type { FormulaFn, Tok } from "./formulaTypes";
 
 /** The subset of the parser's token-stream operations these special forms
@@ -126,6 +127,10 @@ export function tryParseRowAwareCall(
     };
     return { fn };
   }
+  // Worksheet audit #17 (lib/formulaRefs.ts): cumsum / sheet / col, and an
+  // aggregate over a 1-based row range, `sum(A[1:10])`.
+  const ref = tryParseRefCall(fname, ops) ?? tryParseAggregateRange(fname, ops, consts);
+  if (ref) return { fn: ref };
   if (AGGREGATE_NAMES.has(fname)) {
     // Bare-single-column form (`mean(A)`, and `min(A)`/`max(A)` in aggregate
     // mode): a name token immediately followed by ")".

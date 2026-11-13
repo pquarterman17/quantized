@@ -7,9 +7,14 @@
 // ("emu/g", "V·A", "m/s²", "J/(mol·K)", "K^0.5").
 //
 // Deliberate limits — each one refuses or says so, never guesses:
-//   - NO conversion and NO prefix algebra. "mA" and "A" are different
-//     symbols, so `A + B` over mA and A is REFUSED ("convert first"), and
-//     `mA * A` is "mA·A", not "10⁻³ A²". Honest, if unsimplified.
+//   - NO conversion and NO prefix algebra between columns. "mA" and "A" are
+//     different symbols, so `A + B` over mA and A is REFUSED ("convert
+//     first"), and `mA * A` is "mA·A", not "10⁻³ A²". Honest, if unsimplified.
+//     The one prefix rule (worksheet audit #17): scaling a column by an exact
+//     power of 1000 is a unit CHANGE — `T/1000` over K is in kK, `M*1000`
+//     over emu in memu — when the unit is one known symbol (`withPrefix`);
+//     otherwise the result has NO unit and says why. (It used to keep "K",
+//     labelling 0.3 as 0.3 K.) Any other constant factor keeps the unit.
 //   - A unit text that is not a clean product/quotient ("J/mol K" — is that
 //     J/(mol·K)?, "cm-3", "a.u.") is ONE opaque symbol: carried through
 //     algebra intact and parenthesized where needed, never split.
@@ -50,6 +55,10 @@ const AFFINE = new Set(["°C", "°F", "degC", "degF", "C°"]);
 const TRANSCENDENTAL = new Set(["exp", "log", "ln", "log10", "log2", "sinh", "cosh", "tanh", "asin", "acos", "atan", "arcsin", "arccos", "arctan"]);
 const TRIG = new Set(["sin", "cos", "tan"]);
 const SAME_UNIT = new Set(["abs", "absolute", "floor", "ceil"]);
+// SI prefixes by power of ten, and the base symbols a prefix may attach to
+// (audit #17) — short on purpose: "min", "deg" or "a.u." never get one.
+const PREFIX: Record<number, string> = { [-24]: "y", [-21]: "z", [-18]: "a", [-15]: "f", [-12]: "p", [-9]: "n", [-6]: "µ", [-3]: "m", 3: "k", 6: "M", 9: "G", 12: "T", 15: "P", 18: "E", 21: "Z", 24: "Y" };
+const PREFIXABLE = new Set(["K", "Oe", "T", "G", "emu", "A", "V", "W", "Hz", "s", "g", "m", "Pa", "eV", "J", "N", "Ω", "F", "C", "S", "mol", "L", "bar", "Wb", "H", "rad"]);
 const MATCHING = new Set(["min", "max", "hypot"]);
 
 const clean = (e: number): number => {
@@ -175,6 +184,19 @@ function scale(a: Dim, k: number): Dim {
   for (const [s, e] of a) if (clean(e * k) !== 0) out.set(s, clean(e * k));
   return out;
 }
+/** `dim` re-expressed after the VALUE was multiplied by 10^shift (shift a
+ *  multiple of 3): kK for K/1000. Null when no clean prefixed symbol exists. */
+function withPrefix(dim: Dim, shift: number): Dim | null {
+  if (dim.size !== 1) return null;
+  const [[sym, e]] = [...dim];
+  if (e !== 1) return null;
+  const own = Object.entries(PREFIX).find(([, p]) => sym.startsWith(p) && PREFIXABLE.has(sym.slice(p.length)));
+  const [base, power] = PREFIXABLE.has(sym) ? [sym, 0] : own ? [sym.slice(own[1].length), Number(own[0])] : [null, 0];
+  if (!base) return null;
+  const next = power - shift;
+  if (next === 0) return new Map([[base, 1]]);
+  return PREFIX[next] ? new Map([[PREFIX[next] + base, 1]]) : null;
+}
 const sameDim = (a: Dim, b: Dim): boolean => a.size === b.size && [...a].every(([s, e]) => b.get(s) === e);
 const DIMLESS: U = { t: "known", dim: new Map() };
 // Finding 2: a comparison/row()/count()/sign() result is a plain NUMBER
@@ -278,6 +300,15 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
         if (a.t === "lit" && b.t === "lit") return { t: "lit" };
         affine(a, `"${printExpr(n)}"`);
         affine(b, `"${printExpr(n)}"`);
+        // A power-of-1000 factor is a unit change (module header).
+        const [knownSide, k] = a.t === "lit" && n.op === "*" ? [b, constValue(n.a)] : b.t === "lit" ? [a, constValue(n.b)] : [null, null];
+        const shift = k !== null && k > 0 && k !== 1 ? Math.round(Math.log10(k)) * (n.op === "/" ? -1 : 1) : 0;
+        if (knownSide?.t === "known" && knownSide.dim.size > 0 && shift % 3 === 0 && shift !== 0 && Math.abs(Math.log10(k!) - Math.round(Math.log10(k!))) < 1e-9) {
+          const prefixed = withPrefix(knownSide.dim, shift);
+          if (prefixed) return { t: "known", dim: prefixed };
+          warn(`"${printExpr(n)}" rescales ${show(knownSide)} by 10^${shift}, and no prefixed unit expresses that; the result has no unit — set one by hand`);
+          return { t: "unknown" };
+        }
         return { t: "known", dim: combine(ad, bd, n.op === "*" ? 1 : -1) };
       }
       case "cmp":
@@ -303,6 +334,16 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
         return u({ k: "var", name: n.col });
       case "agg":
         return n.fn === "count" ? LIT : u({ k: "var", name: n.col });
+      case "cumsum":
+        return u({ k: "var", name: n.col });
+      case "index":
+        u(n.i);
+        return u({ k: "var", name: n.col });
+      case "sheet":
+        warn(`${printExpr(n)} reads another worksheet; its unit is not checked, so the result's unit is unknown`);
+        return { t: "unknown" };
+      case "textcmp":
+        return LIT;
       case "fit":
         warn(`fit("${n.model}", "${n.param}"): fitted parameters carry no recorded unit, so the result's unit is unknown`);
         return { t: "unknown" };

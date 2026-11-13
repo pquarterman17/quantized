@@ -355,15 +355,16 @@ describe("Worksheet computed columns (recompute)", () => {
     useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data: { ...data, units: ["V", "V"] } }] });
   });
 
-  it("derives the new column's unit and refuses mismatched units with the reason (P2.5)", async () => {
+  it("derives the new column's unit; mismatched units add on the FIRST click, without a unit, the reason inline (P2.5, audit #17)", async () => {
     render(<Worksheet />);
     await addColumn("A * B", "P");
     expect(useApp.getState().datasets[0].formulas?.[0]).toMatchObject({ name: "P", unit: "V²", derived: { unitAuto: true } });
     useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data }] }); // u1, u2
     fireEvent.change(screen.getByPlaceholderText("2*A + sqrt(B)"), { target: { value: "A + B" } });
     fireEvent.click(screen.getByRole("button", { name: /Add column/ }));
-    expect(await screen.findByText(/units differ/)).toBeInTheDocument();
-    expect(useApp.getState().datasets[0].formulas).toBeUndefined();
+    expect(await screen.findByText(/without a unit: units differ/)).toBeInTheDocument();
+    expect(useApp.getState().datasets[0].formulas).toHaveLength(1);
+    expect(useApp.getState().datasets[0].formulas![0].unit).toBeUndefined();
   });
 
   it("± errors adds a bound σ column (first-order, uncorrelated) in one undo step (P2.5)", async () => {

@@ -15,6 +15,7 @@
 // breaks) a formula keeps both in sync.
 
 import { applyFormulasWithErrors, baseColumns, channelLetter, referencedColumns } from "../lib/formula";
+import { resolveColumnNames, setFormulaSheetResolver } from "../lib/formulaRefs";
 import { remapSurvivingFormulas } from "../lib/formulaRename";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
@@ -106,11 +107,16 @@ export function refreshFitRefsLater(id: string, get: SliceGet): void {
 }
 
 export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): ComputedColumnsSlice {
+  // `sheet("Name", A)` (worksheet audit #17) finds a worksheet by its Library
+  // name in the live store.
+  setFormulaSheetResolver((name) => get().datasets.find((d) => d.name === name)?.data);
   return {
-    addFormula: (id, name, expr) => {
+    addFormula: (id, name, rawExpr) => {
       const ds = get().datasets.find((d) => d.id === id);
       if (!ds) return false;
-      if (resolvePendingEdit(get, ds, "adding a column", () => get().addFormula(id, name, expr))) return true;
+      if (resolvePendingEdit(get, ds, "adding a column", () => get().addFormula(id, name, rawExpr))) return true;
+      // col("Long Name") is stored as the column's letter (lib/formulaRefs.ts).
+      const expr = resolveColumnNames(rawExpr, ds.data.labels, channelLetter);
       const deps = referencedColumns(expr).letters;
       const target = formulaLetter(ds.data.labels.length, ds.formulas?.length ?? 0, ds.formulas?.length ?? 0);
       for (const dep of deps) {
@@ -150,7 +156,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
         return true;
       }
       const name = patch.name?.trim() || current.name;
-      const expr = patch.expr ?? current.expr;
+      const expr = patch.expr === undefined ? current.expr : resolveColumnNames(patch.expr, ds.data.labels, channelLetter);
       // P2.5: an auto-derived unit, the σ link and the notes describe the OLD
       // formula, so an expr edit drops them (unlinking a σ derived from this
       // column, lib/formula.ts) and keeps only the fitted-value snapshots. A

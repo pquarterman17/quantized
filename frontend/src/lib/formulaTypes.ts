@@ -21,6 +21,15 @@ export interface FormulaRowContext {
   /** P2.5: the fitted values this column was resolved against
    *  (`ComputedColumn.derived.fits`) — what `fit()` / `fitval()` read. */
   fits?: readonly FitRefSnapshot[];
+  /** Worksheet audit #17 (lib/formulaRefs.ts): a categorical channel's level
+   *  table by letter, so `A == "label"` compares the row's LABEL. */
+  levels?: Record<string, readonly string[]>;
+  /** Text (non-numeric) columns by name, one string per row — what
+   *  `col("Name") == "text"` reads. */
+  text?: Record<string, readonly string[]>;
+  /** Another worksheet's columns by letter (+ `x`), by its name — what
+   *  `sheet("Name", A)` reads; undefined when no worksheet has that name. */
+  sheet?: (name: string) => Record<string, readonly number[]> | undefined;
 }
 
 export type FormulaFn = (ctx: Record<string, number>, rowCtx?: FormulaRowContext) => number;

@@ -22,6 +22,7 @@ import { PropagationError, propagateSigma, type SigmaInput } from "./derivedProp
 import { deriveUnit } from "./derivedUnits";
 import { inferErrorBindings } from "./errorRoles";
 import { channelLetter, compileFormula, referencedColumns } from "./formula";
+import { resolveColumnNames } from "./formulaRefs";
 import { resolveFits } from "./derivedFitRefs";
 import { channelIndexOf } from "./formulaRename";
 import type { DerivedSpec } from "./formulaTypes";
@@ -34,8 +35,9 @@ export interface DeriveRequest {
   /** Also derive the propagated-uncertainty column. */
   propagate: boolean;
   /** Add the column even though its operands' units contradict each other —
-   *  with NO unit and the contradiction kept as a note. The user asked twice
-   *  (store/derivedColumnRun.ts), or a recorded step said so. */
+   *  with NO unit and the contradiction kept as a note. Interactive adds do
+   *  (store/derivedColumnRun.ts shows the contradiction inline), or a
+   *  recorded step said so. */
   allowUnitMismatch?: boolean;
 }
 
@@ -100,7 +102,8 @@ function upstreamOf(ds: Dataset, letter: string): Set<string> {
 }
 
 export function deriveColumns(ds: Dataset, req: DeriveRequest): DeriveOutcome {
-  const expr = req.expr.trim();
+  // col("Long Name") is stored as the column's letter (lib/formulaRefs.ts).
+  const expr = resolveColumnNames(req.expr.trim(), ds.data.labels, channelLetter);
   const name = req.name.trim() || expr;
   try {
     compileFormula(expr);
@@ -134,7 +137,7 @@ export function deriveColumns(ds: Dataset, req: DeriveRequest): DeriveOutcome {
   });
   if (unitResult.error && !req.allowUnitMismatch) return { ok: false, error: unitResult.error, unitMismatch: true };
   const { unit } = unitResult;
-  const notes = [...unitResult.warnings, ...(unitResult.error ? [`${unitResult.error}; added WITHOUT a unit, as asked`] : [])];
+  const notes = [...unitResult.warnings, ...(unitResult.error ? [`${unitResult.error}; added WITHOUT a unit`] : [])];
   const spec = (extra: DerivedSpec, colNotes: string[]): DerivedSpec | undefined => {
     const out: DerivedSpec = { ...(unit ? { unitAuto: true } : {}), ...(colNotes.length ? { notes: colNotes } : {}), ...extra };
     return Object.keys(out).length ? out : undefined;

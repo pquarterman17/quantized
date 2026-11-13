@@ -17,6 +17,11 @@
 //   pypow  := atom ('**' unary)?            // P2.5, Python's rule
 //   atom   := number | name ['(' args ')'] | '(' or ')'
 //
+// Worksheet audit #17: `c ? a : b` (the conditional, = `if`; lowest
+// precedence, right-associative, the top of the grammar), col(A) /
+// col("Name"), A[i], agg(A[i:j]), cumsum(A), sheet("Name", A) and text
+// comparison — semantics documented in lib/formulaRefs.ts.
+//
 // P2.5 (2026-09-27) Python-like syntax — tokenizer additions are documented
 // in formulaTokenize.ts (`**`, `//`, `np.` prefixes, "text", `.member`);
 // `where(c, a, b)` is `if`; fitted-value references `fit("Model", "p")` /
@@ -100,11 +105,13 @@
 // bare column argument.
 
 import { tryParseFitRef } from "./formulaFitRefs";
+import { parseIndexSuffix, resolveColumnNames, rowContextExtras, tryParseTextCompare } from "./formulaRefs";
 import { CONSTS, FUNCS } from "./formulaFuncs";
 import { tryParseRowAwareCall, type ParserOps } from "./formulaRowFns";
 import { tokenize } from "./formulaTokenize";
 import { applyAnd, applyCompare, applyNot, applyOr, COMPARE_OPS, type FormulaFn, type Tok } from "./formulaTypes";
 import { baseColumns, carryComputedLevelOrder, type StrippableData } from "./formulaInputs";
+import { originTextColumns } from "./originTextColumns";
 import { computeRecodeAppend } from "./recode";
 import type { ComputedColumn, DataStruct } from "./types";
 
@@ -134,6 +141,16 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
   const isKeyword = (t: Tok | undefined, kw: string): boolean => !!t && t.t === "name" && t.v === kw;
   const ref = (name: string): void => onRef?.(name, pos - 1); // pos-1: ref() always fires right after eat()
 
+  // `c ? a : b` (audit #17): `if(c, a, b)`, NaN when c is NaN.
+  function parseTernary(): FormulaFn {
+    const cond = parseOr();
+    if (!(peek()?.t === "op" && peek()?.v === "?")) return cond;
+    eat();
+    const a = parseTernary();
+    expectOp(":");
+    const b = parseTernary();
+    return (c, ex) => ((cv) => (Number.isNaN(cv) ? NaN : cv !== 0 ? a(c, ex) : b(c, ex)))(cond(c, ex));
+  }
   function parseOr(): FormulaFn {
     let left = parseAnd();
     while (isKeyword(peek(), "or")) {
@@ -163,6 +180,8 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
     return parseComparison();
   }
   function parseComparison(): FormulaFn {
+    const text = tryParseTextCompare(rowFnOps); // `A == "label"` (audit #17)
+    if (text) return text;
     const left = parseArith();
     const t = peek();
     if (t && t.t === "op" && COMPARE_OPS.has(t.v)) {
@@ -235,14 +254,14 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
   // Bridges this closure's private token-stream ops to formulaRowFns.ts's
   // ParserOps capability interface, so the row-aware special forms (if /
   // row / lag / diff / the aggregates) parse against this SAME token stream.
-  const rowFnOps: ParserOps = { peek, peekAt, eat, expectOp, parseExpr: () => parseOr(), ref, nonLocal: onNonLocal ?? (() => {}) };
+  const rowFnOps: ParserOps = { peek, peekAt, eat, expectOp, parseExpr: () => parseTernary(), ref, nonLocal: onNonLocal ?? (() => {}) };
 
   function parseAtom(): FormulaFn {
     const t = eat();
     if (!t) throw new Error("unexpected end of expression");
     if (t.t === "num") return () => t.v;
     if (t.t === "op" && t.v === "(") {
-      const e = parseOr();
+      const e = parseTernary();
       expectOp(")");
       return e;
     }
@@ -258,6 +277,7 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
       }
       const name = t.v;
       ref(name);
+      if (peek()?.t === "op" && peek()?.v === "[") return parseIndexSuffix(name, rowFnOps); // A[i]
       return (c) => {
         const v = c[name];
         if (v === undefined) throw new Error(`unknown variable "${name}"`);
@@ -278,10 +298,10 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
     if (!fn) throw new Error(`unknown function "${fname}"`);
     const args: FormulaFn[] = [];
     if (!(peek()?.t === "op" && peek()?.v === ")")) {
-      args.push(parseOr());
+      args.push(parseTernary());
       while (peek()?.t === "op" && peek()?.v === ",") {
         eat();
-        args.push(parseOr());
+        args.push(parseTernary());
       }
     }
     expectOp(")");
@@ -290,7 +310,7 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
 
   // Parse errors here are unpositioned (bytes: this is eager); the authoring
   // path adds the column from the lazy tree parser (lib/derivedColumn.ts).
-  const fn = parseOr();
+  const fn = parseTernary();
   if (pos !== toks.length) throw new Error("trailing characters in expression");
   return fn;
 }
@@ -379,7 +399,7 @@ function computeFormulas(
     } else {
       let fn: FormulaFn | null;
       try {
-        fn = compileFormula(f.expr);
+        fn = compileFormula(resolveColumnNames(f.expr, labels, channelLetter));
       } catch (e) {
         fn = null;
         errors[f.name] = e instanceof Error ? e.message : "formula failed to compile";
@@ -396,6 +416,7 @@ function computeFormulas(
       labels.forEach((_, c) => {
         colSnapshot[channelLetter(c)] = values.map((row) => row[c]);
       });
+      const extras = rowContextExtras(labels, catLevels, originTextColumns(base), channelLetter);
       colValues = [];
       for (let r = 0; r < rowCount; r++) {
         let v = Number.NaN;
@@ -405,7 +426,7 @@ function computeFormulas(
             ctx[channelLetter(c)] = values[r]?.[c];
           });
           try {
-            v = fn(ctx, { row: r, rowCount, columns: colSnapshot, fits: f.derived?.fits });
+            v = fn(ctx, { row: r, rowCount, columns: colSnapshot, fits: f.derived?.fits, ...extras });
           } catch (e) {
             v = Number.NaN;
             // First failing row wins (later rows' errors are usually the same
