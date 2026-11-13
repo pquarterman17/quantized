@@ -44,13 +44,21 @@ from __future__ import annotations
 
 import re
 import struct
+import threading
 
 import numpy as np
 from numpy.typing import NDArray
 
 from quantized.io.origin_project.container import ORIGIN_MISSING, plausible_column
 
-__all__ = ["CodecError", "curve_plot_style", "decode_stream", "scan_columns", "tail_start"]
+__all__ = [
+    "CodecError",
+    "curve_plot_style",
+    "decode_stream",
+    "scan_columns",
+    "scan_marked_columns",
+    "tail_start",
+]
 
 _MASK = 0xFFFFFFFFFFFFFFFF
 _TABLE_MASK = (1 << 12) - 1  # 2**12-entry FCM/DFCM hash tables
@@ -156,6 +164,27 @@ def _zigzag(v: int) -> int:
     """ZigZag-decode a varint (0,1,2,3,… → 0,−1,1,−2,…)."""
     return (v >> 1) ^ -(v & 1)
 
+
+# ── the marker-anchored scan (FROZEN) ─────────────────────────────────────────
+#
+# Everything from here to ``tail_start`` is the original marker-anchored
+# column scan, and it decodes exactly what it decoded when it shipped (the
+# only change is that ``scan_marked_columns`` also reports each marker's
+# offset). It is deliberately NOT widened with the value tags and record
+# forms ``opju_values`` / ``opju_records`` now understand, because two
+# validated consumers are defined in terms of exactly the set of columns
+# THIS scan decodes:
+#
+# * ``opju_curves``' curve->column binding counts its ``y_ord`` ordinal over
+#   "the columns ``scan_columns`` decoded, in book-appearance order". Decoding
+#   more columns here would silently renumber every later column and rebind
+#   curves — a graph-semantics change that needs its own oracle and its own
+#   handoff (CLAUDE.md "Origin graph-recovery safety").
+# * ``windows_opju`` bounds its designation-marker search with ``tail_start``.
+#
+# Worksheet DATA no longer comes from this scan: ``opju.py`` reads it through
+# ``opju_worksheet.scan_worksheet`` (the structural path), which falls back to
+# this scan only for a record the structural path could not decode.
 
 # Repeat-run value tags: tag byte → payload length. The payload holds the
 # float64's TOP bytes (rest zero) — the compact forms cover round values.
@@ -267,22 +296,18 @@ def _plausible(vals: NDArray[np.float64]) -> bool:
     return plausible_column(vals, allow_all_nan=False)
 
 
-def scan_columns(b: bytes) -> list[tuple[str, NDArray[np.float64]]]:
-    """Decode every ``<Book>_<Col>`` numeric column in a CPYUA ``.opju`` file.
-
-    Records are walked in file order with a cursor: each decoded stream advances
-    the cursor past its own bytes, so the false ``ff ff`` markers buried in long
-    residual streams are skipped. Every real record is labelled by the nearest
-    preceding length-prefixed dataset name (validated on the local corpus: the
-    owning ``<Book>_<Col>`` name always leads its record). Streams that fail the
-    codec or decode to garbage are dropped — never emitted.
-    """
+def scan_marked_columns(b: bytes) -> list[tuple[int, str, NDArray[np.float64]]]:
+    """:func:`scan_columns` with each column's ``ff ff`` marker offset —
+    ``(marker, name, values)`` in file order. The offset lets
+    ``opju_worksheet`` tell which dataset record a marker-decoded column
+    belongs to (see the FROZEN note above: this is the same walk, not a
+    second decoder)."""
     names = [
         (m.start(), m.group(0).decode("latin1"))
         for m in _NAME.finditer(b)
         if m.start() > 0 and b[m.start() - 1] == len(m.group(0))
     ]
-    out: list[tuple[str, NDArray[np.float64]]] = []
+    out: list[tuple[int, str, NDArray[np.float64]]] = []
     cursor = 0
     for marker in _records(b):
         if marker < cursor:  # a false marker inside an already-decoded record
@@ -295,9 +320,31 @@ def scan_columns(b: bytes) -> list[tuple[str, NDArray[np.float64]]]:
             continue
         prev = [name for pos, name in names if pos < marker]
         if prev:
-            out.append((prev[-1], vals))
+            out.append((marker, prev[-1], vals))
         cursor = end
     return out
+
+
+def scan_columns(b: bytes) -> list[tuple[str, NDArray[np.float64]]]:
+    """Decode every ``<Book>_<Col>`` numeric column in a CPYUA ``.opju`` file.
+
+    Records are walked in file order with a cursor: each decoded stream advances
+    the cursor past its own bytes, so the false ``ff ff`` markers buried in long
+    residual streams are skipped. Every real record is labelled by the nearest
+    preceding length-prefixed dataset name (validated on the local corpus: the
+    owning ``<Book>_<Col>`` name always leads its record). Streams that fail the
+    codec or decode to garbage are dropped — never emitted.
+    """
+    return [(name, vals) for _, name, vals in scan_marked_columns(b)]
+
+
+# One import asks for the same file's tail start several times (the worksheet
+# reader's metadata lookups, then the figure reader's), and each answer costs
+# a full decode pass. Remembered per file by ``(length, hash)`` — an int per
+# entry, and no reference to the file's bytes is kept.
+_TAIL_START_MEMO: dict[tuple[int, int], int] = {}
+_TAIL_START_MEMO_MAX = 8
+_TAIL_START_LOCK = threading.Lock()
 
 
 def tail_start(b: bytes) -> int:
@@ -308,6 +355,18 @@ def tail_start(b: bytes) -> int:
     windows-section designation markers). ``windows_opju`` uses this to bound
     its marker search to the tail region, avoiding those false positives.
     """
+    key = (len(b), hash(b))
+    cached = _TAIL_START_MEMO.get(key)
+    if cached is None:
+        cached = _tail_start(b)
+        with _TAIL_START_LOCK:  # imports run on a thread pool
+            while len(_TAIL_START_MEMO) >= _TAIL_START_MEMO_MAX:
+                _TAIL_START_MEMO.pop(next(iter(_TAIL_START_MEMO)))
+            _TAIL_START_MEMO[key] = cached
+    return cached
+
+
+def _tail_start(b: bytes) -> int:
     end = 0
     cursor = 0
     for marker in _records(b):
