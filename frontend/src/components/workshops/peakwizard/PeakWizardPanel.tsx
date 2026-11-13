@@ -105,7 +105,9 @@ export default function PeakWizardPanel() {
             </div>
           )}
 
-          <div style={{ marginTop: 10 }}>{stepBody}</div>
+          {/* qzk-peakwizard: the steps' hint lines wrap instead of being cut
+              off with an ellipsis in the 420 px window (re-audit #16). */}
+          <div className="qzk-peakwizard" style={{ marginTop: 10 }}>{stepBody}</div>
 
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
             <Button size="sm" disabled={w.step === 0} onClick={w.back}>

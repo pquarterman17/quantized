@@ -127,7 +127,8 @@ export default function ModelSetupView({ w }: { w: PeakWizardState }) {
           </div>
           <ModelParamTable model={m} />
           <SetupProblems problems={m.problems} />
-          <div className="qzk-ds-meta" style={{ ...faint, marginTop: 6 }}>
+          {/* Wraps: .qzk-ds-meta alone is one ellipsized line (re-audit #16). */}
+          <div className="qzk-ds-meta" style={{ ...faint, marginTop: 6, whiteSpace: "normal" }}>
             Seeded from the detected peaks; your edits save with the recipe. Blank min/max = open
             (widths stay positive, η in [0, 1]).
           </div>

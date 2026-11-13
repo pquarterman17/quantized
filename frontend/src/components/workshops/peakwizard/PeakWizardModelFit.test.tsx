@@ -5,6 +5,9 @@
 // SSR vs chi-square, warnings), the ASCII error, and the report hand-off.
 // Every wait is on rendered STATE, never on a mock having been called.
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -160,6 +163,25 @@ describe("Peak Analyzer — model engine setup (step 3)", () => {
     const tie = screen.getByRole("combobox", { name: "#1 FWHM tie" });
     const options = within(tie).getAllByRole("option").map((o) => o.getAttribute("value"));
     expect(options).toEqual(["", "p1.fwhm"]);
+  });
+
+  it("the parameter table fits the 420 px window, and the hint wraps (re-audit #16)", async () => {
+    await findTwoPeaks();
+    step("Model");
+    // Name (~60) + vary (~36) + six cells' padding: the controls must leave
+    // room for them inside the window's ~396 px content width.
+    const widths = ["#1 center start", "#1 center min", "#1 center max"].map((name) =>
+      parseFloat((screen.getByRole("textbox", { name }) as HTMLElement).style.width),
+    );
+    const tie = parseFloat(screen.getByRole("combobox", { name: "#1 center tie" }).style.width);
+    expect(widths.every((w) => w > 0) && tie > 0).toBe(true);
+    expect(widths.reduce((a, b) => a + b, 0) + tie + 60 + 36 + 6 * 6).toBeLessThanOrEqual(396);
+    expect(screen.getByText(/Seeded from the detected peaks/)).toHaveStyle({ whiteSpace: "normal" });
+    // Every step's hint lines wrap too: the step body carries the class that
+    // shell.css's rule targets (the classic engine's "N peak(s) will be fit…").
+    expect(screen.getByText(/Seeded from the detected peaks/).closest(".qzk-peakwizard")).not.toBeNull();
+    const css = readFileSync(join(__dirname, "../../../styles/shell.css"), "utf8");
+    expect(css).toMatch(/\.qzk-peakwizard div\.qzk-ds-meta \{ white-space: normal; \}/);
   });
 
   it("a peak's × in the model table deletes it; the other peak keeps its edit under its new number (slice 3)", async () => {

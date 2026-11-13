@@ -61,10 +61,16 @@ function setAsItems(col: number, ctx: ColumnMenuContext): ContextMenuItem[] {
   return [
     {
       label: "Set As",
+      // Set As › X also plots against the column: one entry for "this is
+      // the X", where there used to be a separate "Set as X axis" right next
+      // to Set As › that did only the plot half (re-audit #20).
       submenu: SET_AS_CHOICES.map(([designation, label]) => ({
         label,
         checked: current === designation,
-        run: () => set(col, designation),
+        run: () => {
+          set(col, designation);
+          if (designation === "X" && ctx.xKey !== col) ctx.setXKey(col);
+        },
       })),
     },
   ];
@@ -110,7 +116,8 @@ const worksheetSetXAction: ContextAction<WorksheetColumnTarget> = {
   id: "worksheet.setX",
   label: (t) => (t.ctx.xKey === t.col ? "Already the X axis" : "Set as X axis"),
   enabled: (t) => t.ctx.xKey !== t.col,
-  hidden: (t) => t.col < 0,
+  // Where Set As › is offered, its X entry is the one way to say so.
+  hidden: (t) => t.col < 0 || Boolean(t.ctx.setDesignation),
   run: (t) => t.ctx.setXKey(t.col),
 };
 

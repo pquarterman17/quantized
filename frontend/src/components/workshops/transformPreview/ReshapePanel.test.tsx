@@ -160,7 +160,9 @@ describe("ReshapePanel — live data preview", () => {
     expect(within(table()).getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
       "Field (Oe)", "M (emu)", "T (K)", "Q",
     ]);
-    expect(within(table()).getAllByRole("row")[1].textContent).toContain("NaN");
+    // A blank cell reads "—", as in the worksheet grid, never "NaN" (re-audit #19).
+    expect(within(table()).getAllByRole("row")[1].textContent).toContain("—");
+    expect(within(table()).getAllByRole("row")[1].textContent).not.toContain("NaN");
     const warnings = screen.getByRole("list", { name: "Transform warnings" }).textContent;
     expect(warnings).toContain('wide.dat has no "Q" column; its 30 rows are left blank (NaN) there.');
     expect(warnings).toContain('left.dat has no "T" column; its 4 rows are left blank (NaN) there.');

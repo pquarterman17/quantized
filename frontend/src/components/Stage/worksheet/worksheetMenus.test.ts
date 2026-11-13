@@ -49,6 +49,18 @@ describe("worksheetMenus — Set As (Origin Column > Set As)", () => {
     expect(setDesignation).toHaveBeenCalledWith(2, "Y-error");
   });
 
+  it("Set As › X also plots against the column, and replaces the separate 'Set as X axis' (re-audit #20)", () => {
+    const setDesignation = vi.fn();
+    const setXKey = vi.fn();
+    const items = columnMenuItems(2, makeColCtx({ setDesignation, setXKey }));
+    expect(labelsOf(items)).not.toContain("Set as X axis");
+    (setAs(items)!.submenu[0] as { run: () => void }).run();
+    expect(setDesignation).toHaveBeenCalledWith(2, "X");
+    expect(setXKey).toHaveBeenCalledWith(2);
+    // A read-only sheet (no Set As) keeps the plain plot-X entry.
+    expect(labelsOf(columnMenuItems(2, makeColCtx()))).toContain("Set as X axis");
+  });
+
   it("is absent for the x column and when no setter is supplied (a read-only sheet)", () => {
     expect(setAs(columnMenuItems(-1, makeColCtx({ setDesignation: vi.fn() })))).toBeUndefined();
     expect(setAs(columnMenuItems(1, makeColCtx()))).toBeUndefined();

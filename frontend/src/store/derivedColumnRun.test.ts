@@ -95,6 +95,13 @@ describe("commit", () => {
     expect(state().formulas).toBeUndefined();
     expect(useApp.getState().macroSteps).toEqual([]);
   });
+  it("a bare long name adds the column; an ambiguous one is refused inline with the letters (re-audit #17)", async () => {
+    expect(await addDerivedColumn("d", { name: "twice", expr: "dU * 2", propagate: false })).toMatchObject({ ok: true });
+    expect(state().formulas![0].expr).toBe("B * 2");
+    useApp.setState({ datasets: [ds("d", { data: { ...ds().data, labels: ["U", "dU", "I", "dU", "n"] } })] });
+    const r = await addDerivedColumn("d", { name: "bad", expr: "dU * 2", propagate: false });
+    expect(r).toMatchObject({ ok: false, error: expect.stringMatching(/"dU" is ambiguous: columns B, D/) });
+  });
   it("a refusal replaces the previous 'added' status with its own reason (live check)", async () => {
     expect((await addDerivedColumn("d", { name: "ok", expr: "A * 2", propagate: false })).ok).toBe(true);
     useApp.setState({ status: 'added column "ok" [V]' });

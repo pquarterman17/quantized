@@ -1087,6 +1087,17 @@ under `empty_books_omitted`.
 
 ### 3.6 `.opju` matrix books
 
+**Import shape (2026-11-14).** A matrix whose shape is located imports
+exactly like an `.opj` matrix — `opj_matrix.build_matrix_book`: one row per
+cell with X, Y, Z (and `Z (imaginary)` for a complex matrix, which no longer
+loses its imaginary part), `is2D`/`map_shape` so it opens as a map, and
+`origin_matrix.coordinates_recovered` (False → the axes are 1-based cell
+indices, also listed as the `matrix_coordinates` book loss). Oracle: every
+matrix of the paired Altaxo projects (12 matrices in 4 files, every storage
+type incl. complex) is cell-for-cell identical to its `.opj` twin
+(`test_opju_matrix_books_equal_the_paired_opj_matrix_books`); the 23 corpus
+matrix books keep every Z cell and Y coordinate of the previous wide form.
+
 **Solved and shipping** (`opju_matrix.py`). A matrix object's cells are an
 ordinary dataset record whose name is the bare book name (`MBook1`); it
 decodes like any double / float32 / integer / complex column and holds
@@ -1992,13 +2003,31 @@ vertical peak-position markers) objects; a 133-byte header (position
 * **Unrecovered graph windows are named, never decoded.** A window whose
   kind is not `2` and whose first block is neither a recognised layer
   (`00 00 <0x1f|0x17|0x5f> 00`) nor a sheet head (`0x5e`/`0xde`/`0x7e`) is
-  reported in the fidelity manifest as `unrecovered_graphs` with omission
-  `graph_windows_not_recovered` (replacing `no_graph_records`). In the
+  reported in the fidelity manifest the same way as `.opju` graph pages
+  (`unrecovered_graph_count`, `unrecovered_graphs` by `page_name`, omission
+  `graphs_not_recovered` replacing `no_graph_records`). In the
   public corpus exactly one such window exists: `3dband-origin.opj`'s
   `Graph2` (first block head `0x47`). Every other `.opj` without a graph
   row has no graph window at all (worksheet/matrix-only projects).
 
 ### 6.2 `.opju` figures
+
+**Graph pages present but not recovered (2026-11-14, `opju_graph_pages`).**
+A page that owns no columns in the column-id table and whose span holds a
+`_cart_object` record is a graph page. Of the 980 pages the figure decoder
+recovers, 979 carry it (the exception, a layout page, is therefore never
+reported); worksheet/matrix-only projects (the Altaxo and synthetic
+fixtures) carry none. Over the 274 public `.opju` files: 158 have ≥ 1
+recovered graph; 319 further graph pages in 119 files are not recovered
+(281 named `Graph<N>`, none an imported workbook) — 293 of them with
+Origin's saved PNG attributable under the item-51 rule (exactly one valid
+PNG in the page's span); in 17 more files graph objects exist but no page
+isolates them (`graph_content_unattributed`); 32 files hold no graph
+content at all. These are reported in `origin_fidelity`
+(`graphs_not_recovered`, `unrecovered_graph_count`, `unrecovered_graphs`
+with the saved image), never decoded: their layer records use forms the
+axis decoder does not read (e.g. no `03 00 00 1f` anchor in a bar chart),
+and curve binding is unchanged.
 
 **Solved and shipping** (`figures_opju.py::extract_figures_opju`). CPYUA
 stores a graph layer's axis descriptor as a self-contained record, found by

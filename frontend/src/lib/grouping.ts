@@ -25,6 +25,15 @@ export function isOriginBookDataset(d: Dataset): boolean {
   return meta?.origin_book != null;
 }
 
+/** An Origin MATRIX book imported as a 2-D map (X, Y, Z per cell —
+ *  io/origin_project/opj_matrix.build_matrix_book, used for `.opj` and
+ *  `.opju`). Same test as lib/mapdata's `is2DMap`, restated so the eager
+ *  selection store keeps its one-directional imports. */
+export function isOriginMatrixBook(d: Dataset): boolean {
+  const meta = d.data.metadata as Record<string, unknown> | undefined;
+  return meta?.origin_matrix != null && meta.is2D === true && d.data.labels.length >= 3;
+}
+
 /** A family of datasets fanned out from the same multi-book Origin project
  *  (plan item 17): `useApp.importFiles` names each book `"<stem>:<label>"` and
  *  stamps its metadata with `origin_book`. Detecting the family off that

@@ -56,6 +56,14 @@ describe("row functions", () => {
 });
 
 describe("Row statistics", () => {
+  it("warns when the columns have different units, and the statistics carry none (re-audit #18)", async () => {
+    useApp.setState({ datasets: [{ ...sheet, data: { ...sheet.data, units: ["K", "emu", "emu"] } }] });
+    askParamsMock.mockResolvedValue({ "col:0": true, "col:1": true, mean: true });
+    await runRowStatistics();
+    expect(useApp.getState().status).toMatch(/warning: these columns have different units \(A K, B emu\)/);
+    expect(useApp.getState().datasets[0].formulas?.[0].unit).toBeUndefined();
+  });
+
   it("adds the ticked statistics as computed columns in ONE undo step, with the shared unit", async () => {
     askParamsMock.mockResolvedValue({ "col:0": true, "col:1": true, mean: true, sd: false, min: false, max: true, sum: false, n: true });
     await runRowStatistics();

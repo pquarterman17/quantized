@@ -20,7 +20,6 @@ from quantized.io.origin_project.fidelity import (
     assess_origin_figures,
     book_source_names,
     origin_figure_decode_failure,
-    with_unrecovered_graphs,
 )
 from quantized.io.origin_project.figures import extract_figures
 from quantized.io.origin_project.figures_opju import extract_figures_opju
@@ -30,6 +29,10 @@ from quantized.io.origin_project.graph_preview import (
 )
 from quantized.io.origin_project.integrity import apply_container_integrity
 from quantized.io.origin_project.opj_graph_windows import unrecovered_graph_windows
+from quantized.io.origin_project.opju_graph_pages import (
+    GraphPageReport,
+    unrecovered_graph_pages,
+)
 from quantized.io.origin_project.worksheet_fidelity import worksheet_fidelity_summary
 
 __all__ = ["origin_figures_and_fidelity"]
@@ -47,6 +50,7 @@ def origin_figures_and_fidelity(
     are shown at import time instead of sitting unread in metadata.
     """
     container: Literal["opj", "opju"] = "opj" if suffix == ".opj" else "opju"
+    missed = GraphPageReport(0, [])
     try:
         if container == "opj":
             raw_figs = extract_figures(raw)
@@ -54,6 +58,7 @@ def origin_figures_and_fidelity(
         else:
             raw_figs = extract_figures_opju(raw)
             raw_figs, preview_diagnostics = attach_opju_graph_previews(raw_figs, raw)
+            missed = unrecovered_graph_pages(raw, {str(f.get("name")) for f in raw_figs})
         figs, fidelity = assess_origin_figures(
             raw_figs,
             container=container,
@@ -68,11 +73,22 @@ def origin_figures_and_fidelity(
         fidelity = origin_figure_decode_failure(container=container)
     manifest = apply_container_integrity(fidelity, raw, container)
     if container == "opj":
+        # .opj graph windows the layer gate skips (``opj_graph_windows``),
+        # reported in the same shape as the .opju pages below.
         try:
-            missed = unrecovered_graph_windows(raw)
+            names = unrecovered_graph_windows(raw)
         except (IndexError, ValueError, ArithmeticError, KeyError, struct.error):
-            missed = []  # same degrade-not-fail rule as the figures above
-        manifest = with_unrecovered_graphs(manifest, missed)
+            names = []  # same degrade-not-fail rule as the figures above
+        missed = GraphPageReport(len(names), [{"page_name": n} for n in names])
+    if missed.missing or missed.unattributed:
+        # A graph window the figure decoder could not read is diagnosed, not
+        # silently absent ("no graph records found" would then be untrue).
+        code = "graphs_not_recovered" if missed.missing else "graph_content_unattributed"
+        omissions = [o for o in manifest["omissions"] if o != "no_graph_records"]
+        manifest = {**manifest, "omissions": sorted({*omissions, code})}
+        if missed.missing:
+            manifest["unrecovered_graph_count"] = missed.missing
+            manifest["unrecovered_graphs"] = [dict(g) for g in missed.pages]
     worksheet = primary.metadata.get("origin_worksheet_fidelity") if primary is not None else None
     if isinstance(worksheet, Mapping):
         manifest = {**manifest, "worksheet": worksheet_fidelity_summary(worksheet)}

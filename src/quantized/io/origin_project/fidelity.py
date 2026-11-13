@@ -21,7 +21,6 @@ __all__ = [
     "book_source_names",
     "origin_figure_decode_failure",
     "with_data_diagnostics",
-    "with_unrecovered_graphs",
 ]
 
 FidelityStatus = Literal["exact", "best_effort", "reference_only", "unresolved"]
@@ -59,10 +58,11 @@ class OriginFidelityManifest(TypedDict):
     # The ``.opju`` worksheet decode's loss summary
     # (``worksheet_fidelity.worksheet_fidelity_summary``), added at import time.
     worksheet: NotRequired[dict[str, object]]
-    # ``.opj`` graph windows present in the file but not recovered
-    # (``opj_graph_windows``), by window name; with the omission
-    # ``graph_windows_not_recovered``. Present only when there are any.
-    unrecovered_graphs: NotRequired[list[str]]
+    # ``.opju`` graph pages present in the file but not recovered as figures
+    # (``opju_graph_pages``): their total, and the first pages with Origin's
+    # saved image where one is attributable. Added at import time.
+    unrecovered_graph_count: NotRequired[int]
+    unrecovered_graphs: NotRequired[list[dict[str, object]]]
 
 
 def origin_figure_decode_failure(
@@ -265,19 +265,3 @@ def with_data_diagnostics(
     if details:
         out["data_diagnostics"] = details
     return out
-
-
-def with_unrecovered_graphs(
-    manifest: OriginFidelityManifest, names: list[str]
-) -> OriginFidelityManifest:
-    """Record graph windows the file has but the decoder did not recover.
-
-    They are listed by name (``unrecovered_graphs``) under the omission
-    ``graph_windows_not_recovered``; "no graph records found" is dropped,
-    since it would contradict them. Nothing to add returns ``manifest``.
-    """
-    if not names:
-        return manifest
-    omissions = [o for o in manifest["omissions"] if o != "no_graph_records"]
-    omissions.append("graph_windows_not_recovered")
-    return {**manifest, "omissions": sorted(omissions), "unrecovered_graphs": list(names)}

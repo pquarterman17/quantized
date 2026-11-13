@@ -57,7 +57,7 @@ export interface WorksheetToolbarProps {
   onAnalyzeSelection: () => void;
   onClearColSelection: () => void;
   /** GUI_INTERACTION #14: is THIS worksheet linked to the live plot (row
-   *  selection highlights plotted points; "Set as X axis"/"Plot as Y" edit it
+   *  selection highlights plotted points; "Set As › X"/"Plot as Y" edit it
    *  directly)? Shown as an explicit badge — never a silent assumption. */
   plotLinked: boolean;
 }
@@ -243,7 +243,7 @@ export default function WorksheetToolbar({
         <span
           className="qzk-ds-meta"
           style={{ color: "var(--accent)" }}
-          title="This worksheet's dataset is the live plot's — row selection highlights plotted points, and Set as X axis/Plot as Y edit it directly"
+          title="This worksheet's dataset is the live plot's — row selection highlights plotted points, and Set As › X / Plot as Y edit it directly"
         >
           ⧟ Linked to plot
         </span>

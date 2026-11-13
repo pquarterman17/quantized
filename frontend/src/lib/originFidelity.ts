@@ -12,7 +12,8 @@ const LABELS: Record<string, string> = {
   curve_sheet_mismatch: "curves to check: recorded on another sheet",
   exact_curve_bindings: "exact curve bindings",
   figure_decode_error: "graph decode failed",
-  graph_windows_not_recovered: "graphs present in the file but not recovered",
+  graph_content_unattributed: "graph content found but its window not identified",
+  graphs_not_recovered: "graphs present but not recovered",
   file_truncated: "file appears incomplete or truncated — books and columns past the cut are missing",
   filtered_internal_graph_records: "internal graph records filtered",
   graphic_objects: "drawn arrows and shapes",
@@ -47,9 +48,13 @@ export function originImportToast(
 ): { msg: string; kind: "info" | "danger" } {
   const graphs = `${m.graph_records_actionable}/${m.graph_records_total} Origin graph records are editable`;
   const lost = (m.worksheet?.losses ?? []).reduce((n, loss) => n + loss.count, 0);
-  if (lost > 0) {
-    const items = lost === 1 ? "1 worksheet item" : `${lost} worksheet items`;
-    return { msg: `${stem}: ${items} could not be imported. ${graphs}`, kind: "danger" };
+  const missedGraphs = m.unrecovered_graph_count ?? 0;
+  const parts: string[] = [];
+  if (lost > 0) parts.push(lost === 1 ? "1 worksheet item" : `${lost} worksheet items`);
+  if (missedGraphs > 0) parts.push(missedGraphs === 1 ? "1 graph" : `${missedGraphs} graphs`);
+  else if (m.omissions.includes("graph_content_unattributed")) parts.push("graph content");
+  if (parts.length > 0) {
+    return { msg: `${stem}: ${parts.join(" and ")} could not be imported. ${graphs}`, kind: "danger" };
   }
   return { msg: `${stem}: ${graphs}; fidelity details saved`, kind: "info" };
 }

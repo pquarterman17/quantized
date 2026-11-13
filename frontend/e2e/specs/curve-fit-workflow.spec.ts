@@ -58,7 +58,7 @@ test.describe("Curve Fit workflow (fitting audit)", () => {
     expect(box.x + box.width).toBeGreaterThan(viewport.width - 40);
     expect(box.x).toBeGreaterThan(viewport.width / 2);
 
-    await panel.getByRole("combobox", { name: "Model", exact: true }).selectOption({ label: "Exponential Decay" });
+    await panel.getByRole("combobox", { name: "Model", exact: true }).selectOption({ value: "Exponential Decay" }) // the label adds "(= ExpDec1)";
     await panel.getByRole("button", { name: "Fit", exact: true }).click();
     await expect(panel.getByText("reduced χ²")).toBeVisible({ timeout: 15_000 });
     // Key results are above the fold: the parameter table is in view.
@@ -93,7 +93,7 @@ test.describe("Curve Fit workflow (fitting audit)", () => {
     await waitForDatasetCount(page, 1);
     await runPaletteCommand(page, "Curve fit…");
     const panel = curveFit(page);
-    await panel.getByRole("combobox", { name: "Model", exact: true }).selectOption({ label: "Exponential Decay" });
+    await panel.getByRole("combobox", { name: "Model", exact: true }).selectOption({ value: "Exponential Decay" }) // the label adds "(= ExpDec1)";
     await panel.getByRole("button", { name: "Fit", exact: true }).click();
     await expect(panel.getByText("reduced χ²")).toBeVisible({ timeout: 15_000 });
 

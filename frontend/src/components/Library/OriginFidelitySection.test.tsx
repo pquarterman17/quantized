@@ -142,25 +142,54 @@ describe("OriginFidelitySection", () => {
     ).toBeInTheDocument();
   });
 
-  it("names the graph windows the file has but that were not recovered", () => {
+  it("names graphs that are in the file but not recovered, with Origin's saved image", () => {
     useApp.setState({
-      originFidelitySectionExpanded: true,
-      originFidelity: [{
-        id: "fidelity-3d",
-        stem: "3dband",
-        siblingIds: ["d1"],
-        manifest: {
-          version: 1, container: "opj", status: "best_effort",
-          graph_records_total: 4, graph_records_actionable: 4, graph_records_filtered: 0,
-          omissions: ["graph_windows_not_recovered", "graphic_objects"],
-          filtered_figures: [],
-          unrecovered_graphs: ["Graph2"],
+      originFidelity: [
+        {
+          id: "fidelity-d3",
+          stem: "Figs",
+          siblingIds: ["d3"],
+          manifest: {
+            version: 1,
+            container: "opju",
+            status: "unresolved",
+            graph_records_total: 0,
+            graph_records_actionable: 0,
+            graph_records_filtered: 0,
+            omissions: ["graphs_not_recovered"],
+            filtered_figures: [],
+            unrecovered_graph_count: 3,
+            unrecovered_graphs: [
+              {
+                page_name: "Plot7",
+                saved_preview: {
+                  format: "png",
+                  mime: "image/png",
+                  width: 4,
+                  height: 3,
+                  sha256: "0".repeat(64),
+                  data: "iVBORw0KGgo=",
+                  confidence: "exact_page",
+                  page_name: "Plot7",
+                },
+              },
+              { page_name: "Plot8" },
+            ],
+          },
         },
-      }],
+      ],
     });
     render(<OriginFidelitySection />);
-    fireEvent.click(screen.getByText(/^3dband/));
-    expect(screen.getByRole("note")).toHaveTextContent("Graphs not recovered: Graph2");
-    expect(screen.getByText(/^Missing:/)).toHaveTextContent("graphs present in the file but not recovered");
+    fireEvent.click(screen.getByText("Origin fidelity"));
+    fireEvent.click(screen.getByText(/Figs · Unresolved · graphs not recovered/));
+    const group = screen.getByRole("group", { name: "Graphs not recovered" });
+    expect(group).toHaveTextContent("3 graphs are in the file but could not be recovered");
+    expect(screen.getByAltText("Origin's saved image of Plot7")).toHaveAttribute(
+      "src",
+      "data:image/png;base64,iVBORw0KGgo=",
+    );
+    expect(group).toHaveTextContent("Plot8 (no saved image)");
+    expect(group).toHaveTextContent("+1 more");
+    expect(screen.getByText(/Missing: graphs present but not recovered/)).toBeInTheDocument();
   });
 });

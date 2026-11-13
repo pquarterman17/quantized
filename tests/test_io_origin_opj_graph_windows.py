@@ -13,9 +13,9 @@ from __future__ import annotations
 import struct
 
 from origin_opj_fixtures import DOUBLE, block, dataset, dataset_header, project, window_header
-from quantized.io.origin_project.fidelity import assess_origin_figures, with_unrecovered_graphs
 from quantized.io.origin_project.figures import extract_figures
 from quantized.io.origin_project.opj_graph_windows import unrecovered_graph_windows
+from quantized.routes._originfigures import origin_figures_and_fidelity
 
 
 def _window(name: str, kind: int) -> bytes:
@@ -61,11 +61,18 @@ def test_sheets_recovered_graphs_and_non_window_headers_are_not_reported() -> No
     assert unrecovered_graph_windows(raw) == []
 
 
-def test_manifest_lists_the_graph_and_drops_no_graph_records() -> None:
-    _, manifest = assess_origin_figures([], container="opj")
+def test_manifest_lists_the_graph_like_an_opju_page_and_drops_no_graph_records() -> None:
+    clean = _project(_window("Book1", 2) + _first_block(0x5E))
+    _, manifest = origin_figures_and_fidelity(clean, ".opj", books=[])
     assert "no_graph_records" in manifest["omissions"]
-    out = with_unrecovered_graphs(manifest, ["Graph2"])
-    assert "no_graph_records" not in out["omissions"]
-    assert "graph_windows_not_recovered" in out["omissions"]
-    assert out["unrecovered_graphs"] == ["Graph2"]
-    assert with_unrecovered_graphs(manifest, []) is manifest
+    assert "unrecovered_graphs" not in manifest
+
+    missed = _project(
+        _window("Book1", 2) + _first_block(0x5E),
+        _window("Graph2", 0) + _first_block(0x47),
+    )
+    _, manifest = origin_figures_and_fidelity(missed, ".opj", books=[])
+    assert "no_graph_records" not in manifest["omissions"]
+    assert "graphs_not_recovered" in manifest["omissions"]
+    assert manifest.get("unrecovered_graph_count") == 1
+    assert manifest.get("unrecovered_graphs") == [{"page_name": "Graph2"}]
