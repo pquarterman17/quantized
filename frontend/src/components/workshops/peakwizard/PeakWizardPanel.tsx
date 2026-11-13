@@ -2,7 +2,8 @@
 // re-imagined as a quantized workshop: five steps over the existing peak /
 // baseline / fit calc, ending in a #36 report (or the #32 integrate-only
 // path). All state lives in usePeakWizard so navigation never loses edits;
-// clearing the overlays on close mirrors the Peaks workshop.
+// clearing the overlays on close mirrors the Peaks workshop. The window opens
+// docked at the right edge (overlays/dockedX.ts), like Curve Fit.
 //
 // "Batch" mode (audit P2.4 slice 4, ./PeakBatchView) runs a saved recipe over
 // many datasets. Once opened it stays MOUNTED (hidden) while the wizard is
@@ -11,6 +12,7 @@
 import { useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
+import { dockedX } from "../../overlays/dockedX";
 import { Button, Select } from "../../primitives";
 import { onTabListKeyDown } from "../../../lib/tabListKeys";
 import { useApp } from "../../../store/useApp";
@@ -53,7 +55,7 @@ export default function PeakWizardPanel() {
   ][w.step];
 
   return (
-    <ToolWindow id={PEAK_WIZARD_WINDOW_ID} title="Peak Analyzer" width={420} onClose={close}>
+    <ToolWindow id={PEAK_WIZARD_WINDOW_ID} title="Peak Analyzer" width={420} x={dockedX(420)} onClose={close}>
       {/* Roving tablist, AUTOMATIC activation (lib/tabListKeys): switching is
           cheap, and the batch view stays mounted, so arrows select too. */}
       <div role="tablist" aria-label="Peak Analyzer mode" style={{ display: "flex", gap: 6, marginBottom: 8 }} onKeyDown={(e) => onTabListKeyDown(e, true)}>

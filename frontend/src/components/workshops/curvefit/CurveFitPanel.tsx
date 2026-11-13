@@ -14,6 +14,7 @@
 import { useEffect, useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
+import { dockedX } from "../../overlays/dockedX";
 import { Button, Select } from "../../primitives";
 import { reportEmit } from "../../../lib/api";
 import type { CustomFitModel } from "../../../lib/fitmodels";
@@ -50,12 +51,6 @@ const GlobalFitSection = lazyRegion(() => import("./GlobalFitSection"), "Global 
 // Custom-model picker values are namespaced "custom:<name>"; the bare prefix
 // is the blank "type a new equation" entry (GOTO #1).
 const CUSTOM_PREFIX = "custom:";
-
-/** Default x of a Curve Fit window `width` px wide: docked at the right edge,
- *  clear of the plot's Y axis (the old x = 120 sat on it). */
-function dockedX(width: number): number {
-  return typeof window === "undefined" ? 120 : Math.max(16, window.innerWidth - width - 16);
-}
 
 // Unreadable saved models are reported ONCE per session however often the
 // panel mounts (P2.7 slice 3: tolerant load, single warning).
