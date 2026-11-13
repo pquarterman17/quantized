@@ -388,6 +388,11 @@ describe("runExportFigureCommand — MAIN #24 x_fmt/y_fmt wiring", () => {
     expect(fields.find((f) => f.key === "x_label")?.default).toBe("Q (nm^-1)");
     expect(fields.find((f) => f.key === "y_label")?.default).toBe("Reflectivity");
   });
+
+  it("confirms with Export, not the generic Run (live check)", async () => {
+    await runExportFigureCommand(useApp.getState);
+    expect(vi.mocked(askParams).mock.calls[0][2]).toEqual({ confirmLabel: "Export" });
+  });
 });
 
 describe("runExportFigureCommand — y2 (secondary axis) export parity", () => {

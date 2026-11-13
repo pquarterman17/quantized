@@ -441,7 +441,7 @@ test("Group well renders live on the interactive Stage, undoes, survives a windo
   );
   await runPaletteCommand(page, "Export figure");
   await expect(exportDialog).toBeVisible();
-  await exportDialog.getByRole("button", { name: "Run" }).click();
+  await exportDialog.getByRole("button", { name: "Export" }).click();
   const response = await exportResponse;
   expect(response.ok()).toBe(true);
   const body = response.request().postDataJSON() as { group_col?: number; y_keys?: number[] };

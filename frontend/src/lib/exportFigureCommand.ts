@@ -93,7 +93,7 @@ export async function runExportFigureCommand(
   // Stat mode exports the stat plot on screen through the stage's own export.
   const stat = buildSpec ? null : activeStatExporter(s());
   if (stat) {
-    const p = await askParams("Export figure", OUTPUT_FIELDS);
+    const p = await askParams("Export figure", OUTPUT_FIELDS, { confirmLabel: "Export" });
     if (p) await exportStatFigure(s, stat, String(p.fmt), { style: String(p.style), dpi: Number(p.dpi) });
     return;
   }
@@ -115,7 +115,7 @@ export async function runExportFigureCommand(
     },
     { key: "y_label", label: "Y label", type: "text", default: s().yAxisLabel },
     ...(hasY2 ? [{ key: "y2_label", label: "Y2 label", type: "text" as const, default: s().y2AxisLabel, hint: "Blank = derive from the right-axis column" }] : []),
-  ]);
+  ], { confirmLabel: "Export" }); // live check: the button read "Run"
   if (!params) return;
   // The size answer writes the window's page (one undoable step, only when it
   // changed) BEFORE the spec is built, so this export and every later one —
