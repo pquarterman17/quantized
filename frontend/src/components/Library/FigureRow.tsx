@@ -111,7 +111,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
   return (
     <div className="qzk-origin-figure-row">
       <div
-        className={`qzk-fig-row${treeMode ? " qzk-fig-row-tree" : ""}${selected ? " selected" : ""}${!resolved ? " unresolved" : ""}`}
+        className={`qzk-fig-row${treeMode ? " qzk-fig-row-tree" : ""}${selected ? " selected" : ""}${!resolved ? " unresolved" : sheetNotes ? " needs-review" : ""}`}
         style={treeMode && depth ? { paddingLeft: depth * 14 } : undefined}
         {...treeRowProps}
       >
@@ -201,7 +201,9 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
             <button
               className="qz-btn qz-btn-sm qz-btn-primary qzk-origin-recover-btn"
               tabIndex={inner}
-              aria-label={`Recover unresolved Origin bindings for ${figureLabel(entry)}`}
+              aria-label={sourceResolution.unresolved.length
+                ? `Recover unresolved Origin bindings for ${figureLabel(entry)}`
+                : `Check curves recorded on another sheet for ${figureLabel(entry)}`}
               title={sourceResolution.unresolved.length
                 ? `Review ${sourceResolution.unresolved.length} unresolved Origin binding${plural(sourceResolution.unresolved.length)}`
                 : `Review ${sheetNotes} curve${plural(sheetNotes)} the file records on another sheet`}

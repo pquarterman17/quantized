@@ -603,8 +603,19 @@ body {
 }
 /* An unresolved graph has nothing to open (in the tree its row stays a
    focusable aria-disabled treeitem). Keep its recovery controls visible so
-   keyboard/touch users can still choose a source. */
+   keyboard/touch users can still choose a source. A resolved graph with a
+   curve the file records on another sheet (`needs-review`) shows them too:
+   that warning must not wait for a hover. */
 .qzk-fig-row-tree.unresolved .qzk-origin-figure-actions {
+  position: static;
+  align-self: center;
+  max-width: 60%;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+}
+.qzk-fig-row-tree.needs-review .qzk-origin-figure-actions {
   position: static;
   align-self: center;
   max-width: 60%;

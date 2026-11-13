@@ -100,8 +100,8 @@ export default function OriginRecoveryWindow({
         </p>
         {splitBooks.map(([book, sheets]) => (
           <p key={book}>
-            The graph names workbook {book}, not a sheet. This file has {book} sheets{" "}
-            {sheets.join(", ")}: choose one below.
+            The graph names workbook {book}, not a sheet. This file has {book}{" "}
+            {sheets.length === 1 ? "sheet" : "sheets"} {sheets.join(", ")}: choose one below.
           </p>
         ))}
         {sheetNotes.length > 0 && (

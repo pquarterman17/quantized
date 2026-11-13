@@ -187,13 +187,20 @@ describe("FigureRow — PR C additions", () => {
     const { unmount } = render(<FigureRow entry={entry("g1", "s1")} treeMode />);
     expect(screen.queryByRole("button", { name: /Recover unresolved Origin bindings/ })).toBeNull();
     unmount();
-    render(<FigureRow entry={noted} treeMode />);
-    fireEvent.click(screen.getByRole("button", { name: /Recover unresolved Origin bindings/ }));
+    const { container } = render(<FigureRow entry={noted} treeMode />);
+    // Shown without a hover, like an unresolved graph's controls.
+    expect(container.querySelector(".qzk-fig-row-tree")).toHaveClass("needs-review");
+    const rules = flatRules(readShellCss());
+    expect(rules.some((r) => r.selector.includes(".qzk-fig-row-tree.needs-review .qzk-origin-figure-actions")
+      && declares(r.body, "visibility", "visible"))).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Check curves recorded on another sheet for MokeGraph" }));
     const region = await screen.findByRole("region", { name: "Recover MokeGraph" });
     expect(region).toHaveTextContent(note);
     const names = [...region.querySelectorAll(".qzk-origin-recovery-candidate strong")].map((n) => n.textContent);
     expect(names).toEqual(["strings:NLFit1@2", "strings:NLFit1"]);
     expect(region).toHaveTextContent("the file records curves on this sheet");
+    // The import has NLFit1 (sheet 1), so no "names no sheet" paragraph.
+    expect(region).not.toHaveTextContent("not a sheet");
   });
 
   it("explains an unresolved graph even when no sibling workbook survived import", async () => {
