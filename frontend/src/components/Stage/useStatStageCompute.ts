@@ -20,7 +20,7 @@
 import { statsBox, statsHistogram, statsQQ, statsViolin } from "../../lib/api";
 import type { BoxStatWire } from "../../lib/api/stats";
 import type { BarChartData } from "../../lib/barlayout";
-import { buildBarMatrix, seriesStat } from "../../lib/barMatrix";
+import { buildBarMatrix, seriesStat, withColumnErrors } from "../../lib/barMatrix";
 import type { FacetSlice } from "../../lib/facet";
 import { facetSliceRowIds } from "../../lib/facetDomains";
 import type { GroupSpec } from "../../lib/statschooser";
@@ -239,11 +239,15 @@ export function computeFacetBarDraws(
   barStack: boolean,
   groupLabel: string,
   raw: FacetRaw = null,
+  errChannels: readonly (number | null)[] = [],
 ): FacetDraw[] {
   const out: FacetDraw[] = [];
   for (const s of slices) {
     const sliceRaw = raw ? { rowIds: facetSliceRowIds(s, raw.rowIds) } : null;
-    const bd = computeBarData(s.data, groupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel, sliceRaw);
+    const bd = withColumnErrors(
+      computeBarData(s.data, groupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel, sliceRaw),
+      s.data, groupCol, barValueChannels, errChannels,
+    );
     if (bd.groups.length > 0) {
       out.push({
         label: s.label,

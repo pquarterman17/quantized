@@ -29,7 +29,7 @@ export function requestDatasetRemoval(ids: readonly string[]): void {
     toast(msg);
   };
   if (s.confirmRemove) {
-    void askParams(`Remove ${n} dataset${plural(n)}?`, []).then((ok) => {
+    void askParams(`Remove ${n} dataset${plural(n)}?`, [], { confirmLabel: "Remove" }).then((ok) => {
       if (ok) doRemove();
     });
   } else {

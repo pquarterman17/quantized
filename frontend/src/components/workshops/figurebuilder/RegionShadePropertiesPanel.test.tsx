@@ -110,8 +110,26 @@ describe("RegionShadePropertiesPanel — Add form", () => {
     expect(screen.getByRole("button", { name: "Add" })).toBeEnabled();
   });
 
+  it("adds a full-height shade by default (audit #11: visible on a log axis)", () => {
+    const { onAdd } = renderPanel([]);
+    expect(screen.queryByLabelText("new shade y1")).toBeNull();
+    fireEvent.change(screen.getByLabelText("new shade x1"), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText("new shade x2"), { target: { value: "30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ x1: 10, x2: 30, fullHeight: true }));
+  });
+
+  it("a row's full-height toggle patches that shade only", () => {
+    const { onPatch } = renderPanel([{ id: "r1", x1: 0, x2: 1, y1: 0, y2: 1, fill: "#336699" }]);
+    const toggles = screen.getAllByRole("checkbox", { name: /full height/ });
+    expect(toggles.map((t) => t.getAttribute("aria-label"))).toEqual([expect.stringMatching(/full height$/), "new shade full height"]);
+    fireEvent.click(toggles[0]);
+    expect(onPatch).toHaveBeenCalledWith("r1", { fullHeight: true });
+  });
+
   it("adds a shade with the entered coordinates + fill + axis", () => {
     const { onAdd } = renderPanel([]);
+    fireEvent.click(screen.getByLabelText("new shade full height"));
     fireEvent.change(screen.getByLabelText("new shade x1"), { target: { value: "10" } });
     fireEvent.change(screen.getByLabelText("new shade y1"), { target: { value: "20" } });
     fireEvent.change(screen.getByLabelText("new shade x2"), { target: { value: "30" } });

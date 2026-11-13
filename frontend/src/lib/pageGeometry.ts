@@ -8,17 +8,22 @@
 // eager chunk (slice 18). See pagesetup.ts's header for the physical-units
 // caveat that `pageSetupFromDecoded` honours.
 
-import { DEFAULT_PAGE_WIDTH_IN, type PageMargins, type PageSetup, type PageUnit } from "./pagesetup";
+import { DEFAULT_PAGE_HEIGHT_IN, DEFAULT_PAGE_WIDTH_IN, type PageMargins, type PageSetup, type PageUnit } from "./pagesetup";
 
 const CM_PER_IN = 2.54;
+const MM_PER_IN = 25.4;
 // CSS reference DPI — the interactive "px" unit. Export converts to inches for
 // matplotlib figsize, so the on-screen px<->in factor is presentation only.
 const PX_PER_IN = 96;
-const DEFAULT_MARGIN_IN = 0.5;
+// Page margins are OUTER padding around the export's tight layout (audit B3,
+// calc/figure_layout.py), which already keeps matplotlib's own small border --
+// so the default is none: a fresh page exports exactly like no page setup.
+const DEFAULT_MARGIN_IN = 0;
 
 /** Convert a length in `unit` to inches (the export/canonical unit). */
 export function toInches(value: number, unit: PageUnit): number {
   if (unit === "cm") return value / CM_PER_IN;
+  if (unit === "mm") return value / MM_PER_IN;
   if (unit === "px") return value / PX_PER_IN;
   return value;
 }
@@ -26,6 +31,7 @@ export function toInches(value: number, unit: PageUnit): number {
 /** Convert inches to `unit`. */
 export function fromInches(inches: number, unit: PageUnit): number {
   if (unit === "cm") return inches * CM_PER_IN;
+  if (unit === "mm") return inches * MM_PER_IN;
   if (unit === "px") return inches * PX_PER_IN;
   return inches;
 }
@@ -40,13 +46,19 @@ function defaultMargins(inches = DEFAULT_MARGIN_IN): PageMargins {
   return { left: inches, right: inches, top: inches, bottom: inches };
 }
 
-/** A neutral default page (US-letter-ish 4:3 at 6 in wide) — the seed when the
- *  user opens Page Setup on a window with no page model yet. Not aspect-derived
- *  (the user is defining it). */
+/** The default page — the "default" style preset's own 6 x 4 in, i.e. the size
+ *  an export already uses before Page setup is ever opened (audit #5: the
+ *  dialog used to open at 6 x 4.5 in). The seed when the user opens Page
+ *  Setup or the preview's canvas section on a window with no page model yet,
+ *  and the margins a size typed into the Export dialog starts from. The
+ *  Export dialog itself leaves Width / Height BLANK on such a window -- blank
+ *  means "the chosen style preset's own size", which differs per preset
+ *  (lib/pageSizeFields.ts), so seeding 6 x 4 there would override it. Not
+ *  aspect-derived (the user is defining it). */
 export function defaultPageSetup(): PageSetup {
   return {
     width: DEFAULT_PAGE_WIDTH_IN,
-    height: (DEFAULT_PAGE_WIDTH_IN * 3) / 4,
+    height: DEFAULT_PAGE_HEIGHT_IN,
     unit: "in",
     margins: defaultMargins(),
     aspectDerived: false,

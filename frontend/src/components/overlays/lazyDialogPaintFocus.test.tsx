@@ -130,7 +130,7 @@ describe("a lazy dialog body takes focus in the same task that paints it", () =>
     const probe = probeAtPaint();
     let result!: Promise<unknown>;
     act(() => {
-      result = askParams("Proceed?", []);
+      result = askParams("Proceed?", [], { confirmLabel: "Proceed" });
     });
     expect(screen.queryByRole("dialog")).toBeNull();
 

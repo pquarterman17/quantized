@@ -38,6 +38,7 @@ import math
 from collections.abc import Sequence
 from typing import Any
 
+from quantized.calc.axis_breaks import axis_break_info
 from quantized.calc.figure_render import savefig_bytes
 from quantized.heavy_import import heavy_imports
 
@@ -103,7 +104,14 @@ def _artist_window_extent(artist: Any, renderer: Any) -> Any:
 
 
 def collect_map(
-    fig: Any, ax: Any, *, series_artists: Sequence[Any], dpi: int, x_scale: str, y_scale: str
+    fig: Any,
+    ax: Any,
+    *,
+    series_artists: Sequence[Any],
+    dpi: int,
+    x_scale: str,
+    y_scale: str,
+    transparent: bool = False,
 ) -> dict[str, Any]:
     """Draw at ``dpi`` and harvest artist extents in image-pixel coords.
     ``series_artists`` is ``figure.draw_series_axes``'s return value (one
@@ -138,7 +146,11 @@ def collect_map(
     G1 was never actually facet-specific, just first NOTICED there because
     a faceted grid has sibling panels for an oversized box to visibly
     invade). Dropped entirely (not emitted) when the clip is empty, same as
-    the facet path."""
+    the facet path.
+
+    ``transparent`` renders the preview PNG on a transparent canvas, as the
+    export does for the same request (publication-figures audit #4: the
+    preview must show what Export writes)."""
     fig.set_dpi(dpi)
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
@@ -239,7 +251,9 @@ def collect_map(
     # `axes_px` was already computed above (fix round 5, V1) so `add_series`
     # could clip against it -- reused here verbatim, not recomputed.
     return {
-        "image": base64.b64encode(savefig_bytes(fig, "png")).decode("ascii"),
+        "image": base64.b64encode(
+            savefig_bytes(fig, "png", dpi=dpi, transparent=transparent)
+        ).decode("ascii"),
         "width": int(width),
         "height": int(height),
         "elements": elements,
@@ -251,8 +265,20 @@ def collect_map(
             "ylog": y_scale == "log",
             "xscale": x_scale,
             "yscale": y_scale,
+            **_y_break_fields(ax),
         },
     }
+
+
+def _y_break_fields(ax: Any) -> dict[str, Any]:
+    """A broken Y axis' transform (``calc.axis_breaks``), so the client can
+    invert a preview pixel through it (``previewmap.pxToData``): its
+    ``yscale`` reads "linear", but pixels are not linear in data there."""
+    info = axis_break_info(ax.yaxis)
+    if info is None:
+        return {}
+    breaks, gap = info
+    return {"ybreaks": [[lo, hi] for lo, hi in breaks], "ybreak_gap": gap}
 
 
 def _clip_box(box: dict[str, float], to: dict[str, float]) -> dict[str, float] | None:
@@ -460,10 +486,11 @@ def collect_facet_map(
             "ylog": y_scale == "log",
             "xscale": x_scale,
             "yscale": y_scale,
+            **_y_break_fields(ax),
         })
 
     return {
-        "image": base64.b64encode(savefig_bytes(fig, "png")).decode("ascii"),
+        "image": base64.b64encode(savefig_bytes(fig, "png", dpi=dpi)).decode("ascii"),
         "width": int(width),
         "height": int(height),
         "elements": elements,

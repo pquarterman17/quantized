@@ -67,12 +67,14 @@ export default function RescaleFields(p: RescaleFieldsProps) {
           <Select
             options={SCALE_OPS}
             value={p.xScaleOp}
+            aria-label="X scale operation"
             onChange={(e) => p.onChange("xScaleOp", e.target.value)}
             style={{ width: 52 }}
             title="Multiply or divide the X axis by a factor"
           />
           <NumberField
             value={p.xScaleVal}
+            aria-label="X scale factor"
             placeholder="1"
             onChange={(v) => p.onChange("xScaleVal", v)}
           />
@@ -84,12 +86,14 @@ export default function RescaleFields(p: RescaleFieldsProps) {
           <Select
             options={SCALE_OPS}
             value={p.yScaleOp}
+            aria-label="Y scale operation"
             onChange={(e) => p.onChange("yScaleOp", e.target.value)}
             style={{ width: 52 }}
             title="Multiply or divide every Y channel (error channels scale with them)"
           />
           <NumberField
             value={p.yScaleVal}
+            aria-label="Y scale factor"
             placeholder="1"
             onChange={(v) => p.onChange("yScaleVal", v)}
           />
@@ -102,6 +106,7 @@ export default function RescaleFields(p: RescaleFieldsProps) {
             <NumberField
               numeric={false}
               value={p.xLabelText}
+              aria-label="Rescaled X label"
               placeholder="keep current"
               title="Rename the X axis with this scale — blank keeps the current label"
               onChange={(v) => p.onChange("xLabelText", v)}
@@ -111,6 +116,7 @@ export default function RescaleFields(p: RescaleFieldsProps) {
             <NumberField
               numeric={false}
               value={p.yLabelText}
+              aria-label="Rescaled Y label"
               placeholder="keep current"
               title="Rename the Y axis with this scale — blank keeps the current label"
               onChange={(v) => p.onChange("yLabelText", v)}

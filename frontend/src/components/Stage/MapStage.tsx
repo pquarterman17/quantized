@@ -4,7 +4,7 @@
 // up-scale instead of nx·ny rects. NaN cells (outside the data hull) are
 // transparent (gaps), matching uPlot's null = gap for 1-D.
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { COLORMAPS } from "../../lib/colormap";
 import { cutSpaceForKeys } from "../../lib/mapcuts";
@@ -20,6 +20,7 @@ import { armExclusively, routedTool } from "./mapToolArming";
 import { fmt } from "./mapRender";
 import { runMapExport } from "./mapFigureExport";
 import { useMapPaint } from "./useMapPaint";
+import { useMapColumnPicks } from "./useMapColumnPicks";
 import { useMapPayload } from "./useMapPayload";
 import { useDockClearance } from "./useDockClearance";
 import { useMapCuts } from "./useMapCuts";
@@ -88,13 +89,12 @@ export default function MapStage({ dataset }: MapStageProps) {
   const contourScale = useApp((s) => s.contourScale);
   const setContourOn = useApp((s) => s.setContourOn);
   const setStatus = useApp((s) => s.setStatus);
-  // x/y/z channel picks, local to this view (default the first three channels).
-  const [keys, setKeys] = useState<[number, number, number]>([0, 1, 2]);
-
-  const labels = active?.data.labels ?? [];
+  // x/y/z channel picks over every file column (useMapColumnPicks.ts, #13).
+  const { mapActive, keys, setKeys } = useMapColumnPicks(active);
+  const labels = mapActive?.data.labels ?? [];
   const enoughChannels = labels.length >= 3;
   // Fetch + regrid on dataset/channel changes; `fresh` gates the export.
-  const { payload, fresh: payloadFresh, error: mapError } = useMapPayload(active, enoughChannels, keys, method, res, setStatus);
+  const { payload, fresh: payloadFresh, error: mapError } = useMapPayload(mapActive, enoughChannels, keys, method, res, setStatus);
 
   // RSM (XRDML 2D) datasets carry Qx/Qz columns -> offer an angular⇄Q toggle.
   const axis1Name = String(active?.data.metadata?.axis1_name ?? "Omega");
@@ -153,12 +153,6 @@ export default function MapStage({ dataset }: MapStageProps) {
     reportToStore: dataset === undefined,
   });
   const hostSize = { w, h };
-
-  // Reset the channel picks to 0/1/2 when the active dataset changes.
-  useEffect(() => {
-    setKeys([0, 1, Math.min(2, Math.max(0, labels.length - 1))]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.id]);
 
   // Box, ruler, and the sector wedge take precedence over the cut tool while
   // armed — all four drive the same canvas pointer gestures, so only one may

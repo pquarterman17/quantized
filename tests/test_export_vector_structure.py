@@ -516,7 +516,9 @@ def test_waterfall_offsets_leave_the_legend_and_axis_labels_alone() -> None:
     resp = client.post("/api/export/figure", json=payload)
     assert resp.status_code == 200, resp.text
     svg = resp.content.decode("utf-8", "ignore")
-    assert _legend_entries(svg) == _LEGEND_ENTRIES[:2]
+    # The entries keep their own text; under a waterfall the legend lists the
+    # TOP trace first, as the screen does (calc/figure_legend_order.py).
+    assert _legend_entries(svg) == _LEGEND_ENTRIES[:2][::-1]
     assert "Field" in svg and "Signal" in svg and "Stagger" in svg
 
 

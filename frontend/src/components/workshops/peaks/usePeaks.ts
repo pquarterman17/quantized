@@ -298,7 +298,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         hint: "{center} {height} {fwhm} {area} {index} — unknown tokens pass through literally",
       },
       { key: "precision", label: "Decimals", type: "number", default: 2 },
-    ]);
+    ], { confirmLabel: "Label" });
     if (!values) return; // cancelled — creates nothing (RULING 7's guard)
 
     // L3: match the sibling fit actions' (fitTogether/fitEach) error-

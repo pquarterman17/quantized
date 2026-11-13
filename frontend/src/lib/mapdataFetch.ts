@@ -19,6 +19,7 @@
 // importer of what moved is lazy.
 
 import { mapSeries } from "./api";
+import { repeats } from "./mapdata";
 import type { DataStruct, MapResponse } from "./types";
 
 // RSM_CUTS_PLAN item 16: regridNearest is documented O(nx·ny·N) brute force
@@ -265,4 +266,56 @@ export async function fetchMap(
       },
     };
   }
+}
+
+// ── Figures-audit #13: the map's column set and default picks (lazy: only
+// MapStage reads them; the eager tab gate is mapdata.ts's canRenderMap). ──
+
+/** The columns a map may pick from (figures-audit #13). A parser-flagged 2-D
+ *  map (`is2D`) keeps its own channels -- its ROI/cut tooling indexes them.
+ *  Every other dataset gets its FILE'S FIRST COLUMN back as channel 0: a
+ *  plain long-form `X,Y,Z` CSV stores X as the axis (`time`), not as a
+ *  channel, so without this its map could never use X -- and a 3-column
+ *  file looked like it had only two. Pure; the result is cached per
+ *  DataStruct so a re-render never re-allocates it. */
+const withAxisCache = new WeakMap<DataStruct, DataStruct>();
+export function mapColumns(ds: DataStruct): DataStruct {
+  if (ds.metadata["is2D"] === true) return ds;
+  const hit = withAxisCache.get(ds);
+  if (hit) return hit;
+  const meta = ds.metadata;
+  // The same x-label rule the line plot uses (`plotdata.ts`).
+  const xLabel = String(meta["x_column_long"] || meta["x_column_name"] || "X (first column)");
+  const xUnit = typeof meta["x_column_unit"] === "string" ? meta["x_column_unit"] : "";
+  const out: DataStruct = {
+    ...ds,
+    labels: [xLabel, ...ds.labels],
+    units: [xUnit, ...ds.units],
+    values: ds.values.map((row, i) => [ds.time[i], ...row]),
+  };
+  withAxisCache.set(ds, out);
+  return out;
+}
+
+/** The map's starting X/Y/Z picks among `mapColumns(ds)` (figures-audit
+ *  #13): the first two columns that repeat like grid axes become X and Y,
+ * 
+ *  the first column after them Z -- so `i,X,Y,Z` (a row-index first column)
+ *  maps X/Y/Z, not i/X/Y. A parser 2-D map, or data with no two grid-like
+ *  columns, keeps the plain first three. The user can re-pick any of them in
+ *  the map toolbar. */
+export function defaultMapKeys(ds: DataStruct): [number, number, number] {
+  const cols = mapColumns(ds);
+  const n = cols.labels.length;
+  const fallback: [number, number, number] = [0, Math.min(1, n - 1), Math.min(2, Math.max(0, n - 1))];
+  if (ds.metadata["is2D"] === true) return fallback;
+  const grid: number[] = [];
+  for (let c = 0; c < n && grid.length < 2; c++) {
+    if (repeats(cols.values.map((row) => row[c]))) grid.push(c);
+  }
+  if (grid.length < 2) return fallback;
+  // Z: the first column after the two axes (the long-form X,Y,Z order), else any other.
+  const others = Array.from({ length: n }, (_, c) => c).filter((c) => !grid.includes(c));
+  const z = others.find((c) => c > grid[1]) ?? others[0];
+  return z === undefined ? fallback : [grid[0], grid[1], z];
 }

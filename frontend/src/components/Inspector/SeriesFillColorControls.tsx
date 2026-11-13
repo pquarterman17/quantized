@@ -43,6 +43,7 @@ export default function SeriesFillColorControls({
           Fill
         </span>
         <Select
+          aria-label="Fill"
           options={[
             { value: "none", label: "None" },
             { value: "under", label: "Under (to zero)" },

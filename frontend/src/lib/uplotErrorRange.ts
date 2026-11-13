@@ -174,3 +174,11 @@ export function fullYExtents(
   // ...and its soft zero: data on one side of zero never pad across it.
   return [min < 0 ? min - pad : Math.max(0, min - pad), max >= 0 ? max + pad : Math.min(0, max + pad)];
 }
+
+/** The on-screen error-bar cap half-width (CSS px), so the canvas matches the
+ *  publication export: `calc/figure_errorbars.py` draws every bound bar with
+ *  matplotlib `capsize=2` (a 4 pt cap, i.e. 2 pt ≈ 2.7 px each side). The
+ *  2026-07-09 "caps default to zero" choice (item 3) predates the export
+ *  growing caps and left screen and export disagreeing; figures-audit #10
+ *  ("draw bound errors with caps") settles it in favour of agreement. */
+export const ERROR_CAP_HALF_PX = 3;

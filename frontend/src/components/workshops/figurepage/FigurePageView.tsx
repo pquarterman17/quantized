@@ -247,6 +247,7 @@ export default function FigurePageView() {
               {/* Rich-text (GOTO #5): $...$ math renders in the export. */}
               <RichLabelInput
                 live
+                name="Panel title"
                 value={sel.title ?? ""}
                 placeholder="title (from source)"
                 onCommit={(v) => p.setSlotTitle(selIdx, v.trim() === "" ? null : v)}

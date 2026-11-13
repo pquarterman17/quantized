@@ -32,7 +32,7 @@ import type { ParamValues } from "../../lib/params";
 function open(title: string, fields: ParamField[]): Promise<ParamValues | null> {
   let p!: Promise<ParamValues | null>;
   act(() => {
-    p = askParams(title, fields);
+    p = askParams(title, fields, { confirmLabel: "Run" });
   });
   return p;
 }
@@ -185,15 +185,15 @@ describe("ParamDialog — visible message and custom confirm label (audit item 3
     await expect(result).resolves.toEqual({ m: "a" });
   });
 
-  it("a later ask without options falls back to Run and no message", () => {
+  it("a later ask carries only its own message and verb", () => {
     render(<ParamDialog />);
     act(() => {
       void askParams("First", [], { message: "One-off note.", confirmLabel: "Export" });
     });
     act(() => {
-      void askParams("Second", []);
+      void askParams("Second", [], { confirmLabel: "Rename" });
     });
     expect(screen.queryByText("One-off note.")).toBeNull();
-    expect(screen.getByRole("button", { name: "Run" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rename" })).toBeInTheDocument();
   });
 });

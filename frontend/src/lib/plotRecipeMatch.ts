@@ -58,6 +58,10 @@ export interface ResolvedRecipeMapping {
   groupKey: number | null;
   facetKey: number | null;
   errors: ErrorBinding[];
+  /** Mirrors `RecipeMapping.yAuto`: the applied view keeps the target's
+   *  DEFAULT channel set (`yKeys: null`); `yKeys` then only says which
+   *  channels the captured per-series styles landed on. */
+  yAuto?: boolean;
 }
 
 /** The re-keyed visual payload -- identical field set to `RecipeVisual`
@@ -184,17 +188,17 @@ function findChannel(labels: readonly string[], entry: RecipeSignatureEntry): Ch
  *  recipe's panels resolve through `resolvePanels` with `opts`; their misses
  *  join `unmatched` (so they stage the same preview) and `panelIssues`. */
 export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset, opts: ResolveRecipeOptions = {}): RecipeResolution {
-  // "generic" never matches anything (lib/techniqueViewMemory.ts's rule,
-  // deliberately STRONGER here than a memory lookup's silent skip): there is
-  // no meaningful similarity between two unclassified datasets to trade a
-  // recipe on, so a generic-scoped recipe is refused even against another
-  // generic dataset, not merely against every OTHER technique.
-  if (recipe.technique === "generic") {
-    return { refused: "recipes scoped to \"generic\" never match (no reliable similarity between unclassified datasets)" };
-  }
-  const currentTechnique = techniqueOf(dataset);
-  if (currentTechnique !== recipe.technique) {
-    return { refused: `saved for ${recipe.technique}, not ${currentTechnique}` };
+  // B2 (figures audit, superseding the old "generic never matches" rule): a
+  // "generic"-scoped recipe -- every figure saved from plain CSV/text data --
+  // is a STYLE carrier, so it applies to any dataset, re-keyed by label /
+  // alias first and, failing that, by column position (see `positional`
+  // below). A technique-scoped recipe keeps its technique gate unchanged.
+  const generic = recipe.technique === "generic";
+  if (!generic) {
+    const currentTechnique = techniqueOf(dataset);
+    if (currentTechnique !== recipe.technique) {
+      return { refused: `saved for ${recipe.technique}, not ${currentTechnique}` };
+    }
   }
 
   const labels = dataset.data.labels;
@@ -205,18 +209,29 @@ export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset, opts: Resolv
   const unmatched: string[] = [];
   const warnings: string[] = [];
   const resolvedByEntry = new Map<string, number>();
+  // A `yAuto` recipe's Y entries only key per-series STYLES -- the applied
+  // view keeps the target's own default channel set -- so a Y entry with no
+  // counterpart is a dropped style, not an unbound field.
+  const styleOnlyY = recipe.mapping.yAuto === true;
+  const reportMiss = (entry: RecipeSignatureEntry): void => {
+    if (styleOnlyY && entry.role === "y") warnings.push(`${fieldName(entry)}: no matching column -- its style was not applied`);
+    else unmatched.push(fieldName(entry));
+  };
+  // Entries no label/alias tier matched, kept for the generic positional tier.
+  const positional: RecipeSignatureEntry[] = [];
 
   for (const entry of recipe.signature) {
     const match = findChannel(labels, entry);
     if (match.kind === "none") {
-      unmatched.push(fieldName(entry));
+      if (generic && entry.position !== undefined) positional.push(entry);
+      else reportMiss(entry);
       continue;
     }
     if (match.kind === "ambiguous") {
       // A genuine fold-only (or alias-only) duplicate at this tier -- no
       // exact match won outright, so there is no defensible single answer.
       // Never guess: drop the field and report every candidate by name.
-      unmatched.push(fieldName(entry));
+      reportMiss(entry);
       warnings.push(`${fieldName(entry)}: ambiguous -- matches columns ${candidateList(labels, match.candidates)}`);
       continue;
     }
@@ -228,7 +243,7 @@ export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset, opts: Resolv
     // `quickPlotTemplates.ts`'s `resolveChannel` uses.
     if (entry.unit && units[idx] !== entry.unit) {
       warnings.push(`${fieldName(entry)}: unit changed (saved "${entry.unit}", now "${units[idx] || "(none)"}")`);
-      unmatched.push(fieldName(entry));
+      reportMiss(entry);
       continue;
     }
     // The errorRole guard (P1-4 idiom, quickPlotTemplates.ts ~238-264): a
@@ -251,6 +266,25 @@ export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset, opts: Resolv
       };
     }
     resolvedByEntry.set(entry.id, idx);
+  }
+
+  // Generic positional tier: the same column position, provided no label
+  // match already claimed it and it still plays the same error role (a
+  // position is a weaker guess than a label, so a role change demotes the
+  // entry to unmatched rather than refusing the whole recipe). Units are not
+  // compared -- a different CSV's column at the same place is expected to
+  // carry its own unit. Every positional bind is named in `warnings`, so the
+  // apply preview says how each column was chosen.
+  const claimed = new Set(resolvedByEntry.values());
+  for (const entry of positional) {
+    const idx = entry.position!;
+    if (idx >= labels.length || claimed.has(idx) || currentErrorRole(idx) !== entry.errorRole) {
+      reportMiss(entry);
+      continue;
+    }
+    claimed.add(idx);
+    resolvedByEntry.set(entry.id, idx);
+    warnings.push(`${fieldName(entry)}: matched by column position ${idx + 1} ("${labels[idx]}")`);
   }
 
   // Cross-entry collision check: TWO DIFFERENT signature entries can each
@@ -353,7 +387,7 @@ export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset, opts: Resolv
   const panelIssues = [...(panelsResolution?.issues ?? []), ...(windowResolution?.issues ?? [])];
 
   const resolved: ResolvedRecipeApplication = {
-    mapping: { xKey, yKeys, y2Keys, groupKey, facetKey, errors },
+    mapping: { xKey, yKeys, y2Keys, groupKey, facetKey, errors, ...(styleOnlyY ? { yAuto: true } : {}) },
     panels: panelsResolution?.panels ?? null,
     map: recipe.map ? { ...recipe.map, colorLimits: recipe.map.colorLimits ? [...recipe.map.colorLimits] : null } : null,
     ...(windowResolution?.window ? { panelWindow: windowResolution.window } : {}),

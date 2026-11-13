@@ -108,7 +108,7 @@ export function violinValueDomain(
 export function barErrorHalf(
   d: Extract<StatDrawData, { mode: "bar" }>, s: BarSeriesStat, m: DrawMarks = drawMarks(d),
 ): number {
-  return errorHalfWidth(m.errorBars, s.sem, s.n);
+  return errorHalfWidth(m.errorBars, s.sem, s.n, s.err);
 }
 
 /** Every extent bar mode draws (bar tops/bottoms, error whiskers, 0, and a

@@ -10,6 +10,7 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { Select } from "../../primitives";
 import AnnotationEditor from "./AnnotationEditor";
+import CanvasPanel from "./CanvasPanel";
 import ChannelsPanel from "./ChannelsPanel";
 import ErrorColumnsPanel from "./ErrorColumnsPanel";
 import FacetBreakNotice from "./FacetBreakNotice";
@@ -21,6 +22,8 @@ import RegionShadePropertiesPanel from "./RegionShadePropertiesPanel";
 import type { ChannelsPanelProps, ErrorColumnsPanelProps, RefLinesPanelProps, RegionShadesPanelProps, SeriesPanelProps, ShapesPanelProps, TickFormatPanelProps } from "./propertyPanelTypes";
 import TickFormatPanel from "./TickFormatPanel";
 import ShapePropertiesPanel from "./ShapePropertiesPanel";
+import TypographyPanel from "./TypographyPanel";
+import type { PageSetup } from "../../../lib/pagesetup";
 
 // The panel-group prop contracts live in propertyPanelTypes.ts (extracted to
 // fund F2.3g -- see its module doc); re-exported so every existing importer
@@ -89,6 +92,8 @@ export default function PropertyPanels({
   grouping,
   openGroup = null,
   openNonce,
+  pageSetup,
+  setPageSetup,
 }: {
   overrides: FigureOverrides;
   setOverrides: (overrides: FigureOverrides) => void;
@@ -137,6 +142,9 @@ export default function PropertyPanels({
   /** Bumped on every selection (even reselecting the same group) so a
    *  manually-collapsed panel reopens. */
   openNonce?: number;
+  /** Audit #5: the figure's page (shared with Page setup / Export). */
+  pageSetup?: PageSetup | null;
+  setPageSetup?: (next: PageSetup) => void;
 }) {
   const patch = (change: Partial<FigureOverrides>) => setOverrides({ ...overrides, ...change });
   // Post-removal focus anchor for the break rows' Remove buttons — the same
@@ -168,19 +176,7 @@ export default function PropertyPanels({
   return (
     <div>
       <Group title="Text & fonts" forceOpen={openGroup === "Text & fonts"} openNonce={openNonce}>
-        <Num label="font size" value={overrides.font_size} min={1} onValue={(font_size) => patch({ font_size })} />
-        <Num label="title size" value={overrides.title_size} min={1} onValue={(title_size) => patch({ title_size })} />
-        <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
-          <label className="qzk-field-lbl">font name</label>
-          <NumberField
-            aria-label="font name"
-            numeric={false}
-            width={110}
-            value={overrides.font_name ?? ""}
-            placeholder="(preset)"
-            onChange={(font_name) => patch({ font_name: font_name.trim() || undefined })}
-          />
-        </span>
+        <TypographyPanel overrides={overrides} patch={patch} />
       </Group>
 
       <Group title="Axes & ticks" forceOpen={openGroup === "Axes & ticks"} openNonce={openNonce}>
@@ -304,17 +300,7 @@ export default function PropertyPanels({
 
       {channels && (
         <Group title="Channels" forceOpen={openGroup === "Channels"} openNonce={openNonce}>
-          <ChannelsPanel
-            labels={channels.labels}
-            channelRoles={channels.channelRoles}
-            xKey={channels.xKey}
-            yKeys={channels.yKeys}
-            y2Keys={channels.y2Keys}
-            fallbackYKeys={channels.fallbackYKeys}
-            onXKey={channels.onXKey}
-            onToggleY={channels.onToggleY}
-            onToggleY2={channels.onToggleY2}
-          />
+          <ChannelsPanel {...channels} />
         </Group>
       )}
 
@@ -381,11 +367,8 @@ export default function PropertyPanels({
         </Group>
       )}
 
-      <Group title="Canvas (margins, fig fraction)">
-        <Num label="left" value={overrides.margins?.left} onValue={(left) => patch({ margins: { ...overrides.margins, left } })} />
-        <Num label="right" value={overrides.margins?.right} onValue={(right) => patch({ margins: { ...overrides.margins, right } })} />
-        <Num label="top" value={overrides.margins?.top} onValue={(top) => patch({ margins: { ...overrides.margins, top } })} />
-        <Num label="bottom" value={overrides.margins?.bottom} onValue={(bottom) => patch({ margins: { ...overrides.margins, bottom } })} />
+      <Group title="Page & canvas" forceOpen={openGroup === "Canvas"} openNonce={openNonce}>
+        <CanvasPanel overrides={overrides} patch={patch} pageSetup={pageSetup} setPageSetup={setPageSetup} />
       </Group>
 
       <Group title="Annotations" forceOpen={openGroup === "Annotations"} openNonce={openNonce}>

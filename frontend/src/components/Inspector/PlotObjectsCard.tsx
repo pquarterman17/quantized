@@ -95,6 +95,9 @@ export default function PlotObjectsCard() {
     setSeriesOrder(order);
   };
 
+  // Each curve row's controls carry the curve's name, so they stay unique.
+  const curveName = (channel: number): string => active.data.labels[channel] ?? `Channel ${channel + 1}`;
+
   const toggleCurveAxis = (channel: number) => {
     const next = new Set(y2Keys ?? []);
     if (next.has(channel)) next.delete(channel);
@@ -219,15 +222,15 @@ export default function PlotObjectsCard() {
           <span className="qz-v" style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
             {active.data.labels[channel] ?? `Channel ${channel + 1}`}
           </span>
-          <IconButton aria-label="Move up" title="Move up" disabled={i === 0} onClick={() => moveCurve(channel, -1)}>↑</IconButton>
-          <IconButton aria-label="Move down" title="Move down" disabled={i === channels.length - 1} onClick={() => moveCurve(channel, 1)}>↓</IconButton>
-          <Button size="sm" onClick={() => toggleCurveAxis(channel)}>{y2Keys?.includes(channel) ? "Y2" : "Y"}</Button>
-          <IconButton aria-label="Curve properties" title="Properties" onClick={() => openSeriesProperties(channel)}>⚙</IconButton>
+          <IconButton aria-label={`Move ${curveName(channel)} up`} title="Move up" disabled={i === 0} onClick={() => moveCurve(channel, -1)}>↑</IconButton>
+          <IconButton aria-label={`Move ${curveName(channel)} down`} title="Move down" disabled={i === channels.length - 1} onClick={() => moveCurve(channel, 1)}>↓</IconButton>
+          <Button size="sm" aria-label={`${curveName(channel)} on ${y2Keys?.includes(channel) ? "Y2" : "Y"} axis`} title="Toggle the curve between the Y and Y2 axes" onClick={() => toggleCurveAxis(channel)}>{y2Keys?.includes(channel) ? "Y2" : "Y"}</Button>
+          <IconButton aria-label={`${curveName(channel)} properties`} title="Properties" onClick={() => openSeriesProperties(channel)}>⚙</IconButton>
         </div>
       ))}
 
       <div className="qzk-field-lbl" style={{ marginTop: 8 }}>Annotations</div>
-      {annotations.map((a) => (
+      {annotations.map((a, ai) => (
         <div key={a.id} className="qz-meta-row" style={{ display: "flex", alignItems: "center", gap: 3 }}>
           <input
             type="checkbox"
@@ -241,14 +244,14 @@ export default function PlotObjectsCard() {
             onClick={() => { setSelection(new Set([annotationKey(a.id)])); setSelectedShapeId(null); setSelectedAnnotationId(a.id); }}
             style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", textAlign: "left" }}
           >{a.text}</button>
-          <IconButton aria-label="Duplicate annotation" title="Duplicate" onClick={() => addAnnotation(a.x, a.y, a.text)}>⧉</IconButton>
-          <IconButton aria-label="Annotation properties" title="Properties" onClick={() => { setSelectedAnnotationId(a.id); setStatus("Annotation selected; edit it in Annotations below"); }}>⚙</IconButton>
-          <IconButton aria-label="Delete annotation" title="Delete" onClick={() => removeAnnotation(a.id)}>×</IconButton>
+          <IconButton aria-label={`Duplicate annotation ${ai + 1}`} title="Duplicate" onClick={() => addAnnotation(a.x, a.y, a.text)}>⧉</IconButton>
+          <IconButton aria-label={`Annotation ${ai + 1} properties`} title="Properties" onClick={() => { setSelectedAnnotationId(a.id); setStatus("Annotation selected; edit it in Annotations below"); }}>⚙</IconButton>
+          <IconButton aria-label={`Delete annotation ${ai + 1}`} title="Delete" onClick={() => removeAnnotation(a.id)}>×</IconButton>
         </div>
       ))}
 
       <div className="qzk-field-lbl" style={{ marginTop: 8 }}>Shapes</div>
-      {shapes.map((shape) => (
+      {shapes.map((shape, si) => (
         <div key={shape.id} className="qz-meta-row" style={{ display: "flex", alignItems: "center", gap: 3 }}>
           <input
             type="checkbox"
@@ -262,9 +265,9 @@ export default function PlotObjectsCard() {
             onClick={() => { setSelection(new Set([shapeKey(shape.id)])); setSelectedAnnotationId(null); setSelectedShapeId(shape.id); }}
             style={{ flex: 1, textAlign: "left" }}
           >{shape.kind}</button>
-          <IconButton aria-label="Duplicate shape" title="Duplicate" onClick={() => { const { id: _id, ...copy } = shape; addShape(copy); }}>⧉</IconButton>
-          <IconButton aria-label="Shape properties" title="Properties" onClick={() => { setSelectedShapeId(shape.id); setStatus("Shape selected; edit it in Shapes below"); }}>⚙</IconButton>
-          <IconButton aria-label="Delete shape" title="Delete" onClick={() => removeShape(shape.id)}>×</IconButton>
+          <IconButton aria-label={`Duplicate shape ${si + 1}`} title="Duplicate" onClick={() => { const { id: _id, ...copy } = shape; addShape(copy); }}>⧉</IconButton>
+          <IconButton aria-label={`Shape ${si + 1} properties`} title="Properties" onClick={() => { setSelectedShapeId(shape.id); setStatus("Shape selected; edit it in Shapes below"); }}>⚙</IconButton>
+          <IconButton aria-label={`Delete shape ${si + 1}`} title="Delete" onClick={() => removeShape(shape.id)}>×</IconButton>
         </div>
       ))}
     </Card>

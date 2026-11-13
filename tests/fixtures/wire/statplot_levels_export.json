@@ -31,7 +31,6 @@
     "grp = E"
   ],
   "fmt": "svg",
-  "title": "y by grp",
   "x_label": "grp",
   "y_label": "y",
   "filename": "box_y",

@@ -149,7 +149,9 @@ export function useFitBands(target: FitBandsTarget): FitBandsState {
     // six unstyled lines beside the styled copy). The styles go on after the
     // rebind, which resets them to the dataset defaults.
     focusWindow(createWindow(null, undefined, `${model} fit band`));
-    addDataset({ id, name, data: bandDataStruct(rows, band, prediction, src) });
+    // `intoFocused`: this window was made for the band, so its own title does
+    // not make it a styled window to protect (store/windowUserEdits.ts).
+    addDataset({ id, name, data: bandDataStruct(rows, band, prediction, src) }, undefined, true);
     useApp.setState({ seriesStyles: bandStyles(prediction) });
     setStatus(`added ${name}`);
   }

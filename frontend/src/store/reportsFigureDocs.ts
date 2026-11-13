@@ -131,10 +131,14 @@ export function createReportsFigureDocsSlice(set: SliceSet, get: SliceGet): Repo
         };
       })),
     removeReport: (id) => removeReportWithTrash(get, set, id),
-    renameReport: (id, name) => (get().recordHistory("rename report"),
+    renameReport: (id, name) => {
+      const r0 = get().reports.find((r) => r.id === id);
+      if (!r0 || r0.name === name) return; // no-op: no undo step
+      get().recordHistory("rename report");
       set((s) => ({
         reports: s.reports.map((r) => (r.id === id ? { ...r, name } : r)),
-      }))),
+      }));
+    },
     updateReportSheet: (id, edit, label) => {
       const entry = get().reports.find((r) => r.id === id);
       const report = entry ? edit(entry.report) : null;
@@ -149,9 +153,12 @@ export function createReportsFigureDocsSlice(set: SliceSet, get: SliceGet): Repo
       figureDocs: [...s.figureDocs, doc], status: `figure "${doc.name}" saved`,
     }))),
     removeFigureDoc: (id) => removeFigureDocWithTrash(get, set, id),
-    renameFigureDoc: (id, name) => (get().recordHistory("rename figure"), set((s) => ({
-        figureDocs: s.figureDocs.map((f) => (f.id === id ? { ...f, name } : f)),
-    }))),
+    renameFigureDoc: (id, name) => {
+      const f0 = get().figureDocs.find((f) => f.id === id);
+      if (!f0 || f0.name === name) return; // no-op: no undo step
+      get().recordHistory("rename figure");
+      set((s) => ({ figureDocs: s.figureDocs.map((f) => (f.id === id ? { ...f, name } : f)) }));
+    },
     duplicateFigureDoc: (id) => {
       if (!get().figureDocs.some((f) => f.id === id)) return;
       get().recordHistory("duplicate figure");

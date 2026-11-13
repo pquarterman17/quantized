@@ -59,7 +59,10 @@ describe("HelpDialog", () => {
       target: { value: "discontinuous" },
     });
     expect(titleShown("Break x-axis at gaps")).toBe(true);
-    expect(screen.getByText("Plot ▸ Layout")).toBeInTheDocument();
+    // The Y break (an Axis-dialog property, reached from Plot ▸ Layout too)
+    // is discontinuous as well, so both answer.
+    expect(titleShown("Break y-axis")).toBe(true);
+    expect(screen.getAllByText("Plot ▸ Layout")).toHaveLength(2);
   });
 
   it("searches File and Data commands by outcomes rather than menu labels", () => {

@@ -15,6 +15,9 @@
 import { useRef, useState } from "react";
 
 import { CHANNEL_DND, decodeChannelDrag, resolveAxisZone, type AxisZone } from "../../lib/dragaxis";
+import { onLoadFailure, runLazy } from "../../lib/runLazy";
+import { openFigureDialog } from "../../store/figureDialogs";
+import { useApp } from "../../store/useApp";
 
 interface Props {
   className: string;
@@ -38,6 +41,7 @@ export default function AxisDropZones({ className, style, onContextMenu, onAxisD
   // the pointer truly leaves the whole stage subtree.
   const [depth, setDepth] = useState(0);
   const [zone, setZone] = useState<AxisZone | null>(null);
+  const hasY2 = useApp((s) => (s.y2Keys?.length ?? 0) > 0); // #6: Y2's band opens its dialog only when drawn
 
   const isChannelDrag = (e: React.DragEvent): boolean => e.dataTransfer.types.includes(CHANNEL_DND);
 
@@ -56,6 +60,19 @@ export default function AxisDropZones({ className, style, onContextMenu, onAxisD
       className={className}
       style={style}
       onContextMenu={onContextMenu}
+      // Origin's "double-click an axis" opens the Axis dialog (#6).
+      onDoubleClick={(e) => {
+        const root = (e.target as Element).closest?.(".uplot");
+        const over = root?.querySelector(".u-over");
+        if (!root || !over) return;
+        // The hit test is a lazy piece (axisAtPoint.ts, eager-bundle budget);
+        // the boxes and point are read now, while the event is current.
+        const [o, r, x, y] = [over.getBoundingClientRect(), root.getBoundingClientRect(), e.clientX, e.clientY];
+        void runLazy("Loading the axis dialog…", () => import("./axisAtPoint")).then((m) => {
+          const axis = m.axisAtPoint(o, r, x, y, hasY2);
+          if (axis) openFigureDialog({ kind: "axis", axis });
+        }, onLoadFailure);
+      }}
       onDragEnter={(e) => {
         if (!isChannelDrag(e)) return;
         e.preventDefault();

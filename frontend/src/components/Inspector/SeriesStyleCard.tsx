@@ -22,12 +22,12 @@ import Card from "../primitives/Card";
 import SeriesFillColorControls from "./SeriesFillColorControls";
 
 const PALETTE = [1, 2, 3, 4, 5, 6, 7, 8];
-const LINE_OPTS: { value: LineStyle; label: string }[] = [
-  { value: "solid", label: "──" },
-  { value: "dashed", label: "╌╌" },
-  { value: "dotted", label: "···" },
-];
 const LINE_NAMES: Record<LineStyle, string> = { solid: "Solid", dashed: "Dashed", dotted: "Dotted" };
+const LINE_OPTS: { value: LineStyle; label: string; ariaLabel: string }[] = [
+  { value: "solid", label: "──", ariaLabel: LINE_NAMES.solid },
+  { value: "dashed", label: "╌╌", ariaLabel: LINE_NAMES.dashed },
+  { value: "dotted", label: "···", ariaLabel: LINE_NAMES.dotted },
+];
 const shapeLabel = (s: MarkerShape) => MARKER_SHAPES.find((m) => m.value === s)?.label ?? s;
 
 /** Where the focused canvas draws each channel: its position in the plotted
@@ -181,6 +181,7 @@ function StyleRow({
             value={style.width != null ? String(style.width) : ""}
             width={52}
             placeholder="1.5"
+            aria-label="Line width"
             unit="px"
             onChange={commitWidth}
           />

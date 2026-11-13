@@ -1,23 +1,35 @@
 """Read Origin ``.opj`` (CPYA) projects: worksheet data + column names/units.
 
-M1 recovered the numeric columns (datasets named ``"<Book>_<Col>"``, 10-byte
-``<mask><float64>`` records); this adds the windows-section metadata (plan
-item 2): real column long names, units, comments, and X/Y designations. The
-largest book returns as the :class:`~quantized.datastruct.DataStruct` (every
-book's inventory stays in metadata; per-book selection is plan item 3/16).
+Each worksheet column is a dataset named ``"<Book>_<Col>[@sheet]"``; a
+matrix sheet is one dataset named after its window. Since 2026-11 the
+reader is **header-driven**: every dataset header states its cell type, row
+width and used-row range (``opj_datasets``), ``opj_scan`` walks the
+datasets section and sorts each dataset into a worksheet column, a matrix
+(``opj_matrix``) or a not-imported diagnostic, and this module groups the
+result into books and attaches the windows-section metadata (long names,
+units, comments, X/Y designations — ``windows``).
 
-Plan item 4 (non-double column value types) adds inline-text column decode:
-a "Text & Numeric" column reuses the same 10-byte record as a double column,
-but its 8-byte value area holds a short NUL-terminated string instead of a
-raw float64 (`container.decode_inline_text`). Decoded text columns never
-enter `.values` (the data contract is numeric); they attach to metadata as
-`origin_text_columns: {short_name: [str, ...]}`. A column that overflows
-`decode_inline_text`'s 8-byte value area (Origin's FitLinear/NLFit
-auto-generated report-sheet columns, e.g. `"cell://Parameters.Slope.Value"`)
-gets a second try via `container.decode_report_strings` — a wider,
-column-specific record width — attaching to
-`origin_report_sheets: {short_name: [str, ...]}`. Whatever fits neither
-shape keeps the honest drop.
+What lands where:
+
+* numeric cells -> ``.values`` (blank cells NaN; float32 / integer / the
+  real part of a complex column widen to float64; rows past the used-row
+  end are allocation and are not returned);
+* text cells -> ``metadata["origin_text_columns"]: {short: [str per row]}``,
+  never ``.values`` (the data contract is numeric). A Text & Numeric column
+  holding BOTH gets its numbers in ``.values`` (text cells NaN) and its
+  full text view in the sidecar;
+* Origin's FitLinear/NLFit report-sheet reference columns
+  (``"cell://Parameters.Slope.Value"``) -> ``metadata["origin_report_sheets"]``;
+* a complex column's imaginary part -> ``metadata["origin_complex_imaginary"]``;
+* a matrix sheet -> its own map DataStruct (X, Y, Z point cloud);
+* anything not decoded -> ``metadata["origin_data_diagnostics"]``, which the
+  import route merges into the project's fidelity manifest.
+
+A project with no parseable dataset header (the synthetic fixtures older
+tests build) takes the LEGACY walk, :func:`_columns` — every data block read
+as 10-byte ``<mask><float64>`` records and content-sniffed for text
+(``container.decode_inline_text`` / ``decode_report_strings``). It is kept
+unchanged and is never used for a file the header-driven path recognises.
 
 Column long names/units/comments and book display titles are Origin
 LabTalk *label* fields — the exact same rich-text escape syntax as graph
@@ -26,16 +38,17 @@ type ``\\+(...)``/``\\g(...)``/etc. into a column's Long Name or Unit row
 just as freely as into an axis title. Confirmed live in the corpus
 (`MnN_Diffusion_PNR.opj`'s "Nuclear SLD" books carry a Unit of
 ``10\\+(-6) A\\+(-2)``): every such field is decoded through
-`clean_richtext` here, at the one `_build_book` shared by both `.opj`
-and `.opju` (`opju.py` reuses it verbatim) — the single chokepoint that
-also feeds every frontend consumer of `.labels`/`.units`/
-`x_column_unit`/`origin_book_long` (axis labels, per-series legends,
-the worksheet header, the Inspector).
+`clean_richtext` at the one `_build_book` (``opj_books``) shared by both
+`.opj` and `.opju` — the single chokepoint that also feeds every frontend
+consumer of `.labels`/`.units`/`x_column_unit`/`origin_book_long`.
 """
 
 from __future__ import annotations
 
+import dataclasses
 from collections import OrderedDict
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypeVar
 
@@ -53,7 +66,28 @@ from quantized.io.origin_project.container import (
     salvage_column,
     walk_blocks,
 )
-from quantized.io.origin_project.origin_richtext import clean_richtext
+from quantized.io.origin_project.opj_books import Columns as Columns
+from quantized.io.origin_project.opj_books import TextColumns as TextColumns
+from quantized.io.origin_project.opj_books import _book_long_name as _book_long_name
+from quantized.io.origin_project.opj_books import _build_book as _build_book
+from quantized.io.origin_project.opj_books import _group as _group
+from quantized.io.origin_project.opj_books import _group_named as _group_named
+from quantized.io.origin_project.opj_books import _inventory as _inventory
+from quantized.io.origin_project.opj_books import _label_for as _label_for
+from quantized.io.origin_project.opj_matrix import matrix_books, matrix_sheets
+from quantized.io.origin_project.opj_scan import (
+    DatasetScan,
+    Problem,
+    scan_datasets,
+    summarize_problems,
+)
+from quantized.io.origin_project.opj_sheets import (
+    WindowSheet,
+    bind_worksheets,
+    book_key,
+    sole_sheet_books,
+    window_sheets,
+)
 from quantized.io.origin_project.windows import BookMeta, ColumnMeta, window_metadata
 
 __all__ = [
@@ -63,8 +97,6 @@ __all__ = [
     "read_opj",
     "read_opj_books",
 ]
-
-_V = TypeVar("_V")
 
 
 def _columns(
@@ -138,227 +170,107 @@ def _looks_textual(payload: bytes) -> bool:
     return masked < 0.5 * n_rec
 
 
-def _label_for(col: str, meta: ColumnMeta | None) -> str:
-    """The display label for a value column: its decoded Long Name (Origin
-    rich-text escapes translated — see the module docstring) when the windows
-    section resolved one, else the bare Origin short designation (A, B, …)."""
-    return clean_richtext(meta.long_name) if meta is not None and meta.long_name else col
+@dataclass
+class _ParseResult:
+    """One parsed project: column groups per book, window metadata, the
+    book inventory, and (header-driven files only) matrices + diagnostics."""
+
+    books: OrderedDict[str, Columns]
+    text_books: OrderedDict[str, TextColumns]
+    report_books: OrderedDict[str, TextColumns]
+    books_meta: dict[str, BookMeta]
+    inventory: list[dict[str, object]]
+    imag_books: OrderedDict[str, Columns] = field(default_factory=OrderedDict)
+    matrices: list[DataStruct] = field(default_factory=list)
+    diagnostics: dict[str, object] | None = None
+    # True when the datasets were decoded from their headers; False on the
+    # legacy content-sniffing walk (which keeps its old book assembly too).
+    header_driven: bool = False
+    # Header-driven only: each book key's column metadata (its bound
+    # sheet's), the book keys with a column that could not be decoded, and
+    # whether a dataset was lost with no name to say whose it was.
+    sheet_columns: dict[str, dict[str, ColumnMeta]] = field(default_factory=dict)
+    lost_books: set[str] = field(default_factory=set)
+    unowned_loss: bool = False
+    # Book key -> the sheet id its datasets carry, for a one-sheet book
+    # named as the book (`opj_sheets.sole_sheet_books`), so the `@N` is not lost.
+    sheet_ids: dict[str, str] = field(default_factory=dict)
 
 
-Columns = list[tuple[str, NDArray[np.float64]]]
-TextColumns = list[tuple[str, list[str]]]
+_LEGACY_NOTICE = (
+    "this file's datasets have no readable headers: columns were recovered by "
+    "inspecting their bytes, so values and column types may be unreliable"
+)
 
 
-def _group_named(pairs: list[tuple[str, _V]]) -> OrderedDict[str, list[tuple[str, _V]]]:
-    """Group ``<Book>_<Col>[@sheet]`` names into per-book column lists.
+_T = TypeVar("_T")
 
-    Shared by numeric column grouping (`_group`) and text column grouping —
-    the naming/sheet rule doesn't care what a column's values look like.
+
+def _rekey(d: Mapping[str, _T], names: dict[str, str]) -> OrderedDict[str, _T]:
+    return OrderedDict((names.get(k, k), v) for k, v in d.items())
+
+
+def _sheet_columns(
+    scan: DatasetScan, sheets: dict[str, list[WindowSheet]]
+) -> tuple[dict[str, dict[str, ColumnMeta]], set[str]]:
+    """``(book key -> its sheet's column metadata, book keys whose first
+    column was lost)`` for a header-driven project.
+
+    Each book key (``Book`` / ``Book@N``) takes the columns of the sheet
+    its id is bound to (``opj_sheets``); one that cannot be bound gets none
+    and is reported. Metadata for a column that names no dataset is
+    forgotten (:func:`_drop_unbacked_columns` says why) — unless a dataset
+    was lost without a name, when the missing dataset may be that one.
+
+    A book key is in the second result when a column that could not be
+    decoded comes BEFORE its first decoded numeric column: with no
+    designation to go by, "the first column is X" would then promote a
+    column that is not the first.
     """
-    books: OrderedDict[str, list[tuple[str, _V]]] = OrderedDict()
-    for name, vals in pairs:
-        book, _, col = name.rpartition("_")
-        col, _, sheet = (col or "A").partition("@")
-        if sheet:  # sheet N>1 becomes its own pseudo-book "<Book>@N"
-            book = f"{book or 'Book'}@{sheet}"
-        books.setdefault(book or "Book", []).append((col or "A", vals))
-    return books
-
-
-def _group(columns: Columns) -> OrderedDict[str, Columns]:
-    return _group_named(columns)
-
-
-def _inventory(
-    books: OrderedDict[str, Columns],
-    books_meta: dict[str, BookMeta],
-    report_only: OrderedDict[str, TextColumns] | None = None,
-) -> list[dict[str, object]]:
-    """Book inventory for metadata. ``report_only`` (plan item 4) lists any
-    pseudo-book whose columns are entirely Origin's auto-generated
-    report-sheet family (e.g. a fit's "FitNL1" sheet with zero plausible
-    numeric columns) — without it, such a sheet would be silently absent from
-    the inventory despite getting its own DataStruct (see ``_build_book``).
-    """
-    out = [
-        {
-            "name": k,
-            "long_name": clean_richtext(books_meta[k].long_name) if k in books_meta else k,
-            "ncols": len(v),
-            "nrows": max((len(a) for _, a in v), default=0),
-        }
-        for k, v in books.items()
-    ]
-    for k, v in (report_only or {}).items():
-        if k in books:
-            continue
-        out.append(
-            {
-                "name": k,
-                "long_name": clean_richtext(books_meta[k].long_name) if k in books_meta else k,
-                "ncols": len(v),
-                "nrows": max((len(rows) for _, rows in v), default=0),
-            }
+    bound, unbound = bind_worksheets(scan.headers, sheets)
+    columns: dict[str, dict[str, ColumnMeta]] = {key: {} for key in unbound}
+    for key in unbound:
+        scan.problems.append(
+            Problem("sheet", key, "its sheet could not be identified among its window's sheets")
         )
-    return out
-
-
-def _book_long_name(book: str, books_meta: dict[str, BookMeta]) -> str:
-    """The book's display title (Origin rich-text escapes translated — see
-    the module docstring), with a "(sheet N)" suffix for an extra-sheet
-    pseudo-book (``Book@N``)."""
-    base_book, _, sheet_no = book.partition("@")
-    if sheet_no and base_book in books_meta:
-        return f"{clean_richtext(books_meta[base_book].long_name)} (sheet {sheet_no})"
-    return clean_richtext(books_meta[book].long_name) if book in books_meta else book
-
-
-def _build_book(
-    book: str,
-    cols: Columns,
-    books_meta: dict[str, BookMeta],
-    inventory: list[dict[str, object]],
-    source_format: str = "origin_opj",
-    text_cols: TextColumns | None = None,
-    report_cols: TextColumns | None = None,
-) -> DataStruct:
-    """Assemble one workbook into a DataStruct.
-
-    Ragged columns are padded to the book's max length with NaN. The X column
-    is the first designation-X column when the windows metadata knows one,
-    else the first column; the rest become value columns labelled by their
-    long name (falling back to the Origin short designation A, B, …).
-
-    ``text_cols`` (plan item 4) are this book's inline-text columns — never
-    part of `.values` (the data contract is numeric); they attach under
-    ``metadata["origin_text_columns"]`` keyed by Origin short name (A, B, …).
-    ``report_cols`` (plan item 4, report-sheet residue) are this book's
-    report-sheet reference-string columns (Notes/Summary/Parameters/RegStats/
-    ANOVA "cell://" columns), attached the same way under
-    ``metadata["origin_report_sheets"]``.
-
-    A sheet made *entirely* of report-sheet columns (e.g. a fit's "FitNL1"
-    report, which typically has zero plausible-numeric columns of its own —
-    ``cols`` empty) still gets its own pseudo-book: an empty-data DataStruct
-    carrying only the report metadata, rather than being silently omitted.
-    """
-    if not cols:
-        book_long = _book_long_name(book, books_meta)
-        meta_empty: dict[str, object] = {
-            "source_format": source_format,
-            "origin_book": book,
-            "origin_book_long": book_long,
-            "origin_books": inventory,
-            "origin_report_sheets": {c: rows for c, rows in (report_cols or [])},
+    for key, sheet in bound.items():
+        book, at, sheet_no = key.partition("@")
+        columns[key] = {
+            c: m
+            for c, m in sheet.columns.items()
+            if scan.unowned_losses or f"{book}_{c}{at}{sheet_no}" in scan.names
         }
-        return DataStruct(time=np.empty(0), values=np.empty((0, 0)), metadata=meta_empty)
-
-    base_book, _, sheet_no = book.partition("@")
-    col_meta = books_meta[base_book].columns if base_book in books_meta and not sheet_no else {}
-    maxlen = max((len(v) for _, v in cols), default=0)
-
-    # Locate the independent (X) axis among the DECODED columns. When a book's
-    # windows metadata *declares* an X column but that column failed every decode
-    # path (so it is absent from ``cols``), do NOT fall back to promoting the
-    # first value column to the x-axis: that silently relabels a Y measurement as
-    # the independent variable and drops the real X without a trace (Moke.opj
-    # Book3; the hc2convert.opj "A6221Lockin*" TDI family — 34 of 74 books). Use
-    # a synthetic row-index axis instead, keep every decoded column as a value
-    # series, and flag the loss in metadata (``x_column_recovered``).
-    decoded_x = next(
-        (j for j, (c, _) in enumerate(cols) if (m := col_meta.get(c)) and m.designation == "X"),
-        None,
-    )
-    declared_x = next((c for c, m in col_meta.items() if m.designation == "X"), None)
-    x_unrecovered = decoded_x is None and declared_x is not None
-
-    if x_unrecovered:
-        ordered = list(cols)
-    else:
-        x_idx = decoded_x if decoded_x is not None else 0
-        ordered = [cols[x_idx]] + [cv for j, cv in enumerate(cols) if j != x_idx]
-
-    def _pad(a: NDArray[np.float64]) -> NDArray[np.float64]:
-        return a if len(a) == maxlen else np.concatenate([a, np.full(maxlen - len(a), np.nan)])
-
-    padded = [_pad(v) for _, v in ordered]
-    if x_unrecovered:
-        # The designated X column is unrecoverable → synthetic 0..N-1 row index
-        # as `.time`; every decoded column stays a value series (none consumed).
-        time = np.arange(maxlen, dtype=np.float64)
-        values = np.column_stack(padded) if padded else np.empty((maxlen, 0))
-        value_cols = [c for c, _ in ordered]
-        x_meta = None
-    else:
-        time = padded[0] if padded else np.empty(0)
-        values = np.column_stack(padded[1:]) if len(padded) > 1 else np.empty((maxlen, 0))
-        value_cols = [c for c, _ in ordered[1:]]
-        x_meta = col_meta.get(ordered[0][0]) if ordered else None
-    meta = {
-        "source_format": source_format,
-        "origin_book": book,
-        "origin_book_long": _book_long_name(book, books_meta),
-        "origin_books": inventory,
-        "x_column_name": "" if x_unrecovered else (ordered[0][0] if ordered else "A"),
-        "x_column_long": (
-            "Row" if x_unrecovered else (_label_for(ordered[0][0], x_meta) if ordered else "")
-        ),
-        # `x_unit` is the Origin-subsystem key (writer/COM read it); also emit
-        # the canonical `x_column_unit` every other parser uses so the plot +
-        # .ogs export layers (which read `x_column_unit`) show the x-axis unit.
-        # Both translated (rich-text escapes — see module docstring): a Unit
-        # row is exactly as free-form as a Long Name.
-        "x_unit": clean_richtext(x_meta.unit) if x_meta is not None else "",
-        "x_column_unit": clean_richtext(x_meta.unit) if x_meta is not None else "",
-        # False when `.time` is a synthetic row index substituted because the
-        # designated X column could not be decoded (its long name, when known,
-        # is in ``x_column_unrecovered``); True when `.time` is the real X.
-        "x_column_recovered": not x_unrecovered,
-        # Origin short names of the value columns, in channel order — lets a
-        # figure's curve->column binding (opju_curves) map onto `.values`.
-        "origin_column_names": value_cols,
-        "column_designations": {c: m.designation for c, m in col_meta.items()},
-        "column_comments": {
-            c: clean_richtext(m.comment) for c, m in col_meta.items() if m.comment
-        },
-        "origin_text_columns": {c: rows for c, rows in (text_cols or [])},
-        "origin_report_sheets": {c: rows for c, rows in (report_cols or [])},
+    position = {name: k for k, name in reversed(list(enumerate(scan.order)))}
+    first_decoded: dict[str, int] = {}
+    for name, _values in scan.numeric:
+        if (parsed := book_key(name)) is not None:
+            first_decoded.setdefault(parsed[1], position.get(name, 0))
+    lost = {
+        parsed[1]
+        for p in scan.problems
+        if p.category == "column"
+        and (parsed := book_key(p.dataset)) is not None
+        and position.get(p.dataset, 0) < first_decoded.get(parsed[1], len(scan.order))
     }
-    if text_cols:
-        # A text column is not a channel, so its Long Name / Unit have no
-        # slot in `.labels` / `.units`; keep them beside the cells (the
-        # worksheet header names the column by its Long Name, like Origin).
-        # Metadata exposure of the already-decoded column record only -- no
-        # parse rule changes. Same key + shape as the reader lane's
-        # opj_books._build_book.
-        meta["origin_text_column_labels"] = {
-            c: {"long_name": clean_richtext(m.long_name), "unit": clean_richtext(m.unit)}
-            for c, _ in text_cols
-            if (m := col_meta.get(c)) is not None and (m.long_name or m.unit)
-        }
-    if x_unrecovered and declared_x is not None:
-        # The declared X's long name, so the Inspector can say *which* column
-        # was lost (e.g. "Temperature") rather than just that the axis is a row
-        # index.
-        meta["x_column_unrecovered"] = _label_for(declared_x, col_meta.get(declared_x))
-    return DataStruct(
-        time=time,
-        values=values,
-        labels=tuple(_label_for(c, col_meta.get(c)) for c in value_cols),
-        units=tuple(
-            clean_richtext(col_meta[c].unit) if c in col_meta else "" for c in value_cols
-        ),
-        metadata=meta,
-    )
+    return columns, lost
 
 
-_ParseResult = tuple[
-    OrderedDict[str, Columns],
-    OrderedDict[str, TextColumns],
-    OrderedDict[str, TextColumns],
-    dict[str, BookMeta],
-    list[dict[str, object]],
-]
+def _drop_unbacked_columns(books_meta: dict[str, BookMeta], names: set[str]) -> None:
+    """Forget window metadata for a column that names no dataset in the file.
+
+    Column ``S`` of book ``B`` is the dataset ``"B_S"`` (``windows`` module
+    docstring). Where no such dataset exists the join has failed — Origin
+    truncates a property block's short name to 11 characters while the
+    dataset keeps a disambiguating suffix (liborigin's
+    ``column-dataid-collision`` specimen: two columns, one truncated name) —
+    and metadata that joins nothing must not act: left in, a designated-X
+    entry would read as "the X column failed to decode" and replace the
+    book's real X with a row index. A column whose dataset exists but could
+    NOT be decoded stays (its name is in ``names``): that is the case the
+    row-index fallback is for.
+    """
+    for book, meta in books_meta.items():
+        meta.columns = {c: m for c, m in meta.columns.items() if f"{book}_{c}" in names}
 
 
 def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
@@ -370,14 +282,61 @@ def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
     b = path.read_bytes() if raw is None else raw
     if not b.startswith(b"CPYA"):
         raise fallback(path, f"'{path.name}' does not look like a CPYA .opj (bad header).")
-    columns, text_columns, report_columns = _columns(b)
-    if not columns:
-        raise fallback(path, f"no worksheet columns could be decoded from '{path.name}'.")
+    blocks = list(walk_blocks(b))
+    sheets = matrix_sheets(blocks)
+    scan = scan_datasets(blocks, sheets.keys())
+    header_driven = scan.n_headers > 0
+    sheet_columns: dict[str, dict[str, ColumnMeta]] = {}
+    lost_books: set[str] = set()
+    sole: dict[str, str] = {}
+    if header_driven:
+        columns, text_columns, report_columns = scan.numeric, scan.text, scan.report
+        worksheets = window_sheets(blocks)
+        sheet_columns, lost_books = _sheet_columns(scan, worksheets)
+        sole = sole_sheet_books(scan.names, worksheets)
+    else:
+        # No dataset header parsed: the legacy walk guesses each column's
+        # type from its bytes. Say so wherever the data goes.
+        scan.problems.append(Problem("notice", "", _LEGACY_NOTICE))
+        columns, text_columns, report_columns = _columns(b)
+        if not columns:
+            raise fallback(path, f"no worksheet columns could be decoded from '{path.name}'.")
+    del blocks
     books = _group(columns)
     text_books = _group_named(text_columns)
     report_books = _group_named(report_columns)
+    imag_books = _group(scan.imag)
+    if header_driven and sole:
+        books, text_books = _rekey(books, sole), _rekey(text_books, sole)
+        report_books, imag_books = _rekey(report_books, sole), _rekey(imag_books, sole)
+        sheet_columns = dict(_rekey(sheet_columns, sole))
+        lost_books = {sole.get(k, k) for k in lost_books}
     books_meta = window_metadata(b)
-    return books, text_books, report_books, books_meta, _inventory(books, books_meta, report_books)
+    if header_driven:
+        _drop_unbacked_columns(books_meta, scan.names)
+    inventory = _inventory(books, books_meta, report_books)
+    if header_driven:  # a book whose columns are all text is a book too
+        inventory += [
+            {"name": k, "long_name": _book_long_name(k, books_meta), "ncols": len(v),
+             "nrows": max((len(rows) for _, rows in v), default=0)}
+            for k, v in text_books.items()
+            if k not in books and k not in report_books
+        ]  # fmt: skip
+    matrices = matrix_books(scan, sheets, books_meta, inventory)
+    diagnostics = summarize_problems(scan.problems)
+    if not (books or text_books or report_books or matrices):
+        lost = "; ".join(diagnostics["omissions"]) if diagnostics else ""  # type: ignore[arg-type]
+        raise fallback(
+            path,
+            f"no worksheet or matrix data could be decoded from '{path.name}'"
+            + (f" ({lost})." if lost else "."),
+        )
+    return _ParseResult(
+        books, text_books, report_books, books_meta, inventory,
+        imag_books, matrices, diagnostics, header_driven,
+        sheet_columns, lost_books, scan.unowned_losses > 0,
+        {book: key.partition("@")[2] for key, book in sole.items()},
+    )  # fmt: skip
 
 
 def _primary_key(books: OrderedDict[str, Columns]) -> str:
@@ -404,20 +363,71 @@ def parse_opj(path: Path, *, raw: bytes | None = None) -> _ParseResult:
     return _parse(path, raw=raw)
 
 
+def _has_numbers(columns: Columns) -> bool:
+    return any(bool(np.isfinite(v).any()) for _, v in columns)
+
+
+def _book(parsed: _ParseResult, key: str) -> DataStruct:
+    """One worksheet book of a parsed project."""
+    book = _build_book(
+        key,
+        parsed.books.get(key, []),
+        parsed.books_meta,
+        parsed.inventory,
+        text_cols=parsed.text_books.get(key),
+        report_cols=parsed.report_books.get(key),
+        row_aligned_text=parsed.header_driven,
+        imag_cols=parsed.imag_books.get(key),
+        sheet_columns=parsed.sheet_columns.get(key, {}) if parsed.header_driven else None,
+        lost_columns=parsed.unowned_loss or key in parsed.lost_books,
+    )
+    if parsed.header_driven:
+        if key in parsed.sheet_ids:
+            book = dataclasses.replace(
+                book, metadata={**book.metadata, "origin_sheet_id": parsed.sheet_ids[key]}
+            )
+        return book
+    # The legacy walk: every book it yields carries the caveat.
+    return dataclasses.replace(
+        book, metadata={**book.metadata, "origin_decode": "content_sniffing"}
+    )
+
+
+def _with_diagnostics(ds: DataStruct, parsed: _ParseResult) -> DataStruct:
+    """Attach the project's data diagnostics. They are project-global, so
+    (like the results log) they ride the primary DataStruct and the first
+    book of the list, not every book."""
+    if parsed.diagnostics is None:
+        return ds
+    meta = {**ds.metadata, "origin_data_diagnostics": parsed.diagnostics}
+    return dataclasses.replace(ds, metadata=meta)
+
+
 def build_opj_primary(parsed: _ParseResult) -> DataStruct:
     """Build the primary (largest) book's DataStruct from an already-
     :func:`parse_opj`'d project — the same selection :func:`read_opj`
     performs, factored out so it can share a parse with
-    :func:`build_opj_books`."""
-    books, text_books, report_books, books_meta, inventory = parsed
-    primary = _primary_key(books)
-    return _build_book(
-        primary,
-        books[primary],
-        books_meta,
-        inventory,
-        text_cols=text_books.get(primary),
-        report_cols=report_books.get(primary),
+    :func:`build_opj_books`.
+
+    The largest book can be one that holds no number at all — rows are the
+    USED rows now, so Origin's untouched default ``Book1`` is zero rows
+    long, where the whole-allocation reader made it 30 rows of blanks. A
+    header-driven project therefore prefers, in order: the largest
+    worksheet book that has numbers (sheet-1 books first, as ever), the
+    largest matrix, then the first book of any kind."""
+    key = _primary_key(parsed.books) if parsed.books else None
+    if key is not None and parsed.header_driven and not _has_numbers(parsed.books[key]):
+        populated = OrderedDict((k, v) for k, v in parsed.books.items() if _has_numbers(v))
+        if populated:
+            key = _primary_key(populated)
+        elif parsed.matrices:
+            key = None
+    if key is not None:
+        return _with_diagnostics(_book(parsed, key), parsed)
+    if parsed.matrices:
+        return _with_diagnostics(max(parsed.matrices, key=lambda m: m.n_points), parsed)
+    return _with_diagnostics(
+        _book(parsed, next(iter([*parsed.text_books, *parsed.report_books]))), parsed
     )
 
 
@@ -430,24 +440,22 @@ def build_opj_books(parsed: _ParseResult) -> list[DataStruct]:
     "FitNL1" report) has no plausible-numeric columns at all, so it never
     appears as a key in ``books``; the union with ``report_books`` (and
     ``text_books``, for the analogous inline-text case) below still surfaces
-    it as its own pseudo-book rather than dropping the whole sheet.
+    it as its own pseudo-book rather than dropping the whole sheet. Matrix
+    books follow the worksheet books.
     """
-    books, text_books, report_books, books_meta, inventory = parsed
+    books, text_books, report_books = parsed.books, parsed.text_books, parsed.report_books
     keys = list(books)
     keys += [k for k in text_books if k not in books and k not in keys]
     keys += [k for k in report_books if k not in books and k not in keys]
-    return [
-        _build_book(
-            k,
-            books.get(k, []),
-            books_meta,
-            inventory,
-            text_cols=text_books.get(k),
-            report_cols=report_books.get(k),
-        )
+    out = [
+        _book(parsed, k)
         for k in keys
         if books.get(k) or text_books.get(k) or report_books.get(k)
     ]
+    out += parsed.matrices
+    if out:
+        out[0] = _with_diagnostics(out[0], parsed)
+    return out
 
 
 def read_opj(path: Path) -> DataStruct:

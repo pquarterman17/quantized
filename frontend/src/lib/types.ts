@@ -52,21 +52,19 @@ export interface DataStruct {
   origin_fidelity?: OriginFidelityManifest;
 }
 
-export type OriginFidelityStatus = "exact" | "best_effort" | "reference_only" | "unresolved";
-
-export interface OriginFigureFidelity {
-  status: OriginFidelityStatus;
-  recovered: string[];
-  omissions: string[];
-}
-
-// The fidelity manifest, its filtered-figure records and the saved-preview
-// diagnostics live in a sibling (types.ts module-size ceiling); re-exported
-// so every importer is unchanged.
-import type { OriginFidelityManifest, OriginSavedPreview } from "./originFidelityTypes";
+// Fidelity wire types live in ./originFidelityTypes (size ceiling); re-exported.
+import type {
+  OriginCurveSheetNote,
+  OriginFidelityManifest,
+  OriginFigureFidelity,
+  OriginSavedPreview,
+} from "./originFidelityTypes";
 export type {
   OriginContainerIntegrity,
+  OriginCurveSheetNote,
   OriginFidelityManifest,
+  OriginFidelityStatus,
+  OriginFigureFidelity,
   OriginFilteredFigure,
   OriginPreviewDiagnostic,
   OriginSavedPreview,
@@ -274,6 +272,8 @@ export interface OriginFigure {
   /** Original CRC-validated PNG bytes saved inside this exact Origin graph
    *  page. Shared by every layer of the page; never recompressed. */
   saved_preview?: OriginSavedPreview;
+  /** `.opj` only, present only when non-empty: see `OriginCurveSheetNote`. */
+  curve_sheet_notes?: OriginCurveSheetNote[];
 }
 
 /** Response of POST /api/plot/series — uPlot-ready column data. */
@@ -623,6 +623,10 @@ export interface RegionShade {
   /** Which Y scale y1/y2 are expressed in: 0/undefined = primary, 1 =
    *  secondary (y2) — same convention as `Annotation.axis`. */
   axis?: 0 | 1;
+  /** Span the whole plot height (y1/y2 ignored) — the default for a newly
+   *  inserted shade: it reads the same on a linear or log axis and never
+   *  depends on the data's y range (publication-figures audit #11). */
+  fullHeight?: boolean;
 }
 
 export type { DefaultTrace, LineStyle, MarkerShape, SeriesStyle, StepMode } from "./seriesStyleTypes";
@@ -717,32 +721,12 @@ export interface Shape {
   dash?: boolean;
 }
 
-/** Axis tick number format. `auto` = increment-aware locale-grouped labels
- *  (MAIN #20: overrides uPlot's own default formatter, which caps at 3
- *  fraction digits regardless of the actual tick spacing — see
- *  `uplotOpts.ts`'s `autoTickValues` doc for the owner bug this fixes);
- *  `fixed` = `toFixed(digits)`; `sci` = `toExponential(digits)`; `eng` =
- *  engineering notation (mantissa in [1,1000), exponent a multiple of 3,
- *  e.g. `12.3e-6`). `digits` is the decimal/mantissa count for
- *  fixed/sci/eng — ignored (uPlot-style adaptive) for `auto`. Every
- *  non-auto mode still FLOORS its decimal/mantissa count at whatever the
- *  actual tick increment needs, so `digits` sets a minimum, not an exact
- *  count (`tickFormatter`'s `Math.max(digits, decimalsForIncrement(...))`). */
-export type TickMode = "auto" | "fixed" | "sci" | "eng" | "date" | "time" | "datetime";
-
-export interface AxisFormat {
-  mode: TickMode;
-  digits: number;
-}
-
-/** MAIN #24: an export request's `x_fmt`/`y_fmt` wire field — `undefined`
- *  for `auto` (the default; omitting it keeps requests lean and matches
- *  every caller that predates this field) or the format itself for an
- *  explicit fixed/sci/eng override, mirroring `tickFormatter`'s own
- *  `auto` short-circuit. */
-export function axisFmtParam(fmt: AxisFormat): AxisFormat | undefined {
-  return fmt.mode === "auto" ? undefined : fmt;
-}
+// The axis tick-format contract (`TickMode`, `AxisFormat` + the figures-audit
+// #6 Axis-dialog extras, `axisFmtParam`) lives in axisFormat.ts -- moved
+// verbatim when the extras outgrew this file's line pin; re-exported here so
+// no importer changed.
+export type { AxisFormat, TickMode } from "./axisFormat";
+export { axisFmtParam, hasAxisExtras, sanitizeAxisExtras } from "./axisFormat";
 
 /** How an axis maps data values to pixel position (MAIN #12): `"linear"`
  *  (default) positions values proportionally; `"log"` positions by

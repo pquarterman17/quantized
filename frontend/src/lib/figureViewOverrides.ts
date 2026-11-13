@@ -138,6 +138,7 @@ export function viewOverrides(st: Pick<
       y2: r.y2,
       fill: r.fill,
       ...(r.axis === 1 ? { axis: 1 as const } : {}),
+      ...(r.fullHeight ? { full_height: true } : {}),
     }));
   // A null side is auto for that side (half-open, P2.8 residual (b)) and rides
   // the wire as null: matplotlib's own `set_xlim(None, hi)` autoscales it.

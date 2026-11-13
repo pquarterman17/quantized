@@ -467,7 +467,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
         default: "",
       },
       { key: "errors", label: "± errors (bound σ column)", type: "boolean", default: false },
-    ]);
+    ], { confirmLabel: "Add column" });
     const expr = p ? String(p.expr).trim() : "";
     if (!p || !expr) return;
     setErr(null);

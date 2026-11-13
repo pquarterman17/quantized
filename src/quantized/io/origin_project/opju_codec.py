@@ -44,13 +44,31 @@ from __future__ import annotations
 
 import re
 import struct
+import threading
+from bisect import bisect_left
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 import numpy as np
 from numpy.typing import NDArray
 
 from quantized.io.origin_project.container import ORIGIN_MISSING, plausible_column
+from quantized.io.origin_project.opju_budget import DECODE_BUDGET_CELLS, DecodeBudget
+from quantized.io.origin_project.opju_curve_style import curve_plot_style
 
-__all__ = ["CodecError", "curve_plot_style", "decode_stream", "scan_columns", "tail_start"]
+__all__ = [
+    "DECODE_BUDGET_CELLS",
+    "CodecError",
+    "DecodeBudget",
+    "curve_plot_style",
+    "decode_stream",
+    "decode_at",
+    "scan_columns",
+    "scan_marked_columns",
+    "shared_fpc_decodes",
+    "tail_start",
+]
 
 _MASK = 0xFFFFFFFFFFFFFFFF
 _TABLE_MASK = (1 << 12) - 1  # 2**12-entry FCM/DFCM hash tables
@@ -134,6 +152,51 @@ def _decode(stream: bytes, nrows: int) -> tuple[NDArray[np.float64], int]:
     return vals, pos
 
 
+# One import decodes each FPC stream up to twice: once through the structural
+# record reader (``opju_values.read_segments``) and once through the frozen
+# marker scan below, which sees the same ``0x0c`` streams at the same offsets.
+# Inside :func:`shared_fpc_decodes` the second request for a stream is served
+# from the first decode. The answer is a pure function of the stream's bytes
+# (``b[p : p + 9m + 16]`` and ``m``), so sharing it cannot change any result;
+# an entry is dropped once served, so at most one extra copy of a column lives
+# for the length of the block.
+_Decoded = tuple[NDArray[np.float64], int]
+_FPC_MEMO: ContextVar[tuple[bytes, dict[tuple[int, int], _Decoded | CodecError]] | None] = (
+    ContextVar("_FPC_MEMO", default=None)
+)
+
+
+@contextmanager
+def shared_fpc_decodes(b: bytes) -> Iterator[None]:
+    """Within the block, :func:`decode_at` on ``b`` decodes each stream once."""
+    token = _FPC_MEMO.set((b, {}))
+    try:
+        yield
+    finally:
+        _FPC_MEMO.reset(token)
+
+
+def decode_at(b: bytes, p: int, nrows: int) -> tuple[NDArray[np.float64], int]:
+    """:func:`_decode` of the stream starting at ``b[p]`` (just past its
+    ``0x0c``) — ``(values, bytes_consumed)``; raises :class:`CodecError`.
+    The returned array may be shared with another caller: never mutate it."""
+    memo = _FPC_MEMO.get()
+    if memo is None or memo[0] is not b:
+        return _decode(b[p : p + nrows * 9 + 16], nrows)
+    cache = memo[1]
+    key = (p, nrows)
+    got = cache.pop(key, None)
+    if got is None:
+        try:
+            got = _decode(b[p : p + nrows * 9 + 16], nrows)
+        except CodecError as exc:
+            got = exc
+        cache[key] = got
+    if isinstance(got, CodecError):
+        raise got
+    return got
+
+
 def decode_stream(stream: bytes, nrows: int) -> NDArray[np.float64]:
     """Decode ``nrows`` float64 values from one FPC control+residual stream."""
     return _decode(stream, nrows)[0]
@@ -157,12 +220,38 @@ def _zigzag(v: int) -> int:
     return (v >> 1) ^ -(v & 1)
 
 
+# ── the marker-anchored scan (FROZEN) ─────────────────────────────────────────
+#
+# Everything from here to ``tail_start`` is the original marker-anchored
+# column scan, and it decodes exactly what it decoded when it shipped (the
+# only changes: ``scan_marked_columns`` also reports each marker's offset and
+# settles ``tail_start`` in the same pass, FPC streams go through the shared
+# ``decode_at``, and each walk stops materializing cells at its
+# ``DecodeBudget`` — far above any real project, see that constant). It is
+# deliberately NOT widened with the value tags and record forms
+# ``opju_values`` / ``opju_records`` now understand, because two validated
+# consumers are defined in terms of exactly the set of columns
+# THIS scan decodes:
+#
+# * ``opju_curves``' curve->column binding counts its ``y_ord`` ordinal over
+#   "the columns ``scan_columns`` decoded, in book-appearance order". Decoding
+#   more columns here would silently renumber every later column and rebind
+#   curves — a graph-semantics change that needs its own oracle and its own
+#   handoff (CLAUDE.md "Origin graph-recovery safety").
+# * ``windows_opju`` bounds its designation-marker search with ``tail_start``.
+#
+# Worksheet DATA no longer comes from this scan: ``opju.py`` reads it through
+# ``opju_worksheet.scan_worksheet`` (the structural path), which falls back to
+# this scan only for a record the structural path could not decode.
+
 # Repeat-run value tags: tag byte → payload length. The payload holds the
 # float64's TOP bytes (rest zero) — the compact forms cover round values.
 _TAG_LEN = {0x50: 8, 0x1A: 2, 0x11: 1, 0x64: 0}
 
 
-def _decode_record(b: bytes, ff: int) -> tuple[NDArray[np.float64], int] | None:
+def _decode_record(
+    b: bytes, ff: int, budget: DecodeBudget | None = None
+) -> tuple[NDArray[np.float64], int] | None:
     """Parse *and* decode the column record whose ``ff ff`` sits at ``ff``.
 
     Grammar (validated against Origin's own CSV dumps): ``ff ff
@@ -192,7 +281,16 @@ def _decode_record(b: bytes, ff: int) -> tuple[NDArray[np.float64], int] | None:
         return None
     if p >= len(b) or b[p] != 0x00:
         return None
-    p += 1
+    if budget is not None and not budget.charge(nrows):
+        return None
+    got = _segments(b, p + 1, nrows)
+    if got is None and budget is not None:
+        budget.refund(nrows)  # nothing is kept
+    return got
+
+
+def _segments(b: bytes, p: int, nrows: int) -> tuple[NDArray[np.float64], int] | None:
+    """The segment list of :func:`_decode_record` (its body, unchanged)."""
     parts: list[NDArray[np.float64]] = []
     total = 0
     while total < nrows:  # each iteration adds ≥1 row, so this terminates
@@ -216,7 +314,7 @@ def _decode_record(b: bytes, ff: int) -> tuple[NDArray[np.float64], int] | None:
             if total + m > nrows or p >= len(b) or b[p] != 0x0C:
                 return None
             try:
-                vals, consumed = _decode(b[p + 1 : p + 1 + m * 9 + 16], m)
+                vals, consumed = decode_at(b, p + 1, m)
             except CodecError:
                 return None
             parts.append(vals)
@@ -267,6 +365,56 @@ def _plausible(vals: NDArray[np.float64]) -> bool:
     return plausible_column(vals, allow_all_nan=False)
 
 
+def scan_marked_columns(b: bytes) -> list[tuple[int, str, NDArray[np.float64]]]:
+    """:func:`scan_columns` with each column's ``ff ff`` marker offset —
+    ``(marker, name, values)`` in file order. The offset lets
+    ``opju_worksheet`` tell which dataset record a marker-decoded column
+    belongs to (see the FROZEN note above: this is the same walk, not a
+    second decoder).
+
+    The same pass also settles :func:`tail_start` for ``b`` (its walk visits
+    the same markers with its own cursor — it advances past implausible
+    records too — and each marker is decoded once for both), so a later
+    ``tail_start(b)`` costs nothing."""
+    columns, tail = _marker_walk(b)
+    _remember_tail(b, tail)
+    return columns
+
+
+def _marker_walk(b: bytes) -> tuple[list[tuple[int, str, NDArray[np.float64]]], int]:
+    """The column walk and the tail walk in one loop, each with its own
+    cursor exactly as the two walks had when they ran separately."""
+    names = [
+        (m.start(), m.group(0).decode("latin1"))
+        for m in _NAME.finditer(b)
+        if m.start() > 0 and b[m.start() - 1] == len(m.group(0))
+    ]
+    name_pos = [pos for pos, _ in names]
+    out: list[tuple[int, str, NDArray[np.float64]]] = []
+    cursor = tail_cursor = tail = 0
+    budget = DecodeBudget()
+    for marker in _records(b):
+        columns_walk = marker >= cursor  # else a false marker inside a decoded record
+        tail_walk = marker >= tail_cursor
+        if not (columns_walk or tail_walk):
+            continue
+        got = _decode_record(b, marker, budget)
+        if got is None:
+            continue
+        vals, end = got
+        if tail_walk:
+            tail_cursor = end
+            tail = max(tail, end, marker)
+        k = bisect_left(name_pos, marker)  # names strictly before the marker
+        if columns_walk and _plausible(vals):
+            cursor = end
+            if k:
+                out.append((marker, names[k - 1][1], vals))
+                continue
+        budget.refund(len(vals))  # not kept
+    return out, tail
+
+
 def scan_columns(b: bytes) -> list[tuple[str, NDArray[np.float64]]]:
     """Decode every ``<Book>_<Col>`` numeric column in a CPYUA ``.opju`` file.
 
@@ -277,27 +425,16 @@ def scan_columns(b: bytes) -> list[tuple[str, NDArray[np.float64]]]:
     owning ``<Book>_<Col>`` name always leads its record). Streams that fail the
     codec or decode to garbage are dropped — never emitted.
     """
-    names = [
-        (m.start(), m.group(0).decode("latin1"))
-        for m in _NAME.finditer(b)
-        if m.start() > 0 and b[m.start() - 1] == len(m.group(0))
-    ]
-    out: list[tuple[str, NDArray[np.float64]]] = []
-    cursor = 0
-    for marker in _records(b):
-        if marker < cursor:  # a false marker inside an already-decoded record
-            continue
-        got = _decode_record(b, marker)
-        if got is None:
-            continue
-        vals, end = got
-        if not _plausible(vals):
-            continue
-        prev = [name for pos, name in names if pos < marker]
-        if prev:
-            out.append((prev[-1], vals))
-        cursor = end
-    return out
+    return [(name, vals) for _, name, vals in scan_marked_columns(b)]
+
+
+# One import asks for the same file's tail start several times (the worksheet
+# reader's metadata lookups, then the figure reader's), and each answer costs
+# a full decode pass. Remembered per file by ``(length, hash)`` — an int per
+# entry, and no reference to the file's bytes is kept.
+_TAIL_START_MEMO: dict[tuple[int, int], int] = {}
+_TAIL_START_MEMO_MAX = 8
+_TAIL_START_LOCK = threading.Lock()
 
 
 def tail_start(b: bytes) -> int:
@@ -308,63 +445,32 @@ def tail_start(b: bytes) -> int:
     windows-section designation markers). ``windows_opju`` uses this to bound
     its marker search to the tail region, avoiding those false positives.
     """
+    cached = _TAIL_START_MEMO.get((len(b), hash(b)))
+    if cached is None:
+        cached = _tail_start(b)
+        _remember_tail(b, cached)
+    return cached
+
+
+def _remember_tail(b: bytes, tail: int) -> None:
+    key = (len(b), hash(b))
+    with _TAIL_START_LOCK:  # imports run on a thread pool
+        _TAIL_START_MEMO.pop(key, None)
+        while len(_TAIL_START_MEMO) >= _TAIL_START_MEMO_MAX:
+            _TAIL_START_MEMO.pop(next(iter(_TAIL_START_MEMO)))
+        _TAIL_START_MEMO[key] = tail
+
+
+def _tail_start(b: bytes) -> int:
     end = 0
     cursor = 0
+    budget = DecodeBudget()
     for marker in _records(b):
         if marker < cursor:  # a false marker inside an already-decoded record
             continue
-        got = _decode_record(b, marker)
+        got = _decode_record(b, marker, budget)
         if got is None:
             continue
         cursor = got[1]
         end = max(end, cursor, marker)
     return end
-
-
-# ── curve plot-style (item 35 follow-on: line vs scatter) ─────────────────────
-#
-# A compact-int property tag inside a CPYUA curve's own object body, found at
-# a variable forward offset (22-44 bytes past the curve/column token's start
-# -- never a fixed offset; see ``opju_curves.py``'s ``_CURVE_RE``/``_extract_
-# curves_0x03`` and ``opju_curves_allcols.py``'s ``extract_curves_allcols``,
-# both of which locate a curve token first and then call this on its start).
-# Validated 135/147 real-corpus curve tokens, 0 disagreements, and 4/4 on the
-# ``fig_pairs`` by-construction oracle (scatter/scatter/scatter/line, matching
-# LabTalk's ``plot:=201``/``plot:=200``). Lives here, not in ``opju_curves.py``,
-# because ``opju_curves_allcols.py`` needs it too and already sits *beneath*
-# ``opju_curves.py`` in the import graph (the latter imports the former) --
-# importing it the other way round would be circular. ``opju_codec`` is the
-# lowest-level module both curve modules already import (``scan_columns``/
-# ``_NAME``), so it carries no new dependency edge.
-_STYLE_RE = re.compile(rb"\x8f\x01(.)\x83")
-_STYLE_WINDOW = 400  # backstop only; the next-token bound below is the gate
-_STYLE_BYTES = {0xC8: "line", 0xC9: "scatter"}
-# The two curve-token shapes (opju_figure_curves' unified id token and
-# opju_curves' 0x03-family token): the style search must STOP at the next
-# curve token so a curve with no style tag of its own can never pick up its
-# NEIGHBOR's tag. The old fixed 400-byte window was sized against the
-# corpus-wide minimum inter-token gap (697 B) — corpus-shaped: a file packing
-# curve objects closer than 400 B aliased the next curve's style (2026-07-06
-# genericity audit). A false positive of this pattern only SHRINKS the search
-# window (worst case an honest ``None``), never widens it.
-_NEXT_TOKEN_RE = re.compile(rb"\x01\x01\x01\x80[\x01\x03]|\x01.\x01\x80\x03.\x00", re.DOTALL)
-
-
-def curve_plot_style(b: bytes, token_start: int) -> str | None:
-    """Plot style ("line"/"scatter") of the curve token starting at
-    ``token_start``, or ``None`` when no ``8f 01 <style> 83`` tag is found
-    before the next curve token (or the 400-byte backstop), or the style
-    byte is unrecognized.
-
-    ~8% of real-corpus curve tokens (composite-window duplicate references)
-    legitimately have no tag in range -- this returns ``None`` for those
-    rather than fabricating a default.
-    """
-    hi = min(len(b), token_start + _STYLE_WINDOW)
-    nxt = _NEXT_TOKEN_RE.search(b, token_start + 8, hi)
-    if nxt is not None:
-        hi = nxt.start()
-    m = _STYLE_RE.search(b, token_start, hi)
-    if m is None:
-        return None
-    return _STYLE_BYTES.get(m.group(1)[0])

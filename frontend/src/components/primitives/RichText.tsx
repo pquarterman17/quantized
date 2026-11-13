@@ -4,8 +4,9 @@
 // renders as the raw string — the same literal fallback the canvas and
 // export renderers apply, so all three surfaces always agree.
 
-import type { CSSProperties, ReactNode } from "react";
+import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 
+import { originEscapesReady, subscribeOriginEscapes } from "../../lib/originEscapeLoader";
 import { hasMarkup, parseRichText, type RichNode } from "../../lib/richtext";
 
 // Inline styles (self-contained so the primitive needs no global stylesheet —
@@ -35,7 +36,7 @@ function renderNodes(nodes: RichNode[], keyBase: string): ReactNode[] {
   return nodes.map((n, i) => {
     const key = `${keyBase}.${i}`;
     if (n.kind === "text") {
-      return n.italic ? <i key={key}>{n.text}</i> : <span key={key}>{n.text}</span>;
+      return n.bold ? <b key={key}>{n.text}</b> : n.italic ? <i key={key}>{n.text}</i> : <span key={key}>{n.text}</span>;
     }
     // Fractions/roots (MAIN #28): CSS approximations of the canvas layout — a
     // stacked column with a rule for \frac, a √ prefix + overlined radicand
@@ -83,6 +84,9 @@ function renderNodes(nodes: RichNode[], keyBase: string): ReactNode[] {
 }
 
 export default function RichText({ text }: { text: string }) {
+  // Re-render once the lazy Origin-escape rewrite settles: a label rendered
+  // before it shows `\g(m)` literally until then (lib/richtext.ts).
+  useSyncExternalStore(subscribeOriginEscapes, originEscapesReady);
   if (!hasMarkup(text)) return <>{text}</>;
   const r = parseRichText(text);
   if (!r.ok) return <>{text}</>;

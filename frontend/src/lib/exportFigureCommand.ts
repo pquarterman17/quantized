@@ -21,6 +21,8 @@ import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
 import { chooseExcludedRows } from "./excludedRowsChoice";
 import { excludedChoiceMatters } from "./excludedRowsExport";
+import { defaultPageSetup } from "./pageGeometry";
+import { pageSetupFromFields, pageSizeFields } from "./pageSizeFields";
 import { confirmScreenOnlyExport } from "./screenOnlyExport";
 import { stackExportView, stackPageRequest } from "./stackPageExport";
 import { exportStatFigure } from "./statFigureCommands";
@@ -91,12 +93,17 @@ export async function runExportFigureCommand(
   // Stat mode exports the stat plot on screen through the stage's own export.
   const stat = buildSpec ? null : activeStatExporter(s());
   if (stat) {
-    const p = await askParams("Export figure", OUTPUT_FIELDS);
+    const p = await askParams("Export figure", OUTPUT_FIELDS, { confirmLabel: "Export" });
     if (p) await exportStatFigure(s, stat, String(p.fmt), { style: String(p.style), dpi: Number(p.dpi) });
     return;
   }
+  // Audit #5: the figure size (the window's page — the SAME `pageSetup` Page
+  // setup edits, lib/pageSizeFields.ts) and the secondary axis' label are
+  // part of the export, so the dialog asks for them too.
+  const hasY2 = (s().y2Keys?.length ?? 0) > 0;
   const params = await askParams("Export figure", [
     ...OUTPUT_FIELDS,
+    ...pageSizeFields(s().pageSetup),
     GREYSCALE_FIELD,
     { key: "title", label: "Title", type: "text", default: s().plotTitle },
     {
@@ -107,8 +114,14 @@ export async function runExportFigureCommand(
       hint: "Blank = derive from the data column",
     },
     { key: "y_label", label: "Y label", type: "text", default: s().yAxisLabel },
-  ]);
+    ...(hasY2 ? [{ key: "y2_label", label: "Y2 label", type: "text" as const, default: s().y2AxisLabel, hint: "Blank = derive from the right-axis column" }] : []),
+  ], { confirmLabel: "Export" }); // live check: the button read "Run"
   if (!params) return;
+  // The size answer writes the window's page (one undoable step, only when it
+  // changed) BEFORE the spec is built, so this export and every later one —
+  // Copy figure, the Publication preview, Page setup — agree on it.
+  const page = pageSetupFromFields(params, s().pageSetup, defaultPageSetup);
+  if (JSON.stringify(page) !== JSON.stringify(s().pageSetup)) s().setPageSetup(page);
   // Blank label fields mean "derive from the data" → send undefined, not "".
   // Guarded (not a bare `as string`): coerceParams now guarantees every field
   // key is present, but this stays defensive — a `.trim()` on a genuinely
@@ -123,6 +136,7 @@ export async function runExportFigureCommand(
   const asStr = (v: unknown): string => (typeof v === "string" ? v : "");
   const xl = asStr(params.x_label).trim();
   const yl = asStr(params.y_label).trim();
+  const y2l = asStr(params.y2_label).trim();
   const titleStr = asStr(params.title).trim();
   const opts: FigureRenderOpts = {
     fmt: params.fmt as string,
@@ -138,7 +152,9 @@ export async function runExportFigureCommand(
     const picked = await chooseExcludedRows(
       (greyExcluded) => {
         const o = { ...opts, greyExcluded };
-        return buildSpec ? buildSpec(stem, ds, o) : buildStageFigureSpec(s, ds, stem, o);
+        const spec = buildSpec ? buildSpec(stem, ds, o) : buildStageFigureSpec(s, ds, stem, o);
+        // A typed Y2 label wins for this export, as X/Y do; blank derives.
+        return y2l && spec.y2_keys?.length ? { ...spec, y2_label: y2l } : spec;
       },
       excludedChoiceMatters,
       s().excludedDisplay,

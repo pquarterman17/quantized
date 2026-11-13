@@ -397,7 +397,8 @@ def render_categorical_facets_figure(
     per-panel ``"bar_marks"`` (``figure_stat_marks.overlay_bar_marks``'s
     keywords, that panel's own ``raw`` / ``raw_rows``) draws its points and
     summary marker as the flat export does; stacked panels draw none. An
-    optional per-panel ``"colors"`` colours its categories (P1.4 Color-by).
+    optional per-panel ``"colors"`` colours its categories (P1.4 Color-by), and
+    ``"palette"`` its series otherwise (the canvas' ``seriesColor(i)``).
     """
     with heavy_imports("quantized.calc.figure_categorical", "quantized.calc.figure_group_notes"):
         from quantized.calc.figure_categorical import (
@@ -446,7 +447,7 @@ def render_categorical_facets_figure(
         for ax, (label, groups, series, vals, errs, cnts, raw_groups, bar_marks, p) in cat_rows:
             _draw_categorical_bars(
                 ax, groups, series, vals, errs, stacked, cnts, axis_style, raw_groups, bar_marks,
-                p.get("colors"),
+                p.get("colors"), p.get("palette"),
             )
             ax.set_title(label, fontsize=st.font_size)
             if not st.box_on:

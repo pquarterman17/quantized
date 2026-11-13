@@ -11,7 +11,7 @@
 import { useState, type KeyboardEvent, type MouseEvent } from "react";
 import { plural } from "../../lib/plural";
 
-import { recordWorkbookOpen } from "./libraryOpen";
+import { originFigureOpenOpts, recordWorkbookOpen } from "./libraryOpen";
 import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import { originFidelityLabel, originFidelityStatusLabel } from "../../lib/originFidelity";
 import { figureLabel, type OriginFigureEntry } from "../../lib/originFigures";
@@ -65,7 +65,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
   // (a cross-workbook/root placement never "remembers" a single workbook).
   const ownerWorkbookId = datasets.find((ds) => ds.id === entry.datasetId)?.workbookId;
   const openAndRemember = (opts?: { newWindow?: boolean }) => {
-    applyOriginFigure(entry.id, opts);
+    applyOriginFigure(entry.id, opts ?? originFigureOpenOpts(entry.id)); // figures audit B1
     recordWorkbookOpen(ownerWorkbookId, `origin-figure:${entry.id}`);
   };
   const [showSavedPreview, setShowSavedPreview] = useState(false);
@@ -106,13 +106,20 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
   const fidelityText = fidelity
     ? `${originFidelityStatusLabel(fidelity.status)}; missing ${fidelity.omissions.map(originFidelityLabel).join(", ")}`
     : "Fidelity not assessed";
+  // Curves whose column the file records on another sheet: the binding is
+  // kept, so the row is not "unresolved", but Recover is how to pick that sheet.
+  const sheetNotes = entry.figure.curve_sheet_notes?.length ?? 0;
+  const needsReview = sourceResolution.unresolved.length + sheetNotes;
   const title = resolved
     ? `${entry.stem} — restore axis ranges (${n} curve${plural(n)}); ${fidelityText}`
+      // The worded, grouped lines live in the lazy Recover window
+      // (lib/originCurveSheets.ts); the row only counts them.
+      + (sheetNotes ? `. ${sheetNotes} curve${plural(sheetNotes)} recorded on another sheet: see Recover` : "")
     : `unresolved source "${entry.figure.source_hint || "unknown"}" — no matching imported book`;
   return (
     <div className="qzk-origin-figure-row">
       <div
-        className={`qzk-fig-row${treeMode ? " qzk-fig-row-tree" : ""}${selected ? " selected" : ""}${!resolved ? " unresolved" : ""}`}
+        className={`qzk-fig-row${treeMode ? " qzk-fig-row-tree" : ""}${selected ? " selected" : ""}${!resolved ? " unresolved" : sheetNotes ? " needs-review" : ""}`}
         style={treeMode && depth ? { paddingLeft: depth * 14 } : undefined}
         {...treeRowProps}
       >
@@ -198,12 +205,16 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
               ▣
             </button>
           )}
-          {sourceResolution.unresolved.length > 0 && (
+          {needsReview > 0 && (
             <button
               className="qz-btn qz-btn-sm qz-btn-primary qzk-origin-recover-btn"
               tabIndex={inner}
-              aria-label={`Recover unresolved Origin bindings for ${figureLabel(entry)}`}
-              title={`Review ${sourceResolution.unresolved.length} unresolved Origin binding${plural(sourceResolution.unresolved.length)}`}
+              aria-label={sourceResolution.unresolved.length
+                ? `Recover unresolved Origin bindings for ${figureLabel(entry)}`
+                : `Check curves recorded on another sheet for ${figureLabel(entry)}`}
+              title={sourceResolution.unresolved.length
+                ? `Review ${sourceResolution.unresolved.length} unresolved Origin binding${plural(sourceResolution.unresolved.length)}`
+                : `Review ${sheetNotes} curve${plural(sheetNotes)} the file records on another sheet`}
               onClick={() => setShowRecovery(true)}
             >
               Recover…

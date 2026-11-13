@@ -195,9 +195,9 @@ describe("a map DOCUMENT WINDOW on a non-active dataset has a colour-limit contr
 
     const win2 = render(<MapStage dataset={ds} />); // also defaults to Z1 at first
     await within(win2.container).findByTestId("map-toolbar-colour-limits-effective");
-    // Switch window 2's own Z channel to Z2 (channel 3, index 3 in the
+    // Switch window 2's own Z channel to Z2 (channel 3, index 4 in the
     // picker's options) — window 1 never touches this control.
-    fireEvent.change(within(win2.container).getByLabelText("Z"), { target: { value: "3" } });
+    fireEvent.change(within(win2.container).getByLabelText("Z"), { target: { value: "4" } }); // Z2: picker index 4 (the axis column is option 0, #13)
     await waitFor(() =>
       expect(within(win2.container).getByTestId("map-toolbar-colour-limits-effective")).toHaveTextContent(
         /^eff 1000–4003$/,
@@ -253,7 +253,7 @@ describe("a map DOCUMENT WINDOW on a non-active dataset has a colour-limit contr
     // the OTHER z channel so it paints a genuinely different range.
     const win = render(<MapStage dataset={ds} />);
     await within(win.container).findByTestId("map-toolbar-colour-limits-effective");
-    fireEvent.change(within(win.container).getByLabelText("Z"), { target: { value: "3" } });
+    fireEvent.change(within(win.container).getByLabelText("Z"), { target: { value: "4" } }); // Z2: picker index 4 (the axis column is option 0, #13)
     await waitFor(() =>
       expect(within(win.container).getByTestId("map-toolbar-colour-limits-effective")).toHaveTextContent(
         /^eff 1000–4003$/,

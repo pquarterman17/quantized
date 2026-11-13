@@ -193,13 +193,18 @@ def drop_empty_library_books(books: list[DataStruct]) -> list[DataStruct]:
     Text-only books (real content in ``origin_text_columns``) are kept. Never
     returns empty: a degenerate all-empty project passes through unchanged so the
     Library still shows something.
+
+    A matrix book (``metadata["origin_matrix"]``) is judged on its CELLS: its
+    ``.values`` are X, Y, Z[, Z imaginary], and the X/Y columns are generated
+    coordinates that are finite however empty the matrix is — counted as data,
+    they made Origin's untouched default 32 x 32 matrix a 1024-row book.
     """
-    kept = [
-        b
-        for b in books
-        if (b.values.size and int(np.count_nonzero(np.isfinite(b.values))) > 0)
-        or b.metadata.get("origin_text_columns")
-    ]
+
+    def has_numbers(b: DataStruct) -> bool:
+        cells = b.values[:, 2:] if b.metadata.get("origin_matrix") else b.values
+        return bool(cells.size) and int(np.count_nonzero(np.isfinite(cells))) > 0
+
+    kept = [b for b in books if has_numbers(b) or b.metadata.get("origin_text_columns")]
     return kept or books
 
 

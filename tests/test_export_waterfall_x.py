@@ -83,23 +83,23 @@ def test_without_the_x_half_every_series_shares_the_unshifted_x(
 # the x data domain an auto-scaled X axis must cover (every drawn series at its
 # own shifted x; positive points only on a log X) and pins it beside the
 # request in ``waterfall_x_domain.json``; the canvas half asserts uPlot's range
-# is that domain padded by the canvas' rule. Here matplotlib's autoscaled xlim
-# must be that SAME domain padded by matplotlib's margin rule, and an explicit
+# is that domain padded by the canvas' rule. Here the exported xlim must be
+# that SAME domain padded by that same rule (audit #11), and an explicit
 # ``x_lim`` must win outright.
 
 DOMAIN_FIXTURE = Path(__file__).parent / "fixtures" / "wire" / "waterfall_x_domain.json"
 DOMAIN_CASES = json.loads(DOMAIN_FIXTURE.read_text(encoding="utf-8"))["cases"]
 
 
-def _padded(domain: list[float], margin: float, log: bool) -> tuple[float, float]:
+def _padded(domain: list[float], log: bool) -> tuple[float, float]:
     """The export's autoscale of ``domain`` (``calc.figure_autoscale``): a log
-    axis snaps as uPlot's ``rangeLog``; a linear one takes matplotlib's margin,
-    never across zero."""
+    axis snaps as uPlot's ``rangeLog``; a linear one takes the canvas'
+    full-scan pad for a block layout (``padXDomain``, 2% each side -- audit
+    #11; the canvas always scans x for ``blockRows``)."""
     if log:
         return log_auto_range(domain[0], domain[1])
-    pad = (domain[1] - domain[0]) * margin
-    a, b = domain[0] - pad, domain[1] + pad
-    return (max(0.0, a) if domain[0] >= 0 else a, min(0.0, b) if domain[1] <= 0 else b)
+    pad = (domain[1] - domain[0]) * 0.02
+    return (domain[0] - pad, domain[1] + pad)
 
 
 @pytest.mark.parametrize("case", DOMAIN_CASES, ids=[c["name"] for c in DOMAIN_CASES])
@@ -113,5 +113,5 @@ def test_the_x_autoscale_covers_every_shifted_series(
     if case["x_lim"] is not None:
         assert got == pytest.approx(tuple(case["x_lim"]), abs=1e-12)
         return
-    want = _padded(case["x_domain"], ax.margins()[0], req.get("x_scale") == "log")
+    want = _padded(case["x_domain"], req.get("x_scale") == "log")
     assert got == pytest.approx(want, rel=1e-12)

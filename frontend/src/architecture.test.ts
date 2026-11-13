@@ -864,7 +864,9 @@ const TS_MODULE_PINS: Record<string, number> = {
   // 1279 -> 1269 (2026-10-02): log-axis tick labels (decade anchors + the
   // major-tick filter) moved to lib/logTicks.ts.
   "/lib/uplotOpts.ts": 1269,
-  "/lib/uplotOverlays.ts": 1175,
+  // 1175 -> 1164 (2026-11-13, figures integration): the region-shade chunk
+  // loader moved to lib/regionDecorLoader.ts.
+  "/lib/uplotOverlays.ts": 1164,
   // 1090 -> 1040 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR A1): the Reductions
   // wire types (WilliamsonHallResult/FftThicknessResult/SuperlatticeResult/
   // ReflectivityFftResult) — a self-contained leaf block nothing else in this
@@ -904,6 +906,10 @@ const TS_MODULE_PINS: Record<string, number> = {
   // 843 / 908 -> 821 (2026-11-13, merging main's fitting work into the Origin
   // interchange branch): both sides' moves combined; the pin is the merged
   // file's measured size.
+  // 821 (2026-11-13, merging the .opj reader branch): OriginFidelityStatus /
+  // OriginFigureFidelity joined lib/originFidelityTypes.ts (re-exported, no
+  // importer changed), funding `OriginFigure.curve_sheet_notes`; the pin is
+  // unchanged. (The reader branch's own 934 -> 901 move is subsumed.)
   "/lib/types.ts": 821,
   // 893 -> 863 (P1.4 Graph Builder encodings): the error-well helpers
   // (specErrorBindings/prefillErrorZones) moved verbatim to lib/plotspecErrors.ts
@@ -936,7 +942,9 @@ const TS_MODULE_PINS: Record<string, number> = {
   // saving went back into the stack leg's payload/channel snapshot (N4).
   // 753 -> 705 (2026-09-29, F4.2c (a)): the spatial leg's per-panel fetch
   // moved to `spatialPanelFetch.ts`, which also masks excluded rows.
-  "/components/Stage/useMultiPanelStage.ts": 705,
+  // 705 -> 695 (2026-11-13, figures integration): the hook's result types
+  // moved to `useMultiPanelStageTypes.ts`, funding the on-demand plot parts.
+  "/components/Stage/useMultiPanelStage.ts": 695,
   // useStatStage.ts GRADUATED 2026-09-27 (pin was 546; P2.6 box 4): its
   // public types (params + the returned state) moved to
   // components/Stage/useStatStageTypes.ts, re-exported unchanged, which put
@@ -2756,6 +2764,20 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/commands/plotCommands.ts",
       call: 'import("../lib/pageSetupCommand")',
     },
+    // Figures audit (2026-11-13): on-demand uPlot plugin families, so the
+    // Axis dialog's extras (#6) cost a plain plot nothing, funded by moving
+    // the qfit gadget frame (a tool-activation-only plugin) behind the same
+    // getter seam. Plus the Plot menu's graph-template and dialog bodies.
+    { module: "/lib/axisExtras.ts", loader: "/lib/axisExtrasHook.ts", call: 'import("./axisExtras")' },
+    { module: "/lib/uplotGadgets.ts", loader: "/lib/axisExtrasHook.ts", call: 'import("./uplotGadgets")' },
+    { module: "/lib/graphTemplateCommands.ts", loader: "/commands/plotCommands.ts", call: 'import("../lib/graphTemplateCommands")' },
+    // Figures integration (2026-11-13, budget after the main merges): the canvas
+    // title drawing and the axis double-click hit test.
+    { module: "/lib/uplotRichLabels.ts", loader: "/lib/richLabelsLoader.ts", call: 'import("./uplotRichLabels")' },
+    { module: "/components/Stage/axisAtPoint.ts", loader: "/components/Stage/AxisDropZones.tsx", call: 'import("./axisAtPoint")' },
+    // The facet / x-break dialog bodies (both lanes moved them on demand; the
+    // integration kept one module, commands/plotLayoutCommands.ts).
+    { module: "/commands/plotLayoutCommands.ts", loader: "/commands/plotCommands.ts", call: 'import("./plotLayoutCommands")' },
     {
       // SLICE 17: Paste and Duplicate load their bodies, which import the
       // core statically, so the core itself moved to DRAGGED_OUT below.

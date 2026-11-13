@@ -29,6 +29,7 @@ __all__ = [
     "color_boxes",
     "color_violins",
     "level_colors",
+    "position_colors",
 ]
 
 #: The canvas' body fills: ``globalAlpha`` 0.28 (box), 0.32 (violin), 0.75 (bar).
@@ -54,6 +55,21 @@ def level_colors(
         else:
             out.append(f"C{int(lv) % 10}")
     return out
+
+
+def position_colors(
+    levels: Sequence[int | None] | None, palette: Sequence[str] | None, n: int,
+) -> list[str | None] | None:
+    """Box / violin / strip glyph colours as the canvas picks them
+    (``lib/statColor.ts`` ``glyphColor``: ``seriesColor(levels?.[i] ?? i)``):
+    a group without a level is coloured by its POSITION in the palette, not
+    left to matplotlib's default (review finding: the export drew black/blue
+    glyphs under the screen's theme colours). Without a palette this is
+    ``level_colors``, unchanged."""
+    if not palette:
+        return level_colors(levels, palette)
+    lv = list(levels) if levels is not None else [None] * n
+    return [str(palette[(v if v is not None else i) % len(palette)]) for i, v in enumerate(lv)]
 
 
 def check_aligned(colors: Sequence[str | None] | None, n: int, what: str) -> None:
@@ -90,12 +106,19 @@ def color_violins(parts: dict[str, Any], colors: Sequence[str | None]) -> None:
         body.set_edgecolor(c)
 
 
-def bar_colors(colors: Sequence[str | None] | None, series_index: int) -> dict[str, Any]:
+def bar_colors(
+    colors: Sequence[str | None] | None, series_index: int, palette: Sequence[str] | None = None,
+) -> dict[str, Any]:
     """``ax.bar`` keywords colouring each category's bar of series
     ``series_index`` by its category's colour: filled at ``BAR_ALPHA``, edged
-    opaque (the screen's). A category with no colour keeps the series'
-    ``"C{i}"``. Empty without colours, so the call is the one it always was."""
+    opaque (the screen's). A category with no colour keeps the series' own:
+    ``palette[i]`` -- the canvas' ``seriesColor(i)`` -- when the client sent
+    its palette, else ``"C{i}"``. Empty with neither, so the call is the one
+    it always was."""
+    own_series = str(palette[series_index % len(palette)]) if palette else f"C{series_index % 10}"
     if colors is None:
-        return {}
-    own = [c or f"C{series_index % 10}" for c in colors]
+        if not palette:
+            return {}
+        return {"color": to_rgba(own_series, BAR_ALPHA), "edgecolor": own_series}
+    own = [c or own_series for c in colors]
     return {"color": [to_rgba(c, BAR_ALPHA) for c in own], "edgecolor": own}

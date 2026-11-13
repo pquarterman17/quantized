@@ -119,6 +119,8 @@ describe("DESIGNATION_BADGE", () => {
       label: "Label",
       disregard: "Disregard",
       Z: "Z",
+      group: "Group",
+      subject: "Subject",
     });
   });
 

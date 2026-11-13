@@ -1,0 +1,123 @@
+{
+  "cases": [
+    [
+      "T\\+(2)",
+      "T$^{\\mathrm{2}}$"
+    ],
+    [
+      "M\\-(s) (emu)",
+      "M$_{\\mathrm{s}}$ (emu)"
+    ],
+    [
+      "2\\g(q) (deg)",
+      "2θ (deg)"
+    ],
+    [
+      "\\b(Bold text)",
+      "$\\mathbf{Bold\\ text}$"
+    ],
+    [
+      "\\i(x) and \\b(\\g(m)\\+(2))",
+      "$\\mathit{x}$ and $\\mathbf{μ^{2}}$"
+    ],
+    [
+      "10\\+(-3) emu cm\\+(-3)",
+      "10$^{\\mathrm{-3}}$ emu cm$^{\\mathrm{-3}}$"
+    ],
+    [
+      "\\+(a(b)c)",
+      "$^{\\mathrm{a(b)c}}$"
+    ],
+    [
+      "\\g(Dr)/r",
+      "Δρ/r"
+    ],
+    [
+      "H\\-(c\\-(2))",
+      "H$_{\\mathrm{c}_{\\mathrm{2}}}$"
+    ],
+    [
+      "\\x(1) unknown control",
+      "\\x(1) unknown control"
+    ],
+    [
+      "\\+(50%) unsafe body",
+      "\\+(50%) unsafe body"
+    ],
+    [
+      "\\+(unterminated",
+      "\\+(unterminated"
+    ],
+    [
+      "$x^2$ and \\+(3)",
+      "$x^2$ and $^{\\mathrm{3}}$"
+    ],
+    [
+      "odd $ count \\+(3)",
+      "odd $ count \\+(3)"
+    ],
+    [
+      "plain label",
+      "plain label"
+    ],
+    [
+      "\\g(\\+(2)) nested literal",
+      "\\g(\\+(2)) nested literal"
+    ],
+    [
+      "\\b(\\g(\\+(a))) nested literal",
+      "\\b(\\g(\\+(a))) nested literal"
+    ],
+    [
+      "\\\\+(2) escaped backslash",
+      "\\\\+(2) escaped backslash"
+    ],
+    [
+      "\\+(é) outside the math subset",
+      "\\+(é) outside the math subset"
+    ],
+    [
+      "\\+(@) outside the math subset",
+      "\\+(@) outside the math subset"
+    ],
+    [
+      "\\+(!?) outside the math subset",
+      "\\+(!?) outside the math subset"
+    ],
+    [
+      "\\+(\"x\") outside the math subset",
+      "\\+(\"x\") outside the math subset"
+    ],
+    [
+      "\\+([1]) inside it",
+      "$^{\\mathrm{[1]}}$ inside it"
+    ],
+    [
+      "\\+(°C) inside it",
+      "$^{\\mathrm{°C}}$ inside it"
+    ],
+    [
+      "\\g(\\+(2)) beside M\\+(2)",
+      "\\g(\\+(2)) beside M$^{\\mathrm{2}}$"
+    ],
+    [
+      "\\\\+(2) beside M\\+(2)",
+      "\\\\+(2) beside M$^{\\mathrm{2}}$"
+    ],
+    [
+      "\\+(é) beside M\\+(2)",
+      "\\+(é) beside M$^{\\mathrm{2}}$"
+    ],
+    [
+      "C:\\data beside M\\+(2)",
+      "C:\\data beside M$^{\\mathrm{2}}$"
+    ]
+  ],
+  "screen_literal": [
+    "odd $ count \\+(3)",
+    "\\g(\\+(2)) beside M\\+(2)",
+    "\\\\+(2) beside M\\+(2)",
+    "\\+(é) beside M\\+(2)",
+    "C:\\data beside M\\+(2)"
+  ]
+}

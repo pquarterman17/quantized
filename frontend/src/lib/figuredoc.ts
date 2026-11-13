@@ -81,6 +81,16 @@ export interface GraphTemplate {
    *  (MAIN_PLAN #5 — lib/originTemplate). Extra fields survive the
    *  localStorage round-trip (isTemplate only checks name/style). */
   source?: string;
+  /** The Stage-side style (B2 figures audit, `lib/graphFormat.ts`'s
+   *  `GraphFormat`): axis scales/formats, chrome and per-POSITION series
+   *  styles, captured from a plot window or a canonical Publication preview
+   *  draft. Absent on a template saved before it existed; the Stage then
+   *  restyles from `seriesStyles` alone (`seriesStyleFromExport`).
+   *
+   *  Typed `unknown` and NOT validated on load: every consumer is a lazy
+   *  chunk that runs `sanitizeGraphFormat` itself, so this always-loaded
+   *  module never pulls the format code into the eager bundle. */
+  format?: unknown;
 }
 
 // ── .dwk sanitizers ─────────────────────────────────────────────────────────

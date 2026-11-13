@@ -107,7 +107,7 @@ export default function ParamDialog() {
         <div className="qz-btn-row">
           <Button onClick={() => finish(null)}>Cancel</Button>
           <Button variant="primary" onClick={() => finish(coerceParams(values, fields))}>
-            {confirmLabel ?? "Run"}
+            {confirmLabel ?? "OK"}
           </Button>
         </div>
       </div>

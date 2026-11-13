@@ -80,7 +80,7 @@ export function createPageDocumentsSlice(set: SliceSet, get: SliceGet): PageDocu
     },
     renamePageDocument: (id, name) => {
       const trimmed = name.trim();
-      if (!trimmed) return;
+      if (!trimmed || !get().pages.some((p) => p.id === id && p.name !== trimmed)) return; // no-op: no undo step
       get().recordHistory("rename figure page");
       set((state) => ({
         pages: state.pages.map((p) =>

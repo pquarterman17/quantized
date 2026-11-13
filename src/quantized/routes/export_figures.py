@@ -19,6 +19,7 @@ it. Filenames are sanitized before reaching the Content-Disposition header.
 
 from __future__ import annotations
 
+import json
 import threading
 from functools import partial
 from typing import Any
@@ -27,6 +28,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import Field, field_validator
 
 from quantized.calc.figure_group_styles import expand_grouped_series_styles
+from quantized.calc.figure_warnings import collect_figure_warnings
 from quantized.calc.plot_log_offsets import apply_log_offsets, scale_error_spans
 from quantized.calc.plot_waterfall_x import apply_waterfall_x_offsets
 from quantized.calc.plotting import (
@@ -84,6 +86,9 @@ from quantized.routes.export_figures_schema import (
 )
 
 router = APIRouter(prefix="/api/export", tags=["export"], route_class=OffloopJSONRoute)
+
+# Response header carrying the render's warnings (calc.figure_warnings).
+FIGURE_WARNINGS_HEADER = "X-Figure-Warnings"
 
 
 class FigureRequest(CachedDatasetRequest, ExcludedRowsFields, AxisTitleFields, PolarFields):
@@ -363,9 +368,19 @@ def render_figure_request(req: FigureRequest, *, fmt: str, dpi: int) -> bytes:
         from quantized.calc.figure import render_figure
 
     resolved = _figure_series(req)
-    return render_figure(
-        resolved.x,
-        resolved.series,
+    kwargs = _flat_render_kwargs(req, resolved, dpi)
+    return render_figure(resolved.x, resolved.series, fmt=fmt, **kwargs)
+
+
+def _flat_render_kwargs(req: FigureRequest, resolved: _ResolvedFigure, dpi: int) -> dict[str, Any]:
+    """The flat (non-facet, non-polar) renderer's keyword arguments for
+    ``req`` -- the ONE list shared by the export (``render_figure_request``)
+    and the publication preview (``/figure-hitmap``), so the preview renders
+    exactly what Export writes. It used to be two hand-copied lists, and the
+    preview's lacked ``error_spans``, ``width_in``/``height_in`` and
+    ``transparent`` (publication-figures audit #4): a preview at the preset
+    size with no error bars beside an export at the page size with them."""
+    return dict(
         title=req.title,
         x_label=resolved.x_label,
         y_label=resolved.y_label,
@@ -373,7 +388,6 @@ def render_figure_request(req: FigureRequest, *, fmt: str, dpi: int) -> bytes:
         y_log=req.y_log,
         x_scale=req.x_scale,
         y_scale=req.y_scale,
-        fmt=fmt,
         style=req.style,
         series_styles=resolved.styles,
         error_spans=resolved.error_spans,
@@ -408,14 +422,17 @@ def export_figure(req: FigureRequest) -> Response:
             status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
         )
     try:
-        data = render_figure_request(req, fmt=req.fmt, dpi=req.dpi)
+        with collect_figure_warnings() as notes:
+            data = render_figure_request(req, fmt=req.fmt, dpi=req.dpi)
     except CALC_ERRORS_WITH_LOCK as exc:
         raise_calc_error(exc)
-    return Response(
-        content=data,
-        media_type=_FIGURE_MIME[req.fmt],
-        headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
-    )
+    headers = _attachment(_safe_name(req.filename, f".{req.fmt}"))
+    if notes:
+        # What the render could not honour (a missing font, an off-scale
+        # reference line, a page too small for its labels) -- JSON, ASCII-
+        # escaped so any font name survives an HTTP header.
+        headers[FIGURE_WARNINGS_HEADER] = json.dumps(notes)
+    return Response(content=data, media_type=_FIGURE_MIME[req.fmt], headers=headers)
 
 
 @router.post("/figure-hitmap")
@@ -471,30 +488,9 @@ def _figure_hitmap(req: FigureRequest, response: Response, gone: threading.Event
                 raise HTTPException(status_code=499, detail="client_disconnected")
             if req.facets:
                 return _render_facets_map(req, resolved, dpi=dpi)
-            return render_figure_map(
-                resolved.x,
-                resolved.series,
-                title=req.title,
-                x_label=resolved.x_label,
-                y_label=resolved.y_label,
-                x_log=req.x_log,
-                y_log=req.y_log,
-                x_scale=req.x_scale,
-                y_scale=req.y_scale,
-                style=req.style,
-                series_styles=resolved.styles,
-                dpi=dpi,
-                greyscale=req.greyscale,
-                overrides=request_overrides(req),
-                x_fmt=_tick_fmt(req.x_fmt),
-                y_fmt=_tick_fmt(req.y_fmt),
-                x_step=req.x_step,
-                y_step=req.y_step,
-                y2_mask=resolved.y2_mask,
-                y2_label=resolved.y2_label,
-                y2_scale=req.y2_scale,
-                y2_fmt=_tick_fmt(req.y2_fmt),
-                y2_step=req.y2_step,
-            )
+            kwargs = _flat_render_kwargs(req, resolved, dpi)
+            with collect_figure_warnings() as notes:
+                out = render_figure_map(resolved.x, resolved.series, **kwargs)
+            return {**out, "warnings": notes}
     except CALC_ERRORS_WITH_LOCK as exc:
         raise_calc_error(exc)

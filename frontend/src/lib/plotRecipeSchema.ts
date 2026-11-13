@@ -81,6 +81,13 @@ export interface RecipeSignatureEntry {
    *  case/whitespace-insensitively -- e.g. a user-declared "2θ" / "2theta"
    *  equivalence. Empty by default; a UI can grow this list later. */
   aliases: string[];
+  /** The 0-based column POSITION this entry had in the source dataset
+   *  (optional, additive). Only a `"generic"`-scoped recipe reads it: two
+   *  unclassified CSVs share no technique vocabulary to trust, so after the
+   *  label/alias tiers find nothing, `resolveRecipe` falls back to "the same
+   *  column position" (and says so in a warning). Technique recipes never
+   *  match by position -- the P1.3 reordered-columns acceptance case. */
+  position?: number;
 }
 
 /** One error binding expressed against the signature: `channel`/`target` are
@@ -104,6 +111,12 @@ export interface RecipeMapping {
   groupId: string | null;
   facetId: string | null;
   errors: RecipeErrorBinding[];
+  /** True when the source view plotted its DEFAULT channel set (`yKeys:
+   *  null`). `yIds` then still names those channels -- so per-series styles
+   *  have signature entries to key against -- but applying the recipe keeps
+   *  the target's own default channel set instead of narrowing it to the
+   *  source's columns. Optional/additive; absent = false. */
+  yAuto?: boolean;
 }
 
 /** Autoscale-vs-fixed range policy for one axis (P1.3's explicit ask: the
@@ -298,8 +311,9 @@ export interface PlotRecipe {
   schemaVersion: typeof PLOT_RECIPE_SCHEMA_VERSION;
   provenance: PlotRecipeProvenance;
   /** Equality-only scope (`lib/techniqueViewMemory.ts`'s rule): a recipe
-   *  matches a dataset only when `techniqueOf(dataset) === technique`, and
-   *  `"generic"` never matches anything at all (see `plotRecipeMatch.ts`). */
+   *  matches a dataset only when `techniqueOf(dataset) === technique` --
+   *  except `"generic"`, a technique-free style carrier that applies to any
+   *  dataset by label, then column position (see `plotRecipeMatch.ts`). */
   technique: Technique;
   signature: RecipeSignatureEntry[];
   mapping: RecipeMapping;

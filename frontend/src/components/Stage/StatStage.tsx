@@ -25,6 +25,7 @@ import StatMarksControls from "./StatMarksControls";
 import StatStagePlot from "./StatStagePlot";
 import StatSummaryTable from "./StatSummaryTable";
 import { useStatGroupSelection } from "./useStatGroupSelection";
+import { useToolsClearance } from "./useToolsClearance";
 import { BIN_RULES, DISTRIBUTIONS, useStatStage } from "./useStatStage";
 import { useRegisterStatStageExporter } from "./useStatStageExport";
 
@@ -86,6 +87,7 @@ export default function StatStage() {
   // it's actually open — the plot half of the link needs only rows/keys.
   const sel = useStatGroupSelection(active, st.axes, hideEmptyLevels, showSummary);
   const dockOpen = categorical && showSummary;
+  const [toolsRef, toolsClearance] = useToolsClearance(); // the plot and dock sit below the bar
   const [exporting, setExporting] = useState(false);
 
   async function onExport() {
@@ -175,21 +177,23 @@ export default function StatStage() {
         accent={accent}
         sel={categorical ? sel : null}
         right={dockOpen ? DOCK_WIDTH + 8 : 0}
+        top={toolsClearance}
         errorNote={st.errorNote}
       />
       {dockOpen && sel.summary && (
         <div
           className="qzk-glass"
           data-testid="stat-summary-dock"
-          style={{ position: "absolute", top: 56, right: 8, bottom: 44, width: DOCK_WIDTH, overflow: "auto", padding: 4 }}
+          style={{ position: "absolute", top: Math.max(56, toolsClearance), right: 8, bottom: 44, width: DOCK_WIDTH, overflow: "auto", padding: 4 }}
         >
           <StatSummaryTable sel={sel} valueLabels={sel.summary.valueLabels} />
         </div>
       )}
 
       <div
+        ref={toolsRef}
         className="qzk-glass qzk-float-tools"
-        style={{ gap: 10, padding: "6px 10px", flexWrap: "wrap", maxWidth: "92vw", justifyContent: "center" }}
+        style={{ gap: 10, padding: "6px 10px", flexWrap: "wrap", maxWidth: "92vw", justifyContent: "center", maxHeight: "40%", overflowY: "auto" }}
       >
         <button
           aria-label="Cartesian plot"
@@ -275,7 +279,7 @@ export default function StatStage() {
             connect-means and label options -- persisted on the PlotView. */}
         {categorical && (
           <StatMarksControls
-            mode={st.mode} marks={st.marks} setMarks={st.setMarks} grouped={st.groupCol != null} stacked={st.barStack}
+            mode={st.mode} marks={st.marks} setMarks={st.setMarks} grouped={st.groupCol != null} stacked={st.barStack} errorColumn={st.errorColumn}
           />
         )}
 

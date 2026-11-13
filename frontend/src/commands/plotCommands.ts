@@ -7,12 +7,12 @@
 // every command whose `group` is "Plot" or "Insert". Behavior is
 // unchanged — this is a verbatim move.
 
-import { askParams } from "../components/overlays/ParamDialog";
 import type { StoreGet } from "../lib/exportActive";
 import { plotInNewWindow } from "../lib/plotInNewWindow";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { cycleAxisScale, cycleTickMode } from "../lib/plotview";
 import type { Action } from "../store/commands";
+import { openFigureDialog } from "../store/figureDialogs";
 import { useRecipeManager } from "../store/recipeManager";
 import { toast } from "../store/toasts";
 import { onLoadFailure, runLazy } from "./fileCommands";
@@ -56,6 +56,19 @@ export function sendFigureToReport(s: StoreGet): Promise<boolean> {
 export function sendEditableFigureToReport(s: StoreGet, figureId: string): Promise<void> {
   return runLazy("Loading report tools…", () => import("../lib/sendFigureToReport")).then(
     (m) => m.runSendEditableFigureToReport(s, figureId),
+    onLoadFailure,
+  );
+}
+
+/** The Stage graph-template / Copy-Paste Format commands (figures-audit B2):
+ *  the bodies load on demand, the same `runLazy` + `.then(act,
+ *  onLoadFailure)` shape as `openPageSetup` above. */
+function graphFormatCommand(
+  s: StoreGet,
+  pick: (m: typeof import("../lib/graphTemplateCommands")) => (s: StoreGet) => void | Promise<void>,
+): void {
+  void runLazy("Loading graph templates…", () => import("../lib/graphTemplateCommands")).then(
+    (m) => pick(m)(s),
     onLoadFailure,
   );
 }
@@ -199,43 +212,30 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       run: () => s().setStatMode(!s().statMode),
     },
     {
+      // Figures audit #19: the toolbar's ⊕ sits in the View group, which is
+      // the first to fold into "⋯" on a narrow window — so the magnifier
+      // inset needs a menu/palette entry point of its own.
+      id: "inset-mode",
+      group: "Plot",
+      section: "Display",
+      label: "Magnifier inset",
+      description: "Show a zoomed inset of a region over the plot.",
+      keywords: "zoom inset magnify detail",
+      checked: () => s().insetMode,
+      run: () => s().setInsetMode(!s().insetMode),
+    },
+    {
       id: "facet-by-column",
       group: "Plot",
       section: "Layout",
       label: "Facet by column…",
       description: "Split data into small-multiple panels using the distinct values of a selected column.",
-      run: async () => {
-        const ds = s().datasets.find((d) => d.id === s().activeId);
-        if (!ds) {
-          toast("no active dataset", "danger");
-          return;
-        }
-        if (ds.data.labels.length === 0) {
-          toast("active dataset has no columns to facet by", "danger");
-          return;
-        }
-        // Disambiguate duplicate labels (real instrument imports can repeat
-        // a column name) so the reverse `indexOf` lookup below always maps
-        // the picked option back to the SAME channel the user saw.
-        const raw = ds.data.labels.map((lab, i) => lab || `Column ${i + 1}`);
-        const counts = new Map<string, number>();
-        for (const lab of raw) counts.set(lab, (counts.get(lab) ?? 0) + 1);
-        const options = raw.map((lab, i) => (counts.get(lab)! > 1 ? `${lab} (col ${i + 1})` : lab));
-        const params = await askParams("Facet by column", [
-          {
-            key: "column",
-            label: "Column",
-            type: "select",
-            default: options[0],
-            options,
-            hint: "One small-multiples panel per distinct level, sharing the x-axis",
-          },
-        ]);
-        if (!params) return;
-        const col = options.indexOf(String(params.column));
-        if (col < 0) return;
-        s().facetByColumn(ds.id, col);
-      },
+      // Body lazy (commands/plotLayoutCommands.ts): it only runs after a pick.
+      run: () =>
+        void runLazy("Loading facets…", () => import("./plotLayoutCommands")).then(
+          (m) => m.runFacetByColumn(s),
+          onLoadFailure,
+        ),
     },
     {
       id: "break-x-axis",
@@ -243,24 +243,23 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       section: "Layout",
       label: "Break x-axis at gaps…",
       description: "Detect large gaps in horizontal values and display a discontinuous x-axis.",
-      run: async () => {
-        const ds = s().datasets.find((d) => d.id === s().activeId);
-        if (!ds) {
-          toast("no active dataset", "danger");
-          return;
-        }
-        const params = await askParams("Break x-axis at gaps", [
-          {
-            key: "gapFactor",
-            label: "Gap factor",
-            type: "number",
-            default: 4,
-            hint: "A gap at least this many times the median x-spacing becomes a break",
-          },
-        ]);
-        if (!params) return;
-        s().breakAtGaps(ds.id, undefined, Number(params.gapFactor));
-      },
+      // Body lazy (commands/plotLayoutCommands.ts): it only runs after a pick.
+      run: () =>
+        void runLazy("Loading x-axis breaks…", () => import("./plotLayoutCommands")).then(
+          (m) => m.runBreakXAxis(s),
+          onLoadFailure,
+        ),
+    },
+    {
+      // A Y break is an axis property (one frame, the stretch elided), so it
+      // lives on the Axis dialog's Y tab; this is the menu's way there.
+      id: "break-y-axis",
+      group: "Plot",
+      section: "Layout",
+      label: "Break y-axis…",
+      description: "Hide a stretch of the vertical axis (Break from / Break to) so two separated ranges share one graph.",
+      keywords: "axis break gap discontinuous",
+      run: () => openFigureDialog({ kind: "axis", axis: "y" }),
     },
     {
       // Multi-plot discoverability: the palette counterpart of the Library
@@ -332,6 +331,64 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       description: "Add the current plot to a report; Word, PowerPoint and HTML report exports embed it as rendered.",
       keywords: "report figure embed word powerpoint docx pptx html",
       run: () => void sendFigureToReport(s),
+    },
+    // ── Figures audit #6 / #8: the Axis dialog and the plot-type gallery
+    // (one lazy chunk, store/figureDialogs.ts). ──
+    {
+      id: "axis-dialog",
+      group: "Plot",
+      section: "Axes",
+      label: "Axis…",
+      description: "Edit an axis (scale, limits, break, ticks, number format, divide-by, fonts), or double-click the axis.",
+      keywords: "scale limits ticks minor divide font break",
+      run: () => openFigureDialog({ kind: "axis", axis: "x" }),
+    },
+    {
+      id: "plot-type",
+      group: "Plot",
+      section: "Display",
+      label: "Plot type…",
+      description: "Switch the graph to line, scatter, area, column, box, histogram or contour.",
+      keywords: "gallery bar histogram heatmap",
+      run: () => openFigureDialog({ kind: "plotType" }),
+    },
+    // ── Graph format (figures-audit B2; filed under "Display"): style-only templates and Origin-style
+    // Copy/Paste Format. Style travels; data, limits and titles never do. ──
+    {
+      id: "graph-template-save",
+      group: "Plot",
+      section: "Display",
+      label: "Save Graph Template…",
+      description: "Save this graph's style (not its data) as a reusable template.",
+      keywords: "style otp",
+      run: () => graphFormatCommand(s, (m) => m.saveStageGraphTemplate),
+    },
+    {
+      id: "graph-template-apply",
+      group: "Plot",
+      section: "Display",
+      label: "Apply Graph Template…",
+      description: "Restyle this graph with a saved template; its data is kept.",
+      keywords: "style otp",
+      run: () => graphFormatCommand(s, (m) => m.applyStageGraphTemplate),
+    },
+    {
+      id: "copy-format",
+      group: "Plot",
+      section: "Display",
+      label: "Copy Format",
+      description: "Copy this graph's style (not its data).",
+      keywords: "style",
+      run: () => graphFormatCommand(s, (m) => m.copyStageFormat),
+    },
+    {
+      id: "paste-format",
+      group: "Plot",
+      section: "Display",
+      label: "Paste Format",
+      description: "Apply the copied style to this graph; its data is kept.",
+      keywords: "style",
+      run: () => graphFormatCommand(s, (m) => m.pasteStageFormat),
     },
     // ── Insert (MAIN #27: drawing shapes on plots — the menu-driven
     // counterpart of PlotToolbar's dock flyout) ──

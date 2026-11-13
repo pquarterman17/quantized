@@ -31,6 +31,7 @@ from quantized.calc.figure_axis_titles import apply_axis_titles
 from quantized.calc.figure_decor import _apply_region_shades, _split_region_shades_by_axis
 from quantized.calc.figure_errorbars import apply_error_bars
 from quantized.calc.figure_inset import apply_inset
+from quantized.calc.figure_legend_order import draw_legend, tag_series_slots
 from quantized.calc.figure_overrides import legend_kwargs
 from quantized.calc.figure_scale import apply_axis_scale, drawable_lim, resolve_axis_scale
 from quantized.calc.figure_styles import FigureStyle
@@ -283,7 +284,6 @@ def render_with_secondary_axis(
     )
     ax2.spines["right"].set_visible(True)
     apply_axis_titles(fig, {"y2": ax2}, ov.get("axis_titles"))  # the y2 title's Format + drag
-    _apply_region_shades(ax2, secondary_shades)
     y2_lim = ov.get("y2_lim")
     if y2_lim is not None:
         lo, hi = y2_lim
@@ -291,6 +291,9 @@ def render_with_secondary_axis(
         ax2.set_ylim(*drawable_lim(
             ax2, "y", None if lo is None else float(lo), None if hi is None else float(hi)
         ))
+    # After the y2 limits (audit #11): a shade's log-floor clamp and its
+    # off-scale warning read the FINAL secondary range.
+    _apply_region_shades(ax2, secondary_shades)
     apply_inset(
         ax, artists, ov, resolve_axis_scale(x_scale, x_log), resolve_axis_scale(y_scale, y_log),
         st.grid_alpha, twin=(ax2, y2_artists, resolve_axis_scale(y2_scale, False)),
@@ -341,5 +344,6 @@ def _combined_legend(
     if kw is None:
         return
     ordered = _display_order(primary, secondary, y2_mask)
+    tag_series_slots(ordered)  # display slots across BOTH axes (figure_legend_order)
     handles = [h for h in ordered if not str(h.get_label()).startswith("_")]
-    ax.legend(handles, [h.get_label() for h in handles], **kw)
+    draw_legend(ax, ov, kw, handles)

@@ -59,6 +59,12 @@ _EXCLUDE_PREFIXES = (
     # RE probe artifacts (byte-probing specimens with *_truth.json oracles,
     # exercised by test_io_origin_project/-_fuzz), not instrument data.
     "origin/specimens/probe_",
+    # The public Origin specimen corpus (third-party projects + other
+    # readers' test files, incl. deliberately broken stubs). It is the
+    # Origin decoder's own oracle corpus, swept by its dedicated suites
+    # (test_io_origin_opj_corpus), which state per file what must import —
+    # "every file imports with rows" is not a property that corpus has.
+    "origin/public/",
 )
 
 # Known-gap corpus files: relative posix path -> reason. These xfail (not

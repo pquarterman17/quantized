@@ -15,6 +15,8 @@
 // (a saved doc that reopens looking different from the preview it was saved
 // from). One input type makes that structural instead of a review question.
 
+import { withPageSetup } from "./canonicalPage";
+import type { PageSetup } from "../../../lib/pagesetup";
 import type { FigureSpec } from "../../../lib/api/figures";
 import { resolveSecondaryAxis, secondaryAxisWire, type SecondaryAxisSpec } from "../../../lib/axisspec";
 import { buildExportStyles, toWireSeriesStyles, type ExportSeriesStyle } from "../../../lib/exportStyles";
@@ -78,6 +80,9 @@ export interface LegacyFigureState {
    *  width the canvas draws an unstyled line at (`exportLineWidth`). */
   plotTemplate?: string;
   defaultLineWidth?: number;
+  /** The live window's page (audit #5): sizes the request as the Stage export
+   *  does (`canonicalPage.withPageSetup`). Preview-only, like `y2`. */
+  pageSetup?: PageSetup | null;
 }
 
 /** The channels a spec plots when `yKeys` is the "all channels" null sentinel. */
@@ -148,7 +153,7 @@ export function buildLegacyFigureSpec(
   const y2Axis = state.y2 === null || state.docGroupCol !== null
     ? null
     : resolveSecondaryAxis(plotted, state.y2, { scale: state.yScale, fmt: state.yFmt });
-  const spec: FigureSpec = {
+  const spec: FigureSpec = withPageSetup(state.pageSetup, {
     dataset: pruneToLiveDataset(state.data, state.liveDataset),
     x_key: state.xKey ?? undefined,
     y_keys: state.yKeys ?? undefined,
@@ -166,7 +171,7 @@ export function buildLegacyFigureSpec(
     series_styles: styles ?? undefined,
     group_col: state.docGroupCol ?? undefined,
     ...secondaryAxisWire(y2Axis),
-  };
+  });
   if (!state.liveDataset) return spec;
   return stableWireDataset(
     greyExcluded ? greyExcluded(spec, state.data, droppedRows(state.liveDataset)) : spec,

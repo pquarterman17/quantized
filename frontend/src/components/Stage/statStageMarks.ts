@@ -20,6 +20,27 @@ export function stageMarks(mode: StatMode, marks: StatMarks | null | undefined, 
   return grouped ? r : { ...r, connectMeans: false };
 }
 
+/** Bar mode's error-bar kind once the bar data is known (figures-audit #8
+ *  leftover). `columnAvailable` = a bound error COLUMN supplies at least one
+ *  cell's whisker (`BarChartData.errorColumn`, set by `lib/barMatrix.
+ *  withColumnErrors`). Then an UNPICKED kind defaults to "column" -- a
+ *  summary table draws its own SD/SE, and the picker says "from column"
+ *  rather than the "SE" it used to show over the column's whiskers. A stored
+ *  "column" with no column to read (unbound since, or another mode) falls
+ *  back to the mode's default, so the picker never shows an option it does
+ *  not offer. */
+export function withErrorColumn(
+  r: ResolvedStatMarks,
+  mode: StatMode,
+  marks: StatMarks | null | undefined,
+  columnAvailable: boolean,
+): ResolvedStatMarks {
+  const usable = mode === "bar" && columnAvailable;
+  if (usable && marks?.errorBars === undefined) return { ...r, errorBars: "column" };
+  if (!usable && r.errorBars === "column") return { ...r, errorBars: resolveStatMarks(mode, null).errorBars };
+  return r;
+}
+
 /** Whether the stage must resolve raw (row-indexed) points for `mode`: strip
  *  always (its slots ARE its points), box when every point is shown (its
  *  outliers are the box stats' own fliers), violin when any are. */

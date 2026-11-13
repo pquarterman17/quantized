@@ -52,7 +52,7 @@ export async function reviewQuickPlotPairings(
       default: false,
       hint: "Only column position pairs these columns; no name or unit confirms it.",
     }));
-    const answer = await askParams("Confirm suggested error bars", fields);
+    const answer = await askParams("Confirm suggested error bars", fields, { confirmLabel: "Use error bars" });
     if (!answer) {
       useApp.setState({ status: "Quick Plot cancelled: no figure was created" });
       return;

@@ -10,6 +10,8 @@ export const DESIGNATION_BADGE: Record<OriginDesignation, string> = {
   label: "Label",
   disregard: "Disregard",
   Z: "Z",
+  group: "Group",
+  subject: "Subject",
 };
 
 /** One Origin inline-text column. Text cells stay outside the numeric value

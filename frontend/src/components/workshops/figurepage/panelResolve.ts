@@ -89,14 +89,14 @@ export function resolveSlotFigureId(
   return documentId && editableFigures.some((figure) => figure.id === documentId) ? documentId : null;
 }
 
-/** x_breaks / margins are single-figure-only (the page composer rejects them
+/** x_breaks / margins / page_pad are single-figure-only (the page composer rejects them
  *  with a 422) — strip them from a saved override bag, keeping everything
  *  else. Shared by the "figdoc" and "figure" (F3.3) panel-source branches
  *  below, both of which embed a document's saved overrides into a panel. */
 export function stripPageIncompatibleOverrides(
   saved: FigureOverrides | null | undefined,
 ): FigureOverrides | undefined {
-  const { x_breaks: _xb, margins: _mg, ...overrides } = saved ?? {};
+  const { x_breaks: _xb, margins: _mg, page_pad: _pp, ...overrides } = saved ?? {};
   return Object.keys(overrides).length > 0 ? overrides : undefined;
 }
 

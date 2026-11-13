@@ -32,7 +32,7 @@ export interface PlotSpecBarProps {
 }
 
 async function promptName(title: string, initial: string): Promise<string | null> {
-  const params = await askParams(title, [{ key: "name", label: "Name", type: "text", default: initial }]);
+  const params = await askParams(title, [{ key: "name", label: "Name", type: "text", default: initial }], { confirmLabel: "Save" });
   if (!params) return null;
   return String(params.name);
 }

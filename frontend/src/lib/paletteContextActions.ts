@@ -55,7 +55,7 @@ export function actionPaletteEntry<T>(
 }
 
 function renameDatasetDialog(id: string, name: string): void {
-  void askParams(`Rename "${name}"`, [{ key: "name", label: "Name", type: "text", default: name }]).then(
+  void askParams(`Rename "${name}"`, [{ key: "name", label: "Name", type: "text", default: name }], { confirmLabel: "Rename" }).then(
     (result) => {
       const next = result && String(result.name).trim();
       if (next) useApp.getState().renameDataset(id, next);
@@ -64,7 +64,7 @@ function renameDatasetDialog(id: string, name: string): void {
 }
 
 function addDatasetTagDialog(id: string, name: string): void {
-  void askParams(`Add tag to "${name}"`, [{ key: "tag", label: "Tag", type: "text", default: "" }]).then(
+  void askParams(`Add tag to "${name}"`, [{ key: "tag", label: "Tag", type: "text", default: "" }], { confirmLabel: "Add tag" }).then(
     (result) => {
       const tag = result && String(result.tag).trim();
       if (tag) useApp.getState().addDatasetTag(id, tag);

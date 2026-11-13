@@ -20,6 +20,7 @@ import type { Measurement } from "../../lib/measure";
 import type { FwhmResult } from "../../lib/peakwidth";
 import type { PlotPayload } from "../../lib/plotdata";
 import type { RegionStats } from "../../lib/regionStats";
+import { waterfallStaggeredRows } from "../../lib/waterfallOffset";
 import type { SeriesCycle } from "../../lib/seriesStyleCycle";
 import type { Dataset, DefaultTrace, SeriesStyle } from "../../lib/types";
 import type { PlotTool } from "../../lib/uplotOpts";
@@ -131,6 +132,7 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
           isDarkBg={p.isDarkBg}
           inkColor={p.inkColor}
           defaultTrace={p.defaultTrace}
+          staggeredRows={waterfallStaggeredRows(p.displayPayload)}
         />
       )}
     </>

@@ -25,6 +25,7 @@ from matplotlib import patheffects
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (registers the 3d projection)
 from numpy.typing import ArrayLike, NDArray
 
+from quantized.calc.figure_fonts import font_family_rc
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
@@ -194,10 +195,8 @@ def render_map_figure(
             z_min = z_max = float("nan")  # all-gaps map; contour kinds raise below
 
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
-    fallback = "DejaVu Serif" if st.font_generic == "serif" else "DejaVu Sans"
     rc: dict[str, Any] = {
-        "font.family": st.font_generic,
-        f"font.{st.font_generic}": [st.font_name, fallback],
+        **font_family_rc(st),
         "font.size": st.font_size,
         "axes.labelsize": st.font_size,
         "axes.titlesize": st.title_font_size,

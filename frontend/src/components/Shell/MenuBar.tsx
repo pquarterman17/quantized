@@ -1,12 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
-import { reopenRecent } from "../../lib/reopenRecent";
-import {
-  recentParentLabel,
-  relativeTime,
-  type RecentFile,
-} from "../../lib/recentFiles";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcutFormat";
 import {
   mergeCommands,
@@ -50,18 +44,14 @@ interface MenuBarProps {
   onOpenPalette: () => void;
 }
 
-function recentLabel(entry: RecentFile, now: number): string {
-  const parent = entry.path ? ` — ${recentParentLabel(entry.path)}` : "";
-  return `${entry.name}${parent} · ${relativeTime(entry.at, now)}`;
-}
-
 export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
   const [open, setOpen] = useState<OpenMenu | null>(null);
   const [focusedMenu, setFocusedMenu] = useState<string>(MENUS[0]);
   const [buildMenuItems, setBuildMenuItems] = useState<MenuBuilder | null>(null);
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const recent = useApp((s) => s.recent);
-  const clearRecent = useApp((s) => s.clearRecent);
+  // Subscribed so an open File menu re-renders when Recent changes; the
+  // menu model reads the list itself (appMenuModel.recentMenuItems).
+  useApp((s) => s.recent);
   const menuCmds = useCommands((s) => s.menuCommands);
   const allActions = useMemo(
     () => mergeCommands(actions, menuCmds),
@@ -105,41 +95,6 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
     if (keepOpen) openMenu(label);
   };
 
-  const reopen = (entry: RecentFile) => {
-    if (!entry.path)
-      useApp.getState().setStatus(`re-select "${entry.name}" to import it`);
-    void reopenRecent(useApp.getState(), entry);
-  };
-
-  const recentItems = (): ContextMenuItem[] => {
-    if (!recent.length) return [];
-    const now = Date.now();
-    return [
-      { separator: true },
-      {
-        label: "Recent",
-        submenu: recent.map((entry) => ({
-          label: recentLabel(entry, now),
-          title: entry.path ?? `Re-open the import picker for ${entry.name}`,
-          run: () => reopen(entry),
-        })),
-      },
-      {
-        label: "Manage recent",
-        submenu: [
-          ...recent.map((entry) => ({
-            label: `Remove ${entry.name}`,
-            title:
-              "Remove this entry from Recent without deleting its source file",
-            run: () => useApp.getState().removeRecent(entry),
-          })),
-          { separator: true } as const,
-          { label: "Clear recent", run: clearRecent },
-        ],
-      },
-    ];
-  };
-
   const itemsFor = (label: string): ContextMenuItem[] => {
     if (!buildMenuItems) return [];
     if (label === "Help") {
@@ -167,12 +122,10 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
         },
       ];
     }
-    const items = buildMenuItems(
-      label,
-      allActions.filter((action) => action.group === label),
-      format,
-    );
-    return label === "File" ? [...items, ...recentItems()] : items;
+    // Every command: the model keeps `label`'s own plus its cross-listed
+    // ones (File > Export also offers figure export — figures audit #18),
+    // and File's Recent / Manage recent flyouts (built in the same lazy model).
+    return buildMenuItems(label, allActions, format);
   };
 
   const openItems = open ? itemsFor(open.label) : [];

@@ -42,7 +42,7 @@ import type { BarChartData } from "../../lib/barlayout";
 import type { AxisSlot } from "../../lib/groupAxis";
 import { resolvedPalette } from "../../lib/plotEncodingWire";
 import type { StatExportOut, StatStageRequest } from "../../lib/statStageBridge";
-import { axisStyleWire, errorHalfWidth, nestedTiers, type ResolvedStatMarks } from "../../lib/statMarks";
+import { axisStyleWire, categoricalErrorWire, errorHalfWidth, nestedTiers, type ResolvedStatMarks } from "../../lib/statMarks";
 import type { GroupSpec } from "../../lib/statschooser";
 import { finiteOf, type IndexedGroupSpec, type StatMode } from "../../lib/statstage";
 import type { DataStruct } from "../../lib/types";
@@ -118,7 +118,6 @@ export function buildExportSpec(
       data: finiteGroups.map((g) => g.values),
       labels: finiteGroups.map((g) => g.label),
       fmt,
-      title: `${valueLabel} by ${groupLabel}`,
       x_label: groupLabel,
       y_label: valueLabel,
       filename: `${mode}_${valueLabel}`,
@@ -133,7 +132,6 @@ export function buildExportSpec(
       data: values,
       dist,
       fmt,
-      title: `Q-Q — ${valueLabel}`,
       x_label: `Theoretical quantiles (${dist})`,
       y_label: `Sample quantiles (${valueLabel})`,
       filename: `qq_${valueLabel}`,
@@ -146,7 +144,6 @@ export function buildExportSpec(
     bins,
     fit,
     fmt,
-    title: `Histogram — ${valueLabel}`,
     x_label: valueLabel,
     y_label: fit ? "density" : "count",
     filename: `histogram_${valueLabel}`,
@@ -159,7 +156,7 @@ export function buildExportSpec(
  *  flags and connect-means are box / strip only. */
 function marksWire(mode: StatMode, m: ResolvedStatMarks, rows: number[][] | null) {
   const pts = {
-    points: m.points, jitter_width: m.jitterWidth, point_row_indices: rows, summary: m.summary, error_bars: m.errorBars,
+    points: m.points, jitter_width: m.jitterWidth, point_row_indices: rows, summary: m.summary, error_bars: categoricalErrorWire(m.errorBars),
   };
   if (mode === "violin") return pts;
   return {
@@ -192,13 +189,14 @@ export interface FacetedExportInputs {
 
 /** P1.4 Color-by on the wire: each group's colour LEVEL (`lib/statColor`,
  *  aligned with the request's groups) and the palette the canvas resolves, as
- *  hex. Nothing without a colour factor, so every other request is unchanged. */
+ *  hex. Without a colour factor only the palette rides, so the export colours
+ *  by position / series as the canvas does. No title either: the canvas draws
+ *  none (review finding: the export added "Value by Sample"). */
 function colorWire(levels: readonly (number | null)[] | null | undefined): {
   color_levels?: (number | null)[];
   palette?: string[];
 } {
-  if (!levels) return {};
-  return { ...levelsWire(levels), ...paletteWire(true) };
+  return { ...(levels ? levelsWire(levels) : {}), ...paletteWire() };
 }
 
 /** A facet panel's half: its levels only (the palette rides the request). */
@@ -206,9 +204,11 @@ function levelsWire(levels: readonly (number | null)[] | null | undefined): { co
   return levels ? { color_levels: [...levels] } : {};
 }
 
-/** The request's palette, when any group is coloured by level. */
-function paletteWire(coloured: boolean): { palette?: string[] } {
-  const palette = coloured ? resolvedPalette() : null;
+/** The request's palette — ALWAYS, so a group or series without a colour
+ *  level is drawn in the canvas' `seriesColor(i)`, not matplotlib's default
+ *  (review finding: the bar export was blue under the screen's purple). */
+function paletteWire(): { palette?: string[] } {
+  const palette = resolvedPalette();
   return palette ? { palette } : {};
 }
 
@@ -250,7 +250,7 @@ export function onAxis<T>(
  *  (`statBarMarks.barMarksWire`; `marksOn` false for stacked). */
 function barWire(d: BarChartData, showN: boolean, m: ResolvedStatMarks | null = null, marksOn = false) {
   const kind = m?.errorBars ?? "se";
-  const half = (s: { sem: number; n: number }) => errorHalfWidth(kind, s.sem, s.n);
+  const half = (s: { sem: number; n: number; err?: number }) => errorHalfWidth(kind, s.sem, s.n, s.err);
   return {
     groups: d.groups.map((g) => g.label),
     series: d.seriesLabels,
@@ -319,7 +319,6 @@ export async function exportFacetedFigure(
       errors: facets[0].errors,
       stacked: barStack,
       fmt,
-      title: `${barValueLabel} by ${groupLabel}, faceted`,
       x_label: groupLabel,
       y_label: barValueLabel,
       filename: `bar_${barValueLabel}_faceted`,
@@ -327,7 +326,7 @@ export async function exportFacetedFigure(
       caveat,
       ...noteWire(o.errorNote),
       axis_style: axisWire(m, facets.flatMap((f) => f.groups)),
-      ...paletteWire(facets.some((f) => f.color_levels)),
+      ...paletteWire(),
     };
     await deliver({ route: "categorical", spec }, signal, out);
     return;
@@ -375,7 +374,6 @@ export async function exportFacetedFigure(
     data: facets[0].data,
     labels: facets[0].labels,
     fmt,
-    title: `${valueLabel} by ${groupLabel}, faceted`,
     x_label: groupLabel,
     y_label: valueLabel,
     filename: `${mode}_${valueLabel}_faceted`,
@@ -383,9 +381,9 @@ export async function exportFacetedFigure(
     show_n: showN,
     caveat,
     ...noteWire(o.errorNote),
-    ...(m ? { summary: m.summary, error_bars: m.errorBars, points: m.points, jitter_width: m.jitterWidth } : {}),
+    ...(m ? { summary: m.summary, error_bars: categoricalErrorWire(m.errorBars), points: m.points, jitter_width: m.jitterWidth } : {}),
     ...(m?.connectMeans ? { show_connect_means: true } : {}),
-    ...paletteWire(facets.some((f) => f.color_levels)),
+    ...paletteWire(),
     // `tiered` (whether nesting is active) is shared; `tiers` itself is
     // NOT — dropped here so it can never be applied, uniformly and wrongly,
     // to every panel's own different label set (each panel's pairs ride
@@ -441,7 +439,6 @@ export async function exportStatStage(
       caveat,
       ...noteWire(o.errorNote),
       fmt,
-      title: `${o.barValueLabel} by ${o.groupLabel}`,
       x_label: o.groupLabel,
       y_label: o.barValueLabel,
       filename: `bar_${o.barValueLabel}`,
@@ -466,6 +463,7 @@ export async function exportStatStage(
     m?.points === "all", pointRowIndices, m?.summary === "mean", m?.connectMeans ?? false, m,
   );
   if (!spec) return;
+  Object.assign(spec, paletteWire()); // Q-Q / histogram too: the canvas' seriesColor(0)
   if (mode === "box" || mode === "violin" || mode === "strip") {
     const slots = draw && (draw.mode === "box" || draw.mode === "violin" || draw.mode === "strip") ? draw.slots : null;
     const axis = onAxis(slots, spec.data as number[][], []);

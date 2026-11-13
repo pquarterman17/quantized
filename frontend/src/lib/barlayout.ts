@@ -214,6 +214,11 @@ export interface BarSeriesStat {
   /** Stat stage only (P2.6 box 1): the cell's raw points, attached when the
    *  bar's marks draw points or a median (`Stage/statBarMarks.withBarRaw`). */
   raw?: BarCellRaw | null;
+  /** Figures-audit #8: the cell's PRECOMPUTED error half-width -- set only
+   *  when the cell holds exactly one row and the series has a bound error
+   *  column (an already-summarized Sample,Value,SD table), from that row's
+   *  error value (`barMatrix.withColumnErrors`). */
+  err?: number;
 }
 
 /** One bar cell's raw finite points (ORIGINAL row indices, the jitter hash's
@@ -233,6 +238,10 @@ export interface BarGroup {
 }
 
 export interface BarChartData {
+  /** Figures-audit #8: the bound error column(s) whose values became the
+   *  bars' whiskers (`barMatrix.withColumnErrors`), named for the footnote;
+   *  absent when the whiskers are statistics. */
+  errorColumn?: string;
   groups: BarGroup[];
   seriesLabels: string[];
 }

@@ -53,7 +53,7 @@ export function createWorkbookActionsSlice(set: SliceSet, get: SliceGet): Workbo
   return {
     renameWorkbook: (id, name) => {
       const trimmed = name.trim();
-      if (!trimmed) return;
+      if (!trimmed || !get().workbooks.some((w) => w.id === id && w.name !== trimmed)) return; // no-op: no undo step
       get().recordHistory("rename workbook");
       set((s) => ({
         workbooks: s.workbooks.map((w) => (w.id === id ? { ...w, name: trimmed } : w)),

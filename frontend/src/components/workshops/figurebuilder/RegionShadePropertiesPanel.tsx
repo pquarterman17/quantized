@@ -19,6 +19,7 @@ import { useRef, useState } from "react";
 import { deriveRegionShadeRows } from "./canonicalRegionShades";
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../../lib/focusGuard";
 import type { RegionShade } from "../../../lib/types";
+import { Checkbox } from "../../primitives/Checkbox";
 import { IconButton } from "../../primitives/IconButton";
 import { NumberField } from "../../primitives/NumberField";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
@@ -52,6 +53,9 @@ export default function RegionShadePropertiesPanel({
   const [y2, setY2] = useState("1");
   const [fill, setFill] = useState(DEFAULT_FILL);
   const [axis, setAxis] = useState<AxisChoice>("y");
+  // Audit #11: a new shade spans the full plot height by default — y1/y2 = 0/1
+  // were invisible on a log axis. Untick to shade a data-y band.
+  const [fullHeight, setFullHeight] = useState(true);
   // Focus-safety anchor (lib/focusGuard) — a remove ✕ below unmounts its own
   // row; without this, focus falls to <body> and a follow-up Delete
   // keystroke deletes the ACTIVE DATASET instead (see focusGuard's doc).
@@ -61,16 +65,17 @@ export default function RegionShadePropertiesPanel({
   // non-finite coordinate): a broken shade renders nowhere and would
   // serialize as `null` over the export wire, so the button explains itself
   // rather than accepting a no-op. Matches RefLinePropertiesPanel's addReason.
-  const addReason: string | null = [x1, y1, x2, y2].some((v) => v.trim() === "")
+  const needed = fullHeight ? [x1, x2] : [x1, y1, x2, y2];
+  const addReason: string | null = needed.some((v) => v.trim() === "")
     ? "enter every coordinate"
-    : coords.some((n) => !Number.isFinite(n))
+    : needed.map(Number).some((n) => !Number.isFinite(n))
       ? "coordinates must be numbers"
       : null;
   const rows = deriveRegionShadeRows(regionShades);
   const commitAdd = () => {
     if (addReason !== null) return;
-    const [nx1, ny1, nx2, ny2] = coords;
-    onAdd({ x1: nx1, y1: ny1, x2: nx2, y2: ny2, fill, ...(axis === "y2" ? { axis: 1 } : {}) });
+    const [nx1, ny1, nx2, ny2] = coords.map((n, k) => (Number.isFinite(n) ? n : k % 2)); // a blank full-height y: 0 / 1
+    onAdd({ x1: nx1, y1: ny1, x2: nx2, y2: ny2, fill, ...(axis === "y2" ? { axis: 1 } : {}), ...(fullHeight ? { fullHeight: true } : {}) });
     setX1("0"); setY1("0"); setX2("1"); setY2("1");
   };
 
@@ -102,18 +107,25 @@ export default function RegionShadePropertiesPanel({
                 label="x1" ariaLabel={`${row.label} x1`} value={sh.x1} required
                 onValue={(v) => (v === undefined ? undefined : onPatch(row.id, { x1: v }))}
               />
-              <PropertyNumberField
-                label="y1" ariaLabel={`${row.label} y1`} value={sh.y1} required
-                onValue={(v) => (v === undefined ? undefined : onPatch(row.id, { y1: v }))}
-              />
+              {!sh.fullHeight && (
+                <PropertyNumberField
+                  label="y1" ariaLabel={`${row.label} y1`} value={sh.y1} required
+                  onValue={(v) => (v === undefined ? undefined : onPatch(row.id, { y1: v }))}
+                />
+              )}
               <PropertyNumberField
                 label="x2" ariaLabel={`${row.label} x2`} value={sh.x2} required
                 onValue={(v) => (v === undefined ? undefined : onPatch(row.id, { x2: v }))}
               />
-              <PropertyNumberField
-                label="y2" ariaLabel={`${row.label} y2`} value={sh.y2} required
-                onValue={(v) => (v === undefined ? undefined : onPatch(row.id, { y2: v }))}
-              />
+              {!sh.fullHeight && (
+                <PropertyNumberField
+                  label="y2" ariaLabel={`${row.label} y2`} value={sh.y2} required
+                  onValue={(v) => (v === undefined ? undefined : onPatch(row.id, { y2: v }))}
+                />
+              )}
+              <Checkbox ariaLabel={`${row.label} full height`} checked={!!sh.fullHeight} onChange={(on) => onPatch(row.id, { fullHeight: on || undefined })}>
+                full height
+              </Checkbox>
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "end" }}>
               <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
@@ -146,18 +158,23 @@ export default function RegionShadePropertiesPanel({
               keyboard affordance -- any of the four fields can submit. */}
           <NumberField aria-label="new shade x1" value={x1} width={56} onChange={setX1} onKeyDown={(e) => e.key === "Enter" && commitAdd()} />
         </span>
-        <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
-          <label className="qzk-field-lbl">y1</label>
-          <NumberField aria-label="new shade y1" value={y1} width={56} onChange={setY1} onKeyDown={(e) => e.key === "Enter" && commitAdd()} />
-        </span>
+        {!fullHeight && (
+          <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
+            <label className="qzk-field-lbl">y1</label>
+            <NumberField aria-label="new shade y1" value={y1} width={56} onChange={setY1} onKeyDown={(e) => e.key === "Enter" && commitAdd()} />
+          </span>
+        )}
         <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
           <label className="qzk-field-lbl">x2</label>
           <NumberField aria-label="new shade x2" value={x2} width={56} onChange={setX2} onKeyDown={(e) => e.key === "Enter" && commitAdd()} />
         </span>
-        <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
-          <label className="qzk-field-lbl">y2</label>
-          <NumberField aria-label="new shade y2" value={y2} width={56} onChange={setY2} onKeyDown={(e) => e.key === "Enter" && commitAdd()} />
-        </span>
+        {!fullHeight && (
+          <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
+            <label className="qzk-field-lbl">y2</label>
+            <NumberField aria-label="new shade y2" value={y2} width={56} onChange={setY2} onKeyDown={(e) => e.key === "Enter" && commitAdd()} />
+          </span>
+        )}
+        <Checkbox ariaLabel="new shade full height" checked={fullHeight} onChange={setFullHeight}>full height</Checkbox>
         <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
           <label className="qzk-field-lbl">fill</label>
           <input

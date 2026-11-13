@@ -413,7 +413,7 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
     },
     renameEditableFigure: (documentId, name) => {
       const trimmed = name.trim();
-      if (!trimmed) return;
+      if (!trimmed || !get().editableFigures.some((d) => d.id === documentId && d.name !== trimmed)) return; // no-op: no undo step
       get().recordHistory("rename figure");
       set((state) => ({
         editableFigures: state.editableFigures.map((document) =>

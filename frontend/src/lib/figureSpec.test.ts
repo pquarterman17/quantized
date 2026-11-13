@@ -175,7 +175,8 @@ describe("FigureDocument FigureSpec adapter", () => {
         y_lim: [1, 9],
         grid: true,
         spines: { top: true, right: true },
-        margins: { left: 0.1, right: 0.2, top: 0.1, bottom: 0.3 },
+        // Page setup margins are OUTER padding (audit B3), never subplot fractions.
+        page_pad: { left: 0.1, right: 0.2, top: 0.1, bottom: 0.3 },
         y2_lim: [2, 20],
         ticks: { minor: true },
       },
@@ -239,7 +240,7 @@ describe("FigureDocument FigureSpec adapter", () => {
       ref_lines: [{ axis: "x", value: 5 }],
       region_shades: [{ x1: 0, x2: 2, y1: 1, y2: 3, fill: "#336699", axis: 1 }],
       x_breaks: [[0.4, 0.6]],
-      margins: { left: 0.1, right: 0.2, top: 0.1, bottom: 0.3 },
+      page_pad: { left: 0.1, right: 0.2, top: 0.1, bottom: 0.3 },
     });
     // Plot audit round 4: an x-break sends no y2 split; its panels draw every
     // channel on their one shared y (and the route refuses the pair).
@@ -324,9 +325,12 @@ describe("FigureDocument FigureSpec adapter", () => {
     expect(spec.overrides).toMatchObject({
       font_size: 11,
       legend: { show: true, loc: "custom", anchor: [0.2, 0.8], title: "Publication legend" },
-      margins: { left: 0.33, right: 0.2, top: 0.1, bottom: 0.3 },
+      // The publication's own axes-box margins and the page's outer padding are separate keys.
+      margins: { left: 0.33 },
+      page_pad: { left: 0.1, right: 0.2, top: 0.1, bottom: 0.3 },
       ticks: { dir: "in", minor: true },
     });
+    expect(spec.overrides?.margins).toEqual({ left: 0.33 }); // no page margin leaks into the axes box
     // The saved array rides verbatim, with only the rename laid over it — and
     // the document's own copy is never touched (BUG-014's overlay is a
     // per-request presentation pass, not an edit).

@@ -185,7 +185,7 @@ export function usePageLifecycle(
     const { askParams } = await import("../../overlays/ParamDialog");
     const params = await askParams("Save page as", [
       { key: "name", label: "Name", type: "text", default: draft.name || "Untitled page" },
-    ]);
+    ], { confirmLabel: "Save" });
     if (!params) return;
     const id = useApp.getState().savePageAs(pageDocument, String(params.name));
     if (!id) return;

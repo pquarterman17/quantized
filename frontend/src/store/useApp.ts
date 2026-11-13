@@ -9,7 +9,7 @@ import { nextStageTab, type StageTab } from "../lib/stagetab";
 // ./windows and are composed into THIS store instance below; the shared
 // rebind helpers are imported back for addDataset (setActive's live in
 // ./datasetSelection).
-import { createWindowsSlice, datasetViewDefaults, retargetPassiveRebind, type WindowsSlice } from "./windows";
+import { analysisResultReset, createWindowsSlice, datasetViewDefaults, retargetPassiveRebind, type WindowsSlice } from "./windows";
 import { rebindFocusedPlotWindow } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistoryBatchToken, type HistorySlice } from "./history";
@@ -194,8 +194,11 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
    *  doc (store/history.ts) for why a token, not a boolean, is what makes
    *  that operation-scoped rather than a global suppress (R6). Omitted by
    *  every other call site (paste/merge/demo/derived-worksheet/etc.), which
-   *  keep recording their own independent entry exactly as before. */
-  addDataset: (ds: Dataset, historyToken?: HistoryBatchToken) => void;
+   *  keep recording their own independent entry exactly as before.
+   *  `intoFocused`: the caller has already chosen the focused window as the
+   *  target (an Origin figure applied in place), so a styled window is not
+   *  protected from this add (figures audit B1). */
+  addDataset: (ds: Dataset, historyToken?: HistoryBatchToken, intoFocused?: boolean) => void;
   // importFilesAppended: see store/importAppend.ts (ImportAppendSlice).
   // ensureBookData / resolvePendingDatasets / resolveDataset / resolveDatasets
   // / pasteDataFromClipboard: see store/dataIntake.ts (DataIntakeSlice).
@@ -334,7 +337,7 @@ export const useApp = create<AppState>((set, get) => ({
   // createMacroPipelineSlice above, spread into this literal.)
   status: "starting…",
 
-  addDataset: (ds, historyToken) => {
+  addDataset: (ds, historyToken, intoFocused) => {
     // MAIN_PLAN #9: the single entry point for import/paste/demo/merge — one
     // call site covers all of them (mergeSelected/importFilesAppended/
     // pasteDataFromClipboard all route through here).
@@ -343,7 +346,12 @@ export const useApp = create<AppState>((set, get) => ({
     // click — a pinned focused window never absorbs it (shared helper;
     // `ds.name` seeds the title when a fresh window must be created, since
     // the dataset isn't in the store yet for createWindow to look up).
-    retargetPassiveRebind(get(), ds.id, ds.name);
+    // Figures audit B1: nor does a window the user has styled (protectEdits).
+    // A window that opens for it joins THIS undo step: the entry above already
+    // predates it, so the window's own "create window" entry is dropped.
+    const step = get().history.at(-1)?.seq;
+    retargetPassiveRebind(get(), ds.id, ds.name, { protectEdits: !intoFocused });
+    set((s) => ({ history: s.history.slice(0, s.history.findIndex((e) => e.seq === step) + 1 || s.history.length) }));
     const defaults = datasetViewDefaults(ds, undefined, {}, { outgoing: get() });
     set((s) => ({
       datasets: [...s.datasets, ds],
@@ -355,23 +363,10 @@ export const useApp = create<AppState>((set, get) => ({
       // clearing here never disturbs where the batch landed.
       librarySelection: null,
       // Keep the focused document binding aligned with the newly imported data.
-      plotWindows: rebindFocusedPlotWindow(s.plotWindows, s.focusedWindowId, { ...snapshotView(s), ...defaults }, ds),
+      plotWindows: rebindFocusedPlotWindow(s, { ...snapshotView(s), ...defaults }, ds),
       stageTab: nextStageTab(ds, s.stageTab), // 2-D maps open in the Map view
       ...defaults, // the shared rebind view reset (item 14 hoist)
-      integral: null, // on-plot analysis results are tied to the old data → clear
-      fwhmResult: null,
-      qfitRoi: null,
-      qfitResult: null,
-      qfitBusy: false,
-      qfitError: null,
-      gadgetBusy: false,
-      gadgetError: null,
-      gadgetIntegrateResult: null,
-      gadgetStatsResult: null,
-      gadgetDerivResult: null,
-      gadgetFftPreview: null,
-      gadgetCursors: null,
-      gadgetCursorResult: null,
+      ...analysisResultReset(), // on-plot analysis results are tied to the old data → clear
     }));
   },
 

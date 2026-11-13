@@ -189,7 +189,7 @@ test("line/scatter, color, width, errors, scale, limits, legend, and label edits
   // ── Y axis label — Inspector "Titles & labels" card. X label is
   //    axis-title-limits.spec.ts's territory; this is the untested Y one. ──
   const titlesCard = await openCard(page, "Titles & labels");
-  const yLabelField = titlesCard.getByPlaceholder("auto").nth(1); // X row first, Y row second
+  const yLabelField = titlesCard.getByRole("textbox", { name: "Plot Y label" });
   await yLabelField.fill("Custom Signal Label");
   await yLabelField.blur();
   await expect

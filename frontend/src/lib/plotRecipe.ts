@@ -16,10 +16,12 @@
 //     `plotRecipeMatch.ts`. `SignatureErrorRole` (the value/error-x/error-y+/
 //     ... vocabulary) is imported from there rather than redeclared, so the
 //     two systems never drift onto two different error-role enums.
-//   - `lib/techniqueViewMemory.ts` (item 5): "generic" never carries memory --
-//     the same rule applies here, deliberately STRONGER for recipes: a
-//     recipe scoped to "generic" is refused outright at resolve time (see
-//     `plotRecipeMatch.ts`), not merely skipped like a memory lookup.
+//   - `lib/techniqueViewMemory.ts` (item 5): "generic" never carries memory.
+//     Recipes used to copy that rule (a generic recipe was refused outright);
+//     since the B2 figures-audit fix a "generic" recipe is a technique-free
+//     STYLE carrier instead: it applies to any dataset by label, then by
+//     column position (`plotRecipeMatch.ts`), and is still never offered by
+//     the automatic suggestion surfaces (`store/plotRecipeApply.ts`).
 //   - `lib/template.ts` (AnalysisTemplate): the versioned serialize/parse
 //     precedent -- a numeric schema-version field, `parseRecipe` throws
 //     "unsupported plot recipe schema version" on mismatch, pretty diffable
@@ -52,6 +54,7 @@
 import type { HalfLim } from "./axisLim";
 import { inferErrorBindings, type ErrorBinding } from "./errorRoles";
 import { legacyErrorBindings } from "./figureDocument";
+import { effectiveChannels } from "./plotdata";
 import { isAxisScale, type PlotView } from "./plotview";
 import type { PlotMark } from "./plotspec";
 import { errorRoleFor as classifyErrorRole, normalizeLabel } from "./quickPlotTemplates";
@@ -181,13 +184,25 @@ export function captureRecipe(
       unit: units[channel] ?? "",
       errorRole: classifyErrorRole(datasetErrorRoles, channel),
       aliases: [],
+      // Read only by a "generic" recipe's last-resort positional tier
+      // (plotRecipeMatch.ts) -- recorded always, so a recipe's matching
+      // substrate never depends on which technique it was saved under.
+      position: channel,
     });
     channelToId.set(channel, id);
     return id;
   }
 
   const xId = view.xKey !== null ? entryFor(view.xKey, "x") : null;
-  const yIds = (view.yKeys ?? []).map((ch) => entryFor(ch, "y"));
+  // B2 (figures audit): a view on its DEFAULT channel set (`yKeys: null` --
+  // every freshly imported CSV) used to capture ZERO channels, so none of
+  // its per-series styles survived the capture. Record the channels it
+  // actually draws, and flag the mapping `yAuto` so applying keeps the
+  // target's own default set instead of narrowing it to these columns.
+  const yAuto = view.yKeys === null;
+  const plottedY = view.yKeys
+    ?? effectiveChannels(dataset.data, null, view.xKey, dataset.channelRoles).filter((ch) => !view.y2Keys?.includes(ch));
+  const yIds = plottedY.map((ch) => entryFor(ch, "y"));
   const y2Ids = (view.y2Keys ?? []).map((ch) => entryFor(ch, "y2"));
   const groupId = view.groupKey !== null ? entryFor(view.groupKey, "group") : null;
   // F4.4 (review K4/K6): `facetKey` is bindings-owned, symmetric with
@@ -247,7 +262,7 @@ export function captureRecipe(
     },
     technique: techniqueOf(dataset),
     signature: entries,
-    mapping: { xId, yIds, y2Ids, groupId, facetId, errors },
+    mapping: { xId, yIds, y2Ids, groupId, facetId, errors, ...(yAuto ? { yAuto: true } : {}) },
     visual: {
       mark: opts.mark ?? "line",
       xScale: isAxisScale(view.xScale) ? view.xScale : "linear",

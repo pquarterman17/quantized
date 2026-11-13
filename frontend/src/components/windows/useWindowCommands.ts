@@ -21,7 +21,8 @@ import { listenForAppShortcuts } from "../../lib/appShortcuts";
 import { isEditingTarget } from "../../lib/editingTarget";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import { freezePlotSnapshot, livePlotSnapshotAltMode, readLivePlotSnapshot } from "../../lib/plotsnapshot";
-import { cycleWindow, nextPlotBg, snapshotView, zOrderIds } from "../../lib/plotview";
+import { cycleWindow, nextPlotBg, zOrderIds } from "../../lib/plotview";
+import { newGraphWindowView } from "../../lib/plotWindows";
 import { useCommands, type Action } from "../../store/commands";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
@@ -39,7 +40,7 @@ function windowState(): ReturnType<typeof useApp.getState> {
  *  "New Graph" opens on top, ready to interact with immediately. */
 function newGraphWindow(): void {
   const s = windowState();
-  const id = s.createWindow(s.activeId, snapshotView(s));
+  const id = s.createWindow(s.activeId, newGraphWindowView(s));
   s.focusWindow(id);
 }
 

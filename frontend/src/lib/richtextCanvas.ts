@@ -130,7 +130,7 @@ function layoutNode(
 ): RichBox {
   switch (n.kind) {
     case "text": {
-      ctx.font = fontString(px, n.italic || !!font.italic, font.weight, font.family);
+      ctx.font = fontString(px, n.italic || !!font.italic, n.bold ? "bold" : font.weight, font.family);
       if (draw) ctx.fillText(n.text, x, y);
       return { width: ctx.measureText(n.text).width, ascent: ASCENT_EM * px, descent: DESCENT_EM * px };
     }

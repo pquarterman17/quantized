@@ -29,6 +29,17 @@ beforeEach(() => {
 });
 
 describe("applyDesignation", () => {
+  it("Y Error never binds to an Origin Group/Subject factor column", () => {
+    // Channel 0 is an imported Group column: the Y Error on channel 2 passes it
+    // over and binds to the Y at channel 1.
+    let d = ds({ columnDesignations: { 0: "group" } });
+    d = { ...d, ...applyDesignation(d, 2, "Y-error") };
+    expect(d.errorRoles).toEqual([{ channel: 2, target: 1, axis: "y", side: "both" }]);
+    let s = ds({ columnDesignations: { 1: "subject" } });
+    s = { ...s, ...applyDesignation(s, 2, "Y-error") };
+    expect(s.errorRoles).toEqual([{ channel: 2, target: 0, axis: "y", side: "both" }]);
+  });
+
   it("Y Error binds to the nearest preceding Y; X Error to the Y it follows", () => {
     let d = ds();
     d = { ...d, ...applyDesignation(d, 1, "Y-error") };

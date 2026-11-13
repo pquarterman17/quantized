@@ -242,8 +242,9 @@ export interface PlotRecipesSlice {
   /** Every recipe scoped to `dataset`'s technique that `resolveRecipe`
    *  doesn't refuse, CLEAN matches (zero `unmatched`) first, then partial
    *  matches -- the ordering a suggestion surface (a later lane) renders
-   *  directly. `"generic"` never matches anything (the recipe module's own
-   *  stronger-than-memory rule) -- always `[]` for a generic dataset. Pure;
+   *  directly. Always `[]` for a `"generic"` dataset -- an automatic
+   *  surface never guesses between unclassified datasets (B2: a generic
+   *  recipe still applies on an explicit choice). Pure;
    *  never mutates state or applies anything. Async: lazy-loads
    *  `resolveRecipe` (see the module doc's LAZY-LOADED note). */
   matchingPlotRecipes: (dataset: Dataset) => Promise<PlotRecipe[]>;

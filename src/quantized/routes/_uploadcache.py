@@ -121,10 +121,30 @@ class UploadCache:
 
     # -- persistence --------------------------------------------------------
     def _path(self, token: str, entry: fs.Entry) -> Path:
-        return self.root / token / entry.name
+        """``<root>/<token>/<name>``, contained: ``ValueError`` unless the
+        normalized path is exactly one token directory and one file name below
+        the root. Callers validate ``token`` (:data:`fs.TOKEN_RE`) and the
+        index validates ``name`` (:func:`fs.valid_name`) already; this is the
+        last check before the path reaches the filesystem, so a token or name
+        that ever slipped past those (``..``, a separator, an absolute path)
+        fails closed here instead of escaping the cache."""
+        base = os.path.normpath(self.root)
+        candidate = os.path.normpath(os.path.join(base, token, entry.name))
+        prefix = base if base.endswith(os.sep) else base + os.sep  # "/" or "C:\\" root
+        if not candidate.startswith(prefix):
+            raise ValueError(f"upload cache path escapes {base}: {token!r}/{entry.name!r}")
+        token_dir = os.path.dirname(candidate)
+        # Exactly <base>/<token>/<name>: the depth check refuses a token with
+        # a separator, the token-dir check a ".." name at a filesystem root.
+        if os.path.dirname(token_dir) != base or token_dir != os.path.join(base, token):
+            raise ValueError(f"malformed upload cache path: {token!r}/{entry.name!r}")
+        return Path(candidate)
 
     def _present(self, token: str, entry: fs.Entry) -> bool:
-        path = self._path(token, entry)
+        try:
+            path = self._path(token, entry)
+        except ValueError:
+            return False
         try:
             # The token dir and its file themselves, never through a link.
             return (
@@ -146,7 +166,14 @@ class UploadCache:
             return
         disk, ok = fs.read_index(self.root)
         merged: dict[str, fs.Entry] = {}
-        for token in {*disk, *self._entries}:
+        # Deterministic merge order: the index's rows as written (LRU order,
+        # oldest first), then tokens only this process knows (also LRU). The
+        # sort below is stable, so this order is the tie-break for equal
+        # ``last_used`` -- which a coarse clock produces routinely (Windows
+        # time.time() on Python < 3.13 ticks every ~15.6 ms). It used to be a
+        # SET, so ties fell back to hash-seed order and a restart could evict
+        # the most recently used entry instead of the least.
+        for token in dict.fromkeys([*disk, *self._entries]):
             mine, theirs = self._entries.get(token), disk.get(token)
             entry = theirs or mine
             assert entry is not None
@@ -296,11 +323,15 @@ class UploadCache:
             entry = self._entries.get(token)
             if entry is None:
                 return None
+            try:
+                path = self._path(token, entry)
+            except ValueError:
+                return None
             entry.last_used = time.time()
             self._entries.move_to_end(token)
             self._own.add(token)
             self._save()
-            return self._path(token, entry)
+            return path
 
     def _unpin(self, token: str) -> None:
         with self._lock:

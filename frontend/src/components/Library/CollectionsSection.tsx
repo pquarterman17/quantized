@@ -69,7 +69,7 @@ export default function CollectionsSection({ hierarchy, onShowInLibrary }: Props
             void askParams("New Collection", [
               { key: "name", label: "Name", type: "text", default: "" },
               { key: "query", label: "Query", type: "text", default: "", hint: QUERY_HINT },
-            ]).then((p) => {
+            ], { confirmLabel: "Create" }).then((p) => {
               if (p && String(p.name).trim()) addCollection(String(p.name), String(p.query));
             });
           }}
@@ -98,7 +98,7 @@ export default function CollectionsSection({ hierarchy, onShowInLibrary }: Props
                 aria-label="Rename collection"
                 title="Rename Collection…"
                 onClick={() => {
-                  void askParams("Rename Collection", [{ key: "name", label: "Name", type: "text", default: c.name }])
+                  void askParams("Rename Collection", [{ key: "name", label: "Name", type: "text", default: c.name }], { confirmLabel: "Rename" })
                     .then((p) => { if (p && String(p.name).trim()) renameCollection(c.id, String(p.name)); });
                 }}
               >
@@ -111,7 +111,7 @@ export default function CollectionsSection({ hierarchy, onShowInLibrary }: Props
                 onClick={() => {
                   void askParams("Edit Collection filter", [
                     { key: "query", label: "Query", type: "text", default: c.query, hint: QUERY_HINT },
-                  ]).then((p) => { if (p) updateCollectionQuery(c.id, String(p.query)); });
+                  ], { confirmLabel: "Apply" }).then((p) => { if (p) updateCollectionQuery(c.id, String(p.query)); });
                 }}
               >
                 ⚙

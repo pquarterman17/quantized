@@ -57,13 +57,15 @@ export default function RefLinesCard() {
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <SegmentedControl<"x" | "y">
           options={[
-            { value: "x", label: "X" },
-            { value: "y", label: "Y" },
+            { value: "x", label: "X", ariaLabel: "X axis" },
+            { value: "y", label: "Y", ariaLabel: "Y axis" },
           ]}
           value={axis}
           onChange={setAxis}
+          aria-label="New reference line axis"
         />
         <NumberField
+          aria-label="New reference line value"
           value={value}
           width={72}
           onChange={setValue}
@@ -127,7 +129,7 @@ export default function RefLinesCard() {
             <span className="qz-k">
               {typeof r.label === "string" && r.label ? `${r.label} · ` : ""}{r.axis.toUpperCase()} = <span style={{ fontFamily: "var(--font-mono)" }}>{fmtNum(r.value)}</span>
             </span>
-            <IconButton aria-label="Remove line" title="Remove" onClick={() => removeRowSafely(containerRef.current, () => removeRefLine(r.id))}
+            <IconButton aria-label={`Remove line ${r.axis.toUpperCase()} = ${fmtNum(r.value)}`} title="Remove" onClick={() => removeRowSafely(containerRef.current, () => removeRefLine(r.id))}
               onKeyDown={absorbStrayDeleteOnContainer}>
               ✕
             </IconButton>

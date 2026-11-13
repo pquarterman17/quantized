@@ -172,6 +172,25 @@ describe("shapesPlugin — draw pass", () => {
     expect(calls).toContain("fill"); // the arrowhead triangle
   });
 
+  it("fills the arrowhead in the arrow's STROKE colour, not its transparent fill (audit #11)", () => {
+    // The head used to be filled with the arrow's own fill — "transparent",
+    // since fill applies to rect/ellipse only — so the screen showed no head
+    // while the export (FancyArrowPatch -|>) did.
+    const { u } = fakeDrawU();
+    const fills: string[] = [];
+    (u.ctx as { fill: () => void }).fill = () => fills.push(u.ctx.fillStyle);
+    const plugin = shapesPlugin([{ id: "s1", kind: "arrow", x1: 0, y1: 0, x2: 10, y2: 0, stroke: "#c03030" }], "#eee");
+    // @ts-expect-error — minimal stub stands in for a real uPlot instance
+    plugin.hooks.draw?.(u);
+    expect(fills).toEqual(["#c03030"]);
+    const plain = fakeDrawU();
+    const inkFills: string[] = [];
+    (plain.u.ctx as { fill: () => void }).fill = () => inkFills.push(plain.u.ctx.fillStyle);
+    // @ts-expect-error — minimal stub stands in for a real uPlot instance
+    shapesPlugin([{ id: "s2", kind: "arrow", x1: 0, y1: 0, x2: 10, y2: 0 }], "#eee").hooks.draw?.(plain.u);
+    expect(inkFills).toEqual(["#eee"]);
+  });
+
   it("draws a rect as BOTH a fillRect and a strokeRect at the same bounds", () => {
     // valToPos: y -> 100-y, so y1=2 -> py=98, y2=90 -> py=10 -> [10,98], h=88.
     const { rects } = draw([{ id: "s1", kind: "rect", x1: 2, y1: 2, x2: 8, y2: 90 }]);

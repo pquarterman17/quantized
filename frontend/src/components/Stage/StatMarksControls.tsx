@@ -46,6 +46,8 @@ const ERRORS = [
   { value: "se", label: "SE" },
   { value: "ci95", label: "95% CI" },
 ];
+/** Bar mode with a bound error column: its values as the whiskers. */
+const FROM_COLUMN = { value: "column", label: "from column" };
 const ROTATIONS = [
   { value: "0", label: "0°" },
   { value: "45", label: "45°" },
@@ -72,17 +74,22 @@ export interface StatMarksControlsProps {
   grouped: boolean;
   /** Bar mode draws stacked bars (no points / summary marker there). */
   stacked?: boolean;
+  /** Bar mode: the bound error column(s) a whisker can come from, or null --
+   *  the error-bar picker then also offers "from column". */
+  errorColumn?: string | null;
 }
 
 const STACKED_HINT = "Stacked bars carry no raw points or summary marker — switch the layout to grouped";
 
-export default function StatMarksControls({ mode, marks, setMarks, grouped, stacked = false }: StatMarksControlsProps) {
+export default function StatMarksControls({ mode, marks, setMarks, grouped, stacked = false, errorColumn = null }: StatMarksControlsProps) {
   const boxFamily = mode === "box" || mode === "strip";
   const categorical = boxFamily || mode === "violin" || mode === "bar";
   const off = mode === "bar" && stacked;
   // Box draws its outliers as fliers on the centre line; only "all" jitters.
   const jitters = categorical && !off && marks.points !== "none" && !(mode === "box" && marks.points === "outliers");
   const errorsLive = mode === "bar" || (categorical && marks.summary === "mean");
+  const fromColumn = mode === "bar" && errorColumn != null;
+  const errorHint = fromColumn ? `${ERROR_HINT} From column = the values of ${errorColumn} (one-row categories).` : ERROR_HINT;
   const jitterValue = marks.jitterWidth === 0 ? "off" : String(marks.jitterWidth);
   const jitterOptions = [
     { value: "off", label: "off" },
@@ -136,9 +143,9 @@ export default function StatMarksControls({ mode, marks, setMarks, grouped, stac
         <Picker label="error bars">
           <Select
             aria-label="error bars"
-            title={errorsLive ? ERROR_HINT : "Error bars are drawn about the mean — pick the mean summary marker"}
+            title={errorsLive ? errorHint : "Error bars are drawn about the mean — pick the mean summary marker"}
             disabled={!errorsLive}
-            options={ERRORS}
+            options={fromColumn ? [...ERRORS, FROM_COLUMN] : ERRORS}
             value={marks.errorBars}
             onChange={(e) => setMarks({ errorBars: e.target.value as StatMarks["errorBars"] }, "set error bars")}
           />

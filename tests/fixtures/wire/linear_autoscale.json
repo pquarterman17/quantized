@@ -1,0 +1,492 @@
+{
+  "cases": [
+    {
+      "name": "ascending x, positive y (soft at zero)",
+      "request": {
+        "dataset": {
+          "time": [
+            0.1,
+            2.5,
+            5,
+            7.5,
+            9.9
+          ],
+          "values": [
+            [
+              100
+            ],
+            [
+              80
+            ],
+            [
+              45
+            ],
+            [
+              20
+            ],
+            [
+              3
+            ]
+          ],
+          "labels": [
+            "S"
+          ],
+          "units": [
+            "a.u."
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "linear"
+      },
+      "want": {
+        "x": [
+          0.1,
+          9.9
+        ],
+        "y": [
+          0,
+          110
+        ]
+      }
+    },
+    {
+      "name": "y across zero",
+      "request": {
+        "dataset": {
+          "time": [
+            0.1,
+            2.5,
+            5,
+            7.5,
+            9.9
+          ],
+          "values": [
+            [
+              -3
+            ],
+            [
+              1
+            ],
+            [
+              4
+            ],
+            [
+              -2
+            ],
+            [
+              0.5
+            ]
+          ],
+          "labels": [
+            "S"
+          ],
+          "units": [
+            "a.u."
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "linear"
+      },
+      "want": {
+        "x": [
+          0.1,
+          9.9
+        ],
+        "y": [
+          -3.7,
+          4.7
+        ]
+      }
+    },
+    {
+      "name": "all-negative y",
+      "request": {
+        "dataset": {
+          "time": [
+            0.1,
+            2.5,
+            5,
+            7.5,
+            9.9
+          ],
+          "values": [
+            [
+              -10
+            ],
+            [
+              -20
+            ],
+            [
+              -5
+            ],
+            [
+              -8
+            ],
+            [
+              -12
+            ]
+          ],
+          "labels": [
+            "S"
+          ],
+          "units": [
+            "a.u."
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "linear"
+      },
+      "want": {
+        "x": [
+          0.1,
+          9.9
+        ],
+        "y": [
+          -22,
+          -3
+        ]
+      }
+    },
+    {
+      "name": "offset y, snapped to a tenth of the span's decade",
+      "request": {
+        "dataset": {
+          "time": [
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              1234
+            ],
+            [
+              1290
+            ],
+            [
+              1251
+            ]
+          ],
+          "labels": [
+            "S"
+          ],
+          "units": [
+            "a.u."
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "linear"
+      },
+      "want": {
+        "x": [
+          1,
+          3
+        ],
+        "y": [
+          1228,
+          1296
+        ]
+      }
+    },
+    {
+      "name": "loop: non-ascending x scans",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            3,
+            2,
+            1,
+            -1
+          ],
+          "values": [
+            [
+              1
+            ],
+            [
+              4
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              0.5
+            ]
+          ],
+          "labels": [
+            "S"
+          ],
+          "units": [
+            "a.u."
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "linear"
+      },
+      "want": {
+        "x": [
+          -1.08,
+          3.08
+        ],
+        "y": [
+          0.15,
+          4.35
+        ]
+      }
+    }
+  ],
+  "range_num": [
+    [
+      3,
+      100,
+      [
+        0,
+        110
+      ]
+    ],
+    [
+      -3,
+      4,
+      [
+        -3.700000000000001,
+        4.700000000000001
+      ]
+    ],
+    [
+      -20,
+      -5,
+      [
+        -22,
+        -3
+      ]
+    ],
+    [
+      1234,
+      1296,
+      [
+        1227,
+        1303
+      ]
+    ],
+    [
+      0.001,
+      0.0042,
+      [
+        0.0006000000000000002,
+        0.004600000000000001
+      ]
+    ],
+    [
+      -1e-7,
+      3e-7,
+      [
+        -1.4000000000000004e-7,
+        3.400000000000001e-7
+      ]
+    ],
+    [
+      100000,
+      3300000,
+      [
+        0,
+        3700000
+      ]
+    ],
+    [
+      0.1,
+      9.9,
+      [
+        0,
+        10.900000000000002
+      ]
+    ],
+    [
+      -250,
+      -0.5,
+      [
+        -280,
+        0
+      ]
+    ],
+    [
+      12.34,
+      12.35,
+      [
+        12.339000000000002,
+        12.351000000000003
+      ]
+    ],
+    [
+      0,
+      1,
+      [
+        0,
+        1.1000000000000003
+      ]
+    ],
+    [
+      -1,
+      0,
+      [
+        -1.1000000000000003,
+        0
+      ]
+    ],
+    [
+      2.5e-12,
+      7.1e-12,
+      [
+        2e-12,
+        7.6e-12
+      ]
+    ]
+  ]
+}

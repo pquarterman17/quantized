@@ -4,6 +4,10 @@
 import type { ErrorSpan } from "./errorbars";
 import type uPlot from "uplot";
 
+import { axisExtrasApplier, gadgetPlugins } from "./axisExtrasHook";
+import { categoricalTickFormatter } from "./categoricalTicks"; // moved out (line pin); re-exported
+export { categoricalTickFormatter };
+
 import type { ColorScatterSpec } from "./colorscatter";
 // The palette (cssVar / SERIES_VARS / seriesColor) now lives beside the P3.3
 // cycle in ./seriesStyleCycle: hue by display position there, dash and glyph by
@@ -23,7 +27,7 @@ import { sharedAxisTitle } from "./sharedAxisTitle";
 import { logDecadeLabels, logGridSplits, logMajorTickFilter, spansDecade } from "./logTicks";
 export { logMajorTickFilter };
 import { decimalsForIncrement, pow10 } from "./ticks";
-import { errorRange, errorReach, fullYExtents, withXBarRows } from "./uplotErrorRange";
+import { ERROR_CAP_HALF_PX, errorRange, errorReach, fullYExtents, withXBarRows } from "./uplotErrorRange";
 import { fixedXRange, fullXExtents, scannedXRange } from "./uplotXRange";
 import type { Annotation, AxisFormat, AxisScale, DefaultTrace, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
 import {
@@ -37,10 +41,9 @@ import {
   type AnnotationEditOpts,
 } from "./uplotOverlays";
 import { regionLiveBoxHook, regionSelectPick } from "./uplotRegionBox";
-import { richLabelsPlugin, type AxisLabelEditOpts } from "./uplotRichLabels";
+import { richLabels, type AxisLabelEditOpts } from "./richLabelsLoader"; // the title drawing is a lazy chunk; until it lands uPlot draws plain titles
 import { buildSeriesDefs, type SeriesColors } from "./uplotSeries";
 import { shapesPlugin, type ShapeEditOpts } from "./uplotShapes";
-import { gadgetCursorsPlugin, quickFitPlugin } from "./uplotGadgets";
 import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit";
 import { anchorEditPlugin, type AnchorPoint } from "./uplotAnchors";
 import { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
@@ -373,21 +376,6 @@ export function tickFormatter(fmt?: AxisFormat, scale: AxisScale = "linear"): Ti
   };
 }
 
-/** Build a uPlot axis `values` formatter for a categorical x-axis
- *  (`PlotPayload.xCategories`, gap #20): `data[0]` holds ORDINAL positions
- *  (0, 1, 2, …), so a tick maps to its label only when it lands exactly on an
- *  in-range integer index — a fractional split (uPlot may propose one
- *  between categories at some zoom levels) or an out-of-range one renders
- *  blank rather than a misleading label. */
-export function categoricalTickFormatter(categories: readonly string[]): TickValues {
-  return (_u, splits) =>
-    splits.map((v) => {
-      if (v == null) return null;
-      const i = Math.round(v);
-      return i >= 0 && i < categories.length && Math.abs(v - i) < 1e-6 ? categories[i] : "";
-    });
-}
-
 /** A "nice" linear tick step (1/2/5 × 10^n) for a span with no decoded Origin
  *  increment to anchor to — the classic tick-step heuristic, aiming for
  *  roughly `targetTicks` ticks across the span. Used by `fixedLogAxisSplits`
@@ -622,6 +610,8 @@ export interface BuildOptsArgs {
    *  double-Y figure carries layer 2's own axis state here; null/undefined =
    *  autoscale / inherit yScale (the pre-2026-07-06 behaviour). */
   y2Lim?: [number, number] | null;
+  /** A Y break's data extent when panels share one y (x-break panels): sizes every panel's gap alike. */ yBreakExtent?: [number, number] | null;
+  /** false: no Y break marks here (an inner x-break panel; Origin marks the outer y axis only). */ yBreakMarks?: boolean;
   y2Scale?: AxisScale | null;
   /** Reference lines to draw at fixed X/Y values. */
   refLines?: RefLine[];
@@ -799,7 +789,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // ink colours below AND the contrast check on literal per-series colours
   // (`resolveDrawColor`, via buildSeriesDefs) — NOT the app's global theme,
   // since a per-window override can disagree with the surrounding chrome.
-  const { gridColor, inkColor, inkDimColor } = resolvePlotBg(args.bg);
+  const { axesBg, gridColor, inkColor, inkDimColor } = resolvePlotBg(args.bg);
   const axisColor = inkDimColor;
   const accentColor = cssVar("--accent") || "#8b5cf6";
   const accentSoftColor = cssVar("--accent-soft") || "rgba(139,92,246,0.18)";
@@ -870,14 +860,14 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     text && text.trim() ? (richLabelAst(text) ?? [{ kind: "text", text, italic: false }]) : null;
   const xRealRich = richLabelAst(xLabel);
   const xRich = astOf(xLabel);
-  const xDrawn = !!xRealRich || off.x !== undefined || sty.x !== undefined;
+  const xDrawn = !!richLabels() && (!!xRealRich || off.x !== undefined || sty.x !== undefined);
   const yLabelText = soloLabel(0);
   const yRealRich = richLabelAst(yLabelText);
   const yRich = astOf(yLabelText);
-  const yDrawn = !!yRealRich || off.y !== undefined || sty.y !== undefined;
+  const yDrawn = !!richLabels() && (!!yRealRich || off.y !== undefined || sty.y !== undefined);
   const y2LabelText = hasY2 ? soloLabel(1) : undefined;
   const y2Rich = hasY2 ? astOf(y2LabelText) : null;
-  const y2Drawn = hasY2 && (!!richLabelAst(y2LabelText) || off.y2 !== undefined || sty.y2 !== undefined);
+  const y2Drawn = hasY2 && !!richLabels() && (!!richLabelAst(y2LabelText) || off.y2 !== undefined || sty.y2 !== undefined);
   const titleRich = richLabelAst(args.title?.trim());
 
   // labelSize is the px height/width uPlot reserves for the axis TITLE
@@ -933,17 +923,20 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // mode swaps the ROI band for two independent draggable lines; every other
   // mode (fit/integrate/stats/differentiate/fft) shares the same band — only
   // what the store computes from it differs.
-  if (tool === "qfit") {
+  // The gadget plugins load on demand (axisExtrasHook.ts): until the chunk
+  // arrives (the tool's first activation) no frame is drawn yet.
+  const g = tool === "qfit" ? gadgetPlugins() : null;
+  if (g) {
     if (args.gadgetMode === "cursors") {
       plugins.push(
-        gadgetCursorsPlugin(args.gadgetCursors ?? null, accentColor, {
+        g.gadgetCursorsPlugin(args.gadgetCursors ?? null, accentColor, {
           onCursorsChange: args.onCursorsChange,
           interactive: true,
         }),
       );
     } else {
       plugins.push(
-        quickFitPlugin(args.qfitRoi ?? null, accentColor, accentSoftColor, {
+        g.quickFitPlugin(args.qfitRoi ?? null, accentColor, accentSoftColor, {
           onRoiChange: args.onRoiChange,
           interactive: true,
         }),
@@ -986,7 +979,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     plugins.push(
       annotationPlugin(annotations, inkColor, font, {
         interactive: tool === "pointer" && !!args.annotationEdit,
-        selectColor: accentColor,
+        selectColor: accentColor, paperColor: axesBg,
         selectedId: args.annotationEdit?.selectedId ?? null,
         onSelect: args.annotationEdit?.onSelect,
         onMove: args.annotationEdit?.onMove,
@@ -1003,13 +996,13 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   if (args.errorSpans && args.errorSpans.size > 0) {
     // The richer payload supersedes the legacy one for every column it
     // covers; anything it does not cover still falls through below.
-    plugins.push(errorSpansPlugin(args.errorSpans, inkDimColor));
+    plugins.push(errorSpansPlugin(args.errorSpans, inkDimColor, ERROR_CAP_HALF_PX));
   }
   const legacyBars = args.errorBars
     ? new Map([...args.errorBars].filter(([col]) => !args.errorSpans?.has(col)))
     : undefined;
   if (legacyBars && legacyBars.size > 0) {
-    plugins.push(errorBarsPlugin(legacyBars, inkDimColor));
+    plugins.push(errorBarsPlugin(legacyBars, inkDimColor, ERROR_CAP_HALF_PX));
   }
   if (args.colorByColumns && args.colorByColumns.size > 0) {
     plugins.push(colorScatterPlugin(args.colorByColumns));
@@ -1044,14 +1037,14 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // (rich or moved) or the DOM title is rich, OR — in the pointer tool — for
   // any title, so a plain unmoved title is still grab-testable to start a drag.
   const anyAxisLabel = !!(xRich || yRich || y2Rich);
-  const anyDrawn = xDrawn || yDrawn || y2Drawn;
   // The plugin is needed to DRAW (rich/moved titles or a rich DOM title), or to
   // enable dragging — but only where the drag is actually wired (`axisLabelEdit`
   // present, pointer tool). Facet panels (MultiPanelStage) pass no edit bridge,
   // so plain unmoved titles there stay on uPlot's draw with no extra plugin.
-  if (anyDrawn || titleRich || (tool === "pointer" && anyAxisLabel && args.axisLabelEdit)) {
+  const rl = richLabels();
+  if (rl && (xDrawn || yDrawn || y2Drawn || titleRich || (tool === "pointer" && anyAxisLabel && args.axisLabelEdit))) {
     plugins.push(
-      richLabelsPlugin(
+      rl.richLabelsPlugin(
         { x: xRich, y: yRich, y2: y2Rich, title: titleRich },
         { px: titlePx, family: uiFamily, color: axisColor, weight: "600" },
         args.axisLabelEdit ?? undefined,
@@ -1211,6 +1204,13 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       ...(y2ScaleEff === "log" ? { filter: logMajorTickFilter } : {}),
     });
   }
+
+  // Figures-audit #6: the Axis dialog's extras (minor/inward ticks, divide-by,
+  // tick font, Ln) -- null, and nothing changed, when no axis has one. y2
+  // inherits yFmt exactly as its tick formatter above does.
+  // The module loads on demand (axisExtrasHook.ts): absent = none drawn yet.
+  const extrasPlugin = axisExtrasApplier()?.(axes, [xFmt, yFmt, y2Fmt ?? yFmt], [xScale, yScale, y2ScaleEff], axisColor, { scales, payload, typed: [!!xLim, !!yLim, !!args.y2Lim], steps: [args.xStep, args.yStep, args.y2Step], scan: !xAscending, y2Own: !!y2Fmt, hidden: args.hidden, extent: args.yBreakExtent, breakMarks: args.yBreakMarks });
+  if (extrasPlugin) plugins.push(extrasPlugin);
 
   // The same colour read a live repaint uses (seriesColorsFor), so the two agree.
   const { series: seriesArr, bands } = buildSeriesDefs(payload, args, labels, xAscending, seriesColorsFor(args.bg));

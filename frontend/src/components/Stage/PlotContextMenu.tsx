@@ -142,7 +142,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
     const rename = (channel: number) => {
       void askParams("Rename series", [
         { key: "label", label: "Label", type: "text", default: st.seriesLabels[channel] ?? series?.label ?? "" },
-      ]).then((v) => {
+      ], { confirmLabel: "Rename" }).then((v) => {
         if (v) st.setSeriesLabel(channel, String(v.label));
       });
     };
@@ -161,7 +161,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       void askParams("Set axis limits", [
         { key: "min", label: "Min", type: "text", default: side(0), hint: "Blank = auto" },
         { key: "max", label: "Max", type: "text", default: side(1), hint: "Blank = auto" },
-      ]).then((v) => {
+      ], { confirmLabel: "Apply" }).then((v) => {
         if (!v) return;
         const [a, b] = [String(v.min), String(v.max)];
         const asc = parseLimFields(a, b);

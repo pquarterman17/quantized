@@ -73,3 +73,13 @@ export function toggleChannelSecondary(
   if (primaries.length <= 1) return membership;
   return { ...membership, y2Keys: [...y2, i].sort((a, b) => a - b) };
 }
+
+/** The name of the bound dataset's own x column — what the `xKey=null`
+ *  default plots against, so the X-axis select can say so (figures audit #16:
+ *  a real temperature column was offered as "Row index (default)"). The same
+ *  metadata order Inspector/ChannelsCard.tsx and lib/plotdata.ts read;
+ *  "Row index" only when the dataset names no x column. */
+export function xColumnLabel(data: { metadata?: Record<string, unknown> } | null | undefined): string {
+  const meta = data?.metadata;
+  return String(meta?.["x_column_long"] || meta?.["x_column_name"] || "Row index");
+}

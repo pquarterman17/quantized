@@ -116,7 +116,11 @@ function sanitizeSignatureEntries(v: unknown): RecipeSignatureEntry[] | null {
     if (typeof o.label !== "string" || typeof o.unit !== "string") return null;
     if (!isErrorRole(o.errorRole)) return null;
     const aliases = Array.isArray(o.aliases) ? o.aliases.filter((a): a is string => typeof a === "string") : [];
-    out.push({ id: o.id, role: o.role, label: o.label, unit: o.unit, errorRole: o.errorRole, aliases });
+    const position = typeof o.position === "number" && Number.isInteger(o.position) && o.position >= 0 ? o.position : undefined;
+    out.push({
+      id: o.id, role: o.role, label: o.label, unit: o.unit, errorRole: o.errorRole, aliases,
+      ...(position !== undefined ? { position } : {}),
+    });
   }
   return out;
 }
@@ -197,6 +201,7 @@ function sanitizeMapping(v: unknown): RecipeMapping | null {
     groupId,
     facetId,
     errors: sanitizeErrorBindingsList(o.errors),
+    ...(o.yAuto === true ? { yAuto: true } : {}),
   };
 }
 

@@ -43,6 +43,7 @@ from quantized.routes import (
     export_figure_batch,
     export_figures,
     export_figures_aux,
+    export_fonts,
     export_multivar,
     export_page,
     export_statplots,
@@ -234,6 +235,7 @@ def create_app(
     application.include_router(export_figure_batch.router)
     application.include_router(export_figures.router)
     application.include_router(export_figures_aux.router)
+    application.include_router(export_fonts.router)
     application.include_router(export_statplots.router)
     application.include_router(export_multivar.router)
     application.include_router(export_page.router)

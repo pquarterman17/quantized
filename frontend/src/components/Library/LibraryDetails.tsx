@@ -247,7 +247,7 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
       { key: "clearGroup", label: "Clear group", type: "boolean", default: false },
       { key: "addTags", label: "Add tags", type: "text", default: "", hint: "comma-separated" },
       { key: "removeTags", label: "Remove tags", type: "text", default: "", hint: "comma-separated" },
-    ]);
+    ], { confirmLabel: "Apply" });
     if (!picked) return;
     const updated = useApp.getState().batchEditDatasetMetadata(ids, batchPatchFrom(picked));
     if (updated > 0) toast(`Updated metadata for ${updated} dataset(s)`);

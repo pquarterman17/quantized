@@ -26,8 +26,11 @@ from quantized.calc.figure_decor import (
     _validate_ref_lines,
     _validate_region_shades,
 )
+from quantized.calc.figure_fonts import validate_typography
 from quantized.calc.figure_inset import validate_inset
 from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_layout import validate_page_pad
+from quantized.calc.figure_legend_order import draw_legend
 from quantized.calc.figure_scale import drawable_lim
 from quantized.calc.figure_shapes import _apply_shapes, _validate_shapes
 
@@ -72,6 +75,8 @@ def _validate_overrides(ov: Mapping[str, Any]) -> None:
             v = margins.get(side)
             if v is not None and not 0.0 <= float(v) <= 1.0:
                 raise ValueError("margins are figure fractions in [0, 1]")
+    validate_page_pad(ov.get("page_pad"))  # Page setup margins (calc.figure_layout)
+    validate_typography(ov)  # per-element font sizes (calc.figure_fonts)
     breaks = ov.get("x_breaks")
     if breaks is not None:
         if not isinstance(breaks, (list, tuple)) or len(breaks) == 0:
@@ -202,7 +207,7 @@ def _apply_overrides(
     if legend is not None:
         kw = legend_kwargs(fig, ax, st, legend, n_series=n_series)
         if kw is not None:
-            ax.legend(**kw)
+            draw_legend(ax, ov, kw)  # top trace first under a waterfall
         elif ax.get_legend() is not None:
             ax.get_legend().remove()
 
@@ -250,18 +255,18 @@ def _apply_overrides(
             ann_kw["xycoords"] = "figure fraction"
             y = 1.0 - y
         frame = ann.get("frame")
+        fontsize = float(size) if size else float(ov.get("font_size", st.font_size))
         if frame:
             # MAIN #27 "text box": a bbox behind the annotation text. `pad`
-            # (screen CSS px around the measured text) has no exact
-            # matplotlib equivalent (`boxstyle="square,pad=N"`'s pad is in
-            # font-size units, not px) -- divided by a fixed factor so the
-            # box reads as padded rather than pixel-identical, the same
-            # "Origin-parity-in-spirit, not pixel-identical" caveat the
-            # page-anchor y-flip above documents. fc/ec default to a plain
-            # white-card-on-black-border look (independent of the screen's
-            # own dark-canvas ink default -- publication export is white-bg).
+            # is screen CSS px around the measured text; matplotlib's
+            # `boxstyle="square,pad=N"` pad is in units of the font size, so
+            # convert exactly: px -> pt (x 0.75) -> font-size fractions. It
+            # used to divide by a fixed 4, which made the exported box ~3x
+            # the screen's and let it cover an arrow drawn to it (audit #11
+            # live check). fc/ec default to a plain white-card-on-black-
+            # border look -- the screen's own paper/ink pair on a print page.
             ann_kw["bbox"] = dict(
-                boxstyle=f"square,pad={float(frame.get('pad', 4)) / 4.0}",
+                boxstyle=f"square,pad={float(frame.get('pad', 4)) * 0.75 / fontsize}",
                 fc=frame.get("fill") or "white",
                 ec=frame.get("stroke") or "black",
                 alpha=frame.get("opacity", 1.0),
@@ -276,7 +281,7 @@ def _apply_overrides(
             xytext=(4.5, 1.5),
             textcoords="offset points",
             va="bottom",
-            fontsize=float(size) if size else float(ov.get("font_size", st.font_size)),
+            fontsize=fontsize,
             **ann_kw,
         )
 

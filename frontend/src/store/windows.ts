@@ -19,7 +19,6 @@
 
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import {
-  cascadeLayout,
   defaultPlotView,
   displayedWindowTitle,
   dropGeometry,
@@ -29,17 +28,17 @@ import {
   type PlotWindow,
   type WinState,
 } from "../lib/plotview";
-import { fitNewWindowGeometry, newWindowGeometry } from "../lib/plotWindows";
+import { fitNewWindowGeometry, newWindowGeometry, reboundWindowTitle } from "../lib/plotWindows";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { createPlotWindowDocument, plotWindowDatasetId, plotWindowView, syncPlotWindow } from "./windowDocuments";
 import { datasetViewDefaults } from "./windowDefaults";
-import { _focusHandoff, _relayoutVisible, dedupeAgainstDisplayed, focusedRebindPatch, mainWindow, maxZ, nextWindowId } from "./windowFocus";
+import { _focusHandoff, _relayoutVisible, arrangedWindowsPatch, dedupeAgainstDisplayed, focusedRebindPatch, mainWindow, maxZ, nextWindowId } from "./windowFocus";
 import type { WindowsSlice } from "./windowsSliceTypes";
 import { dropWorksheetSelection } from "./worksheetSelection";
 
 // Moved-out helpers + the slice contract (store-size ratchet), re-exported so no importer changed.
-export { datasetViewDefaults, focusedRebindPatch, focusTransientReset, mainWindow, maxZ, nextWindowId, retargetPassiveRebind } from "./windowFocus";
+export { analysisResultReset, datasetViewDefaults, focusedRebindPatch, focusTransientReset, focusWindowShowing, mainWindow, maxZ, nextWindowId, retargetPassiveRebind } from "./windowFocus";
 export type { WindowsSlice } from "./windowsSliceTypes";
 
 // The store-facing handles the slice builds against — the exact subset of
@@ -94,8 +93,12 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
             s,
             boundId ? (s.datasets.find((d) => d.id === boundId)?.name ?? "Untitled graph") : "Untitled graph",
           );
-        const seedView = view ?? defaultPlotView();
         const dataset = boundId ? s.datasets.find((d) => d.id === boundId) : undefined;
+        // No view given: the bound dataset's own defaults (its error layer, a
+        // text X, technique defaults), as every rebind seeds -- a bare default
+        // view drew a detected error column as a Y curve, and then read as
+        // "styled" against those defaults (windowUserEdits).
+        const seedView = view ?? { ...defaultPlotView(), ...(dataset ? datasetViewDefaults(dataset) : {}) };
         const win: PlotWindow = {
           id,
           kind: "plot",
@@ -197,7 +200,8 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
     rebindWindow: (windowId, datasetId) => {
       const s = get();
       const win = s.plotWindows.find((w) => w.id === windowId);
-      if (!win || !s.datasets.some((d) => d.id === datasetId)) return;
+      const ds = s.datasets.find((d) => d.id === datasetId);
+      if (!win || !ds) return;
       // Neither a snapshot ("frozen means frozen") nor a panel window (item
       // 19's binding is `panel.datasetIds`, not this field) rebinds on drop.
       if (win.kind === "snapshot" || win.kind === "panel") return;
@@ -208,7 +212,9 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         // shows. It's also never the focus target, so focus/activeId/the live
         // singleton fields are all untouched.
         set((st) => ({
-          plotWindows: st.plotWindows.map((w) => (w.id === windowId ? { ...w, datasetId } : w)),
+          plotWindows: st.plotWindows.map((w) =>
+            w.id === windowId ? { ...w, datasetId, title: reboundWindowTitle(st.plotWindows, st.datasets, w, ds.name) } : w,
+          ),
         }));
         get().ensureBookData(datasetId); // #38 — same activation-shaped fetch as below
         return;
@@ -221,7 +227,6 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       } else {
         // A background window's view is at rest in its record: rebind + reset
         // it to the same/memory-derived defaults, leaving focus untouched.
-        const ds = s.datasets.find((d) => d.id === datasetId);
         const priorDs = s.datasets.find((d) => d.id === win.datasetId);
         const currentView = plotWindowView(win);
         const memory = captureTechniqueView(priorDs, currentView, s.techniqueViewMemory); // item 5
@@ -229,7 +234,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         set((st) => ({
           plotWindows: st.plotWindows.map((w) =>
             w.id === windowId
-              ? syncPlotWindow(w, reboundView, { datasetId, errors: ds?.errorRoles, resetErrors: true, resetAxisBreaks: true }) // this branch always applies datasetViewDefaults wholesale, so review F4's reset is unconditional
+              ? syncPlotWindow(w, reboundView, { title: reboundWindowTitle(st.plotWindows, st.datasets, w, ds.name), datasetId, errors: ds?.errorRoles, resetErrors: true, resetAxisBreaks: true }) // this branch always applies datasetViewDefaults wholesale, so review F4's reset is unconditional
               : w,
           ),
           techniqueViewMemory: memory,
@@ -359,21 +364,22 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
     // side by side/cascaded; minimized windows stay minimized (docked in the
     // strip — item 8). Falls back to a default canvas size when the real
     // bounds aren't known yet (e.g. invoked from the palette before the Plot
-    // tab ever mounted). A no-op with fewer than 2 visible windows (nothing to
-    // arrange).
-    tileWindows: () => (get().recordHistory("tile windows"),
-      set((s) => {
-        const visible = s.plotWindows.filter((w) => w.winState !== "minimized");
-        if (visible.length < 2) return {};
-        const bounds = s.plotCanvasBounds ?? { width: 1200, height: 800 };
-        return _relayoutVisible(s, tileLayout(visible.length, bounds));
-      })),
-    cascadeWindows: () => (get().recordHistory("cascade windows"),
-      set((s) => {
-        const visible = s.plotWindows.filter((w) => w.winState !== "minimized");
-        if (visible.length < 2) return {};
-        return _relayoutVisible(s, cascadeLayout(visible.length));
-      })),
+    // tab ever mounted). Tile on ONE visible window fills the stage (figures
+    // audit #15: it used to be a no-op, leaving a small window in a corner);
+    // Cascade stays a no-op below 2 (nothing to stagger). A no-op records no
+    // undo step (store/windowFocus.ts arrangedWindowsPatch).
+    tileWindows: () => {
+      const patch = arrangedWindowsPatch(get(), "tile");
+      if (!patch) return;
+      get().recordHistory("tile windows");
+      set(patch);
+    },
+    cascadeWindows: () => {
+      const patch = arrangedWindowsPatch(get(), "cascade");
+      if (!patch) return;
+      get().recordHistory("cascade windows");
+      set(patch);
+    },
     // Minimizing the FOCUSED window hands focus to the top-z remaining VISIBLE
     // window — `closeWindow`'s exact refocus formula, but the window stays IN
     // `plotWindows` (docked in the strip) rather than being removed. A no-op
@@ -444,7 +450,10 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         const target = s.plotWindows.find((w) => w.id === id);
         if (!target || target.winState === "minimized") return {};
         const winState: WinState = target.winState === "maximized" ? "normal" : "maximized";
-        return { plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, winState } : w)) };
+        // Maximizing also raises (figures audit #15): a maximized window left
+        // under its siblings' z read as "Maximize doesn't stick".
+        const z = winState === "maximized" ? maxZ(s.plotWindows) + 1 : target.z;
+        return { plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, winState, z } : w)) };
       })),
     renameWindow: (id, title) => (get().recordHistory("rename window"),
       set((s) => ({

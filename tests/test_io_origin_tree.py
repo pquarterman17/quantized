@@ -541,8 +541,22 @@ def _resolve_corpus_dir() -> Path:
 _CORPUS = _resolve_corpus_dir()
 
 
+def _needs(*names: str) -> pytest.MarkDecorator:
+    """Skip unless every named project is in the local Origin corpus.
+
+    Keyed on the FILES, not the corpus directory: ``test-data/origin`` can
+    exist while holding only other material (the public specimen corpus
+    under ``public/``), and a guard that checks the directory then runs the
+    test straight into a FileNotFoundError.
+    """
+    missing = [n for n in names if not (_CORPUS / n).exists()]
+    return pytest.mark.skipif(
+        bool(missing), reason=f"not in the local Origin corpus: {', '.join(missing)}"
+    )
+
+
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+@_needs("Moke.opj")
 def test_realdata_moke_folder_tree_matches_com_ground_truth() -> None:
     """Pinned against live Origin COM (OriginPro 2026b) Project Explorer:
     ``Raw normalized`` holds Book1/2/3 (+graphs), ``Sub subtraction`` holds
@@ -557,7 +571,7 @@ def test_realdata_moke_folder_tree_matches_com_ground_truth() -> None:
 
 
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+@_needs("Moke.opj")
 def test_realdata_moke_books_carry_origin_folder_path() -> None:
     books = read_origin_books(_CORPUS / "Moke.opj")
     by_book = {str(b.metadata["origin_book"]): b for b in books}
@@ -572,7 +586,7 @@ def test_realdata_moke_books_carry_origin_folder_path() -> None:
 
 
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+@_needs("XRD.opj")
 def test_realdata_xrd_folder_tree_matches_com() -> None:
     """Three sibling folders (Si/GGG/S11) holding books AND graph windows —
     pinned against the live-Origin ``pe_path`` capture
@@ -593,7 +607,6 @@ def test_realdata_xrd_folder_tree_matches_com() -> None:
 
 
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
 @pytest.mark.parametrize(
     ("stem", "expected"),
     [
@@ -687,7 +700,7 @@ def test_opj_project_dates_fail_closed() -> None:
 
 
 @pytest.mark.realdata
-@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+@_needs("Moke.opj", "XMCD.opj")
 def test_realdata_project_dates_land_in_metadata() -> None:
     """Moke.opj's own stamp (validated against its results-log JDNs) reaches
     DataStruct metadata; the 4.3227 XMCD.opj honestly carries no key."""

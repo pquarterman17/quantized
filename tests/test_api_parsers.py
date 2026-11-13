@@ -294,8 +294,12 @@ def test_every_origin_corpus_file_imports_without_crashing(corpus_dir: Path) -> 
     origin = corpus_dir / "origin"
     if not origin.is_dir():
         pytest.skip("origin corpus subdir absent")
+    # The owner's projects sit DIRECTLY under origin/ (non-recursive glob on
+    # purpose: origin/public/ is the third-party specimen corpus, which has
+    # files that must not import). The directory can exist with none of them.
     files = sorted(p for ext in ("*.opj", "*.opju") for p in origin.glob(ext))
-    assert files, "no Origin corpus files found under test-data/origin"
+    if not files:
+        pytest.skip("no owner Origin projects directly under test-data/origin")
     failures = []
     for p in files:
         resp = client.post("/api/parsers/import", json={"path": str(p)})

@@ -8,6 +8,42 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- Publication figures: the Export dialog sets the figure's width and height
+  (in, cm, mm or px) and the right-axis label; the Publication preview's
+  Canvas group sets the page size too. Page setup, Export and the preview all
+  edit the same page, and Page setup now opens at the size an export already
+  uses (6 × 4 in).
+- Publication preview: separate title, axis-label, tick-label and legend font
+  sizes, and a font picker listing the fonts the export can render. Arial and
+  Helvetica render in Liberation Sans, Times New Roman in Liberation Serif;
+  a font that falls back is reported.
+- Labels accept Origin-style rich text — `\+( )` superscript, `\-( )`
+  subscript, `\g( )` Greek, `\b( )` bold, `\i( )` italic — on screen and in
+  every export (docs/rich_text_labels.md).
+- Region shades span the full plot height by default, with a per-shade
+  toggle; they show on log axes. A reference line or shade outside the axis
+  range is marked "(off-scale)" on screen and reported by the export.
+- Graph windows are independent: importing data or opening a Library item
+  never restyles a window you have styled (it opens in an unedited or a new
+  window), each window keeps its own plot mode, and double-clicking a Library
+  dataset another window already shows brings that window forward. Windows
+  maximize, tile and cascade, and closing a styled window asks first.
+- Axis dialog (double-click an axis, or Plot ▸ Axis…): scale (linear, log,
+  ln, reciprocal), limits, major increment, minor ticks, tick direction,
+  number format, divide-by factor (its "×10ⁿ" sits at the axis end, as in the
+  export) and font sizes, for X, Y and Y2.
+- Y-axis breaks: Break from / Break to on the Axis dialog's Y and Y2 tabs
+  (or Plot ▸ Break y-axis…) elide a stretch of the axis, with break marks, on
+  screen and in every export.
+- Plot ▸ Plot type… gallery (line, scatter, line + symbol, area, column,
+  stacked column, box, histogram, contour); Column / Bar charts from a
+  summary table draw a bound error column as the whiskers ("from column").
+- Style templates, recipes and Copy / Paste Format apply to plain CSV
+  datasets, carrying style only (never another graph's limits, breaks or
+  annotations); error columns are bound consistently across the Channels and
+  Error columns cards; an XYZ map picks its X, Y and Z columns.
+- The exported legend of a waterfall lists the top trace first, as the
+  screen does, and an export marks the same tick positions the screen drew.
 - Worksheet column menu ▸ Set As (X, Y, Z, Y Error, X Error, Label,
   Disregard), Origin's column designations: one undoable step, saved with
   the workspace, honoured by the default plot, Graph Builder and the .ogs,
@@ -151,6 +187,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   Tests check its conversion factors dimensionally, including
   1 emu/cm³ = 1000 A/m. The A/m, A·m²/kg and area-normalized units are
   documented SI extensions beyond the MATLAB `convertMagUnits`.
+- Origin `.opj` matrix books open in the Map view, with Origin's X/Y
+  coordinate mapping. A project holding only matrices used to fail to import.
+- Origin `.opj` projects saved by Origin 7 and Origin 8 import. Origin 8
+  projects used to fail entirely.
 
 ### Changed
 
@@ -228,17 +268,68 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Fixed
 
+- Origin `.opj` Numeric columns (double, float, short, long, byte, complex)
+  and Date/Time columns read their real values. Some used to come in as
+  nonsense numbers, and others were dropped.
+- Origin `.opj` worksheets import only the rows that were used. The blank
+  rows Origin pre-allocates used to come in as zeros.
+- Origin `.opj` text cells are kept: Text columns, and Text & Numeric columns
+  holding text, appear as the worksheet's text columns. A workbook made only
+  of text used to import empty.
+- Origin `.opj` workbooks without a long name are titled by their short name
+  (`Book1`). Many used to be titled "BA".
+- Origin `.opj` Numeric, Date and Time columns keep their long name, unit,
+  comment and X/Y designation; multi-line comments are kept whole.
+- Origin `.opj` columns designated Group or Subject are labelled as such in
+  the worksheet header and are no longer plotted as data series.
+- Origin `.opj` files written by quantized state each column's real row
+  count. Files written earlier still open in full.
+- Origin `.opj` sheets other than the first keep their column names, units,
+  comments and X/Y designations, and a workbook whose sheets were deleted or
+  reordered no longer picks up another sheet's column names.
+- An Origin `.opj` column is no longer dropped because one cell holds an
+  implausibly small or large number; that cell is blanked and reported.
+- An Origin `.opj` text column wider than ten characters is shown as text
+  instead of being filed away as a fit-report sheet.
+- Origin `.opj` imports say so when a dataset could not be recognised, when
+  a matrix's X/Y coordinates were not found, and when an old-style file had
+  to be read by inspecting its bytes.
+- Deleting or filtering rows keeps the imaginary part of an Origin complex
+  column on the same row as its real part.
+- Origin `.opj` data that cannot be read is named in the import's fidelity
+  summary instead of being left out silently.
 - The Reshape preview reports the real result row count when its table is
   capped.
-
-### Fixed
-
 - Paste and import keep a row's empty edge cells and a short first data
   row: values no longer shift under the wrong header or lose a column, and
   direct import and the Import wizard read such files the same way.
 - /api/stats/descriptive no longer fails on columns of tiny or huge values.
 - A project import opens its primary book; the title and status bars name
   the sheet the Worksheet tab shows.
+- Page setup margins no longer clip tick labels, axis titles or the title
+  from an exported figure: they are blank border around the laid-out figure,
+  and the page keeps its exact size.
+- The Publication preview now renders exactly what Export writes (page size,
+  error bars, transparency).
+- An exported figure's autoscaled axes match the screen (x spans exactly the
+  data), so data-anchored text boxes and arrows land in the same place.
+- On screen, a text box is readable on a dark plot, and an inserted arrow
+  shows its arrowhead.
+- View-only edits to a graph window (axis scales, limits, stack mode) are
+  autosaved, so a reload no longer loses them.
+- An exported figure uses the same X/Y tick increment as the screen, and a
+  break mark no longer overlaps the tick label at the break edge.
+- X and Y breaks together: every panel keeps its data, on screen and in the
+  export.
+- Dialogs name their action (Rename, Apply, Export, …) instead of "Run".
+- An Origin escape that cannot convert stays as typed, the same on screen
+  and in the export; `\\+(` is a literal backslash.
+- A region shade starting at or below zero on a log (or reciprocal) X axis
+  draws from the left edge on screen and in the export alike.
+- Stat-stage exports (bar, box, violin, strip, Q-Q, histogram) use the
+  screen's theme colours and no longer add a title the screen does not show.
+- Renaming an item to its own name, and Tile / Cascade with nothing to
+  arrange, no longer leave an empty undo step.
 
 ### Security
 

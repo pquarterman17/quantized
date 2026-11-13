@@ -42,6 +42,7 @@ from collections.abc import Sequence
 from functools import lru_cache
 from typing import Any, Protocol
 
+from quantized.calc.figure_origin_escapes import origin_escapes_to_mathtext
 from quantized.calc.render_lock import RenderLockTimeout, acquire_render_lock
 from quantized.heavy_import import heavy_imports
 from quantized.unit_display import display_unit, with_unit
@@ -92,8 +93,10 @@ _SYMBOL_COMMANDS = frozenset(
         "rightarrow", "to", "leftarrow", "leftrightarrow", "Rightarrow",
     }
 )
-# Mirrors richtext.ts's `\mathrm{...}` / `\mathit{...}` style-group handling.
-_STYLE_COMMANDS = frozenset({"mathrm", "mathit"})
+# Mirrors richtext.ts's `\mathrm{...}` / `\mathit{...}` / `\mathbf{...}`
+# style-group handling (`\mathbf` arrives with Origin's `\b(...)` bold run --
+# calc.figure_origin_escapes).
+_STYLE_COMMANDS = frozenset({"mathrm", "mathit", "mathbf"})
 # Mirrors richtext.ts's structural nodes: `\frac{a}{b}`, `\sqrt{x}`,
 # `\sqrt[n]{x}` (MAIN #28). matplotlib renders these natively; the frontend
 # canvas + DOM renderers draw the matching stacked/radical layout.
@@ -156,15 +159,31 @@ def safe_mathtext_label(label: str) -> str:
       savefig time OR silently rendering richer math than the screen ever
       showed.
     """
+    # Origin escapes (\+( \-( \g( \b( \i() become the mathtext subset first,
+    # exactly as the screen's richtext.ts does (calc.figure_origin_escapes).
+    original = label
+    label = origin_escapes_to_mathtext(label)
     if not label or "$" not in label:
         return label
+    # A label that cannot render as math falls back to the text the user
+    # TYPED, as the screen's literal fallback does -- never to the rewritten
+    # one (review finding: `\$^{...}$` reached the figure).
+    literal = _UNESCAPED_DOLLAR.sub(r"\\$", original)
     n_math = len(_UNESCAPED_DOLLAR.findall(label))
     if n_math == 0 or n_math % 2 == 1:
         # Zero unescaped $ (all \$-escaped) or an odd count: matplotlib
         # already renders the whole string as literal text -- leave it be.
         return label
+    # The screen's rule (richtext.ts parseRichText): in a math-bearing label a
+    # backslash in a TEXT segment (outside $...$; `\$` is a literal dollar)
+    # makes the whole label literal. matplotlib draws such a label part math,
+    # part raw -- e.g. a literal Origin run beside a converted one (review
+    # finding: "\g(\+(2)) M\+(2)" was literal on screen, M² in the export).
+    text_segments = _UNESCAPED_DOLLAR.split(label)[0::2]
+    if any("\\" in seg.replace("\\$", "") for seg in text_segments):
+        return literal
     if not _uses_only_supported_commands(label):
-        return _UNESCAPED_DOLLAR.sub(r"\\$", label)
+        return literal
     # The trial parse runs on matplotlib's ONE shared mathtext parser, which is
     # not thread-safe: an unlocked concurrent parse could fail spuriously here
     # (silently de-mathing a valid label) or corrupt a render's own parse.
@@ -181,7 +200,7 @@ def safe_mathtext_label(label: str) -> str:
         # label just because the render lock is busy.
         raise
     except Exception:  # ANY parse failure means "render literal", never raise
-        return _UNESCAPED_DOLLAR.sub(r"\\$", label)
+        return literal
     return label
 
 

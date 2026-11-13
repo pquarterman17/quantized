@@ -31,7 +31,9 @@ export function sanitizeLegendSize(v: unknown): [number, number] | null {
  *  resolveStatMarks` owns the defaults and the meaning of every field). */
 export type StatPointsMode = "all" | "outliers" | "none";
 export type StatSummaryMark = "none" | "mean" | "median";
-export type StatErrorBars = "none" | "sd" | "se" | "ci95";
+/** "column" (bar mode only): each whisker is the value of the bar's bound
+ *  error COLUMN (`lib/barMatrix.withColumnErrors`), not a statistic. */
+export type StatErrorBars = "none" | "sd" | "se" | "ci95" | "column";
 export interface StatMarks {
   points?: StatPointsMode;
   jitter?: boolean;
@@ -46,7 +48,7 @@ export interface StatMarks {
 
 const STAT_MARK_VALUES: Record<string, readonly unknown[]> = {
   points: ["all", "outliers", "none"], jitter: [true, false], summary: ["none", "mean", "median"],
-  errorBars: ["none", "sd", "se", "ci95"], connectMeans: [true, false], labelRotation: [0, 45, 90],
+  errorBars: ["none", "sd", "se", "ci95", "column"], connectMeans: [true, false], labelRotation: [0, 45, 90],
   labelWrap: [true, false],
 };
 
@@ -217,6 +219,7 @@ export function sanitizeRegionShades(v: unknown): RegionShade[] {
       y2: o.y2 as number,
       fill: o.fill,
       ...(o.axis === 0 || o.axis === 1 ? { axis: o.axis } : {}),
+      ...(o.fullHeight === true && { fullHeight: true }),
     });
   }
   return out;

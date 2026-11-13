@@ -84,6 +84,18 @@ describe("resolveSelectionPlot", () => {
     expect(result.actions).toEqual([]);
   });
 
+  it("Group and Subject (factor) columns are never plotted as a series", () => {
+    const factors: DataStruct = {
+      ...originData,
+      metadata: {
+        origin_column_names: ["R++", "dR++", "Sample", "X2", "Junk"],
+        column_designations: { A: "X", "R++": "Y", "dR++": "group", Sample: "subject", X2: "Y", Junk: "Y" },
+      },
+    };
+    const result = resolveSelectionPlot(factors, new Set([0, 1, 2]), NO_AXIS, "replace");
+    expect(result.actions).toContainEqual({ kind: "setYKeys", yKeys: [0] });
+  });
+
   it("a secondary X designation is excluded from Y even when it isn't a NEW X", () => {
     const result = resolveSelectionPlot(originData, new Set([0, 3]), { xKey: 3, yKeys: null }, "replace");
     // X2 (col 3) already IS xKey — resolving to the same value collapses to

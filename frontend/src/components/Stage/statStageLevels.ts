@@ -170,6 +170,9 @@ function padBarData(data: BarChartData, slots: readonly AxisSlot[]): BarChartDat
   const blank = () => data.seriesLabels.map(() => ({ mean: Number.NaN, sem: Number.NaN, n: 0 }));
   return {
     seriesLabels: data.seriesLabels,
+    // Figures-audit #8: the bound error column the whiskers came from (named
+    // in the footnote) survives the padding.
+    ...(data.errorColumn ? { errorColumn: data.errorColumn } : {}),
     groups: slots.map((s) =>
       s.group === null ? { label: s.label, series: blank() } : { ...filled[s.group], label: s.label },
     ),

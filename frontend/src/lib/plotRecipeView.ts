@@ -19,7 +19,9 @@ export function resolvedRecipeView(
     // immediately overwritten and falsely imply a second source of truth.
     ...(panels ? { panelFit: panels.panelFit, pageSetup: panels.pageSetup } : {}),
     xKey: mapping.xKey,
-    yKeys: mapping.yKeys,
+    // A `yAuto` recipe (saved from a default-channel view) keeps the
+    // target's own default set; its `yKeys` only placed the series styles.
+    yKeys: mapping.yAuto ? null : mapping.yKeys,
     y2Keys: mapping.y2Keys,
     groupKey: mapping.groupKey,
     facetKey: mapping.facetKey,

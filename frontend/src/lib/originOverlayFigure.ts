@@ -7,7 +7,7 @@
 // segment-concatenation core stays in the parent, which the eager "Plot
 // selected together" path also uses.
 
-import { curveDisplayName, originCurveSeriesStyle, resolveLegendTemplate } from "./originCurveText";
+import { curveDisplayName, legendCaption, originCurveSeriesStyle } from "./originCurveText";
 import { assembleOverlay, ORIGIN_OVERLAY_VERSION, type OverlayBound } from "./originOverlay";
 import type { Dataset, DataStruct, OriginFigure, SeriesStyle } from "./types";
 
@@ -90,7 +90,7 @@ export function overlayCurveStyles(data: DataStruct | null | undefined): Record<
 /** Recover the per-column legend captions stamped by buildOverlayDataset into
  *  an overlay's metadata, as a channel-index → label map ready for the
  *  store's `seriesLabels` (fix #4). Already resolved via
- *  `resolveLegendTemplate` at build time (`%(n)` -> the nth curve's display
+ *  `legendCaption` at build time (`%(n)` -> the nth curve's display
  *  name, `\l(n)` swatch stripped) — this is just the read-back, no further
  *  substitution here. Empty for a non-overlay dataset or one whose figure had
  *  no legend_labels. */
@@ -160,7 +160,7 @@ export function buildOverlayDataset(
       designation: cd ? String(cd[c.y] ?? "Y") : "Y",
       legendLabel:
         curveIdx < legend.length && legend[curveIdx]
-          ? resolveLegendTemplate(legend[curveIdx], curveNames)
+          ? legendCaption(legend[curveIdx], curveNames)
           : undefined,
     });
   });

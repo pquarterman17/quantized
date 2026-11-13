@@ -184,7 +184,7 @@ export default function AnalysisResultPanel() {
   const rename = async () => {
     const picked = await askParams(`Rename "${result.name}"`, [
       { key: "name", label: "Name", type: "text", default: result.name },
-    ]);
+    ], { confirmLabel: "Rename" });
     const name = picked && String(picked.name).trim();
     if (name) withActions((m) => m.renameAnalysisResult(result.id, name));
   };

@@ -37,16 +37,16 @@ _RECT_EPS = 1e-6
 
 def _validate_panel_overrides(n: int, p: PagePanel) -> None:
     """Raise ``ValueError`` on a page-incompatible per-panel override
-    (``x_breaks`` / ``margins``) or a malformed ``y2_mask`` (GUI_INTERACTION
+    (``x_breaks`` / ``margins`` / ``page_pad``) or a malformed ``y2_mask`` (GUI_INTERACTION
     #12 slice 4c -- mirrors ``calc.figure._render_impl``'s own
     ``len(y2_mask) != len(series)`` guard), shared by both the grid and
     free-placement validators."""
     ov = dict(p.overrides or {})
     if "x_breaks" in ov:
         raise ValueError(f"panel {n}: x_breaks is not supported on a figure page")
-    if "margins" in ov:
+    if "margins" in ov or "page_pad" in ov:
         raise ValueError(
-            f"panel {n}: margins are page-level on a figure page; "
+            f"panel {n}: margins (and page_pad) are page-level on a figure page; "
             "remove the per-panel margins override"
         )
     _validate_overrides(ov)

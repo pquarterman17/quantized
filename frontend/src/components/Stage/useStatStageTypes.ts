@@ -91,6 +91,10 @@ export interface StatStageState {
    *  their setters) are gone — every caller reads/writes `marks` directly
    *  (`StatMarksControls.tsx`'s own convention already did). */
   marks: ResolvedStatMarks;
+  /** Bar mode: the bound error column(s) whose values can be the whiskers
+   *  (`BarChartData.errorColumn`) -- the picker then offers "from column".
+   *  null = none. */
+  errorColumn: string | null;
   setMarks: (patch: StatMarks, label?: string) => void;
   /** Box/Violin/Strip/Bar "facet by" column (GUI_INTERACTION #11) — null = no
    *  facet (the ordinary single-panel draw). A persisted pick

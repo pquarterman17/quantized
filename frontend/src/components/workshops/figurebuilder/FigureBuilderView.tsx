@@ -5,7 +5,9 @@
 
 import { useEffect, useState } from "react";
 
+import { xColumnLabel } from "./canonicalChannels";
 import PreviewOverlay from "./PreviewOverlay";
+import PreviewWarnings from "./PreviewWarnings";
 import PropertyPanels from "./PropertyPanels";
 import { cancelPublicationPreview } from "../../windows/figureLifecycleUi";
 import ToolWindow from "../../overlays/ToolWindow";
@@ -61,18 +63,21 @@ export default function FigureBuilderView() {
             </div>
             <label className="qzk-field-lbl">Format</label>
             <Select
+              aria-label="Figure format"
               options={FIGURE_FORMATS.map((v) => ({ value: v, label: v.toUpperCase() }))}
               value={f.fmt}
               onChange={(e) => f.setFmt(e.target.value)}
             />
             <label className="qzk-field-lbl">Style</label>
             <Select
+              aria-label="Figure style"
               options={FIGURE_STYLES.map((v) => ({ value: v, label: v }))}
               value={f.style}
               onChange={(e) => f.setStyle(e.target.value)}
             />
             <label className="qzk-field-lbl">DPI (raster)</label>
             <NumberField
+              aria-label="Figure DPI (raster)"
               value={dpiText}
               onChange={(v) => {
                 setDpiText(v);
@@ -88,11 +93,11 @@ export default function FigureBuilderView() {
             {/* Rich-text labels (GOTO #5): `$...$` math renders in the export
                 via matplotlib mathtext; Ω opens the symbol palette. */}
             <label className="qzk-field-lbl">Title</label>
-            <RichLabelInput live value={f.title} placeholder="(none)" onCommit={f.setTitle} />
+            <RichLabelInput live value={f.title} name="Figure title" placeholder="(none)" onCommit={f.setTitle} />
             <label className="qzk-field-lbl">X label</label>
-            <RichLabelInput live value={f.xLabel} placeholder="auto" onCommit={f.setXLabel} />
+            <RichLabelInput live value={f.xLabel} name="Figure X label" placeholder="auto" onCommit={f.setXLabel} />
             <label className="qzk-field-lbl">Y label</label>
-            <RichLabelInput live value={f.yLabel} placeholder="auto" onCommit={f.setYLabel} />
+            <RichLabelInput live value={f.yLabel} name="Figure Y label" placeholder="auto" onCommit={f.setYLabel} />
             {/* #11: every export property, panel-grouped, one config object */}
             <PropertyPanels
               overrides={f.overrides}
@@ -112,6 +117,7 @@ export default function FigureBuilderView() {
                 yKeys: f.channelYKeys,
                 y2Keys: f.channelY2Keys,
                 fallbackYKeys: f.channelFallbackYKeys,
+                xDefaultLabel: xColumnLabel(f.data),
                 onXKey: f.setChannelXKey,
                 onToggleY: f.toggleChannelY,
                 onToggleY2: f.toggleChannelY2,
@@ -192,6 +198,8 @@ export default function FigureBuilderView() {
               } : undefined}
               openGroup={f.focusGroup}
               openNonce={f.focusNonce}
+              pageSetup={f.pageSetup}
+              setPageSetup={f.setPageSetup}
             />
 
             {!f.canonical && <>
@@ -217,8 +225,10 @@ export default function FigureBuilderView() {
                 Save
               </Button>
             </div>
+            </>}
 
-            {/* #15: user graph templates — the style half, appliable anywhere */}
+            {/* #15: user graph templates — the style half, appliable anywhere
+                (both modes since figures-audit B2). */}
             <label className="qzk-field-lbl" style={{ marginTop: 6 }}>Style template</label>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <NumberField
@@ -226,10 +236,12 @@ export default function FigureBuilderView() {
                 width={100}
                 value={tplName}
                 placeholder="save style as…"
+                aria-label="Style template name"
                 onChange={setTplName}
               />
               <Button
                 size="sm"
+                aria-label="Save style template"
                 disabled={!tplName.trim()}
                 onClick={() => {
                   f.saveStyleTemplate(tplName.trim());
@@ -247,10 +259,10 @@ export default function FigureBuilderView() {
                 ]}
                 value=""
                 onChange={(e) => e.target.value && f.applyStyleTemplate(e.target.value)}
+                aria-label="Apply style template"
               />
             )}
 
-            </>}
             {/* Sticky action row. Export/Apply/Cancel used to scroll away with
                 the rest of the column: with the property groups expanded the
                 settings column is ~2,400 px tall inside a ~900 px viewport, so
@@ -330,7 +342,7 @@ export default function FigureBuilderView() {
             ) : f.preview && f.hitmap ? (
               /* #13/#14: hit-testable preview — click to focus a panel,
                  double-click text to edit, drag legend/annotations */
-              <PreviewOverlay
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", maxWidth: "100%" }}><PreviewOverlay
                 src={f.preview}
                 map={f.hitmap}
                 textOf={f.textOf}
@@ -339,6 +351,7 @@ export default function FigureBuilderView() {
                 onDragEnd={f.dragElement}
                 canonicalSeries={f.canonical && f.seriesChannels.length > 0}
               />
+              <PreviewWarnings warnings={f.hitmap.warnings} /></div>
             ) : (
               <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
                 {f.busy ? "rendering…" : "preview"}

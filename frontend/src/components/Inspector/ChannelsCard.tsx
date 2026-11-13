@@ -7,6 +7,8 @@
 
 import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
 import { describeLabelRow, labelRows, labelsFromRow, type LabelRow } from "../../lib/labelRows";
+import { withErrKey, withSymmetricYError } from "../../lib/errorRoleEdits";
+import { symmetricBinding } from "../../lib/errorRoles";
 import { channelModelingType } from "../../lib/modeling";
 import { defaultDenseChannels } from "../../lib/plotdata";
 import type { ChannelRole, Dataset, ModelingType } from "../../lib/types";
@@ -29,6 +31,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   const setY2Keys = useApp((s) => s.setY2Keys);
   const errKeys = useApp((s) => s.errKeys);
   const setErrKey = useApp((s) => s.setErrKey);
+  const setErrorRoles = useApp((s) => s.setErrorRoles);
   const setChannelRole = useApp((s) => s.setChannelRole);
   const setChannelType = useApp((s) => s.setChannelType);
   const waterfall = useApp((s) => s.waterfall);
@@ -63,6 +66,23 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   };
   // Default x source name (ds.time), e.g. "Temperature" or "Index". Prefer the
   // Origin long name over the raw column letter, matching the plot x-axis.
+  // Figures-audit #10: a series' "±" shows the error actually drawn -- the
+  // legacy pick, else the dataset's role binding (the Error columns card's
+  // answer, which used to be invisible here) -- and a pick writes BOTH, so
+  // the two cards never disagree about one series.
+  const roles = active.errorRoles ?? [];
+  const errorFor = (i: number): number | null => errKeys[i] ?? symmetricBinding(roles, i, "y");
+  const pickError = (i: number, channel: number | null) => {
+    // ONE undo step per pick. Each store setter records its own, so only the
+    // one(s) that change anything run -- and when BOTH must (a restored
+    // legacy pick plus an unbound role), the roles' entry already holds the
+    // pre-pick state, so the legacy key is written under it, unrecorded.
+    const keyChanges = (errKeys[i] ?? null) !== channel;
+    const rolesChange = symmetricBinding(roles, i, "y") !== channel;
+    if (rolesChange) setErrorRoles(active.id, withSymmetricYError(roles, i, channel));
+    if (keyChanges && !rolesChange) setErrKey(i, channel);
+    else if (keyChanges) useApp.setState((s) => ({ errKeys: withErrKey(s.errKeys, i, channel) }));
+  };
   const meta = active.data.metadata;
   // #33: the file's other descriptive rows, offered as legend-label sources.
   const sources = labelRows(active.data);
@@ -156,50 +176,47 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
         const isData = !role; // a roled channel (label/ignore) is not a plotted series
         const visible = isData && selected.includes(i);
         return (
-          <div
-            key={i}
-            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}
-          >
-            <label
-              className="qz-check"
-              // GUI_INTERACTION #17: `minWidth: 0` here alone gave this label a
-              // flexbox shrink WEIGHT of 0 (flex:1 => flex-basis:0%, and CSS
-              // shrink weight = flex-basis * flex-shrink) — so the row's negative
-              // space (this checkbox + the 2-4 right-hand selects don't all fit
-              // in the Inspector's fixed 296px column) was entirely assigned to
-              // the right-hand controls `<div>` below. But THAT div's own
-              // children (the Selects) had no `minWidth: 0` of their own, so it
-              // hit ITS min-content floor before absorbing enough — leaving this
-              // label's box at literally 0 width, with the right-hand div
-              // rendered starting at the row's left edge, painting directly over
-              // the checkbox. A small explicit floor (checkbox 14px + gap 7px +
-              // a few px buffer) guarantees the checkbox always has a real box;
-              // pushing `minWidth: 0` onto the right-hand controls instead (see
-              // below) makes THEM absorb the rest of the squeeze — their text
-              // is short (native <select> already clips its own display value)
-              // and less harmed by shrinking than a hidden/overlapped checkbox.
-              style={{ flex: 1, minWidth: 24, opacity: isData ? 1 : 0.6 }}
-              draggable
-              title={`Drag onto the plot's X / Y / Y2 axis band to re-plot "${lab}" there`}
-              onDragStart={(e) => {
-                e.dataTransfer.setData(CHANNEL_DND, encodeChannelDrag({ datasetId: active.id, channel: i }));
-                e.dataTransfer.effectAllowed = "copy";
-              }}
-            >
-              <input type="checkbox" checked={visible} disabled={!isData} onChange={() => toggle(i)} />
-              {/* The channel name + units still truncates (rather than
-                  overflowing into the right-hand controls) once the label
-                  itself is down near its 24px floor. */}
-              <span
-                style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}
+          // Figures-audit #14: TWO lines per channel. One line (name + up to
+          // three selects + the Y2 pill) did not fit the Inspector's default
+          // 296px column: the name collapsed to a few characters and the
+          // error select clipped to "± symmet…". The name line now owns the
+          // full width; the controls share the line below it equally.
+          <div key={i} className="qzk-channel-row" style={{ marginBottom: 4 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <label
+                className="qz-check"
+                style={{ flex: 1, minWidth: 0, opacity: isData ? 1 : 0.6 }}
+                draggable
+                title={`${lab}${units[i] ? ` (${units[i]})` : ""} — drag onto the plot's X / Y / Y2 axis band to re-plot it there`}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(CHANNEL_DND, encodeChannelDrag({ datasetId: active.id, channel: i }));
+                  e.dataTransfer.effectAllowed = "copy";
+                }}
               >
-                {lab}
-                {units[i] ? ` (${units[i]})` : ""}
-              </span>
-            </label>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                <input type="checkbox" checked={visible} disabled={!isData} onChange={() => toggle(i)} />
+                {/* Still truncates (never overflows) for a genuinely long
+                    name; the full name is the row's tooltip. */}
+                <span
+                  style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}
+                >
+                  {lab}
+                  {units[i] ? ` (${units[i]})` : ""}
+                </span>
+              </label>
+              <Pill
+                active={y2.has(i)}
+                disabled={!visible}
+                title="Draw on the secondary (right) Y axis"
+                aria-label={`Draw ${lab} on the secondary Y axis`}
+                onClick={() => toggleAxis(i)}
+              >
+                Y2
+              </Pill>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 21 }}>
               <Select
-                style={{ maxWidth: 64, minWidth: 0 }}
+                style={{ flex: "1.2 1 0", minWidth: 0 }}
+                aria-label={`${lab} modeling type`}
                 value={active.channelTypes?.[i] ?? ""}
                 onChange={(e) =>
                   setChannelType(active.id, i, e.target.value === "" ? null : (e.target.value as ModelingType))
@@ -213,7 +230,8 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
                 ]}
               />
               <Select
-                style={{ maxWidth: 78, minWidth: 0 }}
+                style={{ flex: "0.9 1 0", minWidth: 0 }}
+                aria-label={`${lab} column role`}
                 value={role ?? ""}
                 onChange={(e) => changeRole(i, e.target.value === "" ? null : (e.target.value as ChannelRole))}
                 title="Column role — Data: plotted · Label: kept in the worksheet but off the plot · Ignore: also dropped from statistics"
@@ -225,9 +243,10 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
               />
               {visible && (
                 <Select
-                  style={{ maxWidth: 88, minWidth: 0 }}
-                  value={errKeys[i] == null ? "" : String(errKeys[i])}
-                  onChange={(e) => setErrKey(i, e.target.value === "" ? null : Number(e.target.value))}
+                  style={{ flex: "1.4 1 0", minWidth: 0 }}
+                  aria-label={`${lab} error column`}
+                  value={errorFor(i) == null ? "" : String(errorFor(i))}
+                  onChange={(e) => pickError(i, e.target.value === "" ? null : Number(e.target.value))}
                   title="Channel holding this series' ± error (draws error bars)"
                   options={[
                     { value: "", label: "± none" },
@@ -238,14 +257,6 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
                   ]}
                 />
               )}
-              <Pill
-                active={y2.has(i)}
-                disabled={!visible}
-                title="Draw on the secondary (right) Y axis"
-                onClick={() => toggleAxis(i)}
-              >
-                Y2
-              </Pill>
             </div>
           </div>
         );
@@ -257,6 +268,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
         max={100}
         step={5}
         onChange={(v) => setWaterfall(v / 100)}
+        onGestureStart={endHistoryRun}
         format={(v) => `${v}%`}
       />
       {/* Origin's waterfall X step: series i slides right by i x this % of the x-range.

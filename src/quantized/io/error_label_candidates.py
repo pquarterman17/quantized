@@ -72,8 +72,8 @@ class Candidate:
 
 # Suffixes that mark an asymmetric half, checked before token matching so
 # "err+" is not first read with "+" as part of the base.
-_PLUS = ["+", "up", "hi", "high", "upper"]
-_MINUS = ["-", "dn", "down", "lo", "low", "lower"]
+_PLUS = ["+", "up", "hi", "high", "upper", "plus", "pos"]
+_MINUS = ["-", "dn", "down", "lo", "low", "lower", "minus", "neg"]
 
 # The token table. New spellings are added HERE ONLY -- ranking and
 # selection (error_label_classify.py) are independent of this list, so

@@ -64,7 +64,7 @@ export default function ShapesCard() {
        *  button absorbs a Delete aimed at itself the same way: a focused
        *  button is not an editing target either. */}
       <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer}>
-        {shapes.map((sh) => (
+        {shapes.map((sh, i) => (
           <div key={sh.id} className="qz-meta-row" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             <span
               className="qz-k"
@@ -86,7 +86,7 @@ export default function ShapesCard() {
                 {sh.anchor === "page" ? " (page)" : ""}
               </span>
               <IconButton
-                aria-label="Remove shape"
+                aria-label={`Remove shape ${i + 1}`}
                 title="Remove"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -100,11 +100,11 @@ export default function ShapesCard() {
             {/* Editable x1/y1 → x2/y2 (GUI_INTERACTION #3 sub-item 4) — the
              *  non-mouse path for "move/reshape this shape"; see the module doc. */}
             <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <BufferedNumberField value={sh.x1} width={48} placeholder="x1" required onValue={setCoord(sh.id, "x1")} />
-              <BufferedNumberField value={sh.y1} width={48} placeholder="y1" required onValue={setCoord(sh.id, "y1")} />
+              <BufferedNumberField value={sh.x1} width={48} placeholder="x1" aria-label={`Shape ${i + 1} x1`} required onValue={setCoord(sh.id, "x1")} />
+              <BufferedNumberField value={sh.y1} width={48} placeholder="y1" aria-label={`Shape ${i + 1} y1`} required onValue={setCoord(sh.id, "y1")} />
               <span style={{ color: "var(--text-faint)" }}>→</span>
-              <BufferedNumberField value={sh.x2} width={48} placeholder="x2" required onValue={setCoord(sh.id, "x2")} />
-              <BufferedNumberField value={sh.y2} width={48} placeholder="y2" required onValue={setCoord(sh.id, "y2")} />
+              <BufferedNumberField value={sh.x2} width={48} placeholder="x2" aria-label={`Shape ${i + 1} x2`} required onValue={setCoord(sh.id, "x2")} />
+              <BufferedNumberField value={sh.y2} width={48} placeholder="y2" aria-label={`Shape ${i + 1} y2`} required onValue={setCoord(sh.id, "y2")} />
             </span>
           </div>
         ))}

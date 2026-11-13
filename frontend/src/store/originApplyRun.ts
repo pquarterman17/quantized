@@ -114,7 +114,9 @@ export function runOriginFigureApply(
   // singleton `set()` call further down — already scoped to "the focused
   // window" by construction — lands on this new window. Title comes from
   // the figure's own label (deduped against what's already showing), per
-  // item 9's "window title from figureLabel / doc name".
+  // item 9's "window title from figureLabel / doc name". (A Library OPEN
+  // asks for this itself when the focused window carries edits for other
+  // data — figures audit B1, `components/Library/libraryOpen.ts`.)
   if (opts?.newWindow) {
     const s = get();
     const title = dedupeWindowTitle(
@@ -154,7 +156,7 @@ export function runOriginFigureApply(
         ),
       }));
     } else {
-      get().addDataset(refreshed);
+      get().addDataset(refreshed, undefined, true); // the target window is already chosen above
       toast(`built overlay — ${overlay.labels.length} curves`, "ok");
     }
     if (targetId) {

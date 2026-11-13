@@ -440,6 +440,8 @@ describe("facetByColumn — the facet-partition applier", () => {
       "gadgetError",
       "hiddenChannels",
       "history",
+      "legendTitle", // figures audit B1: a genuine switch blanks the old dataset's title
+      "plotTitle", // figures audit B1: a genuine switch blanks the old dataset's title
       "plotWindows",
       "qfitBusy",
       "qfitError",
@@ -559,6 +561,8 @@ describe("breakAtGaps — the x-break applier", () => {
       "gadgetError",
       "hiddenChannels",
       "history",
+      "legendTitle", // figures audit B1: a genuine switch blanks the old dataset's title
+      "plotTitle", // figures audit B1: a genuine switch blanks the old dataset's title
       "plotWindows",
       "qfitBusy",
       "qfitError",
@@ -752,6 +756,7 @@ describe("applyOriginFigure — cross-book overlay branch", () => {
         "legendFrameXY",
         "legendStatic",
         "legendTitle",
+        "plotTitle", // figures audit B1: a genuine switch blanks the old dataset's title
         "plotWindows",
         "qfitBusy",
         "qfitError",
@@ -792,9 +797,10 @@ describe("applyOriginFigure — cross-book overlay branch", () => {
       expect(s.showGrid).toBe(false);
       expect(s.facetKey).toBeNull();
       // The reviewed sabotage this spec's key-set sibling catches: this
-      // branch must NOT carry along a `plotTitle` write, so the poisoned
-      // value survives untouched.
-      expect(s.plotTitle).toBe("STALE TITLE");
+      // branch must NOT carry along a `plotTitle` write of its own. The
+      // genuine dataset switch blanks the old title (figures audit B1), so
+      // anything but "" is a stray write.
+      expect(s.plotTitle).toBe("");
       expect(toastTexts()).toEqual(["built overlay — 2 curves"]);
     });
   });
@@ -910,6 +916,7 @@ describe("applyOriginFigure — single-layer branch", () => {
       "legendFrameXY",
       "legendStatic",
       "legendTitle",
+      "plotTitle", // figures audit B1: a genuine switch blanks the old dataset's title
       "plotWindows",
       "qfitBusy",
       "qfitError",
@@ -1003,6 +1010,7 @@ describe("applyOriginFigure — single-layer branch", () => {
       "legendFrameXY",
       "legendStatic",
       "legendTitle",
+      "plotTitle", // figures audit B1: a genuine switch blanks the old dataset's title
       "plotWindows",
       "qfitBusy",
       "qfitError",
@@ -1142,6 +1150,7 @@ describe("applyOriginFigure — double-Y branch (2 layers, same dataset)", () =>
       "legendFrameXY",
       "legendStatic",
       "legendTitle",
+      "plotTitle", // figures audit B1: a genuine switch blanks the old dataset's title
       "plotWindows",
       "qfitBusy",
       "qfitError",
@@ -1203,12 +1212,14 @@ describe("applyOriginFigure — spatial multi-panel branch", () => {
       "hiddenChannels",
       "history",
       "legendStatic",
+      "legendTitle", // figures audit B1: a genuine switch blanks the old dataset's title
       // F3: the spatial branch's `pageSetup: pageSetupFromDecoded(...)` write
       // resolves to `null` for this fixture (no decoded page) — the SAME
       // value as `pageSetup`'s own default, which is exactly why `poison()`
       // has to poison it non-default (see that function's audit comment).
       "pageSetup",
       "panelFit",
+      "plotTitle", // figures audit B1: a genuine switch blanks the old dataset's title
       "plotWindows",
       "qfitBusy",
       "qfitError",

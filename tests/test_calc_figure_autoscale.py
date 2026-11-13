@@ -82,9 +82,19 @@ def test_non_negative_counts_never_pad_below_zero(fig_ax: FigAx) -> None:
     ax = _draw(fig_ax, [10, 20, 30, 40], [0.0, 5e6, 2e7, 1e6])
     lo, hi = ax.get_ylim()
     assert lo == 0.0 and hi > 2e7
-    assert ax.get_xlim()[0] == pytest.approx(10 - 1.5)  # the x margin is untouched
+    # x spans exactly the data, as the canvas' autoScaleX (audit #11).
+    assert ax.get_xlim() == pytest.approx((10.0, 40.0))
 
 
-def test_data_across_zero_keep_matplotlibs_margin(fig_ax: FigAx) -> None:
+def test_data_across_zero_take_the_canvas_pad(fig_ax: FigAx) -> None:
+    # uPlot's rangeNum(-1, 1, 0.1, true): 10% of the span, snapped to 0.1.
     ax = _draw(fig_ax, [0, 1, 2], [-1.0, 0.0, 1.0])
-    assert ax.get_ylim() == pytest.approx((-1.1, 1.1))
+    assert ax.get_ylim() == pytest.approx((-1.2, 1.2))
+    assert ax.get_xlim() == pytest.approx((0.0, 2.0))
+
+
+def test_a_loop_takes_the_canvas_full_scan_view(fig_ax: FigAx) -> None:
+    # Non-ascending x (a hysteresis sweep): x padded 2%, y 10% unsnapped.
+    ax = _draw(fig_ax, [0, 10, 5, -10, 0], [0.0, 1.0, 0.5, -1.0, 0.0])
+    assert ax.get_xlim() == pytest.approx((-10.4, 10.4))
+    assert ax.get_ylim() == pytest.approx((-1.2, 1.2))

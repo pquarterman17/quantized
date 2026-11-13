@@ -146,3 +146,35 @@ describe("RichLabelInput accessibility (dialog-basics audit)", () => {
     expect(getInput()).not.toHaveAttribute("aria-invalid");
   });
 });
+
+describe("Origin escape toolbar (figures-audit #17)", () => {
+  it("the symbol palette's Origin superscript wraps the selection as \\+(...), outside $...$", () => {
+    const onCommit = vi.fn();
+    render(<RichLabelInput value="cm-3" onCommit={onCommit} />);
+    const input = getInput();
+    select(input, 2, 4); // "-3"
+    fireEvent.click(screen.getByRole("button", { name: "Insert symbol" }));
+    fireEvent.click(screen.getByRole("button", { name: "Origin superscript" }));
+    expect(onCommit).toHaveBeenCalledWith("cm\\+(-3)");
+  });
+
+  it("Origin subscript and Greek insert empty escapes at the caret with no selection", () => {
+    const onCommit = vi.fn();
+    render(<RichLabelInput value="M" onCommit={onCommit} />);
+    const input = getInput();
+    select(input, 1, 1);
+    fireEvent.click(screen.getByRole("button", { name: "Insert symbol" }));
+    fireEvent.click(screen.getByRole("button", { name: "Origin subscript" }));
+    expect(onCommit).toHaveBeenLastCalledWith("M\\-()");
+    expect(screen.getByRole("button", { name: "Origin Greek" })).toBeInTheDocument();
+  });
+
+  it("the mathtext entries still produce $...$ (both syntaxes stay)", () => {
+    const onCommit = vi.fn();
+    render(<RichLabelInput value="M" onCommit={onCommit} />);
+    select(getInput(), 1, 1);
+    fireEvent.click(screen.getByRole("button", { name: "Insert symbol" }));
+    fireEvent.click(screen.getByRole("button", { name: "alpha" }));
+    expect(onCommit).toHaveBeenLastCalledWith("M$\\alpha$");
+  });
+});

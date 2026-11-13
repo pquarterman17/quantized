@@ -101,7 +101,7 @@ describe("a lazy promise dialog whose chunk fails to load", () => {
     );
     let values!: Promise<ParamValues | null>;
     act(() => {
-      values = askParams("Rename", [{ key: "name", label: "Name", type: "text", default: "a" }]);
+      values = askParams("Rename", [{ key: "name", label: "Name", type: "text", default: "a" }], { confirmLabel: "Run" });
     });
     await expect(values).resolves.toBeNull();
     await flushRejection();
@@ -113,7 +113,7 @@ describe("a lazy promise dialog whose chunk fails to load", () => {
     fail.params = false;
     let retried!: Promise<ParamValues | null>;
     act(() => {
-      retried = askParams("Rename", [{ key: "name", label: "Name", type: "text", default: "a" }]);
+      retried = askParams("Rename", [{ key: "name", label: "Name", type: "text", default: "a" }], { confirmLabel: "Run" });
     });
     expect(await screen.findByRole("dialog")).toHaveAccessibleName("Rename");
     act(() => screen.getByRole("button", { name: "Run" }).click());

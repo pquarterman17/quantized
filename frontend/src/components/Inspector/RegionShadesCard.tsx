@@ -17,6 +17,7 @@ import { useRef, useState } from "react";
 
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import { useApp } from "../../store/useApp";
+import { Checkbox } from "../primitives/Checkbox";
 import { IconButton } from "../primitives/IconButton";
 import { NumberField } from "../primitives/NumberField";
 import { SegmentedControl } from "../primitives/SegmentedControl";
@@ -39,22 +40,30 @@ export default function RegionShadesCard() {
   const [y2, setY2] = useState("1");
   const [fill, setFill] = useState(DEFAULT_FILL);
   const [axis, setAxis] = useState<AxisChoice>("y");
+  // Audit #11: full plot height by default (y1/y2 = 0/1 vanished on a log axis).
+  const [fullHeight, setFullHeight] = useState(true);
   // Focus-safety anchor (lib/focusGuard) — a remove ✕ below unmounts its own
   // row; without this, focus falls to <body> and a follow-up Delete
   // keystroke deletes the ACTIVE DATASET instead (see focusGuard's doc).
   const containerRef = useRef<HTMLDivElement>(null);
 
   const coords = [x1, y1, x2, y2].map(Number);
-  const addReason: string | null = [x1, y1, x2, y2].some((v) => v.trim() === "")
+  const needed = fullHeight ? [x1, x2] : [x1, y1, x2, y2];
+  const addReason: string | null = needed.some((v) => v.trim() === "")
     ? "enter every coordinate"
-    : coords.some((n) => !Number.isFinite(n))
+    : needed.map(Number).some((n) => !Number.isFinite(n))
       ? "coordinates must be numbers"
       : null;
 
   const add = () => {
     if (addReason !== null) return;
-    const [nx1, ny1, nx2, ny2] = coords;
-    addRegionShade({ x1: nx1, y1: ny1, x2: nx2, y2: ny2, fill, ...(axis === "y2" ? { axis: 1 } : {}) });
+    // A full-height shade needs no y, but keeps a usable 0..1 span (blank or
+    // invalid y1 -> 0, y2 -> 1) so unticking "full height" later still shows
+    // it. `Number("")` is 0, so a blank field is caught by its TEXT.
+    const yOr = (text: string, fallback: number) => (text.trim() !== "" && Number.isFinite(Number(text)) ? Number(text) : fallback);
+    const [nx1, nx2] = [coords[0], coords[2]];
+    const [ny1, ny2] = [yOr(y1, 0), yOr(y2, 1)];
+    addRegionShade({ x1: nx1, y1: ny1, x2: nx2, y2: ny2, fill, ...(axis === "y2" ? { axis: 1 } : {}), ...(fullHeight ? { fullHeight: true } : {}) });
   };
 
   // Nudge one coordinate of one shade — the shared onValue body for all four
@@ -69,9 +78,9 @@ export default function RegionShadesCard() {
     if (v !== undefined) updateRegionShade(id, { [key]: v });
   };
 
-  const axisOptions: { value: AxisChoice; label: string }[] = [
-    { value: "y", label: "Y" },
-    { value: "y2", label: "Y2" },
+  const axisOptions: { value: AxisChoice; label: string; ariaLabel: string }[] = [
+    { value: "y", label: "Y", ariaLabel: "Y axis" },
+    { value: "y2", label: "Y2", ariaLabel: "Y2 axis" },
   ];
 
   return (
@@ -83,12 +92,12 @@ export default function RegionShadesCard() {
        *  button absorbs a Delete aimed at itself the same way: a focused
        *  button is not an editing target either. */}
       <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer}>
-        {regionShades.map((sh) => (
+        {regionShades.map((sh, i) => (
           <div key={sh.id} className="qz-meta-row" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             <span className="qz-k" style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <input
                 type="color"
-                aria-label="Fill color"
+                aria-label={`Shade ${i + 1} fill color`}
                 value={sh.fill}
                 onChange={(e) => updateRegionShade(sh.id, { fill: e.target.value })}
                 style={{ width: 20, height: 20, padding: 0, border: "1px solid var(--border)" }}
@@ -97,11 +106,12 @@ export default function RegionShadesCard() {
                 options={axisOptions}
                 value={axisOf(sh.axis)}
                 onChange={(next) => updateRegionShade(sh.id, { axis: next === "y2" ? 1 : 0 })}
+                aria-label={`Shade ${i + 1} axis`}
               />
               <span style={{ flex: 1 }} />
               <IconButton
                 title="Remove"
-                aria-label="Remove region shade"
+                aria-label={`Remove shade ${i + 1}`}
                 onClick={() => removeRowSafely(containerRef.current, () => removeRegionShade(sh.id))}
                 onKeyDown={absorbStrayDeleteOnContainer}
               >
@@ -109,21 +119,25 @@ export default function RegionShadesCard() {
               </IconButton>
             </span>
             <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <BufferedNumberField value={sh.x1} width={48} placeholder="x1" required onValue={setCoord(sh.id, "x1")} />
-              <BufferedNumberField value={sh.y1} width={48} placeholder="y1" required onValue={setCoord(sh.id, "y1")} />
+              <BufferedNumberField aria-label={`Shade ${i + 1} x1`} value={sh.x1} width={48} placeholder="x1" required onValue={setCoord(sh.id, "x1")} />
+              {!sh.fullHeight && <BufferedNumberField aria-label={`Shade ${i + 1} y1`} value={sh.y1} width={48} placeholder="y1" required onValue={setCoord(sh.id, "y1")} />}
               <span style={{ color: "var(--text-faint)" }}>→</span>
-              <BufferedNumberField value={sh.x2} width={48} placeholder="x2" required onValue={setCoord(sh.id, "x2")} />
-              <BufferedNumberField value={sh.y2} width={48} placeholder="y2" required onValue={setCoord(sh.id, "y2")} />
+              <BufferedNumberField aria-label={`Shade ${i + 1} x2`} value={sh.x2} width={48} placeholder="x2" required onValue={setCoord(sh.id, "x2")} />
+              {!sh.fullHeight && <BufferedNumberField aria-label={`Shade ${i + 1} y2`} value={sh.y2} width={48} placeholder="y2" required onValue={setCoord(sh.id, "y2")} />}
+              <Checkbox ariaLabel={`Shade ${sh.x1} to ${sh.x2} full height`} checked={!!sh.fullHeight} onChange={(on) => updateRegionShade(sh.id, { fullHeight: on || undefined })}>
+                full height
+              </Checkbox>
             </span>
           </div>
         ))}
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "end", marginTop: regionShades.length ? 6 : 0 }}>
-          <NumberField value={x1} width={48} placeholder="x1" onChange={setX1} />
-          <NumberField value={y1} width={48} placeholder="y1" onChange={setY1} />
+          <NumberField aria-label="New shade x1" value={x1} width={48} placeholder="x1" onChange={setX1} />
+          {!fullHeight && <NumberField aria-label="New shade y1" value={y1} width={48} placeholder="y1" onChange={setY1} />}
           <span style={{ color: "var(--text-faint)" }}>→</span>
-          <NumberField value={x2} width={48} placeholder="x2" onChange={setX2} />
-          <NumberField value={y2} width={48} placeholder="y2" onChange={setY2} />
+          <NumberField aria-label="New shade x2" value={x2} width={48} placeholder="x2" onChange={setX2} />
+          {!fullHeight && <NumberField aria-label="New shade y2" value={y2} width={48} placeholder="y2" onChange={setY2} />}
+          <Checkbox ariaLabel="New shade full height" checked={fullHeight} onChange={setFullHeight}>full height</Checkbox>
           <input
             type="color"
             aria-label="New shade fill color"
@@ -131,7 +145,7 @@ export default function RegionShadesCard() {
             onChange={(e) => setFill(e.target.value)}
             style={{ width: 24, height: 22, padding: 0, border: "1px solid var(--border)" }}
           />
-          <SegmentedControl<AxisChoice> options={axisOptions} value={axis} onChange={setAxis} />
+          <SegmentedControl<AxisChoice> options={axisOptions} value={axis} onChange={setAxis} aria-label="New shade axis" />
           <span title={addReason ?? "Add a filled region shade at these coordinates"}>
             <Button size="sm" disabled={addReason !== null} onClick={add}>
               Add

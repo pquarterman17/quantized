@@ -26,19 +26,19 @@ type Case = {
 
 const cases: Case[] = [
   {
-    name: "Remove region shade",
+    name: "Remove shade 1",
     card: () => <RegionShadesCard />,
     state: { regionShades: [{ id: "sh1", x1: 1, y1: 2, x2: 3, y2: 4, fill: "#336699" }] },
     count: () => useApp.getState().regionShades.length,
   },
   {
-    name: "Remove shape",
+    name: "Remove shape 1",
     card: () => <ShapesCard />,
     state: { shapes: [{ id: "s1", kind: "rect", x1: 1, y1: 2, x2: 3, y2: 4 }], selectedShapeId: null },
     count: () => useApp.getState().shapes.length,
   },
   {
-    name: "Remove line",
+    name: "Remove line X = 5",
     card: () => <RefLinesCard />,
     state: { refLines: [{ id: "ref-1", axis: "x", value: 5 }] },
     count: () => useApp.getState().refLines.length,
@@ -50,7 +50,7 @@ const cases: Case[] = [
     count: () => useApp.getState().refLines.length,
   },
   {
-    name: "Remove annotation",
+    name: "Remove annotation 1",
     card: () => <AnnotationsCard />,
     state: { annotations: [{ id: "a1", x: 1, y: 2, text: "peak" }] },
     count: () => useApp.getState().annotations.length,

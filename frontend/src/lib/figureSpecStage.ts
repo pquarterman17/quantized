@@ -19,6 +19,7 @@ import { buildPolarFigureSpec } from "./polarFigureSpec";
 import { windowCyclesSeriesStyles } from "./seriesStyleCycle";
 import type { Dataset } from "./types";
 import { readLiveWaterfallSpan } from "./waterfallOffset";
+import { withLiveTickSteps } from "./liveTickStepsSpec";
 import { withLiveLegendCorner } from "./liveLegendCorner";
 
 /** Stage copy/export entry point (F2.5b). Every Stage command that renders
@@ -120,7 +121,7 @@ export function buildStageFigureSpec(
   // markers / Step), read like `autoSeriesStyles` from the live store.
   const defaultTrace = st.defaultTrace;
   const defaultLineWidth = st.defaultLineWidth; // and its line width (`exportLineWidth`)
-  const spec = canRouteThroughDocument
+  const built = canRouteThroughDocument
     ? buildFigureSpecFromDocument(document, ds, stem, {
         fmt: o.fmt,
         style: o.style,
@@ -138,6 +139,8 @@ export function buildStageFigureSpec(
         defaultLineWidth,
       })
     : buildFigureSpec(s, ds, stem, { ...o, defaultTrace, defaultLineWidth }, { autoSeriesStyles, waterfallSpan, waterfallXSpan });
+  // An automatic tick increment marks the ticks the canvas drew (lib/liveTickSteps.ts).
+  const spec = withLiveTickSteps(built, ds.id);
   // The fit / baseline / peak overlays the canvas splices on after `count`
   // channels (lib/figureSpecOverlays.ts). Not on a frozen document: it renders
   // its own snapshot, not the rows the overlay was computed on.

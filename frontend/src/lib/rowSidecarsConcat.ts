@@ -6,7 +6,7 @@
 // are unchanged, and Rollup bundles this file with the lazy chunks that use
 // it. architecture.test.ts ("re-exported lazy half") keeps eager modules off it.
 
-import { FIT_ROW_IDENTITIES, PREVIEW_SOURCE_ROWS, ROW_INDEXED_SIDECARS } from "./rowSidecars";
+import { FIT_ROW_IDENTITIES, PREVIEW_SOURCE_ROWS, ROW_INDEXED_SIDECARS, sidecarBlank } from "./rowSidecars";
 
 /** A copy of `metadata` with every row-indexed sidecar key REMOVED — and
  *  `PREVIEW_SOURCE_ROWS` with them.
@@ -49,7 +49,8 @@ export interface SidecarPart {
  *
  *  Column names are UNIONED in first-appearance order, so a text column present
  *  in only some inputs survives, blank for the rows of the datasets that lack
- *  it. Each part contributes EXACTLY `rowCount` cells, padded with `""` — the
+ *  it. Each part contributes EXACTLY `rowCount` cells, padded with the key's
+ *  blank (`sidecarBlank`: `""`, or `null` for the imaginary parts) — the
  *  blanks are real (those rows genuinely have no cell), and exact-length parts
  *  are what keeps every later cell aligned with its own row. This is the one
  *  place that does NOT trailing-trim: trimming a part would shift every
@@ -79,6 +80,7 @@ export function concatRowSidecars(parts: readonly SidecarPart[]): Record<string,
       }
     }
     if (!names.length) continue;
+    const blank = sidecarBlank(key);
     const merged: Record<string, unknown[]> = {};
     for (const name of names) {
       const column: unknown[] = [];
@@ -89,9 +91,9 @@ export function concatRowSidecars(parts: readonly SidecarPart[]): Record<string,
             ? (raw as Record<string, unknown>)
             : {};
         const cells = Array.isArray(map[name]) ? (map[name] as unknown[]) : [];
-        for (let r = 0; r < Math.max(0, part.rowCount); r += 1) column.push(cells[r] ?? "");
+        for (let r = 0; r < Math.max(0, part.rowCount); r += 1) column.push(cells[r] ?? blank);
       }
-      if (column.some((cell) => cell !== "")) merged[name] = column;
+      if (column.some((cell) => cell !== blank)) merged[name] = column;
     }
     if (Object.keys(merged).length) out[key] = merged;
   }

@@ -12,6 +12,7 @@ export function SliderRow({
   onChange,
   format,
   "aria-label": ariaLabel,
+  onGestureStart,
 }: {
   label: ReactNode;
   value: number;
@@ -22,6 +23,9 @@ export function SliderRow({
   format?: (value: number) => ReactNode;
   /** Overrides the visible `label` as the slider's name when that is terse ("px"). */
   "aria-label"?: string;
+  /** Called as a drag or a keyboard session begins (pointer-down, focus) --
+   *  where a caller that coalesces its undo steps ends the previous run. */
+  onGestureStart?: () => void;
 }) {
   // The visible label names the slider unless an aria-label overrides it.
   const labelId = useId();
@@ -36,6 +40,8 @@ export function SliderRow({
         max={max}
         step={step}
         value={value}
+        onPointerDown={onGestureStart}
+        onFocus={onGestureStart}
         onChange={(e) => onChange?.(Number(e.target.value))}
       />
       <span className="qz-v">{format ? format(value) : value}</span>

@@ -86,7 +86,7 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
     // "on for the whole page"). A facet panel would grey too (U2), though
     // `spatialPanelFigure` never emits `.facets` today.
     GREYSCALE_FIELD,
-  ]);
+  ], { confirmLabel: "Export" });
   if (!params) return;
   const controller = new AbortController();
   const opId = beginOp("Exporting page…", () => controller.abort());

@@ -97,6 +97,15 @@ beforeEach(() => {
   cancelPublicationPreview.mockReset();
 });
 
+describe("Publication Preview control names (review finding)", () => {
+  it("names the Format and Style pickers and the DPI field", () => {
+    render(<FigureBuilderView />);
+    expect(screen.getByRole("combobox", { name: "Figure format" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Figure style" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Figure DPI (raster)" })).toBeInTheDocument();
+  });
+});
+
 describe("Publication Preview role cues", () => {
   it("names the surface and explains that it does not edit the Stage plot", () => {
     render(<FigureBuilderView />);
@@ -140,6 +149,28 @@ describe("Publication Preview role cues", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(cancelPublicationPreview).toHaveBeenCalledTimes(2);
     expect(figureState.cancel).not.toHaveBeenCalled();
+  });
+
+  it("offers style-template Save/Apply on a canonical draft too (figures-audit B2)", () => {
+    const saveStyleTemplate = vi.fn();
+    const applyStyleTemplate = vi.fn();
+    vi.mocked(useFigureBuilder).mockReturnValue({
+      ...figureState,
+      canonical: true,
+      documentName: "Device figure",
+      publicationTarget: "window",
+      graphTemplates: [{ name: "Lab style", style: "default", overrides: null, seriesStyles: null }],
+      saveStyleTemplate,
+      applyStyleTemplate,
+    } as unknown as ReturnType<typeof useFigureBuilder>);
+    render(<FigureBuilderView />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Style template name" }), { target: { value: "Mine" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save style template" }));
+    expect(saveStyleTemplate).toHaveBeenCalledWith("Mine");
+    fireEvent.change(screen.getByRole("combobox", { name: "Apply style template" }), { target: { value: "Lab style" } });
+    expect(applyStyleTemplate).toHaveBeenCalledWith("Lab style");
+    // The legacy-only "Save as figure" row stays legacy-only.
+    expect(screen.queryByText("Save as figure")).toBeNull();
   });
 
   it("keeps Export/Apply/Cancel in a sticky row, not scrolled away with the settings", () => {

@@ -302,7 +302,7 @@ describe("ImportWizardPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Save as filter…" }));
     await waitFor(() => expect(screen.getByText("Save as filter")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(saveImportFilterMock).toHaveBeenLastCalledWith(
       "run1", "*.dat", expect.objectContaining({ roles: ["x", "categorical"] }),
     ));
@@ -338,7 +338,7 @@ describe("ImportWizardPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Save as filter…" }));
     await waitFor(() => expect(screen.getByText("Save as filter")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(saveImportFilterMock).toHaveBeenCalledWith("run1", "*.dat", SETTINGS),

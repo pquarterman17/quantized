@@ -142,7 +142,8 @@ export default function Inspector() {
 
       <ShapesCard />
 
-      <SeriesStyleCard active={active} />
+      {/* Line/Scatter/marker controls style XY curves; a map draws none (figures audit #18). */}
+      {stageTab !== "map" && <SeriesStyleCard active={active} />}
 
       <MacroCard />
     </aside>

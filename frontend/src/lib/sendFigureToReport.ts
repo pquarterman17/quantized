@@ -172,7 +172,7 @@ async function askSendToReport(
   const openIdx = reports.findIndex((r) => r.id === s().openReportId);
   const params = await askParams(
     "Send figure to report",
-    sendToReportFields(labels, openIdx >= 0 ? labels[openIdx] : NEW_REPORT, captionDefault, defaultReportName),
+    sendToReportFields(labels, openIdx >= 0 ? labels[openIdx] : NEW_REPORT, captionDefault, defaultReportName), { confirmLabel: "Send" },
   );
   if (!params) return null;
   const pick = labels.indexOf(String(params.target));

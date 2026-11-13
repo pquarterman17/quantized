@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { ERROR_CAP_HALF_PX } from "./uplotErrorRange";
 import type uPlot from "uplot";
 
 import type { ColorScatterSpec } from "./colorscatter";
@@ -25,6 +26,14 @@ import {
   regionShadePlugin,
 } from "./uplotOverlays";
 import type { RegionShade } from "./types";
+
+/** The module under test starts a lazy import at load; once that chunk has
+ *  evaluated and one macrotask has passed, its `.then` has installed it. */
+const lazyChunkLoaded = async () => {
+  await import("./uplotRegionShades");
+  await new Promise((r) => setTimeout(r, 0));
+};
+beforeAll(lazyChunkLoaded); // the lazy chunk the module under test loads at import
 
 /** Minimal uPlot stub: a recording 2D context + a linear valToPos. */
 function fakeU() {
@@ -452,6 +461,12 @@ describe("errorBarsPlugin (item 3: cap width defaults to zero)", () => {
 
   it("draws no caps when capHalfWidth is explicitly zero (same as the default)", () => {
     expect(draw(0)).toHaveLength(2);
+  });
+
+  it("the interactive plot's cap matches the export's matplotlib capsize=2 (figures-audit #10)", () => {
+    // 2 pt each side at 96/72 px per pt ~ 2.7 px; zero was the screen/export mismatch.
+    expect(ERROR_CAP_HALF_PX).toBeGreaterThan(2);
+    expect(ERROR_CAP_HALF_PX).toBeLessThanOrEqual(4);
   });
 });
 

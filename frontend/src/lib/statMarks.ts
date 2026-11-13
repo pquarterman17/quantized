@@ -75,10 +75,17 @@ export function resolveStatMarks(mode: StatMode, m: StatMarks | null | undefined
 }
 
 /** Error-bar half-width about the mean from (SE, n): `se` itself, `sd` =
- *  SE*sqrt(n), `ci95` = t(0.975, n-1)*SE. NaN = no bar (kind "none", n < 2,
- *  or a non-finite SE). Bar mode's per-series stats carry exactly (mean, SE,
- *  n), so this is the one formula both its screen and its export use. */
-export function errorHalfWidth(kind: StatErrorBars, sem: number, n: number): number {
+ *  SE*sqrt(n), `ci95` = t(0.975, n-1)*SE, `column` = the cell's bound error
+ *  column value `err`. NaN = no bar (kind "none", n < 2 or a non-finite SE
+ *  for a statistic, no column value for "column"). Bar mode's per-series
+ *  stats carry exactly (mean, SE, n, err), so this is the one formula both
+ *  its screen and its export use. */
+export function errorHalfWidth(kind: StatErrorBars, sem: number, n: number, err?: number): number {
+  // Figures-audit #8: a one-row cell has no spread to estimate, so the bound
+  // error COLUMN's value (a summary table's own SD/SE) is its only meaningful
+  // bar. It is its own kind ("from column"), so the error-bar picker names
+  // what is drawn: a statistic never silently draws the column instead.
+  if (kind === "column") return err !== undefined && Number.isFinite(err) ? err : NaN;
   if (kind === "none" || n < 2 || !Number.isFinite(sem)) return NaN;
   if (kind === "se") return sem;
   if (kind === "sd") return sem * Math.sqrt(n);
@@ -98,7 +105,14 @@ export function errorBounds(b: BoxStat, kind: StatErrorBars): [number, number] |
   return Number.isFinite(half) ? [b.mean - half, b.mean + half] : null;
 }
 
-const ERROR_BAR_NOTES: Record<Exclude<StatErrorBars, "none">, string> = {
+/** The box / strip / violin request's `error_bars`: those modes never draw
+ *  a column (`Stage/statStageMarks.withErrorColumn` already resolves a stored
+ *  "column" to the mode's default), so it can only mean "none" there. */
+export function categoricalErrorWire(kind: StatErrorBars): Exclude<StatErrorBars, "column"> {
+  return kind === "column" ? "none" : kind;
+}
+
+const ERROR_BAR_NOTES: Record<Exclude<StatErrorBars, "none" | "column">, string> = {
   sd: "Error bars: SD",
   se: "Error bars: SE of the mean",
   ci95: "Error bars: 95% CI of the mean",
@@ -109,8 +123,13 @@ const ERROR_BAR_NOTES: Record<Exclude<StatErrorBars, "none">, string> = {
  *  export's `error_note` (`calc.figure_group_notes.footnote_text` stacks it
  *  above the caveat), so screen and figure cannot word it differently. ASCII
  *  only, like `groupAxis.balanceCaveat` — matplotlib typesets it. */
-export function errorBarNote(kind: StatErrorBars): string | null {
-  return kind === "none" ? null : ERROR_BAR_NOTES[kind];
+export function errorBarNote(kind: StatErrorBars, fromColumn: string | null = null): string | null {
+  if (kind === "none") return null;
+  // Figures-audit #8: bars whose whiskers come from a bound error column say
+  // which column, not a statistic the figure never computed. Only the
+  // "column" kind draws the column, so only it names one.
+  if (kind === "column") return fromColumn ? `Error bars: ${fromColumn} (error column)` : "Error bars: from the error column";
+  return ERROR_BAR_NOTES[kind];
 }
 
 /** Whether a value is outside the group's Tukey whiskers (a box flier). */

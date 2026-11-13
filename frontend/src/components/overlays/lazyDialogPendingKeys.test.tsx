@@ -125,8 +125,8 @@ describe("a replaced ask settles instead of hanging", () => {
   it("params: the replaced request resolves null", async () => {
     let first!: Promise<ParamValues | null>;
     act(() => {
-      first = askParams("First", []);
-      void askParams("Second", []);
+      first = askParams("First", [], { confirmLabel: "OK" });
+      void askParams("Second", [], { confirmLabel: "OK" });
     });
     await expect(first).resolves.toBeNull();
   });

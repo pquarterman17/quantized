@@ -114,7 +114,7 @@ function windowFrame(page: Page, title: string): Locator {
  *  showing, instead of assuming a toggle from a possibly-stale prior step. */
 async function openTitlesCard(page: Page): Promise<Locator> {
   const titlesCard = page.locator(".qz-card", { hasText: "Titles & labels" });
-  const yLabelInput = titlesCard.getByPlaceholder("auto").nth(1);
+  const yLabelInput = titlesCard.getByRole("textbox", { name: "Plot Y label" });
   if (!(await yLabelInput.isVisible())) {
     await page.getByText("Titles & labels").click();
   }

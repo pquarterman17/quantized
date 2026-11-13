@@ -42,6 +42,19 @@ describe("withLiveLegendCorner", () => {
     expect(withLiveLegendCorner(spec("auto")).overrides?.legend?.loc).toBe("auto");
   });
 
+  // Figures audit #12: the export re-resolves "auto" instead of freezing the
+  // screen's sticky first pick, and reads the stage that draws the legend.
+  it("uses the freshly resolved corner over the sticky on-screen one", () => {
+    stage("ne", "auto").dataset.lcFresh = "sw";
+    expect(withLiveLegendCorner(spec("auto")).overrides?.legend?.loc).toBe("lower left");
+  });
+
+  it("reads the stage with the auto legend, not the first stage in the DOM", () => {
+    stage("ne", "out"); // e.g. a background Statistics window's stage, earlier in the DOM
+    stage("se", "auto");
+    expect(withLiveLegendCorner(spec("auto")).overrides?.legend?.loc).toBe("lower right");
+  });
+
   it("is applied by the Stage export's spec builder", () => {
     stage("sw", "auto");
     useApp.setState({ plotWindows: [], focusedWindowId: null, legendPos: "auto", showLegend: true, yKeys: null, xKey: null });

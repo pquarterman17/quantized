@@ -2,9 +2,11 @@
 // detection half) and `mapdataFetch.ts` (lazy fetch/grid half).
 import { describe, expect, it, vi } from "vitest";
 
-import { is2DMap } from "./mapdata";
+import { canRenderMap, is2DMap } from "./mapdata";
 import {
   buildMapColumns,
+  defaultMapKeys,
+  mapColumns,
   fetchMap,
   hasQSpace,
   regridNearest,
@@ -180,5 +182,52 @@ describe("rsmAxisKeys", () => {
   it("returns null when required columns are missing", () => {
     expect(rsmAxisKeys(["2Theta", "Omega", "Intensity"], "Omega", "q")).toBeNull();
     expect(rsmAxisKeys(["Qx", "Qz"], "Omega", "q")).toBeNull(); // no Intensity
+  });
+});
+
+describe("map columns + tab gating (figures-audit #13)", () => {
+  // Plain long-form X,Y,Z CSV: X is the file's first column, so it lands in
+  // `time`, leaving only two channels.
+  function xyz(): DataStruct {
+    const time: number[] = [];
+    const values: number[][] = [];
+    for (const x of [0, 1, 2]) for (const y of [0, 1, 2]) {
+      time.push(x);
+      values.push([y, x * 10 + y]);
+    }
+    return { time, values, labels: ["Y", "Z"], units: ["", ""], metadata: { x_column_name: "X" } };
+  }
+
+  it("offers a map for long-form XYZ even with only two channels, picking the first column too", () => {
+    expect(canRenderMap(xyz())).toBe(true);
+    const cols = mapColumns(xyz());
+    expect(cols.labels).toEqual(["X", "Y", "Z"]);
+    expect(cols.values[4]).toEqual([1, 1, 11]);
+    expect(defaultMapKeys(xyz())).toEqual([0, 1, 2]);
+  });
+
+  it("starts an i,X,Y,Z file (row-index first column) on X/Y/Z, not i/X/Y", () => {
+    const d = xyz();
+    const idx: DataStruct = { ...d, time: d.time.map((_, k) => k), values: d.values.map((r, k) => [d.time[k], ...r]), labels: ["X", "Y", "Z"], units: ["", "", ""] };
+    expect(canRenderMap(idx)).toBe(true);
+    expect(defaultMapKeys(idx)).toEqual([1, 2, 3]);
+  });
+
+  it("does not offer a map for a 1-D sweep (swept axis + continuous signals)", () => {
+    const n = 20;
+    const sweep: DataStruct = {
+      time: Array.from({ length: n }, (_, i) => i * 0.1),
+      values: Array.from({ length: n }, (_, i) => [Math.sin(i), Math.cos(i), i * i]),
+      labels: ["S0", "S1", "S2"],
+      units: ["", "", ""],
+      metadata: {},
+    };
+    expect(canRenderMap(sweep)).toBe(false);
+  });
+
+  it("keeps a parser-flagged 2-D map's own channels (its ROI tools index them)", () => {
+    const rsm: DataStruct = { ..._ds(), metadata: { is2D: true } };
+    expect(canRenderMap(rsm)).toBe(true);
+    expect(mapColumns(rsm)).toBe(rsm);
   });
 });

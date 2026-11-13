@@ -10,6 +10,7 @@ export function Checkbox({
   children,
   disabled = false,
   title,
+  ariaLabel,
 }: {
   checked: boolean;
   onChange?: (checked: boolean) => void;
@@ -18,11 +19,14 @@ export function Checkbox({
   /** Optional hover hint on the whole label (input + text) — e.g. a
    *  behavior note too long for the visible label itself. */
   title?: string;
+  /** Overrides the accessible name when the visible text repeats per row. */
+  ariaLabel?: string;
 }) {
   return (
     <label className={clsx("qz-check", disabled && "qz-disabled")} title={title}>
       <input
         type="checkbox"
+        aria-label={ariaLabel}
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange?.(e.target.checked)}

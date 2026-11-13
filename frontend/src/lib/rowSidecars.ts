@@ -28,16 +28,28 @@ import type { Dataset } from "./types";
  *  origin_text_columns`). `origin_report_sheets` is the same
  *  `{name: [cell per row]}` shape — Origin report-sheet reference strings
  *  (`io/origin_project/opj.py`) — and was missed by the first version of this
- *  fix, which asserted in its own comment that nothing else was row-indexed. */
+ *  fix, which asserted in its own comment that nothing else was row-indexed.
+ *  `origin_complex_imaginary` is the same shape once more: the imaginary part
+ *  of each complex Origin column, one number (or null) per row. */
 export const ROW_INDEXED_SIDECARS = [
   "text_columns",
   "origin_text_columns",
   "origin_report_sheets",
+  "origin_complex_imaginary",
 ] as const;
+
+/** What a gap in one row-indexed sidecar reads as. The text sidecars hold
+ *  strings, so a gap is `""`, the blank the worksheet renders. The imaginary
+ *  parts are NUMBERS, one per row, where the backend writes a blank as `null`
+ *  (JSON's NaN); a `""` there would be a string in a numeric column. */
+export function sidecarBlank(key: string): "" | null {
+  return key === "origin_complex_imaginary" ? null : "";
+}
 
 /** Slice ONE column's cells to `rowIndexes`.
  *
- *  A gap inside the kept range yields `""` — a blank, which is what the
+ *  A gap inside the kept range yields `blank` (`sidecarBlank`: `""` for the
+ *  text sidecars) — a blank, which is what the
  *  worksheet renders for a missing cell — rather than `undefined`, which would
  *  serialize to `null` and read back as a hole. `??` not `||`, so a legitimate
  *  `0` or empty-string cell survives as itself.
@@ -48,12 +60,16 @@ export const ROW_INDEXED_SIDECARS = [
  *  edit — and `insertRows` at the end would otherwise append a blank cell to
  *  every text column forever. This also gives the whole module one checkable
  *  invariant: a sliced column is never longer than it needs to be. */
-function sliceCells(cells: readonly unknown[], rowIndexes: readonly number[]): unknown[] {
+function sliceCells(
+  cells: readonly unknown[],
+  rowIndexes: readonly number[],
+  blank: "" | null,
+): unknown[] {
   const hit = (i: number): boolean => i >= 0 && i < cells.length;
   let end = rowIndexes.length;
   while (end > 0 && !hit(rowIndexes[end - 1])) end -= 1;
   const out: unknown[] = [];
-  for (let i = 0; i < end; i += 1) out.push(cells[rowIndexes[i]] ?? "");
+  for (let i = 0; i < end; i += 1) out.push(cells[rowIndexes[i]] ?? blank);
   return out;
 }
 
@@ -63,7 +79,7 @@ function sliceCells(cells: readonly unknown[], rowIndexes: readonly number[]): u
  *  UNTOUCHED: without the `Array.isArray` rejection `Object.entries` walks an
  *  array's indices and hands back an object, silently reshaping data we failed
  *  to understand instead of leaving it alone. */
-function sliceOneSidecar(raw: unknown, rowIndexes: readonly number[]): unknown {
+function sliceOneSidecar(raw: unknown, rowIndexes: readonly number[], blank: "" | null): unknown {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
   const out: Record<string, unknown> = {};
   for (const [name, cells] of Object.entries(raw as Record<string, unknown>)) {
@@ -71,7 +87,7 @@ function sliceOneSidecar(raw: unknown, rowIndexes: readonly number[]): unknown {
       out[name] = cells;
       continue;
     }
-    const sliced = sliceCells(cells, rowIndexes);
+    const sliced = sliceCells(cells, rowIndexes, blank);
     // A column the slice emptied is REMOVED, not kept as `[]`. Keeping it made
     // the key non-empty for no rows, and several readers test only for
     // presence: `columnmeta.hasOriginReportSheets` gates the worksheet's "see
@@ -261,7 +277,7 @@ export function sliceRowSidecars(
     return out;
   }
   for (const key of ROW_INDEXED_SIDECARS) {
-    if (key in out) out[key] = sliceOneSidecar(out[key], rowIndexes);
+    if (key in out) out[key] = sliceOneSidecar(out[key], rowIndexes, sidecarBlank(key));
   }
   return out;
 }

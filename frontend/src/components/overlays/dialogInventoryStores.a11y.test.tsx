@@ -16,6 +16,8 @@ import ReimportAllDialog from "./ReimportAllDialog";
 import SeparateWorksheetsDialog from "./SeparateWorksheetsDialog";
 import SplitDatasetDialog from "./SplitDatasetDialog";
 import WorkbookPropertiesDialog from "../Library/WorkbookPropertiesDialog";
+import FigureDialogs from "./figuredialogs/FigureDialogs";
+import { openFigureDialog, useFigureDialog } from "../../store/figureDialogs";
 import { auditDialog } from "../../test/dialogA11y";
 import { captureRecipe } from "../../lib/plotRecipe";
 import { defaultPlotView } from "../../lib/plotview";
@@ -95,6 +97,17 @@ beforeEach(() => {
 });
 
 describe("dialog basics — store-driven dialogs", () => {
+  it("Axis dialog and Plot type gallery (figures audit #6/#8)", async () => {
+    useFigureDialog.setState({ open: null });
+    const user = userEvent.setup();
+    const opener = await openWith(<FigureDialogs />, () => openFigureDialog({ kind: "axis", axis: "x" }));
+    expect(await auditDialog(dialog, { opener, user })).toEqual([]);
+    await act(async () => {
+      openFigureDialog({ kind: "plotType" });
+    });
+    expect(await auditDialog(dialog, { opener, user })).toEqual([]);
+  });
+
   it("Split dataset", async () => {
     const user = userEvent.setup();
     const opener = await openWith(<SplitDatasetDialog />, () => useApp.setState({ splitDialogTargetId: "d1" }));

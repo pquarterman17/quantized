@@ -78,9 +78,9 @@ describe("captureRecipe", () => {
   it("builds one signature entry per MAPPED channel only, never per raw index", () => {
     const r = capture();
     expect(r.signature).toEqual([
-      { id: "x0", role: "x", label: "2theta", unit: "deg", errorRole: "value", aliases: [] },
-      { id: "y0", role: "y", label: "Intensity", unit: "cps", errorRole: "value", aliases: [] },
-      { id: "error0", role: "error", label: "Ierr", unit: "cps", errorRole: "error-y", aliases: [] },
+      { id: "x0", role: "x", label: "2theta", unit: "deg", errorRole: "value", aliases: [], position: 0 },
+      { id: "y0", role: "y", label: "Intensity", unit: "cps", errorRole: "value", aliases: [], position: 1 },
+      { id: "error0", role: "error", label: "Ierr", unit: "cps", errorRole: "error-y", aliases: [], position: 2 },
     ]);
   });
 

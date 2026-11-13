@@ -20,10 +20,17 @@ from quantized.calc.figure_colorscatter import MARKER_CODES as _MARKER
 from quantized.calc.figure_colorscatter import (
     draw_color_scatter as _draw_color_scatter,
 )
+from quantized.calc.figure_fonts import effective_style, style_rc
 from quantized.calc.figure_greyscale import apply_greyscale
 from quantized.calc.figure_hitmap import collect_map as _collect_map_impl
 from quantized.calc.figure_inset import apply_inset
 from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_layout import apply_figure_layout
+from quantized.calc.figure_legend_order import (
+    draw_legend,
+    preset_legend_kwargs,
+    tag_series_slots,
+)
 from quantized.calc.figure_overrides import _apply_overrides, _validate_overrides
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
@@ -115,42 +122,6 @@ def _apply_fill(
                 ax.fill_between(xv[:n], yv[:n], other[:n], color=color, alpha=_FILL_ALPHA)
 
 
-def style_rc(st: FigureStyle, ov: Mapping[str, Any]) -> dict[str, Any]:
-    """The rc-param dict a preset (+ optional font/tick overrides) resolves to.
-
-    Scoped to one render via ``figure_render.render_scope`` by the callers (the
-    single-figure renderer below and the page composer in ``figure_page``).
-    The named font is given a generic fallback so matplotlib stays silent when
-    Helvetica/Arial/Times aren't installed on the host.
-    """
-    fallback = "DejaVu Serif" if st.font_generic == "serif" else "DejaVu Sans"
-    font_size = float(ov.get("font_size", st.font_size))
-    font_name = str(ov.get("font_name", st.font_name))
-    tick_dir = str(ov.get("ticks", {}).get("dir", st.tick_dir))
-    rc: dict[str, Any] = {
-        "font.family": st.font_generic,
-        f"font.{st.font_generic}": [font_name, fallback],
-        "font.size": font_size,
-        "axes.labelsize": font_size,
-        "axes.titlesize": float(ov.get("title_size", st.title_font_size)),
-        "xtick.labelsize": font_size,
-        "ytick.labelsize": font_size,
-        "xtick.direction": tick_dir,
-        "ytick.direction": tick_dir,
-        # Mirror ticks onto the top/right spines whenever the box is drawn
-        # (the journal "closed box, inward ticks on all four sides" look) --
-        # matplotlib's own default leaves top/right bare even with the full
-        # rectangular border, which reads as an unfinished box.
-        "xtick.top": st.box_on,
-        "ytick.right": st.box_on,
-    }
-    tick_len = ov.get("ticks", {}).get("len")
-    if tick_len is not None:
-        rc["xtick.major.size"] = float(tick_len)
-        rc["ytick.major.size"] = float(tick_len)
-    return rc
-
-
 def draw_series_axes(
     fig: Any,
     ax: Any,
@@ -221,6 +192,7 @@ def draw_series_axes(
         _apply_fill(ax, xv, yv, series, i, spec, line.get_color())
         artists.append(line)
     apply_error_bars(ax, xv, series, error_spans, artists)
+    tag_series_slots(artists)  # the legend's waterfall row order (figure_legend_order)
     resolved_x_scale = resolve_axis_scale(x_scale, x_log)
     resolved_y_scale = resolve_axis_scale(y_scale, y_log)
     apply_axis_scale(ax, "x", resolved_x_scale)
@@ -239,11 +211,7 @@ def draw_series_axes(
     if len(series) > 1 and "legend" not in ov:
         # legend_location is a plain str (FigureStyle field); every preset's
         # value is one of matplotlib's accepted location strings.
-        ax.legend(
-            frameon=st.legend_box,
-            fontsize=st.legend_font_size,
-            loc=st.legend_location,
-        )
+        draw_legend(ax, ov, preset_legend_kwargs(st))
     if st.grid_alpha > 0:
         ax.grid(True, which="major", alpha=st.grid_alpha)
         ax.grid(True, which="minor", alpha=st.grid_alpha * 0.4)
@@ -346,16 +314,18 @@ def _render_impl(
         raise ValueError(f"fmt must be one of {_FORMATS}")
     if greyscale:
         series_styles = apply_greyscale(series_styles, len(series))
-    st = figure_style(style)
     ov = dict(overrides or {})
     _validate_overrides(ov)
+    # Typography overrides folded into the preset once (calc.figure_fonts):
+    # every downstream reader of st's font/title/legend sizes agrees.
+    st = effective_style(figure_style(style), ov)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
     y2_mask_list = list(y2_mask) if y2_mask is not None else [False] * len(series)
     if len(y2_mask_list) != len(series):
         raise ValueError("y2_mask must have the same length as series")
     has_y2 = any(y2_mask_list)
 
-    # render_scope scopes typography to this render (see style_rc) and holds
+    # render_scope scopes typography to this render (see figure_fonts.style_rc) and holds
     # the process-wide render lock (see calc.figure_render).
     rc = style_rc(st, ov)
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
@@ -456,8 +426,8 @@ def _render_impl(
                 x_step=x_step,
                 y_step=y_step,
             )
-        if not ov.get("margins"):
-            fig.tight_layout()
+        # Page margins are OUTER padding around a tight layout (calc.figure_layout).
+        apply_figure_layout(fig, ov)
         if collect_map:
             return _collect_map_impl(
                 fig,
@@ -466,6 +436,7 @@ def _render_impl(
                 dpi=resolved_dpi,
                 x_scale=resolve_axis_scale(x_scale, x_log),
                 y_scale=resolve_axis_scale(y_scale, y_log),
+                transparent=transparent,
             )
         return savefig_bytes(
             fig, fmt, dpi=resolved_dpi, transparent=transparent, svg_text_as_paths=svg_text_as_paths

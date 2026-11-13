@@ -37,7 +37,18 @@ import type { DataStruct } from "./types";
 
 /** Origin's own designation for a worksheet column — the exact strings
  *  `windows.py`'s `_DESIGNATION` enum emits (case included). */
-export type OriginDesignation = "X" | "Y" | "Y-error" | "X-error" | "label" | "disregard" | "Z";
+export type OriginDesignation =
+  | "X"
+  | "Y"
+  | "Y-error"
+  | "X-error"
+  | "label"
+  | "disregard"
+  | "Z"
+  // Origin's factor designations (statistics tools): which group / which
+  // subject a row belongs to. Never a plotted series.
+  | "group"
+  | "subject";
 
 /** Every designation string the backend can emit (module doc). Exported so
  *  a test can pin it against the backend's own enum from one shared fixture
@@ -50,6 +61,8 @@ export const ORIGIN_DESIGNATIONS: readonly OriginDesignation[] = [
   "label",
   "disregard",
   "Z",
+  "group",
+  "subject",
 ];
 
 const DESIGNATIONS: ReadonlySet<string> = new Set<OriginDesignation>(ORIGIN_DESIGNATIONS);

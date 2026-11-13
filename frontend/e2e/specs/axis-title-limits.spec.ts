@@ -23,7 +23,7 @@ test("edit the X axis label and set explicit X/Y limits", async ({ page }) => {
   // `.first()` silently resolves to the wrong, invisible input).
   await page.getByText("Titles & labels").click();
   const titlesCard = page.locator(".qz-card", { hasText: "Titles & labels" });
-  const xLabelInput = titlesCard.getByPlaceholder("auto").first();
+  const xLabelInput = titlesCard.getByRole("textbox", { name: "Plot X label" });
   await xLabelInput.fill("Elapsed time");
   await xLabelInput.blur();
 

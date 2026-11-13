@@ -211,10 +211,9 @@ describe("resolveRecipe — alias resolution", () => {
 });
 
 describe("resolveRecipe — technique scope", () => {
-  it("\"generic\" recipes never match, even against another generic dataset", () => {
+  it("a technique recipe still refuses a generic dataset", () => {
     const ds = xrdDataset({ data: { ...xrdDataset().data, metadata: {} } }); // no technique tag -> "generic"
-    const recipe: PlotRecipe = { ...xrdRecipe(), technique: "generic" };
-    const res = resolveRecipe(recipe, ds);
+    const res = resolveRecipe(xrdRecipe(), ds);
     expect("refused" in res).toBe(true);
     if ("refused" in res) expect(res.refused).toMatch(/generic/);
   });
@@ -445,5 +444,69 @@ describe("resolveRecipe — seriesStyles/seriesOrder/hiddenChannels re-key", () 
     expect(res.resolved.visual.refLines).toEqual([{ id: "rl1", axis: "y", value: 0 }]);
     res.resolved.visual.refLines[0].value = 99;
     expect(recipe.visual.refLines[0].value).toBe(0); // untouched
+  });
+});
+
+/** A plain CSV: no technique tag, the first file column is the x/time axis. */
+function csv(labels: string[], name = "a.csv"): Dataset {
+  return {
+    id: name,
+    name,
+    data: {
+      time: [0, 1, 2],
+      values: [[1, 2, 3], [4, 5, 6], [7, 8, 9]].map((row) => row.slice(0, labels.length)),
+      labels,
+      units: labels.map(() => ""),
+      metadata: {},
+    },
+  };
+}
+
+describe("resolveRecipe — generic (plain CSV) recipes (B2 figures audit)", () => {
+  const red = { color: "#ff0000", lineWidth: 3 };
+
+  it("a default-channel view captures its plotted channels with their styles, flagged yAuto", () => {
+    const recipe = captureRecipe(csv(["A", "B"]), view({ seriesStyles: { 1: red } }), null, { id: "g", name: "g", appVersion: "0" });
+    expect(recipe.technique).toBe("generic");
+    expect(recipe.signature.map((e) => e.label)).toEqual(["A", "B"]);
+    expect(recipe.mapping.yAuto).toBe(true);
+    expect(Object.values(recipe.visual.seriesStyles)).toEqual([red]);
+  });
+
+  it("applies to ANOTHER generic CSV, re-keying styles by column position and reporting it", () => {
+    const recipe = captureRecipe(csv(["A", "B"]), view({ seriesStyles: { 1: red } }), null, { id: "g", name: "g", appVersion: "0" });
+    const res = resolveRecipe(recipe, csv(["P", "Q", "R"], "b.csv"));
+    if (!("resolved" in res)) throw new Error(`expected a resolved result, got refusal: ${res.refused}`);
+    expect(res.unmatched).toEqual([]);
+    expect(res.resolved.mapping.yAuto).toBe(true);
+    expect(res.resolved.visual.seriesStyles).toEqual({ 1: red });
+    expect(res.warnings.join("\n")).toMatch(/matched by column position 2 \("Q"\)/);
+  });
+
+  it("prefers a label match over position, and never binds one column twice", () => {
+    const recipe = captureRecipe(csv(["A", "B"]), view({ xKey: 0, yKeys: [1] }), null, { id: "g", name: "g", appVersion: "0" });
+    // "B" still sits in column 2 but "A" is gone: B binds by label, X falls back to position 1.
+    const res = resolveRecipe(recipe, csv(["Z", "B", "C"], "b.csv"));
+    if (!("resolved" in res)) throw new Error(`expected a resolved result, got refusal: ${res.refused}`);
+    expect(res.resolved.mapping.xKey).toBe(0);
+    expect(res.resolved.mapping.yKeys).toEqual([1]);
+    // ...but when the label match claims X's old position, X is unmatched rather than doubled.
+    const clash = resolveRecipe(recipe, csv(["B", "Z"], "c.csv"));
+    if (!("resolved" in clash)) throw new Error("expected resolved");
+    expect(clash.resolved.mapping.yKeys).toEqual([0]);
+    expect(clash.resolved.mapping.xKey).toBeNull();
+    expect(clash.unmatched).toEqual(['X axis ("A")']);
+  });
+
+  it("a positional candidate whose error role changed is unmatched, not a refusal", () => {
+    const recipe = captureRecipe(csv(["A", "B"]), view({ xKey: 0, yKeys: [1] }), null, { id: "g", name: "g", appVersion: "0" });
+    const res = resolveRecipe(recipe, csv(["Z", "Z_err"], "b.csv"));
+    if (!("resolved" in res)) throw new Error("expected resolved");
+    expect(res.unmatched).toEqual(['Y series ("B")']);
+  });
+
+  it("an explicit-Y technique-free view keeps its explicit channel list (no yAuto)", () => {
+    const recipe = captureRecipe(csv(["A", "B"]), view({ xKey: 0, yKeys: [1] }), null, { id: "g", name: "g", appVersion: "0" });
+    expect(recipe.mapping.yAuto).toBeUndefined();
   });
 });

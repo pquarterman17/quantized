@@ -44,13 +44,30 @@ import operator
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
-__all__ = ["ROW_INDEXED_SIDECARS", "drop_row_sidecars", "slice_row_sidecars"]
+__all__ = ["ROW_INDEXED_SIDECARS", "drop_row_sidecars", "sidecar_blank", "slice_row_sidecars"]
 
 #: ``text_columns`` and ``origin_text_columns`` are the two spellings of the
 #: inline-text sidecar (the frontend's ``lib/columnmeta.ts`` reads
 #: ``text_columns ?? origin_text_columns``); ``origin_report_sheets`` is the same
-#: ``{name: [cell per row]}`` shape, holding Origin report-sheet references.
-ROW_INDEXED_SIDECARS = ("text_columns", "origin_text_columns", "origin_report_sheets")
+#: ``{name: [cell per row]}`` shape, holding Origin report-sheet references;
+#: ``origin_complex_imaginary`` is the same shape again — the imaginary part of
+#: each complex ``.opj`` column, one number (or None) per row.
+ROW_INDEXED_SIDECARS = (
+    "text_columns",
+    "origin_text_columns",
+    "origin_report_sheets",
+    "origin_complex_imaginary",
+)
+
+
+def sidecar_blank(key: str) -> str | None:
+    """What a gap in one row-indexed sidecar reads as (TS ``sidecarBlank``).
+
+    The text sidecars hold strings, so a gap is ``""``. The imaginary parts
+    are NUMBERS, one per row, whose blank is ``None`` (JSON ``null``); a ``""``
+    there would put a string in a numeric column.
+    """
+    return None if key == "origin_complex_imaginary" else ""
 
 
 def _is_boolean(i: Any) -> bool:
@@ -176,7 +193,7 @@ def _in_range(cells: Sequence[Any], i: Any) -> bool:
         return False
 
 
-def _cell(cells: Sequence[Any], i: Any) -> Any:
+def _cell(cells: Sequence[Any], i: Any, blank: str | None = "") -> Any:
     """One cell, or ``""`` for anything that is not a real position in ``cells``.
 
     Mirrors the TypeScript ``cells[i] ?? ""``. ``None`` becomes ``""`` because JS
@@ -187,15 +204,18 @@ def _cell(cells: Sequence[Any], i: Any) -> Any:
     """
     idx = _as_index(i)
     if idx is None:
-        return ""
-    return cells[idx] if 0 <= idx < len(cells) and cells[idx] is not None else ""
+        return blank
+    return cells[idx] if 0 <= idx < len(cells) and cells[idx] is not None else blank
 
 
-def _slice_cells(cells: Sequence[Any], row_indexes: list[Any]) -> list[Any]:
+def _slice_cells(
+    cells: Sequence[Any], row_indexes: list[Any], blank: str | None = ""
+) -> list[Any]:
     """Slice one column's cells to ``row_indexes``.
 
-    A gap inside the kept range yields ``""`` -- the blank the worksheet already
-    renders for a missing cell -- rather than ``None``, which serializes to
+    A gap inside the kept range yields ``blank`` (``""`` for the text sidecars,
+    see :func:`sidecar_blank`) -- the blank the worksheet already renders for a
+    missing cell -- rather than ``None``, which serializes to
     ``null`` and reads back as a hole.
 
     TRAILING misses are dropped rather than materialized, matching the
@@ -206,10 +226,10 @@ def _slice_cells(cells: Sequence[Any], row_indexes: list[Any]) -> list[Any]:
     end = len(row_indexes)
     while end > 0 and not _in_range(cells, row_indexes[end - 1]):
         end -= 1
-    return [_cell(cells, i) for i in row_indexes[:end]]
+    return [_cell(cells, i, blank) for i in row_indexes[:end]]
 
 
-def _slice_one(raw: Any, row_indexes: list[int]) -> Any:
+def _slice_one(raw: Any, row_indexes: list[int], blank: str | None = "") -> Any:
     """Slice one ``{column: [cell per row]}`` sidecar.
 
     A value that is not a mapping of lists is a corrupted sidecar and is returned
@@ -229,7 +249,7 @@ def _slice_one(raw: Any, row_indexes: list[int]) -> Any:
         if not isinstance(cells, (list, tuple)):
             out[name] = cells
             continue
-        sliced = _slice_cells(cells, row_indexes)
+        sliced = _slice_cells(cells, row_indexes, blank)
         if sliced:
             out[name] = sliced
     return out
@@ -252,7 +272,7 @@ def slice_row_sidecars(metadata: Mapping[str, Any], row_indexes: Iterable[Any]) 
     out = dict(metadata)
     for key in ROW_INDEXED_SIDECARS:
         if key in out:
-            out[key] = _slice_one(out[key], rows)
+            out[key] = _slice_one(out[key], rows, sidecar_blank(key))
     return out
 
 

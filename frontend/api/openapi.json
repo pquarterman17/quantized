@@ -15184,10 +15184,72 @@
       "TickFormatSpec": {
         "description": "Wire model for the screen's `AxisFormat` (MAIN #24,\n`frontend/src/lib/types.ts`): the tick-label number format for one axis.\n`\"auto\"` (the default) leaves matplotlib's own formatter untouched --\nsee `calc.figure_ticks.axis_tick_formatter`.",
         "properties": {
+          "base": {
+            "anyOf": [
+              {
+                "const": "e",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base"
+          },
+          "breaks": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breaks"
+          },
           "digits": {
             "default": 2,
             "title": "Digits",
             "type": "number"
+          },
+          "divide": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Divide"
+          },
+          "minor": {
+            "anyOf": [
+              {
+                "maximum": 20.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minor"
           },
           "mode": {
             "default": "auto",
@@ -15202,6 +15264,35 @@
             ],
             "title": "Mode",
             "type": "string"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 72.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "ticks": {
+            "anyOf": [
+              {
+                "enum": [
+                  "in",
+                  "out",
+                  "both"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticks"
           }
         },
         "title": "TickFormatSpec",
@@ -18280,6 +18371,30 @@
           }
         },
         "summary": "Export Figure Page",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/export/fonts": {
+      "get": {
+        "description": "``families``: installed family names; ``aliases``: each proprietary\nname -> ``{\"family\", \"status\"}`` as an export would render it\n(``installed`` / ``substituted`` / ``fallback``).",
+        "operationId": "list_fonts_api_export_fonts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Fonts Api Export Fonts Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Fonts",
         "tags": [
           "export"
         ]

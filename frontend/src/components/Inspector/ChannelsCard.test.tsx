@@ -160,3 +160,65 @@ describe("ChannelsCard waterfall X offset", () => {
     expect(useApp.getState().history).toHaveLength(2);
   });
 });
+
+describe("ChannelsCard waterfall slider (live check)", () => {
+  it("one slider gesture is one undo step, however many steps it moves", () => {
+    render(<ChannelsCard active={dataset} />);
+    const slider = screen.getByRole("slider", { name: "Waterfall" });
+    fireEvent.focus(slider);
+    for (const v of ["5", "10", "15", "20"]) fireEvent.change(slider, { target: { value: v } });
+    expect(useApp.getState().waterfall).toBe(0.2);
+    expect(useApp.getState().history.map((h) => h.label)).toEqual(["change waterfall offset"]);
+    fireEvent.pointerDown(slider); // a new drag is a new step
+    fireEvent.change(slider, { target: { value: "40" } });
+    expect(useApp.getState().history).toHaveLength(2);
+    useApp.getState().undo();
+    expect(useApp.getState().waterfall).toBe(0.2);
+  });
+});
+
+describe("ChannelsCard layout + error consistency (figures-audit #10/#14)", () => {
+  const withErr: Dataset = {
+    id: "d2",
+    name: "mt",
+    data: { ...DATA, values: DATA.values.map((r) => [...r, 0.1]), labels: ["Moment", "Resistance", "Moment err"], units: ["emu", "Ohm", "emu"] },
+    errorRoles: [{ channel: 2, target: 0, axis: "y", side: "both" }],
+  };
+
+  it("gives each channel name its own line and names every control uniquely", () => {
+    render(<ChannelsCard active={dataset} />);
+    const type = screen.getByRole("combobox", { name: "Moment modeling type" });
+    expect(screen.getByRole("combobox", { name: "Field modeling type" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Moment column role" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Draw Moment on the secondary Y axis" })).toBeInTheDocument();
+    // The name's label and the selects no longer share a flex line.
+    const name = screen.getByText("Moment (emu)", { selector: "span" });
+    expect(name.closest("label")?.parentElement).not.toBe(type.parentElement);
+  });
+
+  it("shows the error the dataset's roles actually draw, and a pick writes the roles too", () => {
+    useApp.setState({ datasets: [withErr], activeId: "d2" });
+    render(<ChannelsCard active={withErr} />);
+    const pick = screen.getByRole("combobox", { name: "Moment error column" }) as HTMLSelectElement;
+    expect(pick.value).toBe("2"); // was "± none" while the role drew the bars
+    fireEvent.change(pick, { target: { value: "" } });
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([]);
+    expect(useApp.getState().errKeys[0]).toBeUndefined();
+    expect(useApp.getState().history).toHaveLength(1); // one pick, one undo step
+  });
+
+  it("a pick that changes BOTH the legacy key and the roles is still one undo step", () => {
+    // A restored session: a legacy pick of column 1 and no role binding.
+    const legacy: Dataset = { ...withErr, errorRoles: [] };
+    useApp.setState({ datasets: [legacy], activeId: "d2", errKeys: { 0: 1 } });
+    render(<ChannelsCard active={legacy} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Moment error column" }), { target: { value: "2" } });
+    expect(useApp.getState().errKeys[0]).toBe(2);
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([{ channel: 2, target: 0, axis: "y", side: "both" }]);
+    expect(useApp.getState().history).toHaveLength(1);
+    useApp.getState().undo();
+    expect(useApp.getState().errKeys[0]).toBe(1);
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([]);
+  });
+});
+

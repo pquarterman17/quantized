@@ -24,9 +24,10 @@ import { useApp } from "../../store/useApp";
 import { useWindowsStore } from "../../store/hooks/useWindowsStore";
 import { forceHydrate } from "../../store/windowHydration";
 import { editableFigureDirty } from "../../store/figureLifecycle";
-import { buildMenuItems } from "../../lib/contextActions";
-import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
-import { windowCloseAction, windowCoreActions, type WindowActionTarget } from "./windowMenu";
+import ContextMenu from "../overlays/ContextMenu";
+import { lazyRegion } from "../../lib/lazyRegion";
+// The right-click menu loads on first use (bundle diet, figures audit 2026-11-13).
+const WindowTitleMenu = lazyRegion(() => import("./WindowTitleMenu"), "Window menu");
 
 const BG_LABEL: Record<PlotBg, string> = { theme: "Theme", light: "Light", dark: "Dark" };
 
@@ -62,31 +63,11 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
     return () => bar.removeEventListener("contextmenu", onContextMenu);
   }, []);
 
-  const target: WindowActionTarget = { win };
-  const titleMenuItems: ContextMenuItem[] = [
-    ...buildMenuItems(windowCoreActions, target),
-    ...(canRebind
-      ? ([
-          { separator: true },
-          {
-            label: "Rebind to",
-            submenu: datasets.map((d) => ({
-              label: d.name,
-              run: () => rebindWindow(win.id, d.id),
-              disabled: d.id === win.datasetId,
-            })),
-          },
-        ] as ContextMenuItem[])
-      : []),
-    { separator: true },
-    ...buildMenuItems([windowCloseAction], target),
-  ];
-
   return (
     <>
       <span ref={anchorRef} style={{ display: "none" }} />
       {titleMenu && (
-        <ContextMenu x={titleMenu.x} y={titleMenu.y} items={titleMenuItems} help={{ label: "plot windows", query: "plot window" }} onClose={() => setTitleMenu(null)} />
+        <WindowTitleMenu win={win} x={titleMenu.x} y={titleMenu.y} canRebind={canRebind} onClose={() => setTitleMenu(null)} />
       )}
       {/* Item 14's rebind gesture is drag-only for a snapshot/panel window
           too (both kinds silently ignore a drop — "frozen means frozen" /
