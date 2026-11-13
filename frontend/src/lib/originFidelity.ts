@@ -9,6 +9,7 @@ export interface OriginFidelityEntry {
 
 const LABELS: Record<string, string> = {
   advanced_axis_types: "advanced axis types",
+  curve_sheet_mismatch: "curves to check: recorded on another sheet",
   exact_curve_bindings: "exact curve bindings",
   figure_decode_error: "graph decode failed",
   filtered_internal_graph_records: "internal graph records filtered",

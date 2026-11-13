@@ -11,6 +11,10 @@ import { useApp } from "../../store/useApp";
 import ToolWindow from "../overlays/ToolWindow";
 import { Button } from "../primitives";
 
+function originBookOf(dataset: { data: { metadata?: Record<string, unknown> } }): string {
+  return String((dataset.data.metadata ?? {}).origin_book ?? "");
+}
+
 export default function OriginRecoveryWindow({
   entry,
   onClose,
@@ -25,6 +29,10 @@ export default function OriginRecoveryWindow({
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<{ datasetId: string; action: "inspect" | "rebuild" } | null>(null);
   const resolution = resolveOriginFigureSources(entry, figures, datasets);
+  const recordedOn = useMemo(
+    () => new Set((entry.figure.curve_sheet_notes ?? []).map((note) => note.recorded)),
+    [entry],
+  );
   const candidates = useMemo(() => {
     const family = figureLayerFamily(entry, figures);
     return datasets
@@ -36,17 +44,23 @@ export default function OriginRecoveryWindow({
         rebuildSource: resolveOriginSourceManually(entry, [entry], dataset, { requireFinite: true }),
       }))
       .sort((a, b) => {
+        const recorded = Number(recordedOn.has(originBookOf(b.dataset)))
+          - Number(recordedOn.has(originBookOf(a.dataset)));
+        if (recorded) return recorded;
         const aCompatible = a.inspectSource ? 1 : 0;
         const bCompatible = b.inspectSource ? 1 : 0;
         return bCompatible - aCompatible || a.dataset.name.localeCompare(b.dataset.name, undefined, { numeric: true });
       });
-  }, [datasets, entry, figures]);
+  }, [datasets, entry, figures, recordedOn]);
   // A workbook whose data sits only on `Book@N` sheets: say which sheets once.
   const splitBooks = [
     ...new Map(
       resolution.unresolved.filter((b) => b.sheets?.length).map((b) => [b.book, b.sheets ?? []] as const),
     ),
   ];
+  // Curves the file records on another sheet (`curve_sheet_notes`): say so,
+  // and put that sheet first among the candidates.
+  const sheetNotes = [...new Set(entry.figure.fidelity?.notes ?? [])];
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const visibleCandidates = normalizedQuery
     ? candidates.filter(({ dataset, inspectSource }) =>
@@ -79,15 +93,25 @@ export default function OriginRecoveryWindow({
     >
       <section className="qzk-origin-recovery" aria-label={`Recover ${figureLabel(entry)}`}>
         <p>
-          Quantized could not match every saved curve to an imported workbook.
-          Choose a compatible workbook to inspect its columns or rebuild an editable plot.
+          {resolution.unresolved.length > 0
+            ? "Quantized could not match every saved curve to an imported workbook."
+            : "The file records a curve's column on another sheet than the one it is plotted from."}
+          {" "}Choose a compatible workbook to inspect its columns or rebuild an editable plot.
         </p>
         {splitBooks.map(([book, sheets]) => (
           <p key={book}>
-            The graph names workbook {book}, but not which of its sheets. This file has {book} sheets{" "}
+            The graph names workbook {book}, not a sheet. This file has {book} sheets{" "}
             {sheets.join(", ")}: choose one below.
           </p>
         ))}
+        {sheetNotes.length > 0 && (
+          <div className="qzk-origin-recovery-hints">
+            <strong>Recorded on another sheet</strong>
+            <ul>
+              {sheetNotes.map((note) => <li key={note}>{note}</li>)}
+            </ul>
+          </div>
+        )}
         {resolution.unresolved.length > 0 && (
           <div className="qzk-origin-recovery-hints">
             <strong>Saved references</strong>
@@ -126,6 +150,7 @@ export default function OriginRecoveryWindow({
                         ? "Saved columns found, but this layer has no numeric data"
                         : "Compatible columns were found only for another layer"
                     : "Saved column letters do not exist in this workbook"}
+                  {recordedOn.has(originBookOf(dataset)) ? " · the file records curves on this sheet" : ""}
                 </small>
               </div>
               <div className="qz-btn-row">

@@ -160,6 +160,7 @@ from quantized.io.origin_project.container import walk_blocks
 from quantized.io.origin_project.figure_geometry import opj_page_size
 from quantized.io.origin_project.figure_layers import _build_layer, _is_layer_block
 from quantized.io.origin_project.figure_text import distribute_legend_layers
+from quantized.io.origin_project.opj_curve_sheets import curve_sheet_keys, layer_sheet_notes
 from quantized.io.origin_project.opj_curves import (
     book_column_designations,
     column_id_map,
@@ -173,8 +174,13 @@ __all__ = ["extract_figures"]
 def extract_figures(b: bytes) -> list[dict[str, Any]]:
     """Every layer of every graph window in a CPYA project as a plot-state
     snapshot dict -- one dict per layer (see module docstring)."""
-    blocks = [(size, payload) for size, payload in walk_blocks(b) if size]
+    walked = list(walk_blocks(b))
+    blocks = [(size, payload) for size, payload in walked if size]
     id_map = column_id_map(blocks)
+    # Diagnostic only: the sheet each curve column is recorded on, where that
+    # is not the sheet the binding uses (`opj_curve_sheets`).
+    sheet_keys, imported = curve_sheet_keys(walked)
+    del walked
     # One walk of the block list: the ordered per-book designations drive both
     # the per-curve nearest-preceding-X (col_order) and the book-level fallback
     # X (x_columns) -- deriving the latter in memory avoids a second walk.
@@ -210,6 +216,11 @@ def extract_figures(b: bytes) -> list[dict[str, Any]]:
             # Page size (u16 pair @35 of the window header): with the layer
             # frame quad this places every panel of a multi-panel page.
             fig["page"] = page
+            notes = layer_sheet_notes(
+                blocks, layer_start, layer_end, id_map, sheet_keys, fig["curves"], imported
+            )
+            if notes:  # absent, not empty, so other figures are unchanged
+                fig["curve_sheet_notes"] = notes
             window_figs.append(fig)
         # Composite (multi-layer) legends: dotted ``\l(layer.plot)`` entries
         # live in ONE legend object but caption every layer's curves —

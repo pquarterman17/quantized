@@ -487,12 +487,20 @@ but `<book>@N` sheets are, the Recover window says so once per workbook:
 Book1 sheets 6, 7: choose one below", and lists those sheets as candidates
 (binding reason `sheet_not_recorded`; `originSources.test.ts`).
 
-**Open, for the owner.** The `strings_testing.opj` curve above is bound
-today to `NLFit1` column B, i.e. sheet 1's column B, while its column id is
-on sheet 2. That is the reverse failure (an existing book name, so nothing
-looks unresolved). Fixing it means dropping or re-pointing a curve in
-`extract_figures`, which would change owner-corpus figure pins (`Moke.opj`
-`Book4` has three sheets) that cannot be re-measured here. Not changed.
+**Decided (owner, 2026-11-13): report, do not re-bind.** The
+`strings_testing.opj` curve above is bound to `NLFit1` column B (sheet 1)
+while its column id is on sheet 2: the reverse failure, which looked
+resolved. The binding is kept (re-pointing it would move owner figure pins
+that cannot be re-measured here), but it is no longer silent:
+`opj_curve_sheets` compares each curve's recorded sheet with the one its
+binding uses, the figure gains `curve_sheet_notes`, its fidelity an
+omission `curve_sheet_mismatch` and one line per curve ("Curve NLFit1 B: the
+file records its column on sheet 2 (NLFit1@2), but it is plotted from sheet
+1; check it, or use Recover to choose the sheet"), and Recover opens with
+the recorded sheet first. Public corpus: 3 figures gain notes — `DO.opj`
+Graph1 and Graph6 (6 curves each, recorded on `Book1@6`) and
+`strings_testing.opj` Graph1 (1 curve). Every other field of every figure is
+byte-identical to `main` (`tests/test_io_origin_curve_sheets.py`).
 
 ## How to re-run
 

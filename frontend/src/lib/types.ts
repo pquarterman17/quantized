@@ -54,6 +54,20 @@ export interface OriginFigureFidelity {
   status: OriginFidelityStatus;
   recovered: string[];
   omissions: string[];
+  /** One sentence per curve to check (`fidelity._sheet_notes`), e.g. a curve
+   *  whose column the file records on another sheet than it is plotted from. */
+  notes?: string[];
+}
+
+/** A curve whose column the `.opj` records on sheet `recorded` (`Book@N`),
+ *  while its binding names `book` (`opj_curve_sheets`). The binding is kept;
+ *  `plotted_from` is `book` when that is an imported sheet, else `""`. */
+export interface OriginCurveSheetNote {
+  book: string;
+  x: string;
+  y: string;
+  recorded: string;
+  plotted_from: string;
 }
 
 export interface OriginFilteredFigure {
@@ -296,6 +310,8 @@ export interface OriginFigure {
   /** Original CRC-validated PNG bytes saved inside this exact Origin graph
    *  page. Shared by every layer of the page; never recompressed. */
   saved_preview?: OriginSavedPreview;
+  /** `.opj` only, present only when non-empty: see `OriginCurveSheetNote`. */
+  curve_sheet_notes?: OriginCurveSheetNote[];
 }
 
 /** Response of POST /api/plot/series — uPlot-ready column data. */

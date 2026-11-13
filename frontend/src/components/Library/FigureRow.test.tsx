@@ -156,6 +156,46 @@ describe("FigureRow — PR C additions", () => {
     expect(screen.getByRole("button", { name: "Rebuild plot" })).toBeEnabled();
   });
 
+  it("offers Recover, recorded sheet first, for a resolved curve the file records on another sheet", async () => {
+    // strings_testing.opj's shape: the curve binds to NLFit1 (sheet 1) while
+    // its column id is on sheet 2 (NLFit1@2). The binding stays; Recover says
+    // so and puts the recorded sheet first. A plain resolved graph (decoy,
+    // the default entry) has no Recover button.
+    const book = (id: string, originBook: string): Dataset => ({
+      ...ds(id, "w1"),
+      name: `strings:${originBook}`,
+      data: {
+        time: [0, 1],
+        values: [[1], [2]],
+        labels: ["B"],
+        units: [""],
+        metadata: { origin_book: originBook, x_column_name: "A", origin_column_names: ["B"] },
+      },
+    });
+    const note = "Curve NLFit1 B: the file records its column on sheet 2 (NLFit1@2), but it is plotted from sheet 1; check it, or use Recover to choose the sheet";
+    const noted: OriginFigureEntry = {
+      ...entry("g3", "s1"),
+      siblingIds: ["s1", "s2"],
+      figure: {
+        ...entry("g3", "s1").figure,
+        curves: [{ book: "NLFit1", x: "A", y: "B" }],
+        curve_sheet_notes: [{ book: "NLFit1", x: "A", y: "B", recorded: "NLFit1@2", plotted_from: "NLFit1" }],
+        fidelity: { status: "best_effort", recovered: [], omissions: ["curve_sheet_mismatch"], notes: [note] },
+      },
+    };
+    useApp.setState({ datasets: [book("s1", "NLFit1"), book("s2", "NLFit1@2")], originFigures: [noted] });
+    const { unmount } = render(<FigureRow entry={entry("g1", "s1")} treeMode />);
+    expect(screen.queryByRole("button", { name: /Recover unresolved Origin bindings/ })).toBeNull();
+    unmount();
+    render(<FigureRow entry={noted} treeMode />);
+    fireEvent.click(screen.getByRole("button", { name: /Recover unresolved Origin bindings/ }));
+    const region = await screen.findByRole("region", { name: "Recover MokeGraph" });
+    expect(region).toHaveTextContent(note);
+    const names = [...region.querySelectorAll(".qzk-origin-recovery-candidate strong")].map((n) => n.textContent);
+    expect(names).toEqual(["strings:NLFit1@2", "strings:NLFit1"]);
+    expect(region).toHaveTextContent("the file records curves on this sheet");
+  });
+
   it("explains an unresolved graph even when no sibling workbook survived import", async () => {
     const unresolvedEntry = {
       ...entry("g2", null),

@@ -99,7 +99,12 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
   const fidelity = entry.figure.fidelity;
   const fidelityText = fidelity
     ? `${originFidelityStatusLabel(fidelity.status)}; missing ${fidelity.omissions.map(originFidelityLabel).join(", ")}`
+      + (fidelity.notes?.length ? `. ${fidelity.notes.join(". ")}` : "")
     : "Fidelity not assessed";
+  // Curves whose column the file records on another sheet: the binding is
+  // kept, so the row is not "unresolved", but Recover is how to pick that sheet.
+  const sheetNotes = entry.figure.curve_sheet_notes?.length ?? 0;
+  const needsReview = sourceResolution.unresolved.length + sheetNotes;
   const title = resolved
     ? `${entry.stem} — restore axis ranges (${n} curve${plural(n)}); ${fidelityText}`
     : `unresolved source "${entry.figure.source_hint || "unknown"}" — no matching imported book`;
@@ -192,12 +197,14 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
               ▣
             </button>
           )}
-          {sourceResolution.unresolved.length > 0 && (
+          {needsReview > 0 && (
             <button
               className="qz-btn qz-btn-sm qz-btn-primary qzk-origin-recover-btn"
               tabIndex={inner}
               aria-label={`Recover unresolved Origin bindings for ${figureLabel(entry)}`}
-              title={`Review ${sourceResolution.unresolved.length} unresolved Origin binding${plural(sourceResolution.unresolved.length)}`}
+              title={sourceResolution.unresolved.length
+                ? `Review ${sourceResolution.unresolved.length} unresolved Origin binding${plural(sourceResolution.unresolved.length)}`
+                : `Review ${sheetNotes} curve${plural(sheetNotes)} the file records on another sheet`}
               onClick={() => setShowRecovery(true)}
             >
               Recover…
