@@ -99,3 +99,31 @@ export function toFitTemplate(name: string, settings: FitTemplateSettings): Anal
     description: `Curve Fit template: ${s.model}`,
   });
 }
+
+const WEIGHT_WORDS: Record<WeightMode, string> = {
+  none: "none (equal weights)",
+  yerr: "Y error column",
+  poisson: "Poisson (√N)",
+  manual: "manual error column",
+  direct: "direct weights",
+};
+
+/** What a fit template step will run, in words (Pipeline Studio's step
+ *  summary): model, weighting with its column name, the X range and every
+ *  start / bound / hold — a blank start reads "auto" (guessed from the data). */
+export function describeFitTemplate(t: FitTemplateSettings): string {
+  const column = (t.weight === "manual" || t.weight === "direct") && t.manualLabel ? ` “${t.manualLabel}”` : "";
+  const scaled = t.weight !== "none" && t.scaleErrors === false ? ", errors not scaled by √(reduced χ²)" : "";
+  const parts = [`Fit template: ${t.model}`, `weighting ${WEIGHT_WORDS[t.weight]}${column}${scaled}`];
+  parts.push(t.range ? `X range ${t.range.lo} to ${t.range.hi}` : "full X range");
+  if (t.rows.length) {
+    parts.push(`starts ${t.rows.map((r) => {
+      const start = r.start.trim() ? r.start : "auto";
+      const bounds = [r.min.trim() ? `≥ ${r.min}` : "", r.max.trim() ? `≤ ${r.max}` : ""].filter(Boolean).join(", ");
+      return `${r.name} = ${start}${r.fixed ? " (held)" : ""}${bounds ? ` [${bounds}]` : ""}`;
+    }).join("; ")}`);
+  } else {
+    parts.push("all starts auto");
+  }
+  return `${parts.join(" · ")}.`;
+}
