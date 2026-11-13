@@ -1058,6 +1058,26 @@ the shipped contract)
 
 ## Completed
 
+- ~~**`.opju` structural worksheet reader**~~ (2026-11-13, owner handoff:
+  reading existing projects without an Origin install) — worksheet data is
+  read from each column's own storage header through a full record grammar
+  (`opju_blocks.py`, `opju_values.py`, `opju_records.py`,
+  `opju_worksheet.py`, `opju_matrix.py`) instead of one byte signature:
+  Text&Numeric cells incl. mixed/short/gapped columns, double, float32,
+  integers, complex, Text, the used-row extent, pre-4.33 builds and matrix
+  books. Oracle: 14 third-party projects stored in both containers (127/127
+  records cell-identical) + their published matrix expectations; 274-file
+  public corpus 199 → 258 importing, 25,356 → 33,413 book columns. Every
+  import now carries `metadata["origin_worksheet_fidelity"]`. Grammar and
+  evidence: `docs/origin_project_format.md` §3.5–§3.6; log:
+  `docs/origin_re/validation_log.md` 2026-11-13. **Open follow-ups:** the
+  curve-binding column universe is deliberately frozen on the marker scan
+  (re-derive against dataset stream order under its own handoff); the
+  worksheet fidelity summary rides each book's metadata but is not yet
+  merged into the route's `origin_fidelity` manifest or shown by the Library
+  fidelity section (`routes/parsers.py` sits exactly at the 500-line
+  ceiling, so that wiring needs an extraction first); the owner's own
+  ground-truth suite must be re-run where that corpus exists.
 - ~~**21. Templates (`.otp`/`.otpu`)**~~ (2026-07-11) — same CPY family; a
   graph template imports as a quantized style preset. Backend shipped
   2026-07-07 via the (now-archived) `GAP_ECOSYSTEM_PLAN.md` item 5
