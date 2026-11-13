@@ -76,6 +76,24 @@ describe("FigureRow — PR C additions", () => {
     expect(remake).toHaveAttribute("title", "No decoded bindings; Origin hint: Book7");
   });
 
+  it("the tooltip counts the decoded curves, not the legend entries (n_curves)", () => {
+    const fig = { ...entry("g1", "a").figure, n_curves: 0, curves: [
+      { book: "Book1", x: "A", y: "B" }, { book: "Book1", x: "A", y: "C" },
+    ] };
+    useApp.setState({
+      datasets: [{
+        ...ds("a", "w1"),
+        data: {
+          time: [0, 1], values: [[1, 2], [3, 4]], labels: ["b", "c"], units: ["", ""],
+          metadata: { origin_book: "Book1", x_column_name: "A", origin_column_names: ["B", "C"] },
+        },
+      }],
+    });
+    render(<FigureRow entry={{ ...entry("g1", "a"), figure: fig }} />);
+    const open = screen.getByRole("button", { name: /MokeGraph/ });
+    expect(open.getAttribute("title")).toContain("(2 curves)");
+  });
+
   it("a resolved dataset with no workbookId records nothing", () => {
     useApp.setState({ datasets: [ds("a")] }); // no workbookId this time
     render(<FigureRow entry={entry("g1", "a")} />);

@@ -95,7 +95,9 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
     onContextMenu: select,
     onKeyDown: (e: KeyboardEvent) => { if (e.target === e.currentTarget) spaceActivates(e, select); },
   };
-  const n = entry.figure.n_curves;
+  // The DECODED curve count; `n_curves` is the legend-entry count, which is 0
+  // for a graph with curves but no legend (audit 2026-11: "(0 curves)").
+  const n = entry.figure.curves?.length ?? entry.figure.n_curves;
   const fidelity = entry.figure.fidelity;
   const fidelityText = fidelity
     ? `${originFidelityStatusLabel(fidelity.status)}; missing ${fidelity.omissions.map(originFidelityLabel).join(", ")}`
