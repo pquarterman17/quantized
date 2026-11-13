@@ -68,6 +68,24 @@ def test_a_zero_floor_shade_runs_from_the_log_axis_floor(monkeypatch: pytest.Mon
     assert notes == []
 
 
+def test_a_zero_floor_shade_runs_from_the_reciprocal_axis_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review finding: 1/0 has no position, so the screen floors a y = 0 side
+    on a reciprocal axis too; the export used to add a patch at an infinite
+    position (missing or misdrawn in the file, no warning)."""
+    shade = {"x1": 2.0, "x2": 4.0, "y1": 0.0, "y2": 1e3, "fill": "#3388cc"}
+    ax, notes = _render(
+        monkeypatch, y_scale="reciprocal", region_shades=[shade], y_lim=[10.0, 1e5]
+    )
+    assert ax.get_yscale() == "function"
+    patches = _shade_patches(ax)
+    assert len(patches) == 1
+    assert patches[0].get_y() == pytest.approx(10.0)  # the axis floor, not 1/0
+    assert patches[0].get_y() + patches[0].get_height() == pytest.approx(1e3)
+    assert notes == []
+
+
 def test_a_shade_below_zero_on_a_log_axis_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
     shade = {"x1": 2.0, "x2": 4.0, "y1": -5.0, "y2": 0.0, "fill": "#3388cc"}
     ax, notes = _render(monkeypatch, y_scale="log", region_shades=[shade])

@@ -51,6 +51,7 @@ from typing import Any
 
 from matplotlib.patches import Rectangle
 
+from quantized.calc.axis_breaks import is_broken_axis
 from quantized.calc.figure_warnings import note_figure_warning
 
 __all__ = [
@@ -288,12 +289,22 @@ def _apply_region_shades(ax: Any, shades: Sequence[Mapping[str, Any]] | None) ->
                 _warn_if_outside(ax, "x", x0, x1, what)
                 continue
             y0, y1 = sorted((float(sh["y1"]), float(sh["y2"])))
+            # A side with no position on this scale runs from the axis floor,
+            # as the screen draws it (`uplotRegionShades.shadeYSpan`): <= 0
+            # on a log axis, exactly 0 (1/0) on a reciprocal one.
+            reciprocal = ax.get_yscale() == "function" and not is_broken_axis(ax.yaxis)
             if ax.get_yscale() == "log" and y0 <= 0:
                 y0 = min(ax.get_ylim())  # the axis floor: <= 0 has no position
+            elif reciprocal and 0.0 in (y0, y1):
+                floor = min(ax.get_ylim())
+                y0, y1 = sorted((floor if y0 == 0 else y0, floor if y1 == 0 else y1))
             if y1 <= y0:
                 note_figure_warning(
                     f"{what} lies at or below zero on a log axis and cannot be "
                     "drawn; use a full-height shade or positive y values."
+                    if not reciprocal
+                    else f"{what} lies at zero on a reciprocal axis and cannot be "
+                    "drawn; use a full-height shade or non-zero y values."
                 )
                 continue
             ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, **style))
