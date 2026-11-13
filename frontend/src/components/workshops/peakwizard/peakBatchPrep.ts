@@ -201,7 +201,7 @@ export async function prepareBatchItem(
 ): Promise<PreparedItem> {
   try {
     const seg = batchSegment(ds, ch, recipe.range);
-    const baseline = await recipeBaseline(seg.y, recipe.baseline);
+    const baseline = await recipeBaseline(seg.x, seg.y, recipe.baseline);
     const workingY = baseline ? subtractBaseline(seg.y, baseline) : seg.y;
     const found = await recipeFind(seg.x, workingY, recipe.find);
     if (found.length === 0) {

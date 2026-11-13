@@ -13,7 +13,7 @@ import { useRef, useState } from "react";
 
 import { type ScanEntry } from "../../../lib/api/curvefit";
 import { dropGapRows } from "../../../lib/api/finitePairs";
-import { loadCustomModels } from "../../../lib/fitmodels";
+import { candidateGuesses, loadCustomModels } from "../../../lib/fitmodels";
 import { scanFitModelsJob } from "../../../lib/fitscan";
 import { cancelJob, pollJob, JobCancelledError } from "../../../lib/jobs";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -80,7 +80,7 @@ export function useModelScan(): ModelScanState {
       const equations = loadCustomModels().map((m) => ({
         name: m.name,
         equation: m.equation,
-        guesses: m.guesses,
+        ...candidateGuesses(m),
       }));
       const { job_id } = await scanFitModelsJob({
         x: pairs.x,

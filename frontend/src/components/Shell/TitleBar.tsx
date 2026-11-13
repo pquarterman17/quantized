@@ -1,11 +1,12 @@
 // App title bar: brand · centred document title · panel + theme toggles.
 // Native window owns OS chrome (no traffic-light dots), matching fermiviewer.
 
-import { useActiveDataset, useApp } from "../../store/useApp";
+import { useApp } from "../../store/useApp";
+import { useShownDataset } from "../../store/useShownDataset";
 import AppearanceMenu from "./AppearanceMenu";
 
 export default function TitleBar() {
-  const active = useActiveDataset();
+  const active = useShownDataset(); // the dataset the Stage shows (worksheet tab: worksheetId)
   const toggleLeft = useApp((s) => s.toggleLeft);
   const toggleRight = useApp((s) => s.toggleRight);
   const theme = useApp((s) => s.theme);

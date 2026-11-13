@@ -10,6 +10,7 @@ import { figureLayerFamily } from "../lib/originFigures";
 import { plural } from "../lib/plural";
 import { ORIGIN_OVERLAY_VERSION } from "../lib/originOverlay";
 import type { PlotSpec } from "../lib/plotspec";
+import { seedDesignatedErrorZones } from "../lib/plotspecDesignatedErrors";
 import type { AppState } from "./useApp";
 import { toast } from "./toasts";
 
@@ -211,7 +212,9 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
           (curve) => curve.style === "line" || curve.style === "line_symbol",
         ) ? "line" : "scatter",
       };
-      get().openGraphBuilderSeeded(spec);
+      // A Y-error curve/column binds as its Y's error bars, never a Y series.
+      const seedDs = get().datasets.find((d) => d.id === datasetId);
+      get().openGraphBuilderSeeded(seedDs ? seedDesignatedErrorZones(spec, seedDs) : spec);
       set({ status: `opened ${entry.figure.name || "Origin graph"} layer ${entry.figure.layer ?? 1} in Graph Builder${manualSource ? ` using manually chosen ${manualSource.book}` : resolution.unresolved.length ? `; ${resolution.unresolved.length} binding${plural(resolution.unresolved.length)} unresolved` : ""}` });
       return true;
     },

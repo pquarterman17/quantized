@@ -1816,6 +1816,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report
+         * @description t / Prob>|t| / confidence limits, ANOVA, covariance and correlation.
+         */
+        post: operations["report_api_fitting_report_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/scan": {
         parameters: {
             query?: never;
@@ -2757,6 +2777,34 @@ export interface paths {
          */
         post: operations["upload_file_api_parsers_upload_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/parsers/upload-cache": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Upload Cache Info
+         * @description Where staged Origin project uploads are kept and how much is there:
+         *     ``{"path", "entries", "bytes", "max_bytes"}`` (``_uploadcache``).
+         */
+        get: operations["upload_cache_info_api_parsers_upload_cache_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Upload Cache Clear
+         * @description Delete every staged Origin project upload (privacy / disk space).
+         *     Lazy books of a project opened from the file picker then need a
+         *     re-import. Returns ``{"removed", "bytes", "kept"}`` -- ``kept`` counts
+         *     uploads a running import is still reading.
+         */
+        delete: operations["upload_cache_clear_api_parsers_upload_cache_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5971,8 +6019,6 @@ export interface components {
         BandsRequest: {
             /** Covar */
             covar?: number[][] | null;
-            /** Dof */
-            dof: number;
             /** Equation */
             equation?: string | null;
             /**
@@ -5982,12 +6028,20 @@ export interface components {
             level?: number;
             /** Model */
             model?: string | null;
+            /** Mse */
+            mse?: number | null;
+            /** N Free */
+            n_free: number;
             /** N Points */
             n_points: number;
+            /** Obs Var */
+            obs_var?: (number | null)[] | null;
             /** Params */
             params: number[];
             /** X */
             x: number[];
+            /** X Data */
+            x_data?: number[] | null;
         };
         /**
          * BatchIntegrateRequest
@@ -7276,6 +7330,8 @@ export interface components {
             n_params: number;
             /** Residuals */
             residuals: number[];
+            /** Weights */
+            weights?: number[] | null;
             /** Y */
             y: number[];
         };
@@ -7359,6 +7415,12 @@ export interface components {
              * @default true
              */
             calc_errors?: boolean;
+            /**
+             * Covariance
+             * @default jtj
+             * @enum {string}
+             */
+            covariance?: "jtj" | "hessian";
             /** Dy */
             dy?: number[] | null;
             /** Equation */
@@ -7366,9 +7428,20 @@ export interface components {
             /** Fixed */
             fixed?: boolean[] | null;
             /** Guesses */
-            guesses?: number[] | null;
+            guesses?: (number | null)[] | null;
             /** Lower */
             lower?: (number | null)[] | null;
+            /**
+             * Scale Errors
+             * @default true
+             */
+            scale_errors?: boolean;
+            /**
+             * Stats Version
+             * @default 2
+             * @enum {integer}
+             */
+            stats_version?: 1 | 2;
             /** Upper */
             upper?: (number | null)[] | null;
             /** Weights */
@@ -8076,6 +8149,30 @@ export interface components {
             /** Y */
             y: number[];
         };
+        /** FitReportRequest */
+        FitReportRequest: {
+            /** Covar */
+            covar?: number[][] | null;
+            /** Dy */
+            dy?: number[] | null;
+            /** Errors */
+            errors: (number | null)[];
+            /**
+             * Level
+             * @default 0.95
+             */
+            level?: number;
+            /** N Free */
+            n_free: number;
+            /** Params */
+            params: number[];
+            /** Residuals */
+            residuals: number[];
+            /** Weights */
+            weights?: number[] | null;
+            /** Y */
+            y: number[];
+        };
         /** FitRequest */
         FitRequest: {
             /**
@@ -8083,18 +8180,35 @@ export interface components {
              * @default true
              */
             calc_errors?: boolean;
+            /**
+             * Covariance
+             * @default jtj
+             * @enum {string}
+             */
+            covariance?: "jtj" | "hessian";
             /** Dy */
             dy?: number[] | null;
             /** Fixed */
             fixed?: boolean[] | null;
             /** Lower */
-            lower?: number[] | null;
+            lower?: (number | null)[] | null;
             /** Model */
             model: string;
             /** P0 */
             p0?: number[] | null;
+            /**
+             * Scale Errors
+             * @default true
+             */
+            scale_errors?: boolean;
+            /**
+             * Stats Version
+             * @default 2
+             * @enum {integer}
+             */
+            stats_version?: 1 | 2;
             /** Upper */
-            upper?: number[] | null;
+            upper?: (number | null)[] | null;
             /** Weights */
             weights?: number[] | null;
             /** X */
@@ -8170,10 +8284,18 @@ export interface components {
              * @default []
              */
             constraints?: components["schemas"]["ShareGroup"][];
+            /**
+             * Covariance
+             * @default jtj
+             * @enum {string}
+             */
+            covariance?: "jtj" | "hessian";
             /** Datasets */
             datasets: components["schemas"]["GlobalSeries"][];
             /** Equation */
             equation?: string | null;
+            /** Fixed */
+            fixed?: boolean[][] | boolean[] | null;
             /** Lower */
             lower?: (number | null)[] | null;
             /**
@@ -14617,6 +14739,41 @@ export interface operations {
             };
         };
     };
+    report_api_fitting_report_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FitReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     scan_api_fitting_scan_post: {
         parameters: {
             query?: never;
@@ -16071,6 +16228,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_cache_info_api_parsers_upload_cache_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    upload_cache_clear_api_parsers_upload_cache_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number;
+                    };
                 };
             };
         };

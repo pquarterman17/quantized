@@ -76,6 +76,30 @@ describe("FigureRow — PR C additions", () => {
     expect(remake).toHaveAttribute("title", "No decoded bindings; Origin hint: Book7");
   });
 
+  it("the tooltip counts the decoded curves, not the legend entries (n_curves)", () => {
+    const fig = { ...entry("g1", "a").figure, n_curves: 0, curves: [
+      { book: "Book1", x: "A", y: "B" }, { book: "Book1", x: "A", y: "C" },
+    ] };
+    useApp.setState({
+      datasets: [{
+        ...ds("a", "w1"),
+        data: {
+          time: [0, 1], values: [[1, 2], [3, 4]], labels: ["b", "c"], units: ["", ""],
+          metadata: { origin_book: "Book1", x_column_name: "A", origin_column_names: ["B", "C"] },
+        },
+      }],
+    });
+    render(<FigureRow entry={{ ...entry("g1", "a"), figure: fig }} />);
+    const open = screen.getByRole("button", { name: /MokeGraph/ });
+    expect(open.getAttribute("title")).toContain("(2 curves)");
+  });
+
+  it("an EMPTY decoded curve list falls back to the legend count", () => {
+    const fig = { ...entry("g1", "a").figure, n_curves: 3, curves: [] };
+    render(<FigureRow entry={{ ...entry("g1", "a"), figure: fig }} />);
+    expect(screen.getByRole("button", { name: /MokeGraph/ }).getAttribute("title")).toContain("(3 curves)");
+  });
+
   it("a resolved dataset with no workbookId records nothing", () => {
     useApp.setState({ datasets: [ds("a")] }); // no workbookId this time
     render(<FigureRow entry={entry("g1", "a")} />);
@@ -97,13 +121,22 @@ describe("FigureRow — PR C additions", () => {
     const rules = flatRules(readShellCss());
     const resting = rules.find((r) => r.selector === ".qzk-fig-row-tree .qzk-origin-figure-actions");
     expect(resting).toBeDefined();
-    expect(declares(resting!.body, "position", "absolute")).toBe(true);
-    expect(declares(resting!.body, "visibility", "hidden")).toBe(true);
-    expect(declares(resting!.body, "pointer-events", "none")).toBe(true);
+    expect(declares(resting!.body, "display", "none")).toBe(true);
     const reveal = rules.find((r) => r.selector.includes(".qzk-fig-row-tree:hover .qzk-origin-figure-actions"));
     expect(reveal).toBeDefined();
-    expect(declares(reveal!.body, "visibility", "visible")).toBe(true);
-    expect(declares(reveal!.body, "pointer-events", "auto")).toBe(true);
+    expect(reveal!.selector).toContain(":focus-within");
+    expect(declares(reveal!.body, "display", "flex")).toBe(true);
+  });
+
+  it("puts the revealed strip beside the graph name, never over it", () => {
+    // Origin-replacement audit: an absolutely positioned strip covered the
+    // graph name it was revealed for and swallowed the click meant for the
+    // row. In the row's own flex flow the name shrinks instead.
+    const rules = flatRules(readShellCss()).filter((r) => r.selector.includes(".qzk-origin-figure-actions"));
+    expect(rules.length).toBeGreaterThan(0);
+    for (const r of rules) expect(declares(r.body, "position", "absolute")).toBe(false);
+    const row = flatRules(readShellCss()).find((r) => r.selector === ".qzk-fig-row");
+    expect(declares(row!.body, "display", "flex")).toBe(true);
   });
 
   it("keeps source-recovery controls exposed when the unresolved main button cannot receive focus", () => {
@@ -123,8 +156,7 @@ describe("FigureRow — PR C additions", () => {
     expect(screen.getByRole("button", { name: /Recover unresolved Origin bindings/ })).toBeVisible();
     const rules = flatRules(readShellCss());
     const unresolved = rules.find((r) => r.selector === ".qzk-fig-row-tree.unresolved .qzk-origin-figure-actions");
-    expect(declares(unresolved!.body, "position", "static")).toBe(true);
-    expect(declares(unresolved!.body, "transform", "none")).toBe(true);
+    expect(declares(unresolved!.body, "display", "flex")).toBe(true);
   });
 
   it("opens a focused recovery window instead of an inline workbook selector", async () => {
@@ -193,7 +225,7 @@ describe("FigureRow — PR C additions", () => {
     expect(container.querySelector(".qzk-fig-row-tree")).toHaveClass("needs-review");
     const rules = flatRules(readShellCss());
     expect(rules.some((r) => r.selector.includes(".qzk-fig-row-tree.needs-review .qzk-origin-figure-actions")
-      && declares(r.body, "visibility", "visible"))).toBe(true);
+      && declares(r.body, "display", "flex"))).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Check curves recorded on another sheet for MokeGraph" }));
     const region = await screen.findByRole("region", { name: "Recover MokeGraph" });
     expect(region).toHaveTextContent(
@@ -283,8 +315,14 @@ describe("FigureRow — PR C additions", () => {
       originFigures: [emptyEntry],
     });
     const { container } = render(<FigureRow entry={emptyEntry} treeMode />);
+    // The name part is the (dimmed) unavailable thing, never the row's actions.
     expect(container.querySelector('[data-lib-row="origin-figure:g2"]')).toHaveAttribute("aria-disabled", "true");
-    fireEvent.click(screen.getByRole("button", { name: /Recover unresolved Origin bindings/ }));
+    // Recover… is the row's one action: enabled, a tab stop of the row, and
+    // under no aria-disabled ancestor (which disables descendants for AT).
+    const recover = screen.getByRole("button", { name: /Recover unresolved Origin bindings/ });
+    expect(recover).toBeEnabled();
+    expect(recover.closest('[aria-disabled="true"]')).toBeNull();
+    fireEvent.click(recover);
     expect(await screen.findByText("Saved columns found, but this layer has no numeric data")).toBeVisible();
     expect(screen.getByRole("button", { name: "Inspect columns" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Rebuild plot" })).toBeDisabled();

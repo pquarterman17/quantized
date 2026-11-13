@@ -52,6 +52,7 @@ def global_fit(
     upper: Sequence[float] | None = None,
     channel: int = 0,
     weights: str = "none",
+    covariance: str = "jtj",
 ) -> dict[str, Any]:
     """Fit ``datasets`` simultaneously with shared/per-dataset parameters.
 
@@ -60,7 +61,8 @@ def global_fit(
     length-M (one dataset). ``weights`` ∈ {``none``, ``1/y``, ``1/y2``}. Returns a
     dict with ``sharedParams``/``sharedErrors``, ``perDataset``/``perErrors`` (N×M),
     per-dataset ``R2`` + ``residuals``, ``R2global``, ``chiSqRed``, ``exitFlag``,
-    ``nParams``, ``nDatasets``, ``sharedMask``.
+    ``nParams``, ``nDatasets``, ``sharedMask``. ``covariance`` is passed to
+    ``curve_fit`` (``"hessian"`` reproduces MATLAB's errors).
     """
     if weights not in ("none", "1/y", "1/y2"):
         raise ValueError(f'weights must be "none", "1/y", or "1/y2", got "{weights}"')
@@ -139,12 +141,15 @@ def global_fit(
     fit = curve_fit(
         x_concat, y_concat, super_model, super_p0.tolist(),
         lower=super_lb.tolist(), upper=super_ub.tolist(), weights=w_concat, calc_errors=True,
+        covariance=covariance,
     )
     sp_opt = np.asarray(fit["params"], dtype=float)
     sp_err = np.asarray(fit["errors"], dtype=float)
 
     shared_params = sp_opt[:n_shared]
     shared_errors = sp_err[:n_shared]
+    err_both = {key: np.asarray(fit[key], dtype=float) for key in ("errorsJtj", "errorsHessian")}
+    per_both = {key: np.zeros((n, m)) for key in err_both}
     per_dataset = np.zeros((n, m))
     per_errors = np.zeros((n, m))
     residuals: list[NDArray[np.float64]] = []
@@ -159,6 +164,9 @@ def global_fit(
         e_full[free_idx] = sp_err[off : off + n_free]
         per_dataset[i, :] = p_full
         per_errors[i, :] = e_full
+        for key, vec in err_both.items():
+            per_both[key][i, shared_idx] = vec[:n_shared]
+            per_both[key][i, free_idx] = vec[off : off + n_free]
         res = y_all[i] - model_fcn(x_all[i], p_full)
         residuals.append(np.asarray(res, dtype=float))
         ss_tot = float(np.sum((y_all[i] - np.mean(y_all[i])) ** 2))
@@ -168,6 +176,10 @@ def global_fit(
     return {
         "sharedParams": shared_params,
         "sharedErrors": shared_errors,
+        "sharedErrorsJtj": err_both["errorsJtj"][:n_shared],
+        "sharedErrorsHessian": err_both["errorsHessian"][:n_shared],
+        "perErrorsJtj": per_both["errorsJtj"],
+        "perErrorsHessian": per_both["errorsHessian"],
         "perDataset": per_dataset,
         "perErrors": per_errors,
         "R2": r2_per,

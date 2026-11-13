@@ -311,7 +311,7 @@ def _build_book(
         meta["origin_complex_imaginary"] = {
             c: [None if x != x else x for x in _pad(v).tolist()] for c, v in imag_cols
         }
-    if row_aligned_text and text_cols:
+    if text_cols:
         # A text column is not a channel, so its Long Name / Unit have no
         # slot in `.labels` / `.units`; keep them beside the cells.
         meta["origin_text_column_labels"] = {

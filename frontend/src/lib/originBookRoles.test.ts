@@ -109,7 +109,12 @@ describe("originBookErrorRoles", () => {
   // to just that loop. Binding it to `target: -1` anyway would draw the
   // wrong loop's error magnitude on every plotted series' abscissa -- worse
   // than leaving it unbound.
-  it("Round 7 item 5: an X-error AFTER a secondary X (multi-loop Moke shape) is left unbound, not misattributed to the shared axis", () => {
+  //
+  // Origin-replacement audit: the render pipeline CAN now attach an X error to
+  // one series (`buildErrorSpans` honours an x binding whose target is a
+  // channel), so loop 2's own X-error binds to loop 2's Y -- still never to
+  // the shared axis.
+  it("Round 7 item 5: an X-error AFTER a secondary X (multi-loop Moke shape) binds to that loop's own Y, never the shared axis", () => {
     const roles = originBookErrorRoles({
       metadata: {
         origin_book: "Moke",
@@ -127,7 +132,38 @@ describe("originBookErrorRoles", () => {
         },
       },
     });
-    expect(roles?.errorRoles).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
+    expect(roles?.errorRoles).toEqual([
+      { channel: 1, target: 0, axis: "y", side: "both" },
+      { channel: 4, target: 3, axis: "x", side: "both" },
+    ]);
+  });
+
+  it("an X-error after a secondary X with no Y of its own yet stays unbound", () => {
+    const roles = originBookErrorRoles({
+      metadata: {
+        origin_column_names: ["B", "C", "D"],
+        column_designations: { A: "X", B: "Y", C: "X", D: "X-error" },
+      },
+    });
+    expect(roles?.errorRoles).toEqual([]);
+  });
+
+  // Audit item 1: X, Y, yErr, xErr, Label, Disregard, X, Y -- the xErr is the
+  // first Y's own (Origin attaches an X error to the Y it follows); bound to
+  // the shared axis it drew x-whiskers on every curve.
+  it("binds an X-error that follows a Y to THAT Y, not the shared axis", () => {
+    const roles = originBookErrorRoles({
+      metadata: {
+        origin_column_names: ["B", "C", "D", "E", "F", "G", "H"],
+        column_designations: {
+          A: "X", B: "Y", C: "Y-error", D: "X-error", E: "label", F: "disregard", G: "X", H: "Y",
+        },
+      },
+    });
+    expect(roles?.errorRoles).toEqual([
+      { channel: 1, target: 0, axis: "y", side: "both" },
+      { channel: 2, target: 0, axis: "x", side: "both" },
+    ]);
   });
 
   // Control: an X-error that precedes any secondary "X" is unambiguous --

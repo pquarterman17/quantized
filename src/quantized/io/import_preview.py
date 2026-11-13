@@ -39,10 +39,6 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 from quantized.io._decimal_comma import decimal_metadata
-from quantized.io._delimited_layout import (
-    _looks_like_units_row,
-    _numeric_score,
-)
 from quantized.io.error_binding_suggestions import suggest_error_bindings
 from quantized.io.import_categorical_guards import (
     categorical_level_problems_only,
@@ -66,15 +62,10 @@ from quantized.io.import_parse import (
 from quantized.io.import_parse import (
     _decimal_names,
     _effective_names,
-    _effective_ncols,
+    _guess_layout,
     _label_row_overrides,
     _parse_core,
     _Parsed,
-    _resolve_delim,
-    _resolve_names,
-    _scoring_rows,
-    _split,
-    _uncommented,
 )
 
 __all__ = [
@@ -215,28 +206,8 @@ class ImportSettings:
 
 def guess_settings(text: str) -> ImportSettings:
     """Best-effort starting settings for ``text`` (the wizard's initial state)."""
-    lines = text.removeprefix("\ufeff").splitlines()  # a BOM is not cell text
-    delim = _resolve_delim(lines, "auto")
-    tokens = [_split(ln, delim) for ln in lines]
-    scored = _scoring_rows(text, tokens, delim)
-    scores = [_numeric_score(t) if ln.strip() else 0.0 for t, ln in zip(scored, lines, strict=True)]
-    data_start = next((i for i, s in enumerate(scores) if s > 0.5), 0)
-
-    header_line: int | None = None
-    units_line: int | None = None
-    data_rows = [t for t in tokens[data_start:] if any(c.strip() for c in t)]
-    n_cols = _effective_ncols(data_rows)
-    # a units row just above the data, and a header above that
-    if data_start >= 2 and scores[data_start - 1] < 0.5 and _looks_like_units_row(
-        tokens[data_start - 1], n_cols
-    ):
-        units_line = data_start - 1
-        header_line = data_start - 2 if scores[data_start - 2] < 0.5 else None
-    elif data_start >= 1 and scores[data_start - 1] < 0.5:
-        header_line = data_start - 1
-    header_line, units_line = (_uncommented(lines, i) for i in (header_line, units_line))
-    names = _resolve_names(tokens, header_line, n_cols)
-    roles = ["x"] + ["y"] * (n_cols - 1) if n_cols else []
+    # Text columns start as ``label`` (kept as text), not ``y`` (_guess_roles).
+    header_line, units_line, data_start, names, roles = _guess_layout(text)
     return ImportSettings(
         delimiter="auto", header_line=header_line, units_line=units_line,
         data_start_line=data_start, column_names=names, roles=roles,

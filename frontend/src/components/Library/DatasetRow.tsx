@@ -44,7 +44,7 @@
 import { useState } from "react";
 import { buildDatasetRowMenu, removeDatasetConfirmed } from "./datasetRowMenu";
 import DatasetRowPreview from "./DatasetRowPreview";
-import { DatasetRowControls, DatasetRowName, DatasetRowTags } from "./DatasetRowParts";
+import { DatasetRowControls, DatasetRowName, DatasetRowTags, OriginSheetChip } from "./DatasetRowParts";
 import { recordWorkbookOpen } from "./libraryOpen";
 import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import Sparkline from "./Sparkline";
@@ -118,6 +118,9 @@ export default function DatasetRow({
   const moveDataset = useApp((s) => s.moveDataset);
   const renameDataset = useApp((s) => s.renameDataset);
   const folders = useApp((s) => s.folders);
+  // The workbook of the dataset on screen: a click on another sheet of it is
+  // a sheet switch (below).
+  const activeWorkbookId = useApp((s) => (s.activeId ? s.datasets.find((x) => x.id === s.activeId)?.workbookId : undefined));
 
   // Inline editors (null = not editing); rename allows an empty draft.
   const [rename, setRename] = useState<string | null>(null);
@@ -146,7 +149,10 @@ export default function DatasetRow({
     else if (e.ctrlKey || e.metaKey) toggleSelected(d.id);
     // L0.25 tree mode: a plain click selects WITHOUT touching the plot; the
     // open (double-click here, Enter via LibraryTree) is a separate gesture.
-    else if (treeMode) selectIds([d.id]);
+    // Except within the workbook already on screen: there a click on another
+    // sheet switches to it, exactly as the sheet tabs under the worksheet do
+    // (Origin-replacement live check: the card click "did nothing").
+    else if (treeMode && (!d.workbookId || d.workbookId !== activeWorkbookId)) selectIds([d.id]);
     else open();
   };
 
@@ -202,6 +208,7 @@ export default function DatasetRow({
   const nameProps = {
     dataset: d,
     compactOriginName: treeMode,
+    openHint: treeMode,
     rename,
     onChange: setRename,
     onCommit: commitRename,
@@ -243,6 +250,8 @@ export default function DatasetRow({
       // `id === activeId`) -- semantic marker for the `.active` CSS class,
       // independent of multi-select's `selected`/`.selected`.
       aria-current={active ? "true" : undefined}
+      // Tree: a click selects (L0.25), so say how to open.
+      title={treeMode ? "Double-click to open" : undefined}
       onKeyDown={onRowKeyDown}
       onClick={onRowClick}
       // L0.25 tree open gesture; the NAME span's dbl-click rename wins over it.
@@ -260,6 +269,7 @@ export default function DatasetRow({
             </span>
             {nameEl}
             <span className="qzk-ds-compact-meta" title={pendingTitle}>
+              <OriginSheetChip dataset={d} />
               {pts} pts · {ch} ch{d.pending && " · …"}
             </span>
             <DatasetRowPreview dataset={d} tabIndex={innerTab} />

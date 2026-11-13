@@ -2,7 +2,7 @@
 // appear only after a completed fit, Compare models is always offered, and
 // the ODR option only when the dataset has an X-error column.
 
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fitModel } from "../../../lib/api";
@@ -131,7 +131,7 @@ describe("CurveFitPanel — fit statistics sections", () => {
     fireEvent.click(await screen.findByRole("checkbox", { name: "Bands" }));
     expect(await screen.findByRole("button", { name: "Plot with band" })).toBeInTheDocument();
     expect(screen.getByText(/95% CI ±/)).toBeInTheDocument();
-    expect(vi.mocked(fitBands).mock.calls[0]![0]).toMatchObject({ model: "Linear", params: [2, 1], dof: 2 });
+    expect(vi.mocked(fitBands).mock.calls[0]![0]).toMatchObject({ model: "Linear", params: [2, 1], n_free: 2 });
   });
 
   it("opening Diagnostics lists AIC/BIC, R², reduced χ² and residual stats", async () => {
@@ -143,7 +143,8 @@ describe("CurveFitPanel — fit statistics sections", () => {
       details.open = true;
       fireEvent(details, new Event("toggle"));
     });
-    expect(await screen.findByText("reduced χ²")).toBeInTheDocument();
+    // The headline stats above also show reduced χ²; this one is the section's.
+    expect(await within(details).findByText("reduced χ²")).toBeInTheDocument();
     for (const k of ["AIC", "BIC", "R²", "Durbin–Watson", "skewness"]) {
       expect(screen.getAllByText(k).length).toBeGreaterThan(0);
     }

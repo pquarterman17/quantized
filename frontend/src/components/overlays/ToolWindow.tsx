@@ -30,8 +30,18 @@ import { workshopHelpTopic } from "../../lib/workshopHelp";
 import { openHelpTopic } from "../../store/help";
 import { useApp } from "../../store/useApp";
 import { useOpenerRestore } from "./useDialogFocus";
+import { useRightDockRegistration } from "./useRightDockRegistration";
 
 let zTop = 0;
+
+/** A window with no saved position opens clear of the Library panel, not over
+ *  it: the Library is where the user picks what the window acts on (and was
+ *  widened for Origin book names, so the old fixed x=120 covered its rows).
+ *  The usual clamp still keeps a narrow viewport's window on screen. */
+function clearOfLibrary(x: number): number {
+  const right = typeof document === "undefined" ? 0 : (document.querySelector(".qzk-library")?.getBoundingClientRect().right ?? 0);
+  return right > 0 ? Math.max(x, Math.round(right) + 8) : x;
+}
 
 export default function ToolWindow({
   id,
@@ -41,6 +51,7 @@ export default function ToolWindow({
   width = 360,
   onClose,
   helpTopic,
+  dock,
   children,
 }: {
   /** Stable identity for the persisted-layout registry (store/toolwindows.ts)
@@ -60,13 +71,17 @@ export default function ToolWindow({
    *  so the search lands on that command's shared one-sentence description
    *  rather than a parallel catalog. */
   helpTopic?: string;
+  /** "right": while docked at the right edge the stage reflows to the
+   *  window's left instead of running under it (store/rightDock.ts). */
+  dock?: "right";
   children: ReactNode;
 }) {
   const stored = useApp((s) => s.toolWindowLayout[id]);
   const setLayout = useApp((s) => s.setToolWindowLayout);
   const toggleCollapsed = useApp((s) => s.toggleToolWindowCollapsed);
-  const fallback = defaultToolWindowLayout(x, y, width);
+  const fallback = defaultToolWindowLayout(clearOfLibrary(x), y, width);
   const layout = stored ?? fallback;
+  useRightDockRegistration(id, dock === "right", layout);
   // P3.1: registry-driven by default (lib/workshopHelp.ts) so no panel needs
   // its own edit; an explicit `helpTopic` still wins, including for a window
   // with no registry entry.

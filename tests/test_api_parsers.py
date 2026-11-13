@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from quantized.app import app
 from quantized.datastruct import DataStruct
+from quantized.routes import _originfigures as originfigures_mod
 from quantized.routes import _plainimport as plainimport_mod
 from quantized.routes import parsers as parsers_mod
 
@@ -263,7 +264,7 @@ def test_opj_import_filters_nonactionable_figure_records(
     )
     monkeypatch.setattr(parsers_mod, "read_origin_project_all", lambda *_args, **_kw: (ds, [ds]))
     monkeypatch.setattr(
-        parsers_mod,
+        originfigures_mod,
         "extract_figures",
         lambda _raw: [
             {"name": "Graph1", "curves": [{"book": "Book1", "x": "A", "y": "B"}]},

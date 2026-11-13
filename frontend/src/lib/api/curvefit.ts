@@ -78,15 +78,24 @@ export interface EquationFitRequest {
   equation: string;
   x: number[];
   y: number[];
-  guesses?: number[];
+  /** Starting values; a null entry (or no list) is derived from the data
+   *  by the route (calc.fit_equation_init.auto_start). */
+  guesses?: (number | null)[];
   /** Per-parameter bounds; null entries = unbounded on that side. */
   lower?: (number | null)[];
   upper?: (number | null)[];
   /** Per-parameter hold flags (P2.7): a held parameter keeps its guess and
    *  reports no standard error. Omitted when nothing is held. */
   fixed?: boolean[];
+  /** Instrumental weighting: 1-sigma errors -> weights 1/dy^2. */
+  dy?: number[];
+  /** Direct weighting: the weight column used as w as given. */
   weights?: number[];
   calc_errors?: boolean;
+  /** "jtj" (Origin / scipy, default) or "hessian" (MATLAB curveFit). */
+  covariance?: "jtj" | "hessian";
+  /** Origin "Scale Error with sqrt(Reduced Chi-Sqr)"; default true. */
+  scale_errors?: boolean;
 }
 
 /** Fit a custom equation model — the SAME result shape as `fitModel`

@@ -69,15 +69,31 @@ def descriptive_stats(x: NDArray[np.float64]) -> dict[str, Any]:
                 "q1", "q3", "iqr", "skewness", "kurtosis"]
         return {"N": 0, **{k: nan for k in keys}}
 
-    mean = float(np.mean(arr))
-    std = float(np.std(arr, ddof=1)) if n > 1 else nan
+    # Moments are computed on the data divided by its largest finite
+    # magnitude, then scaled back. Raw powers of tiny values underflow
+    # (``(1e-247)**2`` is 0, so std came back 0 and ``std**3`` raised a
+    # float division by zero) and of huge ones overflow (``np.mean`` of
+    # values near 1e308 sums to inf). Skewness and kurtosis are scale-free,
+    # so they need no scaling back at all. The scale is a POWER OF TWO, so
+    # dividing and multiplying by it is exact: ordinary data gets
+    # bit-identical results, only the out-of-range intermediates change.
+    finite = np.abs(arr[np.isfinite(arr)])
+    peak = float(np.max(finite)) if finite.size else 0.0
+    scale = math.ldexp(1.0, math.frexp(peak)[1]) if peak > 0 else 1.0
+    z = arr / scale
+    zmean = float(np.mean(z))
+    zstd = float(np.std(z, ddof=1)) if n > 1 else nan
+    mean = zmean * scale
+    std = zstd * scale
     s: dict[str, Any] = {
         "N": n,
         "mean": mean,
-        "median": float(np.median(arr)),
+        "median": float(np.median(z)) * scale,
         "std": std,
         "sem": (std / math.sqrt(max(n, 1))) if not math.isnan(std) else nan,
-        "var": float(np.var(arr, ddof=1)) if n > 1 else nan,
+        # scale**2 may itself under/overflow; the product is then the honest
+        # nearest double (0 or inf), never an exception.
+        "var": float(np.var(z, ddof=1)) * scale * scale if n > 1 else nan,
         "min": float(np.min(arr)),
         "max": float(np.max(arr)),
     }
@@ -92,15 +108,15 @@ def descriptive_stats(x: NDArray[np.float64]) -> dict[str, Any]:
     else:
         s["q1"] = s["q3"] = s["iqr"] = nan
 
-    if n >= 3 and not math.isnan(std) and std > 0:
-        m3 = float(np.mean((arr - mean) ** 3))
-        s["skewness"] = m3 / std**3 * (n**2 / ((n - 1) * (n - 2)))
+    if n >= 3 and not math.isnan(zstd) and zstd > 0:
+        m3 = float(np.mean((z - zmean) ** 3))
+        s["skewness"] = m3 / zstd**3 * (n**2 / ((n - 1) * (n - 2)))
     else:
         s["skewness"] = nan
 
-    if n >= 4 and not math.isnan(std) and std > 0:
-        m4 = float(np.mean((arr - mean) ** 4))
-        raw_kurt = m4 / std**4
+    if n >= 4 and not math.isnan(zstd) and zstd > 0:
+        m4 = float(np.mean((z - zmean) ** 4))
+        raw_kurt = m4 / zstd**4
         s["kurtosis"] = ((n + 1) * raw_kurt - 3 * (n - 1)) * (n - 1) / ((n - 2) * (n - 3))
     else:
         s["kurtosis"] = nan

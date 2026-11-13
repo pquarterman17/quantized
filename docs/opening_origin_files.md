@@ -59,14 +59,31 @@ Import is thorough but not lossless. In particular:
   convert them, but the worksheet does not format them yet.
 - **Text in a non-Western code page** (e.g. a project saved on a Chinese
   Windows) may show garbled characters in text cells and labels.
-
-- **Report-sheet reference columns are dropped, not guessed.** Origin's
-  auto-generated FitLinear/NLFit "Notes"/"Summary"/ANOVA columns contain
-  variable-length text (e.g. `"cell://Parameters.Slope.Value"`) that spans
-  multiple internal records with no reliable row boundary. Rather than
-  emit misaligned or garbled values, quantized drops these columns
-  entirely — the source project is unaffected, and everything else in the
-  same workbook still imports normally.
+- **Report-sheet columns come in as text references, not computed
+  numbers.** Origin's auto-generated FitLinear/NLFit "Notes"/"Summary"/
+  ANOVA columns store variable-length reference strings (e.g.
+  `"cell://Parameters.Slope.Value"`). quantized decodes those strings in
+  both `.opj` and `.opju` and shows them in the Inspector's Origin card
+  ("Report-sheet columns"; `origin_report_sheets` metadata), but they are
+  kept OUT of the numeric worksheet/plot data, and the fit's own computed
+  value behind each reference is not recovered. Everything else in the
+  same workbook imports normally.
+- **A truncated or incomplete `.opj` is flagged, not silently trusted.**
+  An interrupted copy or download still parses up to the cut; quantized
+  compares the file's length with the size its own header records and,
+  when the file is shorter, says so in the import toast and the Origin
+  fidelity panel ("file appears incomplete or truncated"). The check runs
+  only for the `.opj` header versions it was measured on (CPYA 4.3295,
+  4.3380, 4.3386, 4.3445, 4.3478, 4.3522, 4.3551 and 4.3778 — 52 real
+  files, every one matching its recorded size exactly). Any other
+  version, and every `.opju`, is not checked: a truncated file of those
+  kinds still imports without a warning.
+- **Origin window and template files are not projects.** `.ogw`/`.ogwu`
+  (workbook), `.ogg` (graph), `.ogm` (matrix) windows and `.otw`/`.otm`
+  templates can't be opened directly — save the project as `.opj` in
+  Origin, or export the worksheet to CSV from the free Origin Viewer.
+  Graph templates (`.otp`/`.otpu`) are applied with File ▸ Import Origin
+  template.
 - **Log-scale axis detection is a heuristic when the exact flag isn't
   recoverable.** Where the on-disk lin/log bit is confirmed, quantized
   reports it exactly; otherwise it infers log scale from the axis range
@@ -88,10 +105,43 @@ Import is thorough but not lossless. In particular:
   carries real column names/units — extra sheets fall back to plain
   `A`/`B`/`C` designations.
 
-None of the above affects the *primary* worksheet data most researchers
-care about — every one of these is either a genuinely auto-generated
-Origin artifact (report-sheet columns) or a scoped, documented UI
+Apart from a truncated file (which is flagged), none of the above affects
+the *primary* worksheet data most researchers care about — every one of
+these is either a genuinely auto-generated Origin artifact (report-sheet
+columns), a file type that is not a project, or a scoped, documented UI
 simplification.
+
+## Where an opened project is kept (the upload cache)
+
+A multi-book project opened from the file picker or by drag-and-drop loads
+its non-primary books on demand, so quantized keeps **a copy of the
+project file on disk** until those books are needed — including after you
+quit and restart the app. You should know it is there:
+
+- **Location.** `origin-uploads` inside quantized's per-user cache
+  directory: `~/.cache/quantized/origin-uploads` on Linux,
+  `~/Library/Caches/quantized/origin-uploads` on macOS,
+  `%LOCALAPPDATA%\quantized\Cache\origin-uploads` on Windows. Set the
+  `QZ_UPLOAD_CACHE_DIR` environment variable to keep it elsewhere; the
+  copies then live in an `origin-uploads` subfolder of that directory, and
+  nothing else in the directory is touched.
+- **What is stored.** The uploaded `.opj`/`.opju` files themselves, byte
+  for byte (one folder per file, named by the file's SHA-256), plus a small
+  index. The folder and files are readable only by your user account
+  (`0700`/`0600` on Linux and macOS).
+- **How long.** Until the cache passes **2 GiB**, when the least recently
+  used copies are removed first — there is no time limit. If a project's
+  copy has been removed, its unloaded books show one notice offering
+  Re-import.
+- **Clearing it.** *Preferences ▸ Interaction ▸ Origin upload cache ▸
+  Clear…* deletes every copy after a confirmation that names the folder,
+  the number of files and their size; so does
+  `qz upload-cache clear` from a terminal (`qz upload-cache` shows the
+  location and size). Deleting the `origin-uploads` folder by hand while
+  the app is closed is also safe.
+
+Projects opened by path in the desktop app are read in place and are not
+copied.
 
 ## Exporting back to Origin
 
@@ -99,13 +149,24 @@ quantized can hand data back to Origin colleagues two ways:
 
 - **Recommended: Origin-ASCII + a LabTalk `.ogs` script.** Exports a CSV
   plus a small script that, when run inside Origin, imports the CSV and
-  rebuilds column designations, long names, units, and (optionally) a
-  graph. This works with **every version of Origin** and is the
+  rebuilds column designations (X, Y, yErr, xErr, Label, Disregard, Z,
+  and further X columns), long names, units, comments, and (optionally) a
+  graph of every Y column against its nearest-preceding X with its error
+  bars. This works with **every version of Origin** and is the
   well-tested, cross-platform path — use it by default.
 - **Native `.opj` project file.** quantized can also write a `.opj` file
-  directly. This **opens in real OriginPro** (verified live on Origin
-  2026b, 2026-07-07: single- and multi-book files load and re-export
-  value-exact data, names, and units — plan item 34). Because Origin
+  directly. Books of one X column plus Y columns **open in real
+  OriginPro** (verified live on Origin 2026b, 2026-07-07: single- and
+  multi-book files load and re-export value-exact data, names, and units
+  — plan item 34). The file also carries column designations (Y-error,
+  X-error, label, disregard, Z, further X columns), column comments, and
+  text outside Latin-1 (as Origin's `\(xHHHH)` escapes, which is also how
+  an accented book title is written). Those parts are **not yet verified
+  in Origin**: they round-trip through quantized's own reader, and the
+  column-association bytes agree with real Origin-written files, but no
+  such file has been opened in Origin since they were added — if Origin
+  shows a column role or a title differently, use the `.ogs` path.
+  Because Origin
   ≥2023 still *reads* the classic `.opj` format even though it no longer
   writes it, one file reaches every Origin version. The Origin-ASCII +
   `.ogs` path remains the belt-and-braces alternative (it re-runs the

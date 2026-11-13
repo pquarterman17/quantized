@@ -123,3 +123,36 @@ export function columnMetaAt(ds: Pick<DataStruct, "metadata">, col: number): Col
   if (col < 0) return undefined;
   return columnMetaList(ds)[col];
 }
+
+// ── Effective designations: the book's own + the user's "Set As" ──────────
+// The book's own (`columnMetaList` above, decoded from the FILE) overlaid
+// with the user's per-dataset "Set As" choices (`Dataset.columnDesignations`,
+// written by the worksheet's column menu -- store/columnDesignationActions.ts).
+// The plotting defaults (lib/errorbars.ts's `originHiddenChannels`,
+// lib/ownXSeries.ts, Quick Plot's per-series X) read through here so a user
+// designation is honoured exactly like a decoded one. `columnMetaList` itself
+// stays the pure FILE reader on purpose: reimport and `isDeclaredBinding`
+// compare what the FILE says, and a user override must not look like a
+// changed file layout. Kept in this module so the eager bundle carries one
+// chunk for both halves, not two (the eager-bundle ratchet,
+// scripts/check-bundle-size.mjs); the load-time sanitizer lives with its one
+// caller's chunk (lib/columnDesignationsSanitize.ts).
+
+/** A dataset's user designation map, keyed by value-channel index. */
+export type ColumnDesignations = Record<number, OriginDesignation>;
+
+/** One designation per value channel (index-aligned with `data.labels`):
+ *  the user's choice, else the book's own, else undefined. As long as the
+ *  longer of the two lists, so a book whose decoded column list runs past
+ *  its labels reads exactly as `columnMetaList` always did. `user` is
+ *  trusted: it is sanitized where it enters (a .dwk load,
+ *  lib/columnDesignationsSanitize.ts) and written only by the Set As action;
+ *  a user entry past the labels is ignored all the same. */
+export function effectiveDesignations(
+  data: Pick<DataStruct, "metadata" | "labels">,
+  user?: ColumnDesignations,
+): (OriginDesignation | undefined)[] {
+  const meta = columnMetaList(data);
+  const n = data.labels.length;
+  return Array.from({ length: Math.max(n, meta.length) }, (_, c) => (c < n ? user?.[c] : undefined) ?? meta[c]?.designation);
+}

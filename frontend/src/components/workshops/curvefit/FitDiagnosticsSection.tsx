@@ -1,7 +1,15 @@
 // Curve Fit — Diagnostics panel (lazy chunk). Collapsed by default; opening
 // it posts the current fit's y and residuals to /api/fitting/diagnostics
 // (calc.fit_stats.fit_compare + residual_diagnostics) and lists the goodness-
-// of-fit and residual statistics. Reduced χ² is the fit's own (curve_fit).
+// of-fit and residual statistics. Reduced χ², RMSE and AIC/AICc/BIC are the
+// fit's OWN numbers (curve_fit, calc.fit_metrics) whenever the result carries
+// them, so this panel and the fit summary can never disagree (fitting audit
+// finding 16 -- they used to differ by a constant, and by weighting); the
+// route's values are the fallback for an older result. RMSE is unweighted, in
+// y units; a weighted fit also lists its weighted χ² (the minimised sum).
+// R² is the fit's own too (weighted for a weighted fit, as in the summary
+// above it — the route's is unweighted and read 0.33 beside the summary's
+// 0.69 in the live check), and adj. R² is derived from that same R².
 
 import { useEffect, useState } from "react";
 
@@ -12,22 +20,37 @@ import type { CalcResult } from "../../../lib/types";
 
 interface Props {
   result: CalcResult;
-  fitData: { x: number[]; y: number[] };
+  fitData: { x: number[]; y: number[]; dy?: number[] | null; weights?: number[] | null };
+}
+
+/** The fit's own metric when it has one, else the diagnostics route's. */
+function own(result: CalcResult, key: string, fallback: number | null): number | null {
+  const v = result[key];
+  return typeof v === "number" ? v : fallback;
 }
 
 function rowsFor(d: DiagnosticsResult, result: CalcResult): string[][] {
   const c = d.compare;
   const r = d.residuals;
   const runs = r.runsTestZ == null ? "—" : `${fmt(r.runsTestZ)} (p ${fmt(r.runsTestP)})`;
+  const weighted = typeof result.chiSq === "number" && typeof result.SSR === "number" && result.chiSq !== result.SSR;
+  const r2 = own(result, "R2", c.R2);
+  // Residual dof n - p (Origin / statsmodels / the fit report), p = every
+  // fitted parameter (integration review item 1).
+  const dofAdj = c.n - c.p;
+  const adjR2 = typeof result.R2 === "number"
+    ? (dofAdj > 0 ? 1 - ((1 - result.R2) * (c.n - 1)) / dofAdj : null)
+    : c.adjR2;
   return [
     ["n / k", `${c.n} / ${c.p}`],
-    ["R²", fmt(c.R2)],
-    ["adj. R²", fmt(c.adjR2)],
+    [weighted ? "R² (weighted)" : "R²", fmt(r2)],
+    ["adj. R²", fmt(adjR2)],
     ["reduced χ²", fmt(result.chiSqRed)],
-    ["RMSE", fmt(c.rmse)],
-    ["AIC", fmt(c.aic)],
-    ["AICc", fmt(c.aicc)],
-    ["BIC", fmt(c.bic)],
+    ...(weighted ? [["weighted χ²", fmt(result.chiSq)]] : []),
+    ["RMSE (y units)", fmt(own(result, "RMSE", c.rmse))],
+    ["AIC", fmt(own(result, "AIC", c.aic))],
+    ["AICc", fmt(own(result, "AICc", c.aicc))],
+    ["BIC", fmt(own(result, "BIC", c.bic))],
     ["Durbin–Watson", fmt(r.durbinWatson)],
     ["runs test z", runs],
     ["skewness", fmt(r.skewness)],
@@ -47,8 +70,17 @@ export default function FitDiagnosticsSection({ result, fitData }: Props) {
     if (!open || !Array.isArray(residuals)) return;
     const ctrl = new AbortController();
     const nParams = Number(result.nFree ?? (result.params as number[] | undefined)?.length ?? 0);
+    // The fit's own weights (a direct column as given, or 1/dy²), so n, AIC
+    // and the residual statistics cover the points the fit used — a
+    // zero-weight outlier was being counted (integration review item 2).
+    const weights = fitData.weights ?? (fitData.dy ? fitData.dy.map((d) => 1 / (d * d)) : null);
     fitDiagnostics(
-      { y: fitData.y, residuals: residuals.map((v) => v ?? Number.NaN), n_params: nParams },
+      {
+        y: fitData.y,
+        residuals: residuals.map((v) => v ?? Number.NaN),
+        n_params: nParams,
+        ...(weights && weights.length === fitData.y.length ? { weights } : {}),
+      },
       ctrl.signal,
     )
       .then(setDiag)
@@ -79,7 +111,7 @@ export default function FitDiagnosticsSection({ result, fitData }: Props) {
         <div style={{ marginTop: 6 }}>
           <DataTable columns={["diagnostic", "value"]} rows={rowsFor(diag, result)} />
           <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
-            AIC, AICc and BIC here use n·ln(RSS/n), so they differ from the fit&apos;s AIC by a constant.
+            AIC = 2k − 2 ln L (Gaussian likelihood on the fit&apos;s weighted χ²), the same value the fit reports.
           </div>
         </div>
       )}

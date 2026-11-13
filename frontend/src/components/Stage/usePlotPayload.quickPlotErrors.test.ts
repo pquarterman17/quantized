@@ -312,10 +312,15 @@ describe("Quick Plot's error layer: one resolver, bounded scope", () => {
     expect(seed.view.hiddenChannels).toEqual([]);
   });
 
-  it("the silent import/switch rebind is untouched: without the opt-in, no role column is hidden", () => {
+  // Fitting-workflow audit #18 widened the error layer from Quick Plot to every
+  // rebind: an imported "err" column drew as its own Y curve. Same resolver,
+  // same result, now for the import/switch path too.
+  it("the import/switch rebind applies the same error layer as Quick Plot", () => {
     const ds = imported("silent", labels, values);
     const defaults = datasetViewDefaults(ds);
-    expect(defaults.hiddenChannels).toEqual([]);
-    expect(defaults.errKeys).toEqual({});
+    const seed = quickPlotFigureSeed(ds);
+    expect(defaults.hiddenChannels).toEqual([1, 3]);
+    expect(defaults.hiddenChannels).toEqual(seed.view.hiddenChannels);
+    expect(defaults.errKeys).toEqual(seed.view.errKeys);
   });
 });

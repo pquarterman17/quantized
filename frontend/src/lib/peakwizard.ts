@@ -42,16 +42,31 @@ export interface PeakFindAdvanced {
   bg_iterative: boolean;
 }
 
+/** The step-① baseline methods: the original three plus the Baseline
+ *  workshop's SNIP, anchor points, Shirley and full-range polynomial, run by
+ *  the same /api/baseline endpoints (recipeSteps.ts). */
+export const PEAK_BASELINE_METHODS = ["none", "als", "rollingball", "modpoly", "snip", "anchor", "shirley", "poly"] as const;
+export type PeakBaselineMethod = (typeof PEAK_BASELINE_METHODS)[number];
+export const PEAK_ANCHOR_METHODS = ["pchip", "linear", "spline"] as const;
+
 export interface PeakRecipe {
   version: 2;
   name: string;
   range: { lo: number | null; hi: number | null };
   baseline: {
-    method: "none" | "als" | "rollingball" | "modpoly";
+    method: PeakBaselineMethod;
     lam: number; // ALS smoothness
     p: number; // ALS asymmetry
     radius: number; // rolling-ball radius (points)
-    order: number; // modpoly order
+    order: number; // modpoly / polynomial order
+    /** Shirley iteration cap (absent = the Baseline workshop's 50). */
+    maxIter?: number;
+    /** Anchor-point X positions; each anchor's y is the working trace's y at
+     *  the nearest point, so one recipe anchors every batch dataset on its own
+     *  data. Absent/fewer than two = no anchor baseline (an error at run). */
+    anchorX?: number[];
+    /** Anchor interpolation (calc.backgrounds.anchor_baseline's keys). */
+    anchorMethod?: "pchip" | "linear" | "spline";
   };
   find: { snr_threshold: number; min_prominence: number; max_peaks: number } & Partial<PeakFindAdvanced>;
   model: { shape: string; bgDegree: number; linkMode: string; constrain: boolean };
@@ -86,6 +101,7 @@ export const peakClamp = {
   maxPeaks: (v: number): number => Math.max(1, Math.round(v)),
   bgDegree: (v: number): number => Math.max(0, Math.round(v)),
   regionWidth: (v: number): number | null => (v > 0 ? v : null),
+  maxIter: (v: number): number => Math.max(1, Math.round(v)),
 } as const;
 
 export const DEFAULT_RECIPE: PeakRecipe = {

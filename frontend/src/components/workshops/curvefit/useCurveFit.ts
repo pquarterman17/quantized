@@ -4,13 +4,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { autoGuess, bootstrapFit, listFitModels } from "../../../lib/api/curvefit";
+import { autoGuess, listFitModels } from "../../../lib/api/curvefit";
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
-import { exportCornerFigure } from "../../../lib/api/figures";
 import { fitModel } from "../../../lib/api";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitWeighting, WeightMode } from "../../../lib/types";
-import { runCancellable } from "../../../store/pendingOpActions";
 import { publishFitAnalysisResult } from "../../../store/publishFitAnalysisResult";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { toast } from "../../../store/toasts";
@@ -26,7 +24,7 @@ import {
   rowsForModel,
   type FitParamRow,
 } from "../../../lib/fitParams";
-import { dyForFit } from "../../../lib/fitweights";
+import { dyForFit, weightRequestFields } from "../../../lib/fitweights";
 import type { ByColumnOption } from "../useByPartition";
 import { useCurveFitByLevel, type CurveFitByLevelStart, type CurveFitLevelResult } from "./useCurveFitByLevel";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
@@ -34,14 +32,15 @@ import { useToolAnalysisSelection } from "../analysisselection/useToolAnalysisSe
 import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { analysisSelectionData } from "../../../lib/analysisSelection";
 
-/** The (x, y) pairs a completed fit ran on (gap rows dropped) and the
- *  channels they came from. */
-export interface FittedData {
-  x: number[];
-  y: number[];
-  xKey: number | null;
-  yKey: number;
-}
+import { rememberCurveFitOverlay } from "../../../store/curveFitOverlay";
+import { exportCornerPlot } from "./curveFitCornerPlot";
+import { parseFitStarts } from "./fitStarts";
+import { weightingNow, weightingOf } from "./fitWeighting";
+import { followRefits } from "../../../store/curveFitRefit";
+import { removeCurveFit, showRetainedCurve } from "../../../store/curveFitRemove";
+import { fitInputsChanged, fittedWeighting, onRetainedFitChange, restoreFitted, retainFitted, type Fitted, type FittedData } from "../../../store/curveFitSession";
+
+export type { FittedData } from "../../../store/curveFitSession";
 
 export interface CurveFitState {
   active: Dataset | null;
@@ -49,6 +48,8 @@ export interface CurveFitState {
   modelName: string;
   setModelName: (name: string) => void;
   result: CalcResult | null;
+  /** The data selected for fitting is no longer what `result` was fitted to. */
+  resultStale: boolean;
   /** The (x, y) pairs the last completed fit ran on — the rows its
    *  `residuals`/`yFit` align to. Null after a guess or clear. */
   fitData: FittedData | null;
@@ -56,6 +57,8 @@ export interface CurveFitState {
   busy: boolean;
   error: string | null;
   run: (kind: "guess" | "fit") => Promise<void>;
+  /** REMOVE the fit: curve, FitSpec (so auto re-fit) and the retained result.
+   *  Closing the panel must NOT call this — closing only hides. */
   clear: () => void;
   /** Bootstraps the current fit (return_samples: true) then exports a
    *  pairwise corner (pairs) plot of the parameter uncertainty — gap #29's
@@ -70,12 +73,18 @@ export interface CurveFitState {
    *  model change when the parameter name survives. */
   paramRows: FitParamRow[];
   setParamRow: (index: number, patch: Partial<FitParamRow>) => void;
+  /** Replace the whole table (a fit template's rows). */
+  replaceParamRows: (rows: FitParamRow[]) => void;
   resetParamRows: () => void;
   /** Weighting (Sol audit): mode selector + a picked sigma column for `manual`. */
   weightMode: WeightMode;
   setWeightMode: (m: WeightMode) => void;
   manualKey: number | null;
   setManualKey: (k: number | null) => void;
+  /** Origin's "Scale Error with sqrt(Reduced Chi-Sqr)" for a weighted fit
+   *  (default on); off = the error column is absolute sigmas. */
+  scaleErrors: boolean;
+  setScaleErrors: (on: boolean) => void;
   /** True when the primary fit channel has a designated error column (enables
    *  the "Y error column" mode). */
   hasYErr: boolean;
@@ -125,21 +134,30 @@ export function useCurveFit(): CurveFitState {
   // and references the CURRENT dataset/model, and the corner plot bootstraps
   // the CURRENT x/y, so a dataset/model/channel change (or a fit landing
   // after one) would otherwise ship or seed with another fit's parameters.
-  const [fitted, setFitted] = useState<{
-    result: CalcResult;
-    fitData: FittedData | null;
-    datasetId: string;
-    model: string;
-    xKey: number | null;
-    yKey: number;
-  } | null>(null);
-  const [guessOnly, setGuessOnly] = useState(false);
+  // Restored from the session on mount: closing the panel only hides it.
+  // `fitted` is what THIS mount computed (a guess or a fit). Each worksheet's
+  // last fit is also kept in the session (store/curveFitSession.ts), which is
+  // what shows after a reopen, on coming back to a worksheet fitted earlier,
+  // and after an Undo of "Remove fit".
+  const [fitted, setFitted] = useState<Fitted | null>(null);
+  const [, sessionChanged] = useState(0);
+  // Undo of "Remove fit" shows the result again, Redo drops it
+  // (curveFitRemove.ts); a background re-fit replaces it (curveFitRefit.ts).
+  useEffect(() => {
+    followRefits();
+    return onRetainedFitChange((kept, present, replaces) => {
+      setFitted((f) => (f === kept && !present ? null : f === replaces ? kept : f));
+      sessionChanged((v) => v + 1);
+    });
+  }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cornerBusy, setCornerBusy] = useState(false);
   const [weightMode, setWeightMode] = useState<WeightMode>(savedSpec?.weight?.mode ?? "none");
   const [manualKey, setManualKey] = useState<number | null>(
-    savedSpec?.weight?.mode === "manual" ? savedSpec.weight.errKey ?? null : null,
+    savedSpec?.weight?.mode === "manual" || savedSpec?.weight?.mode === "direct"
+      ? savedSpec.weight.errKey ?? null
+      : null,
   );
   // The manual weight column follows its label too (../useFollowColumnPicks).
   useFollowColumnPicks(active, (follow) => {
@@ -147,15 +165,10 @@ export function useCurveFit(): CurveFitState {
     if (next !== manualKey) setManualKey(next);
   });
   const [weightNote, setWeightNote] = useState<string | null>(null);
+  const [scaleErrors, setScaleErrors] = useState(savedSpec?.weight?.scaleErrors !== false);
 
-  /** The weighting choice for a given primary channel: `yerr` resolves its
-   *  sigma column from the view's `errKeys`; `manual` uses the picked column. */
-  function weightingFor(yKey: number): FitWeighting {
-    if (weightMode === "yerr") return { mode: "yerr", errKey: errKeys[yKey] };
-    if (weightMode === "manual")
-      return manualKey != null ? { mode: "manual", errKey: manualKey } : { mode: "manual" };
-    return { mode: weightMode };
-  }
+  /** The weighting choice for a given primary channel (./fitWeighting). */
+  const weightingFor = (yKey: number): FitWeighting => weightingOf(weightMode, errKeys, manualKey, scaleErrors, yKey);
 
   useEffect(() => {
     let cancelled = false;
@@ -207,23 +220,40 @@ export function useCurveFit(): CurveFitState {
   }, [active, xKey, plottedYKeyNow]);
 
   const model = models.find((m) => m.name === modelName);
+  const shown = fitted?.datasetId === active?.id ? fitted : restoreFitted(datasets, active?.id ?? null);
   const current =
-    fitted &&
-    fitted.datasetId === active?.id &&
-    fitted.model === modelName &&
-    fitted.xKey === xKey &&
-    fitted.yKey === plottedYKeyNow
-      ? fitted
+    shown &&
+    shown.datasetId === active?.id &&
+    shown.model === modelName &&
+    shown.xKey === xKey &&
+    shown.yKey === plottedYKeyNow
+      ? shown
       : null;
+  // A guess carries no fitted pairs; a completed fit always does.
+  const guessOnly = current != null && current.fitData === null;
   const result = current?.result ?? null;
   const fitData = current?.fitData ?? null;
+  const resultStale = useMemo(
+    () => !!fitData && !!xy && !!active &&
+      fitInputsChanged(xy, fitData, weightingNow(active, xy, weightingOf(weightMode, errKeys, manualKey, scaleErrors, xy.yKey))),
+    [xy, fitData, active, weightMode, errKeys, manualKey, scaleErrors],
+  );
+  const plotId = useApp((s) => s.activeId);
+  // Back on a worksheet fitted earlier: its curve is drawn again (never a
+  // curve the data has since moved away from).
+  useEffect(() => {
+    if (fitData && !resultStale && plotId === current?.datasetId) showRetainedCurve(plotId);
+  }, [current, fitData, resultStale, plotId]);
+  const rowsModel = useRef<FitModel | undefined>(undefined);
   useEffect(() => {
     if (!restoredRecipe.current && savedSpec?.model === modelName && model) {
       setParamRows(rowsFromFitSpec(model, savedSpec));
       restoredRecipe.current = true;
     } else {
-      setParamRows((prev) => rowsForModel(model, prev));
+      const before = rowsModel.current;
+      setParamRows((prev) => rowsForModel(model, prev, before));
     }
+    rowsModel.current = model;
     // Keyed on the model identity, not the object, so a models[] refetch
     // does not wipe the user's edits.
   }, [modelName, models.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -283,7 +313,6 @@ export function useCurveFit(): CurveFitState {
           xKey: runXKey,
           yKey: localXy.yKey,
         });
-        setGuessOnly(true);
       } else {
         // Resolve weighting -> dy over the SAME analysis rows as the fit; a
         // missing/invalid error column refits unweighted with a surfaced note.
@@ -296,8 +325,9 @@ export function useCurveFit(): CurveFitState {
         // #30: the user's starting values / bounds / fixed flags. An
         // UNTOUCHED table is the registry default, so it is neither sent nor
         // recorded — that keeps the request lean and the recipe honest about
-        // what was actually chosen.
-        const parsed = parseFitParams(paramRows, model);
+        // what was actually chosen. In an EDITED table the starts the user
+        // did not choose come from the data (fitStarts.ts).
+        const parsed = await parseFitStarts(paramRows, model, modelName, pairs.x, pairs.y);
         if (parsed.error) {
           setError(parsed.error);
           return;
@@ -307,7 +337,7 @@ export function useCurveFit(): CurveFitState {
           model: modelName,
           x: pairs.x,
           y: pairs.y,
-          ...(finiteDy ? { dy: finiteDy } : {}),
+          ...(finiteDy ? weightRequestFields(weight, finiteDy) : {}),
           ...(custom
             ? {
                 p0: parsed.p0,
@@ -322,15 +352,18 @@ export function useCurveFit(): CurveFitState {
         if (useApp.getState().datasets.find((dataset) => dataset.id === ds.id) !== ds) {
           throw new Error("worksheet changed while fitting; run the fit again");
         }
-        setFitted({
+        const done: Fitted = {
           result: r,
-          fitData: { x: pairs.x, y: pairs.y, xKey: runXKey, yKey: localXy.yKey },
+          fitData: {
+            x: pairs.x, y: pairs.y, xKey: runXKey, yKey: localXy.yKey, ...fittedWeighting(weight.mode, finiteDy),
+            weightMode: finiteDy ? weight.mode : "none", scaleErrors: weight.scaleErrors !== false,
+          },
           datasetId: ds.id,
           model: modelName,
           xKey: runXKey,
           yKey: localXy.yKey,
-        });
-        setGuessOnly(false);
+        };
+        setFitted(done);
         // Durable fit spec (audit P1 #3): records the plotted channels + the
         // weighting ACTUALLY used (unweighted if dy couldn't resolve) so the
         // recalc graph (#1) reproduces the original fit, not time/values[0].
@@ -370,6 +403,10 @@ export function useCurveFit(): CurveFitState {
         });
         useApp.getState().setFitSpec(ds.id, bound.spec, bound.rowIdentities);
         publishFitAnalysisResult(ds.id);
+        // Say so: the status line otherwise kept its previous message (after
+        // a template, "press Fit to run it" — with the fit already done).
+        useApp.getState().setStatus(`fitted ${modelName} to ${ds.name}`);
+        retainFitted(done, useApp.getState().datasets.find((d) => d.id === ds.id) ?? null);
         const yFit = r.yFit as (number | null)[] | undefined;
         if (Array.isArray(yFit)) {
           // yFit aligns to the pruned analysis x; expand it back to the full row
@@ -379,7 +416,10 @@ export function useCurveFit(): CurveFitState {
           const kept = localXy.sourceRows ?? activeRowIndices(n, droppedRows(ds));
           const aligned = restoreGapRows(yFit, pairs);
           const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
-          setFitOverlay({ datasetId: ds.id, y });
+          const overlay = { datasetId: ds.id, y };
+          rememberCurveFitOverlay(overlay);
+          setFitOverlay(overlay);
+          retainFitted(done, useApp.getState().datasets.find((d) => d.id === ds.id) ?? null, overlay);
         }
       }
     } catch (e) {
@@ -391,14 +431,9 @@ export function useCurveFit(): CurveFitState {
 
   function clear(): void {
     setFitted(null);
-    setGuessOnly(false);
     setError(null);
     setWeightNote(null);
-    setFitOverlay(null);
-    if (active) {
-      useApp.getState().setFitSpec(active.id, null);
-      useApp.setState((state) => ({ staleFits: state.staleFits.filter((id) => id !== active.id) }));
-    }
+    removeCurveFit(active?.id ?? null);
   }
 
   async function runCornerPlot(): Promise<void> {
@@ -408,30 +443,7 @@ export function useCurveFit(): CurveFitState {
     setCornerBusy(true);
     setError(null);
     try {
-      const pairs = dropGapRows(xy.x, xy.y);
-      if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to bootstrap");
-      if (!pairs.complete) {
-        toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the bootstrap.`);
-      }
-      // P3.4: bootstrap + render are one StatusBar op whose Cancel aborts
-      // whichever request is in flight; a cancel saves no file and sets no error.
-      const done = await runCancellable("Exporting corner plot…", async (signal) => {
-        const boot = await bootstrapFit({ model: modelName, x: pairs.x, y: pairs.y, p0, return_samples: true }, signal);
-        if (!boot.boot_samples || boot.boot_samples.length === 0) {
-          throw new Error("bootstrap returned no replicate samples");
-        }
-        const names = models.find((m) => m.name === modelName)?.paramNames ?? [];
-        const paramNames =
-          names.length === boot.params.length ? names : boot.params.map((_, i) => `p${i}`);
-        const stem = active.name.replace(/\.[^.]+$/, "");
-        await exportCornerFigure({
-          samples: boot.boot_samples,
-          param_names: paramNames,
-          truths: boot.params,
-          title: `${modelName} corner — ${active.name}`,
-          filename: `${stem}-corner`,
-        }, signal);
-      });
+      const done = await exportCornerPlot({ dataset: active, model: modelName, paramNames: model?.paramNames ?? [], x: xy.x, y: xy.y, p0 });
       if (!done) useApp.getState().setStatus("corner plot cancelled");
     } catch (e) {
       setError(e instanceof Error ? e.message : "corner plot failed");
@@ -444,6 +456,7 @@ export function useCurveFit(): CurveFitState {
     paramRows,
     setParamRow: (index, patch) =>
       setParamRows((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r))),
+    replaceParamRows: (rows) => setParamRows(rows.map((r) => ({ ...r }))),
     resetParamRows: () => setParamRows(resetRows(model)),
     active,
     models,
@@ -451,6 +464,7 @@ export function useCurveFit(): CurveFitState {
     setModelName,
     result,
     fitData,
+    resultStale,
     guessOnly,
     busy,
     error,
@@ -463,6 +477,8 @@ export function useCurveFit(): CurveFitState {
     setWeightMode,
     manualKey,
     setManualKey,
+    scaleErrors,
+    setScaleErrors,
     hasYErr,
     weightNote,
     byOptions: byLevel.byOptions,

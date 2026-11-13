@@ -58,6 +58,9 @@ PYPROJECT = SRC.parents[1] / "pyproject.toml"
 #: here, with its reason, rather than weakening the rules above.
 ALLOWLIST: dict[tuple[str, str], str] = {
     ("cli.py", "quantized.plugins"): "`qz plugin ...` CLI subcommand; main thread, no server",
+    ("cli.py", "quantized.routes._uploadcache"): (
+        "`qz upload-cache ...` CLI subcommand; main thread, no server"
+    ),
     ("server_launch.py", "webview"): "launcher, main thread, before the server starts",
     ("server_launch.py", "uvicorn"): "launcher, main thread, before the server starts",
     ("server_launch.py", "quantized.app"): "launcher, main thread, before the server starts",

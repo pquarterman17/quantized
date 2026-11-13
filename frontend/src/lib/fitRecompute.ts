@@ -6,6 +6,7 @@
 
 import { restoreGapRows, type FinitePairs } from "./api/finitePairs";
 import { refreshFitAnalysisResults } from "./fitAnalysisResultLive";
+import { announceFitRecomputed } from "./fitRecomputeEvents";
 import { activeRowIndices, droppedRows, expandToFull } from "./rowstate";
 import type { CalcResult, Dataset, FitSpec } from "./types";
 import type { AppState } from "../store/useApp";
@@ -64,12 +65,18 @@ export function commitRecomputedFit(
   pairs: FinitePairs,
   result: CalcResult,
   sourceRows?: readonly number[],
+  /** The 1-sigma errors the re-fit was weighted with (aligned to `pairs`). */
+  dy?: readonly number[],
 ): void {
   const updatedSpec = stampRecompute(spec, result);
   if (get().datasets.find((item) => item.id === dataset.id) !== dataset) {
     throw new Error("source or fit changed while recalculating");
   }
   set((state) => recomputedFitPatch(state, dataset, spec, updatedSpec, pairs, result.yFit, sourceRows));
+  announceFitRecomputed({
+    datasetId: dataset.id, previousSpec: spec, result, x: pairs.x, y: pairs.y, dy: dy ? [...dy] : null,
+    curve: fitOverlayValues(dataset, pairs, result.yFit, sourceRows),
+  });
 }
 
 /** Replace a saved fit's result snapshot and mark when it was regenerated. */
@@ -90,8 +97,14 @@ export function stampRecompute(
     chiSqRed: _oldChiSqRed,
     nFree: _oldNFree,
     uncertainty: _oldUncertainty,
+    statsVersion: _oldStatsVersion,
     ...recipe
   } = spec;
+  // The statistics version is part of the RESULT, not the recipe: it is
+  // whatever the fitter just used. A response that names none (an older
+  // backend) keeps the spec's own, so nothing is relabelled on a guess.
+  const declared = result.statsVersion === 2 ? 2 : result.statsVersion === 1 ? 1 : undefined;
+  const statsVersion = declared === undefined ? spec.statsVersion : declared === 2 ? 2 : undefined;
   const params = result.params;
   if (!Array.isArray(params) ||
       !params.every((value) => typeof value === "number" && Number.isFinite(value))) {
@@ -115,6 +128,7 @@ export function stampRecompute(
       ? { errors: errors as (number | null)[] }
       : {}),
     uncertainty: validErrors ? "covariance" : "none",
+    ...(statsVersion === 2 ? { statsVersion } : {}),
     ...summaries,
     ...(typeof result.nFree === "number" && Number.isInteger(result.nFree) && result.nFree >= 0
       ? { nFree: result.nFree }

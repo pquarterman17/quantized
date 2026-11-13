@@ -8,6 +8,57 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- Worksheet column menu ▸ Set As (X, Y, Z, Y Error, X Error, Label,
+  Disregard), Origin's column designations: one undoable step, saved with
+  the workspace, honoured by the default plot, Graph Builder and the .ogs,
+  .opj and consolidated-CSV exports.
+- Origin's own ASCII export (Long Name / Units / Comments rows above the
+  data) imports with names, units and comments in place, by direct import
+  and in the Import wizard; when the three header rows are ambiguous the
+  import says which rows it used and the wizard lets you choose them.
+- Origin upload cache: opened Origin projects are kept on disk (per user,
+  private, up to 2 GiB, least recently used first) so their books still
+  load after a restart. `qz upload-cache [info|clear]` and Preferences ▸
+  Interaction ▸ Origin upload cache ▸ Clear… remove them.
+- A truncated or partly copied .opj is reported (import toast and Origin
+  fidelity) instead of importing silently, for the header versions where
+  the recorded file size was measured reliable.
+- .ogs and .opj exports write every Origin designation (Y error, X error,
+  Label, Disregard, Z, a second X) and column comments; the .ogs default
+  graph plots every Y against its own X with its error bars.
+- Graph Builder seeded from a worksheet or a recovered Origin graph puts
+  Y-error columns in the error wells instead of listing them as series.
+- Library Tree rows say how to open them ("Double-click to open").
+- Curve fitting now includes 33 of Origin's built-in fit functions, with
+  Origin's names, parameter order, formulas and default bounds:
+  - Peak Functions: Gauss, GaussAmp, Lorentz, a true Voigt, PsdVoigt1/2,
+    LogNormal and Asym2Sig.
+  - Exponential: ExpDec1/2/3, ExpDecay1/2/3, ExpGro1/2 and ExpGrow1/2.
+  - Growth/Sigmoidal: Boltzmann, DoseResp, Hill, Hill1, MichaelisMenten,
+    Logistic, Logistic5, SLogistic1, SGompertz and SWeibull1.
+  - Polynomial, Power and Waveform: Poly5, the 9th-order Poly, Allometric1,
+    Sine and SineDamp.
+
+  Polynomials of order 6, 7 and 8 and a line through the origin
+  (Proportional) are added alongside them.
+
+  Each one has a starting guess computed from the data, so most fits work
+  without hand-tuned starting values. Origin's `Logistic` appears as
+  "Logistic (Origin)" because the original Logistic model keeps its name.
+  `docs/fit_models.md` lists every model with its formula and its Origin Help
+  page. A model scan with no model list fits the original models plus nine
+  of the new ones; the rest can be added to the scan by name.
+- Curve Fit weighting: **Direct (weight column)** uses a column as the
+  weights themselves, and **Scale errors with √(reduced χ²)** (on by default,
+  as in Origin) can be turned off to treat error bars as absolute.
+- Custom equation fits derive blank starting values from the data: leave a
+  guess empty ("auto") instead of typing one. New functions: natural log,
+  min/max, gamma, Heaviside/step, a conditional `if(cond, a, b)` with
+  comparisons, the Voigt profile and Bessel functions.
+- Global fits can hold parameters fixed and report errors with either
+  covariance method.
+- A fit that stalls on a parameter, or whose model is undefined at the
+  fitted values, is reported as not converged with the reason.
 - Calculators ▸ Film stack also predicts where each layer and the substrate
   appear in a reciprocal-space map for a chosen asymmetric reflection
   (H 0 L), default (103): Qx, Qz (Q = 2π/d, as in the RSM workshop), 2θ, and
@@ -111,6 +162,82 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   column on the same row as its real part.
 - Origin `.opj` data that cannot be read is named in the import's fidelity
   summary instead of being left out silently.
+
+### Changed
+
+- Origin window and template files (.ogw, .ogg, .otw, .opx, …) get an
+  Origin-specific explanation instead of "no parser registered", and a
+  failed binary import no longer suggests the text-only Import wizard.
+- Export download names keep non-ASCII project names (RFC 5987
+  `filename*`) and fold accents in the plain fallback ("Ångström run" ->
+  `Angstrom_run`); .ogs book names follow Origin's short-name rule.
+- The Library's first-run width follows the screen (210 px up to a 1360 px
+  window, up to 264 px on wider ones) so Origin book names fit; tool
+  windows open beside the Library instead of over it.
+- A Y that belongs to a later X column is held back from the one-X plot and
+  offered on its own X ("Plot each Y against its own X"); un-hiding it never
+  draws it against the wrong X.
+- The Map tab says why columns cannot be gridded (a constant axis, no row
+  with all three values) instead of drawing an offline grid of them.
+- Curve Fit: in an edited start-value table, every free parameter whose
+  start you did not type (blank, or still the default it was seeded with)
+  starts from the data-driven guess, as an untouched table does. Holding one
+  parameter used to send the model's fixed defaults for all the others, and
+  the fit could collapse. Batch fits do the same for each input.
+- Curve Fit: fit templates keep Direct (weight column) weighting and the
+  "Scale errors with √(reduced χ²)" choice; batch fits honour that switch.
+  A direct-weighted fit's report, report sheet and ANOVA use the weights as
+  given and leave zero-weight points out of N.
+- The Peak Analyzer opens docked at the right edge, like Curve Fit, instead
+  of over the Library and the plot's Y axis.
+- **Curve-fit statistics now follow Origin / scipy / statsmodels.** Several
+  reported numbers change meaning; `docs/fitting_statistics.md` has the
+  definitions. Fits saved before this change keep their old definitions when
+  they are recalculated, and the result overview says which set a fit uses;
+  **Update statistics** on a saved fit moves it to the current set.
+  - Parameter errors default to the covariance `(JᵀWJ)⁻¹·s²` (what Origin and
+    scipy `curve_fit` report) instead of the Hessian of the SSR. Both are
+    returned (`errorsJtj`, `errorsHessian`); `covariance: "hessian"` selects
+    the old one.
+  - Prediction bands are wider and confidence bands narrower. The prediction
+    band adds the fit's residual variance (it was several times too narrow),
+    per point for a weighted fit, and both bands use the residual degrees of
+    freedom (the confidence band was about 1.6× too wide for a 3-parameter
+    fit).
+  - AIC, AICc and BIC in Diagnostics and model comparison use the same
+    definition as the fit's own AIC (`2k − 2 ln L`). They are larger than
+    before by the constant `n(1 + ln 2π)`; differences between models are
+    unchanged. A weighted fit's AIC now includes the `Σ ln w` term.
+  - RMSE is always the unweighted root-mean-square residual in the units of
+    y, including for weighted and global fits. The weighted sum the fit
+    minimised is reported separately as χ².
+  - Zero-weight points no longer count as observations (n, degrees of
+    freedom, errors, AIC).
+- `POST /api/fitting/bands` takes `n_free` and `mse` (or `x_data` +
+  `obs_var` for a weighted fit) instead of `dof`.
+- Peak finding measures heights from the centre of the noise rather than its
+  lower edge and estimates noise robustly, including correlated noise, so
+  noisy patterns no longer return a flood of noise peaks. Reported heights
+  and backgrounds of noisy data shift by about two noise standard deviations.
+- Custom equations: `ln`, `gamma`, `heaviside`, `step`, `min`, `max`, `if`,
+  `voigt`, `besselj`, `bessely`, `besseli` and `besselk` are now function
+  names when called. A parameter with one of these names still works unless
+  it is written with parentheses.
+
+### Fixed
+
+- Paste and import keep a row's empty edge cells and a short first data
+  row: values no longer shift under the wrong header or lose a column, and
+  direct import and the Import wizard read such files the same way.
+- /api/stats/descriptive no longer fails on columns of tiny or huge values.
+- A project import opens its primary book; the title and status bars name
+  the sheet the Worksheet tab shows.
+
+### Security
+
+- The Origin upload cache never follows a symlink (its sweep could delete
+  files a planted link pointed to), keeps its directory 0700 / files 0600,
+  and refuses a cache directory owned by another user.
 
 ## [0.33.0] - 2026-11-01
 

@@ -94,7 +94,7 @@ export function resolveWorksheetRows(source: Dataset, rules: WorksheetRowRules) 
 
 export function worksheetTsvHeaders(source: Dataset): string[] {
   const { labels, units, metadata } = source.data;
-  const xName = String(metadata?.["x_column_name"] ?? "x");
+  const xName = String(metadata?.["x_column_long"] || metadata?.["x_column_name"] || "x"); // long name, as the header shows
   const xUnit = String(metadata?.["x_column_unit"] ?? "");
   return [
     xUnit ? `${xName} (${xUnit})` : xName,

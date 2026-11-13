@@ -57,6 +57,31 @@ describe("ToolWindow default layout", () => {
   });
 });
 
+describe("ToolWindow opens clear of the Library", () => {
+  it("a never-placed window starts right of the Library panel, not over its rows", () => {
+    // Integration e2e (export-roundtrip): with the Library widened for Origin
+    // book names, the Graph Builder's fixed x=120 covered the figure row the
+    // user double-clicks next.
+    const lib = document.createElement("aside");
+    lib.className = "qzk-library";
+    lib.getBoundingClientRect = () => ({ left: 0, right: 264, top: 0, bottom: 800, width: 264, height: 800, x: 0, y: 0, toJSON: () => ({}) });
+    document.body.appendChild(lib);
+    const innerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1360 });
+    try {
+      const { container } = render(
+        <ToolWindow id="t-lib" title="Test">
+          body
+        </ToolWindow>,
+      );
+      expect(winEl(container).style.left).toBe("272px");
+    } finally {
+      lib.remove();
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: innerWidth });
+    }
+  });
+});
+
 describe("ToolWindow persistence across close/reopen", () => {
   it("restores a previously-set store position instead of the default props", () => {
     useApp.getState().setToolWindowLayout("t3", {

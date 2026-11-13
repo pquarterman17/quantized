@@ -17,6 +17,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import DatasetRow from "./DatasetRow";
+import { declares, flatRules, readShellCss } from "../../styles/cssRules.testkit";
 
 const ds: Dataset = {
   id: "d1",
@@ -89,7 +90,7 @@ describe("DatasetRow — Tree (treeMode) compact worksheet row (UX-001)", () => 
     expect(first.container.querySelector(".qzk-ds-name")).not.toHaveTextContent("Moke:");
     expect(first.container.querySelector(".qzk-ds-name")).toHaveAttribute(
       "title",
-      "Moke:Book4 — 30 nm MnN — double-click to rename",
+      "Moke:Book4 — 30 nm MnN — double-click the row to open it, or this name to rename it",
     );
     first.unmount();
 
@@ -188,5 +189,46 @@ describe("DatasetRow — flat/full card (treeMode=false) is unchanged by UX-001"
     expect(container.querySelector(".qzk-ds")).not.toHaveClass("qzk-ds-compact");
     expect(container.querySelector(".qzk-ds-spark")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /preview/i })).not.toBeInTheDocument();
+  });
+
+  // Origin-replacement live check: in a 264px Library an Origin sheet's
+  // name got ~78px beside the "Sheet" chip ("crash:DfAqD…", every sheet
+  // alike). The Tree row carries the chip inside its counts, which wrap
+  // below the name, so the name keeps the line.
+  it("an Origin sheet's Tree row carries its Sheet chip in the counts, not on the name's line", () => {
+    const sheet: Dataset = { ...ds, name: "crash:DfAqDDD3@2", data: { ...ds.data, metadata: { origin_book: "DfAqDDD3@2" } } };
+    const { container } = render(<DatasetRow dataset={sheet} {...baseProps} treeMode />);
+    const chip = container.querySelector('[title="Origin worksheet"]');
+    expect(chip).toHaveTextContent("Sheet");
+    expect(chip?.parentElement).toHaveClass("qzk-ds-compact-meta");
+  });
+});
+
+describe("Library rows: a book or sheet name outranks its kind chip", () => {
+  const rules = flatRules(readShellCss());
+  const rule = (sel: string) => rules.find((r) => r.selector === sel)?.body ?? "";
+  it("the workbook row's Origin book chip gives up width before the name", () => {
+    expect(declares(rule(".qzk-workbook-row > .qzk-group-name"), "flex", "1 1 auto")).toBe(true);
+    const chip = rule(".qzk-workbook-row > .qzk-origin-kind");
+    expect(declares(chip, "flex", "0 1000 auto")).toBe(true);
+    expect(declares(chip, "text-overflow", "ellipsis")).toBe(true);
+    expect(declares(rule(".qzk-workbook-row > .qzk-group-count"), "flex-shrink", "0")).toBe(true);
+  });
+});
+
+describe("Library Tree rows say how to open them", () => {
+  // Coordinator follow-up: a click on a sheet card only SELECTS (L0.25, except
+  // a sheet of the workbook already on screen), so the open gesture must be
+  // discoverable where the user hovers.
+  it("the row and its name tooltip name the double-click", () => {
+    const { container } = render(<DatasetRow dataset={ds} {...baseProps} treeMode />);
+    expect(container.querySelector(".qzk-ds")).toHaveAttribute("title", "Double-click to open");
+    expect(container.querySelector(".qzk-ds-name")?.getAttribute("title")).toMatch(/double-click the row to open it/);
+  });
+
+  it("the flat list (where a click opens) carries no such hint", () => {
+    const { container } = render(<DatasetRow dataset={ds} {...baseProps} />);
+    expect(container.querySelector(".qzk-ds")).not.toHaveAttribute("title");
+    expect(container.querySelector(".qzk-ds-name")).toHaveAttribute("title", "sample.dat — double-click to rename");
   });
 });

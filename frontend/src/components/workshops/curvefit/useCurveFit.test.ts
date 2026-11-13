@@ -78,6 +78,24 @@ describe("useCurveFit saved recipe", () => {
   });
 });
 
+describe("useCurveFit edited start table", () => {
+  it("holding one parameter keeps the data-driven starts for the others", async () => {
+    vi.mocked(listFitModels).mockResolvedValue({ models: [{
+      name: "Linear", category: "line", paramNames: ["slope", "intercept"], nParams: 2,
+      p0: [1, 0], lb: [null, null], ub: [null, null],
+    }] });
+    vi.mocked(autoGuess).mockResolvedValue({ p0: [10, 0.25] });
+    vi.mocked(fitModel).mockResolvedValue({ params: [10, 0], yFit: [10, 20, 30, 40] });
+    const { result } = renderHook(() => useCurveFit());
+    await waitFor(() => expect(result.current.paramRows).toHaveLength(2));
+    act(() => result.current.setParamRow(1, { start: "0", fixed: true }));
+    await act(async () => result.current.run("fit"));
+    // Before: p0 [1, 0] — the registry's slope 1, not the data's 10.
+    expect(fitModel).toHaveBeenCalledWith(expect.objectContaining({ p0: [10, 0], fixed: [false, true] }));
+    expect(autoGuess).toHaveBeenCalledWith("Linear", [0, 1, 2, 3], [10, 20, 30, 40]);
+  });
+});
+
 describe("useCurveFit exclusion honoring (#50/#53)", () => {
   it("fits an explicit shared-selection row/range subset and records its original rows", async () => {
     const dataset = { id: "d1", name: "run.dat", data: DATA };
@@ -375,6 +393,109 @@ describe("useCurveFit weighting (Sol audit — connect fitting to error columns)
       dy: [Math.sqrt(10), Math.sqrt(20), Math.sqrt(30), Math.sqrt(40)],
     });
     expect(useApp.getState().datasets[0].fitSpec?.weight).toEqual({ mode: "poisson" });
+  });
+
+  it("scale-errors off sends scale_errors: false and records it in provenance (finding 12)", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41] });
+    const { result } = renderHook(() => useCurveFit());
+    expect(result.current.scaleErrors).toBe(true); // Origin's default
+    act(() => result.current.setWeightMode("poisson"));
+    act(() => result.current.setScaleErrors(false));
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    expect(fitModel).toHaveBeenCalledWith({
+      model: "Linear",
+      x: [0, 1, 2, 3],
+      y: [10, 20, 30, 40],
+      dy: [Math.sqrt(10), Math.sqrt(20), Math.sqrt(30), Math.sqrt(40)],
+      scale_errors: false,
+    });
+    expect(useApp.getState().datasets[0].fitSpec?.weight).toEqual({ mode: "poisson", scaleErrors: false });
+  });
+
+  it("direct weighting sends the picked column as `weights` and records it (review item 11)", async () => {
+    const multi: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [[10, 4], [20, 0], [30, 1], [40, 0.25]],
+      labels: ["moment", "w"],
+      units: ["emu", ""],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run.dat", data: multi }],
+      activeId: "d1", xKey: null, yKeys: [0], seriesOrder: null, errKeys: {}, fitOverlay: null,
+    });
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41], exitFlag: 1, statsVersion: 2 });
+    const { result } = renderHook(() => useCurveFit());
+    act(() => result.current.setWeightMode("direct"));
+    act(() => result.current.setManualKey(1));
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    expect(fitModel).toHaveBeenCalledWith({
+      model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40], weights: [4, 0, 1, 0.25],
+    });
+    const spec = useApp.getState().datasets[0].fitSpec;
+    expect(spec?.weight).toEqual({ mode: "direct", errKey: 1 });
+    expect(spec?.statsVersion).toBe(2); // the fitter declared the current statistics
+    // The report/residuals/output read the weighting from fitData: the column
+    // holds WEIGHTS, so it must not pose as 1-sigma errors (`dy`), which the
+    // report would turn into 1/dy² — a zero weight there is a 422.
+    expect(result.current.fitData).toMatchObject({ dy: null, weights: [4, 0, 1, 0.25] });
+  });
+
+  it("a weighted result goes stale when its σ column, weight mode or scale switch changes (review item 3)", async () => {
+    const multi: DataStruct = {
+      time: [0, 1, 2, 3], values: [[10, 1], [20, 2], [30, 1], [40, 2]], labels: ["moment", "dM"], units: ["emu", "emu"], metadata: {},
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run.dat", data: multi }],
+      activeId: "d1", xKey: null, yKeys: [0], seriesOrder: null, errKeys: {}, fitOverlay: null,
+    });
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41], exitFlag: 1 });
+    const { result } = renderHook(() => useCurveFit());
+    act(() => result.current.setWeightMode("manual"));
+    act(() => result.current.setManualKey(1));
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    expect(result.current.resultStale).toBe(false);
+    act(() => result.current.setScaleErrors(false));
+    expect(result.current.resultStale).toBe(true);
+    act(() => result.current.setScaleErrors(true));
+    expect(result.current.resultStale).toBe(false);
+    act(() => result.current.setWeightMode("none"));
+    expect(result.current.resultStale).toBe(true);
+    act(() => result.current.setWeightMode("manual"));
+    expect(result.current.resultStale).toBe(false);
+    // An edited σ value (x and y untouched).
+    act(() => useApp.setState((st) => ({
+      datasets: st.datasets.map((d) => ({ ...d, data: { ...d.data, values: [[10, 1], [20, 5], [30, 1], [40, 2]] } })),
+    })));
+    expect(result.current.resultStale).toBe(true);
+  });
+
+  it("direct weighting with no column picked fits unweighted and says so", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41] });
+    const { result } = renderHook(() => useCurveFit());
+    act(() => result.current.setWeightMode("direct"));
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
+    expect(result.current.weightNote).toMatch(/pick a column of weights/);
+  });
+
+  it("scale-errors off is not sent for an unweighted fit (it always scales)", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41] });
+    const { result } = renderHook(() => useCurveFit());
+    act(() => result.current.setScaleErrors(false));
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
+    expect(useApp.getState().datasets[0].fitSpec?.weight).toBeUndefined();
   });
 
   it("yerr with no designated column fits unweighted and surfaces a note", async () => {

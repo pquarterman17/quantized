@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 
 import numpy as np
 
+from quantized.io._delimiter_vote import _COMMA_NUMBER_RE, _detect_delimiter
 from quantized.io._fortran_float import parse_float
 
 __all__ = [
@@ -36,18 +37,8 @@ __all__ = [
 
 _SCORE_CHUNK_ROWS = 4096
 
-# Shared across every delimited-text reader (delimited.py, sims.py, qd.py,
-# lakeshore.py): a `,`/tab/`;`/space plurality vote over the first 10 lines.
-_DELIM_CANDIDATES = (",", "\t", ";", " ")
-
-
-def _delimiter_count(line: str, ch: str) -> int:
-    """How many separators ``ch`` contributes to ``line``. A space separator
-    is a RUN of whitespace (fixed-width exports pad to align columns), so it
-    counts gaps between fields, not individual space characters."""
-    if ch == " ":
-        return max(len(line.split()) - 1, 0)
-    return line.count(ch)
+# The delimiter vote (`_detect_delimiter`) and the comma-number shape live in
+# `_delimiter_vote`; re-exported here so every reader keeps one import path.
 
 
 def split_row(line: str, delim: str) -> list[str]:
@@ -65,62 +56,51 @@ def split_row(line: str, delim: str) -> list[str]:
     if '"' in line:
         if delim == " ":
             return next(csv.reader([line], delimiter=" ", skipinitialspace=True))
-        return next(csv.reader([line], delimiter=delim))
+        return _split_quoted(line, delim)
     if delim == " ":
         return line.split()
     return line.split(delim)
 
 
-def _detect_delimiter(raw_lines: Sequence[str]) -> str:
-    """Pick the delimiter whose per-line count is both present on every
-    sampled line and least variable -- a plurality vote, not a strict
-    majority, so a ragged preamble line doesn't disqualify the real
-    delimiter by itself (see the ``std < mean * 0.5`` consistency check).
-    Defaults to comma when nothing qualifies (e.g. every candidate is
-    absent from at least one of the first 10 lines). A comma win is handed
-    to ``;`` when the sample is ``;``-delimited decimal-comma data
-    (`_semicolon_over_comma`)."""
-    test = raw_lines[:10]
-    best_delim = ","
-    best_score = 0.0
-    for ch in _DELIM_CANDIDATES:
-        counts = [_delimiter_count(line, ch) for line in test]
-        if counts and all(c > 0 for c in counts):
-            mean = sum(counts) / len(counts)
-            std = (sum((c - mean) ** 2 for c in counts) / len(counts)) ** 0.5
-            if std < mean * 0.5 and mean > best_score:
-                best_score = mean
-                best_delim = ch
-    if best_delim == "," and _semicolon_over_comma(test):
-        return ";"
-    if best_delim == " " and len(tabs := {ln.count("\t") for ln in test}) == 1 and 0 not in tabs:
-        # Every line has the same nonzero tab count: a tab export whose text
-        # cells hold spaces ("Smith, J"), which outvoted the tabs as whitespace.
-        return "\t"
-    return best_delim
-
-
-def _semicolon_over_comma(lines: Sequence[str]) -> bool:
-    """Whether a comma-voted sample is really ``;``-delimited decimal-comma data.
-
-    A headerless ``"1,5;2,5"`` file has more commas than semicolons, so the
-    plain vote picked ``","``. Narrow on purpose: every line needs the same
-    nonzero ``;`` count and no quotes, and then either the comma counts vary
-    line to line and some ``;``-cell is a comma number, or every ``;``-cell
-    holding a comma is one. A file with no ``;`` returns at once.
-    """
-    first = lines[0].count(";") if lines else 0
-    if first == 0 or any(ln.count(";") != first or '"' in ln for ln in lines):
-        return False
-    numbers = [
-        bool(_COMMA_NUMBER_RE.match(cell.strip()))
-        for ln in lines
-        for cell in ln.split(";")
-        if "," in cell
-    ]
-    if len({ln.count(",") for ln in lines}) > 1:
-        return any(numbers)  # ragged alone is no evidence: "a, b;1" / "c, d, e;2"
-    return all(numbers)
+def _split_quoted(line: str, delim: str) -> list[str]:
+    """``split_row`` for a line with a double quote and a one-character
+    delimiter, RFC 4180 style plus one tolerance :mod:`csv` lacks: a cell
+    whose first non-blank character is ``"`` is quoted even after a space
+    (``1, "1,234.5"`` is two cells, not three -- csv's default dialect
+    splits it, and ``skipinitialspace`` would strip EVERY cell's leading
+    space). A quoted cell runs to its closing quote (``""`` is a literal
+    quote) and keeps any text after it up to the delimiter, as csv does. An
+    unquoted cell is taken verbatim, a quote inside it included (``5" pipe``)."""
+    blanks = " \t".replace(delim, "")
+    out: list[str] = []
+    i, n = 0, len(line)
+    while True:
+        j = i
+        while j < n and line[j] in blanks:
+            j += 1
+        if j < n and line[j] == '"':
+            cell: list[str] = []
+            k = j + 1
+            while k < n:
+                if line[k] == '"':
+                    if k + 1 < n and line[k + 1] == '"':
+                        cell.append('"')
+                        k += 2
+                        continue
+                    k += 1
+                    break
+                cell.append(line[k])
+                k += 1
+            end = line.find(delim, k)
+            end = n if end < 0 else end
+            out.append("".join(cell) + line[k:end])
+        else:
+            end = line.find(delim, i)
+            end = n if end < 0 else end
+            out.append(line[i:end])
+        if end >= n:
+            return out
+        i = end + 1
 
 
 def _to_float(token: str) -> float:
@@ -348,11 +328,6 @@ def _iter_row_scores(tokens: Sequence[Sequence[str]]) -> Iterator[float]:
         yield from _score_chunk(tokens[start : start + _SCORE_CHUNK_ROWS])
 
 
-#: A number written with a comma: a decimal comma ("1,5", "-0,25", "1,5E-3",
-#: "1.234,5") or, indistinguishably, a thousands separator ("1,500").
-_COMMA_NUMBER_RE = re.compile(r"^[+-]?(?:\d{1,3}(?:\.\d{3})+|\d*),\d+(?:[eE][+-]?\d+)?$")
-
-
 def reject_comma_numbers(
     file_name: str,
     col_headers: Sequence[str],
@@ -388,6 +363,8 @@ def reject_comma_numbers(
 #: Spellings of a MISSING value in a numeric column (compared lower-cased and
 #: stripped). "nan" itself is already numeric-like; the blank cell is here.
 _MISSING_TOKENS = frozenset({"", "na", "n/a", "#n/a", "-", "--", "null", "none", "?"})
+# Confirmed data rows sampled to decide which columns are numeric.
+_TYPE_SAMPLE_ROWS = 32
 
 
 def _is_data_cell(token: str) -> bool:
@@ -401,21 +378,43 @@ def _walk_back_gappy_rows(tokens: Sequence[Sequence[str]], first_data: int) -> i
     cell: in a 2-column file ``"1,n/a"`` scores exactly 0.5, so every such
     LEADING row was skipped as preamble -- dropped without a warning -- and
     the header above it was lost too (it no longer sat directly above the
-    data). A row above ``first_data`` is taken as data only on positive
-    evidence, column by column against the first confirmed data row: same
-    width; every column that is numeric there holds a number or a missing-
-    value spelling here; and at least one cell is a number. A header, a units
-    row or a ``key,value`` preamble line has text in a numeric column, so the
-    walk stops at it.
+    data). The same holds for a file with text columns: "A,1,x,10,r1"
+    scores 0.4 although it is data. A row above ``first_data`` is taken as
+    data only on positive evidence, column by column against the column
+    types of the confirmed data rows: no wider than they are (a shorter row's
+    missing trailing cells are empty); every numeric column holds a number or
+    a missing-value spelling; and at least one numeric column holds a number.
+    A header, a units row or a ``key,value`` preamble line has text in a
+    numeric column, so the walk stops at it.
     """
-    reference = [_is_data_cell(t.strip()) for t in tokens[first_data]]
+    # Which columns hold NUMBERS, judged over a sample of the confirmed data
+    # rows rather than the first one alone: a text column ("Sample", "Run")
+    # may hold a number-looking cell ("7") in that row, and a numeric column
+    # an empty one. A column is numeric when most of its non-empty sampled
+    # cells are numbers.
+    sample = [
+        [t.strip() for t in tokens[i]]
+        for i in range(first_data, min(len(tokens), first_data + _TYPE_SAMPLE_ROWS))
+    ]
+    width = len(sample[0])
+    reference: list[bool] = []
+    for c in range(width):
+        cells = [row[c] for row in sample if c < len(row) and row[c].lower() not in _MISSING_TOKENS]
+        reference.append(bool(cells) and 2 * sum(map(_is_data_cell, cells)) > len(cells))
     start = first_data
     while start > 0:
         row = [t.strip() for t in tokens[start - 1]]
-        if len(row) != len(reference):
+        if len(row) > width:
             break
+        # A SHORTER row is data whose trailing cells are missing ("1<TAB>2"
+        # in a 3-column file, or "<TAB>2"): pad it with empty cells, which
+        # the per-column rule below treats as missing values.
+        row += [""] * (width - len(row))
         numeric = [_is_data_cell(t) for t in row]
-        if not any(numeric):
+        # At least one number IN A NUMERIC COLUMN, and every numeric column a
+        # number or a missing value; a text column may hold anything (a header,
+        # units or preamble row has text where the numbers go, so it stops).
+        if not any(n and ref for n, ref in zip(numeric, reference, strict=True)):
             break
         compatible = all(
             is_num or not ref or t.lower() in _MISSING_TOKENS

@@ -12,8 +12,11 @@
 //   - a minus at the start or after `(` is the historical `0 - operand`
 //     (binds looser than `*`), one after an operator is a prefix negation
 //     that binds tighter than `*` and looser than `^`; unary plus is dropped;
-//   - one-argument functions only, no implicit multiplication, only space and
-//     tab count as whitespace.
+//   - one-argument functions only (an equation using a multi-argument one --
+//     min/max/if/voigt/bessel*, or a comparison -- gets no preview), no
+//     implicit multiplication, only space and tab count as whitespace;
+//   - `ln`, `gamma`, `heaviside` and `step` are functions only when CALLED
+//     (`gamma(x)`); bare, they are parameters, as in the backend (`_CALL_ONLY`).
 // Anything the backend would reject, and the few things it accepts but this
 // cannot draw faithfully (non-ASCII digits; names with characters other than
 // ASCII letters/digits/`_`, Greek letters and subscript digits), yield null:
@@ -29,6 +32,10 @@
 const FUNCTIONS = new Map<string, (arg: string) => string>(Object.entries({
   exp: (a) => `e^{${a}}`,
   log: (a) => `\\ln\\left(${a}\\right)`,
+  ln: (a) => `\\ln\\left(${a}\\right)`,
+  gamma: (a) => `\\Gamma\\left(${a}\\right)`,
+  heaviside: (a) => `H\\left(${a}\\right)`,
+  step: (a) => `\\operatorname{step}\\left(${a}\\right)`,
   log10: (a) => `\\log_{10}\\left(${a}\\right)`,
   sqrt: (a) => `\\sqrt{${a}}`,
   abs: (a) => `\\left|${a}\\right|`,
@@ -43,6 +50,9 @@ const FUNCTIONS = new Map<string, (arg: string) => string>(Object.entries({
     ].map(([name, op]) => [name, (a: string) => `${op}\\left(${a}\\right)`]),
   ),
 }));
+
+/** Names that are functions only when followed by "(" (backend `_CALL_ONLY`). */
+const CALL_ONLY = new Set(["ln", "gamma", "heaviside", "step"]);
 
 /** The function names the preview draws (a test pins them to the backend's). */
 export const PREVIEW_FUNCTION_NAMES: readonly string[] = [...FUNCTIONS.keys()];
@@ -145,7 +155,9 @@ function tokenize(src: string): Tok[] {
       i += 1;
       while (i < s.length && IDENT_PART.test(s[i])) i += 1;
       const name = s.slice(start, i).join("");
-      if (FUNCTIONS.has(name)) {
+      let look = i;
+      while (s[look] === " " || s[look] === "\t") look += 1;
+      if (FUNCTIONS.has(name) && (s[look] === "(" || !CALL_ONLY.has(name))) {
         out.push({ t: "fn", name });
         prev = "function";
         continue;

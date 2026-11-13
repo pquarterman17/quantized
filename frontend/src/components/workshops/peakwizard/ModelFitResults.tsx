@@ -18,9 +18,17 @@ const SHAPE_LABEL: Record<string, string> = {
   gaussian: "Gauss", lorentzian: "Lorentz", pseudo_voigt: "pV", voigt: "Voigt",
 };
 
+/** A standard error to two significant figures (its own precision); the
+ *  full value is in the tooltip. */
+export function fmtErr(err: number): string {
+  const a = Math.abs(err);
+  if (!Number.isFinite(err)) return "—";
+  return a !== 0 && (a < 1e-3 || a >= 1e5) ? err.toExponential(1) : String(Number(err.toPrecision(2)));
+}
+
 /** "± err", or a dash that explains itself on hover. */
 function Err({ err, reason }: { err: number | null; reason: string | null }): ReactNode {
-  if (err !== null) return <span style={faint}>± {fmtNum(err)}</span>;
+  if (err !== null) return <span style={faint} title={`± ${fmtNum(err)}`}>± {fmtErr(err)}</span>;
   return (
     <span style={faint} title={reason ?? "no error reported"} data-no-error="">
       ± —
@@ -28,10 +36,16 @@ function Err({ err, reason }: { err: number | null; reason: string | null }): Re
   );
 }
 
-function Pm({ value, err, reason }: { value: number | null; err: number | null; reason: string | null }) {
+/** Value over its error. `stacked` (the per-peak table) puts the error on a
+ *  second line, so six columns fit the docked 420 px window without a
+ *  sideways scroll (fitting live check: height and area were cut off). */
+function Pm({ value, err, reason, stacked = false }: {
+  value: number | null; err: number | null; reason: string | null; stacked?: boolean;
+}) {
   return (
-    <span style={{ whiteSpace: "nowrap" }}>
-      {fmtNum(value)} <Err err={err} reason={reason} />
+    <span style={{ whiteSpace: "nowrap", display: stacked ? "inline-flex" : undefined, flexDirection: "column", alignItems: "flex-end" }}>
+      <span>{fmtNum(value)}</span>{" "}
+      <Err err={err} reason={reason} />
     </span>
   );
 }
@@ -57,7 +71,7 @@ export default function ModelFitResults({ r }: { r: PeakModelFitResponse }) {
           ))}
         </ul>
       )}
-      <div style={{ marginTop: 6, maxHeight: 180, overflow: "auto" }}>
+      <div className="qzk-dense-table" data-testid="peak-results" style={{ marginTop: 6, maxHeight: 180, overflow: "auto" }}>
         <DataTable
           columns={["#", "shape", "center", "FWHM", "height", "area"]}
           rows={r.peaks.map((p, k) => [
@@ -69,6 +83,7 @@ export default function ModelFitResults({ r }: { r: PeakModelFitResponse }) {
                 value={p[key]}
                 err={p[`${key}_stderr`]}
                 reason={derivedErrorReason(r, k, key)}
+                stacked
               />
             )),
           ])}

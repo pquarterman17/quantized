@@ -1552,7 +1552,9 @@ the shipped contract)
   LRU cache — `routes/_bookcache.py`, bound 4 projects — with the SAME parse
   it already did, so the common case never re-reads the file). Upload-
   sourced projects stage their bytes persistently (bounded LRU, 8 uploads —
-  `routes/_uploadcache.py`) instead of the ephemeral per-request temp dir,
+  `routes/_uploadcache.py`; since the 2026-11 interchange audit a
+  content-hash keyed on-disk cache with a persisted index, 2 GiB byte-
+  bounded LRU, that survives app restarts) instead of the ephemeral per-request temp dir,
   so a later book fetch still has bytes to re-parse if the cache misses.
   Trimmed the (pre-existing, unrelated-to-#38) `origin_books` per-project
   inventory metadata key from every wire payload — write-only/unconsumed,

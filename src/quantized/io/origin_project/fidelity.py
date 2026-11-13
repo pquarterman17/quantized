@@ -14,6 +14,7 @@ from typing import Any, Literal, NotRequired, TypedDict
 
 from quantized.datastruct import DataStruct
 from quantized.io.origin_project.graph_preview import PreviewDiagnostic
+from quantized.io.origin_project.integrity import ContainerIntegrity
 
 __all__ = [
     "assess_origin_figures",
@@ -51,6 +52,9 @@ class OriginFidelityManifest(TypedDict):
     # Per-dataset reasons behind the DATA omissions (a worksheet dataset or a
     # matrix that was not imported). Present only when there are any.
     data_diagnostics: NotRequired[list[dict[str, str]]]
+    # File length vs the size its header records (``integrity.py``); added by
+    # ``integrity.apply_container_integrity`` at import time.
+    container_integrity: NotRequired[ContainerIntegrity]
 
 
 def origin_figure_decode_failure(

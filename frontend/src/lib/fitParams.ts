@@ -17,7 +17,9 @@ import type { FitModel, FitSpec } from "./types";
 
 export interface FitParamRow {
   name: string;
-  /** Starting value. Blank falls back to the model's default. */
+  /** Starting value. Blank (or the seeded default) starts from the data-driven
+   *  guess when the caller supplies one (`parseFitParams`), else the model's
+   *  default. */
   start: string;
   /** "" = unbounded. */
   min: string;
@@ -72,10 +74,19 @@ export function rowsFromFitSpec(model: FitModel | undefined, spec: FitSpec): Fit
 export function rowsForModel(
   model: FitModel | undefined,
   previous: readonly FitParamRow[],
+  /** The model `previous` was seeded from: a row still equal to ITS seed is
+   *  not an edit, so the new model seeds it fresh. Carrying an untouched
+   *  default across (Linear's b = 0 into Quadratic) made the table look
+   *  edited and froze that default as a typed start (integration review). */
+  previousModel?: FitModel,
 ): FitParamRow[] {
+  const seeded = rowsFromModel(previousModel);
+  const same = (a: FitParamRow, b: FitParamRow | undefined) =>
+    !!b && a.start === b.start && a.min === b.min && a.max === b.max && a.fixed === b.fixed;
   return rowsFromModel(model).map((fresh) => {
     const kept = previous.find((p) => p.name === fresh.name);
-    return kept ? { ...kept } : fresh;
+    if (!kept || (previousModel && same(kept, seeded.find((s) => s.name === kept.name)))) return fresh;
+    return { ...kept };
   });
 }
 
@@ -92,6 +103,10 @@ export function resetRows(model: FitModel | undefined): FitParamRow[] {
 export function parseFitParams(
   rows: readonly FitParamRow[],
   model: FitModel | undefined,
+  /** The data-driven starts (`/api/fitting/guess`) for the rows in
+   *  `autoStartRows`: a start the user never typed is the same auto start an
+   *  untouched table fits from, not the registry's static default. */
+  guess?: readonly number[],
 ): ParsedFitParams {
   const empty: ParsedFitParams = { p0: [], lower: [], upper: [], fixed: [] };
   if (!model || rows.length === 0) return empty;
@@ -101,22 +116,38 @@ export function parseFitParams(
   const upper: number[] = [];
   const fixed: boolean[] = [];
 
+  // A non-finite guess (the route sends NaN as null) leaves the row on its default.
+  const auto = new Set(
+    guess && guess.length === rows.length ? autoStartRows(rows, model).filter((i) => Number.isFinite(guess[i])) : [],
+  );
   for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
+    const row = auto.has(i) ? { ...rows[i]!, start: "" } : rows[i];
     // Shared with the equation table (lib/paramRowCheck); here a blank start
     // falls back to the model's default and a blank bound is unbounded.
     const r = checkParamRow(
       { name: row.name, start: row.start, min: row.min, max: row.max, held: row.fixed },
-      { startLabel: "start", blankStart: model.p0[i] ?? 1 },
+      { startLabel: "start", blankStart: auto.has(i) ? guess![i]! : model.p0[i] ?? 1 },
     );
     if ("error" in r) return { ...empty, error: r.error };
-    p0.push(r.start);
+    // An auto start is clipped into the user's bounds (a typed one is checked).
+    p0.push(auto.has(i) ? Math.min(Math.max(r.start, r.lo ?? -Infinity), r.hi ?? Infinity) : r.start);
     lower.push(r.lo ?? Number.NEGATIVE_INFINITY);
     upper.push(r.hi ?? Number.POSITIVE_INFINITY);
     fixed.push(row.fixed);
   }
   if (allHeld(fixed)) return { ...empty, error: ALL_HELD_ERROR };
   return { p0, lower, upper, fixed };
+}
+
+/** Rows whose start the user did not choose — blank, or still the registry
+ *  default the table was seeded with — and that are free (a held row keeps
+ *  the value it shows). In an EDITED table these start from the data-driven
+ *  guess, exactly as every row does when the table is untouched: typing one
+ *  start (or holding one parameter) used to send the static registry defaults
+ *  for all the others (centre 0, width 1 …), and the fit fell apart. */
+export function autoStartRows(rows: readonly FitParamRow[], model: FitModel | undefined): number[] {
+  const seeded = rowsFromModel(model);
+  return rows.flatMap((r, i) => (!r.fixed && (!r.start.trim() || r.start === seeded[i]?.start) ? [i] : []));
 }
 
 /** Have the rows been changed from the model's defaults?

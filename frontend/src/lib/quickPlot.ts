@@ -45,7 +45,7 @@
 // import in place (see the PR report for the exact command).
 
 import { datasetViewDefaults } from "../store/windowDefaults";
-import { columnMetaList } from "./columnmeta";
+import { effectiveDesignations } from "./columnmeta";
 import { figureSeedErrorBindings, type ErrorBinding } from "./errorRoles";
 import { legacyErrorBindings } from "./figureDocument";
 import { is2DMap } from "./mapdata";
@@ -238,7 +238,7 @@ export function quickPlotFigureSeed(
       // through `figureSeedErrorBindings`, which yields the same list.)
       const held = new Set(withhold.map((b) => b.channel));
       const seeded = { ...dataset, errorRoles: figureSeedErrorBindings(dataset).filter((b) => !held.has(b.channel)) };
-      const view = { ...defaultPlotView(), ...datasetViewDefaults(seeded, undefined, memory, { errorRoles: true }) };
+      const view = { ...defaultPlotView(), ...datasetViewDefaults(seeded, undefined, memory) };
       view.hiddenChannels = [...new Set([...view.hiddenChannels, ...held])];
       const rich = figureSeedErrorBindings(seeded).filter((b) => b.axis !== "y" || b.side !== "both");
       return {
@@ -257,5 +257,5 @@ export function quickPlotFigureSeed(
  *  answer null -- e.g. every paired Y is hidden -- and then the plain seed
  *  applies). */
 export function hasDesignatedSeriesX(dataset: Dataset): boolean {
-  return columnMetaList(dataset.data).some((c) => c?.designation === "X");
+  return effectiveDesignations(dataset.data, dataset.columnDesignations).includes("X");
 }

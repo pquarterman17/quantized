@@ -1,6 +1,7 @@
-// Origin import-fidelity wire types (`io/origin_project/fidelity.py`):
-// the per-figure and per-project decode report. Split out of `./types`
-// (module-size ceiling); `./types` re-exports every name, so importers are
+// Origin import-fidelity wire types (backend io/origin_project/fidelity.py
+// + integrity.py): the per-figure and per-project decode report and the
+// saved-preview diagnostics it carries. Split out of lib/types.ts under its
+// module-size ceiling; types.ts re-exports every name, so importers are
 // unchanged.
 
 export type OriginFidelityStatus = "exact" | "best_effort" | "reference_only" | "unresolved";
@@ -21,13 +22,6 @@ export interface OriginCurveSheetNote {
   recorded: string;
 }
 
-export interface OriginFilteredFigure {
-  index: number;
-  name: string;
-  layer: number | null;
-  reason: string;
-}
-
 export interface OriginSavedPreview {
   format: "png";
   mime: "image/png";
@@ -46,6 +40,23 @@ export interface OriginPreviewDiagnostic {
   assets?: OriginSavedPreview[];
 }
 
+export interface OriginFilteredFigure {
+  index: number;
+  name: string;
+  layer: number | null;
+  reason: string;
+}
+
+/** File length vs the size the project's own header records. */
+export interface OriginContainerIntegrity {
+  checked: boolean;
+  /** null: not checkable, or longer than recorded (unverified). */
+  complete: boolean | null;
+  file_bytes: number;
+  declared_bytes: number | null;
+  detail: string;
+}
+
 export interface OriginFidelityManifest {
   version: 1;
   container: "opj" | "opju";
@@ -57,4 +68,8 @@ export interface OriginFidelityManifest {
   filtered_figures: OriginFilteredFigure[];
   /** Optional for backward compatibility with #49 workspaces. */
   preview_diagnostics?: OriginPreviewDiagnostic[];
+  /** File length vs the size its header records (backend
+   *  io/origin_project/integrity.py). A truncated file also lists the
+   *  `file_truncated` omission. Optional: older workspaces lack it. */
+  container_integrity?: OriginContainerIntegrity;
 }

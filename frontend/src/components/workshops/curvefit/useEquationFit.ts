@@ -113,7 +113,7 @@ function rowsFromModel(m: CustomFitModel): EquationParamRow[] {
     const hi = m.upper[i];
     return {
       name,
-      guess: String(m.guesses[i] ?? 1),
+      guess: m.guesses[i] == null ? "" : String(m.guesses[i]), // null = auto start
       min: lo === null ? "" : String(lo),
       max: hi === null ? "" : String(hi),
       fixed: false,

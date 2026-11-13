@@ -5,10 +5,16 @@
 // card — caption, an indicator badge, and what the export will embed — since
 // the panel itself never renders the figure (the backend does, on export).
 
+import { copyText } from "../../../lib/clipboard";
+import { csvBlob } from "../../../lib/csvCell";
+import { saveBlob } from "../../../lib/download";
 import { fmtNum } from "../../../lib/format";
+import { tablesToCSV, tablesToTSV } from "../../../lib/statsTestsResults";
+import { useApp } from "../../../store/useApp";
 import type { ReportBlock, ReportFigureBlock, ReportParam } from "../../../lib/report";
 import { Badge } from "../../primitives";
 import { IconButton } from "../../primitives/IconButton";
+import { reportBlockTable } from "./reportBlockTable";
 
 /** value ± error [unit], error omitted when absent. */
 function paramText(p: ReportParam): string {
@@ -128,12 +134,33 @@ export function EditableBlock({
   onRemove: () => void;
 }) {
   const what = block.type === "figure" ? "figure" : "block";
+  const table = reportBlockTable(block);
+  const name = table?.title ? `"${table.title}"` : `table ${index + 1}`;
+  const setStatus = useApp((s) => s.setStatus);
   return (
     <div className="qzk-report-block" data-block-key={blockKey}>
       <div className="qzk-report-block-body">
         <BlockView block={block} />
       </div>
       <div className="qzk-report-block-ctl">
+        {table && (
+          <>
+            <IconButton
+              aria-label={`Copy ${name} as text`}
+              title="Copy as tab-separated text"
+              onClick={() => void copyText(tablesToTSV([table])).then((ok) => setStatus(ok ? `copied ${name}` : "clipboard unavailable — use Save CSV"))}
+            >
+              ⧉
+            </IconButton>
+            <IconButton
+              aria-label={`Save ${name} as CSV`}
+              title="Save as a CSV file"
+              onClick={() => saveBlob(csvBlob(tablesToCSV([table])), `${(table.title || "table").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_")}.csv`)}
+            >
+              ⤓
+            </IconButton>
+          </>
+        )}
         <IconButton
           aria-label={`Move ${what} up`}
           title="Move up"

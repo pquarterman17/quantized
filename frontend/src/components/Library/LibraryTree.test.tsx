@@ -617,6 +617,16 @@ describe("LibraryTree — L0.25 select/open/disclosure contract, every node kind
     expect(s.activeId).toBe("solo"); // click did NOT open/plot
   });
 
+  it("worksheet: a click on another sheet of the workbook on screen switches to it, like a sheet tab", () => {
+    // Origin-replacement live check: clicking a sheet card of the open book
+    // did nothing visible while the sheet tabs under the worksheet switch.
+    useApp.setState({ datasets: [ds("d1", "w1"), ds("d2", "w1"), ds("solo")], activeId: "d2", selectedIds: ["d2"] });
+    render(<Harness />);
+    fireEvent.click(worksheetRow("d1"));
+    expect(useApp.getState().activeId).toBe("d1");
+    expect(useApp.getState().selectedIds).toEqual(["d1"]);
+  });
+
   it("worksheet: double-click opens (activates) and records the remembered child", () => {
     render(<Harness />);
     fireEvent.doubleClick(worksheetRow("d1"));

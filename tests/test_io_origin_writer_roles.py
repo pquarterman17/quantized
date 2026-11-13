@@ -1,0 +1,191 @@
+"""``.opj`` writer: designations, comments, X fallback, text and book names.
+
+Audit 2026-11 (Origin interchange): the writer wrote every value column as
+Y, dropped comments, read X names only from the Origin-subsystem keys,
+turned ``μ`` into ``?``, kept spaces in book short names, and gave books
+without a long name the junk title ``"BA"``. Every check re-reads the file
+through the existing reader (``read_origin_books``).
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+
+from quantized.datastruct import DataStruct
+from quantized.io.origin_project import read_origin_books
+from quantized.io.origin_project.container import walk_blocks
+from quantized.io.origin_project.writer import opj_bytes, write_opj
+from quantized.io.origin_project.writer_blocks import encode_text
+
+
+def _ds(n: int, meta: dict[str, Any], labels: list[str] | None = None,
+        units: list[str] | None = None) -> DataStruct:
+    labels = labels or [f"c{j}" for j in range(n)]
+    return DataStruct(
+        time=np.array([1.0, 2.0, 3.0]),
+        values=np.arange(3.0 * n).reshape(3, n),
+        labels=tuple(labels),
+        units=tuple(units or [""] * n),
+        metadata=meta,
+    )
+
+
+def _roundtrip(tmp_path: Path, books: list[DataStruct]) -> list[DataStruct]:
+    p = tmp_path / "out.opj"
+    write_opj(books, p)
+    return read_origin_books(p)
+
+
+def test_declared_designations_roundtrip_including_second_x(tmp_path: Path) -> None:
+    meta = {
+        "origin_book": "Desig",
+        "column_designations": {
+            "B": "Y", "C": "Y-error", "D": "X-error", "E": "label",
+            "F": "disregard", "G": "X", "H": "Y", "I": "Z",
+        },
+    }
+    (back,) = _roundtrip(tmp_path, [_ds(8, meta)])
+    assert back.metadata["column_designations"] == {
+        "A": "X", "B": "Y", "C": "Y-error", "D": "X-error", "E": "label",
+        "F": "disregard", "G": "X", "H": "Y", "I": "Z",
+    }
+    np.testing.assert_array_equal(back.values, np.arange(24.0).reshape(3, 8))
+
+
+def test_live_error_roles_designate_error_columns(tmp_path: Path) -> None:
+    meta = {"origin_book": "Err", "error_roles": [
+        {"channel": 1, "target": 0, "axis": "y", "side": "both"},
+        {"channel": 2, "target": -1, "axis": "x", "side": "both"},
+    ]}
+    (back,) = _roundtrip(tmp_path, [_ds(3, meta)])
+    assert back.metadata["column_designations"] == {
+        "A": "X", "B": "Y", "C": "Y-error", "D": "X-error",
+    }
+
+
+def test_worksheet_set_as_designates_columns_in_the_opj(tmp_path: Path) -> None:
+    # Integration of the worksheet "Set As" map (user_column_designations,
+    # keyed by channel) with the .opj writer: it overrides the book's own
+    # designation, while the live error roles still decide error columns.
+    meta = {
+        "origin_book": "SetAs",
+        "column_designations": {"B": "Y", "C": "Y", "D": "Y", "E": "Y"},
+        "error_roles": [{"channel": 3, "target": 0, "axis": "y", "side": "both"}],
+        "user_column_designations": {"1": "label", "2": "X", "3": "disregard"},
+    }
+    (back,) = _roundtrip(tmp_path, [_ds(4, meta)])
+    assert back.metadata["column_designations"] == {
+        "A": "X", "B": "Y", "C": "label", "D": "X", "E": "Y-error",
+    }
+
+
+def test_designations_keyed_by_origin_column_names(tmp_path: Path) -> None:
+    # A re-exported Origin import: channel short names come from the source.
+    meta = {
+        "origin_book": "Src",
+        "origin_column_names": ["Q", "dQ"],
+        "column_designations": {"P": "X", "Q": "Y", "dQ": "Y-error"},
+        "column_comments": {"P": "x note", "dQ": "1 sigma"},
+        "x_column_name": "P",
+    }
+    (back,) = _roundtrip(tmp_path, [_ds(2, meta)])
+    assert back.metadata["column_designations"] == {"A": "X", "B": "Y", "C": "Y-error"}
+    assert back.metadata["column_comments"] == {"A": "x note", "C": "1 sigma"}
+
+
+def test_column_comments_are_written(tmp_path: Path) -> None:
+    meta = {"origin_book": "Cm", "column_comments": {"A": "swept", "B": "spin up"}}
+    (back,) = _roundtrip(tmp_path, [_ds(1, meta)])
+    assert back.metadata["column_comments"] == {"A": "swept", "B": "spin up"}
+
+
+def test_x_name_and_unit_fall_back_to_canonical_keys(tmp_path: Path) -> None:
+    meta = {"origin_book": "Xf", "x_column_name": "Field", "x_column_unit": "Oe"}
+    (back,) = _roundtrip(tmp_path, [_ds(1, meta)])
+    assert back.metadata["x_column_long"] == "Field"
+    assert back.metadata["x_unit"] == "Oe"
+
+
+def test_non_latin1_text_never_becomes_question_marks(tmp_path: Path) -> None:
+    meta = {"origin_book": "Txt", "x_column_long": "2θ", "x_unit": "°",
+            "origin_book_long": "Ångström μ-loop"}
+    (back,) = _roundtrip(
+        tmp_path, [_ds(2, meta, labels=["Moment", "n"], units=["μB", "cm⁻³"])]
+    )
+    assert back.units == ("µB", "cm⁻³")  # μ (U+03BC) -> its Latin-1 twin µ
+    assert back.metadata["x_column_long"] == "2θ"
+    assert back.metadata["x_unit"] == "°"
+    assert back.metadata["origin_book_long"] == "Ångström µ-loop"
+    assert b"?" not in encode_text("μ θ ⁻ Å Ω")
+
+
+def test_book_short_names_follow_origins_rule(tmp_path: Path) -> None:
+    books = [
+        _ds(1, {"origin_book": "Wide Book (30 cols)"}),
+        _ds(1, {"origin_book": "wide book 30 cols"}),  # case-insensitive clash
+        _ds(1, {"origin_book": "2024 run"}),
+    ]
+    back = _roundtrip(tmp_path, books)
+    shorts = [b.metadata["origin_book"] for b in back]
+    assert shorts == ["WideBook30cols", "widebook30cols2", "B2024run"]
+    assert all(s.isalnum() and s[0].isalpha() for s in shorts)
+    # The original text survives as the long name.
+    assert [b.metadata["origin_book_long"] for b in back] == [
+        "Wide Book (30 cols)", "wide book 30 cols", "2024 run",
+    ]
+
+
+def test_book_without_long_name_reads_back_its_short_name(tmp_path: Path) -> None:
+    # Was "BA": the minimal no-marker header sent the reader to its printable-
+    # run fallback, which picked template bytes as the title.
+    (back,) = _roundtrip(tmp_path, [_ds(1, {"origin_book": "Moke"})])
+    assert back.metadata["origin_book_long"] == "Moke"
+
+
+def test_storage_marker_in_user_text_round_trips(tmp_path: Path) -> None:
+    # "@${" is the reader's storage marker: unescaped, `a@${b` read back as `a`
+    # and took the unit and comment rows with it.
+    meta = {
+        "origin_book": "Mk",
+        "origin_book_long": "run @${1}",
+        "column_comments": {"B": "note @${x} end"},
+    }
+    (back,) = _roundtrip(tmp_path, [_ds(1, meta, labels=["a@${b"], units=["u@${"])])
+    assert back.labels == ("a@${b",)
+    assert back.units == ("u@${",)
+    assert back.metadata["column_comments"] == {"B": "note @${x} end"}
+    assert back.metadata["origin_book_long"] == "run @${1}"
+    assert b"@${" not in encode_text("a@${b")
+
+
+def test_property_blocks_follow_the_corpus_association_model() -> None:
+    """@35 of each 519B property block: a Y points at its X; a Y-error /
+    X-error / label / Z column at the nearest-preceding Y (measured on real
+    Origin files, writer_blocks.prop_block); X and disregard carry 0."""
+    meta = {
+        "origin_book": "Assoc",
+        "column_designations": {
+            "B": "Y", "C": "Y-error", "D": "X-error", "E": "label", "F": "Z",
+            "G": "disregard", "H": "X", "I": "Z", "J": "Y", "K": "Y-error",
+        },
+    }
+    raw = opj_bytes([_ds(10, meta)])
+    props = [p for size, p in walk_blocks(raw) if size == 519]
+    got = {
+        p[0x12:0x14].split(b"\x00")[0].decode(): (
+            int.from_bytes(p[4:6], "little"), int.from_bytes(p[35:37], "little"), p[38], p[51]
+        )
+        for p in props
+    }
+    serial = {name: vals[0] for name, vals in got.items()}
+    assoc = {name: vals[1] for name, vals in got.items()}
+    assert assoc["A"] == 0 and assoc["H"] == 0 and assoc["G"] == 0
+    assert assoc["B"] == serial["A"]
+    assert [assoc[c] for c in "CDEF"] == [serial["B"]] * 4
+    assert assoc["I"] == serial["H"]  # no Y yet in the second X group
+    assert assoc["J"] == serial["H"] and assoc["K"] == serial["J"]
+    assert [got[c][2] for c in "ABCDEFGH"] == [0x51, 0x61, 0x61, 0x61, 0x61, 0x61, 0x41, 0x51]
+    assert [got[c][3] for c in "ABGHJK"] == [1, 1, 1, 2, 2, 2]

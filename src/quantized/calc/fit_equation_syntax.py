@@ -8,7 +8,11 @@ Messages are ASCII-only (non-ASCII input is echoed as ``\\uXXXX`` escapes),
 matching the HTTP error-text convention of ``routes/peaks_batch``.
 
 Grammar (Python-flavoured): numbers, ``x``, parameters, the constants
-``pi``/``e``, one-argument functions ``name(expr)``, parentheses, binary
+``pi``/``e``, functions ``name(expr, ...)`` with a fixed argument count
+(``FUNCTION_NAMES`` take one; ``MULTI_ARG_FUNCTIONS`` maps the others --
+``min``/``max``, the conditional ``if(cond, a, b)``, ``voigt`` and the Bessel
+family -- to theirs), parentheses, the comparisons ``< <= > >= == !=``
+(binding loosest of all; they give 1.0 / 0.0, for ``if``), binary
 ``+ - * / ^`` and ``**`` (a synonym of ``^``: right-associative, binding
 tighter than unary minus on its left -- ``-x**2`` is ``-(x**2)`` -- and
 looser on its right -- ``2**-1`` is ``2**(-1)``), and unary ``+``/``-``.
@@ -42,17 +46,38 @@ import math
 import re
 from typing import Any
 
-__all__ = ["CONSTANTS", "FUNCTION_NAMES", "EquationSyntaxError", "parse_tokens"]
+__all__ = [
+    "CONSTANTS",
+    "FUNCTION_ARITY",
+    "FUNCTION_NAMES",
+    "MULTI_ARG_FUNCTIONS",
+    "EquationSyntaxError",
+    "parse_tokens",
+]
 
+# One-argument functions. (The frontend LaTeX preview pins this tuple.)
 FUNCTION_NAMES: tuple[str, ...] = (
-    "exp", "log", "log10", "sqrt", "abs", "sin", "cos", "tan", "asin", "acos",
+    "exp", "log", "ln", "log10", "sqrt", "abs", "sin", "cos", "tan", "asin", "acos",
     "atan", "sinh", "cosh", "tanh", "coth", "erf", "erfc", "sign", "floor",
-    "ceil", "round",
+    "ceil", "round", "gamma", "heaviside", "step",
 )
-_FUNCTION_SET = frozenset(FUNCTION_NAMES)
+# Functions of more than one argument -> their argument count.
+MULTI_ARG_FUNCTIONS: dict[str, int] = {
+    "min": 2, "max": 2, "if": 3, "voigt": 3,
+    "besselj": 2, "bessely": 2, "besseli": 2, "besselk": 2,
+}
+FUNCTION_ARITY: dict[str, int] = {**dict.fromkeys(FUNCTION_NAMES, 1), **MULTI_ARG_FUNCTIONS}
+# Names added after models were already being saved. Each is a function only
+# when CALLED -- ``gamma(x)`` -- and otherwise still a parameter, so a saved
+# Lorentzian ``A*gamma^2/((x-x0)^2+gamma^2)`` keeps its meaning.
+_CALL_ONLY = frozenset({"ln", "gamma", "heaviside", "step", *MULTI_ARG_FUNCTIONS})
+_FUNCTION_SET = frozenset(FUNCTION_ARITY)
 CONSTANTS: dict[str, float] = {"pi": math.pi, "e": math.e}
 # Binary operators, plus the prefix "neg" (between * / and ^: see the module doc).
-_PREC = {"+": 1.0, "-": 1.0, "*": 2.0, "/": 2.0, "neg": 2.5, "^": 3.0}
+# Comparisons bind loosest: ``x < a + b`` is ``x < (a + b)``.
+_COMPARISONS = ("<=", ">=", "==", "!=", "<", ">")
+_PREC = {"+": 1.0, "-": 1.0, "*": 2.0, "/": 2.0, "neg": 2.5, "^": 3.0,
+         **dict.fromkeys(_COMPARISONS, 0.5)}
 _VALUE_TYPES = ("number", "x", "param")
 _LHS = re.compile(r"^\s*(y|f\(x\))\s*=\s*")
 
@@ -119,18 +144,19 @@ def _identifier(s: str, pos: int, base: int, params: list[str], spans: dict[str,
         pos += 1
     name = s[start:pos]
     a, b = base + start, base + pos
-    if name in _FUNCTION_SET:
-        return _tok("function", name, a, b, name), pos
-    # A non-function identifier directly followed by "(" is a call of an
-    # unknown symbol (there is no implicit multiplication in this grammar).
     look = pos
     while look < n and s[look] in " \t":
         look += 1
-    if look < n and s[look] == "(":
+    called = look < n and s[look] == "("
+    if name in _FUNCTION_SET and (called or name not in _CALL_ONLY):
+        return _tok("function", name, a, b, name), pos
+    # A non-function identifier directly followed by "(" is a call of an
+    # unknown symbol (there is no implicit multiplication in this grammar).
+    if called:
         if name in CONSTANTS or name == "x":
             raise EquationSyntaxError(f'"{name}" cannot be called as a function', a, b)
         raise EquationSyntaxError(
-            f'Unknown function "{name}". Known functions: ' + ", ".join(sorted(FUNCTION_NAMES)),
+            f'Unknown function "{name}". Known functions: ' + ", ".join(sorted(FUNCTION_ARITY)),
             a, b,
         )
     if name in CONSTANTS:
@@ -172,6 +198,15 @@ def _tokenize(s: str, base: int) -> tuple[list[Token], list[str], dict[str, tupl
             prev = "operator"
             pos += 2
             continue
+        cmp_op = next((c for c in _COMPARISONS if s.startswith(c, pos)), None)
+        if cmp_op is not None:
+            tokens.append(_tok("operator", cmp_op, a, a + len(cmp_op), cmp_op))
+            prev = "operator"
+            pos += len(cmp_op)
+            continue
+        if ch in "=!":
+            raise EquationSyntaxError(
+                f'"{ch}" is not an operator (compare with ==, !=, <, <=, > or >=)', a, a + 1)
         if ch in "+-*/^(),":
             if ch == "(":
                 tokens.append(_tok("lparen", "(", a, a + 1, ch))
@@ -205,12 +240,20 @@ def _missing_operand(op: Token) -> EquationSyntaxError:
     )
 
 
+def _arity_error(func: Token, end: int) -> EquationSyntaxError:
+    n = FUNCTION_ARITY[func["value"]]
+    count = "one argument" if n == 1 else f"{n} arguments"
+    return EquationSyntaxError(
+        f'function "{func["value"]}" takes exactly {count}', func["start"], end)
+
+
 def _check_sequence(tokens: list[Token], whole: tuple[int, int]) -> None:
     """Walk the tokens as a value/operator alternation, raising the FIRST
     positioned error: missing operand, missing operator, a function without
     ``(``, a wrong argument count, or unbalanced parentheses."""
     expect_value = True
-    opens: list[tuple[Token, Token | None]] = []  # (lparen, its function or None)
+    # Open parentheses: (lparen, its function or None, commas seen so far).
+    opens: list[tuple[Token, Token | None, int]] = []
     prev: Token | None = None
     i = 0
     while i < len(tokens):
@@ -225,15 +268,21 @@ def _check_sequence(tokens: list[Token], whole: tuple[int, int]) -> None:
                     raise EquationSyntaxError(
                         f'function "{tok["value"]}" needs parentheses, e.g. {tok["value"]}(x)',
                         tok["start"], tok["end"])
-                opens.append((nxt, tok))
+                opens.append((nxt, tok, 0))
                 prev, i = nxt, i + 2
                 continue
             elif t == "lparen":
-                opens.append((tok, None))
+                opens.append((tok, None, 0))
             elif t == "unary":
                 pass
             elif prev is not None and prev["type"] in ("operator", "unary"):
                 raise _missing_operand(prev)  # "a*)", "a+*b", "a-,"
+            elif prev is not None and prev["type"] == "comma":
+                func = opens[-1][1]
+                assert func is not None  # a comma is only accepted inside a call
+                raise EquationSyntaxError(
+                    f'function "{func["value"]}" is missing an argument after ","',
+                    func["start"], tok["end"])
             elif t == "rparen" and prev is not None and prev["type"] == "lparen":
                 func = opens[-1][1]
                 if func is not None:
@@ -254,14 +303,17 @@ def _check_sequence(tokens: list[Token], whole: tuple[int, int]) -> None:
             if not opens:
                 raise EquationSyntaxError(
                     'Mismatched parentheses: unmatched ")"', tok["start"], tok["end"])
-            opens.pop()
+            _, func, commas = opens.pop()
+            if func is not None and commas + 1 != FUNCTION_ARITY[func["value"]]:
+                raise _arity_error(func, tok["end"])
         elif t == "comma":
-            func = opens[-1][1] if opens else None
+            lparen, func, commas = opens[-1] if opens else (tok, None, 0)
             if func is None:
                 raise EquationSyntaxError('Unexpected ","', tok["start"], tok["end"])
-            raise EquationSyntaxError(
-                f'function "{func["value"]}" takes exactly one argument',
-                func["start"], tok["end"])
+            if commas + 1 >= FUNCTION_ARITY[func["value"]]:
+                raise _arity_error(func, tok["end"])
+            opens[-1] = (lparen, func, commas + 1)
+            expect_value = True
         else:
             raise EquationSyntaxError(
                 f'Missing operator before "{tok["text"]}" (write "*" to multiply)',
@@ -274,7 +326,7 @@ def _check_sequence(tokens: list[Token], whole: tuple[int, int]) -> None:
         if not opens:
             raise EquationSyntaxError("Expected a value", *whole)
     if opens:
-        lparen, func = opens[-1]
+        lparen, func, _ = opens[-1]
         start = func["start"] if func is not None else lparen["start"]
         raise EquationSyntaxError(
             'Mismatched parentheses: "(" is never closed', start, lparen["end"])
@@ -301,6 +353,9 @@ def _to_rpn(tokens: list[Token]) -> list[Token]:
                    and _should_pop(op_stack[-1]["value"], tok["value"])):
                 rpn.append(op_stack.pop())
             op_stack.append(tok)
+        elif ttype == "comma":  # end of one argument: flush it, keep the "("
+            while op_stack[-1]["type"] != "lparen":
+                rpn.append(op_stack.pop())
         elif ttype == "rparen":
             while op_stack[-1]["type"] != "lparen":
                 rpn.append(op_stack.pop())
@@ -324,7 +379,13 @@ def _check_arity(rpn: list[Token], whole: tuple[int, int]) -> None:
             if depth < 2:
                 raise _missing_operand(tok)
             depth -= 1
-        elif depth < 1:  # function / unary
+        elif ttype == "function":
+            n_args = FUNCTION_ARITY[tok["value"]]
+            if depth < n_args:
+                raise EquationSyntaxError(f'"{tok["text"]}" is missing its operand',
+                                          tok["start"], tok["end"])
+            depth -= n_args - 1
+        elif depth < 1:  # unary
             raise EquationSyntaxError(f'"{tok["text"]}" is missing its operand',
                                       tok["start"], tok["end"])
     if depth != 1:

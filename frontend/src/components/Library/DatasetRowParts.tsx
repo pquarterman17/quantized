@@ -113,6 +113,9 @@ interface NameProps {
   /** Tree-only: hide the redundant project prefix from an untouched
    *  importer-generated Origin worksheet name. */
   compactOriginName?: boolean;
+  /** Tree-only: the tooltip says how to OPEN the row too (a single click
+   *  there only selects -- L0.25 -- so the gesture must be discoverable). */
+  openHint?: boolean;
   /** null = not editing; "" is a valid in-progress empty draft. */
   rename: string | null;
   onChange: (value: string) => void;
@@ -121,7 +124,7 @@ interface NameProps {
   onStart: () => void;
 }
 
-export function DatasetRowName({ dataset: d, compactOriginName = false, rename, onChange, onCommit, onCancel, onStart }: NameProps) {
+export function DatasetRowName({ dataset: d, compactOriginName = false, openHint = false, rename, onChange, onCommit, onCancel, onStart }: NameProps) {
   if (rename != null) {
     return (
       <input
@@ -159,10 +162,10 @@ export function DatasetRowName({ dataset: d, compactOriginName = false, rename, 
   const nameAriaLabel = displayName !== d.name ? d.name : undefined;
   return (
     <>
-      {isOriginBookDataset(d) && <span className="qzk-origin-kind" title="Origin worksheet">Sheet</span>}
+      {!compactOriginName && <OriginSheetChip dataset={d} />}
       <span
         className="qzk-ds-name"
-        title={`${d.name} — double-click to rename`}
+        title={openHint ? `${d.name} — double-click the row to open it, or this name to rename it` : `${d.name} — double-click to rename`}
         aria-label={nameAriaLabel}
         onDoubleClick={(e) => {
           e.stopPropagation();
@@ -173,6 +176,18 @@ export function DatasetRowName({ dataset: d, compactOriginName = false, rename, 
       </span>
     </>
   );
+}
+
+/** The visible "Sheet" kind chip of an Origin worksheet row. The Tree's
+ *  one-line row carries it in its counts (DatasetRow), not beside the name:
+ *  there it wraps with the counts instead of cutting the sheet's name to a
+ *  few letters in a narrow Library (Origin-replacement live check). */
+export function OriginSheetChip({ dataset: d }: { dataset: Dataset }) {
+  return isOriginBookDataset(d) ? (
+    <span className="qzk-origin-kind" title="Origin worksheet">
+      Sheet
+    </span>
+  ) : null;
 }
 
 interface TagsProps {
