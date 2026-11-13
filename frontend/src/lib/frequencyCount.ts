@@ -6,6 +6,11 @@
 //   - Bins are equal-width over [min, max] (the data's own range unless given).
 //     Every bin is half-open [lo, hi) EXCEPT the last, which also counts a
 //     value exactly at max — so the data's own maximum is never lost.
+//   - A value is binned by comparing it against the PUBLISHED edges (the very
+//     numbers in the Bin start / Bin end columns), never by floor((v - lo) /
+//     width): the two disagree by one ulp at grid-aligned values, which put a
+//     value in a bin whose stated range excluded it. Recounting by the table's
+//     own edges therefore always reproduces its counts.
 //   - The bin count is given, or derived from a given width (ceil((max-min) /
 //     width)), or Sturges' rule (ceil(log2 n) + 1) by default.
 //   - Blank (NaN) cells are MISSING; finite values outside [min, max] are
@@ -60,17 +65,22 @@ export function frequencyTable(values: readonly number[], opts: FrequencyOptions
   if (n > 100_000) throw new Error("more than 100,000 bins; use a wider bin");
   const width = (hi - lo) / n;
   const counts = new Array<number>(n).fill(0);
+  // The published edges: bin i is [edgesLo[i], edgesHi[i]), the last closed.
+  const edgesLo = counts.map((_, i) => lo + i * width);
+  const edgesHi = counts.map((_, i) => (i === n - 1 ? hi : lo + (i + 1) * width));
   let outside = 0;
   for (const v of finite) {
     if (v < lo || v > hi) {
       outside++;
       continue;
     }
-    counts[Math.min(n - 1, Math.floor((v - lo) / width))]++;
+    // The arithmetic guess, corrected against the edges themselves.
+    let i = Math.min(n - 1, Math.max(0, Math.floor((v - lo) / width)));
+    while (i > 0 && v < edgesLo[i]) i--;
+    while (i < n - 1 && v >= edgesHi[i]) i++;
+    counts[i]++;
   }
   const counted = finite.length - outside;
-  const edgesLo = counts.map((_, i) => lo + i * width);
-  const edgesHi = counts.map((_, i) => (i === n - 1 ? hi : lo + (i + 1) * width));
   let running = 0;
   const cumulative = counts.map((c) => (running += c));
   const pct = (c: number) => (counted ? (100 * c) / counted : Number.NaN);

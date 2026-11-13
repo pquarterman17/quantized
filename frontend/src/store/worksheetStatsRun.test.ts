@@ -93,6 +93,22 @@ describe("Frequency count", () => {
     expect(frequencyTable([0, 10], { width: 3 }).counts).toEqual([1, 0, 0, 1]); // ceil(10/3) bins
   });
 
+  it("fuzz: recounting by the table's own published edges always reproduces its counts (grid-aligned values)", () => {
+    let seed = 12345;
+    const rand = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    for (let trial = 0; trial < 3000; trial++) {
+      const n = 2 + Math.floor(rand() * 30);
+      const lo = Math.round((rand() - 0.5) * 2000) / 10;
+      const width = [0.1, 0.2, 0.3, 0.7, 1.1, 0.01, 2.5][Math.floor(rand() * 7)];
+      // Values ON the bin grid, where floor((v - lo) / width) is off by one ulp.
+      const values = Array.from({ length: n + 1 }, (_, i) => lo + i * width);
+      const t = frequencyTable(values, { width, min: lo, max: lo + n * width });
+      const recount = t.lo.map((l, i) => values.filter((v) => v >= l && (i === t.lo.length - 1 ? v <= t.hi[i] : v < t.hi[i])).length);
+      expect(t.counts).toEqual(recount);
+      expect(t.counted + t.outside).toBe(values.length);
+    }
+  });
+
   it("creates a new worksheet in the source's book from the analysis rows", async () => {
     useApp.setState({ datasets: [{ ...sheet, workbookId: "B", excludedRows: [3] }] });
     askParamsMock.mockResolvedValue({ column: "A: M1", bins: "2", width: "", min: "", max: "" });
