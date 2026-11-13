@@ -15,6 +15,7 @@
 
 import type uPlot from "uplot";
 
+import { divideFont, divideLabelSpot, reserveDivideBand, type AxisSide } from "./axisDivideLabel";
 import { activeBreaks, applyAxisBreaks, drawBreakMarks, insideBreak, type AxisExtrasContext } from "./axisBreakExtras";
 import type { AxisBreak } from "./axisBreaks";
 import { hasAxisExtras, type AxisFormat, type AxisScale } from "./types";
@@ -92,7 +93,10 @@ export function applyAxisExtras(
 }
 
 function axisExtrasPlugin(extras: readonly Extra[], ink: string): uPlot.Plugin {
+  const dividedAxes = extras.filter((e) => e.fmt.divide && e.fmt.divide > 0 && e.fmt.divide !== 1).map((e) => e.idx);
   return {
+    // A band above the frame for a Y / Y2 factor, so it is never clipped.
+    ...(dividedAxes.length ? { opts: (_u: uPlot, o: uPlot.Options) => reserveDivideBand(o, dividedAxes) } : {}),
     hooks: {
       draw: (u: uPlot) => {
         const { ctx } = u;
@@ -139,14 +143,15 @@ function axisExtrasPlugin(extras: readonly Extra[], ink: string): uPlot.Plugin {
           }
           if (breaks && !horizontal) drawBreakMarks(u, key, edge, breaks, pr);
           if (fmt.divide && fmt.divide > 0 && fmt.divide !== 1) {
-            ctx.font = typeof axis.font === "string" ? axis.font.replace(/(\d+(?:\.\d+)?)px/, (_m, n) => `${Number(n) * pr}px`) : `${11 * pr}px sans-serif`;
-            const text = divideLabel(fmt.divide);
-            // Inside the plot corner at that axis' end: the band above the
-            // frame is too thin (the factor clipped there in the live check).
-            ctx.textAlign = side === 3 ? "left" : "right";
-            ctx.textBaseline = horizontal ? "bottom" : "top";
-            if (horizontal) ctx.fillText(text, left + width - 4 * pr, edge - 4 * pr);
-            else ctx.fillText(text, side === 3 ? left + 4 * pr : left + width - 4 * pr, top + 4 * pr);
+            // Outside the frame, where the export's offset text sits, in the
+            // axis' own tick font (lib/axisDivideLabel.ts): inside the corner
+            // it was small and under the legend.
+            const f = divideFont(axis.font, pr);
+            const at = divideLabelSpot(side as AxisSide, { left, top, width, height }, pr, f.px);
+            ctx.font = f.font;
+            ctx.textAlign = at.align;
+            ctx.textBaseline = at.baseline;
+            ctx.fillText(divideLabel(fmt.divide), at.x, at.y);
           }
         }
         ctx.restore();
