@@ -106,6 +106,18 @@ inline, with the replaced MATLAB values next to them. Neither bug has been
 fixed on the MATLAB side. That repository is fixed only deliberately, never
 silently.
 
+**MATLAB divergence #9 (adjusted R² dof).** `fitCompare.m` computes
+`adjR² = 1 − (1 − R²)(n − 1)/(n − p − 1)`, the textbook form for p predictors
+PLUS an intercept. In a curve fit `p` already counts every fitted parameter,
+intercept included, so the residual dof is `n − p`: Origin's NLFit report and
+statsmodels' `rsquared_adj` both use `(n − 1)/(n − p)`. The port uses `n − p`
+everywhere (`calc.fit_stats.fit_compare` behind Diagnostics and model
+comparison, and `calc.fit_report`), so every panel shows the same adjusted R²
+as the fit report. The golden test freezes the intended value from the golden
+R² (`n = 80`, `p = 3`: 0.99962052 instead of MATLAB's 0.99961553) and checks
+statsmodels (`test_adjusted_r2_matches_statsmodels_and_the_fit_report`).
+`fitCompare.m` is not changed on the MATLAB side.
+
 ## Optimizer start-up and stopping (`calc.fit_simplex`)
 
 * A start exactly one unit inside a one-sided bound maps to ≈2e-16 in the
