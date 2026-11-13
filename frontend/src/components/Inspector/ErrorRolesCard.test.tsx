@@ -157,6 +157,21 @@ describe("ErrorRolesCard", () => {
       expect(live().data.metadata.error_roles).toEqual([]);
     });
 
+    it("re-pointing a row to another column keeps focus on its select and withdraws the old column's decision", () => {
+      useApp.setState({ datasets: [ds(["R", "err", "S"], low)] });
+      const { rerender } = render(<ErrorRolesCard active={live()} />);
+      fireEvent.change(screen.getByTitle(/series \(or axis\)/), { target: { value: "0" } }); // confirms column 1
+      rerender(<ErrorRolesCard active={live()} />);
+      const column = screen.getByRole("combobox", { name: "Error column 1" });
+      column.focus();
+      fireEvent.change(column, { target: { value: "2" } });
+      rerender(<ErrorRolesCard active={live()} />);
+      expect(live().errorRoles).toEqual([{ channel: 2, target: 0, axis: "y", side: "both" }]);
+      expect(live().data.metadata.error_roles).toEqual([{ channel: 2, target: 0, axis: "y", side: "both" }]);
+      expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Error column 1" }));
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
     it("a name-backed pairing needs no confirmation", () => {
       useApp.setState({ datasets: [ds(["R", "dR"], low)] });
       render(<ErrorRolesCard active={live()} />);

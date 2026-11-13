@@ -190,4 +190,19 @@ describe("ChannelsCard layout + error consistency (figures-audit #10/#14)", () =
     expect(useApp.getState().errKeys[0]).toBeUndefined();
     expect(useApp.getState().history).toHaveLength(1); // one pick, one undo step
   });
+
+  it("a pick that changes BOTH the legacy key and the roles is still one undo step", () => {
+    // A restored session: a legacy pick of column 1 and no role binding.
+    const legacy: Dataset = { ...withErr, errorRoles: [] };
+    useApp.setState({ datasets: [legacy], activeId: "d2", errKeys: { 0: 1 } });
+    render(<ChannelsCard active={legacy} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Moment error column" }), { target: { value: "2" } });
+    expect(useApp.getState().errKeys[0]).toBe(2);
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([{ channel: 2, target: 0, axis: "y", side: "both" }]);
+    expect(useApp.getState().history).toHaveLength(1);
+    useApp.getState().undo();
+    expect(useApp.getState().errKeys[0]).toBe(1);
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([]);
+  });
 });
+

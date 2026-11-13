@@ -52,7 +52,12 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
   // removal withdraws any confirmation for that column.
   const patch = (i: number, next: Partial<ErrorBinding>) => {
     const edited = { ...roles[i], ...next };
-    setErrorRoles(active.id, roles.map((r, k) => (k === i ? edited : r)));
+    const nextRoles = roles.map((r, k) => (k === i ? edited : r));
+    setErrorRoles(active.id, nextRoles);
+    // Re-pointing the row to another column: the old column is no longer a
+    // decided pairing (unless another row still binds it).
+    const old = roles[i].channel;
+    if (edited.channel !== old && !nextRoles.some((r) => r.channel === old)) withdrawErrorBindingConfirmation(active.id, old);
     confirmErrorBindings(active.id, [edited]);
   };
   const remove = (i: number) => {
@@ -106,7 +111,11 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
           // Figures-audit #14: the column name gets its own line and the
           // three selects share the line below, so neither the name nor
           // "± symmetric" is clipped at the Inspector's default width.
-          <div key={`${r.channel}-${r.axis}-${r.side}`} style={{ marginBottom: 4 }}>
+          // Keyed by POSITION: a key built from the binding's own fields
+          // remounted the row on every edit of those fields (the column, the
+          // axis, the side), dropping keyboard focus to <body> -- the hazard
+          // lib/focusGuard exists for. A removal is guarded there.
+          <div key={i} style={{ marginBottom: 4 }}>
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
             <Select
               style={{ flex: 1, minWidth: 0 }}

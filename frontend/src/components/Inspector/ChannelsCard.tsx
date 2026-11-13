@@ -7,7 +7,7 @@
 
 import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
 import { describeLabelRow, labelRows, labelsFromRow, type LabelRow } from "../../lib/labelRows";
-import { withSymmetricYError } from "../../lib/errorRoleEdits";
+import { withErrKey, withSymmetricYError } from "../../lib/errorRoleEdits";
 import { symmetricBinding } from "../../lib/errorRoles";
 import { channelModelingType } from "../../lib/modeling";
 import { defaultDenseChannels } from "../../lib/plotdata";
@@ -73,10 +73,15 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   const roles = active.errorRoles ?? [];
   const errorFor = (i: number): number | null => errKeys[i] ?? symmetricBinding(roles, i, "y");
   const pickError = (i: number, channel: number | null) => {
-    // Each store write is its own undo step, so only the one(s) that change
-    // anything run: a fresh CSV's role-bound series touches only the roles.
-    if ((errKeys[i] ?? null) !== channel) setErrKey(i, channel);
-    if (symmetricBinding(roles, i, "y") !== channel) setErrorRoles(active.id, withSymmetricYError(roles, i, channel));
+    // ONE undo step per pick. Each store setter records its own, so only the
+    // one(s) that change anything run -- and when BOTH must (a restored
+    // legacy pick plus an unbound role), the roles' entry already holds the
+    // pre-pick state, so the legacy key is written under it, unrecorded.
+    const keyChanges = (errKeys[i] ?? null) !== channel;
+    const rolesChange = symmetricBinding(roles, i, "y") !== channel;
+    if (rolesChange) setErrorRoles(active.id, withSymmetricYError(roles, i, channel));
+    if (keyChanges && !rolesChange) setErrKey(i, channel);
+    else if (keyChanges) useApp.setState((s) => ({ errKeys: withErrKey(s.errKeys, i, channel) }));
   };
   const meta = active.data.metadata;
   // #33: the file's other descriptive rows, offered as legend-label sources.

@@ -43,3 +43,13 @@ export function withSymmetricYError(roles: readonly ErrorBinding[], target: numb
   const kept = roles.filter((r) => !(r.target === target && r.axis === "y" && r.side === "both"));
   return channel === null ? kept : [...kept, { channel, target, axis: "y", side: "both" }];
 }
+
+/** `errKeys` (the legacy per-series error pick) with series `channel`'s
+ *  error column set to `err` (null = none) -- `store.setErrKey`'s update,
+ *  for a caller that records the undo step itself. */
+export function withErrKey(errKeys: Readonly<Record<number, number>>, channel: number, err: number | null): Record<number, number> {
+  const next = { ...errKeys };
+  if (err == null) delete next[channel];
+  else next[channel] = err;
+  return next;
+}
