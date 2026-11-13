@@ -21,6 +21,33 @@ export interface FormulaRowContext {
   /** P2.5: the fitted values this column was resolved against
    *  (`ComputedColumn.derived.fits`) — what `fit()` / `fitval()` read. */
   fits?: readonly FitRefSnapshot[];
+  /** Worksheet audit #17 (lib/formulaRefs.ts): a categorical channel's level
+   *  table by letter, so `A == "label"` compares the row's LABEL. */
+  levels?: Record<string, readonly string[]>;
+  /** Text (non-numeric) columns by name, one string per row — what
+   *  `col("Name") == "text"` reads. */
+  text?: Record<string, readonly string[]>;
+  /** Another worksheet's columns by letter (+ `x`), for the name a
+   *  `sheet("Name", A)` call writes — resolved through the column's LINK to
+   *  that worksheet (lib/sheetRefs.ts); throws, saying why, when the link is
+   *  missing, cut, ambiguous to resolve or not fully loaded. */
+  sheet?: (name: string) => Record<string, readonly number[]>;
+}
+
+/** One `sheet("Name", …)` link on a computed column (`ComputedColumn.sheets`,
+ *  lib/sheetRefs.ts): the name as the formula writes it, and the worksheet it
+ *  is bound to — `null` once that worksheet was removed. */
+export interface SheetBinding {
+  name: string;
+  id: string | null;
+}
+
+/** The cross-worksheet half of `ComputedColumn` (lib/types.ts extends it),
+ *  kept here with the binding it carries: lib/types.ts sits at its size pin. */
+export interface SheetLinked {
+  /** The worksheets this formula's `sheet("Name", …)` calls are LINKED to, by
+   *  id (lib/sheetRefs.ts). */
+  sheets?: SheetBinding[];
 }
 
 export type FormulaFn = (ctx: Record<string, number>, rowCtx?: FormulaRowContext) => number;

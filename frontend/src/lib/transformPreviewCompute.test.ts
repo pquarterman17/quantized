@@ -91,3 +91,36 @@ describe("computeTransformPreview — join caps the OUTPUT via joinWorksheets's 
     expect(out.preview.previewCapped).toBe(true);
   });
 });
+
+describe("computeTransformPreview — the summary reports the REAL result row count (worksheet audit #16)", () => {
+  it("append, stack, unstack and join each carry resultRows equal to the full compute's row count", async () => {
+    const a: Dataset = { id: "a", name: "a.dat", data: big(1_545, "v") };
+    const b: Dataset = { id: "b", name: "b.dat", data: big(40, "v") };
+    const unstackSrc: Dataset = {
+      id: "u",
+      name: "u.dat",
+      data: {
+        time: Array.from({ length: 300 }, (_, i) => i),
+        values: Array.from({ length: 300 }, (_, i) => [Math.floor(i / 2), i % 2, i]),
+        labels: ["key", "cat", "val"],
+        units: ["", "", ""],
+        metadata: {},
+      },
+    };
+    const joinL: Dataset = { id: "l", name: "l.dat", data: big(200, "a") };
+    const joinR: Dataset = { id: "r", name: "r.dat", data: big(200, "b") };
+    const cases: [Parameters<typeof computeTransform>[0], Dataset, Dataset[]][] = [
+      [{ op: "merge", with: [{ id: "b", name: "b.dat" }] }, a, [b]],
+      [{ op: "stack", channels: [0, 1] }, a, []],
+      [{ op: "unstack", key: 0, category: 1, value: 2, aggregate: "mean" }, unstackSrc, []],
+      [{ op: "join", leftKey: -1, rightKey: -1, mode: "inner", keyMode: "text", with: { id: "r", name: "r.dat" } }, joinL, [joinR]],
+    ];
+    for (const [params, primary, others] of cases) {
+      const full = await computeTransform(params, primary, others);
+      const capped = await computeTransformPreview(params, primary, others);
+      expect(capped.preview.previewCapped).toBe(true);
+      expect(capped.data.time.length).toBeLessThan(full.data.time.length);
+      expect(capped.preview.resultRows).toBe(full.data.time.length);
+    }
+  });
+});

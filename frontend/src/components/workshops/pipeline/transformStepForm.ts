@@ -25,7 +25,8 @@ export interface Option {
 
 export type FieldSpec =
   | { key: string; label: string; type: "text" | "number" | "bool" | "columns" }
-  | { key: string; label: string; type: "column"; withX?: boolean }
+  /** `text`: also offer the input's text columns, recorded by name. */
+  | { key: string; label: string; type: "column"; withX?: boolean; text?: boolean }
   | { key: string; label: string; type: "select"; options: Option[]; fallback: string };
 
 /** Where "Open in workshop" goes for an op with structured params. */
@@ -75,7 +76,7 @@ export function transformForm(d: Record<string, unknown>): TransformForm {
       return {
         fields: [
           { key: "key", label: "row key", type: "column", withX: true },
-          { key: "category", label: "category column", type: "column", withX: true },
+          { key: "category", label: "category column", type: "column", withX: true, text: true },
           { key: "value", label: "value column", type: "column", withX: true },
           select("aggregate", "duplicate cells", opts(["mean", "first", "last"])),
         ],

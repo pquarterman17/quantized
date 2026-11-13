@@ -321,3 +321,76 @@ def test_preview_reports_decimal_comma_columns() -> None:
     ]
     us = "Temp;Moment\n300.5;1.25e-3\n301;1.5e-3\n"
     assert preview_import(us, guess_settings(us))["decimal_comma_columns"] == []
+
+
+# --- worksheet audit #21: a stray decimal comma is never a silent NaN --------
+_STRAY = (
+    "Field (Oe)\tMoment (emu)\tErr (emu)\n"
+    "-100\t1.5E-3\t1e-5\n0\t2,5\t1e-5\n100\t3.5E-3\t1e-5\n"
+)
+
+
+def test_stray_comma_cell_in_point_column_is_reported_by_paste_parse() -> None:
+    ds = parse_import(_STRAY, guess_settings(_STRAY))
+    assert np.isnan(ds.values[1, 0])  # never guessed cell by cell
+    notes = ds.metadata["notes"]
+    assert len(notes) == 1
+    assert "Column 'Moment' has 1 cell written with a decimal comma (e.g. '2,5')" in notes[0]
+    assert "left blank (NaN)" in notes[0]
+
+
+def test_stray_comma_cell_is_reported_by_delimited_import(tmp_path: Path) -> None:
+    ds = import_csv(_write(tmp_path, _STRAY, "stray.tsv"))
+    assert any("decimal comma (e.g. '2,5')" in note for note in ds.metadata["notes"])
+
+
+def test_clean_and_fully_converted_files_get_no_stray_note(tmp_path: Path) -> None:
+    clean = "a\tb\n1\t2.5\n2\t3.5\n"
+    assert "notes" not in parse_import(clean, guess_settings(clean)).metadata
+    eu = "a\tb\n1\t2,5\n2\t3,5\n"
+    notes = parse_import(eu, guess_settings(eu)).metadata["notes"]
+    assert notes == ["Column(s) read with ',' as the decimal separator: b."]
+
+
+def _notes(column: list[str]) -> list[str]:
+    text = "x\tv\n" + "".join(f"{i}\t{cell}\n" for i, cell in enumerate(column))
+    return list(parse_import(text, guess_settings(text)).metadata.get("notes", []))
+
+
+def test_text_column_holding_a_comma_number_is_not_reported_as_blanked(tmp_path: Path) -> None:
+    text = "x\tlabel\n1\tabc\n2\t1,5\n3\tdef\n"
+    ds = import_csv(_write(tmp_path, text, "text.tsv"))
+    assert ds.cat_levels  # imported intact, as text
+    assert not any("left blank" in note for note in ds.metadata.get("notes", []))
+
+
+def test_thousands_grouped_integer_is_not_called_a_decimal_comma() -> None:
+    (note,) = _notes(["950.5", "1,234", "870.25"])
+    assert "decimal comma" not in note.split("could be")[0]
+    assert "'1,234'" in note and "thousands separator or a decimal comma" in note
+    assert "left blank (NaN)" in note
+
+
+def test_us_thousands_with_decimals_is_never_a_silent_nan() -> None:
+    (note,) = _notes(["950.5", "1,234.5", "870.25"])
+    assert "'1,234.5'" in note and "thousands separators" in note and "left blank (NaN)" in note
+
+
+def test_true_decimal_comma_cell_keeps_its_wording() -> None:
+    (note,) = _notes(["1.5", "2,5", "3.5"])
+    assert "written with a decimal comma (e.g. '2,5')" in note
+
+
+@pytest.mark.parametrize(
+    ("cell", "kind"), [("2,5", "decimal comma"), ("(2,5)", "no number it reads as")]
+)
+def test_one_text_cell_does_not_hide_a_comma_cell_in_a_numeric_column(
+    tmp_path: Path, cell: str, kind: str
+) -> None:
+    """Review #2 item 5: an ``ERR`` cell used to make the whole column count as
+    text, so the comma cell's NaN went unreported."""
+    text = f"x\ty\n1\t950.5\n2\t{cell}\n3\t870.25\n4\tERR\n5\t3.5\n6\t4.5\n7\t5.5\n"
+    ds = import_csv(_write(tmp_path, text, "err.tsv"))
+    assert np.isnan(ds.values[1, 0])
+    notes = " ".join(ds.metadata["notes"])
+    assert kind in notes and cell in notes

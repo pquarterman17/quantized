@@ -46,7 +46,7 @@ export const ORIGIN_TIPS: readonly OriginTip[] = [
     id: "set-column-values",
     origin: "Set Column Values (a column formula)",
     quantized:
-      "Add a computed column with a formula; combine two datasets with Data ▸ Dataset math. Recalc mode controls when formulas re-run (auto / manual / off).",
+      "Add a computed column with a formula; combine two datasets with Data ▸ Dataset math. Recalc mode controls when formulas re-run (Auto / Manual / None).",
     keywords: "formula set column values compute derived math recalculate",
   },
   {

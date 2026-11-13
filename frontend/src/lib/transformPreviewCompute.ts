@@ -40,7 +40,7 @@
 
 import { analyzeMerge } from "./appendWarnings";
 import { mergeDatasets } from "./merge";
-import { sliceRowSidecars } from "./rowSidecars";
+import { sidecarRowCount, sliceRowSidecars } from "./rowSidecars";
 import {
   computeTransform,
   preview,
@@ -52,7 +52,7 @@ import {
 import { analyzeJoin, analyzeStack, analyzeUnstack } from "./transformWarnings";
 import type { DataStruct, Dataset } from "./types";
 import { joinWorksheets } from "./worksheetJoin";
-import { stackWorksheet, unstackWorksheet } from "./worksheetTransforms";
+import { stackRowCount, stackWorksheet, unstackRowCount, unstackWorksheet } from "./worksheetTransforms";
 
 /** Rows read from each input before materializing append/join/stack/unstack
  *  for the LIVE preview — generous enough that a real single-dataset preview
@@ -78,8 +78,11 @@ function headOfDataStruct(ds: DataStruct, n: number): DataStruct {
  *  `ReshapePanel.tsx` to show "Preview shows the first N rows"; `pv.summary`
  *  itself is untouched (it is a Create-time confirm-dialog string that this
  *  bounded preview object never reaches — see this module's header). */
-function withCapNote(pv: TransformPreview, truncated: boolean): TransformPreview {
-  return truncated ? { ...pv, previewCapped: true } : pv;
+function withCapNote(pv: TransformPreview, truncated: boolean, resultRows: number): TransformPreview {
+  // `resultRows` is the row count the FULL result will have (worksheet audit
+  // #16: the summary used to report the truncated table's 40 rows for an
+  // append whose real result had 1,585).
+  return truncated ? { ...pv, previewCapped: true, resultRows } : pv;
 }
 
 /** The bounded counterpart to `computeTransform`, for `useReshapePreview.ts`'s
@@ -93,13 +96,17 @@ export async function computeTransformPreview(p: TransformParams, primary: Datas
       const capped = headOfDataStruct(src, PREVIEW_CAP);
       const data = stackWorksheet(capped, p.channels);
       const pv = preview("Stack columns", data, analyzeStack(src, p.channels), [[primary.name, src]]);
-      return { data, name: `${primary.name} (stacked)`, preview: withCapNote(pv, capped !== src) };
+      return { data, name: `${primary.name} (stacked)`, preview: withCapNote(pv, capped !== src, stackRowCount(src, p.channels)) };
     }
     case "unstack": {
       const capped = headOfDataStruct(src, PREVIEW_CAP);
       const data = unstackWorksheet(capped, p.key, p.category, p.value, p.aggregate);
       const pv = preview("Unstack", data, analyzeUnstack(src, p.key, p.category, p.value, p.aggregate), [[primary.name, src]]);
-      return { data, name: `${primary.name} (unstacked)`, preview: withCapNote(pv, capped !== src) };
+      return {
+        data,
+        name: `${primary.name} (unstacked)`,
+        preview: withCapNote(pv, capped !== src, unstackRowCount(src, p.key, p.category, p.value)),
+      };
     }
     case "join": {
       const right = others[0];
@@ -111,7 +118,9 @@ export async function computeTransformPreview(p: TransformParams, primary: Datas
       return {
         data,
         name: `${primary.name} + ${right.name} (joined)`,
-        preview: withCapNote(pv, typeof data.metadata.preview_truncated_from === "number"),
+        preview: typeof data.metadata.preview_truncated_from === "number"
+          ? withCapNote(pv, true, data.metadata.preview_truncated_from)
+          : pv,
       };
     }
     case "merge": {
@@ -123,7 +132,9 @@ export async function computeTransformPreview(p: TransformParams, primary: Datas
       const capped = fulls.map((d) => headOfDataStruct(d, PREVIEW_CAP));
       const data = mergeDatasets(capped, names, p.match, p.sourceFactor);
       const pv = preview(`Append ${all.length} datasets`, data, analyzeMerge(fulls, names, p.match), all.map((d, i) => [d.name, fulls[i]]));
-      return { data, name: `merged (${all.length})`, preview: withCapNote(pv, capped.some((d, i) => d !== fulls[i])) };
+      // mergeDatasets gives every input exactly its sidecar-aware row span.
+      const rows = fulls.reduce((n, d) => n + sidecarRowCount(d.metadata, Math.max(d.time.length, d.values.length)), 0);
+      return { data, name: `merged (${all.length})`, preview: withCapNote(pv, capped.some((d, i) => d !== fulls[i]), rows) };
     }
     // transpose (module doc), and any op this workshop never opens on
     // (algebra/resample/split) — the full compute already IS the sensible

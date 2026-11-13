@@ -54,7 +54,7 @@ function PickPreflight({
         ) : null,
       )}
       {preflight.issues.length > 0 && (
-        <ul aria-label={`Issues for ${ds.name}`} className="qzk-ds-meta" style={{ margin: "2px 0 0", paddingLeft: 16 }}>
+        <ul aria-label={`Issues for ${ds.name}`} className="qzk-ds-meta" style={{ margin: "2px 0 0", paddingLeft: 16, whiteSpace: "normal" }}>
           {preflight.issues.map((x, k) => (
             <li key={k} data-kind={x.kind} style={x.blocking ? { color: "var(--danger)" } : undefined}>
               {x.text}
@@ -70,6 +70,8 @@ export default function ApplyRecipeSection({
   recipe,
   onClose,
   disabled = false,
+  disabledReason,
+  keepActive = false,
 }: {
   recipe: AnalysisTemplate;
   onClose: () => void;
@@ -77,14 +79,20 @@ export default function ApplyRecipeSection({
    *  elsewhere — the SAME store-wide flag both set — so this section's own
    *  Apply button stays disabled even if it was opened before that started. */
   disabled?: boolean;
+  /** Why `disabled` (shown on the Apply button) when it is not another run:
+   *  e.g. the launching dialog's setup is invalid right now. */
+  disabledReason?: string;
+  /** Hand the view back to the worksheet that was active before the run —
+   *  for a launcher whose dialog works on the active worksheet. */
+  keepActive?: boolean;
 }) {
-  const a = useApplyRecipe(recipe);
+  const a = useApplyRecipe(recipe, keepActive);
   const columns = recipe.expects?.columns ?? [];
   const steps = runnableSteps(recipe.steps);
   const anyUnits = a.picks.some((p) => p.preflight.unitMismatch);
   return (
-    <div role="region" aria-label={`Apply recipe ${recipe.name}`} style={{ marginTop: 8, padding: 6, border: "1px solid var(--border-soft)", borderRadius: 4 }}>
-      <div className="qzk-ds-meta">
+    <div role="region" aria-label={`Apply recipe ${recipe.name}`} style={{ marginTop: 8, padding: 6, border: "1px solid var(--border-soft)", borderRadius: 4, minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}>
+      <div className="qzk-ds-meta" style={{ whiteSpace: "normal" }}>
         Apply “{recipe.name}”{recipe.revision ? ` (revision ${recipe.revision})` : ""} — {steps.length} step
         {steps.length === 1 ? "" : "s"}: {steps.map((s) => s.label).join(" → ") || "none"}
       </div>
@@ -114,9 +122,20 @@ export default function ApplyRecipeSection({
         </div>
       )}
       <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
-        <Button variant="primary" size="sm" disabled={a.running || a.ready === 0 || disabled} onClick={() => void a.apply()}>
-          {a.running ? "Applying…" : `Apply to ${a.ready} dataset${a.ready === 1 ? "" : "s"}`}
+        <Button
+          variant="primary"
+          size="sm"
+          disabled={a.running || a.ready === 0 || disabled}
+          title={disabledReason ?? (a.ready === 0 ? "No picked dataset passes the preflight" : disabled ? "Another recipe or batch is running" : undefined)}
+          onClick={() => void a.apply()}
+        >
+          {a.running ? `Applying ${Math.min((a.results?.length ?? 0) + 1, a.picks.length)} of ${a.picks.length}…` : `Apply to ${a.ready} dataset${a.ready === 1 ? "" : "s"}`}
         </Button>
+        {a.running && (
+          <Button size="sm" onClick={a.cancel}>
+            Cancel run
+          </Button>
+        )}
         {a.picks.length > a.ready && (
           <span className="qzk-ds-meta">{a.picks.length - a.ready} refused — not applied</span>
         )}
@@ -125,11 +144,11 @@ export default function ApplyRecipeSection({
           Close
         </Button>
       </div>
-      {a.results && (
-        <ul aria-label="Apply results" className="qzk-ds-meta" style={{ margin: "6px 0 0", paddingLeft: 16 }}>
+      {a.results && a.results.length > 0 && (
+        <ul aria-label="Apply results" className="qzk-ds-meta" style={{ margin: "6px 0 0", paddingLeft: 16, whiteSpace: "normal" }}>
           {a.results.map((r) => (
-            <li key={r.datasetId} data-status={r.status} style={r.status === "ok" ? undefined : { color: "var(--danger)" }}>
-              {r.name}: {r.status === "ok" ? r.note : `${r.status} — ${r.note}`}
+            <li key={r.datasetId} data-status={r.status} style={r.status === "ok" ? undefined : r.status === "cancelled" ? { color: "var(--text-faint)" } : { color: "var(--danger)" }}>
+              {r.name}: {r.status === "ok" || r.status === "cancelled" ? r.note : `${r.status} — ${r.note}`}
             </li>
           ))}
         </ul>

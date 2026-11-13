@@ -11,6 +11,8 @@
 // ACTION itself (history + trash + patch, or the permanent variant), homed
 // here rather than in useApp.ts at its own size ratchet.
 
+import { applyFormulasWithErrors, baseColumns } from "../lib/formula";
+import { cutSheetRefs } from "../lib/sheetBindings";
 import { pruneEditableFigureRefs } from "./figureLifecycle";
 import { pruneOriginFidelityRefs, pruneOriginFigureRefs } from "./originImport";
 import type { AppState } from "./useApp";
@@ -45,7 +47,18 @@ export type RemovableState = Pick<
 export function removeDatasetsPatch(s: RemovableState, ids: readonly string[]): Partial<RemovableState> {
   if (ids.length === 0) return {};
   const drop = new Set(ids);
-  const datasets = s.datasets.filter((d) => !drop.has(d.id));
+  // Formulas linked to a removed worksheet (`sheet("Name", …)`) have the link
+  // CUT and are re-evaluated, so they show the error now rather than their
+  // last values — and never re-attach to a later same-named worksheet.
+  const cut = cutSheetRefs(s.datasets.filter((d) => !drop.has(d.id)), drop);
+  const orphaned = new Set(cut.changed);
+  const datasets = orphaned.size
+    ? cut.datasets.map((d) => {
+        if (!orphaned.has(d.id) || !d.formulas) return d;
+        const { data, errors } = applyFormulasWithErrors(baseColumns(d.data, d.formulas.length), d.formulas);
+        return { ...d, data, formulaErrors: Object.keys(errors).length ? errors : undefined };
+      })
+    : cut.datasets;
   const activeId = s.activeId && !drop.has(s.activeId) ? s.activeId : (datasets[0]?.id ?? null);
   const worksheetId = s.worksheetId && drop.has(s.worksheetId) ? null : s.worksheetId;
   const selectedIds = s.selectedIds.filter((x) => !drop.has(x));

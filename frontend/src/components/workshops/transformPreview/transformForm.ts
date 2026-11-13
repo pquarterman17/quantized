@@ -4,7 +4,7 @@
 // the commit run (lib/transformRun.computeTransform). No React, no store.
 
 import { isCategoricalChannel } from "../../../lib/categorical";
-import { originTextColumnNames } from "../../../lib/originTextColumnCells";
+import { originTextColumnNames, textColumnCells } from "../../../lib/originTextColumnCells";
 import type { AppendMatch } from "../../../lib/mergeByName";
 import type { TransformParams } from "../../../lib/transformRun";
 import type { DataStruct } from "../../../lib/types";
@@ -38,7 +38,9 @@ export interface TransformForm {
   /** Stack: 0-based channels. */
   channels: number[];
   key: number;
-  category: number;
+  /** Unstack's category as a `keyOptions` value: a channel index, or
+   *  `t:<name>` for a text column. */
+  category: string;
   value: number;
   aggregate: AggregateMode;
 }
@@ -69,10 +71,43 @@ export function seedForm(op: PreviewOp, seed: readonly string[], datasets: reado
     mode: "inner",
     channels: Array.from({ length: n }, (_, i) => i),
     key: -1,
-    category: Math.min(0, n - 1),
-    value: Math.min(1, n - 1),
+    category: defaultCategory(data),
+    value: defaultValue(data, defaultCategory(data)),
     aggregate: "mean",
   };
+}
+
+/** Unstack's default category: what a long-form table pivots on — the
+ *  column with the FEWEST distinct values (2–20), a text column or a
+ *  categorical channel winning a tie over a numeric one. Picking the first
+ *  numeric channel turned a 20-row sheet into 20 one-cell "Category 0.327…"
+ *  columns; picking the first text column picked a unique timestamp. */
+export function defaultCategory(data: DataStruct | undefined): string {
+  if (!data) return "0";
+  const n = data.labels.length;
+  const candidates: { value: string; distinct: number; text: boolean }[] = [];
+  for (const name of originTextColumnNames(data)) {
+    const cells = textColumnCells(data, name) ?? [];
+    // levels-allowlist: a COUNT of distinct values, to choose a default category — not a level table.
+    const distinct = new Set(cells.map((c) => String(c ?? "").trim()).filter(Boolean)).size;
+    candidates.push({ value: `t:${name}`, distinct, text: true });
+  }
+  for (let c = 0; c < n; c += 1) {
+    // levels-allowlist: a COUNT of distinct values, to choose a default category — not a level table.
+    const distinct = new Set(data.values.map((row) => row[c]).filter(Number.isFinite)).size;
+    candidates.push({ value: String(c), distinct, text: isCategoricalChannel(data, c) });
+  }
+  const best = candidates
+    .filter((k) => k.distinct >= 2 && k.distinct <= 20)
+    .sort((a, b) => a.distinct - b.distinct || Number(b.text) - Number(a.text))[0];
+  return best ? best.value : String(Math.min(0, n - 1));
+}
+
+/** The first channel that is not the category (the values being spread). */
+function defaultValue(data: DataStruct | undefined, category: string): number {
+  const n = data?.labels.length ?? 0;
+  const v = Array.from({ length: n }, (_, i) => i).find((i) => String(i) !== category);
+  return v ?? Math.min(1, n - 1);
 }
 
 export interface KeyOption {
@@ -158,9 +193,11 @@ export function formToRun(form: TransformForm, datasets: readonly Named[]): Tran
       return { params: { op: "stack", channels }, primaryId: primary.id, otherIds: [] };
     }
     case "unstack":
-      if (![form.key, form.category, form.value].every(inRange)) return "Pick the row key, category and value columns.";
+      if (![form.key, form.value].every(inRange) || !keyOptions(primary.data).some((o) => o.value === form.category)) {
+        return "Pick the row key, category and value columns.";
+      }
       return {
-        params: { op: "unstack", key: form.key, category: form.category, value: form.value, aggregate: form.aggregate },
+        params: { op: "unstack", key: form.key, category: parseKey(form.category), value: form.value, aggregate: form.aggregate },
         primaryId: primary.id,
         otherIds: [],
       };

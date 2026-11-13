@@ -13,6 +13,7 @@
 
 import { AGGREGATE_NAMES } from "./formulaAggregates";
 import { CONSTS, FUNCS } from "./formulaFuncs";
+import { ROW_FUNCS } from "./formulaRefs";
 import { syntaxError, tokenize } from "./formulaTokenize";
 import { COMPARE_OPS, type Tok } from "./formulaTypes";
 
@@ -32,9 +33,14 @@ export type Node =
   | { k: "row" }
   | { k: "lag"; col: string; n: Node }
   | { k: "diff"; col: string }
-  | { k: "agg"; fn: string; col: string }
+  | { k: "agg"; fn: string; col: string; range?: [Node, Node] }
   | { k: "fit"; model: string; param: string }
-  | { k: "fitval"; model: string; arg: Node };
+  | { k: "fitval"; model: string; arg: Node }
+  // Worksheet audit #17 (lib/formulaRefs.ts): `c ? a : b` parses to "if".
+  | { k: "cumsum"; col: string }
+  | { k: "index"; col: string; i: Node }
+  | { k: "sheet"; name: string; col: string }
+  | { k: "textcmp"; op: string; ref: string; textCol: boolean; value: string };
 
 export function parseExpr(src: string): Node {
   const toks = tokenize(src);
@@ -56,6 +62,43 @@ export function parseExpr(src: string): Node {
     return t.v;
   };
 
+  function ternary(): Node {
+    const c = or();
+    if (!isOp(peek(), "?")) return c;
+    pos++;
+    const a = ternary();
+    expect(":");
+    return { k: "if", c, a, b: ternary() };
+  }
+  /** `A == "x"` / `col("T") != "x"` / reversed — formulaRefs.tryParseTextCompare. */
+  function textCmp(): Node | null {
+    const refLen = (at: number): number => {
+      const t = peek(at);
+      if (isKw(t, "col") && isOp(peek(at + 1), "(") && peek(at + 2)?.t === "str" && isOp(peek(at + 3), ")")) return 4;
+      if (t?.t === "name" && t.v !== "col" && !isOp(peek(at + 1), "(") && !isOp(peek(at + 1), "[")) return 1;
+      return 0;
+    };
+    const isEq = (at: number): boolean => isOp(peek(at), "==") || isOp(peek(at), "!=");
+    const readRef = (len: number): { ref: string; textCol: boolean } => {
+      if (len === 1) return { ref: bare(), textCol: false };
+      pos += 2;
+      const ref = text();
+      expect(")");
+      return { ref, textCol: true };
+    };
+    const left = refLen(0);
+    if (left && isEq(left) && peek(left + 1)?.t === "str") {
+      const r = readRef(left);
+      const op = String(toks[pos++].v);
+      return { k: "textcmp", op, ...r, value: text() };
+    }
+    if (peek()?.t === "str" && isEq(1) && refLen(2)) {
+      const value = text();
+      const op = String(toks[pos++].v);
+      return { k: "textcmp", op, ...readRef(refLen(0)), value };
+    }
+    return null;
+  }
   function or(): Node {
     let a = and();
     while (isKw(peek(), "or")) {
@@ -77,6 +120,8 @@ export function parseExpr(src: string): Node {
       pos++;
       return { k: "not", a: not() };
     }
+    const tc = textCmp();
+    if (tc) return tc;
     const a = arith();
     const t = peek();
     if (t && t.t === "op" && COMPARE_OPS.has(t.v)) {
@@ -124,7 +169,7 @@ export function parseExpr(src: string): Node {
     if (!t) throw new Error("unexpected end of expression");
     if (t.t === "num") return { k: "num", v: t.v };
     if (isOp(t, "(")) {
-      const e = or();
+      const e = ternary();
       expect(")");
       return e;
     }
@@ -134,15 +179,21 @@ export function parseExpr(src: string): Node {
       return call(t.v);
     }
     if (Object.hasOwn(CONSTS, t.v)) return { k: "const", name: t.v };
+    if (isOp(peek(), "[")) {
+      pos++;
+      const i = ternary();
+      expect("]");
+      return { k: "index", col: t.v, i };
+    }
     return { k: "var", name: t.v };
   }
   function args(): Node[] {
     const out: Node[] = [];
     if (!isOp(peek(), ")")) {
-      out.push(or());
+      out.push(ternary());
       while (isOp(peek(), ",")) {
         pos++;
-        out.push(or());
+        out.push(ternary());
       }
     }
     expect(")");
@@ -161,7 +212,7 @@ export function parseExpr(src: string): Node {
     if (fn === "lag") {
       const col = bare();
       expect(",");
-      const n = or();
+      const n = ternary();
       expect(")");
       return { k: "lag", col, n };
     }
@@ -180,6 +231,32 @@ export function parseExpr(src: string): Node {
       pos += 2;
       return { k: "agg", fn, col: first.v };
     }
+    if (AGGREGATE_NAMES.has(fn) && first?.t === "name" && !Object.hasOwn(CONSTS, first.v) && isOp(peek(1), "[")) {
+      pos += 2;
+      const from = ternary();
+      expect(":");
+      const to = ternary();
+      expect("]");
+      expect(")");
+      return { k: "agg", fn, col: first.v, range: [from, to] };
+    }
+    if (fn === "col") {
+      const name = bare(); // col(A) is A; col("Name") was resolved to a letter
+      expect(")");
+      return { k: "var", name };
+    }
+    if (fn === "cumsum") {
+      const col = bare();
+      expect(")");
+      return { k: "cumsum", col };
+    }
+    if (fn === "sheet") {
+      const name = text();
+      expect(",");
+      const col = bare();
+      expect(")");
+      return { k: "sheet", name, col };
+    }
     if (fn === "fit") {
       const model = text();
       let param: string;
@@ -197,16 +274,16 @@ export function parseExpr(src: string): Node {
     if (fn === "fitval") {
       const model = text();
       expect(",");
-      const arg = or();
+      const arg = ternary();
       expect(")");
       return { k: "fitval", model, arg };
     }
-    if (!Object.hasOwn(FUNCS, fn)) throw syntaxError(`unknown function "${fn}"`, toks[pos - 2]?.p ?? 0);
+    if (!Object.hasOwn(FUNCS, fn) && !Object.hasOwn(ROW_FUNCS, fn)) throw syntaxError(`unknown function "${fn}"`, toks[pos - 2]?.p ?? 0);
     return { k: "call", fn, args: args() };
   }
 
   try {
-    const root = or();
+    const root = ternary();
     if (pos !== toks.length) throw syntaxError("trailing characters in expression", toks[pos].p ?? 0);
     return root;
   } catch (e) {
@@ -224,6 +301,7 @@ function precOf(n: Node): number {
   if (n.k === "num") return n.v < 0 || Object.is(n.v, -0) ? PREC.neg : 10;
   if (n.k === "bin") return PREC[n.op];
   if (n.k === "neg" || n.k === "not" || n.k === "cmp" || n.k === "and" || n.k === "or") return PREC[n.k];
+  if (n.k === "textcmp") return PREC.cmp;
   return 10;
 }
 
@@ -266,7 +344,15 @@ export function printExpr(n: Node): string {
     case "diff":
       return `diff(${n.col})`;
     case "agg":
-      return `${n.fn}(${n.col})`;
+      return n.range ? `${n.fn}(${n.col}[${printExpr(n.range[0])}:${printExpr(n.range[1])}])` : `${n.fn}(${n.col})`;
+    case "cumsum":
+      return `cumsum(${n.col})`;
+    case "index":
+      return `${n.col}[${printExpr(n.i)}]`;
+    case "sheet":
+      return `sheet(${quote(n.name)}, ${n.col})`;
+    case "textcmp":
+      return `${n.textCol ? `col(${quote(n.ref)})` : n.ref} ${n.op} ${quote(n.value)}`;
     case "fit":
       return `fit(${quote(n.model)}, ${quote(n.param)})`;
     case "fitval":
@@ -293,6 +379,10 @@ export function children(n: Node): Node[] {
       return [n.n];
     case "fitval":
       return [n.arg];
+    case "index":
+      return [n.i];
+    case "agg":
+      return n.range ?? [];
     default:
       return [];
   }
@@ -301,7 +391,8 @@ export function children(n: Node): Node[] {
 /** Column letters / `x` a tree reads, directly or through a row-aware form. */
 export function columnsRead(n: Node, out: Set<string> = new Set()): Set<string> {
   if (n.k === "var") out.add(n.name);
-  if (n.k === "lag" || n.k === "diff" || n.k === "agg") out.add(n.col);
+  if (n.k === "lag" || n.k === "diff" || n.k === "agg" || n.k === "cumsum" || n.k === "index") out.add(n.col);
+  if (n.k === "textcmp" && !n.textCol) out.add(n.ref);
   for (const c of children(n)) columnsRead(c, out);
   return out;
 }
@@ -309,5 +400,6 @@ export function columnsRead(n: Node, out: Set<string> = new Set()): Set<string> 
 /** True when the tree reads no column, row, or fitted value — a constant. */
 export function isConstant(n: Node): boolean {
   if (n.k === "var" || n.k === "row" || n.k === "lag" || n.k === "diff" || n.k === "agg" || n.k === "fit" || n.k === "fitval") return false;
+  if (n.k === "cumsum" || n.k === "index" || n.k === "sheet" || n.k === "textcmp") return false;
   return children(n).every(isConstant);
 }

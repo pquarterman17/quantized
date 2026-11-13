@@ -58,6 +58,9 @@ class CorrectionParams(BaseModel):
     # derivative). Other correction stages still apply to the whole dataset.
     # Absent preserves the established all-measured-channels behavior.
     signal_channels: list[StrictInt] | None = Field(default=None, alias="signalChannels")
+    # Worksheet audit #9: blank the transformed channels' bound Y errors
+    # instead of propagating them (the only option for a nonlinear step).
+    drop_y_uncertainty: bool | None = Field(default=None, alias="dropYUncertainty")
     # GOTO additions (new features beyond MATLAB parity):
     # #2 anchor-point baseline subtraction ((x, y) pairs + interp method).
     bg_anchors: list[list[float]] | None = Field(default=None, alias="bgAnchors")

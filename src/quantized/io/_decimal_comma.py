@@ -41,6 +41,7 @@ __all__ = [
     "DECIMAL_CHOICES",
     "check_decimal",
     "decimal_metadata",
+    "stray_comma_notes",
     "layout_rows",
     "resolve_decimal_columns",
     "uses_decimal_path",
@@ -242,3 +243,84 @@ def decimal_metadata(column_names: Sequence[str]) -> tuple[dict[str, Any], str]:
     names = list(column_names)
     note = f"Column(s) read with ',' as the decimal separator: {', '.join(names)}."
     return {"decimal_separator": ",", "decimal_comma_columns": names}, note
+
+
+#: "1,234" / "1,234.5" / "12,345,678.9e3": US thousands grouping.
+_US_GROUPED_RE = re.compile(r"^[+-]?[1-9]\d{0,2}(?:,\d{3})+(?:\.\d*)?(?:[eE][+-]?\d+)?$")
+
+
+def _comma_kind(cell: str) -> str | None:
+    """How a comma-bearing cell that read as NaN is written, or ``None``."""
+    match = _COMMA_RE.match(cell)
+    if match and _unambiguous(match):
+        return "decimal"
+    if _US_GROUPED_RE.match(cell):
+        # "1,234" fits both readings; "1,234.5" only the grouped one.
+        return "ambiguous" if match else "grouped"
+    return None
+
+
+_KIND_TEXT = {
+    "decimal": "written with a decimal comma (e.g. '{example}') among point-decimal numbers",
+    "ambiguous": (
+        "written like '{example}', where the comma could be a thousands separator or a "
+        "decimal comma"
+    ),
+    "grouped": "written with thousands separators (e.g. '{example}')",
+    "other": "holding a comma but no number it reads as (e.g. '{example}')",
+}
+
+
+def stray_comma_notes(
+    col_headers: Sequence[str],
+    matrix: np.ndarray,
+    data_tokens: Sequence[Sequence[str]],
+    *,
+    converted: Sequence[int] = (),
+    separator_choice: bool = True,
+) -> list[str]:
+    """Notes for comma-written cells left blank (NaN) in NUMERIC columns.
+
+    Worksheet audit #21: a column of point decimals with one ``"2,5"`` in it
+    is not a European column (``"auto"`` converts only all-comma columns), so
+    that cell read as NaN without a word. Converting it would guess the
+    locale cell by cell; this says so instead, naming the column, how many
+    cells and an example -- and how they are written, because the three
+    shapes need different fixes: a decimal comma (``"2,5"``), US thousands
+    grouping (``"1,234.5"``), or a cell that fits both (``"1,234"``).
+
+    Only a numeric column is reported, by the importer's own rule (more than
+    10% of its rows hold a number): a text column (``abc / 1,5 / def``) is
+    imported as text, intact, and nothing in it was blanked. Any other comma
+    cell left blank in a numeric column (``"(2,5)"``) is reported too. Only
+    columns with a NaN are inspected, so a clean file pays nothing.
+    ``separator_choice=False`` (a comma-delimited file, where the decimal
+    separator cannot be a comma) drops the Import Wizard hint.
+    """
+    fix = ", or pick the decimal separator in the Import Wizard" if separator_choice else ""
+    skip = set(converted)
+    notes: list[str] = []
+    for c, header in enumerate(col_headers):
+        if c in skip or c >= matrix.shape[1] or not np.isnan(matrix[:, c]).any():
+            continue
+        cells = _column_cells(data_tokens, c)[: matrix.shape[0]]
+        # The importer's own rule for a numeric column (delimited.py: more
+        # than 10% of its rows hold a number). One stray text cell ("ERR")
+        # used to make the whole column count as text and hide every note.
+        if np.count_nonzero(~np.isnan(matrix[:, c])) <= 0.1 * max(matrix.shape[0], 1):
+            continue
+        stray: dict[str, list[str]] = {}
+        for r, cell in enumerate(cells):
+            if "," not in cell or not np.isnan(matrix[r, c]):
+                continue
+            stray.setdefault(_comma_kind(cell) or "other", []).append(cell)
+        for kind, found in stray.items():
+            count = len(found)
+            noun = "cell" if count == 1 else "cells"
+            how = _KIND_TEXT[kind].format(example=found[0])
+            notes.append(
+                f"Column '{header}' has {count} {noun} {how}; "
+                f"{'it was' if count == 1 else 'they were'} left blank (NaN). Fix the "
+                f"{noun}{fix}."
+            )
+    return notes

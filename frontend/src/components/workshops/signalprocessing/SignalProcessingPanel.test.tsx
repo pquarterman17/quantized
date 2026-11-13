@@ -17,7 +17,10 @@ vi.mock("../../../lib/api", async (importOriginal) => ({
 vi.mock("../../../lib/api/spectralWorkbench", () => ({ runSpectralWorkbench: spectralMock }));
 vi.mock("../../../store/signalWorksheetCommand", () => ({ createSignalWorksheetFromApp: createSignalMock }));
 vi.mock("../../overlays/ParamDialog", () => ({ askParams: askParamsMock }));
-vi.mock("../../../lib/signalRecipeTemplate", () => ({ saveSignalRecipeTemplate: saveRecipeMock }));
+vi.mock("../../../lib/signalRecipeTemplate", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/signalRecipeTemplate")>()),
+  saveSignalRecipeTemplate: saveRecipeMock,
+}));
 
 vi.mock("../../overlays/ToolWindow", () => ({
   default: ({ title, children }: { title: string; children: ReactNode }) => (
@@ -77,19 +80,68 @@ describe("SignalProcessingPanel", () => {
     expect(create).toBeEnabled();
   });
 
-  it("fails closed when the chosen operation cannot propagate a bound Y error", () => {
+  it("smooths data with a bound Y error by propagating it (worksheet audit #9)", async () => {
+    useApp.setState({
+      datasets: [{ ...dataset, errorRoles: [{ channel: 1, target: 0, axis: "y", side: "both" }] }],
+      yKeys: [0],
+    });
+    render(<SignalProcessingPanel />);
+
+    const create = screen.getByRole("button", { name: "Create linked worksheet" });
+    await waitFor(() => expect(create).toBeEnabled());
+    expect(screen.getByRole("group", { name: "Bound uncertainty" })).toHaveTextContent("propagated through this linear operation");
+    // The caveat is on screen, not only in the code.
+    expect(screen.getByRole("group", { name: "Bound uncertainty" })).toHaveTextContent(/diagonal only.*neighbouring output points are correlated/);
+    expect(correctionMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      params: expect.not.objectContaining({ dropYUncertainty: true }),
+      error_bindings: [{ channel: 1, target: 0, axis: "y", side: "both" }],
+    }), expect.any(AbortSignal));
+  });
+
+  it("a second linear step on an already-propagated (correlated) uncertainty is blocked with the reason, before any request", async () => {
     useApp.setState({
       datasets: [{
         ...dataset,
+        data: { ...dataset.data, metadata: { ...dataset.data.metadata, correlated_y_errors: ["secondary"] } },
         errorRoles: [{ channel: 1, target: 0, axis: "y", side: "both" }],
       }],
       yKeys: [0],
     });
     render(<SignalProcessingPanel />);
-
-    expect(screen.getByRole("alert")).toHaveTextContent("cannot yet propagate bound Y uncertainty");
+    fireEvent.change(screen.getByRole("combobox", { name: "Operation" }), { target: { value: "integral" } });
+    expect(screen.getByRole("alert")).toHaveTextContent(/uncertainty in secondary came out of an earlier smoothing, derivative or integral.*correlated/);
     expect(screen.getByRole("button", { name: "Create linked worksheet" })).toBeDisabled();
     expect(correctionMock).not.toHaveBeenCalled();
+    // The note under the drop box must not contradict the alert: an integral
+    // CAN propagate; this input is the problem, not the operation (live check).
+    const note = screen.getByRole("group", { name: "Bound uncertainty" });
+    expect(note).not.toHaveTextContent(/cannot be propagated through this operation/);
+    expect(note).toHaveTextContent(/earlier linear step/);
+    // A scalar step is still exact.
+    fireEvent.change(screen.getByRole("combobox", { name: "Operation" }), { target: { value: "normalize-peak" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create linked worksheet" })).toBeEnabled());
+  });
+
+  it("a nonlinear operation with a bound Y error says why it is blocked, and dropping the uncertainty unblocks it", async () => {
+    useApp.setState({
+      datasets: [{ ...dataset, errorRoles: [{ channel: 1, target: 0, axis: "y", side: "both" }] }],
+      yKeys: [0],
+    });
+    render(<SignalProcessingPanel />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Operation" }), { target: { value: "log-derivative" } });
+
+    const reason = 'Logarithmic derivative can\'t propagate the bound Y uncertainty. Tick "Drop uncertainty for this output" or unassign the error column.';
+    expect(screen.getByRole("alert")).toHaveTextContent(reason);
+    const create = screen.getByRole("button", { name: "Create linked worksheet" });
+    expect(create).toBeDisabled();
+    expect(create).toHaveAttribute("title", reason); // a disabled control says why
+    expect(screen.getByRole("button", { name: "Save recipe…" })).toHaveAttribute("title", reason);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Drop uncertainty for this output" }));
+    await waitFor(() => expect(create).toBeEnabled());
+    expect(correctionMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      params: expect.objectContaining({ derivativeMode: "dlog/dlog", dropYUncertainty: true }),
+    }), expect.any(AbortSignal));
   });
 
   it("does not create duplicate outputs from rapid repeated clicks", async () => {
@@ -225,6 +277,31 @@ describe("SignalProcessingPanel", () => {
       expect.objectContaining({ secondarySource: expect.objectContaining({ datasetId: reference.id }) }),
       expect.any(AbortSignal),
     );
+  });
+
+  it("Apply to selected sheets… opens the batch apply on the CURRENT setup, seeded with the Library selection (worksheet audit #15)", async () => {
+    const other: Dataset = { ...dataset, id: "other", name: "scan 2" };
+    useApp.setState({ datasets: [dataset, other], selectedIds: [dataset.id, other.id] });
+    render(<SignalProcessingPanel />);
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "derivative-first" } });
+    const launch = screen.getByRole("button", { name: "Apply to selected sheets…" });
+    await waitFor(() => expect(launch).toBeEnabled());
+    fireEvent.click(launch);
+    const region = await screen.findByRole("region", { name: "Apply recipe First derivative (Signal Processing)" });
+    expect(region).toHaveTextContent("1 step: First derivative · secondary");
+    // A preflight per picked sheet, before anything runs.
+    expect(screen.getByRole("group", { name: "Preflight scan" })).toHaveTextContent("ready");
+    expect(screen.getByRole("group", { name: "Preflight scan 2" })).toHaveTextContent("ready");
+    expect(screen.getByRole("button", { name: "Apply to 2 datasets" })).toBeEnabled();
+  });
+
+  it("Apply to selected sheets… is disabled, with the reason, while the setup is invalid", () => {
+    render(<SignalProcessingPanel />);
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "normalize-reference" } });
+    fireEvent.change(screen.getByLabelText("Reference"), { target: { value: "range" } });
+    const launch = screen.getByRole("button", { name: "Apply to selected sheets…" });
+    expect(launch).toBeDisabled();
+    expect(launch).toHaveAttribute("title", "Reference X range must be finite and increasing.");
   });
 
   it("does not silently interpret a blank reference bound as zero", () => {

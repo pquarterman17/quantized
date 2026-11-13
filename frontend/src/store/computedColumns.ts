@@ -15,13 +15,16 @@
 // breaks) a formula keeps both in sync.
 
 import { applyFormulasWithErrors, baseColumns, channelLetter, referencedColumns } from "../lib/formula";
+import { EXTENSION_PENDING, formulaExtension, loadFormulaExtension, onFormulaExtension } from "../lib/formulaExt";
 import { remapSurvivingFormulas } from "../lib/formulaRename";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
-import type { ComputedColumn, DataStruct } from "../lib/types";
+import type { SheetBinding } from "../lib/formulaTypes";
+import type { ComputedColumn, DataStruct, Dataset } from "../lib/types";
 import { remapDatasetChannels } from "../lib/channelRemap";
 import { columnRemovalRefsPatch } from "./columnRemovalRefs";
 import { resolvePendingEdit } from "./pendingEdit";
+import { failWithRetry } from "./toasts";
 import type { AppState } from "./useApp";
 
 export interface ComputedColumnsSlice {
@@ -105,12 +108,69 @@ export function refreshFitRefsLater(id: string, get: SliceGet): void {
     .catch((e) => get().setStatus(`could not refresh fitted-value columns: ${e instanceof Error ? e.message : "error"}`));
 }
 
+/** `expr` with col("Long Name") stored as the column's letter
+ *  (lib/formulaRefs.ts) — or null, with the reason in the status bar, when a
+ *  name is ambiguous (zero mutation, like a refused cycle). */
+function resolvedNames(expr: string, labels: readonly string[], get: SliceGet): string | null {
+  try {
+    return formulaExtension()?.resolveColumnNames(expr, labels) ?? expr;
+  } catch (e) {
+    get().setStatus(e instanceof Error ? e.message : "formula error");
+    return null;
+  }
+}
+
+/** The worksheets `expr`'s `sheet("Name", …)` calls are linked to (by id —
+ *  lib/sheetRefs.ts), or why the formula must be refused: an unknown or
+ *  ambiguous name, a worksheet reading itself, one that has not loaded its
+ *  full data, or a link that would close a circle of worksheets. `sheets` is
+ *  undefined when the formula reads no other worksheet. */
+export function linkSheets(
+  get: SliceGet,
+  id: string,
+  expr: string,
+  prior?: readonly SheetBinding[],
+): { sheets: SheetBinding[] | undefined } | { error: string } {
+  if (!/\bsheet\s*\(/.test(expr)) return { sheets: undefined };
+  const ext = formulaExtension();
+  return ext ? ext.linkSheets(expr, get().datasets, id, prior) : { error: EXTENSION_PENDING };
+}
+
+/** `d` with its computed columns re-evaluated (values + `formulaErrors`). */
+export function recomputeFormulaData(d: Dataset): Dataset {
+  return d.formulas ? { ...d, ...withRecomputedFormulas(baseColumns(d.data, d.formulas.length), d.formulas) } : d;
+}
+
 export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): ComputedColumnsSlice {
+  // The Origin-style formula syntax is a lazy chunk (lib/formulaExt.ts):
+  // load it now, then recalculate any formula that needed it before it came.
+  // `sheet("Name", A)` reads the worksheet a column is LINKED to, from the
+  // store's live dataset list.
+  onFormulaExtension({
+    loaded: (m) => m.attachStore(() => get().datasets, (datasets) => set({ datasets })),
+    // A chunk that would not download: say so once, with a way to retry; the
+    // automatic retries (lib/formulaExt.ts) stay quiet.
+    failed: (quiet) => {
+      if (quiet) return;
+      const msg = "The formula module didn't load, so Origin-style formulas (col(), A[i], cumsum, sheet(), text comparison, row statistics) can't be evaluated yet";
+      failWithRetry(get().setStatus, msg, () => void loadFormulaExtension().catch(() => undefined));
+    },
+  });
+  void loadFormulaExtension().catch(() => undefined);
   return {
-    addFormula: (id, name, expr) => {
+    addFormula: (id, name, rawExpr) => {
       const ds = get().datasets.find((d) => d.id === id);
       if (!ds) return false;
-      if (resolvePendingEdit(get, ds, "adding a column", () => get().addFormula(id, name, expr))) return true;
+      if (resolvePendingEdit(get, ds, "adding a column", () => get().addFormula(id, name, rawExpr))) return true;
+      // col("Long Name") is stored as the column's letter (lib/formulaRefs.ts).
+      const expr = resolvedNames(rawExpr, ds.data.labels, get);
+      if (expr === null) return false;
+      const linked = linkSheets(get, id, expr);
+      if ("error" in linked) {
+        get().setStatus(`Can't add column "${name}": ${linked.error}`);
+        return false;
+      }
+      const sheets = linked.sheets;
       const deps = referencedColumns(expr).letters;
       const target = formulaLetter(ds.data.labels.length, ds.formulas?.length ?? 0, ds.formulas?.length ?? 0);
       for (const dep of deps) {
@@ -128,7 +188,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
         datasets: s.datasets.map((d) => {
           if (d.id !== id) return d;
           const base = baseColumns(d.data, d.formulas?.length ?? 0);
-          const formulas: ComputedColumn[] = [...(d.formulas ?? []), { name, expr, deps }];
+          const formulas: ComputedColumn[] = [...(d.formulas ?? []), { name, expr, deps, ...(sheets ? { sheets } : {}) }];
           return { ...d, formulas, ...withRecomputedFormulas(base, formulas) };
         }),
       }));
@@ -150,7 +210,16 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
         return true;
       }
       const name = patch.name?.trim() || current.name;
-      const expr = patch.expr ?? current.expr;
+      const expr = patch.expr === undefined ? current.expr : resolvedNames(patch.expr, ds.data.labels, get);
+      if (expr === null) return false;
+      // An unchanged formula keeps its links; an edited one is re-linked,
+      // each name it already used staying on the worksheet it was bound to.
+      const linked = expr === current.expr ? { sheets: current.sheets } : linkSheets(get, id, expr, current.sheets);
+      if ("error" in linked) {
+        get().setStatus(`Can't update column "${current.name}": ${linked.error}`);
+        return false;
+      }
+      const sheets = linked.sheets;
       // P2.5: an auto-derived unit, the σ link and the notes describe the OLD
       // formula, so an expr edit drops them (unlinking a σ derived from this
       // column, lib/formula.ts) and keeps only the fitted-value snapshots. A
@@ -180,7 +249,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
           let formulas = d.formulas.map((f, i): ComputedColumn =>
             // A metadata factor (P2.5) stays one while only its name/unit change.
             i === index
-              ? { name, expr, ...(unit ? { unit } : {}), deps, ...(f.factor && !edited ? { factor: f.factor } : {}), ...(derived ? { derived } : {}) }
+              ? { name, expr, ...(unit ? { unit } : {}), deps, ...(f.factor && !edited ? { factor: f.factor } : {}), ...(derived ? { derived } : {}), ...(sheets ? { sheets } : {}) }
               : f,
           );
           // Finding 9: renaming EITHER end of a σ pair used to permanently
