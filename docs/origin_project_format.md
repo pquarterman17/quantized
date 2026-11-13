@@ -100,8 +100,8 @@ page-span scoping, closed the former per-figure attribution gap — only
 documented negative. [Superseded note: earlier text in this section and §11
 still quote the pre-rework 30.6% figure; §6.2.2 and `opju_figure_curves.py`
 are authoritative. See `docs/origin_re/ORIGIN_CONVENTIONS.md` §6.1.] A native `.opj` writer
-round-trips through our own reader but does **not** yet load in real Origin
-(item 34, open); full sheet-hierarchy UI (nested Book→Sheet trees) is out
+round-trips through our own reader and loads in real Origin (item 34,
+CLOSED 2026-07-07 — see §8 and §11); full sheet-hierarchy UI (nested Book→Sheet trees) is out
 of scope by design — extra sheets surface as flat pseudo-books instead.
 One still-undecoded non-double shape remains in each container: `.opj`'s
 `Moke.opj Book3_A` mixes text labels and numeric-sentinel rows within one
@@ -2199,6 +2199,30 @@ Verified live on Origin 2026b: single-book, multi-book, and synthetic
 count, and expASC re-exports are **value-exact with correct names and
 units** (`tools/origin_trial/probe_opj_loader.py verify`). Re-verify per
 license window via the validation-log checklist.
+
+**Interchange audit follow-ups (2026-11), writer side only — reader parse
+rules unchanged:**
+
+* Value columns carry their declared designation (`column_designations` +
+  the live `error_roles`, `io/_column_roles.py`): Y, Y-error, X-error,
+  label, disregard, Z, or a further X, which opens the next X group — @35
+  is then that X's serial and @51 its group index (the reader's
+  nearest-preceding-X rule). These shapes round-trip through the reader in
+  CI; the live probe series above covered X/Y books, so a multi-X /
+  label / Z load in real Origin is still to be re-verified per license
+  window.
+* The label block's third row carries the column comment; text outside
+  Latin-1 is written as Origin's `\(xHHHH)` escape (μ → µ, Å-sign → Å
+  first), never `?`.
+* The window header ALWAYS uses the `@${` marker form, repeating the short
+  name when there is no long name: the 197-byte no-marker variant sent the
+  reader to its v4.3227 printable-run fallback, which titled such books
+  `BA` (template bytes). Book short names are ASCII letters/digits with a
+  leading letter (Origin's Short Name rule), ≤16 characters so
+  `<book>_<column>` fits the 147B header's 23-byte name field.
+* The fh file-size u32 also backs an import-side completeness diagnostic
+  (`integrity.py`): a v4.3380 `.opj` shorter than its recorded size is
+  reported as truncated (`file_truncated` in the fidelity manifest).
 
 ---
 
