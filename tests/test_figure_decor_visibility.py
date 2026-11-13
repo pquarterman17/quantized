@@ -155,3 +155,38 @@ def test_a_text_box_pads_by_its_screen_pixels_not_a_fixed_quarter_font(
     # 12 more CSS px a side = 9 pt a side = 18 px taller at 72 dpi (the old
     # px/4-font-sizes rule gave 60).
     assert big - small == pytest.approx(18.0, abs=1.0)
+
+
+def _render_x(monkeypatch: pytest.MonkeyPatch, x_scale: str, **ov: Any) -> tuple[Any, list[str]]:
+    seen: list[Any] = []
+    real = figure_mod.savefig_bytes
+
+    def spy(fig: Any, fmt: str, **kw: Any) -> bytes:
+        seen.append(fig)
+        return real(fig, fmt, **kw)
+
+    monkeypatch.setattr(figure_mod, "savefig_bytes", spy)
+    x = np.array([1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0])
+    with collect_figure_warnings() as notes:
+        render_figure(x, [("S", x)], fmt="png", dpi=40, x_scale=x_scale, overrides=ov)
+    return seen[-1].axes[0], notes
+
+
+def test_an_x_side_at_or_below_zero_on_a_log_x_runs_from_the_left_edge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review finding: the screen floored an x side with no position to the
+    left edge only for y; on a log X it skipped the shade while the export
+    drew it from somewhere else, with no warning. Both now floor to the
+    left edge, and a shade with no x position at all is reported."""
+    keep = {"x1": 0.0, "x2": 5.0, "y1": 0.0, "y2": 1.0, "fill": "#3388cc", "full_height": True}
+    ax, notes = _render_x(monkeypatch, "log", region_shades=[keep], x_lim=[1.0, 100.0])
+    (patch,) = _shade_patches(ax)
+    # axvspan's patch is a Rectangle in data x (axes-fraction y).
+    assert patch.get_x() == pytest.approx(1.0)
+    assert patch.get_x() + patch.get_width() == pytest.approx(5.0)
+    assert notes == []
+    gone = {"x1": -3.0, "x2": 0.0, "y1": 0.0, "y2": 1.0, "fill": "#3388cc", "full_height": True}
+    ax, notes = _render_x(monkeypatch, "log", region_shades=[gone], x_lim=[1.0, 100.0])
+    assert _shade_patches(ax) == []
+    assert any("Region shade 1" in n and "log x axis" in n for n in notes)

@@ -20,7 +20,7 @@ const BBOX = { left: 10, top: 5, width: 100, height: 80 };
 
 /** A log-ish y: v > 0 -> 100 - log10(v) * 10, v <= 0 -> -Infinity / NaN, as
  *  uPlot's own log valToPos gives for a value with no position. */
-function fakeU(log: boolean) {
+function fakeU(log: boolean, logX = false) {
   const rects: { x: number; y: number; w: number; h: number }[] = [];
   const ctx = {
     save() {}, restore() {}, beginPath() {}, rect() {}, clip() {},
@@ -30,15 +30,15 @@ function fakeU(log: boolean) {
     fillStyle: "", globalAlpha: 1,
   };
   const valToPos = (v: number, scale: string) => {
-    if (scale === "x") return v;
+    if (scale === "x") return logX ? (v > 0 ? 10 + Math.log10(v) * 20 : NaN) : v;
     if (!log) return 100 - v;
     return v > 0 ? 85 - Math.log10(v) * 10 : v === 0 ? -Infinity : NaN;
   };
   return { u: { ctx, bbox: BBOX, valToPos, scales: { x: {}, y: {} } }, rects };
 }
 
-function draw(shades: RegionShade[], log: boolean) {
-  const { u, rects } = fakeU(log);
+function draw(shades: RegionShade[], log: boolean, logX = false) {
+  const { u, rects } = fakeU(log, logX);
   // @ts-expect-error — minimal stub stands in for a real uPlot instance
   regionShadePlugin(shades).hooks.drawClear?.(u);
   return rects;
@@ -59,6 +59,14 @@ describe("region shades are visible on any scale", () => {
 
   it("a shade with no position at all is skipped", () => {
     expect(draw([{ id: "s", x1: 20, x2: 40, y1: -2, y2: -1, fill: "#336699" }], true)).toEqual([]);
+  });
+
+  it("an x side <= 0 on a log X runs from the left edge, as the export draws it (review finding)", () => {
+    const rects = draw([{ id: "s", x1: 0, x2: 5, y1: 0, y2: 1, fill: "#336699", fullHeight: true }], false, true);
+    expect(rects).toHaveLength(1);
+    expect(rects[0].x).toBe(BBOX.left);
+    expect(rects[0].x + rects[0].w).toBeCloseTo(10 + Math.log10(5) * 20, 9);
+    expect(draw([{ id: "s", x1: -3, x2: 0, y1: 0, y2: 1, fill: "#336699", fullHeight: true }], false, true)).toEqual([]);
   });
 
   it("linear data-y shades are unchanged", () => {

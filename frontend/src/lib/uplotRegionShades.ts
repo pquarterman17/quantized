@@ -49,10 +49,16 @@ export function drawRegionShades(u: uPlot, shades: readonly RegionShade[]): void
     if (![s.x1, s.x2].every(Number.isFinite)) continue;
     if (!s.fullHeight && ![s.y1, s.y2].every(Number.isFinite)) continue;
     const yScale = s.axis === 1 && hasY2 ? "y2" : "y";
-    const xa = u.valToPos(s.x1, "x", true);
-    const xb = u.valToPos(s.x2, "x", true);
+    // An x side with no position on this scale (<= 0 on log, 0 on
+    // reciprocal) runs from the left edge, as the export does
+    // (`calc.figure_decor._floored_span`); both sides missing draws nothing.
+    const xa0 = u.valToPos(s.x1, "x", true);
+    const xb0 = u.valToPos(s.x2, "x", true);
+    if (!Number.isFinite(xa0) && !Number.isFinite(xb0)) continue;
+    const xa = Number.isFinite(xa0) ? xa0 : left;
+    const xb = Number.isFinite(xb0) ? xb0 : left;
     const ys = shadeYSpan(u, s, yScale);
-    if (!ys || ![xa, xb].every(Number.isFinite)) continue;
+    if (!ys) continue;
     const [ya, yb] = ys;
     ctx.fillStyle = s.fill;
     ctx.fillRect(Math.min(xa, xb), Math.min(ya, yb), Math.abs(xb - xa), Math.abs(yb - ya));

@@ -284,6 +284,16 @@ def _apply_region_shades(ax: Any, shades: Sequence[Mapping[str, Any]] | None) ->
             "zorder": _REGION_SHADE_ZORDER,
         }
         with _outside_autoscale(ax):
+            # An x side with no position on this scale runs from the left
+            # edge, as the screen draws it (`uplotRegionShades.drawRegionShades`).
+            x0, x1, x_recip = _floored_span(ax, "x", x0, x1)
+            if x1 <= x0:
+                note_figure_warning(
+                    f"{what} lies at or below zero on a log x axis and cannot be drawn."
+                    if not x_recip
+                    else f"{what} lies at zero on a reciprocal x axis and cannot be drawn."
+                )
+                continue
             if sh.get("full_height"):
                 ax.axvspan(x0, x1, ymin=0.0, ymax=1.0, **style)
                 _warn_if_outside(ax, "x", x0, x1, what)
@@ -292,12 +302,7 @@ def _apply_region_shades(ax: Any, shades: Sequence[Mapping[str, Any]] | None) ->
             # A side with no position on this scale runs from the axis floor,
             # as the screen draws it (`uplotRegionShades.shadeYSpan`): <= 0
             # on a log axis, exactly 0 (1/0) on a reciprocal one.
-            reciprocal = ax.get_yscale() == "function" and not is_broken_axis(ax.yaxis)
-            if ax.get_yscale() == "log" and y0 <= 0:
-                y0 = min(ax.get_ylim())  # the axis floor: <= 0 has no position
-            elif reciprocal and 0.0 in (y0, y1):
-                floor = min(ax.get_ylim())
-                y0, y1 = sorted((floor if y0 == 0 else y0, floor if y1 == 0 else y1))
+            y0, y1, reciprocal = _floored_span(ax, "y", y0, y1)
             if y1 <= y0:
                 note_figure_warning(
                     f"{what} lies at or below zero on a log axis and cannot be "
@@ -310,6 +315,24 @@ def _apply_region_shades(ax: Any, shades: Sequence[Mapping[str, Any]] | None) ->
             ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, **style))
             _warn_if_outside(ax, "x", x0, x1, what)
             _warn_if_outside(ax, "y", y0, y1, what)
+
+
+def _floored_span(ax: Any, which: str, lo: float, hi: float) -> tuple[float, float, bool]:
+    """``(lo, hi)`` on ``ax``'s ``which`` axis with each side that has no
+    position on its scale moved to the axis floor (its lower view limit):
+    <= 0 on a log axis, exactly 0 (1/0) on a reciprocal one -- the screen's
+    rule for a non-finite pixel. Also returns whether the axis is the
+    reciprocal one (for the warning's wording)."""
+    scale = ax.get_xscale() if which == "x" else ax.get_yscale()
+    axis = ax.xaxis if which == "x" else ax.yaxis
+    floor = min(ax.get_xlim() if which == "x" else ax.get_ylim())
+    reciprocal = scale == "function" and not is_broken_axis(axis)
+    if scale == "log":
+        lo, hi = (floor if lo <= 0 else lo), (floor if hi <= 0 else hi)
+    elif reciprocal:
+        lo, hi = (floor if lo == 0 else lo), (floor if hi == 0 else hi)
+    lo, hi = sorted((lo, hi))
+    return lo, hi, reciprocal
 
 
 def _warn_if_outside(
