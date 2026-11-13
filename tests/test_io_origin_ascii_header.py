@@ -215,3 +215,27 @@ def test_paste_whose_first_data_row_has_an_empty_cell_keeps_header_and_row() -> 
     assert ds.metadata.get("x_column_name") == "Temp"
     np.testing.assert_array_equal(ds.time, [1.0, 2.0, 3.0])
     np.testing.assert_array_equal(ds.values[:, 0], [np.nan, 5.0, 6.0])
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "A\tB\tC\n1\t2\n4\t5\t6\n7\t8\t9\n",  # short first data row
+        "A\tB\tC\n\t2\n4\t5\t6\n7\t8\t9\n",  # leading empty, short
+        "A,B,C\n,2\n4,5,6\n7,8,9\n",
+    ],
+)
+def test_short_first_data_row_keeps_every_column_in_both_paths(tmp_path: Path, text: str) -> None:
+    # Integration review: direct import sized the table from the FIRST data
+    # row, so a short one dropped column C (or, with a leading empty cell,
+    # lost the header and the row). Direct import and the wizard now agree.
+    p = tmp_path / "short.txt"
+    p.write_text(text)
+    direct = import_csv(p)
+    wizard = parse_import(text, guess_settings(text))
+    for ds in (direct, wizard):
+        assert ds.labels == ("B", "C")
+        assert ds.metadata.get("x_column_name") == "A"
+        assert len(ds.time) == 3
+        np.testing.assert_array_equal(ds.values[1:], [[5.0, 6.0], [8.0, 9.0]])
+        assert np.isnan(ds.values[0, 1])

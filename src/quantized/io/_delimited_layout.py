@@ -336,8 +336,9 @@ def _walk_back_gappy_rows(tokens: Sequence[Sequence[str]], first_data: int) -> i
     LEADING row was skipped as preamble -- dropped without a warning -- and
     the header above it was lost too (it no longer sat directly above the
     data). A row above ``first_data`` is taken as data only on positive
-    evidence, column by column against the first confirmed data row: same
-    width; every column that is numeric there holds a number or a missing-
+    evidence, column by column against the first confirmed data row: no
+    wider than it (a shorter row's missing trailing cells are empty); every
+    column that is numeric there holds a number or a missing-
     value spelling here; and at least one cell is a number. A header, a units
     row or a ``key,value`` preamble line has text in a numeric column, so the
     walk stops at it.
@@ -346,8 +347,12 @@ def _walk_back_gappy_rows(tokens: Sequence[Sequence[str]], first_data: int) -> i
     start = first_data
     while start > 0:
         row = [t.strip() for t in tokens[start - 1]]
-        if len(row) != len(reference):
+        if len(row) > len(reference):
             break
+        # A SHORTER row is data whose trailing cells are missing ("1<TAB>2"
+        # in a 3-column file, or "<TAB>2"): pad it with empty cells, which
+        # the per-column rule below treats as missing values.
+        row += [""] * (len(reference) - len(row))
         numeric = [_is_data_cell(t) for t in row]
         if not any(numeric):
             break

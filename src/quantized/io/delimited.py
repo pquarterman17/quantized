@@ -118,6 +118,20 @@ def _encode_categorical(cells: Sequence[str]) -> tuple[np.ndarray, tuple[str, ..
     return codes, tuple(levels)
 
 
+_WIDTH_SAMPLE_ROWS = 64
+
+
+def _sample_width(tokens: Sequence[Sequence[str]], data_start: int) -> int:
+    """Widest data row among the first `_WIDTH_SAMPLE_ROWS`, ignoring
+    trailing empty cells (a trailing delimiter is padding, not a column)."""
+    width = 0
+    for i in range(data_start, min(len(tokens), data_start + _WIDTH_SAMPLE_ROWS)):
+        row = tokens[i]
+        last = max((k + 1 for k, cell in enumerate(row) if cell.strip()), default=0)
+        width = max(width, last)
+    return width or len(tokens[data_start])
+
+
 def import_csv(
     filepath: str | Path,
     *,
@@ -166,7 +180,10 @@ def import_csv(
         header_row, data_start, units_row = layout._detect_layout(scoring_rows)
     except ValueError as exc:  # header-only file
         raise ValueError(f"{exc} ({path.name})") from exc
-    n_data_cols = len(lazy_tokens[data_start])
+    # The data's EFFECTIVE width over its leading rows (the wizard's
+    # `_effective_ncols` rule): a short first data row ("1<TAB>2" in a
+    # 3-column file) must not drop the columns the rows below fill.
+    n_data_cols = _sample_width(lazy_tokens, data_start)
     # Origin's own ASCII export: Long Name / Units / Comments above the data.
     origin_rows = origin_ascii_rows(scoring_rows, data_start, n_data_cols)
     if origin_rows is not None:
