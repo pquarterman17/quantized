@@ -48,8 +48,9 @@ beforeEach(() => {
 describe("CurveFitBatchSection — summary worksheet row order", () => {
   it("lists the inputs in Library order whatever order the batch ran them in", async () => {
     // The selection starts with the ACTIVE worksheet ("b"), so the run is b, a.
-    const datasets = useApp.getState().datasets;
-    useApp.setState({ activeId: "b" });
+    // "b" holds different data so its row is told apart by its value.
+    const datasets = useApp.getState().datasets.map((d) => (d.id === "b" ? { ...d, data: { ...d.data, values: [[7], [8], [9]] } } : d));
+    useApp.setState({ datasets, activeId: "b", resolveDataset: async (id: string) => datasets.find((d) => d.id === id) });
     useAnalysisSelection.setState({
       toolId: "curvefit",
       selection: captureAnalysisSelection({
@@ -58,7 +59,6 @@ describe("CurveFitBatchSection — summary worksheet row order", () => {
       }, "library"),
     });
     vi.mocked(fitModel).mockImplementation(async (req) => ({ params: [req.y[0] === 1 ? 10 : 20, 0, 0], errors: [0, 0, 0], R2: 1, RMSE: 0, chiSqRed: 0, nPoints: 3 }));
-    useApp.setState((s) => ({ datasets: s.datasets.map((d) => (d.id === "b" ? { ...d, data: { ...d.data, values: [[7], [8], [9]] } } : d)) }));
     render(<CurveFitBatchSection modelName="Gaussian" model={GAUSS} paramRows={[]} weightMode="none" manualKey={null} />);
     fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
     fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Gaussian) batch" }));
