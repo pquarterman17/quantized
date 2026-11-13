@@ -26,6 +26,7 @@ import { ownCurveFitOverlay, setCurveFitOverlayBand } from "../../../store/curve
 import { bandPrefs, type FittedData } from "../../../store/curveFitSession";
 import {
   bandDataStruct,
+  bandFitStats,
   bandIsEmpty,
   bandRows,
   bandSourceFor,
@@ -99,12 +100,6 @@ export function useFitBands(target: FitBandsTarget): FitBandsState {
     const xs = fitData.xKey == null ? d.time : d.values.map((r) => r[fitData.xKey!]!);
     const plotRows = mine ? overlayRows(mine, xs) : { idx: [], x: [] };
     const params = (result.params as number[] | undefined) ?? [];
-    const nPoints = Number(result.nPoints ?? fitData.x.length);
-    const nFree = Number(result.nFree ?? params.length);
-    const mse = typeof result.MSE === "number" && Number.isFinite(result.MSE) ? result.MSE : null;
-    const obsVar = Array.isArray(result.obsVar) && result.obsVar.length === fitData.x.length
-      ? (result.obsVar as (number | null)[])
-      : null;
     const ctrl = new AbortController();
     setBusy(true);
     fitBands(
@@ -113,10 +108,7 @@ export function useFitBands(target: FitBandsTarget): FitBandsState {
         params,
         covar: (result.covar as number[][] | null | undefined) ?? null,
         x: [...rows.x, ...plotRows.x],
-        n_points: nPoints,
-        n_free: nFree,
-        mse,
-        ...(obsVar ? { x_data: fitData.x, obs_var: obsVar } : {}),
+        ...bandFitStats(result, fitData.x),
         level,
       },
       ctrl.signal,

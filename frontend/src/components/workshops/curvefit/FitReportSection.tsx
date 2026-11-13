@@ -22,7 +22,7 @@ import { useApp } from "../../../store/useApp";
 import { Button, Select } from "../../primitives";
 import { DataTable } from "../../primitives/DataTable";
 import { parameterTable, pctLabel, REPORT_LEVELS, reportTables } from "./fitReportTables";
-import { reportPrefs, type FittedData } from "../../../store/curveFitSession";
+import { fitIsWeighted, reportPrefs, type FittedData } from "../../../store/curveFitSession";
 
 interface Props {
   result: CalcResult;
@@ -49,7 +49,7 @@ export default function FitReportSection({ result, fitData, paramNames, fileStem
   const setLevel = (v: number) => setLevelState((reportPrefs.level = v));
   const [rep, setRep] = useState<FitReportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const weighted = fitData.dy != null;
+  const weighted = fitIsWeighted(fitData);
 
   useEffect(() => {
     setRep(null);
@@ -67,6 +67,7 @@ export default function FitReportSection({ result, fitData, paramNames, fileStem
         residuals: residuals.map((v) => v ?? Number.NaN),
         n_free: Number(result.nFree ?? params.length),
         dy: fitData.dy ?? null,
+        ...(fitData.weights ? { weights: fitData.weights } : {}),
         level,
       },
       ctrl.signal,

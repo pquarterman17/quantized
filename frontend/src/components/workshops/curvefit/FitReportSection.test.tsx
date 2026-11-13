@@ -56,6 +56,15 @@ describe("FitReportSection", () => {
     expect(screen.getByText("Prob>|t|")).toBeInTheDocument();
   });
 
+  it("a direct-weighted fit posts its weights, not 1-sigma errors", async () => {
+    const direct = { ...FIT, dy: null, weights: [1, 0, 2, 2] };
+    render(<FitReportSection result={RESULT} fitData={direct} paramNames={["A"]} fileStem="run-Linear" />);
+    fireEvent.click(screen.getByText("Fit report"));
+    expect(await screen.findByText("Statistics (weighted)")).toBeInTheDocument();
+    const req = vi.mocked(fitReport).mock.calls[0]![0];
+    expect(req).toMatchObject({ dy: null, weights: [1, 0, 2, 2] });
+  });
+
   it("re-asks at the chosen confidence level", async () => {
     open();
     await screen.findByText("ANOVA");

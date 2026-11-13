@@ -47,11 +47,18 @@ def fit_report_blocks(
     yf = np.asarray([np.nan if v is None else v for v in y_fit], dtype=float)
     keep = np.isfinite(r) & np.isfinite(yf)
     dy = result.get("dy")
+    direct = result.get("weights")
     weights = None
     if isinstance(dy, Sequence) and len(dy) == len(residuals):
         d = np.asarray(dy, dtype=float)
         keep &= np.isfinite(d) & (d > 0)
         weights = (1.0 / d[keep] ** 2).tolist()
+    elif isinstance(direct, Sequence) and len(direct) == len(residuals):
+        # Origin's direct weighting: the weights as given (zero allowed —
+        # fit_report leaves a zero-weight point out of N).
+        wv = np.asarray([np.nan if v is None else v for v in direct], dtype=float)
+        keep &= np.isfinite(wv) & (wv >= 0)
+        weights = wv[keep].tolist()
     level = float(result.get("ciLevel") or 0.95)
     # ``nFree`` may legitimately be 0 (every parameter held): only an ABSENT
     # count falls back to "all parameters free".

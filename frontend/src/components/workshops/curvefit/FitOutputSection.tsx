@@ -17,7 +17,7 @@ import { nextDatasetId } from "../../../store/idSeq";
 import { useApp } from "../../../store/useApp";
 import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
-import { BAND_LEVELS, levelLabel } from "./fitBandData";
+import { BAND_LEVELS, bandFitStats, levelLabel } from "./fitBandData";
 import { canLinkModel, linkedColumns, resultSheetData } from "./fitOutputData";
 import type { FittedData } from "../../../store/curveFitSession";
 
@@ -60,16 +60,13 @@ export default function FitOutputSection({ dataset, model, paramNames, result, f
         setStatus(`added ${cols.map((c) => `"${c.name}"`).join(" and ")} to ${dataset.name} (linked to the fit; Undo removes)`);
         return;
       }
-      const params = (result.params as number[] | undefined) ?? [];
-      const nPoints = Number(result.nPoints ?? fitData.x.length);
       const band = ci || pi
         ? await fitBands({
           model,
-          params,
+          params: (result.params as number[] | undefined) ?? [],
           covar: (result.covar as number[][] | null | undefined) ?? null,
           x: fitData.x,
-          n_points: nPoints,
-          dof: Math.max(nPoints - Number(result.nFree ?? params.length), 1),
+          ...bandFitStats(result, fitData.x),
           level,
         })
         : null;

@@ -8140,6 +8140,8 @@ export interface components {
             params: number[];
             /** Residuals */
             residuals: number[];
+            /** Weights */
+            weights?: number[] | null;
             /** Y */
             y: number[];
         };

@@ -127,3 +127,35 @@ def test_matrices_are_exactly_symmetric_with_a_unit_diagonal() -> None:
     # A held parameter still has no correlation, itself included.
     held = correlation_matrix([[0.01, 0.0], [0.0, 0.0]])
     assert held is not None and held[1] == [None, None] and held[0][1] is None
+
+
+def test_zero_weight_points_are_left_out_of_n_and_every_df() -> None:
+    """Origin's direct weighting allows w = 0; such a point carries no
+    information, so the report equals the report without it (the fit itself
+    excludes it from N — fitting review item 2)."""
+    x, y, w = _data(True)
+    assert w is not None
+    w0 = w.copy()
+    w0[::5] = 0.0  # 8 of 40 points weightless
+    keep = w0 > 0
+    design = np.column_stack([x, np.ones_like(x)])
+    res = sm.WLS(y[keep], design[keep], weights=w0[keep], hasconst=False).fit()
+    resid = y - design @ res.params
+
+    full = fit_report(list(res.params), list(res.bse), res.cov_params().tolist(),
+                      list(y), list(resid), 2, weights=list(w0))
+    dropped = fit_report(list(res.params), list(res.bse), res.cov_params().tolist(),
+                         list(y[keep]), list(resid[keep]), 2, weights=list(w0[keep]))
+    assert full["stats"]["n"] == 32 and full["stats"]["dof"] == 30
+    assert [r["df"] for r in full["anova"]] == [2, 30, 32, 31]
+    for a, b in zip(full["anova"], dropped["anova"], strict=True):
+        for k in ("ss", "ms", "f", "prob"):
+            assert (a[k] is None and b[k] is None) or a[k] == pytest.approx(b[k], rel=1e-12)
+    assert full["stats"]["reducedChiSq"] == pytest.approx(res.mse_resid, rel=1e-10)
+    for a, b in zip(full["parameters"], dropped["parameters"], strict=True):
+        assert a["prob"] == pytest.approx(b["prob"], rel=1e-12)
+
+
+def test_negative_weights_are_refused() -> None:
+    with pytest.raises(ValueError, match="weights"):
+        anova_table([1.0, 2.0, 3.0], [0.1, -0.1, 0.0], 1, [1.0, -1.0, 1.0])

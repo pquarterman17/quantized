@@ -14,7 +14,7 @@
 import { onFitRecomputed } from "../lib/fitRecomputeEvents";
 import { rememberCurveFitOverlay } from "./curveFitOverlay";
 import { useApp } from "./useApp";
-import { replaceRetainedFit, retainedFit } from "./curveFitSession";
+import { fittedWeighting, replaceRetainedFit, retainedFit } from "./curveFitSession";
 
 let following = false;
 
@@ -36,7 +36,11 @@ export function followRefits(): void {
     if (drawn) rememberCurveFitOverlay(drawn);
     const curve = drawn ?? (e.curve ? { datasetId: e.datasetId, y: e.curve } : null);
     replaceRetainedFit(
-      { ...f, result: e.result, fitData: { x: e.x, y: e.y, xKey: f.xKey, yKey: f.yKey, dy: e.dy } },
+      {
+        ...f,
+        result: e.result,
+        fitData: { x: e.x, y: e.y, xKey: f.xKey, yKey: f.yKey, ...fittedWeighting(e.previousSpec.weight?.mode, e.dy) },
+      },
       live,
       curve,
     );

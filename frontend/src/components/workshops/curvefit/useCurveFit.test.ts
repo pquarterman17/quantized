@@ -421,6 +421,10 @@ describe("useCurveFit weighting (Sol audit — connect fitting to error columns)
     const spec = useApp.getState().datasets[0].fitSpec;
     expect(spec?.weight).toEqual({ mode: "direct", errKey: 1 });
     expect(spec?.statsVersion).toBe(2); // the fitter declared the current statistics
+    // The report/residuals/output read the weighting from fitData: the column
+    // holds WEIGHTS, so it must not pose as 1-sigma errors (`dy`), which the
+    // report would turn into 1/dy² — a zero weight there is a 422.
+    expect(result.current.fitData).toMatchObject({ dy: null, weights: [4, 0, 1, 0.25] });
   });
 
   it("direct weighting with no column picked fits unweighted and says so", async () => {

@@ -14,7 +14,31 @@
 // NaN on the grid rows (drawn as markers only, so the gaps never show).
 
 import type { BandsResult } from "../../../lib/api/fitStats";
-import type { DataStruct, Dataset, FitOverlay, SeriesStyle } from "../../../lib/types";
+import type { CalcResult, DataStruct, Dataset, FitOverlay, SeriesStyle } from "../../../lib/types";
+
+/** The fit-specific fields of a /bands request, from the fit's own result:
+ *  its point and free-parameter counts (the Student-t dof is the residual
+ *  dof nPoints - nFree), its observation variance `MSE` (what the prediction
+ *  band adds), and — for a weighted fit — its per-point `obsVar` at the fitted
+ *  x. ONE builder for the band on the graph (useFitBands) and the band columns
+ *  written to a worksheet (FitOutputSection), so the two can never disagree.
+ *  A result without MSE (an older snapshot) sends `mse: null`: the route then
+ *  returns no prediction limits rather than a wrong band. */
+export function bandFitStats(result: CalcResult, fitX: readonly number[]): {
+  n_points: number; n_free: number; mse: number | null; x_data?: number[]; obs_var?: (number | null)[];
+} {
+  const params = (result.params as number[] | undefined) ?? [];
+  const mse = typeof result.MSE === "number" && Number.isFinite(result.MSE) ? result.MSE : null;
+  const obsVar = Array.isArray(result.obsVar) && result.obsVar.length === fitX.length
+    ? (result.obsVar as (number | null)[])
+    : null;
+  return {
+    n_points: Number(result.nPoints ?? fitX.length),
+    n_free: Number(result.nFree ?? params.length),
+    mse,
+    ...(obsVar ? { x_data: [...fitX], obs_var: obsVar } : {}),
+  };
+}
 
 /** Band levels offered in the panel. */
 export const BAND_LEVELS = [0.68, 0.9, 0.95, 0.99] as const;

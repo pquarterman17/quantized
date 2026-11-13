@@ -6332,6 +6332,20 @@
             "title": "Residuals",
             "type": "array"
           },
+          "weights": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weights"
+          },
           "y": {
             "items": {
               "type": "number"

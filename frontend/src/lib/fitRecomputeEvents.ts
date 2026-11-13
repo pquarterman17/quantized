@@ -14,7 +14,10 @@ export interface FitRecomputed {
   previousSpec: FitSpec;
   /** The fitter's full response for the re-fit. */
   result: CalcResult;
-  /** The pairs it ran on (gap rows dropped) and their 1-sigma errors (null = unweighted). */
+  /** The pairs it ran on (gap rows dropped) and the weighting column values
+   *  it sent, aligned to them (null = unweighted): 1-sigma errors, or — for a
+   *  direct-weighted spec (`previousSpec.weight.mode === "direct"`) — the
+   *  weights themselves. */
   x: number[];
   y: number[];
   dy: number[] | null;

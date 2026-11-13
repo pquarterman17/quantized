@@ -80,6 +80,13 @@ def parameter_inference(
     return rows
 
 
+def _n_effective(w: NDArray[np.float64]) -> int:
+    """Points that count toward N: those with a positive weight."""
+    if not bool(np.all(np.isfinite(w))) or bool(np.any(w < 0)):
+        raise ValueError("weights must be finite and >= 0")
+    return int(np.count_nonzero(w > 0))
+
+
 def anova_table(
     y: ArrayLike,
     residuals: ArrayLike,
@@ -100,7 +107,9 @@ def anova_table(
     w = np.ones_like(yv) if weights is None else np.asarray(weights, dtype=float).ravel()
     if w.size != yv.size:
         raise ValueError(f"weights ({w.size}) must match y ({yv.size})")
-    n = int(yv.size)
+    # A zero-weight point carries no information (Origin's direct weighting
+    # allows w = 0): it is excluded from N and every df, as in the fit itself.
+    n = _n_effective(w)
     ss_res = float(np.sum(w * rv**2))
     ss_unc = float(np.sum(w * yv**2))
     w_mean = float(np.sum(w * yv) / np.sum(w)) if np.sum(w) > 0 else math.nan
@@ -172,7 +181,7 @@ def fit_report(
     err = [math.nan if e is None else float(e) for e in errors]
     yv = np.asarray(y, dtype=float).ravel()
     rv = np.asarray(residuals, dtype=float).ravel()
-    n = int(yv.size)
+    n = int(yv.size) if weights is None else _n_effective(np.asarray(weights, dtype=float).ravel())
     dof = n - int(n_free)
     anova = anova_table(yv, rv, n_free, weights)
     ss_res = float(anova[1]["ss"] or 0.0)

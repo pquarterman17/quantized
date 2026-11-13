@@ -3,7 +3,8 @@
 No math here: validates, calls ``calc.fit_report.fit_report`` and serializes
 (non-finite -> null). The client posts the finished fit's params / errors /
 covar / residuals and the y it ran on, plus the same ``dy`` it fitted with
-(``1/dy**2`` weights, the ``/fit`` convention via ``weights_from_dy``).
+(``1/dy**2`` weights, the ``/fit`` convention via ``weights_from_dy``) or, for
+Origin's direct weighting, the ``weights`` themselves.
 """
 
 from __future__ import annotations
@@ -31,6 +32,9 @@ class FitReportRequest(BaseModel):
     n_free: int = Field(ge=0)
     # 1-sigma errors the fit was weighted with; null = unweighted.
     dy: list[float] | None = None
+    # Origin's direct weighting: the weights themselves (>= 0; a zero weight
+    # leaves its point out of N). Exclusive with ``dy``.
+    weights: list[float] | None = None
     level: float = Field(default=0.95, gt=0.0, lt=1.0)
 
 
@@ -41,7 +45,11 @@ def report(req: FitReportRequest) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail="y and residuals must have the same length")
     if len(req.errors) != len(req.params):
         raise HTTPException(status_code=422, detail="errors and params must have the same length")
-    weights = None if req.dy is None else call_calc(weights_from_dy, req.dy, len(req.y))
+    if req.dy is not None and req.weights is not None:
+        raise HTTPException(status_code=422, detail="send dy or weights, not both")
+    if req.weights is not None and len(req.weights) != len(req.y):
+        raise HTTPException(status_code=422, detail="weights and y must have the same length")
+    weights = req.weights if req.dy is None else call_calc(weights_from_dy, req.dy, len(req.y))
     out = call_calc(
         fit_report, req.params, req.errors, req.covar, req.y, req.residuals, req.n_free,
         weights=None if weights is None else list(weights), level=req.level,

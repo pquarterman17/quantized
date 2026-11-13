@@ -82,3 +82,24 @@ def test_bad_input_is_422(patch: dict) -> None:
     body = {"params": [1.0, 2.0], "errors": [0.1, 0.2], "y": [1.0, 2.0],
             "residuals": [0.01, -0.01], "n_free": 1, **patch}
     assert client.post("/api/fitting/report", json=body).status_code == 422
+
+
+def test_direct_weights_equal_the_calc_and_exclude_with_dy() -> None:
+    """Origin's direct weighting: the client posts the weights themselves
+    (zero allowed), never as ``dy``."""
+    fit, y = _fit()
+    w = [0.0 if i % 7 == 0 else 1.0 + 0.1 * i for i in range(50)]
+    req = {
+        "params": fit["params"], "errors": fit["errors"], "covar": fit["covar"], "y": y,
+        "residuals": fit["residuals"], "n_free": fit["nFree"], "weights": w,
+    }
+    resp = client.post("/api/fitting/report", json=req)
+    assert resp.status_code == 200, resp.text
+    want = fit_report(fit["params"], fit["errors"], fit["covar"], y, fit["residuals"],
+                      fit["nFree"], weights=w)
+    assert resp.json()["stats"]["n"] == want["stats"]["n"] == 42
+    assert resp.json()["anova"][1]["ss"] == pytest.approx(want["anova"][1]["ss"])
+    both = client.post("/api/fitting/report", json={**req, "dy": [0.1] * 50})
+    assert both.status_code == 422
+    neg = client.post("/api/fitting/report", json={**req, "weights": [-1.0] * 50})
+    assert neg.status_code == 422

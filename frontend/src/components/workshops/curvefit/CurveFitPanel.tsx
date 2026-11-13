@@ -198,11 +198,17 @@ export default function CurveFitPanel() {
     try {
       const names = models.find((m) => m.name === modelName)?.paramNames ?? [];
       const nParams = (result.params as number[] | undefined)?.length ?? 0;
-      // `dy` + `ciLevel` let the report sheet carry the NLFit inference/ANOVA
-      // tables on the fit's own weighting (calc/report_emit_fit.py).
+      // `dy` (or a direct fit's `weights`) + `ciLevel` let the report sheet
+      // carry the NLFit inference/ANOVA tables on the fit's own weighting
+      // (calc/report_emit_fit.py).
       const { report } = await reportEmit({
         kind: "curve_fit",
-        result: { ...result, ...(fitData?.dy ? { dy: fitData.dy } : {}), ciLevel: reportPrefs.level } as Record<string, unknown>,
+        result: {
+          ...result,
+          ...(fitData?.dy ? { dy: fitData.dy } : {}),
+          ...(fitData?.weights ? { weights: fitData.weights } : {}),
+          ciLevel: reportPrefs.level,
+        } as Record<string, unknown>,
         param_names: names.length === nParams ? names : Array.from({ length: nParams }, (_, i) => `p${i}`),
         model_name: modelName,
         title: `${modelName} fit — ${active.name}`,

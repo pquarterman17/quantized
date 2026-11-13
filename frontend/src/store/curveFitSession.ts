@@ -11,15 +11,28 @@
 import type { CalcResult, Dataset, FitOverlay } from "../lib/types";
 
 /** The (x, y) pairs a completed fit ran on (gap rows dropped), the channels
- *  they came from and the 1-sigma errors it was weighted with (null =
- *  unweighted), so a report reproduces the fit's own weighted sums. */
+ *  they came from and how it was weighted, so a report reproduces the fit's
+ *  own weighted sums: `dy` = the 1-sigma errors of an error-column/Poisson
+ *  fit, `weights` = the weights themselves of a direct-weighted fit (Origin's
+ *  "Direct weighting"; zero allowed). At most one is set; neither = unweighted. */
 export interface FittedData {
   x: number[];
   y: number[];
   xKey: number | null;
   yKey: number;
   dy?: number[] | null;
+  weights?: number[] | null;
 }
+
+/** `dy` vs `weights` for FittedData from the column a fit was weighted with:
+ *  a direct-weighted fit's column holds weights, never 1-sigma errors. */
+export function fittedWeighting(mode: string | undefined, values: number[] | null): Pick<FittedData, "dy" | "weights"> {
+  if (!values) return { dy: null };
+  return mode === "direct" ? { dy: null, weights: values } : { dy: values };
+}
+
+/** Is this fit weighted (either way)? */
+export const fitIsWeighted = (d: FittedData): boolean => d.dy != null || d.weights != null;
 
 export interface Fitted {
   result: CalcResult;

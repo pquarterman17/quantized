@@ -88,3 +88,18 @@ def test_all_parameters_held_keeps_zero_free_parameters() -> None:
     stats = {row[0]: row[1] for row in blocks[1]["rows"]}
     assert stats["Number of points"] == 4
     assert stats["Degrees of freedom"] == 4
+
+
+def test_direct_weights_reach_the_report_sheet() -> None:
+    """A direct-weighted fit's report sheet carries the weighted tables (the
+    weights as given, zero-weight points out of N), not unweighted ones."""
+    result, y = _result()
+    w = [0.0 if i % 4 == 0 else 2.0 for i in range(40)]
+    result["weights"] = w
+    blocks = fit_report_blocks(result, NAMES)
+    want = fit_report(result["params"], result["errors"], result["covar"], y.tolist(),
+                      result["residuals"], result["nFree"], weights=w)
+    assert _table(blocks, "Statistics")["caption"].endswith("(weighted)")
+    anova = _table(blocks, "ANOVA")
+    assert anova["rows"][1][1] == want["anova"][1]["df"] == 30 - 3
+    assert anova["rows"][1][2] == pytest.approx(want["anova"][1]["ss"])

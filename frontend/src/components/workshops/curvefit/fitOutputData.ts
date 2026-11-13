@@ -137,7 +137,7 @@ export function resultSheetData(i: ResultSheetInput): DataStruct {
         paramNames: [...i.paramNames],
         params: (i.result.params as number[] | undefined) ?? [],
         errors: (i.result.errors as (number | null)[] | undefined) ?? [],
-        weighted: i.fitData.dy != null,
+        weighted: i.fitData.dy != null || i.fitData.weights != null,
         ...(i.band && (ci || pi) ? { level: i.band.level, confidence: ci, prediction: pi } : {}),
         createdAt: new Date().toISOString(),
       },

@@ -36,7 +36,7 @@ import { rememberCurveFitOverlay } from "../../../store/curveFitOverlay";
 import { exportCornerPlot } from "./curveFitCornerPlot";
 import { followRefits } from "../../../store/curveFitRefit";
 import { removeCurveFit, showRetainedCurve } from "../../../store/curveFitRemove";
-import { fitInputsChanged, onRetainedFitChange, restoreFitted, retainFitted, type Fitted, type FittedData } from "../../../store/curveFitSession";
+import { fitInputsChanged, fittedWeighting, onRetainedFitChange, restoreFitted, retainFitted, type Fitted, type FittedData } from "../../../store/curveFitSession";
 
 export type { FittedData } from "../../../store/curveFitSession";
 
@@ -351,7 +351,7 @@ export function useCurveFit(): CurveFitState {
         }
         const done: Fitted = {
           result: r,
-          fitData: { x: pairs.x, y: pairs.y, xKey: runXKey, yKey: localXy.yKey, dy: finiteDy },
+          fitData: { x: pairs.x, y: pairs.y, xKey: runXKey, yKey: localXy.yKey, ...fittedWeighting(weight.mode, finiteDy) },
           datasetId: ds.id,
           model: modelName,
           xKey: runXKey,

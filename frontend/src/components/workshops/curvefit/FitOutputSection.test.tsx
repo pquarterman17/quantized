@@ -56,8 +56,25 @@ describe("FitOutputSection", () => {
     const added = useApp.getState().datasets[1]!;
     expect(added.workbookId).toBe("wb1");
     expect(added.data.labels).toEqual(["M", "M fit", "M residual", "95% CI low", "95% CI high"]);
-    expect(vi.mocked(fitBands).mock.calls[0]![0]).toMatchObject({ model: "Pseudo-Voigt", x: [0, 1, 2], dof: 1 });
+    // The same fit statistics as the band on the graph (fitBandData.bandFitStats):
+    // the counts and the fit's MSE, never a bare dof (the /bands contract
+    // after the fitting-numerics merge; a `dof` field would be a 422).
+    const req = vi.mocked(fitBands).mock.calls[0]![0];
+    expect(req).toMatchObject({ model: "Pseudo-Voigt", x: [0, 1, 2], n_points: 3, n_free: 2, mse: null });
+    expect(req).not.toHaveProperty("dof");
     expect(addDerivedColumn).not.toHaveBeenCalled();
+  });
+
+  it("a weighted fit's band columns carry its per-point variance", async () => {
+    vi.mocked(fitBands).mockResolvedValue({ yFit: [1, 3, 5], ciLo: [0, 2, 4], ciHi: [2, 4, 6], piLo: [0, 0, 0], piHi: [9, 9, 9], level: 0.95 });
+    const ds = { ...DS, fitSpec: { model: "Pseudo-Voigt", params: [1, 1, 1, 0.5] } };
+    const weighted = { ...RESULT, MSE: 0.5, obsVar: [0.1, 0.2, 0.3] };
+    render(<FitOutputSection dataset={ds} model="Pseudo-Voigt" paramNames={["A", "x0", "w", "eta"]} result={weighted} fitData={FIT} />);
+    fireEvent.click(screen.getByText("Output to worksheet"));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Prediction band" }));
+    fireEvent.click(screen.getByRole("button", { name: "Write to worksheet" }));
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(2));
+    expect(vi.mocked(fitBands).mock.calls[0]![0]).toMatchObject({ mse: 0.5, x_data: [0, 1, 2], obs_var: [0.1, 0.2, 0.3] });
   });
 
   it("adds the result worksheet without leaving the fitted one, as one undo step", async () => {

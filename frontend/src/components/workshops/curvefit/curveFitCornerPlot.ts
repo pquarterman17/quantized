@@ -47,5 +47,5 @@ export async function exportCornerPlot(i: CornerPlotInput): Promise<boolean> {
       filename: `${stem}-corner`,
     }, signal);
   });
-  return done;
+  return done !== null;
 }
