@@ -87,6 +87,11 @@ export function applyAxisBreaks(axis: uPlot.Axis, idx: number, breaks: readonly 
   ctx.scales[key] = scale;
   const step = ctx.steps[idx];
   axis.splits = (_u, _i, min, max) => breakTicks(min, max, breaks, step);
+  // Every split gets its label. uPlot's default label filter for any scale
+  // with distr >= 3 is the LOG one (it keeps 1/2/5 x 10^n), and a custom
+  // scale is distr 100: in the live check a 0..6 | 996..1008 axis labelled
+  // only "2" and "1,000".."1,008".
+  axis.filter = (_u, splits) => splits;
   if (typeof axis.values === "function") {
     // The formatter sizes its decimals from the tick increment; hand it the
     // increment of the ticks actually drawn, not uPlot's own (found for the

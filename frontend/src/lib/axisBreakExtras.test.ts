@@ -65,6 +65,14 @@ describe("axis breaks on the canvas", () => {
     expect(ctx.scales.x).toEqual({}); // x is never broken this way
   });
 
+  it("labels every tick: uPlot's distr >= 3 default filter is the log one (live check)", () => {
+    const axes: uPlot.Axis[] = [{}, { scale: "y" }];
+    applyAxisExtras(axes, [{ mode: "auto", digits: 2 }, broken], ["linear", "linear"], "#000", context());
+    const splits = breakTicks(0, 1012, BREAKS);
+    expect(typeof axes[1].filter).toBe("function");
+    expect((axes[1].filter as (u: uPlot, s: number[], i: number, sp: number, inc: number) => (number | null)[])({} as uPlot, splits, 1, 40, 5)).toEqual(splits);
+  });
+
   it("a typed limit keeps its range; a typed increment sets the ticks", () => {
     const typed = [1, 990] as [number, number];
     const ctx = context({ scales: { x: {}, y: { distr: 1, range: typed } }, typed: [false, true, false], steps: [null, 4, null] });
