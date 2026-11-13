@@ -374,3 +374,22 @@ def test_origin8_workbook_matches_labplot_expectations() -> None:
             assert text is not None and text[int(row)] == value, (index, row)  # type: ignore[index]
             checked += 1
     assert checked >= 25
+
+
+def test_graph_windows_are_recovered_or_named_never_silent() -> None:
+    """Every graph window (header kind field 0x42 != 2) either becomes a
+    figure or is named as present-but-not-recovered; no worksheet, matrix or
+    notes window is ever reported (``opj_graph_windows``)."""
+    from quantized.io.origin_project.figures import extract_figures
+    from quantized.io.origin_project.opj_graph_windows import unrecovered_graph_windows
+
+    for path in _opj_files():
+        raw = path.read_bytes()
+        missed = unrecovered_graph_windows(raw)
+        recovered = {str(f["name"]) for f in extract_figures(raw)}
+        # A reported window is never one extract_figures already recovered.
+        assert not set(missed) & recovered, path.name
+        if path.name == "3dband-origin.opj":
+            assert missed == ["Graph2"]  # first layer block head 0x47
+        else:
+            assert missed == [], path.name

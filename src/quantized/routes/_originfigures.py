@@ -20,6 +20,7 @@ from quantized.io.origin_project.fidelity import (
     assess_origin_figures,
     book_source_names,
     origin_figure_decode_failure,
+    with_unrecovered_graphs,
 )
 from quantized.io.origin_project.figures import extract_figures
 from quantized.io.origin_project.figures_opju import extract_figures_opju
@@ -28,6 +29,7 @@ from quantized.io.origin_project.graph_preview import (
     attach_opju_graph_previews,
 )
 from quantized.io.origin_project.integrity import apply_container_integrity
+from quantized.io.origin_project.opj_graph_windows import unrecovered_graph_windows
 from quantized.io.origin_project.worksheet_fidelity import worksheet_fidelity_summary
 
 __all__ = ["origin_figures_and_fidelity"]
@@ -65,6 +67,12 @@ def origin_figures_and_fidelity(
         figs = []
         fidelity = origin_figure_decode_failure(container=container)
     manifest = apply_container_integrity(fidelity, raw, container)
+    if container == "opj":
+        try:
+            missed = unrecovered_graph_windows(raw)
+        except (IndexError, ValueError, ArithmeticError, KeyError, struct.error):
+            missed = []  # same degrade-not-fail rule as the figures above
+        manifest = with_unrecovered_graphs(manifest, missed)
     worksheet = primary.metadata.get("origin_worksheet_fidelity") if primary is not None else None
     if isinstance(worksheet, Mapping):
         manifest = {**manifest, "worksheet": worksheet_fidelity_summary(worksheet)}
