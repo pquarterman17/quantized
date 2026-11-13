@@ -25,7 +25,7 @@
 
 import { useEffect, useState } from "react";
 
-import { lastBookError, truncateReason } from "../../../lib/bookData";
+import { bookFetchSettled, lastBookError, truncateReason } from "../../../lib/bookData";
 import { isCategoricalChannel } from "../../../lib/categorical";
 import { effectiveDesignations, type OriginDesignation } from "../../../lib/columnmeta";
 import { hasOriginReportSheets } from "../../../lib/originTextColumns";
@@ -105,13 +105,11 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
     const source = ds.pending;
     if (!source) return;
     let live = true;
-    void useApp
-      .getState()
-      .ensureBookData(ds.id)
-      ?.then(() => {
-        const reason = lastBookError(ds.id, source);
-        if (live && reason) setLoadFailure({ source, reason });
-      });
+    useApp.getState().ensureBookData(ds.id);
+    void bookFetchSettled(ds.id, source)?.then(() => {
+      const reason = lastBookError(ds.id, source);
+      if (live && reason) setLoadFailure({ source, reason });
+    });
     return () => {
       live = false;
     };

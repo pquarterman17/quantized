@@ -42,10 +42,7 @@ export interface DataIntakeSlice {
   // Call this from any view that's about to READ a dataset's `.data` for
   // real (not just list it): setActive, a plot window binding, a multi-panel
   // cell, the worksheet.
-  // Resolves (never rejects) once the kicked fetch has settled, so a view can
-  // ask `lib/bookData.lastBookError` whether it failed; undefined when `id`
-  // is not pending.
-  ensureBookData: (id: string) => Promise<void> | void;
+  ensureBookData: (id: string) => void;
   // Awaited version for a caller that needs every pending dataset FULLY
   // resolved before proceeding — the "Save workspace (.dwk)…" command, so an
   // exported .dwk is always self-contained (never references a book by a
@@ -116,12 +113,12 @@ export function createDataIntakeSlice(set: SliceSet, get: SliceGet): DataIntakeS
       // edit anywhere in the project. A failure writes nothing, so the object
       // survives those re-kicks; a reopened project, a relink or a reimport is a
       // new object and is announced again. An action on it reports every time.
-      return install(id, ds.pending).then(undefined, (e: unknown) => {
+      install(id, ds.pending).catch((e: unknown) => {
         const reason = e instanceof Error ? e.message : String(e);
         if (quietFailures.get(ds) === reason) return;
         quietFailures.set(ds, reason);
         announceBookFailure(get, ds, `couldn't load full data for "${ds.name}" — ${reason}`, e);
-      }).then(() => undefined);
+      });
     },
     resolvePendingDatasets: async () => {
       const pending = get().datasets.filter((d) => d.pending);
