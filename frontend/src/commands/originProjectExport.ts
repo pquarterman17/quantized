@@ -5,13 +5,29 @@
 // Library shows it (extension stripped).
 //
 // What the .opj carries is the data the writer takes: x plus value columns
-// with their labels and units, per workbook. No graph, axis, colour or
-// excluded-row state travels; the writer has no field for it.
+// with their labels, units, comments and designations (column_designations
+// + the LIVE error bindings, via withLiveErrorRoles), per workbook. No
+// graph, axis, colour or excluded-row state travels; the writer has no
+// field for it.
+//
+// The download is named after the open project, else the single exported
+// book, else "project" — never always "project.opj".
 
 import { exportOriginProject } from "../lib/api/originProject";
 import { stemFromName, type StoreGet } from "../lib/exportActive";
+import { withLiveErrorRoles } from "../lib/liveErrorRoles";
+import type { Dataset } from "../lib/types";
 import { runCancellable } from "../store/pendingOpActions";
 import { toast } from "../store/toasts";
+
+/** The .opj file stem: the open project's name (extension stripped), else
+ *  the one exported dataset's name, else "project". */
+export function opjFileStem(s: StoreGet, picked: readonly Dataset[]): string {
+  const project = s().currentProject?.name?.replace(/\.(dwk|json)$/i, "");
+  if (project) return project;
+  if (picked.length === 1) return stemFromName(picked[0].name) || "project";
+  return "project";
+}
 
 export async function runExportOriginProject(s: StoreGet): Promise<void> {
   const all = s().datasets;
@@ -28,8 +44,8 @@ export async function runExportOriginProject(s: StoreGet): Promise<void> {
       signal.throwIfAborted();
       await exportOriginProject(
         {
-          datasets: resolved.map((d) => ({ dataset: d.data, name: stemFromName(d.name) })),
-          filename: "project",
+          datasets: resolved.map((d) => ({ dataset: withLiveErrorRoles(d), name: stemFromName(d.name) })),
+          filename: opjFileStem(s, picked),
         },
         signal,
       );

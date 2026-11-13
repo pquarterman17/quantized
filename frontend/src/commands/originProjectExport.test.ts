@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportOriginProject } from "../lib/api/originProject";
+import type { Dataset } from "../lib/types";
 import { usePendingOps } from "../store/pendingOps";
 import { useToasts } from "../store/toasts";
 import { useApp } from "../store/useApp";
@@ -52,7 +53,9 @@ describe("runExportOriginProject", () => {
     await runExportOriginProject(useApp.getState);
     expect(exportMock).toHaveBeenCalledTimes(1);
     expect(lastBody().datasets.map((d) => d.name)).toEqual(["loopA", "loopB", "rocking"]);
-    expect(lastBody().datasets[2].dataset).toEqual(data(3));
+    // error_roles always travels ([] = no error columns), so the backend never
+    // falls back to guessing error columns from label keywords.
+    expect(lastBody().datasets[2].dataset).toEqual({ ...data(3), metadata: { error_roles: [] } });
     expect(lastBody().filename).toBe("project");
     expect(useApp.getState().status).toBe("exported Origin project (3 books)");
   });
@@ -71,7 +74,30 @@ describe("runExportOriginProject", () => {
     useApp.setState({ resolveDatasets });
     await runExportOriginProject(useApp.getState);
     expect(resolveDatasets).toHaveBeenCalledWith(["d1", "d2", "d3"]);
-    expect(lastBody().datasets.map((d) => d.dataset)).toEqual([full, full, full]);
+    const sent = { ...full, metadata: { error_roles: [] } };
+    expect(lastBody().datasets.map((d) => d.dataset)).toEqual([sent, sent, sent]);
+  });
+
+  it("sends each book's live error bindings as error_roles", async () => {
+    const live = [{ channel: 0, target: 0, axis: "y" as const, side: "both" as const }];
+    const book: Dataset = { id: "d1", name: "loopA.dat", data: data(1), errorRoles: live };
+    // An earlier test swaps in a resolveDatasets mock; resolve to this book.
+    useApp.setState({ datasets: [book], selectedIds: [], resolveDatasets: async () => [book] });
+    await runExportOriginProject(useApp.getState);
+    expect(lastBody().datasets[0].dataset.metadata.error_roles).toEqual(live);
+  });
+
+  it("names the file after the open project", async () => {
+    useApp.setState({ currentProject: { name: "MOKE survey.dwk", path: "/p/MOKE survey.dwk" } });
+    await runExportOriginProject(useApp.getState);
+    expect(lastBody().filename).toBe("MOKE survey");
+    useApp.setState({ currentProject: null });
+  });
+
+  it("names the file after a single exported book when no project is open", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "loopA.dat", data: data(1) }], selectedIds: [] });
+    await runExportOriginProject(useApp.getState);
+    expect(lastBody().filename).toBe("loopA");
   });
 
   it("reports an empty session without calling the route", async () => {

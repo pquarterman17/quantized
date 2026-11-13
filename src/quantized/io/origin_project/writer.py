@@ -14,16 +14,33 @@ Round-trip through :func:`quantized.io.origin_project.read_origin_books` is
 CI-tested; loading in REAL Origin (COM ``app.Load``) is verified live per
 license window (validation log) — the probe series this layout ships from
 loaded ``True`` on Origin 2026b.
+
+Column roles follow the dataset's declared designations
+(``io/_column_roles``: ``column_designations`` + the live ``error_roles``):
+Y, Y-error, X-error, label, disregard, Z, and a second X column (which opens
+a new X group its following Y columns bind to -- the reader's
+nearest-preceding-X rule). Column comments are written to the label block's
+third row. Text is Latin-1 with Origin's ``\\(xHHHH)`` escape for anything
+else (``writer_blocks.encode_text``), never ``?``. Multi-X / non-Y
+designations round-trip through the reader in CI; the live-Origin probe
+series above covered X/Y books only.
 """
 
 from __future__ import annotations
 
+import re
 import struct
 from pathlib import Path
 
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io._column_roles import (
+    channel_comments,
+    channel_designations,
+    column_letter,
+    x_column_comment,
+)
 from quantized.io.origin_project import writer_blocks as wb
 from quantized.io.origin_project.container import ORIGIN_MISSING
 
@@ -34,17 +51,20 @@ _DESIGNATION_CODE = {"Y": 0, "disregard": 1, "Y-error": 2, "X": 3, "label": 4, "
 _NULL = struct.pack("<I", 0) + b"\n"
 
 
+# Origin short (window) names: ASCII letters/digits only, starting with a
+# letter -- no spaces or punctuation (Origin's Short Name rule). Capped so
+# the ``<book>_<column>`` dataset name fits the 147B header's 23-byte field
+# even for a 3-letter column (AAA): 16 + 1 + 3 + NUL < 23.
+_SHORT_MAX = 16
+_NOT_ALNUM = re.compile(r"[^A-Za-z0-9]")
+
+
 def _col_short(i: int) -> str:
     """0-based column index -> Origin short name, bijective base-26
     (A..Z, AA, AB, …) — the same lettering the readers decode. (The old
     A..Z-only table made the writer reject >26-column books that the read
     path handles fine; 2026-07-06 genericity audit.)"""
-    out = ""
-    i += 1
-    while i:
-        i, rem = divmod(i - 1, 26)
-        out = chr(ord("A") + rem) + out
-    return out
+    return column_letter(i)
 
 
 def _block(payload: bytes) -> bytes:
@@ -60,64 +80,84 @@ def _data_block(values: np.ndarray) -> bytes:
 
 
 def _label_block(long_name: str, unit: str, comment: str) -> bytes:
-    text = "\r\n".join([long_name, unit, comment]).rstrip("\r\n") or " "
-    return _block(text.encode("latin1", errors="replace") + b"\x00")
+    rows = [wb.encode_text(t) for t in (long_name, unit, comment)]
+    text = b"\r\n".join(rows).rstrip(b"\r\n") or b" "
+    return _block(text + b"\x00")
 
 
 def _book_name(ds: DataStruct, index: int, used: set[str]) -> tuple[str, str]:
-    """(short, long) book names: short must be latin-1 word-ish and unique."""
+    """(short, long) book names. The short name obeys Origin's rule (ASCII
+    letters/digits, leading letter, no spaces) and is unique ignoring case
+    (Origin names are case-insensitive); the long name keeps the original
+    text, so a renamed short name loses nothing the user sees."""
     raw = str(ds.metadata.get("origin_book", "") or f"Book{index + 1}")
-    # LabTalk/dataset names must stay ASCII word characters (the reader's
-    # NAME_RE contract): strip everything else, including non-Latin scripts.
-    short = "".join(c for c in raw if c.isascii() and (c.isalnum() or c == " ")).strip()
-    short = short or f"Book{index + 1}"
+    short = _NOT_ALNUM.sub("", raw)
+    if short and not short[0].isalpha():
+        short = "B" + short
+    short = (short or f"Book{index + 1}")[:_SHORT_MAX]
     base = short
     n = 1
-    while short in used:
+    while short.lower() in used:
         n += 1
-        short = f"{base}{n}"
-    used.add(short)
-    long_name = str(ds.metadata.get("origin_book_long", "") or short)
+        short = f"{base[: _SHORT_MAX - len(str(n))]}{n}"
+    used.add(short.lower())
+    long_name = str(ds.metadata.get("origin_book_long", "") or raw)
     return short, long_name
+
+
+def _x_label(ds: DataStruct) -> tuple[str, str]:
+    """The X (time) column's long name + unit: the Origin keys
+    (``x_column_long``/``x_unit``) first, then the canonical keys every other
+    parser writes (``x_column_name``/``x_column_unit``)."""
+    meta = ds.metadata
+    long_name = meta.get("x_column_long") or meta.get("x_column_name") or ""
+    unit = meta.get("x_unit") or meta.get("x_column_unit") or ""
+    return str(long_name), str(unit)
+
+
+def _columns(ds: DataStruct) -> list[tuple[str, str, str, str, str]]:
+    """``(short, long, unit, designation, comment)`` per worksheet column:
+    the X/time column A, then one per value channel with its declared
+    designation (``io/_column_roles``) and comment."""
+    labels = [str(lb) for lb in ds.labels]
+    desig = channel_designations(ds.metadata, labels)
+    comments = channel_comments(ds.metadata, ds.values.shape[1])
+    x_long, x_unit = _x_label(ds)
+    cols = [(_col_short(0), x_long, x_unit, "X", x_column_comment(ds.metadata))]
+    for j in range(ds.values.shape[1]):
+        label = labels[j] if j < len(labels) else ""
+        unit = str(ds.units[j]) if j < len(ds.units) else ""
+        d = desig[j] if j < len(desig) else "Y"
+        cols.append((_col_short(j + 1), label, unit, d, comments[j]))
+    return cols
 
 
 def opj_bytes(books: list[DataStruct]) -> bytes:
     """Serialize DataStructs as a CPYA ``.opj`` project (one workbook each).
 
     Column 0 of every book is the DataStruct's ``time`` (designation X, named
-    by ``x_column_long``/``x_unit`` metadata when present); the value columns
-    follow with their labels/units. Short designations run A, B, C, …
+    by ``x_column_long``/``x_unit``, else ``x_column_name``/``x_column_unit``);
+    the value columns follow with their labels, units, comments and declared
+    designations. Short designations run A, B, C, …
     """
     if not books:
         raise ValueError("opj_bytes needs at least one DataStruct")
     out = bytearray(_HEADER_LINE)
     out += _block(wb.FH_123)
     used: set[str] = set()
-    named: list[tuple[str, str, DataStruct, list[tuple[str, str, str, str]]]] = []
+    named: list[tuple[str, str, DataStruct, list[tuple[str, str, str, str, str]]]] = []
     serial = 0  # global column counter: 147B header id + 519B property serial
 
     for i, ds in enumerate(books):
         short_book, long_book = _book_name(ds, i, used)
-        cols: list[tuple[str, str, str, str]] = []  # (short, long, unit, designation)
-        cols.append(
-            (
-                _col_short(0),
-                str(ds.metadata.get("x_column_long", "") or ""),
-                str(ds.metadata.get("x_unit", "") or ""),
-                "X",
-            )
-        )
-        for j in range(ds.values.shape[1]):
-            label = ds.labels[j] if j < len(ds.labels) else ""
-            unit = ds.units[j] if j < len(ds.units) else ""
-            cols.append((_col_short(j + 1), str(label), str(unit), "Y"))
+        cols = _columns(ds)
         named.append((short_book, long_book, ds, cols))
 
         # datasets section: [NULL][147B column header][data] per column
         arrays = [np.asarray(ds.time, dtype=float)] + [
             np.asarray(ds.values[:, j], dtype=float) for j in range(ds.values.shape[1])
         ]
-        for (short, _lng, _unit, _desig), arr in zip(cols, arrays, strict=True):
+        for (short, _lng, _unit, _desig, _cmt), arr in zip(cols, arrays, strict=True):
             serial += 1
             out += _NULL
             out += _block(wb.col_header(f"{short_book}_{short}", len(arr), serial))
@@ -137,13 +177,17 @@ def opj_bytes(books: list[DataStruct]) -> bytes:
         out += _block(wb.sheet_subheader(len(ds.time)))
         out += wb.sheet_storage_group()
         out += _NULL  # closes the record-group run (real files: group NULL + one)
-        x_serial = serial + 1  # the book's X column (column A) comes first
-        for short, long_name, unit, desig in cols:
+        # Each column binds to its nearest-preceding X (column A first; a
+        # later X-designated column opens the next X group).
+        x_serial, x_group = 0, 0
+        for short, long_name, unit, desig, comment in cols:
             serial += 1
+            if desig == "X":
+                x_serial, x_group = serial, x_group + 1
             out += _block(
-                wb.prop_block(serial, short, _DESIGNATION_CODE.get(desig, 0), x_serial)
+                wb.prop_block(serial, short, _DESIGNATION_CODE[desig], x_serial, x_group)
             )
-            out += _label_block(long_name, unit, "")
+            out += _label_block(long_name, unit, comment)
     out += _NULL * 3  # closes the windows section (stream end)
 
     out += wb.tail(len(named))

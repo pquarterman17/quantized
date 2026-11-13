@@ -29,10 +29,12 @@ here and patched per write by the builders. Format facts are clean-room
 
 from __future__ import annotations
 
+import re
 import struct
 
 __all__ = [
     "col_header",
+    "encode_text",
     "fh_size_offset",
     "make_block",
     "make_null",
@@ -41,6 +43,30 @@ __all__ = [
     "tail",
     "window_header",
 ]
+
+
+# Characters with a same-looking Latin-1 twin: the Greek small mu and the
+# Angstrom / Ohm-free SIGN code points users type for units. Mapped to the
+# Latin-1 character Origin's own unit text uses, so a unit stays plain text.
+_LATIN1_TWIN = str.maketrans({"\u03bc": "\u00b5", "\u212b": "\u00c5"})
+# C0/C1 controls (a CR/LF would split the LongName/Unit/Comment rows).
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
+
+
+def encode_text(text: str, *, ascii_only: bool = False) -> bytes:
+    """``text`` as Origin stores it in a ``.opj``: Latin-1, never ``?``.
+
+    A character outside the target range (Latin-1, or printable ASCII with
+    ``ascii_only`` -- the reader's book-title rule) becomes Origin's own
+    Unicode escape ``\\(xHHHH)``, the form Origin's ``.opj`` Save-As writes
+    for non-ANSI characters and ``origin_richtext.clean_richtext`` decodes
+    back. ``μ`` (U+03BC) and ``Å`` (U+212B) first map to their Latin-1 twins
+    ``µ``/``Å``. Control characters become spaces."""
+    text = _CONTROL.sub(" ", text.translate(_LATIN1_TWIN))
+    limit = 0x7F if ascii_only else 0x100
+    return "".join(
+        c if ord(c) < limit else f"\\(x{ord(c):04X})" for c in text
+    ).encode("latin1")
 
 
 def make_block(payload: bytes) -> bytes:
@@ -182,24 +208,25 @@ def col_header(dataset: str, nrows: int, col_id: int) -> bytes:
     p = bytearray(_COL_147)
     struct.pack_into("<I", p, 6, nrows)
     struct.pack_into("<I", p, 25, nrows)
-    enc = dataset.encode("latin1", errors="replace")[:23]
+    enc = dataset.encode("ascii", errors="strict")[:23]  # sanitized short names
     p[88 : 88 + len(enc) + 1] = enc + b"\x00"
     struct.pack_into("<H", p, 113, col_id & 0xFFFF)
     return bytes(p)
 
 
 def window_header(book: str, long_name: str = "") -> bytes:
-    """Window header: short name @2; a display long name (when it differs)
-    rides the real files' owned-storage slot at payload offset 195, anchored
-    by the ``@${`` marker the reader decodes (197-byte minimal variant
-    otherwise — both shapes exist in the corpus)."""
+    """Window header: short name @2; the display long name rides the real
+    files' owned-storage slot at payload offset 195, anchored by the ``@${``
+    marker the reader decodes. ALWAYS the marker form -- with no long name
+    the short name is repeated as the title: the 197-byte minimal variant
+    (no marker) sends the reader to its v4.3227 printable-run fallback,
+    which picked template bytes ("BA") as the title of every book written
+    without a long name (audit 2026-11). The title is printable ASCII (the
+    reader's title rule), other characters as ``\\(xHHHH)`` escapes."""
     p = bytearray(_WIN_197[:195])
-    enc = book.encode("latin1", errors="replace")[:24]
+    enc = book.encode("ascii", errors="strict")[:24]  # sanitized by the writer
     p[2 : 2 + len(enc) + 1] = enc + b"\x00"
-    if long_name and long_name != book:
-        p += long_name.encode("latin1", errors="replace") + b"@${[0|]}\x00"
-    else:
-        p += b"\x00\x00"
+    p += encode_text(long_name or book, ascii_only=True) + b"@${[0|]}\x00"
     return bytes(p)
 
 
@@ -211,7 +238,9 @@ def sheet_subheader(nrows: int) -> bytes:
     return bytes(p)
 
 
-def prop_block(serial: int, short: str, designation: int, x_serial: int) -> bytes:
+def prop_block(
+    serial: int, short: str, designation: int, x_serial: int, x_group: int = 1
+) -> bytes:
     """519-byte column property block — the column-association model measured
     across every corpus workbook (61 columns, 6 books):
 
@@ -223,7 +252,9 @@ def prop_block(serial: int, short: str, designation: int, x_serial: int) -> byte
     * @35 u16: the associated X column's serial for Y/Y-error columns,
       0 for X/disregard columns themselves;
     * @38: designation flag — X 0x51, Y/Y-error 0x61, disregard 0x41;
-    * @51: X-group index (1-based; the writer emits one X group per book);
+    * @51: X-group index (1-based): the count of X columns up to and
+      including this column's own X, so a second X column (``X,Y,X,Y``)
+      opens group 2 and its Y columns carry 2 with @35 = THAT X's serial;
     * @0x11 designation code, @0x12 short name.
 
     Getting @35/@38 wrong doesn't refuse the load — it silently unbinds the
@@ -235,9 +266,9 @@ def prop_block(serial: int, short: str, designation: int, x_serial: int) -> byte
     is_x = designation in (1, 3)  # X and disregard carry no X-association
     struct.pack_into("<H", p, 35, 0 if is_x else x_serial & 0xFFFF)
     p[38] = {3: 0x51, 1: 0x41}.get(designation, 0x61)
-    p[51] = 1
+    p[51] = x_group & 0xFF
     p[0x11] = designation
-    enc = short.encode("latin1", errors="replace")[:11]
+    enc = short.encode("ascii", errors="strict")[:11]  # A, B, … AA
     p[0x12 : 0x12 + len(enc) + 1] = enc + b"\x00"
     return bytes(p)
 
@@ -251,7 +282,7 @@ def tail(n_windows: int, root_name: str = "Project") -> bytes:
     """
     tree = bytearray()
     tree += make_block(_TREE_HDR32) + make_null()
-    tree += make_block(root_name.encode("latin1", errors="replace") + b"\x00")
+    tree += make_block(encode_text(root_name) + b"\x00")
     tree += struct.pack("<I", 2) + b"\n"  # bare marker fragment (not a block)
     tree += make_block(_TREE_ATTRS) + make_block(_TREE_FSTORAGE)
     tree += make_block(struct.pack("<I", n_windows))
