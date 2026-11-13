@@ -107,6 +107,17 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Changed
 
+- Curve Fit: in an edited start-value table, every free parameter whose
+  start you did not type (blank, or still the default it was seeded with)
+  starts from the data-driven guess, as an untouched table does. Holding one
+  parameter used to send the model's fixed defaults for all the others, and
+  the fit could collapse. Batch fits do the same for each input.
+- Curve Fit: fit templates keep Direct (weight column) weighting and the
+  "Scale errors with √(reduced χ²)" choice; batch fits honour that switch.
+  A direct-weighted fit's report, report sheet and ANOVA use the weights as
+  given and leave zero-weight points out of N.
+- The Peak Analyzer opens docked at the right edge, like Curve Fit, instead
+  of over the Library and the plot's Y axis.
 - **Curve-fit statistics now follow Origin / scipy / statsmodels.** Several
   reported numbers change meaning; `docs/fitting_statistics.md` has the
   definitions. Fits saved before this change keep their old definitions when
