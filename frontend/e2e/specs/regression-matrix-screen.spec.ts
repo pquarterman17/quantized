@@ -152,8 +152,12 @@ test.describe("P4.2 regression matrix — screen canvas", () => {
   test("errors: symmetric, asymmetric and x whiskers at every point", async ({ page }) => {
     const { s, ax, g } = await checkFlat(page, "errors");
     const p = s.panels[0];
-    const whiskers = p.ops.filter((o) => o.op === "stroke" && o.moves === 1 && o.pts.length === 2 && o.dash.length === 0);
-    const segs = whiskers.map((o) => o.pts);
+    // A whisker is one stroked path: its bar, then (since the error-bar
+    // consistency work) the two end caps the export also draws — 1 or 3
+    // move-to segments. The bar is the first segment.
+    const whiskers = p.ops.filter((o) => o.op === "stroke" && o.dash.length === 0 &&
+      ((o.moves === 1 && o.pts.length === 2) || (o.moves === 3 && o.pts.length === 6)));
+    const segs = whiskers.map((o) => o.pts.slice(0, 2));
     const [fx, fy] = [toPx(ax.x), toPx(ax.y)];
     const tol = 1.5 * p.dpr;
     const has = (a: [number, number], b: [number, number]) =>
