@@ -590,10 +590,10 @@ what precedes them. Fields used:
 | `0x58` | dataset name — `Book_Col[@sheet]`, or a bare book name for a matrix object | — |
 
 **The header name is the whole name.** A name containing three or more equal
-characters in a row is itself run-length coded (`resultR02` + a fill run of
-three `0` + `t_A`), so its tail becomes a separate length-prefixed literal.
-The marker scan labels a record by the nearest preceding length-prefixed
-name and therefore saw only `t_A` — which merged unrelated books under a
+characters in a row is itself run-length coded (an invented `runQ444z_A`
+is `runQ` + a fill run of three `4` + `z_A`), so its tail becomes a separate
+length-prefixed literal. The marker scan labels a record by the nearest
+preceding length-prefixed name and therefore saw only the tail (`z_A`) — which merged unrelated books under a
 truncated name. The structural path reads the name from the expanded header.
 
 #### Record framing
@@ -616,8 +616,8 @@ Confidence is recorded per column and surfaced in the fidelity summary:
   every record of a pre-4.33 file). Accepted when the grammar consumes
   exactly `rows` rows (plus the `ce fa` terminator for Text&Numeric) and the
   values pass the magnitude gate. The magnitude gate is NOT applied to
-  length-checked columns: real data does go below 1e-290 (a Gaussian tail
-  starting at 2e-302 was measured), and the gate would wrongly drop it.
+  length-checked columns: real data does go below 1e-290 (measured in the
+  public corpus), and the gate would wrongly drop it.
 
 #### Bodies, by storage class
 
@@ -654,8 +654,8 @@ opens with a ZigZag varint:
 - **−m** then `0c` — an FPC stream of m rows (§3.3), fresh predictor state;
 - **−1** then a value-spec tag instead of `0c` — one literal row. Seen only
   with a count of −1 (73 times, all in length-checked
-  records, none in the paired specimens — e.g. the closing `1.0` of an
-  empirical CDF after its 0.99994 plateau); any other count without `0c`
+  records, none in the paired specimens — e.g. a lone value between two
+  repeat runs); any other count without `0c`
   is rejected;
 - **+k** — k rows of one repeated value-spec.
 
@@ -709,25 +709,80 @@ does **not** clear cells when a column shrinks. The decoded cells are
 therefore cut at the header's used-row extent. Two corpus observations show
 why this is a correction and not a preference:
 
-- a 0 → 0.15 ramp of 301 rows followed by 29 allocated rows of numeric
-  `0.0` — the marker scan returned all 330 rows, i.e. 29 fabricated zeros;
-- a sheet whose sibling sheets hold the ramp −80, −85 … −155 (16 rows), with
-  used = 1 and cells `[−140, −85, −90 …]` — one live value written over the
-  head of sixteen stale ones.
+- a ramp column followed by 29 allocated rows of numeric `0.0` — the marker
+  scan returned every allocated row, i.e. 29 fabricated zeros;
+- a sheet whose sibling sheets hold a 16-row ramp, with used = 1 and the
+  same 16 cells of which only the first differs — one live value written
+  over the head of sixteen stale ones.
 
 Columns with filled cells beyond the extent are counted as
 `stale_cells_beyond_extent` rather than silently trimmed.
 
 #### What the reader reports (`metadata["origin_worksheet_fidelity"]`)
 
-Every book of an `.opju` import carries the project's worksheet summary:
-`datasets_total`, `columns_numeric`, `columns_text`, `confidence` (counts of
-`length_checked` / `grammar_only` / `marker_fallback` /
-`marker_unanchored`), `report_columns`, `undecoded` (one entry per
-`(form, reason)` with a count and example names), `matrix_datasets`,
-`complex_imaginary_omitted`, `stale_cells_beyond_extent`, `text_unresolved`
-and `empty_books_omitted`. A project with nothing decodable raises with that
+The primary book of an `.opju` import (only that one — it is a project-wide
+report) carries the worksheet summary: `datasets_total`, `columns_numeric`,
+`columns_text`, `confidence` (counts of `length_checked` / `grammar_only` /
+`marker_fallback` / `marker_unanchored`), `report_columns`, `undecoded` (one
+entry per `(form, reason)` with a count and example names), `matrix_datasets`,
+`complex_imaginary_omitted`, `stale_cells_beyond_extent`, `text_unresolved`,
+`columns_without_header`, `over_decode_budget`, `records_without_header` and
+`empty_books_omitted`. A project with nothing decodable raises with that
 census in the message instead of a bare "no worksheet columns".
+
+Every book also carries its OWN losses, `metadata["origin_worksheet_losses"]`
+= `{kind: {"count", "columns"}}` (at most 20 short names per kind; the count
+is exact) with kinds `undecoded`, `unread_dataset`, `complex_imaginary`,
+`stale_cells`, `text_unresolved`, `no_header` and `grammar_only` (the last is
+not a loss — read without a length check). The import route folds a bounded
+summary of the project report into `origin_fidelity["worksheet"]`
+(`io/origin_project/worksheet_fidelity.py`: `status` complete / unverified /
+partial, `columns_imported`, `unverified_columns`, `losses[]` of
+`{code, count, examples≤5}`), which the import toast, the Library's Origin
+fidelity entry and each book's Origin provenance card show. An allocated but
+never-filled book is not a loss and is not listed there.
+
+#### Fail-closed rules added by the 2026-11-13 review
+
+- **A Y is never promoted to X** (`opju_book_checks.x_unconfirmed`). With no
+  column designated X, `_build_book` takes the first decoded column as the X
+  — Origin's default. In a `.opju` book that default is applied only when
+  that column is the book's first column: if a Text, undecoded or report
+  column precedes it (in file order, or in short-name order A < B …), or the
+  column's own known designation is not X, the book gets the row-index axis,
+  every decoded column stays a Y series, and
+  `metadata["x_column_unrecovered_reason"]` says why. A sheet book
+  (`Book@N`) has no designations of its own in the windows section (its
+  anchor is never found), and sheet 1's do not describe it, so only the order
+  check protects it. Header byte `0x17`'s high nibble was measured against
+  the windows-section designation over the corpus and does NOT determine it
+  (X columns spread over nibbles 4–7, Y over 2 and 4–6), so it is not used.
+- **Decode budget.** Each walk over a file (structural records, the marker
+  scan, the tail walk) may materialize at most `DECODE_BUDGET_CELLS` = 2^24
+  cells; the largest corpus project declares 2.6 M in total. A record that
+  would cross it is refused before anything is allocated — reported as
+  undecoded with reason "exceeds the import's decode budget" — and a record
+  that is then rejected gives its cells back. A string heap is materialized
+  only when its declared size is ≤ 255 × its compressed bytes (LZ4's
+  ceiling) and ≤ 64 MiB; LZ4 matches copy in slices; a repeated text
+  reference shares one string; used-extent slices are copies, so the unused
+  allocated tail is freed.
+- **No silent header misses.** The marker scan always runs (its FPC decodes
+  are shared with the structural pass, so it costs no second decode), so a
+  numeric record whose header is not recognized is still imported and
+  reported under `columns_without_header`. The block length is read as a
+  varint: one byte (`0x10`..`0x7f`) or the two-byte form `[80-ff] 01`
+  (128..255 — a 147-byte header's token stream is at most 149 bytes). The
+  corpus's longest header stream is 78 bytes, so only the one-byte form is
+  exercised by real files; an acceptance still has to pass the 147-byte +
+  name gate. A 147-byte header whose name is not a dataset name this reader
+  knows (31 corpus records, all `Book_Col.Y2`: a dataset attached to a
+  column) is reported, not read; and a 4.33+ record length block followed by
+  a record lead that follows NO header (a damaged header) is counted as
+  `records_without_header` (0 in every intact corpus file).
+- **Text past the numeric rows.** A Text column longer than every numeric
+  column of its book pads the numeric rows with NaN, so its cells keep their
+  row.
 
 Text never enters `.values`: a Text column, and the text cells of a mixed
 Text&Numeric column, go to `metadata["origin_text_columns"]` (`""` marks a

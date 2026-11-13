@@ -53,7 +53,7 @@ from quantized.io.origin_project.opju_codec import (
     _zigzag,
 )
 
-__all__ = ["scan_report_columns"]
+__all__ = ["scan_marked_report_columns", "scan_report_columns"]
 
 _PRINTABLE = frozenset(range(0x20, 0x7F))
 _MAX_ROWS = 500  # generous ceiling for a report sheet's row count (real corpus: <= 11)
@@ -105,6 +105,12 @@ def _decode_report_record(b: bytes, marker: int) -> list[str] | None:
 
 
 def scan_report_columns(b: bytes) -> list[tuple[str, list[str]]]:
+    """Every ``<Book>_<Col>[@sheet]`` report-sheet column in a CPYUA file —
+    :func:`scan_marked_report_columns` without the marker offsets."""
+    return [(name, rows) for _, name, rows in scan_marked_report_columns(b)]
+
+
+def scan_marked_report_columns(b: bytes) -> list[tuple[int, str, list[str]]]:
     """Every ``<Book>_<Col>[@sheet]`` report-sheet column in a CPYUA file.
 
     Reuses ``opju_codec``'s record-marker scan (``_records``) and the same
@@ -112,18 +118,20 @@ def scan_report_columns(b: bytes) -> list[tuple[str, list[str]]]:
     ``scan_columns`` uses; the two functions never compete for the same
     marker (see ``_decode_report_record``'s docstring), so this can run as an
     entirely independent second pass with no cursor coordination needed.
+    Each entry carries its record marker's offset, so the worksheet scan can
+    tell which report-form dataset records this pass did NOT read.
     """
     names = [
         (m.start(), m.group(0).decode("latin1"))
         for m in _NAME.finditer(b)
         if m.start() > 0 and b[m.start() - 1] == len(m.group(0))
     ]
-    out: list[tuple[str, list[str]]] = []
+    out: list[tuple[int, str, list[str]]] = []
     for marker in _records(b):
         rows = _decode_report_record(b, marker)
         if rows is None:
             continue
         prev = [name for pos, name in names if pos < marker]
         if prev:
-            out.append((prev[-1], rows))
+            out.append((marker, prev[-1], rows))
     return out

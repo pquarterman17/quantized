@@ -13,7 +13,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from quantized.io.origin_project.container import ORIGIN_MISSING
-from quantized.io.origin_project.opju_codec import CodecError, _decode, _read_varint, _zigzag
+from quantized.io.origin_project.opju_codec import CodecError, _read_varint, _zigzag, decode_at
 
 __all__ = ["read_segments", "read_value"]
 
@@ -67,9 +67,8 @@ def read_segments(
     * **−m** — m rows as one FPC stream: ``0x0c`` + the stream (``m·width``
       doubles, FRESH predictor state per stream);
     * **−1** followed by a value-spec tag instead of ``0x0c`` — ONE literal
-      row (a lone value between two repeat runs: e.g. the closing 1.0 of an
-      empirical CDF after its 0.99994 plateau). Seen only with a count of
-      −1, so any other count without ``0x0c`` is rejected;
+      row (a lone value between two repeat runs). Seen only with a count
+      of −1, so any other count without ``0x0c`` is rejected;
     * **+k** — k rows of one repeated row; ``width`` value-specs follow.
 
     ``width`` is the doubles-per-row count: 1 for a real column, 2 for a
@@ -92,7 +91,7 @@ def read_segments(
         if count < 0 and b[p] == 0x0C:
             m = -count * width
             try:
-                vals, consumed = _decode(b[p + 1 : p + 1 + m * 9 + 16], m)
+                vals, consumed = decode_at(b, p + 1, m)
             except CodecError:
                 return None
             parts.append(vals)

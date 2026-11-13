@@ -383,6 +383,53 @@ oracle pins 127 / 127):
 - Curve→column binding was deliberately left on the old marker-scan column
   universe (see §3.5 "What did NOT change").
 
+## 2026-11-13 (review fixes to the `.opju` structural reader)
+
+Seven review findings, each fixed with a synthetic regression test that
+fails on the reviewed commit (`tests/test_io_origin_opju_safety.py`).
+Rules: `docs/origin_project_format.md` §3.5 "Fail-closed rules added by the
+2026-11-13 review". Corpus: the 274 unique public `.opju` files.
+
+- **No regression.** Against the reviewed reader: 0 files lost, 32,953/32,953
+  column comparisons identical, primary book unchanged in every file, raw
+  `extract_figures_opju` output identical in all 274 files (1,587 actionable
+  figures, 5,980 curves). Against the pre-structural reader the picture is
+  the one the reviewed reader already had (199 → 258 importing files, no file
+  regressed). The frozen marker scan's output (`scan_columns` names and
+  values) and `tail_start` are identical to the pre-structural reader on all
+  274 files, so curve→column binding cannot have moved.
+- **Y never promoted to X:** 212 books now carry the row-index axis with a
+  stated reason instead of a guessed X (193 behind an earlier Text column, 6
+  behind an earlier report-form record that was not read, 13 whose first
+  decoded column is designated Y / Y-error); every one of their decoded
+  columns stays a value series. 40 books whose designated X is a Text
+  column now say so instead of "could not be decoded". Header byte `0x17`'s high nibble was measured against the
+  windows-section designation (X: nibbles 4/5/6/7 = 110/1,457/90/10 columns;
+  Y: 2/4/5/6 = 47/100/53/5,262) — it does not determine the designation and
+  is not used.
+- **Losses reported, not silent:** 37 files report worksheet data that was
+  not imported (430 column records not decoded — 324 of them report-form
+  records the report reader does not read, previously counted as read — 139
+  other datasets, 66 complex columns real-part only, 76 columns with stale
+  cells, 4 matrices of unknown shape); 21 more were read without a length
+  check; 31 `Book_Col.Y2` dataset headers were previously skipped without a
+  trace — both are now reported. 0 columns found without a header, 0
+  records without a header in intact files. Text cells beyond the numeric
+  rows: 38 lost before, 0 now.
+- **Resources:** a 164-byte file declaring 2 × 20 M rows: refused in 0.0 s,
+  30 MB RSS (was 1.6 GB; 20 such columns OOM-killed > 8 GB). 2 × 2 M text
+  references: 153 MB; LZ4 200 kB bomb: 0.1 s (was 2 s). Fuzz (22 files ×
+  160 truncations / bit flips / random bytes / fills): 3,493 imports + 27
+  `OriginProjectError`, nothing else, none over 5 s. Truncation/flip probe
+  (720 mutations): every truncation that changes the data is now diagnosed
+  (38 were silent); 2 bit flips remain undiagnosable without the record
+  checksum (a flipped residual byte inside an FPC stream changes values).
+- **Import time:** interleaved per file against the pre-structural reader on
+  the same machine: 151.4 s → 147.4 s over all 274 files (was 186 → 294 s
+  for the reviewed commit). The marker scan runs once, shares its FPC
+  decodes with the structural pass and settles `tail_start` in the same
+  walk; the two label lookups share each book's anchor search.
+
 ## How to re-run
 
 `tools/origin_trial/export_ground_truth.py` (skips completed stems);

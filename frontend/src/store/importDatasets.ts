@@ -31,6 +31,7 @@ import type { HistoryBatchToken } from "./history";
 import { lit } from "../lib/macro";
 import { revealAncestorChain } from "../lib/foldertree";
 import { originBookErrorRoles } from "../lib/originBookRoles";
+import { originImportToast } from "../lib/originFidelity";
 import { planOriginImport } from "../lib/originFolders";
 import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "../lib/rowSidecars";
 import {
@@ -323,10 +324,13 @@ function addFromPayload(
   if (figures?.length) get().addOriginFigures(stem, figures, newIds);
   if (fidelity) {
     get().addOriginFidelity(stem, fidelity, newIds);
-    toast(
-      `${stem}: ${fidelity.graph_records_actionable}/${fidelity.graph_records_total} Origin graph records are editable; fidelity details saved`,
-      "info",
-    );
+    // Worksheet data that did not come in leads the toast, with a one-click
+    // way to the detail (the Library's Origin fidelity group starts tucked).
+    const note = originImportToast(stem, fidelity);
+    const showDetails = () => {
+      if (!get().originFidelitySectionExpanded) get().toggleOriginFidelitySectionExpanded();
+    };
+    toast(note.msg, note.kind, note.kind === "danger" ? { action: { label: "Show what is missing", onClick: showDetails } } : undefined);
   }
   get().recordMacro(`Import ${origin.name}`, `qz.import(${lit(origin.name)})`, {
     kind: "import",

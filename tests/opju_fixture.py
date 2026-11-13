@@ -71,14 +71,37 @@ def rle(raw: bytes) -> bytes:
 
 
 def block(raw: bytes) -> bytes:
-    """``80 <clen:varint> <tokens>`` — one run-length block."""
+    """``80 <clen:varint> <tokens>`` — one run-length block.
+
+    The header reader accepts the one-byte length (``0x10..0x7f``) and the
+    two-byte varint ``[80-ff] 01`` (128..255): a 147-byte header's token
+    stream is at most 149 bytes, so nothing longer can occur, and the builder
+    refuses to write a length the reader would not read."""
     tokens = rle(raw)
+    if len(tokens) > 0xFF:
+        raise ValueError(f"a header token stream of {len(tokens)} bytes cannot occur")
     return b"\x80" + varint(len(tokens)) + tokens
 
 
-def header(name: str, *, kind: int, total: int, used: int, size: int, flags: int = 0) -> bytes:
-    """The 147-byte column-storage header (only the fields the reader uses)."""
-    h = bytearray(HEADER_LEN)
+def header(
+    name: str,
+    *,
+    kind: int,
+    total: int,
+    used: int,
+    size: int,
+    flags: int = 0,
+    noise: bool = False,
+) -> bytes:
+    """The 147-byte column-storage header (only the fields the reader uses).
+
+    ``noise=True`` fills the bytes the reader ignores with a non-repeating
+    pattern, so the run-length coder finds no runs and the token stream
+    exceeds 127 bytes (the two-byte length form)."""
+    if noise:
+        h = bytearray((i * 37 + 11) % 251 + 1 for i in range(HEADER_LEN))
+    else:
+        h = bytearray(HEADER_LEN)
     h[0x02] = 0x01
     h[0x16] = 0x21
     h[0x17] = kind
@@ -88,6 +111,8 @@ def header(name: str, *, kind: int, total: int, used: int, size: int, flags: int
     h[0x3F] = flags
     nm = name.encode("latin1")
     h[0x58 : 0x58 + len(nm)] = nm
+    if noise:
+        h[0x58 + len(nm)] = 0x00  # the name's terminator
     return bytes(h)
 
 
@@ -104,6 +129,7 @@ def dataset(
     length: bool | int = True,
     length_block: bool = True,
     attach: bytes = b"\x00",
+    noise: bool = False,
 ) -> bytes:
     """One dataset: header block + (length block) + record + attachment.
 
@@ -112,7 +138,9 @@ def dataset(
     length; ``length_block=False`` is the pre-4.33 form (lead ``00``).
     """
     rec = bytes([mode]) + varint(total) + body
-    out = block(header(name, kind=kind, total=total, used=used, size=size, flags=flags))
+    out = block(
+        header(name, kind=kind, total=total, used=used, size=size, flags=flags, noise=noise)
+    )
     if not length_block:
         return out + b"\x00" + rec + attach
     if length is False:

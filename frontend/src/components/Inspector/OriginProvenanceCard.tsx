@@ -18,10 +18,12 @@
 
 import { copyText } from "../../lib/clipboard";
 import { formatMetaValue } from "../../lib/metadata";
+import { bookLosses, UNVERIFIED_KIND } from "../../lib/originWorksheetFidelity";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { Button } from "../primitives";
 import Card from "../primitives/Card";
+import OriginWorksheetLosses from "./OriginWorksheetLosses";
 
 interface ResultsLogRecord {
   timestamp: string;
@@ -139,10 +141,19 @@ export default function OriginProvenanceCard({ active }: { active: Dataset | nul
   const xUnrecovered = meta.x_column_recovered === false;
   const xUnrecoveredName =
     typeof meta.x_column_unrecovered === "string" ? meta.x_column_unrecovered : "";
+  // `.opju`: no column is designated X and the first decoded one could not be
+  // confirmed as the X (io/origin_project/opju_book_checks.py) — the reason.
+  const xUnconfirmed =
+    typeof meta.x_column_unrecovered_reason === "string" ? meta.x_column_unrecovered_reason : "";
+  const losses = bookLosses(meta.origin_worksheet_losses);
+  const lossy = losses.some((l) => l.kind !== UNVERIFIED_KIND);
 
   const hasLog = records.length > 0 || rawLog.length > 0;
   const hasColumnSections = reportKeys.length > 0 || textKeys.length > 0;
-  if (!active || (noteWindows.length === 0 && !hasLog && !hasColumnSections && !xUnrecovered))
+  if (
+    !active ||
+    (noteWindows.length === 0 && !hasLog && !hasColumnSections && !xUnrecovered && losses.length === 0)
+  )
     return null;
 
   const copyLog = () =>
@@ -152,7 +163,7 @@ export default function OriginProvenanceCard({ active }: { active: Dataset | nul
     <Card
       title="Origin provenance"
       count={noteWindows.length + records.length + reportKeys.length + textKeys.length || undefined}
-      defaultOpen={false}
+      defaultOpen={xUnrecovered || lossy}
     >
       {xUnrecovered && (
         <div
@@ -163,11 +174,21 @@ export default function OriginProvenanceCard({ active }: { active: Dataset | nul
             lineHeight: 1.4,
           }}
         >
-          <span style={{ color: "var(--accent)" }}>⚠</span> X axis shows the row index — Origin's
-          designated X column{xUnrecoveredName ? ` (“${xUnrecoveredName}”)` : ""} could not be
-          decoded, so its values aren&rsquo;t available.
+          <span style={{ color: "var(--accent)" }}>⚠</span> X axis shows the row index —{" "}
+          {xUnconfirmed ? (
+            <>
+              {xUnconfirmed}. Every decoded column is kept as a Y series.
+            </>
+          ) : (
+            <>
+              Origin&rsquo;s designated X column{xUnrecoveredName ? ` (“${xUnrecoveredName}”)` : ""}{" "}
+              could not be decoded, so its values aren&rsquo;t available.
+            </>
+          )}
         </div>
       )}
+
+      <OriginWorksheetLosses entries={losses} />
 
       {noteWindows.length > 0 && (
         <div style={{ marginBottom: hasLog ? 10 : 0 }}>

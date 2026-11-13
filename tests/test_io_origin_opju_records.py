@@ -91,20 +91,20 @@ def test_lz4_block_literals_matches_and_overlap() -> None:
 
 
 def test_find_headers_reads_fields_and_the_whole_run_length_coded_name() -> None:
-    # "resultR02000t_A" holds a run of three '0' — the header codes it as a
-    # fill run, so the name's tail ("t_A") is its own length-prefixed literal.
+    # "runQ444z_A" (invented) holds a run of three '4' — the header codes it as a
+    # fill run, so the name's tail ("z_A") is its own length-prefixed literal.
     blob = project(
-        _tn("resultR02000t_A", run_num(4, seg_fpc([1.5, 2.5, 4.0, 8.5])), total=4, used=4)
+        _tn("runQ444z_A", run_num(4, seg_fpc([1.5, 2.5, 4.0, 8.5])), total=4, used=4)
     )
     (h,) = find_headers(blob)
-    assert (h.name, h.total_rows, h.used_rows, h.value_size) == ("resultR02000t_A", 4, 4, 10)
+    assert (h.name, h.total_rows, h.used_rows, h.value_size) == ("runQ444z_A", 4, 4, 10)
     assert h.is_column and not h.unsigned
     # The frozen marker scan labels the same record by the nearest
     # length-prefixed name and so loses the head of it …
-    assert [n for n, _ in scan_columns(blob)] == ["t_A"]
+    assert [n for n, _ in scan_columns(blob)] == ["z_A"]
     # … the worksheet scan names it from the header.
     scan = scan_worksheet(blob)
-    assert [n for n, _ in scan.columns] == ["resultR02000t_A"]
+    assert [n for n, _ in scan.columns] == ["runQ444z_A"]
 
 
 def test_find_headers_ignores_blocks_that_are_not_147_byte_headers() -> None:
@@ -195,18 +195,18 @@ def test_text_numeric_leading_empty_rows_are_nan_not_zero() -> None:
 
 
 def test_text_numeric_mixed_cells_resolve_through_the_string_heap() -> None:
-    attach, refs = heap(["Hallo", "Ola", "größer"])
+    attach, refs = heap(["first", "last", "ünïcode"])
     cells = (
-        cell_text(refs["Hallo"])
+        cell_text(refs["first"])
         + cell_num(5.5)
-        + run_text(3, zz(-2) + varint(refs["größer"]) + varint(0) + zz(1) + varint(refs["Ola"]))
+        + run_text(3, zz(-2) + varint(refs["ünïcode"]) + varint(0) + zz(1) + varint(refs["last"]))
     )
     blob = project(_tn("Book2_B", cells, total=5, used=5, mode=4, attach=attach))
     rec = _one(blob, "Book2_B")
     assert rec.decoded
     assert rec.values is not None
     assert np.array_equal(rec.values, [np.nan, 5.5, np.nan, np.nan, np.nan], equal_nan=True)
-    assert rec.text == ["Hallo", "", "größer", "", "Ola"]
+    assert rec.text == ["first", "", "ünïcode", "", "last"]
 
 
 def test_string_heap_is_found_among_other_attachments_and_at_any_size() -> None:
@@ -278,17 +278,17 @@ def test_double_column_trailing_missing_run_and_used_extent() -> None:
 
 
 def test_stale_cells_beyond_the_used_extent_are_never_data() -> None:
-    """Origin leaves old cells behind when a column shrinks: a 0..0.15 ramp
-    followed by 29 allocated zeros, or 16 rows of which only 1 is in use."""
-    stale = [float(v) for v in (-140, -85, -90, -95)]
-    blob = project(_tn("Loss_A@14", run_num(4, seg_fpc(stale)), total=4, used=1))
-    rec = _one(blob, "Loss_A@14")
-    assert rec.values is not None and rec.values.tolist() == [-140.0]
+    """Origin leaves old cells behind when a column shrinks: the allocated
+    rows past the used-row extent still hold values (here 3 of 4)."""
+    stale = [float(v) for v in (-7.5, 3.25, 1.5, 9.0)]
+    blob = project(_tn("Shrunk_A@3", run_num(4, seg_fpc(stale)), total=4, used=1))
+    rec = _one(blob, "Shrunk_A@3")
+    assert rec.values is not None and rec.values.tolist() == [-7.5]
     assert rec.extra["stale_cells"] == 3
     assert scan_columns(blob)[0][1].tolist() == stale  # what the marker scan emitted
     assert scan_worksheet(blob).fidelity["stale_cells_beyond_extent"] == {
         "count": 1,
-        "examples": ["Loss_A@14"],
+        "examples": ["Shrunk_A@3"],
     }
 
 
@@ -327,10 +327,10 @@ def test_fixed_width_and_varint_integer_columns(
 
 
 def test_text_column_rows_are_length_prefixed() -> None:
-    body = b"\x05Hallo\x03Ola" + bytes(12)
+    body = b"\x05first\x04last" + bytes(12)
     blob = project(dataset("Text_A", body, kind=DBL, total=14, used=2, size=50, length=False))
     rec = _one(blob, "Text_A")
-    assert rec.form == "text" and rec.values is None and rec.text == ["Hallo", "Ola"]
+    assert rec.form == "text" and rec.values is None and rec.text == ["first", "last"]
     over = b"\x40" + b"x" * 0x40 + bytes(13)  # a cell wider than the column
     bad = project(dataset("Text_A", over, kind=DBL, total=14, used=1, size=50, length=False))
     assert not _one(bad, "Text_A").decoded
@@ -347,7 +347,7 @@ def test_pre_4_33_record_has_no_length_block_and_is_grammar_only() -> None:
 
 
 def test_grammar_only_record_must_still_be_plausible_but_length_checked_need_not() -> None:
-    tiny = [2.1e-302, 5.7e-301, 1.5e-299]  # a real Gaussian tail starts like this
+    tiny = [3.3e-305, 7.1e-303, 4.4e-298]  # tiny, but legitimate doubles
     cells = run_num(3, seg_fpc(tiny))
     checked = _one(project(_tn("G_A", cells, total=3, used=3)), "G_A")
     assert checked.decoded and checked.values is not None and checked.values.tolist() == tiny
@@ -377,7 +377,7 @@ def _write(tmp_path: Path, blob: bytes) -> Path:
 
 
 def test_read_opju_builds_books_text_columns_and_fidelity(tmp_path: Path) -> None:
-    attach, refs = heap(["male", "female"])
+    attach, refs = heap(["red", "blue"])
     x = [0.5, 1.0, 1.5, 2.0]
     blob = project(
         _tn("Data_A", run_num(4, seg_fpc(x)) + run_text(2, zz(2) + varint(0)), total=6, used=4),
@@ -394,9 +394,9 @@ def test_read_opju_builds_books_text_columns_and_fidelity(tmp_path: Path) -> Non
             run_text(
                 6,
                 zz(-3)
-                + varint(refs["male"])
-                + varint(refs["female"])
-                + varint(refs["male"])
+                + varint(refs["red"])
+                + varint(refs["blue"])
+                + varint(refs["red"])
                 + zz(3)
                 + varint(0),
             ),
@@ -415,7 +415,7 @@ def test_read_opju_builds_books_text_columns_and_fidelity(tmp_path: Path) -> Non
     assert book.metadata["origin_column_names"] == ["B", "D"]
     assert book.values[:, 0].tolist() == [3.0, 1.0, 4.0, 1.5]
     assert np.isnan(book.values[:, 1]).all()  # an empty column of a filled book stays
-    assert book.metadata["origin_text_columns"] == {"C": ["male", "female", "male"]}
+    assert book.metadata["origin_text_columns"] == {"C": ["red", "blue", "red"]}
     fid = book.metadata["origin_worksheet_fidelity"]
     assert fid["datasets_total"] == 5
     assert fid["confidence"] == {"length_checked": 5}
@@ -460,9 +460,9 @@ def test_primary_book_has_a_value_series_when_any_book_does(tmp_path: Path) -> N
     attach, refs = heap(["low", "mid", "high"])
     ticks = [1.0, 2.0, 3.0]
     blob = project(
-        _tn("yLabels_A", run_num(3, seg_fpc(ticks)), total=3, used=3),
+        _tn("Ticks_A", run_num(3, seg_fpc(ticks)), total=3, used=3),
         _tn(
-            "yLabels_B",
+            "Ticks_B",
             run_text(3, zz(-3) + b"".join(varint(refs[w]) for w in ("low", "mid", "high"))),
             total=3,
             used=3,
@@ -476,7 +476,7 @@ def test_primary_book_has_a_value_series_when_any_book_does(tmp_path: Path) -> N
     primary = read_origin_project(path)
     assert primary.metadata["origin_book"] == "C0"
     assert primary.values.shape == (1, 1) and primary.values[0, 0] == 9.0
-    assert [b.metadata["origin_book"] for b in read_origin_books(path)] == ["yLabels", "C0"]
+    assert [b.metadata["origin_book"] for b in read_origin_books(path)] == ["Ticks", "C0"]
 
 
 def test_marker_scan_universe_is_frozen_for_curve_binding() -> None:
@@ -520,11 +520,11 @@ def _matrix_project(
     cols: int, rows: int, coords: dict[str, str], *, claim: tuple[int, int]
 ) -> bytes:
     values = [float(v) for v in range(cols * rows)]
-    window = block(b"\x00\x00MBook1\x00" + bytes(40))
+    window = block(b"\x00\x00Mat7\x00" + bytes(40))
     tail = b"\x00\x0a\x00" + window + b"\x00\x02\x01\x00" + _layer(*claim)
     tail += b"".join(b"\x00" + _coord(k, v) for k, v in coords.items())
     return project(
-        dataset("MBook1", seg_fpc(values), kind=DBL, total=cols * rows, used=cols * rows, size=8),
+        dataset("Mat7", seg_fpc(values), kind=DBL, total=cols * rows, used=cols * rows, size=8),
         tail=tail,
     )
 
@@ -532,7 +532,7 @@ def _matrix_project(
 def test_matrix_book_shape_ranges_and_row_major_cells(tmp_path: Path) -> None:
     coords = {"X1": "13", "X2": "21", "Y1": "17", "Y2": "37"}
     blob = _matrix_project(4, 3, coords, claim=(4, 3))
-    geo = matrix_geometry(blob, "MBook1", 12)
+    geo = matrix_geometry(blob, "Mat7", 12)
     assert geo is not None and (geo.rows, geo.cols) == (3, 4)
     assert geo.x_range == (13.0, 21.0) and geo.y_range == (17.0, 37.0)
     (book,) = read_origin_books(_write(tmp_path, blob))
@@ -549,18 +549,18 @@ def test_matrix_book_shape_ranges_and_row_major_cells(tmp_path: Path) -> None:
 
 def test_matrix_without_all_four_coordinates_has_unknown_ranges() -> None:
     blob = _matrix_project(4, 3, {"X1": "13", "Y2": "37"}, claim=(4, 3))
-    geo = matrix_geometry(blob, "MBook1", 12)
+    geo = matrix_geometry(blob, "Mat7", 12)
     assert geo is not None and geo.x_range is None and geo.y_range is None
 
 
 def test_matrix_whose_layer_does_not_multiply_out_is_reported_not_shaped(tmp_path: Path) -> None:
     blob = _matrix_project(4, 3, {}, claim=(5, 3))  # 5 × 3 != 12 cells
-    assert matrix_geometry(blob, "MBook1", 12) is None
+    assert matrix_geometry(blob, "Mat7", 12) is None
     scan = scan_worksheet(blob)
     assert scan.matrices == []
     assert scan.fidelity["matrix_datasets"] == [
         {
-            "name": "MBook1",
+            "name": "Mat7",
             "cells": 12,
             "imported": False,
             "reason": "matrix shape not located in the windows section",
@@ -601,7 +601,12 @@ def test_window_metadata_keeps_validated_labels_and_only_adds(
 ) -> None:
     from quantized.io.origin_project import opju as opju_mod
 
-    legacy = [("Good_A", np.zeros(1)), ("Good_B", np.zeros(1)), ("Drift_A", np.zeros(1))]
+    legacy = [
+        ("Good_A", np.zeros(1)),
+        ("Good_B", np.zeros(1)),
+        ("Drift_A", np.zeros(1)),
+        ("Same_A", np.zeros(1)),
+    ]
     table = {
         # the marker scan's column lists — the validated answers
         ("Good", "A", "B"): {"A": ("X", "Field"), "B": ("Y", "Moment")},
@@ -614,12 +619,32 @@ def test_window_metadata_keeps_validated_labels_and_only_adds(
         },
         ("Drift", "A", "B"): {"A": ("X", "WRONG RUN"), "B": ("Y", "also wrong")},
         ("Fresh", "A"): {"A": ("X", "Angle")},
+        ("Same", "A"): {"A": ("X", "Kept")},
     }
-    monkeypatch.setattr(opju_mod, "scan_columns", lambda _b: legacy)
-    monkeypatch.setattr(opju_mod, "opju_window_metadata", _fake_lookup(table))
+    asked: list[dict[str, list[str]]] = []
+    lookup = _fake_lookup(table)
+
+    def recording(b: bytes, book_columns: dict[str, list[str]], anchors: object = None) -> object:
+        asked.append(dict(book_columns))
+        assert isinstance(anchors, dict)  # one anchor cache serves both lookups
+        return lookup(b, book_columns)
+
+    monkeypatch.setattr(opju_mod, "opju_window_metadata", recording)
     merged = opju_mod._window_metadata(
-        b"", {"Good": ["A", "B", "C"], "Drift": ["A", "B"], "Fresh": ["A"], "None": ["A"]}
+        b"",
+        legacy,
+        {
+            "Good": ["A", "B", "C"],
+            "Drift": ["A", "B"],
+            "Fresh": ["A"],
+            "None": ["A"],
+            "Same": ["A"],  # nothing the marker scan missed: no second lookup
+        },
     )
+    assert asked[0] == {"Good": ["A", "B"], "Drift": ["A"], "Same": ["A"]}
+    # the full lookup is asked only about the books it can add to
+    assert asked[1] == {"Good": ["A", "B", "C"], "Drift": ["A", "B"], "Fresh": ["A"], "None": ["A"]}
+    assert merged["Same"].columns["A"].long_name == "Kept"
     assert {c: m.long_name for c, m in merged["Good"].columns.items()} == {
         "A": "Field",
         "B": "Moment",

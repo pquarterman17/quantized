@@ -1073,11 +1073,15 @@ the shipped contract)
   `docs/origin_re/validation_log.md` 2026-11-13. **Open follow-ups:** the
   curve-binding column universe is deliberately frozen on the marker scan
   (re-derive against dataset stream order under its own handoff); the
-  worksheet fidelity summary rides each book's metadata but is not yet
-  merged into the route's `origin_fidelity` manifest or shown by the Library
-  fidelity section (`routes/parsers.py` sits exactly at the 500-line
-  ceiling, so that wiring needs an extraction first); the owner's own
-  ground-truth suite must be re-run where that corpus exists.
+  owner's own ground-truth suite must be re-run where that corpus exists.
+  Review follow-up (2026-11-13): a Y is never promoted to X, a per-walk
+  decode budget bounds memory, the marker scan always runs as a safety net
+  (no second decode), unread/orphan records and unread report records are
+  reported, text past the numeric rows is kept, and the worksheet losses
+  reach `origin_fidelity["worksheet"]` (import toast, Library fidelity
+  entry, provenance card). Still open: the record checksum is not decoded,
+  so a corrupted byte inside an FPC stream cannot be detected; designations
+  of `Book@N` sheet books are not recovered from the windows section.
 - ~~**21. Templates (`.otp`/`.otpu`)**~~ (2026-07-11) — same CPY family; a
   graph template imports as a quantized style preset. Backend shipped
   2026-07-07 via the (now-archived) `GAP_ECOSYSTEM_PLAN.md` item 5

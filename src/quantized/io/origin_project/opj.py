@@ -221,6 +221,7 @@ def _build_book(
     source_format: str = "origin_opj",
     text_cols: TextColumns | None = None,
     report_cols: TextColumns | None = None,
+    x_unconfirmed: str | None = None,
 ) -> DataStruct:
     """Assemble one workbook into a DataStruct.
 
@@ -236,6 +237,12 @@ def _build_book(
     report-sheet reference-string columns (Notes/Summary/Parameters/RegStats/
     ANOVA "cell://" columns), attached the same way under
     ``metadata["origin_report_sheets"]``.
+
+    ``x_unconfirmed`` (the ``.opju`` reader's X check, ``opju._x_unconfirmed``)
+    is the reason the first decoded column cannot be taken as the X when no
+    column is designated X; the book then gets the row-index axis, exactly
+    like a designated X that failed to decode, with the reason in
+    ``metadata["x_column_unrecovered_reason"]``.
 
     A sheet made *entirely* of report-sheet columns (e.g. a fit's "FitNL1"
     report, which typically has zero plausible-numeric columns of its own —
@@ -270,7 +277,7 @@ def _build_book(
         None,
     )
     declared_x = next((c for c, m in col_meta.items() if m.designation == "X"), None)
-    x_unrecovered = decoded_x is None and declared_x is not None
+    x_unrecovered = decoded_x is None and (declared_x is not None or x_unconfirmed is not None)
 
     if x_unrecovered:
         ordered = list(cols)
@@ -329,6 +336,8 @@ def _build_book(
         # was lost (e.g. "Temperature") rather than just that the axis is a row
         # index.
         meta["x_column_unrecovered"] = _label_for(declared_x, col_meta.get(declared_x))
+    elif x_unrecovered and x_unconfirmed is not None:
+        meta["x_column_unrecovered_reason"] = x_unconfirmed
     return DataStruct(
         time=time,
         values=values,

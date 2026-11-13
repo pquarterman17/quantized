@@ -55,10 +55,17 @@ from numpy.typing import NDArray
 
 from quantized.io.origin_project.container import plausible_column
 from quantized.io.origin_project.opju_blocks import DatasetHeader, find_headers, lz4_block
-from quantized.io.origin_project.opju_codec import CodecError, _read_varint, _zigzag
+from quantized.io.origin_project.opju_codec import (
+    CodecError,
+    DecodeBudget,
+    _read_varint,
+    _zigzag,
+)
 from quantized.io.origin_project.opju_values import read_segments, read_value
 
-__all__ = ["DatasetRecord", "decode_record", "scan_records"]
+__all__ = ["BUDGET_REASON", "DatasetRecord", "decode_record", "orphan_records", "scan_records"]
+
+BUDGET_REASON = "exceeds the import's decode budget"
 
 Confidence = Literal["length_checked", "grammar_only"]
 
@@ -68,6 +75,11 @@ _TERMINATOR = b"\xce\xfa"
 _HEAP_NAME = b"#_MSER_STRINGS_PSET"
 _HEAP_MAGIC = b"\x77\x11\x11\x11"
 _MAX_ROWS = 50_000_000
+# A string heap is an LZ4 block, which cannot expand more than 255-fold (one
+# match byte per 255 of output); a declared size past that, or past this
+# absolute cap, is not a heap this reader materializes.
+_LZ4_MAX_RATIO = 255
+_MAX_HEAP = 1 << 26
 
 
 @dataclass(frozen=True)
@@ -282,6 +294,8 @@ def _string_heap(b: bytes, p: int) -> bytes | None:
     if n < 5 or q + 1 + n > stop or b[q] != 0x00:
         return None
     size = int.from_bytes(b[q + 1 : q + 5], "little")
+    if size > min(_MAX_HEAP, _LZ4_MAX_RATIO * (n - 4)):
+        return None
     raw = lz4_block(b[q + 5 : q + 1 + n], size)
     if raw is None or len(raw) < 24 or raw[:4] != _HEAP_MAGIC:
         return None
@@ -297,21 +311,29 @@ def _resolve(
     """Text for every cell (``""`` for numeric/empty), or None if any
     reference cannot be resolved against the heap."""
     out: list[str] = []
+    seen: dict[int, str] = {}  # a repeated reference shares one string
     for ref, text in zip(refs.tolist(), is_text.tolist(), strict=True):
         if not text or ref == 0:
             out.append("")
             continue
-        if heap is None or ref > len(heap):
-            return None
-        nul = heap.find(b"\x00", ref - 1)
-        if nul < 0:
-            return None
-        out.append(_decode_text(heap[ref - 1 : nul]))
+        got = seen.get(ref)
+        if got is None:
+            if heap is None or ref > len(heap):
+                return None
+            nul = heap.find(b"\x00", ref - 1)
+            if nul < 0:
+                return None
+            got = seen[ref] = _decode_text(heap[ref - 1 : nul])
+        out.append(got)
     return out
 
 
-def decode_record(b: bytes, h: DatasetHeader) -> DatasetRecord:
-    """Decode the record that follows header ``h`` (never raises)."""
+def decode_record(b: bytes, h: DatasetHeader, budget: DecodeBudget | None = None) -> DatasetRecord:
+    """Decode the record that follows header ``h`` (never raises).
+
+    With a ``budget``, a record whose declared cells do not fit what is left
+    of it is refused (reported, with that reason) before anything is
+    allocated; a record that is then rejected gives its cells back."""
     form = _form_of(h)
     p = h.end
     declared_end: int | None = None
@@ -334,9 +356,23 @@ def decode_record(b: bytes, h: DatasetHeader) -> DatasetRecord:
             raise _Reject("virtual or function dataset: no stored cells")
         if rows != h.total_rows or rows > _MAX_ROWS:
             raise _Reject(f"record rows {rows} != header rows {h.total_rows}")
-        return _decode_body(b, h, form, q, rows, declared_end)
     except _Reject as exc:
         return DatasetRecord(h, form, h.end, reason=str(exc))
+    cells = rows * (2 if form == "complex" else 1)
+    if budget is not None and not budget.charge(cells):
+        return DatasetRecord(h, form, h.end, reason=BUDGET_REASON)
+    try:
+        return _decode_body(b, h, form, q, rows, declared_end)
+    except _Reject as exc:
+        if budget is not None:
+            budget.refund(cells)
+        return DatasetRecord(h, form, h.end, reason=str(exc))
+
+
+def _kept(a: NDArray[np.float64], used: int) -> NDArray[np.float64]:
+    """The used extent of ``a`` — a copy when it is shorter, so the unused
+    allocated tail is not kept alive by a view."""
+    return a if used >= len(a) else a[:used].copy()
 
 
 def _decode_body(
@@ -349,7 +385,7 @@ def _decode_body(
     stale = 0  # filled cells BEYOND the used-row extent (never emitted)
     if form == "text_numeric":
         cells, refs, is_text, end = _cells(b, q, rows)
-        values = cells[:used]
+        values = _kept(cells, used)
         stale = int(np.count_nonzero(np.nan_to_num(cells[used:]))) + int(
             np.count_nonzero(refs[used:])
         )
@@ -366,14 +402,14 @@ def _decode_body(
         stale = int(np.count_nonzero(np.nan_to_num(flat[used * width :])))
         if width == 2:
             pairs = flat.reshape(rows, 2)
-            values = pairs[:used, 0]
-            extra["imaginary"] = pairs[:used, 1]
+            values = pairs[:used, 0].copy()
+            extra["imaginary"] = pairs[:used, 1].copy()
         else:
-            values = flat[:used]
+            values = _kept(flat, used)
     elif form in ("float32", "integer"):
         flat, end = _fixed(b, q, rows, h)
         stale = int(np.count_nonzero(flat[used:]))
-        values = flat[:used]
+        values = _kept(flat, used)
     elif form == "text":
         rows_text, end = _text_rows(b, q, rows, h.value_size)
         stale = sum(1 for t in rows_text[used:] if t)
@@ -387,8 +423,8 @@ def _decode_body(
     # A length-checked body is proven by its own framing; the magnitude gate
     # exists for the builds with no length field, where a desynchronized
     # parse could otherwise pass on grammar alone. (It must NOT run on a
-    # length-checked column: real data does reach below 1e-290 — a Gaussian
-    # tail starting at 2e-302 was measured in the corpus.)
+    # length-checked column: real data does reach below 1e-290, measured in
+    # the public corpus.)
     if (
         declared_end is None
         and values is not None
@@ -406,6 +442,27 @@ def _decode_body(
     )
 
 
-def scan_records(b: bytes) -> list[DatasetRecord]:
-    """Decode every dataset record in ``b``, in file order."""
-    return [decode_record(b, h) for h in find_headers(b)]
+def scan_records(b: bytes, unread: list[tuple[str, int]] | None = None) -> list[DatasetRecord]:
+    """Decode every dataset record in ``b``, in file order, within one
+    :class:`~quantized.io.origin_project.opju_codec.DecodeBudget`.
+    ``unread`` collects the headers ``find_headers`` saw but does not read."""
+    budget = DecodeBudget()
+    return [decode_record(b, h, budget) for h in find_headers(b, unread)]
+
+
+def orphan_records(b: bytes, header_ends: set[int]) -> int:
+    """How many dataset records (a 4.33+ length block, then the ``0a 04|05``
+    record lead) do NOT follow any header in ``header_ends`` — records whose
+    header was not recognized at all (a damaged file), which would otherwise
+    vanish without a trace. In every intact project of the public corpus,
+    each such block follows a header (read or reported)."""
+    count = 0
+    p = b.find(_B18)
+    while p >= 0:
+        if p not in header_ends and b[p + 25 : p + 26] == b"\x0a" and b[p + 26 : p + 27] in (
+            b"\x04",
+            b"\x05",
+        ):
+            count += 1
+        p = b.find(_B18, p + 1)
+    return count

@@ -1514,6 +1514,41 @@ describe("useApp importFiles", () => {
     expect(s.datasets.every((d) => !("origin_fidelity" in d.data))).toBe(true);
   });
 
+  it("warns at import when Origin worksheet data was not imported, with a way to the details", async () => {
+    const book = (short: string) => ({ ...raw, metadata: { origin_book: short } });
+    vi.mocked(uploadFile).mockResolvedValue({
+      ...raw,
+      books: [book("Book1"), book("Book2")],
+      origin_fidelity: {
+        version: 1,
+        container: "opju",
+        status: "best_effort",
+        graph_records_total: 0,
+        graph_records_actionable: 0,
+        graph_records_filtered: 0,
+        omissions: [],
+        filtered_figures: [],
+        worksheet: {
+          version: 1,
+          status: "partial",
+          columns_imported: 5,
+          unverified_columns: 0,
+          losses: [{ code: "columns_not_decoded", count: 2, examples: ["Book1_C", "Book1_D"] }],
+        },
+      },
+    });
+    useToasts.setState({ toasts: [] });
+    useApp.setState({ originFidelitySectionExpanded: false });
+    await useApp.getState().importFiles([fakeFile("Lab.opju")]);
+
+    const note = useToasts.getState().toasts.find((t) => t.msg.startsWith("Lab:"));
+    expect(note?.msg).toBe("Lab: 2 worksheet items could not be imported. 0/0 Origin graph records are editable");
+    expect(note?.kind).toBe("danger");
+    expect(note?.action?.label).toBe("Show what is missing"); // not "Details": the Library's view switch owns that name
+    note?.action?.onClick();
+    expect(useApp.getState().originFidelitySectionExpanded).toBe(true);
+  });
+
   it("disables a figure whose loose source hint matches no imported book", async () => {
     const book = (short: string) => ({ ...raw, metadata: { origin_book: short } });
     vi.mocked(uploadFile).mockResolvedValue({

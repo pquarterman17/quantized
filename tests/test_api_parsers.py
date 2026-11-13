@@ -261,9 +261,11 @@ def test_opj_import_filters_nonactionable_figure_records(
         units=("",),
         metadata={"origin_book": "Book1"},
     )
+    from quantized.routes import _originfidelity
+
     monkeypatch.setattr(parsers_mod, "read_origin_project_all", lambda *_args, **_kw: (ds, [ds]))
     monkeypatch.setattr(
-        parsers_mod,
+        _originfidelity,
         "extract_figures",
         lambda _raw: [
             {"name": "Graph1", "curves": [{"book": "Book1", "x": "A", "y": "B"}]},

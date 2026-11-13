@@ -11,7 +11,7 @@ be decoded and checked byte-for-byte against the ``.opj`` header.
 
 Block framing::
 
-    80 <clen:u8> <clen bytes of tokens>
+    80 <clen:varint> <clen bytes of tokens>
 
 Token stream (each token is one byte, optionally followed by payload):
 
@@ -54,23 +54,33 @@ __all__ = ["HEADER_LEN", "DatasetHeader", "find_headers", "lz4_block", "rle_expa
 
 HEADER_LEN = 147  # identical to the `.opj` column-storage header length
 _NAME_OFF = 0x58
-# Block lead: 0x80 then a one-byte token-stream length. A dataset header's
-# token stream is never shorter than its own name literal + the fixed fields.
-_LEAD = re.compile(rb"\x80[\x10-\x7f]")
+# Block lead: 0x80 then the token-stream length as a LEB128 varint. A dataset
+# header's token stream is never shorter than its own name literal + the
+# fixed fields (>= 0x10), and never longer than 147 literal bytes plus their
+# two count tokens (149), so the length is one byte (0x10..0x7f) or the
+# two-byte form 128..255 (``[80-ff] 01``). The public corpus only exercises
+# the one-byte form (its longest header stream is 78 bytes); the two-byte
+# form is the same varint the rest of the format uses, and an acceptance
+# still has to pass the 147-byte + name gate below.
+_LEAD = re.compile(rb"\x80(?:[\x10-\x7f]|[\x80-\xff]\x01)")
 _DATASET_NAME = re.compile(rb"[A-Za-z][\w ]{0,62}(?:_[A-Za-z0-9]{1,16})?(?:@\d{1,3})?")
 
 
-def rle_expand(b: bytes, p: int, clen: int) -> bytes | None:
+def rle_expand(b: bytes, p: int, clen: int, limit: int | None = None) -> bytes | None:
     """Expand the ``clen``-byte token stream at ``p``; None if malformed.
 
     The stream must be consumed EXACTLY (a token whose payload would cross
     ``p + clen`` rejects the block) and a zero literal count is not a token.
+    With ``limit``, an expansion that grows past it stops early (None): the
+    header scan only wants 147-byte expansions.
     """
     end = p + clen
     if end > len(b):
         return None
     out = bytearray()
     while p < end:
+        if limit is not None and len(out) > limit:
+            return None
         t = b[p]
         p += 1
         if t & 0x80:
@@ -141,8 +151,10 @@ def lz4_block(src: bytes, expected: int) -> bytes | None:
         if len(out) + mlen > expected:
             return None
         start = len(out) - offset
-        for i in range(mlen):  # byte-wise: matches may overlap their output
-            out.append(out[start + i])
+        if offset >= mlen:
+            out += out[start : start + mlen]
+        else:  # an overlapping match repeats the last `offset` bytes
+            out += (out[start:] * (mlen // offset + 1))[:mlen]
     return bytes(out) if len(out) == expected else None
 
 
@@ -170,13 +182,22 @@ class DatasetHeader:
         return bool(self.flags & 0x08)
 
 
-def find_headers(b: bytes) -> list[DatasetHeader]:
+def find_headers(
+    b: bytes, unread: list[tuple[str, int]] | None = None
+) -> list[DatasetHeader]:
     """Every dataset header in ``b``, in file order.
 
     Walks ``80 <clen>`` candidates forward; each accepted header jumps the
     cursor past its own token stream (headers never nest). The 147-byte +
     name-at-0x58 gate does the validation, so no assumption is made about
     what precedes a header.
+
+    ``unread``, when given, collects ``(name, end)`` for each block that
+    expands to a 147-byte header whose NUL-terminated name is printable but
+    not a dataset name this reader knows (the public corpus has one such
+    family, ``Book1_B.Y2``: a dataset attached to a column, not a column),
+    so the caller can report it instead of skipping it silently. They are
+    never decoded, and they do not move the cursor.
     """
     out: list[DatasetHeader] = []
     cursor = 0
@@ -184,15 +205,18 @@ def find_headers(b: bytes) -> list[DatasetHeader]:
         s = m.start()
         if s < cursor:
             continue
-        clen = b[s + 1]
-        raw = rle_expand(b, s + 2, clen)
+        tokens = m.end()
+        clen = b[s + 1] if tokens == s + 2 else (b[s + 1] & 0x7F) | (b[s + 2] << 7)
+        raw = rle_expand(b, tokens, clen, HEADER_LEN)
         if raw is None or len(raw) != HEADER_LEN:
             continue
         nul = raw.find(b"\x00", _NAME_OFF)
         name = raw[_NAME_OFF:nul] if nul > _NAME_OFF else b""
         if _DATASET_NAME.fullmatch(name) is None:
+            if unread is not None and name and all(0x20 <= c < 0x7F for c in name):
+                unread.append((name.decode("ascii"), tokens + clen))
             continue
-        end = s + 2 + clen
+        end = tokens + clen
         out.append(
             DatasetHeader(
                 name=name.decode("latin1"),

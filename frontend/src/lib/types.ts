@@ -9,6 +9,7 @@ import type { DatasetSource } from "./datasetSource";
 import type { PeakTable } from "./peakTable";
 import type { RecodeSpec } from "./recode";
 import type { FactorSpec } from "./metadataFactor";
+import type { OriginWorksheetFidelity } from "./originWorksheetTypes";
 export type { CorrectionParams } from "./correctionTypes";
 /** DataStruct as serialized by `datastruct_payload` / `DataStruct.to_dict`. */
 export interface DataStruct {
@@ -92,6 +93,8 @@ export interface OriginFidelityManifest {
   filtered_figures: OriginFilteredFigure[];
   /** Optional for backward compatibility with #49 workspaces. */
   preview_diagnostics?: OriginPreviewDiagnostic[];
+  /** `.opju` only (see ./originWorksheetTypes); absent for `.opj`. */
+  worksheet?: OriginWorksheetFidelity;
 }
 
 /** The `books[]` entry for the book already returned in full at the payload's

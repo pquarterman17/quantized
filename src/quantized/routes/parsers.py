@@ -8,7 +8,6 @@ and drag-drop). Both auto-detect format via ``io.import_auto``.
 from __future__ import annotations
 
 import os
-import struct
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -25,20 +24,11 @@ from quantized.io.origin_project import (
     drop_empty_library_books,
     read_origin_project_all,
 )
-from quantized.io.origin_project.fidelity import (
-    assess_origin_figures,
-    origin_figure_decode_failure,
-)
-from quantized.io.origin_project.figures import extract_figures
-from quantized.io.origin_project.figures_opju import extract_figures_opju
-from quantized.io.origin_project.graph_preview import (
-    PreviewDiagnostic,
-    attach_opju_graph_previews,
-)
 from quantized.io.origin_project.preview import decimate_with_alignment
 from quantized.routes._bookcache import cache_project_books
 from quantized.routes._datasetcache import cache_dataset
 from quantized.routes._errors import CALC_ERRORS_IO
+from quantized.routes._originfidelity import origin_figures_and_fidelity
 from quantized.routes._payload import DataStructResponse, datastruct_payload, jsonify
 from quantized.routes._plainimport import plain_import_payload
 from quantized.routes._uploadcache import clear_in_flight, stage_upload_stream
@@ -93,6 +83,12 @@ def _origin_book_id(ds: DataStruct) -> str:
     return str(ds.metadata.get("origin_book", ""))
 
 
+# ``origin_worksheet_fidelity`` (the primary ``.opju`` book's full worksheet
+# loss report) reaches the client as ``origin_fidelity["worksheet"]``
+# instead (``_originfidelity``), so it is not sent a second time.
+_UNSENT_METADATA = frozenset({"origin_books", "origin_worksheet_fidelity"})
+
+
 def _slim_metadata(meta: Any) -> dict[str, Any]:
     """Wire-payload metadata, minus ``origin_books`` — the full per-project
     book inventory ``_build_book`` (io/origin_project/opj.py) embeds in
@@ -101,7 +97,7 @@ def _slim_metadata(meta: Any) -> dict[str, Any]:
     go through the pure Python API, untouched by this trim) — it duplicates
     ~10-15 KB per book project-wide, which is material at PNR.opj's 122-book
     scale (~1.4 MB of dead weight). Trimmed only here, at the HTTP boundary."""
-    return {k: v for k, v in dict(meta).items() if k != "origin_books"}
+    return {k: v for k, v in dict(meta).items() if k not in _UNSENT_METADATA}
 
 
 def _book_payload(ds: DataStruct) -> dict[str, Any]:
@@ -252,36 +248,7 @@ def _import_with_books(
                 ]
                 payload["book_source"] = _book_source_ref(path, upload_token)
                 cache_project_books(path, books)
-        try:
-            if suffix == ".opj":
-                raw_figs = extract_figures(raw)
-                preview_diagnostics: list[PreviewDiagnostic] = []
-            else:
-                raw_figs = extract_figures_opju(raw)
-                raw_figs, preview_diagnostics = attach_opju_graph_previews(raw_figs, raw)
-            source_names = {
-                str(name)
-                for book in books
-                for name in (
-                    book.metadata.get("origin_book", ""),
-                    book.metadata.get("origin_book_long", ""),
-                )
-                if name
-            }
-            figs, fidelity = assess_origin_figures(
-                raw_figs,
-                container="opj" if suffix == ".opj" else "opju",
-                source_names=source_names,
-                preview_diagnostics=preview_diagnostics,
-            )
-        except (IndexError, ValueError, ArithmeticError, KeyError, struct.error):
-            # Figures are an optional nicety; a decode hiccup on a malformed or
-            # truncated project must degrade to "no figures", never fail the
-            # whole import (the data books already succeeded above).
-            figs = []
-            fidelity = origin_figure_decode_failure(
-                container="opj" if suffix == ".opj" else "opju"
-            )
+        figs, fidelity = origin_figures_and_fidelity(raw, suffix, ds, books)
         if figs:
             payload["figures"] = figs
         payload["origin_fidelity"] = fidelity
