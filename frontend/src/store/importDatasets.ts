@@ -25,14 +25,13 @@
 // line, so it's the chokepoint for the batch-overlay offer — see
 // `batchOverlayOffer` below.
 
-import { plural } from "../lib/plural";
 
 import type { HistoryBatchToken } from "./history";
 import { lit } from "../lib/macro";
 import { revealAncestorChain } from "../lib/foldertree";
 import { originBookErrorRoles } from "../lib/originBookRoles";
 import { planOriginImport } from "../lib/originFolders";
-import { importFailureHint } from "../lib/importFailureHint";
+import { importSummary } from "../lib/importFailureHint";
 import { originImportNotice } from "../lib/originImportNotice";
 import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "../lib/rowSidecars";
 import {
@@ -449,14 +448,8 @@ async function runImport<T>(
     return createdIds; // files already fully imported STAY — see this function's own doc
   }
 
-  // A parse failure is the wizard's second front door (#40): the auto-detect
-  // path gave up, so point at the manual guess/preview/parse one instead of
-  // just reporting the error — for a text-like file only; the wizard cannot
-  // read a binary container such as an Origin project (lib/importFailureHint).
-  const hint = importFailureHint(lastFailed);
-  const summary = lastError
-    ? `imported ${added}/${items.length} — failed ${lastError}${hint}`
-    : `imported ${added} file${plural(added)}`;
+  // With the wizard hint for a failed text file (lib/importFailureHint).
+  const summary = importSummary(added, items.length, lastError, lastFailed);
   // A parser note (a skipped workbook sheet, dropped rows) rides on the status
   // line too -- the toast is transient; the danger toast below keeps `summary`.
   const notes = parserNotesSummary(noted);
