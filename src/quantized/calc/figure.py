@@ -38,6 +38,7 @@ from quantized.calc.figure_styles import FigureStyle, figure_style
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
 from quantized.heavy_import import heavy_imports
 
+from .figure_bars import draw_series
 from .figure_errorbars import apply_error_bars
 
 __all__ = ["draw_series_axes", "render_figure", "style_rc"]
@@ -188,8 +189,8 @@ def draw_series_axes(
             artists.append(_draw_color_scatter(fig, ax, xv, yv, label, spec, st))
             continue
         kw = _plot_kwargs(st.line_width, st.marker_size, spec)
-        (line,) = ax.plot(xv, yv, label=label, **kw)
-        _apply_fill(ax, xv, yv, series, i, spec, line.get_color())
+        line, color = draw_series(ax, xv, yv, label, kw, spec)  # bars: figure_bars
+        _apply_fill(ax, xv, yv, series, i, spec, color)
         artists.append(line)
     apply_error_bars(ax, xv, series, error_spans, artists)
     tag_series_slots(artists)  # the legend's waterfall row order (figure_legend_order)

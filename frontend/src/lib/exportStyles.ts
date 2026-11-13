@@ -109,6 +109,7 @@ export function buildExportStyles(
     }
     if (st?.fill && st.fill !== "none") spec.fill = st.fill;
     if (st?.step) spec.step = st.step;
+    if (st?.bars) spec.bars = true;
     if (st?.colorBy != null) {
       spec.color_by = st.colorBy;
       spec.colormap = st.colormap ?? "viridis";

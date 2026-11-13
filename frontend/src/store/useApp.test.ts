@@ -2406,7 +2406,7 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(s.yScale).toBe("log");
   });
 
-  it("an Origin bar graph opens as bars on the Stat Stage, a line graph does not (re-audit #2)", () => {
+  it("an Origin bar graph opens with its curve drawn as bars, and says the bars turn vertical (re-audit #2)", () => {
     const meta = { origin_book: "Book2", x_column_name: "A", origin_column_names: ["B"] };
     const barFig = {
       ...figureEntry,
@@ -2419,13 +2419,13 @@ describe("useApp applyOriginFigure (item 18)", () => {
     });
     useToasts.setState({ toasts: [] });
     useApp.getState().applyOriginFigure("fig-bar");
-    expect(useApp.getState().statMode).toBe(true);
-    expect(useApp.getState().statPicks.mode).toBe("bar");
+    expect(useApp.getState().statMode).toBe(false); // bars on the XY stage
+    expect(useApp.getState().seriesStyles[0]).toEqual({ bars: true });
     expect(useToasts.getState().toasts.map((t) => t.msg)).toContain(
       "Graph1: Origin's horizontal bars are drawn as vertical columns",
     );
-    useApp.getState().applyOriginFigure("fig-XRD-0"); // no plot type: back to XY
-    expect(useApp.getState().statMode).toBe(false);
+    useApp.getState().applyOriginFigure("fig-XRD-0"); // no curves: no bar style left over
+    expect(useApp.getState().seriesStyles).toEqual({});
   });
 
   it("reveals an explicitly applied Origin figure instead of leaving it behind Workflow", () => {

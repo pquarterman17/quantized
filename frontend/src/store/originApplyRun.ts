@@ -348,20 +348,15 @@ export function runOriginFigureApply(
     regionShades: libs.originRegionShades([fig], entry.id),
     ...libs.originLegendState(fig),
     ...libs.figureSelectionState(selection),
-    // An all-column / bar / histogram figure opens on the Stat Stage.
-    ...withoutHorizontal(libs.figureStatState(fig, ds)),
+    // An all-histogram figure opens on the Stat Stage's histogram.
+    ...libs.figureStatState(fig, ds),
     hiddenChannels: ds
       ? originHiddenChannels(ds.data).filter((key) => selection ? !selection.yKeys.includes(key) : true)
       : [],
   });
-  if (libs.figureStatState(fig, ds).horizontal) {
+  if (libs.hasHorizontalBars(fig)) {
     toast(`${fig.name}: Origin's horizontal bars are drawn as vertical columns`, "info");
   }
   get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
 }
 
-/** The view fields of `figureStatState` (its `horizontal` flag is a notice). */
-function withoutHorizontal<T extends { horizontal?: boolean }>(state: T): Omit<T, "horizontal"> {
-  const { horizontal: _horizontal, ...view } = state;
-  return view;
-}

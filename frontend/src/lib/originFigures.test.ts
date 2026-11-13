@@ -19,6 +19,7 @@ import {
   figureChannelSelection,
   figureSelectionState,
   figureStatState,
+  hasHorizontalBars,
   originFigureAnnotations,
   originLegendFrameXY,
   originLegendPos,
@@ -1403,7 +1404,7 @@ describe("curveDisplayName (Origin %(n) resolution — comment first)", () => {
   });
 });
 
-describe("figureStatState (re-audit #2: a bar graph restores as bars)", () => {
+describe("Origin column / bar / histogram graphs (re-audit #2: a bar graph restores as bars)", () => {
   const book: Dataset = {
     id: "b1",
     name: "bar:Book1",
@@ -1415,40 +1416,39 @@ describe("figureStatState (re-audit #2: a bar graph restores as bars)", () => {
       metadata: { origin_book: "Book1", x_column_name: "A", origin_column_names: ["B"] },
     },
   };
-  const fig = (...kinds: (OriginCurve["plotType"] | undefined)[]) =>
-    figure({ curves: kinds.map((plotType) => ({ book: "Book1", x: "A", y: "B", ...(plotType ? { plotType } : {}) })) });
+  const curve = (plotType?: OriginCurve["plotType"]): OriginCurve =>
+    ({ book: "Book1", x: "A", y: "B", symbol: "square", symbolSize: 8, lineWidth: 1, color: "#ff0000", ...(plotType ? { plotType } : {}) });
 
-  it("an Origin column graph opens the Stat Stage's bars: X levels, the bound Y", () => {
-    expect(figureStatState(fig("column"), book)).toEqual({
+  it("a column or bar curve draws as bars on the XY stage, without its latent symbol", () => {
+    expect(originCurveSeriesStyle(curve("column"))).toEqual({ color: "#ff0000", bars: true });
+    expect(originCurveSeriesStyle(curve("bar"))).toEqual({ color: "#ff0000", bars: true });
+    expect(originCurveSeriesStyle(curve())).toMatchObject({ marker: true, markerShape: "square" });
+    const sel = figureChannelSelection(figure({ curves: [curve("column")] }), book);
+    expect(sel?.styles[0]).toEqual({ color: "#ff0000", bars: true });
+    expect(figureStatState(figure({ curves: [curve("column")] }), book)).toEqual({});
+    expect(hasHorizontalBars(figure({ curves: [curve("bar")] }))).toBe(true);
+    expect(hasHorizontalBars(figure({ curves: [curve("column")] }))).toBe(false);
+  });
+
+  it("a histogram of the X column opens the Stat Stage's histogram of that column", () => {
+    const hist = figure({ curves: [{ book: "Book1", x: "A", y: "A", plotType: "histogram" }] });
+    expect(figureStatState(hist, book)).toEqual({
       statMode: true,
       statPicks: {
-        mode: "bar",
-        barStack: false,
-        cols: { group: [-1, ""], group2: null, value: [0, "Height"], facet: null, color: null },
+        mode: "histogram",
+        cols: { group: null, group2: null, value: [-1, ""], facet: null, color: null },
       },
     });
+    const ofB = figure({ curves: [{ book: "Book1", x: "A", y: "B", plotType: "histogram" }] });
+    expect(figureStatState(ofB, book).statPicks?.cols?.value).toEqual([0, "Height"]);
   });
 
-  it("a horizontal Origin bar graph draws as columns and says so", () => {
-    const state = figureStatState(fig("bar"), book);
-    expect(state.statPicks?.mode).toBe("bar");
-    expect(state.horizontal).toBe(true);
-  });
-
-  it("a histogram of the X column is a histogram of that column", () => {
-    const hist = figure({ curves: [{ book: "Book1", x: "A", y: "A", plotType: "histogram" }] });
-    expect(figureStatState(hist, book)).toMatchObject({
-      statMode: true,
-      statPicks: { mode: "histogram", cols: { group: null, value: [-1, ""] } },
-    });
-  });
-
-  it("line figures, mixed figures and unbound columns stay on the XY stage", () => {
-    expect(figureStatState(fig(undefined), book)).toEqual({});
-    expect(figureStatState(fig("column", undefined), book)).toEqual({});
-    expect(figureStatState(fig("column", "histogram"), book)).toEqual({});
-    const missing = figure({ curves: [{ book: "Book1", x: "A", y: "Z", plotType: "column" }] });
+  it("line figures, mixed figures and unbound columns stay as they are", () => {
+    expect(figureStatState(figure({ curves: [curve()] }), book)).toEqual({});
+    const mixed = figure({ curves: [{ book: "Book1", x: "A", y: "A", plotType: "histogram" }, curve()] });
+    expect(figureStatState(mixed, book)).toEqual({});
+    const missing = figure({ curves: [{ book: "Book1", x: "A", y: "Z", plotType: "histogram" }] });
     expect(figureStatState(missing, book)).toEqual({});
-    expect(figureStatState(fig("column"), undefined)).toEqual({});
+    expect(figureStatState(figure({ curves: [curve("column")] }), undefined)).toEqual({});
   });
 });

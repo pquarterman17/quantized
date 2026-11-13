@@ -115,40 +115,29 @@ export function figureSelectionState(
     ? { xKey: sel.xKey, yKeys: sel.yKeys, seriesStyles: sel.styles, seriesLabels: sel.labels }
     : { xKey: null, yKeys: null, seriesStyles: {}, seriesLabels: {} };
 }
-/** The Stat Stage view for a figure whose every curve is an Origin column,
- *  bar or histogram plot (`OriginCurve.plotType`), or `{}` for any other
- *  figure (a mix, or line/scatter curves, stays on the XY stage). Column and
- *  bar draw as the Stat Stage's bar mode, one bar per X level of the first
- *  bound Y; histogram as its histogram of the curve's column. The app has no
- *  horizontal bars, so Origin's horizontal "bar" draws vertical
- *  (`horizontal: true` lets the caller say so). */
+/** The Stat Stage view for a figure whose every curve is an Origin
+ *  histogram (`OriginCurve.plotType`): a histogram of the curve's column. `{}`
+ *  for any other figure. (Column and bar curves stay on the XY stage, drawn
+ *  as bars by their series style — `originCurveSeriesStyle`.) */
 export function figureStatState(
   figure: OriginFigure,
   ds: Dataset | undefined,
-): { statMode?: true; statPicks?: StatPicks; horizontal?: boolean } {
+): { statMode?: true; statPicks?: StatPicks } {
   const curves = figure.curves ?? [];
-  const kinds = new Set(curves.map((c) => c.plotType));
-  if (!ds || curves.length === 0 || kinds.size !== 1) return {};
-  const kind = curves[0].plotType;
-  if (!kind) return {};
+  if (!ds || curves.length === 0 || curves.some((c) => c.plotType !== "histogram")) return {};
   const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
   const letters = Array.isArray(meta.origin_column_names) ? (meta.origin_column_names as unknown[]).map(String) : [];
-  const xLetter = String(meta.x_column_name ?? "");
-  const channel = (letter: string): number | null =>
-    letter === xLetter ? -1 : letters.includes(letter) ? letters.indexOf(letter) : null;
-  const value = channel(curves[0].y);
-  if (value === null) return {};
-  const group = kind === "histogram" ? null : channel(curves[0].x) ?? -1;
-  const cols: StatCols = { group, group2: null, value, facet: null, color: null };
-  return {
-    statMode: true,
-    statPicks: {
-      mode: kind === "histogram" ? "histogram" : "bar",
-      ...(kind === "histogram" ? {} : { barStack: false }),
-      cols: statColRefs(ds, cols),
-    },
-    ...(kind === "bar" ? { horizontal: true } : {}),
-  };
+  const y = curves[0].y;
+  const value = y === String(meta.x_column_name ?? "") ? -1 : letters.indexOf(y);
+  if (value === -1 && y !== String(meta.x_column_name ?? "")) return {};
+  const cols: StatCols = { group: null, group2: null, value, facet: null, color: null };
+  return { statMode: true, statPicks: { mode: "histogram", cols: statColRefs(ds, cols) } };
+}
+
+/** Origin's horizontal "bar" graphs are drawn as vertical columns (the app
+ *  has no horizontal bars); the apply says so. */
+export function hasHorizontalBars(figure: OriginFigure): boolean {
+  return (figure.curves ?? []).some((c) => c.plotType === "bar");
 }
 
 /** Channel selection for a figure's decoded curves on its resolved dataset:
