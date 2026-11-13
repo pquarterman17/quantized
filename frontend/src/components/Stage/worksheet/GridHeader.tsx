@@ -280,10 +280,19 @@ export default function GridHeader({
           role="columnheader"
           className="qzk-grid-headcell"
           style={{ width: colWidth, flexShrink: 0 }}
-          title={`${t.shortName} — read-only text column (Origin)`}
+          title={`${t.longName ? `${t.longName} (${t.shortName})` : t.shortName}${t.unit ? ` [${t.unit}]` : ""} — read-only text column (Origin)`}
         >
-          {t.shortName}
-          <span className="role">text</span>
+          {/* Origin names a column by its Long Name, the short name otherwise. */}
+          {t.longName ?? t.shortName}
+          <span className="role">
+            text
+            {t.unit && (
+              <>
+                {" · "}
+                <span className="unit">{t.unit}</span>
+              </>
+            )}
+          </span>
         </div>
       ))}
     </div>
