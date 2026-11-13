@@ -145,7 +145,12 @@ def _guess_layout(text: str) -> tuple[int | None, int | None, int, list[str]]:
         layout._numeric_score(t) if ln.strip() else 0.0
         for t, ln in zip(scored, lines, strict=True)
     ]
-    data_start = next((i for i, s in enumerate(scores) if s > 0.5), 0)
+    data_start = next((i for i, s in enumerate(scores) if s > 0.5), None)
+    # Leading data rows with an empty cell ("1<TAB>" in a 2-column paste)
+    # score exactly 0.5; extend over them as direct import does
+    # (`_walk_back_gappy_rows`), or the first row -- and the header above it
+    # -- were lost.
+    data_start = 0 if data_start is None else layout._walk_back_gappy_rows(scored, data_start)
 
     header_line: int | None = None
     units_line: int | None = None

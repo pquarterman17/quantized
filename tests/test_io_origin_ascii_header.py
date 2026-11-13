@@ -199,3 +199,19 @@ def test_wizard_can_assign_the_three_rows_by_hand() -> None:
     assert ds.labels == ("Kerr Signal", "Kerr err")
     assert ds.units == ("mdeg", "mdeg")
     assert any("RT" in c for c in ds.metadata["comments"])
+
+
+def test_paste_whose_first_data_row_has_an_empty_cell_keeps_header_and_row() -> None:
+    # Integration live check: pasting an Excel block whose first data row has
+    # an empty cell (``"1<TAB>"`` scores exactly 0.5) named the columns
+    # Col1/Col2 and dropped that row; direct import already walks back over
+    # such rows (`_walk_back_gappy_rows`), and the paste/wizard guess now does.
+    text = "Temp\tSignal\n1\t\n2\t5\n3\t6\n"
+    settings = guess_settings(text)
+    assert settings.header_line == 0
+    assert settings.data_start_line == 1
+    ds = parse_import(text, settings)
+    assert ds.labels == ("Signal",)
+    assert ds.metadata.get("x_column_name") == "Temp"
+    np.testing.assert_array_equal(ds.time, [1.0, 2.0, 3.0])
+    np.testing.assert_array_equal(ds.values[:, 0], [np.nan, 5.0, 6.0])
