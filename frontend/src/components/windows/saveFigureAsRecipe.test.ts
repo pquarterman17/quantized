@@ -49,7 +49,7 @@ describe("saveFocusedFigureAsRecipe", () => {
 
     expect(askParams).toHaveBeenCalledWith("Save as Plot Recipe", [
       { key: "name", label: "Name", type: "text", default: "My Plot" },
-    ]);
+    ], { confirmLabel: "Save" });
     expect(useApp.getState().plotRecipes.map((r) => r.name)).toEqual(["My Recipe"]);
   });
 
@@ -106,7 +106,7 @@ describe("saveFocusedFigureAsRecipe", () => {
     const title = useApp.getState().plotWindows.find((w) => w.id === panelId)?.title;
     expect(askParams).toHaveBeenCalledWith("Save as Plot Recipe", [
       { key: "name", label: "Name", type: "text", default: title },
-    ]);
+    ], { confirmLabel: "Save" });
     const [recipe] = useApp.getState().plotRecipes;
     expect(recipe.name).toBe("Stack");
     expect(recipe.panelWindow).toEqual({ datasets: [null, "d2.xy"], layout: "column" });
