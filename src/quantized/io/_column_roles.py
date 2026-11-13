@@ -16,6 +16,10 @@ Two dataset fields carry them:
   columns: a channel they list is ``Y-error``/``X-error``, and a channel that
   ``column_designations`` calls an error column but the live bindings do not
   list is a plain ``Y`` (the user unbound it).
+* ``metadata["user_column_designations"]`` (``_error_roles.user_designations``)
+  -- the worksheet's "Set As" map, keyed by value channel. It overrides
+  ``column_designations`` for that channel; the live ``error_roles`` still
+  decide error status.
 
 ``column_comments`` uses the same short-name keys.
 
@@ -28,7 +32,7 @@ import re
 from collections.abc import Mapping
 from typing import Any, TypeGuard
 
-from quantized.io._error_roles import error_axes
+from quantized.io._error_roles import error_axes, user_designations
 
 __all__ = [
     "LABTALK_COLUMN_TYPE",
@@ -114,12 +118,14 @@ def channel_designations(
     """One Origin designation per value channel (``ORIGIN_DESIGNATIONS``).
 
     Precedence: live ``error_roles`` decide error status when declared; then
+    the worksheet's "Set As" (``user_column_designations``); then
     ``column_designations``; then -- only with ``keyword_fallback`` and only
-    when the dataset declares neither field -- the whole-token label guess
-    (``is_error_label`` -> ``Y-error``); otherwise ``Y``."""
+    when the dataset declares none of those fields -- the whole-token label
+    guess (``is_error_label`` -> ``Y-error``); otherwise ``Y``."""
     n = len(labels)
     shorts = channel_short_names(metadata, n)
     declared = _str_map(metadata, "column_designations")
+    user = user_designations(metadata, n)
     err = error_axes(metadata, n)
     out: list[str] = []
     for j in range(n):
@@ -127,13 +133,14 @@ def channel_designations(
         desig = declared.get(short, "") if short is not None else ""
         if desig not in ORIGIN_DESIGNATIONS:
             desig = ""
+        desig = user.get(j, desig)
         if err is not None:
             axis = err.get(j)
             if axis is not None:
                 desig = "Y-error" if axis == "y" else "X-error"
             elif desig in ("Y-error", "X-error"):
                 desig = "Y"  # the live bindings unbound it
-        elif not desig and keyword_fallback and not declared and is_error_label(labels[j]):
+        elif not desig and keyword_fallback and not declared and not user and is_error_label(labels[j]):
             desig = "Y-error"
         out.append(desig or "Y")
     return out
