@@ -28,9 +28,8 @@ export async function recomputeStaleFits(set: SliceSet, get: SliceGet): Promise<
       continue;
     }
     try {
-      const { FIT_SUBSET_MISMATCH, fitDataForSpec } = await import("../lib/fitselection");
-      const { weightRequestFields } = await import("../lib/fitweights");
-      const { statsVersionField } = await import("../lib/fitStatsVersion");
+      const { FIT_SUBSET_MISMATCH, fitDataForSpec, statsVersionField, weightRequestFields } =
+        await import("../lib/fitselection");
       // Reproduce the fit's RECORDED channels (audit P1 #3), falling back
       // to the live plotted selection for legacy specs — not time/values[0].
       const sel = fitDataForSpec(d, d.fitSpec, get().xKey, get().yKeys, get().seriesOrder);
