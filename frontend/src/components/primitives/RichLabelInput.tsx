@@ -33,11 +33,16 @@ interface RichLabelInputProps {
   placeholder?: string;
   /** id of the visible caption that names the field (a placeholder does not). */
   labelledBy?: string;
+  /** The field's accessible name when no `labelledBy` caption is given -- it
+   *  also names the Ω button ("Insert symbol into <name>"), so two rich label
+   *  fields side by side never share one control name. Include the visible
+   *  caption's words (a speech user says what they see). */
+  name?: string;
   /** Commit on every keystroke (FigureBuilder) instead of blur/Enter. */
   live?: boolean;
 }
 
-export default function RichLabelInput({ value, onCommit, placeholder, labelledBy, live = false }: RichLabelInputProps) {
+export default function RichLabelInput({ value, onCommit, placeholder, labelledBy, name, live = false }: RichLabelInputProps) {
   const previewId = useId();
   const [draft, setDraft] = useState(value);
   const [palette, setPalette] = useState<{ x: number; y: number } | null>(null);
@@ -106,6 +111,7 @@ export default function RichLabelInput({ value, onCommit, placeholder, labelledB
           value={draft}
           placeholder={placeholder}
           aria-labelledby={labelledBy}
+          aria-label={labelledBy ? undefined : name}
           // The preview line doubles as the validation message: linked so a
           // screen reader hears why the markup is rejected.
           aria-invalid={check.ok ? undefined : true}
@@ -155,7 +161,7 @@ export default function RichLabelInput({ value, onCommit, placeholder, labelledB
             'Insert symbol — Greek, sub/superscript, Å, ° ("$...$" math labels). ' +
             "Ctrl/Cmd+I italic · Ctrl+= subscript · Ctrl+Shift+= superscript · Ctrl+. this palette"
           }
-          aria-label="Insert symbol"
+          aria-label={name ? `Insert symbol into ${name}` : "Insert symbol"}
           onClick={togglePalette}
         >
           Ω

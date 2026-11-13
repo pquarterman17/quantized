@@ -90,11 +90,11 @@ export default function FigureBuilderView() {
             {/* Rich-text labels (GOTO #5): `$...$` math renders in the export
                 via matplotlib mathtext; Ω opens the symbol palette. */}
             <label className="qzk-field-lbl">Title</label>
-            <RichLabelInput live value={f.title} placeholder="(none)" onCommit={f.setTitle} />
+            <RichLabelInput live value={f.title} name="Figure title" placeholder="(none)" onCommit={f.setTitle} />
             <label className="qzk-field-lbl">X label</label>
-            <RichLabelInput live value={f.xLabel} placeholder="auto" onCommit={f.setXLabel} />
+            <RichLabelInput live value={f.xLabel} name="Figure X label" placeholder="auto" onCommit={f.setXLabel} />
             <label className="qzk-field-lbl">Y label</label>
-            <RichLabelInput live value={f.yLabel} placeholder="auto" onCommit={f.setYLabel} />
+            <RichLabelInput live value={f.yLabel} name="Figure Y label" placeholder="auto" onCommit={f.setYLabel} />
             {/* #11: every export property, panel-grouped, one config object */}
             <PropertyPanels
               overrides={f.overrides}

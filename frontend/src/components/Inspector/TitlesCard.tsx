@@ -11,11 +11,15 @@ import RichLabelInput from "../primitives/RichLabelInput";
 
 function LabelRow({
   label,
+  name,
   placeholder,
   value,
   onCommit,
 }: {
   label: string;
+  /** The field's accessible name: the caption's words, made unique in the
+   *  app ("Plot X label" -- the Figure Builder has an "X label" too). */
+  name: string;
   placeholder: string;
   value: string;
   onCommit: (v: string) => void;
@@ -25,7 +29,7 @@ function LabelRow({
       <span className="qzk-field-lbl" style={{ margin: 0, width: 48, paddingTop: 4 }}>
         {label}
       </span>
-      <RichLabelInput value={value} placeholder={placeholder} onCommit={onCommit} />
+      <RichLabelInput value={value} name={name} placeholder={placeholder} onCommit={onCommit} />
     </div>
   );
 }
@@ -43,11 +47,11 @@ export default function TitlesCard() {
 
   return (
     <Card title="Titles & labels" defaultOpen={false}>
-      <LabelRow label="Title" placeholder="(none)" value={plotTitle} onCommit={setPlotTitle} />
-      <LabelRow label="X label" placeholder="auto" value={xAxisLabel} onCommit={setXAxisLabel} />
-      <LabelRow label="Y label" placeholder="auto" value={yAxisLabel} onCommit={setYAxisLabel} />
+      <LabelRow label="Title" name="Plot title" placeholder="(none)" value={plotTitle} onCommit={setPlotTitle} />
+      <LabelRow label="X label" name="Plot X label" placeholder="auto" value={xAxisLabel} onCommit={setXAxisLabel} />
+      <LabelRow label="Y label" name="Plot Y label" placeholder="auto" value={yAxisLabel} onCommit={setYAxisLabel} />
       {y2Keys && y2Keys.length > 0 && (
-        <LabelRow label="Y2 label" placeholder="auto" value={y2AxisLabel} onCommit={setY2AxisLabel} />
+        <LabelRow label="Y2 label" name="Plot Y2 label" placeholder="auto" value={y2AxisLabel} onCommit={setY2AxisLabel} />
       )}
     </Card>
   );
