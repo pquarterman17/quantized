@@ -113,6 +113,9 @@ interface NameProps {
   /** Tree-only: hide the redundant project prefix from an untouched
    *  importer-generated Origin worksheet name. */
   compactOriginName?: boolean;
+  /** Tree-only: the tooltip says how to OPEN the row too (a single click
+   *  there only selects -- L0.25 -- so the gesture must be discoverable). */
+  openHint?: boolean;
   /** null = not editing; "" is a valid in-progress empty draft. */
   rename: string | null;
   onChange: (value: string) => void;
@@ -121,7 +124,7 @@ interface NameProps {
   onStart: () => void;
 }
 
-export function DatasetRowName({ dataset: d, compactOriginName = false, rename, onChange, onCommit, onCancel, onStart }: NameProps) {
+export function DatasetRowName({ dataset: d, compactOriginName = false, openHint = false, rename, onChange, onCommit, onCancel, onStart }: NameProps) {
   if (rename != null) {
     return (
       <input
@@ -162,7 +165,7 @@ export function DatasetRowName({ dataset: d, compactOriginName = false, rename, 
       {!compactOriginName && <OriginSheetChip dataset={d} />}
       <span
         className="qzk-ds-name"
-        title={`${d.name} — double-click to rename`}
+        title={openHint ? `${d.name} — double-click the row to open it, or this name to rename it` : `${d.name} — double-click to rename`}
         aria-label={nameAriaLabel}
         onDoubleClick={(e) => {
           e.stopPropagation();

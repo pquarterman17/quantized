@@ -208,6 +208,7 @@ export default function DatasetRow({
   const nameProps = {
     dataset: d,
     compactOriginName: treeMode,
+    openHint: treeMode,
     rename,
     onChange: setRename,
     onCommit: commitRename,
@@ -249,6 +250,8 @@ export default function DatasetRow({
       // `id === activeId`) -- semantic marker for the `.active` CSS class,
       // independent of multi-select's `selected`/`.selected`.
       aria-current={active ? "true" : undefined}
+      // Tree: a click selects (L0.25), so say how to open.
+      title={treeMode ? "Double-click to open" : undefined}
       onKeyDown={onRowKeyDown}
       onClick={onRowClick}
       // L0.25 tree open gesture; the NAME span's dbl-click rename wins over it.

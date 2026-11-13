@@ -90,7 +90,7 @@ describe("DatasetRow — Tree (treeMode) compact worksheet row (UX-001)", () => 
     expect(first.container.querySelector(".qzk-ds-name")).not.toHaveTextContent("Moke:");
     expect(first.container.querySelector(".qzk-ds-name")).toHaveAttribute(
       "title",
-      "Moke:Book4 — 30 nm MnN — double-click to rename",
+      "Moke:Book4 — 30 nm MnN — double-click the row to open it, or this name to rename it",
     );
     first.unmount();
 
@@ -213,5 +213,22 @@ describe("Library rows: a book or sheet name outranks its kind chip", () => {
     expect(declares(chip, "flex", "0 1000 auto")).toBe(true);
     expect(declares(chip, "text-overflow", "ellipsis")).toBe(true);
     expect(declares(rule(".qzk-workbook-row > .qzk-group-count"), "flex-shrink", "0")).toBe(true);
+  });
+});
+
+describe("Library Tree rows say how to open them", () => {
+  // Coordinator follow-up: a click on a sheet card only SELECTS (L0.25, except
+  // a sheet of the workbook already on screen), so the open gesture must be
+  // discoverable where the user hovers.
+  it("the row and its name tooltip name the double-click", () => {
+    const { container } = render(<DatasetRow dataset={ds} {...baseProps} treeMode />);
+    expect(container.querySelector(".qzk-ds")).toHaveAttribute("title", "Double-click to open");
+    expect(container.querySelector(".qzk-ds-name")?.getAttribute("title")).toMatch(/double-click the row to open it/);
+  });
+
+  it("the flat list (where a click opens) carries no such hint", () => {
+    const { container } = render(<DatasetRow dataset={ds} {...baseProps} />);
+    expect(container.querySelector(".qzk-ds")).not.toHaveAttribute("title");
+    expect(container.querySelector(".qzk-ds-name")).toHaveAttribute("title", "sample.dat — double-click to rename");
   });
 });
