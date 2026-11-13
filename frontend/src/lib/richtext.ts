@@ -22,12 +22,17 @@
 //   \leq \geq \neq \approx \equiv \sim \propto \ll \gg  relations
 //   \infty \partial \nabla \perp \parallel \angle \cdots \ldots  analysis
 //   \rightarrow (\to) \leftarrow \leftrightarrow \Rightarrow     arrows
-//   \mathrm{...} upright, \mathit{...} italic
+//   \mathrm{...} upright, \mathit{...} italic, \mathbf{...} bold upright
+//   `\ ` (backslash-space) a word space (mathtext drops bare spaces)
 //   letters → italic (mathtext convention), digits/punct → upright,
 //   `-` → true minus (U+2212), `'` → prime (U+2032), whitespace ignored
 //   (mathtext drops it too), plus a verified set of literal Unicode
 //   (Greek, ° Å µ × ± ⋅ ∘ ′ ″ −).
 // Outside `$...$`: literal Unicode passthrough; `\$` → a literal `$`.
+// Origin escapes (`\+(..)` sup, `\-(..)` sub, `\g(..)` Greek, `\b(..)` bold,
+// `\i(..)` italic) are rewritten into this subset first by
+// `lib/originEscapes.ts` — the same rewrite the export applies
+// (calc/figure_origin_escapes.py); see docs/rich_text_labels.md.
 //
 // Unparseable input NEVER throws into a render path: `parseRichText` returns
 // `ok: false` plus the whole string as one literal text node, and callers
@@ -35,8 +40,24 @@
 // literal fallback — see calc/figure_labels.py). A label containing no `$`
 // short-circuits (`hasMarkup`) so it renders byte-identical to before.
 
+// The Origin-escape rewrite is a LAZY chunk (eager-bundle budget): only the
+// one-line detector below stays eager. The import starts the moment this
+// module loads — app startup, before any plot can have data to label — so
+// it is in place by the first labelled render; a label parsed in the brief
+// window before it lands renders literally (the safe fallback every invalid
+// label already takes) until that plot's next rebuild.
+const ORIGIN_ESCAPE = /\\[+\-gbi]\(/;
+let originRewrite: ((s: string) => string) | null = null;
+// A chunk failure (offline) leaves escapes literal, never a crash.
+import("./originEscapes").then(
+  (m) => {
+    originRewrite = m.originEscapesToMarkup;
+  },
+  () => {},
+);
+
 export type RichNode =
-  | { kind: "text"; text: string; italic: boolean }
+  | { kind: "text"; text: string; italic: boolean; bold?: boolean }
   | { kind: "sub"; children: RichNode[] }
   | { kind: "sup"; children: RichNode[] }
   | { kind: "frac"; num: RichNode[]; den: RichNode[] }
@@ -55,9 +76,10 @@ export interface RichParseResult {
   nodes: RichNode[];
 }
 
-/** Fast-path gate: only strings containing `$` are ever parsed. */
+/** Fast-path gate: only strings containing `$` (or an Origin escape run,
+ *  rewritten to `$...$` by `originEscapesToMarkup`) are ever parsed. */
 export function hasMarkup(s: string): boolean {
-  return s.includes("$");
+  return s.includes("$") || ORIGIN_ESCAPE.test(s);
 }
 
 /** Greek commands -> [unicode, italic]. Lowercase renders italic, uppercase
@@ -176,45 +198,48 @@ function greekUnicodeItalic(c: string): boolean | null {
 
 class RichSyntaxError extends Error {}
 
-type MathStyle = "auto" | "rm" | "it";
+type MathStyle = "auto" | "rm" | "it" | "bf";
 
-/** Append a text run, merging with the previous run when styles match. */
-function emitText(nodes: RichNode[], text: string, italic: boolean): void {
+/** Append a text run, merging with the previous run when styles match. A
+ *  bold run is always upright (mathtext's \mathbf). */
+function emitText(nodes: RichNode[], text: string, italic: boolean, bold = false): void {
   if (!text) return;
   const last = nodes[nodes.length - 1];
-  if (last && last.kind === "text" && last.italic === italic) last.text += text;
-  else nodes.push({ kind: "text", text, italic });
+  const it = italic && !bold;
+  if (last && last.kind === "text" && last.italic === it && !!last.bold === bold) last.text += text;
+  else nodes.push({ kind: "text", text, italic: it, ...(bold && { bold }) });
 }
 
 /** One char inside math -> its text run, or throw when outside the subset. */
 function emitMathChar(nodes: RichNode[], c: string, style: MathStyle): void {
+  const bold = style === "bf";
   if (/[a-zA-Z]/.test(c)) {
-    emitText(nodes, c, style !== "rm");
+    emitText(nodes, c, style === "auto" || style === "it", bold);
     return;
   }
   if (/[0-9]/.test(c)) {
-    emitText(nodes, c, style === "it");
+    emitText(nodes, c, style === "it", bold);
     return;
   }
   if (c === "-") {
-    emitText(nodes, "−", false); // mathtext renders '-' as a true minus
+    emitText(nodes, "−", false, bold); // mathtext renders '-' as a true minus
     return;
   }
   if (c === "'") {
-    emitText(nodes, "′", false); // mathtext turns ' into a prime
+    emitText(nodes, "′", false, bold); // mathtext turns ' into a prime
     return;
   }
   if (MATH_PUNCT.has(c)) {
-    emitText(nodes, c, false);
+    emitText(nodes, c, false, bold);
     return;
   }
   const greekIt = greekUnicodeItalic(c);
   if (greekIt != null) {
-    emitText(nodes, c, greekIt);
+    emitText(nodes, c, greekIt, bold);
     return;
   }
   if (MATH_UNICODE.has(c)) {
-    emitText(nodes, c, false);
+    emitText(nodes, c, false, bold);
     return;
   }
   throw new RichSyntaxError(`unsupported character "${c}" in math mode`);
@@ -241,7 +266,12 @@ function parseCommand(cur: Cursor, nodes: RichNode[], style: MathStyle): void {
   // cur.pos sits just after the backslash.
   if (cur.src[cur.pos] === ",") {
     cur.pos += 1;
-    emitText(nodes, " ", false); // thin space (U+2009)
+    emitText(nodes, " ", false, style === "bf"); // thin space (U+2009)
+    return;
+  }
+  if (cur.src[cur.pos] === " ") {
+    cur.pos += 1;
+    emitText(nodes, " ", false, style === "bf"); // `\ `: mathtext's word space
     return;
   }
   let name = "";
@@ -250,8 +280,8 @@ function parseCommand(cur: Cursor, nodes: RichNode[], style: MathStyle): void {
     cur.pos += 1;
   }
   if (!name) throw new RichSyntaxError("stray backslash in math mode");
-  if (name === "mathrm" || name === "mathit") {
-    const children = parseGroup(cur, name === "mathrm" ? "rm" : "it", `\\${name}`);
+  if (name === "mathrm" || name === "mathit" || name === "mathbf") {
+    const children = parseGroup(cur, name === "mathrm" ? "rm" : name === "mathit" ? "it" : "bf", `\\${name}`);
     for (const child of children) appendNode(nodes, child);
     return;
   }
@@ -315,7 +345,7 @@ function parseCommand(cur: Cursor, nodes: RichNode[], style: MathStyle): void {
 
 /** Append preserving text-run merging (group results flatten into parent). */
 function appendNode(nodes: RichNode[], node: RichNode): void {
-  if (node.kind === "text") emitText(nodes, node.text, node.italic);
+  if (node.kind === "text") emitText(nodes, node.text, node.italic, !!node.bold);
   else nodes.push(node);
 }
 
@@ -411,7 +441,7 @@ function splitSegments(source: string): { math: boolean; body: string }[] {
 export function parseRichText(source: string): RichParseResult {
   const literal: RichNode[] = source ? [{ kind: "text", text: source, italic: false }] : [];
   try {
-    const segs = splitSegments(source);
+    const segs = splitSegments(originRewrite ? originRewrite(source) : source);
     const anyMath = segs.some((s) => s.math);
     const nodes: RichNode[] = [];
     for (const seg of segs) {
@@ -445,23 +475,8 @@ export function richLabelAst(s: string | null | undefined): RichNode[] | null {
   return r.ok ? r.nodes : null;
 }
 
-/** Flatten an AST (or raw label) to plain text — a11y / tooltip fallback. */
-export function plainText(input: string | RichNode[]): string {
-  const nodes = typeof input === "string" ? parseRichText(input).nodes : input;
-  let out = "";
-  for (const n of nodes) {
-    if (n.kind === "text") out += n.text;
-    else if (n.kind === "frac") out += `${plainText(n.num)}/${plainText(n.den)}`;
-    else if (n.kind === "sqrt") {
-      out += `${n.index ? plainText(n.index) : ""}√(${plainText(n.radicand)})`;
-    } else if (n.kind === "bigop") {
-      out += n.op;
-      if (n.under) out += `_${plainText(n.under)}`;
-      if (n.over) out += `^${plainText(n.over)}`;
-    } else out += plainText(n.children);
-  }
-  return out;
-}
+// `plainText` (flatten an AST to plain text) lives in lib/richtextPlain.ts:
+// no eager caller uses it (bundle offset for the Origin-escape detector).
 
 // `validateRichText` (the label editor's live feedback) lives in
 // lib/richtextValidate.ts: only the lazy RichLabelInput calls it (bundle diet

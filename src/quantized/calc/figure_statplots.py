@@ -16,6 +16,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 
 from quantized.calc.figure_category_axis import style_category_axis
+from quantized.calc.figure_fonts import font_family_rc
 from quantized.calc.figure_group_notes import (
     add_caveat,
     annotate_top_counts,
@@ -159,10 +160,8 @@ def render_statplot_figure(
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
-    fallback = "DejaVu Serif" if st.font_generic == "serif" else "DejaVu Sans"
     rc: dict[str, Any] = {
-        "font.family": st.font_generic,
-        f"font.{st.font_generic}": [st.font_name, fallback],
+        **font_family_rc(st),
         "font.size": st.font_size,
         "axes.labelsize": st.font_size,
         "axes.titlesize": st.title_font_size,

@@ -1,0 +1,64 @@
+{
+  "cases": [
+    [
+      "T\\+(2)",
+      "T$^{\\mathrm{2}}$"
+    ],
+    [
+      "M\\-(s) (emu)",
+      "M$_{\\mathrm{s}}$ (emu)"
+    ],
+    [
+      "2\\g(q) (deg)",
+      "2θ (deg)"
+    ],
+    [
+      "\\b(Bold text)",
+      "$\\mathbf{Bold\\ text}$"
+    ],
+    [
+      "\\i(x) and \\b(\\g(m)\\+(2))",
+      "$\\mathit{x}$ and $\\mathbf{μ^{2}}$"
+    ],
+    [
+      "10\\+(-3) emu cm\\+(-3)",
+      "10$^{\\mathrm{-3}}$ emu cm$^{\\mathrm{-3}}$"
+    ],
+    [
+      "\\+(a(b)c)",
+      "$^{\\mathrm{a(b)c}}$"
+    ],
+    [
+      "\\g(Dr)/r",
+      "Δρ/r"
+    ],
+    [
+      "H\\-(c\\-(2))",
+      "H$_{\\mathrm{c}_{\\mathrm{2}}}$"
+    ],
+    [
+      "\\x(1) unknown control",
+      "\\x(1) unknown control"
+    ],
+    [
+      "\\+(50%) unsafe body",
+      "\\+(50%) unsafe body"
+    ],
+    [
+      "\\+(unterminated",
+      "\\+(unterminated"
+    ],
+    [
+      "$x^2$ and \\+(3)",
+      "$x^2$ and $^{\\mathrm{3}}$"
+    ],
+    [
+      "odd $ count \\+(3)",
+      "odd $ count \\+(3)"
+    ],
+    [
+      "plain label",
+      "plain label"
+    ]
+  ]
+}

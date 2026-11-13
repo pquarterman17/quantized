@@ -83,6 +83,15 @@ def test_panel_margins_rejected() -> None:
         render_figure_page([p], rows=1, cols=1)
 
 
+def test_panel_page_pad_rejected() -> None:
+    # A window's Page setup margins (audit B3's page_pad) are page-level too:
+    # a panel cannot carry its own page border, and the composer must say so
+    # rather than silently ignore it.
+    p = _panel(0, 0, overrides={"page_pad": {"left": 0.1}})
+    with pytest.raises(ValueError, match="page_pad"):
+        render_figure_page([p], rows=1, cols=1)
+
+
 def test_unknown_style_and_format_raise() -> None:
     with pytest.raises(ValueError, match="fmt"):
         render_figure_page([_panel(0, 0)], rows=1, cols=1, fmt="bmp")

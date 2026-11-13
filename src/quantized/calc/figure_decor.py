@@ -51,6 +51,8 @@ from typing import Any
 
 from matplotlib.patches import Rectangle
 
+from quantized.calc.figure_warnings import note_figure_warning
+
 __all__ = [
     "REGION_SHADE_ALPHA",
     "_apply_ref_lines",
@@ -148,7 +150,12 @@ def _validate_region_shades(shades: Sequence[Mapping[str, Any]] | None) -> None:
     if not shades:
         return
     for sh in shades:
-        for key in ("x1", "x2", "y1", "y2"):
+        full = sh.get("full_height")
+        if full is not None and not isinstance(full, bool):
+            raise ValueError("region_shades full_height must be a boolean")
+        # A full-height shade spans the axes (axes fraction), so its y1/y2
+        # are not needed -- the screen still sends them, harmlessly.
+        for key in ("x1", "x2") if full else ("x1", "x2", "y1", "y2"):
             v = sh.get(key)
             if not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v):
                 raise ValueError(f"region_shades {key} must be a finite number")
@@ -240,6 +247,13 @@ def _apply_ref_lines(ax: Any, ref_lines: Sequence[Mapping[str, Any]] | None) -> 
                 ax.axvline(value, **line_kw)
             else:
                 ax.axhline(value, **line_kw)
+        # An off-scale line draws nothing; say so (audit #11) rather than
+        # export a figure silently missing the marker the user added.
+        label = rl.get("label")
+        name = (
+            f"Reference line '{label}'" if label else f"Reference line {rl['axis']} = {_fmt(value)}"
+        )
+        _warn_if_outside(ax, str(rl["axis"]), value, value, name, named=not label)
 
 
 def _apply_region_shades(ax: Any, shades: Sequence[Mapping[str, Any]] | None) -> None:
@@ -248,24 +262,64 @@ def _apply_region_shades(ax: Any, shades: Sequence[Mapping[str, Any]] | None) ->
     shades belong on THIS axes) is entirely the CALLER's job -- see this
     module's header and ``_split_region_shades_by_axis`` below; this
     function draws whatever list it is given, unconditionally, onto
-    whichever ``ax`` it is given."""
+    whichever ``ax`` it is given.
+
+    ``full_height`` (the default for a newly inserted shade, publication-
+    figures audit #11) spans the whole axes height -- y in axes fraction, so
+    it reads the same on a linear or a log axis and never depends on the y
+    data. A data-coordinate shade on a log axis with a side <= 0 (y1 = 0,
+    the old default) runs from the axis floor instead of vanishing; one that
+    still cannot be seen is reported (``calc.figure_warnings``), never
+    dropped silently."""
     if not shades:
         return
-    for sh in shades:
+    for index, sh in enumerate(shades):
         x0, x1 = sorted((float(sh["x1"]), float(sh["x2"])))
-        y0, y1 = sorted((float(sh["y1"]), float(sh["y2"])))
+        what = f"Region shade {index + 1}"
+        style: dict[str, Any] = {
+            "facecolor": str(sh["fill"]),
+            "edgecolor": "none",
+            "alpha": REGION_SHADE_ALPHA,
+            "zorder": _REGION_SHADE_ZORDER,
+        }
         with _outside_autoscale(ax):
-            ax.add_patch(
-                Rectangle(
-                    (x0, y0),
-                    x1 - x0,
-                    y1 - y0,
-                    facecolor=str(sh["fill"]),
-                    edgecolor="none",
-                    alpha=REGION_SHADE_ALPHA,
-                    zorder=_REGION_SHADE_ZORDER,
+            if sh.get("full_height"):
+                ax.axvspan(x0, x1, ymin=0.0, ymax=1.0, **style)
+                _warn_if_outside(ax, "x", x0, x1, what)
+                continue
+            y0, y1 = sorted((float(sh["y1"]), float(sh["y2"])))
+            if ax.get_yscale() == "log" and y0 <= 0:
+                y0 = min(ax.get_ylim())  # the axis floor: <= 0 has no position
+            if y1 <= y0:
+                note_figure_warning(
+                    f"{what} lies at or below zero on a log axis and cannot be "
+                    "drawn; use a full-height shade or positive y values."
                 )
-            )
+                continue
+            ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, **style))
+            _warn_if_outside(ax, "x", x0, x1, what)
+            _warn_if_outside(ax, "y", y0, y1, what)
+
+
+def _warn_if_outside(
+    ax: Any, axis: str, lo: float, hi: float, what: str, *, named: bool = False
+) -> None:
+    """Note a render warning when ``[lo, hi]`` misses ``ax``'s ``axis`` view
+    entirely -- an object the user placed that the figure will not show.
+    ``named``: ``what`` already states the position (an unlabelled reference
+    line's "x = 8000"), so it is not repeated."""
+    a, b = sorted(ax.get_xlim() if axis == "x" else ax.get_ylim())
+    if hi < a or lo > b:
+        span = _fmt(lo) if lo == hi else f"{_fmt(lo)} to {_fmt(hi)}"
+        where = "" if named else f" ({axis} {span})"
+        note_figure_warning(
+            f"{what}{where} is outside the {axis} axis range "
+            f"({_fmt(a)} to {_fmt(b)}) and is not visible."
+        )
+
+
+def _fmt(v: float) -> str:
+    return f"{v:.4g}"
 
 
 def _split_region_shades_by_axis(

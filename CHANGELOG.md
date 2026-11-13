@@ -8,6 +8,22 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- Publication figures: the Export dialog sets the figure's width and height
+  (in, cm, mm or px) and the right-axis label; the Publication preview's
+  Canvas group sets the page size too. Page setup, Export and the preview all
+  edit the same page, and Page setup now opens at the size an export already
+  uses (6 × 4 in).
+- Publication preview: separate title, axis-label, tick-label and legend font
+  sizes, and a font picker listing the fonts the export can render. Arial and
+  Helvetica render in Liberation Sans, Times New Roman in Liberation Serif;
+  a font that falls back is reported.
+- Labels accept Origin-style rich text — `\+( )` superscript, `\-( )`
+  subscript, `\g( )` Greek, `\b( )` bold, `\i( )` italic — on screen and in
+  every export (docs/rich_text_labels.md).
+- Region shades span the full plot height by default, with a per-shade
+  toggle; they show on log axes. A reference line or shade outside the axis
+  range is marked "(off-scale)" on screen and reported by the export.
+
 - Calculators ▸ Film stack also predicts where each layer and the substrate
   appear in a reciprocal-space map for a chosen asymmetric reflection
   (H 0 L), default (103): Qx, Qz (Q = 2π/d, as in the RSM workshop), 2θ, and
@@ -74,6 +90,18 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   Tests check its conversion factors dimensionally, including
   1 emu/cm³ = 1000 A/m. The A/m, A·m²/kg and area-normalized units are
   documented SI extensions beyond the MATLAB `convertMagUnits`.
+
+### Fixed
+
+- Page setup margins no longer clip tick labels, axis titles or the title
+  from an exported figure: they are blank border around the laid-out figure,
+  and the page keeps its exact size.
+- The Publication preview now renders exactly what Export writes (page size,
+  error bars, transparency).
+- An exported figure's autoscaled axes match the screen (x spans exactly the
+  data), so data-anchored text boxes and arrows land in the same place.
+- On screen, a text box is readable on a dark plot, and an inserted arrow
+  shows its arrowhead.
 
 ## [0.33.0] - 2026-11-01
 

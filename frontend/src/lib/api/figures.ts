@@ -212,12 +212,9 @@ export interface FigureSpec {
   filename?: string;
 }
 
-/** `signal` — P3.4 safe-cancel-for-export (lib/exportActive.ts): aborts the
- *  in-flight render/download; postDownload's own race guard means a cancel
- *  can never still trigger the browser download once the response lands. */
-export function exportFigure(body: FigureSpec, signal?: AbortSignal): Promise<void> {
-  return postDownload("/api/export/figure", body, `figure.${body.fmt ?? "pdf"}`, signal);
-}
+// `exportFigure` lives in ./figureRenderInfo since it toasts the render's
+// warnings (publication-figures audit #7/#11); re-exported for its importers.
+export { exportFigure } from "./figureRenderInfo";
 
 /** Preview render + element hit-map (#13): PNG + per-artist pixel boxes.
  *  Rides the dataset-handle cache (`./datasetCache`); `signal` aborts a

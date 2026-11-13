@@ -1192,7 +1192,8 @@ def test_figure_hitmap_elements_and_axes() -> None:
     # FU-facet-hitmap (flat-path-unchanged evidence): the flat response's key
     # set is EXACTLY what it was before per-panel geometry existed -- no
     # `panels` key leaking in, `axes` still the single dict.
-    assert set(m.keys()) == {"image", "width", "height", "elements", "axes"}
+    # `warnings`: what the render could not honour (calc.figure_warnings).
+    assert set(m.keys()) == {"image", "width", "height", "elements", "axes", "warnings"}
     assert isinstance(m["axes"], dict)
 
 

@@ -215,13 +215,13 @@ function buildFigureSpecForView(
     encoding?: FigureEncoding;
   } = {},
 ): FigureSpec {
-  // #54 Stage 3: honor the window's page — figsize (inches) + margins. Absent pageSetup keeps the preset size + tight_layout behaviour.
+  // #54 Stage 3: honor the window's page — figsize (inches) + margins as OUTER padding (`page_pad`, audit B3). Absent pageSetup keeps the preset size + tight_layout.
   const ps = st.pageSetup;
   const pageSize = ps ? pageSizeInches(ps) : null;
   const overrides = ps
     ? (compactOverrides({
         ...(viewOverrides(st) ?? {}),
-        margins: marginFractions(ps),
+        page_pad: marginFractions(ps),
       }) ?? undefined)
     : viewOverrides(st);
   // BUG-012: x breaks ride the wire only when the screen's rule (>= 2 surviving panels) draws them.

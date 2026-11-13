@@ -100,6 +100,10 @@ export interface FigureHitmap {
   /** FU-facet-hitmap: one entry per facet panel. Absent on the flat path
    *  -- see `axes` instead. Exactly one of `axes`/`panels` is ever set. */
   panels?: PanelAxesInfo[];
+  /** What the render could not honour (a missing font, an off-scale
+   *  reference line or shade, a page too small for its labels) —
+   *  `calc.figure_warnings`; the preview shows them under the image. */
+  warnings?: string[];
 }
 
 /** The element under (px, py) — the SMALLEST hit box wins, so a series line

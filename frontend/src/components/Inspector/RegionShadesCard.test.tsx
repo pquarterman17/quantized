@@ -17,14 +17,29 @@ beforeEach(() => {
 describe("RegionShadesCard — empty state + Add", () => {
   it("renders the Add form's coordinate fields with sensible defaults", () => {
     render(<RegionShadesCard />);
+    // Audit #11: a new shade is full-height by default, so only x is asked.
+    expect(screen.getByLabelText("New shade full height")).toBeChecked();
+    expect(screen.queryByPlaceholderText("y1")).toBeNull();
+    fireEvent.click(screen.getByLabelText("New shade full height"));
     expect(screen.getByPlaceholderText("x1")).toHaveValue("0");
     expect(screen.getByPlaceholderText("y1")).toHaveValue("0");
     expect(screen.getByPlaceholderText("x2")).toHaveValue("1");
     expect(screen.getByPlaceholderText("y2")).toHaveValue("1");
   });
 
+  it("Add defaults to a full-height shade (visible on a log axis too)", () => {
+    render(<RegionShadesCard />);
+    fireEvent.change(screen.getByPlaceholderText("x1"), { target: { value: "2" } });
+    fireEvent.change(screen.getByPlaceholderText("x2"), { target: { value: "4" } });
+    fireEvent.click(screen.getByText("Add"));
+    expect(useApp.getState().regionShades).toEqual([
+      expect.objectContaining({ x1: 2, x2: 4, fullHeight: true }),
+    ]);
+  });
+
   it("Add commits a new shade via addRegionShade with the entered coordinates + fill", () => {
     render(<RegionShadesCard />);
+    fireEvent.click(screen.getByLabelText("New shade full height"));
     fireEvent.change(screen.getByPlaceholderText("x1"), { target: { value: "2" } });
     fireEvent.change(screen.getByPlaceholderText("y1"), { target: { value: "3" } });
     fireEvent.change(screen.getByPlaceholderText("x2"), { target: { value: "4" } });
@@ -34,6 +49,7 @@ describe("RegionShadesCard — empty state + Add", () => {
     expect(useApp.getState().regionShades).toEqual([
       expect.objectContaining({ x1: 2, y1: 3, x2: 4, y2: 5, fill: "#ff0000" }),
     ]);
+    expect(useApp.getState().regionShades[0]).not.toHaveProperty("fullHeight");
   });
 
   it("Add defaults a fresh shade to the primary axis (no axis key at all)", () => {

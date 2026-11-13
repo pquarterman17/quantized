@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   hasMarkup,
   parseRichText,
-  plainText,
   richLabelAst,
   type RichNode,
 } from "./richtext";
+import { plainText } from "./richtextPlain";
 import { validateRichText } from "./richtextValidate";
 
 const text = (t: string, italic = false): RichNode => ({ kind: "text", text: t, italic });

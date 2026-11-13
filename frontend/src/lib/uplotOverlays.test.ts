@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type uPlot from "uplot";
 
 import type { ColorScatterSpec } from "./colorscatter";
@@ -25,6 +25,14 @@ import {
   regionShadePlugin,
 } from "./uplotOverlays";
 import type { RegionShade } from "./types";
+
+/** The module under test starts a lazy import at load; once that chunk has
+ *  evaluated and one macrotask has passed, its `.then` has installed it. */
+const lazyChunkLoaded = async () => {
+  await import("./uplotRegionShades");
+  await new Promise((r) => setTimeout(r, 0));
+};
+beforeAll(lazyChunkLoaded); // the lazy chunk the module under test loads at import
 
 /** Minimal uPlot stub: a recording 2D context + a linear valToPos. */
 function fakeU() {

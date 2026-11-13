@@ -17,6 +17,7 @@ import { useRef, useState } from "react";
 
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import { useApp } from "../../store/useApp";
+import { Checkbox } from "../primitives/Checkbox";
 import { IconButton } from "../primitives/IconButton";
 import { NumberField } from "../primitives/NumberField";
 import { SegmentedControl } from "../primitives/SegmentedControl";
@@ -39,22 +40,25 @@ export default function RegionShadesCard() {
   const [y2, setY2] = useState("1");
   const [fill, setFill] = useState(DEFAULT_FILL);
   const [axis, setAxis] = useState<AxisChoice>("y");
+  // Audit #11: full plot height by default (y1/y2 = 0/1 vanished on a log axis).
+  const [fullHeight, setFullHeight] = useState(true);
   // Focus-safety anchor (lib/focusGuard) — a remove ✕ below unmounts its own
   // row; without this, focus falls to <body> and a follow-up Delete
   // keystroke deletes the ACTIVE DATASET instead (see focusGuard's doc).
   const containerRef = useRef<HTMLDivElement>(null);
 
   const coords = [x1, y1, x2, y2].map(Number);
-  const addReason: string | null = [x1, y1, x2, y2].some((v) => v.trim() === "")
+  const needed = fullHeight ? [x1, x2] : [x1, y1, x2, y2];
+  const addReason: string | null = needed.some((v) => v.trim() === "")
     ? "enter every coordinate"
-    : coords.some((n) => !Number.isFinite(n))
+    : needed.map(Number).some((n) => !Number.isFinite(n))
       ? "coordinates must be numbers"
       : null;
 
   const add = () => {
     if (addReason !== null) return;
-    const [nx1, ny1, nx2, ny2] = coords;
-    addRegionShade({ x1: nx1, y1: ny1, x2: nx2, y2: ny2, fill, ...(axis === "y2" ? { axis: 1 } : {}) });
+    const [nx1, ny1, nx2, ny2] = coords.map((n, k) => (Number.isFinite(n) ? n : k % 2)); // a blank full-height y: 0 / 1
+    addRegionShade({ x1: nx1, y1: ny1, x2: nx2, y2: ny2, fill, ...(axis === "y2" ? { axis: 1 } : {}), ...(fullHeight ? { fullHeight: true } : {}) });
   };
 
   // Nudge one coordinate of one shade — the shared onValue body for all four
@@ -110,20 +114,24 @@ export default function RegionShadesCard() {
             </span>
             <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <BufferedNumberField value={sh.x1} width={48} placeholder="x1" required onValue={setCoord(sh.id, "x1")} />
-              <BufferedNumberField value={sh.y1} width={48} placeholder="y1" required onValue={setCoord(sh.id, "y1")} />
+              {!sh.fullHeight && <BufferedNumberField value={sh.y1} width={48} placeholder="y1" required onValue={setCoord(sh.id, "y1")} />}
               <span style={{ color: "var(--text-faint)" }}>→</span>
               <BufferedNumberField value={sh.x2} width={48} placeholder="x2" required onValue={setCoord(sh.id, "x2")} />
-              <BufferedNumberField value={sh.y2} width={48} placeholder="y2" required onValue={setCoord(sh.id, "y2")} />
+              {!sh.fullHeight && <BufferedNumberField value={sh.y2} width={48} placeholder="y2" required onValue={setCoord(sh.id, "y2")} />}
+              <Checkbox ariaLabel={`Shade ${sh.x1} to ${sh.x2} full height`} checked={!!sh.fullHeight} onChange={(on) => updateRegionShade(sh.id, { fullHeight: on || undefined })}>
+                full height
+              </Checkbox>
             </span>
           </div>
         ))}
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "end", marginTop: regionShades.length ? 6 : 0 }}>
           <NumberField value={x1} width={48} placeholder="x1" onChange={setX1} />
-          <NumberField value={y1} width={48} placeholder="y1" onChange={setY1} />
+          {!fullHeight && <NumberField value={y1} width={48} placeholder="y1" onChange={setY1} />}
           <span style={{ color: "var(--text-faint)" }}>→</span>
           <NumberField value={x2} width={48} placeholder="x2" onChange={setX2} />
-          <NumberField value={y2} width={48} placeholder="y2" onChange={setY2} />
+          {!fullHeight && <NumberField value={y2} width={48} placeholder="y2" onChange={setY2} />}
+          <Checkbox ariaLabel="New shade full height" checked={fullHeight} onChange={setFullHeight}>full height</Checkbox>
           <input
             type="color"
             aria-label="New shade fill color"

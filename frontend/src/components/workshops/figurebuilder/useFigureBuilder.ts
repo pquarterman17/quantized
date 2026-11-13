@@ -17,6 +17,7 @@ import { regionShadeBindings } from "./canonicalRegionShades";
 import { deriveShapeRows, patchShapeList, removeShapeFromList } from "./canonicalShapes";
 import { selectSessionCyclesSeriesStyles, selectSessionLiveDrifted } from "./canonicalSession";
 import { FIGURE_STYLE_DPI } from "./figureOutputConstants";
+import { pageSetupBinding, tickFormatBindings } from "./canonicalPage";
 import { buildLegacyFigureDoc, buildLegacyPreviewSpec, type LegacyFigureState } from "./legacyFigure";
 import { dragPreviewElement } from "./previewDrag";
 import { exportPreviewFigure } from "./previewExport";
@@ -30,7 +31,7 @@ import type { ExportSeriesStyle } from "../../../lib/exportStyles";
 import { inferErrorBindings, type ErrorBinding, type ErrorSide } from "../../../lib/errorRoles";
 import { defaultDenseChannels, effectiveChannels } from "../../../lib/plotdata";
 import { xAxisIsDate } from "../../../lib/tickFormat";
-import type { AxisFormat, AxisScale, DataStruct, RefLine, Shape, SeriesStyle } from "../../../lib/types";
+import type { AxisScale, DataStruct, RefLine, Shape, SeriesStyle } from "../../../lib/types";
 import { nextFigureDocId } from "../../../store/idSeq";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -45,6 +46,7 @@ export function useFigureBuilder() {
   const xKey = useApp((s) => s.xKey);
   const liveY2 = useApp(useShallow(secondaryAxisFromView)); // legacy mode mirrors the live y2 axis
   const { excludedDisplay, defaultTrace, plotTemplate, defaultLineWidth } = useApp(useShallow((s) => ({ excludedDisplay: s.excludedDisplay, defaultTrace: s.defaultTrace, plotTemplate: s.plotTemplate, defaultLineWidth: s.defaultLineWidth })));
+  const livePage = useApp(useShallow((s) => ({ pageSetup: s.pageSetup, setPageSetup: s.setPageSetup }))); // audit #5
   const xScale = useApp((s) => s.xScale);
   const yScale = useApp((s) => s.yScale);
   const xFmt = useApp((s) => s.xFmt);
@@ -247,13 +249,9 @@ export function useFigureBuilder() {
   // close to its own size ceiling).
   const regionShadeOps = regionShadeBindings(canonical ? canonicalView?.regionShades ?? [] : [], setCanonicalView);
 
-  // F2.3e: axis tick formats are the same canonical-only PlotView fields as
-  // the three slices above -- and they already reach the renderer
-  // (figureSpec's x_fmt/y_fmt + secondaryAxisWire's y2_fmt), so the panel was
-  // the only missing piece. y2Fmt null = inherit Y, the Stage's own rule.
-  const setXFmtCanonical = (next: AxisFormat) => setCanonicalView({ xFmt: next });
-  const setYFmtCanonical = (next: AxisFormat) => setCanonicalView({ yFmt: next });
-  const setY2FmtCanonical = (next: AxisFormat | null) => setCanonicalView({ y2Fmt: next });
+  // F2.3e axis tick formats + audit #5's page size: see canonicalPage.ts.
+  const tickFmtOps = tickFormatBindings(setCanonicalView);
+  const page = pageSetupBinding(canonicalView, setCanonicalView, livePage);
 
   // F2.3f: error-column bindings live on `document.bindings.errors`, not
   // the PlotView, so edits patch the document directly instead of routing
@@ -311,9 +309,10 @@ export function useFigureBuilder() {
     data, liveDataset: canonical || frozenData ? null : active, xKey: effXKey, yKeys: effYKeys, xScale: effXScale, yScale: effYScale,
     xFmt, yFmt, style, overrides, title, xLabel, yLabel, seriesStyles, docSeriesStyles, docGroupCol, defaultTrace, plotTemplate, defaultLineWidth,
     y2: docScales === undefined ? liveY2 : null, // a re-opened FigureDoc carries no y2
+    pageSetup: livePage.pageSetup,
   }), [
     data, effXKey, effYKeys, effXScale, effYScale, xFmt, yFmt, style, overrides, title, xLabel, yLabel,
-    seriesStyles, docSeriesStyles, docGroupCol, docScales, liveY2, canonical, frozenData, active, defaultTrace, plotTemplate, defaultLineWidth,
+    seriesStyles, docSeriesStyles, docGroupCol, docScales, liveY2, canonical, frozenData, active, defaultTrace, plotTemplate, defaultLineWidth, livePage.pageSetup,
   ]);
   const legacySpec = useMemo(() => buildLegacyPreviewSpec(legacyState, excludedDisplay), [legacyState, excludedDisplay]);
   // Item 2 / F2.1g: y2 min/max need a secondary axis to apply to (gateY2Overrides
@@ -454,9 +453,8 @@ export function useFigureBuilder() {
     canonicalYFmt: canonicalView?.yFmt ?? yFmt,
     canonicalY2Fmt: canonicalView?.y2Fmt ?? null,
     xIsDate: xAxisIsDate(data?.metadata, (canonicalView?.xFmt ?? xFmt).mode),
-    setXFmtCanonical,
-    setYFmtCanonical,
-    setY2FmtCanonical,
+    ...tickFmtOps,
+    ...page,
     // F2.3f: canonical-only (empty/no-op in legacy mode — see the field doc above).
     errorBindings,
     patchErrorBinding,

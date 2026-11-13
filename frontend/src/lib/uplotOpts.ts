@@ -799,7 +799,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // ink colours below AND the contrast check on literal per-series colours
   // (`resolveDrawColor`, via buildSeriesDefs) — NOT the app's global theme,
   // since a per-window override can disagree with the surrounding chrome.
-  const { gridColor, inkColor, inkDimColor } = resolvePlotBg(args.bg);
+  const { axesBg, gridColor, inkColor, inkDimColor } = resolvePlotBg(args.bg);
   const axisColor = inkDimColor;
   const accentColor = cssVar("--accent") || "#8b5cf6";
   const accentSoftColor = cssVar("--accent-soft") || "rgba(139,92,246,0.18)";
@@ -986,7 +986,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     plugins.push(
       annotationPlugin(annotations, inkColor, font, {
         interactive: tool === "pointer" && !!args.annotationEdit,
-        selectColor: accentColor,
+        selectColor: accentColor, paperColor: axesBg,
         selectedId: args.annotationEdit?.selectedId ?? null,
         onSelect: args.annotationEdit?.onSelect,
         onMove: args.annotationEdit?.onMove,

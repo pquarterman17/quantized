@@ -63,9 +63,10 @@ export function figureDocumentFromLegacyFigureDoc(legacy: FigureDoc): FigureDocu
       } : {}),
     };
   });
-  const regionShades: RegionShade[] = (wireRegionShades ?? []).map((wire, i) => ({
+  const regionShades: RegionShade[] = (wireRegionShades ?? []).map(({ full_height, ...wire }, i) => ({
     id: `legacyshade-${legacy.id}-${i}`,
     ...wire,
+    ...(full_height ? { fullHeight: true } : {}),
   }));
   const overrides: FigureOverrides | null = Object.keys(restOverrides).length ? restOverrides : null;
   return createFigureDocument({

@@ -43,6 +43,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.figure import _plot_kwargs
 from quantized.calc.figure_errorbars import apply_error_bars
+from quantized.calc.figure_layout import apply_figure_layout
 from quantized.calc.figure_overrides import apply_axis_shape_overrides
 from quantized.calc.figure_render import in_render_scope, new_figure, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
@@ -252,4 +253,7 @@ def render_breaks_impl(
             handles, labels_out, frameon=st.legend_box, fontsize=st.legend_font_size,
             loc=st.legend_location,
         )
+    # Page setup margins (calc.figure_layout): a broken figure never laid
+    # itself out, but a padded page must still fit every label inside it.
+    apply_figure_layout(fig, ov, default_tight=False)
     return savefig_bytes(fig, fmt, dpi=dpi, transparent=transparent)

@@ -14,7 +14,7 @@
 // flagged `aspectDerived` — the dialog states this; page-mode rendering only
 // ever uses the aspect, so the fabricated absolute size never misleads.
 
-export type PageUnit = "cm" | "in" | "px";
+export type PageUnit = "cm" | "mm" | "in" | "px";
 
 export interface PageMargins {
   left: number;
@@ -34,10 +34,13 @@ export interface PageSetup {
   aspectDerived: boolean;
 }
 
-export const PAGE_UNITS: readonly PageUnit[] = ["cm", "in", "px"];
+export const PAGE_UNITS: readonly PageUnit[] = ["cm", "mm", "in", "px"];
 
 // A sensible publication default width; height is derived from the aspect.
+// 6 x 4 in is the "default" style preset's own size (calc/figure_styles.py,
+// 15.24 x 10.16 cm), so opening Page setup shows what an export already used.
 export const DEFAULT_PAGE_WIDTH_IN = 6;
+export const DEFAULT_PAGE_HEIGHT_IN = 4;
 
 const num = (v: unknown, d: number): number =>
   typeof v === "number" && Number.isFinite(v) ? v : d;
@@ -50,7 +53,7 @@ export function sanitizePageSetup(v: unknown): PageSetup | null {
   const o = v as Record<string, unknown>;
   const unit = PAGE_UNITS.includes(o.unit as PageUnit) ? (o.unit as PageUnit) : "in";
   const width = Math.max(0.01, num(o.width, DEFAULT_PAGE_WIDTH_IN));
-  const height = Math.max(0.01, num(o.height, (DEFAULT_PAGE_WIDTH_IN * 3) / 4));
+  const height = Math.max(0.01, num(o.height, DEFAULT_PAGE_HEIGHT_IN));
   const m = (o.margins ?? {}) as Record<string, unknown>;
   const clampM = (x: unknown) => Math.max(0, num(x, 0));
   return {

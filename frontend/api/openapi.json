@@ -18009,6 +18009,30 @@
         ]
       }
     },
+    "/api/export/fonts": {
+      "get": {
+        "description": "``families``: installed family names; ``aliases``: each proprietary\nname -> ``{\"family\", \"status\"}`` as an export would render it\n(``installed`` / ``substituted`` / ``fallback``).",
+        "operationId": "list_fonts_api_export_fonts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Fonts Api Export Fonts Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Fonts",
+        "tags": [
+          "export"
+        ]
+      }
+    },
     "/api/export/hdf5": {
       "post": {
         "description": "DataStruct (+ optional corrected/corrections) -> self-describing HDF5.",

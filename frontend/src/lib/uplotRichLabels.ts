@@ -69,8 +69,8 @@ export function richDomFragment(nodes: RichNode[], doc: Document): DocumentFragm
   const frag = doc.createDocumentFragment();
   for (const n of nodes) {
     if (n.kind === "text") {
-      if (n.italic) {
-        const i = doc.createElement("i");
+      if (n.italic || n.bold) {
+        const i = doc.createElement(n.bold ? "b" : "i");
         i.textContent = n.text;
         frag.appendChild(i);
       } else {

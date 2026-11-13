@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 
 import PreviewOverlay from "./PreviewOverlay";
+import PreviewWarnings from "./PreviewWarnings";
 import PropertyPanels from "./PropertyPanels";
 import { cancelPublicationPreview } from "../../windows/figureLifecycleUi";
 import ToolWindow from "../../overlays/ToolWindow";
@@ -192,6 +193,8 @@ export default function FigureBuilderView() {
               } : undefined}
               openGroup={f.focusGroup}
               openNonce={f.focusNonce}
+              pageSetup={f.pageSetup}
+              setPageSetup={f.setPageSetup}
             />
 
             {!f.canonical && <>
@@ -330,7 +333,7 @@ export default function FigureBuilderView() {
             ) : f.preview && f.hitmap ? (
               /* #13/#14: hit-testable preview — click to focus a panel,
                  double-click text to edit, drag legend/annotations */
-              <PreviewOverlay
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", maxWidth: "100%" }}><PreviewOverlay
                 src={f.preview}
                 map={f.hitmap}
                 textOf={f.textOf}
@@ -339,6 +342,7 @@ export default function FigureBuilderView() {
                 onDragEnd={f.dragElement}
                 canonicalSeries={f.canonical && f.seriesChannels.length > 0}
               />
+              <PreviewWarnings warnings={f.hitmap.warnings} /></div>
             ) : (
               <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
                 {f.busy ? "rendering…" : "preview"}

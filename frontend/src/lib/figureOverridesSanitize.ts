@@ -27,9 +27,10 @@ export function sanitizeFigureOverrides(value: unknown): FigureOverrides | null 
   const raw = record(value);
   if (!raw) return null;
   const out: FigureOverrides = {};
-  if (finite(raw.font_size) !== undefined && finite(raw.font_size)! > 0) out.font_size = finite(raw.font_size);
+  for (const key of ["font_size", "title_size", "label_size", "tick_size", "legend_size"] as const) {
+    if (finite(raw[key]) !== undefined && finite(raw[key])! > 0) out[key] = finite(raw[key]);
+  }
   if (typeof raw.font_name === "string") out.font_name = raw.font_name;
-  if (finite(raw.title_size) !== undefined && finite(raw.title_size)! > 0) out.title_size = finite(raw.title_size);
   const legend = record(raw.legend);
   if (legend) {
     const next: NonNullable<FigureOverrides["legend"]> = {};
@@ -158,6 +159,7 @@ export function sanitizeFigureOverrides(value: unknown): FigureOverrides | null 
         x1: coordinates[0]!, x2: coordinates[1]!, y1: coordinates[2]!, y2: coordinates[3]!, fill: shade.fill,
       };
       if (shade.axis === 0 || shade.axis === 1) next.axis = shade.axis;
+      if (shade.full_height) next.full_height = true;
       return [next];
     });
   }

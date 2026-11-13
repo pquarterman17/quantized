@@ -193,7 +193,7 @@
         ],
         "label_format": "none",
         "width_in": 6,
-        "height_in": 4.5,
+        "height_in": 4,
         "fmt": "svg",
         "style": "default"
       },
@@ -315,7 +315,7 @@
         ],
         "label_format": "none",
         "width_in": 6,
-        "height_in": 4.5,
+        "height_in": 4,
         "fmt": "svg",
         "style": "poster"
       },
@@ -431,7 +431,7 @@
         ],
         "label_format": "none",
         "width_in": 6,
-        "height_in": 4.5,
+        "height_in": 4,
         "fmt": "svg",
         "style": "default"
       },

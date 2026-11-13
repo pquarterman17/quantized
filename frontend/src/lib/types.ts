@@ -732,6 +732,10 @@ export interface RegionShade {
   /** Which Y scale y1/y2 are expressed in: 0/undefined = primary, 1 =
    *  secondary (y2) — same convention as `Annotation.axis`. */
   axis?: 0 | 1;
+  /** Span the whole plot height (y1/y2 ignored) — the default for a newly
+   *  inserted shade: it reads the same on a linear or log axis and never
+   *  depends on the data's y range (publication-figures audit #11). */
+  fullHeight?: boolean;
 }
 
 export type { DefaultTrace, LineStyle, MarkerShape, SeriesStyle, StepMode } from "./seriesStyleTypes";

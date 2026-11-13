@@ -14,6 +14,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike
 
+from quantized.calc.figure_fonts import font_family_rc
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
@@ -78,10 +79,8 @@ def render_field_figure(
 
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
-    fallback = "DejaVu Serif" if st.font_generic == "serif" else "DejaVu Sans"
     rc: dict[str, Any] = {
-        "font.family": st.font_generic,
-        f"font.{st.font_generic}": [st.font_name, fallback],
+        **font_family_rc(st),
         "font.size": st.font_size,
         "axes.labelsize": st.font_size,
         "axes.titlesize": st.title_font_size,

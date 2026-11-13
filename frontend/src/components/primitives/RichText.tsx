@@ -35,7 +35,7 @@ function renderNodes(nodes: RichNode[], keyBase: string): ReactNode[] {
   return nodes.map((n, i) => {
     const key = `${keyBase}.${i}`;
     if (n.kind === "text") {
-      return n.italic ? <i key={key}>{n.text}</i> : <span key={key}>{n.text}</span>;
+      return n.bold ? <b key={key}>{n.text}</b> : n.italic ? <i key={key}>{n.text}</i> : <span key={key}>{n.text}</span>;
     }
     // Fractions/roots (MAIN #28): CSS approximations of the canvas layout — a
     // stacked column with a rule for \frac, a √ prefix + overlined radicand

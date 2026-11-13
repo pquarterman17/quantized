@@ -42,6 +42,7 @@ from collections.abc import Sequence
 from functools import lru_cache
 from typing import Any, Protocol
 
+from quantized.calc.figure_origin_escapes import origin_escapes_to_mathtext
 from quantized.calc.render_lock import RenderLockTimeout, acquire_render_lock
 from quantized.heavy_import import heavy_imports
 from quantized.unit_display import display_unit, with_unit
@@ -92,8 +93,10 @@ _SYMBOL_COMMANDS = frozenset(
         "rightarrow", "to", "leftarrow", "leftrightarrow", "Rightarrow",
     }
 )
-# Mirrors richtext.ts's `\mathrm{...}` / `\mathit{...}` style-group handling.
-_STYLE_COMMANDS = frozenset({"mathrm", "mathit"})
+# Mirrors richtext.ts's `\mathrm{...}` / `\mathit{...}` / `\mathbf{...}`
+# style-group handling (`\mathbf` arrives with Origin's `\b(...)` bold run --
+# calc.figure_origin_escapes).
+_STYLE_COMMANDS = frozenset({"mathrm", "mathit", "mathbf"})
 # Mirrors richtext.ts's structural nodes: `\frac{a}{b}`, `\sqrt{x}`,
 # `\sqrt[n]{x}` (MAIN #28). matplotlib renders these natively; the frontend
 # canvas + DOM renderers draw the matching stacked/radical layout.
@@ -156,6 +159,9 @@ def safe_mathtext_label(label: str) -> str:
       savefig time OR silently rendering richer math than the screen ever
       showed.
     """
+    # Origin escapes (\+( \-( \g( \b( \i() become the mathtext subset first,
+    # exactly as the screen's richtext.ts does (calc.figure_origin_escapes).
+    label = origin_escapes_to_mathtext(label)
     if not label or "$" not in label:
         return label
     n_math = len(_UNESCAPED_DOLLAR.findall(label))

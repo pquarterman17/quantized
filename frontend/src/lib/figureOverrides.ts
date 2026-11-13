@@ -9,7 +9,12 @@ import { compactOverrides } from "./figureOverridesSanitize";
 export interface FigureOverrides {
   font_size?: number;
   font_name?: string;
+  /** Per-element sizes (pt) — `calc.figure_fonts`: absent title/legend sizes
+   *  scale with `font_size`; absent label/tick sizes equal it. */
   title_size?: number;
+  label_size?: number;
+  tick_size?: number;
+  legend_size?: number;
   legend?: { show?: boolean; loc?: string; frame?: boolean; anchor?: [number, number]; title?: string };
   ticks?: { dir?: "in" | "out"; len?: number; minor?: boolean };
   spines?: { top?: boolean; right?: boolean };
@@ -27,7 +32,14 @@ export interface FigureOverrides {
    *  carries a leftover range with no y2 axis to apply it to
    *  (GUI_INTERACTION #12 slice 4a). */
   y2_lim?: [number | null, number | null];
+  /** Explicit SUBPLOT fractions (the Figure Builder's hand placement of the
+   *  axes box). Page setup margins ride `page_pad` instead. */
   margins?: { left?: number; right?: number; top?: number; bottom?: number };
+  /** Page setup margins as OUTER padding (each side a fraction of its page
+   *  dimension): the backend lays the figure out inside the padded page
+   *  (`calc.figure_layout`), so labels are never clipped. Render-time only,
+   *  derived from the window's `pageSetup` (`lib/pageGeometry.marginFractions`). */
+  page_pad?: { left?: number; right?: number; top?: number; bottom?: number };
   grid?: boolean;
   /** `size` (MAIN #18 — export parity for the pointer tool's font-size
    *  resize): a per-annotation override, falling back to `font_size` (or
@@ -99,7 +111,7 @@ export interface FigureOverrides {
    *  request has one (`y2_keys` set and non-empty); falls back to the
    *  primary scale otherwise — matches the screen's own `hasY2` fallback.
    *  See `calc.figure_decor._apply_region_shades`/`_split_region_shades_by_axis`. */
-  region_shades?: { x1: number; x2: number; y1: number; y2: number; fill: string; axis?: 0 | 1 }[];
+  region_shades?: { x1: number; x2: number; y1: number; y2: number; fill: string; axis?: 0 | 1; full_height?: boolean }[];
   /** The magnifier inset (`PlotView.inset`, sent while `insetMode` is on):
    *  an inset axes at `at` (main-frame fractions, top-origin) showing the
    *  source region `x` × `y` with the plot's own series and scales, plus the

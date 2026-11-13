@@ -217,6 +217,7 @@ export function sanitizeRegionShades(v: unknown): RegionShade[] {
       y2: o.y2 as number,
       fill: o.fill,
       ...(o.axis === 0 || o.axis === 1 ? { axis: o.axis } : {}),
+      ...(o.fullHeight === true && { fullHeight: true }),
     });
   }
   return out;

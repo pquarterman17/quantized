@@ -31,6 +31,7 @@ from typing import Any
 import numpy as np
 
 from quantized.calc.figure_facets import draw_facet_grid
+from quantized.calc.figure_fonts import font_family_rc
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_overrides import _validate_overrides
 from quantized.calc.figure_render import new_figure, render_scope
@@ -108,10 +109,8 @@ def _facet_grid(
         width_in or st.fig_width_in * cols * 0.8,
         height_in or st.fig_height_in * rows * 0.8,
     )
-    fallback = "DejaVu Serif" if st.font_generic == "serif" else "DejaVu Sans"
     rc: dict[str, Any] = {
-        "font.family": st.font_generic,
-        f"font.{st.font_generic}": [st.font_name, fallback],
+        **font_family_rc(st),
         "font.size": st.font_size,
         "axes.labelsize": st.font_size,
         "axes.titlesize": st.font_size,

@@ -6,6 +6,17 @@ below and a whole decade above (``rangeLog``), and never pads data on one side
 of zero across it. ``shared_autoscale`` applies the screen's rule to an axis
 the caller has not given a typed limit (``_apply_overrides`` sets those after).
 
+A linear axis with a real span takes the canvas' rule as well (publication-
+figures audit #11: the screen read x 0.1..9.9 where the export padded to
+0..10.4, so a text box placed against the data sat elsewhere in the PDF).
+uPlot ranges x to exactly the data ([min, max], ``autoScaleX``) and y by
+``rangeNum(min, max, 0.1, true)`` -- a 10% pad snapped out to a tenth of the
+span's decade, soft at zero (``range_num``). A NON-ASCENDING x (a hysteresis
+loop) takes the canvas' full-scan path instead: x padded 2% each side
+(``padXDomain``), y padded 10% and soft at zero but not snapped
+(``fullYExtents``); so does an x whose first or last row draws no point.
+Both halves read ``tests/fixtures/wire/linear_autoscale.json``.
+
 A FLAT (zero-span) axis takes uPlot's own rule too, on x, y and y2 alike
 (``flat_auto_range``; ``log_auto_range`` already is ``rangeLog``'s): a flat
 1000 Oe field reads 0..2000, not matplotlib's ~950..1050, which frames a
@@ -40,7 +51,13 @@ from numpy.typing import NDArray
 
 from quantized.calc.figure_ticks import _pow10
 
-__all__ = ["flat_auto_range", "log_auto_range", "mask_nonpositive", "shared_autoscale"]
+__all__ = [
+    "flat_auto_range",
+    "log_auto_range",
+    "mask_nonpositive",
+    "range_num",
+    "shared_autoscale",
+]
 
 
 def _fix(v: float) -> float:
@@ -101,6 +118,79 @@ def flat_auto_range(lo: float, hi: float) -> tuple[float, float] | None:
     out_lo = 0.0 if lo >= 0 and new_lo <= 0 else new_lo
     out_hi = 0.0 if hi <= 0 and new_hi >= 0 else new_hi
     return (0.0, 100.0) if out_lo == out_hi == 0 else (out_lo, out_hi)
+
+
+def range_num(lo: float, hi: float) -> tuple[float, float]:
+    """uPlot's ``rangeNum(lo, hi, 0.1, true)`` -- the canvas' y autoscale:
+    the span grows by 10% each side, snapped out to a tenth of the span's
+    decade, and never crosses zero (soft 0). A flat span is
+    :func:`flat_auto_range`'s."""
+    flat = flat_auto_range(lo, hi)
+    if flat is not None:
+        return flat
+    delta = hi - lo
+    incr = _pow10(math.floor(math.log10(delta))) / 10
+    pad = delta * 0.1
+    new_lo = _round_dec(_fix_float(math.floor(_fix_float((lo - pad) / incr)) * incr), 24)
+    new_hi = _round_dec(_fix_float(math.ceil(_fix_float((hi + pad) / incr)) * incr), 24)
+    return (
+        0.0 if lo >= 0 and new_lo <= 0 else new_lo,
+        0.0 if hi <= 0 and new_hi >= 0 else new_hi,
+    )
+
+
+def _scan_range(lo: float, hi: float, axis: str) -> tuple[float, float]:
+    """The canvas' full-scan view of a non-ascending x (``padXDomain``: 2%
+    each side) or of y beside one (``fullYExtents``: 10%, soft at zero)."""
+    flat = flat_auto_range(lo, hi)
+    if flat is not None:
+        return flat
+    if axis == "x":
+        pad = (hi - lo) * 0.02
+        return (lo - pad, hi + pad)
+    pad = (hi - lo) * 0.1
+    return (
+        lo - pad if lo < 0 else max(0.0, lo - pad),
+        hi + pad if hi >= 0 else min(0.0, hi + pad),
+    )
+
+
+def _x_scanned(axes: list[Any]) -> bool:
+    """Does the canvas range x by its full scan? It does for a non-ascending
+    x (``xIsAscending``) and for an x whose first or last row no series
+    draws (uPlot's own autoscale would range over those blank rows)."""
+    for a in axes:
+        caps = {id(cap) for c in a.containers if isinstance(c, ErrorbarContainer) for cap in c[1]}
+        lines = [ln for ln in a.lines if ln.get_transform() == a.transData and id(ln) not in caps]
+        if not lines:
+            continue
+        xs = np.asarray(lines[0].get_xdata(), dtype=float)
+        finite = xs[np.isfinite(xs)]
+        if finite.size > 1 and np.any(np.diff(finite) < 0):
+            return True
+        ys = [
+            np.asarray(ln.get_ydata(), dtype=float)
+            for ln in lines
+            if len(ln.get_xdata()) == len(xs)
+        ]
+        for r in (0, len(xs) - 1):
+            if xs.size and ys and not any(np.isfinite(y[r]) for y in ys if y.size > r):
+                return True
+        if _block_layout(ys):
+            return True
+    return False
+
+
+def _block_layout(ys: list[NDArray[np.float64]]) -> bool:
+    """A waterfall X step's block layout (``calc.plot_waterfall_x``; the
+    canvas' ``PlotPayload.blockRows``): two or more series, each drawing only
+    rows no other series draws. The canvas always scans x for it."""
+    if len(ys) < 2:
+        return False
+    drawn = [np.isfinite(y) for y in ys]
+    if any(not d.any() for d in drawn):
+        return False
+    return bool(np.all(np.sum(drawn, axis=0) <= 1))
 
 
 def log_auto_range(lo: float, hi: float) -> tuple[float, float]:
@@ -185,11 +275,13 @@ def shared_autoscale(ax: Any, axis: str, scale: str) -> None:
             return
         lo, hi = get_lim()
         flip = lo > hi
-        lo, hi = min(lo, hi), max(lo, hi)
-        new_lo = 0.0 if both.min() >= 0 and lo < 0 else lo
-        new_hi = 0.0 if both.max() <= 0 and hi > 0 else hi
-        flat = flat_auto_range(float(both.min()), float(both.max()))
-        if flat:  # already soft at zero
-            new_lo, new_hi = flat
-        if (flat or (new_lo, new_hi) != (lo, hi)) and new_hi > new_lo:
+        d_lo, d_hi = float(both.min()), float(both.max())
+        x_axes = axes if axis == "x" else _axes_of(ax, "x")
+        if _x_scanned(x_axes):
+            new_lo, new_hi = _scan_range(d_lo, d_hi, axis)
+        elif axis == "x":
+            new_lo, new_hi = flat_auto_range(d_lo, d_hi) or (d_lo, d_hi)
+        else:
+            new_lo, new_hi = range_num(d_lo, d_hi)
+        if new_hi > new_lo:
             set_lim(*((new_hi, new_lo) if flip else (new_lo, new_hi)))

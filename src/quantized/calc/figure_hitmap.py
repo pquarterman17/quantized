@@ -103,7 +103,14 @@ def _artist_window_extent(artist: Any, renderer: Any) -> Any:
 
 
 def collect_map(
-    fig: Any, ax: Any, *, series_artists: Sequence[Any], dpi: int, x_scale: str, y_scale: str
+    fig: Any,
+    ax: Any,
+    *,
+    series_artists: Sequence[Any],
+    dpi: int,
+    x_scale: str,
+    y_scale: str,
+    transparent: bool = False,
 ) -> dict[str, Any]:
     """Draw at ``dpi`` and harvest artist extents in image-pixel coords.
     ``series_artists`` is ``figure.draw_series_axes``'s return value (one
@@ -138,7 +145,11 @@ def collect_map(
     G1 was never actually facet-specific, just first NOTICED there because
     a faceted grid has sibling panels for an oversized box to visibly
     invade). Dropped entirely (not emitted) when the clip is empty, same as
-    the facet path."""
+    the facet path.
+
+    ``transparent`` renders the preview PNG on a transparent canvas, as the
+    export does for the same request (publication-figures audit #4: the
+    preview must show what Export writes)."""
     fig.set_dpi(dpi)
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
@@ -239,7 +250,9 @@ def collect_map(
     # `axes_px` was already computed above (fix round 5, V1) so `add_series`
     # could clip against it -- reused here verbatim, not recomputed.
     return {
-        "image": base64.b64encode(savefig_bytes(fig, "png")).decode("ascii"),
+        "image": base64.b64encode(
+            savefig_bytes(fig, "png", dpi=dpi, transparent=transparent)
+        ).decode("ascii"),
         "width": int(width),
         "height": int(height),
         "elements": elements,
@@ -463,7 +476,7 @@ def collect_facet_map(
         })
 
     return {
-        "image": base64.b64encode(savefig_bytes(fig, "png")).decode("ascii"),
+        "image": base64.b64encode(savefig_bytes(fig, "png", dpi=dpi)).decode("ascii"),
         "width": int(width),
         "height": int(height),
         "elements": elements,

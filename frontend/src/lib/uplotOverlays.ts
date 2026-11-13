@@ -19,7 +19,16 @@ import { colorScatterFill, paintColorPoint, type ColorScatterSpec } from "./colo
 import { richLabelAst, type RichNode } from "./richtext";
 import { DESCENT_EM, drawRich, measureRich, type RichFont } from "./richtextCanvas";
 import { drawReferenceStick } from "./referenceStickOverlay";
-import type { Annotation, RefLine, RegionShade } from "./types";
+import type { Annotation, RefLine } from "./types";
+import type { RegionShade } from "./types";
+// Shade drawing + the off-scale marker are a lazy chunk (lib/uplotRegionShades.ts's header).
+let lazyDecor: typeof import("./uplotRegionShades") | null = null;
+import("./uplotRegionShades").then(
+  (m) => {
+    lazyDecor = m;
+  },
+  () => {},
+);
 const MOVE = "mousemove", UP = "mouseup";
 export { pickRefLine, type RefLineHit } from "./refLineHit";
 
@@ -121,7 +130,10 @@ export function refLinePlugin(
           ctx.beginPath();
           if (ln.axis === "x") {
             const px = u.valToPos(value, "x", true);
-            if (px < left || px > left + width) continue;
+            if (px < left || px > left + width) {
+              if (!ln.stick) lazyDecor?.drawOffScaleRefLine(ctx, ln, value, px < left ? "low" : "high", u.bbox);
+              continue;
+            }
             if (ln.stick) {
               if (!drawReferenceStick(ctx, ln, px, top, height)) continue;
             } else {
@@ -140,7 +152,10 @@ export function refLinePlugin(
             ctx.strokeStyle = ctx.fillStyle = color;
             ctx.setLineDash([5, 4]);
             const py = u.valToPos(value, "y", true);
-            if (py < top || py > top + height) continue;
+            if (py < top || py > top + height || !Number.isFinite(py)) {
+              lazyDecor?.drawOffScaleRefLine(ctx, ln, value, py < top ? "high" : "low", u.bbox);
+              continue;
+            }
             ctx.moveTo(left, py);
             ctx.lineTo(left + width, py);
             if (ln.label) ctx.fillText(ln.label, left + 4, py - 3);
@@ -477,6 +492,8 @@ export interface AnnotationEditOpts {
    *  the plain annotation ink colour, so a selected object visibly stands
    *  out (defaults to `color` when omitted). */
   selectColor?: string;
+  /** A text box's default fill: the plot background token (`axesBg`). */
+  paperColor?: string;
   onSelect?: (id: string | null) => void;
   onMove?: (id: string, x: number, y: number) => void;
   onResize?: (id: string, size: number) => void;
@@ -536,8 +553,12 @@ export function resolveFrameOpacity(frame: NonNullable<Annotation["frame"]>): nu
 export function resolveFrameStroke(frame: NonNullable<Annotation["frame"]>, inkColor: string): string {
   return frame.stroke ?? inkColor;
 }
-export function resolveFrameFill(frame: NonNullable<Annotation["frame"]>, inkColor: string): string {
-  return frame.fill ?? resolveFrameStroke(frame, inkColor);
+/** Default fill = the plot's own PAPER (axes background token), behind ink
+ *  text and an ink border — the export's white card with a black border on
+ *  every theme. It used to default to the stroke (= the ink), so a dark
+ *  canvas drew light text on a near-white box (audit #11). */
+export function resolveFrameFill(frame: NonNullable<Annotation["frame"]>, paperColor: string): string {
+  return frame.fill ?? paperColor;
 }
 
 /** Draw an annotation's `frame` (MAIN #27's "text box") — a filled+stroked
@@ -549,11 +570,12 @@ function drawAnnotationFrame(
   box: { left: number; top: number; width: number; height: number },
   frame: NonNullable<Annotation["frame"]>,
   inkColor: string,
+  paperColor: string,
 ): void {
   const pad = frame.pad ?? DEFAULT_FRAME_PAD;
   ctx.save();
   ctx.globalAlpha = resolveFrameOpacity(frame);
-  ctx.fillStyle = resolveFrameFill(frame, inkColor);
+  ctx.fillStyle = resolveFrameFill(frame, paperColor);
   ctx.strokeStyle = resolveFrameStroke(frame, inkColor);
   ctx.lineWidth = 1;
   const x = box.left - pad;
@@ -886,7 +908,7 @@ export function annotationPlugin(
           if (px < 0 || px > cw || py < 0 || py > chh) continue;
           // Frame (MAIN #27 "text box") draws BEHIND the dot+text, padded
           // around the same box the hit-test/selection outline use.
-          if (a.text && a.frame) drawAnnotationFrame(ctx, annotationBox(layout), a.frame, color);
+          if (a.text && a.frame) drawAnnotationFrame(ctx, annotationBox(layout), a.frame, color, opts?.paperColor ?? "transparent");
           ctx.beginPath();
           ctx.arc(px, py, 3, 0, Math.PI * 2);
           ctx.fill();
@@ -952,7 +974,8 @@ export function annotationPlugin(
  *  fill-transparency field is UNDECODED (decode-plan #41 — no byte could be
  *  isolated across the corpus, see docs/origin_project_format.md §6.1), so
  *  this is a documented presentation choice — pale enough that data drawn
- *  over the band stays readable, matching Origin's pastel render. */
+ *  over the band stays readable, matching Origin's pastel render. Mirrored
+ *  exactly by calc/figure_decor.py's REGION_SHADE_ALPHA. */
 export const REGION_SHADE_ALPHA = 0.25;
 
 /** Draw filled region rectangles (Origin `Rect*` bands — e.g. film-stack
@@ -962,34 +985,10 @@ export const REGION_SHADE_ALPHA = 0.25;
  *  under everything. Extents are data coords re-derived on every draw
  *  (pinned across zoom/pan) and clipped to the plot area; a shade tagged
  *  `axis: 1` maps its y-extent through the y2 scale when the plot has one
- *  (same fallback rule as annotationPlugin). */
+ *  (same fallback rule as annotationPlugin). A `fullHeight` shade spans the
+ *  plot height whatever the y scale (see this module's header). */
 export function regionShadePlugin(shades: RegionShade[]): uPlot.Plugin {
-  return {
-    hooks: {
-      drawClear: (u: uPlot) => {
-        const { ctx } = u;
-        const { left, top, width, height } = u.bbox;
-        const hasY2 = u.scales.y2 != null;
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(left, top, width, height);
-        ctx.clip();
-        ctx.globalAlpha = REGION_SHADE_ALPHA;
-        for (const s of shades) {
-          if (![s.x1, s.x2, s.y1, s.y2].every(Number.isFinite)) continue;
-          const yScale = s.axis === 1 && hasY2 ? "y2" : "y";
-          const xa = u.valToPos(s.x1, "x", true);
-          const xb = u.valToPos(s.x2, "x", true);
-          const ya = u.valToPos(s.y1, yScale, true);
-          const yb = u.valToPos(s.y2, yScale, true);
-          if (![xa, xb, ya, yb].every(Number.isFinite)) continue;
-          ctx.fillStyle = s.fill;
-          ctx.fillRect(Math.min(xa, xb), Math.min(ya, yb), Math.abs(xb - xa), Math.abs(yb - ya));
-        }
-        ctx.restore();
-      },
-    },
-  };
+  return { hooks: { drawClear: (u: uPlot) => lazyDecor?.drawRegionShades(u, shades) } };
 }
 
 /** A series' stroke once uPlot has initialised it (always a function). A

@@ -283,7 +283,6 @@ def render_with_secondary_axis(
     )
     ax2.spines["right"].set_visible(True)
     apply_axis_titles(fig, {"y2": ax2}, ov.get("axis_titles"))  # the y2 title's Format + drag
-    _apply_region_shades(ax2, secondary_shades)
     y2_lim = ov.get("y2_lim")
     if y2_lim is not None:
         lo, hi = y2_lim
@@ -291,6 +290,9 @@ def render_with_secondary_axis(
         ax2.set_ylim(*drawable_lim(
             ax2, "y", None if lo is None else float(lo), None if hi is None else float(hi)
         ))
+    # After the y2 limits (audit #11): a shade's log-floor clamp and its
+    # off-scale warning read the FINAL secondary range.
+    _apply_region_shades(ax2, secondary_shades)
     apply_inset(
         ax, artists, ov, resolve_axis_scale(x_scale, x_log), resolve_axis_scale(y_scale, y_log),
         st.grid_alpha, twin=(ax2, y2_artists, resolve_axis_scale(y2_scale, False)),
