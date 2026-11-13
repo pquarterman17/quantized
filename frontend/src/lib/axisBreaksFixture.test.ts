@@ -92,8 +92,10 @@ describe("axis breaks — the shared screen/export wire fixture", () => {
 
   it("sizes the ticks for the KEPT span and puts none inside a break", () => {
     // 22 kept units, not 1012: a step of 5, where the unbroken axis would take 200.
-    expect(breakTicks(0, 1012, [[12, 990]])).toEqual([0, 5, 10, 990, 995, 1000, 1005, 1010]);
-    expect(breakTicks(0, 1012, [[12, 990]], 4)).toEqual([0, 4, 8, 12, 992, 996, 1000, 1004, 1008, 1012]);
+    expect(breakTicks(0, 1012, [[12, 990]])).toEqual([0, 5, 10, 995, 1000, 1005, 1010]);
+    expect(breakTicks(0, 1012, [[12, 990]], 4)).toEqual([0, 4, 8, 992, 996, 1000, 1004, 1008, 1012]);
+    // No tick ON a break edge: the break marks sit there (live check).
+    expect(breakTicks(0, 1012, [[6, 995]], 2)).not.toContain(6);
     expect(breakTicks(5, 5, [[12, 990]])).toEqual([]);
   });
 

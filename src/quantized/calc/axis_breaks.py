@@ -203,7 +203,8 @@ def auto_break_step(lo: float, hi: float, breaks: Breaks) -> float:
 def break_ticks(lo: float, hi: float, breaks: Breaks, step: float | None = None) -> list[float]:
     """Major ticks of a broken axis showing ``[lo, hi]``: whole multiples of
     the step (the typed increment, else :func:`auto_break_step`), never
-    strictly inside a break."""
+    inside a break nor on its edge, where the break marks are drawn
+    (``breakTicks``: a label there sat under the marks)."""
     if not (math.isfinite(lo) and math.isfinite(hi)) or not hi > lo:
         return []
     typed = step is not None and step > 0 and math.isfinite(step)
@@ -215,7 +216,7 @@ def break_ticks(lo: float, hi: float, breaks: Breaks, step: float | None = None)
     out: list[float] = []
     for k in range(first, last + 1):
         v = float(f"{k * st:.12g}")
-        if not any(b_lo < v < b_hi for b_lo, b_hi in breaks):
+        if not any(b_lo <= v <= b_hi for b_lo, b_hi in breaks):
             out.append(v)
     return out
 

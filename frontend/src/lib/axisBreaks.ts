@@ -108,8 +108,10 @@ export function autoBreakStep(min: number, max: number, breaks: readonly AxisBre
 }
 
 /** Major ticks of a broken axis showing `[min, max]`: whole multiples of the
- *  step (the typed increment, else `autoBreakStep`), never strictly inside a
- *  break. */
+ *  step (the typed increment, else `autoBreakStep`), never inside a break
+ *  NOR on its edge: the break marks are drawn across the axis at the edges,
+ *  and a tick label there sat under them (live check: "6" under the marks of
+ *  a 6..995 break, on screen and in the export). */
 export function breakTicks(min: number, max: number, breaks: readonly AxisBreak[], step?: number | null): number[] {
   if (!Number.isFinite(min) || !Number.isFinite(max) || !(max > min)) return [];
   const st = step != null && step > 0 && Number.isFinite(step) ? step : autoBreakStep(min, max, breaks);
@@ -119,7 +121,7 @@ export function breakTicks(min: number, max: number, breaks: readonly AxisBreak[
   const out: number[] = [];
   for (let k = first; k <= last; k++) {
     const v = Number((k * st).toPrecision(12));
-    if (!breaks.some(([lo, hi]) => v > lo && v < hi)) out.push(v);
+    if (!breaks.some(([lo, hi]) => v >= lo && v <= hi)) out.push(v);
   }
   return out;
 }
