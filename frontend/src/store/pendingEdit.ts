@@ -40,13 +40,7 @@
 // registry, NOT on `Dataset` — see its comment for the request storm and the starved
 // autosave that putting it on `Dataset` caused.
 
-import {
-  claimExpiredUploadNotice,
-  isExpiredUpload,
-  lastBookError,
-  sameBookSource,
-  truncateReason,
-} from "../lib/bookData";
+import { lastBookError, sameBookSource, truncateReason } from "../lib/bookData";
 import type { Dataset } from "../lib/types";
 // `toast` ONLY: a dozen suites `vi.mock` ./toasts with nothing else, and a
 // missing mock export throws on access — inside a fetch's failure handler.
@@ -96,28 +90,22 @@ const announced = new WeakSet<object>();
 
 /** Toast a lazy-book load failure once per failed fetch, offering Re-import.
  *
- *  An EXPIRED UPLOAD is one cause however many books and fetches hit it: one
- *  toast per upload token (`lib/bookData.claimExpiredUploadNotice`), worded
- *  for the project rather than the book, with the same Re-import recovery
- *  (for an upload it opens the file picker; a path source the shell finds
- *  missing opens Relink — `store/reimport.ts`). */
+ *  An EXPIRED UPLOAD (`routes/books.py`'s 404) is one cause however many books
+ *  and fetches hit it, so it goes to `./expiredUploadNotice` — a lazy chunk
+ *  holding the wording and the one-toast-at-a-time rule. If that chunk cannot
+ *  load, the ordinary per-book toast below is shown instead. */
 export function announceBookFailure(get: () => OfferState, ds: Dataset, msg: string, e: unknown): void {
   if (typeof e === "object" && e !== null) {
     if (announced.has(e)) return;
     announced.add(e);
   }
-  const src = ds.pending;
-  if (src?.token && isExpiredUpload(src, e)) {
-    if (!claimExpiredUploadNotice(src.token)) return;
-    toast(
-      `The uploaded project behind "${ds.name}" is no longer in the server's upload cache. ` +
-        "Re-import the file to load its books.",
-      "danger",
-      reimportOffer(get, ds),
-    );
+  const offer = reimportOffer(get, ds);
+  const plain = (): void => toast(msg, "danger", offer);
+  if (ds.pending?.kind === "upload" && /upload expired/i.test(e instanceof Error ? e.message : `${e}`)) {
+    void import("./expiredUploadNotice").then((m) => m.announceExpiredUpload(ds, offer), plain);
     return;
   }
-  toast(msg, "danger", reimportOffer(get, ds));
+  plain();
 }
 
 /** Resolve `id`'s full data, THEN run `fn` on the resolved dataset — the

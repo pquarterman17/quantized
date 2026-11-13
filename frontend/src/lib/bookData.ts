@@ -108,30 +108,6 @@ export function truncateReason(reason: string): string {
 export function resetBookTransportForTests(): void {
   _bookFetches.clear();
   _bookErrors.clear();
-  _expiredUploads.clear();
-}
-
-/** Upload tokens whose expiry has already been announced. Every book of one
- *  uploaded project shares its token, and a restored workspace can kick
- *  several of them at once (views, the worksheet, a queued action) — each a
- *  separate fetch with its own rejection, so the per-rejection dedupe let
- *  the audit (2026-11) see three toasts for one cause. One notice per token;
- *  a later successful fetch for the token (a re-import of the same file re-
- *  stages it under the same content-hash token) clears it. */
-const _expiredUploads = new Set<string>();
-
-/** Did this fetch fail because the server no longer holds the uploaded
- *  project (`routes/books.py`'s 404 "upload expired")? */
-export function isExpiredUpload(source: BookSource | undefined, e: unknown): boolean {
-  if (source?.kind !== "upload" || !source.token) return false;
-  return /upload expired/i.test(e instanceof Error ? e.message : String(e));
-}
-
-/** True the FIRST time an expired `token` is reported, false after that. */
-export function claimExpiredUploadNotice(token: string): boolean {
-  if (_expiredUploads.has(token)) return false;
-  _expiredUploads.add(token);
-  return true;
 }
 
 function resolvedExcludedRows(ds: Dataset, sourceRows: number): number[] | undefined {
@@ -178,7 +154,6 @@ export function installBookData(set: DatasetsSetter, id: string, source: BookSou
         return { datasets: installed ? datasets : s.datasets };
       });
       if (installed) _bookErrors.delete(id);
-      if (source.kind === "upload" && source.token) _expiredUploads.delete(source.token);
       return installed;
     })
     .then(undefined, (e: unknown) => {

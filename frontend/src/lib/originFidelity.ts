@@ -11,7 +11,7 @@ const LABELS: Record<string, string> = {
   advanced_axis_types: "advanced axis types",
   exact_curve_bindings: "exact curve bindings",
   figure_decode_error: "graph decode failed",
-  file_truncated: "file appears incomplete or truncated",
+  file_truncated: "file appears incomplete or truncated — books and columns past the cut are missing",
   filtered_internal_graph_records: "internal graph records filtered",
   graphic_objects: "drawn arrows and shapes",
   layer_geometry: "layer geometry",

@@ -94,6 +94,12 @@ describe("FigureRow — PR C additions", () => {
     expect(open.getAttribute("title")).toContain("(2 curves)");
   });
 
+  it("an EMPTY decoded curve list falls back to the legend count", () => {
+    const fig = { ...entry("g1", "a").figure, n_curves: 3, curves: [] };
+    render(<FigureRow entry={{ ...entry("g1", "a"), figure: fig }} />);
+    expect(screen.getByRole("button", { name: /MokeGraph/ }).getAttribute("title")).toContain("(3 curves)");
+  });
+
   it("a resolved dataset with no workbookId records nothing", () => {
     useApp.setState({ datasets: [ds("a")] }); // no workbookId this time
     render(<FigureRow entry={entry("g1", "a")} />);
