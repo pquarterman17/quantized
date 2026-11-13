@@ -156,6 +156,13 @@ export interface FitRequest {
   weights?: number[];
   fixed?: boolean[];
   calc_errors?: boolean;
+  /** "jtj" (Origin / scipy, default) or "hessian" (MATLAB curveFit). */
+  covariance?: "jtj" | "hessian";
+  /** Origin "Scale Error with sqrt(Reduced Chi-Sqr)"; default true. */
+  scale_errors?: boolean;
+  /** The statistics definitions to report under (lib/fitStatsVersion.ts);
+   *  absent = current. */
+  stats_version?: number;
 }
 
 /** Bounded nonlinear least-squares fit of a named model. */
