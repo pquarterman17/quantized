@@ -76,3 +76,14 @@ describe("RefLinesCard — remove", () => {
     expect(useApp.getState().refLines.every((line) => line.stick?.color === "#123456")).toBe(true);
   });
 });
+
+describe("RefLinesCard — accessible names (live check)", () => {
+  it("names the new line's axis and value, and each remove button by its line", () => {
+    useApp.setState({ refLines: [{ id: "a", axis: "x", value: 5 }, { id: "b", axis: "y", value: 2.5 }] });
+    render(<RefLinesCard />);
+    expect(screen.getByRole("radiogroup", { name: "New reference line axis" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "New reference line value" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove line X = 5" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove line Y = 2.5" })).toBeInTheDocument();
+  });
+});

@@ -38,7 +38,7 @@ const cases: Case[] = [
     count: () => useApp.getState().shapes.length,
   },
   {
-    name: "Remove line",
+    name: "Remove line X = 5",
     card: () => <RefLinesCard />,
     state: { refLines: [{ id: "ref-1", axis: "x", value: 5 }] },
     count: () => useApp.getState().refLines.length,
