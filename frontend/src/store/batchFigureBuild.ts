@@ -120,7 +120,9 @@ export function preflightBatchFigure(
       resolved: null,
     };
   }
-  if (result.resolved.mapping.yKeys.length + result.resolved.mapping.y2Keys.length === 0) {
+  // A `yAuto` recipe (saved from a default-channel view) plots the target's
+  // own default channel set, so zero matched Y entries is not a blank plot.
+  if (!result.resolved.mapping.yAuto && result.resolved.mapping.yKeys.length + result.resolved.mapping.y2Keys.length === 0) {
     return {
       datasetId: dataset.id,
       datasetName: dataset.name,

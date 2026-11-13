@@ -59,6 +59,19 @@ export function sendEditableFigureToReport(s: StoreGet, figureId: string): Promi
   );
 }
 
+/** The Stage graph-template / Copy-Paste Format commands (figures-audit B2):
+ *  the bodies load on demand, the same `runLazy` + `.then(act,
+ *  onLoadFailure)` shape as `openPageSetup` above. */
+function graphFormatCommand(
+  s: StoreGet,
+  pick: (m: typeof import("../lib/graphTemplateCommands")) => (s: StoreGet) => void | Promise<void>,
+): void {
+  void runLazy("Loading graph templates…", () => import("../lib/graphTemplateCommands")).then(
+    (m) => pick(m)(s),
+    onLoadFailure,
+  );
+}
+
 /** Build the Plot- and Insert-group curated palette actions against the
  *  live store handle (`useApp.getState`) — store setters are stable, so
  *  callers build once. */
@@ -306,6 +319,44 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       description: "Add the current plot to a report; Word, PowerPoint and HTML report exports embed it as rendered.",
       keywords: "report figure embed word powerpoint docx pptx html",
       run: () => void sendFigureToReport(s),
+    },
+    // ── Graph format (figures-audit B2; filed under "Display"): style-only templates and Origin-style
+    // Copy/Paste Format. Style travels; data, limits and titles never do. ──
+    {
+      id: "graph-template-save",
+      group: "Plot",
+      section: "Display",
+      label: "Save Graph Template…",
+      description: "Save the active graph's style (axis scales and formats, legend, frame, series styles by position) as a reusable template.",
+      keywords: "style template origin otp save format",
+      run: () => graphFormatCommand(s, (m) => m.saveStageGraphTemplate),
+    },
+    {
+      id: "graph-template-apply",
+      group: "Plot",
+      section: "Display",
+      label: "Apply Graph Template…",
+      description: "Restyle the active graph with a saved graph template; its data, limits and titles are kept.",
+      keywords: "style template origin otp apply format",
+      run: () => graphFormatCommand(s, (m) => m.applyStageGraphTemplate),
+    },
+    {
+      id: "copy-format",
+      group: "Plot",
+      section: "Display",
+      label: "Copy Format",
+      description: "Copy the active graph's style (not its data) so it can be pasted onto another graph.",
+      keywords: "style copy format origin",
+      run: () => graphFormatCommand(s, (m) => m.copyStageFormat),
+    },
+    {
+      id: "paste-format",
+      group: "Plot",
+      section: "Display",
+      label: "Paste Format",
+      description: "Apply the copied graph style to the active graph; its data, limits and titles are kept.",
+      keywords: "style paste format origin",
+      run: () => graphFormatCommand(s, (m) => m.pasteStageFormat),
     },
     // ── Insert (MAIN #27: drawing shapes on plots — the menu-driven
     // counterpart of PlotToolbar's dock flyout) ──

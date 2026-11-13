@@ -370,9 +370,10 @@ interface RecipeCandidate {
 }
 
 /** Every recipe scoped to `dataset`'s technique, from BOTH scopes, resolved
- *  EXACTLY ONCE each -- see the module doc's FINDING 4/6 note. `"generic"`
- *  never matches anything (the recipe module's own stronger-than-memory
- *  rule) -- always `[]`. Refused candidates (technique mismatch / errorRole
+ *  EXACTLY ONCE each -- see the module doc's FINDING 4/6 note. A
+ *  `"generic"` dataset gets `[]`: nothing about two unclassified datasets
+ *  says one's figure suits the other, so the AUTOMATIC surfaces never offer
+ *  one (a generic recipe still applies by an explicit choice -- B2). Refused candidates (technique mismatch / errorRole
  *  guard) are dropped, never counted. A recipe flagged `noAutoSuggest`
  *  (code-review finding 7 -- a "Copy to Project" of a built-in) is dropped
  *  here too, BEFORE it is ever resolved: this is the ONE function both

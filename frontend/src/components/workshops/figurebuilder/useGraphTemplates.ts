@@ -5,10 +5,17 @@
 // fund by moving a cohesive block out first (legacyFigure.ts did it for
 // F2.3d, canonicalReadiness.ts for F2.3c).
 //
-// This is legacy-mode-only by nature: a template writes back through the
-// legacy `setStyle`/`setOverrides`/`setDocSeriesStyles` setters, and the
-// Save/Apply UI itself only renders when `!f.canonical` (FigureBuilderView).
-// A canonical draft's equivalent is F4's semantic recipes, not this.
+// Both modes (figures-audit B2 -- this used to be legacy-only, so the
+// default canonical Publication preview had no style templates at all):
+//   - legacy: writes back through the legacy `setStyle`/`setOverrides`/
+//     `setDocSeriesStyles` setters, as before;
+//   - canonical: writes the draft's style preset, its publication overrides
+//     (through the same view+publication delta bridge every other canonical
+//     edit uses) and the Stage-side `format` (`lib/graphFormat.ts`: axis
+//     scales/formats, chrome, series styles by POSITION) into the draft view.
+// The template record is shared with the Stage's "Save/Apply Graph
+// Template…" (`lib/graphTemplateCommands.ts`), so either side's templates
+// apply on the other. Style only: no data binding travels.
 
 import { useState } from "react";
 
@@ -20,6 +27,9 @@ import {
 } from "../../../lib/figuredoc";
 import { buildExportStyles, type ExportSeriesStyle } from "../../../lib/exportStyles";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
+import type { FigureViewState } from "../../../lib/figureDocument";
+import { captureGraphFormat, graphFormatPatch, seriesStyleFromExport } from "../../../lib/graphFormat";
+import type { PlotView } from "../../../lib/plotview";
 import { recordUse } from "../../../lib/recipeIndex";
 import type { LegacyFigureState } from "./legacyFigure";
 
@@ -30,6 +40,19 @@ export interface GraphTemplatesApi {
   removeStyleTemplate: (name: string) => void;
 }
 
+/** What a canonical draft exposes to templates: its current style preset,
+ *  effective overrides, view and plotted channels (display order), and the
+ *  draft setters. */
+export interface CanonicalTemplateTarget {
+  style: string;
+  overrides: FigureOverrides;
+  view: PlotView;
+  plotted: readonly number[];
+  setStyle: (next: string) => void;
+  setOverrides: (next: FigureOverrides) => void;
+  setView: (patch: Partial<FigureViewState>) => void;
+}
+
 export function useGraphTemplates(deps: {
   /** The same bundle the preview request is built from, so a saved template
    *  carries exactly the styling the user is looking at. */
@@ -38,11 +61,27 @@ export function useGraphTemplates(deps: {
   setOverrides: (next: FigureOverrides) => void;
   setDocSeriesStyles: (next: (ExportSeriesStyle | null)[] | null | undefined) => void;
   setStatus: (message: string) => void;
+  /** The open canonical draft, or null in legacy mode. */
+  canonical: CanonicalTemplateTarget | null;
 }): GraphTemplatesApi {
   const [graphTemplates, setGraphTemplates] = useState<GraphTemplate[]>(() => loadGraphTemplates());
   const { legacy } = deps;
 
   function saveStyleTemplate(name: string): void {
+    const target = deps.canonical;
+    if (target) {
+      setGraphTemplates(
+        saveGraphTemplate({
+          name,
+          style: target.style,
+          overrides: compactOverrides(target.overrides),
+          seriesStyles: buildExportStyles([...target.plotted], target.view.seriesStyles),
+          format: captureGraphFormat(target.view, target.plotted),
+        }),
+      );
+      deps.setStatus(`graph template "${name}" saved`);
+      return;
+    }
     if (!legacy.data) return;
     const plotted = legacy.yKeys ?? legacy.data.labels.map((_, index) => index);
     setGraphTemplates(
@@ -61,6 +100,20 @@ export function useGraphTemplates(deps: {
     if (!template) return;
     // P3.5 "recently used" — after the existence guard.
     recordUse({ kind: "graph", scope: "global", id: template.name });
+    const target = deps.canonical;
+    if (target) {
+      target.setStyle(template.style);
+      target.setOverrides(template.overrides ?? {});
+      // A template saved before `format` existed (or from an Origin .otp)
+      // still restyles the series, from its publication styles.
+      const format = template.format ?? {
+        ...captureGraphFormat(target.view, target.plotted),
+        series: (template.seriesStyles ?? []).map(seriesStyleFromExport),
+      };
+      target.setView(graphFormatPatch(format, target.plotted, target.view.seriesStyles));
+      deps.setStatus(`graph template "${name}" applied`);
+      return;
+    }
     deps.setStyle(template.style);
     deps.setOverrides(template.overrides ?? {});
     // `?? null` is load-bearing: a template with no styles must set the

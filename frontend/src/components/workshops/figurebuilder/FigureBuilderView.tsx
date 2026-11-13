@@ -222,8 +222,10 @@ export default function FigureBuilderView() {
                 Save
               </Button>
             </div>
+            </>}
 
-            {/* #15: user graph templates — the style half, appliable anywhere */}
+            {/* #15: user graph templates — the style half, appliable anywhere
+                (both modes since figures-audit B2). */}
             <label className="qzk-field-lbl" style={{ marginTop: 6 }}>Style template</label>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <NumberField
@@ -231,10 +233,12 @@ export default function FigureBuilderView() {
                 width={100}
                 value={tplName}
                 placeholder="save style as…"
+                aria-label="Style template name"
                 onChange={setTplName}
               />
               <Button
                 size="sm"
+                aria-label="Save style template"
                 disabled={!tplName.trim()}
                 onClick={() => {
                   f.saveStyleTemplate(tplName.trim());
@@ -252,10 +256,10 @@ export default function FigureBuilderView() {
                 ]}
                 value=""
                 onChange={(e) => e.target.value && f.applyStyleTemplate(e.target.value)}
+                aria-label="Apply style template"
               />
             )}
 
-            </>}
             {/* Sticky action row. Export/Apply/Cancel used to scroll away with
                 the rest of the column: with the property groups expanded the
                 settings column is ~2,400 px tall inside a ~900 px viewport, so

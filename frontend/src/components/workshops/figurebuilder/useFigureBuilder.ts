@@ -15,6 +15,7 @@ import { computeCanonicalReadiness, type CanonicalReadiness } from "./canonicalR
 import { appendRefLine, patchRefLineList, removeRefLineFromList } from "./canonicalRefLines";
 import { regionShadeBindings } from "./canonicalRegionShades";
 import { deriveShapeRows, patchShapeList, removeShapeFromList } from "./canonicalShapes";
+import { canonicalSeriesOps } from "./canonicalSeriesOps";
 import { selectSessionCyclesSeriesStyles, selectSessionLiveDrifted } from "./canonicalSession";
 import { FIGURE_STYLE_DPI } from "./figureOutputConstants";
 import { pageSetupBinding, tickFormatBindings } from "./canonicalPage";
@@ -31,7 +32,7 @@ import type { ExportSeriesStyle } from "../../../lib/exportStyles";
 import { inferErrorBindings, type ErrorBinding, type ErrorSide } from "../../../lib/errorRoles";
 import { defaultDenseChannels, effectiveChannels } from "../../../lib/plotdata";
 import { xAxisIsDate } from "../../../lib/tickFormat";
-import type { AxisScale, DataStruct, RefLine, Shape, SeriesStyle } from "../../../lib/types";
+import type { AxisScale, DataStruct, RefLine, Shape } from "../../../lib/types";
 import { figurePublicationDirty } from "../../../store/figureUnsavedEdits";
 import { nextFigureDocId } from "../../../store/idSeq";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -195,29 +196,8 @@ export function useFigureBuilder() {
         canonicalView?.seriesOrder ?? null,
       )
     : [];
-  const setSeriesStyle = (channel: number, patch: Partial<SeriesStyle>) =>
-    setCanonicalView({
-      seriesStyles: {
-        ...canonicalView?.seriesStyles,
-        [channel]: { ...canonicalView?.seriesStyles?.[channel], ...patch },
-      },
-    });
-  const setSeriesHidden = (channel: number, hidden: boolean) => {
-    const current = canonicalView?.hiddenChannels ?? [];
-    setCanonicalView({
-      hiddenChannels: hidden
-        ? (current.includes(channel) ? current : [...current, channel])
-        : current.filter((c) => c !== channel),
-    });
-  };
-  const moveSeries = (channel: number, direction: -1 | 1) => {
-    const order = [...seriesChannels];
-    const index = order.indexOf(channel);
-    const target = index + direction;
-    if (index < 0 || target < 0 || target >= order.length) return;
-    [order[index], order[target]] = [order[target], order[index]];
-    setCanonicalView({ seriesOrder: order });
-  };
+  // Moved to canonicalSeriesOps.ts (module-size pin) -- verbatim.
+  const { setSeriesStyle, setSeriesHidden, moveSeries } = canonicalSeriesOps(canonicalView, seriesChannels, setCanonicalView);
 
   // F2.3c: drawn shapes (`document.plot.view.shapes`) are the SAME kind of
   // canonical-only PlotView field as F2.3b's series properties above -- no
@@ -363,8 +343,20 @@ export function useFigureBuilder() {
     if (doc) addFigureDoc(doc);
   }
 
-  // User graph templates (#15) — legacy-mode-only by nature; see the module doc.
-  const templates = useGraphTemplates({ legacy: legacyState, setStyle, setOverrides, setDocSeriesStyles, setStatus });
+  // User graph templates (#15) — and, since figures-audit B2, on a canonical
+  // draft too (style preset, publication overrides, Stage format).
+  const templates = useGraphTemplates({
+    legacy: legacyState, setStyle, setOverrides, setDocSeriesStyles, setStatus,
+    canonical: canonical && canonicalDocument && canonicalView ? {
+      style: canonicalDocument.output.stylePreset,
+      overrides: activeOverrides,
+      view: canonicalView,
+      plotted: seriesChannels,
+      setStyle: setCanonicalStyle,
+      setOverrides: setCanonicalOverrides,
+      setView: setCanonicalView,
+    } : null,
+  });
 
   // ── Preview interactions (#13/#14) ────────────────────────────────────
   // Dispatch lives in previewSelect.ts (moved out to fund F2.3h's grouping

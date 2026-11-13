@@ -138,6 +138,27 @@ describe("Batch Figure Builder preflight", () => {
     expect(row.summary).toContain("transform the datasets first");
   });
 });
+describe("Batch Figure Builder with plain CSV (generic) data — B2 figures audit", () => {
+  const csv = (id: string, labels: string[]): Dataset => ({ ...dataset(id, labels), name: `${id}.csv`, data: { ...dataset(id, labels).data, metadata: {} } });
+
+  it("a recipe saved from one plain CSV builds figures for others, keeping their default channels", () => {
+    const red = { color: "#ff0000" };
+    const saved = captureRecipe(
+      csv("source", ["A", "B"]),
+      { ...defaultPlotView(), seriesStyles: { 0: red } },
+      null,
+      { id: "generic-1", name: "My style", appVersion: "test" },
+    );
+    const row = preflightBatchFigure(saved, csv("other", ["P", "Q", "R"]), { datasets: [] });
+    expect(row.status).toBe("ready");
+    if (!row.resolved) throw new Error("expected resolved recipe");
+    const view = resolvedRecipeView(row.resolved.mapping, row.resolved.visual, () => "l");
+    expect(view.yKeys).toBeNull();
+    expect(view.seriesStyles).toEqual({ 0: red });
+    // Every source column missing still builds (the target's defaults plot).
+    expect(preflightBatchFigure(saved, csv("tiny", ["P"]), { datasets: [] }).status).toBe("ready");
+  });
+});
 describe("batch recipe view projection", () => {
   it("stays apply-equivalent to the ordinary one-figure Plot Recipe path", async () => {
     const saved = {

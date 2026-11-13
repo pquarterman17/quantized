@@ -19,6 +19,7 @@ import { isAxisScale, scaleFromLog } from "./plotview";
 // sanitizers below call `sanitizeExportSeriesStyles` without pulling the
 // export BUILDERS and the wire boundary into this module's runtime graph.
 import { sanitizeExportSeriesStyles, type ExportSeriesStyle } from "./publicationStyles";
+import { sanitizeGraphFormat, type GraphFormat } from "./graphFormat";
 import { warnStorageRefused } from "./storageWarning";
 import type { AxisScale, DataStruct } from "./types";
 
@@ -81,6 +82,12 @@ export interface GraphTemplate {
    *  (MAIN_PLAN #5 — lib/originTemplate). Extra fields survive the
    *  localStorage round-trip (isTemplate only checks name/style). */
   source?: string;
+  /** The Stage-side style (B2 figures audit, `lib/graphFormat.ts`): axis
+   *  scales/formats, chrome and per-POSITION series styles, captured from a
+   *  plot window or a canonical Publication preview draft. Absent on a
+   *  template saved before it existed; the Stage then restyles from
+   *  `seriesStyles` alone (`seriesStyleFromExport`). */
+  format?: GraphFormat;
 }
 
 // ── .dwk sanitizers ─────────────────────────────────────────────────────────
@@ -212,10 +219,15 @@ export function loadGraphTemplates(): GraphTemplate[] {
     // `saveGraphTemplate`/`deleteGraphTemplate` then persist that shape for
     // every template in the store. The tolerant `isGraphTemplate` check above
     // is itself unchanged.
-    return parsed.filter(isGraphTemplate).map((t) => ({
-      ...t,
-      seriesStyles: sanitizeExportSeriesStyles(t.seriesStyles),
-    }));
+    return parsed.filter(isGraphTemplate).map((t) => {
+      const { format, ...rest } = t;
+      const cleanFormat = format === undefined ? null : sanitizeGraphFormat(format);
+      return {
+        ...rest,
+        seriesStyles: sanitizeExportSeriesStyles(t.seriesStyles),
+        ...(cleanFormat ? { format: cleanFormat } : {}),
+      };
+    });
   } catch {
     return [];
   }
