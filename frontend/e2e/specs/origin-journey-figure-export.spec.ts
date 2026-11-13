@@ -60,7 +60,7 @@ async function exportAs(page: Page, fmt: "pdf" | "svg"): Promise<{ body: FigureB
   const body = (await request).postDataJSON() as FigureBody;
   const file = await download;
   expect(file.suggestedFilename()).toBe(`decay-err.${fmt}`);
-  return { body, bytes: await readFile((await file.path())!) };
+  return { body, bytes: await readFile(await file.path()) };
 }
 
 test("a styled graph exports to PDF and SVG exactly as shown", async ({ page }) => {
