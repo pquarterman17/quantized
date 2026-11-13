@@ -28,8 +28,11 @@ import type { ChannelRole, Dataset } from "../lib/types";
 import { useApp } from "./useApp";
 import { syncDatasetWindowDocuments } from "./windowDocuments";
 
+// Not a Y an error column can belong to: errors, labels, X, and Origin's
+// factor columns (Group/Subject, never a plotted series).
 const isErrorish = (d: OriginDesignation | undefined) =>
-  d === "Y-error" || d === "X-error" || d === "label" || d === "disregard" || d === "X";
+  d === "Y-error" || d === "X-error" || d === "label" || d === "disregard" || d === "X"
+  || d === "group" || d === "subject";
 
 /** The error binding a Y Error / X Error choice makes, or null when there is
  *  nothing it can describe (no Y before it). Pure. */
