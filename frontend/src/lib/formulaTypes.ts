@@ -42,6 +42,14 @@ export interface SheetBinding {
   id: string | null;
 }
 
+/** The cross-worksheet half of `ComputedColumn` (lib/types.ts extends it),
+ *  kept here with the binding it carries: lib/types.ts sits at its size pin. */
+export interface SheetLinked {
+  /** The worksheets this formula's `sheet("Name", …)` calls are LINKED to, by
+   *  id (lib/sheetRefs.ts). */
+  sheets?: SheetBinding[];
+}
+
 export type FormulaFn = (ctx: Record<string, number>, rowCtx?: FormulaRowContext) => number;
 
 /** `p` = 0-based start offset in the source (positioned syntax errors). */

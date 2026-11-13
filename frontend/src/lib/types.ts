@@ -5,7 +5,7 @@
 import type { ErrorBinding } from "./errorRoles";
 import type { FitSpec } from "./fitTypes";
 import type { CorrectionParams } from "./correctionTypes";
-import type { DerivedSpec, SheetBinding } from "./formulaTypes";
+import type { DerivedSpec, SheetLinked } from "./formulaTypes";
 import type { DatasetSource } from "./datasetSource";
 import type { PeakTable } from "./peakTable";
 import type { RecodeSpec } from "./recode";
@@ -342,7 +342,7 @@ export type { RsmPeak, RsmAnalysisResponse, RsmStrainResponse } from "./reductio
  *  and the channel letters (A, B, …). Stored on the dataset so it recomputes
  *  when the base data changes. The computed columns are always the LAST
  *  `formulas.length` columns of the dataset's `data`. */
-export interface ComputedColumn {
+export interface ComputedColumn extends SheetLinked {
   name: string;
   expr: string;
   unit?: string;
@@ -353,10 +353,7 @@ export interface ComputedColumn {
   recode?: RecodeSpec;
   factor?: FactorSpec; // P2.5: a metadata field promoted to a per-row factor (lib/metadataFactor.ts)
   derived?: DerivedSpec; // P2.5: derived unit / fitted values / propagated σ (lib/derivedColumn.ts)
-  /** The worksheets this formula's `sheet("Name", …)` calls are LINKED to, by id (lib/sheetRefs.ts). */
-  sheets?: SheetBinding[];
 }
-
 
 /** One column's non-destructive filter predicate (#53). `col` is -1 for x, 0..
  *  for a channel. `range` keeps min ≤ value ≤ max (either bound optional); `set`
