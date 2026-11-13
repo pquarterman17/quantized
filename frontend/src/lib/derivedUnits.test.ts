@@ -121,6 +121,20 @@ describe("other forms", () => {
     expect(unitOf('A - fitval("Gaussian", x)', { A: "counts" }, { Gaussian: "counts" }).unit).toBe("counts");
     expect(unitOf('A - fitval("Gaussian", x)', { A: "counts" }, { Gaussian: "cps" }).error).toMatch(/units differ/);
   });
+  it("says once that the unit is unknown, not again as '(see above)' (live check)", () => {
+    for (const [expr, units] of [
+      ['fit("Gaussian", "A")', {}],
+      ["A / 1000", { A: "mV" }],
+      ['sheet("Other", C) * 2', {}],
+    ] as const) {
+      const r = unitOf(expr, units);
+      expect(r.unit).toBe("");
+      expect(r.warnings).toHaveLength(1);
+      expect(r.warnings.join(" ")).not.toMatch(/see above/);
+    }
+    // A unitless column is still named: that trailer adds information.
+    expect(unitOf("A * B", { A: "V", B: "" }).warnings.join(" ")).toMatch(/B has no recorded unit/);
+  });
   it("flags scaling an offset temperature scale", () => {
     const r = unitOf("A * 1.8 + 32", { A: "°C" });
     expect(r.unit).toBe("°C");

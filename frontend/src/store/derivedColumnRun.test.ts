@@ -95,6 +95,13 @@ describe("commit", () => {
     expect(state().formulas).toBeUndefined();
     expect(useApp.getState().macroSteps).toEqual([]);
   });
+  it("a refusal replaces the previous 'added' status with its own reason (live check)", async () => {
+    expect((await addDerivedColumn("d", { name: "ok", expr: "A * 2", propagate: false })).ok).toBe(true);
+    useApp.setState({ status: 'added column "ok" [V]' });
+    const r = await addDerivedColumn("d", { name: "nope", expr: 'sheet("nowhere", A)', propagate: false });
+    expect(r.ok).toBe(false);
+    expect(useApp.getState().status).toMatch(/^Can't add column "nope": .*nowhere/);
+  });
 });
 
 // BUG-009: adding a derived column was the last action behind the refuse-only

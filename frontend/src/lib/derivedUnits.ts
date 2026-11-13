@@ -360,7 +360,12 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
     const r = u(root);
     if (r.t === "unknown") {
       const who = [...unitless];
-      const why = who.length ? `${who.join(", ")} ${who.length > 1 ? "have" : "has"} no recorded unit` : "see above";
+      // A node that made the unit unknown has already said so in its own
+      // warning; repeating "the result's unit is unknown (see above)" after
+      // it only doubled the message. The trailer is added when it says
+      // something new: which columns lack a unit, or (no warning at all) why.
+      if (!who.length && warnings.length) return { unit: "", dimensionless: false, warnings };
+      const why = who.length ? `${who.join(", ")} ${who.length > 1 ? "have" : "has"} no recorded unit` : "no unit could be derived";
       return { unit: "", dimensionless: false, warnings: [...warnings, `the result's unit is unknown (${why})`] };
     }
     const unit = r.t === "known" ? formatUnit(r.dim) : "";

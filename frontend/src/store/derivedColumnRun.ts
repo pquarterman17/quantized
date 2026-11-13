@@ -105,10 +105,7 @@ export async function addDerivedColumn(
       const to = recalcNodes.column(id, formulaLetter(ds.data.labels.length, count, count + i));
       for (const dep of c.deps ?? []) {
         const reason = wouldCreateCycle(get().datasets, { from: recalcNodes.column(id, dep), to });
-        if (reason) {
-          get().setStatus(`Can't add column "${c.name}": ${reason}`);
-          return { ok: false, error: `could not add column "${step.name}" (see the status bar)` };
-        }
+        if (reason) return { ok: false, error: reason };
       }
     }
     const bind = added.length > 1;
@@ -149,5 +146,11 @@ export async function addDerivedColumn(
     const warning = failed ? `"${failed.name}" was added, but it has an error: ${errors![failed.name]}` : a.warning;
     return { ok: true, message: failed ? `${a.message} — but it has an error: ${errors![failed.name]}` : a.message, ...(warning ? { warning } : {}) };
   });
-  return out.ok ? out.value : { ok: false, error: out.error };
+  const r: DerivedColumnResult = out.ok ? out.value : { ok: false, error: out.error };
+  // Every refusal replaces the status, so it never goes on reading the
+  // previous column's "added …" while the formula row shows this error
+  // (live check). The inline message carries the same reason.
+  const named = req.name.trim() ? ` "${req.name.trim()}"` : "";
+  if (!r.ok) get().setStatus(`Can't add column${named}: ${r.error}`);
+  return r;
 }
