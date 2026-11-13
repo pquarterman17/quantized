@@ -76,6 +76,16 @@ describe("sidecarRowCount", () => {
 });
 
 describe("sliceRowSidecars", () => {
+  it("leaves an imaginary-part gap null, never a string, on filter and insert", () => {
+    // `origin_complex_imaginary` holds numbers; a blank is `null` on the wire.
+    // An inserted row (-1) and a blank kept by a filter must stay `null`.
+    const metadata = { origin_complex_imaginary: { A: [0.5, null, 2.5] }, text_columns: { T: ["a", "b", "c"] } };
+    const inserted = sliceRowSidecars(metadata, insertRowIndexes(3, 1, 1));
+    expect(inserted.origin_complex_imaginary).toEqual({ A: [0.5, null, null, 2.5] });
+    expect(inserted.text_columns).toEqual({ T: ["a", "", "b", "c"] });
+    expect(sliceRowSidecars(metadata, [1, 2]).origin_complex_imaginary).toEqual({ A: [null, 2.5] });
+  });
+
   it("moves sparse fit-row identities with a permutation or insertion", () => {
     const metadata = { [FIT_ROW_IDENTITIES]: { 0: "r1:0", 2: "r1:2" } };
     expect(sliceRowSidecars(metadata, [2, 0, 1])[FIT_ROW_IDENTITIES]).toEqual({ 0: "r1:2", 1: "r1:0" });
@@ -114,6 +124,14 @@ describe("sliceRowSidecars", () => {
 // reachable only through `mergeDatasets`, so the all-blank prune (the branch that
 // kept BUG-006 site 8 open) could be deleted with the whole suite still green.
 describe("concatRowSidecars", () => {
+  it("pads imaginary parts with null, and drops a column that is null throughout", () => {
+    const out = concatRowSidecars([
+      { metadata: { origin_complex_imaginary: { A: [0.5] } }, rowCount: 2 },
+      { metadata: { origin_complex_imaginary: { B: [null] } }, rowCount: 1 },
+    ]);
+    expect(out.origin_complex_imaginary).toEqual({ A: [0.5, null, null] });
+  });
+
   const part = (cells: Record<string, unknown[]>, rowCount: number) => ({
     metadata: { text_columns: cells },
     rowCount,
