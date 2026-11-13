@@ -13,6 +13,7 @@ import logging
 import os
 import re
 import secrets
+import stat
 import sys
 import time
 from collections.abc import Iterator
@@ -88,9 +89,59 @@ class HashingReader:
         return chunk
 
 
+def regular_file(path: Path) -> bool:
+    """``path`` itself is a regular file -- a symlink is NOT followed (the
+    cache never makes links; one planted in it could point anywhere)."""
+    try:
+        return stat.S_ISREG(path.lstat().st_mode)
+    except OSError:
+        return False
+
+
+def real_dir(path: Path) -> bool:
+    """``path`` itself is a directory, not a symlink to one."""
+    try:
+        return stat.S_ISDIR(path.lstat().st_mode)
+    except OSError:
+        return False
+
+
+def check_private_root(root: Path) -> None:
+    """Refuse a cache root that is not this user's own private directory.
+
+    POSIX: the root must be a real directory (not a symlink) owned by the
+    current user; group/other permission bits are tightened to 0700 rather
+    than trusted, since a pre-made world-writable directory would let another
+    user swap the staged files a parser later opens. Windows has no POSIX
+    owner/mode to check (the per-user profile directory is already private)."""
+    if sys.platform == "win32":
+        return
+    st = root.lstat()
+    if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
+        raise OSError(f"refusing to use {root} as the Origin upload cache: not a real directory")
+    if st.st_uid != os.getuid():
+        raise OSError(f"refusing to use {root} as the Origin upload cache: owned by another user")
+    if st.st_mode & 0o077:
+        os.chmod(root, 0o700)
+
+
+def owned_root(root: Path) -> bool:
+    """``root`` carries the cache marker AND is this user's own real
+    directory: only then does the cache lock, sweep or write in it."""
+    if not regular_file(root / MARKER):
+        return False
+    try:
+        check_ok = sys.platform == "win32" or (real_dir(root) and root.lstat().st_uid == os.getuid())
+    except OSError:
+        return False
+    return check_ok
+
+
 def private_file(path: Path, data: bytes = b"") -> None:
-    """Create ``path`` exclusively with mode 0600 and write ``data``."""
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    """Create ``path`` exclusively with mode 0600 and write ``data`` (never
+    through a symlink: ``O_EXCL`` refuses an existing name of any kind)."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(path, flags, 0o600)
     with os.fdopen(fd, "wb") as f:
         f.write(data)
 
@@ -123,7 +174,7 @@ def file_lock(root: Path) -> Iterator[None]:
     """Exclusive cross-process lock on ``.lock`` (best effort: a
     directory that is absent, unowned or unlockable proceeds unlocked)."""
     fd: int | None = None
-    if (root / MARKER).is_file():
+    if owned_root(root):
         try:
             fd = os.open(root / LOCK, os.O_RDWR | os.O_CREAT, 0o600)
             _lock_fd(fd)
@@ -171,20 +222,23 @@ def adopt_and_sweep(root: Path, merged: dict[str, Entry]) -> None:
     now = time.time()
     for child in list(root.iterdir()):
         try:
-            age = now - child.stat().st_mtime
-            if child.is_file() and child.name.startswith(TMP_PREFIX):
+            st = child.lstat()  # never follow a link: it could point anywhere
+            if stat.S_ISLNK(st.st_mode):
+                continue  # the cache makes no links; not ours to judge or follow
+            age = now - st.st_mtime
+            if stat.S_ISREG(st.st_mode) and child.name.startswith(TMP_PREFIX):
                 if age > STALE_S:  # a fresh one may still be streaming
                     child.unlink()
                 continue
-            if not (child.is_dir() and TOKEN_RE.fullmatch(child.name)):
+            if not (stat.S_ISDIR(st.st_mode) and TOKEN_RE.fullmatch(child.name)):
                 continue  # the marker, the lock, the index: not ours to judge
             if child.name in merged:
                 continue
-            files = [f for f in child.iterdir() if f.is_file()]
+            files = [f for f in child.iterdir() if regular_file(f)]
             if len(files) == 1 and valid_name(files[0].name):
                 if file_token(files[0], files[0].name) == child.name:
-                    stat = files[0].stat()
-                    merged[child.name] = Entry(files[0].name, stat.st_size, stat.st_mtime)
+                    fst = files[0].lstat()
+                    merged[child.name] = Entry(files[0].name, fst.st_size, fst.st_mtime)
                     continue
             if age > STALE_S:  # never a fresh dir: another instance may be mid-commit
                 remove_dir(child)
@@ -216,9 +270,14 @@ def write_index(root: Path, entries: dict[str, Entry]) -> None:
 
 
 def remove_dir(directory: Path) -> None:
-    """Remove a token directory this cache created (its one file)."""
-    for child in directory.iterdir() if directory.is_dir() else []:
+    """Remove a token directory this cache created (its one file). A symlink
+    in its place is removed as a LINK -- never followed into its target."""
+    if directory.is_symlink():
         with contextlib.suppress(OSError):
-            child.unlink()
+            directory.unlink()
+        return
+    for child in directory.iterdir() if real_dir(directory) else []:
+        with contextlib.suppress(OSError):
+            child.unlink()  # unlinks a link itself, never its target
     with contextlib.suppress(OSError):
         directory.rmdir()

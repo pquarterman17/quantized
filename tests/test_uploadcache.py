@@ -17,6 +17,7 @@ import json
 import os
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -516,3 +517,52 @@ def test_upload_cache_routes_report_and_clear(tmp_path: Path, monkeypatch) -> No
         "removed": 1, "bytes": 123, "kept": 0,
     }
     assert cache_mod.resolve_upload_token(token) is None
+
+
+# ── integration review: links and the cache root's owner/mode ──────────────
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks/modes")
+def test_sweep_never_follows_a_symlink_out_of_the_cache(tmp_path: Path) -> None:
+    root = tmp_path / "origin-uploads"
+    UploadCache(root).stage("a.opj", b"x")
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (victim / "thesis.docx").write_bytes(b"precious")
+    old = time.time() - 7200
+    os.utime(victim / "thesis.docx", (old, old))
+    os.utime(victim, (old, old))
+    link = root / ("ab" * 32)  # a token-shaped name
+    os.symlink(victim, link)
+    UploadCache(root)  # startup scan + sweep
+    path, token = UploadCache(root).stage("b.opj", b"y")  # a commit too
+    assert (victim / "thesis.docx").read_bytes() == b"precious"
+    # A link planted under a staged token is not served either.
+    os.unlink(path)
+    os.symlink(victim / "thesis.docx", path)
+    assert UploadCache(root).resolve(token) is None
+    assert (victim / "thesis.docx").read_bytes() == b"precious"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX modes")
+def test_a_lax_premade_root_is_tightened_to_0700(tmp_path: Path) -> None:
+    lax = tmp_path / "lax"
+    lax.mkdir()
+    os.chmod(lax, 0o777)
+    (lax / fs.MARKER).write_text("x")
+    path, _ = UploadCache(lax).stage("b.opj", b"data")
+    assert lax.stat().st_mode & 0o777 == 0o700
+    assert path.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32" or os.geteuid() != 0, reason="needs root to chown"
+)
+def test_a_root_owned_by_another_user_is_refused(tmp_path: Path) -> None:
+    other = tmp_path / "theirs"
+    other.mkdir(mode=0o700)
+    (other / fs.MARKER).write_text("x")
+    os.chown(other, 12345, 12345)
+    with pytest.raises(OSError, match="owned by another user"):
+        UploadCache(other).stage("b.opj", b"data")
+    assert [p.name for p in other.iterdir()] == [fs.MARKER]

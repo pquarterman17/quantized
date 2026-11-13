@@ -99,14 +99,15 @@ class UploadCache:
 
     # -- ownership + locking ------------------------------------------------
     def _owned(self) -> bool:
-        return (self.root / fs.MARKER).is_file()
+        return fs.owned_root(self.root)
 
     def _ensure_root(self) -> None:
         """Create the directory (0700) and its marker, or refuse a non-empty
-        directory this module did not create."""
-        if self._owned():
+        directory this module did not create (or one another user owns)."""
+        if (self.root / fs.MARKER).exists() or self._owned():
+            fs.check_private_root(self.root)  # raises for a foreign/linked root
             return
-        if self.root.is_dir() and any(self.root.iterdir()):
+        if self.root.is_symlink() or (self.root.is_dir() and any(self.root.iterdir())):
             raise OSError(
                 f"refusing to use {self.root} as the Origin upload cache: it is not empty "
                 "and was not created by Quantized"
@@ -114,6 +115,7 @@ class UploadCache:
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         with contextlib.suppress(OSError):
             os.chmod(self.root, 0o700)
+        fs.check_private_root(self.root)  # a pre-made parent-owned dir, mkdir's mode not applied
         with contextlib.suppress(FileExistsError):
             fs.private_file(self.root / fs.MARKER, b"Quantized Origin upload cache\n")
 
@@ -124,7 +126,12 @@ class UploadCache:
     def _present(self, token: str, entry: fs.Entry) -> bool:
         path = self._path(token, entry)
         try:
-            return path.is_file() and path.stat().st_size == entry.size
+            # The token dir and its file themselves, never through a link.
+            return (
+                fs.real_dir(path.parent)
+                and fs.regular_file(path)
+                and path.lstat().st_size == entry.size
+            )
         except OSError:
             return False
 
