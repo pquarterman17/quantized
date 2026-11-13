@@ -302,6 +302,53 @@ def test_index_entry_with_unsafe_name_is_ignored(tmp_path: Path) -> None:
     assert UploadCache(tmp_path).resolve(token) is None
 
 
+@pytest.mark.parametrize(
+    ("token", "name"),
+    [
+        ("..", "passwd"),  # token dir climbs out of the root
+        ("a" * 64, "../../outside.opj"),  # name climbs out of the token dir
+        ("a" * 64, "/etc/passwd"),  # absolute name replaces the whole join
+        ("a" * 64 + "/nested", "x.opj"),  # one level too deep
+        ("", "x.opj"),  # file directly in the root (index/marker level)
+    ],
+)
+def test_path_containment_fails_closed_even_past_the_upstream_guards(
+    tmp_path: Path, token: str, name: str
+) -> None:
+    """``_path`` is the last check before a cache path reaches the
+    filesystem (CodeQL py/path-injection: the token flows from the request).
+    The token regex and the index's name check normally stop these first;
+    here they are bypassed by planting the entry in memory, and the
+    containment check alone must still refuse every escape."""
+    cache = UploadCache(tmp_path)
+    entry = fs.Entry(name, 1, 1.0)
+    with pytest.raises(ValueError):
+        cache._path(token, entry)
+    cache._entries[token] = entry
+    assert cache._present(token, entry) is False
+
+
+def test_resolve_returns_none_for_an_entry_whose_path_would_escape(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A valid token whose (somehow) unsafe entry name would escape the token
+    directory resolves to ``None``, never to a path outside the cache."""
+    cache = UploadCache(tmp_path)
+    _dest, token = cache.stage("ok.opj", b"ok")
+    monkeypatch.setattr(cache, "_sync", lambda **_kw: None)
+    cache._entries[token] = fs.Entry("../../escape.opj", 2, 1.0)
+    assert cache.resolve(token) is None
+
+
+def test_resolved_path_is_exactly_token_dir_and_name(tmp_path: Path) -> None:
+    (tmp_path / "sub").mkdir()
+    cache = UploadCache(tmp_path / "sub" / ".." / "root")
+    dest, token = cache.stage("proj.opj", b"hello")
+    root = os.path.normpath(tmp_path / "root")
+    assert str(dest) == os.path.join(root, token, "proj.opj")
+    assert cache.resolve(token) == dest
+
+
 # ── review item 8: never touch files it did not create ──────────────────────
 
 

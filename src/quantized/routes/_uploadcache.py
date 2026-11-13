@@ -121,10 +121,26 @@ class UploadCache:
 
     # -- persistence --------------------------------------------------------
     def _path(self, token: str, entry: fs.Entry) -> Path:
-        return self.root / token / entry.name
+        """``<root>/<token>/<name>``, contained: ``ValueError`` unless the
+        normalized path is exactly one token directory and one file name below
+        the root. Callers validate ``token`` (:data:`fs.TOKEN_RE`) and the
+        index validates ``name`` (:func:`fs.valid_name`) already; this is the
+        last check before the path reaches the filesystem, so a token or name
+        that ever slipped past those (``..``, a separator, an absolute path)
+        fails closed here instead of escaping the cache."""
+        base = os.path.normpath(self.root)
+        candidate = os.path.normpath(os.path.join(base, token, entry.name))
+        if not candidate.startswith(base + os.sep):
+            raise ValueError(f"upload cache path escapes {base}: {token!r}/{entry.name!r}")
+        if os.path.dirname(os.path.dirname(candidate)) != base:
+            raise ValueError(f"malformed upload cache path: {token!r}/{entry.name!r}")
+        return Path(candidate)
 
     def _present(self, token: str, entry: fs.Entry) -> bool:
-        path = self._path(token, entry)
+        try:
+            path = self._path(token, entry)
+        except ValueError:
+            return False
         try:
             # The token dir and its file themselves, never through a link.
             return (
@@ -296,11 +312,15 @@ class UploadCache:
             entry = self._entries.get(token)
             if entry is None:
                 return None
+            try:
+                path = self._path(token, entry)
+            except ValueError:
+                return None
             entry.last_used = time.time()
             self._entries.move_to_end(token)
             self._own.add(token)
             self._save()
-            return self._path(token, entry)
+            return path
 
     def _unpin(self, token: str) -> None:
         with self._lock:
