@@ -73,6 +73,27 @@ def test_observation_variance_interpolates_and_holds_the_ends() -> None:
     np.testing.assert_allclose(got, [2.0])
 
 
+def test_repeated_x_rows_keep_their_own_variance_on_the_fitted_x() -> None:
+    """Integration review item 5: repeated x with unequal weights. On the
+    fitted x itself (the result worksheet's PI columns) each row keeps its own
+    variance, matching statsmodels WLS row for row; a separate grid gets the
+    mean at that x."""
+    rng = np.random.default_rng(8)
+    x = np.repeat(np.linspace(0.0, 10.0, 15), 2)
+    dy = np.tile([0.2, 1.5], 15)
+    y = 1.0 + 0.5 * x + rng.normal(0, 1, x.size) * dy
+    w = weights_from_dy(dy, x.size)
+    fit = curve_fit(x, y, _line, [0.0, 0.0], weights=w)
+    var_rows = observation_variance_on_grid(x, fit["obsVar"], x)
+    np.testing.assert_allclose(var_rows, fit["obsVar"])
+    b = fit_bands(x, _line, fit["params"], fit["covar"], fit["nPoints"], fit["nFree"], mse=var_rows)
+    wls = sm.WLS(y, sm.add_constant(x), weights=w).fit()
+    frame = wls.get_prediction(sm.add_constant(x), weights=w).summary_frame(alpha=0.05)
+    np.testing.assert_allclose(b["piHi"], frame["obs_ci_upper"], rtol=1e-6, atol=1e-7)
+    grid = observation_variance_on_grid(x, fit["obsVar"], np.array([x[0]]))
+    assert grid[0] == pytest.approx(np.mean(fit["obsVar"][:2]))
+
+
 def test_absolute_sigma_obs_var_is_the_error_bar_squared() -> None:
     x = np.linspace(0.0, 5.0, 12)
     dy = 0.2 + 0.1 * x

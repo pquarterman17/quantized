@@ -183,17 +183,23 @@ def observation_variance_on_grid(
     * between data points the variance is linearly interpolated in x;
     * outside the data range it is held at the nearest end point's value (no
       extrapolation of an error model the data cannot support);
-    * repeated x values are averaged; zero-weight points (infinite variance)
-      are not observations and are skipped.
+    * where several data points share one x, the grid there gets their mean
+      variance (one band value per x); zero-weight points (infinite
+      variance) are not observations and are skipped.
 
-    At a data point the result is exactly that point's variance, which is
-    what statsmodels' ``get_prediction(..., weights=w)`` uses.
+    When the grid IS the fitted x, row for row (the result worksheet's
+    prediction columns), each row gets its OWN variance, repeated x
+    included — what statsmodels' ``get_prediction(..., weights=w)`` gives
+    at the data. Elsewhere a grid point at a distinct data x gets exactly
+    that point's variance.
     """
     xd = np.asarray(x_data, dtype=float).ravel()
     vd = np.asarray(var_data, dtype=float).ravel()
     xg = np.asarray(x_grid, dtype=float).ravel()
     if xd.size != vd.size:
         raise ValueError("x_data and var_data must be the same length")
+    if xg.size == xd.size and bool(np.array_equal(xg, xd, equal_nan=True)):
+        return np.where(np.isfinite(vd) & (vd >= 0), vd, np.nan)
     ok = np.isfinite(xd) & np.isfinite(vd) & (vd >= 0)
     if not bool(np.any(ok)):
         return np.full(xg.size, np.nan)
