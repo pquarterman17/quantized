@@ -46,7 +46,13 @@ export function quickPlotSeriesXSeed(
 ): QuickPlotSeriesXSeed | null {
   const seed = quickPlotFigureSeed(dataset, memory, withhold);
   const own = ownXSeries(effectiveDesignations(dataset.data, dataset.columnDesignations));
-  const excluded = new Set([...seed.view.hiddenChannels, ...seed.errors.map((b) => b.channel)]);
+  // The one-X default plot holds a Y on a secondary X back (store/
+  // windowDefaults' own-X rule); HERE each Y gets its own X, so those are
+  // exactly the series to draw -- only the other held columns stay out.
+  const excluded = new Set([
+    ...seed.view.hiddenChannels.filter((c) => !Object.hasOwn(own, c)),
+    ...seed.errors.map((b) => b.channel),
+  ]);
   // A never-filled column is no curve (no empty legend entry).
   const yKeys = (seed.view.yKeys ?? dataset.data.labels.map((_, c) => c)).filter(
     (c) => !excluded.has(c) && hasFiniteValue(dataset.data.values, c),
