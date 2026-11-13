@@ -112,6 +112,11 @@ describe("SignalProcessingPanel", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/uncertainty in secondary came out of an earlier smoothing, derivative or integral.*correlated/);
     expect(screen.getByRole("button", { name: "Create linked worksheet" })).toBeDisabled();
     expect(correctionMock).not.toHaveBeenCalled();
+    // The note under the drop box must not contradict the alert: an integral
+    // CAN propagate; this input is the problem, not the operation (live check).
+    const note = screen.getByRole("group", { name: "Bound uncertainty" });
+    expect(note).not.toHaveTextContent(/cannot be propagated through this operation/);
+    expect(note).toHaveTextContent(/earlier linear step/);
     // A scalar step is still exact.
     fireEvent.change(screen.getByRole("combobox", { name: "Operation" }), { target: { value: "normalize-peak" } });
     await waitFor(() => expect(screen.getByRole("button", { name: "Create linked worksheet" })).toBeEnabled());

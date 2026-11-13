@@ -37,7 +37,11 @@ export default function SignalUncertaintyControls({
       <div className="qz-signal-note">
         {drop
           ? `The output's error column for ${boundLabels.join(", ")} is left blank; the source keeps its uncertainty.`
-          : blocked || !propagates
+          : blocked && propagates
+            ? // Blocked although the operation propagates: the input is an
+              // earlier step's correlated output (the alert below says so).
+              `The bound uncertainty of ${boundLabels.join(", ")} came out of an earlier linear step, so it can't be propagated again. Drop it for this output to continue.`
+            : blocked || !propagates
             ? `The bound uncertainty of ${boundLabels.join(", ")} cannot be propagated through this operation. Drop it for this output to continue.`
             : operation.startsWith("normalize")
               ? `The bound uncertainty of ${boundLabels.join(", ")} is scaled with the signal.`
