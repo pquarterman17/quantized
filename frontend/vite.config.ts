@@ -64,6 +64,42 @@ export default defineConfig({
     outDir: "../src/quantized/web",
     emptyOutDir: true,
     modulePreload: { resolveDependencies: prune.resolveDependencies },
+    // Bundle diet slice 25 (plans/BUNDLE_HEADROOM.md): write every module the
+    // entry runs at startup into the entry chunk itself.
+    //
+    // Rolldown's automatic splitting gives each distinct "which entries reach
+    // this module" set a chunk of its own, so any startup module that a lazy
+    // panel also imports was split out of the entry chunk. The startup code
+    // ended up in 87 chunks, every one a `<link rel="modulepreload">` fetched
+    // before first paint anyway, and each boundary was paid for in eager
+    // bytes: an `import{a as b,…}from"./x.js"` on one side and an `export{…}`
+    // on the other, for names that never leave the startup set. Measured on
+    // `d5c8ffba`: 836,984 B across 87 eager chunks; 821,796 B as the entry
+    // chunk plus Rolldown's runtime. The same modules, 15,188 B less glue.
+    //
+    // `tags: ["$initial"]` is Rolldown's own name for "statically needed by
+    // an entry". `includeDependenciesRecursively: false` is what keeps the
+    // group exact, and it is NOT optional here: the default (true) also pulls
+    // in whatever a captured module merely re-exports, and a re-export is how
+    // this codebase keeps lazy-only halves out of the eager bundle (`export *
+    // from "./foldertreeQueries"` in an eager module; architecture.test.ts's
+    // REEXPORTED_LAZY_HALVES). Measured with the default: 15 lazy modules came
+    // back into the startup chunk, 833,354 B.
+    //
+    // A group only decides which FILE a module is written to. The set of
+    // modules loaded at startup is unchanged (the eager chunks' sourcemaps
+    // list the same sources before and after), and lazy chunks import from
+    // the entry chunk exactly as they imported from its 86 siblings.
+    rolldownOptions: {
+      output: {
+        codeSplitting: { includeDependenciesRecursively: false, groups: [{ name: "app", tags: ["$initial"] }] },
+      },
+    },
+    // Vite warns about any single chunk over 500 kB and suggests splitting
+    // it. For the entry chunk that advice is the reverse of the measurement
+    // above; `scripts/check-bundle-size.mjs` is the size gate (it fails the
+    // build, this only prints), so the warning is set clear of the entry.
+    chunkSizeWarningLimit: 900,
   },
   server: {
     proxy: {
