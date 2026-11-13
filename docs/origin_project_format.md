@@ -331,9 +331,11 @@ and never used for a file the header-driven path recognises.
 - Text is decoded as latin-1 (as everywhere in this reader); a project
   saved under another ANSI code page (the corpus has GBK-era templates)
   shows mojibake in text cells and labels. No oracle states the code page.
-- Date/Time columns are returned as Origin stores them: a float64 day
-  count (Origin's Julian-day number, 12 h offset from the astronomical JD),
-  not a timestamp.
+- Date / Time / Month / Day-of-week columns are returned as Origin stores
+  them — float64 numbers — with a per-column **format hint** in
+  `metadata["origin_column_formats"]` saying how to read them (§4.1,
+  "Column format"). They are not converted to timestamps, and which
+  weekday a day-of-week `1` is has no oracle.
 - Column order within a book is dataset order in the file, not the sheet's
   display order (§4.1 notes the two can differ).
 - The native writer now writes the allocated / first / used-end row
@@ -652,6 +654,8 @@ whatever it was, as its label:
 | `0x0b` | byte | flags (`0xa1` v4.3380 / `0x81` v4.3227) |
 | **`0x11`** | **byte = plot designation** | 0=Y, 1=disregard, 2=Y-error, 3=X, 4=label, 5=Z, 6=X-error, 7=Group, 8=Subject (see below). **Authoritative.** |
 | **`0x12`** | **short name** | ASCII, NUL-terminated, variable length (1-4+ chars: `A`, `EY`, `c9`, `i0es`). Maps to the dataset — §4.1.1 |
+| `0x1E` | u8 column format | low nibble = the column's Format: `0` Numeric, `1` Text, `2` Time, `3` Date, `4` Month, `5` Day of week, `9` Text & Numeric; high nibble = numeric display (`0` decimal, `1` scientific, `2` engineering, `3` decimal with separators, `5` custom). See "Column format" below |
+| `0x1F` | u8 | display sub-format of a Date/Time column (e.g. `0x09` on the "MM/DD/YYYY HH:mm" columns); not decoded |
 | `0x23` | byte | X-column pointer: for Y/Y-error columns, the object-id (`0x04`) of the X column they plot against; `0x00` for X columns |
 | `0x25` | u8 type flags | a copy of the dataset header's `0x16` (§3.1): `0x21` on a Text & Numeric column — which is why it once looked like a constant marker — `0x01`/`0x03`/`0x00`/`0x10` on Numeric columns, `0x20`/`0x30` on some text ones |
 | `0x26` | u8 kind flags | a copy of the dataset header's `0x17`: high nibble = designation class (X→`5`, Y→`6`, disregard→`4`), low nibble = value kind (`0`/`1`/`2`/`8`) |
@@ -695,15 +699,42 @@ GPL code):
 | 4 | Label | public corpus (Altaxo `WksDifferentDiagramAssoc`) |
 | 5 | Z | public corpus (same) |
 | 6 | X Error | public corpus (same) |
-| 7 | Group | public corpus (same) — **not surfaced**, see below |
-| 8 | Subject | public corpus (same) — **not surfaced**, see below |
+| 7 | Group | public corpus (same) → `"group"` |
+| 8 | Subject | public corpus (same) → `"subject"` |
 
 All nine codes are confirmed by Altaxo's `WksDifferentDiagramAssoc` test,
-which names the designation of each of nine columns in four books. Codes 7
-and 8 have no member in the designation vocabulary shared with the
-frontend (`tests/fixtures/wire/origin_designations.json`), so such a
-column is recovered (name, unit, comment) but carries **no** designation —
-it is left out of `column_designations` rather than reported as Y.
+which names the designation of each of nine columns in four books. Group
+and Subject are the factor designations of Origin's statistics tools
+(which group / which subject a row belongs to); they are in the
+designation vocabulary shared with the frontend
+(`tests/fixtures/wire/origin_designations.json`) as `"group"` and
+`"subject"`, get a header badge, and are never auto-plotted as a series.
+(The native `.opj` writer's own designation table does not carry them
+yet: exporting such a column writes it as Y.)
+
+**Column format (Date / Time / Month / Day of week).** These columns are
+plain 8-byte doubles in the datasets section (§3.1: `01 60`, like any
+Numeric column); only the property block's `0x1E` says the numbers are a
+calendar quantity. The reader surfaces that as
+`metadata["origin_column_formats"][<short>]` and leaves the values alone:
+
+| Format | hint | meaning of the stored number |
+|---|---|---|
+| Date (`3`) | `{"kind": "datetime", "unit": "origin_day_number", "unix_epoch_day": 2440587.0}` | an instant, as Origin's Julian day number. Origin starts its day numbers at **midnight** — astronomical JD − 0.5 — so `unix_seconds = (value − 2440587.0) × 86400` |
+| Time (`2`) | `{"kind": "time", "unit": "days"}` | a time of day, as a fraction of a day (0.5 = 12:00) |
+| Month (`4`) | `{"kind": "month"}` | month number 1-12 |
+| Day of week (`5`) | `{"kind": "day_of_week"}` | weekday number (numbering not established) |
+
+Oracle: Altaxo's `ValueType` assertions name the format of each column in
+`DateTimeColumns` and `WksDifferentColumnTypes`, and its tests state the
+calendar date-time behind seven stored day numbers (1999-2033) and the
+clock time behind three stored fractions; the midnight-based epoch
+reproduces all of them to the minute (the astronomical epoch is 12 h off
+on every one). Corpus: the `0x1E` low nibble agrees with the dataset
+header's cell kind on all 1297 columns (`9` ↔ Text & Numeric, `1` ↔ Text,
+`0`/`2`-`5` ↔ numeric cells). Whether a Date column was displayed with
+or without the time of day is the `0x1F` sub-format, which is not decoded:
+the hint is `datetime` either way, since the fraction is always stored.
 
 **Sheet (layer) structure.** Books can hold multiple sheets (`Moke.opj`
 `Book4` has three: `Sheet1`, `FitLinear1`, `FitLinearCurve1`). Each sheet is
@@ -2463,7 +2494,7 @@ reading only this doc:
 - **`.opj` header-driven reader, open points (2026-11-13)** — listed in
   §3.1 "Not known / not done" and §3.1.1: the owner-corpus realdata pins
   have not been re-run against it; multi-object matrix sheets; text code
-  page; Group / Subject designations not surfaced.
+  page.
 - **Sheet-name exact bytes** (§4.1's `50 64` prefix) and **extra-sheet
   suffix numbering** (§5) — medium confidence, not exhaustively pinned.
 - **Templates (`.otp`/`.otpu`)** — same CPY family, not yet RE'd as a

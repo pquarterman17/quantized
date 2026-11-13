@@ -22,7 +22,47 @@ from quantized.datastruct import DataStruct
 from quantized.io.origin_project.origin_richtext import clean_richtext
 from quantized.io.origin_project.windows import BookMeta, ColumnMeta
 
-__all__ = ["Columns", "TextColumns"]
+__all__ = ["ORIGIN_DAY_NUMBER_OF_UNIX_EPOCH", "Columns", "TextColumns", "column_format_hint"]
+
+# Origin stores a date as a "Julian day number" that starts its days at
+# MIDNIGHT: the astronomical Julian date minus 0.5. 1970-01-01 00:00 is
+# therefore day number 2440587.0 (astronomical JD 2440587.5), and
+#     unix_seconds = (value - 2440587.0) * 86400.
+# Oracle: Altaxo's DateTimeColumns / WksDifferentColumnTypes /
+# WksThreeGroups / WksDifferentDiagramAssoc tests state the calendar
+# date-time of stored values (seven distinct instants, 1999-2033, to the
+# minute); this epoch reproduces every one, and the astronomical epoch is
+# 12 h off on every one. tests/test_io_origin_opj_corpus.py replays the
+# three that sit in straight-line test code; the four inside loops were
+# checked by hand.
+ORIGIN_DAY_NUMBER_OF_UNIX_EPOCH = 2440587.0
+
+
+def column_format_hint(value_format: str) -> dict[str, object] | None:
+    """How to READ a calendar-formatted column's numbers, or None.
+
+    The cells stay float64 — this is a hint for whoever renders them:
+
+    * ``date``: an instant, as Origin's midnight-based Julian day number
+      (``unix_epoch_day`` is the value of 1970-01-01 00:00). Whether Origin
+      displayed it as a date, or a date and time, is a display setting the
+      reader does not decode — the fractional day is always there;
+    * ``time``: a time of day (or a duration), in days — 0.5 is 12:00;
+    * ``month``: a month number, 1-12;
+    * ``day_of_week``: a weekday number (which weekday is 1 is not
+      established — no oracle pins it).
+    """
+    if value_format == "date":
+        return {
+            "kind": "datetime",
+            "unit": "origin_day_number",
+            "unix_epoch_day": ORIGIN_DAY_NUMBER_OF_UNIX_EPOCH,
+        }
+    if value_format == "time":
+        return {"kind": "time", "unit": "days"}
+    if value_format in ("month", "day_of_week"):
+        return {"kind": value_format}
+    return None
 
 _V = TypeVar("_V")
 
@@ -229,15 +269,22 @@ def _build_book(
         # Origin short names of the value columns, in channel order — lets a
         # figure's curve->column binding (opju_curves) map onto `.values`.
         "origin_column_names": value_cols,
-        # A column whose designation the reader has no name for (``""`` — see
-        # ``windows._DESIGNATION_CODES``) is left out, never given a default.
-        "column_designations": {c: m.designation for c, m in col_meta.items() if m.designation},
+        "column_designations": {c: m.designation for c, m in col_meta.items()},
         "column_comments": {
             c: clean_richtext(m.comment) for c, m in col_meta.items() if m.comment
         },
         "origin_text_columns": {c: rows for c, rows in (text_cols or [])},
         "origin_report_sheets": {c: rows for c, rows in (report_cols or [])},
     }
+    formats = {
+        c: hint
+        for c, m in col_meta.items()
+        if (hint := column_format_hint(m.value_format)) is not None
+    }
+    if formats:
+        # Date / Time / Month / Day-of-week columns: the numbers are in
+        # `.values` as Origin stored them; this says how to read them.
+        meta["origin_column_formats"] = formats
     if imag_cols:
         # Blank cells as None, not NaN: metadata is serialized as strict JSON.
         meta["origin_complex_imaginary"] = {

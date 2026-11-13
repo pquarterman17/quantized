@@ -23,6 +23,7 @@ from __future__ import annotations
 import math
 import os
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -196,6 +197,13 @@ _STRING = re.compile(r'Assert\.Equal\("([^"]*)", c\.Data\[(\d+)\]\.AsString\(\)\
 _LABEL = re.compile(r'Assert\.Equal\("((?:[^"\\]|\\.)*)", c\.(LongName|Units|Comments)\)')
 _EMPTY = re.compile(r"Assert\.Empty\(c\.(LongName|Units|Comments)\)")
 _END_ROW = re.compile(r"Assert\.Equal\((\d+), c\.EndRow\)")
+_DATETIME = re.compile(
+    r"new DateTime\((\d+), (\d+), (\d+), (\d+), (\d+), (\d+)\), "
+    r"RoundToSecond\(c\.Data\[(\d+)\]\.AsDateTime\(\)"
+)
+_TIMESPAN = re.compile(
+    r"new TimeSpan\((\d+), (\d+), (\d+)\), RoundToSecond\(c\.Data\[(\d+)\]\.AsTimeSpan\(\)"
+)
 _LOOP = re.compile(r"^\s*(for|foreach|switch)\b")
 
 
@@ -236,6 +244,12 @@ def _altaxo_expectations() -> dict[str, list[tuple[int, int, str, object, object
             facts.append((sheet, column, "label", m.group(1), ""))
         elif m := _END_ROW.search(line):
             facts.append((sheet, column, "end_row", None, int(m.group(1))))
+        elif m := _DATETIME.search(line):
+            *ymdhms, row = (int(g) for g in m.groups())
+            facts.append((sheet, column, "datetime", row, tuple(ymdhms)))
+        elif m := _TIMESPAN.search(line):
+            h, mi, sec, row = (int(g) for g in m.groups())
+            facts.append((sheet, column, "timespan", row, h * 3600 + mi * 60 + sec))
     return out
 
 
@@ -262,6 +276,7 @@ def _column_view(book: DataStruct, index: int) -> dict[str, object]:
         "LongName": long_name,
         "Units": unit,
         "Comments": (meta.get("column_comments") or {}).get(short, ""),
+        "format": (meta.get("origin_column_formats") or {}).get(short),
         "rows": max(0 if numeric is None else numeric.size, len(text or [])),
     }
 
@@ -284,6 +299,18 @@ def test_altaxo_expected_values_labels_and_row_counts() -> None:
                 assert view["text"] is not None and view["text"][key] == expected, where  # type: ignore[index]
             elif kind == "label":
                 assert view[str(key)] == expected, where
+            elif kind == "datetime":
+                # The stored number + the column's format hint must give the
+                # calendar instant Altaxo states (to the minute it rounds to).
+                hint = view["format"]
+                assert hint is not None and hint["kind"] == "datetime", where  # type: ignore[index]
+                seconds = (view["numeric"][key] - hint["unix_epoch_day"]) * 86400.0  # type: ignore[index]
+                got = datetime.fromtimestamp(round(seconds), tz=UTC)
+                assert got == datetime(*expected, tzinfo=UTC), where  # type: ignore[misc]
+            elif kind == "timespan":
+                hint = view["format"]
+                assert hint == {"kind": "time", "unit": "days"}, where
+                assert round(view["numeric"][key] * 86400.0) == expected, where  # type: ignore[index]
             else:
                 # A book pads shorter columns to its longest; no column may
                 # run past the longest used-row end Altaxo states for it.

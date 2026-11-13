@@ -137,13 +137,21 @@ def sheet_header(
 
 
 def prop_block(
-    short: str, designation: int, kind: tuple[int, int, int] = TEXT_NUMERIC, *, size: int = 519
+    short: str,
+    designation: int,
+    kind: tuple[int, int, int] = TEXT_NUMERIC,
+    *,
+    size: int = 519,
+    value_format: int = 9,
 ) -> bytes:
     """A column-property block: flag byte at 0x06, designation at 0x11,
-    short name at 0x12, the column's two type bytes at 0x25-0x26."""
+    short name at 0x12, the column's Format at 0x1E (9 Text & Numeric,
+    0 Numeric, 1 Text, 2 Time, 3 Date, 4 Month, 5 Day of week), its two
+    type bytes at 0x25-0x26."""
     p = bytearray(size)
     p[0x06] = 0x09
     p[0x11] = designation
+    p[0x1E] = value_format
     p[0x12 : 0x12 + len(short) + 1] = short.encode("latin1") + b"\x00"
     p[0x25], p[0x26] = kind[0], kind[1]
     return block(bytes(p))

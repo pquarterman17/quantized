@@ -383,9 +383,13 @@ data. The one `.opj` still not importing is a third-party synthetic stub
 - Which Origin release each CPYA build number is. The corpus names two
   (a file called `…-7.0.opj` is 4.2656; LabPlot's `origin8_…` files are
   4.2878); the rest is left as build numbers on purpose.
-- Text code page (latin-1 assumed); Date/Time as raw day counts.
-- Group / Subject designations are recovered but not surfaced (the
-  designation vocabulary shared with the frontend has no such members).
+- Text code page (latin-1 assumed). Date/Time columns keep their raw
+  numbers; a follow-up the same day added a per-column format hint
+  (`origin_column_formats`, epoch proven against Altaxo's date-time
+  assertions — format doc §4.1 "Column format"). No UI renders it yet.
+- Group / Subject designations: surfaced in a follow-up the same day
+  (`"group"` / `"subject"` in the shared vocabulary); the native writer's
+  designation table still lacks them.
 - **Native `.opj` writer:** `writer_blocks.col_header` never set the
   used-row end (`0x21` stayed at the template's 161); Origin loaded the
   files regardless. Fixed in a follow-up the same day — it now writes

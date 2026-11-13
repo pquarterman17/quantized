@@ -93,6 +93,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   (`Book1`). Many used to be titled "BA".
 - Origin `.opj` Numeric, Date and Time columns keep their long name, unit,
   comment and X/Y designation; multi-line comments are kept whole.
+- Origin `.opj` columns designated Group or Subject are labelled as such in
+  the worksheet header and are no longer plotted as data series.
+- Origin `.opj` files written by quantized state each column's real row
+  count. Files written earlier still open in full.
 - Origin `.opj` data that cannot be read is named in the import's fidelity
   summary instead of being left out silently.
 

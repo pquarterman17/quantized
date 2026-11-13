@@ -54,7 +54,12 @@ from quantized.io.origin_project.container import walk_blocks
 
 __all__ = ["BookMeta", "ColumnMeta", "window_metadata"]
 
-# Origin's published plot-designation enum (format fact).
+# Origin's plot-designation enum. 0-6 are the published X/Y/Z/error/label
+# set; 7 (Group) and 8 (Subject) are the factor designations of the
+# statistics tools, confirmed by Altaxo's WksDifferentDiagramAssoc oracle
+# (one column of each of the nine designations, in four books). The strings
+# are a wire contract shared with the frontend
+# (tests/fixtures/wire/origin_designations.json).
 _DESIGNATION = {
     0: "Y",
     1: "disregard",
@@ -63,14 +68,22 @@ _DESIGNATION = {
     4: "label",
     5: "Z",
     6: "X-error",
+    7: "group",
+    8: "subject",
 }
-# Codes 7 (Group) and 8 (Subject) are real -- Altaxo's WksDifferentDiagramAssoc
-# oracle names them -- and a column carrying one IS a column-property block.
-# They have no entry above: the designation vocabulary is a wire contract
-# shared with the frontend (tests/fixtures/wire/origin_designations.json) and
-# has no such member yet. Such a column is reported with NO designation
-# (``""``, left out of ``column_designations``) rather than passed off as Y.
 _DESIGNATION_CODES = frozenset(range(9))
+
+# The column's Origin FORMAT (Column Properties > Format), low nibble of
+# property-block byte 0x1E. Only the calendar formats are surfaced: their
+# cells are ordinary float64 numbers that mean something else (see
+# ``opj_books.column_format_hint``). The other codes are 0 Numeric, 1 Text
+# and 9 Text & Numeric — in the public corpus those agree, column for
+# column, with the cell kind the dataset header declares (1297 columns) —
+# and the high nibble is the numeric display (decimal / scientific / ...).
+# Oracle: Altaxo's ValueType assertions in DateTimeColumns and
+# WksDifferentColumnTypes (Time, Date, Month, Day) and OneWorksheet /
+# WksDifferentNumericFormattings (TextNumeric, Numeric).
+_VALUE_FORMAT = {2: "time", 3: "date", 4: "month", 5: "day_of_week"}
 
 
 @dataclass(frozen=True)
@@ -80,6 +93,9 @@ class ColumnMeta:
     long_name: str = ""
     unit: str = ""
     comment: str = ""
+    # "time" | "date" | "month" | "day_of_week" for a calendar-formatted
+    # column (``_VALUE_FORMAT``), else "".
+    value_format: str = ""
 
 
 @dataclass
@@ -241,8 +257,7 @@ def window_metadata(b: bytes) -> dict[str, BookMeta]:
 
     Only primary-sheet columns are mapped for now (multi-sheet ``@N`` datasets
     are plan item 5). Graph windows contain no column blocks and drop out
-    naturally. A column whose designation code has no name in
-    ``_DESIGNATION`` (Group, Subject) gets ``designation == ""``.
+    naturally.
 
     A report/curve sheet appended after the primary sheet (Origin's
     FitLinear/FitNL auto-add, e.g. "FitLinear1"/"FitLinearCurve1") must never
@@ -255,14 +270,14 @@ def window_metadata(b: bytes) -> dict[str, BookMeta]:
     """
     books: dict[str, BookMeta] = {}
     current: BookMeta | None = None
-    pending: tuple[str, str] | None = None  # (short, designation) awaiting label
+    pending: tuple[str, str, str] | None = None  # (short, designation, format) awaiting label
     closed = False  # set once the current window moves past its primary sheet
     sheets_seen = 0  # count of Pd<Name> markers since the current window header
 
     def commit(long_name: str = "", unit: str = "", comment: str = "") -> None:
         nonlocal pending, closed
         if pending is not None and current is not None and not closed:
-            short, desig = pending
+            short, desig, value_format = pending
             if short in current.columns:
                 # A repeated short means sheet 2+ started (every sheet restarts
                 # at column A); only the primary sheet maps to plain
@@ -270,7 +285,9 @@ def window_metadata(b: bytes) -> dict[str, BookMeta]:
                 # fallback for containers with no Pd<Name> marker).
                 closed = True
             else:
-                current.columns[short] = ColumnMeta(short, desig, long_name, unit, comment)
+                current.columns[short] = ColumnMeta(
+                    short, desig, long_name, unit, comment, value_format
+                )
         pending = None
 
     for size, payload in walk_blocks(b):
@@ -304,6 +321,7 @@ def window_metadata(b: bytes) -> dict[str, BookMeta]:
                 closed = True
         elif current is not None and is_col and not closed:
             short = _cstring(payload, 0x12, 20) or "?"
-            pending = (short, _DESIGNATION.get(payload[0x11], ""))
+            value_format = _VALUE_FORMAT.get(payload[0x1E] & 0x0F, "")
+            pending = (short, _DESIGNATION[payload[0x11]], value_format)
     commit()
     return books

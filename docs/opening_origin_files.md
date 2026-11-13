@@ -55,7 +55,8 @@ Import is thorough but not lossless. In particular:
   worksheet data) is left out, and the Library's Origin fidelity summary
   says so — e.g. "1 matrix book(s) not imported".
 - **Date and Time columns come in as Origin's day numbers**, not as
-  formatted dates.
+  formatted dates. The dataset records which columns they are and how to
+  convert them, but the worksheet does not format them yet.
 - **Text in a non-Western code page** (e.g. a project saved on a Chinese
   Windows) may show garbled characters in text cells and labels.
 

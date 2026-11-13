@@ -656,10 +656,9 @@ def test_import_route_lists_data_omissions_in_origin_fidelity(tmp_path: Path) ->
     assert fidelity["data_diagnostics"][0]["dataset"] == "MBook1"
 
 
-def test_group_and_subject_designations_are_columns_without_a_designation(tmp_path: Path) -> None:
-    """Designation codes 7 (Group) and 8 (Subject) have no name in the
-    shared designation vocabulary. The column and its labels are still
-    recovered; it is left out of ``column_designations`` — not called Y."""
+def test_group_and_subject_designations_are_surfaced(tmp_path: Path) -> None:
+    """Designation codes 7 (Group) and 8 (Subject) — the factor columns of
+    Origin's statistics tools — are reported as such, not as Y."""
     datasets = [
         dataset(dataset_header("Book1_A", DOUBLE, total=2, used=2), _doubles([1.0, 2.0], 2)),
         dataset(dataset_header("Book1_B", DOUBLE, total=2, used=2), _doubles([3.0, 4.0], 2)),
@@ -677,7 +676,7 @@ def test_group_and_subject_designations_are_columns_without_a_designation(tmp_pa
     )
     book = _books(tmp_path, project(datasets, windows))["Book1"]
     assert book.labels == ("Cohort", "Subject id")
-    assert book.metadata["column_designations"] == {"A": "X"}
+    assert book.metadata["column_designations"] == {"A": "X", "B": "group", "C": "subject"}
 
 
 def test_metadata_naming_no_dataset_does_not_displace_the_real_x(tmp_path: Path) -> None:
@@ -855,3 +854,43 @@ def test_primary_book_is_one_that_holds_numbers(tmp_path: Path) -> None:
     path.write_bytes(project([empty, real]))
     ds = read_origin_project(path)
     assert ds.metadata["origin_book"] == "Book1@2" and ds.time.tolist() == [4.0, 5.0, 6.0]
+
+
+def test_calendar_columns_carry_a_format_hint_and_keep_their_numbers(tmp_path: Path) -> None:
+    """A Date / Time / Month / Day-of-week column is float64 like any
+    Numeric column; only its property block says the numbers are a
+    calendar quantity. The hint says how to read them — the values are
+    not converted."""
+    from quantized.io.origin_project.opj_books import ORIGIN_DAY_NUMBER_OF_UNIX_EPOCH
+
+    # 2000-01-01 12:00 UTC is 10957.5 days after the Unix epoch.
+    stamp = ORIGIN_DAY_NUMBER_OF_UNIX_EPOCH + 10957.5
+    names = "ABCDE"
+    cells = ([1.0], [stamp], [0.25], [7.0], [3.0])
+    datasets = [
+        dataset(dataset_header(f"Book1_{n}", DOUBLE, total=1, used=1), _doubles(v, 1))
+        for n, v in zip(names, cells, strict=True)
+    ]
+    windows = window_header("Book1") + sheet_header("Sheet1", cols=5, rows=1)
+    for n, fmt in zip(names, (0, 3, 2, 4, 5), strict=True):
+        windows += prop_block(n, 3 if n == "A" else 0, (0x01, 0x60, 8), value_format=fmt) + null()
+    book = _books(tmp_path, project(datasets, windows))["Book1"]
+    assert book.values[0].tolist() == [stamp, 0.25, 7.0, 3.0]  # untouched
+    assert book.metadata["origin_column_formats"] == {
+        "B": {"kind": "datetime", "unit": "origin_day_number", "unix_epoch_day": 2440587.0},
+        "C": {"kind": "time", "unit": "days"},
+        "D": {"kind": "month"},
+        "E": {"kind": "day_of_week"},
+    }
+    seconds = (book.values[0, 0] - 2440587.0) * 86400.0
+    assert seconds == 946728000.0  # 2000-01-01T12:00:00Z
+
+
+def test_plain_numeric_book_has_no_format_hints(tmp_path: Path) -> None:
+    windows = (
+        window_header("Book1")
+        + sheet_header("Sheet1", cols=1, rows=2)
+        + prop_block("A", 3, (0x01, 0x50, 8), value_format=0)
+        + null()
+    )
+    assert "origin_column_formats" not in _books(tmp_path, _one_column(windows))["Book1"].metadata
