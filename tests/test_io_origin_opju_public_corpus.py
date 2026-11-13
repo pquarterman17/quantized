@@ -29,7 +29,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from quantized.io.origin_project import OriginProjectError, read_origin_project_all
+from quantized.io.origin_project import (
+    OriginProjectError,
+    read_origin_books,
+    read_origin_project_all,
+)
 from quantized.io.origin_project.container import ORIGIN_MISSING
 from quantized.io.origin_project.opju_blocks import find_headers, rle_expand
 from quantized.io.origin_project.opju_matrix import matrix_geometry
@@ -280,3 +284,25 @@ def test_corpus_fails_closed_and_length_checks_dominate() -> None:
     assert imported >= 0.9 * len(files)
     assert confidence["length_checked"] >= 3 * confidence["grammar_only"]
     assert confidence["marker_unanchored"] == 0
+
+
+@pytest.mark.parametrize("stem", [s for s in _STEMS if s.startswith(("Matrix", "OneWorksheetOne"))])
+def test_opju_matrix_books_equal_the_paired_opj_matrix_books(stem: str) -> None:
+    """Both containers' matrices import as the same X / Y / Z map, cell for
+    cell — the `.opj` reader is the oracle for the `.opju` one."""
+    assert _PAIR_DIR is not None
+
+    def matrices(path: Path) -> dict[str, object]:
+        return {
+            str(b.metadata["origin_book"]): b
+            for b in read_origin_books(path)
+            if b.metadata.get("origin_matrix")
+        }
+
+    opj, opju = matrices(_PAIR_DIR / f"{stem}.opj"), matrices(_PAIR_DIR / f"{stem}.opju")
+    assert opj and set(opj) == set(opju)
+    for name, a in opj.items():
+        b = opju[name]
+        assert a.labels == b.labels, name  # type: ignore[attr-defined]
+        assert np.array_equal(a.values, b.values, equal_nan=True), name  # type: ignore[attr-defined]
+        assert b.metadata["is2D"] is True  # type: ignore[attr-defined]

@@ -7009,6 +7009,18 @@ describe("openFromLibrary: one meaning for the Library's open (re-audit #11)", (
     expect(s.plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("c");
   });
 
+  it("an Origin MATRIX book's open still lands in Map, not the Worksheet (#646)", () => {
+    const matrix = {
+      id: "mx", name: "MBook1",
+      data: { time: [0, 0, 1, 1], values: [[0, 1], [1, 2], [0, 3], [1, 4]], labels: ["Y", "Z", "W"], units: ["", "", ""], metadata: { origin_book: "MBook1", origin_matrix: "MBook1", is2D: true } },
+    };
+    useApp.setState({ datasets: [csv, book, matrix] as never });
+    useApp.getState().openFromLibrary("mx");
+    const s = useApp.getState();
+    expect(s.stageTab).toBe("map");
+    expect(s.activeId).toBe("mx");
+  });
+
   it("a plain activation (click, right-click, sheet tab) still leaves the plot alone", () => {
     useApp.getState().activateFromLibrary("ob");
     expect(useApp.getState().activeId).toBe("c");

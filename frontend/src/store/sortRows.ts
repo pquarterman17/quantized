@@ -33,6 +33,7 @@ import { excludedSet } from "../lib/rowstate";
 import type { Dataset } from "../lib/types";
 import { clearOverlaysFor } from "./corrections";
 import { resolvePendingEdit } from "./pendingEdit";
+import { toast } from "./toasts";
 import { recompute, useApp } from "./useApp";
 
 /** A sort key: a channel index (-1 = X) or a text column by name. */
@@ -70,13 +71,20 @@ export function sortWorksheetRows(id: string, col: SortKey, dir: 1 | -1): void {
   const get = useApp.getState;
   const ds = get().datasets.find((d) => d.id === id);
   if (!ds) return;
-  if (isRederived(ds)) return get().setStatus(REDERIVED_EDIT_NOTICE);
+  // A refusal is a toast as well as the status line (re-audit #8): read only
+  // in the status bar, it looked like nothing happened, and Ctrl+Z then
+  // undid the user's previous edit instead.
+  const refuse = (msg: string): void => {
+    get().setStatus(msg);
+    toast(msg, "danger");
+  };
+  if (isRederived(ds)) return refuse(REDERIVED_EDIT_NOTICE);
   if (resolvePendingEdit(get, ds, "sorting", () => sortWorksheetRows(id, col, dir))) return;
   const name =
     typeof col === "string" ? col : col < 0 ? String(ds.data.metadata?.x_column_name ?? "") || "X" : ds.data.labels[col] ?? `column ${col + 1}`;
   const reads = (ds.formulas ?? []).filter((f) => f.sheets?.length).map((f) => `"${f.name}"`);
   if (reads.length) {
-    return get().setStatus(
+    return refuse(
       `Can't sort "${ds.name}": ${reads.join(", ")} ${reads.length === 1 ? "reads" : "read"} another worksheet row by row through sheet(), and sorting would pair its rows with different rows there — remove that column first`,
     );
   }
@@ -84,7 +92,7 @@ export function sortWorksheetRows(id: string, col: SortKey, dir: 1 | -1): void {
     .datasets.filter((d) => d.id !== id && d.formulas?.some((f) => f.sheets?.some((b) => b.id === id)))
     .map((d) => `"${d.name}"`);
   if (readBy.length) {
-    return get().setStatus(
+    return refuse(
       `Can't sort "${ds.name}": ${readBy.join(", ")} ${readBy.length === 1 ? "reads" : "read"} it row by row through sheet(), and sorting would pair those rows with different rows here — remove those columns first`,
     );
   }

@@ -90,11 +90,12 @@ describe("Worksheet context menus", () => {
   // Rows: [ headerRow, dataRow0, dataRow1, … ] (no stats footer by default).
   const dataRow = (i: number) => screen.getAllByRole("row")[i + 1];
 
-  it("right-clicking a column header opens a menu that sets the X axis", () => {
+  it("right-clicking a column header opens a menu whose Set As › X sets the X axis", () => {
     render(<Worksheet />);
     fireEvent.contextMenu(header(2)); // channel A
-    const setX = screen.getByText("Set as X axis");
-    fireEvent.click(setX);
+    expect(screen.queryByText("Set as X axis")).toBeNull(); // one entry, not two (re-audit #20)
+    fireEvent.click(screen.getByText("Set As"));
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "X" }));
     expect(useApp.getState().xKey).toBe(0); // channel A is index 0
   });
 
@@ -636,7 +637,7 @@ describe("Worksheet column selection (item 6)", () => {
   it("right-click still opens the column context menu regardless of the click-selects change", () => {
     render(<Worksheet />);
     fireEvent.contextMenu(header(2));
-    expect(screen.getByText("Set as X axis")).toBeInTheDocument();
+    expect(screen.getByText("Set As")).toBeInTheDocument();
   });
 });
 

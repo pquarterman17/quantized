@@ -28,6 +28,10 @@ from quantized.io.origin_project.graph_preview import (
     attach_opju_graph_previews,
 )
 from quantized.io.origin_project.integrity import apply_container_integrity
+from quantized.io.origin_project.opju_graph_pages import (
+    GraphPageReport,
+    unrecovered_graph_pages,
+)
 from quantized.io.origin_project.worksheet_fidelity import worksheet_fidelity_summary
 
 __all__ = ["origin_figures_and_fidelity"]
@@ -45,6 +49,7 @@ def origin_figures_and_fidelity(
     are shown at import time instead of sitting unread in metadata.
     """
     container: Literal["opj", "opju"] = "opj" if suffix == ".opj" else "opju"
+    missed = GraphPageReport(0, [])
     try:
         if container == "opj":
             raw_figs = extract_figures(raw)
@@ -52,6 +57,7 @@ def origin_figures_and_fidelity(
         else:
             raw_figs = extract_figures_opju(raw)
             raw_figs, preview_diagnostics = attach_opju_graph_previews(raw_figs, raw)
+            missed = unrecovered_graph_pages(raw, {str(f.get("name")) for f in raw_figs})
         figs, fidelity = assess_origin_figures(
             raw_figs,
             container=container,
@@ -65,6 +71,15 @@ def origin_figures_and_fidelity(
         figs = []
         fidelity = origin_figure_decode_failure(container=container)
     manifest = apply_container_integrity(fidelity, raw, container)
+    if missed.missing or missed.unattributed:
+        # A graph window the figure decoder could not read is diagnosed, not
+        # silently absent ("no graph records found" would then be untrue).
+        code = "graphs_not_recovered" if missed.missing else "graph_content_unattributed"
+        omissions = [o for o in manifest["omissions"] if o != "no_graph_records"]
+        manifest = {**manifest, "omissions": sorted({*omissions, code})}
+        if missed.missing:
+            manifest["unrecovered_graph_count"] = missed.missing
+            manifest["unrecovered_graphs"] = [dict(g) for g in missed.pages]
     worksheet = primary.metadata.get("origin_worksheet_fidelity") if primary is not None else None
     if isinstance(worksheet, Mapping):
         manifest = {**manifest, "worksheet": worksheet_fidelity_summary(worksheet)}

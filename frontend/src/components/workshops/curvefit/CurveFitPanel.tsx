@@ -18,6 +18,8 @@ import { dockedX } from "../../overlays/dockedX";
 import { Button, Select } from "../../primitives";
 import { reportEmit } from "../../../lib/api";
 import type { CustomFitModel } from "../../../lib/fitmodels";
+import { groupFitModels } from "../../../lib/fitModelCatalog";
+import ModelSelect from "./ModelSelect";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { askConfirm } from "../../../store/confirmDialog";
@@ -150,11 +152,13 @@ export default function CurveFitPanel() {
   const isCustom = modelName.startsWith(CUSTOM_PREFIX);
   const customName = isCustom ? modelName.slice(CUSTOM_PREFIX.length) : "";
   const currentCustom = customModels.find((m) => m.name === customName) ?? null;
-  const modelOptions = [
-    ...models.map((m) => ({ value: m.name, label: m.name })),
+  const customOptions = [
     { value: CUSTOM_PREFIX, label: "Custom equation…" },
     ...customModels.map((m) => ({ value: `${CUSTOM_PREFIX}${m.name}`, label: customLabel(m) })),
   ];
+  // Grouped by Origin category, with aliases spelled out (lib/fitModelCatalog).
+  const modelGroups = groupFitModels(models);
+  const modelOptions = [...modelGroups.flatMap((g) => g.options), ...customOptions];
   // Deleting (or renaming) the loaded model — here, in the Recipe Library, or
   // anywhere else that writes the library — orphans the picker value: fall
   // back to the blank equation instead of a value no option matches.
@@ -234,12 +238,7 @@ export default function CurveFitPanel() {
           Global fit
         </Button>
       </div>
-      <Select
-        aria-label="Model"
-        options={modelOptions}
-        value={modelName}
-        onChange={(e) => setModelName(e.target.value)}
-      />
+      <ModelSelect groups={modelGroups} custom={customOptions} value={modelName} onChange={setModelName} />
     </>
   );
 

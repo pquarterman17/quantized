@@ -42,7 +42,7 @@
 // kicks. Written green against the pre-extraction useApp.ts and unchanged by
 // the move.
 
-import { isOriginBookDataset } from "../lib/grouping";
+import { isOriginBookDataset, isOriginMatrixBook } from "../lib/grouping";
 import type { AppState } from "./useApp";
 import { switchDecorationReset } from "./windowDefaults";
 import { focusedRebindPatch, focusWindowShowing, retargetPassiveRebind } from "./windows";
@@ -142,6 +142,15 @@ export function createDatasetSelectionSlice(set: SliceSet, get: SliceGet): Datas
         if (ds && !focusWindowShowing(s, id)) retargetPassiveRebind(s, id, undefined, { protectEdits: true }); // figures audit B1, below
         get().setActive(id);
         set({ stageTab: s.stageTab });
+        return;
+      }
+      // An Origin matrix book opens in Map, as a heatmap — the view a matrix
+      // is for (its worksheet is just X, Y, Z per cell, and its Plot default
+      // a Z scatter).
+      if (ds && isOriginMatrixBook(ds)) {
+        if (!focusWindowShowing(s, id)) retargetPassiveRebind(s, id, undefined, { protectEdits: true });
+        get().setActive(id);
+        set({ stageTab: "map" });
         return;
       }
       if (ds && isOriginBookDataset(ds) && s.originBookClickOpens === "worksheet") {

@@ -106,6 +106,18 @@ export function linkSheets(
 ): { sheets: SheetBinding[] | undefined } | { error: string } {
   const bound = bindSheets(expr, datasets, selfId, prior);
   if ("error" in bound) return bound;
+  // A letter the linked worksheet does not have would read nothing: the
+  // column used to be added all blank, with the reason only in the status
+  // bar (re-audit #7). Refused here, so it never lands.
+  for (const call of sheetCalls(expr)) {
+    const target = datasets.find((d) => d.id === bound.sheets.find((b) => b.name === call.name)?.id);
+    const n = target?.data.labels.length ?? 0;
+    const index = channelIndexOf(call.col);
+    if (target && call.col !== "x" && (index === null || index >= n)) {
+      const has = n ? `it has x and ${channelLetter(0)}${n > 1 ? `–${channelLetter(n - 1)}` : ""}` : "it has only x";
+      return { error: `worksheet "${call.name}" has no column ${call.col} (${has})` };
+    }
+  }
   for (const link of bound.sheets) {
     const reason = wouldCreateCycle(datasets, { from: recalcNodes.dataset(link.id!), to: recalcNodes.dataset(selfId) });
     if (reason) return { error: reason };

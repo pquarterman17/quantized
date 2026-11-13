@@ -76,4 +76,21 @@ describe("worksheet fidelity wording", () => {
       kind: "danger",
     });
   });
+
+  it("the import toast also counts graphs that were not recovered", () => {
+    expect(originImportToast("proj", { ...manifest(), unrecovered_graph_count: 2 })).toEqual({
+      msg: "proj: 2 graphs could not be imported. 3/5 Origin graph records are editable",
+      kind: "danger",
+    });
+  });
+
+  it("graph content without an identified window still reaches the toast", () => {
+    expect(
+      originImportToast("proj", { ...manifest(), omissions: ["graph_content_unattributed"] }).msg,
+    ).toBe("proj: graph content could not be imported. 3/5 Origin graph records are editable");
+    const base = { version: 1 as const, unverified_columns: 0, losses: [] };
+    expect(worksheetSummaryLine({ ...base, status: "complete", columns_imported: 0 })).toBe(
+      "Worksheets: no worksheet columns",
+    );
+  });
 });

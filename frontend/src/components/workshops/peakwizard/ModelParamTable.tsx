@@ -15,6 +15,11 @@ import type { ModelFitState } from "./useModelFit";
 
 const cell = { padding: "2px 3px" } as const;
 
+/** Control widths (px). Together with the name and vary columns they fit the
+ *  Peak Analyzer's 420 px window: the table used to run past its right edge,
+ *  cutting the "tie to" column off (re-audit #16). */
+export const COL = { start: 64, bound: 50, tie: 80 } as const;
+
 function Row({ p, all, model }: { p: ModelParam; all: ModelParam[]; model: ModelFitState }) {
   const label = paramLabel(p.name);
   const tied = p.tie !== null;
@@ -38,7 +43,7 @@ function Row({ p, all, model }: { p: ModelParam; all: ModelParam[]; model: Model
           aria-label={`${label} start`}
           value={p.value}
           required
-          width={70}
+          width={COL.start}
           disabled={tied}
           onValue={(v) => {
             if (v !== undefined) model.patch(p.name, { value: v });
@@ -64,7 +69,7 @@ function Row({ p, all, model }: { p: ModelParam; all: ModelParam[]; model: Model
           aria-label={`${label} min`}
           value={p.min ?? undefined}
           placeholder="—"
-          width={58}
+          width={COL.bound}
           disabled={tied || !p.vary}
           onValue={(v) => model.patch(p.name, { min: v ?? null })}
         />
@@ -74,7 +79,7 @@ function Row({ p, all, model }: { p: ModelParam; all: ModelParam[]; model: Model
           aria-label={`${label} max`}
           value={p.max ?? undefined}
           placeholder="—"
-          width={58}
+          width={COL.bound}
           disabled={tied || !p.vary}
           onValue={(v) => model.patch(p.name, { max: v ?? null })}
         />
@@ -85,6 +90,7 @@ function Row({ p, all, model }: { p: ModelParam; all: ModelParam[]; model: Model
           options={tieOptions}
           value={p.tie ?? ""}
           disabled={tieOptions.length < 2}
+          style={{ width: COL.tie }}
           onChange={(e) => model.patch(p.name, { tie: e.target.value || null })}
         />
       </td>

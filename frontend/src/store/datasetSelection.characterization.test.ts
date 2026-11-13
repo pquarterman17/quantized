@@ -319,6 +319,25 @@ describe("activateFromLibrary", () => {
     expectNoSideNotices();
   });
 
+  it("an Origin MATRIX book opens in Map whatever the pref, as the active dataset", () => {
+    const matrix: DataStruct = {
+      time: [1, 2, 1, 2],
+      values: [
+        [1, 2, 1, 2],
+        [1, 1, 2, 2],
+        [5, 6, 7, 8],
+      ],
+      labels: ["X", "Y", "Z"],
+      units: ["", "", ""],
+      metadata: { origin_book: "MBook1", origin_matrix: { rows: 2, cols: 2 }, is2D: true },
+    };
+    useApp.setState({ datasets: [...act().datasets, ds("mx", { data: matrix })], stageTab: "worksheet" });
+    act().activateFromLibrary("mx");
+    expect(act().activeId).toBe("mx");
+    expect(act().stageTab).toBe("map");
+    expect(kicks).toEqual(["mx"]);
+  });
+
   // Figures audit B1: the seeded window carries edits (POISON_VIEW), so a
   // plot-intent open lands in a fresh window and leaves it alone.
   it("an Origin book under the 'plot' pref opens a fresh window beside the edited one", () => {
