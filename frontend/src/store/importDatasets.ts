@@ -32,6 +32,7 @@ import { lit } from "../lib/macro";
 import { revealAncestorChain } from "../lib/foldertree";
 import { originBookErrorRoles } from "../lib/originBookRoles";
 import { planOriginImport } from "../lib/originFolders";
+import { importFailureHint } from "../lib/importFailureHint";
 import { originImportNotice } from "../lib/originImportNotice";
 import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "../lib/rowSidecars";
 import {
@@ -400,6 +401,7 @@ async function runImport<T>(
 
   let added = 0;
   let lastError = "";
+  let lastFailed = ""; // its file name/path: picks the follow-up hint below
   let cancelled = false;
   const createdIds: string[] = [];
   const structures: StructurePreset[] = []; // .cif: lattice presets, not datasets
@@ -430,7 +432,8 @@ async function runImport<T>(
           cancelled = true;
           break;
         }
-        lastError = `${describe(item)}: ${e instanceof Error ? e.message : "error"}`;
+        lastFailed = describe(item);
+        lastError = `${lastFailed}: ${e instanceof Error ? e.message : "error"}`;
       }
     }
   } finally {
@@ -448,8 +451,9 @@ async function runImport<T>(
 
   // A parse failure is the wizard's second front door (#40): the auto-detect
   // path gave up, so point at the manual guess/preview/parse one instead of
-  // just reporting the error.
-  const hint = " — try the Import wizard (⌘K → Import wizard…)";
+  // just reporting the error — for a text-like file only; the wizard cannot
+  // read a binary container such as an Origin project (lib/importFailureHint).
+  const hint = importFailureHint(lastFailed);
   const summary = lastError
     ? `imported ${added}/${items.length} — failed ${lastError}${hint}`
     : `imported ${added} file${plural(added)}`;

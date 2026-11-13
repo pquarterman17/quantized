@@ -1467,6 +1467,17 @@ describe("useApp importFiles", () => {
     expect(useApp.getState().status).toContain("Import wizard");
   });
 
+  it("a broken binary Origin project is NOT pointed at the text-only Import wizard", async () => {
+    // Audit 2026-11: the wizard reads text; a corrupt .opju cannot go there.
+    vi.mocked(uploadFile).mockRejectedValueOnce(
+      new Error("no worksheet columns could be decoded from 'junk.opju'. … export the worksheet(s) to CSV"),
+    );
+    await useApp.getState().importFiles([fakeFile("junk.opju")]);
+
+    expect(useApp.getState().status).toContain("failed junk.opju");
+    expect(useApp.getState().status).not.toContain("Import wizard");
+  });
+
   it("stores Origin figures from the import, resolved against the new books (item 18)", async () => {
     const book = (short: string) => ({ ...raw, metadata: { origin_book: short } });
     const originFigure = {
