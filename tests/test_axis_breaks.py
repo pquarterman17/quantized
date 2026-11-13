@@ -247,3 +247,32 @@ def test_a_hysteresis_loop_keeps_its_row_order_under_a_break(
     assert np.asarray(line.get_xdata(), dtype=float).tolist() == x
     assert np.asarray(line.get_ydata(), dtype=float).tolist() == y
     assert ax.get_yscale() == "function"
+
+
+def test_x_and_y_breaks_share_one_broken_y_over_every_panel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review finding: with an X break too, the Y break was applied per panel
+    on the shared y -- panel 0's data alone sized it, and the later panel's
+    1015..1020 fell off-axis. One break now spans every panel's data, with
+    the range the canvas' x-break panels share (break_auto_range over all
+    the data; breakPanelYBreak.test.ts on the screen side)."""
+    x = [float(v) for v in range(21)]
+    y = [v if v < 10 else 1000.0 + v for v in x]
+    body = {
+        "dataset": {
+            "time": x, "values": [[v] for v in y],
+            "labels": ["S"], "units": [""], "metadata": {},
+        },
+        "y_keys": [0], "fmt": "svg",
+        "y_fmt": {"mode": "auto", "digits": 2, "breaks": [[15, 995]]},
+        "overrides": {"x_breaks": [[5, 15]]},
+    }
+    axes = _axes(monkeypatch, body)
+    assert len(axes) == 2
+    want = break_auto_range(0.0, 1020.0, [(15.0, 995.0)])
+    for ax in axes:
+        assert ax.get_ylim() == pytest.approx(want)
+    lo, hi = axes[1].get_ylim()
+    assert lo <= 1015.0 and 1020.0 <= hi  # the later panel's data is on-axis
+    assert sum(1 for ln in axes[0].lines if ln.get_label() == "_axis_break") == 1

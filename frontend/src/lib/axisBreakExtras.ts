@@ -33,6 +33,10 @@ export interface AxisExtrasContext {
   /** The Y2 axis has a format of its own (an inherited one carries the
    *  primary axis' breaks, which mean nothing in Y2's units). */
   y2Own: boolean;
+  /** Panels sharing one y (x-break panels): the y data extent of ALL of
+   *  them, so each panel's gap -- and so each panel's positions -- agree
+   *  (the export sizes its one shared break the same way). */
+  extent?: [number, number] | null;
 }
 
 /** Finite min/max of every series riding axis `on` (0 = y, 1 = y2), or null. */
@@ -69,7 +73,7 @@ export function activeBreaks(
 /** Make `axis` (and its scale in `ctx.scales`) a broken axis. */
 export function applyAxisBreaks(axis: uPlot.Axis, idx: number, breaks: readonly AxisBreak[], ctx: AxisExtrasContext): void {
   const key = axis.scale ?? "y";
-  const extent = seriesExtent(ctx.payload, idx === 2 ? 1 : 0, ctx.hidden);
+  const extent = (idx === 1 ? ctx.extent : null) ?? seriesExtent(ctx.payload, idx === 2 ? 1 : 0, ctx.hidden);
   const gap = extent ? breakGap(breaks, extent[0], extent[1]) : breakGap(breaks, 0, 0);
   const scale: uPlot.Scale = {
     ...ctx.scales[key],

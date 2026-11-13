@@ -32,7 +32,7 @@ import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
 // file's "driven entirely by props, NO store reads" contract (same reasoning
 // PreferencesDialog.tsx documents for the store-independent prefs it reads).
 import { loadPlotPerfPrefs } from "../../store/prefs";
-import { liveTicksPlugin } from "./liveTicksPlugin";
+import { liveTicksPlugin } from "../../lib/liveTicksPlugin";
 import { plotDecorNeeds, useLazyPlotParts } from "./useLazyPlotParts";
 import { useLivePaint } from "./useLivePaint";
 import { useResolvedLims } from "./useResolvedLims";

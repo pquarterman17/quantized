@@ -610,6 +610,7 @@ export interface BuildOptsArgs {
    *  double-Y figure carries layer 2's own axis state here; null/undefined =
    *  autoscale / inherit yScale (the pre-2026-07-06 behaviour). */
   y2Lim?: [number, number] | null;
+  /** A Y break's data extent when panels share one y (x-break panels): sizes every panel's gap alike. */ yBreakExtent?: [number, number] | null;
   y2Scale?: AxisScale | null;
   /** Reference lines to draw at fixed X/Y values. */
   refLines?: RefLine[];
@@ -1207,7 +1208,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // tick font, Ln) -- null, and nothing changed, when no axis has one. y2
   // inherits yFmt exactly as its tick formatter above does.
   // The module loads on demand (axisExtrasHook.ts): absent = none drawn yet.
-  const extrasPlugin = axisExtrasApplier()?.(axes, [xFmt, yFmt, y2Fmt ?? yFmt], [xScale, yScale, y2ScaleEff], axisColor, { scales, payload, typed: [!!xLim, !!yLim, !!args.y2Lim], steps: [args.xStep, args.yStep, args.y2Step], scan: !xAscending, y2Own: !!y2Fmt, hidden: args.hidden });
+  const extrasPlugin = axisExtrasApplier()?.(axes, [xFmt, yFmt, y2Fmt ?? yFmt], [xScale, yScale, y2ScaleEff], axisColor, { scales, payload, typed: [!!xLim, !!yLim, !!args.y2Lim], steps: [args.xStep, args.yStep, args.y2Step], scan: !xAscending, y2Own: !!y2Fmt, hidden: args.hidden, extent: args.yBreakExtent });
   if (extrasPlugin) plugins.push(extrasPlugin);
 
   // The same colour read a live repaint uses (seriesColorsFor), so the two agree.

@@ -41,6 +41,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from quantized.calc.axis_breaks import apply_y_breaks
 from quantized.calc.figure import _plot_kwargs
 from quantized.calc.figure_errorbars import apply_error_bars
 from quantized.calc.figure_layout import apply_figure_layout
@@ -184,6 +185,7 @@ def render_breaks_impl(
     applied uniformly for simplicity/consistency."""
     bounds = _visible_bounds(x, breaks)
     n = len(bounds)
+    panel_y_fmt = {k: v for k, v in y_fmt.items() if k != "breaks"} if y_fmt else y_fmt
     widths = [max(hi - lo, 1e-9) for lo, hi in bounds]
 
     fig = new_figure(figsize=figsize)
@@ -210,7 +212,9 @@ def render_breaks_impl(
         apply_axis_scale(ax, "x", resolved_x_scale)
         apply_axis_scale(ax, "y", resolved_y_scale)
         apply_tick_steps(ax, x_step, y_step, resolved_x_scale, resolved_y_scale)
-        apply_tick_formats(ax, x_fmt, y_fmt)
+        # A Y break is applied ONCE, below, to the shared y: per panel, the
+        # first panel's data alone sized it and later panels' fell off-axis.
+        apply_tick_formats(ax, x_fmt, panel_y_fmt)
         if i == 0:
             handles, _ = ax.get_legend_handles_labels()
         if i > 0:
@@ -224,6 +228,8 @@ def render_breaks_impl(
             ax.grid(True, which="major", alpha=st.grid_alpha)
             ax.grid(True, which="minor", alpha=st.grid_alpha * 0.4)
 
+    if y_fmt and y_fmt.get("breaks") and resolved_y_scale == "linear":
+        apply_y_breaks(axes[0], y_fmt.get("breaks"), y_fmt.get("minor"), data_axes=axes)
     if ov.get("y_lim") is not None:  # shared y: set once, after the autoscale
         apply_axis_shape_overrides(axes[0], st, {"y_lim": ov["y_lim"]}, lim_keys=("y_lim",))
     clear_seam_labels(fig, axes)

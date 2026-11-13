@@ -5,8 +5,8 @@
 
 import type uPlot from "uplot";
 
-import { drawnIncrement, publishLiveTickSteps } from "../../lib/liveTickSteps";
-import { useApp } from "../../store/useApp";
+import { drawnIncrement, publishLiveTickSteps } from "./liveTickSteps";
+import { useApp } from "../store/useApp";
 
 type DrawnAxis = uPlot.Axis & { _splits?: (number | null)[] };
 

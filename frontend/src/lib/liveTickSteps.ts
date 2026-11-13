@@ -8,7 +8,7 @@
 // backend's MultipleLocator places the ticks (`calc.figure_ticks`).
 //
 // Module-scope seam like `lib/waterfallOffset.publishLiveWaterfallSpan`: the
-// focused stage's canvas publishes (`Stage/liveTicksPlugin.ts`), the export
+// focused stage's canvas publishes (`lib/liveTicksPlugin.ts`), the export
 // reads at command time, keyed by dataset so a refocus race never carries
 // one plot's ticks onto another. Not store state -- publishing must cause no
 // re-render.

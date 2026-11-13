@@ -45,6 +45,8 @@
 
 import uPlot from "uplot";
 
+import { breakAutoRange } from "../../lib/axisBreaks";
+import { normalizeBreaks } from "../../lib/axisFormat";
 import { buildErrorColumns, buildErrorSpans, type ErrorSpan } from "../../lib/errorbars";
 import type { ErrorBinding } from "../../lib/errorRoles";
 import type { BreakPanel } from "../../lib/facet";
@@ -183,8 +185,14 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
   const yLim = args.yAuto && args.cell.yLim
     ? widenByBars(args.cell.yLim, args.panels, bars, args.hiddenChannels, yScale !== "linear")
     : args.cell.yLim;
+  // A Y break (yFmt.breaks on a linear y) pads the shared range by its KEPT
+  // span, as a single broken axis and the export do -- the unbroken padding
+  // spent the axis on the elided stretch (review: 0..1200, labels piled up).
+  const yBreaks = yScale === "linear" ? normalizeBreaks(args.cell.yFmt?.breaks) : undefined;
   const padded =
-    args.yAuto && yLim && yScale !== "reciprocal" && typeof uPlot.rangeNum === "function" // (a test's mock may lack it)
+    args.yAuto && yLim && yBreaks
+      ? breakAutoRange(yLim[0], yLim[1], yBreaks)
+      : args.yAuto && yLim && yScale !== "reciprocal" && typeof uPlot.rangeNum === "function" // (a test's mock may lack it)
       ? ((yScale === "log" ? uPlot.rangeLog(yLim[0], yLim[1], 10, false) : uPlot.rangeNum(yLim[0], yLim[1], 0.1, true)) as [number, number])
       : null;
   const title0 = args.panels.length ? yTitleKey(args.panels[0], args.seriesLabels) : "";
@@ -200,6 +208,7 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
       // A break panel's whole point is showing only its own x-slice.
       xLim: p.xRange,
       yLim: padded ?? yLim,
+      yBreakExtent: yBreaks ? yLim : null, // every panel's gap from the shared extent
       // Right of a seam the y axis is panel 0's (`applySeamSides` below), so
       // a y title that would only repeat panel 0's goes; the x title is drawn
       // once, on panel 0, as the export's one `supxlabel` (`null` keeps the

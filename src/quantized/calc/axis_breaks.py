@@ -265,14 +265,15 @@ class _KeptMinorLocator(AutoMinorLocator):
 
 
 def _series_values(ax: Any) -> NDArray[np.float64]:
-    """Finite y of every drawn series point on ``ax`` (error-bar ends and
+    """Finite y of every drawn series point on ``ax`` -- a list of axes, for
+    panels sharing one y (``calc.figure_break``) -- (error-bar ends and
     reference lines left out, as the canvas' extent leaves them out)."""
     # Function-level: figure_autoscale -> figure_ticks -> axis_extras imports
     # this module, so a top-level import would be a cycle.
     with heavy_imports("quantized.calc.figure_autoscale"):
         from quantized.calc.figure_autoscale import _values  # shares the scan
 
-    pts, _ends = _values([ax], 1)
+    pts, _ends = _values(list(ax) if isinstance(ax, (list, tuple)) else [ax], 1)
     return pts
 
 
@@ -302,7 +303,9 @@ def _draw_marks(ax: Any, breaks: Breaks, right: bool) -> None:
         )
 
 
-def apply_y_breaks(ax: Any, raw_breaks: Any, minor: Any = None) -> bool:
+def apply_y_breaks(
+    ax: Any, raw_breaks: Any, minor: Any = None, data_axes: Sequence[Any] | None = None
+) -> bool:
     """Break ``ax``'s Y axis at ``raw_breaks`` (module doc). Returns whether a
     break was applied -- nothing happens off a linear scale or with no valid
     break. Call after the tick formatter and any typed increment are in
@@ -314,7 +317,9 @@ def apply_y_breaks(ax: Any, raw_breaks: Any, minor: Any = None) -> bool:
     formatter = axis.get_major_formatter()
     locator = axis.get_major_locator()
     step = _typed_step(locator)
-    pts = _series_values(ax)
+    # Panels sharing this y (an X break, `calc.figure_break`) size the gap
+    # and the range from ALL their data, as the screen's shared range does.
+    pts = _series_values(list(data_axes) if data_axes else ax)
     d_lo, d_hi = (float(pts.min()), float(pts.max())) if pts.size else (0.0, 0.0)
     gap = break_gap(breaks, d_lo, d_hi)
     lim = ax.get_ylim()
