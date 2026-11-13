@@ -7,7 +7,8 @@
 // has reference lines / region shades, drawn before the escape rewrite
 // (`lib/richtext.originEscapesSettled`) or the shade / off-scale drawing
 // (`lib/uplotOverlays.regionDecorSettled`) landed, rebuilds once it settles,
-// so a first plot never keeps literal escapes or misses its shades. A no-op
+// so a first plot never keeps literal escapes or misses its shades -- and the
+// canvas title drawing (`lib/richLabelsLoader.ts`) likewise. A no-op
 // for every plot needing none of these.
 
 import { useEffect, useState } from "react";
@@ -22,6 +23,7 @@ import {
 import { awaitsOriginEscapes, originEscapesSettled } from "../../lib/originEscapeLoader";
 import type { AxisFormat } from "../../lib/types";
 import { regionDecorReady, regionDecorSettled } from "../../lib/regionDecorLoader";
+import { richLabelsReady, richLabelsSettled } from "../../lib/richLabelsLoader";
 
 /** What the startup chunks would change on this plot: every label it draws
  *  (title, axis titles, series and annotation text) and whether it has any
@@ -54,8 +56,11 @@ export function useLazyPlotParts(
   const needGadgets = tool === "qfit" && gadgetPlugins() === null;
   const needEscapes = decor.texts.some(awaitsOriginEscapes);
   const needDecor = decor.overlays && !regionDecorReady();
+  // The canvas title drawing (lib/richLabelsLoader.ts): any plot with a label
+  // rebuilds once it lands, so rich / moved / draggable titles appear.
+  const needTitles = !richLabelsReady() && decor.texts.some((t) => !!t?.trim());
   useEffect(() => {
-    if (!needExtras && !needGadgets && !needEscapes && !needDecor) return;
+    if (!needExtras && !needGadgets && !needEscapes && !needDecor && !needTitles) return;
     let live = true;
     // A failed chunk load leaves that part undrawn (the plot itself is
     // complete without it); the next need retries. The startup chunks never
@@ -65,6 +70,7 @@ export function useLazyPlotParts(
       needGadgets ? loadGadgetPlugins() : null,
       needEscapes ? originEscapesSettled : null,
       needDecor ? regionDecorSettled : null,
+      needTitles ? richLabelsSettled : null,
     ]).then(
       () => {
         if (live) onReady();
@@ -75,7 +81,7 @@ export function useLazyPlotParts(
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `onReady` is a fresh closure each render; only the needs decide.
-  }, [needExtras, needGadgets, needEscapes, needDecor]);
+  }, [needExtras, needGadgets, needEscapes, needDecor, needTitles]);
 }
 
 /** `useLazyPlotParts` for a renderer that rebuilds on a counter (the

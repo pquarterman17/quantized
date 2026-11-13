@@ -41,7 +41,7 @@ import {
   type AnnotationEditOpts,
 } from "./uplotOverlays";
 import { regionLiveBoxHook, regionSelectPick } from "./uplotRegionBox";
-import { richLabelsPlugin, type AxisLabelEditOpts } from "./uplotRichLabels";
+import { richLabels, type AxisLabelEditOpts } from "./richLabelsLoader"; // the title drawing is a lazy chunk; until it lands uPlot draws plain titles
 import { buildSeriesDefs, type SeriesColors } from "./uplotSeries";
 import { shapesPlugin, type ShapeEditOpts } from "./uplotShapes";
 import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit";
@@ -860,14 +860,14 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     text && text.trim() ? (richLabelAst(text) ?? [{ kind: "text", text, italic: false }]) : null;
   const xRealRich = richLabelAst(xLabel);
   const xRich = astOf(xLabel);
-  const xDrawn = !!xRealRich || off.x !== undefined || sty.x !== undefined;
+  const xDrawn = !!richLabels() && (!!xRealRich || off.x !== undefined || sty.x !== undefined);
   const yLabelText = soloLabel(0);
   const yRealRich = richLabelAst(yLabelText);
   const yRich = astOf(yLabelText);
-  const yDrawn = !!yRealRich || off.y !== undefined || sty.y !== undefined;
+  const yDrawn = !!richLabels() && (!!yRealRich || off.y !== undefined || sty.y !== undefined);
   const y2LabelText = hasY2 ? soloLabel(1) : undefined;
   const y2Rich = hasY2 ? astOf(y2LabelText) : null;
-  const y2Drawn = hasY2 && (!!richLabelAst(y2LabelText) || off.y2 !== undefined || sty.y2 !== undefined);
+  const y2Drawn = hasY2 && !!richLabels() && (!!richLabelAst(y2LabelText) || off.y2 !== undefined || sty.y2 !== undefined);
   const titleRich = richLabelAst(args.title?.trim());
 
   // labelSize is the px height/width uPlot reserves for the axis TITLE
@@ -1037,14 +1037,14 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // (rich or moved) or the DOM title is rich, OR — in the pointer tool — for
   // any title, so a plain unmoved title is still grab-testable to start a drag.
   const anyAxisLabel = !!(xRich || yRich || y2Rich);
-  const anyDrawn = xDrawn || yDrawn || y2Drawn;
   // The plugin is needed to DRAW (rich/moved titles or a rich DOM title), or to
   // enable dragging — but only where the drag is actually wired (`axisLabelEdit`
   // present, pointer tool). Facet panels (MultiPanelStage) pass no edit bridge,
   // so plain unmoved titles there stay on uPlot's draw with no extra plugin.
-  if (anyDrawn || titleRich || (tool === "pointer" && anyAxisLabel && args.axisLabelEdit)) {
+  const rl = richLabels();
+  if (rl && (xDrawn || yDrawn || y2Drawn || titleRich || (tool === "pointer" && anyAxisLabel && args.axisLabelEdit))) {
     plugins.push(
-      richLabelsPlugin(
+      rl.richLabelsPlugin(
         { x: xRich, y: yRich, y2: y2Rich, title: titleRich },
         { px: titlePx, family: uiFamily, color: axisColor, weight: "600" },
         args.axisLabelEdit ?? undefined,

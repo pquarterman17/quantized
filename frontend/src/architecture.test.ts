@@ -2767,6 +2767,12 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     { module: "/lib/axisExtras.ts", loader: "/lib/axisExtrasHook.ts", call: 'import("./axisExtras")' },
     { module: "/lib/uplotGadgets.ts", loader: "/lib/axisExtrasHook.ts", call: 'import("./uplotGadgets")' },
     { module: "/lib/graphTemplateCommands.ts", loader: "/commands/plotCommands.ts", call: 'import("../lib/graphTemplateCommands")' },
+    // Figures integration (2026-11-13, budget after the main merges): the canvas
+    // title drawing, the axis double-click hit test and the Appearance
+    // dropdown's panel.
+    { module: "/lib/uplotRichLabels.ts", loader: "/lib/richLabelsLoader.ts", call: 'import("./uplotRichLabels")' },
+    { module: "/components/Stage/axisAtPoint.ts", loader: "/components/Stage/AxisDropZones.tsx", call: 'import("./axisAtPoint")' },
+    { module: "/components/Shell/AppearancePanel.tsx", loader: "/components/Shell/AppearanceMenu.tsx", call: 'import("./AppearancePanel")' },
     // The facet / x-break dialog bodies (both lanes moved them on demand; the
     // integration kept one module, commands/plotLayoutCommands.ts).
     { module: "/commands/plotLayoutCommands.ts", loader: "/commands/plotCommands.ts", call: 'import("./plotLayoutCommands")' },
