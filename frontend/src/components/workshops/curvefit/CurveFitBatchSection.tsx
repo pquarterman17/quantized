@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 
 import { fitModel } from "../../../lib/api";
 import { dropGapRows } from "../../../lib/api/finitePairs";
@@ -32,7 +32,14 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
   const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
   const names = model?.paramNames ?? paramRows.map((r) => r.name);
+  const columns = batchColumns(names);
+  // What the LAST RUN fitted. The summary worksheet is built from the run's
+  // own model and columns, never the panel's current ones: picking another
+  // model after a run used to label that run's values with the new model's
+  // parameter names.
+  const ran = useRef<{ model: string; columns: string[] } | null>(null);
   const runItem = useCallback(async (dataset: Dataset, selection: AnalysisSelectionItem): Promise<AnalysisBatchOutcome> => {
+    ran.current = { model: modelName, columns: batchColumns(model?.paramNames ?? paramRows.map((r) => r.name)) };
     const parsed = parseFitParams(paramRows, model);
     if (parsed.error) throw new Error(parsed.error);
     const custom = !rowsAreDefault(paramRows, model);
@@ -94,10 +101,10 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     return { values: [1, 1, ...fitSummaryValues(result, names.length)], warnings };
   }, [manualKey, model, modelName, paramRows, weightMode, names.length]);
 
-  const columns = batchColumns(names);
   const summarySheet = (rows: readonly AnalysisBatchRow[]) => {
-    const name = `Curve Fit summary — ${modelName} (${rows.length} worksheet${rows.length === 1 ? "" : "s"})`;
-    addDataset({ id: nextDatasetId(), name, data: batchSummaryData(rows, columns, modelName) });
+    const run = ran.current ?? { model: modelName, columns };
+    const name = `Curve Fit summary — ${run.model} (${rows.length} worksheet${rows.length === 1 ? "" : "s"})`;
+    addDataset({ id: nextDatasetId(), name, data: batchSummaryData(rows, run.columns, run.model) });
     setStatus(`added ${name}`);
   };
 

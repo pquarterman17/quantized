@@ -1,0 +1,65 @@
+// Curve Fit batch -> "Create summary worksheet": the sheet describes the RUN.
+// Picking another model after a run (the button stays, with the run's rows)
+// used to label the run's values with the NEW model's parameter names and
+// name the sheet after the new model.
+
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { fitModel } from "../../../lib/api";
+import { captureAnalysisSelection } from "../../../lib/analysisSelection";
+import type { Dataset, FitModel } from "../../../lib/types";
+import { useAnalysisSelection } from "../../../store/analysisSelection";
+import { usePendingOps } from "../../../store/pendingOps";
+import { useApp } from "../../../store/useApp";
+import CurveFitBatchSection from "./CurveFitBatchSection";
+
+vi.mock("../../../lib/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/api")>()),
+  fitModel: vi.fn(),
+}));
+vi.mock("../../../store/analysisResultActions", () => ({ registerAnalysisResult: vi.fn() }));
+
+const sheet = (id: string): Dataset => ({
+  id, name: `${id}.csv`,
+  data: { time: [0, 1, 2], values: [[1], [2], [3]], labels: ["Y"], units: [""], metadata: {} },
+});
+const GAUSS: FitModel = { name: "Gaussian", category: "peak", paramNames: ["A", "mu", "sigma"], nParams: 3, p0: [1, 1, 1], lb: [], ub: [] };
+const LINEAR: FitModel = { name: "Linear", category: "polynomial", paramNames: ["m", "b"], nParams: 2, p0: [1, 0], lb: [], ub: [] };
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  const datasets = [sheet("a"), sheet("b")];
+  useApp.setState({
+    datasets, activeId: "a", selectedIds: ["a", "b"], analysisResults: [], history: [], future: [],
+    resolveDataset: async (id: string) => datasets.find((d) => d.id === id),
+  });
+  useAnalysisSelection.setState({
+    toolId: "curvefit",
+    selection: captureAnalysisSelection({
+      datasets, activeId: "a", selectedIds: ["a", "b"], xKey: null, yKeys: [0],
+      seriesOrder: null, errKeys: {}, selection: null, range: null,
+    }, "library"),
+  });
+  usePendingOps.setState({ ops: [] });
+  vi.mocked(fitModel).mockResolvedValue({ params: [5, 10, 1.5], errors: [0.1, 0.2, 0.3], R2: 0.99, RMSE: 0.1, chiSqRed: 0.01, nPoints: 3 });
+});
+
+describe("CurveFitBatchSection — summary worksheet", () => {
+  it("keeps the run's model and parameter columns after the panel's model changes", async () => {
+    const props = { paramRows: [], weightMode: "none" as const, manualKey: null };
+    const { rerender } = render(<CurveFitBatchSection modelName="Gaussian" model={GAUSS} {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Gaussian) batch" }));
+    await screen.findByRole("button", { name: "Create summary worksheet" });
+    await waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
+
+    rerender(<CurveFitBatchSection modelName="Linear" model={LINEAR} {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Create summary worksheet" }));
+    const added = useApp.getState().datasets.at(-1)!;
+    expect(added.name).toBe("Curve Fit summary — Gaussian (2 worksheets)");
+    expect(added.data.labels).toEqual(["Levels", "Completed", "N", "R²", "Reduced χ²", "RMSE", "A", "A SE", "mu", "mu SE", "sigma", "sigma SE"]);
+    expect(added.data.values[0]).toEqual([1, 1, 3, 0.99, 0.01, 0.1, 5, 0.1, 10, 0.2, 1.5, 0.3]);
+    expect((added.data.metadata as { curveFitBatch: { model: string } }).curveFitBatch.model).toBe("Gaussian");
+  });
+});
