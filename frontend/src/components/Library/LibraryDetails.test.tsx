@@ -146,7 +146,7 @@ describe("LibraryDetails — batch project-metadata edit (PR L, L0.56)", () => {
     });
     render(<LibraryDetails hierarchy={hierarchy} />);
     fireEvent.click(screen.getByRole("button", { name: "Edit metadata (2)…" }));
-    expect(askParams).toHaveBeenCalledWith("Edit metadata for 2 selected", expect.anything());
+    expect(askParams).toHaveBeenCalledWith("Edit metadata for 2 selected", expect.anything(), { confirmLabel: "Apply" });
     await act(() => Promise.resolve());
     const s = useApp.getState();
     expect(s.datasets.find((d) => d.id === "a")?.notes).toBe("batch note");

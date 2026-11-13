@@ -89,7 +89,7 @@ export default function EditableFiguresSection() {
                   ({ askParams }) =>
                     askParams("Rename editable figure", [
                       { key: "name", label: "Name", type: "text", default: document.name },
-                    ]).then((params) => {
+                    ], { confirmLabel: "Rename" }).then((params) => {
                       if (params) rename(document.id, String(params.name));
                     }),
                   onLoadFailure,

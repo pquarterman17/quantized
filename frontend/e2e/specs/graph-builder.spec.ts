@@ -52,7 +52,7 @@ test("build, save, and reopen a Graph Builder PlotSpec", async ({ page }) => {
   // ── Save As a named PlotSpec ────────────────────────────────────────────
   await page.getByRole("button", { name: "Save As…" }).click();
   await page.locator(".qz-dialog input").fill("E2E test graph");
-  await page.getByRole("button", { name: "Run" }).click();
+  await page.getByRole("button", { name: "Save" }).click();
 
   // Two matches once saved: the PlotSpecBar header's active-spec name span
   // AND the (still-collapsed) "Saved plot recipes" list row — `.first()` is the

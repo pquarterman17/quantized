@@ -62,7 +62,7 @@ function renamePrompt(node: LibraryNode, hooks: TileMenuHooks): () => void {
   return () => {
     void askParams(`Rename "${node.name}"`, [
       { key: "name", label: "Name", type: "text", default: node.name },
-    ]).then((result) => {
+    ], { confirmLabel: "Rename" }).then((result) => {
       const next = result && String(result.name).trim();
       if (next) renameLibraryNode(node, next);
     });
@@ -79,7 +79,7 @@ function revealChild(node: LibraryNode, hooks: TileMenuHooks): () => void {
 }
 
 function tagDialog(id: string, name: string): void {
-  void askParams(`Add tag to "${name}"`, [{ key: "tag", label: "Tag", type: "text", default: "" }]).then(
+  void askParams(`Add tag to "${name}"`, [{ key: "tag", label: "Tag", type: "text", default: "" }], { confirmLabel: "Add tag" }).then(
     (result) => {
       const tag = result && String(result.tag).trim();
       if (tag) useApp.getState().addDatasetTag(id, tag);

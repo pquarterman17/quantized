@@ -38,6 +38,6 @@ export async function saveFocusedFigureAsRecipe(): Promise<void> {
   const { askParams } = await import("../overlays/ParamDialog");
   const params = await askParams("Save as Plot Recipe", [
     { key: "name", label: "Name", type: "text", default: window.title || "Untitled Plot Recipe" },
-  ]);
+  ], { confirmLabel: "Save" });
   if (params) await useApp.getState().saveAsPlotRecipe(String(params.name), datasetId, window.id);
 }

@@ -66,7 +66,7 @@ export async function openFolderProperties(folder: FolderNode): Promise<void> {
         ]
       : []),
   ];
-  const picked = await askParams(`Properties — "${folder.name}"`, fields);
+  const picked = await askParams(`Properties — "${folder.name}"`, fields, { confirmLabel: "Apply" });
   if (!picked) return;
 
   const s = useApp.getState();
@@ -167,7 +167,7 @@ export async function runTemplateOnFolder(folder: FolderNode): Promise<void> {
       options: templates.map((t) => t.name),
       hint: `runs on ${members.length} dataset(s)`,
     },
-  ]);
+  ], { confirmLabel: "Run template" });
   if (!picked) return; // cancelled
   const t = templates.find((x) => x.name === String(picked.template));
   if (!t) return;

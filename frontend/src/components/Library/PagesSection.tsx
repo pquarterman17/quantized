@@ -113,7 +113,7 @@ export default function PagesSection() {
                 ({ askParams }) =>
                   askParams("Rename saved page", [
                     { key: "name", label: "Name", type: "text", default: page.name },
-                  ]).then((params) => {
+                  ], { confirmLabel: "Rename" }).then((params) => {
                     if (params) rename(page.id, String(params.name));
                   }),
                 onLoadFailure,

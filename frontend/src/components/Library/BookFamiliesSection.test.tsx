@@ -51,7 +51,7 @@ describe("BookFamiliesSection", () => {
     const checkboxes = await screen.findAllByRole("checkbox");
     expect(checkboxes).toHaveLength(3);
     fireEvent.click(checkboxes[1]); // uncheck Book2
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
     await waitFor(() => {
       expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["b1", "b3"]);

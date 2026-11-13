@@ -89,7 +89,7 @@ describe("lazy promise dialogs (bundle diet slice 8)", () => {
     expect(loaded).toEqual(["ConfirmDialogBody"]);
     let params!: Promise<ParamValues | null>;
     act(() => {
-      params = askParams("Smooth", [{ key: "n", label: "Window", type: "number", default: 5 }]);
+      params = askParams("Smooth", [{ key: "n", label: "Window", type: "number", default: 5 }], { confirmLabel: "Run" });
     });
     expect(await screen.findByRole("dialog")).toHaveAccessibleName("Smooth");
     expect(loaded).toEqual(["ConfirmDialogBody", "ParamDialogBody"]);
@@ -98,7 +98,7 @@ describe("lazy promise dialogs (bundle diet slice 8)", () => {
 
     let cancelled!: Promise<ParamValues | null>;
     act(() => {
-      cancelled = askParams("Again", []);
+      cancelled = askParams("Again", [], { confirmLabel: "OK" });
     });
     expect(screen.getByRole("dialog")).toHaveAccessibleName("Again");
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));

@@ -57,7 +57,7 @@ export default function MultiSelectBar() {
         default: ROOT,
         options: [ROOT, ...childFolders(folders, null).map((f) => f.name)],
       },
-    ]);
+    ], { confirmLabel: "Move" });
     if (!picked) return;
     const dest = String(picked.folder);
     const target = dest === ROOT ? null : (folders.find((f) => f.name === dest)?.id ?? null);
@@ -68,7 +68,7 @@ export default function MultiSelectBar() {
   const onTag = async () => {
     const picked = await askParams(`Tag ${n} selected`, [
       { key: "tag", label: "Tag", type: "text", default: "" },
-    ]);
+    ], { confirmLabel: "Tag" });
     const tag = picked ? String(picked.tag).trim() : "";
     if (!tag) return;
     // PR L (L0.56): ONE undo entry for the whole batch, not one per dataset.

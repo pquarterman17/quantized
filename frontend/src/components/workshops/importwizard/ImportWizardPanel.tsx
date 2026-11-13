@@ -60,7 +60,7 @@ export default function ImportWizardPanel() {
     const params = await askParams("Save as filter", [
       { key: "name", label: "Name", type: "text", default: defaultFilterName(w.file.name) },
       { key: "glob", label: "File glob", type: "text", default: defaultGlob(w.file.name) },
-    ]);
+    ], { confirmLabel: "Save" });
     if (!params) return;
     const name = String(params.name).trim();
     const glob = String(params.glob).trim();

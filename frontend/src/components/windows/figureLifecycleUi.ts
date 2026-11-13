@@ -30,7 +30,7 @@ export async function saveFigureAs(windowId: string): Promise<void> {
   const { askParams } = await import("../overlays/ParamDialog");
   const params = await askParams("Save editable figure as", [
     { key: "name", label: "Name", type: "text", default: window.title || "Untitled graph" },
-  ]);
+  ], { confirmLabel: "Save" });
   if (params) state.saveFigureAs(windowId, String(params.name));
 }
 

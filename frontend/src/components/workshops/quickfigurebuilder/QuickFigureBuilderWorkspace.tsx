@@ -51,7 +51,7 @@ function promptSaveTemplate(dataset: Dataset): Promise<{ name: string; scope: Qu
     ...(options.length > 1
       ? [{ key: "scope", label: "Scope", type: "select" as const, options, default: SCHEMA_SCOPE_LABEL }]
       : []),
-  ]).then((result) => {
+  ], { confirmLabel: "Save" }).then((result) => {
     if (!result) return null;
     const name = String(result.name).trim();
     if (!name) return null;

@@ -27,7 +27,7 @@ function renameArtifact(target: ArtifactTarget): void {
   const { node } = target;
   void askParams(`Rename "${node.name}"`, [
     { key: "name", label: "Name", type: "text", default: node.name },
-  ]).then((result) => {
+  ], { confirmLabel: "Rename" }).then((result) => {
     const name = result && String(result.name).trim();
     if (!name) return;
     // L1.4: the kind -> store-action mapping lives in ONE place now

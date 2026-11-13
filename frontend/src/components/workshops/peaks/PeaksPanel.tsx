@@ -219,7 +219,7 @@ export default function PeaksPanel() {
       { key: "fwhm", label: "FWHM", type: "number", default: entry.fwhm },
       { key: "height", label: "Height", type: "number", default: entry.height },
       { key: "area", label: "Area", type: "number", default: entry.area },
-    ]);
+    ], { confirmLabel: "Apply" });
     if (!values) return;
     const patch = {
       center: Number(values.center),

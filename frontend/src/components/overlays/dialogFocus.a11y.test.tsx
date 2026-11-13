@@ -159,7 +159,7 @@ describe("ParamDialog keyboard cancel (P3.3)", () => {
     render(<ParamDialog />);
     let result!: Promise<unknown>;
     act(() => {
-      result = askParams("Proceed?", []);
+      result = askParams("Proceed?", [], { confirmLabel: "Proceed" });
     });
     // The body is a lazy chunk (bundle diet slice 8): wait for it to mount.
     await screen.findByRole("dialog");
@@ -181,7 +181,7 @@ describe("ParamDialog keyboard cancel (P3.3)", () => {
 
     let result!: Promise<unknown>;
     act(() => {
-      result = askParams("Smooth", [{ key: "n", label: "Window", type: "number", default: 5 }]);
+      result = askParams("Smooth", [{ key: "n", label: "Window", type: "number", default: 5 }], { confirmLabel: "Run" });
     });
     await screen.findByRole("dialog"); // lazy body (bundle diet slice 8)
 

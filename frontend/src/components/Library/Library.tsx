@@ -307,7 +307,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
             onClick={() => {
               void askParams("Save filter as smart folder", [
                 { key: "name", label: "Name", type: "text", default: query.trim() },
-              ]).then((p) => {
+              ], { confirmLabel: "Save" }).then((p) => {
                 if (p && String(p.name).trim()) addSmartFolder(String(p.name), query);
               });
             }}
@@ -327,7 +327,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
             onClick={() => {
               void askParams("Save filter as Collection", [
                 { key: "name", label: "Name", type: "text", default: query.trim() },
-              ]).then((p) => {
+              ], { confirmLabel: "Save" }).then((p) => {
                 if (p && String(p.name).trim()) addCollection(String(p.name), query);
               });
             }}

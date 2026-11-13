@@ -27,7 +27,7 @@ export default function BookFamiliesSection() {
       type: "boolean",
       default: true,
     }));
-    const picked = await askParams(`Manage "${stem}" books`, fields);
+    const picked = await askParams(`Manage "${stem}" books`, fields, { confirmLabel: "Apply" });
     if (!picked) return;
     const drop = members.filter((d) => picked[d.id] === false).map((d) => d.id);
     if (drop.length) removeDatasets(drop);

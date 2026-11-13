@@ -31,7 +31,7 @@ async function promptSmartFolder(
   const p = await askParams(title, [
     { key: "name", label: "Name", type: "text", default: name },
     { key: "query", label: "Query", type: "text", default: query, hint: QUERY_HINT },
-  ]);
+  ], { confirmLabel: "Save" });
   if (!p || !String(p.name).trim()) return null;
   return { name: String(p.name), query: String(p.query) };
 }

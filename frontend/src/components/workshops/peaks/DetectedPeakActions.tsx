@@ -26,7 +26,7 @@ export default function DetectedPeakActions(props: Props) {
     const values = await askParams("Add detected peak", [
       { key: "center", label: "Approximate x position", type: "number", default: peaks[0]?.center ?? 0,
         hint: "The marker snaps to a nearby local maximum." },
-    ]);
+    ], { confirmLabel: "Add peak" });
     if (!values) return;
     const center = Number(values.center);
     if (!Number.isFinite(center)) {

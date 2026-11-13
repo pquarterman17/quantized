@@ -68,7 +68,7 @@ describe("dialog basics — the most-used dialogs", () => {
         { key: "width", label: "Width (in)", type: "number", default: 6 },
         { key: "x_label", label: "X label", type: "text", default: "" },
         { key: "legend", label: "Legend", type: "boolean", default: true, hint: "Draw the legend." },
-      ]);
+      ], { confirmLabel: "Export" });
     });
     expect(await auditDialog(dialog, { opener, user })).toEqual([]);
   });

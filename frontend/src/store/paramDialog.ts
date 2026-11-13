@@ -9,12 +9,18 @@ import { create } from "zustand";
 
 import type { ParamField, ParamValues } from "../lib/params";
 
-/** Optional presentation for one ask: a visible explanatory line under the
- *  title, and the confirm button's text (default "Run"). */
+/** Presentation for one ask: a visible explanatory line under the title,
+ *  and the confirm button's text -- REQUIRED by `askParams`, so every dialog
+ *  says what its button does (Apply / Add / Save / Export ...). The old
+ *  generic "Run" default read wrong on nearly every dialog (figures
+ *  integration live check). */
 export interface ParamDialogOptions {
   message?: string;
   confirmLabel?: string;
 }
+
+/** `askParams`' options: a confirm verb is mandatory. */
+export type AskParamsOptions = ParamDialogOptions & { confirmLabel: string };
 
 export interface ParamDialogState {
   title: string | null;
@@ -50,7 +56,7 @@ export const useParamDialog = create<ParamDialogState>((set, get) => ({
 export function askParams(
   title: string,
   fields: ParamField[],
-  options?: ParamDialogOptions,
+  options: AskParamsOptions,
 ): Promise<ParamValues | null> {
   return new Promise((resolve) => {
     useParamDialog.getState().open(title, fields, resolve, options);

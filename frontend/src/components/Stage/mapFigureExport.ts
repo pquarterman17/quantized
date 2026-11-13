@@ -154,7 +154,7 @@ export async function runMapExport({ canvas, payload, loading, view, stem, setSt
     },
     { key: "style", label: "Style", type: "select", default: "default", options: FIGURE_STYLES },
     { key: "title", label: "Title", type: "text", default: "" },
-  ]);
+  ], { confirmLabel: "Export" });
   if (!params) return;
   const filename = `${stem}_map`;
   const fmt = typeof params.fmt === "string" ? params.fmt : "pdf";
