@@ -45,6 +45,15 @@ describe("parseEquationRows", () => {
     expect("error" in parseEquationRows([row("a", { guess: "5", max: "1" })])).toBe(false);
   });
 
+  it("sends a blank guess as null (auto start), but refuses a blank HELD guess", () => {
+    expect(parseEquationRows([row("a", { guess: "" }), row("b", { guess: " 3 " })])).toEqual({
+      guesses: [null, 3], lower: [null, null], upper: [null, null], fixed: [false, false],
+    });
+    expect(parseEquationRows([row("a", { guess: "", fixed: true }), row("b")])).toEqual({
+      error: "a: a held parameter needs a guess",
+    });
+  });
+
   it("refuses a non-numeric guess or bound", () => {
     expect(parseEquationRows([row("a", { guess: "x" })])).toEqual({ error: "a: guess is not a number" });
     expect(parseEquationRows([row("a", { min: "lo" })])).toEqual({ error: "a: min is not a number" });

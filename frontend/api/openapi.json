@@ -546,10 +546,6 @@
             ],
             "title": "Covar"
           },
-          "dof": {
-            "title": "Dof",
-            "type": "integer"
-          },
           "equation": {
             "anyOf": [
               {
@@ -579,6 +575,22 @@
             ],
             "title": "Model"
           },
+          "mse": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mse"
+          },
+          "n_free": {
+            "title": "N Free",
+            "type": "integer"
+          },
           "n_points": {
             "title": "N Points",
             "type": "integer"
@@ -602,7 +614,7 @@
           "params",
           "x",
           "n_points",
-          "dof"
+          "n_free"
         ],
         "title": "BandsRequest",
         "type": "object"
@@ -4163,6 +4175,20 @@
             "title": "Residuals",
             "type": "array"
           },
+          "weights": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weights"
+          },
           "y": {
             "items": {
               "type": "number"
@@ -4353,6 +4379,15 @@
             "title": "Calc Errors",
             "type": "boolean"
           },
+          "covariance": {
+            "default": "jtj",
+            "enum": [
+              "jtj",
+              "hessian"
+            ],
+            "title": "Covariance",
+            "type": "string"
+          },
           "dy": {
             "anyOf": [
               {
@@ -4389,7 +4424,14 @@
             "anyOf": [
               {
                 "items": {
-                  "type": "number"
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "type": "array"
               },
@@ -4419,6 +4461,11 @@
               }
             ],
             "title": "Lower"
+          },
+          "scale_errors": {
+            "default": true,
+            "title": "Scale Errors",
+            "type": "boolean"
           },
           "upper": {
             "anyOf": [
@@ -6175,6 +6222,15 @@
             "title": "Calc Errors",
             "type": "boolean"
           },
+          "covariance": {
+            "default": "jtj",
+            "enum": [
+              "jtj",
+              "hessian"
+            ],
+            "title": "Covariance",
+            "type": "string"
+          },
           "dy": {
             "anyOf": [
               {
@@ -6234,6 +6290,11 @@
               }
             ],
             "title": "P0"
+          },
+          "scale_errors": {
+            "default": true,
+            "title": "Scale Errors",
+            "type": "boolean"
           },
           "upper": {
             "anyOf": [
@@ -6440,6 +6501,15 @@
             "title": "Constraints",
             "type": "array"
           },
+          "covariance": {
+            "default": "jtj",
+            "enum": [
+              "jtj",
+              "hessian"
+            ],
+            "title": "Covariance",
+            "type": "string"
+          },
           "datasets": {
             "items": {
               "$ref": "#/components/schemas/GlobalSeries"
@@ -6457,6 +6527,29 @@
               }
             ],
             "title": "Equation"
+          },
+          "fixed": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "boolean"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "items": {
+                  "type": "boolean"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed"
           },
           "lower": {
             "anyOf": [

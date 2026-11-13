@@ -1,9 +1,11 @@
 // Curve Fit — weighting control (Sol GUI audit: connect fitting to the plotted
 // error columns). Compact: a mode selector + a column picker for `manual`, plus
-// a non-fatal note when the chosen error column can't be used. State lives in
+// a non-fatal note when the chosen error column can't be used, and (when
+// weighted) Origin's "Scale errors with sqrt(reduced chi^2)" switch. State lives in
 // useCurveFit; this is a thin view (workshop pattern, like BumpsSection).
 
 import { Select } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
 import type { Dataset, WeightMode } from "../../../lib/types";
 
 interface Props {
@@ -12,6 +14,9 @@ interface Props {
   setWeightMode: (m: WeightMode) => void;
   manualKey: number | null;
   setManualKey: (k: number | null) => void;
+  /** Origin's "Scale Error with sqrt(Reduced Chi-Sqr)" (fitting audit #12). */
+  scaleErrors: boolean;
+  setScaleErrors: (on: boolean) => void;
   /** Whether the primary fit channel has a designated error column. */
   hasYErr: boolean;
   weightNote: string | null;
@@ -40,11 +45,24 @@ export default function WeightingSection(p: Props) {
       />
       {p.weightMode === "manual" && (
         <Select
+          aria-label="Manual error column"
           options={[{ value: "", label: "— pick error column —" }, ...cols]}
           value={p.manualKey == null ? "" : String(p.manualKey)}
           disabled={!p.active}
           onChange={(e) => p.setManualKey(e.target.value === "" ? null : Number(e.target.value))}
         />
+      )}
+      {p.weightMode !== "none" && (
+        <div style={{ marginTop: 6 }}>
+          <Checkbox
+            checked={p.scaleErrors}
+            disabled={!p.active}
+            onChange={p.setScaleErrors}
+            title="Off treats the error column as absolute 1σ uncertainties instead of scaling the errors (Origin's default)"
+          >
+            Scale errors with √(reduced χ²)
+          </Checkbox>
+        </div>
       )}
       {p.weightNote && (
         <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--warning)" }}>

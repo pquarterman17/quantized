@@ -26,7 +26,7 @@ import {
   rowsForModel,
   type FitParamRow,
 } from "../../../lib/fitParams";
-import { dyForFit } from "../../../lib/fitweights";
+import { dyForFit, scaleErrorsField } from "../../../lib/fitweights";
 import type { ByColumnOption } from "../useByPartition";
 import { useCurveFitByLevel, type CurveFitByLevelStart, type CurveFitLevelResult } from "./useCurveFitByLevel";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
@@ -76,6 +76,10 @@ export interface CurveFitState {
   setWeightMode: (m: WeightMode) => void;
   manualKey: number | null;
   setManualKey: (k: number | null) => void;
+  /** Origin's "Scale Error with sqrt(Reduced Chi-Sqr)" for a weighted fit
+   *  (default on); off = the error column is absolute sigmas. */
+  scaleErrors: boolean;
+  setScaleErrors: (on: boolean) => void;
   /** True when the primary fit channel has a designated error column (enables
    *  the "Y error column" mode). */
   hasYErr: boolean;
@@ -147,14 +151,16 @@ export function useCurveFit(): CurveFitState {
     if (next !== manualKey) setManualKey(next);
   });
   const [weightNote, setWeightNote] = useState<string | null>(null);
+  const [scaleErrors, setScaleErrors] = useState(savedSpec?.weight?.scaleErrors !== false);
 
   /** The weighting choice for a given primary channel: `yerr` resolves its
    *  sigma column from the view's `errKeys`; `manual` uses the picked column. */
   function weightingFor(yKey: number): FitWeighting {
-    if (weightMode === "yerr") return { mode: "yerr", errKey: errKeys[yKey] };
+    const scale = scaleErrors ? {} : { scaleErrors: false as const };
+    if (weightMode === "yerr") return { mode: "yerr", errKey: errKeys[yKey], ...scale };
     if (weightMode === "manual")
-      return manualKey != null ? { mode: "manual", errKey: manualKey } : { mode: "manual" };
-    return { mode: weightMode };
+      return manualKey != null ? { mode: "manual", errKey: manualKey, ...scale } : { mode: "manual", ...scale };
+    return weightMode === "none" ? { mode: "none" } : { mode: weightMode, ...scale };
   }
 
   useEffect(() => {
@@ -307,7 +313,7 @@ export function useCurveFit(): CurveFitState {
           model: modelName,
           x: pairs.x,
           y: pairs.y,
-          ...(finiteDy ? { dy: finiteDy } : {}),
+          ...(finiteDy ? { dy: finiteDy, ...scaleErrorsField(weight) } : {}),
           ...(custom
             ? {
                 p0: parsed.p0,
@@ -463,6 +469,8 @@ export function useCurveFit(): CurveFitState {
     setWeightMode,
     manualKey,
     setManualKey,
+    scaleErrors,
+    setScaleErrors,
     hasYErr,
     weightNote,
     byOptions: byLevel.byOptions,

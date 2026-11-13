@@ -52,6 +52,7 @@ def global_fit(
     upper: Sequence[float] | None = None,
     channel: int = 0,
     weights: str = "none",
+    covariance: str = "jtj",
 ) -> dict[str, Any]:
     """Fit ``datasets`` simultaneously with shared/per-dataset parameters.
 
@@ -60,7 +61,8 @@ def global_fit(
     length-M (one dataset). ``weights`` ∈ {``none``, ``1/y``, ``1/y2``}. Returns a
     dict with ``sharedParams``/``sharedErrors``, ``perDataset``/``perErrors`` (N×M),
     per-dataset ``R2`` + ``residuals``, ``R2global``, ``chiSqRed``, ``exitFlag``,
-    ``nParams``, ``nDatasets``, ``sharedMask``.
+    ``nParams``, ``nDatasets``, ``sharedMask``. ``covariance`` is passed to
+    ``curve_fit`` (``"hessian"`` reproduces MATLAB's errors).
     """
     if weights not in ("none", "1/y", "1/y2"):
         raise ValueError(f'weights must be "none", "1/y", or "1/y2", got "{weights}"')
@@ -139,6 +141,7 @@ def global_fit(
     fit = curve_fit(
         x_concat, y_concat, super_model, super_p0.tolist(),
         lower=super_lb.tolist(), upper=super_ub.tolist(), weights=w_concat, calc_errors=True,
+        covariance=covariance,
     )
     sp_opt = np.asarray(fit["params"], dtype=float)
     sp_err = np.asarray(fit["errors"], dtype=float)

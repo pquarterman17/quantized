@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import type { Dataset } from "./types";
-import { dyForFit } from "./fitweights";
+import { parseFitSpec } from "./fitSpecParse";
+import { fitSpecFromStepParams } from "./fitStepDecode";
+import { dyForFit, scaleErrorsField } from "./fitweights";
 
 // field, moment, err(good), bad(has non-positive). Row 1 excluded, so every
 // resolved dy is aligned to the analysis rows [0, 2, 3] — same pruning the fit
@@ -71,5 +73,23 @@ describe("dyForFit", () => {
 
   it("rejects an out-of-range error column", () => {
     expect(dyForFit(dataset, 1, { mode: "manual", errKey: 9 }).dy).toBeNull();
+  });
+});
+
+describe("scale-errors switch (fitting audit #12)", () => {
+  it("adds scale_errors: false only for a weighted fit that turned scaling off", () => {
+    expect(scaleErrorsField(undefined)).toEqual({});
+    expect(scaleErrorsField({ mode: "yerr", errKey: 2 })).toEqual({});
+    expect(scaleErrorsField({ mode: "yerr", errKey: 2, scaleErrors: false })).toEqual({ scale_errors: false });
+    expect(scaleErrorsField({ mode: "none", scaleErrors: false })).toEqual({});
+  });
+
+  it("round-trips through a saved fit spec and a recorded pipeline step", () => {
+    const weight = { mode: "manual", errKey: 2, scaleErrors: false };
+    expect(parseFitSpec({ model: "Linear", weight })?.weight).toEqual(weight);
+    expect(fitSpecFromStepParams({ model: "Linear", yKey: 0, weight }).weight).toEqual(weight);
+    // Anything but an explicit false is the default (scaled) and is not stored.
+    expect(parseFitSpec({ model: "Linear", weight: { mode: "poisson", scaleErrors: "no" } })?.weight)
+      .toEqual({ mode: "poisson" });
   });
 });

@@ -397,6 +397,10 @@ export type WeightMode = "none" | "yerr" | "poisson" | "manual";
 export interface FitWeighting {
   mode: WeightMode;
   errKey?: number;
+  /** Origin's "Scale Error with sqrt(Reduced Chi-Sqr)" turned OFF: the error
+   *  column is taken as absolute sigmas. Stored only when false (on is the
+   *  default, and an unweighted fit always scales). */
+  scaleErrors?: false;
 }
 
 /** A reproducible fit recipe + result snapshot saved on a dataset (audit P1 #3).

@@ -39,10 +39,14 @@ class BandsRequest(BaseModel):
     covar: list[list[float]] | None = None
     # Grid the bands are evaluated on.
     x: list[float]
+    # The fit's point and free-parameter counts; the band's Student-t
+    # quantile uses the residual dof n_points - n_free.
     n_points: int
-    # Student-t degrees of freedom for the band quantile. ``fit_bands`` uses
-    # its ``n_free`` argument only as this dof, so it is passed straight in.
-    dof: int
+    n_free: int
+    # The fit's observation variance (curve_fit's ``MSE``), which the
+    # prediction band adds to the curve's own variance. null -> the
+    # prediction limits come back null (the confidence band is unaffected).
+    mse: float | None = Field(default=None, ge=0.0)
     level: float = Field(default=0.95, gt=0.0, lt=1.0)
 
 
@@ -74,7 +78,8 @@ def bands(req: BandsRequest) -> dict[str, Any]:
     """Confidence and prediction bands around a fitted curve (fitting.fitBands)."""
     fcn = _model_fcn(req.model, req.equation, len(req.params))
     out = call_calc(
-        fit_bands, req.x, fcn, req.params, req.covar, req.n_points, req.dof, level=req.level
+        fit_bands, req.x, fcn, req.params, req.covar, req.n_points, req.n_free,
+        level=req.level, mse=req.mse,
     )
     return to_jsonable(out)  # type: ignore[no-any-return]
 
@@ -84,6 +89,9 @@ class DiagnosticsRequest(BaseModel):
     residuals: list[float]
     # Free (fitted) parameter count of the model the residuals came from.
     n_params: int
+    # The fit's least-squares weights (1/dy^2, or a direct weight column), so
+    # AIC/AICc/BIC are computed on the same weighted chi^2 as the fit's own.
+    weights: list[float] | None = None
 
 
 @router.post("/diagnostics")
@@ -92,7 +100,9 @@ def diagnostics(req: DiagnosticsRequest) -> dict[str, Any]:
     if len(req.y) != len(req.residuals):
         raise HTTPException(status_code=422, detail="y and residuals must have the same length")
     return {
-        "compare": to_jsonable(call_calc(fit_compare, req.y, req.residuals, req.n_params)),
+        "compare": to_jsonable(
+            call_calc(fit_compare, req.y, req.residuals, req.n_params, weights=req.weights)
+        ),
         "residuals": to_jsonable(call_calc(residual_diagnostics, req.residuals)),
     }
 

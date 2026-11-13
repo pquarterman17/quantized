@@ -77,6 +77,7 @@ def _golden_request(g: dict[str, Any], case: str) -> dict[str, Any]:
         "p0": g["initGuess"],
         "lower": lower,
         "upper": upper,
+        "covariance": "hessian",  # MATLAB's error method; the default is now jtj
     }
 
 

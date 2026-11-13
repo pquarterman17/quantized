@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from typing import Any
 
 import numpy as np
 import pytest
+from scipy.stats import t as student_t
 
 from quantized.calc.fit_models import FIT_MODELS
 from quantized.calc.fit_stats import fit_bands, fit_compare, residual_diagnostics
@@ -25,7 +27,17 @@ def test_fit_compare_matches_matlab(
         resid_ref=np.asarray(inp["residRef"], dtype=float),
         n_params_ref=float(inp["nParamsRef"]),
     )
-    compare_calc(out, g["output"], rtol=1e-6, atol=1e-9)
+    ref = dict(g["output"])
+    # DEPARTURE from the MATLAB golden (fitting audit finding 16; see
+    # docs/fitting_statistics.md): one AIC definition project-wide, statsmodels'
+    # -2 llf + 2k. MATLAB fitCompare's n*ln(RSS/n) + 2k is that minus the
+    # constant n(1 + ln 2*pi); the intended values are frozen here as golden +
+    # that constant (n = 80 -> +227.0302), every other field stays golden.
+    shift = ref["n"] * (1 + math.log(2 * math.pi))
+    assert shift == pytest.approx(227.03016531, rel=1e-9)
+    for key in ("aic", "aicc", "bic"):
+        ref[key] = ref[key] + shift
+    compare_calc(out, ref, rtol=1e-6, atol=1e-9)
 
 
 @pytest.mark.golden
@@ -38,11 +50,22 @@ def test_residual_diagnostics_matches_matlab(
 
 
 @pytest.mark.golden
-def test_fit_bands_matches_matlab(
+def test_fit_bands_matches_matlab_curve_and_intended_bands(
     load_golden: Callable[[str], dict[str, Any]], compare_calc: Callable[..., None]
 ) -> None:
+    """The fitted curve is golden; the bands are a deliberate DEPARTURE.
+
+    MATLAB fitBands has two latent bugs (docs/fitting_statistics.md): its
+    prediction variance adds sum(var_ci)/tr(J'J) -- not the residual variance
+    -- so the PI was ~4.6x too narrow here, and its t quantile used nFree (3)
+    instead of the residual dof nPoints - nFree (77), so the CI was ~1.6x too
+    wide. The INTENDED values are frozen inline below (half-widths at grid
+    points 0/10/20/30, MSE = the same fit's golden chiSqRed); the MATLAB
+    golden values they replace are kept beside them for the record.
+    """
     g = load_golden("calc_fitbands.json")
     inp = g["input"]
+    mse = load_golden("calc_curvefit_gauss.json")["output"]["chiSqRed"]  # same fit
     out = fit_bands(
         np.asarray(inp["xGrid"], dtype=float),
         FIT_MODELS["Gaussian"]["fcn"],
@@ -50,8 +73,22 @@ def test_fit_bands_matches_matlab(
         np.asarray(inp["covar"], dtype=float),
         int(inp["nPoints"]),
         int(inp["nFree"]),
+        mse=mse,
     )
-    compare_calc(out, g["output"], rtol=1e-6, atol=1e-9)
+    compare_calc({"yFit": out["yFit"]}, {"yFit": g["output"]["yFit"]}, rtol=1e-6, atol=1e-9)
+    y = out["yFit"]
+    idx = [0, 10, 20, 30]
+    # intended (this port)            MATLAB golden (buggy)
+    ci = [2.9966557e-11, 9.4189917e-04, 2.2594050e-02, 2.9375361e-04]
+    # MATLAB ci: 4.7892906e-11, 1.5053544e-03, 3.6110077e-02, 4.6948049e-04
+    pi = [5.9313577e-02, 5.9321055e-02, 6.3471186e-02, 5.9314304e-02]
+    # MATLAB pi: 1.2944175e-02, 1.3031414e-02, 3.8359997e-02, 1.2952686e-02
+    np.testing.assert_allclose((out["ciHi"] - y)[idx], ci, rtol=1e-6)
+    np.testing.assert_allclose((y - out["ciLo"])[idx], ci, rtol=1e-6)
+    np.testing.assert_allclose((out["piHi"] - y)[idx], pi, rtol=1e-6)
+    np.testing.assert_allclose((y - out["piLo"])[idx], pi, rtol=1e-6)
+    # Far from the peak the curve is pinned, so PI -> t * sqrt(MSE).
+    assert (out["piHi"] - y)[0] == pytest.approx(student_t.ppf(0.975, 77) * math.sqrt(mse))
 
 
 def test_fit_compare_perfect_fit() -> None:
@@ -74,7 +111,7 @@ def test_fit_bands_ci_inside_pi() -> None:
     x = np.linspace(0.0, 20.0, 30)
     params = np.array([5.0, 10.0, 2.0])
     covar = np.diag([0.01, 0.001, 0.001])
-    b = fit_bands(x, FIT_MODELS["Gaussian"]["fcn"], params, covar, 80, 3)
+    b = fit_bands(x, FIT_MODELS["Gaussian"]["fcn"], params, covar, 80, 3, mse=0.01)
     assert np.all(b["ciHi"] <= b["piHi"] + 1e-12)  # CI band inside PI band
     assert np.all(b["ciLo"] >= b["piLo"] - 1e-12)
     assert np.all(b["ciHi"] >= b["ciLo"])

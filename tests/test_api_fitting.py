@@ -219,3 +219,45 @@ def test_fit_still_clips_a_free_start_outside_its_bounds() -> None:
               "lower": [-10.0, -10.0], "upper": [2.0, 10.0]},
     )
     assert resp.status_code == 200
+
+
+# ── error estimates / weighting options (fitting audit findings 3 and 12) ─────
+
+
+def _decay_body() -> dict[str, object]:
+    x = np.linspace(0.0, 10.0, 50)
+    dy = 0.05 + 0.02 * x
+    y = 3.0 * np.exp(-x / 2.0) + 0.3 + 0.7 * dy * np.cos(5 * x)
+    return {"model": "Exponential Decay", "x": x.tolist(), "y": y.tolist(), "dy": dy.tolist()}
+
+
+def test_fit_defaults_to_jtj_scaled_errors_and_reports_both_methods() -> None:
+    out = client.post("/api/fitting/fit", json=_decay_body()).json()
+    assert out["covariance"] == "jtj" and out["errorsScaled"] is True
+    assert out["errors"] == out["errorsJtj"]
+    assert all(e is not None and e > 0 for e in out["errorsHessian"])
+
+
+def test_fit_hessian_covariance_is_selectable() -> None:
+    out = client.post("/api/fitting/fit", json={**_decay_body(), "covariance": "hessian"}).json()
+    assert out["covariance"] == "hessian" and out["errors"] == out["errorsHessian"]
+    bad = client.post("/api/fitting/fit", json={**_decay_body(), "covariance": "nope"})
+    assert bad.status_code == 422
+
+
+def test_fit_scale_errors_off_gives_absolute_errors() -> None:
+    scaled = client.post("/api/fitting/fit", json=_decay_body()).json()
+    absolute = client.post("/api/fitting/fit", json={**_decay_body(), "scale_errors": False}).json()
+    assert absolute["errorsScaled"] is False
+    ratio = np.array(scaled["errors"]) / np.array(absolute["errors"])
+    np.testing.assert_allclose(ratio, np.sqrt(scaled["chiSqRed"]), rtol=1e-9)
+
+
+def test_fit_direct_weighting_uses_the_weight_column_as_is() -> None:
+    body = _decay_body()
+    dy = np.array(body.pop("dy"))  # type: ignore[arg-type]
+    via_dy = client.post("/api/fitting/fit", json={**body, "dy": dy.tolist()}).json()
+    direct = client.post("/api/fitting/fit", json={**body, "weights": (1 / dy**2).tolist()}).json()
+    np.testing.assert_allclose(direct["params"], via_dy["params"], rtol=1e-12)
+    bad = client.post("/api/fitting/fit", json={**body, "weights": [-1.0] * dy.size})
+    assert bad.status_code == 422

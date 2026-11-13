@@ -17,6 +17,7 @@ function decodeWeight(v: unknown): FitWeighting | undefined {
   if (mode === "none") return undefined; // `none` = unweighted; keep specs minimal
   const weight: FitWeighting = { mode };
   if (typeof o.errKey === "number" && Number.isInteger(o.errKey)) weight.errKey = o.errKey;
+  if (o.scaleErrors === false) weight.scaleErrors = false;
   return weight;
 }
 

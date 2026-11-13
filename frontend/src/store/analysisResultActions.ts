@@ -16,6 +16,7 @@ import { fullPlottedX } from "../lib/fitselectionActions";
 import { boundsFromWire } from "../lib/fitBoundsWire";
 import { fitOverlayValues, stampRecompute } from "../lib/fitRecompute";
 import { fitDataForSpec } from "../lib/fitselection";
+import { scaleErrorsField } from "../lib/fitweights";
 import type { Dataset } from "../lib/types";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 import { resolveAnalysisResultPlot, type PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
@@ -207,8 +208,9 @@ export async function prepareAnalysisResultPlot(id: string, bindingIndex: number
         params: fitSpec.params,
         covar: null,
         x: finite.map((entry) => entry.value),
-        n_points: finite.length,
-        dof: Math.max(1, (fitSpec.nPoints ?? finite.length) - (fitSpec.nFree ?? fitSpec.params.length)),
+        // Only yFit is read (covar null -> no bands), so the counts are nominal.
+        n_points: fitSpec.nPoints ?? finite.length,
+        n_free: fitSpec.nFree ?? fitSpec.params.length,
       });
       if (!Array.isArray(evaluated.yFit) || evaluated.yFit.length !== finite.length ||
           !evaluated.yFit.every((value) => value === null || (typeof value === "number" && Number.isFinite(value)))) {
@@ -371,7 +373,7 @@ export async function recalculateFitAnalysisResult(id: string): Promise<boolean>
       model: spec.model,
       x: pairs.x,
       y: pairs.y,
-      ...(dy ? { dy } : {}),
+      ...(dy ? { dy, ...scaleErrorsField(spec.weight) } : {}),
       ...(spec.p0 ? { p0: spec.p0 } : {}),
       ...(spec.lower ? { lower: boundsFromWire(spec.lower, -1) } : {}),
       ...(spec.upper ? { upper: boundsFromWire(spec.upper, 1) } : {}),

@@ -377,6 +377,36 @@ describe("useCurveFit weighting (Sol audit — connect fitting to error columns)
     expect(useApp.getState().datasets[0].fitSpec?.weight).toEqual({ mode: "poisson" });
   });
 
+  it("scale-errors off sends scale_errors: false and records it in provenance (finding 12)", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41] });
+    const { result } = renderHook(() => useCurveFit());
+    expect(result.current.scaleErrors).toBe(true); // Origin's default
+    act(() => result.current.setWeightMode("poisson"));
+    act(() => result.current.setScaleErrors(false));
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    expect(fitModel).toHaveBeenCalledWith({
+      model: "Linear",
+      x: [0, 1, 2, 3],
+      y: [10, 20, 30, 40],
+      dy: [Math.sqrt(10), Math.sqrt(20), Math.sqrt(30), Math.sqrt(40)],
+      scale_errors: false,
+    });
+    expect(useApp.getState().datasets[0].fitSpec?.weight).toEqual({ mode: "poisson", scaleErrors: false });
+  });
+
+  it("scale-errors off is not sent for an unweighted fit (it always scales)", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41] });
+    const { result } = renderHook(() => useCurveFit());
+    act(() => result.current.setScaleErrors(false));
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
+    expect(useApp.getState().datasets[0].fitSpec?.weight).toBeUndefined();
+  });
+
   it("yerr with no designated column fits unweighted and surfaces a note", async () => {
     // default DATA has no error column and no errKeys -> hasYErr false
     vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41] });

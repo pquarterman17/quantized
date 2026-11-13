@@ -25,7 +25,9 @@ export interface EquationParamRow {
 }
 
 export interface ParsedEquationRows {
-  guesses: number[];
+  /** null = blank: the route derives that start from the data
+   *  (calc.fit_equation_init.auto_start; fitting audit finding 14). */
+  guesses: (number | null)[];
   /** null where unbounded — the wire shape `/api/fitting/equation/fit` takes. */
   lower: (number | null)[];
   upper: (number | null)[];
@@ -40,13 +42,16 @@ export type EquationRowsParse = ParsedEquationRows | { error: string };
 export function parseEquationRows(rows: readonly EquationParamRow[]): EquationRowsParse {
   const out: ParsedEquationRows = { guesses: [], lower: [], upper: [], fixed: [] };
   for (const r of rows) {
-    // No blankStart: an equation has no default, so a blank guess is refused.
+    // A blank guess is sent as null and derived from the data by the route,
+    // except on a HELD row: a held parameter needs the value to hold.
+    const blank = readParamNumber(r.guess) === null;
+    if (blank && r.fixed) return { error: `${r.name}: a held parameter needs a guess` };
     const c = checkParamRow(
       { name: r.name, start: r.guess, min: r.min, max: r.max, held: r.fixed },
-      { startLabel: "guess" },
+      { startLabel: "guess", blankStart: 0 },
     );
     if ("error" in c) return { error: c.error };
-    out.guesses.push(c.start);
+    out.guesses.push(blank ? null : c.start);
     out.lower.push(c.lo);
     out.upper.push(c.hi);
     out.fixed.push(r.fixed);

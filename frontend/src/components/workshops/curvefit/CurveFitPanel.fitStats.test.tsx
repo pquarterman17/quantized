@@ -131,7 +131,7 @@ describe("CurveFitPanel — fit statistics sections", () => {
     fireEvent.click(await screen.findByRole("checkbox", { name: "Bands" }));
     expect(await screen.findByRole("button", { name: "Plot with band" })).toBeInTheDocument();
     expect(screen.getByText(/95% CI ±/)).toBeInTheDocument();
-    expect(vi.mocked(fitBands).mock.calls[0]![0]).toMatchObject({ model: "Linear", params: [2, 1], dof: 2 });
+    expect(vi.mocked(fitBands).mock.calls[0]![0]).toMatchObject({ model: "Linear", params: [2, 1], n_free: 2 });
   });
 
   it("opening Diagnostics lists AIC/BIC, R², reduced χ² and residual stats", async () => {

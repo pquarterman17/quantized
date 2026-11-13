@@ -42,6 +42,7 @@ function weighting(v: unknown): FitWeighting | undefined {
   if (!WEIGHT_MODES.includes(w.mode as WeightMode)) return undefined;
   const out: FitWeighting = { mode: w.mode as WeightMode };
   if (Number.isInteger(w.errKey) && (w.errKey as number) >= 0) out.errKey = w.errKey as number;
+  if (w.scaleErrors === false) out.scaleErrors = false;
   return out;
 }
 

@@ -11,6 +11,13 @@
 import { analysisData } from "./rowstate";
 import type { Dataset, FitWeighting } from "./types";
 
+/** The `/fit` request field for a weighting's error scaling: present only
+ *  when scaling is OFF (the route's default is on), so every replay of a
+ *  recorded fit reproduces its parameter errors, not just its parameters. */
+export function scaleErrorsField(weight: FitWeighting | undefined): { scale_errors?: false } {
+  return weight?.scaleErrors === false && weight.mode !== "none" ? { scale_errors: false } : {};
+}
+
 export interface DyResolution {
   /** 1-sigma errors aligned to the analysis rows, or null = fit unweighted. */
   dy: number[] | null;

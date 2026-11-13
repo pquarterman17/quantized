@@ -79,6 +79,8 @@ export default function CurveFitPanel() {
     setWeightMode,
     manualKey,
     setManualKey,
+    scaleErrors,
+    setScaleErrors,
     hasYErr,
     weightNote,
     // Renamed on destructure: `paramRows` below is the RESULTS table (fitted
@@ -109,6 +111,8 @@ export default function CurveFitPanel() {
       setWeightMode={setWeightMode}
       manualKey={manualKey}
       setManualKey={setManualKey}
+      scaleErrors={scaleErrors}
+      setScaleErrors={setScaleErrors}
       hasYErr={hasYErr}
       weightNote={weightNote}
     />

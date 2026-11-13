@@ -4,9 +4,12 @@
 // library dataset opened in its own plot with the band filled (fitBandData.ts
 // says why a dataset: it is what reaches the vector export).
 //
-// Degrees of freedom: fit_bands takes its Student-t dof directly, and the
-// band is a statement about THIS fit's residual scatter, so it is sent as
-// nPoints - nFree (the fit's residual dof), not the free-parameter count.
+// The band is a statement about THIS fit: the route takes the fit's point and
+// free-parameter counts (its Student-t quantile uses the residual dof
+// nPoints - nFree) and the fit's observation variance `MSE`, which the
+// prediction band adds to the curve's own variance (fitting audit finding 1:
+// the band used to be ~7x too narrow). A result without MSE (an older saved
+// snapshot) gets no prediction limits rather than a wrong band.
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -71,6 +74,7 @@ export function useFitBands(target: FitBandsTarget): FitBandsState {
     const params = (result.params as number[] | undefined) ?? [];
     const nPoints = Number(result.nPoints ?? fitData.x.length);
     const nFree = Number(result.nFree ?? params.length);
+    const mse = typeof result.MSE === "number" && Number.isFinite(result.MSE) ? result.MSE : null;
     const ctrl = new AbortController();
     setBusy(true);
     fitBands(
@@ -80,7 +84,8 @@ export function useFitBands(target: FitBandsTarget): FitBandsState {
         covar: (result.covar as number[][] | null | undefined) ?? null,
         x: rows.x,
         n_points: nPoints,
-        dof: Math.max(nPoints - nFree, 1),
+        n_free: nFree,
+        mse,
         level,
       },
       ctrl.signal,
