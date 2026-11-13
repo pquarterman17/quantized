@@ -887,6 +887,11 @@ const TS_MODULE_PINS: Record<string, number> = {
   // contained leaf block — moved verbatim to the new lib/seriesStyleTypes.ts
   // and re-exported from types.ts (no importer changed). Funds the new
   // `SeriesStyle.logOffset` field and ratchets down by the balance.
+  // 934 -> 849 (2026-11-13): the fit recipe types (WeightMode, FitWeighting,
+  // FitSpec) moved whole to lib/fitTypes.ts when the statistics-version and
+  // direct-weighting fields would have taken this file past its pin.
+  // 849 -> 843 (2026-11-13, fitting integration): FitOverlay moved to
+  // lib/fitTypes.ts when the Curve Fit band field took the merge past the pin.
   // 934 -> 915 (2026-11, Origin interchange audit): the fidelity manifest +
   // filtered-figure types moved verbatim to lib/originFidelityTypes.ts (re-
   // exported, no importer changed); funds the manifest's new
@@ -896,7 +901,10 @@ const TS_MODULE_PINS: Record<string, number> = {
   // verbatim in lib/originFidelityTypes.ts (re-exported, no importer changed);
   // funds the worksheet "Set As" `Dataset.columnDesignations` field and
   // ratchets down by the balance.
-  "/lib/types.ts": 908,
+  // 843 / 908 -> 821 (2026-11-13, merging main's fitting work into the Origin
+  // interchange branch): both sides' moves combined; the pin is the merged
+  // file's measured size.
+  "/lib/types.ts": 821,
   // 893 -> 863 (P1.4 Graph Builder encodings): the error-well helpers
   // (specErrorBindings/prefillErrorZones) moved verbatim to lib/plotspecErrors.ts
   // (re-exported, no importer moved), funding the three optional encoding zones;

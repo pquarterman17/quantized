@@ -77,6 +77,14 @@ beforeEach(() => {
 });
 
 describe("PeakWizardPanel", () => {
+  it("opens docked at the right edge, clear of the Library and the plot's Y axis", async () => {
+    // Live check: it opened at x = 120, over the Library, the Y axis and the
+    // first peaks of the pattern being analysed.
+    render(<PeakWizardPanel />);
+    const frame = await screen.findByRole("dialog");
+    expect(parseFloat(frame.style.left)).toBe(window.innerWidth - 420 - 16);
+  });
+
   it("walks find → fit → report and lands a #36 report", async () => {
     findMock.mockResolvedValue(FOUND);
     fitMock.mockResolvedValue(FIT);

@@ -105,7 +105,14 @@ def test_xrd_strict_prominence_on_real_laboratory_pattern(corpus_dir: Path) -> N
     assert strict.status_code == 200
     legacy_centers = [p["center"] for p in legacy.json()["peaks"]]
     strict_centers = [p["center"] for p in strict.json()["peaks"]]
-    assert len(strict_centers) < len(legacy_centers)
+    # The low-angle background ripples that exposed the defect were noise:
+    # since the detector measures heights from the noise centre and tests
+    # candidates against the smoothed-series noise (calc.peak_noise) the
+    # default mode no longer labels them either, so strict can only match or
+    # prune it. (Noise-free, the two modes still differ:
+    # test_strict_prominence_rejects_locally_prominent_weak_peak.)
+    assert len(strict_centers) <= len(legacy_centers)
+    assert sum(c < 20 for c in legacy_centers) <= 2
     assert sum(c < 20 for c in strict_centers) <= 2
     assert any(abs(c - 24.11) < 0.05 for c in strict_centers)
     assert any(abs(c - 31.37) < 0.05 for c in strict_centers)

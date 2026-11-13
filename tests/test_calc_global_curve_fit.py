@@ -60,6 +60,7 @@ def test_global_curve_fit_matches_matlab(
     r = global_curve_fit(
         datasets, _FCN[case], g["paramNames"], _constraints_py(g["constraints"]),
         init_guess=g["initGuess"], lower=lower, upper=upper,
+        covariance="hessian",  # MATLAB's error method; the default is now jtj
     )
     ref = g["result"]
     assert_allclose(np.asarray(r["params"]), np.asarray(ref["params"], dtype=float),

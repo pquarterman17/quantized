@@ -1,3 +1,4 @@
+import { describeFitTemplate, sanitizeFitTemplate } from "./fitTemplates";
 import { validateExpression } from "./pipeline";
 import type { PipelineStep } from "./pipelineStep";
 import { transformParamsOf } from "./transformRun";
@@ -137,6 +138,10 @@ function problem(
 function stepSummary(step: PipelineStep, dataset: Dataset | null): string {
   if (step.kind === "expression") return `Create “${String(step.params.name ?? "unnamed")}” from ${String(step.params.expr ?? "an empty expression")}.`;
   if (step.kind === "fit") {
+    // A Curve Fit template step runs the template's own settings
+    // (lib/fitTemplateReplay.ts): say what they are.
+    const template = sanitizeFitTemplate(step.params.fitTemplate);
+    if (template) return describeFitTemplate(template);
     const y = typeof step.params.yKey === "number" ? dataset?.data.labels[step.params.yKey] : undefined;
     return `Fit ${String(step.params.model ?? "an unspecified model")}${y ? ` to ${y}` : " using the recorded or current channel selection"}.`;
   }
@@ -160,8 +165,16 @@ function stepImpact(step: PipelineStep, later: number): string {
   return "Does not change data during interactive replay.";
 }
 
-function compatibilityWarning(step: PipelineStep, columnCount: number | null): string | undefined {
+function compatibilityWarning(step: PipelineStep, columnCount: number | null, dataset: Dataset | null): string | undefined {
   if (step.kind !== "fit" || columnCount === null) return undefined;
+  const template = sanitizeFitTemplate(step.params.fitTemplate);
+  if (template) {
+    const label = template.manualLabel;
+    const byName = template.weight === "manual" || template.weight === "direct";
+    return byName && dataset && (!label || !dataset.data.labels.includes(label))
+      ? `The template's weight column “${label ?? ""}” is not in this worksheet; this fit will run unweighted.`
+      : undefined;
+  }
   const yKey = step.params.yKey;
   if (typeof yKey === "number" && Number.isInteger(yKey) && (yKey < 0 || yKey >= columnCount)) {
     return `Recorded Y column ${yKey + 1} is missing; the run will use the current plotted selection.`;
@@ -171,9 +184,11 @@ function compatibilityWarning(step: PipelineStep, columnCount: number | null): s
     return `Recorded X column ${xKey + 1} is missing; the run will use the worksheet X column.`;
   }
   const weight = step.params.weight as { mode?: unknown; errKey?: unknown } | undefined;
-  if ((weight?.mode === "yerr" || weight?.mode === "manual") &&
+  if ((weight?.mode === "yerr" || weight?.mode === "manual" || weight?.mode === "direct") &&
       (typeof weight.errKey !== "number" || weight.errKey < 0 || weight.errKey >= columnCount)) {
-    return "The recorded uncertainty column is missing; this fit will run unweighted.";
+    return weight.mode === "direct"
+      ? "The recorded weight column is missing; this fit will run unweighted."
+      : "The recorded uncertainty column is missing; this fit will run unweighted.";
   }
   return undefined;
 }
@@ -201,7 +216,7 @@ export function analyzePipeline(steps: readonly PipelineStep[], dataset: Dataset
       reviews.push({ id: step.id, state: "input", summary, impact });
     } else {
       const issue = problem(step, dataset, schemaDataset, loadedDatasets, loaded, available, columnCount);
-      const warning = issue ? undefined : compatibilityWarning(step, columnCount);
+      const warning = issue ? undefined : compatibilityWarning(step, columnCount, schemaDataset);
       reviews.push({ id: step.id, state: issue ? "invalid" : "ready", summary, impact, issue: issue ?? warning });
       if (issue && step.kind === "transform") blockedBy = step.label;
     }

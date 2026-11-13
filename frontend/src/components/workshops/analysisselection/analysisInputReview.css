@@ -1,4 +1,10 @@
+/* Both cards sit in a ToolWindow body, a scrolling FLEX COLUMN. A flex item
+   with overflow other than visible gets min-height: 0, so `overflow: hidden`
+   on the batch card let it shrink to its 2px of border: "Batch · N
+   worksheets" (the only way to reach a batch fit) collapsed to a line.
+   flex-shrink: 0 keeps each card at its content height; the body scrolls. */
 .qzk-analysis-input-review {
+  flex-shrink: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-2);
@@ -39,7 +45,7 @@
 .qzk-analysis-input-issue.error { color: var(--danger); }
 .qzk-analysis-input-issue.warning { color: var(--warning); }
 
-.qzk-analysis-batch { margin-top: 8px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.qzk-analysis-batch { flex-shrink: 0; margin-top: 8px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .qzk-analysis-batch-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
 .qzk-analysis-batch-table th, .qzk-analysis-batch-table td { padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--border); }
 .qzk-analysis-batch-table th { color: var(--text-faint); font-weight: 600; }

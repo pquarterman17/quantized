@@ -25,7 +25,9 @@ export interface EquationParamRow {
 }
 
 export interface ParsedEquationRows {
-  guesses: number[];
+  /** null = blank: the route derives that start from the data
+   *  (calc.fit_equation_init.auto_start; fitting audit finding 14). */
+  guesses: (number | null)[];
   /** null where unbounded — the wire shape `/api/fitting/equation/fit` takes. */
   lower: (number | null)[];
   upper: (number | null)[];
@@ -40,13 +42,16 @@ export type EquationRowsParse = ParsedEquationRows | { error: string };
 export function parseEquationRows(rows: readonly EquationParamRow[]): EquationRowsParse {
   const out: ParsedEquationRows = { guesses: [], lower: [], upper: [], fixed: [] };
   for (const r of rows) {
-    // No blankStart: an equation has no default, so a blank guess is refused.
+    // A blank guess is sent as null and derived from the data by the route,
+    // except on a HELD row: a held parameter needs the value to hold.
+    const blank = readParamNumber(r.guess) === null;
+    if (blank && r.fixed) return { error: `${r.name}: a held parameter needs a guess` };
     const c = checkParamRow(
       { name: r.name, start: r.guess, min: r.min, max: r.max, held: r.fixed },
-      { startLabel: "guess" },
+      { startLabel: "guess", blankStart: 0 },
     );
     if ("error" in c) return { error: c.error };
-    out.guesses.push(c.start);
+    out.guesses.push(blank ? null : c.start);
     out.lower.push(c.lo);
     out.upper.push(c.hi);
     out.fixed.push(r.fixed);
@@ -58,28 +63,24 @@ export function parseEquationRows(rows: readonly EquationParamRow[]): EquationRo
 /** The numbers a SAVED model records for these rows, or why it cannot be
  *  saved: the fit's own per-row checks (`checkParamRow` — a guess, min or max
  *  that is not a number, min above max), with two differences. A BLANK guess
- *  is 1 clamped into the row's bounds — the start the engine would use, since
- *  it clips every start into its bounds (PR #432 review: unclamped, a blank
- *  guess with min 5 was refused as a guess the user never typed). And the
+ *  is saved as null — "derive this start from the data" — so a model saved
+ *  with an auto start reloads with an auto start (it used to be frozen as 1,
+ *  which made the auto start unreachable after the first save). And the
  *  hold flag plays no part: a saved model does not record it. A TYPED guess
  *  outside its bounds is left for the creation check (lib/fitmodels'
  *  `checkFitModelRecord`) to refuse, naming it. */
 export function savedModelRows(
   rows: readonly EquationParamRow[],
-): { guesses: number[]; lower: (number | null)[]; upper: (number | null)[] } | { error: string } {
-  const out: { guesses: number[]; lower: (number | null)[]; upper: (number | null)[] } = { guesses: [], lower: [], upper: [] };
+): { guesses: (number | null)[]; lower: (number | null)[]; upper: (number | null)[] } | { error: string } {
+  const out: { guesses: (number | null)[]; lower: (number | null)[]; upper: (number | null)[] } = { guesses: [], lower: [], upper: [] };
   for (const r of rows) {
-    // An unreadable bound is refused by checkParamRow below; here it only
-    // must not move the blank start.
-    const lo = readParamNumber(r.min) ?? null;
-    const hi = readParamNumber(r.max) ?? null;
-    const blankStart = hi !== null && hi < 1 ? hi : lo !== null && lo > 1 ? lo : 1;
+    const blank = readParamNumber(r.guess) === null;
     const c = checkParamRow(
       { name: r.name, start: r.guess, min: r.min, max: r.max, held: false },
-      { startLabel: "guess", blankStart },
+      { startLabel: "guess", blankStart: 0 },
     );
     if ("error" in c) return { error: c.error };
-    out.guesses.push(c.start);
+    out.guesses.push(blank ? null : c.start);
     out.lower.push(c.lo);
     out.upper.push(c.hi);
   }
@@ -95,9 +96,11 @@ export function equationRunProblem(rows: readonly EquationParamRow[]): string | 
   return "error" in parsed ? parsed.error : null;
 }
 
-/** Seed a row for a parameter the equation just gained. */
+/** Seed a row for a parameter the equation just gained: a BLANK guess, i.e.
+ *  "auto" — the route derives the start from the data. (Seeding "1" made the
+ *  auto start unreachable without first deleting every guess by hand.) */
 export function newEquationRow(name: string): EquationParamRow {
-  return { name, guess: "1", min: "", max: "", fixed: false, unit: "" };
+  return { name, guess: "", min: "", max: "", fixed: false, unit: "" };
 }
 
 /** The recorded macro step of an equation fit (P2.7 review): the script line
@@ -106,7 +109,11 @@ export function newEquationRow(name: string): EquationParamRow {
  *  default-start one. `qz.fitEquation(equation, setup?)`: the second argument
  *  is optional, so a step recorded before it existed (equation only, i.e.
  *  the route's defaults: guesses of 1, no bounds, nothing held) is still a
- *  valid line and replays exactly as it always did. The step stays a
+ *  valid line and replays exactly as it always did — the route keeps
+ *  "guesses omitted" meaning 1.0 each; only an explicit null entry, which
+ *  is what a blank guess in THIS table records, asks for a data-derived
+ *  start (`/api/fitting/equation/fit`, tests/test_api_fitting_equation.py).
+ *  The step stays a
  *  script-only "ui" step; the pipeline runner skips it as before. */
 export function equationFitStep(
   equation: string,

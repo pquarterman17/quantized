@@ -467,6 +467,32 @@ describe("withFitOverlay", () => {
   it("is a no-op when there is no overlay", () => {
     expect(withFitOverlay(base, null, "d1")).toBe(base);
   });
+
+  // Audit #9: the Curve Fit band rides on the overlay and is drawn with it.
+  it("appends the band edges after the curve, each pointing back at it", () => {
+    const band = [
+      { label: "95% CI low", y: [10, 20, 30] },
+      { label: "95% CI high", y: [12, 22, 32] },
+      { label: "95% PI low", y: [9, 19, 29] },
+      { label: "95% PI high", y: [13, 23, 33] },
+    ];
+    const p = withFitOverlay(base, { datasetId: "d1", y: [11, 21, 31], band }, "d1");
+    expect(p.data.slice(2)).toEqual([[11, 21, 31], ...band.map((e) => e.y)]);
+    expect(p.series.slice(1)).toEqual([
+      { label: "fit", unit: "" },
+      { label: "95% CI low", unit: "", band: 1 },
+      { label: "95% CI high", unit: "", band: 2 },
+      { label: "95% PI low", unit: "", band: 3 },
+      { label: "95% PI high", unit: "", band: 4 },
+    ]);
+    const ci = withFitOverlay(base, { datasetId: "d1", y: [11, 21, 31], band: band.slice(0, 2).map((e) => ({ ...e, label: e.label.replace("95", "90") })) }, "d1");
+    expect(ci.series.map((x) => x.label)).toEqual(["y", "fit", "90% CI low", "90% CI high"]);
+  });
+
+  it("draws the curve without its band when a band edge cannot align", () => {
+    const p = withFitOverlay(base, { datasetId: "d1", y: [11, 21, 31], band: [{ label: "lo", y: [1] }, { label: "hi", y: [1, 2, 3] }] }, "d1");
+    expect(p.series.map((x) => x.label)).toEqual(["y", "fit"]);
+  });
 });
 
 describe("withDerivOverlay (gap #34 differentiate mode)", () => {

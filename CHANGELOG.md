@@ -29,7 +29,36 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 - Graph Builder seeded from a worksheet or a recovered Origin graph puts
   Y-error columns in the error wells instead of listing them as series.
 - Library Tree rows say how to open them ("Double-click to open").
+- Curve fitting now includes 33 of Origin's built-in fit functions, with
+  Origin's names, parameter order, formulas and default bounds:
+  - Peak Functions: Gauss, GaussAmp, Lorentz, a true Voigt, PsdVoigt1/2,
+    LogNormal and Asym2Sig.
+  - Exponential: ExpDec1/2/3, ExpDecay1/2/3, ExpGro1/2 and ExpGrow1/2.
+  - Growth/Sigmoidal: Boltzmann, DoseResp, Hill, Hill1, MichaelisMenten,
+    Logistic, Logistic5, SLogistic1, SGompertz and SWeibull1.
+  - Polynomial, Power and Waveform: Poly5, the 9th-order Poly, Allometric1,
+    Sine and SineDamp.
 
+  Polynomials of order 6, 7 and 8 and a line through the origin
+  (Proportional) are added alongside them.
+
+  Each one has a starting guess computed from the data, so most fits work
+  without hand-tuned starting values. Origin's `Logistic` appears as
+  "Logistic (Origin)" because the original Logistic model keeps its name.
+  `docs/fit_models.md` lists every model with its formula and its Origin Help
+  page. A model scan with no model list fits the original models plus nine
+  of the new ones; the rest can be added to the scan by name.
+- Curve Fit weighting: **Direct (weight column)** uses a column as the
+  weights themselves, and **Scale errors with √(reduced χ²)** (on by default,
+  as in Origin) can be turned off to treat error bars as absolute.
+- Custom equation fits derive blank starting values from the data: leave a
+  guess empty ("auto") instead of typing one. New functions: natural log,
+  min/max, gamma, Heaviside/step, a conditional `if(cond, a, b)` with
+  comparisons, the Voigt profile and Bessel functions.
+- Global fits can hold parameters fixed and report errors with either
+  covariance method.
+- A fit that stalls on a parameter, or whose model is undefined at the
+  fitted values, is reported as not converged with the reason.
 - Calculators ▸ Film stack also predicts where each layer and the substrate
   appear in a reciprocal-space map for a chosen asymmetric reflection
   (H 0 L), default (103): Qx, Qz (Q = 2π/d, as in the RSM workshop), 2θ, and
@@ -113,6 +142,50 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   draws it against the wrong X.
 - The Map tab says why columns cannot be gridded (a constant axis, no row
   with all three values) instead of drawing an offline grid of them.
+- Curve Fit: in an edited start-value table, every free parameter whose
+  start you did not type (blank, or still the default it was seeded with)
+  starts from the data-driven guess, as an untouched table does. Holding one
+  parameter used to send the model's fixed defaults for all the others, and
+  the fit could collapse. Batch fits do the same for each input.
+- Curve Fit: fit templates keep Direct (weight column) weighting and the
+  "Scale errors with √(reduced χ²)" choice; batch fits honour that switch.
+  A direct-weighted fit's report, report sheet and ANOVA use the weights as
+  given and leave zero-weight points out of N.
+- The Peak Analyzer opens docked at the right edge, like Curve Fit, instead
+  of over the Library and the plot's Y axis.
+- **Curve-fit statistics now follow Origin / scipy / statsmodels.** Several
+  reported numbers change meaning; `docs/fitting_statistics.md` has the
+  definitions. Fits saved before this change keep their old definitions when
+  they are recalculated, and the result overview says which set a fit uses;
+  **Update statistics** on a saved fit moves it to the current set.
+  - Parameter errors default to the covariance `(JᵀWJ)⁻¹·s²` (what Origin and
+    scipy `curve_fit` report) instead of the Hessian of the SSR. Both are
+    returned (`errorsJtj`, `errorsHessian`); `covariance: "hessian"` selects
+    the old one.
+  - Prediction bands are wider and confidence bands narrower. The prediction
+    band adds the fit's residual variance (it was several times too narrow),
+    per point for a weighted fit, and both bands use the residual degrees of
+    freedom (the confidence band was about 1.6× too wide for a 3-parameter
+    fit).
+  - AIC, AICc and BIC in Diagnostics and model comparison use the same
+    definition as the fit's own AIC (`2k − 2 ln L`). They are larger than
+    before by the constant `n(1 + ln 2π)`; differences between models are
+    unchanged. A weighted fit's AIC now includes the `Σ ln w` term.
+  - RMSE is always the unweighted root-mean-square residual in the units of
+    y, including for weighted and global fits. The weighted sum the fit
+    minimised is reported separately as χ².
+  - Zero-weight points no longer count as observations (n, degrees of
+    freedom, errors, AIC).
+- `POST /api/fitting/bands` takes `n_free` and `mse` (or `x_data` +
+  `obs_var` for a weighted fit) instead of `dof`.
+- Peak finding measures heights from the centre of the noise rather than its
+  lower edge and estimates noise robustly, including correlated noise, so
+  noisy patterns no longer return a flood of noise peaks. Reported heights
+  and backgrounds of noisy data shift by about two noise standard deviations.
+- Custom equations: `ln`, `gamma`, `heaviside`, `step`, `min`, `max`, `if`,
+  `voigt`, `besselj`, `bessely`, `besseli` and `besselk` are now function
+  names when called. A parameter with one of these names still works unless
+  it is written with parentheses.
 
 ### Fixed
 

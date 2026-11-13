@@ -238,7 +238,7 @@ export function quickPlotFigureSeed(
       // through `figureSeedErrorBindings`, which yields the same list.)
       const held = new Set(withhold.map((b) => b.channel));
       const seeded = { ...dataset, errorRoles: figureSeedErrorBindings(dataset).filter((b) => !held.has(b.channel)) };
-      const view = { ...defaultPlotView(), ...datasetViewDefaults(seeded, undefined, memory, { errorRoles: true }) };
+      const view = { ...defaultPlotView(), ...datasetViewDefaults(seeded, undefined, memory) };
       view.hiddenChannels = [...new Set([...view.hiddenChannels, ...held])];
       const rich = figureSeedErrorBindings(seeded).filter((b) => b.axis !== "y" || b.side !== "both");
       return {
