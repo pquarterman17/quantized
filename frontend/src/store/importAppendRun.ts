@@ -57,6 +57,9 @@ export async function runImportFilesAppended(
       const id = nextDatasetId();
       const name = `${uploaded[0].name} +${uploaded.length - 1} more (appended)`;
       get().addDataset({ id, name, data: merged });
+      // Already active; `setActive` also drops a worksheet-only override, so the
+      // Worksheet tab shows the appended data, not a book opened earlier.
+      get().setActive(id);
       for (const u of uploaded) get().pushRecent(u.name, u.size);
       get().recordMacro(
         `Import (append) ${uploaded.length} files`,
