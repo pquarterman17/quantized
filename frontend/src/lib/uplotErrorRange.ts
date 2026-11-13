@@ -182,3 +182,17 @@ export function fullYExtents(
  *  growing caps and left screen and export disagreeing; figures-audit #10
  *  ("draw bound errors with caps") settles it in favour of agreement. */
 export const ERROR_CAP_HALF_PX = 3;
+
+/** The error-bar plugins' shared draw setup (`uplotOverlays`'
+ *  errorBarsPlugin / errorSpansPlugin): save, clip to the plot area so
+ *  off-range whiskers do not bleed into the axes, 1 px, and a SOLID line --
+ *  a dashed series (a fit band) leaves its dash on the shared context, which
+ *  drew every error bar dashed (re-audit #6). The caller restores. */
+export function beginErrorDraw(ctx: CanvasRenderingContext2D, bbox: { left: number; top: number; width: number; height: number }): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(bbox.left, bbox.top, bbox.width, bbox.height);
+  ctx.clip();
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+}
