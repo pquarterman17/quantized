@@ -35,9 +35,9 @@ describe("Column / Bar from a Sample,Value,SD table (#8)", () => {
   it("the bound SD column becomes each one-row category's error bar, named in the note", () => {
     const bd = withColumnErrors(buildBarMatrix(bar.data, 2, [0], ["Value"]), bar.data, 2, [0], [1]);
     expect(bd.groups.map((g) => g.series[0].err)).toEqual([0.3, 0.4, 0.2, 0.6]);
-    expect(errorHalfWidth("se", NaN, 1, bd.groups[0].series[0].err)).toBe(0.3);
+    expect(errorHalfWidth("column", NaN, 1, bd.groups[0].series[0].err)).toBe(0.3);
     expect(errorHalfWidth("none", NaN, 1, 0.3)).toBeNaN();
-    expect(errorBarNote("se", bd.errorColumn ?? null)).toBe("Error bars: SD (error column)");
+    expect(errorBarNote("column", bd.errorColumn ?? null)).toBe("Error bars: SD (error column)");
   });
 
   it("cells with several rows keep their statistics", () => {

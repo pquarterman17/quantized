@@ -42,7 +42,7 @@ import type { BarChartData } from "../../lib/barlayout";
 import type { AxisSlot } from "../../lib/groupAxis";
 import { resolvedPalette } from "../../lib/plotEncodingWire";
 import type { StatExportOut, StatStageRequest } from "../../lib/statStageBridge";
-import { axisStyleWire, errorHalfWidth, nestedTiers, type ResolvedStatMarks } from "../../lib/statMarks";
+import { axisStyleWire, categoricalErrorWire, errorHalfWidth, nestedTiers, type ResolvedStatMarks } from "../../lib/statMarks";
 import type { GroupSpec } from "../../lib/statschooser";
 import { finiteOf, type IndexedGroupSpec, type StatMode } from "../../lib/statstage";
 import type { DataStruct } from "../../lib/types";
@@ -159,7 +159,7 @@ export function buildExportSpec(
  *  flags and connect-means are box / strip only. */
 function marksWire(mode: StatMode, m: ResolvedStatMarks, rows: number[][] | null) {
   const pts = {
-    points: m.points, jitter_width: m.jitterWidth, point_row_indices: rows, summary: m.summary, error_bars: m.errorBars,
+    points: m.points, jitter_width: m.jitterWidth, point_row_indices: rows, summary: m.summary, error_bars: categoricalErrorWire(m.errorBars),
   };
   if (mode === "violin") return pts;
   return {
@@ -383,7 +383,7 @@ export async function exportFacetedFigure(
     show_n: showN,
     caveat,
     ...noteWire(o.errorNote),
-    ...(m ? { summary: m.summary, error_bars: m.errorBars, points: m.points, jitter_width: m.jitterWidth } : {}),
+    ...(m ? { summary: m.summary, error_bars: categoricalErrorWire(m.errorBars), points: m.points, jitter_width: m.jitterWidth } : {}),
     ...(m?.connectMeans ? { show_connect_means: true } : {}),
     ...paletteWire(facets.some((f) => f.color_levels)),
     // `tiered` (whether nesting is active) is shared; `tiers` itself is

@@ -57,7 +57,7 @@ import { needsBarRaw } from "./statBarMarks";
 import { useStatBarSeries } from "./useStatBarSeries";
 import { figureErrorNote } from "./statErrorNote";
 import { applyLevels, levelAxes } from "./statStageLevels";
-import { needsPoints, stageMarks, withMarks, withNestLabel } from "./statStageMarks";
+import { needsPoints, stageMarks, withErrorColumn, withMarks, withNestLabel } from "./statStageMarks";
 import {
   computeBarData,
   computeBoxDraw,
@@ -146,8 +146,10 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     else setLocalMarks((m) => ({ ...m, [marksMode]: { ...m[marksMode], ...patch } }));
   };
   const grouped = effectiveGroupCol != null;
-  const rm = useMemo(() => stageMarks(mode, marks, grouped), [mode, marks, grouped]);
-  const wantPoints = needsPoints(mode, rm);
+  // The marks before the bar data is known: points / summary (all that
+  // `wantPoints` / `barRaw` read). The error-bar kind settles below (`rm`).
+  const rmBase = useMemo(() => stageMarks(mode, marks, grouped), [mode, marks, grouped]);
+  const wantPoints = needsPoints(mode, rmBase);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -206,13 +208,15 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     active, plotted, valueCol, effectiveGroupCol, nestCol, columns, valueLabel,
   );
   // P2.6 box 1: a grouped bar's points / median need each cell's raw rows.
-  const barRaw = mode === "bar" && needsBarRaw(rm);
+  const barRaw = mode === "bar" && needsBarRaw(rmBase);
   const barData = useMemo<BarChartData | null>(() => {
     if (!data || mode !== "bar") return null;
     const raw = barRaw ? { rowIds } : null;
     const bd = computeBarData(data, effectiveGroupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel, raw);
     return withColumnErrors(bd, data, effectiveGroupCol, barValueChannels, barErrorChannels);
   }, [data, rowIds, barRaw, mode, effectiveGroupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel, barErrorChannels]);
+  const errorColumn = barData?.errorColumn ?? null;
+  const rm = useMemo(() => withErrorColumn(rmBase, mode, marks, errorColumn != null), [rmBase, mode, marks, errorColumn]);
 
   // P2.6 box 2: facet slices computed ONCE, shared by the compute effect and
   // the level axes; and every draw keyed to the grouping inputs it was
@@ -467,6 +471,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     barStack,
     setBarStack,
     marks: rm,
+    errorColumn,
     setMarks: patchMarks,
     facetCol: effectiveFacetCol,
     setFacetCol,
