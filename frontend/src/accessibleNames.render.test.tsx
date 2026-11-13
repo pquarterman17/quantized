@@ -98,13 +98,19 @@ describe("rendered controls are named in words (U6)", () => {
     expect(unnamedControls(calc.container), FIX).toEqual([]);
   });
 
-  it("the menu bar with a menu open, and the status bar", () => {
+  it("the menu bar with a menu open, and the status bar", async () => {
     const actions: Action[] = [
       { id: "imp", group: "File", label: "Import data…", run: vi.fn() },
       { id: "thm", group: "View", label: "Toggle theme", run: vi.fn() },
     ];
     const menus = render(<MenuBar actions={actions} onOpenPalette={vi.fn()} />);
     fireEvent.click(screen.getByText("File"));
+    // The menu's items come from a lazily loaded model (MenuBar.loadMenuModel).
+    // Wait for them: asserting at once scanned an EMPTY menu, and left that
+    // import in flight, so it could land after the file's environment was torn
+    // down (an unhandled EnvironmentTeardownError; forced by holding the chunk
+    // until afterAll -- 2 of 3 runs).
+    await screen.findByRole("menuitem", { name: "Import data…" });
     expect(unnamedControls(menus.container), FIX).toEqual([]);
     // (Its per-op Cancel names are pinned in StatusBar.test.tsx, under fake timers.)
     const status = render(<StatusBar />);
