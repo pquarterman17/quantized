@@ -92,6 +92,16 @@ export interface OriginFidelityManifest {
   filtered_figures: OriginFilteredFigure[];
   /** Optional for backward compatibility with #49 workspaces. */
   preview_diagnostics?: OriginPreviewDiagnostic[];
+  /** File length vs the size its header records (backend
+   *  io/origin_project/integrity.py). A truncated file also lists the
+   *  `file_truncated` omission. Optional: older workspaces lack it. */
+  container_integrity?: {
+    checked: boolean;
+    complete: boolean | null;
+    file_bytes: number;
+    declared_bytes: number | null;
+    detail: string;
+  };
 }
 
 /** The `books[]` entry for the book already returned in full at the payload's

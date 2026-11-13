@@ -32,6 +32,7 @@ import { lit } from "../lib/macro";
 import { revealAncestorChain } from "../lib/foldertree";
 import { originBookErrorRoles } from "../lib/originBookRoles";
 import { planOriginImport } from "../lib/originFolders";
+import { originImportNotice } from "../lib/originImportNotice";
 import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "../lib/rowSidecars";
 import {
   isLazyBookEntry,
@@ -329,10 +330,8 @@ function addFromPayload(
   if (figures?.length) get().addOriginFigures(stem, figures, newIds);
   if (fidelity) {
     get().addOriginFidelity(stem, fidelity, newIds);
-    toast(
-      `${stem}: ${fidelity.graph_records_actionable}/${fidelity.graph_records_total} Origin graph records are editable; fidelity details saved`,
-      "info",
-    );
+    const notice = originImportNotice(stem, fidelity); // truncated file -> danger
+    toast(notice.msg, notice.kind);
   }
   get().recordMacro(`Import ${origin.name}`, `qz.import(${lit(origin.name)})`, {
     kind: "import",

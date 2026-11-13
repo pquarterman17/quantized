@@ -10,9 +10,10 @@ reduces the pure decoder output.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
 
 from quantized.io.origin_project.graph_preview import PreviewDiagnostic
+from quantized.io.origin_project.integrity import ContainerIntegrity
 
 __all__ = ["assess_origin_figures", "origin_figure_decode_failure"]
 
@@ -42,6 +43,9 @@ class OriginFidelityManifest(TypedDict):
     omissions: list[str]
     filtered_figures: list[FilteredFigure]
     preview_diagnostics: list[PreviewDiagnostic]
+    # File length vs the size its header records (``integrity.py``); added by
+    # ``integrity.apply_container_integrity`` at import time.
+    container_integrity: NotRequired[ContainerIntegrity]
 
 
 def origin_figure_decode_failure(

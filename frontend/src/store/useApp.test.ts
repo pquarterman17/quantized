@@ -1514,6 +1514,37 @@ describe("useApp importFiles", () => {
     expect(s.datasets.every((d) => !("origin_fidelity" in d.data))).toBe(true);
   });
 
+  it("a truncated Origin project raises a danger toast saying the file appears incomplete", async () => {
+    // Audit 2026-11: the first third of a 4-book .opj imported silently as 3
+    // books. The backend now flags it (io/origin_project/integrity.py).
+    const book = (short: string) => ({ ...raw, metadata: { origin_book: short } });
+    useToasts.setState({ toasts: [] });
+    vi.mocked(uploadFile).mockResolvedValue({
+      ...raw,
+      books: [book("Book1"), book("Book2")],
+      origin_fidelity: {
+        version: 1,
+        container: "opj",
+        status: "unresolved",
+        graph_records_total: 0,
+        graph_records_actionable: 0,
+        graph_records_filtered: 0,
+        omissions: ["file_truncated", "no_graph_records"],
+        filtered_figures: [],
+        container_integrity: {
+          checked: true, complete: false, file_bytes: 24568, declared_bytes: 73704,
+          detail: "file is 24568 bytes but its header records 73704",
+        },
+      },
+    });
+    await useApp.getState().importFiles([fakeFile("multi.opj")]);
+
+    const danger = useToasts.getState().toasts.filter((t) => t.kind === "danger");
+    expect(danger.map((t) => t.msg)).toEqual([
+      expect.stringMatching(/^multi: the file appears incomplete or truncated \(24568 of 73704 bytes\)/),
+    ]);
+  });
+
   it("disables a figure whose loose source hint matches no imported book", async () => {
     const book = (short: string) => ({ ...raw, metadata: { origin_book: short } });
     vi.mocked(uploadFile).mockResolvedValue({
