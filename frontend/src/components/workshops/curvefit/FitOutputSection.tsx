@@ -49,10 +49,13 @@ export default function FitOutputSection({ dataset, model, paramNames, result, f
     try {
       if (toSource) {
         const cols = linkedColumns(dataset, model, fitData.xKey, fitData.yKey, { fitted, residual });
-        for (const c of cols) {
-          const r = await addDerivedColumn(dataset.id, { name: c.name, expr: c.expr, propagate: false });
-          if (!r.ok) throw new Error(r.error);
-        }
+        // ONE undo step for both columns: the status promises "Undo removes".
+        await useApp.getState().withHistoryBatch("add fit columns", async (token) => {
+          for (const c of cols) {
+            const r = await addDerivedColumn(dataset.id, { name: c.name, expr: c.expr, propagate: false }, token);
+            if (!r.ok) throw new Error(r.error);
+          }
+        });
         setStatus(`added ${cols.map((c) => `"${c.name}"`).join(" and ")} to ${dataset.name} (linked to the fit; Undo removes)`);
         return;
       }
@@ -69,7 +72,7 @@ export default function FitOutputSection({ dataset, model, paramNames, result, f
           level,
         })
         : null;
-      const data = resultSheetData({ source: dataset, model, paramNames, result, fitData, band: ci || pi ? band : null, prediction: pi, want: { fitted, residual } });
+      const data = resultSheetData({ source: dataset, model, paramNames, result, fitData, band, want: { fitted, residual, ci, pi } });
       const name = `${dataset.name} — ${model} fit results`;
       addDataset({
         id: nextDatasetId(),

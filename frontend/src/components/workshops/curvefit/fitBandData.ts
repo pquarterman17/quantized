@@ -1,12 +1,13 @@
 // Curve Fit — the confidence/prediction band as a library dataset. Pure: no
 // React, no store.
 //
-// Why a dataset and not a live-plot overlay: the fit overlay (store
-// `fitOverlay`) is a screen-only extra series and never reaches the vector
-// export, while a dataset channel styled `fill: {vs}` (MAIN #13) is drawn as
-// a native uPlot band on screen AND as `fill_between` in the export. So the
-// band plot carries the data, the fit and the band limits as channels, the
-// same way the reflectivity workshop's DREAM bands do (reflDreamBands.ts).
+// Two forms. On the MAIN graph the band rides on the fit overlay
+// (`FitOverlay.band`, the last section of this file) and is exported with the
+// curve (lib/figureSpecOverlays.ts). "Plot with band" additionally lands it as
+// a dataset whose channels are styled `fill: {vs}` (MAIN #13) — a native uPlot
+// band on screen and `fill_between` in the export — so the band also exists as
+// DATA: a smooth grid across the fitted range, kept in the project, the same
+// way the reflectivity workshop's DREAM bands do (reflDreamBands.ts).
 //
 // Rows: every fitted point plus an even grid across the fitted x-range,
 // sorted by x, so the band is smooth even for sparse data. The data column is

@@ -83,9 +83,9 @@ export interface ResultSheetInput {
   fitData: FittedData;
   /** Band limits at fitData.x (null = no band columns). */
   band: BandsResult | null;
-  prediction: boolean;
-  /** Which fit columns to write (X and Y are always written). */
-  want: { fitted: boolean; residual: boolean };
+  /** Which columns to write (X and Y are always written). `ci` and `pi` are
+   *  independent: asking for the prediction limits alone writes only those. */
+  want: { fitted: boolean; residual: boolean; ci?: boolean; pi?: boolean };
 }
 
 const num = (v: number | null | undefined): number => (v == null || !Number.isFinite(v) ? Number.NaN : v);
@@ -110,11 +110,15 @@ export function resultSheetData(i: ResultSheetInput): DataStruct {
     labels.push(`${yName} residual`);
     cols.push(res);
   }
-  if (i.band) {
+  const ci = i.band != null && i.want.ci === true;
+  const pi = i.band != null && i.want.pi === true;
+  if (i.band && (ci || pi)) {
     const lv = levelLabel(i.band.level);
-    labels.push(`${lv} CI low`, `${lv} CI high`);
-    cols.push(i.band.ciLo, i.band.ciHi);
-    if (i.prediction) {
+    if (ci) {
+      labels.push(`${lv} CI low`, `${lv} CI high`);
+      cols.push(i.band.ciLo, i.band.ciHi);
+    }
+    if (pi) {
       labels.push(`${lv} PI low`, `${lv} PI high`);
       cols.push(i.band.piLo, i.band.piHi);
     }
@@ -134,7 +138,7 @@ export function resultSheetData(i: ResultSheetInput): DataStruct {
         params: (i.result.params as number[] | undefined) ?? [],
         errors: (i.result.errors as (number | null)[] | undefined) ?? [],
         weighted: i.fitData.dy != null,
-        ...(i.band ? { level: i.band.level, prediction: i.prediction } : {}),
+        ...(i.band && (ci || pi) ? { level: i.band.level, confidence: ci, prediction: pi } : {}),
         createdAt: new Date().toISOString(),
       },
     },

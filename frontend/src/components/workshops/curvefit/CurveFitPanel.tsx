@@ -31,6 +31,7 @@ import FitConvergenceWarning from "./FitConvergenceWarning";
 import ModelScanSection from "./ModelScanSection";
 import FitParamsSection from "./FitParamsSection";
 import WeightingSection from "./WeightingSection";
+import { reportPrefs } from "./curveFitSession";
 import { useCurveFit } from "./useCurveFit";
 import { useModelScan } from "./useModelScan";
 import { useSavedFitModels } from "./useSavedFitModels";
@@ -216,7 +217,7 @@ export default function CurveFitPanel() {
       // tables on the fit's own weighting (calc/report_emit_fit.py).
       const { report } = await reportEmit({
         kind: "curve_fit",
-        result: { ...result, ...(fitData?.dy ? { dy: fitData.dy } : {}), ciLevel: 0.95 } as Record<string, unknown>,
+        result: { ...result, ...(fitData?.dy ? { dy: fitData.dy } : {}), ciLevel: reportPrefs.level } as Record<string, unknown>,
         param_names: names.length === nParams ? names : Array.from({ length: nParams }, (_, i) => `p${i}`),
         model_name: modelName,
         title: `${modelName} fit — ${active.name}`,

@@ -47,6 +47,36 @@ function flat(over: Partial<FigureSpec> = {}): FigureSpec {
 const col = (spec: FigureSpec, k: number) => spec.dataset.values.map((r) => r[k]);
 
 describe("withAnalysisOverlays", () => {
+  it("exports the Curve Fit band with its curve: dashed edges, each low edge filled to its high edge", () => {
+    const band = [
+      { label: "95% CI low", y: [1, 4.7, 2, 0.8] },
+      { label: "95% CI high", y: [1.2, 5.1, 2.2, 1] },
+      { label: "95% PI low", y: [0.5, 4, 1.5, 0.3] },
+      { label: "95% PI high", y: [1.7, 5.8, 2.7, 1.5] },
+    ];
+    const view: OverlayView = { ...VIEW, fitOverlay: { datasetId: "d1", y: [1.1, 4.9, 2.1, 0.9], band } };
+    const out = withAnalysisOverlays(flat(), DS, view, 1);
+    // Before the fix the band was dropped: fit and peaks only.
+    expect(out.dataset.labels).toEqual(["Intensity", "fit", "95% CI low", "95% CI high", "95% PI low", "95% PI high", "peaks"]);
+    expect(out.y_keys).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(col(out, 2)).toEqual([1, 4.7, 2, 0.8]);
+    expect(col(out, 5)).toEqual([1.7, 5.8, 2.7, 1.5]);
+    const styles = out.series_styles ?? [];
+    const fitColor = resolveToHex(seriesColor(1));
+    expect(styles[1]).toMatchObject({ legend: "fit", color: fitColor });
+    expect(styles[2]).toEqual({ color: fitColor, legend: "95% CI low", line: "dashed", width: 1, fill: { vs: 3 } });
+    expect(styles[3]).toEqual({ color: fitColor, legend: "95% CI high", line: "dashed", width: 1 });
+    expect(styles[4]).toEqual({ color: fitColor, legend: "95% PI low", line: "dashed", width: 1, fill: { vs: 5 } });
+    expect(styles[5]).toEqual({ color: fitColor, legend: "95% PI high", line: "dashed", width: 1 });
+    // The peaks keep the palette slot of their canvas display position (after the edges).
+    expect(styles[6]).toMatchObject({ legend: "peaks", color: resolveToHex(seriesColor(6)) });
+  });
+
+  it("drops a band whose edges do not span the worksheet, keeping the curve", () => {
+    const view: OverlayView = { ...VIEW, peakOverlay: null, fitOverlay: { datasetId: "d1", y: [1.1, 4.9, 2.1, 0.9], band: [{ label: "lo", y: [1] }, { label: "hi", y: [2] }] } };
+    expect(withAnalysisOverlays(flat(), DS, view, 1).dataset.labels).toEqual(["Intensity", "fit"]);
+  });
+
   it("appends the fit as a line and the peaks as markers, each with a legend entry", () => {
     const out = withAnalysisOverlays(flat(), DS, VIEW, 1);
     expect(out.y_keys).toEqual([0, 1, 2]);

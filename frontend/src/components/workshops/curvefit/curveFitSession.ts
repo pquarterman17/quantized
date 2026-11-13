@@ -67,3 +67,7 @@ export function announceRetainedFit(present: boolean): void {
 
 /** The Bands toggle's choices, kept across a close/reopen like the band they draw. */
 export const bandPrefs = { on: false, level: 0.95, prediction: false };
+
+/** The Fit report's confidence level, kept across a close/reopen and shared
+ *  with "→ Report", so the report sheet's limits are at the level the panel shows. */
+export const reportPrefs = { level: 0.95 };

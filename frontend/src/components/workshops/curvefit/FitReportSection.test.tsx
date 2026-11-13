@@ -10,6 +10,7 @@ import { fitReport, type FitReportResult } from "../../../lib/api/fitReport";
 import { copyText } from "../../../lib/clipboard";
 import { saveBlob } from "../../../lib/download";
 import { useApp } from "../../../store/useApp";
+import { reportPrefs } from "./curveFitSession";
 import FitReportSection from "./FitReportSection";
 
 vi.mock("../../../lib/api/fitReport", () => ({ fitReport: vi.fn() }));
@@ -35,6 +36,7 @@ const FIT = { x: [0, 1, 2, 3], y: [1, 2, 3, 4], xKey: null, yKey: 0, dy: [0.5, 0
 
 beforeEach(() => {
   vi.clearAllMocks();
+  reportPrefs.level = 0.95;
   vi.mocked(fitReport).mockImplementation(async (req) => ({ ...REP, level: req.level ?? 0.95 }));
 });
 
@@ -60,6 +62,9 @@ describe("FitReportSection", () => {
     fireEvent.change(screen.getByLabelText("Parameter confidence level"), { target: { value: "0.99" } });
     await waitFor(() => expect(vi.mocked(fitReport).mock.calls.at(-1)![0].level).toBe(0.99));
     expect(await screen.findByText("LCL (99%)")).toBeInTheDocument();
+    // The level is the session's, so "→ Report" emits the same limits
+    // (it used to be hardcoded to 95% whatever the panel showed).
+    expect(reportPrefs.level).toBe(0.99);
   });
 
   it("copies the parameter table or the whole report as TSV, and saves a CSV", async () => {

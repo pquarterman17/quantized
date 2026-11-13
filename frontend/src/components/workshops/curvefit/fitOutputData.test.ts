@@ -58,7 +58,7 @@ describe("resultSheetData", () => {
   };
 
   it("writes X, Y, fitted, residual and the bands, NaN for gaps", () => {
-    const d = resultSheetData({ ...base, band, prediction: true, want: { fitted: true, residual: true } });
+    const d = resultSheetData({ ...base, band, want: { fitted: true, residual: true, ci: true, pi: true } });
     expect(d.labels).toEqual(["M", "M fit", "M residual", "90% CI low", "90% CI high", "90% PI low", "90% PI high"]);
     expect(d.time).toEqual([0, 1]);
     expect(d.values[1]![2]).toBeNaN();
@@ -66,12 +66,22 @@ describe("resultSheetData", () => {
     expect(d.units[0]).toBe("emu");
     expect(d.metadata).toMatchObject({ x_column_name: "t", x_column_unit: "s" });
     expect(d.metadata!.fitOutput).toMatchObject({
-      source: { id: "d1", name: "run" }, model: "Linear", params: [1, 1], errors: [0.1, null], level: 0.9, prediction: true, weighted: false,
+      source: { id: "d1", name: "run" }, model: "Linear", params: [1, 1], errors: [0.1, null], level: 0.9, confidence: true, prediction: true, weighted: false,
     });
   });
 
+  it("writes the prediction limits alone when only they are asked for", () => {
+    // Before the fix a prediction-only request also wrote the two CI columns.
+    const d = resultSheetData({ ...base, band, want: { fitted: true, residual: false, ci: false, pi: true } });
+    expect(d.labels).toEqual(["M", "M fit", "90% PI low", "90% PI high"]);
+    expect(d.values[0]).toEqual([1.5, 1, 0.5, 1.5]);
+    expect(d.metadata!.fitOutput).toMatchObject({ level: 0.9, confidence: false, prediction: true });
+    const c = resultSheetData({ ...base, band, want: { fitted: false, residual: false, ci: true } });
+    expect(c.labels).toEqual(["M", "90% CI low", "90% CI high"]);
+  });
+
   it("writes only the requested fit columns", () => {
-    const d = resultSheetData({ ...base, band: null, prediction: false, want: { fitted: false, residual: true } });
+    const d = resultSheetData({ ...base, band: null, want: { fitted: false, residual: true } });
     expect(d.labels).toEqual(["M", "M residual"]);
   });
 });

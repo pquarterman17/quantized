@@ -53,7 +53,10 @@ def fit_report_blocks(
         keep &= np.isfinite(d) & (d > 0)
         weights = (1.0 / d[keep] ** 2).tolist()
     level = float(result.get("ciLevel") or 0.95)
-    n_free = int(result.get("nFree") or len(params))
+    # ``nFree`` may legitimately be 0 (every parameter held): only an ABSENT
+    # count falls back to "all parameters free".
+    n_free_raw = result.get("nFree")
+    n_free = len(params) if n_free_raw is None else int(n_free_raw)
     errors = list(result.get("errors") or [None] * len(params))
     rep = fit_report(
         params, errors, result.get("covar"), (yf + r)[keep].tolist(), r[keep].tolist(), n_free,

@@ -72,3 +72,19 @@ def test_from_curve_fit_includes_blocks_only_with_residuals() -> None:
 def test_mismatched_or_missing_residuals_add_nothing() -> None:
     assert fit_report_blocks({"params": [1.0], "residuals": [0.1, 0.2], "yFit": [1.0]}, ["a"]) == []
     assert fit_report_blocks({"params": [1.0]}, ["a"]) == []
+
+
+def test_all_parameters_held_keeps_zero_free_parameters() -> None:
+    """nFree == 0 is a real count, not "missing": the residual df is N, not N - p.
+
+    Before the fix ``nFree or len(params)`` read 0 as absent and reported
+    N - 2 degrees of freedom for a fit with both parameters held.
+    """
+    result = {
+        "params": [2.0, 1.0], "errors": [None, None], "covar": None, "nFree": 0,
+        "yFit": [1.0, 3.0, 5.0, 7.0], "residuals": [0.1, -0.1, 0.2, -0.2],
+    }
+    blocks = fit_report_blocks(result, ["m", "b"])
+    stats = {row[0]: row[1] for row in blocks[1]["rows"]}
+    assert stats["Number of points"] == 4
+    assert stats["Degrees of freedom"] == 4

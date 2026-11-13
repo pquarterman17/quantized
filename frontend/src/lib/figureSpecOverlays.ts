@@ -19,6 +19,11 @@
 // trace for the two lines, and size-8 markers with no line for the peaks. Its
 // values are scaled by the first plotted channel's decade offset, as
 // `Stage/usePlotPayloadLogOffsets` does, and are never waterfall-shifted.
+// The Curve Fit's confidence/prediction band (`FitOverlay.band`) rides with its
+// curve: each edge is one more column right after the fit, dashed in the fit's
+// own colour, and every LOWER edge is filled up to its upper edge (`fill:
+// {vs}`, the renderer's `fill_between`) — what `uplotSeries` shades on screen.
+// Without it the canvas showed a shaded band and the SVG/PDF a bare curve.
 // Grouped, encoded, faceted and polar requests are returned unchanged: their
 // rows are re-split server-side, so a row-aligned column has no place there.
 // Imported only by lazily-loaded export modules.
@@ -45,6 +50,8 @@ export interface OverlayView {
 
 /** Peak markers' size on the canvas (`uplotSeries`: `points.size: 8`). */
 const PEAK_MARKER_PX = 8;
+/** A fit-band edge's line width on the canvas (`uplotSeries`: `width: 1`). */
+const BAND_EDGE_PX = 1;
 
 /** Original row index of each wire row, or null when the wire rows cannot be
  *  matched to `ds` (then nothing is appended). Ghost rows map to -1. */
@@ -88,9 +95,13 @@ export function withAnalysisOverlays(
     ["baseline", view.baselineOverlay, false],
     ["peaks", view.peakOverlay, true],
   ];
-  const present = candidates.flatMap(([label, o, points]) =>
-    o && o.datasetId === ds.id && o.y.length >= n ? [{ label, y: o.y, points }] : [],
-  );
+  // `band` is `PlotSeriesSpec.band`: how many series back the edge's curve is
+  // (0 = not a band edge); an odd value is a lower edge.
+  const present = candidates.flatMap(([label, o, points]) => {
+    if (!o || o.datasetId !== ds.id || o.y.length < n) return [];
+    const edges = (o.band ?? []).every((e) => e.y.length >= n) ? (o.band ?? []) : [];
+    return [{ label, y: o.y, points, band: 0 }, ...edges.map((e, k) => ({ label: e.label, y: e.y, points: false, band: k + 1 }))];
+  });
   if (present.length === 0) return spec;
   const rows = wireRows(spec, ds, grey.wire);
   if (!rows) return spec;
@@ -108,20 +119,23 @@ export function withAnalysisOverlays(
   // their grey companions when any row is greyed, then the overlays.
   const before = canvasSeries * (grey.screen && droppedRows(ds).size > 0 ? 2 : 1);
   const lineKeys = present.map((_p, i) => width + i);
-  const base: ExportSeriesStyle[] = present.map(({ label, points }, i) => {
-    const color = resolveToHex(seriesColor(before + i));
+  const base: ExportSeriesStyle[] = present.map(({ label, points, band }, i) => {
+    // A band edge takes its curve's colour (the canvas does the same), though
+    // it still occupies its own display position for whatever follows it.
+    const color = resolveToHex(seriesColor(before + i - band));
     return {
       ...(color ? { color } : {}),
       legend: label,
       ...(points ? { line: "none" as const, marker: true, marker_size: PEAK_MARKER_PX } : {}),
+      ...(band ? { line: "dashed" as const, width: BAND_EDGE_PX, ...(band % 2 ? { fill: { vs: width + i + 1 } } : {}) } : {}),
     };
   });
   // The two LINES take the canvas' default trace and line width, as an
-  // unstyled channel does; the markers are already fully specified.
+  // unstyled channel does; the markers and band edges are fully specified.
   const traced = traceSeriesStyles(base, lineKeys, view.defaultTrace, {}) ?? base;
   const widened =
     lineWidthSeriesStyles(traced, lineKeys, canvasLineWidth(view.plotTemplate, view.defaultLineWidth)) ?? traced;
-  const styles = widened.map((st, i) => (present[i].points ? base[i] : st));
+  const styles = widened.map((st, i) => (present[i].points || present[i].band ? base[i] : st));
   const pad = <T>(list: T[] | undefined, v: T): T[] | undefined => (list ? [...list, ...present.map(() => v)] : undefined);
   return {
     ...spec,
