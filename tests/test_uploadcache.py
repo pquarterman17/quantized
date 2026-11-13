@@ -263,6 +263,22 @@ def test_corrupt_or_missing_index_is_rebuilt_from_token_dirs(
     assert json.loads((tmp_path / fs.INDEX).read_text())["entries"].keys() == {ta, tb}
 
 
+def test_running_instance_rebuilds_a_corrupt_index_on_its_next_operation(
+    tmp_path: Path,
+) -> None:
+    # Review item 7, the running case: an index corrupted while this instance
+    # is up (another instance crashed mid-write) must not cost the uploads
+    # this instance never saw -- its next operation re-hashes and adopts the
+    # token directories, the same rebuild a restart does.
+    mine = UploadCache(tmp_path)
+    other = UploadCache(tmp_path)
+    path, token = other.stage("other.opj", b"theirs")
+    (tmp_path / fs.INDEX).write_text("{ not json")
+    mine.stage("mine.opj", b"ours")
+    assert mine.resolve(token) == path
+    assert token in json.loads((tmp_path / fs.INDEX).read_text())["entries"]
+
+
 def test_rebuild_rejects_a_directory_whose_content_does_not_hash_to_its_name(
     tmp_path: Path,
 ) -> None:
