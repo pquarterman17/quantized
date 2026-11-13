@@ -318,7 +318,7 @@
 .qzk-app:has(.qzk-main.rc) .qzk-toaster {
   left: 8px;
   right: auto;
-  max-width: calc(var(--lw, 264px) - 16px);
+  max-width: calc(var(--lw, 210px) - 16px);
   align-items: flex-start;
 }
 .qzk-app .qzk-toast-alerts {
@@ -348,7 +348,7 @@
    Help over a plot, a fixed 310px card stuck out of the 296px Inspector over
    the x-axis); while it is open the toasts take the top of that column. */
 .qzk-hints-card { right: 8px; bottom: 32px; width: min(310px, calc(var(--rw, 296px) - 16px)); }
-.qzk-app:has(.qzk-main.rc) .qzk-hints-card { right: auto; left: 8px; width: min(310px, calc(var(--lw, 264px) - 16px)); }
+.qzk-app:has(.qzk-main.rc) .qzk-hints-card { right: auto; left: 8px; width: min(310px, calc(var(--lw, 210px) - 16px)); }
 .qzk-app:has(.qzk-main.lc.rc) .qzk-hints-card { top: 76px; bottom: auto; left: auto; right: 16px; width: 310px; }
 .qzk-app:has(.qzk-hints-card):not(:has(.qzk-main.lc.rc)) .qzk-toaster { top: 76px; bottom: auto; }
 /* The always-mounted assertive region for danger toasts: a column of its own;
