@@ -25,11 +25,16 @@ interface Props {
    * Source arrays remain in their worksheets; this is provenance only. */
   resultParameters?: Record<string, AnalysisResultValue>;
   blockedReason?: string | null;
+  /** When given, a finished run offers "Create summary worksheet", which hands
+   *  the run's rows (every input, in order) to this tool-owned builder. */
+  onSummarySheet?: (rows: readonly AnalysisBatchRow[]) => void;
 }
 
 type RunStatus = "ready" | "completed" | "failed" | "cancelled";
 
 const MAX_BATCH_INPUTS = 1_000;
+
+export type AnalysisBatchRow = RunRow;
 
 interface RunRow {
   datasetId: string;
@@ -46,7 +51,7 @@ const displayStatus = (status: RunStatus): string => status[0].toUpperCase() + s
  * has a deterministic boundary, and one durable result even after a partial
  * failure/cancel. Scientific algorithms remain tool-owned via runItem. */
 export default function AnalysisBatchControls({
-  toolId, label, summaryColumns, runItem, resultParameters, blockedReason,
+  toolId, label, summaryColumns, runItem, resultParameters, blockedReason, onSummarySheet,
 }: Props) {
   const owner = useAnalysisSelection((state) => state.toolId);
   const selection = useAnalysisSelection((state) => state.selection);
@@ -206,6 +211,11 @@ export default function AnalysisBatchControls({
         <Button variant="primary" size="sm" disabled={blocked || running} onClick={() => void runBatch()}>
           {running ? "Running…" : `Run ${label} batch`}
         </Button>
+        {onSummarySheet && lastRows && !running && lastRows.some((row) => row.status === "completed") && (
+          <Button size="sm" onClick={() => onSummarySheet(lastRows)} title="A worksheet with one row per input and a column per parameter and statistic, ready to plot">
+            Create summary worksheet
+          </Button>
+        )}
       </div>
     </div>}
   </section>;

@@ -1816,6 +1816,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report
+         * @description t / Prob>|t| / confidence limits, ANOVA, covariance and correlation.
+         */
+        post: operations["report_api_fitting_report_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/scan": {
         parameters: {
             query?: never;
@@ -8073,6 +8093,28 @@ export interface components {
             x_hi: number;
             /** X Lo */
             x_lo: number;
+            /** Y */
+            y: number[];
+        };
+        /** FitReportRequest */
+        FitReportRequest: {
+            /** Covar */
+            covar?: number[][] | null;
+            /** Dy */
+            dy?: number[] | null;
+            /** Errors */
+            errors: (number | null)[];
+            /**
+             * Level
+             * @default 0.95
+             */
+            level?: number;
+            /** N Free */
+            n_free: number;
+            /** Params */
+            params: number[];
+            /** Residuals */
+            residuals: number[];
             /** Y */
             y: number[];
         };
@@ -14592,6 +14634,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PosteriorRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_api_fitting_report_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FitReportRequest"];
             };
         };
         responses: {

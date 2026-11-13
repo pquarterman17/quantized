@@ -4,7 +4,7 @@
 // range. Works for either a registry model or a saved custom equation (the
 // route resolves both the same way) — the caller passes whichever it has.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { findXY } from "../../../lib/api/curvefit";
 
@@ -18,6 +18,18 @@ export interface FindXYTarget {
   xMax: number;
 }
 
+/** One answered query, newest first in `history`: "y" = Y at an X,
+ *  "x" = every X crossing at a Y (possibly none). */
+export interface FindXYEntry {
+  id: number;
+  find: "x" | "y";
+  input: number;
+  results: number[];
+}
+
+/** Queries kept per fit — enough for a calibration table, bounded. */
+export const FIND_XY_HISTORY_MAX = 100;
+
 export interface FindXYState {
   xInput: string;
   setXInput: (v: string) => void;
@@ -29,7 +41,13 @@ export interface FindXYState {
   error: string | null;
   findY: () => Promise<void>;
   findX: () => Promise<void>;
+  /** Every answered query for THIS fit, newest first; a new fit (model,
+   *  equation or params) starts a new list, so no row describes another fit. */
+  history: FindXYEntry[];
+  clearHistory: () => void;
 }
+
+let entrySeq = 0;
 
 export function useFindXY(target: FindXYTarget | null): FindXYState {
   const [xInput, setXInput] = useState("");
@@ -38,6 +56,15 @@ export function useFindXY(target: FindXYTarget | null): FindXYState {
   const [xResults, setXResults] = useState<number[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<FindXYEntry[]>([]);
+  const fitKey = target ? JSON.stringify([target.model, target.equation, target.params, target.xMin, target.xMax]) : "";
+  useEffect(() => {
+    setHistory([]);
+    setYResult(null);
+    setXResults(null);
+  }, [fitKey]);
+  const remember = (find: "x" | "y", input: number, results: number[]) =>
+    setHistory((h) => [{ id: ++entrySeq, find, input, results }, ...h].slice(0, FIND_XY_HISTORY_MAX));
 
   async function findY(): Promise<void> {
     if (!target) return;
@@ -59,6 +86,7 @@ export function useFindXY(target: FindXYTarget | null): FindXYState {
       });
       setYResult(r.y ?? null);
       setXResults(null);
+      if (r.y != null) remember("y", x, [r.y]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "find Y failed");
     } finally {
@@ -86,6 +114,7 @@ export function useFindXY(target: FindXYTarget | null): FindXYState {
       });
       setXResults(r.x ?? []);
       setYResult(null);
+      remember("x", y, r.x ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "find X failed");
     } finally {
@@ -93,5 +122,8 @@ export function useFindXY(target: FindXYTarget | null): FindXYState {
     }
   }
 
-  return { xInput, setXInput, yInput, setYInput, yResult, xResults, busy, error, findY, findX };
+  return {
+    xInput, setXInput, yInput, setYInput, yResult, xResults, busy, error, findY, findX,
+    history, clearHistory: () => setHistory([]),
+  };
 }

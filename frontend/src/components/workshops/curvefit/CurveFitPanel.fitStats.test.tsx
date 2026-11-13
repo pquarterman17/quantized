@@ -2,7 +2,7 @@
 // appear only after a completed fit, Compare models is always offered, and
 // the ODR option only when the dataset has an X-error column.
 
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fitModel } from "../../../lib/api";
@@ -143,7 +143,8 @@ describe("CurveFitPanel — fit statistics sections", () => {
       details.open = true;
       fireEvent(details, new Event("toggle"));
     });
-    expect(await screen.findByText("reduced χ²")).toBeInTheDocument();
+    // The headline stats above also show reduced χ²; this one is the section's.
+    expect(await within(details).findByText("reduced χ²")).toBeInTheDocument();
     for (const k of ["AIC", "BIC", "R²", "Durbin–Watson", "skewness"]) {
       expect(screen.getAllByText(k).length).toBeGreaterThan(0);
     }

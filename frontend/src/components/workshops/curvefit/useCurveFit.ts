@@ -34,14 +34,10 @@ import { useToolAnalysisSelection } from "../analysisselection/useToolAnalysisSe
 import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { analysisSelectionData } from "../../../lib/analysisSelection";
 
-/** The (x, y) pairs a completed fit ran on (gap rows dropped) and the
- *  channels they came from. */
-export interface FittedData {
-  x: number[];
-  y: number[];
-  xKey: number | null;
-  yKey: number;
-}
+import { isCurveFitOverlay, rememberCurveFitOverlay } from "../../../store/curveFitOverlay";
+import { restoreFitted, retainFitted, type Fitted, type FittedData } from "./curveFitSession";
+
+export type { FittedData } from "./curveFitSession";
 
 export interface CurveFitState {
   active: Dataset | null;
@@ -56,6 +52,8 @@ export interface CurveFitState {
   busy: boolean;
   error: string | null;
   run: (kind: "guess" | "fit") => Promise<void>;
+  /** REMOVE the fit: curve, FitSpec (so auto re-fit) and the retained result.
+   *  Closing the panel must NOT call this — closing only hides. */
   clear: () => void;
   /** Bootstraps the current fit (return_samples: true) then exports a
    *  pairwise corner (pairs) plot of the parameter uncertainty — gap #29's
@@ -70,6 +68,8 @@ export interface CurveFitState {
    *  model change when the parameter name survives. */
   paramRows: FitParamRow[];
   setParamRow: (index: number, patch: Partial<FitParamRow>) => void;
+  /** Replace the whole table (a fit template's rows). */
+  replaceParamRows: (rows: FitParamRow[]) => void;
   resetParamRows: () => void;
   /** Weighting (Sol audit): mode selector + a picked sigma column for `manual`. */
   weightMode: WeightMode;
@@ -125,14 +125,8 @@ export function useCurveFit(): CurveFitState {
   // and references the CURRENT dataset/model, and the corner plot bootstraps
   // the CURRENT x/y, so a dataset/model/channel change (or a fit landing
   // after one) would otherwise ship or seed with another fit's parameters.
-  const [fitted, setFitted] = useState<{
-    result: CalcResult;
-    fitData: FittedData | null;
-    datasetId: string;
-    model: string;
-    xKey: number | null;
-    yKey: number;
-  } | null>(null);
+  // Restored from the session on mount: closing the panel only hides it.
+  const [fitted, setFitted] = useState<Fitted | null>(() => restoreFitted(useApp.getState().datasets));
   const [guessOnly, setGuessOnly] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -322,14 +316,15 @@ export function useCurveFit(): CurveFitState {
         if (useApp.getState().datasets.find((dataset) => dataset.id === ds.id) !== ds) {
           throw new Error("worksheet changed while fitting; run the fit again");
         }
-        setFitted({
+        const done: Fitted = {
           result: r,
-          fitData: { x: pairs.x, y: pairs.y, xKey: runXKey, yKey: localXy.yKey },
+          fitData: { x: pairs.x, y: pairs.y, xKey: runXKey, yKey: localXy.yKey, dy: finiteDy },
           datasetId: ds.id,
           model: modelName,
           xKey: runXKey,
           yKey: localXy.yKey,
-        });
+        };
+        setFitted(done);
         setGuessOnly(false);
         // Durable fit spec (audit P1 #3): records the plotted channels + the
         // weighting ACTUALLY used (unweighted if dy couldn't resolve) so the
@@ -370,6 +365,7 @@ export function useCurveFit(): CurveFitState {
         });
         useApp.getState().setFitSpec(ds.id, bound.spec, bound.rowIdentities);
         publishFitAnalysisResult(ds.id);
+        retainFitted(done, useApp.getState().datasets.find((d) => d.id === ds.id) ?? null);
         const yFit = r.yFit as (number | null)[] | undefined;
         if (Array.isArray(yFit)) {
           // yFit aligns to the pruned analysis x; expand it back to the full row
@@ -379,7 +375,9 @@ export function useCurveFit(): CurveFitState {
           const kept = localXy.sourceRows ?? activeRowIndices(n, droppedRows(ds));
           const aligned = restoreGapRows(yFit, pairs);
           const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
-          setFitOverlay({ datasetId: ds.id, y });
+          const overlay = { datasetId: ds.id, y };
+          rememberCurveFitOverlay(overlay);
+          setFitOverlay(overlay);
         }
       }
     } catch (e) {
@@ -394,7 +392,10 @@ export function useCurveFit(): CurveFitState {
     setGuessOnly(false);
     setError(null);
     setWeightNote(null);
-    setFitOverlay(null);
+    retainFitted(null, null);
+    const shown = useApp.getState().fitOverlay;
+    if (isCurveFitOverlay(shown) || (active && shown?.datasetId === active.id)) setFitOverlay(null);
+    rememberCurveFitOverlay(null);
     if (active) {
       useApp.getState().setFitSpec(active.id, null);
       useApp.setState((state) => ({ staleFits: state.staleFits.filter((id) => id !== active.id) }));
@@ -444,6 +445,7 @@ export function useCurveFit(): CurveFitState {
     paramRows,
     setParamRow: (index, patch) =>
       setParamRows((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r))),
+    replaceParamRows: (rows) => setParamRows(rows.map((r) => ({ ...r }))),
     resetParamRows: () => setParamRows(resetRows(model)),
     active,
     models,

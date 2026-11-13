@@ -7,7 +7,7 @@ import { snapshotResultState } from "../../../lib/analysisResultFreshness";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { useApp } from "../../../store/useApp";
 import { usePendingOps } from "../../../store/pendingOps";
-import AnalysisBatchControls from "./AnalysisBatchControls";
+import AnalysisBatchControls, { type AnalysisBatchRow } from "./AnalysisBatchControls";
 
 const { register } = vi.hoisted(() => ({ register: vi.fn() }));
 vi.mock("../../../store/analysisResultActions", () => ({ registerAnalysisResult: register }));
@@ -56,6 +56,25 @@ describe("AnalysisBatchControls", () => {
       ["b.csv", "Failed", 2, null, "bad calibration"],
     ]);
     expect(result.warnings).toContain("b.csv: bad calibration");
+  });
+
+  // Audit #10: a tool can turn a finished run into a plottable worksheet.
+  it("offers Create summary worksheet only after a run, with every input's row", async () => {
+    const onSummarySheet = vi.fn<(rows: readonly AnalysisBatchRow[]) => void>();
+    const runItem = vi.fn(async (dataset: Dataset) => {
+      if (dataset.id === "b") throw new Error("bad calibration");
+      return { values: [2] };
+    });
+    render(<AnalysisBatchControls toolId="batch-test" label="Test batch" summaryColumns={["N"]} runItem={runItem} onSummarySheet={onSummarySheet} />);
+    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
+    expect(screen.queryByRole("button", { name: "Create summary worksheet" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Run Test batch batch" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Create summary worksheet" }));
+    const rows = onSummarySheet.mock.calls[0]![0];
+    expect(rows.map((r) => [r.name, r.status, r.values])).toEqual([
+      ["a.csv", "completed", [2]],
+      ["b.csv", "failed", []],
+    ]);
   });
 
   it("stores bounded tool-specific result parameters without letting them replace shared provenance", async () => {
