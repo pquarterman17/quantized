@@ -12,11 +12,13 @@ rule). Nothing here is copied from another reader's source.
 
 Record framing (after the header's token stream)::
 
-    [18 | u64 24 | u64 body_len | u64 checksum]   # absent before build 4.33
+    [18 | u64 24 | u64 body_len | u32 A | u32 B]  # absent before build 4.33
     <0a | 00> <mode: 04 | 05> <rows:varint> <body>
 
 ``body_len`` counts from the mode byte to the body's last byte, which makes a
-decode *provable*: a body that does not end exactly there is rejected. The
+decode *provable*: a body that does not end exactly there is rejected. ``A``
+and ``B`` are the body's checksum (``opju_blocks.record_checksum``); a
+mismatch is reported, never a reason to refuse the record. The
 block is filled with ``0x22`` for the storage classes that carry no length
 (fixed-width integers, float32, Text); builds before 4.33 have no block at
 all, so their records are accepted on grammar alone and reported as

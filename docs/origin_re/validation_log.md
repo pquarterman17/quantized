@@ -430,6 +430,35 @@ Rules: `docs/origin_project_format.md` §3.5 "Fail-closed rules added by the
   decodes with the structural pass and settles `tail_start` in the same
   walk; the two label lookups share each book's anchor search.
 
+## 2026-11-13 (record checksum; sheet-2+ designations)
+
+- **Record checksum identified.** The 8 bytes after a 4.33+ record's
+  `body_len` are a Fletcher-style pair over the body as little-endian u32
+  words (§3.5). Search: CRC32, CRC32C, Adler-32, xxHash32, xxHash64, XXH3-64
+  / -128, MurmurHash3-32 / -128, FNV-1 / FNV-1a 32 / 64, over the body, the
+  body with its `0a` lead, length field + body, block + body, header tokens
+  + body and ±1-byte windows, compared as u64 LE/BE and either u32 half — no
+  match on the first 7 records tried. A controlled pair inside one corpus
+  project (bodies equal except four bytes +1 at all four word lanes; the
+  checksum's first u32 differed by `0x01010101`, the checksum was equal for
+  two columns with equal bodies and different headers) pointed to word
+  sums; the pair (Σw, ΣΣw) mod 2^32 then matched 243/243 records of that
+  file and **37,189/37,189** length-checked records of the 274-file corpus.
+  The reader now verifies it: a mismatch is decoded anyway and reported as
+  `checksum_failed`. The truncation/flip probe's two remaining silent
+  mutations (a flipped byte inside an FPC stream) are now diagnosed.
+- **Sheet-2+ designations: not implemented — no discriminating oracle.**
+  The only paired `.opj`/`.opju` multi-sheet book (Altaxo
+  `OneWorksheetWithTwoSheets`, sheet 2) carries the default designations
+  (A = X, B = Y), which any rule — including "sheet N reuses sheet 1's" or
+  "the N-th X-led marker run after the book anchor" — reproduces, so it
+  cannot confirm one; the Altaxo C# tests assert no per-sheet designation,
+  and in that `.opju` the marker scan decodes nothing, so `tail_start` is 0
+  and the designation-marker search covers the data section too. Sheet books
+  therefore stay "designations unknown", protected by the column-order X
+  check. What would settle it: a paired project whose second sheet has a
+  non-default designation (e.g. a Y-error or Label column).
+
 ## How to re-run
 
 `tools/origin_trial/export_ground_truth.py` (skips completed stems);

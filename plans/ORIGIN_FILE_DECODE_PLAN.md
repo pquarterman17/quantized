@@ -1079,9 +1079,10 @@ the shipped contract)
   (no second decode), unread/orphan records and unread report records are
   reported, text past the numeric rows is kept, and the worksheet losses
   reach `origin_fidelity["worksheet"]` (import toast, Library fidelity
-  entry, provenance card). Still open: the record checksum is not decoded,
-  so a corrupted byte inside an FPC stream cannot be detected; designations
-  of `Book@N` sheet books are not recovered from the windows section.
+  entry, provenance card). The record checksum is verified (a Fletcher pair
+  over the body's u32 words; 37,189/37,189 corpus records). Still open:
+  designations of `Book@N` sheet books — no paired specimen has a
+  non-default sheet-2 designation to confirm a rule against.
 - ~~**21. Templates (`.otp`/`.otpu`)**~~ (2026-07-11) — same CPY family; a
   graph template imports as a quantized style preset. Backend shipped
   2026-07-07 via the (now-archived) `GAP_ECOSYSTEM_PLAN.md` item 5

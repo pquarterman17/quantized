@@ -599,7 +599,7 @@ truncated name. The structural path reads the name from the expanded header.
 #### Record framing
 
 ```
-[18 | u64 24 | u64 body_len | u64 checksum]    absent before build 4.33
+[18 | u64 24 | u64 body_len | u32 A | u32 B]   absent before build 4.33
 <0a | 00> <mode: 04 | 05> <rows:varint> <body>
 ```
 
@@ -608,6 +608,20 @@ decode into a *proof*: a body that does not end exactly where its header
 says is rejected. The 16 bytes after `u64 24` are `0x22`-filled for the
 storage classes that carry no length (float32, the integers, Text). Mode
 `04` marks a record followed by a string-heap attachment, `05` one without.
+
+**The record checksum** (`opju_blocks.record_checksum`). `A` and `B` are a
+Fletcher-style pair over the body (mode byte through its declared end) read
+as little-endian u32 words, the last zero-padded: `A` = Σ words, `B` = Σ of
+the running sums, both mod 2^32. Found by elimination: two report columns
+of one corpus project whose bodies differed in four bytes (+1 each, at
+offsets ≡ 1, 0, 3, 2 mod 4) had `A` differ by exactly `0x01010101` and equal
+checksums wherever the bodies were equal (the header is not covered); CRC32,
+CRC32C, Adler-32, xxHash32/64/XXH3, MurmurHash3 and FNV-1/1a over
+body / lead+body / header+body ranges matched nothing. Verified on all
+37,189 length-checked records of the 274-file public corpus (0 mismatches;
+the 442 length-less records store `0x22` fill there). A mismatch never
+refuses a record: it is decoded and reported as `checksum_failed` ("values
+may be corrupt").
 
 Confidence is recorded per column and surfaced in the fidelity summary:
 
@@ -911,8 +925,7 @@ under `empty_books_omitted`.
   headers (report tables). It is not applied; no specimen exercises it.
 - **Pre-4.33 builds** have no length field: 1,141 columns of 4.3268 are
   accepted on grammar alone, with no value oracle.
-- **Not interpreted:** the u64 after `body_len` (presumably a checksum), the
-  meaning of mode `04` vs `05` beyond "an attachment follows", the other
+- **Not interpreted:** the of mode `04` vs `05` beyond "an attachment follows", the other
   attachment entries (`SYSTEM`, `_Storage_Cell_Ref_Data_`), a Text column's
   category map, and the u32 at +12 of the string heap (0, 1 and 2 seen).
   Heap strings are decoded as UTF-8 with a latin-1 fallback; the oracle
