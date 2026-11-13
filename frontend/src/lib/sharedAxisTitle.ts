@@ -13,3 +13,17 @@ export function sharedAxisTitle(series: readonly { label: string; unit?: string 
     return (unit ? `${label} (${displayUnit(unit)})`.trim() : label) || undefined;
   }
 }
+
+/** The series a Y axis' auto title is read from: those on axis `which`
+ *  that are DRAWN (re-audit #13: a hidden error column on the axis blanked
+ *  the title, or left only "(unit)"), or every one on it when none is drawn.
+ *  The export receives only drawn series, so this is what it titles too. */
+export function drawnOnAxis(
+  series: readonly { axis?: number }[],
+  hidden: readonly boolean[] | null | undefined,
+  which: number,
+): number[] {
+  const onAxis = series.map((_, i) => i).filter((i) => (series[i].axis ?? 0) === which);
+  const drawn = onAxis.filter((i) => !hidden?.[i]);
+  return drawn.length ? drawn : onAxis;
+}
