@@ -3,7 +3,6 @@
 // The error-role model lives in ./errorRoles (it owns the inference too);
 // imported type-only, so there is no runtime cycle with this contract file.
 import type { ErrorBinding } from "./errorRoles";
-import type { FitBandEdges } from "./fitBandOverlay";
 import type { FitSpec } from "./fitTypes";
 import type { CorrectionParams } from "./correctionTypes";
 import type { DerivedSpec } from "./formulaTypes";
@@ -13,7 +12,7 @@ import type { RecodeSpec } from "./recode";
 import type { FactorSpec } from "./metadataFactor";
 
 // Re-exported so every existing `from "./types"` import keeps working.
-export type { FitSpec, FitWeighting, WeightMode } from "./fitTypes";
+export type { FitOverlay, FitSpec, FitWeighting, WeightMode } from "./fitTypes";
 export type { CorrectionParams } from "./correctionTypes";
 /** DataStruct as serialized by `datastruct_payload` / `DataStruct.to_dict`. */
 export interface DataStruct {
@@ -568,15 +567,7 @@ export interface FitModel {
  *  documented per endpoint; values may be scalars, arrays, or null (NaN/Inf). */
 export type CalcResult = Record<string, unknown>;
 
-/** A fit curve to overlay on the plot, tagged with the dataset it was fit to
- *  (so it only renders while that dataset is active). `y` aligns to the
- *  dataset's plotted x (null = gap). */
-export interface FitOverlay {
-  datasetId: string;
-  y: (number | null)[];
-  /** Curve Fit's shaded band around this curve (lib/fitBandOverlay.ts). */
-  band?: FitBandEdges;
-}
+// FitOverlay (the fit curve on the plot) lives in ./fitTypes; re-exported above.
 
 /** Peak markers to overlay (points only). `y` is sparse — null except at the
  *  data points nearest each peak center. Tagged with the source dataset. */

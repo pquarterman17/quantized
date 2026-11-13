@@ -2,6 +2,10 @@
 // result snapshot saved on a dataset. Extracted whole from lib/types.ts
 // (which re-exports them) when the statistics-version and direct-weighting
 // fields took it past its module-size pin. Types only: no runtime code.
+// FitOverlay (the fit curve on the plot) moved here too when the Curve Fit
+// band field took lib/types.ts past its pin again.
+
+import type { FitBandEdges } from "./fitBandOverlay";
 
 /** Fit weighting mode (Sol GUI audit — weighting connected to error columns):
  *  - `none`    — unweighted least squares (default)
@@ -103,4 +107,14 @@ export interface FitSpec {
    *  2026-11 (Hessian errors, weighted RMSE): a recompute keeps those
    *  definitions until the user runs "Update statistics". */
   statsVersion?: 2;
+}
+
+/** A fit curve to overlay on the plot, tagged with the dataset it was fit to
+ *  (so it only renders while that dataset is active). `y` aligns to the
+ *  dataset's plotted x (null = gap). */
+export interface FitOverlay {
+  datasetId: string;
+  y: (number | null)[];
+  /** Curve Fit's shaded band around this curve (./fitBandOverlay.ts). */
+  band?: FitBandEdges;
 }

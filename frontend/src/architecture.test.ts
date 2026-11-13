@@ -890,7 +890,7 @@ const TS_MODULE_PINS: Record<string, number> = {
   // 934 -> 849 (2026-11-13): the fit recipe types (WeightMode, FitWeighting,
   // FitSpec) moved whole to lib/fitTypes.ts when the statistics-version and
   // direct-weighting fields would have taken this file past its pin.
-  "/lib/types.ts": 849,
+  "/lib/types.ts": 842,
   // 893 -> 863 (P1.4 Graph Builder encodings): the error-well helpers
   // (specErrorBindings/prefillErrorZones) moved verbatim to lib/plotspecErrors.ts
   // (re-exported, no importer moved), funding the three optional encoding zones;

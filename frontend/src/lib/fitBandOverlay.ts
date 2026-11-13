@@ -1,5 +1,5 @@
 // The Curve Fit's confidence/prediction band as it rides on the plot's fit
-// overlay (`FitOverlay.band`, lib/types.ts). Split out of lib/types.ts (at its
+// overlay (`FitOverlay.band`, lib/fitTypes.ts). Split out of lib/types.ts (at its
 // line pin). Type-only.
 
 /** The band edges, in order: CI low, CI high, then optionally PI low and PI
