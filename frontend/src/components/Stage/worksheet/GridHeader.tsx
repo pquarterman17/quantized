@@ -67,6 +67,8 @@ export interface GridHeaderProps {
    *  instead of the failure staying silent. */
   formulaErrors?: Record<string, string>;
   onHeaderContext?: (col: number, e: React.MouseEvent) => void;
+  /** Right-click on a TEXT column's header (its sort menu), by column name. */
+  onTextHeaderContext?: (name: string, e: React.MouseEvent) => void;
   /** Read-only Origin text columns (item 8), unvirtualized, always appended
    *  after the numeric/computed run (and its trailing spacer). */
   textCols: TextColumn[];
@@ -135,6 +137,7 @@ export default function GridHeader({
   onRemoveFormula,
   formulaErrors,
   onHeaderContext,
+  onTextHeaderContext,
   textCols,
   modelingTypeOf,
   channelTypes,
@@ -271,6 +274,7 @@ export default function GridHeader({
           className="qzk-grid-headcell"
           style={{ width: colWidth, flexShrink: 0 }}
           title={`${t.shortName} — read-only text column (Origin)`}
+          onContextMenu={onTextHeaderContext ? (e) => onTextHeaderContext(t.shortName, e) : undefined}
         >
           {t.shortName}
           <span className="role">text</span>

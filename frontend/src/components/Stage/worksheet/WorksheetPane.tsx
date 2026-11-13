@@ -72,7 +72,7 @@ function DerivedWorksheetBanner({ ds }: { ds: Dataset }) {
 }
 
 /** Sort the worksheet's rows by a column — one undo step (lazy chunk). */
-function sortRows(id: string, col: number, dir: 1 | -1): void {
+function sortRows(id: string, col: number | string, dir: 1 | -1): void {
   void import("../../../store/sortRows").then(
     (m) => m.sortWorksheetRows(id, col, dir),
     () => useApp.getState().setStatus("couldn't load sorting — try again"),
@@ -98,6 +98,8 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
   const view = useWorksheetView(ds, windowId);
   const reveal = useRowReveal(ds, view, windowId);
   const [menu, setMenu] = useState<{ kind: "col" | "row"; target: number; x: number; y: number } | null>(null);
+  // A text column's header menu: Sort by its cell text (store/sortRows.ts).
+  const [textMenu, setTextMenu] = useState<{ name: string; x: number; y: number } | null>(null);
 
   // ORIGIN_FILE_DECODE_PLAN #38: opening the worksheet on a still-lazy Origin
   // book fetches its full data (the grid below renders the preview rows
@@ -246,6 +248,10 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         colStats={view.colStats}
         statsErr={view.statsErr}
         onHeaderContext={openMenu("col")}
+        onTextHeaderContext={(name, e) => {
+          e.preventDefault();
+          setTextMenu({ name, x: e.clientX, y: e.clientY });
+        }}
         onRowContext={openMenu("row")}
         textCols={view.textCols}
         colWidths={view.colWidths}
@@ -314,6 +320,19 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
                   copyRow: view.copyRow,
                 })
           }
+        />
+      )}
+
+      {textMenu && (
+        <ContextMenu
+          x={textMenu.x}
+          y={textMenu.y}
+          help={{ label: "worksheets", query: "worksheet" }}
+          onClose={() => setTextMenu(null)}
+          items={[
+            { label: "Sort ascending (by text)", run: () => sortRows(ds.id, textMenu.name, 1) },
+            { label: "Sort descending (by text)", run: () => sortRows(ds.id, textMenu.name, -1) },
+          ]}
         />
       )}
 
