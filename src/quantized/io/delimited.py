@@ -121,6 +121,25 @@ def _encode_categorical(cells: Sequence[str]) -> tuple[np.ndarray, tuple[str, ..
 _WIDTH_SAMPLE_ROWS = 64
 
 
+def _numeric_column(
+    values: np.ndarray, tokens: Sequence[Sequence[str]], c: int, n_rows: int
+) -> bool:
+    """A data column holds NUMBERS: more than a tenth of its rows parse, and
+    they are most of its non-empty cells (a missing-value spelling such as
+    "n/a" counts as empty). A text column with the odd
+    number-looking cell ("r1, r2, 7, r4") is text -- it used to become a
+    mostly-NaN numeric channel and lose its text."""
+    n_num = int(np.count_nonzero(~np.isnan(values)))
+    if n_num / max(n_rows, 1) <= 0.1:
+        return False
+    if n_num == n_rows:
+        return True  # every row parsed: no need to look at the text
+    n_filled = sum(
+        1 for row in tokens if c < len(row) and row[c].strip().lower() not in layout._MISSING_TOKENS
+    )
+    return 2 * n_num > n_filled
+
+
 def _sample_width(tokens: Sequence[Sequence[str]], data_start: int) -> int:
     """Widest data row among the first `_WIDTH_SAMPLE_ROWS`, ignoring
     trailing empty cells (a trailing delimiter is padding, not a column)."""
@@ -275,9 +294,7 @@ def import_csv(
         reserved = set() if time_promoted else {time_idx}
         candidates = [c for c in range(n_cols) if c not in reserved]
         numeric_idx = [
-            c
-            for c in candidates
-            if (np.count_nonzero(~np.isnan(matrix[:, c])) / n_rows) > 0.1
+            c for c in candidates if _numeric_column(matrix[:, c], data_tokens, c, n_rows)
         ]
         data_idx = numeric_idx
         # P1.4 (f2): a trailing-text-only file used to raise here once
@@ -407,9 +424,8 @@ def import_csv(
     for c in range(n_cols):
         if c in used:
             continue
-        numeric_ratio = float(np.count_nonzero(~np.isnan(matrix[:, c]))) / max(n_rows, 1)
-        if numeric_ratio > 0.1:
-            continue  # a sparse NUMERIC column, not text — leave it dropped
+        if data_columns is not None and _numeric_column(matrix[:, c], data_tokens, c, n_rows):
+            continue  # a numeric column the caller did not select: not text
         cells = [row[c].strip() if c < len(row) else "" for row in data_tokens]
         if any(cells):  # an entirely blank column is padding, not data
             text_columns[col_headers[c]] = cells
@@ -458,6 +474,13 @@ def import_csv(
     if other_categorical:
         names = ", ".join(col_headers[c] for c in other_categorical)
         notes.append(f"Text column(s) imported as categorical channel(s): {names}.")
+    if text_columns:
+        # Say so: they are not curves, and used to vanish without a word.
+        text_names = ", ".join(f"'{n}'" for n in text_columns)
+        notes.append(
+            f"Text column{'s' if len(text_columns) > 1 else ''} {text_names} kept as text "
+            "(shown in the worksheet, usable for labels and grouping), not plotted."
+        )
     if notes:
         metadata["notes"] = notes
     values_matrix = np.hstack([matrix[:, data_idx], cat_matrix])

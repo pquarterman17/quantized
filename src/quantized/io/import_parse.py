@@ -150,7 +150,13 @@ def _guess_layout(text: str) -> tuple[int | None, int | None, int, list[str]]:
     # score exactly 0.5; extend over them as direct import does
     # (`_walk_back_gappy_rows`), or the first row -- and the header above it
     # -- were lost.
-    data_start = 0 if data_start is None else layout._walk_back_gappy_rows(scored, data_start)
+    if data_start is None:
+        # No numeric-majority row (as many text columns as numbers): the
+        # header is LESS numeric than the data under it -- direct import's
+        # fallback (`_detect_layout`), so the two paths agree.
+        data_start = next((i for i, s in enumerate(scores) if i > 0 and s > scores[0] and s > 0), 0)
+    else:
+        data_start = layout._walk_back_gappy_rows(scored, data_start)
 
     header_line: int | None = None
     units_line: int | None = None

@@ -322,6 +322,8 @@ def reject_comma_numbers(
 #: Spellings of a MISSING value in a numeric column (compared lower-cased and
 #: stripped). "nan" itself is already numeric-like; the blank cell is here.
 _MISSING_TOKENS = frozenset({"", "na", "n/a", "#n/a", "-", "--", "null", "none", "?"})
+# Confirmed data rows sampled to decide which columns are numeric.
+_TYPE_SAMPLE_ROWS = 32
 
 
 def _is_data_cell(token: str) -> bool:
@@ -335,26 +337,43 @@ def _walk_back_gappy_rows(tokens: Sequence[Sequence[str]], first_data: int) -> i
     cell: in a 2-column file ``"1,n/a"`` scores exactly 0.5, so every such
     LEADING row was skipped as preamble -- dropped without a warning -- and
     the header above it was lost too (it no longer sat directly above the
-    data). A row above ``first_data`` is taken as data only on positive
-    evidence, column by column against the first confirmed data row: no
-    wider than it (a shorter row's missing trailing cells are empty); every
-    column that is numeric there holds a number or a missing-
-    value spelling here; and at least one cell is a number. A header, a units
-    row or a ``key,value`` preamble line has text in a numeric column, so the
-    walk stops at it.
+    data). The same holds for a file with text columns: "A,1,x,10,r1"
+    scores 0.4 although it is data. A row above ``first_data`` is taken as
+    data only on positive evidence, column by column against the column
+    types of the confirmed data rows: no wider than they are (a shorter row's
+    missing trailing cells are empty); every numeric column holds a number or
+    a missing-value spelling; and at least one numeric column holds a number.
+    A header, a units row or a ``key,value`` preamble line has text in a
+    numeric column, so the walk stops at it.
     """
-    reference = [_is_data_cell(t.strip()) for t in tokens[first_data]]
+    # Which columns hold NUMBERS, judged over a sample of the confirmed data
+    # rows rather than the first one alone: a text column ("Sample", "Run")
+    # may hold a number-looking cell ("7") in that row, and a numeric column
+    # an empty one. A column is numeric when most of its non-empty sampled
+    # cells are numbers.
+    sample = [
+        [t.strip() for t in tokens[i]]
+        for i in range(first_data, min(len(tokens), first_data + _TYPE_SAMPLE_ROWS))
+    ]
+    width = len(sample[0])
+    reference: list[bool] = []
+    for c in range(width):
+        cells = [row[c] for row in sample if c < len(row) and row[c].lower() not in _MISSING_TOKENS]
+        reference.append(bool(cells) and 2 * sum(map(_is_data_cell, cells)) > len(cells))
     start = first_data
     while start > 0:
         row = [t.strip() for t in tokens[start - 1]]
-        if len(row) > len(reference):
+        if len(row) > width:
             break
         # A SHORTER row is data whose trailing cells are missing ("1<TAB>2"
         # in a 3-column file, or "<TAB>2"): pad it with empty cells, which
         # the per-column rule below treats as missing values.
-        row += [""] * (len(reference) - len(row))
+        row += [""] * (width - len(row))
         numeric = [_is_data_cell(t) for t in row]
-        if not any(numeric):
+        # At least one number IN A NUMERIC COLUMN, and every numeric column a
+        # number or a missing value; a text column may hold anything (a header,
+        # units or preamble row has text where the numbers go, so it stops).
+        if not any(n and ref for n, ref in zip(numeric, reference, strict=True)):
             break
         compatible = all(
             is_num or not ref or t.lower() in _MISSING_TOKENS
