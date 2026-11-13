@@ -12,7 +12,7 @@ import type uPlot from "uplot";
 
 import type { PlotPayload } from "../../lib/plotdata";
 import { lazyRegion } from "../../lib/lazyRegion";
-import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
+import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenuLazy";
 import SelectionMiniToolbar from "./SelectionMiniToolbar";
 import type { PlotStageActions } from "./usePlotStageActions";
 

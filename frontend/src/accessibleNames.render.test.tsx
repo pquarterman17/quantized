@@ -13,9 +13,10 @@
 
 import { fireEvent, isInaccessible, render, screen } from "@testing-library/react";
 import { computeAccessibleName } from "dom-accessibility-api";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import AppearanceMenu from "./components/Shell/AppearanceMenu";
+import { preloadContextMenu } from "./components/overlays/ContextMenuLazy";
 import CalcTitleBar from "./components/Shell/CalcTitleBar";
 import MenuBar from "./components/Shell/MenuBar";
 import StatusBar from "./components/Shell/StatusBar";
@@ -31,6 +32,12 @@ import { useConnection } from "./lib/lifecycle";
 import type { Action } from "./store/commands";
 import { useApp } from "./store/useApp";
 import { isWordLikeName } from "./test/accessibleNameScan";
+
+// The app warms the context-menu body once the menu bar mounts (bundle diet
+// slice 26, components/overlays/ContextMenuLazy.tsx). These tests open menus
+// and query them synchronously, so warm it the same way first; a cold open is
+// covered by components/overlays/onDemandMenus.test.tsx.
+beforeAll(() => preloadContextMenu());
 
 // The Stage's views are heavy canvases; only its tab strip is under test here.
 vi.mock("./components/windows/WindowCanvas", () => ({ default: () => <div>plot-canvas</div> }));
@@ -117,9 +124,12 @@ describe("rendered controls are named in words (U6)", () => {
     expect(unnamedControls(status.container), FIX).toEqual([]);
   });
 
-  it("the appearance menu, opened", () => {
+  it("the appearance menu, opened", async () => {
     const { container } = render(<AppearanceMenu />);
     fireEvent.click(screen.getByRole("button", { name: "Appearance" }));
+    // The dropdown's body loads on demand (bundle diet slice 26); check it
+    // once it is there, or this would pass on the bare gear button.
+    await screen.findByText("Theme");
     expect(unnamedControls(container), FIX).toEqual([]);
   });
 

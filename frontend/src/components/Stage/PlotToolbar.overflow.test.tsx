@@ -6,11 +6,18 @@
 // promise (every button inside the stage) is e2e/specs/layout-fit.spec.ts.
 
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { useApp } from "../../store/useApp";
 import PlotToolbar from "./PlotToolbar";
+import { preloadContextMenu } from "../overlays/ContextMenuLazy";
 import { fitToolGroups } from "./plotToolbarOverflow";
+
+// The app warms the context-menu body once the menu bar mounts (bundle diet
+// slice 26, components/overlays/ContextMenuLazy.tsx). These tests open menus
+// and query them synchronously, so warm it the same way first; a cold open is
+// covered by components/overlays/onDemandMenus.test.tsx.
+beforeAll(() => preloadContextMenu());
 
 const ORIGINAL = useApp.getState();
 

@@ -6,7 +6,7 @@
 // accessible name (aria-label) instead of getByTitle.
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildPlotCommands } from "../../commands/plotCommands";
 import { createFigureDocument } from "../../lib/figureDocument";
@@ -14,6 +14,13 @@ import { defaultPlotView } from "../../lib/plotview";
 import { loadToolbarPrefs, saveToolbarPrefs } from "../../store/prefs";
 import { useApp } from "../../store/useApp";
 import PlotToolbar from "./PlotToolbar";
+import { preloadContextMenu } from "../overlays/ContextMenuLazy";
+
+// The app warms the context-menu body once the menu bar mounts (bundle diet
+// slice 26, components/overlays/ContextMenuLazy.tsx). These tests open menus
+// and query them synchronously, so warm it the same way first; a cold open is
+// covered by components/overlays/onDemandMenus.test.tsx.
+beforeAll(() => preloadContextMenu());
 
 const ORIGINAL = useApp.getState();
 const ORIGINAL_CLIPBOARD = navigator.clipboard;

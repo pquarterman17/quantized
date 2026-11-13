@@ -34,6 +34,11 @@
 // grabs focus on open (no pre-highlighted item, matching native OS menus)
 // so the FIRST arrow key already navigates. Swatch grids stay mouse-first
 // (like a native colour picker); a hover-opened submenu doesn't steal focus.
+//
+// Loading (bundle diet slice 26): the startup hosts (menu bar, plot window
+// title buttons, plot stage menus, legend, plot toolbar) render this through
+// ./ContextMenuLazy.tsx, which loads it on demand and is warmed when the menu
+// bar mounts. Lazy panels import it directly.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";

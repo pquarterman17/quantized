@@ -3,11 +3,18 @@
 // with the click's own last-visible guard; the row's menu (Shift+F10) renames.
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import PlotLegend from "./PlotLegend";
+import { preloadContextMenu } from "../overlays/ContextMenuLazy";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import { useApp } from "../../store/useApp";
+
+// The app warms the context-menu body once the menu bar mounts (bundle diet
+// slice 26, components/overlays/ContextMenuLazy.tsx). These tests open menus
+// and query them synchronously, so warm it the same way first; a cold open is
+// covered by components/overlays/onDemandMenus.test.tsx.
+beforeAll(() => preloadContextMenu());
 
 const series: PlotSeriesSpec[] = [
   { label: "A", unit: "" },
