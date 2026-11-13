@@ -4,12 +4,13 @@
 // Storage and sanitizing live in lib/fitTemplates.ts (an analysis template
 // with one fit step, so it is carried in the project file like every other
 // recipe). Applying only LOADS the settings — the user still presses Fit —
-// and nothing ever applies a template on its own.
+// and nothing ever applies a template on its own. A saved template can be
+// deleted here too (confirmed), so the list never only grows.
 
 import { useEffect, useState } from "react";
 
 import { fitTemplateOf, toFitTemplate, type FitTemplateSettings } from "../../../lib/fitTemplates";
-import { loadTemplates, saveTemplate, TEMPLATES_CHANGED_EVENT, type AnalysisTemplate } from "../../../lib/template";
+import { deleteTemplate, loadTemplates, saveTemplate, TEMPLATES_CHANGED_EVENT, type AnalysisTemplate } from "../../../lib/template";
 import { askConfirm } from "../../../store/confirmDialog";
 import { useApp } from "../../../store/useApp";
 import { Button, Select } from "../../primitives";
@@ -57,6 +58,21 @@ export default function FitTemplatesSection({ current, apply }: Props) {
     }
   };
 
+  const remove = async () => {
+    if (!chosen) return;
+    const ok = await askConfirm(
+      `Delete the fit template "${chosen.name}"?`,
+      "It is removed from this computer's template library. Fits already run with it are not changed.",
+      "Delete template",
+      true,
+    );
+    if (!ok) return;
+    deleteTemplate(chosen.name);
+    setList(fitTemplates());
+    setPicked("");
+    setStatus(`deleted fit template "${chosen.name}"`);
+  };
+
   return (
     <details style={{ marginTop: 10 }}>
       <summary className="qzk-field-lbl">Templates</summary>
@@ -91,6 +107,9 @@ export default function FitTemplatesSection({ current, apply }: Props) {
             }}
           >
             Apply template
+          </Button>
+          <Button size="sm" variant="ghost" disabled={!chosen} title="Delete this saved template" onClick={() => void remove()}>
+            Delete template
           </Button>
         </div>
       ) : (

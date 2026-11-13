@@ -13,6 +13,7 @@ import { fitTemplateOf } from "../../../lib/fitTemplates";
 import { loadTemplates } from "../../../lib/template";
 import type { DataStruct } from "../../../lib/types";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
+import { askConfirm } from "../../../store/confirmDialog";
 import { useApp } from "../../../store/useApp";
 import CurveFitPanel from "./CurveFitPanel";
 import { retainFitted } from "./curveFitSession";
@@ -25,6 +26,8 @@ vi.mock("../../../lib/api/curvefit", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api/curvefit")>()),
   listFitModels: vi.fn(),
 }));
+
+vi.mock("../../../store/confirmDialog", () => ({ askConfirm: vi.fn(async () => true) }));
 
 const DATA: DataStruct = { time: [0, 1, 2, 3], values: [[1, 0.1], [3, 0.1], [5, 0.1], [7, 0.1]], labels: ["y", "w"], units: ["", ""], metadata: {} };
 
@@ -83,6 +86,26 @@ describe("CurveFitPanel — fit templates", () => {
     await waitFor(() =>
       expect(useAnalysisSelection.getState().selection?.items[0]?.range).toEqual({ lo: 1, hi: 2, source: "manual" }),
     );
+  });
+
+  it("deletes a saved template after a confirmation, and not when it is declined", async () => {
+    const { toFitTemplate } = await import("../../../lib/fitTemplates");
+    const { saveTemplate } = await import("../../../lib/template");
+    saveTemplate(toFitTemplate("old", { version: 1, model: "Linear", weight: "none", rows: [] }));
+    render(<CurveFitPanel />);
+    fireEvent.click(await screen.findByText("Templates"));
+    // Nothing picked: there is nothing to delete.
+    expect(screen.getByRole("button", { name: "Delete template" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Saved fit template"), { target: { value: "old" } });
+    vi.mocked(askConfirm).mockResolvedValueOnce(false);
+    fireEvent.click(screen.getByRole("button", { name: "Delete template" }));
+    await waitFor(() => expect(askConfirm).toHaveBeenCalledTimes(1));
+    expect(loadTemplates()).toHaveLength(1);
+    vi.mocked(askConfirm).mockResolvedValueOnce(true);
+    fireEvent.click(screen.getByRole("button", { name: "Delete template" }));
+    await waitFor(() => expect(loadTemplates()).toHaveLength(0));
+    expect(await screen.findByText("No fit templates yet.")).toBeInTheDocument();
+    expect(useApp.getState().status).toBe('deleted fit template "old"');
   });
 
   it("refuses a template whose model this build does not have, changing nothing", async () => {
