@@ -11,7 +11,6 @@ row-indices out. No fastapi/pydantic/`quantized.routes` imports.
 
 from __future__ import annotations
 
-import csv
 import math
 import re
 from collections.abc import Iterator, Sequence
@@ -19,6 +18,7 @@ from datetime import UTC, datetime
 
 import numpy as np
 
+from quantized.io._delimited_split import split_row
 from quantized.io._fortran_float import parse_float
 
 __all__ = [
@@ -48,27 +48,6 @@ def _delimiter_count(line: str, ch: str) -> int:
     if ch == " ":
         return max(len(line.split()) - 1, 0)
     return line.count(ch)
-
-
-def split_row(line: str, delim: str) -> list[str]:
-    """Tokenize one (already stripped) delimited line.
-
-    * A space delimiter splits on whitespace RUNS. Splitting on each single
-      space turned ``"1.5  2"`` into three cells but ``"10.5 3"`` into two, so
-      a fixed-width file's values landed in different columns row to row.
-    * A line carrying a double quote goes through :mod:`csv`, so a quoted
-      cell (``"1"``, or ``"x, y"`` with the delimiter inside it) is one cell
-      with its quotes removed instead of a quoted string that fails ``float()``
-      or a cell split in two that shifts every column after it.
-    * Anything else is a plain ``str.split`` -- the fast, common case.
-    """
-    if '"' in line:
-        if delim == " ":
-            return next(csv.reader([line], delimiter=" ", skipinitialspace=True))
-        return next(csv.reader([line], delimiter=delim))
-    if delim == " ":
-        return line.split()
-    return line.split(delim)
 
 
 def _detect_delimiter(raw_lines: Sequence[str]) -> str:

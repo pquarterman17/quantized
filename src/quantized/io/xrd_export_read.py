@@ -24,8 +24,8 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io._header_units import _extract_units
 from quantized.io.base import read_head, read_text
-from quantized.io.delimited import _extract_units
 
 __all__ = ["MARKER", "import_xrd_export", "is_xrd_export"]
 

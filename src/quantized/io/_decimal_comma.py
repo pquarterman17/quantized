@@ -276,6 +276,7 @@ def stray_comma_notes(
     data_tokens: Sequence[Sequence[str]],
     *,
     converted: Sequence[int] = (),
+    separator_choice: bool = True,
 ) -> list[str]:
     """Notes for comma-written cells left blank (NaN) in NUMERIC columns.
 
@@ -290,8 +291,10 @@ def stray_comma_notes(
     Only a column that is otherwise numeric is reported: one holding real
     text (``abc / 1,5 / def``) is imported as text, intact, and nothing in
     it was blanked. Only columns with a NaN are inspected, so a clean file
-    pays nothing.
+    pays nothing. ``separator_choice=False`` (a comma-delimited file, where
+    the decimal separator cannot be a comma) drops the Import Wizard hint.
     """
+    fix = ", or pick the decimal separator in the Import Wizard" if separator_choice else ""
     skip = set(converted)
     notes: list[str] = []
     for c, header in enumerate(col_headers):
@@ -321,6 +324,6 @@ def stray_comma_notes(
             notes.append(
                 f"Column '{header}' has {count} {noun} {how}; "
                 f"{'it was' if count == 1 else 'they were'} left blank (NaN). Fix the "
-                f"{noun}, or pick the decimal separator in the Import Wizard."
+                f"{noun}{fix}."
             )
     return notes

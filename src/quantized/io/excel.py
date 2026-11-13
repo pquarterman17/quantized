@@ -26,8 +26,8 @@ from quantized.io._delimited_layout import (
     _to_float,
     _walk_back_gappy_rows,
 )
+from quantized.io._header_units import _extract_units
 from quantized.io.base import CORRUPT_ARCHIVE_ERRORS, resolve_column
-from quantized.io.delimited import _extract_units
 
 __all__ = ["import_excel", "read_sheet", "sheet_titles"]
 

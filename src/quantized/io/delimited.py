@@ -18,12 +18,14 @@ import numpy as np
 from quantized.datastruct import DataStruct
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
+from quantized.io import _delimited_split as split
 from quantized.io._delimited_fast import (
     LazyTokenRows,
     _DeferredDataTokens,
     _tokens_to_columns,
     try_fast_parse_matrix,
 )
+from quantized.io._header_units import _extract_units
 from quantized.io.base import read_text, resolve_column
 
 __all__ = ["import_csv"]
@@ -55,72 +57,6 @@ def _split_lines(text: str) -> tuple[list[str], list[str]]:
         else:
             data.append(stripped)
     return data, comments
-
-
-def _split_trailing_bracket(header: str, opener: str, closer: str) -> tuple[str, str] | None:
-    """``('Temp (C)', '(', ')')`` -> ``('C', 'Temp')``; ``None`` if no match.
-
-    A hand-rolled scan, not a regex. The regexes this replaces --
-    ``(.+?)\\s*\\(([^)]+)\\)\\s*$`` and its ``[...]`` twin -- were quadratic
-    (CodeQL ``py/polynomial-redos``): ``.`` also matches a space, so ``.+?``
-    and ``\\s*`` can split the same run of blanks in as many ways as it is
-    long, and every one of them is retried before a header with no bracket is
-    rejected. Column headers come straight out of an untrusted instrument file,
-    so a row of long blank-padded headers was enough to stall a parse. This
-    scan is linear and allocation-free apart from the two returned slices.
-
-    Behaviour is preserved exactly, including the awkward corners:
-
-    * the closer must be the LAST character (bar trailing whitespace), and the
-      unit may not itself contain one -- so ``'a (b) c (d)'`` yields ``'d'``;
-    * the unit must be non-empty and something must precede the opener, so
-      ``'Temp ()'`` and ``'(C)'`` both fail and leave the header alone;
-    * the opener is the FIRST one that can still satisfy the above, which is
-      why ``'a ((b)'`` yields the unit ``'(b'`` rather than ``'b'``;
-    * ``.`` never matched a newline, so a label spanning lines still fails.
-    """
-    body = header.rstrip()
-    if not body.endswith(closer):
-        return None
-    before_closer = body[:-1]
-    newline = body.find("\n")
-    # The unit may not contain a closer, so the opener must sit after the last
-    # one; and something must precede it, so index 0 is never a candidate.
-    start = max(1, before_closer.rfind(closer) + 1)
-    limit = len(before_closer) - 1  # the opener must leave a non-empty unit
-    while start < limit:
-        start = before_closer.find(opener, start)
-        if start < 0 or start >= limit:
-            return None
-        if newline < 0 or newline >= _label_length(body, start):
-            return before_closer[start + 1 :].strip(), body[:start].strip()
-        # A newline inside the label itself is fatal (``.`` never matched one),
-        # but one in the run of blanks before the opener is not -- so keep
-        # looking rather than giving up on the header.
-        start += 1
-    return None
-
-
-def _label_length(body: str, start: int) -> int:
-    """Length of the shortest ``(.+?)`` that can precede the opener at ``start``.
-
-    ``.+?`` is non-greedy and ``\\s*`` mops up the rest, so the label proper
-    ends at the last non-blank before the opener -- but it must be at least one
-    character even when everything before the opener is blank.
-    """
-    end = start
-    while end > 1 and body[end - 1].isspace():
-        end -= 1
-    return end
-
-
-def _extract_units(header: str) -> tuple[str, str]:
-    """``'Temp (C)'`` -> ``('C', 'Temp')`` (also ``[...]``). Returns (unit, label)."""
-    for opener, closer in (("(", ")"), ("[", "]")):
-        found = _split_trailing_bracket(header, opener, closer)
-        if found is not None:
-            return found
-    return "", header
 
 
 def _convert_column(cells: Sequence[str]) -> np.ndarray:
@@ -208,7 +144,12 @@ def import_csv(
     lazy_tokens = LazyTokenRows(raw_lines, delim)
     try:
         header_row, data_start, units_row = layout._detect_layout(
-            dc.layout_rows(lazy_tokens) if comma_path else lazy_tokens
+            # A quoted comma number in a comma-delimited file ("1,234", "1,5")
+            # is still a number-shaped cell: scored as text, it made its row
+            # (and the header above it) preamble, dropped without a word.
+            dc.layout_rows(lazy_tokens)
+            if comma_path or (delim == "," and '"' in text)
+            else lazy_tokens
         )
     except ValueError as exc:  # header-only file
         raise ValueError(f"{exc} ({path.name})") from exc
@@ -267,6 +208,14 @@ def import_csv(
         )
     elif delim != ",":  # with a comma delimiter, "1,5" is already two cells
         layout.reject_comma_numbers(path.name, col_headers, matrix, data_tokens)
+    elif '"' in text:
+        # Unless it is quoted: a quoted grouped number was read as its number
+        # (`_delimited_split`), and one that fits two readings ("1,234") or a
+        # quoted decimal comma ("1,5") was left blank -- both are reported.
+        comma_notes = split.grouped_number_notes(col_headers, raw_lines[data_start:], delim)
+        comma_notes += dc.stray_comma_notes(
+            col_headers, matrix, data_tokens, separator_choice=False
+        )
 
     if isinstance(time_column, int) and time_column < 0:
         time_idx = -1
