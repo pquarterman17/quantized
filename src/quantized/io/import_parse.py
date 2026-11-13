@@ -129,9 +129,30 @@ def _resolve_names(tokens: list[list[str]], header_line: int | None, n_cols: int
     return names
 
 
-def _guess_layout(text: str) -> tuple[int | None, int | None, int, list[str]]:
+def _guess_roles(data_rows: list[list[str]], n_cols: int) -> list[str]:
+    """Default role per column: a TEXT column (most of its non-empty sampled
+    cells are not numbers -- direct import's rule, `delimited._numeric_column`)
+    is ``label``, kept as a text column like direct import keeps it, never a
+    NaN-filled ``y``; the first numeric column is ``x``, the rest ``y``. A
+    file with no numeric column keeps the plain ``x, y, …`` start."""
+    sample = data_rows[:64]
+    text: list[bool] = []
+    for c in range(n_cols):
+        cells = [
+            r[c].strip() for r in sample
+            if c < len(r) and r[c].strip().lower() not in layout._MISSING_TOKENS
+        ]
+        text.append(bool(cells) and 2 * sum(map(layout._is_data_cell, cells)) <= len(cells))
+    if all(text):
+        return ["x"] + ["y"] * (n_cols - 1) if n_cols else []
+    first_numeric = text.index(False)
+    return ["label" if t else ("x" if c == first_numeric else "y") for c, t in enumerate(text)]
+
+
+def _guess_layout(text: str) -> tuple[int | None, int | None, int, list[str], list[str]]:
     """``guess_settings``' layout guess: (header_line, units_line,
-    data_start_line, column names) for ``text`` under an auto delimiter.
+    data_start_line, column names, default roles) for ``text`` under an auto
+    delimiter.
 
     Origin's own ASCII export (Long Name / Units / Comments above the data,
     `_origin_ascii_header`) is recognised first; otherwise a units row just
@@ -174,7 +195,8 @@ def _guess_layout(text: str) -> tuple[int | None, int | None, int, list[str]]:
     elif data_start >= 1 and scores[data_start - 1] < 0.5:
         header_line = data_start - 1
     header_line, units_line = (_uncommented(lines, i) for i in (header_line, units_line))
-    return header_line, units_line, data_start, _resolve_names(tokens, header_line, n_cols)
+    names = _resolve_names(tokens, header_line, n_cols)
+    return header_line, units_line, data_start, names, _guess_roles(data_rows, n_cols)
 
 
 def _parse_core(text: str, settings: ImportSettings) -> _Parsed:

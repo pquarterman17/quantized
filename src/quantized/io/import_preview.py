@@ -206,9 +206,8 @@ class ImportSettings:
 
 def guess_settings(text: str) -> ImportSettings:
     """Best-effort starting settings for ``text`` (the wizard's initial state)."""
-    header_line, units_line, data_start, names = _guess_layout(text)
-    n_cols = len(names)
-    roles = ["x"] + ["y"] * (n_cols - 1) if n_cols else []
+    # Text columns start as ``label`` (kept as text), not ``y`` (_guess_roles).
+    header_line, units_line, data_start, names, roles = _guess_layout(text)
     return ImportSettings(
         delimiter="auto", header_line=header_line, units_line=units_line,
         data_start_line=data_start, column_names=names, roles=roles,

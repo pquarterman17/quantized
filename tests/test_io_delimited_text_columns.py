@@ -65,3 +65,20 @@ def test_a_numeric_column_with_a_few_text_cells_stays_numeric(tmp_path: Path) ->
     ds = import_csv(_write(tmp_path, "T,M\n1,10\n2,n/a\n3,30\n4,40\n"))
     assert ds.labels == ("M",)
     assert "text_columns" not in ds.metadata
+
+
+def test_wizard_defaults_text_columns_to_label_not_y() -> None:
+    # Owner policy (pre-existing gap): the Import Wizard started every column
+    # after the first as Y, so a text column became a NaN-filled channel. Text
+    # columns now start as label (a text column, as direct import keeps it),
+    # and X goes to the first NUMERIC column.
+    settings = guess_settings(TEXT_1_3_LAST)
+    assert settings.roles == ["label", "x", "label", "y", "label"]
+    ds = parse_import(TEXT_1_3_LAST, settings)
+    assert ds.labels == ("M",)
+    assert ds.metadata.get("x_column_name") == "T"
+    assert list(ds.metadata["text_columns"]) == ["Sample", "Op", "Run"]
+
+
+def test_wizard_keeps_x_then_y_for_an_all_numeric_file() -> None:
+    assert guess_settings("T,M,N\n1,2,3\n4,5,6\n").roles == ["x", "y", "y"]
