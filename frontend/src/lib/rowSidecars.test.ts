@@ -62,6 +62,9 @@ describe("sidecarRowCount", () => {
   it("covers every allowlisted spelling, and only those", () => {
     expect(sidecarRowCount({ origin_text_columns: { A: [1, 2, 3] } }, 0)).toBe(3);
     expect(sidecarRowCount({ origin_report_sheets: { R: [1, 2, 3] } }, 0)).toBe(3);
+    // The imaginary parts of a complex Origin column: one number per row. Off
+    // the list, deleting a row left each one a row away from its real part.
+    expect(sidecarRowCount({ origin_complex_imaginary: { A: [1, null, 3] } }, 0)).toBe(3);
     expect(sidecarRowCount({ per_channel_notes: { A: [1, 2, 3] } }, 0)).toBe(0);
   });
 
@@ -172,11 +175,12 @@ describe("concatRowSidecars", () => {
 });
 
 describe("withoutRowSidecars", () => {
-  it("removes all three keys and keeps everything else", () => {
+  it("removes every row-indexed key and keeps everything else", () => {
     const out = withoutRowSidecars({
       text_columns: { A: ["a"] },
       origin_text_columns: { B: ["b"] },
       origin_report_sheets: { R: ["r"] },
+      origin_complex_imaginary: { C: [0.5] },
       source: "run.dat",
     });
     expect(out).toEqual({ source: "run.dat" });

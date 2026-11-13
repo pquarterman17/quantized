@@ -28,11 +28,14 @@ import type { Dataset } from "./types";
  *  origin_text_columns`). `origin_report_sheets` is the same
  *  `{name: [cell per row]}` shape — Origin report-sheet reference strings
  *  (`io/origin_project/opj.py`) — and was missed by the first version of this
- *  fix, which asserted in its own comment that nothing else was row-indexed. */
+ *  fix, which asserted in its own comment that nothing else was row-indexed.
+ *  `origin_complex_imaginary` is the same shape once more: the imaginary part
+ *  of each complex Origin column, one number (or null) per row. */
 export const ROW_INDEXED_SIDECARS = [
   "text_columns",
   "origin_text_columns",
   "origin_report_sheets",
+  "origin_complex_imaginary",
 ] as const;
 
 /** Slice ONE column's cells to `rowIndexes`.

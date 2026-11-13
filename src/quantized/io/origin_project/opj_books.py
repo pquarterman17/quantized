@@ -153,6 +153,8 @@ def _build_book(
     *,
     row_aligned_text: bool = False,
     imag_cols: Columns | None = None,
+    sheet_columns: dict[str, ColumnMeta] | None = None,
+    lost_columns: bool = False,
 ) -> DataStruct:
     """Assemble one workbook into a DataStruct.
 
@@ -184,6 +186,18 @@ def _build_book(
     (the all-text second book of Altaxo's ``TwoWorksheets`` specimen). Off,
     the behaviour is byte-for-byte what it was (``.opju`` relies on that).
 
+    ``sheet_columns`` (opt-in; the header-driven ``.opj`` reader passes it)
+    is this book's column metadata, already bound to the right sheet
+    (``opj_sheets``) — for a sheet pseudo-book ``Book@N`` as much as for
+    the first sheet. Left None, only a first-sheet book looks its columns
+    up in ``books_meta`` and a ``Book@N`` gets none, as before.
+
+    ``lost_columns`` (opt-in, same caller) says a column of this book
+    exists in the file but could not be decoded. Then "no designated X, so
+    the first column is X" is not safe — the first column may be the one
+    that was lost — and unless the metadata names a decoded X the axis is
+    the row index, flagged like any other unrecovered X.
+
     ``imag_cols`` are the imaginary parts of this book's complex columns
     (same short names and row order as their real parts in ``cols``),
     attached under ``metadata["origin_complex_imaginary"]`` — the numeric
@@ -202,7 +216,12 @@ def _build_book(
         return DataStruct(time=np.empty(0), values=np.empty((0, 0)), metadata=meta_empty)
 
     base_book, _, sheet_no = book.partition("@")
-    col_meta = books_meta[base_book].columns if base_book in books_meta and not sheet_no else {}
+    if sheet_columns is not None:
+        col_meta = sheet_columns
+    else:
+        col_meta = (
+            books_meta[base_book].columns if base_book in books_meta and not sheet_no else {}
+        )
     maxlen = max((len(v) for _, v in cols), default=0)
     if row_aligned_text:
         maxlen = max(maxlen, text_rows)
@@ -222,7 +241,9 @@ def _build_book(
     )
     declared_x = next((c for c, m in col_meta.items() if m.designation == "X"), None)
     # No numeric column at all (an all-text book): nothing can be the axis.
-    x_unrecovered = (decoded_x is None and declared_x is not None) or not cols
+    x_unrecovered = (
+        decoded_x is None and (declared_x is not None or lost_columns)
+    ) or not cols
 
     if x_unrecovered:
         ordered = list(cols)

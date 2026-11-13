@@ -393,7 +393,10 @@ def test_unknown_text_numeric_tag_omits_the_column(tmp_path: Path) -> None:
     assert "tag" in diag["details"][0]["reason"]  # type: ignore[index]
 
 
-def test_many_implausible_doubles_omit_the_column_a_few_are_blanked(tmp_path: Path) -> None:
+def test_implausible_doubles_are_blanked_never_the_column_dropped(tmp_path: Path) -> None:
+    """The header declares float64 and the block is the declared size: the
+    column is a float64 column whatever a cell holds. Implausible cells are
+    blanked and counted; the plausibility test is not a type detector."""
     junk = struct.pack("<d", 5e-310)
     few = _doubles([float(k) for k in range(999)], 999) + junk
     many = junk * 50 + _doubles([1.0] * 50, 50)
@@ -405,11 +408,26 @@ def test_many_implausible_doubles_omit_the_column_a_few_are_blanked(tmp_path: Pa
         ]
     )
     book = _books(tmp_path, blob)["Book1"]
-    assert book.metadata["origin_column_names"] == ["B"]
+    assert book.metadata["origin_column_names"] == ["B", "C"]
     assert np.isnan(_column(book, "B")[-1]) and _column(book, "B")[998] == 998.0
+    c = _column(book, "C")[:100]
+    assert np.isnan(c[:50]).all() and c[50:].tolist() == [1.0] * 50
     assert book.metadata["origin_data_diagnostics"]["omissions"] == [
-        "1 worksheet dataset(s) not decoded",
-        "1 column(s) with implausible cells blanked",
+        "2 column(s) with implausible cells blanked",
+    ]
+
+
+def test_one_tiny_value_does_not_drop_a_declared_float64_column(tmp_path: Path) -> None:
+    """Five rows, one of them 1e-300: four values survive, one cell is
+    blanked and reported. (The column used to vanish whole.)"""
+    cells = _doubles([1.0, 2.0, 3.0, 4.0], 4) + struct.pack("<d", 1e-300)
+    blob = project([_good(), dataset(dataset_header("Book1_B", DOUBLE, total=5, used=5), cells)])
+    book = _books(tmp_path, blob)["Book1"]
+    assert book.metadata["origin_column_names"] == ["B"]
+    b = _column(book, "B")
+    assert b[:4].tolist() == [1.0, 2.0, 3.0, 4.0] and np.isnan(b[4])
+    assert book.metadata["origin_data_diagnostics"]["omissions"] == [
+        "1 column(s) with implausible cells blanked"
     ]
 
 
@@ -800,19 +818,87 @@ def test_header_directly_followed_by_another_header_does_not_eat_it(tmp_path: Pa
     assert _column(book, "B").size == 2 and np.isnan(_column(book, "B")).all()  # empty slot
 
 
-def test_section_that_ends_at_an_unrecognised_block_says_so(tmp_path: Path) -> None:
-    """Whatever follows a block the walk cannot place is not read. That is
-    reported — a project must not look complete when the reader stopped."""
+def _bad_header(name: str, offset: int) -> bytes:
+    """A dataset header this reader does not recognise: a real one with a
+    byte set where every known header has zero."""
+    raw = bytearray(dataset_header(name, DOUBLE, total=3, used=3))
+    raw[offset] = 1
+    return bytes(raw)
+
+
+def test_unrecognised_header_first_in_the_section_is_reported(tmp_path: Path) -> None:
+    """The first dataset has a header the reader cannot parse. It used to
+    vanish without a word, and the next column became the X axis."""
+    lost = dataset(_bad_header("Book1_A", 0x41), _doubles([1.0, 2.0, 3.0], 3))
+    kept = dataset(dataset_header("Book1_B", DOUBLE, total=3, used=3), _doubles([4.0, 5.0, 6.0], 3))
+    book = _books(tmp_path, project([lost, kept]))["Book1"]
+    # B is NOT promoted to X: its X was the column that could not be read.
+    assert book.metadata["x_column_recovered"] is False
+    assert book.time.tolist() == [0.0, 1.0, 2.0]
+    assert book.metadata["origin_column_names"] == ["B"]
+    assert _column(book, "B").tolist() == [4.0, 5.0, 6.0]
+    diag = book.metadata["origin_data_diagnostics"]
+    assert diag["omissions"] == ["1 worksheet dataset(s) not decoded"]
+    assert diag["details"][0]["dataset"] == "Book1_A"
+    assert "not recognised" in diag["details"][0]["reason"]
+
+
+def test_unrecognised_header_mid_section_loses_only_itself(tmp_path: Path) -> None:
+    """The walk steps over the dataset it cannot read and carries on: every
+    later column and book is still imported, and the loss is named."""
+
+    def col(name: str, base: float) -> bytes:
+        return dataset(
+            dataset_header(name, DOUBLE, total=3, used=3), _doubles([base, base + 1, base + 2], 3)
+        )
+
+    lost = dataset(_bad_header("Book1_B", 0x12), _doubles([4.0, 5.0, 6.0], 3))
+    books = _books(
+        tmp_path, project([col("Book1_A", 1.0), lost, col("Book1_C", 7.0), col("Book2_A", 7.0)])
+    )
+    assert set(books) == {"Book1", "Book2"}
+    book = books["Book1"]
+    # A precedes the lost column, so it is still the first column: the X.
+    assert book.metadata["x_column_recovered"] is True
+    assert book.time.tolist() == [1.0, 2.0, 3.0]
+    assert book.metadata["origin_column_names"] == ["C"]
+    assert _column(book, "C").tolist() == [7.0, 8.0, 9.0]
+    diag = book.metadata["origin_data_diagnostics"]
+    assert diag["omissions"] == ["1 worksheet dataset(s) not decoded"]
+    assert [d["dataset"] for d in diag["details"]] == ["Book1_B"]
+
+
+def test_undecodable_first_column_does_not_promote_the_next_to_x(tmp_path: Path) -> None:
+    """Same rule for a header that parses but a block that does not decode."""
+    bad = dataset(dataset_header("Book1_A", DOUBLE, total=100, used=100), b"\x00" * 15)
+    kept = dataset(dataset_header("Book1_B", DOUBLE, total=2, used=2), _doubles([4.0, 5.0], 2))
+    book = _books(tmp_path, project([bad, kept]))["Book1"]
+    assert book.metadata["x_column_recovered"] is False
+    assert book.metadata["origin_column_names"] == ["B"]
+
+
+def test_unplaceable_block_is_reported_and_the_walk_resynchronises(tmp_path: Path) -> None:
+    """A block in a header slot that is nothing like a header, with no data
+    block or terminator of its own: it is reported as a dataset the reader
+    could not identify, the walk resumes at the next real header, and —
+    since nobody knows whose column was lost — no book keeps a guessed X."""
     stray = block(b"\x07" * 64)
-    unread = dataset(dataset_header("Book1_C", DOUBLE, total=2, used=2), _doubles([7.0, 8.0], 2))
-    blob = project([_good(), stray, unread])
-    book = _books(tmp_path, blob)["Book1"]
-    assert book.metadata["origin_column_names"] == []
-    assert book.metadata["origin_data_diagnostics"]["omissions"] == [
-        "1 non-worksheet dataset(s) not imported"
-    ]
-    reason = book.metadata["origin_data_diagnostics"]["details"][0]["reason"]
-    assert "ended at an unrecognised block" in reason
+    after = dataset(dataset_header("Book1_C", DOUBLE, total=2, used=2), _doubles([7.0, 8.0], 2))
+    book = _books(tmp_path, project([_good(), stray, after]))["Book1"]
+    assert book.metadata["origin_column_names"] == ["A", "C"]
+    assert _column(book, "C").tolist() == [7.0, 8.0]
+    assert book.metadata["x_column_recovered"] is False
+    diag = book.metadata["origin_data_diagnostics"]
+    assert diag["omissions"] == ["1 unrecognised dataset(s) not imported"]
+    assert "not recognised" in diag["details"][0]["reason"]
+
+
+def test_run_of_unplaceable_blocks_is_counted(tmp_path: Path) -> None:
+    stray = block(b"\x07" * 64) + block(b"\x08" * 30) + block(b"\x09" * 30)
+    after = dataset(dataset_header("Book1_C", DOUBLE, total=2, used=2), _doubles([7.0, 8.0], 2))
+    diag = _diagnostics(tmp_path, project([_good(), stray, after]))
+    reasons = [d["reason"] for d in diag["details"]]  # type: ignore[index, union-attr]
+    assert any("2 block(s) before the next readable dataset" in r for r in reasons)
 
 
 def test_matrix_is_primary_when_the_worksheets_hold_no_numbers(tmp_path: Path) -> None:
@@ -894,3 +980,269 @@ def test_plain_numeric_book_has_no_format_hints(tmp_path: Path) -> None:
         + null()
     )
     assert "origin_column_formats" not in _books(tmp_path, _one_column(windows))["Book1"].metadata
+
+
+# ── review round: sheet ids, report marker, sidecars, notices ────────────────
+
+
+def _xy(book: str, sheet: str, x: list[float], y: list[float], *, x_id: int = 0) -> list[bytes]:
+    """Datasets ``<book>_A<sheet>`` and ``<book>_B<sheet>``; B names its X
+    by object id when ``x_id`` is given."""
+    n = len(x)
+    return [
+        dataset(dataset_header(f"{book}_A{sheet}", DOUBLE, total=n, used=n), _doubles(x, n)),
+        dataset(
+            dataset_header(f"{book}_B{sheet}", DOUBLE, total=n, used=n, x_ref=x_id),
+            _doubles(y, n),
+        ),
+    ]
+
+
+def _sheet(name: str, x_long: str, y_long: str, first_id: int, *, x_first: bool = True) -> bytes:
+    """A worksheet sheet with columns A and B (object ids ``first_id``,
+    ``first_id + 1``). ``x_first=False`` makes B the X column."""
+    a, b = (3, 0) if x_first else (0, 3)
+    return (
+        sheet_header(name, cols=2, rows=2)
+        + prop_block("A", a, (0x01, 0x50, 8), value_format=0, object_id=first_id)
+        + label_block(x_long, "s")
+        + prop_block("B", b, (0x01, 0x60, 8), value_format=0, object_id=first_id + 1)
+        + label_block(y_long, "V")
+    )
+
+
+def test_single_sheet_whose_id_is_not_1_keeps_its_column_metadata(tmp_path: Path) -> None:
+    """A book whose only sheet has id 3 (sheets 1 and 2 were deleted): its
+    datasets are ``Book1_A@3``. One id, one sheet — it can be no other, and
+    its long names, units and X designation must arrive."""
+    windows = window_header("Book1") + _sheet("Data", "Time", "Signal", 2, x_first=False)
+    blob = project(_xy("Book1", "@3", [1.0, 2.0], [5.0, 6.0]), windows)
+    books = _books(tmp_path, blob)
+    # One sheet in the window, one id in the datasets: that sheet IS the
+    # book, and takes the book's name (the name a graph curve refers to).
+    assert set(books) == {"Book1"}
+    book = books["Book1"]
+    assert book.metadata["origin_book_long"] == "Book1"
+    assert book.metadata["origin_sheet_id"] == "3"  # the datasets are still `@3`
+    assert book.metadata["column_designations"] == {"A": "Y", "B": "X"}
+    assert book.time.tolist() == [5.0, 6.0]  # B is the designated X, not column 1
+    assert book.metadata["x_column_long"] == "Signal"
+    assert book.labels == ("Time",) and book.units == ("s",)
+    assert "origin_data_diagnostics" not in book.metadata
+
+
+def test_sheet_ids_bind_by_column_reference_not_by_position(tmp_path: Path) -> None:
+    """Two sheets with ids 6 and 7, stored in the window in the OTHER order
+    (the user dragged a tab). Each id's Y column names its X by object id;
+    that reference, not the position, says which sheet is which."""
+    windows = (
+        window_header("Book1")
+        + _sheet("Second", "Depth", "Count", 10)  # holds id 7's columns
+        + _sheet("First", "Time", "Signal", 2)  # holds id 6's columns
+    )
+    datasets = _xy("Book1", "@6", [1.0, 2.0], [5.0, 6.0], x_id=2) + _xy(
+        "Book1", "@7", [3.0, 4.0], [7.0, 8.0], x_id=10
+    )
+    books = _books(tmp_path, project(datasets, windows))
+    assert books["Book1@6"].metadata["x_column_long"] == "Time"
+    assert books["Book1@6"].labels == ("Signal",)
+    assert books["Book1@7"].metadata["x_column_long"] == "Depth"
+    assert books["Book1@7"].labels == ("Count",)
+    assert "origin_data_diagnostics" not in books["Book1@6"].metadata
+
+
+def test_one_reference_and_elimination_bind_the_other_sheet(tmp_path: Path) -> None:
+    windows = (
+        window_header("Book1")
+        + _sheet("Second", "Depth", "Count", 10)
+        + _sheet("First", "Time", "Signal", 2)
+    )
+    datasets = _xy("Book1", "@6", [1.0, 2.0], [5.0, 6.0], x_id=2) + _xy(
+        "Book1", "@7", [3.0, 4.0], [7.0, 8.0]
+    )
+    books = _books(tmp_path, project(datasets, windows))
+    assert books["Book1@6"].labels == ("Signal",)
+    assert books["Book1@7"].labels == ("Count",)
+
+
+def test_sheet_ids_that_cannot_be_resolved_get_no_metadata_and_say_so(tmp_path: Path) -> None:
+    """Ids 6 and 7, two sheets, no reference: nothing says which is which.
+    The numbers are imported; the column names, units and designations of
+    EITHER sheet are not applied to them (a positional guess would give
+    half of all such books another sheet's names), and the loss is listed."""
+    windows = (
+        window_header("Book1")
+        + _sheet("Second", "Depth", "Count", 10)
+        + _sheet("First", "Time", "Signal", 2)
+    )
+    datasets = _xy("Book1", "@6", [1.0, 2.0], [5.0, 6.0]) + _xy(
+        "Book1", "@7", [3.0, 4.0], [7.0, 8.0]
+    )
+    books = _books(tmp_path, project(datasets, windows))
+    for key in ("Book1@6", "Book1@7"):
+        assert books[key].labels == ("B",)
+        assert books[key].metadata["column_designations"] == {}
+    assert books["Book1@6"].values[:, 0].tolist() == [5.0, 6.0]
+    diag = books["Book1@6"].metadata["origin_data_diagnostics"]
+    assert diag["omissions"] == ["2 sheet(s) imported without column names, units or designations"]
+    assert {d["dataset"] for d in diag["details"]} == {"Book1@6", "Book1@7"}
+
+
+def test_dense_sheet_ids_keep_their_position(tmp_path: Path) -> None:
+    """Ids 1..n on an n-sheet book: id k is sheet k — the case Altaxo's and
+    LabPlot's multi-sheet oracles cover. Sheet 2 now gets its metadata too."""
+    windows = (
+        window_header("Book1")
+        + _sheet("One", "Time", "Signal", 2)
+        + _sheet("Two", "Depth", "Count", 10)
+    )
+    datasets = _xy("Book1", "", [1.0, 2.0], [5.0, 6.0]) + _xy("Book1", "@2", [3.0, 4.0], [7.0, 8.0])
+    books = _books(tmp_path, project(datasets, windows))
+    assert books["Book1"].labels == ("Signal",)
+    assert books["Book1@2"].labels == ("Count",)
+    assert books["Book1@2"].metadata["x_column_long"] == "Depth"
+    # Two sheets: neither is renamed, so neither carries a sole-sheet id.
+    assert not any("origin_sheet_id" in b.metadata for b in books.values())
+
+
+def _two_matrix_sheets() -> bytes:
+    return (
+        window_header("MBook1")
+        + sheet_header("MSheet1", matrix=True, cols=2, rows=1)
+        + sheet_header("MSheet2", matrix=True, cols=1, rows=2)
+    )
+
+
+def test_matrix_sheet_id_is_not_an_ordinal(tmp_path: Path) -> None:
+    """A two-sheet matrix window whose datasets are ids 6 and 7. Read as
+    positions they are "sheets 6 and 7 of 2"; read as the 1st and 2nd they
+    are a guess. Neither: both are omitted and named."""
+    cells = _doubles([1.0, 2.0], 2)
+    datasets = [
+        dataset(dataset_header("MBook1@6", DOUBLE, total=2, used=2), cells),
+        dataset(dataset_header("MBook1@7", DOUBLE, total=2, used=2), cells),
+        _good(),
+    ]
+    books = _books(tmp_path, project(datasets, _two_matrix_sheets()))
+    assert set(books) == {"Book1"}
+    diag = books["Book1"].metadata["origin_data_diagnostics"]
+    assert diag["omissions"] == ["2 matrix book(s) not imported"]
+    assert all("sheet id" in d["reason"] for d in diag["details"])
+
+
+def test_single_matrix_sheet_with_a_high_id_is_bound(tmp_path: Path) -> None:
+    """One matrix sheet, one dataset, id 3: it can be no other sheet."""
+    cells = _doubles([1.0, 2.0, 3.0, 4.0], 4)
+    blob = project(
+        [dataset(dataset_header("MBook1@3", DOUBLE, total=4, used=4), cells)],
+        _matrix_windows(2, 2),
+    )
+    book = _books(tmp_path, blob)["MBook1"]
+    assert book.metadata["map_shape"] == [2, 2]
+    assert book.values[:, 2].tolist() == [1.0, 2.0, 3.0, 4.0]
+
+
+def test_dense_matrix_sheet_ids_bind_in_order(tmp_path: Path) -> None:
+    datasets = [
+        dataset(dataset_header("MBook1", DOUBLE, total=2, used=2), _doubles([1.0, 2.0], 2)),
+        dataset(dataset_header("MBook1@2", DOUBLE, total=2, used=2), _doubles([3.0, 4.0], 2)),
+    ]
+    books = _books(tmp_path, project(datasets, _two_matrix_sheets()))
+    assert books["MBook1"].metadata["map_shape"] == [1, 2]
+    assert books["MBook1@2"].metadata["map_shape"] == [2, 1]
+
+
+def test_matrix_without_coordinates_says_its_axes_are_cell_indices(tmp_path: Path) -> None:
+    cells = _doubles([1.0, 2.0, 3.0, 4.0], 4)
+    blob = project(
+        [dataset(dataset_header("MBook1", DOUBLE, total=4, used=4), cells)],
+        _matrix_windows(2, 2, coords=False),
+    )
+    book = _books(tmp_path, blob)["MBook1"]
+    assert book.metadata["origin_matrix"]["coordinates_recovered"] is False
+    (line,) = book.metadata["origin_data_diagnostics"]["omissions"]
+    assert "MBook1" in line and "coordinates not recovered" in line
+    manifest = with_data_diagnostics(
+        assess_origin_figures([], container="opj")[1], book.metadata["origin_data_diagnostics"]
+    )
+    assert line in manifest["omissions"]
+
+
+def test_empty_matrix_is_not_a_library_book(tmp_path: Path) -> None:
+    """Origin's untouched default matrix: every cell blank. Its generated
+    X/Y coordinates are finite, and counting them as data listed it as a
+    populated book."""
+    from quantized.io.origin_project import drop_empty_library_books
+
+    blank = dataset(dataset_header("MBook1", DOUBLE, total=4, used=4), MISSING * 4)
+    blob = project([blank, *_xy("Book1", "", [1.0, 2.0], [5.0, 6.0])], _matrix_windows(2, 2))
+    books = _books(tmp_path, blob)
+    assert set(books) == {"Book1", "MBook1"}  # the reader still returns it
+    kept = drop_empty_library_books(list(books.values()))
+    assert [b.metadata["origin_book"] for b in kept] == ["Book1"]
+    full = dataset(dataset_header("MBook1", DOUBLE, total=4, used=4), _doubles([1.0] * 4, 4))
+    blob = project([full, *_xy("Book1", "", [1.0, 2.0], [5.0, 6.0])], _matrix_windows(2, 2))
+    books = _books(tmp_path, blob)
+    assert len(drop_empty_library_books(list(books.values()))) == 2
+
+
+def test_wide_all_text_column_of_user_labels_is_a_text_column(tmp_path: Path) -> None:
+    """A Text & Numeric column wider than 10 bytes whose every row is text
+    is the user's labels unless it holds a ``cell://`` report reference."""
+    wide = (0x21, 0x61, 20)
+    labels = b"".join(tn_text(t, 20) for t in ("sample one", "sample two", "sample three"))
+    refs = b"".join(tn_text(t, 20) for t in ("cell://P.S.V", "Plot", ""))
+    blob = project(
+        [
+            dataset(dataset_header("Book1_A", wide, total=3, used=3), labels),
+            dataset(
+                dataset_header("Book1_B", DOUBLE, total=3, used=3), _doubles([1.0, 2.0, 3.0], 3)
+            ),
+            dataset(dataset_header("Book1_C", wide, total=3, used=3), refs),
+        ]
+    )
+    meta = _books(tmp_path, blob)["Book1"].metadata
+    assert meta["origin_text_columns"] == {"A": ["sample one", "sample two", "sample three"]}
+    assert meta["origin_report_sheets"] == {"C": ["cell://P.S.V", "Plot", ""]}
+
+
+def test_window_label_typed_on_two_lines_is_one_title(tmp_path: Path) -> None:
+    windows = window_header("Book1", "Run 7\r\nafter anneal") + sheet_header("Sheet1")
+    book = _books(tmp_path, _one_column(windows))["Book1"]
+    assert book.metadata["origin_book_long"] == "Run 7 after anneal"
+
+
+def test_legacy_content_sniffing_walk_says_values_may_be_unreliable(tmp_path: Path) -> None:
+    """A file with no parseable dataset header is read by guessing each
+    column's type from its bytes. Every book says so, and the project's
+    fidelity manifest carries a plain-language line."""
+    header = block(b"\x00" * 40 + b"Book1_A\x00" + b"\x00" * 6)
+    data = block(tn_number(1.0) + tn_number(2.0) + tn_text(""))
+    path = tmp_path / "legacy.opj"
+    path.write_bytes(b"CPYA 4.3380 188 W64 #\n" + block(b"\x00" * 32) + null() + header + data)
+    books = read_origin_books(path)
+    assert all(b.metadata["origin_decode"] == "content_sniffing" for b in books)
+    (line,) = books[0].metadata["origin_data_diagnostics"]["omissions"]
+    assert "may be unreliable" in line
+    manifest = with_data_diagnostics(
+        assess_origin_figures([], container="opj")[1], books[0].metadata["origin_data_diagnostics"]
+    )
+    assert line in manifest["omissions"]
+
+
+def test_header_driven_books_are_not_marked_as_sniffed(tmp_path: Path) -> None:
+    book = _books(tmp_path, project([_good()]))["Book1"]
+    assert "origin_decode" not in book.metadata
+    assert "origin_data_diagnostics" not in book.metadata
+
+
+def test_stray_block_does_not_swallow_the_empty_dataset_after_it(tmp_path: Path) -> None:
+    """Stepping over an unrecognised dataset means its data block and its
+    terminator — never a real header that happens to sit where the data
+    block would be (here an empty column: header, NULL, NULL)."""
+    stray = block(b"\x07" * 64)
+    empty = dataset(dataset_header("Book1_C", DOUBLE, total=4, used=0), None)
+    after = dataset(dataset_header("Book1_D", DOUBLE, total=2, used=2), _doubles([7.0, 8.0], 2))
+    book = _books(tmp_path, project([_good(), stray, empty, after]))["Book1"]
+    assert book.metadata["origin_column_names"] == ["A", "C", "D"]
+

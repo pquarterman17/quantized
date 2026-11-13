@@ -58,9 +58,13 @@ def dataset_header(
     unsigned: bool = False,
     size: int = 147,
     elem: int | None = None,
+    x_ref: int = 0,
 ) -> bytes:
+    """``x_ref``: the object id (``prop_block(object_id=...)``) of the
+    column this one is plotted against, u16 at 0x52; 0 = none."""
     p = bytearray(size)
     p[0x16], p[0x17] = kind[0], kind[1]
+    struct.pack_into("<H", p, 0x52, x_ref)
     struct.pack_into("<III", p, 0x19, total, first, used)
     p[0x3D] = kind[2] if elem is None else elem
     p[0x3F] = 0x08 if unsigned else 0x00
@@ -143,12 +147,16 @@ def prop_block(
     *,
     size: int = 519,
     value_format: int = 9,
+    object_id: int = 0,
 ) -> bytes:
-    """A column-property block: flag byte at 0x06, designation at 0x11,
+    """A column-property block: u16 object id at 0x04 (unique within the
+    window; a dataset header's ``x_ref`` names it), flag byte at 0x06,
+    designation at 0x11,
     short name at 0x12, the column's Format at 0x1E (9 Text & Numeric,
     0 Numeric, 1 Text, 2 Time, 3 Date, 4 Month, 5 Day of week), its two
     type bytes at 0x25-0x26."""
     p = bytearray(size)
+    struct.pack_into("<H", p, 0x04, object_id)
     p[0x06] = 0x09
     p[0x11] = designation
     p[0x1E] = value_format

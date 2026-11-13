@@ -1061,6 +1061,17 @@ the shipped contract)
 
 ## Completed
 
+- ~~**`.opj` reader: review round**~~ (2026-11-13) — eleven fail-closed
+  gaps from an independent review of the header-driven reader. `@N` is a
+  sheet ID: sheets are bound by column object id (`opj_sheets.py`;
+  property block `0x04` ↔ dataset header `0x52`), never by position, and
+  every bound sheet keeps its column metadata. The datasets section is
+  walked positionally: an unrecognised header is reported and stepped
+  over. A lost first column no longer promotes the next to X. Report
+  sheets need a `cell://` cell. Implausible float64 cells are blanked, the
+  column kept. The legacy walk and coordinate-less matrices put a line in
+  `origin_fidelity`. Corpus numbers and `extract_figures` output
+  unchanged; evidence in `docs/origin_re/validation_log.md`.
 - ~~**`.opj` reader handoff: header-driven decode**~~ (2026-11-13) — owner
   handoff after an audit of 49 public `.opj` projects (13 failing, wrong
   values in others). The dataset header's type / row-width / used-row

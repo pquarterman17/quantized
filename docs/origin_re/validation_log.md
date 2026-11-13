@@ -350,7 +350,7 @@ dataset; a kind outside the table (`SBin_`, kind nibble 4) is omitted.
 |---|---:|---:|
 | `.opj` files importing (of 49) | 36 | 48 |
 | `.opj` books | 64 | 103 |
-| `.opj` numeric columns | 1050 | 1300 |
+| `.opj` numeric columns (1284 worksheet columns + the X column of each of the 16 matrix books) | 1050 | 1300 |
 | `.opj` text columns | 1 | 47 |
 | `.opj` matrix books | 0 | 16 |
 | `.opj` books titled `"BA"` | 37 | 0 |
@@ -403,6 +403,59 @@ data. The one `.opj` still not importing is a third-party synthetic stub
 **How to re-run:** `uv run pytest -m realdata tests/test_io_origin_opj_corpus.py`
 (needs the public corpus; it replays 147 Altaxo assertions, 5 liborigin
 exports, LabPlot's workbook test and four corpus-wide invariants).
+
+### 2026-11-13 (later) — review round on the header-driven `.opj` reader
+
+An independent review of the entry above found the decode right against
+every oracle and eleven places where the reader was not yet fail-closed.
+What changed, and on what evidence:
+
+1. **`@N` is a sheet id, not a position.** Three public specimens: a
+   one-sheet book whose datasets are all `@3`; a two-sheet book with ids
+   6 and 7; a 24-sheet book with ids 1-23 (gaps) whose window lists id 20
+   first. Binding is by column object id (property block u16 `0x04` ↔
+   dataset header u16 `0x52`): 1058 references resolve over the corpus,
+   none splits a sheet id over two sheets, the named column belongs to the
+   same id every time, and all 56 bindings on books with ids 1..n agree
+   with position (the Altaxo / LabPlot multi-sheet oracles). Ids that no
+   rule binds get no column metadata and a diagnostics line; matrices
+   (no column reference) bind only when dense or single. Effect on the
+   corpus: 4 files gain correct column names / units / designations
+   (17 sheets of the 24-sheet book — whose first-created sheet previously
+   carried ANOTHER sheet's names — a fit book's second sheet, the id-3 book, and the id-6/7 book's
+   Y-error designations and comments); no value changes.
+2. **The datasets section is positional** (block 2 onwards,
+   `[header][data|NULL][NULL]`, in all 48 real files). An unrecognised
+   header is reported and stepped over; the walk no longer stops at it or
+   skips it silently. No corpus file has one — synthetic tests only.
+3. **A lost first column never promotes the next one to X.**
+4. **Report sheets are identified by a `cell://` cell**, not by "wide and
+   all text": 26 of 26 corpus report columns have one, 0 other columns do.
+5. **Implausible float64 cells are blanked per cell**; the column stays.
+6. **Notices**: the legacy content-sniffing walk and a matrix whose
+   coordinates were not found (4 of 16) each put a line in the fidelity
+   manifest. `origin_complex_imaginary` joined the row-indexed sidecars
+   (Python and TypeScript). An all-blank matrix no longer counts as a
+   populated Library book. A window label typed over several lines is
+   one title (it was rejected for its line break).
+7. **A book down to one sheet is the book.** Datasets that all carry one
+   id N, in a window with one sheet, are imported as `<Book>` (metadata
+   `origin_sheet_id = N`), not as `<Book>@N`. Graph curves name the book
+   without a sheet, so the one public specimen of this shape now opens its
+   graph with data (live-checked); its values are unchanged.
+
+Re-measured after the round: corpus table above unchanged (48 / 103 /
+1300 / 47 / 16 / 0; 274 of 274 `.opju` byte-identical; 0 columns lost or
+changed against the first pass); `extract_figures` output byte-identical
+to `main` on every `.opj` and `.opju` in the corpus.
+
+**Owner-corpus pins this round can move (not available here, not
+re-run):** the `hc2convert` report-sheet count (a wide all-text column
+with no `cell://` cell would now be a text column); any book whose
+datasets are `@N` with N ≠ position (labels, designations, hence which
+column is X); any book with an undecodable column ahead of its first
+decoded one (row-index X); a column the old plausibility gate dropped
+whole (now kept, cells blanked).
 
 ## How to re-run
 

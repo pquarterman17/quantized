@@ -6,8 +6,10 @@ Origin 7 and Origin 8 eras — and 147 B from 4.3116 on) states how to read
 its data block, at offsets that are the SAME in all four sizes:
 
 ======  ====================================================================
-0x16    type flags — ``0x20`` set on string-capable columns, ``0x02`` on the
-        "half width" numerics (float32, int16)
+0x16    type flags — ``0x02`` on the "half width" numerics (float32,
+        int16); ``0x20`` on Text and Text & Numeric columns AND on 1-byte
+        integers (so ``0x20`` alone does not mean "string": it tells Text
+        from a real column only when the value kind at 0x17 is ``0``)
 0x17    high nibble = plot designation, LOW nibble = value kind:
         ``0`` real (or Text when 0x16 has ``0x20``), ``1`` Text & Numeric,
         ``2`` complex, ``8`` integer
@@ -16,6 +18,10 @@ its data block, at offsets that are the SAME in all four sizes:
 0x21    u32 used-row END (index one past the last used row)
 0x3D    u8 bytes per row (1/2/4/8/10/16, wider for Text and long T&N)
 0x3F    ``0x08`` = unsigned integer
+0x52    u16 object id of the column this one is plotted against (its X; a
+        Y-error column names its Y), ``0`` for none — the id is the u16 at
+        0x04 of that column's property block in the windows section
+        (``opj_sheets``, which binds a dataset's ``@N`` to its sheet by it)
 0x58    NUL-terminated dataset name (``<Book>_<Col>[@sheet]``; a matrix is
         just ``<Book>[@sheet]``)
 ======  ====================================================================
@@ -50,7 +56,7 @@ from typing import Literal
 import numpy as np
 from numpy.typing import NDArray
 
-from quantized.io.origin_project.container import ORIGIN_MISSING, salvage_column
+from quantized.io.origin_project.container import ORIGIN_MISSING
 
 __all__ = [
     "DatasetHeader",
@@ -65,6 +71,7 @@ Kind = Literal["float64", "float32", "int", "complex", "text", "text_numeric"]
 _NAME_OFFSET = 0x58
 _PRINTABLE = frozenset(range(0x20, 0x7F)) | frozenset(range(0xA0, 0x100))
 _INLINE_PRINTABLE = frozenset(range(0x20, 0x7F))
+_REPORT_REFERENCE = "cell://"  # Origin's report-cell link syntax
 _INT_DTYPES = {
     (1, False): "i1", (2, False): "<i2", (4, False): "<i4",
     (1, True): "u1", (2, True): "<u2", (4, True): "<u4",
@@ -83,6 +90,7 @@ class DatasetHeader:
     used_rows: int
     elem_size: int
     unsigned: bool
+    x_ref: int = 0
 
     @property
     def data_size(self) -> int:
@@ -143,6 +151,7 @@ def parse_dataset_header(payload: bytes) -> DatasetHeader | None:
         used_rows=used,
         elem_size=elem,
         unsigned=bool(payload[0x3F] & 0x08),
+        x_ref=struct.unpack_from("<H", payload, 0x52)[0],
     )
 
 
@@ -225,20 +234,22 @@ def _wrecked(values: NDArray[np.float64]) -> NDArray[np.bool_]:
     return np.asarray(out, dtype=bool)
 
 
-def _checked_doubles(values: NDArray[np.float64], out: DecodedDataset) -> bool:
-    """Apply the reader's standing float64 plausibility rule in place: a few
-    stray denormals are blanked (``container.salvage_column``'s measured
-    bound), more than that rejects the column rather than emit garbage."""
+def _checked_doubles(values: NDArray[np.float64], out: DecodedDataset) -> None:
+    """Blank (in place) the float64 cells no measurement holds — denormals
+    and magnitudes past 1e290 — and say how many.
+
+    This is a per-CELL backstop, never a verdict on the column: the header
+    declares these cells float64 and the data block is exactly the declared
+    size, so the column IS a float64 column whatever a cell holds. (The
+    legacy walk had no header and used the same test to tell a float64
+    column from text read as float64; applied here it threw away a whole
+    five-row column for one cell of 1e-300.)
+    """
     bad = _wrecked(values)
     n_bad = int(bad.sum())
-    if n_bad == 0:
-        return True
-    if salvage_column(values) is None:
-        out.problem = f"{n_bad} implausible float64 cell(s)"
-        return False
-    values[bad] = np.nan
-    out.notes.append(f"{n_bad} implausible float64 cell(s) blanked")
-    return True
+    if n_bad:
+        values[bad] = np.nan
+        out.notes.append(f"{n_bad} implausible float64 cell(s) blanked")
 
 
 def _decode_text_numeric(h: DatasetHeader, data: bytes, out: DecodedDataset) -> None:
@@ -246,9 +257,13 @@ def _decode_text_numeric(h: DatasetHeader, data: bytes, out: DecodedDataset) -> 
 
     Where the cells go: no text at all -> ``numeric``; any text -> ``text``
     (plus ``numeric`` when numbers are present too, text cells NaN). The one
-    exception is the pre-existing report-sheet bucket: a column WIDER than
-    10 bytes whose every allocated row is a string (Origin's FitLinear/NLFit
-    ``cell://...`` reference columns) stays in ``report``, as before.
+    exception is the report-sheet bucket: a column whose every allocated row
+    is a string AND that holds at least one ``cell://`` reference — the link
+    syntax Origin's FitLinear / NLFit report sheets are made of — goes to
+    ``report``. The marker is the reference, not the width: a wide all-text
+    column of the user's own labels is a text column. (All 26 wide all-text
+    columns of the public corpus carry a ``cell://`` cell, and no column
+    outside that set does.)
     """
     size = h.elem_size
     rec = np.frombuffer(data, dtype=np.uint8).reshape(h.total_rows, size)
@@ -271,11 +286,10 @@ def _decode_text_numeric(h: DatasetHeader, data: bytes, out: DecodedDataset) -> 
         if legacy is not None:
             strings[int(k)] = legacy
             values[k] = np.nan
-    if size > 10 and all_text:
+    if all_text and any(s.startswith(_REPORT_REFERENCE) for s in strings.values()):
         out.report = [strings.get(k, "") for k in range(end)]
         return
-    if not _checked_doubles(values, out):
-        return
+    _checked_doubles(values, out)
     has_numbers = bool(np.any(np.isfinite(values)))
     if strings:
         out.text = [strings.get(k) or format_number(float(values[k])) for k in range(end)]
@@ -313,16 +327,17 @@ def decode_dataset(h: DatasetHeader, data: bytes) -> DecodedDataset:
         pairs[missing] = np.nan
         real = np.ascontiguousarray(pairs[:end, 0])
         imag = np.ascontiguousarray(pairs[:end, 1])
-        if _checked_doubles(real, out) and _checked_doubles(imag, out):
-            out.numeric, out.imag = real, imag
+        _checked_doubles(real, out)
+        _checked_doubles(imag, out)
+        out.numeric, out.imag = real, imag
     elif kind == "float64":
         vals = np.frombuffer(data, dtype="<f8", count=total).copy()
         missing = vals == ORIGIN_MISSING
         _first, end = _row_range(h, missing)
         vals[missing] = np.nan
         vals = vals[:end]
-        if _checked_doubles(vals, out):
-            out.numeric = vals
+        _checked_doubles(vals, out)
+        out.numeric = vals
     else:
         # float32 and the integers have no blank cell: an unused row reads 0.
         # So 0 is what the row range may trim, and what a row before the

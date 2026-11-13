@@ -213,9 +213,21 @@ the byte stream:
 by one more NULL (the windows section follows). A dataset that holds no
 data yet keeps its slot with a NULL where the data block would be
 (`[header][NULL][NULL]`). A worksheet column is the dataset
-`"<Book>_<Col>"` (extra sheets: `"<Book>_<Col>@N"`, §5); a matrix sheet is
-the dataset `"<Book>"` (§3.1.1); anything else (Origin's function plots,
-loose datasets) is not a worksheet object.
+`"<Book>_<Col>"` (other sheets: `"<Book>_<Col>@N"`, N a sheet **id** — §5);
+a matrix sheet is the dataset `"<Book>"` (§3.1.1); anything else (Origin's
+function plots, loose datasets) is not a worksheet object.
+
+The grammar is positional, and the reader relies on it (`opj_scan`): block
+0 is the file header, block 1 a NULL, the first dataset header is block 2,
+and every one of the 48 real `.opj` files in the public corpus then runs
+`[header][data | NULL][NULL]` without exception up to the closing NULL,
+which a window header follows. So a non-NULL block in a header slot **is**
+a dataset header whether or not the reader recognises it. An unrecognised
+one is recorded (by name when it has a printable one at `0x58`), its data
+block and terminator are stepped over, and the walk carries on; if what
+follows does not fit the grammar the walk resumes at the next block that
+parses as a header and reports how many blocks it could not place. It is
+never passed over in silence, and it never ends the read early.
 
 **The dataset header** is 115 bytes at CPYA 4.2656 (a specimen named
 `…-7.0.opj`), 123 at 4.2673, 140 at 4.2878 and 4.2946 (LabPlot's
@@ -298,10 +310,25 @@ a book with no numeric column at all → a row-index `.time`,
 `x_column_recovered: False`, its text columns intact.
 
 **Fail closed.** A dataset that cannot be decoded as its header describes
-(unknown kind, size mismatch, an unknown Text & Numeric tag, more than a
-few implausible float64 cells) is omitted and listed in
+(unknown kind, size mismatch, an unknown Text & Numeric tag), or whose
+header is not recognised at all, is omitted and listed in
 `metadata["origin_data_diagnostics"]`; the import route merges that into
 the project's `origin_fidelity` manifest (`fidelity.with_data_diagnostics`).
+
+A lost column also constrains its book's X axis. With no designation to go
+by, the reader's convention is "the first column is X" — which is only
+true if the first column was read. When a column that could not be decoded
+precedes the book's first decoded numeric column (or a dataset was lost
+with no name to say whose it was), no column is promoted: `.time` is the
+row index and `x_column_recovered` is `False`, exactly as when a
+*designated* X fails to decode.
+
+**Implausible float64 cells** (denormals, magnitudes past 1e290) are
+blanked one cell at a time and counted in the diagnostics. They never
+remove the column: the header declares float64 and the block is the
+declared size, so the plausibility test is a per-cell backstop, not the
+type detector it had to be for the header-less legacy walk. (Before
+2026-11-13 one cell of `1e-300` dropped a whole five-row column.)
 
 **Evidence (independent oracles; expected values read from the test
 sources of GPL readers, never their code — §10):**
@@ -313,6 +340,11 @@ sources of GPL readers, never their code — §10):**
 | used-row end, leading blank rows | Altaxo `EndRow` / `BeginRow` assertions; liborigin `*.dat.orig` (5 books: nothing but blanks past our last row) | match |
 | 115 / 123 / 140-byte headers use the same offsets | liborigin `data+graph-7.0`; LabPlot `origin8_test_workbook` (cell by cell), `origin8_test_tree_import` | match |
 
+What the oracles do **not** assert directly: columns C-G of Altaxo's
+`WksDifferentNumericFormattings` (its test checks A and B cell by cell and
+the others only by type and row count), so those five columns rest on the
+same decode path as the asserted ones, not on a stated value.
+
 147 of Altaxo's straight-line assertions, the 5 liborigin exports and
 LabPlot's workbook test are replayed against the reader by
 `tests/test_io_origin_opj_corpus.py` (realdata; values are read from the
@@ -321,7 +353,11 @@ oracle files at test time, none is committed).
 **Legacy walk.** A project in which no dataset header parses (the synthetic
 fixtures of the older tests) is read by `opj._columns`: every data block as
 10-byte `<u16><float64>` records, content-sniffed for text. It is unchanged
-and never used for a file the header-driven path recognises.
+and never used for a file the header-driven path recognises. Because it
+guesses each column's type from its bytes, it says so: every book it
+returns carries `metadata["origin_decode"] = "content_sniffing"`, and the
+project's diagnostics (hence `origin_fidelity.omissions`) carry a line
+telling the user that values and column types may be unreliable.
 
 **Not known / not done:**
 
@@ -348,8 +384,12 @@ and never used for a file the header-driven path recognises.
 #### 3.1.1 Matrix books (`.opj`)
 
 A matrix sheet's cells are one dataset named after its window (`MBook1`;
-sheet N > 1 is `MBook1@N`), `rows × cols` values **row-major**, in any
-numeric cell type of §3.1. The shape is in the window's sheet sub-header
+another sheet is `MBook1@N`, where N is the sheet's **id**, not its
+position — §5), `rows × cols` values **row-major**, in any numeric cell
+type of §3.1. A matrix dataset carries no reference that names its sheet,
+so the id is bound only where it can be nothing else — ids 1..n on an
+n-sheet window (LabPlot's `MBook2`), or one id and one sheet; any other
+matrix is omitted and reported, never bound by position. The shape is in the window's sheet sub-header
 (§4.1): byte 2 has `0x80` set on a matrix sheet (`0xDE`; a worksheet sheet
 is `0x5E`), **u16 at `0x2B` = columns, u32 at `0x52` = rows**. The X/Y
 mapping follows as four named records (`X1`, `X2`, `Y1`, `Y2` at offset
@@ -362,8 +402,10 @@ importer returns (`io/_map_schema.py`): one row per cell, columns `X`, `Y`,
 `Z` (plus `Z (imaginary)` for a complex matrix), `metadata.is2D`,
 `map_shape = [rows, cols]`, and `metadata["origin_matrix"]`. X runs
 linearly X1→X2 across the columns and Y from Y1→Y2 down the rows; when the
-coordinate records are missing the axes are the 1-based cell index and
-`coordinates_recovered` is `False`.
+coordinate records are missing the axes are the 1-based cell index,
+`coordinates_recovered` is `False`, and the project's diagnostics carry a
+line naming the matrix (so the fidelity manifest says its axes are cell
+indices, not Origin's coordinates — 4 of the 16 corpus matrices, 3 of them untouched all-blank defaults).
 
 Oracle: Altaxo `Matrix71x29`, `Matrix137x179` (dimensions, all four
 coordinate bounds, individual cells by `[row, column]`),
@@ -404,13 +446,19 @@ What remains true, and how it maps onto the header-driven reader:
   `metadata["origin_text_columns"]`, never `.values`.
 - **Report-sheet columns** (FitLinear/NLFit "Notes"/"Parameters"/"RegStats"
   /"Summary"/"ANOVA": `cell://<Section>.<Row>.<Field>` and
-  `embedding:<Graph>` references) are Text & Numeric columns whose row is
-  **wider than 10 bytes** (21-56 seen) and whose every allocated row is a
-  string. They keep their own bucket, `metadata["origin_report_sheets"]`,
-  **never** `.values`/`.labels`; a sheet made only of such columns still
-  surfaces as an empty-data pseudo-book. (LabPlot's `strings_testing.opj`
-  is the public example: 26 such columns.) The width is now read from the
-  header instead of inferred from the spacing of `01 00` markers.
+  `embedding:<Graph>` references) are Text & Numeric columns whose every
+  allocated row is a string **and that hold at least one `cell://`
+  reference**. They keep their own bucket,
+  `metadata["origin_report_sheets"]`, **never** `.values`/`.labels`; a
+  sheet made only of such columns still surfaces as an empty-data
+  pseudo-book. The marker is the reference, not the row width: all 26 wide
+  all-text columns of the public corpus (LabPlot's `strings_testing.opj`,
+  rows 21-56 bytes) carry a `cell://` cell and no other column does, but a
+  wide all-text column of the user's own labels is an ordinary text column
+  (until 2026-11-13 "wider than 10 bytes and all text" alone filed it as a
+  report sheet). The owner-corpus pin (`hc2convert.opj`, 407 report
+  columns) was fitted to the old rule and has **not** been re-run against
+  this one.
 - **The mixed label column** this section listed as the one still-dropped
   family (`Moke.opj Book3_A`: long text labels beside blank rows) is the
   wide Text & Numeric row with mixed tags, and now decodes as any mixed
@@ -649,7 +697,7 @@ whatever it was, as its label:
 | Offset | Field | Notes |
 |-------:|-------|-------|
 | `0x00` | uint32 | column display width/size (variable — not a fixed marker) |
-| `0x04` | byte | column **object id** (sequential per book); referenced by `0x23` of dependent columns |
+| `0x04` | u16 | column **object id** (sequential per book, unique within the window); referenced by `0x23` of dependent columns, and by the u16 at `0x52` of a dataset header (§3.1) — which is how a dataset's `@N` sheet id is bound to its sheet (§5) |
 | `0x06` | flag byte | `0x0B` on most columns, `0x09` plain sheet-1 column, `0x02`/`0x03` on Text / numeric-typed columns, optionally `| 0x80`. **Not** invariant (corrected 2026-11-13); never zero |
 | `0x0b` | byte | flags (`0xa1` v4.3380 / `0x81` v4.3227) |
 | **`0x11`** | **byte = plot designation** | 0=Y, 1=disregard, 2=Y-error, 3=X, 4=label, 5=Z, 6=X-error, 7=Group, 8=Subject (see below). **Authoritative.** |
@@ -867,23 +915,67 @@ anchor, so they correctly keep the A/B/C fallback).
 
 ## 5. Sheet hierarchy (`Book@N` pseudo-books)
 
-Extra sheets (sheet index ≥ 2 within one book) are recovered as separate
+Sheets other than a book's first-created one are recovered as separate
 pseudo-books rather than a nested Book→Sheet tree. The dataset-naming
-convention already marks them: `"<Book>_<Col>@<N>"` (e.g. `Book4_A@3`).
-`opj.py::_group_named` (shared by numeric and text column grouping) splits
-on `@` and renames the pseudo-book `"<Book>@<N>"`; `_build_book` then gives
-it a display title `"<Book long name> (sheet N)"`.
+convention marks them: `"<Book>_<Col>@<N>"` (e.g. `Book4_A@3`).
+`opj_books._group_named` (shared by numeric and text column grouping)
+splits on `@` and renames the pseudo-book `"<Book>@<N>"`; `_build_book`
+then gives it a display title `"<Book long name> (sheet N)"`.
 
-**Scope note:** only the **primary sheet** gets real names/units — the
-windows-section column-property list for sheet 2+ is not consumed by
-`window_metadata`/`opju_window_metadata` (see §4.1.1's "stop once a repeated
-short name appears"), so extra-sheet pseudo-books fall back to the plain
-Origin short designation (A, B, C, …) for labels. The `@N` suffix numbering
-(sheet index vs. layer index; where sheet-2 vs. sheet-3 splits) is
-validated for the common case but not exhaustively pinned — treat sheet-1
-mapping as high confidence, extra-sheet *data* recovery as validated, and
-extra-sheet *labels* as out of scope. Full Book→Sheet nesting in the UI was
-a deliberate descope (frontend pseudo-books read `"Book@N (sheet N)"`).
+**`.opj`: N is a sheet ID, not a position.** Origin numbers sheets as they
+are created and never renumbers them. Public specimens show a single-sheet
+book whose only sheet is id 3 (`Book1_A@3`, no bare `Book1_A` at all), a
+two-sheet book with ids 6 and 7, and a 24-sheet book whose ids run 1-23
+with gaps and whose first sheet in the window is id 20. Reading N as "the
+Nth sheet of the window" gave those books another sheet's column names and
+designations, or none.
+
+The sheet sub-header carries no id that has been found. What binds a
+dataset to its sheet is the **column object id** (`opj_sheets.py`):
+
+- every column-property block has a u16 object id at `0x04` (§4.1), unique
+  within its window (no duplicate among the 1297 blocks of the corpus);
+- a dataset header names at `0x52` (u16) the object id of the column it is
+  plotted against — a Y names its X, a Y-error its Y; 0 for none.
+
+A dataset of sheet id N that names object id K puts id N on the sheet whose
+property blocks include K. Corpus measurement: 1058 references resolve (20
+more name no property block of their window, and are ignored); the
+named column is a dataset of the same sheet id every time (one 11-character
+name truncation aside); no sheet id resolves to two sheets; and on every
+book whose ids are 1..n over n sheets the binding equals the position (56
+of 56) — the one case independent oracles cover (Altaxo
+`OneWorksheetWithTwoSheets`, LabPlot `Book2` / `MBook2`). On the 24-sheet
+specimen it recovers a permutation no positional rule could.
+
+Binding rules, in order, per window: **reference** (the sheet the id's
+column references name, when they agree and no other id claims it);
+**dense** (ids exactly 1..n on an n-sheet window: id k is sheet k);
+**elimination** (one id and one sheet left). An id none of them binds is
+imported **without** column names, units or designations and listed in the
+diagnostics (`N sheet(s) imported without column names, units or
+designations`) — never bound by position. Every bound sheet, not just the
+first, now gets its long names, units, comments, designations and format
+hints, so a `Book@N` pseudo-book has a real X column and real labels.
+
+**A book that is down to one sheet is that book.** When every dataset of a
+book carries the same id N and its window holds exactly one sheet (the
+earlier sheets were deleted), the datasets are imported as `<Book>`, not as
+a `<Book>@N` pseudo-book of a `<Book>` that does not exist
+(`opj._sole_sheet_books`). That is also the name a graph curve record gives
+the book (curves name the book without a sheet), so those graphs now find
+their data. One public specimen has such a book; its values are unchanged.
+
+What is not established: no oracle states a sheet id directly (the
+evidence is the internal consistency above plus the three positional
+oracles), and matrix sheets have no column reference at all (§3.1.1).
+
+**`.opju` scope note (unchanged):** only the **primary sheet** gets real
+names/units — the windows-section column-property list for sheet 2+ is not
+consumed by `opju_window_metadata`, so its extra-sheet pseudo-books fall
+back to the plain Origin short designation (A, B, C, …) for labels. Full
+Book→Sheet nesting in the UI was a deliberate descope (frontend
+pseudo-books read `"Book@N (sheet N)"`).
 
 ---
 

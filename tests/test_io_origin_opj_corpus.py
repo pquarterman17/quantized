@@ -139,6 +139,8 @@ def test_every_worksheet_dataset_is_a_column_or_a_named_omission() -> None:
                 continue
             key = str(book.metadata["origin_book"])
             base, _, sheet = key.partition("@")
+            # A one-sheet book named as the book still holds `@N` datasets.
+            sheet = sheet or str(book.metadata.get("origin_sheet_id") or "")
             shorts = [book.metadata.get("x_column_name") or ""]
             shorts += list(book.metadata.get("origin_column_names") or [])
             shorts += list(book.metadata.get("origin_text_columns") or {})

@@ -47,8 +47,10 @@ from __future__ import annotations
 
 import dataclasses
 from collections import OrderedDict
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
@@ -72,14 +74,21 @@ from quantized.io.origin_project.opj_books import _group as _group
 from quantized.io.origin_project.opj_books import _group_named as _group_named
 from quantized.io.origin_project.opj_books import _inventory as _inventory
 from quantized.io.origin_project.opj_books import _label_for as _label_for
-from quantized.io.origin_project.opj_matrix import MatrixSheet, build_matrix_book, matrix_sheets
+from quantized.io.origin_project.opj_matrix import matrix_books, matrix_sheets
 from quantized.io.origin_project.opj_scan import (
     DatasetScan,
     Problem,
     scan_datasets,
     summarize_problems,
 )
-from quantized.io.origin_project.windows import BookMeta, window_metadata
+from quantized.io.origin_project.opj_sheets import (
+    WindowSheet,
+    bind_worksheets,
+    book_key,
+    sole_sheet_books,
+    window_sheets,
+)
+from quantized.io.origin_project.windows import BookMeta, ColumnMeta, window_metadata
 
 __all__ = [
     "build_opj_books",
@@ -177,48 +186,73 @@ class _ParseResult:
     # True when the datasets were decoded from their headers; False on the
     # legacy content-sniffing walk (which keeps its old book assembly too).
     header_driven: bool = False
+    # Header-driven only: each book key's column metadata (its bound
+    # sheet's), the book keys with a column that could not be decoded, and
+    # whether a dataset was lost with no name to say whose it was.
+    sheet_columns: dict[str, dict[str, ColumnMeta]] = field(default_factory=dict)
+    lost_books: set[str] = field(default_factory=set)
+    unowned_loss: bool = False
+    # Book key -> the sheet id its datasets carry, for a one-sheet book
+    # named as the book (`opj_sheets.sole_sheet_books`), so the `@N` is not lost.
+    sheet_ids: dict[str, str] = field(default_factory=dict)
 
 
-def _matrix_books(
-    scan: DatasetScan,
-    sheets: dict[str, list[MatrixSheet]],
-    books_meta: dict[str, BookMeta],
-    inventory: list[dict[str, object]],
-) -> list[DataStruct]:
-    """Build a map DataStruct per matrix dataset whose shape is proven.
+_LEGACY_NOTICE = (
+    "this file's datasets have no readable headers: columns were recovered by "
+    "inspecting their bytes, so values and column types may be unreliable"
+)
 
-    The Nth dataset of a matrix window (``MBook1``, ``MBook1@2``, ...) is
-    its Nth matrix sheet. ``rows * cols`` must equal the dataset's cell
-    count exactly; a mismatch is recorded in ``scan.problems`` instead.
+
+_T = TypeVar("_T")
+
+
+def _rekey(d: Mapping[str, _T], names: dict[str, str]) -> OrderedDict[str, _T]:
+    return OrderedDict((names.get(k, k), v) for k, v in d.items())
+
+
+def _sheet_columns(
+    scan: DatasetScan, sheets: dict[str, list[WindowSheet]]
+) -> tuple[dict[str, dict[str, ColumnMeta]], set[str]]:
+    """``(book key -> its sheet's column metadata, book keys whose first
+    column was lost)`` for a header-driven project.
+
+    Each book key (``Book`` / ``Book@N``) takes the columns of the sheet
+    its id is bound to (``opj_sheets``); one that cannot be bound gets none
+    and is reported. Metadata for a column that names no dataset is
+    forgotten (:func:`_drop_unbacked_columns` says why) — unless a dataset
+    was lost without a name, when the missing dataset may be that one.
+
+    A book key is in the second result when a column that could not be
+    decoded comes BEFORE its first decoded numeric column: with no
+    designation to go by, "the first column is X" would then promote a
+    column that is not the first.
     """
-    out: list[DataStruct] = []
-    for m in scan.matrices:
-        base, _, sheet_no = m.name.partition("@")
-        index = int(sheet_no) - 1 if sheet_no.isdigit() else 0
-        window = sheets.get(base, [])
-        sheet = window[index] if 0 <= index < len(window) else None
-        reason = m.problem
-        if reason is None and sheet is None:
-            reason = "no matrix sheet with that index in its window"
-        if reason is None and m.cells is not None and sheet is not None:
-            if sheet.rows * sheet.cols != m.cells.size or m.cells.size == 0:
-                reason = (
-                    f"sheet is {sheet.rows} x {sheet.cols} "
-                    f"but the dataset has {m.cells.size} cells"
-                )
-        if reason is not None or m.cells is None or sheet is None:
-            scan.problems.append(Problem("matrix", m.name, reason or "not decoded"))
-            continue
-        inventory.append(
-            {"name": m.name, "long_name": _book_long_name(m.name, books_meta),
-             "ncols": sheet.cols, "nrows": sheet.rows, "matrix": True}
-        )  # fmt: skip
-        out.append(
-            build_matrix_book(
-                m.name, _book_long_name(m.name, books_meta), sheet, m.cells, m.imag, inventory
-            )
+    bound, unbound = bind_worksheets(scan.headers, sheets)
+    columns: dict[str, dict[str, ColumnMeta]] = {key: {} for key in unbound}
+    for key in unbound:
+        scan.problems.append(
+            Problem("sheet", key, "its sheet could not be identified among its window's sheets")
         )
-    return out
+    for key, sheet in bound.items():
+        book, at, sheet_no = key.partition("@")
+        columns[key] = {
+            c: m
+            for c, m in sheet.columns.items()
+            if scan.unowned_losses or f"{book}_{c}{at}{sheet_no}" in scan.names
+        }
+    position = {name: k for k, name in reversed(list(enumerate(scan.order)))}
+    first_decoded: dict[str, int] = {}
+    for name, _values in scan.numeric:
+        if (parsed := book_key(name)) is not None:
+            first_decoded.setdefault(parsed[1], position.get(name, 0))
+    lost = {
+        parsed[1]
+        for p in scan.problems
+        if p.category == "column"
+        and (parsed := book_key(p.dataset)) is not None
+        and position.get(p.dataset, 0) < first_decoded.get(parsed[1], len(scan.order))
+    }
+    return columns, lost
 
 
 def _drop_unbacked_columns(books_meta: dict[str, BookMeta], names: set[str]) -> None:
@@ -251,17 +285,32 @@ def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
     blocks = list(walk_blocks(b))
     sheets = matrix_sheets(blocks)
     scan = scan_datasets(blocks, sheets.keys())
-    del blocks
     header_driven = scan.n_headers > 0
+    sheet_columns: dict[str, dict[str, ColumnMeta]] = {}
+    lost_books: set[str] = set()
+    sole: dict[str, str] = {}
     if header_driven:
         columns, text_columns, report_columns = scan.numeric, scan.text, scan.report
+        worksheets = window_sheets(blocks)
+        sheet_columns, lost_books = _sheet_columns(scan, worksheets)
+        sole = sole_sheet_books(scan.names, worksheets)
     else:
+        # No dataset header parsed: the legacy walk guesses each column's
+        # type from its bytes. Say so wherever the data goes.
+        scan.problems.append(Problem("notice", "", _LEGACY_NOTICE))
         columns, text_columns, report_columns = _columns(b)
         if not columns:
             raise fallback(path, f"no worksheet columns could be decoded from '{path.name}'.")
+    del blocks
     books = _group(columns)
     text_books = _group_named(text_columns)
     report_books = _group_named(report_columns)
+    imag_books = _group(scan.imag)
+    if header_driven and sole:
+        books, text_books = _rekey(books, sole), _rekey(text_books, sole)
+        report_books, imag_books = _rekey(report_books, sole), _rekey(imag_books, sole)
+        sheet_columns = dict(_rekey(sheet_columns, sole))
+        lost_books = {sole.get(k, k) for k in lost_books}
     books_meta = window_metadata(b)
     if header_driven:
         _drop_unbacked_columns(books_meta, scan.names)
@@ -273,7 +322,7 @@ def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
             for k, v in text_books.items()
             if k not in books and k not in report_books
         ]  # fmt: skip
-    matrices = _matrix_books(scan, sheets, books_meta, inventory)
+    matrices = matrix_books(scan, sheets, books_meta, inventory)
     diagnostics = summarize_problems(scan.problems)
     if not (books or text_books or report_books or matrices):
         lost = "; ".join(diagnostics["omissions"]) if diagnostics else ""  # type: ignore[arg-type]
@@ -284,7 +333,9 @@ def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
         )
     return _ParseResult(
         books, text_books, report_books, books_meta, inventory,
-        _group(scan.imag), matrices, diagnostics, header_driven,
+        imag_books, matrices, diagnostics, header_driven,
+        sheet_columns, lost_books, scan.unowned_losses > 0,
+        {book: key.partition("@")[2] for key, book in sole.items()},
     )  # fmt: skip
 
 
@@ -318,7 +369,7 @@ def _has_numbers(columns: Columns) -> bool:
 
 def _book(parsed: _ParseResult, key: str) -> DataStruct:
     """One worksheet book of a parsed project."""
-    return _build_book(
+    book = _build_book(
         key,
         parsed.books.get(key, []),
         parsed.books_meta,
@@ -327,6 +378,18 @@ def _book(parsed: _ParseResult, key: str) -> DataStruct:
         report_cols=parsed.report_books.get(key),
         row_aligned_text=parsed.header_driven,
         imag_cols=parsed.imag_books.get(key),
+        sheet_columns=parsed.sheet_columns.get(key, {}) if parsed.header_driven else None,
+        lost_columns=parsed.unowned_loss or key in parsed.lost_books,
+    )
+    if parsed.header_driven:
+        if key in parsed.sheet_ids:
+            book = dataclasses.replace(
+                book, metadata={**book.metadata, "origin_sheet_id": parsed.sheet_ids[key]}
+            )
+        return book
+    # The legacy walk: every book it yields carries the caveat.
+    return dataclasses.replace(
+        book, metadata={**book.metadata, "origin_decode": "content_sniffing"}
     )
 
 

@@ -40,9 +40,12 @@ import numpy as np
 from numpy.typing import NDArray
 
 from quantized.datastruct import DataStruct
-from quantized.io.origin_project.windows import _is_sheet_header, _is_window_header
+from quantized.io.origin_project.opj_books import _book_long_name
+from quantized.io.origin_project.opj_scan import DatasetScan, Problem
+from quantized.io.origin_project.opj_sheets import bind_ids
+from quantized.io.origin_project.windows import BookMeta, _is_sheet_header, _is_window_header
 
-__all__ = ["MatrixSheet", "build_matrix_book", "matrix_sheets"]
+__all__ = ["MatrixSheet", "build_matrix_book", "matrix_books", "matrix_sheets"]
 
 _MATRIX_FLAG = 0x80
 _RECORD_NAME_OFFSET = 0x46
@@ -160,3 +163,67 @@ def build_matrix_book(
         units=[""] * len(labels),
         metadata=metadata,
     )
+
+
+def matrix_books(
+    scan: DatasetScan,
+    sheets: dict[str, list[MatrixSheet]],
+    books_meta: dict[str, BookMeta],
+    inventory: list[dict[str, object]],
+) -> list[DataStruct]:
+    """Build a map DataStruct per matrix dataset whose sheet and shape are
+    proven.
+
+    ``MBook1`` / ``MBook1@N`` is the matrix sheet whose ID is N — not the
+    Nth sheet (``opj_sheets``). A matrix dataset carries no reference that
+    names its sheet, so the id is bound only where it cannot be anything
+    else: ids 1..n on an n-sheet window, or one id and one sheet. Otherwise
+    the matrix is omitted and reported. ``rows * cols`` must equal the
+    dataset's cell count exactly; a mismatch is reported the same way.
+    """
+    ids: dict[str, set[int]] = {}
+    for m in scan.matrices:
+        base, _, sheet_no = m.name.partition("@")
+        ids.setdefault(base, set()).add(int(sheet_no) if sheet_no.isdigit() else 1)
+    bound = {w: bind_ids(found, len(sheets.get(w, [])), {}) for w, found in ids.items()}
+    out: list[DataStruct] = []
+    for m in scan.matrices:
+        base, at, sheet_no = m.name.partition("@")
+        window = sheets.get(base, [])
+        index = None if at and not sheet_no.isdigit() else bound[base].get(int(sheet_no or 1))
+        sheet = window[index] if index is not None else None
+        reason = m.problem
+        if reason is None and sheet is None:
+            reason = (
+                f"sheet id {sheet_no or 1} could not be matched to one of the "
+                f"window's {len(window)} matrix sheet(s)"
+            )
+        if reason is None and m.cells is not None and sheet is not None:
+            if sheet.rows * sheet.cols != m.cells.size or m.cells.size == 0:
+                reason = (
+                    f"sheet is {sheet.rows} x {sheet.cols} "
+                    f"but the dataset has {m.cells.size} cells"
+                )
+        if reason is not None or m.cells is None or sheet is None:
+            scan.problems.append(Problem("matrix", m.name, reason or "not decoded"))
+            continue
+        # A matrix window with one sheet and one id: the sheet is the book.
+        name = base if len(window) == 1 and len(ids[base]) == 1 else m.name
+        inventory.append(
+            {"name": name, "long_name": _book_long_name(name, books_meta),
+             "ncols": sheet.cols, "nrows": sheet.rows, "matrix": True}
+        )  # fmt: skip
+        book = build_matrix_book(
+            name, _book_long_name(name, books_meta), sheet, m.cells, m.imag, inventory
+        )
+        if not book.metadata["origin_matrix"]["coordinates_recovered"]:
+            scan.problems.append(
+                Problem(
+                    "notice",
+                    m.name,
+                    f"matrix {m.name}: X/Y coordinates not recovered - "
+                    "its axes are cell indices (1..n), not Origin's coordinates",
+                )
+            )
+        out.append(book)
+    return out

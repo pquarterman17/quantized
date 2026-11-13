@@ -48,6 +48,7 @@ version spread and the Numeric/Text column kinds, the public specimen corpus
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from quantized.io.origin_project.container import walk_blocks
@@ -159,6 +160,10 @@ def _book_long_name(payload: bytes, short: str) -> str:
         if anchor < 0:
             return short
         raw = payload[payload.rfind(b"\x00", 0, anchor) + 1 : anchor]
+    # A label can be typed on several lines; a title is one line. Line
+    # breaks and tabs become single spaces rather than disqualify the label.
+    # (Nothing else about the label changes: only the breaks.)
+    raw = re.sub(rb"[\r\n\t]+", b" ", raw).strip(b" ") if re.search(rb"[\r\n\t]", raw) else raw
     if raw and all(0x20 <= c < 0x7F or c >= 0xA0 for c in raw):
         return raw.decode("latin1")
     return short

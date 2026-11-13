@@ -97,6 +97,18 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   the worksheet header and are no longer plotted as data series.
 - Origin `.opj` files written by quantized state each column's real row
   count. Files written earlier still open in full.
+- Origin `.opj` sheets other than the first keep their column names, units,
+  comments and X/Y designations, and a workbook whose sheets were deleted or
+  reordered no longer picks up another sheet's column names.
+- An Origin `.opj` column is no longer dropped because one cell holds an
+  implausibly small or large number; that cell is blanked and reported.
+- An Origin `.opj` text column wider than ten characters is shown as text
+  instead of being filed away as a fit-report sheet.
+- Origin `.opj` imports say so when a dataset could not be recognised, when
+  a matrix's X/Y coordinates were not found, and when an old-style file had
+  to be read by inspecting its bytes.
+- Deleting or filtering rows keeps the imaginary part of an Origin complex
+  column on the same row as its real part.
 - Origin `.opj` data that cannot be read is named in the import's fidelity
   summary instead of being left out silently.
 

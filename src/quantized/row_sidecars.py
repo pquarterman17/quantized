@@ -49,8 +49,15 @@ __all__ = ["ROW_INDEXED_SIDECARS", "drop_row_sidecars", "slice_row_sidecars"]
 #: ``text_columns`` and ``origin_text_columns`` are the two spellings of the
 #: inline-text sidecar (the frontend's ``lib/columnmeta.ts`` reads
 #: ``text_columns ?? origin_text_columns``); ``origin_report_sheets`` is the same
-#: ``{name: [cell per row]}`` shape, holding Origin report-sheet references.
-ROW_INDEXED_SIDECARS = ("text_columns", "origin_text_columns", "origin_report_sheets")
+#: ``{name: [cell per row]}`` shape, holding Origin report-sheet references;
+#: ``origin_complex_imaginary`` is the same shape again — the imaginary part of
+#: each complex ``.opj`` column, one number (or None) per row.
+ROW_INDEXED_SIDECARS = (
+    "text_columns",
+    "origin_text_columns",
+    "origin_report_sheets",
+    "origin_complex_imaginary",
+)
 
 
 def _is_boolean(i: Any) -> bool:
