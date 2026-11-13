@@ -56,10 +56,51 @@ def split_row(line: str, delim: str) -> list[str]:
     if '"' in line:
         if delim == " ":
             return next(csv.reader([line], delimiter=" ", skipinitialspace=True))
-        return next(csv.reader([line], delimiter=delim))
+        return _split_quoted(line, delim)
     if delim == " ":
         return line.split()
     return line.split(delim)
+
+
+def _split_quoted(line: str, delim: str) -> list[str]:
+    """``split_row`` for a line with a double quote and a one-character
+    delimiter, RFC 4180 style plus one tolerance :mod:`csv` lacks: a cell
+    whose first non-blank character is ``"`` is quoted even after a space
+    (``1, "1,234.5"`` is two cells, not three -- csv's default dialect
+    splits it, and ``skipinitialspace`` would strip EVERY cell's leading
+    space). A quoted cell runs to its closing quote (``""`` is a literal
+    quote) and keeps any text after it up to the delimiter, as csv does. An
+    unquoted cell is taken verbatim, a quote inside it included (``5" pipe``)."""
+    blanks = " \t".replace(delim, "")
+    out: list[str] = []
+    i, n = 0, len(line)
+    while True:
+        j = i
+        while j < n and line[j] in blanks:
+            j += 1
+        if j < n and line[j] == '"':
+            cell: list[str] = []
+            k = j + 1
+            while k < n:
+                if line[k] == '"':
+                    if k + 1 < n and line[k + 1] == '"':
+                        cell.append('"')
+                        k += 2
+                        continue
+                    k += 1
+                    break
+                cell.append(line[k])
+                k += 1
+            end = line.find(delim, k)
+            end = n if end < 0 else end
+            out.append("".join(cell) + line[k:end])
+        else:
+            end = line.find(delim, i)
+            end = n if end < 0 else end
+            out.append(line[i:end])
+        if end >= n:
+            return out
+        i = end + 1
 
 
 def _to_float(token: str) -> float:
