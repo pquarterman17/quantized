@@ -6,9 +6,6 @@
 // a formula; until then a formula using the new syntax reports
 // EXTENSION_PENDING and is recalculated the moment the module arrives.
 //
-// Also here, because eager code needs it without the parser: `sheetNamesRead`
-// for the recalc graph.
-//
 // Telling every new shape apart before the module arrives would cost eager
 // bytes, so only `A[…]` and `c ? a : b` say EXTENSION_PENDING; cumsum/sheet/
 // col/row* report "unknown function", and a text comparison or a ranged
@@ -16,7 +13,8 @@
 // value, and the store recomputes every formula that errored once the module
 // loads (formulaRefs.recomputeExtensionPending).
 
-import type { DataStruct } from "./types";
+import type { ColumnShift } from "./channelRemap";
+import type { DataStruct, Dataset, SheetBinding } from "./types";
 import type { FormulaFn, FormulaRowContext } from "./formulaTypes";
 import type { ParserOps } from "./formulaRowFns";
 
@@ -33,7 +31,15 @@ export interface FormulaExtension {
     metadata: DataStruct["metadata"],
     labels: readonly string[],
     catLevels: Record<number, readonly string[]>,
+    sheets?: readonly SheetBinding[],
   ): Pick<FormulaRowContext, "levels" | "text" | "sheet">;
+  /** Cross-worksheet links (lib/sheetRefs.ts). */
+  bindSheets(expr: string, datasets: readonly Dataset[], selfId: string, prior?: readonly SheetBinding[]): { sheets: SheetBinding[] } | { error: string };
+  renameSheetRefs(datasets: readonly Dataset[], id: string, newName: string): { datasets: Dataset[]; changed: string[] };
+  shiftSheetRefs(datasets: readonly Dataset[], id: string, shift: ColumnShift): { datasets: Dataset[]; changed: string[] };
+  /** Evaluate `fn` with `sheet()` reading `datasets` instead of the live
+   *  store — for a recompute inside a store update, before it is committed. */
+  withSheetDatasets<T>(datasets: readonly Dataset[], fn: () => T): T;
   /** Row statistics across columns: rowmean(A, B, …) etc. */
   funcs: Record<string, (...a: number[]) => number>;
 }
@@ -46,7 +52,7 @@ export function registerFormulaExtension(e: FormulaExtension): void {
   ext = e;
 }
 
-export const EXTENSION_PENDING = "formula module still loading; recalculates when ready";
+export const EXTENSION_PENDING = "this formula uses Origin-style syntax whose module has not loaded yet; it recalculates as soon as it does";
 
 /** The extension, or the pending error a formula needing it reports. */
 export function requireExtension(): FormulaExtension {
@@ -56,11 +62,4 @@ export function requireExtension(): FormulaExtension {
 
 export function loadFormulaExtension(): Promise<typeof import("./formulaRefs")> {
   return import("./formulaRefs");
-}
-
-/** The worksheet names a formula reads through `sheet("Name", …)`. */
-export function sheetNamesRead(expr: string): string[] {
-  const out = new Set<string>();
-  for (const m of expr.matchAll(/\bsheet\s*\(\s*(["'])(.*?)\1/g)) out.add(m[2]);
-  return [...out];
 }

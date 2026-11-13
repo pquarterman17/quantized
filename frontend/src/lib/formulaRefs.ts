@@ -32,7 +32,10 @@
 //   sheet("Name", A)     column A (or x) of the worksheet named "Name", at the
 //                        same row (NaN past its last row) — the simpler,
 //                        documented form of Origin's [Book]Sheet!col(A). The
-//                        worksheet is found by its name in the Library. A
+//                        name is what the formula SHOWS; it is LINKED to that
+//                        worksheet by id when the formula is added, and
+//                        follows it through renames, column changes, deletion
+//                        (an error) and Append Project — lib/sheetRefs.ts. A
 //                        formula reading another worksheet is recalculated when
 //                        that worksheet changes (lib/recalc.ts edges).
 //   A == "text"          text comparison: A categorical -> its row's LEVEL
@@ -52,7 +55,8 @@ import { tokenize } from "./formulaTokenize";
 import type { FormulaFn, FormulaRowContext, Tok } from "./formulaTypes";
 import type { ParserOps } from "./formulaRowFns";
 import { textColumnEntries } from "./originTextColumnCells";
-import type { DataStruct, Dataset } from "./types";
+import { bindSheets, REMOVED_COLUMN, renameSheetRefs, shiftSheetRefs } from "./sheetRefs";
+import type { DataStruct, Dataset, SheetBinding } from "./types";
 
 const isOp = (t: Tok | undefined, v: string): boolean => !!t && t.t === "op" && t.v === v;
 
@@ -259,11 +263,11 @@ function tryParseRefCall(fname: string, ops: ParserOps): FormulaFn | undefined {
     // NOT ops.ref(): the letter names a column of ANOTHER worksheet, so the
     // column-shift rewrite and this sheet's dependency list must not see it.
     return (_c, ex) => {
-      const cols = ex?.sheet?.(name.v);
-      if (!cols) throw new Error(`no worksheet named "${name.v}"`);
-      const arr = cols[col.v];
+      if (!ex?.sheet) throw new Error("sheet() has no worksheet context to evaluate against");
+      if (col.v === REMOVED_COLUMN) throw new Error(`the column this formula read in worksheet "${name.v}" was removed`);
+      const arr = ex.sheet(name.v)[col.v];
       if (!arr) throw new Error(`worksheet "${name.v}" has no column ${col.v}`);
-      return ex && ex.row < arr.length ? arr[ex.row] : NaN;
+      return ex.row < arr.length ? arr[ex.row] : NaN;
     };
   }
   if (fname === "col") {
@@ -285,13 +289,37 @@ function tryParseRefCall(fname: string, ops: ParserOps): FormulaFn | undefined {
 
 // ── the evaluation context ──────────────────────────────────────────────
 
-type SheetData = Pick<DataStruct, "time" | "values" | "labels">;
-let sheetResolver: ((name: string) => SheetData | undefined) | null = null;
+let sheetDatasets: (() => readonly Dataset[]) | null = null;
+let sheetOverride: readonly Dataset[] | null = null;
 
-/** How `sheet("Name", …)` finds a worksheet (by its Library name): the store
- *  registers it when this module loads (store/computedColumns.ts). */
-export function setFormulaSheetResolver(resolve: ((name: string) => SheetData | undefined) | null): void {
-  sheetResolver = resolve;
+/** Where `sheet(…)` finds worksheets (by the id a column is linked to): the
+ *  store registers its live dataset list when this module loads
+ *  (store/computedColumns.ts). */
+export function setFormulaSheetSource(datasets: (() => readonly Dataset[]) | null): void {
+  sheetDatasets = datasets;
+}
+
+/** Evaluate `fn` with `sheet()` reading `datasets` instead of the live store. */
+export function withSheetDatasets<T>(datasets: readonly Dataset[], fn: () => T): T {
+  const before = sheetOverride;
+  sheetOverride = datasets;
+  try {
+    return fn();
+  } finally {
+    sheetOverride = before;
+  }
+}
+
+/** The worksheet a `sheet("name", …)` call is linked to — or the reason it
+ *  cannot be read. NEVER looked up by name: an unlinked, cut or unloaded
+ *  reference is an error, not a guess. */
+function linkedSheet(name: string, sheets: readonly SheetBinding[] | undefined): DataStruct {
+  const link = sheets?.find((b) => b.name === name);
+  if (!link) throw new Error(`sheet("${name}", …) is not linked to a worksheet — edit the formula to link it`);
+  const ds = link.id === null ? undefined : (sheetOverride ?? sheetDatasets?.() ?? []).find((d) => d.id === link.id);
+  if (!ds) throw new Error(`worksheet "${name}" was removed, so sheet("${name}", …) has nothing to read — edit or remove this column`);
+  if (ds.pending) throw new Error(`worksheet "${ds.name}" has not loaded its full data yet — open it, then recalculate`);
+  return ds.data;
 }
 
 /** The text/level/other-sheet parts of a formula's row context. */
@@ -299,6 +327,7 @@ export function rowContextExtras(
   metadata: DataStruct["metadata"],
   labels: readonly string[],
   catLevels: Record<number, readonly string[]>,
+  sheets?: readonly SheetBinding[],
 ): Pick<FormulaRowContext, "levels" | "text" | "sheet"> {
   const levels: Record<string, readonly string[]> = {};
   for (const [i, table] of Object.entries(catLevels)) if (Number(i) < labels.length) levels[channelLetter(Number(i))] = table;
@@ -308,15 +337,16 @@ export function rowContextExtras(
     let rows: readonly string[] | undefined;
     Object.defineProperty(text, name, { enumerable: true, get: () => (rows ??= cells.map((c) => String(c ?? ""))) });
   }
-  const cache = new Map<string, Record<string, readonly number[]> | undefined>();
+  const cache = new Map<string, Record<string, readonly number[]>>();
   const sheet = (name: string) => {
-    if (!cache.has(name)) {
-      const ds = sheetResolver?.(name);
-      const cols: Record<string, readonly number[]> | undefined = ds ? { x: ds.time } : undefined;
-      if (ds && cols) ds.labels.forEach((_, c) => (cols[channelLetter(c)] = ds.values.map((row) => row[c])));
-      cache.set(name, cols);
+    let cols = cache.get(name);
+    if (!cols) {
+      const ds = linkedSheet(name, sheets);
+      const built: Record<string, readonly number[]> = { x: ds.time };
+      ds.labels.forEach((_, c) => (built[channelLetter(c)] = ds.values.map((row) => row[c])));
+      cache.set(name, (cols = built));
     }
-    return cache.get(name);
+    return cols;
   };
   return { levels, text, sheet };
 }
@@ -366,4 +396,8 @@ registerFormulaExtension({
   resolveColumnNames,
   rowContextExtras,
   funcs: ROW_FUNCS,
+  bindSheets,
+  renameSheetRefs,
+  shiftSheetRefs,
+  withSheetDatasets,
 });

@@ -44,7 +44,7 @@
 //                            to deriving it on demand rather than throwing).
 
 import { referencedColumns, channelLetter } from "./formula";
-import { sheetNamesRead } from "./formulaExt";
+import { sheetIdsRead } from "./sheetBindings";
 import type { Dataset } from "./types";
 
 export type RecalcMode = "auto" | "manual" | "off";
@@ -89,10 +89,8 @@ function buildEdges(datasets: readonly Dataset[]): Map<NodeId, NodeId[]> {
       // Worksheet audit #17: `sheet("Name", A)` reads another worksheet, so
       // that worksheet's changes reach this one (store/recalcDatasets.ts
       // recomputes its formulas).
-      for (const name of sheetNamesRead(f.expr)) {
-        const other = datasets.find((o) => o.name === name);
-        if (other && other.id !== d.id) addEdge(dsNode(other.id), dsNode(d.id));
-      }
+      // (by the LINKED id, never by name — lib/sheetRefs.ts.)
+      for (const otherId of sheetIdsRead(f)) if (otherId !== d.id) addEdge(dsNode(otherId), dsNode(d.id));
     });
   }
   return edges;

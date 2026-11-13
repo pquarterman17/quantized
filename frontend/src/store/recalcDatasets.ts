@@ -39,7 +39,7 @@
 import { columnRemovalRefsPatch } from "./columnRemovalRefs";
 import { withRecomputedFormulas } from "./computedColumns";
 import { baseColumns } from "../lib/formula";
-import { sheetNamesRead } from "../lib/formulaExt";
+import { sheetIdsRead } from "../lib/sheetBindings";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 import { rowsChangedGuard } from "./corrections";
 import { plural } from "../lib/plural";
@@ -167,7 +167,7 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
       // Worksheet audit #17: a worksheet whose formulas read ANOTHER
       // worksheet (`sheet("Name", A)`) re-evaluates them against its current
       // contents; anything else stale here has nothing of its own to re-run.
-      const readsSheets = d?.formulas?.some((f) => sheetNamesRead(f.expr).length > 0);
+      const readsSheets = d?.formulas?.some((f) => sheetIdsRead(f).length > 0);
       set((s) => ({
         staleDatasets: s.staleDatasets.filter((x) => x !== id),
         ...(readsSheets ? {
@@ -189,7 +189,7 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
  *  works in mode None ("off"), which tracks no staleness (worksheet audit
  *  #22). Lives in this lazy module with the pass it feeds. */
 export function markEverythingStale(set: SliceSet, get: SliceGet): void {
-  get().setStatus("recalculating everything (mode None tracks nothing)");
+  get().setStatus("recalculating every derived worksheet and fit (mode None tracks no changes)");
   const s = get();
   let staleDatasets = s.staleDatasets;
   let staleFits = s.staleFits;

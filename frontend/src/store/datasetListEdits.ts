@@ -41,6 +41,7 @@
 // steps. Written green against the pre-extraction useApp.ts and unchanged by
 // the move.
 
+import { formulaExtension } from "../lib/formulaExt";
 import { cloneDataStruct } from "../lib/dataset";
 import {
   createFolder as treeCreateFolder,
@@ -233,11 +234,15 @@ export function createDatasetListEditsSlice(set: SliceSet, get: SliceGet): Datas
     },
     renameDataset: (id, name) => {
       get().recordHistory("rename dataset");
-      set((s) => ({
-        datasets: s.datasets.map((d) =>
+      set((s) => {
+        const datasets = s.datasets.map((d) =>
           d.id === id ? { ...d, name: name.trim() || d.name } : d,
-        ),
-      }));
+        );
+        // Formulas LINKED to this worksheet (`sheet("Name", …)`) keep their
+        // link and show the new name (lib/sheetRefs.ts).
+        const renamed = datasets.find((d) => d.id === id)?.name;
+        return { datasets: (renamed && formulaExtension()?.renameSheetRefs(datasets, id, renamed).datasets) || datasets };
+      });
     },
 
     // ── Folder tree (project-organization plan item 1) ──────────────────────

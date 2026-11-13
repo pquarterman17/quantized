@@ -412,7 +412,7 @@ function computeFormulas(
       labels.forEach((_, c) => {
         colSnapshot[channelLetter(c)] = values.map((row) => row[c]);
       });
-      const extras = formulaExtension()?.rowContextExtras(base.metadata, labels, catLevels);
+      const extras = formulaExtension()?.rowContextExtras(base.metadata, labels, catLevels, f.sheets);
       colValues = [];
       for (let r = 0; r < rowCount; r++) {
         let v = Number.NaN;

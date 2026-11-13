@@ -132,7 +132,7 @@ describe("recalc engine (#1)", () => {
     await vi.waitFor(() => expect(useApp.getState().datasets.find((d) => d.id === "b")?.data.values).toEqual([[99]]));
     expect(applyCorrectionsApi).toHaveBeenCalledWith(expect.objectContaining({ params: { yOff: -1 } }));
     expect(useApp.getState().staleDatasets).toEqual([]);
-    expect(useApp.getState().status).toMatch(/recalculating everything \(mode None tracks nothing\)/);
+    expect(useApp.getState().status).toMatch(/recalculating every derived worksheet and fit \(mode None tracks no changes\)/);
   });
 
   it("a formula reading another worksheet (sheet(\"Name\", A)) follows that worksheet's edits (worksheet audit #17)", async () => {
@@ -154,7 +154,7 @@ describe("recalc engine (#1)", () => {
     expect(cmds.find((c) => c.id === "recalc-mode")!.label).toContain("None");
     cmds.find((c) => c.id === "recalc-mode")!.run();
     expect(useApp.getState().recalcMode).toBe("off");
-    expect(useApp.getState().status).toMatch(/^recalc mode: None \(untracked; Recalculate now reruns all\)/);
+    expect(useApp.getState().status).toMatch(/^recalc mode: None \(nothing is tracked; Recalculate now reruns every derived result\)/);
   });
 
   it("bg-dependent datasets re-derive their corrections on recalcNow", async () => {

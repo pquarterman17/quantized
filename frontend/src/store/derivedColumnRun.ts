@@ -19,7 +19,7 @@ import { baseColumns, referencedColumns } from "../lib/formula";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { ComputedColumn, Dataset } from "../lib/types";
-import { formulaLetter, withRecomputedFormulas } from "./computedColumns";
+import { formulaLetter, linkSheets, withRecomputedFormulas } from "./computedColumns";
 import { withResolved } from "./pendingEdit";
 import { useApp } from "./useApp";
 import { syncDatasetWindowDocuments } from "./windowDocuments";
@@ -94,10 +94,16 @@ export async function addDerivedColumn(
     if (!a.ok) return a;
     const { columns, step } = a;
     const count = ds.formulas?.length ?? 0;
-    const added = columns.map((c) => ({ ...c, deps: referencedColumns(c.expr).letters }));
+    const added: ComputedColumn[] = [];
+    for (const c of columns) {
+      // sheet("Name", …) is linked to its worksheet by id here, or refused.
+      const linked = linkSheets(get, id, c.expr);
+      if ("error" in linked) return { ok: false, error: linked.error };
+      added.push({ ...c, deps: referencedColumns(c.expr).letters, ...(linked.sheets ? { sheets: linked.sheets } : {}) });
+    }
     for (const [i, c] of added.entries()) {
       const to = recalcNodes.column(id, formulaLetter(ds.data.labels.length, count, count + i));
-      for (const dep of c.deps) {
+      for (const dep of c.deps ?? []) {
         const reason = wouldCreateCycle(get().datasets, { from: recalcNodes.column(id, dep), to });
         if (reason) {
           get().setStatus(`Can't add column "${c.name}": ${reason}`);

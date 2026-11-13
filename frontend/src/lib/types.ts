@@ -349,6 +349,15 @@ export interface ComputedColumn {
   recode?: RecodeSpec;
   factor?: FactorSpec; // P2.5: a metadata field promoted to a per-row factor (lib/metadataFactor.ts)
   derived?: DerivedSpec; // P2.5: derived unit / fitted values / propagated σ (lib/derivedColumn.ts)
+  /** The worksheets this formula's `sheet("Name", …)` calls are LINKED to, by id (lib/sheetRefs.ts). */
+  sheets?: SheetBinding[];
+}
+
+/** One `sheet("Name", …)` link: the name as the formula writes it, and the
+ *  worksheet it is bound to — `null` once that worksheet was removed. */
+export interface SheetBinding {
+  name: string;
+  id: string | null;
 }
 
 /** One column's non-destructive filter predicate (#53). `col` is -1 for x, 0..

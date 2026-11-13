@@ -50,6 +50,7 @@
 // ordering. Written and run GREEN against the pre-extraction code in
 // useApp.ts, and passes byte-unchanged against this module.
 
+import { recomputeFormulaData } from "./computedColumns";
 import { defaultErrKeys, originHiddenChannels } from "../lib/errorbars";
 import { migrateGroupsToFolders } from "../lib/foldertree";
 import { sanitizeVisibleDetailsColumns } from "../lib/libraryDetailsColumns";
@@ -365,7 +366,7 @@ async function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorksp
   );
   get().recordHistory("append workspace");
   const currentWorkbookIds = new Set(get().workbooks.map((w) => w.id));
-  const { datasets, renamed, workbooks, analysisResults } = mergeWorkspace(
+  const { datasets: mergedDatasets, renamed, workbooks, analysisResults, droppedSheetRefs } = mergeWorkspace(
     get().datasets,
     ws,
     nextDatasetId,
@@ -377,7 +378,15 @@ async function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorksp
     workbooks.length > 0
       ? ` — ${workbooks.length} workbook${workbooks.length === 1 ? "" : "s"} landed at Library root`
       : "";
-  const msg = `appended ${n} dataset${n === 1 ? "" : "s"} (${renamed} renamed)${wbNote}`;
+  // A sheet("Name", …) link whose worksheet was not in the appended project
+  // is cut: re-evaluate those columns so they show the error, and say so.
+  const datasets = droppedSheetRefs
+    ? mergedDatasets.map((d) => (d.formulas?.some((f) => f.sheets?.some((b) => b.id === null)) ? recomputeFormulaData(d) : d))
+    : mergedDatasets;
+  const cutNote = droppedSheetRefs
+    ? ` — ${droppedSheetRefs} sheet() formula link${droppedSheetRefs === 1 ? "" : "s"} pointed outside the appended project and ${droppedSheetRefs === 1 ? "was" : "were"} cut`
+    : "";
+  const msg = `appended ${n} dataset${n === 1 ? "" : "s"} (${renamed} renamed)${wbNote}${cutNote}`;
   // P2.7: the appended file's unaccepted fit models JOIN the carry (which
   // un-certifies the Recipe Library, store/recipeFidelity.ts's
   // `recipeSourcesWhole`) in the same set() as its datasets.
@@ -389,7 +398,7 @@ async function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorksp
     status: msg,
     ...(carry.length ? { fitModelCarry: grownCarry(get().fitModelCarry, carry) } : {}),
   });
-  toast(msg, "ok");
+  toast(msg, droppedSheetRefs ? "danger" : "ok");
   adoptFitModels(ws, set, get);
   // BUG-010: `ws.migrationWarnings` (produced when the appended .dwk was
   // parsed) has no status-line fold here at all — this never routes through

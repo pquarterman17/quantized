@@ -27,9 +27,11 @@ export interface FormulaRowContext {
   /** Text (non-numeric) columns by name, one string per row — what
    *  `col("Name") == "text"` reads. */
   text?: Record<string, readonly string[]>;
-  /** Another worksheet's columns by letter (+ `x`), by its name — what
-   *  `sheet("Name", A)` reads; undefined when no worksheet has that name. */
-  sheet?: (name: string) => Record<string, readonly number[]> | undefined;
+  /** Another worksheet's columns by letter (+ `x`), for the name a
+   *  `sheet("Name", A)` call writes — resolved through the column's LINK to
+   *  that worksheet (lib/sheetRefs.ts); throws, saying why, when the link is
+   *  missing, cut, ambiguous to resolve or not fully loaded. */
+  sheet?: (name: string) => Record<string, readonly number[]>;
 }
 
 export type FormulaFn = (ctx: Record<string, number>, rowCtx?: FormulaRowContext) => number;

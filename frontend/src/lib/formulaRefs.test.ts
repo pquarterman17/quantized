@@ -7,9 +7,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { parseExpr, printExpr } from "./derivedExprAst";
 import { deriveUnit } from "./derivedUnits";
 import { applyFormulas, applyFormulasWithErrors, compileFormula, referencedColumns } from "./formula";
-import { sheetNamesRead } from "./formulaExt";
 import { isRowLocalFormula } from "./formulaIncremental";
-import { resolveColumnNames, setFormulaSheetResolver } from "./formulaRefs";
+import { resolveColumnNames, setFormulaSheetSource } from "./formulaRefs";
+import { sheetNamesRead } from "./sheetRefs";
 import { downstreamOf } from "./recalc";
 import type { DataStruct, Dataset } from "./types";
 
@@ -27,13 +27,16 @@ const base: DataStruct = {
   cat_levels: { 1: ["A", "B"] },
 };
 
-const col = (expr: string, data: DataStruct = base): number[] => {
-  const out = applyFormulasWithErrors(data, [{ name: "f", expr }]);
+/** Links for a test formula: every listed name bound to the id of the same text. */
+const linked = (...names: string[]) => names.map((name) => ({ name, id: name }));
+const col = (expr: string, data: DataStruct = base, sheets = linked("Run 2")): number[] => {
+  const out = applyFormulasWithErrors(data, [{ name: "f", expr, sheets }]);
   expect(out.errors).toEqual({});
   return out.data.values.map((row) => row[row.length - 1]);
 };
+const asSheet = (id: string, data: DataStruct, over: Partial<Dataset> = {}): Dataset => ({ id, name: id, data, ...over });
 
-afterEach(() => setFormulaSheetResolver(null));
+afterEach(() => setFormulaSheetSource(null));
 
 describe("col() references", () => {
   it("col(A) is A, and col(\"Long Name\") resolves to the named column's letter", () => {
@@ -115,11 +118,24 @@ describe("text comparison", () => {
 describe("sheet(\"Name\", A)", () => {
   it("reads another worksheet's column at the same row, NaN past its end", () => {
     const other: DataStruct = { time: [0, 0], values: [[5], [6]], labels: ["v"], units: [""], metadata: {} };
-    setFormulaSheetResolver((name) => (name === "Run 2" ? other : undefined));
+    setFormulaSheetSource(() => [asSheet("Run 2", other)]);
     expect(col('A + sheet("Run 2", A)')).toEqual([15, 26, Number.NaN, Number.NaN]);
     expect(referencedColumns('sheet("Run 2", B)').letters).toEqual([]); // not THIS sheet's column
     expect(sheetNamesRead('sheet("Run 2", A) * sheet("x", B)')).toEqual(["Run 2", "x"]);
-    expect(applyFormulasWithErrors(base, [{ name: "f", expr: 'sheet("Missing", A)' }]).errors.f).toMatch(/no worksheet named "Missing"/);
+  });
+
+  it("reads through the column's LINK, never by name: unlinked, cut and unloaded references are errors", () => {
+    const other: DataStruct = { time: [0, 0], values: [[5], [6]], labels: ["v"], units: [""], metadata: {} };
+    // A worksheet NAMED "Run 2" exists, but the column is not linked to it.
+    setFormulaSheetSource(() => [asSheet("other-id", other, { name: "Run 2" })]);
+    const err = (sheets?: { name: string; id: string | null }[]) =>
+      applyFormulasWithErrors(base, [{ name: "f", expr: 'sheet("Run 2", A)', sheets }]).errors.f;
+    expect(err(undefined)).toMatch(/sheet\("Run 2", …\) is not linked to a worksheet/);
+    expect(err([{ name: "Run 2", id: null }])).toMatch(/worksheet "Run 2" was removed/);
+    expect(err([{ name: "Run 2", id: "gone" }])).toMatch(/worksheet "Run 2" was removed/);
+    expect(err([{ name: "Run 2", id: "other-id" }])).toBeUndefined();
+    setFormulaSheetSource(() => [asSheet("other-id", other, { name: "Run 2", pending: { kind: "path", path: "/b.opj", bookId: "B", rows: 300, cols: 1 } })]);
+    expect(err([{ name: "Run 2", id: "other-id" }])).toMatch(/has not loaded its full data yet/);
   });
 
   it("puts the reading worksheet downstream of the one it reads (recalc)", () => {
@@ -128,7 +144,7 @@ describe("sheet(\"Name\", A)", () => {
       id: "rd",
       name: "reader",
       data: applyFormulas(base, [{ name: "f", expr: 'sheet("Run 2", A)' }]),
-      formulas: [{ name: "f", expr: 'sheet("Run 2", A)' }],
+      formulas: [{ name: "f", expr: 'sheet("Run 2", A)', sheets: [{ name: "Run 2", id: "r2" }] }],
     };
     expect(downstreamOf([run2, reader], "r2").datasets).toContain("rd");
   });
@@ -147,7 +163,7 @@ describe("the expression tree mirrors every new form", () => {
   ];
   it.each(exprs)("print(parse(%s)) evaluates identically", (expr) => {
     const other: DataStruct = { time: [0, 0, 0, 0], values: [[1], [2], [3], [4]], labels: ["v"], units: [""], metadata: {} };
-    setFormulaSheetResolver(() => other);
+    setFormulaSheetSource(() => [asSheet("Run 2", other)]);
     expect(col(printExpr(parseExpr(expr)))).toEqual(col(expr));
   });
 });
