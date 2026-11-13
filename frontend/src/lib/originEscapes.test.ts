@@ -44,6 +44,16 @@ const INPUTS = [
   "$x^2$ and \\+(3)",
   "odd $ count \\+(3)",
   "plain label",
+  // Review finding: never half-converted, and never math in one half only.
+  "\\g(\\+(2)) nested literal",
+  "\\b(\\g(\\+(a))) nested literal",
+  "\\\\+(2) escaped backslash",
+  "\\+(é) outside the math subset",
+  "\\+(@) outside the math subset",
+  "\\+(!?) outside the math subset",
+  '\\+("x") outside the math subset',
+  "\\+([1]) inside it",
+  "\\+(°C) inside it",
 ];
 
 const fresh = () => INPUTS.map((input) => [input, originEscapesToMarkup(input)]);
@@ -84,6 +94,13 @@ describe("Origin rich-text escapes (screen half)", () => {
   it("detects escapes without false positives", () => {
     expect(hasOriginEscape("a\\+(b)")).toBe(true);
     expect(hasOriginEscape("C:\\path (x)")).toBe(false);
+  });
+
+  it("a run the screen cannot draw as math stays exactly as typed, whole (review finding)", () => {
+    for (const s of ["\\g(\\+(2))", "\\b(\\g(\\+(a)))", "\\\\+(2)", "\\+(é)", "\\+(@)", "\\+(!?)", '\\+("x")']) {
+      expect(originEscapesToMarkup(s), s).toBe(s);
+    }
+    expect(hasOriginEscape("\\\\+(2)")).toBe(false);
   });
 
   it("matches the committed fixture the export half reads", () => {

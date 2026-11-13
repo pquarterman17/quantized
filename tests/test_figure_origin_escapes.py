@@ -50,3 +50,23 @@ def test_escaped_labels_draw_in_every_text_slot() -> None:
     )
     ids = {e["id"] for e in hit["elements"]}
     assert {"title", "xlabel", "ylabel", "legend", "ann:0"} <= ids
+
+
+@pytest.mark.parametrize(
+    "source", [c[0] for c in CASES if c[0] == c[1]], ids=[c[0] for c in CASES if c[0] == c[1]]
+)
+def test_a_label_the_screen_keeps_literal_is_literal_in_the_export(source: str) -> None:
+    """Review finding: nested literal runs, an escaped backslash and run text
+    outside the screen's math subset drew as math in the export while the
+    screen showed them as typed. Unconverted on screen = no math here."""
+    assert origin_escapes_to_mathtext(source) == source
+    if "$" not in source:
+        assert safe_mathtext_label(source) == source
+
+
+def test_a_label_that_cannot_render_falls_back_to_what_was_typed() -> None:
+    """Review finding: the fallback escaped the REWRITTEN label, so the figure
+    showed `\\$^{...}$`. It is the typed label, as the screen's fallback."""
+    out = safe_mathtext_label("$\\textbf{x}$ \\+(2)")
+    assert out == "\\$\\textbf{x}\\$ \\+(2)"
+    assert "^{" not in out

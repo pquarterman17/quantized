@@ -29,10 +29,15 @@ Rules a toolbar must respect:
 * Wrap the **selected text** in the run (`\+(` … `)`); with no selection,
   insert the empty run and place the caret inside it.
 * Escapes are only interpreted **outside** `$...$` math regions.
-* A run whose body contains a mathtext-syntax character
-  (`$ % # & ~ ^ _ { } \`), an unterminated run, or an unknown control
-  (`\x(...)`) is **left literally as typed** — never half-converted. A label
-  with an odd number of `$` is rendered literally as a whole.
+* A run whose text holds a character outside the math subset below (letters,
+  digits, spaces, `+ = / ( ) [ ] | . , : ; ! * < > - '`, the Greek letters and
+  `° Å µ × ± ⋅ ∘ ′ ″ −`) — e.g. `$ % # & ~ ^ _ { } \ @ ? " é` — an
+  unterminated run, or an unknown control (`\x(...)`) is **left literally as
+  typed**, the whole run including any runs nested in it — never
+  half-converted, on screen and in the export alike. `\\+(` (an escaped
+  backslash) is a literal backslash, not an escape. A label with an odd
+  number of `$` is rendered literally as a whole, and a label the export
+  cannot draw as math falls back to the text as typed.
 * Spaces inside a run are preserved.
 
 Implementation: both halves rewrite the escapes into the mathtext subset

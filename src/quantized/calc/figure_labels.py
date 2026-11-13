@@ -161,16 +161,21 @@ def safe_mathtext_label(label: str) -> str:
     """
     # Origin escapes (\+( \-( \g( \b( \i() become the mathtext subset first,
     # exactly as the screen's richtext.ts does (calc.figure_origin_escapes).
+    original = label
     label = origin_escapes_to_mathtext(label)
     if not label or "$" not in label:
         return label
+    # A label that cannot render as math falls back to the text the user
+    # TYPED, as the screen's literal fallback does -- never to the rewritten
+    # one (review finding: `\$^{...}$` reached the figure).
+    literal = _UNESCAPED_DOLLAR.sub(r"\\$", original)
     n_math = len(_UNESCAPED_DOLLAR.findall(label))
     if n_math == 0 or n_math % 2 == 1:
         # Zero unescaped $ (all \$-escaped) or an odd count: matplotlib
         # already renders the whole string as literal text -- leave it be.
         return label
     if not _uses_only_supported_commands(label):
-        return _UNESCAPED_DOLLAR.sub(r"\\$", label)
+        return literal
     # The trial parse runs on matplotlib's ONE shared mathtext parser, which is
     # not thread-safe: an unlocked concurrent parse could fail spuriously here
     # (silently de-mathing a valid label) or corrupt a render's own parse.
@@ -187,7 +192,7 @@ def safe_mathtext_label(label: str) -> str:
         # label just because the render lock is busy.
         raise
     except Exception:  # ANY parse failure means "render literal", never raise
-        return _UNESCAPED_DOLLAR.sub(r"\\$", label)
+        return literal
     return label
 
 

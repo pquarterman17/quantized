@@ -28,8 +28,16 @@ const GREEK: Record<string, string> = {
 };
 
 const CONTROLS = "+-gbi";
-const ESCAPE = /\\[+\-gbi]\(/;
-const UNSAFE = new Set([..."$%#&~^_{}\\"]);
+// An escape is a backslash NOT itself escaped: `\\+(2)` is a literal
+// backslash then "+(2)" (review finding: it became `\$^{...}$`).
+const ESCAPE = /(?<!\\)\\[+\-gbi]\(/;
+// The run text richtext.ts' math subset accepts (emitMathChar: letters,
+// digits, MATH_PUNCT, MATH_UNICODE, the Greek glyphs, '-', "'" and spaces).
+// A run holding anything else stays literal on BOTH sides (review finding:
+// accented letters, @, ? rendered as math in the export, literally here).
+const MATH_SAFE = new Set([..."+=/()[]|.,:;!*<>-' °Åµ×±⋅∘′″−"]);
+const GREEK_GLYPHS = new Set(Object.values(GREEK));
+const safe = (c: string): boolean => /^[A-Za-z0-9]$/.test(c) || MATH_SAFE.has(c) || GREEK_GLYPHS.has(c);
 type Style = "rm" | "bf" | "it";
 
 class Literal extends Error {}
@@ -54,7 +62,7 @@ function close(s: string, openAt: number): number {
 const greek = (body: string) => [...body].map((c) => GREEK[c] ?? c).join("");
 
 function mathText(text: string, style: Style): string {
-  if ([...text].some((c) => UNSAFE.has(c))) throw new Literal();
+  if (![...text].every(safe)) throw new Literal();
   const body = text.replaceAll(" ", "\\ ");
   return style === "rm" ? `\\mathrm{${body}}` : body;
 }
@@ -64,7 +72,8 @@ function math(s: string, style: Style): string {
   let plain = "";
   let i = 0;
   while (i < s.length) {
-    if (s[i] === "\\" && i + 2 < s.length && CONTROLS.includes(s[i + 1]) && s[i + 2] === "(") {
+    const nested = s[i] === "\\" && i + 2 < s.length && CONTROLS.includes(s[i + 1]) && s[i + 2] === "(";
+    if (nested && !(i > 0 && s[i - 1] === "\\")) {
       if (plain) out += mathText(plain, style);
       plain = "";
       const end = close(s, i + 2);
@@ -99,21 +108,30 @@ function convertPlain(s: string): string {
     out += s.slice(i, m.index);
     const control = s[m.index + 1];
     const openAt = m.index + m[0].length - 1;
+    let end: number;
     try {
-      const end = close(s, openAt);
-      const body = s.slice(openAt + 1, end);
+      end = close(s, openAt);
+    } catch (e) {
+      if (!(e instanceof Literal)) throw e;
+      out += m[0]; // unterminated: the prefix stays as typed
+      i = m.index + m[0].length;
+      continue;
+    }
+    const body = s.slice(openAt + 1, end);
+    try {
       if (control === "g") {
-        if ([...body].some((c) => UNSAFE.has(c))) throw new Literal();
+        if (body.includes("\\")) throw new Literal(); // a nested run inside Greek is not Origin's
         out += greek(body);
       } else {
         out += `$${run(control, body, "rm")}$`;
       }
-      i = end + 1;
     } catch (e) {
       if (!(e instanceof Literal)) throw e;
-      out += m[0];
-      i = m.index + m[0].length;
+      // The WHOLE balanced run stays as typed: converting the runs nested in
+      // it would half-convert it (review finding: nested Greek / bold runs).
+      out += s.slice(m.index, end + 1);
     }
+    i = end + 1;
   }
   return out;
 }

@@ -52,10 +52,17 @@ GREEK: dict[str, str] = {
 }  # fmt: skip
 
 _CONTROLS = "+-gbi"
-_ESCAPE = re.compile(r"\\[+\-gbi]\(")
-# Characters mathtext treats as syntax (or rejects): a run containing one
-# stays literal rather than being half-converted.
-_UNSAFE = set("$%#&~^_{}\\")
+_GREEK_GLYPHS = set(GREEK.values())
+# An escape is a backslash NOT itself escaped: `\\+(2)` is a literal
+# backslash followed by "+(2)" (review finding: it became `\$^{...}$`).
+_ESCAPE = re.compile(r"(?<!\\)\\[+\-gbi]\(")
+# The run text the screen's math subset accepts (frontend/src/lib/richtext.ts
+# emitMathChar: letters, digits, MATH_PUNCT, MATH_UNICODE, the Greek glyphs,
+# '-', "'" and spaces). A run holding anything else stays literal on BOTH
+# sides rather than rendering as math in the export and literally on screen
+# (review finding: \+(é), \+(@), \+(!?), \+("x")).
+_MATH_PUNCT = set("+=/()[]|.,:;!*<>-' ")
+_MATH_UNICODE = set("°Åµ×±⋅∘′″−")
 _UNESCAPED_DOLLAR = re.compile(r"(?<!\\)\$")
 
 
@@ -81,9 +88,19 @@ def _close(s: str, open_at: int) -> int:
     raise _Literal
 
 
+def _safe(c: str) -> bool:
+    """Is ``c`` inside the screen's math character subset?"""
+    return (
+        (c.isascii() and c.isalnum())
+        or c in _MATH_PUNCT
+        or c in _MATH_UNICODE
+        or c in _GREEK_GLYPHS
+    )
+
+
 def _math_text(text: str, style: str) -> str:
     """Plain run text as mathtext content in ``style`` (rm/bf/it)."""
-    if any(c in _UNSAFE for c in text):
+    if not all(_safe(c) for c in text):
         raise _Literal
     body = text.replace(" ", r"\ ")
     return f"\\mathrm{{{body}}}" if style == "rm" else body
@@ -95,7 +112,8 @@ def _math(s: str, style: str) -> str:
     plain: list[str] = []
     i = 0
     while i < len(s):
-        if s[i] == "\\" and i + 2 < len(s) and s[i + 1] in _CONTROLS and s[i + 2] == "(":
+        nested = s[i] == "\\" and i + 2 < len(s) and s[i + 1] in _CONTROLS and s[i + 2] == "("
+        if nested and not (i > 0 and s[i - 1] == "\\"):
             if plain:
                 out.append(_math_text("".join(plain), style))
                 plain = []
@@ -135,17 +153,24 @@ def _convert_plain(s: str) -> str:
         control = s[m.start() + 1]
         try:
             end = _close(s, m.end() - 1)
-            body = s[m.end() : end]
+        except _Literal:  # unterminated: the prefix stays as typed
+            out.append(s[m.start() : m.end()])
+            i = m.end()
+            continue
+        body = s[m.end() : end]
+        try:
             if control == "g":
-                if any(c in _UNSAFE for c in body):
+                if "\\" in body:  # a nested run inside Greek is not Origin's
                     raise _Literal
                 out.append("".join(GREEK.get(c, c) for c in body))
             else:
                 out.append(f"${_run(control, body, 'rm')}$")
-            i = end + 1
         except _Literal:
-            out.append(s[m.start() : m.end()])
-            i = m.end()
+            # The WHOLE balanced run stays as typed -- converting the runs
+            # nested inside it would half-convert it (review finding:
+            # \g(\+(2)), \b(\g(\+(a)))).
+            out.append(s[m.start() : end + 1])
+        i = end + 1
     return "".join(out)
 
 

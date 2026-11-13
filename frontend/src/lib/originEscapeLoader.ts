@@ -12,7 +12,7 @@
 // and draws again: the plot viewport rebuilds
 // (`Stage/useLazyPlotParts.ts`, via `awaitsOriginEscapes`) and `RichText`
 // re-renders (`subscribeOriginEscapes`). A first plot never stays literal.
-export const ORIGIN_ESCAPE = /\\[+\-gbi]\(/;
+export const ORIGIN_ESCAPE = /(?<!\\)\\[+\-gbi]\(/; // an unescaped backslash (lib/originEscapes.ts)
 let rewrite: ((s: string) => string) | null = null;
 let escapesSettled = false;
 const escapeListeners = new Set<() => void>();

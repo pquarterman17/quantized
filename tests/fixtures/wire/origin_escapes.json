@@ -59,6 +59,42 @@
     [
       "plain label",
       "plain label"
+    ],
+    [
+      "\\g(\\+(2)) nested literal",
+      "\\g(\\+(2)) nested literal"
+    ],
+    [
+      "\\b(\\g(\\+(a))) nested literal",
+      "\\b(\\g(\\+(a))) nested literal"
+    ],
+    [
+      "\\\\+(2) escaped backslash",
+      "\\\\+(2) escaped backslash"
+    ],
+    [
+      "\\+(é) outside the math subset",
+      "\\+(é) outside the math subset"
+    ],
+    [
+      "\\+(@) outside the math subset",
+      "\\+(@) outside the math subset"
+    ],
+    [
+      "\\+(!?) outside the math subset",
+      "\\+(!?) outside the math subset"
+    ],
+    [
+      "\\+(\"x\") outside the math subset",
+      "\\+(\"x\") outside the math subset"
+    ],
+    [
+      "\\+([1]) inside it",
+      "$^{\\mathrm{[1]}}$ inside it"
+    ],
+    [
+      "\\+(°C) inside it",
+      "$^{\\mathrm{°C}}$ inside it"
     ]
   ]
 }
