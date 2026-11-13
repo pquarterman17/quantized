@@ -25,6 +25,22 @@ function channel(dataset: Dataset | undefined, key: number | null | undefined, f
   return `${dataset.data.labels[key]}${unit ? ` (${unit})` : ""}`;
 }
 
+const WEIGHTING: Record<string, string> = {
+  none: "None (equal weights)",
+  yerr: "Y error column",
+  poisson: "Poisson (√N)",
+  manual: "Manual error column",
+  direct: "Direct (weight column)",
+};
+
+/** The weighting in the words the Curve Fit panel uses, plus the one option
+ *  that changes what the errors mean. */
+function weighting(spec: FitSpec): string {
+  const mode = spec.weight?.mode ?? "none";
+  const label = WEIGHTING[mode] ?? mode;
+  return spec.weight?.scaleErrors === false ? `${label} · errors not scaled by √(reduced χ²)` : label;
+}
+
 export default function AnalysisResultFitOverview({ result, source, spec, provenance = false, busy = false, onUpdateStatistics }: {
   result: AnalysisResult;
   source: Dataset | undefined;
@@ -59,7 +75,7 @@ export default function AnalysisResultFitOverview({ result, source, spec, proven
       <div><dt>X axis</dt><dd>{channel(source, spec.xKey, "Legacy selection")}</dd></div>
       <div><dt>Range</dt><dd>{spec.range?.map(number).join(" to ") ?? "Full analysis view"}</dd></div>
       <div><dt>Points</dt><dd>{spec.nPoints?.toLocaleString() ?? "Not recorded"}</dd></div>
-      <div><dt>Weighting</dt><dd>{spec.weight?.mode ?? "none"}</dd></div>
+      <div><dt>Weighting</dt><dd>{weighting(spec)}</dd></div>
       <div><dt>Converged</dt><dd>{spec.exitFlag === undefined ? "Not reported" : spec.exitFlag === 1 ? "Yes" : "No"}</dd></div>
       <div><dt>R²</dt><dd>{number(spec.R2)}</dd></div>
       <div><dt>{stats.rmse}</dt><dd>{number(spec.RMSE)}</dd></div>
