@@ -19,11 +19,13 @@ export function StepRangeBaseline({ w }: { w: PeakWizardState }) {
         <Num
           value={w.recipe.range.lo}
           placeholder="from"
+          ariaLabel="X range from"
           onValue={(v) => w.patchRecipe({ range: { lo: v } })}
         />
         <Num
           value={w.recipe.range.hi}
           placeholder="to"
+          ariaLabel="X range to"
           onValue={(v) => w.patchRecipe({ range: { hi: v } })}
         />
       </div>

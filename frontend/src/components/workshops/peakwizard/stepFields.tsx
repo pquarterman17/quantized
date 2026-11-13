@@ -8,8 +8,6 @@ import { NumberField } from "../../primitives/NumberField";
 
 export const faint = { color: "var(--text-faint)" } as const;
 
-/** A labelled numeric field: local text echo, commits parsed finite values
- *  (or null when cleared) upward on change. */
 /** Route a `Num` edit through one of `peakClamp`'s rules: a null (empty)
  *  field or a rejected value leaves the recipe as it was, so every value that
  *  reaches `patchRecipe` is one the recipe-file importer will accept back. */
@@ -21,14 +19,21 @@ export function clamped(rule: (v: number) => number | null, apply: (v: number) =
   };
 }
 
+/** A labelled numeric field: local text echo, commits parsed finite values
+ *  (or null when cleared) upward on change. The input's accessible name is
+ *  `ariaLabel`, else the visible `label` (a sibling `<label>`, which names
+ *  nothing on its own) — so a field with only a placeholder must pass
+ *  `ariaLabel`. */
 export function Num({
   label,
+  ariaLabel,
   value,
   onValue,
   placeholder,
   width = 84,
 }: {
   label?: string;
+  ariaLabel?: string;
   value: number | null;
   onValue: (v: number | null) => void;
   placeholder?: string;
@@ -41,6 +46,7 @@ export function Num({
     <NumberField
       value={text}
       placeholder={placeholder}
+      aria-label={ariaLabel ?? label}
       width={width}
       onChange={(t) => {
         setText(t);
