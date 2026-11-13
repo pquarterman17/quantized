@@ -52,7 +52,7 @@ function applyFormat(s: StoreGet, format: GraphFormat, label: string): boolean {
   const plotted = plottedSeries(s, label);
   if (!plotted) return false;
   s().recordHistory(label.toLowerCase());
-  useApp.setState(graphFormatPatch(format, plotted, s().seriesStyles));
+  useApp.setState(graphFormatPatch(format, plotted, s().seriesStyles, s()));
   return true;
 }
 

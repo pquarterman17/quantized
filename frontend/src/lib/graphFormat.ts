@@ -49,6 +49,19 @@ function portableStyle(style: SeriesStyle | undefined): SeriesStyle | null {
   return Object.keys(out).length > 0 ? out : null;
 }
 
+/** An axis format without its `breaks`: they are `[lo, hi]` stretches in
+ *  the SOURCE data's units, data-anchored like a limit. */
+function portableFmt(fmt: AxisFormat): AxisFormat {
+  const { breaks: _breaks, ...rest } = fmt;
+  void _breaks;
+  return rest;
+}
+
+/** `fmt` with the target's own breaks (`keep`) put back, if it had any. */
+function withBreaksOf(fmt: AxisFormat, keep: AxisFormat | null | undefined): AxisFormat {
+  return keep?.breaks ? { ...fmt, breaks: keep.breaks.map(([lo, hi]) => [lo, hi] as [number, number]) } : { ...fmt };
+}
+
 /** Capture the format of `view`, whose plotted series are `plotted` (in
  *  display order). */
 export function captureGraphFormat(view: GraphFormatFields & Pick<PlotView, "seriesStyles">, plotted: readonly number[]): GraphFormat {
@@ -58,9 +71,9 @@ export function captureGraphFormat(view: GraphFormatFields & Pick<PlotView, "ser
     yScale: view.yScale,
     y2Scale: view.y2Scale,
     xReversed: view.xReversed,
-    xFmt: { ...view.xFmt },
-    yFmt: { ...view.yFmt },
-    y2Fmt: view.y2Fmt ? { ...view.y2Fmt } : null,
+    xFmt: portableFmt(view.xFmt),
+    yFmt: portableFmt(view.yFmt),
+    y2Fmt: view.y2Fmt ? portableFmt(view.y2Fmt) : null,
     showGrid: view.showGrid,
     showAxisBox: view.showAxisBox,
     showLegend: view.showLegend,
@@ -79,11 +92,13 @@ export function captureGraphFormat(view: GraphFormatFields & Pick<PlotView, "ser
  *  `plotted`. Series styles REPLACE the target's styles for those channels
  *  (a format paste is a restyle, not a merge); channels past the format's
  *  last position keep their current style. Nothing the format does not carry
- *  (bindings, limits, titles, decorations) is touched. */
+ *  (bindings, limits, titles, decorations, axis breaks) is touched: `current`
+ *  is the target's view, whose own axis breaks the pasted formats keep. */
 export function graphFormatPatch(
   format: GraphFormat,
   plotted: readonly number[],
   currentStyles: Readonly<Record<number, SeriesStyle>>,
+  current?: Pick<PlotView, "xFmt" | "yFmt" | "y2Fmt">,
 ): Partial<PlotView> {
   const seriesStyles: Record<number, SeriesStyle> = { ...currentStyles };
   plotted.forEach((ch, position) => {
@@ -97,9 +112,11 @@ export function graphFormatPatch(
     yScale: format.yScale,
     y2Scale: format.y2Scale,
     xReversed: format.xReversed,
-    xFmt: { ...format.xFmt },
-    yFmt: { ...format.yFmt },
-    y2Fmt: format.y2Fmt ? { ...format.y2Fmt } : null,
+    xFmt: withBreaksOf(portableFmt(format.xFmt), current?.xFmt),
+    yFmt: withBreaksOf(portableFmt(format.yFmt), current?.yFmt),
+    // A format whose Y2 inherits Y's still leaves the target's own Y2 breaks
+    // in place (on an own Y2 format carrying the inherited look).
+    y2Fmt: format.y2Fmt || current?.y2Fmt?.breaks ? withBreaksOf(portableFmt(format.y2Fmt ?? format.yFmt), current?.y2Fmt) : null,
     showGrid: format.showGrid,
     showAxisBox: format.showAxisBox,
     showLegend: format.showLegend,

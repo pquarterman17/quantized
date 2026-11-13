@@ -60,4 +60,21 @@ describe("canonical graph templates", () => {
     expect(t.setOverrides).toHaveBeenCalledWith({ font_size: 9 });
     expect(vi.mocked(t.setView).mock.calls[0][0].seriesStyles).toEqual({ 0: { color: "#00ff00", width: 3 } });
   });
+
+  it("never carries the source's limits or data-anchored decorations, and keeps the target's own", () => {
+    const source = target({
+      overrides: {
+        font_size: 7, x_lim: [0, 8000], y_lim: [1, 2],
+        ref_lines: [{ axis: "x", value: 8000 }], annotations: [{ x: 1, y: 2, text: "peak" }],
+      },
+    });
+    const { result } = hook(source);
+    act(() => result.current.saveStyleTemplate("Clean"));
+    expect(loadGraphTemplates().find((t) => t.name === "Clean")?.overrides).toEqual({ font_size: 7 });
+
+    const dest = target({ overrides: { font_size: 12, legend_size: 9, ref_lines: [{ axis: "y", value: 0 }], x_lim: [5, 6] } });
+    const { result: applied } = hook(dest);
+    act(() => applied.current.applyStyleTemplate("Clean"));
+    expect(dest.setOverrides).toHaveBeenCalledWith({ font_size: 7, ref_lines: [{ axis: "y", value: 0 }], x_lim: [5, 6] });
+  });
 });

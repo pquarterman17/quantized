@@ -58,4 +58,18 @@ describe("graph format", () => {
     expect(seriesStyleFromExport({ color: "#a785fc", colorDerived: true })).toBeNull();
     expect(seriesStyleFromExport(null)).toBeNull();
   });
+
+  it("axis breaks are data, not format: never copied, and the target keeps its own", () => {
+    const broken = { ...defaultPlotView(), yFmt: { mode: "fixed" as const, digits: 1, breaks: [[20, 80]] as [number, number][] } };
+    const format = captureGraphFormat(broken, [0]);
+    expect(format.yFmt).toEqual({ mode: "fixed", digits: 1 });
+    // A stored format from before still never pastes its breaks.
+    const stale = { ...format, yFmt: { ...format.yFmt, breaks: [[20, 80]] as [number, number][] } };
+    expect(graphFormatPatch(stale, [0], {}, defaultPlotView()).yFmt).toEqual({ mode: "fixed", digits: 1 });
+    const target = { ...defaultPlotView(), yFmt: { mode: "auto" as const, digits: 2, breaks: [[3, 4]] as [number, number][] }, y2Fmt: { mode: "auto" as const, digits: 2, breaks: [[7, 9]] as [number, number][] } };
+    const patch = graphFormatPatch(format, [0], {}, target);
+    expect(patch.yFmt).toEqual({ mode: "fixed", digits: 1, breaks: [[3, 4]] });
+    expect(patch.y2Fmt).toEqual({ mode: "fixed", digits: 1, breaks: [[7, 9]] });
+  });
 });
+

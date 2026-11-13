@@ -15,7 +15,8 @@
 //     scales/formats, chrome, series styles by POSITION) into the draft view.
 // The template record is shared with the Stage's "Save/Apply Graph
 // Template…" (`lib/graphTemplateCommands.ts`), so either side's templates
-// apply on the other. Style only: no data binding travels.
+// apply on the other. Style only: no data binding travels -- nor a limit or
+// a data-anchored decoration from the overrides (lib/graphTemplateOverrides.ts).
 
 import { useState } from "react";
 
@@ -29,6 +30,7 @@ import { buildExportStyles, type ExportSeriesStyle } from "../../../lib/exportSt
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
 import type { FigureViewState } from "../../../lib/figureDocument";
 import { captureGraphFormat, graphFormatPatch, sanitizeGraphFormat, seriesStyleFromExport } from "../../../lib/graphFormat";
+import { applyTemplateOverrides, templateStyleOverrides } from "../../../lib/graphTemplateOverrides";
 import type { PlotView } from "../../../lib/plotview";
 import { recordUse } from "../../../lib/recipeIndex";
 import type { LegacyFigureState } from "./legacyFigure";
@@ -74,7 +76,7 @@ export function useGraphTemplates(deps: {
         saveGraphTemplate({
           name,
           style: target.style,
-          overrides: compactOverrides(target.overrides),
+          overrides: compactOverrides(templateStyleOverrides(target.overrides)),
           seriesStyles: buildExportStyles([...target.plotted], target.view.seriesStyles),
           format: captureGraphFormat(target.view, target.plotted),
         }),
@@ -88,7 +90,7 @@ export function useGraphTemplates(deps: {
       saveGraphTemplate({
         name,
         style: legacy.style,
-        overrides: compactOverrides(legacy.overrides),
+        overrides: compactOverrides(templateStyleOverrides(legacy.overrides)),
         seriesStyles: buildExportStyles(plotted, legacy.seriesStyles),
       }),
     );
@@ -103,19 +105,19 @@ export function useGraphTemplates(deps: {
     const target = deps.canonical;
     if (target) {
       target.setStyle(template.style);
-      target.setOverrides(template.overrides ?? {});
+      target.setOverrides(applyTemplateOverrides(target.overrides, template.overrides));
       // A template saved before `format` existed (or from an Origin .otp)
       // still restyles the series, from its publication styles.
       const format = sanitizeGraphFormat(template.format) ?? {
         ...captureGraphFormat(target.view, target.plotted),
         series: (template.seriesStyles ?? []).map(seriesStyleFromExport),
       };
-      target.setView(graphFormatPatch(format, target.plotted, target.view.seriesStyles));
+      target.setView(graphFormatPatch(format, target.plotted, target.view.seriesStyles, target.view));
       deps.setStatus(`graph template "${name}" applied`);
       return;
     }
     deps.setStyle(template.style);
-    deps.setOverrides(template.overrides ?? {});
+    deps.setOverrides(applyTemplateOverrides(legacy.overrides, template.overrides));
     // `?? null` is load-bearing: a template with no styles must set the
     // EXPLICIT "this figure has none" sentinel, not `undefined`, which would
     // silently fall back to mirroring the live plot's per-channel styles --
