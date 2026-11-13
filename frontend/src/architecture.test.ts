@@ -887,7 +887,12 @@ const TS_MODULE_PINS: Record<string, number> = {
   // contained leaf block — moved verbatim to the new lib/seriesStyleTypes.ts
   // and re-exported from types.ts (no importer changed). Funds the new
   // `SeriesStyle.logOffset` field and ratchets down by the balance.
-  "/lib/types.ts": 934,
+  // 934 -> 901 (2026-11-13, Origin curve-sheet notes): the Origin fidelity
+  // wire types (OriginFidelityStatus .. OriginFidelityManifest) moved
+  // verbatim to lib/originFidelityTypes.ts and re-exported from types.ts (no
+  // importer changed). Funds `OriginCurveSheetNote` / `curve_sheet_notes` and
+  // ratchets down by the balance.
+  "/lib/types.ts": 901,
   // 893 -> 863 (P1.4 Graph Builder encodings): the error-well helpers
   // (specErrorBindings/prefillErrorZones) moved verbatim to lib/plotspecErrors.ts
   // (re-exported, no importer moved), funding the three optional encoding zones;
