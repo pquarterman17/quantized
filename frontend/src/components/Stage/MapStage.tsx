@@ -227,7 +227,8 @@ export default function MapStage({ dataset }: MapStageProps) {
 
   return (
     <div className="qzk-stage">
-      <div ref={hostRef} style={{ position: "absolute", inset: 8, top: hostTop }}>
+      {/* aria-busy: the grid on screen is not yet the one for the current inputs (a gesture now acts on the old one). */}
+      <div ref={hostRef} aria-busy={!payloadFresh} data-map-host="" style={{ position: "absolute", inset: 8, top: hostTop }}>
         <canvas
           ref={canvasRef}
           tabIndex={roi.rect || ruler.ruler ? 0 : -1}

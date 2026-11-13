@@ -4,6 +4,15 @@ import { gotoApp, waitForDatasetCount } from "../utils/harness";
 
 type RoiRect = { x0: number; x1: number; y0: number; y1: number };
 
+/** Switch to Q-space axes and wait until the map on screen IS the Q-space
+ *  grid: a box drag issued while the regrid is still in flight lands on the
+ *  previous (angular) grid and draws nothing in Q (forced by delaying
+ *  /api/plot/map 1.5 s: 3/3 failures before this wait, on main as well). */
+async function showQSpace(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Q-space axes" }).click();
+  await expect(page.locator('[data-map-host][aria-busy="false"]')).toBeVisible({ timeout: 15_000 });
+}
+
 async function seedRsm(page: Page): Promise<void> {
   await page.evaluate(() => {
     const rows: number[][] = [];
@@ -33,7 +42,7 @@ async function seedRsm(page: Page): Promise<void> {
   });
   await waitForDatasetCount(page, 1);
   await expect(page.locator(".qzk-stage canvas")).toBeVisible();
-  await page.getByRole("button", { name: "Q-space axes" }).click();
+  await showQSpace(page);
 }
 
 async function restoreRsmMap(page: Page): Promise<void> {
@@ -42,7 +51,7 @@ async function restoreRsmMap(page: Page): Promise<void> {
     useApp.setState({ activeId: "rsm", selectedIds: ["rsm"], stageTab: "map" });
   });
   await expect(page.locator(".qzk-stage canvas")).toBeVisible();
-  await page.getByRole("button", { name: "Q-space axes" }).click();
+  await showQSpace(page);
 }
 
 test("XRD map box and sector handles drag and land visible 1-D profiles @core", async ({ page }) => {
