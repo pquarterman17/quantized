@@ -78,6 +78,24 @@ describe("useCurveFit saved recipe", () => {
   });
 });
 
+describe("useCurveFit edited start table", () => {
+  it("holding one parameter keeps the data-driven starts for the others", async () => {
+    vi.mocked(listFitModels).mockResolvedValue({ models: [{
+      name: "Linear", category: "line", paramNames: ["slope", "intercept"], nParams: 2,
+      p0: [1, 0], lb: [null, null], ub: [null, null],
+    }] });
+    vi.mocked(autoGuess).mockResolvedValue({ p0: [10, 0.25] });
+    vi.mocked(fitModel).mockResolvedValue({ params: [10, 0], yFit: [10, 20, 30, 40] });
+    const { result } = renderHook(() => useCurveFit());
+    await waitFor(() => expect(result.current.paramRows).toHaveLength(2));
+    act(() => result.current.setParamRow(1, { start: "0", fixed: true }));
+    await act(async () => result.current.run("fit"));
+    // Before: p0 [1, 0] — the registry's slope 1, not the data's 10.
+    expect(fitModel).toHaveBeenCalledWith(expect.objectContaining({ p0: [10, 0], fixed: [false, true] }));
+    expect(autoGuess).toHaveBeenCalledWith("Linear", [0, 1, 2, 3], [10, 20, 30, 40]);
+  });
+});
+
 describe("useCurveFit exclusion honoring (#50/#53)", () => {
   it("fits an explicit shared-selection row/range subset and records its original rows", async () => {
     const dataset = { id: "d1", name: "run.dat", data: DATA };

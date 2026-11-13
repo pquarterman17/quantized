@@ -19,6 +19,10 @@ vi.mock("../../../lib/api", async (importOriginal) => ({
   fitModel: vi.fn(),
 }));
 vi.mock("../../../store/analysisResultActions", () => ({ registerAnalysisResult: vi.fn() }));
+vi.mock("../../../lib/api/curvefit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/api/curvefit")>()),
+  autoGuess: vi.fn(async (_m: string, _x: number[], y: number[]) => ({ p0: [y[0]! * 100, 2, 0.5] })),
+}));
 
 const sheet = (id: string): Dataset => ({
   id, name: `${id}.csv`,
@@ -104,6 +108,23 @@ describe("CurveFitBatchSection — weighting", () => {
     const reqs = vi.mocked(fitModel).mock.calls.map((c) => c[0]);
     expect(reqs).toHaveLength(2);
     for (const r of reqs) expect(r).toMatchObject({ dy: [1, Math.SQRT2, Math.sqrt(3)], scale_errors: false });
+  });
+
+  it("an edited table's unchosen starts come from each input's own data", async () => {
+    const rows = [
+      { name: "A", start: "1", min: "", max: "", fixed: false }, // still the seeded default: auto
+      { name: "mu", start: "1", min: "", max: "", fixed: false },
+      { name: "sigma", start: "0.3", min: "", max: "", fixed: true }, // held at a typed value
+    ];
+    useApp.setState((s) => ({ datasets: s.datasets.map((d) => (d.id === "b" ? { ...d, data: { ...d.data, values: [[7], [8], [9]] } } : d)) }));
+    const datasets = useApp.getState().datasets;
+    useApp.setState({ resolveDataset: async (id: string) => datasets.find((d) => d.id === id) });
+    render(<CurveFitBatchSection modelName="Gaussian" model={GAUSS} paramRows={rows} weightMode="none" manualKey={null} />);
+    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Gaussian) batch" }));
+    await screen.findByRole("button", { name: "Create summary worksheet" });
+    const p0s = vi.mocked(fitModel).mock.calls.map((c) => c[0].p0);
+    expect(p0s).toEqual(expect.arrayContaining([[100, 2, 0.3], [700, 2, 0.3]]));
   });
 
   it("names direct weighting, not manual, when it cannot be used", async () => {

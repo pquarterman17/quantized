@@ -13,6 +13,7 @@ import { addWorksheetQuietly } from "../../../store/addWorksheetQuietly";
 import { nextDatasetId } from "../../../store/idSeq";
 import AnalysisBatchControls, { type AnalysisBatchOutcome, type AnalysisBatchRow } from "../analysisselection/AnalysisBatchControls";
 import { batchColumns, batchSummaryData, fitSummaryValues } from "./curveFitBatchSummary";
+import { parseFitStarts } from "./fitStarts";
 
 interface Props {
   modelName: string;
@@ -47,10 +48,14 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     const parsed = parseFitParams(paramRows, model);
     if (parsed.error) throw new Error(parsed.error);
     const custom = !rowsAreDefault(paramRows, model);
-    const customRequest = custom ? {
-      p0: parsed.p0, lower: parsed.lower, upper: parsed.upper,
-      ...(parsed.fixed.some(Boolean) ? { fixed: parsed.fixed } : {}),
-    } : {};
+    // Per input: an edited table's unchosen starts come from THAT input's
+    // data (fitStarts.ts), as in the single fit.
+    const customRequest = async (x: number[], y: number[]) => {
+      if (!custom) return {};
+      const p = await parseFitStarts(paramRows, model, modelName, x, y);
+      if (p.error) throw new Error(p.error);
+      return { p0: p.p0, lower: p.lower, upper: p.upper, ...(p.fixed.some(Boolean) ? { fixed: p.fixed } : {}) };
+    };
     const factor = selection.factorKeys[0];
     const warnings: string[] = [];
 
@@ -69,7 +74,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
         const pairs = dropGapRows(x, y);
         try {
           if (pairs.x.length === 0) throw new Error("no finite pairs");
-          results.push(await fitModel({ model: modelName, x: pairs.x, y: pairs.y, ...customRequest }));
+          results.push(await fitModel({ model: modelName, x: pairs.x, y: pairs.y, ...(await customRequest(pairs.x, pairs.y)) }));
         } catch (error) {
           warnings.push(`${level.label}: ${error instanceof Error ? error.message : "fit failed"}`);
         }
@@ -88,7 +93,9 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     if (!selected) throw new Error("No response column is available to fit.");
     const pairs = dropGapRows(selected.x, selected.y);
     if (pairs.x.length === 0) throw new Error("No finite X/Y pairs are available to fit.");
-    const request: Parameters<typeof fitModel>[0] = { model: modelName, x: pairs.x, y: pairs.y, ...customRequest };
+    const request: Parameters<typeof fitModel>[0] = {
+      model: modelName, x: pairs.x, y: pairs.y, ...(await customRequest(pairs.x, pairs.y)),
+    };
     if (weightMode === "yerr" || weightMode === "poisson") {
       const keep = pairs.keep.map((index) => selected.analysisRows?.[index] ?? index);
       const weighted = dyForFit(dataset, selected.yKey, weightMode === "poisson"

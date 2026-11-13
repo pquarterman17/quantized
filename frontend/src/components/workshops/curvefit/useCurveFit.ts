@@ -34,6 +34,7 @@ import { analysisSelectionData } from "../../../lib/analysisSelection";
 
 import { rememberCurveFitOverlay } from "../../../store/curveFitOverlay";
 import { exportCornerPlot } from "./curveFitCornerPlot";
+import { parseFitStarts } from "./fitStarts";
 import { followRefits } from "../../../store/curveFitRefit";
 import { removeCurveFit, showRetainedCurve } from "../../../store/curveFitRemove";
 import { fitInputsChanged, fittedWeighting, onRetainedFitChange, restoreFitted, retainFitted, type Fitted, type FittedData } from "../../../store/curveFitSession";
@@ -323,8 +324,9 @@ export function useCurveFit(): CurveFitState {
         // #30: the user's starting values / bounds / fixed flags. An
         // UNTOUCHED table is the registry default, so it is neither sent nor
         // recorded — that keeps the request lean and the recipe honest about
-        // what was actually chosen.
-        const parsed = parseFitParams(paramRows, model);
+        // what was actually chosen. In an EDITED table the starts the user
+        // did not choose come from the data (fitStarts.ts).
+        const parsed = await parseFitStarts(paramRows, model, modelName, pairs.x, pairs.y);
         if (parsed.error) {
           setError(parsed.error);
           return;

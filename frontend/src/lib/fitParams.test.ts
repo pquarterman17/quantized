@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  autoStartRows,
   boundsForWire,
   boundsFromWire,
   parseFitParams,
@@ -143,6 +144,30 @@ describe("parseFitParams", () => {
 
   it("is empty with no model", () => {
     expect(parseFitParams([], undefined).p0).toEqual([]);
+  });
+});
+
+describe("auto starts in an edited table", () => {
+  // Live check: holding one parameter (or typing one start) sent the static
+  // registry defaults for every other start (centre 0, width 1) and the fit
+  // fell apart, while the untouched table fitted from the data-driven guess.
+  it("an unchosen start (blank or still the seeded default) takes the guess; typed and held ones do not", () => {
+    const rows = rowsFromModel(gauss);
+    rows[0] = { ...rows[0]!, start: "5" }; // typed
+    rows[2] = { ...rows[2]!, start: "" }; // cleared
+    expect(autoStartRows(rows, gauss)).toEqual([1, 2]);
+    const held = rows.map((r, i) => (i === 1 ? { ...r, fixed: true } : r));
+    expect(autoStartRows(held, gauss)).toEqual([2]);
+    expect(parseFitParams(rows, gauss, [4.9, 10, 1.5]).p0).toEqual([5, 10, 1.5]);
+    // Without a guess the registry default still fills a blank (old behaviour).
+    expect(parseFitParams(rows, gauss).p0).toEqual([5, 0, 1]);
+  });
+
+  it("clips an auto start into the user's bounds rather than refusing the fit", () => {
+    const rows = rowsFromModel(gauss).map((r, i) => (i === 1 ? { ...r, min: "8", max: "12" } : r));
+    const parsed = parseFitParams(rows, gauss, [5, 20, 1.5]);
+    expect(parsed.error).toBeUndefined();
+    expect(parsed.p0).toEqual([5, 12, 1.5]);
   });
 });
 
