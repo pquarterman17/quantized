@@ -27,6 +27,8 @@ interface Props {
   sel: StatGroupSelection | null;
   /** Space kept free on the right for the summary dock, px. */
   right: number;
+  /** Space kept free at the top for the floating tool bar, px. */
+  top?: number;
   /** Which error bar the figure draws (`statErrorNote.figureErrorNote`);
    *  null = none drawn, no footnote strip. */
   errorNote?: string | null;
@@ -64,7 +66,7 @@ function drawnSlots(d: StatDrawData | null): readonly AxisSlot[] {
   return d && "slots" in d && d.slots ? d.slots : [];
 }
 
-export default function StatStagePlot({ draw, drawFacets, theme, accent, sel, right, errorNote = null }: Props) {
+export default function StatStagePlot({ draw, drawFacets, theme, accent, sel, right, top = 0, errorNote = null }: Props) {
   const decorate = sel?.decorate;
   const decorateFacets = sel?.decorateFacets;
   const shown = useMemo(() => (decorate ? decorate(draw) : draw), [decorate, draw]);
@@ -89,6 +91,7 @@ export default function StatStagePlot({ draw, drawFacets, theme, accent, sel, ri
       style={{
         position: "absolute",
         inset: 8,
+        top: Math.max(8, top),
         right: 8 + right,
         bottom: 8 + foot,
         display: "grid",
@@ -115,7 +118,7 @@ export default function StatStagePlot({ draw, drawFacets, theme, accent, sel, ri
       ))}
     </div>
   ) : (
-    <div style={{ position: "absolute", inset: 0, right, bottom: foot }}>
+    <div style={{ position: "absolute", inset: 0, top, right, bottom: foot }}>
       <StatStageCanvas data={shown} theme={theme} accent={accent} {...clickFor(shown)} />
     </div>
   );
