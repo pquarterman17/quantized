@@ -26,14 +26,17 @@ import type { WeightMode } from "./types";
 export const FIT_TEMPLATE_VERSION = 1;
 const MAX_ROWS = 64;
 const MAX_TEXT = 64;
-const WEIGHTS: readonly WeightMode[] = ["none", "yerr", "poisson", "manual"];
+const WEIGHTS: readonly WeightMode[] = ["none", "yerr", "poisson", "manual", "direct"];
 
 export interface FitTemplateSettings {
   version: typeof FIT_TEMPLATE_VERSION;
   model: string;
   weight: WeightMode;
-  /** The manual weight column's LABEL (indices differ between worksheets). */
+  /** The manual error / direct weight column's LABEL (indices differ
+   *  between worksheets). */
   manualLabel?: string;
+  /** Origin's "Scale errors with √(reduced χ²)" turned OFF; absent = on. */
+  scaleErrors?: false;
   /** The start/min/max/hold table, as typed (blank = model default / unbounded). */
   rows: FitParamRow[];
   /** The X range the fit was restricted to; absent = the full range. */
@@ -59,6 +62,10 @@ export function sanitizeFitTemplate(v: unknown): FitTemplateSettings | null {
   const rows = o.rows.map(rowOf);
   if (rows.some((r) => r === null)) return null;
   const out: FitTemplateSettings = { version: 1, model: o.model, weight: o.weight as WeightMode, rows: rows as FitParamRow[] };
+  if (o.scaleErrors !== undefined) {
+    if (o.scaleErrors !== false) return null;
+    out.scaleErrors = false;
+  }
   if (o.manualLabel !== undefined) {
     if (!text(o.manualLabel)) return null;
     out.manualLabel = o.manualLabel;
@@ -83,7 +90,9 @@ export function toFitTemplate(name: string, settings: FitTemplateSettings): Anal
   const s = sanitizeFitTemplate(settings);
   if (!s) throw new Error("these fit settings cannot be saved as a template");
   const params: Record<string, unknown> = { model: s.model, fitTemplate: s };
-  if (s.weight === "yerr" || s.weight === "poisson") params.weight = { mode: s.weight };
+  if (s.weight === "yerr" || s.weight === "poisson") {
+    params.weight = { mode: s.weight, ...(s.scaleErrors === false ? { scaleErrors: false } : {}) };
+  }
   if (s.range) params.range = [s.range.lo, s.range.hi];
   const step = makeStep("fit", `Fit ${s.model}`, `qz.fit(${JSON.stringify(s.model)})`, params);
   return toTemplate(name.trim(), [step], s.rows.map((r) => r.name), {

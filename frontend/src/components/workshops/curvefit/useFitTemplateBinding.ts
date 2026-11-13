@@ -18,6 +18,8 @@ interface PanelSettings {
   setWeightMode: (mode: WeightMode) => void;
   manualKey: number | null;
   setManualKey: (key: number | null) => void;
+  scaleErrors: boolean;
+  setScaleErrors: (on: boolean) => void;
   paramRows: FitParamRow[];
   replaceParamRows: (rows: FitParamRow[]) => void;
 }
@@ -39,7 +41,10 @@ export function useFitTemplateBinding(p: PanelSettings): FitTemplateBinding {
     version: 1,
     model: p.modelName,
     weight: p.weightMode,
-    ...(p.weightMode === "manual" && p.manualKey != null && active ? { manualLabel: active.data.labels[p.manualKey] ?? "" } : {}),
+    ...((p.weightMode === "manual" || p.weightMode === "direct") && p.manualKey != null && active
+      ? { manualLabel: active.data.labels[p.manualKey] ?? "" }
+      : {}),
+    ...(p.weightMode !== "none" && !p.scaleErrors ? { scaleErrors: false as const } : {}),
     rows: p.paramRows,
     ...(selectionRange ? { range: { lo: selectionRange.lo, hi: selectionRange.hi } } : {}),
   };
@@ -50,6 +55,7 @@ export function useFitTemplateBinding(p: PanelSettings): FitTemplateBinding {
     }
     p.setModelName(t.model);
     p.setWeightMode(t.weight);
+    p.setScaleErrors(t.scaleErrors !== false);
     const manual = t.manualLabel !== undefined && active ? active.data.labels.indexOf(t.manualLabel) : -1;
     p.setManualKey(manual >= 0 ? manual : null);
     p.replaceParamRows(t.rows);

@@ -75,6 +75,27 @@ describe("CurveFitPanel — fit templates", () => {
     expect(fitModel).not.toHaveBeenCalled(); // applied, not run
   });
 
+  it("saves and applies direct weighting with its column and the error-scaling switch", async () => {
+    render(<CurveFitPanel />);
+    fireEvent.change(await screen.findByLabelText("Model"), { target: { value: "Quadratic" } });
+    fireEvent.change(screen.getByLabelText("Weighting"), { target: { value: "direct" } });
+    await waitFor(() => expect(screen.getByLabelText("Weighting")).toHaveValue("direct"));
+    fireEvent.change(screen.getByLabelText("Weight column"), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /Scale errors/ }));
+    fireEvent.click(await screen.findByText("Templates"));
+    fireEvent.change(screen.getByLabelText("New fit template name"), { target: { value: "w" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save as template" }));
+    // Before the fix: "these fit settings cannot be saved as a template".
+    await waitFor(() => expect(loadTemplates()).toHaveLength(1));
+    expect(fitTemplateOf(loadTemplates()[0]!)).toMatchObject({ weight: "direct", manualLabel: "w", scaleErrors: false });
+
+    fireEvent.change(screen.getByLabelText("Weighting"), { target: { value: "none" } });
+    fireEvent.change(screen.getByLabelText("Saved fit template"), { target: { value: "w" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply template" }));
+    await waitFor(() => expect(screen.getByLabelText("Weighting")).toHaveValue("direct"));
+    expect(screen.getByRole("checkbox", { name: /Scale errors/ })).not.toBeChecked();
+  });
+
   it("applies a template's X range to the analysis selection", async () => {
     const { toFitTemplate } = await import("../../../lib/fitTemplates");
     const { saveTemplate } = await import("../../../lib/template");

@@ -189,7 +189,7 @@ export default function CurveFitPanel() {
 
   const template = useFitTemplateBinding({
     active, models, modelName, setModelName, weightMode, setWeightMode, manualKey, setManualKey,
-    paramRows: paramInputs, replaceParamRows,
+    scaleErrors, setScaleErrors, paramRows: paramInputs, replaceParamRows,
   });
 
   const toReport = async () => {

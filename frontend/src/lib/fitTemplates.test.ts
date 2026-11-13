@@ -38,6 +38,14 @@ describe("fit templates", () => {
     expect(toFitTemplate("m", s).steps[0]!.params.weight).toBeUndefined();
   });
 
+  it("keeps direct weighting (by column label) and unscaled errors", () => {
+    const s = { ...SETTINGS, weight: "direct" as const, manualLabel: "w", scaleErrors: false as const };
+    expect(fitTemplateOf(toFitTemplate("d", s))).toEqual(s);
+    const y = { ...SETTINGS, scaleErrors: false as const };
+    expect(toFitTemplate("y", y).steps[0]!.params.weight).toEqual({ mode: "yerr", scaleErrors: false });
+    expect(sanitizeFitTemplate({ ...SETTINGS, scaleErrors: true })).toBeNull();
+  });
+
   it.each([
     ["an unknown version", { ...SETTINGS, version: 2 }],
     ["an unknown weighting", { ...SETTINGS, weight: "chi" }],
