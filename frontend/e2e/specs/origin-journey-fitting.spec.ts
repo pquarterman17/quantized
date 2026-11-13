@@ -61,7 +61,7 @@ test.describe("Origin journey: fitting and peaks", () => {
     await expect(panel).toBeVisible();
 
     // Origin's built-in ExpDec1: y = y0 + A1*exp(-x/t1).
-    await panel.getByRole("combobox", { name: "Model", exact: true }).selectOption({ label: "ExpDec1" });
+    await panel.getByRole("combobox", { name: "Model", exact: true }).selectOption({ value: "ExpDec1" });
     await panel.getByRole("button", { name: /Start values & bounds/ }).click();
     await panel.getByLabel("Start value of y0").fill("0.2");
     await panel.getByLabel("Hold y0 fixed").check();
@@ -112,7 +112,7 @@ test.describe("Origin journey: fitting and peaks", () => {
     await rows.nth(2).click({ modifiers: ["Control"] });
     await runPaletteCommand(page, "Curve fit…");
     const panel = curveFit(page);
-    await panel.getByRole("combobox", { name: "Model", exact: true }).selectOption({ label: "Linear" });
+    await panel.getByRole("combobox", { name: "Model", exact: true }).selectOption({ value: "Linear" });
     const toggle = panel.getByRole("button", { name: /Batch · 3 worksheets/ });
     await toggle.scrollIntoViewIfNeeded();
     await toggle.click();
