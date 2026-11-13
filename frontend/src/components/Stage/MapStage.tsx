@@ -27,6 +27,7 @@ import { useMapPointer } from "./useMapPointer";
 import { useMapRoi } from "./useMapRoi";
 import { useMapRuler } from "./useMapRuler";
 import { useMapSectorWedge } from "./useMapSectorWedge";
+import MapStageNotice from "./MapStageNotice";
 
 export interface MapStageProps {
   /** Bind the map to an EXPLICIT dataset instead of the Library-active one
@@ -93,7 +94,7 @@ export default function MapStage({ dataset }: MapStageProps) {
   const labels = active?.data.labels ?? [];
   const enoughChannels = labels.length >= 3;
   // Fetch + regrid on dataset/channel changes; `fresh` gates the export.
-  const { payload, fresh: payloadFresh } = useMapPayload(active, enoughChannels, keys, method, res, setStatus);
+  const { payload, fresh: payloadFresh, error: mapError } = useMapPayload(active, enoughChannels, keys, method, res, setStatus);
 
   // RSM (XRDML 2D) datasets carry Qx/Qz columns -> offer an angular⇄Q toggle.
   const axis1Name = String(active?.data.metadata?.axis1_name ?? "Omega");
@@ -380,11 +381,10 @@ export default function MapStage({ dataset }: MapStageProps) {
         </div>
       )}
       {active && !enoughChannels && (
-        <div className="qzk-ds-meta" style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", textAlign: "center", padding: 24 }}>
-          A 2-D map needs at least 3 channels (x, y, z).
-          <br />
-          This dataset has {labels.length}.
-        </div>
+        <MapStageNotice lines={["A 2-D map needs at least 3 channels (x, y, z).", `This dataset has ${labels.length}.`]} />
+      )}
+      {active && enoughChannels && mapError && (
+        <MapStageNotice passThrough lines={["These columns can't be mapped:", mapError, "Choose other x, y and z columns in the toolbar."]} />
       )}
 
       {readout && (

@@ -17,6 +17,8 @@ import type { Dataset } from "../../lib/types";
 
 interface Loaded {
   payload: MapPayload | null;
+  /** The backend's reason these columns cannot be mapped (HTTP 422). */
+  error?: string;
   active: Dataset | null;
   keys: readonly [number, number, number] | null;
   method: string;
@@ -30,7 +32,7 @@ export function useMapPayload(
   method: string,
   res: number,
   setStatus: (status: string) => void,
-): { payload: MapPayload | null; fresh: boolean } {
+): { payload: MapPayload | null; fresh: boolean; error: string | null } {
   const [loaded, setLoaded] = useState<Loaded>({ payload: null, active: null, keys: null, method: "", res: 0 });
   useEffect(() => {
     let cancelled = false;
@@ -45,12 +47,19 @@ export function useMapPayload(
         setLoaded({ payload: p, active, keys, method, res });
         if (p.fallback) setStatus(`backend unavailable — offline grid, ${p.fallback.nx}×${p.fallback.ny}`);
       })
-      .catch(() => {}); // aborted (superseded) -- nothing to show
+      .catch((err: unknown) => {
+        // Aborted (superseded): nothing to show. Refused data (422, the only
+        // other rejection fetchMap passes on): say why, instead of a stale map.
+        if (cancelled || (err as { status?: unknown } | null)?.status !== 422) return;
+        const error = err instanceof Error ? err.message : String(err);
+        setLoaded({ payload: null, error, active, keys, method, res });
+        setStatus(`Map: ${error}`);
+      });
     return () => {
       cancelled = true;
       controller.abort();
     };
   }, [active, enoughChannels, keys, method, res, setStatus]);
   const fresh = loaded.active === active && loaded.keys === keys && loaded.method === method && loaded.res === res;
-  return { payload: loaded.payload, fresh };
+  return { payload: loaded.payload, fresh, error: fresh ? (loaded.error ?? null) : null };
 }
