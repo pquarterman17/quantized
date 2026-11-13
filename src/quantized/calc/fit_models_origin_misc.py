@@ -23,6 +23,9 @@ checked against the Origin Help page cited for each function:
   ``SineDamp``: y = y0 + A*exp(-x/t0)*sin(pi*(x-xc)/w), params
   (y0, xc, w, t0, A), bounds w > 0 and t0 > 0.
   https://www.originlab.com/doc/Origin-Help/SineDamp-FitFunc
+  The parameter ORDER follows that English page (y0, xc, w, t0, A); the
+  German translation of the page lists them in a different order — the
+  English page is the source used here (fitting integration review).
   Origin does not bound A, so a fit is unique only up to (A, xc) ->
   (-A, xc + w) and xc mod 2w.
 """
