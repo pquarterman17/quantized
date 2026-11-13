@@ -2205,15 +2205,28 @@ rules unchanged:**
 
 * Value columns carry their declared designation (`column_designations` +
   the live `error_roles`, `io/_column_roles.py`): Y, Y-error, X-error,
-  label, disregard, Z, or a further X, which opens the next X group — @35
-  is then that X's serial and @51 its group index (the reader's
-  nearest-preceding-X rule). These shapes round-trip through the reader in
-  CI; the live probe series above covered X/Y books, so a multi-X /
-  label / Z load in real Origin is still to be re-verified per license
-  window.
+  label, disregard, Z, or a further X, which opens the next X group (@51
+  its 1-based index; the reader's nearest-preceding-X rule). @35 is the
+  associated column's serial: a Y column's X; a Y-error / X-error / label
+  / Z column's nearest-preceding Y; 0 on X and disregard. Measured over
+  every `.opj` in the local corpus (64 files): Y → its X in 977/989
+  columns with a preceding X; Y-error/label/Z/X-error → the preceding Y in
+  40/40; those four designations all carry @38 = 0x61 (or 0x60). X
+  columns carry @35 = 0 in 120/149 — the 29 nonzero values are not
+  understood and the writer always writes 0.
+  **UNVERIFIED IN ORIGIN:** every shape in this list round-trips through
+  our reader in CI and matches the corpus where stated, but the live probe
+  series above loaded only single-X books of X/Y columns. A multi-X,
+  error, label, disregard or Z column, a comment row, or an escaped title
+  has not been opened in real Origin.
 * The label block's third row carries the column comment; text outside
   Latin-1 is written as Origin's `\(xHHHH)` escape (μ → µ, Å-sign → Å
-  first), never `?`.
+  first), never `?`. A literal `@${` in user text (the storage marker the
+  reader cuts at) is written `\(64)${`. Book TITLES escape Latin-1
+  letters too (`Å` → `\(x00C5)`): Origin stores ANSI characters raw
+  there, but our reader accepts a title only when every byte is printable
+  ASCII, so the raw form cannot round-trip (no corpus title contains a
+  high byte, so neither form is measured).
 * The window header ALWAYS uses the `@${` marker form, repeating the short
   name when there is no long name: the 197-byte no-marker variant sent the
   reader to its v4.3227 printable-run fallback, which titled such books
@@ -2221,8 +2234,14 @@ rules unchanged:**
   leading letter (Origin's Short Name rule), ≤16 characters so
   `<book>_<column>` fits the 147B header's 23-byte name field.
 * The fh file-size u32 also backs an import-side completeness diagnostic
-  (`integrity.py`): a v4.3380 `.opj` shorter than its recorded size is
-  reported as truncated (`file_truncated` in the fidelity manifest).
+  (`integrity.py`): an `.opj` shorter than its recorded size is reported
+  as truncated (`file_truncated` in the fidelity manifest). The fh block
+  grows across versions but the u32 stays at payload offset 115 —
+  measured (files matching exactly / files): 4.3295 123 B 1/1; 4.3380
+  123 B 28/28; 4.3386 123 B 1/1; 4.3445 124 B 11/11; 4.3478 124 B 2/2;
+  4.3522 132 B 1/1; 4.3551 132 B 6/6; 4.3778 146 B 2/2. Versions 4.2673
+  (39 B), 4.2946 (107 B) and 4.3116 (111 B) have no such field. The check
+  is gated to exactly the eight measured versions; `.opju` is unchecked.
 
 ---
 

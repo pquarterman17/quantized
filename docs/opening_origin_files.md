@@ -52,11 +52,14 @@ Import is thorough but not lossless. In particular:
   same workbook imports normally.
 - **A truncated or incomplete `.opj` is flagged, not silently trusted.**
   An interrupted copy or download still parses up to the cut; quantized
-  compares the file's length with the size its own header records
-  (`.opj` files with a CPYA 4.3380 or newer header) and, when the file is
-  shorter, says so in the import toast and the Origin fidelity panel
-  ("file appears incomplete or truncated"). Older `.opj` versions and
-  `.opju` carry no recorded size and are not checked.
+  compares the file's length with the size its own header records and,
+  when the file is shorter, says so in the import toast and the Origin
+  fidelity panel ("file appears incomplete or truncated"). The check runs
+  only for the `.opj` header versions it was measured on (CPYA 4.3295,
+  4.3380, 4.3386, 4.3445, 4.3478, 4.3522, 4.3551 and 4.3778 — 52 real
+  files, every one matching its recorded size exactly). Any other
+  version, and every `.opju`, is not checked: a truncated file of those
+  kinds still imports without a warning.
 - **Origin window and template files are not projects.** `.ogw`/`.ogwu`
   (workbook), `.ogg` (graph), `.ogm` (matrix) windows and `.otw`/`.otm`
   templates can't be opened directly — save the project as `.opj` in
@@ -108,12 +111,18 @@ quantized can hand data back to Origin colleagues two ways:
   bars. This works with **every version of Origin** and is the
   well-tested, cross-platform path — use it by default.
 - **Native `.opj` project file.** quantized can also write a `.opj` file
-  directly. This **opens in real OriginPro** (verified live on Origin
-  2026b, 2026-07-07: single- and multi-book files load and re-export
-  value-exact data, names, and units — plan item 34). Column
-  designations, comments, and non-Latin-1 text (as Origin's `\(xHHHH)`
-  escapes) are written too and round-trip through quantized's reader;
-  the live-Origin probe series covered X/Y books. Because Origin
+  directly. Books of one X column plus Y columns **open in real
+  OriginPro** (verified live on Origin 2026b, 2026-07-07: single- and
+  multi-book files load and re-export value-exact data, names, and units
+  — plan item 34). The file also carries column designations (Y-error,
+  X-error, label, disregard, Z, further X columns), column comments, and
+  text outside Latin-1 (as Origin's `\(xHHHH)` escapes, which is also how
+  an accented book title is written). Those parts are **not yet verified
+  in Origin**: they round-trip through quantized's own reader, and the
+  column-association bytes agree with real Origin-written files, but no
+  such file has been opened in Origin since they were added — if Origin
+  shows a column role or a title differently, use the `.ogs` path.
+  Because Origin
   ≥2023 still *reads* the classic `.opj` format even though it no longer
   writes it, one file reaches every Origin version. The Origin-ASCII +
   `.ogs` path remains the belt-and-braces alternative (it re-runs the

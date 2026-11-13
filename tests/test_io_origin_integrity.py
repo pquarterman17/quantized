@@ -9,12 +9,17 @@ shorter than the size its own v4.3380 file header records (fh offset 115).
 from __future__ import annotations
 
 import io
+import re
+from collections import Counter
+from pathlib import Path
 
 import numpy as np
+import pytest
 from fastapi.testclient import TestClient
 
 from quantized.app import app
 from quantized.datastruct import DataStruct
+from quantized.io.origin_project import read_origin_books
 from quantized.io.origin_project.integrity import (
     apply_container_integrity,
     container_integrity,
@@ -60,8 +65,14 @@ def test_longer_than_recorded_is_unverified_not_complete() -> None:
 
 def test_versions_without_a_size_field_are_not_checked() -> None:
     raw = _project()
-    old = b"CPYA 4.3227 188 #\n" + raw[raw.find(b"\n") + 1 :]
-    assert container_integrity(old, "opj")["checked"] is False
+    body = raw[raw.find(b"\n") + 1 :]
+    # Unmeasured versions -- older, NEWER, or in between -- are never judged.
+    for version in (b"4.3227", b"4.3116", b"4.3400", b"4.3811", b"5.0000"):
+        got = container_integrity(b"CPYA " + version + b" 188 #\n" + body[:5000], "opj")
+        assert got["checked"] is False and got["complete"] is None, version
+    # A measured version whose fh block is not the measured length: unchecked.
+    odd = b"CPYA 4.3445 188 #\n" + body  # 4.3445 measured with a 124-byte fh
+    assert container_integrity(odd[:5000], "opj")["checked"] is False
     assert container_integrity(b"CPYUA 4.3811 188 W64 #\n", "opju")["checked"] is False
 
 
@@ -97,3 +108,46 @@ def test_truncated_upload_imports_what_it_can_and_says_it_is_incomplete() -> Non
     assert "file_truncated" in fidelity["omissions"]
     assert fidelity["status"] == "unresolved"
     assert fidelity["container_integrity"]["declared_bytes"] == len(raw)
+
+
+@pytest.mark.realdata
+def test_real_corpus_has_zero_false_truncated_verdicts(corpus_dir: Path) -> None:
+    """Every real ``.opj`` that parses must NOT be called truncated (none of
+    the corpus files is), and every checked file must match its header
+    exactly. Prints the per-version distribution (``pytest -s``) -- the
+    numbers the gate in ``integrity._MEASURED`` was set from."""
+    origin = corpus_dir / "origin"
+    files = sorted(p for p in origin.rglob("*") if p.is_file() and p.suffix.lower() == ".opj")
+    if not files:
+        pytest.skip("no .opj files under the corpus")
+    dist: dict[str, Counter[str]] = {}
+    false_truncated: list[str] = []
+    unverified: list[str] = []
+    parsed = 0
+    for path in files:
+        raw = path.read_bytes()
+        try:
+            read_origin_books(path)
+        except Exception:  # noqa: BLE001 - "files that parse" is the population
+            continue
+        parsed += 1
+        m = re.match(rb"CPYA (\d+\.\d+)", raw)
+        version = m.group(1).decode() if m else "?"
+        got = container_integrity(raw, "opj")
+        verdict = (
+            "unchecked" if not got["checked"]
+            else {True: "complete", False: "TRUNCATED", None: "longer"}[got["complete"]]
+        )
+        dist.setdefault(version, Counter())[verdict] += 1
+        rel = str(path.relative_to(origin))
+        if verdict == "TRUNCATED":
+            false_truncated.append(rel)
+        elif verdict == "longer":
+            unverified.append(rel)
+    for version in sorted(dist):
+        print(f"CPYA {version}: {dict(dist[version])}")
+    print(f"parsed {parsed}/{len(files)} .opj files")
+    assert parsed > 0
+    assert false_truncated == []
+    assert unverified == []  # a checked real file matches its header exactly
+    assert sum(c["complete"] for c in dist.values()) > 0  # the check really ran
