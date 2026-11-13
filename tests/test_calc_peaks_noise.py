@@ -79,3 +79,61 @@ def test_pure_noise_has_no_peaks() -> None:
     x = np.linspace(0, 10, 3000)
     peaks, _ = find_peaks_robust(x, 200 + rng.normal(0, 4, x.size), snr_threshold=3.0)
     assert peaks == []
+
+
+# ── review item 7: integer counts tie on the smoothed maximum ──────────────
+
+
+def test_matched_filter_keeps_a_flat_topped_peak() -> None:
+    from quantized.calc.peak_noise import matched_filter_keep
+
+    resid = np.zeros(60)
+    resid[28:32] = [20.0, 60.0, 60.0, 20.0]  # ties -> the 5-point mean has a 2-sample plateau
+    resid[10] = 4.0
+    keep = matched_filter_keep(resid, np.array([29, 10]), 1.0, 5, 5.0)
+    assert keep.tolist() == [True, False]
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_poisson_peak_with_tied_integer_counts_is_found(seed: int) -> None:
+    rng = np.random.default_rng(seed)
+    x = np.linspace(0.0, 20.0, 801)
+    y = rng.poisson(8 + _gauss(x, 60, 10.0, 0.5)).astype(float)
+    peaks, _ = find_peaks_robust(x, y)
+    assert [round(p["center"]) for p in peaks] == [10]
+
+
+# ── review item 8: correlated (non-white) noise ─────────────────────────────
+
+
+def _correlated(seed: int, k: int, n: int = 4000, sigma: float = 3.3) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    white = rng.normal(0, 1, n + k)
+    ma = np.convolve(white, np.ones(k) / k, mode="valid")[:n]
+    return np.asarray(ma / np.std(ma) * sigma, dtype=float)
+
+
+@pytest.mark.parametrize("k", [5, 11, 21])
+def test_noise_estimate_handles_correlated_noise(k: int) -> None:
+    for seed in range(3):
+        noise = _correlated(seed, k)
+        # The white-noise estimator read 0.63 for sigma = 3.3 at k = 21.
+        assert estimate_noise(100 + noise) == pytest.approx(3.3, rel=0.25)
+
+
+@pytest.mark.parametrize("k", [5, 11, 21])
+def test_correlated_noise_gives_no_flood_of_false_peaks(k: int) -> None:
+    x = np.linspace(20.0, 60.0, 4000)
+    found = 0
+    for seed in range(3):
+        y = 100 + 1.5 * (x - 20) + _correlated(seed, k) + _gauss(x, 300, 40.0, 0.4)
+        peaks, _ = find_peaks_robust(x, y)
+        centers = [p["center"] for p in peaks]
+        assert any(abs(c - 40.0) < 0.1 for c in centers)
+        found += len(centers) - 1
+    assert found <= 1  # was 18-37 false peaks per pattern
+
+
+def test_white_noise_estimate_is_not_inflated_by_the_multi_lag_estimate() -> None:
+    rng = np.random.default_rng(3)
+    assert estimate_noise(50 + rng.normal(0, 2.0, 5000)) == pytest.approx(2.0, rel=0.05)

@@ -29,20 +29,54 @@ def noise_floor(y: NDArray[np.float64]) -> float:
     return float(np.max(y)) * 1e-6
 
 
+_LAGS = (1, 2, 4, 8, 16, 32)
+
+
+def _lag_sigma(y: NDArray[np.float64], lag: int) -> float:
+    """sigma from the MAD of the lag-``lag`` second difference
+    ``y[i+lag] - 2 y[i] + y[i-lag]`` (variance ``6 sigma^2`` when the three
+    samples are uncorrelated)."""
+    d2 = y[2 * lag :] - 2 * y[lag:-lag] + y[: -2 * lag]
+    return 1.4826 * float(np.median(np.abs(d2 - np.median(d2)))) / math.sqrt(6.0)
+
+
 def estimate_noise(y: NDArray[np.float64]) -> float:
-    """Robust white-noise sigma: MAD of the SECOND differences / sqrt(6), floored.
+    """Robust noise sigma: MAD of second differences / sqrt(6), over several
+    lags, floored.
 
     A second difference is a high-pass filter that cancels any locally linear
-    trend (a sloping background, the flanks of a broad peak) and leaves
-    ``n[i+1] - 2 n[i] + n[i-1]``, whose variance is ``6 sigma^2`` for white
-    noise; the MAD ignores the few samples a sharp peak still disturbs. (The
-    first-difference MAD/sqrt(2) it replaces kept a curvature- and slope-
-    dependent bias.) Floored at ``1e-6 * max(y)`` exactly as before, so
-    noise-free data -- the MATLAB golden case -- is unchanged.
+    trend (a sloping background, the flanks of a broad peak); the MAD ignores
+    the few samples a sharp peak still disturbs. At lag 1 this assumes WHITE
+    noise: neighbouring samples of correlated noise (a detector's point
+    spread, a smoothed or oversampled scan) nearly cancel, so the lag-1
+    estimate read 0.63 for sigma = 3.3 with a 21-point correlation and every
+    slow wiggle became a "peak" (review item 8). The same difference at a lag
+    beyond the correlation length sees independent samples again: the
+    estimate climbs with the lag (by >= 1.2x per doubling) until the lag
+    passes the correlation length, then levels off. So the lag is doubled
+    (1, 2, ... 32, capped at n/16 so each lag keeps plenty of samples) for
+    as long as the estimate keeps RISING by more than 10 %, and stops at the
+    first lag that does not. White noise stops immediately -- its estimate
+    is flat across lags -- which also keeps the longer lags, where peaks
+    start to leak into the differences, out of the ordinary case.
+
+    Noise-free data is decided at lag 1 alone: if that is at the
+    ``1e-6 * max(y)`` floor there is no noise to measure (longer lags would
+    only read the signal's own curvature), and the floor is returned exactly
+    as before -- the MATLAB golden case is unchanged.
     """
-    d2 = np.diff(y, 2)
-    sigma = 1.4826 * float(np.median(np.abs(d2 - np.median(d2)))) / math.sqrt(6.0)
-    return max(sigma, noise_floor(y))
+    floor = noise_floor(y)
+    sigma = _lag_sigma(y, 1) if y.size >= 3 else 0.0
+    if sigma <= floor:
+        return floor
+    for lag in _LAGS[1:]:
+        if lag > y.size // 16:
+            break
+        nxt = _lag_sigma(y, lag)
+        if nxt <= 1.1 * sigma:
+            break
+        sigma = nxt
+    return sigma
 
 
 def noise_floor_offset(residual: NDArray[np.float64], sigma: float) -> float:
@@ -88,8 +122,18 @@ def matched_filter_keep(
     that rides a big peak's tail or simply tops the noise band -- averages
     away: it is no longer a local maximum, or barely stands out. Each
     candidate keeps the smoothed maximum within ``w`` samples of it, and that
-    maximum's topographic prominence must reach ``snr_thr * sigma / sqrt(w)``.
-    On the audit pattern real peaks score >100 there and noise maxima <= 1.1.
+    maximum's topographic prominence must reach ``snr_thr`` times the noise
+    of the SMOOTHED series. That noise is measured (``estimate_noise`` of the
+    smoothed residual), not assumed to be ``sigma / sqrt(w)``: averaging does
+    not reduce correlated noise, and the white-noise figure let its slow
+    wiggles through. On the audit pattern real peaks score >100 there and
+    noise maxima <= 1.1.
+
+    Two candidates that share one smoothed maximum are one peak (the taller
+    stands for it). The smoothed maximum may be a PLATEAU: integer counts tie, and the mean
+    of ``w`` of them is then flat across two or more samples (a 60-count
+    Poisson peak was rejected for it). A plateau is a maximum when the
+    series rises into it and falls out of it.
     """
     n = residual.size
     w = max(3, int(min_width_pts) | 1)
@@ -97,7 +141,9 @@ def matched_filter_keep(
     padded = np.pad(residual, half, mode="edge")
     smooth = np.convolve(padded, np.ones(w) / w, mode="valid")
     keep = np.zeros(max_idx.size, dtype=bool)
-    thresh = snr_thr * sigma / math.sqrt(w)
+    sigma_s = min(sigma, estimate_noise(smooth)) if sigma > 0 else 0.0
+    thresh = snr_thr * max(sigma_s, sigma / math.sqrt(w))
+    tie = 1e-12 * max(float(np.max(np.abs(smooth))), 1e-300)
     cand: list[int] = []
     tops: list[int] = []
     for k, idx in enumerate(max_idx):
@@ -105,10 +151,27 @@ def matched_filter_keep(
         if hi < lo:
             continue
         j = lo + int(np.argmax(smooth[lo : hi + 1]))
-        if smooth[j] >= smooth[j - 1] and smooth[j] > smooth[j + 1]:
+        left = j
+        while left > 0 and abs(smooth[left - 1] - smooth[j]) <= tie:
+            left -= 1
+        right = j
+        while right < n - 1 and abs(smooth[right + 1] - smooth[j]) <= tie:
+            right += 1
+        rises = left > 0 and smooth[left - 1] < smooth[j]
+        falls = right < n - 1 and smooth[right + 1] < smooth[j]
+        if rises and falls:
             cand.append(k)  # else: a slope once the noise is averaged out
-            tops.append(j)
+            tops.append(left)
     if cand:
         prom = compute_prominence(smooth, np.asarray(tops, dtype=np.intp))
-        keep[np.asarray(cand)] = prom >= thresh
+        # One smoothed maximum is ONE peak: noise can split a peak's top into
+        # two raw maxima, and only the taller of them stands for it.
+        best: dict[int, int] = {}
+        for k, top, pr in zip(cand, tops, prom, strict=True):
+            if pr < thresh:
+                continue
+            rival = best.get(top)
+            if rival is None or residual[max_idx[k]] > residual[max_idx[rival]]:
+                best[top] = k
+        keep[list(best.values())] = True
     return keep
