@@ -20,6 +20,9 @@ interface Props {
   paramRows: FitParamRow[];
   weightMode: WeightMode;
   manualKey: number | null;
+  /** The panel's "Scale errors with √(reduced χ²)" switch: a weighted batch
+   *  input reports its errors the way the single fit would. */
+  scaleErrors?: boolean;
 }
 
 const median = (values: number[]): number | null => {
@@ -29,7 +32,7 @@ const median = (values: number[]): number | null => {
   return finite.length % 2 ? finite[middle] : (finite[middle - 1] + finite[middle]) / 2;
 };
 
-export default function CurveFitBatchSection({ modelName, model, paramRows, weightMode, manualKey }: Props) {
+export default function CurveFitBatchSection({ modelName, model, paramRows, weightMode, manualKey, scaleErrors = true }: Props) {
   const setStatus = useApp((s) => s.setStatus);
   const datasets = useApp((s) => s.datasets);
   const names = model?.paramNames ?? paramRows.map((r) => r.name);
@@ -91,16 +94,20 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
       const weighted = dyForFit(dataset, selected.yKey, weightMode === "poisson"
         ? { mode: "poisson" }
         : { mode: "yerr", errKey: selection.errorKeys[selected.yKey] }, keep);
-      if (weighted.dy) request.dy = keep.map((index) => weighted.dy![index]!);
+      if (weighted.dy) {
+        request.dy = keep.map((index) => weighted.dy![index]!);
+        if (!scaleErrors) request.scale_errors = false;
+      }
       if (weighted.issue) warnings.push(weighted.issue);
     } else if (weightMode === "manual" || weightMode === "direct") {
+      const what = weightMode === "direct" ? "Direct weighting" : "Manual weighting";
       warnings.push(manualKey === null
-        ? "Manual weighting was not configured; this input ran unweighted."
-        : "Manual weight columns are worksheet-specific; this batch input ran unweighted.");
+        ? `${what} was not configured; this input ran unweighted.`
+        : `${what} columns are worksheet-specific; this batch input ran unweighted.`);
     }
     const result = await fitModel(request);
     return { values: [1, 1, ...fitSummaryValues(result, names.length)], warnings };
-  }, [manualKey, model, modelName, paramRows, weightMode, names.length]);
+  }, [manualKey, model, modelName, paramRows, weightMode, scaleErrors, names.length]);
 
   const summarySheet = (ranRows: readonly AnalysisBatchRow[]) => {
     const run = ran.current ?? { model: modelName, columns };

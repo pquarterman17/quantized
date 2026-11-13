@@ -367,7 +367,10 @@ export default function CurveFitPanel() {
       )}
 
       {/* Batch across worksheets (below the results, which come first). */}
-      <CurveFitBatchSection modelName={modelName} model={registryModel} paramRows={paramInputs} weightMode={weightMode} manualKey={manualKey} />
+      <CurveFitBatchSection
+        modelName={modelName} model={registryModel} paramRows={paramInputs}
+        weightMode={weightMode} manualKey={manualKey} scaleErrors={scaleErrors}
+      />
 
       {/* Save / apply named fit settings. */}
       <FitTemplatesSection current={template.current} apply={template.apply} />

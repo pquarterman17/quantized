@@ -93,3 +93,24 @@ describe("CurveFitBatchSection — summary worksheet", () => {
     expect(useApp.getState().selectedIds).toEqual(["a", "b"]);
   });
 });
+
+describe("CurveFitBatchSection — weighting", () => {
+  it("honours the panel's 'Scale errors with √(reduced χ²)' switch for weighted inputs", async () => {
+    // Poisson weighting needs positive counts: the sheets hold 1, 2, 3.
+    render(<CurveFitBatchSection modelName="Gaussian" model={GAUSS} paramRows={[]} weightMode="poisson" manualKey={null} scaleErrors={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Gaussian) batch" }));
+    await screen.findByRole("button", { name: "Create summary worksheet" });
+    const reqs = vi.mocked(fitModel).mock.calls.map((c) => c[0]);
+    expect(reqs).toHaveLength(2);
+    for (const r of reqs) expect(r).toMatchObject({ dy: [1, Math.SQRT2, Math.sqrt(3)], scale_errors: false });
+  });
+
+  it("names direct weighting, not manual, when it cannot be used", async () => {
+    render(<CurveFitBatchSection modelName="Gaussian" model={GAUSS} paramRows={[]} weightMode="direct" manualKey={null} />);
+    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Gaussian) batch" }));
+    await screen.findByRole("button", { name: "Create summary worksheet" });
+    expect(screen.getAllByText(/Direct weighting was not configured/).length).toBeGreaterThan(0);
+  });
+});
