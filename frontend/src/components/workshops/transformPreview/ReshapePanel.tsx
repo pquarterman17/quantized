@@ -39,7 +39,7 @@ function Preview({ r }: { r: ReshapeState }) {
         {c.preview.inputs.map((i, k) => (
           <li key={k}>{`${i.name}: ${size(i.rows, i.cols)}`}</li>
         ))}
-        <li style={{ fontWeight: 600 }}>{`Result “${c.name}”: ${size(c.data.time.length, c.data.labels.length)} (plus X)`}</li>
+        <li style={{ fontWeight: 600 }}>{`Result “${c.name}”: ${size(c.preview.resultRows ?? c.data.time.length, c.data.labels.length)} (plus X)`}</li>
       </ul>
       {r.previewOnly && (
         <div className="qzk-ds-meta" style={faint}>

@@ -6,6 +6,7 @@
 
 import type { StoreGet } from "../lib/exportActive";
 import type { Action } from "../store/commands";
+import type { RecalcMode } from "../lib/recalc";
 import { openMetaFactors } from "../store/metaFactorsDialog";
 import { openResampleDialog } from "../store/resampleDialog";
 import { SHOW_SQLITE_QUERY } from "../store/sqliteQueryDialog";
@@ -18,6 +19,22 @@ function openReshape(s: StoreGet, op: PreviewOp): void {
   const active = s().activeId;
   const ids = seedIds(s);
   openTransformPreview(op, active ? [active, ...ids.filter((id) => id !== active)] : ids);
+}
+
+/** Origin's names for the three modes (worksheet audit #22): "off" is
+ *  Origin's "None" — and the status says what "Recalculate now" does there. */
+const RECALC_MODE_STATUS: Record<RecalcMode, string> = {
+  auto: "Auto (stale results rerun automatically)",
+  manual: "Manual (results are marked stale; Recalculate now reruns them)",
+  off: "None (nothing is tracked; Recalculate now reruns every derived result)",
+};
+
+/** Row statistics / Frequency count — one lazy chunk for both (audit #19). */
+function statsRun(s: StoreGet, which: "row" | "freq"): void {
+  void import("../store/worksheetStatsRun").then(
+    (m) => (which === "row" ? m.runRowStatistics() : m.runFrequencyCount()),
+    () => s().setStatus(`couldn't load ${which === "row" ? "Row statistics" : "Frequency count"} — try again`),
+  );
 }
 
 /** Build the Data-group curated palette actions against the live store
@@ -86,6 +103,25 @@ export function buildDataCommands(s: StoreGet): Action[] {
       keywords: "jmp tabulate group summary statistics aggregate",
       run: () => s().setTabulateOpen(true),
     },
+    // Worksheet audit #19 — lazy bodies (store/worksheetStatsRun.ts).
+    {
+      id: "row-statistics",
+      group: "Data",
+      section: "Rows & summary",
+      label: "Row statistics (mean, SD, min, max, sum, N across columns)…",
+      description: "Add computed columns holding each row's mean, standard deviation, minimum, maximum, sum or count across chosen columns.",
+      keywords: "origin row statistics across columns per row average",
+      run: () => statsRun(s, "row"),
+    },
+    {
+      id: "frequency-count",
+      group: "Data",
+      section: "Rows & summary",
+      label: "Frequency count (bin a column into a table)…",
+      description: "Bin one column into a new worksheet with bin edges and centers, counts, cumulative counts and percentages.",
+      keywords: "origin frequency count histogram bins table cumulative percent",
+      run: () => statsRun(s, "freq"),
+    },
     {
       id: "pipeline",
       group: "Data",
@@ -100,21 +136,26 @@ export function buildDataCommands(s: StoreGet): Action[] {
       group: "Data",
       section: "Recalculation",
       label: "Recalculate now (run stale corrections + fits)",
-      description: "Immediately rerun corrections and fits whose inputs or settings have changed.",
-      run: () => void s().recalcNow(),
+      description: "Immediately rerun corrections and fits whose inputs or settings have changed — or, in recalc mode None (which tracks no changes), every derived worksheet and fit.",
+      run: () => {
+        // Worksheet audit #22: "off" tracks nothing, so the request must
+        // recalculate everything derived rather than an (always empty) stale set.
+        // (store/recalcDatasets.markEverythingStale says so in the status.)
+        void s().recalcNow({ everything: s().recalcMode === "off" });
+      },
     },
     {
       id: "recalc-mode",
       group: "Data",
       section: "Recalculation",
-      label: "Recalc mode (cycle auto → manual → off)",
-      description: "Choose whether stale calculations rerun automatically, on request, or not at all.",
+      label: "Recalc mode (cycle auto → manual → None)",
+      description: "Choose whether stale calculations rerun automatically (Auto), are marked stale and rerun on request (Manual), or are not tracked at all (None — Recalculate now then reruns everything derived).",
       run: () => {
         const order = ["auto", "manual", "off"] as const;
         const cur = s().recalcMode;
         const next = order[(order.indexOf(cur) + 1) % order.length];
         s().setRecalcMode(next);
-        s().setStatus(`recalc mode: ${next}`);
+        s().setStatus(`recalc mode: ${RECALC_MODE_STATUS[next]}`);
       },
     },
     {

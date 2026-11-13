@@ -156,6 +156,14 @@ export function toast(msg: string, kind?: ToastKind, opts?: ToastOptions): void 
   useToasts.getState().push(msg, kind, opts);
 }
 
+/** A lazy chunk would not load: the same message in the status line and in a
+ *  danger toast whose Retry re-asks (store/recalcEngine.ts, the formula
+ *  module in store/computedColumns.ts). Never silent. */
+export function failWithRetry(setStatus: (msg: string) => void, msg: string, retry: () => void): void {
+  setStatus(msg);
+  toast(msg, "danger", { action: { label: "Retry", onClick: retry } });
+}
+
 /** BUG-010: fire ONE toast summarizing `warnings` (a load/merge path's
  *  `migrationWarnings` — a skipped/degraded field from an older or
  *  unsupported saved document) — the first warning's text plus a "(+N more)"

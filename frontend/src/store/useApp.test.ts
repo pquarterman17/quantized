@@ -2239,6 +2239,18 @@ describe("useApp pasteDataFromClipboard (gap #47 — structured clipboard paste)
     expect(useApp.getState().status).toContain("pasted data 1");
   });
 
+  it("says the parser's notes — a decimal-comma cell left blank is never silent (worksheet audit #21)", async () => {
+    readText.mockResolvedValue("x\ty\n1\t1.5\n2\t2,5\n");
+    vi.mocked(guessImportSettings).mockResolvedValue({});
+    const note = "Column 'y' has 1 cell written with a decimal comma (e.g. '2,5') among point-decimal numbers; it was left blank (NaN).";
+    const parsed: DataStruct = { time: [1, 2], values: [[1.5], [Number.NaN]], labels: ["y"], units: [""], metadata: { notes: [note] } };
+    vi.mocked(parseImportText).mockResolvedValue(parsed);
+
+    await useApp.getState().pasteDataFromClipboard();
+
+    expect(useApp.getState().status).toContain(note);
+  });
+
   it("names successive pastes pasted data 1, 2, …", async () => {
     readText.mockResolvedValue("x\n1\n2\n");
     vi.mocked(guessImportSettings).mockResolvedValue({});

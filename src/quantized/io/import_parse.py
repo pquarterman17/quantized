@@ -28,7 +28,8 @@ import numpy as np
 
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
-from quantized.io._delimiter_vote import vote_lines
+from quantized.io import _quoted_numbers as qn
+from quantized.io._delimiter_vote import _COMMA_NUMBER_RE, vote_lines
 from quantized.io._origin_ascii_header import origin_ascii_rows
 from quantized.io.delimited import _extract_units, _split_lines
 
@@ -66,6 +67,9 @@ class _Parsed:
     all_tokens: list[list[str]]
     # Raw column indices read with a decimal comma (`_decimal_comma`).
     decimal_columns: list[int] = field(default_factory=list)
+    # Worksheet audit #21: decimal-comma cells left NaN in a point-decimal
+    # column, one sentence per column (`_decimal_comma.stray_comma_notes`).
+    decimal_notes: list[str] = field(default_factory=list)
 
 
 def _split(line: str, delim: str) -> list[str]:
@@ -98,6 +102,8 @@ def _scoring_rows(text: str, tokens: list[list[str]], delim: str) -> Sequence[Se
     (`decimal="auto"`), so a European file's header is not taken for data."""
     if dc.uses_decimal_path("auto", delim, "," in text):
         return dc.layout_rows(tokens)
+    if delim == "," and '"' in text:  # quoted grouped numbers (`_quoted_numbers`)
+        return qn.scoring_rows(tokens)
     return tokens
 
 
@@ -129,6 +135,14 @@ def _resolve_names(tokens: list[list[str]], header_line: int | None, n_cols: int
     return names
 
 
+def _numberish(cell: str) -> bool:
+    return bool(
+        layout._is_data_cell(cell)
+        or _COMMA_NUMBER_RE.match(cell)
+        or qn.grouped_value(cell) is not None
+    )
+
+
 def _guess_roles(data_rows: list[list[str]], n_cols: int) -> list[str]:
     """Default role per column: a TEXT column (most of its non-empty sampled
     cells are not numbers -- direct import's rule, `delimited._numeric_column`)
@@ -142,7 +156,10 @@ def _guess_roles(data_rows: list[list[str]], n_cols: int) -> list[str]:
             r[c].strip() for r in sample
             if c < len(r) and r[c].strip().lower() not in layout._MISSING_TOKENS
         ]
-        text.append(bool(cells) and 2 * sum(map(layout._is_data_cell, cells)) <= len(cells))
+        # A comma number is a number too: a decimal comma ("2,5", converted by
+        # `_decimal_comma`) or a quoted grouped one ("1,234.5", `_quoted_numbers`).
+        numeric = sum(_numberish(x) for x in cells)
+        text.append(bool(cells) and 2 * numeric <= len(cells))
     if all(text):
         return ["x"] + ["y"] * (n_cols - 1) if n_cols else []
     first_numeric = text.index(False)
@@ -230,11 +247,18 @@ def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
             matrix[i, k] = layout._to_float(row[k])
     decimal = dc.check_decimal(settings.decimal, delim)
     comma_cols: list[int] = []
+    notes: list[str] = []
     if dc.uses_decimal_path(decimal, delim, "," in text):
         comma_cols = dc.resolve_decimal_columns(
             "this file", names, matrix, data_tokens, decimal=decimal
         )
-    return _Parsed(lines, delim, names, units, roles, matrix, ds, data_tokens, tokens, comma_cols)
+        notes = dc.stray_comma_notes(names, matrix, data_tokens, converted=comma_cols)
+    elif delim == "," and '"' in text:  # quoted grouped numbers (`_quoted_numbers`)
+        notes = qn.ungroup_columns(names, matrix, data_tokens)
+        notes += dc.stray_comma_notes(names, matrix, data_tokens, separator_choice=False)
+    return _Parsed(
+        lines, delim, names, units, roles, matrix, ds, data_tokens, tokens, comma_cols, notes
+    )
 
 
 def _label_row_overrides(p: _Parsed, settings: ImportSettings, n_cols: int) -> list[str] | None:
@@ -282,6 +306,23 @@ def _decimal_names(p: _Parsed, effective_names: list[str]) -> list[str]:
     x column keeps its header name (`x_column_name`); every other column
     carries its effective (label-row) name."""
     return [p.names[k] if p.roles[k] == "x" else effective_names[k] for k in p.decimal_columns]
+
+
+def _decimal_fields(p: _Parsed, effective_names: list[str]) -> dict[str, object]:
+    """The parsed dataset's decimal-comma metadata: the converted columns'
+    keys + note, then one note per column whose stray decimal-comma cells
+    were left NaN (worksheet audit #21 -- never a silent NaN). Empty when
+    neither applies."""
+    fields: dict[str, object] = {}
+    notes: list[str] = []
+    if p.decimal_columns:
+        decimal_meta, decimal_note = dc.decimal_metadata(_decimal_names(p, effective_names))
+        fields.update(decimal_meta)
+        notes.append(decimal_note)
+    notes.extend(p.decimal_notes)
+    if notes:
+        fields["notes"] = notes
+    return fields
 
 
 def _resolve_roles(roles: list[str] | None, n_cols: int) -> list[str]:

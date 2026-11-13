@@ -89,6 +89,11 @@ function sanitizeCorrectionParams(
     allowed.add("xTrimMin");
     allowed.add("xTrimMax");
   }
+  if (raw.dropYUncertainty !== undefined) {
+    if (raw.dropYUncertainty !== true) return null;
+    result.dropYUncertainty = true;
+    allowed.add("dropYUncertainty");
+  }
   if (operation === "Smooth") {
     const window = raw.smoothWindow;
     const method = raw.smoothMethod;

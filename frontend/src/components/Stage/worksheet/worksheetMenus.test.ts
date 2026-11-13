@@ -21,6 +21,8 @@ function makeColCtx(over: Partial<ColumnMenuContext> = {}): ColumnMenuContext {
     setYKeys: vi.fn(),
     sortAsc: vi.fn(),
     sortDesc: vi.fn(),
+    viewSortMark: () => "",
+    toggleViewSort: vi.fn(),
     onNewColumn: vi.fn(),
     showStats: false,
     onToggleStats: vi.fn(),
@@ -59,6 +61,7 @@ describe("worksheetMenus — columnMenuItems", () => {
     expect(labelsOf(items)).toEqual([
       "Sort ascending",
       "Sort descending",
+      "View sorted ascending (data unchanged)",
       "—sep—",
       "Plot selection",
       "Add selection to plot",
@@ -76,6 +79,7 @@ describe("worksheetMenus — columnMenuItems", () => {
     expect(labelsOf(items)).toEqual([
       "Sort ascending",
       "Sort descending",
+      "View sorted ascending (data unchanged)",
       "—sep—",
       "Set as X axis",
       "Hide from plot",

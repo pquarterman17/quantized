@@ -89,6 +89,7 @@
 // `order`, `pending`) is self-contained — no id references — and rides
 // along untouched onto the merged dataset.
 
+import { remapSheetRefIds } from "./sheetBindings";
 import type { AnalysisResult } from "./analysisResult";
 import type { Dataset } from "./types";
 import type { LoadedWorkspace } from "./workspace";
@@ -112,6 +113,9 @@ export interface WorkspaceMergeResult {
   /** `bgRef` back-references dropped because they targeted an id outside
    *  the incoming batch — see the field matrix above. */
   droppedBgRefs: number;
+  /** `sheet("Name", …)` formula links cut because they targeted an id
+   *  outside the incoming batch (their columns then report the error). */
+  droppedSheetRefs: number;
   /** `folderId` memberships dropped because the destination folder tree is
    *  never merged in — see the field matrix above. */
   droppedFolderRefs: number;
@@ -320,10 +324,14 @@ export function mergeWorkspace(
   const analysisResults = (incoming.analysisResults ?? []).map((result) =>
     remapAnalysisResult(result, idMap, usedResultIds));
 
+  // sheet("Name", …) links are ids too: remapped like bgRef, cut when the
+  // target was not part of the appended project (lib/sheetRefs.ts).
+  const relinked = remapSheetRefIds(merged, idMap);
   return {
-    datasets: [...current, ...merged],
+    datasets: [...current, ...relinked.datasets],
     remapped,
     renamed,
+    droppedSheetRefs: relinked.dropped,
     droppedBgRefs,
     droppedFolderRefs,
     droppedWorkbookRefs,

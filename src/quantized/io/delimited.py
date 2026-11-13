@@ -18,6 +18,7 @@ import numpy as np
 from quantized.datastruct import DataStruct
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
+from quantized.io import _quoted_numbers as qn
 from quantized.io._delimited_fast import (
     LazyTokenRows,
     _DeferredDataTokens,
@@ -195,8 +196,9 @@ def import_csv(
     # where the header ends.
     lazy_tokens = LazyTokenRows(raw_lines, delim)
     scoring_rows = dc.layout_rows(lazy_tokens) if comma_path else lazy_tokens
-    try:
-        header_row, data_start, units_row = layout._detect_layout(scoring_rows)
+    try:  # (quoted grouped numbers: the comma-aware layout where sound, `qn`)
+        rows3 = qn.detect(scoring_rows, layout._detect_layout, text, delim)
+        header_row, data_start, units_row = rows3
     except ValueError as exc:  # header-only file
         raise ValueError(f"{exc} ({path.name})") from exc
     # The data's EFFECTIVE width over its leading rows (the wizard's
@@ -258,6 +260,9 @@ def import_csv(
         )
     elif delim != ",":  # with a comma delimiter, "1,5" is already two cells
         layout.reject_comma_numbers(path.name, col_headers, matrix, data_tokens)
+    # Comma cells read or left blank, and rows the layout skipped (`qn`).
+    args = ((header_row, data_start, units_row), delim, text, comma_path, comma_cols)
+    comma_notes = qn.import_notes(col_headers, matrix, data_tokens, lazy_tokens, *args)
 
     if isinstance(time_column, int) and time_column < 0:
         time_idx = -1
@@ -455,6 +460,7 @@ def import_csv(
         decimal_meta, decimal_note = dc.decimal_metadata(shown)
         metadata.update(decimal_meta)
         notes.append(decimal_note)
+    notes.extend(comma_notes)
     if time_promoted:
         if time_idx in categorical_idx:
             notes.append(

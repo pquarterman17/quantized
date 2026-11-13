@@ -174,9 +174,16 @@ export function parseWorkspaceDataset(
     );
     // P2.5: `derived` is re-typed (sanitizeDerived), never trusted as read.
     if (formulas.length)
-      ds.formulas = formulas.map(({ derived, ...f }) => {
+      ds.formulas = formulas.map(({ derived, sheets, ...f }) => {
         const d = sanitizeDerived(derived);
-        return d ? { ...f, derived: d } : f;
+        // sheet() links are re-typed too: { name, id | null } and nothing else.
+        const links = Array.isArray(sheets)
+          ? sheets.flatMap((b: unknown) => {
+              const r = b as Record<string, unknown> | null;
+              return r && typeof r.name === "string" && (typeof r.id === "string" || r.id === null) ? [{ name: r.name, id: r.id }] : [];
+            })
+          : [];
+        return { ...f, ...(d ? { derived: d } : {}), ...(links.length ? { sheets: links } : {}) };
       });
   }
   // SILENT_STATE_CORRUPTION_PLAN #6 version-skew: `ds.formulas` is final as

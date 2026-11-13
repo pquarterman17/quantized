@@ -14,6 +14,10 @@
 //   - a `.` not followed by a digit is the member operator
 //     (`fit("Gaussian").A`, spaces allowed — the column-removal rewrite
 //     re-joins tokens with them); `.5` is still a number.
+//
+// Origin-like additions (worksheet audit #17, lib/formulaRefs.ts):
+//   - `?` `:` (the conditional `c ? a : b`) and `[` `]` (`A[3]`, `A[1:10]`)
+//     are operator tokens.
 
 import type { Tok } from "./formulaTypes";
 
@@ -76,7 +80,7 @@ export function tokenize(src: string): Tok[] {
     } else if ((c === "*" || c === "/") && src[i + 1] === c) {
       toks.push({ t: "op", v: c + c, p });
       i += 2;
-    } else if ("+-*/%^(),.".includes(c)) {
+    } else if ("+-*/%^(),.?:[]".includes(c)) {
       toks.push({ t: "op", v: c, p });
       i++;
     } else {

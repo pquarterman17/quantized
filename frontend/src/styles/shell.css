@@ -1034,6 +1034,11 @@ body {
 .qzk-grid-headcell .comment { display: block; font-size: var(--type-nano); color: var(--text-faint); font-weight: var(--weight-regular); text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qzk-grid-rownum { background: var(--surface-1); color: var(--text-faint); text-align: center; cursor: pointer; }
 .qzk-grid-footer .qzk-grid-rownum { cursor: default; }
+/* The footer is sticky over the last rows: opaque, or the rows beneath show
+   through its cells (11 stat rows cover most of a short sheet). Its row
+   headers are stat names, not row numbers, so they get the full gutter. */
+.qzk-grid-footer .qzk-grid-cell { background: var(--surface-2); }
+.qzk-grid-footer .qzk-grid-rownum { background: var(--surface-1); padding: 3px 1px; font-size: var(--type-nano); text-overflow: clip; }
 
 /* column resize handle (MAIN_PLAN #3): a slim hit zone hugging each numeric
    header cell's right edge — drag to resize, double-click to autofit. The

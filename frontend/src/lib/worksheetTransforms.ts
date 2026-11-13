@@ -1,5 +1,6 @@
 import { PREVIEW_SOURCE_ROWS, ROW_INDEXED_SIDECARS } from "./rowSidecars";
 import type { DataStruct } from "./types";
+import { joinKeyColumn, type JoinKey } from "./worksheetJoin";
 
 export { joinWorksheets, type JoinMode } from "./worksheetJoin";
 export type AggregateMode = "mean" | "first" | "last";
@@ -130,15 +131,17 @@ export function stackWorksheet(ds: DataStruct, channels: readonly number[]): Dat
 export function unstackWorksheet(
   ds: DataStruct,
   keyColumn: number,
-  categoryColumn: number,
+  // A channel (-1 = X), or a TEXT column by name: a category is matched by
+  // its text (a categorical channel by its level text), as a join key is.
+  categoryColumn: JoinKey,
   valueColumn: number,
   aggregate: AggregateMode = "mean",
 ): DataStruct {
   const keys = column(ds, keyColumn);
-  const categories = column(ds, categoryColumn);
+  const { kind, keys: categories } = joinKeyColumn(ds, categoryColumn);
   const values = column(ds, valueColumn);
   const keyOrder: number[] = [];
-  const categoryOrder: number[] = [];
+  const categoryOrder: string[] = [];
   const keySeen = new Set<string>();
   const categorySeen = new Set<string>();
   // Per-cell accumulators, NOT per-cell arrays. Collecting every duplicate
@@ -153,10 +156,10 @@ export function unstackWorksheet(
   const hits = new Map<string, number>();
   for (let i = 0; i < keys.length; i += 1) {
     const key = finiteKey(keys[i]);
-    const category = finiteKey(categories[i]);
+    const category = categories[i];
     if (key === null || category === null || !Number.isFinite(values[i])) continue;
     if (!keySeen.has(key)) { keySeen.add(key); keyOrder.push(keys[i]); }
-    if (!categorySeen.has(category)) { categorySeen.add(category); categoryOrder.push(categories[i]); }
+    if (!categorySeen.has(category)) { categorySeen.add(category); categoryOrder.push(category); }
     const cell = `${key}\u0000${category}`;
     const seen = hits.get(cell) ?? 0;
     if (aggregate === "mean") acc.set(cell, (acc.get(cell) ?? 0) + values[i]);
@@ -190,8 +193,34 @@ export function unstackWorksheet(
   return {
     time: plotOrder,
     values: plotOrder.map((key) => categoryOrder.map((category) => pick(`${key}\u0000${category}`))),
-    labels: categoryOrder.map((category) => `Category ${category}`),
+    // A text category names its own column ("S0"); a number keeps the prefix.
+    labels: categoryOrder.map((category) => (kind === "text" ? category : `Category ${category}`)),
     units: categoryOrder.map(() => valueColumn < 0 ? "" : (ds.units[valueColumn] ?? "")),
     metadata: { ...provenance(ds, "unstack"), unstack_aggregate: aggregate },
   };
+}
+
+/** How many rows `stackWorksheet(ds, channels)` WOULD produce, without
+ *  materializing it — the bounded live preview reports the real result size
+ *  next to its truncated table (worksheet audit #16). Same channel filter. */
+export function stackRowCount(ds: DataStruct, channels: readonly number[]): number {
+  const selected = [...new Set(channels)].filter((i) => i >= 0 && i < ds.labels.length);
+  return ds.time.length * selected.length;
+}
+
+/** How many rows `unstackWorksheet` WOULD produce (its distinct finite keys
+ *  among rows with a finite key, category and value) — the same row filter,
+ *  counted without building the pivot (worksheet audit #16). */
+export function unstackRowCount(ds: DataStruct, keyColumn: number, categoryColumn: JoinKey, valueColumn: number): number {
+  const keys = column(ds, keyColumn);
+  const categories = joinKeyColumn(ds, categoryColumn).keys;
+  const values = column(ds, valueColumn);
+  // levels-allowlist: a COUNT of distinct pivot keys (the result's row count), never a level table.
+  const seen = new Set<string>();
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = finiteKey(keys[i]);
+    if (key === null || categories[i] === null || !Number.isFinite(values[i])) continue;
+    seen.add(key);
+  }
+  return seen.size;
 }

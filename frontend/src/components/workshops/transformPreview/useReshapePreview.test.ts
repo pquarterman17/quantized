@@ -61,7 +61,7 @@ describe("Reshape & combine — the created dataset IS the previewed one", () =>
       { id: "l", name: "long.dat", data: long },
     ]);
     const { result } = renderHook(() => useReshapePreview());
-    if (op === "unstack") act(() => result.current.setForm({ key: 0, category: 1, value: 2 }));
+    if (op === "unstack") act(() => result.current.setForm({ key: 0, category: "1", value: 2 }));
     await waitFor(() => expect(result.current.computed).not.toBeNull());
     const shown = result.current.computed!;
     // Stack of M (emu) and T (K) is a unit mismatch: acknowledged first.
@@ -159,7 +159,7 @@ describe("Reshape & combine — staleness and a still-loading book", () => {
     });
     vi.mocked(askConfirm).mockResolvedValue(false);
     const { result } = renderHook(() => useReshapePreview());
-    act(() => result.current.setForm({ key: 0, category: -1, value: 1 }));
+    act(() => result.current.setForm({ key: 0, category: "-1", value: 1 }));
     await waitFor(() => expect(result.current.computed).not.toBeNull());
     expect(result.current.previewOnly).toBe(true);
     expect(result.current.computed!.preview.warnings).toEqual([]);

@@ -103,6 +103,14 @@ describe("ReshapePanel — live data preview", () => {
     expect(screen.queryByRole("list", { name: "Transform warnings" })).toBeNull();
   });
 
+  it("unstack names the X column one way in every picker (review #2)", () => {
+    run("unstack-columns");
+    render(<ReshapePanel />);
+    const xLabel = (name: string) =>
+      within(screen.getByRole("combobox", { name })).getAllByRole("option").find((o) => (o as HTMLOptionElement).value === "-1")!.textContent;
+    expect(["Row key", "Category column", "Value column"].map(xLabel)).toEqual(["Field (x)", "Field (x)", "Field (x)"]);
+  });
+
   it("join: N rows, the duplicate-key warning, both inputs' sizes; the key-unit mismatch needs the acknowledgment", async () => {
     useApp.setState({ activeId: "L", selectedIds: ["L", "R"] });
     run("join-by-key");
@@ -144,9 +152,10 @@ describe("ReshapePanel — live data preview", () => {
     await waitFor(() => expect(screen.getByText(/Column names differ at the same position/)).toBeTruthy());
     fireEvent.change(screen.getByRole("combobox", { name: "Match columns" }), { target: { value: "name" } });
     // The LIVE preview is bounded (P2.5 review finding 5): wide.dat's 30 rows
-    // are over the cap, so the previewed merge is only 20 + 4 = 24 rows, with
-    // a note saying so — the WARNING below still counts wide.dat's real 30.
-    await waitFor(() => expect(sizes().textContent).toContain("Result “merged (2)”: 24 rows × 3 columns"));
+    // are over the cap, so the previewed TABLE is only 20 + 4 = 24 rows, with
+    // a note saying so — but the summary states the REAL result size, 30 + 4
+    // (worksheet audit #16), as the WARNING below counts wide.dat's real 30.
+    await waitFor(() => expect(sizes().textContent).toContain("Result “merged (2)”: 34 rows × 3 columns"));
     expect(screen.getByText(/Preview shows the first 20 rows/)).toBeTruthy();
     expect(within(table()).getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
       "Field (Oe)", "M (emu)", "T (K)", "Q",

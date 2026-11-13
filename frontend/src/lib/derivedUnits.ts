@@ -7,9 +7,15 @@
 // ("emu/g", "V·A", "m/s²", "J/(mol·K)", "K^0.5").
 //
 // Deliberate limits — each one refuses or says so, never guesses:
-//   - NO conversion and NO prefix algebra. "mA" and "A" are different
-//     symbols, so `A + B` over mA and A is REFUSED ("convert first"), and
-//     `mA * A` is "mA·A", not "10⁻³ A²". Honest, if unsimplified.
+//   - NO conversion and NO prefix algebra between columns. "mA" and "A" are
+//     different symbols, so `A + B` over mA and A is REFUSED ("convert
+//     first"), and `mA * A` is "mA·A", not "10⁻³ A²". Honest, if unsimplified.
+//     Scaling a column by an exact power of 1000 (worksheet audit #17) is
+//     AMBIGUOUS — `T/1000` over K may be a conversion to kK, or `V/1000` a
+//     gain correction that stays in V — so the result is left WITHOUT a unit
+//     and the note says so. (It used to keep "K", labelling 0.3 kK as 0.3 K;
+//     relabelling it "kK" would be the same guess in the other direction.)
+//     Any other constant factor keeps the unit.
 //   - A unit text that is not a clean product/quotient ("J/mol K" — is that
 //     J/(mol·K)?, "cm-3", "a.u.") is ONE opaque symbol: carried through
 //     algebra intact and parenthesized where needed, never split.
@@ -50,7 +56,7 @@ const AFFINE = new Set(["°C", "°F", "degC", "degF", "C°"]);
 const TRANSCENDENTAL = new Set(["exp", "log", "ln", "log10", "log2", "sinh", "cosh", "tanh", "asin", "acos", "atan", "arcsin", "arccos", "arctan"]);
 const TRIG = new Set(["sin", "cos", "tan"]);
 const SAME_UNIT = new Set(["abs", "absolute", "floor", "ceil"]);
-const MATCHING = new Set(["min", "max", "hypot"]);
+const MATCHING = new Set(["min", "max", "hypot", "rowmean", "rowsd", "rowmin", "rowmax", "rowsum"]);
 
 const clean = (e: number): number => {
   const r = Math.round(e * 1e9) / 1e9;
@@ -278,6 +284,13 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
         if (a.t === "lit" && b.t === "lit") return { t: "lit" };
         affine(a, `"${printExpr(n)}"`);
         affine(b, `"${printExpr(n)}"`);
+        // A power-of-1000 factor: conversion or gain? Never guessed (header).
+        const [knownSide, k] = a.t === "lit" && n.op === "*" ? [b, constValue(n.a)] : b.t === "lit" ? [a, constValue(n.b)] : [null, null];
+        const shift = k !== null && k > 0 && k !== 1 ? Math.round(Math.log10(k)) * (n.op === "/" ? -1 : 1) : 0;
+        if (knownSide?.t === "known" && knownSide.dim.size > 0 && shift % 3 === 0 && shift !== 0 && Math.abs(Math.log10(k!) - Math.round(Math.log10(k!))) < 1e-9) {
+          warn(`"${printExpr(n)}" rescales ${show(knownSide)} by 10^${shift}: that could be a unit conversion or a plain scale factor, so the column is left without a unit — set one by hand`);
+          return { t: "unknown" };
+        }
         return { t: "known", dim: combine(ad, bd, n.op === "*" ? 1 : -1) };
       }
       case "cmp":
@@ -303,6 +316,16 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
         return u({ k: "var", name: n.col });
       case "agg":
         return n.fn === "count" ? LIT : u({ k: "var", name: n.col });
+      case "cumsum":
+        return u({ k: "var", name: n.col });
+      case "index":
+        u(n.i);
+        return u({ k: "var", name: n.col });
+      case "sheet":
+        warn(`${printExpr(n)} reads another worksheet; its unit is not checked, so the result's unit is unknown`);
+        return { t: "unknown" };
+      case "textcmp":
+        return LIT;
       case "fit":
         warn(`fit("${n.model}", "${n.param}"): fitted parameters carry no recorded unit, so the result's unit is unknown`);
         return { t: "unknown" };
@@ -316,7 +339,7 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
         if (f === "sqrt") return power(n.args[0], { k: "num", v: 0.5 }, `"${printExpr(n)}"`);
         if (f === "pow" || f === "power") return power(n.args[0], n.args[1], `"${printExpr(n)}"`);
         const us = n.args.map(u);
-        if (f === "sign") return LIT;
+        if (f === "sign" || f === "rown") return LIT;
         if (SAME_UNIT.has(f)) return us[0];
         if (MATCHING.has(f)) return unify(n.args, us, `"${printExpr(n)}"`);
         if (f === "atan2") {
@@ -337,7 +360,12 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
     const r = u(root);
     if (r.t === "unknown") {
       const who = [...unitless];
-      const why = who.length ? `${who.join(", ")} ${who.length > 1 ? "have" : "has"} no recorded unit` : "see above";
+      // A node that made the unit unknown has already said so in its own
+      // warning; repeating "the result's unit is unknown (see above)" after
+      // it only doubled the message. The trailer is added when it says
+      // something new: which columns lack a unit, or (no warning at all) why.
+      if (!who.length && warnings.length) return { unit: "", dimensionless: false, warnings };
+      const why = who.length ? `${who.join(", ")} ${who.length > 1 ? "have" : "has"} no recorded unit` : "no unit could be derived";
       return { unit: "", dimensionless: false, warnings: [...warnings, `the result's unit is unknown (${why})`] };
     }
     const unit = r.t === "known" ? formatUnit(r.dim) : "";

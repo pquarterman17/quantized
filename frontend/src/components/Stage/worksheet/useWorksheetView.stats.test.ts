@@ -51,7 +51,8 @@ async function settle() {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
-  vi.mocked(statsDescriptive).mockImplementation(async (col: number[]) => ({ sum: sum(col), N: col.length }));
+  // The route returns no `sum`: useWorksheetStats adds it (and `missing`) itself.
+  vi.mocked(statsDescriptive).mockImplementation(async (col: number[]) => ({ N: col.length }));
   useApp.setState({ datasets: [], activeId: null, selection: null, worksheetSelections: {} });
 });
 
@@ -73,7 +74,7 @@ describe("the stats footer's per-column cache", () => {
       const edited = editCell(ds, 5, 1, -1000);
       rerender({ d: edited });
       await settle();
-      expect(result.current.colStats?.[2]).toEqual({ sum: sum(edited.data.values.map((r) => r[1])), N: rows });
+      expect(result.current.colStats?.[2]).toEqual({ sum: sum(edited.data.values.map((r) => r[1])), N: rows, missing: 0 });
       expect(statsDescriptive).toHaveBeenCalledTimes(1);
       expect(valuesSent()).toBe(rows); // one column, not all of them
     });
@@ -102,15 +103,24 @@ describe("the stats footer's per-column cache", () => {
 
     rerender({ d: { ...ds, excludedRows: [3] } });
     await settle();
-    expect(result.current.colStats?.[0]).toEqual({ sum: sum(ds.data.time) - 3, N: 49 });
+    expect(result.current.colStats?.[0]).toEqual({ sum: sum(ds.data.time) - 3, N: 49, missing: 0 });
     expect(statsDescriptive).toHaveBeenCalledTimes(CHANNELS + 1);
 
     vi.mocked(statsDescriptive).mockClear();
     act(() => result.current.setShowStats(false));
     act(() => result.current.setShowStats(true));
     await settle();
-    expect(result.current.colStats?.[0]).toEqual({ sum: sum(ds.data.time) - 3, N: 49 });
+    expect(result.current.colStats?.[0]).toEqual({ sum: sum(ds.data.time) - 3, N: 49, missing: 0 });
     expect(statsDescriptive).not.toHaveBeenCalled();
+  });
+
+  it("adds the exact sum and the missing-cell count the route never sees (worksheet audit #19)", async () => {
+    const ds = editCell(editCell(sheet(10), 2, 0, Number.NaN), 7, 0, Number.NaN);
+    const { result } = renderHook(({ d }) => useWorksheetView(d), { initialProps: { d: ds } });
+    act(() => result.current.setShowStats(true));
+    await settle();
+    const finiteA = ds.data.values.map((r) => r[0]).filter(Number.isFinite);
+    expect(result.current.colStats?.[1]).toEqual({ sum: sum(finiteA), N: 8, missing: 2 });
   });
 
   it("requests a newly added column without re-requesting the others", async () => {
@@ -123,7 +133,7 @@ describe("the stats footer's per-column cache", () => {
     const values = ds.data.values.map((r) => [...r, 1]);
     rerender({ d: { ...ds, data: { ...ds.data, values, labels: [...ds.data.labels, "d"], units: [...ds.data.units, ""] } } });
     await settle();
-    expect(result.current.colStats?.[CHANNELS + 1]).toEqual({ sum: 40, N: 40 });
+    expect(result.current.colStats?.[CHANNELS + 1]).toEqual({ sum: 40, N: 40, missing: 0 });
     expect(statsDescriptive).toHaveBeenCalledTimes(1);
   });
 });

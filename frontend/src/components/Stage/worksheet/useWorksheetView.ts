@@ -453,7 +453,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     const { addDerivedColumn } = await import("../../../store/derivedColumnRun");
     const r = await addDerivedColumn(ds.id, { name, expr, propagate: errors });
     if (r.ok) setStatus(r.message);
-    else setErr(r.error);
+    setErr(r.ok ? (r.warning ?? null) : r.error); // added with a warning (audit #17): inline too
     return r.ok;
   }
 
