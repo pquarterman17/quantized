@@ -32,7 +32,7 @@ const cases: Case[] = [
     count: () => useApp.getState().regionShades.length,
   },
   {
-    name: "Remove shape",
+    name: "Remove shape 1",
     card: () => <ShapesCard />,
     state: { shapes: [{ id: "s1", kind: "rect", x1: 1, y1: 2, x2: 3, y2: 4 }], selectedShapeId: null },
     count: () => useApp.getState().shapes.length,
@@ -50,7 +50,7 @@ const cases: Case[] = [
     count: () => useApp.getState().refLines.length,
   },
   {
-    name: "Remove annotation",
+    name: "Remove annotation 1",
     card: () => <AnnotationsCard />,
     state: { annotations: [{ id: "a1", x: 1, y: 2, text: "peak" }] },
     count: () => useApp.getState().annotations.length,

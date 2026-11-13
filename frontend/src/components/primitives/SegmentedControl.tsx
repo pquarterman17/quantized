@@ -9,7 +9,9 @@
 import type { KeyboardEvent, ReactNode } from "react";
 import clsx from "clsx";
 
-export type SegOption<T extends string> = T | { value: T; label: ReactNode };
+/** `ariaLabel`: the option's accessible name when its visible label is a
+ *  glyph or a single letter (e.g. "──" -> "Solid", "X" -> "X axis"). */
+export type SegOption<T extends string> = T | { value: T; label: ReactNode; ariaLabel?: string };
 
 const STEP: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
 
@@ -53,6 +55,7 @@ export function SegmentedControl<T extends string>({
             role="radio"
             aria-checked={val === value}
             tabIndex={i === tabStop ? 0 : -1}
+            aria-label={typeof opt === "string" ? undefined : opt.ariaLabel}
             className={clsx("qz-seg-btn", val === value && "qz-active")}
             onClick={() => onChange?.(val)}
           >

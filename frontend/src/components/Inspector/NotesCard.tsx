@@ -30,6 +30,7 @@ export default function NotesCard({ active }: { active: Dataset | null }) {
       <textarea
         className="qz-input"
         style={{ width: "100%", minHeight: 64, resize: "vertical", fontFamily: "inherit" }}
+        aria-label="Dataset notes"
         placeholder="Notes about this dataset — sample, conditions, caveats…"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}

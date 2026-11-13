@@ -45,14 +45,15 @@ export default function AnnotationsCard() {
   return (
     <Card title="Annotations" count={annotations.length || undefined} defaultOpen={false}>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <NumberField value={x} width={56} placeholder="X" onChange={setX} />
-        <NumberField value={y} width={56} placeholder="Y" onChange={setY} />
+        <NumberField value={x} width={56} placeholder="X" aria-label="New annotation X" onChange={setX} />
+        <NumberField value={y} width={56} placeholder="Y" aria-label="New annotation Y" onChange={setY} />
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
         <input
           className="qz-input"
           value={text}
           placeholder="label text"
+          aria-label="New annotation text"
           style={{ flex: 1 }}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
@@ -69,7 +70,7 @@ export default function AnnotationsCard() {
        *  button absorbs a Delete aimed at itself the same way: a focused
        *  button is not an editing target either. */}
       <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer}>
-        {annotations.map((a) => (
+        {annotations.map((a, i) => (
           <div key={a.id} className="qz-meta-row" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             <span
               className="qz-k"
@@ -88,6 +89,7 @@ export default function AnnotationsCard() {
                 value={String(a.x)}
                 width={56}
                 placeholder="X"
+                aria-label={`Annotation ${i + 1} X`}
                 onChange={(v) => {
                   const n = Number(v);
                   if (Number.isFinite(n) && v.trim()) updateAnnotation(a.id, { x: n });
@@ -97,6 +99,7 @@ export default function AnnotationsCard() {
                 value={String(a.y)}
                 width={56}
                 placeholder="Y"
+                aria-label={`Annotation ${i + 1} Y`}
                 onChange={(v) => {
                   const n = Number(v);
                   if (Number.isFinite(n) && v.trim()) updateAnnotation(a.id, { y: n });
@@ -106,13 +109,14 @@ export default function AnnotationsCard() {
                 value={String(a.size ?? "")}
                 width={40}
                 placeholder="px"
+                aria-label={`Annotation ${i + 1} size`}
                 onChange={(v) => {
                   const n = Number(v);
                   if (Number.isFinite(n) && v.trim()) updateAnnotation(a.id, { size: clampAnnotationSize(n) });
                 }}
               />
               <IconButton
-                aria-label="Remove annotation"
+                aria-label={`Remove annotation ${i + 1}`}
                 title="Remove"
                 onClick={() => removeRowSafely(containerRef.current, () => removeAnnotation(a.id))}
                 onKeyDown={absorbStrayDeleteOnContainer}

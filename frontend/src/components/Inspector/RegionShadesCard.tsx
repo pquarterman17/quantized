@@ -78,9 +78,9 @@ export default function RegionShadesCard() {
     if (v !== undefined) updateRegionShade(id, { [key]: v });
   };
 
-  const axisOptions: { value: AxisChoice; label: string }[] = [
-    { value: "y", label: "Y" },
-    { value: "y2", label: "Y2" },
+  const axisOptions: { value: AxisChoice; label: string; ariaLabel: string }[] = [
+    { value: "y", label: "Y", ariaLabel: "Y axis" },
+    { value: "y2", label: "Y2", ariaLabel: "Y2 axis" },
   ];
 
   return (

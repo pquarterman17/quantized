@@ -215,10 +215,10 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
   return (
     <Card title="Corrections" defaultOpen={false} helpTopic="Pipeline">
       <Field label="X offset">
-        <NumberField value={form.xOff} placeholder="0" onChange={(v) => upd("xOff", v)} />
+        <NumberField value={form.xOff} aria-label="X offset" placeholder="0" onChange={(v) => upd("xOff", v)} />
       </Field>
       <Field label="Y offset">
-        <NumberField value={form.yOff} placeholder="0" onChange={(v) => upd("yOff", v)} />
+        <NumberField value={form.yOff} aria-label="Y offset" placeholder="0" onChange={(v) => upd("yOff", v)} />
       </Field>
       <RescaleFields
         xScaleOp={form.xScaleOp}
@@ -232,16 +232,16 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
         onChange={(k, v) => upd(k, v as never)}
       />
       <Field label="BG slope">
-        <NumberField value={form.bgSlope} placeholder="0" onChange={(v) => upd("bgSlope", v)} />
+        <NumberField value={form.bgSlope} aria-label="BG slope" placeholder="0" onChange={(v) => upd("bgSlope", v)} />
       </Field>
       <Field label="BG intercept">
-        <NumberField value={form.bgInt} placeholder="0" onChange={(v) => upd("bgInt", v)} />
+        <NumberField value={form.bgInt} aria-label="BG intercept" placeholder="0" onChange={(v) => upd("bgInt", v)} />
       </Field>
       <Field label="Trim min">
-        <NumberField value={form.xTrimMin} placeholder="—" onChange={(v) => upd("xTrimMin", v)} />
+        <NumberField value={form.xTrimMin} aria-label="Trim min" placeholder="—" onChange={(v) => upd("xTrimMin", v)} />
       </Field>
       <Field label="Trim max">
-        <NumberField value={form.xTrimMax} placeholder="—" onChange={(v) => upd("xTrimMax", v)} />
+        <NumberField value={form.xTrimMax} aria-label="Trim max" placeholder="—" onChange={(v) => upd("xTrimMax", v)} />
       </Field>
 
       {bgOptions.length > 1 && (
@@ -249,6 +249,7 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
           <Field label="Background">
             <Select
               options={bgOptions}
+              aria-label="Background dataset"
               value={form.bgId}
               onChange={(e) => upd("bgId", e.target.value)}
             />
@@ -257,6 +258,7 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
             <Field label="Interp">
               <Select
                 options={opts(INTERP_METHODS)}
+                aria-label="Background interpolation"
                 value={form.bgInterp}
                 onChange={(e) => upd("bgInterp", e.target.value)}
               />
@@ -278,6 +280,7 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
           <Field label="Beam w">
             <NumberField
               value={form.footprintW}
+              aria-label="Beam width"
               placeholder="mm"
               onChange={(v) => upd("footprintW", v)}
             />
@@ -285,6 +288,7 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
           <Field label="Sample L">
             <NumberField
               value={form.footprintL}
+              aria-label="Sample length"
               placeholder="mm"
               onChange={(v) => upd("footprintL", v)}
             />
@@ -311,12 +315,14 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
           <Field label="Window">
             <NumberField
               value={form.smoothWindow}
+              aria-label="Smoothing window"
               onChange={(v) => upd("smoothWindow", v)}
             />
           </Field>
           <Field label="Method">
             <Select
               options={opts(SMOOTH_METHODS)}
+              aria-label="Smoothing method"
               value={form.smoothMethod}
               onChange={(e) => upd("smoothMethod", e.target.value)}
             />
@@ -327,6 +333,7 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
       <Field label="Normalize">
         <Select
           options={opts(NORM_METHODS)}
+          aria-label="Normalize"
           value={form.normMethod}
           onChange={(e) => upd("normMethod", e.target.value)}
         />
@@ -334,6 +341,7 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
       <Field label="Derivative">
         <Select
           options={opts(DERIV_MODES)}
+          aria-label="Derivative"
           value={form.derivativeMode}
           onChange={(e) => upd("derivativeMode", e.target.value)}
         />

@@ -57,8 +57,8 @@ export default function RefLinesCard() {
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <SegmentedControl<"x" | "y">
           options={[
-            { value: "x", label: "X" },
-            { value: "y", label: "Y" },
+            { value: "x", label: "X", ariaLabel: "X axis" },
+            { value: "y", label: "Y", ariaLabel: "Y axis" },
           ]}
           value={axis}
           onChange={setAxis}

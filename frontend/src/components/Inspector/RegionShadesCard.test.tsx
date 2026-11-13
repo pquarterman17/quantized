@@ -74,7 +74,7 @@ describe("RegionShadesCard — empty state + Add", () => {
 
   it("picking Y2 before Add tags the new shade axis: 1", () => {
     render(<RegionShadesCard />);
-    fireEvent.click(screen.getAllByRole("radio", { name: "Y2" })[0]);
+    fireEvent.click(screen.getAllByRole("radio", { name: "Y2 axis" })[0]);
     fireEvent.click(screen.getByText("Add"));
     expect(useApp.getState().regionShades[0].axis).toBe(1);
   });
@@ -154,7 +154,7 @@ describe("RegionShadesCard — existing shade: edit + remove", () => {
 
   it("toggling the row's axis to Y2 commits axis: 1 via updateRegionShade", () => {
     render(<RegionShadesCard />);
-    fireEvent.click(screen.getAllByRole("radio", { name: "Y2" })[0]);
+    fireEvent.click(screen.getAllByRole("radio", { name: "Y2 axis" })[0]);
     expect(useApp.getState().regionShades[0].axis).toBe(1);
   });
 
@@ -163,7 +163,7 @@ describe("RegionShadesCard — existing shade: edit + remove", () => {
       regionShades: [{ id: "sh1", x1: 1, y1: 2, x2: 3, y2: 4, fill: "#336699", axis: 1 }],
     });
     render(<RegionShadesCard />);
-    fireEvent.click(screen.getAllByRole("radio", { name: "Y" })[0]);
+    fireEvent.click(screen.getAllByRole("radio", { name: "Y axis" })[0]);
     expect(useApp.getState().regionShades[0].axis).toBe(0);
   });
 

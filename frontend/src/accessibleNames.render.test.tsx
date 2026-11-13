@@ -20,6 +20,7 @@ import CalcTitleBar from "./components/Shell/CalcTitleBar";
 import MenuBar from "./components/Shell/MenuBar";
 import StatusBar from "./components/Shell/StatusBar";
 import TitleBar from "./components/Shell/TitleBar";
+import Inspector from "./components/Inspector/Inspector";
 import PreferencesDialog from "./components/overlays/PreferencesDialog";
 import MapToolbar, { type MapToolbarProps } from "./components/Stage/MapToolbar";
 import PlotLegend from "./components/Stage/PlotLegend";
@@ -62,6 +63,22 @@ function unnamedControls(root: HTMLElement): string[] {
 }
 
 const FIX = "give the control a short aria-label (one or two words, matching its tooltip)";
+
+/** Names used more than once within one scope -- a card, or a radio/button
+ *  group inside it (a radio's "Y axis" is unique within its own group). A
+ *  repeated row (a curve, an annotation, a shape) carries its item in the name. */
+function duplicateNames(root: HTMLElement): string[] {
+  const seen = new Map<string, number>();
+  const scopes = new Map<Element | null, number>();
+  for (const el of root.querySelectorAll<HTMLElement>(CONTROLS)) {
+    if (isInaccessible(el)) continue;
+    const scope = el.closest("[role=radiogroup],[role=group],[role=toolbar]") ?? el.closest(".qz-card");
+    if (!scopes.has(scope)) scopes.set(scope, scopes.size);
+    const key = `${scopes.get(scope)}: ${computeAccessibleName(el)}`;
+    seen.set(key, (seen.get(key) ?? 0) + 1);
+  }
+  return [...seen].filter(([, n]) => n > 1).map(([k, n]) => `${k} (x${n})`);
+}
 
 beforeEach(() => {
   useConnection.setState({ connected: true });
@@ -176,5 +193,28 @@ describe("rendered controls are named in words (U6)", () => {
     expect(strip).toContainElement(screen.getByRole("tab", { name: "Plot" }));
     expect(strip).toContainElement(screen.getByRole("tab", { name: "Workflow" }));
     expect(unnamedControls(container), FIX).toEqual([]);
+  });
+
+  it("every Inspector card, with its optional rows showing: named, and unique within its card", () => {
+    const data = {
+      time: [1, 2, 3], values: [[10, 1, 5], [20, 2, 6], [30, 3, 7]],
+      labels: ["Moment", "Field", "Temp"], units: ["emu", "Oe", "K"], metadata: { sample: "A" },
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "s", data }, { id: "d2", name: "t", data }], activeId: "d1", folders: [], yKeys: [0, 1],
+      annotations: [{ id: "a1", x: 1, y: 1, text: "peak" }, { id: "a2", x: 2, y: 2, text: "dip" }] as never,
+      regionShades: [{ id: "r1", x1: 1, x2: 2, y1: 0, y2: 1, fill: "#ff0000", fullHeight: true }] as never,
+      refLines: [{ id: "l1", axis: "x", value: 2 }] as never,
+      shapes: [{ id: "s1", kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1 }, { id: "s2", kind: "line", x1: 0, y1: 1, x2: 1, y2: 0 }] as never,
+    });
+    const { container } = render(<Inspector />);
+    // The Corrections card's conditional rows: footprint, smoothing, and the
+    // relabel rows a scale factor reveals.
+    fireEvent.click(screen.getByRole("checkbox", { name: /Footprint/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Smooth" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "X scale factor" }), { target: { value: "2" } });
+    expect(screen.getByRole("textbox", { name: "Rescaled X label" })).toBeInTheDocument();
+    expect(unnamedControls(container), FIX).toEqual([]);
+    expect(duplicateNames(container), "name repeated rows after their item").toEqual([]);
   });
 });
