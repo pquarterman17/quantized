@@ -133,6 +133,7 @@ export function createDatasetSelectionSlice(set: SliceSet, get: SliceGet): Datas
       // summary receives the new active worksheet, then restore the surface;
       // explicit plot actions still call setActive and reveal Plot/Map.
       if (s.stageTab === "technique" || s.stageTab === "analysis") {
+        if (ds) retargetPassiveRebind(s, id, undefined, { protectEdits: true }); // figures audit B1, below
         get().setActive(id);
         set({ stageTab: s.stageTab });
         return;
@@ -150,6 +151,11 @@ export function createDatasetSelectionSlice(set: SliceSet, get: SliceGet): Datas
         get().ensureBookData(id);
         return;
       }
+      // Figures audit B1: opening a Library item never rebinds a window the
+      // user has styled (Origin: graph windows are independent) — it lands in
+      // an unedited window or a fresh one. Dropping the row onto a frame is
+      // the explicit rebind (`rebindWindow`). An unknown id opens nothing.
+      if (ds) retargetPassiveRebind(s, id, undefined, { protectEdits: true });
       get().setActive(id);
     },
     // Ctrl/Cmd-click: add or remove a row from the multi-selection WITHOUT changing

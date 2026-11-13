@@ -1,6 +1,6 @@
-// The F1.4 close gate's two branches (PR #106 review): a never-saved window
-// closes plainly (undoable + workspace-persisted — the confirm-exemption
-// convention), while a SAVED figure with drifted state gets the discard gate.
+// The F1.4 close gate's branches (PR #106 review): a never-saved DEFAULT
+// window closes plainly, a SAVED figure with drifted state gets the discard
+// gate, and (figures audit #15) so does a never-saved window the user styled.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createFigureDocument } from "../../lib/figureDocument";
@@ -15,7 +15,7 @@ vi.mock("../overlays/ConfirmDialog", () => ({
 
 function secondPlotWindowId(): string {
   const state = useApp.getState();
-  const id = state.createWindow(null, undefined, "scratch");
+  const id = state.createWindow(null); // a default, unstyled window (a typed title would count as an edit)
   return id;
 }
 
@@ -25,7 +25,7 @@ beforeEach(() => {
 });
 
 describe("closeFigureWindow", () => {
-  it("closes a never-saved window without any confirm", async () => {
+  it("closes a never-saved DEFAULT window without any confirm", async () => {
     const id = secondPlotWindowId();
     const before = useApp.getState().plotWindows.length;
 
@@ -44,6 +44,23 @@ describe("closeFigureWindow", () => {
     askConfirm.mockResolvedValueOnce(false);
     await closeFigureWindow(id);
     expect(askConfirm).toHaveBeenCalledOnce();
+    expect(useApp.getState().plotWindows).toHaveLength(before);
+
+    askConfirm.mockResolvedValueOnce(true);
+    await closeFigureWindow(id);
+    expect(useApp.getState().plotWindows).toHaveLength(before - 1);
+  });
+
+  // Figures audit #15: a window the user styled but never saved closed with
+  // no word, taking titles, error bars and annotations with it.
+  it("asks before closing a STYLED never-saved window, and cancel keeps it", async () => {
+    const id = useApp.getState().createWindow(null, { ...defaultPlotView(), plotTitle: "Sample A", yScale: "log" });
+    const before = useApp.getState().plotWindows.length;
+
+    askConfirm.mockResolvedValueOnce(false);
+    await closeFigureWindow(id);
+    expect(askConfirm).toHaveBeenCalledOnce();
+    expect(String(askConfirm.mock.calls[0][0])).toContain("Close");
     expect(useApp.getState().plotWindows).toHaveLength(before);
 
     askConfirm.mockResolvedValueOnce(true);
@@ -97,6 +114,23 @@ describe("cancelPublicationPreview", () => {
     const baseline = baselineDoc();
     useApp.setState({
       figurePublicationSession: { target: "new-editable", windowId: null, baseline, draft: baseline },
+      figureBuilderOpen: true,
+    });
+
+    await cancelPublicationPreview();
+
+    expect(askConfirm).not.toHaveBeenCalled();
+    expect(useApp.getState().figurePublicationSession).toBeNull();
+  });
+
+  // Figures audit #16: setting a value and setting it back left an empty
+  // override group and a reordered key behind, and Cancel asked "Discard?".
+  it("clears with no prompt after an edit that changed nothing", async () => {
+    const baseline = baselineDoc();
+    const { output, ...rest } = baseline;
+    const reordered = { output: { ...output }, ...rest, publication: { overrides: { legend: {} }, title: undefined } };
+    useApp.setState({
+      figurePublicationSession: { target: "new-editable", windowId: null, baseline, draft: reordered as typeof baseline },
       figureBuilderOpen: true,
     });
 

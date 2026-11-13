@@ -53,7 +53,7 @@ describe("WindowWorkspaceControls", () => {
 
   it("opens another focused plot and exposes layout controls", () => {
     render(<WindowWorkspaceControls />);
-    expect(screen.getByRole("button", { name: "Tile visible windows" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cascade visible windows" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Plot" }));
 
     const state = useApp.getState();
@@ -61,6 +61,25 @@ describe("WindowWorkspaceControls", () => {
     expect(state.focusedWindowId).toBe(state.plotWindows[1].id);
     expect(screen.getByRole("button", { name: "Tile visible windows" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Cascade visible windows" })).toBeEnabled();
+  });
+
+  // Figures audit #15: Tile did nothing for a single small window.
+  it("Tile on ONE window fills the stage", () => {
+    useApp.setState({ plotWindows: [{ ...mainWindow(), winState: "normal", geometry: { x: 300, y: 200, w: 200, h: 150 } }] });
+    render(<WindowWorkspaceControls />);
+    fireEvent.click(screen.getByRole("button", { name: "Tile visible windows" }));
+    const g = useApp.getState().plotWindows[0].geometry;
+    expect(g.w).toBeGreaterThan(850);
+    expect(g.h).toBeGreaterThan(550);
+  });
+
+  // Figures audit #9: a Statistics bar chart leaked into every "+ Plot" window.
+  it("+ Plot opens an XY plot even from a window in Statistics mode", () => {
+    useApp.setState({ statMode: true, polarMode: false, plotTitle: "Kept" });
+    render(<WindowWorkspaceControls />);
+    fireEvent.click(screen.getByRole("button", { name: "Plot" }));
+    expect(useApp.getState().statMode).toBe(false);
+    expect(useApp.getState().plotTitle).toBe("Kept"); // the rest of the view is still cloned
   });
 
   it("restores the full-bleed starter plot without requiring a hidden title bar", () => {

@@ -97,6 +97,8 @@ export interface ChannelsPanelProps {
   yKeys: number[] | null;
   y2Keys: number[] | null;
   fallbackYKeys: readonly number[];
+  /** The dataset's own x column name, labelling the `xKey=null` default. */
+  xDefaultLabel?: string;
   onXKey: (xKey: number | null) => void;
   onToggleY: (channel: number) => void;
   onToggleY2: (channel: number) => void;

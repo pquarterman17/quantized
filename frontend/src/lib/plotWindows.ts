@@ -6,7 +6,7 @@
 
 import { sanitizePanelDatasetIds, sanitizePanelLayout } from "./panelWindowModel";
 import { sanitizeFrozenBundle } from "./plotsnapshot";
-import { num, sanitizePlotView, strOrDefault, type PlotBg, type PlotWindow, type WindowGeometry, type WindowKind, type WinState } from "./plotview";
+import { num, sanitizePlotView, snapshotView, strOrDefault, type PlotBg, type PlotView, type PlotWindow, type WindowGeometry, type WindowKind, type WinState } from "./plotview";
 
 const PLOT_BG_CYCLE: readonly PlotBg[] = ["theme", "light", "dark"];
 
@@ -200,6 +200,43 @@ export function dedupeWindowTitle(baseName: string, existingTitles: readonly str
   let n = 2;
   while (existingTitles.includes(`${baseName} (${n})`)) n++;
   return `${baseName} (${n})`;
+}
+
+/** The seed view for "New Graph Window" (and the workspace "+ Plot" button):
+ *  a clone of the focused view, the plan's fast-compare workflow, but in the
+ *  plain XY plot mode. The plot MODE is per window (figures audit #9): a
+ *  Statistics bar chart or a polar plot leaked into every window opened from
+ *  it. */
+export function newGraphWindowView(source: PlotView): PlotView {
+  return { ...snapshotView(source), statMode: false, polarMode: false };
+}
+
+/** True for the computed default title of a window bound to `datasetName`:
+ *  blank, the name itself, or its " (n)" dedupe ("Untitled graph" likewise
+ *  for an unbound window). Anything else is a title the user typed. */
+export function isDefaultWindowTitle(title: string, datasetName: string | undefined): boolean {
+  if (title === "") return true;
+  const base = datasetName || "Untitled graph";
+  return title === base || (title.startsWith(`${base} (`) && /^ \(\d+\)$/.test(title.slice(base.length)));
+}
+
+/** The title `win` carries once rebound to a dataset named `nextName`
+ *  (figures audit B1): a computed default follows the new dataset, deduped
+ *  against every OTHER window's displayed title; blank stays blank (it
+ *  already displays the bound dataset's name); a title the user typed is
+ *  kept. Before this, a window created for "xyz_idx.csv" kept that title
+ *  while showing decay2, and a figure saved from it was named after the
+ *  wrong data. */
+export function reboundWindowTitle(
+  windows: readonly Pick<PlotWindow, "id" | "title" | "datasetId">[],
+  datasets: readonly { id: string; name: string }[],
+  win: Pick<PlotWindow, "id" | "title" | "datasetId">,
+  nextName: string | undefined,
+): string {
+  const prevName = datasets.find((d) => d.id === win.datasetId)?.name;
+  if (win.title === "" || !isDefaultWindowTitle(win.title, prevName)) return win.title;
+  const others = windows.filter((w) => w.id !== win.id).map((w) => displayedWindowTitle(w, datasets));
+  return dedupeWindowTitle(nextName || "Untitled graph", others);
 }
 
 

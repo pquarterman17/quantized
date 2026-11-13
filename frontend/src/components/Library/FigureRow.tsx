@@ -11,7 +11,7 @@
 import { useState, type KeyboardEvent, type MouseEvent } from "react";
 import { plural } from "../../lib/plural";
 
-import { recordWorkbookOpen } from "./libraryOpen";
+import { originFigureOpenOpts, recordWorkbookOpen } from "./libraryOpen";
 import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import { originFidelityLabel, originFidelityStatusLabel } from "../../lib/originFidelity";
 import { figureLabel, type OriginFigureEntry } from "../../lib/originFigures";
@@ -65,7 +65,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
   // (a cross-workbook/root placement never "remembers" a single workbook).
   const ownerWorkbookId = datasets.find((ds) => ds.id === entry.datasetId)?.workbookId;
   const openAndRemember = (opts?: { newWindow?: boolean }) => {
-    applyOriginFigure(entry.id, opts);
+    applyOriginFigure(entry.id, opts ?? originFigureOpenOpts(entry.id)); // figures audit B1
     recordWorkbookOpen(ownerWorkbookId, `origin-figure:${entry.id}`);
   };
   const [showSavedPreview, setShowSavedPreview] = useState(false);

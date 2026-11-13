@@ -230,7 +230,12 @@ test("the data-cursor readout stays inside the plot frame @core", async ({ page 
   const readout = page.locator(".qzk-stage > .qzk-readout");
   for (const size of SIZES) {
     await page.setViewportSize(size);
-    await over.hover({ position: { x: 20, y: 20 } });
+    // Off-centre first, at the bottom left (the ramp's own start): the auto
+    // legend re-resolves per size (figures audit #12) and on this ramp the
+    // empty TOP-left is exactly where it belongs, so a top-left hover would
+    // land on the legend, not the frame.
+    const box = await rectOf(over);
+    await over.hover({ position: { x: 20, y: box.height - 20 } });
     await over.hover(); // the centre lies on the ramp
     await expect(readout).toBeVisible();
     await expect

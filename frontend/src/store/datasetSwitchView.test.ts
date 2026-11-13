@@ -2,7 +2,8 @@
 // coordinate-tied decorations, tick formats and (for a generic dataset) axis
 // scales. Ref lines, region shades, data-anchored annotations/shapes and the
 // tick formats describe the dataset that just left the window, so they reset;
-// window style (title, grid, legend, template) and page-anchored marks stay.
+// window style (grid, legend, template) and page-anchored marks stay. The
+// plot title resets too since the figures audit (B1).
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { defaultPlotView, type PlotView, type PlotWindow } from "../lib/plotview";
@@ -80,8 +81,9 @@ function expectSwitched(v: Pick<PlotView, keyof typeof DECORATED>): void {
   expect(v.xFmt).toEqual(defaultPlotView().xFmt);
   expect(v.yFmt).toEqual(defaultPlotView().yFmt);
   expect(v.y2Fmt).toBeNull();
-  // Window style is not dataset-bound.
-  expect(v.plotTitle).toBe("kept");
+  // Window style is not dataset-bound; the plot title describes the dataset
+  // that left (figures audit B1: "Sample A" leaked onto later datasets).
+  expect(v.plotTitle).toBe("");
   expect(v.showGrid).toBe(false);
 }
 
@@ -120,10 +122,23 @@ describe("genuine dataset switch — coordinate-tied decorations and tick format
     expect(s.yFmt).toEqual({ mode: "fixed", digits: 1 });
   });
 
-  it("an import (addDataset) resets them", () => {
+  // Figures audit B1: an import never lands on a window the user decorated —
+  // both windows here carry edits, so the data opens in a fresh window and
+  // the decorated focused window keeps every mark.
+  it("an import (addDataset) opens a fresh window instead of resetting a decorated one", () => {
     seed();
     useApp.getState().addDataset(ds("d9"));
-    expectSwitched(useApp.getState());
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(3);
+    const fresh = s.plotWindows.find((w) => w.id === s.focusedWindowId)!;
+    expect(fresh.datasetId).toBe("d9");
+    expect(s.refLines).toEqual([]);
+    expect(s.plotTitle).toBe("");
+    const kept = plotWindowView(s.plotWindows.find((w) => w.id === "w1")!);
+    expect(kept.refLines).toHaveLength(1);
+    expect(kept.annotations).toEqual([dataNote, pageNote]);
+    expect(kept.plotTitle).toBe("kept");
+    expect(s.plotWindows.find((w) => w.id === "w1")!.datasetId).toBe("d1");
   });
 
   it("rebinding a BACKGROUND window resets its stored view only", () => {

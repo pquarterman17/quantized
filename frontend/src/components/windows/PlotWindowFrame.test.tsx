@@ -280,6 +280,18 @@ describe("PlotWindowFrame", () => {
     expect(container.querySelector(".qzk-plotwin-resize")).toBeNull();
   });
 
+  // Figures audit #15: a maximized frame dropped its z, so every normal
+  // sibling painted over it — Maximize "did not stick", and double-clicking a
+  // title bar seemed to make that window vanish.
+  it("a maximized frame keeps its stacking order above its siblings", () => {
+    const { container } = render(
+      <PlotWindowFrame win={win({ id: "w1", winState: "maximized", z: 7 })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    expect((container.querySelector(".qzk-plotwin") as HTMLElement).style.zIndex).toBe("7");
+  });
+
   it("the close button closes the window via the store", async () => {
     const { getByLabelText } = render(
       <PlotWindowFrame win={win({ id: "w2" })} focused={false} datasetName={undefined}>

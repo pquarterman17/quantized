@@ -1,4 +1,5 @@
-import { snapshotView, type PlotWindow } from "../../lib/plotview";
+import { newGraphWindowView } from "../../lib/plotWindows";
+import type { PlotWindow } from "../../lib/plotview";
 import { useApp } from "../../store/useApp";
 
 /** Always-visible entry points for the common Origin-style MDI workflows.
@@ -23,7 +24,7 @@ export default function WindowWorkspaceControls() {
 
   const newPlot = () => {
     const s = useApp.getState();
-    const id = s.createWindow(s.activeId, snapshotView(s));
+    const id = s.createWindow(s.activeId, newGraphWindowView(s));
     s.focusWindow(id);
     s.setStageTab("plot");
   };
@@ -74,7 +75,7 @@ export default function WindowWorkspaceControls() {
           s.tileWindows();
           s.setStageTab("plot");
         }}
-        disabled={visibleCount < 2}
+        disabled={visibleCount < 1} // one window tiles to fill the stage (figures audit #15)
         title="Tile windows side by side"
         aria-label="Tile visible windows"
       >

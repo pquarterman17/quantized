@@ -48,6 +48,23 @@ describe("useShapeDraw — bridge gating", () => {
     renderHook(() => useShapeDraw());
     expect(useApp.getState().status).toMatch(/rectangle/i);
   });
+
+  // Figures audit #15: "drag to draw an arrow — Esc cancels" stayed in the
+  // status bar after the arrow was drawn.
+  it("withdraws the hint when the mode ends, but never clobbers a newer status", () => {
+    useApp.setState({ drawShapeKind: "arrow" });
+    const { rerender } = renderHook(() => useShapeDraw());
+    expect(useApp.getState().status).toMatch(/arrow/i);
+    act(() => useApp.setState({ drawShapeKind: null }));
+    rerender();
+    expect(useApp.getState().status).toBe("");
+
+    act(() => useApp.setState({ drawShapeKind: "line" }));
+    rerender();
+    act(() => useApp.setState({ status: "saved figure", drawShapeKind: null }));
+    rerender();
+    expect(useApp.getState().status).toBe("saved figure");
+  });
 });
 
 describe("useShapeDraw — committing a real shape kind", () => {

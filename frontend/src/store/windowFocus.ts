@@ -4,12 +4,15 @@
 // importer changed. Only TYPE imports cross back into useApp (no runtime cycle).
 
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
-import { dedupeWindowTitle, displayedWindowTitle, hydrateView, snapshotView, type PlotView, type PlotWindow, type WinState, type WindowGeometry } from "../lib/plotview";
+import { dedupeWindowTitle, defaultPlotView, displayedWindowTitle, hydrateView, snapshotView, type PlotView, type PlotWindow, type WinState, type WindowGeometry } from "../lib/plotview";
+import { reboundWindowTitle } from "../lib/plotWindows";
 import { plotIntentStageTab } from "../lib/stagetab";
 import { workbookDisclosurePatch } from "./libraryPanel";
+import { toast } from "./toasts";
 import type { AppState } from "./useApp";
-import { syncPlotWindow } from "./windowDocuments";
+import { plotWindowDatasetId, syncPlotWindow } from "./windowDocuments";
 import { datasetViewDefaults, mainWindow as createMainWindow } from "./windowDefaults";
+import { windowHasUserEdits } from "./windowUserEdits";
 // Window ids get their own sequence (dataset/folder/report ids keep useApp's)
 // — the `win-` prefix + timestamp keeps them collision-free across both.
 let _winSeq = 0;
@@ -72,6 +75,16 @@ export function focusTransientReset(): Partial<AppState> {
   return {
     composition: null,
     rsmPeaks: null,
+    ...analysisResultReset(),
+  };
+}
+
+/** The on-plot analysis results tied to the data on screen (integral, FWHM,
+ *  quick fit, gadget readouts): `focusTransientReset` clears them with the
+ *  arrangement, and `addDataset` clears exactly these on an import. One list,
+ *  so the two can never drift (it was written out twice). */
+export function analysisResultReset(): Partial<AppState> {
+  return {
     integral: null,
     fwhmResult: null,
     qfitRoi: null,
@@ -96,8 +109,9 @@ export function focusTransientReset(): Partial<AppState> {
  *  Channel-keyed state (keys/styles/labels/order/hidden) resets because it
  *  indexes the OLD dataset's columns; axis limits reset to autoscale; errKeys/
  *  hiddenChannels seed from the dataset (Origin Y-error designations + parser
- *  hints — see lib/errorbars); with `outgoing`, data-tied marks and tick
- *  formats too. Window style (grid, legend, template, title, …) is absent —
+ *  hints — see lib/errorbars); with `outgoing`, data-tied marks, tick
+ *  formats, the plot/legend titles and the Statistics mode too (figures audit
+ *  B1/#9). Window style (grid, legend, template, …) is absent —
  *  same as `setActive` has always behaved, EXCEPT axis scale (item 2):
  *  `prevDs` gates the technique-defaults table to a genuine technique change
  *  (`lib/techniqueDefaults.isTechniqueChange`), so log axes still survive a
@@ -118,6 +132,10 @@ export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
   const memory = captureTechniqueView(prevDs, s, s.techniqueViewMemory);
   const viewPatch = s.activeId === id ? {} : datasetViewDefaults(ds, prevDs, memory, { outgoing: s });
   const nextView = { ...snapshotView(s), ...viewPatch };
+  // Figures audit B1: a default title follows the new dataset (never a stale
+  // "xyz_idx.csv" over decay2); a title the user typed is kept.
+  const focused = s.plotWindows.find((w) => w.id === s.focusedWindowId);
+  const title = focused && s.activeId !== id ? reboundWindowTitle(s.plotWindows, s.datasets, focused, ds?.name) : undefined;
   return {
     activeId: id,
     ...workbookDisclosurePatch(s, ds), // PR C: activation discloses the sheet's workbook
@@ -132,7 +150,7 @@ export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
     // decision #4).
     plotWindows: s.plotWindows.map((w) =>
       w.id === s.focusedWindowId
-        ? syncPlotWindow(w, nextView, { datasetId: id, errors: ds?.errorRoles, resetErrors: true, resetAxisBreaks: s.activeId !== id }) // resetAxisBreaks (review F4, windowDocuments.ts): same genuine-switch test `viewPatch` uses
+        ? syncPlotWindow(w, nextView, { title, datasetId: id, errors: ds?.errorRoles, resetErrors: true, resetAxisBreaks: s.activeId !== id }) // resetAxisBreaks (review F4, windowDocuments.ts): same genuine-switch test `viewPatch` uses
         : w,
     ),
     // setActive IS the plot-intent primitive (item 15's DatasetRow "Plot
@@ -159,20 +177,42 @@ export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
  *  (cascade placement) bound to `datasetId` instead. `titleBase` covers the
  *  import case, where the dataset isn't in the store yet so `createWindow`
  *  couldn't compute its name-derived default title (still deduped here, item
- *  10). A no-op when the focused window isn't pinned. `rebindWindow` (the
- *  EXPLICIT gesture) deliberately never calls this. */
-export function retargetPassiveRebind(s: AppState, datasetId: string, titleBase?: string): void {
+ *  10). A no-op when the focused window isn't protected. With
+ *  `protectEdits` (figures audit B1: `addDataset` and `activateFromLibrary`)
+ *  a window carrying user edits (`windowHasUserEdits`) is protected too, and
+ *  never chosen as the candidate either. `rebindWindow` (the EXPLICIT
+ *  gesture) deliberately never calls this. */
+export function retargetPassiveRebind(
+  s: AppState,
+  datasetId: string,
+  titleBase?: string,
+  options: { protectEdits?: boolean } = {},
+): void {
   const focused = s.plotWindows.find((w) => w.id === s.focusedWindowId);
-  if (!focused?.pinned) return;
+  if (!focused) return;
+  // Figures audit B1: with `protectEdits` (an import, a Library open) a
+  // window the user has styled is protected exactly like a pinned one —
+  // unless it already shows `datasetId`, where nothing would be rebound.
+  const protect = (w: PlotWindow): boolean =>
+    w.pinned || (options.protectEdits === true && plotWindowDatasetId(w) !== datasetId && windowHasUserEdits(s, w));
+  if (!protect(focused)) return;
   // Only plot windows are retarget candidates — future window kinds (item
   // 17's worksheets/maps, item 11's snapshots) never absorb a plot intent.
   const candidates = s.plotWindows.filter(
-    (w) => w.kind === "plot" && w.id !== focused.id && !w.pinned && w.winState !== "minimized",
+    (w) => w.kind === "plot" && w.id !== focused.id && !protect(w) && w.winState !== "minimized",
   );
   if (candidates.length > 0) {
     s.focusWindow(candidates.reduce((a, b) => (b.z > a.z ? b : a)).id);
     return;
   }
   const title = titleBase !== undefined ? dedupeAgainstDisplayed(s, titleBase) : undefined;
-  s.focusWindow(s.createWindow(datasetId, undefined, title));
+  // Seeded with the dataset's own defaults (error columns, technique axes):
+  // the caller's rebind is then a re-activation of the same id, which by
+  // design leaves the view alone. An import's dataset is not in the store
+  // yet; `addDataset` applies the same defaults itself.
+  const ds = s.datasets.find((d) => d.id === datasetId);
+  const seed = ds ? { ...defaultPlotView(), ...datasetViewDefaults(ds) } : undefined;
+  s.focusWindow(s.createWindow(datasetId, seed, title));
+  // Say why a window appeared (live check): the styled graph was kept.
+  if (!focused.pinned) toast(`"${displayedWindowTitle(focused, s.datasets)}" keeps its styling — opened in a new window`, "info");
 }

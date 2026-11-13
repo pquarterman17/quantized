@@ -80,6 +80,33 @@ describe("buildAppMenuItems", () => {
     expect(file.at(-1)).toMatchObject({ label: "Remove all…", danger: true });
   });
 
+  // Figures audit #18: Origin users look for figure export under File.
+  it("cross-lists figure export, publication preview and page setup under File > Export", () => {
+    const run = vi.fn();
+    const actions: Action[] = [
+      { id: "export-csv", group: "File", label: "Export CSV…", run: vi.fn() },
+      { id: "export-figure", group: "Plot", section: "Build & export", label: "Export figure…", run },
+      { id: "figure-builder", group: "Plot", section: "Build & export", label: "Publication preview…", run: vi.fn() },
+      { id: "page-setup", group: "Plot", section: "Layout", label: "Page setup…", run: vi.fn() },
+      { id: "autoscale", group: "Plot", label: "Autoscale", run: vi.fn() },
+    ];
+    const file = buildAppMenuItems("File", actions, fmt);
+    const exportMenu = file.find((item) => "label" in item && item.label === "Export");
+    expect(exportMenu).toMatchObject({
+      submenu: [
+        expect.objectContaining({ label: "Export CSV…" }),
+        expect.objectContaining({ label: "Export figure…" }),
+        expect.objectContaining({ label: "Publication preview…" }),
+        expect.objectContaining({ label: "Page setup…" }),
+      ],
+    });
+    expect(JSON.stringify(file)).not.toContain("Autoscale"); // another menu's own command stays there
+    // Still listed in its own menu, in its own section.
+    const plot = buildAppMenuItems("Plot", actions, fmt);
+    expect(plot).toContainEqual(expect.objectContaining({ label: "Build & export" }));
+    expect(plot).toContainEqual(expect.objectContaining({ label: "Autoscale" }));
+  });
+
   it("formats shortcut hints without changing action behavior", () => {
     const run = vi.fn();
     const [item] = buildAppMenuItems(

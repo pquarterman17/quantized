@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { xColumnLabel } from "./canonicalChannels";
 import ChannelsPanel from "./ChannelsPanel";
 
 const LABELS = ["A", "B", "C"];
@@ -41,6 +42,20 @@ describe("ChannelsPanel", () => {
     const select = screen.getByLabelText("X axis channel") as HTMLSelectElement;
     const optionLabels = Array.from(select.options).map((o) => o.textContent);
     expect(optionLabels).toEqual(["Row index (default)", "A", "B", "C"]);
+  });
+
+  // Figures audit #16: a dataset with a real x column (T) showed its default
+  // as "Row index (default)".
+  it("names the default after the dataset's own x column when there is one", () => {
+    render(
+      <ChannelsPanel labels={LABELS} xKey={null} yKeys={null} y2Keys={null} fallbackYKeys={[0]}
+        xDefaultLabel={xColumnLabel({ metadata: { x_column_name: "T" } })}
+        onXKey={vi.fn()} onToggleY={vi.fn()} onToggleY2={vi.fn()} />,
+    );
+    const select = screen.getByLabelText("X axis channel") as HTMLSelectElement;
+    expect(select.options[0].textContent).toBe("T (default)");
+    expect(xColumnLabel({ metadata: { x_column_long: "Temperature (K)", x_column_name: "T" } })).toBe("Temperature (K)");
+    expect(xColumnLabel({ metadata: {} })).toBe("Row index");
   });
 
   it("selects null for the auto sentinel and a numeric channel otherwise", () => {

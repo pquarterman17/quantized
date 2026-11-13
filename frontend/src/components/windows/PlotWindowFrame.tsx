@@ -111,8 +111,11 @@ export default function PlotWindowFrame({
   };
 
   const maximized = win.winState === "maximized";
+  // A maximized frame keeps its z (figures audit #15): without it, any normal
+  // sibling (which always carries one) painted over it, so Maximize did not
+  // stick and a double-clicked title bar seemed to make its window vanish.
   const style: React.CSSProperties = maximized
-    ? { position: "absolute", inset: 0, padding: 0 }
+    ? { position: "absolute", inset: 0, padding: 0, zIndex: win.z }
     : {
         position: "absolute",
         left: win.geometry.x,

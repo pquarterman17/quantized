@@ -13,7 +13,25 @@
 // every caller of this module is already lazy, so this module loads with them.
 
 import type { LibraryNode } from "../../lib/libraryHierarchy";
+import { figureLayerFamily } from "../../lib/originFigures";
 import { useApp } from "../../store/useApp";
+import { focusedWindowGuardsAgainst } from "../../store/windowUserEdits";
+
+/** Figures audit B1: how a Library OPEN applies an Origin graph. Applying
+ *  replaces the target window's whole view, so when the focused window
+ *  carries user edits for other data the graph opens in a new window instead
+ *  (Origin: graph windows are independent). Onto the window already showing
+ *  the graph's data — its book, a sibling book, or its overlay — it still
+ *  refreshes in place. The row's ⊞ button always asks for a new window. */
+export function originFigureOpenOpts(entryId: string): { newWindow: true } | undefined {
+  const s = useApp.getState();
+  const entry = s.originFigures.find((figure) => figure.id === entryId);
+  if (!entry) return undefined;
+  const family = new Set(figureLayerFamily(entry, s.originFigures).map((member) => member.id));
+  const overlays = s.datasets.filter((d) => family.has(String((d.data.metadata ?? {}).origin_overlay_source ?? "")));
+  const ids = [entry.datasetId ?? "", ...entry.siblingIds, ...overlays.map((d) => d.id)];
+  return focusedWindowGuardsAgainst(s, ids) ? { newWindow: true } : undefined;
+}
 
 /** Record L0.6's remembered child for `workbookId` — a no-op when the node
  *  isn't nested under a workbook (undefined). Shared by every open path so a
@@ -102,7 +120,7 @@ export function openLibraryNode(node: LibraryNode): void {
       s.activateFromLibrary(node.entityId);
       break;
     case "origin-figure":
-      s.applyOriginFigure(node.entityId);
+      s.applyOriginFigure(node.entityId, originFigureOpenOpts(node.entityId));
       break;
     case "editable-figure":
       s.openEditableFigure(node.entityId);

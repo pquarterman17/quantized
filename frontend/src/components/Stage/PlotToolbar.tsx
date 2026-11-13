@@ -54,6 +54,7 @@ import { loadToolbarPrefs, saveToolbarPrefs } from "../../store/prefs";
 import { useApp } from "../../store/useApp";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { useToolGroupFit } from "./plotToolbarOverflow";
+import { usePublishDockClearance } from "./useDockClearance";
 import PlotToolbarGroup from "./PlotToolbarGroup";
 
 interface Props {
@@ -252,6 +253,7 @@ export default function PlotToolbar({
   ];
 
   const visible = useToolGroupFit(barRef, groups.length, showGroupLabels);
+  usePublishDockClearance(barRef); // the plot host starts below the dock (figures audit #15)
   const overflowItems: ContextMenuItem[] = groups.slice(visible).flatMap((g) => [
     { header: g.label },
     ...(g.items ??

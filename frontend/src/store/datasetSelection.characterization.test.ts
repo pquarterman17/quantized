@@ -23,6 +23,7 @@
 // nothing here may change when the domain moves out.
 
 import { beforeEach, describe, expect, it } from "vitest";
+import { defaultPlotView } from "../lib/plotview";
 
 import type { Dataset, DataStruct } from "../lib/types";
 import { useToasts } from "./toasts";
@@ -144,6 +145,16 @@ function expectNoSideNotices(undoLabels: string[] = []): void {
   expect(act().status, "status untouched").toBe("sentinel-status");
 }
 
+/** Figures audit B1: a Library open beside an EDITED window pushes the new
+ *  window's one undo step and says, in one info toast, why a window opened. */
+function expectProtectedNotice(): void {
+  expect(act().history.map((h) => h.label), "undo steps").toEqual(["create window"]);
+  const toasts = useToasts.getState().toasts.slice((toastsBefore as unknown[]).length);
+  expect(toasts.map((t) => t.msg), "one info toast").toEqual([expect.stringMatching(/keeps its styling — opened in a new window/)]);
+  expect(act().macroSteps, "no macro step").toEqual([]);
+  expect(act().status, "status untouched").toBe("sentinel-status");
+}
+
 // A genuine plot-intent switch on an unpinned focused window: the rebind,
 // the dataset-derived view reset, technique memory and the transient reset.
 const SWITCH_KEYS = [
@@ -163,6 +174,12 @@ const REACTIVATE_KEYS = [
 ];
 // An unknown id: everything a switch writes except the stage tab (no dataset to route on).
 const UNKNOWN_KEYS = SWITCH_KEYS.filter((k) => k !== "stageTab");
+// The same switch from an UNEDITED window (view fields at their defaults):
+// only the view fields the dataset seeds still change.
+const UNEDITED_SWITCH_KEYS = SWITCH_KEYS.filter((k) => ![
+  "facetKey", "groupKey", "seriesOrder", "xKey", "xLim", "xStep", "y2AxisLabel", "y2Keys", "y2Lim",
+  "y2Scale", "y2Step", "yKeys", "yLim", "yStep",
+].includes(k));
 // A pinned focused window: `focusWindow` hands the live view to the retarget
 // window first, so its hydrated view fields land on top of a switch.
 const FOCUS_HANDOFF_KEYS = [
@@ -302,25 +319,39 @@ describe("activateFromLibrary", () => {
     expectNoSideNotices();
   });
 
-  it("an Origin book under the 'plot' pref is a plain setActive", () => {
+  // Figures audit B1: the seeded window carries edits (POISON_VIEW), so a
+  // plot-intent open lands in a fresh window and leaves it alone.
+  it("an Origin book under the 'plot' pref opens a fresh window beside the edited one", () => {
     useApp.setState({ originBookClickOpens: "plot" });
-    const before = snapshot();
     act().activateFromLibrary("ob");
-    expect(changedSince(before)).toEqual(withKeys(SWITCH_KEYS, ["expandedWorkbookIds"]));
     expect(act().activeId).toBe("ob");
     expect(act().worksheetId).toBeNull();
-    expect(act().plotWindows[0].datasetId).toBe("ob");
+    expect(act().plotWindows[0].datasetId).toBe("d2");
+    expect(act().plotWindows).toHaveLength(2);
+    expect(act().plotWindows[1].datasetId).toBe("ob");
+    expect(act().focusedWindowId).toBe(act().plotWindows[1].id);
     expect(kicks).toEqual(["ob"]);
-    expectNoSideNotices();
+    expectProtectedNotice();
   });
 
-  it("a non-Origin dataset is a plain setActive whatever the pref", () => {
+  it("a non-Origin dataset opens a fresh window beside the edited one whatever the pref", () => {
+    act().activateFromLibrary("d1");
+    expect(act().activeId).toBe("d1");
+    expect(act().plotWindows[0].datasetId).toBe("d2");
+    expect(act().plotWindows[0].view.xKey).toBe(0); // its edits survive
+    expect(act().plotWindows[1].datasetId).toBe("d1");
+    expect(kicks).toEqual(["d1"]);
+    expectProtectedNotice();
+  });
+
+  it("a non-Origin dataset on an UNEDITED window is a plain setActive", () => {
+    useApp.setState({ ...defaultPlotView(), plotWindows: [mainWindow("d2")] });
+    useApp.setState((s) => ({ focusedWindowId: s.plotWindows[0].id }));
     const before = snapshot();
     act().activateFromLibrary("d1");
-    expect(changedSince(before)).toEqual(SWITCH_KEYS);
-    expect(act().activeId).toBe("d1");
+    expect(changedSince(before)).toEqual(UNEDITED_SWITCH_KEYS);
+    expect(act().plotWindows).toHaveLength(1);
     expect(act().plotWindows[0].datasetId).toBe("d1");
-    expect(kicks).toEqual(["d1"]);
     expectNoSideNotices();
   });
 

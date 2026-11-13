@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from "react";
 
+import { xColumnLabel } from "./canonicalChannels";
 import PreviewOverlay from "./PreviewOverlay";
 import PreviewWarnings from "./PreviewWarnings";
 import PropertyPanels from "./PropertyPanels";
@@ -113,6 +114,7 @@ export default function FigureBuilderView() {
                 yKeys: f.channelYKeys,
                 y2Keys: f.channelY2Keys,
                 fallbackYKeys: f.channelFallbackYKeys,
+                xDefaultLabel: xColumnLabel(f.data),
                 onXKey: f.setChannelXKey,
                 onToggleY: f.toggleChannelY,
                 onToggleY2: f.toggleChannelY2,

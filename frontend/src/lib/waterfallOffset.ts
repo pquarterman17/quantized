@@ -93,6 +93,18 @@ export function waterfallApplies(fraction: number): boolean {
   return fraction > 0;
 }
 
+/** The legend's row order under a waterfall (figures audit #19): series `i`
+ *  is lifted `i` steps, so the LAST channel is the TOP trace — listing S0
+ *  first put the bottom curve's name at the top of the legend. Channel rows
+ *  (`0..channelCount-1`) run top trace first; any rows after them (overlay
+ *  companions) keep their place. Without a stagger, draw order unchanged. */
+export function waterfallLegendOrder(rowCount: number, channelCount: number, fraction: number): number[] {
+  const rows = Array.from({ length: rowCount }, (_, i) => i);
+  if (!waterfallApplies(fraction)) return rows;
+  const n = Math.min(channelCount, rowCount);
+  return [...rows.slice(0, n).reverse(), ...rows.slice(n)];
+}
+
 /** The X half's guard (Origin's waterfall X step, `view.waterfallDx`): any
  *  finite non-zero fraction of the x-span — a NEGATIVE step slides the series
  *  left, as Origin's does. Shared by the canvas (`lib/waterfallX.ts`), its lazy

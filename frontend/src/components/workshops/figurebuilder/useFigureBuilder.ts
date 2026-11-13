@@ -32,6 +32,7 @@ import { inferErrorBindings, type ErrorBinding, type ErrorSide } from "../../../
 import { defaultDenseChannels, effectiveChannels } from "../../../lib/plotdata";
 import { xAxisIsDate } from "../../../lib/tickFormat";
 import type { AxisScale, DataStruct, RefLine, Shape, SeriesStyle } from "../../../lib/types";
+import { figurePublicationDirty } from "../../../store/figureUnsavedEdits";
 import { nextFigureDocId } from "../../../store/idSeq";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -485,7 +486,7 @@ export function useFigureBuilder() {
     canonical,
     documentName: canonicalDocument?.name ?? null,
     publicationTarget: publicationSession?.target ?? null,
-    dirty: publicationSession !== null && JSON.stringify(publicationSession.baseline) !== JSON.stringify(publicationSession.draft),
+    dirty: figurePublicationDirty(publicationSession), // the same test Cancel asks (figures audit #16)
     canApply,
     applyBlockedReason,
     apply: applyFigurePublicationEdit,

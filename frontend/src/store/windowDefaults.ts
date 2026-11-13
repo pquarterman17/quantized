@@ -22,16 +22,22 @@ export interface DatasetViewDefaultsOptions {
 
 /** The view fields tied to the outgoing dataset's coordinates. */
 export const SWITCH_DECORATIONS = ["refLines", "regionShades", "annotations", "shapes", "xFmt", "yFmt", "y2Fmt"] as const;
-type SwitchDecorations = Pick<PlotView, (typeof SWITCH_DECORATIONS)[number]>;
+/** The view fields that describe the outgoing dataset itself, blanked on a
+ *  genuine switch (figures audit B1/#9): its plot title ("Sample A: ..."
+ *  leaked onto every later dataset), its legend title, and the Statistics
+ *  plot mode, whose group/value picks name the old dataset's columns. */
+export const SWITCH_DESCRIPTIONS = ["plotTitle", "legendTitle", "statMode"] as const;
+type SwitchDecorations = Pick<PlotView, (typeof SWITCH_DECORATIONS)[number] | (typeof SWITCH_DESCRIPTIONS)[number]>;
 
 /** What a genuine dataset switch drops from `view`: ref lines, region shades,
  *  data-anchored annotations/shapes (page-anchored ones are not tied to the
- *  data and stay) and non-default tick formats. Only the fields that change,
- *  so an undecorated view keeps every reference ({} = nothing to drop). */
+ *  data and stay), non-default tick formats and the `SWITCH_DESCRIPTIONS`.
+ *  Only the fields that change, so an undecorated view keeps every reference
+ *  ({} = nothing to drop). */
 export function switchDecorationReset(view: SwitchDecorations): Partial<PlotView> {
   const blank = defaultPlotView() as unknown as Record<string, unknown>;
   const out: Record<string, unknown> = {};
-  for (const k of SWITCH_DECORATIONS) {
+  for (const k of [...SWITCH_DECORATIONS, ...SWITCH_DESCRIPTIONS]) {
     const v: unknown = view[k];
     // Ref lines and shades carry no anchor, so the filter empties them.
     const next = Array.isArray(v) ? v.filter((m: { anchor?: string }) => m.anchor === "page") : blank[k];

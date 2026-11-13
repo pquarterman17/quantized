@@ -300,17 +300,7 @@ export default function PropertyPanels({
 
       {channels && (
         <Group title="Channels" forceOpen={openGroup === "Channels"} openNonce={openNonce}>
-          <ChannelsPanel
-            labels={channels.labels}
-            channelRoles={channels.channelRoles}
-            xKey={channels.xKey}
-            yKeys={channels.yKeys}
-            y2Keys={channels.y2Keys}
-            fallbackYKeys={channels.fallbackYKeys}
-            onXKey={channels.onXKey}
-            onToggleY={channels.onToggleY}
-            onToggleY2={channels.onToggleY2}
-          />
+          <ChannelsPanel {...channels} />
         </Group>
       )}
 

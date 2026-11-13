@@ -111,8 +111,26 @@ export function pickReadoutCorner(counts: Record<Corner, number>, blocked: reado
   return cur && counts[cur] <= counts[best] * 1.25 + 2 ? cur : best;
 }
 
+/** What each stage's corner was last chosen FOR: the plotted data and the
+ *  frame size. The pick is sticky (`pickCorner`'s `current`) only while both
+ *  hold, so a pan never makes the legend hop, but new data, a y2 assignment
+ *  or a resized window re-resolves it from scratch (figures audit #12: the
+ *  corner chosen for the first draw stayed put over data drawn later). */
+const pickedFor = new WeakMap<HTMLElement, { data: unknown; w: number; h: number }>();
+
+/** The sticky corner to keep, or undefined when the data or the frame size
+ *  changed since it was picked. Records the current basis. */
+function stickyCorner(u: uPlot, stage: HTMLElement, w: number, h: number): string | undefined {
+  const prev = pickedFor.get(stage);
+  const same = prev !== undefined && prev.data === u.data && Math.abs(prev.w - w) < 1 && Math.abs(prev.h - h) < 1;
+  pickedFor.set(stage, { data: u.data, w, h });
+  return same ? stage.dataset.lc : undefined;
+}
+
 /** Place the stage's auto legend (corner), size its outside column, and pick
- *  the tool readout's corner (`data-rc`; shell.css does the placing). */
+ *  the tool readout's corner (`data-rc`; shell.css does the placing). Also
+ *  records `data-lc-fresh`, the least-covered corner with no stickiness at
+ *  all: what an export resolves "auto" to (`lib/liveLegendCorner`). */
 export function placeLegend(u: uPlot, stage: HTMLElement): void {
   const r = u.over.getBoundingClientRect();
   stage.toggleAttribute("data-narrow-frame", r.width < NARROW_FRAME);
@@ -132,8 +150,10 @@ export function placeLegend(u: uPlot, stage: HTMLElement): void {
     const lw = box.offsetWidth + INSET;
     const lh = box.offsetHeight + INSET;
     const counts = cornerCounts(pts, r.width, r.height, lw, lh);
-    const lc = pickCorner(counts, stage.dataset.lc);
+    const lc = pickCorner(counts, stickyCorner(u, stage, r.width, r.height));
     if (stage.dataset.lc !== lc) stage.dataset.lc = lc;
+    const fresh = pickCorner(counts);
+    if (stage.dataset.lcFresh !== fresh) stage.dataset.lcFresh = fresh;
     const held = box.classList.contains("auto") ? lc : CORNERS.find((k) => box.classList.contains(k));
     if (held) {
       const wide = lw + w + INSET > r.width;

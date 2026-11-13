@@ -103,8 +103,11 @@ function expectLegend(screen: Screen, g: CanonicalFigure, colors: (string | null
   expect(screen.legend, "legend shown").not.toBeNull();
   expect(screen.legend!.className.split(/\s+/)).toContain(g.decor.legend.position);
   const drawn = screen.legend!.rows.filter((r) => !r.struck);
-  expect(drawn.map((r) => r.label), "legend labels").toEqual(g.series.map((s) => s.label));
-  expect(drawn.map((r) => r.swatch), "legend swatch = stroke").toEqual(colors);
+  // Under a waterfall the rows list the TOP trace first, matching the
+  // stacking (figures audit #19); otherwise draw order.
+  const order = (xs: readonly (string | null)[]) => (g.waterfallOffset > 0 ? [...xs].reverse() : [...xs]);
+  expect(drawn.map((r) => r.label), "legend labels").toEqual(order(g.series.map((s) => s.label)));
+  expect(drawn.map((r) => r.swatch), "legend swatch = stroke").toEqual(order(colors));
 }
 
 function expectFlatAxes(p: Panel, g: CanonicalFigure): Axes {

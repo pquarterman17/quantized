@@ -415,6 +415,9 @@ test("Group well renders live on the interactive Stage, undoes, survives a windo
   await expect(focusedTitlebar).toBeVisible();
   await focusedTitlebar.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Close Window", exact: true }).click();
+  // A grouped, never-saved window carries user edits, so closing it asks
+  // first (figures audit #15); confirm.
+  await page.getByRole("dialog").getByRole("button", { name: "Close window", exact: true }).click();
   await expect.poll(() => storeGroupKey(page)).toBeNull(); // the OTHER (default) window is now focused, ungrouped
   await page.keyboard.press("Control+z"); // undo the close
   await expect.poll(() => storeGroupKey(page)).toBe(1);

@@ -222,6 +222,9 @@ describe("datasetViewDefaults — outgoing decorations (genuine switch only)", (
     xFmt: { mode: "sci" as const, digits: 2 },
     yFmt: { mode: "auto" as const, digits: 2 },
     y2Fmt: null,
+    plotTitle: "",
+    legendTitle: null,
+    statMode: false,
   };
 
   it("adds only the fields that change", () => {
@@ -230,6 +233,20 @@ describe("datasetViewDefaults — outgoing decorations (genuine switch only)", (
     expect(extra.sort()).toEqual(["refLines", "xFmt"]);
     expect(patch.refLines).toEqual([]);
     expect(patch.xFmt).toEqual({ mode: "auto", digits: 2 });
+  });
+
+  // Figures audit B1/#9: "Sample A: chi_ac and rho" stayed on every later
+  // dataset, and a Statistics bar chart stayed on after a rebind.
+  it("a genuine switch blanks the plot title, legend title and Statistics mode", () => {
+    const described = { ...outgoing, plotTitle: "Sample A", legendTitle: "Runs", statMode: true };
+    const patch = datasetViewDefaults(ds("generic"), ds("generic"), {}, { outgoing: described });
+    expect(patch.plotTitle).toBe("");
+    expect(patch.legendTitle).toBeNull();
+    expect(patch.statMode).toBe(false);
+    // Split/reimport (no outgoing view) keep them: same data, same figure.
+    const same = datasetViewDefaults(ds("generic"), ds("generic"));
+    expect(same.plotTitle).toBeUndefined();
+    expect(same.statMode).toBeUndefined();
   });
 
   it("no outgoing view (split/reimport) leaves decorations alone", () => {

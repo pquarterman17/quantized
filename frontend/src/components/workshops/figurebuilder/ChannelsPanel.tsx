@@ -29,12 +29,16 @@ export default function ChannelsPanel({
   yKeys,
   y2Keys,
   fallbackYKeys,
+  xDefaultLabel = "Row index",
   onXKey,
   onToggleY,
   onToggleY2,
 }: {
   /** The bound dataset's raw channel labels, indexed by channel. */
   labels: readonly string[];
+  /** What the `xKey=null` default IS: the dataset's own x column, by name
+   *  (figures audit #16: a temperature column was offered as "Row index"). */
+  xDefaultLabel?: string;
   /** Non-data column roles (label/ignore); a roled channel can't be plotted. */
   channelRoles?: Record<number, ChannelRole>;
   xKey: number | null;
@@ -62,7 +66,7 @@ export default function ChannelsPanel({
           onChange={(e) => onXKey(e.target.value === "" ? null : Number(e.target.value))}
           title="Channel to use as the plot's x-axis (default = the dataset's own x column)"
           options={[
-            { value: "", label: "Row index (default)" },
+            { value: "", label: `${xDefaultLabel} (default)` },
             ...labels.map((label, i) => ({ value: String(i), label })),
           ]}
         />

@@ -1,4 +1,5 @@
-import { editableFigureHasUnsavedEdits, figurePublicationDirty } from "../../store/figureUnsavedEdits";
+import { displayedWindowTitle } from "../../lib/plotview";
+import { editableFigureHasUnsavedEdits, figurePublicationDirty, styledWindowCloseNeedsConfirm } from "../../store/figureUnsavedEdits";
 import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
 
@@ -34,10 +35,8 @@ export async function saveFigureAs(windowId: string): Promise<void> {
 }
 
 /** SAVED figures with unsaved edits get an explicit discard gate on every UI
- *  close path. A window never saved as an editable figure closes plainly —
- *  the close is undoable and the window persists in the workspace, so a
- *  confirm there would violate the confirm-exemption convention and tax the
- *  routine MDI close (see `editableFigureHasUnsavedEdits`'s doc). */
+ *  close path, and so does a window the user styled but never saved (figures
+ *  audit #15). A default window closes plainly — it holds nothing to lose. */
 export async function closeFigureWindow(windowId: string): Promise<void> {
   const state = useApp.getState();
   const window = state.plotWindows.find((candidate) => candidate.id === windowId);
@@ -53,6 +52,15 @@ export async function closeFigureWindow(windowId: string): Promise<void> {
       `Close "${window.title || "Untitled graph"}" without saving?`,
       "Changes to this editable figure will be lost. Use Save first to keep them.",
       "Close without saving",
+      true,
+    ))
+  ) return;
+  if (
+    styledWindowCloseNeedsConfirm(state, window) &&
+    !(await askConfirm(
+      `Close "${displayedWindowTitle(window, state.datasets)}"?`,
+      "This graph's styling (titles, error bars, axes, annotations) is not saved as a figure. Edit ▸ Undo restores the window; Save first to keep it in the Library.",
+      "Close window",
       true,
     ))
   ) return;

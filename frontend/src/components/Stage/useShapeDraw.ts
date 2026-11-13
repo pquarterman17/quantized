@@ -49,10 +49,17 @@ export function useShapeDraw(): ShapeDrawResult {
   const setSelectedShapeId = useApp((s) => s.setSelectedShapeId);
   const setPlotTool = useApp((s) => s.setPlotTool);
 
-  // Status-line hint while a mode is active.
+  // Status-line hint while a mode is active — and ONLY while it is: when the
+  // mode ends (a shape committed, Esc, another tool) the hint is withdrawn,
+  // unless something has replaced it meanwhile (figures audit #15: "drag to
+  // draw an arrow" stayed in the status bar after the arrow was drawn).
   useEffect(() => {
     if (!drawShapeKind) return;
-    useApp.getState().setStatus(DRAW_HINTS[drawShapeKind]);
+    const hint = DRAW_HINTS[drawShapeKind];
+    useApp.getState().setStatus(hint);
+    return () => {
+      if (useApp.getState().status === hint) useApp.getState().setStatus("");
+    };
   }, [drawShapeKind]);
 
   // Escape cancels the mode (mirrors useAnnotationEdit's Escape-deselect —

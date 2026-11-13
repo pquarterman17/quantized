@@ -8,6 +8,7 @@ import {
 } from "../lib/figureDocument";
 import { errKeysFromBindings, type ErrorBinding } from "../lib/errorRoles";
 import type { PlotView, PlotWindow } from "../lib/plotview";
+import { reboundWindowTitle } from "../lib/plotWindows";
 import type { Dataset } from "../lib/types";
 
 const figureIdForWindow = (windowId: string): string => `figure-${windowId}`;
@@ -295,16 +296,17 @@ export function commitFocusedPlotWindow(
  *  holding an authored `[[2, 3]]` panelled the freshly imported dataset at
  *  the PREVIOUS one's gap, with no gesture and no toggle (round 3, finding 1:
  *  F4 covered `setActive` and `rebindWindow` but missed this, the most common
- *  way a new dataset reaches the focused window). */
+ *  way a new dataset reaches the focused window). A default title follows
+ *  the new dataset (`reboundWindowTitle`, figures audit B1). */
 export function rebindFocusedPlotWindow(
-  windows: readonly PlotWindow[],
-  focusedId: string | null,
+  s: { plotWindows: readonly PlotWindow[]; focusedWindowId: string | null; datasets: readonly Dataset[] },
   view: PlotView,
   dataset: Dataset,
 ): PlotWindow[] {
-  return windows.map((window) =>
-    window.id === focusedId
+  return s.plotWindows.map((window) =>
+    window.id === s.focusedWindowId
       ? syncPlotWindow(window, view, {
+          title: reboundWindowTitle(s.plotWindows, s.datasets, window, dataset.name),
           datasetId: dataset.id,
           errors: dataset.errorRoles,
           resetErrors: true,

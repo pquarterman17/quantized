@@ -20,6 +20,7 @@ import LegendSample from "./LegendSample";
 import { resolveSeriesStyle, SERIES_VARS, type SeriesCycle } from "../../lib/seriesStyleCycle";
 import { useLegendBox } from "./useLegendBox";
 import { withUnit } from "../../lib/uplotOpts";
+import { waterfallApplies, waterfallLegendOrder } from "../../lib/waterfallOffset";
 
 /** The canvas' excluded companion: line-free 5px hollow circles. */
 const EXCLUDED_SAMPLE: SeriesStyle = { width: 0, marker: true, markerShape: "circle", markerSize: 5 };
@@ -92,6 +93,9 @@ export default function PlotLegend({
   // R2: the title heads the legend in BOTH modes, as the export draws it; a
   // blank title draws no heading.
   const legendTitle = useApp((s) => s.legendTitle)?.trim() || null;
+  // Under a waterfall the rows list the TOP trace first (figures audit #19).
+  const waterfall = useApp((s) => s.waterfall);
+  const up = waterfallApplies(waterfall) ? 1 : -1;
   const titleId = useId();
   const tool = useApp((s) => s.plotTool);
   const legendBox = useLegendBox(tool);
@@ -167,7 +171,8 @@ export default function PlotLegend({
           <RichText text={legendTitle} />
         </div>
       ) : null}
-      {series.map((s, i) => {
+      {waterfallLegendOrder(series.length, plotted.length, waterfall).map((i) => {
+        const s = series[i];
         // Keep the CSS token for default series (re-themes); use the resolved
         // override color when one is set, so the legend matches the line. A
         // literal (non-token) override runs through the SAME contrast check
@@ -298,30 +303,23 @@ export default function PlotLegend({
             </span>
             {interactive && plotted.length > 1 && (
               <span style={{ marginLeft: 6, display: "inline-flex", gap: 2 }}>
-                <button
-                  aria-label="Move earlier"
-                  className="qz-icon-btn"
-                  title="Move earlier (draw under)"
-                  disabled={i === 0}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    move(i, -1);
-                  }}
-                >
-                  ▲
-                </button>
-                <button
-                  aria-label="Move later"
-                  className="qz-icon-btn"
-                  title="Move later (draw over)"
-                  disabled={i === plotted.length - 1}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    move(i, 1);
-                  }}
-                >
-                  ▼
-                </button>
+                {/* ▲ always moves the row UP the list: earlier in draw order,
+                    or under a waterfall (rows listed top trace first) later. */}
+                {[up, -up].map((dir) => (
+                  <button
+                    key={dir}
+                    aria-label={dir < 0 ? "Move earlier" : "Move later"}
+                    className="qz-icon-btn"
+                    title={dir < 0 ? "Move earlier (draw under)" : "Move later (draw over)"}
+                    disabled={dir < 0 ? i === 0 : i === plotted.length - 1}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      move(i, dir as -1 | 1);
+                    }}
+                  >
+                    {dir === up ? "▲" : "▼"}
+                  </button>
+                ))}
               </span>
             )}
           </div>

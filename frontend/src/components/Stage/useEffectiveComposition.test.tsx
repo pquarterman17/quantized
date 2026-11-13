@@ -218,13 +218,26 @@ describe("clearing an authored break (review F3/F4)", () => {
     // reverted: breaks `[[2, 3]]`, panels `[[0, 2], [3, 5]]`,
     // `multiPanelShowing` true.
     const imported: DataStruct = { ...DATA, time: [0, 1, 2, 3, 4, 5] };
-    useApp.getState().addDataset({ id: "d2", name: "ds2", data: imported });
+    // Figures audit B1: a plain import no longer rebinds a window carrying
+    // an authored break at all (it opens a fresh window), so this drives the
+    // one add that still rebinds it — `intoFocused`, an Origin figure applied
+    // in place.
+    useApp.getState().addDataset({ id: "d2", name: "ds2", data: imported }, undefined, true);
     const [w] = useApp.getState().plotWindows;
     expect(useApp.getState().activeId).toBe("d2");
     expect(w.datasetId).toBe("d2"); // the rebind really happened
     expect(w.document?.plot.axisBreaks.x).toEqual([]);
     expect(effective()).toBeNull();
     expect(multiPanelShowing(effective(), useApp.getState().stackMode, 1)).toBe(false);
+  });
+
+  it("figures audit B1: a plain import leaves the broken window (and its break) alone", () => {
+    useApp.getState().addDataset({ id: "d2", name: "ds2", data: { ...DATA, time: [0, 1, 2, 3, 4, 5] } });
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(2);
+    expect(s.plotWindows[0].datasetId).not.toBe("d2");
+    expect(s.plotWindows[0].document?.plot.axisBreaks.x).toEqual([[2, 3]]);
+    expect(s.plotWindows.find((w) => w.id === s.focusedWindowId)?.document?.plot.axisBreaks.x).toEqual([]);
   });
 
   // Round 3, finding 4. The clear is unconditional on the new `stackMode`

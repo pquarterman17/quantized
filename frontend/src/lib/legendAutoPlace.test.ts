@@ -64,6 +64,29 @@ describe("placeLegend", () => {
     expect(stage.dataset.lc).toBe("sw");
   });
 
+  // Figures audit #12: the corner stayed where the FIRST draw put it, over
+  // data drawn later. Sticky through a pan (same data), re-resolved for new data.
+  it("keeps its corner through a pan but re-resolves it when the data changes", () => {
+    const xs = Array.from({ length: 101 }, (_, i) => i);
+    const stage = stageWith("auto", 120, 60);
+    const flatLow = xs.map(() => 5); // data along the bottom: both top corners clear
+    placeLegend(fakePlot([flatLow], xs), stage);
+    expect(stage.dataset.lc).toBe("ne"); // the tie goes to top right
+    // New data puts two points under the top-right box. That is within the
+    // sticky allowance (2 <= 0 * 1.25 + 2), so before the fix the legend
+    // stayed on them; now new data re-resolves to the clear top left.
+    const blip = xs.map((x) => (x === 95 || x === 96 ? 95 : null));
+    const withBlip = fakePlot([flatLow, blip], xs);
+    placeLegend(withBlip, stage);
+    expect(stage.dataset.lc).toBe("nw");
+    expect(stage.dataset.lcFresh).toBe("nw");
+    // A redraw of the SAME data (a pan) keeps whatever corner it holds.
+    stage.dataset.lc = "ne";
+    placeLegend(withBlip, stage);
+    expect(stage.dataset.lc).toBe("ne");
+    expect(stage.dataset.lcFresh).toBe("nw"); // what an export resolves "auto" to
+  });
+
   it("publishes an outside column's width for the stage CSS", () => {
     const stage = stageWith("out", 180, 500);
     placeLegend(fakePlot([[1, 2]], [0, 1]), stage);

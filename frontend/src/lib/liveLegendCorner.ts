@@ -19,8 +19,15 @@ type Corner = (typeof CORNERS)[number];
 export function withLiveLegendCorner(spec: FigureSpec, root: ParentNode = document): FigureSpec {
   const legend = spec.overrides?.legend;
   if (!legend || legend.loc !== "auto") return spec;
-  const stage = root.querySelector<HTMLElement>(".qzk-stage");
-  const lc = stage?.dataset.lc;
-  if (!stage?.querySelector(":scope > .qzk-legend.auto") || !CORNERS.includes(lc as Corner)) return spec;
+  // Figures audit #12, two fixes. The stage that DRAWS an auto legend (the
+  // focused XY Stage — the first `.qzk-stage` in the DOM can be a background
+  // Statistics window's), and its corner re-resolved for the data as it is
+  // now (`data-lc-fresh`), not the sticky on-screen pick, which can still be
+  // the corner chosen for the first draw.
+  const stage = [...root.querySelectorAll<HTMLElement>(".qzk-stage")].find((el) =>
+    el.querySelector(":scope > .qzk-legend.auto"),
+  );
+  const lc = stage?.dataset.lcFresh ?? stage?.dataset.lc;
+  if (!stage || !CORNERS.includes(lc as Corner)) return spec;
   return { ...spec, overrides: { ...spec.overrides, legend: { ...legend, loc: legendPosToLoc(lc as Corner) } } };
 }

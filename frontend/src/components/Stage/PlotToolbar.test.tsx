@@ -268,6 +268,17 @@ describe("PlotToolbar — the Stack toggle follows the multi-panel layout (S1 a)
     expect(useApp.getState().stackMode).toBe(true);
   });
 
+  // Figures audit #19: the ⊕ button folds into "⋯" on a narrow window, so the
+  // magnifier inset has its own Plot-menu / palette entry, with a check mark.
+  it("the Plot menu's Magnifier inset command toggles the inset and reports its state", () => {
+    useApp.setState({ insetMode: false });
+    const cmd = buildPlotCommands(useApp.getState).find((c) => c.id === "inset-mode")!;
+    expect(cmd.group).toBe("Plot");
+    cmd.run();
+    expect(useApp.getState().insetMode).toBe(true);
+    expect(typeof cmd.checked === "function" && cmd.checked()).toBe(true);
+  });
+
   it("the command-palette toggle makes the same choice over a facet grid", () => {
     useApp.setState({ stackMode: false, facetKey: 0, composition: null });
     buildPlotCommands(useApp.getState).find((c) => c.id === "stacked")?.run();

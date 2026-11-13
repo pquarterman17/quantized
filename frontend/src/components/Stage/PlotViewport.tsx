@@ -81,7 +81,7 @@ export interface PlotViewportProps
    *  title rendered exactly behind it (owner report 2026-07-11: "titles get
    *  lost, covered by the top menu"). Window consumers (panel cells,
    *  snapshot/background windows) have title bars instead of docks and keep
-   *  the default. */
+   *  the default; a taller dock pushes it down (`--qz-dock-clear`, audit #15). */
   insetTop?: number;
   /** Publish the plot-frame rect as CSS vars on the enclosing `.qzk-stage`
    *  (decode #52), so a frame-anchored `PlotLegend` sibling can place itself
@@ -395,5 +395,5 @@ export default function PlotViewport(props: PlotViewportProps) {
   // Display-only edits patch the live instance (after the create effect: see useLivePaint).
   useLivePaint(plotRef, paintRef, displayPayload, args, xAscending, limsRef, () => setRebuildEpoch((e) => e + 1));
 
-  return <div ref={hostRef} style={{ position: "absolute", inset: 8, top: insetTop ?? 8, right: "var(--qz-plot-right,8px)" }} />;
+  return <div ref={hostRef} style={{ position: "absolute", inset: 8, top: insetTop === undefined ? 8 : `max(${insetTop}px, var(--qz-dock-clear, 0px))`, right: "var(--qz-plot-right,8px)" }} />;
 }

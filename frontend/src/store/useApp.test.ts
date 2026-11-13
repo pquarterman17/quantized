@@ -321,13 +321,34 @@ describe("activateFromLibrary (WORKSHEET_PLAN item 15 — origin book click open
   });
 
   it("the pref set to 'plot' restores the pre-item-15 behavior for an Origin book too", () => {
-    useApp.setState({ originBookClickOpens: "plot" });
+    // An UNEDITED window (xKey back at its default): only such a window takes
+    // a Library open (figures audit B1 — see the next test).
+    useApp.setState({ originBookClickOpens: "plot", xKey: null });
     useApp.getState().activateFromLibrary("b1");
     const s = useApp.getState();
     expect(s.activeId).toBe("b1"); // rebound, unlike the worksheet-intent case above
     expect(s.worksheetId).toBeNull();
     expect(s.xKey).toBeNull(); // setActive's usual view reset ran
     expect(s.plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("b1"); // window DID rebind
+  });
+
+  // Figures audit B1: a Library open never rebinds a window carrying user
+  // edits (here a chosen X column) — the data opens in a fresh window.
+  it("a plot-intent open leaves an EDITED focused window alone and opens a new window", () => {
+    useApp.setState({ originBookClickOpens: "plot", history: [] });
+    useApp.getState().activateFromLibrary("b1");
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("csv");
+    expect(s.plotWindows.find((w) => w.id === "w1")?.view.xKey).toBe(0);
+    expect(s.plotWindows).toHaveLength(2);
+    expect(s.focusedWindowId).not.toBe("w1");
+    expect(s.activeId).toBe("b1");
+    // One gesture, one undo step, which brings everything back.
+    expect(s.history).toHaveLength(1);
+    s.undo();
+    expect(useApp.getState().plotWindows).toHaveLength(1);
+    expect(useApp.getState().focusedWindowId).toBe("w1");
+    expect(useApp.getState().xKey).toBe(0);
   });
 
   it("setActive (the explicit plot-intent primitive) clears a prior worksheetId override", () => {
@@ -5429,11 +5450,36 @@ describe("useApp plot windows — item 6 (Tile/Cascade + canvas bounds)", () => 
     expect(useApp.getState().plotCanvasBounds).toBeNull();
   });
 
-  it("tileWindows is a no-op with fewer than 2 visible windows", () => {
-    useApp.setState({ plotWindows: [win({ id: "w1" })], focusedWindowId: "w1" });
+  // Figures audit #15: Tile on a single small window left it in its corner.
+  it("tileWindows on ONE visible window fills the stage", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", geometry: { x: 300, y: 200, w: 200, h: 150 } })],
+      focusedWindowId: "w1",
+      plotCanvasBounds: { width: 800, height: 400 },
+    });
+    useApp.getState().tileWindows();
+    const g = useApp.getState().plotWindows[0].geometry;
+    expect(g.w).toBeGreaterThan(760);
+    expect(g.h).toBeGreaterThan(360);
+    expect(g.x).toBeLessThan(20);
+    expect(g.y).toBeLessThan(20);
+  });
+
+  it("tileWindows is a no-op with no visible window", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1", winState: "minimized" })], focusedWindowId: "w1" });
     const before = useApp.getState().plotWindows;
     useApp.getState().tileWindows();
     expect(useApp.getState().plotWindows).toBe(before);
+  });
+
+  // Figures audit #15: a maximized window kept its old z, so any normal
+  // sibling painted over it ("Maximize doesn't stick").
+  it("toggleMaximizeWindow raises the window it maximizes", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1", z: 1 }), win({ id: "w2", z: 5 })], focusedWindowId: "w1" });
+    useApp.getState().toggleMaximizeWindow("w1");
+    const w1 = useApp.getState().plotWindows.find((w) => w.id === "w1")!;
+    expect(w1.winState).toBe("maximized");
+    expect(w1.z).toBeGreaterThan(5);
   });
 
   it("tileWindows arranges visible windows into a grid, skips minimized ones, and un-maximizes maximized ones", () => {
@@ -6271,7 +6317,7 @@ describe("useApp plot windows — item 14 (drag-drop rebind + per-window pin)", 
     expect(viaRebind.errKeys).toEqual(defaultErrKeys(errData));
     expect(viaRebind.xLim).toBeNull();
     expect(viaRebind.seriesStyles).toEqual({});
-    expect(viaRebind.plotTitle).toBe("kept across rebinds"); // titles survive a dataset switch
+    expect(viaRebind.plotTitle).toBe(""); // the old dataset's title goes with it (figures audit B1)
     expect(viaRebind.bindings).toEqual([
       ["w1", "d2"],
       ["w2", "d1"], // the unfocused window kept its binding
@@ -6309,7 +6355,7 @@ describe("useApp plot windows — item 14 (drag-drop rebind + per-window pin)", 
     expect(w2.view.xLim).toBeNull(); // same dataset-derived reset setActive applies
     expect(w2.view.seriesStyles).toEqual({});
     expect(w2.view.errKeys).toEqual(defaultErrKeys(errData));
-    expect(w2.view.plotTitle).toBe("w2 title"); // display config survives, like setActive
+    expect(w2.view.plotTitle).toBe(""); // its title described d1 (figures audit B1), like setActive
   });
 
   // BUG-012 review F4 / round 3, finding 7: the background branch's

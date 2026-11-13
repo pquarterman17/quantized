@@ -7,7 +7,6 @@
 // every command whose `group` is "Plot" or "Insert". Behavior is
 // unchanged — this is a verbatim move.
 
-import { askParams } from "../components/overlays/ParamDialog";
 import type { StoreGet } from "../lib/exportActive";
 import { plotInNewWindow } from "../lib/plotInNewWindow";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
@@ -199,43 +198,30 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       run: () => s().setStatMode(!s().statMode),
     },
     {
+      // Figures audit #19: the toolbar's ⊕ sits in the View group, which is
+      // the first to fold into "⋯" on a narrow window — so the magnifier
+      // inset needs a menu/palette entry point of its own.
+      id: "inset-mode",
+      group: "Plot",
+      section: "Display",
+      label: "Magnifier inset",
+      description: "Show a zoomed inset of a region over the plot.",
+      keywords: "zoom inset magnify detail",
+      checked: () => s().insetMode,
+      run: () => s().setInsetMode(!s().insetMode),
+    },
+    {
       id: "facet-by-column",
       group: "Plot",
       section: "Layout",
       label: "Facet by column…",
       description: "Split data into small-multiple panels using the distinct values of a selected column.",
-      run: async () => {
-        const ds = s().datasets.find((d) => d.id === s().activeId);
-        if (!ds) {
-          toast("no active dataset", "danger");
-          return;
-        }
-        if (ds.data.labels.length === 0) {
-          toast("active dataset has no columns to facet by", "danger");
-          return;
-        }
-        // Disambiguate duplicate labels (real instrument imports can repeat
-        // a column name) so the reverse `indexOf` lookup below always maps
-        // the picked option back to the SAME channel the user saw.
-        const raw = ds.data.labels.map((lab, i) => lab || `Column ${i + 1}`);
-        const counts = new Map<string, number>();
-        for (const lab of raw) counts.set(lab, (counts.get(lab) ?? 0) + 1);
-        const options = raw.map((lab, i) => (counts.get(lab)! > 1 ? `${lab} (col ${i + 1})` : lab));
-        const params = await askParams("Facet by column", [
-          {
-            key: "column",
-            label: "Column",
-            type: "select",
-            default: options[0],
-            options,
-            hint: "One small-multiples panel per distinct level, sharing the x-axis",
-          },
-        ]);
-        if (!params) return;
-        const col = options.indexOf(String(params.column));
-        if (col < 0) return;
-        s().facetByColumn(ds.id, col);
-      },
+      // Body lazy (commands/plotLayoutCommands.ts): it only runs after a pick.
+      run: () =>
+        void runLazy("Loading facets…", () => import("./plotLayoutCommands")).then(
+          (m) => m.runFacetByColumn(s),
+          onLoadFailure,
+        ),
     },
     {
       id: "break-x-axis",
@@ -243,24 +229,12 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       section: "Layout",
       label: "Break x-axis at gaps…",
       description: "Detect large gaps in horizontal values and display a discontinuous x-axis.",
-      run: async () => {
-        const ds = s().datasets.find((d) => d.id === s().activeId);
-        if (!ds) {
-          toast("no active dataset", "danger");
-          return;
-        }
-        const params = await askParams("Break x-axis at gaps", [
-          {
-            key: "gapFactor",
-            label: "Gap factor",
-            type: "number",
-            default: 4,
-            hint: "A gap at least this many times the median x-spacing becomes a break",
-          },
-        ]);
-        if (!params) return;
-        s().breakAtGaps(ds.id, undefined, Number(params.gapFactor));
-      },
+      // Body lazy (commands/plotLayoutCommands.ts): it only runs after a pick.
+      run: () =>
+        void runLazy("Loading x-axis breaks…", () => import("./plotLayoutCommands")).then(
+          (m) => m.runBreakXAxis(s),
+          onLoadFailure,
+        ),
     },
     {
       // Multi-plot discoverability: the palette counterpart of the Library

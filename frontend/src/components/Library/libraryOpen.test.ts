@@ -1,7 +1,35 @@
 import { describe, expect, it } from "vitest";
 
-import { isSelected } from "./libraryOpen";
+import { isSelected, originFigureOpenOpts } from "./libraryOpen";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
+import type { OriginFigureEntry } from "../../lib/originFigures";
+import { useApp } from "../../store/useApp";
+
+// Figures audit B1: opening an Origin graph from the Library replaces the
+// target window's whole view, so it must not land on a window the user styled
+// for other data.
+describe("originFigureOpenOpts", () => {
+  const data = { time: [0, 1], values: [[1], [2]], labels: ["A"], units: [""], metadata: {} };
+  const entry = { id: "fig", stem: "P", datasetId: "book", siblingIds: ["book", "book2"], figure: { name: "Graph1" } } as unknown as OriginFigureEntry;
+  const seed = (bound: string, styled: boolean) => {
+    useApp.setState(useApp.getInitialState(), true);
+    useApp.setState({ datasets: ["mt", "book", "book2"].map((id) => ({ id, name: id, data })), originFigures: [entry] });
+    useApp.getState().setActive(bound);
+    if (styled) useApp.getState().setPlotTitle("Sample A");
+  };
+
+  it("opens in a NEW window over a window styled for other data", () => {
+    seed("mt", true);
+    expect(originFigureOpenOpts("fig")).toEqual({ newWindow: true });
+  });
+
+  it("applies in place onto an unstyled window, or onto the window already showing the graph's data", () => {
+    seed("mt", false);
+    expect(originFigureOpenOpts("fig")).toBeUndefined();
+    seed("book2", true);
+    expect(originFigureOpenOpts("fig")).toBeUndefined();
+  });
+});
 
 const worksheet = (id: string): LibraryNode =>
   ({ key: `worksheet:${id}`, entityId: id, kind: "worksheet" }) as LibraryNode;
