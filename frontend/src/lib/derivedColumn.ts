@@ -103,7 +103,12 @@ function upstreamOf(ds: Dataset, letter: string): Set<string> {
 
 export function deriveColumns(ds: Dataset, req: DeriveRequest): DeriveOutcome {
   // col("Long Name") is stored as the column's letter (lib/formulaRefs.ts).
-  const expr = resolveColumnNames(req.expr.trim(), ds.data.labels);
+  let expr: string;
+  try {
+    expr = resolveColumnNames(req.expr.trim(), ds.data.labels);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "formula error" }; // an ambiguous col("Name")
+  }
   const name = req.name.trim() || expr;
   try {
     compileFormula(expr);

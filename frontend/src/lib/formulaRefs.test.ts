@@ -44,6 +44,13 @@ describe("col() references", () => {
     expect(col('col("Moment") / 2')).toEqual([5, 10, Number.NaN, 20]);
   });
 
+  it("a name two columns share is refused, listing the candidates — never the first one silently", () => {
+    const dup: DataStruct = { ...base, labels: ["Moment", "Moment"], cat_levels: undefined };
+    const out = applyFormulasWithErrors(dup, [{ name: "f", expr: 'col("Moment") * 2' }]);
+    expect(out.errors.f).toBe('col("Moment") is ambiguous: columns A, B are all named "Moment" — use the letter, e.g. col(A)');
+    expect(() => resolveColumnNames('col("moment")', ["Moment", "moment "])).toThrow(/ambiguous: columns A, B/);
+  });
+
   it("an unknown name is an error that names it", () => {
     const out = applyFormulasWithErrors(base, [{ name: "f", expr: 'col("Nope") + 1' }]);
     expect(out.errors.f).toMatch(/no column named "Nope"/);
@@ -70,6 +77,15 @@ describe("conditional, indexing, ranges, cumsum", () => {
     expect(col("mean(A[2:4])")).toEqual([30, 30, 30, 30]); // the NaN row is skipped
     expect(col("count(A[1:4])")).toEqual([3, 3, 3, 3]);
     expect(() => compileFormula("A[1:2]")).toThrow(/use it inside an aggregate, e.g. sum\(A\[i:j\]\)/);
+  });
+
+  it("a range outside rows 1..N is an error about 1-based rows, never silently clamped", () => {
+    const err = (expr: string) => applyFormulasWithErrors(base, [{ name: "f", expr }]);
+    expect(err("sum(A[0:2])").errors.f).toBe("A[0:2] is outside rows 1..4 — rows are numbered from 1, and a range is inclusive at both ends");
+    expect(err("sum(A[0:2])").data.values.map((r) => r[2])).toEqual([Number.NaN, Number.NaN, Number.NaN, Number.NaN]);
+    expect(err("sum(A[-1:2])").errors.f).toMatch(/outside rows 1\.\.4/);
+    expect(err("sum(A[2:9])").errors.f).toMatch(/outside rows 1\.\.4/);
+    expect(err("sum(A[3:2])").errors.f).toMatch(/A\[3:2\] is empty: the range must run from a lower row to a higher one/);
   });
 
   it("cumsum(A) is the running sum; a NaN row adds nothing but is itself NaN", () => {
@@ -139,16 +155,13 @@ describe("the expression tree mirrors every new form", () => {
 describe("unit inference for a power-of-1000 rescale", () => {
   const env = (unit: string) => ({ unitOf: () => unit, label: (l: string) => l, fitYUnit: () => "" });
   const unitOf = (expr: string, unit: string) => deriveUnit(parseExpr(expr), env(unit));
-  it("gives the prefixed unit — never the wrong unprefixed one", () => {
-    expect(unitOf("x / 1000", "K").unit).toBe("kK");
-    expect(unitOf("A * 1000", "emu").unit).toBe("memu");
-    expect(unitOf("A / 1e6", "Oe").unit).toBe("MOe");
-    expect(unitOf("A / 1000", "mK").unit).toBe("K");
-  });
-  it("gives NO unit (and says why) when no prefixed symbol exists", () => {
-    const r = unitOf("A / 1000", "emu/g");
-    expect(r.unit).toBe("");
-    expect(r.warnings.join(" ")).toMatch(/no prefixed unit expresses that; the result has no unit/);
+  it("never guesses: no unit, and the note says why (a unit change and a gain correction look the same)", () => {
+    for (const [expr, unit] of [["x / 1000", "K"], ["A * 1000", "emu"], ["A / 1e6", "V"], ["A / 1000", "emu/g"]] as const) {
+      const r = unitOf(expr, unit);
+      expect(r.unit).toBe("");
+      expect(r.dimensionless).toBe(false);
+      expect(r.warnings.join(" ")).toMatch(/could be a unit conversion or a plain scale factor.*left without a unit — set one by hand/);
+    }
   });
   it("keeps the unit for any other constant factor", () => {
     expect(unitOf("A * 2", "K").unit).toBe("K");

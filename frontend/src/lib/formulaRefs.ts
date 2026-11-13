@@ -13,8 +13,9 @@
 //   col("Long Name")     the column whose NAME is "Long Name". Resolved to its
 //                        letter when the formula is added (`resolveColumnNames`),
 //                        so a later rename or move follows the column like any
-//                        letter reference. Exact name first, then a unique
-//                        case-insensitive match.
+//                        letter reference. Exact name first, then a
+//                        case-insensitive match; a name more than one column
+//                        carries is refused, listing the candidate letters.
 //   c ? a : b            the conditional, exactly `if(c, a, b)` (formula.ts).
 //   A[i]                 column A at row i — 1-BASED like the grid's row
 //                        numbers (A[1] is the first row); `i` may be any
@@ -23,7 +24,9 @@
 //   sum(A[i:j])          an aggregate over rows i..j, 1-based and INCLUSIVE
 //                        at both ends (A[1:10] is the first ten rows) — every
 //                        aggregate (mean/sd/min/max/median/sum/count) takes a
-//                        range. A range is only meaningful inside one.
+//                        range. A range is only meaningful inside one. A
+//                        range reaching outside rows 1..N, or running
+//                        backwards, is an ERROR — never clamped.
 //   cumsum(A)            running sum of A down to this row. A blank (NaN) cell
 //                        adds nothing to the running total but is itself NaN.
 //   sheet("Name", A)     column A (or x) of the worksheet named "Name", at the
@@ -57,7 +60,9 @@ const isOp = (t: Tok | undefined, v: string): boolean => !!t && t.t === "op" && 
 
 /** `expr` with every `col("Name")` naming a value column replaced by that
  *  column's letter. Unmatched names — a text column, or a typo the evaluator
- *  will then report — are left as written. */
+ *  will then report — are left as written. THROWS when a name is shared by
+ *  more than one column (exactly, or case-insensitively with no exact match):
+ *  picking the first would silently compute from the wrong column. */
 export function resolveColumnNames(expr: string, labels: readonly string[]): string {
   let toks: Tok[];
   try {
@@ -79,10 +84,13 @@ export function resolveColumnNames(expr: string, labels: readonly string[]): str
 }
 
 function indexOfName(labels: readonly string[], name: string): number {
-  const exact = labels.indexOf(name);
-  if (exact >= 0) return exact;
+  const exact = labels.flatMap((l, i) => (l === name ? [i] : []));
   const key = name.trim().toLowerCase();
-  const hits = labels.flatMap((l, i) => (l.trim().toLowerCase() === key ? [i] : []));
+  const hits = exact.length ? exact : labels.flatMap((l, i) => (l.trim().toLowerCase() === key ? [i] : []));
+  if (hits.length > 1) {
+    const letters = hits.map(channelLetter);
+    throw new Error(`col("${name}") is ambiguous: columns ${letters.join(", ")} are all named "${name}" — use the letter, e.g. col(${letters[0]})`);
+  }
   return hits.length === 1 ? hits[0] : -1;
 }
 
@@ -202,11 +210,15 @@ function tryParseAggregateRange(fname: string, ops: ParserOps, consts: Record<st
     if (!arr) throw new Error(`unknown variable "${col}"`);
     const [i, j] = [from(c, ex), to(c, ex)];
     if (!Number.isInteger(i) || !Number.isInteger(j)) return NaN;
+    // Never clamped: sum(A[0:2]) silently summing rows 1..2 hides an
+    // off-by-one from 0-based habits.
+    if (j < i) throw new Error(`${col}[${i}:${j}] is empty: the range must run from a lower row to a higher one`);
+    if (i < 1 || j > arr.length) throw new Error(`${col}[${i}:${j}] is outside rows 1..${arr.length} — rows are numbered from 1, and a range is inclusive at both ends`);
     const key = `${i}:${j}`;
     let cache = memo.get(arr);
     if (!cache) memo.set(arr, (cache = new Map()));
     let v = cache.get(key);
-    if (v === undefined) cache.set(key, (v = computeAggregate(name, arr.slice(Math.max(0, i - 1), Math.max(0, j)))));
+    if (v === undefined) cache.set(key, (v = computeAggregate(name, arr.slice(i - 1, j))));
     return v;
   };
 }

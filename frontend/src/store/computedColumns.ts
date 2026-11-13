@@ -106,6 +106,18 @@ export function refreshFitRefsLater(id: string, get: SliceGet): void {
     .catch((e) => get().setStatus(`could not refresh fitted-value columns: ${e instanceof Error ? e.message : "error"}`));
 }
 
+/** `expr` with col("Long Name") stored as the column's letter
+ *  (lib/formulaRefs.ts) — or null, with the reason in the status bar, when a
+ *  name is ambiguous (zero mutation, like a refused cycle). */
+function resolvedNames(expr: string, labels: readonly string[], get: SliceGet): string | null {
+  try {
+    return formulaExtension()?.resolveColumnNames(expr, labels) ?? expr;
+  } catch (e) {
+    get().setStatus(e instanceof Error ? e.message : "formula error");
+    return null;
+  }
+}
+
 export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): ComputedColumnsSlice {
   // The Origin-style formula syntax is a lazy chunk (lib/formulaExt.ts):
   // load it now, then recalculate any formula that needed it before it came.
@@ -123,7 +135,8 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
       if (!ds) return false;
       if (resolvePendingEdit(get, ds, "adding a column", () => get().addFormula(id, name, rawExpr))) return true;
       // col("Long Name") is stored as the column's letter (lib/formulaRefs.ts).
-      const expr = formulaExtension()?.resolveColumnNames(rawExpr, ds.data.labels) ?? rawExpr;
+      const expr = resolvedNames(rawExpr, ds.data.labels, get);
+      if (expr === null) return false;
       const deps = referencedColumns(expr).letters;
       const target = formulaLetter(ds.data.labels.length, ds.formulas?.length ?? 0, ds.formulas?.length ?? 0);
       for (const dep of deps) {
@@ -163,7 +176,8 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
         return true;
       }
       const name = patch.name?.trim() || current.name;
-      const expr = patch.expr === undefined ? current.expr : (formulaExtension()?.resolveColumnNames(patch.expr, ds.data.labels) ?? patch.expr);
+      const expr = patch.expr === undefined ? current.expr : resolvedNames(patch.expr, ds.data.labels, get);
+      if (expr === null) return false;
       // P2.5: an auto-derived unit, the σ link and the notes describe the OLD
       // formula, so an expr edit drops them (unlinking a σ derived from this
       // column, lib/formula.ts) and keeps only the fitted-value snapshots. A
