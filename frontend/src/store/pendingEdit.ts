@@ -101,7 +101,7 @@ export function announceBookFailure(get: () => OfferState, ds: Dataset, msg: str
   }
   const offer = reimportOffer(get, ds);
   const plain = (): void => toast(msg, "danger", offer);
-  if (ds.pending?.kind === "upload" && /upload expired/i.test(e instanceof Error ? e.message : `${e}`)) {
+  if (ds.pending?.kind === "upload" && /upload expired/i.test(e instanceof Error ? e.message : String(e))) {
     void import("./expiredUploadNotice").then((m) => m.announceExpiredUpload(ds, offer), plain);
     return;
   }
