@@ -46,5 +46,7 @@ describe("before the extension loads", () => {
     // Re-evaluated with the module: now the REAL diagnosis (A is numeric).
     expect(t.formulaErrors?.f).toMatch(/numeric column; compare it with a number/);
     expect(u).toBe(untouched);
+    const none = [untouched];
+    expect(recomputeExtensionPending(none)).toBe(none); // nothing waiting: the SAME array
   });
 });

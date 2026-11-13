@@ -59,7 +59,7 @@ describe("BatchApplyLauncher", () => {
   });
 
   it("applies the setup as it is AT APPLY TIME, not as it was when the panel was opened", async () => {
-    applyMock.mockResolvedValue([]);
+    applyMock.mockResolvedValue([{ datasetId: "a", name: "a.dat", status: "ok", note: "created “out”" }]);
     const named = (name: string) => () => ({ ...recipe(), name });
     const { rerender } = render(<BatchApplyLauncher setup="smooth" build={named("Smooth")} disabledReason="" />);
     fireEvent.click(screen.getByRole("button", { name: "Apply to selected sheets…" }));
@@ -68,7 +68,9 @@ describe("BatchApplyLauncher", () => {
     rerender(<BatchApplyLauncher setup="derivative" build={named("Derivative")} disabledReason="" />);
     expect(screen.getByRole("region", { name: "Apply recipe Derivative" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Apply to 2 datasets" }));
-    await waitFor(() => expect(applyMock).toHaveBeenCalledTimes(1));
+    // Wait on what the user sees (the result list), then check what ran.
+    await waitFor(() => expect(screen.getByRole("list", { name: "Apply results" })).toHaveTextContent("a.dat: created “out”"));
+    expect(applyMock).toHaveBeenCalledTimes(1);
     expect(applyMock.mock.calls[0][0]).toMatchObject({ name: "Derivative" });
     // An invalid setup disables Apply, with the dialog's own reason.
     rerender(<BatchApplyLauncher setup="bad" build={named("Bad")} disabledReason="Half-window must be a positive integer." />);

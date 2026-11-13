@@ -34,6 +34,14 @@ export interface FormulaRowContext {
   sheet?: (name: string) => Record<string, readonly number[]>;
 }
 
+/** One `sheet("Name", …)` link on a computed column (`ComputedColumn.sheets`,
+ *  lib/sheetRefs.ts): the name as the formula writes it, and the worksheet it
+ *  is bound to — `null` once that worksheet was removed. */
+export interface SheetBinding {
+  name: string;
+  id: string | null;
+}
+
 export type FormulaFn = (ctx: Record<string, number>, rowCtx?: FormulaRowContext) => number;
 
 /** `p` = 0-based start offset in the source (positioned syntax errors). */

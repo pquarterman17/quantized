@@ -52,11 +52,11 @@ import { applyFormulasWithErrors, baseColumns, channelLetter } from "./formula";
 import { AGGREGATE_NAMES, computeAggregate, type AggregateName } from "./formulaAggregates";
 import { registerFormulaExtension } from "./formulaExt";
 import { tokenize } from "./formulaTokenize";
-import type { FormulaFn, FormulaRowContext, Tok } from "./formulaTypes";
+import type { FormulaFn, FormulaRowContext, SheetBinding, Tok } from "./formulaTypes";
 import type { ParserOps } from "./formulaRowFns";
 import { textColumnEntries } from "./originTextColumnCells";
 import { bindSheets, REMOVED_COLUMN, renameSheetRefs, shiftSheetRefs } from "./sheetRefs";
-import type { DataStruct, Dataset, SheetBinding } from "./types";
+import type { DataStruct, Dataset } from "./types";
 
 const isOp = (t: Tok | undefined, v: string): boolean => !!t && t.t === "op" && t.v === v;
 
@@ -375,6 +375,9 @@ export const ROW_FUNCS: Record<string, (...a: number[]) => number> = {
  *  comparison (lib/formulaExt.ts) — recomputed; the others unchanged (same
  *  object). The store calls it once, when this module has loaded. */
 export function recomputeExtensionPending(datasets: Dataset[]): Dataset[] {
+  // The SAME array when nothing was waiting: the store's `datasets` identity
+  // must not change just because this module finished loading.
+  if (!datasets.some((d) => d.formulas && Object.keys(d.formulaErrors ?? {}).length)) return datasets;
   return datasets.map((d) => {
     if (!d.formulas || !Object.keys(d.formulaErrors ?? {}).length) return d;
     const { data, errors } = applyFormulasWithErrors(baseColumns(d.data, d.formulas.length), d.formulas);

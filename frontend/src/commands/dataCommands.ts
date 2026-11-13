@@ -136,7 +136,7 @@ export function buildDataCommands(s: StoreGet): Action[] {
       group: "Data",
       section: "Recalculation",
       label: "Recalculate now (run stale corrections + fits)",
-      description: "Immediately rerun corrections and fits whose inputs or settings have changed. In mode None (off), which tracks no changes, this reruns every derived worksheet and fit.",
+      description: "Immediately rerun corrections and fits whose inputs or settings have changed — or, in recalc mode None (which tracks no changes), every derived worksheet and fit.",
       run: () => {
         // Worksheet audit #22: "off" tracks nothing, so the request must
         // recalculate everything derived rather than an (always empty) stale set.

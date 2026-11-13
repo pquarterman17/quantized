@@ -19,7 +19,8 @@ import { EXTENSION_PENDING, formulaExtension, loadFormulaExtension, onFormulaExt
 import { remapSurvivingFormulas } from "../lib/formulaRename";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
-import type { ComputedColumn, DataStruct, Dataset, SheetBinding } from "../lib/types";
+import type { SheetBinding } from "../lib/formulaTypes";
+import type { ComputedColumn, DataStruct, Dataset } from "../lib/types";
 import { remapDatasetChannels } from "../lib/channelRemap";
 import { columnRemovalRefsPatch } from "./columnRemovalRefs";
 import { resolvePendingEdit } from "./pendingEdit";
@@ -155,7 +156,8 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
   onFormulaExtension({
     loaded: (m) => {
       m.setFormulaSheetSource(() => get().datasets);
-      set((s) => ({ datasets: m.recomputeExtensionPending(s.datasets) }));
+      const datasets = m.recomputeExtensionPending(get().datasets);
+      if (datasets !== get().datasets) set({ datasets });
     },
     // A chunk that would not download: say so once, with a way to retry; the
     // automatic retries (lib/formulaExt.ts) stay quiet.

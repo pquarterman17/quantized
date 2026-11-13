@@ -4,7 +4,7 @@
 // imported type-only, so there is no runtime cycle with this contract file.
 import type { ErrorBinding } from "./errorRoles";
 import type { CorrectionParams } from "./correctionTypes";
-import type { DerivedSpec } from "./formulaTypes";
+import type { DerivedSpec, SheetBinding } from "./formulaTypes";
 import type { DatasetSource } from "./datasetSource";
 import type { PeakTable } from "./peakTable";
 import type { RecodeSpec } from "./recode";
@@ -353,12 +353,6 @@ export interface ComputedColumn {
   sheets?: SheetBinding[];
 }
 
-/** One `sheet("Name", …)` link: the name as the formula writes it, and the
- *  worksheet it is bound to — `null` once that worksheet was removed. */
-export interface SheetBinding {
-  name: string;
-  id: string | null;
-}
 
 /** One column's non-destructive filter predicate (#53). `col` is -1 for x, 0..
  *  for a channel. `range` keeps min ≤ value ≤ max (either bound optional); `set`

@@ -29,8 +29,8 @@ import { type ColumnShift, remapChannel } from "./channelRemap";
 import { channelLetter } from "./formula";
 import { channelIndexOf } from "./formulaRename";
 import { tokenize } from "./formulaTokenize";
-import type { Tok } from "./formulaTypes";
-import type { ComputedColumn, Dataset, SheetBinding } from "./types";
+import type { SheetBinding, Tok } from "./formulaTypes";
+import type { ComputedColumn, Dataset } from "./types";
 
 /** The placeholder letter a reference to a removed column is rewritten to. */
 export const REMOVED_COLUMN = "__removed__";

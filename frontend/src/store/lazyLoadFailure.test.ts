@@ -53,7 +53,8 @@ describe("the formula module fails to load", () => {
     });
     const { useApp } = await import("./useApp");
     const ext = await import("../lib/formulaExt");
-    await vi.waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(useApp.getState().status).toMatch(/formula module didn't load/));
+    expect(toastMock).toHaveBeenCalledTimes(1);
     expect(toastMock.mock.calls[0][0]).toMatch(/formula module didn't load/);
     expect(retry().label).toBe("Retry");
     expect(useApp.getState().status).toMatch(/formula module didn't load/);
@@ -66,8 +67,7 @@ describe("the formula module fails to load", () => {
     const now = vi.spyOn(Date, "now");
     now.mockReturnValue(Date.now() + ext.RETRY_MS + 1);
     ext.formulaExtension();
-    await vi.waitFor(() => expect(now).toHaveBeenCalled());
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 20)); // let the quiet retry fail
     expect(toastMock).toHaveBeenCalledTimes(1);
 
     // Reachable again: the next evaluation's retry loads it and recomputes.

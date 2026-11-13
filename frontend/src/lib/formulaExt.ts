@@ -16,8 +16,8 @@
 // loads (formulaRefs.recomputeExtensionPending).
 
 import type { ColumnShift } from "./channelRemap";
-import type { DataStruct, Dataset, SheetBinding } from "./types";
-import type { FormulaFn, FormulaRowContext } from "./formulaTypes";
+import type { DataStruct, Dataset } from "./types";
+import type { FormulaFn, FormulaRowContext, SheetBinding } from "./formulaTypes";
 import type { ParserOps } from "./formulaRowFns";
 
 export interface FormulaExtension {
