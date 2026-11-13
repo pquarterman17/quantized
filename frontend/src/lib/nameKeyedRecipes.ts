@@ -51,6 +51,8 @@ import {
   deleteRecipe as deletePeakRecipe,
   isPeakRecipe,
   loadRecipes as loadPeakRecipes,
+  PEAK_ANCHOR_METHODS,
+  PEAK_BASELINE_METHODS,
   PEAK_LINK_MODES,
   PEAK_RECIPE_VERSION,
   PEAK_SHAPES,
@@ -152,7 +154,7 @@ const positive = (v: unknown): v is number => finite(v) && v > 0;
 const nonnegInt = (v: unknown): v is number => nonneg(v) && Number.isInteger(v);
 const posInt = (v: unknown): v is number => positive(v) && Number.isInteger(v);
 
-const PEAK_BASELINE_METHODS = ["none", "als", "rollingball", "modpoly"] as const;
+
 const PEAK_REPORT_MODES = ["fit", "integrate"] as const;
 const PEAK_FIND_SENSITIVITIES = ["low", "medium", "high"] as const;
 const PEAK_FIND_BACKGROUNDS = ["snip", "polynomial"] as const;
@@ -179,8 +181,10 @@ const PEAK_FIND_BACKGROUNDS = ["snip", "polynomial"] as const;
  *    range          lo <= hi when both are set
  *    baseline       als: lam > 0, 0 < p < 1 (calc/baseline.py's
  *                   baseline_als raises outside the OPEN interval);
- *                   rollingball: radius integer >= 1; modpoly: order
- *                   integer >= 0
+ *                   rollingball: radius integer >= 1; modpoly/poly:
+ *                   order integer >= 0; the OPTIONAL Shirley maxIter
+ *                   (integer >= 1), anchorX (finite numbers, at most
+ *                   256) and anchorMethod (PEAK_ANCHOR_METHODS)
  *    find           snr_threshold >= 0; min_prominence >= 0;
  *                   max_peaks integer >= 1; the OPTIONAL Advanced fields
  *                   (lib/peakwizard's `PeakFindAdvanced`) only when
@@ -223,7 +227,12 @@ function parsePeakRecipeFile(text: string): NamedRecord {
     if (!positive(baseline.p) || baseline.p >= 1) bad("baseline.p");
   }
   if (baseline.method === "rollingball" && !posInt(baseline.radius)) bad("baseline.radius");
-  if (baseline.method === "modpoly" && !nonnegInt(baseline.order)) bad("baseline.order");
+  if ((baseline.method === "modpoly" || baseline.method === "poly") && !nonnegInt(baseline.order)) bad("baseline.order");
+  if (baseline.maxIter !== undefined && !posInt(baseline.maxIter)) bad("baseline.maxIter");
+  if (baseline.anchorX !== undefined && (!Array.isArray(baseline.anchorX) || baseline.anchorX.length > 256 || !baseline.anchorX.every(finite))) {
+    bad("baseline.anchorX");
+  }
+  if (baseline.anchorMethod !== undefined && !oneOf(baseline.anchorMethod, PEAK_ANCHOR_METHODS)) bad("baseline.anchorMethod");
   const find = o.find as Record<string, unknown>;
   if (!nonneg(find.snr_threshold)) bad("find.snr_threshold");
   if (!nonneg(find.min_prominence)) bad("find.min_prominence");
@@ -269,6 +278,9 @@ function parsePeakRecipeFile(text: string): NamedRecord {
       p: baseline.p as number,
       radius: baseline.radius as number,
       order: baseline.order as number,
+      ...(baseline.maxIter !== undefined ? { maxIter: baseline.maxIter as number } : {}),
+      ...(baseline.anchorX !== undefined ? { anchorX: [...(baseline.anchorX as number[])] } : {}),
+      ...(baseline.anchorMethod !== undefined ? { anchorMethod: baseline.anchorMethod as "pchip" | "linear" | "spline" } : {}),
     },
     find: {
       snr_threshold: find.snr_threshold as number,

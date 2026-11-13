@@ -8,6 +8,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fitBands, type BandsResult } from "../../../lib/api/fitStats";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { rememberCurveFitOverlay } from "../../../store/curveFitOverlay";
+import { bandPrefs } from "./curveFitSession";
 import { useFitBands, type FitBandsTarget } from "./useFitBands";
 
 vi.mock("../../../lib/api/fitStats", () => ({ fitBands: vi.fn() }));
@@ -39,8 +41,10 @@ function bandFor(x: number[], level: number): BandsResult {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  Object.assign(bandPrefs, { on: false, level: 0.95, prediction: false });
+  rememberCurveFitOverlay(null);
   vi.mocked(fitBands).mockImplementation((req) => Promise.resolve(bandFor(req.x, req.level ?? 0.95)));
-  useApp.setState({ datasets: [DS], activeId: "d1" });
+  useApp.setState({ datasets: [DS], activeId: "d1", fitOverlay: null });
 });
 
 describe("useFitBands", () => {
@@ -96,16 +100,56 @@ describe("useFitBands", () => {
     });
     await waitFor(() => expect(result.current.halfWidth).toBe(0.5));
     const before = useApp.getState().plotWindows.length;
+    const sourceWindows = useApp.getState().plotWindows.map((w) => [w.id, w.datasetId]);
     act(() => result.current.plot());
 
     const added = useApp.getState().datasets.at(-1)!;
     expect(added.id).not.toBe("d1");
     expect(added.data.labels).toEqual(["M", "Linear fit", "95% CI low", "95% CI high", "95% PI low", "95% PI high"]);
-    const wins = useApp.getState().plotWindows;
-    expect(wins).toHaveLength(before + 1);
-    const win = wins.at(-1)!;
+    const st = useApp.getState();
+    expect(st.plotWindows).toHaveLength(before + 1);
+    // Its OWN window, focused and styled (the live view is the focused one's).
+    const win = st.plotWindows.at(-1)!;
+    expect(st.focusedWindowId).toBe(win.id);
     expect(win.datasetId).toBe(added.id);
-    expect(win.view.seriesStyles?.[2]?.fill).toEqual({ vs: 3 });
-    expect(win.view.seriesStyles?.[4]?.fill).toEqual({ vs: 5 });
+    expect(st.seriesStyles[2]?.fill).toEqual({ vs: 3 });
+    expect(st.seriesStyles[4]?.fill).toEqual({ vs: 5 });
+    expect(st.seriesStyles[0]).toMatchObject({ marker: true, width: 0 });
+    // Every window that showed something else still does (the import-style
+    // rebind used to land on the focused SOURCE window too).
+    for (const [id, ds] of sourceWindows) expect(st.plotWindows.find((w) => w.id === id)?.datasetId).toBe(ds);
+  });
+
+  // Audit #9: the band is shaded around the curve ON THE MAIN GRAPH.
+  it("shades the band on the Curve Fit's own overlay, at the overlay's rows, and removes it when off", async () => {
+    const overlay = { datasetId: "d1", y: [1, 3, null, 7, 9] };
+    rememberCurveFitOverlay(overlay);
+    useApp.setState({ fitOverlay: overlay });
+    const { result } = renderHook(() => useFitBands(TARGET));
+    act(() => result.current.setOn(true));
+    await waitFor(() => expect(useApp.getState().fitOverlay?.band).toBeDefined());
+    // The grid rows, then the overlay's non-null rows at their x.
+    expect(vi.mocked(fitBands).mock.calls[0]![0].x.slice(-4)).toEqual([0, 1, 3, 4]);
+    const band = useApp.getState().fitOverlay!.band!;
+    expect(band).toEqual([
+      { label: "95% CI low", y: [0.5, 2.5, null, 6.5, 8.5] },
+      { label: "95% CI high", y: [1.5, 3.5, null, 7.5, 9.5] },
+    ]);
+    // Still the band plot's numbers for the panel: the grid half-width.
+    expect(result.current.halfWidth).toBe(0.5);
+
+    act(() => result.current.setPrediction(true));
+    await waitFor(() => expect(useApp.getState().fitOverlay?.band?.[2]).toEqual({ label: "95% PI low", y: [0, 2, null, 6, 8] }));
+    act(() => result.current.setOn(false));
+    await waitFor(() => expect(useApp.getState().fitOverlay?.band).toBeUndefined());
+    expect(useApp.getState().fitOverlay?.y).toEqual(overlay.y);
+  });
+
+  it("never decorates a curve another tool put in the overlay slot", async () => {
+    useApp.setState({ fitOverlay: { datasetId: "d1", y: [1, 3, 5, 7, 9] } }); // e.g. Quick Fit
+    const { result } = renderHook(() => useFitBands(TARGET));
+    act(() => result.current.setOn(true));
+    await waitFor(() => expect(result.current.halfWidth).toBe(0.5));
+    expect(useApp.getState().fitOverlay?.band).toBeUndefined();
   });
 });

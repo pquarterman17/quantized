@@ -654,6 +654,11 @@ export type CalcResult = Record<string, unknown>;
 export interface FitOverlay {
   datasetId: string;
   y: (number | null)[];
+  /** Curve Fit's confidence (and optional prediction) band, shaded around the
+   *  curve on the plot; edges align to `y` the same way. Rides on the overlay
+   *  so anything that clears or replaces the curve clears the band with it. */
+  /** Edges in order: CI low, CI high, then optionally PI low, PI high. */
+  band?: { label: string; y: (number | null)[] }[];
 }
 
 /** Peak markers to overlay (points only). `y` is sparse — null except at the

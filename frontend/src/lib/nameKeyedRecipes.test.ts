@@ -647,6 +647,39 @@ describe("import validates FIELDS at the file boundary, not just the shape (revi
   });
 });
 
+describe("peak recipe import: the Baseline workshop's methods (audit #19)", () => {
+  const peakJson = (baseline: Record<string, unknown>) =>
+    JSON.stringify({ ...DEFAULT_RECIPE, name: "B", baseline: { ...DEFAULT_RECIPE.baseline, ...baseline } });
+
+  it("round-trips SNIP, Shirley, anchor points and polynomial recipes", () => {
+    for (const b of [
+      { method: "snip" },
+      { method: "shirley", maxIter: 80 },
+      { method: "anchor", anchorX: [10, 25.5, 40], anchorMethod: "linear" },
+      { method: "poly", order: 3 },
+    ]) {
+      const r = importNameKeyed("peak", peakJson(b));
+      expect(r.ok, JSON.stringify(b)).toBe(true);
+    }
+    const anchor = loadPeakRecipes().find((r) => r.baseline.method === "anchor");
+    expect(anchor?.baseline).toMatchObject({ anchorX: [10, 25.5, 40], anchorMethod: "linear" });
+    expect(loadPeakRecipes().find((r) => r.baseline.method === "shirley")?.baseline.maxIter).toBe(80);
+  });
+
+  it("refuses malformed anchor / Shirley / polynomial fields", () => {
+    const cases: [Record<string, unknown>, RegExp][] = [
+      [{ method: "shirley", maxIter: 0 }, /baseline\.maxIter/],
+      [{ method: "anchor", anchorX: [1, "2"] }, /baseline\.anchorX/],
+      [{ method: "anchor", anchorX: 5 }, /baseline\.anchorX/],
+      [{ method: "anchor", anchorMethod: "cubic" }, /baseline\.anchorMethod/],
+      [{ method: "poly", order: 1.5 }, /baseline\.order/],
+    ];
+    for (const [b, reason] of cases) {
+      expect(importNameKeyed("peak", peakJson(b)), JSON.stringify(b)).toMatchObject({ ok: false, reason: expect.stringMatching(reason) });
+    }
+  });
+});
+
 describe("import verifies the write LANDED (review finding on #290)", () => {
   it("refuses — and announces nothing — when the storage write throws", () => {
     // The repo's ratchet (architecture.test.ts): replace the localStorage

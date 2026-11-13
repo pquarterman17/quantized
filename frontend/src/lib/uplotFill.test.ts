@@ -38,7 +38,15 @@ describe("resolveFillBands", () => {
     const bands = resolveFillBands([0, 2], [{ fill: { vs: 2 } }, undefined], strokeOf);
     expect(bands).toEqual([
       { series: [1, 2], fill: "color-mix(in oklab, stroke-0 25%, transparent)" },
+      { series: [2, 1], fill: "color-mix(in oklab, stroke-0 25%, transparent)" },
     ]);
+  });
+
+  it("fills between in BOTH orders: a band is [upper, lower] and the styled series may be the lower edge", () => {
+    // The curve-fit band styles "CI low" with fill vs "CI high": the single
+    // [from, vs] band was [lower, upper] and uPlot drew no fill at all.
+    const bands = resolveFillBands([0, 1], [{ fill: { vs: 1 } }], strokeOf);
+    expect(bands.map((b) => b.series)).toEqual([[1, 2], [2, 1]]);
   });
 
   it("skips a vs channel that isn't currently plotted", () => {
@@ -68,7 +76,9 @@ describe("resolveFillBands", () => {
     );
     expect(bands).toEqual([
       { series: [1, 2], fill: "color-mix(in oklab, stroke-0 25%, transparent)" },
+      { series: [2, 1], fill: "color-mix(in oklab, stroke-0 25%, transparent)" },
       { series: [3, 1], fill: "color-mix(in oklab, stroke-2 25%, transparent)" },
+      { series: [1, 3], fill: "color-mix(in oklab, stroke-2 25%, transparent)" },
     ]);
   });
 });

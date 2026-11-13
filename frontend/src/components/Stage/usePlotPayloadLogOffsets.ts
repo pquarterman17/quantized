@@ -74,9 +74,11 @@ export interface LogOffsetScalingResult {
  *  real dependency instead of a freshly-recreated-every-render helper.
  *  `factor === 1` (no offset, or no overlay) returns `overlay` itself
  *  unchanged. */
-function scaleOverlay<T extends { y: (number | null)[] } | null>(overlay: T, factor: number): T {
+function scaleOverlay<T extends { y: (number | null)[]; band?: FitOverlay["band"] } | null>(overlay: T, factor: number): T {
   if (!overlay || factor === 1) return overlay;
-  return { ...overlay, y: overlay.y.map((v) => (v == null ? v : v * factor)) };
+  const s = (c: (number | null)[]) => c.map((v) => (v == null ? v : v * factor));
+  // A fit band moves with its curve.
+  return { ...overlay, y: s(overlay.y), band: overlay.band?.map((e) => ({ ...e, y: s(e.y) })) };
 }
 
 export function useLogOffsetScaling(p: LogOffsetScalingParams): LogOffsetScalingResult {

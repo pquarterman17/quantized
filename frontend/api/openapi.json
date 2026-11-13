@@ -6168,6 +6168,97 @@
         "title": "FitPeakRequest",
         "type": "object"
       },
+      "FitReportRequest": {
+        "properties": {
+          "covar": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Covar"
+          },
+          "dy": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dy"
+          },
+          "errors": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "level": {
+            "default": 0.95,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Level",
+            "type": "number"
+          },
+          "n_free": {
+            "minimum": 0.0,
+            "title": "N Free",
+            "type": "integer"
+          },
+          "params": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Params",
+            "type": "array"
+          },
+          "residuals": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Residuals",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "params",
+          "errors",
+          "y",
+          "residuals",
+          "n_free"
+        ],
+        "title": "FitReportRequest",
+        "type": "object"
+      },
       "FitRequest": {
         "properties": {
           "calc_errors": {
@@ -19152,6 +19243,50 @@
           }
         },
         "summary": "Posterior",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/report": {
+      "post": {
+        "description": "t / Prob>|t| / confidence limits, ANOVA, covariance and correlation.",
+        "operationId": "report_api_fitting_report_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FitReportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Report Api Fitting Report Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report",
         "tags": [
           "fitting"
         ]

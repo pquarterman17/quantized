@@ -13,7 +13,7 @@
 // NaN on the grid rows (drawn as markers only, so the gaps never show).
 
 import type { BandsResult } from "../../../lib/api/fitStats";
-import type { DataStruct, Dataset, SeriesStyle } from "../../../lib/types";
+import type { DataStruct, Dataset, FitOverlay, SeriesStyle } from "../../../lib/types";
 
 /** Band levels offered in the panel. */
 export const BAND_LEVELS = [0.68, 0.9, 0.95, 0.99] as const;
@@ -120,4 +120,45 @@ export function bandStyles(prediction: boolean): Record<number, SeriesStyle> {
     styles[5] = { color: "--series-3", width: 1, line: "dotted" };
   }
   return styles;
+}
+
+// ── the band on the MAIN graph (FitOverlay.band) ─────────────────────────────
+// The fit overlay is a full-row column (null where the fit has no value:
+// excluded/gap rows), so the band is evaluated at exactly the rows that carry
+// a fitted value, at their plotted x, and laid back onto the same full-row
+// length — it then aligns with the curve however the plot trims or masks it.
+
+/** Rows of `overlay` that carry a fitted value, and their x from `xs`. */
+export function overlayRows(overlay: FitOverlay, xs: readonly number[]): { idx: number[]; x: number[] } {
+  const idx: number[] = [];
+  overlay.y.forEach((v, i) => {
+    if (v != null && Number.isFinite(xs[i])) idx.push(i);
+  });
+  return { idx, x: idx.map((i) => xs[i]!) };
+}
+
+/** The band columns for `overlay`, full-row length, from `band` values
+ *  starting at `offset` (the rows were appended after the band-plot grid). */
+export function overlayBand(
+  overlay: FitOverlay,
+  idx: readonly number[],
+  band: BandsResult,
+  offset: number,
+  prediction: boolean,
+): NonNullable<FitOverlay["band"]> {
+  const col = (src: (number | null)[]) => {
+    const out: (number | null)[] = overlay.y.map(() => null);
+    idx.forEach((row, k) => {
+      const v = src[offset + k];
+      out[row] = v != null && Number.isFinite(v) ? v : null;
+    });
+    return out;
+  };
+  const lv = levelLabel(band.level);
+  const edges = [
+    { label: `${lv} CI low`, y: col(band.ciLo) },
+    { label: `${lv} CI high`, y: col(band.ciHi) },
+  ];
+  if (prediction) edges.push({ label: `${lv} PI low`, y: col(band.piLo) }, { label: `${lv} PI high`, y: col(band.piHi) });
+  return edges;
 }
