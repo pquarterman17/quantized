@@ -317,6 +317,49 @@ describe("ensureBookData — a failed load offers the same recovery", () => {
   });
 });
 
+describe("an expired upload — one toast, however many books and fetches hit it", () => {
+  const UP: BookSource = { kind: "upload", token: "a".repeat(64), bookId: "b1", rows: 4000, cols: 1 };
+  const expired = () => new Error("upload expired -- re-import the file to fetch this book");
+
+  it("three books of one upload, each failing with its own rejection, raise ONE Re-import toast", async () => {
+    vi.mocked(fetchBookData).mockImplementation(() => Promise.reject(expired()));
+    useApp.setState({
+      datasets: ["d1", "d2", "d3"].map((id, i) =>
+        pendingDataset({ id, name: `book${i}`, pending: { ...UP, bookId: `b${i}` } }),
+      ),
+    });
+
+    for (const id of ["d1", "d2", "d3"]) useApp.getState().ensureBookData(id);
+    await settle();
+    const out = await withResolved(useApp.getState, "d2", "excluding rows", () => 1);
+    await settle();
+
+    expect(out.ok).toBe(false);
+    expect(fetchBookData).toHaveBeenCalledTimes(4);
+    expect(dangerToasts()).toHaveLength(1);
+    expect(dangerToasts()[0]).toMatchObject({
+      msg: expect.stringContaining("no longer in the server's upload cache"),
+      action: { label: "Re-import" },
+    });
+  });
+
+  it("is announced again once a fetch for the token has succeeded in between", async () => {
+    useApp.setState({ datasets: [pendingDataset({ pending: UP })] });
+    vi.mocked(fetchBookData).mockRejectedValueOnce(expired());
+    useApp.getState().ensureBookData("d1");
+    await settle();
+    expect(dangerToasts()).toHaveLength(1);
+
+    vi.mocked(fetchBookData).mockResolvedValueOnce(FULL);
+    await installBookData(setter, "d1", UP); // re-staged: the token works again
+    useApp.setState({ datasets: [pendingDataset({ id: "d2", pending: { ...UP, bookId: "b2" } })] });
+    vi.mocked(fetchBookData).mockRejectedValueOnce(expired());
+    useApp.getState().ensureBookData("d2");
+    await settle();
+    expect(dangerToasts()).toHaveLength(2);
+  });
+});
+
 describe("lastBookError — the record itself", () => {
   it("records WHY a failed fetch failed, and leaves `pending` set so a retry is possible", async () => {
     await failOnce(new Error("source not found"));

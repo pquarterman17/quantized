@@ -40,7 +40,13 @@
 // registry, NOT on `Dataset` — see its comment for the request storm and the starved
 // autosave that putting it on `Dataset` caused.
 
-import { lastBookError, sameBookSource, truncateReason } from "../lib/bookData";
+import {
+  claimExpiredUploadNotice,
+  isExpiredUpload,
+  lastBookError,
+  sameBookSource,
+  truncateReason,
+} from "../lib/bookData";
 import type { Dataset } from "../lib/types";
 // `toast` ONLY: a dozen suites `vi.mock` ./toasts with nothing else, and a
 // missing mock export throws on access — inside a fetch's failure handler.
@@ -88,11 +94,28 @@ export function reimportOffer(get: () => OfferState, ds: Dataset): ToastOptions 
  *  its own status. A primitive rejection cannot be held here and just toasts. */
 const announced = new WeakSet<object>();
 
-/** Toast a lazy-book load failure once per failed fetch, offering Re-import. */
+/** Toast a lazy-book load failure once per failed fetch, offering Re-import.
+ *
+ *  An EXPIRED UPLOAD is one cause however many books and fetches hit it: one
+ *  toast per upload token (`lib/bookData.claimExpiredUploadNotice`), worded
+ *  for the project rather than the book, with the same Re-import recovery
+ *  (for an upload it opens the file picker; a path source the shell finds
+ *  missing opens Relink — `store/reimport.ts`). */
 export function announceBookFailure(get: () => OfferState, ds: Dataset, msg: string, e: unknown): void {
   if (typeof e === "object" && e !== null) {
     if (announced.has(e)) return;
     announced.add(e);
+  }
+  const src = ds.pending;
+  if (src?.token && isExpiredUpload(src, e)) {
+    if (!claimExpiredUploadNotice(src.token)) return;
+    toast(
+      `The uploaded Origin project behind "${ds.name}" is no longer in the server's upload cache, ` +
+        "so its books can't load. Re-import the file to continue.",
+      "danger",
+      reimportOffer(get, ds),
+    );
+    return;
   }
   toast(msg, "danger", reimportOffer(get, ds));
 }

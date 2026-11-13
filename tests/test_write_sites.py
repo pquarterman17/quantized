@@ -214,11 +214,14 @@ WRITE_SITE_ALLOWLIST: dict[str, str] = {
         "touches an original dataset source path."
     ),
     "routes/_uploadcache.py": (
-        "stage_upload/_commit: writes and evicts (unlink) entries inside "
-        "this module's own bounded staging directory "
-        "(`tempfile.gettempdir()/qz_origin_uploads/<token>/<name>`) -- a "
-        "server-generated token-named path, never a caller-supplied one, "
-        "and always a COPY of uploaded bytes, never the original file."
+        "UploadCache.stage/_commit/_save/_evict: writes, renames "
+        "(os.replace) and evicts (unlink/rmdir) entries + its index.json "
+        "inside this module's own byte-bounded staging directory (the "
+        "per-user cache dir's `origin-uploads/<sha256 token>/<basename>`, "
+        "or QZ_UPLOAD_CACHE_DIR) -- a server-generated content-hash path "
+        "(token checked against ^[0-9a-f]{64}$, name a plain basename), "
+        "never a caller-supplied one, and always a COPY of uploaded bytes, "
+        "never the original file."
     ),
     "routes/_uploadstream.py": (
         "stream_to_path: on a failed/oversized upload, unlinks the partial "

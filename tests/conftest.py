@@ -63,6 +63,12 @@ _TRANSFER_TEST_DIR = tempfile.mkdtemp(prefix="qz-transfer-test-")
 os.environ["QZ_TRANSFER_DIR"] = _TRANSFER_TEST_DIR
 atexit.register(shutil.rmtree, _TRANSFER_TEST_DIR, ignore_errors=True)
 
+# Same isolation for the persistent Origin upload staging cache
+# (routes/_uploadcache.py), which also lives in the user CACHE dir.
+_UPLOAD_TEST_DIR = tempfile.mkdtemp(prefix="qz-uploads-test-")
+os.environ["QZ_UPLOAD_CACHE_DIR"] = _UPLOAD_TEST_DIR
+atexit.register(shutil.rmtree, _UPLOAD_TEST_DIR, ignore_errors=True)
+
 TESTS_DIR = Path(__file__).parent
 FIXTURES = TESTS_DIR / "fixtures"
 GOLDEN = TESTS_DIR / "golden"
