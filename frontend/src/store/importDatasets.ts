@@ -228,8 +228,7 @@ function addFromPayload(
       }
       newIds.push(id);
     }
-    // Each `addDataset` activated its book, which left the LAST one active;
-    // the project opens on its primary book (Origin's active window) instead.
+    // Open on the primary book (Origin's active window), not the last one added.
     if (primaryId) get().setActive(primaryId);
     // item 4 / LIBRARY_WORKBOOK_UX_PLAN PR A3: organize the imported books
     // into a project folder that mirrors Origin's Project Explorer
@@ -326,6 +325,7 @@ function addFromPayload(
       datasets: s.datasets.map((d) => (mine.has(d.id) ? { ...d, workbookId } : d)),
     }));
   }
+  set({ worksheetId: null }); // the Worksheet tab shows the import, not a book opened earlier
   if (figures?.length) get().addOriginFigures(stem, figures, newIds);
   if (fidelity) {
     get().addOriginFidelity(stem, fidelity, newIds);

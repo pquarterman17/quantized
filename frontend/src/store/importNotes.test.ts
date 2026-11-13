@@ -126,6 +126,16 @@ describe("parser notes after an import", () => {
     expect(useApp.getState().hiddenChannels).toEqual([1, 2]);
   });
 
+  it("an import replaces an Origin book opened as a worksheet on the Worksheet tab", async () => {
+    // Origin-replacement live check: after opening a book as a sheet
+    // (worksheetId), importing another file left the Worksheet tab on that
+    // old book while the plot (and title) moved to the new file.
+    useApp.setState({ worksheetId: "earlier-book" });
+    vi.mocked(uploadFile).mockResolvedValue(payload({}));
+    await useApp.getState().importFiles([new File(["x"], "next.dat")]);
+    expect(useApp.getState().worksheetId).toBeNull();
+  });
+
   it("a clean import fires no notes toast", async () => {
     vi.mocked(uploadFile).mockResolvedValue(payload({ sample: "Si" }));
     await useApp.getState().importFiles([new File(["x"], "clean.dat")]);
