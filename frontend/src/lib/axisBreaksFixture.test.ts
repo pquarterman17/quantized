@@ -50,6 +50,9 @@ const CASES: Case[] = [
   { name: "two breaks", breaks: [[10, 100], [120, 1000]], data: [0, 1030], view: [0, 1030], step: null, samples: [5, 10, 55, 100, 110, 120, 560, 1000, 1030] },
   { name: "negative values", breaks: [[-90, -10]], data: [-100, 5], view: [-101, 7], step: null, samples: [-100, -90, -50, -10, 0, 5] },
   { name: "sub-unit ticks", breaks: [[0.2, 5]], data: [0, 5.3], view: [0, 5.4], step: null, samples: [0.1, 0.2, 2.6, 5, 5.3] },
+  // Live check: a 1..5 cluster under a 1000-unit one -- the short segment
+  // must still get several ticks.
+  { name: "short segment keeps its ticks", breaks: [[6, 995]], data: [1, 1007.8], view: [0, 1009.5], step: null, samples: [1, 3, 6, 995, 1007.8] },
 ];
 
 const round = (v: number): number => Number(v.toPrecision(12));

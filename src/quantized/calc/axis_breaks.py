@@ -44,6 +44,7 @@ __all__ = [
     "break_gap",
     "break_ticks",
     "elide",
+    "auto_break_step",
     "axis_break_info",
     "is_broken_axis",
     "nice_break_step",
@@ -170,16 +171,43 @@ def nice_break_step(span: float, target: int = BREAK_TARGET_TICKS) -> float:
     return (1 if residual < 1.5 else 2 if residual < 3 else 5 if residual < 7 else 10) * mag
 
 
+def _shortest_segment(lo: float, hi: float, breaks: Breaks) -> float:
+    """The shortest visible stretch of ``[lo, hi]`` between breaks, or inf
+    when none is cut (``shortestSegment``)."""
+    shortest = math.inf
+    start = lo
+    for b_lo, b_hi in breaks:
+        if b_hi <= lo or b_lo >= hi:
+            continue
+        if b_lo > start:
+            shortest = min(shortest, b_lo - start)
+        start = max(start, b_hi)
+    if hi > start and shortest != math.inf:
+        shortest = min(shortest, hi - start)
+    return shortest
+
+
+def auto_break_step(lo: float, hi: float, breaks: Breaks) -> float:
+    """The automatic step of a broken axis (``autoBreakStep``): 1-2-5 for the
+    KEPT span, finer when the shortest segment would get barely one tick, but
+    never above about four times the usual tick count."""
+    kept = elide(hi, breaks) - elide(lo, breaks)
+    base = nice_break_step(kept)
+    shortest = _shortest_segment(lo, hi, breaks)
+    if not math.isfinite(shortest):
+        return base
+    finest = nice_break_step(kept, 4 * BREAK_TARGET_TICKS)
+    return max(finest, min(base, nice_break_step(shortest, 3)))
+
+
 def break_ticks(lo: float, hi: float, breaks: Breaks, step: float | None = None) -> list[float]:
     """Major ticks of a broken axis showing ``[lo, hi]``: whole multiples of
-    the step (the typed increment, else a 1-2-5 step sized for the KEPT span),
-    never strictly inside a break."""
+    the step (the typed increment, else :func:`auto_break_step`), never
+    strictly inside a break."""
     if not (math.isfinite(lo) and math.isfinite(hi)) or not hi > lo:
         return []
     typed = step is not None and step > 0 and math.isfinite(step)
-    st = float(step) if typed and step is not None else nice_break_step(
-        elide(hi, breaks) - elide(lo, breaks)
-    )
+    st = float(step) if typed and step is not None else auto_break_step(lo, hi, breaks)
     first = math.ceil(lo / st - 1e-9)
     last = math.floor(hi / st + 1e-9)
     if last - first > 2000:

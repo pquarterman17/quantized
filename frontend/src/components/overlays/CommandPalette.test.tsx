@@ -60,6 +60,16 @@ describe("CommandPalette returns focus to its opener (R2)", () => {
     expect(opener).toHaveFocus();
   });
 
+  it("consumes the Enter that runs a command (live check: no stray click on the dialog it opens)", async () => {
+    // A command that opens a dialog moves focus to the dialog's first button
+    // before this Enter's keypress; an unconsumed Enter then "clicked" it --
+    // Plot > Break y-axis... opened on the Axis dialog's X tab.
+    await openFrom();
+    const notPrevented = fireEvent.keyDown(screen.getByPlaceholderText("Type a command…"), { key: "Enter" });
+    expect(action.run).toHaveBeenCalledOnce();
+    expect(notPrevented).toBe(false);
+  });
+
   it("on a close from outside the palette (the unmount backstop)", async () => {
     const opener = await openFrom();
     act(() => useApp.setState({ cmdkOpen: false }));

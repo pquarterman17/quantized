@@ -80,12 +80,39 @@ export function niceBreakStep(span: number, target = BREAK_TARGET_TICKS): number
   return (residual < 1.5 ? 1 : residual < 3 ? 2 : residual < 7 ? 5 : 10) * mag;
 }
 
+/** The shortest visible stretch of `[min, max]` between breaks (the kept
+ *  segments a broken axis draws), or Infinity when none is cut. */
+function shortestSegment(min: number, max: number, breaks: readonly AxisBreak[]): number {
+  let shortest = Infinity;
+  let start = min;
+  for (const [lo, hi] of breaks) {
+    if (hi <= min || lo >= max) continue;
+    if (lo > start) shortest = Math.min(shortest, lo - start);
+    start = Math.max(start, hi);
+  }
+  if (max > start && shortest !== Infinity) shortest = Math.min(shortest, max - start);
+  return shortest;
+}
+
+/** The automatic step of a broken axis showing `[min, max]`: a 1-2-5 step for
+ *  the KEPT span (so an elided stretch does not thin the ticks), made finer
+ *  when that would leave the shortest segment with barely one tick (the live
+ *  check: a 1..5 cluster under a 1000-unit one got a single "5"), but never so
+ *  fine the axis carries more than about four times the usual tick count. */
+export function autoBreakStep(min: number, max: number, breaks: readonly AxisBreak[]): number {
+  const kept = elide(max, breaks) - elide(min, breaks);
+  const base = niceBreakStep(kept);
+  const shortest = shortestSegment(min, max, breaks);
+  if (!Number.isFinite(shortest)) return base;
+  return Math.max(niceBreakStep(kept, 4 * BREAK_TARGET_TICKS), Math.min(base, niceBreakStep(shortest, 3)));
+}
+
 /** Major ticks of a broken axis showing `[min, max]`: whole multiples of the
- *  step (the typed increment, else a 1-2-5 step sized for the KEPT span, so an
- *  elided stretch does not thin the ticks), never strictly inside a break. */
+ *  step (the typed increment, else `autoBreakStep`), never strictly inside a
+ *  break. */
 export function breakTicks(min: number, max: number, breaks: readonly AxisBreak[], step?: number | null): number[] {
   if (!Number.isFinite(min) || !Number.isFinite(max) || !(max > min)) return [];
-  const st = step != null && step > 0 && Number.isFinite(step) ? step : niceBreakStep(elide(max, breaks) - elide(min, breaks));
+  const st = step != null && step > 0 && Number.isFinite(step) ? step : autoBreakStep(min, max, breaks);
   const first = Math.ceil(min / st - 1e-9);
   const last = Math.floor(max / st + 1e-9);
   if (last - first > 2000) return [];

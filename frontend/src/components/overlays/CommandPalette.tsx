@@ -156,6 +156,10 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
       e.preventDefault();
       setCursor((c) => Math.max(0, c - 1));
     } else if (e.key === "Enter" && matches[cursor]) {
+      // Consume the key: the command may open a dialog that focuses a button
+      // before this key's keypress fires, and the browser would then "click"
+      // that button (Plot > Break y-axis... landed on the dialog's X tab).
+      e.preventDefault();
       run(matches[cursor].a);
     } else if (e.key === "Tab") {
       // The input is the palette's only Tab stop, so trapping Tab means
