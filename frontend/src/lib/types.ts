@@ -60,43 +60,17 @@ export interface OriginFigureFidelity {
   omissions: string[];
 }
 
-export interface OriginFilteredFigure {
-  index: number;
-  name: string;
-  layer: number | null;
-  reason: string;
-}
-
-export interface OriginSavedPreview {
-  format: "png";
-  mime: "image/png";
-  width: number;
-  height: number;
-  sha256: string;
-  data: string;
-  confidence: "exact_page" | "ambiguous_page";
-  page_name: string;
-}
-
-export interface OriginPreviewDiagnostic {
-  page_name: string;
-  status: "no_preview" | "ambiguous" | "workbook_thumbnail";
-  asset_count: number;
-  assets?: OriginSavedPreview[];
-}
-
-export interface OriginFidelityManifest {
-  version: 1;
-  container: "opj" | "opju";
-  status: OriginFidelityStatus;
-  graph_records_total: number;
-  graph_records_actionable: number;
-  graph_records_filtered: number;
-  omissions: string[];
-  filtered_figures: OriginFilteredFigure[];
-  /** Optional for backward compatibility with #49 workspaces. */
-  preview_diagnostics?: OriginPreviewDiagnostic[];
-}
+// The fidelity manifest, its filtered-figure records and the saved-preview
+// diagnostics live in a sibling (types.ts module-size ceiling); re-exported
+// so every importer is unchanged.
+import type { OriginFidelityManifest, OriginSavedPreview } from "./originFidelityTypes";
+export type {
+  OriginContainerIntegrity,
+  OriginFidelityManifest,
+  OriginFilteredFigure,
+  OriginPreviewDiagnostic,
+  OriginSavedPreview,
+} from "./originFidelityTypes";
 
 /** The `books[]` entry for the book already returned in full at the payload's
  *  top level (ORIGIN_FILE_DECODE_PLAN #38) — carries no data of its own; the
@@ -459,6 +433,10 @@ export interface Dataset {
    *  dataset (persist across dataset switches + round-trip .dwk), not in the
    *  transient view state. */
   channelRoles?: Record<number, ChannelRole>;
+  /** The worksheet's "Set As" designations (channel → Origin designation), overlaying
+   *  the book's own for every plotting default (lib/columnmeta.ts); round-trips
+   *  .dwk. store/columnDesignationActions.ts also writes channelRoles/errorRoles. */
+  columnDesignations?: Record<number, import("./columnmeta").OriginDesignation>;
   /** MAIN_PLAN #33: the canonical error-column roles — X±, Y±, and the two
    *  halves of an asymmetric pair. Supersedes the store's `errKeys` map,
    *  which expressed only symmetric-vertical-Y and is now DERIVED from this

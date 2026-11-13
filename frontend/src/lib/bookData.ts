@@ -71,6 +71,14 @@ export function lastBookError(id: string, source: BookSource): string | null {
   return sameBookSource(rec.source, source) ? rec.message : null;
 }
 
+/** Settles (never rejects) when the fetch currently in flight for `id`'s
+ *  `source` does; null when none is. Lets a view that kicked
+ *  `ensureBookData` ask `lastBookError` afterwards (the worksheet's banner). */
+export function bookFetchSettled(id: string, source: BookSource): Promise<void> | null {
+  const p = _bookFetches.get(bookRequestKey(id, source));
+  return p ? p.then(() => undefined, () => undefined) : null;
+}
+
 /** Did the last fetch of `id`'s `source` fail with exactly this rejection? By
  *  IDENTITY, not message text (BUG-009): two books can fail in the same words
  *  ("Failed to fetch"), and an older failure of a different book must never be

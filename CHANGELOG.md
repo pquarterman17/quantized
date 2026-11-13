@@ -8,6 +8,27 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- Worksheet column menu ▸ Set As (X, Y, Z, Y Error, X Error, Label,
+  Disregard), Origin's column designations: one undoable step, saved with
+  the workspace, honoured by the default plot, Graph Builder and the .ogs,
+  .opj and consolidated-CSV exports.
+- Origin's own ASCII export (Long Name / Units / Comments rows above the
+  data) imports with names, units and comments in place, by direct import
+  and in the Import wizard; when the three header rows are ambiguous the
+  import says which rows it used and the wizard lets you choose them.
+- Origin upload cache: opened Origin projects are kept on disk (per user,
+  private, up to 2 GiB, least recently used first) so their books still
+  load after a restart. `qz upload-cache [info|clear]` and Preferences ▸
+  Interaction ▸ Origin upload cache ▸ Clear… remove them.
+- A truncated or partly copied .opj is reported (import toast and Origin
+  fidelity) instead of importing silently, for the header versions where
+  the recorded file size was measured reliable.
+- .ogs and .opj exports write every Origin designation (Y error, X error,
+  Label, Disregard, Z, a second X) and column comments; the .ogs default
+  graph plots every Y against its own X with its error bars.
+- Graph Builder seeded from a worksheet or a recovered Origin graph puts
+  Y-error columns in the error wells instead of listing them as series.
+- Library Tree rows say how to open them ("Double-click to open").
 - Curve fitting now includes 33 of Origin's built-in fit functions, with
   Origin's names, parameter order, formulas and default bounds:
   - Peak Functions: Gauss, GaussAmp, Lorentz, a true Voigt, PsdVoigt1/2,
@@ -133,6 +154,20 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Changed
 
+- Origin window and template files (.ogw, .ogg, .otw, .opx, …) get an
+  Origin-specific explanation instead of "no parser registered", and a
+  failed binary import no longer suggests the text-only Import wizard.
+- Export download names keep non-ASCII project names (RFC 5987
+  `filename*`) and fold accents in the plain fallback ("Ångström run" ->
+  `Angstrom_run`); .ogs book names follow Origin's short-name rule.
+- The Library's first-run width follows the screen (210 px up to a 1360 px
+  window, up to 264 px on wider ones) so Origin book names fit; tool
+  windows open beside the Library instead of over it.
+- A Y that belongs to a later X column is held back from the one-X plot and
+  offered on its own X ("Plot each Y against its own X"); un-hiding it never
+  draws it against the wrong X.
+- The Map tab says why columns cannot be gridded (a constant axis, no row
+  with all three values) instead of drawing an offline grid of them.
 - Curve Fit: in an edited start-value table, every free parameter whose
   start you did not type (blank, or still the default it was seeded with)
   starts from the data-driven guess, as an untouched table does. Holding one
@@ -195,6 +230,21 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 - The Reshape preview reports the real result row count when its table is
   capped.
+
+### Fixed
+
+- Paste and import keep a row's empty edge cells and a short first data
+  row: values no longer shift under the wrong header or lose a column, and
+  direct import and the Import wizard read such files the same way.
+- /api/stats/descriptive no longer fails on columns of tiny or huge values.
+- A project import opens its primary book; the title and status bars name
+  the sheet the Worksheet tab shows.
+
+### Security
+
+- The Origin upload cache never follows a symlink (its sweep could delete
+  files a planted link pointed to), keeps its directory 0700 / files 0600,
+  and refuses a cache directory owned by another user.
 
 ## [0.33.0] - 2026-11-01
 

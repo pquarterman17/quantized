@@ -14,11 +14,12 @@
 // The preview draws this overlay and the created figure binds to it as a new
 // Library dataset, so the two cannot disagree.
 //
-// X error: an X-error binding (`target: -1`) means the SHARED axis everywhere
-// in the render pipeline (`lib/errorbars.ts`'s `buildErrorSpans`), and there
-// is no way to say "this series' own X" -- the same limit
-// `lib/originBookRoles.ts` documents. So X error fills only the shared-X
-// block; a series on its own X draws no X bars rather than another X's.
+// X error: an axis-wide X-error binding (`target: -1`) means the SHARED
+// axis (`lib/errorbars.ts`'s `buildErrorSpans`), so it fills only the
+// shared-X block; a series on its own X draws no X bars rather than another
+// X's. An X-error bound to one series (`target` = that Y, the Origin rule in
+// `lib/originBookRoles.ts`) rides in that series' own block, re-keyed to its
+// overlay column, so a loop's own X uncertainty stays on that loop.
 
 import type { ErrorBinding } from "./errorRoles";
 import type { QuickFigureMapping } from "./quickFigureMapping";
@@ -71,10 +72,12 @@ export function quickFigureOverlay(data: DataStruct, mapping: QuickFigureMapping
   const cols = mapping.yKeys.map((src) => ({ src, block: blockOf(seriesXKey(mapping, src)) }));
   const errorBindings: ErrorBinding[] = [];
   for (const b of mapping.errorBindings) {
-    const target = b.axis === "x" ? -1 : mapping.yKeys.indexOf(b.target);
-    // -1: a Y error whose target is not a plotted Y, or an X error with no
-    // series on the shared X -- neither could draw a bar, so neither is carried.
-    const block = b.axis === "x" ? blocks.indexOf(mapping.xKey) : target < 0 ? -1 : cols[target].block;
+    const shared = b.axis === "x" && b.target < 0;
+    const target = shared ? -1 : mapping.yKeys.indexOf(b.target);
+    // -1: an error whose target is not a plotted Y, or an axis-wide X error
+    // with no series on the shared X -- neither could draw a bar, so neither
+    // is carried.
+    const block = shared ? blocks.indexOf(mapping.xKey) : target < 0 ? -1 : cols[target].block;
     if (block < 0) continue;
     errorBindings.push({ channel: cols.length, target, axis: b.axis, side: b.side });
     cols.push({ src: b.channel, block });

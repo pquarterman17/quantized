@@ -51,7 +51,7 @@
 // useApp.ts, and passes byte-unchanged against this module.
 
 import { recomputeFormulaData } from "./computedColumns";
-import { defaultErrKeys, originHiddenChannels } from "../lib/errorbars";
+import { bookDefaultHiddenChannels, defaultErrKeys } from "../lib/errorbars";
 import { migrateGroupsToFolders } from "../lib/foldertree";
 import { sanitizeVisibleDetailsColumns } from "../lib/libraryDetailsColumns";
 import { hydrateView } from "../lib/plotview";
@@ -237,12 +237,12 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
           y2AxisLabel: restoredView ? restoredView.y2AxisLabel : "",
           seriesStyles: restoredView ? restoredView.seriesStyles : {},
           seriesLabels: restoredView ? restoredView.seriesLabels : {},
-          errKeys: restoredView ? restoredView.errKeys : activeDs ? defaultErrKeys(activeDs.data) : {},
+          errKeys: restoredView ? restoredView.errKeys : activeDs ? defaultErrKeys(activeDs.data, activeDs.columnDesignations) : {},
           seriesOrder: restoredView ? restoredView.seriesOrder : null,
           hiddenChannels: restoredView
             ? restoredView.hiddenChannels
             : activeDs
-              ? originHiddenChannels(activeDs.data)
+              ? bookDefaultHiddenChannels(activeDs)
               : [],
           xLim: restoredView ? restoredView.xLim : null,
           yLim: restoredView ? restoredView.yLim : null,

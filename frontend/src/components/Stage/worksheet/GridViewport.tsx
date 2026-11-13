@@ -37,6 +37,7 @@ import {
   revealScrollOffset,
   windowIndices,
 } from "../../../lib/gridwindow";
+import type { OriginDesignation } from "../../../lib/columnmeta";
 import type { CalcResult, ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
 import GridHeader from "./GridHeader";
 import { gridFormatters } from "./cellFormat";
@@ -55,6 +56,8 @@ export interface GridViewportProps {
   filteredOut: Set<number>;
   selected: Set<number>;
   channelRoles: Record<number, ChannelRole>;
+  /** The user's "Set As" overrides, for the header badges (GridHeader). */
+  columnDesignations?: Record<number, OriginDesignation>;
   sortMark: (col: number) => string;
   selectedCols: Set<number>;
   onToggleColSelect: (col: number) => void;
@@ -127,6 +130,7 @@ export default function GridViewport({
   filteredOut,
   selected,
   channelRoles,
+  columnDesignations,
   sortMark,
   selectedCols,
   onToggleColSelect,
@@ -301,6 +305,7 @@ export default function GridViewport({
         xName={xName}
         xUnit={xUnit}
         channelRoles={channelRoles}
+        columnDesignations={columnDesignations}
         baseCount={baseCount}
         formulaErrors={formulaErrors}
         visibleCols={visibleCols}

@@ -21327,6 +21327,54 @@
         ]
       }
     },
+    "/api/parsers/upload-cache": {
+      "delete": {
+        "description": "Delete every staged Origin project upload (privacy / disk space).\nLazy books of a project opened from the file picker then need a\nre-import. Returns ``{\"removed\", \"bytes\", \"kept\"}`` -- ``kept`` counts\nuploads a running import is still reading.",
+        "operationId": "upload_cache_clear_api_parsers_upload_cache_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "title": "Response Upload Cache Clear Api Parsers Upload Cache Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Upload Cache Clear",
+        "tags": [
+          "parsers"
+        ]
+      },
+      "get": {
+        "description": "Where staged Origin project uploads are kept and how much is there:\n``{\"path\", \"entries\", \"bytes\", \"max_bytes\"}`` (``_uploadcache``).",
+        "operationId": "upload_cache_info_api_parsers_upload_cache_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Upload Cache Info Api Parsers Upload Cache Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Upload Cache Info",
+        "tags": [
+          "parsers"
+        ]
+      }
+    },
     "/api/peaks/find": {
       "post": {
         "description": "Find peaks in (x, y); returns the peak list + the estimated background.",

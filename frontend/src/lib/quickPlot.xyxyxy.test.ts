@@ -201,4 +201,25 @@ describe("Quick Plot on a recognized XYXYXY workbook makes three paired series",
       ],
     });
   });
+
+  it("a never-filled column on another X is no series: no empty legend entry", () => {
+    // Origin keeps a template's spare Y columns empty; the seed must not draw
+    // them (each would be a legend row with nothing behind it).
+    const withEmpty: Dataset = {
+      ...XYXYXY,
+      data: {
+        ...XYXYXY.data,
+        values: XYXYXY.data.values.map((r) => [...r, NaN]),
+        labels: [...XYXYXY.data.labels, "Spare"],
+        units: [...XYXYXY.data.units, ""],
+        metadata: {
+          ...XYXYXY.data.metadata,
+          origin_column_names: ["B", "C", "D", "E", "F", "G"],
+          column_designations: { A: "X", B: "Y", C: "X", D: "Y", E: "X", F: "Y", G: "Y" },
+        },
+      },
+    };
+    const seed = quickPlotSeriesXSeed(withEmpty);
+    expect(seed?.overlay.data.labels).toEqual(["Y1", "Y2", "Y3"]);
+  });
 });

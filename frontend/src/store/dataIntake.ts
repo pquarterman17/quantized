@@ -178,6 +178,7 @@ export function createDataIntakeSlice(set: SliceSet, get: SliceGet): DataIntakeS
         const id = nextDatasetId();
         const name = `pasted data ${_pasteSeq}`;
         get().addDataset({ id, name, data });
+        set({ worksheetId: null }); // the Worksheet tab shows the paste, not a book opened earlier
         get().recordMacro(`Paste ${name}`, `qz.pasteData(${lit(name)})`, {
           kind: "import",
           params: { name },

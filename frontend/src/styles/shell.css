@@ -342,6 +342,11 @@ body {
    wrapped row never puts a button where a row click lands. */
 .qzk-ds-compact-row > .qzk-ds-name { flex: 1 1 0; min-width: min(10ch, 100%); }
 .qzk-ds-compact-row > .qzk-ds-compact-meta { order: 1; }
+/* The Tree row's Origin "Sheet" chip rides inside the counts (DatasetRow's
+   OriginSheetChip), so it wraps with them instead of taking the name's line:
+   beside the name it cut an Origin sheet's name to "crash:DfAqD…" in a 264px
+   Library (Origin-replacement live check). */
+.qzk-ds-compact-meta > .qzk-origin-kind { display: inline-flex; margin-right: 6px; vertical-align: middle; font-family: var(--font-ui); }
 .qzk-ds-compact-row > .qzk-ds-spark-wrap { order: 2; }
 .qzk-ds-compact-row > .qzk-ds-tags-compact { order: 3; }
 /* DatasetRowPreview's expanded Sparkline: a DIRECT flex child of
@@ -408,6 +413,14 @@ body {
 .qzk-group-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 2px; background: none; border: none; cursor: pointer; color: var(--text-faint); font-size: var(--type-label); font-weight: var(--weight-semibold); text-transform: uppercase; letter-spacing: var(--tracking-label); }
 .qzk-group-caret { width: 10px; color: var(--text-dim); }
 .qzk-group-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+/* A workbook row's book name outranks its "Origin book" chip: the name sizes
+   to its text and the chip gives up its width first (ellipsized, full text in
+   its tooltip) before the name loses a character. The count stays whole. */
+.qzk-workbook-row > .qzk-group-name { flex: 1 1 auto; }
+/* min-width: squeezed, it still reads as a chip ("O…" in its box, full
+   text in the tooltip), never an empty sliver of border. */
+.qzk-workbook-row > .qzk-origin-kind { display: block; line-height: 14px; flex: 0 1000 auto; min-width: 2.6em; overflow: hidden; text-overflow: ellipsis; }
+.qzk-workbook-row > .qzk-group-count { flex-shrink: 0; }
 .qzk-group-count { color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
 /* PR L (L0.48/L0.49) — a Collection's member row. Deliberately NOT a
    DatasetRow: a Collection's members span every hierarchy node kind, and
@@ -570,48 +583,32 @@ body {
    into a wall of repeated marks and steals most of the graph name. Tree mode
    overlays one row's strip only while that row is hovered, keyboard-focused,
    or selected. Flat/search mode keeps its established always-visible actions.
-   Visibility (rather than display:none) lets focusing the row reveal the
-   controls before Tab advances into them. The bounded, scrolling strip also
-   prevents an unusual graph with many decoded source books from widening the
-   Library or reintroducing its horizontal scrollbar. */
+   The revealed strip sits BESIDE the graph name, in the row's own flex flow
+   (not overlaid on it): an overlay covered the name it was revealed for and
+   swallowed the click meant for the row (Origin-replacement audit). The name
+   ellipsizes into what is left and stays clickable. Focusing the row reveals
+   the strip (`:focus-within`) before Tab advances into it. The bounded,
+   scrolling strip also prevents an unusual graph with many decoded source
+   books from widening the Library or reintroducing its horizontal scrollbar. */
 .qzk-fig-row-tree .qzk-origin-figure-actions {
-  position: absolute;
-  z-index: 1;
-  top: 50%;
-  right: 2px;
-  display: flex;
+  display: none;
+  align-self: center;
   align-items: center;
   gap: 2px;
-  max-width: calc(100% - 8px);
-  padding: 2px;
+  max-width: 60%;
   overflow-x: auto;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  box-shadow: var(--shadow-sm);
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transform: translateY(-50%);
 }
 .qzk-fig-row-tree:hover .qzk-origin-figure-actions,
 .qzk-fig-row-tree:focus-within .qzk-origin-figure-actions,
 .qzk-fig-row-tree.selected .qzk-origin-figure-actions {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
+  display: flex;
 }
 /* An unresolved graph has nothing to open (in the tree its row stays a
-   focusable aria-disabled treeitem). Keep its recovery controls visible so
+   focusable treeitem that DESCRIBES its state -- never aria-disabled, which
+   would disable its Recover button too). Keep its recovery controls visible so
    keyboard/touch users can still choose a source. */
 .qzk-fig-row-tree.unresolved .qzk-origin-figure-actions {
-  position: static;
-  align-self: center;
-  max-width: 60%;
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: none;
+  display: flex;
 }
 .qzk-fig-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-width: 0; text-align: left; padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); cursor: default; color: var(--text); font-size: var(--font-size-sm); }
 .qzk-fig-item:hover:not(:disabled):not([aria-disabled="true"]) { border-color: var(--accent); }
@@ -619,8 +616,8 @@ body {
 /* In the tree the whole recovered-graph row is the treeitem (name + action
    strip), so focus and the unresolved dimming key off the row wrapper. */
 .qzk-fig-row-tree:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius-sm); }
-.qzk-fig-row-tree[aria-disabled="true"] > .qzk-fig-item { opacity: 0.45; }
-.qzk-fig-row-tree[aria-disabled="true"] > .qzk-fig-item:hover { border-color: var(--border-soft); }
+.qzk-fig-row-tree.unresolved > .qzk-fig-item { opacity: 0.45; }
+.qzk-fig-row-tree.unresolved > .qzk-fig-item:hover { border-color: var(--border-soft); }
 .qzk-fig-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qzk-fig-meta { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-faint); font-size: var(--type-nano); font-family: var(--font-mono); }
 .qzk-origin-figure-row { min-width: 0; }

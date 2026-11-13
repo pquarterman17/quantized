@@ -25,12 +25,19 @@ from quantized.io._delimited_fast import (
     _tokens_to_columns,
     try_fast_parse_matrix,
 )
-from quantized.io._header_units import _extract_units
+from quantized.io._delimiter_vote import COMMENT_CHARS, tab_cell_lines, vote_lines
+from quantized.io._header_units import _extract_units as _extract_units  # re-export
+from quantized.io._origin_ascii_header import (
+    AMBIGUOUS_HEADER_NOTE,
+    OriginAsciiRows,
+    origin_ascii_ambiguous,
+    origin_ascii_rows,
+)
 from quantized.io.base import read_text, resolve_column
 
 __all__ = ["import_csv"]
 
-_COMMENT_CHARS = "#%"
+_COMMENT_CHARS = COMMENT_CHARS
 
 
 def _read_raw_lines(text: str) -> list[str]:
@@ -81,6 +88,15 @@ def _convert_column(cells: Sequence[str]) -> np.ndarray:
         return np.asarray([layout._to_float(c) for c in cells], dtype=np.float64)
 
 
+def _label_row_role(i: int, header: int, units: int, origin: OriginAsciiRows | None) -> str:
+    """A preserved descriptive row's role in ``metadata["label_rows"]``."""
+    if i == header:
+        return "header"
+    if i == units:
+        return "units"
+    return "comment" if origin is not None and i == origin.comments else "label"
+
+
 def _encode_categorical(cells: Sequence[str]) -> tuple[np.ndarray, tuple[str, ...]]:
     """P1.4: encode raw text cells as float codes ``0..n-1`` (NaN = a blank
     cell -- missing, not a level of its own) plus the ordered level table
@@ -101,6 +117,39 @@ def _encode_categorical(cells: Sequence[str]) -> tuple[np.ndarray, tuple[str, ..
             levels.append(text)
         codes[i] = idx
     return codes, tuple(levels)
+
+
+_WIDTH_SAMPLE_ROWS = 64
+
+
+def _numeric_column(
+    values: np.ndarray, tokens: Sequence[Sequence[str]], c: int, n_rows: int
+) -> bool:
+    """A data column holds NUMBERS: more than a tenth of its rows parse, and
+    they are most of its non-empty cells (a missing-value spelling such as
+    "n/a" counts as empty). A text column with the odd
+    number-looking cell ("r1, r2, 7, r4") is text -- it used to become a
+    mostly-NaN numeric channel and lose its text."""
+    n_num = int(np.count_nonzero(~np.isnan(values)))
+    if n_num / max(n_rows, 1) <= 0.1:
+        return False
+    if n_num == n_rows:
+        return True  # every row parsed: no need to look at the text
+    n_filled = sum(
+        1 for row in tokens if c < len(row) and row[c].strip().lower() not in layout._MISSING_TOKENS
+    )
+    return 2 * n_num > n_filled
+
+
+def _sample_width(tokens: Sequence[Sequence[str]], data_start: int) -> int:
+    """Widest data row among the first `_WIDTH_SAMPLE_ROWS`, ignoring
+    trailing empty cells (a trailing delimiter is padding, not a column)."""
+    width = 0
+    for i in range(data_start, min(len(tokens), data_start + _WIDTH_SAMPLE_ROWS)):
+        row = tokens[i]
+        last = max((k + 1 for k, cell in enumerate(row) if cell.strip()), default=0)
+        width = max(width, last)
+    return width or len(tokens[data_start])
 
 
 def import_csv(
@@ -129,7 +178,11 @@ def import_csv(
     raw_lines, comment_lines = _split_lines(text)
     if not raw_lines:
         raise ValueError(f"file empty or only comments: {path.name}")
-    delim = layout._detect_delimiter(raw_lines)
+    # Voted on UNSTRIPPED lines: a trailing empty cell's tab is real evidence.
+    voted = vote_lines(text)
+    delim = layout._detect_delimiter(voted)
+    if delim == "\t":  # keep a tab row's empty edge cells (`tab_cell_lines`)
+        raw_lines = tab_cell_lines(voted)
     comma_path = dc.uses_decimal_path(dc.check_decimal(decimal, delim), delim, "," in text)
 
     # P0.4-perf4: layout detection scores rows in fixed-size chunks
@@ -142,18 +195,21 @@ def import_csv(
     # (measured ~2.8s of a 7.3s import on a 1M-row file) just to find
     # where the header ends.
     lazy_tokens = LazyTokenRows(raw_lines, delim)
-    try:
-        rows = dc.layout_rows(lazy_tokens) if comma_path else lazy_tokens
-        # Quoted grouped numbers ("1,234.5") in a comma-delimited file: the
-        # comma-aware layout, where it is sound (`_quoted_numbers`).
-        quoted = delim == "," and '"' in text
-        detect = layout._detect_layout
-        header_row, data_start, units_row = (
-            qn.choose_layout(rows, detect) if quoted else detect(rows)
-        )
+    scoring_rows = dc.layout_rows(lazy_tokens) if comma_path else lazy_tokens
+    try:  # (quoted grouped numbers: the comma-aware layout where sound, `qn`)
+        rows3 = qn.detect(scoring_rows, layout._detect_layout, text, delim)
+        header_row, data_start, units_row = rows3
     except ValueError as exc:  # header-only file
         raise ValueError(f"{exc} ({path.name})") from exc
-    n_data_cols = len(lazy_tokens[data_start])
+    # The data's EFFECTIVE width over its leading rows (the wizard's
+    # `_effective_ncols` rule): a short first data row ("1<TAB>2" in a
+    # 3-column file) must not drop the columns the rows below fill.
+    n_data_cols = _sample_width(lazy_tokens, data_start)
+    # Origin's own ASCII export: Long Name / Units / Comments above the data.
+    origin_rows = origin_ascii_rows(scoring_rows, data_start, n_data_cols)
+    if origin_rows is not None:
+        header_row, units_row = origin_rows.header, origin_rows.units
+    header_unclear = origin_ascii_ambiguous(scoring_rows, data_start, n_data_cols)
     if header_row >= 0:
         col_headers = [c.strip() for c in lazy_tokens[header_row]]
     else:
@@ -198,23 +254,15 @@ def import_csv(
         # it is already a `Sequence[Sequence[str]]`.
         data_tokens = data_tokens_list
     comma_cols: list[int] = []
-    comma_notes: list[str] = []
     if comma_path:
         comma_cols = dc.resolve_decimal_columns(
             path.name, col_headers, matrix, data_tokens, decimal=decimal
         )
-        comma_notes = dc.stray_comma_notes(col_headers, matrix, data_tokens, converted=comma_cols)
     elif delim != ",":  # with a comma delimiter, "1,5" is already two cells
         layout.reject_comma_numbers(path.name, col_headers, matrix, data_tokens)
-    elif quoted:
-        # Unless it is quoted: grouped numbers in numeric columns are read
-        # (`_quoted_numbers`); any other comma cell left blank is reported.
-        comma_notes = qn.ungroup_columns(col_headers, matrix, data_tokens)
-        comma_notes += dc.stray_comma_notes(
-            col_headers, matrix, data_tokens, separator_choice=False
-        )
-    # Rows the layout skipped between the header and the data are named.
-    comma_notes += qn.skipped_row_notes(lazy_tokens, header_row, units_row, data_start)
+    # Comma cells read or left blank, and rows the layout skipped (`qn`).
+    args = ((header_row, data_start, units_row), delim, text, comma_path, comma_cols)
+    comma_notes = qn.import_notes(col_headers, matrix, data_tokens, lazy_tokens, *args)
 
     if isinstance(time_column, int) and time_column < 0:
         time_idx = -1
@@ -251,7 +299,7 @@ def import_csv(
         reserved = set() if time_promoted else {time_idx}
         candidates = [c for c in range(n_cols) if c not in reserved]
         numeric_idx = [
-            c for c in candidates if (np.count_nonzero(~np.isnan(matrix[:, c])) / n_rows) > 0.1
+            c for c in candidates if _numeric_column(matrix[:, c], data_tokens, c, n_rows)
         ]
         data_idx = numeric_idx
         # P1.4 (f2): a trailing-text-only file used to raise here once
@@ -360,7 +408,7 @@ def import_csv(
             label_rows.append(
                 {
                     "index": i,
-                    "role": "header" if i == header_row else "units" if i == units_row else "label",
+                    "role": _label_row_role(i, header_row, units_row, origin_rows),
                     "x": at(time_idx) if time_idx >= 0 and not time_promoted else "",
                     # Aligned to the FINAL channel order (numeric, then any
                     # P1.4 categorical channels appended after) -- same
@@ -381,9 +429,8 @@ def import_csv(
     for c in range(n_cols):
         if c in used:
             continue
-        numeric_ratio = float(np.count_nonzero(~np.isnan(matrix[:, c]))) / max(n_rows, 1)
-        if numeric_ratio > 0.1:
-            continue  # a sparse NUMERIC column, not text — leave it dropped
+        if data_columns is not None and _numeric_column(matrix[:, c], data_tokens, c, n_rows):
+            continue  # a numeric column the caller did not select: not text
         cells = [row[c].strip() if c < len(row) else "" for row in data_tokens]
         if any(cells):  # an entirely blank column is padding, not data
             text_columns[col_headers[c]] = cells
@@ -405,6 +452,8 @@ def import_csv(
     if time_is_datetime:
         metadata.update({"time_is_datetime": True, "time_timezone": "UTC"})
     notes: list[str] = []
+    if header_unclear:  # say so: the rows were read conservatively
+        notes.append(AMBIGUOUS_HEADER_NOTE.format(names=header_row + 1, units=units_row + 1))
     if comma_cols:
         # Named as the dataset shows them: the header with its unit split off.
         shown = [_extract_units(col_headers[c])[1] for c in comma_cols]
@@ -431,6 +480,13 @@ def import_csv(
     if other_categorical:
         names = ", ".join(col_headers[c] for c in other_categorical)
         notes.append(f"Text column(s) imported as categorical channel(s): {names}.")
+    if text_columns:
+        # Say so: they are not curves, and used to vanish without a word.
+        text_names = ", ".join(f"'{n}'" for n in text_columns)
+        notes.append(
+            f"Text column{'s' if len(text_columns) > 1 else ''} {text_names} kept as text "
+            "(shown in the worksheet, usable for labels and grouping), not plotted."
+        )
     if notes:
         metadata["notes"] = notes
     values_matrix = np.hstack([matrix[:, data_idx], cat_matrix])

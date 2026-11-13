@@ -174,11 +174,14 @@ describe("LibraryTree — one roving tab stop", () => {
     expect(tabStops(row("worksheet:d1")).length).toBeGreaterThan(1);
   });
 
-  it("an UNRESOLVED recovered graph is still a reachable treeitem (aria-disabled, not a disabled button)", () => {
+  it("an UNRESOLVED recovered graph is still a reachable treeitem (described, not a disabled button)", () => {
     useApp.setState({ originFigures: [{ ...originEntry, datasetId: null }] });
     render(<Harness />);
     const fig = row("origin-figure:g1");
-    expect(fig).toHaveAttribute("aria-disabled", "true");
+    // Its state is described; aria-disabled would disable its Recover button
+    // with it (reader-lane live check on DO.opj).
+    expect(fig).not.toHaveAttribute("aria-disabled");
+    expect(fig.getAttribute("aria-description")).toMatch(/^unresolved/);
     // A disabled <button> can't take focus at all, so arrows would skip it and
     // it could never hold the tree's one tab stop.
     const items = screen.getAllByRole("treeitem");

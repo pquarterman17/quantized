@@ -287,6 +287,7 @@ export function serializeWorkspace(
       ...(d.importedAt ? { importedAt: d.importedAt } : {}),
       ...(d.channelRoles && Object.keys(d.channelRoles).length ? { channelRoles: d.channelRoles } : {}),
       ...(d.channelTypes && Object.keys(d.channelTypes).length ? { channelTypes: d.channelTypes } : {}),
+      ...(d.columnDesignations && Object.keys(d.columnDesignations).length ? { columnDesignations: d.columnDesignations } : {}),
       ...(d.excludedRows?.length ? { excludedRows: d.excludedRows } : {}),
       ...(d.filter?.length ? { filter: d.filter } : {}),
       fitSpec: d.fitSpec,

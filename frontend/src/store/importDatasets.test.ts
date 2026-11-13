@@ -566,6 +566,17 @@ describe("multi-book Origin import provenance (FU-1)", () => {
     expect(new Set(ds.map((d) => d.importedAt)).size).toBe(1);
   });
 
+  it("opens the project on its PRIMARY book, not on whichever book was added last", async () => {
+    // Origin-replacement audit item 12: every addDataset activated its book,
+    // so the LAST one stayed active. The primary sits mid-list here.
+    const p = multiBookPayload();
+    p.books = [p.books[1], p.books[0], p.books[2]];
+    vi.mocked(uploadFile).mockResolvedValueOnce(p);
+    await useApp.getState().importFiles(files("Multi.opj"));
+    const s = useApp.getState();
+    expect(s.datasets.find((d) => d.id === s.activeId)?.name).toBe("Multi:Trap");
+  });
+
   it("E1: does NOT bind a genuine 'Depth' measurement column as an error role, on any shape", async () => {
     vi.mocked(uploadFile).mockResolvedValueOnce(multiBookPayload());
     await useApp.getState().importFiles(files("Multi.opj"));

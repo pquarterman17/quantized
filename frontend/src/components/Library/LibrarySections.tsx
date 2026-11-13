@@ -15,16 +15,20 @@
 // SAME emptiness test the section applies internally, so its chunk is
 // requested strictly after the user authors that content or opens a project
 // that already had it (a persisted-state restore), never on first paint.
-// `BookFamiliesSection` is the one exception and stays static: its gate is a
-// DERIVED value (`originBookFamilies(datasets)`), so gating the seam on it
-// would mean recomputing that grouping in this component on every dataset
-// change just to decide whether to fetch a 1 kB chunk.
+// `BookFamiliesSection` was the one exception, static because its own gate is
+// a DERIVED value (`originBookFamilies(datasets)`) that is not worth
+// recomputing here. It is now lazy behind a cheap NECESSARY condition instead
+// (some dataset is an Origin book, `isOriginBookDataset` -- every family
+// member is one), so a project with no Origin books never fetches it and the
+// section still applies its exact family test itself (Origin-replacement
+// sprint: room in the eager bundle for the worksheet's Set As designations).
 
-import BookFamiliesSection from "./BookFamiliesSection";
+import { isOriginBookDataset } from "../../lib/grouping";
 import type { LibraryHierarchy, LibraryNode } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
 import { lazyRegion } from "../../lib/lazyRegion";
 
+const BookFamiliesSection = lazyRegion(() => import("./BookFamiliesSection"), "Library");
 const CollectionsSection = lazyRegion(() => import("./CollectionsSection"), "Library");
 const EditableFiguresSection = lazyRegion(() => import("./EditableFiguresSection"), "Library");
 const FiguresSection = lazyRegion(() => import("./FiguresSection"), "Library");
@@ -58,6 +62,7 @@ export default function LibrarySections(p: LibrarySectionsProps) {
   const reportCount = useApp((s) => s.reports.length);
   const smartFolderCount = useApp((s) => s.smartFolders.length);
   const collectionCount = useApp((s) => s.collections.length);
+  const hasOriginBooks = useApp((s) => s.datasets.some(isOriginBookDataset));
   const flat = !p.inHierarchy && !p.searchActive;
   if (p.focusActive) return null;
   return (
@@ -68,7 +73,7 @@ export default function LibrarySections(p: LibrarySectionsProps) {
       {flat && figureDocCount > 0 && <SavedFiguresSection />}
       {flat && <PagesSection />}
       {flat && reportCount > 0 && <ReportsSection />}
-      {!p.searchActive && <BookFamiliesSection />}
+      {!p.searchActive && hasOriginBooks && <BookFamiliesSection />}
       {smartFolderCount > 0 && <SmartFoldersSection onFilterTag={p.onFilterTag} />}
       {collectionCount > 0 && (
         <CollectionsSection hierarchy={p.hierarchy} onShowInLibrary={p.onShowInLibrary} />

@@ -324,6 +324,18 @@ def _build_book(
         "origin_text_columns": {c: rows for c, rows in (text_cols or [])},
         "origin_report_sheets": {c: rows for c, rows in (report_cols or [])},
     }
+    if text_cols:
+        # A text column is not a channel, so its Long Name / Unit have no
+        # slot in `.labels` / `.units`; keep them beside the cells (the
+        # worksheet header names the column by its Long Name, like Origin).
+        # Metadata exposure of the already-decoded column record only -- no
+        # parse rule changes. Same key + shape as the reader lane's
+        # opj_books._build_book.
+        meta["origin_text_column_labels"] = {
+            c: {"long_name": clean_richtext(m.long_name), "unit": clean_richtext(m.unit)}
+            for c, _ in text_cols
+            if (m := col_meta.get(c)) is not None and (m.long_name or m.unit)
+        }
     if x_unrecovered and declared_x is not None:
         # The declared X's long name, so the Inspector can say *which* column
         # was lost (e.g. "Temperature") rather than just that the axis is a row

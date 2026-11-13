@@ -68,6 +68,7 @@ export async function runSplit(
     if (src.formulas?.length) child.formulas = src.formulas.map((f) => ({ ...f }));
     if (src.channelRoles) child.channelRoles = { ...src.channelRoles };
     if (src.channelTypes) child.channelTypes = { ...src.channelTypes };
+    if (src.columnDesignations) child.columnDesignations = { ...src.columnDesignations };
     // F5: preserve `[]` (O1 marker) vs `undefined` exactly -- `[]` is
     // truthy, so this carries an explicit empty array too, unlike a
     // `?.length` guard which would collapse it to "not carried".

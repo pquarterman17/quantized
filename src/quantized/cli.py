@@ -52,10 +52,14 @@ _WEB_DIR = Path(__file__).parent / "web"
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Dispatch: ``qz plugin ...`` to the plugin CLI, else launch the server."""
+    """Dispatch: ``qz plugin ...`` / ``qz upload-cache ...`` to their CLIs,
+    else launch the server."""
     args = list(sys.argv[1:] if argv is None else argv)
     if args and args[0] == "plugin":
         _plugin_command(args[1:])
+        return
+    if args and args[0] == "upload-cache":
+        _upload_cache_command(args[1:])
         return
     _serve(args)
 
@@ -159,6 +163,41 @@ def _serve(argv: list[str]) -> None:
 
     print(f"[qz] quantized -> {url}   (press Ctrl+C to stop)")
     uvicorn.run("quantized.app:app", host=args.host, port=port, log_level="warning")
+
+
+def _upload_cache_command(argv: list[str]) -> None:
+    """``qz upload-cache [info|clear]`` — the on-disk copies of Origin
+    projects opened through the browser file picker (kept so their other
+    books still load after a restart; ``routes/_uploadcache.py``).
+
+    ``info`` (default) prints the directory and what it holds; ``clear``
+    deletes every staged upload after a confirmation (``--yes`` skips it).
+    """
+    parser = argparse.ArgumentParser(
+        prog="qz upload-cache", description="Inspect or clear staged Origin project uploads."
+    )
+    sub = parser.add_subparsers(dest="action")
+    sub.add_parser("info", help="show where staged uploads are kept and their size")
+    clear = sub.add_parser("clear", help="delete every staged upload")
+    clear.add_argument("--yes", action="store_true", help="do not ask for confirmation")
+    args = parser.parse_args(argv)
+
+    from quantized.routes._uploadcache import get_cache
+
+    cache = get_cache()
+    info = cache.info()
+    size_mb = info["bytes"] / 1e6
+    print(f"[qz] Origin upload cache: {info['path']}")
+    print(f"  {info['entries']} staged upload(s), {size_mb:.1f} MB (limit 2 GiB)")
+    if args.action != "clear":
+        return
+    if info["entries"] and not args.yes:
+        answer = input("  Delete them all? Lazy books will need a re-import. [y/N] ")
+        if answer.strip().lower() not in ("y", "yes"):
+            print("[qz] nothing deleted.")
+            return
+    done = cache.clear()
+    print(f"[qz] deleted {done['removed']} staged upload(s), {done['bytes'] / 1e6:.1f} MB.")
 
 
 def _plugin_command(argv: list[str]) -> None:

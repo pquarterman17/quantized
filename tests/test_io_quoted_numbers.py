@@ -126,3 +126,19 @@ def test_grouped_value_shapes() -> None:
     assert grouped_value("(1,234)") == -1234
     for no in ("1,5", "01,234.5", "001,002,003", "555,123,4567", "1,2345.0", "abc, def", "($1,234"):
         assert grouped_value(no) is None, no
+
+
+_COMBINED = 'T, Amount, Sample\n1, "1,234.5", a\n2, "2,000", b\n3,7,c\n'
+
+
+def test_quoted_numbers_compose_with_text_columns_and_quote_after_space(tmp_path: Path) -> None:
+    """The per-column quoted-number rule composes with #641's tokenizing of a
+    quote after a space and its kept text columns, in both import paths."""
+    direct = import_csv(_csv(tmp_path, _COMBINED))
+    wizard = parse_import(_COMBINED, guess_settings(_COMBINED))
+    for ds in (direct, wizard):
+        np.testing.assert_array_equal(ds.time, [1, 2, 3])
+        assert ds.labels == ("Amount",)
+        np.testing.assert_array_equal(ds.values[:, 0], [1234.5, 2000, 7])
+        assert ds.metadata["text_columns"] == {"Sample": ["a", "b", "c"]}
+        assert "Column 'Amount' has 2 quoted cells written with thousands separators" in _notes(ds)

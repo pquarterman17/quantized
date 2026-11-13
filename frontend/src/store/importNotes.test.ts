@@ -94,6 +94,69 @@ describe("parser notes after an import", () => {
     expect(toastMsgs()).toContain(`a.dat: ${DROPPED}`);
   });
 
+  it("a skipped workbook sheet is on the status line, not only in the toast", async () => {
+    const SKIPPED = "Sheet 'Notes' has no numeric data; not imported.";
+    vi.mocked(uploadFile).mockResolvedValue(payload({ notes: [SKIPPED] }));
+    await useApp.getState().importFiles([new File(["x"], "multisheet.xlsx")]);
+    expect(useApp.getState().status).toBe(`imported 1 file — multisheet.xlsx: ${SKIPPED}`);
+    expect(toastMsgs()).toContain(`multisheet.xlsx: ${SKIPPED}`);
+  });
+
+  it("an append import puts its notes on the status line too", async () => {
+    vi.mocked(uploadFile)
+      .mockResolvedValueOnce(payload({ notes: [DROPPED] }))
+      .mockResolvedValueOnce(payload({}));
+    await useApp.getState().importFilesAppended([new File(["x"], "a.dat"), new File(["x"], "b.dat")]);
+    expect(useApp.getState().status).toContain(`— a.dat: ${DROPPED}`);
+  });
+
+  it("a book with a Y on its own X column says so, with a way to plot it there", async () => {
+    vi.mocked(uploadFile).mockResolvedValue({
+      time: [0, 1],
+      values: [[1, 10, 2], [2, 20, 3]],
+      labels: ["Signal", "X2", "Signal2"],
+      units: ["", "", ""],
+      metadata: { origin_column_names: ["B", "C", "D"], column_designations: { A: "X", B: "Y", C: "X", D: "Y" } },
+    });
+    await useApp.getState().importFiles([new File(["x"], "desig.opj")]);
+    const t = useToasts.getState().toasts.find((x) => x.msg.includes("own") || x.msg.includes("another X"));
+    expect(t?.msg).toBe("desig.opj: 1 Y column belongs to another X column and is hidden from this plot");
+    expect(t?.action?.label).toBe("Plot each Y against its own X");
+    // ...and the default plot really did hold it back.
+    expect(useApp.getState().hiddenChannels).toEqual([1, 2]);
+  });
+
+  it("an empty column on another X is not counted as a hidden Y", async () => {
+    vi.mocked(uploadFile).mockResolvedValue({
+      time: [0, 1],
+      values: [[1, 10, 2, NaN], [2, 20, 3, NaN]],
+      labels: ["Signal", "X2", "Signal2", "Spare"],
+      units: ["", "", "", ""],
+      metadata: { origin_column_names: ["B", "C", "D", "E"], column_designations: { A: "X", B: "Y", C: "X", D: "Y", E: "Y" } },
+    });
+    await useApp.getState().importFiles([new File(["x"], "spare.opj")]);
+    const t = useToasts.getState().toasts.find((x) => x.msg.includes("another X"));
+    expect(t?.msg).toBe("spare.opj: 1 Y column belongs to another X column and is hidden from this plot");
+  });
+
+  it("an import replaces an Origin book opened as a worksheet on the Worksheet tab", async () => {
+    // Origin-replacement live check: after opening a book as a sheet
+    // (worksheetId), importing another file left the Worksheet tab on that
+    // old book while the plot (and title) moved to the new file.
+    useApp.setState({ worksheetId: "earlier-book" });
+    vi.mocked(uploadFile).mockResolvedValue(payload({}));
+    await useApp.getState().importFiles([new File(["x"], "next.dat")]);
+    expect(useApp.getState().worksheetId).toBeNull();
+  });
+
+  it("an append import replaces an Origin book opened as a worksheet too", async () => {
+    useApp.setState({ worksheetId: "earlier-book" });
+    vi.mocked(uploadFile).mockResolvedValueOnce(payload({})).mockResolvedValueOnce(payload({}));
+    await useApp.getState().importFilesAppended([new File(["x"], "a.dat"), new File(["x"], "b.dat")]);
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(useApp.getState().worksheetId).toBeNull();
+  });
+
   it("a clean import fires no notes toast", async () => {
     vi.mocked(uploadFile).mockResolvedValue(payload({ sample: "Si" }));
     await useApp.getState().importFiles([new File(["x"], "clean.dat")]);

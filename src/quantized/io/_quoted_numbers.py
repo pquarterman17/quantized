@@ -36,9 +36,18 @@ from collections.abc import Callable, Sequence
 
 import numpy as np
 
+from quantized.io import _decimal_comma as dc
 from quantized.io._delimited_layout import _MISSING_TOKENS, _is_numeric_like
 
-__all__ = ["choose_layout", "grouped_value", "scoring_rows", "skipped_row_notes", "ungroup_columns"]
+__all__ = [
+    "choose_layout",
+    "detect",
+    "grouped_value",
+    "import_notes",
+    "scoring_rows",
+    "skipped_row_notes",
+    "ungroup_columns",
+]
 
 _GROUPED_RE = re.compile(
     r"^(?P<paren>\()?(?P<cur>[$€£¥])?(?P<sign>[+-])?(?P<cur2>[$€£¥])?"
@@ -207,3 +216,40 @@ def skipped_row_notes(
         f"as data or as the header: {shown}{more}. Check the header and data start in the "
         "Import Wizard."
     ]
+
+
+def detect(
+    rows: Sequence[Sequence[str]],
+    detect_layout: Callable[[Sequence[Sequence[str]]], Layout],
+    text: str,
+    delim: str,
+) -> Layout:
+    """``delimited.import_csv``'s layout: the comma-aware one where sound
+    (:func:`choose_layout`) in a comma-delimited file with quotes."""
+    quoted = delim == "," and '"' in text
+    return choose_layout(rows, detect_layout) if quoted else detect_layout(rows)
+
+
+def import_notes(
+    col_headers: Sequence[str],
+    matrix: np.ndarray,
+    data_tokens: Sequence[Sequence[str]],
+    rows: Sequence[Sequence[str]],
+    layout: Layout,
+    delim: str,
+    text: str,
+    comma_path: bool,
+    comma_cols: Sequence[int],
+) -> list[str]:
+    """``delimited.import_csv``'s comma notes, converting in place where it
+    reads a number: decimal-comma cells left blank (the comma path); quoted
+    grouped numbers read and other comma cells left blank (a comma-delimited
+    file with quotes); then the rows the layout skipped above the data."""
+    header_row, data_start, units_row = layout
+    notes: list[str] = []
+    if comma_path:
+        notes = dc.stray_comma_notes(col_headers, matrix, data_tokens, converted=comma_cols)
+    elif delim == "," and '"' in text:
+        notes = ungroup_columns(col_headers, matrix, data_tokens)
+        notes += dc.stray_comma_notes(col_headers, matrix, data_tokens, separator_choice=False)
+    return notes + skipped_row_notes(rows, header_row, units_row, data_start)

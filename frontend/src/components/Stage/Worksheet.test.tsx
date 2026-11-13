@@ -66,6 +66,24 @@ describe("Worksheet worksheetId override (WORKSHEET_PLAN item 15)", () => {
   });
 });
 
+describe("Worksheet X column header (Origin-replacement audit item 10)", () => {
+  it("shows the X column's LONG name like the Y headers, not Origin's short name", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "b.opj", data: { ...data, metadata: { x_column_name: "A", x_column_long: "Field", x_column_unit: "Oe" } } }],
+    });
+    render(<Worksheet />);
+    const x = screen.getAllByRole("columnheader")[1];
+    expect(x.textContent).toContain("Field");
+    expect(x.textContent).not.toMatch(/^A/);
+  });
+
+  it("falls back to the short name when there is no long name", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "s.dat", data: { ...data, metadata: { x_column_name: "time" } } }] });
+    render(<Worksheet />);
+    expect(screen.getAllByRole("columnheader")[1].textContent).toContain("time");
+  });
+});
+
 describe("Worksheet context menus", () => {
   // Header cells in order: [ #, x(time), A, B ].
   const header = (i: number) => screen.getAllByRole("columnheader")[i];
@@ -814,6 +832,26 @@ describe("Worksheet text-sheet rendering (item 8)", () => {
     expect(screen.getByText("alpha")).toBeInTheDocument();
     expect(screen.getByText("beta")).toBeInTheDocument();
     expect(screen.getByText("gamma")).toBeInTheDocument();
+  });
+
+  it("names a text column by its Origin Long Name (and shows its unit), like Origin", () => {
+    // Origin-replacement live check: TwoWorksheets.opj Book2 showed A/B
+    // instead of its Long Names LN1/LN2.
+    const named: DataStruct = {
+      ...textData,
+      metadata: {
+        origin_text_columns: { B: ["x", "y", "z"], C: ["alpha", "beta", "gamma"] },
+        origin_text_column_labels: { B: { long_name: "LN1", unit: "" }, C: { long_name: "LN2", unit: "nm" } },
+      },
+    };
+    useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data: named }], activeId: "d1" });
+    render(<Worksheet />);
+    const headers = screen.getAllByRole("columnheader");
+    const [b, c] = headers.slice(-2);
+    expect(b.firstChild?.textContent).toBe("LN1");
+    expect(c.firstChild?.textContent).toBe("LN2");
+    expect(c.textContent).toContain("nm");
+    expect(c).toHaveAttribute("title", "LN2 (C) [nm] — read-only text column (Origin)");
   });
 
   it("a text-only book (no numeric columns at all) renders its rows entirely from the text columns", () => {

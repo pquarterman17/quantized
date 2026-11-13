@@ -33,6 +33,28 @@ function makeColCtx(over: Partial<ColumnMenuContext> = {}): ColumnMenuContext {
   };
 }
 
+describe("worksheetMenus — Set As (Origin Column > Set As)", () => {
+  const setAs = (items: ContextMenuItem[]) =>
+    items.find((i): i is Extract<ContextMenuItem, { submenu: ContextMenuItem[] }> => "submenu" in i && i.label === "Set As");
+
+  it("offers Origin's seven designations, checks the current one, and sets the picked one", () => {
+    const setDesignation = vi.fn();
+    const items = columnMenuItems(2, makeColCtx({ designationOf: () => "label", setDesignation }));
+    const sub = setAs(items)!.submenu;
+    expect(labelsOf(sub)).toEqual(["X", "Y", "Z", "Y Error", "X Error", "Label", "Disregard"]);
+    const checked = sub.filter((i) => "checked" in i && i.checked).map((i) => ("label" in i ? i.label : ""));
+    expect(checked).toEqual(["Label"]);
+    const yErr = sub[3] as { run: () => void };
+    yErr.run();
+    expect(setDesignation).toHaveBeenCalledWith(2, "Y-error");
+  });
+
+  it("is absent for the x column and when no setter is supplied (a read-only sheet)", () => {
+    expect(setAs(columnMenuItems(-1, makeColCtx({ setDesignation: vi.fn() })))).toBeUndefined();
+    expect(setAs(columnMenuItems(1, makeColCtx()))).toBeUndefined();
+  });
+});
+
 describe("worksheetMenus — columnMenuItems", () => {
   it("col = -1 (the x column): sort only, no set-X/plot-toggle block", () => {
     const items = columnMenuItems(-1, makeColCtx());

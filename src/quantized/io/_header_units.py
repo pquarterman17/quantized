@@ -1,13 +1,12 @@
-"""Column-header unit parsing: ``'Temp (C)'`` -> ``('C', 'Temp')``.
+"""Split a unit out of a column header: ``'Temp (C)'`` -> ``('C', 'Temp')``.
 
-Moved out of :mod:`quantized.io.delimited` unchanged (that module was at the
-500-line ceiling). Used by it and by :mod:`excel`, :mod:`xrd_export_read` and
-:mod:`import_parse`.
+Moved out of :mod:`quantized.io.delimited` (which had reached its 500-line
+ceiling) unchanged; ``delimited`` re-exports `_extract_units`, so its other
+readers (``excel``, ``xrd_export_read``, ``import_parse``) keep one import
+path. Pure: a string in, two strings out.
 """
 
 from __future__ import annotations
-
-__all__ = ["_extract_units"]
 
 
 def _split_trailing_bracket(header: str, opener: str, closer: str) -> tuple[str, str] | None:

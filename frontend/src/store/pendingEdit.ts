@@ -88,13 +88,24 @@ export function reimportOffer(get: () => OfferState, ds: Dataset): ToastOptions 
  *  its own status. A primitive rejection cannot be held here and just toasts. */
 const announced = new WeakSet<object>();
 
-/** Toast a lazy-book load failure once per failed fetch, offering Re-import. */
+/** Toast a lazy-book load failure once per failed fetch, offering Re-import.
+ *
+ *  An EXPIRED UPLOAD (`routes/books.py`'s 404) is one cause however many books
+ *  and fetches hit it, so it goes to `./expiredUploadNotice` — a lazy chunk
+ *  holding the wording and the one-toast-at-a-time rule. If that chunk cannot
+ *  load, the ordinary per-book toast below is shown instead. */
 export function announceBookFailure(get: () => OfferState, ds: Dataset, msg: string, e: unknown): void {
   if (typeof e === "object" && e !== null) {
     if (announced.has(e)) return;
     announced.add(e);
   }
-  toast(msg, "danger", reimportOffer(get, ds));
+  const offer = reimportOffer(get, ds);
+  const plain = (): void => toast(msg, "danger", offer);
+  if (ds.pending?.kind === "upload" && /upload expired/i.test(e instanceof Error ? e.message : String(e))) {
+    void import("./expiredUploadNotice").then((m) => m.announceExpiredUpload(ds, offer), plain);
+    return;
+  }
+  plain();
 }
 
 /** Resolve `id`'s full data, THEN run `fn` on the resolved dataset — the

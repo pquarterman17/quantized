@@ -29,7 +29,7 @@ from quantized.io.origin_project import (
 from quantized.routes._bookcache import cache_project_books, get_cached_book
 from quantized.routes._errors import CALC_ERRORS_IO
 from quantized.routes._payload import DataStructResponse
-from quantized.routes._uploadcache import resolve_upload_token
+from quantized.routes._uploadcache import get_cache, resolve_upload_token
 from quantized.routes.parsers import _allowed_prefixes, _book_payload
 
 router = APIRouter(prefix="/api/parsers", tags=["parsers"])
@@ -125,3 +125,25 @@ def book_data(req: BookDataRequest) -> Response:
     if match is None:
         raise HTTPException(status_code=404, detail=f"book not found: {req.book_id}")
     return DataStructResponse(_book_payload(match))
+
+
+@router.get("/upload-cache")
+def upload_cache_info() -> dict[str, Any]:
+    """Where staged Origin project uploads are kept and how much is there:
+    ``{"path", "entries", "bytes", "max_bytes"}`` (``_uploadcache``)."""
+    try:
+        return get_cache().info()
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.delete("/upload-cache")
+def upload_cache_clear() -> dict[str, int]:
+    """Delete every staged Origin project upload (privacy / disk space).
+    Lazy books of a project opened from the file picker then need a
+    re-import. Returns ``{"removed", "bytes", "kept"}`` -- ``kept`` counts
+    uploads a running import is still reading."""
+    try:
+        return get_cache().clear()
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc

@@ -21,6 +21,7 @@ import { decodeDataStruct, isWireCellArray, type WireDataStruct } from "./nonFin
 import { noteLegacyNulls, readLegacyNullStruct, type LegacyNullTally } from "./legacyNullCells";
 import { parseDatasetSource } from "./datasetSource";
 import { sanitizeFilter } from "./datafilter";
+import { sanitizeColumnDesignations } from "./columnDesignationsSanitize";
 import { sanitizeBindings } from "./errorRoles";
 import { parseFitSpec } from "./fitSpecParse";
 import { baseColumns } from "./formula";
@@ -246,6 +247,9 @@ export function parseWorkspaceDataset(
     }
     if (Object.keys(types).length) ds.channelTypes = types;
   }
+  // "Set As" designations: only known designations on in-range channels.
+  const designations = sanitizeColumnDesignations(dd.columnDesignations, ds.data.labels.length);
+  if (designations) ds.columnDesignations = designations;
   // Row exclusions (#50): clamp to the loaded row count — a hand-edited or
   // stale .dwk could carry out-of-range indices.
   const excluded = sanitizeExcluded(dd.excludedRows, ds.data.time.length);

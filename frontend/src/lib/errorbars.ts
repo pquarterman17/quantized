@@ -4,7 +4,7 @@
 // row — no backend involvement. This module is the pure, testable core; the
 // canvas drawing lives in uplotOverlays.errorBarsPlugin.
 
-import { columnMetaList } from "./columnmeta";
+import { effectiveDesignations, type ColumnDesignations } from "./columnmeta";
 import {
   asymmetricPair,
   errKeysFromBindings,
@@ -50,8 +50,8 @@ export function buildErrorColumns(
  *  `metadata.error_channels` hint ({seriesCol: errCol} — e.g. reflectometry
  *  `.dat` pairs R with dR). The explicit hint wins on a conflict. Used to seed
  *  `errKeys` on dataset activation and to drive the Series-style error toggle. */
-export function defaultErrKeys(ds: DataStruct): Record<number, number> {
-  const out: Record<number, number> = { ...originErrKeys(ds) };
+export function defaultErrKeys(ds: DataStruct, user?: ColumnDesignations): Record<number, number> {
+  const out: Record<number, number> = { ...originErrKeys(ds, user) };
   const hint = (ds.metadata ?? {})["error_channels"];
   if (hint && typeof hint === "object" && !Array.isArray(hint)) {
     for (const [k, v] of Object.entries(hint as Record<string, unknown>)) {
@@ -63,12 +63,14 @@ export function defaultErrKeys(ds: DataStruct): Record<number, number> {
   return out;
 }
 
-export function originErrKeys(ds: DataStruct): Record<number, number> {
-  const list = columnMetaList(ds); // the shared alignment (lib/columnmeta) — never re-derived here
+/** `user`: the dataset's "Set As" overrides (`Dataset.columnDesignations`),
+ *  read through the same alignment (lib/columnmeta.ts's effectiveDesignations). */
+export function originErrKeys(ds: DataStruct, user?: ColumnDesignations): Record<number, number> {
+  const list = effectiveDesignations(ds, user);
   const out: Record<number, number> = {};
   let lastY: number | null = null;
   for (let i = 0; i < list.length; i++) {
-    const g = list[i]?.designation;
+    const g = list[i];
     if (g === "Y") lastY = i;
     else if (g === "Y-error" && lastY !== null) out[lastY] = i;
   }
@@ -84,16 +86,32 @@ export function originErrKeys(ds: DataStruct): Record<number, number> {
  *     several hysteresis loops as X,Y,X,Y) keeps its FIRST X as the axis (the
  *     DataStruct `time`); any further X columns are axis columns, not data, and
  *     Origin draws them as the shared abscissa, never as a flat Y line.
+ *   - label and disregard columns — Origin never plots either as a curve.
  *  Hidden channels stay in the legend (toggleable) and still feed the whiskers
- *  via errKeys. Empty for non-Origin data (no designations). */
-export function originHiddenChannels(ds: DataStruct): number[] {
-  const list = columnMetaList(ds); // the shared alignment (lib/columnmeta) — never re-derived here
+ *  via errKeys. Empty for non-Origin data with no "Set As" overrides. */
+export function originHiddenChannels(ds: DataStruct, user?: ColumnDesignations): number[] {
   const out: number[] = [];
-  for (let i = 0; i < list.length; i++) {
-    const g = list[i]?.designation;
-    if (g === "Y-error" || g === "X-error" || g === "X") out.push(i);
-  }
+  effectiveDesignations(ds, user).forEach((g, i) => {
+    if (g && g !== "Y" && g !== "Z") out.push(i);
+  });
   return out;
+}
+
+/** The book's DEFAULT plot (an import, a dataset switch): `originHiddenChannels`
+ *  plus every Y that belongs to a SECONDARY X (`ownXSeries`, Origin's
+ *  nearest-preceding-X rule). The default plot has one X -- the book's first
+ *  -- so drawing such a Y there would bind it to the wrong X; it is held back
+ *  (fail closed) and Quick Plot draws it against its own X instead
+ *  (lib/quickPlotSeriesX.ts). Still toggleable in the legend. */
+export function bookDefaultHiddenChannels(dataset: Pick<Dataset, "data" | "columnDesignations">): number[] {
+  // One pass, the two rules side by side: `originHiddenChannels`' (a
+  // designation other than Y/Z) and `ownXSeries`' (a Y, or undesignated
+  // channel, after an X value column).
+  let sawX = false;
+  return effectiveDesignations(dataset.data, dataset.columnDesignations).flatMap((g, i) => {
+    sawX ||= g === "X";
+    return (g && g !== "Y" && g !== "Z") || (sawX && g !== "Z") ? [i] : [];
+  });
 }
 
 /** Quick Plot's error defaults: the two seeds above widened with the
@@ -106,12 +124,12 @@ export function originHiddenChannels(ds: DataStruct): number[] {
  *  `hiddenChannels`, `originHiddenChannels`' rule for a designated error:
  *  never its own curve, still toggleable in the legend. */
 export function errorRoleViewDefaults(
-  dataset: Pick<Dataset, "data" | "errorRoles">,
+  dataset: Pick<Dataset, "data" | "errorRoles" | "columnDesignations">,
 ): { errKeys: Record<number, number>; hiddenChannels: number[] } {
   const bindings = figureSeedErrorBindings(dataset);
-  const hinted = defaultErrKeys(dataset.data);
+  const hinted = defaultErrKeys(dataset.data, dataset.columnDesignations);
   const hidden = new Set([
-    ...originHiddenChannels(dataset.data),
+    ...originHiddenChannels(dataset.data, dataset.columnDesignations),
     ...Object.values(hinted),
     ...bindings.map((b) => b.channel),
   ]);
@@ -154,9 +172,12 @@ function magnitudes(ds: DataStruct, channel: number, n: number): (number | null)
  *  plotted series) so the plugin indexes both the same way. A column can carry
  *  BOTH an x and a y span, which is why the value is a list.
  *
- *  X-error binds to the x axis (`target === -1`) and is emitted against every
- *  plotted column, since the x uncertainty applies to each point regardless of
- *  which series is drawn there. */
+ *  X-error bound to ONE series (`target` = that channel: an Origin X-error
+ *  column belongs to the Y it follows, lib/originBookRoles.ts) draws on that
+ *  series only. X-error bound to the x axis (`target === -1`) is the fallback
+ *  for a series with none of its own and is emitted against every plotted
+ *  column, since a shared-axis uncertainty applies to each point regardless
+ *  of which series is drawn there. */
 export function buildErrorSpans(
   ds: DataStruct,
   plotted: number[],
@@ -175,7 +196,8 @@ export function buildErrorSpans(
     for (const axis of ["y", "x"] as const) {
       // An asymmetric pair needs BOTH halves; half a pair would mean inventing
       // the other side, so it is skipped in favour of the symmetric binding.
-      const target = axis === "x" ? -1 : ch;
+      const own = axis === "y" || bindings.some((b) => b.axis === "x" && b.target === ch);
+      const target = own ? ch : -1;
       const pair = asymmetricPair(bindings, target, axis);
       if (pair) {
         push(col, {

@@ -211,6 +211,27 @@ describe("Origin figure fallbacks", () => {
     });
   });
 
+  it("binds a decoded Y-error curve as its Y's error bars, not a Y series", async () => {
+    // Reader-lane live check (an Origin book with yErr columns): the remake
+    // listed the error column as a second Y series.
+    const withErr: Dataset = {
+      ...book,
+      data: {
+        time: [1, 2], values: [[10, 1], [20, 2]], labels: ["signal", "signal sd"], units: ["", ""],
+        metadata: { origin_book: "Book1", x_column_name: "A", origin_column_names: ["B", "C"], column_designations: { A: "X", B: "Y", C: "Y-error" } },
+      },
+      errorRoles: [{ channel: 1, target: 0, axis: "y", side: "both" }],
+    };
+    useApp.setState({
+      datasets: [withErr],
+      originFigures: [{ id: "f1", stem: "Project", datasetId: "d1", siblingIds: ["d1"], figure: { ...figure, curves: [{ book: "Book1", x: "A", y: "B", style: "line" }, { book: "Book1", x: "A", y: "C", style: "line" }] } }],
+    });
+    await useApp.getState().remakeOriginFigure("f1");
+    const zones = useApp.getState().graphBuilderSeed?.zones;
+    expect(zones?.y).toEqual([{ datasetId: "d1", channel: 0 }]);
+    expect(zones?.yErr).toEqual([{ datasetId: "d1", channel: 1 }]);
+  });
+
   it("materializes and seeds the existing provenance-stamped overlay for cross-book curves", async () => {
     const book2: Dataset = {
       ...book,

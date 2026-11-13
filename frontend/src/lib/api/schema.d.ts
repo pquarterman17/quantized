@@ -2782,6 +2782,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/parsers/upload-cache": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Upload Cache Info
+         * @description Where staged Origin project uploads are kept and how much is there:
+         *     ``{"path", "entries", "bytes", "max_bytes"}`` (``_uploadcache``).
+         */
+        get: operations["upload_cache_info_api_parsers_upload_cache_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Upload Cache Clear
+         * @description Delete every staged Origin project upload (privacy / disk space).
+         *     Lazy books of a project opened from the file picker then need a
+         *     re-import. Returns ``{"removed", "bytes", "kept"}`` -- ``kept`` counts
+         *     uploads a running import is still reading.
+         */
+        delete: operations["upload_cache_clear_api_parsers_upload_cache_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/peaks/find": {
         parameters: {
             query?: never;
@@ -16202,6 +16230,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_cache_info_api_parsers_upload_cache_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    upload_cache_clear_api_parsers_upload_cache_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number;
+                    };
                 };
             };
         };
