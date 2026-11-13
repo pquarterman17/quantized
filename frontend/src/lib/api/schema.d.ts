@@ -6833,6 +6833,8 @@ export interface components {
             derivativeMode?: string | null;
             /** Detrendorder */
             detrendOrder?: number | null;
+            /** Dropyuncertainty */
+            dropYUncertainty?: boolean | null;
             /** Fieldunit */
             fieldUnit?: string | null;
             /** Footprintl */

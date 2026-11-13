@@ -2854,6 +2854,17 @@
             ],
             "title": "Detrendorder"
           },
+          "dropYUncertainty": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dropyuncertainty"
+          },
           "fieldUnit": {
             "anyOf": [
               {

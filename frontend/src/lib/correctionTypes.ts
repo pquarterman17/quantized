@@ -26,6 +26,9 @@ export interface CorrectionParams {
   derivativeMode?: string;
   /** Signal-stage subset; absent preserves all channels. */
   signalChannels?: number[];
+  /** Worksheet audit #9: blank the transformed channels' bound Y errors in
+   *  the output instead of propagating them through the transform. */
+  dropYUncertainty?: boolean;
   /** GOTO #2 anchor-point baseline subtraction: user-picked (x, y) anchor
    * pairs + the interpolation method (linear/pchip/spline). Present with
    * >=2 anchors = subtracted in pipeline step 3 (beats bgPoly/slope). */

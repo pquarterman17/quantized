@@ -82,4 +82,13 @@ describe("signal transform recipe", () => {
     })).toThrow(/malformed/);
     expect(signalTransformParamsOf({ op: "signal", recipe })).toEqual({ op: "signal", recipe });
   });
+
+  it("keeps a recorded drop-uncertainty choice and rejects a malformed one (worksheet audit #9)", () => {
+    const dropping = { ...recipe, params: { ...recipe.params, dropYUncertainty: true } };
+    expect(signalTransformParamsOf({ op: "signal", recipe: dropping })).toEqual({ op: "signal", recipe: dropping });
+    expect(() => signalTransformParamsOf({
+      op: "signal",
+      recipe: { ...recipe, params: { ...recipe.params, dropYUncertainty: "yes" } },
+    })).toThrow(/malformed/);
+  });
 });

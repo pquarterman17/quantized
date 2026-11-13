@@ -30,6 +30,9 @@ export interface SignalSettings {
   useRange: boolean;
   xMin: string;
   xMax: string;
+  /** Worksheet audit #9: blank the bound Y errors of the output instead of
+   *  propagating them (required for a nonlinear operation). */
+  dropUncertainty: boolean;
 }
 
 export const DEFAULT_SIGNAL_SETTINGS: SignalSettings = {
@@ -45,6 +48,7 @@ export const DEFAULT_SIGNAL_SETTINGS: SignalSettings = {
   useRange: false,
   xMin: "",
   xMax: "",
+  dropUncertainty: false,
 };
 
 export function measuredChannels(dataset: Dataset): number[] {
@@ -62,6 +66,7 @@ export function settingsToParams(
   const params: CorrectionParams = {
     signalChannels: channels,
     ...(settings.useRange ? { xTrimMin: Number(settings.xMin), xTrimMax: Number(settings.xMax) } : {}),
+    ...(settings.dropUncertainty ? { dropYUncertainty: true } : {}),
   };
   switch (settings.operation) {
     case "smooth":
@@ -164,4 +169,16 @@ export function selectedBoundErrorTargets(dataset: Dataset, channels: number[]):
 
 export function channelsWithoutFiniteValues(dataset: Dataset["data"], channels: number[]): number[] {
   return channels.filter((channel) => !dataset.values.some((row) => Number.isFinite(row[channel])));
+}
+
+/** The linear operations whose bound Y uncertainty the backend propagates
+ *  (worksheet audit #9). Normalizations only scale it. */
+export function propagatesBoundErrors(operation: CorrectionOperation): boolean {
+  return operation !== "detrend" && operation !== "log-derivative";
+}
+
+/** Why a bound Y uncertainty blocks this operation ("" = it does not). */
+export function boundErrorBlock(operation: CorrectionOperation, boundCount: number, drop: boolean): string {
+  if (!boundCount || drop || propagatesBoundErrors(operation)) return "";
+  return `${operationLabel(operation)} can't propagate the bound Y uncertainty. Tick "Drop uncertainty for this output" or unassign the error column.`;
 }

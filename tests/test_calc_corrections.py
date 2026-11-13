@@ -156,30 +156,101 @@ def test_bound_x_and_y_uncertainty_follow_only_their_axis_scale() -> None:
     assert_allclose(out.values[:, 2], [4.0, 6.0])
 
 
-@pytest.mark.parametrize("param", [
-    {"smoothEnabled": True, "smoothMethod": "moving", "smoothWindow": 1},
-    {"derivativeMode": "dY/dX"},
-    {"derivativeMode": "d²Y/dX²"},
-    {"derivativeMode": "∫Y dx"},
-    {"derivativeMode": "dlog/dlog"},
-])
-def test_bound_y_uncertainty_refuses_undefined_nonlinear_propagation(
-    param: dict[str, Any],
-) -> None:
+def test_bound_y_uncertainty_refuses_the_nonlinear_log_derivative() -> None:
     data = DataStruct.create(
         [1.0, 2.0, 3.0],
         [[10.0, 1.0], [20.0, 1.0], [30.0, 1.0]],
         labels=["signal", "sigma"],
         units=["V", "V"],
     )
-    with pytest.raises(ValueError, match="bound Y uncertainty"):
+    with pytest.raises(ValueError, match="cannot propagate bound Y uncertainty"):
         apply_corrections(
             data,
-            param,
+            {"derivativeMode": "dlog/dlog"},
             error_bindings=[
                 {"channel": 1, "target": 0, "axis": "y", "side": "both"}
             ],
         )
+
+
+_SIGMA_BINDING = [{"channel": 1, "target": 0, "axis": "y", "side": "both"}]
+
+
+def _with_sigma(n: int = 9) -> DataStruct:
+    x = np.cumsum(np.linspace(0.5, 1.5, n))
+    y = np.sin(x)
+    sigma = np.linspace(0.1, 0.3, n)
+    return DataStruct.create(
+        x, np.column_stack([y, sigma]), labels=["M", "dM"], units=["emu", "emu"]
+    )
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"smoothEnabled": True, "smoothMethod": "moving", "smoothWindow": 2},
+        {"smoothEnabled": True, "smoothMethod": "savitzky-golay", "smoothWindow": 3},
+        {"derivativeMode": "dY/dX"},
+        {"derivativeMode": "d²Y/dX²"},
+        {"derivativeMode": "∫Y dx"},
+        {"smoothEnabled": True, "smoothMethod": "gaussian", "smoothWindow": 2,
+         "derivativeMode": "dY/dX"},
+        {"smoothEnabled": True, "smoothMethod": "moving", "smoothWindow": 2,
+         "derivativeMode": "∫Y dx"},
+        {"normMethod": "Peak (max=1)", "derivativeMode": "dY/dX"},
+    ],
+)
+def test_bound_y_uncertainty_propagates_through_linear_transforms(params: dict[str, Any]) -> None:
+    """Worksheet audit #9: smoothing / derivative / integral used to refuse a
+    bound Y error (every QD import has one). The propagated sigma must be the
+    exact linear propagation of the transform the VALUES went through -- the
+    whole pipeline is linear here, so it is checked against the dense
+    Jacobian of ``apply_corrections`` itself (column j = response to e_j)."""
+    data = _with_sigma()
+    out = apply_corrections(data, params, error_bindings=_SIGMA_BINDING)
+    n = data.time.size
+    base = np.asarray(data.values)
+    # Peak normalization's scale is read from the data; it is held fixed (the
+    # pipeline treats it as a constant), so the Jacobian is taken without it
+    # and the scale applied after.
+    linear = {k: v for k, v in params.items() if k != "normMethod"}
+
+    def signal(values: np.ndarray) -> np.ndarray:
+        probe = DataStruct.create(data.time, values, labels=data.labels, units=data.units)
+        return np.asarray(apply_corrections(probe, linear).values[:, 0])
+
+    jac = np.empty((n, n))
+    for j in range(n):
+        bumped = base.copy()
+        bumped[j, 0] += 1.0
+        jac[:, j] = signal(bumped) - signal(base)
+    scale = 1.0 / np.max(np.abs(base[:, 0])) if params.get("normMethod") else 1.0
+    expected = np.sqrt((jac**2) @ base[:, 1] ** 2) * scale
+    assert_allclose(out.values[:, 1], expected, rtol=1e-9, atol=1e-12)
+    assert out.units[1] == out.units[0]  # the error column follows the signal unit
+
+
+def test_drop_y_uncertainty_blanks_the_bound_error_instead_of_refusing() -> None:
+    data = _with_sigma()
+    params = {"derivativeMode": "dlog/dlog", "dropYUncertainty": True}
+    out = apply_corrections(data, params, error_bindings=_SIGMA_BINDING)
+    assert np.isnan(out.values[:, 1]).all()
+    assert np.isfinite(out.values[1:, 0]).any()
+
+
+def test_asymmetric_bound_y_uncertainty_refuses_linear_propagation() -> None:
+    data = DataStruct.create(
+        [1.0, 2.0, 3.0],
+        [[10.0, 1.0, 2.0], [20.0, 1.0, 2.0], [30.0, 1.0, 2.0]],
+        labels=["signal", "plus", "minus"],
+        units=["V", "V", "V"],
+    )
+    bindings = [
+        {"channel": 1, "target": 0, "axis": "y", "side": "+"},
+        {"channel": 2, "target": 0, "axis": "y", "side": "-"},
+    ]
+    with pytest.raises(ValueError, match="asymmetric"):
+        apply_corrections(data, {"derivativeMode": "dY/dX"}, error_bindings=bindings)
 
 
 @pytest.mark.parametrize(
