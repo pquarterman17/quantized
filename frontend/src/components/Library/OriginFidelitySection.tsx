@@ -72,6 +72,12 @@ export default function OriginFidelitySection({ onStageOpen }: { onStageOpen?: (
               >
                 Review import…
               </button>
+              {(m.unrecovered_graphs?.length ?? 0) > 0 && (
+                // The file has these graph windows; their layout is not decoded.
+                <div className="qzk-ds-meta qzk-msg" role="note">
+                  Graphs not recovered: {m.unrecovered_graphs!.join(", ")}
+                </div>
+              )}
               {m.filtered_figures.length > 0 && (
                 <div className="qzk-ds-meta">
                   Filtered: {m.filtered_figures.map((f) => f.name).join(", ")}

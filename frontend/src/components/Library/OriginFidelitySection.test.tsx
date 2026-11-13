@@ -141,4 +141,26 @@ describe("OriginFidelitySection", () => {
       screen.getByText("Worksheets: 7 columns imported; 2 columns could not be read"),
     ).toBeInTheDocument();
   });
+
+  it("names the graph windows the file has but that were not recovered", () => {
+    useApp.setState({
+      originFidelitySectionExpanded: true,
+      originFidelity: [{
+        id: "fidelity-3d",
+        stem: "3dband",
+        siblingIds: ["d1"],
+        manifest: {
+          version: 1, container: "opj", status: "best_effort",
+          graph_records_total: 4, graph_records_actionable: 4, graph_records_filtered: 0,
+          omissions: ["graph_windows_not_recovered", "graphic_objects"],
+          filtered_figures: [],
+          unrecovered_graphs: ["Graph2"],
+        },
+      }],
+    });
+    render(<OriginFidelitySection />);
+    fireEvent.click(screen.getByText(/^3dband/));
+    expect(screen.getByRole("note")).toHaveTextContent("Graphs not recovered: Graph2");
+    expect(screen.getByText(/^Missing:/)).toHaveTextContent("graphs present in the file but not recovered");
+  });
 });

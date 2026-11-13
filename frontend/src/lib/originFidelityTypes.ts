@@ -76,4 +76,8 @@ export interface OriginFidelityManifest {
   container_integrity?: OriginContainerIntegrity;
   /** `.opju` only (see ./originWorksheetTypes); absent for `.opj`. */
   worksheet?: OriginWorksheetFidelity;
+  /** `.opj` graph windows present in the file but not recovered (backend
+   *  io/origin_project/opj_graph_windows.py), by window name; with the
+   *  `graph_windows_not_recovered` omission. */
+  unrecovered_graphs?: string[];
 }

@@ -12,6 +12,7 @@ const LABELS: Record<string, string> = {
   curve_sheet_mismatch: "curves to check: recorded on another sheet",
   exact_curve_bindings: "exact curve bindings",
   figure_decode_error: "graph decode failed",
+  graph_windows_not_recovered: "graphs present in the file but not recovered",
   file_truncated: "file appears incomplete or truncated — books and columns past the cut are missing",
   filtered_internal_graph_records: "internal graph records filtered",
   graphic_objects: "drawn arrows and shapes",
