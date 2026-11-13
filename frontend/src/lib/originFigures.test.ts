@@ -572,9 +572,24 @@ describe("figureLabel", () => {
   });
 
 
-  it("prefers a surviving annotation over the raw window name", () => {
+  it("puts the window name first and a readable annotation after it", () => {
     const entry = { id: "f1", stem: "XRD", datasetId: "b1", siblingIds: [], figure: figure({ name: "Graph1", annotations: ["Si (004)"] }) };
-    expect(figureLabel(entry)).toBe("Si (004)");
+    expect(figureLabel(entry)).toBe("Graph1 — Si (004)");
+    // The annotation alone only when the window has no name.
+    const nameless = { ...entry, figure: figure({ name: "", annotations: ["Si (004)"] }) };
+    expect(figureLabel(nameless)).toBe("Si (004)");
+  });
+
+  it("rejects junk annotations, so two graphs never share an unreadable label", () => {
+    // Re-audit #3: Graph1 and Graph2 both read "?iiiiii".
+    const label = (name: string, note: string) =>
+      figureLabel({ id: name, stem: "B", datasetId: "b1", siblingIds: [], figure: figure({ name, annotations: [note] }) });
+    expect(label("Graph1", "?iiiiii")).toBe("Graph1");
+    expect(label("Graph2", "?iiiiii")).toBe("Graph2");
+    for (const junk of ["\\b(", "ab\ufffdcd", "x\u0001y", "a??b", "---", "Graph2"]) {
+      expect(label("Graph2", junk)).toBe("Graph2");
+    }
+    expect(label("Graph5", "A".repeat(60))).toBe(`Graph5 — ${"A".repeat(39)}…`);
   });
 
   it("never shows a raw Origin substitution code as the title", () => {
@@ -588,7 +603,7 @@ describe("figureLabel", () => {
     }
     // Resolved where the referenced title is known.
     const known = figure({ name: "Graph3", annotations: ["%(?Y) vs %(?X)"], x_title: "Cycle", y_title: "Capacity" });
-    expect(figureLabel({ id: "f3", stem: "C", datasetId: "b1", siblingIds: [], figure: known })).toBe("Capacity vs Cycle");
+    expect(figureLabel({ id: "f3", stem: "C", datasetId: "b1", siblingIds: [], figure: known })).toBe("Graph3 — Capacity vs Cycle");
   });
 
   it("falls back to the window name with no annotations", () => {
