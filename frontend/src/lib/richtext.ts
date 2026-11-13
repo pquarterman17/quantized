@@ -43,18 +43,42 @@
 // The Origin-escape rewrite is a LAZY chunk (eager-bundle budget): only the
 // one-line detector below stays eager. The import starts the moment this
 // module loads — app startup, before any plot can have data to label — so
-// it is in place by the first labelled render; a label parsed in the brief
+// it is usually in place by the first labelled render. A label parsed in the
 // window before it lands renders literally (the safe fallback every invalid
-// label already takes) until that plot's next rebuild.
+// label already takes), so whatever drew one waits for `originEscapesSettled`
+// and draws again: the plot viewport rebuilds
+// (`Stage/useLazyPlotParts.ts`, via `awaitsOriginEscapes`) and `RichText`
+// re-renders (`subscribeOriginEscapes`). A first plot never stays literal.
 const ORIGIN_ESCAPE = /\\[+\-gbi]\(/;
 let originRewrite: ((s: string) => string) | null = null;
-// A chunk failure (offline) leaves escapes literal, never a crash.
-import("./originEscapes").then(
-  (m) => {
-    originRewrite = m.originEscapesToMarkup;
-  },
-  () => {},
-);
+let escapesSettled = false;
+const escapeListeners = new Set<() => void>();
+/** Settles once the escape chunk has loaded -- or failed to (offline): then
+ *  escapes stay literal, never a crash. Either way a redraw is final. */
+export const originEscapesSettled: Promise<void> = import("./originEscapes")
+  .then(
+    (m) => {
+      originRewrite = m.originEscapesToMarkup;
+    },
+    () => {},
+  )
+  .then(() => {
+    escapesSettled = true;
+    for (const f of escapeListeners) f();
+  });
+
+/** Whether `s` carries an Origin escape that would still render literally
+ *  because the rewrite chunk has not settled yet. */
+export function awaitsOriginEscapes(s: string | null | undefined): boolean {
+  return !escapesSettled && !!s && ORIGIN_ESCAPE.test(s);
+}
+
+/** `useSyncExternalStore` pair for a DOM renderer of rich labels. */
+export function subscribeOriginEscapes(onChange: () => void): () => void {
+  escapeListeners.add(onChange);
+  return () => escapeListeners.delete(onChange);
+}
+export const originEscapesReady = (): boolean => escapesSettled;
 
 export type RichNode =
   | { kind: "text"; text: string; italic: boolean; bold?: boolean }

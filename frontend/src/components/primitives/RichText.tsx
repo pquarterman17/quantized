@@ -4,9 +4,9 @@
 // renders as the raw string — the same literal fallback the canvas and
 // export renderers apply, so all three surfaces always agree.
 
-import type { CSSProperties, ReactNode } from "react";
+import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 
-import { hasMarkup, parseRichText, type RichNode } from "../../lib/richtext";
+import { hasMarkup, originEscapesReady, parseRichText, subscribeOriginEscapes, type RichNode } from "../../lib/richtext";
 
 // Inline styles (self-contained so the primitive needs no global stylesheet —
 // it renders identically under Testing Library and the visual harness).
@@ -83,6 +83,9 @@ function renderNodes(nodes: RichNode[], keyBase: string): ReactNode[] {
 }
 
 export default function RichText({ text }: { text: string }) {
+  // Re-render once the lazy Origin-escape rewrite settles: a label rendered
+  // before it shows `\g(m)` literally until then (lib/richtext.ts).
+  useSyncExternalStore(subscribeOriginEscapes, originEscapesReady);
   if (!hasMarkup(text)) return <>{text}</>;
   const r = parseRichText(text);
   if (!r.ok) return <>{text}</>;

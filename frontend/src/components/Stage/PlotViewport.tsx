@@ -32,7 +32,7 @@ import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
 // file's "driven entirely by props, NO store reads" contract (same reasoning
 // PreferencesDialog.tsx documents for the store-independent prefs it reads).
 import { loadPlotPerfPrefs } from "../../store/prefs";
-import { useLazyPlotParts } from "./useLazyPlotParts";
+import { plotDecorNeeds, useLazyPlotParts } from "./useLazyPlotParts";
 import { useLivePaint } from "./useLivePaint";
 import { useResolvedLims } from "./useResolvedLims";
 
@@ -344,7 +344,12 @@ export default function PlotViewport(props: PlotViewportProps) {
 
   // Display-only edits patch the live instance (after the create effect: see useLivePaint).
   useLivePaint(plotRef, paintRef, displayPayload, args, xAscending, limsRef, () => setRebuildEpoch((e) => e + 1));
-  useLazyPlotParts([args.xFmt, args.yFmt, args.y2Fmt], args.tool, () => setRebuildEpoch((e) => e + 1)); // on-demand plugins
+  // On-demand plugins, and a rebuild once the startup chunks settle (figures leftover g).
+  const decor = plotDecorNeeds(
+    [args.title, args.xAxisLabel, args.yAxisLabel, args.y2AxisLabel, ...(seriesLabels ?? [])],
+    displayPayload, args.annotations, (args.refLines?.length ?? 0) + (args.regionShades?.length ?? 0),
+  );
+  useLazyPlotParts([args.xFmt, args.yFmt, args.y2Fmt], args.tool, () => setRebuildEpoch((e) => e + 1), decor);
 
   return <div ref={hostRef} style={{ position: "absolute", inset: 8, top: insetTop === undefined ? 8 : `max(${insetTop}px, var(--qz-dock-clear, 0px))`, right: "var(--qz-plot-right,8px)" }} />;
 }

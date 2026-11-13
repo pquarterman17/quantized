@@ -22,13 +22,23 @@ import { drawReferenceStick } from "./referenceStickOverlay";
 import type { Annotation, RefLine } from "./types";
 import type { RegionShade } from "./types";
 // Shade drawing + the off-scale marker are a lazy chunk (lib/uplotRegionShades.ts's header).
+// A plot drawn before it lands misses its shades / off-scale markers, so the
+// viewport waits for `regionDecorSettled` and rebuilds (Stage/useLazyPlotParts.ts).
 let lazyDecor: typeof import("./uplotRegionShades") | null = null;
-import("./uplotRegionShades").then(
-  (m) => {
-    lazyDecor = m;
-  },
-  () => {},
-);
+let decorSettled = false;
+/** Settles once the shade chunk has loaded -- or failed to (offline: no
+ *  shades drawn, never a crash). */
+export const regionDecorSettled: Promise<void> = import("./uplotRegionShades")
+  .then(
+    (m) => {
+      lazyDecor = m;
+    },
+    () => {},
+  )
+  .then(() => {
+    decorSettled = true;
+  });
+export const regionDecorReady = (): boolean => decorSettled;
 const MOVE = "mousemove", UP = "mouseup";
 export { pickRefLine, type RefLineHit } from "./refLineHit";
 
