@@ -64,7 +64,8 @@ export function reserveDivideBand(opts: uPlot.Options, dividedAxes: readonly num
   let need = 0;
   for (const idx of dividedAxes) {
     const axis = opts.axes?.[idx];
-    const side = axis?.side ?? (idx === 0 ? 2 : 3);
+    // uPlot's Side enum, read as the plain number it is (AxisSide above).
+    const side: number = axis?.side ?? (idx === 0 ? 2 : 3);
     if (side === 1 || side === 3) need = Math.max(need, divideTopPadding(typeof axis?.font === "string" ? axis.font : undefined));
   }
   if (!need) return opts;
