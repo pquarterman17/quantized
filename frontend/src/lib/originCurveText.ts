@@ -91,3 +91,16 @@ export function resolveLegendTemplate(
   const stripped = template.replace(LEGEND_SWATCH_RE, "");
   return stripped.replace(LEGEND_CODE_RE, (raw, n: string) => curveNames[Number(n) - 1] || raw);
 }
+
+/** A legend caption as it may be SHOWN: `resolveLegendTemplate`'s result, or
+ *  `undefined` when a substitution code is still in it (an unavailable curve,
+ *  an `@`-modifier). The low-level resolver keeps the raw code so nothing is
+ *  guessed; a caller given `undefined` leaves the series its own default name
+ *  instead of printing `%(7,@LG)` in the legend. */
+export function legendCaption(
+  template: string,
+  curveNames: readonly (string | undefined)[],
+): string | undefined {
+  const caption = resolveLegendTemplate(template, curveNames);
+  return /[%$]\(/.test(caption) ? undefined : caption;
+}

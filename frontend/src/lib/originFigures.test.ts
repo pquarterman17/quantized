@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 // that. Eager half: `./originFigures`. Lazy apply half:
 // `./originFigureSelection` + `./originSpatialPanels` + `./originCurveText`
 // (slice 18).
-import { curveDisplayName, originCurveSeriesStyle, resolveLegendTemplate } from "./originCurveText";
+import { curveDisplayName, legendCaption, originCurveSeriesStyle, resolveLegendTemplate } from "./originCurveText";
 import {
   buildOriginFigureEntries,
   figureLabel,
@@ -439,6 +439,31 @@ describe("figureChannelSelection", () => {
     });
   });
 
+  it("never shows an unresolvable legend code: the series keeps its own name", () => {
+    const ds: Dataset = {
+      id: "b12",
+      name: "Hc2:Co",
+      data: {
+        time: [0],
+        values: [[1, 2]],
+        labels: ["Hc2", "Tc"],
+        units: ["", ""],
+        metadata: { origin_book: "Co", x_column_name: "A", origin_column_names: ["B", "C"] },
+      },
+    };
+    // `%(7,@LG)`: an @-modifier this reader does not interpret; `%(9)`: no 9th curve.
+    const fig = figure({
+      legend_labels: ["\\l(1) %(7,@LG)", "%(9)"],
+      curves: [
+        { book: "Co", x: "A", y: "B" },
+        { book: "Co", x: "A", y: "C" },
+      ],
+    });
+    expect(figureChannelSelection(fig, ds)?.labels).toEqual({});
+    expect(legendCaption("%(1) up", ["Hc2"])).toBe("Hc2 up");
+    expect(legendCaption("$(page.name)", ["Hc2"])).toBeUndefined();
+  });
+
   // Item A (PNR.opj Book14 Graph11 repro): the multi-panel path never
   // applied error pairing / hidden-channel suppression at all — this is the
   // chokepoint that now threads a book's Origin worksheet designations
@@ -551,6 +576,20 @@ describe("figureLabel", () => {
   it("prefers a surviving annotation over the raw window name", () => {
     const entry = { id: "f1", stem: "XRD", datasetId: "b1", siblingIds: [], figure: figure({ name: "Graph1", annotations: ["Si (004)"] }) };
     expect(figureLabel(entry)).toBe("Si (004)");
+  });
+
+  it("never shows a raw Origin substitution code as the title", () => {
+    // CYCLING.opj's first annotation is the auto X title `%(?X)`; with no
+    // decoded X title it is no title, and the window name stands in.
+    const raw = figure({ name: "Graph3", annotations: ["%(?X)", "Capacity (mAh/g)"] });
+    expect(figureLabel({ id: "f1", stem: "C", datasetId: "b1", siblingIds: [], figure: raw })).toBe("Graph3");
+    for (const code of ["%(1)", "rM%(", "$(page.name)", "%(?Y) vs %(?X)"]) {
+      const f = figure({ name: "Graph7", annotations: [code] });
+      expect(figureLabel({ id: "f2", stem: "C", datasetId: "b1", siblingIds: [], figure: f })).toBe("Graph7");
+    }
+    // Resolved where the referenced title is known.
+    const known = figure({ name: "Graph3", annotations: ["%(?Y) vs %(?X)"], x_title: "Cycle", y_title: "Capacity" });
+    expect(figureLabel({ id: "f3", stem: "C", datasetId: "b1", siblingIds: [], figure: known })).toBe("Capacity vs Cycle");
   });
 
   it("falls back to the window name with no annotations", () => {

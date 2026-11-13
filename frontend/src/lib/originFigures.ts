@@ -115,11 +115,29 @@ export function figureLayerFamily(
     .sort((a, b) => (a.figure.layer ?? 1) - (b.figure.layer ?? 1));
 }
 
+/** Origin substitution codes (`%(?X)`, `%(1)`, `$(...)`): text Origin fills in
+ *  when it draws, never meant to be read raw. */
+const ORIGIN_TEMPLATE = /[%$]\(/;
+
+/** An annotation as a title: Origin's auto axis-title codes `%(?X)` / `%(?Y)`
+ *  resolve to the decoded axis titles when those are known; anything still
+ *  holding a substitution code is no title at all (`""`). */
+export function resolvedTitleText(text: string, f: OriginFigureEntry["figure"]): string {
+  const out = text
+    .replace(/%\(\?X\)/g, () => f.x_title || "%(?X)")
+    .replace(/%\(\?Y\)/g, () => f.y_title || "%(?Y)")
+    .trim();
+  return ORIGIN_TEMPLATE.test(out) ? "" : out;
+}
+
 /** Library row label: prefer a surviving annotation (reads like a plot title
- *  or peak label) over the raw Origin graph-window name (e.g. "Graph3"). */
+ *  or peak label) over the raw Origin graph-window name (e.g. "Graph3"). An
+ *  annotation that is an unresolved substitution code falls back to the
+ *  window name: a raw `%(?X)` must never be shown as a title. */
 export function figureLabel(entry: OriginFigureEntry): string {
   const f = entry.figure;
-  const base = f.annotations[0] || f.name || "Figure";
+  const first = f.annotations[0] ? resolvedTitleText(f.annotations[0], f) : "";
+  const base = first || f.name || "Figure";
   // Multi-layer .opj windows emit one figure per layer under the same window
   // name — suffix layers ≥2 so "Graph4" and "Graph4 · layer 2" read apart.
   return (f.layer ?? 1) >= 2 ? `${base} · layer ${f.layer}` : base;
