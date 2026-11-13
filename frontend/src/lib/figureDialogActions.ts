@@ -19,6 +19,10 @@ export function currentAxisDraft(axis: AxisId): AxisDraft {
 /** Commit an edited (valid) draft as ONE undo step. */
 export function commitAxisDraft(axis: AxisId, draft: AxisDraft): void {
   const s = useApp.getState();
+  // Apply with nothing edited changes nothing: no undo step, and no rebuilt
+  // format (which would, e.g., stop a Y2 axis inheriting Y's) that would make
+  // an untouched window count as user-styled (store/windowUserEdits.ts).
+  if (JSON.stringify(draft) === JSON.stringify(axisDraft(s, axis))) return;
   s.recordHistory(`edit ${AXIS_NAMES[axis]}`);
   useApp.setState(axisPatch(s, axis, draft));
 }

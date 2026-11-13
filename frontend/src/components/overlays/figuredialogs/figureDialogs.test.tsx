@@ -100,6 +100,24 @@ describe("Axis dialog model (#6)", () => {
   });
 });
 
+describe("Axis dialog — Apply with nothing edited (review finding)", () => {
+  it("changes nothing: no undo step, no empty title style, Y2 still inherits", () => {
+    useApp.setState({ y2Keys: [1] });
+    const before = useApp.getState();
+    openFigureDialog({ kind: "axis", axis: "y2" });
+    render(<FigureDialogs />);
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().axisLabelStyles).toEqual(before.axisLabelStyles);
+    expect(useApp.getState().y2Fmt).toBe(before.y2Fmt);
+  });
+
+  it("an edit that sets no title size stores no empty title style", () => {
+    const patch = axisPatch(defaultPlotView(), "x", { ...axisDraft(defaultPlotView(), "x"), minor: "2" });
+    expect(patch.axisLabelStyles).toEqual({});
+  });
+});
+
 describe("Axis dialog — Y-axis break rows", () => {
   it("the Y tab breaks the axis in one undo step, and blanking both rows removes it", () => {
     openFigureDialog({ kind: "axis", axis: "y" });

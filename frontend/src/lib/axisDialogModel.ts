@@ -136,7 +136,11 @@ export function axisPatch(view: AxisView, axis: AxisId, d: AxisDraft): Partial<P
   const styles = { ...view.axisLabelStyles };
   const { size: _old, ...restStyle } = styles[axis] ?? {};
   void _old;
-  styles[axis] = titleSize !== null ? { ...restStyle, size: titleSize } : restStyle;
+  // No title size and nothing else: drop the axis' entry rather than store
+  // an empty `{}` (a "style" that differs from the default by structure only).
+  const nextStyle = titleSize !== null ? { ...restStyle, size: titleSize } : restStyle;
+  if (Object.keys(nextStyle).length > 0) styles[axis] = nextStyle;
+  else delete styles[axis];
   const lim = lo === null && hi === null ? null : ([lo, hi] as [number | null, number | null]);
   if (axis === "x") return { xScale: scale, xLim: lim, xStep: step, xFmt: fmt, axisLabelStyles: styles };
   if (axis === "y") return { yScale: scale, yLim: lim, yStep: step, yFmt: fmt, axisLabelStyles: styles };
