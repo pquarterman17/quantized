@@ -41,6 +41,7 @@ __all__ = [
     "DECIMAL_CHOICES",
     "check_decimal",
     "decimal_metadata",
+    "stray_comma_notes",
     "layout_rows",
     "resolve_decimal_columns",
     "uses_decimal_path",
@@ -242,3 +243,42 @@ def decimal_metadata(column_names: Sequence[str]) -> tuple[dict[str, Any], str]:
     names = list(column_names)
     note = f"Column(s) read with ',' as the decimal separator: {', '.join(names)}."
     return {"decimal_separator": ",", "decimal_comma_columns": names}, note
+
+
+def stray_comma_notes(
+    col_headers: Sequence[str],
+    matrix: np.ndarray,
+    data_tokens: Sequence[Sequence[str]],
+    *,
+    converted: Sequence[int] = (),
+) -> list[str]:
+    """One note per column where a decimal-comma cell was left blank (NaN).
+
+    Worksheet audit #21: a column of point decimals with one ``"2,5"`` in it
+    is not a European column (``"auto"`` converts only all-comma columns), so
+    that cell read as NaN without a word. Converting it would guess the
+    locale cell by cell; this says so instead, naming the column, how many
+    cells and an example. Only columns with a NaN are inspected, so a clean
+    file pays nothing.
+    """
+    skip = set(converted)
+    notes: list[str] = []
+    for c, header in enumerate(col_headers):
+        if c in skip or c >= matrix.shape[1] or not np.isnan(matrix[:, c]).any():
+            continue
+        cells = _column_cells(data_tokens, c)
+        stray = [
+            cell
+            for r, cell in enumerate(cells)
+            if r < matrix.shape[0] and np.isnan(matrix[r, c]) and _COMMA_RE.match(cell)
+        ]
+        if stray:
+            count = len(stray)
+            noun = "cell" if count == 1 else "cells"
+            notes.append(
+                f"Column '{header}' has {count} {noun} written with a decimal comma "
+                f"(e.g. '{stray[0]}') among point-decimal numbers; "
+                f"{'it was' if count == 1 else 'they were'} left blank (NaN). Fix the "
+                f"{noun}, or pick the decimal separator in the Import Wizard."
+            )
+    return notes

@@ -64,6 +64,9 @@ class _Parsed:
     all_tokens: list[list[str]]
     # Raw column indices read with a decimal comma (`_decimal_comma`).
     decimal_columns: list[int] = field(default_factory=list)
+    # Worksheet audit #21: decimal-comma cells left NaN in a point-decimal
+    # column, one sentence per column (`_decimal_comma.stray_comma_notes`).
+    decimal_notes: list[str] = field(default_factory=list)
 
 
 def _split(line: str, delim: str) -> list[str]:
@@ -157,11 +160,15 @@ def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
             matrix[i, k] = layout._to_float(row[k])
     decimal = dc.check_decimal(settings.decimal, delim)
     comma_cols: list[int] = []
+    notes: list[str] = []
     if dc.uses_decimal_path(decimal, delim, "," in text):
         comma_cols = dc.resolve_decimal_columns(
             "this file", names, matrix, data_tokens, decimal=decimal
         )
-    return _Parsed(lines, delim, names, units, roles, matrix, ds, data_tokens, tokens, comma_cols)
+        notes = dc.stray_comma_notes(names, matrix, data_tokens, converted=comma_cols)
+    return _Parsed(
+        lines, delim, names, units, roles, matrix, ds, data_tokens, tokens, comma_cols, notes
+    )
 
 
 def _label_row_overrides(p: _Parsed, settings: ImportSettings, n_cols: int) -> list[str] | None:
@@ -209,6 +216,23 @@ def _decimal_names(p: _Parsed, effective_names: list[str]) -> list[str]:
     x column keeps its header name (`x_column_name`); every other column
     carries its effective (label-row) name."""
     return [p.names[k] if p.roles[k] == "x" else effective_names[k] for k in p.decimal_columns]
+
+
+def _decimal_fields(p: _Parsed, effective_names: list[str]) -> dict[str, object]:
+    """The parsed dataset's decimal-comma metadata: the converted columns'
+    keys + note, then one note per column whose stray decimal-comma cells
+    were left NaN (worksheet audit #21 -- never a silent NaN). Empty when
+    neither applies."""
+    fields: dict[str, object] = {}
+    notes: list[str] = []
+    if p.decimal_columns:
+        decimal_meta, decimal_note = dc.decimal_metadata(_decimal_names(p, effective_names))
+        fields.update(decimal_meta)
+        notes.append(decimal_note)
+    notes.extend(p.decimal_notes)
+    if notes:
+        fields["notes"] = notes
+    return fields
 
 
 def _resolve_roles(roles: list[str] | None, n_cols: int) -> list[str]:

@@ -321,3 +321,32 @@ def test_preview_reports_decimal_comma_columns() -> None:
     ]
     us = "Temp;Moment\n300.5;1.25e-3\n301;1.5e-3\n"
     assert preview_import(us, guess_settings(us))["decimal_comma_columns"] == []
+
+
+# --- worksheet audit #21: a stray decimal comma is never a silent NaN --------
+_STRAY = (
+    "Field (Oe)\tMoment (emu)\tErr (emu)\n"
+    "-100\t1.5E-3\t1e-5\n0\t2,5\t1e-5\n100\t3.5E-3\t1e-5\n"
+)
+
+
+def test_stray_comma_cell_in_point_column_is_reported_by_paste_parse() -> None:
+    ds = parse_import(_STRAY, guess_settings(_STRAY))
+    assert np.isnan(ds.values[1, 0])  # never guessed cell by cell
+    notes = ds.metadata["notes"]
+    assert len(notes) == 1
+    assert "Column 'Moment' has 1 cell written with a decimal comma (e.g. '2,5')" in notes[0]
+    assert "left blank (NaN)" in notes[0]
+
+
+def test_stray_comma_cell_is_reported_by_delimited_import(tmp_path: Path) -> None:
+    ds = import_csv(_write(tmp_path, _STRAY, "stray.tsv"))
+    assert any("decimal comma (e.g. '2,5')" in note for note in ds.metadata["notes"])
+
+
+def test_clean_and_fully_converted_files_get_no_stray_note(tmp_path: Path) -> None:
+    clean = "a\tb\n1\t2.5\n2\t3.5\n"
+    assert "notes" not in parse_import(clean, guess_settings(clean)).metadata
+    eu = "a\tb\n1\t2,5\n2\t3,5\n"
+    notes = parse_import(eu, guess_settings(eu)).metadata["notes"]
+    assert notes == ["Column(s) read with ',' as the decimal separator: b."]

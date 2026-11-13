@@ -183,8 +183,13 @@ export function createDataIntakeSlice(set: SliceSet, get: SliceGet): DataIntakeS
           params: { name },
         });
         const msg = `${name} — ${data.time.length} rows, ${data.labels.length} column${plural(data.labels.length)}`;
-        get().setStatus(msg);
-        toast(msg, "ok");
+        // Worksheet audit #21: the parser's notes (a decimal-comma cell left
+        // blank, a column read as text) are part of the outcome — say them,
+        // never leave a NaN unexplained.
+        const notes = Array.isArray(data.metadata.notes) ? data.metadata.notes.filter((n): n is string => typeof n === "string") : [];
+        const full = notes.length ? `${msg}. ${notes.join(" ")}` : msg;
+        get().setStatus(full);
+        toast(full, notes.length ? "info" : "ok");
       } catch (e) {
         // P3.4 error-quality audit (2026-09-14): a bare `e.message` here is
         // whatever the parser threw ("no delimiter found", or an HTTP status

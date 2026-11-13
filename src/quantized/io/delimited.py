@@ -257,9 +257,13 @@ def import_csv(
         # it is already a `Sequence[Sequence[str]]`.
         data_tokens = data_tokens_list
     comma_cols: list[int] = []
+    comma_notes: list[str] = []
     if comma_path:
         comma_cols = dc.resolve_decimal_columns(
             path.name, col_headers, matrix, data_tokens, decimal=decimal
+        )
+        comma_notes = dc.stray_comma_notes(
+            col_headers, matrix, data_tokens, converted=comma_cols
         )
     elif delim != ",":  # with a comma delimiter, "1,5" is already two cells
         layout.reject_comma_numbers(path.name, col_headers, matrix, data_tokens)
@@ -461,6 +465,7 @@ def import_csv(
         decimal_meta, decimal_note = dc.decimal_metadata(shown)
         metadata.update(decimal_meta)
         notes.append(decimal_note)
+    notes.extend(comma_notes)
     if time_promoted:
         if time_idx in categorical_idx:
             notes.append(

@@ -38,7 +38,6 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
-from quantized.io._decimal_comma import decimal_metadata
 from quantized.io._delimited_layout import (
     _looks_like_units_row,
     _numeric_score,
@@ -64,6 +63,7 @@ from quantized.io.import_parse import (
     DATA_ROLES as _DATA_ROLES,
 )
 from quantized.io.import_parse import (
+    _decimal_fields,
     _decimal_names,
     _effective_names,
     _effective_ncols,
@@ -460,9 +460,7 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
         "all_column_names": p.names,
         "import_settings": settings.to_dict(),
     }
-    if p.decimal_columns:
-        decimal_meta, decimal_note = decimal_metadata(_decimal_names(p, effective_names))
-        metadata.update(decimal_meta, notes=[decimal_note])
+    metadata.update(_decimal_fields(p, effective_names))
     label_cols = [k for k in range(n_cols) if p.roles[k] == "label"]
     if label_cols:
         metadata["text_columns"] = {
