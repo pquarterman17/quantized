@@ -342,6 +342,11 @@ body {
    wrapped row never puts a button where a row click lands. */
 .qzk-ds-compact-row > .qzk-ds-name { flex: 1 1 0; min-width: min(10ch, 100%); }
 .qzk-ds-compact-row > .qzk-ds-compact-meta { order: 1; }
+/* The Tree row's Origin "Sheet" chip rides inside the counts (DatasetRow's
+   OriginSheetChip), so it wraps with them instead of taking the name's line:
+   beside the name it cut an Origin sheet's name to "crash:DfAqD…" in a 264px
+   Library (Origin-replacement live check). */
+.qzk-ds-compact-meta > .qzk-origin-kind { display: inline-flex; margin-right: 6px; vertical-align: middle; font-family: var(--font-ui); }
 .qzk-ds-compact-row > .qzk-ds-spark-wrap { order: 2; }
 .qzk-ds-compact-row > .qzk-ds-tags-compact { order: 3; }
 /* DatasetRowPreview's expanded Sparkline: a DIRECT flex child of
@@ -408,6 +413,14 @@ body {
 .qzk-group-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 2px; background: none; border: none; cursor: pointer; color: var(--text-faint); font-size: var(--type-label); font-weight: var(--weight-semibold); text-transform: uppercase; letter-spacing: var(--tracking-label); }
 .qzk-group-caret { width: 10px; color: var(--text-dim); }
 .qzk-group-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+/* A workbook row's book name outranks its "Origin book" chip: the name sizes
+   to its text and the chip gives up its width first (ellipsized, full text in
+   its tooltip) before the name loses a character. The count stays whole. */
+.qzk-workbook-row > .qzk-group-name { flex: 1 1 auto; }
+/* min-width: squeezed, it still reads as a chip ("O…" in its box, full
+   text in the tooltip), never an empty sliver of border. */
+.qzk-workbook-row > .qzk-origin-kind { display: block; line-height: 14px; flex: 0 1000 auto; min-width: 2.6em; overflow: hidden; text-overflow: ellipsis; }
+.qzk-workbook-row > .qzk-group-count { flex-shrink: 0; }
 .qzk-group-count { color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
 /* PR L (L0.48/L0.49) — a Collection's member row. Deliberately NOT a
    DatasetRow: a Collection's members span every hierarchy node kind, and

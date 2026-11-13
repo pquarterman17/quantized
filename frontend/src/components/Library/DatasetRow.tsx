@@ -44,7 +44,7 @@
 import { useState } from "react";
 import { buildDatasetRowMenu, removeDatasetConfirmed } from "./datasetRowMenu";
 import DatasetRowPreview from "./DatasetRowPreview";
-import { DatasetRowControls, DatasetRowName, DatasetRowTags } from "./DatasetRowParts";
+import { DatasetRowControls, DatasetRowName, DatasetRowTags, OriginSheetChip } from "./DatasetRowParts";
 import { recordWorkbookOpen } from "./libraryOpen";
 import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import Sparkline from "./Sparkline";
@@ -260,6 +260,7 @@ export default function DatasetRow({
             </span>
             {nameEl}
             <span className="qzk-ds-compact-meta" title={pendingTitle}>
+              <OriginSheetChip dataset={d} />
               {pts} pts · {ch} ch{d.pending && " · …"}
             </span>
             <DatasetRowPreview dataset={d} tabIndex={innerTab} />

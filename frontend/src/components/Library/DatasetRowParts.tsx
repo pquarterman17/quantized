@@ -159,7 +159,7 @@ export function DatasetRowName({ dataset: d, compactOriginName = false, rename, 
   const nameAriaLabel = displayName !== d.name ? d.name : undefined;
   return (
     <>
-      {isOriginBookDataset(d) && <span className="qzk-origin-kind" title="Origin worksheet">Sheet</span>}
+      {!compactOriginName && <OriginSheetChip dataset={d} />}
       <span
         className="qzk-ds-name"
         title={`${d.name} — double-click to rename`}
@@ -173,6 +173,18 @@ export function DatasetRowName({ dataset: d, compactOriginName = false, rename, 
       </span>
     </>
   );
+}
+
+/** The visible "Sheet" kind chip of an Origin worksheet row. The Tree's
+ *  one-line row carries it in its counts (DatasetRow), not beside the name:
+ *  there it wraps with the counts instead of cutting the sheet's name to a
+ *  few letters in a narrow Library (Origin-replacement live check). */
+export function OriginSheetChip({ dataset: d }: { dataset: Dataset }) {
+  return isOriginBookDataset(d) ? (
+    <span className="qzk-origin-kind" title="Origin worksheet">
+      Sheet
+    </span>
+  ) : null;
 }
 
 interface TagsProps {
