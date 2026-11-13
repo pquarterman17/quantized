@@ -188,5 +188,6 @@ describe("ChannelsCard layout + error consistency (figures-audit #10/#14)", () =
     fireEvent.change(pick, { target: { value: "" } });
     expect(useApp.getState().datasets[0].errorRoles).toEqual([]);
     expect(useApp.getState().errKeys[0]).toBeUndefined();
+    expect(useApp.getState().history).toHaveLength(1); // one pick, one undo step
   });
 });

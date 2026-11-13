@@ -73,10 +73,10 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   const roles = active.errorRoles ?? [];
   const errorFor = (i: number): number | null => errKeys[i] ?? symmetricBinding(roles, i, "y");
   const pickError = (i: number, channel: number | null) => {
-    setErrKey(i, channel);
-    if (symmetricBinding(roles, i, "y") !== channel && (channel !== null || symmetricBinding(roles, i, "y") !== null)) {
-      setErrorRoles(active.id, withSymmetricYError(roles, i, channel));
-    }
+    // Each store write is its own undo step, so only the one(s) that change
+    // anything run: a fresh CSV's role-bound series touches only the roles.
+    if ((errKeys[i] ?? null) !== channel) setErrKey(i, channel);
+    if (symmetricBinding(roles, i, "y") !== channel) setErrorRoles(active.id, withSymmetricYError(roles, i, channel));
   };
   const meta = active.data.metadata;
   // #33: the file's other descriptive rows, offered as legend-label sources.
