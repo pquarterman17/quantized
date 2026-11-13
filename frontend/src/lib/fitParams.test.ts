@@ -163,6 +163,11 @@ describe("auto starts in an edited table", () => {
     expect(parseFitParams(rows, gauss).p0).toEqual([5, 0, 1]);
   });
 
+  it("a non-finite guess (null on the wire) leaves that row on the registry default", () => {
+    const rows = rowsFromModel(gauss).map((r, i) => (i === 0 ? { ...r, start: "5" } : r));
+    expect(parseFitParams(rows, gauss, [5, null as unknown as number, 2]).p0).toEqual([5, 0, 2]);
+  });
+
   it("clips an auto start into the user's bounds rather than refusing the fit", () => {
     const rows = rowsFromModel(gauss).map((r, i) => (i === 1 ? { ...r, min: "8", max: "12" } : r));
     const parsed = parseFitParams(rows, gauss, [5, 20, 1.5]);

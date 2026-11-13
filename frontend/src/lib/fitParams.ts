@@ -107,7 +107,10 @@ export function parseFitParams(
   const upper: number[] = [];
   const fixed: boolean[] = [];
 
-  const auto = new Set(guess && guess.length === rows.length ? autoStartRows(rows, model) : []);
+  // A non-finite guess (the route sends NaN as null) leaves the row on its default.
+  const auto = new Set(
+    guess && guess.length === rows.length ? autoStartRows(rows, model).filter((i) => Number.isFinite(guess[i])) : [],
+  );
   for (let i = 0; i < rows.length; i++) {
     const row = auto.has(i) ? { ...rows[i]!, start: "" } : rows[i];
     // Shared with the equation table (lib/paramRowCheck); here a blank start
