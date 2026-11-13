@@ -86,7 +86,7 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
             type="button"
             role="tab"
             aria-selected={current === a}
-            className="qz-btn"
+            className={current === a ? "qz-btn qz-primary" : "qz-btn"}
             onClick={() => switchAxis(a)}
           >
             {a === "y2" ? "Y2" : a.toUpperCase()}
@@ -98,7 +98,7 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
           No Y2 axis yet: put a series on the right axis (Channels ▸ Y2) to edit it here.
         </div>
       )}
-      <h3 style={{ margin: "4px 0" }}>Scale</h3>
+      <h3 style={{ margin: "4px 0" }}>{AXIS_NAMES[current]} — scale</h3>
       {select("scale", "Type", SCALES)}
       {text("from", "From")}
       {text("to", "To")}

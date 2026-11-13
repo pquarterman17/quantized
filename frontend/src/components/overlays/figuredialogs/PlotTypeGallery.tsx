@@ -31,7 +31,10 @@ export default function PlotTypeGallery({ onClose }: { onClose: () => void }) {
               onClose();
             }}
             style={{
+              // The tile holds a glyph AND a label: `.qz-btn`'s fixed control
+              // height clipped them over each other (live check), so it grows.
               display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 6px",
+              height: "auto", minHeight: 64,
               opacity: reason ? 0.45 : 1, cursor: "default",
             }}
           >

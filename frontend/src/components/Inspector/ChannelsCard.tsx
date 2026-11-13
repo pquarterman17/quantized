@@ -210,7 +210,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 21 }}>
               <Select
-                style={{ flex: "1 1 0", minWidth: 0 }}
+                style={{ flex: "1.2 1 0", minWidth: 0 }}
                 aria-label={`${lab} modeling type`}
                 value={active.channelTypes?.[i] ?? ""}
                 onChange={(e) =>
@@ -225,7 +225,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
                 ]}
               />
               <Select
-                style={{ flex: "1 1 0", minWidth: 0 }}
+                style={{ flex: "0.9 1 0", minWidth: 0 }}
                 aria-label={`${lab} column role`}
                 value={role ?? ""}
                 onChange={(e) => changeRole(i, e.target.value === "" ? null : (e.target.value as ChannelRole))}

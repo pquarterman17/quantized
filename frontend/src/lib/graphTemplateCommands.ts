@@ -86,7 +86,7 @@ export async function saveStageGraphTemplate(s: StoreGet): Promise<void> {
   if (!plotted) return;
   const params = await askParams("Save Graph Template", [
     { key: "name", label: "Template name", type: "text", default: "My graph style" },
-  ]);
+  ], { confirmLabel: "Save" });
   const name = params ? String(params.name).trim() : "";
   if (!name) return;
   const state = s();
@@ -108,7 +108,7 @@ export async function applyStageGraphTemplate(s: StoreGet): Promise<void> {
   }
   const params = await askParams("Apply Graph Template", [
     { key: "name", label: "Template", type: "select", default: templates[0].name, options: templates.map((t) => t.name) },
-  ]);
+  ], { confirmLabel: "Apply" });
   if (!params) return;
   const template = templates.find((t) => t.name === params.name);
   const plotted = plottedSeries(s, "Apply Graph Template");

@@ -59,7 +59,7 @@ test("a graph template saved from one plain CSV restyles another CSV's graph", a
   const saveDialog = page.getByRole("dialog", { name: "Save Graph Template" });
   await expect(saveDialog).toBeVisible();
   await saveDialog.getByRole("textbox", { name: "Template name" }).fill("Lab style");
-  await saveDialog.getByRole("button", { name: "Run" }).click();
+  await saveDialog.getByRole("button", { name: "Save" }).click();
   await expect(saveDialog).toHaveCount(0);
 
   // ── A second, differently-shaped plain CSV ──
@@ -73,7 +73,7 @@ test("a graph template saved from one plain CSV restyles another CSV's graph", a
   const applyDialog = page.getByRole("dialog", { name: "Apply Graph Template" });
   await expect(applyDialog).toBeVisible();
   await applyDialog.getByRole("combobox", { name: "Template" }).selectOption("Lab style");
-  await applyDialog.getByRole("button", { name: "Run" }).click();
+  await applyDialog.getByRole("button", { name: "Apply" }).click();
 
   await expect.poll(async () => (await harnessState(page)).seriesStyles[0]?.markerShape).toBe("diamond");
   const applied = (await harnessState(page)).seriesStyles[0];

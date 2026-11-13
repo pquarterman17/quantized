@@ -128,10 +128,12 @@ function axisExtrasPlugin(extras: readonly Extra[], ink: string): uPlot.Plugin {
           if (fmt.divide && fmt.divide > 0 && fmt.divide !== 1) {
             ctx.font = typeof axis.font === "string" ? axis.font.replace(/(\d+(?:\.\d+)?)px/, (_m, n) => `${Number(n) * pr}px`) : `${11 * pr}px sans-serif`;
             const text = divideLabel(fmt.divide);
+            // Inside the plot corner at that axis' end: the band above the
+            // frame is too thin (the factor clipped there in the live check).
             ctx.textAlign = side === 3 ? "left" : "right";
-            ctx.textBaseline = horizontal ? "top" : "bottom";
-            if (horizontal) ctx.fillText(text, left + width, edge + 28 * pr);
-            else ctx.fillText(text, side === 3 ? left : left + width, top - 4 * pr);
+            ctx.textBaseline = horizontal ? "bottom" : "top";
+            if (horizontal) ctx.fillText(text, left + width - 4 * pr, edge - 4 * pr);
+            else ctx.fillText(text, side === 3 ? left + 4 * pr : left + width - 4 * pr, top + 4 * pr);
           }
         }
         ctx.restore();
