@@ -391,7 +391,9 @@ def test_path_containment_at_a_posix_filesystem_root(
     cache.root = PurePosixPath("/")  # type: ignore[assignment]
     monkeypatch.setattr(cache_mod, "os", SimpleNamespace(path=posixpath, sep="/"))
     token = "a" * 64
-    assert str(cache._path(token, fs.Entry("p.opj", 1, 1.0))) == f"/{token}/p.opj"
+    # _path returns the host's concrete Path, which renders "\\" on Windows;
+    # compare in POSIX form so the POSIX rules are what is tested on every OS.
+    assert cache._path(token, fs.Entry("p.opj", 1, 1.0)).as_posix() == f"/{token}/p.opj"
     with pytest.raises(ValueError):
         cache._path(token, fs.Entry("../../escape.opj", 1, 1.0))
 
