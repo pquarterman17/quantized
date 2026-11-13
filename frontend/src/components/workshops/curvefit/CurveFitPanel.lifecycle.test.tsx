@@ -185,13 +185,13 @@ describe("CurveFitPanel — one retained fit per worksheet", () => {
     const before = useApp.getState().datasets[0]!;
     const edited = { ...before, data: { ...before.data, values: before.data.values.map((r, i) => (i === 2 ? [50] : r)) } };
     act(() => useApp.setState({ datasets: [edited], fitOverlay: null }));
-    expect(screen.getByText(/The data selected for fitting changed after this fit/)).toBeInTheDocument();
+    expect(screen.getByText(/The data or weighting selected for fitting changed after this fit/)).toBeInTheDocument();
     expect(useApp.getState().fitOverlay).toBeNull();
   });
 });
 
 describe("CurveFitPanel — a result whose data changed", () => {
-  const NOTE = /The data selected for fitting changed after this fit/;
+  const NOTE = /The data or weighting selected for fitting changed after this fit/;
 
   it("is marked until it is re-fitted, and an added column alone does not mark it", async () => {
     await fitOnce();
