@@ -38,7 +38,9 @@ export interface TransformForm {
   /** Stack: 0-based channels. */
   channels: number[];
   key: number;
-  category: number;
+  /** Unstack's category as a `keyOptions` value: a channel index, or
+   *  `t:<name>` for a text column. */
+  category: string;
   value: number;
   aggregate: AggregateMode;
 }
@@ -69,10 +71,37 @@ export function seedForm(op: PreviewOp, seed: readonly string[], datasets: reado
     mode: "inner",
     channels: Array.from({ length: n }, (_, i) => i),
     key: -1,
-    category: Math.min(0, n - 1),
-    value: Math.min(1, n - 1),
+    category: defaultCategory(data),
+    value: defaultValue(data, defaultCategory(data)),
     aggregate: "mean",
   };
+}
+
+/** Unstack's default category: what a long-form table pivots on — a text
+ *  column, else a categorical channel, else the channel with the FEWEST
+ *  distinct values when that is a handful (≤ 20). Picking the first numeric
+ *  channel turned a 20-row sheet into 20 one-cell "Category 0.327…" columns. */
+export function defaultCategory(data: DataStruct | undefined): string {
+  if (!data) return "0";
+  const text = originTextColumnNames(data)[0];
+  if (text !== undefined) return `t:${text}`;
+  const n = data.labels.length;
+  const categorical = Array.from({ length: n }, (_, i) => i).find((i) => isCategoricalChannel(data, i));
+  if (categorical !== undefined) return String(categorical);
+  let best = -1;
+  let fewest = 21;
+  for (let c = 0; c < n; c += 1) {
+    const distinct = new Set(data.values.map((row) => row[c]).filter(Number.isFinite)).size;
+    if (distinct >= 2 && distinct < fewest) [best, fewest] = [c, distinct];
+  }
+  return String(best >= 0 ? best : Math.min(0, n - 1));
+}
+
+/** The first channel that is not the category (the values being spread). */
+function defaultValue(data: DataStruct | undefined, category: string): number {
+  const n = data?.labels.length ?? 0;
+  const v = Array.from({ length: n }, (_, i) => i).find((i) => String(i) !== category);
+  return v ?? Math.min(1, n - 1);
 }
 
 export interface KeyOption {
@@ -158,9 +187,11 @@ export function formToRun(form: TransformForm, datasets: readonly Named[]): Tran
       return { params: { op: "stack", channels }, primaryId: primary.id, otherIds: [] };
     }
     case "unstack":
-      if (![form.key, form.category, form.value].every(inRange)) return "Pick the row key, category and value columns.";
+      if (![form.key, form.value].every(inRange) || !keyOptions(primary.data).some((o) => o.value === form.category)) {
+        return "Pick the row key, category and value columns.";
+      }
       return {
-        params: { op: "unstack", key: form.key, category: form.category, value: form.value, aggregate: form.aggregate },
+        params: { op: "unstack", key: form.key, category: parseKey(form.category), value: form.value, aggregate: form.aggregate },
         primaryId: primary.id,
         otherIds: [],
       };

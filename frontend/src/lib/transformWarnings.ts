@@ -218,22 +218,22 @@ export function analyzeStack(ds: DataStruct, channels: readonly number[]): Trans
 export function analyzeUnstack(
   ds: DataStruct,
   key: number,
-  category: number,
+  category: JoinKey,
   value: number,
   aggregate: AggregateMode,
 ): TransformWarning[] {
   const out: TransformWarning[] = [];
   const keys = keyColumn(ds, key);
-  const cats = keyColumn(ds, category);
+  const cats = joinKeyColumn(ds, category).keys; // text, or a finite number's string
   const vals = keyColumn(ds, value);
   const hits = new Map<string, number>();
   let dropped = 0;
   for (let i = 0; i < keys.length; i += 1) {
-    if (!Number.isFinite(keys[i]) || !Number.isFinite(cats[i]) || !Number.isFinite(vals[i])) {
+    if (!Number.isFinite(keys[i]) || cats[i] === null || !Number.isFinite(vals[i])) {
       dropped += 1;
       continue;
     }
-    const cell = `${String(keys[i])}\u0000${String(cats[i])}`;
+    const cell = `${String(keys[i])}\u0000${cats[i]}`;
     hits.set(cell, (hits.get(cell) ?? 0) + 1);
   }
   if (dropped) {

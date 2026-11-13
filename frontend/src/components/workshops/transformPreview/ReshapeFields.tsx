@@ -131,7 +131,14 @@ function UnstackFields({ r }: { r: ReshapeState }) {
   return (
     <>
       {pick("Row key", f.key, (key) => r.setForm({ key }))}
-      {pick("Category column", f.category, (category) => r.setForm({ category }))}
+      {/* A category may be a text column (its text names the new columns). */}
+      <label className="qzk-field-lbl" style={gap}>Category column</label>
+      <Select
+        aria-label="Category column"
+        options={keyOptions(r.datasets.find((d) => d.id === f.primary)?.data)}
+        value={f.category}
+        onChange={(e) => r.setForm({ category: e.target.value })}
+      />
       {pick("Value column", f.value, (value) => r.setForm({ value }))}
       <label className="qzk-field-lbl" style={gap}>Duplicate key/category cells</label>
       <Select

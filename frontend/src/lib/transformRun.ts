@@ -85,7 +85,7 @@ export interface DatasetRef {
 export type TransformParams =
   | { op: "transpose" }
   | { op: "stack"; channels: number[] }
-  | { op: "unstack"; key: number; category: number; value: number; aggregate: AggregateMode }
+  | { op: "unstack"; key: number; category: JoinKey; value: number; aggregate: AggregateMode }
   // `keyMode` absent = a step recorded before a categorical key joined by its
   // LEVEL TEXT (worksheetJoin.ts module doc) — it replays with the OLD
   // numeric-code semantics instead, never the new one silently.
