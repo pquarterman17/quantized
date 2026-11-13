@@ -29,7 +29,7 @@ export async function runPageSetupDialog(s: StoreGet): Promise<void> {
     { key: "mtop", label: "Margin top", type: "number", default: r3(ps.margins.top) },
     { key: "mbottom", label: "Margin bottom", type: "number", default: r3(ps.margins.bottom) },
   ];
-  const v = await askParams("Page setup", fields);
+  const v = await askParams("Page setup", fields, { confirmLabel: "Apply" }); // live check: it read "Run"
   if (!v) return;
   const nonneg = (x: unknown) => {
     const n = Number(x);

@@ -35,7 +35,7 @@ export async function runFacetByColumn(s: StoreGet): Promise<void> {
       options,
       hint: "One small-multiples panel per distinct level, sharing the x-axis",
     },
-  ]);
+  ], { confirmLabel: "Facet" });
   if (!params) return;
   const col = options.indexOf(String(params.column));
   if (col < 0) return;
@@ -57,7 +57,7 @@ export async function runBreakXAxis(s: StoreGet): Promise<void> {
       default: 4,
       hint: "A gap at least this many times the median x-spacing becomes a break",
     },
-  ]);
+  ], { confirmLabel: "Break" });
   if (!params) return;
   s().breakAtGaps(ds.id, undefined, Number(params.gapFactor));
 }
