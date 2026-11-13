@@ -25,7 +25,7 @@ Public corpus (49 unique ``.opj``): 13 curve anchors carry such a note —
 from __future__ import annotations
 
 import struct
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 from quantized.io.origin_project.opj_curves import _CURVE_PREFIX, _DATAPLOT_MAGIC
 from quantized.io.origin_project.opj_datasets import parse_dataset_header
@@ -38,9 +38,9 @@ from quantized.io.origin_project.opj_sheets import (
 __all__ = ["curve_sheet_keys", "layer_sheet_notes"]
 
 
-def curve_sheet_keys(blocks: Sequence[tuple[int, bytes]]) -> tuple[dict[int, str], set[str]]:
-    """``(column object id -> the book key of the sheet it is on, every
-    bound book key)`` over the whole project.
+def curve_sheet_keys(blocks: Sequence[tuple[int, bytes]]) -> dict[int, str]:
+    """Column object id -> the book key of the sheet it is on, over the whole
+    project.
 
     ``blocks`` is the FULL walk, NULL blocks included (``window_sheets``
     reads a NULL as "this column has no label"). A column whose sheet the
@@ -48,7 +48,7 @@ def curve_sheet_keys(blocks: Sequence[tuple[int, bytes]]) -> tuple[dict[int, str
     """
     headers = [h for size, p in blocks if size and (h := parse_dataset_header(p)) is not None]
     if not headers:
-        return {}, set()
+        return {}
     sheets = window_sheets(blocks)
     bound, _unbound = bind_worksheets(headers, sheets)
     # The reader names a book that is down to one sheet as the book
@@ -58,7 +58,7 @@ def curve_sheet_keys(blocks: Sequence[tuple[int, bytes]]) -> tuple[dict[int, str
     for key, sheet in bound.items():
         for object_id in sheet.object_ids:
             keys[object_id] = renamed.get(key, key)
-    return keys, {renamed.get(key, key) for key in bound}
+    return keys
 
 
 def layer_sheet_notes(
@@ -68,13 +68,11 @@ def layer_sheet_notes(
     id_map: Mapping[int, tuple[str, str]],
     sheet_keys: Mapping[int, str],
     curves: Sequence[Mapping[str, object]],
-    imported: Collection[str] = (),
 ) -> list[dict[str, str]]:
     """One note per curve of this layer whose column is recorded on a sheet
-    other than the one its binding uses: ``{book, x, y, recorded,
-    plotted_from}``, where ``plotted_from`` is the binding's book when that
-    is an imported sheet (``imported``, the bound book keys) and ``""`` when
-    the binding names a book that has no imported sheet of that name.
+    other than the one its binding uses: ``{book, x, y, recorded}``.
+    Whether ``book`` reached the user's Library is not known here; the
+    frontend words the note against the books it actually imported.
 
     Walks the same anchors as ``opj_curves.extract_curves`` over
     ``blocks[start:end)`` and keeps only those that produced a curve (matched
@@ -95,13 +93,7 @@ def layer_sheet_notes(
         if info is None or recorded is None or info not in bound or recorded == info[0]:
             continue
         book, column = info
-        note = {
-            "book": book,
-            "x": bound[info],
-            "y": column,
-            "recorded": recorded,
-            "plotted_from": book if book in imported else "",
-        }
+        note = {"book": book, "x": bound[info], "y": column, "recorded": recorded}
         if note not in notes:
             notes.append(note)
     return notes

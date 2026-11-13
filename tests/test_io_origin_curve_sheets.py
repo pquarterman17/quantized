@@ -84,16 +84,13 @@ def test_curve_recorded_on_another_sheet_is_noted_and_keeps_its_binding() -> Non
     # The binding is unchanged: both curves read Book1 / B.
     assert [(c["book"], c["y"]) for c in fig["curves"]] == [("Book1", "B"), ("Book1", "B")]
     assert fig["curve_sheet_notes"] == [
-        {"book": "Book1", "x": "A", "y": "B", "recorded": "Book1@2", "plotted_from": "Book1"}
+        {"book": "Book1", "x": "A", "y": "B", "recorded": "Book1@2"}
     ]
     (assessed,), manifest = assess_origin_figures([fig], container="opj")
-    fidelity = assessed["fidelity"]
-    assert "curve_sheet_mismatch" in fidelity["omissions"]
+    # The wording is the frontend's (it knows which books were imported).
+    assert "curve_sheet_mismatch" in assessed["fidelity"]["omissions"]
     assert "curve_sheet_mismatch" in manifest["omissions"]
-    assert fidelity["notes"] == [
-        "Curve Book1 B: the file records its column on sheet 2 (Book1@2), but it is "
-        "plotted from sheet 1; check it, or use Recover to choose the sheet"
-    ]
+    assert "notes" not in assessed["fidelity"]
 
 
 def test_curves_on_the_sheet_their_binding_uses_carry_no_note() -> None:
@@ -101,25 +98,8 @@ def test_curves_on_the_sheet_their_binding_uses_carry_no_note() -> None:
     (fig,) = extract_figures(_project(2))
     assert "curve_sheet_notes" not in fig
     (assessed,), manifest = assess_origin_figures([fig], container="opj")
-    assert "notes" not in assessed["fidelity"]
+    assert "curve_sheet_mismatch" not in assessed["fidelity"]["omissions"]
     assert "curve_sheet_mismatch" not in manifest["omissions"]
     # A single-sheet book: nothing to compare.
     (single,) = extract_figures(_project(2, second_sheet=False))
     assert "curve_sheet_notes" not in single
-
-
-def test_note_says_when_the_named_book_has_no_sheet_of_that_name() -> None:
-    """DO.opj's shape: the curve book has no imported sheet of its own name."""
-    fig = {
-        "name": "Graph1",
-        "curves": [{"book": "Book1", "x": "A", "y": "B"}],
-        "curve_sheet_notes": [
-            {"book": "Book1", "x": "A", "y": "B", "recorded": "Book1@6", "plotted_from": ""}
-        ],
-    }
-    (assessed,), _ = assess_origin_figures([fig], container="opj")
-    assert assessed["fidelity"]["notes"] == [
-        "Curve Book1 B: the file records its column on sheet 6 (Book1@6), but the graph "
-        "names only Book1, which has no sheet of that name here; use Recover to choose "
-        "the sheet"
-    ]

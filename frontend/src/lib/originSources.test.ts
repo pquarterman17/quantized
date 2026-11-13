@@ -71,6 +71,18 @@ describe("resolveOriginFigureSources", () => {
     ]);
   });
 
+  it("names the sheet the file records a curve on instead of 'sheet not recorded'", () => {
+    const fig = figure([{ book: "Book1", x: "A", y: "B" }, { book: "Book1", x: "A", y: "C" }]);
+    fig.curve_sheet_notes = [{ book: "Book1", x: "A", y: "B", recorded: "Book1@6" }];
+    const e = entry(fig, ["d6", "d7"]);
+    const result = resolveOriginFigureSources(e, [e], [dataset("d6", "Book1@6"), dataset("d7", "Book1@7")]);
+    expect(result.unresolved).toEqual([
+      { book: "Book1", x: "A", y: "B", reason: "recorded_on_other_sheet", recorded: "Book1@6" },
+      // Decoy: C has no note, so the file names no sheet for it.
+      { book: "Book1", x: "A", y: "C", reason: "sheet_not_recorded", sheets: ["6", "7"] },
+    ]);
+  });
+
   it("retains raw letters when a decoded column is absent", () => {
     const e = entry(figure([{ book: "Book1", x: "A", y: "Z" }]));
     const result = resolveOriginFigureSources(e, [e], [dataset("d1", "Book1")]);

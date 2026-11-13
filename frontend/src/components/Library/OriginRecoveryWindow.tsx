@@ -5,6 +5,7 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { curveSheetGroups, curveSheetLine } from "../../lib/originCurveSheets";
 import { figureLabel, figureLayerFamily, type OriginFigureEntry } from "../../lib/originFigures";
 import { resolveOriginFigureSources, resolveOriginSourceManually } from "../../lib/originSources";
 import { useApp } from "../../store/useApp";
@@ -60,7 +61,16 @@ export default function OriginRecoveryWindow({
   ];
   // Curves the file records on another sheet (`curve_sheet_notes`): say so,
   // and put that sheet first among the candidates.
-  const sheetNotes = [...new Set(entry.figure.fidelity?.notes ?? [])];
+  // Grouped per graph layer + book + recorded sheet, worded against this
+  // import's own books (lib/originCurveSheets.ts).
+  const sheetNotes = useMemo(() => {
+    const family = figureLayerFamily(entry, figures);
+    const imported = new Set(
+      datasets.filter((dataset) => entry.siblingIds.includes(dataset.id)).map(originBookOf),
+    );
+    return curveSheetGroups((family.length ? family : [entry]).map((e) => e.figure), imported)
+      .map(curveSheetLine);
+  }, [datasets, entry, figures]);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const visibleCandidates = normalizedQuery
     ? candidates.filter(({ dataset, inspectSource }) =>
@@ -119,7 +129,11 @@ export default function OriginRecoveryWindow({
               {resolution.unresolved.map((binding, index) => (
                 <li key={`${binding.book}-${binding.x}-${binding.y}-${index}`}>
                   {binding.book}: {binding.x} → {binding.y}
-                  <span>{binding.reason.replaceAll("_", " ")}</span>
+                  <span>
+                    {binding.recorded
+                      ? `recorded on ${binding.recorded}`
+                      : binding.reason.replaceAll("_", " ")}
+                  </span>
                 </li>
               ))}
             </ul>

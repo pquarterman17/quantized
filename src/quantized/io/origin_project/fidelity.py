@@ -29,8 +29,6 @@ class FigureFidelity(TypedDict):
     status: FidelityStatus
     recovered: list[str]
     omissions: list[str]
-    # One sentence per curve the user should check (`opj_curve_sheets`).
-    notes: NotRequired[list[str]]
 
 
 class FilteredFigure(TypedDict):
@@ -163,8 +161,9 @@ def _figure_fidelity(fig: dict[str, Any]) -> FigureFidelity:
             omissions.append("some_curve_colors")
     if not (fig.get("frame") and fig.get("page")):
         omissions.append("layer_geometry")
-    notes = _sheet_notes(fig.get("curve_sheet_notes"))
-    if notes:
+    if fig.get("curve_sheet_notes"):
+        # The per-curve detail is the figure's own `curve_sheet_notes`; the
+        # frontend words it against the books that were actually imported.
         omissions.append("curve_sheet_mismatch")
     out: FigureFidelity = {
         # No current decoder proves every visual property, so "exact" is
@@ -173,35 +172,7 @@ def _figure_fidelity(fig: dict[str, Any]) -> FigureFidelity:
         "recovered": _recovered_groups(fig),
         "omissions": omissions,
     }
-    if notes:
-        out["notes"] = notes
     return out
-
-
-def _sheet_notes(raw: object) -> list[str]:
-    """The user-facing line for each ``curve_sheet_notes`` entry: a curve
-    whose column the file records on another sheet than the binding uses.
-    The binding is kept (it is not re-pointed without an oracle); this says
-    where to look."""
-    lines: list[str] = []
-    for note in raw if isinstance(raw, list) else []:
-        if not isinstance(note, dict):
-            continue
-        book, y = str(note.get("book", "")), str(note.get("y", ""))
-        recorded = str(note.get("recorded", ""))
-        sheet = recorded.partition("@")[2] or "1"
-        head = f"Curve {book} {y}: the file records its column on sheet {sheet} ({recorded})"
-        if note.get("plotted_from"):
-            lines.append(
-                f"{head}, but it is plotted from sheet 1; check it, or use Recover "
-                "to choose the sheet"
-            )
-        else:
-            lines.append(
-                f"{head}, but the graph names only {book}, which has no sheet of that "
-                "name here; use Recover to choose the sheet"
-            )
-    return lines
 
 
 def assess_origin_figures(

@@ -179,7 +179,7 @@ def extract_figures(b: bytes) -> list[dict[str, Any]]:
     id_map = column_id_map(blocks)
     # Diagnostic only: the sheet each curve column is recorded on, where that
     # is not the sheet the binding uses (`opj_curve_sheets`).
-    sheet_keys, imported = curve_sheet_keys(walked)
+    sheet_keys = curve_sheet_keys(walked)
     del walked
     # One walk of the block list: the ordered per-book designations drive both
     # the per-curve nearest-preceding-X (col_order) and the book-level fallback
@@ -217,7 +217,7 @@ def extract_figures(b: bytes) -> list[dict[str, Any]]:
             # frame quad this places every panel of a multi-panel page.
             fig["page"] = page
             notes = layer_sheet_notes(
-                blocks, layer_start, layer_end, id_map, sheet_keys, fig["curves"], imported
+                blocks, layer_start, layer_end, id_map, sheet_keys, fig["curves"]
             )
             if notes:  # absent, not empty, so other figures are unchanged
                 fig["curve_sheet_notes"] = notes

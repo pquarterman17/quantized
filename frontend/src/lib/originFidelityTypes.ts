@@ -9,20 +9,16 @@ export interface OriginFigureFidelity {
   status: OriginFidelityStatus;
   recovered: string[];
   omissions: string[];
-  /** One sentence per curve to check (`fidelity._sheet_notes`), e.g. a curve
-   *  whose column the file records on another sheet than it is plotted from. */
-  notes?: string[];
 }
 
 /** A curve whose column the `.opj` records on sheet `recorded` (`Book@N`),
  *  while its binding names `book` (`opj_curve_sheets`). The binding is kept;
- *  `plotted_from` is `book` when that is an imported sheet, else `""`. */
+ *  `lib/originCurveSheets.ts` words it against the books actually imported. */
 export interface OriginCurveSheetNote {
   book: string;
   x: string;
   y: string;
   recorded: string;
-  plotted_from: string;
 }
 
 export interface OriginFilteredFigure {

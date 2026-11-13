@@ -3,6 +3,7 @@
 // the same import, and every missing book/column is retained as diagnostics.
 
 import { originErrKeys } from "./errorbars";
+import { recordedSheetOf } from "./originCurveSheets";
 import { figureLayerFamily, type OriginFigureEntry } from "./originFigures";
 import type { Dataset, OriginCurve } from "./types";
 
@@ -24,6 +25,7 @@ export interface UnresolvedOriginBinding {
   reason:
     | "book_not_imported"
     | "sheet_not_recorded"
+    | "recorded_on_other_sheet"
     | "x_column_not_decoded"
     | "y_column_not_decoded"
     | "x_column_has_no_numeric_data"
@@ -32,6 +34,9 @@ export interface UnresolvedOriginBinding {
    *  for the named workbook. The graph names the workbook, not which of its
    *  sheets; the reader does not guess one, so the user picks. */
   sheets?: string[];
+  /** `recorded_on_other_sheet` only: the sheet (`Book@N`) the file records
+   *  this curve's column on (`OriginFigure.curve_sheet_notes`). */
+  recorded?: string;
 }
 
 export interface OriginSourceResolution {
@@ -211,10 +216,15 @@ export function resolveOriginFigureSources(
     for (const curve of member.figure.curves ?? []) {
       const ds = mappedDataset(member, curve.book, candidates);
       if (!ds) {
-        const sheets = sheetIdsOf(curve.book, candidates);
-        unresolved.push(sheets.length
-          ? { ...curveRef(curve), reason: "sheet_not_recorded", sheets }
-          : { ...curveRef(curve), reason: "book_not_imported" });
+        // The file does record a sheet for this curve: say that one, never
+        // also "sheet not recorded" (lib/originCurveSheets.ts words it).
+        const recorded = recordedSheetOf(member.figure, curve.book, curve.y);
+        const sheets = recorded ? [] : sheetIdsOf(curve.book, candidates);
+        unresolved.push(recorded
+          ? { ...curveRef(curve), reason: "recorded_on_other_sheet", recorded }
+          : sheets.length
+            ? { ...curveRef(curve), reason: "sheet_not_recorded", sheets }
+            : { ...curveRef(curve), reason: "book_not_imported" });
         continue;
       }
       const problem = curveProblem(ds, curve);

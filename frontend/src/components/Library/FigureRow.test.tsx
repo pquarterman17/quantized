@@ -156,34 +156,35 @@ describe("FigureRow — PR C additions", () => {
     expect(screen.getByRole("button", { name: "Rebuild plot" })).toBeEnabled();
   });
 
+  // strings_testing.opj's shape: the curve binds to NLFit1 (sheet 1) while its
+  // column id is on sheet 2 (NLFit1@2). The binding stays; the wording depends
+  // on whether NLFit1 itself is in the import.
+  const sheetBook = (id: string, originBook: string): Dataset => ({
+    ...ds(id, "w1"),
+    name: `strings:${originBook}`,
+    data: {
+      time: [0, 1],
+      values: [[1], [2]],
+      labels: ["B"],
+      units: [""],
+      metadata: { origin_book: originBook, x_column_name: "A", origin_column_names: ["B"] },
+    },
+  });
+  const notedEntry = (): OriginFigureEntry => ({
+    ...entry("g3", "s1"),
+    siblingIds: ["s1", "s2"],
+    figure: {
+      ...entry("g3", "s1").figure,
+      curves: [{ book: "NLFit1", x: "A", y: "B" }],
+      curve_sheet_notes: [{ book: "NLFit1", x: "A", y: "B", recorded: "NLFit1@2" }],
+      fidelity: { status: "best_effort", recovered: [], omissions: ["curve_sheet_mismatch"] },
+    },
+  });
+
   it("offers Recover, recorded sheet first, for a resolved curve the file records on another sheet", async () => {
-    // strings_testing.opj's shape: the curve binds to NLFit1 (sheet 1) while
-    // its column id is on sheet 2 (NLFit1@2). The binding stays; Recover says
-    // so and puts the recorded sheet first. A plain resolved graph (decoy,
-    // the default entry) has no Recover button.
-    const book = (id: string, originBook: string): Dataset => ({
-      ...ds(id, "w1"),
-      name: `strings:${originBook}`,
-      data: {
-        time: [0, 1],
-        values: [[1], [2]],
-        labels: ["B"],
-        units: [""],
-        metadata: { origin_book: originBook, x_column_name: "A", origin_column_names: ["B"] },
-      },
-    });
-    const note = "Curve NLFit1 B: the file records its column on sheet 2 (NLFit1@2), but it is plotted from sheet 1; check it, or use Recover to choose the sheet";
-    const noted: OriginFigureEntry = {
-      ...entry("g3", "s1"),
-      siblingIds: ["s1", "s2"],
-      figure: {
-        ...entry("g3", "s1").figure,
-        curves: [{ book: "NLFit1", x: "A", y: "B" }],
-        curve_sheet_notes: [{ book: "NLFit1", x: "A", y: "B", recorded: "NLFit1@2", plotted_from: "NLFit1" }],
-        fidelity: { status: "best_effort", recovered: [], omissions: ["curve_sheet_mismatch"], notes: [note] },
-      },
-    };
-    useApp.setState({ datasets: [book("s1", "NLFit1"), book("s2", "NLFit1@2")], originFigures: [noted] });
+    const noted = notedEntry();
+    useApp.setState({ datasets: [sheetBook("s1", "NLFit1"), sheetBook("s2", "NLFit1@2")], originFigures: [noted] });
+    // Decoy: a plain resolved graph has no button.
     const { unmount } = render(<FigureRow entry={entry("g1", "s1")} treeMode />);
     expect(screen.queryByRole("button", { name: /Recover unresolved Origin bindings/ })).toBeNull();
     unmount();
@@ -195,11 +196,29 @@ describe("FigureRow — PR C additions", () => {
       && declares(r.body, "visibility", "visible"))).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Check curves recorded on another sheet for MokeGraph" }));
     const region = await screen.findByRole("region", { name: "Recover MokeGraph" });
-    expect(region).toHaveTextContent(note);
+    expect(region).toHaveTextContent(
+      "1 curve of MokeGraph (NLFit1 column B) is recorded on NLFit1@2 but plotted from NLFit1; check it, or use Recover to choose the sheet",
+    );
     const names = [...region.querySelectorAll(".qzk-origin-recovery-candidate strong")].map((n) => n.textContent);
     expect(names).toEqual(["strings:NLFit1@2", "strings:NLFit1"]);
     expect(region).toHaveTextContent("the file records curves on this sheet");
-    // The import has NLFit1 (sheet 1), so no "names no sheet" paragraph.
+    expect(region).not.toHaveTextContent("not a sheet");
+    expect(region).not.toHaveTextContent("not in this import");
+  });
+
+  it("never says both 'plotted from' and 'not recorded' when the bound sheet is not in the import", async () => {
+    const noted = notedEntry();
+    // NLFit1 (sheet 1) did not reach the Library; only its sheet 2 did.
+    useApp.setState({ datasets: [sheetBook("s1", "Book1"), sheetBook("s2", "NLFit1@2")], originFigures: [noted] });
+    render(<FigureRow entry={noted} treeMode />);
+    fireEvent.click(screen.getByRole("button", { name: "Recover unresolved Origin bindings for MokeGraph" }));
+    const region = await screen.findByRole("region", { name: "Recover MokeGraph" });
+    expect(region).toHaveTextContent(
+      "1 curve of MokeGraph (NLFit1 column B) is recorded on NLFit1@2; the sheet the graph would otherwise use (NLFit1) is not in this import; use Recover to choose the sheet",
+    );
+    expect(region).toHaveTextContent("recorded on NLFit1@2");
+    expect(region).not.toHaveTextContent("plotted from");
+    expect(region).not.toHaveTextContent("sheet not recorded");
     expect(region).not.toHaveTextContent("not a sheet");
   });
 

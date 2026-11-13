@@ -493,11 +493,16 @@ while its column id is on sheet 2: the reverse failure, which looked
 resolved. The binding is kept (re-pointing it would move owner figure pins
 that cannot be re-measured here), but it is no longer silent:
 `opj_curve_sheets` compares each curve's recorded sheet with the one its
-binding uses, the figure gains `curve_sheet_notes`, its fidelity an
-omission `curve_sheet_mismatch` and one line per curve ("Curve NLFit1 B: the
-file records its column on sheet 2 (NLFit1@2), but it is plotted from sheet
-1; check it, or use Recover to choose the sheet"), and Recover opens with
-the recorded sheet first. Public corpus: 3 figures gain notes — `DO.opj`
+binding uses, the figure gains `curve_sheet_notes` (`{book, x, y,
+recorded}`) and its fidelity an omission `curve_sheet_mismatch`. The
+sentence is the frontend's (`lib/originCurveSheets.ts`), because only it
+knows whether the bound book reached the import: one line per graph layer,
+book and recorded sheet ("6 curves of Graph1 (Book1 columns B, D, F, C, E,
+G) are recorded on Book1@6; the sheet the graph would otherwise use (Book1)
+is not in this import; use Recover to choose the sheet", or "... but plotted
+from NLFit1; check it, ..." when it did). Such a curve is never also listed
+as "sheet not recorded", and Recover opens with the recorded sheet first.
+Public corpus: 3 figures gain notes — `DO.opj`
 Graph1 and Graph6 (6 curves each, recorded on `Book1@6`) and
 `strings_testing.opj` Graph1 (1 curve). Every other field of every figure is
 byte-identical to `main` (`tests/test_io_origin_curve_sheets.py`).
