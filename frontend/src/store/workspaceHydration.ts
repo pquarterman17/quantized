@@ -279,8 +279,9 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
         };
       });
       adoptFitModels(ws, set, get);
+      relinkLoadedGraphs(ws.datasets);
     },
-    appendWorkspace: (ws) => runAppendWorkspace(set, get, ws),
+    appendWorkspace: (ws) => (relinkLoadedGraphs(ws.datasets), runAppendWorkspace(set, get, ws)),
     // Reuses loadWorkspace's "replace everything" reset (clears per-dataset
     // view state, overlays, styles, folders, figures) with an empty
     // workspace, so nothing stale survives; autosave self-clears on the
@@ -314,6 +315,12 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
  *  through the `.dwk` codec, so none of it costs eager bytes; usually already
  *  loaded, except after the browser picker's Worker parse, when this is its
  *  first fetch (a failure is toasted by the loader). */
+/** A loaded live multi-dataset graph (`linkedCurves`) re-links to its sources:
+ *  the watcher (store/linkedCurvesSync.ts, on demand) re-assembles it. */
+function relinkLoadedGraphs(datasets: WorkspaceToLoad["datasets"]): void {
+  if (datasets.some((d) => d.linkedCurves)) void import("./linkedCurvesSync").then((m) => m.watchLinkedCurves(), () => undefined);
+}
+
 function adoptFitModels(ws: WorkspaceToLoad, set: SliceSet, get: SliceGet): void {
   // P2.5 box 4: the project's saved templates / transformation recipes join
   // the local library by the same rule (lib/templatesProject.ts; no carry).

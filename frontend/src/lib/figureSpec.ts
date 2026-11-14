@@ -51,10 +51,9 @@ import { facetEncoding, figureEncodingWire } from "./plotEncodingWire";
 import { droppedRows, pruneToLiveDataset } from "./rowstate";
 import { breakCompositionFromData } from "./facet";
 import { facetSplitChannels } from "./facetDomains";
+import { perSeriesXSpec } from "./figureSpecPerSeriesX";
 // The screen-parity override projection moved to lib/figureViewOverrides.ts to
-// fund P3.3's threading against this file's 500-line ceiling. Imported, NOT
-// re-exported: a barrel here would make every importer of this module pull the
-// projection in whether it uses it or not.
+// fund P3.3 against the 500-line ceiling. Imported, NOT re-exported (no barrel pulling it in).
 import { viewOverrides } from "./figureViewOverrides";
 import type { ErrorBinding } from "./errorRoles";
 import type { Dataset, DataStruct, DefaultTrace } from "./types";
@@ -215,8 +214,8 @@ function buildFigureSpecForView(
     encoding?: FigureEncoding;
   } = {},
 ): FigureSpec {
-  // #54 Stage 3: honor the window's page — figsize (inches) + margins as OUTER padding (`page_pad`, audit B3). Absent pageSetup keeps the preset size + tight_layout.
-  const ps = st.pageSetup;
+  [st, data, extras] = perSeriesXSpec(st, data, channelRoles, extras); // gap-2 #2: each Y on its own X, as on screen
+  const ps = st.pageSetup; // #54 Stage 3: the window page (figsize + margins as `page_pad`, audit B3); absent = preset + tight_layout
   const pageSize = ps ? pageSizeInches(ps) : null;
   const overrides = ps
     ? (compactOverrides({

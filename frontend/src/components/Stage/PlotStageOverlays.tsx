@@ -16,6 +16,7 @@ import type uPlot from "uplot";
 
 import type { ColorScatterSpec } from "../../lib/colorscatter";
 import { lazyRegion } from "../../lib/lazyRegion";
+import { emptyGraphReason } from "../../lib/linkedCurvesLite";
 import type { Measurement } from "../../lib/measure";
 import type { FwhmResult } from "../../lib/peakwidth";
 import type { PlotPayload } from "../../lib/plotdata";
@@ -27,6 +28,7 @@ import type { PlotTool } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotTools";
 import type { IntegralResult } from "../../store/useApp";
 import { snapshotToNewWindow } from "../windows/useWindowCommands";
+const EmptyGraphNotice = lazyRegion(() => import("./EmptyGraphNotice"), "Plot");
 import PlotLegend from "./PlotLegend";
 import PlotReadouts from "./PlotReadouts";
 import PlotToolbar from "./PlotToolbar";
@@ -109,6 +111,8 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
           Select a dataset to plot
         </div>
       )}
+
+      {p.active && emptyGraphReason(p.active) && <EmptyGraphNotice reason={emptyGraphReason(p.active)!} />}
 
       <PlotReadouts tool={p.tool} readout={p.readout} measurement={p.measurement} stats={p.stats} />
       {resultChipsVisible({ integral: p.integral, fwhm: p.fwhm, gadget: p.gadget }) && (

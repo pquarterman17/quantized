@@ -19,6 +19,7 @@
 import { useEffect, useState } from "react";
 
 import { fitModel } from "../../../lib/api";
+import { ownXKey } from "../../../lib/perSeriesX";
 import type { CalcResult, Dataset, DataStruct } from "../../../lib/types";
 import { type ByColumnOption, type ByLevel, useByPartition } from "../useByPartition";
 
@@ -78,7 +79,8 @@ export function useCurveFitByLevel(
     setBusy(true);
     void Promise.all(
       byPartition.levels.map(async (lvl): Promise<CurveFitLevelResult> => {
-        const xv = xKey == null ? lvl.data.time : lvl.data.values.map((row) => row[xKey]);
+        const fitX = active ? ownXKey(active, xKey, yKey) : xKey; // a secondary-X Y fits against its own X
+        const xv = fitX == null ? lvl.data.time : lvl.data.values.map((row) => row[fitX]);
         const yv = lvl.data.values.map((row) => row[yKey]);
         const n = Math.min(xv.length, yv.length);
         const x: number[] = [];
@@ -123,7 +125,7 @@ export function useCurveFitByLevel(
     return () => {
       cancelled = true;
     };
-  }, [byPartition.levels, modelName, xKey, yKey, start]);
+  }, [byPartition.levels, modelName, xKey, yKey, start, active]);
 
   const { byOptions, byCol, setByCol, levels, totalLevels } = byPartition;
   return { byOptions, byCol, setByCol, levels, totalLevels, results, busy };

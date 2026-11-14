@@ -28,8 +28,8 @@ describe("Y title from the drawn series only (re-audit #13)", () => {
     expect(buildOpts(v, { ...base, hidden: [false, true] }).axes?.[1]?.label).toBe("Voltage (V)");
   });
 
-  it("with every series drawn the rule is unchanged; with none drawn it reads them all", () => {
-    expect(buildOpts(payload, base).axes?.[1]?.label).toBeUndefined();
+  it("with every series drawn it names them jointly; with none drawn it reads them all", () => {
+    expect(buildOpts(payload, base).axes?.[1]?.label).toBe("Signal, err");
     expect(drawnOnAxis([{}, {}], [true, true], 0)).toEqual([0, 1]);
     expect(drawnOnAxis([{ axis: 0 }, { axis: 1 }], [false, false], 1)).toEqual([1]);
   });

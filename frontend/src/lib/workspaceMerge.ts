@@ -89,6 +89,7 @@
 // `order`, `pending`) is self-contained — no id references — and rides
 // along untouched onto the merged dataset.
 
+import { UNRESOLVED_SOURCE } from "./linkedCurvesLite";
 import { remapSheetRefIds } from "./sheetBindings";
 import type { AnalysisResult } from "./analysisResult";
 import type { Dataset } from "./types";
@@ -307,6 +308,13 @@ export function mergeWorkspace(
       } else {
         droppedWorkbookRefs++; // unresolvable — hand-edited/corrupt .dwk
       }
+    }
+    // A live graph's curves name their sources by id: same remap as bgRef. A
+    // source that is not part of the appended project must NOT keep its
+    // incoming id (on a collision that names a different, existing dataset),
+    // so it is bound to nothing and the curve draws empty (fail closed).
+    if (d.linkedCurves) {
+      next.linkedCurves = d.linkedCurves.map((c) => ({ ...c, datasetId: idMap.get(c.datasetId) ?? UNRESOLVED_SOURCE }));
     }
     if (d.bgRef) {
       const target = idMap.get(d.bgRef.datasetId);

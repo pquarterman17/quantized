@@ -52,13 +52,24 @@ describe("worksheetMenus — Set As (Origin Column > Set As)", () => {
   it("Set As › X also plots against the column, and replaces the separate 'Set as X axis' (re-audit #20)", () => {
     const setDesignation = vi.fn();
     const setXKey = vi.fn();
-    const items = columnMenuItems(2, makeColCtx({ setDesignation, setXKey }));
+    // Column 0: no curve before it, so every Y now belongs to it.
+    const items = columnMenuItems(0, makeColCtx({ setDesignation, setXKey }));
     expect(labelsOf(items)).not.toContain("Set as X axis");
     (setAs(items)!.submenu[0] as { run: () => void }).run();
-    expect(setDesignation).toHaveBeenCalledWith(2, "X");
-    expect(setXKey).toHaveBeenCalledWith(2);
+    expect(setDesignation).toHaveBeenCalledWith(0, "X");
+    expect(setXKey).toHaveBeenCalledWith(0);
     // A read-only sheet (no Set As) keeps the plain plot-X entry.
     expect(labelsOf(columnMenuItems(2, makeColCtx()))).toContain("Set as X axis");
+  });
+
+  it("Set As › X on T2 of T1,R1,T2,R2 leaves the plot's X alone: R1 keeps T1 (gap-2 #2)", () => {
+    const setDesignation = vi.fn();
+    const setXKey = vi.fn();
+    // Channels R1, T2, R2 (T1 is the time column); R1 is a curve before T2.
+    const items = columnMenuItems(1, makeColCtx({ labelCount: 3, designationOf: () => undefined, setDesignation, setXKey }));
+    (setAs(items)!.submenu[0] as { run: () => void }).run();
+    expect(setDesignation).toHaveBeenCalledWith(1, "X");
+    expect(setXKey).not.toHaveBeenCalled();
   });
 
   it("is absent for the x column and when no setter is supplied (a read-only sheet)", () => {

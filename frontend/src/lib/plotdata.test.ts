@@ -451,7 +451,7 @@ describe("withFitOverlay", () => {
     const p = withFitOverlay(base, { datasetId: "d1", y: [11, 21, 31] }, "d1");
     expect(p.data).toHaveLength(3);
     expect(p.data[2]).toEqual([11, 21, 31]);
-    expect(p.series[1]).toEqual({ label: "fit", unit: "" });
+    expect(p.series[1]).toEqual({ label: "fit", unit: "", overlay: true });
   });
 
   it("is a no-op when the overlay belongs to another dataset", () => {
@@ -479,7 +479,7 @@ describe("withFitOverlay", () => {
     const p = withFitOverlay(base, { datasetId: "d1", y: [11, 21, 31], band }, "d1");
     expect(p.data.slice(2)).toEqual([[11, 21, 31], ...band.map((e) => e.y)]);
     expect(p.series.slice(1)).toEqual([
-      { label: "fit", unit: "" },
+      { label: "fit", unit: "", overlay: true },
       { label: "95% CI low", unit: "", band: 1 },
       { label: "95% CI high", unit: "", band: 2 },
       { label: "95% PI low", unit: "", band: 3 },
@@ -510,7 +510,7 @@ describe("withDerivOverlay (gap #34 differentiate mode)", () => {
     const p = withDerivOverlay(base, { datasetId: "d1", y: [1, 2, 3] }, "d1");
     expect(p.data).toHaveLength(3);
     expect(p.data[2]).toEqual([1, 2, 3]);
-    expect(p.series[1]).toEqual({ label: "dy/dx", unit: "", axis: 1 });
+    expect(p.series[1]).toEqual({ label: "dy/dx", unit: "", axis: 1, overlay: true });
   });
 
   it("is a no-op when the overlay belongs to another dataset", () => {
@@ -580,7 +580,7 @@ describe("withBaselineOverlay", () => {
     const p = withBaselineOverlay(base, { datasetId: "d1", y: [1, 2, 3] }, "d1");
     expect(p.data).toHaveLength(3);
     expect(p.data[2]).toEqual([1, 2, 3]);
-    expect(p.series[1]).toEqual({ label: "baseline", unit: "" });
+    expect(p.series[1]).toEqual({ label: "baseline", unit: "", overlay: true });
   });
 
   it("is a no-op on mismatch / wrong dataset / null", () => {
@@ -609,7 +609,7 @@ describe("overlay alignment to a trailing-trimmed payload (Hc2 sparse worksheet)
     const p = withFitOverlay(trimmed, { datasetId: "d1", y: [1.2, 2, 7.5, null, null, null] }, "d1");
     expect(p.data).toHaveLength(3);
     expect(p.data[2]).toEqual([1.2, 2, 7.5]);
-    expect(p.series[1]).toEqual({ label: "fit", unit: "" });
+    expect(p.series[1]).toEqual({ label: "fit", unit: "", overlay: true });
   });
 
   it("truncates a full-length baseline overlay", () => {
@@ -700,7 +700,7 @@ describe("withPeakOverlay", () => {
   it("appends a points-kind series when datasetId + length match", () => {
     const p = withPeakOverlay(base, { datasetId: "d1", y: [null, 20, null] }, "d1");
     expect(p.data).toHaveLength(3);
-    expect(p.series[1]).toEqual({ label: "peaks", unit: "", kind: "points" });
+    expect(p.series[1]).toEqual({ label: "peaks", unit: "", kind: "points", overlay: true });
   });
 
   it("is a no-op for a mismatched dataset or length", () => {
