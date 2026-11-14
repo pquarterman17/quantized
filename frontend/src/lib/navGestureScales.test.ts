@@ -4,7 +4,7 @@
 // moved the view to [1.7e5, 1.2e6] — every point off screen — because the pan
 // shifted log bounds by a LINEAR delta; and a y2 series stayed put while pan
 // and wheel moved the primary axis, then lost a box zoom on the next rebuild.
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.hoisted(() => {
   class NoopPath {
@@ -26,6 +26,7 @@ import uPlot from "uplot";
 import { cancelActiveGesture } from "./gestureCancel";
 import type { PlotPayload } from "./plotdata";
 import { buildOpts, type BuildOptsArgs } from "./uplotOpts";
+import { loadToolPlugins } from "./axisExtrasHook";
 
 const live: uPlot[] = [];
 afterEach(() => live.splice(0).forEach((u) => u.destroy()));
@@ -63,6 +64,10 @@ function drag(u: uPlot, dx: number, dy: number): void {
 }
 
 const lim = (u: uPlot, k: string): [number, number] => [u.scales[k].min!, u.scales[k].max!];
+
+// The tool plugins are a lazy chunk the plot toolbar warms once mounted
+// (bundle diet slice 27): load it up front, as the running app has.
+beforeAll(() => loadToolPlugins());
 
 describe("drag-pan", () => {
   it("moves a log axis by decades: same span, a third of it for a third of the height", async () => {

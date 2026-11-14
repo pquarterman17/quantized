@@ -1,7 +1,7 @@
 // The data cursor on a waterfall view reports each series' TRUE value (plot
 // audit round 3). Measured: six curves with a 0.5 waterfall, cursor at x = 50,
 // read s1 = 151.11 where the file holds 98.613 — the display stagger, not data.
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.hoisted(() => {
   class NoopPath {
@@ -22,11 +22,16 @@ import uPlot from "uplot";
 
 import { applyWaterfall, type PlotPayload } from "./plotdata";
 import { buildOpts } from "./uplotOpts";
+import { loadToolPlugins } from "./axisExtrasHook";
 import type { Readout } from "./uplotTools";
 import { expandWaterfallX } from "./waterfallX";
 
 const live: uPlot[] = [];
 afterEach(() => live.splice(0).forEach((u) => u.destroy()));
+
+// The tool plugins are a lazy chunk the plot toolbar warms once mounted
+// (bundle diet slice 27): load it up front, as the running app has.
+beforeAll(() => loadToolPlugins());
 
 describe("cursor readout on a waterfall", () => {
   it("reports the data values, not the staggered ones", async () => {

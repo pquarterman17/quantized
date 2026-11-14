@@ -4,7 +4,7 @@
 import type { ErrorSpan } from "./errorbars";
 import type uPlot from "uplot";
 
-import { axisExtrasApplier, gadgetPlugins } from "./axisExtrasHook";
+import { axisExtrasApplier, gadgetPlugins, toolPlugins } from "./axisExtrasHook";
 import { categoricalTickFormatter } from "./categoricalTicks"; // moved out (line pin); re-exported
 export { categoricalTickFormatter };
 
@@ -46,21 +46,11 @@ import { buildSeriesDefs, type SeriesColors } from "./uplotSeries";
 import { shapesPlugin, type ShapeEditOpts } from "./uplotShapes";
 import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit";
 import { anchorEditPlugin, type AnchorPoint } from "./uplotAnchors";
-import { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
 import { xLabelRightPad, xTickSpace } from "./uplotRightPad";
 import { orientArgs, orientAxes, orientPlugins } from "./uplotOrient";
 import { withUnit } from "./unitDisplay";
 export { withUnit }; // eager callers import it here: ~260 B less first-paint JS than direct
-import {
-  measurePlugin,
-  panPlugin,
-  readoutPlugin,
-  statsPlugin,
-  viewHistoryPlugin,
-  wheelZoomPlugin,
-  type PlotViewBounds,
-  type Readout,
-} from "./uplotTools";
+import { viewHistoryPlugin, wheelZoomPlugin, type PlotViewBounds, type Readout } from "./uplotTools";
 
 export type PlotTool =
   | "pointer"
@@ -887,36 +877,39 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   };
 
   const plugins: uPlot.Plugin[] = [];
-  if (tool === "pan") plugins.push(panPlugin());
-  if (tool === "cursor") plugins.push(readoutPlugin(onReadout, payload.yShift, payload.blockRows, payload.xStep));
-  if (tool === "measure" && args.onMeasure) {
-    plugins.push(measurePlugin(args.onMeasure, cssVar("--accent") || "#8b5cf6"));
+  // The tool-dock plugins below load on demand (axisExtrasHook.ts, warmed once the toolbar mounts): until
+  // the chunk arrives none is pushed; the viewport rebuilds when it lands (Stage/useLazyPlotParts.ts).
+  const t = toolPlugins();
+  if (t && tool === "pan") plugins.push(t.panPlugin());
+  if (t && tool === "cursor") plugins.push(t.readoutPlugin(onReadout, payload.yShift, payload.blockRows, payload.xStep));
+  if (t && tool === "measure" && args.onMeasure) {
+    plugins.push(t.measurePlugin(args.onMeasure, cssVar("--accent") || "#8b5cf6"));
   }
-  if (tool === "stats" && args.onStats) {
-    plugins.push(statsPlugin(args.onStats, accentColor));
+  if (t && tool === "stats" && args.onStats) {
+    plugins.push(t.statsPlugin(args.onStats, accentColor));
   }
   // Integrate / FWHM: when the tool is active, the plugin owns the drag AND draws
   // the committed result; otherwise a draw-only instance keeps a prior result
   // shaded across tool switches (it clears only on dataset change / chip clear).
-  if (tool === "integ") {
+  if (t && tool === "integ") {
     plugins.push(
-      integratePlugin(args.integral ?? null, accentColor, accentSoftColor, {
+      t.integratePlugin(args.integral ?? null, accentColor, accentSoftColor, {
         onIntegrate: args.onIntegrate,
         interactive: true,
       }),
     );
-  } else if (args.integral) {
-    plugins.push(integratePlugin(args.integral, accentColor, accentSoftColor));
+  } else if (t && args.integral) {
+    plugins.push(t.integratePlugin(args.integral, accentColor, accentSoftColor));
   }
-  if (tool === "fwhm") {
+  if (t && tool === "fwhm") {
     plugins.push(
-      fwhmPlugin(args.fwhmResult ?? null, accentColor, captureSoftColor, {
+      t.fwhmPlugin(args.fwhmResult ?? null, accentColor, captureSoftColor, {
         onFwhm: args.onFwhm,
         interactive: true,
       }),
     );
-  } else if (args.fwhmResult) {
-    plugins.push(fwhmPlugin(args.fwhmResult, accentColor, captureSoftColor));
+  } else if (t && args.fwhmResult) {
+    plugins.push(t.fwhmPlugin(args.fwhmResult, accentColor, captureSoftColor));
   }
   // Gadget frame (#33 fit → #34 the rest): only draws/drags while its tool is
   // active (the gadget is cleared entirely on tool switch — see PlotStage —

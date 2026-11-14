@@ -9,6 +9,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildPlotCommands } from "../../commands/plotCommands";
+import { toolPlugins } from "../../lib/axisExtrasHook";
 import { createFigureDocument } from "../../lib/figureDocument";
 import { defaultPlotView } from "../../lib/plotview";
 import { loadToolbarPrefs, saveToolbarPrefs } from "../../store/prefs";
@@ -49,6 +50,14 @@ const props = {
   onCopyFigure: NOOP,
   onSnapshotWindow: NOOP,
 };
+
+describe("PlotToolbar — tool plugin warm-up (bundle diet slice 27)", () => {
+  it("starts loading the tool-dock plugins once mounted, so a first tool pick builds with them", async () => {
+    expect(toolPlugins()).toBeNull();
+    render(<PlotToolbar {...props} />);
+    await vi.waitFor(() => expect(toolPlugins()).not.toBeNull());
+  });
+});
 
 describe("PlotToolbar — shape dock flyout (MAIN #27)", () => {
   it("renders the ▱ dock button", () => {
