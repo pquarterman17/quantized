@@ -69,7 +69,14 @@ function setAsItems(col: number, ctx: ColumnMenuContext): ContextMenuItem[] {
         checked: current === designation,
         run: () => {
           set(col, designation);
-          if (designation === "X" && ctx.xKey !== col) ctx.setXKey(col);
+          // Re-point the plot's X only when no curve sits before the column:
+          // a Y there keeps its own X (T1,R1,T2,R2 -- R1 stays on T1; the
+          // plot pairs each Y with the X before it, lib/perSeriesX.ts).
+          const curveBefore = Array.from({ length: col }, (_, c) => c).some((c) => {
+            const d = ctx.designationOf?.(c);
+            return c !== ctx.xKey && (d === "Y" || d === undefined);
+          });
+          if (designation === "X" && ctx.xKey !== col && !curveBefore) ctx.setXKey(col);
         },
       })),
     },

@@ -54,10 +54,10 @@ describe("book default plot follows the designations (audit item 1)", () => {
     expect(hidden).not.toContain(0);
   });
 
-  it("holds back a Y that belongs to a secondary X instead of drawing it on the first X", () => {
+  it("does not hold back a Y on a secondary X: the plot draws it against its own X (gap-2 #2)", () => {
     const ds: Dataset = { id: "d", name: "desig", data: desig() };
     expect(ownXSeries(effectiveDesignations(ds.data))).toEqual({ 6: 5 });
-    expect(bookDefaultHiddenChannels(ds)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(bookDefaultHiddenChannels(ds)).toEqual([1, 2, 3, 4, 5]);
   });
 
   it("Quick Plot still draws that Y, against its OWN X", () => {

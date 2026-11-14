@@ -41,6 +41,7 @@ import { useLogOffsetScaling, useOffsetErrorBars, useOffsetErrorSpans, useOffset
 import { useEncodedLists, useStageEncoding } from "./usePlotEncoding";
 import { waterfallXFetchWindow, withFullXSpan } from "../../lib/waterfallOffset";
 import { useWaterfallX } from "./useWaterfallX";
+import { usePerSeriesX } from "./usePerSeriesX";
 import type { FigureEncoding } from "../../lib/plotEncodingBinding";
 
 export interface PlotPayloadParams {
@@ -140,7 +141,7 @@ export interface PlotPayloadResult {
  *  eligibility flips); re-composes (no re-fetch) whenever an overlay, the
  *  waterfall offset, the exclusion mode, or the row selection changes. */
 export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
-  const { active } = p;
+  const { active, xKey, selection, blockRows } = usePerSeriesX(p.active, p.xKey, p.selection); // gap-2 #2: each Y on its own X
   // ONE state, two fields, so `payloadDatasetId` is a property OF these rows.
   const [fetched, setFetched] = useState<{ payload: PlotPayload; datasetId: string } | null>(null);
   const payload = fetched?.payload ?? null;
@@ -196,9 +197,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     (set) => [...set].join(","),
   );
 
-  // P1.5: degrades to ungrouped + y2 (mirrors the backend's own incompatibility).
-  // The rule lives in `lib/plotGroupSplit.canvasGroupCol` (BUG-013 round 3).
-  const groupCol = canvasGroupCol(p.groupKey, p.y2Keys);
+  const groupCol = canvasGroupCol(p.groupKey, p.y2Keys); // P1.5: degrades to ungrouped + y2 (lib/plotGroupSplit)
 
   // Channels actually drawn (y selection minus the x-axis channel), in
   // order -- the REAL channels to fetch (a group split happens CLIENT-SIDE
@@ -226,7 +225,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     [fetchChannels, groupCodes, encoded],
   );
   const waterfall = encoded ? 0 : p.waterfall;
-  const waterfallDx = encoded || grouped ? 0 : (p.waterfallDx ?? 0); // the X step: refused with a split, as on the wire
+  const waterfallDx = encoded || grouped || blockRows ? 0 : (p.waterfallDx ?? 0); // the X step: refused with a split, as on the wire
 
   const { offsetsApply, offsetsKey, scaledFitOverlay, scaledBaselineOverlay, scaledPeakOverlay, scaledDerivOverlay } =
     useLogOffsetScaling({ // P2.3 decade offsets -- see usePlotPayloadLogOffsets.ts
@@ -247,7 +246,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
             baselineOverlay: scaledBaselineOverlay,
             peakOverlay: scaledPeakOverlay,
             derivOverlay: scaledDerivOverlay,
-            selection: p.selection,
+            selection,
           })
         : null,
     // `offsetsKey` stands in for `p.seriesStyles` (finding 8: this O(rows)
@@ -263,7 +262,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       activeId,
       dropped,
       p.excludedDisplay,
-      p.selection,
+      selection,
     ],
   );
 
@@ -328,7 +327,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       baselineOverlay: p.baselineOverlay,
       peakOverlay: p.peakOverlay,
       derivOverlay: p.derivOverlay,
-      selection: p.selection,
+      selection,
       excludedDisplay: p.excludedDisplay,
       activeId: active.id,
       dropped,
@@ -347,7 +346,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   // categoricalTickFormatter draws real tick names instead of the raw channel
   // numbers. A primitive, so a `channelTypes` edit refetches only when it
   // changes THIS. No-op for a continuous x/time axis (xKey === null).
-  const xType = active && p.xKey != null ? channelModelingType(active, p.xKey) : "continuous";
+  const xType = active && xKey != null ? channelModelingType(active, xKey) : "continuous";
 
   useEffect(() => {
     let cancelled = false;
@@ -371,11 +370,11 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       p.xScale === "log",
       fetchChannels,
       p.y2Keys,
-      p.xKey,
+      xKey,
       decimateWidth,
     ).then((raw) => {
       if (cancelled) return;
-      const withCategories = categoricalXPayload(raw, data, p.xKey, xType);
+      const cat = categoricalXPayload(raw, data, xKey, xType), withCategories = blockRows ? { ...cat, blockRows } : cat;
       // P1.5: group split (P1.4: or the encoded one) runs LAST, client-side, on the never-decimated fetch.
       const composed = encoded
         ? encoded.apply(withCategories)
@@ -404,7 +403,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     p.xScale,
     fetchChannels,
     p.y2Keys,
-    p.xKey,
+    xKey, blockRows,
     decimateEligible,
     groupCol,
     groupCodes,
@@ -454,7 +453,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       p.xScale === "log",
       fetchChannels,
       p.y2Keys,
-      p.xKey,
+      xKey,
       decimateWidthRef.current ?? defaultDecimateWidthHint(),
       xMin,
       xMax,
@@ -462,7 +461,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     )
       .then((raw) => {
         if (cancelled) return;
-        const windowed = categoricalXPayload(raw, data, p.xKey, xType); // keeps the full-range X step basis:
+        const cat = categoricalXPayload(raw, data, xKey, xType), windowed = blockRows ? { ...cat, blockRows } : cat; // keeps the full-range X step basis:
         setFetched({ payload: base ? withFullXSpan(windowed, base) : windowed, datasetId: activeId });
       })
       .catch(() => {
@@ -476,7 +475,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     };
     // `payload` is read but NOT listed — see this effect's header comment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchLim, data, activeId, xType, fetchChannels, p.y2Keys, p.xKey, p.yScale, p.xScale, baseDecimated, waterfallDx]);
+  }, [fetchLim, data, activeId, xType, fetchChannels, p.y2Keys, xKey, p.yScale, p.xScale, baseDecimated, waterfallDx, blockRows]);
 
   // #36 / G4: the canonical-role error spans -- see usePlotPayloadLogOffsets.ts's
   // `useOffsetErrorSpans` for the document-vs-dataset authority rule.
