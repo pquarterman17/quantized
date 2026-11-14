@@ -15,6 +15,9 @@ vi.mock("../../store/exportSavedFigures", () => ({ exportSavedFiguresPdf: vi.fn(
 
 import EditableFiguresSection from "./EditableFiguresSection";
 import { exportSavedFiguresPdf } from "../../store/exportSavedFigures";
+import { useFigurePdfTicks } from "../../store/figurePdfTicks";
+import FigurePdfBar from "./FigurePdfBar";
+import ArtifactRow from "./ArtifactRows";
 import { createFigureDocument, type FigureDocument } from "../../lib/figureDocument";
 import type { PageDocument } from "../../lib/pageDocument";
 import { createPageDocument } from "../../lib/pageDocumentActions";
@@ -190,6 +193,8 @@ describe("EditableFiguresSection", () => {
 });
 
 describe("EditableFiguresSection multi-page PDF export (N10)", () => {
+  beforeEach(() => useFigurePdfTicks.getState().clear());
+
   const three = () => [figure({ id: "a", name: "A" }), figure({ id: "b", name: "B" }), figure({ id: "c", name: "C" })];
 
   it("offers no export until a figure is ticked", () => {
@@ -200,7 +205,7 @@ describe("EditableFiguresSection multi-page PDF export (N10)", () => {
 
   it("exports the ticked figures as one PDF, pages in tick order", async () => {
     useApp.setState({ editableFigures: three() });
-    render(<EditableFiguresSection />);
+    render(<><EditableFiguresSection /><FigurePdfBar /></>);
     fireEvent.click(screen.getByRole("checkbox", { name: "Select figure C for PDF export" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Select figure A for PDF export" }));
     const button = screen.getByRole("button", { name: "Export 2 figures as one PDF" });
@@ -212,12 +217,25 @@ describe("EditableFiguresSection multi-page PDF export (N10)", () => {
 
   it("unticking removes a figure from the export", async () => {
     useApp.setState({ editableFigures: three() });
-    render(<EditableFiguresSection />);
+    render(<><EditableFiguresSection /><FigurePdfBar /></>);
     for (const n of ["A", "B", "C"]) fireEvent.click(screen.getByRole("checkbox", { name: `Select figure ${n} for PDF export` }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Select figure B for PDF export" }));
     const button = screen.getByRole("button", { name: "Export 2 figures as one PDF" });
     fireEvent.click(button);
     await waitFor(() => expect(button).not.toBeDisabled());
     expect(vi.mocked(exportSavedFiguresPdf)).toHaveBeenCalledWith(["a", "c"], expect.any(String));
+  });
+
+  it("the Library TREE rows carry the same tick, sharing one ordered list with the Export bar", async () => {
+    const docs = three();
+    useApp.setState({ editableFigures: docs });
+    const node = (id: string, name: string) => ({ kind: "editable-figure", key: `fig:${id}`, entityId: id, name, entity: docs.find((d) => d.id === id) }) as never;
+    render(<><ArtifactRow node={node("b", "B")} depth={1} /><ArtifactRow node={node("a", "A")} depth={1} /><FigurePdfBar /></>);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select figure B for PDF export" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select figure A for PDF export" }));
+    const button = screen.getByRole("button", { name: "Export 2 figures as one PDF" });
+    fireEvent.click(button);
+    await waitFor(() => expect(button).not.toBeDisabled());
+    expect(vi.mocked(exportSavedFiguresPdf)).toHaveBeenCalledWith(["b", "a"], expect.any(String));
   });
 });

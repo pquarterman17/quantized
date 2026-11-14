@@ -25,11 +25,13 @@
 
 import { isOriginBookDataset } from "../../lib/grouping";
 import type { LibraryHierarchy, LibraryNode } from "../../lib/libraryHierarchy";
+import { useFigurePdfTicks } from "../../store/figurePdfTicks";
 import { useApp } from "../../store/useApp";
 import { lazyRegion } from "../../lib/lazyRegion";
 
 const BookFamiliesSection = lazyRegion(() => import("./BookFamiliesSection"), "Library");
 const CollectionsSection = lazyRegion(() => import("./CollectionsSection"), "Library");
+const FigurePdfBar = lazyRegion(() => import("./FigurePdfBar"), "Library");
 const EditableFiguresSection = lazyRegion(() => import("./EditableFiguresSection"), "Library");
 const FiguresSection = lazyRegion(() => import("./FiguresSection"), "Library");
 const OriginFidelitySection = lazyRegion(() => import("./OriginFidelitySection"), "Library");
@@ -68,11 +70,13 @@ export default function LibrarySections(p: LibrarySectionsProps) {
   const reportCount = useApp((s) => s.reports.length);
   const smartFolderCount = useApp((s) => s.smartFolders.length);
   const collectionCount = useApp((s) => s.collections.length);
+  const pdfTicked = useFigurePdfTicks((s) => s.ids.length);
   const hasOriginBooks = useApp((s) => s.datasets.some(isOriginBookDataset));
   const flat = !p.inHierarchy && !p.searchActive;
   if (p.focusActive) return null;
   return (
     <>
+      {pdfTicked > 0 && <FigurePdfBar />}
       {flat && originFigureCount > 0 && <FiguresSection />}
       {!p.searchActive && originFidelityCount > 0 && <OriginFidelitySection onStageOpen={p.onStageOpen} />}
       {flat && <EditableFiguresSection />}
