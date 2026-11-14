@@ -11,7 +11,6 @@ import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
 import { colorScaleLegendEntries, type ColorScatterSpec } from "../../lib/colorscatter";
 import { lazyRegion } from "../../lib/lazyRegion";
 import { legendNonCurves } from "../../lib/legendCurves";
-import { withLinkedLegends } from "../../lib/linkedLegends";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import type { DefaultTrace, SeriesStyle } from "../../lib/types";
 import { RichText } from "../primitives";
@@ -81,8 +80,7 @@ export default function PlotLegend({
   const active = useActiveDataset();
   const hiddenChannels = useApp((s) => s.hiddenChannels);
   const toggleHidden = useApp((s) => s.toggleHidden);
-  const renames = useApp((s) => s.seriesLabels);
-  const seriesLabels = useMemo(() => withLinkedLegends(active?.data, renames), [active?.data, renames]); // a graph's curve names
+  const seriesLabels = useApp((s) => s.seriesLabels);
   const setSeriesLabel = useApp((s) => s.setSeriesLabel);
   const setSeriesOrder = useApp((s) => s.setSeriesOrder);
   const y2Keys = useApp((s) => s.y2Keys);
@@ -129,10 +127,12 @@ export default function PlotLegend({
       : [];
 
   const defaultLabel = (s: PlotSeriesSpec) => s.legend ?? withUnit(s.label, s.unit);
+  // A live graph's curve names (gap audit 2 #1, lib/perSeriesX.ts's withLinkedLegends), under a rename.
+  const graphLegends = active?.data.metadata.linked_curve_legends as (string | undefined)[] | undefined;
   // A row's finished text. An EMPTY one has no legend row (the series stays
   // plotted), exactly as the export's matplotlib legend drops a zero-length label.
   const rowText = (s: PlotSeriesSpec, i: number) =>
-    i < plotted.length ? (labels?.[i] ?? seriesLabels[plotted[i]] ?? defaultLabel(s)) : defaultLabel(s);
+    i < plotted.length ? (labels?.[i] ?? seriesLabels[plotted[i]] ?? graphLegends?.[plotted[i]] ?? defaultLabel(s)) : defaultLabel(s);
   // Static mode omits hidden rows too (below), so they do not count.
   const anyRow = series.some((s, i) => rowText(s, i) !== "" && !omitted(i));
   const commit = () => {

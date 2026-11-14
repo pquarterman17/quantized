@@ -29,14 +29,9 @@ export function rederivedNotice(ds: Pick<Dataset, "linkedCurves">): string {
   return ds.linkedCurves != null ? LINKED_GRAPH_EDIT_NOTICE : REDERIVED_EDIT_NOTICE;
 }
 
-/** True for a live multi-dataset graph -- its columns are its curves. */
-export function isLinkedGraph(ds: Pick<Dataset, "linkedCurves"> | null | undefined): boolean {
-  return ds?.linkedCurves != null;
-}
-
 /** Refuse a column/value edit on a graph: reports why and returns true. */
 export function refuseLinkedGraph(ds: Pick<Dataset, "linkedCurves"> | null | undefined, report: (msg: string) => void): boolean {
-  if (!isLinkedGraph(ds)) return false;
+  if (ds?.linkedCurves == null) return false;
   report(LINKED_GRAPH_EDIT_NOTICE);
   return true;
 }

@@ -12,11 +12,11 @@ import {
   reachesGraph,
   relabelCurveColumns,
   remapCurveColumns,
-  remapCurveSources,
-  sanitizeLinkedCurves,
   UNRESOLVED_SOURCE,
   type LinkedCurve,
 } from "./linkedCurves";
+import { sanitizeLinkedCurves } from "./workspaceDatasetParse";
+import { remapCurveSources } from "./workspaceMerge";
 import type { Dataset } from "./types";
 
 const loop = (id: string, name: string, xs: number[], ys: number[], extra: Partial<Dataset> = {}): Dataset => ({

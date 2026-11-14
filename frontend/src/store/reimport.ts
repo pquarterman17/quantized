@@ -59,7 +59,7 @@
 // this fresh data actually do", never a second, divergent one for the batch
 // case.
 
-import { relabelCurveColumns } from "../lib/linkedCurvesSanitize";
+import { graphColumnSeam } from "../lib/graphColumnShift";
 import { applyCorrections as applyCorrectionsApi, importFile, uploadFile, type CorrectionsRequest } from "../lib/api";
 import { computeDependencyImpact, formatDependencyImpact, hasDependencyImpact } from "../lib/dependencyImpact";
 import { hasDesktopShell, pathState } from "../lib/desktopBridge";
@@ -170,14 +170,13 @@ export function applyReimportMerge(
     columnsChanged &&
     (get().editableFigures.some((doc) => doc.bindings.datasetId === ds.id && doc.bindings.groupKey !== null) ||
       get().figureDocs.some((f) => f.live && f.datasetId === ds.id && f.config.groupCol != null));
+  // A live graph's curves on this source follow their columns BY LABEL; an
+  // unmatched one draws empty (gap audit 2 #1, review finding 4).
+  const relabeled = columnsChanged ? graphColumnSeam()?.relabel(get().datasets, ds.id, ds.data.labels, newData.labels) : null;
+  const graphs = new Map(relabeled?.filter((d) => d.linkedCurves).map((d) => [d.id, d]));
   set((s) => ({
     datasets: s.datasets.map((d) => {
-      // A live graph's curves on this source follow their columns BY LABEL; an
-      // unmatched one draws empty (gap audit 2 #1, review finding 4).
-      if (d.id !== ds.id)
-        return columnsChanged && d.linkedCurves?.some((c) => c.datasetId === ds.id)
-          ? { ...d, linkedCurves: relabelCurveColumns(d.linkedCurves, ds.id, ds.data.labels, newData.labels) }
-          : d;
+      if (d.id !== ds.id) return graphs.get(d.id) ?? d;
       const merged: Dataset = {
         ...d,
         data: newData,

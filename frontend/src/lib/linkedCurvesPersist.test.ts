@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { UNRESOLVED_SOURCE } from "./linkedCurvesSanitize";
+import { UNRESOLVED_SOURCE } from "./linkedCurves";
 import type { Dataset } from "./types";
 import { parseWorkspace } from "./workspace";
 import { mergeWorkspace } from "./workspaceMerge";

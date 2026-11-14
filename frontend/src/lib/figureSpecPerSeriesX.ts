@@ -9,8 +9,7 @@
 
 import type { ColumnDesignations } from "./columnmeta";
 import type { ErrorBinding } from "./errorRoles";
-import { withLinkedLegends } from "./linkedLegends";
-import { perSeriesXPlan } from "./perSeriesX";
+import { perSeriesXPlan, withLinkedLegends } from "./perSeriesX";
 import { effectiveChannels } from "./plotdata";
 import type { PlotView } from "./plotview";
 import type { Dataset, DataStruct } from "./types";
@@ -30,7 +29,7 @@ export function withPerSeriesX<E extends SeriesXExtras>(
   errors: readonly ErrorBinding[] | undefined,
   extras: E,
 ): { st: PlotView; data: DataStruct; extras: E } {
-  // A live graph's curve names are its legend defaults (lib/linkedLegends.ts).
+  // A live graph's curve names are its legend defaults (`withLinkedLegends`).
   const labels = withLinkedLegends(data, st.seriesLabels);
   if (labels !== st.seriesLabels) st = { ...st, seriesLabels: labels };
   const live = extras.liveDataset;

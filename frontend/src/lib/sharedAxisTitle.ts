@@ -12,14 +12,10 @@ export const JOINT_TITLE_MAX = 3;
  *  than `JOINT_TITLE_MAX` quantities says only "(unit)". Undefined for no
  *  series. Reads the DATA's label/unit, never a legend rename. */
 export function sharedAxisTitle(series: readonly { label: string; unit?: string }[]): string | undefined {
-  const groups = new Map<string, string[]>();
-  for (const s of series) {
-    const labels = groups.get(s.unit ?? "") ?? [];
-    if (!labels.includes(s.label)) labels.push(s.label);
-    groups.set(s.unit ?? "", labels);
-  }
-  const parts = [...groups].map(([unit, labels]) => {
-    const names = labels.length > JOINT_TITLE_MAX ? "" : labels.filter(Boolean).join(", ");
+  const groups = new Map<string, Set<string>>();
+  for (const { label, unit = "" } of series) groups.set(unit, (groups.get(unit) ?? new Set()).add(label));
+  const parts = [...groups].map(([unit, set]) => {
+    const names = set.size > JOINT_TITLE_MAX ? "" : [...set].filter(Boolean).join(", ");
     return (unit ? `${names} (${displayUnit(unit)})` : names).trim();
   });
   return parts.filter(Boolean).join(", ") || undefined;

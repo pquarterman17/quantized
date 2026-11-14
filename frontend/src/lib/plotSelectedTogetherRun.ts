@@ -20,6 +20,10 @@ import { assembleLinkedCurves, defaultCurves, nextGraphName } from "./linkedCurv
 import { is2DMap } from "./mapdata";
 import type { Dataset } from "./types";
 
+// The other graph actions ride this same lazy chunk (lib/plotSelectedTogether.ts).
+export { addCurveFrom } from "./addCurveRun";
+export { installLinkedCurvesSync } from "../store/linkedCurvesSync";
+
 const MIN_SELECTION = 2;
 
 /** "— skipped N map dataset(s) (name, name): maps don't overlay", or "" when

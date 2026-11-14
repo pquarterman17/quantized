@@ -174,7 +174,7 @@ export interface MultiPanelStageParams {
 }
 
 export function useMultiPanelStage(stageParams: MultiPanelStageParams): MultiPanelStageState {
-  const { params } = usePerSeriesXView(stageParams); // gap audit 2 #2: each panel's Y on its own X
+  const params = usePerSeriesXView(stageParams); // gap audit 2 #2: each panel's Y on its own X
   const {
     active,
     datasets,

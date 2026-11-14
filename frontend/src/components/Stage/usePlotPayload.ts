@@ -142,7 +142,7 @@ export interface PlotPayloadResult {
  *  waterfall offset, the exclusion mode, or the row selection changes. */
 export function usePlotPayload(params: PlotPayloadParams): PlotPayloadResult {
   // Gap audit 2 #2: each Y on its OWN X -- `p` draws the per-series-X view.
-  const { params: p, rowsPerBlock } = usePerSeriesXView(params);
+  const p = usePerSeriesXView(params);
   const { active } = p;
   // ONE state, two fields, so `payloadDatasetId` is a property OF these rows.
   const [fetched, setFetched] = useState<{ payload: PlotPayload; datasetId: string } | null>(null);
@@ -483,8 +483,6 @@ export function usePlotPayload(params: PlotPayloadParams): PlotPayloadResult {
   // Waterfall X step: LAST, over the composed payload + its row-aligned companions; refused with a split, as on the wire.
   const shown = useWaterfallX(displayPayload, payload, waterfallDx, { errorBars, errorSpans, colorByColumns });
 
-  const drawn = shown.displayPayload; // a view row is source row `v % rowsPerBlock` (the brush maps back)
-  const seriesXPayload = useMemo(() => (rowsPerBlock && drawn ? { ...drawn, seriesXRows: rowsPerBlock } : drawn), [drawn, rowsPerBlock]);
   return {
     payload,
     payloadDatasetId: fetched?.datasetId ?? null,
@@ -494,6 +492,5 @@ export function usePlotPayload(params: PlotPayloadParams): PlotPayloadResult {
     legendLabels: encodedLists?.labelList,
     hidden,
     ...shown, // displayPayload + errorBars/errorSpans/colorByColumns, X-offset laid out when set
-    displayPayload: seriesXPayload,
   };
 }

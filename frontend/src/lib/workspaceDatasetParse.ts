@@ -29,7 +29,7 @@ import { baseColumns } from "./formula";
 import { sanitizePeakTable } from "./peakTable";
 import { applyComputedColumnsExtras, reresolveDerivedFitsOnLoad, sanitizeDerived } from "./workspaceComputedColumns";
 import { sanitizeExcluded } from "./rowstate";
-import { sanitizeLinkedCurves } from "./linkedCurvesSanitize";
+import type { LinkedCurve } from "./linkedCurveTypes";
 import type {
   BookSource,
   ChannelRole,
@@ -308,4 +308,23 @@ export function parseWorkspaceDataset(
     delete ds.bgRef;
   }
   return ds;
+}
+
+// Gap audit 2 #1: a live graph's curve list ("" = a source that never resolves).
+/** Re-type a persisted list. A malformed entry keeps its SLOT as an
+ *  unresolvable curve (review finding 9): dropping it would shift every later
+ *  curve onto another curve's style, rename and visibility. */
+export function sanitizeLinkedCurves(v: unknown): LinkedCurve[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  return v.map((e): LinkedCurve => {
+    const o = (e && typeof e === "object" ? e : {}) as Record<string, unknown>;
+    const ok = typeof o.datasetId === "string" && Number.isInteger(o.yKey) && (o.yKey as number) >= 0;
+    const xOk = o.xKey === null || o.xKey === undefined || (Number.isInteger(o.xKey) && (o.xKey as number) >= 0);
+    return {
+      datasetId: typeof o.datasetId === "string" ? o.datasetId : "",
+      xKey: xOk && typeof o.xKey === "number" ? o.xKey : null,
+      yKey: ok && xOk ? (o.yKey as number) : -1,
+      ...(typeof o.label === "string" && o.label ? { label: o.label } : {}),
+    };
+  });
 }

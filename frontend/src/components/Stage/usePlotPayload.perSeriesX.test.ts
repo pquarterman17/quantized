@@ -73,8 +73,6 @@ describe("usePlotPayload — each Y on its own X (gap audit 2 #2)", () => {
     expect(drawn(p, 0)).toEqual([[300, 3], [100, 1], [200, 2]]);
     expect(drawn(p, 1)).toEqual([[30, 33], [10, 11], [20, 22]]);
     expect(p.xLabel).toBe("T1 / T2");
-    // The brush maps a view row back to its source row.
-    expect(p.seriesXRows).toBe(3);
   });
 
   it("with R2 hidden the plot is R1 against T1 alone (no view)", async () => {

@@ -89,7 +89,7 @@
 // `order`, `pending`) is self-contained — no id references — and rides
 // along untouched onto the merged dataset.
 
-import { remapCurveSources } from "./linkedCurvesSanitize";
+import type { LinkedCurve } from "./linkedCurveTypes";
 import { remapSheetRefIds } from "./sheetBindings";
 import type { AnalysisResult } from "./analysisResult";
 import type { Dataset } from "./types";
@@ -342,4 +342,10 @@ export function mergeWorkspace(
     workbooks,
     analysisResults,
   };
+}
+
+/** Re-point each curve's source through `idMap` (a merged .dwk's fresh ids);
+ *  an unmapped source becomes unresolvable (review finding 2). */
+export function remapCurveSources(curves: readonly LinkedCurve[], idMap: ReadonlyMap<string, string>): LinkedCurve[] {
+  return curves.map((c) => ({ ...c, datasetId: idMap.get(c.datasetId) ?? "" }));
 }

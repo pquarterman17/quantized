@@ -1,8 +1,10 @@
 // Origin's nearest-preceding-X rule over a book's EFFECTIVE designations
 // (lib/columnmeta.ts's `effectiveDesignations`). Its own module because only
-// lazy chunks call it (Quick Plot's per-series-X seed, the Quick Figure
-// Builder's first mapping, the import notice); the eager default-plot rule in
-// lib/errorbars.ts's `bookDefaultHiddenChannels` applies the same test inline.
+// lazy chunks call it: Quick Plot's per-series-X seed, the Quick Figure
+// Builder's first mapping, the live plot's per-series-X view
+// (lib/perSeriesX.ts, gap audit 2 #2) and every analysis that must read a
+// curve against its own X (`curveXKey`: fitting, peaks, baseline, the
+// analysis selection).
 
 import { effectiveDesignations, type OriginDesignation } from "./columnmeta";
 import type { Dataset } from "./types";

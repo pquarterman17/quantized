@@ -13,6 +13,7 @@ import type { Dataset } from "../lib/types";
 import { addComputedError } from "./computedErrorRun";
 import { addDerivedColumn } from "./derivedColumnRun";
 import { moveWorksheetRows } from "./moveRows";
+import { installLinkedCurvesSync } from "./linkedCurvesSync";
 import { applyReimportMerge } from "./reimport";
 import { sortWorksheetRows } from "./sortRows";
 import { useApp } from "./useApp";
@@ -34,6 +35,7 @@ const status = () => useApp.getState().status;
 
 beforeEach(() => {
   useApp.setState({ datasets: [source(), graph()], activeId: "g", status: "", history: [] });
+  installLinkedCurvesSync(); // what a created or loaded graph does (registers the column-shift seam)
 });
 
 describe("a graph refuses every data edit (review finding 3)", () => {
@@ -99,12 +101,12 @@ describe("source column edits carry through to the graph", () => {
     expect(g().linkedCurves![0].yKey).toBe(-1);
   });
 
-  it("a re-import that changed the columns re-finds the curves by label (review finding 4)", () => {
+  it("a re-import that changed the columns re-finds the curves by label (review finding 4)", async () => {
     const ds = useApp.getState().datasets.find((d) => d.id === "a")!;
     const newData = { ...ds.data, labels: ["R", "New", "Q"], values: [[100, 0, 10], [200, 0, 20]] };
     applyReimportMerge(useApp.setState, useApp.getState, ds, {
       newData, freshRaw: newData, shapeChanged: true, columnsChanged: true, viewReset: null,
-      reshape: { resetFigureDocumentForReshape: (d: unknown) => d, resetLegacyFigureConfig: (c: unknown) => c, resetPlotSpecRefs: (p: unknown) => p } as never,
+      reshape: await import("../lib/figureDocumentReimport"),
     });
     // Q (1) -> 2; the X R (2) -> 0, its Y P (0) is gone -> empty.
     expect(g().linkedCurves).toEqual([{ datasetId: "a", xKey: null, yKey: 2 }, { datasetId: "a", xKey: 0, yKey: -1 }]);

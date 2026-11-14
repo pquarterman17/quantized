@@ -9,7 +9,7 @@
 
 import type { StoreGet } from "../lib/exportActive";
 import { plotInNewWindow } from "../lib/plotInNewWindow";
-import { plotSelectedTogether } from "../lib/plotSelectedTogether";
+import { addCurveFrom, plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { cycleAxisScale, cycleTickMode } from "../lib/plotview";
 import type { Action } from "../store/commands";
 import { openFigureDialog } from "../store/figureDialogs";
@@ -319,16 +319,14 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       run: () => void plotSelectedTogether(s().selectedIds),
     },
     {
-      // Gap audit 2 #1: one more LIVE curve on the active graph (or a new graph
-      // from this plot) -- lib/addCurveRun.ts, loaded on use.
+      // Gap audit 2 #1: one more LIVE curve on the active graph (or a new
+      // graph from this plot) -- lib/addCurveRun.ts, loaded on use.
       id: "add-curve-from",
       group: "Plot",
       section: "Layout",
       label: "Add curve from…",
-      description: "Add a curve from any dataset to this graph; it stays linked to its source.",
-      keywords: "add plot layer overlay curve live link graph",
-      run: () =>
-        void runLazy("Loading graph tools…", () => import("../lib/addCurveRun")).then((m) => m.addCurveFrom(), onLoadFailure),
+      description: "Add a live curve to this graph.",
+      run: () => void addCurveFrom(),
     },
     {
       // P3.6: the frontend producer of spec-carrying report figure blocks.

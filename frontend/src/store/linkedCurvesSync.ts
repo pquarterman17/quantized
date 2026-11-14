@@ -13,10 +13,13 @@
 // graph's stamp is its curve list alone: it is empty whatever its sources hold,
 // and stamping their (rebuilt) data would ping-pong forever.
 //
-// Loaded on demand: store/linkedCurvesBoot.ts installs it once a graph exists
-// (a created one, or one in a loaded/restored workspace -- the .dwk re-links
-// on load because a fresh install has no stamps).
+// Loaded on demand: installed by whatever brings a graph in -- the graph
+// actions (lib/plotSelectedTogetherRun.ts, lib/addCurveRun.ts) and a workspace
+// load or append (store/workspaceHydration.ts's `relinkGraphs`). The .dwk
+// re-links on load because a fresh install has no stamps.
 
+import { registerGraphColumnSeam } from "../lib/graphColumnShift";
+import { relabelGraphColumns, shiftGraphColumns } from "../lib/linkedCurveColumns";
 import { assembleLinkedCurves, graphBuildOrder } from "../lib/linkedCurves";
 import type { Dataset } from "../lib/types";
 import { useApp } from "./useApp";
@@ -77,6 +80,7 @@ function schedule(): void {
 export function installLinkedCurvesSync(): void {
   if (!installed) {
     installed = true;
+    registerGraphColumnSeam({ shift: shiftGraphColumns, relabel: relabelGraphColumns });
     useApp.subscribe(schedule);
   }
   rebuildLinkedGraphs();

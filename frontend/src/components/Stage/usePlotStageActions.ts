@@ -185,9 +185,11 @@ export function usePlotStageActions(
   // Plot-brush: a dragged x-band → row indices (original order) → worksheet selection.
   function onRangeSelect(x0: number, x1: number) {
     if (!displayPayload) return;
-    // An X-offset (waterfall) payload repeats each row once per x block: map back to dataset rows.
+    // An X-offset (waterfall) payload repeats each row once per x block, and a
+    // per-series-X view (gap audit 2 #2) once per X column: map back to dataset rows.
     const rows = rowsInXRange(displayPayload.data[0] as (number | null)[], x0, x1);
-    const sourceRows = waterfallSourceRows(displayPayload, rows);
+    const n = active?.data.time.length;
+    const sourceRows = [...new Set(waterfallSourceRows(displayPayload, rows).map((r) => (n ? r % n : r)))];
     if (onRowsSelected) onRowsSelected(sourceRows);
     else useApp.getState().setRowSelection(sourceRows);
   }

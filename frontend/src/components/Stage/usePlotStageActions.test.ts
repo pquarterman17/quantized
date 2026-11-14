@@ -83,6 +83,22 @@ describe("usePlotStageActions linked row brushing", () => {
     expect(linked).toHaveBeenCalledWith([1, 2]);
     expect(useApp.getState().selection).toBeNull();
   });
+
+  // Gap audit 2 #2: a per-series-X view repeats each source row once per X
+  // column (lib/perSeriesX.ts), so a band across blocks names source rows.
+  it("maps a per-series-X view's rows back to the dataset's rows", () => {
+    const linked = vi.fn();
+    const view: PlotPayload = {
+      data: [[300, 100, 200, 30, 10, 20], [3, 1, 2, null, null, null], [null, null, null, 33, 11, 22]],
+      series: [{ label: "R1", unit: "" }, { label: "R2", unit: "" }],
+      xLabel: "T1 / T2",
+      xUnit: "K",
+    };
+    const source = { id: "s", name: "s", data: { time: [300, 100, 200], values: [[3], [1], [2]], labels: ["R1"], units: [""], metadata: {} } };
+    const { result } = renderHook(() => usePlotStageActions({ current: null }, view, source, linked));
+    result.current.onRangeSelect(5, 150); // view rows 1 (T1=100), 3, 4, 5 (T2=30, 10, 20)
+    expect(linked).toHaveBeenCalledWith([1, 0, 2]);
+  });
 });
 
 // Finding 2 (Group AB adversarial review, round 2): plottedYExtent must skip

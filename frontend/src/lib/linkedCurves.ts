@@ -28,17 +28,14 @@ import { curveXKey, hasFiniteValue } from "./ownXSeries";
 import { jointXTitle } from "./perSeriesX";
 import { primaryChannel } from "./plotdataExtras";
 import { droppedRows } from "./rowstate";
-import { UNRESOLVED_SOURCE, type LinkedCurve } from "./linkedCurvesSanitize";
+import type { LinkedCurve } from "./linkedCurveTypes";
 import type { Dataset, DataStruct } from "./types";
 
-export {
-  relabelCurveColumns,
-  remapCurveColumns,
-  remapCurveSources,
-  sanitizeLinkedCurves,
-  UNRESOLVED_SOURCE,
-  type LinkedCurve,
-} from "./linkedCurvesSanitize";
+export { relabelCurveColumns, remapCurveColumns } from "./linkedCurveColumns";
+export type { LinkedCurve } from "./linkedCurveTypes";
+
+/** A source id that matches no dataset (an unmapped .dwk merge): drawn empty. */
+export const UNRESOLVED_SOURCE = "";
 
 type Lookup = (id: string) => Dataset | undefined;
 

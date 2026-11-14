@@ -433,7 +433,7 @@ export interface Dataset {
   derivedFrom?: { datasetId: string; pipeline: string };
   /** A LIVE multi-dataset graph (gap audit 2 #1): one entry per curve; `data` is only
    *  a cache rebuilt from the sources (lib/linkedCurves.ts, store/linkedCurvesSync.ts). */
-  linkedCurves?: import("./linkedCurvesSanitize").LinkedCurve[];
+  linkedCurves?: import("./linkedCurveTypes").LinkedCurve[];
   analysisRecipe?: import("./signalRecipe").SignalAnalysisRecipe; // linked analysis recipe
   /** Per-channel column roles (label / ignore) — channel index → role. Excluded
    *  from the plot; semantic metadata about the columns, so they live ON the

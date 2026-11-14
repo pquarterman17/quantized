@@ -204,7 +204,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
     updateFormula: (id, index, patch) => {
       const ds = get().datasets.find((d) => d.id === id);
       const current = ds?.formulas?.[index];
-      if (!ds || !current || refuseLinkedGraph(ds, get().setStatus)) return false;
+      if (!ds || !current) return false; // a graph never has formulas: addFormula refuses, a .dwk load strips them
       if (ds.pending != null) {
         const requestedPatch = { ...patch };
         resolvePendingEdit(get, ds, "editing a column", () => get().updateFormula(id, index, requestedPatch));
@@ -290,7 +290,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
       // concurrent edit on claude/audit-positional-columns touching this
       // function's body.
       const target = get().datasets.find((d) => d.id === id);
-      if (!target?.formulas?.[index] || refuseLinkedGraph(target, get().setStatus)) return;
+      if (!target?.formulas?.[index]) return;
       if (resolvePendingEdit(get, target, "removing a column", () => {
         const current = get().datasets.find((d) => d.id === id);
         if (!current?.formulas?.[index]) return false;

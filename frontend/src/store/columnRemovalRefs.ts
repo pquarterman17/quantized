@@ -13,7 +13,6 @@
 
 import {
   type ColumnShift,
-  remapChannel,
   remapFigureBindings,
   remapFigureViewChannels,
   remapViewChannels,
@@ -21,7 +20,7 @@ import {
 } from "../lib/channelRemap";
 import { remapLegacyFigureConfig, remapPlotSpecRefs } from "../lib/channelRemapDocs";
 import { formulaExtension } from "../lib/formulaExt";
-import { remapCurveColumns } from "../lib/linkedCurvesSanitize";
+import { graphColumnSeam } from "../lib/graphColumnShift";
 import type { Dataset } from "../lib/types";
 import { recomputeFormulaData } from "./computedColumns";
 import type { AppState } from "./useApp";
@@ -43,15 +42,8 @@ export function columnRemovalRefsPatch(
   const read = ext && shifted && readers.size
     ? ext.withSheetDatasets(shifted.datasets, () => shifted.datasets.map((d) => (readers.has(d.id) ? recomputeFormulaData(d) : d)))
     : null;
-  // A live graph's curves on this sheet follow their columns; a curve on the
-  // removed column draws empty, never another column (gap audit 2 #1).
-  const linked = (read ?? datasets).some((d) => d.linkedCurves?.some((c) => c.datasetId === id));
-  const out = linked
-    ? (read ?? datasets).map((d) =>
-        d.linkedCurves?.some((c) => c.datasetId === id)
-          ? { ...d, linkedCurves: remapCurveColumns(d.linkedCurves, id, (c) => remapChannel(c, removedCol) ?? -1) }
-          : d)
-    : read;
+  // A live graph's curves on this sheet follow their columns (gap audit 2 #1).
+  const out = graphColumnSeam()?.shift(read ?? datasets, id, removedCol) ?? read;
   return {
     ...(out ? { datasets: out } : {}),
     plotWindows: syncDatasetWindowDocuments(

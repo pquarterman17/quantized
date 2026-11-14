@@ -55,6 +55,7 @@ import { bookDefaultHiddenChannels, defaultErrKeys } from "../lib/errorbars";
 import { migrateGroupsToFolders } from "../lib/foldertree";
 import { sanitizeVisibleDetailsColumns } from "../lib/libraryDetailsColumns";
 import { hydrateView } from "../lib/plotview";
+import { relinkGraphs } from "../lib/plotSelectedTogether";
 import { runLazy } from "../lib/runLazy";
 import { sanitizeTechniqueViewMemory } from "../lib/techniqueViewMemory";
 import { nextStageTab } from "../lib/stagetab";
@@ -279,6 +280,7 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
         };
       });
       adoptFitModels(ws, set, get);
+      relinkGraphs(ws.datasets); // gap audit 2 #1: a live graph re-links on load
     },
     appendWorkspace: (ws) => runAppendWorkspace(set, get, ws),
     // Reuses loadWorkspace's "replace everything" reset (clears per-dataset
@@ -404,5 +406,6 @@ async function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorksp
   // parsed) has no status-line fold here at all — this never routes through
   // loadWorkspace — so the toast is its only surface.
   notifyMigrationWarnings(ws.migrationWarnings);
+  relinkGraphs(ws.datasets);
   return true;
 }

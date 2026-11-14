@@ -22,6 +22,7 @@
 
 import { effectiveDesignations } from "./columnmeta";
 import { seriesXKeyFor } from "./ownXSeries";
+import { effectiveChannels } from "./plotdata";
 import { droppedRows } from "./rowstate";
 import type { Dataset, DataStruct } from "./types";
 
@@ -133,4 +134,61 @@ export function jointXTitle(sources: readonly (readonly [string, string])[]): { 
   const units = new Set(pairs.map(([, u]) => u));
   if (units.size <= 1) return { name: pairs.map(([n]) => n).join(" / "), unit: pairs[0]?.[1] ?? "" };
   return { name: pairs.map(([n, u]) => (u ? `${n} (${u})` : n)).join(" / "), unit: "" };
+}
+
+// ── the plot surfaces' adapter (Stage/usePerSeriesXView.ts) ───────────────
+
+/** The plot-pipeline fields this step reads and may re-point. */
+export interface PlotParamsIn {
+  active: Dataset | null | undefined;
+  xKey: number | null;
+  yKeys: number[] | null;
+  seriesOrder: number[] | null;
+  hiddenChannels: number[];
+  selection?: { datasetId: string; rows: number[] } | null;
+  seriesLabels?: Record<number, string>;
+}
+
+const lastByActive = new WeakMap<Dataset, { inputs: unknown[]; out: Partial<PlotParamsIn> }>();
+
+/** What the plot must draw instead of `p`: the per-series-X view (each Y on
+ *  its own X; the old X column never turns into a curve) and a live graph's
+ *  curve names under the renames. Memoized per input IDENTITY, so a render
+ *  that changed none of them gets the very same objects back. */
+export function plotOverrides(p: PlotParamsIn): Partial<PlotParamsIn> | null {
+  const { active } = p;
+  if (!active) return null;
+  const inputs = [p.xKey, p.yKeys, p.seriesOrder, p.hiddenChannels, p.selection, p.seriesLabels];
+  const last = lastByActive.get(active);
+  if (last && last.inputs.every((v, i) => v === inputs[i])) return last.out;
+  const plotted = effectiveChannels(active.data, p.yKeys, p.xKey, active.channelRoles, p.seriesOrder);
+  const plan = perSeriesXPlan(active, p.xKey, plotted.filter((c) => !p.hiddenChannels.includes(c)));
+  const view = plan.view;
+  const params: Partial<PlotParamsIn> = {};
+  if (p.seriesLabels) {
+    const labels = withLinkedLegends(active.data, p.seriesLabels);
+    if (labels !== p.seriesLabels) params.seriesLabels = labels;
+  }
+  if (view || plan.xKey !== p.xKey) {
+    Object.assign(params, { active: view?.dataset ?? active, xKey: plan.xKey, yKeys: plotted });
+    const sel = p.selection;
+    if (view && sel && sel.datasetId === active.id) params.selection = { ...sel, rows: viewRows(view, sel.rows) };
+  }
+  lastByActive.set(active, { inputs, out: params });
+  return params;
+}
+
+/** A live graph's legend defaults (gap audit 2 #1): the curve names
+ *  lib/linkedCurves.ts stamps into `metadata.linked_curve_legends` -- the
+ *  user's own label, else the source's CURRENT name -- laid UNDER the view's
+ *  renames. The canvas and the export read it; the DOM legend (Stage/
+ *  PlotLegend.tsx) reads the same field inline. */
+export function withLinkedLegends<T extends Record<number, string>>(data: Pick<DataStruct, "metadata"> | null | undefined, labels: T): T {
+  const raw = data?.metadata?.["linked_curve_legends"];
+  if (!Array.isArray(raw)) return labels;
+  const out: Record<number, string> = {};
+  raw.forEach((l, i) => {
+    if (typeof l === "string" && l) out[i] = l;
+  });
+  return { ...out, ...labels } as T;
 }

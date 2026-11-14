@@ -134,8 +134,7 @@ export function waterfallXApplies(fraction: number): boolean {
  *  a band across blocks names the same dataset row more than once. */
 export function waterfallSourceRows(payload: PlotPayload, rows: number[]): number[] {
   const m = payload.blockRows;
-  const k = payload.seriesXRows; // a per-series-X view repeats each source row once per X block too
-  return m || k ? [...new Set(rows.map((r) => (m ? r % m : r)).map((r) => (k ? r % k : r)))] : rows;
+  return m ? [...new Set(rows.map((r) => r % m))] : rows;
 }
 
 /** The combined y-range of `columns` (every plotted VALUE column, x excluded)
