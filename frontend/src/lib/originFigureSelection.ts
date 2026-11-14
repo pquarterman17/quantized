@@ -134,12 +134,6 @@ export function figureStatState(
   return { statMode: true, statPicks: { mode: "histogram", cols: statColRefs(ds, cols) } };
 }
 
-/** Origin's horizontal "bar" graphs are drawn as vertical columns (the app
- *  has no horizontal bars); the apply says so. */
-export function hasHorizontalBars(figure: OriginFigure): boolean {
-  return (figure.curves ?? []).some((c) => c.plotType === "bar");
-}
-
 /** Channel selection for a figure's decoded curves on its resolved dataset:
  *  maps each curve's Origin column letter through the dataset's
  *  `origin_column_names` metadata (value-channel letters, in channel order)

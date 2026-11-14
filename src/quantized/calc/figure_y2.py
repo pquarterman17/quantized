@@ -32,6 +32,7 @@ from quantized.calc.figure_decor import _apply_region_shades, _split_region_shad
 from quantized.calc.figure_errorbars import apply_error_bars
 from quantized.calc.figure_inset import apply_inset
 from quantized.calc.figure_legend_order import draw_legend, tag_series_slots
+from quantized.calc.figure_orient import oriented
 from quantized.calc.figure_overrides import legend_kwargs
 from quantized.calc.figure_scale import apply_axis_scale, drawable_lim, resolve_axis_scale
 from quantized.calc.figure_styles import FigureStyle
@@ -262,14 +263,14 @@ def render_with_secondary_axis(
     # The magnifier inset shows BOTH axes' series, so it is drawn below once
     # the twin exists (calc.figure_inset), not by the primary-only pass.
     primary_ov = {k: v for k, v in primary_ov.items() if k != "inset"}
-    artists = draw_series_axes(
-        fig, ax, xv, primary,
+    artists = draw_series_axes(  # turned when ANY series, either axis, is horizontal
+        fig, oriented(ax, series_styles), xv, primary,
         st=st, ov=primary_ov, x_log=x_log, y_log=y_log, x_scale=x_scale, y_scale=y_scale,
         title=title, x_label=x_label, y_label=y_label,
         series_styles=primary_styles, error_spans=primary_spans,
         x_fmt=x_fmt, y_fmt=y_fmt, x_step=x_step, y_step=y_step,
     )
-    ax2 = ax.twinx()
+    ax2 = oriented(ax, series_styles).twinx()  # horizontal bars: along the top
     # ov["ticks"]["minor"] already covers "is EITHER axis log" (the frontend
     # folds a log y2Scale into the same single flag -- lib/exportFigureCommand
     # .ts's runExportFigureCommand) -- thread just that bit to the secondary

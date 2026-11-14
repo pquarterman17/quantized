@@ -50,7 +50,7 @@ export interface ExportSeriesStyle {
    *  `drawstyle` by `calc.figure._plot_kwargs`. */
   step?: "pre" | "post" | "mid";
   /** `SeriesStyle.bars`: drawn by `calc.figure_bars` as bars from zero. */
-  bars?: boolean;
+  bars?: boolean | "horizontal";
   /** BUG-014: this series' legend text, used VERBATIM by the renderer
    *  (`calc.figure_labels.series_display_name`) — unit included or not,
    *  exactly as the user typed it, which is the on-screen rule

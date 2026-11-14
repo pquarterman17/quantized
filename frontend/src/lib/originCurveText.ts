@@ -47,9 +47,11 @@ export function originCurveSeriesStyle(
     out.markerSize = curve.symbolSize;
   }
   if (curve.plotType === "column" || curve.plotType === "bar") {
-    // An Origin column / bar plot: bars from zero at each X. The record's
-    // latent symbol and line settings are not drawn by Origin for bars.
-    return { ...(out.color ? { color: out.color } : {}), bars: true };
+    // An Origin column / bar plot: bars from zero at each X — a bar plot's
+    // run horizontally, with X up the side. The record's latent symbol and
+    // line settings are not drawn by Origin for bars.
+    const bars = curve.plotType === "bar" ? "horizontal" : true;
+    return { ...(out.color ? { color: out.color } : {}), bars };
   }
   return Object.keys(out).length > 0 ? out : null;
 }

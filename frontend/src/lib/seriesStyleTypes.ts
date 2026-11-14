@@ -87,8 +87,10 @@ export interface SeriesStyle {
   logOffset?: number;
   /** Draw the series as bars from zero at each X (an Origin column / bar
    *  graph, `OriginCurve.plotType`): `lib/uplotBars.ts` on the canvas,
-   *  `calc/figure_bars.py` on export. Markers and the connector are off. */
-  bars?: boolean;
+   *  `calc/figure_bars.py` on export. Markers and the connector are off.
+   *  `"horizontal"` (an Origin bar graph) also turns the plot on its side:
+   *  X runs up the left axis (`lib/uplotOrient.ts`, `calc/figure_orient.py`). */
+  bars?: boolean | "horizontal";
   /** A COMPLETE style (a Graph Builder mark, `plotspec.markSeriesStyle`): the
    *  Preferences default trace fills nothing, so an unset `width` draws a line,
    *  an unset `marker` none and an unset `step` a straight line. Absent (every

@@ -4,7 +4,9 @@
 // like `uplotPaths.STEPPED_MID_PATHS`, so `uplotSeries` can use it without
 // the uPlot runtime. The bar width is 60% of the smallest gap between
 // neighbouring X positions (a lone point gets 12 px); the export draws the
-// same rule (`calc/figure_bars.py`). A null X or Y draws no bar.
+// same rule (`calc/figure_bars.py`). A null X or Y draws no bar. On a
+// plot turned for horizontal bars (`uplotOrient`, the x scale's `ori` 1)
+// the X position runs down the canvas and the bar along it.
 import type uPlot from "uplot";
 
 export const BAR_FRACTION = 0.6;
@@ -23,14 +25,17 @@ export const BAR_PATHS: uPlot.Series.PathBuilder = (u, seriesIdx, idx0, idx1) =>
   for (let k = 1; k < px.length; k++) if (px[k] > px[k - 1]) gap = Math.min(gap, px[k] - px[k - 1]);
   const width = Number.isFinite(gap) ? gap * BAR_FRACTION : 12;
   const base = u.valToPos(0, scale, true);
+  const turned = u.scales?.x?.ori === 1;
   const path = new Path2D();
   for (let i = idx0; i <= idx1; i++) {
     const x = xs[i];
     const y = ys[i];
     if (x == null || y == null) continue;
-    const cx = u.valToPos(x, "x", true);
-    const cy = u.valToPos(y, scale, true);
-    path.rect(cx - width / 2, Math.min(cy, base), width, Math.abs(base - cy));
+    const at = u.valToPos(x, "x", true);
+    const end = u.valToPos(y, scale, true);
+    const [lo, len] = [Math.min(end, base), Math.abs(base - end)];
+    if (turned) path.rect(lo, at - width / 2, len, width);
+    else path.rect(at - width / 2, lo, width, len);
   }
   return { stroke: path, fill: path };
 };

@@ -48,6 +48,7 @@ import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit"
 import { anchorEditPlugin, type AnchorPoint } from "./uplotAnchors";
 import { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
 import { xLabelRightPad, xTickSpace } from "./uplotRightPad";
+import { orientAxes } from "./uplotOrient";
 import { withUnit } from "./unitDisplay";
 export { withUnit }; // eager callers import it here: ~260 B less first-paint JS than direct
 import {
@@ -1259,8 +1260,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     // exact (it follows DST per timestamp) and far cheaper than uPlot.tzDate,
     // which builds an Intl formatter per call.
     ...(scales.x?.time ? { tzDate: utcTzDate } : {}),
-    scales,
-    axes,
+    ...orientAxes(scales, axes, args.seriesStyles), // horizontal bars: uplotOrient
     padding: [null, hasY2 ? null : xLabelRightPad(tickPx), null, null],
     series: seriesArr,
     ...(bands.length > 0 ? { bands } : {}),
