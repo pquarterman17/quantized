@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { findPeaks, fitMultiPeak, fitPeak, type PeakSeed } from "../../../lib/api/peaks";
 import { placeLabels, renderLabelTemplate, DEFAULT_LABEL_TEMPLATE } from "../../../lib/peakLabels";
+import { DEFAULT_REFERENCE_TOLERANCE, matchReflection, referenceReflections, usesReferenceTokens } from "../../../lib/peakPhaseMatch";
 import { peakTableMatchesData, peakTableToFitResult } from "../../../lib/peakTableFit";
 import { peakOverlayArray } from "../../../lib/plotdataExtras";
 import { rowStateIdentity } from "../../../lib/rowstate";
@@ -295,9 +296,11 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         label: "Template",
         type: "text",
         default: DEFAULT_LABEL_TEMPLATE,
-        hint: "{center} {height} {fwhm} {area} {index} — unknown tokens pass through literally",
+        hint: "{center} {height} {fwhm} {area} {index} {hkl} {phase} — unknown tokens pass through literally",
       },
       { key: "precision", label: "Decimals", type: "number", default: 2 },
+      // Gap #12: {hkl}/{phase} come from the nearest XRD reference stick this close.
+      { key: "tolerance", label: "{hkl}/{phase} match within (° 2θ)", type: "number", default: DEFAULT_REFERENCE_TOLERANCE },
     ], { confirmLabel: "Label" });
     if (!values) return; // cancelled — creates nothing (RULING 7's guard)
 
@@ -366,8 +369,17 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
       // formula for both branches, or every label on a backgrounded
       // dataset (i.e. any real XRD pattern) lands far below the peak it
       // names.
+      // Gap #12: {hkl}/{phase} read the nearest reference stick within the
+      // tolerance (lib/peakPhaseMatch.ts); none on the plot -> say how to add one.
+      const refl = referenceReflections(st.refLines);
+      if (usesReferenceTokens(template) && refl.length === 0) {
+        toast("{hkl}/{phase} need an XRD reference pattern on the plot — add one from Analyze → XRD reference pattern.", "danger");
+        return;
+      }
+      const tol = Number(values.tolerance);
+      const tolerance = Number.isFinite(tol) && tol >= 0 ? tol : DEFAULT_REFERENCE_TOLERANCE;
       const rendered = chosen.map(({ p, i }) => ({
-        label: renderLabelTemplate(template, p, i, precision),
+        label: renderLabelTemplate(template, { ...p, ...matchReflection(p.center, refl, tolerance) }, i, precision),
         point: { x: p.center, y: p.height + p.bg },
       }));
 
@@ -381,6 +393,8 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         toast("Nothing to label — the template rendered blank for every peak.", "danger");
         return;
       }
+      const skipped = rendered.length - kept.length;
+      if (skipped && usesReferenceTokens(template)) toast(`${skipped} peak${skipped === 1 ? " has" : "s have"} no reference reflection within ${tolerance}° and ${skipped === 1 ? "was" : "were"} left unlabeled.`);
 
       const labels = kept.map((r) => r.label);
       const points = kept.map((r) => r.point);

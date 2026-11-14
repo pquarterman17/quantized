@@ -368,6 +368,28 @@ describe("ImportWizardPanel", () => {
     expect(screen.getByText(/Sample: NbAu bilayer/)).toBeInTheDocument();
   });
 
+  it("changing the delimiter re-reads the column names and roles (worksheet audit #2)", async () => {
+    // The guessed names/roles were split under the OLD delimiter; sent back
+    // as overrides they pinned "Col1" onto a file now split into 3 columns.
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByDisplayValue("Temp")).toBeInTheDocument());
+    importPreviewMock.mockClear();
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      columns: [
+        { index: 0, name: "Time", unit: "s", role: "x" },
+        { index: 1, name: "Voltage", unit: "V", role: "y" },
+      ],
+    });
+    fireEvent.change(screen.getByLabelText(/Delimiter/), { target: { value: "semicolon" } });
+    await waitFor(() => expect(screen.getByDisplayValue("Voltage")).toBeInTheDocument());
+    const sent = importPreviewMock.mock.calls.at(-1)![1] as ImportSettingsWire;
+    expect(sent.delimiter).toBe("semicolon");
+    expect(sent.column_names).toBeNull();
+    expect(sent.roles).toBeNull();
+  });
+
   it("choosing the Header line by hand re-reads the column names from that row", async () => {
     // Origin-replacement follow-up 6: the guessed `column_names` outrank
     // `header_line`, so assigning the Long Name row by hand changed nothing.

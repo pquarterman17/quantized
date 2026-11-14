@@ -72,16 +72,33 @@ import type { OriginDesignation } from "./columnmeta";
 import type { ErrorBinding } from "./errorRoles";
 import type { FigureBindings, FigureViewState } from "./figureDocument";
 import type { FigureEncoding } from "./figureEncoding";
+import type { ColumnProps } from "./columnProps";
 import type { ChannelRole, ColumnFilter, FitSpec, ModelingType, SeriesStyle } from "./types";
 
 /** One column-count change: a plain number is the REMOVED column (every
  *  helper below was written for that case); `{ inserted }` is a column added
- *  AT that index, which shifts every later one up and drops nothing. */
-export type ColumnShift = number | { readonly inserted: number };
+ *  AT that index, which shifts every later one up and drops nothing;
+ *  `{ from, to }` is the worksheet's Move Column — the column at `from` now
+ *  sits at `to`, the ones between close the gap, and nothing is dropped. */
+export type ColumnShift = number | { readonly inserted: number } | ColumnMove;
 
-/** Shift one channel index past a removed (down) or inserted (up) column.
- *  `null` = the index WAS the removed column and the caller must drop it. */
+/** Move Column (store/worksheetColumns.ts): `from` lands at `to`. */
+export interface ColumnMove {
+  readonly from: number;
+  readonly to: number;
+}
+
+/** Shift one channel index past a removed (down), inserted (up) or moved
+ *  column. `null` = the index WAS the removed column and the caller must drop
+ *  it; a move never returns `null`. */
 export function remapChannel(c: number, shift: ColumnShift): number | null {
+  if (typeof shift !== "number" && "from" in shift) {
+    const { from, to } = shift;
+    if (c === from) return to;
+    if (from < to && c > from && c <= to) return c - 1;
+    if (to < from && c >= to && c < from) return c + 1;
+    return c;
+  }
   if (typeof shift !== "number") return c >= shift.inserted ? c + 1 : c;
   if (c === shift) return null;
   return c > shift ? c - 1 : c;
@@ -193,6 +210,8 @@ export interface DatasetChannelState {
   filter?: ColumnFilter[];
   errorRoles?: ErrorBinding[];
   fitSpec?: FitSpec;
+  /** Worksheet column comments + display number formats (lib/columnProps.ts). */
+  columnProps?: Record<number, ColumnProps>;
 }
 
 export function remapDatasetChannels(
@@ -210,6 +229,7 @@ export function remapDatasetChannels(
     filter: filter && filter.length ? filter : undefined,
     errorRoles: remapErrorRoles(d.errorRoles, removedCol),
     fitSpec: remapFitSpec(d.fitSpec, removedCol),
+    columnProps: remapKeyedRecord(d.columnProps, removedCol),
   };
 }
 

@@ -34,6 +34,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from quantized.calc.axis_dates import date_aware_x_fmt
+
 __all__ = [
     "SERIES_STYLES_DOC",
     "SVG_TEXT_AS_PATHS_DOC",
@@ -302,6 +304,16 @@ class _ResolvedFigure:
     y2_mask: list[bool]
     y2_label: str
     error_spans: Sequence[Mapping[str, Any] | None] | None = None
+    # The plotted X is a timestamp column (`calc.axis_dates.x_is_datetime`):
+    # an auto X format then draws dates (`_x_tick_fmt`), as the screen does.
+    x_is_datetime: bool = False
+
+
+def _x_tick_fmt(spec: TickFormatSpec | None, resolved: _ResolvedFigure) -> dict[str, Any] | None:
+    """``_tick_fmt`` for the X axis, date-aware (worksheet audit #7):
+    ``auto`` on a timestamp X draws calendar dates on export as on screen."""
+    fmt = date_aware_x_fmt(_tick_fmt(spec), resolved.x_is_datetime)
+    return dict(fmt) if fmt is not None else None
 
 
 def _tick_fmt(spec: TickFormatSpec | None) -> dict[str, Any] | None:

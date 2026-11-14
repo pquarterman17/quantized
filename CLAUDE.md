@@ -116,6 +116,21 @@ cd frontend && npm run build
   or issue comments, review comments, code, or docs. This applies to
   subagents too.
 
+## Agent delegation (owner rule)
+
+In large agentic sessions, delegate each task to the cheapest model that
+fits it — never overkill:
+
+- **Opus:** design-heavy work (new data models, cross-cutting architecture)
+  and reviews of large PRs only.
+- **Sonnet:** scoped fix lanes, merging main / resolving conflicts, and
+  running the check + build gate.
+- **Haiku:** mechanical work — reading CI logs, regenerating OpenAPI/types,
+  simple lookups.
+- The orchestrating session keeps long test/build runs off its own model
+  (delegate them) and does all pushes; worker agents commit locally and never
+  push.
+
 ## Planning docs
 
 - `plans/PORT_PLAN.md` — the detailed, tiered, multi-workstream plan

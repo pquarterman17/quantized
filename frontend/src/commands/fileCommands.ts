@@ -61,6 +61,14 @@ const replaceHalf = () => import("../lib/openWorkspaceReplace");
 export function buildFileCommands(s: StoreGet): Action[] {
   return [
     {
+      id: "new-workbook",
+      group: "File",
+      label: "New workbook",
+      description: "Add an empty worksheet to type or paste data into.",
+      keywords: "blank empty book sheet table create",
+      run: () => void runLazy("Opening a new workbook…", () => import("../store/newWorkbook")).then((m) => m.newWorkbook(), onLoadFailure),
+    },
+    {
       id: "import",
       group: "File",
       label: "Import data…",
@@ -69,6 +77,16 @@ export function buildFileCommands(s: StoreGet): Action[] {
       run: () => {
         if (rejectIfImportRunning()) return;
         void chooseAndImport(s());
+      },
+    },
+    {
+      id: "import-sheets",
+      group: "File",
+      label: "Import as sheets of one workbook…",
+      description: "One workbook, a sheet per file.",
+      run: () => {
+        if (rejectIfImportRunning()) return;
+        openFilePicker((f) => void runLazy("Loading import…", () => import("./importAsSheets")).then((m) => m.runImportAsSheets(s, f), onLoadFailure), IMPORT_ACCEPT);
       },
     },
     {
@@ -408,6 +426,14 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // feature-flagged COM path most sessions never touch has no business
       // sitting in the eager entry chunk.
       run: () => import("./fileCommandsLazy").then((m) => m.runSendToOrigin(s, originComStatus, sendToOrigin)),
+    },
+    {
+      id: "export-worksheet",
+      group: "File",
+      label: "Export worksheet… (CSV, TSV, Excel)",
+      description: "Save worksheets with Long Name and Units rows.",
+      // Lazy body (bundle ratchet): commands/worksheetExport.ts.
+      run: () => void runLazy("Loading export…", () => import("./worksheetExport")).then((m) => m.runExportWorksheet(s), onLoadFailure),
     },
     {
       id: "export-consolidated",

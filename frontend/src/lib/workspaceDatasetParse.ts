@@ -22,6 +22,7 @@ import { noteLegacyNulls, readLegacyNullStruct, type LegacyNullTally } from "./l
 import { parseDatasetSource } from "./datasetSource";
 import { sanitizeFilter } from "./datafilter";
 import { sanitizeColumnDesignations } from "./columnDesignationsSanitize";
+import { sanitizeColumnProps } from "./columnProps";
 import { sanitizeBindings } from "./errorRoles";
 import { parseFitSpec } from "./fitSpecParse";
 import { baseColumns } from "./formula";
@@ -250,6 +251,9 @@ export function parseWorkspaceDataset(
   // "Set As" designations: only known designations on in-range channels.
   const designations = sanitizeColumnDesignations(dd.columnDesignations, ds.data.labels.length);
   if (designations) ds.columnDesignations = designations;
+  // Column comments + display formats: in-range keys, known formats only.
+  const columnProps = sanitizeColumnProps(dd.columnProps, ds.data.labels.length);
+  if (columnProps) ds.columnProps = columnProps;
   // Row exclusions (#50): clamp to the loaded row count — a hand-edited or
   // stale .dwk could carry out-of-range indices.
   const excluded = sanitizeExcluded(dd.excludedRows, ds.data.time.length);

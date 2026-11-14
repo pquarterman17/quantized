@@ -458,6 +458,9 @@ export interface Dataset {
    *  (lib/modeling.channelModelingType). Lives on the dataset like
    *  channelRoles: persists across switches + round-trips .dwk. */
   channelTypes?: Record<number, ModelingType>;
+  /** Worksheet column comments and display number formats, by column (-1 = X);
+   *  user-set, round-trips .dwk (lib/columnProps.ts). */
+  columnProps?: Record<number, import("./columnProps").ColumnProps>;
   /** Excluded original-row indices (JMP-style row state, #50). Excluded rows
    *  stay visible in the worksheet (greyed) but drop from analysis everywhere.
    *  Sorted, unique; managed only via lib/rowstate + the store's row actions,
@@ -730,7 +733,7 @@ export interface Shape {
 // verbatim when the extras outgrew this file's line pin; re-exported here so
 // no importer changed.
 export type { AxisFormat, TickMode } from "./axisFormat";
-export { axisFmtParam, hasAxisExtras, sanitizeAxisExtras } from "./axisFormat";
+export { axisFmtParam, dateAwareXFmt, hasAxisExtras, sanitizeAxisExtras } from "./axisFormat";
 
 /** How an axis maps data values to pixel position (MAIN #12): `"linear"`
  *  (default) positions values proportionally; `"log"` positions by

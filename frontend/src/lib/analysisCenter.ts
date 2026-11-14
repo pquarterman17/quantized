@@ -47,6 +47,7 @@ export const ANALYSIS_TOOL_METADATA: Readonly<Record<string, AnalysisToolMetadat
   "reductions-pawley": { category: "XRD & reflectivity", requiredInputs: "a powder XRD pattern and starting unit cell", requirement: "continuous", techniques: ["xrd.powder"], recommendedFor: ["xrd.powder"] },
   "reductions-reference": { category: "XRD & reflectivity", requiredInputs: "a powder XRD pattern and a trusted 2θ/intensity reference file", requirement: "continuous", techniques: ["xrd.powder"], recommendedFor: ["xrd.powder"] },
   "signal-processing": { category: "Signal processing", requiredInputs: "one numeric signal with at least three rows", requirement: "continuous", recommendedFor: GENERAL_RECOMMENDED },
+  "average-curves": { category: "Signal processing", requiredInputs: "two or more datasets sharing an x axis and a y column", requirement: "continuous" },
   "reductions-fft": { category: "Signal processing", requiredInputs: "a numeric fringe signal", requirement: "continuous", recommendedFor: ["reflectometry"] },
   "reductions-reflfft": { category: "Signal processing", requiredInputs: "an X-ray or neutron reflectivity curve", requirement: "continuous", techniques: ["reflectometry", "xrd.powder"], recommendedFor: ["reflectometry"] },
   sims: { category: "SIMS", requiredInputs: "a SIMS depth profile", requirement: "continuous", techniques: ["sims"], recommendedFor: ["sims"] },

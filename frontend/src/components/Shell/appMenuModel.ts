@@ -55,7 +55,7 @@ export function recentMenuItems(): ContextMenuItem[] {
 type Dynamic<T> = T | (() => T);
 
 const COMMON_IDS: Record<string, ReadonlySet<string>> = {
-  File: new Set(["import", "open-workspace", "save-workspace", "figure-save"]),
+  File: new Set(["new-workbook", "import", "open-workspace", "save-workspace", "figure-save"]),
   Edit: new Set(["undo", "redo", "paste-data", "palette"]),
   Data: new Set(["merge", "duplicate", "reimport"]),
   Plot: new Set(["autoscale", "legend", "grid", "plot-in-new-window"]),
@@ -65,6 +65,7 @@ const COMMON_IDS: Record<string, ReadonlySet<string>> = {
 };
 
 const FILE_SECTIONS: Record<string, string> = {
+  "import-sheets": "Import",
   "import-append": "Import",
   "import-wizard": "Import",
   "import-origin-template": "Import",
@@ -77,6 +78,7 @@ const FILE_SECTIONS: Record<string, string> = {
   "figure-save": "Figures & recipes",
   "figure-save-as": "Figures & recipes",
   "figure-save-recipe": "Figures & recipes",
+  "export-worksheet": "Export",
   "export-csv": "Export",
   "export-hdf5": "Export",
   "export-origin": "Export",

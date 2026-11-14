@@ -120,7 +120,10 @@ export default function ImportWizardPanel() {
               <Select
                 options={DELIMITER_OPTIONS}
                 value={w.settings?.delimiter ?? "auto"}
-                onChange={(e) => w.patchSettings({ delimiter: e.target.value })}
+                // A new delimiter splits the lines into different columns, so the
+                // per-column names and roles guessed under the old one no longer
+                // line up: re-read them (as the Header line field does).
+                onChange={(e) => w.patchSettings({ delimiter: e.target.value, column_names: null, roles: null })}
               />
             </label>
             <label className="qzk-field" title="Auto reads 1,5 as 1.5 unless a value like 1,500 is ambiguous.">

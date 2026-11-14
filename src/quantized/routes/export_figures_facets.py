@@ -24,7 +24,7 @@ from quantized.calc.plotting_encoded_facets import encoded_facet_panels
 from quantized.datastruct import DataStruct
 from quantized.heavy_import import heavy_imports
 from quantized.routes._datasetcache import DatasetHandleMiss
-from quantized.routes.export_figures_schema import _ResolvedFigure, _tick_fmt
+from quantized.routes.export_figures_schema import _ResolvedFigure, _tick_fmt, _x_tick_fmt
 
 if TYPE_CHECKING:
     from quantized.routes.export_figures import FigureRequest
@@ -157,7 +157,7 @@ def _render_facets_bytes(
         height_in=req.height_in,
         dpi=dpi,
         transparent=req.transparent,
-        x_fmt=_tick_fmt(req.x_fmt),
+        x_fmt=_x_tick_fmt(req.x_fmt, resolved),
         y_fmt=_tick_fmt(req.y_fmt),
         overrides=req.overrides,
         svg_text_as_paths=req.svg_text_as_paths,
@@ -189,7 +189,7 @@ def _render_facets_map(
         width_in=req.width_in,
         height_in=req.height_in,
         dpi=dpi,
-        x_fmt=_tick_fmt(req.x_fmt),
+        x_fmt=_x_tick_fmt(req.x_fmt, resolved),
         y_fmt=_tick_fmt(req.y_fmt),
         overrides=req.overrides,
         greyscale=req.greyscale,
