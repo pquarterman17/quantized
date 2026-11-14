@@ -107,6 +107,7 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
   annotations: canonical("decor.annotations"),
   regionShades: canonical("decor.regionShades"),
   shapes: canonical("decor.shapes"),
+  panelInsets: canonical("decor.panelInsets"),
   seriesStyles: canonical("series.styles"),
   seriesLabels: canonical("series.labels"),
   errKeys: canonical("bindings.errors"),

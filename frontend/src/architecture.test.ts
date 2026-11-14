@@ -2052,6 +2052,7 @@ const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   annotations: "Annotation[] pinned at data/page coordinates, not a column index",
   regionShades: "RegionShade[] pinned at data coordinates, not a column index",
   shapes: "Shape[] pinned at data/page coordinates, not a column index",
+  panelInsets: "PanelInset[] pinned at frame-fraction placement (dataset snapshot/image/table content), not a column index",
   waterfall: "numeric offset step, not a column index",
   waterfallDx: "numeric X offset step (a fraction of the x-span), not a column index",
   panelFit: "layout-fit mode enum, not channel-indexed",
@@ -2213,6 +2214,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   shapes: "in-progress shape list (for drawn overlays); overlays cleared on dataset change",
   drawShapeKind: "active shape drawing tool; UI state, cleared on tool switch",
   selectedShapeId: "selected shape for editing; transient tool state",
+  selectedPanelInsetId: "selected panel inset for editing; transient tool state",
 
   // regionShades slice (F2.3j): same PlotView-nested shape as shapes above --
   // undo captures it inside HistorySnapshot's `view: PlotView` field, not by

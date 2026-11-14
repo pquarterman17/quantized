@@ -23,6 +23,7 @@ import type { FrozenPlotBundle } from "./plotsnapshot";
 import { boolViewFields, sanitizeLegendSize, sanitizeRegionShades, sanitizeStatMarksByMode, sanitizeStatPicks, uniqueIds, type StatMarksByMode, type StatPicks } from "./plotviewSanitize";
 import { axisScaleOrDefault, y2ScaleOrDefault } from "./plotviewAxis";
 import { LEGEND_POS, axisLabelOffsetsOrDefault, axisLabelStylesOrDefault, isRange, legendXYOrNull, sanitizeAnnotations, sanitizeInset, sanitizeShapes, type InsetView } from "./plotviewDecor";
+import { sanitizePanelInsets, type PanelInset } from "./panelInset";
 import { isString, keyedRecord } from "./sanitizeRecord";
 import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { FigureDocument } from "./figureDocument";
@@ -179,6 +180,8 @@ export interface PlotView {
    *  same "lives on PlotView, swapped per-window" convention as
    *  `annotations`/`refLines`. */
   shapes: Shape[];
+  /** Panel insets (#15): boxes showing another dataset/an image/a table. */
+  panelInsets: PanelInset[];
   seriesStyles: Record<number, SeriesStyle>;
   seriesLabels: Record<number, string>;
   errKeys: Record<number, number>;
@@ -243,6 +246,7 @@ export function defaultPlotView(): PlotView {
     annotations: [],
     regionShades: [],
     shapes: [],
+    panelInsets: [],
     seriesStyles: {},
     seriesLabels: {},
     errKeys: {},
@@ -455,6 +459,7 @@ export function sanitizePlotView(v: unknown): PlotView {
     annotations: uniqueIds(sanitizeAnnotations(o.annotations)),
     regionShades: uniqueIds(sanitizeRegionShades(o.regionShades)),
     shapes: uniqueIds(sanitizeShapes(o.shapes)),
+    panelInsets: uniqueIds(sanitizePanelInsets(o.panelInsets)),
     seriesStyles:
       typeof o.seriesStyles === "object" && o.seriesStyles !== null
         ? (o.seriesStyles as Record<number, SeriesStyle>)

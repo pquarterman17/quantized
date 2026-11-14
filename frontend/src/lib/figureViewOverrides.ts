@@ -18,6 +18,7 @@ import type { HalfLim } from "./axisLim";
 import type { StoreGet } from "./exportActive";
 import { compactOverrides, legendPosToLoc, type FigureOverrides } from "./figureOverrides";
 import { insetWire } from "./inset";
+import { panelInsetWire } from "./panelInset";
 import type { PlotView } from "./plotview";
 
 
@@ -61,6 +62,7 @@ export function viewOverrides(st: Pick<
   | "xReversed"
   | "insetMode"
   | "inset"
+  | "panelInsets"
 >): FigureOverrides | undefined {
   // Decode #52: the legend title (Origin's bold header) rides the legend
   // override so vector export matches the screen's static legend.
@@ -160,6 +162,10 @@ export function viewOverrides(st: Pick<
       ticks: st.xScale === "log" || st.yScale === "log" ? { minor: true } : undefined,
       // The magnifier inset draws in the export as on screen (lib/inset.ts).
       inset: st.insetMode ? insetWire(st.inset) : undefined,
+      // Panel insets (#15): always sent when present -- no separate on/off
+      // mode like the magnifier's `insetMode` (each box is added/removed
+      // individually, so an empty list already means "none").
+      panel_insets: st.panelInsets.length ? st.panelInsets.map(panelInsetWire) : undefined,
     }) ?? undefined
   );
 }

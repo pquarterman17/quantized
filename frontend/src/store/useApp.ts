@@ -22,6 +22,7 @@ import { createPanelsSlice, type PanelsSlice } from "./panels";
 import { createPointerToolSlice, type PointerToolSlice } from "./pointerTool";
 import { createSplitSlice, type SplitSlice } from "./split";
 import { createShapesSlice, type ShapesSlice } from "./shapes";
+import { createPanelInsetsSlice, type PanelInsetsSlice } from "./panelInsets";
 import { createRegionShadesSlice, type RegionShadesSlice } from "./regionShades";
 import { createLibraryPanelSlice, type LibraryPanelSlice } from "./libraryPanel";
 import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
@@ -136,7 +137,7 @@ export type LegendPos = "auto" | "ne" | "nw" | "se" | "sw";
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, SampleProfilesSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice, WorkshopFlagsSlice, DatasetListEditsSlice, DatasetSelectionSlice, RecalcEngineSlice, PlotViewFieldsSlice, ImportAppendSlice, AppearancePrefsSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, PanelInsetsSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, SampleProfilesSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice, WorkshopFlagsSlice, DatasetListEditsSlice, DatasetSelectionSlice, RecalcEngineSlice, PlotViewFieldsSlice, ImportAppendSlice, AppearancePrefsSlice {
   datasets: Dataset[];
   // activeId / selectedIds / worksheetId: declared on DatasetSelectionSlice
   // (store/datasetSelection.ts) with the actions that move them.
@@ -267,6 +268,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createPointerToolSlice(set, get),
   ...createSplitSlice(set, get),
   ...createShapesSlice(set, get),
+  ...createPanelInsetsSlice(set, get),
   ...createRegionShadesSlice(set, get),
   ...createToolWindowsSlice(set),
   ...createOriginImportSlice(set),

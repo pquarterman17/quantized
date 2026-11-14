@@ -121,6 +121,26 @@ export interface FigureOverrides {
    *  figure the y2 series draw on a twin inset axis ranged by `y2` (as last
    *  drawn; absent = autoscaled), as the screen's inset does. */
   inset?: { x?: [number, number]; y?: [number, number]; y2?: [number, number]; at: [number, number, number, number]; lines?: boolean };
+  /** Panel insets (audit item #15): boxes showing something OTHER than the
+   *  host plot's own data — another dataset's columns, a raster image, or a
+   *  small table. Same `at` placement convention as `inset` above, but a
+   *  LIST (a plot may carry several at once) and never twin-axes-aware (each
+   *  box owns its content) — `calc.figure_panel_insets.apply_panel_insets`. */
+  panel_insets?: {
+    at: [number, number, number, number];
+    content:
+      | {
+          kind: "dataset";
+          x: number[];
+          series: { label: string; y: number[]; color?: string }[];
+          x_scale?: "linear" | "log";
+          y_scale?: "linear" | "log";
+          legend?: boolean;
+          title?: string;
+        }
+      | { kind: "image"; data: string; format: "png" | "jpeg"; title?: string }
+      | { kind: "table"; headers?: string[]; rows: string[][]; title?: string };
+  }[];
 }
 
 // `sanitizeFigureOverrides` and `compactOverrides` (with the helpers only
