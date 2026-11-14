@@ -484,6 +484,51 @@
         "title": "AucRequest",
         "type": "object"
       },
+      "AxisGridSpec": {
+        "description": "One axis' grid lines (the screen's ``AxisGrid``).",
+        "properties": {
+          "color": {
+            "anyOf": [
+              {
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "dash": {
+            "anyOf": [
+              {
+                "enum": [
+                  "solid",
+                  "dash",
+                  "dot"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dash"
+          },
+          "major": {
+            "default": false,
+            "title": "Major",
+            "type": "boolean"
+          },
+          "minor": {
+            "default": false,
+            "title": "Minor",
+            "type": "boolean"
+          }
+        },
+        "title": "AxisGridSpec",
+        "type": "object"
+      },
       "AxisLabelStyle": {
         "description": "One axis title's Format choices; an absent field keeps the preset's.",
         "properties": {
@@ -15272,6 +15317,16 @@
             ],
             "title": "Divide"
           },
+          "grid": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AxisGridSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "minor": {
             "anyOf": [
               {
@@ -15298,6 +15353,43 @@
             ],
             "title": "Mode",
             "type": "string"
+          },
+          "offset": {
+            "anyOf": [
+              {
+                "maximum": 72.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offset"
+          },
+          "reverse": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reverse"
+          },
+          "rotate": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": -90.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotate"
           },
           "size": {
             "anyOf": [
@@ -15327,9 +15419,85 @@
               }
             ],
             "title": "Ticks"
+          },
+          "top": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TopAxisSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "TickFormatSpec",
+        "type": "object"
+      },
+      "TopAxisSpec": {
+        "description": "A top X axis showing a transform of X (``calc.axis_top``).",
+        "properties": {
+          "factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factor"
+          },
+          "kind": {
+            "enum": [
+              "reciprocal",
+              "dspacing",
+              "linear"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "shift": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "wavelength": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wavelength"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "TopAxisSpec",
         "type": "object"
       },
       "TwoSampleRequest": {

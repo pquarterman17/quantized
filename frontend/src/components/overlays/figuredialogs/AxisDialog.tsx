@@ -2,7 +2,9 @@
 // (or Plot ▸ "Axis…") to edit its scale, limits, major increment, minor
 // tick count, tick direction, tick-label number format, divide-by factor,
 // fonts and (Y / Y2) an axis break in one place -- for X, Y and the secondary
-// Y2 axis. Every field is
+// Y2 axis -- plus (gap-audit-2 #5) reverse, the axis' own grid, X label
+// rotation, an outward offset and a top X axis showing 1/T, d-spacing or a
+// linear map of X. Every field is
 // an existing view field (axisDialogModel.ts), and the export carries the
 // same values (`axisFmtParam` -> `calc/axis_extras.py`), so screen and
 // export agree. Apply commits ONE undo step.
@@ -29,6 +31,26 @@ const MODES: { value: TickMode; label: string }[] = [
   { value: "sci", label: "Scientific" },
   { value: "eng", label: "Engineering" },
 ];
+const GRID_LINES: { value: AxisDraft["gridLines"]; label: string }[] = [
+  { value: "plot", label: "As the plot (Grid on/off)" },
+  { value: "none", label: "None" },
+  { value: "major", label: "Major" },
+  { value: "minor", label: "Minor" },
+  { value: "both", label: "Major & minor" },
+];
+const DASHES: { value: AxisDraft["gridDash"]; label: string }[] = [
+  { value: "solid", label: "Solid" },
+  { value: "dash", label: "Dash" },
+  { value: "dot", label: "Dot" },
+];
+const TOP_KINDS: { value: AxisDraft["topKind"]; label: string }[] = [
+  { value: "none", label: "None" },
+  { value: "reciprocal", label: "Reciprocal (factor / x), e.g. 1/T" },
+  { value: "dspacing", label: "d-spacing from 2θ (λ / 2 sin θ)" },
+  { value: "linear", label: "Linear (factor · x + shift)" },
+];
+/** Cu Kα1, Å: the usual lab diffractometer, prefilled for d-spacing. */
+const CU_KALPHA = "1.5406";
 const TICKS: { value: AxisDraft["ticks"]; label: string }[] = [
   { value: "out", label: "Out" },
   { value: "in", label: "In" },
@@ -50,7 +72,7 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
   const [draft, setDraft] = useState<AxisDraft>(() => currentAxisDraft(axis));
   const errors = axisDraftErrors(draft, current);
   const set = <K extends keyof AxisDraft>(k: K, v: AxisDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
-  const text = (k: keyof AxisDraft, label: string, placeholder = "auto") => (
+  const text = (k: Exclude<keyof AxisDraft, "reverse">, label: string, placeholder = "auto") => (
     <Row label={label}>
       <input
         className="qz-input qz-num"
@@ -61,9 +83,18 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
       />
     </Row>
   );
-  const select = <K extends "scale" | "mode" | "ticks">(k: K, label: string, options: { value: AxisDraft[K]; label: string }[]) => (
+  const select = <K extends "scale" | "mode" | "ticks" | "gridLines" | "gridDash" | "topKind">(k: K, label: string, options: { value: AxisDraft[K]; label: string }[]) => (
     <Row label={label}>
-      <select className="qz-select" aria-label={`${AXIS_NAMES[current]} ${label}`} value={draft[k]} onChange={(e) => set(k, e.target.value as AxisDraft[K])}>
+      <select
+        className="qz-select"
+        aria-label={`${AXIS_NAMES[current]} ${label}`}
+        value={draft[k]}
+        onChange={(e) => {
+          const v = e.target.value as AxisDraft[K];
+          set(k, v);
+          if (k === "topKind" && v === "dspacing" && draft.topWavelength.trim() === "") set("topWavelength", CU_KALPHA);
+        }}
+      >
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </Row>
@@ -103,6 +134,14 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
       {select("scale", "Type", SCALES)}
       {text("from", "From")}
       {text("to", "To")}
+      <Row label="Reverse">
+        <input
+          type="checkbox"
+          aria-label={`${AXIS_NAMES[current]} Reverse`}
+          checked={draft.reverse}
+          onChange={(e) => set("reverse", e.target.checked)}
+        />
+      </Row>
       {current === "x" ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           To break the X axis, use Plot ▸ Layout ▸ Break x-axis at gaps…
@@ -123,7 +162,27 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
       {text("digits", "Digits", "2")}
       {text("divide", "Divide by", "1")}
       {text("size", "Label size (pt)")}
+      {current === "x" && text("rotate", "Rotation (°)", "0")}
       {text("titleSize", "Title size (px)")}
+      <h3 style={{ margin: "4px 0" }}>Line &amp; grid</h3>
+      {text("offset", "Offset (pt)", "0")}
+      {select("gridLines", "Grid lines", GRID_LINES)}
+      {draft.gridLines !== "plot" && draft.gridLines !== "none" && (
+        <>
+          {text("gridColor", "Grid colour", "theme")}
+          {select("gridDash", "Grid dash", DASHES)}
+        </>
+      )}
+      {current === "x" && (
+        <>
+          <h3 style={{ margin: "4px 0" }}>Top axis</h3>
+          {select("topKind", "Shows", TOP_KINDS)}
+          {(draft.topKind === "reciprocal" || draft.topKind === "linear") && text("topFactor", "Factor", "1")}
+          {draft.topKind === "linear" && text("topShift", "Shift", "0")}
+          {draft.topKind === "dspacing" && text("topWavelength", "Wavelength (Å)", CU_KALPHA)}
+          {draft.topKind !== "none" && text("topTitle", "Title", draft.topKind === "dspacing" ? "d (Å)" : "none")}
+        </>
+      )}
       {errors.length > 0 && (
         <div role="alert" className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)" }}>
           {errors.join(" ")}

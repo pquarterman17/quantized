@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from quantized.calc.axis_style import apply_axis_style
 from quantized.calc.figure_colorscatter import MARKER_CODES as _MARKER
 from quantized.calc.figure_colorscatter import (
     draw_color_scatter as _draw_color_scatter,
@@ -225,6 +226,9 @@ def draw_series_axes(
     else:
         ax.grid(False, which="both")
     _apply_overrides(fig, ax, st, ov, n_series=len(series))
+    # After the limits and the plot-wide grid, each of which these replace.
+    apply_axis_style(ax, "x", x_fmt, side="bottom", grid_alpha=st.grid_alpha)
+    apply_axis_style(ax, "y", y_fmt, side="left", grid_alpha=st.grid_alpha)
     apply_inset(ax, artists, ov, resolved_x_scale, resolved_y_scale, st.grid_alpha)
     return artists
 

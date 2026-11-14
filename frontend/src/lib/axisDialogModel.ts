@@ -12,11 +12,19 @@
 //   breakFrom/To     the same AxisFormat's `breaks[0]` (Y and Y2 only: a
 //                    linear axis with that stretch elided, lib/axisBreaks.ts)
 //   titleSize        axisLabelStyles[axis].size (the axis title font, px)
+//   reverse          xReversed (X) / the AxisFormat's `reverse` (Y, Y2)
+//   grid*, rotate,   the same AxisFormat's gap-audit-2 #5 fields
+//   offset, top*     (lib/axisStyleExtras.ts, calc/axis_style.py)
 
 import type { AxisId } from "../store/figureDialogs";
 import type { PlotView } from "./plotview";
-import { inheritedAxisFormat, normalizeBreaks } from "./axisFormat";
+import { inheritedAxisFormat, normalizeBreaks, type AxisGrid, type TopAxis } from "./axisFormat";
+import { topAxisProblem } from "./axisTop";
 import type { AxisFormat, AxisScale, TickMode } from "./types";
+
+/** "plot" = follow the plot-wide grid switch (no per-axis grid). */
+export type GridLines = "plot" | "none" | "major" | "minor" | "both";
+export type TopKind = "none" | TopAxis["kind"];
 
 export type AxisScaleChoice = AxisScale | "ln";
 
@@ -35,12 +43,26 @@ export interface AxisDraft {
   /** The elided stretch of a broken Y / Y2 axis; both blank = no break. */
   breakFrom: string;
   breakTo: string;
+  reverse: boolean;
+  gridLines: GridLines;
+  /** `#rrggbb`, or blank for the theme's grid colour. */
+  gridColor: string;
+  gridDash: NonNullable<AxisGrid["dash"]>;
+  /** X only: tick-label rotation, degrees counter-clockwise. */
+  rotate: string;
+  offset: string;
+  /** X only: the top axis. */
+  topKind: TopKind;
+  topFactor: string;
+  topShift: string;
+  topWavelength: string;
+  topTitle: string;
 }
 
 export type AxisView = Pick<
   PlotView,
   | "xScale" | "yScale" | "y2Scale" | "xLim" | "yLim" | "y2Lim" | "xStep" | "yStep" | "y2Step"
-  | "xFmt" | "yFmt" | "y2Fmt" | "axisLabelStyles"
+  | "xFmt" | "yFmt" | "y2Fmt" | "axisLabelStyles" | "xReversed"
 >;
 
 const str = (v: number | null | undefined): string => (v == null || !Number.isFinite(v) ? "" : String(v));
@@ -67,6 +89,17 @@ export function axisDraft(view: AxisView, axis: AxisId): AxisDraft {
     titleSize: str(view.axisLabelStyles[axis]?.size),
     breakFrom: axis === "x" ? "" : str(fmt.breaks?.[0]?.[0]),
     breakTo: axis === "x" ? "" : str(fmt.breaks?.[0]?.[1]),
+    reverse: axis === "x" ? !!view.xReversed : !!fmt.reverse,
+    gridLines: !fmt.grid ? "plot" : fmt.grid.major && fmt.grid.minor ? "both" : fmt.grid.major ? "major" : fmt.grid.minor ? "minor" : "none",
+    gridColor: fmt.grid?.color ?? "",
+    gridDash: fmt.grid?.dash ?? "solid",
+    rotate: str(fmt.rotate),
+    offset: str(fmt.offset),
+    topKind: axis === "x" ? fmt.top?.kind ?? "none" : "none",
+    topFactor: str(fmt.top?.factor),
+    topShift: str(fmt.top?.shift),
+    topWavelength: str(fmt.top?.wavelength),
+    topTitle: fmt.top?.title ?? "",
   };
 }
 
@@ -81,7 +114,7 @@ const num = (s: string): number | null => {
 export function axisDraftErrors(d: AxisDraft, axis: AxisId): string[] {
   const out: string[] = [];
   const bad = (s: string) => s.trim() !== "" && num(s) === null;
-  for (const [label, v] of [["From", d.from], ["To", d.to], ["Major increment", d.increment], ["Divide by", d.divide], ["Tick label size", d.size], ["Title size", d.titleSize], ["Minor ticks", d.minor], ["Digits", d.digits], ["Break from", d.breakFrom], ["Break to", d.breakTo]] as const) {
+  for (const [label, v] of [["From", d.from], ["To", d.to], ["Major increment", d.increment], ["Divide by", d.divide], ["Tick label size", d.size], ["Title size", d.titleSize], ["Minor ticks", d.minor], ["Digits", d.digits], ["Break from", d.breakFrom], ["Break to", d.breakTo], ["Rotation", d.rotate], ["Offset", d.offset], ["Top factor", d.topFactor], ["Top shift", d.topShift], ["Wavelength", d.topWavelength]] as const) {
     if (bad(v)) out.push(`${label} must be a number.`);
   }
   const lo = num(d.from);
@@ -104,7 +137,42 @@ export function axisDraftErrors(d: AxisDraft, axis: AxisId): string[] {
     else if (bLo >= bHi) out.push("Break from must be below Break to.");
     if (d.scale !== "linear") out.push("An axis break needs a linear scale.");
   }
+  const rot = num(d.rotate);
+  if (rot !== null && Math.abs(rot) > 90) out.push("Rotation must be between -90 and 90 degrees.");
+  const off = num(d.offset);
+  if (off !== null && (off < 0 || off > 72)) out.push("Offset must be from 0 to 72 pt.");
+  if (d.gridColor.trim() !== "" && !/^#[0-9a-f]{6}$/i.test(d.gridColor.trim())) out.push("Grid colour must be #rrggbb, or blank for the theme colour.");
+  const top = topOf(d);
+  const why = top && topAxisProblem(top);
+  if (why) out.push(why);
+  if (top?.kind === "dspacing" && (num(d.topWavelength) ?? 0) > 100) out.push("Wavelength must be at most 100 Å.");
   return out;
+}
+
+function gridOf(d: AxisDraft): AxisGrid | undefined {
+  if (d.gridLines === "plot") return undefined;
+  const color = d.gridColor.trim().toLowerCase();
+  return {
+    major: d.gridLines === "major" || d.gridLines === "both",
+    minor: d.gridLines === "minor" || d.gridLines === "both",
+    ...(color ? { color } : {}),
+    ...(d.gridDash !== "solid" ? { dash: d.gridDash } : {}),
+  };
+}
+
+function topOf(d: AxisDraft): TopAxis | undefined {
+  if (d.topKind === "none") return undefined;
+  const factor = num(d.topFactor);
+  const shift = num(d.topShift);
+  const wavelength = num(d.topWavelength);
+  const title = d.topTitle.trim();
+  return {
+    kind: d.topKind,
+    ...(d.topKind !== "dspacing" && factor !== null ? { factor } : {}),
+    ...(d.topKind === "linear" && shift !== null ? { shift } : {}),
+    ...(d.topKind === "dspacing" && wavelength !== null ? { wavelength } : {}),
+    ...(title ? { title } : {}),
+  };
 }
 
 /** The view patch an edited, VALID draft commits. */
@@ -127,6 +195,11 @@ export function axisPatch(view: AxisView, axis: AxisId, d: AxisDraft): Partial<P
     ...(size !== null ? { size } : {}),
     ...(d.scale === "ln" ? { base: "e" as const } : {}),
     ...(breaks ? { breaks } : {}),
+    ...(axis !== "x" && d.reverse ? { reverse: true } : {}),
+    ...(axis === "x" && num(d.rotate) ? { rotate: num(d.rotate) as number } : {}),
+    ...(num(d.offset) ? { offset: num(d.offset) as number } : {}),
+    ...(gridOf(d) ? { grid: gridOf(d) } : {}),
+    ...(axis === "x" && topOf(d) ? { top: topOf(d) } : {}),
   };
   const scale: AxisScale = d.scale === "ln" ? "log" : d.scale;
   const lo = num(d.from);
@@ -142,7 +215,7 @@ export function axisPatch(view: AxisView, axis: AxisId, d: AxisDraft): Partial<P
   if (Object.keys(nextStyle).length > 0) styles[axis] = nextStyle;
   else delete styles[axis];
   const lim = lo === null && hi === null ? null : ([lo, hi] as [number | null, number | null]);
-  if (axis === "x") return { xScale: scale, xLim: lim, xStep: step, xFmt: fmt, axisLabelStyles: styles };
+  if (axis === "x") return { xScale: scale, xLim: lim, xStep: step, xFmt: fmt, axisLabelStyles: styles, xReversed: d.reverse };
   if (axis === "y") return { yScale: scale, yLim: lim, yStep: step, yFmt: fmt, axisLabelStyles: styles };
   return {
     y2Scale: scale,

@@ -6023,6 +6023,26 @@ export interface components {
             tpr: number[];
         };
         /**
+         * AxisGridSpec
+         * @description One axis' grid lines (the screen's ``AxisGrid``).
+         */
+        AxisGridSpec: {
+            /** Color */
+            color?: string | null;
+            /** Dash */
+            dash?: ("solid" | "dash" | "dot") | null;
+            /**
+             * Major
+             * @default false
+             */
+            major?: boolean;
+            /**
+             * Minor
+             * @default false
+             */
+            minor?: boolean;
+        };
+        /**
          * AxisLabelStyle
          * @description One axis title's Format choices; an absent field keeps the preset's.
          */
@@ -11627,6 +11647,7 @@ export interface components {
             digits?: number;
             /** Divide */
             divide?: number | null;
+            grid?: components["schemas"]["AxisGridSpec"] | null;
             /** Minor */
             minor?: number | null;
             /**
@@ -11635,10 +11656,36 @@ export interface components {
              * @enum {string}
              */
             mode?: "auto" | "fixed" | "sci" | "eng" | "date" | "time" | "datetime";
+            /** Offset */
+            offset?: number | null;
+            /** Reverse */
+            reverse?: boolean | null;
+            /** Rotate */
+            rotate?: number | null;
             /** Size */
             size?: number | null;
             /** Ticks */
             ticks?: ("in" | "out" | "both") | null;
+            top?: components["schemas"]["TopAxisSpec"] | null;
+        };
+        /**
+         * TopAxisSpec
+         * @description A top X axis showing a transform of X (``calc.axis_top``).
+         */
+        TopAxisSpec: {
+            /** Factor */
+            factor?: number | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "reciprocal" | "dspacing" | "linear";
+            /** Shift */
+            shift?: number | null;
+            /** Title */
+            title?: string | null;
+            /** Wavelength */
+            wavelength?: number | null;
         };
         /** TwoSampleRequest */
         TwoSampleRequest: {
