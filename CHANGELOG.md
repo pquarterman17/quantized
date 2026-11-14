@@ -6,6 +6,28 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-11-14
+
+A **major feature** release: the Origin-replacement sprint. Quantized can now
+stand in for OriginPro for daily lab work: opening Origin projects, publication
+figures, curve fitting and peaks, and worksheet operations.
+
+- **Origin projects:** header-driven `.opj`/`.opju` readers (48/49 public `.opj`
+  and 258/274 public `.opju` projects import), matrices as maps, bar/column/
+  histogram graphs restored, graphs that cannot be rebuilt reported with
+  Origin's saved image, designations driving plots, Set As, `.opj`/`.ogs`/
+  Origin ASCII export.
+- **Fitting:** 71 Origin built-in fit models with Origin's parameters, statistics
+  matching statsmodels/scipy (weights, bands, adjusted R²), Curve Fit and Peak
+  Analyzer usability.
+- **Figures:** export matches the screen, page setup, fonts, Origin rich-text
+  escapes, axis breaks, independent styled windows.
+- **Worksheet:** undoable data sort, `sheet()` cross-worksheet links,
+  uncertainty propagation, quoted CSV numbers, row statistics.
+
+Known limit: writing matrix books as true Origin matrices is opt-in
+(Preferences) until it has been checked by opening the file in Origin.
+
 ### Added
 
 - Publication figures: the Export dialog sets the figure's width and height
