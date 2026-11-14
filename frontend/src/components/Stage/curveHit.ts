@@ -5,7 +5,36 @@
 
 import type uPlot from "uplot";
 
+import type { PlotPayload } from "../../lib/plotdata";
 import { axisZoneAt, type AxisZone, nearestIndex, pickNearestSeries } from "../../lib/plotHitTest";
+import { isDataSeries, nearestPointRow } from "../../lib/plotPointMask";
+import { waterfallSourceRows } from "../../lib/waterfallOffset";
+
+/** A data point this close (px) to a right-click is "the point under it". */
+const POINT_PX = 8;
+
+/** The DATASET row of the data point (a plotted or masked one, never an
+ *  overlay) under the client point, or null (gap audit 3 N2). */
+export function pointNear(u: uPlot | null, x: number, y: number, payload: PlotPayload, nBase: number): number | null {
+  if (!u?.over) return null;
+  const rect = u.over.getBoundingClientRect();
+  const xs = (u.data[0] ?? []) as (number | null)[];
+  const hit = nearestPointRow(
+    payload.series.length,
+    xs.length,
+    (s) => isDataSeries(payload.series, nBase, s),
+    (s, r) => {
+      const xv = xs[r];
+      const yv = (u.data[s + 1] as (number | null)[] | undefined)?.[r];
+      if (xv == null || yv == null || !Number.isFinite(xv) || !Number.isFinite(yv)) return null;
+      return [u.valToPos(xv, "x", false), u.valToPos(yv, u.series[s + 1]?.scale ?? "y", false)];
+    },
+    x - rect.left,
+    y - rect.top,
+    POINT_PX,
+  );
+  return hit ? (waterfallSourceRows(payload, [hit.row])[0] ?? null) : null;
+}
 
 /** Hit-test the cursor against the live plot: the nearest visible curve
  *  (within `hitPx`), which axis zone the cursor sits in, and the cursor's own

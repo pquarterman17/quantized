@@ -898,9 +898,9 @@ describe("buildOpts defaultTrace", () => {
 });
 
 describe("buildOpts select tool (#50 plot-brush)", () => {
-  it("drags an x-band without rescaling (like region, unlike zoom)", () => {
+  it("drags an x-band or a 2-D box without rescaling (like region, unlike zoom; gap audit 3 N2)", () => {
     const sel = buildOpts(payload, { ...base, yScale: "linear", tool: "select" });
-    expect(sel.cursor?.drag).toMatchObject({ x: true, y: false, setScale: false });
+    expect(sel.cursor?.drag).toMatchObject({ x: true, y: true, setScale: false });
   });
 
   it("routes the drag-end band to onRangeSelect (not onRegionSelect)", () => {
@@ -914,10 +914,18 @@ describe("buildOpts select tool (#50 plot-brush)", () => {
       onRegionSelect,
     });
     // Invoke the setSelect hook with a fake uPlot: 100px→data 1, 150px→data 1.5.
-    const u = { select: { left: 100, width: 50 }, posToVal: (px: number) => px / 100 };
+    const u = { select: { left: 100, width: 50, top: 0, height: 0 }, posToVal: (px: number) => px / 100, setSelect: vi.fn() };
     opts.hooks?.setSelect?.[0]?.(u as never);
     expect(onRangeSelect).toHaveBeenCalledWith(1, 1.5);
     expect(onRegionSelect).not.toHaveBeenCalled();
+  });
+
+  it("a tall drag routes a 2-D box (y edges on the plot's Y) to onRangeSelect", () => {
+    const onRangeSelect = vi.fn();
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "select", onRangeSelect });
+    const u = { select: { left: 100, width: 50, top: 20, height: 30 }, posToVal: (px: number) => px / 100, setSelect: vi.fn() };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRangeSelect).toHaveBeenCalledWith(1, 1.5, 0.2, 0.5, false);
   });
 
   it("ignores a zero-width (click) select", () => {
@@ -1107,8 +1115,15 @@ describe("buildOpts region tool live drag rendering (Finding 1, Group AB adversa
     expect(u.over.querySelector).not.toHaveBeenCalled();
   });
 
-  it("is a no-op for the \"select\" tool (x-only by design, never even starts y-tracking)", () => {
+  it("paints the Select Rows tool's flat drag as a full-height band too (its box mask, gap audit 3 N2)", () => {
     const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "select" });
+    const { u, band } = fakeU(2);
+    opts.hooks?.setCursor?.[0]?.(u as never);
+    expect(band.style.height).toBe("200px");
+  });
+
+  it("is a no-op for the zoom tool", () => {
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     const { u, querySelector } = fakeU(2);
     opts.hooks?.setCursor?.[0]?.(u as never);
     expect(querySelector).not.toHaveBeenCalled();

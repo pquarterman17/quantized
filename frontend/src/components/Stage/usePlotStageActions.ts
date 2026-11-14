@@ -87,7 +87,7 @@ export function usePlotStageActions(
   plotted: readonly number[] = [],
 ): PlotStageActions & {
   onRegionSelect: (x0: number, x1: number, y0?: number, y1?: number) => void;
-  onRangeSelect: (x0: number, x1: number) => void;
+  onRangeSelect: (x0: number, x1: number, y0?: number, y1?: number, onY2?: boolean) => void;
   onLimCrossed: (axis: "x" | "y", why?: "log") => void;
 } {
   function resetView() {
@@ -182,14 +182,25 @@ export function usePlotStageActions(
     useApp.getState().setPlotTool("zoom");
   }
 
-  // Plot-brush: a dragged x-band → row indices (original order) → worksheet selection.
-  function onRangeSelect(x0: number, x1: number) {
+  // Plot-brush: a dragged x-band → row indices (original order) → worksheet
+  // selection; a 2-D box (gap audit 3 N2) takes only the rows with a plotted
+  // point inside it, ready for "Exclude selected points".
+  function onRangeSelect(x0: number, x1: number, y0?: number, y1?: number, onY2 = false) {
     if (!displayPayload) return;
     // An X-offset (waterfall) payload repeats each row once per x block: map back to dataset rows.
-    const rows = rowsInXRange(displayPayload.data[0] as (number | null)[], x0, x1);
-    const sourceRows = waterfallSourceRows(displayPayload, rows);
-    if (onRowsSelected) onRowsSelected(sourceRows);
-    else useApp.getState().setRowSelection(sourceRows);
+    const payload = displayPayload;
+    const cols = payload.data as (number | null)[][];
+    const select = (rows: number[]) => {
+      const sourceRows = waterfallSourceRows(payload, rows);
+      if (onRowsSelected) onRowsSelected(sourceRows);
+      else useApp.getState().setRowSelection(sourceRows);
+    };
+    if (y0 === undefined || y1 === undefined) return select(rowsInXRange(cols[0], x0, x1));
+    // The box test loads on first use (off the eager path).
+    void runLazy("Selecting points…", () => import("../../lib/plotPointMask")).then(
+      (m) => select(m.rowsInBox(cols, payload.series, plotted.length || payload.series.length, { x0, x1, y0, y1, onY2 })),
+      onLoadFailure,
+    );
   }
 
   // Gap audit 2 #8: a double-click in the plot area is held back from uPlot's

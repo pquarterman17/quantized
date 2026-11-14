@@ -58,10 +58,11 @@ export function regionYScale(payload: PlotPayload, hasY2: boolean): "y" | "y2" {
 }
 
 /** Build the live-rendering `setCursor` hook described above, closed over
- *  the plot's current tool (a no-op for every tool but "region"). */
+ *  the plot's current tool (a no-op for every tool but "region" and the
+ *  Select Rows tool's box, gap audit 3 N2). */
 export function regionLiveBoxHook(tool: PlotTool): (u: uPlot) => void {
   return (u: uPlot): void => {
-    if (tool !== "region") return;
+    if (tool !== "region" && tool !== "select") return;
     const sel = u.select;
     if (!sel || sel.width <= 0) return;
     if ((sel.height ?? 0) >= MIN_BOX_HEIGHT_PX) return;
@@ -111,4 +112,29 @@ export function regionSelectPick(
     onRegionSelect(x0, x1, u.posToVal(top, scale), u.posToVal(top + h, scale));
   }
   u.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false);
+}
+
+/** The Select Rows tool's drag-END pick (gap audit 3 N2): an x-band as
+ *  before, or -- once the vertical span clears `MIN_BOX_HEIGHT_PX` -- a 2-D
+ *  box with its y edges on `regionYScale`'s axis, whose rows are those with a
+ *  point inside it. The picked area stays painted (the brush's feedback): an
+ *  x-band repainted full height, as it always looked, a box as drawn. */
+export function selectBoxPick(
+  u: uPlot,
+  payload: PlotPayload,
+  hasY2: boolean,
+  onRangeSelect: (x0: number, x1: number, y0?: number, y1?: number, onY2?: boolean) => void,
+): void {
+  const { left, width } = u.select;
+  const x0 = u.posToVal(left, "x");
+  const x1 = u.posToVal(left + width, "x");
+  const h = u.select.height ?? 0;
+  if (h < MIN_BOX_HEIGHT_PX) {
+    u.setSelect({ left, top: 0, width, height: u.over?.clientHeight ?? h }, false);
+    onRangeSelect(x0, x1);
+    return;
+  }
+  const scale = regionYScale(payload, hasY2);
+  const top = u.select.top ?? 0;
+  onRangeSelect(x0, x1, u.posToVal(top, scale), u.posToVal(top + h, scale), scale === "y2");
 }

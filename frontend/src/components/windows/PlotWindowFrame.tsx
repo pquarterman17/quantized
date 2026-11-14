@@ -30,6 +30,7 @@ import { type PlotWindow } from "../../lib/plotview";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { useApp } from "../../store/useApp";
 import { useWindowsStore } from "../../store/hooks/useWindowsStore";
+import { dropOntoGraph, isLibraryDrag } from "../Stage/graphDrop";
 import { DATASET_DND } from "../Library/dnd";
 import { Badge } from "../primitives";
 import WindowTitleButtons from "./WindowTitleButtons";
@@ -74,7 +75,9 @@ export default function PlotWindowFrame({
   // (DATASET_DND — the SAME dataTransfer type DatasetRow sets, so a row
   // dragged over a window and a row dragged over a folder are one gesture).
   // True while such a drag hovers the frame — drives the accent highlight.
-  const [dropping, setDropping] = useState(false);
+  // "add" (gap audit 3 N1): over a graph's PLOT BODY, a dropped dataset or
+  // book joins the graph as linked curves instead of replacing it.
+  const [dropping, setDropping] = useState<false | "rebind" | "add">(false);
 
   // Item 10: double-click the title TEXT (not the bar) to rename inline —
   // null = not editing (DatasetRow/FolderRow's own inline-rename pattern).
@@ -108,6 +111,21 @@ export default function PlotWindowFrame({
   // and focuses it once done (the swap would unmount it mid-gesture).
   const onFrameCapture = (e: React.PointerEvent) => {
     if (!focused && !(e.target as Element).closest?.("[data-inset-box]")) focusWindow(win.id);
+  };
+
+  // Which drop a Library drag over this frame makes: on a graph's plot body,
+  // a dataset or a whole book ADDS curves; elsewhere a dataset rebinds.
+  const dropMode = (e: React.DragEvent): "rebind" | "add" | null => {
+    if (win.kind === "snapshot" || win.kind === "panel") return null;
+    const types = e.dataTransfer.types;
+    const onBody = win.kind === "plot" && !!win.datasetId && !!(e.target as Element).closest?.(".qzk-plotwin-body");
+    if (onBody && isLibraryDrag(types)) return "add";
+    return types.includes(DATASET_DND) ? "rebind" : null;
+  };
+  const addDroppedCurves = (dt: DataTransfer) => {
+    if (!win.datasetId) return;
+    if (!focused) focusWindow(win.id); // the graph to add to is this window's
+    dropOntoGraph(win.datasetId, dt);
   };
 
   const maximized = win.winState === "maximized";
@@ -147,7 +165,7 @@ export default function PlotWindowFrame({
   return (
     <div
       ref={frameRef}
-      className={`qzk-plotwin${focused ? " focused" : ""}${dropping ? " dropping" : ""}${isDropCandidate ? " drop-candidate" : ""}`}
+      className={`qzk-plotwin${focused ? " focused" : ""}${dropping ? " dropping" : ""}${dropping === "add" ? " dropping-add" : ""}${isDropCandidate ? " drop-candidate" : ""}`}
       style={style}
       onPointerDownCapture={onFrameCapture}
       onContextMenuCapture={onFrameContextMenu}
@@ -157,18 +175,19 @@ export default function PlotWindowFrame({
         // field) advertises a rebind it would silently ignore: no highlight,
         // no preventDefault, so the drop falls through to the canvas beneath
         // (which opens a NEW window for it instead).
-        if (win.kind === "snapshot" || win.kind === "panel" || !e.dataTransfer.types.includes(DATASET_DND))
-          return;
+        const mode = dropMode(e);
+        if (!mode) return;
         e.preventDefault(); // required every dragover to keep the drop legal
-        if (!dropping) setDropping(true);
+        if (dropping !== mode) setDropping(mode);
       }}
       onDragLeave={() => setDropping(false)}
       onDrop={(e) => {
-        if (win.kind === "snapshot" || win.kind === "panel" || !e.dataTransfer.types.includes(DATASET_DND))
-          return;
+        const mode = dropMode(e);
+        if (!mode) return;
         e.preventDefault();
         e.stopPropagation(); // a frame drop must never ALSO create a canvas window
         setDropping(false);
+        if (mode === "add") return addDroppedCurves(e.dataTransfer);
         const droppedId = e.dataTransfer.getData(DATASET_DND);
         // The explicit gesture — rebinds even a pinned window (item 14).
         if (droppedId) rebindWindow(win.id, droppedId);
@@ -176,7 +195,7 @@ export default function PlotWindowFrame({
     >
       <div
         className="qzk-plotwin-titlebar"
-        title="Drag to move · double-click to maximize · drop a dataset here to rebind"
+        title="Drag to move · double-click to maximize · drop a dataset here to rebind (on the plot: add its curves)"
         onPointerDown={beginDrag("move")}
         onDoubleClick={() => toggleMaximizeWindow(win.id)}
       >

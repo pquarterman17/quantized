@@ -112,18 +112,16 @@ describe("a graph of a graph rebuilds in topological order", () => {
   });
 });
 
-describe("Add curve from… end to end", () => {
-  it("offers the cyclic source but refuses it with a message that names the reason", async () => {
-    const { addCurveFrom } = await import("../lib/plotSelectedTogether");
-    const { askParams } = await import("./paramDialog");
+describe("Layer Contents end to end", () => {
+  it("refuses a cyclic source with a message that names the reason", async () => {
+    const { appendCurvesTo } = await import("./layerContentsApply");
     await plotSelectedTogether(["a", "b"]);
     await plotSelectedTogether(["a", "b"]);
     const [g1, g2] = useApp.getState().datasets.filter((d) => d.linkedCurves);
     appendCurve(g1.id, { datasetId: g2.id, xKey: null, yKey: 0, label: "g2" });
     useApp.setState({ activeId: g2.id });
-    vi.mocked(askParams).mockResolvedValueOnce({ dataset: g1.name }).mockResolvedValueOnce({ x: "(its own X)", y: "g2" });
     useToasts.setState({ toasts: [] });
-    await addCurveFrom();
+    expect(appendCurvesTo(g2.id, [{ datasetId: g1.id, xKey: null, yKey: 0, label: "g1" }])).toBe(false);
     expect(get(g2.id).linkedCurves).toHaveLength(2); // unchanged
     expect(useToasts.getState().toasts.map((t) => t.msg).join(" ")).toMatch(/depend on each other/);
   });

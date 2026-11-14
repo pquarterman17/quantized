@@ -11,12 +11,12 @@
 // copy). store/useApp.ts's addDataset activates it, retargets the focused
 // window, and resets the view — see that function's own doc.
 //
-// "Add curve from…" (`addCurveFrom` below) adds a curve from any dataset to
-// the focused graph the same way.
+// "Add curve from…" opens Layer Contents (store/layerContentsApply.ts, gap
+// audit 3 N1), which adds, removes, reorders and re-binds curves in one dialog;
+// `appendCurve` below remains the one-curve programmatic path.
 //
 // Loaded on demand through the eager shim lib/plotSelectedTogether.ts.
 
-import { askParams } from "../store/paramDialog";
 import { noteAssembled, watchLinkedCurves } from "../store/linkedCurvesSync";
 import { toast } from "../store/toasts";
 import { nextDatasetId, useApp } from "../store/useApp";
@@ -47,7 +47,7 @@ function nextGraphName(datasets: readonly Dataset[]): string {
 }
 
 /** Add the live graph over `curves` as a new Library dataset and plot it. */
-function landGraph(curves: LinkedCurve[]): Dataset {
+export function landGraph(curves: LinkedCurve[]): Dataset {
   const datasets = useApp.getState().datasets;
   const graph: Dataset = { id: nextDatasetId(), name: nextGraphName(datasets), data: assembleLinkedCurves(curves, datasets), linkedCurves: curves };
   noteAssembled(graph, datasets);
@@ -100,71 +100,9 @@ export async function plotSelectedTogether(ids: readonly string[]): Promise<void
   toast(`plotted ${curves.length === plottable.length ? `${curves.length} datasets` : `${curves.length} curves from ${plottable.length} datasets`} together — the graph follows its sources${mapSkipNote(maps)}`, "ok");
 }
 
-/** Unique option labels for `items` ("name", then "name (2)" for a repeat). */
-function optionLabels(names: readonly string[]): string[] {
-  const seen = new Map<string, number>();
-  return names.map((n) => {
-    const k = (seen.get(n) ?? 0) + 1;
-    seen.set(n, k);
-    return k === 1 ? n : `${n} (${k})`;
-  });
-}
-
-const X_OWN = "(its own X)";
-
-/** "Add curve from…": pick a dataset, then its X and Y, and add that curve to
- *  the FOCUSED graph. A live graph gains a curve; a plain dataset's graph
- *  becomes a live graph of its drawn curves plus the new one (the window is
- *  rebound to it; renames and styles follow their curves). */
-export async function addCurveFrom(): Promise<void> {
-  const s = useApp.getState();
-  const target = s.datasets.find((d) => d.id === s.activeId);
-  if (!target) {
-    toast("open a graph first, then add a curve to it", "danger");
-    return;
-  }
-  // (A source that already draws from this graph stays offered: appendCurve
-  // refuses it with a message that says why, instead of hiding it.)
-  const sources = s.datasets.filter((d) => !is2DMap(d.data) && d.id !== target.id);
-  if (sources.length === 0) {
-    toast("no other dataset to take a curve from", "danger");
-    return;
-  }
-  const dsLabels = optionLabels(sources.map((d) => d.name));
-  const first = await askParams(
-    `Add curve to “${target.name}”`,
-    [{ key: "dataset", label: "From dataset", type: "select", default: dsLabels[0], options: dsLabels }],
-    { confirmLabel: "Next" },
-  );
-  if (!first) return;
-  let source = sources[dsLabels.indexOf(String(first.dataset))];
-  if (!source) return;
-  try {
-    source = (await useApp.getState().resolveDatasets([source.id]))[0] ?? source;
-  } catch (e) {
-    toast(`couldn't load “${source.name}” — ${e instanceof Error ? e.message : "error"}`, "danger");
-    return;
-  }
-  const cols = optionLabels(source.data.labels.map((l, i) => l || `col ${i + 1}`));
-  const yDefault = primaryChannel(source.data) ?? 0;
-  const pick = await askParams(
-    `Add curve from “${source.name}”`,
-    [
-      { key: "x", label: "X", type: "select", default: X_OWN, options: [X_OWN, ...cols] },
-      { key: "y", label: "Y", type: "select", default: cols[yDefault] ?? cols[0], options: cols },
-    ],
-    { confirmLabel: "Add curve" },
-  );
-  if (!pick) return;
-  const yKey = cols.indexOf(String(pick.y));
-  const xKey = String(pick.x) === X_OWN ? null : cols.indexOf(String(pick.x));
-  if (yKey < 0 || (xKey !== null && xKey < 0)) return;
-  appendCurve(target.id, { datasetId: source.id, xKey, yKey, label: `${source.name}: ${cols[yKey]}`, labelFrom: "nameCol" });
-}
-
 /** The curves a plain dataset's FOCUSED graph draws now, each against the X
  *  it is drawn on (its own X column on a multi-X sheet, lib/perSeriesX.ts). */
-function drawnCurves(ds: Dataset): LinkedCurve[] {
+export function drawnCurves(ds: Dataset): LinkedCurve[] {
   const s = useApp.getState();
   const own = curveX(ds, s.xKey);
   const channels = effectiveChannels(ds.data, s.yKeys, s.xKey, ds.channelRoles, s.seriesOrder).filter(
@@ -178,7 +116,7 @@ function drawnCurves(ds: Dataset): LinkedCurve[] {
   }));
 }
 
-/** Add `curve` to the graph `targetId` shows (see `addCurveFrom`). */
+/** Add `curve` to the graph `targetId` shows. */
 export function appendCurve(targetId: string, curve: LinkedCurve): void {
   const s = useApp.getState();
   const target = s.datasets.find((d) => d.id === targetId);
