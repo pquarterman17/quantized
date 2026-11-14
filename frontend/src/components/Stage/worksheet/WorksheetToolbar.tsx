@@ -123,7 +123,14 @@ export default function WorksheetToolbar({
   // + everyday actions) is never the one to go.
   const groups: ToolbarGroup[] = [
     {
-      label: "Edit",
+      // Group 0 — see fitToolGroups' floor rule: ALWAYS shown, so this stays
+      // just the formula bar itself, never bundled with ordinary action
+      // buttons (Stats/Copy/Export, below) — those still need to be able to
+      // collapse at a common width (measured: the formula bar + ± errors +
+      // Add column alone already runs ~520px; adding Stats/Copy/Export pushed
+      // the combined group past 1280px-class windows entirely, taking the
+      // "⋯" button down to a wrapped second line with it).
+      label: "Formula",
       node: (
         <>
           <span className="qzk-field-lbl" style={{ margin: 0 }}>
@@ -158,6 +165,14 @@ export default function WorksheetToolbar({
           <button className="qz-btn" disabled={!formula.trim() || addColumnPending} onClick={() => onAddColumn(propagate)}>
             Add column
           </button>
+        </>
+      ),
+      items: [], // never collapses in practice (always group 0) — nothing to offer
+    },
+    {
+      label: "Actions",
+      node: (
+        <>
           <button className={showStats ? "qz-btn qz-active" : "qz-btn"} aria-pressed={showStats} onClick={onToggleStats} title="Per-column statistics">
             Σ Stats
           </button>
@@ -169,7 +184,11 @@ export default function WorksheetToolbar({
           </button>
         </>
       ),
-      items: [], // never collapses in practice (always group 0) — nothing to offer
+      items: [
+        btnItem("Σ Stats", onToggleStats),
+        btnItem("⧉ Copy", onCopy),
+        btnItem("⇩ Export…", onExport),
+      ],
     },
   ];
 
