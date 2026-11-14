@@ -11,7 +11,7 @@
 // selects the column (ctrl/cmd-click toggles it into a multi-selection,
 // shift-click extends a range from the last-clicked column) — sorting moved
 // OFF the click gesture entirely and lives in the column context menu
-// (worksheetMenus.columnMenuItems' "Sort ascending"/"Sort descending",
+// (worksheetMenuModel.columnMenuItems' "Sort ascending"/"Sort descending",
 // unchanged) plus the `sortMark` indicator already shown in the role line.
 // This is the ONE sanctioned worksheet behaviour change (WORKSHEET_PLAN item
 // 6) — Origin's own muscle memory is header-click-selects, and highlighting
