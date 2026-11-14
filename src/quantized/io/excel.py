@@ -26,6 +26,7 @@ from quantized.io._delimited_layout import (
     _to_float,
     _walk_back_gappy_rows,
 )
+from quantized.io._origin_ascii_header import origin_ascii_rows
 from quantized.io.base import CORRUPT_ARCHIVE_ERRORS, resolve_column
 from quantized.io.delimited import _extract_units
 
@@ -103,6 +104,18 @@ def _units_row(grid: list[list[Any]], scores: list[float], first_data: int, n_co
         return False
     tokens = ["" if v is None else str(v) for v in units[: _row_width(units)]]
     return _looks_like_units_row(tokens, n_cols)
+
+
+def _text_cell(value: Any) -> str:
+    """A cell as display text: blank for empty, ISO 8601 for a date/time
+    (the form CSV import and the worksheet read back as a date)."""
+    if value is None:
+        return ""
+    if isinstance(value, dt.datetime):
+        return value.isoformat(sep=" ")
+    if isinstance(value, dt.date):
+        return value.isoformat()
+    return str(value).strip()
 
 
 def _header_str(value: Any, col: int) -> str:
@@ -273,7 +286,15 @@ def import_excel(
         tokens = [[_cell_token(v, text_numbers) for v in row] for row in grid[: first_data + 1]]
         first_data = _walk_back_gappy_rows(tokens, first_data)
     units_row = first_data - 1 if _units_row(grid, scores, first_data, n_cols) else -1
-    if units_row >= 0:
+    # Origin's Long Name / Units / Comments rows (worksheet audit #11): the
+    # rule CSV import already applies (`_origin_ascii_header`). Read alone,
+    # the Comments row was taken for the names and every unit was lost.
+    head_text = [[_text_cell(v) for v in row] for row in grid[:first_data]]
+    origin = origin_ascii_rows(head_text, first_data, n_cols)
+    comments_row = -1
+    if origin is not None:
+        header_row, units_row, comments_row = origin
+    elif units_row >= 0:
         header_row = units_row - 1
     else:
         header_row = first_data - 1 if first_data >= 1 and scores[first_data - 1] < 0.5 else -1
@@ -340,6 +361,20 @@ def import_excel(
     }
     if time_is_datetime:
         metadata.update({"time_is_datetime": True, "time_timezone": "UTC"})
+    # Text (and non-X date) columns are kept as text, as CSV import keeps
+    # them (`text_columns`), not dropped with no word (audit #11).
+    text_columns = {
+        col_headers[c]: cells
+        for c in range(n_cols)
+        if c != time_idx and c not in data_idx
+        for cells in [[_text_cell(grid[i][c]) for i in keep]]
+        if any(cells) and (data_columns is None or np.isnan(data[:, c]).all())
+    }
+    if text_columns:
+        metadata["text_columns"] = text_columns
+    if comments_row >= 0:  # kept, as CSV import keeps it: one searchable comment line
+        cells = [_text_cell(v) for v in grid[comments_row][:n_cols]]
+        metadata["comments"] = ["\t".join(cells).rstrip("\t")]
     return DataStruct.create(
         time_vec, data[:, data_idx], labels=labels, units=units, metadata=metadata
     )
