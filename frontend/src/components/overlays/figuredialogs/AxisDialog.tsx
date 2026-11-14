@@ -48,6 +48,7 @@ const TOP_KINDS: { value: AxisDraft["topKind"]; label: string }[] = [
   { value: "reciprocal", label: "Reciprocal (factor / x), e.g. 1/T" },
   { value: "dspacing", label: "d-spacing from 2θ (λ / 2 sin θ)" },
   { value: "linear", label: "Linear (factor · x + shift)" },
+  { value: "expr", label: "Expression of x, e.g. 1240/x" },
 ];
 /** Cu Kα1, Å: the usual lab diffractometer, prefilled for d-spacing. */
 const CU_KALPHA = "1.5406";
@@ -178,6 +179,7 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
           <h3 style={{ margin: "4px 0" }}>Top axis</h3>
           {select("topKind", "Shows", TOP_KINDS)}
           {(draft.topKind === "reciprocal" || draft.topKind === "linear") && text("topFactor", "Factor", "1")}
+          {draft.topKind === "expr" && text("topExpr", "f(x) =", "1240/x")}
           {draft.topKind === "linear" && text("topShift", "Shift", "0")}
           {draft.topKind === "dspacing" && text("topWavelength", "Wavelength (Å)", CU_KALPHA)}
           {draft.topKind !== "none" && text("topTitle", "Title", draft.topKind === "dspacing" ? "d (Å)" : "none")}

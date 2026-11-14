@@ -10,6 +10,7 @@ import { figurePublicationSourceUnavailable } from "../../store/figurePublicatio
 import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
+import FigurePdfTick from "./FigurePdfTick";
 
 export default function EditableFiguresSection() {
   const documents = useApp((state) => state.editableFigures);
@@ -22,7 +23,6 @@ export default function EditableFiguresSection() {
   const publicationSession = useApp((state) => state.figurePublicationSession);
   const previewInPlace = useApp((state) => state.beginFigurePublicationEditForFigure);
   const [collapsed, setCollapsed] = useState(false);
-
   if (documents.length === 0) return null;
 
   return (
@@ -46,6 +46,7 @@ export default function EditableFiguresSection() {
         const previewDisabled = sessionBusy || unavailable !== null;
         return (
           <div key={document.id} className="qzk-fig-row">
+            <FigurePdfTick id={document.id} name={document.name} />
             <button
               className="qzk-fig-item"
               title={`open editable figure "${document.name}"`}
