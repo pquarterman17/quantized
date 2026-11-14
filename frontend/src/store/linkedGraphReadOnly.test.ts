@@ -50,8 +50,8 @@ describe("a live graph's sheet is read-only for data edits", () => {
       () => insertColumn(g.id, 0),
       () => deleteColumns(g.id, [0]),
       () => moveColumn(g.id, 0, 1),
-      () => setColumnHeader(g.id, 0, { name: "renamed" }),
-      () => sortWorksheetRowsBy(g.id, [{ col: 0, dir: "desc" }]),
+      () => setColumnHeader(g.id, 0, { label: "renamed" }),
+      () => sortWorksheetRowsBy(g.id, [{ col: 0, dir: -1 }]),
       () => useApp.getState().addFormula(g.id, "twice", "A*2"),
     ];
     for (const run of attempts) {
