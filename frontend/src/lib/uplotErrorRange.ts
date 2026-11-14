@@ -196,3 +196,28 @@ export function beginErrorDraw(ctx: CanvasRenderingContext2D, bbox: { left: numb
   ctx.lineWidth = 1;
   ctx.setLineDash([]);
 }
+
+/** A series' error-bar paint as `uplotSeries.buildSeriesDefs` resolves it onto
+ *  the uPlot series (`qzErr`) from `SeriesStyle.errorBar` (gap audit 2 #6):
+ *  the colour already resolved for the canvas. */
+export interface ErrorBarPaint {
+  cap?: number;
+  width?: number;
+  color?: string;
+}
+
+/** Style one column's bars before they are drawn (`uplotOverlays`' error
+ *  plugins) and return the cap half-width to draw them with. Unstyled bars keep
+ *  the defaults: the series' own stroke (else `color`), 1 px, `defaultCap`.
+ *  A styled cap/width is in POINTS like the export's `capsize`/`elinewidth`:
+ *  a cap is drawn 4/3 px per point (the `ERROR_CAP_HALF_PX` conversion: the
+ *  default 2 pt is its 3 px), a width as that many px — the same canvas
+ *  pixels the defaults are drawn in, so restating a default changes nothing. */
+export function styleErrorDraw(u: uPlot, col: number, color: string, defaultCap: number): number {
+  const s = u.series[col] as uPlot.Series & { qzErr?: ErrorBarPaint };
+  const e = s?.qzErr;
+  const ink = typeof s?.stroke === "function" ? (s.stroke as (u: uPlot, i: number) => string | null)(u, col) : null;
+  u.ctx.strokeStyle = e?.color || ink || color;
+  u.ctx.lineWidth = e?.width != null ? e.width : 1;
+  return e?.cap != null ? (e.cap * 4) / 3 : defaultCap;
+}

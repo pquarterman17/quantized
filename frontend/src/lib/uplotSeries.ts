@@ -14,6 +14,7 @@ import type { PlotPayload } from "./plotdata";
 import { DASH, resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
 import { BAR_PATHS } from "./uplotBars";
 import { resolveFillBands, seriesFillProps, translucent } from "./uplotFill";
+import type { ErrorBarPaint } from "./uplotErrorRange";
 import type { BuildOptsArgs } from "./uplotOpts";
 
 /** The per-series style inputs `buildSeriesDefs` reads (all of them). */
@@ -168,11 +169,22 @@ export function buildSeriesDefs(
       // from this series' own resolved stroke. `{vs}` band fills are NOT a
       // per-series prop — see `resolveFillBands` below (opts.bands).
       // A log axis breaks the line at values it cannot place (lib/logGaps.ts).
-      const def: uPlot.Series = {
+      const def: uPlot.Series & { qzErr?: ErrorBarPaint } = {
         label, scale, stroke, width, dash, points: loopPoints(points), show,
         ...seriesFillProps(style?.fill, stroke),
         ...(xAscending ? { gaps: logGaps } : {}),
       };
+      // Error-bar styling (gap audit 2 #6) rides on the series, where the
+      // error plugins read it (`uplotErrorRange.styleErrorDraw`); a colour is
+      // contrast-checked like the stroke. A change rebuilds (not a paint field).
+      const eb = style?.errorBar;
+      if (eb) {
+        def.qzErr = {
+          ...(typeof eb.cap === "number" && eb.cap >= 0 ? { cap: eb.cap } : {}),
+          ...(typeof eb.width === "number" && eb.width > 0 ? { width: eb.width } : {}),
+          ...(eb.color ? { color: resolveDrawColor(seriesColor(i, { color: eb.color }), isDarkBg, inkColor) } : {}),
+        };
+      }
       // Per-series step alignment (SeriesStyle.step, GAP_PLOTTYPES "step"
       // mark) — a MORE SPECIFIC override than the "Step" default-trace
       // preference below, so it's checked first: a step-marked series

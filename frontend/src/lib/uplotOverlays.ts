@@ -23,7 +23,7 @@ import type { Annotation, RefLine } from "./types";
 import type { RegionShade } from "./types";
 // Shade drawing + the off-scale marker are a lazy chunk (lib/regionDecorLoader.ts).
 import { regionDecor } from "./regionDecorLoader";
-import { beginErrorDraw } from "./uplotErrorRange";
+import { beginErrorDraw, styleErrorDraw } from "./uplotErrorRange";
 const MOVE = "mousemove", UP = "mouseup";
 export { pickRefLine, type RefLineHit } from "./refLineHit";
 
@@ -984,10 +984,6 @@ export function regionShadePlugin(shades: RegionShade[]): uPlot.Plugin {
   return { hooks: { drawClear: (u: uPlot) => regionDecor()?.drawRegionShades(u, shades) } };
 }
 
-/** A series' stroke once uPlot has initialised it (always a function). A
- *  column's bars draw in it, as the export's (`calc/figure_errorbars`). */
-type Ink = (u: uPlot, i: number) => string | null;
-
 export function errorBarsPlugin(
   errorsByCol: Map<number, (number | null)[]>,
   color: string,
@@ -1002,7 +998,7 @@ export function errorBarsPlugin(
         for (const [col, errs] of errorsByCol) {
           const ys = u.data[col];
           if (!ys || u.series[col]?.show === false) continue;
-          ctx.strokeStyle = (u.series[col].stroke as Ink | undefined)?.(u, col) || color;
+          const cap = styleErrorDraw(u, col, color, capHalfWidth); // gap audit 2 #6
           const scaleKey = u.series[col]?.scale ?? "y";
           for (let i = 0; i < xs.length; i++) {
             const x = xs[i];
@@ -1015,11 +1011,11 @@ export function errorBarsPlugin(
             ctx.beginPath();
             ctx.moveTo(px, pLo);
             ctx.lineTo(px, pHi);
-            if (capHalfWidth > 0) {
-              ctx.moveTo(px - capHalfWidth, pHi);
-              ctx.lineTo(px + capHalfWidth, pHi);
-              ctx.moveTo(px - capHalfWidth, pLo);
-              ctx.lineTo(px + capHalfWidth, pLo);
+            if (cap > 0) {
+              ctx.moveTo(px - cap, pHi);
+              ctx.lineTo(px + cap, pHi);
+              ctx.moveTo(px - cap, pLo);
+              ctx.lineTo(px + cap, pLo);
             }
             ctx.stroke();
           }
@@ -1069,7 +1065,7 @@ export function colorScatterPlugin(specs: Map<number, ColorScatterSpec>): uPlot.
             if (x == null || y == null) continue;
             const fill = colorScatterFill(spec, i); // the one colour rule (P1.4 gradient shares it)
             if (fill === null) continue;
-            paintColorPoint(ctx, u.valToPos(x, "x", true), u.valToPos(y, scaleKey, true), r, fill, spec.shape);
+            paintColorPoint(ctx, u.valToPos(x, "x", true), u.valToPos(y, scaleKey, true), r, fill, spec.shape, spec.hollow);
           }
         }
         ctx.restore();
@@ -1106,7 +1102,7 @@ export function errorSpansPlugin(
         for (const [col, spans] of spansByCol) {
           const ys = u.data[col];
           if (!ys || u.series[col]?.show === false) continue;
-          ctx.strokeStyle = (u.series[col].stroke as Ink | undefined)?.(u, col) || color;
+          const cap = styleErrorDraw(u, col, color, capHalfWidth); // gap audit 2 #6
           const scaleKey = u.series[col]?.scale ?? "y";
           for (const span of spans) {
             for (let i = 0; i < xs.length; i++) {
@@ -1123,11 +1119,11 @@ export function errorSpansPlugin(
                 const px = u.valToPos(x, "x", true);
                 ctx.moveTo(px, pLo);
                 ctx.lineTo(px, pHi);
-                if (capHalfWidth > 0) {
-                  ctx.moveTo(px - capHalfWidth, pHi);
-                  ctx.lineTo(px + capHalfWidth, pHi);
-                  ctx.moveTo(px - capHalfWidth, pLo);
-                  ctx.lineTo(px + capHalfWidth, pLo);
+                if (cap > 0) {
+                  ctx.moveTo(px - cap, pHi);
+                  ctx.lineTo(px + cap, pHi);
+                  ctx.moveTo(px - cap, pLo);
+                  ctx.lineTo(px + cap, pLo);
                 }
               } else {
                 const px = u.valToPos(x, "x", true);
@@ -1136,11 +1132,11 @@ export function errorSpansPlugin(
                 const py = u.valToPos(y, scaleKey, true);
                 ctx.moveTo(pL, py);
                 ctx.lineTo(pR, py);
-                if (capHalfWidth > 0) {
-                  ctx.moveTo(pR, py - capHalfWidth);
-                  ctx.lineTo(pR, py + capHalfWidth);
-                  ctx.moveTo(pL, py - capHalfWidth);
-                  ctx.lineTo(pL, py + capHalfWidth);
+                if (cap > 0) {
+                  ctx.moveTo(pR, py - cap);
+                  ctx.lineTo(pR, py + cap);
+                  ctx.moveTo(pL, py - cap);
+                  ctx.lineTo(pL, py + cap);
                 }
               }
               ctx.stroke();

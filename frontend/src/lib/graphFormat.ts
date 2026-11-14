@@ -183,5 +183,12 @@ export function seriesStyleFromExport(style: ExportSeriesStyle | null): SeriesSt
   if (typeof style.marker_shape === "string") out.markerShape = style.marker_shape as SeriesStyle["markerShape"];
   if (style.step) out.step = style.step;
   if (style.fill === "under") out.fill = "under";
+  if (style.marker_fill) out.markerFill = style.marker_fill;
+  const eb = {
+    ...(typeof style.error_cap === "number" ? { cap: style.error_cap } : {}),
+    ...(typeof style.error_width === "number" ? { width: style.error_width } : {}),
+    ...(typeof style.error_color === "string" ? { color: style.error_color } : {}),
+  };
+  if (Object.keys(eb).length) out.errorBar = eb;
   return Object.keys(out).length > 0 ? out : null;
 }

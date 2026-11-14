@@ -41,6 +41,14 @@ export interface ExportSeriesStyle {
    *  unrecognized value falls back to a circle rather than raising, matching
    *  `line`/`step`'s existing degrade-gracefully contract. */
   marker_shape?: string;
+  /** `SeriesStyle.markerFill` (gap audit 2 #6): `"hollow"` → matplotlib
+   *  `markerfacecolor="none"` (`calc.figure._plot_kwargs`). */
+  marker_fill?: "solid" | "hollow";
+  /** `SeriesStyle.errorBar` (gap audit 2 #6) → `calc.figure_errorbars`'
+   *  `capsize` / `elinewidth` / `ecolor` (points, points, hex). */
+  error_cap?: number;
+  error_width?: number;
+  error_color?: string;
   /** `vs` and `color_by` remain dataset channel indices on the wire. */
   fill?: "under" | { vs: number };
   color_by?: number;
@@ -160,6 +168,11 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
       style.marker_shape = raw.marker_shape;
     }
     if (typeof raw.marker_size === "number" && Number.isFinite(raw.marker_size) && raw.marker_size >= 0) style.marker_size = raw.marker_size;
+    if (raw.marker_fill === "hollow" || raw.marker_fill === "solid") style.marker_fill = raw.marker_fill;
+    const pt = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100;
+    if (pt(raw.error_cap)) style.error_cap = raw.error_cap;
+    if (pt(raw.error_width)) style.error_width = raw.error_width;
+    if (typeof raw.error_color === "string") style.error_color = raw.error_color;
     if (raw.fill === "under") style.fill = raw.fill;
     else {
       const fill = object(raw.fill);

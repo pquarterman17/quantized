@@ -633,7 +633,7 @@ export interface RegionShade {
   fullHeight?: boolean;
 }
 
-export type { DefaultTrace, LineStyle, MarkerShape, SeriesStyle, StepMode } from "./seriesStyleTypes";
+export type { DefaultTrace, ErrorBarStyle, LineStyle, MarkerShape, SeriesStyle, StepMode } from "./seriesStyleTypes";
 
 /** A non-data column role (W5 DataWorkspace column roles). A channel with a role
  *  is excluded from the plot. `label` keeps it in the worksheet + its statistics
