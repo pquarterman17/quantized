@@ -56,6 +56,7 @@
 
 import { useEffect, useState } from "react";
 import ConfirmDialog from "./components/overlays/ConfirmDialog";
+import InsertPanelInsetDialog from "./components/overlays/InsertPanelInsetDialog";
 import ParamDialog from "./components/overlays/ParamDialog";
 import Toaster from "./components/overlays/Toaster";
 import TooltipLayer from "./components/overlays/TooltipLayer";
@@ -372,6 +373,7 @@ export default function AppOverlays() {
           asked over. */}
       <ParamDialog />
       <ConfirmDialog />
+      <InsertPanelInsetDialog />
       <Toaster />
     </>
   );

@@ -344,3 +344,13 @@ describe("PlotContextMenu — 'Add text here…' (UX-R6 manual annotation)", () 
     expect(ann).toMatchObject({ x: 200, y: 150 });
   });
 });
+
+// #15: the panel-inset insert dialog's entry point.
+describe("PlotContextMenu — 'Insert panel…' (#15)", () => {
+  it("opens the insert-panel dialog and closes the menu", () => {
+    const onClose = open();
+    fireEvent.click(screen.getByText("Insert panel…"));
+    expect(useApp.getState().insertDialogOpen).toBe(true);
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+});

@@ -117,6 +117,12 @@ export interface PlotMenuContext {
    *  figure-decoration state. */
   addTextHere: () => void;
 
+  /** #15: open the panel-inset insert dialog (dataset/image/table box). Same
+   *  "always-near-the-top, plot-body-only" placement as `addTextHere` —
+   *  offered unconditionally there's no data coordinate it needs, so it is
+   *  not itself zone-gated, but it sits in the same group. */
+  insertPanelInset?: () => void;
+
   /** Gap audit 2 #7: mask points from the plot. `selected` = the brushed
    *  rows (Select Rows tool / worksheet selection) of the active dataset,
    *  `excludedSelected` how many of them are already excluded, `excluded`
@@ -283,6 +289,7 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
   // placement would land off the visible extents).
   if (ctx.zone === "plot") {
     items.push({ label: "Add text here…", run: ctx.addTextHere });
+    if (ctx.insertPanelInset) items.push({ label: "Insert panel…", run: ctx.insertPanelInset });
     items.push({ separator: true });
   }
 

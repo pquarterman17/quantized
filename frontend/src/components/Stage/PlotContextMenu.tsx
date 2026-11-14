@@ -152,6 +152,9 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       void createAnnotationFromDialog({ x: dataX, y: dataY, title: "Add text", flipToPointer: true });
     };
 
+    // #15: open the panel-inset insert dialog (dataset/image/table box).
+    const insertPanelInset = () => st.openInsertPanelInsetDialog();
+
     // Audit P2.4 "Peak Fitting ▸ Fit this range": the selected x-range (Gadget
     // band / ∫ region / selected rows — lib/plotRangeSelection) handed to the
     // Peak Analyzer through store/peakFitRange, which applies it and finds
@@ -239,6 +242,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       copyData: actions.copyData,
       setTool: st.setPlotTool,
       addTextHere,
+      insertPanelInset,
       peakRange,
       fitPeakRange,
       pointMask,

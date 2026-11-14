@@ -161,6 +161,22 @@ describe("buildPlotMenu — 'Add text here…' (UX-R6 manual annotation entry)",
   });
 });
 
+// #15: the panel-inset insert dialog's entry point.
+describe("buildPlotMenu — 'Insert panel…' (#15)", () => {
+  it("offers the entry in the plot zone and dispatches ctx.insertPanelInset", () => {
+    const insertPanelInset = vi.fn();
+    const items = buildPlotMenu(makeCtx({ zone: "plot", insertPanelInset }));
+    const item = find(items, "Insert panel…")!;
+    expect(item).toBeTruthy();
+    if ("run" in item) item.run();
+    expect(insertPanelInset).toHaveBeenCalledTimes(1);
+  });
+
+  it("is absent when ctx carries no insertPanelInset handler", () => {
+    expect(find(buildPlotMenu(makeCtx({ zone: "plot" })), "Insert panel…")).toBeUndefined();
+  });
+});
+
 describe("buildPlotMenu — entries dispatch the ctx actions", () => {
   it("a colour swatch sets that series' colour", () => {
     const ctx = makeCtx({ series: series({ channel: 3 }) });

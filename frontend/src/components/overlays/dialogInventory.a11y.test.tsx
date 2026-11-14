@@ -16,6 +16,7 @@ import AnnotationTextDialog from "./AnnotationTextDialog";
 import CommandPalette from "./CommandPalette";
 import ConfirmDialog from "./ConfirmDialog";
 import HelpDialog from "./HelpDialog";
+import InsertPanelInsetDialog from "./InsertPanelInsetDialog";
 import ParamDialog, { askParams } from "./ParamDialog";
 import PreferencesDialog from "./PreferencesDialog";
 import RecoveryChoiceDialog from "./RecoveryChoiceDialog";
@@ -51,7 +52,7 @@ async function openWith(ui: ReactNode, open: () => void): Promise<HTMLElement> {
 }
 
 beforeEach(() => {
-  useApp.setState({ prefsOpen: false, shortcutsOpen: false, textFormatHelpOpen: false, cmdkOpen: false });
+  useApp.setState({ prefsOpen: false, shortcutsOpen: false, textFormatHelpOpen: false, cmdkOpen: false, insertDialogOpen: false });
   useHelp.setState({ open: false });
   useRecoveryChoice.setState({ pending: null });
   useAnnotationTextDialog.setState({ title: null, initial: "", resolve: null });
@@ -123,6 +124,12 @@ describe("dialog basics — the most-used dialogs", () => {
         pending: { workspace, autosaveAt: 0, datasetCount: 0, lastProject: { name: "p.dwk", path: "/p.dwk", at: 0 } },
       }),
     );
+    expect(await auditDialog(dialog, { opener, user })).toEqual([]);
+  });
+
+  it("Insert panel (#15)", async () => {
+    const user = userEvent.setup();
+    const opener = await openWith(<InsertPanelInsetDialog />, () => useApp.getState().openInsertPanelInsetDialog());
     expect(await auditDialog(dialog, { opener, user })).toEqual([]);
   });
 

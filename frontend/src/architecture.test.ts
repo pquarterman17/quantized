@@ -2215,6 +2215,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   drawShapeKind: "active shape drawing tool; UI state, cleared on tool switch",
   selectedShapeId: "selected shape for editing; transient tool state",
   selectedPanelInsetId: "selected panel inset for editing; transient tool state",
+  insertDialogOpen: "panel-inset insert dialog visibility; UI dialog state, ephemeral",
 
   // regionShades slice (F2.3j): same PlotView-nested shape as shapes above --
   // undo captures it inside HistorySnapshot's `view: PlotView` field, not by

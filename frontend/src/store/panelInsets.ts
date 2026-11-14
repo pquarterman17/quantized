@@ -25,6 +25,11 @@ export interface PanelInsetsSlice {
   updatePanelInset: (id: string, patch: Partial<Omit<PanelInset, "id">>) => void;
   removePanelInset: (id: string) => void;
   clearPanelInsets: () => void;
+  /** The Insert-panel dialog's visibility; UI dialog state, not undo-recorded
+   *  (same convention as `splitDialogTargetId`). */
+  insertDialogOpen: boolean;
+  openInsertPanelInsetDialog: () => void;
+  closeInsertPanelInsetDialog: () => void;
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -60,5 +65,8 @@ export function createPanelInsetsSlice(set: SliceSet, get: SliceGet): PanelInset
       get().recordHistory("clear panels");
       set({ panelInsets: [], selectedPanelInsetId: null });
     },
+    insertDialogOpen: false,
+    openInsertPanelInsetDialog: () => set({ insertDialogOpen: true }),
+    closeInsertPanelInsetDialog: () => set({ insertDialogOpen: false }),
   };
 }
