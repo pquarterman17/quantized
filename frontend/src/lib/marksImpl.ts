@@ -68,6 +68,7 @@ function drawSizeKey(u: uPlot, specs: ColorScatterSpec[]): void {
       ctx.fillText(fmtNum(m.value), left + width - 30 * k, y);
       y -= r + 4 * k;
     }
+    y -= 5 * k;
     ctx.fillText(e.label, left + width - 40 * k - ctx.measureText(e.label).width / 2, y);
     y -= 14 * k;
   }

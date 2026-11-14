@@ -14,7 +14,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { fixedLim, type HalfLim } from "../../lib/axisLim";
 import { groupLevelLabel, levelOrderFor } from "../../lib/categorical";
 import { buildColorByColumns, type ColorScatterSpec } from "../../lib/colorscatter";
-import { marks, useMarksVersion } from "../../lib/marksLoader";
+import { useMarksVersion } from "../../lib/marksLoader";
 import type { ErrorSpan } from "../../lib/errorbars";
 import { hasOverlayCompanions } from "./overlayCompanions";
 import { hasRichErrorBindings, type ErrorBinding } from "../../lib/errorRoles";
@@ -282,18 +282,16 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   const errorBars = useOffsetErrorBars(active, plotted, grouped, p.errKeys, p.seriesStyles, offsetsApply);
   const encodedLists = useEncodedLists(encoded, displayPayload, p.seriesStyles, p.seriesLabels); // P1.4
 
-  // Colour-mapped-scatter specs per plotted series (MAIN #14), same p+1 keying;
-  // P1.4 residual 4: an encoded gradient Color-by draws through the same map.
-  const marksVer = useMarksVersion(); // N5: size-by columns exist once the lazy module has loaded
+  // Colour-mapped-scatter specs per plotted series (MAIN #14), same p+1 keying (P1.4: an encoded gradient too); N5 size-by joins once `loaded`.
+  const loaded = useMarksVersion();
   const colorByColumns = useMemo(
     () => {
       if (encoded?.colorBy) return encoded.colorBy(encoded.styles(p.seriesStyles));
       if (!data || groupCol !== null || encoded) return new Map<number, ColorScatterSpec>();
       const base = buildColorByColumns(data, plotted, p.seriesStyles);
-      return marks()?.withSizes(base, data, plotted, p.seriesStyles) ?? base; // N5, once its module has loaded
+      return loaded?.withSizes(base, data, plotted, p.seriesStyles) ?? base;
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- marksVer: the module's arrival
-    [data, plotted, p.seriesStyles, groupCol, encoded, marksVer],
+    [data, plotted, p.seriesStyles, groupCol, encoded, loaded],
   );
 
   // Interactive-legend visibility, aligned 1:1 with the display series (overlays
