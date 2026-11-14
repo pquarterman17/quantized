@@ -21,6 +21,7 @@ import {
 import { ACCENT_SWATCHES as ACCENTS } from "../../store/accentSwatches";
 import { useApp } from "../../store/useApp";
 import { UploadCachePref } from "./UploadCachePref";
+import { OpjMatrixPref } from "./OpjMatrixPref";
 import { focusablesIn, useDialogFocus } from "./useDialogFocus";
 import { useEscapeSurface } from "../../lib/escapeStack";
 import { onTabListKeyDown } from "../../lib/tabListKeys";
@@ -299,6 +300,7 @@ export default function PreferencesDialog() {
                   />
                 </PrefRow>
                 <UploadCachePref />
+                <OpjMatrixPref />
                 <PrefRow label="Confirm before removing data">
                   <Switch
                     aria-label="Confirm removal"

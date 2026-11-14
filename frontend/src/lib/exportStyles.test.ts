@@ -73,6 +73,7 @@ describe("buildExportStyles", () => {
 
   it("carries bars (an Origin column graph) through to the export renderer", () => {
     expect(buildExportStyles([0], { 0: { bars: true } })[0]?.bars).toBe(true);
+    expect(buildExportStyles([0], { 0: { bars: "horizontal" } })[0]?.bars).toBe("horizontal");
     expect(buildExportStyles([0], { 0: { width: 2 } })[0]?.bars).toBeUndefined();
   });
 });

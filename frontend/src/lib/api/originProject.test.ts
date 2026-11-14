@@ -1,14 +1,15 @@
 // /api/export/opj client: the native Origin project download. It must hit the
 // .opj route (not the .ogs-script /origin-project zip), name the fallback
-// file after the requested stem, and forward the caller's cancel signal.
+// file after the requested stem, forward the caller's cancel signal, and read
+// the writer's matrix-fallback count off the response.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { postDownload } from "./http";
+import { postDownloadHeaders } from "./http";
 import { exportOriginProject } from "./originProject";
 
 vi.mock("./http", () => ({
-  postDownload: vi.fn().mockResolvedValue(undefined),
+  postDownloadHeaders: vi.fn().mockResolvedValue(new Headers()),
 }));
 
 beforeEach(() => vi.clearAllMocks());
@@ -20,12 +21,21 @@ describe("exportOriginProject", () => {
     const signal = new AbortController().signal;
     const body = { datasets: [{ dataset: ds, name: "LoopA" }], filename: "session" };
     await exportOriginProject(body, signal);
-    expect(postDownload).toHaveBeenCalledWith("/api/export/opj", body, "session.opj", signal);
+    expect(postDownloadHeaders).toHaveBeenCalledWith("/api/export/opj", body, "session.opj", signal);
   });
 
   it("falls back to the route's own default stem", async () => {
     const body = { datasets: [{ dataset: ds, name: "LoopA" }] };
     await exportOriginProject(body);
-    expect(postDownload).toHaveBeenCalledWith("/api/export/opj", body, "project.opj", undefined);
+    expect(postDownloadHeaders).toHaveBeenCalledWith("/api/export/opj", body, "project.opj", undefined);
+  });
+
+  it("returns how many matrix books went out as worksheet columns", async () => {
+    const body = { datasets: [{ dataset: ds }] };
+    vi.mocked(postDownloadHeaders).mockResolvedValueOnce(new Headers({ "X-Opj-Matrix-Fallback": "2" }));
+    expect(await exportOriginProject(body)).toEqual({ matrixFallbacks: 2 });
+    expect(await exportOriginProject(body)).toEqual({ matrixFallbacks: 0 }); // no header
+    vi.mocked(postDownloadHeaders).mockResolvedValueOnce(new Headers({ "X-Opj-Matrix-Fallback": "x" }));
+    expect(await exportOriginProject(body)).toEqual({ matrixFallbacks: 0 });
   });
 });

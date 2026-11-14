@@ -48,6 +48,7 @@ import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit"
 import { anchorEditPlugin, type AnchorPoint } from "./uplotAnchors";
 import { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
 import { xLabelRightPad, xTickSpace } from "./uplotRightPad";
+import { orientArgs, orientAxes, orientPlugins } from "./uplotOrient";
 import { withUnit } from "./unitDisplay";
 export { withUnit }; // eager callers import it here: ~260 B less first-paint JS than direct
 import {
@@ -781,8 +782,8 @@ function scaleDistrProps(
   return { distr: 1 };
 }
 
-export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Options {
-  const { width, height, yScale, xScale, tool, onReadout, xLim, yLim, refLines } = args;
+export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Options { // orientArgs: uplotOrient
+  const args = orientArgs(given), { width, height, yScale, xScale, tool, onReadout, xLim, yLim, refLines } = args;
   const { xFmt, yFmt, y2Fmt, annotations, showGrid, onRegionSelect } = args;
   const xAscending = xIsAscending(payload.data[0] as (number | null)[]);
   // This window's EFFECTIVE background (item 18) drives both the axis/grid/
@@ -1246,7 +1247,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         },
       ],
     },
-    plugins: plugins.map(compactPluginHooks),
+    plugins: orientPlugins(plugins.map(compactPluginHooks), args.seriesStyles),
     legend: { show: false },
     // Setting `scales.x.time` engages uPlot's CALENDAR-aware tick placement,
     // which snaps splits to day/month/year boundaries through `tzDate`. Left
@@ -1259,8 +1260,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     // exact (it follows DST per timestamp) and far cheaper than uPlot.tzDate,
     // which builds an Intl formatter per call.
     ...(scales.x?.time ? { tzDate: utcTzDate } : {}),
-    scales,
-    axes,
+    ...orientAxes(scales, axes, args.seriesStyles), // horizontal bars: uplotOrient
     padding: [null, hasY2 ? null : xLabelRightPad(tickPx), null, null],
     series: seriesArr,
     ...(bands.length > 0 ? { bands } : {}),

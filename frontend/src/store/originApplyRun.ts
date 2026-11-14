@@ -354,8 +354,9 @@ export function runOriginFigureApply(
       ? originHiddenChannels(ds.data).filter((key) => selection ? !selection.yKeys.includes(key) : true)
       : [],
   });
-  if (libs.hasHorizontalBars(fig)) {
-    toast(`${fig.name}: Origin's horizontal bars are drawn as vertical columns`, "info");
+  if (Object.values(get().seriesStyles).some((st) => st?.bars === "horizontal")) {
+    // The plot turns on its side (lib/uplotOrient): say what that switches off.
+    toast(`${fig.name}: horizontal bars — pan, region and analysis tools and dragging lines, labels or shapes are off on this turned plot`, "info");
   }
   get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
 }

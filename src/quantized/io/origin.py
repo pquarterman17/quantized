@@ -47,6 +47,7 @@ from quantized.io.origin_graph import (
     origin_rich_unit,
     plot_state_graph,
 )
+from quantized.io.origin_x_echo import kept_channels, remap_graph
 
 __all__ = [
     "GraphSpec",
@@ -126,10 +127,14 @@ def format_origin_script(
     x_name = str(_meta_get(meta, "x_column_long", "x_column_name", "xColumnName", default="X"))
     x_unit = str(_meta_get(meta, "x_column_unit", "xColumnUnit", default=""))
 
-    labels = list(data.labels)
-    units = list(data.units)
+    # An Origin matrix book's X channel repeats column 1: written once
+    # (origin_x_echo). For every other dataset ``keep`` is every channel.
+    n_all = len(data.labels)
+    keep = kept_channels(data)
+    labels = [data.labels[i] for i in keep]
+    units = [data.units[i] if i < len(data.units) else "" for i in keep]
     time = np.asarray(data.time, dtype=float)
-    values = np.asarray(data.values, dtype=float)
+    values = np.asarray(data.values, dtype=float)[:, keep]
 
     # ── CSV: header, units, then %.10g data rows ──
     # Names/units come from the imported file: neutralize spreadsheet formulas
@@ -139,11 +144,11 @@ def format_origin_script(
         ",".join(csv_text_cell(c) for c in [x_unit, *units]),
     ]
     # A categorical channel stores level CODES: write the level text instead.
-    categorical = [is_categorical(data, c) for c in range(values.shape[1])]
+    categorical = [is_categorical(data, c) for c in keep]
     for r in range(values.shape[0]):
         cells = [_num_cell(time[r])]
         cells.extend(
-            csv_text_cell(level_of(data, c, values[r, c]) or "") if categorical[c]
+            csv_text_cell(level_of(data, keep[c], values[r, c]) or "") if categorical[c]
             else _num_cell(values[r, c])
             for c in range(values.shape[1])
         )
@@ -181,8 +186,9 @@ def format_origin_script(
         o.append(f'wks.col1.comment$ = "{escape_lt(x_comment)}";')
     # Declared roles decide (column_designations + the live error roles); the
     # whole-token label guess runs only when the dataset declares neither.
-    designations = channel_designations(meta, labels, keyword_fallback=True)
-    comments = channel_comments(meta, len(labels))
+    all_designations = channel_designations(meta, list(data.labels), keyword_fallback=True)
+    designations = [all_designations[i] for i in keep]
+    comments = [channel_comments(meta, n_all)[i] for i in keep]
     for k, label in enumerate(labels):
         cn = k + 2
         unit = units[k] if k < len(units) else ""
@@ -194,8 +200,15 @@ def format_origin_script(
             o.append(f'wks.col{cn}.comment$ = "{escape_lt(comments[k])}";')
 
     if make_graph:
-        curves = curve_set(designations, error_targets(meta, len(labels)))
+        new_index = {old: k for k, old in enumerate(keep)}
+        targets = {
+            new_index[e]: new_index[t]
+            for e, t in error_targets(meta, n_all).items()
+            if e in new_index and t in new_index
+        }
+        curves = curve_set(designations, targets)
         if graph is not None:
+            graph = remap_graph(graph, keep, n_all)
             o += plot_state_graph(
                 graph, labels=labels, units=units, x_name=x_name, x_unit=x_unit, sheet=sheet,
                 x_data=time if graph.x_key is None or graph.x_key >= values.shape[1]

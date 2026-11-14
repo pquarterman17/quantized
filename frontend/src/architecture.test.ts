@@ -2311,6 +2311,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   defaultLineWidth: "prefs",
   defaultGrid: "prefs",
   copyFigureTransparent: "prefs",
+  opjWriteMatrices: "prefs (Origin .opj export: matrices as Origin matrices, opt-in)",
   antialias: "prefs",
   sigFigs: "prefs",
   notation: "prefs",

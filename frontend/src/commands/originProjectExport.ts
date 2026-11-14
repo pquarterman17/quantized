@@ -4,7 +4,11 @@
 // those, otherwise every loaded dataset. Each becomes a workbook named as the
 // Library shows it (extension stripped) -- except that worksheets of one
 // Library workbook become the sheets of ONE Origin book (`workbookGroups`).
-// A matrix book goes out as X/Y/Z worksheet columns, and the toast says so.
+// A matrix book goes out as X/Y/Z worksheet columns unless Preferences ▸
+// "Write matrix books as Origin matrices" is on (opt-in: the matrix window is
+// not yet verified in real Origin); even then one the writer cannot write as a
+// matrix (complex, edited, or sharing a workbook) goes out as columns. The
+// toast says how many (the server counts them) and why.
 //
 // What the .opj carries is the data the writer takes: x plus value columns
 // with their labels, units, comments and designations (column_designations
@@ -46,13 +50,6 @@ export function workbookGroups(s: StoreGet, picked: readonly Dataset[]): { group
   });
 }
 
-/** Matrix books: the .opj writer writes worksheets only, so a matrix goes
- *  out as its X/Y/Z columns. Said in the export toast, never silent. */
-const isMatrix = (d: Dataset): boolean => {
-  const m = (d.data.metadata ?? {}) as Record<string, unknown>;
-  return m.origin_matrix != null || m.is2D === true;
-};
-
 export async function runExportOriginProject(s: StoreGet): Promise<void> {
   const all = s().datasets;
   const picked = s().selectedIds.length > 1 ? all.filter((d) => s().selectedIds.includes(d.id)) : all;
@@ -61,6 +58,7 @@ export async function runExportOriginProject(s: StoreGet): Promise<void> {
     return;
   }
   const groups = workbookGroups(s, picked);
+  const asMatrix = s().opjWriteMatrices;
   const nBooks = new Set(groups.map((g, i) => g.group || `#${i}`)).size;
   const books = `${nBooks} book${nBooks === 1 ? "" : "s"}${nBooks < picked.length ? `, ${picked.length} sheets` : ""}`;
   try {
@@ -68,7 +66,7 @@ export async function runExportOriginProject(s: StoreGet): Promise<void> {
       // #38: a lazy book may still be a preview; resolve every target first.
       const resolved = await s().resolveDatasets(picked.map((d) => d.id));
       signal.throwIfAborted();
-      await exportOriginProject(
+      return exportOriginProject(
         {
           datasets: resolved.map((d, i) => ({
             dataset: withLiveErrorRoles(d),
@@ -76,6 +74,7 @@ export async function runExportOriginProject(s: StoreGet): Promise<void> {
             ...(groups[i].group ? groups[i] : {}),
           })),
           filename: opjFileStem(s, picked),
+          ...(asMatrix ? { matrices_as_matrix: true } : {}),
         },
         signal,
       );
@@ -84,9 +83,12 @@ export async function runExportOriginProject(s: StoreGet): Promise<void> {
     // Same visible confirmation the .ogs export gives (live check 2026-11:
     // the download was the only sign anything had happened).
     if (done) toast(`exported Origin project (${books})`, "ok");
-    const matrices = picked.filter(isMatrix).length;
-    if (done && matrices) {
-      toast(`${matrices} matrix book${matrices === 1 ? " was" : "s were"} written as X/Y/Z worksheet columns — the .opj export writes worksheets only`, "info");
+    const matrices = done?.value.matrixFallbacks ?? 0;
+    if (matrices) {
+      const why = asMatrix
+        ? "complex, edited, or sharing a workbook, so not as an Origin matrix"
+        : "turn on Preferences ▸ Write matrix books as Origin matrices (not yet verified in Origin) to write them as matrices";
+      toast(`${matrices} matrix book${matrices === 1 ? " was" : "s were"} written as X/Y/Z worksheet columns — ${why}`, "info");
     }
   } catch (e: unknown) {
     const msg = `export failed: ${e instanceof Error ? e.message : "error"}`;

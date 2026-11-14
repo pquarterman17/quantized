@@ -23,6 +23,7 @@ from __future__ import annotations
 import math
 import os
 import re
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -33,6 +34,8 @@ from quantized.datastruct import DataStruct
 from quantized.io.origin_project import read_origin_books
 from quantized.io.origin_project.container import walk_blocks
 from quantized.io.origin_project.opj_datasets import parse_dataset_header
+from quantized.io.origin_project.writer import opj_bytes
+from quantized.io.origin_project.writer_matrix import matrix_fallbacks
 
 
 def _corpus() -> Path:
@@ -330,14 +333,24 @@ def test_matrix_shape_matches_the_dimensions_in_its_file_name(name: str) -> None
     assert book.metadata["origin_matrix"]["coordinates_recovered"] is True
 
 
-def test_altaxo_matrix_cells_and_coordinates() -> None:
+def _written_back(path: Path) -> list[DataStruct]:
+    """``path``'s books written by the ``.opj`` writer and read again."""
+    out = Path(tempfile.mkdtemp()) / "written.opj"
+    out.write_bytes(opj_bytes(_books(path), matrices=True))
+    return _books(out)
+
+
+@pytest.mark.parametrize("via_writer", [False, True], ids=["read", "written-back"])
+def test_altaxo_matrix_cells_and_coordinates(via_writer: bool) -> None:
     """``Assert.Equal(v, sheet[r, c])`` and ``sheet.X1`` ... for the two
-    single-matrix projects: cell [r, c] is point ``r * cols + c``."""
+    single-matrix projects: cell [r, c] is point ``r * cols + c``. Also for
+    the same projects written back by the ``.opj`` writer (``writer_matrix``):
+    an exported matrix carries Altaxo's cells and coordinates too."""
     source = _find("OriginAnyParserTest.cs").read_text(encoding="utf-8-sig")
     checked = 0
     for name in ("Matrix71x29.opj", "Matrix137x179.opj"):
         body = source.split(f'"{name}"', 1)[1].split("[Fact]", 1)[0]
-        (book,) = _books(_find(name))
+        (book,) = (_written_back if via_writer else _books)(_find(name))
         rows, cols = book.metadata["map_shape"]
         z = np.asarray(book.values[:, 2]).reshape(rows, cols)
         for value, r, c in re.findall(r"Assert\.Equal\((-?[\d.]+), sheet\[(\d+), (\d+)\]\)", body):
@@ -349,6 +362,32 @@ def test_altaxo_matrix_cells_and_coordinates() -> None:
             assert got == float(value), f"{name} {bound}"
             checked += 1
     assert checked >= 16
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["Matrix71x29", "Matrix137x179", "Matrix2x3OfDifferentTypes", "OneWorksheetOneMatrix"],
+)
+@pytest.mark.parametrize("ext", [".opj", ".opju"])
+def test_matrix_books_round_trip_through_the_opj_writer(name: str, ext: str) -> None:
+    """Every matrix the reader imports comes back from a written ``.opj`` as
+    the same matrix (shape, coordinates, every cell); worksheets beside it
+    stay worksheets. A complex matrix is the one that cannot (it goes out
+    as worksheet columns, counted by ``matrix_fallbacks``)."""
+    source = _find(name + ext)
+    books = _books(source)
+    back = {b.metadata["origin_book"]: b for b in _written_back(source)}
+    for book in books:
+        again = back[book.metadata["origin_book"]]
+        if "Z (imaginary)" in book.labels:
+            assert again.metadata.get("origin_matrix") is None
+            continue
+        assert again.metadata.get("origin_matrix") == book.metadata.get("origin_matrix")
+        assert again.labels == book.labels
+        assert np.array_equal(again.values, book.values, equal_nan=True)
+    complex_books = sum("Z (imaginary)" in b.labels for b in books)
+    assert matrix_fallbacks(books, None, matrices=True) == complex_books
+    assert matrix_fallbacks(books, None) == sum("origin_matrix" in b.metadata for b in books)
 
 
 # ── LabPlot: Origin 8 Text & Numeric columns ─────────────────────────────────

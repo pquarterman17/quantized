@@ -67,6 +67,8 @@ export interface AppearancePrefsSlice {
   defaultGrid: boolean;
   /** MAIN #35: Copy figure background — transparent vs the preset's opaque. */
   copyFigureTransparent: boolean;
+  /** Origin .opj export: matrices as Origin matrices (opt-in; `Prefs`). */
+  opjWriteMatrices: boolean;
   antialias: boolean;
   sigFigs: number;
   notation: Notation;

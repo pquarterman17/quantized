@@ -372,6 +372,16 @@ describe("buildOpts defaultTrace", () => {
       expect(s.points).toEqual({ show: false });
     });
 
+    it("horizontal bars turn the plot: X up the left, the values along the bottom", () => {
+      const o = buildOpts(payload, {
+        ...base, yScale: "linear", tool: "zoom", seriesStyles: [{ bars: "horizontal" }], ...stepBuilders,
+      });
+      expect(o.series?.[1]?.paths).toBe(BAR_PATHS);
+      expect(o.scales?.x?.ori).toBe(1);
+      expect(o.scales?.y?.ori).toBe(0);
+      expect(o.axes?.map((a) => a.side)).toEqual([3, 2]);
+    });
+
     it("no width:0 side effect — step is independent of the scatter 'no line' mechanism", () => {
       const s = buildOpts(payload, {
         ...base, yScale: "linear", tool: "zoom", seriesStyles: [{ step: "post" }],

@@ -40,6 +40,7 @@ from quantized.heavy_import import heavy_imports
 
 from .figure_bars import draw_series
 from .figure_errorbars import apply_error_bars
+from .figure_orient import TransposedAxes, oriented
 
 __all__ = ["draw_series_axes", "render_figure", "style_rc"]
 
@@ -182,11 +183,16 @@ def draw_series_axes(
     ``None``/``"auto"`` leaves matplotlib's own default formatter untouched.
     """
     artists: list[Any] = []
+    ax = oriented(ax, series_styles)  # horizontal bars: x and y exchanged (figure_orient)
     for i, (label, y) in enumerate(series):
         spec = series_styles[i] if series_styles and i < len(series_styles) else None
         yv = np.asarray(y, dtype=float)
         if spec and spec.get("color_by") is not None:
-            artists.append(_draw_color_scatter(fig, ax, xv, yv, label, spec, st))
+            # fig.colorbar needs the real Axes: a turned plot swaps the data.
+            turned = isinstance(ax, TransposedAxes)
+            cx, cy = (yv, xv) if turned else (xv, yv)
+            real = ax.real if turned else ax
+            artists.append(_draw_color_scatter(fig, real, cx, cy, label, spec, st))
             continue
         kw = _plot_kwargs(st.line_width, st.marker_size, spec)
         line, color = draw_series(ax, xv, yv, label, kw, spec)  # bars: figure_bars

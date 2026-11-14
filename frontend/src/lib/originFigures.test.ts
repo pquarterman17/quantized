@@ -19,7 +19,6 @@ import {
   figureChannelSelection,
   figureSelectionState,
   figureStatState,
-  hasHorizontalBars,
   originFigureAnnotations,
   originLegendFrameXY,
   originLegendPos,
@@ -1419,15 +1418,13 @@ describe("Origin column / bar / histogram graphs (re-audit #2: a bar graph resto
   const curve = (plotType?: OriginCurve["plotType"]): OriginCurve =>
     ({ book: "Book1", x: "A", y: "B", symbol: "square", symbolSize: 8, lineWidth: 1, color: "#ff0000", ...(plotType ? { plotType } : {}) });
 
-  it("a column or bar curve draws as bars on the XY stage, without its latent symbol", () => {
+  it("a column curve draws as bars and a bar curve as horizontal bars, without the latent symbol", () => {
     expect(originCurveSeriesStyle(curve("column"))).toEqual({ color: "#ff0000", bars: true });
-    expect(originCurveSeriesStyle(curve("bar"))).toEqual({ color: "#ff0000", bars: true });
+    expect(originCurveSeriesStyle(curve("bar"))).toEqual({ color: "#ff0000", bars: "horizontal" });
     expect(originCurveSeriesStyle(curve())).toMatchObject({ marker: true, markerShape: "square" });
     const sel = figureChannelSelection(figure({ curves: [curve("column")] }), book);
     expect(sel?.styles[0]).toEqual({ color: "#ff0000", bars: true });
     expect(figureStatState(figure({ curves: [curve("column")] }), book)).toEqual({});
-    expect(hasHorizontalBars(figure({ curves: [curve("bar")] }))).toBe(true);
-    expect(hasHorizontalBars(figure({ curves: [curve("column")] }))).toBe(false);
   });
 
   it("a histogram of the X column opens the Stat Stage's histogram of that column", () => {
