@@ -54,6 +54,13 @@ def test_names_units_and_comments_rows(tmp_path: Path) -> None:
     assert text["Logged"][0] == "2026-03-01 12:00:00"
 
 
+def test_a_sparse_numeric_column_does_not_become_text(tmp_path: Path) -> None:
+    rows: list[list[object]] = [["T", "R", "Note"]]
+    rows += [[float(i), 2.0 * i, 7.5 if i == 3 else None] for i in range(20)]
+    ds = import_excel(_workbook(tmp_path / "s.xlsx", rows))
+    assert "text_columns" not in ds.metadata
+
+
 def test_a_plain_names_and_units_sheet_is_unchanged(tmp_path: Path) -> None:
     rows: list[list[object]] = [["Field", "Moment"], ["Oe", "emu"]]
     rows += [[100.0 * i, 1e-4 * i] for i in range(5)]

@@ -39,6 +39,17 @@ describe("category labels from a text column", () => {
     expect(resolveCategoryLabels(data, 1, [0, 1, 2])).toEqual(["S0", "S1", "S2"]);
   });
 
+  it("names a small grouping where only one level repeats", () => {
+    const data = {
+      time: [1, 2, 3, 4],
+      values: [[1], [1], [2], [3]],
+      labels: ["Code"],
+      units: [""],
+      metadata: { text_columns: { Batch: ["a", "a", "b", "c"] } },
+    } as DataStruct;
+    expect(resolveCategoryLabels(data, 0, [1, 2, 3])).toEqual(["a", "b", "c"]);
+  });
+
   it("uses the channel's OWN text column even when every level occurs once", () => {
     // An Origin label column: numeric codes + `origin_text_columns` under the
     // same short name, one row per category (a bar chart's X).

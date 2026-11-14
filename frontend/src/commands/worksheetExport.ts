@@ -69,7 +69,10 @@ export async function runExportWorksheet(s: StoreGet, scope: WorksheetExportScop
       if (!ds) continue;
       const masked = answer.skipMasked === true ? excludedSet(ds) : new Set<number>();
       const rows = (scope.rows?.length && !several ? scope.rows : allRows(ds)).filter((r) => !masked.has(r));
-      sheets.push({ name: stemFromName(ds.name), columns: worksheetTableWire(ds, rows, answer.skipDisregard === true) });
+      // A spreadsheet's own sheet name ("Run2") over the dataset's ("run.xlsx:Run2").
+      const sheet = ds.data.metadata?.sheet_name;
+      const name = typeof sheet === "string" && sheet ? sheet : stemFromName(ds.name);
+      sheets.push({ name, columns: worksheetTableWire(ds, rows, answer.skipDisregard === true) });
     }
     if (sheets.length === 0) throw new Error("the worksheets are no longer loaded");
     if (fmt === "xlsx") {

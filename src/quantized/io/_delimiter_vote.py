@@ -87,11 +87,21 @@ def data_section_start(lines: Sequence[str]) -> int:
     ``Sweep range (V)<TAB>-1<TAB>1`` looks exactly like a numeric data row,
     so layout detection started the "data" in the preamble (worksheet audit
     #3). Origin starts the table below the heading; so do our readers.
+
+    Only the first `_HEADING_SCAN_LINES` lines are searched: the heading
+    ends a preamble, and scanning a million-row data block for one cost a
+    full extra pass on every large import.
     """
-    for i in range(len(lines) - 1, -1, -1):
-        if is_data_heading(lines[i]):
-            return i + 1
-    return 0
+    start = 0
+    for i, line in enumerate(lines[:_HEADING_SCAN_LINES]):
+        if line[:1] == "[" or line.lstrip()[:1] == "[":
+            if is_data_heading(line):
+                start = i + 1
+    return start
+
+
+#: How far into a file `data_section_start` looks for a ``[DATA]`` heading.
+_HEADING_SCAN_LINES = 2000
 
 
 def _delimiter_count(line: str, ch: str) -> int:

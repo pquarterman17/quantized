@@ -362,14 +362,17 @@ def import_excel(
     if time_is_datetime:
         metadata.update({"time_is_datetime": True, "time_timezone": "UTC"})
     # Text (and non-X date) columns are kept as text, as CSV import keeps
-    # them (`text_columns`), not dropped with no word (audit #11).
-    text_columns = {
-        col_headers[c]: cells
-        for c in range(n_cols)
-        if c != time_idx and c not in data_idx
-        for cells in [[_text_cell(grid[i][c]) for i in keep]]
-        if any(cells) and (data_columns is None or np.isnan(data[:, c]).all())
-    }
+    # them (`text_columns`), not dropped with no word (audit #11). A column
+    # is text when most of its filled cells are not numbers -- a sparse
+    # NUMERIC column stays out, as before, rather than turning into text.
+    text_columns: dict[str, list[str]] = {}
+    for c in range(n_cols):
+        if c == time_idx or c in data_idx:
+            continue
+        cells = [_text_cell(grid[i][c]) for i in keep]
+        filled = sum(1 for t in cells if t)
+        if filled and 2 * int(np.count_nonzero(np.isfinite(data[:, c]))) < filled:
+            text_columns[col_headers[c]] = cells
     if text_columns:
         metadata["text_columns"] = text_columns
     if comments_row >= 0:  # kept, as CSV import keeps it: one searchable comment line
