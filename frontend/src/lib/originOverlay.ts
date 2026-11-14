@@ -11,18 +11,11 @@
 // point order intact and render correctly through the existing loop-safe
 // plot machinery (sorted=0 + full-range path builders).
 //
-// PLOT_WORKFLOW_PLAN #3: the segment-concatenation core (`assembleOverlay`)
-// is shared with `buildSelectionOverlay` below, which generalizes this
-// mechanism beyond Origin figure apply to an arbitrary Library multi-select
-// — same NaN-filled-block geometry, one curve per source dataset instead of
-// per decoded Origin curve.
-//
 // Bundle headroom slice 18: the Origin-figure half (`buildOverlayDataset`,
 // `originOverlayDataset`, `overlayBooks` and the style/label read-backs) is
 // `lib/originOverlayFigure.ts`. Only the lazy apply body calls it. It is NOT
 // re-exported from here: an `export *` kept it in this module's eager chunk.
 
-import { primaryChannel } from "./plotdataExtras";
 import type { Dataset, DataStruct, SeriesStyle } from "./types";
 
 /** Derived-overlay schema. Increment when construction or binding semantics
@@ -33,7 +26,7 @@ export const ORIGIN_OVERLAY_VERSION = 2;
  *  channel binding, and the display/style metadata `assembleOverlay` stamps
  *  into the merged DataStruct. Shared shape for both overlay builders below
  *  — `buildOverlayDataset` resolves these from an Origin figure's curves;
- *  `buildSelectionOverlay` resolves one per selected dataset. */
+ */
 export interface OverlayBound {
   ds: Dataset;
   xCh: number; // -2 = time column
@@ -46,8 +39,7 @@ export interface OverlayBound {
 }
 
 /** Segment-concatenate resolved overlay curves into one DataStruct — the
- *  shared core of `buildOverlayDataset` (Origin figure apply) and
- *  `buildSelectionOverlay` (PLOT_WORKFLOW #3 arbitrary Library selection).
+ *  core of `buildOverlayDataset` (Origin figure apply).
  *  One x-block per distinct (dataset, x-channel), in first-curve order: a
  *  cross-book Origin figure gets one block per book; a MULTI-X worksheet --
  *  curves in ONE book plotted against DIFFERENT x columns (e.g. Moke's
@@ -146,40 +138,3 @@ export function assembleOverlay(bound: OverlayBound[], figureName = ""): DataStr
     },
   };
 }
-
-/** PLOT_WORKFLOW_PLAN #3 "Plot selected together": build an overlay
- *  DataStruct from an arbitrary Library multi-selection, generalizing
- *  `buildOverlayDataset` beyond Origin figure apply. Each dataset
- *  contributes exactly ONE curve — its own designated x/time column against
- *  its default plotted channel ({@link primaryChannel}, the same "what does
- *  this dataset show by default" rule the Library thumbnail and plot use) —
- *  labelled by dataset name (not "book: column", since there's no book).
- *  A dataset with no plottable channel is skipped honestly, same as an
- *  undecoded Origin column; callers are expected to have already filtered
- *  out 2-D maps ({@link "./mapdata".is2DMap}) before calling this, since a
- *  map has no single "curve" to contribute. Returns null when fewer than 2
- *  curves resolve. */
-export function buildSelectionOverlay(datasets: Dataset[]): DataStruct | null {
-  const bound: OverlayBound[] = [];
-  for (const ds of datasets) {
-    const yCh = primaryChannel(ds.data);
-    if (yCh == null) continue; // no plottable channel — skip honestly
-    bound.push({
-      ds,
-      xCh: -2,
-      yCh,
-      label: ds.name,
-      unit: ds.data.units[yCh] ?? "",
-      style: null,
-      designation: "Y",
-      legendLabel: undefined,
-    });
-  }
-  const out = assembleOverlay(bound);
-  // assembleOverlay names x by Origin's column letter "A"; a Library selection
-  // keeps the first source's own x name ("A (deg)" was the XRD symptom).
-  const xName = bound[0]?.ds.data.metadata?.x_column_name;
-  if (out) out.metadata.x_column_name = typeof xName === "string" && xName ? xName : "x";
-  return out;
-}
-
