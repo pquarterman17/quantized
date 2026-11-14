@@ -82,6 +82,8 @@ interface InternalRunOptions {
    *  the importer…" op) instead of registering a new one — ONE continuous
    *  StatusBar entry across the chunk fetch and the imports that follow. */
   existingOpId?: OpId;
+  /** Skip just the folder-creation offer: `importAsSheets.ts`'s batch becomes sheets of ONE workbook, where it's never relevant. */
+  suppressFolderOffer?: boolean;
 }
 
 /** R6 F1/F2 (POST_SPRINT_INDEPENDENT_REVIEW.md code-review round): options
@@ -372,7 +374,7 @@ async function runImport<T>(
   presentOutcome = true,
   internal: InternalRunOptions = {},
 ): Promise<string[]> {
-  const { bypassGuard = false, existingOpId } = internal;
+  const { bypassGuard = false, existingOpId, suppressFolderOffer = false } = internal;
   // DEFECT B fallout (Sol audit P1-6, 2026-08-21): `importFiles`/`importPaths`
   // are called directly (no length guard) by several `openFilePicker` sites
   // — lib/importEntry.ts, useGlobalShortcuts.ts, lib/reopenRecent.ts (x3) —
@@ -470,7 +472,7 @@ async function runImport<T>(
   // `ImportPathsOptions.presentOutcome`'s own doc.
   const dataAdded = added - structures.length;
   if (structures.length > 0) presentStructures(structures);
-  if (dataAdded > 0 && presentOutcome) await presentBatchOutcome(get, dataAdded, createdIds, targetFolderId);
+  if (dataAdded > 0 && presentOutcome) await presentBatchOutcome(get, dataAdded, createdIds, targetFolderId, { suppressFolderOffer });
   // P3.4 error-quality audit (2026-09-14, deduped in the review round): the
   // toast carries the "whether data changed" fact too. The status line said
   // "imported 3/5 — failed …" while the toast — what actually appears over
@@ -488,9 +490,7 @@ export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
     // roles (it infers them at import), and splitting the seed from the edit
     // is how the two drift into different ideas of what a binding means.
     ...createErrorRolesActions(set, get),
-    importFiles: (files, opts) =>
-      runImport(set, get, files, (f) => f.name, loadUpload, undefined, true,
-        { bypassGuard: opts?.bypassGuard, existingOpId: opts?.existingOpId }),
+    importFiles: (files, opts) => runImport(set, get, files, (f) => f.name, loadUpload, undefined, true, opts),
 
     importPaths: (paths, opts) =>
       runImport(set, get, paths, pathBasename, loadPath, opts?.historyToken, opts?.presentOutcome ?? true,

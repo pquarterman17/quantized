@@ -1153,6 +1153,16 @@ describe("L0.46 — batch folder suggestion (never creates without the click)", 
     expect(useToasts.getState().toasts.some((t) => t.action)).toBe(false);
   });
 
+  it("suppressFolderOffer skips just the folder suggestion, falling through to the plain toast (worksheet audit)", async () => {
+    // "Import as sheets of one workbook…" (commands/importAsSheets.ts) passes
+    // this so its own batch of same-prefix files never shows the ordinary
+    // "create folder?" suggestion — those files are about to become sheets of
+    // ONE workbook, not candidates for a new folder.
+    await useApp.getState().importFiles(files("scan_1.dat", "scan_2.dat"), { suppressFolderOffer: true });
+    expect(useToasts.getState().toasts.some((t) => t.action)).toBe(false);
+    expect(toastMsgs()).toContain("imported 2 files");
+  });
+
   it("no offer for a single file", async () => {
     await useApp.getState().importFiles(files("scan_001.dat"));
     expect(useToasts.getState().toasts.some((t) => t.action)).toBe(false);

@@ -14,7 +14,11 @@ import { useApp } from "../store/useApp";
  *  a single import already has its own workbook). */
 export async function runImportAsSheets(s: StoreGet, files: File[]): Promise<string | null> {
   if (files.length === 0) return null;
-  const ids = await s().importFiles(files);
+  // suppressFolderOffer: these files are about to be gathered into ONE
+  // workbook below, so the standard "create folder?" batch suggestion
+  // (store/importTargetFolder.ts's batchFolderOffer) is never relevant here —
+  // worksheet audit follow-up.
+  const ids = await s().importFiles(files, { suppressFolderOffer: true });
   if (ids.length < 2) return null;
   const idSet = new Set(ids);
   const emptied = new Set(

@@ -3,7 +3,7 @@
 // book), not one workbook each, and the per-file workbooks are not left
 // behind empty.
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset } from "../lib/types";
 import { useApp } from "../store/useApp";
@@ -42,5 +42,19 @@ describe("runImportAsSheets", () => {
   it("leaves a single import as it is", async () => {
     useApp.setState({ importFiles: async () => ["x"] });
     expect(await runImportAsSheets(useApp.getState, [new File(["1"], "x.csv")])).toBeNull();
+  });
+
+  it("suppresses the standard 'create folder?' toast — these files become sheets of one workbook, not folder candidates", async () => {
+    const importFiles = vi.fn(async () => {
+      useApp.setState((s) => ({
+        datasets: [...s.datasets, ds("a", "scan_1.csv", "wb-a"), ds("b", "scan_2.csv", "wb-b")],
+        workbooks: [...s.workbooks, { id: "wb-a", name: "scan_1.csv" }, { id: "wb-b", name: "scan_2.csv" }],
+      }));
+      return ["a", "b"];
+    });
+    useApp.setState({ importFiles });
+    const files = [new File(["1"], "scan_1.csv"), new File(["2"], "scan_2.csv")];
+    await runImportAsSheets(useApp.getState, files);
+    expect(importFiles).toHaveBeenCalledWith(files, expect.objectContaining({ suppressFolderOffer: true }));
   });
 });
