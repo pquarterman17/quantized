@@ -143,3 +143,35 @@ def test_column_headers_state_the_real_row_range(tmp_path) -> None:
     np.testing.assert_array_equal(back.time, t)  # 300 rows, well past the old 161
     np.testing.assert_array_equal(back.values[:, 0], tail_blank)
     assert np.isnan(back.values[:, 1]).all()
+
+
+def test_grouped_books_are_the_sheets_of_one_workbook(tmp_path) -> None:
+    """Re-audit #5: two sheets of one Library workbook write as ONE Origin
+    book with two sheets (datasets ``Book1_A`` / ``Book1_A@2``, sheet ids
+    1 and 2 in the sub-headers), not two books named Book1 / Book12."""
+    s1 = _ds(metadata={"origin_book": "Book1", "origin_book_long": "Sample"})
+    s2 = _ds(
+        time=np.array([7.0, 8.0]),
+        values=np.array([[1.0, 0.5], [2.0, 0.5]]),
+        metadata={"origin_book": "Book1@2", "origin_book_long": "Sample (sheet 2)"},
+    )
+    lone = _ds(metadata={"origin_book": "Book1"})
+    p = tmp_path / "grouped.opj"
+    p.write_bytes(opj_bytes([s1, s2, lone], ["wb1", "wb1", ""]))
+    books = {b.metadata["origin_book"]: b for b in read_origin_books(p)}
+    # The ungrouped "Book1" is the second workbook of that name: Origin's
+    # next name is Book2 (counting on), never Book12.
+    assert set(books) == {"Book1", "Book1@2", "Book2"}
+    assert books["Book1"].metadata["origin_book_long"] == "Sample"
+    assert books["Book1@2"].metadata["origin_book_long"] == "Sample (sheet 2)"
+    assert books["Book1@2"].time.tolist() == [7.0, 8.0]
+    assert books["Book1@2"].labels == ("Moment", "Error")
+    raw = p.read_bytes()
+    assert raw.count(b"PdSheet1\x00") == 2 and raw.count(b"PdSheet2\x00") == 1
+
+
+def test_a_lone_sheet_pseudo_book_is_named_after_its_base_book(tmp_path) -> None:
+    p = tmp_path / "lone.opj"
+    sheets = [_ds(metadata={"origin_book": "Book1@2"}), _ds(metadata={"origin_book": "Book1@3"})]
+    write_opj(sheets, p)
+    assert [b.metadata["origin_book"] for b in read_origin_books(p)] == ["Book1", "Book2"]

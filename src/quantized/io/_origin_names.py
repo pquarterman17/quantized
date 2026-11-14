@@ -20,6 +20,7 @@ __all__ = ["SHORT_MAX", "ascii_fold", "origin_short_name"]
 #: 23-byte field even for a 3-letter column (AAA): 16 + 1 + 3 + NUL < 23.
 SHORT_MAX = 16
 _NOT_ALNUM = re.compile(r"[^A-Za-z0-9]")
+_TRAILING_NUMBER = re.compile(r"^(.*?[A-Za-z])(\d+)$")
 
 
 def ascii_fold(text: str) -> str:
@@ -44,7 +45,11 @@ def origin_short_name(raw: str, fallback: str, used: set[str] | None = None) -> 
     short = (short or fallback)[:SHORT_MAX]
     if used is None:
         return short
-    base, n = short, 1
+    # Origin numbers a name that ends in digits by counting on (Book1 taken
+    # -> Book2, never Book12); any other name gets a numeric suffix (Run ->
+    # Run2).
+    counted = _TRAILING_NUMBER.match(short)
+    base, n = (counted.group(1), int(counted.group(2))) if counted else (short, 1)
     while short.lower() in used:
         n += 1
         short = f"{base[: SHORT_MAX - len(str(n))]}{n}"

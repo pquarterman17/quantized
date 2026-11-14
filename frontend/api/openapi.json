@@ -8733,11 +8733,40 @@
         "title": "OneSampleRequest",
         "type": "object"
       },
+      "OpjItem": {
+        "properties": {
+          "book": {
+            "default": "",
+            "title": "Book",
+            "type": "string"
+          },
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "group": {
+            "default": "",
+            "title": "Group",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset"
+        ],
+        "title": "OpjItem",
+        "type": "object"
+      },
       "OpjRequest": {
         "properties": {
           "datasets": {
             "items": {
-              "$ref": "#/components/schemas/ConsolidatedItem"
+              "$ref": "#/components/schemas/OpjItem"
             },
             "title": "Datasets",
             "type": "array"

@@ -1981,6 +1981,35 @@ vertical peak-position markers) objects; a 133-byte header (position
 @19/@27) + format block + content. Axis grid/tick config (`__BCO2`, the
 873/546-byte blocks) is unmapped (low import value).
 
+#### 6.1.x Plot type, window kind, and unrecovered graph windows (2026-11-13)
+
+* **Plot type — curve anchor u8 @76** (`opj_curves._PLOT_TYPES`). Origin's
+  plot-type id: `200` line, `201` scatter, `202` line+symbol (the existing
+  line/marker style), `203` **column** (vertical bars), `215` **bar**
+  (horizontal bars), `219` **histogram**. The three new ids are decoded as
+  `plotType` on the curve; the oracle is LabPlot's `ProjectImportTest`
+  (`testOriginBarPlot`: `bar-column.opj` Graph1 vertical, Graph2
+  horizontal; `testOriginHistogram`), checked at run time by the realdata
+  test `test_bar_column_and_histogram_plot_types_match_labplot`. Other ids
+  seen in the corpus (206, 231, 242) are left undecoded. On restore,
+  column and bar draw as XY bars from zero at each X (`SeriesStyle.bars`,
+  screen and export); horizontal bars are drawn vertical with a notice;
+  a histogram opens in Stat Stage's histogram mode.
+* **Window kind — window header u8 @0x42** (`opj_graph_windows`). Public
+  corpus (49 unique `.opj`): `2` on all 77 worksheet / matrix / notes
+  windows, `0` or `6` on all 43 recovered graph windows; @0x32 separates
+  the same way but is not used. No oracle names the field — it is the
+  corpus distribution, with both groups as controls.
+* **Unrecovered graph windows are named, never decoded.** A window whose
+  kind is not `2` and whose first block is neither a recognised layer
+  (`00 00 <0x1f|0x17|0x5f> 00`) nor a sheet head (`0x5e`/`0xde`/`0x7e`) is
+  reported in the fidelity manifest the same way as `.opju` graph pages
+  (`unrecovered_graph_count`, `unrecovered_graphs` by `page_name`, omission
+  `graphs_not_recovered` replacing `no_graph_records`). In the
+  public corpus exactly one such window exists: `3dband-origin.opj`'s
+  `Graph2` (first block head `0x47`). Every other `.opj` without a graph
+  row has no graph window at all (worksheet/matrix-only projects).
+
 ### 6.2 `.opju` figures
 
 **Graph pages present but not recovered (2026-11-14, `opju_graph_pages`).**
@@ -3005,6 +3034,16 @@ rules unchanged:**
   is gated to exactly the eight measured versions; `.opju` is unchecked.
 
 ---
+
+**Multi-sheet books and names (2026-11-13).** `opj_bytes(books, groups)`
+writes the sheets of one workbook as ONE window section (one window header
+per book, then a sheet sub-header + layer group per sheet, five null blocks
+between sheets); sheet datasets are named `Book_A@k`. The sheet sub-header
+carries its 0-based sheet index at u8 **@0x12D** (sheet id − 1 on 75/75
+bound sheets in the public corpus) and its name at @0xD2. Book short names
+follow Origin's numbering (`Book1` taken → `Book2`, never `Book12`). Matrix
+books are written as X/Y/Z worksheet columns and the export says so — the
+writer has no matrix window.
 
 ## 9. Testing & corpus
 

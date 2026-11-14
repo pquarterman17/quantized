@@ -79,14 +79,27 @@ export function resolvedTitleText(text: string, f: OriginFigureEntry["figure"]):
   return ORIGIN_TEMPLATE.test(out) ? "" : out;
 }
 
-/** Library row label: prefer a surviving annotation (reads like a plot title
- *  or peak label) over the raw Origin graph-window name (e.g. "Graph3"). An
- *  annotation that is an unresolved substitution code falls back to the
- *  window name: a raw `%(?X)` must never be shown as a title. */
+/** An annotation fit to show beside a window name: printable text with a
+ *  letter or digit, no rich-text escape (`\\b(`) and no `?` / U+FFFD
+ *  stand-in for bytes that did not decode (`"?iiiiii"`). Long text is cut. */
+function cleanAnnotation(text: string): string {
+  const t = text.replace(/\s+/g, " ").trim();
+  if (!t || !/[\p{L}\p{N}]/u.test(t)) return "";
+  const junk = [...t].some((c) => c < " " || c === "\u007f" || c === "\ufffd" || c === "\\");
+  if (junk || t.startsWith("?") || t.includes("??")) return "";
+  return t.length > 40 ? `${t.slice(0, 39)}…` : t;
+}
+
+/** Library row label: the Origin graph-window name first (what the user
+ *  named it, and what tells "Graph1" from "Graph2"), then the first decoded
+ *  annotation when it reads as text — e.g. "Graph3 — Si (004)". An
+ *  annotation that is an unresolved substitution code, junk bytes or the
+ *  name again is left out; a window with no name falls back to it. */
 export function figureLabel(entry: OriginFigureEntry): string {
   const f = entry.figure;
-  const first = f.annotations[0] ? resolvedTitleText(f.annotations[0], f) : "";
-  const base = first || f.name || "Figure";
+  const note = f.annotations[0] ? cleanAnnotation(resolvedTitleText(f.annotations[0], f)) : "";
+  const name = (f.name ?? "").trim();
+  const base = name && note && note !== name ? `${name} — ${note}` : name || note || "Figure";
   // Multi-layer .opj windows emit one figure per layer under the same window
   // name — suffix layers ≥2 so "Graph4" and "Graph4 · layer 2" read apart.
   return (f.layer ?? 1) >= 2 ? `${base} · layer ${f.layer}` : base;

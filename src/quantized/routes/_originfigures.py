@@ -28,6 +28,7 @@ from quantized.io.origin_project.graph_preview import (
     attach_opju_graph_previews,
 )
 from quantized.io.origin_project.integrity import apply_container_integrity
+from quantized.io.origin_project.opj_graph_windows import unrecovered_graph_windows
 from quantized.io.origin_project.opju_graph_pages import (
     GraphPageReport,
     unrecovered_graph_pages,
@@ -71,6 +72,14 @@ def origin_figures_and_fidelity(
         figs = []
         fidelity = origin_figure_decode_failure(container=container)
     manifest = apply_container_integrity(fidelity, raw, container)
+    if container == "opj":
+        # .opj graph windows the layer gate skips (``opj_graph_windows``),
+        # reported in the same shape as the .opju pages below.
+        try:
+            names = unrecovered_graph_windows(raw)
+        except (IndexError, ValueError, ArithmeticError, KeyError, struct.error):
+            names = []  # same degrade-not-fail rule as the figures above
+        missed = GraphPageReport(len(names), [{"page_name": n} for n in names])
     if missed.missing or missed.unattributed:
         # A graph window the figure decoder could not read is diagnosed, not
         # silently absent ("no graph records found" would then be untrue).

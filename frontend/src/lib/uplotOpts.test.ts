@@ -1,3 +1,4 @@
+import { BAR_PATHS } from "./uplotBars";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { gadgetPlugins, loadGadgetPlugins } from "./axisExtrasHook";
@@ -283,7 +284,7 @@ describe("buildOpts", () => {
 });
 
 describe("buildOpts defaultTrace", () => {
-  type S = { width?: number; points?: { show?: boolean }; paths?: unknown };
+  type S = { width?: number; points?: { show?: boolean }; paths?: unknown; fill?: unknown };
   const series = (trace: DefaultTrace): S =>
     buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", defaultTrace: trace }).series?.[1] as S;
 
@@ -360,6 +361,15 @@ describe("buildOpts defaultTrace", () => {
         seriesStyles: [{ step: "mid" }], ...stepBuilders,
       }).series?.[1] as S;
       expect(s.paths).toBe(mid);
+    });
+
+    it("a bars style draws bars from zero with a fill and no markers (Origin column graph)", () => {
+      const s = buildOpts(payload, {
+        ...base, yScale: "linear", tool: "zoom", seriesStyles: [{ bars: true, step: "post" }], ...stepBuilders,
+      }).series?.[1] as S;
+      expect(s.paths).toBe(BAR_PATHS); // wins over a step
+      expect(s.fill).toBeTruthy();
+      expect(s.points).toEqual({ show: false });
     });
 
     it("no width:0 side effect — step is independent of the scatter 'no line' mechanism", () => {

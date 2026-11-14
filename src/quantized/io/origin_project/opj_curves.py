@@ -293,6 +293,25 @@ def book_x_columns(blocks: Sequence[tuple[int, bytes]]) -> dict[str, str]:
     return x_columns_from_designations(book_column_designations(blocks))
 
 
+# The u8 at offset 76 of a curve anchor is the plot type (Origin's plot-type
+# ids: 200 line, 201 scatter, 202 line + symbol are the ``style`` that
+# ``curve_style_color`` decodes). Three more are named here, each on the
+# independent oracle of LabPlot's ProjectImportTest: ``bar-column.opj`` (its
+# Graph1 curve, 203, is a vertical bar plot -- Origin's "column"; its Graph2
+# curve, 215, a horizontal one -- Origin's "bar") and ``histogram.opj`` (both
+# curves, 219, histograms). Public corpus: those are the only files with these
+# values; every other curve is 200-202 or one of 206/231/242, which no oracle
+# names and which are therefore left undecoded (no ``plotType`` key).
+_PLOT_TYPE_OFF = 76
+_PLOT_TYPES = {203: "column", 215: "bar", 219: "histogram"}
+
+
+def _plot_type(payload: bytes) -> dict[str, str]:
+    """``{"plotType": ...}`` for an oracle-named plot type, else ``{}``."""
+    kind = _PLOT_TYPES.get(payload[_PLOT_TYPE_OFF]) if len(payload) > _PLOT_TYPE_OFF else None
+    return {"plotType": kind} if kind else {}
+
+
 def _nearest_preceding_x(order: Sequence[tuple[str, int]], y_short: str) -> str | None:
     """The X-designated column (byte ``3``) nearest-preceding ``y_short`` in
     worksheet column order, or ``None`` when ``y_short`` is not on this sheet
@@ -354,7 +373,7 @@ def extract_curves(
             x = x_columns.get(book)
         if x is None:
             continue  # unknown/columnless book: drop, never guess
-        out.append({"book": book, "x": x, "y": col, **style_fields(payload)})
+        out.append({"book": book, "x": x, "y": col, **style_fields(payload), **_plot_type(payload)})
         records.append(payload)
     # auto/increment placeholders resolve by group role + plot order
     # (curve_style_color.apply_increment_colors, pixel-oracle-verified)
