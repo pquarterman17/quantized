@@ -65,6 +65,7 @@ const COMMON_IDS: Record<string, ReadonlySet<string>> = {
 };
 
 const FILE_SECTIONS: Record<string, string> = {
+  "import-sheets": "Import",
   "import-append": "Import",
   "import-wizard": "Import",
   "import-origin-template": "Import",
