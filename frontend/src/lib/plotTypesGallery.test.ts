@@ -53,7 +53,7 @@ describe("plot-type gallery: the types behind separate commands", () => {
     expect(s().waterfallOpen).toBe(true);
     applyPlotType("stacked");
     expect(s().stackMode).toBe(true);
-    applyPlotType("ternary");
+    applyPlotType("ternary", () => useAuxFigureStore.getState().setTernaryOpen(true));
     expect(useAuxFigureStore.getState().ternaryOpen).toBe(true);
   });
 });

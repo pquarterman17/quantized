@@ -5,7 +5,6 @@
 
 import type { AxisId } from "../store/figureDialogs";
 import { useApp } from "../store/useApp";
-import { useAuxFigureStore } from "../components/workshops/ternary/auxFigureStore";
 import { axisDraft, axisPatch, type AxisDraft } from "./axisDialogModel";
 import { PLOT_TYPE_COMMANDS, PLOT_TYPES, plotTypePatch, plotTypeUnavailable, type PlotTypeId } from "./plotTypes";
 import { effectiveChannels } from "./plotdata";
@@ -28,8 +27,9 @@ export function commitAxisDraft(axis: AxisId, draft: AxisDraft): void {
   useApp.setState(axisPatch(s, axis, draft));
 }
 
-/** Switch the focused graph to plot type `id` (one undo step). */
-export function applyPlotType(id: PlotTypeId): void {
+/** Switch the focused graph to plot type `id` (one undo step). The ternary
+ *  builder lives in components/, so its caller passes the opener. */
+export function applyPlotType(id: PlotTypeId, openTernary?: () => void): void {
   const s = useApp.getState();
   const dataset = s.datasets.find((d) => d.id === s.activeId) ?? null;
   if (plotTypeUnavailable(id, dataset) || !dataset) return;
@@ -43,7 +43,7 @@ export function applyPlotType(id: PlotTypeId): void {
   if (PLOT_TYPE_COMMANDS.has(id)) {
     // Gap-audit-2 #17: these open the tool the app already has for them.
     if (id === "waterfall") s.setWaterfallOpen(true);
-    else if (id === "ternary") useAuxFigureStore.getState().setTernaryOpen(true);
+    else if (id === "ternary") openTernary?.();
     else s.setStackMode(true);
     s.setStageTab("plot");
     s.setStatus(`plot type: ${label}`);
