@@ -85,6 +85,10 @@ export interface GridHeaderProps {
    *  the select can show "auto·C" vs an explicit "Cont"/"Ord"/"Nom". */
   channelTypes?: Record<number, ModelingType>;
   onChangeChannelType?: (col: number, t: ModelingType | null) => void;
+  /** Double-click a header: edit its Long Name / Units / Comments (HeaderEditor). */
+  onHeaderDoubleClick?: (col: number, e: React.MouseEvent) => void;
+  /** The user's Comments row (`Dataset.columnProps`), over the book's own. */
+  commentOf?: (col: number) => string | undefined;
 }
 
 /** True short-name-aware role badge for one value channel: computed columns
@@ -150,8 +154,19 @@ export default function GridHeader({
   modelingTypeOf,
   channelTypes,
   onChangeChannelType,
+  onHeaderDoubleClick,
+  commentOf,
 }: GridHeaderProps) {
   const colMeta = columnMetaList(data);
+  // The Comments row: the user's own (columnProps), else the book's.
+  const comment = (col: number, book: string | undefined) => {
+    const text = commentOf?.(col) ?? book;
+    return text ? (
+      <span className="comment" title={text}>
+        {text}
+      </span>
+    ) : null;
+  };
   const selStyle = (selected: boolean): React.CSSProperties =>
     selected ? { background: "var(--accent-soft)", borderBottomColor: "var(--accent)", borderBottomWidth: 2 } : {};
 
@@ -188,6 +203,8 @@ export default function GridHeader({
         style={{ position: "sticky", left: gutterWidth, zIndex: 4, width: widthOf(-1), flexShrink: 0, ...selStyle(selectedCols.has(-1)) }}
         onClick={(e) => onHeaderClick(-1, e)}
         onContextMenu={onHeaderContext ? (e) => onHeaderContext(-1, e) : undefined}
+        onDoubleClick={onHeaderDoubleClick && ((e) => onHeaderDoubleClick(-1, e))}
+        data-col={-1}
       >
         {xName}
         <span className="role">
@@ -200,6 +217,7 @@ export default function GridHeader({
           )}
           {sortMark(-1)}
         </span>
+        {comment(-1, undefined)}
         {resizeHandle(-1)}
       </div>
       {leadingSpacer > 0 && <div style={{ width: leadingSpacer, flexShrink: 0 }} aria-hidden="true" />}
@@ -211,12 +229,14 @@ export default function GridHeader({
         const dimmed = Boolean(channelRoles[c]) || shown === "label" || shown === "disregard";
         return (
           <div
-            key={data.labels[c]}
+            key={c}
             role="columnheader"
             className="qzk-grid-headcell"
             style={{ position: "relative", width: widthOf(c), flexShrink: 0, opacity: dimmed ? 0.55 : 1, ...selStyle(selectedCols.has(c)) }}
             onClick={(e) => onHeaderClick(c, e)}
             onContextMenu={onHeaderContext ? (e) => onHeaderContext(c, e) : undefined}
+            onDoubleClick={onHeaderDoubleClick && ((e) => onHeaderDoubleClick(c, e))}
+            data-col={c}
             title={headerTitle(c, computed, channelRoles[c], meta)}
           >
             {data.labels[c]}
@@ -267,11 +287,7 @@ export default function GridHeader({
                 ]}
               />
             )}
-            {meta?.comment && (
-              <span className="comment" title={meta.comment}>
-                {meta.comment}
-              </span>
-            )}
+            {comment(c, meta?.comment)}
             {resizeHandle(c)}
           </div>
         );

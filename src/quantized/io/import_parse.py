@@ -29,7 +29,7 @@ import numpy as np
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
 from quantized.io import _quoted_numbers as qn
-from quantized.io._delimiter_vote import _COMMA_NUMBER_RE, vote_lines
+from quantized.io._delimiter_vote import _COMMA_NUMBER_RE, data_section_start, vote_lines
 from quantized.io._origin_ascii_header import origin_ascii_rows
 from quantized.io.delimited import _extract_units, _split_lines
 
@@ -183,7 +183,10 @@ def _guess_layout(text: str) -> tuple[int | None, int | None, int, list[str], li
         layout._numeric_score(t) if ln.strip() else 0.0
         for t, ln in zip(scored, lines, strict=True)
     ]
-    data_start = next((i for i, s in enumerate(scores) if s > 0.5), None)
+    # Below a `[DATA]` heading only (`data_section_start`): its key/value
+    # preamble can score like data.
+    section = data_section_start(lines)
+    data_start = next((i for i, s in enumerate(scores) if i >= section and s > 0.5), None)
     # Leading data rows with an empty cell ("1<TAB>" in a 2-column paste)
     # score exactly 0.5; extend over them as direct import does
     # (`_walk_back_gappy_rows`), or the first row -- and the header above it
@@ -192,9 +195,12 @@ def _guess_layout(text: str) -> tuple[int | None, int | None, int, list[str], li
         # No numeric-majority row (as many text columns as numbers): the
         # header is LESS numeric than the data under it -- direct import's
         # fallback (`_detect_layout`), so the two paths agree.
-        data_start = next((i for i, s in enumerate(scores) if i > 0 and s > scores[0] and s > 0), 0)
+        data_start = next(
+            (i for i, s in enumerate(scores) if i > section and s > scores[section] and s > 0),
+            section,
+        )
     else:
-        data_start = layout._walk_back_gappy_rows(scored, data_start)
+        data_start = max(layout._walk_back_gappy_rows(scored, data_start), section)
 
     header_line: int | None = None
     units_line: int | None = None
@@ -204,12 +210,14 @@ def _guess_layout(text: str) -> tuple[int | None, int | None, int, list[str], li
     if origin is not None:
         header_line, units_line = origin.header, origin.units
     # a units row just above the data, and a header above that
-    elif data_start >= 2 and scores[data_start - 1] < 0.5 and layout._looks_like_units_row(
-        tokens[data_start - 1], n_cols
+    elif (
+        data_start >= section + 2
+        and scores[data_start - 1] < 0.5
+        and layout._looks_like_units_row(tokens[data_start - 1], n_cols)
     ):
         units_line = data_start - 1
         header_line = data_start - 2 if scores[data_start - 2] < 0.5 else None
-    elif data_start >= 1 and scores[data_start - 1] < 0.5:
+    elif data_start >= section + 1 and scores[data_start - 1] < 0.5:
         header_line = data_start - 1
     header_line, units_line = (_uncommented(lines, i) for i in (header_line, units_line))
     names = _resolve_names(tokens, header_line, n_cols)
@@ -239,7 +247,14 @@ def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
         for k in range(min(n_cols, len(urow))):
             if urow[k]:
                 units[k] = urow[k]
-    roles = _resolve_roles(settings.roles, n_cols)
+    # No roles given (a fresh file, or the wizard re-splitting under a new
+    # delimiter): the same per-column default `guess_settings` offers, so a
+    # text column stays a ``label`` instead of an all-NaN ``y``.
+    roles = (
+        _resolve_roles(settings.roles, n_cols)
+        if settings.roles
+        else _guess_roles(data_tokens, n_cols)
+    )
 
     matrix = np.full((len(data_tokens), n_cols), np.nan, dtype=float)
     for i, row in enumerate(data_tokens):
@@ -330,3 +345,20 @@ def _resolve_roles(roles: list[str] | None, n_cols: int) -> list[str]:
         return (["x"] + ["y"] * (n_cols - 1)) if n_cols else []
     out = [roles[k] if k < len(roles) and roles[k] in DATA_ROLES else "y" for k in range(n_cols)]
     return out
+
+
+def _datetime_x(p: _Parsed, col: int) -> np.ndarray | None:
+    """Column ``col`` as UTC epoch seconds when it is a timestamp column --
+    direct import's rule (`delimited.import_csv`): under 10% numeric, at
+    least 80% parseable dates (`layout._datetime_epoch`). ``None`` otherwise.
+
+    The wizard read a date X column with ``float()`` alone, so a file that
+    direct import showed against dates came through the wizard as an
+    all-NaN X (worksheet audit #7)."""
+    n_rows = p.matrix.shape[0]
+    if np.count_nonzero(np.isfinite(p.matrix[:, col])) / max(n_rows, 1) >= 0.1:
+        return None
+    parsed = [layout._datetime_epoch(r[col]) if col < len(r) else None for r in p.data_tokens]
+    if sum(v is not None for v in parsed) / max(n_rows, 1) < 0.8:
+        return None
+    return np.asarray([np.nan if v is None else v for v in parsed], dtype=float)

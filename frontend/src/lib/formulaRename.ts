@@ -28,7 +28,7 @@
 // disappearing must not overwrite an in-progress broken edit; that formula
 // keeps whatever error `lib/formula.ts` already reports for it.
 
-import type { ColumnShift } from "./channelRemap";
+import { type ColumnShift, remapChannel } from "./channelRemap";
 import { channelLetter, compileFormula, referencedColumns, tokenize } from "./formula";
 import type { Tok } from "./formulaTypes";
 import type { ComputedColumn } from "./types";
@@ -53,7 +53,8 @@ export function shiftLetter(letter: string, removedCol: ColumnShift): { letter: 
   const idx = channelIndexOf(letter);
   if (idx === null) return { letter, removed: false };
   if (typeof removedCol !== "number") {
-    return { letter: idx >= removedCol.inserted ? channelLetter(idx + 1) : letter, removed: false };
+    // An insertion or a move never removes a column: the shared index rule.
+    return { letter: channelLetter(remapChannel(idx, removedCol) ?? idx), removed: false };
   }
   if (idx === removedCol) return { letter, removed: true };
   return { letter: idx > removedCol ? channelLetter(idx - 1) : letter, removed: false };

@@ -15136,6 +15136,75 @@
         "title": "TTestRequest",
         "type": "object"
       },
+      "TableColumn": {
+        "description": "One column: Long Name, unit, kind (``number``/``text``/``datetime``)\nand one cell per row (numbers, strings, or null for a blank).",
+        "properties": {
+          "cells": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Cells",
+            "type": "array"
+          },
+          "kind": {
+            "default": "number",
+            "enum": [
+              "number",
+              "text",
+              "datetime"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "cells"
+        ],
+        "title": "TableColumn",
+        "type": "object"
+      },
+      "TableSheet": {
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/TableColumn"
+            },
+            "minItems": 1,
+            "title": "Columns",
+            "type": "array"
+          },
+          "name": {
+            "default": "Sheet1",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "columns"
+        ],
+        "title": "TableSheet",
+        "type": "object"
+      },
       "TafelRequest": {
         "properties": {
           "alpha": {
@@ -15710,6 +15779,44 @@
           "fwhm_deg"
         ],
         "title": "WilliamsonHallRequest",
+        "type": "object"
+      },
+      "WorksheetExportRequest": {
+        "description": "``fmt`` csv/tsv write the FIRST sheet; xlsx writes every sheet as a\ntab. ``header``: write the Long Name (and Units) rows.",
+        "properties": {
+          "filename": {
+            "default": "worksheet",
+            "title": "Filename",
+            "type": "string"
+          },
+          "fmt": {
+            "default": "csv",
+            "enum": [
+              "csv",
+              "tsv",
+              "xlsx"
+            ],
+            "title": "Fmt",
+            "type": "string"
+          },
+          "header": {
+            "default": true,
+            "title": "Header",
+            "type": "boolean"
+          },
+          "sheets": {
+            "items": {
+              "$ref": "#/components/schemas/TableSheet"
+            },
+            "minItems": 1,
+            "title": "Sheets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sheets"
+        ],
+        "title": "WorksheetExportRequest",
         "type": "object"
       },
       "XrayCalcRequest": {
@@ -19021,6 +19128,46 @@
           }
         },
         "summary": "Export Ternary Figure",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/export/worksheet": {
+      "post": {
+        "description": "Worksheet (or a selection of it) -> CSV, TSV or Excel, as a download.",
+        "operationId": "export_worksheet_api_export_worksheet_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorksheetExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Worksheet",
         "tags": [
           "export"
         ]

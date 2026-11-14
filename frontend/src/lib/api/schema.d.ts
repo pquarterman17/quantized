@@ -1505,6 +1505,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/export/worksheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Worksheet
+         * @description Worksheet (or a selection of it) -> CSV, TSV or Excel, as a download.
+         */
+        post: operations["export_worksheet_api_export_worksheet_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/export/xrd-csv": {
         parameters: {
             query?: never;
@@ -11587,6 +11607,38 @@ export interface components {
             /** Y */
             y?: number[] | null;
         };
+        /**
+         * TableColumn
+         * @description One column: Long Name, unit, kind (``number``/``text``/``datetime``)
+         *     and one cell per row (numbers, strings, or null for a blank).
+         */
+        TableColumn: {
+            /** Cells */
+            cells: (number | string | null)[];
+            /**
+             * Kind
+             * @default number
+             * @enum {string}
+             */
+            kind?: "number" | "text" | "datetime";
+            /** Name */
+            name: string;
+            /**
+             * Unit
+             * @default
+             */
+            unit?: string;
+        };
+        /** TableSheet */
+        TableSheet: {
+            /** Columns */
+            columns: components["schemas"]["TableColumn"][];
+            /**
+             * Name
+             * @default Sheet1
+             */
+            name?: string;
+        };
         /** TafelRequest */
         TafelRequest: {
             /** Alpha */
@@ -11804,6 +11856,31 @@ export interface components {
              * @default 1.5406
              */
             wavelength_a?: number;
+        };
+        /**
+         * WorksheetExportRequest
+         * @description ``fmt`` csv/tsv write the FIRST sheet; xlsx writes every sheet as a
+         *     tab. ``header``: write the Long Name (and Units) rows.
+         */
+        WorksheetExportRequest: {
+            /**
+             * Filename
+             * @default worksheet
+             */
+            filename?: string;
+            /**
+             * Fmt
+             * @default csv
+             * @enum {string}
+             */
+            fmt?: "csv" | "tsv" | "xlsx";
+            /**
+             * Header
+             * @default true
+             */
+            header?: boolean;
+            /** Sheets */
+            sheets: components["schemas"]["TableSheet"][];
         };
         /** XrayCalcRequest */
         XrayCalcRequest: {
@@ -14332,6 +14409,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TernaryFigureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_worksheet_api_export_worksheet_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorksheetExportRequest"];
             };
         };
         responses: {
