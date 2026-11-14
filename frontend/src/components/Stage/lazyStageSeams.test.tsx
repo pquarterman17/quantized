@@ -8,6 +8,15 @@
 //     menu, now `lazy()` in PlotStageMenus behind the gate that was already
 //     there (`menu && displayPayload`).
 //
+// Plus one more of the same shape added later (#15): `PanelInsetLayer.tsx` —
+// the dataset/image/table panel-inset boxes, `lazy()` in PlotStageOverlays
+// behind a fresh `hasPanelInsets` gate (a direct store read, since
+// PlotStage.tsx sits at its own component-ceiling pin with no headroom for a
+// new threaded prop — see that gate's own doc comment). Same recorder
+// reasoning as `PlotResultChips` below: `PanelInsetLayer` returns null
+// internally with an empty list too (belt-and-suspenders against a future
+// empty-state match), so the DOM alone cannot prove the OUTER gate is real.
+//
 // `src/architecture.test.ts`'s SEAMS list holds the STATIC half (nothing may
 // value-import either, and the loader must reach it with a dynamic
 // `import()`); that grep cannot see whether the thing still RENDERS. Each test
@@ -79,6 +88,7 @@ const { loaded, track } = vi.hoisted(() => {
   return { loaded, track };
 });
 vi.mock("./PlotResultChips", track("PlotResultChips"));
+vi.mock("./PanelInsetLayer", track("PanelInsetLayer"));
 
 const actions: PlotStageActions = {
   resetView: vi.fn(),
@@ -115,9 +125,11 @@ function fakePlot(): uPlot {
   } as unknown as uPlot;
 }
 
-const overlays = (over: { integral?: { xlo: number; xhi: number; area: number } | null } = {}) => (
+const overlays = (
+  over: { integral?: { xlo: number; xhi: number; area: number } | null; displayPayload?: PlotPayload | null } = {},
+) => (
   <PlotStageOverlays
-    displayPayload={null}
+    displayPayload={over.displayPayload ?? null}
     active={null}
     tool="pointer"
     insetMode={false}
@@ -230,5 +242,37 @@ describe("plot context menu — chunk-deferred renderer", () => {
 
     render(menus(null));
     expect(screen.queryByText("X axis")).not.toBeInTheDocument();
+  });
+});
+
+describe("panel insets — chunk-deferred renderer (#15)", () => {
+  it("never fetches the chunk when there are no panel insets", async () => {
+    useApp.setState({ panelInsets: [] });
+    render(overlays({ displayPayload: payload }));
+    await act(async () => {});
+    expect([...loaded]).not.toContain("PanelInsetLayer");
+  });
+
+  it("renders a box only after the chunk resolves, once the gate opens", async () => {
+    useApp.setState({
+      panelInsets: [{ id: "p1", at: [0.1, 0.1, 0.3, 0.3], content: { kind: "table", rows: [["1"]] } }],
+    });
+    const { container } = render(overlays({ displayPayload: payload }));
+    // The gate is open, the boundary is mounted, and its fallback is null —
+    // so no box exists on this flush.
+    expect(container.querySelector('[data-testid="panel-inset-box"]')).toBeNull();
+    await waitFor(() =>
+      expect(container.querySelector('[data-testid="panel-inset-box"]')).not.toBeNull(),
+    );
+    expect([...loaded]).toContain("PanelInsetLayer");
+  });
+
+  it("stays absent with no displayPayload even once a panel inset exists", async () => {
+    useApp.setState({
+      panelInsets: [{ id: "p1", at: [0.1, 0.1, 0.3, 0.3], content: { kind: "table", rows: [["1"]] } }],
+    });
+    const { container } = render(overlays({ displayPayload: null }));
+    await act(async () => {});
+    expect(container.querySelector('[data-testid="panel-inset-box"]')).toBeNull();
   });
 });

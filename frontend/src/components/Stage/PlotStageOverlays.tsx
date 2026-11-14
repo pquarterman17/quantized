@@ -9,7 +9,13 @@
 // zero-argument command function, imported directly here rather than
 // threaded through just to forward a stable reference (mirrors
 // PlotStageMenus mounting SelectionMiniToolbar, which reads its own store
-// slice instead of taking it as a prop).
+// slice instead of taking it as a prop) — and `hasPanelInsets` below, a
+// single boolean read directly rather than threaded as a new prop through
+// PlotStage.tsx, which sits at its own component-ceiling pin with no
+// headroom for one. Gating the mount on it (rather than mounting
+// unconditionally like PlotResultChips/PlotLegend do, which cost nothing
+// extra since they are already-loaded siblings) keeps the "Panel insets"
+// chunk from loading on every plot that has none.
 
 import type { RefObject } from "react";
 import type uPlot from "uplot";
@@ -25,7 +31,7 @@ import type { SeriesCycle } from "../../lib/seriesStyleCycle";
 import type { Dataset, DefaultTrace, SeriesStyle } from "../../lib/types";
 import type { PlotTool } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotTools";
-import type { IntegralResult } from "../../store/useApp";
+import { useApp, type IntegralResult } from "../../store/useApp";
 import { snapshotToNewWindow } from "../windows/useWindowCommands";
 import PlotLegend from "./PlotLegend";
 import PlotReadouts from "./PlotReadouts";
@@ -45,6 +51,9 @@ import type { GadgetChipState } from "./useGadgetChip";
 const PlotResultChips = lazyRegion(() => import("./PlotResultChips"), "Plot");
 // The magnifier shows only in inset mode: its own chunk (plot audit round 3).
 const InsetPlot = lazyRegion(() => import("./InsetPlot"), "Inset");
+// Panel insets (#15): a graph/image/table box over the plot. Its own chunk --
+// most plots have none, so this must never ride the eager bundle.
+const PanelInsetLayer = lazyRegion(() => import("./PanelInsetLayer"), "Panel insets");
 
 export interface PlotStageOverlaysProps {
   displayPayload: PlotPayload | null;
@@ -81,6 +90,7 @@ export interface PlotStageOverlaysProps {
 }
 
 export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
+  const hasPanelInsets = useApp((s) => s.panelInsets.length > 0);
   return (
     <>
       {p.displayPayload && (
@@ -100,6 +110,7 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
         // seriesCycle, hidden, plotRef): spread, not restated (eager bytes).
         <InsetPlot {...p} payload={p.displayPayload} />
       )}
+      {p.displayPayload && hasPanelInsets && <PanelInsetLayer plotRef={p.plotRef} />}
 
       {!p.active && (
         <div
