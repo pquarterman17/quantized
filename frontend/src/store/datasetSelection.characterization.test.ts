@@ -184,7 +184,7 @@ const UNEDITED_SWITCH_KEYS = SWITCH_KEYS.filter((k) => ![
 // window first, so its hydrated view fields land on top of a switch.
 const FOCUS_HANDOFF_KEYS = [
   "annotations", "axisLabelOffsets", "axisLabelStyles", "focusedWindowId", "refLines",
-  "regionShades", "shapes", "statMarks", "statPicks", "xFmt", "yFmt",
+  "regionShades", "shapes", "panelInsets", "statMarks", "statPicks", "xFmt", "yFmt",
 ];
 const withKeys = (base: string[], extra: string[]): string[] => [...base, ...extra].sort();
 // The worksheet-intent path for an Origin book.

@@ -574,6 +574,7 @@ describe("loadWorkspace — restored plot-window layout path (restoredHasPlot tr
       "pageSetup",
       "pages",
       "panelFit",
+      "panelInsets",
       "peakOverlay",
       "peakWizardEdit",
       "pendingRecipeApplication",

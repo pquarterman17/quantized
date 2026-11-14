@@ -11,7 +11,7 @@ import { exportFigure } from "./api/figures";
 import { runExportFigureCommand } from "./exportFigureCommand";
 import { createFigureDocument } from "./figureDocument";
 import { liveViewOverrides } from "./figureViewOverrides";
-import { defaultPlotView, type PlotWindow } from "./plotview";
+import { defaultPlotView, type PlotView, type PlotWindow } from "./plotview";
 import type { Annotation, RefLine, RegionShade, Shape } from "./types";
 import { usePendingOps } from "../store/pendingOps";
 import { useToasts } from "../store/toasts";
@@ -40,6 +40,7 @@ function fakeGet(over: {
   legendTitle?: string | null;
   annotations?: Annotation[];
   shapes?: Shape[];
+  panelInsets?: PlotView["panelInsets"];
   refLines?: RefLine[];
   regionShades?: RegionShade[];
   xLim?: [number, number] | null;
@@ -58,6 +59,7 @@ function fakeGet(over: {
     legendTitle: over.legendTitle ?? null,
     annotations: over.annotations ?? [],
     shapes: over.shapes ?? [],
+    panelInsets: over.panelInsets ?? [],
     refLines: over.refLines ?? [],
     regionShades: over.regionShades ?? [],
     xLim: over.xLim,

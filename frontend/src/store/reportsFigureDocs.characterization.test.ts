@@ -704,6 +704,7 @@ describe("figure documents — openFigureDocInWindow", () => {
         "annotations",
         "refLines",
         "shapes",
+        "panelInsets",
         "regionShades",
         "hiddenChannels",
         "seriesStyles",

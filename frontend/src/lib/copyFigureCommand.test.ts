@@ -90,6 +90,7 @@ function fakeGet(over: Record<string, unknown> = {}) {
     legendTitle: "",
     annotations: [],
     shapes: [],
+    panelInsets: [],
     refLines: [],
     regionShades: [],
     axisLabelStyles: {},

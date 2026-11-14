@@ -102,20 +102,29 @@ export default function PanelInsetBox({ inset, plotRef }: Props) {
   return (
     <div
       ref={boxRef}
-      className="qzk-glass"
       data-testid="panel-inset-box"
       data-panel-inset-id={inset.id}
       onClick={(e) => {
         e.stopPropagation();
         setSelected(inset.id);
       }}
-      style={{
-        position: "absolute",
-        border: selected ? "1px solid var(--accent)" : "1px solid var(--border)",
-        overflow: "hidden",
-      }}
+      style={{ position: "absolute" }}
     >
-      <PanelInsetContentView content={inset.content} />
+      {/* Content gets its own clipped layer -- the header strip below sits at
+          a NEGATIVE top (above the box), so clipping must not apply to this
+          outer positioned div or the header becomes unhittable (found live:
+          a drag-to-move gesture never reached startDrag at all). */}
+      <div
+        className="qzk-glass"
+        style={{
+          position: "absolute",
+          inset: 0,
+          border: selected ? "1px solid var(--accent)" : "1px solid var(--border)",
+          overflow: "hidden",
+        }}
+      >
+        <PanelInsetContentView content={inset.content} />
+      </div>
       {selected && (
         <>
           <div
