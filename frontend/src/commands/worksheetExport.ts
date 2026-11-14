@@ -47,7 +47,7 @@ export async function runExportWorksheet(s: StoreGet, scope: WorksheetExportScop
     return;
   }
   const several = ids.length > 1;
-  const picked = scope.rows?.length && !several ? `${scope.rows.length} selected rows of ` : "";
+  const what = several ? "the selected worksheets" : scope.rows?.length ? `the ${scope.rows.length} selected rows` : "every row";
   const answer = await askParams(
     several ? `Export ${ids.length} worksheets` : "Export worksheet",
     [
@@ -57,7 +57,7 @@ export async function runExportWorksheet(s: StoreGet, scope: WorksheetExportScop
       { key: "skipMasked", label: "Leave out masked rows", type: "boolean", default: false },
       { key: "skipDisregard", label: "Leave out Disregard columns", type: "boolean", default: false },
     ],
-    { confirmLabel: "Export", message: `${picked}${several ? "the selected worksheets" : "the worksheet"}, every column in place, text columns included.` },
+    { confirmLabel: "Export", message: `Writes ${what}, every column in place (text columns included).` },
   );
   if (!answer) return;
   const fmt = FORMATS[String(answer.format)] ?? "csv";

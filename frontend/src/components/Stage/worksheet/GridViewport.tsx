@@ -46,6 +46,8 @@ import GridStatsFooter from "./GridStatsFooter";
 import { useCellEdit } from "./useCellEdit";
 import { useColResize } from "./useColResize";
 
+const DATE_X_COL_WIDTH = 168; // px: a full "YYYY-MM-DD HH:MM:SS" in the mono cell font
+
 export interface GridViewportProps {
   data: DataStruct;
   xName: string;
@@ -191,7 +193,8 @@ export default function GridViewport({
   const colCount = data.labels.length;
   // Per-column width resolution (MAIN_PLAN #3): resized columns override the
   // uniform default; -1 (the pinned x column) is resizable too.
-  const widthOf = (c: number) => colWidths[c] ?? colWidth;
+  // A date X needs room for "2026-03-01 12:00:00" (audit #7) until the user sizes it.
+  const widthOf = (c: number) => colWidths[c] ?? (c < 0 && xIsDate ? DATE_X_COL_WIDTH : colWidth);
   const colResize = useColResize(widthOf, onResizeCol);
   // Any VALUE column resized? (An x-only resize doesn't affect the scrolling
   // axis — it just widens the pinned cell — so the fast path still applies.)
@@ -226,7 +229,7 @@ export default function GridViewport({
     const value = typeof c === "number" && c >= 0 && c < colCount;
     const start = text >= 0 ? at(colCount) + text * colWidth : value ? at(c) : null;
     const size = (value && colWidths[c]) || colWidth;
-    const avail = el.clientWidth - gutterWidth - (colWidths[-1] ?? colWidth);
+    const avail = el.clientWidth - gutterWidth - widthOf(-1);
     const left = start == null ? el.scrollLeft : revealScrollOffset(start, size, el.scrollLeft, avail, false);
     el.scrollTop = top;
     el.scrollLeft = left;
