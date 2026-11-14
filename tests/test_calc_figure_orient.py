@@ -12,6 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
+from matplotlib.colors import to_rgb  # noqa: E402
 from matplotlib.container import BarContainer  # noqa: E402
 
 from quantized.calc.figure import draw_series_axes  # noqa: E402
@@ -105,3 +106,54 @@ def test_a_secondary_axis_on_a_turned_plot_runs_along_the_top() -> None:
     assert twin.xaxis.get_label_position() == "top"
     (line,) = ax.lines
     assert list(line.get_ydata()) == list(X)  # the primary line runs up the side
+
+
+# ── Decorations on a turned export (the screen's overlays, uplotOrient) ──────
+
+
+def _turned(ov: dict[str, object]) -> tuple[object, object]:
+    fig, ax = plt.subplots()
+    draw_series_axes(
+        fig, ax, X, [("B", Y)], st=figure_style("default"), ov=ov,
+        series_styles=[{"bars": "horizontal"}],
+    )
+    fig.canvas.draw()
+    return fig, ax
+
+
+def test_reference_lines_turn_with_the_plot() -> None:
+    _, ax = _turned({"ref_lines": [{"axis": "x", "value": 2.5}, {"axis": "y", "value": 3.0}]})
+    lines = {ln.get_gid(): ln for ln in ax.lines if (ln.get_gid() or "").startswith("refline")}
+    across = [ln for ln in lines.values() if list(ln.get_ydata()) == [2.5, 2.5]]
+    up = [ln for ln in lines.values() if list(ln.get_xdata()) == [3.0, 3.0]]
+    assert across and up  # an X line runs across at X = 2.5, a Y line up at 3
+
+
+def test_a_stick_reference_and_its_label_turn_with_the_plot() -> None:
+    stick = {"intensity": 0.5, "baseline": 0.1, "height": 0.3, "color": "#d97706",
+             "visible": True, "show_label": True}  # fmt: skip
+    _, ax = _turned({"ref_lines": [{"axis": "x", "value": 2.0, "label": "K", "stick": stick}]})
+    (ln,) = [ln for ln in ax.lines if (ln.get_gid() or "").startswith("refline")]
+    assert list(ln.get_ydata()) == [2.0, 2.0]  # horizontal at X = 2
+    assert list(ln.get_xdata()) == pytest.approx([0.1, 0.25])  # its extent, axes fraction
+    (label,) = [t for t in ax.texts if t.get_text() == "K"]
+    assert label.get_position() == pytest.approx((0.25, 2.0))
+
+
+def test_region_shades_turn_with_the_plot() -> None:
+    _, ax = _turned({"region_shades": [
+        {"x1": 1.5, "x2": 2.5, "y1": 0.0, "y2": 2.0, "fill": "#112233"},
+    ]})  # fmt: skip
+    fill = to_rgb("#112233")
+    (shade,) = [p for p in ax.patches if to_rgb(p.get_facecolor()) == pytest.approx(fill)]
+    (x0, y0), w, h = shade.get_xy(), shade.get_width(), shade.get_height()
+    assert (x0, w) == pytest.approx((0.0, 2.0))  # its Y band along the bottom
+    assert (y0, h) == pytest.approx((1.5, 1.0))  # its X band up the side
+
+
+def test_annotations_turn_with_the_plot() -> None:
+    _, ax = _turned({"annotations": [{"x": 2.0, "y": 4.0, "text": "pk"}]})
+    (ann,) = [t for t in ax.texts if t.get_text() == "pk"]
+    assert ann.xy == (4.0, 2.0)  # anchored at (value, X)
+    (dot,) = [a for a in ax.lines if (a.get_gid() or "").startswith("annotation_dot")]
+    assert [list(dot.get_xdata()), list(dot.get_ydata())] == [[4.0], [2.0]]

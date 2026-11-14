@@ -31,6 +31,7 @@ import { Fragment, useId, useRef, useState, type ReactNode } from "react";
 
 import { clipboardImageSupported } from "../../lib/clipboard";
 import { keyForTool, RESET_VIEW_KEY } from "../../lib/plotToolKeys";
+import { hasHorizontalBars, TURNED_TOOL_NOTE, TURNED_TOOLS } from "../../lib/uplotOrient";
 import {
   ANALYZE_TOOLS,
   COPY_DATA,
@@ -119,6 +120,8 @@ export default function PlotToolbar({
   onSnapshotWindow,
 }: Props) {
   const tool = useApp((s) => s.plotTool);
+  // A horizontal bar graph turns the plot: pointer-driven tools are off (uplotOrient).
+  const turned = useApp((s) => hasHorizontalBars(Object.values(s.seriesStyles)));
   const setPlotTool = useApp((s) => s.setPlotTool);
   // S1 (a): ON whenever a multi-panel layout is engaged, not just `stackMode`.
   const stackOn = useApp(stackLayoutOn);
@@ -157,6 +160,7 @@ export default function PlotToolbar({
     shortcut: keyForTool(t.id),
     active: tool === t.id,
     onClick: () => setPlotTool(t.id),
+    ...(turned && !TURNED_TOOLS.includes(t.id) ? { disabled: true, disabledReason: TURNED_TOOL_NOTE } : {}),
   });
 
   // View/Export buttons each have bespoke active/disabled logic, so this only

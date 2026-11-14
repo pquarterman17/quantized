@@ -2406,7 +2406,7 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(s.yScale).toBe("log");
   });
 
-  it("an Origin bar graph opens with its curve drawn as horizontal bars, and no notice (re-audit #2)", () => {
+  it("an Origin bar graph opens with its curve drawn as horizontal bars, and says which tools are off (re-audit #2)", () => {
     const meta = { origin_book: "Book2", x_column_name: "A", origin_column_names: ["B"] };
     const barFig = {
       ...figureEntry,
@@ -2421,7 +2421,9 @@ describe("useApp applyOriginFigure (item 18)", () => {
     useApp.getState().applyOriginFigure("fig-bar");
     expect(useApp.getState().statMode).toBe(false); // bars on the XY stage
     expect(useApp.getState().seriesStyles[0]).toEqual({ bars: "horizontal" });
-    expect(useToasts.getState().toasts.map((t) => t.msg).join(" ")).not.toMatch(/vertical columns/);
+    expect(useToasts.getState().toasts.map((t) => t.msg)).toContain(
+      "Graph1: horizontal bars — pan, region and analysis tools and dragging lines, labels or shapes are off on this turned plot",
+    );
     useApp.getState().applyOriginFigure("fig-XRD-0"); // no curves: no bar style left over
     expect(useApp.getState().seriesStyles).toEqual({});
   });

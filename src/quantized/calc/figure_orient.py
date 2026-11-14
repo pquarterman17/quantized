@@ -26,6 +26,9 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from matplotlib.lines import Line2D
+from matplotlib.patches import Rectangle
+
 __all__ = ["TransposedAxes", "horizontal_bars", "oriented"]
 
 # Attribute names that address one axis: the "x"/"y" in them is swapped.
@@ -33,8 +36,6 @@ _AXIS_NAME = re.compile(
     r"^(set_|get_|invert_|secondary_)?([xy])(label|lim|scale|ticks|ticklabels|axis|bound|margin"
     r"|axis_inverted|axis_transform)$"
 )
-_PAIRS = {"axvline": "axhline", "axhline": "axvline", "axvspan": "axhspan",
-          "axhspan": "axvspan"}  # fmt: skip
 # The spine that carries an axis moves with it: the Y axis sits at the bottom.
 _SPINE = {"left": "bottom", "bottom": "left", "right": "top", "top": "right"}
 _OTHER = {"x": "y", "y": "x"}
@@ -46,12 +47,18 @@ def horizontal_bars(series_styles: Sequence[Mapping[str, Any] | None] | None) ->
 
 
 def _swap_name(name: str) -> str:
-    if name in _PAIRS:
-        return _PAIRS[name]
     m = _AXIS_NAME.match(name)
     if m is None:
         return name
     return f"{m.group(1) or ''}{_OTHER[m.group(2)]}{m.group(3) or ''}"
+
+
+# An axis-spanning line or band's extent along the OTHER axis (axes fraction).
+_SPAN_KW = {"xmin": "ymin", "xmax": "ymax", "ymin": "xmin", "ymax": "xmax"}
+
+
+def _swap_span_kw(kw: dict[str, Any]) -> dict[str, Any]:
+    return {_SPAN_KW.get(k, k): v for k, v in kw.items()}
 
 
 def _swap_axis_kw(kw: dict[str, Any]) -> dict[str, Any]:
@@ -105,10 +112,52 @@ class TransposedAxes:
     def errorbar(self, x: Any, y: Any, yerr: Any = None, xerr: Any = None, **kw: Any) -> Any:
         return self.real.errorbar(y, x, yerr=xerr, xerr=yerr, **kw)
 
+    def _fraction(self, transform: Any) -> bool:
+        """True for axes / figure fractions, which do not turn."""
+        figure = getattr(self.real, "figure", None)
+        return transform is not None and transform in (
+            self.real.transAxes, getattr(figure, "transFigure", None)
+        )
+
     def text(self, x: float, y: float, s: str, *args: Any, **kw: Any) -> Any:
-        if kw.get("transform") is not None:
-            return self.real.text(x, y, s, *args, **kw)  # axes/figure fractions
+        if self._fraction(kw.get("transform")):
+            return self.real.text(x, y, s, *args, **kw)
+        # data, or an axis-blended transform (got through this view, so
+        # already the other axis's): the coordinates swap with it
         return self.real.text(y, x, s, *args, **kw)
+
+    def annotate(self, text: str, xy: Any, *args: Any, **kw: Any) -> Any:
+        if kw.get("xycoords", "data") == "data":
+            xy = (xy[1], xy[0])
+        return self.real.annotate(text, xy, *args, **kw)
+
+    def axvline(self, x: float = 0, *args: Any, **kw: Any) -> Any:
+        return self.real.axhline(x, *args, **_swap_span_kw(kw))
+
+    def axhline(self, y: float = 0, *args: Any, **kw: Any) -> Any:
+        return self.real.axvline(y, *args, **_swap_span_kw(kw))
+
+    def axvspan(self, x0: float, x1: float, *args: Any, **kw: Any) -> Any:
+        return self.real.axhspan(x0, x1, *args, **_swap_span_kw(kw))
+
+    def axhspan(self, y0: float, y1: float, *args: Any, **kw: Any) -> Any:
+        return self.real.axvspan(y0, y1, *args, **_swap_span_kw(kw))
+
+    def add_patch(self, patch: Any) -> Any:
+        if isinstance(patch, Rectangle) and not patch.is_transform_set():
+            (x, y), w, h = patch.get_xy(), patch.get_width(), patch.get_height()
+            patch.set_xy((y, x))
+            patch.set_width(h)
+            patch.set_height(w)
+        return self.real.add_patch(patch)
+
+    def add_artist(self, artist: Any) -> Any:
+        if isinstance(artist, Line2D) and (
+            not artist.is_transform_set() or artist.get_transform() is self.real.transData
+        ):
+            x, y = artist.get_xdata(), artist.get_ydata()
+            artist.set_data(y, x)
+        return self.real.add_artist(artist)
 
     def tick_params(self, *args: Any, **kw: Any) -> Any:
         return self.real.tick_params(*args, **_swap_axis_kw(kw))

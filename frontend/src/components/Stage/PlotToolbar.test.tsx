@@ -292,3 +292,25 @@ describe("PlotToolbar — the Stack toggle follows the multi-panel layout (S1 a)
     expect([useApp.getState().facetKey, useApp.getState().stackMode]).toEqual([null, false]);
   });
 });
+
+describe("PlotToolbar on a horizontal bar graph (the plot turned on its side)", () => {
+  it("keeps Pointer, Zoom and Data Cursor; the pointer-driven tools are disabled with the reason", () => {
+    useApp.setState({ seriesStyles: { 0: { bars: "horizontal" } } });
+    render(<PlotToolbar {...props} />);
+    for (const name of ["Pointer", "Zoom", "Data Cursor"]) {
+      expect(screen.getByRole("button", { name: new RegExp(`^${name}`) })).toBeEnabled();
+    }
+    for (const name of ["Pan", "Measure", "Region Stats", "Select Rows", "Integrate", "Peak / FWHM", "Gadget"]) {
+      const btn = screen.getByRole("button", { name: new RegExp(`^${name.replace("/", "\\/")}`) });
+      expect(btn).toBeDisabled();
+      expect(btn.closest("[title]")?.getAttribute("title") ?? btn.getAttribute("aria-describedby") ?? "").not.toBe("");
+    }
+    expect(document.body.textContent ?? "").toContain("Not available on a horizontal bar graph");
+  });
+
+  it("leaves every tool enabled on an upright bar graph", () => {
+    useApp.setState({ seriesStyles: { 0: { bars: true } } });
+    render(<PlotToolbar {...props} />);
+    expect(screen.getByRole("button", { name: /^Measure/ })).toBeEnabled();
+  });
+});

@@ -1997,8 +1997,16 @@ vertical peak-position markers) objects; a 133-byte header (position
   draws it — X up the left axis, values along the bottom (`bars:
   "horizontal"`: uPlot scale orientation on screen, `lib/uplotOrient.ts`;
   a transposing Axes proxy on export, `calc/figure_orient.py`, with a
-  secondary Y along the top). A histogram opens in Stat Stage's histogram
-  mode.
+  secondary Y along the top). Overlays turn with the plot: reference lines
+  (and off-scale markers, arrows turned), region shades, annotations, error
+  bars/spans and colour-mapped series land where the turned plot shows their
+  values, on screen (`orientPlugins`: an upright view for each draw hook)
+  and on export (the proxy swaps spans, patches, annotations and blended
+  text). The cursor readout is unchanged (it reads the data index). Tools
+  that read raw pointer positions — pan, region/select, measure, stats,
+  integrate, FWHM, gadgets, wheel zoom — and dragging lines, labels or
+  shapes are off on a turned plot; the toolbar shows why and the apply says
+  so. A histogram opens in Stat Stage's histogram mode.
 * **Window kind — window header u8 @0x42** (`opj_graph_windows`). Public
   corpus (49 unique `.opj`): `2` on all 77 worksheet / matrix / notes
   windows, `0` or `6` on all 43 recovered graph windows; @0x32 separates
