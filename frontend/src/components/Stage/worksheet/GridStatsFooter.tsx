@@ -5,11 +5,15 @@
 // stacked as one sticky block pinned to the bottom of the grid's scroll
 // region. "ignore"-role columns blank their stats (out of analysis), matching
 // the old WorksheetTable behaviour. Text columns (item 8) always blank ("—")
-// — read-only, never in stats.
+// — read-only, never in stats — positioned by file order like GridHeader/
+// GridRow (worksheet audit follow-up, `textLayout`).
+
+import { Fragment } from "react";
 
 import type { TextColumn } from "../../../lib/originTextColumns";
 import type { CalcResult, ChannelRole } from "../../../lib/types";
 import { fmtNum } from "../../../lib/format";
+import type { TextColumnLayout } from "./textColumns";
 
 // The descriptive-stats keys surfaced in the footer (StatsCard's set, plus
 // Origin's sum / SE of mean / variance / range / missing — worksheet audit
@@ -45,7 +49,7 @@ export interface GridStatsFooterProps {
   widthOf: (col: number) => number;
   gutterWidth: number;
   rowHeight: number;
-  textCols: TextColumn[];
+  textLayout: TextColumnLayout;
 }
 
 export default function GridStatsFooter({
@@ -59,7 +63,7 @@ export default function GridStatsFooter({
   widthOf,
   gutterWidth,
   rowHeight,
-  textCols,
+  textLayout,
 }: GridStatsFooterProps) {
   if (statsErr) {
     return (
@@ -77,6 +81,12 @@ export default function GridStatsFooter({
       </div>
     );
   }
+
+  const textCell = (t: TextColumn) => (
+    <div key={`text-${t.shortName}`} role="gridcell" className="qzk-grid-cell" style={{ width: colWidth, flexShrink: 0 }}>
+      —
+    </div>
+  );
 
   return (
     <div className="qzk-grid-footer" style={{ position: "sticky", bottom: 0, zIndex: 3 }}>
@@ -98,18 +108,18 @@ export default function GridStatsFooter({
           >
             {colStats ? fmtNum(colStats[0]?.[key]) : "…"}
           </div>
+          {textLayout.before.map(textCell)}
           {leadingSpacer > 0 && <div style={{ width: leadingSpacer, flexShrink: 0 }} aria-hidden="true" />}
           {visibleCols.map((c) => (
-            <div key={c} role="gridcell" className="qzk-grid-cell" style={{ width: widthOf(c), flexShrink: 0 }}>
-              {channelRoles[c] === "ignore" ? "—" : colStats ? fmtNum(colStats[c + 1]?.[key]) : "…"}
-            </div>
+            <Fragment key={c}>
+              <div role="gridcell" className="qzk-grid-cell" style={{ width: widthOf(c), flexShrink: 0 }}>
+                {channelRoles[c] === "ignore" ? "—" : colStats ? fmtNum(colStats[c + 1]?.[key]) : "…"}
+              </div>
+              {textLayout.after(c).map(textCell)}
+            </Fragment>
           ))}
           {trailingSpacer > 0 && <div style={{ width: trailingSpacer, flexShrink: 0 }} aria-hidden="true" />}
-          {textCols.map((t) => (
-            <div key={`text-${t.shortName}`} role="gridcell" className="qzk-grid-cell" style={{ width: colWidth, flexShrink: 0 }}>
-              —
-            </div>
-          ))}
+          {textLayout.trailing.map(textCell)}
         </div>
       ))}
     </div>

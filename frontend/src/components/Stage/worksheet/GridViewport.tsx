@@ -15,9 +15,9 @@
 //
 // Column-selection click handling (item 6) mirrors the row-number click
 // handler below exactly: a local `colAnchor` tracks the last plain/ctrl click
-// for shift-range extension. Text columns (item 8) are unvirtualized —
-// appended once, in full, past the numeric window on every axis (header/row/
-// footer), never part of the row/column windowing math.
+// for shift-range extension. Text columns (item 8) are unvirtualized — always
+// rendered in full, never part of the row/column windowing math — but
+// POSITIONED per the file's own column order, not always trailing (`useTextColumnLayout`).
 
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
@@ -47,6 +47,7 @@ import GridStatsFooter from "./GridStatsFooter";
 import { useCellEdit, type CellEditApi } from "./useCellEdit";
 import { useLineSelect } from "./useLineSelect";
 import { useColResize } from "./useColResize";
+import { useTextColumnLayout } from "./useTextColumnLayout";
 
 const DATE_X_COL_WIDTH = 168; // px: a full "YYYY-MM-DD HH:MM:SS" in the mono cell font
 
@@ -238,31 +239,6 @@ export default function GridViewport({
     [hasCustomCols, colCount, colWidths],
   );
 
-  // Reveal (store/worksheetReveal.ts): scroll once per request key. Reads the
-  // live element — rows sit under the sticky header, and the gutter
-  // + x column are pinned — then mirrors the result into `scroll` so the window
-  // moves this render, not after the browser's async scroll event.
-  const revealed = useRef<number | null>(null);
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el || !reveal || revealed.current === reveal.key) return;
-    revealed.current = reveal.key;
-    const rh = readRowHeight(el);
-    const headerH = (el.firstElementChild as HTMLElement | null)?.offsetHeight || rh;
-    const top = revealScrollOffset(reveal.pos * rh, rh, el.scrollTop, el.clientHeight - headerH, true);
-    const c = reveal.column;
-    const text = typeof c === "string" ? textCols.findIndex((t) => t.shortName === c) : -1;
-    const at = (i: number) => (colOffsets ? colOffsets[i] : i * colWidth);
-    const value = typeof c === "number" && c >= 0 && c < colCount;
-    const start = text >= 0 ? at(colCount) + text * colWidth : value ? at(c) : null;
-    const size = (value && colWidths[c]) || colWidth;
-    const avail = el.clientWidth - gutterWidth - (colWidths[-1] ?? (xIsDate ? DATE_X_COL_WIDTH : colWidth));
-    const left = start == null ? el.scrollLeft : revealScrollOffset(start, size, el.scrollLeft, avail, false);
-    el.scrollTop = top;
-    el.scrollLeft = left;
-    setScroll({ top, left });
-  }, [reveal, textCols, colCount, colWidth, colWidths, gutterWidth, colOffsets, xIsDate]);
-
   const rowCount = order.length + (cursor?.entryRow ? 1 : 0);
   const rowWindow = computeAxisWindow(scroll.top, metrics.height, rowCount, {
     itemSize: metrics.rowHeight,
@@ -291,6 +267,36 @@ export default function GridViewport({
   const trailingColSpacer = colOffsets
     ? colWindow.totalSize - colOffsets[colWindow.end]
     : (colCount - colWindow.end) * colWidth;
+  const { anchors: textAnchors, layout: textLayout } = useTextColumnLayout(data, textCols, visibleCols);
+
+  // Reveal (store/worksheetReveal.ts): scroll once per request key. Reads the
+  // live element — rows sit under the sticky header, and the gutter
+  // + x column are pinned — then mirrors the result into `scroll` so the window
+  // moves this render, not after the browser's async scroll event.
+  const revealed = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !reveal || revealed.current === reveal.key) return;
+    revealed.current = reveal.key;
+    const rh = readRowHeight(el);
+    const headerH = (el.firstElementChild as HTMLElement | null)?.offsetHeight || rh;
+    const top = revealScrollOffset(reveal.pos * rh, rh, el.scrollTop, el.clientHeight - headerH, true);
+    const c = reveal.column;
+    const textIdx = typeof c === "string" ? textCols.findIndex((t) => t.shortName === c) : -1;
+    const at = (i: number) => (colOffsets ? colOffsets[i] : i * colWidth);
+    const value = typeof c === "number" && c >= 0 && c < colCount;
+    // A revealed text column's approximate scroll target: right after its
+    // anchor channel (-1 means before every channel, i.e. position 0) — see
+    // useTextColumnLayout's doc for why this needs `textAnchors`, not `textLayout`.
+    const textAnchor = textIdx >= 0 ? textAnchors[textIdx] ?? -1 : -1;
+    const start = textIdx >= 0 ? (textAnchor < 0 ? 0 : at(textAnchor + 1)) : value ? at(c) : null;
+    const size = (value && colWidths[c]) || colWidth;
+    const avail = el.clientWidth - gutterWidth - (colWidths[-1] ?? (xIsDate ? DATE_X_COL_WIDTH : colWidth));
+    const left = start == null ? el.scrollLeft : revealScrollOffset(start, size, el.scrollLeft, avail, false);
+    el.scrollTop = top;
+    el.scrollLeft = left;
+    setScroll({ top, left });
+  }, [reveal, textCols, textAnchors, colCount, colWidth, colWidths, gutterWidth, colOffsets, xIsDate]);
 
   // The blank entry row (cursor.entryRow) renders at display position
   // `order.length`, past every data row; it has no original row yet.
@@ -317,7 +323,7 @@ export default function GridViewport({
       onRowContext={onRowContext}
       cellEdit={cellEdit}
       readOnly={readOnly}
-      textCols={textCols}
+      textLayout={textLayout}
       catLevels={(col) => categoricalLevels(data, col)}
       onEditCategoricalCell={onEditCategoricalCell}
       onEditCell={onEditCell}
@@ -362,7 +368,7 @@ export default function GridViewport({
         onRemoveFormula={onRemoveFormula}
         onHeaderContext={onHeaderContext}
         onTextHeaderContext={onTextHeaderContext}
-        textCols={textCols}
+        textLayout={textLayout}
         modelingTypeOf={modelingTypeOf}
         channelTypes={channelTypes}
         onChangeChannelType={onChangeChannelType}
@@ -385,7 +391,7 @@ export default function GridViewport({
           widthOf={widthOf}
           gutterWidth={gutterWidth}
           rowHeight={metrics.rowHeight}
-          textCols={textCols}
+          textLayout={textLayout}
         />
       )}
     </div>
