@@ -108,7 +108,7 @@ export function buildColumns(
         ? String(ds.metadata?.["x_column_long"] || ds.metadata?.["x_column_name"] || "x")
         : (ds.labels[xKey] ?? "x"),
     xUnit: xKey == null ? String(ds.metadata?.["x_column_unit"] ?? "") : (ds.units[xKey] ?? ""),
-    xIsDate: xIsDate(ds, xKey),
+    ...(xIsDate(ds, xKey) ? { xIsDate: true } : {}), // only when set: payloads compare deep-equal
   };
 }
 
@@ -626,7 +626,7 @@ export async function fetchPlot(
       },
       signal,
     );
-    return dropTrailingEmptyRows({ ...fromResponse(r), xIsDate: xIsDate(ds, xKey) });
+    return dropTrailingEmptyRows({ ...fromResponse(r), ...(xIsDate(ds, xKey) ? { xIsDate: true } : {}) });
   } catch (err) {
     // An intentional cancellation (a newer commit superseded this fetch)
     // must never be treated as "we're offline" -- the offline fallback below

@@ -30,8 +30,8 @@ function ds(timeIsDatetime: boolean): DataStruct {
 describe("a timestamp X column", () => {
   it("marks its plot payload, and only for the dataset's own axis", () => {
     expect(buildColumns(ds(true)).xIsDate).toBe(true);
-    expect(buildColumns(ds(false)).xIsDate).toBe(false);
-    expect(buildColumns(ds(true), null, 0, []).xIsDate).toBe(false); // a channel as X
+    expect(buildColumns(ds(false)).xIsDate).toBeUndefined();
+    expect(buildColumns(ds(true), null, 0, []).xIsDate).toBeUndefined(); // a channel as X
   });
 
   it("draws date ticks on an auto X format (uPlot time scale + a calendar label)", () => {

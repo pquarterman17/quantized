@@ -140,10 +140,30 @@ function textLabelsFor(
     }
     if (!ok) continue;
     if (levels.length > 0 && levels.every((lvl) => perLevel.has(lvl))) {
+      if (!namesChannel(data, channel, key) && !labelsGroups(perLevel, by)) continue;
       return levels.map((lvl) => perLevel.get(lvl) as string);
     }
   }
   return null;
+}
+
+/** Whether text column `key` is `channel`'s OWN column: the same header name,
+ *  or (Origin) the same short name -- an explicit binding of text to codes. */
+function namesChannel(data: DataStruct, channel: number, key: string): boolean {
+  const short = data.metadata?.["origin_column_names"];
+  return data.labels[channel] === key || (Array.isArray(short) && short[channel] === key);
+}
+
+/** Whether a text column found by agreement alone really LABELS the groups:
+ *  the levels repeat (fewer levels than half the rows) and two levels never
+ *  share one text. Worksheet audit #1: a continuous numeric column has a
+ *  distinct value on every row, so ANY unique-per-row text column (dates,
+ *  IDs) "agreed" with it trivially, and Tabulate titled every Signal group
+ *  with a Date string. */
+function labelsGroups(perLevel: Map<number, string>, by: readonly number[]): boolean {
+  const rows = by.filter((v) => Number.isFinite(v)).length;
+  const texts = new Set(perLevel.values());
+  return perLevel.size * 2 <= rows && texts.size === perLevel.size;
 }
 
 /** Formatted-numeric fallback: whole numbers read as "1" not "1.0"; others
