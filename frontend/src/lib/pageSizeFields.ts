@@ -8,7 +8,7 @@
 
 import type { ParamField } from "./params";
 import { fromInches, toInches } from "./pageGeometry";
-import { PAGE_UNITS, type PageSetup, type PageUnit } from "./pagesetup";
+import { DEFAULT_PAGE_HEIGHT_IN, DEFAULT_PAGE_WIDTH_IN, PAGE_UNITS, type PageSetup, type PageUnit } from "./pagesetup";
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
@@ -22,9 +22,22 @@ export function pageSizeFields(ps: PageSetup | null, hint?: string): ParamField[
       label: "Width",
       type: "number",
       default: ps ? r3(ps.width) : "",
-      hint: hint ?? (ps ? "page width, in the selected unit" : "blank = the style preset's size"),
+      hint:
+        hint ??
+        (ps
+          ? "page width, in the selected unit"
+          : `blank = the style preset's size (Default: ${DEFAULT_PAGE_WIDTH_IN} × ${DEFAULT_PAGE_HEIGHT_IN} in)`),
+      // Re-audit #15: a blank field shows the size it exports at (the Default
+      // preset's, in inches -- the unit the field starts in).
+      ...(ps ? {} : { placeholder: String(DEFAULT_PAGE_WIDTH_IN) }),
     },
-    { key: "height", label: "Height", type: "number", default: ps ? r3(ps.height) : "" },
+    {
+      key: "height",
+      label: "Height",
+      type: "number",
+      default: ps ? r3(ps.height) : "",
+      ...(ps ? {} : { placeholder: String(DEFAULT_PAGE_HEIGHT_IN) }),
+    },
     { key: "unit", label: "Unit", type: "select", default: ps?.unit ?? "in", options: [...PAGE_UNITS] },
   ];
 }

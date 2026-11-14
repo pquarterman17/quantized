@@ -160,7 +160,10 @@ export default function WorkbookRow({ node, depth, expanded, hasChildren, onFocu
           }}
         />
       ) : (
-        <span className="qzk-group-name" title={`${workbook.name} — double-click to open`}>
+        <span
+          className="qzk-group-name"
+          title={`${workbook.name}${workbook.originBook ? ` (Origin book "${workbook.originBook}")` : ""} — double-click to open`}
+        >
           {workbook.name}
         </span>
       )}

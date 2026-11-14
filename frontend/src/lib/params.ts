@@ -8,6 +8,10 @@ export interface ParamField {
   default: number | string | boolean;
   options?: string[]; // for select
   hint?: string;
+  /** Shown in an EMPTY number / text field: what a blank answer means
+   *  (re-audit #15: the Export dialog's blank Width / Height gave no hint of
+   *  the size a blank exports at). */
+  placeholder?: string;
 }
 
 export type ParamValues = Record<string, number | string | boolean>;

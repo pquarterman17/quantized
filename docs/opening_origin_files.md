@@ -29,6 +29,12 @@ you don't need to convert anything first.
   restorable plot snapshot — axis ranges, linear/log scale, titles, and
   legend/annotation text — and listed in the Library's "Figures" section.
   Click one to apply it to its resolved dataset.
+- **Where it lands in the Library.** The project arrives as one folder
+  holding its books and graphs, placed below the items already in the
+  Library, so nothing you were about to click moves. (At the Library's top
+  level, items that hold data are listed in the order they arrived; inside
+  a folder, folders come first.) The Origin fidelity summary and the book
+  families follow the tree's rows.
 - **Notes and the results log.** Free-form notes pages and Origin's
   analysis log (the record of every fit/subtract/smooth operation you ran,
   with parameters) are attached as import metadata, visible in the

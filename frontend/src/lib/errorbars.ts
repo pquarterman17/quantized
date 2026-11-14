@@ -102,7 +102,8 @@ export function originHiddenChannels(ds: DataStruct, user?: ColumnDesignations):
  *  nearest-preceding-X rule). The default plot has one X -- the book's first
  *  -- so drawing such a Y there would bind it to the wrong X; it is held back
  *  (fail closed) and Quick Plot draws it against its own X instead
- *  (lib/quickPlotSeriesX.ts). Still toggleable in the legend. */
+ *  (lib/quickPlotSeriesX.ts). Toggleable from the Channels card; the legend
+ *  lists curves only (lib/legendCurves.ts). */
 export function bookDefaultHiddenChannels(dataset: Pick<Dataset, "data" | "columnDesignations">): number[] {
   // One pass, the two rules side by side: `originHiddenChannels`' (a
   // designation other than Y/Z) and `ownXSeries`' (a Y, or undesignated
@@ -122,7 +123,8 @@ export function bookDefaultHiddenChannels(dataset: Pick<Dataset, "data" | "colum
  *  they render from the bindings themselves. Every error column -- bound by
  *  a role, a designation or an `error_channels` hint -- joins
  *  `hiddenChannels`, `originHiddenChannels`' rule for a designated error:
- *  never its own curve, still toggleable in the legend. */
+ *  never its own curve, toggleable from the Channels / Error columns cards
+ *  (the legend lists curves only, lib/legendCurves.ts). */
 export function errorRoleViewDefaults(
   dataset: Pick<Dataset, "data" | "errorRoles" | "columnDesignations">,
 ): { errKeys: Record<number, number>; hiddenChannels: number[] } {

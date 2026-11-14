@@ -311,10 +311,12 @@ describe("LibraryDetails — focused-row Delete owns the keystroke (PR #140 revi
 });
 
 describe("LibraryDetails — roving keyboard traversal (plan follow-up 4a)", () => {
+  // The root worksheet arrived first: at the Library root, items holding
+  // data sort by when it arrived (re-audit #9, lib/libraryHierarchy).
   const navDatasets = [
+    { ...dataset("solo", "active.csv", 2), workbookId: undefined },
     dataset("d1", "one.csv", 0),
     dataset("d2", "two.csv", 1),
-    { ...dataset("solo", "active.csv", 2), workbookId: undefined },
   ];
 
   function GlobalHarness() {
@@ -346,8 +348,8 @@ describe("LibraryDetails — roving keyboard traversal (plan follow-up 4a)", () 
 
   it("the roving row is the component's ONLY sequential tab stop — the scroll wrapper is not in the Tab order (P1 review fix)", () => {
     const { container } = render(<GlobalHarness />);
-    // Manual order: keyed root worksheet "solo" (order 2) sorts before the
-    // unkeyed workbook (byOrder sinks unkeyed after keyed siblings).
+    // Root order: "solo" arrived before the workbook's sheets, so it sorts
+    // first (re-audit #9); inside the workbook the order keys apply.
     expect(rowKeys()).toEqual(["worksheet:solo", "workbook:w", "worksheet:d1", "worksheet:d2"]);
     // The FULL component tab sequence, not just tbody rows: everything with
     // a non-negative tabindex (native buttons excluded — the sort headers

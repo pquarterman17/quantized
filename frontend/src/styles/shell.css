@@ -424,6 +424,11 @@ body {
    text in the tooltip), never an empty sliver of border. */
 .qzk-workbook-row > .qzk-origin-kind { display: block; line-height: 14px; flex: 0 1000 auto; min-width: 2.6em; overflow: hidden; text-overflow: ellipsis; }
 .qzk-workbook-row > .qzk-group-count { flex-shrink: 0; }
+/* Re-audit #10: at the default 210 px Library (a 1360 px window) the squeezed
+   chip still cost the name ~40 px ("decay…", "twocha…" beside "Ori…"). In a
+   narrow Library the chip goes and the name keeps the row; the book's Origin
+   identity stays in the name's tooltip and its family folder. */
+@container (max-width: 280px) { .qzk-workbook-row > .qzk-origin-kind { display: none; } }
 .qzk-group-count { color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
 /* PR L (L0.48/L0.49) — a Collection's member row. Deliberately NOT a
    DatasetRow: a Collection's members span every hierarchy node kind, and
@@ -605,6 +610,18 @@ body {
 .qzk-fig-row-tree:focus-within .qzk-origin-figure-actions,
 .qzk-fig-row-tree.selected .qzk-origin-figure-actions {
   display: flex;
+}
+/* Re-audit #10: while the strip is revealed it takes the place of the row's
+   secondary text (the "Graph" chip and the book / plot-type meta), not of
+   the graph's NAME -- beside a squeezed chip and meta the name shrank to a
+   couple of letters ("N.."). Both come back when the row is left. */
+.qzk-fig-row-tree:hover:not(.unresolved):not(.needs-review) .qzk-fig-item > .qzk-origin-kind,
+.qzk-fig-row-tree:hover:not(.unresolved):not(.needs-review) .qzk-fig-meta,
+.qzk-fig-row-tree:focus-within:not(.unresolved):not(.needs-review) .qzk-fig-item > .qzk-origin-kind,
+.qzk-fig-row-tree:focus-within:not(.unresolved):not(.needs-review) .qzk-fig-meta,
+.qzk-fig-row-tree.selected:not(.unresolved):not(.needs-review) .qzk-fig-item > .qzk-origin-kind,
+.qzk-fig-row-tree.selected:not(.unresolved):not(.needs-review) .qzk-fig-meta {
+  display: none;
 }
 /* An unresolved graph has nothing to open (in the tree its row stays a
    focusable treeitem that DESCRIBES its state -- never aria-disabled, which

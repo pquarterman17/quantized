@@ -7004,3 +7004,47 @@ describe("useApp plot windows — item 17 (worksheet/map document windows, full 
     expect(useApp.getState().worksheetSelections).toEqual({});
   });
 });
+
+// Re-audit #11: double-clicking a CSV row switched the plot, an Origin sheet
+// only the Worksheet (the Plot tab stayed on the previous data while the
+// title named the book). The explicit open plots the book too, by figures-
+// audit B1's rule -- here the focused window is STYLED, so it keeps its data
+// and the book lands in a new window. Plain clicks stay worksheet-only.
+describe("openFromLibrary: one meaning for the Library's open (re-audit #11)", () => {
+  const book = { id: "ob", name: "Book1", data: { time: [1, 2], values: [[1], [2]], labels: ["A"], units: [""], metadata: { source_format: "origin_opj", origin_book: "Book1" } } };
+  const csv = { id: "c", name: "c.csv", data: { time: [1, 2], values: [[1], [2]], labels: ["A"], units: [""], metadata: {} } };
+  const styled = { id: "w1", kind: "plot", title: "", datasetId: "c", geometry: { x: 0, y: 0, w: 400, h: 300 }, z: 1, winState: "maximized", view: { ...defaultPlotView(), plotTitle: "Styled" }, bg: "theme", linkGroup: null, pinned: false };
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [csv, book] as never, activeId: "c", worksheetId: null, selectedIds: ["c"], stageTab: "plot",
+      plotTitle: "Styled", originBookClickOpens: "worksheet", plotWindows: [styled] as never, focusedWindowId: "w1",
+    });
+  });
+
+  it("opening an Origin sheet shows its Worksheet AND plots it, never in the styled window", () => {
+    useApp.getState().openFromLibrary("ob");
+    const s = useApp.getState();
+    expect(s.stageTab).toBe("worksheet");
+    expect(s.worksheetId).toBe("ob");
+    expect(s.activeId).toBe("ob");
+    expect(s.plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("c");
+  });
+
+  it("an Origin MATRIX book's open still lands in Map, not the Worksheet (#646)", () => {
+    const matrix = {
+      id: "mx", name: "MBook1",
+      data: { time: [0, 0, 1, 1], values: [[0, 1], [1, 2], [0, 3], [1, 4]], labels: ["Y", "Z", "W"], units: ["", "", ""], metadata: { origin_book: "MBook1", origin_matrix: "MBook1", is2D: true } },
+    };
+    useApp.setState({ datasets: [csv, book, matrix] as never });
+    useApp.getState().openFromLibrary("mx");
+    const s = useApp.getState();
+    expect(s.stageTab).toBe("map");
+    expect(s.activeId).toBe("mx");
+  });
+
+  it("a plain activation (click, right-click, sheet tab) still leaves the plot alone", () => {
+    useApp.getState().activateFromLibrary("ob");
+    expect(useApp.getState().activeId).toBe("c");
+  });
+});

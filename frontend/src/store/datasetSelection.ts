@@ -79,6 +79,12 @@ export interface DatasetSelectionSlice {
   // Add-to-plot rebind (`lib/selectionplot` via `useWorksheetView.plotCols`)
   // all call it directly.
   activateFromLibrary: (id: string) => void;
+  /** The Library's explicit OPEN of a worksheet row (double-click, Enter):
+   *  `activateFromLibrary`, and an Origin book opened on its Worksheet also
+   *  becomes the plotted data (re-audit #11), by the same B1 rule a CSV row
+   *  follows. Selection-like routes (a click, a right-click, a sheet tab)
+   *  keep `activateFromLibrary` alone. */
+  openFromLibrary: (id: string) => void;
   toggleSelected: (id: string) => void;
   selectRange: (id: string) => void;
   // Replace the multi-selection with an explicit id list (folder bulk ops,
@@ -168,6 +174,22 @@ export function createDatasetSelectionSlice(set: SliceSet, get: SliceGet): Datas
       // (figures leftover f) instead of rebinding the focused one.
       if (ds && !focusWindowShowing(s, id)) retargetPassiveRebind(s, id, undefined, { protectEdits: true });
       get().setActive(id);
+    },
+    // Re-audit #11: double-clicking a CSV row switched the plot, an Origin
+    // sheet only the Worksheet -- the Plot tab stayed on the previous data
+    // while the title named the book. The explicit open now plots the book
+    // too, through the same figures-audit B1 rule (a styled graph is never
+    // rebound: the book lands in an unedited or a new window, so opening a
+    // workbook still never touches your graphs), and keeps the Worksheet on
+    // screen. Plain clicks, right-clicks and sheet tabs are unchanged.
+    openFromLibrary: (id) => {
+      get().activateFromLibrary(id);
+      const s = get();
+      const ds = s.datasets.find((d) => d.id === id);
+      if (!ds || s.activeId === id || s.stageTab !== "worksheet" || s.worksheetId !== id) return;
+      if (!focusWindowShowing(s, id)) retargetPassiveRebind(s, id, undefined, { protectEdits: true });
+      get().setActive(id);
+      set({ worksheetId: id, stageTab: "worksheet" });
     },
     // Ctrl/Cmd-click: add or remove a row from the multi-selection WITHOUT changing
     // the plotted/active dataset (the plot only follows a plain click).

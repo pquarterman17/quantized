@@ -105,11 +105,12 @@ test("a project written by the Origin exporter opens again as books with names, 
   expect(twoChannel!.rows).toBe(11);
   // Each reopened book is an Origin book row in the Library, under the
   // project's book family. The family card and the Origin-fidelity section
-  // are inserted ABOVE the existing rows after the books land (measured: the
-  // rows move down twice, ~100 px each, in the first ~500 ms), so wait for
-  // both before clicking a row — otherwise the double-click lands on
-  // whichever row has just slid under the pointer.
-  await expect(library.getByText("Origin book").first()).toBeVisible();
+  // arrive after the books land (they used to be inserted ABOVE the rows and
+  // move them under the pointer; since re-audit #9 they render below), so
+  // wait for both before clicking a row. The "Origin book" badge is ATTACHED,
+  // not visible: a Library this narrow hides it so the name keeps the room
+  // (re-audit #10), and the row's name tooltip carries it instead.
+  await expect(library.getByText("Origin book").first()).toBeAttached();
   await expect(library.getByRole("button", { name: "Manage…" })).toBeVisible();
   await expect(library.getByText("Origin fidelity", { exact: true })).toBeVisible();
 

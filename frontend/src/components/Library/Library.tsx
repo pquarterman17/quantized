@@ -248,6 +248,17 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
     body = null;
   }
 
+  const sections = (
+    <LibrarySections
+      inHierarchy={inHierarchy}
+      searchActive={searchActive}
+      hierarchy={hierarchy}
+      onFilterTag={setQuery}
+      onShowInLibrary={showInLibrary}
+      onStageOpen={() => changeViewMode("tree")}
+      focusActive={libraryFocus.focusActive || contentFilter !== "all"}
+    />
+  );
   return (
     <aside
       ref={panelRef}
@@ -364,17 +375,9 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
 
       {selectedIds.length > 1 && <MultiSelectBar />}
 
-      <LibrarySections
-        inHierarchy={inHierarchy}
-        searchActive={searchActive}
-        hierarchy={hierarchy}
-        onFilterTag={setQuery}
-        onShowInLibrary={showInLibrary}
-        onStageOpen={() => changeViewMode("tree")}
-        focusActive={libraryFocus.focusActive || contentFilter !== "all"}
-      />
-
+      {!inHierarchy && sections}
       {body}
+      {inHierarchy && sections /* the tree's rows come first: LibrarySections.tsx (re-audit #9) */}
       {/* MAIN #38: an empty Library is the most common launch state, so it
        *  gets the resume-work surface. `rows.length === 0` (nothing at all —
        *  no dataset/folder/workbook/figure/page/report) is the only way to
