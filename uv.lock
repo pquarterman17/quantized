@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -2820,6 +2820,7 @@ dependencies = [
     { name = "numpy" },
     { name = "openpyxl" },
     { name = "periodictable" },
+    { name = "pillow" },
     { name = "platformdirs" },
     { name = "pydantic" },
     { name = "python-multipart" },
@@ -2878,6 +2879,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26" },
     { name = "openpyxl", specifier = ">=3.1" },
     { name = "periodictable", specifier = ">=1.7" },
+    { name = "pillow", specifier = ">=10.0" },
     { name = "platformdirs", specifier = ">=4.10.0" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "python-docx", marker = "extra == 'office'", specifier = ">=1.1" },

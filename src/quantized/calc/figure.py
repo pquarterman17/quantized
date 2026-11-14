@@ -33,6 +33,7 @@ from quantized.calc.figure_legend_order import (
     tag_series_slots,
 )
 from quantized.calc.figure_overrides import _apply_overrides, _validate_overrides
+from quantized.calc.figure_panel_insets import apply_panel_insets
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
 from quantized.calc.figure_styles import FigureStyle, figure_style
@@ -232,6 +233,7 @@ def draw_series_axes(
     apply_axis_style(ax, "x", x_fmt, side="bottom", grid_alpha=st.grid_alpha)
     apply_axis_style(ax, "y", y_fmt, side="left", grid_alpha=st.grid_alpha)
     apply_inset(ax, artists, ov, resolved_x_scale, resolved_y_scale, st.grid_alpha)
+    apply_panel_insets(ax, ov)
     return artists
 
 

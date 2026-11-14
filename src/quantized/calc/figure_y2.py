@@ -35,6 +35,7 @@ from quantized.calc.figure_inset import apply_inset
 from quantized.calc.figure_legend_order import draw_legend, tag_series_slots
 from quantized.calc.figure_orient import oriented
 from quantized.calc.figure_overrides import legend_kwargs
+from quantized.calc.figure_panel_insets import apply_panel_insets
 from quantized.calc.figure_scale import apply_axis_scale, drawable_lim, resolve_axis_scale
 from quantized.calc.figure_styles import FigureStyle
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
@@ -262,8 +263,11 @@ def render_with_secondary_axis(
     primary_shades, secondary_shades = _split_region_shades_by_axis(ov.get("region_shades"))
     primary_ov = ov if not secondary_shades else {**ov, "region_shades": primary_shades}
     # The magnifier inset shows BOTH axes' series, so it is drawn below once
-    # the twin exists (calc.figure_inset), not by the primary-only pass.
-    primary_ov = {k: v for k, v in primary_ov.items() if k != "inset"}
+    # the twin exists (calc.figure_inset), not by the primary-only pass. A
+    # panel inset owns its own content (no twin awareness needed) but would
+    # still double-draw if left in -- draw_series_axes calls apply_panel_insets
+    # unconditionally, so it is stripped here too and drawn once below instead.
+    primary_ov = {k: v for k, v in primary_ov.items() if k not in ("inset", "panel_insets")}
     artists = draw_series_axes(  # turned when ANY series, either axis, is horizontal
         fig, oriented(ax, series_styles), xv, primary,
         st=st, ov=primary_ov, x_log=x_log, y_log=y_log, x_scale=x_scale, y_scale=y_scale,
@@ -301,6 +305,7 @@ def render_with_secondary_axis(
         ax, artists, ov, resolve_axis_scale(x_scale, x_log), resolve_axis_scale(y_scale, y_log),
         st.grid_alpha, twin=(ax2, y2_artists, resolve_axis_scale(y2_scale, False)),
     )
+    apply_panel_insets(ax, ov)
     _combined_legend(fig, ax, st, ov, artists, y2_artists, y2_mask, n_series=len(series))
     return artists + y2_artists
 
