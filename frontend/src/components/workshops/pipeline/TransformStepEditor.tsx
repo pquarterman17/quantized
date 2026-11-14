@@ -154,7 +154,7 @@ export default function TransformStepEditor({
         )}
         {form.workshop && (
           <Button size="sm" onClick={() =>
-              openWorkshop(form.workshop!, draft, primary, new Set(datasets.map((d) => d.id)), () => openMath(true))
+              openWorkshop(form.workshop!, draft, primary, new Set(datasets.map((d) => d.id)), () => openMath(true, draft.op === "average" ? "average" : "combine"))
             }>
             Open in workshop
           </Button>

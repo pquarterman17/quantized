@@ -484,6 +484,128 @@
         "title": "AucRequest",
         "type": "object"
       },
+      "AverageCurve": {
+        "properties": {
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "dataset"
+        ],
+        "title": "AverageCurve",
+        "type": "object"
+      },
+      "AverageRequest": {
+        "properties": {
+          "allow_unit_mismatch": {
+            "default": false,
+            "title": "Allow Unit Mismatch",
+            "type": "boolean"
+          },
+          "channel": {
+            "default": "",
+            "title": "Channel",
+            "type": "string"
+          },
+          "curves": {
+            "items": {
+              "$ref": "#/components/schemas/AverageCurve"
+            },
+            "minItems": 2,
+            "title": "Curves",
+            "type": "array"
+          },
+          "grid": {
+            "default": "union",
+            "enum": [
+              "union",
+              "step"
+            ],
+            "title": "Grid",
+            "type": "string"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          },
+          "unsorted": {
+            "default": "refuse",
+            "enum": [
+              "refuse",
+              "sort"
+            ],
+            "title": "Unsorted",
+            "type": "string"
+          }
+        },
+        "required": [
+          "curves"
+        ],
+        "title": "AverageRequest",
+        "type": "object"
+      },
+      "AverageResponse": {
+        "properties": {
+          "channels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "overlap": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Overlap",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/ResampleWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dataset",
+          "warnings",
+          "overlap",
+          "channels"
+        ],
+        "title": "AverageResponse",
+        "type": "object"
+      },
       "AxisLabelStyle": {
         "description": "One axis title's Format choices; an absent field keeps the preset's.",
         "properties": {
@@ -27319,6 +27441,48 @@
         "summary": "Thermal Mismatch",
         "tags": [
           "thin-film"
+        ]
+      }
+    },
+    "/api/transform/average": {
+      "post": {
+        "description": "Mean, SD, SEM and N of N curves interpolated onto one grid.",
+        "operationId": "average_api_transform_average_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AverageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AverageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Average",
+        "tags": [
+          "transform"
         ]
       }
     },
