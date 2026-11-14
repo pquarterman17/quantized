@@ -8,7 +8,7 @@ export const SCOPE_LABEL = { project: "Project", global: "Global", "built-in": "
 export const STATUS_LABEL = { ready: "Ready", partial: "Needs review", blocked: "Cannot build" } as const;
 export const STATUS_TONE = { ready: "ok", partial: "warn", blocked: "danger" } as const;
 // "pdf-pages": ONE PDF with a page per figure (gap-audit-2 #10), not a ZIP.
-export const EXPORT_FORMATS = ["pdf", "pdf-pages", "svg", "png", "tiff"] as const;
+export const EXPORT_FORMATS = ["pdf", "pdf-pages", "svg", "eps", "png", "tiff"] as const;
 export const exportFormatLabel = (f: (typeof EXPORT_FORMATS)[number]): string => (f === "pdf-pages" ? "PDF, one file (a page each)" : `${f.toUpperCase()} (ZIP)`);
 export function batchRecipeChoices(
   project: readonly PlotRecipe[],

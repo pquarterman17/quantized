@@ -8,7 +8,7 @@ import type { Dataset } from "./types";
 export const MAX_BATCH_FIGURE_EXPORT = 64;
 
 export interface BatchFigureExportOptions {
-  format: "pdf" | "svg" | "png" | "tiff";
+  format: "pdf" | "svg" | "eps" | "png" | "tiff";
   style: string;
   dpi: number;
   archiveName: string;

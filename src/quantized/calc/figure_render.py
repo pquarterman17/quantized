@@ -108,8 +108,9 @@ R = TypeVar("R")
 # wraps the actual TrueType outlines as a real, embedded, selectable font
 # (Type 0 / CIDFontType2) instead (PRIMARY_SOFTWARE_AUDIT_PLAN P3.6 -- found
 # via ``tests/test_export_copy_figure_vector.py``, which pins the embedded
-# subtype and fails under the matplotlib default).
-BASE_RC: Mapping[str, Any] = {"svg.fonttype": "none", "pdf.fonttype": 42}
+# subtype and fails under the matplotlib default). ps.fonttype 42 does the same
+# for EPS (gap-audit-2 #16): real embedded fonts, not Type 3 procedures.
+BASE_RC: Mapping[str, Any] = {"svg.fonttype": "none", "pdf.fonttype": 42, "ps.fonttype": 42}
 
 
 @contextmanager

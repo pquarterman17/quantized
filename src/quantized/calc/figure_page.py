@@ -72,7 +72,7 @@ from quantized.heavy_import import heavy_imports
 
 __all__ = ["PagePanel", "panel_label", "render_figure_page"]
 
-_FORMATS = ("pdf", "svg", "png", "tiff")
+_FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 _LABEL_POSITIONS = ("nw", "ne", "outside")
 
 

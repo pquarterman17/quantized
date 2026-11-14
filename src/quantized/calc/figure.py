@@ -45,7 +45,7 @@ from .figure_orient import TransposedAxes, oriented
 
 __all__ = ["draw_series_axes", "render_figure", "style_rc"]
 
-_FORMATS = ("pdf", "svg", "png", "tiff")
+_FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 _LINESTYLE = {"solid": "-", "dashed": "--", "dotted": ":", "none": "none"}
 # GAP_PLOTTYPES (Graph Builder "step" mark) export parity: the frontend's
 # per-series `step` ("pre"/"post"/"mid" — SeriesStyle.step / ExportSeriesStyle
