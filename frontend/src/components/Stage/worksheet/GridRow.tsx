@@ -19,6 +19,7 @@
 // extend/clear decision) — two different callbacks on purpose, not
 // redundant ones.
 
+import clsx from "clsx";
 import { useState } from "react";
 
 import { labelForCode } from "../../../lib/categorical";
@@ -85,6 +86,20 @@ export interface GridRowProps {
   /** A column's number formatter (-1 = x): GridViewport's per-column
    *  precision (cellFormat.gridFormatters). Omitted: fmtCell. */
   fmtOf?: (col: number) => CellFormatter;
+  /** The grid's cell cursor (./useGridCursor.ts), all optional together:
+   *  this row's DISPLAY position, each cell's cursor/range mark and DOM id
+   *  (the grid's aria-activedescendant), and the pointer handlers. */
+  cursor?: GridRowCursor;
+  /** The blank entry row under the data: empty cells you can type into. */
+  entry?: boolean;
+}
+
+export interface GridRowCursor {
+  pos: number;
+  mark: (pos: number, col: number) => "cursor" | "range" | null;
+  cellId: (pos: number, col: number) => string;
+  onCellDown: (pos: number, col: number, e: React.MouseEvent) => void;
+  onCellEnter: (pos: number, col: number, e: React.MouseEvent) => void;
 }
 
 export default function GridRow({
@@ -113,6 +128,8 @@ export default function GridRow({
   readOnly = false,
   colName = (col) => (col < 0 ? "x" : `column ${col + 1}`),
   fmtOf,
+  cursor,
+  entry = false,
 }: GridRowProps) {
   const editorName = (col: number) => `${colName(col)}, row ${r + 1}`;
   const rowTitle = isMasked
@@ -208,18 +225,23 @@ export default function GridRow({
     const editing = !locked && cellEdit.isEditing(r, col);
     const colSelected = selectedCols.has(col);
     const levels = computed ? null : (catLevels?.(col) ?? null);
+    const mark = cursor?.mark(cursor.pos, col) ?? null;
     return (
       <div
         key={col}
         role="gridcell"
-        className="qzk-grid-cell"
+        id={cursor?.cellId(cursor.pos, col)}
+        aria-selected={cursor ? mark !== null : undefined}
+        className={clsx("qzk-grid-cell", mark === "cursor" && "qzk-cell-cursor", mark && "qzk-cell-range")}
+        onMouseDown={cursor && ((e) => cursor.onCellDown(cursor.pos, col, e))}
+        onMouseEnter={cursor && ((e) => cursor.onCellEnter(cursor.pos, col, e))}
         style={{
           width: widthOf(col),
           flexShrink: 0,
           color: computed ? "var(--text-dim)" : undefined,
           ...(colSelected ? { background: "var(--accent-soft)" } : {}),
           ...(pinnedLeft != null
-            ? { position: "sticky" as const, left: pinnedLeft, zIndex: 2, background: colSelected ? "var(--accent-soft)" : "var(--surface-0)" }
+            ? { position: "sticky" as const, left: pinnedLeft, zIndex: 2, background: colSelected || mark ? "var(--accent-soft)" : "var(--surface-0)" }
             : {}),
         }}
         onDoubleClick={
@@ -230,7 +252,7 @@ export default function GridRow({
                 cellEdit.startEdit(r, col, value);
               }
         }
-        title={computed ? "computed column — edit the formula" : readOnly ? REDERIVED_EDIT_NOTICE : "double-click to edit"}
+        title={computed ? "computed column — edit the formula" : readOnly ? REDERIVED_EDIT_NOTICE : entry ? "type to add a row" : "type or double-click to edit"}
       >
         {editing && levels ? (
           catCell(col, levels, value ?? Number.NaN)
@@ -241,12 +263,19 @@ export default function GridRow({
             autoFocus
             value={cellEdit.draft}
             onChange={(e) => cellEdit.setDraft(e.target.value)}
-            onBlur={cellEdit.commit}
+            // A refused (non-numeric) draft is dropped on blur: the cell keeps
+            // its value and the status line says why.
+            onBlur={() => {
+              if (cellEdit.isEditing(r, col) && !cellEdit.commit()) cellEdit.cancel();
+            }}
             onKeyDown={(e) => {
+              if (cellEdit.onKey) return cellEdit.onKey(e);
               if (e.key === "Enter") cellEdit.commit();
               if (e.key === "Escape") cellEdit.cancel();
             }}
           />
+        ) : entry ? (
+          ""
         ) : levels ? (
           labelForCode(levels, value ?? Number.NaN) ?? "—"
         ) : (
@@ -259,7 +288,7 @@ export default function GridRow({
   return (
     <div
       role="row"
-      className="qzk-grid-row"
+      className={clsx("qzk-grid-row", entry && "qzk-grid-entry")}
       onContextMenu={onRowContext ? (e) => onRowContext(r, e) : undefined}
       style={{
         height: rowHeight,

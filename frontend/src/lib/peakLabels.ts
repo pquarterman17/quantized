@@ -20,6 +20,10 @@ export interface LabelSourcePeak {
   height: number;
   fwhm: number;
   area: number | null;
+  /** The matched XRD reference reflection's (hkl) and phase (lib/
+   *  peakPhaseMatch.ts); absent = no reference stick within tolerance. */
+  hkl?: string;
+  phase?: string;
 }
 
 const TOKEN_RE = /\{(\w+)\}/g;
@@ -28,16 +32,14 @@ const TOKEN_RE = /\{(\w+)\}/g;
 export const DEFAULT_LABEL_TEMPLATE = "{center}";
 
 /** Render one peak's label text from a token template. RULING 5: tokens are
- *  limited to fields that ACTUALLY EXIST on `Peak`/`FittedPeak` today —
- *  `{center}`, `{height}`, `{fwhm}`, `{area}`, `{index}` (1-based) — plus
- *  literal text. quantized has NO phase/`(hkl)` indexing data source yet, so
- *  this deliberately does NOT invent, infer, or fabricate one; a future
- *  `{phase}`/`{hkl}` token slots into the same `switch` the day real
- *  indexing data exists (tracked in the UX-R6 status note). An UNKNOWN token
- *  — including `{phase}`/`{hkl}` today — renders LITERALLY (the `{...}` text
- *  passes through unchanged) rather than throwing, so a stale or
- *  forward-looking template degrades visibly instead of breaking the whole
- *  label.
+ *  limited to fields that ACTUALLY EXIST — `{center}`, `{height}`, `{fwhm}`,
+ *  `{area}`, `{index}` (1-based) — plus `{hkl}` / `{phase}` (gap audit 2
+ *  #12), which read the XRD reference reflection the caller matched to this
+ *  peak (`peak.hkl` / `peak.phase`, lib/peakPhaseMatch.ts) and render BLANK
+ *  when nothing matched — never an invented or far-away index. An UNKNOWN
+ *  token renders LITERALLY (the `{...}` text passes through unchanged)
+ *  rather than throwing, so a stale template degrades visibly instead of
+ *  breaking the whole label.
  *
  *  `precision` is clamped to `[0, 100]` HERE (M5 review finding), not just
  *  at the call site — `Number.prototype.toFixed` throws `RangeError` above
@@ -66,8 +68,12 @@ export function renderLabelTemplate(
         return fmt(peak.area);
       case "index":
         return String(index + 1);
+      case "hkl":
+        return peak.hkl ?? "";
+      case "phase":
+        return peak.phase ?? "";
       default:
-        return whole; // unknown token (e.g. a not-yet-real {phase}/{hkl}) -> literal
+        return whole; // unknown token -> literal
     }
   });
 }

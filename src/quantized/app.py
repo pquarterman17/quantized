@@ -47,6 +47,7 @@ from quantized.routes import (
     export_multivar,
     export_page,
     export_statplots,
+    export_table,
     fitting,
     fitting_bumps,
     fitting_global,
@@ -238,6 +239,7 @@ def create_app(
     application.include_router(export_fonts.router)
     application.include_router(export_statplots.router)
     application.include_router(export_multivar.router)
+    application.include_router(export_table.router)
     application.include_router(export_page.router)
     application.include_router(report_export.router)
     application.include_router(magnetometry.router)

@@ -159,6 +159,11 @@ export async function executeSteps(
           if (!store().addFormula(target, name, expr)) {
             throw new Error(store().status || "couldn't add the computed column");
           }
+          // Gap audit 2 #14: a computed error column is re-bound as its series' error.
+          if (typeof step.params.errorOf === "string") {
+            const { bindReplayedError } = await import("../../../store/computedErrorRun");
+            if (!bindReplayedError(target, name, step.params.errorOf)) throw new Error(`couldn't bind "${name}" as an error column`);
+          }
           log[step.id] = { status: "ok" };
           break;
         }

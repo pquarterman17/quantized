@@ -210,6 +210,7 @@ export function applyReimportMerge(
               channelRoles: undefined,
               channelTypes: undefined,
               columnDesignations: undefined,
+              columnProps: undefined,
               formulas: undefined,
               // Independent-review booked finding: a plain `undefined` here
               // threw away a still-derivable Origin-authoritative answer on

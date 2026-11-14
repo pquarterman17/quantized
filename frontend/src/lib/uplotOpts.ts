@@ -29,7 +29,7 @@ export { logMajorTickFilter };
 import { decimalsForIncrement, pow10 } from "./ticks";
 import { ERROR_CAP_HALF_PX, errorRange, errorReach, fullYExtents, withXBarRows } from "./uplotErrorRange";
 import { fixedXRange, fullXExtents, scannedXRange } from "./uplotXRange";
-import type { Annotation, AxisFormat, AxisScale, DefaultTrace, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
+import { dateAwareXFmt, type Annotation, type AxisFormat, type AxisScale, type DefaultTrace, type RefLine, type RegionShade, type SeriesStyle, type Shape } from "./types";
 import {
   annotationPlugin,
   axisBoxPlugin,
@@ -774,7 +774,7 @@ function scaleDistrProps(
 
 export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Options { // orientArgs: uplotOrient
   const args = orientArgs(given), { width, height, yScale, xScale, tool, onReadout, xLim, yLim, refLines } = args;
-  const { xFmt, yFmt, y2Fmt, annotations, showGrid, onRegionSelect } = args;
+  const { yFmt, y2Fmt, annotations, showGrid, onRegionSelect } = args, xFmt = dateAwareXFmt(args.xFmt, payload.xIsDate); // audit #7: auto on a date X = dates
   const xAscending = xIsAscending(payload.data[0] as (number | null)[]);
   // This window's EFFECTIVE background (item 18) drives both the axis/grid/
   // ink colours below AND the contrast check on literal per-series colours

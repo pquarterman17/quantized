@@ -102,6 +102,16 @@ export function transformForm(d: Record<string, unknown>): TransformForm {
         note: "Dataset B is chosen in the workshop.",
         workshop: "algebra",
       };
+    case "average":
+      return {
+        fields: [
+          select("grid", "grid", opts(["union", "step"])),
+          ...(d.grid === "step" ? [{ key: "step", label: "step", type: "number" } as FieldSpec] : []),
+          { key: "sortUnsorted", label: "sort x that reverses direction", type: "bool" },
+        ],
+        note: "The averaged datasets are chosen in the workshop.",
+        workshop: "algebra",
+      };
     case "split":
       return {
         fields: [

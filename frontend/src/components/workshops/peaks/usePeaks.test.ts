@@ -640,7 +640,7 @@ describe("usePeaks labelPeaks — MY RULING 4 (never mutates sources)", () => {
 describe("usePeaks labelPeaks — MY RULING 5 (template tokens, unknown tokens, precision)", () => {
   it("renders a custom template, an unknown token literally, and honors precision", async () => {
     vi.mocked(askParams).mockResolvedValue({
-      template: "peak {index}: {phase} {center}",
+      template: "peak {index}: {sigma} {center}",
       precision: 1,
     });
     const { result } = renderHook(() => usePeaks());
@@ -652,7 +652,7 @@ describe("usePeaks labelPeaks — MY RULING 5 (template tokens, unknown tokens, 
 
     const anns = useApp.getState().annotations as Annotation[];
     const texts = anns.map((a) => a.text).sort();
-    expect(texts).toEqual(["peak 1: {phase} 1.0", "peak 2: {phase} 3.0"]);
+    expect(texts).toEqual(["peak 1: {sigma} 1.0", "peak 2: {sigma} 3.0"]);
   });
 });
 
@@ -1319,5 +1319,39 @@ describe("usePeaks durable peak table (PRIMARY_SOFTWARE_AUDIT_PLAN P2.1)", () =>
     expect(useApp.getState().datasets[0].peakTable?.peaks[0].excluded).toBe(true);
     act(() => result.current.toggleExcluded(id, false));
     expect(useApp.getState().datasets[0].peakTable?.peaks[0].excluded).toBe(false);
+  });
+});
+
+describe("usePeaks labelPeaks — {hkl}/{phase} from XRD reference sticks (gap audit 2 #12)", () => {
+  const stick = { intensity: 1, baseline: 0, height: 0.2, color: "#000", visible: true, showLabel: false };
+
+  it("labels each peak with the nearest reference reflection within the tolerance", async () => {
+    useApp.setState({
+      refLines: [
+        { id: "r1", axis: "x", value: 1.05, label: "(111)", groupId: "g", groupLabel: "Au · λ 1.54060 Å", stick },
+        { id: "r2", axis: "x", value: 5, label: "(200)", groupId: "g", stick },
+      ],
+    });
+    vi.mocked(askParams).mockResolvedValue({ template: "{phase} {hkl}", precision: 2, tolerance: 0.2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+    // Peak 3 has no stick within 0.2° — its label renders blank and is skipped.
+    expect(useApp.getState().annotations.map((a) => a.text)).toEqual(["Au (111)"]);
+    expect(useToasts.getState().toasts.at(-1)?.msg).toMatch(/1 peak has no reference reflection within 0.2°/);
+  });
+
+  it("asks for a reference pattern instead of labeling when none is on the plot", async () => {
+    useApp.setState({ refLines: [] });
+    vi.mocked(askParams).mockResolvedValue({ template: "{hkl}", precision: 2, tolerance: 0.2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+    expect(useApp.getState().annotations).toHaveLength(0);
+    expect(useToasts.getState().toasts.at(-1)?.msg).toMatch(/XRD reference pattern/);
   });
 });

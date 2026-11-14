@@ -214,3 +214,41 @@ describe("SheetTabs keyboard", () => {
     expect(screen.queryByRole("tablist")).toBeNull();
   });
 });
+
+describe("SheetTabs for an ordinary workbook (worksheet audit #20)", () => {
+  function plain(id: string, name: string, workbookId: string, sheetName?: string): Dataset {
+    return {
+      id,
+      name,
+      workbookId,
+      data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: sheetName ? { sheet_name: sheetName } : {} },
+    };
+  }
+
+  it("tabs every worksheet of a multi-sheet workbook, and a tab moves only the worksheet", () => {
+    useApp.setState({
+      datasets: [
+        plain("a", "run.xlsx", "wb1", "Run1"),
+        plain("b", "run.xlsx — Run2", "wb1", "Run2"),
+        plain("c", "other.csv", "wb2"),
+      ],
+      stageTab: "worksheet",
+      activeId: "c",
+      worksheetId: "a",
+    });
+    render(<SheetTabs datasetId="a" />);
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.map((t) => t.textContent)).toEqual(["1Run1", "2Run2"]);
+    expect(tabs[0]).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(tabs[1]);
+    expect(useApp.getState().worksheetId).toBe("b");
+    expect(useApp.getState().activeId).toBe("c"); // the plot is not rebound
+    expect(useApp.getState().stageTab).toBe("worksheet");
+  });
+
+  it("renders nothing for a one-sheet workbook", () => {
+    useApp.setState({ datasets: [plain("c", "other.csv", "wb2")] });
+    const { container } = render(<SheetTabs datasetId="c" />);
+    expect(container).toBeEmptyDOMElement();
+  });
+});

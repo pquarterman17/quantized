@@ -54,8 +54,12 @@ export default function SheetTabs({ datasetId }: SheetTabsProps) {
   const currentBook = family ? currentBaseBook(family.members, datasetId) : undefined;
 
   const group = originSheetGroups(datasets).find((g) => g.members.some((m) => m.id === datasetId));
+  // Any other workbook with several worksheets -- a multi-sheet .xlsx, or
+  // files imported "as sheets of one workbook" -- gets tabs too (worksheet
+  // audit #20; they were Origin-only).
+  const book = group ? [] : workbookSheets(datasets, datasetId);
 
-  if (books.length <= 1 && !group) return null; // nothing to switch between
+  if (books.length <= 1 && !group && book.length < 2) return null; // nothing to switch between
 
   return (
     <div className="qzk-sheet-tabs">
@@ -105,6 +109,44 @@ export default function SheetTabs({ datasetId }: SheetTabsProps) {
           })}
         </div>
       )}
+      {book.length > 1 && (
+        <div className="qzk-sheet-tablist" role="tablist" aria-label="Workbook sheets" onKeyDown={(e) => onTabListKeyDown(e, false)}>
+          {book.map((m, i) => {
+            const active = m.id === datasetId;
+            const name = sheetName(m);
+            return (
+              <button
+                key={m.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                tabIndex={active ? 0 : -1}
+                className={`qzk-sheet-tab${active ? " active" : ""}`}
+                title={m.name}
+                // Pure browsing, as an Origin sheet tab: the worksheet moves,
+                // the plot window and the Stage tab stay where they are.
+                onClick={() => useApp.setState({ worksheetId: m.id, selectedIds: [m.id], librarySelection: null })}
+              >
+                <span className="qzk-sheet-tab-num">{i + 1}</span>
+                <span className="qzk-sheet-tab-name">{name}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
+}
+
+/** The worksheets of `datasetId`'s workbook, in Library order (empty when it
+ *  has no workbook). */
+function workbookSheets(datasets: Dataset[], datasetId: string): Dataset[] {
+  const wb = datasets.find((d) => d.id === datasetId)?.workbookId;
+  return wb ? datasets.filter((d) => d.workbookId === wb) : [];
+}
+
+/** A tab's label: the spreadsheet's own sheet name, else the worksheet's. */
+function sheetName(d: Dataset): string {
+  const raw = (d.data.metadata as Record<string, unknown> | undefined)?.["sheet_name"];
+  return typeof raw === "string" && raw ? raw : d.name.replace(/\.[^.]+$/, "");
 }

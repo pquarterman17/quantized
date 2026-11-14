@@ -15,7 +15,7 @@ import numpy as np
 from quantized.datastruct import DataStruct
 from quantized.io._delimited_layout import _to_float
 from quantized.io.base import NO_COLUMN, parse_col_header, read_head, read_text, resolve_column
-from quantized.io.qd_companions import with_companions
+from quantized.io.qd_companions import channel_units, with_companions
 
 __all__ = ["import_mpms", "import_ppms", "import_qd_vsm", "is_ppms_dat", "is_qd_file"]
 
@@ -89,6 +89,13 @@ def _apply_moment_fallback(
 # priority order) so the data plots meaningfully by default; the user can still
 # re-pick the x-axis in the UI afterwards.
 _X_SWEEP_FALLBACKS = ("temp", "field", "time")
+
+
+def _finite_or_nan(values: np.ndarray) -> np.ndarray:
+    """``values`` (a fresh copy) with +/-Inf as NaN: some MPMS3 diagnostic
+    columns write ``inf``, and a DataStruct channel holds no Inf."""
+    values[np.isinf(values)] = np.nan
+    return values
 
 
 def _is_constant_axis(col: np.ndarray) -> bool:
@@ -182,9 +189,9 @@ def import_qd_vsm(
     }
     return DataStruct.create(
         matrix[:, x_idx],
-        matrix[:, channels],
+        _finite_or_nan(matrix[:, channels]),
         labels=[col_names[i] for i in channels],
-        units=[col_units[i] for i in channels],
+        units=channel_units(col_names, col_units, channels, hints),
         metadata=metadata,
     )
 
@@ -371,9 +378,9 @@ def import_ppms(
     }
     return DataStruct.create(
         matrix[:, x_idx],
-        matrix[:, channels],
+        _finite_or_nan(matrix[:, channels]),
         labels=[col_names[i] for i in channels],
-        units=[col_units[i] for i in channels],
+        units=channel_units(col_names, col_units, channels, hints),
         metadata=metadata,
     )
 

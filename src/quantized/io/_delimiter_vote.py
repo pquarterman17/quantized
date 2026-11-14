@@ -39,13 +39,69 @@ def vote_lines(text: str) -> list[str]:
     multi-word header ("Kerr Signal") fragmented into separate columns. The
     line terminators are already gone (``str.splitlines``), so nothing but
     real cell padding is left to count.
+
+    A lone ``[Section]`` heading (`is_section_marker`) is skipped too: it is
+    a heading with no cells, and its missing delimiter outvoted the real one.
+    Below a data-section heading (``[DATA]``, `data_section_start`) only the
+    table is sampled: the preamble above it is ``key<TAB>value`` lines.
     """
+    lines = text.removeprefix("﻿").splitlines()
     out: list[str] = []
-    for raw in text.removeprefix("﻿").splitlines():
+    for raw in lines[data_section_start(lines) :]:
         stripped = raw.strip()
-        if stripped and stripped[0] not in COMMENT_CHARS:
+        if stripped and stripped[0] not in COMMENT_CHARS and not is_section_marker(stripped):
             out.append(raw)
     return out
+
+
+#: A lone INI-style section heading line: ``[DATA]`` (Nanonis), ``[Data]``,
+#: ``[Header]``, ``[Measurement Settings]``. It is a heading, never a row of
+#: cells, so it carries no delimiter -- counted in the vote, its zero tab
+#: count disqualified tab for the whole file (worksheet audit #3: a Nanonis
+#: spectroscopy file imported as one all-NaN column).
+SECTION_MARKER_RE = re.compile(r"^\[[A-Za-z][A-Za-z0-9 _.\-]*\]$")
+
+# A data-section heading: "[DATA]", "[Data]", "[Data Table]", "[Measurement
+# Data]". Other headings ("[Header]", "[Settings]") are not where a table starts.
+_DATA_HEADING_RE = re.compile(r"^\[\s*(?:[A-Za-z ]*\s)?data(?:\s[A-Za-z ]*)?\s*\]$", re.I)
+
+
+def is_section_marker(line: str) -> bool:
+    """Whether ``line`` is a lone ``[Section]`` heading (`SECTION_MARKER_RE`)."""
+    return bool(SECTION_MARKER_RE.match(line.strip()))
+
+
+def is_data_heading(line: str) -> bool:
+    """Whether ``line`` is a lone data-section heading such as ``[DATA]``."""
+    stripped = line.strip()
+    return is_section_marker(stripped) and bool(_DATA_HEADING_RE.match(stripped))
+
+
+def data_section_start(lines: Sequence[str]) -> int:
+    """Index of the first line BELOW the last data-section heading in
+    ``lines``, or 0 when there is none (the whole file is candidate data).
+
+    Many instruments write an INI-style preamble and then the table under a
+    lone heading -- Nanonis spectroscopy (``[DATA]``), other ``[Data]`` /
+    ``[Measurement Data]`` exports. A preamble value pair such as
+    ``Sweep range (V)<TAB>-1<TAB>1`` looks exactly like a numeric data row,
+    so layout detection started the "data" in the preamble (worksheet audit
+    #3). Origin starts the table below the heading; so do our readers.
+
+    Only the first `_HEADING_SCAN_LINES` lines are searched: the heading
+    ends a preamble, and scanning a million-row data block for one cost a
+    full extra pass on every large import.
+    """
+    start = 0
+    for i, line in enumerate(lines[:_HEADING_SCAN_LINES]):
+        if line[:1] == "[" or line.lstrip()[:1] == "[":
+            if is_data_heading(line):
+                start = i + 1
+    return start
+
+
+#: How far into a file `data_section_start` looks for a ``[DATA]`` heading.
+_HEADING_SCAN_LINES = 2000
 
 
 def _delimiter_count(line: str, ch: str) -> int:
@@ -72,17 +128,14 @@ def _tab_over_space(lines: Sequence[str]) -> bool:
     return bool(tabs) and min(tabs) >= 1 and tabs[0] == max(tabs)
 
 
-def _detect_delimiter(raw_lines: Sequence[str]) -> str:
-    """Pick the delimiter whose per-line count is both present on every
-    sampled line and least variable -- a plurality vote, not a strict
-    majority, so a ragged preamble line doesn't disqualify the real
-    delimiter by itself (see the ``std < mean * 0.5`` consistency check).
-    Defaults to comma when nothing qualifies (e.g. every candidate is
-    absent from at least one of the first 10 lines). A comma win is handed
-    to ``;`` when the sample is ``;``-delimited decimal-comma data
-    (`_semicolon_over_comma`), and a whitespace win to tab when the sample
-    is a tab export with spaces inside its cells (`_tab_over_space`)."""
-    test = raw_lines[:10]
+#: How many leading lines `_detect_delimiter` may skip looking for a window
+#: of lines that agrees on a delimiter.
+_MAX_PREAMBLE_SKIP = 20
+
+
+def _vote(test: Sequence[str]) -> tuple[str, float]:
+    """The plurality vote over one window: (winner, its mean count); the
+    comma default with score 0 when no candidate is on every line."""
     best_delim = ","
     best_score = 0.0
     for ch in _DELIM_CANDIDATES:
@@ -93,6 +146,33 @@ def _detect_delimiter(raw_lines: Sequence[str]) -> str:
             if std < mean * 0.5 and mean > best_score:
                 best_score = mean
                 best_delim = ch
+    return best_delim, best_score
+
+
+def _detect_delimiter(raw_lines: Sequence[str]) -> str:
+    """Pick the delimiter whose per-line count is both present on every
+    sampled line and least variable -- a plurality vote, not a strict
+    majority, so a ragged preamble line doesn't disqualify the real
+    delimiter by itself (see the ``std < mean * 0.5`` consistency check).
+    Defaults to comma when nothing qualifies (e.g. every candidate is
+    absent from at least one of the first 10 lines). A comma win is handed
+    to ``;`` when the sample is ``;``-delimited decimal-comma data
+    (`_semicolon_over_comma`), and a whitespace win to tab when the sample
+    is a tab export with spaces inside its cells (`_tab_over_space`).
+
+    When nothing qualifies, the window slides past up to
+    `_MAX_PREAMBLE_SKIP` leading lines first: one free-text preamble line
+    ("Junk line here" above a ``;`` table) lacks every delimiter, and used to
+    send the whole file down the comma default as a single column."""
+    test: Sequence[str] = raw_lines[:10]
+    best_delim, best_score = ",", 0.0
+    for start in range(min(_MAX_PREAMBLE_SKIP, max(len(raw_lines) - 1, 0)) + 1):
+        test = raw_lines[start : start + 10]
+        best_delim, best_score = _vote(test)
+        if best_score > 0:
+            break
+    else:
+        test = raw_lines[:10]
     if best_delim == "," and _semicolon_over_comma(test):
         return ";"
     if best_delim == " " and _tab_over_space(test):

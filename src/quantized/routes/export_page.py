@@ -30,7 +30,7 @@ from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes.export_figures import FigureRequest, _figure_series
 from quantized.routes.export_figures_axis_titles import request_overrides
 from quantized.routes.export_figures_facets import _facet_panels
-from quantized.routes.export_figures_schema import SVG_TEXT_AS_PATHS_DOC, _tick_fmt
+from quantized.routes.export_figures_schema import SVG_TEXT_AS_PATHS_DOC, _tick_fmt, _x_tick_fmt
 
 router = APIRouter(prefix="/api/export", tags=["export"], route_class=OffloopJSONRoute)
 
@@ -160,7 +160,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
                         y_label=resolved.y_label,
                         x_log=f.x_log, y_log=f.y_log,
                         x_scale=f.x_scale, y_scale=f.y_scale,
-                        x_fmt=_tick_fmt(f.x_fmt), y_fmt=_tick_fmt(f.y_fmt),
+                        x_fmt=_x_tick_fmt(f.x_fmt, resolved), y_fmt=_tick_fmt(f.y_fmt),
                         overrides=facet_ov,
                         label=spec.label, page_rect=spec.page_rect,
                         facets=_facet_panels(f),
@@ -184,7 +184,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
                     y_log=f.y_log,
                     x_scale=f.x_scale,
                     y_scale=f.y_scale,
-                    x_fmt=_tick_fmt(f.x_fmt),
+                    x_fmt=_x_tick_fmt(f.x_fmt, resolved),
                     y_fmt=_tick_fmt(f.y_fmt),
                     x_step=f.x_step,
                     y_step=f.y_step,

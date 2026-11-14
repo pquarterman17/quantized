@@ -21,12 +21,14 @@ from __future__ import annotations
 
 import json
 import threading
+from dataclasses import replace
 from functools import partial
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import Field, field_validator
 
+from quantized.calc.axis_dates import x_is_datetime
 from quantized.calc.figure_group_styles import expand_grouped_series_styles
 from quantized.calc.figure_warnings import collect_figure_warnings
 from quantized.calc.plot_log_offsets import apply_log_offsets, scale_error_spans
@@ -82,6 +84,7 @@ from quantized.routes.export_figures_schema import (
     TickFormatSpec,
     _ResolvedFigure,
     _tick_fmt,
+    _x_tick_fmt,
     reject_document_only_style_keys,
 )
 
@@ -277,12 +280,13 @@ def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _Resolve
     if ds is None:
         ds = _request_dataset(req)
 
+    x_dt = x_is_datetime(ds.metadata, req.x_key)  # audit #7: a date X draws dates
     if req.encoding is not None and req.encoding.active():  # P1.4, before group_col
-        return resolve_encoded_figure(
+        return replace(resolve_encoded_figure(
             ds, req.encoding, x_key=req.x_key, y_keys=req.y_keys, group_col=req.group_col,
             y2_keys=req.y2_keys, series_styles=req.series_styles, error_spans=req.error_spans,
             x_label=req.x_label, y_label=req.y_label, excluded=req,
-        )
+        ), x_is_datetime=x_dt)
 
     if req.group_col is not None:
         if req.y2_keys:
@@ -316,7 +320,7 @@ def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _Resolve
         # error_spans unscaled: log_offsets are refused with group_col.
         return _ResolvedFigure(
             grouped.x, g_series, x_label, y_label, g_styles,
-            [False] * len(g_series), "", req.error_spans,
+            [False] * len(g_series), "", req.error_spans, x_dt,
         )
 
     validate_y2_subset(req.y_keys, req.y2_keys)
@@ -348,7 +352,7 @@ def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _Resolve
     x, series, styles, spans = apply_waterfall_x_offsets(  # Origin's X step: one x block per series
         plot.x, series, styles, spans, req.waterfall_x_offsets
     )
-    return _ResolvedFigure(x, series, x_label, y_label, styles, y2_mask, y2_label, spans)
+    return _ResolvedFigure(x, series, x_label, y_label, styles, y2_mask, y2_label, spans, x_dt)
 
 
 def render_figure_request(req: FigureRequest, *, fmt: str, dpi: int) -> bytes:
@@ -397,7 +401,7 @@ def _flat_render_kwargs(req: FigureRequest, resolved: _ResolvedFigure, dpi: int)
         transparent=req.transparent,
         greyscale=req.greyscale,
         overrides=request_overrides(req),
-        x_fmt=_tick_fmt(req.x_fmt),
+        x_fmt=_x_tick_fmt(req.x_fmt, resolved),
         y_fmt=_tick_fmt(req.y_fmt),
         x_step=req.x_step,
         y_step=req.y_step,

@@ -22,6 +22,8 @@ import RecoveryChoiceDialog from "./RecoveryChoiceDialog";
 import ShortcutsDialog from "./ShortcutsDialog";
 import TextFormatHelp from "./TextFormatHelp";
 import ToolWindow from "./ToolWindow";
+import HeaderEditor from "../Stage/worksheet/HeaderEditor";
+import type { Dataset } from "../../lib/types";
 import { auditDialog } from "../../test/dialogA11y";
 import { parseWorkspace, WORKSPACE_FORMAT } from "../../lib/workspace";
 import { askAnnotationText, useAnnotationTextDialog } from "../../store/annotationTextDialog";
@@ -149,6 +151,34 @@ function Host({ children }: { children: ReactNode }) {
     </>
   );
 }
+
+function HeaderEditorHost() {
+  const [open, setOpen] = useState(false);
+  const ds: Dataset = {
+    id: "w",
+    name: "Book1",
+    data: { time: [1], values: [[2]], labels: ["A"], units: [""], metadata: { x_column_name: "X" } },
+  };
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>
+        opener
+      </button>
+      {open && <HeaderEditor ds={ds} target={{ col: 0, x: 10, y: 10 }} xName="X" xUnit="" onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+describe("worksheet header-row editor (a popover dialog: no inert)", () => {
+  it("is a named dialog with labelled fields; focus moves in, Escape closes, focus returns", async () => {
+    const user = userEvent.setup();
+    render(<HeaderEditorHost />);
+    const opener = screen.getByRole("button", { name: "opener" });
+    await user.click(opener);
+    await screen.findByRole("dialog");
+    expect(await auditDialog(dialog, { opener, user, modal: false })).toEqual([]);
+  });
+});
 
 describe("tool-window basics (non-modal: no trap, no inert)", () => {
   beforeEach(() => useApp.setState({ toolWindowLayout: {} }));

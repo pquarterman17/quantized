@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 
 import numpy as np
 
+from quantized.io._date_formats import DATE_FORMATS
 from quantized.io._delimiter_vote import _COMMA_NUMBER_RE, _detect_delimiter
 from quantized.io._fortran_float import parse_float
 
@@ -173,7 +174,7 @@ def _datetime_epoch(token: str) -> float | None:
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
-        for fmt in ("%m/%d/%Y %H:%M:%S", "%m/%d/%Y %H:%M", "%m/%d/%Y"):
+        for fmt in DATE_FORMATS:  # (`_date_formats`: US slash, dotted, year-first)
             try:
                 parsed = datetime.strptime(value, fmt)
                 break

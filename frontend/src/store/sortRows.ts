@@ -39,8 +39,14 @@ import { recompute, useApp } from "./useApp";
 /** A sort key: a channel index (-1 = X) or a text column by name. */
 export type SortKey = number | string;
 
-/** The row order that sorts `ds` by `col`: stable, blanks last. */
-export function sortOrder(ds: Dataset, col: SortKey, dir: 1 | -1): number[] {
+/** One key of a (multi-key) worksheet sort. */
+export interface SortSpec {
+  col: SortKey;
+  dir: 1 | -1;
+}
+
+/** A comparator for ONE key: blanks last in both directions, 0 on a tie. */
+function keyComparator(ds: Dataset, { col, dir }: SortSpec): (a: number, b: number) => number {
   const n = ds.data.time.length;
   let text: (string | null)[] | null = null;
   let raw: readonly number[] = [];
@@ -53,57 +59,77 @@ export function sortOrder(ds: Dataset, col: SortKey, dir: 1 | -1): number[] {
     if (levels) text = raw.map((code) => labelForCode(levels, code));
   }
   const blank = (r: number): boolean => (text ? text[r] === null : !Number.isFinite(raw[r]));
-  const order = Array.from({ length: n }, (_, r) => r);
-  return order.sort((a, b) => {
+  return (a, b) => {
     const ba = blank(a);
     const bb = blank(b);
-    if (ba || bb) return ba === bb ? a - b : ba ? 1 : -1;
-    const cmp = text ? text[a]!.localeCompare(text[b]!, undefined, { numeric: true }) : raw[a] - raw[b];
-    return cmp === 0 ? a - b : dir * cmp;
+    if (ba || bb) return ba === bb ? 0 : ba ? 1 : -1;
+    return dir * (text ? text[a]!.localeCompare(text[b]!, undefined, { numeric: true }) : raw[a] - raw[b]);
+  };
+}
+
+/** The row order that sorts `ds` by `keys` in turn (Origin's Sort Worksheet
+ *  › Custom): a later key only orders rows the earlier ones tie; stable. */
+export function sortOrderBy(ds: Dataset, keys: readonly SortSpec[]): number[] {
+  const cmps = keys.map((k) => keyComparator(ds, k));
+  const order = Array.from({ length: ds.data.time.length }, (_, r) => r);
+  return order.sort((a, b) => {
+    for (const cmp of cmps) {
+      const c = cmp(a, b);
+      if (c !== 0) return c;
+    }
+    return a - b;
   });
+}
+
+/** The row order that sorts `ds` by `col`: stable, blanks last. */
+export function sortOrder(ds: Dataset, col: SortKey, dir: 1 | -1): number[] {
+  return sortOrderBy(ds, [{ col, dir }]);
 }
 
 /** Formulas that read by POSITION: re-evaluated in the new row order. */
 const POSITIONAL = /\b(?:cumsum|diff|lag|row)\s*\(|\[/;
 
-/** Sort dataset `id`'s rows by column `col` (-1 = X). */
-export function sortWorksheetRows(id: string, col: SortKey, dir: 1 | -1): void {
-  const get = useApp.getState;
-  const ds = get().datasets.find((d) => d.id === id);
-  if (!ds) return;
-  // A refusal is a toast as well as the status line (re-audit #8): read only
-  // in the status bar, it looked like nothing happened, and Ctrl+Z then
-  // undid the user's previous edit instead.
-  const refuse = (msg: string): void => {
-    get().setStatus(msg);
-    toast(msg, "danger");
-  };
-  if (isRederived(ds)) return refuse(REDERIVED_EDIT_NOTICE);
-  if (resolvePendingEdit(get, ds, "sorting", () => sortWorksheetRows(id, col, dir))) return;
-  const name =
-    typeof col === "string" ? col : col < 0 ? String(ds.data.metadata?.x_column_name ?? "") || "X" : ds.data.labels[col] ?? `column ${col + 1}`;
+const get = useApp.getState;
+
+/** A refusal is a toast as well as the status line (re-audit #8): read only
+ *  in the status bar, it looked like nothing happened, and Ctrl+Z then undid
+ *  the user's previous edit instead. */
+export function refuseRowOrder(msg: string): void {
+  get().setStatus(msg);
+  toast(msg, "danger");
+}
+
+/** Why `ds`'s rows can't be reordered (`verb`: "sort", "move rows in"), or
+ *  null. sheet("Name", L) pairs row i here with row i THERE, so moving either
+ *  side's rows would silently pair them with other rows. */
+export function rowOrderRefusal(ds: Dataset, verb: string): string | null {
   const reads = (ds.formulas ?? []).filter((f) => f.sheets?.length).map((f) => `"${f.name}"`);
   if (reads.length) {
-    return refuse(
-      `Can't sort "${ds.name}": ${reads.join(", ")} ${reads.length === 1 ? "reads" : "read"} another worksheet row by row through sheet(), and sorting would pair its rows with different rows there — remove that column first`,
-    );
+    return `Can't ${verb} "${ds.name}": ${reads.join(", ")} ${reads.length === 1 ? "reads" : "read"} another worksheet row by row through sheet(), and ${verb === "sort" ? "sorting" : "moving rows"} would pair its rows with different rows there — remove that column first`;
   }
   const readBy = get()
-    .datasets.filter((d) => d.id !== id && d.formulas?.some((f) => f.sheets?.some((b) => b.id === id)))
+    .datasets.filter((d) => d.id !== ds.id && d.formulas?.some((f) => f.sheets?.some((b) => b.id === ds.id)))
     .map((d) => `"${d.name}"`);
   if (readBy.length) {
-    return refuse(
-      `Can't sort "${ds.name}": ${readBy.join(", ")} ${readBy.length === 1 ? "reads" : "read"} it row by row through sheet(), and sorting would pair those rows with different rows here — remove those columns first`,
-    );
+    return `Can't ${verb} "${ds.name}": ${readBy.join(", ")} ${readBy.length === 1 ? "reads" : "read"} it row by row through sheet(), and ${verb === "sort" ? "sorting" : "moving rows"} would pair those rows with different rows here — remove those columns first`;
   }
-  const how = dir === 1 ? "ascending" : "descending";
-  const order = sortOrder(ds, col, dir);
-  if (order.every((r, i) => r === i)) return get().setStatus(`already sorted by "${name}" (${how}) — nothing changed`);
+  return null;
+}
+
+/** Commit row order `order` (new row i = old row order[i]) as ONE undo step:
+ *  numbers, sidecars and exclusion marks move together, formulas recompute.
+ *  Returns the status-line note on formulas that read by position (they were
+ *  re-evaluated in the new order), "" when there are none. */
+export function commitRowOrder(id: string, ds: Dataset, order: readonly number[], label: string, macro: [string, string]): string | null {
+  // Both callers resolve a pending book first; this is the backstop, since an
+  // order computed on preview rows means nothing for the full ones (null =
+  // nothing committed; the guard has loaded the data and said so).
+  if (resolvePendingEdit(get, ds, label, () => false)) return null;
   // Text-only rows past the numeric end keep their place.
   const span = sidecarRowCount(ds.data.metadata, ds.data.time.length);
   const rowIndexes = [...order, ...Array.from({ length: span - order.length }, (_, i) => order.length + i)];
   const newIndex = new Map(rowIndexes.map((old, i) => [old, i]));
-  get().recordHistory("sort rows");
+  get().recordHistory(label);
   useApp.setState((s) => ({
     datasets: s.datasets.map((d) => {
       if (d.id !== id) return d;
@@ -122,9 +148,45 @@ export function sortWorksheetRows(id: string, col: SortKey, dir: 1 | -1): void {
     }),
     ...clearOverlaysFor(s, id),
   }));
-  get().recordMacro(`Sort ${ds.name} by ${name} (${how})`, `qz.sortRows(${lit(ds.name)}, ${lit(name)}, ${lit(how)})`);
+  get().recordMacro(...macro);
   get().touchDataset(id);
   const running = (ds.formulas ?? []).filter((f) => POSITIONAL.test(f.expr)).map((f) => `"${f.name}"`);
-  const rerun = running.length ? `; ${running.join(", ")} ${running.length === 1 ? "reads" : "read"} rows by position and ${running.length === 1 ? "was" : "were"} recalculated in the new order` : "";
-  get().setStatus(`sorted ${order.length} rows by "${name}" (${how})${rerun} — Undo restores the order`);
+  return running.length
+    ? `; ${running.join(", ")} ${running.length === 1 ? "reads" : "read"} rows by position and ${running.length === 1 ? "was" : "were"} recalculated in the new order`
+    : "";
 }
+
+/** A key's name for the status line. */
+function keyName(ds: Dataset, col: SortKey): string {
+  if (typeof col === "string") return col;
+  return col < 0 ? String(ds.data.metadata?.x_column_name ?? "") || "X" : ds.data.labels[col] ?? `column ${col + 1}`;
+}
+
+const how = (dir: 1 | -1): string => (dir === 1 ? "ascending" : "descending");
+
+/** Sort dataset `id`'s rows by `keys` in turn (Origin's Sort Worksheet). */
+export function sortWorksheetRowsBy(id: string, keys: readonly SortSpec[]): void {
+  const ds = get().datasets.find((d) => d.id === id);
+  if (!ds || keys.length === 0) return;
+  if (isRederived(ds)) return refuseRowOrder(REDERIVED_EDIT_NOTICE);
+  if (resolvePendingEdit(get, ds, "sorting", () => sortWorksheetRowsBy(id, keys))) return;
+  const why = rowOrderRefusal(ds, "sort");
+  if (why) return refuseRowOrder(why);
+  const by = keys.map((k) => `"${keyName(ds, k.col)}" (${how(k.dir)})`).join(", then ");
+  const order = sortOrderBy(ds, keys);
+  if (order.every((r, i) => r === i)) return get().setStatus(`already sorted by ${by} — nothing changed`);
+  const [k0] = keys;
+  const macro: [string, string] =
+    keys.length === 1
+      ? [`Sort ${ds.name} by ${keyName(ds, k0.col)} (${how(k0.dir)})`, `qz.sortRows(${lit(ds.name)}, ${lit(keyName(ds, k0.col))}, ${lit(how(k0.dir))})`]
+      : [`Sort ${ds.name} by ${by}`, `qz.sortRowsBy(${lit(ds.name)}, ${lit(keys.map((k) => `${keyName(ds, k.col)} ${how(k.dir)}`).join("; "))})`];
+  const rerun = commitRowOrder(id, ds, order, "sort rows", macro);
+  if (rerun === null) return;
+  get().setStatus(`sorted ${order.length} rows by ${by}${rerun} — Undo restores the order`);
+}
+
+/** Sort dataset `id`'s rows by column `col` (-1 = X). */
+export function sortWorksheetRows(id: string, col: SortKey, dir: 1 | -1): void {
+  sortWorksheetRowsBy(id, [{ col, dir }]);
+}
+

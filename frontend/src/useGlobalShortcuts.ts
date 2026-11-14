@@ -156,7 +156,9 @@ export function useGlobalShortcuts(): void {
           // Only claim ⌘/Ctrl+V as "paste a dataset" when the user isn't typing
           // into a field (rename, tag, formula, dialog input) — those keep the
           // browser's native paste. Command palette / Edit menu always work.
-          if (!isEditingTarget(e.target)) {
+          // Nor when a closer handler consumed it: the worksheet's cell paste
+          // (worksheet audit #4) — `defaultPrevented`, as for Delete above.
+          if (!isEditingTarget(e.target) && !e.defaultPrevented) {
             e.preventDefault();
             void s.pasteDataFromClipboard();
           }

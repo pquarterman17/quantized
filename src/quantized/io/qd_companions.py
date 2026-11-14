@@ -4,9 +4,11 @@
 one moment column (the golden-parity contract). The registry asks for the
 companions too (``companions=True``): the moment's own standard-error column,
 bound as its y-error role, and the sweep/condition columns a user re-plots
-against — temperature, field, time. The moment stays the only default curve
-(``default_value_channels``), so the first plot is unchanged; the extra
-columns are there to pick as x, or to show, with error bars from the start.
+against — temperature, field, time — and then every other column holding
+data, so the worksheet shows the whole file as Origin's QD import does. The
+moment stays the only default curve (``default_value_channels``), so the first
+plot is unchanged; the extra columns are there to pick as x, or to show, with
+error bars from the start.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from typing import Any
 
 import numpy as np
 
-__all__ = ["companion_indices", "companion_metadata", "with_companions"]
+__all__ = ["channel_units", "companion_indices", "companion_metadata", "with_companions"]
 
 # A moment column's own uncertainty column, by exact QD name.
 _ERROR_OF = {
@@ -55,13 +57,24 @@ def companion_indices(
         err_name = _ERROR_OF.get(names[target])
         if err_name in names:
             err = names.index(err_name)
-            if err not in taken and _populated(matrix, err) and col_units[err] == col_units[target]:
+            # Same unit, or none given: PPMS writes "Long Scan Std Dev" with
+            # no unit beside "Long Moment (emu)" (worksheet audit #10).
+            unit_ok = col_units[err] in (col_units[target], "")
+            if err not in taken and _populated(matrix, err) and unit_ok:
                 extra.append(err)
                 errors[err] = target
                 taken.add(err)
     for spellings in _SWEEPS:
         col = next((names.index(s) for s in spellings if s in names), None)
         if col is not None and col not in taken and _populated(matrix, col):
+            extra.append(col)
+            taken.add(col)
+    # Then every other column that holds any number, in file order (worksheet
+    # audit #10): Origin's QD import shows the whole file, and a VSM file's 34
+    # filled columns were cut to 4. They are worksheet columns, not curves --
+    # `default_value_channels` keeps the first plot to the moment.
+    for col in range(len(names)):
+        if col not in taken and np.isfinite(matrix[:, col]).any():
             extra.append(col)
             taken.add(col)
     return extra, errors
@@ -95,3 +108,23 @@ def with_companions(
     extra, errors = companion_indices(col_names, col_units, matrix, x_idx, y_idx)
     channels = [*y_idx, *extra]
     return channels, companion_metadata(channels, len(y_idx), errors)
+
+
+def channel_units(
+    col_names: Sequence[str],
+    col_units: Sequence[str],
+    channels: Sequence[int],
+    hints: dict[str, Any],
+) -> list[str]:
+    """Each value channel's unit, filling two blanks a QD header leaves
+    (worksheet audit #10): a bound error column with no unit ("Long Scan Std
+    Dev") is in its moment's unit, and the MultiVu "Time" column is epoch
+    seconds."""
+    units = [col_units[c] for c in channels]
+    for k, c in enumerate(channels):
+        if not units[k] and col_names[c] == "Time":
+            units[k] = "s"
+    for role in hints.get("error_roles", []):
+        if not units[role["channel"]]:
+            units[role["channel"]] = units[role["target"]]
+    return units

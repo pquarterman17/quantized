@@ -100,10 +100,16 @@ describe("renderLabelTemplate", () => {
     expect(renderLabelTemplate("{area}", peak(1, 2, 3, null), 0, 2)).toBe("");
   });
 
-  it("renders an UNKNOWN token literally instead of throwing (e.g. a future {phase}/{hkl})", () => {
-    expect(() => renderLabelTemplate("{phase} {center}", peak(5), 0, 2)).not.toThrow();
-    expect(renderLabelTemplate("{phase} {center}", peak(5), 0, 2)).toBe("{phase} 5.00");
-    expect(renderLabelTemplate("{hkl}", peak(5), 0, 2)).toBe("{hkl}");
+  it("renders an UNKNOWN token literally instead of throwing", () => {
+    expect(() => renderLabelTemplate("{sigma} {center}", peak(5), 0, 2)).not.toThrow();
+    expect(renderLabelTemplate("{sigma} {center}", peak(5), 0, 2)).toBe("{sigma} 5.00");
+  });
+
+  it("renders {hkl}/{phase} from the matched reference reflection, blank when none matched (gap #12)", () => {
+    const matched = { ...peak(38.2), hkl: "(111)", phase: "Au" };
+    expect(renderLabelTemplate("{phase} {hkl}", matched, 0, 2)).toBe("Au (111)");
+    expect(renderLabelTemplate("{hkl}", peak(5), 0, 2)).toBe("");
+    expect(renderLabelTemplate("{phase} {center}", peak(5), 0, 2)).toBe(" 5.00");
   });
 
   it("respects the precision control", () => {

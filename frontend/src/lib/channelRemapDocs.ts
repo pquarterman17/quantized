@@ -17,7 +17,14 @@ import type { ChannelRef, PlotSpec, PlotZones } from "./plotspec";
 export function remapLegacyFigureConfig(c: FigureConfig, removedCol: ColumnShift): FigureConfig {
   const styles = c.seriesStyles;
   let seriesStyles = styles;
-  if (styles && typeof removedCol !== "number") {
+  if (styles && typeof removedCol !== "number" && "from" in removedCol) {
+    // Every column plots: the moved column's style moves with it.
+    const { from, to } = removedCol;
+    if (!c.yKeys && from < styles.length) {
+      const rest = styles.filter((_, i) => i !== from);
+      seriesStyles = [...rest.slice(0, to), styles[from], ...rest.slice(to)];
+    }
+  } else if (styles && typeof removedCol !== "number" && "inserted" in removedCol) {
     const at = removedCol.inserted;
     if (!c.yKeys && at <= styles.length) seriesStyles = [...styles.slice(0, at), null, ...styles.slice(at)];
   } else if (styles && typeof removedCol === "number") {

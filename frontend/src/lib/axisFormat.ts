@@ -95,3 +95,14 @@ export function axisFmtParam(fmt: AxisFormat): AxisFormat | undefined {
   // (#6), or the export would silently drop what the screen draws.
   return fmt.mode === "auto" && !hasAxisExtras(fmt) ? undefined : fmt;
 }
+
+/** The X format a plot actually draws with: `auto` on an X column the parser
+ *  recognised as timestamps (`metadata.time_is_datetime`) reads as calendar
+ *  date + time, as Origin shows a date column, instead of raw epoch seconds
+ *  (worksheet audit #7). Any explicit mode is kept. The export applies the
+ *  same rule server-side (`calc/figure_ticks.date_aware_x_fmt`), so the
+ *  screen and the PDF agree without either sending the other anything. */
+export function dateAwareXFmt(fmt: AxisFormat | undefined, xIsDate: boolean | undefined): AxisFormat | undefined {
+  if (!xIsDate || (fmt && fmt.mode !== "auto")) return fmt;
+  return { ...(fmt ?? { digits: 2 }), mode: "datetime" };
+}
