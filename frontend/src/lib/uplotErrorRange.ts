@@ -215,9 +215,9 @@ export interface ErrorBarPaint {
  *  pixels the defaults are drawn in, so restating a default changes nothing. */
 export function styleErrorDraw(u: uPlot, col: number, color: string, defaultCap: number): number {
   const s = u.series[col] as uPlot.Series & { qzErr?: ErrorBarPaint };
-  const e = s?.qzErr;
+  const e = s?.qzErr ?? {};
   const ink = typeof s?.stroke === "function" ? (s.stroke as (u: uPlot, i: number) => string | null)(u, col) : null;
-  u.ctx.strokeStyle = e?.color || ink || color;
-  u.ctx.lineWidth = e?.width != null ? e.width : 1;
-  return e?.cap != null ? (e.cap * 4) / 3 : defaultCap;
+  u.ctx.strokeStyle = e.color || ink || color;
+  u.ctx.lineWidth = (e.width ?? 0) > 0 ? e.width! : 1; // a bad stored value draws the default
+  return (e.cap ?? -1) >= 0 ? (e.cap! * 4) / 3 : defaultCap;
 }

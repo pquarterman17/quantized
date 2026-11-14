@@ -229,7 +229,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   // (One-per-line -> wrapped: P3.3 needed two prop lines in the JSX below and
   // this file is on the 400-line component ceiling. Ten names: + onLimCrossed.)
   const { resetView, smartScale, savePng, copyData, copyFigure, copyFigureSvg, snapshot, onRegionSelect, onRangeSelect, onLimCrossed } =
-    usePlotStageActions(plotRef, displayPayload, active, onRowsSelected);
+    usePlotStageActions(plotRef, displayPayload, active, onRowsSelected, plotted);
 
   // Item 11 / MAIN #27 offset: the live-snapshot publish (see
   // useLiveSnapshotPublish's header).

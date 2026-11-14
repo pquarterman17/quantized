@@ -131,7 +131,8 @@ export function buildSeriesDefs(
       const show = !args.hidden?.[i]; // interactive legend visibility
       // Selected companion (#50 brush): accent, filled larger markers, no line.
       if (s.selected) {
-        return { label, scale, stroke: accentColor, fill: accentColor, width: 0, points: loopPoints({ show: true, size: 7 }), show };
+        // The fill goes on the POINTS: a series fill shades the area under them.
+        return { label, scale, stroke: accentColor, width: 0, points: loopPoints({ show: true, size: 7, fill: accentColor }), show };
       }
       // Muted "excluded" companion (grey mode): faint hollow markers, no line.
       if (s.muted) {
@@ -178,13 +179,7 @@ export function buildSeriesDefs(
       // error plugins read it (`uplotErrorRange.styleErrorDraw`); a colour is
       // contrast-checked like the stroke. A change rebuilds (not a paint field).
       const eb = style?.errorBar;
-      if (eb) {
-        def.qzErr = {
-          ...(typeof eb.cap === "number" && eb.cap >= 0 ? { cap: eb.cap } : {}),
-          ...(typeof eb.width === "number" && eb.width > 0 ? { width: eb.width } : {}),
-          ...(eb.color ? { color: resolveDrawColor(seriesColor(i, { color: eb.color }), isDarkBg, inkColor) } : {}),
-        };
-      }
+      if (eb) def.qzErr = { ...eb, color: eb.color && resolveDrawColor(seriesColor(i, { color: eb.color }), isDarkBg, inkColor) };
       // Per-series step alignment (SeriesStyle.step, GAP_PLOTTYPES "step"
       // mark) — a MORE SPECIFIC override than the "Step" default-trace
       // preference below, so it's checked first: a step-marked series

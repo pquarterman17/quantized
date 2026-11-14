@@ -7,7 +7,7 @@
 // displayed payload, not state PlotStage itself needs to react to, so they
 // extract cleanly with no behavior change.
 
-import type { RefObject } from "react";
+import { useEffect, type RefObject } from "react";
 import type uPlot from "uplot";
 
 import { suggestLogScale } from "../../lib/autoscale";
@@ -80,6 +80,7 @@ export function usePlotStageActions(
   displayPayload: PlotPayload | null,
   active: Dataset | null | undefined,
   onRowsSelected?: (rows: number[]) => void,
+  plotted: readonly number[] = [],
 ): PlotStageActions & {
   onRegionSelect: (x0: number, x1: number, y0?: number, y1?: number) => void;
   onRangeSelect: (x0: number, x1: number) => void;
@@ -186,6 +187,26 @@ export function usePlotStageActions(
     if (onRowsSelected) onRowsSelected(sourceRows);
     else useApp.getState().setRowSelection(sourceRows);
   }
+
+  // Gap audit 2 #8: a double-click in the plot area is held back from uPlot's
+  // own re-fit (document capture runs before its listener on `u.over`) until
+  // the lazy `curveDoubleClick` decides: Plot Details on a curve, re-fit on
+  // empty space. The axes keep their Axis dialog (outside `u.over`). Re-bound
+  // every render (no deps): it reads this render's `plotted` and `resetView`.
+  useEffect(() => {
+    const onDbl = (e: MouseEvent) => {
+      const u = plotRef.current;
+      if (!u?.over?.contains(e.target as Node)) return;
+      e.stopPropagation();
+      const { clientX, clientY } = e;
+      void runLazy("Loading plot details…", () => import("./curveDoubleClick")).then(
+        (m) => m.plotDoubleClick(u, clientX, clientY, plotted, resetView),
+        onLoadFailure,
+      );
+    };
+    document.addEventListener("dblclick", onDbl, true);
+    return () => document.removeEventListener("dblclick", onDbl, true);
+  });
 
   // P2.8 residual (b): a half-open limit crossed the data, so the axis is on auto;
   // "log": a typed side <= 0 was dropped on a log or reciprocal axis (lib/canvasLims.drawableLim).

@@ -56,14 +56,17 @@ export default function SeriesSymbolErrorControls({ channel, style, setSeriesSty
       {errors && (
         <div style={row}>
           <span className="qzk-field-lbl" style={{ margin: 0 }}>Error bars</span>
+          <span className="qzk-ds-meta">cap</span>
           <NumberField
             value={eb.cap != null ? String(eb.cap) : ""} width={44} placeholder="2" unit="pt"
             aria-label="Error bar cap size" title="Cap size (0 = no caps)" onChange={num("cap", 0)}
           />
+          <span className="qzk-ds-meta">width</span>
           <NumberField
             value={eb.width != null ? String(eb.width) : ""} width={44} placeholder="1" unit="pt"
             aria-label="Error bar line width" title="Error bar line width" onChange={num("width", 0.1)}
           />
+          {!eb.color && <span className="qzk-ds-meta">color: series</span>}
           <input
             type="color"
             aria-label="Error bar color"

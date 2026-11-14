@@ -184,11 +184,8 @@ export function seriesStyleFromExport(style: ExportSeriesStyle | null): SeriesSt
   if (style.step) out.step = style.step;
   if (style.fill === "under") out.fill = "under";
   if (style.marker_fill) out.markerFill = style.marker_fill;
-  const eb = {
-    ...(typeof style.error_cap === "number" ? { cap: style.error_cap } : {}),
-    ...(typeof style.error_width === "number" ? { width: style.error_width } : {}),
-    ...(typeof style.error_color === "string" ? { color: style.error_color } : {}),
-  };
-  if (Object.keys(eb).length) out.errorBar = eb;
+  // Sanitized on load (`sanitizeExportSeriesStyles`): only real values remain.
+  const { error_cap: cap, error_width: width, error_color: color } = style;
+  if (cap != null || width != null || color) out.errorBar = { cap, width, color };
   return Object.keys(out).length > 0 ? out : null;
 }

@@ -102,3 +102,14 @@ describe("error-bar styling", () => {
     });
   });
 });
+
+// Found while live-checking #7: the brushed-row companion carried a SERIES
+// fill, so uPlot shaded the whole area under the brushed span in the accent.
+describe("the brushed-row companion", () => {
+  it("fills its markers, not the area under them", () => {
+    const payload: PlotPayload = { ...PAYLOAD, series: [{ label: "y (selected)", unit: "", selected: true }] };
+    const { series } = buildSeriesDefs(payload, {}, ["y"], true, COLORS);
+    expect(series[1].fill).toBeUndefined();
+    expect(series[1].points?.fill).toBe("#00f");
+  });
+});

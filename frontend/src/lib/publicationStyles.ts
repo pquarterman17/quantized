@@ -169,9 +169,10 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     }
     if (typeof raw.marker_size === "number" && Number.isFinite(raw.marker_size) && raw.marker_size >= 0) style.marker_size = raw.marker_size;
     if (raw.marker_fill === "hollow" || raw.marker_fill === "solid") style.marker_fill = raw.marker_fill;
-    const pt = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100;
-    if (pt(raw.error_cap)) style.error_cap = raw.error_cap;
-    if (pt(raw.error_width)) style.error_width = raw.error_width;
+    for (const k of ["error_cap", "error_width"] as const) {
+      const v = raw[k];
+      if (typeof v === "number" && v >= 0 && v <= 100) style[k] = v;
+    }
     if (typeof raw.error_color === "string") style.error_color = raw.error_color;
     if (raw.fill === "under") style.fill = raw.fill;
     else {

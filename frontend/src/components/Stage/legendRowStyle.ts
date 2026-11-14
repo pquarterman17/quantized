@@ -29,7 +29,7 @@ export function legendRowStyle(
   seriesCycle: SeriesCycle | undefined,
   isDarkBg: boolean,
   inkColor: string | undefined,
-): { swatch: string; sample: SeriesStyle } {
+): { swatch: string; sample: SeriesStyle | undefined } {
   const ci = i - (s.band ?? 0);
   const override = styleList?.[ci]?.color;
   const swatch = s.selected
