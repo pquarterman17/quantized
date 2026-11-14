@@ -183,5 +183,9 @@ export function seriesStyleFromExport(style: ExportSeriesStyle | null): SeriesSt
   if (typeof style.marker_shape === "string") out.markerShape = style.marker_shape as SeriesStyle["markerShape"];
   if (style.step) out.step = style.step;
   if (style.fill === "under") out.fill = "under";
+  if (style.marker_fill) out.markerFill = style.marker_fill;
+  // Sanitized on load (`sanitizeExportSeriesStyles`): only real values remain.
+  const { error_cap: cap, error_width: width, error_color: color } = style;
+  if (cap != null || width != null || color) out.errorBar = { cap, width, color };
   return Object.keys(out).length > 0 ? out : null;
 }

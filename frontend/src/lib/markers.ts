@@ -158,7 +158,11 @@ export function seriesPoints(
   const { show, shape, size } = markerDecision(style, trace);
   if (!show) return { show: false };
   const paths = markerPaths(shape, size);
+  // Gap audit 2 #6: an open symbol paints no interior ("transparent": uPlot
+  // fills an unset point fill white); a solid one fills the circle too.
+  const interior = style?.markerFill === "hollow" ? { fill: "transparent" }
+    : style?.markerFill === "solid" ? { fill: stroke } : null;
   return paths
-    ? { show: true, size, paths, stroke, ...(FILLED_SHAPES.has(shape) ? { fill: stroke } : {}) }
-    : { show: true, size };
+    ? { show: true, size, paths, stroke, ...(FILLED_SHAPES.has(shape) ? (interior ?? { fill: stroke }) : {}) }
+    : { show: true, size, ...interior };
 }

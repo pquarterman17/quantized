@@ -38,7 +38,7 @@ test("Home's grouped example reaches a labeled grouped plot", async ({ page }) =
   await waitForDatasetCount(page, 1);
   await expect(page.locator(".qzk-tab.active")).toHaveText("Plot");
   await expect(page.locator(".qzk-stage .u-over")).toBeVisible();
-  await expect(page.locator(".qzk-legend")).toContainText("Lot A");
-  await expect(page.locator(".qzk-legend")).toContainText("Lot B");
-  await expect(page.locator(".qzk-legend")).toContainText("Lot C");
+  await expect(page.locator(".qzk-stage .qzk-legend")).toContainText("Lot A");
+  await expect(page.locator(".qzk-stage .qzk-legend")).toContainText("Lot B");
+  await expect(page.locator(".qzk-stage .qzk-legend")).toContainText("Lot C");
 });

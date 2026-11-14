@@ -634,7 +634,7 @@ describe("runExportFigureCommand — P0.4 finding 15 (malformed/partial askParam
     expect(exportFigure).toHaveBeenCalledTimes(1);
   });
 
-  it.each(["pdf", "svg", "png", "tiff"])(
+  it.each(["pdf", "svg", "eps", "png", "tiff"])(
     "the dialog promise resolves and exportFigure is reached for fmt=%s",
     async (fmt) => {
       vi.mocked(askParams).mockResolvedValueOnce({

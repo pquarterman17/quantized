@@ -42,7 +42,7 @@ from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
-_FORMATS = ("pdf", "svg", "png", "tiff")
+_FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 THETA_UNITS = ("deg", "rad")
 DIRECTIONS = ("ccw", "cw")
 # matplotlib's own theta-zero vocabulary; the angle each sits at on screen,

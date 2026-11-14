@@ -8,10 +8,12 @@ import type { Dataset } from "./types";
 export const MAX_BATCH_FIGURE_EXPORT = 64;
 
 export interface BatchFigureExportOptions {
-  format: "pdf" | "svg" | "png" | "tiff";
+  format: "pdf" | "svg" | "eps" | "png" | "tiff";
   style: string;
   dpi: number;
   archiveName: string;
+  /** One PDF with a page per figure instead of a ZIP (format must be pdf). */
+  multipage?: boolean;
   autoSeriesStyles?: boolean;
   defaultTrace?: DefaultTrace;
   defaultLineWidth?: number;
@@ -79,5 +81,5 @@ export async function downloadBatchFigures(
   }
   const fullDatasets = await fullBatchDatasets(figures, datasets, resolveDataset, signal);
   const specs = batchFigureSpecs(figures, fullDatasets, options);
-  await exportFigureBatch(specs, options.archiveName.trim() || "figures", signal);
+  await exportFigureBatch(specs, options.archiveName.trim() || "figures", signal, options.multipage === true);
 }

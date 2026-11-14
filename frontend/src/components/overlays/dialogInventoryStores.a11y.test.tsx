@@ -108,6 +108,13 @@ describe("dialog basics — store-driven dialogs", () => {
     expect(await auditDialog(dialog, { opener, user })).toEqual([]);
   });
 
+  it("Plot Details for one curve (gap audit 2 #8)", async () => {
+    useFigureDialog.setState({ open: null });
+    const user = userEvent.setup();
+    const opener = await openWith(<FigureDialogs />, () => openFigureDialog({ kind: "plotDetails", channel: 0 }));
+    expect(await auditDialog(dialog, { opener, user })).toEqual([]);
+  });
+
   it("Split dataset", async () => {
     const user = userEvent.setup();
     const opener = await openWith(<SplitDatasetDialog />, () => useApp.setState({ splitDialogTargetId: "d1" }));

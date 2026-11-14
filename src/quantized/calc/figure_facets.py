@@ -51,7 +51,7 @@ __all__ = [
     "render_categorical_facets_figure",
 ]
 
-_FORMATS = ("pdf", "svg", "png", "tiff")
+_FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 
 
 def draw_facet_grid(

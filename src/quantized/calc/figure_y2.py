@@ -26,6 +26,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from quantized.calc.axis_style import apply_axis_style
 from quantized.calc.figure import _apply_fill, _plot_kwargs, draw_series_axes
 from quantized.calc.figure_axis_titles import apply_axis_titles
 from quantized.calc.figure_decor import _apply_region_shades, _split_region_shades_by_axis
@@ -161,7 +162,7 @@ def draw_secondary_axes(
         (line,) = ax2.plot(xv, yv, label=label, **kw)
         _apply_fill(ax2, xv, yv, series, i, spec, line.get_color())
         artists.append(line)
-    apply_error_bars(ax2, xv, series, error_spans, artists)
+    apply_error_bars(ax2, xv, series, error_spans, artists, series_styles)
     resolved_y_scale = resolve_axis_scale(y_scale, False)
     apply_axis_scale(ax2, "y", resolved_y_scale)
     apply_tick_steps(ax2, None, y_step, "linear", resolved_y_scale)
@@ -292,6 +293,7 @@ def render_with_secondary_axis(
         ax2.set_ylim(*drawable_lim(
             ax2, "y", None if lo is None else float(lo), None if hi is None else float(hi)
         ))
+    apply_axis_style(ax2, "y", y2_fmt, side="right", grid_alpha=st.grid_alpha)
     # After the y2 limits (audit #11): a shade's log-floor clamp and its
     # off-scale warning read the FINAL secondary range.
     _apply_region_shades(ax2, secondary_shades)

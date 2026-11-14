@@ -32,6 +32,7 @@ import BatchCompatibilityReview from "./BatchCompatibilityReview";
 import {
   batchRecipeChoices,
   EXPORT_FORMATS,
+  exportFormatLabel,
   SCOPE_LABEL,
   type BatchFigurePhase,
 } from "./batchFigureBuilderOptions";
@@ -73,7 +74,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
   const [exportStyle, setExportStyle] = useState("default");
   const [exportDpi, setExportDpi] = useState(300);
   const [archiveName, setArchiveName] = useState("");
-  const [result, setResult] = useState<{ figures: number; pages: string[]; pageOpened: boolean; downloaded: boolean } | null>(null);
+  const [result, setResult] = useState<{ figures: number; pages: string[]; pageOpened: boolean; downloaded: string | null } | null>(null);
   const controller = useRef<AbortController | null>(null);
 
   useEffect(() => hydrateGlobal(), [hydrateGlobal]);
@@ -223,7 +224,8 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
         // artifact snapshot. Edits made while the render is running belong to
         // a later batch; they cannot partly leak into this archive or commit.
         await downloadBatchFigures(artifacts.figures, state.datasets, {
-          format: exportFormat,
+          format: exportFormat === "pdf-pages" ? "pdf" : exportFormat,
+          multipage: exportFormat === "pdf-pages",
           style: exportStyle,
           dpi: Math.max(50, Math.min(1200, exportDpi)),
           archiveName: archiveName.trim() || `${recipeChoice.recipe.name} figures`,
@@ -249,7 +251,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
       recordRecipeUse({ kind: "plot", scope: recipeChoice.scope, id: recipeChoice.recipe.id });
     }
     setProgress({ done: artifacts.figures.length, total: artifacts.figures.length, current: null });
-    setResult({ figures: artifacts.figures.length, pages: artifacts.pages.map((page) => page.name), pageOpened, downloaded: downloadArchive });
+    setResult({ figures: artifacts.figures.length, pages: artifacts.pages.map((page) => page.name), pageOpened, downloaded: downloadArchive ? (exportFormat === "pdf-pages" ? "PDF" : "ZIP") : null });
     setPhase("done");
   };
 
@@ -364,14 +366,14 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
             </div>
           )}
           <Checkbox checked={downloadArchive} disabled={busy} onChange={setDownloadArchive}>
-            Also download one ZIP of publication figures
+            Also download the publication figures (a ZIP, or one multi-page PDF)
           </Checkbox>
           {downloadArchive && (
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) repeat(3, 120px)", gap: 8 }}>
-              <label className="qzk-field"><span className="qzk-field-lbl">Archive name</span><input className="qz-input" value={archiveName} placeholder={`${recipeChoice?.recipe.name ?? "Batch"} figures`} disabled={busy} onChange={(event) => setArchiveName(event.target.value)} /></label>
-              <label className="qzk-field"><span className="qzk-field-lbl">Format</span><Select value={exportFormat} disabled={busy} onChange={(event) => setExportFormat(event.target.value as (typeof EXPORT_FORMATS)[number])} options={EXPORT_FORMATS.map((value) => ({ value, label: value.toUpperCase() }))} /></label>
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 190px repeat(2, 110px)", gap: 8 }}>
+              <label className="qzk-field"><span className="qzk-field-lbl">File name</span><input className="qz-input" value={archiveName} placeholder={`${recipeChoice?.recipe.name ?? "Batch"} figures`} disabled={busy} onChange={(event) => setArchiveName(event.target.value)} /></label>
+              <label className="qzk-field"><span className="qzk-field-lbl">Format</span><Select value={exportFormat} disabled={busy} onChange={(event) => setExportFormat(event.target.value as (typeof EXPORT_FORMATS)[number])} options={EXPORT_FORMATS.map((value) => ({ value, label: exportFormatLabel(value) }))} /></label>
               <label className="qzk-field"><span className="qzk-field-lbl">Style</span><Select value={exportStyle} disabled={busy} onChange={(event) => setExportStyle(event.target.value)} options={FIGURE_STYLES.map((value) => ({ value, label: value }))} /></label>
-              <label className="qzk-field"><span className="qzk-field-lbl">DPI</span><input className="qz-input" type="number" min={50} max={1200} value={exportDpi} disabled={busy || exportFormat === "pdf" || exportFormat === "svg"} onChange={(event) => setExportDpi(Number(event.target.value) || 300)} /></label>
+              <label className="qzk-field"><span className="qzk-field-lbl">DPI</span><input className="qz-input" type="number" min={50} max={1200} value={exportDpi} disabled={busy || exportFormat !== "png" && exportFormat !== "tiff"} onChange={(event) => setExportDpi(Number(event.target.value) || 300)} /></label>
             </div>
           )}
           {downloadArchive && includedIds.size > MAX_BATCH_FIGURE_EXPORT && (
@@ -386,7 +388,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
 
       {phase === "done" && result && (
         <div role="status" style={{ border: "1px solid var(--ok)", borderRadius: 6, padding: 10 }}>
-          Created {result.figures} editable figure{result.figures === 1 ? "" : "s"}{result.pages.length === 1 ? result.pageOpened ? ` and opened Figure Page “${result.pages[0]}”.` : ` and saved Figure Page “${result.pages[0]}” in the Library. Your already-open page was left unchanged.` : result.pages.length > 1 ? result.pageOpened ? ` and ${result.pages.length} Figure Pages. The first page is open; the rest are saved in the Library.` : ` and ${result.pages.length} Figure Pages in the Library. Your already-open page was left unchanged.` : "."}{result.downloaded ? " The publication-file ZIP was downloaded." : ""}
+          Created {result.figures} editable figure{result.figures === 1 ? "" : "s"}{result.pages.length === 1 ? result.pageOpened ? ` and opened Figure Page “${result.pages[0]}”.` : ` and saved Figure Page “${result.pages[0]}” in the Library. Your already-open page was left unchanged.` : result.pages.length > 1 ? result.pageOpened ? ` and ${result.pages.length} Figure Pages. The first page is open; the rest are saved in the Library.` : ` and ${result.pages.length} Figure Pages in the Library. Your already-open page was left unchanged.` : "."}{result.downloaded ? ` The publication-file ${result.downloaded} was downloaded.` : ""}
           <div style={{ marginTop: 8 }}><Button variant="primary" onClick={onClose}>Done</Button></div>
         </div>
       )}

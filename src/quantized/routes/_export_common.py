@@ -10,6 +10,7 @@ from quantized.io._origin_names import ascii_fold
 _FIGURE_MIME = {
     "pdf": "application/pdf",
     "svg": "image/svg+xml",
+    "eps": "application/postscript",
     "png": "image/png",
     "tiff": "image/tiff",
 }

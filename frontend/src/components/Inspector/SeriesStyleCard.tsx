@@ -20,6 +20,7 @@ import { SegmentedControl } from "../primitives/SegmentedControl";
 import { Select } from "../primitives";
 import Card from "../primitives/Card";
 import SeriesFillColorControls from "./SeriesFillColorControls";
+import SeriesSymbolErrorControls from "./SeriesSymbolErrorControls";
 
 const PALETTE = [1, 2, 3, 4, 5, 6, 7, 8];
 const LINE_NAMES: Record<LineStyle, string> = { solid: "Solid", dashed: "Dashed", dotted: "Dotted" };
@@ -244,6 +245,11 @@ function StyleRow({
             </>
           )}
         </div>
+
+        <SeriesSymbolErrorControls
+          channel={channel} style={style} setSeriesStyle={setSeriesStyle}
+          markers={style.marker ?? false} errors={errCol != null}
+        />
 
         <SeriesFillColorControls
           channel={channel}

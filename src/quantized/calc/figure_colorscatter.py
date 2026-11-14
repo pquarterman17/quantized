@@ -44,6 +44,20 @@ MARKER_CODES = {"circle": "o", "square": "s", "triangle": "^", "downtriangle": "
                 "diamond": "D", "plus": "+", "cross": "x", "star": "*"}
 
 
+def _hollow(sc: Any, spec: Mapping[str, Any]) -> Any:
+    """Open symbols (gap audit 2 #6, ``marker_fill: "hollow"``): each point's
+    mapped colour moves to its edge and the face is emptied -- the canvas'
+    ``paintColorPoint(..., hollow)``. matplotlib maps ``c`` onto the FACE and
+    ignores ``facecolors="none"`` beside it, so the colours are resolved here
+    (after any colourbar has read the norm) and the array dropped."""
+    if spec.get("marker_fill") == "hollow":
+        arr = sc.get_array()
+        sc.set_edgecolors(sc.to_rgba(arr) if arr is not None else sc.get_facecolors())
+        sc.set_facecolor("none")
+        sc.set_array(None)
+    return sc
+
+
 def _js_round(v: float) -> int:
     """JavaScript's ``Math.round`` for a non-negative value (half rounds up;
     Python's ``round`` would round half to even)."""
@@ -112,7 +126,7 @@ def _draw_gradient(
             cmap=LinearSegmentedColormap.from_list("qz_gradient", stops),
         )
         fig.colorbar(mappable, ax=ax, label=str(spec.get("colorbar_label") or ""))
-    return sc
+    return _hollow(sc, spec)
 
 
 def draw_color_scatter(
@@ -152,4 +166,4 @@ def draw_color_scatter(
         xv[:n], yv[:n], c=z[:n], cmap=str(spec.get("colormap") or "viridis"), s=size, label=label
     )
     fig.colorbar(sc, ax=ax)
-    return sc
+    return _hollow(sc, spec)

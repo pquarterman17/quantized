@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from quantized.calc.axis_style import apply_axis_style
 from quantized.calc.figure_colorscatter import MARKER_CODES as _MARKER
 from quantized.calc.figure_colorscatter import (
     draw_color_scatter as _draw_color_scatter,
@@ -44,7 +45,7 @@ from .figure_orient import TransposedAxes, oriented
 
 __all__ = ["draw_series_axes", "render_figure", "style_rc"]
 
-_FORMATS = ("pdf", "svg", "png", "tiff")
+_FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 _LINESTYLE = {"solid": "-", "dashed": "--", "dotted": ":", "none": "none"}
 # GAP_PLOTTYPES (Graph Builder "step" mark) export parity: the frontend's
 # per-series `step` ("pre"/"post"/"mid" — SeriesStyle.step / ExportSeriesStyle
@@ -89,6 +90,8 @@ def _plot_kwargs(
         shape = spec.get("marker_shape")
         kw["marker"] = _MARKER.get(shape, "o") if isinstance(shape, str) else "o"
         kw["markersize"] = spec.get("marker_size") or default_marker_size
+        if spec.get("marker_fill") == "hollow":  # an open symbol (gap audit 2 #6)
+            kw["markerfacecolor"] = "none"
     return kw
 
 
@@ -198,7 +201,7 @@ def draw_series_axes(
         line, color = draw_series(ax, xv, yv, label, kw, spec)  # bars: figure_bars
         _apply_fill(ax, xv, yv, series, i, spec, color)
         artists.append(line)
-    apply_error_bars(ax, xv, series, error_spans, artists)
+    apply_error_bars(ax, xv, series, error_spans, artists, series_styles)
     tag_series_slots(artists)  # the legend's waterfall row order (figure_legend_order)
     resolved_x_scale = resolve_axis_scale(x_scale, x_log)
     resolved_y_scale = resolve_axis_scale(y_scale, y_log)
@@ -225,6 +228,9 @@ def draw_series_axes(
     else:
         ax.grid(False, which="both")
     _apply_overrides(fig, ax, st, ov, n_series=len(series))
+    # After the limits and the plot-wide grid, each of which these replace.
+    apply_axis_style(ax, "x", x_fmt, side="bottom", grid_alpha=st.grid_alpha)
+    apply_axis_style(ax, "y", y_fmt, side="left", grid_alpha=st.grid_alpha)
     apply_inset(ax, artists, ov, resolved_x_scale, resolved_y_scale, st.grid_alpha)
     return artists
 

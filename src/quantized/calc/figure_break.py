@@ -205,7 +205,7 @@ def render_breaks_impl(
             artists.extend(ax.plot(x[shown], yv, label=label, **kw))
         tag_series_slots(artists)  # the legend's waterfall row order
         panel_spans = _slice_spans(error_spans, np.flatnonzero(shown))
-        apply_error_bars(ax, x[shown], cut, panel_spans, artists)
+        apply_error_bars(ax, x[shown], cut, panel_spans, artists, series_styles)
         ax.set_xlim(lo, hi)
         resolved_x_scale = resolve_axis_scale(x_scale, x_log)
         resolved_y_scale = resolve_axis_scale(y_scale, y_log)

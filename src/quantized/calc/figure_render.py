@@ -62,6 +62,7 @@ from __future__ import annotations
 import functools
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
+from contextvars import ContextVar
 from io import BytesIO
 from typing import Any, ParamSpec, TypeVar
 
@@ -85,9 +86,15 @@ __all__ = [
     "RenderLockTimeout",
     "in_render_scope",
     "new_figure",
+    "pdf_page_sink",
     "render_scope",
     "savefig_bytes",
 ]
+
+# A multi-page PDF being assembled (``calc.figure_pdf_pages``): while set, a
+# PDF ``savefig_bytes`` adds the figure as the next page instead of returning
+# bytes, so every renderer becomes a page source without knowing it.
+pdf_page_sink: ContextVar[Any] = ContextVar("pdf_page_sink", default=None)
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -101,8 +108,9 @@ R = TypeVar("R")
 # wraps the actual TrueType outlines as a real, embedded, selectable font
 # (Type 0 / CIDFontType2) instead (PRIMARY_SOFTWARE_AUDIT_PLAN P3.6 -- found
 # via ``tests/test_export_copy_figure_vector.py``, which pins the embedded
-# subtype and fails under the matplotlib default).
-BASE_RC: Mapping[str, Any] = {"svg.fonttype": "none", "pdf.fonttype": 42}
+# subtype and fails under the matplotlib default). ps.fonttype 42 does the same
+# for EPS (gap-audit-2 #16): real embedded fonts, not Type 3 procedures.
+BASE_RC: Mapping[str, Any] = {"svg.fonttype": "none", "pdf.fonttype": 42, "ps.fonttype": 42}
 
 
 @contextmanager
@@ -195,6 +203,10 @@ def savefig_bytes(
     so scoping it here is enough. Ignored for every other format (raster and
     PDF bytes are unchanged). Default ``False``: live, editable ``<text>``.
     """
+    pages = pdf_page_sink.get()
+    if pages is not None and fmt == "pdf":
+        pages.savefig(fig, **kwargs)
+        return b""
     buf = BytesIO()
     if svg_text_as_paths and fmt == "svg":
         # Nested inside the caller's render_scope (RENDER_LOCK held), so this

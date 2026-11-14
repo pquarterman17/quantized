@@ -30,7 +30,7 @@ from quantized.calc.figure_styles import figure_style
 
 __all__ = ["render_corner_figure"]
 
-_FORMATS = ("pdf", "svg", "png", "tiff")
+_FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 _PANEL_IN = 2.1  # per-parameter panel edge length (inches) at the default size
 _MAX_TICKS = 4
 _TRUTH_COLOR = "firebrick"
