@@ -71,6 +71,13 @@ function richView() {
     shapes: [{ id: "s", kind: "rect" as const, x1: 0, y1: 1, x2: 2, y2: 3, stroke: "#f00" }],
     refLines: [{ id: "r", axis: "x" as const, value: 5 }],
     regionShades: [{ id: "sh", x1: 0, x2: 2, y1: 1, y2: 3, fill: "#336699", axis: 1 as const }],
+    panelInsets: [
+      {
+        id: "pi",
+        at: [0.1, 0.1, 0.3, 0.3] as [number, number, number, number],
+        content: { kind: "table" as const, headers: ["p"], rows: [["1"]] },
+      },
+    ],
     pageSetup: {
       width: 10,
       height: 5,
@@ -175,6 +182,7 @@ describe("FigureDocument FigureSpec adapter", () => {
         y_lim: [1, 9],
         grid: true,
         spines: { top: true, right: true },
+        panel_insets: [{ at: [0.1, 0.1, 0.3, 0.3], content: { kind: "table", rows: [["1"]], headers: ["p"] } }],
         // Page setup margins are OUTER padding (audit B3), never subplot fractions.
         page_pad: { left: 0.1, right: 0.2, top: 0.1, bottom: 0.3 },
         y2_lim: [2, 20],
@@ -239,6 +247,7 @@ describe("FigureDocument FigureSpec adapter", () => {
       // the StoreGet path the byte-equality test above pins.
       ref_lines: [{ axis: "x", value: 5 }],
       region_shades: [{ x1: 0, x2: 2, y1: 1, y2: 3, fill: "#336699", axis: 1 }],
+      panel_insets: [{ at: [0.1, 0.1, 0.3, 0.3], content: { kind: "table", headers: ["p"], rows: [["1"]] } }],
       x_breaks: [[0.4, 0.6]],
       page_pad: { left: 0.1, right: 0.2, top: 0.1, bottom: 0.3 },
     });
