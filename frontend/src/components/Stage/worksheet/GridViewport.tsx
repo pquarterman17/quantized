@@ -38,12 +38,14 @@ import {
   windowIndices,
 } from "../../../lib/gridwindow";
 import type { OriginDesignation } from "../../../lib/columnmeta";
+import type { ColumnProps } from "../../../lib/columnProps";
 import type { CalcResult, ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
 import GridHeader from "./GridHeader";
 import { gridFormatters } from "./cellFormat";
-import GridRow from "./GridRow";
+import GridRow, { type GridRowCursor } from "./GridRow";
 import GridStatsFooter from "./GridStatsFooter";
-import { useCellEdit } from "./useCellEdit";
+import { useCellEdit, type CellEditApi } from "./useCellEdit";
+import { useLineSelect } from "./useLineSelect";
 import { useColResize } from "./useColResize";
 
 const DATE_X_COL_WIDTH = 168; // px: a full "YYYY-MM-DD HH:MM:SS" in the mono cell font
@@ -105,6 +107,26 @@ export interface GridViewportProps {
   /** Scroll a DISPLAY row (index into `order`) — and a column, if given — into
    *  view, once per `key` (see ./useRowReveal.ts). */
   reveal?: GridReveal | null;
+  /** The cell cursor (./useGridCursor.ts): omitted, the grid has none and
+   *  edits on double-click only (every pre-cursor caller/test). */
+  cursor?: GridCursorProps;
+  /** User display formats per column (`Dataset.columnProps`). */
+  columnProps?: Record<number, ColumnProps>;
+  /** Double-click a header: the Long Name / Units / Comments editor. */
+  onHeaderDoubleClick?: (col: number, e: React.MouseEvent) => void;
+}
+
+/** What the cursor hook hands the grid: the per-cell marks and handlers
+ *  (GridRow's `cursor`, minus the row position the grid supplies), the shared
+ *  cell editor, the grid's ARIA wiring, and the blank entry row. */
+export interface GridCursorProps extends Omit<GridRowCursor, "pos"> {
+  cellEdit: CellEditApi;
+  gridId: string;
+  label: string;
+  activeCellId?: string;
+  /** Show the blank entry row under the data (original index below). */
+  entryRow: boolean;
+  entryRowIndex: number;
 }
 
 export interface GridReveal {
@@ -159,19 +181,24 @@ export default function GridViewport({
   onChangeChannelType,
   readOnly,
   reveal,
+  cursor,
+  columnProps,
+  onHeaderDoubleClick,
 }: GridViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scroll, setScroll] = useState({ top: 0, left: 0 });
   const [metrics, setMetrics] = useState({ width: 0, height: 0, rowHeight: DEFAULT_ROW_HEIGHT });
-  // Anchor row for shift-click range selection (an original row index).
-  const [anchor, setAnchor] = useState<number | null>(null);
-  // Anchor COLUMN for shift-click range selection (item 6) — same pattern,
-  // one axis over. -1 (the pinned x/time column) is a valid anchor.
-  const [colAnchor, setColAnchor] = useState<number | null>(null);
+  const { onRowNumClick, onHeaderClick } = useLineSelect(
+    order,
+    { toggle: onToggleSelect, range: onSelectRange },
+    { toggle: onToggleColSelect, range: onSelectColRange },
+  );
   const xIsDate = data.metadata?.time_is_datetime === true; // audit #7: a date X shows and edits as dates
-  const cellEdit = useCellEdit(onEditCell, xIsDate);
+  const ownCellEdit = useCellEdit(onEditCell, undefined, xIsDate);
+  const cellEdit = cursor?.cellEdit ?? ownCellEdit;
   // Per-column number precision: each drawn column is scanned once per data change.
-  const fmtOf = useMemo(() => gridFormatters(data.time, data.values, xIsDate), [data.time, data.values, xIsDate]);
+  // A column with a user display format (Column Properties) uses that instead.
+  const fmtOf = useMemo(() => gridFormatters(data.time, data.values, columnProps, xIsDate), [data.time, data.values, columnProps, xIsDate]);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -236,7 +263,8 @@ export default function GridViewport({
     setScroll({ top, left });
   }, [reveal, textCols, colCount, colWidth, colWidths, gutterWidth, colOffsets, xIsDate]);
 
-  const rowWindow = computeAxisWindow(scroll.top, metrics.height, order.length, {
+  const rowCount = order.length + (cursor?.entryRow ? 1 : 0);
+  const rowWindow = computeAxisWindow(scroll.top, metrics.height, rowCount, {
     itemSize: metrics.rowHeight,
     overscan: DEFAULT_ROW_OVERSCAN,
     fallbackCount: DEFAULT_FALLBACK_ROWS,
@@ -255,55 +283,63 @@ export default function GridViewport({
         fallbackCount: DEFAULT_FALLBACK_COLS,
       });
 
-  const visibleRows = order.slice(rowWindow.start, rowWindow.end);
+  const visibleRows = order.slice(rowWindow.start, Math.min(rowWindow.end, order.length));
   const visibleCols = windowIndices(colWindow);
   const leadingRowSpacer = rowWindow.offset;
-  const trailingRowSpacer = (order.length - rowWindow.end) * metrics.rowHeight;
+  const trailingRowSpacer = (rowCount - rowWindow.end) * metrics.rowHeight;
   const leadingColSpacer = colWindow.offset;
   const trailingColSpacer = colOffsets
     ? colWindow.totalSize - colOffsets[colWindow.end]
     : (colCount - colWindow.end) * colWidth;
 
-  // Row-number click: plain click toggles the row into the selection; a
-  // shift-click extends from the last-clicked anchor across the DISPLAYED
-  // (post-filter/sort) rows between the two clicks.
-  const onRowNumClick = (r: number, e: React.MouseEvent) => {
-    if (e.shiftKey && anchor != null) {
-      const aPos = order.indexOf(anchor);
-      const pos = order.indexOf(r);
-      if (aPos >= 0 && pos >= 0) {
-        const [lo, hi] = aPos <= pos ? [aPos, pos] : [pos, aPos];
-        onSelectRange(order.slice(lo, hi + 1));
-        return;
-      }
-    }
-    onToggleSelect(r);
-    setAnchor(r);
-  };
-
-  // Header click: plain click selects ONLY that column (replaces the
-  // selection); ctrl/cmd-click toggles it into a multi-selection; shift-click
-  // extends a range from the last-clicked anchor. Column indices are stable
-  // (channel order, not DOM position), so the selection survives scrolling.
-  const onHeaderClick = (col: number, e: React.MouseEvent) => {
-    if (e.shiftKey && colAnchor != null) {
-      const [lo, hi] = colAnchor <= col ? [colAnchor, col] : [col, colAnchor];
-      const range: number[] = [];
-      for (let c = lo; c <= hi; c++) range.push(c);
-      onSelectColRange(range);
-      return;
-    }
-    if (e.ctrlKey || e.metaKey) {
-      onToggleColSelect(col);
-      setColAnchor(col);
-      return;
-    }
-    onSelectColRange([col]);
-    setColAnchor(col);
-  };
+  // The blank entry row (cursor.entryRow) renders at display position
+  // `order.length`, past every data row; it has no original row yet.
+  const entryPos = order.length;
+  const rowAt = (pos: number, r: number, entry: boolean) => (
+    <GridRow
+      key={entry ? "entry" : r}
+      r={r}
+      time={data.time}
+      values={data.values}
+      visibleCols={visibleCols}
+      leadingSpacer={leadingColSpacer}
+      trailingSpacer={trailingColSpacer}
+      colWidth={colWidth}
+      widthOf={widthOf}
+      gutterWidth={gutterWidth}
+      rowHeight={metrics.rowHeight}
+      baseCount={baseCount}
+      isMasked={masked.has(r)}
+      isFilteredOut={!masked.has(r) && filteredOut.has(r)}
+      isSelected={selected.has(r)}
+      selectedCols={selectedCols}
+      onRowNumClick={onRowNumClick}
+      onRowContext={onRowContext}
+      cellEdit={cellEdit}
+      readOnly={readOnly}
+      textCols={textCols}
+      catLevels={(col) => categoricalLevels(data, col)}
+      onEditCategoricalCell={onEditCategoricalCell}
+      onEditCell={onEditCell}
+      colName={(col) => (col < 0 ? xName : data.labels[col] ?? `column ${col + 1}`)}
+      fmtOf={fmtOf}
+      cursor={cursor && { pos, ...cursor }}
+      entry={entry}
+    />
+  );
 
   return (
-    <div className="qzk-grid" ref={scrollRef} onScroll={onScroll} role="grid">
+    <div
+      className="qzk-grid"
+      ref={scrollRef}
+      onScroll={onScroll}
+      role="grid"
+      id={cursor?.gridId}
+      aria-label={cursor?.label}
+      aria-multiselectable={cursor ? true : undefined}
+      aria-activedescendant={cursor?.activeCellId}
+      tabIndex={cursor ? 0 : undefined}
+    >
       <GridHeader
         data={data}
         xName={xName}
@@ -330,38 +366,12 @@ export default function GridViewport({
         modelingTypeOf={modelingTypeOf}
         channelTypes={channelTypes}
         onChangeChannelType={onChangeChannelType}
+        onHeaderDoubleClick={onHeaderDoubleClick}
+        commentOf={(c) => columnProps?.[c]?.comment}
       />
       {leadingRowSpacer > 0 && <div style={{ height: leadingRowSpacer }} aria-hidden="true" />}
-      {visibleRows.map((r) => (
-        <GridRow
-          key={r}
-          r={r}
-          time={data.time}
-          values={data.values}
-          visibleCols={visibleCols}
-          leadingSpacer={leadingColSpacer}
-          trailingSpacer={trailingColSpacer}
-          colWidth={colWidth}
-          widthOf={widthOf}
-          gutterWidth={gutterWidth}
-          rowHeight={metrics.rowHeight}
-          baseCount={baseCount}
-          isMasked={masked.has(r)}
-          isFilteredOut={!masked.has(r) && filteredOut.has(r)}
-          isSelected={selected.has(r)}
-          selectedCols={selectedCols}
-          onRowNumClick={onRowNumClick}
-          onRowContext={onRowContext}
-          cellEdit={cellEdit}
-          readOnly={readOnly}
-          textCols={textCols}
-          catLevels={(col) => categoricalLevels(data, col)}
-          onEditCategoricalCell={onEditCategoricalCell}
-          onEditCell={onEditCell}
-          colName={(col) => (col < 0 ? xName : data.labels[col] ?? `column ${col + 1}`)}
-          fmtOf={fmtOf}
-        />
-      ))}
+      {visibleRows.map((r, i) => rowAt(rowWindow.start + i, r, false))}
+      {cursor?.entryRow && rowWindow.end > entryPos && rowAt(entryPos, cursor.entryRowIndex, true)}
       {trailingRowSpacer > 0 && <div style={{ height: trailingRowSpacer }} aria-hidden="true" />}
       {showStats && (
         <GridStatsFooter

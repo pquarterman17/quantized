@@ -55,7 +55,7 @@ describe("a timestamp X column", () => {
   });
 
   it("shows and edits as a date in the worksheet", () => {
-    expect(gridFormatters(ds(true).time, ds(true).values, true)(-1)(T0)).toBe("2026-03-01 12:00:00");
+    expect(gridFormatters(ds(true).time, ds(true).values, undefined, true)(-1)(T0)).toBe("2026-03-01 12:00:00");
     expect(gridFormatters(ds(true).time, ds(true).values)(-1)(T0)).not.toMatch(/2026/);
     expect(fmtDateCell(T0 + 0.5)).toBe("2026-03-01 12:00:00.500");
     expect(fmtDateCell(Number.NaN)).toBe("—");

@@ -23,27 +23,24 @@
 // the column menu's X/Y-axis actions stay linked to it (WorksheetToolbar's
 // "Linked to plot" badge makes that explicit) — never silent, never assumed.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { bookFetchSettled, lastBookError, truncateReason } from "../../../lib/bookData";
-import { isCategoricalChannel } from "../../../lib/categorical";
-import { effectiveDesignations, type OriginDesignation } from "../../../lib/columnmeta";
 import { hasOriginReportSheets } from "../../../lib/originTextColumns";
 import { isRederived } from "../../../lib/rederived";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { channelModelingType } from "../../../lib/modeling";
 import type { BookSource, Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
-import { useRecode } from "../../../store/recode";
-import { useLevelOrderPanel } from "../../../store/levelOrderPanel";
-import ContextMenu from "../../overlays/ContextMenu";
 import GridViewport from "./GridViewport";
+import HeaderEditor, { type HeaderEditTarget } from "./HeaderEditor";
 import SheetTabs from "./SheetTabs";
+import { useGridCursor } from "./useGridCursor";
 import { useRowReveal } from "./useRowReveal";
 import { useWorksheetView } from "./useWorksheetView";
 import WorksheetFilterBar from "./WorksheetFilterBar";
+import WorksheetMenus, { type WorksheetMenu } from "./WorksheetMenus";
 import WorksheetToolbar from "./WorksheetToolbar";
-import { columnMenuItems, rowMenuItems } from "./worksheetMenus";
 
 /** "⇩ Export…": this sheet, or its selected rows in view order (lazy body). */
 function exportSheet(ds: Dataset, rows: number[]): void {
@@ -81,14 +78,6 @@ function DerivedWorksheetBanner({ ds }: { ds: Dataset }) {
   );
 }
 
-/** Sort the worksheet's rows by a column — one undo step (lazy chunk). */
-function sortRows(id: string, col: number | string, dir: 1 | -1): void {
-  void import("../../../store/sortRows").then(
-    (m) => m.sortWorksheetRows(id, col, dir),
-    () => useApp.getState().setStatus("couldn't load sorting — try again"),
-  );
-}
-
 export default function WorksheetPane({ datasetId, windowId }: WorksheetPaneProps) {
   const ds = useApp((s) => s.datasets.find((d) => d.id === datasetId));
   if (!ds) {
@@ -107,9 +96,27 @@ export default function WorksheetPane({ datasetId, windowId }: WorksheetPaneProp
 function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string }) {
   const view = useWorksheetView(ds, windowId);
   const reveal = useRowReveal(ds, view, windowId);
-  const [menu, setMenu] = useState<{ kind: "col" | "row"; target: number; x: number; y: number } | null>(null);
-  // A text column's header menu: Sort by its cell text (store/sortRows.ts).
-  const [textMenu, setTextMenu] = useState<{ name: string; x: number; y: number } | null>(null);
+  // The right-click menus (./WorksheetMenus.tsx) and the header-row editor.
+  const [menu, setMenu] = useState<WorksheetMenu | null>(null);
+  const [headerEdit, setHeaderEdit] = useState<HeaderEditTarget | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  /** Open the header editor ON column `col`'s header cell. */
+  const editHeader = (col: number) => {
+    const cells = rootRef.current?.querySelectorAll<HTMLElement>("[data-col]") ?? [];
+    const cell = [...cells].find((el) => el.dataset.col === String(col));
+    const box = cell?.getBoundingClientRect();
+    setHeaderEdit({ col, x: box?.left ?? 80, y: box?.bottom ?? 80 }); // just under the header
+  };
+  const cursor = useGridCursor(ds, view, {
+    onColumnMenu: (col, x, y) => setMenu({ kind: "col", target: col, x, y }),
+    onEditHeader: editHeader,
+  });
+  const closeHeaderEdit = useCallback(() => setHeaderEdit(null), []);
+  // Two scroll requests share the grid's one `reveal`: an outside "show this
+  // row" (useRowReveal) and the cursor's own moves. The newer one wins.
+  const [rowRevealFirst, setRowRevealFirst] = useState(false);
+  useEffect(() => setRowRevealFirst(true), [reveal.target]);
+  useEffect(() => setRowRevealFirst(false), [cursor.reveal]);
 
   // ORIGIN_FILE_DECODE_PLAN #38: opening the worksheet on a still-lazy Origin
   // book fetches its full data (the grid below renders the preview rows
@@ -138,18 +145,17 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
     setMenu({ kind, target, x: e.clientX, y: e.clientY });
   };
 
-  // Right-clicking a column that's already part of a multi-column selection
-  // acts on the WHOLE selection (matching the toolbar's "N selected" buttons);
-  // right-clicking an unselected column acts on just that one — the usual
-  // spreadsheet convention for an ad hoc single-column plot/replot.
-  const effectiveCols = (target: number) => (view.selectedCols.has(target) ? [...view.selectedCols] : [target]);
-
   // MAIN #34 keyboard bindings. Scoped to the pane, not the window, so the
   // worksheet cannot hijack ⌘C while the user is copying from the plot or a
   // dialog. An active cell EDIT is left alone — the native input handles its
   // own clipboard, and stealing ⌘V there would paste a grid over a half-typed
-  // number.
+  // number. The cell cursor (./useGridCursor.ts) takes the keys first; what it
+  // leaves acts on the row × column selection.
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if (cursor.onKeyDown(e)) {
+      e.preventDefault();
+      return;
+    }
     const target = e.target as HTMLElement | null;
     // SELECT included (review fix): the filter bar's <select>s use arrows
     // natively — same exemption set as useGlobalShortcuts' isEditing.
@@ -172,15 +178,15 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
       if (view.blockOps.hasBlock) view.blockOps.clearBlock();
     }
     else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-      // No grid arrow-navigation exists yet — but unconsumed bare arrows on
-      // a focused toolbar button/sheet tab stepped the GLOBAL active-dataset
-      // list (retrospective audit). Consume until cell navigation owns them.
+      // Without a cell cursor, unconsumed bare arrows on a focused toolbar
+      // button/sheet tab stepped the GLOBAL active-dataset list
+      // (retrospective audit). Consume them.
       e.preventDefault();
     }
   };
 
   return (
-    <div className="qzk-sheet" onKeyDown={onKeyDown} tabIndex={-1}>
+    <div className="qzk-sheet" onKeyDown={onKeyDown} tabIndex={-1} ref={rootRef}>
       <WorksheetToolbar
         formula={view.formula}
         colName={view.colName}
@@ -192,7 +198,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         onToggleStats={() => view.setShowStats((v) => !v)}
         onCopy={view.copyRows}
         onExport={() => exportSheet(ds, view.order.filter((r) => view.selected.has(r)))}
-        blockOps={view.blockOps}
+        blockOps={cursor.blockOps}
         maskedCount={view.masked.size}
         onUnmaskAll={view.unmaskAll}
         selectedCount={view.selectedCount}
@@ -268,10 +274,11 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         columnDesignations={ds.columnDesignations}
         sortMark={view.sortMark}
         selectedCols={view.selectedCols}
-        onToggleColSelect={view.toggleColSelected}
-        onSelectColRange={view.setColSelection}
-        onToggleSelect={view.toggleRowSelected}
-        onSelectRange={view.setRowSelection}
+        // A row-number or header click switches to whole-line selection.
+        onToggleColSelect={(c) => (cursor.clear(), view.toggleColSelected(c))}
+        onSelectColRange={(cols) => (cursor.clear(), view.setColSelection(cols))}
+        onToggleSelect={(r) => (cursor.clear(), view.toggleRowSelected(r))}
+        onSelectRange={(rows) => (cursor.clear(), view.setRowSelection(rows))}
         onEditCell={view.onEditCell}
         onEditCategoricalCell={(row, col, label) => useApp.getState().setCategoricalCell(ds.id, row, col, label)}
         baseCount={view.baseCount}
@@ -283,7 +290,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         onHeaderContext={openMenu("col")}
         onTextHeaderContext={(name, e) => {
           e.preventDefault();
-          setTextMenu({ name, x: e.clientX, y: e.clientY });
+          setMenu({ kind: "text", name, x: e.clientX, y: e.clientY });
         }}
         onRowContext={openMenu("row")}
         textCols={view.textCols}
@@ -294,90 +301,30 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         channelTypes={ds.channelTypes}
         onChangeChannelType={(col, t) => useApp.getState().setChannelType(ds.id, col, t)}
         readOnly={isRederived(ds)}
-        reveal={reveal.target}
+        reveal={(rowRevealFirst ? reveal.target : cursor.reveal) ?? reveal.target}
+        cursor={cursor.grid}
+        columnProps={ds.columnProps}
+        onHeaderDoubleClick={isRederived(ds) ? undefined : (col) => editHeader(col)}
       />
 
-      {menu && (
-        <ContextMenu
-          x={menu.x}
-          y={menu.y}
-          help={{ label: "worksheets", query: "worksheet" }}
-          onClose={() => setMenu(null)}
-          items={
-            menu.kind === "col"
-              ? [
-                  ...columnMenuItems(menu.target, {
-                    xKey: view.xKey,
-                    yKeys: view.yKeys,
-                    labelCount: view.data.labels.length,
-                    setXKey: view.setXKey,
-                    setYKeys: view.setYKeys,
-                    // A DATA sort, as Origin's column Sort is (store/sortRows.ts).
-                    sortAsc: (col) => sortRows(ds.id, col, 1),
-                    sortDesc: (col) => sortRows(ds.id, col, -1),
-                    viewSortMark: view.sortMark,
-                    toggleViewSort: view.toggleSort,
-                    onNewColumn: () => void view.promptColumn(),
-                    showStats: view.showStats,
-                    onToggleStats: () => view.setShowStats((v) => !v),
-                    onPlotSelection: () => view.plotCols(effectiveCols(menu.target), "replace"),
-                    onAddSelectionToPlot: () => view.plotCols(effectiveCols(menu.target), "add"),
-                    onOpenInGraphBuilder: () => view.openInGraphBuilder(effectiveCols(menu.target)),
-                    ...(isRederived(ds)
-                      ? {}
-                      : {
-                          designationOf: (col: number) => effectiveDesignations(ds.data, ds.columnDesignations)[col],
-                          setDesignation: (col: number, d: OriginDesignation) =>
-                            void runLazy("Loading Set As…", () => import("../../../store/columnDesignationActions")).then(
-                              (m) => m.setColumnDesignation(ds.id, col, d),
-                              onLoadFailure,
-                            ),
-                        }),
-                  }),
-                  // J2: only a real, categorical value column can be recoded
-                  // (never the x column or a column with no level table).
-                  ...(menu.target >= 0 && isCategoricalChannel(ds.data, menu.target)
-                    ? ([
-                        { separator: true },
-                        { label: "Recode…", run: () => useRecode.getState().openRecode(ds.id, menu.target) },
-                        // JMP_GAP J1 (Group O-2b): same guard as Recode above —
-                        // only a real, categorical value column has a level
-                        // order to reorder. Sets the TINY panel-flag store
-                        // (store/levelOrderPanel.ts) directly, not the heavy
-                        // store/levelOrder.ts — this guard already IS the
-                        // refusal check the heavy store would otherwise
-                        // duplicate, and importing that store here would pull
-                        // lib/recode.ts into the eager bundle (bundle-size
-                        // ratchet; see store/levelOrderPanel.ts's header).
-                        {
-                          label: "Reorder levels…",
-                          run: () => useLevelOrderPanel.getState().openPanel(ds.id, menu.target),
-                        },
-                      ] as const)
-                    : []),
-                ]
-              : rowMenuItems(menu.target, {
-                  masked: view.masked,
-                  toggleMask: view.toggleMask,
-                  unmaskAll: view.unmaskAll,
-                  copyRow: view.copyRow,
-                })
-          }
+      <WorksheetMenus
+        ds={ds}
+        view={view}
+        menu={menu}
+        onClose={() => setMenu(null)}
+        onEditHeader={editHeader}
+      />
+      {headerEdit && (
+        <HeaderEditor
+          key={headerEdit.col}
+          ds={ds}
+          target={headerEdit}
+          xName={view.xName}
+          xUnit={view.xUnit}
+          onClose={closeHeaderEdit}
         />
       )}
 
-      {textMenu && (
-        <ContextMenu
-          x={textMenu.x}
-          y={textMenu.y}
-          help={{ label: "worksheets", query: "worksheet" }}
-          onClose={() => setTextMenu(null)}
-          items={[
-            { label: "Sort ascending (by text)", run: () => sortRows(ds.id, textMenu.name, 1) },
-            { label: "Sort descending (by text)", run: () => sortRows(ds.id, textMenu.name, -1) },
-          ]}
-        />
-      )}
 
       <SheetTabs datasetId={ds.id} />
     </div>

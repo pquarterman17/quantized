@@ -8,8 +8,13 @@
 // (`lib/richtext.originEscapesSettled`) or the shade / off-scale drawing
 // (`lib/uplotOverlays.regionDecorSettled`) landed, rebuilds once it settles,
 // so a first plot never keeps literal escapes or misses its shades -- and the
-// canvas title drawing (`lib/richLabelsLoader.ts`) likewise. A no-op
-// for every plot needing none of these.
+// canvas title drawing (`lib/richLabelsLoader.ts`) likewise. The tool-dock
+// plugins (pan, cursor readout, measure, region statistics, integrate, FWHM;
+// bundle diet slice 27) load the same way while one of those tools is picked
+// or an integral / FWHM result is drawn, and a horizontal bar graph built
+// before the overlay half of its turn (`lib/uplotOrient.orientTurnSettled`,
+// a startup chunk) landed rebuilds once it settles. A no-op for every plot
+// needing none of these.
 
 import { useEffect, useState } from "react";
 
@@ -18,10 +23,14 @@ import {
   gadgetPlugins,
   loadAxisExtras,
   loadGadgetPlugins,
+  loadToolPlugins,
   needsAxisExtras,
+  needsToolPlugins,
+  toolPlugins,
 } from "../../lib/axisExtrasHook";
 import { awaitsOriginEscapes, originEscapesSettled } from "../../lib/originEscapeLoader";
-import type { AxisFormat } from "../../lib/types";
+import type { AxisFormat, SeriesStyle } from "../../lib/types";
+import { hasHorizontalBars, orientTurnReady, orientTurnSettled } from "../../lib/uplotOrient";
 import { regionDecorReady, regionDecorSettled } from "../../lib/regionDecorLoader";
 import { richLabelsReady, richLabelsSettled } from "../../lib/richLabelsLoader";
 
@@ -31,6 +40,10 @@ import { richLabelsReady, richLabelsSettled } from "../../lib/richLabelsLoader";
 export interface LazyDecorNeeds {
   texts: readonly (string | null | undefined)[];
   overlays: boolean;
+  /** An integral or FWHM result is drawn (its tool's plugin draws it). */
+  regionResult?: boolean;
+  /** Horizontal bars: the plot is turned (lib/uplotOrient.ts). */
+  turned?: boolean;
 }
 
 /** The `LazyDecorNeeds` of a viewport's labels, payload and overlays. */
@@ -39,10 +52,12 @@ export function plotDecorNeeds(
   payload: { xLabel?: string; series: readonly { label: string }[] } | null | undefined,
   annotations: readonly { text?: string }[] | null | undefined,
   overlays: number,
+  styles?: readonly (SeriesStyle | undefined)[],
 ): LazyDecorNeeds {
   return {
     texts: [...labels, payload?.xLabel, ...(payload?.series.map((s) => s.label) ?? []), ...(annotations ?? []).map((a) => a.text)],
     overlays: overlays > 0,
+    ...(hasHorizontalBars(styles) ? { turned: true } : {}),
   };
 }
 
@@ -54,13 +69,15 @@ export function useLazyPlotParts(
 ): void {
   const needExtras = needsAxisExtras(...fmts) && axisExtrasApplier() === null;
   const needGadgets = tool === "qfit" && gadgetPlugins() === null;
+  const needTools = needsToolPlugins(tool, decor.regionResult) && toolPlugins() === null;
   const needEscapes = decor.texts.some(awaitsOriginEscapes);
   const needDecor = decor.overlays && !regionDecorReady();
+  const needTurn = !!decor.turned && !orientTurnReady();
   // The canvas title drawing (lib/richLabelsLoader.ts): any plot with a label
   // rebuilds once it lands, so rich / moved / draggable titles appear.
   const needTitles = !richLabelsReady() && decor.texts.some((t) => !!t?.trim());
   useEffect(() => {
-    if (!needExtras && !needGadgets && !needEscapes && !needDecor && !needTitles) return;
+    if (!needExtras && !needGadgets && !needTools && !needEscapes && !needDecor && !needTitles && !needTurn) return;
     let live = true;
     // A failed chunk load leaves that part undrawn (the plot itself is
     // complete without it); the next need retries. The startup chunks never
@@ -68,9 +85,11 @@ export function useLazyPlotParts(
     Promise.all([
       needExtras ? loadAxisExtras() : null,
       needGadgets ? loadGadgetPlugins() : null,
+      needTools ? loadToolPlugins() : null,
       needEscapes ? originEscapesSettled : null,
       needDecor ? regionDecorSettled : null,
       needTitles ? richLabelsSettled : null,
+      needTurn ? orientTurnSettled : null,
     ]).then(
       () => {
         if (live) onReady();
@@ -81,7 +100,7 @@ export function useLazyPlotParts(
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `onReady` is a fresh closure each render; only the needs decide.
-  }, [needExtras, needGadgets, needEscapes, needDecor, needTitles]);
+  }, [needExtras, needGadgets, needTools, needEscapes, needDecor, needTitles, needTurn]);
 }
 
 /** `useLazyPlotParts` for a renderer that rebuilds on a counter (the

@@ -351,9 +351,9 @@ export default function PlotViewport(props: PlotViewportProps) {
   // On-demand plugins, and a rebuild once the startup chunks settle (figures leftover g).
   const decor = plotDecorNeeds(
     [args.title, args.xAxisLabel, args.yAxisLabel, args.y2AxisLabel, ...(seriesLabels ?? [])],
-    displayPayload, args.annotations, (args.refLines?.length ?? 0) + (args.regionShades?.length ?? 0),
+    displayPayload, args.annotations, (args.refLines?.length ?? 0) + (args.regionShades?.length ?? 0), args.seriesStyles,
   );
-  useLazyPlotParts([args.xFmt, args.yFmt, args.y2Fmt], args.tool, () => setRebuildEpoch((e) => e + 1), decor);
+  useLazyPlotParts([args.xFmt, args.yFmt, args.y2Fmt], args.tool, () => setRebuildEpoch((e) => e + 1), { ...decor, regionResult: !!(args.integral || args.fwhmResult) });
 
   return <div ref={hostRef} style={{ position: "absolute", inset: 8, top: insetTop === undefined ? 8 : `max(${insetTop}px, var(--qz-dock-clear, 0px))`, right: "var(--qz-plot-right,8px)" }} />;
 }

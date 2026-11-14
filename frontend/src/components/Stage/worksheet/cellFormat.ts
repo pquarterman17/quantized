@@ -4,6 +4,9 @@
 // mis-fit. Kept out of lib/gridwindow (pure geometry) on purpose: this is a
 // display concern of the worksheet subtree.
 
+import { formatNumber } from "../../../lib/columnProps";
+import type { ColumnProps } from "../../../lib/columnProps";
+
 /** fmtCell's exponential threshold, and the largest magnitude shown in full. */
 const BIG = 1e4;
 const FULL = 1e15;
@@ -83,12 +86,21 @@ export function fmtDateCell(v: number | undefined): string {
 
 /** Lazily-built, cached formatters for a grid's columns (-1 = the x column):
  *  each column is scanned the first time it is drawn. Rebuild it when the
- *  data changes (the store replaces `time`/`values` on every edit). `xIsDate`:
- *  the x column holds timestamps (`metadata.time_is_datetime`) and shows dates. */
-export function gridFormatters(time: number[], values: number[][], xIsDate = false): (col: number) => CellFormatter {
+ *  data changes (the store replaces `time`/`values` on every edit). A column
+ *  with a user display format (`Dataset.columnProps`, Origin's Column
+ *  Properties › Display) uses that instead — no scan. `xIsDate`: the x column holds
+ *  timestamps (`metadata.time_is_datetime`) and shows dates. */
+export function gridFormatters(
+  time: number[],
+  values: number[][],
+  props?: Record<number, ColumnProps>,
+  xIsDate = false,
+): (col: number) => CellFormatter {
   const cache = new Map<number, CellFormatter>();
   return (col) => {
     let f = cache.get(col);
+    const user = props?.[col]?.format;
+    if (!f && user) f = (v) => formatNumber(v, user);
     if (!f) {
       f = col < 0 && xIsDate ? fmtDateCell : col < 0 ? columnFormatter(time.length, (r) => time[r]) : columnFormatter(values.length, (r) => values[r]?.[col]);
       cache.set(col, f);

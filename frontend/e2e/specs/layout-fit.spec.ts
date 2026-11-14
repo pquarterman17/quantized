@@ -175,6 +175,41 @@ test("the Quick Figure Builder grid never overflows its container", async ({ pag
 
 const rectOf = (l: Locator) => l.evaluate((e) => e.getBoundingClientRect().toJSON() as DOMRect);
 
+/** The plot frame's rect once uPlot has re-laid out for `size`.
+ *  `setViewportSize` resolves before the plot's ResizeObserver calls
+ *  uPlot.setSize, so an immediate read can still be the PREVIOUS size's frame
+ *  (measured at 1088x720: 594 px tall, bottom at 780 in a 720 px window) and a
+ *  point derived from it lies off-screen, which Playwright reports as "<html>
+ *  intercepts pointer events". Settled = uPlot's root is as wide as its host
+ *  (the observer has applied the new size), the frame fits the viewport, and
+ *  two consecutive reads agree. */
+async function settledFrame(over: Locator, size: { width: number; height: number }): Promise<DOMRect> {
+  let prev: DOMRect | null = null;
+  await expect
+    .poll(
+      async () => {
+        const { r, synced } = await over.evaluate((o) => {
+          const root = o.closest<HTMLElement>(".uplot")!;
+          return {
+            r: o.getBoundingClientRect().toJSON() as DOMRect,
+            synced: root.offsetWidth === root.parentElement!.clientWidth,
+          };
+        });
+        const same =
+          prev !== null &&
+          Math.abs(r.left - prev.left) < 0.5 &&
+          Math.abs(r.top - prev.top) < 0.5 &&
+          Math.abs(r.width - prev.width) < 0.5 &&
+          Math.abs(r.height - prev.height) < 0.5;
+        prev = r;
+        return synced && same && r.bottom <= size.height && r.right <= size.width;
+      },
+      { message: `plot frame never settled at ${size.width}x${size.height}` },
+    )
+    .toBe(true);
+  return prev!;
+}
+
 async function plotFile(page: Page, file: string): Promise<void> {
   await gotoApp(page);
   await dropFileOnto(page, page.locator(".qzk-library"), fixturePath(file));
@@ -220,6 +255,18 @@ test("an outside legend column never covers the plot frame", async ({ page }) =>
 // the x-axis band; in a narrow window that is right on the x-axis title. It now
 // takes a corner inside the frame.
 test("the data-cursor readout stays inside the plot frame @core", async ({ page }) => {
+  // Hold the resize race open on every run: deliver ResizeObserver callbacks
+  // 400 ms late, so the frame read right after setViewportSize is ALWAYS the
+  // previous size's (unpatched, that happened in ~1 run in 4). The hover below
+  // must therefore wait on the settled frame (state), never on luck.
+  await page.addInitScript(() => {
+    const Native = window.ResizeObserver;
+    window.ResizeObserver = class extends Native {
+      constructor(cb: ResizeObserverCallback) {
+        super((entries, obs) => void setTimeout(() => cb(entries, obs), 400));
+      }
+    };
+  });
   await plotFile(page, "linear-ramp.csv");
   await page.evaluate(() =>
     (window as unknown as { __qz: { useApp: { getState: () => { setPlotTool: (t: string) => void } } } }).__qz.useApp
@@ -234,7 +281,7 @@ test("the data-cursor readout stays inside the plot frame @core", async ({ page 
     // legend re-resolves per size (figures audit #12) and on this ramp the
     // empty TOP-left is exactly where it belongs, so a top-left hover would
     // land on the legend, not the frame.
-    const box = await rectOf(over);
+    const box = await settledFrame(over, size);
     await over.hover({ position: { x: 20, y: box.height - 20 } });
     await over.hover(); // the centre lies on the ramp
     await expect(readout).toBeVisible();

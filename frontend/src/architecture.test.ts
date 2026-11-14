@@ -863,7 +863,9 @@ const TS_MODULE_PINS: Record<string, number> = {
   // fullYExtents to lib/uplotErrorRange.ts (error-bar autoscale).
   // 1279 -> 1269 (2026-10-02): log-axis tick labels (decade anchors + the
   // major-tick filter) moved to lib/logTicks.ts.
-  "/lib/uplotOpts.ts": 1269,
+  // 1269 -> 1262 (2026-11-14, bundle diet slice 27): the tool-dock plugins
+  // are read through `toolPlugins()` (lib/axisExtrasHook.ts), one import line.
+  "/lib/uplotOpts.ts": 1262,
   // 1175 -> 1164 (2026-11-13, figures integration): the region-shade chunk
   // loader moved to lib/regionDecorLoader.ts.
   "/lib/uplotOverlays.ts": 1164,
@@ -2771,6 +2773,13 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // getter seam. Plus the Plot menu's graph-template and dialog bodies.
     { module: "/lib/axisExtras.ts", loader: "/lib/axisExtrasHook.ts", call: 'import("./axisExtras")' },
     { module: "/lib/uplotGadgets.ts", loader: "/lib/axisExtrasHook.ts", call: 'import("./uplotGadgets")' },
+    // SLICE 27 (2026-11-14): the tool-dock plugin family (pan, cursor readout,
+    // measure, region statistics, integrate, FWHM), warmed by the plot
+    // toolbar once mounted. The two modules it gathers are in DRAGGED_OUT.
+    { module: "/lib/uplotToolPlugins.ts", loader: "/lib/axisExtrasHook.ts", call: 'import("./uplotToolPlugins")' },
+    // ...and the overlay half of horizontal bars, a startup chunk (the
+    // regionDecorLoader shape): the axes and bars stay eager.
+    { module: "/lib/uplotTurn.ts", loader: "/lib/uplotOrient.ts", call: 'import("./uplotTurn")' },
     { module: "/lib/graphTemplateCommands.ts", loader: "/commands/plotCommands.ts", call: 'import("../lib/graphTemplateCommands")' },
     // Figures integration (2026-11-13, budget after the main merges): the canvas
     // title drawing and the axis double-click hit test.
@@ -3612,6 +3621,17 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/menuKeyboardNav.ts",
     "/lib/fuzzy.ts",
     "/components/overlays/openerCapture.ts",
+    // SLICE 27 (2026-11-14): the two halves `lib/uplotToolPlugins.ts`
+    // gathers -- the pointer tools moved out of `lib/uplotTools.ts` and the
+    // region tools -- and the region computes only they reach.
+    "/lib/uplotPointerTools.ts",
+    "/lib/uplotRegionTools.ts",
+    "/lib/regionStats.ts",
+    "/lib/peakwidth.ts",
+    "/lib/integrate.ts",
+    // ...and the `.dwk` figure-doc sanitizer, which only the lazy workspace
+    // read calls (slice 25 listed it; re-measured once the chunk tax was gone).
+    "/lib/figuredocSanitize.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

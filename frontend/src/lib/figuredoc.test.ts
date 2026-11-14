@@ -6,10 +6,10 @@ import {
   deleteGraphTemplate,
   docRenderable,
   loadGraphTemplates,
-  sanitizeFigureDocs,
   saveGraphTemplate,
   type FigureDoc,
 } from "./figuredoc";
+import { sanitizeFigureDocs } from "./figuredocSanitize";
 import { installSeriesPalette, TEST_SERIES_PALETTE } from "./regressionMatrix.testkit";
 import type { DataStruct } from "./types";
 
