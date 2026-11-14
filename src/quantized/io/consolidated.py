@@ -35,7 +35,7 @@ __all__ = ["consolidate_csv"]
 
 
 class _Col:
-    __slots__ = ("name", "unit", "file", "desig", "data", "levels")
+    __slots__ = ("name", "unit", "file", "desig", "data", "levels", "text")
 
     def __init__(
         self,
@@ -45,6 +45,7 @@ class _Col:
         desig: str,
         data: np.ndarray,
         levels: tuple[str, ...] = (),
+        text: list[str] | None = None,
     ) -> None:
         self.name = name
         self.unit = unit
@@ -53,11 +54,19 @@ class _Col:
         self.data = data
         # A categorical channel's level table: cells are written as labels.
         self.levels = levels
+        # A text column (``metadata["text_columns"]``): its cells, verbatim.
+        self.text = text
+
+    @property
+    def size(self) -> int:
+        return len(self.text) if self.text is not None else int(self.data.size)
 
     def cell(self, r: int) -> str:
         """Row ``r`` as text: blank past the end or for a missing value (like
         the ragged padding, never "nan"), a level label for a categorical
-        code, else ``%.10g``."""
+        code, a text column's own cell, else ``%.10g``."""
+        if self.text is not None:
+            return csv_text_cell(self.text[r]) if r < len(self.text) else ""
         if r >= self.data.size or not np.isfinite(self.data[r]):
             return ""
         v = float(self.data[r])
@@ -146,7 +155,17 @@ def _columns(datasets: list[tuple[DataStruct, str]]) -> list[_Col]:
                 role = _ROLE_OF_USER[user[i]]
             levels = level_labels(ds, i) if is_categorical(ds, i) else ()
             cols.append(_Col(label, unit, file, role, values[:, i], levels))
+        # Text columns (sample ids, dates kept as text) go out too, as Origin
+        # Label columns -- worksheet audit #6: they were dropped.
+        text = ds.metadata.get("text_columns")
+        if isinstance(text, dict):
+            for key, cells in text.items():
+                if isinstance(cells, list):
+                    cols.append(_Col(str(key), "", file, "Label", _EMPTY, text=[str(c) for c in cells]))
     return cols
+
+
+_EMPTY = np.empty(0)
 
 
 def consolidate_csv(datasets: list[tuple[DataStruct, str]], *, fmt: str = "standard") -> str:
@@ -168,7 +187,7 @@ def consolidate_csv(datasets: list[tuple[DataStruct, str]], *, fmt: str = "stand
         hdr = [f"{c.name} ({c.unit})" if c.unit else c.name for c in cols]
         lines.append(",".join(_csv_field(h) for h in hdr))
 
-    max_rows = max((c.data.size for c in cols), default=0)
+    max_rows = max((c.size for c in cols), default=0)
     for r in range(max_rows):
         cells = [c.cell(r) for c in cols]
         lines.append(",".join(cells))

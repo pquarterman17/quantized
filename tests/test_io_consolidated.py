@@ -103,3 +103,21 @@ def test_categorical_channel_exports_level_labels() -> None:
         [1.0, 2.0], [[1.0], [0.0]], labels=["grade"], units=[""], cat_levels={0: ("low", "high")}
     )
     assert consolidate_csv([(ds, "a")]).splitlines()[1:] == ["1,high", "2,low"]
+
+
+def test_text_columns_go_out_as_label_columns() -> None:
+    """Worksheet audit #6: a dataset's text columns (sample ids, dates kept as
+    text) were dropped from the consolidated CSV."""
+    ds = DataStruct.create(
+        [1.0, 2.0],
+        [[10.0], [20.0]],
+        labels=["R"],
+        units=["Ohm"],
+        metadata={"text_columns": {"Sample": ["=bad", "S2"]}},
+    )
+    assert consolidate_csv([(ds, "a")]).splitlines() == [
+        "Q,R (Ohm),Sample",
+        "1,10,'=bad",
+        "2,20,S2",
+    ]
+    assert consolidate_csv([(ds, "a")], fmt="origin").splitlines()[3] == "X,Y,Label"
