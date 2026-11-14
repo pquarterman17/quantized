@@ -20,7 +20,7 @@ const MARKER_SHAPES: ReadonlySet<string> = new Set([
  *  marker glyph). Returns null when nothing was decoded, so callers leave that
  *  series to the default trace/palette rather than forcing a look. */
 export function originCurveSeriesStyle(
-  curve: Pick<OriginCurve, "style" | "color" | "symbol" | "lineWidth" | "symbolSize"> | undefined,
+  curve: Pick<OriginCurve, "style" | "color" | "symbol" | "lineWidth" | "symbolSize" | "plotType"> | undefined,
 ): SeriesStyle | null {
   if (!curve) return null;
   const out: SeriesStyle = {};
@@ -45,6 +45,11 @@ export function originCurveSeriesStyle(
   }
   if (typeof curve.symbolSize === "number" && curve.symbolSize > 0 && out.marker) {
     out.markerSize = curve.symbolSize;
+  }
+  if (curve.plotType === "column" || curve.plotType === "bar") {
+    // An Origin column / bar plot: bars from zero at each X. The record's
+    // latent symbol and line settings are not drawn by Origin for bars.
+    return { ...(out.color ? { color: out.color } : {}), bars: true };
   }
   return Object.keys(out).length > 0 ? out : null;
 }

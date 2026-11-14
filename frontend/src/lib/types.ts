@@ -191,6 +191,10 @@ export interface OriginCurve {
    *  fields (92/92 exact across both containers). */
   lineWidth?: number;
   symbolSize?: number;
+  /** `.opj` plot type beyond the line family (io/origin_project/opj_curves.py
+   *  `_PLOT_TYPES`): Origin's vertical "column", horizontal "bar", or
+   *  "histogram". Absent for line/scatter curves and undecoded types. */
+  plotType?: "column" | "bar" | "histogram";
 }
 
 export interface OriginFigure {

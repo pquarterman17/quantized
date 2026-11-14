@@ -18,6 +18,8 @@ import {
   doubleYPartner,
   figureChannelSelection,
   figureSelectionState,
+  figureStatState,
+  hasHorizontalBars,
   originFigureAnnotations,
   originLegendFrameXY,
   originLegendPos,
@@ -572,9 +574,24 @@ describe("figureLabel", () => {
   });
 
 
-  it("prefers a surviving annotation over the raw window name", () => {
+  it("puts the window name first and a readable annotation after it", () => {
     const entry = { id: "f1", stem: "XRD", datasetId: "b1", siblingIds: [], figure: figure({ name: "Graph1", annotations: ["Si (004)"] }) };
-    expect(figureLabel(entry)).toBe("Si (004)");
+    expect(figureLabel(entry)).toBe("Graph1 — Si (004)");
+    // The annotation alone only when the window has no name.
+    const nameless = { ...entry, figure: figure({ name: "", annotations: ["Si (004)"] }) };
+    expect(figureLabel(nameless)).toBe("Si (004)");
+  });
+
+  it("rejects junk annotations, so two graphs never share an unreadable label", () => {
+    // Re-audit #3: Graph1 and Graph2 both read "?iiiiii".
+    const label = (name: string, note: string) =>
+      figureLabel({ id: name, stem: "B", datasetId: "b1", siblingIds: [], figure: figure({ name, annotations: [note] }) });
+    expect(label("Graph1", "?iiiiii")).toBe("Graph1");
+    expect(label("Graph2", "?iiiiii")).toBe("Graph2");
+    for (const junk of ["\\b(", "ab\ufffdcd", "x\u0001y", "a??b", "---", "Graph2"]) {
+      expect(label("Graph2", junk)).toBe("Graph2");
+    }
+    expect(label("Graph5", "A".repeat(60))).toBe(`Graph5 — ${"A".repeat(39)}…`);
   });
 
   it("never shows a raw Origin substitution code as the title", () => {
@@ -588,7 +605,7 @@ describe("figureLabel", () => {
     }
     // Resolved where the referenced title is known.
     const known = figure({ name: "Graph3", annotations: ["%(?Y) vs %(?X)"], x_title: "Cycle", y_title: "Capacity" });
-    expect(figureLabel({ id: "f3", stem: "C", datasetId: "b1", siblingIds: [], figure: known })).toBe("Capacity vs Cycle");
+    expect(figureLabel({ id: "f3", stem: "C", datasetId: "b1", siblingIds: [], figure: known })).toBe("Graph3 — Capacity vs Cycle");
   });
 
   it("falls back to the window name with no annotations", () => {
@@ -1384,5 +1401,54 @@ describe("curveDisplayName (Origin %(n) resolution — comment first)", () => {
     });
     const sel = figureChannelSelection(fig, ds);
     expect(sel?.labels).toEqual({ 2: "1.5 mT from 700mT" });
+  });
+});
+
+describe("Origin column / bar / histogram graphs (re-audit #2: a bar graph restores as bars)", () => {
+  const book: Dataset = {
+    id: "b1",
+    name: "bar:Book1",
+    data: {
+      time: [1, 2, 3],
+      values: [[5], [6], [7]],
+      labels: ["Height"],
+      units: [""],
+      metadata: { origin_book: "Book1", x_column_name: "A", origin_column_names: ["B"] },
+    },
+  };
+  const curve = (plotType?: OriginCurve["plotType"]): OriginCurve =>
+    ({ book: "Book1", x: "A", y: "B", symbol: "square", symbolSize: 8, lineWidth: 1, color: "#ff0000", ...(plotType ? { plotType } : {}) });
+
+  it("a column or bar curve draws as bars on the XY stage, without its latent symbol", () => {
+    expect(originCurveSeriesStyle(curve("column"))).toEqual({ color: "#ff0000", bars: true });
+    expect(originCurveSeriesStyle(curve("bar"))).toEqual({ color: "#ff0000", bars: true });
+    expect(originCurveSeriesStyle(curve())).toMatchObject({ marker: true, markerShape: "square" });
+    const sel = figureChannelSelection(figure({ curves: [curve("column")] }), book);
+    expect(sel?.styles[0]).toEqual({ color: "#ff0000", bars: true });
+    expect(figureStatState(figure({ curves: [curve("column")] }), book)).toEqual({});
+    expect(hasHorizontalBars(figure({ curves: [curve("bar")] }))).toBe(true);
+    expect(hasHorizontalBars(figure({ curves: [curve("column")] }))).toBe(false);
+  });
+
+  it("a histogram of the X column opens the Stat Stage's histogram of that column", () => {
+    const hist = figure({ curves: [{ book: "Book1", x: "A", y: "A", plotType: "histogram" }] });
+    expect(figureStatState(hist, book)).toEqual({
+      statMode: true,
+      statPicks: {
+        mode: "histogram",
+        cols: { group: null, group2: null, value: [-1, ""], facet: null, color: null },
+      },
+    });
+    const ofB = figure({ curves: [{ book: "Book1", x: "A", y: "B", plotType: "histogram" }] });
+    expect(figureStatState(ofB, book).statPicks?.cols?.value).toEqual([0, "Height"]);
+  });
+
+  it("line figures, mixed figures and unbound columns stay as they are", () => {
+    expect(figureStatState(figure({ curves: [curve()] }), book)).toEqual({});
+    const mixed = figure({ curves: [{ book: "Book1", x: "A", y: "A", plotType: "histogram" }, curve()] });
+    expect(figureStatState(mixed, book)).toEqual({});
+    const missing = figure({ curves: [{ book: "Book1", x: "A", y: "Z", plotType: "histogram" }] });
+    expect(figureStatState(missing, book)).toEqual({});
+    expect(figureStatState(figure({ curves: [curve("column")] }), undefined)).toEqual({});
   });
 });

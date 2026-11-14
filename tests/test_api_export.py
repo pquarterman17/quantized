@@ -1129,6 +1129,51 @@ def test_export_opj_multibook_as_the_file_menu_posts_it(tmp_path):
     assert books[1].values[:, 0].tolist() == [5.0, 6.0]
 
 
+def test_export_opj_writes_a_library_workbook_as_one_multi_sheet_book(tmp_path):
+    """Re-audit #5: the two sheets of an imported two-sheet Book1 (their
+    metadata says Book1 / Book1@2) come back as one Book1 with two sheets,
+    not as "Book12" / "Book122"; an ungrouped item is still its own book."""
+    from quantized.io.origin_project import read_origin_books
+
+    def sheet(v: float, book: str, long_name: str) -> dict[str, Any]:
+        return {
+            "time": [0.0, 1.0],
+            "values": [[v], [v + 1.0]],
+            "labels": ["Y"],
+            "units": [""],
+            "metadata": {"origin_book": book, "origin_book_long": long_name},
+        }
+
+    resp = client.post(
+        "/api/export/opj",
+        json={
+            "datasets": [
+                {
+                    "dataset": sheet(1.0, "Book1", "Book1"),
+                    "name": "x",
+                    "group": "wb1",
+                    "book": "Book1",
+                },
+                {
+                    "dataset": sheet(5.0, "Book1@2", "Book1 (sheet 2)"),
+                    "name": "x",
+                    "group": "wb1",
+                    "book": "Book1",
+                },
+                {"dataset": sheet(9.0, "Other", "Other"), "name": "other"},
+            ],
+            "filename": "project",
+        },
+    )
+    assert resp.status_code == 200
+    out = tmp_path / "project.opj"
+    out.write_bytes(resp.content)
+    books = read_origin_books(out)
+    assert [b.metadata["origin_book"] for b in books] == ["Book1", "Book1@2", "Other"]
+    assert books[1].metadata["origin_book_long"] == "Book1 (sheet 2)"
+    assert books[1].values[:, 0].tolist() == [5.0, 6.0]
+
+
 def test_export_opj_rejects_empty():
     resp = client.post("/api/export/opj", json={"datasets": [], "filename": "x"})
     assert resp.status_code == 422
@@ -2325,9 +2370,9 @@ def test_export_opj_preserves_cat_levels_when_stamping_the_book_name(monkeypatch
     seen: list[DataStruct] = []
     real = export_mod.opj_bytes
 
-    def capture(books):
+    def capture(books, groups=None):
         seen.extend(books)
-        return real(books)
+        return real(books, groups)
 
     monkeypatch.setattr(export_mod, "opj_bytes", capture)
 

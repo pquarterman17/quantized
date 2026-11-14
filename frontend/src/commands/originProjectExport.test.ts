@@ -63,6 +63,33 @@ describe("runExportOriginProject", () => {
     ]);
   });
 
+  it("sends the worksheets of one Library workbook as the sheets of one book (re-audit #5)", async () => {
+    useApp.setState({
+      datasets: [
+        { id: "s1", name: "TwoSheets:Book1", workbookId: "w1", data: { ...data(1), metadata: { origin_book: "Book1" } } },
+        { id: "s2", name: "TwoSheets:Book1@2", workbookId: "w1", data: { ...data(2), metadata: { origin_book: "Book1@2" } } },
+        { id: "m1", name: "TwoSheets:MBook1", workbookId: "w2", data: { ...data(3), metadata: { origin_matrix: {} } } },
+      ],
+      workbooks: [
+        { id: "w1", name: "Two sheets", originBook: "Book1" },
+        { id: "w2", name: "MBook1" },
+      ],
+      selectedIds: ["s1"],
+    });
+    await runExportOriginProject(useApp.getState);
+    const sent = lastBody().datasets;
+    expect(sent.map((d) => [d.group, d.book])).toEqual([
+      ["w1", "Book1"],
+      ["w1", "Book1"],
+      [undefined, undefined], // alone in its workbook: its own book, as before
+    ]);
+    const toasts = useToasts.getState().toasts.map((t) => t.msg);
+    expect(toasts).toContain("exported Origin project (2 books, 3 sheets)");
+    expect(toasts).toContain(
+      "1 matrix book was written as X/Y/Z worksheet columns — the .opj export writes worksheets only",
+    );
+  });
+
   it("exports only a multi-selection, in Library order", async () => {
     useApp.setState({ selectedIds: ["d3", "d1"] });
     await runExportOriginProject(useApp.getState);

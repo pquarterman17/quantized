@@ -8,7 +8,8 @@ import { postDownload } from "./http";
 
 /** Wire shape of the route's `OpjRequest`: one workbook per item. */
 export interface OriginProjectSpec {
-  datasets: { dataset: DataStruct; name?: string }[];
+  /** `group`/`book`: items sharing a group are the sheets of one book. */
+  datasets: { dataset: DataStruct; name?: string; group?: string; book?: string }[];
   filename?: string;
 }
 

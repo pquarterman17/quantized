@@ -374,3 +374,50 @@ def test_origin8_workbook_matches_labplot_expectations() -> None:
             assert text is not None and text[int(row)] == value, (index, row)  # type: ignore[index]
             checked += 1
     assert checked >= 25
+
+
+def test_graph_windows_are_recovered_or_named_never_silent() -> None:
+    """Every graph window (header kind field 0x42 != 2) either becomes a
+    figure or is named as present-but-not-recovered; no worksheet, matrix or
+    notes window is ever reported (``opj_graph_windows``)."""
+    from quantized.io.origin_project.figures import extract_figures
+    from quantized.io.origin_project.opj_graph_windows import unrecovered_graph_windows
+
+    for path in _opj_files():
+        raw = path.read_bytes()
+        missed = unrecovered_graph_windows(raw)
+        recovered = {str(f["name"]) for f in extract_figures(raw)}
+        # A reported window is never one extract_figures already recovered.
+        assert not set(missed) & recovered, path.name
+        if path.name == "3dband-origin.opj":
+            assert missed == ["Graph2"]  # first layer block head 0x47
+        else:
+            assert missed == [], path.name
+
+
+def test_bar_column_and_histogram_plot_types_match_labplot() -> None:
+    """Re-audit #2: the plot type of each curve (anchor u8 @76) against
+    LabPlot's testOriginBarPlot / testOriginHistogram, read at test time: a
+    BarPlot with Vertical orientation is Origin's "column", Horizontal its
+    "bar"; a Histogram is "histogram" (``opj_curves._PLOT_TYPES``)."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    source = _find("ProjectImportTest.cpp").read_text(encoding="utf-8")
+    cases = {"testOriginBarPlot()": "bar-column.opj", "testOriginHistogram()": "histogram.opj"}
+    checked = 0
+    for test, file in cases.items():
+        body = source.split(test, 1)[1].split("\nvoid ", 1)[0]
+        figs = {f["name"]: f for f in extract_figures(_find(file).read_bytes())}
+        for chunk in body.split("worksheet->name(), QLatin1String(\"")[1:]:
+            graph = chunk.split('"', 1)[0]
+            if "BarPlot::Orientation::Vertical" in chunk:
+                want = "column"
+            elif "BarPlot::Orientation::Horizontal" in chunk:
+                want = "bar"
+            elif "Histogram*>" in chunk:
+                want = "histogram"
+            else:
+                continue
+            assert [c.get("plotType") for c in figs[graph]["curves"]] == [want], (file, graph)
+            checked += 1
+    assert checked == 4

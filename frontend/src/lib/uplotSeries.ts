@@ -12,6 +12,7 @@ import { logGaps } from "./logGaps";
 import { seriesPoints, seriesTrace } from "./markers";
 import type { PlotPayload } from "./plotdata";
 import { DASH, resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
+import { BAR_PATHS } from "./uplotBars";
 import { resolveFillBands, seriesFillProps, translucent } from "./uplotFill";
 import type { BuildOptsArgs } from "./uplotOpts";
 
@@ -176,7 +177,12 @@ export function buildSeriesDefs(
       // mark) — a MORE SPECIFIC override than the "Step" default-trace
       // preference below, so it's checked first: a step-marked series
       // renders correctly regardless of the ambient default trace.
-      if (style?.step) {
+      if (style?.bars) {
+        // An Origin column / bar graph: bars from zero, filled with the stroke.
+        def.paths = BAR_PATHS;
+        def.fill = translucent(stroke, 70);
+        def.points = { show: false };
+      } else if (style?.step) {
         const builder =
           style.step === "pre" ? args.steppedPathsPre
           : style.step === "mid" ? args.steppedPathsMid

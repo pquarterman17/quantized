@@ -9156,10 +9156,32 @@ export interface components {
             /** X */
             x: number[];
         };
+        /** OpjItem */
+        OpjItem: {
+            /**
+             * Book
+             * @default
+             */
+            book?: string;
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /**
+             * Group
+             * @default
+             */
+            group?: string;
+            /**
+             * Name
+             * @default
+             */
+            name?: string;
+        };
         /** OpjRequest */
         OpjRequest: {
             /** Datasets */
-            datasets: components["schemas"]["ConsolidatedItem"][];
+            datasets: components["schemas"]["OpjItem"][];
             /**
              * Filename
              * @default project
