@@ -5106,6 +5106,11 @@
             "default": "figures",
             "title": "Filename",
             "type": "string"
+          },
+          "multipage": {
+            "default": false,
+            "title": "Multipage",
+            "type": "boolean"
           }
         },
         "required": [

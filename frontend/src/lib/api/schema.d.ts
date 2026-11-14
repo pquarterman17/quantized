@@ -7712,6 +7712,11 @@ export interface components {
              * @default figures
              */
             filename?: string;
+            /**
+             * Multipage
+             * @default false
+             */
+            multipage?: boolean;
         };
         /**
          * FigureEncoding
