@@ -32,10 +32,10 @@ import {
   type Composition,
 } from "../../lib/composition";
 import { secondaryAxisFromPanel } from "../../lib/axisspec";
-import { buildErrorColumns } from "../../lib/errorbars";
+import { buildErrorColumns, stackErrorSpans } from "../../lib/stackErrorSpans";
 import { sharedXDomain, sharedYDomain } from "../../lib/facetDomains";
 import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
-import { perSeriesXData, stackErrorSpans } from "../../lib/perSeriesX";
+import { perSeriesXData } from "../../lib/perSeriesX";
 import {
   DECIMATE_MIN_POINTS,
   decimationRequestEligible,

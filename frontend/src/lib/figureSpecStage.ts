@@ -10,7 +10,7 @@
 // this module imports that one, so a barrel there would close a cycle and put
 // the Stage routing into the graph of every importer of the builders.
 
-import { emptyGraphReason } from "./linkedCurves";
+import { emptyGraphReason } from "./linkedCurvesLite";
 import type { FigureSpec } from "./api/figures";
 import type { StoreGet } from "./exportActive";
 import { buildFigureSpec, buildFigureSpecFromDocument, type FigureRenderOpts } from "./figureSpec";

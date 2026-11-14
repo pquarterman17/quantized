@@ -11,7 +11,7 @@ import { linkedGraphReaches } from "../lib/linkedCurves";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { appendCurve } from "../lib/plotSelectedTogetherRun";
 import type { Dataset, LinkedCurve } from "../lib/types";
-import { relinkedDatasets, watchLinkedCurves } from "./linkedCurvesSync";
+import { flushLinkedCurves, relinkedDatasets, watchLinkedCurves } from "./linkedCurvesSync";
 import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
 
@@ -63,6 +63,7 @@ describe("refusing a cycle at the entry point", () => {
         datasets: s.datasets.map((d) => (d.id === "a" ? { ...a, data: { ...a.data, values: [[9], [8], [7]] } } : d)),
       })),
     ).not.toThrow();
+    flushLinkedCurves();
     expect(get(g1.id).data.values.map((r) => r[0]).slice(0, 3)).toEqual([9, 8, 7]);
   });
 

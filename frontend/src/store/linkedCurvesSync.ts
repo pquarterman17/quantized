@@ -97,11 +97,17 @@ export function noteAssembled(graph: Dataset, datasets: readonly Dataset[]): voi
 }
 
 let watching = false;
+/** The datasets before the FIRST change of the pending burst (the retitle baseline). */
+let pendingPrev: readonly Dataset[] | null = null;
+let scheduled = false;
+/** Graph rebuilds run, for the coalescing test (one per burst, not per edit). */
+export let rebuildPasses = 0;
 
 function sync(datasets: readonly Dataset[], prev?: readonly Dataset[]): void {
   if (!datasets.some((d) => d.linkedCurves)) return;
   const next = relinkedDatasets(datasets);
   if (!next) return;
+  rebuildPasses++;
   // The active graph's Y title is the auto quantity title unless the user typed
   // one: keep it following the sources' quantities.
   const s = useApp.getState();
@@ -114,12 +120,28 @@ function sync(datasets: readonly Dataset[], prev?: readonly Dataset[]): void {
   useApp.setState({ datasets: next, ...(retitle !== null && retitle !== s.yAxisLabel ? { yAxisLabel: retitle } : {}) });
 }
 
+/** Rebuild now whatever the watcher has queued (a no-op when nothing is). The
+ *  store write that caused a change returns immediately; the graph follows in
+ *  a microtask, once per burst. Tests (and anything that must read the graph
+ *  straight after an edit) call this instead of waiting. */
+export function flushLinkedCurves(): void {
+  scheduled = false;
+  const prev = pendingPrev;
+  pendingPrev = null;
+  if (prev) sync(useApp.getState().datasets, prev);
+}
+
 /** Install the watcher (idempotent) and bring every graph in step now. */
 export function watchLinkedCurves(): void {
   if (!watching) {
     watching = true;
     useApp.subscribe((s, prev) => {
-      if (s.datasets !== prev.datasets) sync(s.datasets, prev.datasets);
+      if (s.datasets === prev.datasets || !s.datasets.some((d) => d.linkedCurves)) return;
+      pendingPrev ??= prev.datasets;
+      if (!scheduled) {
+        scheduled = true;
+        queueMicrotask(flushLinkedCurves);
+      }
     });
   }
   sync(useApp.getState().datasets);

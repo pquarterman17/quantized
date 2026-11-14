@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { assembleLinkedCurves } from "../lib/linkedCurves";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import type { Dataset, LinkedCurve } from "../lib/types";
-import { noteAssembled, relinkedDatasets, watchLinkedCurves } from "./linkedCurvesSync";
+import { flushLinkedCurves, noteAssembled, relinkedDatasets, watchLinkedCurves } from "./linkedCurvesSync";
 import { applyReimportMerge, computeReimportMerge } from "./reimport";
 import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
@@ -59,6 +59,7 @@ describe("finding 4: a column-changing re-import re-maps curves by label, never 
     const merge = await computeReimportMerge(useApp.getState, get("s"), fresh);
     expect(merge.columnsChanged).toBe(true);
     applyReimportMerge(useApp.setState, useApp.getState, get("s"), merge);
+    flushLinkedCurves();
     const lc = get("g").linkedCurves!;
     expect(lc.map((c) => c.yKey)).toEqual([1, 0, 1]); // A -> 1, B -> 0
     expect(lc[2].xKey).toBe(-1); // C vanished: its X is missing, the curve draws empty
@@ -73,6 +74,7 @@ describe("finding 4: a column-changing re-import re-maps curves by label, never 
     const fresh = { ...src.data, labels: ["A", "A", "Z"], units: ["", "", ""], values: [[1, 2, 3], [1, 2, 3], [1, 2, 3]] };
     const merge = await computeReimportMerge(useApp.getState, get("s"), fresh);
     applyReimportMerge(useApp.setState, useApp.getState, get("s"), merge);
+    flushLinkedCurves();
     expect(get("g").linkedCurves![0].yKey).toBe(-1);
   });
 });
@@ -97,14 +99,17 @@ describe("Plot together: designations, labels, names", () => {
     await plotSelectedTogether(["a", "b"]);
     expect(graphs()[0].data.labels).toEqual(["Sample A", "Sample B"]);
     useApp.setState((s) => ({ datasets: s.datasets.map((d) => (d.id === "a" ? { ...d, name: "Renamed" } : d)) }));
+    flushLinkedCurves();
     expect(graphs()[0].data.labels).toEqual(["Renamed", "Sample B"]);
   });
 
   it("the auto Y title follows a source quantity change; a typed one stays", async () => {
     await plotSelectedTogether(["a", "b"]);
     expect(useApp.getState().yAxisLabel).toBe("Y (V)");
-    const rename = (labels: string[]) =>
+    const rename = (labels: string[]) => {
       useApp.setState((s) => ({ datasets: s.datasets.map((d) => (d.id === "a" || d.id === "b" ? { ...d, data: { ...d.data, labels } } : d)) }));
+      flushLinkedCurves();
+    };
     rename(["Moment"]);
     expect(useApp.getState().yAxisLabel).toBe("Moment (V)");
     useApp.setState({ yAxisLabel: "typed by me" });

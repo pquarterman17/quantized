@@ -89,7 +89,7 @@
 // `order`, `pending`) is self-contained — no id references — and rides
 // along untouched onto the merged dataset.
 
-import { UNRESOLVED_SOURCE } from "./linkedCurves";
+import { UNRESOLVED_SOURCE } from "./linkedCurvesLite";
 import { remapSheetRefIds } from "./sheetBindings";
 import type { AnalysisResult } from "./analysisResult";
 import type { Dataset } from "./types";

@@ -5,6 +5,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { flushLinkedCurves } from "../store/linkedCurvesSync";
 import { useApp } from "../store/useApp";
 import { useToasts } from "../store/toasts";
 import { addCurveFrom, plotSelectedTogether } from "./plotSelectedTogether";
@@ -47,10 +48,12 @@ describe("Plot selected together makes a LIVE graph", () => {
     // The audit's repro: a source cell becomes 99 -> the graph shows 99.
     const edited = { ...a, data: { ...a.data, values: [[99, 1], [2, 2], [3, 3]] } };
     useApp.setState((s) => ({ datasets: s.datasets.map((d) => (d.id === "a" ? edited : d)) }));
+    flushLinkedCurves();
     expect(col(0)).toEqual([99, 2, 3, NaN, NaN]);
 
     // A masked source row drops out of the graph too.
     useApp.setState((s) => ({ datasets: s.datasets.map((d) => (d.id === "b" ? { ...d, excludedRows: [1] } : d)) }));
+    flushLinkedCurves();
     expect(col(1)).toEqual([NaN, NaN, NaN, 50, NaN]);
   });
 
@@ -99,6 +102,7 @@ describe("Plot selected together makes a LIVE graph", () => {
     expect(loaded.linkedCurves).toHaveLength(2);
     const edited = { ...a, data: { ...a.data, values: [[42, 1], [2, 2], [3, 3]] } };
     useApp.setState((s) => ({ datasets: s.datasets.map((d) => (d.id === "a" ? edited : d)) }));
+    flushLinkedCurves();
     await vi.waitFor(() => expect(col(0)[0]).toBe(42));
   });
 });

@@ -21,7 +21,6 @@
 // the inverse (the plot brush maps a view row back with `r % blockRows`).
 
 import { effectiveDesignations } from "./columnmeta";
-import { buildErrorSpans, type ErrorSpan } from "./errorbars";
 import { droppedRows } from "./rowstate";
 import type { Dataset, DataStruct } from "./types";
 
@@ -110,16 +109,4 @@ export function perSeriesXDataset(ds: Dataset, xKey: number | null): { dataset: 
 /** Source rows repeated into every block of an `n`-row view. */
 export function viewRows(rows: readonly number[], blocks: number, n: number): number[] {
   return Array.from({ length: blocks }, (_, b) => rows.map((r) => b * n + r)).flat();
-}
-
-/** The stacked-panel plot's error spans, one map per fetched channel. Each stack
- *  panel is a single-series plot over THIS per-series-X view (one block of rows
- *  per X), so its spans are built from the same view -- from the source rows
- *  they would cover only the first block and leave a secondary-X curve's bars
- *  misaligned. */
-export function stackErrorSpans(active: Dataset, xKey: number | null, channels: readonly number[]): Map<number, ErrorSpan[]>[] {
-  const roles = active.errorRoles;
-  if (!roles?.length) return [];
-  const data = perSeriesXData(active, xKey)?.data ?? active.data;
-  return channels.map((ch) => buildErrorSpans(data, [ch], roles));
 }

@@ -13,7 +13,7 @@ import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { LINKED_GRAPH_EDIT_NOTICE } from "../lib/rederived";
 import type { Dataset } from "../lib/types";
 import { applyMetadataCleanup, promoteFactor } from "../lib/metadataRun";
-import { noteAssembled } from "./linkedCurvesSync";
+import { flushLinkedCurves, noteAssembled } from "./linkedCurvesSync";
 import { askParams } from "./paramDialog";
 import { useRecode } from "./recode";
 import { toast } from "./toasts";
@@ -91,6 +91,7 @@ describe("metadata edits on a live graph", () => {
     expect(graph().data.metadata.error_roles).toBeDefined();
     const a = useApp.getState().datasets.find((d) => d.id === "a")!;
     useApp.setState((s) => ({ datasets: s.datasets.map((d) => (d.id === "a" ? { ...a, data: { ...a.data, values: [[9, 9], [9, 9], [9, 9]] } } : d)) }));
+    flushLinkedCurves();
     expect(graph().data.values[0][0]).toBe(9); // it did rebuild ...
     expect(graph().data.metadata.error_roles).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
   });

@@ -10,7 +10,7 @@
 import { recomputeWithErrors } from "./formula";
 import { asAlreadyComputed } from "./formulaInputs";
 import type { FitRefSnapshot } from "./formulaTypes";
-import { sanitizeLinkedCurves } from "./linkedCurves";
+import { sanitizeLinkedCurves } from "./linkedCurvesLite";
 import { sanitizeSignalAnalysisRecipe } from "./signalRecipe";
 import type { ComputedColumn, Dataset, FitSpec } from "./types";
 

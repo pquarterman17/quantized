@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { stackErrorSpans } from "./perSeriesX";
+import { stackErrorSpans } from "./stackErrorSpans";
 import type { Dataset } from "./types";
 
 const ds: Dataset = {

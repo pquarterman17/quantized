@@ -6,6 +6,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { flushLinkedCurves } from "./linkedCurvesSync";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { LINKED_GRAPH_EDIT_NOTICE } from "../lib/rederived";
 import type { Dataset } from "../lib/types";
@@ -73,6 +74,7 @@ describe("a live graph's sheet is read-only for data edits", () => {
     useApp.setState((s) => ({
       datasets: s.datasets.map((d) => (d.id === "a" ? { ...a, data: { ...a.data, values: [[9, 9], [9, 9], [9, 9]] } } : d)),
     }));
+    flushLinkedCurves();
     expect(graph().data.labels).toEqual(g.data.labels);
     expect(graph().data.values.map((r) => r[0]).slice(0, 3)).toEqual([9, 9, 9]);
   });
