@@ -6,6 +6,51 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Added
+
+- Worksheet grid: a cell cursor with keyboard navigation (arrows, Home/End,
+  PageUp/Down, Enter/Tab, F2, Esc, Delete, Ctrl+C/X/V/D/A), type-to-edit, a
+  column menu (insert/add/delete/move, edit Long Name/Units/Comments, number
+  format, sort on up to three keys) and a row menu (insert/delete/move
+  rows), plus File ▸ New workbook.
+- Worksheet import/export: a timestamp X axis shows calendar dates on
+  screen, in the grid, and in every export; dotted (`14.11.2026`) and
+  year-first date formats are recognised; Excel import keeps Long
+  Name/Units/Comments header rows and text columns; File ▸ Export ▸ Export
+  worksheet… writes CSV, TSV or Excel (Long Name/Units rows, text and date
+  columns, one tab per sheet); File ▸ Import ▸ Import as sheets of one
+  workbook… combines several files into one workbook with switchable sheet
+  tabs.
+- Analyze ▸ Average multiple curves…: averages two or more curves onto a
+  common X grid (the union of every curve's X, or a set step over their
+  overlap), reporting mean, sample SD, SEM and N; SEM is bound as the
+  averaged curve's error bar automatically. Also at
+  `POST /api/transform/average`.
+- Peak labels: `{hkl}`/`{phase}` template tokens resolve to the nearest
+  loaded XRD reference stick within a 0.2° 2θ tolerance (adjustable in the
+  label dialog); a peak with no stick that close shows neither token.
+- Error columns ▸ Computed: add √Y (counting statistics, clamped so a
+  zero-count point never gets a zero error), a percent of Y, or a constant
+  as a linked formula column bound as a series' Y error — it recomputes
+  automatically whenever the underlying data changes.
+- Axis dialog: reverse the Y or Y2 axis, a secondary top X axis (1/T,
+  Bragg d-spacing, or linear), grid line styling, X label rotation and an
+  axis offset — matched exactly between the screen and every export.
+- Export: a multi-page PDF (one open figure per page) from the batch
+  exporter; EPS alongside PDF/SVG/PNG; Plot ▸ Display ▸ Apply Graph
+  Template… / Paste Format to Graphs… restyles a whole folder or Library
+  selection in one undo step; the plot-type gallery adds violin, double-Y,
+  polar, waterfall, stacked panels and ternary.
+- Plot styling: hollow or solid symbol fill and per-series error-bar
+  styling (cap, width, color), matched on screen and in export; right-click
+  a brushed selection to Exclude selected points / Include selected points
+  / Include all points (one undo step, honoured by fits and exports);
+  double-click a curve to open Plot Details (color, line, symbol, error
+  bars).
+- Background (unfocused) graph windows now draw their own legend and
+  shapes, so tiled windows stay visually consistent regardless of which one
+  has focus.
+
 ## [0.34.0] - 2026-11-14
 
 A **major feature** release: the Origin-replacement sprint. Quantized can now
