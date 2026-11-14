@@ -1,5 +1,7 @@
 """The ``.opj`` writer writes an imported matrix back as an Origin matrix
-(``writer_matrix``), read again by the repo's own reader (``opj_matrix``).
+(``writer_matrix``), read again by the repo's own reader (``opj_matrix``) —
+when asked to (``matrices=True``). By default a matrix still goes out as
+X/Y/Z worksheet columns: the matrix window is not yet load-probed in Origin.
 
 Synthetic matrices only, built by the reader's own ``build_matrix_book``;
 the Altaxo specimens' round trip is the realdata test in
@@ -35,9 +37,11 @@ def _worksheet() -> DataStruct:
     )
 
 
-def _round_trip(books: list[DataStruct], groups: list[str] | None = None) -> dict[str, DataStruct]:
+def _round_trip(
+    books: list[DataStruct], groups: list[str] | None = None, *, matrices: bool = True
+) -> dict[str, DataStruct]:
     out = Path(tempfile.mkdtemp()) / "m.opj"
-    out.write_bytes(opj_bytes(books, groups))
+    out.write_bytes(opj_bytes(books, groups, matrices=matrices))
     return {str(b.metadata["origin_book"]): b for b in read_origin_books(out)}
 
 
@@ -49,7 +53,17 @@ def test_a_matrix_comes_back_as_the_same_matrix_beside_a_worksheet() -> None:
     assert again.metadata["map_shape"] == [2, 3]
     assert np.array_equal(again.values, matrix.values, equal_nan=True)  # blank cell kept
     assert np.array_equal(back["Book1"].values, _worksheet().values)
-    assert matrix_fallbacks([_worksheet(), matrix], None) == 0
+    assert matrix_fallbacks([_worksheet(), matrix], None, matrices=True) == 0
+
+
+def test_by_default_a_matrix_still_goes_out_as_xyz_worksheet_columns() -> None:
+    matrix = _matrix()
+    again = _round_trip([_worksheet(), matrix], matrices=False)["MBook1"]
+    assert again.metadata.get("origin_matrix") is None
+    assert again.labels == ("X", "Y", "Z")
+    assert np.array_equal(again.values, matrix.values, equal_nan=True)
+    assert opj_bytes([matrix]) == opj_bytes([matrix], matrices=False)  # the default
+    assert matrix_fallbacks([_worksheet(), matrix], None) == 1  # counted, so said
 
 
 def test_a_matrix_without_coordinates_stays_on_cell_indices() -> None:
@@ -69,10 +83,10 @@ def test_an_edited_complex_or_grouped_matrix_goes_out_as_worksheet_columns() -> 
     assert back["MBook1"].metadata.get("origin_matrix") is None
     assert back["MBook1"].values.shape[0] == 6
     two = [_matrix("MBook1"), _matrix("MBook2")]
-    assert matrix_fallbacks([sorted_rows, _matrix(imag=True)], None) == 2
-    assert matrix_fallbacks(two, ["wb", "wb"]) == 2  # a matrix in a shared workbook
-    assert matrix_fallbacks(two, ["", ""]) == 0
-    assert matrix_fallbacks([_worksheet()], None) == 0  # not a matrix at all
+    assert matrix_fallbacks([sorted_rows, _matrix(imag=True)], None, matrices=True) == 2
+    assert matrix_fallbacks(two, ["wb", "wb"], matrices=True) == 2  # a shared workbook
+    assert matrix_fallbacks(two, ["", ""], matrices=True) == 0
+    assert matrix_fallbacks([_worksheet()], None, matrices=True) == 0  # not a matrix
 
 
 def test_two_matrices_each_keep_their_window() -> None:

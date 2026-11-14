@@ -336,7 +336,7 @@ def test_matrix_shape_matches_the_dimensions_in_its_file_name(name: str) -> None
 def _written_back(path: Path) -> list[DataStruct]:
     """``path``'s books written by the ``.opj`` writer and read again."""
     out = Path(tempfile.mkdtemp()) / "written.opj"
-    out.write_bytes(opj_bytes(_books(path)))
+    out.write_bytes(opj_bytes(_books(path), matrices=True))
     return _books(out)
 
 
@@ -386,7 +386,8 @@ def test_matrix_books_round_trip_through_the_opj_writer(name: str, ext: str) -> 
         assert again.labels == book.labels
         assert np.array_equal(again.values, book.values, equal_nan=True)
     complex_books = sum("Z (imaginary)" in b.labels for b in books)
-    assert matrix_fallbacks(books, None) == complex_books
+    assert matrix_fallbacks(books, None, matrices=True) == complex_books
+    assert matrix_fallbacks(books, None) == sum("origin_matrix" in b.metadata for b in books)
 
 
 # ── LabPlot: Origin 8 Text & Numeric columns ─────────────────────────────────

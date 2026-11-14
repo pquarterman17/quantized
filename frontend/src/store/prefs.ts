@@ -95,6 +95,11 @@ export interface Prefs {
   // transparent PNG can pick up whatever is behind it. Opaque default —
   // it matches what an exported figure looks like today.
   copyFigureTransparent: boolean;
+  // File ▸ Export Origin project: write imported matrix books as Origin
+  // matrices (backend writer_matrix) instead of X/Y/Z worksheet columns.
+  // OFF by default: the matrix window has not been loaded in real Origin yet,
+  // and a window Origin rejects would refuse the whole project.
+  opjWriteMatrices: boolean;
 }
 
 export const PREF_DEFAULTS: Prefs = {
@@ -117,6 +122,7 @@ export const PREF_DEFAULTS: Prefs = {
   defaultPanelFit: "frames",
   libraryPanelWidth: LIBRARY_PANEL_WIDTH_DEFAULT,
   copyFigureTransparent: false,
+  opjWriteMatrices: false,
 };
 
 /** F4.2c (a) (owner decision 2026-09-29): excluded rows default to GREYED.
@@ -154,6 +160,7 @@ export function loadPrefs(): Prefs {
       defaultLineWidth: num(p.defaultLineWidth, fb.defaultLineWidth, 0.5, 4),
       defaultGrid: bool(p.defaultGrid, fb.defaultGrid),
       copyFigureTransparent: bool(p.copyFigureTransparent, fb.copyFigureTransparent),
+      opjWriteMatrices: bool(p.opjWriteMatrices, fb.opjWriteMatrices),
       antialias: bool(p.antialias, fb.antialias),
       sigFigs: num(p.sigFigs, fb.sigFigs, 1, 12),
       notation: NOTATIONS.includes(p.notation as string) ? (p.notation as Notation) : fb.notation,
@@ -192,6 +199,7 @@ export function prefsOf(s: AppState): Prefs {
     defaultGrid: s.defaultGrid,
     antialias: s.antialias,
     copyFigureTransparent: s.copyFigureTransparent,
+    opjWriteMatrices: s.opjWriteMatrices,
     sigFigs: s.sigFigs,
     notation: s.notation,
     confirmRemove: s.confirmRemove,

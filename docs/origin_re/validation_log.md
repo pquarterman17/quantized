@@ -729,7 +729,8 @@ Rules: `docs/origin_project_format.md` §3.5 "Fail-closed rules added by the
   Altaxo matrix (`Matrix71x29`, `Matrix137x179`, `Matrix2x3OfDifferentTypes`,
   `OneWorksheetOneMatrix`, `.opj` and `.opju` sources) comes back with the
   same shape, coordinates and every cell, except the complex matrix, which
-  is written as worksheet columns and counted. Real-Origin load not probed.
+  is written as worksheet columns and counted. Real-Origin load not probed,
+  so it ships OPT-IN (default stays X/Y/Z worksheet columns).
 - **`.ogs` export of a matrix book** wrote X twice (time, then the X
   channel). The MATLAB golden pins only the XRDML case (no Origin
   metadata); only an Origin book's channel labelled `x_column_name` with

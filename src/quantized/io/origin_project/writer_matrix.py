@@ -22,7 +22,9 @@ linear row of column coordinates, Y holding each row's coordinate across it.
 A sorted, filtered or complex matrix, or one exported as a sheet of a
 larger workbook, goes out as worksheet columns and is counted
 (:func:`matrix_fallbacks`). Loading in real Origin has not been probed for
-the matrix window (the worksheet window is, §8).
+the matrix window (the worksheet window is, §8), so it is OPT-IN
+(``opj_bytes(..., matrices=True)``, the route's ``matrices_as_matrix``):
+by default every matrix goes out as X/Y/Z columns, as before.
 """
 
 from __future__ import annotations
@@ -96,13 +98,16 @@ def _linear(axis: NDArray[np.float64]) -> bool:
     return bool(np.isfinite(axis).all() and np.allclose(axis, line, rtol=1e-12, atol=0.0))
 
 
-def matrix_fallbacks(books: Sequence[DataStruct], groups: Sequence[str] | None) -> int:
-    """How many matrix books go out as worksheet columns instead."""
+def matrix_fallbacks(
+    books: Sequence[DataStruct], groups: Sequence[str] | None, *, matrices: bool = False
+) -> int:
+    """How many matrix books go out as worksheet columns instead — every one
+    of them unless ``matrices`` (the writer's opt-in) is on."""
     keys = list(groups) if groups is not None else [""] * len(books)
     shared = {k for k in keys if k and keys.count(k) > 1}
     return sum(
         1 for ds, key in zip(books, keys, strict=True)
-        if _is_matrix(ds) and (key in shared or matrix_grid(ds) is None)
+        if _is_matrix(ds) and (not matrices or key in shared or matrix_grid(ds) is None)
     )  # fmt: skip
 
 

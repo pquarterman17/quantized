@@ -164,7 +164,9 @@ def _plan_windows(books: list[DataStruct], groups: Sequence[str] | None) -> list
     return windows
 
 
-def opj_bytes(books: list[DataStruct], groups: Sequence[str] | None = None) -> bytes:
+def opj_bytes(
+    books: list[DataStruct], groups: Sequence[str] | None = None, *, matrices: bool = False
+) -> bytes:
     """Serialize DataStructs as a CPYA ``.opj`` project.
 
     Each DataStruct is one worksheet sheet. Books that share a non-empty
@@ -184,7 +186,14 @@ def opj_bytes(books: list[DataStruct], groups: Sequence[str] | None = None) -> b
     # A window holding one matrix the reader imported goes out as a matrix
     # (writer_matrix); a matrix sharing a workbook, or no longer a grid,
     # stays worksheet columns (counted by writer_matrix.matrix_fallbacks).
-    grids = [matrix_grid(sheets[0][0]) if len(sheets) == 1 else None for _s, _l, sheets in windows]
+    #
+    # OPT-IN (``matrices``): the matrix window has not been loaded in real
+    # Origin yet, and a window Origin rejects would refuse the whole project;
+    # by default every matrix stays X/Y/Z columns (docs §8).
+    grids = [
+        matrix_grid(sheets[0][0]) if matrices and len(sheets) == 1 else None
+        for _s, _l, sheets in windows
+    ]
     out = bytearray(_HEADER_LINE)
     out += _block(wb.FH_123)
     serial = 0  # global column counter: 147B header id + 519B property serial

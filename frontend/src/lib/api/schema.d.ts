@@ -9187,6 +9187,11 @@ export interface components {
              * @default project
              */
             filename?: string;
+            /**
+             * Matrices As Matrix
+             * @default false
+             */
+            matrices_as_matrix?: boolean;
         };
         /** OriginComRequest */
         OriginComRequest: {

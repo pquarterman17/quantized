@@ -11,6 +11,9 @@ export interface OriginProjectSpec {
   /** `group`/`book`: items sharing a group are the sheets of one book. */
   datasets: { dataset: DataStruct; name?: string; group?: string; book?: string }[];
   filename?: string;
+  /** Opt-in: write imported matrix books as Origin matrices (Preferences ▸
+   *  "Write matrix books as Origin matrices"); off writes X/Y/Z columns. */
+  matrices_as_matrix?: boolean;
 }
 
 /** What the writer reports beside the file: how many matrix books it wrote

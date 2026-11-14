@@ -54,6 +54,7 @@ const POISON: Prefs = {
   defaultPanelFit: "window",
   libraryPanelWidth: 300,
   copyFigureTransparent: true,
+  opjWriteMatrices: true,
 };
 const NEXT: Prefs = {
   theme: "dark",
@@ -75,6 +76,7 @@ const NEXT: Prefs = {
   defaultPanelFit: "frames",
   libraryPanelWidth: 250,
   copyFigureTransparent: false,
+  opjWriteMatrices: false,
 };
 const KEYS = Object.keys(PREF_DEFAULTS) as PrefKey[];
 

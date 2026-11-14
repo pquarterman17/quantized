@@ -8775,6 +8775,11 @@
             "default": "project",
             "title": "Filename",
             "type": "string"
+          },
+          "matrices_as_matrix": {
+            "default": false,
+            "title": "Matrices As Matrix",
+            "type": "boolean"
           }
         },
         "required": [

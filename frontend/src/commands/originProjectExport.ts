@@ -4,9 +4,11 @@
 // those, otherwise every loaded dataset. Each becomes a workbook named as the
 // Library shows it (extension stripped) -- except that worksheets of one
 // Library workbook become the sheets of ONE Origin book (`workbookGroups`).
-// A matrix book goes out as an Origin matrix; one the writer cannot write as
-// a matrix (complex, edited, or sharing a workbook) goes out as X/Y/Z
-// worksheet columns, and the toast says how many (the server counts them).
+// A matrix book goes out as X/Y/Z worksheet columns unless Preferences ▸
+// "Write matrix books as Origin matrices" is on (opt-in: the matrix window is
+// not yet verified in real Origin); even then one the writer cannot write as a
+// matrix (complex, edited, or sharing a workbook) goes out as columns. The
+// toast says how many (the server counts them) and why.
 //
 // What the .opj carries is the data the writer takes: x plus value columns
 // with their labels, units, comments and designations (column_designations
@@ -56,6 +58,7 @@ export async function runExportOriginProject(s: StoreGet): Promise<void> {
     return;
   }
   const groups = workbookGroups(s, picked);
+  const asMatrix = s().opjWriteMatrices;
   const nBooks = new Set(groups.map((g, i) => g.group || `#${i}`)).size;
   const books = `${nBooks} book${nBooks === 1 ? "" : "s"}${nBooks < picked.length ? `, ${picked.length} sheets` : ""}`;
   try {
@@ -71,6 +74,7 @@ export async function runExportOriginProject(s: StoreGet): Promise<void> {
             ...(groups[i].group ? groups[i] : {}),
           })),
           filename: opjFileStem(s, picked),
+          ...(asMatrix ? { matrices_as_matrix: true } : {}),
         },
         signal,
       );
@@ -81,7 +85,10 @@ export async function runExportOriginProject(s: StoreGet): Promise<void> {
     if (done) toast(`exported Origin project (${books})`, "ok");
     const matrices = done?.value.matrixFallbacks ?? 0;
     if (matrices) {
-      toast(`${matrices} matrix book${matrices === 1 ? " was" : "s were"} written as X/Y/Z worksheet columns — complex, edited, or sharing a workbook, so not as an Origin matrix`, "info");
+      const why = asMatrix
+        ? "complex, edited, or sharing a workbook, so not as an Origin matrix"
+        : "turn on Preferences ▸ Write matrix books as Origin matrices (not yet verified in Origin) to write them as matrices";
+      toast(`${matrices} matrix book${matrices === 1 ? " was" : "s were"} written as X/Y/Z worksheet columns — ${why}`, "info");
     }
   } catch (e: unknown) {
     const msg = `export failed: ${e instanceof Error ? e.message : "error"}`;

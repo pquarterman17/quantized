@@ -3047,8 +3047,12 @@ carries its 0-based sheet index at u8 **@0x12D** (sheet id − 1 on 75/75
 bound sheets in the public corpus) and its name at @0xD2. Book short names
 follow Origin's numbering (`Book1` taken → `Book2`, never `Book12`).
 
-**Matrix books (2026-11-14, `writer_matrix.py`).** A matrix the reader
-imported goes back out as an Origin matrix in the §3.1.1 layout: one cell
+**Matrix books (2026-11-14, `writer_matrix.py`) — OPT-IN.** By default a
+matrix book is still written as X/Y/Z worksheet columns. With the opt-in
+(`opj_bytes(..., matrices=True)`; route `matrices_as_matrix`; Preferences ▸
+"Write matrix books as Origin matrices (not yet verified in Origin)") a
+matrix the reader imported goes back out as an Origin matrix in the §3.1.1
+layout: one cell
 dataset named after the window, a sub-header with the matrix flag (byte 2
 `0xDE`), columns u16 @0x2B and rows u32 @0x52, and the `Y2`/`X2`/`Y1`/`X1`
 coordinate records. Census of the public corpus's matrix windows (9 files):
@@ -3058,14 +3062,19 @@ dataset serial at @4, 0 at @30/@35/@51/@0x11, `0x60` at @38 and no short
 name — the writer emits exactly that, on its sanitized worksheet templates.
 Only a dataset that is still the reader's grid is written this way; a
 complex, edited (sorted/filtered) or workbook-shared matrix goes out as X/Y/Z
-worksheet columns, counted in the `X-Opj-Matrix-Fallback` response header
-and named in the export toast. Evidence: the Altaxo matrix specimens
+worksheet columns. In both modes every matrix written as columns is counted
+in the `X-Opj-Matrix-Fallback` response header and the export toast says how
+many and why. Evidence: the Altaxo matrix specimens
 (`.opj` and `.opju`) round-trip exactly through the repo reader and still
 meet Altaxo's cell and coordinate expectations
 (`test_matrix_books_round_trip_through_the_opj_writer`,
 `test_altaxo_matrix_cells_and_coordinates[written-back]`). **Not yet
-probed in real Origin** — the worksheet window is (above); run a matrix
-export through the loader at the next licence window.
+probed in real Origin** — the worksheet window is (above). It stays opt-in
+until a matrix export has been loaded by the real Origin loader (a
+PN-style probe at the next licence window: the Altaxo matrices and a
+worksheet + matrix project, checked for shape, coordinates and cells); a
+window Origin rejects would refuse the whole project, so only then may it
+become the default.
 
 ## 9. Testing & corpus
 

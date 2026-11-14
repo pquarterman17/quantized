@@ -137,6 +137,9 @@ class OpjItem(ConsolidatedItem):
 class OpjRequest(BaseModel):
     datasets: list[OpjItem]
     filename: str = "project"
+    # Opt-in: write imported matrix books as Origin matrices (writer_matrix).
+    # Off by default until the matrix window has been loaded in real Origin.
+    matrices_as_matrix: bool = False
 
 
 class OriginComRequest(BaseModel):
@@ -238,8 +241,9 @@ def export_opj(req: OpjRequest) -> Response:
                 ds = replace(ds, metadata=meta)
             books.append(ds)
         groups = [item.group for item in req.datasets]
-        payload = opj_bytes(books, groups)
-        fallbacks = matrix_fallbacks(books, groups)
+        as_matrix = req.matrices_as_matrix
+        payload = opj_bytes(books, groups, matrices=as_matrix)
+        fallbacks = matrix_fallbacks(books, groups, matrices=as_matrix)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     # ASCII fallback + RFC 5987 filename* so "Ångström θ.opj" keeps its name.

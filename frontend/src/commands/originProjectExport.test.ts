@@ -45,6 +45,7 @@ beforeEach(() => {
     activeId: "d1",
     selectedIds: ["d1"],
     status: "",
+    opjWriteMatrices: false,
   });
 });
 
@@ -78,6 +79,7 @@ describe("runExportOriginProject", () => {
     });
     exportMock.mockResolvedValue({ matrixFallbacks: 1 }); // what the writer reports
     await runExportOriginProject(useApp.getState);
+    expect(lastBody().matrices_as_matrix).toBeUndefined(); // default: X/Y/Z columns
     const sent = lastBody().datasets;
     expect(sent.map((d) => [d.group, d.book])).toEqual([
       ["w1", "Book1"],
@@ -87,6 +89,20 @@ describe("runExportOriginProject", () => {
     const toasts = useToasts.getState().toasts.map((t) => t.msg);
     expect(toasts).toContain("exported Origin project (2 books, 3 sheets)");
     expect(toasts).toContain(
+      "1 matrix book was written as X/Y/Z worksheet columns — turn on Preferences ▸ Write matrix books as Origin matrices (not yet verified in Origin) to write them as matrices",
+    );
+  });
+
+  it("asks for Origin matrices only when the preference is on, and says why one still fell back", async () => {
+    useApp.setState({
+      datasets: [{ id: "m1", name: "M:MBook1", data: { ...data(3), metadata: { origin_matrix: {} } } }],
+      selectedIds: [],
+      opjWriteMatrices: true,
+    });
+    exportMock.mockResolvedValue({ matrixFallbacks: 1 });
+    await runExportOriginProject(useApp.getState);
+    expect(lastBody().matrices_as_matrix).toBe(true);
+    expect(useToasts.getState().toasts.map((t) => t.msg)).toContain(
       "1 matrix book was written as X/Y/Z worksheet columns — complex, edited, or sharing a workbook, so not as an Origin matrix",
     );
   });
@@ -95,6 +111,7 @@ describe("runExportOriginProject", () => {
     useApp.setState({
       datasets: [{ id: "m1", name: "M:MBook1", data: { ...data(3), metadata: { origin_matrix: {} } } }],
       selectedIds: [],
+      opjWriteMatrices: true,
     });
     await runExportOriginProject(useApp.getState);
     expect(useToasts.getState().toasts.map((t) => t.msg).join(" ")).not.toMatch(/matrix/);
