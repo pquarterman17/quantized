@@ -39,13 +39,59 @@ def vote_lines(text: str) -> list[str]:
     multi-word header ("Kerr Signal") fragmented into separate columns. The
     line terminators are already gone (``str.splitlines``), so nothing but
     real cell padding is left to count.
+
+    A lone ``[Section]`` heading (`is_section_marker`) is skipped too: it is
+    a heading with no cells, and its missing delimiter outvoted the real one.
+    Below a data-section heading (``[DATA]``, `data_section_start`) only the
+    table is sampled: the preamble above it is ``key<TAB>value`` lines.
     """
+    lines = text.removeprefix("﻿").splitlines()
     out: list[str] = []
-    for raw in text.removeprefix("﻿").splitlines():
+    for raw in lines[data_section_start(lines) :]:
         stripped = raw.strip()
-        if stripped and stripped[0] not in COMMENT_CHARS:
+        if stripped and stripped[0] not in COMMENT_CHARS and not is_section_marker(stripped):
             out.append(raw)
     return out
+
+
+#: A lone INI-style section heading line: ``[DATA]`` (Nanonis), ``[Data]``,
+#: ``[Header]``, ``[Measurement Settings]``. It is a heading, never a row of
+#: cells, so it carries no delimiter -- counted in the vote, its zero tab
+#: count disqualified tab for the whole file (worksheet audit #3: a Nanonis
+#: spectroscopy file imported as one all-NaN column).
+SECTION_MARKER_RE = re.compile(r"^\[[A-Za-z][A-Za-z0-9 _.\-]*\]$")
+
+# A data-section heading: "[DATA]", "[Data]", "[Data Table]", "[Measurement
+# Data]". Other headings ("[Header]", "[Settings]") are not where a table starts.
+_DATA_HEADING_RE = re.compile(r"^\[\s*(?:[A-Za-z ]*\s)?data(?:\s[A-Za-z ]*)?\s*\]$", re.I)
+
+
+def is_section_marker(line: str) -> bool:
+    """Whether ``line`` is a lone ``[Section]`` heading (`SECTION_MARKER_RE`)."""
+    return bool(SECTION_MARKER_RE.match(line.strip()))
+
+
+def is_data_heading(line: str) -> bool:
+    """Whether ``line`` is a lone data-section heading such as ``[DATA]``."""
+    stripped = line.strip()
+    return is_section_marker(stripped) and bool(_DATA_HEADING_RE.match(stripped))
+
+
+def data_section_start(lines: Sequence[str]) -> int:
+    """Index of the first line BELOW the last data-section heading in
+    ``lines``, or 0 when there is none (the whole file is candidate data).
+
+    Many instruments write an INI-style preamble and then the table under a
+    lone heading -- Nanonis spectroscopy (``[DATA]``), other ``[Data]`` /
+    ``[Measurement Data]`` exports. A preamble value pair such as
+    ``Sweep range (V)<TAB>-1<TAB>1`` looks exactly like a numeric data row,
+    so layout detection started the "data" in the preamble (worksheet audit
+    #3). Origin starts the table below the heading; so do our readers.
+    """
+    for i in range(len(lines) - 1, -1, -1):
+        if is_data_heading(lines[i]):
+            return i + 1
+    return 0
 
 
 def _delimiter_count(line: str, ch: str) -> int:

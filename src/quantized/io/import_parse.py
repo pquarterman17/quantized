@@ -29,7 +29,7 @@ import numpy as np
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
 from quantized.io import _quoted_numbers as qn
-from quantized.io._delimiter_vote import _COMMA_NUMBER_RE, vote_lines
+from quantized.io._delimiter_vote import _COMMA_NUMBER_RE, data_section_start, vote_lines
 from quantized.io._origin_ascii_header import origin_ascii_rows
 from quantized.io.delimited import _extract_units, _split_lines
 
@@ -183,7 +183,10 @@ def _guess_layout(text: str) -> tuple[int | None, int | None, int, list[str], li
         layout._numeric_score(t) if ln.strip() else 0.0
         for t, ln in zip(scored, lines, strict=True)
     ]
-    data_start = next((i for i, s in enumerate(scores) if s > 0.5), None)
+    # Below a `[DATA]` heading only (`data_section_start`): its key/value
+    # preamble can score like data.
+    section = data_section_start(lines)
+    data_start = next((i for i, s in enumerate(scores) if i >= section and s > 0.5), None)
     # Leading data rows with an empty cell ("1<TAB>" in a 2-column paste)
     # score exactly 0.5; extend over them as direct import does
     # (`_walk_back_gappy_rows`), or the first row -- and the header above it
@@ -192,9 +195,12 @@ def _guess_layout(text: str) -> tuple[int | None, int | None, int, list[str], li
         # No numeric-majority row (as many text columns as numbers): the
         # header is LESS numeric than the data under it -- direct import's
         # fallback (`_detect_layout`), so the two paths agree.
-        data_start = next((i for i, s in enumerate(scores) if i > 0 and s > scores[0] and s > 0), 0)
+        data_start = next(
+            (i for i, s in enumerate(scores) if i > section and s > scores[section] and s > 0),
+            section,
+        )
     else:
-        data_start = layout._walk_back_gappy_rows(scored, data_start)
+        data_start = max(layout._walk_back_gappy_rows(scored, data_start), section)
 
     header_line: int | None = None
     units_line: int | None = None
@@ -204,12 +210,14 @@ def _guess_layout(text: str) -> tuple[int | None, int | None, int, list[str], li
     if origin is not None:
         header_line, units_line = origin.header, origin.units
     # a units row just above the data, and a header above that
-    elif data_start >= 2 and scores[data_start - 1] < 0.5 and layout._looks_like_units_row(
-        tokens[data_start - 1], n_cols
+    elif (
+        data_start >= section + 2
+        and scores[data_start - 1] < 0.5
+        and layout._looks_like_units_row(tokens[data_start - 1], n_cols)
     ):
         units_line = data_start - 1
         header_line = data_start - 2 if scores[data_start - 2] < 0.5 else None
-    elif data_start >= 1 and scores[data_start - 1] < 0.5:
+    elif data_start >= section + 1 and scores[data_start - 1] < 0.5:
         header_line = data_start - 1
     header_line, units_line = (_uncommented(lines, i) for i in (header_line, units_line))
     names = _resolve_names(tokens, header_line, n_cols)
