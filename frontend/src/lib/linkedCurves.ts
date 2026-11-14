@@ -144,6 +144,15 @@ export function linkedGraphYTitle(curves: readonly LinkedCurve[], datasets: read
   return sharedAxisTitle(series) ?? "";
 }
 
+/** Why a live graph draws nothing: every curve is unresolved (deleted source,
+ *  a cycle, a removed column), so the assembly has no rows. null otherwise.
+ *  Such a graph never asks the backend for a plot or an export (a request
+ *  with labels but no rows is a 422); the stage shows this instead. */
+export const NO_CURVES_REASON = "No curves: their sources are missing";
+export function emptyGraphReason(ds: Pick<Dataset, "linkedCurves" | "data">): string | null {
+  return ds.linkedCurves && ds.data.time.length === 0 ? NO_CURVES_REASON : null;
+}
+
 /** One curve per dataset (its default X against `yKey`), labelled by dataset name. */
 export function curvesFor(datasets: readonly Dataset[], yKeyOf: (ds: Dataset) => number | null): LinkedCurve[] {
   return datasets.flatMap((ds) => {

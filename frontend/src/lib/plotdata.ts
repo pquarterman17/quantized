@@ -614,6 +614,10 @@ export async function fetchPlot(
   xMax: number | null = null,
   signal?: AbortSignal,
 ): Promise<PlotPayload> {
+  // No rows (a live graph whose curves are all unresolved): nothing to ask the
+  // server -- it answers 422 for labels without rows. The client builder gives
+  // the empty payload the stage's normal empty state draws.
+  if (ds.time.length === 0) return dropTrailingEmptyRows(buildColumns(ds, y2Keys, xKey, yKeys));
   try {
     const r = await plotSeries(
       {

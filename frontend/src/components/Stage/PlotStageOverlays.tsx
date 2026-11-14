@@ -16,6 +16,7 @@ import type uPlot from "uplot";
 
 import type { ColorScatterSpec } from "../../lib/colorscatter";
 import { lazyRegion } from "../../lib/lazyRegion";
+import { emptyGraphReason } from "../../lib/linkedCurves";
 import type { Measurement } from "../../lib/measure";
 import type { FwhmResult } from "../../lib/peakwidth";
 import type { PlotPayload } from "../../lib/plotdata";
@@ -107,6 +108,12 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
           style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}
         >
           Select a dataset to plot
+        </div>
+      )}
+
+      {p.active && emptyGraphReason(p.active) && (
+        <div className="qzk-ds-meta" role="status" style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>
+          {emptyGraphReason(p.active)}
         </div>
       )}
 

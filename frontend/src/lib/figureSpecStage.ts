@@ -10,6 +10,7 @@
 // this module imports that one, so a barrel there would close a cycle and put
 // the Stage routing into the graph of every importer of the builders.
 
+import { emptyGraphReason } from "./linkedCurves";
 import type { FigureSpec } from "./api/figures";
 import type { StoreGet } from "./exportActive";
 import { buildFigureSpec, buildFigureSpecFromDocument, type FigureRenderOpts } from "./figureSpec";
@@ -77,6 +78,8 @@ export function buildStageFigureSpec(
   extra: { transparent?: boolean } = {},
 ): FigureSpec {
   const st = s();
+  const empty = emptyGraphReason(ds);
+  if (empty) throw new Error(empty); // nothing to render; the export entries toast it
   // Stat mode never gets here when the stat stage is mounted: its commands route to the
   // stage's own export first (lib/statFigureCommands.ts); otherwise screenOnlyExport asks.
   // The polar canvas (PlotStage's first early return) exports as a polar figure, never as XY.
