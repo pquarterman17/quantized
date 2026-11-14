@@ -29,7 +29,7 @@ export default function FigureDialogs() {
         aria-labelledby={titleId}
         ref={dialogRef}
         tabIndex={-1}
-        style={{ maxWidth: 480, maxHeight: "85vh", overflowY: "auto" }}
+        style={{ maxWidth: 480, maxHeight: "78vh", overflowY: "auto" }}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2 id={titleId}>{title}</h2>

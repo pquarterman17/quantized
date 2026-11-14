@@ -18,6 +18,7 @@ import type uPlot from "uplot";
 import { divideFont, divideLabelSpot, reserveDivideBand, type AxisSide } from "./axisDivideLabel";
 import { activeBreaks, applyAxisBreaks, drawBreakMarks, insideBreak, type AxisExtrasContext } from "./axisBreakExtras";
 import type { AxisBreak } from "./axisBreaks";
+import { applyAxisLook, drawMinorGrid, drawSpine, lookFormat, topAxis, type AxisLook } from "./axisStyleExtras";
 import { hasAxisExtras, type AxisFormat, type AxisScale } from "./types";
 
 type TickValues = NonNullable<uPlot.Axis["values"]>;
@@ -58,6 +59,8 @@ interface Extra {
   breaks: readonly AxisBreak[] | null;
   /** Draw the break's diagonal marks (false on an inner x-break panel). */
   marks: boolean;
+  /** Gap #5's axis look (offset, minor grid), or null (lib/axisStyleExtras.ts). */
+  look: AxisLook | null;
 }
 
 /** Apply each axis' extras to `axes` (index-aligned with `fmts`/`scales`)
@@ -89,8 +92,13 @@ export function applyAxisExtras(
       axis.font = axis.font.replace(/[\d.]+px/, `${Math.round((fmt.size * 96) / 72)}px`);
     }
     if (fmt.ticks === "in") axis.ticks = { ...axis.ticks, show: false };
-    extras.push({ idx, fmt, scale, breaks, marks: ctx?.breakMarks !== false });
+    const look = applyAxisLook(axis, idx, lookFormat(fmt, idx, ctx), scale, ink, ctx);
+    extras.push({ idx, fmt, scale, breaks, marks: ctx?.breakMarks !== false, look });
   });
+  // Gap #5: a top X axis showing a transform of X (pushed last, so x/y/y2
+  // keep their indices).
+  const top = fmts[0]?.top;
+  if (top && axes[0]) axes.push(topAxis(top, axes[0]));
   return extras.length ? axisExtrasPlugin(extras, ink) : null;
 }
 
@@ -100,6 +108,16 @@ function axisExtrasPlugin(extras: readonly Extra[], ink: string): uPlot.Plugin {
     // A band above the frame for a Y / Y2 factor, so it is never clipped.
     ...(dividedAxes.length ? { opts: (_u: uPlot, o: uPlot.Options) => reserveDivideBand(o, dividedAxes) } : {}),
     hooks: {
+      // Minor grid lines go under the series, as uPlot's own grid does.
+      drawAxes: (u: uPlot) => {
+        for (const { idx, look } of extras) {
+          if (!look?.minorGrid) continue;
+          const axis = u.axes[idx] as uPlot.Axis & { _splits?: number[] };
+          const side: number = axis.side ?? (idx === 0 ? 2 : 3);
+          const majors = (axis._splits ?? []).filter((v) => Number.isFinite(v));
+          drawMinorGrid(u, axis.scale ?? (idx === 0 ? "x" : "y"), side === 0 || side === 2, majors, look.minorGrid);
+        }
+      },
       draw: (u: uPlot) => {
         const { ctx } = u;
         const pr = devicePixelRatio || 1;
@@ -108,14 +126,16 @@ function axisExtrasPlugin(extras: readonly Extra[], ink: string): uPlot.Plugin {
         ctx.strokeStyle = ink;
         ctx.fillStyle = ink;
         ctx.lineWidth = pr;
-        for (const { idx, fmt, scale, breaks, marks } of extras) {
+        for (const { idx, fmt, scale, breaks, marks, look } of extras) {
           const axis = u.axes[idx] as uPlot.Axis & { _splits?: number[] };
           const key = axis.scale ?? (idx === 0 ? "x" : "y");
           // uPlot's Side enum as plain numbers: 0 top, 1 right, 2 bottom, 3 left.
           const side: number = axis.side ?? (idx === 0 ? 2 : 3);
           const horizontal = side === 0 || side === 2;
-          const edge = side === 2 ? top + height : side === 3 ? left : side === 1 ? left + width : top;
           const inward = side === 2 || side === 1 ? -1 : 1;
+          // An offset axis (gap #5) sits `look.offset` css px outside the frame.
+          const off = (look?.offset ?? 0) * pr;
+          const edge = (side === 2 ? top + height : side === 3 ? left : side === 1 ? left + width : top) - inward * off;
           const tick = (v: number, len: number, dir: number) => {
             const p = u.valToPos(v, key, true);
             if (!Number.isFinite(p)) return;
@@ -133,6 +153,13 @@ function axisExtrasPlugin(extras: readonly Extra[], ink: string): uPlot.Plugin {
           const wantIn = fmt.ticks === "in" || fmt.ticks === "both";
           const wantOut = fmt.ticks !== "in";
           if (wantIn) for (const v of majors) tick(v, 6, inward);
+          if (off && look) {
+            // uPlot's own ticks are hidden on an offset axis: redraw them here.
+            drawSpine(u, horizontal, edge, ink);
+            ctx.strokeStyle = look.tickStroke;
+            if (wantOut) for (const v of majors) tick(v, 10, -inward);
+            ctx.strokeStyle = ink;
+          }
           if (fmt.minor && fmt.minor > 0 && scale === "linear" && majors.length > 1) {
             const step = (majors[1] - majors[0]) / (fmt.minor + 1);
             const lo = majors[0] - step * fmt.minor;

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import re
 import threading
 import zipfile
 
@@ -122,3 +123,37 @@ def test_batch_export_stops_before_the_next_render_after_disconnect(monkeypatch)
     with pytest.raises(HTTPException) as caught:
         _export_figure_batch(request, gone)
     assert caught.value.status_code == 499
+
+
+def _real(filename: str, fmt: str = "svg") -> dict[str, object]:
+    fig = _figure(filename, fmt)
+    fig["dataset"] = {**fig["dataset"], "values": [[1.0], [2.0]]}  # type: ignore[dict-item]
+    return fig
+
+
+def test_multipage_batch_is_one_pdf_with_a_page_per_figure() -> None:
+    """Gap-audit-2 #10: one PDF, a page per figure in request order, each at
+    its own size -- the real renderer, not a fake."""
+    small = {**_real("b", fmt="png"), "width_in": 3.0, "height_in": 2.0}
+    response = client.post(
+        "/api/export/figure-batch",
+        json={"filename": "Group meeting", "multipage": True, "figures": [_real("a"), small]},
+    )
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.headers["content-disposition"] == 'attachment; filename="Group_meeting.pdf"'
+    body = response.content
+    assert body.startswith(b"%PDF")
+    assert len(re.findall(rb"/Type /Page\b", body)) == 2
+    boxes = re.findall(rb"/MediaBox \[ 0 0 ([\d.]+) ([\d.]+) \]", body)
+    assert (b"216", b"144") in boxes  # the 3 x 2 in page keeps its size
+
+
+def test_multipage_batch_is_all_or_nothing() -> None:
+    bad = {**_real("bad"), "y_keys": [7]}
+    response = client.post(
+        "/api/export/figure-batch",
+        json={"multipage": True, "figures": [_real("a"), bad]},
+    )
+    assert response.status_code == 422
+    assert not response.content.startswith(b"%PDF")
