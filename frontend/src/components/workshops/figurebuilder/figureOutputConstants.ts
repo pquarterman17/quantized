@@ -7,7 +7,7 @@
 // existing importer (FigurePageView.tsx, useFigurePage.ts,
 // FigureBuilderView.tsx) stays untouched.
 
-export const FIGURE_FORMATS = ["pdf", "svg", "png", "tiff"];
+export const FIGURE_FORMATS = ["pdf", "svg", "eps", "png", "tiff"];
 export const FIGURE_STYLES = [
   "default",
   "aps",

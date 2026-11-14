@@ -40,7 +40,7 @@ from quantized.calc.statplots import qq_plot as _qq_plot
 
 __all__ = ["STATPLOT_KINDS", "render_statplot_figure"]
 
-_FORMATS = ("pdf", "svg", "png", "tiff")
+_FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 # "strip" (JMP_GAP J5 #3): a points-only categorical plot, same category
 # slots as box/violin but no quartile/whisker glyph -- always scatters jittered
 # points, optionally overlaid with a mean+-95% CI marker (#2).

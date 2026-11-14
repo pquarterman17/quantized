@@ -348,8 +348,8 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Display",
       label: "Plot type…",
-      description: "Switch the graph to line, scatter, area, column, box, histogram or contour.",
-      keywords: "gallery bar histogram heatmap",
+      description: "Switch the graph to line, scatter, area, column, box, violin, histogram, contour, double-Y, polar, waterfall, stacked panels or ternary.",
+      keywords: "gallery bar histogram heatmap double y polar violin waterfall ternary panels",
       run: () => openFigureDialog({ kind: "plotType" }),
     },
     // ── Graph format (figures-audit B2; filed under "Display"): style-only templates and Origin-style
@@ -389,6 +389,26 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       description: "Apply the copied style to this graph; its data is kept.",
       keywords: "style",
       run: () => graphFormatCommand(s, (m) => m.pasteStageFormat),
+    },
+    // Gap-audit-2 #13: the same two, onto every graph of a folder or the
+    // Library selection, as one undo step (lib/graphFormatBulk.ts).
+    {
+      id: "graph-template-apply-many",
+      group: "Plot",
+      section: "Display",
+      label: "Apply Graph Template to Graphs…",
+      description: "Restyle every graph in this folder, the Library selection, or all open graphs with a saved template; one undo step.",
+      keywords: "style otp theme organizer folder all batch consistent",
+      run: () => graphFormatCommand(s, (m) => m.applyGraphTemplateToGraphs),
+    },
+    {
+      id: "paste-format-many",
+      group: "Plot",
+      section: "Display",
+      label: "Paste Format to Graphs…",
+      description: "Apply the copied style to every graph in this folder, the Library selection, or all open graphs; one undo step.",
+      keywords: "style folder all batch consistent theme",
+      run: () => graphFormatCommand(s, (m) => m.pasteFormatToGraphs),
     },
     // ── Insert (MAIN #27: drawing shapes on plots — the menu-driven
     // counterpart of PlotToolbar's dock flyout) ──

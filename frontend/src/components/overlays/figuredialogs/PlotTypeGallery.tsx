@@ -7,6 +7,7 @@ import { useId } from "react";
 
 import { applyPlotType } from "../../../lib/figureDialogActions";
 import { useActiveDataset } from "../../../store/useApp";
+import { useAuxFigureStore } from "../../workshops/ternary/auxFigureStore";
 import { PLOT_TYPES, plotTypeUnavailable } from "../../../lib/plotTypes";
 
 export default function PlotTypeGallery({ onClose }: { onClose: () => void }) {
@@ -27,7 +28,7 @@ export default function PlotTypeGallery({ onClose }: { onClose: () => void }) {
             title={reason ?? t.description}
             onClick={() => {
               if (reason) return;
-              applyPlotType(t.id);
+              applyPlotType(t.id, () => useAuxFigureStore.getState().setTernaryOpen(true));
               onClose();
             }}
             style={{

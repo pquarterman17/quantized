@@ -67,8 +67,8 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
       label: "Format",
       type: "select",
       default: "pdf",
-      options: ["pdf", "svg", "png", "tiff"],
-      hint: "PDF / SVG are vector; PNG / TIFF are raster",
+      options: ["pdf", "svg", "eps", "png", "tiff"],
+      hint: "PDF / SVG / EPS are vector; PNG / TIFF are raster",
     },
     {
       key: "dpi",

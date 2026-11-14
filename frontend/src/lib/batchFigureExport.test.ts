@@ -67,7 +67,13 @@ describe("downloadBatchFigures", () => {
       [expect.objectContaining({ filename: "Sample A", fmt: "svg" })],
       "My figures",
       controller.signal,
+      false,
     );
+  });
+
+  it("requests a single multi-page PDF when multipage is set", async () => {
+    await downloadBatchFigures([figure], [dataset()], { ...options, format: "pdf", multipage: true });
+    expect(exportFigureBatch).toHaveBeenCalledWith(expect.any(Array), "My figures", undefined, true);
   });
 
   it("refuses an oversized archive before sending a request", async () => {
@@ -94,6 +100,7 @@ describe("downloadBatchFigures", () => {
       [expect.objectContaining({ dataset: expect.objectContaining({ values: [[10, 20, 30]] }) })],
       "My figures",
       undefined,
+      false,
     );
   });
 
