@@ -23,6 +23,8 @@ from matplotlib.ticker import Formatter, Locator
 __all__ = ["apply_top_axis", "nice_ticks", "top_forward", "top_inverse", "top_label", "top_ticks"]
 
 TOP_TICK_TARGET = 8
+# Closest two top-axis labels may sit, as a fraction of the axis length.
+TOP_MIN_GAP = 0.05
 _DEG = math.pi / 180
 
 
@@ -95,7 +97,14 @@ def top_ticks(top: Mapping[str, Any], lo: float, hi: float) -> list[tuple[float,
         pos = top_inverse(top, value)
         if math.isfinite(pos) and lo - span * 1e-9 <= pos <= hi + span * 1e-9:
             out.append((pos, value, top_label(value, decimals)))
-    return sorted(out)
+    out.sort()
+    # Keep a tick only when it sits at least TOP_MIN_GAP of the axis from the
+    # last kept one, so labels never overlap (mirrors frontend axisTop.ts).
+    kept: list[tuple[float, float, str]] = []
+    for tick in out:
+        if not kept or tick[0] - kept[-1][0] >= span * TOP_MIN_GAP - span * 1e-9:
+            kept.append(tick)
+    return kept
 
 
 class _TopLocator(Locator):

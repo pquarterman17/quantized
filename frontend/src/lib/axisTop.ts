@@ -21,6 +21,8 @@ export interface TopTick {
 
 /** About this many ticks across the axis (both renderers use the same). */
 export const TOP_TICK_TARGET = 8;
+/** Closest two top-axis labels may sit, as a fraction of the axis length. */
+export const TOP_MIN_GAP = 0.05;
 
 const DEG = Math.PI / 180;
 
@@ -82,7 +84,13 @@ export function topTicks(top: TopAxis, min: number, max: number): TopTick[] {
     const pos = topInverse(top, value);
     if (Number.isFinite(pos) && pos >= lo - span * 1e-9 && pos <= hi + span * 1e-9) out.push({ pos, value, label: topLabel(value, decimals) });
   }
-  return out.sort((p, q) => p.pos - q.pos);
+  out.sort((p, q) => p.pos - q.pos);
+  // Uneven (reciprocal / d-spacing) ticks bunch up at one end: keep a tick only
+  // when it sits at least TOP_MIN_GAP of the axis from the last kept one, so
+  // labels never overlap. Mirrored in calc/axis_top.py.
+  const kept: TopTick[] = [];
+  for (const tick of out) if (kept.length === 0 || tick.pos - kept[kept.length - 1].pos >= span * TOP_MIN_GAP - span * 1e-9) kept.push(tick);
+  return kept;
 }
 
 /** Why `top` cannot be drawn (missing wavelength, zero factor), or null. */

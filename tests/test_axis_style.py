@@ -24,11 +24,7 @@ from quantized.routes.export_figures_schema import TickFormatSpec, _tick_fmt  # 
 # (top spec, bottom-axis range) -> labels: the SAME rows as axisTop.test.ts.
 TOP_TABLE = [
     ({"kind": "reciprocal", "factor": 1000}, (100, 300), ["10", "9", "8", "7", "6", "5", "4"]),
-    (
-        {"kind": "reciprocal"},
-        (2, 10),
-        ["0.50", "0.45", "0.40", "0.35", "0.30", "0.25", "0.20", "0.15", "0.10"],
-    ),
+    ({"kind": "reciprocal"}, (2, 10), ["0.50", "0.40", "0.30", "0.25", "0.20", "0.15", "0.10"]),
     (
         {"kind": "dspacing", "wavelength": 1.5406},
         (20, 80),
@@ -165,3 +161,12 @@ def test_wire_model_carries_the_look_fields_and_renders_vector() -> None:
     with pytest.raises(ValueError):
         TickFormatSpec.model_validate({**raw, "grid": {"major": True, "color": "red"}})
     assert math.isfinite(top_forward(raw["top"], 30))
+
+
+def test_top_ticks_keep_reciprocal_labels_apart() -> None:
+    from quantized.calc.axis_top import TOP_MIN_GAP
+
+    ticks = top_ticks({"kind": "reciprocal", "factor": 1000}, 10, 300)
+    assert len(ticks) > 2
+    for a, b in zip(ticks, ticks[1:], strict=False):
+        assert b[0] - a[0] >= 290 * TOP_MIN_GAP - 1e-6

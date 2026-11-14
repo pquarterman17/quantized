@@ -5,11 +5,11 @@
 import { describe, expect, it } from "vitest";
 
 import type { TopAxis } from "./axisFormat";
-import { niceTicks, topAxisProblem, topForward, topInverse, topTicks } from "./axisTop";
+import { niceTicks, TOP_MIN_GAP, topAxisProblem, topForward, topInverse, topTicks } from "./axisTop";
 
 const TOP_TABLE: [TopAxis, [number, number], string[]][] = [
   [{ kind: "reciprocal", factor: 1000 }, [100, 300], ["10", "9", "8", "7", "6", "5", "4"]],
-  [{ kind: "reciprocal" }, [2, 10], ["0.50", "0.45", "0.40", "0.35", "0.30", "0.25", "0.20", "0.15", "0.10"]],
+  [{ kind: "reciprocal" }, [2, 10], ["0.50", "0.40", "0.30", "0.25", "0.20", "0.15", "0.10"]],
   [{ kind: "dspacing", wavelength: 1.5406 }, [20, 80], ["4.0", "3.5", "3.0", "2.5", "2.0", "1.5"]],
   [{ kind: "linear", factor: 2, shift: 1 }, [0, 10], ["2.5", "5.0", "7.5", "10.0", "12.5", "15.0", "17.5", "20.0"]],
   [{ kind: "linear", factor: -1 }, [-5, 5], ["4", "2", "0", "-2", "-4"]],
@@ -35,5 +35,13 @@ describe("top X axis", () => {
     expect(topAxisProblem({ kind: "dspacing" })).toMatch(/wavelength/);
     expect(topAxisProblem({ kind: "linear", factor: 0 })).toMatch(/factor/);
     expect(topAxisProblem({ kind: "reciprocal", factor: 1000 })).toBeNull();
+  });
+});
+
+describe("top axis label spacing", () => {
+  it("1/T (factor 1000) over 10-300 K has no two labels closer than the minimum gap", () => {
+    const ticks = topTicks({ kind: "reciprocal", factor: 1000 }, 10, 300);
+    expect(ticks.length).toBeGreaterThan(2);
+    for (let i = 1; i < ticks.length; i++) expect(ticks[i].pos - ticks[i - 1].pos).toBeGreaterThanOrEqual(290 * TOP_MIN_GAP - 1e-6);
   });
 });
