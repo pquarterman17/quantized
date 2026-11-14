@@ -69,12 +69,23 @@ describe("replaceCells", () => {
     expect(r.edits[0].value).toBeNaN();
   });
 
-  it("partial replace edits the cell text and re-parses it; unparseable results are skipped, not written", () => {
-    const hits = findCells(D, opts({ query: "5" }), ORDER);
-    const r = replaceCells(D, hits, opts({ query: "5" }), "0", 2);
+  it("partial replace is REFUSED by default: it would rewrite digits of numbers", () => {
+    const hits = findCells(D, opts({ query: "0.1" }), ORDER);
+    const r = replaceCells(data([0], [[-0.1752]]), hits, opts({ query: "0.1" }), "9", 2);
+    expect(r.edits).toEqual([]);
+    expect(r.error).toMatch(/edit its digits/);
+  });
+
+  it("with the explicit opt-in, partial replace edits the cell text, re-parses it, and reports the first change", () => {
+    const o = opts({ query: "5", insideNumbers: true });
+    const hits = findCells(D, o, ORDER);
+    const r = replaceCells(D, hits, o, "0", 2);
+    expect(r.first).toBe("1.5 → 1");
+    const big = replaceCells(data([0], [[-0.1752]]), [{ row: 0, col: 0 }], opts({ query: "0.1", insideNumbers: true }), "9", 2);
+    expect(big.first).toBe("-0.1752 → -9752");
     expect(r.edits.find((e) => e.row === 0 && e.col === 0)?.value).toBe(1);
     expect(r.edits.find((e) => e.row === 2 && e.col === 1)?.value).toBe(10);
-    const bad = replaceCells(D, [{ row: 0, col: 0 }], opts({ query: "1" }), "x", 2);
+    const bad = replaceCells(D, [{ row: 0, col: 0 }], opts({ query: "1", insideNumbers: true }), "x", 2);
     expect(bad.edits).toEqual([]);
     expect(bad.skipped).toBe(1);
   });

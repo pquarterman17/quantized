@@ -91,4 +91,25 @@ describe("worksheet Find / Replace", () => {
     expect(values()[0][0]).toBe(1.5);
     expect(within(find).getByRole("status")).toHaveTextContent(/not a number/);
   });
+
+  it("partial replace is refused by default and never touches the digits", async () => {
+    const { find } = await openFind("h");
+    fireEvent.change(within(find).getByLabelText("Find"), { target: { value: "1.5" } });
+    fireEvent.change(within(find).getByLabelText("Replace with"), { target: { value: "9" } });
+    fireEvent.click(within(find).getByRole("button", { name: "Replace all" }));
+    expect(values()).toEqual([[1.5, 10], [2.5, 1.5], [3.5, 15], [1.5, 100]]);
+    expect(within(find).getByRole("status")).toHaveTextContent(/edit its digits/);
+  });
+
+  it("with the opt-in, Replace all previews the count and first change, then applies on the second press", async () => {
+    const { find } = await openFind("h");
+    fireEvent.click(within(find).getByLabelText("Replace inside numbers (edits digits)"));
+    fireEvent.change(within(find).getByLabelText("Find"), { target: { value: "1.5" } });
+    fireEvent.change(within(find).getByLabelText("Replace with"), { target: { value: "9" } });
+    fireEvent.click(within(find).getByRole("button", { name: "Replace all" }));
+    expect(within(find).getByRole("status")).toHaveTextContent("Will change 3 cells, first: 1.5 → 9");
+    expect(values()[0][0]).toBe(1.5);
+    fireEvent.click(within(find).getByRole("button", { name: "Replace all" }));
+    expect(values()).toEqual([[9, 10], [2.5, 9], [3.5, 15], [9, 100]]);
+  });
 });

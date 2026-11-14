@@ -17,6 +17,9 @@ export interface FindOptions {
   matchCase: boolean;
   /** The whole cell must equal the query (numerically) instead of containing it. */
   wholeCell: boolean;
+  /** Allow a partial-text replace, which rewrites DIGITS inside numbers. Off by
+   *  default: find still matches partial text, but replacing it is refused. */
+  insideNumbers?: boolean;
 }
 
 /** A cell address: original row, column (-1 = the x / time column). */
@@ -67,6 +70,8 @@ export interface ReplaceResult {
   readOnly: number;
   /** Set when nothing was done at all, and why. */
   error: string | null;
+  /** The first change as text, e.g. "-0.1752 → -9.752e16" (for a preview). */
+  first: string | null;
 }
 
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -77,13 +82,20 @@ const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
  *  a text replacement is applied inside the cell's number text and the result
  *  re-read, skipping any cell it would make unreadable. */
 export function replaceCells(data: DataStruct, hits: readonly FindCell[], opts: FindOptions, replacement: string, writableCols: number): ReplaceResult {
-  const empty = { edits: [], skipped: 0, readOnly: 0 };
+  const empty = { edits: [], skipped: 0, readOnly: 0, first: null };
+  if (!opts.wholeCell && !opts.insideNumbers) {
+    return { ...empty, error: "Replacing part of a number would edit its digits. Tick Whole cell to replace values, or Replace inside numbers (edits digits)." };
+  }
   const whole = opts.wholeCell ? parseCell(replacement) : null;
   if (opts.wholeCell && whole === null) return { ...empty, error: `"${replacement}" is not a number — nothing was replaced` };
   const re = opts.wholeCell ? null : new RegExp(escapeRe(opts.query), opts.matchCase ? "g" : "gi");
   const edits: CellEdit[] = [];
   let skipped = 0;
   let readOnly = 0;
+  let first: string | null = null;
+  const note = (from: number | undefined, to: number) => {
+    first ??= `${cellText(from) || "(blank)"} → ${Number.isNaN(to) ? "(blank)" : String(to)}`;
+  };
   for (const { row, col } of hits) {
     if (col >= writableCols) {
       readOnly++;
@@ -91,12 +103,16 @@ export function replaceCells(data: DataStruct, hits: readonly FindCell[], opts: 
     }
     if (whole !== null) {
       edits.push({ row, col, value: whole });
+      note(col < 0 ? data.time[row] : data.values[row]?.[col], whole);
       continue;
     }
     const current = col < 0 ? data.time[row] : data.values[row]?.[col];
     const value = parseCell(cellText(current).replace(re as RegExp, () => replacement));
     if (value === null) skipped++;
-    else edits.push({ row, col, value });
+    else {
+      edits.push({ row, col, value });
+      note(current, value);
+    }
   }
-  return { edits, skipped, readOnly, error: null };
+  return { edits, skipped, readOnly, error: null, first };
 }

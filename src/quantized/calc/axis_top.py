@@ -39,6 +39,9 @@ __all__ = [
 TOP_TICK_TARGET = 8
 # Closest two top-axis labels may sit, as a fraction of the axis length.
 TOP_MIN_GAP = 0.05
+# ... and at least this much per character of the widest label (+1), so wide
+# labels such as "1200" never touch. Mirrors TOP_GAP_PER_CHAR in axisTop.ts.
+TOP_GAP_PER_CHAR = 0.015
 # Where a transform is undefined at one end of the axis (1/x at 0, d-spacing at
 # 0 or 180 deg), the lower end of the drawn part starts this fraction of the
 # upper end above it. Mirrors TOP_SPAN_FLOOR in frontend/src/lib/axisTop.ts.
@@ -235,9 +238,10 @@ def top_ticks(top: Mapping[str, Any], lo: float, hi: float) -> list[tuple[float,
     out.sort()
     # Keep a tick only when it sits at least TOP_MIN_GAP of the axis from the
     # last kept one, so labels never overlap (mirrors frontend axisTop.ts).
+    gap = max(TOP_MIN_GAP, TOP_GAP_PER_CHAR * (max((len(t[2]) for t in out), default=0) + 1))
     kept: list[tuple[float, float, str]] = []
     for tick in out:
-        if not kept or tick[0] - kept[-1][0] >= span * TOP_MIN_GAP - span * 1e-9:
+        if not kept or tick[0] - kept[-1][0] >= span * gap - span * 1e-9:
             kept.append(tick)
     return kept
 

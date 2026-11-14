@@ -42,6 +42,9 @@ export default function FindReplaceBar({ ds, order, writableCols, selection, rep
   const [matchCase, setMatchCase] = useState(false);
   const [wholeCell, setWholeCell] = useState(false);
   const [inSelection, setInSelection] = useState(false);
+  const [insideNumbers, setInsideNumbers] = useState(false);
+  /** Replace all inside numbers asks once, showing what it will do. */
+  const [pending, setPending] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
   const [note, setNote] = useState("");
   const findRef = useRef<HTMLInputElement>(null);
@@ -50,7 +53,7 @@ export default function FindReplaceBar({ ds, order, writableCols, selection, rep
     findRef.current?.select();
   }, [focusTick]);
 
-  const opts: FindOptions = { query, matchCase, wholeCell };
+  const opts: FindOptions = { query, matchCase, wholeCell, insideNumbers };
   const scoped = inSelection && selection ? selection : null;
   const hits = useMemo(
     () => findCells(ds.data, { query, matchCase, wholeCell }, order, scoped ?? {}),
@@ -68,6 +71,8 @@ export default function FindReplaceBar({ ds, order, writableCols, selection, rep
     if (hits.length) setIndex((current + d + hits.length) % hits.length);
   };
 
+  useEffect(() => setPending(null), [query, replacement, matchCase, wholeCell, insideNumbers, inSelection, ds.data]);
+
   const apply = (targets: readonly FindCell[], keepIndex: boolean) => {
     if (isRederived(ds)) {
       setNote(editRefusalNotice(ds));
@@ -76,6 +81,12 @@ export default function FindReplaceBar({ ds, order, writableCols, selection, rep
     const r = replaceCells(ds.data, targets, opts, replacement, writableCols);
     if (r.error) {
       setNote(r.error);
+      return;
+    }
+    if (!keepIndex && !wholeCell && insideNumbers && r.edits.length > 0 && pending === null) {
+      const msg = `Will change ${r.edits.length} cell${r.edits.length === 1 ? "" : "s"}, first: ${r.first}. Press Replace all again to confirm.`;
+      setPending(msg);
+      setNote(msg);
       return;
     }
     if (r.edits.length === 0) {
@@ -147,6 +158,9 @@ export default function FindReplaceBar({ ds, order, writableCols, selection, rep
       </label>
       <label className="qzk-field-lbl" style={{ margin: 0 }}>
         <input type="checkbox" aria-label="Selection only" disabled={!selection} checked={inSelection && !!selection} onChange={(e) => setInSelection(e.target.checked)} /> Selection only
+      </label>
+      <label className="qzk-field-lbl" style={{ margin: 0 }}>
+        <input type="checkbox" aria-label="Replace inside numbers (edits digits)" checked={insideNumbers} onChange={(e) => setInsideNumbers(e.target.checked)} /> Replace inside numbers (edits digits)
       </label>
       <span className="qzk-ds-meta" aria-live="polite">{query || wholeCell ? plural(hits.length, "match") : ""}</span>
       <button className="qz-btn qz-sm" aria-label="Find previous" disabled={!hits.length} onClick={() => step(-1)}>↑</button>

@@ -24,11 +24,11 @@ from quantized.routes.export_figures_schema import TickFormatSpec, _tick_fmt  # 
 # (top spec, bottom-axis range) -> labels: the SAME rows as axisTop.test.ts.
 TOP_TABLE = [
     ({"kind": "reciprocal", "factor": 1000}, (100, 300), ["10", "9", "8", "7", "6", "5", "4"]),
-    ({"kind": "reciprocal"}, (2, 10), ["0.50", "0.40", "0.30", "0.25", "0.20", "0.15", "0.10"]),
+    ({"kind": "reciprocal"}, (2, 10), ["0.50", "0.35", "0.25", "0.20", "0.15", "0.10"]),
     (
         {"kind": "dspacing", "wavelength": 1.5406},
         (20, 80),
-        ["4.0", "3.5", "3.0", "2.5", "2.0", "1.5"],
+        ["4.0", "3.0", "2.5", "2.0", "1.5"],
     ),
     (
         {"kind": "linear", "factor": 2, "shift": 1},
@@ -41,11 +41,11 @@ TOP_TABLE = [
     (
         {"kind": "expr", "expr": "1/x"},
         (2, 10),
-        ["0.50", "0.40", "0.30", "0.25", "0.20", "0.15", "0.10"],
+        ["0.50", "0.35", "0.25", "0.20", "0.15", "0.10"],
     ),
     ({"kind": "expr", "expr": "sqrt(x)"}, (1, 100), ["2", "4", "6", "8", "10"]),
     # a range through the pole: the end next to it is cut back to a 20x change
-    ({"kind": "expr", "expr": "1240/x"}, (0, 20), ["1200", "600", "400", "200"]),
+    ({"kind": "expr", "expr": "1240/x"}, (0, 20), ["1200", "400", "200"]),
 ]
 
 
@@ -221,9 +221,24 @@ def test_top_ticks_keep_reciprocal_labels_apart() -> None:
     from quantized.calc.axis_top import TOP_MIN_GAP
 
     ticks = top_ticks({"kind": "reciprocal", "factor": 1000}, 10, 300)
-    assert len(ticks) > 2
+    assert len(ticks) >= 2
     for a, b in zip(ticks, ticks[1:], strict=False):
         assert b[0] - a[0] >= 290 * TOP_MIN_GAP - 1e-6
+
+
+@pytest.mark.parametrize(("top", "rng", "labels"), TOP_TABLE)
+def test_top_label_gap_scales_with_label_width(
+    top: dict[str, object], rng: tuple[float, float], labels: list[str]
+) -> None:
+    """Wide labels need a wider gap (shared rule with axisTop.ts), so the
+    export's labels never touch: 1200/600/400 over 0-20 keeps only 1200, 400, 200."""
+    from quantized.calc.axis_top import TOP_GAP_PER_CHAR, TOP_MIN_GAP
+
+    ticks = top_ticks(top, *rng)
+    gap = max(TOP_MIN_GAP, TOP_GAP_PER_CHAR * (max(len(t[2]) for t in ticks) + 1))
+    span = rng[1] - rng[0]
+    for a, b in zip(ticks, ticks[1:], strict=False):
+        assert b[0] - a[0] >= span * gap - 1e-6
 
 
 def test_expr_top_axis_labels_the_valid_side_of_a_pole() -> None:

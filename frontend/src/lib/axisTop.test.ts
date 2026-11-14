@@ -6,20 +6,20 @@ import { describe, expect, it } from "vitest";
 
 import { axisDraft, axisDraftErrors } from "./axisDialogModel";
 import { sanitizeAxisExtras, type TopAxis } from "./axisFormat";
-import { niceTicks, TOP_MIN_GAP, topAxisProblem, topForward, topInverse, topRangeProblem, topSpan, topTicks } from "./axisTop";
+import { niceTicks, TOP_GAP_PER_CHAR, TOP_MIN_GAP, topAxisProblem, topForward, topInverse, topRangeProblem, topSpan, topTicks } from "./axisTop";
 
 const TOP_TABLE: [TopAxis, [number, number], string[]][] = [
   [{ kind: "reciprocal", factor: 1000 }, [100, 300], ["10", "9", "8", "7", "6", "5", "4"]],
-  [{ kind: "reciprocal" }, [2, 10], ["0.50", "0.40", "0.30", "0.25", "0.20", "0.15", "0.10"]],
-  [{ kind: "dspacing", wavelength: 1.5406 }, [20, 80], ["4.0", "3.5", "3.0", "2.5", "2.0", "1.5"]],
+  [{ kind: "reciprocal" }, [2, 10], ["0.50", "0.35", "0.25", "0.20", "0.15", "0.10"]],
+  [{ kind: "dspacing", wavelength: 1.5406 }, [20, 80], ["4.0", "3.0", "2.5", "2.0", "1.5"]],
   [{ kind: "linear", factor: 2, shift: 1 }, [0, 10], ["2.5", "5.0", "7.5", "10.0", "12.5", "15.0", "17.5", "20.0"]],
   [{ kind: "linear", factor: -1 }, [-5, 5], ["4", "2", "0", "-2", "-4"]],
   // N8: arbitrary expressions of the bottom axis (same rows as tests/test_axis_style.py).
   [{ kind: "expr", expr: "1240/x" }, [200, 800], ["6", "5", "4", "3", "2"]],
-  [{ kind: "expr", expr: "1/x" }, [2, 10], ["0.50", "0.40", "0.30", "0.25", "0.20", "0.15", "0.10"]],
+  [{ kind: "expr", expr: "1/x" }, [2, 10], ["0.50", "0.35", "0.25", "0.20", "0.15", "0.10"]],
   [{ kind: "expr", expr: "sqrt(x)" }, [1, 100], ["2", "4", "6", "8", "10"]],
   // a range through the pole: the end next to it is cut back to a 20x change
-  [{ kind: "expr", expr: "1240/x" }, [0, 20], ["1200", "600", "400", "200"]],
+  [{ kind: "expr", expr: "1240/x" }, [0, 20], ["1200", "400", "200"]],
 ];
 
 describe("top X axis", () => {
@@ -30,6 +30,12 @@ describe("top X axis", () => {
       expect(topForward(top, t.pos)).toBeCloseTo(t.value, 9);
       expect(topInverse(top, t.value, [lo, hi])).toBeCloseTo(t.pos, 9);
     }
+  });
+
+  it.each(TOP_TABLE)("%o over %o: the gap scales with the label width (shared rule)", (top, [lo, hi]) => {
+    const ticks = topTicks(top, lo, hi);
+    const gap = Math.max(TOP_MIN_GAP, TOP_GAP_PER_CHAR * (Math.max(...ticks.map((t) => t.label.length)) + 1));
+    for (let i = 1; i < ticks.length; i++) expect(ticks[i].pos - ticks[i - 1].pos).toBeGreaterThanOrEqual((hi - lo) * gap - 1e-6);
   });
 
   it("ticks only the valid part of a range that runs into the singularity", () => {
@@ -121,7 +127,7 @@ describe("expression top axis (N8)", () => {
 describe("top axis label spacing", () => {
   it("1/T (factor 1000) over 10-300 K has no two labels closer than the minimum gap", () => {
     const ticks = topTicks({ kind: "reciprocal", factor: 1000 }, 10, 300);
-    expect(ticks.length).toBeGreaterThan(2);
+    expect(ticks.length).toBeGreaterThanOrEqual(2);
     for (let i = 1; i < ticks.length; i++) expect(ticks[i].pos - ticks[i - 1].pos).toBeGreaterThanOrEqual(290 * TOP_MIN_GAP - 1e-6);
   });
 });

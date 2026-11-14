@@ -25,6 +25,10 @@ export interface TopTick {
 export const TOP_TICK_TARGET = 8;
 /** Closest two top-axis labels may sit, as a fraction of the axis length. */
 export const TOP_MIN_GAP = 0.05;
+/** ... and at least this much per character of the widest label (+1), so wide
+ *  labels such as "1200" never touch: the gap scales with the label width.
+ *  Mirrors TOP_GAP_PER_CHAR in calc/axis_top.py. */
+export const TOP_GAP_PER_CHAR = 0.015;
 
 /** Where a transform is undefined at one end of the axis (1/x at 0, d-spacing
  *  at 0 or 180 deg), the drawn part starts this fraction of its upper end
@@ -222,8 +226,9 @@ export function topTicks(top: TopAxis, min: number, max: number): TopTick[] {
   // Uneven (reciprocal / d-spacing) ticks bunch up at one end: keep a tick only
   // when it sits at least TOP_MIN_GAP of the axis from the last kept one, so
   // labels never overlap. Mirrored in calc/axis_top.py.
+  const gap = Math.max(TOP_MIN_GAP, TOP_GAP_PER_CHAR * (Math.max(0, ...out.map((t) => t.label.length)) + 1));
   const kept: TopTick[] = [];
-  for (const tick of out) if (kept.length === 0 || tick.pos - kept[kept.length - 1].pos >= span * TOP_MIN_GAP - span * 1e-9) kept.push(tick);
+  for (const tick of out) if (kept.length === 0 || tick.pos - kept[kept.length - 1].pos >= span * gap - span * 1e-9) kept.push(tick);
   return kept;
 }
 
