@@ -229,12 +229,12 @@ export default function GridViewport({
     const value = typeof c === "number" && c >= 0 && c < colCount;
     const start = text >= 0 ? at(colCount) + text * colWidth : value ? at(c) : null;
     const size = (value && colWidths[c]) || colWidth;
-    const avail = el.clientWidth - gutterWidth - widthOf(-1);
+    const avail = el.clientWidth - gutterWidth - (colWidths[-1] ?? (xIsDate ? DATE_X_COL_WIDTH : colWidth));
     const left = start == null ? el.scrollLeft : revealScrollOffset(start, size, el.scrollLeft, avail, false);
     el.scrollTop = top;
     el.scrollLeft = left;
     setScroll({ top, left });
-  }, [reveal, textCols, colCount, colWidth, colWidths, gutterWidth, colOffsets]);
+  }, [reveal, textCols, colCount, colWidth, colWidths, gutterWidth, colOffsets, xIsDate]);
 
   const rowWindow = computeAxisWindow(scroll.top, metrics.height, order.length, {
     itemSize: metrics.rowHeight,
