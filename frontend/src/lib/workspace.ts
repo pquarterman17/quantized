@@ -5,7 +5,8 @@
 import { parseFolders, pruneOrphans } from "./foldertree";
 import type { OriginFidelityEntry } from "./originFidelity";
 import type { OriginFigureEntry } from "./originFigures";
-import { sanitizeFigureDocs, type FigureDoc } from "./figuredoc";
+import type { FigureDoc } from "./figuredoc";
+import { sanitizeFigureDocs } from "./figuredocSanitize";
 import type { FigureDocument } from "./figureDocument";
 import { parseEditableFigures } from "./workspaceEditableFigures";
 import { sanitizePageDocuments, type PageDocument } from "./pageDocument";

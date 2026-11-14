@@ -3,7 +3,7 @@
 // (`metadata.x_reversed`, io/technique.py) and the rebind defaults take it;
 // the canvas draws it as uPlot's `dir: -1` x scale, drag-pan follows the
 // pointer, the export inverts matplotlib's x axis, and a .dwk keeps it.
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.hoisted(() => {
   class RecordingPath {
@@ -29,6 +29,7 @@ import type { PlotPayload } from "./plotdata";
 import { defaultPlotView, sanitizePlotView } from "./plotview";
 import type { Dataset } from "./types";
 import { buildOpts } from "./uplotOpts";
+import { loadToolPlugins } from "./axisExtrasHook";
 
 const live: uPlot[] = [];
 afterEach(() => live.splice(0).forEach((u) => u.destroy()));
@@ -53,6 +54,10 @@ async function mount(p: PlotPayload, xReversed: boolean, tool: "zoom" | "pan" = 
   await new Promise((r) => setTimeout(r, 0)); // uPlot commits on a microtask
   return u;
 }
+
+// The tool plugins are a lazy chunk the plot toolbar warms once mounted
+// (bundle diet slice 27): load it up front, as the running app has.
+beforeAll(() => loadToolPlugins());
 
 describe("the canvas", () => {
   it("draws high wavenumber on the left and maps pixels back the same way", async () => {

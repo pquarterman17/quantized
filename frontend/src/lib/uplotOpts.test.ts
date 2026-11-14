@@ -1,7 +1,7 @@
 import { BAR_PATHS } from "./uplotBars";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { gadgetPlugins, loadGadgetPlugins } from "./axisExtrasHook";
+import { gadgetPlugins, loadGadgetPlugins, loadToolPlugins, toolPlugins } from "./axisExtrasHook";
 import { buildOpts, categoricalTickFormatter, fixedLinearAxisSplits, fixedLogAxisSplits, logMajorTickFilter, niceLinearStep, reciprocalAxisSplits, reciprocalTransform, resolvePlotBg, tickFormatter, utcTzDate, xIsAscending } from "./uplotOpts";
 import type { PlotPayload } from "./plotdata";
 import { isFixedXRange } from "./uplotXRange";
@@ -149,7 +149,13 @@ describe("buildOpts", () => {
     expect((zoom.cursor as { y?: unknown }).y).toBeUndefined();
   });
 
-  it("adds one plugin for pan and cursor, none for zoom or pointer (no annotations/refLines)", () => {
+  it("adds one plugin for pan and cursor, none for zoom or pointer (no annotations/refLines)", async () => {
+    // The tool plugins are a lazy chunk (bundle diet slice 27): before it
+    // lands, pan and cursor build without theirs; the viewport rebuilds then.
+    expect(toolPlugins()).toBeNull();
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "pan" }).plugins).toHaveLength(0);
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "cursor" }).plugins).toHaveLength(0);
+    await loadToolPlugins();
     expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" }).plugins).toHaveLength(0);
     // Pointer without an axisLabelEdit bridge stays plugin-free (the axis-title
     // drag plugin is only pushed when that bridge is wired — see PlotStage).
@@ -222,7 +228,8 @@ describe("buildOpts", () => {
     }
   });
 
-  it("adds the stats plugin only in the stats tool", () => {
+  it("adds the stats plugin only in the stats tool", async () => {
+    await loadToolPlugins();
     expect(
       buildOpts(payload, { ...base, yScale: "linear", tool: "stats", onStats: vi.fn() }).plugins,
     ).toHaveLength(1);

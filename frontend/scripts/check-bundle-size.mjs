@@ -1899,8 +1899,27 @@ import { fileURLToPath } from "node:url";
  * the pin to `measured + 1,024`; do not spend the banked bytes on anything
  * else.
  *
+ * 2026-11-14 (bundle diet slice 27, `plans/BUNDLE_HEADROOM.md`) - pin
+ * LOWERED 822,111 -> 816,042 (`measured + 6,000`). Three pieces left the
+ * startup chunk: the tool-dock plugins (pan, cursor readout, measure, region
+ * statistics, integrate, FWHM; `lib/uplotToolPlugins.ts` behind
+ * `toolPlugins()` in `lib/axisExtrasHook.ts`, warmed once the plot toolbar
+ * mounts), the overlay half of horizontal bars (`lib/uplotTurn.ts`, a startup
+ * chunk loaded by `lib/uplotOrient.ts`), and the `.dwk` figure-doc sanitizer
+ * (`lib/figuredocSanitize.ts`, only the lazy workspace read calls it). Exact
+ * bytes, `npm ci`-fresh, `.vite` wiped, `tsc -b --force`, `npm run build`:
+ *   `6c449bcc` (parent)                       820,851
+ *   + the tool-dock plugins                   812,626   (-8,225)
+ *   + the overlay half of horizontal bars     811,088   (-1,538)
+ *   + the `.dwk` figure-doc sanitizer          810,042   (-1,046)
+ *   this slice                                810,042   (-10,809)
+ * The margin is 6,000, the slice-24/25/26 form, for the same queued wave of
+ * feature branches; slice 26's banked 6,000 had shrunk to 1,260 B. The other
+ * 4,809 B of the reduction are locked in. Once the wave has merged, lower the
+ * pin to `measured + 1,024`; do not spend the banked bytes on anything else.
+ *
  */
-const EAGER_JS_BUDGET = 822_111;
+const EAGER_JS_BUDGET = 816_042;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

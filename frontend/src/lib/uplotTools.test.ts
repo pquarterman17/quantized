@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { readoutPlugin, type Readout } from "./uplotTools";
+import { readoutPlugin } from "./uplotPointerTools";
+import type { Readout } from "./uplotTools";
 
 /** Drive the readout plugin's setCursor hook with a stubbed uPlot. */
 function readoutAt(
