@@ -17,7 +17,7 @@ import pytest
 
 from quantized.io._delimiter_vote import data_section_start, vote_lines
 from quantized.io.delimited import import_csv
-from quantized.io.import_preview import guess_settings, parse_import
+from quantized.io.import_preview import ImportSettings, guess_settings, parse_import
 
 
 def _spectroscopy(preamble: list[str]) -> str:
@@ -84,3 +84,17 @@ def test_a_free_text_preamble_line_does_not_defeat_the_delimiter_vote(tmp_path: 
     ds = import_csv(path)
     assert ds.labels == ("Voltage", "Current") and ds.units == ("V", "A")
     assert ds.metadata["x_column_name"] == "Time"
+
+
+def test_no_roles_given_keeps_a_text_column_as_text() -> None:
+    """The wizard clears the guessed roles when the delimiter changes (the
+    columns are re-split); the parse then defaults like `guess_settings`
+    does, so a text column is kept as text, not an all-NaN numeric channel."""
+    text = "T;Sample;R\n1;a;10\n2;b;20\n3;c;30\n"
+    s = guess_settings(text)
+    ds = parse_import(
+        text, ImportSettings(delimiter="semicolon", header_line=0, data_start_line=1)
+    )
+    assert s.roles == ["x", "label", "y"]
+    assert ds.labels == ("R",)
+    assert ds.metadata["text_columns"] == {"Sample": ["a", "b", "c"]}

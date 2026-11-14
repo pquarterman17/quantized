@@ -247,7 +247,14 @@ def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
         for k in range(min(n_cols, len(urow))):
             if urow[k]:
                 units[k] = urow[k]
-    roles = _resolve_roles(settings.roles, n_cols)
+    # No roles given (a fresh file, or the wizard re-splitting under a new
+    # delimiter): the same per-column default `guess_settings` offers, so a
+    # text column stays a ``label`` instead of an all-NaN ``y``.
+    roles = (
+        _resolve_roles(settings.roles, n_cols)
+        if settings.roles
+        else _guess_roles(data_tokens, n_cols)
+    )
 
     matrix = np.full((len(data_tokens), n_cols), np.nan, dtype=float)
     for i, row in enumerate(data_tokens):
