@@ -19,6 +19,7 @@ from quantized.datastruct import DataStruct
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
 from quantized.io import _quoted_numbers as qn
+from quantized.io._data_section import _split_lines as _split_lines  # re-export
 from quantized.io._delimited_fast import (
     LazyTokenRows,
     _DeferredDataTokens,
@@ -42,28 +43,6 @@ _COMMENT_CHARS = COMMENT_CHARS
 
 def _read_raw_lines(text: str) -> list[str]:
     return _split_lines(text)[0]
-
-
-def _split_lines(text: str) -> tuple[list[str], list[str]]:
-    """Split into (data lines, comment/preamble lines).
-
-    MAIN_PLAN #33: the comment lines used to be dropped on the floor. An
-    instrument preamble routinely carries the sample id, temperature, or
-    operator notes that make the file interpretable later, so it is kept in
-    ``metadata["comments"]`` rather than discarded — the original file is never
-    modified, so this is the only place that context can survive an import.
-    """
-    data: list[str] = []
-    comments: list[str] = []
-    for raw in text.splitlines():
-        stripped = raw.strip()
-        if not stripped:
-            continue
-        if stripped[0] in _COMMENT_CHARS:
-            comments.append(stripped)
-        else:
-            data.append(stripped)
-    return data, comments
 
 
 def _convert_column(cells: Sequence[str]) -> np.ndarray:

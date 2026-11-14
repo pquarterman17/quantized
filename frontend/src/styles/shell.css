@@ -1065,6 +1065,18 @@ body {
    headers are stat names, not row numbers, so they get the full gutter. */
 .qzk-grid-footer .qzk-grid-cell { background: var(--surface-2); }
 .qzk-grid-footer .qzk-grid-rownum { background: var(--surface-1); padding: 3px 1px; font-size: var(--type-nano); text-overflow: clip; }
+/* Worksheet cell cursor (useGridCursor): the active cell gets an accent
+   outline, the rest of a cell range the selection tint; the grid shows a focus
+   ring only for keyboard focus. The blank entry row under the data reads as an
+   invitation to type, not as data. */
+.qzk-grid:focus { outline: none; }
+.qzk-grid:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.qzk-grid-row .qzk-grid-cell.qzk-cell-range { background: var(--accent-soft); }
+.qzk-grid-cell.qzk-cell-cursor { outline: 2px solid var(--accent); outline-offset: -2px; }
+.qzk-grid-row.qzk-grid-entry .qzk-grid-rownum { font-style: italic; }
+.qzk-grid[aria-multiselectable] .qzk-grid-cell { user-select: none; }
+/* The header-row editor (HeaderEditor.tsx): a popover on the header cell. */
+.qzk-header-editor { z-index: 45; width: 290px; display: grid; gap: 6px; padding: 8px; background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); font-size: var(--font-size-sm); color: var(--text); }
 
 /* column resize handle (MAIN_PLAN #3): a slim hit zone hugging each numeric
    header cell's right edge — drag to resize, double-click to autofit. The
