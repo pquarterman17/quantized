@@ -125,7 +125,12 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
 
   const onEditCell = (row: number, col: number, value: number) =>
     row >= data.time.length ? growAndSetCell(ds.id, row, col, value) : view.onEditCell(row, col, value);
-  const cellEdit = useCellEdit(onEditCell, (text) => setStatus(`"${text}" is not a number — the cell was not changed`));
+  const xIsDate = data.metadata?.time_is_datetime === true; // a date X edits as dates (worksheet audit #7)
+  const cellEdit = useCellEdit(
+    onEditCell,
+    (text) => setStatus(`"${text}" is not ${xIsDate ? "a number or date" : "a number"} — the cell was not changed`),
+    xIsDate,
+  );
   /** The original row at display `pos`; the entry row's is `order.length`. */
   const rowAt = (pos: number): number => order[pos] ?? order.length + (pos - order.length);
   const valueAt = (row: number, col: number) => (col < 0 ? data.time[row] : data.values[row]?.[col]);
