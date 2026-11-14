@@ -51,8 +51,8 @@ def _size_lim(spec: Mapping[str, Any]) -> tuple[float, float] | None:
 def size_diameters(spec: Mapping[str, Any] | None, n: int) -> NDArray[np.float64] | None:
     """Per-point marker diameters (points) for ``n`` rows, NaN where the size
     value is non-finite or missing; ``None`` when the style has no ``size_by``."""
-    if not spec or spec.get("size_by") is None:
-        return None
+    if not spec or not isinstance(spec.get("size_by"), (list, tuple, np.ndarray)):
+        return None  # absent, or an unresolved channel index / junk: no sizing
     lim = _size_lim(spec)
     z = np.full(n, np.nan)
     raw = np.asarray(spec["size_by"], dtype=float)[:n]

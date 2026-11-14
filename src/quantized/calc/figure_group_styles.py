@@ -59,6 +59,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from quantized.calc.figure_marks import warn_marks_not_drawn
+
 __all__ = ["expand_grouped_series_styles"]
 
 
@@ -66,7 +68,8 @@ def _level_style(spec: Mapping[str, Any], n_levels: int) -> dict[str, Any]:
     """One channel style, rewritten for the synthetic per-level series."""
     out: dict[str, Any] = dict(spec)  # shallow copy -- never mutate the caller's
     out.pop("color_by", None)
-    out.pop("size_by", None)  # a grouped canvas draws no size-by points either
+    if out.pop("size_by", None) is not None:  # a grouped canvas draws no size-by points either
+        warn_marks_not_drawn([{"size_by": 1}], "grouped figures")
     out.pop("size_label", None)
     out.pop("colormap", None)
     # `legend` is the BUG-014 rename. It is consumed at the ROUTE layer -- on

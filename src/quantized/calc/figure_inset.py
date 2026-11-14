@@ -141,6 +141,7 @@ def _copy_line(ins: Any, ln: Line2D) -> None:
         markerfacecolor=ln.get_markerfacecolor(),
         markeredgecolor=ln.get_markeredgecolor(),
         drawstyle=ln.get_drawstyle(),
+        markevery=ln.get_markevery(),  # a spline's markers stay at the original points
         alpha=ln.get_alpha(),
         label="_inset",
     )

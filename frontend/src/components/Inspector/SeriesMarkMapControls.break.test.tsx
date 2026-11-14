@@ -38,11 +38,29 @@ describe("marks in an x-break figure", () => {
     expect(useApp.getState().status).toMatch(/x-break/);
   });
 
-  it("says nothing without a break", () => {
-    kind = "facet";
+  it("says nothing in an ordinary plot", () => {
+    kind = null;
     render(<Host />);
     fireEvent.change(screen.getByRole("combobox", { name: "Drop lines" }), { target: { value: "x" } });
     expect(screen.queryByRole("status")).toBeNull();
     expect(useApp.getState().status).toBe("");
+  });
+
+  it("facet grids draw none of the marks (card and status say so)", () => {
+    kind = "facet";
+    render(<Host />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Drop lines" }), { target: { value: "x" } });
+    expect(screen.getByRole("status").textContent).toMatch(/facet grids/);
+    expect(useApp.getState().status).toMatch(/facet grids/);
+  });
+
+  it("multi-panel cells draw spline and drop lines but not size-by", () => {
+    kind = "spatial";
+    render(<Host />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Drop lines" }), { target: { value: "x" } });
+    expect(screen.queryByRole("status")).toBeNull(); // drop lines are drawn there
+    fireEvent.click(screen.getByRole("checkbox", { name: /Size by/ }));
+    expect(screen.getByRole("status").textContent).toMatch(/multi-panel cells/);
+    expect(useApp.getState().status).toMatch(/multi-panel cells/);
   });
 });

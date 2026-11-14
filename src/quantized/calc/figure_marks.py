@@ -35,6 +35,8 @@ from quantized.calc.figure_warnings import note_figure_warning
 from quantized.heavy_import import heavy_imports
 
 __all__ = [
+    "drop_size_by",
+    "warn_marks_not_drawn",
     "SUBSTEPS",
     "DropLine",
         "apply_drop_lines",
@@ -155,6 +157,42 @@ def draw_marked_series(
 def _plain(ax: Any, xv: Any, yv: Any, label: str, kw: dict[str, Any]) -> tuple[Any, Any]:
     (line,) = ax.plot(xv, yv, label=label, **kw)
     return line, line.get_color()
+
+
+_MARK_NAMES = {"connect": "spline connect", "size_by": "size-by", "drop_lines": "drop lines"}
+
+
+def _asked(spec: Mapping[str, Any] | None, key: str) -> bool:
+    return bool(spec) and (spec.get(key) is not None if key == "size_by" else bool(spec.get(key)))  # type: ignore[union-attr]
+
+
+def warn_marks_not_drawn(
+    specs: Sequence[Mapping[str, Any] | None] | None,
+    where: str,
+    keys: Sequence[str] = ("connect", "size_by", "drop_lines"),
+) -> bool:
+    """Say, once, which of the marks ``specs`` ask for a figure path cannot draw
+    (``where``: "facet figures", "the inset", ...) -- never a silent skip. The
+    screen's matching view strips the same marks. True when it warned."""
+    names = [_MARK_NAMES[k] for k in keys if any(_asked(s, k) for s in specs or [])]
+    if not names:
+        return False
+    what = ", ".join(names[:-1]) + (" and " if len(names) > 1 else "") + names[-1]
+    note_figure_warning(
+        f"{what[0].upper()}{what[1:]} {'is' if len(names) == 1 else 'are'} not drawn in {where}; "
+        "those series are drawn as ordinary lines."
+    )
+    return True
+
+
+def drop_size_by(
+    specs: Sequence[Mapping[str, Any] | None] | None, where: str
+) -> list[Mapping[str, Any] | None] | None:
+    """``specs`` without ``size_by`` (warned), for a path that cannot size points."""
+    if specs is None:
+        return None
+    warn_marks_not_drawn(specs, where, ("size_by",))
+    return [{k: v for k, v in s.items() if k != "size_by"} if s else s for s in specs]
 
 
 def _marker(spec: Mapping[str, Any]) -> str:

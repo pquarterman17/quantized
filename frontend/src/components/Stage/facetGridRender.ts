@@ -33,6 +33,7 @@ import type { FacetPanel } from "../../lib/facet";
 import { cellSize, type xZoomSyncHook } from "../../lib/multipanel";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import type { SeriesStyle } from "../../lib/types";
+import { plainStyle } from "./breakPanelRender";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
 import { alignGutters, resizeAligned, sharedGutters } from "./panelGutters";
 
@@ -96,7 +97,8 @@ export function renderFacetGrid(host: HTMLDivElement, args: FacetGridArgs): uPlo
       // carried by the panel because the default (null `yKeys`) channel list
       // is resolved per row-slice and can differ panel to panel.
       seriesLabels: args.encoded ? [...args.encoded.labels[i]] : p.channels.map((ch) => args.seriesLabels[ch]),
-      seriesStyles: args.encoded ? [...args.encoded.styles[i]] : facetPanelStyles(p, args.seriesStyles),
+      // Spline / size-by / drop lines are not drawn in facet grids (the export warns the same).
+      seriesStyles: (args.encoded ? [...args.encoded.styles[i]] : facetPanelStyles(p, args.seriesStyles)).map((s) => plainStyle(s)),
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
     });

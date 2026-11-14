@@ -44,6 +44,10 @@ describe("break panels and the data-driven marks", () => {
     const plain = { color: "#f00" };
     expect(plainStyle(plain)).toBe(plain);
     expect(plainStyle(undefined)).toBeUndefined();
+    // The magnifier inset keeps the spline (the export's inset copies it) and drops the rest.
+    expect(plainStyle({ connect: "spline", dropLines: "x", sizeBy: 1 }, ["dropLines", "sizeBy"])).toMatchObject({
+      connect: "spline", dropLines: undefined, sizeBy: undefined,
+    });
   });
 
   it("a break panel draws a spline / size-by series as an ordinary visible line, with no mark plugin", async () => {

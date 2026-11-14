@@ -54,16 +54,18 @@ import { breakPanelWidths, xZoomSyncHook } from "../../lib/multipanel";
 import type { SeriesStyle } from "../../lib/types";
 import { errorReach } from "../../lib/uplotErrorRange";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
-import { usesMarks } from "../../lib/marksLoader";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
 import { applySeamSides, breakPlotWidths, yTitleKey } from "./breakPanelLayout";
 
 /** The width of the hashed seam drawn between two adjacent break panels. */
 const BREAK_GLYPH_W = 20;
 
-/** A style without its marks: a break panel cannot draw them (the export warns the same). */
-export const plainStyle = (s: SeriesStyle | undefined): SeriesStyle | undefined =>
-  usesMarks(s) ? { ...s, connect: undefined, dropLines: undefined, sizeBy: undefined } : s;
+/** A style without the given marks (default: all three): a view that cannot draw them shows an
+ *  ordinary line instead, and the export of that view warns the same (`calc.figure_marks`). */
+export const plainStyle = (
+  s: SeriesStyle | undefined,
+  keys: readonly ("connect" | "dropLines" | "sizeBy")[] = ["connect", "dropLines", "sizeBy"],
+): SeriesStyle | undefined => (s && keys.some((k) => s[k] != null) ? { ...s, ...Object.fromEntries(keys.map((k) => [k, undefined])) } : s);
 
 /** Everything a break panel's `buildOpts` call needs that is the SAME for
  *  every panel. `width`/`height` (the computed panel box), `xLim` (the

@@ -40,7 +40,7 @@ from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
 from quantized.heavy_import import heavy_imports
 
 from .figure_errorbars import apply_error_bars
-from .figure_marks import DropLine, apply_drop_lines, draw_marked_series
+from .figure_marks import DropLine, apply_drop_lines, draw_marked_series, warn_marks_not_drawn
 from .figure_orient import TransposedAxes, oriented
 
 __all__ = ["draw_series_axes", "render_figure", "style_rc"]
@@ -235,6 +235,8 @@ def draw_series_axes(
     apply_axis_style(ax, "x", x_fmt, side="bottom", grid_alpha=st.grid_alpha)
     apply_axis_style(ax, "y", y_fmt, side="left", grid_alpha=st.grid_alpha)
     apply_drop_lines(ax, drops)  # needs the final limits
+    if ov.get("inset"):
+        warn_marks_not_drawn(series_styles, "the inset", ("size_by", "drop_lines"))
     apply_inset(ax, artists, ov, resolved_x_scale, resolved_y_scale, st.grid_alpha)
     return artists
 

@@ -29,19 +29,23 @@ interface Props {
   setSeriesStyle: (channel: number, patch: Partial<SeriesStyle>, coalesce?: string) => void;
 }
 
-const BREAK_NOTICE =
-  "Not drawn in x-break panels (the export says so too): this series shows as an ordinary line there.";
+/** What a plot arrangement cannot draw, and the notice for it (the export of that arrangement warns the same). */
+const NOTICES: Record<string, { text: string; sizeOnly: boolean }> = {
+  break: { text: "Not drawn in x-break panels (the export says so too): this series shows as an ordinary line there.", sizeOnly: false },
+  facet: { text: "Not drawn in facet grids (the export says so too): this series shows as an ordinary line there.", sizeOnly: false },
+  spatial: { text: "Size-by is not drawn in multi-panel cells (the page export says so too): those points keep their normal size.", sizeOnly: true },
+};
 
 export default function SeriesMarkMapControls({ channel, style, setSeriesStyle: apply }: Props) {
   const active = useApp((s) => s.datasets.find((d) => d.id === s.activeId) ?? null);
   const data = active?.data;
   const setStatus = useApp((s) => s.setStatus);
-  const broken = useEffectiveComposition(active)?.kind === "break";
-  const asked = style.sizeBy != null || !!style.dropLines || !!style.connect;
-  // Spline / size-by / drop lines are not drawn in x-break panels: say so in the plot status too.
+  const notice = NOTICES[useEffectiveComposition(active)?.kind ?? ""];
+  const hit = (s: Partial<SeriesStyle>) => s.sizeBy != null || (!notice?.sizeOnly && (!!s.dropLines || !!s.connect));
+  // Marks the arrangement cannot draw: say so in the plot status too.
   const setSeriesStyle: Props["setSeriesStyle"] = (ch, patch, coalesce) => {
     apply(ch, patch, coalesce);
-    if (broken && (patch.sizeBy != null || patch.dropLines || patch.connect)) setStatus(BREAK_NOTICE);
+    if (notice && hit(patch)) setStatus(notice.text);
   };
   const xKey = useApp((s) => s.xKey);
   const labels = data?.labels ?? [];
@@ -110,9 +114,9 @@ export default function SeriesMarkMapControls({ channel, style, setSeriesStyle: 
           onChange={(e) => setSeriesStyle(channel, { connect: e.target.value === "spline" ? "spline" : undefined })}
         />
       </div>
-      {broken && asked && (
+      {notice && hit(style) && (
         <div className="qzk-ds-meta" role="status" style={{ marginTop: 4, color: "var(--warn, var(--text-faint))", whiteSpace: "normal" }}>
-          {BREAK_NOTICE}
+          {notice.text}
         </div>
       )}
       {straight && (
