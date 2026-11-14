@@ -1,92 +1,114 @@
 // Dataset Math workshop — view. A draggable ToolWindow: pick dataset A, an
 // operation (A±B, A×B, A/B, asymmetry), and dataset B; B is interpolated onto
 // A's x-grid and the result is written to the library. Thin — logic in the hook.
+// The "Average N" tab (gap audit 2 #9) is AverageCurvesSection.
 
 import ToolWindow from "../../overlays/ToolWindow";
 import TransformWarningList from "../../overlays/TransformWarningList";
 import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
+import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { useApp } from "../../../store/useApp";
+import AverageCurvesSection from "./AverageCurvesSection";
 import { OPERATIONS, useDatasetMath } from "./useDatasetMath";
 
 const INTERP = ["pchip", "linear", "spline"];
 
 export default function DatasetMathPanel() {
   const setOpen = useApp((s) => s.setDatasetMathOpen);
-  const m = useDatasetMath();
-  const dsOptions = m.datasets.map((d) => ({ value: d.id, label: d.name }));
-  const enough = m.datasets.length >= 2;
+  const mode = useApp((s) => s.datasetMathMode);
+  const enough = useApp((s) => s.datasets.length >= 2);
 
   return (
     <ToolWindow id="datasetmath" title="Dataset Math" width={320} onClose={() => setOpen(false)}>
+      <SegmentedControl
+        aria-label="Dataset math mode"
+        options={[
+          { value: "combine", label: "Combine A, B" },
+          { value: "average", label: "Average N" },
+        ]}
+        value={mode}
+        onChange={(v) => setOpen(true, v)}
+      />
+      <div style={{ marginTop: 8 }} />
       {!enough ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
-          Load at least two datasets to combine.
+          Load at least two datasets to {mode === "average" ? "average" : "combine"}.
         </div>
+      ) : mode === "average" ? (
+        <AverageCurvesSection />
       ) : (
-        <>
-          <label className="qzk-field-lbl">Dataset A</label>
-          <Select options={dsOptions} value={m.idA} onChange={(e) => m.setIdA(e.target.value)} />
-
-          <label className="qzk-field-lbl" style={{ marginTop: 8 }}>
-            Operation
-          </label>
-          <Select
-            options={OPERATIONS}
-            value={m.operation}
-            onChange={(e) => m.setOperation(e.target.value)}
-          />
-
-          <label className="qzk-field-lbl" style={{ marginTop: 8 }}>
-            Dataset B
-          </label>
-          <Select options={dsOptions} value={m.idB} onChange={(e) => m.setIdB(e.target.value)} />
-
-          <label className="qzk-field-lbl" style={{ marginTop: 8 }}>
-            Interpolate B onto A
-          </label>
-          <Select
-            options={INTERP.map((v) => ({ value: v, label: v }))}
-            value={m.interp}
-            onChange={(e) => m.setInterp(e.target.value)}
-          />
-
-          <TransformWarningList warnings={m.warnings} />
-          {m.previewOnly && m.warnings.length > 0 && (
-            <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
-              Counted on the loaded preview; the full data is checked again when you combine.
-            </div>
-          )}
-          {(m.blockedByUnits || m.unitsAcknowledged) && (
-            <div style={{ marginTop: 6 }}>
-              <Checkbox checked={m.unitsAcknowledged} onChange={m.setUnitsAcknowledged}>
-                Combine despite the unit mismatch
-              </Checkbox>
-            </div>
-          )}
-
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={m.busy || m.idA === m.idB || m.blockedByUnits}
-            onClick={() => void m.compute()}
-            style={{ marginTop: 12, width: "100%" }}
-          >
-            {m.busy ? "Computing…" : "Combine → new dataset"}
-          </Button>
-
-          {m.idA === m.idB && (
-            <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--text-faint)" }}>
-              Pick two different datasets.
-            </div>
-          )}
-          {m.error && (
-            <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--danger)" }}>
-              {m.error}
-            </div>
-          )}
-        </>
+        <CombineSection />
       )}
     </ToolWindow>
+  );
+}
+
+function CombineSection() {
+  const m = useDatasetMath();
+  const dsOptions = m.datasets.map((d) => ({ value: d.id, label: d.name }));
+  return (
+    <>
+      <label className="qzk-field-lbl">Dataset A</label>
+      <Select options={dsOptions} value={m.idA} onChange={(e) => m.setIdA(e.target.value)} />
+
+      <label className="qzk-field-lbl" style={{ marginTop: 8 }}>
+        Operation
+      </label>
+      <Select
+        options={OPERATIONS}
+        value={m.operation}
+        onChange={(e) => m.setOperation(e.target.value)}
+      />
+
+      <label className="qzk-field-lbl" style={{ marginTop: 8 }}>
+        Dataset B
+      </label>
+      <Select options={dsOptions} value={m.idB} onChange={(e) => m.setIdB(e.target.value)} />
+
+      <label className="qzk-field-lbl" style={{ marginTop: 8 }}>
+        Interpolate B onto A
+      </label>
+      <Select
+        options={INTERP.map((v) => ({ value: v, label: v }))}
+        value={m.interp}
+        onChange={(e) => m.setInterp(e.target.value)}
+      />
+
+      <TransformWarningList warnings={m.warnings} />
+      {m.previewOnly && m.warnings.length > 0 && (
+        <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
+          Counted on the loaded preview; the full data is checked again when you combine.
+        </div>
+      )}
+      {(m.blockedByUnits || m.unitsAcknowledged) && (
+        <div style={{ marginTop: 6 }}>
+          <Checkbox checked={m.unitsAcknowledged} onChange={m.setUnitsAcknowledged}>
+            Combine despite the unit mismatch
+          </Checkbox>
+        </div>
+      )}
+
+      <Button
+        variant="primary"
+        size="sm"
+        disabled={m.busy || m.idA === m.idB || m.blockedByUnits}
+        onClick={() => void m.compute()}
+        style={{ marginTop: 12, width: "100%" }}
+      >
+        {m.busy ? "Computing…" : "Combine → new dataset"}
+      </Button>
+
+      {m.idA === m.idB && (
+        <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--text-faint)" }}>
+          Pick two different datasets.
+        </div>
+      )}
+      {m.error && (
+        <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--danger)" }}>
+          {m.error}
+        </div>
+      )}
+    </>
   );
 }

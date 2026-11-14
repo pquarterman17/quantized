@@ -5586,6 +5586,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/transform/average": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Average
+         * @description Mean, SD, SEM and N of N curves interpolated onto one grid.
+         */
+        post: operations["average_api_transform_average_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/transform/resample": {
         parameters: {
             query?: never;
@@ -6041,6 +6061,57 @@ export interface components {
             fpr: number[];
             /** Tpr */
             tpr: number[];
+        };
+        /** AverageCurve */
+        AverageCurve: {
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /** Name */
+            name: string;
+        };
+        /** AverageRequest */
+        AverageRequest: {
+            /**
+             * Allow Unit Mismatch
+             * @default false
+             */
+            allow_unit_mismatch?: boolean;
+            /**
+             * Channel
+             * @default
+             */
+            channel?: string;
+            /** Curves */
+            curves: components["schemas"]["AverageCurve"][];
+            /**
+             * Grid
+             * @default union
+             * @enum {string}
+             */
+            grid?: "union" | "step";
+            /** Step */
+            step?: number | null;
+            /**
+             * Unsorted
+             * @default refuse
+             * @enum {string}
+             */
+            unsorted?: "refuse" | "sort";
+        };
+        /** AverageResponse */
+        AverageResponse: {
+            /** Channels */
+            channels: string[];
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /** Overlap */
+            overlap: (number | null)[];
+            /** Warnings */
+            warnings: components["schemas"]["ResampleWarning"][];
         };
         /**
          * AxisLabelStyle
@@ -21075,6 +21146,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    average_api_transform_average_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AverageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AverageResponse"];
                 };
             };
             /** @description Validation Error */

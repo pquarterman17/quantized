@@ -22,6 +22,7 @@ import { useApp } from "../../store/useApp";
 import { Button, Select } from "../primitives";
 import Card from "../primitives/Card";
 import { IconButton } from "../primitives/IconButton";
+import ComputedErrorRow from "./ComputedErrorRow";
 
 const SIDES: { value: ErrorSide; label: string }[] = [
   { value: "both", label: "± symmetric" },
@@ -42,7 +43,8 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
   const recordHistory = useApp((s) => s.recordHistory);
   const yKeys = useApp((s) => s.yKeys);
   const xKey = useApp((s) => s.xKey);
-  if (!active || active.data.labels.length < 2) return null;
+  // One column is enough since gap #14: its error can be COMPUTED (√Y, %, constant).
+  if (!active || active.data.labels.length < 1) return null;
   const plottedY = effectiveChannels(active.data, yKeys, xKey, active.channelRoles);
 
   const labels = active.data.labels;
@@ -220,6 +222,7 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
           Detect from names
         </Button>
       </div>
+      <ComputedErrorRow datasetId={active.id} labels={labels} series={plottedY} />
       </div>
     </Card>
   );
