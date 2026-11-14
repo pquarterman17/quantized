@@ -62,10 +62,15 @@ const BREAK_GLYPH_W = 20;
 
 /** A style without the given marks (default: all three): a view that cannot draw them shows an
  *  ordinary line instead, and the export of that view warns the same (`calc.figure_marks`). */
-export const plainStyle = (
+export function plainStyle(
   s: SeriesStyle | undefined,
   keys: readonly ("connect" | "dropLines" | "sizeBy")[] = ["connect", "dropLines", "sizeBy"],
-): SeriesStyle | undefined => (s && keys.some((k) => s[k] != null) ? { ...s, ...Object.fromEntries(keys.map((k) => [k, undefined])) } : s);
+): SeriesStyle | undefined {
+  const o = s && { ...s };
+  const hit = keys.filter((k) => o?.[k] != null);
+  hit.forEach((k) => delete o![k]);
+  return hit.length ? o : s;
+}
 
 /** Everything a break panel's `buildOpts` call needs that is the SAME for
  *  every panel. `width`/`height` (the computed panel box), `xLim` (the
