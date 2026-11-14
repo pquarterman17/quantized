@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from quantized.csv_safe import neutralize_formula
+from quantized.heavy_import import heavy_imports
 
 __all__ = ["COLUMN_KINDS", "ExportColumn", "ExportSheet", "format_delimited", "format_xlsx"]
 
@@ -153,7 +154,8 @@ def format_xlsx(sheets: Sequence[ExportSheet], *, header: bool = True) -> bytes:
     and dates as date cells (shown ``yyyy-mm-dd hh:mm:ss``, UTC)."""
     if not sheets:
         raise ValueError("nothing to export")
-    from openpyxl import Workbook  # the xlsx reader's own dependency
+    with heavy_imports("openpyxl"):  # the xlsx reader's own dependency (BUG-032)
+        from openpyxl import Workbook
 
     wb = Workbook()
     wb.remove(wb.active)
