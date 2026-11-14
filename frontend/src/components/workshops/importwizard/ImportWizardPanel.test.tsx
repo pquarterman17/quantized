@@ -201,6 +201,20 @@ describe("ImportWizardPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Import" }));
     await waitFor(() => expect(screen.getByText(/no y\/error columns/)).toBeInTheDocument());
     expect(useApp.getState().datasets).toHaveLength(0);
+    // A failed import must leave the wizard open with the error visible, not
+    // close it out from under the user.
+    expect(useApp.getState().importWizardOpen).toBe(true);
+  });
+
+  it("closes the wizard automatically after a successful import", async () => {
+    importParseMock.mockResolvedValue(DS);
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByDisplayValue("Temp")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(1));
+    await waitFor(() => expect(useApp.getState().importWizardOpen).toBe(false));
   });
 
   it("P1-5 DEFECT 1: disables Import and shows a named-column conflict message when two columns are marked x", async () => {
