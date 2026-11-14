@@ -9,7 +9,6 @@ import { useId, useMemo, useState } from "react";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenuLazy";
 import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
 import { colorScaleLegendEntries, type ColorScatterSpec } from "../../lib/colorscatter";
-import { sizeLegendEntries } from "../../lib/sizescatter";
 import { lazyRegion } from "../../lib/lazyRegion";
 import { legendNonCurves } from "../../lib/legendCurves";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
@@ -17,7 +16,6 @@ import type { DefaultTrace, SeriesStyle } from "../../lib/types";
 import { RichText } from "../primitives";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import ColorScaleChip from "./ColorScaleChip";
-import SizeScaleChip from "./SizeScaleChip";
 import LegendSample from "./LegendSample";
 import { legendRowStyle } from "./legendRowStyle";
 import { SERIES_VARS, type SeriesCycle } from "../../lib/seriesStyleCycle";
@@ -127,7 +125,6 @@ export default function PlotLegend({
     active && colorByColumns && colorByColumns.size > 0
       ? colorScaleLegendEntries(active.data, colorByColumns)
       : [];
-  const sizeScales = active && colorByColumns ? sizeLegendEntries(active.data, [...colorByColumns.values()]) : []; // N5
 
   const defaultLabel = (s: PlotSeriesSpec) => s.legend ?? withUnit(s.label, s.unit);
   // A row's finished text. An EMPTY one has no legend row (the series stays
@@ -151,7 +148,7 @@ export default function PlotLegend({
   };
 
   // No rows, no title, no colour scale: no box, as the export draws no legend.
-  if (!anyRow && !legendTitle && colorScales.length === 0 && sizeScales.length === 0) return null;
+  if (!anyRow && !legendTitle && colorScales.length === 0) return null;
   const visibleCount = plotted.filter((c) => !hiddenChannels.includes(c)).length;
   // "auto" past the palette's eight shown series: a column outside the frame
   // (shell.css; the export's "outside right"). Else lib/legendAutoPlace's corner.
@@ -314,9 +311,6 @@ export default function PlotLegend({
       })}
       {colorScales.map((cs, i) => (
         <ColorScaleChip key={`cbar-${i}`} scale={cs} />
-      ))}
-      {sizeScales.map((ss, i) => (
-        <SizeScaleChip key={`size-${i}`} scale={ss} />
       ))}
       </div>
       {menu && (

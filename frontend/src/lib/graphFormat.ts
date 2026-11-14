@@ -185,8 +185,7 @@ export function seriesStyleFromExport(style: ExportSeriesStyle | null): SeriesSt
   if (style.step) out.step = style.step;
   if (style.fill === "under") out.fill = "under";
   if (style.marker_fill) out.markerFill = style.marker_fill;
-  // N5/N6: the channel-bound `size_by` is not portable; the rest is.
-  if (style.size_range) out.sizeRange = [style.size_range[0], style.size_range[1]];
+  // N5/N6: size-by is channel-bound (not restored); drop lines and the spline connect are.
   if (style.drop_lines) out.dropLines = style.drop_lines;
   if (style.connect) out.connect = style.connect;
   // Sanitized on load (`sanitizeExportSeriesStyles`): only real values remain.

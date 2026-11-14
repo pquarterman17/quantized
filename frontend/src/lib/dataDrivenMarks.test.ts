@@ -3,11 +3,14 @@
 // tests/test_calc_figure_marks.py; both read the SAME wire keys
 // (`size_by` / `size_range` / `drop_lines` / `connect`).
 
+import { renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { buildColorByColumns, colorScaleLegendEntries, type ColorScatterSpec } from "./colorscatter";
 import { buildExportStyles, toWireSeriesStyles } from "./exportStyles";
 import { portableStyle, seriesStyleFromExport } from "./graphFormat";
+import { marks, useMarksVersion } from "./marksLoader";
+import { sizeScatterPlugin, withSizes } from "./marksImpl";
 import { sanitizeExportSeriesStyles } from "./publicationStyles";
 import type { PlotPayload } from "./plotdata";
 import { buildOpts } from "./uplotOpts";
@@ -34,9 +37,38 @@ const opts = (style: unknown, p: PlotPayload = payload, extra: object = {}) =>
     plotted: [0], seriesStyles: [style] as never, ...extra,
   });
 
+
+// The marks are a lazy chunk (lib/marksLoader.ts). FIRST in this file, before anything has
+// loaded it: until it arrives a series that asks for a mark draws NOTHING of it —
+// never a different shape — and its arrival bumps the version the plot rebuilds on.
+describe("lazy marks: before the module arrives", () => {
+  it("a spline / size-by / drop-line series is HIDDEN (no straight stand-in, no default-size dots) and there is no drop-line plugin; its arrival bumps the rebuild version", async () => {
+    const { result } = renderHook(() => useMarksVersion());
+    expect(result.current).toBeNull();
+    expect(marks()).toBeNull();
+    const calls: string[] = [];
+    class P { moveTo() { calls.push("m"); } lineTo() { calls.push("l"); } }
+    vi.stubGlobal("Path2D", P);
+    const o = opts({ connect: "spline", dropLines: "both" });
+    const sp = o.series![1] as { width: number; paths?: unknown; points: { show: boolean } };
+    expect(sp.width).toBe(0); // hidden: a straight polyline here would later jump to a spline
+    expect(sp.points.show).toBe(false);
+    expect(sp.paths).toBeUndefined();
+    expect(calls).toEqual([]);
+    expect(o.plugins?.length ?? 0).toBe(opts(undefined).plugins?.length ?? 0); // no drop-line plugin yet
+    vi.unstubAllGlobals();
+    const sized = opts({ sizeBy: 1, width: 2 }).series![1] as { width: number; points: { show: boolean } };
+    expect(sized.width).toBe(0);
+    expect(sized.points.show).toBe(false);
+    expect(marks()).toBeNull(); // still pending: all of the above was synchronous
+    await waitFor(() => expect(marks()).not.toBeNull());
+    await waitFor(() => expect(result.current).not.toBeNull()); // the plot's rebuild trigger
+  });
+});
+
 describe("N5 size by column: the canvas spec", () => {
   it("a sizeBy series gets a flat spec carrying per-row diameters and the size key", () => {
-    const m = buildColorByColumns(ds, [0], { 0: { sizeBy: 1, sizeRange: [4, 12] } });
+    const m = withSizes(new Map(), ds, [0], { 0: { sizeBy: 1, sizeRange: [4, 12] } });
     const spec = m.get(1)!;
     expect(spec.flat).toBe(true);
     expect(spec.size).toMatchObject({ channel: 1, lo: 0, hi: 4, minPx: 4, maxPx: 12 });
@@ -44,18 +76,19 @@ describe("N5 size by column: the canvas spec", () => {
   });
 
   it("colorBy + sizeBy keeps the colour scale AND sizes the points", () => {
-    const spec = buildColorByColumns(ds, [0], { 0: { colorBy: 1, sizeBy: 0 } }).get(1)!;
+    const styles = { 0: { colorBy: 1, sizeBy: 0 } };
+    const spec = withSizes(buildColorByColumns(ds, [0], styles), ds, [0], styles).get(1)!;
     expect(spec.flat).toBeUndefined();
     expect(spec.diam).toHaveLength(4);
   });
 
   it("a flat size spec adds no colour-scale chip", () => {
-    const m = buildColorByColumns(ds, [0], { 0: { sizeBy: 1 } });
+    const m = withSizes(new Map(), ds, [0], { 0: { sizeBy: 1 } });
     expect(colorScaleLegendEntries(ds, m)).toEqual([]);
   });
 
   it("a size-only series keeps its LINE but hides the native points", () => {
-    const m = buildColorByColumns(ds, [0], { 0: { sizeBy: 1, width: 2 } });
+    const m = withSizes(new Map(), ds, [0], { 0: { sizeBy: 1, width: 2 } });
     const o = opts({ sizeBy: 1, width: 2 }, payload, { colorByColumns: m });
     const s = o.series![1] as { width: number; points: { show: boolean } };
     expect(s.width).toBe(2);
@@ -70,6 +103,8 @@ describe("N5 size by column: the canvas spec", () => {
       save() {}, restore() {}, beginPath() {}, rect() {}, clip() {},
       arc(_x: number, _y: number, rad: number) { r = rad; },
       fill() { dots.push({ r, fillStyle }); },
+      fillText() {}, measureText: () => ({ width: 0 }),
+      set font(_v: string) {}, set textAlign(_v: string) {}, set textBaseline(_v: string) {},
       set fillStyle(v: string) { fillStyle = v; },
     };
     const u = {
@@ -79,7 +114,12 @@ describe("N5 size by column: the canvas spec", () => {
       series: [{}, { stroke }],
     };
     // @ts-expect-error — minimal stub stands in for a uPlot instance
+    sizeScatterPlugin(new Map([[1, spec]])).hooks.draw?.(u);
+    const before = dots.length;
+    // The eager colour plugin leaves a size-by series to the lazy one (no double draw).
+    // @ts-expect-error — same stub
     colorScatterPlugin(new Map([[1, spec]])).hooks.draw?.(u);
+    expect(dots.length).toBe(before);
     return dots;
   }
 
@@ -95,9 +135,35 @@ describe("N5 size by column: the canvas spec", () => {
   it("the plugin draws each point at its own radius in the series stroke", () => {
     const dots = drawPlugin({
       channel: 1, z: [], colormap: "viridis", lo: 0, hi: 1, flat: true, diam: [4, 8, null],
-      size: { channel: 1, lo: 0, hi: 2, minPx: 4, maxPx: 12 },
+      size: { channel: 1, label: "mass (g)", lo: 0, hi: 2, minPx: 4, maxPx: 12 },
     });
-    expect(dots).toEqual([{ r: 2, fillStyle: "#ff0000" }, { r: 4, fillStyle: "#ff0000" }]); // null = no point
+    expect(dots.slice(0, 2)).toEqual([{ r: 2, fillStyle: "#ff0000" }, { r: 4, fillStyle: "#ff0000" }]); // null = no point; the key follows
+  });
+});
+
+describe("N5 size key on the canvas", () => {
+  it("the lazy plugin draws the key: the channel's label and discs at min / mid / max", () => {
+    const texts: string[] = [];
+    const radii: number[] = [];
+    const ctx = {
+      save() {}, restore() {}, beginPath() {}, rect() {}, clip() {}, fill() {},
+      arc(_x: number, _y: number, r: number) { radii.push(r); },
+      fillText(t: string) { texts.push(t); },
+      measureText: () => ({ width: 40 }),
+      set fillStyle(_v: string) {}, set font(_v: string) {}, set textAlign(_v: string) {}, set textBaseline(_v: string) {},
+    };
+    const u = {
+      ctx, bbox: { left: 0, top: 0, width: 300, height: 200 },
+      valToPos: (v: number, s: string) => (s === "x" ? v : 100 - v),
+      data: [[0], [10]], series: [{}, { stroke: "#f00" }],
+    };
+    const spec = withSizes(new Map(), ds, [0], { 0: { sizeBy: 1, sizeRange: [4, 12] } }).get(1)!;
+    // @ts-expect-error — minimal stub stands in for a uPlot instance
+    sizeScatterPlugin(new Map([[1, spec]])).hooks.draw?.(u);
+    expect(texts).toContain("mass (g)");
+    expect(texts).toEqual(expect.arrayContaining(["0", "2", "4"]));
+    // 1 data disc + 3 key discs, at radii px/2: 2, 4, 6 for the key (devicePixelRatio is 1 here).
+    expect(radii.slice(-3).sort((a, b) => a - b)).toEqual([2, 4, 6]);
   });
 });
 
@@ -171,20 +237,19 @@ describe("the wire keys and their round trips", () => {
     expect(wire).toMatchObject({ size_by: 1, drop_lines: "x", connect: "spline" });
     const [back] = sanitizeExportSeriesStyles([wire])!;
     expect(back).toMatchObject({ size_by: 1, drop_lines: "x", connect: "spline" });
-    const [junk] = sanitizeExportSeriesStyles([
-      { drop_lines: "up", connect: "bezier", size_by: -2, size_range: [9, 1] },
-    ])!;
+    // Junk is left for the backend to reject (tests/test_calc_figure_marks.py); other keys still drop.
+    const [junk] = sanitizeExportSeriesStyles([{ bogus: 1 }])!;
     expect(junk).toBeNull();
   });
 
-  it("a saved publication style restores dropLines/connect/sizeRange (not the channel-bound sizeBy)", () => {
+  it("a saved publication style restores dropLines/connect (not the channel-bound size-by)", () => {
     const st = seriesStyleFromExport({ drop_lines: "y", connect: "spline", size_range: [4, 9], size_by: 1 });
-    expect(st).toMatchObject({ dropLines: "y", connect: "spline", sizeRange: [4, 9] });
+    expect(st).toMatchObject({ dropLines: "y", connect: "spline" });
     expect(st).not.toHaveProperty("sizeBy");
   });
 
   it("a graph format is data-free: sizeBy is stripped, drop lines / spline travel", () => {
     const out = portableStyle({ sizeBy: 1, sizeRange: [4, 9], dropLines: "x", connect: "spline" });
-    expect(out).toEqual({ dropLines: "x", connect: "spline", sizeRange: [4, 9] });
+    expect(out).toEqual({ dropLines: "x", connect: "spline", sizeRange: [4, 9] }); // the range rides along; harmless without sizeBy
   });
 });

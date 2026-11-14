@@ -33,13 +33,12 @@ from quantized.calc.figure_decor import _apply_region_shades, _split_region_shad
 from quantized.calc.figure_errorbars import apply_error_bars
 from quantized.calc.figure_inset import apply_inset
 from quantized.calc.figure_legend_order import draw_legend, tag_series_slots
-from quantized.calc.figure_marks import draw_marked_series
+from quantized.calc.figure_marks import apply_drop_lines, draw_marked_series
 from quantized.calc.figure_orient import oriented
 from quantized.calc.figure_overrides import legend_kwargs
 from quantized.calc.figure_scale import apply_axis_scale, drawable_lim, resolve_axis_scale
 from quantized.calc.figure_styles import FigureStyle
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
-from quantized.calc.figure_warnings import note_figure_warning
 
 __all__ = ["draw_secondary_axes", "render_with_secondary_axis"]
 
@@ -162,8 +161,6 @@ def draw_secondary_axes(
         if "color" not in kw:
             kw["color"] = f"C{(color_offset + i) % 10}"
         line, _ = draw_marked_series(ax2, xv, yv, label, kw, spec, bars=False)
-        if spec and spec.get("drop_lines"):
-            note_figure_warning("Drop lines are drawn for primary-axis series only.")
         _apply_fill(ax2, xv, yv, series, i, spec, line.get_color())
         artists.append(line)
     apply_error_bars(ax2, xv, series, error_spans, artists, series_styles)
@@ -301,6 +298,13 @@ def render_with_secondary_axis(
     # After the y2 limits (audit #11): a shade's log-floor clamp and its
     # off-scale warning read the FINAL secondary range.
     _apply_region_shades(ax2, secondary_shades)
+    apply_drop_lines(ax2, [
+        (xv, np.asarray(y, dtype=float), str(spec["drop_lines"]), art.get_color())
+        for (_, y), spec, art in zip(
+            y2_series, y2_styles or [None] * len(y2_series), y2_artists, strict=False
+        )
+        if spec and spec.get("drop_lines") in ("x", "y", "both") and not spec.get("bars")
+    ])  # N6: to the secondary axes' final bottom / left edge
     apply_inset(
         ax, artists, ov, resolve_axis_scale(x_scale, x_log), resolve_axis_scale(y_scale, y_log),
         st.grid_alpha, twin=(ax2, y2_artists, resolve_axis_scale(y2_scale, False)),

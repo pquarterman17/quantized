@@ -13,8 +13,9 @@ import type { DataStruct } from "./types";
 export const DEFAULT_SIZE_RANGE: [number, number] = [3, 14];
 
 export interface SizeKey {
-  /** The size channel's index (legend title). */
+  /** The size channel's index and its legend title ("label (unit)"). */
   channel: number;
+  label: string;
   /** The channel's full finite range (stable across zoom/pan). */
   lo: number;
   hi: number;
@@ -41,7 +42,8 @@ export function buildSizeKey(ds: DataStruct, channel: number, range?: readonly n
   }
   if (lo > hi) return null;
   const [minPx, maxPx] = sizeRange(range);
-  return { channel, lo, hi, minPx, maxPx };
+  const label = withUnit(ds.labels[channel] ?? `channel ${channel}`, ds.units[channel]);
+  return { channel, label, lo, hi, minPx, maxPx };
 }
 
 /** One row's marker diameter, or null for a non-finite value (no point). A
@@ -57,18 +59,16 @@ export interface SizeLegendEntry {
   marks: { value: number; px: number }[];
 }
 
-/** The size key chips: the channel's label and its min / middle / max sizes. */
-export function sizeLegendEntries(ds: DataStruct, specs: readonly { size?: SizeKey }[]): SizeLegendEntry[] {
+/** The size key's entries: the channel's label and its min / middle / max sizes. */
+export function sizeLegendEntries(specs: readonly { size?: SizeKey }[]): SizeLegendEntry[] {
   const seen = new Set<string>();
   const out: SizeLegendEntry[] = [];
   for (const { size: k } of specs) {
     if (!k) continue;
-    const label = withUnit(ds.labels[k.channel] ?? `channel ${k.channel}`, ds.units[k.channel]);
-    const marks = k.hi > k.lo
-      ? [k.lo, (k.lo + k.hi) / 2, k.hi].map((value) => ({ value, px: sizeDiameter(k, value) as number }))
-      : [{ value: k.lo, px: sizeDiameter(k, k.lo) as number }];
-    const key = JSON.stringify([label, marks]);
-    if (!seen.has(key)) { seen.add(key); out.push({ label, marks }); }
+    const vals = k.hi > k.lo ? [k.lo, (k.lo + k.hi) / 2, k.hi] : [k.lo];
+    const marks = vals.map((value) => ({ value, px: sizeDiameter(k, value) as number }));
+    const key = JSON.stringify([k.label, marks]);
+    if (!seen.has(key)) { seen.add(key); out.push({ label: k.label, marks }); }
   }
   return out;
 }

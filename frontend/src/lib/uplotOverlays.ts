@@ -24,7 +24,6 @@ import type { RegionShade } from "./types";
 // Shade drawing + the off-scale marker are a lazy chunk (lib/regionDecorLoader.ts).
 import { regionDecor } from "./regionDecorLoader";
 import { beginErrorDraw, styleErrorDraw } from "./uplotErrorRange";
-import { seriesStrokeColor } from "./uplotDropLines";
 const MOVE = "mousemove", UP = "mouseup";
 export { pickRefLine, type RefLineHit } from "./refLineHit";
 
@@ -1058,19 +1057,15 @@ export function colorScatterPlugin(specs: Map<number, ColorScatterSpec>): uPlot.
         ctx.clip();
         for (const [col, spec] of specs) {
           const ys = u.data[col];
-          if (!ys) continue;
+          if (!ys || spec.diam) continue; // a size-by series is drawn by the lazy `sizeScatterPlugin`
           const scaleKey = u.series[col]?.scale ?? "y";
-          // N5: a size-only series paints in its own stroke; `diam` (px) sets each radius.
-          const flat = seriesStrokeColor(u, col);
           for (let i = 0; i < xs.length; i++) {
             const x = xs[i];
             const y = ys[i];
             if (x == null || y == null) continue;
-            const fill = spec.flat ? flat : colorScatterFill(spec, i); // the one colour rule (P1.4 gradient shares it)
+            const fill = colorScatterFill(spec, i); // the one colour rule (P1.4 gradient shares it)
             if (fill === null) continue;
-            const d = spec.diam ? spec.diam[i] : r * 2;
-            if (d == null) continue;
-            paintColorPoint(ctx, u.valToPos(x, "x", true), u.valToPos(y, scaleKey, true), d / 2, fill, spec.shape, spec.hollow);
+            paintColorPoint(ctx, u.valToPos(x, "x", true), u.valToPos(y, scaleKey, true), r, fill, spec.shape, spec.hollow);
           }
         }
         ctx.restore();

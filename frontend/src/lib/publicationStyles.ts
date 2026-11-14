@@ -190,13 +190,9 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     }
     if (Number.isInteger(raw.color_by) && (raw.color_by as number) >= 0) style.color_by = raw.color_by as number;
     if (typeof raw.colormap === "string") style.colormap = raw.colormap;
-    if (Number.isInteger(raw.size_by) && (raw.size_by as number) >= 0) style.size_by = raw.size_by as number;
-    const sr = raw.size_range;
-    if (Array.isArray(sr) && sr.length === 2 && sr.every((v) => typeof v === "number" && Number.isFinite(v)) && sr[0] > 0 && sr[0] <= sr[1]) {
-      style.size_range = [sr[0], sr[1]];
-    }
-    if (raw.drop_lines === "x" || raw.drop_lines === "y" || raw.drop_lines === "both") style.drop_lines = raw.drop_lines;
-    if (raw.connect === "spline") style.connect = "spline";
+    // N5/N6 marks pass through as stored: the backend validates each one (`calc.figure_marks`,
+    // `calc.plotting.resolve_style_channels`), and an invalid one draws nothing, never a 500.
+    for (const k of ["size_by", "size_range", "drop_lines", "connect"] as const) if (raw[k] != null) (style as Record<string, unknown>)[k] = raw[k];
     if (raw.step === "pre" || raw.step === "post" || raw.step === "mid") style.step = raw.step;
     // `legend` is NOT restored -- see its own doc on ExportSeriesStyle above:
     // a rename persists in `view.seriesLabels` and is re-laid on every export.

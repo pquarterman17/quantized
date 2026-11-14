@@ -102,6 +102,11 @@ def test_resolve_style_channels_resolves_size_by_and_label() -> None:
     assert out[0]["size_label"] == "mass (g)"
     bad = resolve_style_channels(ds, [0], [{"size_by": 9}])
     assert bad is not None and bad[0] is not None and "size_by" not in bad[0]
+    junk = resolve_style_channels(ds, [0], [{"size_by": "mass", "size_range": "big"}])
+    assert junk is not None and junk[0] is not None and "size_by" not in junk[0]
+    # a junk range never reaches matplotlib as anything but the default
+    d = size_diameters({"size_by": [0.0, 1.0], "size_range": "big"}, 2)
+    assert d is not None and d[0] == 3.0 and d[1] == 14.0
 
 
 def test_size_by_series_renders_to_pdf_bytes() -> None:
@@ -201,6 +206,44 @@ def test_drop_line_series_renders_to_svg() -> None:
         X, [("A", Y)], fmt="svg", series_styles=[{"drop_lines": "both", "connect": "spline"}]
     )
     assert b"<svg" in out
+
+
+# ------------------------------------------------- x-break panels, secondary axis
+
+
+def test_x_break_figure_warns_that_marks_are_not_drawn() -> None:
+    x = np.linspace(0.0, 10.0, 20)
+    for style in ({"connect": "spline"}, {"size_by": [1.0] * 20}, {"drop_lines": "x"}):
+        with collect_figure_warnings() as notes:
+            out = render_figure(
+                x, [("a", x * 2)], fmt="png", series_styles=[style],
+                overrides={"x_breaks": [[4.0, 6.0]]},
+            )
+        assert out[:4] == b"\x89PNG"
+        assert any("break" in n.lower() and "not drawn" in n.lower() for n in notes), style
+    with collect_figure_warnings() as plain:
+        render_figure(x, [("a", x)], fmt="png", overrides={"x_breaks": [[4.0, 6.0]]})
+    assert not plain
+
+
+def test_secondary_axis_series_draw_drop_lines_on_the_secondary_axes(monkeypatch) -> None:
+    import quantized.calc.figure_y2 as y2
+
+    seen: list[tuple[object, list[object]]] = []
+    real = y2.apply_drop_lines
+
+    def spy(ax: object, drops: list[object]) -> None:
+        seen.append((ax, list(drops)))
+        real(ax, drops)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(y2, "apply_drop_lines", spy)
+    with collect_figure_warnings() as notes:
+        render_figure(
+            X, [("a", Y), ("b", [1.0, 2.0, 3.0, 4.0])], fmt="png", y2_mask=[False, True],
+            series_styles=[None, {"drop_lines": "both"}],
+        )
+    assert len(seen) == 1 and len(seen[0][1]) == 1
+    assert not notes  # drawn, so nothing to warn about
 
 
 # ----------------------------------------------------------------- the wire

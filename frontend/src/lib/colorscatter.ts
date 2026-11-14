@@ -11,7 +11,7 @@
 
 import { colormap, normalize, type ColormapName } from "./colormap";
 import { FILLED_SHAPES, markerSubpaths } from "./markers";
-import { buildSizeKey, sizeDiameter, type SizeKey } from "./sizescatter";
+import type { SizeKey } from "./sizescatter";
 import type { DataStruct, MarkerShape, SeriesStyle } from "./types";
 
 export interface ColorScatterSpec {
@@ -27,12 +27,11 @@ export interface ColorScatterSpec {
   shape?: MarkerShape;
   /** Gap audit 2 #6: open symbols (`SeriesStyle.markerFill: "hollow"`). */
   hollow?: boolean;
-  /** N5 size-by: the key (channel + range) the legend reads, and the per-row
-   *  marker DIAMETERS in px (null = no point), aligned to the rows like `z`. */
+  /** N5 size-by (built by the lazy `marksImpl.withSizes`): the legend key and
+   *  the per-row marker DIAMETERS in px (null = no point), aligned like `z`. */
   size?: SizeKey;
   diam?: (number | null)[];
-  /** A SIZE-only series (no `colorBy`): the points take the series' own stroke
-   *  colour, so `z`/`colormap`/`lo`/`hi` are unused and there is no colour scale. */
+  /** A size-only series: the points take the series' stroke; no colour scale. */
   flat?: boolean;
 }
 
@@ -86,33 +85,20 @@ export function buildColorByColumns(
   plotted.forEach((ch, p) => {
     const style = seriesStyles[ch];
     const zCh = style?.colorBy;
-    const sizeCh = style?.sizeBy;
-    if (zCh == null && sizeCh == null) return;
-    const hollow = style?.markerFill === "hollow" ? { hollow: true } : {};
-    let spec: ColorScatterSpec;
-    if (zCh != null) {
-      const z = ds.values.map((row) => (Number.isFinite(row[zCh]) ? row[zCh] : null));
-      let lo = Infinity;
-      let hi = -Infinity;
-      for (const v of z) {
-        if (v == null) continue;
-        if (v < lo) lo = v;
-        if (v > hi) hi = v;
-      }
-      if (lo > hi) return; // no finite z values anywhere -> nothing to colour
-      spec = { channel: zCh, z, colormap: style?.colormap ?? "viridis", lo, hi, ...hollow };
-    } else {
-      spec = { channel: sizeCh as number, z: [], colormap: "viridis", lo: 0, hi: 1, flat: true, ...hollow };
-      if (style?.markerShape) spec.shape = style.markerShape;
+    if (zCh == null) return;
+    const z = ds.values.map((row) => (Number.isFinite(row[zCh]) ? row[zCh] : null));
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const v of z) {
+      if (v == null) continue;
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
     }
-    if (sizeCh != null) {
-      const key = buildSizeKey(ds, sizeCh, style?.sizeRange);
-      if (key) {
-        spec.size = key;
-        spec.diam = ds.values.map((row) => sizeDiameter(key, row[sizeCh]));
-      } else if (spec.flat) return; // nothing to size
-    }
-    out.set(p + 1, spec);
+    if (lo > hi) return; // no finite z values anywhere -> nothing to colour
+    out.set(p + 1, {
+      channel: zCh, z, colormap: style?.colormap ?? "viridis", lo, hi,
+      ...(style?.markerFill === "hollow" ? { hollow: true } : {}),
+    });
   });
   return out;
 }
@@ -134,7 +120,7 @@ export function colorScaleLegendEntries(
 ): ColorScaleLegendEntry[] {
   const seen = new Set<string>();
   return [...columns.values()].flatMap((spec) => {
-    if (spec.flat) return []; // a size-only series has no colour scale
+    if (spec.flat) return [];
     const e = { label: spec.label ?? ds.labels[spec.channel] ?? `channel ${spec.channel}`, colormap: spec.colormap, lo: spec.lo, hi: spec.hi };
     const key = JSON.stringify(e);
     return seen.has(key) ? [] : (seen.add(key), [e]);

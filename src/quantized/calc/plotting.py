@@ -371,6 +371,8 @@ def resolve_style_channels(
                 resolved["size_label"] = series_display_name(lab, unit)
             else:
                 resolved.pop("size_by", None)
+        elif size_by is not None:
+            resolved.pop("size_by", None)  # junk (a stored style): drawn without, never a 500
         out.append(resolved)
     return out
 

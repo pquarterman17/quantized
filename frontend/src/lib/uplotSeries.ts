@@ -13,7 +13,7 @@ import { seriesPoints, seriesTrace } from "./markers";
 import type { PlotPayload } from "./plotdata";
 import { DASH, resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
 import { BAR_PATHS } from "./uplotBars";
-import { SPLINE_PATHS } from "./uplotSpline";
+import { ensureMarks, marks, usesMarks } from "./marksLoader";
 import { resolveFillBands, seriesFillProps, translucent } from "./uplotFill";
 import type { ErrorBarPaint } from "./uplotErrorRange";
 import type { BuildOptsArgs } from "./uplotOpts";
@@ -54,6 +54,7 @@ export function buildSeriesDefs(
   colors: SeriesColors,
 ): { series: uPlot.Series[]; bands: uPlot.Band[] } {
   const { seriesStyles } = args;
+  ensureMarks(seriesStyles);
   const { accentColor, inkColor, inkDimColor, isDarkBg } = colors;
   // Non-monotonic x: wrap a path builder so it ignores uPlot's (collapsed)
   // index window and draws the full acquisition order. See `linearPaths` docs.
@@ -154,7 +155,9 @@ export function buildSeriesDefs(
       // AND points are hidden entirely here to avoid double-drawing. No fill
       // (a fill-under/between a colour-mapped point cloud isn't meaningful).
       const cbSpec = args.colorByColumns?.get(i + 1);
-      if (cbSpec && !cbSpec.flat) {
+      // A spline / size-by / drop-line series is hidden until its module has loaded: never a
+      // straight stand-in that later jumps, nor default-size dots (see marksLoader).
+      if ((cbSpec && !cbSpec.flat) || (usesMarks(style) && !marks())) {
         return { label, scale, stroke, width: 0, points: { show: false }, show };
       }
       // Default trace shape (Preferences) when the series has no explicit style:
@@ -208,7 +211,7 @@ export function buildSeriesDefs(
       } else if (style?.connect === "spline") {
         // N6 Spline connect: SPLINE_PATHS strokes the natural cubic spline, or
         // the straight row-order polyline where X is not ascending (a loop).
-        def.paths = SPLINE_PATHS;
+        def.paths = marks()!.SPLINE_PATHS; // loaded: a series that uses a mark is hidden until it is
       } else if (!xAscending && width > 0 && args.linearPaths) {
         // Loop rendering: draw the line over every point in acquisition order.
         def.paths = fullLine(args.linearPaths);

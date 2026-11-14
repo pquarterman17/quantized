@@ -12,6 +12,7 @@ import { useApp } from "../../store/useApp";
 import { Checkbox } from "../primitives/Checkbox";
 import { NumberField } from "../primitives/NumberField";
 import { Select } from "../primitives";
+import { useEffectiveComposition } from "../Stage/useEffectiveComposition";
 
 const row = { display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" } as const;
 
@@ -28,8 +29,20 @@ interface Props {
   setSeriesStyle: (channel: number, patch: Partial<SeriesStyle>, coalesce?: string) => void;
 }
 
-export default function SeriesMarkMapControls({ channel, style, setSeriesStyle }: Props) {
-  const data = useApp((s) => s.datasets.find((d) => d.id === s.activeId)?.data);
+const BREAK_NOTICE =
+  "Not drawn in x-break panels (the export says so too): this series shows as an ordinary line there.";
+
+export default function SeriesMarkMapControls({ channel, style, setSeriesStyle: apply }: Props) {
+  const active = useApp((s) => s.datasets.find((d) => d.id === s.activeId) ?? null);
+  const data = active?.data;
+  const setStatus = useApp((s) => s.setStatus);
+  const broken = useEffectiveComposition(active)?.kind === "break";
+  const asked = style.sizeBy != null || !!style.dropLines || !!style.connect;
+  // Spline / size-by / drop lines are not drawn in x-break panels: say so in the plot status too.
+  const setSeriesStyle: Props["setSeriesStyle"] = (ch, patch, coalesce) => {
+    apply(ch, patch, coalesce);
+    if (broken && (patch.sizeBy != null || patch.dropLines || patch.connect)) setStatus(BREAK_NOTICE);
+  };
   const xKey = useApp((s) => s.xKey);
   const labels = data?.labels ?? [];
   const others = labels.map((lab, i) => ({ i, lab })).filter(({ i }) => i !== channel);
@@ -97,6 +110,11 @@ export default function SeriesMarkMapControls({ channel, style, setSeriesStyle }
           onChange={(e) => setSeriesStyle(channel, { connect: e.target.value === "spline" ? "spline" : undefined })}
         />
       </div>
+      {broken && asked && (
+        <div className="qzk-ds-meta" role="status" style={{ marginTop: 4, color: "var(--warn, var(--text-faint))", whiteSpace: "normal" }}>
+          {BREAK_NOTICE}
+        </div>
+      )}
       {straight && (
         <div className="qzk-ds-meta" role="status" style={{ marginTop: 4, color: "var(--warn, var(--text-faint))", whiteSpace: "normal" }}>
           X is not strictly ascending here (a loop or repeated X), so this series is drawn with straight segments in

@@ -11,12 +11,11 @@ import type uPlot from "uplot";
 
 import type { DropLines, SeriesStyle } from "./seriesStyleTypes";
 
-/** A series' resolved stroke colour: uPlot wraps the configured string into a
- *  function once initialised (`(u, seriesIdx) => colour`), so both forms read. */
-export function seriesStrokeColor(u: uPlot, col: number, fallback = "#888"): string {
+/** A series' resolved stroke: uPlot turns the configured string into a function once initialised. */
+export function seriesStrokeColor(u: uPlot, col: number): string {
   const st = u.series[col]?.stroke as unknown;
   const c = typeof st === "function" ? (st as (u: uPlot, i: number) => unknown)(u, col) : st;
-  return typeof c === "string" ? c : fallback;
+  return typeof c === "string" ? c : "#888";
 }
 
 /** Draw each series' drop lines behind nothing in particular: uPlot's `draw`

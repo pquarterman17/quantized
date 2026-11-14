@@ -24,7 +24,7 @@ describe("sizeDiameter (N5 size by column)", () => {
     const key = buildSizeKey(ds(), 1)!;
     expect(sizeDiameter(key, NaN)).toBeNull();
     expect(sizeDiameter(key, null)).toBeNull();
-    const flat = { channel: 0, lo: 2, hi: 2, minPx: 3, maxPx: 14 };
+    const flat = { channel: 0, label: "y", lo: 2, hi: 2, minPx: 3, maxPx: 14 };
     expect(sizeDiameter(flat, 2)).toBe(8.5); // same rule as the export
   });
 
@@ -38,7 +38,7 @@ describe("sizeDiameter (N5 size by column)", () => {
 
   it("legend entries name the channel and span min/mid/max", () => {
     const key = buildSizeKey(ds(), 1, [4, 12])!;
-    const e = sizeLegendEntries(ds(), [{ size: key }])[0];
+    const e = sizeLegendEntries([{ size: key }])[0];
     expect(e.label).toBe("mass (g)");
     expect(e.marks.map((m) => [m.value, m.px])).toEqual([[0, 4], [1, 8], [2, 12]]);
   });

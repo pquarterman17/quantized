@@ -54,6 +54,7 @@ from quantized.calc.figure_overrides import apply_axis_shape_overrides
 from quantized.calc.figure_render import in_render_scope, new_figure, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
+from quantized.calc.figure_warnings import note_figure_warning
 
 __all__ = ["render_breaks_impl"]
 
@@ -183,6 +184,12 @@ def render_breaks_impl(
     (matplotlib's own ``sharey`` + this module's ``tick_params(left=False)``
     on the rest), so ``y_fmt`` only visibly affects that panel, but is
     applied uniformly for simplicity/consistency."""
+    if any(s and (s.get("connect") or s.get("size_by") is not None or s.get("drop_lines"))
+           for s in (series_styles or [])):
+        note_figure_warning(
+            "Spline connect, size-by and drop lines are not drawn in x-break figures; "
+            "those series are drawn as ordinary lines."
+        )
     bounds = _visible_bounds(x, breaks)
     n = len(bounds)
     panel_y_fmt = {k: v for k, v in y_fmt.items() if k != "breaks"} if y_fmt else y_fmt
