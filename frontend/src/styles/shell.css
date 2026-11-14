@@ -982,6 +982,10 @@ body {
    whose points are coloured by a third channel. */
 .qzk-colorbar-grad { display: inline-block; width: 48px; height: 8px; border-radius: 2px; border: 1px solid var(--glass-border); }
 .qzk-colorbar-lbl { font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-faint); }
+/* Size key (gap audit 3 N5): discs at a size-by series' min / middle / max. */
+.qzk-sizekey { display: flex; align-items: center; gap: 8px; }
+.qzk-sizekey-mark { display: inline-flex; align-items: center; gap: 3px; }
+.qzk-sizekey-dot { display: inline-block; border-radius: 50%; background: var(--text-faint); }
 
 /* ── drag-to-axis (gap #49) ── */
 /* Band sizing MUST match lib/dragaxis.ts's resolveAxisZone (X_BAND_FRACTION/

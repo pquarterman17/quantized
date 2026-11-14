@@ -33,11 +33,13 @@ from quantized.calc.figure_decor import _apply_region_shades, _split_region_shad
 from quantized.calc.figure_errorbars import apply_error_bars
 from quantized.calc.figure_inset import apply_inset
 from quantized.calc.figure_legend_order import draw_legend, tag_series_slots
+from quantized.calc.figure_marks import draw_marked_series
 from quantized.calc.figure_orient import oriented
 from quantized.calc.figure_overrides import legend_kwargs
 from quantized.calc.figure_scale import apply_axis_scale, drawable_lim, resolve_axis_scale
 from quantized.calc.figure_styles import FigureStyle
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
+from quantized.calc.figure_warnings import note_figure_warning
 
 __all__ = ["draw_secondary_axes", "render_with_secondary_axis"]
 
@@ -159,7 +161,9 @@ def draw_secondary_axes(
         kw = _plot_kwargs(st.line_width, st.marker_size, spec)
         if "color" not in kw:
             kw["color"] = f"C{(color_offset + i) % 10}"
-        (line,) = ax2.plot(xv, yv, label=label, **kw)
+        line, _ = draw_marked_series(ax2, xv, yv, label, kw, spec, bars=False)
+        if spec and spec.get("drop_lines"):
+            note_figure_warning("Drop lines are drawn for primary-axis series only.")
         _apply_fill(ax2, xv, yv, series, i, spec, line.get_color())
         artists.append(line)
     apply_error_bars(ax2, xv, series, error_spans, artists, series_styles)

@@ -9,12 +9,15 @@ import { useState } from "react";
 import type { ErrorSource } from "../../store/computedErrorRun";
 import { useApp } from "../../store/useApp";
 import { Button, Select } from "../primitives";
+import { Checkbox } from "../primitives/Checkbox";
 import { NumberField } from "../primitives/NumberField";
 
 const SOURCES: { value: ErrorSource; label: string }[] = [
   { value: "sqrt", label: "√Y" },
   { value: "percent", label: "% of Y" },
   { value: "constant", label: "constant" },
+  { value: "sd", label: "SD of replicates" },
+  { value: "sem", label: "SEM of replicates" },
 ];
 
 export default function ComputedErrorRow({ datasetId, labels, series }: {
@@ -28,6 +31,8 @@ export default function ComputedErrorRow({ datasetId, labels, series }: {
   const [source, setSource] = useState<ErrorSource>("sqrt");
   const [param, setParam] = useState("5");
   const [busy, setBusy] = useState(false);
+  const [reps, setReps] = useState<number[]>([]); // N9: the replicate columns of an SD / SEM source
+  const stat = source === "sd" || source === "sem";
   const choices = series.length ? series : labels.map((_, i) => i);
   const t = target !== null && choices.includes(target) ? target : choices[0];
   if (t === undefined) return null;
@@ -36,7 +41,7 @@ export default function ComputedErrorRow({ datasetId, labels, series }: {
     setBusy(true);
     try {
       const { addComputedError } = await import("../../store/computedErrorRun");
-      await addComputedError(datasetId, t, source, Number(param));
+      await addComputedError(datasetId, t, source, Number(param), reps.filter((c) => c !== t));
     } catch (e) {
       setStatus(`Can't add the error column: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -65,7 +70,7 @@ export default function ComputedErrorRow({ datasetId, labels, series }: {
           options={SOURCES}
           title="√Y: counting statistics (Y below 1 counts as 1, so no point gets zero error)"
         />
-        {source !== "sqrt" && (
+        {(source === "percent" || source === "constant") && (
           <NumberField
             aria-label={source === "percent" ? "Percent of Y" : "Constant error"}
             value={param}
@@ -77,6 +82,25 @@ export default function ComputedErrorRow({ datasetId, labels, series }: {
           Add
         </Button>
       </div>
+      {stat && (
+        <div role="group" aria-label="Replicate columns" style={{ display: "flex", flexWrap: "wrap", gap: "2px 10px", marginTop: 4 }}>
+          {labels.map((lab, c) =>
+            c === t ? null : (
+              <Checkbox
+                key={c}
+                checked={reps.includes(c)}
+                ariaLabel={`Replicate ${lab}`}
+                onChange={(on) => setReps((r) => (on ? [...r, c].sort((a, b) => a - b) : r.filter((x) => x !== c)))}
+              >
+                {lab}
+              </Checkbox>
+            ),
+          )}
+          <span className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+            per-row {source === "sem" ? "SD/√n" : "SD (n−1)"} across the ticked columns (blank if any is blank)
+          </span>
+        </div>
+      )}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { seriesPoints, seriesTrace } from "./markers";
 import type { PlotPayload } from "./plotdata";
 import { DASH, resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
 import { BAR_PATHS } from "./uplotBars";
+import { SPLINE_PATHS } from "./uplotSpline";
 import { resolveFillBands, seriesFillProps, translucent } from "./uplotFill";
 import type { ErrorBarPaint } from "./uplotErrorRange";
 import type { BuildOptsArgs } from "./uplotOpts";
@@ -152,7 +153,8 @@ export function buildSeriesDefs(
       // for this column itself, keyed to the z channel — so the native line
       // AND points are hidden entirely here to avoid double-drawing. No fill
       // (a fill-under/between a colour-mapped point cloud isn't meaningful).
-      if (args.colorByColumns?.has(i + 1)) {
+      const cbSpec = args.colorByColumns?.get(i + 1);
+      if (cbSpec && !cbSpec.flat) {
         return { label, scale, stroke, width: 0, points: { show: false }, show };
       }
       // Default trace shape (Preferences) when the series has no explicit style:
@@ -175,6 +177,8 @@ export function buildSeriesDefs(
         ...seriesFillProps(style?.fill, stroke),
         ...(xAscending ? { gaps: logGaps } : {}),
       };
+      // A size-only series (N5): the plugin draws the points; the line stays.
+      if (cbSpec?.flat) def.points = { show: false };
       // Error-bar styling (gap audit 2 #6) rides on the series, where the
       // error plugins read it (`uplotErrorRange.styleErrorDraw`); a colour is
       // contrast-checked like the stroke. A change rebuilds (not a paint field).
@@ -201,6 +205,10 @@ export function buildSeriesDefs(
         // RAW list, not the resolved `style`: a P3.3 auto dash is a DEFAULT and
         // must not read as an explicit choice, or the pref would un-step this.
         def.paths = xAscending ? args.steppedPaths : fullLine(args.steppedPaths);
+      } else if (style?.connect === "spline") {
+        // N6 Spline connect: SPLINE_PATHS strokes the natural cubic spline, or
+        // the straight row-order polyline where X is not ascending (a loop).
+        def.paths = SPLINE_PATHS;
       } else if (!xAscending && width > 0 && args.linearPaths) {
         // Loop rendering: draw the line over every point in acquisition order.
         def.paths = fullLine(args.linearPaths);

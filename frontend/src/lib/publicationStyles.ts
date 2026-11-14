@@ -53,6 +53,15 @@ export interface ExportSeriesStyle {
   fill?: "under" | { vs: number };
   color_by?: number;
   colormap?: string;
+  /** Gap audit 3 N5: marker size from a channel (`SeriesStyle.sizeBy`, a
+   *  dataset channel index like `color_by`) mapped onto `size_range` points
+   *  (`calc.figure_sizes`). */
+  size_by?: number;
+  size_range?: [number, number];
+  /** Gap audit 3 N6: drop lines to the X axis / Y axis (`calc.figure_marks.
+   *  apply_drop_lines`) and the spline connect (`calc.figure_marks.spline_dense`). */
+  drop_lines?: "x" | "y" | "both";
+  connect?: "spline";
   /** Stepped-line alignment (GAP_PLOTTYPES Graph Builder "step" mark) —
    *  the wire form of `SeriesStyle.step`/`StepMode`; mapped to matplotlib's
    *  `drawstyle` by `calc.figure._plot_kwargs`. */
@@ -181,6 +190,13 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     }
     if (Number.isInteger(raw.color_by) && (raw.color_by as number) >= 0) style.color_by = raw.color_by as number;
     if (typeof raw.colormap === "string") style.colormap = raw.colormap;
+    if (Number.isInteger(raw.size_by) && (raw.size_by as number) >= 0) style.size_by = raw.size_by as number;
+    const sr = raw.size_range;
+    if (Array.isArray(sr) && sr.length === 2 && sr.every((v) => typeof v === "number" && Number.isFinite(v)) && sr[0] > 0 && sr[0] <= sr[1]) {
+      style.size_range = [sr[0], sr[1]];
+    }
+    if (raw.drop_lines === "x" || raw.drop_lines === "y" || raw.drop_lines === "both") style.drop_lines = raw.drop_lines;
+    if (raw.connect === "spline") style.connect = "spline";
     if (raw.step === "pre" || raw.step === "post" || raw.step === "mid") style.step = raw.step;
     // `legend` is NOT restored -- see its own doc on ExportSeriesStyle above:
     // a rename persists in `view.seriesLabels` and is re-laid on every export.

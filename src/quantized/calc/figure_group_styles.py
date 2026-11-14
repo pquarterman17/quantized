@@ -66,6 +66,8 @@ def _level_style(spec: Mapping[str, Any], n_levels: int) -> dict[str, Any]:
     """One channel style, rewritten for the synthetic per-level series."""
     out: dict[str, Any] = dict(spec)  # shallow copy -- never mutate the caller's
     out.pop("color_by", None)
+    out.pop("size_by", None)  # a grouped canvas draws no size-by points either
+    out.pop("size_label", None)
     out.pop("colormap", None)
     # `legend` is the BUG-014 rename. It is consumed at the ROUTE layer -- on
     # this branch by `build_grouped_series`' `"{legend} ({group}={level})"`

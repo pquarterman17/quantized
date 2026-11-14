@@ -39,8 +39,8 @@ from quantized.calc.figure_styles import FigureStyle, figure_style
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
 from quantized.heavy_import import heavy_imports
 
-from .figure_bars import draw_series
 from .figure_errorbars import apply_error_bars
+from .figure_marks import DropLine, apply_drop_lines, draw_marked_series
 from .figure_orient import TransposedAxes, oriented
 
 __all__ = ["draw_series_axes", "render_figure", "style_rc"]
@@ -186,6 +186,7 @@ def draw_series_axes(
     ``None``/``"auto"`` leaves matplotlib's own default formatter untouched.
     """
     artists: list[Any] = []
+    drops: list[DropLine] = []
     ax = oriented(ax, series_styles)  # horizontal bars: x and y exchanged (figure_orient)
     for i, (label, y) in enumerate(series):
         spec = series_styles[i] if series_styles and i < len(series_styles) else None
@@ -198,7 +199,9 @@ def draw_series_axes(
             artists.append(_draw_color_scatter(fig, real, cx, cy, label, spec, st))
             continue
         kw = _plot_kwargs(st.line_width, st.marker_size, spec)
-        line, color = draw_series(ax, xv, yv, label, kw, spec)  # bars: figure_bars
+        line, color = draw_marked_series(ax, xv, yv, label, kw, spec)
+        if spec and spec.get("drop_lines") in ("x", "y", "both") and not spec.get("bars"):
+            drops.append((xv, yv, str(spec["drop_lines"]), color))
         _apply_fill(ax, xv, yv, series, i, spec, color)
         artists.append(line)
     apply_error_bars(ax, xv, series, error_spans, artists, series_styles)
@@ -231,6 +234,7 @@ def draw_series_axes(
     # After the limits and the plot-wide grid, each of which these replace.
     apply_axis_style(ax, "x", x_fmt, side="bottom", grid_alpha=st.grid_alpha)
     apply_axis_style(ax, "y", y_fmt, side="left", grid_alpha=st.grid_alpha)
+    apply_drop_lines(ax, drops)  # needs the final limits
     apply_inset(ax, artists, ov, resolved_x_scale, resolved_y_scale, st.grid_alpha)
     return artists
 

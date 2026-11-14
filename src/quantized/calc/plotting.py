@@ -15,6 +15,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from quantized.calc.figure_greyscale import GREY_SLOT_KEY
+from quantized.calc.figure_labels import series_display_name
 from quantized.datastruct import DataStruct, is_categorical, level_of
 
 __all__ = [
@@ -361,6 +362,15 @@ def resolve_style_channels(
                 resolved["color_by"] = ds.values[:, color_by].tolist()
             else:
                 resolved.pop("color_by", None)
+        size_by = resolved.get("size_by")  # N5: marker size from a column
+        if isinstance(size_by, int) and not isinstance(size_by, bool):
+            if 0 <= size_by < ds.n_channels:
+                resolved["size_by"] = ds.values[:, size_by].tolist()
+                lab = ds.labels[size_by] if size_by < len(ds.labels) else f"channel {size_by}"
+                unit = ds.units[size_by] if size_by < len(ds.units) else ""
+                resolved["size_label"] = series_display_name(lab, unit)
+            else:
+                resolved.pop("size_by", None)
         out.append(resolved)
     return out
 

@@ -119,6 +119,16 @@ export function buildExportStyles(
     if (ebHex) spec.error_color = ebHex;
     if (st?.fill && st.fill !== "none") spec.fill = st.fill;
     if (st?.step) spec.step = st.step;
+    // Gap audit 3 N5/N6. `size_by` stays a channel index here (the backend
+    // resolves it to values, like `color_by`); the glyph rides with it because
+    // a size-by series draws its points whether or not `marker` is on.
+    if (st?.sizeBy != null) {
+      spec.size_by = st.sizeBy;
+      if (st.sizeRange) spec.size_range = [st.sizeRange[0], st.sizeRange[1]];
+      if (st.markerShape) spec.marker_shape = st.markerShape;
+    }
+    if (st?.dropLines) spec.drop_lines = st.dropLines;
+    if (st?.connect) spec.connect = st.connect;
     if (st?.bars) spec.bars = st.bars;
     if (st?.colorBy != null) {
       spec.color_by = st.colorBy;
