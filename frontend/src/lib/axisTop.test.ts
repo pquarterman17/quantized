@@ -4,8 +4,9 @@
 
 import { describe, expect, it } from "vitest";
 
+import { axisDraft, axisDraftErrors } from "./axisDialogModel";
 import type { TopAxis } from "./axisFormat";
-import { niceTicks, TOP_MIN_GAP, topAxisProblem, topForward, topInverse, topTicks } from "./axisTop";
+import { niceTicks, TOP_MIN_GAP, topAxisProblem, topForward, topInverse, topRangeProblem, topSpan, topTicks } from "./axisTop";
 
 const TOP_TABLE: [TopAxis, [number, number], string[]][] = [
   [{ kind: "reciprocal", factor: 1000 }, [100, 300], ["10", "9", "8", "7", "6", "5", "4"]],
@@ -25,10 +26,37 @@ describe("top X axis", () => {
     }
   });
 
-  it("draws nothing across a transform's singularity", () => {
-    expect(topTicks({ kind: "reciprocal" }, -1, 1)).toEqual([]);
-    expect(topTicks({ kind: "dspacing", wavelength: 1.54 }, -5, 30)).toEqual([]);
+  it("ticks only the valid part of a range that runs into the singularity", () => {
+    const t = topTicks({ kind: "reciprocal", factor: 1000 }, 0, 10);
+    expect(t.length).toBeGreaterThan(0);
+    for (const k of t) {
+      expect(k.pos).toBeGreaterThan(0);
+      expect(k.pos).toBeLessThanOrEqual(10);
+      expect(k.label).not.toMatch(/NaN|Infinity/);
+    }
+    expect(topTicks({ kind: "reciprocal" }, -1, 1).every((k) => k.pos > 0)).toBe(true);
+    const d = topTicks({ kind: "dspacing", wavelength: 1.54 }, -5, 30);
+    expect(d.length).toBeGreaterThan(0);
+    expect(d.every((k) => k.pos > 0 && k.pos <= 30)).toBe(true);
     expect(niceTicks(1, 1).values).toEqual([]);
+  });
+
+  it("draws no top axis when no part of the range is valid", () => {
+    expect(topTicks({ kind: "reciprocal", factor: 1000 }, -10, -1)).toEqual([]);
+    expect(topTicks({ kind: "reciprocal" }, -10, 0)).toEqual([]);
+    expect(topTicks({ kind: "dspacing", wavelength: 1.54 }, -20, -1)).toEqual([]);
+    expect(topSpan({ kind: "reciprocal" }, -10, -1)).toBeNull();
+    expect(topSpan({ kind: "reciprocal" }, 0, 10)).toEqual([0.1, 10]);
+    expect(topRangeProblem({ kind: "reciprocal" }, -10, -1)).toBe("1/T needs X > 0.");
+    expect(topRangeProblem({ kind: "reciprocal" }, 0, 10)).toBeNull();
+    expect(topRangeProblem({ kind: "reciprocal" }, null, null)).toBeNull();
+  });
+
+  it("the Axis dialog says why a 1/T axis over negative limits shows nothing", () => {
+    const base = axisDraft({ xScale: "linear", yScale: "linear", y2Scale: null, xLim: null, yLim: null, y2Lim: null, xStep: null, yStep: null, y2Step: null, xFmt: { mode: "auto", digits: 2 }, yFmt: { mode: "auto", digits: 2 }, y2Fmt: null, axisLabelStyles: {}, xReversed: false } as never, "x");
+    const d = { ...base, topKind: "reciprocal" as const, topFactor: "1000", from: "-10", to: "-1" };
+    expect(axisDraftErrors(d, "x")).toContain("1/T needs X > 0.");
+    expect(axisDraftErrors({ ...d, from: "0", to: "10" }, "x")).toEqual([]);
   });
 
   it("names what a top axis is missing", () => {

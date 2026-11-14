@@ -19,7 +19,7 @@
 import type { AxisId } from "../store/figureDialogs";
 import type { PlotView } from "./plotview";
 import { inheritedAxisFormat, normalizeBreaks, type AxisGrid, type TopAxis } from "./axisFormat";
-import { topAxisProblem } from "./axisTop";
+import { topAxisProblem, topRangeProblem } from "./axisTop";
 import type { AxisFormat, AxisScale, TickMode } from "./types";
 
 /** "plot" = follow the plot-wide grid switch (no per-axis grid). */
@@ -145,6 +145,10 @@ export function axisDraftErrors(d: AxisDraft, axis: AxisId): string[] {
   const top = topOf(d);
   const why = top && topAxisProblem(top);
   if (why) out.push(why);
+  else if (top && axis === "x") {
+    const range = topRangeProblem(top, lo, hi);
+    if (range) out.push(range);
+  }
   if (top?.kind === "dspacing" && (num(d.topWavelength) ?? 0) > 100) out.push("Wavelength must be at most 100 Å.");
   return out;
 }

@@ -24,6 +24,12 @@ export const TOP_TICK_TARGET = 8;
 /** Closest two top-axis labels may sit, as a fraction of the axis length. */
 export const TOP_MIN_GAP = 0.05;
 
+/** Where a transform is undefined at one end of the axis (1/x at 0, d-spacing
+ *  at 0 or 180 deg), the drawn part starts this fraction of its upper end
+ *  above zero. Mirrors TOP_SPAN_FLOOR in calc/axis_top.py. */
+export const TOP_SPAN_FLOOR = 0.01;
+const DSPACING_MAX = 179.99;
+
 const DEG = Math.PI / 180;
 
 /** x -> the top axis' value, or NaN outside the transform's domain. */
@@ -68,17 +74,27 @@ export function topLabel(value: number, decimals: number): string {
   return /^-0(\.0*)?$/.test(s) ? s.slice(1) : s;
 }
 
-/** The top axis' ticks for a bottom axis showing [min, max]. Empty when
- *  either end lies outside the transform's domain. */
-export function topTicks(top: TopAxis, min: number, max: number): TopTick[] {
+/** The part of the bottom axis [min, max] where the transform is finite and
+ *  monotonic, or null when no part is (1/x needs x > 0; d-spacing needs
+ *  0 < x < 180). A range running into the singularity keeps only its valid
+ *  side, starting a small fraction of the way in so the mapped range is finite. */
+export function topSpan(top: TopAxis, min: number, max: number): [number, number] | null {
   const lo = Math.min(min, max);
   const hi = Math.max(min, max);
-  const ta = topForward(top, lo);
-  const tb = topForward(top, hi);
-  // A reciprocal axis across x = 0 has no finite image.
-  if (top.kind === "reciprocal" && lo <= 0 && hi >= 0) return [];
-  const { values, decimals } = niceTicks(ta, tb);
-  const span = hi - lo;
+  if (top.kind === "linear") return [lo, hi];
+  const upper = top.kind === "reciprocal" ? hi : top.kind === "dspacing" ? Math.min(hi, DSPACING_MAX) : NaN;
+  if (!Number.isFinite(lo) || !Number.isFinite(upper) || upper <= 0 || lo >= upper) return null;
+  return [lo > 0 ? lo : upper * TOP_SPAN_FLOOR, upper];
+}
+
+/** The top axis' ticks for a bottom axis showing [min, max]: only the part of
+ *  the axis inside the transform's domain gets ticks, none when no part does. */
+export function topTicks(top: TopAxis, min: number, max: number): TopTick[] {
+  const valid = topSpan(top, min, max);
+  if (!valid) return [];
+  const span = Math.max(min, max) - Math.min(min, max); // label spacing is measured on the whole axis
+  const [lo, hi] = valid;
+  const { values, decimals } = niceTicks(topForward(top, lo), topForward(top, hi));
   const out: TopTick[] = [];
   for (const value of values) {
     const pos = topInverse(top, value);
@@ -97,5 +113,17 @@ export function topTicks(top: TopAxis, min: number, max: number): TopTick[] {
 export function topAxisProblem(top: TopAxis): string | null {
   if (top.kind === "dspacing" && !(top.wavelength && top.wavelength > 0)) return "A d-spacing top axis needs a wavelength (Å).";
   if (top.kind !== "dspacing" && top.factor === 0) return "The top-axis factor cannot be 0.";
+  return null;
+}
+
+/** Why `top` shows nothing over the X limits typed so far, or null. Only a
+ *  range with no valid part at all is a problem; a range that merely touches
+ *  the singularity draws its valid side. */
+export function topRangeProblem(top: TopAxis, min: number | null, max: number | null): string | null {
+  const hi = max ?? min;
+  if (hi === null || !Number.isFinite(hi)) return null;
+  const lo = min ?? max ?? hi;
+  if (top.kind === "reciprocal" && topSpan(top, lo, hi) === null) return "1/T needs X > 0.";
+  if (top.kind === "dspacing" && topSpan(top, lo, hi) === null) return "d-spacing needs 0 < 2θ < 180°.";
   return null;
 }
