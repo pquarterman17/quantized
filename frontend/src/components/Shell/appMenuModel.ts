@@ -77,6 +77,7 @@ const FILE_SECTIONS: Record<string, string> = {
   "figure-save": "Figures & recipes",
   "figure-save-as": "Figures & recipes",
   "figure-save-recipe": "Figures & recipes",
+  "export-worksheet": "Export",
   "export-csv": "Export",
   "export-hdf5": "Export",
   "export-origin": "Export",

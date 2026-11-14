@@ -410,6 +410,14 @@ export function buildFileCommands(s: StoreGet): Action[] {
       run: () => import("./fileCommandsLazy").then((m) => m.runSendToOrigin(s, originComStatus, sendToOrigin)),
     },
     {
+      id: "export-worksheet",
+      group: "File",
+      label: "Export worksheet… (CSV, TSV, Excel)",
+      description: "Save the worksheet, or the selected ones, with Long Name and Units rows.",
+      // Lazy body (bundle ratchet): commands/worksheetExport.ts.
+      run: () => void runLazy("Loading export…", () => import("./worksheetExport")).then((m) => m.runExportWorksheet(s), onLoadFailure),
+    },
+    {
       id: "export-consolidated",
       group: "File",
       label: "Export consolidated CSV…",

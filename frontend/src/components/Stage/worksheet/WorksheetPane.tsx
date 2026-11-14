@@ -45,6 +45,13 @@ import WorksheetFilterBar from "./WorksheetFilterBar";
 import WorksheetToolbar from "./WorksheetToolbar";
 import { columnMenuItems, rowMenuItems } from "./worksheetMenus";
 
+/** "⇩ Export…": this sheet, or its selected rows in view order (lazy body). */
+function exportSheet(ds: Dataset, rows: number[]): void {
+  void runLazy("Loading export…", () => import("../../../commands/worksheetExport"))
+    // A still-pending book shows preview rows, which name no real row: export it all.
+    .then((m) => m.runExportWorksheet(useApp.getState, { ids: [ds.id], rows: ds.pending ? [] : rows }), onLoadFailure);
+}
+
 export interface WorksheetPaneProps {
   datasetId: string;
   /** GUI_INTERACTION #14: an MDI document window's id — omit for the Stage
@@ -184,6 +191,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         showStats={view.showStats}
         onToggleStats={() => view.setShowStats((v) => !v)}
         onCopy={view.copyRows}
+        onExport={() => exportSheet(ds, view.order.filter((r) => view.selected.has(r)))}
         blockOps={view.blockOps}
         maskedCount={view.masked.size}
         onUnmaskAll={view.unmaskAll}

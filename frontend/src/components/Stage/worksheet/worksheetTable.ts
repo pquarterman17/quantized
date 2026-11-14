@@ -11,13 +11,12 @@
 // writes its level names. Copy and Export read the same columns, so the
 // clipboard and the file cannot disagree.
 
+import type { TableColumnKind, TableColumnWire } from "../../../lib/api/worksheetExport";
 import { categoricalLevels } from "../../../lib/categorical";
 import { clipboardCellText } from "../../../lib/clipboardGrid";
 import type { Dataset } from "../../../lib/types";
 import { fmtDateCell } from "./cellFormat";
 import { worksheetTextColumns } from "./textColumns";
-
-export type TableColumnKind = "number" | "text" | "datetime";
 
 /** One column of the table: what to call it and where its cells come from. */
 export interface TableColumnPlan {
@@ -28,14 +27,6 @@ export interface TableColumnPlan {
   channel?: number;
   /** A text column's cells (one per row). */
   text?: readonly string[];
-}
-
-/** The wire shape `/api/export/worksheet` takes (routes/export_table.py). */
-export interface TableColumnWire {
-  name: string;
-  unit: string;
-  kind: TableColumnKind;
-  cells: (number | string | null)[];
 }
 
 const UNIT_SUFFIX = /\s*[([][^)\]]*[)\]]\s*$/;
