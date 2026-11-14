@@ -345,3 +345,20 @@ def _resolve_roles(roles: list[str] | None, n_cols: int) -> list[str]:
         return (["x"] + ["y"] * (n_cols - 1)) if n_cols else []
     out = [roles[k] if k < len(roles) and roles[k] in DATA_ROLES else "y" for k in range(n_cols)]
     return out
+
+
+def _datetime_x(p: _Parsed, col: int) -> np.ndarray | None:
+    """Column ``col`` as UTC epoch seconds when it is a timestamp column --
+    direct import's rule (`delimited.import_csv`): under 10% numeric, at
+    least 80% parseable dates (`layout._datetime_epoch`). ``None`` otherwise.
+
+    The wizard read a date X column with ``float()`` alone, so a file that
+    direct import showed against dates came through the wizard as an
+    all-NaN X (worksheet audit #7)."""
+    n_rows = p.matrix.shape[0]
+    if np.count_nonzero(np.isfinite(p.matrix[:, col])) / max(n_rows, 1) >= 0.1:
+        return None
+    parsed = [layout._datetime_epoch(r[col]) if col < len(r) else None for r in p.data_tokens]
+    if sum(v is not None for v in parsed) / max(n_rows, 1) < 0.8:
+        return None
+    return np.asarray([np.nan if v is None else v for v in parsed], dtype=float)
