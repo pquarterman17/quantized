@@ -127,6 +127,36 @@ describe("copyRows writes displayed text", () => {
   });
 });
 
+describe("copyRows keeps text and date columns (worksheet audit #6/#7)", () => {
+  it("copies a text column in its file position and a date X as a date", () => {
+    const ds: Dataset = {
+      id: "t",
+      name: "t.csv",
+      data: {
+        time: [Date.UTC(2026, 2, 1, 12) / 1000, Date.UTC(2026, 2, 1, 13) / 1000],
+        values: [[20.1], [21.5]],
+        labels: ["Temp"],
+        units: ["C"],
+        metadata: {
+          x_column_name: "Date",
+          time_is_datetime: true,
+          all_column_names: ["Date", "Sample", "Temp (C)"],
+          text_columns: { Sample: ["S0", "S1"] },
+        },
+      },
+    };
+    useApp.setState({ datasets: [ds] });
+    const { result } = renderHook(() => useWorksheetView(ds));
+    result.current.copyRows();
+    const tsv = vi.mocked(copyText).mock.calls[0][0];
+    expect(tsv.split("\n")).toEqual([
+      "Date\tSample\tTemp (C)",
+      "2026-03-01 12:00:00\tS0\t20.1",
+      "2026-03-01 13:00:00\tS1\t21.5",
+    ]);
+  });
+});
+
 describe("the stats footer", () => {
   it("sends only finite values, so a blank cell does not fail the request", () => {
     vi.useFakeTimers();
