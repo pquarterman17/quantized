@@ -548,8 +548,16 @@ describe("LibraryDetails — L1.4 inline rename under virtualization", () => {
 // abandoned-drag (no-drop) case this file does not repeat.
 describe("LibraryDetails — L1.4 drag survives its source scrolling out of the window", () => {
   it("a drag whose SOURCE row scrolls out of the virtualized window still completes when dropped on a folder", async () => {
+    // The drop target must sit BELOW the 4000 rows so it is the one still
+    // rendered after scrolling to the end. At the root, items rank by when
+    // their data arrived and an empty folder stays on top (re-audit #9), so
+    // both folders go one level down, where folders keep their order keys.
     applyToStore(() =>
-      useApp.setState({ datasets: Array.from({ length: 4000 }, (_, i) => dataset(`d${i}`, `run-${i}.csv`, i)) }),
+      useApp.setState({
+        folders: [folder("f0", "Root", null, 0), folder("f1", "Alpha", "f0", 0), folder("f2", "Beta", "f0", 1)],
+        expandedFolders: ["f0", "f1", "f2"],
+        datasets: Array.from({ length: 4000 }, (_, i) => dataset(`d${i}`, `run-${i}.csv`, i)),
+      }),
     );
     render(<Harness />);
     expect(rowFor("workbook:w")).not.toBeNull();
