@@ -247,3 +247,22 @@ describe("useGlobalShortcuts — A resets the view", () => {
     expect(useApp.getState().y2Lim).toBeNull();
   });
 });
+
+// Worksheet audit #4: Ctrl+V in the worksheet pasted into the cells AND made a
+// new dataset ("pasted data 2"), because this window listener ignored that the
+// worksheet had already consumed the key. It honours preventDefault now.
+describe("useGlobalShortcuts — Ctrl+V defers to a closer paste", () => {
+  it("a consumed Ctrl+V does not also paste a new dataset; an unclaimed one still does", () => {
+    const paste = vi.fn(() => Promise.resolve());
+    useApp.setState({ pasteDataFromClipboard: paste });
+    renderHook(() => useGlobalShortcuts());
+    const grid = document.createElement("div");
+    document.body.appendChild(grid);
+    grid.addEventListener("keydown", (e) => e.preventDefault());
+    grid.dispatchEvent(new KeyboardEvent("keydown", { key: "v", ctrlKey: true, bubbles: true, cancelable: true }));
+    expect(paste).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: "v", ctrlKey: true });
+    expect(paste).toHaveBeenCalledOnce();
+    grid.remove();
+  });
+});

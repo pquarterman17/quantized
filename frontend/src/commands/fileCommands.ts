@@ -61,6 +61,14 @@ const replaceHalf = () => import("../lib/openWorkspaceReplace");
 export function buildFileCommands(s: StoreGet): Action[] {
   return [
     {
+      id: "new-workbook",
+      group: "File",
+      label: "New workbook",
+      description: "Add an empty worksheet to type or paste data into.",
+      keywords: "blank empty book sheet table create",
+      run: () => void runLazy("Opening a new workbook…", () => import("../store/newWorkbook")).then((m) => m.newWorkbook(), onLoadFailure),
+    },
+    {
       id: "import",
       group: "File",
       label: "Import data…",
