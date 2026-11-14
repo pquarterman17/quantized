@@ -5,8 +5,9 @@
 
 import type { AxisId } from "../store/figureDialogs";
 import { useApp } from "../store/useApp";
+import { useAuxFigureStore } from "../components/workshops/ternary/auxFigureStore";
 import { axisDraft, axisPatch, type AxisDraft } from "./axisDialogModel";
-import { PLOT_TYPES, plotTypePatch, plotTypeUnavailable, type PlotTypeId } from "./plotTypes";
+import { PLOT_TYPE_COMMANDS, PLOT_TYPES, plotTypePatch, plotTypeUnavailable, type PlotTypeId } from "./plotTypes";
 import { effectiveChannels } from "./plotdata";
 
 const AXIS_NAMES: Record<AxisId, string> = { x: "X axis", y: "Y axis", y2: "Y2 (right) axis" };
@@ -39,7 +40,20 @@ export function applyPlotType(id: PlotTypeId): void {
     s.setStatus(`plot type: ${label}`);
     return;
   }
+  if (PLOT_TYPE_COMMANDS.has(id)) {
+    // Gap-audit-2 #17: these open the tool the app already has for them.
+    if (id === "waterfall") s.setWaterfallOpen(true);
+    else if (id === "ternary") useAuxFigureStore.getState().setTernaryOpen(true);
+    else s.setStackMode(true);
+    s.setStageTab("plot");
+    s.setStatus(`plot type: ${label}`);
+    return;
+  }
   const plotted = effectiveChannels(dataset.data, s.yKeys, s.xKey, dataset.channelRoles, s.seriesOrder);
+  if (id === "doubleY" && plotted.length < 2) {
+    s.setStatus("Double-Y: plot at least two Y columns first");
+    return;
+  }
   s.recordHistory(`plot type: ${label.toLowerCase()}`);
   useApp.setState({ ...plotTypePatch(id, s, plotted), stageTab: "plot" });
   s.setStatus(`plot type: ${label}`);
