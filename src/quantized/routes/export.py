@@ -29,6 +29,7 @@ from quantized.io.hdf5 import write_hdf5
 from quantized.io.origin import GraphSpec, format_origin_project_script, format_origin_script
 from quantized.io.origin_com import com_available, send_to_origin
 from quantized.io.origin_project.writer import opj_bytes
+from quantized.io.origin_project.writer_matrix import matrix_fallbacks
 from quantized.io.xrd_csv import format_xrd_csv
 from quantized.routes._errors import CALC_ERRORS, CALC_ERRORS_IO
 from quantized.routes._export_common import _attachment, _attachment_named, _safe_name
@@ -236,15 +237,17 @@ def export_opj(req: OpjRequest) -> Response:
                 # io/technique.py and io/origin_project/__init__.py already use.
                 ds = replace(ds, metadata=meta)
             books.append(ds)
-        payload = opj_bytes(books, [item.group for item in req.datasets])
+        groups = [item.group for item in req.datasets]
+        payload = opj_bytes(books, groups)
+        fallbacks = matrix_fallbacks(books, groups)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return Response(
-        content=payload,
-        media_type="application/octet-stream",
-        # ASCII fallback + RFC 5987 filename* so "Ångström θ.opj" keeps its name.
-        headers=_attachment_named(req.filename, ".opj"),
-    )
+    # ASCII fallback + RFC 5987 filename* so "Ångström θ.opj" keeps its name.
+    headers = _attachment_named(req.filename, ".opj")
+    # Matrix books written as X/Y/Z worksheet columns instead of a matrix
+    # (complex, edited, or a sheet of a shared workbook): the client says so.
+    headers["X-Opj-Matrix-Fallback"] = str(fallbacks)
+    return Response(content=payload, media_type="application/octet-stream", headers=headers)
 
 
 @router.post("/origin-project")

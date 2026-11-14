@@ -1093,6 +1093,29 @@ def test_export_opj_roundtrips_through_our_reader(tmp_path):
     assert list(books[0].time) == [1.0, 2.0, 3.0]
 
 
+def test_export_opj_writes_a_matrix_as_a_matrix_and_counts_fallbacks(tmp_path):
+    """An imported matrix goes back out as an Origin matrix; one that cannot
+    (complex) is counted in ``X-Opj-Matrix-Fallback`` for the client's notice."""
+    import numpy as np
+
+    from quantized.io.origin_project import read_origin_books
+    from quantized.io.origin_project.opj_matrix import MatrixSheet, build_matrix_book
+
+    cells = np.arange(6, dtype=float)
+    sheet = MatrixSheet("MSheet1", 2, 3, 1.0, 3.0, 1.0, 2.0)
+    real = build_matrix_book("MBook1", "MBook1", sheet, cells, None, [])
+    cplx = build_matrix_book("MBook2", "MBook2", sheet, cells, cells, [])
+    items = [{"dataset": ds.to_dict(), "name": ds.metadata["origin_book"]} for ds in (real, cplx)]
+    resp = client.post("/api/export/opj", json={"datasets": items, "filename": "m"})
+    assert resp.status_code == 200
+    assert resp.headers["X-Opj-Matrix-Fallback"] == "1"
+    out = tmp_path / "m.opj"
+    out.write_bytes(resp.content)
+    back = {b.metadata["origin_book"]: b for b in read_origin_books(out)}
+    assert back["MBook1"].metadata["origin_matrix"]["rows"] == 2
+    assert back["MBook2"].metadata.get("origin_matrix") is None  # X/Y/Z columns
+
+
 def test_export_opj_multibook_as_the_file_menu_posts_it(tmp_path):
     """File > Export Origin project (.opj) posts every dataset as a named item
     with filename "project": each becomes its own workbook, in order, with

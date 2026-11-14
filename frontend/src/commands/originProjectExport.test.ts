@@ -9,7 +9,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { exportOriginProject } from "../lib/api/originProject";
+import { exportOriginProject, type OriginProjectResult } from "../lib/api/originProject";
 import type { Dataset } from "../lib/types";
 import { usePendingOps } from "../store/pendingOps";
 import { useToasts } from "../store/toasts";
@@ -33,7 +33,7 @@ const lastBody = (): Body => exportMock.mock.calls.at(-1)![0];
 
 beforeEach(() => {
   exportMock.mockReset();
-  exportMock.mockResolvedValue(undefined);
+  exportMock.mockResolvedValue({ matrixFallbacks: 0 });
   usePendingOps.setState({ ops: [] });
   useToasts.setState({ toasts: [] });
   useApp.setState({
@@ -76,6 +76,7 @@ describe("runExportOriginProject", () => {
       ],
       selectedIds: ["s1"],
     });
+    exportMock.mockResolvedValue({ matrixFallbacks: 1 }); // what the writer reports
     await runExportOriginProject(useApp.getState);
     const sent = lastBody().datasets;
     expect(sent.map((d) => [d.group, d.book])).toEqual([
@@ -86,8 +87,17 @@ describe("runExportOriginProject", () => {
     const toasts = useToasts.getState().toasts.map((t) => t.msg);
     expect(toasts).toContain("exported Origin project (2 books, 3 sheets)");
     expect(toasts).toContain(
-      "1 matrix book was written as X/Y/Z worksheet columns — the .opj export writes worksheets only",
+      "1 matrix book was written as X/Y/Z worksheet columns — complex, edited, or sharing a workbook, so not as an Origin matrix",
     );
+  });
+
+  it("says nothing about matrices when the writer wrote every one as a matrix", async () => {
+    useApp.setState({
+      datasets: [{ id: "m1", name: "M:MBook1", data: { ...data(3), metadata: { origin_matrix: {} } } }],
+      selectedIds: [],
+    });
+    await runExportOriginProject(useApp.getState);
+    expect(useToasts.getState().toasts.map((t) => t.msg).join(" ")).not.toMatch(/matrix/);
   });
 
   it("exports only a multi-selection, in Library order", async () => {
@@ -141,7 +151,7 @@ describe("runExportOriginProject", () => {
     let signal: AbortSignal | undefined;
     exportMock.mockImplementation((_body, s) => {
       signal = s;
-      return new Promise<void>((_, reject) =>
+      return new Promise<OriginProjectResult>((_, reject) =>
         s?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))),
       );
     });

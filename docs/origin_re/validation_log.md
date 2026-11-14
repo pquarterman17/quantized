@@ -719,6 +719,22 @@ Rules: `docs/origin_project_format.md` §3.5 "Fail-closed rules added by the
   (labels, X, Y, Z, imaginary Z); the 23 corpus matrix books keep every
   cell. Matrix books open in the Map tab from the Library.
 
+## 2026-11-14 (matrix export; horizontal bars; .ogs matrix X)
+
+- **Matrix books in the `.opj` writer.** Census of every matrix window in
+  the public `.opj` corpus (9 files): coordinate records 96/96 are 133-byte
+  `00 00 06 00` records followed by a text block and two NULLs; matrix
+  property blocks 24/24 carry only the serial (@4) and `0x60` (@38). The
+  writer emits that layout. Round trip through the repo reader: every
+  Altaxo matrix (`Matrix71x29`, `Matrix137x179`, `Matrix2x3OfDifferentTypes`,
+  `OneWorksheetOneMatrix`, `.opj` and `.opju` sources) comes back with the
+  same shape, coordinates and every cell, except the complex matrix, which
+  is written as worksheet columns and counted. Real-Origin load not probed.
+- **`.ogs` export of a matrix book** wrote X twice (time, then the X
+  channel). The MATLAB golden pins only the XRDML case (no Origin
+  metadata); only an Origin book's channel labelled `x_column_name` with
+  values equal to `time` is dropped now.
+
 ## How to re-run
 
 `tools/origin_trial/export_ground_truth.py` (skips completed stems);

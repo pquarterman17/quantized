@@ -1993,8 +1993,12 @@ vertical peak-position markers) objects; a 133-byte header (position
   test `test_bar_column_and_histogram_plot_types_match_labplot`. Other ids
   seen in the corpus (206, 231, 242) are left undecoded. On restore,
   column and bar draw as XY bars from zero at each X (`SeriesStyle.bars`,
-  screen and export); horizontal bars are drawn vertical with a notice;
-  a histogram opens in Stat Stage's histogram mode.
+  screen and export). A bar (215) turns the plot on its side as Origin
+  draws it — X up the left axis, values along the bottom (`bars:
+  "horizontal"`: uPlot scale orientation on screen, `lib/uplotOrient.ts`;
+  a transposing Axes proxy on export, `calc/figure_orient.py`, with a
+  secondary Y along the top). A histogram opens in Stat Stage's histogram
+  mode.
 * **Window kind — window header u8 @0x42** (`opj_graph_windows`). Public
   corpus (49 unique `.opj`): `2` on all 77 worksheet / matrix / notes
   windows, `0` or `6` on all 43 recovered graph windows; @0x32 separates
@@ -3041,9 +3045,27 @@ per book, then a sheet sub-header + layer group per sheet, five null blocks
 between sheets); sheet datasets are named `Book_A@k`. The sheet sub-header
 carries its 0-based sheet index at u8 **@0x12D** (sheet id − 1 on 75/75
 bound sheets in the public corpus) and its name at @0xD2. Book short names
-follow Origin's numbering (`Book1` taken → `Book2`, never `Book12`). Matrix
-books are written as X/Y/Z worksheet columns and the export says so — the
-writer has no matrix window.
+follow Origin's numbering (`Book1` taken → `Book2`, never `Book12`).
+
+**Matrix books (2026-11-14, `writer_matrix.py`).** A matrix the reader
+imported goes back out as an Origin matrix in the §3.1.1 layout: one cell
+dataset named after the window, a sub-header with the matrix flag (byte 2
+`0xDE`), columns u16 @0x2B and rows u32 @0x52, and the `Y2`/`X2`/`Y1`/`X1`
+coordinate records. Census of the public corpus's matrix windows (9 files):
+all 96 coordinate records are 133 bytes opening `00 00 06 00`, each followed
+by its text block and two NULLs; all 24 matrix property blocks carry the
+dataset serial at @4, 0 at @30/@35/@51/@0x11, `0x60` at @38 and no short
+name — the writer emits exactly that, on its sanitized worksheet templates.
+Only a dataset that is still the reader's grid is written this way; a
+complex, edited (sorted/filtered) or workbook-shared matrix goes out as X/Y/Z
+worksheet columns, counted in the `X-Opj-Matrix-Fallback` response header
+and named in the export toast. Evidence: the Altaxo matrix specimens
+(`.opj` and `.opju`) round-trip exactly through the repo reader and still
+meet Altaxo's cell and coordinate expectations
+(`test_matrix_books_round_trip_through_the_opj_writer`,
+`test_altaxo_matrix_cells_and_coordinates[written-back]`). **Not yet
+probed in real Origin** — the worksheet window is (above); run a matrix
+export through the loader at the next licence window.
 
 ## 9. Testing & corpus
 

@@ -54,6 +54,7 @@ from quantized.io._column_roles import (
 from quantized.io._origin_names import origin_short_name
 from quantized.io.origin_project import writer_blocks as wb
 from quantized.io.origin_project.container import ORIGIN_MISSING
+from quantized.io.origin_project.writer_matrix import matrix_grid, matrix_window
 
 __all__ = ["opj_bytes", "write_opj"]
 
@@ -180,11 +181,20 @@ def opj_bytes(books: list[DataStruct], groups: Sequence[str] | None = None) -> b
     if not books:
         raise ValueError("opj_bytes needs at least one DataStruct")
     windows = _plan_windows(books, groups)
+    # A window holding one matrix the reader imported goes out as a matrix
+    # (writer_matrix); a matrix sharing a workbook, or no longer a grid,
+    # stays worksheet columns (counted by writer_matrix.matrix_fallbacks).
+    grids = [matrix_grid(sheets[0][0]) if len(sheets) == 1 else None for _s, _l, sheets in windows]
     out = bytearray(_HEADER_LINE)
     out += _block(wb.FH_123)
     serial = 0  # global column counter: 147B header id + 519B property serial
 
-    for short_book, _long, sheets in windows:
+    for (short_book, _long, sheets), grid in zip(windows, grids, strict=True):
+        if grid is not None:  # the cells: one dataset named after the window
+            serial += 1
+            out += _NULL + _block(wb.col_header(short_book, grid.cells.size, serial))
+            out += _data_block(grid.cells)
+            continue
         for k, (ds, cols) in enumerate(sheets, start=1):
             suffix = f"@{k}" if k > 1 else ""
             # datasets section: [NULL][147B column header][data] per column
@@ -209,9 +219,13 @@ def opj_bytes(books: list[DataStruct], groups: Sequence[str] | None = None) -> b
     # window, a further sheet follows its predecessor's last label block
     # after 5 NULLs (the corpus' two-sheet books).
     serial = 0
-    for w, (short_book, long_book, sheets) in enumerate(windows):
+    for w, ((short_book, long_book, sheets), grid) in enumerate(zip(windows, grids, strict=True)):
         if w:
             out += _NULL * 6
+        if grid is not None:
+            serial += 1
+            out += matrix_window(short_book, long_book, grid, serial)
+            continue
         out += _block(wb.window_header(short_book, long_book))
         for k, (ds, cols) in enumerate(sheets, start=1):
             if k > 1:
