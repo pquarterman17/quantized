@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { columnMetaAt } from "../../../lib/columnmeta";
 import type { Dataset } from "../../../lib/types";
 import { setColumnHeader } from "../../../store/worksheetColumns";
+import { useDialogFocus } from "../../overlays/useDialogFocus";
 
 export interface HeaderEditTarget {
   col: number;
@@ -38,6 +39,13 @@ export default function HeaderEditor({
   const [note, setNote] = useState(comment);
   const first = useRef<HTMLInputElement>(null);
   const box = useRef<HTMLDivElement>(null);
+  // The shared dialog focus contract: focus in on open, Tab kept inside, and
+  // focus back to the opener (the grid) when Apply / Cancel / Escape closes it.
+  const restore = useDialogFocus(box, true);
+  const close = () => {
+    onClose();
+    restore();
+  };
   useEffect(() => first.current?.select(), []);
   // A click anywhere else closes it unapplied, like any popover.
   useEffect(() => {
@@ -51,7 +59,7 @@ export default function HeaderEditor({
   const name = col < 0 ? xName : (ds.data.labels[col] ?? `column ${col + 1}`);
   const apply = () => {
     setColumnHeader(ds.id, col, { label, unit, ...(note !== comment ? { comment: note } : {}) });
-    onClose();
+    close();
   };
   const field = (text: string, value: string, set: (v: string) => void, ref?: React.Ref<HTMLInputElement>) => (
     <label style={{ display: "grid", gridTemplateColumns: "84px 1fr", alignItems: "center", gap: 6 }}>
@@ -84,7 +92,7 @@ export default function HeaderEditor({
           apply();
         } else if (e.key === "Escape") {
           e.preventDefault();
-          onClose();
+          close();
         }
       }}
     >
@@ -93,7 +101,7 @@ export default function HeaderEditor({
       {field("Units", unit, setUnit)}
       {field("Comments", note, setNote)}
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
-        <button className="qz-btn" onClick={onClose}>
+        <button className="qz-btn" onClick={close}>
           Cancel
         </button>
         <button className="qz-btn qz-primary" onClick={apply}>

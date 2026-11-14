@@ -39,13 +39,12 @@ export interface WorksheetMenusProps {
 
 export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader }: WorksheetMenusProps) {
   if (!menu) return null;
-  const help = { label: "worksheets", query: "worksheet" };
   if (menu.kind === "text") {
     return (
       <ContextMenu
         x={menu.x}
         y={menu.y}
-        help={help}
+        help={{ label: "worksheets", query: "worksheet" }}
         onClose={onClose}
         items={[
           { label: "Sort ascending (by text)", run: () => sortWorksheetRows(ds.id, menu.name, 1) },
@@ -57,7 +56,7 @@ export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader }
   const readOnly = isRederived(ds);
   const t = menu.target;
   const items = menu.kind === "col" ? columnItems(ds, view, t, readOnly, onEditHeader) : rowItems(ds, view, t, readOnly);
-  return <ContextMenu x={menu.x} y={menu.y} help={help} onClose={onClose} items={items} />;
+  return <ContextMenu x={menu.x} y={menu.y} help={{ label: "worksheets", query: "worksheet" }} onClose={onClose} items={items} />;
 }
 
 function columnItems(
