@@ -248,7 +248,10 @@ class AxisGridSpec(BaseModel):
 class TopAxisSpec(BaseModel):
     """A top X axis showing a transform of X (``calc.axis_top``)."""
 
-    kind: Literal["reciprocal", "dspacing", "linear"]
+    kind: Literal["reciprocal", "dspacing", "linear", "expr"]
+    # ``expr``: any expression f(x) of the bottom axis (``calc.axis_expr``, no
+    # eval); one that does not parse draws no top axis rather than failing.
+    expr: str | None = Field(default=None, max_length=200)
     factor: float | None = None
     shift: float | None = None
     wavelength: float | None = Field(default=None, gt=0, le=100)

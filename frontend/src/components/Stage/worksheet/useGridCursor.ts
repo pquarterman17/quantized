@@ -63,6 +63,8 @@ export interface GridCursor {
   clear: () => void;
   /** Scroll request for the focused cell, or null. */
   reveal: GridReveal | null;
+  /** Put the cursor on the cell at original row `row`, column `col` (Find). */
+  goTo: (row: number, col: number) => void;
 }
 
 const PAGE = 20;
@@ -277,5 +279,10 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     },
   };
 
-  return { range, grid, blockOps, onKeyDown, clear: () => setRange(null), reveal };
+  const goTo = (row: number, col: number) => {
+    const pos = order.indexOf(row);
+    if (pos >= 0) place({ anchor: { pos, col }, focus: { pos, col } });
+  };
+
+  return { range, grid, blockOps, onKeyDown, clear: () => setRange(null), reveal, goTo };
 }

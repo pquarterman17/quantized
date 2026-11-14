@@ -5,14 +5,16 @@
 // document (undo restores it); a page panel that pointed at it resolves to
 // "missing" on its next read (lib/pageDocument.ts's resolvePagePanel).
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askConfirm } from "../overlays/ConfirmDialog";
 
 vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
+vi.mock("../../store/exportSavedFigures", () => ({ exportSavedFiguresPdf: vi.fn(async (ids: readonly string[]) => ids.length) }));
 
 import EditableFiguresSection from "./EditableFiguresSection";
+import { exportSavedFiguresPdf } from "../../store/exportSavedFigures";
 import { createFigureDocument, type FigureDocument } from "../../lib/figureDocument";
 import type { PageDocument } from "../../lib/pageDocument";
 import { createPageDocument } from "../../lib/pageDocumentActions";
@@ -184,5 +186,38 @@ describe("EditableFiguresSection", () => {
       const button = screen.getByTitle("finish or cancel the current Publication Preview before opening another");
       expect(button).toBeDisabled();
     });
+  });
+});
+
+describe("EditableFiguresSection multi-page PDF export (N10)", () => {
+  const three = () => [figure({ id: "a", name: "A" }), figure({ id: "b", name: "B" }), figure({ id: "c", name: "C" })];
+
+  it("offers no export until a figure is ticked", () => {
+    useApp.setState({ editableFigures: three() });
+    render(<EditableFiguresSection />);
+    expect(screen.queryByRole("button", { name: /export .* pdf/i })).toBeNull();
+  });
+
+  it("exports the ticked figures as one PDF, pages in tick order", async () => {
+    useApp.setState({ editableFigures: three() });
+    render(<EditableFiguresSection />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select figure C for PDF export" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select figure A for PDF export" }));
+    const button = screen.getByRole("button", { name: "Export 2 figures as one PDF" });
+    expect(screen.getByTitle("PDF page 1")).toBeInTheDocument();
+    fireEvent.click(button);
+    await waitFor(() => expect(button).not.toBeDisabled()); // the export settled
+    expect(vi.mocked(exportSavedFiguresPdf)).toHaveBeenCalledWith(["c", "a"], expect.any(String));
+  });
+
+  it("unticking removes a figure from the export", async () => {
+    useApp.setState({ editableFigures: three() });
+    render(<EditableFiguresSection />);
+    for (const n of ["A", "B", "C"]) fireEvent.click(screen.getByRole("checkbox", { name: `Select figure ${n} for PDF export` }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select figure B for PDF export" }));
+    const button = screen.getByRole("button", { name: "Export 2 figures as one PDF" });
+    fireEvent.click(button);
+    await waitFor(() => expect(button).not.toBeDisabled());
+    expect(vi.mocked(exportSavedFiguresPdf)).toHaveBeenCalledWith(["a", "c"], expect.any(String));
   });
 });

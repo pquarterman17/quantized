@@ -5,6 +5,7 @@ import { useState } from "react";
 import { pagesReferencingFigure } from "../../lib/pageDocumentActions";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import { transformProvenanceOfData, transformProvenanceOfDataset, transformRecipeLabel } from "../../lib/transformProvenance";
+import { toast } from "../../store/toasts";
 import { SESSION_BUSY_MSG } from "../../store/figureLifecycle";
 import { figurePublicationSourceUnavailable } from "../../store/figurePublicationLibrary";
 import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
@@ -22,6 +23,21 @@ export default function EditableFiguresSection() {
   const publicationSession = useApp((state) => state.figurePublicationSession);
   const previewInPlace = useApp((state) => state.beginFigurePublicationEditForFigure);
   const [collapsed, setCollapsed] = useState(false);
+  // N10: figures ticked for the one-PDF export, in tick order (= page order).
+  const [ticked, setTicked] = useState<string[]>([]);
+  const [exporting, setExporting] = useState(false);
+  const live = ticked.filter((id) => documents.some((document) => document.id === id));
+  const tick = (id: string) => setTicked((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
+  const exportPdf = () => {
+    setExporting(true);
+    void runLazy("Loading figure export…", () => import("../../store/exportSavedFigures"))
+      .then((m) => m.exportSavedFiguresPdf(live, "figures"), onLoadFailure)
+      .then((n) => {
+        if (n) toast(`exported ${n} figure${n === 1 ? "" : "s"} as one PDF`);
+      })
+      .catch((error: unknown) => toast(`PDF export failed: ${error instanceof Error ? error.message : String(error)}`, "danger"))
+      .finally(() => setExporting(false));
+  };
 
   if (documents.length === 0) return null;
 
@@ -32,6 +48,19 @@ export default function EditableFiguresSection() {
         <span className="qzk-group-name">Editable figures</span>
         <span className="qzk-group-count">{documents.length}</span>
       </button>
+      {!collapsed && live.length > 0 && (
+        <div className="qzk-fig-row">
+          <button
+            className="qz-btn qz-sm"
+            disabled={exporting}
+            aria-label={`Export ${live.length} figure${live.length === 1 ? "" : "s"} as one PDF`}
+            title="one multi-page PDF, one page per ticked figure, in the order you ticked them"
+            onClick={exportPdf}
+          >
+            Export PDF ({live.length})
+          </button>
+        </div>
+      )}
       {!collapsed && documents.map((document) => {
         const dataset = datasets.find((candidate) => candidate.id === document.bindings.datasetId);
         const transformProvenance = transformProvenanceOfDataset(dataset) ??
@@ -46,6 +75,13 @@ export default function EditableFiguresSection() {
         const previewDisabled = sessionBusy || unavailable !== null;
         return (
           <div key={document.id} className="qzk-fig-row">
+            <input
+              type="checkbox"
+              aria-label={`Select figure ${document.name} for PDF export`}
+              checked={live.includes(document.id)}
+              onChange={() => tick(document.id)}
+            />
+            {live.includes(document.id) && <span className="qzk-fig-meta" title={`PDF page ${live.indexOf(document.id) + 1}`}>{live.indexOf(document.id) + 1}</span>}
             <button
               className="qzk-fig-item"
               title={`open editable figure "${document.name}"`}

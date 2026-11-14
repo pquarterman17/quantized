@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import { axisDraft, axisDraftErrors } from "./axisDialogModel";
-import type { TopAxis } from "./axisFormat";
+import { sanitizeAxisExtras, type TopAxis } from "./axisFormat";
 import { niceTicks, TOP_MIN_GAP, topAxisProblem, topForward, topInverse, topRangeProblem, topSpan, topTicks } from "./axisTop";
 
 const TOP_TABLE: [TopAxis, [number, number], string[]][] = [
@@ -14,6 +14,12 @@ const TOP_TABLE: [TopAxis, [number, number], string[]][] = [
   [{ kind: "dspacing", wavelength: 1.5406 }, [20, 80], ["4.0", "3.5", "3.0", "2.5", "2.0", "1.5"]],
   [{ kind: "linear", factor: 2, shift: 1 }, [0, 10], ["2.5", "5.0", "7.5", "10.0", "12.5", "15.0", "17.5", "20.0"]],
   [{ kind: "linear", factor: -1 }, [-5, 5], ["4", "2", "0", "-2", "-4"]],
+  // N8: arbitrary expressions of the bottom axis (same rows as tests/test_axis_style.py).
+  [{ kind: "expr", expr: "1240/x" }, [200, 800], ["6", "5", "4", "3", "2"]],
+  [{ kind: "expr", expr: "1/x" }, [2, 10], ["0.50", "0.40", "0.30", "0.25", "0.20", "0.15", "0.10"]],
+  [{ kind: "expr", expr: "sqrt(x)" }, [1, 100], ["2", "4", "6", "8", "10"]],
+  // a range through the pole: the end next to it is cut back to a 20x change
+  [{ kind: "expr", expr: "1240/x" }, [0, 20], ["1200", "600", "400", "200"]],
 ];
 
 describe("top X axis", () => {
@@ -22,7 +28,7 @@ describe("top X axis", () => {
     expect(ticks.map((t) => t.label)).toEqual(labels);
     for (const t of ticks) {
       expect(topForward(top, t.pos)).toBeCloseTo(t.value, 9);
-      expect(topInverse(top, t.value)).toBeCloseTo(t.pos, 9);
+      expect(topInverse(top, t.value, [lo, hi])).toBeCloseTo(t.pos, 9);
     }
   });
 
@@ -63,6 +69,52 @@ describe("top X axis", () => {
     expect(topAxisProblem({ kind: "dspacing" })).toMatch(/wavelength/);
     expect(topAxisProblem({ kind: "linear", factor: 0 })).toMatch(/factor/);
     expect(topAxisProblem({ kind: "reciprocal", factor: 1000 })).toBeNull();
+  });
+});
+
+describe("expression top axis (N8)", () => {
+  it("labels the valid side of a range through a pole instead of failing", () => {
+    const top: TopAxis = { kind: "expr", expr: "1240/x" };
+    for (const [lo, hi] of [[-5, 5], [0, 10], [-1, 300]]) {
+      const ticks = topTicks(top, lo, hi);
+      expect(ticks.length).toBeGreaterThan(0);
+      for (const t of ticks) {
+        expect(t.pos).toBeGreaterThan(0);
+        expect(Number.isFinite(t.value)).toBe(true);
+        expect(t.label).not.toMatch(/NaN|Infinity/);
+      }
+    }
+    expect(topTicks(top, -10, -1).length).toBeGreaterThan(0);
+    expect(topTicks({ kind: "expr", expr: "sqrt(x)" }, -9, -1)).toEqual([]);
+    expect(topTicks({ kind: "expr", expr: "x^2" }, -3, 3).every((t) => t.pos >= 0)).toBe(true);
+    expect(topTicks({ kind: "expr", expr: "5" }, 0, 10)).toEqual([]);
+    expect(topRangeProblem({ kind: "expr", expr: "sqrt(x)" }, -9, -1)).toMatch(/monotonic/);
+    expect(topRangeProblem(top, -5, 5)).toBeNull();
+  });
+
+  it("parses without eval, with the same rules as the export", () => {
+    const f = (expr: string): number => topForward({ kind: "expr", expr }, 3);
+    expect(f("-x^2")).toBe(9);
+    expect(f("-x**2")).toBe(-9);
+    expect(f("2*x")).toBe(6);
+    for (const bad of ["__import__('os')", "x.real", "open(x)", "x;1", "foo(x)", "", "1+", "(x", "A+x", "x > 1", "lag(x)", "math.sqrt(x)"]) {
+      expect(topAxisProblem({ kind: "expr", expr: bad }), bad).not.toBeNull();
+      expect(f(bad), bad).toBeNaN();
+    }
+    expect(topAxisProblem({ kind: "expr", expr: "1240/x" })).toBeNull();
+  });
+
+  it("survives a save / load: the sanitiser keeps a valid expr axis and drops a blank one", () => {
+    const kept = sanitizeAxisExtras({ mode: "auto", digits: 2, top: { kind: "expr", expr: " 1240/x ", title: "E" } });
+    expect(kept.top).toEqual({ kind: "expr", expr: " 1240/x ".slice(0, 200), title: "E" });
+    expect(sanitizeAxisExtras({ mode: "auto", digits: 2, top: { kind: "expr", expr: "  " } }).top).toEqual({ kind: "expr" });
+  });
+
+  it("the Axis dialog reports a bad expression", () => {
+    const base = axisDraft({ xScale: "linear", yScale: "linear", y2Scale: null, xLim: null, yLim: null, y2Lim: null, xStep: null, yStep: null, y2Step: null, xFmt: { mode: "auto", digits: 2 }, yFmt: { mode: "auto", digits: 2 }, y2Fmt: null, axisLabelStyles: {}, xReversed: false } as never, "x");
+    const d = { ...base, topKind: "expr" as const, topExpr: "foo(x)" };
+    expect(axisDraftErrors(d, "x").join(" ")).toMatch(/unknown name/);
+    expect(axisDraftErrors({ ...d, topExpr: "1240/x" }, "x")).toEqual([]);
   });
 });
 
