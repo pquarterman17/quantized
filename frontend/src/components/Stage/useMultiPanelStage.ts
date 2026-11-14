@@ -32,10 +32,10 @@ import {
   type Composition,
 } from "../../lib/composition";
 import { secondaryAxisFromPanel } from "../../lib/axisspec";
-import { buildErrorColumns, buildErrorSpans } from "../../lib/errorbars";
+import { buildErrorColumns } from "../../lib/errorbars";
 import { sharedXDomain, sharedYDomain } from "../../lib/facetDomains";
 import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
-import { perSeriesXData } from "../../lib/perSeriesX";
+import { perSeriesXData, stackErrorSpans } from "../../lib/perSeriesX";
 import {
   DECIMATE_MIN_POINTS,
   decimationRequestEligible,
@@ -609,7 +609,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       // screen and export disagree.
       seriesLabels: labelList,
       seriesStyles: styleList,
-      errorBars: errorBarsList, errorSpans: active?.errorRoles?.length ? payload.channels.map((ch) => buildErrorSpans(active.data, [ch], active.errorRoles!)) : [], // spans as the flat plot
+      errorBars: errorBarsList, errorSpans: active ? stackErrorSpans(active, xKey, payload.channels) : [], // spans as the flat plot, over the per-series-X view
       syncKey,
       // Propagate an x-zoom on one panel to all the others.
       onSetScale: xZoomSyncHook(() => plotsRef.current),
@@ -642,7 +642,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     encodedFacets,
     facetGrid,
     facetXLim,
-    payload, active, // active: the stack panels' error spans
+    payload, active, xKey, // active: the stack panels' error spans
     yScale,
     xScale,
     xLim,

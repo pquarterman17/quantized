@@ -370,7 +370,7 @@ export type AxisLabelStyles = Partial<Record<AxisKey, AxisLabelStyle>>;
 
 /** One curve of a live multi-dataset graph: source dataset, its X (null = `.time`), its Y, legend label.
  *  -1 = that source column was removed (drawn empty, never rebound). */
-export interface LinkedCurve { datasetId: string; xKey: number | null; yKey: number; label: string }
+export interface LinkedCurve { datasetId: string; xKey: number | null; yKey: number; label: string; labelFrom?: "name" | "nameCol" /* legend follows the source name; `label` = fallback */ }
 
 /** A dataset held client-side: the parsed DataStruct + a stable id + name.
  *  `data` is the currently displayed (corrected + formula-recomputed) view;

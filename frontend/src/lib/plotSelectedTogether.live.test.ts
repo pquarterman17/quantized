@@ -36,8 +36,8 @@ describe("Plot selected together makes a LIVE graph", () => {
   it("references each source's curve and follows a cell edit and a row mask", async () => {
     await plotSelectedTogether(["a", "b"]);
     expect(graph().linkedCurves).toEqual([
-      { datasetId: "a", xKey: null, yKey: 0, label: "Sample A" },
-      { datasetId: "b", xKey: null, yKey: 0, label: "Sample B" },
+      { datasetId: "a", xKey: null, yKey: 0, label: "Sample A", labelFrom: "name" },
+      { datasetId: "b", xKey: null, yKey: 0, label: "Sample B", labelFrom: "name" },
     ]);
     expect(useApp.getState().activeId).toBe(graph().id);
     expect(col(0)).toEqual([1, 2, 3, NaN, NaN]);
@@ -60,7 +60,7 @@ describe("Plot selected together makes a LIVE graph", () => {
       .mockResolvedValueOnce({ dataset: "Sample B" })
       .mockResolvedValueOnce({ x: "Y", y: "Z" });
     await addCurveFrom();
-    expect(graph().linkedCurves?.[2]).toEqual({ datasetId: "b", xKey: 0, yKey: 1, label: "Sample B: Z" });
+    expect(graph().linkedCurves?.[2]).toEqual({ datasetId: "b", xKey: 0, yKey: 1, label: "Sample B: Z", labelFrom: "nameCol" });
     // Its own block: x = b's Y column (50, 60), y = b's Z column (7, 8).
     expect(graph().data.time.slice(-2)).toEqual([50, 60]);
     expect(col(2).slice(-2)).toEqual([7, 8]);
@@ -86,7 +86,7 @@ describe("Plot selected together makes a LIVE graph", () => {
     expect(graph().linkedCurves).toEqual([
       { datasetId: "m", xKey: null, yKey: 0, label: "R1" },
       { datasetId: "m", xKey: 1, yKey: 2, label: "R2" },
-      { datasetId: "a", xKey: null, yKey: 0, label: "Sample A: Y" },
+      { datasetId: "a", xKey: null, yKey: 0, label: "Sample A: Y", labelFrom: "nameCol" },
     ]);
     expect(graph().data.time).toEqual([1, 2, 5, 3, 1, 2, 3]);
   });

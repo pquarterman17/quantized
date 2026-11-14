@@ -21,6 +21,7 @@
 // the inverse (the plot brush maps a view row back with `r % blockRows`).
 
 import { effectiveDesignations } from "./columnmeta";
+import { buildErrorSpans, type ErrorSpan } from "./errorbars";
 import { droppedRows } from "./rowstate";
 import type { Dataset, DataStruct } from "./types";
 
@@ -39,6 +40,14 @@ export function curveX(ds: Pick<Dataset, "data" | "columnDesignations">, shared:
   });
 }
 
+/** The X column a fit/analysis of Y channel `yKey` must read: the curve's OWN X
+ *  on a multi-X sheet (T1,R1,T2,R2 -- R2 against T2), else the plot's `xKey`
+ *  (null = the time column). The same rule the plot draws by. */
+export function ownXKey(ds: Pick<Dataset, "data" | "columnDesignations">, xKey: number | null, yKey: number): number | null {
+  const own = curveX(ds, xKey)[yKey];
+  return own === undefined ? xKey : own;
+}
+
 const cache = new WeakMap<DataStruct, Map<string, { data: DataStruct; blocks: (number | null)[] }>>();
 
 /** The X blocks (shared X first) and the concatenated DataStruct, or null
@@ -51,7 +60,7 @@ export function perSeriesXData(
   const blocks: (number | null)[] = [xKey];
   for (const x of own) if (x !== undefined && !blocks.includes(x)) blocks.push(x);
   if (blocks.length < 2) return null;
-  const key = own.join(",");
+  const key = `${xKey}|${own.join(",")}`;
   const hit = cache.get(ds.data)?.get(key);
   if (hit) return hit;
   const src = ds.data;
@@ -101,4 +110,16 @@ export function perSeriesXDataset(ds: Dataset, xKey: number | null): { dataset: 
 /** Source rows repeated into every block of an `n`-row view. */
 export function viewRows(rows: readonly number[], blocks: number, n: number): number[] {
   return Array.from({ length: blocks }, (_, b) => rows.map((r) => b * n + r)).flat();
+}
+
+/** The stacked-panel plot's error spans, one map per fetched channel. Each stack
+ *  panel is a single-series plot over THIS per-series-X view (one block of rows
+ *  per X), so its spans are built from the same view -- from the source rows
+ *  they would cover only the first block and leave a secondary-X curve's bars
+ *  misaligned. */
+export function stackErrorSpans(active: Dataset, xKey: number | null, channels: readonly number[]): Map<number, ErrorSpan[]>[] {
+  const roles = active.errorRoles;
+  if (!roles?.length) return [];
+  const data = perSeriesXData(active, xKey)?.data ?? active.data;
+  return channels.map((ch) => buildErrorSpans(data, [ch], roles));
 }

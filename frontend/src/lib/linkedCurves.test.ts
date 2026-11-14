@@ -58,7 +58,7 @@ describe("assembleLinkedCurves", () => {
 });
 
 describe("sanitizeLinkedCurves (.dwk load)", () => {
-  it("keeps well-formed curves and drops malformed ones", () => {
+  it("keeps well-formed curves and keeps a malformed one as an empty slot (finding 9)", () => {
     expect(
       sanitizeLinkedCurves([
         { datasetId: "a", xKey: null, yKey: 1, label: "A" },
@@ -69,6 +69,9 @@ describe("sanitizeLinkedCurves (.dwk load)", () => {
     ).toEqual([
       { datasetId: "a", xKey: null, yKey: 1, label: "A" },
       { datasetId: "b", xKey: 2, yKey: 0, label: "" },
+      // Malformed entries keep their SLOT (later curves keep their column), bound to nothing, drawn empty.
+      { datasetId: "", xKey: null, yKey: -1, label: "" },
+      { datasetId: "", xKey: null, yKey: -1, label: "" },
     ]);
     expect(sanitizeLinkedCurves("nope")).toBeUndefined();
   });

@@ -20,7 +20,7 @@ import { askParams } from "../store/paramDialog";
 import { noteAssembled, watchLinkedCurves } from "../store/linkedCurvesSync";
 import { toast } from "../store/toasts";
 import { nextDatasetId, useApp } from "../store/useApp";
-import { assembleLinkedCurves, curvesFor, linkedGraphYTitle } from "./linkedCurves";
+import { assembleLinkedCurves, curvesForDatasets, linkedGraphReaches, linkedGraphYTitle } from "./linkedCurves";
 import { is2DMap } from "./mapdata";
 import { curveX } from "./perSeriesX";
 import { effectiveChannels } from "./plotdata";
@@ -38,10 +38,18 @@ function mapSkipNote(maps: Dataset[]): string {
   return ` — skipped ${maps.length} ${noun} (${maps.map((d) => d.name).join(", ")}): maps don't overlay`;
 }
 
+/** The next free Origin-style graph name: Graph1, Graph2, ... (unique in the Library). */
+function nextGraphName(datasets: readonly Dataset[]): string {
+  const taken = new Set(datasets.map((d) => d.name));
+  let n = 1;
+  while (taken.has(`Graph${n}`)) n++;
+  return `Graph${n}`;
+}
+
 /** Add the live graph over `curves` as a new Library dataset and plot it. */
-function landGraph(name: string, curves: LinkedCurve[]): Dataset {
+function landGraph(curves: LinkedCurve[]): Dataset {
   const datasets = useApp.getState().datasets;
-  const graph: Dataset = { id: nextDatasetId(), name, data: assembleLinkedCurves(curves, datasets), linkedCurves: curves };
+  const graph: Dataset = { id: nextDatasetId(), name: nextGraphName(datasets), data: assembleLinkedCurves(curves, datasets), linkedCurves: curves };
   noteAssembled(graph, datasets);
   useApp.getState().addDataset(graph);
   // Titled by what is plotted, not by which datasets (the curve labels).
@@ -83,13 +91,13 @@ export async function plotSelectedTogether(ids: readonly string[]): Promise<void
     return;
   }
   // A dataset with no plottable channel contributes no curve (skipped honestly).
-  const curves = curvesFor(plottable, (ds) => primaryChannel(ds.data));
+  const curves = curvesForDatasets(plottable, (ds) => primaryChannel(ds.data));
   if (curves.length < MIN_SELECTION) {
     toast("couldn't build an overlay from the selected datasets", "danger");
     return;
   }
-  landGraph(`overlay (${curves.length})`, curves);
-  toast(`plotted ${curves.length} datasets together — the graph follows its sources${mapSkipNote(maps)}`, "ok");
+  landGraph(curves);
+  toast(`plotted ${curves.length === plottable.length ? `${curves.length} datasets` : `${curves.length} curves from ${plottable.length} datasets`} together — the graph follows its sources${mapSkipNote(maps)}`, "ok");
 }
 
 /** Unique option labels for `items` ("name", then "name (2)" for a repeat). */
@@ -115,6 +123,8 @@ export async function addCurveFrom(): Promise<void> {
     toast("open a graph first, then add a curve to it", "danger");
     return;
   }
+  // (A source that already draws from this graph stays offered: appendCurve
+  // refuses it with a message that says why, instead of hiding it.)
   const sources = s.datasets.filter((d) => !is2DMap(d.data) && d.id !== target.id);
   if (sources.length === 0) {
     toast("no other dataset to take a curve from", "danger");
@@ -149,7 +159,7 @@ export async function addCurveFrom(): Promise<void> {
   const yKey = cols.indexOf(String(pick.y));
   const xKey = String(pick.x) === X_OWN ? null : cols.indexOf(String(pick.x));
   if (yKey < 0 || (xKey !== null && xKey < 0)) return;
-  appendCurve(target.id, { datasetId: source.id, xKey, yKey, label: `${source.name}: ${cols[yKey]}` });
+  appendCurve(target.id, { datasetId: source.id, xKey, yKey, label: `${source.name}: ${cols[yKey]}`, labelFrom: "nameCol" });
 }
 
 /** The curves a plain dataset's FOCUSED graph draws now, each against the X
@@ -173,10 +183,15 @@ export function appendCurve(targetId: string, curve: LinkedCurve): void {
   const s = useApp.getState();
   const target = s.datasets.find((d) => d.id === targetId);
   if (!target) return;
+  // Fail closed: never write a curve that makes `target` depend on itself.
+  if (linkedGraphReaches(s.datasets, curve.datasetId, targetId)) {
+    toast(`can't add “${curve.label}” to “${target.name}”: the two graphs would depend on each other`, "danger");
+    return;
+  }
   if (target.linkedCurves) {
     s.recordHistory("add curve");
     const curves = [...target.linkedCurves, curve];
-    const data = assembleLinkedCurves(curves, s.datasets);
+    const data = assembleLinkedCurves(curves, s.datasets, target.data);
     const next = { ...target, data, linkedCurves: curves };
     noteAssembled(next, s.datasets); // assembled from these sources: the watcher need not rebuild it
     useApp.setState((st) => ({
@@ -192,7 +207,7 @@ export function appendCurve(targetId: string, curve: LinkedCurve): void {
     return;
   }
   const own = drawnCurves(target);
-  const graph = landGraph(`${target.name} + ${curve.label}`, [...own, curve]);
+  const graph = landGraph([...own, curve]);
   // The drawn curves keep their styles: re-key them onto the graph's columns.
   const styles = Object.fromEntries(own.flatMap((c, i) => (s.seriesStyles[c.yKey] ? [[i, s.seriesStyles[c.yKey]]] : [])));
   if (Object.keys(styles).length > 0) useApp.setState({ seriesStyles: styles });

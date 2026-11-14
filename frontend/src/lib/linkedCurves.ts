@@ -20,6 +20,8 @@
 //
 // Pure; loaded only by the lazy graph actions and the sync watcher.
 
+import { effectiveDesignations } from "./columnmeta";
+import { curveX } from "./perSeriesX";
 import { droppedRows } from "./rowstate";
 import { sharedAxisTitle } from "./sharedAxisTitle";
 import type { Dataset, DataStruct, LinkedCurve } from "./types";
@@ -31,42 +33,59 @@ function xQuantity(ds: Dataset, xKey: number | null): [string, string] {
   return [ds.data.labels[xKey] ?? `col ${xKey + 1}`, ds.data.units[xKey] ?? ""];
 }
 
-/** The graph's DataStruct for `curves` over the CURRENT `datasets`. */
-export function assembleLinkedCurves(curves: readonly LinkedCurve[], datasets: readonly Dataset[]): DataStruct {
+/** A curve's legend text: derived from the source's CURRENT name when the
+ *  curve carries `labelFrom` (so a rename follows), else the stored label. */
+function curveLabel(c: LinkedCurve, ds: Dataset | undefined): string {
+  if (!ds || !c.labelFrom) return c.label;
+  if (c.labelFrom === "name") return ds.name;
+  const col = ds.data.labels[c.yKey];
+  return col === undefined ? c.label : `${ds.name}: ${col}`;
+}
+
+/** The graph's DataStruct for `curves` over the CURRENT `datasets`. `previous`
+ *  (the graph's data being replaced) lends it the presentation-only metadata
+ *  a user declared on the graph itself (confirmed error pairings), which a
+ *  rebuild must not drop. */
+export function assembleLinkedCurves(
+  curves: readonly LinkedCurve[],
+  datasets: readonly Dataset[],
+  previous?: DataStruct,
+): DataStruct {
   const byId = new Map(datasets.map((d) => [d.id, d]));
-  const blocks: { ds: Dataset; xKey: number | null; start: number }[] = [];
+  const blocks: { ds: Dataset; xKey: number | null; start: number; cols: { col: number; yKey: number }[] }[] = [];
   const blockOf = new Map<string, number>();
   let total = 0;
-  const curveBlock = curves.map((c) => {
+  const curveBlock = curves.map((c, col) => {
     const ds = byId.get(c.datasetId);
     const width = ds?.data.labels.length ?? 0;
     if (!ds || c.yKey < 0 || c.yKey >= width || (c.xKey !== null && (c.xKey < 0 || c.xKey >= width))) return -1;
     const key = `${c.datasetId}#${c.xKey}`;
-    if (!blockOf.has(key)) {
-      blockOf.set(key, blocks.length);
-      blocks.push({ ds, xKey: c.xKey, start: total });
+    let bi = blockOf.get(key);
+    if (bi === undefined) {
+      bi = blocks.length;
+      blockOf.set(key, bi);
+      blocks.push({ ds, xKey: c.xKey, start: total, cols: [] });
       total += ds.data.time.length;
     }
-    return blockOf.get(key)!;
+    blocks[bi].cols.push({ col, yKey: c.yKey });
+    return bi;
   });
+  // One row per block row (never per curve); each block writes only its own
+  // curves' cells, reading each source row once.
   const time = new Array<number>(total).fill(NaN);
-  const values = Array.from({ length: total }, () => new Array<number>(curves.length).fill(NaN));
+  const values = new Array<number[]>(total);
+  const blank = new Array<number>(curves.length).fill(NaN);
   for (const b of blocks) {
     const src = b.ds.data;
+    const skip = droppedRows(b.ds);
     for (let r = 0; r < src.time.length; r++) {
-      time[b.start + r] = b.xKey === null ? src.time[r] : (src.values[r]?.[b.xKey] ?? NaN);
+      const srcRow = src.values[r];
+      const row = blank.slice();
+      time[b.start + r] = b.xKey === null ? src.time[r] : (srcRow?.[b.xKey] ?? NaN);
+      if (!skip.has(r)) for (const { col, yKey } of b.cols) row[col] = srcRow?.[yKey] ?? NaN;
+      values[b.start + r] = row;
     }
   }
-  const dropped = new Map(blocks.map((b) => [b.ds.id, droppedRows(b.ds)]));
-  curves.forEach((c, col) => {
-    const bi = curveBlock[col];
-    if (bi < 0) return;
-    const b = blocks[bi];
-    const skip = dropped.get(b.ds.id)!;
-    for (let r = 0; r < b.ds.data.time.length; r++) {
-      if (!skip.has(r)) values[b.start + r][col] = b.ds.data.values[r]?.[c.yKey] ?? NaN;
-    }
-  });
   // One X axis: name every distinct X quantity ("2-Theta (deg)"; "T (K) / H (Oe)").
   const xs = new Map(blocks.map((b) => xQuantity(b.ds, b.xKey)).map(([n, u]) => [`${n}\0${u}`, [n, u] as const]));
   const pairs = [...xs.values()];
@@ -77,10 +96,11 @@ export function assembleLinkedCurves(curves: readonly LinkedCurve[], datasets: r
   // QUANTITY is the column's Comment in the worksheet.
   const src = (i: number) => (curveBlock[i] < 0 ? undefined : byId.get(curves[i].datasetId)!.data);
   const names = curves.map((_, i) => `c${i}`);
+  const declared = previous?.metadata?.error_roles;
   return {
     time,
     values,
-    labels: curves.map((c) => c.label),
+    labels: curves.map((c) => curveLabel(c, byId.get(c.datasetId))),
     units: curves.map((c, i) => src(i)?.units[c.yKey] ?? ""),
     metadata: {
       source_format: "linked-graph",
@@ -89,8 +109,26 @@ export function assembleLinkedCurves(curves: readonly LinkedCurve[], datasets: r
       x_column_unit: xUnit,
       origin_column_names: names,
       column_comments: Object.fromEntries(curves.map((c, i) => [names[i], src(i)?.labels[c.yKey] ?? "(missing)"])),
+      ...(declared !== undefined ? { error_roles: declared } : {}),
     },
   };
+}
+
+/** Does `fromId` draw (directly, or through other graphs) from `targetId`?
+ *  True for `fromId === targetId`. Used to refuse a curve that would close a
+ *  graph <-> graph cycle. */
+export function linkedGraphReaches(datasets: readonly Dataset[], fromId: string, targetId: string): boolean {
+  const byId = new Map(datasets.map((d) => [d.id, d]));
+  const seen = new Set<string>();
+  const stack = [fromId];
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (id === targetId) return true;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    for (const c of byId.get(id)?.linkedCurves ?? []) stack.push(c.datasetId);
+  }
+  return false;
 }
 
 /** The graph's Y title over its sources' QUANTITIES ("Moment (emu)"; mixed:
@@ -110,19 +148,59 @@ export function linkedGraphYTitle(curves: readonly LinkedCurve[], datasets: read
 export function curvesFor(datasets: readonly Dataset[], yKeyOf: (ds: Dataset) => number | null): LinkedCurve[] {
   return datasets.flatMap((ds) => {
     const yKey = yKeyOf(ds);
-    return yKey === null ? [] : [{ datasetId: ds.id, xKey: null, yKey, label: ds.name }];
+    return yKey === null ? [] : [{ datasetId: ds.id, xKey: null, yKey, label: ds.name, labelFrom: "name" as const }];
   });
 }
 
-/** Validate a parsed .dwk `linkedCurves` entry; anything malformed is dropped. */
+/** The curves "Plot together" draws for each dataset, honouring column
+ *  designations: a sheet with columns designated Y contributes every one of
+ *  them, each against its OWN X (the nearest preceding X, lib/perSeriesX.ts),
+ *  named "sheet: column"; a sheet with none contributes `primaryOf` -- unless
+ *  that is a designated X/error/label column, then its first plain channel --
+ *  named by the sheet. A sheet with nothing plottable contributes nothing. */
+export function curvesForDatasets(datasets: readonly Dataset[], primaryOf: (ds: Dataset) => number | null): LinkedCurve[] {
+  return datasets.flatMap((ds): LinkedCurve[] => {
+    const n = ds.data.labels.length;
+    const des = effectiveDesignations(ds.data, ds.columnDesignations).slice(0, n);
+    const own = curveX(ds, null);
+    // Any designation means the user (or the Origin book) laid the sheet out:
+    // every curve channel (a Y, or an undesignated one -- never an X, error or
+    // label column) is drawn against its own X.
+    const ys = des.some((d) => d === "X" || d === "Y") ? own.flatMap((x, c) => (x === undefined ? [] : [c])) : [];
+    if (ys.length > 0) {
+      return ys.map((c) => ({
+        datasetId: ds.id,
+        xKey: own[c] ?? null,
+        yKey: c,
+        label: `${ds.name}: ${ds.data.labels[c] ?? ""}`,
+        labelFrom: "nameCol" as const,
+      }));
+    }
+    const plainChannels = Array.from({ length: n }, (_, c) => c).filter((c) => des[c] === undefined);
+    const primary = primaryOf(ds);
+    const yKey = primary !== null && primary < n && des[primary] === undefined ? primary : (plainChannels[0] ?? null);
+    return yKey === null ? [] : [{ datasetId: ds.id, xKey: own[yKey] ?? null, yKey, label: ds.name, labelFrom: "name" }];
+  });
+}
+
+/** What a saved curve that cannot be restored is bound to: nothing. */
+export const UNRESOLVED_SOURCE = "";
+
+/** Validate a parsed .dwk `linkedCurves` entry list. A malformed entry keeps
+ *  its SLOT as an empty curve (-1, bound to no dataset) so the later curves
+ *  keep their column indices (styles, renames and error keys index them). */
 export function sanitizeLinkedCurves(raw: unknown): LinkedCurve[] | undefined {
   if (!Array.isArray(raw)) return undefined;
   // -1 = the source column was removed (remapLinkedCurveSources): kept, drawn empty.
   const ok = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= -1;
-  const out = raw.flatMap((c): LinkedCurve[] => {
+  const out = raw.map((c): LinkedCurve => {
     const r = (c && typeof c === "object" ? c : {}) as Record<string, unknown>;
-    if (typeof r.datasetId !== "string" || !ok(r.yKey) || !(r.xKey === null || ok(r.xKey))) return [];
-    return [{ datasetId: r.datasetId, xKey: r.xKey, yKey: r.yKey, label: typeof r.label === "string" ? r.label : "" }];
+    const label = typeof r.label === "string" ? r.label : "";
+    if (typeof r.datasetId !== "string" || !ok(r.yKey) || !(r.xKey === null || ok(r.xKey))) {
+      return { datasetId: UNRESOLVED_SOURCE, xKey: null, yKey: -1, label };
+    }
+    const labelFrom = r.labelFrom === "name" || r.labelFrom === "nameCol" ? r.labelFrom : undefined;
+    return { datasetId: r.datasetId, xKey: r.xKey, yKey: r.yKey, label, ...(labelFrom ? { labelFrom } : {}) };
   });
   return out.length ? out : undefined;
 }

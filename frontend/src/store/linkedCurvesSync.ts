@@ -11,43 +11,78 @@
 // plain set: no undo step (the change it mirrors recorded its own) and no
 // macro step.
 
-import { assembleLinkedCurves } from "../lib/linkedCurves";
+import { assembleLinkedCurves, linkedGraphYTitle } from "../lib/linkedCurves";
 import { rowStateIdentity } from "../lib/rowstate";
 import type { Dataset, DataStruct } from "../lib/types";
 import { useApp } from "./useApp";
 
-/** A source's identity for change detection: rows, exclusions, filter. */
-type SourceStamp = readonly [unknown, unknown, unknown] | null;
-const stampOf = (d: Dataset | undefined): SourceStamp => (d ? rowStateIdentity(d) : null);
+/** A source's identity for change detection: rows, exclusions, filter, its
+ *  type overrides (they decide which filter rows apply) and its name (the
+ *  legend follows it). */
+type SourceStamp = readonly unknown[] | null;
+const stampOf = (d: Dataset | undefined): SourceStamp => (d ? [...rowStateIdentity(d), d.channelTypes, d.name] : null);
 
-const assembledFrom = new WeakMap<DataStruct, { curves: string; sources: SourceStamp[] }>();
+/** `cyclic`: assembled while on a graph <-> graph cycle (fail closed: empty
+ *  curves) -- in step as long as the curve list is unchanged and it is still
+ *  on a cycle, since its sources are themselves empty cycle members. */
+const assembledFrom = new WeakMap<DataStruct, { curves: string; sources: SourceStamp[]; cyclic: boolean }>();
 
-function inStep(graph: Dataset, byId: Map<string, Dataset>): boolean {
-  const rec = assembledFrom.get(graph.data);
-  if (!rec || rec.curves !== JSON.stringify(graph.linkedCurves)) return false;
-  const ids = graph.linkedCurves!.map((c) => c.datasetId);
-  return ids.every((id, i) => {
-    const now = stampOf(byId.get(id));
-    const then = rec.sources[i];
-    return now === then || (now !== null && then !== null && now.every((v, k) => v === then[k]));
-  });
+function sameStamp(now: SourceStamp, then: SourceStamp): boolean {
+  return now === then || (now !== null && then !== null && now.length === then.length && now.every((v, k) => v === then[k]));
 }
 
-/** Re-assemble every out-of-step graph in `datasets`; null when all are current. */
+function inStep(graph: Dataset, byId: Map<string, Dataset>, cyclic: boolean): boolean {
+  const rec = assembledFrom.get(graph.data);
+  if (!rec || rec.curves !== JSON.stringify(graph.linkedCurves) || rec.cyclic !== cyclic) return false;
+  if (cyclic) return true;
+  return graph.linkedCurves!.every((c, i) => sameStamp(stampOf(byId.get(c.datasetId)), rec.sources[i]));
+}
+
+/** Graphs in build order (a graph after every graph it draws from) and the ids
+ *  of those on a graph <-> graph cycle (or drawing from itself). */
+function buildOrder(datasets: readonly Dataset[]): { order: Dataset[]; cyclic: Set<string> } {
+  const graphs = new Map(datasets.filter((d) => d.linkedCurves).map((d) => [d.id, d]));
+  const state = new Map<string, 1 | 2>(); // 1 = on the DFS path, 2 = done
+  const order: Dataset[] = [];
+  const cyclic = new Set<string>();
+  const visit = (id: string, path: string[]): void => {
+    const g = graphs.get(id)!;
+    state.set(id, 1);
+    path.push(id);
+    for (const c of g.linkedCurves!) {
+      if (!graphs.has(c.datasetId)) continue;
+      const st = state.get(c.datasetId);
+      if (st === 1) path.slice(path.indexOf(c.datasetId)).forEach((m) => cyclic.add(m));
+      else if (st === undefined) visit(c.datasetId, path);
+    }
+    path.pop();
+    state.set(id, 2);
+    order.push(g);
+  };
+  for (const id of graphs.keys()) if (!state.has(id)) visit(id, []);
+  return { order, cyclic };
+}
+
+/** Re-assemble every out-of-step graph in `datasets`, sources first (a graph
+ *  of a graph sees its inner graph's NEW rows in the same pass); null when all
+ *  are current. A graph on a cycle draws empty curves -- fail closed, it never
+ *  loops and never rebinds. */
 export function relinkedDatasets(datasets: readonly Dataset[]): Dataset[] | null {
-  const byId = new Map(datasets.map((d) => [d.id, d]));
+  const { order, cyclic } = buildOrder(datasets);
+  const latest = new Map(datasets.map((d) => [d.id, d]));
   let changed = false;
-  const next = datasets.map((d) => {
-    if (!d.linkedCurves || inStep(d, byId)) return d;
+  for (const g of order) {
+    const d = latest.get(g.id)!;
+    const onCycle = cyclic.has(d.id);
+    if (inStep(d, latest, onCycle)) continue;
     changed = true;
-    const data = assembleLinkedCurves(d.linkedCurves, datasets);
-    assembledFrom.set(data, {
-      curves: JSON.stringify(d.linkedCurves),
-      sources: d.linkedCurves.map((c) => stampOf(byId.get(c.datasetId))),
-    });
-    return { ...d, data };
-  });
-  return changed ? next : null;
+    const curves = d.linkedCurves!;
+    const live = onCycle ? curves.map((c) => ({ ...c, yKey: -1 })) : curves;
+    const data = assembleLinkedCurves(live, [...latest.values()], d.data);
+    assembledFrom.set(data, { curves: JSON.stringify(curves), sources: curves.map((c) => stampOf(latest.get(c.datasetId))), cyclic: onCycle });
+    latest.set(d.id, { ...d, data });
+  }
+  return changed ? datasets.map((d) => latest.get(d.id)!) : null;
 }
 
 /** Mark `graph.data` as assembled from the current `datasets` (a graph the
@@ -57,15 +92,26 @@ export function noteAssembled(graph: Dataset, datasets: readonly Dataset[]): voi
   assembledFrom.set(graph.data, {
     curves: JSON.stringify(graph.linkedCurves),
     sources: (graph.linkedCurves ?? []).map((c) => stampOf(byId.get(c.datasetId))),
+    cyclic: false,
   });
 }
 
 let watching = false;
 
-function sync(datasets: readonly Dataset[]): void {
+function sync(datasets: readonly Dataset[], prev?: readonly Dataset[]): void {
   if (!datasets.some((d) => d.linkedCurves)) return;
   const next = relinkedDatasets(datasets);
-  if (next) useApp.setState({ datasets: next });
+  if (!next) return;
+  // The active graph's Y title is the auto quantity title unless the user typed
+  // one: keep it following the sources' quantities.
+  const s = useApp.getState();
+  const was = prev?.find((d) => d.id === s.activeId);
+  const now = next.find((d) => d.id === s.activeId);
+  const retitle =
+    was?.linkedCurves && now?.linkedCurves && s.yAxisLabel === linkedGraphYTitle(was.linkedCurves, prev!)
+      ? linkedGraphYTitle(now.linkedCurves, next)
+      : null;
+  useApp.setState({ datasets: next, ...(retitle !== null && retitle !== s.yAxisLabel ? { yAxisLabel: retitle } : {}) });
 }
 
 /** Install the watcher (idempotent) and bring every graph in step now. */
@@ -73,7 +119,7 @@ export function watchLinkedCurves(): void {
   if (!watching) {
     watching = true;
     useApp.subscribe((s, prev) => {
-      if (s.datasets !== prev.datasets) sync(s.datasets);
+      if (s.datasets !== prev.datasets) sync(s.datasets, prev.datasets);
     });
   }
   sync(useApp.getState().datasets);
