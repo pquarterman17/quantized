@@ -23,7 +23,7 @@ import type { PlotPayload } from "./plotdata";
 import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst, type RichNode } from "./richtext";
-import { sharedAxisTitle } from "./sharedAxisTitle";
+import { drawnOnAxis, sharedAxisTitle } from "./sharedAxisTitle";
 import { logDecadeLabels, logGridSplits, logMajorTickFilter, spansDecade } from "./logTicks";
 export { logMajorTickFilter };
 import { decimalsForIncrement, pow10 } from "./ticks";
@@ -830,7 +830,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     if (which === 0 && args.yAxisLabel === null) return undefined;
     if (which === 0 && args.yAxisLabel?.trim()) return args.yAxisLabel.trim();
     if (which === 1 && args.y2AxisLabel?.trim()) return args.y2AxisLabel.trim();
-    const idxs = payload.series.map((_, i) => i).filter((i) => (payload.series[i].axis ?? 0) === which);
+    const idxs = drawnOnAxis(payload.series, args.hidden, which);
     return idxs.length === 1 ? labels[idxs[0]] : sharedAxisTitle(idxs.map((i) => payload.series[i]));
   };
   const hasY2 = payload.series.some((s) => (s.axis ?? 0) === 1);

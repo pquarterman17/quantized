@@ -112,6 +112,35 @@ function compareDraft(a: DraftNode, b: DraftNode): number {
   return a.section - b.section || byOrder(a, b) || a.tiebreak - b.tiebreak || a.sequence - b.sequence;
 }
 
+/** Root order (re-audit #9): a root item that holds data ranks by the
+ *  EARLIEST dataset under it -- `datasets` is append-ordered, so that is when
+ *  its data arrived. A new import therefore lands BELOW the existing root
+ *  rows instead of pushing them down under the pointer (an Origin project is
+ *  a folder, and folders used to band above every workbook). An item with no
+ *  data keeps its band: an empty folder above them (structure the user
+ *  made), anything else after them. Ties, and every level below the root,
+ *  keep `compareDraft`: folders first, then the order keys. */
+function compareRoots(datasets: readonly Dataset[]): (a: DraftNode, b: DraftNode) => number {
+  const index = new Map(datasets.map((dataset, i) => [dataset.id, i]));
+  const rank = new Map<DraftNode, number>();
+  const earliest = (node: DraftNode): number => {
+    const own = node.kind === "worksheet" ? (index.get(node.entityId) ?? Infinity) : Infinity;
+    return node.children.reduce((m, child) => Math.min(m, earliest(child)), own);
+  };
+  const rankOf = (node: DraftNode): number => {
+    if (!rank.has(node)) {
+      const first = earliest(node);
+      rank.set(node, first !== Infinity ? first : node.kind === "folder" ? -1 : Infinity);
+    }
+    return rank.get(node)!;
+  };
+  return (a, b) => {
+    const ra = rankOf(a);
+    const rb = rankOf(b);
+    return (ra === rb ? 0 : ra - rb) || compareDraft(a, b);
+  };
+}
+
 /** Dataset ids used by an Origin graph, scoped to the siblings from the same
  * import. This mirrors application-time source resolution, including layers
  * belonging to one graph window, without treating every sibling as a source. */
@@ -318,7 +347,7 @@ export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHier
     const children = [...node.children].sort(compareDraft).map((child) => finalize(child, depth + 1, nextAncestors));
     return { ...node, depth, children } as LibraryNode;
   };
-  const finalRoots = roots.sort(compareDraft).map((root) => finalize(root, 0, new Set()));
+  const finalRoots = roots.sort(compareRoots(input.datasets)).map((root) => finalize(root, 0, new Set()));
   const byKey = new Map<LibraryNodeKey, LibraryNode>();
   const indexNodes = (nodes: readonly LibraryNode[]) => nodes.forEach((node) => {
     byKey.set(node.key, node);

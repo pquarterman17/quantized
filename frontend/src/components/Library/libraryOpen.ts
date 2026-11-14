@@ -117,7 +117,7 @@ export function openLibraryNode(node: LibraryNode): void {
   }
   switch (node.kind) {
     case "worksheet":
-      s.activateFromLibrary(node.entityId);
+      s.openFromLibrary(node.entityId); // re-audit #11: an Origin sheet's open plots it too
       break;
     case "origin-figure":
       s.applyOriginFigure(node.entityId, originFigureOpenOpts(node.entityId));

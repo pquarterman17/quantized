@@ -9,9 +9,14 @@ import { errorBarsPlugin, errorSpansPlugin } from "./uplotOverlays";
 
 function stub(series: { stroke?: unknown; show?: boolean }[]) {
   const inks: string[] = [];
+  const dashes: string[] = [];
+  let dash: number[] = [5, 4]; // what a dashed series (a fit band) left on the shared context
   const ctx = {
     strokeStyle: "",
     lineWidth: 0,
+    setLineDash(d: number[]) {
+      dash = d;
+    },
     save() {},
     restore() {},
     beginPath() {},
@@ -21,6 +26,7 @@ function stub(series: { stroke?: unknown; show?: boolean }[]) {
     lineTo() {},
     stroke() {
       inks.push(ctx.strokeStyle);
+      dashes.push(dash.join(","));
     },
   };
   const u = {
@@ -30,7 +36,7 @@ function stub(series: { stroke?: unknown; show?: boolean }[]) {
     data: [[0, 1], [10, 20], [30, 40]],
     series: [{}, ...series],
   };
-  return { u, inks };
+  return { u, inks, dashes };
 }
 
 describe("error bar ink", () => {
@@ -55,5 +61,19 @@ describe("error bar ink", () => {
     // @ts-expect-error — minimal stub stands in for a real uPlot instance
     spans.hooks.draw?.(u);
     expect(inks).toEqual(["#dim", "#dim"]);
+  });
+
+  // Re-audit #6: with fit bands on (dashed CI/PI series), every error bar
+  // came out dashed -- the plugins inherited the last series' dash.
+  it("draws error bars and spans solid whatever dash a series left behind", () => {
+    const a = stub([{ stroke: () => "#f00" }]);
+    // @ts-expect-error — minimal stub stands in for a real uPlot instance
+    errorBarsPlugin(new Map([[1, [1, 1]]]), "#dim", 4).hooks.draw?.(a.u);
+    expect(a.dashes.length).toBeGreaterThan(0);
+    expect(new Set(a.dashes)).toEqual(new Set([""]));
+    const b = stub([{ stroke: () => "#f00" }]);
+    // @ts-expect-error — minimal stub stands in for a real uPlot instance
+    errorSpansPlugin(new Map([[1, [{ axis: "y" as const, plus: [1, 1], minus: [1, 1] }]]]), "#dim", 4).hooks.draw?.(b.u);
+    expect(new Set(b.dashes)).toEqual(new Set([""]));
   });
 });

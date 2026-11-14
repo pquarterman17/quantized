@@ -23,6 +23,7 @@ import type { Annotation, RefLine } from "./types";
 import type { RegionShade } from "./types";
 // Shade drawing + the off-scale marker are a lazy chunk (lib/regionDecorLoader.ts).
 import { regionDecor } from "./regionDecorLoader";
+import { beginErrorDraw } from "./uplotErrorRange";
 const MOVE = "mousemove", UP = "mouseup";
 export { pickRefLine, type RefLineHit } from "./refLineHit";
 
@@ -996,13 +997,8 @@ export function errorBarsPlugin(
     hooks: {
       draw: (u: uPlot) => {
         const { ctx } = u;
-        const { left, top, width, height } = u.bbox;
         const xs = u.data[0];
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(left, top, width, height);
-        ctx.clip();
-        ctx.lineWidth = 1;
+        beginErrorDraw(ctx, u.bbox);
         for (const [col, errs] of errorsByCol) {
           const ys = u.data[col];
           if (!ys || u.series[col]?.show === false) continue;
@@ -1105,13 +1101,8 @@ export function errorSpansPlugin(
     hooks: {
       draw: (u: uPlot) => {
         const { ctx } = u;
-        const { left, top, width, height } = u.bbox;
         const xs = u.data[0];
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(left, top, width, height);
-        ctx.clip();
-        ctx.lineWidth = 1;
+        beginErrorDraw(ctx, u.bbox);
         for (const [col, spans] of spansByCol) {
           const ys = u.data[col];
           if (!ys || u.series[col]?.show === false) continue;

@@ -415,6 +415,7 @@ describe("errorBarsPlugin (item 3: cap width defaults to zero)", () => {
       beginPath() {},
       rect() {},
       clip() {},
+      setLineDash() {},
       stroke() {},
       moveTo(x: number, y: number) {
         pen = [x, y];
@@ -492,6 +493,7 @@ describe("errorSpansPlugin (item 4: log-Y axis, a whisker end <= 0)", () => {
       beginPath() {},
       rect() {},
       clip() {},
+      setLineDash() {},
       stroke() {},
       moveTo(x: number, y: number) {
         pen = [x, y];

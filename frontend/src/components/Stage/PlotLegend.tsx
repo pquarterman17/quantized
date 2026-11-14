@@ -4,13 +4,14 @@
 // baseline — index ≥ plotted.length) are display-only: not toggleable, not
 // renameable. Extracted from PlotStage to keep that component lean.
 
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenuLazy";
 import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
 import { colorScaleLegendEntries, type ColorScatterSpec } from "../../lib/colorscatter";
 import { resolveDrawColor } from "../../lib/contrastColor";
 import { lazyRegion } from "../../lib/lazyRegion";
+import { legendNonCurves } from "../../lib/legendCurves";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import type { DefaultTrace, SeriesStyle } from "../../lib/types";
 import { RichText } from "../primitives";
@@ -97,6 +98,13 @@ export default function PlotLegend({
   // draggable (still Origin-like). Default false keeps the full interactive
   // legend for every ordinary plot.
   const legendStatic = useApp((s) => s.legendStatic);
+  // Re-audit #12: a hidden column that is not a curve (an error, Label,
+  // Disregard or secondary-X column) is left out, as Origin's legend lists
+  // only what the graph draws (lib/legendCurves.ts).
+  const errKeys = useApp((s) => s.errKeys);
+  const nonCurves = useMemo(() => legendNonCurves(active, errKeys), [active, errKeys]);
+  const omitted = (i: number): boolean =>
+    (hidden?.[i] ?? false) && (legendStatic || (i < plotted.length && nonCurves.has(plotted[i])));
   // R2: the title heads the legend in BOTH modes, as the export draws it; a
   // blank title draws no heading.
   const legendTitle = useApp((s) => s.legendTitle)?.trim() || null;
@@ -131,7 +139,7 @@ export default function PlotLegend({
   const rowText = (s: PlotSeriesSpec, i: number) =>
     i < plotted.length ? (labels?.[i] ?? seriesLabels[plotted[i]] ?? defaultLabel(s)) : defaultLabel(s);
   // Static mode omits hidden rows too (below), so they do not count.
-  const anyRow = series.some((s, i) => rowText(s, i) !== "" && !(legendStatic && (hidden?.[i] ?? false)));
+  const anyRow = series.some((s, i) => rowText(s, i) !== "" && !omitted(i));
   const commit = () => {
     if (editing) setSeriesLabel(editing.channel, editing.value);
     setEditing(null);
@@ -217,7 +225,7 @@ export default function PlotLegend({
         // Static (Origin) legend: omit hidden channels entirely rather than
         // showing them greyed + struck through — Origin's legend never lists
         // the error/secondary-X columns it doesn't draw (decode #52).
-        if (legendStatic && isHidden) return null;
+        if (omitted(i)) return null;
         const text = rowText(s, i);
         if (text === "") return null;
 

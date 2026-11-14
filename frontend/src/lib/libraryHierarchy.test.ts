@@ -296,4 +296,27 @@ describe("flattenLibraryHierarchy", () => {
     expect(flattenLibraryHierarchy(hierarchy, new Set<LibraryNodeKey>(["folder:f", "workbook:w"]))
       .map((row) => row.node.key)).toEqual(["folder:f", "workbook:w", "worksheet:d"]);
   });
+
+  // Re-audit #9 (owner decision): a new import lands BELOW the existing root
+  // rows. An Origin project is a keyed folder, and folders used to band
+  // above every workbook, so importing one pushed the existing CSV rows
+  // down under the pointer.
+  it("a newly imported root item sorts below the existing root rows; folders stay first inside it", () => {
+    const folders = [folder("empty", null, 0), folder("proj", null, 1), folder("sub", "proj", 0)];
+    const workbooks = [workbook("csv1"), workbook("csv2"), workbook("bookB", "proj"), workbook("bookA", "sub")];
+    const datasets = [
+      dataset("c1", "csv1"), // arrived first
+      dataset("c2", "csv2"),
+      dataset("b1", "bookB", undefined, "Book2"), // the Origin import, later
+      dataset("a1", "bookA", undefined, "Book1"),
+    ];
+    const result = buildLibraryHierarchy({ folders, workbooks, datasets });
+    expect(result.roots.map((node) => node.key)).toEqual([
+      "folder:empty", // structure the user made, no data: stays on top
+      "workbook:csv1",
+      "workbook:csv2",
+      "folder:proj", // the import, below the rows that were already there
+    ]);
+    expect(result.byKey.get("folder:proj")?.children.map((node) => node.key)).toEqual(["folder:sub", "workbook:bookB"]);
+  });
 });
