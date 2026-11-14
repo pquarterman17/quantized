@@ -118,17 +118,14 @@ def _tab_over_space(lines: Sequence[str]) -> bool:
     return bool(tabs) and min(tabs) >= 1 and tabs[0] == max(tabs)
 
 
-def _detect_delimiter(raw_lines: Sequence[str]) -> str:
-    """Pick the delimiter whose per-line count is both present on every
-    sampled line and least variable -- a plurality vote, not a strict
-    majority, so a ragged preamble line doesn't disqualify the real
-    delimiter by itself (see the ``std < mean * 0.5`` consistency check).
-    Defaults to comma when nothing qualifies (e.g. every candidate is
-    absent from at least one of the first 10 lines). A comma win is handed
-    to ``;`` when the sample is ``;``-delimited decimal-comma data
-    (`_semicolon_over_comma`), and a whitespace win to tab when the sample
-    is a tab export with spaces inside its cells (`_tab_over_space`)."""
-    test = raw_lines[:10]
+#: How many leading lines `_detect_delimiter` may skip looking for a window
+#: of lines that agrees on a delimiter.
+_MAX_PREAMBLE_SKIP = 20
+
+
+def _vote(test: Sequence[str]) -> tuple[str, float]:
+    """The plurality vote over one window: (winner, its mean count); the
+    comma default with score 0 when no candidate is on every line."""
     best_delim = ","
     best_score = 0.0
     for ch in _DELIM_CANDIDATES:
@@ -139,6 +136,33 @@ def _detect_delimiter(raw_lines: Sequence[str]) -> str:
             if std < mean * 0.5 and mean > best_score:
                 best_score = mean
                 best_delim = ch
+    return best_delim, best_score
+
+
+def _detect_delimiter(raw_lines: Sequence[str]) -> str:
+    """Pick the delimiter whose per-line count is both present on every
+    sampled line and least variable -- a plurality vote, not a strict
+    majority, so a ragged preamble line doesn't disqualify the real
+    delimiter by itself (see the ``std < mean * 0.5`` consistency check).
+    Defaults to comma when nothing qualifies (e.g. every candidate is
+    absent from at least one of the first 10 lines). A comma win is handed
+    to ``;`` when the sample is ``;``-delimited decimal-comma data
+    (`_semicolon_over_comma`), and a whitespace win to tab when the sample
+    is a tab export with spaces inside its cells (`_tab_over_space`).
+
+    When nothing qualifies, the window slides past up to
+    `_MAX_PREAMBLE_SKIP` leading lines first: one free-text preamble line
+    ("Junk line here" above a ``;`` table) lacks every delimiter, and used to
+    send the whole file down the comma default as a single column."""
+    test: Sequence[str] = raw_lines[:10]
+    best_delim, best_score = ",", 0.0
+    for start in range(min(_MAX_PREAMBLE_SKIP, max(len(raw_lines) - 1, 0)) + 1):
+        test = raw_lines[start : start + 10]
+        best_delim, best_score = _vote(test)
+        if best_score > 0:
+            break
+    else:
+        test = raw_lines[:10]
     if best_delim == "," and _semicolon_over_comma(test):
         return ";"
     if best_delim == " " and _tab_over_space(test):

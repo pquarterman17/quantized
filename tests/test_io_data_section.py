@@ -67,3 +67,20 @@ def test_only_a_data_heading_anchors_and_the_last_one_wins() -> None:
     assert data_section_start(["[Data]", "x", "[Measurement Data]", "y"]) == 3
     # a heading never takes part in the delimiter vote
     assert vote_lines("[DATA]\nx\ty\n1\t2\n") == ["x\ty", "1\t2"]
+
+
+def test_a_free_text_preamble_line_does_not_defeat_the_delimiter_vote(tmp_path: Path) -> None:
+    """Audit #2's wizard file: one free-text line above a ``;`` table has no
+    delimiter at all, which disqualified every candidate in the first ten
+    lines -- the file fell back to comma and imported as ONE column."""
+    lines = ["# instrument", "Junk line here", "Time;Voltage;Current", "s;V;A"]
+    lines += [f"{i};{i * 0.5:.2f};{i * i * 0.01:.3f}" for i in range(12)]
+    text = "\n".join(lines) + "\n"
+    s = guess_settings(text)
+    assert s.column_names == ["Time", "Voltage", "Current"]
+    assert (s.header_line, s.units_line, s.data_start_line) == (2, 3, 4)
+    path = tmp_path / "preamble.txt"
+    path.write_text(text, encoding="utf-8")
+    ds = import_csv(path)
+    assert ds.labels == ("Voltage", "Current") and ds.units == ("V", "A")
+    assert ds.metadata["x_column_name"] == "Time"
