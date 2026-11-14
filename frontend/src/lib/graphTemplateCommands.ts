@@ -22,6 +22,8 @@ import {
   seriesStyleFromExport,
   type GraphFormat,
 } from "./graphFormat";
+import { applyFormatToGraphs, GRAPH_SCOPES, type GraphScope } from "./graphFormatBulk";
+import type { PlotView } from "./plotview";
 import { recordUse } from "./recipeIndex";
 import { useApp } from "../store/useApp";
 
@@ -75,10 +77,52 @@ export function pasteStageFormat(s: StoreGet): void {
  *  from its publication series styles (a template saved before `format`
  *  existed, or imported from an Origin .otp) over the CURRENT chrome. */
 export function templateFormat(template: GraphTemplate, s: StoreGet, plotted: readonly number[]): GraphFormat {
+  return templateFormatFor(template, s(), plotted);
+}
+
+function templateFormatFor(template: GraphTemplate, view: Parameters<typeof captureGraphFormat>[0], plotted: readonly number[]): GraphFormat {
   const own = sanitizeGraphFormat(template.format);
   if (own) return own;
-  const base = captureGraphFormat(s(), plotted);
+  const base = captureGraphFormat(view, plotted);
   return { ...base, series: (template.seriesStyles ?? []).map(seriesStyleFromExport) };
+}
+
+// The select shows (and answers with) each scope's label.
+const SCOPE_FIELD = { key: "scope", label: "Apply to", type: "select" as const, default: GRAPH_SCOPES[0].label, options: GRAPH_SCOPES.map((o) => o.label) };
+const scopeOf = (answer: unknown): GraphScope => GRAPH_SCOPES.find((o) => o.label === answer)?.value ?? "folder";
+
+function reportMany(s: StoreGet, n: number, what: string): void {
+  s().setStatus(n === 0 ? `${what}: no open graph matches -- open the graphs first, or pick another scope` : `${what}: ${n} graph${n === 1 ? "" : "s"} restyled (one undo step)`);
+}
+
+/** Gap-audit-2 #13: Paste Format onto every graph of a folder / selection. */
+export async function pasteFormatToGraphs(s: StoreGet): Promise<void> {
+  const format = copiedFormat;
+  if (!format) {
+    s().setStatus("Paste Format: nothing copied yet — use Copy Format on a styled graph first");
+    return;
+  }
+  const params = await askParams("Paste Format to Graphs", [SCOPE_FIELD], { confirmLabel: "Paste" });
+  if (!params) return;
+  reportMany(s, applyFormatToGraphs(s, scopeOf(params.scope), () => format, "Paste Format to graphs"), "Paste Format");
+}
+
+/** Gap-audit-2 #13: a graph template onto every graph of a folder / selection. */
+export async function applyGraphTemplateToGraphs(s: StoreGet): Promise<void> {
+  const templates = loadGraphTemplates();
+  if (templates.length === 0) {
+    s().setStatus("Apply Graph Template: no saved templates yet — use Save Graph Template… first");
+    return;
+  }
+  const params = await askParams("Apply Graph Template to Graphs", [
+    { key: "name", label: "Template", type: "select", default: templates[0].name, options: templates.map((t) => t.name) },
+    SCOPE_FIELD,
+  ], { confirmLabel: "Apply" });
+  const template = params && templates.find((t) => t.name === params.name);
+  if (!params || !template) return;
+  recordUse({ kind: "graph", scope: "global", id: template.name });
+  const n = applyFormatToGraphs(s, scopeOf(params.scope), (view: PlotView, plotted) => templateFormatFor(template, view, plotted), `Apply Graph Template "${template.name}" to graphs`);
+  reportMany(s, n, `Graph template "${template.name}"`);
 }
 
 export async function saveStageGraphTemplate(s: StoreGet): Promise<void> {
