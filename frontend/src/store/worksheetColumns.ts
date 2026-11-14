@@ -20,6 +20,7 @@ import { remapDatasetChannels, type ColumnShift } from "../lib/channelRemap";
 import { patchColumnProps } from "../lib/columnProps";
 import { channelLetter } from "../lib/formula";
 import { baseColumns } from "../lib/formulaInputs";
+import { lit } from "../lib/macro";
 import { remapSurvivingFormulas } from "../lib/formulaRename";
 import { isRederived, REDERIVED_EDIT_NOTICE } from "../lib/rederived";
 import type { ColumnProps, NumberFormat } from "../lib/columnProps";
@@ -122,6 +123,7 @@ export function insertColumn(id: string, at: number): number | null {
   const edit = insertColumnEdit(baseCountOf(ds), pos);
   commitSteps(id, "insert column", [(d) => [withColumnEdit(d, edit, name), edit.shift]]);
   get().setStatus(`inserted column "${name}" — Undo removes it`);
+  get().recordMacro(`Insert column "${name}" in ${ds.name}`, `qz.insertColumn(${lit(ds.name)}, ${pos})`);
   return pos;
 }
 
@@ -145,6 +147,10 @@ export function deleteColumns(id: string, cols: readonly number[]): void {
   );
   const skippedX = cols.includes(-1) ? " (the X column stays)" : "";
   get().setStatus(`deleted ${names.join(", ")}${skippedX} — Undo restores ${targets.length === 1 ? "it" : "them"}`);
+  get().recordMacro(
+    `Delete ${targets.length} column(s) from ${ds.name}`,
+    `qz.deleteColumns(${lit(ds.name)}, ${lit(targets)})`,
+  );
 }
 
 /** Move base column `from` to index `to` (Origin's Move Left/Right/First/Last). */
@@ -166,6 +172,7 @@ export function moveColumn(id: string, from: number, to: number): void {
   const edit = moveColumnEdit(n, from, dest);
   commitSteps(id, "move column", [(d) => [withColumnEdit(d, edit), edit.shift]]);
   get().setStatus(`moved "${columnName(ds, from)}" to position ${dest + 1}`);
+  get().recordMacro(`Move column "${columnName(ds, from)}" in ${ds.name}`, `qz.moveColumn(${lit(ds.name)}, ${from}, ${dest})`);
 }
 
 export interface HeaderPatch {

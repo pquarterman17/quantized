@@ -46,7 +46,15 @@ const ds = (id = "b") => st().datasets.find((d) => d.id === id)!;
 const col = (label: string, id = "b") => ds(id).data.values.map((r) => r[ds(id).data.labels.indexOf(label)]);
 
 beforeEach(() => {
-  useApp.setState({ datasets: [book()], activeId: "b", history: [], future: [], status: "" });
+  useApp.setState({
+    datasets: [book()],
+    activeId: "b",
+    history: [],
+    future: [],
+    status: "",
+    macroRecording: false,
+    macroSteps: [],
+  });
 });
 
 describe("Insert / Add New Column", () => {
@@ -71,6 +79,13 @@ describe("Insert / Add New Column", () => {
     expect(ds().data.labels).toEqual(["Volt", "Amp", "C", "Sum"]);
     expect(ds().formulas?.[0].expr).toBe("A + B");
   });
+
+  it("records a macro step, like the sibling row commands do (worksheet audit follow-up)", () => {
+    useApp.setState({ macroRecording: true });
+    insertColumn("b", 0);
+    const codes = st().macroSteps.map((s) => s.code);
+    expect(codes).toEqual(["qz.insertColumn(\"Book1\", 0)"]);
+  });
 });
 
 describe("Delete Column", () => {
@@ -91,6 +106,13 @@ describe("Delete Column", () => {
     deleteColumns("b", [-1]);
     expect(st().status).toMatch(/X column can't be deleted/);
     expect(st().history).toHaveLength(1);
+  });
+
+  it("records a macro step for the deleted columns (worksheet audit follow-up)", () => {
+    useApp.setState({ macroRecording: true });
+    deleteColumns("b", [2, 1]);
+    const codes = st().macroSteps.map((s) => s.code);
+    expect(codes).toEqual(["qz.deleteColumns(\"Book1\", [2, 1])"]);
   });
 
   it("another worksheet's sheet() read follows the shift, and reading the deleted column is an error", () => {
@@ -125,6 +147,20 @@ describe("Move Column", () => {
     expect(st().status).toMatch(/computed column/);
     moveColumn("b", 0, 0);
     expect(st().history).toEqual([]);
+  });
+
+  it("records a macro step, like the sibling row commands do (worksheet audit follow-up)", () => {
+    useApp.setState({ macroRecording: true });
+    moveColumn("b", 0, 1);
+    const codes = st().macroSteps.map((s) => s.code);
+    expect(codes).toEqual(["qz.moveColumn(\"Book1\", 0, 1)"]);
+  });
+
+  it("a refused or no-op move records no macro step", () => {
+    useApp.setState({ macroRecording: true });
+    moveColumn("b", 2, 0); // refused: computed column
+    moveColumn("b", 0, 0); // no-op
+    expect(st().macroSteps).toEqual([]);
   });
 });
 
