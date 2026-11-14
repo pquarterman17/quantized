@@ -49,8 +49,7 @@ function nextGraphName(datasets: readonly Dataset[]): string {
 /** Add the live graph over `curves` as a new Library dataset and plot it. */
 export function landGraph(curves: LinkedCurve[]): Dataset {
   const datasets = useApp.getState().datasets;
-  const graph: Dataset = { id: nextDatasetId(), name: nextGraphName(datasets), data: assembleLinkedCurves(curves, datasets), linkedCurves: curves };
-  noteAssembled(graph, datasets);
+  const graph = noteAssembled({ id: nextDatasetId(), name: nextGraphName(datasets), data: assembleLinkedCurves(curves, datasets), linkedCurves: curves }, datasets);
   useApp.getState().addDataset(graph);
   // Titled by what is plotted, not by which datasets (the curve labels).
   useApp.setState({ yAxisLabel: linkedGraphYTitle(curves, datasets) });
@@ -130,8 +129,7 @@ export function appendCurve(targetId: string, curve: LinkedCurve): void {
     s.recordHistory("add curve");
     const curves = [...target.linkedCurves, curve];
     const data = assembleLinkedCurves(curves, s.datasets, target.data);
-    const next = { ...target, data, linkedCurves: curves };
-    noteAssembled(next, s.datasets); // assembled from these sources: the watcher need not rebuild it
+    const next = noteAssembled({ ...target, data, linkedCurves: curves }, s.datasets); // the watcher need not rebuild it
     useApp.setState((st) => ({
       datasets: st.datasets.map((d) => (d.id === targetId ? next : d)),
       ...(st.activeId === targetId && st.yKeys ? { yKeys: [...st.yKeys, curves.length - 1] } : {}),

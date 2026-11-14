@@ -50,10 +50,12 @@ describe("Plot selected together makes a LIVE graph", () => {
     flushLinkedCurves();
     expect(col(0)).toEqual([99, 2, 3, NaN, NaN]);
 
-    // A masked source row drops out of the graph too.
+    // A masked source point is masked on the graph too (drawn per the mask
+    // display; the mask stays keyed to the source point).
     useApp.setState((s) => ({ datasets: s.datasets.map((d) => (d.id === "b" ? { ...d, excludedRows: [1] } : d)) }));
     flushLinkedCurves();
-    expect(col(1)).toEqual([NaN, NaN, NaN, 50, NaN]);
+    expect(col(1)).toEqual([NaN, NaN, NaN, 50, 60]);
+    expect(graph().excludedRows).toEqual([4]);
   });
 
   it("Layer Contents adds another dataset's X/Y to the graph; Undo takes it back", async () => {

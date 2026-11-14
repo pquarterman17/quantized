@@ -16,16 +16,15 @@
 // Loaded on demand (the dialog chunk and the drop-onto-graph gesture).
 
 import { remapDatasetChannels, type ColumnShift } from "../lib/channelRemap";
-import { layerRowsChanged, layerRowsProblems, layerShifts, remapGraphMask, sameBinding, type LayerRow } from "../lib/layerContents";
+import { layerRowsChanged, layerRowsProblems, layerShifts, sameBinding, type LayerRow } from "../lib/layerContents";
 import { assembleLinkedCurves, curvesForDatasets, linkedGraphReaches, linkedGraphYTitle } from "../lib/linkedCurves";
 import { is2DMap } from "../lib/mapdata";
 import { primaryChannel } from "../lib/plotdataExtras";
-import { excludedSet } from "../lib/rowstate";
 import { UNRESOLVED_SOURCE } from "../lib/linkedCurvesLite";
 import { drawnCurves, landGraph } from "../lib/plotSelectedTogetherRun";
 import type { Dataset, LinkedCurve } from "../lib/types";
 import { columnRemovalRefsPatch } from "./columnRemovalRefs";
-import { noteAssembled, watchLinkedCurves } from "./linkedCurvesSync";
+import { flushLinkedCurves, noteAssembled, watchLinkedCurves } from "./linkedCurvesSync";
 import { resolvePendingEdit } from "./pendingEdit";
 import { toast } from "./toasts";
 import { useApp, type AppState } from "./useApp";
@@ -58,6 +57,7 @@ export function layerCurvesOf(s: AppState, targetId: string): LinkedCurve[] {
 /** Apply `rows` to the graph `targetId` shows. Returns true when it changed
  *  something; a draft with problems is refused (toast) and changes nothing. */
 export function applyLayerContents(targetId: string, rows: readonly LayerRow[]): boolean {
+  flushLinkedCurves(); // a mask just set on the graph reaches its sources first
   const s = useApp.getState();
   const target = s.datasets.find((d) => d.id === targetId);
   if (!target) return false;
@@ -95,10 +95,9 @@ function applyToGraph(target: Dataset, old: readonly LinkedCurve[], rows: readon
   // The draft's bindings (re-bound and added curves), assembled from the live sources.
   const curves = rows.map((r) => r.curve);
   const ds = cur.datasets.find((d) => d.id === id)!;
-  const excludedRows = remapGraphMask([...excludedSet(target)], old, curves, cur.datasets); // each mask follows its point
-  const graph: Dataset = { ...ds, linkedCurves: curves, ...(excludedRows || excludedSet(ds).size ? { excludedRows } : {}), data: assembleLinkedCurves(curves, cur.datasets, ds.data) };
+  // The mask lives on the source points (lib/linkedCurves.linkedGraphMask), so it follows every curve.
+  const graph = noteAssembled({ ...ds, linkedCurves: curves, data: assembleLinkedCurves(curves, cur.datasets, ds.data) }, cur.datasets);
   const datasets = cur.datasets.map((d) => (d.id === id ? graph : d));
-  noteAssembled(graph, datasets);
   // An added curve is drawn: a view that names its curves gains it.
   const added = rows.flatMap((r, i) => (r.from === null ? [i] : []));
   const withAdded = (keys: number[] | null): number[] | null => (keys === null ? null : [...keys, ...added]);

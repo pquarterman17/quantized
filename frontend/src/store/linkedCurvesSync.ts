@@ -11,9 +11,9 @@
 // plain set: no undo step (the change it mirrors recorded its own) and no
 // macro step.
 
-import { assembleLinkedCurves, linkedGraphYTitle } from "../lib/linkedCurves";
-import { rowStateIdentity } from "../lib/rowstate";
-import type { Dataset, DataStruct } from "../lib/types";
+import { assembleLinkedCurves, linkedGraphMask, linkedGraphYTitle, linkedRowSources } from "../lib/linkedCurves";
+import { excludedSet, mergeExcluded, rowStateIdentity } from "../lib/rowstate";
+import type { Dataset, DataStruct, LinkedCurve } from "../lib/types";
 import { useApp } from "./useApp";
 
 /** A source's identity for change detection: rows, exclusions, filter, its
@@ -25,7 +25,48 @@ const stampOf = (d: Dataset | undefined): SourceStamp => (d ? [...rowStateIdenti
 /** `cyclic`: assembled while on a graph <-> graph cycle (fail closed: empty
  *  curves) -- in step as long as the curve list is unchanged and it is still
  *  on a cycle, since its sources are themselves empty cycle members. */
-const assembledFrom = new WeakMap<DataStruct, { curves: string; sources: SourceStamp[]; cyclic: boolean }>();
+const assembledFrom = new WeakMap<DataStruct, { curves: string; sources: SourceStamp[]; cyclic: boolean; mask: string }>();
+
+/** A graph's mask as a comparable key (its excluded rows, ascending). */
+const maskKey = (d: Dataset): string => JSON.stringify([...excludedSet(d)].sort((a, b) => a - b));
+
+/** The graph with its mask set to the projection of its sources' dropped
+ *  rows (lib/linkedCurves.linkedGraphMask) -- the only mask a graph keeps. */
+function withMask(d: Dataset, curves: readonly LinkedCurve[], datasets: readonly Dataset[]): Dataset {
+  const mask = linkedGraphMask(curves, datasets);
+  if (!mask && excludedSet(d).size === 0) return d;
+  return { ...d, excludedRows: mask };
+}
+
+/** A mask the USER set on a graph (masking its points from the plot, the
+ *  worksheet or an action) is routed to the source points those rows draw:
+ *  rows newly masked exclude their source row, rows unmasked include it. The
+ *  graph's own mask is then rebuilt from its sources, so the mask follows the
+ *  source point through every later insert, delete or sort there. Outer graphs
+ *  route first, so a mask on a graph of graphs reaches the inner sources. */
+function routeGraphMasks(order: readonly Dataset[], cyclic: Set<string>, latest: Map<string, Dataset>): boolean {
+  let changed = false;
+  for (const g of [...order].reverse()) {
+    const d = latest.get(g.id)!;
+    const rec = assembledFrom.get(d.data);
+    if (!rec || cyclic.has(d.id) || rec.curves !== JSON.stringify(d.linkedCurves) || rec.mask === maskKey(d)) continue;
+    const before = new Set<number>(JSON.parse(rec.mask) as number[]);
+    const now = excludedSet(d);
+    const points = linkedRowSources(d.linkedCurves!, [...latest.values()]);
+    const edits = new Map<string, { add: number[]; drop: Set<number> }>();
+    const edit = (id: string) => edits.get(id) ?? edits.set(id, { add: [], drop: new Set() }).get(id)!;
+    for (const r of now) if (!before.has(r) && points[r]) edit(points[r].id).add.push(points[r].row);
+    for (const r of before) if (!now.has(r) && points[r]) edit(points[r].id).drop.add(points[r].row);
+    for (const [id, e] of edits) {
+      const src = latest.get(id);
+      if (!src) continue;
+      const kept = mergeExcluded([...excludedSet(src)], e.add).filter((r) => !e.drop.has(r));
+      latest.set(id, { ...src, excludedRows: kept.length ? kept : undefined });
+      changed = true;
+    }
+  }
+  return changed;
+}
 
 function sameStamp(now: SourceStamp, then: SourceStamp): boolean {
   return now === then || (now !== null && then !== null && now.length === then.length && now.every((v, k) => v === then[k]));
@@ -33,7 +74,7 @@ function sameStamp(now: SourceStamp, then: SourceStamp): boolean {
 
 function inStep(graph: Dataset, byId: Map<string, Dataset>, cyclic: boolean): boolean {
   const rec = assembledFrom.get(graph.data);
-  if (!rec || rec.curves !== JSON.stringify(graph.linkedCurves) || rec.cyclic !== cyclic) return false;
+  if (!rec || rec.curves !== JSON.stringify(graph.linkedCurves) || rec.cyclic !== cyclic || rec.mask !== maskKey(graph)) return false;
   if (cyclic) return true;
   return graph.linkedCurves!.every((c, i) => sameStamp(stampOf(byId.get(c.datasetId)), rec.sources[i]));
 }
@@ -70,7 +111,7 @@ function buildOrder(datasets: readonly Dataset[]): { order: Dataset[]; cyclic: S
 export function relinkedDatasets(datasets: readonly Dataset[]): Dataset[] | null {
   const { order, cyclic } = buildOrder(datasets);
   const latest = new Map(datasets.map((d) => [d.id, d]));
-  let changed = false;
+  let changed = routeGraphMasks(order, cyclic, latest);
   for (const g of order) {
     const d = latest.get(g.id)!;
     const onCycle = cyclic.has(d.id);
@@ -78,22 +119,27 @@ export function relinkedDatasets(datasets: readonly Dataset[]): Dataset[] | null
     changed = true;
     const curves = d.linkedCurves!;
     const live = onCycle ? curves.map((c) => ({ ...c, yKey: -1 })) : curves;
-    const data = assembleLinkedCurves(live, [...latest.values()], d.data);
-    assembledFrom.set(data, { curves: JSON.stringify(curves), sources: curves.map((c) => stampOf(latest.get(c.datasetId))), cyclic: onCycle });
-    latest.set(d.id, { ...d, data });
+    const all = [...latest.values()];
+    const next = withMask({ ...d, data: assembleLinkedCurves(live, all, d.data) }, live, all);
+    assembledFrom.set(next.data, { curves: JSON.stringify(curves), sources: curves.map((c) => stampOf(latest.get(c.datasetId))), cyclic: onCycle, mask: maskKey(next) });
+    latest.set(d.id, next);
   }
   return changed ? datasets.map((d) => latest.get(d.id)!) : null;
 }
 
 /** Mark `graph.data` as assembled from the current `datasets` (a graph the
- *  caller just built itself), so the watcher does not rebuild it again. */
-export function noteAssembled(graph: Dataset, datasets: readonly Dataset[]): void {
+ *  caller just built itself), so the watcher does not rebuild it again, and
+ *  return it carrying its sources' mask -- the graph the caller stores. */
+export function noteAssembled(graph: Dataset, datasets: readonly Dataset[]): Dataset {
   const byId = new Map(datasets.map((d) => [d.id, d]));
-  assembledFrom.set(graph.data, {
+  const masked = withMask(graph, graph.linkedCurves ?? [], datasets);
+  assembledFrom.set(masked.data, {
     curves: JSON.stringify(graph.linkedCurves),
     sources: (graph.linkedCurves ?? []).map((c) => stampOf(byId.get(c.datasetId))),
     cyclic: false,
+    mask: maskKey(masked),
   });
+  return masked;
 }
 
 let watching = false;
