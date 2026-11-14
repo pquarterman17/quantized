@@ -24,9 +24,11 @@ import BackgroundPlotWindow from "./BackgroundPlotWindow";
  *  a tool plugin. These tests count `opts.plugins` to prove a background window
  *  activates no TOOL plugins, so they opt out of the box to keep the "one
  *  plugin = the thing under test" idiom readable — the same convention
- *  `MultiPanelStage.test.tsx` uses. */
+ *  `MultiPanelStage.test.tsx` uses. The legend is off for the same reason
+ *  (gap audit 2 #3): a shown legend adds the frame-vars LAYOUT plugin that
+ *  places it, exactly as the focused stage does. */
 function noBoxView(): PlotView {
-  return { ...defaultPlotView(), showAxisBox: false };
+  return { ...defaultPlotView(), showAxisBox: false, showLegend: false };
 }
 
 const { created, MockUPlot, statDrawCalls } = vi.hoisted(() => {
@@ -140,13 +142,14 @@ describe("BackgroundPlotWindow", () => {
   // with `defaultPlotView()`; this pins that the value reaches a real render.
   // (`PlotStage` is deliberately never mounted in jsdom — see its test's
   // header — so a background window is the closest mountable stand-in.)
-  it("a window taking defaultPlotView() unmodified is boxed — one plugin, the axis box", async () => {
+  it("a window taking defaultPlotView() unmodified is boxed — the axis box plus the legend's frame vars", async () => {
     expect(defaultPlotView().showAxisBox).toBe(true); // guard the guard
     render(<BackgroundPlotWindow dataset={DATASET} view={defaultPlotView()} />);
     await waitFor(() => expect(created).toHaveLength(1));
     const opts = created[0].opts as { plugins: unknown[] };
-    // Exactly one, and it is the decoration — no tool plugin came along.
-    expect(opts.plugins).toHaveLength(1);
+    // Exactly two: the decoration and (gap audit 2 #3) the frame-vars layout
+    // plugin the shown legend is placed by — no tool plugin came along.
+    expect(opts.plugins).toHaveLength(2);
   });
 
   it("ignores the singleton store's tool overlays entirely (decision #2 — focused-window-only)", async () => {
@@ -170,17 +173,54 @@ describe("BackgroundPlotWindow", () => {
   });
 
   // BUG-014 finding 4: an empty display name hides a series from the legend,
-  // never from the plot. A background window draws no legend at all (the
-  // header's "no toolbar/legend"), so the empty rename must still leave the
-  // series drawn and add no legend row.
+  // never from the plot. Gap audit 2 #3: the background window now draws the
+  // same legend the focused one does, so the empty rename leaves the series
+  // drawn and its row out, while the other series keeps its row.
   it("an empty rename keeps the series drawn and shows no legend row", async () => {
-    const view = { ...noBoxView(), yKeys: [0, 1], seriesLabels: { 1: "" } };
+    const view = { ...noBoxView(), yKeys: [0, 1], seriesLabels: { 1: "" }, showLegend: true };
     const { container } = render(<BackgroundPlotWindow dataset={DATASET2} view={view} />);
     await waitFor(() => expect(created).toHaveLength(1));
     const series = (created[0].opts as { series: { show?: boolean; label?: string }[] }).series;
     expect(series).toHaveLength(3);
     expect(series[2].show).not.toBe(false);
-    expect(container.querySelector(".qzk-legend")).toBeNull();
+    await waitFor(() => expect(container.querySelector(".qzk-legend")).not.toBeNull());
+    const rows = [...container.querySelectorAll(".qzk-legend .it")].map((r) => r.textContent);
+    expect(rows).toEqual(["a"]);
+  });
+
+  // Gap audit 2 #3: an unfocused window used to drop its drawn shapes and its
+  // legend, so the same graph looked different depending on focus.
+  it("draws the view's shapes (the shapes plugin is wired) like the focused window", async () => {
+    const view: PlotView = {
+      ...noBoxView(),
+      shapes: [{ id: "s1", kind: "arrow", x1: 0, y1: 10, x2: 2, y2: 30 }],
+    };
+    render(<BackgroundPlotWindow dataset={DATASET} view={view} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+    expect((created[0].opts as { plugins: unknown[] }).plugins).toHaveLength(1);
+  });
+
+  it("shows the view's legend (title, corner, renamed rows) read-only, and none when showLegend is off", async () => {
+    const view: PlotView = {
+      ...noBoxView(), yKeys: [0, 1], seriesLabels: { 0: "first" }, legendTitle: "Samples", legendPos: "nw",
+      hiddenChannels: [1], showLegend: true,
+    };
+    // The live singleton disagrees on every input: the legend must follow the view.
+    useApp.setState({ seriesLabels: { 0: "WRONG" }, legendTitle: "WRONG", legendPos: "se", showLegend: false });
+    const { container, rerender } = render(<BackgroundPlotWindow dataset={DATASET2} view={view} />);
+    await waitFor(() => expect(container.querySelector(".qzk-legend")).not.toBeNull());
+    const box = container.querySelector(".qzk-legend")!;
+    expect(box.classList.contains("nw")).toBe(true);
+    expect(box.querySelector(".qzk-legend-title")?.textContent).toBe("Samples");
+    const rows = [...box.querySelectorAll(".it")].filter((r) => !r.classList.contains("qzk-legend-title"));
+    expect(rows.map((r) => r.textContent)).toEqual(["first", "b"]);
+    // Read-only: no toggles, no reorder buttons; the hidden channel is greyed.
+    expect(box.querySelector('[role="checkbox"]')).toBeNull();
+    expect(box.querySelector("button")).toBeNull();
+    expect((rows[1] as HTMLElement).style.opacity).toBe("0.4");
+    rerender(<BackgroundPlotWindow dataset={DATASET2} view={{ ...view, showLegend: false }} />);
+    await waitFor(() => expect(container.querySelector(".qzk-legend")).toBeNull());
+    useApp.setState({ seriesLabels: {}, legendTitle: null, legendPos: "auto", showLegend: true });
   });
 
   it("a linkGroup joins the uPlot cursor-sync group + x-range sync hook (item 13); no group = no sync patch", async () => {
@@ -506,7 +546,8 @@ describe("BackgroundPlotWindow — Sol review round: figure-scoped rich errors s
   // projection cannot express an asymmetric pair at all).
   it("renders the errorSpansPlugin for a document's asymmetric pair (documentErrors threaded through)", async () => {
     const document = richErrorDocument();
-    const view = figureDocumentToPlotView(document);
+    // No legend: its frame-vars layout plugin is not under test here.
+    const view = { ...figureDocumentToPlotView(document), showLegend: false };
     render(<BackgroundPlotWindow dataset={RICH_DATASET} view={view} document={document} />);
     await waitFor(() => expect(created).toHaveLength(1));
     const opts = created[0].opts as { plugins: unknown[] };
