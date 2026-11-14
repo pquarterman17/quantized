@@ -74,7 +74,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
   const [exportStyle, setExportStyle] = useState("default");
   const [exportDpi, setExportDpi] = useState(300);
   const [archiveName, setArchiveName] = useState("");
-  const [result, setResult] = useState<{ figures: number; pages: string[]; pageOpened: boolean; downloaded: boolean } | null>(null);
+  const [result, setResult] = useState<{ figures: number; pages: string[]; pageOpened: boolean; downloaded: string | null } | null>(null);
   const controller = useRef<AbortController | null>(null);
 
   useEffect(() => hydrateGlobal(), [hydrateGlobal]);
@@ -251,7 +251,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
       recordRecipeUse({ kind: "plot", scope: recipeChoice.scope, id: recipeChoice.recipe.id });
     }
     setProgress({ done: artifacts.figures.length, total: artifacts.figures.length, current: null });
-    setResult({ figures: artifacts.figures.length, pages: artifacts.pages.map((page) => page.name), pageOpened, downloaded: downloadArchive });
+    setResult({ figures: artifacts.figures.length, pages: artifacts.pages.map((page) => page.name), pageOpened, downloaded: downloadArchive ? (exportFormat === "pdf-pages" ? "PDF" : "ZIP") : null });
     setPhase("done");
   };
 
@@ -388,7 +388,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
 
       {phase === "done" && result && (
         <div role="status" style={{ border: "1px solid var(--ok)", borderRadius: 6, padding: 10 }}>
-          Created {result.figures} editable figure{result.figures === 1 ? "" : "s"}{result.pages.length === 1 ? result.pageOpened ? ` and opened Figure Page “${result.pages[0]}”.` : ` and saved Figure Page “${result.pages[0]}” in the Library. Your already-open page was left unchanged.` : result.pages.length > 1 ? result.pageOpened ? ` and ${result.pages.length} Figure Pages. The first page is open; the rest are saved in the Library.` : ` and ${result.pages.length} Figure Pages in the Library. Your already-open page was left unchanged.` : "."}{result.downloaded ? " The publication-file ZIP was downloaded." : ""}
+          Created {result.figures} editable figure{result.figures === 1 ? "" : "s"}{result.pages.length === 1 ? result.pageOpened ? ` and opened Figure Page “${result.pages[0]}”.` : ` and saved Figure Page “${result.pages[0]}” in the Library. Your already-open page was left unchanged.` : result.pages.length > 1 ? result.pageOpened ? ` and ${result.pages.length} Figure Pages. The first page is open; the rest are saved in the Library.` : ` and ${result.pages.length} Figure Pages in the Library. Your already-open page was left unchanged.` : "."}{result.downloaded ? ` The publication-file ${result.downloaded} was downloaded.` : ""}
           <div style={{ marginTop: 8 }}><Button variant="primary" onClick={onClose}>Done</Button></div>
         </div>
       )}
