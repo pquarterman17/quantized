@@ -9,6 +9,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { LINKED_GRAPH_EDIT_NOTICE } from "../lib/rederived";
 import type { Dataset } from "../lib/types";
+import { addComputedError } from "./computedErrorRun";
+import { addDerivedColumn } from "./derivedColumnRun";
 import { insertColumn, deleteColumns, moveColumn, setColumnHeader } from "./worksheetColumns";
 import { sortWorksheetRowsBy } from "./sortRows";
 import { useApp } from "./useApp";
@@ -73,6 +75,17 @@ describe("a live graph's sheet is read-only for data edits", () => {
     }));
     expect(graph().data.labels).toEqual(g.data.labels);
     expect(graph().data.values.map((r) => r[0]).slice(0, 3)).toEqual([9, 9, 9]);
+  });
+
+  it("refuses the worksheet's \u0192x-bar and error-column adds (the column would be lost on rebuild)", async () => {
+    const g = graph();
+    const r = await addDerivedColumn(g.id, { name: "twice", expr: "A*2", propagate: false });
+    expect(r).toEqual({ ok: false, error: LINKED_GRAPH_EDIT_NOTICE });
+    const e = await addComputedError(g.id, 0, "percent", 5);
+    expect(e).toEqual({ ok: false, error: LINKED_GRAPH_EDIT_NOTICE });
+    expect(graph().formulas ?? []).toHaveLength(0);
+    expect(graph().data).toBe(g.data);
+    expect(useApp.getState().history).toHaveLength(0);
   });
 
   it("plot styling of the graph still works", () => {
