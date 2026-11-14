@@ -15,6 +15,7 @@ version is intentionally the terser companion, not a duplicate.
 | [`transport.md`](transport.md) | Electrical transport: van der Pauw sheet resistance, Hall-effect carrier analysis |
 | [`thin_films.md`](thin_films.md) | Thin-film growth & epitaxy: QCM (Sauerbrey), Matthews-Blakeslee critical thickness, dopant in-diffusion |
 | [`constants.md`](constants.md) | Fundamental constants across unit systems (SI / CGS-Gaussian / eV-based) |
+| [`analysis.md`](analysis.md) | Multi-curve averaging (mean/SD/SEM, SD vs. SEM), computed error bars (√Y counting statistics, percent, constant) and their effect on a weighted fit, secondary top axes (1/T Arrhenius, Bragg d-spacing) |
 
 Each entry names the `calc/` module + function it documents so the two stay
 in sync; when a formula changes, update both.
