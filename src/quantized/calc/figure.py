@@ -90,6 +90,8 @@ def _plot_kwargs(
         shape = spec.get("marker_shape")
         kw["marker"] = _MARKER.get(shape, "o") if isinstance(shape, str) else "o"
         kw["markersize"] = spec.get("marker_size") or default_marker_size
+        if spec.get("marker_fill") == "hollow":  # an open symbol (gap audit 2 #6)
+            kw["markerfacecolor"] = "none"
     return kw
 
 
@@ -199,7 +201,7 @@ def draw_series_axes(
         line, color = draw_series(ax, xv, yv, label, kw, spec)  # bars: figure_bars
         _apply_fill(ax, xv, yv, series, i, spec, color)
         artists.append(line)
-    apply_error_bars(ax, xv, series, error_spans, artists)
+    apply_error_bars(ax, xv, series, error_spans, artists, series_styles)
     tag_series_slots(artists)  # the legend's waterfall row order (figure_legend_order)
     resolved_x_scale = resolve_axis_scale(x_scale, x_log)
     resolved_y_scale = resolve_axis_scale(y_scale, y_log)

@@ -736,6 +736,7 @@ body {
 .qzk-window-workspace-sep { width: 1px; height: 16px; margin: 0 2px; background: var(--border-soft); }
 @media (max-width: 900px) { .qzk-window-workspace button span + span { display: none; } }
 .qzk-stage { position: relative; flex: 1; background: var(--axes-bg); min-height: 0; overflow: hidden; }
+.qzk-bg-stage { position: absolute; inset: 0; } /* an unfocused window's plot + read-only legend (gap audit 2 #3) */
 /* Optional uPlot chart title (Inspector "Titles & labels"); themed + a fixed
    ~24px height so PlotStage can reserve matching room and not clip the x-axis. */
 .u-title { color: var(--text); font-size: 14px; font-weight: var(--weight-semibold); line-height: 20px; padding-bottom: 4px; }
@@ -941,18 +942,18 @@ body {
    plot host gives up --qz-plot-right for it (--qz-out-w is its measured
    width) — the export's "outside right". */
 .qzk-legend.auto { top: calc(var(--qz-frame-top, 72px) + 8px); right: calc(100% - var(--qz-frame-left, 0px) - var(--qz-frame-width, 100%) + 8px); }
-.qzk-stage[data-lc$="w"] > .qzk-legend.auto { left: calc(var(--qz-frame-left, 0px) + 8px); right: auto; }
-.qzk-stage[data-lc^="s"] > .qzk-legend.auto { top: auto; bottom: calc(100% - var(--qz-frame-top, 0px) - var(--qz-frame-height, 100%) + 8px); }
+:is(.qzk-stage, .qzk-bg-stage)[data-lc$="w"] > .qzk-legend.auto { left: calc(var(--qz-frame-left, 0px) + 8px); right: auto; }
+:is(.qzk-stage, .qzk-bg-stage)[data-lc^="s"] > .qzk-legend.auto { top: auto; bottom: calc(100% - var(--qz-frame-top, 0px) - var(--qz-frame-height, 100%) + 8px); }
 /* Chrome audit round 4: in a narrow frame the auto legend grew left past the
    frame over the y ticks and title (and off the stage). It now stays inside
    the frame: labels wrap, and the rows scroll once it is full. Any other
    placement at least stays on the stage. */
-.qzk-stage > .qzk-legend { max-width: calc(100% - 24px); }
-.qzk-stage > .qzk-legend.auto { max-width: calc(var(--qz-frame-width, 100%) - 16px); max-height: calc(var(--qz-frame-height, 100%) - 16px); }
+:is(.qzk-stage, .qzk-bg-stage) > .qzk-legend { max-width: calc(100% - 24px); }
+:is(.qzk-stage, .qzk-bg-stage) > .qzk-legend.auto { max-width: calc(var(--qz-frame-width, 100%) - 16px); max-height: calc(var(--qz-frame-height, 100%) - 16px); }
 .qzk-legend-toggle { overflow-wrap: anywhere; }
 .qzk-stage[data-narrow-frame] > .qzk-legend .it .qz-icon-btn { display: none; }
 .qzk-legend.out { top: var(--qz-frame-top, 72px); right: 8px; max-height: var(--qz-frame-height, 70%); max-width: min(260px, 40%); } /* the plot keeps 60% of a narrow stage */
-.qzk-stage:has(> .qzk-legend.out) { --qz-plot-right: calc(var(--qz-out-w, 200px) + 16px); }
+:is(.qzk-stage, .qzk-bg-stage):has(> .qzk-legend.out) { --qz-plot-right: calc(var(--qz-out-w, 200px) + 16px); }
 .qzk-legend.out .qzk-legend-content { gap: 1px; }
 .qzk-legend.out .it { font-size: var(--font-size-sm); }
 .qzk-legend.out .it .qz-icon-btn { display: none; }

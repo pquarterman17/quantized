@@ -14,16 +14,18 @@ import { parseLimFields } from "../../lib/axisLimFields";
 import { drawnSeriesStyle } from "../../lib/drawnSeriesStyle";
 import { fullPlottedX } from "../../lib/fitselectionActions";
 import type { PlotPayload } from "../../lib/plotdata";
-import { axisZoneAt, type AxisZone, nearestIndex, pickNearestSeries } from "../../lib/plotHitTest";
 import { buildPlotMenu, type LegendCorner, type MenuSeries } from "../../lib/plotMenu";
 import { plotRangeSelection } from "../../lib/plotRangeSelection";
+import { excludedSet } from "../../lib/rowstate";
 import type { MarkerShape } from "../../lib/types";
 import { sendFigureToReport } from "../../commands/plotCommands";
+import { openFigureDialog } from "../../store/figureDialogs";
 import { requestPeakFitRange } from "../../store/peakFitRange";
 import { useApp } from "../../store/useApp";
 import ContextMenu from "../overlays/ContextMenu";
 import { askParams } from "../overlays/ParamDialog";
 import { createAnnotationFromDialog } from "./annotationShapeActions";
+import { hitTest } from "./curveHit";
 import type { PlotStageActions } from "./usePlotStageActions";
 import { selectFocusedWindowCycles } from "./useStageSeriesCycle";
 
@@ -45,47 +47,6 @@ interface Props {
   onClose: () => void;
 }
 
-/** Hit-test the cursor against the live plot: the nearest visible curve (within
- *  HIT_PX), which axis zone the cursor sits in, and the cursor's own DATA
- *  coordinates (computed here, ONCE, alongside the same rect/posToVal this
- *  function already needs — see `dataX`/`dataY`'s doc comment at the call
- *  site for why nothing may redo this conversion later). */
-function hitTest(
-  u: uPlot | null,
-  x: number,
-  y: number,
-  plotted: number[],
-  hidden: boolean[] | undefined,
-  hasY2: boolean,
-): { series: number | null; idx: number | null; zone: AxisZone; dataX: number | null; dataY: number | null } {
-  if (!u || !u.over) return { series: null, idx: null, zone: "outside", dataX: null, dataY: null };
-  const rect = u.over.getBoundingClientRect();
-  const zone = axisZoneAt(
-    x,
-    y,
-    { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
-    hasY2,
-  );
-  const localX = x - rect.left;
-  const localY = y - rect.top;
-  const dataX = u.posToVal(localX, "x");
-  const dataY = u.posToVal(localY, "y");
-  const xData = (u.data[0] ?? []) as (number | null)[];
-  const idx = nearestIndex(xData, dataX);
-  if (idx == null) return { series: null, idx: null, zone, dataX, dataY };
-  // Pixel-y of each visible display-series at the probe index (through its own
-  // scale, so primary + secondary series compare fairly). Hidden → null.
-  const seriesPy: (number | null)[] = plotted.map((_, i) => {
-    if (hidden?.[i]) return null;
-    const col = u.data[i + 1] as (number | null)[] | undefined;
-    const yv = col?.[idx];
-    if (yv == null || Number.isNaN(yv)) return null;
-    const scale = u.series[i + 1]?.scale ?? "y";
-    return u.valToPos(yv, scale, false);
-  });
-  return { series: pickNearestSeries(localY, seriesPy, HIT_PX), idx, zone, dataX, dataY };
-}
-
 export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidden, actions, onClose }: Props) {
   const items = useMemo(() => {
     // Snapshot the store at open time — the menu is single-shot (every action
@@ -93,7 +54,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
     const st = useApp.getState();
     const u = plotRef.current;
     const hasY2 = (st.y2Keys?.length ?? 0) > 0;
-    const { series: nearIdx, zone, dataX, dataY } = hitTest(u, x, y, plotted, hidden, hasY2);
+    const { series: nearIdx, zone, dataX, dataY } = hitTest(u, x, y, plotted, hidden, hasY2, HIT_PX);
 
     // Resolve the hit-tested series into the menu-spec shape.
     let series: MenuSeries | null = null;
@@ -211,6 +172,24 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       st.setPeakWizardOpen(true);
     };
 
+    // Gap audit 2 #7: mask the brushed points (the Select Rows tool fills the
+    // same `selection` the worksheet's row brush does) through the worksheet's
+    // own row exclusion, so undo, fits, statistics and exports all follow.
+    const sel = activeDs && st.selection?.datasetId === activeDs.id ? st.selection.rows : [];
+    const excluded = activeDs ? excludedSet(activeDs) : new Set<number>();
+    const pointMask = activeDs ? {
+      selected: sel.length,
+      excludedSelected: sel.filter((r) => excluded.has(r)).length,
+      excluded: excluded.size,
+      exclude: () => st.excludeSelectedRows(),
+      include: () => {
+        const picked = new Set(sel);
+        st.setRowsExcluded(activeDs.id, [...excluded].filter((r) => !picked.has(r)));
+        st.clearRowSelection();
+      },
+      includeAll: () => st.clearRowExclusions(activeDs.id),
+    } : undefined;
+
     return buildPlotMenu({
       series,
       zone,
@@ -262,6 +241,8 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       addTextHere,
       peakRange,
       fitPeakRange,
+      pointMask,
+      openDetails: (channel) => openFigureDialog({ kind: "plotDetails", channel }),
     });
     // Single-shot menu (every action calls onClose): rebuild only if the anchor
     // moves. The store snapshot is captured at open time — correct because a

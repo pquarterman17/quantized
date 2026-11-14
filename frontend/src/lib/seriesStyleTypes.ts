@@ -97,4 +97,25 @@ export interface SeriesStyle {
    *  older saved style) = the default trace fills what is unset, as before.
    *  Read through `markers.seriesTrace` on the canvas, legend and export. */
   explicit?: boolean;
+  /** Marker interior (gap audit 2 #6): `"hollow"` draws an open symbol (no
+   *  fill, edge in the series colour — matplotlib `markerfacecolor="none"`);
+   *  `"solid"` fills it with the series colour, the plain circle included.
+   *  Absent = as before (closed glyphs filled, uPlot's white-filled circle).
+   *  Open glyphs (plus, cross, star) have no interior either way. */
+  markerFill?: "solid" | "hollow";
+  /** Error-bar styling for this series' bars (gap audit 2 #6). */
+  errorBar?: ErrorBarStyle;
+}
+
+/** One series' error-bar look, shared by the canvas (`uplotErrorRange.
+ *  styleErrorDraw`) and the export (`calc/figure_errorbars.py`, as the wire
+ *  keys `error_cap`/`error_width`/`error_color`). Unset = the defaults both
+ *  sides already used: matplotlib `capsize=2`, `elinewidth=1`, series colour. */
+export interface ErrorBarStyle {
+  /** Cap half-length in points (matplotlib `capsize`); 0 = no caps. */
+  cap?: number;
+  /** Bar line width in points (matplotlib `elinewidth`). */
+  width?: number;
+  /** A token (`"--series-3"`) or literal hex; absent = the series colour. */
+  color?: string;
 }

@@ -50,10 +50,34 @@ def test_top_ticks_match_the_shared_table(
         assert top_inverse(top, value) == pytest.approx(pos)
 
 
-def test_top_ticks_refuse_a_reciprocal_axis_across_zero() -> None:
-    assert top_ticks({"kind": "reciprocal"}, -1, 1) == []
-    assert top_ticks({"kind": "dspacing", "wavelength": 1.54}, -5, 30) == []
+def test_top_ticks_use_only_the_valid_part_of_a_range() -> None:
+    # 1/x across 0: ticks come from the positive part only, never past it.
+    ticks = top_ticks({"kind": "reciprocal", "factor": 1000}, 0, 10)
+    assert ticks
+    assert all(0 < pos <= 10 for pos, _v, _l in ticks)
+    assert top_ticks({"kind": "reciprocal"}, -1, 1)
+    assert all(pos > 0 for pos, _v, _l in top_ticks({"kind": "reciprocal"}, -1, 1))
+    # d-spacing is only defined for 0 < 2theta < 180.
+    d = top_ticks({"kind": "dspacing", "wavelength": 1.54}, -5, 30)
+    assert d
+    assert all(0 < pos <= 30 for pos, _v, _l in d)
     assert nice_ticks(1, 1) == ([], 0)
+
+
+def test_top_ticks_draw_nothing_when_no_part_is_valid() -> None:
+    assert top_ticks({"kind": "reciprocal"}, -10, -1) == []
+    assert top_ticks({"kind": "reciprocal"}, -10, 0) == []
+    assert top_ticks({"kind": "dspacing", "wavelength": 1.54}, -20, -1) == []
+
+
+@pytest.mark.parametrize("rng", [(0, 10), (-5, 10), (-10, -1), (-10, 0)])
+def test_reciprocal_top_axis_never_fails_the_render(rng: tuple[float, float]) -> None:
+    lo, hi = rng
+    render_figure_map(
+        [lo, (lo + hi) / 2, hi],
+        [("a", [1, 2, 3])],
+        x_fmt={"mode": "auto", "digits": 2, "top": {"kind": "reciprocal", "factor": 1000}},
+    )
 
 
 def _drawn(ax: object) -> None:

@@ -79,10 +79,11 @@ export function publishFrameVars(stage: HTMLElement, r: FrameRect): void {
 
 /** uPlot plugin: on layout (ready), resize (setSize) and every redraw (draw —
  *  catches zoom/pan gutter shifts), publish the frame rect as CSS vars on the
- *  nearest `.qzk-stage` ancestor. No-op when there is no such ancestor
- *  (MultiPanel / inset / background hosts, jsdom without layout) — those never
- *  mount a frame-anchored `PlotLegend`, so nothing reads the vars. */
-export function frameVarsPlugin(stageSelector = ".qzk-stage"): uPlot.Plugin {
+ *  nearest `.qzk-stage` ancestor (or `.qzk-bg-stage`: an unfocused window's
+ *  host, which draws a read-only legend — gap audit 2 #3). No-op when there is
+ *  no such ancestor (MultiPanel / inset hosts, jsdom without layout) — those
+ *  never mount a frame-anchored legend, so nothing reads the vars. */
+export function frameVarsPlugin(stageSelector = ".qzk-stage,.qzk-bg-stage"): uPlot.Plugin {
   const publish = (u: uPlot): void => {
     const stage = u.root.closest(stageSelector);
     if (!(stage instanceof HTMLElement)) return;

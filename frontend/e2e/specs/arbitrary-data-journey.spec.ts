@@ -178,7 +178,7 @@ test("importing an arbitrary CSV confirms the guessed roles and reaches a clean,
 
   // Series count + labels carrying the fixture's headers/units, straight off
   // the real DOM legend (PlotLegend.tsx's `defaultLabel`: `"${label} (${unit})"`).
-  const legendRows = page.locator(".qzk-legend .it");
+  const legendRows = page.locator(".qzk-stage .qzk-legend .it");
   await expect(legendRows).toHaveCount(2);
   await expect(legendRows.nth(0)).toContainText("Signal A (V)");
   await expect(legendRows.nth(1)).toContainText("Signal B (V)");

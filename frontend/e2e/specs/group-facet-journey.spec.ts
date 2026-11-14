@@ -317,7 +317,7 @@ test("Group well builds one series per level, survives Stage edit + save/reopen,
 // excludes the button `<span>` (and the `<LegendSample>` swatch, which
 // renders no text) without depending on the buttons' exact glyphs at all.
 async function legendSeriesLabels(page: Page): Promise<string[]> {
-  const rows = page.locator(".qzk-legend .it").filter({ hasText: /\(Run=/ });
+  const rows = page.locator(".qzk-stage .qzk-legend .it").filter({ hasText: /\(Run=/ });
   return rows.evaluateAll((elements) =>
     elements.map((el) => {
       // The series label sits in the row's keyboard toggle when the legend is

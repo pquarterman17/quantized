@@ -14,6 +14,7 @@ import type { PlotPayload } from "./plotdata";
 import { DASH, resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
 import { BAR_PATHS } from "./uplotBars";
 import { resolveFillBands, seriesFillProps, translucent } from "./uplotFill";
+import type { ErrorBarPaint } from "./uplotErrorRange";
 import type { BuildOptsArgs } from "./uplotOpts";
 
 /** The per-series style inputs `buildSeriesDefs` reads (all of them). */
@@ -130,7 +131,8 @@ export function buildSeriesDefs(
       const show = !args.hidden?.[i]; // interactive legend visibility
       // Selected companion (#50 brush): accent, filled larger markers, no line.
       if (s.selected) {
-        return { label, scale, stroke: accentColor, fill: accentColor, width: 0, points: loopPoints({ show: true, size: 7 }), show };
+        // The fill goes on the POINTS: a series fill shades the area under them.
+        return { label, scale, stroke: accentColor, width: 0, points: loopPoints({ show: true, size: 7, fill: accentColor }), show };
       }
       // Muted "excluded" companion (grey mode): faint hollow markers, no line.
       if (s.muted) {
@@ -168,11 +170,16 @@ export function buildSeriesDefs(
       // from this series' own resolved stroke. `{vs}` band fills are NOT a
       // per-series prop — see `resolveFillBands` below (opts.bands).
       // A log axis breaks the line at values it cannot place (lib/logGaps.ts).
-      const def: uPlot.Series = {
+      const def: uPlot.Series & { qzErr?: ErrorBarPaint } = {
         label, scale, stroke, width, dash, points: loopPoints(points), show,
         ...seriesFillProps(style?.fill, stroke),
         ...(xAscending ? { gaps: logGaps } : {}),
       };
+      // Error-bar styling (gap audit 2 #6) rides on the series, where the
+      // error plugins read it (`uplotErrorRange.styleErrorDraw`); a colour is
+      // contrast-checked like the stroke. A change rebuilds (not a paint field).
+      const eb = style?.errorBar;
+      if (eb) def.qzErr = { ...eb, color: eb.color && resolveDrawColor(seriesColor(i, { color: eb.color }), isDarkBg, inkColor) };
       // Per-series step alignment (SeriesStyle.step, GAP_PLOTTYPES "step"
       // mark) — a MORE SPECIFIC override than the "Step" default-trace
       // preference below, so it's checked first: a step-marked series

@@ -24,6 +24,8 @@ export interface ColorScatterSpec {
   label?: string;
   /** P1.4: the point glyph (default: a circle) — a Symbol-by level's. */
   shape?: MarkerShape;
+  /** Gap audit 2 #6: open symbols (`SeriesStyle.markerFill: "hollow"`). */
+  hollow?: boolean;
 }
 
 /** The fill of row `i`'s point: its z value normalized over [lo, hi] (linear;
@@ -46,6 +48,7 @@ export function paintColorPoint(
   r: number,
   fill: string,
   shape: MarkerShape = "circle",
+  hollow = false,
 ): void {
   const closed = shape === "circle" || FILLED_SHAPES.has(shape);
   ctx.fillStyle = ctx.strokeStyle = fill;
@@ -55,7 +58,7 @@ export function paintColorPoint(
     sub.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
     if (closed) ctx.closePath();
   }
-  if (closed) ctx.fill();
+  if (closed && !hollow) ctx.fill();
   else ctx.stroke();
 }
 
@@ -85,7 +88,10 @@ export function buildColorByColumns(
       if (v > hi) hi = v;
     }
     if (lo > hi) return; // no finite z values anywhere -> nothing to colour
-    out.set(p + 1, { channel: zCh, z, colormap: style?.colormap ?? "viridis", lo, hi });
+    out.set(p + 1, {
+      channel: zCh, z, colormap: style?.colormap ?? "viridis", lo, hi,
+      ...(style?.markerFill === "hollow" ? { hollow: true } : {}),
+    });
   });
   return out;
 }
