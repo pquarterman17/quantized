@@ -730,7 +730,7 @@ export interface Shape {
 // verbatim when the extras outgrew this file's line pin; re-exported here so
 // no importer changed.
 export type { AxisFormat, TickMode } from "./axisFormat";
-export { axisFmtParam, hasAxisExtras, sanitizeAxisExtras } from "./axisFormat";
+export { axisFmtParam, dateAwareXFmt, hasAxisExtras, sanitizeAxisExtras } from "./axisFormat";
 
 /** How an axis maps data values to pixel position (MAIN #12): `"linear"`
  *  (default) positions values proportionally; `"log"` positions by

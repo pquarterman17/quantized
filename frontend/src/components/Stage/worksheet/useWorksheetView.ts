@@ -512,7 +512,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
       col < 0
         ? [xName, xUnit ? `X · ${xUnit}` : "X"]
         : [labels[col] ?? "", units[col] ? `· ${units[col]}` : ""];
-    const fmt = gridFormatters(time, values)(col); // the grid's per-column precision
+    const fmt = gridFormatters(time, values, metadata?.time_is_datetime === true)(col); // the grid's per-column precision
     for (const r of order.slice(0, AUTOFIT_SAMPLE_ROWS)) samples.push(fmt(col < 0 ? time[r] : values[r]?.[col]));
     setColWidth(col, autofitColWidth(samples));
   }

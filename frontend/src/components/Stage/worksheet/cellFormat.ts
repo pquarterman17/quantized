@@ -71,15 +71,26 @@ export function columnFormatter(n: number, at: (r: number) => number | undefined
   return (v) => (isLarge(v) ? v.toFixed(decimals) : fmtCell(v));
 }
 
+/** A timestamp cell (epoch seconds, UTC -- the importers' convention) as
+ *  `YYYY-MM-DD HH:MM:SS`, the date column Origin shows (worksheet audit #7);
+ *  fractional seconds only when present. Em-dash for missing/out of range. */
+export function fmtDateCell(v: number | undefined): string {
+  if (v == null || !Number.isFinite(v) || Math.abs(v) > 8.64e12) return "—";
+  const iso = new Date(v * 1000).toISOString(); // 2026-03-01T12:00:00.000Z
+  const ms = iso.slice(19, 23);
+  return `${iso.slice(0, 10)} ${iso.slice(11, 19)}${ms === ".000" ? "" : ms}`;
+}
+
 /** Lazily-built, cached formatters for a grid's columns (-1 = the x column):
  *  each column is scanned the first time it is drawn. Rebuild it when the
- *  data changes (the store replaces `time`/`values` on every edit). */
-export function gridFormatters(time: number[], values: number[][]): (col: number) => CellFormatter {
+ *  data changes (the store replaces `time`/`values` on every edit). `xIsDate`:
+ *  the x column holds timestamps (`metadata.time_is_datetime`) and shows dates. */
+export function gridFormatters(time: number[], values: number[][], xIsDate = false): (col: number) => CellFormatter {
   const cache = new Map<number, CellFormatter>();
   return (col) => {
     let f = cache.get(col);
     if (!f) {
-      f = col < 0 ? columnFormatter(time.length, (r) => time[r]) : columnFormatter(values.length, (r) => values[r]?.[col]);
+      f = col < 0 && xIsDate ? fmtDateCell : col < 0 ? columnFormatter(time.length, (r) => time[r]) : columnFormatter(values.length, (r) => values[r]?.[col]);
       cache.set(col, f);
     }
     return f;

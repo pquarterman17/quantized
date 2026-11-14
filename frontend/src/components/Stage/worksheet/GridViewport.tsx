@@ -166,9 +166,10 @@ export default function GridViewport({
   // Anchor COLUMN for shift-click range selection (item 6) — same pattern,
   // one axis over. -1 (the pinned x/time column) is a valid anchor.
   const [colAnchor, setColAnchor] = useState<number | null>(null);
-  const cellEdit = useCellEdit(onEditCell);
+  const xIsDate = data.metadata?.time_is_datetime === true; // audit #7: a date X shows and edits as dates
+  const cellEdit = useCellEdit(onEditCell, xIsDate);
   // Per-column number precision: each drawn column is scanned once per data change.
-  const fmtOf = useMemo(() => gridFormatters(data.time, data.values), [data.time, data.values]);
+  const fmtOf = useMemo(() => gridFormatters(data.time, data.values, xIsDate), [data.time, data.values, xIsDate]);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
