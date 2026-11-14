@@ -29,6 +29,11 @@ export const TOP_MIN_GAP = 0.05;
  *  labels such as "1200" never touch: the gap scales with the label width.
  *  Mirrors TOP_GAP_PER_CHAR in calc/axis_top.py. */
 export const TOP_GAP_PER_CHAR = 0.015;
+/** A top axis shows at least this many ticks when the spacing rule allows:
+ *  while fewer survive, the next finer nice step is added (at most two finer
+ *  levels). Mirrors TOP_MIN_TICKS in calc/axis_top.py. */
+export const TOP_MIN_TICKS = 5;
+const MANTISSAS = [1, 2, 2.5, 5];
 
 /** Where a transform is undefined at one end of the axis (1/x at 0, d-spacing
  *  at 0 or 180 deg), the drawn part starts this fraction of its upper end
@@ -171,6 +176,15 @@ function inverseOn(top: TopAxis, t: number, span: [number, number] | null): numb
 /** Nice tick values covering [a, b] (either order): steps of 1, 2, 2.5 or 5
  *  times a power of ten, about `target` of them. Returns the values and the
  *  decimals their labels need. */
+function niceStep(a: number, b: number, target = TOP_TICK_TARGET): { step: number | null } {
+  const lo = Math.min(a, b);
+  const hi = Math.max(a, b);
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || !(hi > lo)) return { step: null };
+  const raw = (hi - lo) / target;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  return { step: ([1, 2, 2.5, 5, 10].find((m) => m * mag >= raw * (1 - 1e-9)) ?? 10) * mag };
+}
+
 export function niceTicks(a: number, b: number, target = TOP_TICK_TARGET): { values: number[]; decimals: number } {
   const lo = Math.min(a, b);
   const hi = Math.max(a, b);
@@ -211,24 +225,75 @@ export function topSpan(top: TopAxis, min: number, max: number): [number, number
 
 /** The top axis' ticks for a bottom axis showing [min, max]: only the part of
  *  the axis inside the transform's domain gets ticks, none when no part does. */
+function stepParts(step: number): [number, number] {
+  const exp = Math.floor(Math.log10(step) + 1e-9);
+  const idx = MANTISSAS.indexOf(Number((step / 10 ** exp).toFixed(6)));
+  return [exp, Math.max(0, idx)];
+}
+
+/** `step` then the `finer` next smaller nice steps (1, 2, 2.5, 5 x 10^e). */
+function stepLevels(step: number, finer: number): number[] {
+  let [exp, idx] = stepParts(step);
+  const out = [step];
+  for (let i = 0; i < finer; i++) {
+    idx -= 1;
+    if (idx < 0) [idx, exp] = [MANTISSAS.length - 1, exp - 1];
+    out.push(Number((MANTISSAS[idx] * 10 ** exp).toPrecision(12)));
+  }
+  return out;
+}
+
+function stepDecimals(step: number): number {
+  const [exp, idx] = stepParts(step);
+  return Math.min(12, Math.max(0, -exp + (MANTISSAS[idx] === 2.5 ? 1 : 0)));
+}
+
+/** Ticks from the nice multiples of every step in `levels`. The coarsest step a
+ *  value is a multiple of is its rank; candidates are taken nicest first and
+ *  kept only when their centre sits far enough from every kept one: at least
+ *  TOP_MIN_GAP of the axis, and TOP_GAP_PER_CHAR per character of the wider of
+ *  the two labels (+1), so labels never touch. Mirrors `_select` in Python. */
+function selectTicks(top: TopAxis, valid: [number, number], values: [number, number], levels: number[], span: number): TopTick[] {
+  const [lo, hi] = valid;
+  const decimals = stepDecimals(levels[levels.length - 1]);
+  const ranked = new Map<number, number>();
+  levels.forEach((step, rank) => {
+    for (let k = Math.ceil(Math.min(...values) / step - 1e-9); k <= Math.floor(Math.max(...values) / step + 1e-9); k++) {
+      const v = Number((k * step).toPrecision(12));
+      if (!ranked.has(v)) ranked.set(v, rank);
+    }
+  });
+  const cands: { rank: number; tick: TopTick }[] = [];
+  for (const [value, rank] of ranked) {
+    const pos = top.kind === "expr" ? inverseOn(top, value, valid) : topInverse(top, value);
+    if (Number.isFinite(pos) && pos >= lo - span * 1e-9 && pos <= hi + span * 1e-9) cands.push({ rank, tick: { pos, value, label: topLabel(value, decimals) } });
+  }
+  cands.sort((p, q) => p.rank - q.rank || p.tick.pos - q.tick.pos);
+  const kept: TopTick[] = [];
+  for (const { tick } of cands) {
+    const clear = kept.every((k) => Math.abs(tick.pos - k.pos) >= span * Math.max(TOP_MIN_GAP, TOP_GAP_PER_CHAR * (Math.max(tick.label.length, k.label.length) + 1)) - span * 1e-9);
+    if (clear) kept.push(tick);
+  }
+  return kept.sort((p, q) => p.pos - q.pos);
+}
+
+/** The top axis' ticks for a bottom axis showing [min, max]: only the part of
+ *  the axis inside the transform's domain gets ticks, none when no part does.
+ *  Where the nice-step ticks bunch up (1/T), finer steps are added, nicest
+ *  first, until TOP_MIN_TICKS fit without touching. */
 export function topTicks(top: TopAxis, min: number, max: number): TopTick[] {
   const valid = topSpan(top, min, max);
   if (!valid) return [];
   const span = Math.max(min, max) - Math.min(min, max); // label spacing is measured on the whole axis
-  const [lo, hi] = valid;
-  const { values, decimals } = niceTicks(topForward(top, lo), topForward(top, hi));
-  const out: TopTick[] = [];
-  for (const value of values) {
-    const pos = top.kind === "expr" ? inverseOn(top, value, valid) : topInverse(top, value);
-    if (Number.isFinite(pos) && pos >= lo - span * 1e-9 && pos <= hi + span * 1e-9) out.push({ pos, value, label: topLabel(value, decimals) });
+  const values: [number, number] = [topForward(top, valid[0]), topForward(top, valid[1])];
+  const { step } = niceStep(values[0], values[1]);
+  if (step === null) return [];
+  const levels = stepLevels(step, 2);
+  let kept: TopTick[] = [];
+  for (const n of [1, 2, 3]) {
+    kept = selectTicks(top, valid, values, levels.slice(0, n), span);
+    if (kept.length >= TOP_MIN_TICKS) break;
   }
-  out.sort((p, q) => p.pos - q.pos);
-  // Uneven (reciprocal / d-spacing) ticks bunch up at one end: keep a tick only
-  // when it sits at least TOP_MIN_GAP of the axis from the last kept one, so
-  // labels never overlap. Mirrored in calc/axis_top.py.
-  const gap = Math.max(TOP_MIN_GAP, TOP_GAP_PER_CHAR * (Math.max(0, ...out.map((t) => t.label.length)) + 1));
-  const kept: TopTick[] = [];
-  for (const tick of out) if (kept.length === 0 || tick.pos - kept[kept.length - 1].pos >= span * gap - span * 1e-9) kept.push(tick);
   return kept;
 }
 

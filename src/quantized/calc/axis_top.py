@@ -42,6 +42,11 @@ TOP_MIN_GAP = 0.05
 # ... and at least this much per character of the widest label (+1), so wide
 # labels such as "1200" never touch. Mirrors TOP_GAP_PER_CHAR in axisTop.ts.
 TOP_GAP_PER_CHAR = 0.015
+# A top axis shows at least this many ticks when the spacing rule allows: while
+# fewer survive, the next finer nice step is added (at most two finer levels).
+# Mirrors TOP_MIN_TICKS in axisTop.ts.
+TOP_MIN_TICKS = 5
+_MANTISSAS = (1.0, 2.0, 2.5, 5.0)
 # Where a transform is undefined at one end of the axis (1/x at 0, d-spacing at
 # 0 or 180 deg), the lower end of the drawn part starts this fraction of the
 # upper end above it. Mirrors TOP_SPAN_FLOOR in frontend/src/lib/axisTop.ts.
@@ -192,6 +197,15 @@ def top_span(top: Mapping[str, Any], lo: float, hi: float) -> tuple[float, float
     return (lo if lo > 0 else top_hi * TOP_SPAN_FLOOR, top_hi)
 
 
+def _nice_step(a: float, b: float, target: int) -> float | None:
+    lo, hi = min(a, b), max(a, b)
+    if not (math.isfinite(lo) and math.isfinite(hi) and hi > lo):
+        return None
+    raw = (hi - lo) / target
+    mag = 10.0 ** math.floor(math.log10(raw))
+    return next((m for m in (1, 2, 2.5, 5, 10) if m * mag >= raw * (1 - 1e-9)), 10) * mag
+
+
 def nice_ticks(a: float, b: float, target: int = TOP_TICK_TARGET) -> tuple[list[float], int]:
     """Nice tick values covering [a, b]: steps of 1, 2, 2.5 or 5 times a power
     of ten, about ``target`` of them, and the decimals their labels need."""
@@ -217,32 +231,90 @@ def top_label(value: float, decimals: int) -> str:
     return s[1:] if s.startswith("-") and float(s) == 0 else s
 
 
+def _step_parts(step: float) -> tuple[int, int]:
+    exp = math.floor(math.log10(step) + 1e-9)
+    mant = round(step / 10.0**exp, 6)
+    return exp, _MANTISSAS.index(mant) if mant in _MANTISSAS else 0
+
+
+def _levels(step: float, finer: int) -> list[float]:
+    """``step`` then the ``finer`` next smaller nice steps (1, 2, 2.5, 5 x 10^e)."""
+    exp, idx = _step_parts(step)
+    out = [step]
+    for _ in range(finer):
+        idx -= 1
+        if idx < 0:
+            idx, exp = len(_MANTISSAS) - 1, exp - 1
+        out.append(float(f"{_MANTISSAS[idx] * 10.0**exp:.12g}"))
+    return out
+
+
+def _step_decimals(step: float) -> int:
+    exp, idx = _step_parts(step)
+    return min(12, max(0, -exp + (1 if _MANTISSAS[idx] == 2.5 else 0)))
+
+
+def _select(
+    top: Mapping[str, Any],
+    valid: tuple[float, float],
+    values: tuple[float, float],
+    levels: list[float],
+    span: float,
+) -> list[tuple[float, float, str]]:
+    """Ticks from the nice multiples of every step in ``levels``. The coarsest
+    step a value is a multiple of is its rank; candidates are taken nicest first
+    and kept only when their centre sits far enough from every kept one: at
+    least TOP_MIN_GAP of the axis, and TOP_GAP_PER_CHAR per character of the
+    wider of the two labels (+1), so labels never touch."""
+    lo, hi = valid
+    decimals = _step_decimals(levels[-1])
+    ranked: dict[float, int] = {}
+    for rank, step in enumerate(levels):
+        first = math.ceil(min(values) / step - 1e-9)
+        for k in range(first, math.floor(max(values) / step + 1e-9) + 1):
+            ranked.setdefault(float(f"{k * step:.12g}"), rank)
+    cands: list[tuple[int, float, float, str]] = []
+    for value, rank in ranked.items():
+        pos = (
+            _inverse_on(top, value, valid) if top.get("kind") == "expr" else top_inverse(top, value)
+        )
+        if math.isfinite(pos) and lo - span * 1e-9 <= pos <= hi + span * 1e-9:
+            cands.append((rank, pos, value, top_label(value, decimals)))
+    cands.sort(key=lambda c: (c[0], c[1]))
+    kept: list[tuple[float, float, str]] = []
+    for _rank, pos, value, label in cands:
+        ok = True
+        for kpos, _kv, klabel in kept:
+            gap = max(TOP_MIN_GAP, TOP_GAP_PER_CHAR * (max(len(label), len(klabel)) + 1))
+            if abs(pos - kpos) < span * gap - span * 1e-9:
+                ok = False
+                break
+        if ok:
+            kept.append((pos, value, label))
+    kept.sort()
+    return kept
+
+
 def top_ticks(top: Mapping[str, Any], lo: float, hi: float) -> list[tuple[float, float, str]]:
     """``(position in x, value, label)`` per tick for a bottom axis showing
     [lo, hi]; only the part of the axis inside the transform's domain gets ticks, and
-    none when no part does."""
+    none when no part does. Where the nice-step ticks bunch up (1/T), finer steps
+    are added, nicest first, until TOP_MIN_TICKS fit without touching."""
     lo, hi = min(lo, hi), max(lo, hi)
     valid = top_span(top, lo, hi)
     if valid is None:
         return []
     span = hi - lo  # label spacing is measured on the whole axis
-    values, decimals = nice_ticks(top_forward(top, valid[0]), top_forward(top, valid[1]))
-    lo, hi = valid
-    out = []
-    for value in values:
-        pos = (
-            _inverse_on(top, value, valid) if top.get("kind") == "expr" else top_inverse(top, value)
-        )
-        if math.isfinite(pos) and lo - span * 1e-9 <= pos <= hi + span * 1e-9:
-            out.append((pos, value, top_label(value, decimals)))
-    out.sort()
-    # Keep a tick only when it sits at least TOP_MIN_GAP of the axis from the
-    # last kept one, so labels never overlap (mirrors frontend axisTop.ts).
-    gap = max(TOP_MIN_GAP, TOP_GAP_PER_CHAR * (max((len(t[2]) for t in out), default=0) + 1))
+    values = (top_forward(top, valid[0]), top_forward(top, valid[1]))
+    step = _nice_step(values[0], values[1], TOP_TICK_TARGET)
+    if step is None:
+        return []
+    levels = _levels(step, 2)
     kept: list[tuple[float, float, str]] = []
-    for tick in out:
-        if not kept or tick[0] - kept[-1][0] >= span * gap - span * 1e-9:
-            kept.append(tick)
+    for n in (1, 2, 3):
+        kept = _select(top, valid, values, levels[:n], span)
+        if len(kept) >= TOP_MIN_TICKS:
+            break
     return kept
 
 

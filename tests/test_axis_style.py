@@ -36,6 +36,8 @@ TOP_TABLE = [
         ["2.5", "5.0", "7.5", "10.0", "12.5", "15.0", "17.5", "20.0"],
     ),
     ({"kind": "linear", "factor": -1}, (-5, 5), ["4", "2", "0", "-2", "-4"]),
+    # the common magnetometry 1000/T axis: bunched nice ticks get finer ones, nicest first
+    ({"kind": "reciprocal", "factor": 1000}, (10, 300), ["100", "30", "20", "15", "10", "5"]),
     # N8: arbitrary expressions of the bottom axis (same rows in axisTop.test.ts).
     ({"kind": "expr", "expr": "1240/x"}, (200, 800), ["6", "5", "4", "3", "2"]),
     (
@@ -45,7 +47,7 @@ TOP_TABLE = [
     ),
     ({"kind": "expr", "expr": "sqrt(x)"}, (1, 100), ["2", "4", "6", "8", "10"]),
     # a range through the pole: the end next to it is cut back to a 20x change
-    ({"kind": "expr", "expr": "1240/x"}, (0, 20), ["1200", "400", "200"]),
+    ({"kind": "expr", "expr": "1240/x"}, (0, 20), ["1200", "400", "250", "200", "150", "100"]),
 ]
 
 
@@ -217,6 +219,21 @@ def test_wire_model_carries_the_look_fields_and_renders_vector() -> None:
     assert math.isfinite(top_forward(raw["top"], 30))
 
 
+@pytest.mark.parametrize(
+    "top",
+    [{"kind": "reciprocal", "factor": 1000}, {"kind": "expr", "expr": "1000/x"}],
+)
+def test_one_over_t_keeps_a_useful_tick_count(top: dict[str, object]) -> None:
+    ticks = top_ticks(top, 10, 300)
+    assert len(ticks) >= 5
+    fractions = [round((p - 10) / 290, 3) for p, _v, _l in ticks]
+    at = {label: frac for frac, (_p, _v, label) in zip(fractions, ticks, strict=True)}
+    # the pole end of an expr axis is cut back (20x rule), so its "100" tick is not drawn
+    assert {"20": 0.138, "10": 0.31, "5": 0.655}.items() <= at.items()
+    if top["kind"] == "reciprocal":
+        assert at["100"] == 0.0
+
+
 def test_top_ticks_keep_reciprocal_labels_apart() -> None:
     from quantized.calc.axis_top import TOP_MIN_GAP
 
@@ -235,9 +252,9 @@ def test_top_label_gap_scales_with_label_width(
     from quantized.calc.axis_top import TOP_GAP_PER_CHAR, TOP_MIN_GAP
 
     ticks = top_ticks(top, *rng)
-    gap = max(TOP_MIN_GAP, TOP_GAP_PER_CHAR * (max(len(t[2]) for t in ticks) + 1))
     span = rng[1] - rng[0]
     for a, b in zip(ticks, ticks[1:], strict=False):
+        gap = max(TOP_MIN_GAP, TOP_GAP_PER_CHAR * (max(len(a[2]), len(b[2])) + 1))
         assert b[0] - a[0] >= span * gap - 1e-6
 
 
