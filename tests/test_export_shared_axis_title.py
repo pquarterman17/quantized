@@ -1,8 +1,8 @@
 """A Y axis carrying several series exports the title the screen shows.
 
 The canvas (``frontend/src/lib/sharedAxisTitle.ts``) titles such an axis with
-what its series share: "quantity (unit)" when both are common, "(unit)" when
-only the unit is, nothing when the units differ. Both legs read the cases in
+a JOINT title grouped by unit ("R1, R2 (ohm) / V (V)"); "quantity (unit)"
+when every series shares both. Both legs read the cases in
 ``tests/fixtures/wire/shared_axis_title.json``.
 """
 
@@ -57,14 +57,13 @@ def _svg(payload: dict[str, Any]) -> str:
 
 
 def test_two_series_sharing_a_unit_export_it_as_the_y_title() -> None:
-    # A "Plot selected together" overlay: one column per file, one unit.
-    assert "(emu)" in _svg(_payload(["emu", "emu"], ["a.dat", "b.dat"]))
+    # One column per file, one unit.
+    assert "a.dat, b.dat (emu)" in _svg(_payload(["emu", "emu"], ["a.dat", "b.dat"]))
 
 
-def test_series_with_different_units_export_no_y_title() -> None:
-    svg = _svg(_payload(["emu", "K"], ["M", "T"]))
-    assert "emu" not in svg
-    assert "(K)" not in svg
+def test_series_with_different_units_export_a_joint_y_title() -> None:
+    # Origin gap audit 2 #11: a mixed-unit axis used to export no title.
+    assert "M (emu) / T (K)" in _svg(_payload(["emu", "K"], ["M", "T"]))
 
 
 def test_a_user_y_title_still_wins() -> None:

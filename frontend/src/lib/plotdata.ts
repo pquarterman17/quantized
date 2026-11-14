@@ -38,6 +38,9 @@ export interface PlotSeriesSpec {
   /** Legend text when it is not the label ("" = no legend row); a fit band's
    *  one entry (lib/fitBandOverlay.ts). */
   legend?: string;
+  /** An analysis overlay (fit, baseline, peaks, dy/dx), not a data curve:
+   *  it never names the Y axis (lib/sharedAxisTitle.ts's `drawnOnAxis`). */
+  overlay?: boolean;
 }
 
 export interface PlotPayload {
@@ -433,7 +436,7 @@ export function withFitOverlay(
   return {
     ...payload,
     data: [...payload.data, y, ...edges] as uPlot.AlignedData,
-    series: [...payload.series, { label: "fit", unit: "" }, ...edges.map((_, k) => {
+    series: [...payload.series, { label: "fit", unit: "", overlay: true }, ...edges.map((_, k) => {
       const e = overlay.band![k]!;
       return { label: e.label, unit: "", band: k + 1, ...(e.legend !== undefined ? { legend: e.legend } : {}) };
     })],
@@ -455,7 +458,7 @@ export function withDerivOverlay(
   return {
     ...payload,
     data: [...payload.data, y] as uPlot.AlignedData,
-    series: [...payload.series, { label: "dy/dx", unit: "", axis: 1 }],
+    series: [...payload.series, { label: "dy/dx", unit: "", axis: 1, overlay: true }],
   };
 }
 
@@ -476,7 +479,7 @@ export function withBaselineOverlay(
   return {
     ...payload,
     data: [...payload.data, y] as uPlot.AlignedData,
-    series: [...payload.series, { label: "baseline", unit: "" }],
+    series: [...payload.series, { label: "baseline", unit: "", overlay: true }],
   };
 }
 
@@ -492,7 +495,7 @@ export function withPeakOverlay(
   return {
     ...payload,
     data: [...payload.data, y] as uPlot.AlignedData,
-    series: [...payload.series, { label: "peaks", unit: "", kind: "points" }],
+    series: [...payload.series, { label: "peaks", unit: "", kind: "points", overlay: true }],
   };
 }
 
