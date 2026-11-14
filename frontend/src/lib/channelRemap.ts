@@ -72,7 +72,7 @@ import type { OriginDesignation } from "./columnmeta";
 import type { ErrorBinding } from "./errorRoles";
 import type { FigureBindings, FigureViewState } from "./figureDocument";
 import type { FigureEncoding } from "./figureEncoding";
-import type { ChannelRole, ColumnFilter, FitSpec, ModelingType, SeriesStyle } from "./types";
+import type { ChannelRole, ColumnFilter, Dataset, FitSpec, LinkedCurve, ModelingType, SeriesStyle } from "./types";
 
 /** One column-count change: a plain number is the REMOVED column (every
  *  helper below was written for that case); `{ inserted }` is a column added
@@ -193,6 +193,8 @@ export interface DatasetChannelState {
   filter?: ColumnFilter[];
   errorRoles?: ErrorBinding[];
   fitSpec?: FitSpec;
+  /** A live graph's curves: curve i IS the graph's column i (lib/linkedCurves.ts). */
+  linkedCurves?: LinkedCurve[];
 }
 
 export function remapDatasetChannels(
@@ -210,6 +212,11 @@ export function remapDatasetChannels(
     filter: filter && filter.length ? filter : undefined,
     errorRoles: remapErrorRoles(d.errorRoles, removedCol),
     fitSpec: remapFitSpec(d.fitSpec, removedCol),
+    // A removed graph column drops its curve; an inserted one is no curve.
+    linkedCurves:
+      typeof removedCol === "number" && d.linkedCurves
+        ? d.linkedCurves.filter((_, i) => i !== removedCol)
+        : d.linkedCurves,
   };
 }
 
@@ -349,4 +356,26 @@ export function remapWindowViews<W extends { datasetId: string | null; view: Vie
       ? { ...w, view: { ...w.view, ...remapViewChannels(w.view, removedCol) } }
       : w,
   );
+}
+
+/** A source column removed (or inserted) in dataset `id`: every graph curve
+ *  reading that source follows its column. A curve whose X or Y WAS the
+ *  removed column is marked missing (-1) and drawn empty -- never shifted onto
+ *  the neighbouring column (fail closed). `null` when no graph reads `id`. */
+export function remapLinkedCurveSources(
+  datasets: readonly Dataset[],
+  id: string,
+  shift: ColumnShift,
+): Dataset[] | null {
+  const move = (c: number): number => (c < 0 ? c : (remapChannel(c, shift) ?? -1));
+  let changed = false;
+  const next = datasets.map((d) => {
+    if (!d.linkedCurves?.some((c) => c.datasetId === id)) return d;
+    changed = true;
+    const linkedCurves = d.linkedCurves.map((c) =>
+      c.datasetId !== id ? c : { ...c, yKey: move(c.yKey), xKey: c.xKey === null ? null : move(c.xKey) },
+    );
+    return { ...d, linkedCurves };
+  });
+  return changed ? next : null;
 }

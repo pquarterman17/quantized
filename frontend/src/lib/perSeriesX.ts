@@ -30,7 +30,7 @@ import type { Dataset, DataStruct } from "./types";
  *  (`shared`; a plain "plot against this column"). Only curves (a Y, or an
  *  undesignated channel -- ownXSeries' rule) get a block; every other channel
  *  is `undefined` (copied into every block). */
-function curveX(ds: Pick<Dataset, "data" | "columnDesignations">, shared: number | null): (number | null | undefined)[] {
+export function curveX(ds: Pick<Dataset, "data" | "columnDesignations">, shared: number | null): (number | null | undefined)[] {
   const designations = effectiveDesignations(ds.data, ds.columnDesignations).slice(0, ds.data.labels.length);
   let lastX: number | null = shared !== null && designations[shared] === "X" ? null : shared;
   return designations.map((d, c) => {

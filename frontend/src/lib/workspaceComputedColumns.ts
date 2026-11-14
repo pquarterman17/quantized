@@ -10,6 +10,7 @@
 import { recomputeWithErrors } from "./formula";
 import { asAlreadyComputed } from "./formulaInputs";
 import type { FitRefSnapshot } from "./formulaTypes";
+import { sanitizeLinkedCurves } from "./linkedCurves";
 import { sanitizeSignalAnalysisRecipe } from "./signalRecipe";
 import type { ComputedColumn, Dataset, FitSpec } from "./types";
 
@@ -17,9 +18,11 @@ import type { ComputedColumn, Dataset, FitSpec } from "./types";
  *  spread into `serializeWorkspace`'s per-dataset object alongside every
  *  other optional field there. */
 export function serializeComputedColumnsExtras(
-  d: Pick<Dataset, "formulaErrors" | "derivedFrom" | "analysisRecipe">,
-): Partial<Pick<Dataset, "formulaErrors" | "derivedFrom" | "analysisRecipe">> {
+  d: Pick<Dataset, "formulaErrors" | "derivedFrom" | "analysisRecipe" | "linkedCurves">,
+): Partial<Pick<Dataset, "formulaErrors" | "derivedFrom" | "analysisRecipe" | "linkedCurves">> {
   return {
+    // A live multi-dataset graph's curve references (lib/linkedCurves.ts).
+    ...(d.linkedCurves?.length ? { linkedCurves: d.linkedCurves } : {}),
     ...(d.formulaErrors && Object.keys(d.formulaErrors).length ? { formulaErrors: d.formulaErrors } : {}),
     ...(d.derivedFrom ? { derivedFrom: d.derivedFrom } : {}),
     ...(d.derivedFrom && d.analysisRecipe ? { analysisRecipe: d.analysisRecipe } : {}),
@@ -49,6 +52,9 @@ export function applyComputedColumnsExtras(ds: Dataset, dd: Record<string, unkno
     const recipe = sanitizeSignalAnalysisRecipe(dd.analysisRecipe);
     if (recipe) ds.analysisRecipe = recipe;
   }
+  // A live graph's curves; the store re-links it once loaded (store/linkedCurvesSync.ts).
+  const curves = sanitizeLinkedCurves(dd.linkedCurves);
+  if (curves) ds.linkedCurves = curves;
 }
 
 const strings = (v: unknown): string[] | undefined =>

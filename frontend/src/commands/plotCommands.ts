@@ -9,7 +9,7 @@
 
 import type { StoreGet } from "../lib/exportActive";
 import { plotInNewWindow } from "../lib/plotInNewWindow";
-import { plotSelectedTogether } from "../lib/plotSelectedTogether";
+import { addCurveFrom, plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { cycleAxisScale, cycleTickMode } from "../lib/plotview";
 import type { Action } from "../store/commands";
 import { openFigureDialog } from "../store/figureDialogs";
@@ -307,18 +307,27 @@ export function buildPlotCommands(s: StoreGet): Action[] {
     {
       // PLOT_WORKFLOW_PLAN #3: distinct from "Overlay in one plot" above —
       // that opens a composite panel window keeping each dataset separate;
-      // this MERGES the selection into one real Library dataset (one curve
-      // per dataset, segment-concatenated — see lib/originOverlay's
-      // buildSelectionOverlay) so it plots, exports, and fits like any
-      // ordinary single dataset.
+      // this lands ONE live graph (a Library dataset whose curves reference
+      // their sources and follow their edits — lib/linkedCurves.ts) so it
+      // plots, exports, and fits like any ordinary single dataset.
       id: "plot-selected-together",
       group: "Plot",
       section: "Layout",
       label: "Plot selected together",
       description:
-        "Merge two or more selected Library datasets into one overlay plot, one curve per dataset.",
+        "Plot two or more selected Library datasets in one live graph, one curve per dataset; it follows edits to its sources.",
       keywords: "combine merge overlay library selection",
       run: () => void plotSelectedTogether(s().selectedIds),
+    },
+    {
+      // Origin gap audit 2 #1: Origin's Layer Contents "add a curve".
+      id: "add-curve-from",
+      group: "Plot",
+      section: "Layout",
+      label: "Add curve from…",
+      description: "Add a curve from another dataset to the current graph; the graph stays linked to its sources.",
+      keywords: "layer contents add plot curve overlay dataset book",
+      run: () => void addCurveFrom(),
     },
     {
       // P3.6: the frontend producer of spec-carrying report figure blocks.
