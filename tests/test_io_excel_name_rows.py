@@ -31,8 +31,7 @@ def _workbook(path: Path, rows: list[list[object]]) -> Path:
 
 def _data(n: int = 6) -> list[list[object]]:
     return [
-        [10 + 5 * i, 100.0 - 1.5 * i, f"S{i % 3}", dt.datetime(2026, 3, 1, 12, i)]
-        for i in range(n)
+        [10 + 5 * i, 100.0 - 1.5 * i, f"S{i % 3}", dt.datetime(2026, 3, 1, 12, i)] for i in range(n)
     ]
 
 

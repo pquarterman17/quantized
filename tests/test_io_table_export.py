@@ -34,7 +34,9 @@ def _sheet(name: str = "run 1") -> ExportSheet:
         [
             ExportColumn("Temperature", "K", "number", [10.0 + 5 * i for i in range(N)]),
             ExportColumn("Sample", "", "text", [f"S{i % 3}" for i in range(N)]),
-            ExportColumn("Resistance", "Ohm", "number", [100.5 - i if i != 2 else None for i in range(N)]),
+            ExportColumn(
+                "Resistance", "Ohm", "number", [100.5 - i if i != 2 else None for i in range(N)]
+            ),
             ExportColumn("Logged", "", "datetime", [T0 + 60.0 * i for i in range(N)]),
         ],
     )
@@ -100,9 +102,7 @@ def test_a_date_x_column_reimports_as_dates(tmp_path: Path) -> None:
 
 
 def test_text_never_becomes_a_live_formula() -> None:
-    sheet = ExportSheet(
-        "s", [ExportColumn("=HYPERLINK(1)", "", "text", ["=cmd()", "-1.5", "+x"])]
-    )
+    sheet = ExportSheet("s", [ExportColumn("=HYPERLINK(1)", "", "text", ["=cmd()", "-1.5", "+x"])])
     lines = format_delimited(sheet).splitlines()
     assert lines == ["'=HYPERLINK(1)", "'=cmd()", "-1.5", "'+x"]
     wb = openpyxl.load_workbook(io.BytesIO(format_xlsx([sheet])))
@@ -113,7 +113,9 @@ def test_text_never_becomes_a_live_formula() -> None:
 def test_malformed_sheets_are_refused() -> None:
     with pytest.raises(ValueError, match="different row counts"):
         format_delimited(
-            ExportSheet("s", [ExportColumn("a", "", "number", [1.0]), ExportColumn("b", "", "number", [])])
+            ExportSheet(
+                "s", [ExportColumn("a", "", "number", [1.0]), ExportColumn("b", "", "number", [])]
+            )
         )
 
 

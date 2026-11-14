@@ -92,9 +92,7 @@ def test_no_roles_given_keeps_a_text_column_as_text() -> None:
     does, so a text column is kept as text, not an all-NaN numeric channel."""
     text = "T;Sample;R\n1;a;10\n2;b;20\n3;c;30\n"
     s = guess_settings(text)
-    ds = parse_import(
-        text, ImportSettings(delimiter="semicolon", header_line=0, data_start_line=1)
-    )
+    ds = parse_import(text, ImportSettings(delimiter="semicolon", header_line=0, data_start_line=1))
     assert s.roles == ["x", "label", "y"]
     assert ds.labels == ("R",)
     assert ds.metadata["text_columns"] == {"Sample": ["a", "b", "c"]}

@@ -43,9 +43,12 @@ def _body(metadata: dict[str, Any], **extra: Any) -> dict[str, Any]:
         "dataset": {
             "time": [_T0 + 3600.0 * i for i in range(6)],
             "values": [[20.0 + i] for i in range(6)],
-            "labels": ["Temp"], "units": ["C"], "metadata": metadata,
+            "labels": ["Temp"],
+            "units": ["C"],
+            "metadata": metadata,
         },
-        "y_keys": [0], "fmt": "svg",
+        "y_keys": [0],
+        "fmt": "svg",
         **extra,
     }
 
@@ -72,7 +75,9 @@ def test_a_numeric_x_and_an_explicit_format_are_unchanged(
 def test_the_rule() -> None:
     assert date_aware_x_fmt(None, True) == {"digits": 2, "mode": "datetime"}
     assert date_aware_x_fmt({"mode": "auto", "digits": 3, "minor": 1}, True) == {
-        "mode": "datetime", "digits": 3, "minor": 1,
+        "mode": "datetime",
+        "digits": 3,
+        "minor": 1,
     }
     assert date_aware_x_fmt({"mode": "sci", "digits": 2}, True) == {"mode": "sci", "digits": 2}
     assert date_aware_x_fmt(None, False) is None

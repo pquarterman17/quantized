@@ -161,7 +161,8 @@ def _columns(datasets: list[tuple[DataStruct, str]]) -> list[_Col]:
         if isinstance(text, dict):
             for key, cells in text.items():
                 if isinstance(cells, list):
-                    cols.append(_Col(str(key), "", file, "Label", _EMPTY, text=[str(c) for c in cells]))
+                    cells_text = [str(c) for c in cells]
+                    cols.append(_Col(str(key), "", file, "Label", _EMPTY, text=cells_text))
     return cols
 
 
