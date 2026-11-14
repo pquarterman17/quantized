@@ -178,7 +178,7 @@ test("Quick Figure survives create -> edit -> save/close -> reopen -> project sa
   const frame = windowFrame(page, figureName);
   await expect(frame).toHaveClass(/focused/);
   await expect(page.locator(".qzk-stage .u-over")).toBeVisible();
-  await expect(page.locator(".qzk-legend .it")).toHaveCount(2);
+  await expect(page.locator(".qzk-stage .qzk-legend .it")).toHaveCount(2);
 
   // ── 3. Modify a normal figure property through the real UI ─────────────
   // The Y axis label, via the Inspector's "Titles & labels" card — writes
@@ -272,7 +272,7 @@ test("Quick Figure survives create -> edit -> save/close -> reopen -> project sa
   const finalDoc = finalWindow.document!;
   expect(finalDoc).toEqual(reloadedDocBeforeReopen); // byte-exact: reopening never rewrites the document
   await expect(page.locator(".qzk-stage .u-over")).toBeVisible();
-  await expect(page.locator(".qzk-legend .it")).toHaveCount(2);
+  await expect(page.locator(".qzk-stage .qzk-legend .it")).toHaveCount(2);
 
   // ── 8. Undo/Redo coherence spot-check ───────────────────────────────────
   // One more real-UI edit on the reopened figure, its own undo entry

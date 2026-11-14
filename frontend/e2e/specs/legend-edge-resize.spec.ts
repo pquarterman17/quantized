@@ -16,13 +16,13 @@ test("a legend resizes from its corner, stays inside the plot, and can fit conte
     });
   });
 
-  const legend = page.locator(".qzk-legend");
+  const legend = page.locator(".qzk-stage .qzk-legend");
   await expect(legend).toBeVisible();
   const before = await legend.boundingBox();
   const stage = await page.locator(".qzk-stage").boundingBox();
   if (!before || !stage) throw new Error("legend/stage geometry unavailable");
 
-  const handle = page.locator(".qzk-legend-resize-se");
+  const handle = page.locator(".qzk-stage .qzk-legend-resize-se");
   const grip = await handle.boundingBox();
   if (!grip) throw new Error("legend resize handle geometry unavailable");
   await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);

@@ -35,6 +35,10 @@ import { useApp } from "../../store/useApp";
 // below) since both callers build the bag as an object LITERAL, and
 // PlotStageActions is their prop's structural type. copyFigure joined for
 // MAIN #35 (publication copy); snapshot stays as the screen grab.
+/** The cursors the on-plot object plugins set while hovering an annotation /
+ *  shape (move, resize handle) or a reference line (resize). */
+const OBJECT_CURSORS: ReadonlySet<string> = new Set(["move", "nwse-resize", "ew-resize", "ns-resize"]);
+
 export interface PlotStageActions {
   resetView: () => void;
   smartScale: () => void;
@@ -197,6 +201,11 @@ export function usePlotStageActions(
     const onDbl = (e: MouseEvent) => {
       const u = plotRef.current;
       if (!u?.over?.contains(e.target as Node)) return;
+      // An annotation, text box, shape or reference line under the pointer owns
+      // the gesture (its plugin shows a move / resize cursor on hover and edits
+      // on its own double-mousedown): leave this double-click to it, even when
+      // the object sits on a curve. Only a curve alone opens Plot Details.
+      if (OBJECT_CURSORS.has(u.over.style.cursor)) return;
       e.stopPropagation();
       const { clientX, clientY } = e;
       void runLazy("Loading plot details…", () => import("./curveDoubleClick")).then(
