@@ -4,7 +4,8 @@
 // Builder's first mapping, the import notice); the eager default-plot rule in
 // lib/errorbars.ts's `bookDefaultHiddenChannels` applies the same test inline.
 
-import type { OriginDesignation } from "./columnmeta";
+import { effectiveDesignations, type OriginDesignation } from "./columnmeta";
+import type { Dataset } from "./types";
 
 /** Origin's nearest-preceding-X rule (`opj_curves.py`): each Y channel that
  *  has a designated X VALUE column before it, mapped to that column. A Y
@@ -28,4 +29,28 @@ export function ownXSeries(designations: readonly (OriginDesignation | undefined
  *  "belongs to another X" notice -- it would only add an empty legend row. */
 export function hasFiniteValue(values: readonly (readonly number[])[], c: number): boolean {
   return values.some((row) => Number.isFinite(row?.[c]));
+}
+
+/** The X source channel `c` plots against under the same rule: its
+ *  nearest-preceding X VALUE column, else the plot's base X. The base is the
+ *  plot's `xKey` -- unless that is itself a designated X column, which owns
+ *  only the channels after it, so a channel before every X keeps the book's
+ *  first X (`.time`, null). Gap audit 2 #2: setting a later X as the plot X
+ *  must never re-point an earlier Y onto it. */
+export function seriesXKeyFor(
+  designations: readonly (OriginDesignation | undefined)[],
+  xKey: number | null,
+  c: number,
+): number | null {
+  let lastX = -1;
+  for (let i = 0; i < c && i < designations.length; i++) if (designations[i] === "X") lastX = i;
+  if (lastX >= 0) return lastX;
+  return xKey !== null && designations[xKey] === "X" ? null : xKey;
+}
+
+/** `seriesXKeyFor` over a dataset's effective designations: the X column (null
+ *  = `.time`) curve `c` belongs to when the plot's X is `xKey`. Analysis reads
+ *  a curve's X through this, so it fits/integrates the pairs the plot draws. */
+export function curveXKey(ds: Pick<Dataset, "data" | "columnDesignations">, xKey: number | null, c: number): number | null {
+  return seriesXKeyFor(effectiveDesignations(ds.data, ds.columnDesignations), xKey, c);
 }

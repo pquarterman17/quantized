@@ -103,7 +103,7 @@ export interface GridViewportProps {
   channelTypes?: Record<number, ModelingType>;
   onChangeChannelType?: (col: number, t: ModelingType | null) => void;
   /** Every cell is read-only: the dataset is re-derived by the recalc (lib/rederived.ts). */
-  readOnly?: boolean;
+  readOnly?: boolean | string;
   /** Scroll a DISPLAY row (index into `order`) — and a column, if given — into
    *  view, once per `key` (see ./useRowReveal.ts). */
   reveal?: GridReveal | null;

@@ -31,6 +31,7 @@ describe("selectedFitData", () => {
       x: [100, 300, 400],
       y: [10, 30, 40],
       yKey: 1,
+      xKey: 0,
     });
   });
 
@@ -43,7 +44,7 @@ describe("selectedFitData", () => {
     expect(selectedFitData(dataset, 0, [1], null, {
       rowIds: [0, 2, 3], range: { lo: 250, hi: 400, source: "manual" },
     })).toEqual({
-      x: [300, 400], y: [30, 40], yKey: 1,
+      x: [300, 400], y: [30, 40], yKey: 1, xKey: 0,
       analysisRows: [1, 2], sourceRows: [2, 3], sourceRowCount: 4,
     });
   });
@@ -99,7 +100,7 @@ describe("fitDataForSpec (recompute reproduces the recorded channels)", () => {
     // spec fit field(0) vs moment(1); row 1 excluded. Ignores the live plot
     // selection passed alongside (aux(2) vs time) — provenance wins.
     const sel = fitDataForSpec(dataset, { model: "Linear", xKey: 0, yKey: 1 }, null, [2], null);
-    expect(sel).toEqual({ x: [100, 300, 400], y: [10, 30, 40], yKey: 1 });
+    expect(sel).toEqual({ x: [100, 300, 400], y: [10, 30, 40], yKey: 1, xKey: 0 });
   });
 
   it("reproduces a saved explicit row/range subset with original-row mapping", () => {
@@ -107,7 +108,7 @@ describe("fitDataForSpec (recompute reproduces the recorded channels)", () => {
       model: "Linear", xKey: 0, yKey: 1, rowIds: [0, 2, 3], sourceRowCount: 4,
       rowXFingerprint: fitRowXFingerprint([300, 400]), range: [250, 400], nPoints: 2,
     }, null, null, null)).toEqual({
-      x: [300, 400], y: [30, 40], yKey: 1,
+      x: [300, 400], y: [30, 40], yKey: 1, xKey: 0,
       analysisRows: [1, 2], sourceRows: [2, 3], sourceRowCount: 4,
     });
   });
@@ -206,7 +207,7 @@ describe("fitDataForSpec (recompute reproduces the recorded channels)", () => {
   it("falls back to the live plotted selection for a legacy {model} spec", () => {
     // No xKey/yKey recorded -> use the live selection (xKey 0, yKeys [2]).
     const sel = fitDataForSpec(dataset, { model: "Linear" }, 0, [2], null);
-    expect(sel).toEqual({ x: [100, 300, 400], y: [5, 7, 8], yKey: 2 });
+    expect(sel).toEqual({ x: [100, 300, 400], y: [5, 7, 8], yKey: 2, xKey: 0 });
   });
 
   it("falls back to live when a stored channel no longer exists (columns changed)", () => {
@@ -221,6 +222,7 @@ describe("fitDataForSpec (recompute reproduces the recorded channels)", () => {
       x: [100, 300, 400],
       y: [10, 30, 40],
       yKey: 1,
+      xKey: 0,
       dy: [5, 7, 8],
     });
   });
@@ -500,5 +502,28 @@ describe("starts/bounds in the recipe (MAIN #30)", () => {
     const malformed = fitSpecFrom("g", null, sel, { errors: [Number.NaN] }, undefined, undefined, undefined, at);
     expect(malformed.uncertainty).toBe("none");
     expect(malformed.errors).toBeUndefined();
+  });
+});
+
+// Gap audit 2 #2 / review finding 7: Curve Fit (and every consumer of
+// selectedFitData -- batch fit, peaks, integrate) fits a Y against its OWN X.
+describe("selectedFitData — each Y on its own X", () => {
+  // .time = T1 (non-monotonic), values = [R1, T2, R2], T2 designated X.
+  const sheet: Dataset = {
+    id: "s",
+    name: "sheet",
+    data: { time: [300, 100, 200], values: [[3, 30, 33], [1, 10, 11], [2, 20, 22]], labels: ["R1", "T2", "R2"], units: ["", "", ""], metadata: {} },
+    columnDesignations: { 1: "X" },
+  };
+
+  it("R1 fits against T1 even with T2 as the plot X; R2 against T2", () => {
+    expect(selectedFitData(sheet, 1, [0], null)).toMatchObject({ x: [300, 100, 200], y: [3, 1, 2], yKey: 0, xKey: null });
+    expect(selectedFitData(sheet, null, [2], null)).toMatchObject({ x: [30, 10, 20], y: [33, 11, 22], yKey: 2, xKey: 1 });
+  });
+
+  it("the recipe records the X the fit actually read", () => {
+    const sel = selectedFitData(sheet, null, [2], null)!;
+    const result = { params: [1, 0], errors: [0, 0], r2: 1, chi2: 0, exitFlag: 1 } as unknown as Parameters<typeof fitSpecFrom>[3];
+    expect(fitSpecFrom("Linear", null, sel, result).xKey).toBe(1);
   });
 });

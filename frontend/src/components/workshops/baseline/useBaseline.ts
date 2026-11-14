@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { baselineALS, baselineAnchor, baselineEstimate, baselineModPoly, baselineRegion, baselineRollingBall, baselineShirley, baselineXrdLowAngle } from "../../../lib/api/baseline";
 import { fullPlottedX, plottedYKey } from "../../../lib/fitselectionActions";
+import { curveXKey } from "../../../lib/ownXSeries";
 import { magXAxis } from "../../../lib/magDataKind";
 import type { CorrectionParams, Dataset, DataStruct } from "../../../lib/types";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
@@ -95,12 +96,13 @@ interface BaselineInput {
 
 function baselineInput(
   ds: Dataset,
-  xKey: number | null,
+  plotX: number | null,
   yKeys: number[] | null,
   seriesOrder: number[] | null,
 ): BaselineInput | null {
-  const yKey = plottedYKey(ds, xKey, yKeys, seriesOrder);
+  const yKey = plottedYKey(ds, plotX, yKeys, seriesOrder);
   if (yKey == null) return null;
+  const xKey = curveXKey(ds, plotX, yKey); // the curve's own X (gap audit 2 #2)
   const x = fullPlottedX(ds.data, xKey);
   const y = ds.data.values.map((row) => row[yKey]);
   if (x.length === 0 || x.length !== y.length) return null;

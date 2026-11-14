@@ -34,7 +34,7 @@ import {
   type CellRange,
   type GridBounds,
 } from "../../../lib/gridCursor";
-import { isRederived } from "../../../lib/rederived";
+import { isRederived, LINKED_GRAPH_EDIT_NOTICE } from "../../../lib/rederived";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { growAndSetCell, liveShape, pasteGrowing } from "../../../store/worksheetGrow";
@@ -139,7 +139,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     if (!range) return;
     const { pos, col } = range.focus;
     if (readOnly || col >= baseCount) {
-      setStatus(col >= baseCount ? "a computed column is read-only — right-click its header › Set Column Values… to edit the formula" : "this worksheet is rebuilt from its source and can't be edited here");
+      setStatus(col >= baseCount ? "a computed column is read-only — right-click its header › Set Column Values… to edit the formula" : ds.linkedCurves ? LINKED_GRAPH_EDIT_NOTICE : "this worksheet is rebuilt from its source and can't be edited here");
       return;
     }
     cellEdit.startEdit(rowAt(pos), col, valueAt(rowAt(pos), col), typed);

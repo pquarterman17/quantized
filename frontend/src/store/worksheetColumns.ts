@@ -21,7 +21,7 @@ import { patchColumnProps } from "../lib/columnProps";
 import { channelLetter } from "../lib/formula";
 import { baseColumns } from "../lib/formulaInputs";
 import { remapSurvivingFormulas } from "../lib/formulaRename";
-import { isRederived, REDERIVED_EDIT_NOTICE } from "../lib/rederived";
+import { isRederived, rederivedNotice } from "../lib/rederived";
 import type { ColumnProps, NumberFormat } from "../lib/columnProps";
 import type { Dataset } from "../lib/types";
 import {
@@ -47,7 +47,7 @@ function editable(id: string): Dataset | null {
   const ds = get().datasets.find((d) => d.id === id);
   if (!ds) return null;
   if (isRederived(ds)) {
-    get().setStatus(REDERIVED_EDIT_NOTICE);
+    get().setStatus(rederivedNotice(ds));
     return null;
   }
   return ds;

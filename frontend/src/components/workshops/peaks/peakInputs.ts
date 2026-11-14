@@ -54,15 +54,16 @@ export function peakInputs(
   seriesOrder: number[] | null,
   selection?: Pick<AnalysisSelectionItem, "rowIds" | "range">,
 ): PeakInputs {
-  const fullX = fullPlottedX(ds.data, xKey);
   const sel = selectedFitData(ds, xKey, yKeys, seriesOrder, selection);
+  // The detected curve's OWN X (gap audit 2 #2): what selectedFitData read.
+  const fullX = fullPlottedX(ds.data, sel?.xKey !== undefined ? sel.xKey : xKey);
   if (sel) {
     const pairs = dropGapRows(sel.x, sel.y);
     return {
       x: pairs.x,
       y: pairs.y,
       fullX,
-      xKeyUsed: xKey,
+      xKeyUsed: sel.xKey !== undefined ? sel.xKey : xKey,
       yKeyUsed: sel.yKey,
       gapCount: pairs.n - pairs.keep.length,
       sourceCount: pairs.n,

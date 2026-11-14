@@ -24,6 +24,7 @@ import { useMemo, useState } from "react";
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { subtractHysteresisBackground, subtractMagBackground } from "../../../lib/api/magnetometry";
 import { fullPlottedX, plottedYKey } from "../../../lib/fitselectionActions";
+import { curveXKey } from "../../../lib/ownXSeries";
 import {
   detectMagXKind,
   magXAxis,
@@ -46,7 +47,7 @@ export function magXY(
 ): { x: number[]; y: number[]; yKey: number } {
   const yKey = plottedYKey(ds, xKey, yKeys, seriesOrder) ?? 0;
   return {
-    x: fullPlottedX(ds.data, xKey),
+    x: fullPlottedX(ds.data, curveXKey(ds, xKey, yKey)), // the curve's own X (gap audit 2 #2)
     y: ds.data.values.map((row) => row[yKey]),
     yKey,
   };

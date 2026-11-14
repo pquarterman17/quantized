@@ -59,6 +59,7 @@
 // this fresh data actually do", never a second, divergent one for the batch
 // case.
 
+import { relabelCurveColumns } from "../lib/linkedCurvesSanitize";
 import { applyCorrections as applyCorrectionsApi, importFile, uploadFile, type CorrectionsRequest } from "../lib/api";
 import { computeDependencyImpact, formatDependencyImpact, hasDependencyImpact } from "../lib/dependencyImpact";
 import { hasDesktopShell, pathState } from "../lib/desktopBridge";
@@ -171,7 +172,12 @@ export function applyReimportMerge(
       get().figureDocs.some((f) => f.live && f.datasetId === ds.id && f.config.groupCol != null));
   set((s) => ({
     datasets: s.datasets.map((d) => {
-      if (d.id !== ds.id) return d;
+      // A live graph's curves on this source follow their columns BY LABEL; an
+      // unmatched one draws empty (gap audit 2 #1, review finding 4).
+      if (d.id !== ds.id)
+        return columnsChanged && d.linkedCurves?.some((c) => c.datasetId === ds.id)
+          ? { ...d, linkedCurves: relabelCurveColumns(d.linkedCurves, ds.id, ds.data.labels, newData.labels) }
+          : d;
       const merged: Dataset = {
         ...d,
         data: newData,

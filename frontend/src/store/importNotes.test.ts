@@ -110,7 +110,7 @@ describe("parser notes after an import", () => {
     expect(useApp.getState().status).toContain(`— a.dat: ${DROPPED}`);
   });
 
-  it("a book with a Y on its own X column says so, with a way to plot it there", async () => {
+  it("a book with a Y on its own X column plots it there: no hold, no notice (gap audit 2 #2)", async () => {
     vi.mocked(uploadFile).mockResolvedValue({
       time: [0, 1],
       values: [[1, 10, 2], [2, 20, 3]],
@@ -119,24 +119,9 @@ describe("parser notes after an import", () => {
       metadata: { origin_column_names: ["B", "C", "D"], column_designations: { A: "X", B: "Y", C: "X", D: "Y" } },
     });
     await useApp.getState().importFiles([new File(["x"], "desig.opj")]);
-    const t = useToasts.getState().toasts.find((x) => x.msg.includes("own") || x.msg.includes("another X"));
-    expect(t?.msg).toBe("desig.opj: 1 Y column belongs to another X column and is hidden from this plot");
-    expect(t?.action?.label).toBe("Plot each Y against its own X");
-    // ...and the default plot really did hold it back.
-    expect(useApp.getState().hiddenChannels).toEqual([1, 2]);
-  });
-
-  it("an empty column on another X is not counted as a hidden Y", async () => {
-    vi.mocked(uploadFile).mockResolvedValue({
-      time: [0, 1],
-      values: [[1, 10, 2, NaN], [2, 20, 3, NaN]],
-      labels: ["Signal", "X2", "Signal2", "Spare"],
-      units: ["", "", "", ""],
-      metadata: { origin_column_names: ["B", "C", "D", "E"], column_designations: { A: "X", B: "Y", C: "X", D: "Y", E: "Y" } },
-    });
-    await useApp.getState().importFiles([new File(["x"], "spare.opj")]);
-    const t = useToasts.getState().toasts.find((x) => x.msg.includes("another X"));
-    expect(t?.msg).toBe("spare.opj: 1 Y column belongs to another X column and is hidden from this plot");
+    expect(useToasts.getState().toasts.find((x) => x.msg.includes("another X"))).toBeUndefined();
+    // Only the X column itself is hidden; Signal2 draws against X2 (lib/perSeriesX.ts).
+    expect(useApp.getState().hiddenChannels).toEqual([1]);
   });
 
   it("an import replaces an Origin book opened as a worksheet on the Worksheet tab", async () => {

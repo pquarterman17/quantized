@@ -359,6 +359,8 @@ export function serializeWorkspace(
       // saved-and-reopened new-version dataset lost its link to the
       // original outright.
       ...(d.versionOf ? { versionOf: d.versionOf } : {}),
+      // Gap audit 2 #1: a live graph's curve list (its data is a cache, re-linked on load).
+      ...(d.linkedCurves ? { linkedCurves: d.linkedCurves } : {}),
     })),
   };
   return stringifyWithCells((hole) => ({

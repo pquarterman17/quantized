@@ -14,6 +14,7 @@
 // captured on every write, not just at creation, so an edit that fixes (or
 // breaks) a formula keeps both in sync.
 
+import { refuseLinkedGraph } from "../lib/rederived";
 import { applyFormulasWithErrors, baseColumns, channelLetter, referencedColumns } from "../lib/formula";
 import { EXTENSION_PENDING, formulaExtension, loadFormulaExtension, onFormulaExtension } from "../lib/formulaExt";
 import { remapSurvivingFormulas } from "../lib/formulaRename";
@@ -160,7 +161,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
   return {
     addFormula: (id, name, rawExpr) => {
       const ds = get().datasets.find((d) => d.id === id);
-      if (!ds) return false;
+      if (!ds || refuseLinkedGraph(ds, get().setStatus)) return false;
       if (resolvePendingEdit(get, ds, "adding a column", () => get().addFormula(id, name, rawExpr))) return true;
       // col("Long Name") is stored as the column's letter (lib/formulaRefs.ts).
       const expr = resolvedNames(rawExpr, ds.data.labels, get);
@@ -203,7 +204,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
     updateFormula: (id, index, patch) => {
       const ds = get().datasets.find((d) => d.id === id);
       const current = ds?.formulas?.[index];
-      if (!ds || !current) return false;
+      if (!ds || !current || refuseLinkedGraph(ds, get().setStatus)) return false;
       if (ds.pending != null) {
         const requestedPatch = { ...patch };
         resolvePendingEdit(get, ds, "editing a column", () => get().updateFormula(id, index, requestedPatch));
@@ -289,7 +290,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
       // concurrent edit on claude/audit-positional-columns touching this
       // function's body.
       const target = get().datasets.find((d) => d.id === id);
-      if (!target?.formulas?.[index]) return;
+      if (!target?.formulas?.[index] || refuseLinkedGraph(target, get().setStatus)) return;
       if (resolvePendingEdit(get, target, "removing a column", () => {
         const current = get().datasets.find((d) => d.id === id);
         if (!current?.formulas?.[index]) return false;

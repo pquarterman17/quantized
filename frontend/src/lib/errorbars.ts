@@ -97,22 +97,13 @@ export function originHiddenChannels(ds: DataStruct, user?: ColumnDesignations):
   return out;
 }
 
-/** The book's DEFAULT plot (an import, a dataset switch): `originHiddenChannels`
- *  plus every Y that belongs to a SECONDARY X (`ownXSeries`, Origin's
- *  nearest-preceding-X rule). The default plot has one X -- the book's first
- *  -- so drawing such a Y there would bind it to the wrong X; it is held back
- *  (fail closed) and Quick Plot draws it against its own X instead
- *  (lib/quickPlotSeriesX.ts). Toggleable from the Channels card; the legend
- *  lists curves only (lib/legendCurves.ts). */
+/** The book's DEFAULT plot (an import, a dataset switch): `originHiddenChannels`.
+ *  A Y that belongs to a SECONDARY X (`ownXSeries`, Origin's nearest-preceding-X
+ *  rule) is no longer held back: the plot draws every Y against its own X
+ *  (Origin-gap audit 2 #2, `lib/perSeriesX.ts`), so it is simply a curve. The
+ *  legend lists curves only (lib/legendCurves.ts). */
 export function bookDefaultHiddenChannels(dataset: Pick<Dataset, "data" | "columnDesignations">): number[] {
-  // One pass, the two rules side by side: `originHiddenChannels`' (a
-  // designation other than Y/Z) and `ownXSeries`' (a Y, or undesignated
-  // channel, after an X value column).
-  let sawX = false;
-  return effectiveDesignations(dataset.data, dataset.columnDesignations).flatMap((g, i) => {
-    sawX ||= g === "X";
-    return (g && g !== "Y" && g !== "Z") || (sawX && g !== "Z") ? [i] : [];
-  });
+  return originHiddenChannels(dataset.data, dataset.columnDesignations);
 }
 
 /** Quick Plot's error defaults: the two seeds above widened with the

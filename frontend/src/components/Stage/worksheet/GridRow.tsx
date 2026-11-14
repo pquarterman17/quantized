@@ -79,7 +79,7 @@ export interface GridRowProps {
    *  reads it. */
   onEditCell?: (row: number, col: number, value: number) => void;
   /** Every cell is read-only: the dataset is re-derived by the recalc (lib/rederived.ts). */
-  readOnly?: boolean;
+  readOnly?: boolean | string; // a string is the refusal notice (lib/rederived.ts)
   /** A column's header name (-1 = x), which names the cell editor with its
    *  row ("A, row 3"); the editors have no visible label of their own. */
   colName?: (col: number) => string;
@@ -252,7 +252,7 @@ export default function GridRow({
                 cellEdit.startEdit(r, col, value);
               }
         }
-        title={computed ? "computed column — edit the formula" : readOnly ? REDERIVED_EDIT_NOTICE : entry ? "type to add a row" : "type or double-click to edit"}
+        title={computed ? "computed column — edit the formula" : readOnly ? (typeof readOnly === "string" ? readOnly : REDERIVED_EDIT_NOTICE) : entry ? "type to add a row" : "type or double-click to edit"}
       >
         {editing && levels ? (
           catCell(col, levels, value ?? Number.NaN)

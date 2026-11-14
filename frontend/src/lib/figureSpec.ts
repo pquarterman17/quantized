@@ -9,7 +9,6 @@
 // multi-panel layout. Both now build this spec and post it to
 // /api/export/figure; only the output verb differs (download vs clipboard).
 // Do NOT add a third rendering implementation — extend this one.
-//
 // F2.5b (FIGURE_AUTHORING_WORKFLOW_PLAN): `buildFigureSpec` derives from the
 // live `PlotView` singleton, which structurally cannot represent grouping,
 // axis breaks, or publication overrides/series styles — PlotView has no
@@ -31,6 +30,7 @@ import type { FigureSpec } from "./api/figures";
 import type { StoreGet } from "./exportActive";
 import { figureDocumentToPlotView, type FigureDocument } from "./figureDocument";
 import { resolveFacetsOrThrow, withFacetRows } from "./figureSpecFacets";
+import { withPerSeriesX } from "./figureSpecPerSeriesX";
 import {
   exportErrorSpans,
   resolveDisplaySeries,
@@ -196,10 +196,8 @@ function buildFigureSpecForView(
     /** Preserve the valid canonical case where an explicitly selected channel
      * is deliberately used for both X and Y. */
     allowExplicitXAsY?: boolean;
-    /** C2/flat-path fix: bound live `Dataset` (absent for frozen), used to
-     * prune BOTH facets (via `resolveFacetsOrThrow`) and a flat export's own
-     * `dataset`/`error_spans` (via `wireDataset` above) to its analysisData
-     * view -- excluded rows and rows the Data Filter drops. */
+    /** C2/flat-path fix: bound live `Dataset` (absent for frozen), pruning facets and a
+     * flat export's `dataset`/`error_spans` to its analysisData view (exclusions + filter). */
     liveDataset?: Dataset | null;
     /** P3.3: opt IN to the auto dash/marker cycle for THIS request. Passed only
      *  by a producer whose LIVE canvas is on screen cycling the same series at
@@ -213,8 +211,10 @@ function buildFigureSpecForView(
     waterfallXSpan?: number | null;
     /** P1.4: the document's Color / Symbol / Label picks (`bindings.encoding`). */
     encoding?: FigureEncoding;
+    columnDesignations?: Dataset["columnDesignations"]; // per-series X without a live dataset
   } = {},
 ): FigureSpec {
+  ({ st, data, extras } = withPerSeriesX(st, data, channelRoles, errors, extras)); // gap audit 2 #2: each Y on its own X
   // #54 Stage 3: honor the window's page — figsize (inches) + margins as OUTER padding (`page_pad`, audit B3). Absent pageSetup keeps the preset size + tight_layout.
   const ps = st.pageSetup;
   const pageSize = ps ? pageSizeInches(ps) : null;
@@ -493,7 +493,7 @@ export function buildFigureSpecFromDocument(
       waterfallSpan: document.data.mode === "frozen" ? null : overrides.waterfallSpan,
       waterfallXSpan: document.data.mode === "frozen" ? null : overrides.waterfallXSpan,
       liveDataset: document.data.mode === "frozen" ? null : (dataset ?? null), // C2
-      encoding: document.bindings.encoding, // P1.4
+      columnDesignations: dataset?.columnDesignations, encoding: document.bindings.encoding, // P1.4
     },
   );
 }

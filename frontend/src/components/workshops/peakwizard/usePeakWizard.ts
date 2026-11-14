@@ -208,6 +208,7 @@ export function usePeakWizard(): PeakWizardState {
       y: pairs.y,
       kept: pairs.keep.map((i) => cut.kept[i]!),
       yKey: sel.yKey,
+      xKey: sel.xKey !== undefined ? sel.xKey : xKey, // the curve's own X (gap audit 2 #2)
       gapCount: pairs.n - pairs.keep.length,
       sourceCount: pairs.n,
     };
@@ -229,7 +230,7 @@ export function usePeakWizard(): PeakWizardState {
   }, [segment, baseline, recipe.baseline.method]);
 
   const cands = usePeakCandidates({
-    active, step, segment, workingY, baseline, find: recipe.find, xKey, onReplaced: dropResults, peakLeft, peakJoined,
+    active, step, segment, workingY, baseline, find: recipe.find, xKey: segment ? segment.xKey : xKey, onReplaced: dropResults, peakLeft, peakJoined,
   });
   const { candidates, runFind } = cands;
 

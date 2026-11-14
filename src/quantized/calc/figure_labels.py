@@ -239,19 +239,30 @@ class _Labelled(Protocol):
     def unit(self) -> str: ...
 
 
+JOINT_TITLE_MAX = 3
+"""Most quantities a joint title names per unit before it says "(unit)" alone."""
+
+
 def shared_axis_title(series: Sequence[_Labelled]) -> str:
     """The auto title of a Y axis that carries several series.
 
-    "quantity (unit)" when every series shares both, "(unit)" when only the
-    unit is common, else blank (the legend names them). Reads the DATA's
+    Joint over what the series carry: one "quantity, quantity (unit)" group
+    per unit in first-seen order -- "Moment (emu)", "R1, R2 (ohm)",
+    "M (emu), T (K)" -- and a group naming more than ``JOINT_TITLE_MAX``
+    quantities says only "(unit)". Blank for no series. Reads the DATA's
     label/unit, never a legend rename. The screen leg is
     ``frontend/src/lib/sharedAxisTitle.ts``; both read the cases in
     ``tests/fixtures/wire/shared_axis_title.json``.
     """
-    if not series:
-        return ""
-    unit = series[0].unit or ""
-    if any((s.unit or "") != unit for s in series):
-        return ""
-    label = series[0].label if all(s.label == series[0].label for s in series) else ""
-    return f"{label} ({display_unit(unit)})".strip() if unit else label
+    groups: dict[str, list[str]] = {}
+    for s in series:
+        labels = groups.setdefault(s.unit or "", [])
+        if s.label not in labels:
+            labels.append(s.label)
+    parts: list[str] = []
+    for unit, labels in groups.items():
+        names = "" if len(labels) > JOINT_TITLE_MAX else ", ".join(lb for lb in labels if lb)
+        part = (f"{names} ({display_unit(unit)})" if unit else names).strip()
+        if part:
+            parts.append(part)
+    return ", ".join(parts)

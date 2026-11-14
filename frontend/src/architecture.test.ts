@@ -1444,6 +1444,11 @@ describe("row-state model guard (#50 universal linking)", () => {
       // above) — still calls rowsChangedGuard on the SAME
       // recompute-invalidates-excludedRows path, just relocated.
       "/store/recalcDatasets.ts",
+      // Gap audit 2 #1 (2026-11-14): the live-graph sync STAMPS a source's
+      // `excludedRows` by identity to know when to rebuild -- it never reads
+      // the rows themselves (the rebuild reads them through
+      // rowstate.droppedRows in lib/linkedCurves.ts).
+      "/store/linkedCurvesSync.ts",
     ];
     expect(
       offenders(/\.excludedRows\b/, allow),
@@ -1993,6 +1998,8 @@ const DATASET_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
     "computed-column list; positional shift on removal is handled by lib/formulaRename's remapSurvivingFormulas, a separate mechanism from lib/channelRemap",
   formulaErrors: "keyed by formula NAME, not column index",
   derivedFrom: "source dataset id + pipeline descriptor, not channel-indexed",
+  linkedCurves:
+    "a live graph's curves index their SOURCES' columns, remapped when a source's columns shift (store/columnRemovalRefs.ts); the graph's own columns ARE its curves",
   analysisRecipe: "label-bound indices address the source dataset and are re-resolved there, not this output's columns",
   importedAt: "timestamp, not channel-indexed",
   excludedRows:

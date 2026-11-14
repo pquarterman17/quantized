@@ -12,7 +12,7 @@
 import { recomputeWithErrors } from "../lib/formula";
 import { asAlreadyComputed } from "../lib/formulaInputs";
 import { carryOrderAcrossRename, renameLevelIn } from "../lib/levelRename";
-import { isRederived, REDERIVED_EDIT_NOTICE } from "../lib/rederived";
+import { isRederived, rederivedNotice } from "../lib/rederived";
 import type { Dataset } from "../lib/types";
 import { resolvePendingEdit } from "./pendingEdit";
 import { toast } from "./toasts";
@@ -29,7 +29,7 @@ export function renameLevel(datasetId: string, channel: number, code: number, na
     return false;
   }
   if (isRederived(ds)) {
-    toast(REDERIVED_EDIT_NOTICE, "danger");
+    toast(rederivedNotice(ds), "danger");
     return false;
   }
   if (ds.pending != null) {

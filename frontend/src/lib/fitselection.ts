@@ -17,6 +17,7 @@ import { dropGapRows } from "./api/finitePairs";
 import { dyForFit } from "./fitweights";
 import { effectiveChannels } from "./plotdata";
 import { analysisData, analysisView } from "./rowstate";
+import { curveXKey } from "./ownXSeries";
 import { fitRowXFingerprint } from "./fitRowFingerprint";
 import { fitRowIdentities, fitRowIdentityFingerprint } from "./fitRowIdentity";
 import type { AnalysisSelectionItem } from "./analysisSelection";
@@ -39,6 +40,9 @@ export interface FitSelection {
   analysisRows?: number[];
   /** Original worksheet row ids corresponding to x/y. */
   sourceRows?: number[];
+  /** The X column the pairs came from: the curve's OWN X (gap audit 2 #2,
+   *  `ownXSeries.curveXKey`), which may differ from the plot's `xKey`. */
+  xKey?: number | null;
   /** Raw worksheet length that gives positional sourceRows their meaning. */
   sourceRowCount?: number;
   /** 1-sigma errors for the recorded weighting (recompute path only); null/
@@ -66,9 +70,11 @@ export function selectedFitData(
   );
   const yKey = channels[0];
   if (yKey === undefined) return null;
-  const allX = xKey == null ? data.time : data.values.map((row) => row[xKey]);
+  // Each Y against its OWN X (its nearest-preceding X column), as the plot draws it.
+  const ownX = curveXKey(dataset, xKey, yKey);
+  const allX = ownX == null ? data.time : data.values.map((row) => row[ownX]);
   const allY = data.values.map((row) => row[yKey]);
-  if (!subset || (subset.rowIds === null && subset.range === null)) return { x: allX, y: allY, yKey };
+  if (!subset || (subset.rowIds === null && subset.range === null)) return { x: allX, y: allY, yKey, xKey: ownX };
   const sourceRows = view.rowIds ?? data.time.map((_value, index) => index);
   const selectedRows = subset.rowIds === null ? null : new Set(subset.rowIds);
   const analysisRows: number[] = [];
@@ -82,6 +88,7 @@ export function selectedFitData(
     x: analysisRows.map((index) => allX[index]),
     y: analysisRows.map((index) => allY[index]),
     yKey,
+    xKey: ownX,
     analysisRows,
     sourceRows: analysisRows.map((index) => sourceRows[index]),
     sourceRowCount: dataset.data.time.length,

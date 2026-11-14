@@ -33,6 +33,7 @@
 // cross-dataset case — see its module doc — and never reaches this slice.)
 
 import { applyCorrections as applyCorrectionsApi } from "../lib/api";
+import { refuseLinkedGraph } from "../lib/rederived";
 import { onDemand } from "../lib/onDemand";
 import { recomputeFromBaseOrEmpty } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
@@ -141,6 +142,7 @@ export function rowsChangedGuard(
  *  honest path to an independently correctable dataset. */
 function refuseDerived(get: SliceGet, id: string): boolean {
   const ds = get().datasets.find((d) => d.id === id);
+  if (refuseLinkedGraph(ds, get().setStatus)) return true; // a graph's rebuild would drop them
   if (!ds?.derivedFrom) return false;
   get().setStatus(
     `"${ds.name}" is a derived worksheet — its corrections re-run from its source. ` +

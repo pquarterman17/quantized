@@ -33,6 +33,7 @@ import {
 } from "../../lib/composition";
 import { secondaryAxisFromPanel } from "../../lib/axisspec";
 import { buildErrorColumns, buildErrorSpans } from "../../lib/errorbars";
+import { usePerSeriesXView } from "./usePerSeriesXView";
 import { sharedXDomain, sharedYDomain } from "../../lib/facetDomains";
 import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
 import {
@@ -172,7 +173,8 @@ export interface MultiPanelStageParams {
   ensureBookData: (id: string) => void;
 }
 
-export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelStageState {
+export function useMultiPanelStage(stageParams: MultiPanelStageParams): MultiPanelStageState {
+  const { params } = usePerSeriesXView(stageParams); // gap audit 2 #2: each panel's Y on its own X
   const {
     active,
     datasets,
@@ -209,8 +211,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     bg,
     ensureBookData,
   } = params;
-  // The union's three faces. Each accessor returns the stored array BY
-  // REFERENCE (or null), so these stay valid `useMemo`/effect dependencies.
+  // The union's three faces, each BY REFERENCE (valid memo/effect dependencies).
   const rawSpatialPanels = spatialPanelsOf(composition);
   const facetPanels = facetPanelsOf(composition);
   const breakPanels = breakPanelsOf(composition);
@@ -227,8 +228,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
   const [readout, setReadout] = useState<Readout | null>(null);
   const [spatialLegends, setSpatialLegends] = useState<SpatialLegendPortal[]>([]);
 
-  // Spatial panels whose dataset still exists (a removed dataset degrades to
-  // dropping that one cell, never a crash).
+  // Spatial panels whose dataset still exists (a removed one drops its cell, never a crash).
   const panels = useMemo(
     () => (rawSpatialPanels ?? []).filter((p) => datasets.some((d) => d.id === p.datasetId)),
     [rawSpatialPanels, datasets],

@@ -91,4 +91,38 @@ describe("MultiPanelStage — stack panels match the flat plot", () => {
     const axes = built.map((b) => (b.args.errorSpans?.get(1) ?? []).map((s) => s.axis).sort());
     expect(axes).toEqual([["x", "y"], ["x"]]);
   });
+
+  // Gap audit 2 #2 / review finding 6: a T1,R1,T2,R2 sheet stacks each Y on its
+  // OWN X, and each panel's error spans are aligned to THAT view's rows (the
+  // dataset's own rows would put R2's dR2 bars under T1's points).
+  it("stacks each Y on its own X, with error spans on the same per-series-X rows", async () => {
+    useApp.setState({
+      datasets: [{
+        id: "d1", name: "multix",
+        data: {
+          time: [300, 100, 200],
+          values: [[3, 30, 33, 0.5], [1, 10, 11, 0.6], [2, 20, 22, 0.7]],
+          labels: ["R1", "T2", "R2", "dR2"], units: ["", "", "", ""], metadata: {},
+        },
+        columnDesignations: { 1: "X", 3: "Y-error" },
+        errorRoles: [{ channel: 3, target: 2, axis: "y", side: "both" }],
+      }],
+      xKey: 1, yKeys: [0, 2], y2Keys: null, hiddenChannels: [1, 3],
+    });
+    render(<MultiPanelStage composition={null} />);
+    await waitFor(() => expect(built).toHaveLength(2));
+    const x = built[1].payload.data[0] as number[];
+    const y = built[1].payload.data[1] as (number | null)[];
+    const drawn = x.flatMap((xv, i) => (y[i] != null && Number.isFinite(y[i]) ? [[xv, y[i]]] : []));
+    expect(drawn).toEqual([[30, 33], [10, 11], [20, 22]]); // R2 on T2, row order kept
+    const x0 = built[0].payload.data[0] as number[];
+    const y0 = built[0].payload.data[1] as (number | null)[];
+    expect(x0.flatMap((xv, i) => (y0[i] != null && Number.isFinite(y0[i]) ? [[xv, y0[i]]] : []))).toEqual([[300, 3], [100, 1], [200, 2]]); // R1 still on T1
+    const span = built[1].args.errorSpans?.get(1)?.find((s) => s.axis === "y");
+    expect(span?.plus.length).toBe(x.length);
+    // The bars sit on R2's own rows: finite exactly where R2 is.
+    expect(span!.plus.map((v, i) => (v != null && Number.isFinite(v) ? i : -1)).filter((i) => i >= 0)).toEqual(
+      y.map((v, i) => (v != null && Number.isFinite(v) ? i : -1)).filter((i) => i >= 0),
+    );
+  });
 });

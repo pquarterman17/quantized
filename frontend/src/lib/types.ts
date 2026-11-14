@@ -431,6 +431,9 @@ export interface Dataset {
   /** PR K (L0.50): set for a DERIVED WORKSHEET — recalculates only via the
    *  async scheduler (K5c); `pipeline` is a short descriptor for now. */
   derivedFrom?: { datasetId: string; pipeline: string };
+  /** A LIVE multi-dataset graph (gap audit 2 #1): one entry per curve; `data` is only
+   *  a cache rebuilt from the sources (lib/linkedCurves.ts, store/linkedCurvesSync.ts). */
+  linkedCurves?: import("./linkedCurvesSanitize").LinkedCurve[];
   analysisRecipe?: import("./signalRecipe").SignalAnalysisRecipe; // linked analysis recipe
   /** Per-channel column roles (label / ignore) — channel index → role. Excluded
    *  from the plot; semantic metadata about the columns, so they live ON the

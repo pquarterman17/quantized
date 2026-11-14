@@ -21,7 +21,7 @@ import {
   pasteTargetRows,
   type PasteBounds,
 } from "../../../lib/clipboardGrid";
-import { isRederived, REDERIVED_EDIT_NOTICE } from "../../../lib/rederived";
+import { isRederived, rederivedNotice } from "../../../lib/rederived";
 import { useApp } from "../../../store/useApp";
 
 export interface BlockOpsSource {
@@ -79,11 +79,11 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   // too, so the "pasted/cleared N" report never overwrites that notice.
   const rederived = useApp((s) => {
     const d = s.datasets.find((x) => x.id === src.datasetId);
-    return d != null && isRederived(d);
+    return d != null && isRederived(d) ? rederivedNotice(d) : null;
   });
   function refused(): boolean {
-    if (rederived) src.setStatus(REDERIVED_EDIT_NOTICE);
-    return rederived;
+    if (rederived) src.setStatus(rederived);
+    return rederived !== null;
   }
   // Row insert/delete edit the DATA, so they read the selection in index order.
   const rows = ordered(src.rows);

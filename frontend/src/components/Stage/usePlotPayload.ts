@@ -41,6 +41,7 @@ import { useLogOffsetScaling, useOffsetErrorBars, useOffsetErrorSpans, useOffset
 import { useEncodedLists, useStageEncoding } from "./usePlotEncoding";
 import { waterfallXFetchWindow, withFullXSpan } from "../../lib/waterfallOffset";
 import { useWaterfallX } from "./useWaterfallX";
+import { usePerSeriesXView } from "./usePerSeriesXView";
 import type { FigureEncoding } from "../../lib/plotEncodingBinding";
 
 export interface PlotPayloadParams {
@@ -139,7 +140,9 @@ export interface PlotPayloadResult {
  *  data, a scale, or the plotted-channel selection changes (or decimation
  *  eligibility flips); re-composes (no re-fetch) whenever an overlay, the
  *  waterfall offset, the exclusion mode, or the row selection changes. */
-export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
+export function usePlotPayload(params: PlotPayloadParams): PlotPayloadResult {
+  // Gap audit 2 #2: each Y on its OWN X -- `p` draws the per-series-X view.
+  const { params: p, rowsPerBlock } = usePerSeriesXView(params);
   const { active } = p;
   // ONE state, two fields, so `payloadDatasetId` is a property OF these rows.
   const [fetched, setFetched] = useState<{ payload: PlotPayload; datasetId: string } | null>(null);
@@ -182,15 +185,12 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   // re-run (a ref write alone triggers nothing).
   const [baseDecimated, setBaseDecimated] = useState(false);
 
-  // What the base REQUEST is built from (perf audit 2026-09-29): a rename or
-  // an exclusion toggle mints a new `active` over the SAME `data`, so every
-  // fetch-side memo/effect keys on these fields, never on `active` itself.
+  // The base REQUEST keys on these fields, never on `active` (a rename mints a new one; perf audit 2026-09-29).
   const data = active?.data;
   const activeId = active?.id;
   const roles = active?.channelRoles;
 
-  // Rows dropped from the plot: manually excluded (#50) ∪ filter-failed (#53).
-  // Stabilized by content so a rename doesn't recompose the O(rows) display.
+  // Rows dropped from the plot (#50 ∪ #53), stabilized by content (a rename must not recompose).
   const dropped = useStableByValue(
     useMemo(() => droppedRows(active), [active]),
     (set) => [...set].join(","),
@@ -267,9 +267,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     ],
   );
 
-  // Map each display-series back to its dataset channel so the per-channel style
-  // overrides land on the right line. Plotted channels come first (in yKeys order,
-  // matching the backend), overlays after — those get `undefined` (defaults).
+  // Per-channel style overrides, 1:1 with the display series (plotted first, overlays after = defaults).
   const styleList = useMemo(() => {
     if (!displayPayload) return undefined;
     return displayPayload.series.map((_, i) => (i < plotted.length ? p.seriesStyles[plotted[i]] : undefined));
@@ -294,8 +292,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     [data, plotted, p.seriesStyles, groupCol, encoded],
   );
 
-  // Interactive-legend visibility, aligned 1:1 with the display series (overlays
-  // — index ≥ plotted.length — are never hidden).
+  // Legend visibility, 1:1 with the display series (overlays are never hidden).
   const hidden = useMemo(
     () =>
       displayPayload?.series.map((_, i) => i < plotted.length && p.hiddenChannels.includes(plotted[i])) ??
@@ -486,6 +483,8 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   // Waterfall X step: LAST, over the composed payload + its row-aligned companions; refused with a split, as on the wire.
   const shown = useWaterfallX(displayPayload, payload, waterfallDx, { errorBars, errorSpans, colorByColumns });
 
+  const drawn = shown.displayPayload; // a view row is source row `v % rowsPerBlock` (the brush maps back)
+  const seriesXPayload = useMemo(() => (rowsPerBlock && drawn ? { ...drawn, seriesXRows: rowsPerBlock } : drawn), [drawn, rowsPerBlock]);
   return {
     payload,
     payloadDatasetId: fetched?.datasetId ?? null,
@@ -495,5 +494,6 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     legendLabels: encodedLists?.labelList,
     hidden,
     ...shown, // displayPayload + errorBars/errorSpans/colorByColumns, X-offset laid out when set
+    displayPayload: seriesXPayload,
   };
 }

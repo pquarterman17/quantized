@@ -29,6 +29,7 @@ import { baseColumns } from "./formula";
 import { sanitizePeakTable } from "./peakTable";
 import { applyComputedColumnsExtras, reresolveDerivedFitsOnLoad, sanitizeDerived } from "./workspaceComputedColumns";
 import { sanitizeExcluded } from "./rowstate";
+import { sanitizeLinkedCurves } from "./linkedCurvesSanitize";
 import type {
   BookSource,
   ChannelRole,
@@ -295,5 +296,16 @@ export function parseWorkspaceDataset(
   // WORKSPACE_VERSION v4 comment.
   if (typeof dd.workbookId === "string" && dd.workbookId) ds.workbookId = dd.workbookId;
   if (typeof dd.order === "number" && Number.isFinite(dd.order)) ds.order = dd.order;
+  // Gap audit 2 #1: a live graph. Its columns ARE its curves, so nothing that
+  // edits or re-derives them survives the load (the sync rebuilds `data`).
+  const linkedCurves = sanitizeLinkedCurves(dd.linkedCurves);
+  if (linkedCurves) {
+    ds.linkedCurves = linkedCurves;
+    delete ds.formulas;
+    delete ds.formulaErrors;
+    delete ds.raw;
+    delete ds.corrections;
+    delete ds.bgRef;
+  }
   return ds;
 }

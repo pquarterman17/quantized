@@ -4,6 +4,7 @@ import { analysisView } from "./rowstate";
 import { sliceDataStruct } from "./datasetsplit";
 import { columnMetaList } from "./columnmeta";
 import { channelModelingType, isCategorical } from "./modeling";
+import { curveXKey } from "./ownXSeries";
 import type { RoiRect, RoiRuler, RoiSector } from "./roi";
 import type { Dataset, DataStruct } from "./types";
 import { ANALYSIS_SELECTION_VERSION } from "./analysisSelectionVersion";
@@ -135,17 +136,22 @@ function rowsFor(dataset: Dataset, selected: AnalysisSelectionCapture["selection
 function itemFor(dataset: Dataset, capture: AnalysisSelectionCapture, primary: boolean): AnalysisSelectionItem {
   const width = dataset.data.labels.length;
   const designatedX = columnMetaList(dataset.data).findIndex((column) => column?.designation === "X");
-  const xKey = primary
+  const plotX = primary
     ? capture.xKey != null && liveColumn(capture.xKey, width) ? capture.xKey : null
     : designatedX >= 0 ? designatedX : null;
   const requestedY = primary ? capture.yKeys : null;
   const yKeys = effectiveChannels(
     dataset.data,
     requestedY ? [...requestedY] : null,
-    xKey,
+    plotX,
     dataset.channelRoles,
     primary && capture.seriesOrder ? [...capture.seriesOrder] : null,
   );
+  // Each Y against its OWN X (gap audit 2 #2): when every selected curve shares
+  // one, the analysis reads that X; curves on different X columns keep the
+  // plot's X and `resolveAnalysisSelection` refuses them as ambiguous.
+  const ownX = [...new Set(yKeys.map((y) => curveXKey(dataset, plotX, y)))];
+  const xKey = ownX.length === 1 ? ownX[0] : plotX;
   const inferredErrors = errKeysFromBindings(dataset.errorRoles ?? []);
   const errors = primary ? { ...inferredErrors, ...capture.errKeys } : inferredErrors;
   const errorKeys = Object.fromEntries(
@@ -253,6 +259,17 @@ export function resolveAnalysisSelection(
     }
     if (yKeys.length !== selected.yKeys.length) {
       issues.push({ datasetId: dataset.id, severity: "warning", message: "One or more selected response columns no longer exist and were omitted." });
+    }
+    // A Y analysed against another column than its own X is the wrong science (gap audit 2 #2).
+    const strayY = yKeys.find((y) => curveXKey(dataset, selected.xKey, y) !== selected.xKey);
+    if (strayY !== undefined) {
+      const xName = (x: number | null) => (x === null ? "the first X" : `"${dataset.data.labels[x] ?? `column ${x + 1}`}"`);
+      issues.push({
+        datasetId: dataset.id,
+        severity: "error",
+        message: `"${dataset.data.labels[strayY]}" belongs to ${xName(curveXKey(dataset, selected.xKey, strayY))}, not ${xName(selected.xKey)}: analyse curves on different X columns one X at a time.`,
+      });
+      continue;
     }
     const analysisRows = analysisView(dataset).rowIds ?? dataset.data.time.map((_value, index) => index);
     const liveRows = new Set(analysisRows);

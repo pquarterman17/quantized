@@ -69,9 +69,10 @@ export function integrateChannels(
   const sel = selectedFitData(active, xKey, yKeys, seriesOrder);
   const labels = active?.data.labels ?? [];
   if (!sel || labels[sel.yKey] === undefined) return null;
-  const xLabel = xKey === null ? null : (labels[xKey] ?? null);
-  if (xKey !== null && xLabel === null) return null;
-  return { xLabel, yLabel: labels[sel.yKey], xIndex: xKey, yIndex: sel.yKey };
+  const ownX = sel.xKey !== undefined ? sel.xKey : xKey; // the curve's own X (gap audit 2 #2)
+  const xLabel = ownX === null ? null : (labels[ownX] ?? null);
+  if (ownX !== null && xLabel === null) return null;
+  return { xLabel, yLabel: labels[sel.yKey], xIndex: ownX, yIndex: sel.yKey };
 }
 
 function columnOf(labels: readonly string[], label: string, preferred: number | null): number {

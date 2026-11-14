@@ -13,6 +13,7 @@
 // of the commit lives here, not in the eager slice — so the unit algebra, the
 // expression tree and symbolic differentiation stay out of the eager bundle.
 
+import { isLinkedGraph, LINKED_GRAPH_EDIT_NOTICE } from "../lib/rederived";
 import { deriveColumns, type DeriveRequest } from "../lib/derivedColumn";
 import { inferErrorBindings } from "../lib/errorRoles";
 import { baseColumns, referencedColumns } from "../lib/formula";
@@ -94,6 +95,7 @@ export async function addDerivedColumn(
 ): Promise<DerivedColumnResult> {
   const get = useApp.getState;
   const out = await withResolved(get, id, "adding a column", (ds): DerivedColumnResult => {
+    if (isLinkedGraph(ds)) return { ok: false, error: LINKED_GRAPH_EDIT_NOTICE };
     const a = analyse(ds, req);
     if (!a.ok) return a;
     const { columns, step } = a;

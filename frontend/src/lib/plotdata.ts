@@ -77,6 +77,7 @@ export interface PlotPayload {
   xIsDate?: boolean;
   blockRows?: number; xStep?: number; // waterfall X offset: rows per x block, block b slid by b·xStep (lib/waterfallX.ts)
   yShift?: number[]; // per data column, the waterfall stagger added for display; the cursor readout takes it back off
+  seriesXRows?: number; // per-series-X view (lib/perSeriesX.ts): source rows per block -- row v is source row v % seriesXRows
 }
 
 /** Pure client-side column packing — the offline mirror of /api/plot/series.

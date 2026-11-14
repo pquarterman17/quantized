@@ -48,7 +48,7 @@ import { presentBatchOutcome } from "./importBatchOffers";
 import { createErrorRolesActions, seedErrorRoles, type ErrorRolesActions } from "./importErrorRoles";
 import type { StructurePreset } from "./crystalStructures";
 import { loadPath, loadUpload, pathBasename, presentStructures, type ImportLoad, type ImportOrigin } from "./importLoaders";
-import { notifyOwnXSeries, notifyParserNotes, parserNotes, parserNotesSummary } from "./importNotes";
+import { notifyParserNotes, parserNotes, parserNotesSummary } from "./importNotes";
 import { resolveImportTargetFolderId } from "./importTargetFolder";
 import { beginOp, endOp, updateOp, type OpId } from "./pendingOps";
 import { toast } from "./toasts";
@@ -478,7 +478,6 @@ async function runImport<T>(
   // above to this exact string, rather than re-interpolating it.
   if (lastError) toast(summary, "danger");
   notifyParserNotes(noted);
-  notifyOwnXSeries(get().datasets.filter((d) => createdIds.includes(d.id)));
   return createdIds;
 }
 

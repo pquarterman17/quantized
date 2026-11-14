@@ -55,7 +55,6 @@ import { effectiveChannels } from "../lib/plotdata";
 import type { AxisFormat, AxisScale, SeriesStyle } from "../lib/types";
 import type { HistoryBatchToken } from "./history";
 import { nextPlotObjectId } from "./idSeq";
-import { heldOwnX, ownXStatus, plotOwnXInstead } from "./ownXGuard";
 import type { AppState, LegendPos } from "./useApp";
 import { clearFocusedXBreaks } from "./windowDocuments";
 
@@ -286,15 +285,7 @@ export function createPlotViewSettingsSlice(set: SliceSet, get: SliceGet): PlotV
     // no longer plotted) are ignored and newly-plotted channels append in order.
     setSeriesOrder: (seriesOrder) => { get().recordHistory("reorder curves"); set({ seriesOrder }); },
     toggleHidden: (channel) => {
-      // Un-hiding a Y that belongs to another X column would draw it against
-      // this plot's X: route to the per-series-X plot instead (./ownXGuard).
-      const now = get();
-      const ownX = now.hiddenChannels.includes(channel) ? heldOwnX(now, channel) : null;
-      if (ownX !== null && now.activeId) {
-        set({ status: ownXStatus(now, channel, ownX) });
-        plotOwnXInstead(now.activeId);
-        return;
-      }
+      // A Y on its own X column is drawn against that X (gap audit 2 #2), so un-hiding is safe.
       get().recordHistory("toggle curve visibility");
       set((s) => ({
         hiddenChannels: s.hiddenChannels.includes(channel)
@@ -307,14 +298,11 @@ export function createPlotViewSettingsSlice(set: SliceSet, get: SliceGet): PlotV
     soloChannel: (channel) => {
       get().recordHistory("solo curve");
       set((s) => {
-        // "Show all" and solo never un-hide a Y held for its own X (./ownXGuard).
-        if (channel == null) return { hiddenChannels: s.hiddenChannels.filter((c) => heldOwnX(s, c) !== null) };
+        if (channel == null) return { hiddenChannels: [] };
         const ds = s.datasets.find((d) => d.id === s.activeId);
         if (!ds) return {};
         const plotted = effectiveChannels(ds.data, s.yKeys, s.xKey, ds.channelRoles, s.seriesOrder);
         if (!plotted.includes(channel)) return {};
-        const ownX = heldOwnX(s, channel);
-        if (ownX !== null) return { status: ownXStatus(s, channel, ownX) };
         return { hiddenChannels: plotted.filter((c) => c !== channel) };
       });
     },

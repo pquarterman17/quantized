@@ -47,6 +47,7 @@
 // `activeRecodePreview` resyncs the same way, returning null rather than
 // reading a column the panel didn't open on.
 
+import { refuseLinkedGraph } from "../lib/rederived";
 import { create } from "zustand";
 
 import { withRecomputedFormulas, formulaLetter } from "./computedColumns";
@@ -217,6 +218,7 @@ export const useRecode = create<RecodeState>((set, get) => ({
     // A resolved retarget updates `channel` in the panel state too, so the
     // rest of this function (and every later read of `get().channel`) sees
     // the corrected index; a refusal returns with the draft untouched.
+    if (refuseLinkedGraph(ds, (m) => toast(m, "danger"))) return null;
     const resolved = resolveRecodeChannel(ds.data.labels, channel, openLabel);
     if (!resolved.ok) {
       toast(resolved.reason, "danger");

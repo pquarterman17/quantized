@@ -1,6 +1,6 @@
 // A Y axis carrying several series used to show no title at all. It now
-// names what the series share: the quantity and unit when both are common,
-// else "(unit)", else nothing. The cases live in a SHARED wire fixture
+// names what the series carry, jointly: "R1, R2 (ohm)", "M (emu), T (K)"
+// (gap audit 2 #11). The cases live in a SHARED wire fixture
 // (`tests/fixtures/wire/shared_axis_title.json`) that the export leg
 // (`tests/test_export_shared_axis_title.py`) reads too.
 import { readFileSync } from "node:fs";
@@ -50,20 +50,20 @@ describe("buildOpts — multi-series y-axis title", () => {
     expect(buildOpts(p, base).axes?.[1]?.label).toBe("Moment (emu)");
   });
 
-  it("titles a shared unit alone when the quantities differ, and ignores legend renames", () => {
+  it("names both quantities when they differ over one unit, and ignores legend renames", () => {
     const p = payload([
-      { label: "a.dat", unit: "emu" },
-      { label: "b.dat", unit: "emu" },
+      { label: "R1", unit: "ohm" },
+      { label: "R2", unit: "ohm" },
     ]);
-    expect(buildOpts(p, { ...base, seriesLabels: ["Loop 1", "Loop 2"] }).axes?.[1]?.label).toBe("(emu)");
+    expect(buildOpts(p, { ...base, seriesLabels: ["Loop 1", "Loop 2"] }).axes?.[1]?.label).toBe("R1, R2 (ohm)");
   });
 
-  it("leaves the axis blank when the units differ, and a user title still wins", () => {
+  it("titles mixed units jointly (gap audit 2 #11), and a user title still wins", () => {
     const p = payload([
       { label: "M", unit: "emu" },
       { label: "T", unit: "K" },
     ]);
-    expect(buildOpts(p, base).axes?.[1]?.label).toBeUndefined();
+    expect(buildOpts(p, base).axes?.[1]?.label).toBe("M (emu), T (K)");
     expect(buildOpts(p, { ...base, yAxisLabel: "Signal" }).axes?.[1]?.label).toBe("Signal");
   });
 
@@ -73,6 +73,15 @@ describe("buildOpts — multi-series y-axis title", () => {
       { label: "T1", unit: "K", axis: 1 },
       { label: "T2", unit: "K", axis: 1 },
     ]);
-    expect(buildOpts(p, base).axes?.[2]?.label).toBe("(K)");
+    expect(buildOpts(p, base).axes?.[2]?.label).toBe("T1, T2 (K)");
+  });
+
+  it("counts only the curves drawn: a hidden one never joins the title", () => {
+    const p = payload([
+      { label: "R1", unit: "ohm" },
+      { label: "T", unit: "K" },
+      { label: "R2", unit: "ohm" },
+    ]);
+    expect(buildOpts(p, { ...base, hidden: [false, true, false] }).axes?.[1]?.label).toBe("R1, R2 (ohm)");
   });
 });

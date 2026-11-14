@@ -14,6 +14,7 @@
 import { effectiveChannels } from "./plotdata";
 import type { FitSelection } from "./fitselection";
 import { fitRowXFingerprint } from "./fitRowFingerprint";
+import { curveXKey } from "./ownXSeries";
 import type { CalcResult, CorrectionParams, Dataset, DataStruct, FitSpec, FitWeighting } from "./types";
 
 /** The FULL plotted-X column (not analysis-pruned): `time` when `xKey` is null,
@@ -23,6 +24,13 @@ export function fullPlottedX(data: DataStruct, xKey: number | null): number[] {
   return xKey == null || xKey < 0 || xKey >= data.labels.length
     ? data.time
     : data.values.map((row) => row[xKey]);
+}
+
+/** The X column the primary plotted curve is drawn against: its OWN X (gap
+ *  audit 2 #2, `ownXSeries.curveXKey`), else the plot's `xKey`. */
+export function plottedCurveX(ds: Dataset, xKey: number | null, yKeys: number[] | null, seriesOrder: number[] | null): number | null {
+  const y = plottedYKey(ds, xKey, yKeys, seriesOrder);
+  return y === null ? xKey : curveXKey(ds, xKey, y);
 }
 
 /** The primary plotted Y CHANNEL index (first effective, after series order),
@@ -74,7 +82,8 @@ export function fitSpecFrom(
   /** Injected so the recipe is reproducible in tests. */
   now: () => string = () => new Date().toISOString(),
 ): FitSpec {
-  const spec: FitSpec = { model, xKey, yKey: sel.yKey, fittedAt: now() };
+  // The X the fit actually read (the curve's own X), when the selection says.
+  const spec: FitSpec = { model, xKey: sel.xKey !== undefined ? sel.xKey : xKey, yKey: sel.yKey, fittedAt: now() };
   // #30: the x-WINDOW the fit consumed, after exclusions/filters pruned it.
   // Without it a recipe names the channels but not which part of them, so
   // "fit the peak" and "fit the whole scan" look identical on reopening.

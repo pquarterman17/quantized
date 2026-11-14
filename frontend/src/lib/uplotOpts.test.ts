@@ -456,8 +456,8 @@ describe("buildOpts defaultTrace", () => {
     const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect(opts.axes?.[1]?.label).toBe("M (emu)");
     const two: PlotPayload = { ...payload, series: [...payload.series, { label: "B", unit: "" }] };
-    // With >1 series the legend names them, so the axis label is omitted.
-    expect(buildOpts(two, { ...base, yScale: "linear", tool: "zoom" }).axes?.[1]?.label).toBeUndefined();
+    // With >1 series the axis names them jointly (gap audit 2 #11).
+    expect(buildOpts(two, { ...base, yScale: "linear", tool: "zoom" }).axes?.[1]?.label).toBe("M (emu), B");
   });
 
   it("applies explicit axis limits as static scale ranges", () => {
@@ -865,8 +865,8 @@ describe("buildOpts defaultTrace", () => {
 
   it("overrides the primary y-axis label and forces it to show with >1 series", () => {
     const two: PlotPayload = { ...payload, series: [...payload.series, { label: "B", unit: "T" }] };
-    // Without an override, >1 series leaves the axis label to the legend (undefined).
-    expect(buildOpts(two, { ...base, yScale: "linear", tool: "zoom" }).axes?.[1]?.label).toBeUndefined();
+    // Without an override, >1 series get the joint auto title (gap audit 2 #11).
+    expect(buildOpts(two, { ...base, yScale: "linear", tool: "zoom" }).axes?.[1]?.label).toBe("M (emu), B (T)");
     // With an override it shows regardless of series count.
     const over = buildOpts(two, { ...base, yScale: "linear", tool: "zoom", yAxisLabel: "Moment (emu)" });
     expect(over.axes?.[1]?.label).toBe("Moment (emu)");

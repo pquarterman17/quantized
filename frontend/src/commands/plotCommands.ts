@@ -307,18 +307,28 @@ export function buildPlotCommands(s: StoreGet): Action[] {
     {
       // PLOT_WORKFLOW_PLAN #3: distinct from "Overlay in one plot" above —
       // that opens a composite panel window keeping each dataset separate;
-      // this MERGES the selection into one real Library dataset (one curve
-      // per dataset, segment-concatenated — see lib/originOverlay's
-      // buildSelectionOverlay) so it plots, exports, and fits like any
-      // ordinary single dataset.
+      // this makes one LIVE graph dataset (gap audit 2 #1, lib/linkedCurves.ts)
+      // so it plots, exports, and fits like any ordinary single dataset.
       id: "plot-selected-together",
       group: "Plot",
       section: "Layout",
       label: "Plot selected together",
       description:
-        "Merge two or more selected Library datasets into one overlay plot, one curve per dataset.",
+        "Plot two or more selected Library datasets together as one live graph that follows its sources.",
       keywords: "combine merge overlay library selection",
       run: () => void plotSelectedTogether(s().selectedIds),
+    },
+    {
+      // Gap audit 2 #1: one more LIVE curve on the active graph (or a new graph
+      // from this plot) -- lib/addCurveRun.ts, loaded on use.
+      id: "add-curve-from",
+      group: "Plot",
+      section: "Layout",
+      label: "Add curve from…",
+      description: "Add a curve from any dataset to this graph; it stays linked to its source.",
+      keywords: "add plot layer overlay curve live link graph",
+      run: () =>
+        void runLazy("Loading graph tools…", () => import("../lib/addCurveRun")).then((m) => m.addCurveFrom(), onLoadFailure),
     },
     {
       // P3.6: the frontend producer of spec-carrying report figure blocks.

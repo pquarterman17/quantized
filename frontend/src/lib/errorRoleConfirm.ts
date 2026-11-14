@@ -24,7 +24,8 @@ import type { Dataset } from "./types";
 function writeDeclared(datasetId: string, next: (current: ErrorBinding[]) => ErrorBinding[]): void {
   useApp.setState((s) => ({
     datasets: s.datasets.map((d): Dataset => {
-      if (d.id !== datasetId) return d;
+      // A graph's rebuild from its sources would silently drop the write.
+      if (d.id !== datasetId || d.linkedCurves) return d;
       const current = sanitizeBindings(d.data.metadata?.["error_roles"], d.data.labels.length) ?? [];
       return { ...d, data: { ...d.data, metadata: { ...d.data.metadata, error_roles: next(current) } } };
     }),

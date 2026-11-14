@@ -1,8 +1,8 @@
 """A Y axis carrying several series exports the title the screen shows.
 
-The canvas (``frontend/src/lib/sharedAxisTitle.ts``) titles such an axis with
-what its series share: "quantity (unit)" when both are common, "(unit)" when
-only the unit is, nothing when the units differ. Both legs read the cases in
+The canvas (``frontend/src/lib/sharedAxisTitle.ts``) titles such an axis
+jointly over what its series carry: "Moment (emu)", "R1, R2 (ohm)",
+"M (emu), T (K)" (gap audit 2 #11). Both legs read the cases in
 ``tests/fixtures/wire/shared_axis_title.json``.
 """
 
@@ -61,10 +61,9 @@ def test_two_series_sharing_a_unit_export_it_as_the_y_title() -> None:
     assert "(emu)" in _svg(_payload(["emu", "emu"], ["a.dat", "b.dat"]))
 
 
-def test_series_with_different_units_export_no_y_title() -> None:
-    svg = _svg(_payload(["emu", "K"], ["M", "T"]))
-    assert "emu" not in svg
-    assert "(K)" not in svg
+def test_series_with_different_units_export_a_joint_y_title() -> None:
+    svg = _svg(_payload(["emu", "K"], ["Mag", "Temp"]))
+    assert "Mag (emu), Temp (K)" in svg
 
 
 def test_a_user_y_title_still_wins() -> None:

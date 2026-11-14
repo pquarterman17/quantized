@@ -16,6 +16,7 @@
 //
 // Lazy: only the Inspector's Error columns card and pipeline replay load it.
 
+import { isLinkedGraph, LINKED_GRAPH_EDIT_NOTICE } from "../lib/rederived";
 import { baseColumns, channelLetter, referencedColumns } from "../lib/formula";
 import { errKeysFromBindings, inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
 import { lit } from "../lib/macro";
@@ -79,6 +80,7 @@ export async function addComputedError(
   const bad = checkParam(source, param);
   if (bad) return { ok: false, error: bad };
   const out = await withResolved(get, id, "adding an error column", (ds): ComputedErrorResult => {
+    if (isLinkedGraph(ds)) return { ok: false, error: LINKED_GRAPH_EDIT_NOTICE };
     const label = ds.data.labels[target];
     if (label === undefined || target < 0) return { ok: false, error: "pick the series the error describes" };
     const letter = channelLetter(target);

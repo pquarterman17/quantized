@@ -27,7 +27,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { bookFetchSettled, lastBookError, truncateReason } from "../../../lib/bookData";
 import { hasOriginReportSheets } from "../../../lib/originTextColumns";
-import { isRederived } from "../../../lib/rederived";
+import { isRederived, rederivedNotice } from "../../../lib/rederived";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { channelModelingType } from "../../../lib/modeling";
 import type { BookSource, Dataset } from "../../../lib/types";
@@ -300,7 +300,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         modelingTypeOf={(col) => channelModelingType(ds, col)}
         channelTypes={ds.channelTypes}
         onChangeChannelType={(col, t) => useApp.getState().setChannelType(ds.id, col, t)}
-        readOnly={isRederived(ds)}
+        readOnly={isRederived(ds) && rederivedNotice(ds)}
         reveal={(rowRevealFirst ? reveal.target : cursor.reveal) ?? reveal.target}
         cursor={cursor.grid}
         columnProps={ds.columnProps}

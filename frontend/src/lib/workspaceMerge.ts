@@ -89,6 +89,7 @@
 // `order`, `pending`) is self-contained — no id references — and rides
 // along untouched onto the merged dataset.
 
+import { remapCurveSources } from "./linkedCurvesSanitize";
 import { remapSheetRefIds } from "./sheetBindings";
 import type { AnalysisResult } from "./analysisResult";
 import type { Dataset } from "./types";
@@ -299,6 +300,9 @@ export function mergeWorkspace(
 
     const next: Dataset = { ...d, id, name, folderId: undefined, workbookId: undefined };
     if (Array.isArray(d.reflFits)) next.reflFits = remapReflectivityHistory(d.reflFits, idMap);
+    // A graph's curves name sources in the SAME file: follow their fresh ids;
+    // a source the file does not carry draws empty (review finding 2).
+    if (d.linkedCurves) next.linkedCurves = remapCurveSources(d.linkedCurves, idMap);
     if (d.folderId !== undefined) droppedFolderRefs++;
     if (d.workbookId !== undefined) {
       const newWbId = workbookIdMap.get(d.workbookId);

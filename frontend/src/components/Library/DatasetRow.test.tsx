@@ -487,7 +487,7 @@ describe("DatasetRow panel/overlay quick picks (MAIN_PLAN #19 v1)", () => {
     expect(win.panel?.layout).toBe("grid");
   });
 
-  it("'Plot selected together' merges the selection into one new overlay dataset and makes it active", async () => {
+  it("'Plot selected together' makes one new live graph of the selection and makes it active", async () => {
     useApp.setState({ datasets: [a, b], activeId: "a", selectedIds: ["a", "b"] });
     const before = useApp.getState().datasets.length;
     const { container } = render(<DatasetRow dataset={a} {...baseProps} selected />);
@@ -496,7 +496,9 @@ describe("DatasetRow panel/overlay quick picks (MAIN_PLAN #19 v1)", () => {
     await waitFor(() => expect(useApp.getState().datasets.length).toBe(before + 1));
     const s = useApp.getState();
     const created = s.datasets.find((d) => d.id !== "a" && d.id !== "b")!;
-    expect(created.data.labels).toEqual(["A", "B"]); // one curve per dataset, labelled by name
+    // One curve per dataset, legend named by the source (gap audit 2 #1).
+    expect(created.data.metadata.linked_curve_legends).toEqual(["A", "B"]);
+    expect(created.linkedCurves?.map((c) => c.datasetId)).toEqual(["a", "b"]);
     expect(s.activeId).toBe(created.id); // lands as the active plot, same as Origin apply's overlay
   });
 });

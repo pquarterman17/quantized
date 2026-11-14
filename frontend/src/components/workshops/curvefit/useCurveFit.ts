@@ -296,8 +296,10 @@ export function useCurveFit(): CurveFitState {
         : undefined;
       const runXKey = runSelection?.xKey ?? state.xKey;
       const runYKeys = runSelection?.yKeys ?? state.yKeys;
-      const localXy = selectedFitData(ds, runXKey, runYKeys, state.seriesOrder, runSelection);
-      if (!localXy) return;
+      const picked = selectedFitData(ds, runXKey, runYKeys, state.seriesOrder, runSelection);
+      if (!picked) return;
+      // The X the pairs came from: the fitted curve's OWN X (gap audit 2 #2).
+      const localXy = { ...picked, fitX: picked.xKey !== undefined ? picked.xKey : runXKey };
       const pairs = dropGapRows(localXy.x, localXy.y);
       if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
       if (!pairs.complete) {
@@ -310,7 +312,7 @@ export function useCurveFit(): CurveFitState {
           fitData: null,
           datasetId: ds.id,
           model: modelName,
-          xKey: runXKey,
+          xKey: localXy.fitX,
           yKey: localXy.yKey,
         });
       } else {
@@ -355,12 +357,12 @@ export function useCurveFit(): CurveFitState {
         const done: Fitted = {
           result: r,
           fitData: {
-            x: pairs.x, y: pairs.y, xKey: runXKey, yKey: localXy.yKey, ...fittedWeighting(weight.mode, finiteDy),
+            x: pairs.x, y: pairs.y, xKey: localXy.fitX, yKey: localXy.yKey, ...fittedWeighting(weight.mode, finiteDy),
             weightMode: finiteDy ? weight.mode : "none", scaleErrors: weight.scaleErrors !== false,
           },
           datasetId: ds.id,
           model: modelName,
-          xKey: runXKey,
+          xKey: localXy.fitX,
           yKey: localXy.yKey,
         };
         setFitted(done);

@@ -6,7 +6,7 @@
 // worksheet pane (a lazy chunk).
 
 import { lit } from "../lib/macro";
-import { isRederived, REDERIVED_EDIT_NOTICE } from "../lib/rederived";
+import { isRederived, rederivedNotice } from "../lib/rederived";
 import { commitRowOrder, refuseRowOrder, rowOrderRefusal } from "./sortRows";
 import { useApp } from "./useApp";
 
@@ -64,7 +64,7 @@ export function moveWorksheetRows(id: string, rows: readonly number[], where: Ro
   const ds = get().datasets.find((d) => d.id === id);
   if (!ds) return null;
   if (isRederived(ds)) {
-    refuseRowOrder(REDERIVED_EDIT_NOTICE);
+    refuseRowOrder(rederivedNotice(ds));
     return null;
   }
   if (ds.pending != null) {

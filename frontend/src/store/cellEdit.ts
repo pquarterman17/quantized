@@ -47,7 +47,7 @@ import { dropRows, insertBlanks, padRows, patchCell, shiftForDelete, shiftForIns
 import { computeFormulasIncremental } from "../lib/formulaIncremental";
 import { asAlreadyComputed } from "../lib/formulaInputs";
 import { clearOverlaysFor } from "./corrections";
-import { isRederived, REDERIVED_EDIT_NOTICE } from "../lib/rederived";
+import { isRederived, rederivedNotice } from "../lib/rederived";
 import { noteCellEdit } from "../lib/api/datasetCache";
 import type { CellEdit } from "../lib/clipboardGrid";
 import type { Dataset } from "../lib/types";
@@ -138,7 +138,7 @@ export interface CellEditSlice {
  *  pending guard too, whose retry re-enters here anyway. */
 function refuseRederived(get: () => AppState, ds: Dataset): boolean {
   if (!isRederived(ds)) return false;
-  get().setStatus(REDERIVED_EDIT_NOTICE);
+  get().setStatus(rederivedNotice(ds));
   return true;
 }
 

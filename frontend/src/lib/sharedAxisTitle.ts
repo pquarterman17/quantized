@@ -1,17 +1,28 @@
-// The auto title of a Y axis that carries several series. The export leg is
+// The auto title of a Y axis that carries several series (gap audit 2 #11: joint over mixed units). The export leg is
 // `calc/figure_labels.shared_axis_title`; both read the cases in
 // `tests/fixtures/wire/shared_axis_title.json`.
 import { displayUnit } from "./unitDisplay";
 
-/** The quantity and unit every series shares ("Moment (emu)"), else the
- *  shared unit alone ("(emu)"), else undefined (the legend names them). Reads
- *  the DATA's label/unit, never a legend rename. */
+/** Most quantities a joint title names per unit before it says "(unit)" alone. */
+export const JOINT_TITLE_MAX = 3;
+
+/** The axis' auto title, joint over what its series carry (gap audit 2 #11):
+ *  one "quantity, quantity (unit)" group per unit in first-seen order --
+ *  "Moment (emu)", "R1, R2 (ohm)", "M (emu), T (K)" -- a group naming more
+ *  than `JOINT_TITLE_MAX` quantities says only "(unit)". Undefined for no
+ *  series. Reads the DATA's label/unit, never a legend rename. */
 export function sharedAxisTitle(series: readonly { label: string; unit?: string }[]): string | undefined {
-  const unit = series[0]?.unit ?? "";
-  if (series.every((s) => (s.unit ?? "") === unit)) {
-    const label = series.every((s) => s.label === series[0].label) ? series[0]?.label : "";
-    return (unit ? `${label} (${displayUnit(unit)})`.trim() : label) || undefined;
+  const groups = new Map<string, string[]>();
+  for (const s of series) {
+    const labels = groups.get(s.unit ?? "") ?? [];
+    if (!labels.includes(s.label)) labels.push(s.label);
+    groups.set(s.unit ?? "", labels);
   }
+  const parts = [...groups].map(([unit, labels]) => {
+    const names = labels.length > JOINT_TITLE_MAX ? "" : labels.filter(Boolean).join(", ");
+    return (unit ? `${names} (${displayUnit(unit)})` : names).trim();
+  });
+  return parts.filter(Boolean).join(", ") || undefined;
 }
 
 /** The series a Y axis' auto title is read from: those on axis `which`

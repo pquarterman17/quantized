@@ -10,11 +10,13 @@ import { defaultPlotView } from "./lib/plotview";
 import type { PlotView, PlotWindow, WindowGeometry, WinState } from "./lib/plotview";
 import type { Dataset } from "./lib/types";
 import { isCalcOnlyView } from "./lib/viewMode";
+import { bootLinkedCurves } from "./store/linkedCurvesBoot";
 import { useApp } from "./store/useApp";
 import { warmSaveModules } from "./store/workspaceIOLazy";
 import "./styles/index.css";
 
 connectLifecycle();
+bootLinkedCurves(); // live multi-dataset graphs: the sync loads once a graph exists
 
 // ── Visual-verification seam (tools/visual) ─────────────────────────────────
 // When loaded with `?harness`, expose the store (plus the two MDI helpers

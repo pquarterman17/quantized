@@ -130,3 +130,30 @@ describe("AnalysisSelection", () => {
     expect(snapshot.items[0]).not.toHaveProperty("rowIds");
   });
 });
+
+// Gap audit 2 #2 / review finding 7: analysis reads each Y against its OWN X.
+describe("AnalysisSelection — each Y on its own X", () => {
+  // .time = T1, values = [R1, T2, R2], T2 designated X.
+  const sheet: Dataset = {
+    id: "s", name: "sheet.csv",
+    data: { time: [300, 100], values: [[3, 30, 33], [1, 10, 11]], labels: ["R1", "T2", "R2"], units: ["", "", ""], metadata: {} },
+    columnDesignations: { 1: "X" },
+  };
+  const take = (xKey: number | null, yKeys: number[]) => captureAnalysisSelection({
+    datasets: [sheet], activeId: "s", selectedIds: [], xKey, yKeys, seriesOrder: null, errKeys: {},
+    selection: null, range: null,
+  }, "plot");
+
+  it("a curve's own X is captured, whatever the plot's X", () => {
+    expect(take(1, [0]).items[0]).toMatchObject({ xKey: null, yKeys: [0] }); // R1 on T1, not T2
+    expect(take(null, [2]).items[0]).toMatchObject({ xKey: 1, yKeys: [2] }); // R2 on T2
+    expect(resolveAnalysisSelection(take(1, [0]), [sheet]).issues).toEqual([]);
+  });
+
+  it("curves on different X columns are refused as ambiguous, never paired with the wrong X", () => {
+    const { items, issues } = resolveAnalysisSelection(take(1, [0, 2]), [sheet]);
+    expect(items).toEqual([]);
+    expect(issues[0]).toMatchObject({ severity: "error" });
+    expect(issues[0].message).toContain('"R1" belongs to the first X');
+  });
+});

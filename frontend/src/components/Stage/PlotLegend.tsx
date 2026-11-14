@@ -11,6 +11,7 @@ import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
 import { colorScaleLegendEntries, type ColorScatterSpec } from "../../lib/colorscatter";
 import { lazyRegion } from "../../lib/lazyRegion";
 import { legendNonCurves } from "../../lib/legendCurves";
+import { withLinkedLegends } from "../../lib/linkedLegends";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import type { DefaultTrace, SeriesStyle } from "../../lib/types";
 import { RichText } from "../primitives";
@@ -80,7 +81,8 @@ export default function PlotLegend({
   const active = useActiveDataset();
   const hiddenChannels = useApp((s) => s.hiddenChannels);
   const toggleHidden = useApp((s) => s.toggleHidden);
-  const seriesLabels = useApp((s) => s.seriesLabels);
+  const renames = useApp((s) => s.seriesLabels);
+  const seriesLabels = useMemo(() => withLinkedLegends(active?.data, renames), [active?.data, renames]); // a graph's curve names
   const setSeriesLabel = useApp((s) => s.setSeriesLabel);
   const setSeriesOrder = useApp((s) => s.setSeriesOrder);
   const y2Keys = useApp((s) => s.y2Keys);

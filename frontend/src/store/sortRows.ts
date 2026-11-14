@@ -27,7 +27,7 @@
 import { categoricalLevels, labelForCode } from "../lib/categorical";
 import { lit } from "../lib/macro";
 import { textColumnCells } from "../lib/originTextColumnCells";
-import { isRederived, REDERIVED_EDIT_NOTICE } from "../lib/rederived";
+import { isRederived, rederivedNotice } from "../lib/rederived";
 import { sidecarRowCount, sliceRowSidecars } from "../lib/rowSidecars";
 import { excludedSet } from "../lib/rowstate";
 import type { Dataset } from "../lib/types";
@@ -168,7 +168,7 @@ const how = (dir: 1 | -1): string => (dir === 1 ? "ascending" : "descending");
 export function sortWorksheetRowsBy(id: string, keys: readonly SortSpec[]): void {
   const ds = get().datasets.find((d) => d.id === id);
   if (!ds || keys.length === 0) return;
-  if (isRederived(ds)) return refuseRowOrder(REDERIVED_EDIT_NOTICE);
+  if (isRederived(ds)) return refuseRowOrder(rederivedNotice(ds));
   if (resolvePendingEdit(get, ds, "sorting", () => sortWorksheetRowsBy(id, keys))) return;
   const why = rowOrderRefusal(ds, "sort");
   if (why) return refuseRowOrder(why);

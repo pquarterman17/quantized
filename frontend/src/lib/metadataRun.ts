@@ -17,6 +17,7 @@
 //
 // Lazy: reached only from the workshop and the pipeline runner.
 
+import { LINKED_GRAPH_EDIT_NOTICE } from "./rederived";
 import { lit } from "./macro";
 import { applyCleanup, planCleanup, type CleanupPlan, type CleanupResult, type LetterCase } from "./metadataCleanup";
 import { factorColumn, planFactor, type FactorAs, type FactorPlan } from "./metadataFactor";
@@ -50,6 +51,8 @@ async function resolveAll(s: StoreGet, ids: readonly string[]): Promise<Dataset[
     const d = s().datasets.find((x) => x.id === id);
     if (!d) throw new Error("a picked dataset is no longer in the workspace");
     if (d.pending) throw new Error(`the full data of “${d.name}” could not be loaded`);
+    // A graph's rebuild from its sources would silently drop the write.
+    if (d.linkedCurves) throw new Error(`“${d.name}”: ${LINKED_GRAPH_EDIT_NOTICE}`);
     return d;
   });
 }
