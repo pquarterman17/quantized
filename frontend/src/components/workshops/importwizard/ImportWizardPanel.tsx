@@ -10,7 +10,7 @@
 // state lives in useImportWizard; the raw-lines + resolved-columns grid is
 // PreviewTable, the error-role assignment table is ErrorRolesEditor.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   DECIMAL_OPTIONS,
@@ -39,6 +39,15 @@ export default function ImportWizardPanel() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [pickedFilter, setPickedFilter] = useState("");
   const faint = { color: "var(--text-faint)" } as const;
+
+  // Close automatically on a successful import — this is a one-shot action,
+  // not a workspace to linger in, and ToolWindow's own close path (used by
+  // Cancel/Escape/the X button, below) already restores focus to whatever
+  // opened the wizard. A failed import leaves `w.imported` false, so the
+  // panel stays open with `w.error` visible for the user to fix and retry.
+  useEffect(() => {
+    if (w.imported) setOpen(false);
+  }, [w.imported, setOpen]);
 
   function onFileChosen(e: React.ChangeEvent<HTMLInputElement>): void {
     const f = e.target.files?.[0];
@@ -241,7 +250,7 @@ export default function ImportWizardPanel() {
               disabled={!w.preview || w.importing || !!w.xConflict || w.categoricalBlocked}
               onClick={() => void w.doImport()}
             >
-              {w.importing ? "Importing…" : w.imported ? "Imported ✓ — import again" : "Import"}
+              {w.importing ? "Importing…" : "Import"}
             </Button>
             <Button size="sm" disabled={!w.settings} onClick={() => void onSaveAsFilter()}>
               Save as filter…

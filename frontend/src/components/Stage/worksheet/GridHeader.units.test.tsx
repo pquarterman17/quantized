@@ -10,6 +10,9 @@ import { describe, expect, it } from "vitest";
 
 import type { DataStruct } from "../../../lib/types";
 import GridHeader from "./GridHeader";
+import { layoutTextColumns } from "./textColumns";
+
+const EMPTY_TEXT_LAYOUT = layoutTextColumns([], [], []);
 
 const data: DataStruct = {
   time: [0, 1],
@@ -41,7 +44,7 @@ describe("GridHeader units keep their case", () => {
         onResizeStart={noop}
         onAutofitCol={noop}
         onRemoveFormula={noop}
-        textCols={[]}
+        textLayout={EMPTY_TEXT_LAYOUT}
       />,
     );
     for (const unit of ["Oe", "mT"]) {
