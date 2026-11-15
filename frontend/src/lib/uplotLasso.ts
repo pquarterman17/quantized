@@ -27,7 +27,10 @@ export function lassoPlugin(onLasso: LassoHandler, color: string): uPlot.Plugin 
           if (e.button !== 0) return;
           e.preventDefault();
           const rect = over.getBoundingClientRect();
-          const at = (ev: MouseEvent): [number, number] => [ev.clientX - rect.left, ev.clientY - rect.top];
+          // Clamped to the plotting area: a point off the view (zoomed out of
+          // it) is never inside the outline, so it is never masked unseen.
+          const clamp = (v: number, hi: number) => Math.min(hi, Math.max(0, v));
+          const at = (ev: MouseEvent): [number, number] => [clamp(ev.clientX - rect.left, rect.width), clamp(ev.clientY - rect.top, rect.height)];
           poly = [at(e)];
           const onMove = (ev: MouseEvent) => {
             const p = at(ev);

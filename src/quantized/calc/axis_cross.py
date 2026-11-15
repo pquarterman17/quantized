@@ -17,6 +17,11 @@ where it is drawn. As on screen:
 
 The drawing happens at draw time (a small artist), so it reads the final
 ticks and limits -- whatever ``tight_layout`` or a later limit settles on.
+It is applied on the flat plot and its Y2 axis (``calc.axis_style``), on
+every facet panel (``calc.figure_facets``) and on every X-break panel
+(``calc.figure_break``: the Y crossing clamped into each panel's slice and
+labelled on panel 0 only, as the screen's break panels draw it). A turned
+(horizontal-bar) axes is drawn on the real axes it stands for.
 """
 
 from __future__ import annotations
@@ -31,7 +36,14 @@ from matplotlib.lines import Line2D
 from matplotlib.text import Text
 from matplotlib.transforms import offset_copy
 
+from quantized.calc.figure_orient import TransposedAxes
+
 __all__ = ["apply_cross", "cross_fraction", "cross_position"]
+
+# A turned (horizontal-bar) plot's axis lives on the real axes' other axis,
+# drawn on the matching real spine (calc.figure_orient).
+_OTHER = {"x": "y", "y": "x"}
+_TURNED_SIDE = {"left": "bottom", "bottom": "left", "right": "top", "top": "right"}
 
 _HIDDEN = (0.0, 0.0, 0.0, 0.0)
 # matplotlib's TICKLEFT / TICKRIGHT / TICKUP / TICKDOWN marker codes.
@@ -71,10 +83,21 @@ class _CrossedAxis(Artist):
     """Draws ``axis``' line, major ticks and labels across ``other``."""
 
     def __init__(
-        self, ax: Any, which: str, side: str, cross: float, look: Mapping[str, Any]
+        self,
+        ax: Any,
+        which: str,
+        side: str,
+        cross: float,
+        look: Mapping[str, Any],
+        labels: bool = True,
     ) -> None:
         super().__init__()
         self.ax, self.which, self.side, self.cross, self.look = ax, which, side, cross, look
+        self.labels = labels
+        #: What the last draw put on the page (the wire fixture reads it back):
+        #: the crossing as an axes fraction of the other axis, the line in axes
+        #: fractions, and the ticks with the labels drawn at them.
+        self.drawn: dict[str, Any] = {}
         self.set_zorder(2.6)
 
     def draw(self, renderer: Any) -> None:
@@ -85,7 +108,8 @@ class _CrossedAxis(Artist):
         lo, hi = sorted(axis.get_view_interval())
         tol = (hi - lo) * 1e-9
         locs = [float(v) for v in axis.get_major_locator()() if lo - tol <= v <= hi + tol]
-        labels = axis.get_major_formatter().format_ticks(locs) if locs else []
+        labels = axis.get_major_formatter().format_ticks(locs) if locs and self.labels else []
+        labels = labels or [""] * len(locs)
         fig = ax.figure
         trans = ax.get_xaxis_transform() if which == "x" else ax.get_yaxis_transform()
         out = -1.0 if self.side in ("left", "bottom") else 1.0
@@ -143,14 +167,22 @@ class _CrossedAxis(Artist):
         for part in parts:
             part.set_figure(fig)
             part.draw(renderer)
+        self.drawn = {"fraction": f, "line": span, "ticks": locs, "labels": list(labels)}
 
 
-def apply_cross(ax: Any, which: str, fmt: Mapping[str, Any], side: str) -> None:
+def apply_cross(
+    ax: Any, which: str, fmt: Mapping[str, Any] | None, side: str, *, labels: bool = True
+) -> _CrossedAxis | None:
     """Draw ``ax``'s ``which`` axis (on ``side``) across the other axis at
-    ``fmt["cross"]`` (module doc). Call after the limits are set."""
-    cross = fmt.get("cross")
+    ``fmt["cross"]`` (module doc); returns the drawing artist, or None.
+    ``labels=False``: the line and ticks only (an inner panel right of an X
+    break, whose Y labels are panel 0's). A turned (horizontal-bar) axes is
+    drawn on the real axes it stands for."""
+    cross = (fmt or {}).get("cross")
     if not isinstance(cross, (int, float)) or isinstance(cross, bool) or not math.isfinite(cross):
-        return
+        return None
+    if isinstance(ax, TransposedAxes):
+        ax, which, side = ax.real, _OTHER[which], _TURNED_SIDE[side]
     axis = ax.xaxis if which == "x" else ax.yaxis
     ticks = axis.get_major_ticks()
     tick = ticks[0] if ticks else None
@@ -169,4 +201,6 @@ def apply_cross(ax: Any, which: str, fmt: Mapping[str, Any], side: str) -> None:
     # The ticks and labels keep their space (the frame and title stay where
     # they are, as on screen); only the crossing draws them.
     ax.tick_params(axis=which, which="both", color=_HIDDEN, labelcolor=_HIDDEN)
-    ax.add_artist(_CrossedAxis(ax, which, side, float(cross), look))
+    artist = _CrossedAxis(ax, which, side, float(cross), look, labels)
+    ax.add_artist(artist)
+    return artist

@@ -165,7 +165,7 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
       {text("minor", "Minor ticks", "0")}
       {select("ticks", "Direction", TICKS)}
       {text("tickAt", "Tick positions", "auto, e.g. 0, 0.5, 1")}
-      {draft.tickAt.trim() !== "" && text("tickLabels", "Tick labels", "numbers, e.g. low, mid, high")}
+      {draft.tickAt.trim() !== "" && text("tickLabels", "Tick labels", "numbers, e.g. low, mid, high (\\, = a comma)")}
       <h3 style={{ margin: "4px 0" }}>Tick labels</h3>
       {select("mode", "Number format", MODES)}
       {text("digits", "Digits", "2")}

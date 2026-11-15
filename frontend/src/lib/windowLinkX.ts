@@ -6,14 +6,19 @@
 // agree; this is only the discoverable, named way to set it. One undo step.
 // "Link Y axis with…" (gap audit 4 G19) is the same model on its own field,
 // `PlotWindow.linkYGroup` (the primary Y range only), with the same refusals.
+// Either link joins only windows whose axis has the same KIND of scale
+// (linear, log, log2, reciprocal, probability): a range pushed from a linear
+// axis onto a log one would blank it. A window whose scale changes kind
+// afterwards leaves its group, with a status message (`ensureLinkGuard`).
 //
 // Loaded on demand (the plot right-click menu and the Plot menu command).
 
 import { askParams } from "../store/paramDialog";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
+import { plotWindowView } from "../store/windowDocuments";
 import { displayedWindowTitle, MAX_LINK_GROUP } from "./plotWindows";
-import type { PlotWindow } from "./plotview";
+import type { PlotView, PlotWindow } from "./plotview";
 
 type LinkWin = Pick<PlotWindow, "id" | "kind" | "linkGroup" | "linkYGroup">;
 /** Which link a call edits: X (`linkGroup`) or Y (`linkYGroup`). */
@@ -56,6 +61,25 @@ export function linkXGroups(windows: readonly LinkWin[], id: string, picked: rea
   return out;
 }
 
+type KindView = Pick<PlotView, "xScale" | "yScale" | "xFmt" | "yFmt">;
+
+/** The kind of scale `axis` has: "linear", "log" (log10 and ln place values
+ *  alike), "log2", "reciprocal", or "prob:<unit>". */
+export function scaleKind(view: KindView, axis: "x" | "y"): string {
+  const scale = axis === "x" ? view.xScale : view.yScale;
+  const fmt = axis === "x" ? view.xFmt : view.yFmt;
+  if (scale === "linear" && fmt?.prob) return `prob:${fmt.prob}`;
+  return scale === "log" && fmt?.base === "2" ? "log2" : scale;
+}
+
+const KIND_NAME: Record<string, string> = { "prob:fraction": "probability (0–1)", "prob:percent": "probability (%)" };
+const kindName = (k: string): string => KIND_NAME[k] ?? k;
+
+/** A window's live view: the focused one's is the store's own fields. */
+function liveView(s: ReturnType<typeof useApp.getState>, w: PlotWindow): KindView {
+  return w.id === s.focusedWindowId ? s : plotWindowView(w);
+}
+
 /** Ask which windows to link X with the focused one, then apply. */
 export function linkXAxisWith(): Promise<void> {
   return linkAxisWith("x");
@@ -95,6 +119,12 @@ async function linkAxisWith(axis: "x" | "y"): Promise<void> {
   if (!values) return;
   const picked = others.filter((w) => values[w.id] === true).map((w) => w.id);
   const now = useApp.getState();
+  const own = scaleKind(liveView(now, self), axis);
+  const clash = now.plotWindows.find((w) => picked.includes(w.id) && scaleKind(liveView(now, w), axis) !== own);
+  if (clash) {
+    toast(`can't link ${A} axes: “${name(clash)}” has a ${kindName(scaleKind(liveView(now, clash), axis))} ${A} axis and “${name(self)}” a ${kindName(own)} one`, "danger");
+    return;
+  }
   const changes = linkXGroups(now.plotWindows, id, picked, field);
   if (changes === null) {
     toast(`all ${MAX_LINK_GROUP} link groups are in use — unlink one (its windows' link button) first`, "danger");
@@ -106,4 +136,47 @@ async function linkAxisWith(axis: "x" | "y"): Promise<void> {
     plotWindows: st.plotWindows.map((w) => (changes.has(w.id) ? { ...w, [field]: changes.get(w.id)! } : w)),
   }));
   toast(picked.length ? `${A} axis linked with ${picked.length} window${picked.length === 1 ? "" : "s"}` : `${A} axis unlinked`, "ok");
+}
+
+let guarded = false;
+
+/** The windows to unlink because their axis' scale kind no longer matches
+ *  their group's: the focused window when it is the odd one out, else every
+ *  member of a group that disagrees. */
+export function linkClashes(s: ReturnType<typeof useApp.getState>, field: LinkField): string[] {
+  const axis = field === "linkGroup" ? "x" : "y";
+  const groups = new Map<number, PlotWindow[]>();
+  for (const w of s.plotWindows) {
+    const g = w.kind === "plot" ? w[field] ?? null : null;
+    if (g !== null) groups.set(g, [...(groups.get(g) ?? []), w]);
+  }
+  const out: string[] = [];
+  for (const members of groups.values()) {
+    const kinds = new Set(members.map((w) => scaleKind(liveView(s, w), axis)));
+    if (kinds.size < 2) continue;
+    const focused = members.find((w) => w.id === s.focusedWindowId);
+    out.push(...(focused ? [focused.id] : members.map((w) => w.id)));
+  }
+  return out;
+}
+
+/** Watch the store once: a linked window whose scale kind changes leaves its
+ *  link group, with a status message, instead of being blanked by its
+ *  partners' ranges. Installed by a linked plot (Stage/PlotViewport.tsx). */
+export function ensureLinkGuard(): void {
+  if (guarded) return;
+  guarded = true;
+  let seen: unknown[] = [];
+  useApp.subscribe((s) => {
+    const deps = [s.plotWindows, s.focusedWindowId, s.xScale, s.yScale, s.xFmt, s.yFmt];
+    if (deps.every((d, i) => d === seen[i])) return;
+    seen = deps;
+    for (const field of ["linkGroup", "linkYGroup"] as const) {
+      const off = linkClashes(s, field);
+      if (off.length === 0) continue;
+      const A = field === "linkGroup" ? "X" : "Y";
+      useApp.setState((st) => ({ plotWindows: st.plotWindows.map((w) => (off.includes(w.id) ? { ...w, [field]: null } : w)) }));
+      useApp.getState().setStatus(`${A} axis unlinked: its scale no longer matches the windows it was linked with`);
+    }
+  });
 }

@@ -352,6 +352,10 @@ export default function PlotViewport(props: PlotViewportProps) {
     ySyncKey,
   ]);
 
+  // A linked plot watches for a scale-kind change that would break its link (lib/windowLinkX.ts).
+  useEffect(() => {
+    if (syncKey || ySyncKey) void import("../../lib/windowLinkX").then((m) => m.ensureLinkGuard(), () => undefined);
+  }, [syncKey, ySyncKey]);
   // Display-only edits patch the live instance (after the create effect: see useLivePaint).
   useLivePaint(plotRef, paintRef, displayPayload, args, xAscending, limsRef, () => setRebuildEpoch((e) => e + 1));
   // On-demand plugins, and a rebuild once the startup chunks settle (figures leftover g).

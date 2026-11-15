@@ -15,7 +15,14 @@ import type { Dataset } from "./types";
 
 /** Mask (or unmask) what `poly` (css px over `u`'s plotting area) encloses. */
 export function lassoMask(u: uPlot, payload: PlotPayload, plotted: readonly number[], ds: Dataset, poly: Polygon, unmask: boolean): void {
-  const toPx = (x: number, y: number, axis: 0 | 1): [number, number] => [u.valToPos(x, "x"), u.valToPos(y, axis === 1 ? "y2" : "y")];
+  // Only a point drawn inside the plotting area can be hit.
+  const pr = devicePixelRatio || 1;
+  const w = u.bbox.width / pr;
+  const h = u.bbox.height / pr;
+  const toPx = (x: number, y: number, axis: 0 | 1): [number, number] | null => {
+    const p: [number, number] = [u.valToPos(x, "x"), u.valToPos(y, axis === 1 ? "y2" : "y")];
+    return p[0] >= 0 && p[0] <= w && p[1] >= 0 && p[1] <= h ? p : null;
+  };
   const got = lassoRows(payload, plotted, ds, useApp.getState().xKey, poly, toPx);
   if ("refused" in got) {
     toast(`couldn't mask those points: ${got.refused}`, "danger");

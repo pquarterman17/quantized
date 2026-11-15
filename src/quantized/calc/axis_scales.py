@@ -15,7 +15,9 @@ mapping (``x_fmt`` / ``y_fmt`` / ``y2_fmt``), applied from
   runs out to the nearest of them around the in-domain data. A value off the
   domain is not drawn (NaN), never clamped onto the axis.
 * ``custom: {"at": [...], "labels": [...]}`` -- explicit majors, labelled
-  where a label is given (otherwise the axis' own number).
+  where a label is given (otherwise the axis' own number). Labels are
+  literal text, as the canvas draws them: a ``$`` is escaped, never
+  mathtext. A list with a repeated position is refused whole.
 
 The axis crossing (``cross``) is ``calc.axis_cross``. The shared numbers are
 pinned by ``tests/fixtures/wire/axis_scales.json`` from both suites.
@@ -107,9 +109,28 @@ def prob_unit_of(axis: Any) -> str | None:
     return _PROB_AXES.get(axis)
 
 
+#: How far past the standard majors the auto range extends, by decades:
+#: down to 1e-10 and up to 1 - 1e-10 (as a fraction).
+PROB_MIN_DECADE = 10
+
+
+def _decades(lo: float, hi: float, unit: str) -> list[float]:
+    """Decade majors past the standard list (``10^-n`` and ``1 - 10^-n`` as a
+    fraction, n = 5..PROB_MIN_DECADE) inside ``[lo, hi]``."""
+    k = _scale(unit)
+    out = []
+    for n in range(5, PROB_MIN_DECADE + 1):
+        for f in (float(f"1e-{n}"), 1 - float(f"1e-{n}")):
+            v = _p12(f * k)
+            if lo <= v <= hi and in_prob_domain(v, unit):
+                out.append(v)
+    return sorted(out)
+
+
 def prob_auto_range(lo: float | None, hi: float | None, unit: str) -> tuple[float, float]:
     """The auto range over in-domain data ``[lo, hi]`` (None = none): out to
-    the nearest standard majors (the screen's ``probAutoRange``)."""
+    the nearest standard majors, or past them by decades (to 1e-10 as a
+    fraction) for data beyond 0.01 % or 99.99 % (the screen's ``probAutoRange``)."""
     k = _scale(unit)
     std = [t / 100 * k for t in PROB_TICKS_PCT]
     if lo is None or hi is None:
@@ -122,6 +143,12 @@ def prob_auto_range(lo: float | None, hi: float | None, unit: str) -> tuple[floa
     for t in reversed(std):
         if t >= hi * (1 - _EPS):
             b = t
+    floor = float(f"1e-{PROB_MIN_DECADE}")
+    # Data past 0.01 % / 99.99 %: out by whole decades, never past 1e-10.
+    if lo < std[0]:
+        a = _p12(max(floor, float(f"1e{math.floor(math.log10(lo / k) + _EPS)}")) * k)
+    if hi > std[-1]:
+        b = _p12((1 - max(floor, float(f"1e{math.floor(math.log10(1 - hi / k) + _EPS)}"))) * k)
     if not b > a:
         i = std.index(a)
         return std[max(0, i - 1)], std[min(len(std) - 1, i + 1)]
@@ -152,6 +179,7 @@ def prob_ticks(vmin: float, vmax: float, unit: str) -> list[float]:
         return lo - _EPS * k <= v <= hi + _EPS * k and in_prob_domain(v, unit)
 
     std = [v for v in (_p12(t / 100 * k) for t in PROB_TICKS_PCT) if inside(v)]
+    std = sorted([*_decades(lo - _EPS * k, hi + _EPS * k, unit), *std])
     if len(std) >= 2 or not hi > lo:
         return std
     step = nice_step((hi - lo) / 4)
@@ -164,9 +192,16 @@ def prob_ticks(vmin: float, vmax: float, unit: str) -> list[float]:
 
 
 def plain_label(v: float, _pos: int | None = None) -> str:
-    """A plain number label (the screen's ``plainLabel``)."""
-    out = f"{v:.12g}"
-    return out[:-2] if out.endswith(".0") else out
+    """A plain number label: JavaScript's ``String(Number(v.toPrecision(12)))``,
+    the screen's ``plainLabel`` (positional from 1e-6 to 1e21, else
+    exponent notation with no padded exponent)."""
+    x = _p12(v)
+    if x == 0:
+        return "0"
+    if 1e-6 <= abs(x) < 1e21:
+        return str(np.format_float_positional(x, trim="-"))
+    mant, exp = repr(x).split("e")
+    return f"{mant.removesuffix('.0')}e{'-' if exp[0] == '-' else '+'}{int(exp[1:])}"
 
 
 def log2_ticks(vmin: float, vmax: float) -> list[float]:
@@ -175,6 +210,11 @@ def log2_ticks(vmin: float, vmax: float) -> list[float]:
         return []
     k0 = math.ceil(math.log2(vmin) - _EPS)
     k1 = math.floor(math.log2(vmax) + _EPS)
+    if k1 - k0 < 1:
+        # Fewer than two powers of 2 in view: even steps of the value.
+        step = nice_step((vmax - vmin) / 4)
+        rng = range(math.ceil(vmin / step - _EPS), math.floor(vmax / step + _EPS) + 1)
+        return [v for v in (_p12(n * step) for n in rng) if v > 0]
     every = max(1, math.ceil((k1 - k0 + 1) / 12))
     start = math.ceil(k0 / every) * every
     return [2.0**k for k in range(start, k1 + 1, every)]
@@ -185,7 +225,9 @@ def log2_label(v: float, _pos: int | None = None) -> str:
     if not v > 0:
         return ""
     k = round(math.log2(v))
-    return plain_label(v) if abs(k) <= 10 else "2" + str(k).translate(_SUPERSCRIPT)
+    # Only an exact power of 2 takes the 2^k form: 3000 is not "2¹²".
+    exact = abs(math.log2(v) - k) < 1e-9
+    return plain_label(v) if abs(k) <= 10 or not exact else "2" + str(k).translate(_SUPERSCRIPT)
 
 
 def drawable_on(v: float, scale: str, fmt: Mapping[str, Any] | None) -> bool:
@@ -218,6 +260,8 @@ def _custom(raw: Any) -> tuple[list[float], list[str]] | None:
         return None
     if not all(isinstance(s, str) for s in labels):
         return None
+    if len(set(at)) != len(at):
+        return None  # a repeated position: which label is meant is ambiguous
     return [float(v) for v in at], [str(s) for s in labels]
 
 
@@ -233,9 +277,12 @@ def custom_ticks_in(
     lo, hi = min(vmin, vmax), max(vmin, vmax)
     tol = (hi - lo) * _EPS
     pairs = sorted(
-        (v, labels[i] if i < len(labels) and labels[i].strip() else None)
-        for i, v in enumerate(at)
-        if lo - tol <= v <= hi + tol and ok(v)
+        (
+            (v, labels[i] if i < len(labels) and labels[i].strip() else None)
+            for i, v in enumerate(at)
+            if lo - tol <= v <= hi + tol and ok(v)
+        ),
+        key=lambda p: p[0],
     )
     return [p[0] for p in pairs], [p[1] for p in pairs]
 
@@ -327,7 +374,8 @@ class _CustomFormatter(Formatter):
 
     def __call__(self, x: float, pos: int | None = None) -> str:
         label = self.labels.get(float(x))
-        return label if label is not None else str(self.inner(x, pos))
+        # The screen draws a label as literal text: a "$" is not mathtext here.
+        return label.replace("$", r"\$") if label is not None else str(self.inner(x, pos))
 
     def get_offset(self) -> str:
         return str(self.inner.get_offset())

@@ -127,13 +127,33 @@ export function axisDraft(view: AxisView, axis: AxisId): AxisDraft {
     topWavelength: str(fmt.top?.wavelength),
     topTitle: fmt.top?.title ?? "",
     tickAt: fmt.custom?.at.join(", ") ?? "",
-    tickLabels: fmt.custom?.labels?.join(", ") ?? "",
+    tickLabels: joinLabels(fmt.custom?.labels ?? []),
     cross: str(fmt.cross),
   };
 }
 
 /** A comma-separated list as entries (blank = none). */
 const listOf = (s: string): string[] => (s.trim() === "" ? [] : s.split(",").map((t) => t.trim()));
+
+/** Tick labels as one field: comma-separated, a literal comma (or
+ *  backslash) written `\,` (`\\`), so "1,000" survives a reopen. */
+export const joinLabels = (labels: readonly string[]): string => labels.map((l) => l.replace(/[\\,]/g, (c) => `\\${c}`)).join(", ");
+
+/** `joinLabels`' inverse. */
+export function splitLabels(s: string): string[] {
+  if (s.trim() === "") return [];
+  const out: string[] = [];
+  let cur = "";
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === "\\" && i + 1 < s.length) cur += s[++i];
+    else if (s[i] === ",") {
+      out.push(cur.trim());
+      cur = "";
+    } else cur += s[i];
+  }
+  out.push(cur.trim());
+  return out;
+}
 
 const num = (s: string): number | null => {
   const t = s.trim();
@@ -154,13 +174,13 @@ function scaleExtraErrors(d: AxisDraft, axis: AxisId, other: string | undefined,
   if (prob && ((lo !== null && !inProbDomain(lo, prob)) || (hi !== null && !inProbDomain(hi, prob)))) out.push(`A probability axis needs limits strictly between ${span}.`);
   if (prob && axis !== "x" && (d.breakFrom.trim() !== "" || d.breakTo.trim() !== "")) out.push("A probability axis cannot have a break.");
   const at = listOf(d.tickAt);
-  const labels = listOf(d.tickLabels);
+  const labels = splitLabels(d.tickLabels);
   const vals = at.map((t) => (t === "" ? NaN : Number(t)));
   if (vals.some((v) => !Number.isFinite(v))) out.push("Tick positions must be numbers, separated by commas.");
+  else if (new Set(vals).size !== vals.length) out.push("Each tick position may appear only once.");
   else if (vals.length > MAX_CUSTOM_TICKS) out.push(`At most ${MAX_CUSTOM_TICKS} tick positions.`);
   else if (prob && vals.some((v) => !inProbDomain(v, prob))) out.push(`Tick positions on a probability axis must be strictly between ${span}.`);
   else if (["log", "ln", "log2", "reciprocal"].includes(d.scale) && vals.some((v) => v <= 0)) out.push("Tick positions on a log, ln, log2 or reciprocal axis must be positive.");
-  if (labels.length > 0 && at.length === 0) out.push("Tick labels need tick positions.");
   if (labels.length > at.length && at.length > 0) out.push("There are more tick labels than tick positions.");
   if (d.cross.trim() !== "") {
     const c = num(d.cross);
@@ -259,7 +279,7 @@ export function axisPatch(view: AxisView, axis: AxisId, d: AxisDraft): Partial<P
   const breaks = axis === "x" ? base.breaks : bLo !== null && bHi !== null ? normalizeBreaks([[bLo, bHi], ...(base.breaks ?? []).slice(1)]) : undefined;
   const prob = probOf(d.scale);
   const at = listOf(d.tickAt).map(Number);
-  const labels = listOf(d.tickLabels);
+  const labels = splitLabels(d.tickLabels);
   const cross = num(d.cross);
   const fmt: AxisFormat = {
     mode: d.mode,

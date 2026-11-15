@@ -8,7 +8,12 @@
 //                a fraction in (0, 1) or a percent in (0, 100) (`prob`);
 //   custom       explicit major positions, optionally labelled (`custom`);
 //   cross        the axis drawn across the other axis at a value (`cross`).
-// A value outside a scale's domain is never drawn and never coerced.
+// A value outside a scale's domain is never drawn and never coerced: the line
+// breaks there on screen (`lib/logGaps.ts`) as it does in the export.
+// Probability axes auto-range past the standard 0.01 %..99.99 % majors by
+// whole decades (to 1e-10) so no drawable point is left off the view. The
+// crossing is drawn on every panel of a facet grid or an X-broken plot (Y
+// labelled on panel 0 only), and on a horizontal-bar plot's turned axes.
 
 import type { AxisFormat, CustomTicks } from "./axisFormat";
 
@@ -80,8 +85,30 @@ export const probBackward = (z: number, unit: ProbUnit): number => normCdf(z) * 
 
 const EPS = 1e-9;
 
+/** How far past the standard majors a probability axis reaches, by decades:
+ *  1e-10 and 1 - 1e-10 as a fraction (the export's `PROB_MIN_DECADE`). */
+export const PROB_MIN_DECADE = 10;
+
+const p12 = (v: number): number => Number(v.toPrecision(12));
+
+/** Decade majors past the standard list (10^-n and 1 - 10^-n as a fraction,
+ *  n = 5..PROB_MIN_DECADE) inside `[lo, hi]`. */
+function decades(lo: number, hi: number, unit: ProbUnit): number[] {
+  const k = scaleOf(unit);
+  const out: number[] = [];
+  for (let n = 5; n <= PROB_MIN_DECADE; n++) {
+    for (const f of [Number(`1e-${n}`), 1 - Number(`1e-${n}`)]) {
+      const v = p12(f * k);
+      if (v >= lo && v <= hi && inProbDomain(v, unit)) out.push(v);
+    }
+  }
+  return out.sort((a, b) => a - b);
+}
+
 /** The auto range of a probability axis over in-domain data `[lo, hi]`
- *  (null = no in-domain data): out to the nearest standard majors. */
+ *  (null = no in-domain data): out to the nearest standard majors, or past
+ *  them by whole decades (to 1e-10 as a fraction) for data beyond 0.01 % or
+ *  99.99 %, so no drawable point is left off the view. */
 export function probAutoRange(lo: number | null, hi: number | null, unit: ProbUnit): [number, number] {
   const k = scaleOf(unit);
   const std = PROB_TICKS_PCT.map((t) => (t / 100) * k);
@@ -90,6 +117,9 @@ export function probAutoRange(lo: number | null, hi: number | null, unit: ProbUn
   for (const t of std) if (t <= lo * (1 + EPS)) a = t;
   let b = std[std.length - 1];
   for (let i = std.length - 1; i >= 0; i--) if (std[i] >= hi * (1 - EPS)) b = std[i];
+  const floor = Number(`1e-${PROB_MIN_DECADE}`);
+  if (lo < std[0]) a = p12(Math.max(floor, Number(`1e${Math.floor(Math.log10(lo / k) + EPS)}`)) * k);
+  if (hi > std[std.length - 1]) b = p12((1 - Math.max(floor, Number(`1e${Math.floor(Math.log10(1 - hi / k) + EPS)}`))) * k);
   if (!(b > a)) {
     const i = std.indexOf(a);
     return [std[Math.max(0, i - 1)], std[Math.min(std.length - 1, i + 1)]];
@@ -111,7 +141,7 @@ export function probTicks(min: number, max: number, unit: ProbUnit): number[] {
   const [lo, hi] = min <= max ? [min, max] : [max, min];
   const k = scaleOf(unit);
   const inside = (v: number) => v >= lo - EPS * k && v <= hi + EPS * k && inProbDomain(v, unit);
-  const std = PROB_TICKS_PCT.map((t) => Number(((t / 100) * k).toPrecision(12))).filter(inside);
+  const std = [...decades(lo - EPS * k, hi + EPS * k, unit), ...PROB_TICKS_PCT.map((t) => p12((t / 100) * k)).filter(inside)].sort((a, b) => a - b);
   if (std.length >= 2 || !(hi > lo)) return std;
   const step = niceStep((hi - lo) / 4);
   const out: number[] = [];
@@ -122,29 +152,41 @@ export function probTicks(min: number, max: number, unit: ProbUnit): number[] {
   return out;
 }
 
-/** A plain number label (the export's `"%.12g"`, no exponent here). */
+/** A plain number label (the export's `plain_label` mirrors it exactly). */
 export const plainLabel = (v: number): string => String(Number(v.toPrecision(12)));
 
 const SUP: Record<string, string> = { "-": "⁻", "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴", "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹" };
 
 /** A log2 axis' majors in `[min, max]`: powers of 2, thinned to every k-th
- *  power (k a whole number) once there would be more than 12. */
+ *  power (k a whole number) once there would be more than 12; on a view
+ *  holding fewer than two powers, even steps of the value instead. */
 export function log2Ticks(min: number, max: number): number[] {
   if (!(min > 0) || !(max > min)) return [];
   const k0 = Math.ceil(Math.log2(min) - EPS);
   const k1 = Math.floor(Math.log2(max) + EPS);
+  if (k1 - k0 < 1) {
+    const step = niceStep((max - min) / 4);
+    const even: number[] = [];
+    for (let n = Math.ceil(min / step - EPS); n <= Math.floor(max / step + EPS); n++) {
+      const v = p12(n * step);
+      if (v > 0) even.push(v);
+    }
+    return even;
+  }
   const every = Math.max(1, Math.ceil((k1 - k0 + 1) / 12));
   const out: number[] = [];
   for (let k = Math.ceil(k0 / every) * every; k <= k1; k += every) out.push(2 ** k);
   return out;
 }
 
-/** A log2 major's label: the number for 2^-10..2^10, else 2 with a
- *  superscript exponent. */
+/** A log2 major's label: the number for 2^-10..2^10 or for a value that is
+ *  not an exact power of 2 (3000 is not "2¹²"), else 2 with a superscript
+ *  exponent. */
 export function log2Label(v: number): string {
   if (!(v > 0)) return "";
   const k = Math.round(Math.log2(v));
-  return Math.abs(k) <= 10 ? plainLabel(v) : `2${String(k).replace(/[-0-9]/g, (c) => SUP[c])}`;
+  const exact = Math.abs(Math.log2(v) - k) < 1e-9;
+  return Math.abs(k) <= 10 || !exact ? plainLabel(v) : `2${String(k).replace(/[-0-9]/g, (c) => SUP[c])}`;
 }
 
 /** Can scale `scale` (with format `fmt`) draw the value `v` at all? */

@@ -36,6 +36,10 @@ interface ExportCase {
   ticks: number[];
   labels: string[];
   crossFraction?: number;
+  crossLine?: "horizontal" | "vertical";
+  crossTicks?: number[];
+  crossLabels?: string[];
+  turned?: boolean;
 }
 
 const fx = JSON.parse(readFileSync(FIXTURE, "utf8")) as {
@@ -43,6 +47,8 @@ const fx = JSON.parse(readFileSync(FIXTURE, "utf8")) as {
   log2: { view: [number, number]; ticks: number[]; labels: string[] }[];
   custom: { custom: { at: number[]; labels?: string[] }; scale: string; fmt: AxisFormat; view: [number, number]; at: number[]; labels: (string | null)[] }[];
   cross: { cross: number; view: [number, number]; drawable: boolean; position: number | null }[];
+  log2Labels: Record<string, string>;
+  plain: Record<string, string>;
   export: ExportCase[];
 };
 
@@ -76,6 +82,14 @@ describe("axis_scales.json: the shared math", () => {
     expect(got).toEqual({ at: c.at, labels: c.labels });
   });
 
+  it("log2 labels: only an exact power of 2 reads 2^k (review M6)", () => {
+    for (const [v, label] of Object.entries(fx.log2Labels)) expect(log2Label(Number(v))).toBe(label);
+  });
+
+  it("plain labels format numbers identically on both sides", () => {
+    for (const [v, label] of Object.entries(fx.plain)) expect(plainLabel(Number(v))).toBe(label);
+  });
+
   it.each(fx.cross)("crossing at $cross over $view", (c) => {
     expect(crossPosition(c.cross, c.view[0], c.view[1], c.drawable)).toBe(c.position);
   });
@@ -99,9 +113,9 @@ function recordingCtx() {
   return { ctx, lines, texts };
 }
 
-/** uPlot's valToPos for a plain linear / log scale over `[min, max]`. */
-function pos(scale: string, min: number, max: number, from: number, size: number) {
-  const t = (v: number) => (scale === "log" ? (v > 0 ? Math.log10(v) : NaN) : v);
+/** uPlot's valToPos for a linear / log / probability scale over `[min, max]`. */
+function pos(scale: string, min: number, max: number, from: number, size: number, prob?: ProbUnit) {
+  const t = (v: number) => (prob ? probForward(v, prob) : scale === "log" ? (v > 0 ? Math.log10(v) : NaN) : v);
   return (v: number) => from + ((t(v) - t(min)) / (t(max) - t(min))) * size;
 }
 
@@ -140,30 +154,42 @@ describe("axis_scales.json: the canvas draws what the export drew", () => {
       labels.forEach((l, i) => own[i] !== null && expect(l).toBe(own[i]));
       return;
     }
-    // The crossing: the axis line sits where the export put it.
+    // The crossing: the axis line, its ticks and its labels sit where the
+    // export's crossing artist drew them -- the screen computing its OWN
+    // ticks (a turned export plot is drawn upright on screen).
     const other = c.axis === "x" ? "y" : "x";
+    const oProb = (other === "x" ? xFmt : yFmt).prob;
+    const splits = (axes[idx].splits as Splits)(u, idx, lim[0], lim[1], 1, 30);
+    close(splits, c.crossTicks!);
     const ov = (other === "x" ? c.x_view : c.y_view) ?? [Math.min(...c[other]), Math.max(...c[other])];
     const bbox = { left: 100, top: 20, width: 400, height: 300 };
     const oScale = (other === "x" ? c.x_scale : c.y_scale) ?? "linear";
     const toPos = {
-      x: other === "x" ? pos(oScale, ov[0], ov[1], bbox.left, bbox.width) : pos("linear", lim[0], lim[1], bbox.left, bbox.width),
-      y: other === "y" ? pos(oScale, ov[0], ov[1], bbox.top + bbox.height, -bbox.height) : pos("linear", lim[0], lim[1], bbox.top + bbox.height, -bbox.height),
+      x: other === "x" ? pos(oScale, ov[0], ov[1], bbox.left, bbox.width, oProb) : pos("linear", lim[0], lim[1], bbox.left, bbox.width),
+      y: other === "y" ? pos(oScale, ov[0], ov[1], bbox.top + bbox.height, -bbox.height, oProb) : pos("linear", lim[0], lim[1], bbox.top + bbox.height, -bbox.height),
     };
     const rec = recordingCtx();
     const drawn = {
-      ctx: rec.ctx, bbox, axes: axes.map((a) => ({ ...a, _splits: c.ticks })),
+      ctx: rec.ctx, bbox, axes: axes.map((a) => ({ ...a, _splits: splits })),
       scales: { [other]: { min: ov[0], max: ov[1] } },
       valToPos: (v: number, k: string) => toPos[k as "x" | "y"](v),
     } as unknown as uPlot;
     // uPlot hands the formatter its splits before it lays the axis out.
-    (axes[idx].values as Values)(drawn, c.ticks, idx, 30, 1);
+    (axes[idx].values as Values)(drawn, splits, idx, 30, 1);
     (plugin!.hooks.draw as (u: uPlot) => void)(drawn);
     const [x0, y0, x1, y1] = rec.lines[0];
     const frac = c.axis === "x" ? (bbox.top + bbox.height - y0) / bbox.height : (x0 - bbox.left) / bbox.width;
     expect(c.axis === "x" ? y0 === y1 : x0 === x1).toBe(true);
+    if (!c.turned) expect(c.crossLine).toBe(c.axis === "x" ? "horizontal" : "vertical");
     expect(frac).toBeCloseTo(c.crossFraction!, 9);
-    // Every tick is labelled at the crossing, on the axis' own side.
-    expect(rec.texts.map((t) => t.text)).toEqual(c.ticks.map(String));
+    // Every tick is labelled at the crossing, on the axis' own side; a custom
+    // label reads the same as the export's (each engine formats its own numbers).
+    expect(rec.texts).toHaveLength(splits.length);
+    const custom = fmt.custom;
+    rec.texts.forEach((t, i) => {
+      const given = custom?.labels?.[custom.at.indexOf(splits[i])];
+      if (given?.trim()) expect(t.text).toBe(c.crossLabels![i]);
+    });
     for (const t of rec.texts) expect(c.axis === "x" ? t.y > y0 : t.x < x0).toBe(true);
   });
 });

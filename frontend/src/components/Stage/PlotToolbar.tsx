@@ -83,6 +83,8 @@ interface BtnSpec {
   onClick: () => void;
 }
 
+const LASSO_STACK_NOTE = "Lasso Mask works on a single graph: turn the multi-panel layout off, or mask rows in the worksheet";
+
 function ToolButton({ glyph, name, desc, shortcut, active, disabled, disabledReason, onClick }: BtnSpec) {
   const reason = disabled && disabledReason ? disabledReason : undefined;
   const reasonId = useId();
@@ -149,6 +151,13 @@ export default function PlotToolbar({
   useEffect(() => {
     loadToolPlugins().catch(() => undefined);
   }, []);
+  // Lasso Mask draws on one graph only: a multi-panel layout drops it, and says why.
+  useEffect(() => {
+    if (stackOn && tool === "lasso") {
+      setPlotTool("zoom");
+      useApp.getState().setStatus(LASSO_STACK_NOTE);
+    }
+  }, [stackOn, tool, setPlotTool]);
 
   const toggleGroupLabels = () => {
     const next = !showGroupLabels;
@@ -167,6 +176,7 @@ export default function PlotToolbar({
     active: tool === t.id,
     onClick: () => setPlotTool(t.id),
     ...(turned && !TURNED_TOOLS.includes(t.id) ? { disabled: true, disabledReason: TURNED_TOOL_NOTE } : {}),
+    ...(stackOn && t.id === "lasso" ? { disabled: true, disabledReason: LASSO_STACK_NOTE } : {}),
   });
 
   // View/Export buttons each have bespoke active/disabled logic, so this only

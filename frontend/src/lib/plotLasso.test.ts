@@ -78,15 +78,17 @@ describe("lassoRows on a reduced payload", () => {
   });
 });
 
+const ORIGINAL_STATE = useApp.getState();
+
 describe("lassoMask: one undo step", () => {
-  const ORIGINAL = useApp.getState();
+  const ORIGINAL = ORIGINAL_STATE;
   afterEach(() => useApp.setState(ORIGINAL, true));
 
   it("masks the enclosed points, Shift unmasks them, and undo restores", () => {
     const ds: Dataset = { id: "d", name: "d", data: { time: [10, 20, 30, 40], values: [[10], [20], [30], [40]], labels: ["y"], units: [""], metadata: {} } };
     useApp.setState({ datasets: [ds], activeId: "d", xKey: null, history: [], future: [] });
     const payload = { data: [[10, 20, 30, 40], [10, 20, 30, 40]], series: [{ label: "y", unit: "" }], xLabel: "x", xUnit: "" } as PlotPayload;
-    const u = { valToPos: (v: number, k: string) => (k === "x" ? v : 100 - v) } as unknown as uPlot;
+    const u = { valToPos: (v: number, k: string) => (k === "x" ? v : 100 - v), bbox: { left: 0, top: 0, width: 100, height: 100 } } as unknown as uPlot;
     lassoMask(u, payload, [0], ds, square(15, 60, 35, 85), false);
     const st = useApp.getState();
     expect([...excludedSet(st.datasets[0])].sort()).toEqual([1, 2]);
@@ -120,5 +122,41 @@ describe("lassoPlugin", () => {
     over.dispatchEvent(at("mousedown", 110, 60));
     document.dispatchEvent(at("mouseup", 110, 60));
     expect(onLasso).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Gap audit 4 G19 review: the outline is clamped to the plotting area and a
+// point drawn off it is never hit (M3); the non-zero winding rule (L1).
+describe("lasso review fixes", () => {
+  it("never masks a point drawn off the plotting area", () => {
+    const ds: Dataset = { id: "d", name: "d", data: { time: [50, 150], values: [[50], [50]], labels: ["y"], units: [""], metadata: {} } };
+    useApp.setState({ datasets: [ds], activeId: "d", xKey: null, history: [], future: [] });
+    const payload = { data: [[50, 150], [50, 50]], series: [{ label: "y", unit: "" }], xLabel: "x", xUnit: "" } as PlotPayload;
+    // Zoomed so x in [0, 100] fills a 100 px plot: row 1 sits at px 150, off it.
+    const u = { valToPos: (v: number, k: string) => (k === "x" ? v : 100 - v), bbox: { left: 0, top: 0, width: 100, height: 100 } } as unknown as uPlot;
+    lassoMask(u, payload, [0], ds, [[90, 40], [200, 40], [200, 60], [90, 60]], false);
+    expect(useApp.getState().datasets[0].excludedRows ?? []).toEqual([]);
+    lassoMask(u, payload, [0], ds, [[40, 40], [200, 40], [200, 60], [40, 60]], false);
+    expect(useApp.getState().datasets[0].excludedRows).toEqual([0]);
+    useApp.setState(ORIGINAL_STATE, true);
+  });
+
+  it("clamps the drawn outline to the plotting area", () => {
+    const over = document.createElement("div");
+    over.getBoundingClientRect = () => ({ left: 100, top: 50, right: 500, bottom: 350, width: 400, height: 300, x: 100, y: 50, toJSON: () => ({}) });
+    const onLasso = vi.fn();
+    (lassoPlugin(onLasso, "#f00").hooks.ready as (u: uPlot) => void)({ over, redraw: vi.fn() } as unknown as uPlot);
+    const at = (type: string, x: number, y: number) => new MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true });
+    over.dispatchEvent(at("mousedown", 110, 60));
+    document.dispatchEvent(at("mousemove", 900, 60));
+    document.dispatchEvent(at("mousemove", 900, 900));
+    document.dispatchEvent(at("mouseup", 900, 900));
+    expect(onLasso.mock.calls[0][1]).toEqual([[10, 10], [400, 10], [400, 300]]);
+  });
+
+  it("an outline traced round twice still encloses its inside (non-zero winding)", () => {
+    const sq: [number, number][] = [[0, 0], [10, 0], [10, 10], [0, 10]];
+    expect(insidePolygon([...sq, ...sq], 5, 5)).toBe(true);
+    expect(insidePolygon([...sq, ...sq], 15, 5)).toBe(false);
   });
 });

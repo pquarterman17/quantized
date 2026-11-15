@@ -76,14 +76,14 @@ export interface CustomTicks {
 /** At most this many custom ticks (a typed list, not a data column). */
 export const MAX_CUSTOM_TICKS = 50;
 
-/** `raw` as valid custom ticks -- finite positions (at most
+/** `raw` as valid custom ticks -- finite, distinct positions (at most
  *  `MAX_CUSTOM_TICKS`) with labels index-aligned -- or `undefined`. A list
  *  with any invalid entry is refused whole, never repaired: a label that
  *  slid onto its neighbour's position would mislabel the axis. */
 export function normalizeCustomTicks(raw: unknown): CustomTicks | undefined {
   const c = raw as Partial<CustomTicks> | null | undefined;
   if (!c || typeof c !== "object" || !Array.isArray(c.at) || c.at.length === 0 || c.at.length > MAX_CUSTOM_TICKS) return undefined;
-  if (!c.at.every((v) => typeof v === "number" && Number.isFinite(v))) return undefined;
+  if (!c.at.every((v) => typeof v === "number" && Number.isFinite(v)) || new Set(c.at).size !== c.at.length) return undefined;
   const labels = c.labels;
   if (labels !== undefined && (!Array.isArray(labels) || labels.length > c.at.length || !labels.every((l) => typeof l === "string" && l.length <= 100))) return undefined;
   return { at: [...c.at], ...(labels?.some((l) => l.trim()) ? { labels: [...labels] } : {}) };

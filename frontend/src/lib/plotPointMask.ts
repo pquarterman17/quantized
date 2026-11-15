@@ -113,15 +113,19 @@ export function pickRows(
 export type Polygon = readonly (readonly [number, number])[];
 export type ToPx = (x: number, y: number, axis: 0 | 1) => readonly [number, number] | null;
 
-/** Is (`px`, `py`) inside `poly` (even-odd ray casting)? */
+/** Is (`px`, `py`) inside `poly`? The non-zero winding rule: an outline
+ *  traced round twice, or crossing itself, still encloses what it circles. */
 export function insidePolygon(poly: Polygon, px: number, py: number): boolean {
-  let inside = false;
+  let winding = 0;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [xi, yi] = poly[i];
     const [xj, yj] = poly[j];
-    if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+    const [xi, yi] = poly[i];
+    const side = (xi - xj) * (py - yj) - (px - xj) * (yi - yj);
+    if (yj <= py) {
+      if (yi > py && side > 0) winding++;
+    } else if (yi <= py && side < 0) winding--;
   }
-  return inside;
+  return winding !== 0;
 }
 
 /** Rows with a drawn point of ANY data series inside the lasso, tested in

@@ -27,8 +27,9 @@
 // through the one shared `lib/facet.durableComposition` — precedence and all
 // — and mounted through the one shared `multiPanelShowing` predicate the
 // focused `PlotStage` asks (BUG-012 review F5).
-// Cross-window link groups (item 13) stay XY-only: the `linkGroup` prop is
-// threaded into the XY path's viewport ONLY, never into the alternate mode
+// Cross-window link groups (item 13; the Y link, gap audit 4 G19) stay
+// XY-only: the `linkGroup` (X range + cursor) and `linkYGroup` (primary Y
+// range) props are threaded into the XY path's viewport ONLY, never into the alternate mode
 // cores (a stack window's panels sync among THEMSELVES via a per-window key
 // — see `BackgroundAltModes.tsx`).
 //

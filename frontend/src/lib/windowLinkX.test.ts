@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useApp } from "../store/useApp";
 import { defaultPlotView, type PlotWindow } from "./plotview";
 import type { Dataset } from "./types";
-import { linkXAxisWith, linkXGroups, linkYAxisWith } from "./windowLinkX";
+import { ensureLinkGuard, linkClashes, linkXAxisWith, linkXGroups, linkYAxisWith, scaleKind } from "./windowLinkX";
 import { parseWorkspace } from "./workspace";
 import { serializeWorkspace } from "./workspaceSerialize";
 
@@ -113,5 +113,42 @@ describe("Link Y axis with…", () => {
     const loaded = parseWorkspace(serializeWorkspace(useApp.getState()));
     useApp.getState().loadWorkspace(loaded);
     expect(Object.fromEntries(useApp.getState().plotWindows.map((w) => [w.title, w.linkYGroup ?? null]))).toEqual({ A: null, B: 2 });
+  });
+});
+
+// Gap audit 4 G19 review M4: a link only joins axes of the same KIND of
+// scale, and a window whose scale changes kind afterwards leaves its group
+// with a status message (a pushed linear range would blank a log axis).
+describe("links refuse and drop mismatched scale kinds", () => {
+  const logY = (id: string, linkYGroup: number | null = null): PlotWindow => ({ ...winY(id, linkYGroup), view: { ...defaultPlotView(), yScale: "log" } });
+
+  it("names the kinds: log10 and ln alike, log2 and probability apart", () => {
+    const v = defaultPlotView();
+    expect(scaleKind(v, "y")).toBe("linear");
+    expect(scaleKind({ ...v, yScale: "log", yFmt: { mode: "auto", digits: 2, base: "e" } }, "y")).toBe("log");
+    expect(scaleKind({ ...v, yScale: "log", yFmt: { mode: "auto", digits: 2, base: "2" } }, "y")).toBe("log2");
+    expect(scaleKind({ ...v, xFmt: { mode: "auto", digits: 2, prob: "percent" } }, "x")).toBe("prob:percent");
+  });
+
+  it("refuses to link Y with a window whose Y scale differs in kind", async () => {
+    useApp.setState({ plotWindows: [winY("a"), logY("b"), winY("c")] });
+    vi.mocked(askParams).mockResolvedValueOnce({ b: true, c: true });
+    await linkYAxisWith();
+    expect(yGroups()).toEqual({ a: null, b: null, c: null });
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("unlinks the focused window, with a status message, when its Y scale changes kind", () => {
+    useApp.setState({ plotWindows: [winY("a", 1), winY("b", 1)], status: "" });
+    ensureLinkGuard();
+    useApp.setState({ yScale: "log" });
+    expect(yGroups()).toEqual({ a: null, b: 1 });
+    expect(useApp.getState().status).toMatch(/Y axis unlinked/);
+  });
+
+  it("a clash between two unfocused windows unlinks that whole group", () => {
+    const s = { ...useApp.getState(), plotWindows: [winY("a"), winY("b", 2), logY("c", 2)] };
+    expect(linkClashes(s, "linkYGroup").sort()).toEqual(["b", "c"]);
+    expect(linkClashes(s, "linkGroup")).toEqual([]);
   });
 });
