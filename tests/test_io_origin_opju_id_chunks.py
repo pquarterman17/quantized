@@ -16,7 +16,13 @@ import pytest
 
 from quantized.io.origin_project.figures_opju import extract_figures_opju
 from quantized.io.origin_project.opju_blocks import DatasetHeader, find_headers
-from quantized.io.origin_project.opju_curve_token import CURVE_TOKEN, column_id_chunks, token_id
+from quantized.io.origin_project.opju_curve_token import (
+    CURVE_TOKEN,
+    chunk_id,
+    column_id_records,
+    is_shipped_form,
+    token_id,
+)
 from quantized.io.origin_project.opju_display_range import before_begin_missing
 from quantized.io.origin_project.opju_figure_curves import column_id_table, opju_pages
 from quantized.io.origin_project.opju_records import DatasetRecord, decode_record
@@ -62,11 +68,30 @@ def _wide_record(cid: int, name: str, partner: int) -> bytes:
     )
 
 
-def test_column_id_chunks_give_the_fields_offset() -> None:
+def test_column_id_records_give_the_fields_offset() -> None:
     rec = _wide_record(0x57, "I", 1)
-    [(cid, fields, width)] = column_id_chunks(rec, 0, len(rec))
-    assert (cid, width) == (0x57, 4)
+    [(off, cid, fields)] = column_id_records(rec, 0, len(rec))
+    assert (off, cid) == (2, 0x57)
     assert rec[fields : fields + 2] == b"\x80\x01"
+
+
+def test_chunk_id_zero_low_byte_and_lengths() -> None:
+    assert chunk_id(b"\x81\x02\x16\x09", 0) == (0x1600, 4)
+    assert chunk_id(b"\x81\x01\x11", 0) == (0x1100, 3)
+    assert chunk_id(b"\x80\x02\x35\x0a", 0) == (0x0A35, 4)
+    assert chunk_id(b"\x80\x04\x57\x00\x10\x0c", 0) == (0x57, 6)
+    assert chunk_id(b"\x82\x02\x16\x09", 0) is None
+    assert chunk_id(b"\x80\x03\x35", 0) is None  # truncated
+
+
+def test_shipped_forms() -> None:
+    def form(tag: int, n: int) -> bool:
+        m = CURVE_TOKEN.search(bytes([0xBA, 1, 1, 1, tag, n]) + b"\x05" * n)
+        assert m is not None
+        return is_shipped_form(m)
+
+    assert form(0x80, 1) and form(0x80, 3) and form(0x81, 1) and form(0x81, 2)
+    assert not form(0x80, 2) and not form(0x80, 4)
 
 
 def _blob(*tokens: bytes) -> bytes:

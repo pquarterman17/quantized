@@ -161,7 +161,7 @@ from quantized.io.origin_project.opju_figure_curves import (
     opju_pages,
 )
 from quantized.io.origin_project.opju_figure_text import routed_figure_text
-from quantized.io.origin_project.opju_sheet_signals import sheet_map
+from quantized.io.origin_project.opju_sheet_segments import sheet_map_with_segments
 
 __all__ = ["extract_figures_opju"]
 
@@ -307,7 +307,7 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         book_columns = book_columns_from_bytes(b)
         books_meta = book_metadata_from_bytes(b, book_columns)
         book_counts_all = allocated_columns_from_bytes(b)
-    off_sheet, gates = ({}, None) if legacy else sheet_map(b, table)  # opju_sheet_signals
+    off_sheet, gates = ({}, None) if legacy else sheet_map_with_segments(b, table)
     page_starts = [off for off, _name in pages]
     page_layers: dict[int, int] = {}  # page index -> anchors seen so far (the layer ordinal)
     anchors = sorted(_find_all(b, _ANCHOR) + _find_all(b, _ANCHOR_PANEL))

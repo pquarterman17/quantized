@@ -118,7 +118,12 @@ from quantized.io.origin_project.curve_style_color import (
 from quantized.io.origin_project.opju_codec import curve_plot_style
 from quantized.io.origin_project.opju_curve_range import range_reason
 from quantized.io.origin_project.opju_curve_sheets import curve_sheet, sheet_x_names
-from quantized.io.origin_project.opju_curve_token import CURVE_TOKEN, column_id_chunks, token_id
+from quantized.io.origin_project.opju_curve_token import (
+    CURVE_TOKEN,
+    column_id_records,
+    is_shipped_form,
+    token_id,
+)
 from quantized.io.origin_project.opju_curve_token_x import token_x
 from quantized.io.origin_project.opju_embedded_pages import span_pages
 from quantized.io.origin_project.opju_sheet_signals import SheetGates, newly_proven_reason
@@ -126,10 +131,6 @@ from quantized.io.origin_project.tree_opju import iter_opju_windows
 
 __all__ = ["ColumnIdTable", "column_id_table", "extract_curves_by_id", "opju_pages"]
 
-# Column-record id field, form B (see module docstring); form A, at every
-# id-chunk length, is ``opju_curve_token.column_id_chunks``.
-_ID_FORM_B = re.compile(rb"\x07\x10\x01\x00\x00(..)", re.DOTALL)
-_ID_FORM_B1 = re.compile(rb"\x05\x10\x01\x00\x00(.)", re.DOTALL)  # u8 id, no <pb>
 
 # The unified curve token: <flag> 01 01 01 80 <width> <id…> (module docstring).
 _CURVE_TOKEN = re.compile(rb"\x01\x01\x01\x80([\x01\x03])", re.DOTALL)
@@ -227,26 +228,6 @@ def _parse_column_record(b: bytes, after_id: int) -> tuple[str, str | None, int 
         return None  # name shape found but no designation marker: not a column record
     return None
 
-
-def _id_records(b: bytes, start: int, end: int) -> list[tuple[int, int]]:
-    """``(column id, offset of its tagged fields)`` for every id record in
-    ``b[start:end)``, in the scan order shipped before the other id-chunk
-    lengths were read (form A length 3, B, A length 1, B1), those last."""
-    a = column_id_chunks(b, start, end)
-    forms_b = [
-        (int.from_bytes(m.group(1), "little"), m.end() + 1)
-        for m in _ID_FORM_B.finditer(b, start, end)
-    ]
-    forms_b1 = [(m.group(1)[0], m.end()) for m in _ID_FORM_B1.finditer(b, start, end)]
-    return [
-        *((c, f) for c, f, w in a if w == 3),
-        *forms_b,  # one <pb> byte before the fields
-        *((c, f) for c, f, w in a if w == 1),
-        *forms_b1,
-        *((c, f) for c, f, w in a if w not in (1, 3)),
-    ]
-
-
 def column_id_table(b: bytes, pages: list[tuple[int, str]]) -> ColumnIdTable:
     """Scan every page span for column records and build the global id table.
 
@@ -264,7 +245,7 @@ def column_id_table(b: bytes, pages: list[tuple[int, str]]) -> ColumnIdTable:
     book_pages: set[str] = set()
     bounds = [*pages, (len(b), "")]
     for (start, book), (end, _next) in zip(bounds, bounds[1:], strict=False):
-        for cid, fields in _id_records(b, start, end):
+        for _off, cid, fields in column_id_records(b, start, end):
             parsed = _parse_column_record(b, fields - 1)  # it skips one <pb> byte
             if parsed is None:
                 continue
@@ -304,7 +285,7 @@ def _yerr_x_unproven(
     against another X than the fallback, the X is unproven; a first curve,
     or one after another sheet's, keeps the fallback (PerceivedRisk Graph35
     ``Book1DAA_B@3`` -- COM-identical against ``A``)."""
-    if partner is not None or cid not in table.yerr_ids or m.group(1)[0] in (1, 3):
+    if partner is not None or cid not in table.yerr_ids or is_shipped_form(m):
         return False
     return prev is not None and prev[0] == this[0] and prev[1] != this[1]
 
@@ -345,24 +326,26 @@ def extract_curves_by_id(
     ``legend_labels`` follows. ``gates`` (``opju_sheet_signals.sheet_map``)
     omits the same way a curve whose book carries a worksheet data filter
     (``worksheet_filter``) and a curve placed only by the second sheet signal
-    when ``opju_sheet_signals.newly_proven_reason`` gives a reason. Dedup is per
+    when ``opju_sheet_signals.newly_proven_reason`` gives a reason, or when the
+    layer plots it again (``plotted_twice``). Dedup is per
     ``(book, y, sheet)``, so a layer plotting ``B`` of two sheets keeps both.
     """
     off = off_sheet or {}
     out: list[dict[str, str | float]] = []
     records: list[bytes | None] = []
     notes: list[dict[str, str]] = []  # per curve: its sheet note (reason "" = kept)
-    seen: set[tuple[str, str, str]] = set()
+    seen: dict[tuple[str, str, str], int] = {}  # key -> its curve's index
+    placed: set[int] = set()  # indices of curves the second/third sheet signal placed
     sheet_x: dict[str, str] | None = None  # built on first need
     prev: tuple[str, str] | None = None  # the previous curve's (sheet, X)
     token_starts: list[int] | None = None  # built on first need
     tokens = list(CURVE_TOKEN.finditer(b, start, end))  # every id-chunk width
-    # the 1/3-byte chunks were the only ones read before: where one names the
+    # the forms read before (opju_curve_token): where one names the
     # same id, it keeps the curve (and its colour) the shipped dedup kept
-    shipped = {token_id(b, t) for t in tokens if t.group(1)[0] in (1, 3)}
+    shipped = {token_id(b, t) for t in tokens if is_shipped_form(t)}
     for m in tokens:
         cid = token_id(b, m)
-        if cid is None or (m.group(1)[0] not in (1, 3) and cid in shipped):
+        if cid is None or (not is_shipped_form(m) and cid in shipped):
             continue
         info = table.ids.get(cid)
         if info is None:
@@ -399,8 +382,16 @@ def extract_curves_by_id(
             reason = "x_unproven"
         key = (book, y_col, sheet)
         if key in seen:
+            # Origin plots the same column again (row-range parts, SOP_meas
+            # Graph12 ``figSOPvsR_E`` x3, 4 of 15 rows first): undecoded, so a
+            # curve only the new sheet signals place is withheld (plan item 67)
+            k = seen[key]
+            if k in placed and not notes[k]["reason"]:
+                notes[k]["reason"] = "plotted_twice"
             continue
-        seen.add(key)
+        seen[key] = len(out)
+        if cid in newly or partner in newly:
+            placed.add(len(out))
         curve: dict[str, str | float] = {"book": sheet or book, "x": x_col, "y": y_col}
         # the token IS the sparse form of the .opj curve-anchor record; the
         # id chunk's 0x80 tag sits 3 bytes into the regex match

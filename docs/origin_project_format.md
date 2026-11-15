@@ -2553,6 +2553,34 @@ column of the book (`x_token_differs`), or when its token's plot-type tag
 (`plot_type_not_drawn`; 219 `0xdb` is a histogram). Without the two X
 gates 12 more newly drawn, COM-checked curves drew the wrong X.
 
+**Zero-low-byte column ids (2026-11-15, plan items 67-68,
+`opju_zero_low_ids`).** The id sits at offset 4 of both the column record
+and the curve token's sparse record, after the 3 zeros an `80` chunk
+skips. When the id's LOW byte is 0 (256, 512, 3072, …) the writer folds it
+into the skip: `81 02 <hi> <next>` (`81 01 <hi>` when `<next>` is 0 too) —
+`01 10 81 02 <hi> <pb> <fields…>` in the column record,
+`<flag> 01 01 01 81 0[12] <hi>` in the token. Neither form was read, so
+every such column was missing from the id table (107 records corpus-wide,
+all passing the same field walk) and every curve plotting one was never
+decoded; one missing id is enough to break the rank alignment of its
+whole `(book, column)` name (`PerceivedRisk` `Book1D`: 26 `D` ids against
+27 `Book1D_D[@N]` datasets).
+
+**Third sheet signal S (2026-11-15, plan item 67,
+`opju_sheet_segments`).** A book's window section writes its sheets in
+window order, each opened by a sheet header whose sparse stream carries
+the `Pd` field (`82 02 50 64`, the 2-byte prefix of the `.opj` layer
+header's sheet name, §4.1) and followed by that sheet's column records.
+Every record between one marker and the next is on one sheet. The segment
+names no sheet id (ids are creation ids: `Catchment A`'s second window
+sheet is `@7`), so it is anchored by its rank/H/P-proven ids. Over the 32
+multi-sheet books of the 16 COM-checked files the marker count equals the
+sheet count and each segment holds its sheet's name; over the 359-file
+corpus, 3,598 segments, 35,128 proven ids: 0 segments whose proven ids
+disagree, 0 sheets claimed by two segments. Report sheets (`FitNL1`,
+`FitLinear1`) write no id records, which is why their extra datasets break
+the rank alignment (`SOP_meas` `figSOPvsR`: 4 ids, 7 datasets).
+
 **Worksheet data filter (2026-11-15).** A book page whose span holds a
 `__STGCOLFILTER` storage block (the filter column's name and a condition
 text such as `0.07` follow it) has an Origin data filter: rows the
