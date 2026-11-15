@@ -11,7 +11,8 @@ import { seriesPoints } from "./markers";
 import type { PlotPayload } from "./plotdata";
 import { sanitizeExportSeriesStyles } from "./publicationStyles";
 import type { DataStruct, SeriesStyle } from "./types";
-import { ERROR_CAP_HALF_PX, styleErrorDraw } from "./uplotErrorRange";
+import { styleErrorDraw } from "./uplotErrorDraw";
+import { ERROR_CAP_HALF_PX } from "./uplotErrorRange";
 import { buildSeriesDefs } from "./uplotSeries";
 
 const COLORS = { accentColor: "#00f", inkColor: "#fff", inkDimColor: "#888", isDarkBg: true };

@@ -244,3 +244,27 @@ describe("the default trace on page panels", () => {
     expect(panelRenderInputs(slots, useApp.getState())).not.toEqual(before);
   });
 });
+
+// Review M3 (gap audit 4 lane A): a focused-window panel's preview must re-render
+// when ONLY the graph's colour gradient, or an input its resolver reads, changes.
+describe("the focused-window panel's preview cache key", () => {
+  const slots = [{ source: { kind: "window" as const, id: "w-focus", name: "W" } }];
+  const win = { id: "w-focus", kind: "plot", datasetId: "d1", document: LIVE } as unknown as ReturnType<typeof useApp.getState>["plotWindows"][number];
+
+  beforeEach(() => {
+    useApp.setState({ plotWindows: [win], focusedWindowId: "w-focus", seriesRamp: null, seriesLabels: {} });
+    return () => useApp.setState({ plotWindows: [], focusedWindowId: null, seriesRamp: null, seriesLabels: {} });
+  });
+
+  it("changes when the gradient changes", () => {
+    const before = panelRenderInputs(slots, useApp.getState());
+    useApp.setState({ seriesRamp: { map: "plasma" } });
+    expect(panelRenderInputs(slots, useApp.getState())).not.toEqual(before);
+  });
+
+  it("changes when a legend label (the gradient's value order) changes", () => {
+    const before = panelRenderInputs(slots, useApp.getState());
+    useApp.setState({ seriesLabels: { 0: "M 5 K" } });
+    expect(panelRenderInputs(slots, useApp.getState())).not.toEqual(before);
+  });
+});

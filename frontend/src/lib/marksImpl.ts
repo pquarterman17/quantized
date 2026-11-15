@@ -7,6 +7,8 @@ import { buildSizeKey, sizeDiameter, sizeLegendEntries } from "./sizescatter";
 import type { DataStruct, SeriesStyle } from "./types";
 
 export { SPLINE_PATHS } from "./uplotSpline";
+export { symbolPoints } from "./symbolDetails"; // gap audit 4 G10
+export { rampedStyles } from "./seriesRampImpl"; // gap audit 4 G1 (Stage/useSeriesRamp)
 import { colorScatterFill, paintColorPoint } from "./colorscatter";
 import { dropLinePlugins, seriesStrokeColor } from "./uplotDropLines";
 import type uPlot from "uplot";

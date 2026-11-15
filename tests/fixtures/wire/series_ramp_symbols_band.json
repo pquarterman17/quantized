@@ -1,0 +1,1187 @@
+{
+  "cases": [
+    {
+      "name": "a gradient over 12 curves, plotted order, one hidden",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11
+            ],
+            [
+              0.1,
+              1.1,
+              2.1,
+              3.1,
+              4.1,
+              5.1,
+              6.1,
+              7.1,
+              8.1,
+              9.1,
+              10.1,
+              11.1
+            ],
+            [
+              0.2,
+              1.2,
+              2.2,
+              3.2,
+              4.2,
+              5.2,
+              6.2,
+              7.2,
+              8.2,
+              9.2,
+              10.2,
+              11.2
+            ],
+            [
+              0.30000000000000004,
+              1.3,
+              2.3,
+              3.3,
+              4.3,
+              5.3,
+              6.3,
+              7.3,
+              8.3,
+              9.3,
+              10.3,
+              11.3
+            ],
+            [
+              0.4,
+              1.4,
+              2.4,
+              3.4,
+              4.4,
+              5.4,
+              6.4,
+              7.4,
+              8.4,
+              9.4,
+              10.4,
+              11.4
+            ],
+            [
+              0.5,
+              1.5,
+              2.5,
+              3.5,
+              4.5,
+              5.5,
+              6.5,
+              7.5,
+              8.5,
+              9.5,
+              10.5,
+              11.5
+            ]
+          ],
+          "labels": [
+            "M 300 K",
+            "M 2 K",
+            "M 150 K",
+            "M 10 K",
+            "M 250 K",
+            "M 5 K",
+            "M 50 K",
+            "M 200 K",
+            "M 20 K",
+            "M 100 K",
+            "M 30 K",
+            "M 75 K"
+          ],
+          "units": [
+            "emu",
+            "emu",
+            "emu",
+            "emu",
+            "emu",
+            "emu",
+            "emu",
+            "emu",
+            "emu",
+            "emu",
+            "emu",
+            "emu"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1,
+          2,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#723684",
+            "ramp_rank": 0,
+            "width": 1.5
+          },
+          {
+            "color": "#694598",
+            "ramp_rank": 1,
+            "width": 1.5
+          },
+          {
+            "color": "#5a58a0",
+            "ramp_rank": 2,
+            "width": 1.5
+          },
+          {
+            "color": "#377796",
+            "ramp_rank": 4,
+            "width": 1.5
+          },
+          {
+            "color": "#23848c",
+            "ramp_rank": 5,
+            "width": 1.5
+          },
+          {
+            "color": "#07907e",
+            "ramp_rank": 6,
+            "width": 1.5
+          },
+          {
+            "color": "#199a6a",
+            "ramp_rank": 7,
+            "width": 1.5
+          },
+          {
+            "color": "#2da449",
+            "ramp_rank": 8,
+            "width": 1.5
+          },
+          {
+            "color": "#5da804",
+            "ramp_rank": 9,
+            "width": 1.5
+          },
+          {
+            "color": "#90a611",
+            "ramp_rank": 10,
+            "width": 1.5
+          },
+          {
+            "color": "#b4a417",
+            "ramp_rank": 11,
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "lane-a"
+      },
+      "canvas": [
+        {
+          "color": "#723684",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#694598",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#5a58a0",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#377796",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#23848c",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#07907e",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#199a6a",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#2da449",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#5da804",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#90a611",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#b4a417",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        }
+      ]
+    },
+    {
+      "name": "a reversed gradient ordered by the temperature in each legend; an own colour is kept",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11
+            ],
+            [
+              0.1,
+              1.1,
+              2.1,
+              3.1,
+              4.1,
+              5.1,
+              6.1,
+              7.1,
+              8.1,
+              9.1,
+              10.1,
+              11.1
+            ],
+            [
+              0.2,
+              1.2,
+              2.2,
+              3.2,
+              4.2,
+              5.2,
+              6.2,
+              7.2,
+              8.2,
+              9.2,
+              10.2,
+              11.2
+            ],
+            [
+              0.30000000000000004,
+              1.3,
+              2.3,
+              3.3,
+              4.3,
+              5.3,
+              6.3,
+              7.3,
+              8.3,
+              9.3,
+              10.3,
+              11.3
+            ],
+            [
+              0.4,
+              1.4,
+              2.4,
+              3.4,
+              4.4,
+              5.4,
+              6.4,
+              7.4,
+              8.4,
+              9.4,
+              10.4,
+              11.4
+            ],
+            [
+              0.5,
+              1.5,
+              2.5,
+              3.5,
+              4.5,
+              5.5,
+              6.5,
+              7.5,
+              8.5,
+              9.5,
+              10.5,
+              11.5
+            ]
+          ],
+          "labels": [
+            "M 300 K",
+            "M 2 K",
+            "M 150 K",
+            "M 10 K",
+            "M 250 K",
+            "M 5 K",
+            "M 50 K",
+            "M 200 K",
+            "M 20 K",
+            "M 100 K",
+            "M 30 K",
+            "M 75 K"
+          ],
+          "units": [
+            "emu",
+            "emu",
+            "emu",
+            "emu",
+            "emu",
+            "emu",
+            "emu",
+            "emu",
+            "emu",
+            "emu",
+            "emu",
+            "emu"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#3442b6",
+            "ramp_rank": 11,
+            "width": 1.5
+          },
+          {
+            "color": "#a10d23",
+            "ramp_rank": 0,
+            "width": 1.5
+          },
+          {
+            "color": "#6a89ce",
+            "ramp_rank": 8,
+            "width": 1.5
+          },
+          {
+            "color": "#c25840",
+            "ramp_rank": 2,
+            "width": 1.5
+          },
+          {
+            "color": "#cc3311",
+            "ramp_rank": 10,
+            "width": 1.5
+          },
+          {
+            "color": "#b8312b",
+            "ramp_rank": 1,
+            "width": 1.5
+          },
+          {
+            "color": "#ac9b93",
+            "ramp_rank": 5,
+            "width": 1.5
+          },
+          {
+            "color": "#5575cf",
+            "ramp_rank": 9,
+            "width": 1.5
+          },
+          {
+            "color": "#c47458",
+            "ramp_rank": 3,
+            "width": 1.5
+          },
+          {
+            "color": "#8198c2",
+            "ramp_rank": 7,
+            "width": 1.5
+          },
+          {
+            "color": "#bc8b75",
+            "ramp_rank": 4,
+            "width": 1.5
+          },
+          {
+            "color": "#979fad",
+            "ramp_rank": 6,
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "lane-a"
+      },
+      "canvas": [
+        {
+          "color": "#3442b6",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#a10d23",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#6a89ce",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#c25840",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#cc3311",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#b8312b",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#ac9b93",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#5575cf",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#c47458",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#8198c2",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#bc8b75",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        },
+        {
+          "color": "#979fad",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        }
+      ]
+    },
+    {
+      "name": "symbol edge, fill, opacity and every 3rd point over a gap",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "values": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              null
+            ],
+            [
+              4
+            ],
+            [
+              5
+            ],
+            [
+              6
+            ],
+            [
+              7
+            ],
+            [
+              8
+            ],
+            [
+              9
+            ],
+            [
+              10
+            ]
+          ],
+          "labels": [
+            "S"
+          ],
+          "units": [
+            "emu"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "marker": true,
+            "marker_shape": "square",
+            "marker_edge": "#2255aa",
+            "marker_face": "#dd8800",
+            "marker_alpha": 0.4,
+            "marker_every": 3,
+            "marker_size": 5,
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "lane-a"
+      },
+      "canvas": [
+        {
+          "color": "#8b5cf6",
+          "marker_rows": [
+            0,
+            4,
+            7
+          ],
+          "marker_edge": "#2255aa",
+          "marker_fill": "color-mix(in oklab, #dd8800 40%, transparent)",
+          "band": null
+        }
+      ]
+    },
+    {
+      "name": "every 2nd symbol on a hysteresis loop, row order",
+      "request": {
+        "dataset": {
+          "time": [
+            -2,
+            -1,
+            0,
+            1,
+            2,
+            1,
+            0,
+            -1,
+            -2
+          ],
+          "values": [
+            [
+              -1
+            ],
+            [
+              -0.9
+            ],
+            [
+              -0.2
+            ],
+            [
+              0.8
+            ],
+            [
+              1
+            ],
+            [
+              0.9
+            ],
+            [
+              0.2
+            ],
+            [
+              -0.8
+            ],
+            [
+              -1
+            ]
+          ],
+          "labels": [
+            "M"
+          ],
+          "units": [
+            "emu"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#3366cc",
+            "marker": true,
+            "marker_every": 2,
+            "marker_size": 5,
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "lane-a"
+      },
+      "canvas": [
+        {
+          "color": "#3366cc",
+          "marker_rows": [
+            0,
+            2,
+            4,
+            6,
+            8
+          ],
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": null
+        }
+      ]
+    },
+    {
+      "name": "a Y error band on a hysteresis loop follows row order",
+      "request": {
+        "dataset": {
+          "time": [
+            -2,
+            -1,
+            0,
+            1,
+            2,
+            1,
+            0,
+            -1,
+            -2
+          ],
+          "values": [
+            [
+              -1,
+              0.1
+            ],
+            [
+              -0.9,
+              0.2
+            ],
+            [
+              -0.2,
+              0.3
+            ],
+            [
+              0.8,
+              0.2
+            ],
+            [
+              1,
+              0.1
+            ],
+            [
+              0.9,
+              0.2
+            ],
+            [
+              0.2,
+              0.3
+            ],
+            [
+              -0.8,
+              0.2
+            ],
+            [
+              -1,
+              0.1
+            ]
+          ],
+          "labels": [
+            "M",
+            "dM"
+          ],
+          "units": [
+            "emu",
+            "emu"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#aa3377",
+            "error_band": true,
+            "width": 1.5
+          }
+        ],
+        "error_spans": [
+          {
+            "y": {
+              "plus": [
+                0.1,
+                0.2,
+                0.3,
+                0.2,
+                0.1,
+                0.2,
+                0.3,
+                0.2,
+                0.1
+              ],
+              "minus": [
+                0.1,
+                0.2,
+                0.3,
+                0.2,
+                0.1,
+                0.2,
+                0.3,
+                0.2,
+                0.1
+              ]
+            }
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "lane-a"
+      },
+      "canvas": [
+        {
+          "color": "#aa3377",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": [
+            [
+              -2,
+              -0.9,
+              -1,
+              -0.7,
+              -1.1,
+              -1.1
+            ],
+            [
+              -1,
+              -0.7,
+              0,
+              0.09999999999999998,
+              -0.5,
+              -1.1
+            ],
+            [
+              0,
+              0.09999999999999998,
+              1,
+              1,
+              0.6000000000000001,
+              -0.5
+            ],
+            [
+              1,
+              1,
+              2,
+              1.1,
+              0.9,
+              0.6000000000000001
+            ],
+            [
+              1,
+              1.1,
+              2,
+              1.1,
+              0.9,
+              0.7
+            ],
+            [
+              0,
+              0.5,
+              1,
+              1.1,
+              0.7,
+              -0.09999999999999998
+            ],
+            [
+              -1,
+              -0.6000000000000001,
+              0,
+              0.5,
+              -0.09999999999999998,
+              -1
+            ],
+            [
+              -2,
+              -0.9,
+              -1,
+              -0.6000000000000001,
+              -1,
+              -1.1
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "a Y error band on a descending sweep keeps its X bars",
+      "request": {
+        "dataset": {
+          "time": [
+            5,
+            4,
+            3,
+            2,
+            1
+          ],
+          "values": [
+            [
+              1,
+              0.5,
+              0.2
+            ],
+            [
+              2,
+              0.4,
+              0.2
+            ],
+            [
+              4,
+              0.3,
+              0.2
+            ],
+            [
+              3,
+              0.2,
+              0.2
+            ],
+            [
+              5,
+              0.1,
+              0.2
+            ]
+          ],
+          "labels": [
+            "R",
+            "dR",
+            "dT"
+          ],
+          "units": [
+            "emu",
+            "emu",
+            "emu"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#228833",
+            "error_color": "#ee6677",
+            "error_band": true,
+            "width": 1.5
+          }
+        ],
+        "error_spans": [
+          {
+            "y": {
+              "plus": [
+                0.5,
+                0.4,
+                0.3,
+                0.2,
+                0.1
+              ],
+              "minus": [
+                0.5,
+                0.4,
+                0.3,
+                0.2,
+                0.1
+              ]
+            },
+            "x": {
+              "plus": [
+                0.2,
+                0.2,
+                0.2,
+                0.2,
+                0.2
+              ],
+              "minus": [
+                0.2,
+                0.2,
+                0.2,
+                0.2,
+                0.2
+              ]
+            }
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "lane-a"
+      },
+      "canvas": [
+        {
+          "color": "#228833",
+          "marker_rows": null,
+          "marker_edge": null,
+          "marker_fill": null,
+          "band": [
+            [
+              4,
+              2.4,
+              5,
+              1.5,
+              0.5,
+              1.6
+            ],
+            [
+              3,
+              4.3,
+              4,
+              2.4,
+              1.6,
+              3.7
+            ],
+            [
+              2,
+              3.2,
+              3,
+              4.3,
+              3.7,
+              2.8
+            ],
+            [
+              1,
+              5.1,
+              2,
+              3.2,
+              2.8,
+              4.9
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}
