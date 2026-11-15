@@ -35,6 +35,8 @@ from quantized.io.origin_project.opju_axis_real_form import (
 
 __all__ = ["parse_hybrid_record"]
 
+_RLE_MARKERS = (0xC2, 0xC3)  # run of 5 / 6 repeated bytes (see ``_real_rle``)
+
 
 def _value_candidates(b: bytes, pos: int, end: int) -> list[tuple[float, int]]:
     """Every plausible ``(value, bytes_consumed)`` parse starting at ``pos``.
@@ -55,6 +57,12 @@ def _value_candidates(b: bytes, pos: int, end: int) -> list[tuple[float, int]]:
         v = _decode_raw8(b[pos : pos + 8])
         if v is not None:
             out.append((v, 8))
+    if pos < end and b[pos] in _RLE_MARKERS:
+        # ``c2``/``c3`` opening a token is a run-first RLE marker (``c3 66 02 25
+        # 40`` is 10.7), never a 2-byte tag to skip: skipping it read the run's
+        # context byte and suffix as a 3-byte compact (``02 25 40`` = 10.5039..).
+        # The specimen grammar has no RLE token; the real form decodes it.
+        return out
     if avail >= 10:
         v = _decode_raw8(b[pos + 2 : pos + 10])
         if v is not None:

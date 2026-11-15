@@ -130,3 +130,28 @@ def test_specimen_skeleton_with_scale_trailer_stays_specimen() -> None:
     blob = _skeleton(b"\x03\x7b\x40\x01\x8d\x03\x40\x6e\x40\x83\x02\x34\x40")
     assert _parse_specimen_record(blob, _payload(blob)) is not None
     assert [(f["y_from"], f["y_to"]) for f in extract_figures_opju(blob)] == [(0.0, 242.0)]
+
+
+# ── RLE value after a tagged one is not a 2-byte tag to skip ──────────────────
+
+
+def test_specimen_skeleton_rle_y_to_decodes_in_real_form() -> None:
+    """XRD_no_card: type byte 03 + ``7b 40 01`` (a true specimen skeleton) with Y
+    ``85 02 e0 bf`` = -0.5, ``c3 66 02 25 40`` = 10.7 (0x4025666666666666), step
+    1.0. The specimen reader took ``c3 66`` for a 2-byte tag and ``02 25 40`` for a
+    3-byte compact -- 10.50390625 (0x4025020000000000). It now declines (no RLE in
+    its grammar) and the real form reads Origin's [-0.5, 10.7]."""
+    blob = _skeleton(
+        b"\x03\x7b\x40\x01\x85\x02\xe0\xbf\xc3\x66\x02\x25\x40\x83\x02\xf0\x3f"
+    )
+    assert _parse_specimen_record(blob, _payload(blob)) is None
+    assert [(f["y_from"], f["y_to"]) for f in extract_figures_opju(blob)] == [(-0.5, 10.7)]
+
+
+def test_specimen_skeleton_literal_y_still_decodes_as_specimen() -> None:
+    """Negative control: a specimen Y span with no RLE marker (``85 02 e0 bf`` then
+    ``8d 03 40 6e 40`` = 242) is untouched and still accepted by the specimen
+    reader."""
+    blob = _skeleton(b"\x03\x7b\x40\x01\x85\x02\xe0\xbf\x8d\x03\x40\x6e\x40\x83\x02\xf0\x3f")
+    assert _parse_specimen_record(blob, _payload(blob)) is not None
+    assert [(f["y_from"], f["y_to"]) for f in extract_figures_opju(blob)] == [(-0.5, 242.0)]

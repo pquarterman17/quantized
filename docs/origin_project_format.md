@@ -2705,6 +2705,20 @@ separator (`81 id plen 00 flag 01`):
 Oracle (76 files, decoded layers): 1549 match / 13 wrong / 16 phantom before
 -> 1588 / 0 / 16 after (phantoms are the page-name-escape class above, unchanged).
 
+**RLE value inside a specimen skeleton (2026-11-15).** XRD_no_card's Y span
+`85 02 e0 bf | c3 66 02 25 40 | 83 02 f0 3f` is -0.5, 10.7, step 1.0 (the run
+`c3 66` = six `66`s, ctx `02`, suffix `25 40` = 0x4025666666666666). The
+specimen reader (`_parse_pair`/`_value_candidates`) offers a "skip 2 tag
+bytes, read 1-3 compact bytes" candidate at every token start; at `c3` that
+skipped the run marker and read `02 25 40` as a compact = 0x4025020000000000 =
+10.50390625 -- the mantissa cut after two bytes. `c2`/`c3` at a token start is
+an RLE marker, never a tag, so the skip candidates are not offered there; the
+specimen reader then declines (it has no RLE token) and the real form decodes
+the record (also yielding the tick steps, 10 and 1). Over all 359 `.opju` files
+exactly one decoded record changes (this one); Origin 2026b COM, 102 oracle
+files: 1773 match / 3 wrong -> 1774 / 2 wrong (the two left are the Battery
+Aging value-shift defects, unchanged).
+
 **Validation.** File-level `plots.json`: unchanged 36/36, 0 wrong (table
 above, now resolved via ids). Per-graph vs the populated `index.json`
 oracles (`tools/origin_trial/score_curve_bindings.py`'s per-graph section +
