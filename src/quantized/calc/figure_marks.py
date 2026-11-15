@@ -66,7 +66,12 @@ def _runs(ok: NDArray[np.bool_]) -> list[tuple[int, int]]:
 def _dense_run(
     x: NDArray[np.float64], y: NDArray[np.float64]
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """Natural cubic spline through one run, SUBSTEPS samples per segment (broadcast, no loop)."""
+    """Natural cubic spline through one run, SUBSTEPS samples per segment (broadcast, no loop).
+    A DESCENDING run (a cooling or +H to -H sweep) is fitted reversed and handed back in row order,
+    so the path direction, the knots (same positions) and a fill stay aligned with the rows."""
+    if x[0] > x[-1]:
+        xd, yd = _dense_run(x[::-1], y[::-1])
+        return xd[::-1], yd[::-1]
     with heavy_imports("scipy.interpolate"):
         from scipy.interpolate import CubicSpline
 
@@ -80,7 +85,8 @@ def spline_refusal(x: NDArray[np.float64], y: NDArray[np.float64]) -> str | None
     n = min(len(x), len(y))
     xv, yv = np.asarray(x, dtype=float)[:n], np.asarray(y, dtype=float)[:n]
     ok = np.isfinite(xv) & np.isfinite(yv)
-    if np.any(np.diff(xv[ok]) <= 0):
+    d = np.diff(xv[ok])
+    if not (np.all(d > 0) or np.all(d < 0)):  # strictly monotonic in EITHER direction
         return "loop"
     cnt = int(ok.sum())
     return "long" if cnt > SPLINE_MAX_ROWS else "short" if cnt < 3 else None

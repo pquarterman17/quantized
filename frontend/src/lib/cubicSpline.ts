@@ -3,7 +3,7 @@
 // bc_type="natural"), SUBSTEPS samples per segment, so the exported figure
 // draws the same curve the Stage does.
 //
-// Only where X is strictly ascending over the finite rows AND there are at most
+// Only where X is strictly monotonic (ascending or descending) over the finite rows AND there are at most
 // SPLINE_MAX_ROWS of them: a hysteresis loop or a repeated X is not a function
 // of X, and past the cap the rows are denser than the pixels. `splineDense` then
 // answers null and the caller draws straight segments in row order (never resorted).
@@ -21,11 +21,16 @@ const finite = (v: Cell): v is number => v != null && Number.isFinite(v);
 /** Why a spline cannot be drawn for these rows, or null when it can. */
 export function splineRefusal(xs: readonly Cell[], ys: readonly Cell[]): "loop" | "long" | "short" | null {
   let n = 0;
-  let prev = -Infinity;
+  let prev = NaN;
+  let dir = 0; // +1 ascending, -1 descending: strictly monotonic either way (a cooling or +H to -H sweep)
   for (let i = 0; i < Math.min(xs.length, ys.length); i++) {
     const x = xs[i];
     if (!finite(x) || !finite(ys[i])) continue;
-    if (x <= prev) return "loop";
+    if (n > 0) {
+      const d = Math.sign(x - prev);
+      if (d === 0 || (dir !== 0 && d !== dir)) return "loop";
+      dir = d;
+    }
     prev = x;
     n++;
   }

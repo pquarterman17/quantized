@@ -123,3 +123,32 @@ def test_a_size_column_without_a_finite_value_means_no_sizing() -> None:
     (line,) = ax.lines
     assert line.get_marker() == "o"  # the normal markers stay
     assert not _keys(ax)
+
+
+# ---- descending X (a cooling or +H to -H sweep) splines too
+def test_a_descending_run_is_the_mirror_of_its_ascending_counterpart() -> None:
+    x = np.array([4.0, 3.0, 2.0, 1.0])
+    y = np.array([30.0, 15.0, 20.0, 10.0])
+    assert spline_refusal(x, y) is None
+    desc = spline_dense(x, y)
+    asc = spline_dense(x[::-1], y[::-1])
+    assert desc is not None and asc is not None
+    np.testing.assert_allclose(desc[0], asc[0][::-1])
+    np.testing.assert_allclose(desc[1], asc[1][::-1])
+    assert desc[2] == [0, 16, 32, 48]  # row order kept: knot j sits at j * 16
+    np.testing.assert_allclose(desc[0][desc[2]], x)  # markers stay on the rows
+    # Frozen values the canvas test (lib/cubicSpline.test.ts) pins to the same numbers.
+    np.testing.assert_allclose(
+        [desc[1][1], desc[1][8], desc[1][24], desc[1][40]], [28.668212890625, 20.125, 17.125, 17.0]
+    )
+
+
+def test_loops_and_ties_still_refuse_and_a_descending_series_draws_a_spline_in_row_order() -> None:
+    assert spline_refusal(np.array([3.0, 2.0, 3.0]), np.array([1.0, 2.0, 3.0])) == "loop"
+    assert spline_refusal(np.array([3.0, 3.0, 1.0]), np.array([1.0, 2.0, 3.0])) == "loop"
+    x = np.array([4.0, 3.0, 2.0, 1.0])
+    _, ax, notes = _draw([{"connect": "spline", "marker": True}], [("A", Y)], x)
+    (line,) = ax.lines
+    assert len(line.get_xdata()) == 3 * 16 + 1 and line.get_xdata()[0] == 4.0  # direction preserved
+    assert list(line.get_markevery()) == [0, 16, 32, 48]
+    assert not notes

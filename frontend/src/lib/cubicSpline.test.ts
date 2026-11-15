@@ -42,3 +42,32 @@ describe("splineDense (N6 spline connect)", () => {
     expect(d.x.filter((v) => Number.isNaN(v))).toHaveLength(1);
   });
 });
+
+describe("descending X (cooling / +H to -H sweeps)", () => {
+  const xd = [4, 3, 2, 1];
+  const yd = [30, 15, 20, 10];
+
+  it("is strictly monotonic in either direction; loops and ties still refuse", () => {
+    expect(splineEligible(xd, yd)).toBe(true);
+    expect(splineEligible([3, 2, 3], [1, 2, 3])).toBe(false);
+    expect(splineEligible([3, 3, 1], [1, 2, 3])).toBe(false);
+  });
+
+  it("equals the mirror of the ascending run, in row order", () => {
+    const d = splineDense(xd, yd)!;
+    const a = splineDense([...xd].reverse(), [...yd].reverse())!;
+    a.x.forEach((v, i) => expect(d.x[a.x.length - 1 - i]).toBeCloseTo(v, 12));
+    a.y.forEach((v, i) => expect(d.y[a.y.length - 1 - i]).toBeCloseTo(v, 10));
+    expect(d.knots).toEqual([0, 16, 32, 48]);
+    expect(d.x[0]).toBe(4); // direction preserved: markers and a fill stay on their rows
+  });
+
+  it("matches the export's values (tests/test_calc_figure_marks_review.py), screen = export", () => {
+    const d = splineDense(xd, yd)!;
+    expect(d.y[1]).toBeCloseTo(28.668212890625, 10);
+    expect(d.y[8]).toBeCloseTo(20.125, 10);
+    expect(d.y[24]).toBeCloseTo(17.125, 10);
+    expect(d.y[40]).toBeCloseTo(17.0, 10);
+    expect(d.x[1]).toBeCloseTo(3.9375, 12);
+  });
+});
