@@ -23,6 +23,7 @@ import { parseDatasetSource } from "./datasetSource";
 import { sanitizeFilter } from "./datafilter";
 import { sanitizeColumnDesignations } from "./columnDesignationsSanitize";
 import { sanitizeColumnProps } from "./columnProps";
+import { sanitizeFrozenCols, sanitizeHiddenCols } from "./worksheetColumnViewSanitize";
 import { sanitizeBindings } from "./errorRoles";
 import { parseFitSpec } from "./fitSpecParse";
 import { baseColumns } from "./formula";
@@ -254,6 +255,11 @@ export function parseWorkspaceDataset(
   // Column comments + display formats: in-range keys, known formats only.
   const columnProps = sanitizeColumnProps(dd.columnProps, ds.data.labels.length);
   if (columnProps) ds.columnProps = columnProps;
+  // Worksheet view: hidden columns and the frozen prefix, in range only.
+  const hiddenCols = sanitizeHiddenCols(dd.hiddenCols, ds.data.labels.length);
+  if (hiddenCols) ds.hiddenCols = hiddenCols;
+  const frozenCols = sanitizeFrozenCols(dd.frozenCols, ds.data.labels.length);
+  if (frozenCols) ds.frozenCols = frozenCols;
   // Row exclusions (#50): clamp to the loaded row count — a hand-edited or
   // stale .dwk could carry out-of-range indices.
   const excluded = sanitizeExcluded(dd.excludedRows, ds.data.time.length);

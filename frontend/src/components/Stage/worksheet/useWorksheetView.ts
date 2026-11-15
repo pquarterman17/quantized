@@ -45,6 +45,7 @@ import { textColumnRowCount, worksheetTextColumns } from "./textColumns";
 import { autofitColWidth, clampColWidth } from "../../../lib/gridwindow";
 import { excludedSet, filteredOutSet } from "../../../lib/rowstate";
 import { resolveSelectionPlot } from "../../../lib/selectionplot";
+import { useShownSelection } from "./useColumnVisibility";
 import { useWorksheetBlockOps, type BlockOpsApi } from "./useWorksheetBlockOps";
 import { useWorksheetStats } from "./useWorksheetStats";
 import type { CalcResult, ChannelRole, Dataset, DataStruct } from "../../../lib/types";
@@ -236,15 +237,13 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   const [filterOp, setFilterOp] = useState(">");
   const [filterV1, setFilterV1] = useState("");
   const [filterV2, setFilterV2] = useState("");
-  const [selectedCols, setSelectedCols] = useState<Set<number>>(new Set());
+  const [pickedCols, setSelectedCols] = useState<Set<number>>(new Set());
+  const selectedCols = useShownSelection(pickedCols, ds.hiddenCols); // hidden columns are never selected
   const [colWidths, setColWidths] = useState<Record<number, number>>({});
 
-  // Clear the column selection AND the per-column widths on a dataset switch
-  // (sheet tab, book switcher, Library click, …) — state keyed by column
-  // INDEX is meaningless once the underlying columns can be entirely
-  // different (the same rule the item-6 selection set already followed).
-  // Sort and filter are index-keyed too: carried over, they empty the new sheet
-  // or silently filter a different column (skewing Extract and the stats).
+  // On a dataset switch (sheet tab, book switcher, Library click, …) clear the
+  // column selection, widths, sort and filter: all keyed by column INDEX, so
+  // carried over they point at different columns (or empty the new sheet).
   useEffect(() => {
     setSelectedCols(new Set());
     setColWidths({});
@@ -421,7 +420,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
         .filter((r) => !excluded.has(r));
       const { headers, data } = worksheetTsvTable(source, rows); // text + date columns too (audit #6)
       void copyText(tableToTSV(headers, data)).then((ok) =>
-        setStatus(ok ? `copied ${rows.length} rows to clipboard` : "clipboard unavailable"),
+        setStatus(ok ? `copied ${rows.length} rows to clipboard${source.hiddenCols?.length ? ` (includes ${source.hiddenCols.length} hidden column${source.hiddenCols.length === 1 ? "" : "s"})` : ""}` : "clipboard unavailable"),
       );
     };
     if (resolvePendingEdit(useApp.getState, ds, "copying rows", apply)) return;
