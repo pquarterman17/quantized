@@ -142,22 +142,27 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   Library multi-figure PDFs, Send to report and Analysis Results' Build
   source figure all carry it. A fit belongs to the window that drew it: other
   windows on the same worksheet do not show it, and it comes back when its
-  window takes focus, after undo, and when a project or autosave reopens. If
-  the worksheet's rows, excluded rows or column roles have changed since,
-  the saved curve is not drawn (the export says it was left out). Fitting
-  marks the project changed, so the autosave keeps it.
+  window takes focus, after undo (also when you changed the plotted X or Y
+  before fitting), and when a project or autosave reopens. If the
+  worksheet's rows, excluded rows or column roles have changed since, the
+  saved curve is not drawn (the export says it was left out). Fitting marks
+  the project changed, so the autosave keeps it; opening a project and
+  putting its saved fit back does not.
 - Reopening a project made before this keeps its fit: the focused window's
   Curve Fit curve is redrawn from the saved parameters, over the rows that
-  were fitted (no re-fit). If the model cannot be evaluated or the fit is
-  out of date, nothing is drawn and the status line says why. The Curve Fit
-  panel then offers Remove fit for that saved fit.
+  were fitted (no re-fit). If the model cannot be evaluated, the fit is out
+  of date, the fit never recorded its X or Y, or its curve is not on the
+  plot, nothing is drawn and the status line says why. The Curve Fit panel
+  then offers Remove fit for that saved fit.
 
 ### Changed
 
 - Peak markers and an estimated baseline are previews, not figure content:
   they are not saved with a figure and go when their panel closes. A Peak
-  Analyzer model fit and its fitted background are results: closing the
-  panel now keeps them, and they are saved with the figure. (This replaces
+  Analyzer model fit and its fitted background are results: closing and
+  reopening the panel keeps them (its baseline step no longer replaces a
+  fitted background with an estimate), and they are saved with the figure.
+  (This replaces
   the gap-audit-6 lane K acceptance item "a two-peak fit reopens with the
   peaks overlay": the model curve and fitted background reopen; the peak
   markers do not.)
@@ -166,7 +171,6 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   boolean per `y_keys` entry) that marks fit, band, baseline and peak series,
   and return **422** when it is not exactly one strict boolean per `y_keys`
   entry.
-
 - Analysis tools compute on each Y's own X (#666): baseline, magnetometry,
   batch integrate, the peak tools and Curve Fit used the plot's shared X, so
   on a sheet laid out `T1,R1,T2,R2` R2 was analysed against T1. Curve Fit

@@ -85,7 +85,7 @@ import { BROWSER_AUTOSAVE_LOCK_PATH } from "./store/projectLockPaths";
 import { useRecentProjects } from "./store/recentProjects";
 import { useRecoveryChoice } from "./store/recoveryChoice";
 import { notifyMigrationWarnings, toast } from "./store/toasts";
-import { shouldAutosave } from "./store/autosaveTrigger";
+import { applyingRestore, shouldAutosave } from "./store/autosaveTrigger";
 import { useApp } from "./store/useApp";
 import { stageWorkspaceRestore } from "./store/windowHydration";
 
@@ -382,7 +382,7 @@ export function useWorkspaceAutosave(): void {
       // focused window via `windowsForSave()` below.
       // The helper compares the complete serialized workspace slice, including
       // reports, figure docs, macro steps, Origin figures, and recalc mode.
-      if (!shouldAutosave(state, prev)) return;
+      if (applyingRestore() || !shouldAutosave(state, prev)) return; // a restore is not an edit (review 3 R2)
       // P1.2 box 1: the SAME comparison that decides "worth autosaving"
       // also decides "the project no longer matches disk" — reusing it here
       // is what keeps the title bar's dirty marker from ever disagreeing

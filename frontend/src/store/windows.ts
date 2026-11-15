@@ -490,7 +490,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       const s = get();
       if (s.focusedWindowId === null) return s.plotWindows;
       return s.plotWindows.map((w) =>
-        w.id === s.focusedWindowId ? commitFocusedWindow(w, s) : w,
+        w.id === s.focusedWindowId ? commitFocusedWindow(w, s, false) : w, // a save never records (review 3 L3)
       );
     },
   };

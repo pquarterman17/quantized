@@ -10,7 +10,7 @@
 // ownership is visible at the call site instead of being three more setters
 // threaded down.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { PeakRecipe } from "../../../lib/peakwizard";
 import type { BaselineOverlay, Dataset, OverlayBinding } from "../../../lib/types";
@@ -39,8 +39,15 @@ export function usePeakBaseline(
   active: Dataset | null | undefined,
   segment: WorkingSegment | null,
   recipeBaseline: PeakRecipe["baseline"],
-  setBaselineOverlay: (v: BaselineOverlay | null) => void,
+  setBaselineOverlayRaw: (v: BaselineOverlay | null) => void,
 ): PeakBaselineState {
+  // The estimate is a PREVIEW. A committed model fit's fitted background
+  // (`fitOf`) is a result saved with the figure: reopening the wizard never
+  // clears or replaces it (lanes C/K review 3 R3). A new model fit replaces
+  // it together with its curve (useModelFit).
+  const setBaselineOverlay = useCallback((v: BaselineOverlay | null) => {
+    if (!useApp.getState().baselineOverlay?.fitOf) setBaselineOverlayRaw(v);
+  }, [setBaselineOverlayRaw]);
   // The estimate is kept WITH the segment it was computed for, and handed out
   // only while that is still the segment (slice 3): between a range change
   // and this effect's reset, the old range's baseline must not be subtracted

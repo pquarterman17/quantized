@@ -34,6 +34,7 @@ import { perSeriesXDataset } from "../lib/perSeriesX";
 import type { PlotView, PlotWindow } from "../lib/plotview";
 import { shownCurves } from "../lib/shownCurves";
 import type { BaselineOverlay, Dataset, FitOverlay } from "../lib/types";
+import { asRestore } from "./autosaveTrigger";
 import { useApp, type AppState } from "./useApp";
 import { withPlotWindowDocument } from "./windowDocuments";
 import { clearMissedHandoff, missedHandoff } from "./windowOverlaysLazy";
@@ -52,7 +53,11 @@ export function resetWindowOverlaysForTests(): void {
   focus = null;
   owner = new WeakMap();
   drawnKey = new WeakMap();
+  sections = new WeakMap();
 }
+
+/** Test access: what the focus record says was shown (review 3 L3). */
+export const shownForTests = (): FitOverlay | null | undefined => focus?.shown;
 
 /** Is `fit` drawn on `view` of `ds`? The canvas' own placement (I1,
  *  lib/overlayPlacement): its bound Y shown, on its own X's block. */
@@ -114,8 +119,11 @@ export function handoff(
 }
 
 /** `doc` (window `windowId`'s) with the fit its canvas draws folded in.
- *  `record` false (a history snapshot) folds without touching the focus record. */
-export function fold(doc: FigureDocument, s: State, windowId: string, record = true): FigureDocument {
+ *  `record` false (a history snapshot, a save, a preview) folds without
+ *  touching the focus record (review 3 L3: only a real commit records).
+ *  `view`: the view the canvas draws NOW, when `doc`'s own is not synced yet
+ *  (a history snapshot of the focused window, review 3 R1). */
+export function fold(doc: FigureDocument, s: State, windowId: string, record = true, view?: PlotView): FigureDocument {
   watch();
   if (doc.data.mode !== "live") return doc;
   // A focus this module did not see (the startup window, or one taken before
@@ -131,9 +139,9 @@ export function fold(doc: FigureDocument, s: State, windowId: string, record = t
   const cur = s.fitOverlay;
   if (cur && ds && !ds.pending && cur.datasetId === ds.id && !f.foreign && mayDraw(windowId, cur)) {
     if (record) f.shown = cur;
-    if (!fitPlaced(ds, figureDocumentToPlotView(doc), cur)) return doc; // not on this view: the section stands
-    const overlays = captureFit(cur, ds, drawnKey.get(cur) ?? overlayRowsKey(ds), s.baselineOverlay);
-    return overlays ? { ...doc, overlays } : doc;
+    if (!fitPlaced(ds, view ?? figureDocumentToPlotView(doc), cur)) return doc; // not on this view: the section stands
+    const overlays = captured(cur, ds, s.baselineOverlay);
+    return !overlays ? doc : doc.overlays === overlays ? doc : { ...doc, overlays };
   }
   if (cur === null && f.shown && doc.overlays && fitFromDocument(doc.overlays, ds)) {
     const { overlays: _removed, ...rest } = doc; // shown on this focus, rows unchanged, now removed
@@ -142,10 +150,25 @@ export function fold(doc: FigureDocument, s: State, windowId: string, record = t
   return doc;
 }
 
-/** `w` (the focused window, just synced) with its fold applied. */
-export function commit(w: PlotWindow, s: AppState, record = true): PlotWindow {
+/** The section for `cur` (and its fitted background), built once per curve:
+ *  a snapshot taken on every undo step (each typed cell) reuses it instead of
+ *  copying the curve again (review 3 L4). Curves are immutable: a new fit is a
+ *  new object, so the curve itself, its rows key and the background are the
+ *  whole cache key. */
+let sections = new WeakMap<object, { key: string; bg: BaselineOverlay | null; overlays: ReturnType<typeof captureFit> }>();
+function captured(cur: FitOverlay, ds: Dataset, bg: BaselineOverlay | null): ReturnType<typeof captureFit> {
+  const key = drawnKey.get(cur) ?? overlayRowsKey(ds);
+  const hit = sections.get(cur);
+  if (hit && hit.key === key && hit.bg === bg) return hit.overlays;
+  const overlays = captureFit(cur, ds, key, bg);
+  sections.set(cur, { key, bg, overlays });
+  return overlays;
+}
+
+/** `w` (the focused window) with its fold applied; see `fold` for `view`. */
+export function commit(w: PlotWindow, s: AppState, record = true, view?: PlotView): PlotWindow {
   if (w.kind !== "plot" || !w.document) return w;
-  const doc = fold(w.document, s, w.id, record);
+  const doc = fold(w.document, s, w.id, record, view);
   return doc === w.document ? w : withPlotWindowDocument(w, doc);
 }
 
@@ -160,7 +183,7 @@ export async function restoreOverlays(): Promise<"seeded" | "drawn" | "refused" 
   const target = s.plotWindows.find((w) => w.id === s.focusedWindowId);
   const patch = handoff(target, s);
   if (patch.fitOverlay) {
-    useApp.setState(patch);
+    asRestore(() => useApp.setState(patch));
     return "seeded";
   }
   const result = await (await import("./overlayRestore")).restoreSavedFitOverlay();
@@ -178,11 +201,11 @@ function dropUnreadable(): void {
   const windows = s.plotWindows.filter((w) => w.kind === "plot" && bad(w.document));
   const figures = s.editableFigures.filter(bad);
   if (!windows.length && !figures.length) return;
-  useApp.setState({
+  asRestore(() => useApp.setState({
     plotWindows: s.plotWindows.map((w) => (w.kind === "plot" && w.document && bad(w.document) ? withPlotWindowDocument(w, clean(w.document)) : w)),
     editableFigures: s.editableFigures.map((f) => (bad(f) ? clean(f) : f)),
     status: `dropped ${windows.length + figures.length} unreadable saved fit curve(s); their figures are kept`,
-  });
+  }));
 }
 
 // Installed on first use (never at import: this chunk can load while the
@@ -216,5 +239,5 @@ function onChange(s: AppState, prev: AppState): void {
   const now = s.datasets.find((d) => d.id === id);
   if (!w || !was?.pending || !now || now.pending) return;
   const patch = handoff(w, s);
-  if (patch.fitOverlay) useApp.setState(patch);
+  if (patch.fitOverlay) asRestore(() => useApp.setState(patch));
 }

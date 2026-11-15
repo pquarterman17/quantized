@@ -30,5 +30,6 @@ export function liveWindowDocument(state: AppState, window: PlotWindow): FigureD
     datasetId: window.datasetId,
   });
   // Gap audit 5 lane C: and the overlays its canvas draws (store/windowOverlays).
-  return overlaysNow()?.fold(live, state, window.id) ?? live;
+  // A read (Save, preview, unsaved check): never moves the focus record.
+  return overlaysNow()?.fold(live, state, window.id, false) ?? live;
 }

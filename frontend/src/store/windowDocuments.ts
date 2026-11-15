@@ -165,21 +165,30 @@ export function syncPlotWindow(
 
 /** The focused window committed: its live view (`syncPlotWindow`) and the
  *  fit its canvas draws (store/windowOverlays), into its document. */
-export function commitFocusedWindow(w: PlotWindow, s: AppState): PlotWindow {
+export function commitFocusedWindow(w: PlotWindow, s: AppState, record = true): PlotWindow {
   const synced = syncPlotWindow(w, snapshotView(s));
-  return overlaysNow()?.commit(synced, s) ?? synced;
+  return overlaysNow()?.commit(synced, s, record) ?? synced;
 }
 
 /** `s.plotWindows` with the focused window's document holding the fit its
  *  canvas draws -- what an undo step must snapshot, or undoing a window step
  *  restores a document without the fit (review N3). The view is NOT synced
- *  here: the snapshot keeps the live view separately (`snapshotView`). */
+ *  here: the snapshot keeps the live view separately (`snapshotView`) -- but
+ *  the fit's placement is checked against that LIVE view, not the document's
+ *  stale one, or a fit on a column plotted since focus is lost (review 3 R1). */
 export function windowsWithLiveFit(s: AppState): AppState["plotWindows"] {
   const m = overlaysNow();
   const i = m ? s.plotWindows.findIndex((w) => w.id === s.focusedWindowId) : -1;
   if (!m || i < 0) return s.plotWindows;
-  const w = m.commit(s.plotWindows[i], s, false);
-  return w === s.plotWindows[i] ? s.plotWindows : s.plotWindows.map((x, j) => (j === i ? w : x));
+  const w = s.plotWindows[i];
+  if (w.kind !== "plot" || !w.document) return s.plotWindows;
+  const doc = m.fold(w.document, s, w.id, false, snapshotView(s));
+  if (doc === w.document) return s.plotWindows;
+  // Only `overlays` differs (the view stays the window's own), so no deep
+  // copy: this runs on EVERY undo step while a fit is shown (review 3 L4).
+  // The section object is the module's immutable per-curve capture.
+  const snap: PlotWindow = { ...w, document: doc };
+  return s.plotWindows.map((x, j) => (j === i ? snap : x));
 }
 
 /** Replace a plot window's canonical document and regenerate every legacy

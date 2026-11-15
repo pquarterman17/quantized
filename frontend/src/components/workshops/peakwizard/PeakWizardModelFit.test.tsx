@@ -8,7 +8,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PeakModelFitResponse } from "../../../lib/api/peaks";
@@ -308,5 +308,25 @@ describe("Peak Analyzer — model fit results (step 4)", () => {
     expect(useApp.getState().peakWizardOpen).toBe(false);
     expect(useApp.getState().fitOverlay).toBe(curve);
     expect(useApp.getState().peakOverlay).toBeNull(); // the markers were a preview
+  });
+
+  // Lanes C/K review 3 R3: REOPENING the wizard re-runs its baseline step, which
+  // used to clear (or replace with an estimate) the committed fit's fitted
+  // background -- so the next commit saved the figure without it.
+  it("reopening the panel keeps a committed fit's fitted background", async () => {
+    await findTwoPeaks();
+    await fitWith(modelFitResponse());
+    await waitFor(() => expect(useApp.getState().baselineOverlay?.fitOf).toBeTruthy());
+    const curve = useApp.getState().fitOverlay;
+    const bg = useApp.getState().baselineOverlay;
+    expect(bg?.fitOf).toBe(curve);
+    fireEvent.click(screen.getByTitle("Close"));
+    cleanup();
+    useApp.setState({ peakWizardOpen: true });
+    render(<PeakWizardPanel />);
+    step("Find peaks");
+    await new Promise((r) => setTimeout(r, 50)); // let the baseline step's effect (and its async estimate) run
+    expect(useApp.getState().fitOverlay).toBe(curve);
+    expect(useApp.getState().baselineOverlay).toBe(bg);
   });
 });

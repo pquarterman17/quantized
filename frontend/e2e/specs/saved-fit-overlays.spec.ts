@@ -172,6 +172,23 @@ test("a Peak Analyzer fit (with its fitted background) survives a reload with no
   });
   expect(kept).toEqual({ fit: true, bgOfFit: true });
 
+  // Review 3 R3: REOPENING the panel (its baseline step runs again) keeps the
+  // fitted background, and a save still writes it.
+  await runPaletteCommand(page, "Peak Analyzer");
+  await expect(panel.locator(".qzk-wizard-step", { hasText: "Find peaks" })).toBeVisible();
+  await panel.locator(".qzk-wizard-step", { hasText: "Find peaks" }).click();
+  await panel.getByRole("button", { name: "Close Peak Analyzer" }).click();
+  await expect(panel).toHaveCount(0);
+  const reopened = await page.evaluate(() => {
+    const s = (window as unknown as Qz).__qz.useApp.getState() as {
+      fitOverlay: unknown; baselineOverlay: { fitOf?: unknown } | null; focusedWindowId: string;
+      windowsForSave: () => { id: string; document?: { overlays?: { background?: unknown } } }[];
+    };
+    const saved = s.windowsForSave().find((w) => w.id === s.focusedWindowId)?.document?.overlays;
+    return { bgOfFit: Boolean(s.baselineOverlay?.fitOf && s.baselineOverlay.fitOf === s.fitOverlay), saved: Boolean(saved?.background) };
+  });
+  expect(reopened).toEqual({ bgOfFit: true, saved: true });
+
   await expect.poll(() => autosavedFit(page), { timeout: 15_000 }).toMatchObject({ fit: true, background: true });
   await page.reload();
   await page.waitForFunction(() => Boolean((window as unknown as { __qz?: unknown }).__qz));

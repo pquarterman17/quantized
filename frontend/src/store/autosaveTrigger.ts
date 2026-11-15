@@ -8,6 +8,22 @@
 import { defaultPlotView, type PlotView } from "../lib/plotview";
 import type { AppState } from "./useApp";
 
+let restoreDepth = 0;
+/** Apply a project RESTORE's own state change (a saved fit put back on the
+ *  canvas after an open, its lane-K redraw, a lazy book's reseed): it is what
+ *  the file already says, not an edit, so the autosave subscriber neither
+ *  marks the project dirty nor writes for it (lanes C/K review 3 R2). */
+export function asRestore(apply: () => void): void {
+  restoreDepth++;
+  try {
+    apply();
+  } finally {
+    restoreDepth--;
+  }
+}
+/** Is a restore's own state change being applied right now? */
+export const applyingRestore = (): boolean => restoreDepth > 0;
+
 /** Every store field serialized into a .dwk workspace. Keep this list in one
  * place so autosave cannot silently omit a newly-persisted artifact — its
  * test file's "AutosaveState completeness sweep" cross-checks it against

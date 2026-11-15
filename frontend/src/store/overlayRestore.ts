@@ -22,6 +22,7 @@
 // Loaded lazily, after hydration, so none of this is on the eager path.
 // (store/windowOverlays.restoreOverlays seeds a lane-C figure first, then calls this.)
 
+import { asRestore } from "./autosaveTrigger";
 import { fitDrawBinding, fitDrawRefusal } from "../lib/fitDrawBinding";
 import { snapshotView } from "../lib/plotview";
 import { evaluateSavedFit } from "../lib/savedFitCurve";
@@ -62,6 +63,6 @@ export async function restoreSavedFitOverlay(): Promise<"drawn" | "refused" | "n
     return "none"; // something else happened meanwhile: never overwrite it
   }
   if (typeof y === "string") return say(`its model could not be evaluated (${y})`);
-  now.setFitOverlay({ datasetId: dataset.id, binding, y });
+  asRestore(() => now.setFitOverlay({ datasetId: dataset.id, binding, y })); // not an edit (review 3 R2)
   return "drawn";
 }
