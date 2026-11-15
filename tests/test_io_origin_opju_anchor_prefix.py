@@ -52,6 +52,46 @@ def test_length_prefix_predicate(pre: bytes, want: bool) -> None:
     assert opju_anchor_has_length_prefix(pre + b"\x03\x00\x00\x1f", 2) is want
 
 
+_ANCHOR = b"\x03\x00\x00\x1f"
+
+
+def _short_record(flag: int, length: int, after: bytes) -> tuple[bytes, int]:
+    """``0a <flag> <1-byte length>`` + a ``length``-byte record opening with the
+    anchor + whatever follows it; returns ``(stream, anchor offset)``."""
+    rec = _ANCHOR + b"\xaa" * (length - len(_ANCHOR))
+    return b"\x0a" + bytes([flag, length]) + rec + after, 3
+
+
+@pytest.mark.parametrize("after", [b"\x0a\x00\x6f\x01", b"\x00\x0a\x80\x30", b"\x00\x06Legend\x00"])
+def test_short_record_is_accepted_when_its_length_lands_on_another_element(after: bytes) -> None:
+    """A record under 128 bytes carries a 1-byte varint; flag ``00`` is accepted
+    only because its VALUE reaches the next frame header / named element."""
+    b, a = _short_record(0x00, 100, after)
+    assert opju_anchor_has_length_prefix(b, a) is True
+
+
+def test_short_record_with_an_inconsistent_length_is_rejected() -> None:
+    b, a = _short_record(0x00, 100, b"\xff\xff\xff\xff\xff\xff")
+    assert opju_anchor_has_length_prefix(b, a) is False
+
+
+def test_short_record_flag_80_matches_the_varint_shape() -> None:
+    b, a = _short_record(0x80, 100, b"\x0a\x00\x6f\x01")
+    assert opju_anchor_has_length_prefix(b, a) is True
+
+
+@pytest.mark.parametrize(
+    "pre",
+    [
+        b"\x83\x01\x08\x80\x06\x62",  # histogram_released_viruses Graph1
+        b"\x24\x80\x01\xf7\xc0\xff",  # SOP_meas Graph6
+        b"\x00\x5d\x03\x00\x00\x5e",  # id table (Figure 6 Graph3)
+    ],
+)
+def test_known_coincidental_anchors_stay_rejected(pre: bytes) -> None:
+    assert opju_anchor_has_length_prefix(pre + _ANCHOR + b"\x00" * 64, len(pre)) is False
+
+
 def test_length_prefix_predicate_at_stream_start() -> None:
     assert opju_anchor_has_length_prefix(b"\x03\x00\x00\x1f", 0) is False
 

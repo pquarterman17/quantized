@@ -78,16 +78,58 @@ def opj_page_size(header_payload: bytes) -> dict[str, int] | None:
     return {"width": int(w), "height": int(h)}
 
 
+def _record_hands_over(b: bytes, end: int) -> bool:
+    """Whether a record that ends at ``end`` is followed by another element:
+    a ``0a`` frame header, or a length-prefixed ASCII name, at ``end`` or the
+    one terminator byte after it."""
+    for q in (end, end + 1):
+        if q + 1 >= len(b):
+            continue
+        if b[q] == 0x0A and b[q + 1] in (0x00, 0x80, 0x81):
+            return True
+        n = b[q]
+        if (
+            1 <= n <= 64
+            and q + 1 + n <= len(b)
+            and all(0x20 <= c < 0x7F for c in b[q + 1 : q + 1 + n])
+        ):
+            return True
+    return False
+
+
 def opju_anchor_has_length_prefix(b: bytes, anchor: int) -> bool:
-    """Whether the 2 bytes before a layer anchor end a LEB128 length varint.
+    """Whether the bytes before a layer anchor are its record-length varint.
 
     Every layer anchor Origin 2026b confirms (2,752 of them, across the whole
     axis oracle) follows its record-length varint (``b9 01``: continuation byte
     ``>= 0x80`` then a final byte ``1..0x7f``); a ``03 00 00 1f``/``5f`` that
     does not is a coincidental 4-byte match inside another block (an id table
-    ``03 00 00 1f 03 00 00 20 ...``, a style block). Used only to decide what
-    the layer ordinal counts, never to decode."""
-    return anchor >= 2 and b[anchor - 2] >= 0x80 and 0 < b[anchor - 1] < 0x80
+    ``03 00 00 1f 03 00 00 20 ...``, a style block). Measured over every graph
+    page in the corpus (3,422 anchors): all carry a 2-byte varint, value
+    130..217; none is shorter, and none has a ``0a 00 <len>`` header.
+
+    A record under 128 bytes would carry a 1-byte varint. Under flag ``80``
+    (``0a 80 <len>``) it already satisfies the shape above; under flag ``00``
+    (``0a 00 <len>``) it is accepted only when the length VALUE lands on
+    another element (``_record_hands_over``), so a stray low byte before a
+    coincidental match is not enough. The same extent test is NOT applied to
+    the multi-byte form: it fails 379 of 3,873 real prefixed anchors on
+    workbook/embedded pages, whose records end in other shapes, and would
+    drop real layers (and shift the ordinals after them).
+
+    Decides what the layer ordinal counts: a non-layer match is removed from
+    the anchor list before any record is read or decoded."""
+    if anchor < 2:
+        return False
+    if b[anchor - 2] >= 0x80 and 0 < b[anchor - 1] < 0x80:
+        return True
+    return (
+        anchor >= 3
+        and b[anchor - 3] == 0x0A
+        and b[anchor - 2] == 0x00
+        and 0 < b[anchor - 1] < 0x80
+        and _record_hands_over(b, anchor + b[anchor - 1])
+    )
 
 
 def opju_layer_frame(b: bytes, anchor: int, end: int) -> tuple[int, int, int, int] | None:
