@@ -91,7 +91,9 @@ function baseProps() {
 
 describe("WorksheetToolbar — overflow menu (worksheet audit follow-up)", () => {
   it("shows every group on one line when the toolbar is wide enough", () => {
-    stubLayout(2000);
+    // 2100: every group costs its width + 2 x the 8px gap (jsdom 31 resolves
+    // the flex gap like a browser; jsdom 30 counted none): 32 + 1845 + 8*16 = 2005.
+    stubLayout(2100);
     render(<WorksheetToolbar {...baseProps()} />);
     for (const name of ["Formula", "Actions", "Block operations", "Row operations", "Masked rows", "Row selection", "Column selection", "Status"]) {
       expect(screen.getByRole("group", { name })).toBeInTheDocument();
@@ -101,12 +103,14 @@ describe("WorksheetToolbar — overflow menu (worksheet audit follow-up)", () =>
   });
 
   it("collapses the groups that don't fit a common width, with a cursor active, and keeps every button reachable from the ⋯ menu — never truncated", () => {
-    // 1050: Formula (526) + Actions (219, Stats/Copy/Export) + Block
+    // 1100: Formula (526) + Actions (219, Stats/Copy/Export) + Block
     // operations (230, the "extra block operation buttons" a cell cursor
-    // adds) fit; Row operations and everything after do not. (jsdom resolves
-    // the bar's flex `columnGap` to "" — i.e. 0 in the fit hook's own math —
-    // so each admitted group only costs its own width, no added gap.)
-    stubLayout(1050);
+    // adds) fit; Row operations and everything after do not. Each admitted
+    // group costs its width plus 2 x the bar's 8px flex gap (jsdom 31's
+    // computed-style engine resolves `columnGap` from the `gap` shorthand the
+    // way a browser does; jsdom 30 returned "", i.e. 0): 32 (opts) + 542 + 235
+    // + 246 = 1055 <= 1100, and Row operations would make it 1161.
+    stubLayout(1100);
     render(<WorksheetToolbar {...baseProps()} />);
     expect(screen.getByRole("group", { name: "Formula" })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Actions" })).toBeInTheDocument();
