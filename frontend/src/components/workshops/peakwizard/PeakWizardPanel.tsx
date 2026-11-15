@@ -46,6 +46,11 @@ export default function PeakWizardPanel() {
     setOpen(false);
   };
 
+  // Step ② cannot lead to a fit with nothing to fit: say why Next is off.
+  const nextBlock = w.step === 1 && !w.candidates.some((c) => c.included)
+    ? w.findBusy ? "finding peaks…" : "no peaks to fit — find or add at least one peak first"
+    : null;
+
   const stepBody = [
     <StepRangeBaseline key={`s0-${w.recipeRev}`} w={w} />,
     <StepFindPeaks key={`s1-${w.recipeRev}`} w={w} />,
@@ -114,10 +119,16 @@ export default function PeakWizardPanel() {
               ← Back
             </Button>
             <span style={{ flex: 1 }} />
+            {nextBlock && (
+              <span className="qzk-ds-meta" role="status" style={{ color: "var(--text-faint)", alignSelf: "center" }}>
+                {nextBlock}
+              </span>
+            )}
             <Button
               size="sm"
               variant="primary"
-              disabled={w.step === WIZARD_STEPS.length - 1}
+              disabled={w.step === WIZARD_STEPS.length - 1 || nextBlock !== null}
+              title={nextBlock ?? undefined}
               onClick={w.next}
             >
               Next →

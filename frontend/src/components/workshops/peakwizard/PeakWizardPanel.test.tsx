@@ -94,7 +94,6 @@ describe("PeakWizardPanel", () => {
 
     // ② find
     fireEvent.click(screen.getByText("Find peaks", { selector: ".qzk-wizard-step" }));
-    fireEvent.click(screen.getByRole("button", { name: "Find peaks" }));
     await waitFor(() => expect(findMock).toHaveBeenCalled());
     // markers land on the plot once the candidates effect settles
     await waitFor(() => expect(useApp.getState().peakOverlay?.datasetId).toBe("d1"));
@@ -135,7 +134,6 @@ describe("PeakWizardPanel", () => {
     render(<PeakWizardPanel />);
 
     fireEvent.click(screen.getByText("Find peaks", { selector: ".qzk-wizard-step" }));
-    fireEvent.click(screen.getByRole("button", { name: "Find peaks" }));
     await waitFor(() => expect(findMock).toHaveBeenCalled());
 
     fireEvent.click(screen.getByText("Report", { selector: ".qzk-wizard-step" }));
@@ -166,7 +164,6 @@ describe("PeakWizardPanel", () => {
     findMock.mockResolvedValue(FOUND);
     render(<PeakWizardPanel />);
     fireEvent.click(screen.getByText("Find peaks", { selector: ".qzk-wizard-step" }));
-    fireEvent.click(screen.getByRole("button", { name: "Find peaks" }));
     await waitFor(() => expect(screen.getByText("25")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "← Back" }));
     fireEvent.click(screen.getByRole("button", { name: "Next →" }));

@@ -77,7 +77,6 @@ const step = (name: string) => fireEvent.click(screen.getByText(name, { selector
 async function findTwoPeaks() {
   render(<PeakWizardPanel />);
   step("Find peaks");
-  fireEvent.click(screen.getByRole("button", { name: "Find peaks" }));
   await waitFor(() => expect(screen.getAllByRole("checkbox", { name: /include peak/ })).toHaveLength(2));
 }
 

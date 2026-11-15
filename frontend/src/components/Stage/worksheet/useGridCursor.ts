@@ -203,7 +203,9 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     const accel = e.ctrlKey || e.metaKey;
     if (accel && e.key.toLowerCase() === "a" && b.rows > 0) {
       const last = { pos: Math.max(0, order.length - 1), col: b.cols - 1 };
-      place({ anchor: { pos: 0, col: -1 }, focus: last });
+      // setRange, not place(): place() also raises a reveal, which would scroll
+      // the view to the last cell. Select-all must leave the viewport alone.
+      setRange({ anchor: { pos: 0, col: -1 }, focus: last });
       return true;
     }
     if (!range) {

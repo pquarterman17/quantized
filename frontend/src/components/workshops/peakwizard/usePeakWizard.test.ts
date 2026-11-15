@@ -290,9 +290,13 @@ describe("usePeakWizard — click-on-plot editing never triggers a find/fit call
     const { findPeaks } = await import("../../../lib/api/peaks");
     const { result } = renderHook(() => usePeakWizard());
     act(() => result.current.setStep(1));
+    // Entering step ② auto-finds once (gap audit 6, lane N); only the editing
+    // calls below must add none.
+    await waitFor(() => expect(result.current.findBusy).toBe(false));
+    const before = vi.mocked(findPeaks).mock.calls.length;
     act(() => result.current.addPeakAt(1));
     act(() => result.current.removePeak(0));
-    await waitFor(() => expect(findPeaks).not.toHaveBeenCalled());
+    expect(vi.mocked(findPeaks).mock.calls.length).toBe(before);
   });
 });
 

@@ -64,8 +64,9 @@ describe("Peak Analyzer step ② ▸ Advanced", () => {
 
     // Wait on STATE — the candidate table lands once the find resolves.
     await waitFor(() => expect(candidateRows()).toHaveLength(1));
-    expect(findMock).toHaveBeenCalledTimes(1);
-    expect(findMock.mock.calls[0]![0]).toEqual(
+    // Entering step ② auto-found once with the defaults; "Find again" is the 2nd.
+    expect(findMock).toHaveBeenCalledTimes(2);
+    expect(findMock.mock.calls[1]![0]).toEqual(
       expect.objectContaining({
         snr_threshold: 3, // the wizard's recipe default, not the route's 5
         max_peaks: 20,
@@ -88,7 +89,6 @@ describe("Peak Analyzer step ② ▸ Advanced", () => {
   it("an untouched step ② still sends only the three fields it always did", async () => {
     render(<PeakWizardPanel />);
     fireEvent.click(screen.getByText("Find peaks", { selector: ".qzk-wizard-step" }));
-    fireEvent.click(screen.getByRole("button", { name: "Find peaks" }));
     await waitFor(() => expect(candidateRows()).toHaveLength(1));
     expect(Object.keys(findMock.mock.calls[0]![0]).sort()).toEqual(["max_peaks", "snr_threshold", "x", "y"]);
   });
