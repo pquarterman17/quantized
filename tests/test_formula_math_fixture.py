@@ -81,6 +81,31 @@ GAMMA_X = [
     172.0,
 ]
 GAMMA_POLES = [0.0, -1.0, -2.0, -17.0]
+# Review L1: next to a negative pole, next to lgamma's zeros at 1 and 2, the
+# overflow edge, and a dense sweep (no whole numbers) across the real line.
+GAMMA_HARD = [
+    -100.000001,
+    -50.5,
+    -20.0000001,
+    -0.9999999,
+    0.7,
+    0.9,
+    0.95,
+    1.0 + 1e-9,
+    1.15,
+    1.2,
+    1.21,
+    1.79,
+    1.8,
+    1.85,
+    2.0 - 1e-10,
+    2.15,
+    2.2,
+    171.6,
+    171.62,
+    171.6243769,
+]
+GAMMA_SWEEP = [round(float(v), 6) for v in np.linspace(-30.37, 171.55, 401)]
 ROUND_CASES = [
     [0.5, 0],
     [1.5, 0],
@@ -128,7 +153,7 @@ def _scaled(op: Any, v: float, n: int) -> float:
 
 def build_fixture() -> dict[str, Any]:
     with np.errstate(all="ignore"):
-        gamma_all = GAMMA_X + GAMMA_POLES
+        gamma_all = GAMMA_X + GAMMA_POLES + GAMMA_HARD + GAMMA_SWEEP
         return {
             "erf": {"x": ERF_X, "erf": _nums(sp.erf(ERF_X)), "erfc": _nums(sp.erfc(ERF_X))},
             "gamma": {

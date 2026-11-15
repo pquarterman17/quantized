@@ -133,4 +133,12 @@ describe("Set Column Values dialog", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(ds().formulas?.[1]).toMatchObject({ name: "T", expr: "A * 1e-4" });
   });
+
+  it("a book still loading its full data: Apply is disabled and says why (review M2)", async () => {
+    useApp.setState({ datasets: [{ ...book(), pending: { kind: "path", path: "p", book: "b" } as unknown as Dataset["pending"] }] });
+    const { user } = await open({ kind: "column", col: 0 });
+    await user.type(formula(), "A * 2");
+    expect(await screen.findByRole("alert")).toHaveTextContent(/still loading/);
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+  });
 });

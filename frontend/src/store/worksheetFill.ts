@@ -49,8 +49,12 @@ export function fillColumns(id: string, cols: readonly number[], spec: FillSpec)
 }
 
 /** Origin's Set Row Count: grow with blank rows at the end, or cut the rows
- *  past `count` (every column, text cells included). One undo step. */
-export function setRowCount(id: string, count: number): void {
+ *  past `count` (every column, text cells included). One undo step.
+ *  `expected` is the row count the user was shown: if the sheet has a
+ *  different count by the time this runs (a loading book resolved to its full
+ *  rows), it is refused — "300" meant "add 100" against 200 rows, and must
+ *  never become "cut 700" against the full 1000. */
+export function setRowCount(id: string, count: number, expected?: number): void {
   const ds = get().datasets.find((d) => d.id === id);
   if (!ds) return;
   if (!Number.isInteger(count) || count < 0 || count > MAX_ROW_COUNT) {
@@ -61,8 +65,12 @@ export function setRowCount(id: string, count: number): void {
     get().setStatus(editRefusalNotice(ds));
     return;
   }
-  if (resolvePendingEdit(get, ds, "setting the row count", () => setRowCount(id, count))) return;
+  if (resolvePendingEdit(get, ds, "setting the row count", () => setRowCount(id, count, expected ?? sidecarRowCount(ds.data.metadata, ds.data.time.length)))) return;
   const now = sidecarRowCount(ds.data.metadata, ds.data.time.length);
+  if (expected !== undefined && expected !== now) {
+    get().setStatus(`nothing changed: the worksheet has ${now} rows, not the ${expected} shown when you chose ${count} — set the row count again`);
+    return;
+  }
   if (count === now) {
     get().setStatus(`the worksheet already has ${now} rows`);
     return;

@@ -19,11 +19,13 @@
 //   rnd(seed)              numpy.random.RandomState(seed).random_sample(N)[row]
 //   normal(seed)           numpy.random.RandomState(seed).standard_normal(N)[row]
 //                          — the same Mersenne Twister and the same polar
-//                          method, so the column matches numpy's draw for that
-//                          seed to the last bit (the log/sqrt may differ by
-//                          one ulp). The seed is REQUIRED, a whole number in
-//                          0..2^32-1: an unseeded column would change on every
-//                          recalculation.
+//                          method: uniform draws are numpy's to the last bit;
+//                          normal draws agree to within a few ulp (V8's log
+//                          rounds differently from glibc's; measured ≤ 2 ulp).
+//                          The seed is REQUIRED and must be a number written
+//                          in the formula (a whole number in 0..2^32-1): an
+//                          unseeded column would change on every
+//                          recalculation, and a per-row seed is not a seed.
 //   interp(v, X, Y)        numpy.interp(v, X, Y, left=nan, right=nan): the
 //                          curve X→Y looked up at v, linear between points,
 //                          NaN outside it — never extrapolated, never clamped.
@@ -98,6 +100,30 @@ function lanczosSum(z: number): number {
   return a;
 }
 
+/** sin(πv) with the argument reduced EXACTLY first: Math.sin(Math.PI * v)
+ *  loses v's fraction at large |v| (Γ near a negative pole). */
+export function sinpi(v: number): number {
+  const n = Math.round(2 * v);
+  const t = Math.PI * (v - n / 2); // |v − n/2| ≤ ¼, exact
+  switch (((n % 4) + 4) % 4) {
+    case 0:
+      return Math.sin(t);
+    case 1:
+      return Math.cos(t);
+    case 2:
+      return -Math.sin(t);
+    default:
+      return -Math.cos(t);
+  }
+}
+
+/** Γ on [0.5, 2) by Lanczos (most accurate on [1, 2)). */
+function gammaCore(f: number): number {
+  const z = f - 1;
+  const t = z + 7.5;
+  return Math.sqrt(2 * Math.PI) * Math.pow(t, z + 0.5) * Math.exp(-t) * lanczosSum(z);
+}
+
 /** Γ(v) — exact products for whole v up to 171, as scipy's table is. */
 export function gamma(v: number): number {
   if (Number.isNaN(v) || v === -Infinity) return NaN;
@@ -109,16 +135,44 @@ export function gamma(v: number): number {
     for (let k = 2; k < v; k++) p *= k;
     return p;
   }
-  if (v < 0.5) return Math.PI / (Math.sin(Math.PI * v) * gamma(1 - v));
-  if (v > 171.62) return Infinity;
-  // Γ(v) = (v−1)(v−2)…·Γ(f), f in [1, 2): Lanczos is most accurate there, and
-  // the product's rounding grows far slower than Lanczos' own error at large v.
-  let p = 1;
-  let f = v;
-  while (f >= 2) p *= --f;
-  const z = f - 1;
-  const t = z + 7.5;
-  return p * (Math.sqrt(2 * Math.PI) * Math.pow(t, z + 0.5) * Math.exp(-t) * lanczosSum(z));
+  if (v < 0.5) {
+    const s = sinpi(v);
+    // Γ(1 − v) overflows past 171.6 while 1/Γ is still a (subnormal) number.
+    return 1 - v > 171 ? (Math.PI / s) * Math.exp(-lgamma(1 - v)) : Math.PI / (s * gamma(1 - v));
+  }
+  if (v > 171.62437695630272) return Infinity;
+  if (v < 2) return gammaCore(v);
+  // Γ(v) = Γ(f)·f(f+1)…(v−1), f in [1, 2), multiplied UP from Γ(f): every
+  // partial product stays below the result, so nothing overflows early, and
+  // the rounding grows far slower than Lanczos' own error at large v.
+  const n = Math.floor(v) - 1;
+  const f = v - n;
+  let p = gammaCore(f);
+  for (let k = 0; k < n; k++) p *= f + k;
+  return p;
+}
+
+const EULER_GAMMA = 0.5772156649015329;
+/** (−1)^k ζ(k)/k for k = 2…31: the series of lgamma(1 + z) about z = 0. ζ(k)
+ *  by direct summation to N = 1000 plus the Euler–Maclaurin tail. */
+const LGAMMA1_SERIES = Array.from({ length: 30 }, (_, i) => {
+  const k = i + 2;
+  const N = 1000;
+  let zeta = 0;
+  for (let n = N - 1; n >= 1; n--) zeta += n ** -k;
+  zeta += N ** (1 - k) / (k - 1) + N ** -k / 2 + (k * N ** (-k - 1)) / 12;
+  return ((k % 2 === 0 ? 1 : -1) * zeta) / k;
+});
+
+/** lgamma(1 + z) for |z| ≤ 0.2 — no cancellation at lgamma's zeros. */
+function lgamma1p(z: number): number {
+  let sum = 0;
+  let zk = z;
+  for (const c of LGAMMA1_SERIES) {
+    zk *= z;
+    sum += c * zk;
+  }
+  return -EULER_GAMMA * z + sum;
 }
 
 /** log|Γ(v)|, scipy.special.gammaln. */
@@ -127,7 +181,9 @@ export function lgamma(v: number): number {
   if (!Number.isFinite(v)) return Infinity;
   if (v <= 0 && Number.isInteger(v)) return Infinity;
   if (v === 1 || v === 2) return 0;
-  if (v < 0.5) return Math.log(Math.PI / Math.abs(Math.sin(Math.PI * v))) - lgamma(1 - v);
+  if (Math.abs(v - 1) <= 0.2) return lgamma1p(v - 1);
+  if (Math.abs(v - 2) <= 0.2) return Math.log1p(v - 2) + lgamma1p(v - 2);
+  if (v < 0.5) return Math.log(Math.PI / Math.abs(sinpi(v))) - lgamma(1 - v);
   if (v < 15) return Math.log(Math.abs(gamma(v)));
   const z = v - 1;
   const t = z + 7.5;

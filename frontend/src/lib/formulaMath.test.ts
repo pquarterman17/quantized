@@ -36,7 +36,16 @@ describe("special functions agree with scipy.special", () => {
 
   it("lgamma is scipy's gammaln, log|Γ|", () => {
     const { x, gammaln } = fixture.gamma;
-    expect(mismatches(x, lgamma, gammaln, 1e-13, 1e-14)).toEqual([]);
+    // Relative 1e-13, with a 5e-17 absolute floor: next to lgamma's zeros at 1
+    // and 2, scipy itself is only that good in absolute terms (below).
+    expect(mismatches(x, lgamma, gammaln, 1e-13, 5e-17)).toEqual([]);
+  });
+
+  it("lgamma next to its zeros at 1 and 2 is exact (mpmath, 40 digits), where log(Γ) cancels", () => {
+    // mpmath.loggamma at the doubles 1.000000001 and 1.9999999999; scipy's
+    // gammaln is 2e-9 and 8e-7 off (relative) here, math.lgamma worse still.
+    expect(close(lgamma(1.000000001), -5.7721571183810395192e-10, 1e-15)).toBe(true);
+    expect(close(lgamma(1.9999999999), -4.2278437004755316937e-11, 1e-15)).toBe(true);
   });
 });
 
@@ -61,6 +70,9 @@ describe("round / floor / ceil with digits agree with numpy", () => {
   it("a digits argument that is not a whole number is an error, never rounded", () => {
     expect(() => round(1.234, 1.5)).toThrow(/whole number/);
     expect(() => FUNCS.ceil(1.234, 0.5)).toThrow(/whole number/);
+    // A blank digits cell is a blank result, not an error for the whole column.
+    expect(FUNCS.floor(1.234, NaN)).toBeNaN();
+    expect(round(1.234, NaN)).toBeNaN();
   });
 });
 
@@ -72,7 +84,10 @@ describe("seeded random draws are numpy.random.RandomState's", () => {
     const g = randomSeries("normal", Number(seed), n);
     // random_sample is integer arithmetic on the twister's output: exact.
     expect(at.map((i) => u[i])).toEqual(want.uniform.map(num));
-    expect(mismatches(at, (i) => g[i], want.normal, 1e-14)).toEqual([]);
+    // Within 4 ulp: V8's Math.log (fdlibm) and glibc's log may round the last
+    // bit differently, and the polar method amplifies it (measured: 2 ulp).
+    const ulp = (w: number) => 2 ** (Math.floor(Math.log2(Math.abs(w))) - 52);
+    expect(at.flatMap((i, k) => (Math.abs(g[i] - num(want.normal[k])) <= 4 * ulp(num(want.normal[k])) ? [] : [`draw ${i}: ${g[i]} vs ${want.normal[k]}`]))).toEqual([]);
   });
 
   it("refuses a seed RandomState would refuse", () => {

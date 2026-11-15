@@ -11,6 +11,8 @@ import type { Dataset } from "../../../lib/types";
 import { sortWorksheetRowsBy, type SortSpec } from "../../../store/sortRows";
 import type { FillSpec } from "../../../lib/fillSeries";
 import { sidecarRowCount } from "../../../lib/rowSidecars";
+import { withResolved } from "../../../store/pendingEdit";
+import { useApp } from "../../../store/useApp";
 import { setColumnFormat } from "../../../store/worksheetColumns";
 import { fillColumns, setRowCount } from "../../../store/worksheetFill";
 import { askParams } from "../../overlays/ParamDialog";
@@ -85,13 +87,17 @@ export async function fillColumnsDialog(ds: Dataset, cols: readonly number[], ki
   fillColumns(ds.id, cols, spec);
 }
 
-/** Set Row Count (G12). */
-export async function setRowCountDialog(ds: Dataset): Promise<void> {
+/** Set Row Count (G12). A book still loading is loaded FIRST, so the count
+ *  shown (and checked again on apply) is the full one, not the preview's. */
+export async function setRowCountDialog(start: Dataset): Promise<void> {
+  const resolved = await withResolved(useApp.getState, start.id, "setting the row count", (d) => d);
+  if (!resolved.ok) return;
+  const ds = resolved.value;
   const now = sidecarRowCount(ds.data.metadata, ds.data.time.length);
   const p = await askParams(
     "Set row count",
     [{ key: "rows", label: "Rows", type: "number", default: now, hint: `now ${now}` }],
     { confirmLabel: "Set", message: "More rows are added blank at the end; fewer cuts the rows past the count, in every column. Undo restores them." },
   );
-  if (p) setRowCount(ds.id, Number(p.rows));
+  if (p) setRowCount(ds.id, Number(p.rows), now);
 }

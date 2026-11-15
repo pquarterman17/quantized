@@ -27,10 +27,12 @@ import {
   OPERATOR_ENTRIES,
   parseRange,
   previewRows,
+  sameFormula,
   targetKind,
   targetNote,
   targetOptions,
   unwrapRange,
+  writable,
   type InsertEntry,
   type ScvTarget,
 } from "../../../lib/setColumnValues";
@@ -115,14 +117,18 @@ export default function SetColumnValuesDialog({ ds, target: initial, xName, onCl
   const deferredExpr = useDeferredValue(expr);
   const evaluation = useMemo(() => evaluateFormula(ds, datasets, deferredExpr), [ds, datasets, deferredExpr]);
   const preview = "error" in range || evaluation.error !== undefined ? [] : previewRows(ds, target, evaluation.values, range);
-  const problem =
-    kind === "categorical"
-      ? targetNote(kind)
-      : "error" in range
+  const canWrite = writable(kind);
+  const problem = !canWrite
+    ? targetNote(kind, ds)
+    : "error" in range
         ? range.error
         : expr !== deferredExpr || expr.trim() === ""
           ? null // still evaluating what was just typed, or nothing typed yet
           : (evaluation.error ?? null);
+  // A computed column's σ partner follows a range change, not a new formula.
+  const current = target.kind === "column" && kind === "computed" ? ds.formulas?.[target.col - baseCountOf(ds)] : undefined;
+  const sigma = current?.derived?.sigma;
+  const unbindsSigma = !!sigma && !!current && expr.trim() !== "" && !sameFormula(unwrapRange(current.expr).expr, expr);
   const canApply = !busy && problem === null && expr.trim() !== "" && expr === deferredExpr;
 
   const pickTarget = (value: string) => {
@@ -167,7 +173,7 @@ export default function SetColumnValuesDialog({ ds, target: initial, xName, onCl
         className="qzk-glass qz-dialog"
         role="dialog"
         aria-labelledby={titleId}
-        aria-describedby={ids.note}
+        aria-describedby={canWrite ? ids.note : ids.problem}
         ref={dialogRef}
         tabIndex={-1}
         style={{ width: "min(640px, 94vw)", top: "8%", maxHeight: "86vh" }}
@@ -236,9 +242,12 @@ export default function SetColumnValuesDialog({ ds, target: initial, xName, onCl
             <input type="checkbox" checked={propagate} onChange={(e) => setPropagate(e.target.checked)} />± errors: also add the propagated σ, bound as this column&rsquo;s error
           </label>
         )}
-        <div id={ids.note} className="qzk-ds-meta" style={{ whiteSpace: "normal" }}>
-          {targetNote(kind)}
-        </div>
+        {canWrite && (
+          <div id={ids.note} className="qzk-ds-meta" style={{ whiteSpace: "normal" }}>
+            {targetNote(kind, ds)}
+            {unbindsSigma && ` Changing the formula (not just the rows) unbinds its error column "${sigma}".`}
+          </div>
+        )}
         {shown && (
           <div id={ids.problem} role="alert" className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)" }}>
             {shown}

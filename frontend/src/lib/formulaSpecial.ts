@@ -27,20 +27,24 @@ function columnArg(fname: string, what: string, ops: ParserOps): string {
  *  not mark itself non-local (a one-cell edit cannot change it). */
 function parseRandom(kind: RandomKind, fname: string, ops: ParserOps): FormulaFn {
   if (isOp(ops.peek(), ")")) throw new Error(`${fname}() needs a seed so the column is the same every time it recalculates, e.g. ${fname}(1)`);
-  const seedFn = ops.parseExpr();
+  // The seed is a number written in the formula: a seed read from a column or
+  // row() would be a different stream on every row — not reproducible in any
+  // useful sense, and O(rows²) to draw.
+  const t = ops.eat();
+  if (t?.t !== "num" || !(isOp(ops.peek(), ")") || isOp(ops.peek(), ",")))
+    throw new Error(`${fname}() takes a seed written as a number, e.g. ${fname}(1) — not a column or an expression`);
   if (isOp(ops.peek(), ",")) throw new Error(`${fname}() takes one argument, the seed — scale it yourself, e.g. ${kind === "uniform" ? "10 * rnd(1)" : "5 + 2 * normal(1)"}`);
   ops.expectOp(")");
-  // One generator per seed, drawn forward as far as the highest row asked for.
-  const streams = new Map<number, { gen: Mt19937; values: number[] }>();
-  return (c, ex) => {
+  const seed = t.v;
+  const why = seedProblem(seed);
+  if (why) throw new Error(`${fname}(): ${why}`);
+  // One generator, drawn forward as far as the highest row asked for.
+  const gen = new Mt19937(seed);
+  const values: number[] = [];
+  return (_c, ex) => {
     if (!ex) throw new Error(`${fname}() has no row context to evaluate against`);
-    const seed = seedFn(c, ex);
-    const why = seedProblem(seed);
-    if (why) throw new Error(`${fname}(): ${why}`);
-    let s = streams.get(seed);
-    if (!s) streams.set(seed, (s = { gen: new Mt19937(seed), values: [] }));
-    while (s.values.length <= ex.row) s.values.push(kind === "uniform" ? s.gen.random() : s.gen.normal());
-    return s.values[ex.row];
+    while (values.length <= ex.row) values.push(kind === "uniform" ? gen.random() : gen.normal());
+    return values[ex.row];
   };
 }
 
@@ -53,7 +57,10 @@ function parseInterp(ops: ParserOps): FormulaFn {
   ops.expectOp(",");
   const yCol = columnArg("interp", "the Y column", ops);
   ops.expectOp(")");
-  const memo = new WeakMap<readonly number[], WeakMap<readonly number[], InterpTable>>();
+  // One table (or its refusal) per pair of column arrays: every row of one
+  // evaluation passes the same arrays, and an unsorted X must cost one scan,
+  // not one per row.
+  const memo = new WeakMap<readonly number[], WeakMap<readonly number[], InterpTable | { error: string }>>();
   return (c, ex) => {
     if (!ex) throw new Error("interp() has no row context to evaluate against");
     const xs = ex.columns[xCol];
@@ -63,7 +70,15 @@ function parseInterp(ops: ParserOps): FormulaFn {
     let byY = memo.get(xs);
     if (!byY) memo.set(xs, (byY = new WeakMap()));
     let table = byY.get(ys);
-    if (!table) byY.set(ys, (table = interpTable(xs, ys, xCol)));
+    if (!table) {
+      try {
+        table = interpTable(xs, ys, xCol);
+      } catch (e) {
+        table = { error: e instanceof Error ? e.message : String(e) };
+      }
+      byY.set(ys, table);
+    }
+    if ("error" in table) throw new Error(table.error);
     return interpAt(table, at(c, ex));
   };
 }

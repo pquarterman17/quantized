@@ -89,7 +89,8 @@ function columnItems(
       sortDesc: (c) => sortWorksheetRows(ds.id, c, -1),
       viewSortMark: view.sortMark,
       toggleViewSort: view.toggleSort,
-      onNewColumn: () => onSetColumnValues({ kind: "new" }),
+      // A live graph's sheet is rebuilt from its curves: no formula column there.
+      onNewColumn: ds.linkedCurves ? undefined : () => onSetColumnValues({ kind: "new" }),
       showStats: view.showStats,
       onToggleStats: () => view.setShowStats((v) => !v),
       onPlotSelection: () => view.plotCols(targets, "replace"),

@@ -19,7 +19,7 @@ import { EXTENSION_PENDING, formulaExtension, loadFormulaExtension, onFormulaExt
 import { remapSurvivingFormulas } from "../lib/formulaRename";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
-import type { SheetBinding } from "../lib/formulaTypes";
+import type { DerivedSpec, SheetBinding } from "../lib/formulaTypes";
 import type { ComputedColumn, DataStruct, Dataset } from "../lib/types";
 import { remapDatasetChannels } from "../lib/channelRemap";
 import { columnRemovalRefsPatch } from "./columnRemovalRefs";
@@ -52,7 +52,10 @@ export interface ComputedColumnsSlice {
   // "updateFormula" authoring path). A real cycle risk here (unlike
   // addFormula): a LATER column may already depend on this one, so widening
   // this column's own deps to reference that later column closes a loop.
-  updateFormula: (id: string, index: number, patch: { name?: string; expr?: string; unit?: string }) => boolean;
+  // `derived` (Set Column Values, G3): the derived spec to store, as given
+  // (null: none) — instead of an edit dropping it. A range-only change keeps
+  // the unit and σ link this way; an edit stores its re-derived unit.
+  updateFormula: (id: string, index: number, patch: { name?: string; expr?: string; unit?: string; derived?: DerivedSpec | null }) => boolean;
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -238,7 +241,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
       const edited = expr !== current.expr;
       const d0 = current.derived;
       const unit = patch.unit ?? (edited && d0?.unitAuto ? undefined : current.unit);
-      const derived = edited ? d0?.fits && { fits: d0.fits } : patch.unit && d0 ? { ...d0, unitAuto: undefined } : d0;
+      const derived = patch.derived !== undefined ? patch.derived || undefined : edited ? d0?.fits && { fits: d0.fits } : patch.unit && d0 ? { ...d0, unitAuto: undefined } : d0;
       const deps = referencedColumns(expr).letters;
       const target = formulaLetter(ds.data.labels.length, ds.formulas!.length, index);
       for (const dep of deps) {

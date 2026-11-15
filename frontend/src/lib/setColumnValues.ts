@@ -20,27 +20,37 @@
 // value the preview shows is the value that gets written.
 
 import { isCategoricalChannel } from "./categorical";
+import { parseExpr, printExpr, type Node } from "./derivedExprAst";
 import { applyFormulasWithErrors, channelLetter } from "./formula";
 import { resolveColumnNames } from "./formulaRefs";
+import { editRefusalNotice, isRederived } from "./rederived";
 import { linkSheets } from "./sheetRefs";
 import type { Dataset } from "./types";
 
 export type ScvTarget = { kind: "new" } | { kind: "column"; col: number };
 
-export type TargetKind = "new" | "computed" | "data" | "x" | "categorical";
+export type TargetKind = "new" | "computed" | "data" | "x" | "categorical" | "readonly" | "loading";
 
 /** Value columns before the computed ones. */
 export const baseCountOf = (ds: Dataset): number => ds.data.labels.length - (ds.formulas?.length ?? 0);
 
+/** What `target` is, or why nothing can be written to it now: a book whose
+ *  full data is still loading (its row count and rows are the preview's), or a
+ *  data column of a sheet that is rebuilt from its source. */
 export function targetKind(ds: Dataset, target: ScvTarget): TargetKind {
+  if (ds.pending != null) return "loading";
   if (target.kind === "new") return "new";
-  if (target.col < 0) return "x";
   if (target.col >= baseCountOf(ds)) return "computed";
+  if (isRederived(ds)) return "readonly";
+  if (target.col < 0) return "x";
   return isCategoricalChannel(ds.data, target.col) ? "categorical" : "data";
 }
 
+/** Can Apply write to a target of this kind? */
+export const writable = (kind: TargetKind): boolean => kind !== "categorical" && kind !== "readonly" && kind !== "loading";
+
 /** What applying does to this target, in words the dialog shows. */
-export function targetNote(kind: TargetKind): string {
+export function targetNote(kind: TargetKind, ds: Dataset): string {
   switch (kind) {
     case "new":
       return "Adds a computed column. The formula stays on it and recalculates when its inputs change.";
@@ -48,6 +58,10 @@ export function targetNote(kind: TargetKind): string {
       return "Replaces this column's formula. It stays on the column and recalculates when its inputs change.";
     case "categorical":
       return "This is a categorical column; its cells are level codes. Write the formula to a new column instead.";
+    case "readonly":
+      return editRefusalNotice(ds);
+    case "loading":
+      return "The full data of this book is still loading, so its rows are not known yet. Apply is available as soon as it has loaded.";
     default:
       return "Writes values once, into the rows of the range (one undo step). A data column keeps values, not formulas: to keep the formula and recalculate it later, write to a new column.";
   }
@@ -80,17 +94,48 @@ export function parseRange(fromText: string, toText: string, rows: number): RowR
 
 const isFull = (r: RowRange, rows: number): boolean => r.from <= 1 && r.to >= rows;
 
-const RANGE_RE = /^if\(row\(\) >= (\d+) and row\(\) <= (\d+), ([\s\S]*), nan\)$/;
+type RangeIf = Extract<Node, { k: "if" }>;
 
-/** The formula a computed column stores for `expr` over `range`. */
-export function wrapRange(expr: string, range: RowRange, rows: number): string {
-  return isFull(range, rows) ? expr : `if(row() >= ${range.from} and row() <= ${range.to}, ${expr}, nan)`;
+/** The [from, to] of a range wrapper `if(row() >= a and row() <= b, f, nan)`,
+ *  read from the syntax TREE, so it survives any respacing (a column delete
+ *  re-serialises formulas token by token), or null when `n` is not one. */
+function rangeOf(n: Node): { from: number; to: number; inner: Node } | null {
+  if (n.k !== "if" || n.b.k !== "const" || n.b.name !== "nan" || n.c.k !== "and") return null;
+  const bound = (c: Node, op: string): number | null =>
+    c.k === "cmp" && c.op === op && c.a.k === "row" && c.b.k === "num" && Number.isInteger(c.b.v) ? c.b.v : null;
+  const from = bound(n.c.a, ">=");
+  const to = bound(n.c.b, "<=");
+  return from === null || to === null ? null : { from, to, inner: (n as RangeIf).a };
 }
 
 /** A stored formula read back into the formula and range the dialog shows. */
 export function unwrapRange(stored: string): { expr: string; from: string; to: string } {
-  const m = RANGE_RE.exec(stored.trim());
-  return m ? { expr: m[3], from: m[1], to: m[2] } : { expr: stored, from: "", to: "" };
+  const plain = { expr: stored, from: "", to: "" };
+  let tree: Node;
+  try {
+    tree = parseExpr(stored);
+  } catch {
+    return plain;
+  }
+  const r = rangeOf(tree);
+  return r ? { expr: printExpr(r.inner), from: String(r.from), to: String(r.to) } : plain;
+}
+
+/** The formula a computed column stores for `expr` over `range`. A formula
+ *  that already carries a range has it REPLACED, never nested inside the new
+ *  one (nesting would intersect the two ranges). */
+export function wrapRange(expr: string, range: RowRange, rows: number): string {
+  const inner = unwrapRange(expr).expr;
+  return isFull(range, rows) ? inner : `if(row() >= ${range.from} and row() <= ${range.to}, ${inner}, nan)`;
+}
+
+/** Do two formulas parse to the same tree (spacing and redundant brackets aside)? */
+export function sameFormula(a: string, b: string): boolean {
+  try {
+    return printExpr(parseExpr(a)) === printExpr(parseExpr(b));
+  } catch {
+    return a.trim() === b.trim();
+  }
 }
 
 export type Evaluation = { values: number[]; error?: undefined } | { values?: undefined; error: string };
@@ -136,9 +181,13 @@ export function previewRows(ds: Dataset, target: ScvTarget, values: readonly num
 /** The dialog's "Into" choices: X, every column, then a new column. */
 export function targetOptions(ds: Dataset, xName: string): { value: string; label: string }[] {
   const base = baseCountOf(ds);
+  // A re-derived sheet's data columns are rebuilt from its source: not offered.
+  const values = !isRederived(ds);
   return [
-    { value: "-1", label: `X — ${xName || "X"} (values)` },
-    ...ds.data.labels.map((l, c) => ({ value: String(c), label: `${channelLetter(c)} — ${l}${c >= base ? " (ƒx formula)" : isCategoricalChannel(ds.data, c) ? " (categorical)" : " (values)"}` })),
+    ...(values ? [{ value: "-1", label: `X — ${xName || "X"} (values)` }] : []),
+    ...ds.data.labels.flatMap((l, c) =>
+      c >= base || values ? [{ value: String(c), label: `${channelLetter(c)} — ${l}${c >= base ? " (ƒx formula)" : isCategoricalChannel(ds.data, c) ? " (categorical)" : " (values)"}` }] : [],
+    ),
     { value: "new", label: "New column (keeps the formula)" },
   ];
 }

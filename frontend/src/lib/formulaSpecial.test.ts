@@ -68,7 +68,12 @@ describe("seeded random columns", () => {
 
   it("refuses an unseeded or badly seeded draw instead of inventing a seed", () => {
     expect(run("rnd()").error).toMatch(/needs a seed/);
-    expect(run("normal(-2)").error).toMatch(/seed must be a whole number/);
+    expect(run("normal(1.5)").error).toMatch(/seed must be a whole number/);
+    expect(run("normal(-2)").error).toMatch(/seed written as a number/);
+    // A per-row seed is no seed: rnd(row()) would be one new stream per row
+    // (and O(rows²) to draw). Refused at parse time.
+    expect(run("rnd(row())").error).toMatch(/seed written as a number/);
+    expect(run("rnd(B)").error).toMatch(/seed written as a number/);
     expect(run("rnd(1, 2)").error).toMatch(/takes one argument/);
   });
 
@@ -88,6 +93,16 @@ describe("interp(v, X, Y)", () => {
     expect(run("interp(x, Q, C)").error).toBe('unknown variable "Q"');
     expect(run("interp(x, C, B)").error).toMatch(/column C must be strictly increasing/);
     expect(run("interp(x, 2 * B, C)").error).toMatch(/bare column letter/);
+  });
+
+  it("an unsorted X is checked once per evaluation, not once per row", () => {
+    // Was O(rows²): the refusal was not remembered, so every row rebuilt and
+    // re-checked the whole table (20,000 rows took 7 s).
+    const n = 20_000;
+    const big: DataStruct = { time: Array.from({ length: n }, (_, i) => i), values: Array.from({ length: n }, (_, i) => [(i * 7919) % n, i]), labels: ["U", "Y"], units: ["", ""], metadata: {} };
+    const t0 = performance.now();
+    expect(run("interp(x, A, B)", big).error).toMatch(/strictly increasing/);
+    expect(performance.now() - t0).toBeLessThan(1500);
   });
 });
 
