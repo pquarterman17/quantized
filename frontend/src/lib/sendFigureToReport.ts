@@ -229,14 +229,14 @@ export function addFigureToReport(
 // Guard the shared command so menu, palette, and context-menu callers agree.
 const sendingPlots = new WeakSet<StoreGet>();
 
-/** `require` (optional): a last check of the BUILT spec, returning why it must
+/** `requirement` (optional): a last check of the BUILT spec, returning why it must
  *  not be sent (e.g. a fitted result plot whose fit the figure does not carry,
  *  store/analysisResultActions) -- the figure is then refused, not sent. */
-export async function runSendFigureToReportCommand(s: StoreGet, require?: SendRequirement): Promise<boolean> {
+export async function runSendFigureToReportCommand(s: StoreGet, requirement?: SendRequirement): Promise<boolean> {
   if (sendingPlots.has(s)) return false;
   sendingPlots.add(s);
   try {
-    return await sendActivePlot(s, require); // true only when a figure block was added
+    return await sendActivePlot(s, requirement); // true only when a figure block was added
   } finally {
     sendingPlots.delete(s);
   }
@@ -244,7 +244,7 @@ export async function runSendFigureToReportCommand(s: StoreGet, require?: SendRe
 
 export type SendRequirement = (spec: FigureSpec | null) => string | null;
 
-async function sendActivePlot(s: StoreGet, require?: SendRequirement): Promise<boolean> {
+async function sendActivePlot(s: StoreGet, requirement?: SendRequirement): Promise<boolean> {
   // Finding #3 (P3.6 review round 2): checked BEFORE any dialog opens, not
   // after the user has already answered target/caption/style/etc — asking
   // those questions only to then discover there is nothing to send wastes
@@ -269,7 +269,7 @@ async function sendActivePlot(s: StoreGet, require?: SendRequirement): Promise<b
       // Stat mode: the stat renderer's PNG as the block's image (lib/statFigureCommands.ts).
       const stat = activeStatExporter(s());
       if (stat) {
-        const refused = require?.(null); // a stat figure carries no row-aligned overlay
+        const refused = requirement?.(null); // a stat figure carries no row-aligned overlay
         if (refused) throw new Error(refused);
         const statBlock = await statReportBlock(stat, { style: opts.style, dpi: REPORT_FIGURE_DPI, signal }, stem, caption);
         addFigureToReport(s, targetId, statBlock, stem, ds.id, newReportName, refs);
@@ -295,7 +295,7 @@ async function sendActivePlot(s: StoreGet, require?: SendRequirement): Promise<b
         s().excludedDisplay,
       );
       if (!picked) return false;
-      const refused = require?.(picked.value); // checked before the screen-only question
+      const refused = requirement?.(picked.value); // checked before the screen-only question
       if (refused) throw new Error(refused);
       if (!(await confirmScreenOnlyExport(s(), picked.value, "Send"))) return false;
       const block = figureBlockFromSpec(picked.value, stem, caption);

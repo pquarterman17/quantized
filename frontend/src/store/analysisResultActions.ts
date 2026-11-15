@@ -20,6 +20,7 @@ import { weightRequestFields } from "../lib/fitweights";
 import type { Dataset } from "../lib/types";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 import type { FigureSpec } from "../lib/api/figures";
+import { canvasGroupCol } from "../lib/plotGroupSplit";
 import { openResultPlot, specCarriesFit } from "./analysisResultPlotOpen";
 import type { PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
 import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
@@ -183,27 +184,24 @@ export function prepareAnalysisResultPlot(id: string, bindingIndex: number): Pro
   return openResultPlot(id, bindingIndex, "open");
 }
 
-function refuseView(): false {
-  useApp.getState().setStatus("can't send fitted plot: a polar, stat or faceted view's figure cannot carry the fit; show it as a plain plot first");
-  return false;
-}
-
 /** Use the same gate as Open plot, then hand the live store to the existing
  * report command. A fitted plot is never sent without its fit: a fit the gate
- * refuses, and a polar / stat view (never an overlay-carrying figure), stop
- * the send before anything changes; a facet that survives the open is refused
- * before the dialog (the opened plot stays); and the built figure must carry
+ * refuses stops the send before anything changes; once the plot is open (a
+ * dataset switch can change its modes and focus), a view whose figure can never
+ * carry an overlay -- polar, stat, faceted, grouped -- is refused before the
+ * dialog asks anything (the opened plot stays); and the built figure must carry
  * THIS fit -- the overlay object the gate drew, on the dataset it opened -- or
- * the send fails. */
+ * the send fails (an encoded view is caught there). */
 export async function sendAnalysisResultPlotToReport(id: string, bindingIndex: number): Promise<boolean> {
-  const before = useApp.getState();
-  const fitted = before.analysisResults.find((item) => item.id === id)?.settingsRef?.field === "fitSpec";
-  if (fitted && (before.polarMode || before.statMode)) return refuseView(); // opening changes neither mode
   const opened = await openResultPlot(id, bindingIndex, "report");
   if (!opened) return false;
   const { fit, dataset } = opened;
-  if (fit && useApp.getState().facetKey !== null) return refuseView();
-  const require = fit
+  const st = useApp.getState();
+  if (fit && (st.polarMode || st.statMode || st.facetKey !== null || canvasGroupCol(st.groupKey, st.y2Keys) !== null)) {
+    st.setStatus("can't send fitted plot: a polar, stat, faceted or grouped view's figure cannot carry the fit; show it as a plain plot first");
+    return false;
+  }
+  const requirement = fit
     ? (spec: FigureSpec | null) => {
         const now = useApp.getState();
         if (now.activeId !== dataset.id || now.fitOverlay !== fit) return "the plot changed while sending; send it again";
@@ -214,7 +212,7 @@ export async function sendAnalysisResultPlotToReport(id: string, bindingIndex: n
     : undefined;
   try {
     // True only when a figure block was really added (not cancelled, refused or a duplicate click).
-    return await import("../commands/plotCommands").then((module) => module.sendFigureToReport(useApp.getState, require));
+    return await import("../commands/plotCommands").then((module) => module.sendFigureToReport(useApp.getState, requirement));
   } catch (error) {
     useApp.getState().setStatus(`can't send result figure to report: ${error instanceof Error ? error.message : "report tools failed to load"}`);
     return false;

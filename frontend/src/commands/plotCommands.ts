@@ -41,9 +41,9 @@ function openPageSetup(s: StoreGet): void {
  *  context menu's "Send to report…" (components/Stage/PlotContextMenu.tsx)
  *  runs this exact path — same busy indicator, same load-failure toast.
  *  Resolves true only when a figure was actually added to a report. */
-export function sendFigureToReport(s: StoreGet, require?: import("../lib/sendFigureToReport").SendRequirement): Promise<boolean> {
+export function sendFigureToReport(s: StoreGet, requirement?: import("../lib/sendFigureToReport").SendRequirement): Promise<boolean> {
   return runLazy("Loading report tools…", () => import("../lib/sendFigureToReport")).then(
-    (m) => m.runSendFigureToReportCommand(s, require),
+    (m) => m.runSendFigureToReportCommand(s, requirement),
     () => { onLoadFailure(); return false; },
   );
 }

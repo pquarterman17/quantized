@@ -39,6 +39,7 @@ export function followRefits(): void {
     replaceRetainedFit(
       {
         ...f,
+        xKey: e.binding.xKey, yKey: e.binding.yKey, // what the re-fit read, as fitData below
         result: e.result,
         fitData: {
           x: e.x, y: e.y, xKey: e.binding.xKey, yKey: e.binding.yKey, ...fittedWeighting(e.previousSpec.weight?.mode, e.dy),

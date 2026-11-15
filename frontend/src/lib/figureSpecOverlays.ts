@@ -52,19 +52,11 @@ import type { PlotView } from "./plotview";
 import { droppedRows } from "./rowstate";
 import { seriesColor } from "./seriesStyleCycle";
 import { overlayLayout, placeOverlay, type OverlayLayout } from "./overlayPlacement";
+import { FIT_SERIES_LABEL, specCanCarryOverlays } from "./overlaySpecShape";
 import { perSeriesXDataset } from "./perSeriesX";
 import { shownCurves } from "./shownCurves";
 import type { BaselineOverlay, Dataset, DefaultTrace, FitOverlay, OverlayBinding, PeakOverlay } from "./types";
 
-/** The fit's series label on the wire, past the dataset's own columns -- what a
- *  caller checking "does this figure carry the fit?" looks for. */
-export const FIT_SERIES_LABEL = "fit";
-
-/** A request shape a row-aligned overlay column can ride: not grouped,
- *  encoded, faceted or polar (their rows are re-split server-side). */
-export function specCanCarryOverlays(spec: FigureSpec): boolean {
-  return !spec.polar && !spec.facets && !spec.encoding && spec.group_col == null;
-}
 
 /** The view fields the overlays are decided from: a slice of the SAME PlotView
  *  the spec was built from -- never re-assembled from two sources. */
@@ -153,6 +145,8 @@ export function withAnalysisOverlays(
   if (!specCanCarryOverlays(spec)) return spec;
   const keys = spec.y_keys;
   if (!keys?.length || keys.some((k) => typeof k !== "number")) return spec;
+  const mine = (o: { datasetId: string } | null) => o?.datasetId === ds.id;
+  if (!mine(sources.fitOverlay) && !mine(sources.baselineOverlay) && !mine(sources.peakOverlay)) return spec; // none to place
   const { target, layout } = overlayTarget(ds, view);
   if (!drawsShownCurves(keys as number[], ds, view, layout.shown)) return spec; // fail closed
   const n = target.data.time.length;

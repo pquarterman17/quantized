@@ -19,7 +19,7 @@
 
 import type { FigureSpec } from "../lib/api/figures";
 import { fitBands } from "../lib/api/fitStats";
-import { FIT_SERIES_LABEL, specCanCarryOverlays } from "../lib/figureSpecOverlays";
+import { FIT_SERIES_LABEL, specCanCarryOverlays } from "../lib/overlaySpecShape";
 import { fitDrawBinding } from "../lib/fitDrawBinding";
 import { fullPlottedX } from "../lib/fitselectionActions";
 import type { Dataset, FitOverlay, FitSpec } from "../lib/types";
