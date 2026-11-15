@@ -16,6 +16,7 @@ import pytest
 
 from quantized.io.origin_project.figures_opju import extract_figures_opju
 from quantized.io.origin_project.opju_blocks import DatasetHeader, find_headers
+from quantized.io.origin_project.opju_curve_range import plot_row_range
 from quantized.io.origin_project.opju_curve_token import (
     CURVE_TOKEN,
     chunk_id,
@@ -185,3 +186,27 @@ def test_realdata_length_four_token_binds_mid1_i(corpus_dir: Path) -> None:
     figs = extract_figures_opju(_path(corpus_dir, _DWS).read_bytes())
     g1 = next(f for f in figs if (f["name"], f["layer"]) == ("Graph1", 1))
     assert ("Mid1@5", "I") in {(c["book"], c["y"]) for c in g1["curves"]}
+
+
+# ── the curve record's plotted row range ──────────────────────────────────────
+
+
+def test_plot_row_range_reads_offsets_7_and_11() -> None:
+    rec = bytearray(519)
+    rec[7:11] = (15).to_bytes(4, "little")
+    rec[11:15] = (901).to_bytes(4, "little")
+    assert plot_row_range(bytes(rec)) == (15, 901)
+    assert plot_row_range(None) is None
+    assert plot_row_range(bytes(10)) is None
+
+
+_F20 = "origin/public/mobilebandwidth_Artifacts/plots/Figure_20.opju"
+
+
+@pytest.mark.realdata
+def test_realdata_partial_plot_range_is_omitted(corpus_dir: Path) -> None:
+    """Origin plots 886 of the 901 rows (record range (15, 901))."""
+    figs = extract_figures_opju(_path(corpus_dir, _F20).read_bytes())
+    g3 = next(f for f in figs if (f["name"], f["layer"]) == ("Graph3", 1))
+    assert g3["curves"] == []
+    assert {n["reason"] for n in g3["curve_sheet_omitted"]} == {"plot_row_range"}

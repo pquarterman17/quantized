@@ -2566,6 +2566,55 @@ decoded; one missing id is enough to break the rank alignment of its
 whole `(book, column)` name (`PerceivedRisk` `Book1D`: 26 `D` ids against
 27 `Book1D_D[@N]` datasets).
 
+**The id chunk at every length (2026-11-15, plan item 68,
+`opju_curve_token`).** `80 <len>` is a literal run, not a field width: the
+writer emits literals from offset 4 up to the last non-zero byte it wants,
+so the same id appears as `80 01 <u8>`, `80 02 <u16>` (flag byte 0),
+`80 03 <u16> <flag>` and `80 04+ <u16> <flag> …` (the run continues into
+the record's next fields). Only lengths 1 and 3 (plus lane #694's `81`
+forms) were read. Corpus: `80` lengths 1/2/3/4/5/9/10 = 1,125 / 875 /
+11,250 / 15 / 1 / 26 / 12 graph-page tokens; 850 length-2 and 13 length-4
+ids name a column. Column records use the same grammar (`01 10 80 04 <id>
+<pb> 0c` for Discretewithsum `Mid1_I` / `Mid2_I`). `opju_curve_token` is
+the one decoder for every `80`/`81` form, used by the id table, the token
+reader and the sheet segments; where a shipped form (`80 01|03`, `81
+01|02`) and a newly read one name the same id in a layer, the shipped
+token keeps the curve (Figure2-c Graph2 plots `Book2_D` twice: the dedup
+keeps one, with the colour it had). A Y-error column with no X of its own
+read through a new length keeps the book's first X only when the curve
+before it on the same sheet uses that X (optimal_MOI Graph5: Origin plots
+`Book29_D` against `Book29_B`, the X of the curve before it).
+
+**Plot row range (2026-11-15, `opju_curve_range`).** The curve record's
+offsets 7-10 (u32) are the first plotted row (0-based) and 11-14 the end
+row (exclusive): Origin's per-plot data range. A non-zero first row is
+also why a token's id chunk runs past 3 literals. COM: `Figure_20` Graph3
+records `(15, 901)`, Origin plots 886 of 901 rows; `SOP_meas` `old`
+layers `(0, 2154)` for 13,143/14,403-row columns, Origin plots 2,154;
+`origin.opju` Graph1 `(0, 844)` of 4,096 rows; `fig_6_b` Graph1 `(0, 12)`
+of 24; Analiza Graph6 `(10, 6)` (empty) and Origin plots none. quantized's
+binding has no row range, so a curve whose range leaves out a filled row
+is omitted (`plot_row_range`).
+
+**Column display range (2026-11-15, plan item 71, `opju_display_range`).**
+Header `0x1D` (u32) is the column's first row (0-based) -- Origin's "Set as
+Begin" -- beside `0x19` allocated and `0x21` used rows. Rows above it stay
+stored but are not in the dataset: `col[i]` reads missing, `sum()` and
+plots skip them. Over 7,364 COM-swept columns `0x1D` = `get -b` - 1 and
+`0x21` = `get -e` on every one (including all 38 corpus columns with a
+non-zero first row); those cells now decode as missing (Discretewithsum
+`Mid1_I@5` / `Mid2_I@3` rows 1-12, stored ~1e-57).
+
+**Row masks (2026-11-15, plan item 71; not applied).** PerceivedRisk
+`Book1D_F@27` row 1 (stored 0.0) reads missing because it is MASKED
+(`ismasked(1, range)` = 1 over COM). The mask is stored after the record
+as `<len> 06 <5 bytes> <rle stream>` (header RLE grammar, `rle_expand`):
+the stream expands to `81 <u16>`, 28 zeros, then one byte per allocated
+row (+4), `01` on a masked row. In the swept PerceivedRisk columns it is
+present on all 12 swept columns with an Origin-missing stored value and on
+none of 788 others; the flagged rows equal Origin's (rows 1 / 1 and 61).
+quantized has no per-cell mask, so these cells keep their stored values.
+
 **Third sheet signal S (2026-11-15, plan item 67,
 `opju_sheet_segments`).** A book's window section writes its sheets in
 window order, each opened by a sheet header whose sparse stream carries

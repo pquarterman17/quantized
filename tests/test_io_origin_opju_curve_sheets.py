@@ -362,7 +362,9 @@ def test_realdata_sop_old_layer5_binds_sheet_two(corpus_dir: Path) -> None:
     want = ["C", "E", "G", "I", "K", "M", "O", "Q", "S", "U", "W", "Y", "AA"]
     rebound = [c for c in f["curves"] if c["book"] == "SOPCC25degC2@2"]
     assert [c["y"] for c in rebound] == want
-    assert not any(c["book"] == "SOPCC25degC2" for c in f["curves"])
+    # sheet 1's AR / AT: 2-byte id chunks (opju_curve_token); Origin plots
+    # SOPCC25degC2_AR and _AT here too (COM, 2026-11-15)
+    assert [c["y"] for c in f["curves"] if c["book"] == "SOPCC25degC2"] == ["AR", "AT"]
     x, y = _drawn(books, rebound[0])
     _assert_origin(y, 15, 18.215624697788, 112.75799918781)  # SOPCC25degC2_C@2
     _assert_origin(x, 15, 0.0, 2.966171615)  # SOPCC25degC2_B@2
