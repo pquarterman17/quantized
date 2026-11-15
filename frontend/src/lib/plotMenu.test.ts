@@ -162,14 +162,14 @@ describe("buildPlotMenu — 'Add text here…' (UX-R6 manual annotation entry)",
 });
 
 describe("buildPlotMenu — Legend formatting… (audit 6 M)", () => {
-  it("is in the Legend submenu, dispatches ctx.legendFormat, and is disabled while the legend is hidden", () => {
+  it("is in the Legend submenu, dispatches ctx.legendFormat, and stays enabled while the legend is hidden (the dialog can show it)", () => {
     const ctx = makeCtx({ legendFormat: vi.fn() });
     const item = find(submenuOf(buildPlotMenu(ctx), "Legend"), "Legend formatting…")!;
     expect(item).toBeTruthy();
     if ("run" in item) item.run();
     expect(ctx.legendFormat).toHaveBeenCalledTimes(1);
     const hidden = find(submenuOf(buildPlotMenu(makeCtx({ legendFormat: vi.fn(), showLegend: false })), "Legend"), "Legend formatting…")!;
-    expect("disabled" in hidden && hidden.disabled).toBe(true);
+    expect("disabled" in hidden && hidden.disabled).toBeFalsy();
   });
 
   it("is absent when there is no active graph to format", () => {

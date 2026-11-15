@@ -16,7 +16,7 @@
 
 import type { HalfLim } from "./axisLim";
 import type { StoreGet } from "./exportActive";
-import { compactOverrides, legendPosToLoc, type FigureOverrides } from "./figureOverrides";
+import { annotationSizePt, compactOverrides, legendPosToLoc, type FigureOverrides } from "./figureOverrides";
 import { layersWire } from "./graphLayersWire";
 import { insetWire } from "./inset";
 import { marginFractions, pageSizeInches } from "./pageGeometry";
@@ -89,7 +89,7 @@ datasets: readonly Dataset[] = useApp.getState().datasets,
       x: a.x,
       y: a.y,
       text: a.text,
-      ...(a.size ? { size: a.size } : {}),
+      ...(a.size ? { size: annotationSizePt(a.size) } : {}),
       ...(a.anchor === "page" ? { anchor: "page" as const } : {}),
       ...(a.frame ? { frame: a.frame } : {}),
       ...(a.dot === false ? { dot: false as const } : {}),
@@ -160,7 +160,6 @@ datasets: readonly Dataset[] = useApp.getState().datasets,
       ref_lines: refLines,
       region_shades: regionShades,
       x_lim: finiteLim(st.xLim),
-      annotation_size_px: annotations.some((a) => a.size) ? (true as const) : undefined,
       x_reversed: st.xReversed || undefined, // matplotlib invert_xaxis (calc/figure_overrides.py)
       y_lim: finiteLim(st.yLim),
       y2_lim: finiteLim(st.y2Lim),

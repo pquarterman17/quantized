@@ -329,7 +329,7 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
       // decode #52: a clean read-only block (Origin apply) vs the full
       // interactive legend; the user flips it back after an Origin apply.
       { label: "Static (Origin) legend", run: () => ctx.setLegendStatic(!ctx.legendStatic), checked: ctx.legendStatic, disabled: !ctx.showLegend },
-      ...(ctx.legendFormat ? [{ label: "Legend formatting…", run: ctx.legendFormat, disabled: !ctx.showLegend }] : []),
+      ...(ctx.legendFormat ? [{ label: "Legend formatting…", run: ctx.legendFormat }] : []),
       { separator: true },
       ...LEGEND_OPTS.map((o) => ({
         label: o.label,

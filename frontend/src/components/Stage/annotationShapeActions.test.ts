@@ -65,7 +65,9 @@ describe("annotationShapeActions — anchor dot toggle and duplicate", () => {
     expect(useApp.getState().annotations[0].dot).toBe(false);
     expect(toggle().checked?.({ id: "a1", conv: null })).toBe(false);
     toggle().run({ id: "a1", conv: null });
-    expect(useApp.getState().annotations[0].dot).toBe(true);
+    expect(useApp.getState().annotations[0].dot).toBeUndefined();
+    expect(JSON.stringify(useApp.getState().annotations[0])).not.toContain("dot"); // saved without the key
+    expect(toggle().checked?.({ id: "a1", conv: null })).toBe(true);
   });
 
   it("duplicate keeps dot, frame, size and anchor, as one undo step", () => {
@@ -75,6 +77,11 @@ describe("annotationShapeActions — anchor dot toggle and duplicate", () => {
     const copy = useApp.getState().annotations.find((a) => a.id === id)!;
     expect(copy).toMatchObject({ x: 1, y: 2, text: "Tc", dot: false, size: 14, anchor: "page", frame: { opacity: 0.9 } });
     expect(useApp.getState().history).toHaveLength(1);
+  });
+
+  it("duplicate keeps a y2-pinned label on y2 and in its group", () => {
+    const id = duplicateAnnotation({ id: "a1", x: 1, y: 2, text: "Tc", axis: 1, groupId: "g1" });
+    expect(useApp.getState().annotations.find((a) => a.id === id)).toMatchObject({ axis: 1, groupId: "g1" });
   });
 
   it("duplicating a legacy dotted label leaves `dot` unset (still dotted)", () => {

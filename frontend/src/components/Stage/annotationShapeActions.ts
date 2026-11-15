@@ -119,7 +119,7 @@ export function createAnnotationFromDialog(opts: CreateAnnotationFromDialogOptio
 }
 
 /** Copy an annotation in place, with its look (anchor dot, frame, size, anchor,
- *  y2 axis) kept, as ONE undo step. Returns the new id. */
+ *  y2 axis, group) kept, as ONE undo step. Returns the new id. */
 export function duplicateAnnotation(a: Annotation): string {
   return asOneEditStep(useApp.getState, "duplicate annotation", () => {
     const s = useApp.getState();
@@ -129,6 +129,8 @@ export function duplicateAnnotation(a: Annotation): string {
     if (a.frame) patch.frame = { ...a.frame };
     if (a.size) patch.size = a.size;
     if (a.anchor) patch.anchor = a.anchor;
+    if (a.axis !== undefined) patch.axis = a.axis; // a y2-pinned label stays on y2
+    if (a.groupId) patch.groupId = a.groupId;
     if (Object.keys(patch).length) s.updateAnnotation(id, patch);
     return id;
   });
@@ -141,7 +143,9 @@ export const annotationEditActions: ContextAction<AnnotationActionTarget>[] = [
     id: "annotation.dotToggle",
     label: "Show anchor dot",
     checked: (t) => getAnnotation(t.id)?.dot !== false,
-    run: (t) => useApp.getState().updateAnnotation(t.id, { dot: getAnnotation(t.id)?.dot === false }),
+    // Re-enabling REMOVES the key (absent = shown): a stored `dot: true` would mean the
+    // same but is not what a v0.34 file or the forward-compat gate expects.
+    run: (t) => useApp.getState().updateAnnotation(t.id, { dot: getAnnotation(t.id)?.dot === false ? undefined : false }),
   },
   // MAIN #21: flip between "data" (moves with zoom/pan) and "page"
   // (canvas-fraction, resize-stable) anchoring, converting x/y IN PLACE from

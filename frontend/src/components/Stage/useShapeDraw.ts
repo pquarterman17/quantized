@@ -39,7 +39,7 @@ const DEFAULT_TEXTBOX_FRAME = { opacity: 0.9 };
 
 /** A fresh text box's font size: the active template's axis-title size (its
  *  tick px + 2, see `uplotOpts.buildOpts`' `titlePx`), not the small
- *  tick-label default. Screen px; the export converts (`annotation_size_px`). */
+ *  tick-label default. Screen px; the view->override mappers convert to pt. */
 export const textBoxSizeFor = (template: string): number => resolveTemplate(template).fontSize + 2;
 
 export interface ShapeDrawResult {

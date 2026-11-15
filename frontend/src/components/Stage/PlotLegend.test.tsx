@@ -38,6 +38,11 @@ beforeEach(() => {
   });
 });
 
+/** Put the legend box's top-left corner exactly under the press at (x, y). */
+function pressAtBoxOrigin(box: Element, x: number, y: number) {
+  setParentRect(box, { width: 60, height: 40, left: x, top: y });
+}
+
 function setParentRect(el: Element, rect: { width: number; height: number; left?: number; top?: number }) {
   const left = rect.left ?? 0;
   const top = rect.top ?? 0;
@@ -161,6 +166,7 @@ describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
     setParentRect(container, { width: 200, height: 100 });
     const el = container.querySelector(".qzk-legend") as HTMLElement;
+    pressAtBoxOrigin(el, 50, 50); // the press is ON the box's top-left corner: no grab offset
     fireEvent.mouseDown(el, { clientX: 50, clientY: 50, button: 0 });
     fireEvent.mouseMove(document, { clientX: 100, clientY: 80 });
     fireEvent.mouseUp(document, { clientX: 100, clientY: 80 });
@@ -172,10 +178,22 @@ describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
     setParentRect(container, { width: 400, height: 200 });
     const content = container.querySelector(".qzk-legend-content") as HTMLElement;
+    pressAtBoxOrigin(container.querySelector(".qzk-legend") as HTMLElement, 80, 60);
     fireEvent.mouseDown(content, { clientX: 80, clientY: 60, button: 0 });
     fireEvent.mouseMove(document, { clientX: 200, clientY: 100 });
     fireEvent.mouseUp(document, { clientX: 200, clientY: 100 });
     expect(useApp.getState().legendXY).toEqual([0.5, 0.5]);
+  });
+
+  it("keeps the grip: the box moves by the pointer's travel, its corner does not jump to the cursor", () => {
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    setParentRect(container, { width: 200, height: 100 });
+    const el = container.querySelector(".qzk-legend") as HTMLElement;
+    setParentRect(el, { width: 60, height: 40, left: 40, top: 30 }); // box at (40, 30)
+    fireEvent.mouseDown(el, { clientX: 70, clientY: 50, button: 0 }); // grabbed 30 right / 20 below its corner
+    fireEvent.mouseMove(document, { clientX: 110, clientY: 80 }); // travelled (+40, +30)
+    fireEvent.mouseUp(document, { clientX: 110, clientY: 80 });
+    expect(useApp.getState().legendXY).toEqual([0.4, 0.6]); // corner now (80, 60) of 200 x 100
   });
 
   it("clamps the dragged fraction to [0, 1]", () => {
@@ -384,6 +402,7 @@ describe("PlotLegend frame anchor (decode #52 — faithful in-frame placement)",
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
     setParentRect(container, { width: 200, height: 100 });
     const el = container.querySelector(".qzk-legend") as HTMLElement;
+    pressAtBoxOrigin(el, 50, 50); // the press is ON the box's top-left corner: no grab offset
     fireEvent.mouseDown(el, { clientX: 50, clientY: 50, button: 0 });
     fireEvent.mouseMove(document, { clientX: 100, clientY: 80 });
     fireEvent.mouseUp(document, { clientX: 100, clientY: 80 });
@@ -455,6 +474,7 @@ describe("PlotLegend static mode (decode #52 — applied Origin figure)", () => 
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
     setParentRect(container, { width: 200, height: 100 });
     const el = container.querySelector(".qzk-legend") as HTMLElement;
+    pressAtBoxOrigin(el, 50, 50); // the press is ON the box's top-left corner: no grab offset
     fireEvent.mouseDown(el, { clientX: 50, clientY: 50, button: 0 });
     fireEvent.mouseMove(document, { clientX: 100, clientY: 80 });
     fireEvent.mouseUp(document, { clientX: 100, clientY: 80 });

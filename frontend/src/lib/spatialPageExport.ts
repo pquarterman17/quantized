@@ -49,7 +49,7 @@ import { traceSeriesStyles } from "./exportDefaultTrace";
 import { lineWidthSeriesStyles } from "./exportLineWidth";
 import { buildExportStyles, toWireSeriesStyles } from "./exportStyles";
 import { withSeriesLegends } from "./figureSpecSeries";
-import { compactOverrides, gateY2Overrides, type FigureOverrides } from "./figureOverrides";
+import { annotationSizePt, compactOverrides, gateY2Overrides, type FigureOverrides } from "./figureOverrides";
 import { spatialGridSize, spatialPlottedChannels, type SpatialPanel } from "./multipanel";
 import { pageValidRects } from "./panelLayout";
 import { withPageGreyscale } from "./pageGreyscale";
@@ -115,13 +115,12 @@ function panelOverrides(
       x: ann.x,
       y: ann.y,
       text: ann.text,
-      ...(ann.size ? { size: ann.size } : {}),
+      ...(ann.size ? { size: annotationSizePt(ann.size) } : {}),
       ...(ann.anchor === "page" ? { anchor: "page" as const } : {}),
       ...(ann.frame ? { frame: ann.frame } : {}),
       ...(ann.dot === false ? { dot: false as const } : {}),
     }));
   return compactOverrides({
-    annotation_size_px: annotations.some((a) => a.size) ? (true as const) : undefined,
     legend: hasLegend
       ? {
           show: true,

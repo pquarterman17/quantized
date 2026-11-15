@@ -173,6 +173,18 @@ describe("buildSpatialPageRequest", () => {
     ]);
   });
 
+  it("a Figure Page panel carries a text box's dot:false and its size converted from canvas px to pt", () => {
+    const fig = buildSpatialPageRequest(
+      [panel({ annotations: [{ id: "t", x: 0.2, y: 0.4, text: "box", dot: false, size: 14 }, { id: "p", x: 0.3, y: 0.5, text: "pk" }] })],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+    )!.panels[0].figure;
+    expect(fig.overrides?.annotations).toEqual([
+      { x: 0.2, y: 0.4, text: "box", size: 10.5, dot: false },
+      { x: 0.3, y: 0.5, text: "pk" },
+    ]);
+  });
+
   it("carries y2 curves through (GUI_INTERACTION #12 slice 4c: real twinx support) instead of omitting them", () => {
     const fig = buildSpatialPageRequest(
       [panel({ yKeys: [1, 2], y2Keys: [2] })],

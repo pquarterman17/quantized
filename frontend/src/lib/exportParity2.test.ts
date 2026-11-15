@@ -192,7 +192,7 @@ describe("6. Decor: annotations, shapes, legend, grid/spines, log ticks", () => 
     useApp.setState({ annotations });
     const body = await exportBody();
     expect(body.overrides?.annotations).toEqual([
-      { x: 1, y: 2, text: "Tc", size: 18 },
+      { x: 1, y: 2, text: "Tc", size: 13.5 }, // 18 canvas px = 13.5 pt on the wire
       { x: 0.1, y: 0.9, text: "note", anchor: "page" },
     ]);
   });

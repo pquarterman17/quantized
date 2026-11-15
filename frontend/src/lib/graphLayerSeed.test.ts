@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { insertGraphLayer } from "./graphLayerCommands";
-import type { InsetLayer } from "./graphLayers";
+import { resolveInsetCurves, type InsetLayer } from "./graphLayers";
 import type { Dataset } from "./types";
 import { useFigureDialog } from "../store/figureDialogs";
 import { useApp } from "../store/useApp";
@@ -51,6 +51,30 @@ describe("inset seeding binds the parent's X", () => {
     setup([ds], "m", { xKey: 0 });
     const c = seeded()!;
     expect(c.map((k) => [k.yKey, k.xKey])).toEqual([[1, 0], [3, 2]]);
+  });
+
+  it("a multi-X sheet with NO chosen X (the Origin-import case) resolves R2 on T2, end to end", () => {
+    const ds = mk("m", ["T1", "R1", "T2", "R2"], { columnDesignations: { 0: "X", 1: "Y", 2: "X", 3: "Y" } });
+    setup([ds], "m");
+    const c = seeded()!;
+    expect(c.map((k) => k.yKey)).toEqual([1, 3]);
+    const layer = { id: "l", kind: "inset", at: [0, 0, 1, 1], curves: c, x: { lim: null, scale: "linear", label: "", step: null }, y: { lim: null, scale: "linear", label: "", step: null }, mark: "line" } as unknown as InsetLayer;
+    const [r1, r2] = resolveInsetCurves(layer, [ds]);
+    expect(r1.x).toEqual([0, 1, 2]); // T1
+    expect(r2.x).toEqual([2, 3, 4]); // T2: the parent's own X for R2
+  });
+
+  it("a hidden channel is not seeded", () => {
+    setup([mk("d", ["a", "b", "c"])], "d", { hiddenChannels: [1] });
+    expect(seeded()!.map((k) => k.yKey)).toEqual([0, 2]);
+  });
+
+  it("an X column the user explicitly plots is seeded on the shared X, as the parent draws it", () => {
+    const ds = mk("m", ["T1", "R1", "T2"], { columnDesignations: { 0: "X", 1: "Y", 2: "X" } });
+    setup([ds], "m", { xKey: 0, yKeys: [1, 2] });
+    expect(seeded()!.map((k) => [k.yKey, k.xKey])).toEqual([[1, 0], [2, 0]]);
+    setup([ds], "m", { xKey: 0 }); // by default the X column is no curve
+    expect(seeded()!.map((k) => k.yKey)).toEqual([1]);
   });
 
   it("a 2-D map seeds nothing", () => {

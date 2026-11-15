@@ -29,6 +29,8 @@ export interface DrawOp {
   pts: [number, number][];
   /** Number of moveTo calls — one per sub-path (e.g. one per error whisker). */
   moves: number;
+  /** Every `arc(x, y, r)` of the path drawn, as [x, y, r] in canvas pixels (an annotation's anchor dot). */
+  arcs: [number, number, number][];
   text?: string;
   x?: number;
   y?: number;
@@ -40,7 +42,7 @@ export interface DrawOp {
  *  serialised, so it may not close over anything in this module. */
 function installRecorder(): void {
   type Pt = [number, number];
-  interface PathRec { pts: Pt[]; moves: number }
+  interface PathRec { pts: Pt[]; moves: number; arcs: [number, number, number][] }
   const w = window as unknown as { __qzDraw?: unknown };
   if (w.__qzDraw) return;
   const logs = new WeakMap<HTMLCanvasElement, unknown[]>();
@@ -48,7 +50,7 @@ function installRecorder(): void {
   const current = new WeakMap<CanvasRenderingContext2D, PathRec>();
   const recOf = (map: WeakMap<object, PathRec>, key: object): PathRec => {
     let r = map.get(key);
-    if (!r) { r = { pts: [], moves: 0 }; map.set(key, r); }
+    if (!r) { r = { pts: [], moves: 0, arcs: [] }; map.set(key, r); }
     return r;
   };
   const push = (ctx: CanvasRenderingContext2D, entry: unknown) => {
@@ -72,6 +74,14 @@ function installRecorder(): void {
   wrapPath(P, "lineTo", false);
   wrapPath(C, "moveTo", true);
   wrapPath(C, "lineTo", true);
+  for (const [proto, isCtx] of [[P, false], [C, true]] as const) {
+    const orig = proto.arc as unknown as (this: unknown, ...a: number[]) => void;
+    (proto as unknown as Record<string, unknown>).arc = function (this: object, x: number, y: number, r: number, ...rest: number[]) {
+      const rec = isCtx ? recOf(current as unknown as WeakMap<object, PathRec>, this) : recOf(paths, this);
+      rec.arcs.push([x, y, r]);
+      return orig.call(this, x, y, r, ...rest);
+    };
+  }
   const corners = (x: number, y: number, rw: number, rh: number): Pt[] =>
     [[x, y], [x + rw, y], [x + rw, y + rh], [x, y + rh]];
   for (const [proto, isCtx] of [[P, false], [C, true]] as const) {
@@ -85,7 +95,7 @@ function installRecorder(): void {
   }
   const origBegin = C.beginPath;
   C.beginPath = function (this: CanvasRenderingContext2D) {
-    current.set(this, { pts: [], moves: 0 });
+    current.set(this, { pts: [], moves: 0, arcs: [] });
     return origBegin.call(this);
   };
   const origClear = C.clearRect;
@@ -106,6 +116,7 @@ function installRecorder(): void {
         alpha: this.globalAlpha,
         pts: rec ? rec.pts.slice() : [],
         moves: rec ? rec.moves : 0,
+        arcs: rec ? rec.arcs.slice() : [],
       });
       return orig.apply(this, args);
     };
@@ -119,7 +130,7 @@ function installRecorder(): void {
         op: op === "fillRect" ? "fill" : "stroke",
         style: String(op === "fillRect" ? this.fillStyle : this.strokeStyle),
         width: this.lineWidth, dash: this.getLineDash(), alpha: this.globalAlpha,
-        pts: corners(x, y, rw, rh), moves: 1,
+        pts: corners(x, y, rw, rh), moves: 1, arcs: [],
       });
       return orig.call(this, x, y, rw, rh);
     };
@@ -129,7 +140,7 @@ function installRecorder(): void {
     const m = this.getTransform();
     push(this, {
       op: "text", style: String(this.fillStyle), width: 0, dash: [], alpha: this.globalAlpha, pts: [], moves: 0,
-      text: String(text), x: m.a * x + m.c * y + m.e, y: m.b * x + m.d * y + m.f, rotated: Math.abs(m.b) > 1e-6,
+      arcs: [], text: String(text), x: m.a * x + m.c * y + m.e, y: m.b * x + m.d * y + m.f, rotated: Math.abs(m.b) > 1e-6,
     });
     return maxWidth === undefined ? origText.call(this, text, x, y) : origText.call(this, text, x, y, maxWidth);
   };

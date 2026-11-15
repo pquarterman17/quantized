@@ -39,7 +39,10 @@ import type { RecipeMapView, RecipeVisual } from "./plotRecipeSchema";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./seriesStyleTypes";
 import type { FigureOverrides } from "./figureOverrides";
-import type { Annotation, Dataset } from "./types";
+import type { MapAnnotation } from "./mapView";
+import type { InsetView } from "./plotviewDecor";
+import type { StatMarks } from "./plotviewSanitize";
+import type { Annotation, Dataset, RefLine, RegionShade, Shape } from "./types";
 
 export type V034Class = "v034" | "gated" | "kept-by-034";
 type Classify<T> = Record<keyof T, V034Class>;
@@ -107,6 +110,41 @@ export const ANNOTATION: Classify<Annotation> = {
   id: V, groupId: V, x: V, y: V, text: V, axis: V, size: V, anchor: V, frame: V,
   dot: G,
 };
+// The annotation's text-box backing rect (`Annotation.frame`), in every 0.34 file.
+export const ANNOTATION_FRAME: Classify<NonNullable<Annotation["frame"]>> = { fill: V, stroke: V, opacity: V, pad: V };
+
+// The other persisted decoration elements. Each type existed in v0.34.0 with
+// exactly these keys (`git show v0.34.0:frontend/src/lib/...`), so a NEW key
+// fails `tsc` here until it is classified, instead of being credited to the
+// parent list field. The kitchen sink fills one `Required<T>` element of each.
+export const SHAPE: Classify<Shape> = {
+  id: V, groupId: V, kind: V, x1: V, y1: V, x2: V, y2: V, anchor: V, stroke: V, fill: V, opacity: V, width: V, dash: V,
+};
+export const REF_LINE: Classify<RefLine> = { id: V, axis: V, value: V, label: V, groupId: V, groupLabel: V, stick: V };
+export const REGION_SHADE: Classify<RegionShade> = { id: V, x1: V, x2: V, y1: V, y2: V, fill: V, axis: V, fullHeight: V };
+export const INSET_VIEW: Classify<InsetView> = { x: V, y: V, y2: V, yZoom: V, at: V, lines: V };
+export const STAT_MARKS: Classify<StatMarks> = {
+  points: V, jitter: V, jitterWidth: V, summary: V, errorBars: V, connectMeans: V, labelRotation: V, labelWrap: V,
+};
+// A map view's pinned text (`mapViews[id].annotations`): a different type from `Annotation`.
+export const MAP_ANNOTATION: Classify<MapAnnotation> = { id: V, x: V, y: V, text: V, space: V };
+// The export-request object persisted in figure documents (publication deltas,
+// templates). `layers` is wire-only: sanitizeFigureOverrides never persists it.
+type OvList<K extends keyof FigureOverrides> = NonNullable<FigureOverrides[K]> extends readonly (infer E)[] ? E : NonNullable<FigureOverrides[K]>;
+// The wire elements inside an overrides object (snake_case, no ids). Same story.
+export const OVERRIDE_SHAPE: Classify<OvList<"shapes">> = {
+  kind: V, x1: V, y1: V, x2: V, y2: V, anchor: V, stroke: V, fill: V, opacity: V, width: V, dash: V,
+};
+export const OVERRIDE_REF_LINE: Classify<OvList<"ref_lines">> = { axis: V, value: V, label: V, group_id: V, group_label: V, stick: V };
+export const OVERRIDE_REGION_SHADE: Classify<OvList<"region_shades">> = { x1: V, x2: V, y1: V, y2: V, fill: V, axis: V, full_height: V };
+export const OVERRIDE_INSET: Classify<OvList<"inset">> = { x: V, y: V, y2: V, at: V, lines: V };
+export const FIGURE_OVERRIDES: Classify<FigureOverrides> = {
+  font_size: V, font_name: V, title_size: V, label_size: V, tick_size: V, legend_size: V, legend: V, ticks: V,
+  spines: V, x_lim: V, x_reversed: V, y_lim: V, y2_lim: V, margins: V, page_pad: V, grid: V, annotations: V,
+  x_breaks: V, shapes: V, ref_lines: V, region_shades: V, inset: V,
+  layers: K,
+};
+
 // The export-request element is a subset of Annotation: a new key must be one.
 type _OverrideAnnotationIsAnnotation = Exclude<
   keyof NonNullable<FigureOverrides["annotations"]>[number],
@@ -146,6 +184,18 @@ export const CLASSIFICATIONS: Readonly<Record<string, Readonly<Record<string, V0
   DisplayBlock: DISPLAY_BLOCK,
   RecipeVisual: RECIPE_VISUAL,
   Annotation: ANNOTATION,
+  AnnotationFrame: ANNOTATION_FRAME,
+  Shape: SHAPE,
+  RefLine: REF_LINE,
+  RegionShade: REGION_SHADE,
+  InsetView: INSET_VIEW,
+  StatMarks: STAT_MARKS,
+  MapAnnotation: MAP_ANNOTATION,
+  FigureOverrides: FIGURE_OVERRIDES,
+  OverrideShape: OVERRIDE_SHAPE,
+  OverrideRefLine: OVERRIDE_REF_LINE,
+  OverrideRegionShade: OVERRIDE_REGION_SHADE,
+  OverrideInset: OVERRIDE_INSET,
   MapViewState: MAP_VIEW,
   RecipeMapView: RECIPE_MAP_VIEW,
   Dataset: DATASET,
@@ -164,8 +214,8 @@ const GATED: Record<string, string[]> = Object.fromEntries(Object.entries(CLASSI
 function checkType(o: unknown, type: string, found: Set<string>): void {
   if (!isObj(o)) return;
   for (const k of GATED[type]) {
-    // `dot: false` is the value that carries information (absent = dot).
-    if (present(o[k]) || (type === "Annotation" && k === "dot" && o[k] === false)) found.add(`${type}.${k}`);
+    // `dot: false` is the only value that carries information (absent = true = dot).
+    if (type === "Annotation" && k === "dot" ? o[k] === false : present(o[k])) found.add(`${type}.${k}`);
   }
   if (type === "AxisFormat" && o.base !== undefined && o.base !== "e") found.add("AxisFormat.base=2");
 }

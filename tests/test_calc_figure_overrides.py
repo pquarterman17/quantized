@@ -37,32 +37,26 @@ def test_annotation_size_override_increases_label_box_height() -> None:
     assert big_h > small_h
 
 
-def _label_height(**over: object) -> float:
-    x = np.linspace(0, 10, 5)
-    ann = {"x": 2.0, "y": 4.0, "text": "pk", "size": over.pop("size")}
-    hm = render_figure_map(x, [("y", x)], overrides={"annotations": [ann], **over})
-    box = _ann_box(hm)
+def _box_height(hitmap: dict, el_id: str) -> float:
+    box = next(e for e in hitmap["elements"] if e["id"] == el_id)
     return box["y1"] - box["y0"]
 
 
-def test_annotation_size_px_converts_screen_px_to_points() -> None:
-    """Audit 6 M: the canvas `size` is px; flagged, the export draws size*0.75 pt,
-    so a 16 px label is the same box as a legacy 12 pt one, and bigger than the
-    unflagged (legacy points) 16."""
-    flagged = _label_height(size=16, annotation_size_px=True)
-    assert flagged == pytest.approx(_label_height(size=12), rel=1e-3)
-    assert flagged < _label_height(size=16)
-
-
-def test_a_text_box_matches_the_axis_titles_in_the_export_as_on_screen() -> None:
-    """Parity: on screen a text box is the axis-title size (tick px + 2). In the
-    export a flagged `size` = that px * 0.75 pt: the screen template's pt
-    equivalent, which is what the same-template axis title is drawn at."""
-    for tick_px in (9, 11, 12, 14, 18):
-        title_px = tick_px + 2
-        assert _label_height(size=title_px, annotation_size_px=True) == pytest.approx(
-            _label_height(size=title_px * 0.75), rel=1e-3
-        )
+def test_a_text_box_is_the_axis_title_size_in_the_export_as_on_screen() -> None:
+    """Audit 6 M, measured in one rendered figure: on screen a new text box is
+    the axis-title size (ratio 1.0). The mapper sends it in points (14 canvas px
+    = 10.5 pt), and the default style's axis label is 10 pt, so the box must be
+    within a few percent of the real axis label's, not 1.4x as with px read as pt."""
+    x = np.linspace(0, 10, 5)
+    ann = {"x": 2.0, "y": 4.0, "text": "ABC", "size": 10.5}
+    hm = render_figure_map(x, [("y", x)], x_label="ABC", overrides={"annotations": [ann]})
+    ratio = _ann_box(hm)["y1"] - _ann_box(hm)["y0"]
+    ratio /= _box_height(hm, "xlabel")
+    assert 0.95 <= ratio <= 1.15
+    # The old reading (14 taken as points) was visibly larger than the axis title.
+    big = {"annotations": [{**ann, "size": 14}]}
+    old = render_figure_map(x, [("y", x)], x_label="ABC", overrides=big)
+    assert (_ann_box(old)["y1"] - _ann_box(old)["y0"]) / _box_height(old, "xlabel") > 1.3
 
 
 def test_annotation_without_size_falls_back_to_the_font_size_override() -> None:

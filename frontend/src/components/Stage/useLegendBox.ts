@@ -6,7 +6,7 @@ import { useApp, type PlotTool } from "../../store/useApp";
 
 /** Pointer travel (px) before a press on the legend box becomes a drag. */
 const DRAG_THRESHOLD_PX = 3;
-const clamp =(value: number, low: number, high: number) => Math.min(Math.max(value, low), high);
+const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high);
 
 /** Position and move behavior for the DOM legend box. */
 export function useLegendBox(tool: PlotTool) {
@@ -34,11 +34,15 @@ export function useLegendBox(tool: PlotTool) {
     e.preventDefault();
     let recorded = false;
     const [sx, sy] = [e.clientX, e.clientY];
+    // Where on the box the press landed: the box keeps that grip under the
+    // cursor instead of snapping its top-left corner to it.
+    const box = boxRef.current?.getBoundingClientRect();
+    const [gx, gy] = box ? [sx - box.left, sy - box.top] : [0, 0];
     const onMove = (ev: MouseEvent) => {
       // A click with a little hand jitter is not a drag: it must neither move
       // the box nor spoil the double-click that opens legend formatting.
       if (!recorded && Math.hypot(ev.clientX - sx, ev.clientY - sy) < DRAG_THRESHOLD_PX) return;
-      const xy = fractionAt(ev.clientX, ev.clientY);
+      const xy = fractionAt(ev.clientX - gx, ev.clientY - gy);
       if (!xy) return;
       if (!recorded) {
         useApp.getState().recordHistory("move legend");

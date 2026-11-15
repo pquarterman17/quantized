@@ -167,12 +167,11 @@ describe("FigureDocument FigureSpec adapter", () => {
       ],
       overrides: {
         legend: { show: true, loc: "custom", anchor: [0.2, 0.8], title: "Signals" },
-        annotations: [{ x: 1, y: 2, text: "peak", size: 14, frame: { pad: 3 } }],
+        annotations: [{ x: 1, y: 2, text: "peak", size: 10.5, frame: { pad: 3 } }], // 14 canvas px = 10.5 pt
         shapes: [{ kind: "rect", x1: 0, y1: 1, x2: 2, y2: 3, stroke: "#f00" }],
         ref_lines: [{ axis: "x", value: 5 }],
         region_shades: [{ x1: 0, x2: 2, y1: 1, y2: 3, fill: "#336699", axis: 1 }],
         x_lim: [0.1, 10],
-        annotation_size_px: true, // a sized label's `size` is canvas px; the export converts to pt
         y_lim: [1, 9],
         grid: true,
         spines: { top: true, right: true },

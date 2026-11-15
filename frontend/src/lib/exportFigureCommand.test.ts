@@ -115,7 +115,7 @@ describe("liveViewOverrides", () => {
       }),
     );
     expect(ov?.annotations).toEqual([
-      { x: 1, y: 2, text: "Tc", size: 24 },
+      { x: 1, y: 2, text: "Tc", size: 18 }, // 24 canvas px = 18 pt on the wire
       { x: 3, y: 4, text: "Hc" },
     ]);
   });

@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { mergeFigureOverrides } from "./figureOverrides";
 import { sanitizeFigureOverrides } from "./figureOverridesSanitize";
 import { viewOverrides } from "./figureViewOverrides";
 import { defaultPlotView, sanitizeAnnotations } from "./plotview";
@@ -31,16 +32,20 @@ describe("Annotation.dot", () => {
     expect(ann?.[1] && "dot" in ann[1]).toBe(false);
   });
 
-  it("sized annotations are flagged px, so the export converts to pt (unsized: no flag)", () => {
-    const sized = { ...defaultPlotView(), annotations: [{ id: "t", x: 1, y: 2, text: "note", size: 14 }] };
-    const plain = { ...defaultPlotView(), annotations: [{ id: "p", x: 1, y: 2, text: "peak" }] };
-    expect(viewOverrides(sized)?.annotation_size_px).toBe(true);
-    expect(viewOverrides(plain)?.annotation_size_px).toBeUndefined();
+  it("a view annotation's canvas-px size rides the export in points (14 px = 10.5 pt)", () => {
+    const v = { ...defaultPlotView(), annotations: [{ id: "t", x: 1, y: 2, text: "note", size: 14 }, { id: "p", x: 1, y: 2, text: "peak" }] };
+    const out = viewOverrides(v);
+    expect(out?.annotations?.[0].size).toBe(10.5);
+    expect(out?.annotations?.[1] && "size" in out.annotations[1]).toBe(false);
+    expect(out && "annotation_size_px" in out).toBe(false); // no unit flag on the wire
   });
 
-  it("the px flag survives the stored-override sanitizer; a legacy override has none", () => {
-    expect(sanitizeFigureOverrides({ annotation_size_px: true, annotations: [] })?.annotation_size_px).toBe(true);
-    expect(sanitizeFigureOverrides({ grid: true })?.annotation_size_px).toBeUndefined();
+  it("Figure Builder: a publication annotation's pt size never changes with the view's other annotations", () => {
+    const pub = { annotations: [{ x: 1, y: 2, text: "typed", size: 12 }] };
+    const plain = viewOverrides(defaultPlotView());
+    const withBox = viewOverrides({ ...defaultPlotView(), annotations: [{ id: "t", x: 1, y: 2, text: "box", size: 14 }] });
+    expect(mergeFigureOverrides(plain, pub)?.annotations).toEqual(pub.annotations);
+    expect(mergeFigureOverrides(withBox, pub)?.annotations).toEqual(pub.annotations);
   });
 
   it("survives the override sanitizer used on stored export overrides", () => {

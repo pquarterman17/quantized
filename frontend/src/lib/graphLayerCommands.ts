@@ -137,9 +137,13 @@ function parentCurves(): LinkedCurve[] {
   const s = useApp.getState();
   const ds = s.datasets.find((d) => d.id === s.activeId);
   if (!ds || is2DMap(ds.data)) return [];
-  const own = curveX(ds, s.xKey); // undefined = an X / non-curve column, never a curve
+  const own = curveX(ds, s.xKey); // undefined = an X / non-curve column
+  const picked = new Set(s.yKeys ?? []);
+  // An X column is no curve by default, but one the user explicitly chose to plot
+  // is drawn by the parent against the shared X (ownXKey falls back to it), so it
+  // is seeded too.
   return effectiveChannels(ds.data, s.yKeys, s.xKey, ds.channelRoles, s.seriesOrder)
-    .filter((ch) => !s.hiddenChannels.includes(ch) && own[ch] !== undefined)
+    .filter((ch) => !s.hiddenChannels.includes(ch) && (own[ch] !== undefined || picked.has(ch)))
     .slice(0, MAX_SEED_CURVES)
     // The parent's own X per curve: a chosen X column, or the nearest preceding
     // X on a multi-X sheet (R2 against T2); null (the book's X) otherwise.

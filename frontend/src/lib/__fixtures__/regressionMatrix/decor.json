@@ -82,13 +82,15 @@
         "x": 1,
         "y": 0.5,
         "text": "onset",
-        "dot": true
+        "dot": true,
+        "size": null
       },
       {
         "x": 4,
         "y": 2.5,
         "text": "plateau",
-        "dot": false
+        "dot": false,
+        "size": 14
       }
     ],
     "shapes": [
