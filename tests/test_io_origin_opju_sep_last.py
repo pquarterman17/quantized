@@ -8,6 +8,11 @@ synthetic data (``double_y/clean``, ``worksheet -p ? DOUBLEY``); Origin's own
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
+from quantized.io.origin_project.figures_opju import extract_figures_opju
 from quantized.io.origin_project.opju_axis_real_form import (
     _SEP_STRICT,
     _SEP_WIDE,
@@ -42,3 +47,19 @@ def test_right_layer_separator_ending_09_decodes_to_origins_axes() -> None:
     assert got is not None
     assert got[:4] == (-0.3, 10.3, 0.4, 1.6)
     assert got[6:] == (2.0, 0.2)  # tick increments
+
+
+@pytest.mark.realdata
+def test_realdata_anchor_right_layer_recovered(corpus_dir: Path) -> None:
+    """Anchor: a real double-Y page whose second layer was dropped before.
+    Expected values are Origin 2026b COM (``layer.x/y.from/to``, ``%Z``,
+    ``xof``) on the file itself."""
+    project = corpus_dir / "origin/public/SerialCore_MassInequality/Bqqbar.opju"
+    if not project.is_file():
+        pytest.skip("Bqqbar.opju not in the corpus")
+    figs = [f for f in extract_figures_opju(project.read_bytes()) if f["name"] == "Graph2"]
+    layer2 = [f for f in figs if f["layer"] == 2]
+    assert len(layer2) == 1
+    f = layer2[0]
+    assert (f["x_from"], f["x_to"], f["y_from"], f["y_to"]) == (0.0, 10.0, -700.0, 100.0)
+    assert [(c["book"], c["x"], c["y"]) for c in f["curves"]] == [("Book1", "A", "B")]
