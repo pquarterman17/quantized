@@ -13,6 +13,7 @@
 // tools) — all already lazy `workshops/` panels. See that file's own header
 // for the verified-no-eager-consumer rationale.
 
+import { effectiveDesignations } from "./columnmeta";
 import { ownXKey } from "./perSeriesX";
 import { dropGapRows } from "./api/finitePairs";
 import { dyForFit } from "./fitweights";
@@ -51,6 +52,44 @@ export interface FitSelection {
   dy?: number[] | null;
 }
 
+/** Why channel `yKey` cannot be a fit's Y, or null (I3, lib/overlayPlacement):
+ *  an X-designated column is an axis, not a curve. Plotted explicitly as a Y it
+ *  has no X of its own (`ownXKey` would hand back the plot's X), the reopen gate
+ *  (lib/fitDrawBinding) could never draw its fit, and a FitSpec naming it as
+ *  the fitted Y would falsify provenance -- so it is refused, never recorded. */
+export function fitYRefusal(
+  dataset: Pick<Dataset, "data" | "columnDesignations">,
+  yKey: number,
+): string | null {
+  if (effectiveDesignations(dataset.data, dataset.columnDesignations)[yKey] !== "X") return null;
+  const label = dataset.data.labels[yKey] ?? `Channel ${yKey + 1}`;
+  return `${label} is an X column, so it cannot be fitted as a Y; fit a Y column, or set ${label} as Y first`;
+}
+
+/** The refusal (`fitYRefusal`) behind a null `selectedFitData` for the same
+ *  inputs, or null when it was null for another reason (no channel at all). */
+export function fitSelectionRefusal(
+  dataset: Dataset | null | undefined,
+  xKey: number | null,
+  yKeys: number[] | null,
+  seriesOrder: number[] | null,
+): string | null {
+  const data = analysisView(dataset).data;
+  if (!dataset || !data) return null;
+  const yKey = effectiveChannels(data, yKeys, xKey, dataset.channelRoles, seriesOrder)[0];
+  return yKey === undefined ? null : fitYRefusal(dataset, yKey);
+}
+
+/** Throw the refusal behind a null `selectedFitData`, if any: the run paths
+ *  report it instead of returning silently. */
+export function throwFitSelectionRefusal(...args: Parameters<typeof fitSelectionRefusal>): void {
+  const why = fitSelectionRefusal(...args);
+  if (why) throw new Error(why);
+}
+
+/** The fit input for the primary plotted channel against its own X, or null
+ *  when there is none -- or when that channel may not be a fitted Y
+ *  (`fitYRefusal`; `fitSelectionRefusal` says why). */
 export function selectedFitData(
   dataset: Dataset | null | undefined,
   xKey: number | null,
@@ -69,7 +108,7 @@ export function selectedFitData(
     seriesOrder,
   );
   const yKey = channels[0];
-  if (yKey === undefined) return null;
+  if (yKey === undefined || fitYRefusal(dataset, yKey)) return null; // I3: never record an X column as Y
   // A Y that belongs to a secondary X column (T1,R1,T2,R2) is fitted against
   // ITS X, exactly as the plot draws it (lib/perSeriesX.ts).
   const fitX = ownXKey(dataset, xKey, yKey);

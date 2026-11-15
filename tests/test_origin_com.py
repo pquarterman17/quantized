@@ -288,3 +288,36 @@ def test_export_origin_com_maps_runtime_error_to_409(monkeypatch: pytest.MonkeyP
     )
     assert resp.status_code == 409
     assert "newbook" in resp.json()["detail"]
+
+
+# ── never close the user's Origin ────────────────────────────────────────────
+
+
+class _NoExitApp(_FakeApp):
+    """Fake whose Exit()/Quit() fail the test: ``Origin.ApplicationSI`` attaches
+    to the Origin the user already has open, and Exit() closes that window."""
+
+    def Exit(self) -> None:  # noqa: N802 - COM method name
+        raise AssertionError("send_to_origin called Exit() on the user's Origin")
+
+    def Quit(self) -> None:  # noqa: N802
+        raise AssertionError("send_to_origin called Quit() on the user's Origin")
+
+
+def test_send_to_origin_never_exits_or_quits_the_com_app(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _NoExitApp()
+    _make_available(monkeypatch, fake)
+    origin_com.send_to_origin([_ds([1.0, 2.0], [[3.0], [4.0]]), _ds([1.0], [[2.0]])])
+    assert fake.worksheets  # the send really ran
+    for cmd in fake.executed:  # nor does it close Origin through LabTalk
+        assert not cmd.strip().lower().startswith(("exit", "quit")), cmd
+
+
+def test_origin_com_source_never_references_exit_or_quit() -> None:
+    import inspect
+    import re
+
+    src = inspect.getsource(origin_com)
+    assert not re.search(r"\.\s*(Exit|Quit)\s*\(", src)

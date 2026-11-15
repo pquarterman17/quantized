@@ -44,6 +44,7 @@ import { excludedChoiceMatters } from "./excludedRowsExport";
 import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
 import { copyOfficeGraphicFormats } from "./officeClipboard";
+import { overlayDropTracker, withDropNote } from "./overlayDropNotice";
 import { confirmScreenOnlyExport } from "./screenOnlyExport";
 import { copyStatFigure } from "./statFigureCommands";
 import { activeStatExporter, renderStatFigureBlob } from "./statStageBridge";
@@ -72,16 +73,18 @@ async function pickCopySpec(
   ds: Dataset,
   stem: string,
   o: FigureRenderOpts,
-): Promise<FigureSpec | null> {
+): Promise<{ spec: FigureSpec; note: string } | null> {
+  const drops = overlayDropTracker();
   const picked = await chooseExcludedRows(
-    (greyExcluded) =>
-      buildStageFigureSpec(s, ds, stem, { ...o, greyExcluded }, { transparent: s().copyFigureTransparent }),
+    (greyExcluded) => drops.build((onDroppedOverlays) =>
+      buildStageFigureSpec(s, ds, stem, { ...o, greyExcluded }, { transparent: s().copyFigureTransparent, onDroppedOverlays })),
     excludedChoiceMatters,
     s().excludedDisplay,
   );
   const spec = picked?.value ?? null;
   // A stack/inset view the request cannot carry says so first (lib/screenOnlyExport.ts).
-  return spec && (await confirmScreenOnlyExport(s(), spec, "Copy")) ? spec : null;
+  // `note`: an overlay the canvas draws that this figure leaves out (lib/overlayDropNotice).
+  return spec && (await confirmScreenOnlyExport(s(), spec, "Copy")) ? { spec, note: drops.note(spec) } : null;
 }
 
 /** MAIN #35: vector copy, offered only where the browser will actually take an
@@ -108,7 +111,7 @@ export async function runCopyFigureSvgCommand(s: StoreGet): Promise<void> {
       // Stat mode: the stat renderer's own SVG (lib/statFigureCommands.ts).
       const stat = activeStatExporter(s());
       if (stat) return copyStatFigure(stat, "svg", { style: COPY_FIGURE_STYLE, dpi: COPY_FIGURE_DPI, signal }, stem);
-      const spec = await pickCopySpec(s, ds, stem, {
+      const picked = await pickCopySpec(s, ds, stem, {
         fmt: "svg",
         style: COPY_FIGURE_STYLE,
         dpi: COPY_FIGURE_DPI, // ignored by vector, sent for spec symmetry
@@ -116,20 +119,21 @@ export async function runCopyFigureSvgCommand(s: StoreGet): Promise<void> {
         xLabel: s().xAxisLabel,
         yLabel: s().yAxisLabel,
       });
-      if (!spec) return false;
+      if (!picked) return false;
+      const { spec, note } = picked;
       s().setStatus("rendering vector figure for the clipboard…");
       // Glyphs as outlines, as the raster copy's SVG leg asks (see the doc above).
       const ok = await copySvgAsync(renderFigureBlob({ ...spec, svg_text_as_paths: true }, signal), signal);
       s().setStatus("");
       if (!ok) throw new Error("clipboard write refused");
-      return "as vector (SVG only)";
+      return withDropNote("as vector (SVG only)", note);
     },
     { verb: "copy", past: "copied" },
   );
 }
 
 /** The spec "Copy figure" renders, at the publication defaults. */
-function rasterCopySpec(s: StoreGet, ds: Dataset, stem: string): Promise<FigureSpec | null> {
+function rasterCopySpec(s: StoreGet, ds: Dataset, stem: string): Promise<{ spec: FigureSpec; note: string } | null> {
   return pickCopySpec(s, ds, stem, {
     fmt: COPY_FIGURE_FMT,
     style: COPY_FIGURE_STYLE,
@@ -154,14 +158,17 @@ async function runNativeCopy(s: StoreGet, { svgRequired }: { svgRequired: boolea
       const stat = activeStatExporter(s());
       let png: Promise<Blob | null>;
       let svg: Promise<Blob | null> | null = null;
+      let note = "";
       if (stat) {
         const out = { style: COPY_FIGURE_STYLE, dpi: COPY_FIGURE_DPI, signal };
         png = renderStatFigureBlob(stat, "png", out);
         // One stat render at a time: the stage exporter is not re-entrant.
         if (svgRequired) svg = png.then(() => renderStatFigureBlob(stat, "svg", out, true));
       } else {
-        const spec = await rasterCopySpec(s, ds, stem);
-        if (!spec) return false;
+        const picked = await rasterCopySpec(s, ds, stem);
+        if (!picked) return false;
+        const { spec } = picked;
+        note = picked.note;
         png = renderFigureBlob(spec, signal);
         if (svgRequired || figurePointCount(spec) <= COPY_SVG_MAX_POINTS) {
           svg = renderFigureBlob({ ...spec, fmt: "svg", svg_text_as_paths: true }, signal);
@@ -169,7 +176,7 @@ async function runNativeCopy(s: StoreGet, { svgRequired }: { svgRequired: boolea
       }
       s().setStatus("rendering figure for the clipboard…");
       try {
-        return describeCopiedFormats(await copyFigureNative(png, svg, signal, { requireSvg: svgRequired }));
+        return withDropNote(describeCopiedFormats(await copyFigureNative(png, svg, signal, { requireSvg: svgRequired })), note);
       } finally {
         s().setStatus("");
       }
@@ -200,8 +207,9 @@ export async function runCopyFigureCommand(s: StoreGet): Promise<void> {
         await copyStatFigure(stat, "png", { style: COPY_FIGURE_STYLE, dpi: COPY_FIGURE_DPI, signal }, stem);
         return describeCopiedFormats(["png"]);
       }
-      const spec = await rasterCopySpec(s, ds, stem);
-      if (!spec) return false;
+      const picked = await rasterCopySpec(s, ds, stem);
+      if (!picked) return false;
+      const { spec, note } = picked;
       // Progress feedback: a large multi-panel render is not instant, and a
       // silent pause reads as a broken button.
       s().setStatus("rendering figure for the clipboard…");
@@ -222,7 +230,7 @@ export async function runCopyFigureCommand(s: StoreGet): Promise<void> {
       );
       s().setStatus("");
       if (!formats) throw new Error("clipboard write refused");
-      return describeCopiedFormats(formats);
+      return withDropNote(describeCopiedFormats(formats), note);
     },
     { verb: "copy", past: "copied" },
   );

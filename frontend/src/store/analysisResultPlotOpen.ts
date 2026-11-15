@@ -20,18 +20,11 @@
 import type { FigureSpec } from "../lib/api/figures";
 import { fitBands } from "../lib/api/fitStats";
 import { FIT_SERIES_LABEL, specCanCarryOverlays } from "../lib/overlaySpecShape";
-import { fitDrawBinding } from "../lib/fitDrawBinding";
+import { fitDrawBinding, fitDrawRefusal } from "../lib/fitDrawBinding";
 import { fullPlottedX } from "../lib/fitselectionActions";
 import type { Dataset, FitOverlay, FitSpec } from "../lib/types";
 import { resolveAnalysisResultPlot, type PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
 import { useApp } from "./useApp";
-
-/** Why a fit is refused, as a status suffix (I4). */
-function refusal(spec: FitSpec): string {
-  return spec.xKey === undefined
-    ? "the saved fit never recorded its X; use Edit / Re-fit first"
-    : "the saved fit does not match the plot's X/Y channels; use Edit / Re-fit first";
-}
 
 /** `spec`'s model evaluated at every finite row of X `xKey`, or an error message. */
 async function evaluateFit(ds: Dataset, spec: FitSpec, params: number[], xKey: number | null): Promise<(number | null)[] | string> {
@@ -78,7 +71,7 @@ export async function openResultPlot(
   const params = fitSpec?.params;
   if (fitSpec && !params?.length) return fail("the saved fit has no parameter values");
   const binding = fitDataset && fitSpec ? fitDrawBinding(fitDataset, prepared, fitSpec) : null;
-  const refused = fitSpec && !binding ? refusal(fitSpec) : null;
+  const refused = fitSpec && !binding ? fitDrawRefusal(fitSpec) : null;
   if (refused && purpose === "report") return fail(refused); // refused by the gate: nothing changed
   let fitY: (number | null)[] | null = null;
   if (fitDataset && fitSpec && params && binding) {

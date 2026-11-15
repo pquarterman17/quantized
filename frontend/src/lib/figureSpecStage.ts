@@ -16,7 +16,7 @@ import type { StoreGet } from "./exportActive";
 import { buildFigureSpec, buildFigureSpecFromDocument, liveFigureView, type FigureRenderOpts } from "./figureSpec";
 import { figureDocumentToPlotView } from "./figureDocument";
 import { windowRampApplies } from "./seriesRampImpl";
-import { withAnalysisOverlays } from "./figureSpecOverlays";
+import { drawnOverlayLabels, placeAnalysisOverlays } from "./figureSpecOverlays";
 import { effectiveChannels } from "./plotdata";
 import { buildPolarFigureSpec } from "./polarFigureSpec";
 import { windowCyclesSeriesStyles } from "./seriesStyleCycle";
@@ -77,7 +77,7 @@ export function buildStageFigureSpec(
   ds: Dataset,
   stem: string,
   o: FigureRenderOpts,
-  extra: { transparent?: boolean } = {},
+  extra: { transparent?: boolean; onDroppedOverlays?: (labels: string[]) => void } = {},
 ): FigureSpec {
   const st = s();
   const empty = emptyGraphReason(ds);
@@ -162,14 +162,14 @@ export function buildStageFigureSpec(
   // The fit / baseline / peak overlays the canvas splices on after its plotted
   // channels (lib/figureSpecOverlays.ts), decided from `view`. Not on a frozen document: it renders
   // its own snapshot, not the rows the overlay was computed on.
-  const overlaid = withLiveLegendCorner( // an "auto" legend where the screen put it
-    document?.data.mode === "frozen"
-      ? spec
-      : withAnalysisOverlays(
-          spec, ds, view,
-          { fitOverlay: st.fitOverlay, baselineOverlay: st.baselineOverlay, peakOverlay: st.peakOverlay, defaultTrace, defaultLineWidth },
-          { screen: st.excludedDisplay === "grey", wire: Boolean(o.greyExcluded) },
-        ),
-  );
+  // An overlay the canvas draws but this figure cannot carry is still left out
+  // (never drawn at a guessed X, I1) -- and reported to `extra.onDroppedOverlays`,
+  // so the command can say so (lib/overlayDropNotice) instead of dropping it silently.
+  const sources = { fitOverlay: st.fitOverlay, baselineOverlay: st.baselineOverlay, peakOverlay: st.peakOverlay, defaultTrace, defaultLineWidth };
+  const placed = document?.data.mode === "frozen"
+    ? { spec, dropped: drawnOverlayLabels(ds, view, sources) }
+    : placeAnalysisOverlays(spec, ds, view, sources, { screen: st.excludedDisplay === "grey", wire: Boolean(o.greyExcluded) });
+  extra.onDroppedOverlays?.(placed.dropped);
+  const overlaid = withLiveLegendCorner(placed.spec); // an "auto" legend where the screen put it
   return extra.transparent === undefined ? overlaid : { ...overlaid, transparent: extra.transparent };
 }

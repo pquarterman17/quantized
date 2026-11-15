@@ -142,6 +142,46 @@ export function withAnalysisOverlays(
   sources: OverlaySources,
   grey: OverlayGrey = { screen: false, wire: false },
 ): FigureSpec {
+  return placeAnalysisOverlays(spec, ds, view, sources, grey).spec;
+}
+
+/** The wire labels of the overlays the CANVAS draws for `ds` on `view`: this
+ *  dataset's, placed by lib/overlayPlacement (a hidden bound curve, another X
+ *  or another dataset's overlay is drawn nowhere, so is never "dropped"). */
+export function drawnOverlayLabels(ds: Dataset, view: OverlayView, sources: OverlaySources): string[] {
+  const all: [string, FitOverlay | null][] = [
+    [FIT_SERIES_LABEL, sources.fitOverlay], ["baseline", sources.baselineOverlay], ["peaks", sources.peakOverlay],
+  ];
+  const mine = all.filter(([, o]) => o?.datasetId === ds.id);
+  if (!mine.length) return [];
+  const { target, layout } = overlayTarget(ds, view);
+  const n = target.data.time.length;
+  return mine.flatMap(([label, o]) => ((placeOverlay(o, layout)?.y.length ?? 0) >= n ? [label] : []));
+}
+
+/** `withAnalysisOverlays`, plus `dropped`: the overlays the canvas draws that
+ *  this figure does NOT carry (it fails closed when the spec and its view
+ *  disagree) -- so Export / Copy can say so instead of dropping them silently. */
+export function placeAnalysisOverlays(
+  spec: FigureSpec,
+  ds: Dataset,
+  view: OverlayView,
+  sources: OverlaySources,
+  grey: OverlayGrey = { screen: false, wire: false },
+): { spec: FigureSpec; dropped: string[] } {
+  const out = appendOverlays(spec, ds, view, sources, grey);
+  if (out === spec) return { spec, dropped: drawnOverlayLabels(ds, view, sources) };
+  const carried = new Set(out.dataset.labels.slice(spec.dataset.labels.length));
+  return { spec: out, dropped: drawnOverlayLabels(ds, view, sources).filter((label) => !carried.has(label)) };
+}
+
+function appendOverlays(
+  spec: FigureSpec,
+  ds: Dataset,
+  view: OverlayView,
+  sources: OverlaySources,
+  grey: OverlayGrey,
+): FigureSpec {
   if (!specCanCarryOverlays(spec)) return spec;
   const keys = spec.y_keys;
   if (!keys?.length || keys.some((k) => typeof k !== "number")) return spec;

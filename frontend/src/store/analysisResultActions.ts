@@ -21,6 +21,7 @@ import type { Dataset } from "../lib/types";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 import type { FigureSpec } from "../lib/api/figures";
 import { openResultPlot, specCarriesFit } from "./analysisResultPlotOpen";
+import { overlaysNotCarriedReason } from "../lib/overlaySpecShape";
 import type { PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
 import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
 import { commitDerivedRecompute } from "./recalcDatasets";
@@ -206,8 +207,7 @@ export async function sendAnalysisResultPlotToReport(id: string, bindingIndex: n
         const now = useApp.getState();
         if (built.id !== dataset.id || now.fitOverlay !== fit) return "the plot changed while sending; send it again";
         if (!spec) return "a stat figure cannot carry the fit";
-        return specCarriesFit(spec, built) ? null
-          : "the figure does not carry the fit (its curve is not drawn there, or the view splits or encodes series)";
+        return specCarriesFit(spec, built) ? null : overlaysNotCarriedReason();
       }
     : undefined;
   try {
