@@ -91,19 +91,26 @@ export function batchOverlayOffer(
  *  files landed, `createdIds` the datasets they produced) — ranked
  *  candidates, first match wins, per L0.46 above: overlay, then folder, then
  *  (this wave) a clean-matching Plot Recipe suggestion, then the plain
- *  "imported N files" fallback. */
+ *  "imported N files" fallback.
+ *
+ *  `suppressFolderOffer` (worksheet audit #20 follow-up): drops JUST the
+ *  folder candidate from the ranking, for "Import as sheets of one
+ *  workbook…" (`commands/importAsSheets.ts`) — its own same-prefix batch is
+ *  about to become sheets of ONE workbook, so the folder suggestion never
+ *  applies, but the overlay/recipe/plain-toast candidates still can. */
 export async function presentBatchOutcome(
   get: SliceGet,
   added: number,
   createdIds: readonly string[],
   targetFolderId: string | undefined,
+  opts: { suppressFolderOffer?: boolean } = {},
 ): Promise<void> {
   const offer = batchOverlayOffer(get, createdIds);
   // If BOTH the overlay and folder offers would qualify, the overlay wins
   // (L0.46 — never stack two action toasts for one batch); the offer toast
   // states "imported" itself, so it replaces (not supplements) any other
   // toast below.
-  const folderOffer = offer ? null : batchFolderOffer(get, createdIds, added);
+  const folderOffer = offer || opts.suppressFolderOffer ? null : batchFolderOffer(get, createdIds, added);
   if (offer) {
     toast(`${offer.ids.length} ${offer.technique} files imported — overlay in one plot?`, "ok", {
       action: { label: "Overlay", onClick: () => void plotSelectedTogether(offer.ids) },

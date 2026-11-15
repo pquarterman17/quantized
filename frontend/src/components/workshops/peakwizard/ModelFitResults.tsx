@@ -11,11 +11,13 @@ import { fmtNum } from "../../../lib/format";
 import { DataTable } from "../../primitives/DataTable";
 import { StatusDot } from "../../primitives";
 import { derivedErrorReason, metricRows, paramErrorReason, type DerivedKey } from "./modelFitReasons";
-import { paramLabel } from "./peakModelParams";
+import { paramLabel, tieText } from "./peakModelParams";
 
 const faint = { color: "var(--text-faint)" } as const;
 const SHAPE_LABEL: Record<string, string> = {
   gaussian: "Gauss", lorentzian: "Lorentz", pseudo_voigt: "pV", voigt: "Voigt",
+  split_gaussian: "asym. G", split_lorentzian: "asym. L", split_pseudo_voigt: "asym. pV",
+  pearson_vii: "PVII", fano: "Fano", doniach_sunjic: "DS",
 };
 
 /** A standard error to two significant figures (its own precision); the
@@ -99,7 +101,9 @@ export default function ModelFitResults({ r }: { r: PeakModelFitResponse }) {
             rows={r.parameters.map((p) => [
               <span key="n" title={p.name}>{paramLabel(p.name)}</span>,
               <Pm key="v" value={p.value} err={p.stderr} reason={paramErrorReason(r, p)} />,
-              p.tie ? `tied → ${paramLabel(p.tie)}` : !p.vary ? "fixed" : p.at_bound ? "at bound" : "free",
+              p.tie
+                ? `tied → ${tieText(p)}` + (p.tie_coef_vary ? ` (${p.tie_op === "offset" ? "offset" : "ratio"} fitted ± ${p.tie_coef_stderr == null ? "—" : fmtErr(p.tie_coef_stderr)})` : "")
+                : !p.vary ? "fixed" : p.at_bound ? "at bound" : "free",
             ])}
           />
         </div>
