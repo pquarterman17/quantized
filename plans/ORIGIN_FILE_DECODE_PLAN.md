@@ -14,7 +14,7 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-11-15 (items 69-70 struck: embedded `Residual*` report-graph headers no longer end their host book; curves bind the X their own token record stores — 380 wrong-X curves and 3 phantoms on main → 0 on the 22 COM-checked files, 307 newly match Origin, 255 omitted with a reason; residue booked as item 71. Earlier: item 66 struck: separator flags `01/08/30/41/48` admitted, 23 layers recovered, 23 more per-layer axis matches, still 0 wrong / 0 phantom on the 113-file oracle; their 367 curves match Origin's `%Z` exactly, sheet included, 0 wrong, 26 not decoded (item 68). Earlier: `.opju` curves now bind the sheet they plot:
+**Updated:** 2026-11-15 (items 67-68 slice: a second sheet signal (dataset header + stored X partner) and u8 id records draw 828 more `.opju` curves than main `da57d658`, 816 checked identical to Origin over COM, 0 drawn differently, 0 vanished, 14 wrong main curves on filtered workbooks now omitted, omissions 1,154 → 585, each listed in Recover; items 67-68 re-booked with the residue. Earlier: items 69-70 struck: embedded `Residual*` report-graph headers no longer end their host book; curves bind the X their own token record stores — 380 wrong-X curves and 3 phantoms on main → 0 on the 22 COM-checked files, 307 newly match Origin, 255 omitted with a reason; residue booked as item 71. Earlier: item 66 struck: separator flags `01/08/30/41/48` admitted, 23 layers recovered, 23 more per-layer axis matches, still 0 wrong / 0 phantom on the 113-file oracle; their 367 curves match Origin's `%Z` exactly, sheet included, 0 wrong, 26 not decoded (item 68). Earlier: `.opju` curves now bind the sheet they plot:
 3,508 curves re-bound to `Book@N` plus 531 previously deduped away, 875
 omitted and diagnosed; 495 of 498 COM-checked re-bound curves draw
 Origin's exact data. Items 67-70 booked. Earlier: items 64-65 fixed: the axis record is run-length
@@ -934,30 +934,54 @@ work.
 
 (items 64-65 shipped 2026-11-15 — see Completed)
 
-67. **`.opju` curves whose sheet is still unknown** — after the 2026-11-15
-    re-binding (see Completed), 770 corpus curves stay omitted as
-    `sheet_unknown` (the id and `Book_Col@N` dataset counts of their name
-    differ: deleted sheets, e.g. Figure4 `@6`-`@10` after `@2`;
-    cleaned_data 11 datasets vs 10 ids; Hc2 data 88), plus 49 as
-    `x_sheet_unproven`. COM evidence on 71 of them: 23 plot sheet 1, 41
-    another sheet, 7 are not plotted at all, so no single default is safe.
-    - [ ] Find a second sheet signal that survives deleted sheets (the
-          worksheet window's own column list, or the sheet id the data
-          header carries) and re-check it against the 71 COM cases
-    - [ ] Surface `curve_sheet_omitted` per curve in the Library/Recover UI
-          (today only the fidelity code `curve_sheet_unresolved` shows)
-    - [ ] Import the missing pseudo-books behind `book_not_imported`
-          (Absorption-D3 `Cu5Cys4wat@2`/`@3`, which Origin plots) and the
-          `column_not_imported` columns (49 curves)
+67. **`.opju` curves whose sheet or X is still unproven** — after the
+    2026-11-15 second sheet signal (see Completed, "#67/#68 slice"),
+    measured against main `da57d658` (token X, #690): the corpus omits 585
+    curves (main: 1,154), each listed per curve in Recover. This item's
+    share: 133 `sheet_unknown`, 25 `x_sheet_unproven`, 59
+    `x_token_differs`, 11 `y_is_x_column`, 12 `plot_type_not_drawn`, 15
+    `worksheet_filter`, 57 `column_not_imported`, 8
+    `book_not_imported` (empty sheets, nothing to draw), 2 `y_is_sheet_x`
+    (the 244 `x_not_a_column` + 19 `x_column_unknown` are item 71's).
+    - [ ] The 133 + 25 the rank alignment AND signals H/P leave unproven
+          (e.g. PerceivedRisk `Book1D_D@27`/`@16`/`@11`, `NNPreLC_D@6`/`@14`,
+          Absorption-D3 `CuSCH3vac_B@2`/`@3`, SOP_meas `figSOPvsR_B@5`, all
+          plotted by Origin on the sheet named, COM 2026-11-15)
+    - [ ] 59 `x_token_differs` + 11 `y_is_x_column`: the sheet is proven,
+          but a `<id:u16> 21 61` X reference in the curve's token record (or,
+          when it names none, in another token of the layer) differs from
+          the X the decoder would use. Over COM, dropping the first gate
+          drew 4 curves against the wrong X and dropping both 12 (and 14
+          more identical): find which reference Origin uses and release them
+    - [ ] `column_not_imported` (57): 39 have a Text X column (Figure4,
+          soil deep: Origin's own `A@N` numeric count is 0; drawing needs a
+          categorical X axis) and 18 a report-sheet X (生化指标非线性
+          `A@2`); import them as categorical X / report columns
+    - [ ] `worksheet_filter` (15, likelihood_profile + simulated-IFN):
+          decode the `__STGCOLFILTER` condition (column name + threshold
+          text, e.g. `error` / `0.07`, are visible in the bytes) and apply it
+          as a row filter, then re-check the row counts over COM
+    - [ ] `plot_type_not_drawn` (12): histograms (type 219) and the other
+          plot types the frontend does not rebuild
+    - [ ] 12 newly placed sheet-1 curves (Figure_9/10 `Book1B`, Catchment
+          B-E Graph1/2 `Book1`) keep a binding whose Text X the importer
+          did not produce, so the frontend skips them without a note:
+          extend `unbound_rebinds`' column check to sheet-1 curves
 
-68. **Origin plots the curve decoder misses entirely** — 89 plotted datasets
-    across the 140 COM-checked layers have no decoded curve at all (none
-    wrong; evidence `%Z` dumps of 2026-11-15, `sheetverify/cmp.txt`):
-    - [ ] pedotpss_IV Graph7 etc.: `Book1` columns before `AC` (the
-          decoder recovers only the later ones)
-    - [ ] un-prefixed function datasets `F13`-`F15`
-    - [ ] datasets Origin names with an explicit `@1` suffix
-    - [ ] `mid1_*@5` and `Book1B_D@10`
+68. **Origin plots the curve decoder misses entirely** — after the
+    2026-11-15 slice (on top of #690), 25 of the original 89 Origin-only
+    plots in the 140 COM-checked layers remain (none wrong;
+    `sheetverify/z_*.json`):
+    - [ ] un-prefixed function datasets `F13`-`F15` (SOP_meas Graph70#11)
+          and `F32`: their 147-byte headers exist (`F1`..`F39`, 100 rows,
+          double) but no curve token in the page span names them; the
+          function-plot object's reference is not decoded
+    - [ ] Discretewithsum Graph1 plots `Mid1_E@5` twice (two tokens, id 83;
+          the `(book, y, sheet)` dedup keeps one) and `Mid1_I@5`, Graph5
+          `Mid2_I@3`, PerceivedRisk Graph10B `Book1B_D@10`: no token for
+          those ids in the page span — another plot-object form
+    - [ ] 5 rise-time file Origin-only plots (Graph66 `Book56_B@3`/`C`/`D`/
+          `E`, …; was 14): no decoded token names them (item 71)
 
 (items 69-70 shipped 2026-11-15 — see Completed; their residue is item 71)
 
@@ -970,11 +994,14 @@ work.
           dataset at all (binned distribution layers, axis -5..45 / 0..11).
           Needs a row-index binding in the frontend (`figureBindingFor`) for
           the line/scatter case; binned layers stay omitted
-    - [ ] The 21 rise-time curves that now name their host book stay
+    - [x] The 21 rise-time curves that now name their host book stay
           `sheet_unknown`: the host's ids and its `Book_Col@N` datasets do
           not align (`Book40_B`: 3 ids vs 7 datasets, sheets in file order
-          `"", 3, 2, 5, 4, 6, 7`) — item 67's second sheet signal would
-          resolve them (Origin plots `Book40_B@3`, `Book31_B@15`, …)
+          `"", 3, 2, 5, 4, 6, 7`) — DONE 2026-11-15 by item 67's second
+          sheet signal: the file's `sheet_unknown` omissions 82 → 2, drawn
+          curves 2 → 120, all COM-identical (see Completed, "#67/#68
+          slice"); 11 stay `y_is_x_column`, 1 `x_token_differs`, 1
+          `plot_type_not_drawn` (Graph62, a histogram)
     - [ ] Unframed curve tokens: 8 of 8,401 resolved tokens corpus-wide are
           not preceded by the `0a [00] 80 <flag>` record framing (they sit in
           a `Style` object, `28 aa 00 80 b0 | 01 01 01 80 01 …`). One is COM-
@@ -1141,6 +1168,50 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**#67/#68 slice: second sheet signal, u8 id records, per-curve
+  omissions in Recover**~~ (2026-11-15, on top of #690 `da57d658`). Closed
+  sub-tasks: #67 "second sheet signal", "surface `curve_sheet_omitted` per
+  curve", "missing pseudo-books"; #68 "pedotpss `Book1` columns before
+  `AC`", "explicit `@1` suffix"; #71 "21 rise-time curves stay
+  `sheet_unknown`". `opju_sheet_signals.py`: when the rank alignment cannot
+  place an id, signal H (dataset header u16 `0x52` names a column on the
+  dataset's own sheet: 8,642 rank-proven references agree, 0 disagree, 359
+  files) or P (a Y is on its stored X partner's sheet: 15,556 agree, 0
+  disagree) does, kept only if the signals agree, `Book_Col@N` exists and
+  no other id of the name lands there; a curve placed this way is still
+  withheld if it plots an X column (`y_is_x_column`) or a `<id> 21 61` X
+  reference in its token record (or the layer's) names another column
+  (`x_token_differs`) — over COM, without those gates 12 more newly drawn
+  curves drew the wrong X — or its token's plot-type tag is not line /
+  scatter / line+symbol / column (`plot_type_not_drawn`: rise-time Graph62
+  `Book3_B` is a histogram, type 219, X axis spanning B's own values).
+  Any curve of a book page storing a worksheet data filter
+  (`__STGCOLFILTER`, 2 of 359 files) is omitted (`worksheet_filter`):
+  Origin plots only the rows the undecoded condition keeps —
+  `likelihood_profile` 48/2/5/16/290 of 3000/1000/1010/1000/1000 rows,
+  `simulated-IFN…longer` 1549 of 1600, the unfiltered `Book4` all 1000. `opju_figure_curves` admits id-record forms
+  A1/B1 (u8 id, no `<pb>`): 54 records, all `pedotpss_IV` `Book1` B..AB.
+  **COM (Origin 2026b):** of the 71 earlier unknown-sheet cases, 62 now
+  bind, all on the sheet Origin's `%Z` names; Origin-only plots in the 140
+  layers 89 → 25 (pedotpss 54 → 0, rise-time 14 → 5). Data check
+  (`%(i,@D)`/`%(iX,@D)` values + paired (x, y) fingerprint, fresh queries
+  on every layer whose curves change: 32 files, 453 layers): of the 828
+  newly drawn curves, 816 are identical to Origin (all 635 re-bound + 181
+  sheet-1) and 12 are not drawable (Text X, item 67 sub-task); none is
+  drawn differently from Origin. **Corpus diff vs main `da57d658`, 359
+  `.opju`:** 828 curves newly drawn (635 re-bound to `Book@N`, 193
+  sheet-1; the rise-time file alone 2 → 120), 6,971 unchanged, 0 vanished;
+  14 curves main draws are now omitted `worksheet_filter`, 13 of them
+  COM-proven to draw more rows than Origin plots (the 14th was not
+  drawable on main); 29 legends gain captions, no other field changes;
+  omitted 1,154 → 585. The `book_not_imported`
+  pseudo-books (Absorption-D3 `Cu5Cys4wat@2`/`@3`) hold no rows: every
+  header's used-row count is 0 and Origin's own `sum()` count is 0 of
+  1400, so there is nothing to import. No `%Z` name in the 140 layers
+  carries an explicit `@1`. Recover lists each omitted curve and why
+  (`lib/originCurveOmissions.ts`, lazy chunk; eager bundle 785.8 kB,
+  budget 796.9 kB). Open residue: items 67-68.
 
 - ~~**69. Rise-time file book mis-binding**~~ (2026-11-15) — the `Residual*`
   pages are NLFit report graphs embedded in their host workbook; their page
