@@ -44,6 +44,7 @@ import {
 } from "./signalTransform";
 import { averageLabel, computeAverage, type AverageParams } from "./transformAverage";
 import { computeResample, resampleLabel, type ResampleParams } from "./transformResample";
+import { computeSigop, sigopLabel, type SigopParams } from "./transformSigop";
 import { computeSims, simsLabel, type SimsParams } from "./transformSims";
 import { computeSimsCompare, simsCompareLabel, type SimsCompareParams } from "./transformSimsCompare";
 import {
@@ -98,6 +99,7 @@ export type TransformParams =
   | { op: "algebra"; operation: string; interp: string; with: DatasetRef }
   | { op: "split"; col: number; tolerance: number | null }
   | ResampleParams
+  | SigopParams
   | SimsParams
   | SimsCompareParams
   | AverageParams
@@ -175,6 +177,7 @@ export function transformStepText(p: TransformParams, primaryName: string): { la
     case "algebra": label = `Dataset math ${primaryName} ${p.operation} ${refs[0]}`; break;
     case "split": label = `Split ${primaryName} by column value`; break;
     case "resample": label = resampleLabel(p, primaryName); break;
+    case "sigop": label = sigopLabel(p, primaryName); break;
     case "sims": label = simsLabel(p, primaryName); break;
     case "simscompare": label = simsCompareLabel(p, primaryName); break;
     case "average": label = averageLabel(p, primaryName); break;
@@ -260,10 +263,7 @@ export async function computeTransform(
     }
     case "algebra": {
       const b = others[0];
-      // A non-finite result (a divide by zero, log/sqrt of an out-of-domain
-      // value) arrives as JSON null; stored as NaN so the `.dwk` reopens --
-      // the same fix `transformSims.ts`/`transformResample.ts` apply
-      // (lib/blankCells.ts).
+      // A non-finite result arrives as JSON null; stored as NaN so the `.dwk` reopens.
       const data = blanksToNaN(await datasetAlgebra({
         dataset_a: primary.data,
         dataset_b: b.data,
@@ -280,6 +280,10 @@ export async function computeTransform(
       const m = others[0];
       const r = await computeResample(p, { name: primary.name, data: src }, m ? { name: m.name, data: m.data } : null);
       return { data: r.data, name: r.name, preview: preview("Resample", r.data, r.warnings, [[primary.name, src]]) };
+    }
+    case "sigop": {
+      const r = await computeSigop(p, { name: primary.name, data: src }, { signal });
+      return { data: r.data, name: r.name, preview: preview(sigopLabel(p, primary.name), r.data, r.warnings, [[primary.name, src]]) };
     }
     case "sims": {
       const r = await computeSims(p, { id: primary.id, name: primary.name, data: src });
@@ -298,10 +302,8 @@ export async function computeTransform(
       return { data: r.data, name: r.name, preview: preview("Average curves", r.data, r.warnings, all.map((d) => [d.name, d.data])), datasetPatch: r.datasetPatch };
     }
     case "signal": {
-      // Signal Processing deliberately reads the full worksheet. Its UI
-      // discloses included/excluded counts and the full-row scope; unlike
-      // statistical transforms, row state is not silently baked into the
-      // linked output.
+      // Signal Processing deliberately reads the full worksheet (its UI discloses
+      // the scope); row state is not silently baked into the linked output.
       const secondary = others[0];
       const r = await computeSignalTransform(p, primary, signal, options, secondary);
       return {

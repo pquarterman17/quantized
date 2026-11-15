@@ -233,6 +233,9 @@ def spectral_workbench(
             "zeroPad": zero_pad,
             "segmentLen": segment_len,
             "overlap": overlap,
+            # Rows transformed, so Inverse FFT can undo the amplitude scale
+            # (|Y|/sum(window)) and crop a zero-padded record back.
+            "recordLength": int(x.size),
         }
         return DataStruct.create(
             freq,
