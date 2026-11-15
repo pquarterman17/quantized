@@ -65,7 +65,7 @@ IMPORT_FILE_TYPES: tuple[str, ...] = (
     (
         "Data files (*.dat;*.csv;*.txt;*.tsv;*.xy;*.xye;*.raw;*.brml;*.xrdml;"
         "*.opj;*.opju;*.spc;*.dx;*.jdx;*.cif;*.refl;"
-        "*.ort;*.pnr;*.datA;*.datB;*.datC;*.datD;*.nc;*.cdf;*.xlsx;*.xlsm;*.opus;"
+        "*.ort;*.pnr;*.datA;*.datB;*.datC;*.datD;*.nc;*.cdf;*.xlsx;*.xlsm;*.xls;*.opus;"
         # Bruker OPUS numbered files (sample.0, sample.1, ...), sniffed by magic.
         "*.0;*.1;*.2;*.3;*.4;*.5;*.6;*.7;*.8;*.9)"
     ),
