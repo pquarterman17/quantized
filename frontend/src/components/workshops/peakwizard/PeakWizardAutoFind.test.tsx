@@ -81,6 +81,24 @@ describe("Peak Analyzer step 2 auto-find", () => {
   });
 });
 
+describe("Peak Analyzer step chips with no peaks", () => {
+  it("the Model and Fit & review chips are disabled with the same reason until a peak exists", async () => {
+    findMock.mockResolvedValue({ peaks: [], background: [] });
+    render(<PeakWizardPanel />);
+    step("Find peaks");
+    const chip = (n: string) => screen.getByText(n, { selector: ".qzk-wizard-step" });
+    await waitFor(() => expect(next()).toBeDisabled());
+    for (const n of ["Model", "Fit & review"]) {
+      expect(chip(n)).toBeDisabled();
+      expect(chip(n)).toHaveAttribute("title", expect.stringMatching(/no peaks to fit/i));
+    }
+    findMock.mockResolvedValue(FOUND);
+    fireEvent.click(screen.getByRole("button", { name: "Find peaks" }));
+    await waitFor(() => expect(chip("Model")).toBeEnabled());
+    expect(chip("Fit & review")).toBeEnabled();
+  });
+});
+
 describe("Peak Analyzer fit status", () => {
   it("says 'fitted' on the status line after a model fit", async () => {
     findMock.mockResolvedValue(FOUND);
