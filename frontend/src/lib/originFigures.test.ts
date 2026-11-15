@@ -1430,7 +1430,7 @@ describe("Origin column / bar / histogram graphs (re-audit #2: a bar graph resto
   it("an area curve fills down to zero and a step curve steps, both lines without the latent symbol", () => {
     expect(originCurveSeriesStyle(curve("area"))).toEqual({ color: "#ff0000", width: 1, fill: "under" });
     expect(originCurveSeriesStyle(curve("step"))).toEqual({ color: "#ff0000", width: 1, step: "post" });
-    expect(originCurveSeriesStyle({ book: "Book1", x: "A", y: "B", plotType: "step" })).toEqual({ width: 1.5, step: "post" });
+    expect(originCurveSeriesStyle({ plotType: "step" })).toEqual({ width: 1.5, step: "post" });
   });
 
   it("a histogram of the X column opens the Stat Stage's histogram of that column", () => {
