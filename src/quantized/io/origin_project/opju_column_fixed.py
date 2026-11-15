@@ -36,8 +36,9 @@ column ``format = 1`` and once ``format = 9`` -- differs only at offsets 30,
 ``WksDifferentDiagramAssoc.opju`` (36 columns, 4 formats) agrees with the
 code table above on every column. Codes 1, 4, 5, 6 are disregard, label,
 Z and X-error -- NOT the label / Z / X-error the marker reader in
-``windows_opju`` assumes for ``21 41`` / ``20 61`` (booked, not changed
-here: those columns are never in the id table).
+``windows_opju`` used to assume for ``21 41`` / ``20 61`` (it now reads
+this code: ``opju_marker_designations``, decode-plan item 72). Codes 7 and 8
+(group, subject) are COM-proven on specimen books too.
 
 Only Y, Y-error and X records are returned (the designations the field walk
 admits), and only when the code, the 0x11 bits of offset 37 and the high
@@ -49,7 +50,14 @@ from __future__ import annotations
 
 import re
 
-__all__ = ["DESIGNATION_CODES", "fixed_column_record", "record_name", "record_prefix"]
+__all__ = [
+    "DESIGNATION_CODES",
+    "expand_record",
+    "fixed_column_record",
+    "record_code",
+    "record_name",
+    "record_prefix",
+]
 
 _PREFIX = 39  # through offset 38
 DESIGNATION_CODES = {
@@ -60,6 +68,8 @@ DESIGNATION_CODES = {
     4: "label",
     5: "Z",
     6: "X-error",
+    7: "group",  # LabTalk wks.col.type 8 (COM specimen, decode-plan item 72)
+    8: "subject",  # LabTalk wks.col.type 9
 }
 _ADMITTED = {0: "Y", 2: "Y-error", 3: "X"}
 # code -> (offset 37 & 0x11, offset 38 & 0xf0)
@@ -82,35 +92,49 @@ def record_prefix(
     literal mask)`` for offsets ``[0, length)``, or ``None`` when the stream
     ends or meets an unknown escape first (``partial``: what was expanded up
     to that point, its mask marking only the literals actually read)."""
+    got = expand_record(b, off, length, partial=partial)
+    return None if got is None else (got[0], got[1])
+
+
+def expand_record(
+    b: bytes, off: int, length: int = _PREFIX, *, partial: bool = False
+) -> tuple[bytes, bytes, list[int]] | None:
+    """``record_prefix`` plus, per expanded offset, the stream position its
+    literal was read from (``-1`` for an elided zero)."""
     buf = bytearray(length)
     lit = bytearray(length)
+    src = [-1] * length
     pos, p, n = 0, off, len(b)
     while pos < length:
         if p >= n:
-            return (bytes(buf), bytes(lit)) if partial else None
+            return (bytes(buf), bytes(lit), src) if partial else None
         t = b[p]
         if 0x80 <= t <= 0xBF:
             if p + 2 > n or p + 2 + b[p + 1] > n:
-                return (bytes(buf), bytes(lit)) if partial else None
+                return (bytes(buf), bytes(lit), src) if partial else None
             ln = b[p + 1]
             pos += t - 0x80 + 3
-            chunk, p = b[p + 2 : p + 2 + ln], p + 2 + ln
+            first, p = p + 2, p + 2 + ln
+            chunk = b[first:p]
         elif 0xC0 <= t <= 0xC3:
             if p + 2 > n:
-                return (bytes(buf), bytes(lit)) if partial else None
+                return (bytes(buf), bytes(lit), src) if partial else None
             chunk, p = bytes([b[p + 1]]) * (t - 0xC0 + 3), p + 2
+            first = -1  # a repeat: no one stream position per offset
         elif 0 < t < 0x80:
             if p + 1 + t > n:
-                return (bytes(buf), bytes(lit)) if partial else None
-            chunk, p = b[p + 1 : p + 1 + t], p + 1 + t
+                return (bytes(buf), bytes(lit), src) if partial else None
+            first, p = p + 1, p + 1 + t
+            chunk = b[first:p]
         else:
-            return (bytes(buf), bytes(lit)) if partial else None
+            return (bytes(buf), bytes(lit), src) if partial else None
         for i, v in enumerate(chunk):
             if pos + i < length:
                 buf[pos + i] = v
                 lit[pos + i] = 1
+                src[pos + i] = first + i if first >= 0 else -1
         pos += len(chunk)
-    return bytes(buf), bytes(lit)
+    return bytes(buf), bytes(lit), src
 
 
 def record_name(buf: bytes, lit: bytes) -> str | None:
@@ -147,3 +171,12 @@ def fixed_column_record(b: bytes, off: int) -> tuple[str, str, int | None] | Non
         return None
     partner = int.from_bytes(buf[35:37], "little") if code == 0 else None
     return name, _ADMITTED[code], partner or None
+
+
+def record_code(b: bytes, off: int) -> int | None:
+    """The designation code (offset 17) of the column record at ``off``, or
+    ``None`` when the record does not expand or its name does not decode."""
+    got = record_prefix(b, off)
+    if got is None or record_name(*got) is None:
+        return None
+    return got[0][17]

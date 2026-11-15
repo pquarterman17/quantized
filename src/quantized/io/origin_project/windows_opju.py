@@ -65,6 +65,7 @@ import re
 from collections.abc import Mapping, Sequence
 
 from quantized.io.origin_project.opju_codec import tail_start
+from quantized.io.origin_project.opju_marker_designations import marker_designations
 from quantized.io.origin_project.windows import BookMeta, ColumnMeta
 
 __all__ = ["opju_window_metadata"]
@@ -72,24 +73,21 @@ __all__ = ["opju_window_metadata"]
 _X_MARK = b"\x21\x51"
 _Y_MARK = b"\x21\x61"
 _YERR_MARK = b"\x30\x61"
-# Label / Z / X-error markers, pinned 2026-07-06 by the designations.opju
-# by-construction specimen (one column per designation): Label = `21 41`;
-# Z and X-error SHARE `20 61` and are told apart by the record's own
-# designation code byte (`82 02 <code>`: 1=label 2=Y-error 3=X 4=Z
-# 5=X-error; a plain Y stores no code field at all). Before these, a book
-# containing ANY such column failed the cover-check and silently lost its
-# ENTIRE metadata run (names, units, and the X designation) — the audit's
-# whole-book blast radius (#10).
-_LABEL_MARK = b"\x21\x41"
-_ZX_MARK = b"\x20\x61"  # Z or X-error; resolved via the code byte
-_DESIGNATION = {
-    "X": "X",
-    "Y": "Y",
-    "Y-error": "Y-error",
-    "label": "label",
-    "Z": "Z",
-    "X-error": "X-error",
-}
+# Disregard (`21 41`) and label-or-Z (`20 61`) markers. Which designation a
+# marker carries is the column record's offset-17 code
+# (``opju_marker_designations``; COM-proven, decode-plan item 72): `30 61` is
+# Y-error OR X-error and `20 61` label OR Z. A marker whose record does not
+# prove its code reads by the marker alone where that is unambiguous; an
+# ambiguous one stays a counted column with no designation (``""``). Before
+# these markers were counted, a book containing ANY such column failed the
+# cover-check and silently lost its ENTIRE metadata run (names, units, and
+# the X designation) -- audit #10.
+_DISREGARD_MARK = b"\x21\x41"
+_LABEL_Z_MARK = b"\x20\x61"  # label or Z: resolved from the column record
+_MARKS = (_X_MARK, _Y_MARK, _YERR_MARK, _DISREGARD_MARK, _LABEL_Z_MARK)
+# The marker-only reading where the marker admits one designation the import
+# acts on (``21 61`` may also be Group / Subject, which plot as Y).
+_BY_MARKER = {_X_MARK: "X", _Y_MARK: "Y", _DISREGARD_MARK: "disregard"}
 
 # A backslash-delimited filename token, as embedded in a column's ImportFile path.
 _FILENAME_RE = re.compile(rb"\\([\w \-]{1,60}?\.[A-Za-z0-9]{2,5})(?=[^\w.]|$)")
@@ -124,16 +122,11 @@ _KNOWN_TOKENS = (
 _MAX_GAP = 600  # max byte spacing between one column-property record and the next
 
 
-def _zx_designation(b: bytes, mark_pos: int) -> str:
-    """Resolve the shared ``20 61`` marker to Z or X-error via the record's
-    own designation code (``82 02 <code>`` a few bytes earlier: 4=Z,
-    5=X-error). An unresolvable record reads as "Z" (either way the column
-    is a non-plottable auxiliary; the marker still COUNTS the column, which
-    is what protects the book's metadata run)."""
-    j = b.rfind(b"\x82\x02", max(0, mark_pos - 16), mark_pos)
-    if j >= 0 and j + 2 < len(b) and b[j + 2] == 5:
-        return "X-error"
-    return "Z"
+def _designation(b: bytes, pos: int, proven: Mapping[int, str]) -> str:
+    """The designation of the column whose marker is at ``pos``: its record's
+    code when proven, else the marker's own when unambiguous, else ``""``
+    (Y-error vs X-error, label vs Z: unproven, never guessed)."""
+    return proven.get(pos) or _BY_MARKER.get(b[pos : pos + 2], "")
 
 
 def _decode_cell_text(raw: bytes) -> str | None:
@@ -324,16 +317,12 @@ def opju_window_metadata(
     list, so sharing it cannot change an answer.
     """
     start = tail_start(b)
+    proven = marker_designations(b, start)
     markers = sorted(
-        [(m.start(), "X") for m in re.finditer(_X_MARK, b) if m.start() >= start]
-        + [(m.start(), "Y") for m in re.finditer(_Y_MARK, b) if m.start() >= start]
-        + [(m.start(), "Y-error") for m in re.finditer(_YERR_MARK, b) if m.start() >= start]
-        + [(m.start(), "label") for m in re.finditer(_LABEL_MARK, b) if m.start() >= start]
-        + [
-            (m.start(), _zx_designation(b, m.start()))
-            for m in re.finditer(_ZX_MARK, b)
-            if m.start() >= start
-        ]
+        (m.start(), _designation(b, m.start(), proven))
+        for mark in _MARKS
+        for m in re.finditer(re.escape(mark), b)
+        if m.start() >= start
     )
     filename_hits = _filename_anchors(b, start)
     books: dict[str, BookMeta] = {}
@@ -400,6 +389,6 @@ def opju_window_metadata(
             next_pos = run[ordinal + 1][0] if ordinal + 1 < len(run) else pos + 3000
             label = _find_label(b, pos + 2, min(next_pos, pos + 3000))
             rows = (label.split("\r\n") if label else []) + ["", "", ""]
-            columns[col] = ColumnMeta(col, _DESIGNATION.get(desig, "Y"), rows[0], rows[1], rows[2])
+            columns[col] = ColumnMeta(col, desig, rows[0], rows[1], rows[2])
         books[book] = BookMeta(book, long_name, columns)
     return books

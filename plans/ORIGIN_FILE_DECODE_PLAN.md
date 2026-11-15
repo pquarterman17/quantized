@@ -14,7 +14,10 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-11-15 (#68/#71 slice: `.opju` id chunks of every literal length, the curve record's plotted row range and the column display begin: 485 more curves drawn than main `f2b53863`, 477 COM-identical, 8 not drawable, 0 drawn differently, 0 vanished; 10 main curves that drew rows Origin's plot range leaves out now omitted; Origin-only plots 15 -> 6; begin-row cells decode missing. Earlier: #67 slice 2: zero-low-byte column ids (`81 02 <hi>`) and sheet signal S (the window's own sheet list) draw 146 more `.opju` curves than main `ce2223fa`, 130 COM-identical, 16 not drawable, 0 drawn differently, 0 vanished; of the 158 unproven-sheet curves 116 now drawn on Origin's sheet, 42 re-booked; item 68's Graph10B `Book1B_D@10` recovered. Earlier: items 67-68 slice: a second sheet signal (dataset header + stored X partner) and u8 id records draw 828 more `.opju` curves than main `da57d658`, 816 checked identical to Origin over COM, 0 drawn differently, 0 vanished, 14 wrong main curves on filtered workbooks now omitted, omissions 1,154 → 585, each listed in Recover; items 67-68 re-booked with the residue. Earlier: items 69-70 struck: embedded `Residual*` report-graph headers no longer end their host book; curves bind the X their own token record stores — 380 wrong-X curves and 3 phantoms on main → 0 on the 22 COM-checked files, 307 newly match Origin, 255 omitted with a reason; residue booked as item 71. Earlier: item 66 struck: separator flags `01/08/30/41/48` admitted, 23 layers recovered, 23 more per-layer axis matches, still 0 wrong / 0 phantom on the 113-file oracle; their 367 curves match Origin's `%Z` exactly, sheet included, 0 wrong, 26 not decoded (item 68). Earlier: `.opju` curves now bind the sheet they plot:
+**Updated:** 2026-11-15 (#72: `.opju` designations read from the column
+record's offset-17 code, not the marker: 458 designations in 46 files
+change, 250 wrong -> right and 183 wrong -> absent vs Origin COM, 0 right
+-> wrong; #73 booked for positional label misalignment.) Earlier: #68/#71 slice: `.opju` id chunks of every literal length, the curve record's plotted row range and the column display begin: 485 more curves drawn than main `f2b53863`, 477 COM-identical, 8 not drawable, 0 drawn differently, 0 vanished; 10 main curves that drew rows Origin's plot range leaves out now omitted; Origin-only plots 15 -> 6; begin-row cells decode missing. Earlier: #67 slice 2: zero-low-byte column ids (`81 02 <hi>`) and sheet signal S (the window's own sheet list) draw 146 more `.opju` curves than main `ce2223fa`, 130 COM-identical, 16 not drawable, 0 drawn differently, 0 vanished; of the 158 unproven-sheet curves 116 now drawn on Origin's sheet, 42 re-booked; item 68's Graph10B `Book1B_D@10` recovered. Earlier: items 67-68 slice: a second sheet signal (dataset header + stored X partner) and u8 id records draw 828 more `.opju` curves than main `da57d658`, 816 checked identical to Origin over COM, 0 drawn differently, 0 vanished, 14 wrong main curves on filtered workbooks now omitted, omissions 1,154 → 585, each listed in Recover; items 67-68 re-booked with the residue. Earlier: items 69-70 struck: embedded `Residual*` report-graph headers no longer end their host book; curves bind the X their own token record stores — 380 wrong-X curves and 3 phantoms on main → 0 on the 22 COM-checked files, 307 newly match Origin, 255 omitted with a reason; residue booked as item 71. Earlier: item 66 struck: separator flags `01/08/30/41/48` admitted, 23 layers recovered, 23 more per-layer axis matches, still 0 wrong / 0 phantom on the 113-file oracle; their 367 curves match Origin's `%Z` exactly, sheet included, 0 wrong, 26 not decoded (item 68). Earlier: `.opju` curves now bind the sheet they plot:
 3,508 curves re-bound to `Book@N` plus 531 previously deduped away, 875
 omitted and diagnosed; 495 of 498 COM-checked re-bound curves draw
 Origin's exact data. Items 67-70 booked. Earlier: items 64-65 fixed: the axis record is run-length
@@ -1055,21 +1058,32 @@ work.
           row-state exclusion) and a decision on how imported masked points
           plot (Origin's plot shows them per its mask display setting)
 
-72. **`windows_opju` reads three designations wrong** — booked 2026-11-15
-    (Origin 2026b COM `wks.col.type`, see `docs/origin_project_format.md`
-    §4.2 "These markers exist only for Text & Numeric columns"). The raw
-    marker scan maps `21 41` to label, `20 61` + code 4 to Z and code 5 to
-    X-error; Origin says `21 41` is DISREGARD, code 4 LABEL, code 5 Z, and a
-    real X-error column (code 6) writes `30 61`, which is read as Y-error.
-    `tests/test_io_origin_fuzz.py`'s `designations.opju` assertion
-    (D label, E Z, F X-error) pins the wrong values: COM reads D disregard,
-    E label, F Z.
-    - [ ] Read the designation from record offset 17 (`opju_column_fixed.
-          DESIGNATION_CODES`) instead of the marker; add `disregard` to the
-          import's designation vocabulary (the frontend already knows it)
-    - [ ] Re-pin the fuzz test to the COM values; corpus diff + COM check
-          of every changed designation (an X-error read as Y-error today
-          pairs as a Y's error bar)
+73. **`windows_opju` binds labels to columns by POSITION, and junk marker
+    bytes shift them** — booked 2026-11-15 from #72's COM sweep. A book's
+    labels/designations come from the N-th marker after the book anchor
+    (`_excel_col(i)`), but the marker bytes also occur in label text
+    (`20 61` = " a", `30 61` = "0a", `21 51`/`21 61` in binary runs): one
+    stray marker in a run shifts every later column. COM (`wks.col.type` /
+    `lname$` / `unit$`, 46 files): after #72, 23 designations, ~110 long
+    names and units in those files are still wrong, all pre-existing --
+    e.g. `Fixed Lambdas SI` (10 books: B..K labelled one column off),
+    `Figure 6 Currents` `resultvarytau` (run starts at a junk `21 51` before
+    the real disregard column A), `SOP_meas` `Samsung30TSHA`. Every T&N
+    column record carries its own short name (offset 18), so binding by NAME
+    fixes the class; two prototypes were measured and NOT shipped:
+    (a) drop unproven `20 61` / `30 61` markers: 302 long names + 147 units +
+    28 more error bars attached (109 -> 137) but 13 values newly wrong
+    (records unproven for real columns); (b) bind proven markers by name:
+    456 long names fixed but 39 newly wrong (a run past the anchor reaches
+    another window's same-named columns, e.g. `Catchment C` Book1 -> its
+    report sheet). Scripts + dumps: session scratch `l72/` (ddiff, regress,
+    dbg).
+    - [ ] Bind by record name but bound the search to the book's own window
+          span (the next page header, `opju_pages`), and fail closed on a
+          book whose proven names do not cover its decoded columns; COM gate:
+          0 values right on main wrong after
+    - [ ] Re-run the error-bar attach count (`verify_errbar`): 26 bars on
+          columns COM reads Y-error lose their designation to misalignment
 
 (items 40-42 booked 2026-07-09 from the first #39 gallery run on PNR.opj;
 item 40 CLOSED same day, see Completed)
@@ -1212,6 +1226,33 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**#72 `windows_opju` reads designations from the marker**~~
+  (2026-11-15, on `9fcfafbf`). The marker bytes (record offsets 37-38) do
+  not name the designation: `30 61` is Y-error OR X-error, `20 61` label OR
+  Z, `21 41` disregard. New `opju_marker_designations` expands every column
+  record and maps its marker position to the offset-17 code (gated on
+  adjacent literal marker bytes, flag bits agreeing with the code, a
+  decodable short name); an unproven ambiguous marker keeps counting its
+  column but gets NO designation (left out of `column_designations`,
+  never guessed). The id table's field walk reads code 6 behind `30 61` as
+  X-error (no longer a Y-error id). `opju_record_meta` now labels sheets
+  with disregard / group / subject columns (codes 1, 7, 8). Fuzz
+  `designations.opju` re-pinned to COM (D disregard, E label, F Z).
+  **COM (Origin 2026b, `wks.col.type`):** specimen books with every
+  designation (LabTalk types 1-9) saved Numeric / Text&Numeric / mixed:
+  offset 17 = 3 0 2 4 5 6 1 7 8 for types 4 1 3 5 6 7 2 8 9 on all 42
+  columns; decoded 41 match, 0 wrong, 1 absent (a mixed-format X-error
+  column whose values do not decode). Real corpus: 458 designations
+  change in 46 of 359 `.opju`, every file COM-checked: 250 wrong -> right
+  (209 label -> disregard, 27 Y-error -> X-error, 6 X-error -> Z, 5 Z ->
+  label, 8 group/subject, 18 newly labelled sheets), 183 wrong -> absent
+  (unproven `20 61` / `30 61`, mostly junk markers), 23 wrong -> still
+  wrong (positional misalignment, #73), 2 junk columns COM lacks -> absent,
+  **0 right -> wrong, 0 right -> absent**. Downstream: 0 curves re-bound,
+  drawn, omitted or re-captioned; book labels/units unchanged; error bars
+  attached to Origin's Y unchanged at 109 (the 26 on columns read Z were
+  misaligned, not mis-tabled: booked #73).
 
 - ~~**#68/#71 slice: id chunks of every length, plot row ranges, column
   begin rows**~~ (2026-11-15, on top of #694 `f2b53863`). Closes #68

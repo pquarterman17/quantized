@@ -11,8 +11,9 @@ This reader starts from the column records themselves, which
 ``opju_curve_token.column_id_records`` locates structurally in every form:
 
 * the **designation** is record offset 17 (``opju_column_fixed``), read for
-  every column; a code outside Y / X / Y-error / X-error / Z / label
-  (disregard, LabTalk types 8 and 9) leaves the sheet unlabelled;
+  every column (codes 0-8: Y, disregard, Y-error, X, label, Z, X-error,
+  group, subject -- each COM-proven on a specimen book, decode-plan item
+  72); any other code leaves the sheet unlabelled;
 * the **label** (long name / unit / comment) is the first label record after
   the column record and before the next one -- the same
   ``<LEB128 len><chunks><text><NUL>`` record and filters ``windows_opju``
@@ -54,7 +55,7 @@ from quantized.io.origin_project.windows_opju import _find_label
 
 __all__ = ["record_column_metadata"]
 
-_LABELLED = frozenset({"X", "Y", "Y-error", "X-error", "Z", "label"})
+_LABELLED = frozenset(DESIGNATION_CODES.values())  # every code COM proves (item 72)
 _LABEL_REACH = 600  # bytes past the last column record searched for its label
 
 
