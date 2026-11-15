@@ -4,11 +4,10 @@
 // offset series' own fit/baseline/peak/deriv overlay need to scale?", and
 // nothing else in usePlotPayload.ts depends on its internals.
 //
-// finding 4 (P2.3 review): a fit/baseline/peak/deriv overlay carries no
-// channel of its own -- every producer (the quick-fit gadget, curve-fit, the
-// differentiate gadget) fits/derives the FIRST VISIBLE plotted channel (the
-// "primary fit channel" convention `lib/quickfit.ts`'s
-// `firstVisiblePlottedChannel` documents and every producer calls).
+// finding 4 (P2.3 review): an overlay is scaled by the decade offset of the Y
+// its producer bound it to (`OverlayBinding.yKey`, lib/overlayPlacement.ts) --
+// never by a guess from the live plot. Only an unbound overlay (an object from
+// before bindings) falls back to the FIRST VISIBLE plotted channel.
 // `applyLogOffsets` (lib/logOffset.ts) only scales the BASE series it's
 // handed -- an overlay is appended by `composeDisplayPayload` AFTER that, so
 // without this it would stay at the unscaled magnitude while the offset
@@ -89,22 +88,21 @@ export function useLogOffsetScaling(p: LogOffsetScalingParams): LogOffsetScaling
     [p.plotted, p.seriesStyles],
   );
 
-  const overlayFactor = useMemo(() => {
-    if (!offsetsApply) return 1;
-    const ch = firstVisiblePlottedChannel(p.plotted, (c) => p.hiddenChannels.includes(c));
+  // The unbound fallback's channel; each overlay's factor is a primitive, so
+  // a colour-only style edit re-scales nothing.
+  const fallback = offsetsApply ? firstVisiblePlottedChannel(p.plotted, (c) => p.hiddenChannels.includes(c)) : null;
+  const factorOf = (o: { binding?: { yKey: number } | null } | null): number => {
+    if (!offsetsApply || !o) return 1;
+    const ch = o.binding ? o.binding.yKey : fallback;
     return ch === null ? 1 : 10 ** logOffsetDecades(p.seriesStyles[ch]?.logOffset);
-  }, [offsetsApply, p.plotted, p.hiddenChannels, p.seriesStyles]);
+  };
+  const fitF = factorOf(p.fitOverlay), baseF = factorOf(p.baselineOverlay);
+  const peakF = factorOf(p.peakOverlay), derivF = factorOf(p.derivOverlay);
 
-  const scaledFitOverlay = useMemo(() => scaleOverlay(p.fitOverlay, overlayFactor), [p.fitOverlay, overlayFactor]);
-  const scaledBaselineOverlay = useMemo(
-    () => scaleOverlay(p.baselineOverlay, overlayFactor),
-    [p.baselineOverlay, overlayFactor],
-  );
-  const scaledPeakOverlay = useMemo(() => scaleOverlay(p.peakOverlay, overlayFactor), [p.peakOverlay, overlayFactor]);
-  const scaledDerivOverlay = useMemo(
-    () => scaleOverlay(p.derivOverlay, overlayFactor),
-    [p.derivOverlay, overlayFactor],
-  );
+  const scaledFitOverlay = useMemo(() => scaleOverlay(p.fitOverlay, fitF), [p.fitOverlay, fitF]);
+  const scaledBaselineOverlay = useMemo(() => scaleOverlay(p.baselineOverlay, baseF), [p.baselineOverlay, baseF]);
+  const scaledPeakOverlay = useMemo(() => scaleOverlay(p.peakOverlay, peakF), [p.peakOverlay, peakF]);
+  const scaledDerivOverlay = useMemo(() => scaleOverlay(p.derivOverlay, derivF), [p.derivOverlay, derivF]);
 
   return { offsetsApply, offsetsKey, scaledFitOverlay, scaledBaselineOverlay, scaledPeakOverlay, scaledDerivOverlay };
 }

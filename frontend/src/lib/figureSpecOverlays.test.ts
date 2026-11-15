@@ -13,6 +13,7 @@ import { createFigureDocument } from "./figureDocument";
 import { defaultPlotView } from "./plotview";
 import { seriesColor } from "./seriesStyleCycle";
 import type { Dataset } from "./types";
+import { SINGLE_X } from "../test/overlayBinding";
 
 const DS: Dataset = {
   id: "d1",
@@ -27,11 +28,15 @@ const DS: Dataset = {
 };
 
 const VIEW: OverlayView = {
-  fitOverlay: { datasetId: "d1", y: [1.1, 4.9, 2.1, 0.9] },
+  fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [1.1, 4.9, 2.1, 0.9] },
   baselineOverlay: null,
-  peakOverlay: { datasetId: "d1", y: [null, 5, null, null] },
+  peakOverlay: { datasetId: "d1", binding: SINGLE_X, y: [null, 5, null, null] },
   plotTemplate: "screen",
   defaultLineWidth: 1.5,
+  xKey: null,
+  yKeys: null,
+  seriesOrder: null,
+  hiddenChannels: [],
 };
 
 function flat(over: Partial<FigureSpec> = {}): FigureSpec {
@@ -54,7 +59,7 @@ describe("withAnalysisOverlays", () => {
       { label: "95% PI low", y: [0.5, 4, 1.5, 0.3], legend: "95% prediction band" },
       { label: "95% PI high", y: [1.7, 5.8, 2.7, 1.5], legend: "" },
     ];
-    const view: OverlayView = { ...VIEW, fitOverlay: { datasetId: "d1", y: [1.1, 4.9, 2.1, 0.9], band } };
+    const view: OverlayView = { ...VIEW, fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [1.1, 4.9, 2.1, 0.9], band } };
     const out = withAnalysisOverlays(flat(), DS, view, 1);
     // Before the fix the band was dropped: fit and peaks only.
     expect(out.dataset.labels).toEqual(["Intensity", "fit", "95% CI low", "95% CI high", "95% PI low", "95% PI high", "peaks"]);
@@ -74,7 +79,7 @@ describe("withAnalysisOverlays", () => {
   });
 
   it("drops a band whose edges do not span the worksheet, keeping the curve", () => {
-    const view: OverlayView = { ...VIEW, peakOverlay: null, fitOverlay: { datasetId: "d1", y: [1.1, 4.9, 2.1, 0.9], band: [{ label: "lo", y: [1] }, { label: "hi", y: [2] }] } };
+    const view: OverlayView = { ...VIEW, peakOverlay: null, fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [1.1, 4.9, 2.1, 0.9], band: [{ label: "lo", y: [1] }, { label: "hi", y: [2] }] } };
     expect(withAnalysisOverlays(flat(), DS, view, 1).dataset.labels).toEqual(["Intensity", "fit"]);
   });
 
@@ -96,12 +101,12 @@ describe("withAnalysisOverlays", () => {
 
   it("keeps the source spec untouched when no overlay belongs to the exported dataset", () => {
     const spec = flat();
-    const other: OverlayView = { ...VIEW, fitOverlay: { datasetId: "d2", y: [1, 2, 3, 4] }, peakOverlay: null };
+    const other: OverlayView = { ...VIEW, fitOverlay: { datasetId: "d2", binding: SINGLE_X, y: [1, 2, 3, 4] }, peakOverlay: null };
     expect(withAnalysisOverlays(spec, DS, other, 1)).toBe(spec);
   });
 
   it("drops an overlay shorter than the data (the canvas cannot align it either)", () => {
-    const short: OverlayView = { ...VIEW, fitOverlay: { datasetId: "d1", y: [1, 2] }, peakOverlay: null };
+    const short: OverlayView = { ...VIEW, fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [1, 2] }, peakOverlay: null };
     expect(withAnalysisOverlays(flat(), DS, short, 1).y_keys).toEqual([0]);
   });
 

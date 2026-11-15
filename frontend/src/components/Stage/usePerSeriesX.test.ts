@@ -71,3 +71,19 @@ describe("canvas and export agree on the blocks", () => {
     expect(data.time).toEqual(T2);
   });
 });
+
+describe("overlay placement cost", () => {
+  it("a rename or an exclusion toggle returns the SAME placed overlay (nothing recomposes)", () => {
+    const ds = t1r1t2r2();
+    const fitOverlay = { datasetId: "own", binding: { yKey: 2, xKey: 1 }, y: [7, 8, 9, 10] };
+    const { result, rerender } = renderHook(({ d }: { d: Dataset }) => usePerSeriesX(d, null, null, { ...plot(), fitOverlay }), {
+      initialProps: { d: ds },
+    });
+    const placed = result.current.overlays.fitOverlay;
+    expect(placed?.y).toEqual([null, null, null, null, 7, 8, 9, 10]);
+    rerender({ d: { ...ds, name: "renamed.csv" } });
+    expect(result.current.overlays.fitOverlay).toBe(placed);
+    rerender({ d: { ...ds, excludedRows: [2] } });
+    expect(result.current.overlays.fitOverlay).toBe(placed);
+  });
+});

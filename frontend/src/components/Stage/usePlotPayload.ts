@@ -141,7 +141,7 @@ export interface PlotPayloadResult {
  *  eligibility flips); re-composes (no re-fetch) whenever an overlay, the
  *  waterfall offset, the exclusion mode, or the row selection changes. */
 export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
-  const { active, xKey, selection, blockRows } = usePerSeriesX(p.active, p.xKey, p.selection, p); // gap-2 #2: each Y on its own X
+  const { active, xKey, selection, blockRows, overlays } = usePerSeriesX(p.active, p.xKey, p.selection, p); // gap-2 #2: own X; overlays in their bound block
   // ONE state, two fields, so `payloadDatasetId` is a property OF these rows.
   const [fetched, setFetched] = useState<{ payload: PlotPayload; datasetId: string } | null>(null);
   const payload = fetched?.payload ?? null;
@@ -230,7 +230,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   const { offsetsApply, offsetsKey, scaledFitOverlay, scaledBaselineOverlay, scaledPeakOverlay, scaledDerivOverlay } =
     useLogOffsetScaling({ // P2.3 decade offsets -- see usePlotPayloadLogOffsets.ts
       plotted, hiddenChannels: p.hiddenChannels, seriesStyles: p.seriesStyles, waterfall, groupCol, encoded: !!encoded,
-      fitOverlay: p.fitOverlay, baselineOverlay: p.baselineOverlay, peakOverlay: p.peakOverlay, derivOverlay: p.derivOverlay,
+      ...overlays, // lib/overlayPlacement: each in its bound block on a per-series-X view, untouched otherwise
     });
 
   // Fold overlays + exclusion mask + selection brush in (see composeDisplayPayload).
@@ -323,10 +323,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     !!active &&
     active.data.time.length > DECIMATE_MIN_POINTS &&
     !hasOverlayCompanions({
-      fitOverlay: p.fitOverlay,
-      baselineOverlay: p.baselineOverlay,
-      peakOverlay: p.peakOverlay,
-      derivOverlay: p.derivOverlay,
+      ...overlays, // the PLACED overlays: one that is not drawn does not block decimation
       selection,
       excludedDisplay: p.excludedDisplay,
       activeId: active.id,

@@ -7,9 +7,8 @@
 import { selectedFitData } from "../../../lib/fitselection";
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import { fullPlottedX } from "../../../lib/fitselectionActions";
-import { ownXKey } from "../../../lib/perSeriesX";
 import { analysisData } from "../../../lib/rowstate";
-import type { Dataset } from "../../../lib/types";
+import type { Dataset, OverlayBinding } from "../../../lib/types";
 import type { AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import type { PeakTable } from "../../../lib/peakTable";
 
@@ -56,7 +55,7 @@ export function peakInputs(
   const sel = selectedFitData(ds, xKey, yKeys, seriesOrder, selection);
   // `sel.x` is the Y's OWN X (R2 -> T2); the marker overlay and the recorded
   // provenance must follow it, not the plot's shared X.
-  const usedX = sel ? ownXKey(ds, xKey, sel.yKey) : xKey;
+  const usedX = sel ? sel.xKey : xKey;
   const fullX = fullPlottedX(ds.data, usedX);
   if (sel) {
     const pairs = dropGapRows(sel.x, sel.y);
@@ -82,6 +81,12 @@ export function peakInputs(
     gapCount: pairs.n - pairs.keep.length,
     sourceCount: pairs.n,
   };
+}
+
+/** The curve a peak overlay drawn from these inputs belongs to: the Y and X
+ *  the peaks were actually found/fitted on (lib/overlayPlacement.ts). */
+export function peakBinding(i: Pick<PeakInputs, "xKeyUsed" | "yKeyUsed">): OverlayBinding {
+  return { yKey: i.yKeyUsed ?? 0, xKey: i.xKeyUsed };
 }
 
 /** A saved peak table may be shown only beside the exact input contract it

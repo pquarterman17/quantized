@@ -2361,6 +2361,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   qfitBusy: "analysis tool/gadget working scratch",
   qfitResult: "analysis tool/gadget working scratch",
   qfitResultModel: "analysis tool/gadget working scratch",
+  qfitResultCurve: "analysis tool/gadget working scratch",
   qfitError: "analysis tool/gadget working scratch",
   gadgetMode: "analysis tool/gadget working scratch",
   gadgetBusy: "analysis tool/gadget working scratch",

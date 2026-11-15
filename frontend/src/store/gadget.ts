@@ -33,14 +33,13 @@ import { computeCursorReadout } from "../lib/gadgetCursors";
 import { lit } from "../lib/macro";
 import type { Measurement } from "../lib/measure";
 import type { RegionContext } from "../lib/plotRangeSelection";
-import { effectiveChannels } from "../lib/plotdata";
 import {
-  firstVisiblePlottedChannel,
+  gadgetCurve,
   qfitSpec,
   selectRoiRows,
   type GadgetMode,
 } from "../lib/quickfit";
-import type { CalcResult, DataStruct, FitOverlay } from "../lib/types";
+import type { CalcResult, DataStruct, FitOverlay, OverlayBinding } from "../lib/types";
 import { toast } from "./toasts";
 import { nextDatasetId } from "./idSeq";
 import type { GadgetRunCtx, GadgetRunner } from "./gadgetRun";
@@ -63,6 +62,8 @@ export interface GadgetSlice {
   qfitResult: CalcResult | null;
   /** The model that PRODUCED `qfitResult` — what commit/report must name. */
   qfitResultModel: string | null;
+  /** The curve that PRODUCED `qfitResult` (its overlay's binding): what commit records. */
+  qfitResultCurve: OverlayBinding | null;
   qfitError: string | null;
   // ROI gadget family (#34): generalizes the #33 frame above with a mode
   // selector on the SAME chip. `gadgetMode` picks which of the region's rows
@@ -120,6 +121,7 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
   const dropQfitResult = (s: AppState): Partial<AppState> => ({
     qfitResult: null,
     qfitResultModel: null,
+    qfitResultCurve: null,
     fitOverlay: s.qfitResult != null ? null : s.fitOverlay,
   });
 
@@ -154,6 +156,7 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
     qfitBusy: false,
     qfitResult: null,
     qfitResultModel: null,
+    qfitResultCurve: null,
     qfitError: null,
     gadgetMode: "fit",
     gadgetBusy: false,
@@ -220,13 +223,14 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
       const s = get();
       const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
       if (!active || !s.qfitResult) return;
-      // Durable fit spec (audit P1 #3): records the plotted channels the gadget
-      // fit (first visible plotted channel + xKey), reused as the step params so
+      // Durable fit spec (audit P1 #3): records the curve the gadget FITTED
+      // (`qfitResultCurve`: the then first visible curve on its own X -- not
+      // whatever is first visible now), reused as the step params so
       // a template batch replays those channels, not time/values[0]. The ROI only
       // shaped which rows the user previewed (preview-only — never encoded).
       // The model that PRODUCED the result, never the picker's current value.
       const model = s.qfitResultModel ?? s.qfitModel;
-      const spec = qfitSpec(active, s, model, s.qfitResult);
+      const spec = qfitSpec(active, s, model, s.qfitResult, s.qfitResultCurve);
       get().recordMacro(`Fit ${model}`, `qz.fit(${lit(model)})`, {
         kind: "fit",
         params: fitStepParams(model, spec),
@@ -311,9 +315,8 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
         set({ gadgetCursorResult: null });
         return;
       }
-      const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
-      const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
-      const sel = selectRoiRows(active, [-Infinity, Infinity], col);
+      const curve = gadgetCurve(active, s);
+      const sel = selectRoiRows(active, [-Infinity, Infinity], curve?.yKey ?? null, curve?.xKey ?? null);
       set({ gadgetCursorResult: computeCursorReadout(sel.x, sel.y, gadgetCursors) });
     },
     clearQfit: () => {

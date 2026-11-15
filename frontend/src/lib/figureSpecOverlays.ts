@@ -17,8 +17,9 @@
 // DISPLAY position (after every plotted channel, and after the grey
 // "(excluded)" companions when those draw), the canvas line width and default
 // trace for the two lines, and size-8 markers with no line for the peaks. Its
-// values are scaled by the first plotted channel's decade offset, as
-// `Stage/usePlotPayloadLogOffsets` does, and are never waterfall-shifted.
+// values are scaled by the decade offset of the Y it is bound to (the first
+// plotted channel's when unbound), as `Stage/usePlotPayloadLogOffsets` does,
+// and are never waterfall-shifted.
 // The Curve Fit's confidence/prediction band (`FitOverlay.band`) rides with its
 // curve: each edge is one more column right after the fit, dashed in the fit's
 // own colour, and every LOWER edge is filled up to its upper edge (`fill:
@@ -26,6 +27,10 @@
 // Without it the canvas showed a shaded band and the SVG/PDF a bare curve.
 // Grouped, encoded, faceted and polar requests are returned unchanged: their
 // rows are re-split server-side, so a row-aligned column has no place there.
+// A per-series-X request (lib/figureSpecPerSeriesX) carries the blocks x n
+// view rows; each overlay is placed into its bound X's block by
+// lib/overlayPlacement -- the placement the canvas draws -- and the wire's X
+// must match the view's X row for row, or nothing is appended (fail closed).
 // Imported only by lazily-loaded export modules.
 
 import type { FigureSpec } from "./api/figures";
@@ -36,6 +41,9 @@ import { canvasLineWidth } from "./plotTemplates";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import { droppedRows } from "./rowstate";
 import { seriesColor } from "./seriesStyleCycle";
+import { overlayLayout, placeOverlay, type OverlayLayout } from "./overlayPlacement";
+import { perSeriesXDataset } from "./perSeriesX";
+import { shownCurves } from "./shownCurves";
 import type { BaselineOverlay, Dataset, DefaultTrace, FitOverlay, PeakOverlay } from "./types";
 
 /** The live view fields the overlays are read from (all on the app store). */
@@ -46,6 +54,29 @@ export interface OverlayView {
   plotTemplate: string;
   defaultLineWidth?: number;
   defaultTrace?: DefaultTrace;
+  /** The plot binding, which decides the per-series-X blocks (lib/shownCurves). */
+  xKey: number | null;
+  yKeys: number[] | null;
+  seriesOrder: number[] | null;
+  hiddenChannels: readonly number[];
+}
+
+/** The rows the overlays align to: `ds` itself, or on a per-series-X sheet the
+ *  same blocks x n view the canvas and the request are built from. */
+function overlayTarget(ds: Dataset, view: OverlayView): { target: Dataset; layout: OverlayLayout | null } {
+  const v = perSeriesXDataset(ds, view.xKey, shownCurves(ds.data, view, ds.channelRoles));
+  return { target: v?.dataset ?? ds, layout: overlayLayout(ds, view.xKey, v?.blocks) };
+}
+
+/** Same X, row for row (NaN = NaN): the wire really is `target`'s rows. */
+function sameX(spec: FigureSpec, target: Dataset, rows: readonly number[]): boolean {
+  const t = target.data.time;
+  return rows.every((r, i) => {
+    if (r < 0) return true;
+    const a = spec.dataset.time[i];
+    const b = t[r];
+    return a === b || (Number.isNaN(Number(a)) && Number.isNaN(Number(b)));
+  });
 }
 
 /** Peak markers' size on the canvas (`uplotSeries`: `points.size: 8`). */
@@ -89,33 +120,40 @@ export function withAnalysisOverlays(
   if (spec.polar || spec.facets || spec.encoding || spec.group_col != null) return spec;
   const keys = spec.y_keys;
   if (!keys?.length || keys.some((k) => typeof k !== "number")) return spec;
-  const n = ds.data.time.length;
+  const { target, layout } = overlayTarget(ds, view);
+  const n = target.data.time.length;
   const candidates: [string, FitOverlay | null | undefined, boolean][] = [
-    ["fit", view.fitOverlay, false],
-    ["baseline", view.baselineOverlay, false],
-    ["peaks", view.peakOverlay, true],
+    ["fit", placeOverlay(view.fitOverlay, layout), false],
+    ["baseline", placeOverlay(view.baselineOverlay, layout), false],
+    ["peaks", placeOverlay(view.peakOverlay, layout), true],
   ];
   // `band` is `PlotSeriesSpec.band`: how many series back the edge's curve is
   // (0 = not a band edge); an odd value is a lower edge.
+  // The bound Y's offset: the wire keeps channel indices, so it is its y_keys slot.
+  const factorFor = (o: { binding?: { yKey: number } | null }): number => {
+    const at = o.binding ? keys.indexOf(o.binding.yKey) : 0;
+    return 10 ** (spec.log_offsets?.[at < 0 ? 0 : at] ?? 0);
+  };
   const present = candidates.flatMap(([label, o, points]) => {
     if (!o || o.datasetId !== ds.id || o.y.length < n) return [];
     const edges = (o.band ?? []).every((e) => e.y.length >= n) ? (o.band ?? []) : [];
     return [
-      { label, legend: label, y: o.y, points, band: 0 },
-      ...edges.map((e, k) => ({ label: e.label, legend: e.legend ?? e.label, y: e.y, points: false, band: k + 1 })),
+      { label, legend: label, y: o.y, points, band: 0, factor: factorFor(o) },
+      ...edges.map((e, k) => ({
+        label: e.label, legend: e.legend ?? e.label, y: e.y, points: false, band: k + 1, factor: factorFor(o),
+      })),
     ];
   });
   if (present.length === 0) return spec;
-  const rows = wireRows(spec, ds, grey.wire);
-  if (!rows) return spec;
+  const rows = wireRows(spec, target, grey.wire);
+  if (!rows || (target !== ds && !sameX(spec, target, rows))) return spec; // a view: its X, row for row
 
-  const factor = 10 ** (spec.log_offsets?.[0] ?? 0);
   const width = spec.dataset.labels.length;
   const values = spec.dataset.values.map((row, i) => [
     ...row.slice(0, width),
     ...present.map((o) => {
       const v = rows[i] < 0 ? null : o.y[rows[i]];
-      return v == null || !Number.isFinite(v) ? Number.NaN : v * factor;
+      return v == null || !Number.isFinite(v) ? Number.NaN : v * o.factor;
     }),
   ]);
   // The canvas colours each display series by its position: channels, then

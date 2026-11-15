@@ -25,6 +25,7 @@ import {
   resolveAnalysisResultPlot,
 } from "./analysisResultActions";
 import { useApp } from "./useApp";
+import { SINGLE_X } from "../test/overlayBinding";
 
 const spec: FitSpec = {
   model: "Linear", xKey: null, yKey: 0, params: [2, 1], errors: [0.1, 0.2],
@@ -55,7 +56,7 @@ describe("curve-fit analysis result actions", () => {
       model: "Linear", params: [2, 1], x: [0, 1, 2], n_points: 3,
     }));
     expect(mocks.fitModel).not.toHaveBeenCalled();
-    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "source", y: [1, 3, 5] });
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "source", binding: SINGLE_X, y: [1, 3, 5] });
   });
 
   it("derives plot channels from the live fit after an earlier column is removed", async () => {
@@ -97,13 +98,13 @@ describe("curve-fit analysis result actions", () => {
   });
 
   it("recalculates only this saved fit, clears staleness, and is undoable", async () => {
-    useApp.setState({ fitOverlay: { datasetId: "source", y: [9, 9, 9] } });
+    useApp.setState({ fitOverlay: { datasetId: "source", binding: SINGLE_X, y: [9, 9, 9] } });
     expect(await recalculateFitAnalysisResult("analysis-fit-source")).toBe(true);
     expect(mocks.fitModel).toHaveBeenCalledTimes(1);
     expect(useApp.getState().staleFits).toEqual([]);
     expect(useApp.getState().datasets[0].fitSpec).toMatchObject({ R2: 1, RMSE: 0, recomputedAt: expect.any(String) });
     expect(useApp.getState().analysisResults).toHaveLength(1);
-    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "source", y: [1, 3, 5] });
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "source", binding: SINGLE_X, y: [1, 3, 5] });
     expect(useApp.getState().history).toHaveLength(1);
     useApp.getState().undo();
     expect(useApp.getState().datasets[0].fitSpec?.recomputedAt).toBeUndefined();
@@ -111,7 +112,7 @@ describe("curve-fit analysis result actions", () => {
   });
 
   it("keeps a visible fit overlay through an unrelated result rename undo", () => {
-    const overlay = { datasetId: "source", y: [1, 3, 5] };
+    const overlay = { datasetId: "source", binding: SINGLE_X, y: [1, 3, 5] };
     useApp.setState({ fitOverlay: overlay });
     renameAnalysisResult("analysis-fit-source", "Renamed fit");
     useApp.getState().undo();

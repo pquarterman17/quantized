@@ -62,7 +62,7 @@ export async function recomputeStaleFits(set: SliceSet, get: SliceGet): Promise<
       const { commitRecomputedFit } = await import("../lib/fitRecompute");
       // #30: stamp the re-run so the workspace distinguishes a HISTORICAL
       // result from one the recalc graph regenerated over changed data.
-      commitRecomputedFit(set, get, d, spec, pairs, r, sel.sourceRows, dy);
+      commitRecomputedFit(set, get, d, spec, pairs, { yKey: sel.yKey, xKey: sel.xKey }, r, sel.sourceRows, dy);
       refreshFitRefsLater(id, get); // P2.5: fit() columns follow the refit
     } catch (e) {
       get().setStatus(

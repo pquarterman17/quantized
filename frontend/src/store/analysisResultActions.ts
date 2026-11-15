@@ -19,7 +19,7 @@ import { announceFitRecomputed } from "../lib/fitRecomputeEvents";
 import { fitDataForSpec } from "../lib/fitselection";
 import { statsVersionField } from "../lib/fitStatsVersion";
 import { weightRequestFields } from "../lib/fitweights";
-import type { Dataset } from "../lib/types";
+import type { Dataset, OverlayBinding } from "../lib/types";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 import { resolveAnalysisResultPlot, type PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
 import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
@@ -186,6 +186,7 @@ export async function prepareAnalysisResultPlot(id: string, bindingIndex: number
   const fitDataset = fitDatasetId === prepared.dataset.id ? prepared.dataset : null;
   const fitSpec = fitDataset?.fitSpec;
   let fitY: (number | null)[] | null = null;
+  let fitBinding: OverlayBinding | null = null;
   if (fitDatasetId && (!fitDataset || !fitSpec)) {
     state.setStatus("can't open fitted plot: the saved fit is missing");
     return null;
@@ -198,6 +199,7 @@ export async function prepareAnalysisResultPlot(id: string, bindingIndex: number
     // `null` deliberately means the independent/time axis; unlike `undefined`
     // it must not fall through to the FitSpec channel.
     const savedX = prepared.xChannel !== undefined ? prepared.xChannel : fitSpec.xKey ?? null;
+    fitBinding = { yKey: fitSpec.yKey ?? prepared.channels[0] ?? 0, xKey: savedX }; // the curve is the model at savedX
     const xs = fullPlottedX(fitDataset.data, savedX);
     const finite = xs.flatMap((value, index) => Number.isFinite(value) ? [{ value, index }] : []);
     if (!finite.length) {
@@ -238,7 +240,7 @@ export async function prepareAnalysisResultPlot(id: string, bindingIndex: number
   state.setYKeys(prepared.channels);
   useApp.setState({
     stageTab: "plot",
-    fitOverlay: fitY ? { datasetId: prepared.dataset.id, y: fitY } : null,
+    fitOverlay: fitY && fitBinding ? { datasetId: prepared.dataset.id, binding: fitBinding, y: fitY } : null,
   });
   return prepared;
 }
@@ -404,7 +406,9 @@ export async function recalculateFitAnalysisResult(
     const nextOverlay = overlayWasVisible ? fitOverlayValues(source, pairs, fitted.yFit, selection.sourceRows) : null;
     current.recordHistory(`recalculate ${result.name}`);
     current.setFitSpec(sourceId, stampRecompute(spec, fitted));
-    if (overlayWasVisible) useApp.setState({ fitOverlay: nextOverlay ? { datasetId: sourceId, y: nextOverlay } : null });
+    if (overlayWasVisible) useApp.setState({
+      fitOverlay: nextOverlay ? { datasetId: sourceId, binding: { yKey: selection.yKey, xKey: selection.xKey }, y: nextOverlay } : null,
+    });
     publishFitAnalysisResult(sourceId);
     announceFitRecomputed({
       datasetId: sourceId, previousSpec: spec, result: fitted, x: pairs.x, y: pairs.y, dy: dy ?? null,

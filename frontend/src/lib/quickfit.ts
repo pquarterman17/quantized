@@ -10,9 +10,10 @@
 // band + row math is identical across modes, only what's computed FROM the
 // selected rows differs (see the store's `runGadget*` actions).
 
+import { ownXKey } from "./perSeriesX";
 import { effectiveChannels } from "./plotdata";
 import { activeRowIndices, analysisData, droppedRows } from "./rowstate";
-import type { CalcResult, Dataset, FitSpec } from "./types";
+import type { CalcResult, Dataset, FitSpec, OverlayBinding } from "./types";
 
 /** The gadget's dispatch modes, in the order the chip's picker presents them.
  *  "fit" is the original #33 behavior; the rest are #34. "cursors" doesn't use
@@ -35,14 +36,15 @@ export interface RoiRowSelection {
 }
 
 /** The dataset's analysis-view rows (#50 excluded ∪ #53 filtered pruned, via
- *  rowstate.analysisData) whose x on channel `col` falls in [lo, hi] AND whose
- *  y on that channel is finite. Endpoints may be given in either order. Empty
+ *  rowstate.analysisData) whose x -- column `xCol`, null = the time column --
+ *  falls in [lo, hi] AND whose y on channel `col` is finite. Endpoints may be given in either order. Empty
  *  selection when nothing qualifies (no active dataset, no ROI, no channel, or
  *  nothing in range). */
 export function selectRoiRows(
   active: Dataset | null,
   roi: readonly [number, number] | null,
   col: number | null,
+  xCol: number | null = null,
 ): RoiRowSelection {
   const empty: RoiRowSelection = { x: [], y: [], rows: [] };
   if (!active || !roi || col == null) return empty;
@@ -56,7 +58,7 @@ export function selectRoiRows(
   const y: number[] = [];
   const rows: number[] = [];
   for (let i = 0; i < ad.time.length; i++) {
-    const xv = ad.time[i];
+    const xv = xCol === null ? ad.time[i] : ad.values[i]?.[xCol];
     const yv = ad.values[i]?.[col];
     if (xv == null || !Number.isFinite(xv) || xv < lo || xv > hi) continue;
     if (yv == null || !Number.isFinite(yv)) continue;
@@ -82,9 +84,24 @@ export function firstVisiblePlottedChannel(
   return plotted.length > 0 ? plotted[0] : null;
 }
 
+/** The curve every ROI gadget mode reads: the first visible plotted channel
+ *  and the X it is DRAWN against -- its own X on a T1,R1,T2,R2 sheet (R2 ->
+ *  T2, lib/perSeriesX `ownXKey`), else the plot's X. The ROI band is in that
+ *  X's units, so the rows are clipped on it, and a gadget overlay records it
+ *  as its binding (lib/overlayPlacement.ts). Null when nothing is plotted. */
+export function gadgetCurve(
+  ds: Dataset,
+  view: { xKey: number | null; yKeys: number[] | null; seriesOrder: number[] | null; hiddenChannels: readonly number[] },
+): OverlayBinding | null {
+  const plotted = effectiveChannels(ds.data, view.yKeys, view.xKey, ds.channelRoles, view.seriesOrder);
+  const yKey = firstVisiblePlottedChannel(plotted, (c) => view.hiddenChannels.includes(c));
+  return yKey === null ? null : { yKey, xKey: ownXKey(ds, view.xKey, yKey) };
+}
+
 /** Build a durable fit recipe (audit P1 #3) for a quick-fit gadget commit. The
- *  gadget fits the first VISIBLE plotted channel over the ROI, so the spec
- *  records THAT `yKey` + the plotted `xKey` (and a `params`/`exitFlag`
+ *  gadget fits one curve over the ROI -- `curve`, the one the result came
+ *  from (else the live `gadgetCurve`: first VISIBLE channel, on its OWN X) --
+ *  so the spec records THAT `yKey` + `xKey` (and a `params`/`exitFlag`
  *  snapshot) so a recompute reproduces the same channels rather than
  *  `time`/`values[0]`. Mirrors curvefit's `fitSpecFrom`. */
 export function qfitSpec(
@@ -97,10 +114,10 @@ export function qfitSpec(
   },
   model: string,
   result: CalcResult | null,
+  fitted?: OverlayBinding | null,
 ): FitSpec {
-  const plotted = effectiveChannels(ds.data, view.yKeys, view.xKey, ds.channelRoles, view.seriesOrder);
-  const yKey = firstVisiblePlottedChannel(plotted, (c) => view.hiddenChannels.includes(c)) ?? 0;
-  const spec: FitSpec = { model, xKey: view.xKey, yKey };
+  const curve = fitted ?? gadgetCurve(ds, view);
+  const spec: FitSpec = { model, xKey: curve?.xKey ?? view.xKey, yKey: curve?.yKey ?? 0 };
   const params = result?.params;
   if (Array.isArray(params) && params.every((v) => typeof v === "number")) {
     spec.params = params as number[];

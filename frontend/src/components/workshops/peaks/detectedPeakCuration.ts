@@ -4,13 +4,15 @@
 // detector.
 
 import { seedPeakNear } from "../../../lib/peakSeed";
-import type { Peak } from "../../../lib/types";
+import type { OverlayBinding, Peak } from "../../../lib/types";
 
 export interface PeakDetectionData {
   x: number[];
   y: number[];
   fullX: number[];
   background: (number | null)[];
+  /** The curve the peaks were found on (peakInputs' `peakBinding`). */
+  binding: OverlayBinding;
 }
 
 const nearestIndex = (xs: readonly number[], at: number): number => {
@@ -27,7 +29,7 @@ const finiteBackground = (background: readonly (number | null)[], index: number)
 };
 
 /** Build a manual candidate near ``at``, snapped to the local apex. */
-export function manualPeakAt(data: PeakDetectionData, at: number): Peak | null {
+export function manualPeakAt(data: Omit<PeakDetectionData, "binding">, at: number): Peak | null {
   if (data.x.length === 0) return null;
   let lo = Number.POSITIVE_INFINITY;
   let hi = Number.NEGATIVE_INFINITY;

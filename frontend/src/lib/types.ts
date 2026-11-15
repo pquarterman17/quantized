@@ -12,7 +12,7 @@ import type { RecodeSpec } from "./recode";
 import type { FactorSpec } from "./metadataFactor";
 
 // Re-exported so every existing `from "./types"` import keeps working.
-export type { FitOverlay, FitSpec, FitWeighting, WeightMode } from "./fitTypes";
+export type { BaselineOverlay, FitOverlay, FitSpec, FitWeighting, OverlayBinding, PeakOverlay, WeightMode } from "./fitTypes";
 export type { CorrectionParams } from "./correctionTypes";
 /** DataStruct as serialized by `datastruct_payload` / `DataStruct.to_dict`. */
 export interface DataStruct {
@@ -561,21 +561,8 @@ export interface FitModel {
  *  documented per endpoint; values may be scalars, arrays, or null (NaN/Inf). */
 export type CalcResult = Record<string, unknown>;
 
-// FitOverlay (the fit curve on the plot) lives in ./fitTypes; re-exported above.
-
-/** Peak markers to overlay (points only). `y` is sparse — null except at the
- *  data points nearest each peak center. Tagged with the source dataset. */
-export interface PeakOverlay {
-  datasetId: string;
-  y: (number | null)[];
-}
-
-/** An estimated baseline to overlay as a line, aligned 1:1 with the dataset's
- *  plotted x. Tagged with the source dataset (drops out when stale/mismatched). */
-export interface BaselineOverlay {
-  datasetId: string;
-  y: (number | null)[];
-}
+// FitOverlay, PeakOverlay, BaselineOverlay and their OverlayBinding live in
+// ./fitTypes (the analysis overlays, together); re-exported above.
 
 // The /api/peaks wire types MOVED to ./peakTable 2026-09-14 (audit P2.1), the
 // single home of the peak contract; re-exported so no importer changed.

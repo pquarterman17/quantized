@@ -13,6 +13,7 @@ import type { DataStruct } from "./types";
 import { expandWaterfallX } from "./waterfallX";
 import { waterfallSourceRows, waterfallXApplies } from "./waterfallOffset";
 import { waterfallWire } from "./waterfallWire";
+import { SINGLE_X } from "../test/overlayBinding";
 
 type Col = (number | null)[];
 
@@ -68,7 +69,7 @@ describe("expandWaterfallX — the canvas layout", () => {
   it("puts each companion in its source series' block: ghosts, overlays (block 0), selection marks", () => {
     const p = compose({
       dropped: new Set([1]), excludedDisplay: "grey",
-      fitOverlay: { datasetId: "d1", y: [5, 6, 7] },
+      fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [5, 6, 7] },
       selection: { datasetId: "d1", rows: [2] },
     });
     // [x, A, B, A-ghost, B-ghost, fit, then one selection mark per column]

@@ -109,12 +109,43 @@ export interface FitSpec {
   statsVersion?: 2;
 }
 
+/** The curve an analysis overlay (fit / baseline / peaks / dy/dx) was
+ *  computed FOR, recorded by its producer when the overlay is made -- the Y
+ *  it read and the X it read that Y against (`xKey` null = the time column;
+ *  on a T1,R1,T2,R2 sheet R2's binding is `{ yKey: R2, xKey: T2 }`, #666's
+ *  own-X rule). A per-series-X view places the overlay in THAT X's block
+ *  (lib/overlayPlacement.ts) and never guesses the owner from the live plot.
+ *  Required, so the compiler finds every producer. */
+export interface OverlayBinding {
+  yKey: number;
+  xKey: number | null;
+}
+
 /** A fit curve to overlay on the plot, tagged with the dataset it was fit to
  *  (so it only renders while that dataset is active). `y` aligns to the
- *  dataset's plotted x (null = gap). */
+ *  dataset's rows (null = gap). */
 export interface FitOverlay {
   datasetId: string;
+  binding: OverlayBinding;
   y: (number | null)[];
   /** Curve Fit's shaded band around this curve (./fitBandOverlay.ts). */
   band?: FitBandEdges;
+}
+
+/** Peak markers to overlay (points only). `y` is sparse — null except at the
+ *  data points nearest each peak center. Tagged with the source dataset. */
+export interface PeakOverlay {
+  datasetId: string;
+  /** The curve the peaks were found on (OverlayBinding). */
+  binding: OverlayBinding;
+  y: (number | null)[];
+}
+
+/** An estimated baseline to overlay as a line, aligned 1:1 with the dataset's
+ *  plotted x. Tagged with the source dataset (drops out when stale/mismatched). */
+export interface BaselineOverlay {
+  datasetId: string;
+  /** The curve the baseline was estimated for (OverlayBinding). */
+  binding: OverlayBinding;
+  y: (number | null)[];
 }

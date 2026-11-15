@@ -24,6 +24,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlotPayload } from "../../lib/plotdata";
 import type { Dataset } from "../../lib/types";
 import { usePlotPayload, type PlotPayloadParams } from "./usePlotPayload";
+import { SINGLE_X } from "../../test/overlayBinding";
 
 const fetchPlotMock = vi.fn();
 vi.mock("../../lib/plotdata", async (importOriginal) => ({
@@ -126,14 +127,14 @@ describe("usePlotPayload — decade offsets reach error bars/spans and overlays 
     expect(result.current.errorBars.get(1)).toEqual([0.5, 1, 1.5]); // true magnitude, un-offset
   });
 
-  it("scales a fit overlay by its parent series' (first visible plotted channel's) offset", async () => {
+  it("scales a fit overlay by its bound channel's offset", async () => {
     const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
-      initialProps: params({ fitOverlay: { datasetId: "d1", y: [100, 200, 300] } }),
+      initialProps: params({ fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [100, 200, 300] } }),
     });
     await waitFor(() => expect(result.current.payload).not.toBeNull());
     const cols = result.current.displayPayload!.data as unknown as (number | null)[][];
     // x, A, B, fit -- the fit column is the 4th (index 3), scaled ×10 like A
-    // (channel 0 is the first VISIBLE plotted channel it was fit against).
+    // (channel 0 is the channel it is bound to).
     expect(result.current.displayPayload!.series.map((s) => s.label)).toEqual(["A ×10^1", "B", "fit"]);
     expect(cols[3]).toEqual([1000, 2000, 3000]);
   });
@@ -158,17 +159,24 @@ describe("usePlotPayload — decade offsets reach error bars/spans and overlays 
     expect(result.current.labelList?.[1]).toBe("Renamed B");
   });
 
-  it("leaves a fit overlay untouched when its parent channel carries no offset", async () => {
-    const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+  it("scales a fit by the channel it is BOUND to, never by the first visible one", async () => {
+    const { result, rerender } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
       initialProps: params({
         seriesStyles: { 1: { logOffset: 1 } }, // B offset, not A
         hiddenChannels: [0], // A hidden -> first VISIBLE plotted channel is B
-        fitOverlay: { datasetId: "d1", y: [100, 200, 300] },
+        fitOverlay: { datasetId: "d1", binding: { yKey: 1, xKey: null }, y: [100, 200, 300] },
       }),
     });
     await waitFor(() => expect(result.current.payload).not.toBeNull());
-    const cols = result.current.displayPayload!.data as unknown as (number | null)[][];
-    expect(cols[3]).toEqual([1000, 2000, 3000]); // fit follows B (offset ×10) instead
+    const cols = () => result.current.displayPayload!.data as unknown as (number | null)[][];
+    expect(cols()[3]).toEqual([1000, 2000, 3000]); // B's fit follows B (offset ×10)
+    // A fit of A (no offset) stays put although B is the first visible channel.
+    rerender(params({
+      seriesStyles: { 1: { logOffset: 1 } },
+      hiddenChannels: [0],
+      fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [100, 200, 300] },
+    }));
+    await waitFor(() => expect(cols()[3]).toEqual([100, 200, 300]));
   });
 });
 

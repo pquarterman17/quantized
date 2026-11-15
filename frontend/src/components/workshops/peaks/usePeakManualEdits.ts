@@ -6,7 +6,7 @@ import type { Dataset, FittedPeak, MultiFitResult } from "../../../lib/types";
 import type { AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import { editPeak, removePeaks } from "../../../store/peakTables";
 import { useApp } from "../../../store/useApp";
-import { peakInputs, peakTableMatchesInputs } from "./peakInputs";
+import { peakInputs, peakTableMatchesInputs, type PeakInputs } from "./peakInputs";
 
 /** Two tables that differ only in which rows are excluded. Exclusion is read
  *  straight off the table by the panel, so it needs no refresh; refreshing
@@ -23,7 +23,7 @@ interface Args {
   selection?: AnalysisSelectionItem;
   setFitResult: (value: MultiFitResult | null) => void;
   setPeakOverlay: (value: ReturnType<typeof useApp.getState>["peakOverlay"]) => void;
-  overlayFitted: (ds: Dataset, fitted: FittedPeak[], fullX: number[]) => void;
+  overlayFitted: (ds: Dataset, fitted: FittedPeak[], used: Pick<PeakInputs, "fullX" | "xKeyUsed" | "yKeyUsed">) => void;
 }
 
 export function usePeakManualEdits({
@@ -72,10 +72,9 @@ export function usePeakManualEdits({
       setPeakOverlay(null);
       return;
     }
-    const { fullX } = inputs;
     if (!stillCurrent()) return;
     setFitResult(next);
-    overlayFitted(ds, next.peaks, fullX);
+    overlayFitted(ds, next.peaks, inputs);
   }, [activeId, overlayFitted, resolveDataset, selection, seriesOrder, setFitResult, setPeakOverlay, xKey, yKeys]);
 
   useEffect(() => {

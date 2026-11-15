@@ -147,7 +147,7 @@ describe("useEquationFit fitting", () => {
       y: [10, 30, 40],
       guesses: [null, null], // untouched rows are blank = auto start
     });
-    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", y: [11, null, 31, 41] });
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", binding: { yKey: 0, xKey: null }, y: [11, null, 31, 41] });
     expect(result.current.result?.params).toEqual([10, 1]);
   });
 

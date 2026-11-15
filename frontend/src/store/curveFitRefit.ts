@@ -34,7 +34,7 @@ export function followRefits(): void {
     // later — never the superseded curve.
     const drawn = s.fitOverlay?.datasetId === e.datasetId ? s.fitOverlay : null;
     if (drawn) rememberCurveFitOverlay(drawn);
-    const curve = drawn ?? (e.curve ? { datasetId: e.datasetId, y: e.curve } : null);
+    const curve = drawn ?? (e.curve ? { datasetId: e.datasetId, binding: { yKey: f.yKey, xKey: f.xKey }, y: e.curve } : null);
     replaceRetainedFit(
       {
         ...f,
