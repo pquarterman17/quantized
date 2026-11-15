@@ -43,6 +43,7 @@ import re
 from collections import defaultdict
 from collections.abc import Mapping
 
+from quantized.io.origin_project.opju_column_fixed import fixed_column_record
 from quantized.io.origin_project.opju_curve_token import column_id_records
 from quantized.io.origin_project.opju_figure_curves import (
     ColumnIdTable,
@@ -71,7 +72,7 @@ def record_segments(
             continue
         recs: list[tuple[int, int]] = []
         for off, cid, fields in column_id_records(b, start, end):  # every id form
-            parsed = _parse_column_record(b, fields - 1)  # it skips one <pb> byte
+            parsed = _parse_column_record(b, fields - 1) or fixed_column_record(b, off)
             if parsed is None or ids.get(cid) != (book, parsed[0]):
                 continue
             recs.append((off, cid))

@@ -193,7 +193,13 @@ def test_realdata_row_number_plot_is_omitted(corpus_dir: Path) -> None:
 
 
 @pytest.mark.realdata
-def test_realdata_unimported_x_column_is_omitted(corpus_dir: Path) -> None:
-    fig = _layer(corpus_dir, _FIG4, "Graph1", 1)  # Origin: X = Book1_B (no record)
-    assert fig["curves"] == []
-    assert {r for _b, _y, r in _omitted(fig)} == {"x_column_unknown"}
+def test_realdata_numeric_x_column_now_binds(corpus_dir: Path) -> None:
+    """Origin: Graph1 plots Book1_C/E/F/H against Book1_B. ``B`` is a Numeric-
+    format column, so its id record had no field-walk form and the curves were
+    omitted (``x_column_unknown``); ``opju_column_fixed`` reads it (2026-11-15),
+    and every curve binds Origin's own X."""
+    fig = _layer(corpus_dir, _FIG4, "Graph1", 1)
+    assert {(c["y"], c["x"]) for c in fig["curves"]} == {
+        ("C", "B"), ("E", "B"), ("F", "B"), ("H", "B")
+    }
+    assert _omitted(fig) == []

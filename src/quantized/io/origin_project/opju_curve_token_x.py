@@ -50,8 +50,15 @@ __all__ = ["X_FIELD", "token_x", "token_x_id"]
 X_FIELD = 35  # record offset of the X column id (u16 LE); marker at +2
 # The pair at offsets 37-38 that validates the field: ``21 61`` on most
 # tokens, ``21 21`` on some (EIS, Hc2 data); both COM-checked. ``30 61``
-# (Y-error tokens) and any other pair are not decoded.
-_MARKERS = (b"\x21\x61", b"\x21\x21")
+# (Y-error tokens) and any other pair are not decoded. The pair is the plotted
+# column's own designation flags (``opju_column_fixed``: offset 37 bit 0x20
+# and offset 38 bit 0x01 are Text & Numeric format flags), so it is compared
+# with those two bits masked off: ``01 60`` / ``01 20`` are the same pairs for
+# a Numeric column (every plot-corpus specimen, Origin 2026b COM-built) and
+# ``21 50`` / ``01 50`` an X-designated column plotted as a Y (CompareRc
+# Graph2: Origin plots ``Book1_A`` against ``Book1_B``). COM-checked on the
+# real files of ORIGIN_PLOT_TYPE_PARITY_PLAN items 5-7.
+_MARKERS = ((0x01, 0x60), (0x01, 0x20), (0x01, 0x50))
 _END = X_FIELD + 4  # the walk only needs to reach past the marker
 
 
@@ -98,7 +105,9 @@ def token_x_id(b: bytes, tag_pos: int) -> int | None:
             p += 1 + t
         else:
             return None
-    if pos < _END or not all(have[X_FIELD:_END]) or bytes(lit[X_FIELD + 2 : _END]) not in _MARKERS:
+    if pos < _END or not all(have[X_FIELD:_END]):
+        return None
+    if (lit[X_FIELD + 2] & 0xDF, lit[X_FIELD + 3] & 0xFE) not in _MARKERS:
         return None
     return int.from_bytes(lit[X_FIELD : X_FIELD + 2], "little")
 
