@@ -22,7 +22,7 @@ own it. Filenames are sanitized before reaching the Content-Disposition header.
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from quantized.heavy_import import heavy_imports
 from quantized.routes._errors import call_calc
@@ -36,6 +36,10 @@ from quantized.routes._export_common import (
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
+_MAX_POINTS = 1_000_000  # a request body bound; calc samples a 3-D scatter further
+_MAX_CURVES = 500
+_MAX_INCHES = 40.0  # figure size bound: 200 in x 200 in at 600 dpi was a 500
+
 
 class MapLabel(BaseModel):
     """A text label pinned to a map data coordinate (MapStage's annotations)."""
@@ -45,9 +49,18 @@ class MapLabel(BaseModel):
     text: str
 
 
+class MapCurve(BaseModel):
+    """One separate curve of a 3-D waterfall: points in ORIGINAL order, drawn at
+    ``depth`` along the third axis (no union, no sort)."""
+
+    x: list[float] = Field(max_length=_MAX_POINTS)
+    z: list[float] = Field(max_length=_MAX_POINTS)
+    depth: float
+
+
 class MapFigureRequest(BaseModel):
-    x_axis: list[float]
-    y_axis: list[float]
+    x_axis: list[float] = Field(default=[], max_length=_MAX_POINTS)
+    y_axis: list[float] = Field(default=[], max_length=_MAX_POINTS)
     # (ny, nx), NaN allowed for gaps -- required when contour_source="grid".
     # A JSON null cell is a gap too (-> NaN in calc's float asarray): that is
     # how /api/plot/map serves hull gaps, so MapStage's vector export posts
@@ -56,7 +69,9 @@ class MapFigureRequest(BaseModel):
     # Scattered per-point z, same length as x_axis/y_axis -- required when
     # contour_source="points" (gap #17 tri-contour: the RSM cloud shape,
     # never regridded).
-    z_values: list[float] | None = None
+    z_values: list[float] | None = Field(default=None, max_length=_MAX_POINTS)
+    # contour_source="curves" (kind waterfall): separate polylines, see MapCurve.
+    curves: list[MapCurve] | None = Field(default=None, max_length=_MAX_CURVES)
     contour_source: str = "grid"  # grid (z_grid) | points (x_axis/y_axis/z_values cloud)
     # PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 review (F1): deliberately NO
     # `greyscale` field on this request, for every `kind` including
@@ -98,10 +113,13 @@ class MapFigureRequest(BaseModel):
     x_label: str = ""
     y_label: str = ""
     z_label: str = ""
-    width_in: float | None = None
-    height_in: float | None = None
+    width_in: float | None = Field(default=None, gt=0, le=_MAX_INCHES)
+    height_in: float | None = Field(default=None, gt=0, le=_MAX_INCHES)
     view_elev: float = 30.0
     view_azim: float = -60.0
+    # 3-D waterfall of a grid: draw at most this many evenly stepped rows
+    # (0 = every row).
+    max_lines: int = Field(default=0, ge=0, le=1000)
     # A footnote under the map (e.g. "Interpolated onto a regular grid"), so the
     # figure says what the screen badge says.
     note: str = ""
@@ -133,7 +151,8 @@ def export_map_figure(req: MapFigureRequest) -> Response:
         title=req.title, x_label=req.x_label, y_label=req.y_label, z_label=req.z_label,
         width_in=req.width_in, height_in=req.height_in,
         view_elev=req.view_elev, view_azim=req.view_azim, z_limits=req.z_limits,
-        equal_aspect=req.equal_aspect, note=req.note, lines=req.lines,
+        equal_aspect=req.equal_aspect, note=req.note, lines=req.lines, max_lines=req.max_lines,
+        curves=[c.model_dump() for c in req.curves] if req.curves else None,
         colorbar_log10=req.colorbar_log10,
         labels=[lab.model_dump() for lab in req.labels] if req.labels else None,
     )

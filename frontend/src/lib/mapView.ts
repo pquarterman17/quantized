@@ -48,6 +48,7 @@
 import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { ColormapName } from "./colormap";
 import type { CutSpace } from "./mapcuts";
+import { sanitizeMap3d, type Map3dView } from "./mapView3d";
 import { uniqueIds } from "./uniqueIds";
 
 /** Which of the map's two axes a slice is fixed on. `h` holds y and sweeps x,
@@ -113,6 +114,9 @@ export interface MapViewState {
   colorLimits: HalfLim | null;
   slices: MapSliceDef[];
   annotations: MapAnnotation[];
+  /** Static 3-D view (surface / scatter / waterfall) shown instead of the 2-D
+   *  canvas; absent = the 2-D map. See `lib/mapView3d.ts`. */
+  view3d?: Map3dView;
 }
 
 /** Every dataset's map view, keyed by dataset id. An ABSENT key is not a
@@ -145,7 +149,8 @@ export function isDefaultMapView(v: MapViewState | undefined | null): boolean {
     v.logZ === DEFAULT_MAP_VIEW.logZ &&
     v.colorLimits === null &&
     v.slices.length === 0 &&
-    v.annotations.length === 0
+    v.annotations.length === 0 &&
+    !v.view3d
   );
 }
 
@@ -268,6 +273,11 @@ function annotation(raw: unknown): MapAnnotation | null {
   };
 }
 
+const spread3d = (raw: unknown) => {
+  const view3d = sanitizeMap3d(raw);
+  return view3d ? { view3d } : {};
+};
+
 /** Read ONE dataset's stored view. Drop-malformed-never-throw, the same
  *  degrade `deserializeRois`/`sanitizeCollections` use: a hand-edited or
  *  half-written entry is skipped, never propagated and never fatal. */
@@ -296,6 +306,7 @@ export function sanitizeMapView(raw: unknown): MapViewState {
           .filter((a): a is MapAnnotation => a !== null)
           .slice(0, MAX_ANNOTATIONS))
       : [],
+    ...spread3d(o.view3d),
   };
 }
 

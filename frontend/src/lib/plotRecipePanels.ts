@@ -143,15 +143,15 @@ export function capturePanels(
   return { panels, panelFit: view.panelFit, pageSetup: view.pageSetup ? structuredClone(view.pageSetup) : null };
 }
 
-/** The source dataset's map view, recorded only when one of the three
- *  reusable decisions differs from the default. Slices and annotations are
+/** The source dataset's map view, recorded only when one of the reusable
+ *  decisions (colormap, scale, limits, 3-D view) differs from the default. Slices and annotations are
  *  data-anchored and deliberately not captured. */
 export function captureMapView(view: MapViewState | undefined): RecipeMapView | null {
   if (!view) return null;
-  const untouched = view.colormap === DEFAULT_MAP_VIEW.colormap && !view.logZ && view.colorLimits === null;
+  const untouched = view.colormap === DEFAULT_MAP_VIEW.colormap && !view.logZ && view.colorLimits === null && !view.view3d;
   if (untouched) return null;
   const lim = view.colorLimits;
-  return { colormap: view.colormap, logZ: view.logZ, colorLimits: lim ? [lim[0], lim[1]] : null };
+  return { colormap: view.colormap, logZ: view.logZ, colorLimits: lim ? [lim[0], lim[1]] : null, ...(view.view3d ? { view3d: { ...view.view3d } } : {}) };
 }
 
 /** `plotRecipeMatch.ts`'s `findChannel` tiers minus aliases (a panel channel
