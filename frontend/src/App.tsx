@@ -142,6 +142,9 @@ export default function App() {
       void runLazy("Loading desktop project lock…", () => import("./lib/desktopLockProvider")).then((m) => {
         useProjectLock.getState().setProvider(m.createDesktopLockProvider());
       }, onLoadFailure);
+      // gap-4 G14: probe the native clipboard once, so a copy click reads a
+      // cached answer instead of awaiting the bridge before the write.
+      void import("./lib/desktopClipboard").then((m) => m.primeNativeClipboard(), () => {});
     }
   }, []);
 
