@@ -151,26 +151,77 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
 
 ## Tier 1 — High Impact
 
-2. **Check 1 — Origin → quantized import scorer**
-   - [ ] Score each specimen's import against `oracle.json`:
-         - curves, bindings and values;
-         - plot type mapped;
-         - axes and styles.
-         Report per (type × family): match / wrong / omitted-with-reason.
-
 4. **First scorecard** — every 2D type × family, both checks, with a review
    page of side-by-side PNGs for the owner
 
 ## Tier 2 — Medium Impact
 
 5. **XY family import parity** — line, scatter, line+symbol, step, area,
-   stacked area, double-Y, error bars/bands, log/reversed axes, multi-layer
+   stacked area, double-Y, error bars/bands, log/reversed axes, multi-layer.
+   Measured by the item 2 scorer (2026-11-15, 231 specimens; anchor
+   specimen named per gap). Items 6 and 7 share the first two gaps.
+   - [ ] **No curve binding decodes on any Origin 2026b `.opju`: 0 / 484
+         Origin curves.** `column_id_table` is empty on 231 / 231 specimens,
+         so `extract_figures_opju` takes the legacy counting fallback, which
+         binds nothing and leaves every figure unnamed (page unattributed).
+         Everything per curve is blocked behind it: plot type (0 decoded),
+         styles (0 / 750 planted: colour 334, line width 139, dash 139,
+         symbol 69, symbol size 69) and the drawn view. Anchor `line/clean`.
+   - [ ] **No column metadata decodes: designations 0 / 806, long names
+         0 / 806 (labels fall back to the letter), units 0 / 105.** With no
+         binding either, the frontend's default view draws WRONG curves:
+         `error_columns` draws Y-error and X-error as Y curves (12 phantom
+         curves in 6 specimens: line, scatter, line+symbol, step, area,
+         y_error); `area/multi_x` draws X2 as a curve and D against A instead
+         of C (1 wrong, 1 phantom); `double_y` draws every column on both
+         layers (6 phantom curves in 6 specimens). Error bars: 0 / 12.
+         Anchor `line/error_columns`.
+   - [ ] **Phantom sheet from a deleted sheet.** `deleted_sheet` imports the
+         deleted sheet's data as book `DelA@2` (wrong book name too) and names
+         the survivor `Del@3`. 5 specimens (line, scatter, line+symbol, step,
+         area). Anchor `line/deleted_sheet`.
+   - [ ] **Graph layer not recovered** (`graphs_not_recovered`, no axis
+         record decoded): line / line+symbol / scatter / step x {duplicates,
+         huge_tiny, log_range, masked_rows, multi_x}; area x {huge_tiny,
+         log_range, masked_rows}; double_y, stacked_area, stacked_lines_offset
+         x {log_range, masked_rows}. Where a layer IS recovered the axes are
+         exact: 804 / 804 from/to/log match, 0 wrong.
+   - [ ] **No quantized mapping for step, area, stacked area, waterfall
+         (offset lines)** even once bindings decode: `OriginCurve.style` has
+         only line / scatter / line+symbol, and there is no dash field (the
+         139 planted dashes cannot be represented).
 6. **Category/statistics family import parity** — column, horizontal bar,
    stacked column/bar, floating column, histogram, box, violin, strip, and
-   wiring `.opj`/`.opju` column/bar/histogram to the bar/stat renderers
+   wiring `.opj`/`.opju` column/bar/histogram to the bar/stat renderers.
+   Measured by the item 2 scorer (2026-11-15); bindings and metadata are
+   item 5's first two gaps.
+   - [ ] **Phantom book: the stacked plots' hidden helper book `CS`** (the
+         cumulative sums, 3 columns, flagged `complex_imaginary`) is listed
+         as a Library book though Origin's own book list does not have it.
+         26 specimens: every stacked_area, stacked_column and stacked_bar.
+         Anchor `stacked_column/clean`.
+   - [ ] **Box, violin and strip: no graph layer recovered on 33 / 33.**
+         Column, bar, stacked column/bar and floating column: not recovered
+         for {clean, descending_x, huge_tiny, masked_rows, nan_gaps, noisy};
+         histogram for {huge_tiny, masked_rows}. Anchor `box/clean`.
+   - [ ] **Plot type: 0 decoded on `.opju`** (203, 207, 213, 215, 216, 206,
+         219 all draw the default line view); `.opju` sets no `plotType`.
+   - [ ] **Text X** (`text_categories`, 5 specimens, 10 curves): Origin
+         plots against the text categories; quantized draws against the row
+         index.
 7. **Specialised family import parity** — polar, contour, heatmap, ternary,
    waterfall, bubble/colour-mapped scatter, vector, inset, axis break,
-   multi-panel
+   multi-panel. Measured by the item 2 scorer (2026-11-15).
+   - [ ] **Bubble / colour-mapped: the size / colour column is drawn as its
+         own curve** (22 phantom curves in 12 specimens: bubble and
+         color_mapped x {clean, descending_x, nan_gaps, negative, noisy,
+         unicode_names}). Anchor `bubble/clean`.
+   - [ ] **XYZ contour, ternary, matrix contour: figure and axes decode
+         (6 / 6 each), but quantized draws Y and Z as lines against X.**
+         Heatmap (matrix): no layer recovered. Matrix cells import exactly
+         (800 / 800).
+   - [ ] **Polar draws as a Cartesian line** (axes 6 / 6 match; polar is the
+         layer's coordinate system, not a plot byte).
 8. **Commit passing specimens** to `test-data/origin/generated/<type>/` with
    their `oracle.json`, PNG and `.truth.json`, plus the generator command that
    rebuilds them; add realdata tests that score them
@@ -232,6 +283,23 @@ Evidence for every item below: `tools/plot_corpus/scratch_run.py` over the
    against the same truth
 
 ## Completed
+
+- ~~**#2 Check 1 — Origin → quantized import scorer**~~ (2026-11-15).
+  `tools/plot_corpus/score_import.py` imports every specimen through the
+  import route's own composition (`read_origin_project_all` →
+  `drop_empty_library_books` → `origin_figures_and_fidelity`) and scores it
+  against `oracle.json` and the planted data: curve bindings, the curves the
+  frontend would draw (`frontend_view.py`, a mirror pinned to the real
+  frontend by shared cases asserted in pytest AND vitest), values, column
+  metadata, plot type, axes, styles, error bars, phantom sheets and figures.
+  Every item is match / wrong / phantom / omitted-with-reason;
+  `scorecard.json` + `scorecard.md`. Comparison logic is unit-tested on
+  synthetic fixtures (`tests/test_plot_corpus_import_score.py`).
+  First run, 231 scored + 2 not built: values 808 / 808 exact, axes 804 match
+  / 0 wrong / 630 omitted, curves 0 / 484 bound, column metadata 0 / 1,717,
+  styles 0 / 750, plot type 13 match (line by default) / 226 omitted.
+  WRONG / phantom: 31 phantom books (26 hidden `CS`, 5 deleted sheet),
+  41 phantom and 1 wrong drawn curve. Every gap is booked under items 5-7.
 
 - ~~**#1 Plot-corpus harness**~~ (2026-11-15). Built in `tools/plot_corpus/`
   (README there), with `tests/test_plot_corpus_tools.py` running without
