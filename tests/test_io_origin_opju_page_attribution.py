@@ -14,22 +14,31 @@ COM ``layer.x/y.from/to`` as the independent oracle):
    byte is a flag field. Origin-confirmed values 40/80/88/c0 now decode
    (retry-only); unconfirmed values stay unrecovered.
 
-Synthetic bytes only (invented names); the ``realdata`` anchors assert Origin's
-own numbers, copied in as literals.
+A third rule: ``layer`` is the anchor's ordinal within its graph page, counted
+whether or not the record decodes, so an undecodable layer leaves a gap.
+
+Synthetic bytes only (invented names); the ``realdata`` tests load Origin's own
+per-layer axis ranges from ``test-data/origin/ground_truth_public`` and compare
+EVERY file/page/layer in it.
 """
 
 from __future__ import annotations
 
+import functools
+import json
+import math
 from pathlib import Path
 
 import pytest
 
 from quantized.io.origin_project.figures_opju import extract_figures_opju
+from quantized.io.origin_project.opju_axis_real_form import _SEP_WIDE
 from quantized.io.origin_project.opju_figure_curves import opju_pages
 from test_io_origin_figures_opju import (
     _column_id_record,
     _id_curve_token,
     _layer_bytes,
+    _real_form_bare_raw8,
     _real_form_tagged_and_rle,
 )
 
@@ -168,118 +177,256 @@ def test_strict_separator_records_are_unchanged() -> None:
     assert (figs[0]["y_from"], figs[0]["y_to"]) == (1.0, 450000.0)
 
 
+# ── layer numbering: ordinal within the page, decoded or not ─────────────────
+
+
+def _garbage_anchor() -> bytes:
+    """A layer anchor whose record decodes by no form (fail closed)."""
+    return b"\x03\x00\x00\x1f" + b"\xff" * 48
+
+
+def test_undecodable_layer_leaves_a_gap_not_a_shift() -> None:
+    """Layer numbers are the anchor's ORDINAL in the page. An undecodable
+    first layer must leave layer 1 absent and the second layer at 2 -- never
+    renumber it down to 1 (that would label Origin's layer 2 as layer 1)."""
+    recs = _column_id_record(1, "A", "X") + _column_id_record(2, "B", "Y", partner=1)
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _header("WBook", _ONE)
+        + recs
+        + _header("Graph1", _TWO)
+        + _garbage_anchor()
+        + _layer_bytes(0.0, 5.0, 0.0, 100.0, 20.0, 0x03, _TEXT)
+    )
+    figs = extract_figures_opju(blob)
+    assert [(f["name"], f["layer"]) for f in figs] == [("Graph1", 2)]
+    assert (figs[0]["x_to"], figs[0]["y_to"]) == (5.0, 100.0)
+
+
+def test_layer_ordinal_restarts_on_each_page() -> None:
+    recs = _column_id_record(1, "A", "X") + _column_id_record(2, "B", "Y", partner=1)
+    one = _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, _TEXT)
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _header("WBook", _ONE)
+        + recs
+        + _header("Graph1", _ONE)
+        + _garbage_anchor()
+        + one
+        + _header("Graph2", _TWO)
+        + one
+    )
+    figs = extract_figures_opju(blob)
+    assert [(f["name"], f["layer"]) for f in figs] == [("Graph1", 2), ("Graph2", 1)]
+
+
+def test_embedded_graph_in_a_workbook_page_stays_layer_one() -> None:
+    """Anchors inside a workbook page are embedded graphs: unnamed, layer 1
+    (a garbage anchor before them must not push the ordinal)."""
+    recs = _column_id_record(1, "A", "X") + _column_id_record(2, "B", "Y", partner=1)
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _header("WBook", _ONE)
+        + recs
+        + _garbage_anchor()
+        + _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, _TEXT)
+    )
+    assert [(f["name"], f["layer"]) for f in extract_figures_opju(blob)] == [("", 1)]
+
+
+# ── wide separator pass: first candidate that parses fully ───────────────────
+
+
+def _wide_only_record(lookalike: bytes = b"") -> bytes:
+    """``Fixed Lambdas`` bare-raw8 record whose real separators carry flag 40
+    (wide-only); ``lookalike`` is spliced into the geometry filler just past
+    the nominal geometry length (where the second-separator search starts),
+    replacing the two filler bytes there."""
+    rec = _real_form_bare_raw8()
+    for plen in (b"\x04\x07", b"\x04\x09"):
+        sep = b"\x81" + plen + b"\x00\x00\x01"
+        assert sep in rec
+        rec = rec.replace(sep, b"\x81" + plen + b"\x00\x40\x01")
+    first = b"\x81\x04\x07\x00\x40\x01"
+    cut = rec.index(first) + len(first) + 7  # plen = 7
+    # the lookalike replaces the 2 filler bytes, keeping the Y span inside the
+    # decoder's start-scan window (_Y_START_SCAN)
+    assert rec[cut : cut + 2] == b"\x00\x00"
+    tail = rec[cut + 2 :] if lookalike else rec[cut:]
+    return b"CPYUA 4.3811 222\n" + rec[:cut] + lookalike + tail
+
+
+def test_wide_pass_skips_a_coincidental_separator_before_the_real_one() -> None:
+    """A wide-shape hit sitting BEFORE the real end separator (here in the
+    geometry filler, ``81 aa bb 00 40 01``) must not shadow it: the wide retry
+    tries each candidate in order and keeps the first whose Y span exact-fills
+    up to it. The record decodes exactly as it does without the lookalike."""
+    lookalike = bytes([0x81, 0xAA, 0xBB, 0x00, 0x40, 0x01])
+    assert _SEP_WIDE.match(lookalike)
+    want = extract_figures_opju(_wide_only_record())
+    got = extract_figures_opju(_wide_only_record(lookalike))
+    assert len(want) == 1
+    assert (want[0]["x_from"], want[0]["x_to"]) == (pytest.approx(0.005), pytest.approx(0.035))
+    assert [(f["x_from"], f["x_to"], f["y_from"], f["y_to"]) for f in got] == [
+        (f["x_from"], f["x_to"], f["y_from"], f["y_to"]) for f in want
+    ]
+
+
+def test_wide_pass_with_only_a_false_separator_still_fails_closed() -> None:
+    """Negative control: no real separator after the false one -> no figure."""
+    rec = b"CPYUA 4.3811 222\n" + b"\x03\x00\x00\x1f" + b"\x80\x00\x00\x00\x40\x01" + b"\x00" * 60
+    assert extract_figures_opju(rec) == []
+
+
 # ── realdata: Origin 2026b COM (layer.x.from/to, layer.y.from/to) ────────────
+#
+# The oracle is ``test-data/origin/ground_truth_public/axis_ranges.json``
+# (per page, per layer, for every project listed in it). It is the independent
+# check for the two defect classes fixed here, over EVERY file/page/layer it
+# lists -- including the three large projects (208 and 434 graph pages, up to
+# 27 layers per page) that stress layer numbering.
+#
+#   (a) no PHANTOM: a decoded (page, layer) that Origin does not have;
+#   (b) every decoded (page, layer) matches Origin's x/y from/to (rel 1e-6).
+#
+# What the decoder does not recover is simply absent (fail closed) -- that is
+# not asserted here. The two tables below pin the CURRENTLY-WRONG decodes that
+# pre-date this fix (each was verified to be produced by the unfixed main
+# decoder as well). They are strict: an entry that stops being wrong FAILS the
+# test, so a fix is noticed and the entry deleted rather than left to rot.
 
+_AXIS_JSON = "origin/ground_truth_public/axis_ranges.json"
+_REL_TOL = 1e-6
 
-def _corpus() -> Path | None:
-    for ancestor in Path(__file__).resolve().parents:
-        cand = ancestor / "test-data" / "origin" / "public"
-        if cand.is_dir():
-            return cand
-    return None
+_SCI = "origin/public/ARETE-zzwl_origin-meteohydro-skills/python-origin-plotting/assets/scientific_color_reference/origin_scientific_colors.opju"  # noqa: E501
+_TEA = "origin/public/niloofarcrno_Techno-Economic-Model/TEA_ExcelGraphs.opju"
+_HIST = "origin/public/pdalcastel_IAV_Infection_CC3D_MaBoSS_2026/results_and_plots/histogram_released_viruses.opju"  # noqa: E501
+_SOP = "origin/public/Techboyjohnny-98_SOP_measurement_SHAP/OriginPro file/SOP_meas.opju"
+_RISK5 = "origin/public/he-xiaolin_Online-perceived-risk-study/Fig3_ExtFig5/PerceivedRiskandPrediction.opju"  # noqa: E501
+_RISK9 = "origin/public/he-xiaolin_Online-perceived-risk-study/Fig4_ExtFig9/PerceivedRiskandPrediction.opju"  # noqa: E501
 
+_Y_MISREAD = "Y span misread (value-token defect); decoded by the unfixed decoder too"
+_TAIL_BYTE = (
+    "value looks like Origin's with its last mantissa byte dropped (88/90, 136/140, "
+    "1984/2000); decoded identically by the unfixed decoder"
+)
 
-_PUBLIC = _corpus()
-
-# file (relative to test-data/origin/public) -> {(page, layer): (x_from, x_to, y_from, y_to)}
-# Values: Origin 2026b COM, layer.x.from/to + layer.y.from/to.
-_ORACLE = {
-    "stunnerx_CTDHNN-data-code/code/fig4/plot/割值频率图.opju": {
-        ("Graph4", 1): (1225.0, 1440.0, 0.0, 17.5),
-        ("Graph1", 1): (1225.0, 1430.0, 0.0, 35.0),
-        ("Graph5", 1): (1225.0, 1430.0, 0.0, 35.0),
-        ("Graph3", 1): (1225.0, 1430.0, 0.0, 20.0),
-        ("Graph2", 1): (1240.0, 1460.0, 0.0, 35.0),
-        ("Graph2", 2): (1240.0, 1460.0, 0.0, 25.0),
-        ("Graph2", 3): (1240.0, 1460.0, 0.0, 25.0),
-        ("Graph2", 4): (1240.0, 1460.0, 0.0, 35.0),
-    },
-    "niloofarcrno_Techno-Economic-Model/TEA_ExcelGraphs.opju": {
-        ("Graph7", 1): (0.5, 4.5, 2200.0, 2475.0),
-        ("Graph15", 1): (0.5, 5.5, -0.84, 0.84),
-        ("Graph1", 1): (0.5, 6.5, -200.0, 1400.0),
-        ("Graph3", 1): (0.35000000000000003, 1.05, -200.0, 1500.0),
-        ("Graph6", 1): (0.5, 4.5, 0.0, 1500.0),
-        ("Graph13", 1): (0.5, 2.5, 0.0, 15.200000000000001),
-        ("Graph16", 1): (1.5, 6.5, -0.88, 0.84),
-    },
-    "shawxgf_APFD-in-RAS-affect-tilapia-s-growth/生化指标非线性.opju": {
-        ("gucao", 1): (0.5, 3.5, 0.0, 200.0),
-        ("zongdanbai", 1): (0.5, 3.5, 0.0, 40.0),
-        ("putaotang", 1): (0.5, 3.5, 0.0, 5.0),
-        ("zongdanguchun", 1): (0.5, 3.5, 0.0, 3.0),
-        ("gubing", 1): (0.5, 3.5, 0.0, 140.0),
-        ("niaosudan", 1): (0.5, 3.5, 0.0, 0.8),
-    },
-    "ODTUGUNAM_Mixed-SnPb-Perovskite-Simulation/Exported J-Vs/Figure2-c.opju": {
-        ("Graph2", 1): (300.0, 1000.0, 0.0, 100.0),
-        ("Graph6", 1): (-0.2, 0.8, -30.0, 5.0),
-        ("Graph1", 1): (-0.2, 0.8, -30.0, 5.0),
-    },
+# (file, page, layer) -> cause: decoded, but the values differ from Origin's.
+KNOWN_DEFECTS: dict[tuple[str, str, int], str] = {
+    (_SCI, "ColorPage1", 7): "y_to 240 vs Origin 242 (" + _Y_MISREAD + ")",
+    (_SCI, "ColorPage2", 2): "Y span reads +-3.05e-05 vs Origin [-0.5, 3.5] (" + _Y_MISREAD + ")",
+    (_SCI, "ColorPage2", 4): "y_from 438.4 vs Origin 0 (" + _Y_MISREAD + ")",
+    (_SCI, "ColorPage2", 5): "y_from 438.4 vs Origin 0 (" + _Y_MISREAD + ")",
+    (_SCI, "ColorPage2", 6): "y_from 438.4 vs Origin 0 (" + _Y_MISREAD + ")",
+    (_SCI, "ColorPage2", 7): "y_from 438.4 vs Origin 0 (" + _Y_MISREAD + ")",
+    (_SCI, "ColorPage2", 8): "y_from 438.4 vs Origin 0 (" + _Y_MISREAD + ")",
+    (_SCI, "ColorPage2", 9): "y_to 2 vs Origin 4 (" + _Y_MISREAD + ")",
+    (_SCI, "ColorPage2", 10): "Y span reads 0..3.05e-05 vs Origin [0, 1] (" + _Y_MISREAD + ")",
+    (_SCI, "ColorPage2", 12): "y_to 240 vs Origin 242 (" + _Y_MISREAD + ")",
+    (
+        _TEA,
+        "Graph12",
+        1,
+    ): "y_from 927.5 vs Origin 0: geometry payload 82 03 fc 8c 40 fills as a value",
+    (_HIST, "Graph2", 1): "X [0, 4.0025] vs Origin [1, 4] (X value-token defect)",
+    (_SOP, "fig_SOPvsHPPC_A123", 1): "x_to 88 vs 90: " + _TAIL_BYTE,
+    (_SOP, "Graph3", 1): "x_to 88 vs 90: " + _TAIL_BYTE,
+    (_SOP, "Graph24", 1): "X [2, 128] vs Origin [0, 130]: " + _TAIL_BYTE,
+    (_SOP, "Graph12", 1): "x_to 136 vs 140: " + _TAIL_BYTE,
+    (_SOP, "Graph30", 1): "x_to 136 vs 140: " + _TAIL_BYTE,
+    (_SOP, "Graph58", 10): "X [2, 1984] vs Origin [0, 2000]: " + _TAIL_BYTE,
+    (_SOP, "fig_SHAP_stability", 1): "y_from 731.17 vs Origin 0 (" + _Y_MISREAD + ")",
+    (_SOP, "fig_AgingSummary", 1): "X [2, 1984] vs Origin [0, 2000]: " + _TAIL_BYTE,
 }
-# Origin's true layer count for EVERY graph page it lists (decoded here or not),
-# Origin 2026b COM. (TEA ``Graph12`` is deliberately absent from _ORACLE: its Y
-# span currently decodes [927.5, 1000] vs Origin [0, 1000] -- a separate,
-# pre-existing value-token defect, reported rather than asserted.)
-_TRUE_LAYERS = {
-    "stunnerx_CTDHNN-data-code/code/fig4/plot/割值频率图.opju": {
-        "Graph4": 1,
-        "Graph1": 1,
-        "Graph5": 1,
-        "Graph3": 1,
-        "Graph2": 4,
-        "sparkline": 1,
-        "sparkline2": 1,
-        "sparkline3": 1,
-        "sparkline4": 1,
-        "sparkline5": 1,
-    },
-    "niloofarcrno_Techno-Economic-Model/TEA_ExcelGraphs.opju": {
-        "Graph7": 1,
-        "Graph9": 1,
-        "Graph15": 1,
-        "Graph12": 1,
-        "Graph1": 1,
-        "Graph19": 1,
-        "Graph2": 1,
-        "Graph3": 1,
-        "Graph6": 2,
-        "Graph13": 1,
-        "Graph16": 1,
-    },
-    "shawxgf_APFD-in-RAS-affect-tilapia-s-growth/生化指标非线性.opju": {
-        "gucao": 1,
-        "zongdanbai": 1,
-        "putaotang": 1,
-        "zongdanguchun": 1,
-        "gubing": 1,
-        "niaosudan": 1,
-    },
-    "ODTUGUNAM_Mixed-SnPb-Perovskite-Simulation/Exported J-Vs/Figure2-c.opju": {
-        "Graph2": 1,
-        "Graph6": 1,
-        "Graph1": 1,
-    },
+
+# (file, page, layer) -> cause: decoded under a page NAME Origin does not
+# list, so keyed (page, layer) it has no counterpart. All are the same class,
+# a page header whose NAME carries an escape the name scan does not read
+# (``fig_ c0 43 06 Verr..`` is Origin's "fig_CCCVerror"; ``Graph c0 31`` is
+# "Graph111"): the header is truncated ("fig_", "Graph") or not enumerated at
+# all ("Graph222"), so the page's layers surface under the wrong name or as an
+# extra layer of the page before it. The VALUES are Origin's own for the
+# missing page (checked), and the unfixed decoder emitted them too.
+_NAME_ESCAPE = "page-header name escape not read; values are the true page's layer"
+KNOWN_PHANTOMS: dict[tuple[str, str, int], str] = {
+    **{(_SOP, "fig_", n): "Origin 'fig_CCCVerror': " + _NAME_ESCAPE for n in range(1, 13)},
+    (_RISK5, "Graph", 1): "Origin 'Graph111': " + _NAME_ESCAPE,
+    (_RISK5, "Graph221", 3): "Origin 'Graph222' layer 1: " + _NAME_ESCAPE,
+    (_RISK9, "Graph", 1): "Origin 'Graph111': " + _NAME_ESCAPE,
+    (_RISK9, "Graph221", 3): "Origin 'Graph222' layer 1: " + _NAME_ESCAPE,
 }
+
+_Key = tuple[str, str, int]
+
+
+def _same(got: tuple[float, ...], want: tuple[float, ...]) -> bool:
+    return all(
+        math.isclose(g, w, rel_tol=_REL_TOL, abs_tol=1e-9) for g, w in zip(got, want, strict=True)
+    )
+
+
+@functools.cache
+def _compare_to_oracle(corpus_dir: Path) -> tuple[set[_Key], set[_Key], int] | None:
+    """``(phantoms, wrong, n_matched)`` over every oracle file (decoded once
+    per session); ``None`` when the oracle JSON is absent."""
+    oracle_path = corpus_dir / _AXIS_JSON
+    if not oracle_path.is_file():
+        return None
+    files = json.loads(oracle_path.read_text(encoding="utf-8"))["files"]
+    phantoms: set[_Key] = set()
+    wrong: set[_Key] = set()
+    matched = 0
+    for rel, pages in files.items():
+        project = corpus_dir / rel
+        if not project.is_file():
+            continue
+        want = {
+            (page, int(lay["layer"])): (lay["x_from"], lay["x_to"], lay["y_from"], lay["y_to"])
+            for page, info in pages.items()
+            for lay in info["layers"]
+        }
+        for f in extract_figures_opju(project.read_bytes()):
+            if not f["name"]:  # embedded (workbook) graph: no page identity
+                continue
+            key = (f["name"], f["layer"])
+            if key not in want:
+                phantoms.add((rel, *key))
+            elif _same((f["x_from"], f["x_to"], f["y_from"], f["y_to"]), want[key]):
+                matched += 1
+            else:
+                wrong.add((rel, *key))
+    return phantoms, wrong, matched
+
+
+@pytest.fixture
+def axis_comparison(corpus_dir: Path) -> tuple[set[_Key], set[_Key], int]:
+    result = _compare_to_oracle(corpus_dir)
+    if result is None:
+        pytest.skip(f"{_AXIS_JSON} not present")
+    return result
 
 
 @pytest.mark.realdata
-@pytest.mark.skipif(_PUBLIC is None, reason="test-data/origin/public corpus not found")
-@pytest.mark.parametrize("rel", sorted(_ORACLE))
-def test_realdata_layers_match_origin(rel: str) -> None:
-    assert _PUBLIC is not None
-    figs = extract_figures_opju((_PUBLIC / rel).read_bytes())
-    got = {(f["name"], f["layer"]): f for f in figs if f["name"]}
-    for key, want in _ORACLE[rel].items():
-        f = got.get(key)
-        assert f is not None, f"{key} not recovered"
-        assert (f["x_from"], f["x_to"], f["y_from"], f["y_to"]) == pytest.approx(want), key
-    # no layer beyond what Origin lists for the page (the phantom-layer defect)
-    for page, layer in got:
-        assert page in _TRUE_LAYERS[rel], f"unexpected page {page}"
-        assert layer <= _TRUE_LAYERS[rel][page], (page, layer)
-    # unnamed figures are embedded (workbook) graphs, never a copy of a named page
-    named = {(f["x_from"], f["x_to"], f["y_from"], f["y_to"]) for f in got.values()}
-    for f in figs:
-        if not f["name"]:
-            assert (f["x_from"], f["x_to"], f["y_from"], f["y_to"]) not in named
+def test_realdata_no_phantom_layers(axis_comparison: tuple[set[_Key], set[_Key], int]) -> None:
+    """(a) No decoded (page, layer) that Origin does not have."""
+    phantoms, _, matched = axis_comparison
+    assert matched > 1000  # the oracle really was exercised
+    unexpected = sorted(phantoms - KNOWN_PHANTOMS.keys())
+    assert not unexpected, f"phantom layers: {unexpected}"
+    stale = sorted(KNOWN_PHANTOMS.keys() - phantoms)
+    assert not stale, f"KNOWN_PHANTOMS entries no longer phantom -- delete them: {stale}"
+
+
+@pytest.mark.realdata
+def test_realdata_decoded_layers_match_origin(
+    axis_comparison: tuple[set[_Key], set[_Key], int],
+) -> None:
+    """(b) Every decoded (page, layer) carries Origin's axis ranges, except the
+    pinned KNOWN_DEFECTS -- which must STILL be wrong (strict-xfail)."""
+    _, wrong, _ = axis_comparison
+    unexpected = sorted(wrong - KNOWN_DEFECTS.keys())
+    assert not unexpected, f"decoded layers that disagree with Origin: {unexpected}"
+    fixed = sorted(KNOWN_DEFECTS.keys() - wrong)
+    assert not fixed, (
+        f"KNOWN_DEFECTS entries now match Origin (or vanished) -- delete them: {fixed}"
+    )

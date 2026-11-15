@@ -18,10 +18,13 @@ locates the count by scanning for ``0A <2*nwin> [00] <entries>`` validated by a
 clean entry run, matches either SEP, and enumerates windows by the ``0A``-framed
 page header ``0A [00] 80 <type> <namelen+2> 00 00 <name> <hi>`` — the leading
 ``0A`` separates a true page header from a dataset-curve record (a graph's
-``FitLine``), ``namelen >= 2`` rejects 1-byte coincidental matches, and the type
-byte is NOT used (unstable across files). The tree is rebuilt from *preorder +
-per-folder child count* (a structural invariant: arbitrary depth, empty folders,
-duplicate/unicode/spaced names). Validated byte-exact vs live COM on all 5
+``FitLine``), ``namelen >= 2`` rejects 1-byte coincidental matches, and ``<type>``
+is a LEB128-style varint (1 byte below 0x80, else 2) -- a per-window serial that
+is consumed for its WIDTH only (its value is not used; it is not stable across
+files, but the width must be right or every window past the 127th is
+missed). The tree is rebuilt from *preorder + per-folder child count* (a
+structural invariant: arbitrary depth, empty folders, duplicate/unicode/spaced
+names). Validated byte-exact vs live COM on all 5
 corpus files (incl. the 39-book ``Hc2 data`` with report-table windows and
 nested folders) plus 11 controlled 4.3811 specimens. Fail-closed: an ordinal
 past the window list, an inconsistent child count, or any framing mismatch
@@ -56,15 +59,23 @@ _OPJU_SEPS = (b"\x80\x12\x8d\x10", b"\x80\x16\x03\x00\x00\x01\x8a\x10")
 # headers grouped by folder, depth-first).
 #
 # ``<type>`` is a LEB128-style varint -- 1 byte below 0x80, else 2 bytes
-# ``[80-ff][00-7f]`` -- a per-window serial counting up through the file (0x69
-# .. 0x7f, then ``80 01`` .. ``95 01`` across the 359-file corpus; 1-byte
-# values >= 0x80 never occur). This pattern once read it as ONE byte of any
-# value, so every window whose serial passed 127 (``80 87 01 08 00 00
-# Graph2``: the ``01`` was taken for the length) was never enumerated -- its
-# graph anchors then fell into the PREVIOUS page's span (phantom layers) and
-# its columns into the previous page's book.
+# ``[80-ff][01-7f]`` -- a per-window serial counting up through the file (0x69
+# .. 0x7f, then ``80 01`` .. ``95 01`` across the 359-file corpus). This pattern
+# once read it as ONE byte of any value, so every window whose serial passed 127
+# (``80 87 01 08 00 00 Graph2``: the ``01`` was taken for the length) was never
+# enumerated -- its graph anchors then fell into the PREVIOUS page's span
+# (phantom layers) and its columns into the previous page's book.
+#
+# The continuation byte is ``[01-7f]``, not ``[00-7f]``: a ``00`` continuation
+# would encode a value a 1-byte form already covers (non-canonical), and every
+# real 2-byte type in the corpus ends ``01`` (680 gated headers; the serial is
+# < 16384). Corpus measurement (2026-11-14, 359 files): the enumerated window
+# set is identical under ``[00-7f]`` and ``[01-7f]`` (the 7 raw ``[80-ff] 00``
+# matches -- Hc2 data, Fig3_e, ... -- are data, rejected by the name/trail
+# gates either way), and NO header with a one-byte type >= 0x80 exists (no
+# gated match under the old any-byte pattern is lost by the varint reading).
 _OPJU_WIN_HEAD_RE = re.compile(
-    rb"\x0a\x00?\x80(?:[\x00-\x7f]|[\x80-\xff][\x00-\x7f])(.)\x00\x00", re.DOTALL
+    rb"\x0a\x00?\x80(?:[\x00-\x7f]|[\x80-\xff][\x01-\x7f])(.)\x00\x00", re.DOTALL
 )
 _OPJU_WIN_NAME_RE = re.compile(rb"[A-Za-z0-9][A-Za-z0-9_-]*\Z")
 

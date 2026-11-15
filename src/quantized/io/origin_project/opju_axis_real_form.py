@@ -9,10 +9,12 @@ narrative (record grammar, value-token encodings) this implements:
 03 00 00 1f                       layer anchor
 [optional flag token]             1-2 bytes, skipped (see below)
 [X from] [X to] [X step]          value tokens; ``from`` elided when 0.0
-81 <id> <plen> 00 00 01 …         separator (layer geometry; plen VARIES
-                                  and is only a search-window hint)
+8x <id> <plen> 00 <flag> 01 …     separator (layer geometry; plen VARIES
+                                  and is only a search-window hint; 8x =
+                                  81 or 80; <flag> = 00/40/80/88/c0, see
+                                  ``opju_axis_real_form._SEP_WIDE``)
 [Y from] [Y to] [Y step]          value tokens (tagged/RLE only)
-81 <id> <plen> 00 00 01 …         end separator
+8x <id> <plen> 00 <flag> 01 …     end separator
 ```
 
 Value tokens: **tagged compact** (``8T nn <nn bytes>``, tag ``0x81..0x8f``,
@@ -80,10 +82,11 @@ from __future__ import annotations
 
 import re
 import struct
+from collections.abc import Iterator
 
 __all__: list[str] = []  # internal to the .opju figures subsystem; imported by name
 
-# `8x <id> <plen> 00 00 01` separates the X span from the layer-geometry
+# `8x <id> <plen> 00 <flag> 01` separates the X span from the layer-geometry
 # payload and the geometry from the Y span. Two lead bytes exist: `81`
 # (the original form, every record validated through 2026-07-04) and `80`
 # (found 2026-07-05 on Hc2's Graph8/Graph12-family records, always paired
@@ -344,7 +347,7 @@ def _real_y_log_flag(b: bytes, sep_start: int, window_end: int) -> bool | None:
     Any other value, or no marker found within the search span, returns
     ``None`` so the decade heuristic takes over -- never guessed.
     """
-    start = sep_start + 6  # past the separator's own `81 <id> <plen> 00 00 01`
+    start = sep_start + 6  # past the separator's own `8x <id> <plen> 00 <flag> 01`
     mpos = b.find(_Y_STYLE_MARKER, start, min(window_end, start + _Y_FLAG_SEARCH_SPAN))
     if mpos < start + 2:
         return None
@@ -370,29 +373,72 @@ def _parse_real_record(
     with the wide ``[80|81]`` lead that Hc2's Graph8/Graph12-family records
     need -- a record only ever reaches the wide pass after failing the
     strict one, so the retry can add parses but never change one."""
-    for sep_re in (_SEP_STRICT, _SEP_WIDE):
-        got = _parse_real_record_sep(b, p, window_end, sep_re)
+    for sep_re, every in ((_SEP_STRICT, False), (_SEP_WIDE, True)):
+        got = _parse_real_record_sep(b, p, window_end, sep_re, every=every)
         if got is not None:
             return got
     return None
 
 
+def _sep_hits(
+    sep_re: re.Pattern[bytes], b: bytes, lo: int, hi: int, *, every: bool
+) -> Iterator[re.Match[bytes]]:
+    """Separator candidates in ``[lo, hi)``, in order: only the FIRST when not
+    ``every`` (the strict pass, byte-identical to its historical single
+    ``search``), else every start position (overlapping hits included -- a
+    coincidental hit inside a value token must not hide the real separator
+    that begins a few bytes later)."""
+    pos = lo
+    while pos < hi and (m := sep_re.search(b, pos, hi)) is not None:
+        yield m
+        if not every:
+            return
+        pos = m.start() + 1
+
+
 def _parse_real_record_sep(
-    b: bytes, p: int, window_end: int, sep_re: re.Pattern[bytes]
+    b: bytes, p: int, window_end: int, sep_re: re.Pattern[bytes], *, every: bool = False
 ) -> tuple[float, float, float, float, bool | None, bool | None, float | None, float | None] | None:
-    """One separator-form attempt of `_parse_real_record` (see above)."""
-    m1 = sep_re.search(b, p, min(window_end, p + _TAG_SEARCH_SPAN))
-    if m1 is None:
-        return None
-    x_start = p + _real_x_flag_len(b, p, m1.start())
-    if x_start >= m1.start():
-        return None
-    xpair = _real_span_pair(b, x_start, m1.start(), bare=True)
-    if xpair is None:
-        return None
-    plen = b[m1.start() + 2]
-    y_lo = m1.start() + 6
-    m2 = sep_re.search(b, y_lo + plen, min(window_end, y_lo + plen + _TAG_SEARCH_SPAN))
+    """One separator-form attempt of `_parse_real_record` (see above).
+
+    With ``every`` (the wide retry only) each separator candidate is tried in
+    order and the first whose record parses FULLY wins: the X span must
+    exact-fill up to the first separator and the Y span must exact-fill up to
+    the second (the same authentication the strict pass applies). The wide
+    pattern admits more byte shapes, so a first hit can be a coincidental
+    ``8x ?? ?? 00 40 01`` inside a value token; taking it unconditionally would
+    discard the record the real separator makes decodable."""
+    hi1 = min(window_end, p + _TAG_SEARCH_SPAN)
+    for m1 in _sep_hits(sep_re, b, p, hi1, every=every):
+        x_start = p + _real_x_flag_len(b, p, m1.start())
+        if x_start >= m1.start():
+            continue
+        xpair = _real_span_pair(b, x_start, m1.start(), bare=True)
+        if xpair is None:
+            continue
+        plen = b[m1.start() + 2]
+        y_lo = m1.start() + 6
+        hi2 = min(window_end, y_lo + plen + _TAG_SEARCH_SPAN)
+        # No second separator at all -> the end is bounded by the nominal
+        # geometry length (+200); a PRESENT but non-parsing one is not skipped
+        # over in the strict pass.
+        m2s: list[re.Match[bytes] | None] = [*_sep_hits(sep_re, b, y_lo + plen, hi2, every=every)]
+        for m2 in m2s or [None]:
+            got = _real_y_record(b, window_end, y_lo, plen, xpair, m2)
+            if got is not None:
+                return got
+    return None
+
+
+def _real_y_record(
+    b: bytes,
+    window_end: int,
+    y_lo: int,
+    plen: int,
+    xpair: tuple[float, float, float | None],
+    m2: re.Match[bytes] | None,
+) -> tuple[float, float, float, float, bool | None, bool | None, float | None, float | None] | None:
+    """Y half of `_parse_real_record_sep` for one (X span, second separator)."""
     y_hi = m2.start() if m2 else min(window_end, y_lo + plen + 200)
     y_scan_hi = min(y_lo + plen + _Y_START_SCAN, y_hi)
     # plen is a hint only: Y can start inside or a few bytes past the nominal

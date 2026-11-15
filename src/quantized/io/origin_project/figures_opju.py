@@ -33,10 +33,12 @@ shape, solved 2026-07-04 against the 4-file ground-truth oracle — see
 03 00 00 1f                       layer anchor
 [optional flag token]             1-2 bytes, skipped (see below)
 [X from] [X to] [X step]          value tokens; ``from`` elided when 0.0
-81 <id> <plen> 00 00 01 …         separator (layer geometry; plen VARIES
-                                  and is only a search-window hint)
+8x <id> <plen> 00 <flag> 01 …     separator (layer geometry; plen VARIES
+                                  and is only a search-window hint; 8x =
+                                  81 or 80; <flag> = 00/40/80/88/c0, see
+                                  ``opju_axis_real_form._SEP_WIDE``)
 [Y from] [Y to] [Y step]          value tokens (tagged/RLE only)
-81 <id> <plen> 00 00 01 …         end separator
+8x <id> <plen> 00 <flag> 01 …     end separator
 ```
 
 Real-form value tokens add two encodings to the specimen set:
@@ -89,8 +91,11 @@ This module fills ``source_hint`` from the ``<BKNAME>...</BKNAME>`` OriginStorag
 XML tag when one appears near the graph (an unambiguous, low-false-positive
 signal, unlike blind name-scanning) and ``n_curves`` from the legend text's
 ``\\l(n)`` indices, mirroring ``figures.py`` exactly. The per-layer graph
-*window name* (Origin's "Graph1" etc.) is not recoverable with the current
-understanding, so ``name`` is always ``""``.
+*window name* (Origin's "Graph1" etc.) comes from the enclosing page header
+for graph pages (``""`` for embedded graphs and legacy streams). ``layer`` is
+the anchor's 1-based ORDINAL within its graph page, counted over every anchor
+whether or not its record decodes: an undecodable layer leaves a gap in the
+numbering (fail closed) rather than renumbering the layers after it.
 
 **Curve-to-dataset binding — REWORKED 2026-07-05 (the Hc2 per-graph pass;
 supersedes item 35's counting decoders).** The curve token's value is the
@@ -297,7 +302,7 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         books_meta = book_metadata_from_bytes(b, book_columns)
         book_counts_all = allocated_columns_from_bytes(b)
     page_starts = [off for off, _name in pages]
-    page_layers: dict[int, int] = {}  # page index -> layers emitted so far
+    page_layers: dict[int, int] = {}  # page index -> anchors seen so far (the layer ordinal)
     anchors = sorted(_find_all(b, _ANCHOR) + _find_all(b, _ANCHOR_PANEL))
     for idx, anchor in enumerate(anchors):
         p = anchor + len(_ANCHOR)
@@ -311,6 +316,16 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         else:
             page_end, page_name = len(b), None
         window_end = min(next_anchor, page_end)
+        # A GRAPH page (owns no column records; needs the id table) numbers its
+        # layers by the anchor's ORDINAL within the page -- counted BEFORE any
+        # decode attempt, so an undecodable record leaves a GAP in the layer
+        # numbers instead of shifting every later layer onto the wrong index
+        # (fail closed; Origin's layer N is the Nth anchor, decoded or not).
+        # Anchors inside a workbook/report page are embedded (fit-report)
+        # graphs: unnamed, layer 1.
+        is_graph_page = not legacy and page_name is not None and page_name not in table.book_pages
+        if is_graph_page:
+            page_layers[page_idx] = page_layers.get(page_idx, 0) + 1
         # Layer frame quad (12 00 20 22 marker; figure_geometry) -- with
         # the page size this places every panel of a multi-panel page.
         frame = opju_layer_frame(b, anchor, window_end)
@@ -362,15 +377,12 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         routed = routed_figure_text(
             b, anchor, text_end, (x_from, x_to, y_from, y_to), x_log, y_log
         )
-        # A page that owns no column records is a GRAPH page: its figures get
-        # the page's own window name ("Graph1", ...) and a real 1-based layer
-        # index within the page. Anchors inside a workbook/report page are
-        # embedded (fit-report) graphs -- unnamed, layer 1, as before. Name
-        # attachment needs the id table (it is what tells book pages apart),
-        # so legacy streams keep the historical ""/1.
-        if not legacy and page_name is not None and page_name not in table.book_pages:
-            layer = page_layers.get(page_idx, 0) + 1
-            page_layers[page_idx] = layer
+        # Graph-page figures get the page's own window name ("Graph1", ...)
+        # and the 1-based anchor ordinal counted above. Name attachment needs
+        # the id table (it is what tells book pages apart), so legacy streams
+        # keep the historical ""/1.
+        if is_graph_page:
+            layer = page_layers[page_idx]
             name = page_name
         else:
             name, layer = "", 1

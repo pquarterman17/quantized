@@ -2564,10 +2564,50 @@ records that parse only with a free 5th byte: 00 ×44, 40 ×71, 80 ×82, c0 ×21
 00/40/80/88/c0 (60 records match Origin's axes exactly; the one disagreement is
 a value-token defect, below). 01/08/30/41/48 await an oracle.
 
-Known open (reported, not fixed): `TEA_ExcelGraphs` `Graph12` Y decodes
-`[927.5, 1000]` vs Origin `[0, 1000]` — the geometry payload `82 03 fc 8c 40`
-fills as a tagged value and `y_from` (elided 0) is mis-read; and
-`histogram_released_viruses` `Graph2` X `[0, 4.0025]` vs `[1.0, 4.0]`.
+**Layer numbering is the anchor ordinal (2026-11-14).** A graph page's layer
+`N` is its `N`-th layer anchor (`03 00 00 1f` / `5f`), counted whether or not
+that anchor's record decodes. An undecodable layer therefore leaves a GAP
+(`layer` 1 absent, 2 present) instead of renumbering every later layer down —
+which would have labelled Origin's layer 2 as layer 1. Oracle check
+(`test-data/origin/ground_truth_public/axis_ranges.json`, 47 projects, 1,426
+Origin graph pages incl. two 434-page projects with up to 27 layers per page):
+of the 1,106 oracle pages that have any layer anchor, 1,102 have exactly as many
+anchors as Origin has layers; the other 320 pages (`sparkline*`, `Residual*`,
+`FitLine*`) have no anchor and nothing is emitted for them. The four
+disagreements: `SOP_meas` `Graph6` (2 anchors, Origin 1; layer 1 decoded and
+correct), `histogram_released_viruses` `Graph1` (2 anchors, Origin 1; neither
+decodes), and `Graph221` in both `PerceivedRiskandPrediction` projects (4
+anchors, Origin 2: the extra two are the un-enumerated page `Graph222`, see the
+page-name escape below). So an anchor ordinal can over-count a page when a
+neighbouring header is missed or a layer is anchored twice; on this oracle it
+never under-counts. A missed header remains the residual risk (it shifts the
+following page's anchors onto the previous page) and is pinned as a known gap.
+
+**Retry separator search tries every candidate (2026-11-14).** The wide retry
+no longer takes the first `8x ?? ?? 00 <flag> 01` hit inside the search span:
+each candidate is tried in order and the first whose X span exact-fills up to
+it, and whose Y span exact-fills up to the following one, wins (a lookalike in
+a value token or the geometry filler can no longer shadow the real
+separator). The strict pass still takes only its first hit. Whole-corpus
+measurement: 0 of 2,153 (page, layer) values changed.
+
+Known open (reported, not fixed; each is pinned, strict-xfail style, in
+`tests/test_io_origin_opju_page_attribution.py`):
+
+- `TEA_ExcelGraphs` `Graph12` Y decodes `[927.5, 1000]` vs Origin `[0, 1000]` —
+  the geometry payload `82 03 fc 8c 40` fills as a tagged value and `y_from`
+  (elided 0) is mis-read; `histogram_released_viruses` `Graph2` X
+  `[0, 4.0025]` vs `[1.0, 4.0]`; `origin_scientific_colors` `ColorPage1/2`
+  several Y spans (e.g. `y_from` 438.4 for 0).
+- `SOP_meas` X spans that read like Origin's with the last mantissa byte
+  dropped (88 for 90, 136 for 140, 1984 for 2000).
+- **Page-header names with an escape.** `fig_ c0 43 06 Verr…` is Origin's page
+  `fig_CCCVerror`, `Graph c0 31 …` is `Graph111`: the header name is read
+  truncated (`fig_`, `Graph`) or the page is not enumerated at all
+  (`Graph222`). Their layers surface under the wrong name or as an extra layer
+  of the preceding page (`Graph221` layer 3). The values are the true page's
+  (checked against Origin); only the page identity is wrong. Same defect
+  class as the varint type above (a missed page header), different cause.
 
 Axis-record grammar extensions found in the same pass
 (`opju_axis_real_form.py`): the span separator's lead byte can be `80` as
