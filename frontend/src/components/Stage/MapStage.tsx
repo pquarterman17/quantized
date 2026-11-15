@@ -148,7 +148,8 @@ export default function MapStage({ dataset }: MapStageProps) {
     logZ,
     colorLimits: mapView.colorLimits,
     rsmPeaks,
-    antialias,
+    // A native grid (image, Igor wave) is drawn as crisp cells, never smoothed.
+    antialias: antialias && active?.data.metadata?.map_grid !== "native",
     contour: { on: contourOn, levelCount: contourLevelCount, scale: contourScale },
     theme,
     accent,

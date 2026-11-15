@@ -152,7 +152,7 @@ def _open_when_healthy(url: str, host: str, port: int, timeout: float = 30.0) ->
 
 
 _WEBVIEW_HINT = (
-    "--desktop needs pywebview: pip install quantized[desktop]\n"
+    "--desktop needs pywebview: pip install quantized-lab[desktop]\n"
     "On Linux it also needs a native GUI backend (PyGObject + WebKitGTK, "
     "e.g. `sudo apt install python3-gi gir1.2-webkit2-4.1`, or PyQt5/PySide2)."
 )

@@ -20,7 +20,7 @@ decision rules):
 * A block that cannot be embedded becomes a paragraph / text box naming the
   figure and the specific reason, and a warning is appended to ``warnings``.
 
-``python-docx`` / ``python-pptx`` (MIT) are optional (``quantized[office]``);
+``python-docx`` / ``python-pptx`` (MIT) are optional (``quantized-lab[office]``);
 the imports are guarded and a missing library raises ``ReportExportError``.
 Pure ``io`` layer -- no web-stack imports.
 """
@@ -75,7 +75,7 @@ def check_office_library(fmt: str) -> None:
                 import docx  # noqa: F401
         except ImportError as exc:
             raise OfficeLibraryMissing(
-                "Word export needs 'python-docx' (pip install quantized[office])"
+                "Word export needs 'python-docx' (pip install quantized-lab[office])"
             ) from exc
     elif fmt == "pptx":
         try:
@@ -83,7 +83,7 @@ def check_office_library(fmt: str) -> None:
                 import pptx  # noqa: F401
         except ImportError as exc:
             raise OfficeLibraryMissing(
-                "PowerPoint export needs 'python-pptx' (pip install quantized[office])"
+                "PowerPoint export needs 'python-pptx' (pip install quantized-lab[office])"
             ) from exc
 
 

@@ -77,12 +77,12 @@ def flag_attention(manifest: Mapping[str, Any]) -> dict[str, Any]:
     :mod:`quantized.portable.attention`). The registry is imported here, not
     at module load, so the bridge does not pull in every parser on startup."""
     with heavy_imports("quantized.io.registry"):
-        from quantized.io.registry import is_recognised_data_name
+        from quantized.io.registry import is_packable_data_name
 
     return annotate_attention(
         manifest,
         inside_roots=data_roots.is_inside_data_roots,
-        recognised=is_recognised_data_name,
+        recognised=is_packable_data_name,
     )
 
 

@@ -1,7 +1,7 @@
 """Survival analysis: Kaplan-Meier, log-rank test, Cox PH model.
 
 GAP_PLAN #30 (stats extra) — survival methods via lifelines (MIT). Requires
-``pip install quantized[stats]``. Rows with any non-finite time/event are
+``pip install quantized-lab[stats]``. Rows with any non-finite time/event are
 dropped (listwise deletion).
 """
 
@@ -24,7 +24,7 @@ def _check_lifelines() -> None:
             import lifelines  # noqa: F401
     except ImportError as exc:
         raise RuntimeError(
-            "Survival methods require lifelines. Install with: pip install quantized[stats]"
+            "Survival methods require lifelines. Install with: pip install quantized-lab[stats]"
         ) from exc
 
 

@@ -1,0 +1,53 @@
+[
+ {
+  "name": "Book1 style (0.34)",
+  "style": "publication",
+  "overrides": null,
+  "seriesStyles": [
+   {
+    "color": "#d62728",
+    "linewidth": 2,
+    "marker": "s"
+   },
+   null
+  ],
+  "format": {
+   "version": 1,
+   "xScale": "linear",
+   "yScale": "linear",
+   "y2Scale": null,
+   "xReversed": false,
+   "xFmt": {
+    "mode": "auto",
+    "digits": 2
+   },
+   "yFmt": {
+    "mode": "auto",
+    "digits": 2,
+    "minor": 1,
+    "ticks": "in"
+   },
+   "y2Fmt": null,
+   "showGrid": true,
+   "showAxisBox": true,
+   "showLegend": true,
+   "legendPos": "auto",
+   "legendStatic": false,
+   "plotTemplate": "screen",
+   "axisLabelStyles": {},
+   "series": [
+    {
+     "color": "#d62728",
+     "width": 2,
+     "marker": true,
+     "markerShape": "square",
+     "markerSize": 6
+    },
+    {
+     "color": "#1f77b4",
+     "line": "dash"
+    }
+   ]
+  }
+ }
+]

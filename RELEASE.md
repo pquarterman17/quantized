@@ -186,7 +186,7 @@ flow — the project doesn't exist until the first publish):
   smoke-tests, then publishes the build to **TestPyPI** (not PyPI) so the
   whole pipeline — including the Trusted Publishing handshake — is
   validated end to end without touching a real release. Install from there
-  with `pip install -i https://test.pypi.org/simple/ quantized`.
+  with `pip install -i https://test.pypi.org/simple/ quantized-lab`.
 
 ---
 

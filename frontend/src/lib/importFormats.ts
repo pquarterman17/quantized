@@ -74,6 +74,33 @@ export const IMPORT_FORMATS: readonly ImportFormat[] = [
   },
   // ── Chromatography ───────────────────────────────────────────────────
   { exts: [".nc", ".cdf"], name: "NetCDF (ANDI / AIA)", category: "Chromatography", note: "Generic NetCDF-3/4 too." },
+  // ── Array containers & images ────────────────────────────────────────
+  {
+    exts: [".h5", ".hdf5", ".nxs"],
+    name: "HDF5 / NeXus",
+    category: "Array containers & images",
+    note:
+      "Quantized's own HDF5 export re-imports exactly. NeXus NXdata uses @signal/@axes for its axes; other groups give their 1-D/2-D datasets as columns. Ambiguous files are refused, never guessed.",
+  },
+  {
+    exts: [".mat"],
+    name: "MATLAB MAT-file",
+    category: "Array containers & images",
+    note: "v5 and v7.3. Numeric arrays and structs of arrays become columns, names kept.",
+  },
+  {
+    exts: [".ibw"],
+    name: "Igor Pro binary wave",
+    category: "Array containers & images",
+    note: "Versions 2 and 5. Units and x scaling (x0, dx) are kept; a 2-D wave is a map.",
+  },
+  {
+    exts: [".png", ".tif", ".tiff", ".jpg", ".jpeg"],
+    name: "Images",
+    category: "Array containers & images",
+    note:
+      "A 2-D map of intensity (16-bit TIFF kept as stored). Colour is converted to luminance (0.299 R + 0.587 G + 0.114 B); limit 2048 × 2048 pixels.",
+  },
   // ── Origin projects ──────────────────────────────────────────────────
   {
     exts: [".opj", ".opju"],

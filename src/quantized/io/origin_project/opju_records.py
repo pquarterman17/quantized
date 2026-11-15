@@ -68,6 +68,7 @@ from quantized.io.origin_project.opju_codec import (
     _read_varint,
     _zigzag,
 )
+from quantized.io.origin_project.opju_display_range import before_begin_missing
 from quantized.io.origin_project.opju_values import read_segments, read_value
 
 __all__ = ["BUDGET_REASON", "DatasetRecord", "decode_record", "orphan_records", "scan_records"]
@@ -342,7 +343,7 @@ def decode_record(b: bytes, h: DatasetHeader, budget: DecodeBudget | None = None
     its stored checksum (``opju_blocks.record_checksum``). A failed checksum
     never refuses the record: it is decoded as usual and flagged
     (``checksum_ok=False``) so the import can say its values may be corrupt."""
-    rec = _decode_record(b, h, budget)
+    rec = before_begin_missing(_decode_record(b, h, budget))  # Origin's display range
     p = h.end
     if b[p : p + 9] != _B18 or b[p + 9 : p + 17] == _NO_LEN:
         return rec

@@ -209,9 +209,11 @@ def test_without_captions_renumbers_curve_references(
 
 
 def test_unalignable_sheet_fails_closed_with_unknown_sheet() -> None:
-    """Two ``B`` ids but one ``B`` dataset: no sheet is proven for either."""
+    """Two ``B`` ids but one ``B`` dataset: the rank alignment proves neither.
+    Id 4's X partner (A, id 3) is on sheet 2, which stores no ``WBook_B@2``,
+    so the second signal (``opju_sheet_signals``) proves nothing either."""
     figs = extract_figures_opju(
-        _blob(["WBook_A", "WBook_B", "WBook_A@2"], _id_curve_token(0xBA, cid=2))
+        _blob(["WBook_A", "WBook_B", "WBook_A@2"], _id_curve_token(0xBA, cid=4))
     )
     assert figs[0]["curves"] == []
     assert figs[0]["curve_sheet_omitted"] == [
@@ -360,7 +362,9 @@ def test_realdata_sop_old_layer5_binds_sheet_two(corpus_dir: Path) -> None:
     want = ["C", "E", "G", "I", "K", "M", "O", "Q", "S", "U", "W", "Y", "AA"]
     rebound = [c for c in f["curves"] if c["book"] == "SOPCC25degC2@2"]
     assert [c["y"] for c in rebound] == want
-    assert not any(c["book"] == "SOPCC25degC2" for c in f["curves"])
+    # sheet 1's AR / AT: 2-byte id chunks (opju_curve_token); Origin plots
+    # SOPCC25degC2_AR and _AT here too (COM, 2026-11-15)
+    assert [c["y"] for c in f["curves"] if c["book"] == "SOPCC25degC2"] == ["AR", "AT"]
     x, y = _drawn(books, rebound[0])
     _assert_origin(y, 15, 18.215624697788, 112.75799918781)  # SOPCC25degC2_C@2
     _assert_origin(x, 15, 0.0, 2.966171615)  # SOPCC25degC2_B@2
@@ -370,13 +374,11 @@ def test_realdata_sop_old_layer5_binds_sheet_two(corpus_dir: Path) -> None:
 def test_realdata_sop_graph73_binds_sheet_five(corpus_dir: Path) -> None:
     """Origin plots SOPvsHPPCA123_B@5/_C@5/_D@5 against _A@5. The importer
     makes B the X column of ``SOPvsHPPCA123@5``, so B cannot be drawn as a
-    Y and is diagnosed; C and D bind by name. Graph73 is only decoded once
-    the separator-flag admission (#681) is in; until then it is skipped."""
+    Y and is diagnosed; C and D bind by name. Graph73 decodes since the
+    separator-flag admission (#681): a missing layer is a regression, so it
+    fails here; the test skips only when the corpus file is absent."""
     figs, books = _import(corpus_dir, _SOP)
-    got = [f for f in figs if (f["name"], f["layer"]) == ("Graph73", 1)]
-    if not got:
-        pytest.skip("Graph73 layer 1 not decoded on this branch (needs #681)")
-    f = got[0]
+    f = _layer(figs, "Graph73", 1)
     assert {(c["book"], c["x"], c["y"]) for c in f["curves"]} == {
         ("SOPvsHPPCA123@5", "A", "C"),
         ("SOPvsHPPCA123@5", "A", "D"),

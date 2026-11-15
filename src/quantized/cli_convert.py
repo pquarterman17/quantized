@@ -2,6 +2,10 @@
 
     qz convert *.opj archive/**/*.opju --to xlsx --out converted/
     qz convert run1.opj --to csv --out out/ --allow-partial
+    qz convert scan.nxs fit.mat wave.ibw map.tif --to csv --out out/
+
+Any file that is not an Origin project goes through the import registry and
+is written as CSV or Excel, every dataset in it (``io/convert_data.py``).
 
 Every book and sheet of every project is written (naming and the per-book
 fail-closed rule: :mod:`quantized.io.origin_convert`). Globs are expanded
@@ -31,7 +35,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from quantized.io.origin_convert import CONVERT_FORMATS, convert_origin_project, safe_name
+from quantized.io.convert_data import convert_data_file
+from quantized.io.origin_convert import (
+    CONVERT_FORMATS,
+    ORIGIN_SUFFIXES,
+    convert_origin_project,
+    safe_name,
+)
 from quantized.io.write_guard import WriteRefused, check_target
 
 __all__ = ["convert_command", "expand_inputs", "unique_prefixes"]
@@ -120,9 +130,11 @@ def convert_command(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         prog="qz convert",
         description="Convert Origin projects (.opj/.opju) to CSV, Excel or Quantized "
-        "workspaces, every book and sheet, without Origin.",
+        "workspaces, every book and sheet, without Origin. Any other file Quantized "
+        "imports (HDF5/NeXus, MATLAB .mat, Igor .ibw, images, instrument files) converts "
+        "to CSV or Excel, every dataset in it.",
     )
-    parser.add_argument("inputs", nargs="+", help="project files or globs (** recurses)")
+    parser.add_argument("inputs", nargs="+", help="project or data files, or globs (** recurses)")
     parser.add_argument("--to", required=True, choices=CONVERT_FORMATS, help="output format")
     parser.add_argument("--out", required=True, type=Path, help="output directory")
     parser.add_argument(
@@ -159,6 +171,15 @@ def convert_command(argv: list[str]) -> int:
     for path, prefix in zip(paths, unique_prefixes(paths), strict=True):
         if not path.is_file():
             entry = _failed(str(path), "file not found")
+        elif path.suffix.lower() not in ORIGIN_SUFFIXES:
+            entry = convert_data_file(
+                path,
+                args.out,
+                args.to,
+                prefix=prefix,
+                overwrite=args.overwrite,
+                protected=paths,
+            )
         else:
             entry = convert_origin_project(
                 path,
