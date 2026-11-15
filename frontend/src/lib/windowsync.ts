@@ -66,37 +66,26 @@ export function registerSyncPlot(key: string, u: uPlot): () => void {
  *  null-range guard), with the group-level re-entrancy guard described in
  *  the module doc. */
 export function windowXSyncHook(key: string): (self: uPlot, scaleKey: string) => void {
-  return (u, scaleKey) => {
-    if (scaleKey !== "x") return;
-    const g = groups.get(key);
-    if (!g || g.syncing) return;
-    const { min, max } = u.scales.x;
-    if (min == null || max == null) return;
-    g.syncing = true;
-    try {
-      for (const other of g.plots) {
-        if (other !== u) other.setScale("x", { min, max });
-      }
-    } finally {
-      g.syncing = false;
-    }
-  };
+  return scaleSyncHook(key, "x");
 }
 
-/** The Y counterpart of `windowXSyncHook` (gap audit 4 G19): a zoom or pan
- *  of the primary Y range follows across `key`'s group, with the same
- *  group-level re-entrancy guard. Y2 stays per-window. */
+/** The Y counterpart (gap audit 4 G19): a zoom or pan of the primary Y range
+ *  follows across `key`'s group, with the same guard. Y2 stays per-window. */
 export function windowYSyncHook(key: string): (self: uPlot, scaleKey: string) => void {
+  return scaleSyncHook(key, "y");
+}
+
+function scaleSyncHook(key: string, scale: "x" | "y"): (self: uPlot, scaleKey: string) => void {
   return (u, scaleKey) => {
-    if (scaleKey !== "y") return;
+    if (scaleKey !== scale) return;
     const g = groups.get(key);
     if (!g || g.syncing) return;
-    const { min, max } = u.scales.y;
+    const { min, max } = u.scales[scale];
     if (min == null || max == null) return;
     g.syncing = true;
     try {
       for (const other of g.plots) {
-        if (other !== u) other.setScale("y", { min, max });
+        if (other !== u) other.setScale(scale, { min, max });
       }
     } finally {
       g.syncing = false;
