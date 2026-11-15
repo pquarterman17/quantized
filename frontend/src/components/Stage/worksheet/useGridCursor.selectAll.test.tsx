@@ -82,4 +82,37 @@ describe("worksheet Ctrl+A", () => {
     key("Delete");
     expect(useApp.getState().datasets[0].data.values[N - 1]).toEqual([NaN]);
   });
+
+  it("with the previously active column hidden, the active cell moves to a shown column (never a hidden one)", () => {
+    const d = big();
+    d.data = { ...d.data, values: d.data.values.map((r) => [r[0]!, r[0]! + 1, r[0]! + 2]), labels: ["A", "B", "C"], units: ["", "", ""] };
+    useApp.setState({ datasets: [d] });
+    render(<WorksheetPane datasetId="w" />);
+    fireEvent.mouseDown(cellAt(2, 1));
+    grid().focus();
+    act(() => useApp.setState({ datasets: [{ ...d, hiddenCols: [1] }] }));
+    key("a", { ctrlKey: true });
+    const id = active();
+    expect(id).not.toMatch(/-r2-c2$/); // c2 = channel index 1, the hidden one
+    expect(id).toMatch(/-r2-c(1|3)$/); // a shown neighbour, same row
+    key("ArrowDown");
+    const next = active();
+    expect(next).not.toMatch(/-c2$/);
+    expect(next).toMatch(/-r3-c/);
+  });
+
+  it("hiding the remembered active column AFTER Ctrl+A: the active cell and the next arrow key stay on shown columns", () => {
+    const d = big();
+    d.data = { ...d.data, values: d.data.values.map((r) => [r[0]!, r[0]! + 1, r[0]! + 2]), labels: ["A", "B", "C"], units: ["", "", ""] };
+    useApp.setState({ datasets: [d] });
+    render(<WorksheetPane datasetId="w" />);
+    fireEvent.mouseDown(cellAt(2, 1));
+    grid().focus();
+    key("a", { ctrlKey: true });
+    act(() => useApp.setState({ datasets: [{ ...d, hiddenCols: [1] }] }));
+    expect(active()).not.toMatch(/-r2-c2$/);
+    key("ArrowDown");
+    expect(active()).not.toMatch(/-c2$/);
+    expect(active()).toMatch(/-r3-c/);
+  });
 });
