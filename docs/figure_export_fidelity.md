@@ -66,6 +66,67 @@ Tests: `tests/test_export_linear_autoscale.py` (with its canvas half
   an ink border on screen, as the export's white card with a black border; an
   arrow's head is drawn in its stroke colour on both.
 
+## Axis scales, custom ticks, crossing and the expression top axis
+
+* **Log2 and probability** (fraction or percent) scales, **custom tick
+  positions** with optional labels, and an **axis crossing** the other at a
+  value are drawn by one contract on both sides: `frontend/src/lib/axisScales.ts`
+  and `axisScaleExtras.ts` on the canvas, `calc/axis_scales.py` and
+  `calc/axis_cross.py` in the export, pinned by the shared fixture
+  `tests/fixtures/wire/axis_scales.json` (`tests/test_axis_scales.py`). A
+  data value outside a scale's domain (zero or negative on log2, outside
+  (0, 1) or (0, 100) on a probability axis) is never drawn or coerced: the
+  line breaks there on screen as in the export. A range or tick the scale
+  cannot draw is refused in the Axis dialog.
+* The **expression top axis** (`1240/x`, `sqrt(x)`) is parsed without `eval`
+  by the same grammar on both sides (the worksheet formula compiler in
+  TypeScript, `calc/axis_expr.py` in Python), with one shared tick table.
+  Only the longest finite, strictly monotonic stretch is labelled, cut back
+  near a pole, so a range through a pole labels its valid side.
+
+## Series styling: colour gradient, symbol details, error band, data-driven marks
+
+* A **colour gradient** across a graph's curves is resolved once, in the
+  frontend, to a literal hex colour per curve; the export receives those
+  colours and never recomputes them. Grouped, faceted, stacked, polar,
+  statistics, encoded and style-pinned views refuse a gradient on both sides.
+* **Symbol details** (edge and face colour, transparency, every Nth marker)
+  and the **shaded Y error band** are pinned with the gradient by
+  `tests/fixtures/wire/series_ramp_symbols_band.json`
+  (`tests/test_export_series_ramp_symbols_band.py`).
+* **Marker size from a column**, **drop lines** and the **spline connector**
+  (`calc/figure_marks.py`): every export path either draws them as the screen
+  does or omits them with a warning. The spline needs strictly monotonic X;
+  a loop stays straight in row order, with a notice on screen and a warning
+  in the export (`tests/test_calc_figure_marks*.py`).
+
+## Graph layers (inset graphs, images, tables)
+
+The export draws layers from a wire the screen resolves
+(`frontend/src/lib/graphLayersWire.ts` → `calc/figure_layers.py`): an
+inset's plot area sits at the same fractions of the frame, with the same
+curves, axis ranges, tick positions and tick text, so neither side
+autoscales or picks ticks on its own. Layers stack in list order on both
+sides and draw over a twin (Y2) axis. An SVG image keeps a PNG rendering for
+the export, which matplotlib cannot read as SVG. Shared fixture:
+`tests/fixtures/wire/graph_layers.json` (`tests/test_calc_figure_layers.py`).
+
+## Extra Y axes (Y3+)
+
+Each right axis except the outermost takes one 60 pt slot, on the canvas and
+in the export (outward twin spines); only an axis with a drawn series takes
+a slot. The shared fixture `tests/fixtures/wire/multi_y.json` is measured
+from real uPlot geometry, and the backend half reads back what matplotlib
+drew (`tests/test_export_multi_y*.py`). Limits, the same on screen and in
+export:
+
+* at most Y3–Y8 (`_MAX_EXTRA_Y`, `routes/export_figures_multi_y.py`);
+* group, encoding, facet, axis-break and multi-panel views draw Y3+ series
+  on Y1 with a note; the export API refuses Y3+ axes combined with facets, a
+  group split or an encoding with a 422 (`refuse_multi_y`);
+* Figure Page panels drop Y3+ axes with a note; insets skip the extra
+  series; a series assigned to a missing axis falls back to Y1 with a note.
+
 ## Render warnings
 
 Whatever the export cannot honour is said, not swallowed

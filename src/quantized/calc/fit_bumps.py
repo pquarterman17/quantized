@@ -50,7 +50,7 @@ RHAT_THRESHOLD = 1.1
 
 _INSTALL_HINT = (
     "bumps is not installed - the optional fit engine needs "
-    "'pip install quantized[bumps]' (or: uv sync --extra bumps)"
+    "'pip install quantized-lab[bumps]' (or: uv sync --extra bumps)"
 )
 
 

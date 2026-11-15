@@ -16,7 +16,7 @@
 // clears it, and a cell click clears the column selection — so the block the
 // clipboard commands act on is always the one the user can see highlighted.
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
 import { categoricalLevels } from "../../../lib/categorical";
 import { parseClipboardGrid } from "../../../lib/clipboardGrid";
@@ -89,6 +89,9 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
   // does: the range covers everything, but typing / arrows act from `active`.
   const [all, setAll] = useState<{ range: CellRange; active: CellRange } | null>(null);
   const { order, data, baseCount } = view;
+  // Hidden columns (lib/worksheetColumnView.ts): the cursor steps over them
+  // and a range's block ops leave them out.
+  const hidden = useMemo(() => new Set(ds.hiddenCols ?? []), [ds.hiddenCols]);
   const readOnly = isRederived(ds);
   // The entry row only where display position = row index (no view filter or
   // view sort) and the data is fully loaded and editable.
@@ -103,12 +106,13 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
   useEffect(() => {
     setRange((r) => {
       if (!r) return r;
-      const b = { rows: rowCount, cols: colCount };
-      const [a, f] = [clampCell(r.anchor, b), clampCell(r.focus, b)];
+      const b = { rows: rowCount, cols: colCount, hidden };
+      const f = clampCell(r.focus, b);
+      const a = clampCell(r.anchor, b, f.col >= r.anchor.col ? 1 : -1); // toward the focus: no column joins the range
       const same = a.pos === r.anchor.pos && a.col === r.anchor.col && f.pos === r.focus.pos && f.col === r.focus.col;
       return same ? r : { anchor: a, focus: f };
     });
-  }, [rowCount, colCount]);
+  }, [rowCount, colCount, hidden]);
   useEscapeSurface("selection", () => {
     setRange(null);
     return true;
@@ -119,7 +123,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
   const bounds = (): GridBounds => {
     const live = liveShape(ds.id);
     const rows = Math.max(order.length, live?.rows ?? 0);
-    return { rows: rows + (entryRow ? 1 : 0), cols: live?.cols ?? data.labels.length };
+    return { rows: rows + (entryRow ? 1 : 0), cols: live?.cols ?? data.labels.length, hidden };
   };
   // Synchronous: the next key must already land on the grid, not on <body>.
   const focusGrid = () => document.getElementById(gridId)?.focus({ preventScroll: true });
@@ -173,7 +177,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
   const cursorOps = useWorksheetBlockOps({
     datasetId: ds.id,
     rows: range ? rangeRows(range, order) : [],
-    cols: range ? rangeCols(range) : [],
+    cols: range ? rangeCols(range, hidden) : [],
     order,
     rowCount: data.time.length,
     writableCols: baseCount,
@@ -188,10 +192,12 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     void navigator.clipboard
       ?.readText()
       .then((text) => {
-        setStatus(pasteGrowing(ds.id, text, top, left, order, entryRow));
-        // Select what was pasted, as a spreadsheet does.
         const g = parseClipboardGrid(text);
         const w = g.reduce((m, r) => Math.max(m, r.length), 0);
+        // Paste writes contiguous columns (as Excel does); copy/fill/clear skip hidden ones — say so.
+        const intoHidden = Array.from({ length: w }, (_, i) => left + i).filter((c) => hidden.has(c)).length;
+        setStatus(pasteGrowing(ds.id, text, top, left, order, entryRow) + (intoHidden ? ` — ${intoHidden} of the pasted columns are hidden` : ""));
+        // Select what was pasted, as a spreadsheet does.
         if (g.length && w) setRange({ anchor: { pos: top, col: left }, focus: clampCell({ pos: top + g.length - 1, col: left + w - 1 }, bounds()) });
       })
       .catch(() => setStatus("clipboard read unavailable"));
@@ -205,15 +211,17 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     const b = bounds();
     const accel = e.ctrlKey || e.metaKey;
     if (accel && e.key.toLowerCase() === "a" && b.rows > 0) {
-      const last = { pos: Math.max(0, order.length - 1), col: b.cols - 1 };
+      // Never a hidden column: select-all lands on the last SHOWN cell.
+      const last = clampCell({ pos: Math.max(0, order.length - 1), col: b.cols - 1 }, b);
       // setRange, not place(): place() also raises a reveal, which would scroll
       // the view to the last cell. Select-all must leave the viewport alone,
-      // and the active cell stays the one it was (the first cell if none).
+      // and the active cell stays the one it was (the first cell if none),
+      // moved onto the nearest shown column if that one has been hidden since.
       const full = { anchor: { pos: 0, col: -1 }, focus: last };
       const was = (all && all.range === range ? all.active : range) ?? cellAt({ pos: 0, col: -1 }, b);
-      const active = { anchor: was.focus, focus: was.focus };
+      const f = clampCell(was.focus, b);
       setRange(full);
-      setAll({ range: full, active });
+      setAll({ range: full, active: { anchor: f, focus: f } });
       return true;
     }
     if (!range) {
@@ -227,8 +235,8 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     const k = e.key;
     // Keys that move or edit act from the pre-select-all active cell and
     // collapse the selection to it; clear / copy / cut / fill keep the range.
-    const fromAll = all && all.range === range && !accel && k !== "Delete" && k !== "Backspace" && k !== "Escape"  && !["Shift", "Control", "Alt", "Meta"].includes(k);
-    const cur = fromAll ? all.active : range;
+    const fromAll = all && all.range === range && !accel && k !== "Delete" && k !== "Backspace" && k !== "Escape" && !["Shift", "Control", "Alt", "Meta"].includes(k);
+    const cur = fromAll ? { anchor: clampCell(all.active.focus, b), focus: clampCell(all.active.focus, b) } : range;
     if (fromAll) setRange(cur);
     // A jump to the bottom lands on the last DATA row, as Ctrl+End does in a
     // spreadsheet — never on the blank entry row under it.
@@ -271,7 +279,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     return true;
   };
 
-  const activeCell = range ? (all && all.range === range ? all.active.focus : range.focus) : null;
+  const activeCell = range ? (all && all.range === range ? clampCell(all.active.focus, { rows: rowCount, cols: colCount, hidden }) : range.focus) : null;
   const grid: GridCursorProps = {
     gridId,
     label: `${ds.name} worksheet`,
@@ -297,7 +305,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
 
   const goTo = (row: number, col: number) => {
     const pos = order.indexOf(row);
-    if (pos >= 0) place({ anchor: { pos, col }, focus: { pos, col } });
+    if (pos >= 0 && !hidden.has(col)) place({ anchor: { pos, col }, focus: { pos, col } });
   };
 
   return { range, grid, blockOps, onKeyDown, clear: () => setRange(null), reveal, goTo };

@@ -36,7 +36,7 @@ diraculator = "quantized.cli:main_calc"
 [project.optional-dependencies]
 # Word/PowerPoint report export (#37). MIT-licensed, pure-python. Optional so
 # the core install stays lean — io/report_export.py guards these imports and
-# LaTeX/HTML export always work; `pip install quantized[office]` enables .docx/.pptx.
+# LaTeX/HTML export always work; `pip install quantized-lab[office]` enables .docx/.pptx.
 office = [
     "python-docx>=1.1",
     "python-pptx>=1.0",
@@ -45,7 +45,7 @@ office = [
 # (architecture guard #10: never a hard dependency, never a CI requirement).
 # io/origin_com.py imports win32com lazily and guards its absence; the
 # cross-platform fallback (Origin-ASCII / .ogs, always available) is
-# io/origin.py. `pip install quantized[origin-com]` adds the live COM path.
+# io/origin.py. `pip install quantized-lab[origin-com]` adds the live COM path.
 origin-com = [
     "pywin32; sys_platform == 'win32'",
 ]
@@ -62,7 +62,7 @@ desktop = [
 # Advanced statistics: GLM, survival analysis, Cox PH (gap #30). BSD-3 / MIT
 # licensed. Optional so core install stays lean — calc/stats_glm.py and
 # calc/stats_survival.py guard these imports; ROC is pure numpy and always
-# available. `pip install quantized[stats]` enables GLM/survival methods.
+# available. `pip install quantized-lab[stats]` enables GLM/survival methods.
 stats = [
     "statsmodels>=0.14",
     "lifelines>=0.27",
@@ -70,13 +70,13 @@ stats = [
 # Optional bumps fit engine (GOTO #10). BSD-3 licensed. calc/fit_bumps.py
 # guards the import — the MATLAB-parity fitter (calc/fitting.py, golden-locked)
 # stays the default engine everywhere; bumps adds amoeba/lm/de/dream as an
-# ADDITIONAL engine. `pip install quantized[bumps]` enables it.
+# ADDITIONAL engine. `pip install quantized-lab[bumps]` enables it.
 bumps = [
     "bumps>=1.0",
 ]
 # quantized.client (scripting/API slice 1) — a network client for an
 # ALREADY-RUNNING `qz` server, distinct from the in-process `quantized.api`.
-# BSD-licensed. client.py guards the import; `pip install quantized[client]`
+# BSD-licensed. client.py guards the import; `pip install quantized-lab[client]`
 # enables `QuantizedClient`. Already a dev dependency (TestClient), so this
 # adds no new package to CI, only a new extras group.
 client = [

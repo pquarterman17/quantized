@@ -1,0 +1,95 @@
+{
+  "id": "recipe-1",
+  "name": "MvsH loop",
+  "description": "",
+  "createdAt": "2026-08-22T00:00:00.000Z",
+  "modifiedAt": "2026-08-22T00:00:00.000Z",
+  "schemaVersion": 3,
+  "provenance": {
+    "sourceDatasetLabel": "run-a.csv",
+    "appVersion": "0"
+  },
+  "technique": "magnetometry.mvsh",
+  "signature": [
+    {
+      "id": "x0",
+      "role": "x",
+      "label": "Field",
+      "unit": "Oe",
+      "errorRole": "value",
+      "aliases": []
+    },
+    {
+      "id": "y0",
+      "role": "y",
+      "label": "Moment",
+      "unit": "emu",
+      "errorRole": "value",
+      "aliases": []
+    }
+  ],
+  "mapping": {
+    "xId": "x0",
+    "yIds": [
+      "y0"
+    ],
+    "y2Ids": [],
+    "groupId": null,
+    "facetId": null,
+    "errors": []
+  },
+  "visual": {
+    "mark": "line",
+    "xScale": "linear",
+    "yScale": "linear",
+    "y2Scale": null,
+    "xRange": {
+      "mode": "auto"
+    },
+    "yRange": {
+      "mode": "auto"
+    },
+    "y2Range": {
+      "mode": "auto"
+    },
+    "xFmt": {
+      "mode": "auto",
+      "digits": 2
+    },
+    "yFmt": {
+      "mode": "auto",
+      "digits": 2
+    },
+    "y2Fmt": null,
+    "axisBreaks": {
+      "x": [],
+      "y": [],
+      "y2": []
+    },
+    "refLines": [],
+    "showLegend": true,
+    "legendPos": "ne",
+    "legendXY": null,
+    "legendSize": null,
+    "legendTitle": null,
+    "legendStatic": false,
+    "stackMode": false,
+    "waterfall": 0,
+    "plotTemplate": "screen",
+    "seriesStyles": {},
+    "seriesLabels": {},
+    "seriesOrder": null,
+    "hiddenChannels": [],
+    "decorations": {
+      "annotations": [],
+      "shapes": [],
+      "regionShades": []
+    },
+    "compositionKind": null
+  },
+  "preview": null,
+  "outlierPolicy": null,
+  "transform": null,
+  "panels": null,
+  "map": null
+}

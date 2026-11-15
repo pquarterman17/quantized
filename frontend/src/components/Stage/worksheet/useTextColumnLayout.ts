@@ -25,11 +25,13 @@ export function useTextColumnLayout(
   data: DataStruct,
   textCols: readonly TextColumn[],
   visibleCols: readonly number[],
+  hidden?: ReadonlySet<number>,
+  pinned?: readonly number[],
 ): TextColumnPlacement {
   const anchors = useMemo(() => textColumnAnchors(data, textCols), [data, textCols]);
   const layout = useMemo(
-    () => layoutTextColumns(textCols, anchors, visibleCols),
-    [textCols, anchors, visibleCols],
+    () => layoutTextColumns(textCols, anchors, visibleCols, hidden, pinned),
+    [textCols, anchors, visibleCols, hidden, pinned],
   );
   return { anchors, layout };
 }

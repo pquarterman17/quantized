@@ -67,3 +67,42 @@ field, by design, not a bug. `workspaceMigration.test.ts`'s idempotency
 check normalizes `savedAt` (always a fresh timestamp) and each pipeline
 step's `id` before comparing for exactly this reason; everything else must
 match exactly.
+
+## Files written by the released v0.34.0 (`*-0.34.0.*`)
+
+These four were written by **v0.34.0's own code**, not this tree's, so they
+are what a real 0.34 user has on disk. `lib/workspaceCompat034.test.ts`
+checks that this build shows everything v0.34.0 showed from them.
+
+- `v4-0.34.0.dwk.json`: v0.34.0's `serializeWorkspace` output (`savedAt`
+  pinned). The base state is v0.34.0's own `parseWorkspace` of `v4.dwk.json`,
+  plus an Origin-style workbook "Book1" (three channels, a Y-error binding and
+  designation, Origin book metadata), a plot window that passed v0.34.0's
+  `sanitizePlotWindows` (a Y axis break, a second Y axis, error bars, series
+  styles, a reference line), an editable figure from v0.34.0's
+  `createFigureDocument` with a Y axis break, a saved legacy figure with
+  publication (export) series styles, a saved Graph Builder spec with a v2
+  display block, and a pipeline fit step from v0.34.0's `makeStep`.
+- `graphTemplates-0.34.0.json`: the raw localStorage `qz.graphTemplates`
+  value v0.34.0's `saveGraphTemplate` wrote (with a `captureGraphFormat`
+  format).
+- `plotRecipe-0.34.0.json`: v0.34.0's `exportRecipeFile` of the workspace's
+  recipe.
+- `v4-0.34.0.expected.json`: what v0.34.0 itself read back from the three
+  files above (`parseWorkspace`, `loadGraphTemplates`, `parseRecipe`).
+
+The generator is `tools/compat/gen_v034_fixtures.test.ts`. To rerun it (only
+to ADD content; a failing compatibility test is a migration decision, never
+a reason to re-freeze):
+
+1. Extract the tag's frontend: `git archive v0.34.0 frontend | tar -x -C /tmp/v034`.
+2. Symlink this tree's `frontend/node_modules` into `/tmp/v034/frontend/`.
+3. Copy the generator to `/tmp/v034/frontend/src/gen034.test.ts`.
+4. In `/tmp/v034/frontend`, run it with jsdom and no setup file (v0.34.0's
+   `src/test/setup.ts` imports `canvas`, which this tree no longer installs):
+   a one-line `vitest.gen.config.ts` with `environment: "jsdom"` and
+   `include: ["src/gen034.test.ts"]`, then
+   `GEN_OUT=$PWD/out npx vitest run -c vitest.gen.config.ts`.
+
+This executes v0.34.0's TypeScript with this tree's vitest 5 and jsdom 31;
+none of the code the fixtures come from depends on those packages.

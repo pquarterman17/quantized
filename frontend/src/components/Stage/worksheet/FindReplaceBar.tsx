@@ -31,11 +31,13 @@ export interface FindReplaceBarProps {
   focusTick: number;
   onGoTo: (row: number, col: number) => void;
   onClose: () => void;
+  /** Hidden columns (view only): not searched or replaced; matches in them are counted. */
+  hidden?: ReadonlySet<number>;
 }
 
 const plural = (n: number, w: string): string => `${n} ${w}${n === 1 ? "" : "es"}`;
 
-export default function FindReplaceBar({ ds, order, writableCols, selection, replace, focusTick, onGoTo, onClose }: FindReplaceBarProps) {
+export default function FindReplaceBar({ ds, order, writableCols, selection, replace, focusTick, onGoTo, onClose, hidden }: FindReplaceBarProps) {
   const setCellBlock = useApp((s) => s.setCellBlock);
   const [query, setQuery] = useState("");
   const [replacement, setReplacement] = useState("");
@@ -56,8 +58,12 @@ export default function FindReplaceBar({ ds, order, writableCols, selection, rep
   const opts: FindOptions = { query, matchCase, wholeCell, insideNumbers };
   const scoped = inSelection && selection ? selection : null;
   const hits = useMemo(
-    () => findCells(ds.data, { query, matchCase, wholeCell }, order, scoped ?? {}),
-    [ds.data, query, matchCase, wholeCell, order, scoped],
+    () => findCells(ds.data, { query, matchCase, wholeCell }, order, { ...scoped, skip: hidden }),
+    [ds.data, query, matchCase, wholeCell, order, scoped, hidden],
+  );
+  const inHidden = useMemo(
+    () => (hidden?.size ? findCells(ds.data, { query, matchCase, wholeCell }, order, scoped ?? {}).length - hits.length : 0),
+    [ds.data, query, matchCase, wholeCell, order, scoped, hidden, hits.length],
   );
   const current = hits.length ? Math.min(index, hits.length - 1) : -1;
   const at = current >= 0 ? hits[current] : null;
@@ -162,7 +168,7 @@ export default function FindReplaceBar({ ds, order, writableCols, selection, rep
       <label className="qzk-field-lbl" style={{ margin: 0 }}>
         <input type="checkbox" aria-label="Replace inside numbers (edits digits)" checked={insideNumbers} onChange={(e) => setInsideNumbers(e.target.checked)} /> Replace inside numbers (edits digits)
       </label>
-      <span className="qzk-ds-meta" aria-live="polite">{query || wholeCell ? plural(hits.length, "match") : ""}</span>
+      <span className="qzk-ds-meta" aria-live="polite">{query || wholeCell ? plural(hits.length, "match") : ""}{inHidden > 0 ? ` (${inHidden} more in hidden column${inHidden === 1 ? "" : "s"})` : ""}</span>
       <button className="qz-btn qz-sm" aria-label="Find previous" disabled={!hits.length} onClick={() => step(-1)}>↑</button>
       <button className="qz-btn qz-sm" aria-label="Find next" disabled={!hits.length} onClick={() => step(1)}>↓</button>
       {replace && (

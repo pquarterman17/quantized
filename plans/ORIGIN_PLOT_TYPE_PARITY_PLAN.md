@@ -60,44 +60,73 @@ tools/plot_corpus/origin_build.py  (COM) book per family → graph per plot type
 passing specimens → test-data/origin/generated/<type>/<family>/
 ```
 
-### Plot-type codes seen in the 2026-11-15 visual probe
+### Plot-type codes (Origin 2026b, measured 2026-11-15)
 
-Measured with `plotxy plot:=N` on 4 columns. `plotxy` reports success for ANY
-code, so the PNG is the only proof.
+`plotxy plot:=N` reports success for ANY N (even 999), and no LabTalk or COM
+property reports a plot's type. The readback is Origin C
+`DataPlot::GetPlotType()` (`tools/plot_corpus/qz_oracle.c`), checked against
+the exported PNGs. "Menu recipe" is Origin's own Plot-menu command from its
+installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
 
-| Code | Plot type |
-|---|---|
-| 200 | line |
-| 201 | scatter |
-| 202 | line+symbol |
-| 203 | grouped column |
-| 204 | area |
-| 205 | high-low bars |
-| 206 | box |
-| 207 | floating column |
-| 213 | stacked column |
-| 214 | stacked area |
-| 215 | horizontal bar |
-| 216 | stacked bar |
-| 219 | histogram |
-| 120 / 123 | bubble |
-| 122 | doughnut |
-| 225 | 3D pie |
-| 114 / 218 | vector |
-| 108 | drop lines |
-| 210 / 212 | 3D (out of scope) |
+| Read-back type | Plot type | Menu recipe (`worksheet -p`) | Notes |
+|---|---|---|---|
+| 200 | line | `200 Line` | also polar (`192 Polar`), 2D stacked/offset lines (`200 OffsetStackY`) and steps |
+| 201 | scatter | `201 Scatter` | also bubble (`193 bubble`), colour-mapped (`247 colormapped`) and ternary (`245 Ternary`) |
+| 202 | line+symbol | `202 LineSymb` | double-Y (`? DOUBLEY`) is two layers of 202 |
+| 203 | column | `203 Column` | |
+| 204 | area | `204 Area` | |
+| 205 | high-low-close | `205 HLClose` | |
+| 206 | box | `206 Box` | violin (`206 Violin`) and strip (`206 ColumnScatter`) read back the SAME 206; the template is what differs |
+| 207 | floating column | `207 FloatCol` | needs >= 2 Y columns |
+| 208 | vector XYAM | `208 vector` | |
+| 213 | stacked column | `213 StackColumn` | |
+| 214 | stacked area | `214 StackArea` | |
+| 215 | bar (horizontal) | `215 Bar` | |
+| 216 | stacked bar | `216 StackBar` | |
+| 219 | histogram | `219 Hist` | |
+| 220 | image (matrix) | `220 image` | |
+| 226 | contour (matrix) | `226 Contour` | |
+| 243 | contour (XYZ) | `243 TriContour` | |
+| 105 | heatmap (matrix) | `105 HeatMap` | `105 HeatMap` on an XYZ sheet made no graph |
+| 231 / 233 | Y- / X-error bars | added for Y-error / X-error columns | `plotxy plot:=231` on a sheet with no error column KILLED Origin |
+| 232 | data labels | `plotxy` scan | |
+| 241, 249 | fill area between curves | `plotxy` scan | |
 
-Codes that need XYZ, matrix or template input were blank: contour, heatmap,
-ternary, polar, waterfall and violin. Codes 231+ were not reached.
+- **Line connect is not a plot type.** Steps set `layer.plotN.line.connect`:
+  1 none, 2 straight, 3/4 2-/3-point segment, 7 step horizontal, 8 step
+  vertical, 9/10 centred steps. `set %C -l` numbers these differently.
+- **Polar and ternary are layer coordinate systems.** Their plots read back
+  as 200/201, so an importer must read the layer, not the plot byte.
+- **The type is one byte.** Codes 256 and above read back mod 256. The
+  exceptions are template-level ids that map onto base types:
+  - 263 → 206 (split violin);
+  - 264 / 271 → 104;
+  - 265-268 → 225 (pie family);
+  - 269 → 203 (radial bar);
+  - 270 → 213;
+  - 343 → 120;
+  - 344 / 345 → 123;
+  - 349 → 200 (colour-mapped line).
+- **Codes 234-239, 244 and 250-255** are accepted with XY input and draw
+  nothing (234, 235, 244, 250-255) or 3D-style lines (236-239). Their input
+  shape is still unknown.
+- **Out of scope (3D).** Origin 2026b's `Waterfal` template is the 3D
+  waterfall, and `247 CMAP` draws 3D walls (it read back 204).
+- Earlier visual codes kept from the first probe: 120/123 bubble map, 122
+  doughnut/sunburst, 225 3D pie, 114 compass, 218 vector XYXY (made no
+  graph from a 4-column XY selection), 108 polar tree, 210/212 3D.
 
 ### Dependency map
 
-- Item 1 is first: the harness everything else uses.
-- Items 2 and 3 need item 1. Items 2 and 3 are independent of each other.
+- Items 2 and 3 use the shipped item 1 harness and are independent of each
+  other.
 - Item 4 needs 2 and 3.
 - Items 5-8 are per plot-type family and parallelizable. Each one runs its
   import fixes (this session, COM) and books its creation gaps (cloud).
 - Item 9 (round trip quantized → Origin) is a later batch and reuses item 1.
+- Items 10-19 are creation gaps for the cloud sessions, independent of each
+  other; #10 and #14 share the missing bar-creation UI. Re-run
+  `tools/plot_corpus/scratch_run.py` to verify each.
 
 ### Resolved decisions (owner, 2026-11-15)
 
@@ -122,63 +151,130 @@ ternary, polar, waterfall and violin. Codes 231+ were not reached.
 
 ## Tier 1 — High Impact
 
-1. **Plot-corpus harness** — the generator, the Origin builder and the oracle
-   record
-   - [ ] `tools/plot_corpus/generate.py`: seeded data families, each with a
-         `.truth.json`. Families:
-         - clean, noisy, gaps (NaN), masked rows;
-         - descending X, non-monotonic X (loop), multi-X `X,Y,X,Y`;
-         - log-range, negative, huge/tiny magnitudes;
-         - text categories, dates;
-         - 100k points, single point, duplicates;
-         - Unicode names and units, error columns;
-         - many sheets, a deleted sheet;
-         - XYZ / matrix for contour, heatmap and ternary.
-   - [ ] `tools/plot_corpus/origin_build.py` (COM): build each (family ×
-         type), set known styles, save `.opju`, export PNG, and write
-         `oracle.json`:
-         - `%Z` datasets per layer;
-         - plot type read back, not as requested;
-         - axis from/to/type;
-         - colour, symbol and line style per curve.
-         Per-file timeout; exact-PID cleanup.
-   - [ ] Probe the plot-type ids not yet identified (contour, heatmap,
-         ternary, polar, waterfall, violin, step, strip, bubble/colour-mapped
-         scatter; codes 231+) with the right input shapes and record them in
-         this plan
-   - [ ] Find a LabTalk/COM readback of a plot's actual type, since `plotxy`
-         accepts any code
-
-2. **Check 1 — Origin → quantized import scorer**
-   - [ ] Score each specimen's import against `oracle.json`:
-         - curves, bindings and values;
-         - plot type mapped;
-         - axes and styles.
-         Report per (type × family): match / wrong / omitted-with-reason.
-
-3. **Check 2 — quantized-from-scratch scorer**
-   - [ ] Per (type × family) recipe building the same figure through
-         quantized's own figure model.
-   - [ ] Score it against the same `oracle.json`.
-   - [ ] Put quantized's export PNG next to Origin's for review.
-   - [ ] Unbuildable types → book as cloud items here.
-
 4. **First scorecard** — every 2D type × family, both checks, with a review
    page of side-by-side PNGs for the owner
 
 ## Tier 2 — Medium Impact
 
 5. **XY family import parity** — line, scatter, line+symbol, step, area,
-   stacked area, double-Y, error bars/bands, log/reversed axes, multi-layer
+   stacked area, double-Y, error bars/bands, log/reversed axes, multi-layer.
+   Measured by the item 2 scorer (2026-11-15, 231 specimens; anchor
+   specimen named per gap). Items 6 and 7 share the first two gaps.
+   - [ ] **No curve binding decodes on any Origin 2026b `.opju`: 0 / 484
+         Origin curves.** `column_id_table` is empty on 231 / 231 specimens,
+         so `extract_figures_opju` takes the legacy counting fallback, which
+         binds nothing and leaves every figure unnamed (page unattributed).
+         Everything per curve is blocked behind it: plot type (0 decoded),
+         styles (0 / 750 planted: colour 334, line width 139, dash 139,
+         symbol 69, symbol size 69) and the drawn view. Anchor `line/clean`.
+   - [ ] **No column metadata decodes: designations 0 / 806, long names
+         0 / 806 (labels fall back to the letter), units 0 / 105.** With no
+         binding either, the frontend's default view draws WRONG curves:
+         `error_columns` draws Y-error and X-error as Y curves (12 phantom
+         curves in 6 specimens: line, scatter, line+symbol, step, area,
+         y_error); `area/multi_x` draws X2 as a curve and D against A instead
+         of C (1 wrong, 1 phantom); `double_y` draws every column on both
+         layers (6 phantom curves in 6 specimens). Error bars: 0 / 12.
+         Anchor `line/error_columns`.
+   - [ ] **Phantom sheet from a deleted sheet.** `deleted_sheet` imports the
+         deleted sheet's data as book `DelA@2` (wrong book name too) and names
+         the survivor `Del@3`. 5 specimens (line, scatter, line+symbol, step,
+         area). Anchor `line/deleted_sheet`.
+   - [ ] **Graph layer not recovered** (`graphs_not_recovered`, no axis
+         record decoded): line / line+symbol / scatter / step x {duplicates,
+         huge_tiny, log_range, masked_rows, multi_x}; area x {huge_tiny,
+         log_range, masked_rows}; double_y, stacked_area, stacked_lines_offset
+         x {log_range, masked_rows}. Where a layer IS recovered the axes are
+         exact: 804 / 804 from/to/log match, 0 wrong.
+   - [ ] **No quantized mapping for step, area, stacked area, waterfall
+         (offset lines)** even once bindings decode: `OriginCurve.style` has
+         only line / scatter / line+symbol, and there is no dash field (the
+         139 planted dashes cannot be represented).
 6. **Category/statistics family import parity** — column, horizontal bar,
    stacked column/bar, floating column, histogram, box, violin, strip, and
-   wiring `.opj`/`.opju` column/bar/histogram to the bar/stat renderers
+   wiring `.opj`/`.opju` column/bar/histogram to the bar/stat renderers.
+   Measured by the item 2 scorer (2026-11-15); bindings and metadata are
+   item 5's first two gaps.
+   - [ ] **Phantom book: the stacked plots' hidden helper book `CS`** (the
+         cumulative sums, 3 columns, flagged `complex_imaginary`) is listed
+         as a Library book though Origin's own book list does not have it.
+         26 specimens: every stacked_area, stacked_column and stacked_bar.
+         Anchor `stacked_column/clean`.
+   - [ ] **Box, violin and strip: no graph layer recovered on 33 / 33.**
+         Column, bar, stacked column/bar and floating column: not recovered
+         for {clean, descending_x, huge_tiny, masked_rows, nan_gaps, noisy};
+         histogram for {huge_tiny, masked_rows}. Anchor `box/clean`.
+   - [ ] **Plot type: 0 decoded on `.opju`** (203, 207, 213, 215, 216, 206,
+         219 all draw the default line view); `.opju` sets no `plotType`.
+   - [ ] **Text X** (`text_categories`, 5 specimens, 10 curves): Origin
+         plots against the text categories; quantized draws against the row
+         index.
 7. **Specialised family import parity** — polar, contour, heatmap, ternary,
    waterfall, bubble/colour-mapped scatter, vector, inset, axis break,
-   multi-panel
+   multi-panel. Measured by the item 2 scorer (2026-11-15).
+   - [ ] **Bubble / colour-mapped: the size / colour column is drawn as its
+         own curve** (22 phantom curves in 12 specimens: bubble and
+         color_mapped x {clean, descending_x, nan_gaps, negative, noisy,
+         unicode_names}). Anchor `bubble/clean`.
+   - [ ] **XYZ contour, ternary, matrix contour: figure and axes decode
+         (6 / 6 each), but quantized draws Y and Z as lines against X.**
+         Heatmap (matrix): no layer recovered. Matrix cells import exactly
+         (800 / 800).
+   - [ ] **Polar draws as a Cartesian line** (axes 6 / 6 match; polar is the
+         layer's coordinate system, not a plot byte).
 8. **Commit passing specimens** to `test-data/origin/generated/<type>/` with
    their `oracle.json`, PNG and `.truth.json`, plus the generator command that
    rebuilds them; add realdata tests that score them
+
+### Creation gaps found by check 2 (cloud items, owner decision 2026-11-15)
+
+Evidence for every item below: `tools/plot_corpus/scratch_run.py` over the
+231 ok specimens (scorecard in `<review>/scorecard.md`, side-by-side
+`<review>/index.html`); "N/M" = specimens of that type affected.
+
+10. **Horizontal bar** — no way to create one (11/11 `bar` specimens
+    unbuildable). `SeriesStyle.bars = "horizontal"` already renders on the
+    canvas (`lib/uplotOrient.ts`) and in export (`calc/figure_orient.py`),
+    but only an Origin import sets it: no gallery tile, Series card control
+    or Stat Stage orientation.
+11. **Horizontal stacked bar** — 11/11 `stacked_bar` unbuildable: the Stat
+    Stage bar is vertical only and `bars: "horizontal"` has no stacking.
+12. **Floating column** — 9/9 `floating_column` unbuildable: no bar that
+    spans two Y columns (low to high); every bar starts at zero.
+13. **Stacked area** — 8/8 `stacked_area` unbuildable: `fill` is
+    under-zero or between two curves, never cumulative on the previous
+    series.
+14. **Column / stacked column per X row** — 8/11 `column` and 8/11
+    `stacked_column` built the wrong figure. With a numeric X the gallery's
+    Column routes to the Stat Stage, which has no category column and
+    falls back to ONE bar per Y column (its mean ± SE, "n=50"); Origin
+    draws one bar per row at its X value, one series per Y column.
+    `duplicates` (1 Y) gives one bar for 20 rows. Only text-category X
+    (`text_categories`) and one-row data match. The XY-stage bar renderer
+    (`SeriesStyle.bars`) would draw Origin's figure but has no creation UI
+    (shared with #10). The bars also take no Series card colour (11/11
+    styles wrong on both types).
+15. **Histogram of several columns** — 8/11 `histogram`: the gallery's
+    Histogram bins only the first plotted column; Origin bins every
+    selected Y column in one graph. `single_point` (1 row) exports nothing
+    (the stage needs >= 2 values); Origin draws a one-bin histogram.
+16. **Double-Y axis assignment** — 6/8 `double_y` put the wrong curve on the
+    right axis: `plotTypePatch("doubleY")` moves the LAST plotted column to
+    Y2, Origin's `DOUBLEY` template puts the SECOND Y column on the right
+    and keeps the rest on the left (measured: layer 2 holds only `y2` of
+    `y1,y2,y3`). Both agree only with exactly two Y columns.
+17. **Ternary from an A,B,C sheet** — 1/1 `ternary` wrong axis order: the
+    gallery Ternary tile refuses the sheet ("Needs three composition
+    columns") because the first CSV column imports as the X axis, leaving
+    two channels; Plot > Ternary diagram... builds it, but its default picks
+    (`auxColumns.defaultPicks`) take channels first and the X column last,
+    so the axes come out B, C, A instead of A, B, C.
+18. **Bubble axis padding** — 5/7 `bubble`: X runs exactly to the data
+    ([0, 10]) so edge bubbles are cut in half; Origin pads the axis to the
+    largest bubble ([-0.68, 10.46]).
+19. **Polar line width** — the polar export always draws
+    `POLAR_LINE_PX` (`lib/polarFigureSpec.ts`), so a Series card width
+    (2 pt in the corpus) never reaches a polar figure.
 
 ## Tier 3 — Nice-to-Have
 
@@ -188,4 +284,88 @@ ternary, polar, waterfall and violin. Codes 231+ were not reached.
 
 ## Completed
 
-- (none yet)
+- ~~**#2 Check 1 — Origin → quantized import scorer**~~ (2026-11-15).
+  `tools/plot_corpus/score_import.py` imports every specimen through the
+  import route's own composition (`read_origin_project_all` →
+  `drop_empty_library_books` → `origin_figures_and_fidelity`) and scores it
+  against `oracle.json` and the planted data: curve bindings, the curves the
+  frontend would draw (`frontend_view.py`, a mirror pinned to the real
+  frontend by shared cases asserted in pytest AND vitest), values, column
+  metadata, plot type, axes, styles, error bars, phantom sheets and figures.
+  Every item is match / wrong / phantom / omitted-with-reason;
+  `scorecard.json` + `scorecard.md`. Comparison logic is unit-tested on
+  synthetic fixtures (`tests/test_plot_corpus_import_score.py`).
+  First run, 231 scored + 2 not built: values 808 / 808 exact, axes 804 match
+  / 0 wrong / 630 omitted, curves 0 / 484 bound, column metadata 0 / 1,717,
+  styles 0 / 750, plot type 13 match (line by default) / 226 omitted.
+  WRONG / phantom: 31 phantom books (26 hidden `CS`, 5 deleted sheet),
+  41 phantom and 1 wrong drawn curve. Every gap is booked under items 5-7.
+
+- ~~**#1 Plot-corpus harness**~~ (2026-11-15). Built in `tools/plot_corpus/`
+  (README there), with `tests/test_plot_corpus_tools.py` running without
+  Origin.
+  - `generate.py` / `families.py` write 23 seeded families, each with a
+    `.truth.json`. Output is byte-identical for the same seed. Designations,
+    display units and the Origin date epoch are imported from quantized.
+    Each family asserts its own edge case. "Large" is 20,000 points.
+  - `origin_build.py` builds every applicable (family × type) with Origin's
+    own menu recipe, applies known styles, saves `.opju`, exports a PNG, and
+    writes an `oracle.json` read back from Origin. That readback covers plot
+    type, `%Z` per layer, `[Book]Sheet!Col` and X dataset per plot, axis
+    from/to/type, colour, line width/connect/dash, symbol kind/size, and the
+    book's sheets.
+  - `origin_session.py` refuses to start beside another Origin. It records
+    the `-Embedding` PID with its creation time and kills only that exact
+    process, from `finally`, `atexit`, a KILL_ON_JOB_CLOSE job object and a
+    per-specimen deadline. In the scan the deadline caught Origin dying on
+    code 231, and the run continued on a fresh instance.
+  - **Plot-type readback found:** Origin C `DataPlot::GetPlotType()`, loaded
+    with `run.LoadOC` (backslash path, CRLF file). LabTalk `layer.plotN.*`,
+    `get %C -a..z`, the COM `DataPlot`/`Theme` tree and embedded `originpro`
+    all lack a type property. Verified against PNGs; see the code table
+    above.
+  - **Codes probed:** contour, heatmap, ternary, polar, violin, step, strip,
+    bubble/colour-mapped, and codes 231-420. All recorded in the table above.
+  - **Corpus run.** 233 specimens across 25 types × 23 families (in
+    `$SCRATCH/plot_corpus/corpus`, NOT in test-data; item 8 commits them).
+    231 are ok and every read-back type is in the expected set. The other 2
+    are input refusals: floating column needs >= 2 Y, and `duplicates` and
+    `single_point` have one Y.
+  - **Student refused no type.** What does not reach the 2D corpus is a
+    recipe or scope matter, not a refusal: heatmap from an XYZ sheet made no
+    graph (heatmap is built from the matrix family); the waterfall template
+    is 3D; vector XYXY (218) made no graph from the probe selection.
+- ~~**#3 Check 2 — quantized-from-scratch scorer**~~ (2026-11-15). Built in
+  `tools/plot_corpus/scratch_*.py` plus the vitest recipe harness
+  `frontend/src/test/plotCorpus/`; `tests/test_plot_corpus_scratch.py` and
+  `recipeHarness.test.tsx` run without Origin or the corpus.
+  - **Route.** Each family's graphed sheet is written as the CSV a user
+    opens and imported through the app's own `/api/parsers/upload` (a
+    matrix as long-form X,Y,Z; dates as ISO dates). The recipe table
+    (`scratch_recipes.py`) names the user's clicks; the harness replays them
+    on the real store (worksheet Set As, masked rows excluded, log axes,
+    `applyPlotType`, Series card modes/styles, Stat Stage picker, Map contour
+    toggle, Plot > Ternary diagram...) and builds the request with the app's
+    own export entry for what is on screen: `buildStageFigureSpec`, the
+    mounted `<StatStage>`'s registered exporter, `fetchMap` +
+    `mapFigureBody`, `buildTernaryRequest`. The app's `/api/...` calls go to
+    a live in-process backend, so nothing on the path is mocked. Each request
+    is posted to its export route at PNG; `/figure-hitmap` gives an XY
+    figure's drawn axis limits.
+  - **Scoring** vs `oracle.json`: type, curves (Y columns), binding (each
+    curve's drawn X points against Origin's X column, error-bar companions,
+    Y2 membership, ternary axis order), values, axes (scale, range within
+    5 % of span) and styles. `match` = built and the first four ok.
+  - **First run (231 ok specimens): 191 built, 158 match, 40 unbuildable.**
+    Matching every specimen: line, scatter, line+symbol, area, step, y-error,
+    waterfall offset, polar, box, violin, strip, bubble, colour-mapped,
+    contour (XYZ and matrix), heatmap. Unbuildable: horizontal bar, stacked
+    bar, floating column, stacked area (#10-#13). Built but wrong: column and
+    stacked column (#14), histogram (#15), double-Y (#16), ternary (#17).
+    Axis ranges differ on 7/18 XY specimens per type (Origin pads to a tick,
+    matplotlib to round numbers; area bases at 0 in Origin) and bubble
+    padding (#18); styles reach the request everywhere except stat bars
+    (#14) and polar width (#19).
+  - Review page with Origin's PNG beside quantized's for every specimen:
+    `scratch_run.py --out <review>` writes `index.html`, `scorecard.md`,
+    `scorecard.json` (run output stays out of the repo).

@@ -434,7 +434,7 @@ def test_missing_bumps_is_a_value_error_with_the_install_hint(
     for mod in ("bumps.dream.core", "bumps.dream.gelman"):
         monkeypatch.setitem(sys.modules, mod, None)
     params, chans = degenerate()
-    with pytest.raises(ValueError, match=r"quantized\[bumps\]"):
+    with pytest.raises(ValueError, match=r"quantized-lab\[bumps\]"):
         sample_reflectivity(params, chans)
 
 
