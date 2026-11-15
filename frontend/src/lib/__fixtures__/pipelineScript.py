@@ -17,7 +17,7 @@ import numpy as np
 
 import quantized.api as qz
 
-RECORDED_INPUTS = ["peak.csv"]
+RECORDED_INPUTS = ["peak \"run 1\"\n.csv"]
 
 
 def main(argv=None):
@@ -32,7 +32,7 @@ def main(argv=None):
     data = None
     fits = []
 
-    # 1. Import peak.csv
+    # 1. Import peak "run 1" .csv
     data = qz.load(args.inputs[0])
     raw = data  # the uncorrected base that corrections start from
 
@@ -42,24 +42,28 @@ def main(argv=None):
 
     # 3. Y axis log
     # display setting only; there is no data to re-run
+    # app: qz.setYScale("log")
 
-    # 4. Fit Gaussian
+    # 4. Fit "Gaussian" window
     x, y = np.asarray(data.time, dtype=float), np.asarray(data.column(0), dtype=float)
     keep = np.isfinite(x) & np.isfinite(y)
     keep &= (x >= 2) & (x <= 8)  # the recorded fit window
-    fit = qz.fit_model("Gaussian", x[keep], y[keep])
-    fits.append(("4. Fit Gaussian", fit))
+    fit = qz.fit_model("Gaussian", x[keep], y[keep], p0=[30, 5.2, 1], lower=[0, None, 0.01], upper=[None, None, None], fixed=[False, False, False])
+    fits.append(("4. Fit \"Gaussian\"\nwindow", fit))
     if int(keep.sum()) != 61:
         print(f"note: step 4 fit {int(keep.sum())} points; the app fit 61 (rows masked in the app are not recorded)")
 
     # 5. Grid
     # (turned off in the pipeline; not run)
+    # app: qz.setShowGrid(true)
 
-    # 6. Add column twice
-    # NOT REPRODUCED: formula columns are evaluated only in the app (no quantized.api equivalent).
+    # 6. Delete 2 rows
+    # NOT REPRODUCED: this recorded action can change the data and has no quantized.api equivalent.
+    # app: qz.deleteRows("peak", [3, 4])
 
     # 7. Corrections → peak
     # not run: it follows step 6, which this script cannot reproduce
+    # app: qz.applyCorrections("<active>", { xOff: 1 })
 
     for label, fit in fits:
         values = ", ".join(f"{k}={v:.6g}" for k, v in zip(fit["paramNames"], fit["params"]))

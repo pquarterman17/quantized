@@ -15,7 +15,15 @@ column:
   worksheet itself places them for an Origin book.
 
 Rows are the longest of the numeric rows and the text columns; the shorter
-side is padded with blanks, as in the worksheet. Pure ``io`` layer.
+side is padded with blanks, as in the worksheet. Two Origin shapes differ:
+
+* a **matrix** book (``metadata["origin_matrix"]``) is written as its X, Y,
+  Z[, Z imaginary] cell columns only -- ``.time`` is the same X again;
+* a **text-only** sheet (no number column, X not recovered) is written as its
+  text columns only, never a made-up row-number X.
+
+An Origin book's designations, comments and date formats ride a one-line
+preamble the importers read back (``io/_column_marker.py``). Pure ``io``.
 """
 
 from __future__ import annotations
@@ -27,9 +35,11 @@ import numpy as np
 
 from quantized.csv_safe import with_excel_bom
 from quantized.datastruct import DataStruct, is_categorical, level_of
+from quantized.io._column_marker import column_marker
 from quantized.io.table_export import ExportColumn, ExportSheet, format_delimited, format_xlsx
+from quantized.x_units import x_unit_of
 
-__all__ = ["TABLE_SUFFIXES", "sheet_from_datastruct", "write_table"]
+__all__ = ["TABLE_SUFFIXES", "has_x_column", "sheet_from_datastruct", "write_table"]
 
 #: File suffix -> delimiter (``None`` = an Excel workbook).
 TABLE_SUFFIXES: Mapping[str, str | None] = {".csv": ",", ".tsv": "\t", ".xlsx": None}
@@ -60,21 +70,32 @@ def _numbers(values: np.ndarray, n_rows: int) -> list[float | str | None]:
     return cells + [None] * (n_rows - len(cells))
 
 
+def has_x_column(ds: DataStruct) -> bool:
+    """Is ``.time`` written as a column? Not for a matrix book (its X is
+    channel 0 already) nor a text-only sheet whose X is only row numbers."""
+    meta = ds.metadata
+    if meta.get("origin_matrix"):
+        return False
+    text_only = ds.n_channels == 0 and bool(_text_columns(ds))
+    return not (text_only and meta.get("x_column_recovered") is False)
+
+
 def sheet_from_datastruct(ds: DataStruct, name: str) -> ExportSheet:
     """``ds`` as one :class:`ExportSheet` called ``name`` (layout: module doc)."""
     meta = ds.metadata
     texts = _text_columns(ds)
     n_rows = max([ds.n_points, *(len(cells) for _, _, cells in texts)])
-    x_name = meta.get("x_column_long") or meta.get("x_column_name") or "x"
-    x_unit = meta.get("x_column_unit") or ""
-    columns = [
-        ExportColumn(
-            name=str(x_name),
-            unit=str(x_unit),
-            kind="datetime" if meta.get("time_is_datetime") is True else "number",
-            cells=_numbers(ds.time, n_rows),
+    columns: list[ExportColumn] = []
+    if has_x_column(ds):
+        x_name = meta.get("x_column_long") or meta.get("x_column_name") or "x"
+        columns.append(
+            ExportColumn(
+                name=str(x_name),
+                unit=x_unit_of(ds),
+                kind="datetime" if meta.get("time_is_datetime") is True else "number",
+                cells=_numbers(ds.time, n_rows),
+            )
         )
-    ]
     for c, label in enumerate(ds.labels):
         unit = ds.units[c] if c < len(ds.units) else ""
         if is_categorical(ds, c):
@@ -92,7 +113,8 @@ def sheet_from_datastruct(ds: DataStruct, name: str) -> ExportSheet:
     for text_name, unit, rows in texts:
         padded: list[float | str | None] = [*rows, *([""] * (n_rows - len(rows)))]
         columns.append(ExportColumn(name=text_name, unit=unit, kind="text", cells=padded))
-    return ExportSheet(name=name, columns=columns)
+    marker = None if meta.get("origin_matrix") else column_marker(ds)
+    return ExportSheet(name=name, columns=columns, preamble=(marker,) if marker else ())
 
 
 def write_table(

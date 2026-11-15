@@ -16,17 +16,28 @@ import { makeStep, type PipelineStep } from "./pipelineStep";
 
 const FIXTURE = join(__dirname, "__fixtures__", "pipelineScript.py");
 
-/** import -> corrections -> a display step -> a fit -> an unmappable formula
- *  column -> a later correction that must NOT run on the wrong data. */
+/** The name and the fit label carry quotes and a newline on purpose: the
+ *  executed fixture pins that they cannot break out of their literals. */
+const NAME = 'peak "run 1"\n.csv';
+
+/** import -> corrections -> a display step -> a fit with user starts ->
+ *  (off) -> a cell edit recorded as "ui" (it changes data, so it stops the
+ *  replay) -> a later correction that must NOT run on the wrong data. */
 const STEPS: PipelineStep[] = [
-  makeStep("import", "Import peak.csv", 'qz.import("peak.csv")', { name: "peak.csv" }),
+  makeStep("import", `Import ${NAME}`, `qz.import(${JSON.stringify(NAME)})`, { name: NAME }),
   makeStep("correction", "Corrections → peak", "", { params: { yOff: -2, yScale: 0.5 }, bg: null }),
-  makeStep("ui", "Y axis log", "qz.setYLog(true)"),
-  makeStep("fit", "Fit Gaussian", 'qz.fit("Gaussian")', { model: "Gaussian", yKey: 0, xKey: null, range: [2, 8], nPoints: 61, statsVersion: 2 }),
+  makeStep("ui", "Y axis log", 'qz.setYScale("log")'),
+  makeStep("fit", 'Fit "Gaussian"\nwindow', 'qz.fit("Gaussian")', {
+    model: "Gaussian", yKey: 0, xKey: null, range: [2, 8], nPoints: 61, statsVersion: 2,
+    p0: [30, 5.2, 1], lower: [0, null, 0.01], upper: [null, null, null], fixed: [false, false, false],
+  }),
   { ...makeStep("ui", "Grid", "qz.setShowGrid(true)"), enabled: false },
-  makeStep("expression", "Add column twice", 'qz.addColumn("twice", "A * 2")', { name: "twice", expr: "A * 2" }),
-  makeStep("correction", "Corrections → peak", "", { params: { xOff: 1 }, bg: null }),
+  makeStep("ui", "Delete 2 rows", 'qz.deleteRows("peak", [3, 4])'),
+  makeStep("correction", "Corrections → peak", 'qz.applyCorrections("<active>", { xOff: 1 })', { params: { xOff: 1 }, bg: null }),
 ];
+
+const imported = (): PipelineStep => makeStep("import", "Import a.csv", "", { name: "a.csv" });
+const later = (): PipelineStep => makeStep("correction", "Corrections", "", { params: { xOff: 1 }, bg: null });
 
 describe("pipelineToPython", () => {
   it("matches the committed fixture that tests/test_pipeline_script.py runs", () => {
@@ -42,28 +53,104 @@ describe("pipelineToPython", () => {
   it("maps import, corrections and fit to quantized.api calls", () => {
     const s = pipelineToPython(STEPS);
     expect(s).toContain("import quantized.api as qz");
-    expect(s).toContain('RECORDED_INPUTS = ["peak.csv"]');
+    expect(s).toContain(`RECORDED_INPUTS = [${JSON.stringify(NAME)}]`);
     expect(s).toContain("data = qz.load(args.inputs[0])");
     expect(s).toContain('data = qz.apply_corrections(raw, {"yOff": -2, "yScale": 0.5})');
-    expect(s).toContain('fit = qz.fit_model("Gaussian", x[keep], y[keep])');
+    expect(s).toContain(
+      'fit = qz.fit_model("Gaussian", x[keep], y[keep], p0=[30, 5.2, 1], lower=[0, None, 0.01], upper=[None, None, None], fixed=[False, False, False])',
+    );
     expect(s).toContain("keep &= (x >= 2) & (x <= 8)");
     expect(s).toContain("qz.save_table(data, args.out)");
   });
 
-  it("never fakes an unmappable step, and stops replaying data steps after one", () => {
+  it("keeps quotes and newlines inside their literals and comments", () => {
     const s = pipelineToPython(STEPS);
-    expect(s).toContain("# NOT REPRODUCED: formula columns are evaluated only in the app");
-    expect(s).toContain("# not run: it follows step 6, which this script cannot reproduce");
-    expect(s).not.toContain('{"xOff": 1}'); // the correction after it is a comment only
-    expect(s).toContain("steps from 6 on were NOT reproduced");
-    expect(s).toContain("# (turned off in the pipeline; not run)");
-    expect(s).not.toMatch(/^\s*qz\.set/m); // no pseudo-code lines survive
+    expect(s).toContain('fits.append(("4. Fit \\"Gaussian\\"\\nwindow", fit))');
+    expect(s).toContain('    # 4. Fit "Gaussian" window\n'); // a comment never spans lines
+    expect(s).toContain('    # 1. Import peak "run 1" .csv\n');
+    expect(s.split("\n").every((line) => !line.startsWith(".csv") && !line.startsWith("window"))).toBe(true);
   });
 
-  it("reads an Origin project with read_origin_books and says which book it uses", () => {
+  it("never fakes an unmappable step, and stops replaying data steps after one", () => {
+    const s = pipelineToPython(STEPS);
+    expect(s).toContain("# NOT REPRODUCED: this recorded action can change the data");
+    expect(s).toContain("# not run: it follows step 6, which this script cannot reproduce");
+    expect(s).not.toContain('{"xOff": 1}');
+    expect(s).toContain("steps from 6 on were NOT reproduced");
+    expect(s).toContain("# (turned off in the pipeline; not run)");
+    expect(s).not.toMatch(/^\s*qz\.set/m); // no pseudo-code line is ever run
+  });
+
+  it("keeps each skipped step's recorded app line, values included (L4)", () => {
+    const s = pipelineToPython(STEPS);
+    expect(s).toContain('    # app: qz.deleteRows("peak", [3, 4])');
+    expect(s).toContain('    # app: qz.applyCorrections("<active>", { xOff: 1 })');
+    expect(s).toContain("    # app: qz.setShowGrid(true)");
+    expect(s).toContain('    # app: qz.setYScale("log")');
+  });
+
+  // Every data-changing action the app records as kind "ui" (store/cellEdit,
+  // worksheetColumns, sortRows, recode, reimport, useApp's channel role/type,
+  // derived worksheets), and a step with no known kind: each stops the replay.
+  it.each([
+    'qz.setCell("d", 3, 2, 1.5)',
+    'qz.setCells("d", [[0, 0, 1]])',
+    'qz.setCategoricalCell("d", 0, 1, "a")',
+    'qz.insertRows("d", 2, 1)',
+    'qz.deleteRows("d", [3])',
+    'qz.moveRows("d", [1], 3)',
+    'qz.insertColumn("d", 1)',
+    'qz.deleteColumns("d", [1])',
+    'qz.moveColumn("d", 1, 0)',
+    'qz.editColumn("d", 1, {})',
+    'qz.sortRows("d", 0, "asc")',
+    'qz.sortRowsBy("d", [0])',
+    'qz.recode("d", 1, {})',
+    'qz.reimportDataset("d")',
+    'qz.freezeCopy("d")',
+    'qz.setChannelRole(1, "yerr")',
+    'qz.setChannelType(1, "categorical")',
+    'qz.createDerivedWorksheet("d")',
+    'qz.createSpectralWorksheet("d")',
+    "",
+  ])("a ui step recorded as %j is NOT REPRODUCED and stops the replay", (code) => {
+    const s = pipelineToPython([imported(), makeStep("ui", "edit", code), later()]);
+    expect(s).toContain("# NOT REPRODUCED: this recorded action can change the data");
+    expect(s).toContain("# not run: it follows step 2");
+    expect(s).not.toContain("qz.apply_corrections");
+  });
+
+  it("a step of no known kind is NOT REPRODUCED and stops the replay", () => {
+    const odd = { ...makeStep("ui", "?", "qz.setYScale(\"log\")"), kind: "mystery" as never };
+    const s = pipelineToPython([imported(), odd, later()]);
+    expect(s).toContain("# NOT REPRODUCED: this step kind has no quantized.api equivalent");
+    expect(s).not.toContain("qz.apply_corrections");
+  });
+
+  it.each([
+    'qz.setXScale("log")', 'qz.setYScale("linear")', 'qz.setPlotTitle("t")', "qz.setWaterfall(true)",
+    "qz.setShowGrid(false)", 'qz.applyFigure("f")', 'qz.openFigureDocInWindow("f")', 'qz.plotInNewWindow("d")',
+    "qz.setXKey(1)", "qz.setYKeys([0])", "qz.setGroupKey(null)", 'qz.facetByColumn("d", 2)', 'qz.breakAtGaps("d")',
+  ])("a view-only ui step %j does not stop the replay", (code) => {
+    const s = pipelineToPython([imported(), makeStep("ui", "view", code), later()]);
+    expect(s).toContain("# display setting only");
+    expect(s).toContain('data = qz.apply_corrections(raw, {"xOff": 1})');
+  });
+
+  it("loads an Origin project with qz.load: its primary book, as the app activates (M4)", () => {
     const s = pipelineToPython([makeStep("import", "Import run.opju", "", { name: "run.opju" })]);
-    expect(s).toContain("books = qz.read_origin_books(args.inputs[0])");
-    expect(s).toContain("continues on the first");
+    expect(s).toContain("data = qz.load(args.inputs[0])");
+    expect(s).not.toContain("read_origin_books");
+  });
+
+  it("warns, at run time too, when a fit step predates recorded starts (M5)", () => {
+    const old = makeStep("fit", "Fit Linear", "", { model: "Linear", yKey: 0 });
+    const s = pipelineToPython([imported(), old]);
+    expect(s).toContain("# WARNING: recorded before start values, bounds and held parameters were saved");
+    expect(s).toMatch(/print\("warning: step 2 was recorded without its start values/);
+    expect(s).toContain('fit = qz.fit_model("Linear", x[keep], y[keep])');
+    const fresh = makeStep("fit", "Fit Linear", "", { model: "Linear", yKey: 0, p0: null });
+    expect(pipelineToPython([imported(), fresh])).not.toContain("WARNING");
   });
 
   it("asks for the input file when the pipeline started on an open dataset", () => {
@@ -72,18 +159,18 @@ describe("pipelineToPython", () => {
     expect(s).toContain("load its file");
   });
 
-  it("comments out what it cannot reproduce: paste, background, row selection", () => {
+  it("comments out what it cannot reproduce: formula, paste, background, row selection", () => {
+    const formula = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr: "A*2" }), later()]);
+    expect(formula).toContain("NOT REPRODUCED: formula columns are evaluated only in the app");
+    expect(formula).not.toContain("qz.apply_corrections");
     const paste = pipelineToPython([makeStep("import", "Paste pasted data 1", 'qz.pasteData("pasted data 1")', { name: "pasted data 1" })]);
     expect(paste).toContain("NOT REPRODUCED: pasted data has no file to load");
     const bg = pipelineToPython([
-      makeStep("import", "Import a.csv", "", { name: "a.csv" }),
+      imported(),
       makeStep("correction", "Corrections", "", { params: {}, bg: { datasetId: "ds-2", interp: "linear" } }),
     ]);
     expect(bg).toContain("NOT REPRODUCED: it subtracts a background dataset");
-    const rows = pipelineToPython([
-      makeStep("import", "Import a.csv", "", { name: "a.csv" }),
-      makeStep("fit", "Fit Linear", "", { model: "Linear", yKey: 0, rowIds: [1, 2, 3] }),
-    ]);
+    const rows = pipelineToPython([imported(), makeStep("fit", "Fit Linear", "", { model: "Linear", yKey: 0, rowIds: [1, 2, 3] })]);
     expect(rows).toContain("NOT REPRODUCED: it fitted an explicit row selection");
     expect(rows).not.toContain("fit_model");
   });

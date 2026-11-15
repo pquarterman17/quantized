@@ -20,7 +20,9 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -31,25 +33,45 @@ __all__ = ["convert_command", "expand_inputs", "unique_prefixes"]
 _REPORT_NAME = "convert-report.json"
 
 
-def expand_inputs(patterns: list[str]) -> list[Path]:
-    """Files named by ``patterns`` (literal paths or globs), in the order
-    given, each once. A literal path is kept even if it does not exist, so
-    the report can say so; a glob that matches nothing contributes nothing."""
+def expand_inputs(patterns: list[str]) -> tuple[list[Path], list[str]]:
+    """``(files, unmatched)`` for ``patterns``, files in the order given,
+    each once.
+
+    A pattern naming a path that EXISTS is taken literally, before any glob
+    expansion -- ``sample[2].opj`` is a file name, not a character class.
+    Otherwise a pattern with glob characters is expanded (``**`` recurses), and
+    one that matches nothing is returned in ``unmatched``; a literal path that
+    does not exist is kept, so the report says "file not found". A directory
+    is not an input (``unmatched`` too)."""
     seen: set[Path] = set()
     out: list[Path] = []
+    unmatched: list[str] = []
     for pattern in patterns:
-        matches = (
-            sorted(glob.glob(pattern, recursive=True)) if glob.has_magic(pattern) else [pattern]
-        )
-        for m in matches:
-            p = Path(m)
-            if p.is_dir():
-                continue
+        if os.path.exists(pattern) or not glob.has_magic(pattern):
+            matches = [pattern]
+        else:
+            matches = sorted(glob.glob(pattern, recursive=True))
+        files = [Path(m) for m in matches if not Path(m).is_dir()]
+        if not files:
+            unmatched.append(pattern)
+        for p in files:
             key = p.resolve()
             if key not in seen:
                 seen.add(key)
                 out.append(p)
-    return out
+    return out, unmatched
+
+
+def _failed(source: str, error: str) -> dict[str, Any]:
+    return {
+        "source": source,
+        "status": "failed",
+        "error": error,
+        "outputs": [],
+        "omissions": [],
+        "notes": [],
+        "books": [],
+    }
 
 
 def unique_prefixes(paths: list[Path]) -> list[str]:
@@ -82,6 +104,8 @@ def _line(entry: dict[str, Any]) -> str:
             what = {"skipped": "skipped", "partial": "written INCOMPLETE"}.get(b["status"], "empty")
             parts.append(f"{what} {b['book']} sheet {b['sheet']}: {'; '.join(b['problems'])}")
     parts += [f"not recovered: {o}" for o in entry["omissions"]]
+    parts += [f"note: {n}" for n in entry.get("notes", [])]
+    parts += [f"note: {b['book']} sheet {b['sheet']}: {n}" for b in books for n in b["notes"]]
     return f"[{entry['status']:>7}] {entry['source']}" + "".join(f"\n    {p}" for p in parts)
 
 
@@ -104,21 +128,29 @@ def convert_command(argv: list[str]) -> int:
         "--report", type=Path, default=None, help=f"report path (default <out>/{_REPORT_NAME})"
     )
     args = parser.parse_args(argv)
-    paths = expand_inputs(args.inputs)
+    paths, unmatched = expand_inputs(args.inputs)
     if not paths:
         print("[qz] convert: no input file matches", " ".join(args.inputs), file=sys.stderr)
         return 2
+    report_path = args.report or args.out / _REPORT_NAME
     args.out.mkdir(parents=True, exist_ok=True)
+    report_path.parent.mkdir(parents=True, exist_ok=True)  # before any work is done
+    imported_at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     entries: list[dict[str, Any]] = []
+    for pattern in unmatched:  # an input that names nothing is a failure, not a no-op
+        entries.append(_failed(pattern, "no file matches this input"))
+        print(_line(entries[-1]), flush=True)
     for path, prefix in zip(paths, unique_prefixes(paths), strict=True):
         if not path.is_file():
-            entry: dict[str, Any] = {
-                "source": str(path), "status": "failed", "error": "file not found",
-                "outputs": [], "omissions": [], "books": [],
-            }
+            entry = _failed(str(path), "file not found")
         else:
             entry = convert_origin_project(
-                path, args.out, args.to, prefix=prefix, allow_partial=args.allow_partial
+                path,
+                args.out,
+                args.to,
+                prefix=prefix,
+                allow_partial=args.allow_partial,
+                imported_at=imported_at,
             )
         entries.append(entry)
         print(_line(entry), flush=True)
@@ -130,7 +162,6 @@ def convert_command(argv: list[str]) -> int:
         "summary": counts,
         "files": entries,
     }
-    report_path = args.report or args.out / _REPORT_NAME
     report_path.write_text(json.dumps(report, indent=1, ensure_ascii=False), encoding="utf-8")
     print(
         f"[qz] convert: {counts['ok']} ok, {counts['partial']} partial, "

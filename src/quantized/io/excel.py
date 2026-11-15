@@ -20,6 +20,7 @@ import openpyxl
 from openpyxl.utils.exceptions import InvalidFileException
 
 from quantized.datastruct import DataStruct
+from quantized.io._column_marker import apply_marker, find_marker
 from quantized.io._delimited_layout import (
     _is_data_cell,
     _looks_like_units_row,
@@ -261,6 +262,12 @@ def import_grid(
     """A sheet's cell grid (None = blank; numbers, bools, str, date/datetime)
     as a DataStruct. Shared by the ``.xlsx`` and legacy ``.xls`` readers."""
     grid = [list(r) for r in grid]
+    # A converted Origin book's column-roles line (io/_column_marker.py) sits
+    # alone in A1; it is not part of the table, so it goes before the layout.
+    first = grid[0][0] if grid and grid[0] else None
+    marker = find_marker([first]) if isinstance(first, str) else None
+    if marker is not None:
+        grid = grid[1:]
     while grid and all(v is None for v in grid[-1]):
         grid.pop()
     if not grid:
@@ -394,6 +401,8 @@ def import_grid(
     if comments_row >= 0:  # kept, as CSV import keeps it: one searchable comment line
         cells = [_text_cell(v) for v in grid[comments_row][:n_cols]]
         metadata["comments"] = ["\t".join(cells).rstrip("\t")]
+    if marker is not None:
+        apply_marker(metadata, labels, marker)
     return DataStruct.create(
         time_vec, data[:, data_idx], labels=labels, units=units, metadata=metadata
     )

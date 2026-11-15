@@ -44,6 +44,7 @@ is heavier than ``import quantized``; the FastAPI server never imports it.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -76,6 +77,7 @@ from quantized.calc.figure_statplots import render_statplot_figure
 
 # ── Curve & peak fitting ───────────────────────────────────────────────────
 from quantized.calc.fit_autoguess import auto_guess
+from quantized.calc.fit_holds import check_held_starts
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fitting import curve_fit
 from quantized.calc.peak_batch import batch_integrate_peaks
@@ -177,19 +179,27 @@ def convert_origin_project(
     *,
     prefix: str | None = None,
     allow_partial: bool = False,
+    imported_at: str | None = None,
 ) -> dict[str, Any]:
     """Write every book of one Origin project to ``out_dir`` as ``fmt``
     (``"csv"``, ``"xlsx"`` or ``"dwk"``) and return its report.
 
-    Fails closed per book: a book the reader could not fully decode is
-    reported and not written (``allow_partial=True`` writes it anyway, still
-    reported). Never raises for an unreadable project — the report's
-    ``status`` is ``"failed"`` with an ``error``. File naming and the report
-    shape: ``quantized.io.origin_convert``. ``qz convert`` runs this over
-    many files.
+    Fails closed: a book the reader could not fully decode is reported and
+    not written, and a loss no book owns (a truncated file, a dataset no
+    book holds) writes nothing for the project; ``allow_partial=True`` writes
+    it all anyway, still reported. Never raises for an unreadable project —
+    the report's ``status`` is ``"failed"`` with an ``error``. File naming,
+    the report shape and the checks: ``quantized.io.origin_convert``.
+    ``imported_at`` stamps a ``.dwk``'s datasets. ``qz convert`` runs this
+    over many files.
     """
     return _convert_origin_project(
-        Path(path), Path(out_dir), fmt, prefix=prefix, allow_partial=allow_partial
+        Path(path),
+        Path(out_dir),
+        fmt,
+        prefix=prefix,
+        allow_partial=allow_partial,
+        imported_at=imported_at,
     )
 
 
@@ -217,16 +227,21 @@ def fit_model(
     y: ArrayLike,
     *,
     p0: Sequence[float] | None = None,
-    lower: Sequence[float] | None = None,
-    upper: Sequence[float] | None = None,
+    lower: Sequence[float | None] | None = None,
+    upper: Sequence[float | None] | None = None,
     fixed: Sequence[bool] | None = None,
     weights: ArrayLike | None = None,
 ) -> dict[str, Any]:
     """Fit a built-in model BY NAME (``"Gaussian"``, ``"Linear"``, …) to
-    ``(x, y)`` — what the app's Curve Fit and ``POST /api/fitting/fit`` do.
+    ``(x, y)`` — what the app's Curve Fit and ``POST /api/fitting/fit`` do,
+    with the same rules for unweighted or direct ``weights``.
 
     ``p0`` defaults to the model's automatic initial guess from the data,
-    exactly as the app's fit does; bounds default to unbounded. Returns
+    exactly as the app's fit does; bounds default to unbounded, and a ``None``
+    entry in ``lower``/``upper`` is an open side (as the endpoint reads a
+    JSON ``null``). A HELD parameter (``fixed``) whose start lies outside its
+    own bounds is refused with ``ValueError``, as the endpoint refuses it (a
+    clipped start would be reported as held while it is not). Returns
     :func:`curve_fit`'s result (``params``, ``errors``, ``R2``, ``yFit``…)
     plus ``paramNames``. Raises ``ValueError`` for an unknown model name.
     """
@@ -239,9 +254,10 @@ def fit_model(
         return np.asarray(evaluate(model, xx, pp), dtype=float)
 
     start = list(p0) if p0 is not None else auto_guess(model, xs, ys)
-    result = curve_fit(
-        xs, ys, model_fcn, start, lower=lower, upper=upper, fixed=fixed, weights=weights
-    )
+    lo = None if lower is None else [-math.inf if v is None else float(v) for v in lower]
+    hi = None if upper is None else [math.inf if v is None else float(v) for v in upper]
+    check_held_starts(FIT_MODELS[model]["paramNames"], start, fixed, lo, hi)
+    result = curve_fit(xs, ys, model_fcn, start, lower=lo, upper=hi, fixed=fixed, weights=weights)
     result["paramNames"] = list(FIT_MODELS[model]["paramNames"])
     return result
 

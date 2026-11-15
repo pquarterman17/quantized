@@ -93,15 +93,23 @@ export function sanitizeSteps(v: unknown): PipelineStep[] {
 // an open project's workbooks either; see its module doc).
 //
 // Step mapping (`params` as the recorders store them):
-//   import      -> qz.load(path)  (an Origin project: qz.read_origin_books)
+//   import      -> qz.load(path) — for an Origin project too: it returns the
+//                  primary book, the one the app activates after the import
 //   correction  -> qz.apply_corrections(raw, params) — the app always corrects
 //                  the dataset's UNcorrected base, so the script does too
 //   reset       -> back to that base
-//   fit         -> qz.fit_model(model, x, y) on the recorded channels and range
-//   ui          -> a comment: display settings have no data to re-run
+//   fit         -> qz.fit_model(model, x, y) on the recorded channels and range,
+//                  with the recorded starts, bounds and held parameters
+//   ui          -> a comment, but ONLY for the view-only actions in VIEW_ONLY
+//                  (axis scales, titles, figure styles, which channels plot):
+//                  most "ui" recordings edit data (cell edits, sorts, row and
+//                  column moves, recodes, re-imports), and any code not on that
+//                  list is treated as one of them
 // Everything else (formula columns, transforms, paste, append, a background
-// subtraction) has no `quantized.api` equivalent and becomes a comment saying
-// so. Because the data then differs from the app's, every LATER data step is
+// subtraction, a ui step that is not view-only, a step with no known kind)
+// has no `quantized.api` equivalent and becomes "NOT REPRODUCED". Every
+// comment-only step also keeps the app's own recorded line (`# app: ...`),
+// values included, as the audit trail the old export was. Because the data then differs from the app's, every LATER data step is
 // listed as a comment too, never run on the wrong data; the script still saves
 // what it did reproduce and says which step it stopped at.
 //
@@ -130,8 +138,12 @@ export function py(value: unknown): string {
   return "None";
 }
 
-const ORIGIN = /\.opju?$/i;
 const I = "    "; // one indent level, inside main()
+
+/** The recorded actions that only change what is SHOWN (store/plotViewSettings,
+ *  viewAppliers, the figure appliers, plotInNewWindow). Allow-list, never a
+ *  deny-list: a new recorder is data-changing until it is added here. */
+const VIEW_ONLY = /^qz\.(setXScale|setYScale|setPlotTitle|setWaterfall|setShowGrid|applyFigure|openFigureDocInWindow|plotInNewWindow|setXKey|setYKeys|setGroupKey|facetByColumn|breakAtGaps)\(/;
 
 interface Emit {
   /** Code lines for main()'s body (already indented). */
@@ -146,12 +158,24 @@ function comment(text: string): string {
   return `${I}# ${text.replace(/\s+/g, " ")}`;
 }
 
-function fitLines(n: number, p: Record<string, unknown>): Emit {
+/** The app's own recorded line, values included, for a step that is not run
+ *  (the old `.qzm` export's audit trail). */
+function appLine(step: PipelineStep): string[] {
+  return step.code ? [comment(`app: ${step.code}`)] : [];
+}
+
+function fitLines(n: number, p: Record<string, unknown>, label: string): Emit {
   const model = typeof p.model === "string" ? p.model : "";
   if (!model) return { lines: [], changesData: false, unmapped: "the fit model was not recorded" };
   if (typeof p.yKey !== "number") return { lines: [], changesData: false, unmapped: "the fitted Y channel was not recorded" };
   if (Array.isArray(p.rowIds)) return { lines: [], changesData: false, unmapped: "it fitted an explicit row selection, which quantized.api cannot select" };
   if (p.weight) return { lines: [], changesData: false, unmapped: "its weighting has no quantized.api equivalent here" };
+  // `p0` (null = the model's own starts) is recorded since gap audit 4 lane E;
+  // a step without the key cannot say whether the user edited the starts.
+  const recorded = Object.hasOwn(p, "p0");
+  const starts = Array.isArray(p.p0)
+    ? ["p0", "lower", "upper", "fixed"].filter((k) => Array.isArray(p[k])).map((k) => `, ${k}=${py(p[k])}`).join("")
+    : "";
   const x = typeof p.xKey === "number" ? `data.column(${p.xKey})` : "data.time";
   const lines = [
     `${I}x, y = np.asarray(${x}, dtype=float), np.asarray(data.column(${p.yKey}), dtype=float)`,
@@ -159,8 +183,14 @@ function fitLines(n: number, p: Record<string, unknown>): Emit {
   ];
   const range = Array.isArray(p.range) && p.range.length === 2 ? p.range : null;
   if (range) lines.push(`${I}keep &= (x >= ${py(range[0])}) & (x <= ${py(range[1])})  # the recorded fit window`);
-  lines.push(`${I}fit = qz.fit_model(${py(model)}, x[keep], y[keep])`);
-  lines.push(`${I}fits.append((${py(`${n}. Fit ${model}`)}, fit))`);
+  if (!recorded) {
+    lines.push(
+      comment("WARNING: recorded before start values, bounds and held parameters were saved; this fit uses the automatic starts."),
+      `${I}print(${py(`warning: step ${n} was recorded without its start values, bounds or held parameters; if they were edited in the app, this fit differs`)})`,
+    );
+  }
+  lines.push(`${I}fit = qz.fit_model(${py(model)}, x[keep], y[keep]${starts})`);
+  lines.push(`${I}fits.append((${py(`${n}. ${label}`)}, fit))`);
   if (typeof p.nPoints === "number") {
     lines.push(
       `${I}if int(keep.sum()) != ${p.nPoints}:`,
@@ -180,14 +210,12 @@ function stepLines(step: PipelineStep, n: number, inputIndex: number): Emit {
       }
       // store/dataIntake.ts records a paste as an import labelled "Paste <name>".
       if (step.label.startsWith("Paste ")) return { lines: [], changesData: true, unmapped: "pasted data has no file to load" };
-      const load = ORIGIN.test(p.name)
-        ? [
-            comment("The app imports every book of an Origin project; this continues on the first. Pick another with books[i]."),
-            `${I}books = qz.read_origin_books(args.inputs[${inputIndex}])`,
-            `${I}data = books[0]`,
-          ]
-        : [`${I}data = qz.load(args.inputs[${inputIndex}])`];
-      return { lines: [...load, `${I}raw = data  # the uncorrected base that corrections start from`], changesData: true };
+      // An Origin project: qz.load returns its primary book, the one the app
+      // makes active after the import (and the recorded steps then ran on).
+      return {
+        lines: [`${I}data = qz.load(args.inputs[${inputIndex}])`, `${I}raw = data  # the uncorrected base that corrections start from`],
+        changesData: true,
+      };
     }
     case "correction": {
       if (p.bg) return { lines: [], changesData: true, unmapped: "it subtracts a background dataset, which the pipeline does not record by file" };
@@ -202,9 +230,11 @@ function stepLines(step: PipelineStep, n: number, inputIndex: number): Emit {
     case "reset":
       return { lines: [`${I}data = raw`], changesData: true };
     case "fit":
-      return fitLines(n, p);
+      return fitLines(n, p, step.label);
     case "ui":
-      return { lines: [comment("display setting only; there is no data to re-run")], changesData: false };
+      return VIEW_ONLY.test(step.code)
+        ? { lines: [comment("display setting only; there is no data to re-run"), ...appLine(step)], changesData: false }
+        : { lines: [], changesData: true, unmapped: "this recorded action can change the data and has no quantized.api equivalent" };
     case "expression":
       return { lines: [], changesData: true, unmapped: "formula columns are evaluated only in the app (no quantized.api equivalent)" };
     case "transform":
@@ -224,11 +254,11 @@ export function pipelineToPython(steps: readonly PipelineStep[]): string {
     const n = i + 1;
     body.push("", comment(`${n}. ${step.label}`));
     if (!step.enabled) {
-      body.push(comment("(turned off in the pipeline; not run)"));
+      body.push(comment("(turned off in the pipeline; not run)"), ...appLine(step));
       return;
     }
     if (stoppedAt) {
-      body.push(comment(`not run: it follows step ${stoppedAt}, which this script cannot reproduce`));
+      body.push(comment(`not run: it follows step ${stoppedAt}, which this script cannot reproduce`), ...appLine(step));
       return;
     }
     if (step.kind !== "import" && step.kind !== "ui" && !loaded) {
@@ -240,7 +270,7 @@ export function pipelineToPython(steps: readonly PipelineStep[]): string {
     }
     const out = stepLines(step, n, inputs.length);
     if (out.unmapped) {
-      body.push(comment(`NOT REPRODUCED: ${out.unmapped}.`));
+      body.push(comment(`NOT REPRODUCED: ${out.unmapped}.`), ...appLine(step));
       if (out.changesData) stoppedAt = n;
       return;
     }

@@ -1,16 +1,11 @@
 """``qz convert`` and the Origin-conversion public API (origin gap audit 4, G2).
 
-Every project here is built at test time by the committed synthetic builders
-(``io/origin_project/writer.py`` for ``.opj``, ``tests/opju_fixture.py`` for
-``.opju``) -- never the private corpus. What is pinned:
-
-* every book AND sheet is converted, not only the primary book ``qz.load``
-  returns, with deterministic names, and the values round-trip;
-* fail closed per book: a book with an undecoded column is reported and not
-  written (``--allow-partial`` writes it, still reported, still exit 1);
-* per-file report + exit status (0 only when every file converted fully);
-* the ``.dwk`` output is the committed fixture the frontend's
-  ``lib/workspaceDwkWriter.parity.test.ts`` opens with the app's own reader.
+Every project is built at test time by the committed synthetic builders
+(``tests/convert_fixtures.py``), never the private corpus. Pinned here:
+every book AND sheet converted with deterministic names; the per-file report
+and exit status; the CLI's handling of literal, bracketed, globbed and
+unmatched inputs. The fail-closed rules are in ``test_convert_fail_closed.py``,
+the ``.dwk`` parity with an in-app import in ``test_convert_dwk_parity.py``.
 """
 
 from __future__ import annotations
@@ -22,84 +17,32 @@ import numpy as np
 import pytest
 
 import quantized.api as qz
-from opju_fixture import CELLS_END, cell_num, dataset, project, spec
+from convert_fixtures import loops_opj, undecodable_column_opju
 from quantized.cli import main as qz_main
 from quantized.cli_convert import convert_command, expand_inputs, unique_prefixes
 from quantized.datastruct import DataStruct
-from quantized.io.origin_convert import book_problems
-from quantized.io.origin_project.writer import opj_bytes
-from quantized.io.workspace_dwk import DwkDataset, workspace_json
-
-DWK_FIXTURE = (
-    Path(__file__).resolve().parents[1]
-    / "frontend"
-    / "src"
-    / "lib"
-    / "__fixtures__"
-    / "convertedWorkspace.dwk"
-)
-REGEN_HINT = (
-    "regenerate with "
-    "`uv run python -c \"import sys; sys.path.insert(0, 'tests'); "
-    "import test_cli_convert as t; t.write_fixture()\"`"
-)
-
-
-def _book(book: str, n: int = 4, long: str = "") -> DataStruct:
-    return DataStruct(
-        time=np.arange(1.0, n + 1),
-        values=np.column_stack([np.arange(n) * 10.0, np.arange(n) * 0.5]),
-        labels=("Moment", "Error"),
-        units=("emu", "emu"),
-        metadata={
-            "origin_book": book,
-            "origin_book_long": long,
-            "x_column_long": "Field",
-            "x_unit": "Oe",
-        },
-    )
-
-
-def _loops_opj(path: Path) -> Path:
-    """Two workbooks: Loop1 with two sheets, Scan2 with one."""
-    books = [_book("Loop1", long="30 nm µ"), _book("Loop1@2", 3), _book("Scan2", 5)]
-    path.write_bytes(opj_bytes(books, ["a", "a", ""]))
-    return path
-
-
-def _tn(name: str, cells: bytes, total: int, used: int) -> bytes:
-    return dataset(name, cells + CELLS_END, kind=0x61, total=total, used=used, size=10)
-
-
-def _undecodable_column_opju(path: Path) -> Path:
-    """One book whose column B is a record form the reader cannot identify."""
-    path.write_bytes(
-        project(
-            _tn("Book1_A", cell_num(1.0) + cell_num(2.0), 2, 2),
-            _tn("Book1_B", b"\x07\x00" + spec(1.0) + cell_num(2.0), 2, 2),
-        )
-    )
-    return path
-
 
 # ── the public API ──────────────────────────────────────────────────────────
 
 
 def test_read_origin_books_returns_every_book_and_sheet(tmp_path: Path) -> None:
-    path = _loops_opj(tmp_path / "loops.opj")
+    path = loops_opj(tmp_path / "loops.opj")
     books = qz.read_origin_books(path)
     assert [b.metadata["origin_book"] for b in books] == ["Loop1", "Loop1@2", "Scan2"]
     assert all(b.metadata["origin_folder_path"] == [] for b in books)
-    # load() keeps one DataStruct per file: the largest book only.
+    # load() keeps one DataStruct per file: the primary (largest) book only.
     assert qz.load(path).metadata["origin_book"] == "Scan2"
 
 
 def test_save_table_round_trips_names_units_and_values(tmp_path: Path) -> None:
-    ds = _book("Loop1")
+    ds = DataStruct.create([1.0, 2.0], [[3.0], [4.0]], labels=["M"], units=["emu"],
+                           metadata={"x_column_long": "T", "xUnit": "K"})  # fmt: skip
     back = qz.load(qz.save_table(ds, tmp_path / "t.csv"))
     np.testing.assert_array_equal(back.time, ds.time)
     np.testing.assert_array_equal(back.values, ds.values)
-    assert back.labels == ("Moment", "Error") and back.units == ("emu", "emu")
+    assert back.labels == ("M",) and back.units == ("emu",)
+    # The X unit is found under any key the repo's one resolver knows (L2).
+    assert (tmp_path / "t.csv").read_text(encoding="utf-8").splitlines()[1] == "K,emu"
     with pytest.raises(ValueError, match="one sheet"):
         qz.save_table([("a", ds), ("b", ds)], tmp_path / "two.csv")
 
@@ -108,7 +51,7 @@ def test_save_table_round_trips_names_units_and_values(tmp_path: Path) -> None:
 
 
 def test_csv_writes_one_file_per_sheet_with_deterministic_names(tmp_path: Path) -> None:
-    src = _loops_opj(tmp_path / "loops.opj")
+    src = loops_opj(tmp_path / "loops.opj")
     report = qz.convert_origin_project(src, tmp_path / "out", "csv")
     assert report["status"] == "ok" and report["error"] is None
     assert report["outputs"] == [
@@ -124,94 +67,20 @@ def test_csv_writes_one_file_per_sheet_with_deterministic_names(tmp_path: Path) 
     sheet2 = qz.load(tmp_path / "out" / "loops.opj__Loop1__sheet2.csv")
     assert sheet2.time.tolist() == [1.0, 2.0, 3.0]
     assert sheet2.values[:, 0].tolist() == [0.0, 10.0, 20.0]
-    text = (tmp_path / "out" / "loops.opj__Loop1.csv").read_text(encoding="utf-8")
-    assert text.splitlines()[:2] == ["Field,Moment,Error", "Oe,emu,emu"]
+    lines = (tmp_path / "out" / "loops.opj__Loop1.csv").read_text(encoding="utf-8").splitlines()
+    assert lines[0].startswith("# quantized-columns: ")  # designations ride along
+    assert lines[1:3] == ["Field,Moment,Error", "Oe,emu,emu"]
 
 
 def test_xlsx_writes_one_workbook_per_book_a_tab_per_sheet(tmp_path: Path) -> None:
     from openpyxl import load_workbook
 
-    src = _loops_opj(tmp_path / "loops.opj")
+    src = loops_opj(tmp_path / "loops.opj")
     report = qz.convert_origin_project(src, tmp_path / "out", "xlsx")
     assert report["outputs"] == ["loops.opj__Loop1.xlsx", "loops.opj__Scan2.xlsx"]
     wb = load_workbook(tmp_path / "out" / "loops.opj__Loop1.xlsx")
     assert wb.sheetnames == ["Sheet1", "Sheet2"]
-    assert [c.value for c in wb["Sheet2"][3]] == [1, 0, 0]
-
-
-def test_dwk_writes_one_workspace_with_every_sheet(tmp_path: Path) -> None:
-    src = _loops_opj(tmp_path / "loops.opj")
-    report = qz.convert_origin_project(src, tmp_path / "out", "dwk")
-    assert report["outputs"] == ["loops.opj.dwk"]
-    doc = json.loads((tmp_path / "out" / "loops.opj.dwk").read_text(encoding="utf-8"))
-    assert doc["format"] == "quantized-workspace" and doc["version"] == 3
-    assert [d["name"] for d in doc["datasets"]] == ["loops:Loop1", "loops:Loop1@2", "loops:Scan2"]
-    assert doc["folders"] == [{"id": "f-1", "name": "loops", "parentId": None, "order": 1}]
-    assert {d["folderId"] for d in doc["datasets"]} == {"f-1"}
-
-
-def test_an_undecodable_column_skips_its_book_fail_closed(tmp_path: Path) -> None:
-    src = _undecodable_column_opju(tmp_path / "bad.opju")
-    report = qz.convert_origin_project(src, tmp_path / "out", "csv")
-    assert report["status"] == "failed"
-    assert report["outputs"] == []
-    (book,) = report["books"]
-    assert book["status"] == "skipped"
-    assert book["problems"] == ["1 column(s) not decoded: B"]
-    assert not list((tmp_path / "out").glob("*.csv"))
-
-    partial = qz.convert_origin_project(src, tmp_path / "p", "csv", allow_partial=True)
-    assert partial["status"] == "partial"
-    assert partial["books"][0]["status"] == "partial"
-    assert partial["outputs"] == ["bad.opju__Book1.csv"]
-
-
-def test_a_book_with_problems_never_leaves_the_project_ok(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Even when it holds nothing to write: its loss is still a loss."""
-    lost = DataStruct(
-        time=np.array([np.nan]),
-        values=np.full((1, 1), np.nan),
-        metadata={"origin_book": "Book2", "origin_columns_lost": {"B": "unknown storage"}},
-    )
-    monkeypatch.setattr(
-        "quantized.io.origin_convert.read_origin_books", lambda _p: [_book("Book1"), lost]
-    )
-    src = tmp_path / "p.opj"
-    src.write_bytes(b"")
-    report = qz.convert_origin_project(src, tmp_path / "out", "csv", allow_partial=True)
-    assert [b["status"] for b in report["books"]] == ["written", "empty"]
-    assert report["status"] == "partial"
-
-
-def test_book_problems_names_every_fail_closed_marker() -> None:
-    def meta(**kw: object) -> DataStruct:
-        return DataStruct(time=np.arange(2.0), values=np.zeros((2, 1)), metadata=kw)
-
-    assert book_problems(meta()) == ([], [])
-    assert book_problems(meta(origin_columns_lost={"C": "unknown storage"}))[0] == [
-        "column C not decoded (unknown storage)"
-    ]
-    x_lost = meta(x_column_recovered=False, x_column_unrecovered_reason="X is text")
-    assert book_problems(x_lost)[0] == ["X column not recovered: X is text"]
-    problems, notes = book_problems(
-        meta(
-            origin_worksheet_losses={
-                "grammar_only": {"count": 2, "columns": ["A", "B"]},
-                "checksum_failed": {"count": 1, "columns": ["C"]},
-                "some_new_kind": {"count": 1, "columns": []},
-            },
-            origin_decode="content_sniffing",
-        )
-    )
-    # An unknown loss kind blocks too: fail closed on what we cannot classify.
-    assert problems == [
-        "1 column(s) failed their checksum (values may be corrupt): C",
-        "1 some_new_kind",
-    ]
-    assert notes[0] == "2 column(s) read from an older Origin format without a length check: A, B"
-    assert "legacy content scan" in notes[1]
+    assert [c.value for c in wb["Sheet2"][4]] == [1, 0, 0]  # roles line, names, units, data
 
 
 def test_unreadable_and_non_origin_files_fail_with_a_reason(tmp_path: Path) -> None:
@@ -232,8 +101,8 @@ def test_unreadable_and_non_origin_files_fail_with_a_reason(tmp_path: Path) -> N
 def test_cli_converts_a_glob_writes_the_report_and_exits_by_outcome(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    _loops_opj(tmp_path / "loops.opj")
-    _undecodable_column_opju(tmp_path / "bad.opju")
+    loops_opj(tmp_path / "loops.opj")
+    undecodable_column_opju(tmp_path / "bad.opju")
     out = tmp_path / "out"
     code = convert_command([str(tmp_path / "*.opj*"), "--to", "csv", "--out", str(out)])
     assert code == 1  # one file failed
@@ -249,53 +118,54 @@ def test_cli_converts_a_glob_writes_the_report_and_exits_by_outcome(
 
 
 def test_cli_dispatch_and_usage_errors(tmp_path: Path) -> None:
-    _loops_opj(tmp_path / "loops.opj")
+    loops_opj(tmp_path / "loops.opj")
     with pytest.raises(SystemExit) as done:
         qz_main(["convert", str(tmp_path / "loops.opj"), "--to", "dwk", "--out", str(tmp_path)])
     assert done.value.code == 0
     assert (tmp_path / "loops.opj.dwk").is_file()
     out = ["--to", "csv", "--out", str(tmp_path)]
-    assert convert_command([str(tmp_path / "*.nothing"), *out]) == 2  # nothing matched
+    assert convert_command([str(tmp_path / "*.nothing"), *out]) == 2  # nothing matched at all
     assert convert_command([str(tmp_path / "gone.opj"), *out]) == 1  # reported as failed
+
+
+def test_a_bracketed_file_name_is_taken_literally(tmp_path: Path) -> None:
+    """``run[1].opj`` names a file; as a glob it would mean ``run1.opj`` (H4)."""
+    literal = loops_opj(tmp_path / "run[1].opj")
+    decoy = loops_opj(tmp_path / "run1.opj")
+    assert expand_inputs([str(literal)]) == ([literal], [])
+    assert expand_inputs([str(tmp_path / "run[1].opj"), str(decoy)]) == ([literal, decoy], [])
+    code = convert_command([str(literal), "--to", "csv", "--out", str(tmp_path / "o")])
+    assert code == 0
+    assert (tmp_path / "o" / "run_1_.opj__Scan2.csv").is_file()
+
+
+def test_an_input_that_matches_nothing_fails_the_run(tmp_path: Path) -> None:
+    """Among other inputs it is a failed report entry, never a silent no-op (H4)."""
+    good = loops_opj(tmp_path / "good.opj")
+    out = tmp_path / "o"
+    pattern = str(tmp_path / "missing*.opj")
+    assert expand_inputs([pattern, str(good)]) == ([good], [pattern])
+    assert convert_command([pattern, str(good), "--to", "csv", "--out", str(out)]) == 1
+    report = json.loads((out / "convert-report.json").read_text(encoding="utf-8"))
+    assert report["summary"] == {"ok": 1, "partial": 0, "failed": 1}
+    assert report["files"][0] == {
+        "source": pattern, "status": "failed", "error": "no file matches this input",
+        "outputs": [], "omissions": [], "notes": [], "books": [],
+    }  # fmt: skip
+
+
+def test_report_into_a_folder_that_does_not_exist_yet(tmp_path: Path) -> None:
+    """The report's folder is made before any work is done (L1)."""
+    src = loops_opj(tmp_path / "loops.opj")
+    report = tmp_path / "new" / "deeper" / "r.json"
+    args = [str(src), "--to", "csv", "--out", str(tmp_path / "o"), "--report", str(report)]
+    assert convert_command(args) == 0
+    assert json.loads(report.read_text(encoding="utf-8"))["summary"]["ok"] == 1
 
 
 def test_same_file_name_in_two_folders_never_overwrites(tmp_path: Path) -> None:
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()
-    paths = [_loops_opj(tmp_path / "a" / "x.opj"), _loops_opj(tmp_path / "b" / "x.opj")]
+    paths = [loops_opj(tmp_path / "a" / "x.opj"), loops_opj(tmp_path / "b" / "x.opj")]
     assert unique_prefixes(paths) == ["x.opj", "x.opj~2"]
-    assert expand_inputs([str(tmp_path / "**" / "*.opj"), str(paths[0])]) == paths
-
-
-# ── the .dwk the app opens (frontend parity fixture) ────────────────────────
-
-
-def _fixture_text() -> str:
-    """Two sheets of one book in a nested Origin folder, one book at the
-    project root, and every non-finite cell form the app's reader decodes."""
-    sheet1 = _book("Loop1", long="30 nm")
-    sheet2 = DataStruct(
-        time=np.array([1.0, 2.0, 3.0]),
-        values=np.array([[np.nan, -0.0], [np.inf, 1.5], [-np.inf, 2.5]]),
-        labels=("Moment", "Error"),
-        units=("emu", "emu"),
-        metadata={"origin_book": "Loop1@2", "note": float("nan")},
-    )
-    scan = _book("Scan2", 2)
-    return workspace_json(
-        [
-            DwkDataset("loops:Loop1", sheet1, ["loops", "Samples", "30 nm"]),
-            DwkDataset("loops:Loop1@2", sheet2, ["loops", "Samples", "30 nm"]),
-            DwkDataset("loops:Scan2", scan, ["loops"]),
-        ]
-    )
-
-
-def write_fixture() -> None:
-    """Rewrite the committed frontend fixture after a deliberate change."""
-    DWK_FIXTURE.write_text(_fixture_text(), encoding="utf-8")
-
-
-def test_frontend_dwk_fixture_matches_the_writer() -> None:
-    assert DWK_FIXTURE.exists(), REGEN_HINT
-    assert DWK_FIXTURE.read_text(encoding="utf-8") == _fixture_text(), REGEN_HINT
+    assert expand_inputs([str(tmp_path / "**" / "*.opj"), str(paths[0])]) == (paths, [])
