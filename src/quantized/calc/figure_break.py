@@ -54,6 +54,7 @@ from quantized.calc.figure_marks import warn_marks_not_drawn
 from quantized.calc.figure_overrides import apply_axis_shape_overrides
 from quantized.calc.figure_render import in_render_scope, new_figure, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
+from quantized.calc.figure_symbols import apply_symbol_details
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
 
 __all__ = ["render_breaks_impl"]
@@ -204,7 +205,10 @@ def render_breaks_impl(
         for si, (label, yv) in enumerate(cut):
             spec = series_styles[si] if series_styles and si < len(series_styles) else None
             kw = _plot_kwargs(st.line_width, st.marker_size, spec)
-            artists.extend(ax.plot(x[shown], yv, label=label, **kw))
+            drawn = ax.plot(x[shown], yv, label=label, **kw)
+            for line in drawn:
+                apply_symbol_details(line, spec)  # gap audit 4 G10, as on the flat plot
+            artists.extend(drawn)
         tag_series_slots(artists)  # the legend's waterfall row order
         panel_spans = _slice_spans(error_spans, np.flatnonzero(shown))
         apply_error_bars(ax, x[shown], cut, panel_spans, artists, series_styles)

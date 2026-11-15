@@ -42,6 +42,7 @@ from quantized.calc.figure_marks import warn_marks_not_drawn
 from quantized.calc.figure_overrides import apply_axis_shape_overrides
 from quantized.calc.figure_render import render_scope, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale
+from quantized.calc.figure_symbols import apply_symbol_details
 from quantized.calc.figure_ticks import apply_tick_formats
 from quantized.heavy_import import heavy_imports
 
@@ -118,6 +119,7 @@ def draw_facet_grid(
                 x, np.asarray(s.get("y", []), dtype=float),
                 label=safe_mathtext_label(str(s.get("label", f"s{si}"))), **kw,
             )
+            apply_symbol_details(line, s.get("style"))  # gap audit 4 G10
             artists.append(line)
         panel_artists.append(artists)
         ax.set_title(safe_mathtext_label(str(panel.get("label", ""))), fontsize=st.font_size)

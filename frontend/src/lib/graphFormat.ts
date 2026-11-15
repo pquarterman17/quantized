@@ -15,6 +15,8 @@ import { isAxisScale } from "./plotviewAxis";
 import type { LegendPos, PlotView } from "./plotview";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./seriesStyleTypes";
+import { sanitizeSeriesRamp, type SeriesRamp } from "./seriesRamp";
+import { cleanSymbols, validAlpha, validEvery } from "./symbolSanitize";
 import { sanitizeAxisExtras, type AxisFormat, type AxisScale } from "./types";
 
 export const GRAPH_FORMAT_VERSION = 1;
@@ -34,6 +36,9 @@ export interface GraphFormat extends GraphFormatFields {
   /** One style per plotted series POSITION (null = that position uses the
    *  automatic style). */
   series: (SeriesStyle | null)[];
+  /** The graph's colour gradient (gap audit 4 G1): null clears the target's;
+   *  absent (a format saved before gradients existed) leaves it as it is. */
+  seriesRamp?: SeriesRamp | null;
 }
 
 /** Strip the fields of a series style that name a dataset CHANNEL
@@ -45,7 +50,7 @@ export function portableStyle(style: SeriesStyle | undefined): SeriesStyle | nul
   void _colorBy;
   void _colormap;
   void _sizeBy;
-  const out: SeriesStyle = { ...rest };
+  const out: SeriesStyle = cleanSymbols({ ...rest }); // gap audit 4 L5
   if (fill === "under") out.fill = "under";
   return Object.keys(out).length > 0 ? out : null;
 }
@@ -65,7 +70,10 @@ function withBreaksOf(fmt: AxisFormat, keep: AxisFormat | null | undefined): Axi
 
 /** Capture the format of `view`, whose plotted series are `plotted` (in
  *  display order). */
-export function captureGraphFormat(view: GraphFormatFields & Pick<PlotView, "seriesStyles">, plotted: readonly number[]): GraphFormat {
+export function captureGraphFormat(
+  view: GraphFormatFields & Pick<PlotView, "seriesStyles"> & Partial<Pick<PlotView, "seriesRamp">>,
+  plotted: readonly number[],
+): GraphFormat {
   return {
     version: GRAPH_FORMAT_VERSION,
     xScale: view.xScale,
@@ -86,6 +94,7 @@ export function captureGraphFormat(view: GraphFormatFields & Pick<PlotView, "ser
       const style = portableStyle(view.seriesStyles[ch]);
       return style ? structuredClone(style) : null;
     }),
+    seriesRamp: view.seriesRamp ? { ...view.seriesRamp } : null,
   };
 }
 
@@ -126,6 +135,7 @@ export function graphFormatPatch(
     plotTemplate: format.plotTemplate,
     axisLabelStyles: structuredClone(format.axisLabelStyles),
     seriesStyles,
+    ...(format.seriesRamp === undefined ? {} : { seriesRamp: format.seriesRamp ? { ...format.seriesRamp } : null }),
   };
 }
 
@@ -166,6 +176,7 @@ export function sanitizeGraphFormat(v: unknown): GraphFormat | null {
       ? (structuredClone(o.axisLabelStyles) as PlotView["axisLabelStyles"])
       : {},
     series: o.series.map((s) => (typeof s === "object" && s !== null ? portableStyle(s as SeriesStyle) : null)),
+    ...(o.seriesRamp === undefined ? {} : { seriesRamp: sanitizeSeriesRamp(o.seriesRamp) }),
   };
 }
 
@@ -190,6 +201,10 @@ export function seriesStyleFromExport(style: ExportSeriesStyle | null): SeriesSt
   if (style.connect) out.connect = style.connect;
   // Sanitized on load (`sanitizeExportSeriesStyles`): only real values remain.
   const { error_cap: cap, error_width: width, error_color: color } = style;
-  if (cap != null || width != null || color) out.errorBar = { cap, width, color };
+  if (cap != null || width != null || color || style.error_band) out.errorBar = { cap, width, color, ...(style.error_band ? { band: true } : {}) };
+  if (style.marker_edge) out.markerEdge = style.marker_edge; // gap audit 4 G10
+  if (style.marker_face) out.markerFillColor = style.marker_face;
+  if (validAlpha(style.marker_alpha)) out.markerAlpha = style.marker_alpha;
+  if (validEvery(style.marker_every)) out.markerEvery = style.marker_every;
   return Object.keys(out).length > 0 ? out : null;
 }

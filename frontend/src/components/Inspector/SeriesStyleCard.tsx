@@ -13,6 +13,7 @@ import { effectiveChannels } from "../../lib/plotdata";
 import type { Dataset, LineStyle, MarkerShape, SeriesStyle } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { selectFocusedWindowCycles } from "../Stage/useStageSeriesCycle";
+import { useFocusedRampedStyles } from "../Stage/useSeriesRamp";
 import { Checkbox } from "../primitives/Checkbox";
 import { IconButton } from "../primitives/IconButton";
 import { NumberField } from "../primitives/NumberField";
@@ -53,9 +54,12 @@ function StyleRow({
   labels,
   naturalErr,
   cycle,
+  drawnColor,
 }: {
   channel: number;
   cycle: CycleSlot;
+  /** The colour the graph's gradient gives this curve (gap audit 4 G1), if any. */
+  drawnColor?: string;
   label: string;
   /** Every channel's label, dataset-channel-index order — the fill `vs`
    *  channel picker's source (SeriesFillColorControls). */
@@ -107,7 +111,7 @@ function StyleRow({
               ? style.color.startsWith("--")
                 ? `var(${style.color})`
                 : style.color
-              : `var(--series-${(channel % 8) + 1})`,
+              : drawnColor ?? `var(--series-${(channel % 8) + 1})`,
           }}
         />
         {label}
@@ -249,7 +253,7 @@ function StyleRow({
 
         <SeriesSymbolErrorControls
           channel={channel} style={style} setSeriesStyle={setSeriesStyle}
-          markers={style.marker ?? false} errors={errCol != null}
+          markers={style.marker ?? false} errors={errCol != null} drawnColor={drawnColor}
         />
 
         <SeriesFillColorControls
@@ -278,6 +282,7 @@ export default function SeriesStyleCard({ active }: { active: Dataset | null }) 
   );
   const on = useApp((s) => selectFocusedWindowCycles(s, channels.length));
   const cycle = useMemo<CycleSlot>(() => ({ on, channels: on ? channels : [] }), [on, channels]);
+  const ramped = useFocusedRampedStyles(active, useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.document));
   if (!active || active.data.labels.length === 0) return null;
 
   // Default error pairing per series (Origin Y-error / parser hint) so the
@@ -298,6 +303,7 @@ export default function SeriesStyleCard({ active }: { active: Dataset | null }) 
           labels={active.data.labels}
           naturalErr={natErr[i]}
           cycle={cycle}
+          drawnColor={ramped[i]?.color}
         />
       ))}
     </Card>

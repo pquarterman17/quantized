@@ -101,4 +101,24 @@ describe("captureLiveBlocks — own X is not a plotted series", () => {
     expect(out.display).toBeUndefined();
     expect(out.version).toBe(1);
   });
+
+  // Gap audit 4 review L8: a saved PlotSpec keeps the graph's colour gradient,
+  // and reopening it restores (or clears) the gradient.
+  it("captures the colour gradient, and applying the spec restores it", async () => {
+    const { applySpecBlocks } = await import("../../../lib/plotspecApply");
+    const { validateDisplayBlock } = await import("../../../lib/plotspec2");
+    useApp.setState({ seriesOrder: null, seriesRamp: { map: "cividis", reverse: true } });
+    const base: PlotSpec = {
+      version: 1,
+      zones: { x: null, y: [{ datasetId: "d1", channel: 0 }, { datasetId: "d1", channel: 1 }], group: null, facet: null, yErr: [], xErr: null },
+      mark: "line",
+    };
+    const out = captureLiveBlocks(base, useApp.getState);
+    expect(out.version).toBe(2);
+    expect(validateDisplayBlock(JSON.parse(JSON.stringify(out.display)))?.ramp).toEqual({ map: "cividis", reverse: true });
+    useApp.setState({ seriesRamp: null });
+    applySpecBlocks(out, useApp.getState);
+    expect(useApp.getState().seriesRamp).toEqual({ map: "cividis", reverse: true });
+    useApp.setState({ seriesRamp: null });
+  });
 });

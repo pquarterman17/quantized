@@ -126,6 +126,9 @@ function applyDisplayBlock(
     ? display.order.map(resolveChannel).filter((c): c is number => c !== null)
     : null;
   state.setSeriesOrder(order && order.length > 0 ? order : null);
+  // The colour gradient (gap audit 4 G1, review L8): part of the full display restore.
+  const ramp = display.ramp ?? null;
+  if (JSON.stringify(ramp) !== JSON.stringify(state.seriesRamp ?? null)) state.setSeriesRamp(ramp);
 }
 
 function applyAxesBlock(axes: AxesBlock | undefined, s: StoreGet): void {
