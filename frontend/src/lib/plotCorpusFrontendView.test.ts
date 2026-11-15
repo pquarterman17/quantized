@@ -76,6 +76,8 @@ function kindOf(curves: OriginCurve[]): string {
       const st = originCurveSeriesStyle(curve);
       if (st?.bars === "horizontal") return "bar";
       if (st?.bars === true) return "column";
+      if (st?.fill === "under") return "area";
+      if (st?.step === "post") return "step";
       return curve.style ?? "default";
     }),
   );

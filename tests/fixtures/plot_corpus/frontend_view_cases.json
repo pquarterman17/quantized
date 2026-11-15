@@ -125,6 +125,26 @@
       "drawn": [{"x": "A", "y": "B"}]
     },
     {
+      "name": "area plot type fills under the line",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "curves": [{"book": "Clean", "x": "A", "y": "B", "plotType": "area", "color": "#FF0000", "lineWidth": 2}]},
+      "selection": {"xKey": null, "yKeys": [0]},
+      "stat": false,
+      "kind": "area",
+      "via": "selection",
+      "drawn": [{"x": "A", "y": "B"}]
+    },
+    {
+      "name": "step plot type draws a post step",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "curves": [{"book": "Clean", "x": "A", "y": "C", "plotType": "step", "lineWidth": 2}]},
+      "selection": {"xKey": null, "yKeys": [1]},
+      "stat": false,
+      "kind": "step",
+      "via": "selection",
+      "drawn": [{"x": "A", "y": "C"}]
+    },
+    {
       "name": "horizontal bar plot type",
       "dataset": "clean",
       "figure": {"source_hint": "Clean", "curves": [{"book": "Clean", "x": "A", "y": "B", "plotType": "bar"}]},
