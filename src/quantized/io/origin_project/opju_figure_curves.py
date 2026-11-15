@@ -108,6 +108,8 @@ from quantized.io.origin_project.curve_style_color import (
 )
 from quantized.io.origin_project.opju_codec import curve_plot_style
 from quantized.io.origin_project.opju_curve_sheets import curve_sheet, sheet_x_names
+from quantized.io.origin_project.opju_curve_token_x import token_x
+from quantized.io.origin_project.opju_embedded_pages import span_pages
 from quantized.io.origin_project.tree_opju import iter_opju_windows
 
 __all__ = ["ColumnIdTable", "column_id_table", "extract_curves_by_id", "opju_pages"]
@@ -158,9 +160,11 @@ def opju_pages(b: bytes) -> list[tuple[int, str]]:
     live COM (first occurrence per name; the ``namelen+2`` length prefix
     drives the name span, so arbitrary-length window names enumerate — a
     missed header here would attribute every column in its span to the
-    previous page).
+    previous page). Embedded report-graph headers are left out: they sit
+    inside their host workbook and do not end its span
+    (``opju_embedded_pages``).
     """
-    return iter_opju_windows(b)
+    return span_pages(b, iter_opju_windows(b))  # embedded report graphs don't end a book
 
 
 def _walk_fields(b: bytes, p: int) -> list[bytes]:
@@ -261,9 +265,11 @@ def extract_curves_by_id(
     """Every curve binding in ``b[start:end)`` via the unified id token.
 
     ``y`` resolves through ``table.ids`` (a token whose id is unknown is
-    dropped, never guessed). ``x`` is the Y column's own stored X-partner
-    when its record carried one, else the book's first X-designated column,
-    else ``"A"`` (the documented structural fallback). Deduped on
+    dropped, never guessed). ``x`` is the X the token's own record stores
+    (``opju_curve_token_x``; a record X that names no column, an unknown
+    column or another book's omits the curve), else the Y column's stored
+    X-partner when its record carried one, else the book's first
+    X-designated column, else ``"A"`` (the documented structural fallback). Deduped on
     ``(book, y)`` in first-seen (token) order; ``style`` is attached when
     ``opju_codec.curve_plot_style`` finds the ``8f 01 <style> 83`` tag
     (falling back to the reconstructed record's own style byte), and
@@ -302,6 +308,8 @@ def extract_curves_by_id(
             continue
         book, y_col = info
         partner = table.x_partner.get(cid)
+        # the token's own X (record offset 35) outranks the Y's designated X
+        partner, x_reason = token_x(b, m.start() + 3, book, partner, table.ids)
         partner_info = table.ids.get(partner) if partner is not None else None
         if partner_info is not None and partner_info[0] == book:
             x_col = partner_info[1]
@@ -315,6 +323,7 @@ def extract_curves_by_id(
                 sheet_x = sheet_x_names(table.ids, table.x_ids, off)
             x_col = sheet_x.get(sheet, x_col)
             reason = "" if sheet in sheet_x else "x_sheet_unproven"
+        reason = reason or x_reason
         key = (book, y_col, sheet)
         if key in seen:
             continue
