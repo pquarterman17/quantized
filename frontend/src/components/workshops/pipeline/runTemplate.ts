@@ -64,6 +64,10 @@ import { addReportWithProvenance } from "../../../store/addReportWithProvenance"
 import { nextDatasetId, useApp } from "../../../store/useApp";
 
 
+/** The input's metadata and column names for the summary's X (lib/batchSummaryX). */
+const inputOf = (d: { data: { metadata?: Record<string, unknown>; labels: string[] } } | null | undefined): Pick<BatchRow, "input"> =>
+  d ? { input: { metadata: d.data.metadata ?? {}, labels: d.data.labels } } : {};
+
 /** Run template `t` against the loaded dataset `targetId`. Step failures are
  *  isolated (a flagged row, never a throw); the report emission is best-effort
  *  and can't turn a successful analysis into a failed one. */
@@ -83,6 +87,7 @@ export async function runTemplateOnDataset(
       .map((step) => step.issue ?? "invalid step");
     return {
       file: displayName,
+      ...inputOf(target),
       values: extractOutputs(t.outputs, undefined),
       failed: failures.join("; ") || "template preflight failed",
     };
@@ -123,6 +128,7 @@ export async function runTemplateOnDataset(
 
   return {
     file: displayName,
+    ...inputOf(before.datasets.find((dataset) => dataset.id === targetId) ?? target),
     values: extractOutputs(t.outputs, lastFit),
     ...(failedSteps.length
       ? { failed: failedSteps.map((l) => l.note ?? "step failed").join("; ") }

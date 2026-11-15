@@ -92,6 +92,7 @@ def header(
     size: int,
     flags: int = 0,
     noise: bool = False,
+    first: int = 0,
 ) -> bytes:
     """The 147-byte column-storage header (only the fields the reader uses).
 
@@ -106,6 +107,7 @@ def header(
     h[0x16] = 0x21
     h[0x17] = kind
     h[0x19:0x1D] = total.to_bytes(4, "little")
+    h[0x1D:0x21] = first.to_bytes(4, "little")  # display begin (opju_display_range)
     h[0x21:0x25] = used.to_bytes(4, "little")
     h[0x3D] = size
     h[0x3F] = flags

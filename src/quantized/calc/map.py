@@ -85,6 +85,9 @@ class MapState:
     extrapolation: str = "none"
     smoothing: float = 0.0
     idw_power: float = 2.0
+    # A dataset stamped ``metadata.map_grid == "native"`` (images, Igor waves,
+    # NeXus grids) is returned cell for cell; ``resample=True`` regrids it anyway.
+    resample: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -331,6 +334,10 @@ def map_from_datastruct(
     xi = _resolve(ds, x_key)
     yi = _resolve(ds, y_key)
     zi = _resolve(ds, z_key)
+    if state is None or not state.resample:
+        native = _native_map(ds, xi, yi, zi)
+        if native is not None:
+            return native
     has_rows = ds.values.ndim == 2 and ds.values.size > 0
     cols = ds.values[:, [xi, yi, zi]] if has_rows else np.empty((0, 3))
     if not bool(np.isfinite(cols).all(axis=1).any()):
@@ -352,6 +359,47 @@ def map_from_datastruct(
         z_label=ds.labels[zi],
         z_unit=ds.units[zi],
         metadata={"source": ds.metadata.get("source", "")},
+    )
+
+
+def _native_map(ds: DataStruct, xi: int, yi: int, zi: int) -> MapData | None:
+    """The stored grid as a ``MapData`` with no interpolation, or ``None`` when
+    ``ds`` is not a native grid of exactly these channels (rows ``ny * nx`` in
+    y-outer, x-inner order: ``io/_array_books.grid_map_datastruct``). Linear
+    regridding to a fixed 200 x 200 turned a 0/255 checkerboard into thousands
+    of intermediate values that are in no pixel, and could not even ask for a
+    2048-wide image (``nx <= 2000``)."""
+    meta = ds.metadata
+    shape = meta.get("map_shape")
+    if meta.get("map_grid") != "native" or (xi, yi, zi) != (0, 1, 2):
+        return None
+    if not (isinstance(shape, list) and len(shape) == 2 and ds.values.shape[1] >= 3):
+        return None
+    ny, nx = int(shape[0]), int(shape[1])
+    if ny < 1 or nx < 1 or ny * nx != ds.values.shape[0]:
+        return None
+    x = np.asarray(ds.values[:nx, xi], dtype=float)
+    y = np.asarray(ds.values[::nx, yi], dtype=float)
+    z = np.asarray(ds.values[:, zi], dtype=float).reshape(ny, nx)
+    if nx > 1 and x[0] > x[-1]:  # the heatmap draws ascending axes
+        x, z = x[::-1], z[:, ::-1]
+    if ny > 1 and y[0] > y[-1]:
+        y, z = y[::-1], z[::-1, :]
+    return MapData(
+        x_axis=x,
+        y_axis=y,
+        z_grid=z,
+        x_label=ds.labels[xi],
+        x_unit=ds.units[xi],
+        y_label=ds.labels[yi],
+        y_unit=ds.units[yi],
+        z_label=ds.labels[zi],
+        z_unit=ds.units[zi],
+        metadata={
+            "source": ds.metadata.get("source", ""),
+            "interpolated": False,
+            "n_points": int(ds.values.shape[0]),
+        },
     )
 
 

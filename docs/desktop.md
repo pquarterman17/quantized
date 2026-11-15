@@ -35,6 +35,16 @@ Office. To turn it on:
 The setting is read when the window opens. Without it (or on macOS/Linux) the
 desktop window uses the browser clipboard path described above.
 
+**Only the pywebview window (`qz --desktop`) has this path, not the installed
+Windows app.** The native clipboard is a method on pywebview's Python bridge
+(`desktop_bridge_clipboard.py`), which the page reaches as `window.pywebview`.
+The Tauri installer (`Quantized_x64-setup.exe`) runs the same page in a Tauri
+window over a PyInstaller sidecar: there is no pywebview bridge in that
+window, and the sidecar is built with `uv sync --group bundle` and no
+`desktop` extra (`.github/workflows/release.yml`), so pywin32 is not in it
+either. In the installed app, Copy figure uses the browser clipboard path,
+whatever `QZ_WIN_CLIPBOARD` says.
+
 ### Smoke test (owner, once, before making it default-on)
 
 With the flag set, open a dataset, right-click the plot and choose

@@ -101,7 +101,7 @@ _BALL_SD = (1e-6, 0.1)
 _NEAR = 0.1
 _WIDE = 0.5
 _INSTALL_HINT = (
-    "bumps is not installed - DREAM sampling needs 'pip install quantized[bumps]' "
+    "bumps is not installed - DREAM sampling needs 'pip install quantized-lab[bumps]' "
     "(or: uv sync --extra bumps)"
 )
 

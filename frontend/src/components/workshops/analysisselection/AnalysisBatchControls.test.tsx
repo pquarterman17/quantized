@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { SummaryXChoice } from "../../../lib/batchSummaryX";
 import type { Dataset } from "../../../lib/types";
 import { captureAnalysisSelection } from "../../../lib/analysisSelection";
 import { snapshotResultState } from "../../../lib/analysisResultFreshness";
@@ -77,6 +78,23 @@ describe("AnalysisBatchControls", () => {
       ["a.csv", "completed", [2]],
       ["b.csv", "failed", []],
     ]);
+  });
+
+  it("hands the chosen summary X (a metadata field of the run inputs, sorted) to the summary builder", async () => {
+    useApp.setState((st) => ({
+      datasets: st.datasets.map((d, i) => ({ ...d, data: { ...d.data, metadata: { Temperature: i === 0 ? "300 K" : "100 K" } } })),
+    }));
+    const onSummarySheet = vi.fn<(rows: readonly AnalysisBatchRow[], x: SummaryXChoice) => void>();
+    render(<AnalysisBatchControls toolId="batch-test" label="Test batch" summaryColumns={["N"]} runItem={async () => ({ values: [2] })} onSummarySheet={onSummarySheet} />);
+    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Run Test batch batch" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Create summary worksheet" }));
+    // Default: the input's position, unsorted.
+    expect(onSummarySheet.mock.calls[0]![1]).toEqual({ source: { kind: "index" }, sort: false });
+    fireEvent.change(screen.getByLabelText("summary X from"), { target: { value: `meta:${JSON.stringify(["Temperature"])}` } });
+    fireEvent.click(screen.getByLabelText("Sort rows by X"));
+    fireEvent.click(screen.getByRole("button", { name: "Create summary worksheet" }));
+    expect(onSummarySheet.mock.calls[1]![1]).toEqual({ source: { kind: "meta", path: ["Temperature"] }, sort: true });
   });
 
   it("stores bounded tool-specific result parameters without letting them replace shared provenance", async () => {

@@ -277,7 +277,9 @@ def dream_route(req: ReflDreamRequest) -> dict[str, Any]:
     if not bumps_available():
         raise HTTPException(
             status_code=422,
-            detail="bumps is not installed - DREAM sampling needs 'pip install quantized[bumps]'",
+            detail=(
+                "bumps is not installed - DREAM sampling needs 'pip install quantized-lab[bumps]'"
+            ),
         )
     params = [p.model_dump() for p in req.parameters]
     chans = [c.model_dump() for c in req.channels]

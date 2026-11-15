@@ -247,7 +247,7 @@ class TestMissingOptionalDep:
             json={"predictors": [[1.0, 2.0, 3.0]], "y": [0.0, 1.0, 1.0], "alpha": 0.05},
         )
         assert resp.status_code == 501
-        assert "quantized[stats]" in resp.json()["detail"]
+        assert "quantized-lab[stats]" in resp.json()["detail"]
 
     def test_survival_501_when_lifelines_missing(self, monkeypatch) -> None:
         """Survival routes return 501 when lifelines missing."""
@@ -257,4 +257,4 @@ class TestMissingOptionalDep:
             json={"time": [1.0, 2.0, 3.0], "event": [1.0, 0.0, 1.0]},
         )
         assert resp.status_code == 501
-        assert "quantized[stats]" in resp.json()["detail"]
+        assert "quantized-lab[stats]" in resp.json()["detail"]
