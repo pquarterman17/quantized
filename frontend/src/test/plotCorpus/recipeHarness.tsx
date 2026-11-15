@@ -25,8 +25,6 @@ import { act, render } from "@testing-library/react";
 
 import { mapFigureBody } from "../../components/Stage/mapFigureExport";
 import StatStage from "../../components/Stage/StatStage";
-import { buildTernaryRequest } from "../../components/workshops/ternary/ternaryRequest";
-import { defaultPicks } from "../../components/workshops/ternary/auxColumns";
 import { applyPlotType } from "../../lib/figureDialogActions";
 import { buildStageFigureSpec } from "../../lib/figureSpecStage";
 import { defaultMapKeys, fetchMap, mapColumns } from "../../lib/mapdataFetch";
@@ -190,6 +188,9 @@ export async function runSpecimen(input: SpecimenIn, index: number): Promise<Spe
       plotted: plotted(ds), statMode: s.statMode, polarMode: s.polarMode, stageTab: s.stageTab, statPicks: s.statPicks,
     };
     if (flags.ternary) {
+      // Loaded on demand, as the app loads the workshop (ternary/lazyMount.test.ts).
+      const { buildTernaryRequest } = await import("../../components/workshops/ternary/ternaryRequest");
+      const { defaultPicks } = await import("../../components/workshops/ternary/auxColumns");
       const data = analysisData(ds) as DataStruct;
       const [a, b, c] = defaultPicks(data, 3);
       const built = buildTernaryRequest(data, { a, b, c, colorBy: null }, { title: "", filename: "ternary" });
