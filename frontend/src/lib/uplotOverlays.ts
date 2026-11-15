@@ -1057,7 +1057,7 @@ export function colorScatterPlugin(specs: Map<number, ColorScatterSpec>): uPlot.
         ctx.clip();
         for (const [col, spec] of specs) {
           const ys = u.data[col];
-          if (!ys) continue;
+          if (!ys || spec.diam || u.series[col]?.show === false) continue; // a size-by series is the lazy `sizeScatterPlugin`'s
           const scaleKey = u.series[col]?.scale ?? "y";
           for (let i = 0; i < xs.length; i++) {
             const x = xs[i];

@@ -14,6 +14,15 @@
 // gets σ = 1 count rather than σ = 0, which a weighted fit would treat as
 // infinitely certain. Percent uses |Y| so the bar is never negative.
 //
+// SD / SEM of the data (gap audit 3 N9): the error is not a function of Y but
+// of REPLICATE columns — the per-row sample standard deviation (n-1) across
+// the chosen columns, or that divided by √n. A row with any blank replicate is
+// blank (never a made-up SD). The mean series the bars describe is whichever
+// series the user picked; the replicates are just columns.
+//
+// Weighted fits: the column is an ordinary bound error role, so a curve fit's
+// "y errors" weighting (errKeys -> dyForFit, 1/σ²) reads it with no extra wiring.
+//
 // Lazy: only the Inspector's Error columns card and pipeline replay load it.
 
 import { baseColumns, channelLetter, referencedColumns } from "../lib/formula";
@@ -28,25 +37,33 @@ import { withResolved } from "./pendingEdit";
 import { useApp } from "./useApp";
 import { syncDatasetWindowDocuments } from "./windowDocuments";
 
-export type ErrorSource = "sqrt" | "percent" | "constant";
+export type ErrorSource = "sqrt" | "percent" | "constant" | "sd" | "sem";
 
 export type ComputedErrorResult = { ok: true; message: string } | { ok: false; error: string };
 
 /** The formula for `source` over column `letter` (`param` = percent or constant). */
-export function errorExpr(source: ErrorSource, letter: string, param: number): string {
+export function errorExpr(source: ErrorSource, letter: string, param: number, reps: readonly string[] = []): string {
+  if (source === "sd" || source === "sem") {
+    const n = reps.length;
+    const mean = `((${reps.join(" + ")}) / ${n})`;
+    const ss = reps.map((r) => `(${r} - ${mean}) * (${r} - ${mean})`).join(" + ");
+    return source === "sd" ? `sqrt((${ss}) / ${n - 1})` : `sqrt((${ss}) / ${n - 1} / ${n})`;
+  }
   if (source === "sqrt") return `sqrt(max(${letter}, 1))`;
   if (source === "percent") return `abs(${letter}) * ${param} / 100`;
   return `${param} + 0 * ${letter}`; // a constant, blank where Y is blank
 }
 
-function columnName(source: ErrorSource, label: string, param: number): string {
+function columnName(source: ErrorSource, label: string, param: number, nReps = 0): string {
+  if (source === "sd") return `SD of ${nReps} (${label})`;
+  if (source === "sem") return `SEM of ${nReps} (${label})`;
   if (source === "sqrt") return `√(${label})`;
   if (source === "percent") return `${param}% of ${label}`;
   return `±${param} (${label})`;
 }
 
 function checkParam(source: ErrorSource, param: number): string | null {
-  if (source === "sqrt") return null;
+  if (source === "sqrt" || source === "sd" || source === "sem") return null;
   if (!Number.isFinite(param) || param < 0) return `the ${source === "percent" ? "percent" : "constant"} must be a non-negative number`;
   return null;
 }
@@ -54,7 +71,10 @@ function checkParam(source: ErrorSource, param: number): string | null {
 /** Bind channel `channel` of dataset `id` as `target`'s symmetric Y error in
  *  the state, the bound windows and (when it is on show) the live view. */
 function bound(s: ReturnType<typeof useApp.getState>, id: string, next: Dataset, binding: ErrorBinding) {
-  const roles = [...(next.errorRoles ?? inferErrorBindings(next.data)).filter((r) => !(r.target === binding.target && r.axis === "y")), binding];
+  const roles = [...(next.errorRoles ?? inferErrorBindings(next.data)).filter((r) => r.channel !== binding.channel && !(r.target === binding.target && r.axis === "y")), binding];
+  // (`r.channel !== binding.channel`: a name like "SD of 3 (mean)" is read by
+  // `inferErrorBindings` as the error of the column BEFORE it — one column is
+  // one error, the one just bound.)
   const withRoles = { ...next, errorRoles: roles };
   const live = s.activeId === id;
   return {
@@ -75,6 +95,8 @@ export async function addComputedError(
   target: number,
   source: ErrorSource,
   param = 0,
+  /** The replicate channels an `sd`/`sem` source spans (>= 2, distinct). */
+  replicates: readonly number[] = [],
 ): Promise<ComputedErrorResult> {
   const get = useApp.getState;
   const bad = checkParam(source, param);
@@ -85,8 +107,14 @@ export async function addComputedError(
     const label = ds.data.labels[target];
     if (label === undefined || target < 0) return { ok: false, error: "pick the series the error describes" };
     const letter = channelLetter(target);
-    const expr = errorExpr(source, letter, param);
-    const name = uniqueTemplateName(columnName(source, label, param), new Set(ds.data.labels));
+    if (source === "sd" || source === "sem") {
+      if (new Set(replicates).size < 2 || new Set(replicates).size !== replicates.length) {
+        return { ok: false, error: "pick at least two different replicate columns" };
+      }
+      if (replicates.some((c) => c < 0 || ds.data.labels[c] === undefined)) return { ok: false, error: "a replicate column does not exist" };
+    }
+    const expr = errorExpr(source, letter, param, replicates.map(channelLetter));
+    const name = uniqueTemplateName(columnName(source, label, param, replicates.length), new Set(ds.data.labels));
     const unit = ds.data.units[target] ?? "";
     const col: ComputedColumn = { name, expr, ...(unit ? { unit } : {}), deps: referencedColumns(expr).letters };
     get().recordHistory("add computed error");

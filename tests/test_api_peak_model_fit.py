@@ -129,3 +129,42 @@ def test_route_deadline_returns_a_flagged_best_point() -> None:
     out = resp.json()
     assert not out["success"] and "time limit" in out["message"]
     assert all(p["stderr"] is None for p in out["parameters"])
+
+
+def test_new_shapes_and_expression_ties_round_trip() -> None:
+    # gap audit 4 G5: an asymmetric shape plus an offset tie with a fitted
+    # offset travel through the route unchanged.
+    body = _body(shapes=["split_gaussian", "pearson_vii"])
+    body["parameters"] = [
+        {"name": "p0.center", "value": -0.8, "vary": True},
+        {"name": "p0.height", "value": 25.0, "vary": True},
+        {"name": "p0.fwhm_left", "value": 1.0, "vary": True},
+        {"name": "p0.fwhm_right", "value": 1.0, "vary": True},
+        {"name": "p1.center", "value": 0.0, "tie": "p0.center", "tie_op": "offset",
+         "tie_coef": 2.3, "tie_coef_vary": True},
+        {"name": "p1.height", "value": 15.0, "vary": True},
+        {"name": "p1.fwhm", "value": 0.8, "vary": True},
+        {"name": "p1.m", "value": 1.5, "vary": True},
+        {"name": "bg.c0", "value": 0.0, "vary": True},
+    ]
+    resp = client.post("/api/peaks/model-fit", json=body)
+    assert resp.status_code == 200, resp.text
+    out = resp.json()
+    p = {q["name"]: q for q in out["parameters"]}
+    assert "p1.center:coef" in out["free"]
+    assert p["p1.center"]["tie_op"] == "offset" and p["p1.center"]["tie_coef_vary"]
+    assert p["p1.center"]["value"] - p["p0.center"]["value"] == pytest.approx(
+        p["p1.center"]["tie_coef"], abs=1e-12)
+    assert p["p1.center"]["tie_coef"] == pytest.approx(2.5, abs=0.1)
+    assert out["peaks"][0]["shape"] == "split_gaussian"
+
+
+@pytest.mark.parametrize("patch", [
+    {"tie": "p0.center", "tie_op": "sum"},   # the schema: an unknown op
+    {"tie_op": "offset", "tie_coef": 1.0},   # the calc layer: an op without a target
+])
+def test_bad_expression_ties_are_422(patch: dict[str, Any]) -> None:
+    body = _body()
+    body["parameters"][3].update(patch)
+    resp = client.post("/api/peaks/model-fit", json=body)
+    assert resp.status_code == 422 and resp.json()["detail"]

@@ -239,7 +239,11 @@ export function spatialCellStyling(
   return {
     plottedChannels,
     cellCycle,
-    cellStyles: plottedChannels.map((ch) => panel.seriesStyles?.[ch]),
+    // No size-by in a multi-panel cell (the page export omits it and warns): a sized series is an ordinary one.
+    cellStyles: plottedChannels.map((ch) => {
+      const s = panel.seriesStyles?.[ch];
+      return s?.sizeBy != null ? { ...s, sizeBy: undefined } : s;
+    }),
     cellLabels: plottedChannels.map((ch) => panel.seriesLabels?.[ch]),
     legendEntries: plottedChannels.flatMap((ch, displayIndex) => {
       const label = panel.seriesLabels?.[ch];

@@ -17,8 +17,11 @@
 import type { HalfLim } from "./axisLim";
 import type { StoreGet } from "./exportActive";
 import { compactOverrides, legendPosToLoc, type FigureOverrides } from "./figureOverrides";
+import { layersWire } from "./graphLayersWire";
 import { insetWire } from "./inset";
 import type { PlotView } from "./plotview";
+import type { Dataset } from "./types";
+import { useApp } from "../store/useApp";
 
 
 /** Screen-parity overrides (MAIN #18): annotations (with their pointer-tool
@@ -61,7 +64,10 @@ export function viewOverrides(st: Pick<
   | "xReversed"
   | "insetMode"
   | "inset"
->): FigureOverrides | undefined {
+> & Partial<Pick<PlotView, "layers">>,
+// The graph layers' curves read their LIVE sources (lib/graphLayers.ts).
+datasets: readonly Dataset[] = useApp.getState().datasets,
+): FigureOverrides | undefined {
   // Decode #52: the legend title (Origin's bold header) rides the legend
   // override so vector export matches the screen's static legend.
   const legendTitle = st.legendTitle ? { title: st.legendTitle } : {};
@@ -160,6 +166,8 @@ export function viewOverrides(st: Pick<
       ticks: st.xScale === "log" || st.yScale === "log" ? { minor: true } : undefined,
       // The magnifier inset draws in the export as on screen (lib/inset.ts).
       inset: st.insetMode ? insetWire(st.inset) : undefined,
+      // Inset graphs, images and tables, resolved as the screen draws them.
+      layers: layersWire(st.layers, datasets),
     }) ?? undefined
   );
 }

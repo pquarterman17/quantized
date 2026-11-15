@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   categoricalLevels,
-  sanitizeDataStruct,
   categoryLevels,
   isCategoricalChannel,
   levelCountOf,
   levelLabel,
   levelsOf,
 } from "./categorical";
+import { sanitizeDataStruct } from "./dataStructSanitize";
 import type { DataStruct } from "./types";
 
 const catDs: DataStruct = {

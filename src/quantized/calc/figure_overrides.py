@@ -29,6 +29,7 @@ from quantized.calc.figure_decor import (
 from quantized.calc.figure_fonts import validate_typography
 from quantized.calc.figure_inset import validate_inset
 from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_layers import validate_layers
 from quantized.calc.figure_layout import validate_page_pad
 from quantized.calc.figure_legend_order import draw_legend
 from quantized.calc.figure_scale import drawable_lim
@@ -97,6 +98,8 @@ def _validate_overrides(ov: Mapping[str, Any]) -> None:
     _validate_region_shades(ov.get("region_shades"))
     if ov.get("inset") is not None:
         validate_inset(ov["inset"])
+    if ov.get("layers") is not None:
+        validate_layers(ov["layers"])
 
 
 def apply_axis_shape_overrides(

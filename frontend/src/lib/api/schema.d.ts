@@ -9718,7 +9718,7 @@ export interface components {
             /** Parameters */
             parameters: components["schemas"]["PeakModelParameter"][];
             /** Shapes */
-            shapes: ("gaussian" | "lorentzian" | "pseudo_voigt" | "voigt")[];
+            shapes: ("gaussian" | "lorentzian" | "pseudo_voigt" | "voigt" | "split_gaussian" | "split_lorentzian" | "split_pseudo_voigt" | "pearson_vii" | "fano" | "doniach_sunjic")[];
             /** X */
             x: (number | null)[];
             /** X Max */
@@ -9795,8 +9795,10 @@ export interface components {
         };
         /**
          * PeakModelParameter
-         * @description ``p{i}.{center|height|fwhm|eta|fwhm_g|fwhm_l}`` or ``bg.c{k}``: start
-         *     ``value``, ``vary``, optional bounds and an identity ``tie``.
+         * @description ``p{i}.{field}`` (fields by shape: calc/peak_model_shapes.py) or
+         *     ``bg.c{k}``: start ``value``, ``vary``, optional bounds and a ``tie``
+         *     (``tie_op`` equal / offset / ratio / area_ratio with coefficient
+         *     ``tie_coef``, fitted when ``tie_coef_vary``; calc/peak_model.py).
          */
         PeakModelParameter: {
             /** Max */
@@ -9807,6 +9809,15 @@ export interface components {
             name: string;
             /** Tie */
             tie?: string | null;
+            /** Tie Coef */
+            tie_coef?: number | null;
+            /**
+             * Tie Coef Vary
+             * @default false
+             */
+            tie_coef_vary?: boolean;
+            /** Tie Op */
+            tie_op?: ("equal" | "offset" | "ratio" | "area_ratio") | null;
             /** Value */
             value: number;
             /**
@@ -9825,6 +9836,17 @@ export interface components {
             stderr: number | null;
             /** Tie */
             tie: string | null;
+            /** Tie Coef */
+            tie_coef?: number | null;
+            /** Tie Coef Stderr */
+            tie_coef_stderr?: number | null;
+            /**
+             * Tie Coef Vary
+             * @default false
+             */
+            tie_coef_vary?: boolean;
+            /** Tie Op */
+            tie_op?: string | null;
             /** Value */
             value: number | null;
             /** Vary */

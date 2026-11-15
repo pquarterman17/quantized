@@ -43,7 +43,8 @@ import { sheetIdsRead } from "../lib/sheetBindings";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 import { rowsChangedGuard } from "./corrections";
 import { plural } from "../lib/plural";
-import { downstreamOf, markStale, sortForRecalc } from "../lib/recalc";
+import { downstreamOf, markStale } from "../lib/recalc";
+import { sortForRecalc } from "../lib/recalcOrder";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
 

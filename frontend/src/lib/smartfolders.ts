@@ -83,22 +83,3 @@ export function smartFolderMembers(datasets: readonly Dataset[], sf: SmartFolder
   return datasets.filter((d) => matchesQuery(d, terms));
 }
 
-/** Validate persisted smart folders at the untrusted .dwk boundary — drops
- *  malformed entries rather than throwing (mirrors parseFolders). */
-export function sanitizeSmartFolders(v: unknown): SmartFolder[] {
-  if (!Array.isArray(v)) return [];
-  const out: SmartFolder[] = [];
-  for (const f of v) {
-    if (typeof f !== "object" || f === null) continue;
-    const o = f as Record<string, unknown>;
-    if (
-      typeof o.id === "string" &&
-      typeof o.name === "string" &&
-      o.name.trim() !== "" &&
-      typeof o.query === "string"
-    ) {
-      out.push({ id: o.id, name: o.name, query: o.query });
-    }
-  }
-  return out;
-}

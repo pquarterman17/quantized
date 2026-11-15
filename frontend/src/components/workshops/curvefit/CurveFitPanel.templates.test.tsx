@@ -3,7 +3,7 @@
 // (explicitly — nothing auto-applies) loads them into the panel for another
 // dataset, the user then presses Fit.
 
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fitModel } from "../../../lib/api";
@@ -35,12 +35,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   retainFitted(null, null);
-  vi.mocked(listFitModels).mockResolvedValue({
+  // A slow registry on EVERY test: forces the load-dependent ordering (the
+  // panel is interactive before the models arrive) instead of hoping for it.
+  vi.mocked(listFitModels).mockImplementation(async () => { await new Promise((r) => setTimeout(r, 50)); return {
     models: [
       { name: "Linear", category: "polynomial", paramNames: ["m", "b"], nParams: 2, p0: [1, 0], lb: [], ub: [] },
       { name: "Quadratic", category: "polynomial", paramNames: ["a", "b", "c"], nParams: 3, p0: [1, 1, 0], lb: [], ub: [] },
     ],
-  });
+  }; });
   vi.mocked(fitModel).mockResolvedValue({ params: [1, 1, 1], errors: [0, 0, 0], R2: 1 });
   const datasets = [{ id: "d1", name: "run.dat", data: DATA }];
   useApp.setState({ datasets, activeId: "d1", selectedIds: ["d1"], xKey: null, yKeys: [0], seriesOrder: null, errKeys: {}, fitOverlay: null, curveFitOpen: true });
@@ -50,10 +52,21 @@ beforeEach(() => {
   });
 });
 
+// The Model select renders BEFORE the model registry resolves (listFitModels
+// is async), so its label being findable says nothing about the models being
+// loaded. Wait on the STATE that matters: the registry's options are present.
+// Without this, under load the first gesture lands on an empty registry and
+// every save/apply below silently does nothing.
+async function modelsLoaded(): Promise<HTMLElement> {
+  const select = await screen.findByLabelText("Model");
+  await within(select).findByRole("option", { name: "Quadratic" });
+  return select;
+}
+
 describe("CurveFitPanel — fit templates", () => {
   it("saves the panel's settings and applies them back, never on its own", async () => {
     render(<CurveFitPanel />);
-    fireEvent.change(await screen.findByLabelText("Model"), { target: { value: "Quadratic" } });
+    fireEvent.change(await modelsLoaded(), { target: { value: "Quadratic" } });
     fireEvent.change(screen.getByLabelText("Weighting"), { target: { value: "manual" } });
     await waitFor(() => expect(screen.getByLabelText("Weighting")).toHaveValue("manual"));
     fireEvent.click(await screen.findByText("Templates"));
@@ -80,7 +93,7 @@ describe("CurveFitPanel — fit templates", () => {
 
   it("saves and applies direct weighting with its column and the error-scaling switch", async () => {
     render(<CurveFitPanel />);
-    fireEvent.change(await screen.findByLabelText("Model"), { target: { value: "Quadratic" } });
+    fireEvent.change(await modelsLoaded(), { target: { value: "Quadratic" } });
     fireEvent.change(screen.getByLabelText("Weighting"), { target: { value: "direct" } });
     await waitFor(() => expect(screen.getByLabelText("Weighting")).toHaveValue("direct"));
     fireEvent.change(screen.getByLabelText("Weight column"), { target: { value: "1" } });
@@ -104,6 +117,7 @@ describe("CurveFitPanel — fit templates", () => {
     const { saveTemplate } = await import("../../../lib/template");
     saveTemplate(toFitTemplate("ranged", { version: 1, model: "Linear", weight: "none", rows: [], range: { lo: 1, hi: 2 } }));
     render(<CurveFitPanel />);
+    await modelsLoaded();
     fireEvent.click(await screen.findByText("Templates"));
     fireEvent.change(screen.getByLabelText("Saved fit template"), { target: { value: "ranged" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply template" }));
@@ -117,6 +131,7 @@ describe("CurveFitPanel — fit templates", () => {
     const { saveTemplate } = await import("../../../lib/template");
     saveTemplate(toFitTemplate("old", { version: 1, model: "Linear", weight: "none", rows: [] }));
     render(<CurveFitPanel />);
+    await modelsLoaded();
     fireEvent.click(await screen.findByText("Templates"));
     // Nothing picked: there is nothing to delete.
     expect(screen.getByRole("button", { name: "Delete template" })).toBeDisabled();
@@ -140,6 +155,7 @@ describe("CurveFitPanel — fit templates", () => {
     const { saveTemplate } = await import("../../../lib/template");
     saveTemplate(toFitTemplate("plugin", { version: 1, model: "Langevin", weight: "poisson", rows: [] }));
     render(<CurveFitPanel />);
+    await modelsLoaded();
     fireEvent.click(await screen.findByText("Templates"));
     fireEvent.change(screen.getByLabelText("Saved fit template"), { target: { value: "plugin" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply template" }));

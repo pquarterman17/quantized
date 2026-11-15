@@ -96,7 +96,8 @@ export function renderFacetGrid(host: HTMLDivElement, args: FacetGridArgs): uPlo
       // carried by the panel because the default (null `yKeys`) channel list
       // is resolved per row-slice and can differ panel to panel.
       seriesLabels: args.encoded ? [...args.encoded.labels[i]] : p.channels.map((ch) => args.seriesLabels[ch]),
-      seriesStyles: args.encoded ? [...args.encoded.styles[i]] : facetPanelStyles(p, args.seriesStyles),
+      // Spline / size-by / drop lines are not drawn in facet grids (the export warns the same).
+      seriesStyles: (args.encoded ? [...args.encoded.styles[i]] : facetPanelStyles(p, args.seriesStyles)).map((s) => s && { ...s, connect: undefined, dropLines: undefined, sizeBy: undefined }),
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
     });
