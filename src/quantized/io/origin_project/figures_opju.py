@@ -35,7 +35,7 @@ shape, solved 2026-07-04 against the 4-file ground-truth oracle — see
 [X from] [X to] [X step]          value tokens; ``from`` elided when 0.0
 8x <id> <plen> 00 <flag> 01 …     separator (layer geometry; plen VARIES
                                   and is only a search-window hint; 8x =
-                                  81 or 80; <flag> = 00/40/80/88/c0, see
+                                  81 or 80; <flag>: an admitted flag, see
                                   ``opju_axis_real_form._SEP_WIDE``)
 [Y from] [Y to] [Y step]          value tokens (tagged/RLE only)
 8x <id> <plen> 00 <flag> 01 …     end separator
@@ -148,6 +148,7 @@ from quantized.io.origin_project.opju_axis_specimen_form import (
     _parse_specimen_record,
     parse_hybrid_record,
 )
+from quantized.io.origin_project.opju_curve_sheets import off_sheet_ids, without_captions
 from quantized.io.origin_project.opju_curves import (
     allocated_columns_from_bytes,
     book_columns_from_bytes,
@@ -305,6 +306,7 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         book_columns = book_columns_from_bytes(b)
         books_meta = book_metadata_from_bytes(b, book_columns)
         book_counts_all = allocated_columns_from_bytes(b)
+    off_sheet = {} if legacy else off_sheet_ids(b, table.ids)  # opju_curve_sheets
     page_starts = [off for off, _name in pages]
     page_layers: dict[int, int] = {}  # page index -> anchors seen so far (the layer ordinal)
     anchors = sorted(_find_all(b, _ANCHOR) + _find_all(b, _ANCHOR_PANEL))
@@ -422,12 +424,13 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
             name = page_name
         else:
             name, layer = "", 1
+        omitted: list[tuple[int, dict[str, str]]] = []  # (plot index, note): sheet unproven
         if legacy:
             curves = extract_curves(
                 b, anchor, window_end, book_columns, books_meta, book_counts_all
             )
         else:
-            curves = extract_curves_by_id(b, anchor, window_end, table)
+            curves = extract_curves_by_id(b, anchor, window_end, table, off_sheet, omitted)
         figures.append(
             {
                 "name": name,
@@ -451,7 +454,9 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 "x_title": routed.x_title if routed else "",
                 "y_title": routed.y_title if routed else "",
                 "y2_title": routed.y2_title if routed else "",
-                "legend_labels": routed.legend_labels if routed else [],
+                "legend_labels": without_captions(  # one caption per KEPT curve
+                    routed.legend_labels if routed else [], {i for i, _ in omitted}
+                ),
                 # Legend TITLE (Legend object's own header line, "" = none).
                 "legend_title": routed.legend_title if routed else "",
                 # Legend box top-left in data coords, or None (never guessed).
@@ -469,6 +474,7 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 "y_step": y_step,
                 "_page_idx": page_idx,
                 "curves": curves,
+                **({"curve_sheet_omitted": [n for _, n in omitted]} if omitted else {}),
             }
         )
     # Resolve each page's size from its own frames (figure_geometry), then
