@@ -10,8 +10,10 @@
 // preview applies `style`/`overrides`/`seriesStyles` and the Stage `format`.
 // Style only, never data: no channel binding, limit or title travels.
 
+import { askConfirm } from "../store/confirmDialog";
 import { askParams } from "../store/paramDialog";
-import { effectiveChannels } from "./plotdata";
+import { templateSeeds } from "../store/windowDefaults";
+import { loadDefaultGraphTemplateName, plottedChannels, setDefaultGraphTemplate } from "./defaultGraphTemplate";
 import type { StoreGet } from "./exportActive";
 import { buildExportStyles } from "./exportStyles";
 import { loadGraphTemplates, saveGraphTemplate, type GraphTemplate } from "./figuredoc";
@@ -45,9 +47,7 @@ function plottedSeries(s: StoreGet, verb: string): number[] | null {
     state.setStatus(`${verb} unavailable: no plotted dataset`);
     return null;
   }
-  return effectiveChannels(dataset.data, state.yKeys, state.xKey, dataset.channelRoles, state.seriesOrder)
-    .filter((ch) => !state.y2Keys?.includes(ch))
-    .concat(state.y2Keys ?? []);
+  return plottedChannels(dataset, state);
 }
 
 /** Restyle the focused graph with `format`, as ONE undo step. */
@@ -132,23 +132,47 @@ export async function applyGraphTemplateToGraphs(s: StoreGet): Promise<void> {
   reportMany(s, n, `Graph template "${template.name}"`, sanitizeGraphFormat(template.format));
 }
 
-export async function saveStageGraphTemplate(s: StoreGet): Promise<void> {
-  const plotted = plottedSeries(s, "Save Graph Template");
-  if (!plotted) return;
-  const params = await askParams("Save Graph Template", [
-    { key: "name", label: "Template name", type: "text", default: "My graph style" },
-  ], { confirmLabel: "Save" });
-  const name = params ? String(params.name).trim() : "";
-  if (!name) return;
+/** Ask for a name and save the focused graph's style under it; the name, or
+ *  null when nothing was saved. */
+async function saveFocusedAsTemplate(s: StoreGet, title: string, name: string, confirmLabel: string): Promise<string | null> {
+  const plotted = plottedSeries(s, title);
+  if (!plotted) return null;
+  const params = await askParams(title, [
+    { key: "name", label: "Template name", type: "text", default: name },
+  ], { confirmLabel });
+  const picked = params ? String(params.name).trim() : "";
+  if (!picked) return null;
+  // Never replace a saved template silently (gap audit 5 review F9).
+  if (loadGraphTemplates().some((t) => t.name === picked)
+    && !(await askConfirm(`Replace graph template "${picked}"?`, "A saved graph template already has this name. Replacing it changes every graph that uses it as the default.", "Replace"))) return null;
   const state = s();
   saveGraphTemplate({
-    name,
+    name: picked,
     style: "default",
     overrides: null,
     seriesStyles: buildExportStyles(plotted, state.seriesStyles),
     format: captureGraphFormat(state, plotted),
   });
-  state.setStatus(`graph template "${name}" saved`);
+  return picked;
+}
+
+export async function saveStageGraphTemplate(s: StoreGet): Promise<void> {
+  const name = await saveFocusedAsTemplate(s, "Save Graph Template", "My graph style", "Save");
+  if (name) s().setStatus(`graph template "${name}" saved`);
+}
+
+/** Gap audit 5 #1: Origin's "set as default" -- save the focused graph's
+ *  style as a template and open every NEW graph with it (lib/defaultGraphTemplate.ts). */
+export async function setStageGraphAsDefault(s: StoreGet): Promise<void> {
+  const name = await saveFocusedAsTemplate(s, "Set as Default for New Graphs", loadDefaultGraphTemplateName() ?? "Default graph", "Set as default");
+  if (!name) return;
+  // The source graph is the user's own style now, not a new graph: unmark it
+  // so it stays protected from a passive rebind (review F1).
+  templateSeeds.delete(s().focusedWindowId ?? "");
+  setDefaultGraphTemplate(name);
+  // Fail closed: the default never assigns Y3+ axes (lib/defaultGraphTemplate.ts) -- say so.
+  const extra = s().yAxes.length ? "; its Y3+ axes are not applied to new graphs" : "";
+  s().setStatus(`graph template "${name}" saved — new graphs open with it (Preferences ▸ Plot to change)${extra}`);
 }
 
 export async function applyStageGraphTemplate(s: StoreGet): Promise<void> {
@@ -171,3 +195,4 @@ export async function applyStageGraphTemplate(s: StoreGet): Promise<void> {
 }
 export { contourFromScattered } from "./scatteredContour";
 export { editExtraYAxes } from "./multiYCommands"; // Plot ▸ Y Axis Settings… (gap audit 4 G11)
+export { installDefaultGraphTemplate } from "./defaultGraphTemplate"; // the boot (commands/plotCommands.ts warmDefaultGraphTemplate)
