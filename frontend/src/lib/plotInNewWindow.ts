@@ -17,6 +17,7 @@
 // store's existing createWindow/focusWindow/setActive/recordMacro actions.
 
 import { useApp } from "../store/useApp";
+import { openNewGraph } from "../store/windowDefaults";
 import { lit } from "./macro";
 import { plotIntentStageTab } from "./stagetab";
 
@@ -26,7 +27,7 @@ import { plotIntentStageTab } from "./stagetab";
  *  sibling `openFigureDocInWindow`). */
 export function plotInNewWindow(datasetId: string): string {
   const app = useApp.getState();
-  const id = app.createWindow(datasetId);
+  const id = openNewGraph(app, datasetId); // a new graph (default template)
   app.focusWindow(id);
   // Belt-and-braces: focusWindow's own _focusHandoff already sets activeId
   // to this window's binding, so this is normally a no-op — kept for the

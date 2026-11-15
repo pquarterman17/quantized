@@ -33,6 +33,7 @@ export const KNOWN_STORAGE_KEYS: readonly string[] = [
   "qz.autosave",
   "qz.calcHistory",
   "qz.customFitModels",
+  "qz.defaultGraphTemplate",
   "qz.graphTemplates",
   "qz.interactionHints.seen",
   "qz.interactionPrefs",

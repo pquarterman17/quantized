@@ -22,6 +22,7 @@ import { ACCENT_SWATCHES as ACCENTS } from "../../store/accentSwatches";
 import { useApp } from "../../store/useApp";
 import { UploadCachePref } from "./UploadCachePref";
 import { OpjMatrixPref } from "./OpjMatrixPref";
+import { DefaultGraphTemplatePref } from "./DefaultGraphTemplatePref";
 import { focusablesIn, useDialogFocus } from "./useDialogFocus";
 import { useEscapeSurface } from "../../lib/escapeStack";
 import { onTabListKeyDown } from "../../lib/tabListKeys";
@@ -235,6 +236,7 @@ export default function PreferencesDialog() {
                 <PrefRow label="Grid lines" hint="default for the plot">
                   <Switch aria-label="Grid lines" checked={p.defaultGrid} onChange={(v) => setPref("defaultGrid", v)} />
                 </PrefRow>
+                <DefaultGraphTemplatePref />
                 <PrefRow label="Multi-panel fit" hint="fresh Origin multi-panel figures">
                   <SegmentedControl
                     options={["Aspect", "Fill"]}
