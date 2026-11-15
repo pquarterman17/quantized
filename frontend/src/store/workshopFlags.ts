@@ -101,7 +101,7 @@ export interface WorkshopFlagsSlice {
   baselineOpen: boolean; calculatorsOpen: boolean;
   magToolsOpen: boolean;
   rsmOpen: boolean; digitizerOpen: boolean;
-  datasetMathOpen: boolean; tabulateOpen: boolean;
+  datasetMathOpen: boolean; tabulateOpen: boolean; functionPlotOpen: boolean;
   /** Dataset Math's tab: combine two, or average N (gap audit 2 #9). */
   datasetMathMode: "combine" | "average";
   distributionOpen: boolean;
@@ -154,6 +154,7 @@ export interface WorkshopFlagsSlice {
   setRsmOpen: (open: boolean) => void;
   setDigitizerOpen: (open: boolean) => void;
   setDatasetMathOpen: (open: boolean, mode?: "combine" | "average") => void;
+  setFunctionPlotOpen: (open: boolean) => void;
   setTabulateOpen: (open: boolean) => void;
   setDistributionOpen: (open: boolean) => void;
   setSignalProcessingOpen: (open: boolean) => void;
@@ -201,6 +202,7 @@ export function createWorkshopFlagsSlice(set: SliceSet): WorkshopFlagsSlice {
     rsmOpen: false,
     digitizerOpen: false,
     datasetMathOpen: false,
+    functionPlotOpen: false,
     datasetMathMode: "combine",
     tabulateOpen: false,
     distributionOpen: false,
@@ -248,6 +250,7 @@ export function createWorkshopFlagsSlice(set: SliceSet): WorkshopFlagsSlice {
     setRsmOpen: (rsmOpen) => set({ rsmOpen }),
     setDigitizerOpen: (digitizerOpen) => set({ digitizerOpen }),
     setDatasetMathOpen: (datasetMathOpen, datasetMathMode = "combine") => set({ datasetMathOpen, datasetMathMode }),
+    setFunctionPlotOpen: (functionPlotOpen) => set({ functionPlotOpen }),
     setTabulateOpen: (tabulateOpen) => set({ tabulateOpen }),
     setDistributionOpen: (distributionOpen) => set({ distributionOpen }),
     setSignalProcessingOpen: (signalProcessingOpen) => set({ signalProcessingOpen }),

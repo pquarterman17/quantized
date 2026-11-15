@@ -103,6 +103,15 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       run: () => s().setWaterfallOpen(true),
     },
     {
+      id: "function-plot",
+      group: "Plot",
+      section: "Layout",
+      label: "Function plot (y = f(x))…",
+      description: "Add a curve y = f(x; parameters) to the graph.",
+      keywords: "function equation theory curve",
+      run: () => s().setFunctionPlotOpen(true),
+    },
+    {
       // P3.5: the unified browse surface. Plot-specific operations remain one
       // click away in the existing manager rather than being duplicated here.
       // Keep the established id: toolbar preferences persist command ids.

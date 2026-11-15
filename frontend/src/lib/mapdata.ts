@@ -41,7 +41,7 @@ function isScatteredXYZ(data: DataStruct): boolean {
   if (data.labels.length !== 2 || data.values.length < 8) return false;
   const swept = (col: number[]) => col.every((v, i) => i === 0 || v >= col[i - 1]) || col.every((v, i) => i === 0 || v <= col[i - 1]);
   const ys = data.values.map((row) => row[0]);
-  return !swept(data.time) && !swept(ys) && new Set(data.time.map((x, i) => `${x},${ys[i]}`)).size === data.time.length;
+  return !swept(data.time) && !swept(ys);
 }
 
 const mappableCache = new WeakMap<DataStruct, boolean>();

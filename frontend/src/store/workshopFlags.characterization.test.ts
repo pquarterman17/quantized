@@ -49,6 +49,7 @@ const FLAG_SETTERS: [keyof AppState, keyof AppState][] = [
   ["setRsmOpen", "rsmOpen"],
   ["setDigitizerOpen", "digitizerOpen"],
   ["setDatasetMathOpen", "datasetMathOpen"],
+  ["setFunctionPlotOpen", "functionPlotOpen"],
   ["setTabulateOpen", "tabulateOpen"],
   ["setDistributionOpen", "distributionOpen"],
   ["setSignalProcessingOpen", "signalProcessingOpen"],

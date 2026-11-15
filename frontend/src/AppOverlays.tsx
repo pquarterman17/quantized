@@ -111,6 +111,7 @@ const SqliteQueryDialog = lazyPanel(() => import("./components/workshops/databas
 const BaselinePanel = lazyPanel(() => import("./components/workshops/baseline/BaselinePanel"), "BaselinePanel");
 const CalculatorsPanel = lazyPanel(() => import("./components/workshops/calculators/CalculatorsPanel"), "CalculatorsPanel");
 const DatasetMathPanel = lazyPanel(() => import("./components/workshops/datasetmath/DatasetMathPanel"), "DatasetMathPanel");
+const FunctionPlotPanel = lazyPanel(() => import("./components/workshops/functionplot/FunctionPlotPanel"), "FunctionPlotPanel");
 const ResamplePanel = lazyPanel(() => import("./components/workshops/resample/ResamplePanel"), "ResamplePanel");
 const SimsPanel = lazyPanel(() => import("./components/workshops/sims/SimsPanel"), "SimsPanel");
 const ReshapePanel = lazyPanel(() => import("./components/workshops/transformPreview/ReshapePanel"), "ReshapePanel");
@@ -229,6 +230,7 @@ export default function AppOverlays() {
   const digitizerOpen = useApp((s) => s.digitizerOpen);
   const magToolsOpen = useApp((s) => s.magToolsOpen);
   const datasetMathOpen = useApp((s) => s.datasetMathOpen);
+  const functionPlotOpen = useApp((s) => s.functionPlotOpen);
   const resampleOpen = useResampleDialog((s) => s.seed !== null);
   const simsOpen = useSimsDialog((s) => s.seed !== null);
   const reshapeOpen = useTransformPreviewDialog((s) => s.op !== null);
@@ -325,6 +327,7 @@ export default function AppOverlays() {
       {reductionsOpen && <ReductionsPanel />}
       {digitizerOpen && <DigitizerView />}
       {datasetMathOpen && <DatasetMathPanel />}
+      {functionPlotOpen && <FunctionPlotPanel />}
       {resampleOpen && <ResamplePanel />}
       {simsOpen && <SimsPanel />}
       {reshapeOpen && <ReshapePanel />}
