@@ -18,7 +18,7 @@
 // field, every source and every skipped one — is `metadata.peakIntegrateBatch`,
 // the same shape of record the Peak Analyzer batch keeps in `peakBatch`.
 
-import { ownXChannels } from "../../../lib/ownXChannels";
+import { ownXChannels, type OwnXChannels } from "../../../lib/ownXChannels";
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import type { IntegrateBatchRequest, IntegrateBatchResponse } from "../../../lib/api/peaks";
 import { parseQuantity } from "../../../lib/metadataCleanup";
@@ -51,21 +51,10 @@ export function windowsProblem(windows: readonly IntegrateWindow[]): string | nu
   return bad < 0 ? null : `window ${bad + 1}: low must be a number below high`;
 }
 
-/** Which columns the batch integrates: names (null x = the row axis) plus the
- *  active dataset's indices, preferred while the name still matches. */
-export interface IntegrateChannels {
-  xLabel: string | null;
-  yLabel: string;
-  xIndex: number | null;
-  yIndex: number;
-}
-
-export const integrateChannels: (
-  active: Dataset | null | undefined,
-  xKey: number | null,
-  yKeys: number[] | null,
-  seriesOrder: number[] | null,
-) => IntegrateChannels | null = ownXChannels;
+/** Which columns the batch integrates: names (null x = the row axis) plus the active dataset's
+ *  indices, preferred while the name still matches (the Y's OWN X). */
+export type IntegrateChannels = OwnXChannels;
+export { ownXChannels as integrateChannels };
 
 function columnOf(labels: readonly string[], label: string, preferred: number | null): number {
   if (preferred !== null && labels[preferred] === label) return preferred;

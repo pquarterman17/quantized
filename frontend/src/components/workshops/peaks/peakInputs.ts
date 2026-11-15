@@ -21,9 +21,7 @@ export interface PeakInputs {
    *  T1,R1,T2,R2 reads T2), for aligning marker overlays to the full-length
    *  plot x (which keeps excluded/filtered rows as gaps). In the fallback
    *  branch (`selectedFitData` returned null, `x`/`y` come from the time axis)
-   *  it is still the requested `xKey`'s column. The overlay follows the
-   *  curve's own block of a per-series-X plot (lib/overlayBlock.ts), which is
-   *  where `usePerSeriesX` scatters it. */
+   *  it is still the requested `xKey`'s column. */
   fullX: number[];
   /** The x channel `x` was actually taken from — `null` means the time axis.
    *  NOT necessarily the `xKey` that was asked for: `selectedFitData` returns

@@ -24,7 +24,7 @@
 // `segmentYErr`, so the rules match: none designated, or a zero/invalid
 // sigma, fits that dataset unweighted.
 
-import { ownXChannels } from "../../../lib/ownXChannels";
+import { ownXChannels, type OwnXChannels } from "../../../lib/ownXChannels";
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import type { PeakBatchItem } from "../../../lib/api/peakBatch";
 import { errorRoleViewDefaults } from "../../../lib/errorbars";
@@ -101,21 +101,10 @@ export function applyPointBudget(prepared: readonly PreparedItem[], cap: number)
 }
 
 /** Which columns the batch fits: names (null x = the row index/time axis)
- *  plus the active dataset's indices, preferred when the name still matches. */
-export interface BatchChannels {
-  xLabel: string | null;
-  yLabel: string;
-  xIndex: number | null;
-  yIndex: number;
-}
-
-/** The wizard's X/Y on the active dataset, as names; null when it has none. */
-export const batchChannels: (
-  active: Dataset | null | undefined,
-  xKey: number | null,
-  yKeys: number[] | null,
-  seriesOrder: number[] | null,
-) => BatchChannels | null = ownXChannels;
+ *  plus the active dataset's indices (the Y's OWN X), preferred while the name
+ *  still matches. `batchChannels` is the wizard's X/Y on the active dataset. */
+export type BatchChannels = OwnXChannels;
+export { ownXChannels as batchChannels };
 
 function columnOf(labels: readonly string[], label: string, preferred: number | null): number {
   if (preferred !== null && labels[preferred] === label) return preferred;

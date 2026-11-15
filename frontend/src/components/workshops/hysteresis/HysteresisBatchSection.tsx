@@ -7,6 +7,7 @@ import {
   hysteresisTrendCandidates,
 } from "../../../lib/hysteresisTrend";
 import { detectMagXKind, magXAxis } from "../../../lib/magDataKind";
+import { ownXKey } from "../../../lib/perSeriesX";
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { useApp } from "../../../store/useApp";
@@ -64,7 +65,7 @@ export default function HysteresisBatchSection() {
   ): Promise<AnalysisBatchOutcome> => {
     const input = hysteresisInputs(dataset, selection.xKey, selection.yKeys, null, selection);
     if (!input) throw new Error("No response column is available to analyze.");
-    const axis = magXAxis(dataset.data, selection.xKey);
+    const axis = magXAxis(dataset.data, ownXKey(dataset, selection.xKey, input.yKey)); // h is the Y's own X
     const xKind = detectMagXKind(axis.label, axis.unit);
     if (xKind.kind !== "field") {
       throw new Error(`The selected X axis is not a declared magnetic field (${xKind.reason}).`);

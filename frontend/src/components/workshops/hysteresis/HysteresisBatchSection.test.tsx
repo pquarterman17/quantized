@@ -212,4 +212,36 @@ describe("HysteresisBatchSection", () => {
     const saved = register.mock.calls[0][0] as { tables: { rows: unknown[][] }[] };
     expect(saved.tables[0].rows[0].at(-1)).toContain("not a declared magnetic field");
   });
+  it("validates and labels H by the Y's own X when the plot X is a temperature", async () => {
+    const field = Array.from({ length: 24 }, (_v, index) => index - 12);
+    const own: Dataset = {
+      id: "ownx",
+      name: "ownx.dat",
+      data: {
+        time: field.map((_h, index) => 300 - index), // shared X: temperature
+        values: field.map((h) => [h, Math.tanh(h / 3)]),
+        labels: ["Field", "Moment"],
+        units: ["Oe", "emu"],
+        metadata: { x_column_name: "Temperature", x_column_unit: "K" },
+      },
+      columnDesignations: { 0: "X" },
+    };
+    useApp.setState({
+      datasets: [own], activeId: own.id, selectedIds: [own.id],
+      resolveDataset: async () => own,
+    });
+    useAnalysisSelection.getState().setSelection("hysteresis", captureAnalysisSelection({
+      datasets: [own], activeId: own.id, selectedIds: [own.id], xKey: null, yKeys: [1],
+      seriesOrder: null, errKeys: {}, selection: null, range: null,
+    }, "library"));
+
+    render(<HysteresisBatchSection />);
+    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Run Hysteresis comparison batch" }));
+    await waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
+
+    expect(vi.mocked(hysteresisAnalysis).mock.calls[0][0].h).toEqual(field);
+    const saved = register.mock.calls[0][0] as { tables: { rows: unknown[][] }[] };
+    expect(saved.tables[0].rows[0].slice(0, 5)).toEqual(["ownx.dat", "Completed", 24, 2, "Oe"]);
+  });
 });

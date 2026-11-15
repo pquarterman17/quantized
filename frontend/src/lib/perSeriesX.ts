@@ -54,7 +54,7 @@ const cache = new WeakMap<DataStruct, Map<string, { data: DataStruct; blocks: (n
  *  (the source plots unchanged). `shown` = the channels actually drawn (hidden
  *  ones excluded); only they decide the blocks, so a hidden R2 neither widens
  *  the X data nor puts "T1 / T2" in the X title, and the shared X is a block
- *  only when a shown curve sits on it. A hidden curve's values still go in its
+ *  only when a shown curve or a shown non-curve channel sits on it. A hidden curve's values still go in its
  *  own block, so hiding one whose X stays in use yields the SAME view object.
  *  Omit `shown` to treat every curve as shown. */
 export function perSeriesXData(
@@ -64,7 +64,11 @@ export function perSeriesXData(
 ): { data: DataStruct; blocks: (number | null)[] } | null {
   const own = curveX(ds, xKey);
   const used = own.filter((x, c) => x !== undefined && (!shown || shown.includes(c)));
-  const blocks: (number | null)[] = used.includes(xKey) ? [xKey] : [];
+  // Shown NON-curve channels (an explicit X-as-Y column, a Z column) are copied
+  // into every block on the assumption the shared block exists, so one of them
+  // seeds it too.
+  const shownNonCurve = !!shown && own.some((x, c) => x === undefined && shown.includes(c));
+  const blocks: (number | null)[] = used.includes(xKey) || shownNonCurve ? [xKey] : [];
   for (const x of used) if (x !== undefined && !blocks.includes(x)) blocks.push(x);
   if (blocks.length === 0 || (blocks.length === 1 && blocks[0] === xKey)) return null;
   // undefined (not a curve) and null (the time X) must not collide in the key.

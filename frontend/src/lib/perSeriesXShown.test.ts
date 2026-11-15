@@ -29,6 +29,23 @@ describe("perSeriesXData with a shown set", () => {
     expect(v.data.metadata.x_column_long).toBe("T2");
   });
 
+  it("a shown non-curve channel seeds the shared block even when only R2 (on T2) is a shown curve", () => {
+    const ds = t1r1t2r2();
+    // col 3 = an error column designated "Y-error": not a curve, copied into every block.
+    ds.data = {
+      ...ds.data,
+      values: ds.data.values.map((r, i) => [...r, i + 1]),
+      labels: [...ds.data.labels, "R2 err"],
+      units: [...ds.data.units, "ohm"],
+    };
+    ds.columnDesignations = { 1: "X", 3: "Y-error" };
+    const v = perSeriesXData(ds, null, [2, 3])!;
+    expect(v.blocks).toEqual([null, 1]);
+    expect(v.data.time).toEqual([...T1, ...T2]);
+    expect(v.data.values.map((r) => r[3])).toEqual([1, 2, 3, 4, 1, 2, 3, 4]);
+    expect(v.data.values.map((r) => r[2])).toEqual([NaN, NaN, NaN, NaN, ...R2]);
+  });
+
   it("nothing shown: no view", () => {
     expect(perSeriesXData(t1r1t2r2(), null, [])).toBeNull();
   });
