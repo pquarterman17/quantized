@@ -1,6 +1,6 @@
 // The worksheet column menu's "Set As" (Origin's Column > Set As: X, Y, Z,
 // Y Error, X Error, Label, Disregard). LAZY: the menu imports this module
-// only when an entry is picked (components/Stage/worksheet/worksheetMenus.ts),
+// only when an entry is picked (components/Stage/worksheet/worksheetMenuModel.ts),
 // so none of it reaches the eager bundle.
 //
 // One undoable step writes every field the choice touches, so the plot and

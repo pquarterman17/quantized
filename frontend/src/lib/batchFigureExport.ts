@@ -9,8 +9,9 @@ export const MAX_BATCH_FIGURE_EXPORT = 64;
 
 export interface BatchFigureExportOptions {
   format: "pdf" | "svg" | "eps" | "png" | "tiff";
-  style: string;
-  dpi: number;
+  /** Absent = each figure's own saved style preset / DPI. */
+  style?: string;
+  dpi?: number;
   archiveName: string;
   /** One PDF with a page per figure instead of a ZIP (format must be pdf). */
   multipage?: boolean;
