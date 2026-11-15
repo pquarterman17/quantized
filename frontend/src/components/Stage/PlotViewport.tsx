@@ -34,6 +34,7 @@ import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
 import { loadPlotPerfPrefs } from "../../store/prefs";
 import { liveTicksPlugin } from "../../lib/liveTicksPlugin";
 import { plotDecorNeeds, useLazyPlotParts } from "./useLazyPlotParts";
+import { blocksDecimation } from "../../lib/marksLoader";
 import { useLivePaint } from "./useLivePaint";
 import { useResolvedLims } from "./useResolvedLims";
 
@@ -220,7 +221,7 @@ export default function PlotViewport(props: PlotViewportProps) {
         hasErrorBars: hasErrorMapEntries(errorBars),
         hasErrorSpans: hasErrorMapEntries(errorSpans),
         defaultTrace: args.defaultTrace,
-        hasColorByColumns: !!(colorByColumns && colorByColumns.size > 0),
+        hasColorByColumns: !!(colorByColumns && colorByColumns.size > 0) || blocksDecimation(args.seriesStyles ?? [], fullX.length),
       });
     let plotData = displayPayload.data;
     if (decimate) {
@@ -351,9 +352,9 @@ export default function PlotViewport(props: PlotViewportProps) {
   // On-demand plugins, and a rebuild once the startup chunks settle (figures leftover g).
   const decor = plotDecorNeeds(
     [args.title, args.xAxisLabel, args.yAxisLabel, args.y2AxisLabel, ...(seriesLabels ?? [])],
-    displayPayload, args.annotations, (args.refLines?.length ?? 0) + (args.regionShades?.length ?? 0),
+    displayPayload, args.annotations, (args.refLines?.length ?? 0) + (args.regionShades?.length ?? 0), args.seriesStyles,
   );
-  useLazyPlotParts([args.xFmt, args.yFmt, args.y2Fmt], args.tool, () => setRebuildEpoch((e) => e + 1), decor);
+  useLazyPlotParts([args.xFmt, args.yFmt, args.y2Fmt], args.tool, () => setRebuildEpoch((e) => e + 1), { ...decor, regionResult: !!(args.integral || args.fwhmResult) });
 
   return <div ref={hostRef} style={{ position: "absolute", inset: 8, top: insetTop === undefined ? 8 : `max(${insetTop}px, var(--qz-dock-clear, 0px))`, right: "var(--qz-plot-right,8px)" }} />;
 }

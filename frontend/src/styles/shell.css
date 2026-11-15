@@ -736,6 +736,7 @@ body {
 .qzk-window-workspace-sep { width: 1px; height: 16px; margin: 0 2px; background: var(--border-soft); }
 @media (max-width: 900px) { .qzk-window-workspace button span + span { display: none; } }
 .qzk-stage { position: relative; flex: 1; background: var(--axes-bg); min-height: 0; overflow: hidden; }
+.qzk-bg-stage { position: absolute; inset: 0; } /* an unfocused window's plot + read-only legend (gap audit 2 #3) */
 /* Optional uPlot chart title (Inspector "Titles & labels"); themed + a fixed
    ~24px height so PlotStage can reserve matching room and not clip the x-axis. */
 .u-title { color: var(--text); font-size: 14px; font-weight: var(--weight-semibold); line-height: 20px; padding-bottom: 4px; }
@@ -941,18 +942,18 @@ body {
    plot host gives up --qz-plot-right for it (--qz-out-w is its measured
    width) — the export's "outside right". */
 .qzk-legend.auto { top: calc(var(--qz-frame-top, 72px) + 8px); right: calc(100% - var(--qz-frame-left, 0px) - var(--qz-frame-width, 100%) + 8px); }
-.qzk-stage[data-lc$="w"] > .qzk-legend.auto { left: calc(var(--qz-frame-left, 0px) + 8px); right: auto; }
-.qzk-stage[data-lc^="s"] > .qzk-legend.auto { top: auto; bottom: calc(100% - var(--qz-frame-top, 0px) - var(--qz-frame-height, 100%) + 8px); }
+:is(.qzk-stage, .qzk-bg-stage)[data-lc$="w"] > .qzk-legend.auto { left: calc(var(--qz-frame-left, 0px) + 8px); right: auto; }
+:is(.qzk-stage, .qzk-bg-stage)[data-lc^="s"] > .qzk-legend.auto { top: auto; bottom: calc(100% - var(--qz-frame-top, 0px) - var(--qz-frame-height, 100%) + 8px); }
 /* Chrome audit round 4: in a narrow frame the auto legend grew left past the
    frame over the y ticks and title (and off the stage). It now stays inside
    the frame: labels wrap, and the rows scroll once it is full. Any other
    placement at least stays on the stage. */
-.qzk-stage > .qzk-legend { max-width: calc(100% - 24px); }
-.qzk-stage > .qzk-legend.auto { max-width: calc(var(--qz-frame-width, 100%) - 16px); max-height: calc(var(--qz-frame-height, 100%) - 16px); }
+:is(.qzk-stage, .qzk-bg-stage) > .qzk-legend { max-width: calc(100% - 24px); }
+:is(.qzk-stage, .qzk-bg-stage) > .qzk-legend.auto { max-width: calc(var(--qz-frame-width, 100%) - 16px); max-height: calc(var(--qz-frame-height, 100%) - 16px); }
 .qzk-legend-toggle { overflow-wrap: anywhere; }
 .qzk-stage[data-narrow-frame] > .qzk-legend .it .qz-icon-btn { display: none; }
 .qzk-legend.out { top: var(--qz-frame-top, 72px); right: 8px; max-height: var(--qz-frame-height, 70%); max-width: min(260px, 40%); } /* the plot keeps 60% of a narrow stage */
-.qzk-stage:has(> .qzk-legend.out) { --qz-plot-right: calc(var(--qz-out-w, 200px) + 16px); }
+:is(.qzk-stage, .qzk-bg-stage):has(> .qzk-legend.out) { --qz-plot-right: calc(var(--qz-out-w, 200px) + 16px); }
 .qzk-legend.out .qzk-legend-content { gap: 1px; }
 .qzk-legend.out .it { font-size: var(--font-size-sm); }
 .qzk-legend.out .it .qz-icon-btn { display: none; }
@@ -1064,6 +1065,18 @@ body {
    headers are stat names, not row numbers, so they get the full gutter. */
 .qzk-grid-footer .qzk-grid-cell { background: var(--surface-2); }
 .qzk-grid-footer .qzk-grid-rownum { background: var(--surface-1); padding: 3px 1px; font-size: var(--type-nano); text-overflow: clip; }
+/* Worksheet cell cursor (useGridCursor): the active cell gets an accent
+   outline, the rest of a cell range the selection tint; the grid shows a focus
+   ring only for keyboard focus. The blank entry row under the data reads as an
+   invitation to type, not as data. */
+.qzk-grid:focus { outline: none; }
+.qzk-grid:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.qzk-grid-row .qzk-grid-cell.qzk-cell-range { background: var(--accent-soft); }
+.qzk-grid-cell.qzk-cell-cursor { outline: 2px solid var(--accent); outline-offset: -2px; }
+.qzk-grid-row.qzk-grid-entry .qzk-grid-rownum { font-style: italic; }
+.qzk-grid[aria-multiselectable] .qzk-grid-cell { user-select: none; }
+/* The header-row editor (HeaderEditor.tsx): a popover on the header cell. */
+.qzk-header-editor { z-index: 45; width: 290px; display: grid; gap: 6px; padding: 8px; background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); font-size: var(--font-size-sm); color: var(--text); }
 
 /* column resize handle (MAIN_PLAN #3): a slim hit zone hugging each numeric
    header cell's right edge — drag to resize, double-click to autofit. The
@@ -1163,6 +1176,12 @@ body {
 /* Item 14 — a Library dataset drag hovering THIS frame ("drop = rebind");
    stronger than the focus ring so the target reads unambiguously mid-drag. */
 .qzk-plotwin.dropping { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+/* Gap audit 3 N1: over the plot body the drop ADDS the data as curves — say so. */
+.qzk-plotwin.dropping-add .qzk-plotwin-body::after { content: "+ Add as curves"; }
+.qzk-plotwin.dropping-add .qzk-plotwin-body::after, .qzk-graph-drop-add {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); font-weight: 600; pointer-events: none; z-index: 5;
+}
 /* GUI_INTERACTION #3 sub-item 2b: the SAME resting "legal drop target" tint
    FolderRow uses, applied to the second real drop-target family that shares
    `activeDrag` (store/libraryPanel.ts) — every eligible window frame lights

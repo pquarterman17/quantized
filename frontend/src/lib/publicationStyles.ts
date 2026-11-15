@@ -41,10 +41,27 @@ export interface ExportSeriesStyle {
    *  unrecognized value falls back to a circle rather than raising, matching
    *  `line`/`step`'s existing degrade-gracefully contract. */
   marker_shape?: string;
+  /** `SeriesStyle.markerFill` (gap audit 2 #6): `"hollow"` → matplotlib
+   *  `markerfacecolor="none"` (`calc.figure._plot_kwargs`). */
+  marker_fill?: "solid" | "hollow";
+  /** `SeriesStyle.errorBar` (gap audit 2 #6) → `calc.figure_errorbars`'
+   *  `capsize` / `elinewidth` / `ecolor` (points, points, hex). */
+  error_cap?: number;
+  error_width?: number;
+  error_color?: string;
   /** `vs` and `color_by` remain dataset channel indices on the wire. */
   fill?: "under" | { vs: number };
   color_by?: number;
   colormap?: string;
+  /** Gap audit 3 N5: marker size from a channel (`SeriesStyle.sizeBy`, a
+   *  dataset channel index like `color_by`) mapped onto `size_range` points
+   *  (`calc.figure_sizes`). */
+  size_by?: number;
+  size_range?: [number, number];
+  /** Gap audit 3 N6: drop lines to the X axis / Y axis (`calc.figure_marks.
+   *  apply_drop_lines`) and the spline connect (`calc.figure_marks.spline_dense`). */
+  drop_lines?: "x" | "y" | "both";
+  connect?: "spline";
   /** Stepped-line alignment (GAP_PLOTTYPES Graph Builder "step" mark) —
    *  the wire form of `SeriesStyle.step`/`StepMode`; mapped to matplotlib's
    *  `drawstyle` by `calc.figure._plot_kwargs`. */
@@ -160,6 +177,12 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
       style.marker_shape = raw.marker_shape;
     }
     if (typeof raw.marker_size === "number" && Number.isFinite(raw.marker_size) && raw.marker_size >= 0) style.marker_size = raw.marker_size;
+    if (raw.marker_fill === "hollow" || raw.marker_fill === "solid") style.marker_fill = raw.marker_fill;
+    for (const k of ["error_cap", "error_width"] as const) {
+      const v = raw[k];
+      if (typeof v === "number" && v >= 0 && v <= 100) style[k] = v;
+    }
+    if (typeof raw.error_color === "string") style.error_color = raw.error_color;
     if (raw.fill === "under") style.fill = raw.fill;
     else {
       const fill = object(raw.fill);
@@ -167,6 +190,9 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     }
     if (Number.isInteger(raw.color_by) && (raw.color_by as number) >= 0) style.color_by = raw.color_by as number;
     if (typeof raw.colormap === "string") style.colormap = raw.colormap;
+    // N5/N6 marks pass through as stored: the backend validates each one (`calc.figure_marks`,
+    // `calc.plotting.resolve_style_channels`), and an invalid one draws nothing, never a 500.
+    for (const k of ["size_by", "size_range", "drop_lines", "connect"] as const) if (raw[k] != null) (style as Record<string, unknown>)[k] = raw[k];
     if (raw.step === "pre" || raw.step === "post" || raw.step === "mid") style.step = raw.step;
     // `legend` is NOT restored -- see its own doc on ExportSeriesStyle above:
     // a rename persists in `view.seriesLabels` and is re-laid on every export.

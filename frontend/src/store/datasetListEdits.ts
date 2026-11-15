@@ -172,6 +172,7 @@ export function createDatasetListEditsSlice(set: SliceSet, get: SliceGet): Datas
           ...(src.channelRoles ? { channelRoles: { ...src.channelRoles } } : {}),
           ...(src.channelTypes ? { channelTypes: { ...src.channelTypes } } : {}),
           ...(src.columnDesignations ? { columnDesignations: { ...src.columnDesignations } } : {}),
+          ...(src.columnProps ? { columnProps: { ...src.columnProps } } : {}),
           ...(src.errorRoles ? { errorRoles: [...src.errorRoles] } : {}), // F5: [] is truthy, carries the O1 marker too
         };
         const datasets = [...s.datasets];

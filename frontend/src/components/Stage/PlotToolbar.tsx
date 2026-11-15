@@ -27,8 +27,9 @@
 // default Graph Window, a narrow window) the trailing groups collapse into the
 // "⋯" menu instead of being clipped (plotToolbarOverflow.ts).
 
-import { Fragment, useId, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
+import { loadToolPlugins } from "../../lib/axisExtrasHook";
 import { clipboardImageSupported } from "../../lib/clipboard";
 import { keyForTool, RESET_VIEW_KEY } from "../../lib/plotToolKeys";
 import { hasHorizontalBars, TURNED_TOOL_NOTE, TURNED_TOOLS } from "../../lib/uplotOrient";
@@ -143,6 +144,11 @@ export default function PlotToolbar({
   const shapeBtnRef = useRef<HTMLButtonElement>(null);
   const optsBtnRef = useRef<HTMLButtonElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
+  // The tool plugins are a lazy chunk (bundle diet slice 27, lib/axisExtrasHook.ts): fetch it once the
+  // toolbar is up, so a first tool pick builds from the module cache. A failure is retried on that pick.
+  useEffect(() => {
+    loadToolPlugins().catch(() => undefined);
+  }, []);
 
   const toggleGroupLabels = () => {
     const next = !showGroupLabels;

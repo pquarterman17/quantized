@@ -21,7 +21,7 @@ from quantized.calc.figure_styles import figure_style
 
 __all__ = ["render_field_figure"]
 
-_FORMATS = ("pdf", "svg", "png", "tiff")
+_FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 _FIGURE_SIZE_IN = (10, 8)  # inches
 
 

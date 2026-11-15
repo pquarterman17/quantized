@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from quantized.calc.figure_sizes import add_size_legend, size_diameters
 from quantized.calc.figure_styles import FigureStyle
 from quantized.heavy_import import heavy_imports
 
@@ -42,6 +43,20 @@ GRADIENT_STOPS = (
 # `lib/exportStyles`; was hardcoded "o", so every shape exported as a circle).
 MARKER_CODES = {"circle": "o", "square": "s", "triangle": "^", "downtriangle": "v",
                 "diamond": "D", "plus": "+", "cross": "x", "star": "*"}
+
+
+def _hollow(sc: Any, spec: Mapping[str, Any]) -> Any:
+    """Open symbols (gap audit 2 #6, ``marker_fill: "hollow"``): each point's
+    mapped colour moves to its edge and the face is emptied -- the canvas'
+    ``paintColorPoint(..., hollow)``. matplotlib maps ``c`` onto the FACE and
+    ignores ``facecolors="none"`` beside it, so the colours are resolved here
+    (after any colourbar has read the norm) and the array dropped."""
+    if spec.get("marker_fill") == "hollow":
+        arr = sc.get_array()
+        sc.set_edgecolors(sc.to_rgba(arr) if arr is not None else sc.get_facecolors())
+        sc.set_facecolor("none")
+        sc.set_array(None)
+    return sc
 
 
 def _js_round(v: float) -> int:
@@ -90,7 +105,7 @@ def _draw_gradient(
     z: NDArray[np.float64],
     label: str,
     spec: Mapping[str, Any],
-    size: float,
+    size: float | NDArray[np.float64],
 ) -> Any:
     """The P1.4 gradient branch: explicit per-point fills, the series' glyph,
     and (for the first series only, ``colorbar``) one colourbar over the sent
@@ -102,7 +117,8 @@ def _draw_gradient(
     shape = spec.get("marker_shape") if spec.get("marker") else None
     marker = MARKER_CODES.get(shape, "o") if isinstance(shape, str) else "o"
     colors = [f for f, k in zip(fills, keep, strict=True) if k]
-    sc = ax.scatter(xv[keep], yv[keep], c=colors, marker=marker, s=size, label=label)
+    s_arr = size[keep] if isinstance(size, np.ndarray) else size
+    sc = ax.scatter(xv[keep], yv[keep], c=colors, marker=marker, s=s_arr, label=label)
     if spec.get("colorbar", True):
         with heavy_imports("matplotlib.cm", "matplotlib.colors"):
             from matplotlib.cm import ScalarMappable
@@ -112,7 +128,7 @@ def _draw_gradient(
             cmap=LinearSegmentedColormap.from_list("qz_gradient", stops),
         )
         fig.colorbar(mappable, ax=ax, label=str(spec.get("colorbar_label") or ""))
-    return sc
+    return _hollow(sc, spec)
 
 
 def draw_color_scatter(
@@ -145,11 +161,19 @@ def draw_color_scatter(
     """
     z = np.asarray(spec["color_by"], dtype=float)
     n = min(len(xv), len(yv), len(z))
-    size = float(spec.get("marker_size") or st.marker_size) ** 2
+    size: float | NDArray[np.float64] = float(spec.get("marker_size") or st.marker_size) ** 2
+    diam = size_diameters(spec, n)  # N5: marker size from a column
+    if diam is not None:
+        size = np.asarray(np.where(np.isfinite(diam), diam, 0.0) ** 2, dtype=float)
     if spec.get("color_stops") and spec.get("color_lim"):
-        return _draw_gradient(fig, ax, xv[:n], yv[:n], z[:n], label, spec, size)
+        out = _draw_gradient(fig, ax, xv[:n], yv[:n], z[:n], label, spec, size)
+        if diam is not None:
+            add_size_legend(ax, spec, "0.35", "o")
+        return out
     sc = ax.scatter(
         xv[:n], yv[:n], c=z[:n], cmap=str(spec.get("colormap") or "viridis"), s=size, label=label
     )
     fig.colorbar(sc, ax=ax)
-    return sc
+    if diam is not None:
+        add_size_legend(ax, spec, "0.35", "o")
+    return _hollow(sc, spec)

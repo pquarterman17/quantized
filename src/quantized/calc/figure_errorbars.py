@@ -19,7 +19,39 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-__all__ = ["apply_error_bars"]
+__all__ = ["apply_error_bars", "error_bar_style"]
+
+# The defaults every bound bar used before per-series styling (gap audit 2
+# #6), and still uses when a series sets none: the canvas' 1 px bar and
+# ERROR_CAP_HALF_PX cap (`lib/uplotErrorRange.ts`) are drawn to match them.
+_CAPSIZE = 2.0
+_ELINEWIDTH = 1.0
+
+
+def _points(v: Any, lo: float) -> float | None:
+    """A finite size in points within [lo, 100], else ``None`` (the default)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    f = float(v)
+    return f if np.isfinite(f) and lo <= f <= 100 else None
+
+
+def error_bar_style(spec: Mapping[str, Any] | None) -> tuple[float, float, str | None]:
+    """``(capsize, elinewidth, colour)`` for one series' bars from its style
+    spec's ``error_cap`` / ``error_width`` / ``error_color`` (gap audit 2 #6,
+    the wire form of the canvas' ``SeriesStyle.errorBar``). A bad or absent
+    value degrades to the default -- an export never 500s on a style hint.
+    Colour ``None`` = the series' own drawn colour."""
+    if not isinstance(spec, Mapping):
+        return _CAPSIZE, _ELINEWIDTH, None
+    cap = _points(spec.get("error_cap"), 0.0)
+    width = _points(spec.get("error_width"), 0.01)
+    color = spec.get("error_color")
+    return (
+        _CAPSIZE if cap is None else cap,
+        _ELINEWIDTH if width is None else width,
+        color if isinstance(color, str) and color else None,
+    )
 
 
 def _mags(raw: Any, n: int) -> NDArray[np.float64] | None:
@@ -56,6 +88,7 @@ def apply_error_bars(
     series: Sequence[tuple[str, Any]],
     spans: Sequence[Mapping[str, Any] | None] | None,
     artists: Sequence[Any],
+    styles: Sequence[Mapping[str, Any] | None] | None = None,
 ) -> None:
     """Overlay error bars on already-drawn series.
 
@@ -63,7 +96,9 @@ def apply_error_bars(
     re-plotting each series through ``ax.errorbar``: the lines, fills and
     colour-mapped scatter are already on the axes with their own styling, and
     re-drawing them would change how they look in the export only. Bars inherit
-    each series' own colour so a multi-series plot stays readable.
+    each series' own colour so a multi-series plot stays readable, unless that
+    series' style (``styles[i]``, :func:`error_bar_style`) sets cap size, line
+    width or colour.
     """
     if not spans:
         return
@@ -78,11 +113,13 @@ def apply_error_bars(
         if yerr is None and xerr is None:
             continue
         artist = artists[i] if i < len(artists) else None
-        color = None
-        try:
-            color = artist.get_color() if artist is not None else None
-        except AttributeError:
-            color = None  # a colour-mapped scatter has no single colour
+        style = styles[i] if styles and i < len(styles) else None
+        capsize, elinewidth, color = error_bar_style(style)
+        if color is None:
+            try:
+                color = artist.get_color() if artist is not None else None
+            except AttributeError:
+                color = None  # a colour-mapped scatter has no single colour
         container = ax.errorbar(
             xv,
             yv,
@@ -90,8 +127,8 @@ def apply_error_bars(
             xerr=xerr,
             fmt="none",
             ecolor=color,
-            elinewidth=1,
-            capsize=2,
+            elinewidth=elinewidth,
+            capsize=capsize,
             zorder=1,  # behind the series line, so data stays legible
         )
         # matplotlib returns an ErrorbarContainer -- a tuple subclass of

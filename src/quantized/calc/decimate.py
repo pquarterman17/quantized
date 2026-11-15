@@ -157,9 +157,38 @@ def window_columns(
     rows returns empty arrays -- a legitimate "nothing here" answer, not an
     error, left to the caller to interpret.
     """
+    rows = window_row_indices(x, x_min, x_max)
+    return x[rows], [s[rows] for s in series]
+
+
+def reduce_plot_rows(
+    x: NDArray[np.float64],
+    series: Sequence[NDArray[np.float64]],
+    window_rows: NDArray[np.intp] | None,
+    buckets: int | None,
+) -> tuple[NDArray[np.float64], list[NDArray[np.float64]], NDArray[np.intp] | None]:
+    """Apply a view window (``window_rows``, from :func:`window_row_indices`)
+    and then min/max decimation (``buckets``) to the plot columns, returning
+    them with ``rows``: the ORIGINAL row index of every returned row, or None
+    when the rows are the dataset's own one-to-one (gap audit 3 N2 review --
+    a client masking a drawn point maps it back through this, never by
+    position). ``series`` empty is never decimated (see decimate_columns)."""
+    rows: NDArray[np.intp] | None = window_rows
+    cols = list(series)
+    if rows is not None:
+        x, cols = x[rows], [s[rows] for s in cols]
+    if buckets is not None and cols:
+        picked = decimate_row_indices(cols, buckets)
+        x, cols = x[picked], [s[picked] for s in cols]
+        rows = picked if rows is None else rows[picked]
+    return x, cols, rows
+
+
+def window_row_indices(x: NDArray[np.float64], x_min: float, x_max: float) -> NDArray[np.intp]:
+    """The row indices :func:`window_columns` keeps (ascending): finite ``x``
+    within ``[x_min, x_max]``, bounds in either order."""
     lo, hi = (x_min, x_max) if x_min <= x_max else (x_max, x_min)
-    mask = np.isfinite(x) & (x >= lo) & (x <= hi)
-    return x[mask], [s[mask] for s in series]
+    return np.flatnonzero(np.isfinite(x) & (x >= lo) & (x <= hi)).astype(np.intp, copy=False)
 
 
 def is_ascending(x: NDArray[np.float64]) -> bool:

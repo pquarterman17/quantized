@@ -39,11 +39,12 @@ export interface GraphFormat extends GraphFormatFields {
 /** Strip the fields of a series style that name a dataset CHANNEL
  *  (`colorBy`, a fill band's `vs`): a format is data-free, and a channel
  *  index from one dataset means nothing on another. */
-function portableStyle(style: SeriesStyle | undefined): SeriesStyle | null {
+export function portableStyle(style: SeriesStyle | undefined): SeriesStyle | null {
   if (!style) return null;
-  const { colorBy: _colorBy, colormap: _colormap, fill, ...rest } = style;
+  const { colorBy: _colorBy, colormap: _colormap, sizeBy: _sizeBy, fill, ...rest } = style;
   void _colorBy;
   void _colormap;
+  void _sizeBy;
   const out: SeriesStyle = { ...rest };
   if (fill === "under") out.fill = "under";
   return Object.keys(out).length > 0 ? out : null;
@@ -183,5 +184,12 @@ export function seriesStyleFromExport(style: ExportSeriesStyle | null): SeriesSt
   if (typeof style.marker_shape === "string") out.markerShape = style.marker_shape as SeriesStyle["markerShape"];
   if (style.step) out.step = style.step;
   if (style.fill === "under") out.fill = "under";
+  if (style.marker_fill) out.markerFill = style.marker_fill;
+  // N5/N6: size-by is channel-bound (not restored); drop lines and the spline connect are.
+  if (style.drop_lines) out.dropLines = style.drop_lines;
+  if (style.connect) out.connect = style.connect;
+  // Sanitized on load (`sanitizeExportSeriesStyles`): only real values remain.
+  const { error_cap: cap, error_width: width, error_color: color } = style;
+  if (cap != null || width != null || color) out.errorBar = { cap, width, color };
   return Object.keys(out).length > 0 ? out : null;
 }

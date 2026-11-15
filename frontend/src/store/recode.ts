@@ -62,6 +62,7 @@ import {
   type RecodeMapping,
   type SavedRecodeMapping,
 } from "../lib/recode";
+import { LINKED_GRAPH_EDIT_NOTICE } from "../lib/rederived";
 import type { ComputedColumn } from "../lib/types";
 import { toast } from "./toasts";
 import { resolvePendingEdit } from "./pendingEdit";
@@ -249,6 +250,10 @@ export const useRecode = create<RecodeState>((set, get) => ({
     });
     if (reason) {
       toast(`can't add recode column "${name}": ${reason}`, "danger");
+      return null;
+    }
+    if (app.datasets.find((d) => d.id === datasetId)?.linkedCurves) {
+      toast(LINKED_GRAPH_EDIT_NOTICE, "danger");
       return null;
     }
     app.recordHistory("recode column");

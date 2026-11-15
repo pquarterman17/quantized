@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { buildExportStyles } from "../../../lib/exportStyles";
-import { sanitizeFigureDocs } from "../../../lib/figuredoc";
+import { sanitizeFigureDocs } from "../../../lib/figuredocSanitize";
 import { installSeriesPalette, TEST_SERIES_PALETTE } from "../../../lib/regressionMatrix.testkit";
 import type { DataStruct } from "../../../lib/types";
 import { buildLegacyFigureDoc, buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";

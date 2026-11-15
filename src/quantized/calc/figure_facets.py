@@ -38,6 +38,7 @@ from quantized.calc.figure import _plot_kwargs
 from quantized.calc.figure_facets_grid import _grid_setup, _new_grid_figure
 from quantized.calc.figure_greyscale import greyscale_facet_panels
 from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_marks import warn_marks_not_drawn
 from quantized.calc.figure_overrides import apply_axis_shape_overrides
 from quantized.calc.figure_render import render_scope, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale
@@ -51,7 +52,7 @@ __all__ = [
     "render_categorical_facets_figure",
 ]
 
-_FORMATS = ("pdf", "svg", "png", "tiff")
+_FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 
 
 def draw_facet_grid(
@@ -103,6 +104,8 @@ def draw_facet_grid(
     if greyscale:
         panels = greyscale_facet_panels(panels)
     n = len(panels)
+    styles = [s.get("style") for p in panels for s in p.get("series", [])]
+    warn_marks_not_drawn(styles, "facet figures")
     panel_artists: list[list[Any]] = []
     for i, panel in enumerate(panels):
         ax = axes[i]

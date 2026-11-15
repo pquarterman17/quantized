@@ -15,6 +15,7 @@
 import { useRef, useState } from "react";
 
 import { CHANNEL_DND, decodeChannelDrag, resolveAxisZone, type AxisZone } from "../../lib/dragaxis";
+import { dropOntoGraph, isLibraryDrag } from "./graphDrop";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import { openFigureDialog } from "../../store/figureDialogs";
 import { useApp } from "../../store/useApp";
@@ -44,6 +45,10 @@ export default function AxisDropZones({ className, style, onContextMenu, onAxisD
   const hasY2 = useApp((s) => (s.y2Keys?.length ?? 0) > 0); // #6: Y2's band opens its dialog only when drawn
 
   const isChannelDrag = (e: React.DragEvent): boolean => e.dataTransfer.types.includes(CHANNEL_DND);
+  // Gap audit 3 N1: a Library dataset / book dropped on the graph adds curves.
+  const activeId = useApp((s) => s.activeId);
+  const [adding, setAdding] = useState(false);
+  const isGraphDrop = (e: React.DragEvent): boolean => !!activeId && isLibraryDrag([...e.dataTransfer.types]);
 
   const zoneAt = (e: React.DragEvent): AxisZone | null => {
     const rect = ref.current?.getBoundingClientRect();
@@ -74,20 +79,34 @@ export default function AxisDropZones({ className, style, onContextMenu, onAxisD
         }, onLoadFailure);
       }}
       onDragEnter={(e) => {
+        if (isGraphDrop(e)) return void (e.preventDefault(), setAdding(true));
         if (!isChannelDrag(e)) return;
         e.preventDefault();
         setDepth((d) => d + 1);
       }}
       onDragOver={(e) => {
+        if (isGraphDrop(e)) {
+          e.preventDefault();
+          e.stopPropagation(); // this stage is the target, not the window around it
+          if (!adding) setAdding(true);
+          return;
+        }
         if (!isChannelDrag(e)) return;
         e.preventDefault(); // required every dragover to keep the drop legal
         setZone(zoneAt(e));
       }}
       onDragLeave={(e) => {
+        if (adding && !ref.current?.contains(e.relatedTarget as Node | null)) setAdding(false);
         if (!isChannelDrag(e)) return;
         setDepth((d) => Math.max(0, d - 1));
       }}
       onDrop={(e) => {
+        if (isGraphDrop(e)) {
+          e.preventDefault();
+          e.stopPropagation(); // never also rebind the window or open a new one
+          setAdding(false);
+          return dropOntoGraph(activeId!, e.dataTransfer);
+        }
         if (!isChannelDrag(e)) return;
         e.preventDefault();
         const landedZone = zoneAt(e);
@@ -99,6 +118,7 @@ export default function AxisDropZones({ className, style, onContextMenu, onAxisD
       }}
     >
       {children}
+      {adding && <div className="qzk-graph-drop-add" aria-hidden="true">+ Add as curves</div>}
       {depth > 0 && (
         <div className="qzk-axis-drop-zones" aria-hidden="true">
           <div className={`qzk-axis-zone x${zone === "x" ? " active" : ""}`} />

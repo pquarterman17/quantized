@@ -25,7 +25,7 @@ from quantized.calc.figure_styles import figure_style
 
 __all__ = ["render_categorical_figure"]
 
-_FORMATS = ("pdf", "svg", "png", "tiff")
+_FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 
 
 def _draw_categorical_bars(

@@ -7,6 +7,13 @@
 //     (#33/#34): needed only while the "qfit" tool is active. Moved behind
 //     this seam to fund #6's eager bytes; the tool's first activation in a
 //     session waits for one chunk, after which it is instant.
+//   - `lib/uplotToolPlugins.ts` -- the tool-dock plugins (pan, cursor
+//     readout, measure, region statistics, integrate, FWHM): needed only
+//     while one of those tools is picked, or while an integral / FWHM result
+//     it made is still drawn. Moved behind this seam in bundle diet slice 27
+//     (plans/BUNDLE_HEADROOM.md). Unlike the two above it is also WARMED: the
+//     plot toolbar starts the load once it has mounted, so a first tool pick
+//     after first paint builds with the plugin already there.
 // `uplotOpts.buildOpts` reads each module through these getters and simply
 // skips it while still null; the main plot viewport loads whatever its
 // current args need (`components/Stage/useLazyPlotParts.ts`) and rebuilds
@@ -16,11 +23,14 @@ import { hasAxisExtras, type AxisFormat } from "./axisFormat";
 
 type ExtrasModule = typeof import("./axisExtras");
 type GadgetsModule = typeof import("./uplotGadgets");
+type ToolsModule = typeof import("./uplotToolPlugins");
 
 let extras: ExtrasModule | null = null;
 let gadgets: GadgetsModule | null = null;
 let extrasLoading: Promise<void> | null = null;
 let gadgetsLoading: Promise<void> | null = null;
+let tools: ToolsModule | null = null;
+let toolsLoading: Promise<void> | null = null;
 
 /** The loaded axis-extras applier, or null before it has loaded. */
 export function axisExtrasApplier(): ExtrasModule["applyAxisExtras"] | null {
@@ -58,6 +68,34 @@ export function loadGadgetPlugins(): Promise<void> {
     },
   );
   return gadgetsLoading;
+}
+
+/** The loaded tool-dock plugins, or null before they have loaded. */
+export function toolPlugins(): ToolsModule | null {
+  return tools;
+}
+
+/** Load the tool-dock plugins once (idempotent; a failed load may retry). */
+export function loadToolPlugins(): Promise<void> {
+  toolsLoading ??= import("./uplotToolPlugins").then(
+    (m) => {
+      tools = m;
+    },
+    (e: unknown) => {
+      toolsLoading = null;
+      throw e;
+    },
+  );
+  return toolsLoading;
+}
+
+/** The tools whose plugin is in `lib/uplotToolPlugins.ts`. */
+const PLUGIN_TOOLS: ReadonlySet<string> = new Set(["pan", "cursor", "measure", "stats", "integ", "fwhm"]);
+
+/** Whether a plot with this tool (and an integral / FWHM result to draw, or
+ *  not) needs the tool-dock plugins. */
+export function needsToolPlugins(tool: string, regionResult = false): boolean {
+  return regionResult || PLUGIN_TOOLS.has(tool);
 }
 
 /** Whether any of these formats needs the extras drawn. */

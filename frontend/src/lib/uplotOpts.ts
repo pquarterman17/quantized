@@ -4,7 +4,7 @@
 import type { ErrorSpan } from "./errorbars";
 import type uPlot from "uplot";
 
-import { axisExtrasApplier, gadgetPlugins } from "./axisExtrasHook";
+import { axisExtrasApplier, gadgetPlugins, toolPlugins } from "./axisExtrasHook";
 import { categoricalTickFormatter } from "./categoricalTicks"; // moved out (line pin); re-exported
 export { categoricalTickFormatter };
 
@@ -28,8 +28,9 @@ import { logDecadeLabels, logGridSplits, logMajorTickFilter, spansDecade } from 
 export { logMajorTickFilter };
 import { decimalsForIncrement, pow10 } from "./ticks";
 import { ERROR_CAP_HALF_PX, errorRange, errorReach, fullYExtents, withXBarRows } from "./uplotErrorRange";
+import { marks } from "./marksLoader";
 import { fixedXRange, fullXExtents, scannedXRange } from "./uplotXRange";
-import type { Annotation, AxisFormat, AxisScale, DefaultTrace, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
+import { dateAwareXFmt, type Annotation, type AxisFormat, type AxisScale, type DefaultTrace, type RefLine, type RegionShade, type SeriesStyle, type Shape } from "./types";
 import {
   annotationPlugin,
   axisBoxPlugin,
@@ -40,27 +41,17 @@ import {
   regionShadePlugin,
   type AnnotationEditOpts,
 } from "./uplotOverlays";
-import { regionLiveBoxHook, regionSelectPick } from "./uplotRegionBox";
+import { regionLiveBoxHook, regionSelectPick, selectBoxPick } from "./uplotRegionBox";
 import { richLabels, type AxisLabelEditOpts } from "./richLabelsLoader"; // the title drawing is a lazy chunk; until it lands uPlot draws plain titles
 import { buildSeriesDefs, type SeriesColors } from "./uplotSeries";
 import { shapesPlugin, type ShapeEditOpts } from "./uplotShapes";
 import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit";
 import { anchorEditPlugin, type AnchorPoint } from "./uplotAnchors";
-import { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
 import { xLabelRightPad, xTickSpace } from "./uplotRightPad";
 import { orientArgs, orientAxes, orientPlugins } from "./uplotOrient";
 import { withUnit } from "./unitDisplay";
 export { withUnit }; // eager callers import it here: ~260 B less first-paint JS than direct
-import {
-  measurePlugin,
-  panPlugin,
-  readoutPlugin,
-  statsPlugin,
-  viewHistoryPlugin,
-  wheelZoomPlugin,
-  type PlotViewBounds,
-  type Readout,
-} from "./uplotTools";
+import { viewHistoryPlugin, wheelZoomPlugin, type PlotViewBounds, type Readout } from "./uplotTools";
 
 export type PlotTool =
   | "pointer"
@@ -546,8 +537,9 @@ export interface BuildOptsArgs {
   /** In `region` tool: the drag's x edges (unordered); y0/y1 too past
    *  `MIN_BOX_HEIGHT_PX` (2-D box, GAP #96/#20). Baseline's region fit. */
   onRegionSelect?: (x0: number, x1: number, y0?: number, y1?: number) => void;
-  /** #50 plot-brush: drag-end x-band edges for the "select" tool. */
-  onRangeSelect?: (x0: number, x1: number) => void;
+  /** #50 plot-brush: drag-end x-band edges for the "select" tool; a 2-D box
+   *  (gap audit 3 N2) also carries its y edges on the box's axis. */
+  onRangeSelect?: (x0: number, x1: number, y?: [number, number], y2?: [number, number]) => void;
   /** In `measure` tool: called with the live Δx/Δy/slope while dragging the
    *  two-point ruler (null when the ruler is cleared). */
   onMeasure?: (m: Measurement | null) => void;
@@ -784,7 +776,7 @@ function scaleDistrProps(
 
 export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Options { // orientArgs: uplotOrient
   const args = orientArgs(given), { width, height, yScale, xScale, tool, onReadout, xLim, yLim, refLines } = args;
-  const { xFmt, yFmt, y2Fmt, annotations, showGrid, onRegionSelect } = args;
+  const { yFmt, y2Fmt, annotations, showGrid, onRegionSelect } = args, xFmt = dateAwareXFmt(args.xFmt, payload.xIsDate); // audit #7: auto on a date X = dates
   const xAscending = xIsAscending(payload.data[0] as (number | null)[]);
   // This window's EFFECTIVE background (item 18) drives both the axis/grid/
   // ink colours below AND the contrast check on literal per-series colours
@@ -887,36 +879,39 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   };
 
   const plugins: uPlot.Plugin[] = [];
-  if (tool === "pan") plugins.push(panPlugin());
-  if (tool === "cursor") plugins.push(readoutPlugin(onReadout, payload.yShift, payload.blockRows, payload.xStep));
-  if (tool === "measure" && args.onMeasure) {
-    plugins.push(measurePlugin(args.onMeasure, cssVar("--accent") || "#8b5cf6"));
+  // The tool-dock plugins below load on demand (axisExtrasHook.ts, warmed once the toolbar mounts): until
+  // the chunk arrives none is pushed; the viewport rebuilds when it lands (Stage/useLazyPlotParts.ts).
+  const t = toolPlugins();
+  if (t && tool === "pan") plugins.push(t.panPlugin());
+  if (t && tool === "cursor") plugins.push(t.readoutPlugin(onReadout, payload.yShift, payload.blockRows, payload.xStep));
+  if (t && tool === "measure" && args.onMeasure) {
+    plugins.push(t.measurePlugin(args.onMeasure, cssVar("--accent") || "#8b5cf6"));
   }
-  if (tool === "stats" && args.onStats) {
-    plugins.push(statsPlugin(args.onStats, accentColor));
+  if (t && tool === "stats" && args.onStats) {
+    plugins.push(t.statsPlugin(args.onStats, accentColor));
   }
   // Integrate / FWHM: when the tool is active, the plugin owns the drag AND draws
   // the committed result; otherwise a draw-only instance keeps a prior result
   // shaded across tool switches (it clears only on dataset change / chip clear).
-  if (tool === "integ") {
+  if (t && tool === "integ") {
     plugins.push(
-      integratePlugin(args.integral ?? null, accentColor, accentSoftColor, {
+      t.integratePlugin(args.integral ?? null, accentColor, accentSoftColor, {
         onIntegrate: args.onIntegrate,
         interactive: true,
       }),
     );
-  } else if (args.integral) {
-    plugins.push(integratePlugin(args.integral, accentColor, accentSoftColor));
+  } else if (t && args.integral) {
+    plugins.push(t.integratePlugin(args.integral, accentColor, accentSoftColor));
   }
-  if (tool === "fwhm") {
+  if (t && tool === "fwhm") {
     plugins.push(
-      fwhmPlugin(args.fwhmResult ?? null, accentColor, captureSoftColor, {
+      t.fwhmPlugin(args.fwhmResult ?? null, accentColor, captureSoftColor, {
         onFwhm: args.onFwhm,
         interactive: true,
       }),
     );
-  } else if (args.fwhmResult) {
-    plugins.push(fwhmPlugin(args.fwhmResult, accentColor, captureSoftColor));
+  } else if (t && args.fwhmResult) {
+    plugins.push(t.fwhmPlugin(args.fwhmResult, accentColor, captureSoftColor));
   }
   // Gadget frame (#33 fit → #34 the rest): only draws/drags while its tool is
   // active (the gadget is cleared entirely on tool switch — see PlotStage —
@@ -1005,9 +1000,8 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   if (legacyBars && legacyBars.size > 0) {
     plugins.push(errorBarsPlugin(legacyBars, inkDimColor, ERROR_CAP_HALF_PX));
   }
-  if (args.colorByColumns && args.colorByColumns.size > 0) {
-    plugins.push(colorScatterPlugin(args.colorByColumns));
-  }
+  if (args.colorByColumns && args.colorByColumns.size > 0) plugins.push(colorScatterPlugin(args.colorByColumns));
+  plugins.push(...(marks()?.marksPlugins(args.seriesStyles, args.colorByColumns) ?? [])); // N5/N6 (lazy; buildSeriesDefs asks for the load)
   if (args.axisBox) {
     plugins.push(axisBoxPlugin(inkDimColor));
   }
@@ -1220,13 +1214,12 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
     width,
     height,
     ...(args.title?.trim() ? { title: args.title.trim() } : {}),
-    // Box-zoom in zoom/pointer (MAIN #18); select drags x-only, region also
-    // tracks y (2-D box, MATLAB `onBGMouseUp` parity, GAP #96/#20), neither
-    // rescales; pan/cursor disable drag; pointer hides the dashed crosshair.
+    // Box-zoom in zoom/pointer (MAIN #18); region and select also track y
+    // past a threshold (2-D box: MATLAB `onBGMouseUp` parity, GAP #96/#20;
+    // select's box mask, gap audit 3 N2), neither rescales; pan/cursor disable drag; pointer hides the dashed crosshair.
     cursor: {
       drag:
-        tool === "region" ? { x: true, y: true, setScale: false, uni: 1 }
-        : tool === "select" ? { x: true, y: false, setScale: false, uni: 1 }
+        tool === "region" || tool === "select" ? { x: true, y: true, setScale: false, uni: 1 }
         : { x: tool === "zoom" || tool === "pointer", y: tool === "zoom" || tool === "pointer", uni: 1 },
       ...(tool === "pointer" ? { x: false, y: false } : {}),
     },
@@ -1239,9 +1232,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       setSelect: [
         (u: uPlot): void => {
           if (u.select.width <= 0) return;
-          if (tool === "select") {
-            return void args.onRangeSelect?.(u.posToVal(u.select.left, "x"), u.posToVal(u.select.left + u.select.width, "x"));
-          }
+          if (tool === "select") return void (args.onRangeSelect && selectBoxPick(u, payload, hasY2, args.onRangeSelect));
           if (tool !== "region" || !onRegionSelect) return;
           regionSelectPick(u, payload, hasY2, onRegionSelect);
         },

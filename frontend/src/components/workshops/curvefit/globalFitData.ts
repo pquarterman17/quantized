@@ -12,6 +12,7 @@
 
 import { dropGapRows, restoreGapRows, type FinitePairs } from "../../../lib/api/finitePairs";
 import type { GlobalFitResult } from "../../../lib/api/globalFit";
+import { ownXKey } from "../../../lib/perSeriesX";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { Dataset } from "../../../lib/types";
 
@@ -64,7 +65,8 @@ export interface MemberData {
 export function memberData(ds: Dataset, m: GlobalMember): MemberData | null {
   const data = analysisData(ds);
   if (!data) return null;
-  const x = m.xKey == null ? data.time : data.values.map((row) => row[m.xKey!]);
+  const xKey = ownXKey(ds, m.xKey, m.yKey); // a secondary-X Y fits against its own X
+  const x = xKey == null ? data.time : data.values.map((row) => row[xKey]);
   const y = data.values.map((row) => row[m.yKey]);
   const pairs = dropGapRows(x, y);
   return { x: pairs.x, y: pairs.y, pairs };

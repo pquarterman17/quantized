@@ -43,7 +43,13 @@ describe("plot dock + legend (P1)", () => {
     // frame rect (never over the axes' tick labels), and the "out" column
     // takes room from the plot host rather than covering the data.
     expect(bodiesFor(".qzk-legend.auto")).toMatch(/var\(--qz-frame-top/);
-    expect(bodiesFor(".qzk-stage:has(> .qzk-legend.out)")).toMatch(/--qz-plot-right:\s*calc\(var\(--qz-out-w/);
+    // The rule is shared by the focused stage and the background stage via :is(),
+    // whose inner comma defeats bodiesFor's selector-list split.
+    const outBody = rules
+      .filter((r) => r.selector.replace(/\s+/g, " ") === ":is(.qzk-stage, .qzk-bg-stage):has(> .qzk-legend.out)")
+      .map((r) => r.body)
+      .join(";");
+    expect(outBody).toMatch(/--qz-plot-right:\s*calc\(var\(--qz-out-w/);
   });
 });
 

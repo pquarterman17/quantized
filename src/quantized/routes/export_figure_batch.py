@@ -1,7 +1,9 @@
 """Batch publication-figure export as one ZIP download.
 
 Each entry is an ordinary :class:`FigureRequest` rendered by the same
-``render_figure_request`` function as ``POST /api/export/figure``.  The route
+``render_figure_request`` function as ``POST /api/export/figure``.  With
+``multipage`` the figures become the pages of ONE PDF instead of a ZIP
+(gap-audit-2 #10, ``calc.figure_pdf_pages``).  The route
 adds only archive orchestration: bounded batch size, safe unique filenames,
 and all-or-nothing error handling.  It deliberately does not invent a second
 plot renderer or send a burst of browser downloads that modern browsers may
@@ -20,6 +22,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
+from quantized.heavy_import import heavy_imports
 from quantized.routes._disconnect import run_watching_disconnect
 from quantized.routes._errors import CALC_ERRORS_WITH_LOCK, raise_calc_error
 from quantized.routes._export_common import _FIGURE_MIME, _attachment, _safe_name
@@ -32,6 +35,8 @@ router = APIRouter(prefix="/api/export", tags=["export"], route_class=OffloopJSO
 class FigureBatchRequest(BaseModel):
     figures: list[FigureRequest] = Field(min_length=1, max_length=64)
     filename: str = "figures"
+    # One PDF with a page per figure, in request order, instead of a ZIP.
+    multipage: bool = False
 
 
 def _unique_entry_name(filename: str, fmt: str, used: set[str]) -> str:
@@ -78,6 +83,8 @@ def _export_figure_batch(req: FigureBatchRequest, gone: threading.Event) -> Resp
                 detail=f"fmt must be one of {sorted(_FIGURE_MIME)}",
             )
 
+    if req.multipage:
+        return _multipage_pdf(req, gone)
     # Keep ordinary archives in memory, but spill large TIFF/high-DPI batches
     # to disk instead of holding the ZIP plus BytesIO.getvalue()'s full copy.
     archive = tempfile.SpooledTemporaryFile(max_size=64 * 1024 * 1024)
@@ -102,4 +109,25 @@ def _export_figure_batch(req: FigureBatchRequest, gone: threading.Event) -> Resp
         _archive_chunks(archive),
         media_type="application/zip",
         headers=_attachment(_safe_name(req.filename, ".zip")),
+    )
+
+
+def _multipage_pdf(req: FigureBatchRequest, gone: threading.Event) -> Response:
+    """Every figure as one page of a single PDF (all-or-nothing, like the ZIP)."""
+    with heavy_imports("quantized.calc.figure_pdf_pages"):
+        from quantized.calc.figure_pdf_pages import render_pdf_pages
+
+    def page(figure: FigureRequest) -> bytes:
+        if gone.is_set():
+            raise HTTPException(status_code=499, detail="client_disconnected")
+        return render_figure_request(figure, fmt="pdf", dpi=figure.dpi)
+
+    try:
+        data = render_pdf_pages(partial(page, figure) for figure in req.figures)
+    except CALC_ERRORS_WITH_LOCK as exc:
+        raise_calc_error(exc)
+    return Response(
+        content=data,
+        media_type=_FIGURE_MIME["pdf"],
+        headers=_attachment(_safe_name(req.filename, ".pdf")),
     )

@@ -9,7 +9,7 @@
 
 import type { StoreGet } from "../lib/exportActive";
 import { plotInNewWindow } from "../lib/plotInNewWindow";
-import { plotSelectedTogether } from "../lib/plotSelectedTogether";
+import { openLayerContents, plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { cycleAxisScale, cycleTickMode } from "../lib/plotview";
 import type { Action } from "../store/commands";
 import { openFigureDialog } from "../store/figureDialogs";
@@ -307,18 +307,47 @@ export function buildPlotCommands(s: StoreGet): Action[] {
     {
       // PLOT_WORKFLOW_PLAN #3: distinct from "Overlay in one plot" above —
       // that opens a composite panel window keeping each dataset separate;
-      // this MERGES the selection into one real Library dataset (one curve
-      // per dataset, segment-concatenated — see lib/originOverlay's
-      // buildSelectionOverlay) so it plots, exports, and fits like any
-      // ordinary single dataset.
+      // this lands ONE live graph (a Library dataset whose curves reference
+      // their sources and follow their edits — lib/linkedCurves.ts) so it
+      // plots, exports, and fits like any ordinary single dataset.
       id: "plot-selected-together",
       group: "Plot",
       section: "Layout",
       label: "Plot selected together",
       description:
-        "Merge two or more selected Library datasets into one overlay plot, one curve per dataset.",
+        "Plot two or more selected Library datasets in one live graph, one curve per dataset; it follows edits to its sources.",
       keywords: "combine merge overlay library selection",
       run: () => void plotSelectedTogether(s().selectedIds),
+    },
+    {
+      // Origin gap audit 2 #1 / 3 N1: Origin's Layer Contents — one dialog
+      // (no chained prompts) to add, remove, reorder and re-bind curves.
+      id: "layer-contents",
+      group: "Plot",
+      section: "Layout",
+      label: "Layer Contents…",
+      description: "List the current graph's curves: add from any dataset, remove, reorder, or re-bind a curve to another X/Y.",
+      keywords: "layer contents curves add remove reorder rebind plot dataset book",
+      run: openLayerContents,
+    },
+    {
+      // Gap audit 3 N3: the named way to set the windows' x link group.
+      id: "link-x-axis",
+      group: "Plot",
+      section: "Layout",
+      label: "Link X axis with…",
+      description: "Pick graph windows whose X axis follows this one: zoom or pan X in one and the others follow.",
+      keywords: "link sync synchronize x axis zoom pan windows graphs compare",
+      run: () => void runLazy("Loading window links…", () => import("../lib/windowLinkX")).then((m) => m.linkXAxisWith(), onLoadFailure),
+    },
+    {
+      id: "add-curve-from",
+      group: "Plot",
+      section: "Layout",
+      label: "Add curve from…",
+      description: "Add a curve from another dataset to the current graph (opens Layer Contents); the graph stays linked to its sources.",
+      keywords: "layer contents add plot curve overlay dataset book",
+      run: openLayerContents,
     },
     {
       // P3.6: the frontend producer of spec-carrying report figure blocks.
@@ -348,8 +377,8 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Display",
       label: "Plot type…",
-      description: "Switch the graph to line, scatter, area, column, box, histogram or contour.",
-      keywords: "gallery bar histogram heatmap",
+      description: "Switch the graph to line, scatter, area, column, box, violin, histogram, contour, double-Y, polar, waterfall, stacked panels or ternary.",
+      keywords: "gallery bar histogram heatmap double y polar violin waterfall ternary panels",
       run: () => openFigureDialog({ kind: "plotType" }),
     },
     // ── Graph format (figures-audit B2; filed under "Display"): style-only templates and Origin-style
@@ -389,6 +418,26 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       description: "Apply the copied style to this graph; its data is kept.",
       keywords: "style",
       run: () => graphFormatCommand(s, (m) => m.pasteStageFormat),
+    },
+    // Gap-audit-2 #13: the same two, onto every graph of a folder or the
+    // Library selection, as one undo step (lib/graphFormatBulk.ts).
+    {
+      id: "graph-template-apply-many",
+      group: "Plot",
+      section: "Display",
+      label: "Apply Graph Template to Graphs…",
+      description: "Restyle every graph in this folder, the Library selection, or all open graphs with a saved template; one undo step.",
+      keywords: "style otp theme organizer folder all batch consistent",
+      run: () => graphFormatCommand(s, (m) => m.applyGraphTemplateToGraphs),
+    },
+    {
+      id: "paste-format-many",
+      group: "Plot",
+      section: "Display",
+      label: "Paste Format to Graphs…",
+      description: "Apply the copied style to every graph in this folder, the Library selection, or all open graphs; one undo step.",
+      keywords: "style folder all batch consistent theme",
+      run: () => graphFormatCommand(s, (m) => m.pasteFormatToGraphs),
     },
     // ── Insert (MAIN #27: drawing shapes on plots — the menu-driven
     // counterpart of PlotToolbar's dock flyout) ──

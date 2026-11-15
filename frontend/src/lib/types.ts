@@ -292,6 +292,8 @@ export interface PlotSeriesResponse {
    *  carried `decimate_width` and the route honored it — ascending x, no
    *  `full_resolution` override). Absent/false means every row came back. */
   decimated?: boolean;
+  /** A reduced (decimated/windowed) response: the dataset row of each row (gap audit 3 N2). */
+  rows?: number[] | null;
   /** P3.4 zoom-refetch residual: the X window the server actually filtered to
    *  before decimating, echoing the request's `x_min`/`x_max` back (a bound
    *  that was NaN comes back `null` — see routes/plot.py). null/absent means
@@ -368,6 +370,10 @@ export type AxisLabelStyles = Partial<Record<AxisKey, AxisLabelStyle>>;
 // The fit recipe types (WeightMode / FitWeighting / FitSpec) live in
 // lib/fitTypes.ts; re-exported at the top of this file.
 
+/** One curve of a live multi-dataset graph: source dataset, its X (null = `.time`), its Y, legend label.
+ *  -1 = that source column was removed (drawn empty, never rebound). */
+export interface LinkedCurve { datasetId: string; xKey: number | null; yKey: number; label: string; labelFrom?: "name" | "nameCol" /* legend follows the source name; `label` = fallback */ }
+
 /** A dataset held client-side: the parsed DataStruct + a stable id + name.
  *  `data` is the currently displayed (corrected + formula-recomputed) view;
  *  `corrections` are the params that produced its base portion from `raw`.
@@ -432,6 +438,9 @@ export interface Dataset {
    *  async scheduler (K5c); `pipeline` is a short descriptor for now. */
   derivedFrom?: { datasetId: string; pipeline: string };
   analysisRecipe?: import("./signalRecipe").SignalAnalysisRecipe; // linked analysis recipe
+  /** A LIVE multi-dataset graph's curves (gap audit 2 #1, lib/linkedCurves.ts): `data` is
+   *  re-assembled from these sources whenever one changes (store/linkedCurvesSync.ts). */
+  linkedCurves?: LinkedCurve[];
   /** Per-channel column roles (label / ignore) — channel index → role. Excluded
    *  from the plot; semantic metadata about the columns, so they live ON the
    *  dataset (persist across dataset switches + round-trip .dwk), not in the
@@ -458,6 +467,9 @@ export interface Dataset {
    *  (lib/modeling.channelModelingType). Lives on the dataset like
    *  channelRoles: persists across switches + round-trips .dwk. */
   channelTypes?: Record<number, ModelingType>;
+  /** Worksheet column comments and display number formats, by column (-1 = X);
+   *  user-set, round-trips .dwk (lib/columnProps.ts). */
+  columnProps?: Record<number, import("./columnProps").ColumnProps>;
   /** Excluded original-row indices (JMP-style row state, #50). Excluded rows
    *  stay visible in the worksheet (greyed) but drop from analysis everywhere.
    *  Sorted, unique; managed only via lib/rowstate + the store's row actions,
@@ -633,7 +645,7 @@ export interface RegionShade {
   fullHeight?: boolean;
 }
 
-export type { DefaultTrace, LineStyle, MarkerShape, SeriesStyle, StepMode } from "./seriesStyleTypes";
+export type { DefaultTrace, DropLines, ErrorBarStyle, LineStyle, MarkerShape, SeriesStyle, StepMode } from "./seriesStyleTypes";
 
 /** A non-data column role (W5 DataWorkspace column roles). A channel with a role
  *  is excluded from the plot. `label` keeps it in the worksheet + its statistics
@@ -730,7 +742,7 @@ export interface Shape {
 // verbatim when the extras outgrew this file's line pin; re-exported here so
 // no importer changed.
 export type { AxisFormat, TickMode } from "./axisFormat";
-export { axisFmtParam, hasAxisExtras, sanitizeAxisExtras } from "./axisFormat";
+export { axisFmtParam, dateAwareXFmt, hasAxisExtras, sanitizeAxisExtras } from "./axisFormat";
 
 /** How an axis maps data values to pixel position (MAIN #12): `"linear"`
  *  (default) positions values proportionally; `"log"` positions by

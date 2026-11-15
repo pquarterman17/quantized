@@ -1,5 +1,3 @@
-import { categoricalLevels } from "../../../lib/categorical";
-import { clipboardCellText } from "../../../lib/clipboardGrid";
 import { excludedSet } from "../../../lib/rowstate";
 import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "../../../lib/rowSidecars";
 import type { Dataset } from "../../../lib/types";
@@ -90,26 +88,6 @@ export function resolveWorksheetRows(source: Dataset, rules: WorksheetRowRules) 
   // Built ONCE: rebuilding it per row was O(rows × excluded).
   const analysis = analysisWorksheetRows(visible, excludedSet(source));
   return { visible, analysis, ordered: sortWorksheetRows(visible, source.data, rules.sort) };
-}
-
-export function worksheetTsvHeaders(source: Dataset): string[] {
-  const { labels, units, metadata } = source.data;
-  const xName = String(metadata?.["x_column_long"] || metadata?.["x_column_name"] || "x"); // long name, as the header shows
-  const xUnit = String(metadata?.["x_column_unit"] ?? "");
-  return [
-    xUnit ? `${xName} (${xUnit})` : xName,
-    ...labels.map((label, channel) => (units[channel] ? `${label} (${units[channel]})` : label)),
-  ];
-}
-
-/** One source row as "Copy rows"/"Copy row" put it on the clipboard: x then
- *  every channel, as the grid displays it (level labels, blank for missing). */
-export function worksheetTsvRow(source: Dataset, r: number): string[] {
-  const { time, values, labels } = source.data;
-  return [
-    clipboardCellText(time[r]),
-    ...labels.map((_, c) => clipboardCellText(values[r]?.[c], categoricalLevels(source.data, c))),
-  ];
 }
 
 /** Translate one displayed preview row to its full-book row. Aligned previews

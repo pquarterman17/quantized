@@ -170,6 +170,13 @@ CASES = [
         GOOD_DATASET,
     ),
     (
+        "/api/transform/average",
+        lambda ds: {
+            "curves": [{"name": "a", "dataset": GOOD_DATASET}, {"name": "b", "dataset": ds}]
+        },
+        GOOD_DATASET,
+    ),
+    (
         "/api/sims/process",
         lambda ds: {"dataset": ds, "smoothing": {"method": "moving", "window": 2}},
         GOOD_DATASET,

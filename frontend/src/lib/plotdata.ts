@@ -38,6 +38,9 @@ export interface PlotSeriesSpec {
   /** Legend text when it is not the label ("" = no legend row); a fit band's
    *  one entry (lib/fitBandOverlay.ts). */
   legend?: string;
+  /** An analysis overlay (fit, baseline, peaks, dy/dx), not a data curve:
+   *  it never names the Y axis (lib/sharedAxisTitle.ts's `drawnOnAxis`). */
+  overlay?: boolean;
 }
 
 export interface PlotPayload {
@@ -71,8 +74,13 @@ export interface PlotPayload {
    *  `usePlotPayload.ts`'s windowed re-fetch effect is the single producer of
    *  a request that sets this. */
   window?: [number, number] | null;
+  /** The x column is timestamps (epoch seconds; the dataset's own `time`
+   *  with `metadata.time_is_datetime`): an `auto` X format draws dates
+   *  (`axisFormat.dateAwareXFmt`, worksheet audit #7). */
+  xIsDate?: boolean;
   blockRows?: number; xStep?: number; // waterfall X offset: rows per x block, block b slid by b·xStep (lib/waterfallX.ts)
   yShift?: number[]; // per data column, the waterfall stagger added for display; the cursor readout takes it back off
+  rowIds?: number[]; // a reduced (decimated/windowed) payload: row i is dataset row rowIds[i] (lib/plotRowMap.ts)
 }
 
 /** Pure client-side column packing — the offline mirror of /api/plot/series.
@@ -104,7 +112,13 @@ export function buildColumns(
         ? String(ds.metadata?.["x_column_long"] || ds.metadata?.["x_column_name"] || "x")
         : (ds.labels[xKey] ?? "x"),
     xUnit: xKey == null ? String(ds.metadata?.["x_column_unit"] ?? "") : (ds.units[xKey] ?? ""),
+    ...(xIsDate(ds, xKey) ? { xIsDate: true } : {}), // only when set: payloads compare deep-equal
   };
+}
+
+/** Whether the plotted x (`xKey`, null = `ds.time`) is a timestamp column. */
+export function xIsDate(ds: DataStruct, xKey: number | null): boolean {
+  return xKey == null && ds.metadata?.["time_is_datetime"] === true;
 }
 
 /** The xCategories PRODUCER (gap #20 residual): the field and its consumer
@@ -257,7 +271,7 @@ function fromResponse(r: PlotSeriesResponse): PlotPayload {
     series: r.series.map((s) => ({ label: s.label, unit: s.unit, axis: s.axis ?? 0 })),
     xLabel: r.x.label,
     xUnit: r.x.unit,
-    decimated: r.decimated ?? false,
+    decimated: r.decimated ?? false, ...(r.rows ? { rowIds: r.rows } : {}),
     window:
       r.window && r.window.x_min != null && r.window.x_max != null
         ? [r.window.x_min, r.window.x_max]
@@ -433,7 +447,7 @@ export function withFitOverlay(
   return {
     ...payload,
     data: [...payload.data, y, ...edges] as uPlot.AlignedData,
-    series: [...payload.series, { label: "fit", unit: "" }, ...edges.map((_, k) => {
+    series: [...payload.series, { label: "fit", unit: "", overlay: true }, ...edges.map((_, k) => {
       const e = overlay.band![k]!;
       return { label: e.label, unit: "", band: k + 1, ...(e.legend !== undefined ? { legend: e.legend } : {}) };
     })],
@@ -455,7 +469,7 @@ export function withDerivOverlay(
   return {
     ...payload,
     data: [...payload.data, y] as uPlot.AlignedData,
-    series: [...payload.series, { label: "dy/dx", unit: "", axis: 1 }],
+    series: [...payload.series, { label: "dy/dx", unit: "", axis: 1, overlay: true }],
   };
 }
 
@@ -476,7 +490,7 @@ export function withBaselineOverlay(
   return {
     ...payload,
     data: [...payload.data, y] as uPlot.AlignedData,
-    series: [...payload.series, { label: "baseline", unit: "" }],
+    series: [...payload.series, { label: "baseline", unit: "", overlay: true }],
   };
 }
 
@@ -492,7 +506,7 @@ export function withPeakOverlay(
   return {
     ...payload,
     data: [...payload.data, y] as uPlot.AlignedData,
-    series: [...payload.series, { label: "peaks", unit: "", kind: "points" }],
+    series: [...payload.series, { label: "peaks", unit: "", kind: "points", overlay: true }],
   };
 }
 
@@ -601,6 +615,10 @@ export async function fetchPlot(
   xMax: number | null = null,
   signal?: AbortSignal,
 ): Promise<PlotPayload> {
+  // No rows (a live graph whose curves are all unresolved): nothing to ask the
+  // server -- it answers 422 for labels without rows. The client builder gives
+  // the empty payload the stage's normal empty state draws.
+  if (ds.time.length === 0) return dropTrailingEmptyRows(buildColumns(ds, y2Keys, xKey, yKeys));
   try {
     const r = await plotSeries(
       {
@@ -616,7 +634,7 @@ export async function fetchPlot(
       },
       signal,
     );
-    return dropTrailingEmptyRows(fromResponse(r));
+    return dropTrailingEmptyRows({ ...fromResponse(r), ...(xIsDate(ds, xKey) ? { xIsDate: true } : {}) });
   } catch (err) {
     // An intentional cancellation (a newer commit superseded this fetch)
     // must never be treated as "we're offline" -- the offline fallback below

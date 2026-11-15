@@ -60,9 +60,8 @@ import {
   resolveWorksheetRows,
   sortWorksheetRows,
   visibleWorksheetRows,
-  worksheetTsvHeaders,
-  worksheetTsvRow,
 } from "./worksheetRows";
+import { worksheetTsvTable } from "./worksheetTable";
 
 export interface WorksheetView {
   data: DataStruct;
@@ -422,8 +421,8 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
       const excluded = excludedSet(source); // once, not per row
       const rows = (source === ds ? order : resolveWorksheetRows(source, rowRules).ordered)
         .filter((r) => !excluded.has(r));
-      const data = rows.map((r) => worksheetTsvRow(source, r));
-      void copyText(tableToTSV(worksheetTsvHeaders(source), data)).then((ok) =>
+      const { headers, data } = worksheetTsvTable(source, rows); // text + date columns too (audit #6)
+      void copyText(tableToTSV(headers, data)).then((ok) =>
         setStatus(ok ? `copied ${rows.length} rows to clipboard` : "clipboard unavailable"),
       );
     };
@@ -438,7 +437,8 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
         setStatus("Full data loaded, but that preview row could not be matched — select the row again");
         return;
       }
-      void copyText(tableToTSV(worksheetTsvHeaders(source), [worksheetTsvRow(source, sourceRow)])).then((ok) =>
+      const { headers, data } = worksheetTsvTable(source, [sourceRow]);
+      void copyText(tableToTSV(headers, data)).then((ok) =>
         setStatus(ok ? `copied row ${sourceRow! + 1}` : "clipboard unavailable"),
       );
     };
@@ -512,7 +512,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
       col < 0
         ? [xName, xUnit ? `X · ${xUnit}` : "X"]
         : [labels[col] ?? "", units[col] ? `· ${units[col]}` : ""];
-    const fmt = gridFormatters(time, values)(col); // the grid's per-column precision
+    const fmt = gridFormatters(time, values, undefined, metadata?.time_is_datetime === true)(col); // the grid's per-column precision
     for (const r of order.slice(0, AUTOFIT_SAMPLE_ROWS)) samples.push(fmt(col < 0 ? time[r] : values[r]?.[col]));
     setColWidth(col, autofitColWidth(samples));
   }

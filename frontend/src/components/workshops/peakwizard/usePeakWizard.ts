@@ -18,6 +18,7 @@
 // for THAT range is in (usePeakBaseline's result is tied to its segment).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ownXKey } from "../../../lib/perSeriesX";
 import { usePeakBaseline } from "./usePeakBaseline";
 import { usePeakCandidates, type CandidatePeak } from "./usePeakCandidates";
 import { useModelFit, type ModelFitState } from "./useModelFit";
@@ -228,8 +229,10 @@ export function usePeakWizard(): PeakWizardState {
       : segment.y;
   }, [segment, baseline, recipe.baseline.method]);
 
+  // The segment's Y reads its OWN X (R2 -> T2): markers and provenance follow it.
+  const segX = active && segment ? ownXKey(active, xKey, segment.yKey) : xKey;
   const cands = usePeakCandidates({
-    active, step, segment, workingY, baseline, find: recipe.find, xKey, onReplaced: dropResults, peakLeft, peakJoined,
+    active, step, segment, workingY, baseline, find: recipe.find, xKey: segX, onReplaced: dropResults, peakLeft, peakJoined,
   });
   const { candidates, runFind } = cands;
 
@@ -315,7 +318,7 @@ export function usePeakWizard(): PeakWizardState {
   const model = useModelFit({
     active, segment, workingY, yErr, baseline, baselineOn: recipe.baseline.method !== "none",
     peaks: included, model: recipe.model, fit: recipe.fit, setFit,
-    xKey, recipeName: recipe.name, baselineMethod: recipe.baseline.method,
+    xKey: segX, recipeName: recipe.name, baselineMethod: recipe.baseline.method,
   });
   // Step ⑤ reads the ACTIVE engine's CURRENT fit only: a stale model result
   // (table edited since) is blocked, with the reason shown there.

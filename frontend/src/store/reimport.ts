@@ -114,6 +114,8 @@ export interface ReimportMerge {
    *  (see its own module doc: every `applyReimportMerge` call there is
    *  synchronous, back-to-back, for one atomic multi-dataset commit). */
   reshape: typeof FigureReshape | null;
+  /** lib/linkedCurveReimport, resolved in the async phase like `reshape` (off the eager bundle); null when `!columnsChanged`. */
+  follow: typeof import("../lib/linkedCurveReimport") | null;
 }
 
 /** Validate + stage a re-import of `ds` with freshly-read `freshRaw`: re-runs
@@ -142,7 +144,22 @@ export async function computeReimportMerge(get: SliceGet, ds: Dataset, freshRaw:
   // perf(reimport): only fetched when actually needed, during this async
   // staging phase -- never on the synchronous commit path (applyReimportMerge).
   const reshape = columnsChanged ? await import("../lib/figureDocumentReimport") : null;
-  return { newData, freshRaw, shapeChanged, columnsChanged, viewReset, reshape };
+  const follow = columnsChanged ? await import("../lib/linkedCurveReimport") : null;
+  return { newData, freshRaw, shapeChanged, columnsChanged, viewReset, reshape, follow };
+}
+
+/** Live graphs' curves that read `ds` follow a column-changing re-import by
+ *  LABEL (never by index); a column that vanished or whose label is ambiguous
+ *  leaves its curve empty (-1). Applied to the SAME patch as the dataset swap,
+ *  so the watcher never assembles a graph from shifted indices. */
+function followReimportedColumns(
+  patch: Partial<AppState>,
+  ds: Dataset,
+  fresh: DataStruct,
+  follow: ReimportMerge["follow"],
+): Partial<AppState> {
+  const remapped = follow && patch.datasets ? follow.remapLinkedCurvesByLabel(patch.datasets, ds.id, ds.data.labels, fresh.labels) : null;
+  return remapped ? { ...patch, datasets: remapped } : patch;
 }
 
 /** Commit an already-staged `merge` (from `computeReimportMerge`) for `ds`:
@@ -169,7 +186,7 @@ export function applyReimportMerge(
     columnsChanged &&
     (get().editableFigures.some((doc) => doc.bindings.datasetId === ds.id && doc.bindings.groupKey !== null) ||
       get().figureDocs.some((f) => f.live && f.datasetId === ds.id && f.config.groupCol != null));
-  set((s) => ({
+  set((s) => followReimportedColumns({
     datasets: s.datasets.map((d) => {
       if (d.id !== ds.id) return d;
       const merged: Dataset = {
@@ -210,6 +227,7 @@ export function applyReimportMerge(
               channelRoles: undefined,
               channelTypes: undefined,
               columnDesignations: undefined,
+              columnProps: undefined,
               formulas: undefined,
               // Independent-review booked finding: a plain `undefined` here
               // threw away a still-derivable Origin-authoritative answer on
@@ -283,7 +301,7 @@ export function applyReimportMerge(
           savedPlotSpecs: s.savedPlotSpecs.map((p) => ({ ...p, spec: reshape!.resetPlotSpecRefs(p.spec, ds.id) })),
         }
       : {}),
-  }));
+  }, ds, newData, merge.follow));
   if (shapeChanged) {
     toast(`"${ds.name}" changed shape on re-import — row/column selections were cleared`, "info");
   }

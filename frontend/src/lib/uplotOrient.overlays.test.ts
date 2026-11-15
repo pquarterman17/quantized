@@ -10,12 +10,14 @@ import { regionDecorSettled } from "./regionDecorLoader";
 import {
   annotationPlugin, colorScatterPlugin, errorBarsPlugin, errorSpansPlugin, refLinePlugin, regionShadePlugin,
 } from "./uplotOverlays";
-import { orientArgs, orientPlugins, TURNED_TOOLS, uprightView } from "./uplotOrient";
-import { readoutPlugin } from "./uplotTools";
+import { orientArgs, orientPlugins, orientTurnSettled, TURNED_TOOLS } from "./uplotOrient";
+import { uprightView } from "./uplotTurn";
+import { readoutPlugin } from "./uplotPointerTools";
 import type { ColorScatterSpec } from "./colorscatter";
 
 beforeAll(async () => {
   await regionDecorSettled; // shades and off-scale markers draw from this chunk
+  await orientTurnSettled; // the upright view of a turned plot (lib/uplotTurn.ts)
 });
 
 // Turned plot: X 0..10 runs UP the canvas (x=0 at pixel 350, x=10 at 50);

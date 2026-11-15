@@ -42,6 +42,7 @@ import {
   type SignalBindOptions,
   type SignalTransformParams,
 } from "./signalTransform";
+import { averageLabel, computeAverage, type AverageParams } from "./transformAverage";
 import { computeResample, resampleLabel, type ResampleParams } from "./transformResample";
 import { computeSims, simsLabel, type SimsParams } from "./transformSims";
 import { computeSimsCompare, simsCompareLabel, type SimsCompareParams } from "./transformSimsCompare";
@@ -99,6 +100,7 @@ export type TransformParams =
   | ResampleParams
   | SimsParams
   | SimsCompareParams
+  | AverageParams
   | SignalTransformParams
   // In place, no output (lib/metadataRun.ts): a metadata factor / cleanup.
   | MetaStepParams;
@@ -142,7 +144,7 @@ export const rowsOf = (ds: Dataset): DataStruct => analysisData(ds) ?? ds.data;
 
 function refsOf(p: TransformParams): DatasetRef[] {
   if (p.op === "join" || p.op === "algebra") return [p.with];
-  if (p.op === "merge" || p.op === "simscompare") return p.with;
+  if (p.op === "merge" || p.op === "simscompare" || p.op === "average") return p.with;
   if (p.op === "resample") return p.with ? [p.with] : [];
   if (p.op === "signal" && p.recipe.kind === "spectral" && p.recipe.secondarySource) {
     return [{ id: p.recipe.secondarySource.datasetId, name: p.recipe.secondarySource.datasetName }];
@@ -175,6 +177,7 @@ export function transformStepText(p: TransformParams, primaryName: string): { la
     case "resample": label = resampleLabel(p, primaryName); break;
     case "sims": label = simsLabel(p, primaryName); break;
     case "simscompare": label = simsCompareLabel(p, primaryName); break;
+    case "average": label = averageLabel(p, primaryName); break;
     case "signal": return signalTransformStepText(p);
     default: label = `${op[0].toUpperCase()}${op.slice(1)} ${primaryName}`;
   }
@@ -287,6 +290,12 @@ export async function computeTransform(
       const all = [primary, ...others].map((d) => ({ id: d.id, name: d.name, data: rowsOf(d) }));
       const r = await computeSimsCompare(p, all);
       return { data: r.data, name: r.name, preview: preview("SIMS comparison", r.data, r.warnings, all.map((d) => [d.name, d.data])) };
+    }
+    case "average": {
+      // Each curve's ANALYSIS rows; SEM is bound as the mean's error (datasetPatch).
+      const all = [primary, ...others].map((d) => ({ name: d.name, data: rowsOf(d) }));
+      const r = await computeAverage(p, all, { signal });
+      return { data: r.data, name: r.name, preview: preview("Average curves", r.data, r.warnings, all.map((d) => [d.name, d.data])), datasetPatch: r.datasetPatch };
     }
     case "signal": {
       // Signal Processing deliberately reads the full worksheet. Its UI

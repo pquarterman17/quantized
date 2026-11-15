@@ -1,6 +1,16 @@
 # Bundle headroom campaign
 
-**Current state (2026-11-13, after slice 26):** three on-demand surfaces left
+**Current state (2026-11-14, after slice 27):** three pieces left the
+startup chunk: the tool-dock plugins (pan, cursor readout, measure, region
+statistics, integrate, FWHM), warmed once the plot toolbar mounts; the
+overlay half of horizontal bars, a startup chunk; and the `.dwk` figure-doc
+sanitizer. Main `6c449bcc` measured **820,851 B**, 1,260 B under the pin;
+after, **810,042 B** (**−10,809 B**). The pin was LOWERED
+**822,111 → 816,042 B** (`measured + 6,000`): 6,000 B is banked again for the
+queued wave of feature branches, the other 4,809 B are locked in. See
+"Slice 27".
+
+**Previous state (2026-11-13, after slice 26):** three on-demand surfaces left
 the startup chunk, each warmed once its eager host has mounted: the
 context-menu body, the ⌘K palette body and the Appearance dropdown's body.
 Main `5748292c` (after PR #643) measured **826,343 B**, 1,453 B under the
@@ -3322,6 +3332,129 @@ on-demand bodies also remain: `components/windows/windowMenu.ts` (~1.2 kB,
 the plot-window menu's item registry) and `restoreFromTrash`.
 
 **Pin:** lowered to `measured + 6,000`, the slice-24/25 form, for the same
+queued wave of feature branches. When the wave has merged, lower it to
+`measured + 1,024`.
+
+### Slice 27 — tool plugins on demand, the turn's overlay half, the `.dwk` sanitizer, pin ratcheted DOWN — **DONE (2026-11-14)**
+
+**Measured net eager delta −10,809 B — pin LOWERED 822,111 → 816,042 B**
+
+The Origin sprint (#648–#650) spent slice 26's banked 6,000 B down to
+1,260 B. The brief: at least 8 kB (target 10+) from code that does not run
+at startup, behaviour identical, warmed where a first interaction would
+otherwise wait. Exact bytes, `npm ci`, `node_modules/.vite` wiped,
+`npx tsc -b --force`, `npm run build`; rows are cumulative:
+
+| tree | eager B | delta |
+|---|---:|---:|
+| `6c449bcc` (parent, main after #650) | 820,851 | — |
+| + the tool-dock plugins → `lib/uplotToolPlugins.ts` | 812,626 | **−8,225** |
+| + the overlay half of horizontal bars → `lib/uplotTurn.ts` | 811,088 | **−1,538** |
+| + the `.dwk` figure-doc sanitizer → `lib/figuredocSanitize.ts` | 810,042 | **−1,046** |
+| this slice | 810,042 | **−10,809** |
+
+#### How it was found
+
+The slice-26 method: a throwaway vite plugin wrote each module's
+`getModuleInfo().importedIds`, the sourcemap profile
+(`scripts/profile-eager-bundle.mjs`) gave each eager module's bytes, and for
+every eager module the bytes that become unreachable from `main.tsx` without
+it were summed. The brief named the Origin-sprint additions as likely
+candidates; on this tree almost all of them were already lazy (the
+fidelity and worksheet-loss UI, Set As, the matrix-export preference, the
+fit-model catalog, the Library unrecovered-graphs section all sit in panel
+or row chunks). Of the new code only `lib/uplotOrient.ts` (2,437 B) was in
+the startup chunk. The largest subtrees that run only after a click were
+the plot's tool-dock plugins: `lib/uplotTools.ts` 4,817 B with
+`lib/regionStats.ts` 760 B, and `lib/uplotRegionTools.ts` 3,448 B with
+`lib/peakwidth.ts` 718 B and `lib/integrate.ts` 435 B.
+
+#### The three moves
+
+- **Tool-dock plugins.** `panPlugin`, `readoutPlugin` (the cursor tool),
+  `measurePlugin` and `statsPlugin` moved verbatim from `lib/uplotTools.ts`
+  to `lib/uplotPointerTools.ts`; `lib/uplotTools.ts` keeps wheel zoom, the
+  view bounds and the view history every plot uses, and now exports the
+  scale setter pan shares with wheel zoom. `lib/uplotToolPlugins.ts` gathers
+  them with `lib/uplotRegionTools.ts` (integrate, FWHM) as one chunk,
+  loaded through a third getter seam in `lib/axisExtrasHook.ts`
+  (`toolPlugins()` / `loadToolPlugins()`), the shape the qfit gadget frame
+  has used since the figures audit. `buildOpts` pushes none of them while
+  the getter is null. A plot whose tool needs the chunk, or that draws an
+  integral / FWHM result, loads it and rebuilds when it lands
+  (`Stage/useLazyPlotParts.ts`, `needsToolPlugins`; the multi-panel stage
+  goes through the same hook). **Warm-up:** `PlotToolbar` starts the load
+  from a mount effect, so a first tool pick after first paint builds with
+  the plugin already in the module cache. A failed warm-up is silent; the
+  pick that needs the chunk retries it. The pointer and zoom tools, the
+  default, never needed any of these.
+- **The overlay half of horizontal bars.** `turnedFrame`, `uprightView`,
+  its canvas context and the draw-hook wrapper moved verbatim to
+  `lib/uplotTurn.ts`; the wrapper is `turnPlugins` there. What makes the
+  plot itself turn stays eager: `orientAxes` (the scale orientation and axis
+  sides, which `BAR_PATHS` reads), `orientArgs`, `hasHorizontalBars` and the
+  toolbar's `TURNED_TOOLS` note. `lib/uplotOrient.ts` starts the import when
+  it loads, the `lib/regionDecorLoader.ts` shape, and `orientPlugins` returns
+  the plugins unchanged until it lands. A turned plot built before that
+  (bars and axes already turned, overlays still upright) rebuilds once it
+  settles: `plotDecorNeeds` takes the series styles and sets `turned`. The
+  plot itself waits for its data from the backend, so in practice the chunk
+  has landed before any plot is built.
+- **The `.dwk` figure-doc sanitizer** (`sanitizeFigureDocs` and its two
+  helpers) moved verbatim to `lib/figuredocSanitize.ts`. Only
+  `lib/workspace.ts`, the lazy workspace read, calls it. Slice 25 listed it
+  at 1,046 B and asked for a re-measure once the chunk-boundary tax was
+  gone; the measured saving is exactly that.
+
+In a real browser (headless Chromium against `qz --no-browser`, built tree):
+the tool chunk was fetched after first paint and before any tool was
+picked, and the turn's chunk at startup. Pan moved the view, the data
+cursor, measure and region-stats readouts appeared, integrate and FWHM
+committed their results, and a CSV plot whose series were then set to
+horizontal bars turned on its side with the integral band and FWHM marker
+drawn turned and the pointer-driven tools disabled. No console error or
+warning.
+
+#### Guards and tests
+
+- `architecture.test.ts`: SEAMS entries for `lib/uplotToolPlugins.ts`
+  (loader `lib/axisExtrasHook.ts`) and `lib/uplotTurn.ts` (loader
+  `lib/uplotOrient.ts`); `DRAGGED_OUT` entries for
+  `lib/uplotPointerTools.ts`, `lib/uplotRegionTools.ts`,
+  `lib/regionStats.ts`, `lib/peakwidth.ts`, `lib/integrate.ts` and
+  `lib/figuredocSanitize.ts`. `lib/uplotOpts.ts`'s line pin went DOWN
+  1269 → 1262.
+- `Stage/lazyToolPluginsTurn.race.test.tsx` forces both races
+  (`docs/testing.md`): each chunk is held behind a gate, a plot in a plugin
+  tool (or with a region result, or turned) asks for exactly one rebuild when
+  its chunk lands, and a zoom / upright plot asks for none.
+- `PlotToolbar.test.tsx`: mounting the toolbar loads the tool plugins.
+- `uplotOpts.test.ts`: pan and cursor build without their plugin before the
+  chunk lands, with it after. The suites that drive a tool plugin through
+  `buildOpts` (`navGestureScales`, `readoutWaterfall`, `xReversed`) load the
+  chunk in `beforeAll`, as the mounted toolbar does in the app;
+  `uplotOrient.overlays.test.ts` awaits `orientTurnSettled` next to
+  `regionDecorSettled`.
+
+#### Candidates still not taken
+
+Slice 25's list, less the sanitizer: the other lazy-only declarations
+(`lib/categorical.ts`, `lib/nonFiniteCells.ts`, `lib/smartfolders.ts`,
+`Button`, `nodeIcons`, `finitePairs`, `rowstate`, ~3.3 kB) and the async store
+actions whose bodies are still eager (~3.5 kB). Larger subtrees this ranking
+found that only run after an interaction but need more than a move:
+`lib/uplotShapes.ts` with `lib/shapeHit.ts` (9,054 B; the shapes are drawn
+on first paint when a plot has any, so it would be a startup chunk like the
+turn), the plot-window drag/resize gesture
+(`components/windows/usePlotWindowGesture.ts` with `lib/windowSnap.ts`,
+3,933 B; a hook, so its handlers would need splitting from its state), and
+the command registry's description and keyword strings (most of the
+~38 kB the five `commands/*Commands.ts` modules weigh; the menus use the
+descriptions only as item titles, and the palette and Help that search them
+are lazy now, but moving them apart from their commands is a design change,
+not a diet slice).
+
+**Pin:** lowered to `measured + 6,000`, the slice-24/25/26 form, for the same
 queued wave of feature branches. When the wave has merged, lower it to
 `measured + 1,024`.
 

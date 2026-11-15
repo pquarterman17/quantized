@@ -107,8 +107,23 @@ export function buildExportStyles(
       // and plotSpecFigure all route through this one builder.
       if (st.markerShape) spec.marker_shape = st.markerShape;
     }
+    // Gap audit 2 #6: open symbols and error-bar styling. `marker_fill` rides
+    // outside the `marker` branch: a default-trace marker is hollow on the
+    // canvas too (`markers.seriesPoints`), and the backend applies it only
+    // where it draws a marker.
+    if (st?.markerFill) spec.marker_fill = st.markerFill;
+    const eb = st?.errorBar;
+    if (eb?.cap != null) spec.error_cap = eb.cap;
+    if (eb?.width != null) spec.error_width = eb.width;
+    const ebHex = eb?.color ? resolveToHex(seriesColor(pos[i] ?? i, { color: eb.color })) : null;
+    if (ebHex) spec.error_color = ebHex;
     if (st?.fill && st.fill !== "none") spec.fill = st.fill;
     if (st?.step) spec.step = st.step;
+    // Gap audit 3 N5/N6 (`size_by` stays a channel index; the backend resolves it). The glyph
+    // rides with it: a size-by series draws its points whether or not `marker` is on.
+    if (st?.sizeBy != null) Object.assign(spec, { size_by: st.sizeBy, size_range: st.sizeRange, marker_shape: st.markerShape });
+    if (st?.dropLines) spec.drop_lines = st.dropLines;
+    if (st?.connect) spec.connect = st.connect;
     if (st?.bars) spec.bars = st.bars;
     if (st?.colorBy != null) {
       spec.color_by = st.colorBy;

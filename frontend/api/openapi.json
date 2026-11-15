@@ -484,6 +484,173 @@
         "title": "AucRequest",
         "type": "object"
       },
+      "AverageCurve": {
+        "properties": {
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "dataset"
+        ],
+        "title": "AverageCurve",
+        "type": "object"
+      },
+      "AverageRequest": {
+        "properties": {
+          "allow_unit_mismatch": {
+            "default": false,
+            "title": "Allow Unit Mismatch",
+            "type": "boolean"
+          },
+          "channel": {
+            "default": "",
+            "title": "Channel",
+            "type": "string"
+          },
+          "curves": {
+            "items": {
+              "$ref": "#/components/schemas/AverageCurve"
+            },
+            "minItems": 2,
+            "title": "Curves",
+            "type": "array"
+          },
+          "grid": {
+            "default": "union",
+            "enum": [
+              "union",
+              "step"
+            ],
+            "title": "Grid",
+            "type": "string"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          },
+          "unsorted": {
+            "default": "refuse",
+            "enum": [
+              "refuse",
+              "sort"
+            ],
+            "title": "Unsorted",
+            "type": "string"
+          }
+        },
+        "required": [
+          "curves"
+        ],
+        "title": "AverageRequest",
+        "type": "object"
+      },
+      "AverageResponse": {
+        "properties": {
+          "channels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "overlap": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Overlap",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/ResampleWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dataset",
+          "warnings",
+          "overlap",
+          "channels"
+        ],
+        "title": "AverageResponse",
+        "type": "object"
+      },
+      "AxisGridSpec": {
+        "description": "One axis' grid lines (the screen's ``AxisGrid``).",
+        "properties": {
+          "color": {
+            "anyOf": [
+              {
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "dash": {
+            "anyOf": [
+              {
+                "enum": [
+                  "solid",
+                  "dash",
+                  "dot"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dash"
+          },
+          "major": {
+            "default": false,
+            "title": "Major",
+            "type": "boolean"
+          },
+          "minor": {
+            "default": false,
+            "title": "Minor",
+            "type": "boolean"
+          }
+        },
+        "title": "AxisGridSpec",
+        "type": "object"
+      },
       "AxisLabelStyle": {
         "description": "One axis title's Format choices; an absent field keeps the preset's.",
         "properties": {
@@ -5061,6 +5228,11 @@
             "default": "figures",
             "title": "Filename",
             "type": "string"
+          },
+          "multipage": {
+            "default": false,
+            "title": "Multipage",
+            "type": "boolean"
           }
         },
         "required": [
@@ -15014,6 +15186,75 @@
         "title": "TTestRequest",
         "type": "object"
       },
+      "TableColumn": {
+        "description": "One column: Long Name, unit, kind (``number``/``text``/``datetime``)\nand one cell per row (numbers, strings, or null for a blank).",
+        "properties": {
+          "cells": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Cells",
+            "type": "array"
+          },
+          "kind": {
+            "default": "number",
+            "enum": [
+              "number",
+              "text",
+              "datetime"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "cells"
+        ],
+        "title": "TableColumn",
+        "type": "object"
+      },
+      "TableSheet": {
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/TableColumn"
+            },
+            "minItems": 1,
+            "title": "Columns",
+            "type": "array"
+          },
+          "name": {
+            "default": "Sheet1",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "columns"
+        ],
+        "title": "TableSheet",
+        "type": "object"
+      },
       "TafelRequest": {
         "properties": {
           "alpha": {
@@ -15272,6 +15513,16 @@
             ],
             "title": "Divide"
           },
+          "grid": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AxisGridSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "minor": {
             "anyOf": [
               {
@@ -15298,6 +15549,43 @@
             ],
             "title": "Mode",
             "type": "string"
+          },
+          "offset": {
+            "anyOf": [
+              {
+                "maximum": 72.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offset"
+          },
+          "reverse": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reverse"
+          },
+          "rotate": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": -90.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotate"
           },
           "size": {
             "anyOf": [
@@ -15327,9 +15615,98 @@
               }
             ],
             "title": "Ticks"
+          },
+          "top": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TopAxisSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "TickFormatSpec",
+        "type": "object"
+      },
+      "TopAxisSpec": {
+        "description": "A top X axis showing a transform of X (``calc.axis_top``).",
+        "properties": {
+          "expr": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expr"
+          },
+          "factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factor"
+          },
+          "kind": {
+            "enum": [
+              "reciprocal",
+              "dspacing",
+              "linear",
+              "expr"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "shift": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "wavelength": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wavelength"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "TopAxisSpec",
         "type": "object"
       },
       "TwoSampleRequest": {
@@ -15588,6 +15965,44 @@
           "fwhm_deg"
         ],
         "title": "WilliamsonHallRequest",
+        "type": "object"
+      },
+      "WorksheetExportRequest": {
+        "description": "``fmt`` csv/tsv write the FIRST sheet; xlsx writes every sheet as a\ntab. ``header``: write the Long Name (and Units) rows.",
+        "properties": {
+          "filename": {
+            "default": "worksheet",
+            "title": "Filename",
+            "type": "string"
+          },
+          "fmt": {
+            "default": "csv",
+            "enum": [
+              "csv",
+              "tsv",
+              "xlsx"
+            ],
+            "title": "Fmt",
+            "type": "string"
+          },
+          "header": {
+            "default": true,
+            "title": "Header",
+            "type": "boolean"
+          },
+          "sheets": {
+            "items": {
+              "$ref": "#/components/schemas/TableSheet"
+            },
+            "minItems": 1,
+            "title": "Sheets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sheets"
+        ],
+        "title": "WorksheetExportRequest",
         "type": "object"
       },
       "XrayCalcRequest": {
@@ -18899,6 +19314,46 @@
           }
         },
         "summary": "Export Ternary Figure",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/export/worksheet": {
+      "post": {
+        "description": "Worksheet (or a selection of it) -> CSV, TSV or Excel, as a download.",
+        "operationId": "export_worksheet_api_export_worksheet_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorksheetExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Worksheet",
         "tags": [
           "export"
         ]
@@ -27319,6 +27774,48 @@
         "summary": "Thermal Mismatch",
         "tags": [
           "thin-film"
+        ]
+      }
+    },
+    "/api/transform/average": {
+      "post": {
+        "description": "Mean, SD, SEM and N of N curves interpolated onto one grid.",
+        "operationId": "average_api_transform_average_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AverageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AverageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Average",
+        "tags": [
+          "transform"
         ]
       }
     },

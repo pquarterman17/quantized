@@ -21,7 +21,7 @@ describe("tick-format vocabulary", () => {
   });
 
   it("maps the date select's non-date option back to a numeric mode", () => {
-    expect(TICK_DATE_OPTIONS[0]).toEqual({ value: "numeric", label: "Numeric" });
+    expect(TICK_DATE_OPTIONS[0]).toEqual({ value: "numeric", label: "Auto (date + time)" });
     expect(TICK_DATE_OPTIONS.slice(1).every((option) => isDateTickMode(option.value as never))).toBe(true);
   });
 });

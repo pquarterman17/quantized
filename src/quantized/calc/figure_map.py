@@ -32,7 +32,7 @@ from quantized.calc.figure_styles import figure_style
 
 __all__ = ["MAP_KINDS", "log_decade_ticks", "render_map_figure"]
 
-_FORMATS = ("pdf", "svg", "png", "tiff")
+_FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 MAP_KINDS = ("contourf", "contour", "heatmap", "surface", "scatter3d", "waterfall")
 _3D_KINDS = ("surface", "scatter3d", "waterfall")
 _CONTOUR_SOURCES = ("grid", "points")

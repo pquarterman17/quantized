@@ -1,6 +1,6 @@
 // Menu-spec builder for the plot right-click menu (the canvas parity of the
 // MATLAB axes/line uicontextmenus). Pure over an explicit context object — the
-// same testable pattern as worksheet/worksheetMenus.ts — so the entry list for
+// same testable pattern as worksheet/worksheetMenuModel.ts — so the entry list for
 // a given cursor position + store state is unit-tested without rendering a
 // canvas. All entries call back into EXISTING store actions supplied on `ctx`;
 // PlotContextMenu.tsx builds `ctx` from the hit-test + the live store and hands
@@ -116,6 +116,29 @@ export interface PlotMenuContext {
    *  tool and the Inspector's Annotations card already write to; no second
    *  figure-decoration state. */
   addTextHere: () => void;
+
+  /** Gap audit 2 #7: mask points from the plot. `selected` = the brushed
+   *  rows (Select Rows tool / worksheet selection) of the active dataset,
+   *  `excludedSelected` how many of them are already excluded, `excluded`
+   *  the dataset's excluded-row count. The actions are the worksheet's own
+   *  row exclusion (`store/rowState`), so undo, fits and exports follow. */
+  pointMask?: {
+    selected: number;
+    excludedSelected: number;
+    excluded: number;
+    exclude: () => void;
+    include: () => void;
+    includeAll: () => void;
+  };
+  /** Gap audit 2 #8: open the Plot Details dialog on a curve. */
+  openDetails?: (channel: number) => void;
+  /** Gap audit 3 N2: the data point under the right-click (`row` = its
+   *  dataset row) and a toggle masking / unmasking just that point. */
+  pointUnder?: { row: number; excluded: boolean; toggle: () => void; refused?: string };
+  /** Gap audit 3 N1: open Layer Contents for this graph. */
+  layerContents?: () => void;
+  /** Gap audit 3 N3: link this graph's X axis with other graph windows. */
+  linkXAxis?: () => void;
 }
 
 /** Palette swatches: the 8 re-themeable `--series-N` tokens + black/white/grey. */
@@ -195,6 +218,16 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
     const overridden = Object.values(s.style).some((v) => v !== undefined);
     items.push({ header: s.label });
     items.push({ swatches: colorSwatches(s, ctx) });
+    // Gap audit 2 #8: the swatch row has no words, so a named Color entry
+    // (and a Custom… one into Plot Details' full picker) sits beside it.
+    const details = ctx.openDetails;
+    items.push({
+      label: "Color",
+      submenu: [
+        ...PALETTE.map((c) => ({ label: c.title, run: () => ctx.setColor(s.channel, c.value), checked: s.style.color === c.value })),
+        ...(details ? [{ separator: true as const }, { label: "Custom…", run: () => details(s.channel) }] : []),
+      ],
+    });
     // Checks what the canvas DRAWS: with P3.3's auto cycle on, an unstyled
     // series' dash/glyph comes from the cycle and is marked "(auto)". Picking
     // any entry still stores it explicitly, and the cycle then steps aside.
@@ -237,6 +270,24 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
     // are defined once in the shared context-action registry so a future
     // Command Palette / Plot Objects tree consumer renders identical labels.
     items.push(...buildMenuItems(curveActions, { series: s, ctx, overridden }));
+    if (details) items.push({ label: "Plot Details…", run: () => details(s.channel) });
+    items.push({ separator: true });
+  }
+
+  // Gap audit 2 #7: exclude / include the brushed points, Origin's "mask".
+  const p = ctx.pointUnder;
+  if (p) {
+    if (p.refused) items.push({ label: `Can't mask this point: ${p.refused}`, run: () => undefined, disabled: true, title: p.refused });
+    else items.push({ label: p.excluded ? `Unmask this point (row ${p.row + 1})` : `Mask this point (row ${p.row + 1})`, run: p.toggle });
+    if (!(ctx.pointMask && (ctx.pointMask.selected > 0 || ctx.pointMask.excluded > 0))) items.push({ separator: true });
+  }
+  const m = ctx.pointMask;
+  if (m && (m.selected > 0 || m.excluded > 0)) {
+    if (m.selected > 0) {
+      items.push({ label: `Exclude selected points (${m.selected})`, run: m.exclude, disabled: m.excludedSelected >= m.selected });
+      items.push({ label: "Include selected points", run: m.include, disabled: m.excludedSelected === 0 });
+    }
+    if (m.excluded > 0) items.push({ label: `Include all points (${m.excluded})`, run: m.includeAll });
     items.push({ separator: true });
   }
 
@@ -284,6 +335,8 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
     ],
   });
   items.push({ label: ctx.showGrid ? "Hide grid" : "Show grid", run: () => ctx.setShowGrid(!ctx.showGrid), checked: ctx.showGrid });
+  if (ctx.layerContents) items.push({ label: "Layer Contents…", run: ctx.layerContents });
+  if (ctx.linkXAxis) items.push({ label: "Link X axis with…", run: ctx.linkXAxis });
   items.push({
     label: "Tools",
     submenu: [

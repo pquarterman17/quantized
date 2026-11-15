@@ -50,6 +50,7 @@ from quantized.calc.figure_legend_order import (
     preset_legend_kwargs,
     tag_series_slots,
 )
+from quantized.calc.figure_marks import warn_marks_not_drawn
 from quantized.calc.figure_overrides import apply_axis_shape_overrides
 from quantized.calc.figure_render import in_render_scope, new_figure, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
@@ -183,6 +184,7 @@ def render_breaks_impl(
     (matplotlib's own ``sharey`` + this module's ``tick_params(left=False)``
     on the rest), so ``y_fmt`` only visibly affects that panel, but is
     applied uniformly for simplicity/consistency."""
+    warn_marks_not_drawn(series_styles, "x-break figures")
     bounds = _visible_bounds(x, breaks)
     n = len(bounds)
     panel_y_fmt = {k: v for k, v in y_fmt.items() if k != "breaks"} if y_fmt else y_fmt
@@ -205,7 +207,7 @@ def render_breaks_impl(
             artists.extend(ax.plot(x[shown], yv, label=label, **kw))
         tag_series_slots(artists)  # the legend's waterfall row order
         panel_spans = _slice_spans(error_spans, np.flatnonzero(shown))
-        apply_error_bars(ax, x[shown], cut, panel_spans, artists)
+        apply_error_bars(ax, x[shown], cut, panel_spans, artists, series_styles)
         ax.set_xlim(lo, hi)
         resolved_x_scale = resolve_axis_scale(x_scale, x_log)
         resolved_y_scale = resolve_axis_scale(y_scale, y_log)

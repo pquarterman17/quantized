@@ -35,6 +35,38 @@ export interface AxisFormat {
    *  `calc/axis_breaks.py`). Sorted, non-overlapping, at most `MAX_AXIS_BREAKS`.
    *  The X axis breaks as side-by-side panels instead (`lib/facet.ts`). */
   breaks?: [number, number][];
+  /** Gap #5 (the Axis dialog, Lane 3) -- screen `lib/axisStyleExtras.ts`,
+   *  export `calc/axis_style.py`: draw this Y / Y2 axis high-to-low (X uses
+   *  `PlotView.xReversed`); */
+  reverse?: boolean;
+  /** X tick labels rotated this many degrees counter-clockwise (-90..90); */
+  rotate?: number;
+  /** the axis line, ticks and labels pushed outward from the frame, pt; */
+  offset?: number;
+  /** per-axis grid lines, replacing the plot's grid on/off for this axis; */
+  grid?: AxisGrid;
+  /** X only: a second X axis along the top showing a transform of X. */
+  top?: TopAxis;
+}
+
+export interface AxisGrid {
+  major: boolean;
+  minor: boolean;
+  /** `#rrggbb`; absent = the theme's grid colour. */
+  color?: string;
+  dash?: "solid" | "dash" | "dot";
+}
+
+/** `reciprocal`: factor / x (1/T, 1000/T); `dspacing`: Bragg d = λ / (2 sin θ)
+ *  for x = 2θ in degrees and λ = `wavelength` (Å); `linear`: factor·x + shift. */
+export interface TopAxis {
+  kind: "reciprocal" | "dspacing" | "linear" | "expr";
+  /** `expr`: any expression f(x) of the bottom axis (1240/x, sqrt(x)). */
+  expr?: string;
+  factor?: number;
+  shift?: number;
+  wavelength?: number;
+  title?: string;
 }
 
 export const MAX_AXIS_BREAKS = 4;
@@ -56,9 +88,12 @@ export function normalizeBreaks(raw: unknown): [number, number][] | undefined {
 /** `fmt` with only its VALID Axis-dialog extras kept -- a file/template
  *  value is untrusted, and the renderer and export assume these shapes. */
 export function sanitizeAxisExtras(fmt: AxisFormat): AxisFormat {
-  const { mode, digits, divide, minor, ticks, size, base } = fmt;
+  const { mode, digits, divide, minor, ticks, size, base, rotate, offset } = fmt;
   const breaks = normalizeBreaks(fmt.breaks);
   const pos = (v: unknown, max: number): v is number => typeof v === "number" && v > 0 && v <= max;
+  const g = fmt.grid as Partial<AxisGrid> | undefined;
+  const t = fmt.top as Partial<TopAxis> | undefined;
+  const fin = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
   return {
     mode,
     digits,
@@ -68,21 +103,40 @@ export function sanitizeAxisExtras(fmt: AxisFormat): AxisFormat {
     ...(pos(size, 72) ? { size } : {}),
     ...(base === "e" ? { base } : {}),
     ...(breaks ? { breaks } : {}),
+    ...(fmt.reverse === true ? { reverse: true } : {}),
+    ...(fin(rotate) && rotate !== 0 && Math.abs(rotate) <= 90 ? { rotate } : {}),
+    ...(pos(offset, 72) ? { offset } : {}),
+    ...(g && typeof g === "object" ? { grid: {
+      major: g.major === true,
+      minor: g.minor === true,
+      ...(typeof g.color === "string" && /^#[0-9a-f]{6}$/i.test(g.color) ? { color: g.color } : {}),
+      ...(g.dash === "dash" || g.dash === "dot" ? { dash: g.dash } : {}),
+    } } : {}),
+    ...(t && (t.kind === "reciprocal" || t.kind === "dspacing" || t.kind === "linear" || t.kind === "expr") ? { top: {
+      kind: t.kind,
+      ...(t.kind === "expr" && typeof t.expr === "string" && t.expr.trim() ? { expr: t.expr.slice(0, 200) } : {}),
+      ...(fin(t.factor) && t.factor !== 0 ? { factor: t.factor } : {}),
+      ...(fin(t.shift) ? { shift: t.shift } : {}),
+      ...(pos(t.wavelength, 100) ? { wavelength: t.wavelength } : {}),
+      ...(typeof t.title === "string" && t.title ? { title: t.title.slice(0, 200) } : {}),
+    } } : {}),
   };
 }
 
 /** The format a Y2 axis with none of its own inherits from the primary Y
- *  axis: everything but the breaks, whose `[lo, hi]` are in Y's units. */
+ *  axis: its number format and tick look, but not what belongs to the Y
+ *  axis itself -- the breaks (in Y's units), reverse, offset and grid. */
 export function inheritedAxisFormat(fmt: AxisFormat): AxisFormat {
-  if (!fmt.breaks) return fmt;
-  const { breaks: _breaks, ...rest } = fmt;
-  void _breaks;
+  if (!fmt.breaks && !fmt.reverse && !fmt.offset && !fmt.grid && !fmt.top) return fmt;
+  const { breaks: _b, reverse: _r, offset: _o, grid: _g, top: _t, ...rest } = fmt;
+  void [_b, _r, _o, _g, _t];
   return rest;
 }
 
 /** True when `fmt` carries any Axis-dialog extra (figures-audit #6). */
 export function hasAxisExtras(fmt: AxisFormat | null | undefined): boolean {
-  return !!fmt && (fmt.divide !== undefined || !!fmt.minor || fmt.ticks !== undefined || fmt.size !== undefined || fmt.base !== undefined || !!fmt.breaks?.length);
+  return !!fmt && (fmt.divide !== undefined || !!fmt.minor || fmt.ticks !== undefined || fmt.size !== undefined || fmt.base !== undefined || !!fmt.breaks?.length
+    || !!fmt.reverse || !!fmt.rotate || !!fmt.offset || !!fmt.grid || !!fmt.top);
 }
 
 /** MAIN #24: an export request's `x_fmt`/`y_fmt` wire field — `undefined`
@@ -94,4 +148,15 @@ export function axisFmtParam(fmt: AxisFormat): AxisFormat | undefined {
   // An "auto" format still travels when it carries an Axis-dialog extra
   // (#6), or the export would silently drop what the screen draws.
   return fmt.mode === "auto" && !hasAxisExtras(fmt) ? undefined : fmt;
+}
+
+/** The X format a plot actually draws with: `auto` on an X column the parser
+ *  recognised as timestamps (`metadata.time_is_datetime`) reads as calendar
+ *  date + time, as Origin shows a date column, instead of raw epoch seconds
+ *  (worksheet audit #7). Any explicit mode is kept. The export applies the
+ *  same rule server-side (`calc/figure_ticks.date_aware_x_fmt`), so the
+ *  screen and the PDF agree without either sending the other anything. */
+export function dateAwareXFmt(fmt: AxisFormat | undefined, xIsDate: boolean | undefined): AxisFormat | undefined {
+  if (!xIsDate || (fmt && fmt.mode !== "auto")) return fmt;
+  return { ...(fmt ?? { digits: 2 }), mode: "datetime" };
 }

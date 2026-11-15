@@ -23,9 +23,18 @@ import type { SheetBinding } from "../lib/formulaTypes";
 import type { ComputedColumn, DataStruct, Dataset } from "../lib/types";
 import { remapDatasetChannels } from "../lib/channelRemap";
 import { columnRemovalRefsPatch } from "./columnRemovalRefs";
+import { LINKED_GRAPH_EDIT_NOTICE } from "../lib/rederived";
 import { resolvePendingEdit } from "./pendingEdit";
 import { failWithRetry } from "./toasts";
 import type { AppState } from "./useApp";
+
+/** A live graph's sheet is rebuilt from its sources, so a formula column added
+ *  or edited on it would be silently dropped at the next rebuild (lib/rederived.ts). */
+function refuseLinkedGraph(get: () => AppState, ds: Dataset): boolean {
+  if (ds.linkedCurves == null) return false;
+  get().setStatus(LINKED_GRAPH_EDIT_NOTICE);
+  return true;
+}
 
 export interface ComputedColumnsSlice {
   // Append a computed column (formula) to a dataset and evaluate it. The
@@ -161,6 +170,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
     addFormula: (id, name, rawExpr) => {
       const ds = get().datasets.find((d) => d.id === id);
       if (!ds) return false;
+      if (refuseLinkedGraph(get, ds)) return false;
       if (resolvePendingEdit(get, ds, "adding a column", () => get().addFormula(id, name, rawExpr))) return true;
       // col("Long Name") is stored as the column's letter (lib/formulaRefs.ts).
       const expr = resolvedNames(rawExpr, ds.data.labels, get);
@@ -204,6 +214,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
       const ds = get().datasets.find((d) => d.id === id);
       const current = ds?.formulas?.[index];
       if (!ds || !current) return false;
+      if (refuseLinkedGraph(get, ds)) return false;
       if (ds.pending != null) {
         const requestedPatch = { ...patch };
         resolvePendingEdit(get, ds, "editing a column", () => get().updateFormula(id, index, requestedPatch));
@@ -290,6 +301,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
       // function's body.
       const target = get().datasets.find((d) => d.id === id);
       if (!target?.formulas?.[index]) return;
+      if (refuseLinkedGraph(get, target)) return;
       if (resolvePendingEdit(get, target, "removing a column", () => {
         const current = get().datasets.find((d) => d.id === id);
         if (!current?.formulas?.[index]) return false;

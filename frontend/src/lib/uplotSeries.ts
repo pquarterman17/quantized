@@ -13,7 +13,9 @@ import { seriesPoints, seriesTrace } from "./markers";
 import type { PlotPayload } from "./plotdata";
 import { DASH, resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
 import { BAR_PATHS } from "./uplotBars";
+import { ensureMarks, marks, marksPending, usesMarks } from "./marksLoader";
 import { resolveFillBands, seriesFillProps, translucent } from "./uplotFill";
+import type { ErrorBarPaint } from "./uplotErrorRange";
 import type { BuildOptsArgs } from "./uplotOpts";
 
 /** The per-series style inputs `buildSeriesDefs` reads (all of them). */
@@ -52,6 +54,7 @@ export function buildSeriesDefs(
   colors: SeriesColors,
 ): { series: uPlot.Series[]; bands: uPlot.Band[] } {
   const { seriesStyles } = args;
+  ensureMarks(seriesStyles);
   const { accentColor, inkColor, inkDimColor, isDarkBg } = colors;
   // Non-monotonic x: wrap a path builder so it ignores uPlot's (collapsed)
   // index window and draws the full acquisition order. See `linearPaths` docs.
@@ -130,7 +133,8 @@ export function buildSeriesDefs(
       const show = !args.hidden?.[i]; // interactive legend visibility
       // Selected companion (#50 brush): accent, filled larger markers, no line.
       if (s.selected) {
-        return { label, scale, stroke: accentColor, fill: accentColor, width: 0, points: loopPoints({ show: true, size: 7 }), show };
+        // The fill goes on the POINTS: a series fill shades the area under them.
+        return { label, scale, stroke: accentColor, width: 0, points: loopPoints({ show: true, size: 7, fill: accentColor }), show };
       }
       // Muted "excluded" companion (grey mode): faint hollow markers, no line.
       if (s.muted) {
@@ -150,7 +154,10 @@ export function buildSeriesDefs(
       // for this column itself, keyed to the z channel — so the native line
       // AND points are hidden entirely here to avoid double-drawing. No fill
       // (a fill-under/between a colour-mapped point cloud isn't meaningful).
-      if (args.colorByColumns?.has(i + 1)) {
+      const cbSpec = args.colorByColumns?.get(i + 1);
+      // A spline / size-by / drop-line series is hidden until its module has loaded: never a
+      // straight stand-in that later jumps, nor default-size dots (see marksLoader).
+      if ((cbSpec && !cbSpec.flat) || (usesMarks(style) && marksPending())) {
         return { label, scale, stroke, width: 0, points: { show: false }, show };
       }
       // Default trace shape (Preferences) when the series has no explicit style:
@@ -168,11 +175,18 @@ export function buildSeriesDefs(
       // from this series' own resolved stroke. `{vs}` band fills are NOT a
       // per-series prop — see `resolveFillBands` below (opts.bands).
       // A log axis breaks the line at values it cannot place (lib/logGaps.ts).
-      const def: uPlot.Series = {
+      const def: uPlot.Series & { qzErr?: ErrorBarPaint } = {
         label, scale, stroke, width, dash, points: loopPoints(points), show,
         ...seriesFillProps(style?.fill, stroke),
         ...(xAscending ? { gaps: logGaps } : {}),
       };
+      // A size-only series (N5): the plugin draws the points; the line stays.
+      if (cbSpec?.flat) def.points = { show: false };
+      // Error-bar styling (gap audit 2 #6) rides on the series, where the
+      // error plugins read it (`uplotErrorRange.styleErrorDraw`); a colour is
+      // contrast-checked like the stroke. A change rebuilds (not a paint field).
+      const eb = style?.errorBar;
+      if (eb) def.qzErr = { ...eb, color: eb.color && resolveDrawColor(seriesColor(i, { color: eb.color }), isDarkBg, inkColor) };
       // Per-series step alignment (SeriesStyle.step, GAP_PLOTTYPES "step"
       // mark) — a MORE SPECIFIC override than the "Step" default-trace
       // preference below, so it's checked first: a step-marked series
@@ -182,6 +196,11 @@ export function buildSeriesDefs(
         def.paths = BAR_PATHS;
         def.fill = translucent(stroke, 70);
         def.points = { show: false };
+      } else if (style?.connect === "spline" && marks() && !(style.fill && typeof style.fill === "object")) {
+        // N6 Spline connect (wins over a step shape; a fill-under follows it; a fill-BETWEEN keeps
+        // the straight line, as in the export): SPLINE_PATHS strokes the natural cubic spline, or the
+        // row-order polyline where X is not ascending (a loop) / the series is too long.
+        def.paths = marks()!.SPLINE_PATHS;
       } else if (style?.step) {
         const builder =
           style.step === "pre" ? args.steppedPathsPre

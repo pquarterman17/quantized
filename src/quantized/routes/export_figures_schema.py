@@ -34,6 +34,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from quantized.calc.axis_dates import date_aware_x_fmt
+
 __all__ = [
     "SERIES_STYLES_DOC",
     "SVG_TEXT_AS_PATHS_DOC",
@@ -234,6 +236,28 @@ class FigureFacet(BaseModel):
     channels: list[int] | None = None
 
 
+class AxisGridSpec(BaseModel):
+    """One axis' grid lines (the screen's ``AxisGrid``)."""
+
+    major: bool = False
+    minor: bool = False
+    color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
+    dash: Literal["solid", "dash", "dot"] | None = None
+
+
+class TopAxisSpec(BaseModel):
+    """A top X axis showing a transform of X (``calc.axis_top``)."""
+
+    kind: Literal["reciprocal", "dspacing", "linear", "expr"]
+    # ``expr``: any expression f(x) of the bottom axis (``calc.axis_expr``, no
+    # eval); one that does not parse draws no top axis rather than failing.
+    expr: str | None = Field(default=None, max_length=200)
+    factor: float | None = None
+    shift: float | None = None
+    wavelength: float | None = Field(default=None, gt=0, le=100)
+    title: str | None = Field(default=None, max_length=200)
+
+
 class TickFormatSpec(BaseModel):
     """Wire model for the screen's `AxisFormat` (MAIN #24,
     `frontend/src/lib/types.ts`): the tick-label number format for one axis.
@@ -251,6 +275,12 @@ class TickFormatSpec(BaseModel):
     # Y-axis breaks (``calc.axis_breaks``): elided ``[lo, hi]`` stretches of a
     # linear Y / Y2 axis. Validated there; an invalid entry is dropped.
     breaks: list[tuple[float, float]] | None = Field(default=None, max_length=4)
+    # Gap-audit-2 #5: the axis-look fields (``calc.axis_style``).
+    reverse: bool | None = None
+    rotate: float | None = Field(default=None, ge=-90, le=90)
+    offset: float | None = Field(default=None, ge=0, le=72)
+    grid: AxisGridSpec | None = None
+    top: TopAxisSpec | None = None
 
 
 @dataclass(frozen=True)
@@ -277,6 +307,16 @@ class _ResolvedFigure:
     y2_mask: list[bool]
     y2_label: str
     error_spans: Sequence[Mapping[str, Any] | None] | None = None
+    # The plotted X is a timestamp column (`calc.axis_dates.x_is_datetime`):
+    # an auto X format then draws dates (`_x_tick_fmt`), as the screen does.
+    x_is_datetime: bool = False
+
+
+def _x_tick_fmt(spec: TickFormatSpec | None, resolved: _ResolvedFigure) -> dict[str, Any] | None:
+    """``_tick_fmt`` for the X axis, date-aware (worksheet audit #7):
+    ``auto`` on a timestamp X draws calendar dates on export as on screen."""
+    fmt = date_aware_x_fmt(_tick_fmt(spec), resolved.x_is_datetime)
+    return dict(fmt) if fmt is not None else None
 
 
 def _tick_fmt(spec: TickFormatSpec | None) -> dict[str, Any] | None:

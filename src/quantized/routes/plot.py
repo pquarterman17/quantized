@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import Field, model_validator
 
-from quantized.calc.decimate import decimate_columns, is_ascending, window_columns
+from quantized.calc.decimate import is_ascending, reduce_plot_rows, window_row_indices
 from quantized.calc.map import MapState, map_from_datastruct
 from quantized.calc.plotting import PlotState, build_series
 from quantized.routes._columns import COLUMNS_MEDIA_TYPE, encode_columns, wants_columns
@@ -97,9 +97,13 @@ def plot_series(
     # verify a (possibly late-arriving) response still matches the window it
     # currently has committed, rather than trusting request/response pairing
     # alone.
+    # `rows` (gap audit 3 N2 review): the dataset row each returned row is,
+    # whenever the payload is not the dataset's rows one-to-one, so a client
+    # that masks or selects a drawn point maps it back to the RIGHT row.
     window: dict[str, float | None] | None = None
+    in_window = None
     if req.x_min is not None and req.x_max is not None:
-        x, values = window_columns(x, values, req.x_min, req.x_max)
+        in_window = window_row_indices(x, req.x_min, req.x_max)
         window = to_jsonable({"x_min": req.x_min, "x_max": req.x_max})
 
     # A non-ascending x (e.g. a hysteresis-loop sweep) renders via the
@@ -107,9 +111,12 @@ def plot_series(
     # calc/decimate.py's is_ascending doc) -- refuse to decimate regardless
     # of what the client asked for, rather than ship a misleading envelope.
     decimate_width = req.decimate_width
-    decimated = decimate_width is not None and not req.full_resolution and is_ascending(x)
-    if decimated and decimate_width is not None:
-        x, values = decimate_columns(x, values, decimate_width)
+    decimated = (
+        decimate_width is not None
+        and not req.full_resolution
+        and is_ascending(x if in_window is None else x[in_window])
+    )
+    x, values, rows = reduce_plot_rows(x, values, in_window, decimate_width if decimated else None)
 
     if handle is not None:
         response.headers["X-Dataset-Handle"] = handle
@@ -119,6 +126,7 @@ def plot_series(
         "y": {"log": plot.y_log},
         "decimated": decimated,
         "window": window,
+        "rows": rows.tolist() if rows is not None else None,
     }
     # Opt-in binary transport (routes/_columns.py): a client that names the
     # column media type in `Accept` gets the same payload with the columns as

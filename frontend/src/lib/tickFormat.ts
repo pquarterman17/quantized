@@ -42,7 +42,8 @@ export function xAxisIsDate(
 /** The date-select's value/label pairs, including the "not a date" option
  *  that maps back to `auto`. */
 export const TICK_DATE_OPTIONS: { value: string; label: string }[] = [
-  { value: "numeric", label: "Numeric" },
+  // `auto` on a date column draws date + time (`axisFormat.dateAwareXFmt`).
+  { value: "numeric", label: "Auto (date + time)" },
   { value: "date", label: "Date (UTC)" },
   { value: "time", label: "Time (UTC)" },
   { value: "datetime", label: "Date + time (UTC)" },

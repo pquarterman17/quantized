@@ -57,7 +57,8 @@ describe("plotSelectedTogether (PLOT_WORKFLOW_PLAN #3)", () => {
     const s = useApp.getState();
     const created = s.datasets.find((d) => d.id !== "a" && d.id !== "b" && d.id !== "c" && d.id !== "m");
     expect(created).toBeDefined();
-    expect(created!.data.labels).toEqual(["Sample A", "Sample B"]);
+    expect(created!.linkedCurves?.map((c) => c.label)).toEqual(["Sample A", "Sample B"]);
+    expect(created!.data.labels).toEqual(["Sample A", "Sample B"]); // unique curve labels; the quantity is the Comment
     expect(created!.data.time).toEqual([1, 2, 3, 5, 6]);
     // lands as the active plot the same way applyOriginFigure's overlay does.
     expect(s.activeId).toBe(created!.id);
@@ -78,7 +79,7 @@ describe("plotSelectedTogether (PLOT_WORKFLOW_PLAN #3)", () => {
     const s = useApp.getState();
     const created = s.datasets.find((d) => d.id !== "a" && d.id !== "b" && d.id !== "c" && d.id !== "m");
     expect(created).toBeDefined();
-    expect(created!.data.labels).toEqual(["Sample A", "Sample B"]); // the map contributed no curve
+    expect(created!.linkedCurves?.map((c) => c.label)).toEqual(["Sample A", "Sample B"]); // the map contributed no curve
     const msg = toastMsgs().find((m) => m.includes("plotted 2 datasets together"));
     expect(msg).toBeDefined();
     expect(msg).toContain("skipped 1 map dataset (RSM scan): maps don't overlay");

@@ -7,7 +7,7 @@
 // displayed payload, not state PlotStage itself needs to react to, so they
 // extract cleanly with no behavior change.
 
-import type { RefObject } from "react";
+import { useEffect, type RefObject } from "react";
 import type uPlot from "uplot";
 
 import { suggestLogScale } from "../../lib/autoscale";
@@ -35,6 +35,10 @@ import { useApp } from "../../store/useApp";
 // below) since both callers build the bag as an object LITERAL, and
 // PlotStageActions is their prop's structural type. copyFigure joined for
 // MAIN #35 (publication copy); snapshot stays as the screen grab.
+/** The cursors the on-plot object plugins set while hovering an annotation /
+ *  shape (move, resize handle) or a reference line (resize). */
+const OBJECT_CURSORS: ReadonlySet<string> = new Set(["move", "nwse-resize", "ew-resize", "ns-resize"]);
+
 export interface PlotStageActions {
   resetView: () => void;
   smartScale: () => void;
@@ -80,9 +84,10 @@ export function usePlotStageActions(
   displayPayload: PlotPayload | null,
   active: Dataset | null | undefined,
   onRowsSelected?: (rows: number[]) => void,
+  plotted: readonly number[] = [],
 ): PlotStageActions & {
   onRegionSelect: (x0: number, x1: number, y0?: number, y1?: number) => void;
-  onRangeSelect: (x0: number, x1: number) => void;
+  onRangeSelect: (x0: number, x1: number, y?: [number, number], y2?: [number, number]) => void;
   onLimCrossed: (axis: "x" | "y", why?: "log") => void;
 } {
   function resetView() {
@@ -177,15 +182,53 @@ export function usePlotStageActions(
     useApp.getState().setPlotTool("zoom");
   }
 
-  // Plot-brush: a dragged x-band → row indices (original order) → worksheet selection.
-  function onRangeSelect(x0: number, x1: number) {
+  // Plot-brush: a dragged x-band → row indices (original order) → worksheet
+  // selection; a 2-D box (gap audit 3 N2) takes only the rows with a plotted
+  // point inside it, ready for "Exclude selected points".
+  function onRangeSelect(x0: number, x1: number, y?: [number, number], y2?: [number, number]) {
     if (!displayPayload) return;
-    // An X-offset (waterfall) payload repeats each row once per x block: map back to dataset rows.
-    const rows = rowsInXRange(displayPayload.data[0] as (number | null)[], x0, x1);
-    const sourceRows = waterfallSourceRows(displayPayload, rows);
-    if (onRowsSelected) onRowsSelected(sourceRows);
-    else useApp.getState().setRowSelection(sourceRows);
+    const payload = displayPayload;
+    const select = (rows: number[]) => {
+      if (onRowsSelected) onRowsSelected(rows);
+      else useApp.getState().setRowSelection(rows);
+    };
+    // A full payload's x band: its rows are the dataset's (an X-offset
+    // waterfall repeats each row once per x block: folded back).
+    const reduced = payload.rowIds || payload.decimated || payload.window;
+    if (!y && !y2 && !reduced) return select(waterfallSourceRows(payload, rowsInXRange(payload.data[0] as (number | null)[], x0, x1)));
+    // A box, or a reduced (decimated / windowed) payload whose drawn rows must
+    // be traced to dataset rows: on demand, refused rather than guessed.
+    void runLazy("Selecting points…", () => import("../../lib/plotPointMask")).then((m) => {
+      const r = m.pickRows(payload, plotted, active ?? null, useApp.getState().xKey, { x0, x1, y, y2 });
+      if ("rows" in r) select(r.rows);
+      else toast(`couldn't select those points: ${r.refused}`, "danger");
+    }, onLoadFailure);
   }
+
+  // Gap audit 2 #8: a double-click in the plot area is held back from uPlot's
+  // own re-fit (document capture runs before its listener on `u.over`) until
+  // the lazy `curveDoubleClick` decides: Plot Details on a curve, re-fit on
+  // empty space. The axes keep their Axis dialog (outside `u.over`). Re-bound
+  // every render (no deps): it reads this render's `plotted` and `resetView`.
+  useEffect(() => {
+    const onDbl = (e: MouseEvent) => {
+      const u = plotRef.current;
+      if (!u?.over?.contains(e.target as Node)) return;
+      // An annotation, text box, shape or reference line under the pointer owns
+      // the gesture (its plugin shows a move / resize cursor on hover and edits
+      // on its own double-mousedown): leave this double-click to it, even when
+      // the object sits on a curve. Only a curve alone opens Plot Details.
+      if (OBJECT_CURSORS.has(u.over.style.cursor)) return;
+      e.stopPropagation();
+      const { clientX, clientY } = e;
+      void runLazy("Loading plot details…", () => import("./curveDoubleClick")).then(
+        (m) => m.plotDoubleClick(u, clientX, clientY, plotted, resetView),
+        onLoadFailure,
+      );
+    };
+    document.addEventListener("dblclick", onDbl, true);
+    return () => document.removeEventListener("dblclick", onDbl, true);
+  });
 
   // P2.8 residual (b): a half-open limit crossed the data, so the axis is on auto;
   // "log": a typed side <= 0 was dropped on a log or reciprocal axis (lib/canvasLims.drawableLim).

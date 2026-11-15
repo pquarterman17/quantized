@@ -1,7 +1,7 @@
 import { BAR_PATHS } from "./uplotBars";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { gadgetPlugins, loadGadgetPlugins } from "./axisExtrasHook";
+import { gadgetPlugins, loadGadgetPlugins, loadToolPlugins, toolPlugins } from "./axisExtrasHook";
 import { buildOpts, categoricalTickFormatter, fixedLinearAxisSplits, fixedLogAxisSplits, logMajorTickFilter, niceLinearStep, reciprocalAxisSplits, reciprocalTransform, resolvePlotBg, tickFormatter, utcTzDate, xIsAscending } from "./uplotOpts";
 import type { PlotPayload } from "./plotdata";
 import { isFixedXRange } from "./uplotXRange";
@@ -149,7 +149,13 @@ describe("buildOpts", () => {
     expect((zoom.cursor as { y?: unknown }).y).toBeUndefined();
   });
 
-  it("adds one plugin for pan and cursor, none for zoom or pointer (no annotations/refLines)", () => {
+  it("adds one plugin for pan and cursor, none for zoom or pointer (no annotations/refLines)", async () => {
+    // The tool plugins are a lazy chunk (bundle diet slice 27): before it
+    // lands, pan and cursor build without theirs; the viewport rebuilds then.
+    expect(toolPlugins()).toBeNull();
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "pan" }).plugins).toHaveLength(0);
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "cursor" }).plugins).toHaveLength(0);
+    await loadToolPlugins();
     expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" }).plugins).toHaveLength(0);
     // Pointer without an axisLabelEdit bridge stays plugin-free (the axis-title
     // drag plugin is only pushed when that bridge is wired — see PlotStage).
@@ -222,7 +228,8 @@ describe("buildOpts", () => {
     }
   });
 
-  it("adds the stats plugin only in the stats tool", () => {
+  it("adds the stats plugin only in the stats tool", async () => {
+    await loadToolPlugins();
     expect(
       buildOpts(payload, { ...base, yScale: "linear", tool: "stats", onStats: vi.fn() }).plugins,
     ).toHaveLength(1);
@@ -449,8 +456,8 @@ describe("buildOpts defaultTrace", () => {
     const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect(opts.axes?.[1]?.label).toBe("M (emu)");
     const two: PlotPayload = { ...payload, series: [...payload.series, { label: "B", unit: "" }] };
-    // With >1 series the legend names them, so the axis label is omitted.
-    expect(buildOpts(two, { ...base, yScale: "linear", tool: "zoom" }).axes?.[1]?.label).toBeUndefined();
+    // With >1 series the axis gets a joint title (gap-2 #11: it used to be blank).
+    expect(buildOpts(two, { ...base, yScale: "linear", tool: "zoom" }).axes?.[1]?.label).toBe("M (emu) / B");
   });
 
   it("applies explicit axis limits as static scale ranges", () => {
@@ -858,8 +865,8 @@ describe("buildOpts defaultTrace", () => {
 
   it("overrides the primary y-axis label and forces it to show with >1 series", () => {
     const two: PlotPayload = { ...payload, series: [...payload.series, { label: "B", unit: "T" }] };
-    // Without an override, >1 series leaves the axis label to the legend (undefined).
-    expect(buildOpts(two, { ...base, yScale: "linear", tool: "zoom" }).axes?.[1]?.label).toBeUndefined();
+    // Without an override, >1 series get a joint title (gap-2 #11).
+    expect(buildOpts(two, { ...base, yScale: "linear", tool: "zoom" }).axes?.[1]?.label).toBe("M (emu) / B (T)");
     // With an override it shows regardless of series count.
     const over = buildOpts(two, { ...base, yScale: "linear", tool: "zoom", yAxisLabel: "Moment (emu)" });
     expect(over.axes?.[1]?.label).toBe("Moment (emu)");
@@ -891,9 +898,9 @@ describe("buildOpts defaultTrace", () => {
 });
 
 describe("buildOpts select tool (#50 plot-brush)", () => {
-  it("drags an x-band without rescaling (like region, unlike zoom)", () => {
+  it("drags an x-band or a 2-D box without rescaling (like region, unlike zoom; gap audit 3 N2)", () => {
     const sel = buildOpts(payload, { ...base, yScale: "linear", tool: "select" });
-    expect(sel.cursor?.drag).toMatchObject({ x: true, y: false, setScale: false });
+    expect(sel.cursor?.drag).toMatchObject({ x: true, y: true, setScale: false });
   });
 
   it("routes the drag-end band to onRangeSelect (not onRegionSelect)", () => {
@@ -907,10 +914,18 @@ describe("buildOpts select tool (#50 plot-brush)", () => {
       onRegionSelect,
     });
     // Invoke the setSelect hook with a fake uPlot: 100px→data 1, 150px→data 1.5.
-    const u = { select: { left: 100, width: 50 }, posToVal: (px: number) => px / 100 };
+    const u = { select: { left: 100, width: 50, top: 0, height: 0 }, posToVal: (px: number) => px / 100, setSelect: vi.fn() };
     opts.hooks?.setSelect?.[0]?.(u as never);
     expect(onRangeSelect).toHaveBeenCalledWith(1, 1.5);
     expect(onRegionSelect).not.toHaveBeenCalled();
+  });
+
+  it("a tall drag routes a 2-D box (y edges on the plot's Y) to onRangeSelect", () => {
+    const onRangeSelect = vi.fn();
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "select", onRangeSelect });
+    const u = { select: { left: 100, width: 50, top: 20, height: 30 }, posToVal: (px: number) => px / 100, setSelect: vi.fn() };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRangeSelect).toHaveBeenCalledWith(1, 1.5, [0.2, 0.5], undefined);
   });
 
   it("ignores a zero-width (click) select", () => {
@@ -1100,8 +1115,15 @@ describe("buildOpts region tool live drag rendering (Finding 1, Group AB adversa
     expect(u.over.querySelector).not.toHaveBeenCalled();
   });
 
-  it("is a no-op for the \"select\" tool (x-only by design, never even starts y-tracking)", () => {
+  it("paints the Select Rows tool's flat drag as a full-height band too (its box mask, gap audit 3 N2)", () => {
     const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "select" });
+    const { u, band } = fakeU(2);
+    opts.hooks?.setCursor?.[0]?.(u as never);
+    expect(band.style.height).toBe("200px");
+  });
+
+  it("is a no-op for the zoom tool", () => {
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     const { u, querySelector } = fakeU(2);
     opts.hooks?.setCursor?.[0]?.(u as never);
     expect(querySelector).not.toHaveBeenCalled();

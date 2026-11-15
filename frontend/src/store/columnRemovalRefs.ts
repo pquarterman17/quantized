@@ -9,12 +9,14 @@
 // one — applies the SAME remap instead of leaving every reference stale. The
 // dataset's OWN fields (`remapDatasetChannels`, formulas) stay with each caller.
 // It also covers OTHER datasets' formulas that read this one through
-// `sheet("Name", L)` (lib/sheetRefs.ts) — returned as a `datasets` override.
+// `sheet("Name", L)` (lib/sheetRefs.ts) and live graphs' curves that read it
+// (lib/channelRemap's remapLinkedCurveSources) — returned as a `datasets` override.
 
 import {
   type ColumnShift,
   remapFigureBindings,
   remapFigureViewChannels,
+  remapLinkedCurveSources,
   remapViewChannels,
   remapWindowViews,
 } from "../lib/channelRemap";
@@ -38,10 +40,14 @@ export function columnRemovalRefsPatch(
   const ext = formulaExtension();
   const shifted = ext?.shiftSheetRefs(datasets, id, removedCol);
   const readers = new Set(shifted?.changed);
+  const reread =
+    ext && shifted && readers.size
+      ? ext.withSheetDatasets(shifted.datasets, () => shifted.datasets.map((d) => (readers.has(d.id) ? recomputeFormulaData(d) : d)))
+      : null;
+  // Live graphs' curves that read this dataset follow their columns (lib/linkedCurves.ts).
+  const override = remapLinkedCurveSources(reread ?? datasets, id, removedCol) ?? reread;
   return {
-    ...(ext && shifted && readers.size
-      ? { datasets: ext.withSheetDatasets(shifted.datasets, () => shifted.datasets.map((d) => (readers.has(d.id) ? recomputeFormulaData(d) : d))) }
-      : {}),
+    ...(override ? { datasets: override } : {}),
     plotWindows: syncDatasetWindowDocuments(
       remapWindowViews(s.plotWindows, id, removedCol),
       id,

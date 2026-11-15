@@ -198,10 +198,10 @@ test("line/scatter, color, width, errors, scale, limits, legend, and label edits
 
   // ── Legend rename — double-click the live Stage legend entry (real
   //    direct manipulation on the plot itself, not a properties panel). ───
-  const legendRow0 = page.locator(".qzk-legend .it").first();
+  const legendRow0 = page.locator(".qzk-stage .qzk-legend .it").first();
   await expect(legendRow0).toContainText("Signal (V)");
   await legendRow0.dblclick();
-  const legendInput = page.locator(".qzk-legend input.qz-input");
+  const legendInput = page.locator(".qzk-stage .qzk-legend input.qz-input");
   await expect(legendInput).toBeVisible();
   await legendInput.fill("Renamed Signal");
   await legendInput.press("Enter");
@@ -304,5 +304,5 @@ test("line/scatter, color, width, errors, scale, limits, legend, and label edits
 
   // Real-canvas confirmation: the legend still reads the renamed text after
   // a full close/reopen cycle, not just in the store.
-  await expect(page.locator(".qzk-legend .it").first()).toContainText("Renamed Signal");
+  await expect(page.locator(".qzk-stage .qzk-legend .it").first()).toContainText("Renamed Signal");
 });

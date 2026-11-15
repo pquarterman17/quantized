@@ -59,6 +59,7 @@ from quantized.io.import_parse import (
     DATA_ROLES as _DATA_ROLES,
 )
 from quantized.io.import_parse import (
+    _datetime_x,
     _decimal_fields,
     _decimal_names,
     _effective_names,
@@ -363,8 +364,9 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
             f"more than one column is marked as the x role ({names}) -- "
             "only one column can be x; change the others to y/error/label/ignore"
         )
+    x_dates = _datetime_x(p, x_cols[0]) if x_cols else None  # a date X (audit #7)
     if x_cols:
-        x = p.matrix[:, x_cols[0]]
+        x = p.matrix[:, x_cols[0]] if x_dates is None else x_dates
         x_name, x_unit = p.names[x_cols[0]], p.units[x_cols[0]]
     else:
         x = np.arange(1, n_rows + 1, dtype=float)
@@ -432,6 +434,8 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
         "import_settings": settings.to_dict(),
     }
     metadata.update(_decimal_fields(p, effective_names))
+    if x_dates is not None:  # direct import's keys (`delimited.import_csv`)
+        metadata.update({"time_is_datetime": True, "time_timezone": "UTC"})
     label_cols = [k for k in range(n_cols) if p.roles[k] == "label"]
     if label_cols:
         metadata["text_columns"] = {

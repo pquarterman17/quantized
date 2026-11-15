@@ -36,6 +36,8 @@ export interface WorksheetToolbarProps {
   showStats: boolean;
   onToggleStats: () => void;
   onCopy: () => void;
+  /** "Export…": this sheet (or its selected rows) as CSV / TSV / Excel. */
+  onExport: () => void;
   /** MAIN #34 block ops — shown only when a row×column block is selected. */
   blockOps: BlockOpsApi;
   maskedCount: number;
@@ -72,6 +74,7 @@ export default function WorksheetToolbar({
   showStats,
   onToggleStats,
   onCopy,
+  onExport,
   blockOps,
   maskedCount,
   onUnmaskAll,
@@ -142,6 +145,9 @@ export default function WorksheetToolbar({
       </button>
       <button className="qz-btn" onClick={onCopy} title="Copy visible rows to clipboard (TSV)">
         ⧉ Copy
+      </button>
+      <button className="qz-btn" onClick={onExport} title="Save this worksheet (or its selected rows) as CSV, TSV or Excel, with Long Name and Units rows">
+        ⇩ Export…
       </button>
       {blockOps.hasBlock && (
         <>

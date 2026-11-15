@@ -70,10 +70,10 @@ describe("ErrorRolesCard — manual Add on the Stage (figures-audit #10/#14)", (
 });
 
 describe("ErrorRolesCard", () => {
-  it("is hidden for a single-channel dataset", () => {
+  it("offers a COMPUTED error for a single-channel dataset (gap audit 2 #14)", () => {
     const d = ds(["M"]);
-    const { container } = render(<ErrorRolesCard active={d} />);
-    expect(container).toBeEmptyDOMElement();
+    render(<ErrorRolesCard active={d} />);
+    expect(screen.getByRole("combobox", { name: "Computed error source" })).toBeInTheDocument();
   });
 
   it("explains itself when nothing is bound", () => {

@@ -1505,6 +1505,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/export/worksheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Worksheet
+         * @description Worksheet (or a selection of it) -> CSV, TSV or Excel, as a download.
+         */
+        post: operations["export_worksheet_api_export_worksheet_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/export/xrd-csv": {
         parameters: {
             query?: never;
@@ -5566,6 +5586,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/transform/average": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Average
+         * @description Mean, SD, SEM and N of N curves interpolated onto one grid.
+         */
+        post: operations["average_api_transform_average_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/transform/resample": {
         parameters: {
             query?: never;
@@ -6021,6 +6061,77 @@ export interface components {
             fpr: number[];
             /** Tpr */
             tpr: number[];
+        };
+        /** AverageCurve */
+        AverageCurve: {
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /** Name */
+            name: string;
+        };
+        /** AverageRequest */
+        AverageRequest: {
+            /**
+             * Allow Unit Mismatch
+             * @default false
+             */
+            allow_unit_mismatch?: boolean;
+            /**
+             * Channel
+             * @default
+             */
+            channel?: string;
+            /** Curves */
+            curves: components["schemas"]["AverageCurve"][];
+            /**
+             * Grid
+             * @default union
+             * @enum {string}
+             */
+            grid?: "union" | "step";
+            /** Step */
+            step?: number | null;
+            /**
+             * Unsorted
+             * @default refuse
+             * @enum {string}
+             */
+            unsorted?: "refuse" | "sort";
+        };
+        /** AverageResponse */
+        AverageResponse: {
+            /** Channels */
+            channels: string[];
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /** Overlap */
+            overlap: (number | null)[];
+            /** Warnings */
+            warnings: components["schemas"]["ResampleWarning"][];
+        };
+        /**
+         * AxisGridSpec
+         * @description One axis' grid lines (the screen's ``AxisGrid``).
+         */
+        AxisGridSpec: {
+            /** Color */
+            color?: string | null;
+            /** Dash */
+            dash?: ("solid" | "dash" | "dot") | null;
+            /**
+             * Major
+             * @default false
+             */
+            major?: boolean;
+            /**
+             * Minor
+             * @default false
+             */
+            minor?: boolean;
         };
         /**
          * AxisLabelStyle
@@ -7692,6 +7803,11 @@ export interface components {
              * @default figures
              */
             filename?: string;
+            /**
+             * Multipage
+             * @default false
+             */
+            multipage?: boolean;
         };
         /**
          * FigureEncoding
@@ -11516,6 +11632,38 @@ export interface components {
             /** Y */
             y?: number[] | null;
         };
+        /**
+         * TableColumn
+         * @description One column: Long Name, unit, kind (``number``/``text``/``datetime``)
+         *     and one cell per row (numbers, strings, or null for a blank).
+         */
+        TableColumn: {
+            /** Cells */
+            cells: (number | string | null)[];
+            /**
+             * Kind
+             * @default number
+             * @enum {string}
+             */
+            kind?: "number" | "text" | "datetime";
+            /** Name */
+            name: string;
+            /**
+             * Unit
+             * @default
+             */
+            unit?: string;
+        };
+        /** TableSheet */
+        TableSheet: {
+            /** Columns */
+            columns: components["schemas"]["TableColumn"][];
+            /**
+             * Name
+             * @default Sheet1
+             */
+            name?: string;
+        };
         /** TafelRequest */
         TafelRequest: {
             /** Alpha */
@@ -11627,6 +11775,7 @@ export interface components {
             digits?: number;
             /** Divide */
             divide?: number | null;
+            grid?: components["schemas"]["AxisGridSpec"] | null;
             /** Minor */
             minor?: number | null;
             /**
@@ -11635,10 +11784,38 @@ export interface components {
              * @enum {string}
              */
             mode?: "auto" | "fixed" | "sci" | "eng" | "date" | "time" | "datetime";
+            /** Offset */
+            offset?: number | null;
+            /** Reverse */
+            reverse?: boolean | null;
+            /** Rotate */
+            rotate?: number | null;
             /** Size */
             size?: number | null;
             /** Ticks */
             ticks?: ("in" | "out" | "both") | null;
+            top?: components["schemas"]["TopAxisSpec"] | null;
+        };
+        /**
+         * TopAxisSpec
+         * @description A top X axis showing a transform of X (``calc.axis_top``).
+         */
+        TopAxisSpec: {
+            /** Expr */
+            expr?: string | null;
+            /** Factor */
+            factor?: number | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "reciprocal" | "dspacing" | "linear" | "expr";
+            /** Shift */
+            shift?: number | null;
+            /** Title */
+            title?: string | null;
+            /** Wavelength */
+            wavelength?: number | null;
         };
         /** TwoSampleRequest */
         TwoSampleRequest: {
@@ -11733,6 +11910,31 @@ export interface components {
              * @default 1.5406
              */
             wavelength_a?: number;
+        };
+        /**
+         * WorksheetExportRequest
+         * @description ``fmt`` csv/tsv write the FIRST sheet; xlsx writes every sheet as a
+         *     tab. ``header``: write the Long Name (and Units) rows.
+         */
+        WorksheetExportRequest: {
+            /**
+             * Filename
+             * @default worksheet
+             */
+            filename?: string;
+            /**
+             * Fmt
+             * @default csv
+             * @enum {string}
+             */
+            fmt?: "csv" | "tsv" | "xlsx";
+            /**
+             * Header
+             * @default true
+             */
+            header?: boolean;
+            /** Sheets */
+            sheets: components["schemas"]["TableSheet"][];
         };
         /** XrayCalcRequest */
         XrayCalcRequest: {
@@ -14261,6 +14463,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TernaryFigureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_worksheet_api_export_worksheet_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorksheetExportRequest"];
             };
         };
         responses: {
@@ -20965,6 +21200,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    average_api_transform_average_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AverageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AverageResponse"];
                 };
             };
             /** @description Validation Error */

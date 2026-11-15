@@ -1,8 +1,10 @@
 // The BACKGROUND (unfocused) plot window's content (MULTI_PLOT_PLAN item 4,
 // Key Decision 2): live data driven by the window's OWN `PlotView` snapshot
 // rather than the live singleton store fields — and with NO interactive tool
-// plugins (no toolbar/legend/readouts/context menu either — a background
-// window is a plain live preview). `PlotWindowFrame`'s capture-phase
+// plugins (no toolbar/readouts/context menu either — a background window is
+// a plain live preview). Gap audit 2 #3: it DOES draw the view's shapes and
+// a read-only legend (`BackgroundLegend`), because both are part of how the
+// graph looks — focus must not change that. `PlotWindowFrame`'s capture-phase
 // pointerdown handler focuses the window (which snapshot-swaps it to a
 // `PlotStage` in the next render) before any drag gesture could reach this
 // component, so it never needs its own pointerdown handling.
@@ -46,6 +48,8 @@ import { frozenFigureDataset } from "../../lib/frozenFigureDataset";
 import { effectiveChannels } from "../../lib/plotdata";
 import type { PlotBg, PlotView } from "../../lib/plotview";
 import { canvasLineWidth, resolveTemplate } from "../../lib/plotTemplates";
+import { resolvePlotBg } from "../../lib/uplotOpts";
+import { waterfallStaggeredRows } from "../../lib/waterfallOffset";
 import type { Dataset } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
 import { windowSyncKey } from "../../lib/windowsync";
@@ -61,6 +65,7 @@ import {
   BackgroundStackWindow,
   BackgroundStatWindow,
 } from "./BackgroundAltModes";
+import BackgroundLegend from "./BackgroundLegend";
 
 const InsetPlot = lazyRegion(() => import("../Stage/InsetPlot"), "Inset");
 
@@ -198,7 +203,7 @@ function BackgroundXYWindow({
     ? { datasetId: statisticalLink.figureDatasetId, rows: figureRowsForSourceRows(statisticalLink, selection.rows) }
     : selection, [selection, statisticalLink]);
 
-  const { displayPayload, plotted, styleList, labelList, errorBars, errorSpans, colorByColumns, hidden } =
+  const { displayPayload, plotted, styleList, labelList, legendLabels, errorBars, errorSpans, colorByColumns, hidden } =
     usePlotPayload({
       active: dataset,
       yScale: view.yScale,
@@ -239,9 +244,13 @@ function BackgroundXYWindow({
   // this window's own publication export (`buildStageFigureSpec`, reached the
   // moment it is focused) cycles these exact positions.
   const seriesCycle = useWindowSeriesCycle(view, document, plotted.length);
+  const { inkColor, isDark: isDarkBg } = resolvePlotBg(bg);
 
+  // `.qzk-bg-stage` is the host the frame-vars plugin publishes the plot
+  // frame on (`frameVars` below), so a frame-anchored or "auto" legend sits
+  // where the focused window's does.
   return (
-    <>
+    <div className="qzk-bg-stage">
       <PlotViewport
         plotRef={plotRef}
         displayPayload={displayPayload}
@@ -278,6 +287,8 @@ function BackgroundXYWindow({
         refLines={view.refLines}
         annotations={view.annotations}
         regionShades={view.regionShades}
+        shapes={view.shapes}
+        frameVars={view.showLegend}
         seriesStyles={styleList}
         seriesCycle={seriesCycle}
         plotted={plotted}
@@ -304,6 +315,14 @@ function BackgroundXYWindow({
           plotRef={plotRef} hidden={hidden}
         />
       )}
-    </>
+      {displayPayload && view.showLegend && (
+        <BackgroundLegend
+          dataset={dataset} view={view} series={displayPayload.series} styleList={styleList} labels={legendLabels}
+          seriesCycle={seriesCycle} plotted={plotted} hidden={hidden} colorByColumns={colorByColumns}
+          isDarkBg={isDarkBg} inkColor={inkColor} defaultTrace={defaultTrace}
+          staggeredRows={waterfallStaggeredRows(displayPayload)}
+        />
+      )}
+    </div>
   );
 }

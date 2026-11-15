@@ -57,17 +57,24 @@ export function useLegendBox(tool: PlotTool) {
     setLegendXY(null);
   };
 
-  const baseStyle: CSSProperties | undefined = legendFrameXY
-    ? frameAnchorStyle(legendFrameXY)
-    : legendXY
-      ? { left: `${legendXY[0] * 100}%`, top: `${legendXY[1] * 100}%`, right: "auto", bottom: "auto" }
-      : undefined;
-  const style: CSSProperties | undefined = legendSize
-    ? { ...baseStyle, width: legendSize[0], height: legendSize[1] }
-    : baseStyle;
-
   return {
     boxRef, legendPos, isFree: !!legendFrameXY || !!legendXY,
-    style, onBoxMouseDown, onBoxDoubleClick,
+    style: legendBoxStyle(legendFrameXY, legendXY, legendSize), onBoxMouseDown, onBoxDoubleClick,
   };
+}
+
+/** The legend box's inline placement — frame anchor > free fraction > (none:
+ *  the corner class places it) — plus a saved size. Shared with the
+ *  unfocused window's read-only legend (gap audit 2 #3). */
+export function legendBoxStyle(
+  frameXY: [number, number] | null,
+  xy: [number, number] | null,
+  size: [number, number] | null,
+): CSSProperties | undefined {
+  const base: CSSProperties | undefined = frameXY
+    ? frameAnchorStyle(frameXY)
+    : xy
+      ? { left: `${xy[0] * 100}%`, top: `${xy[1] * 100}%`, right: "auto", bottom: "auto" }
+      : undefined;
+  return size ? { ...base, width: size[0], height: size[1] } : base;
 }

@@ -37,7 +37,7 @@ describe("plot-type gallery model (#8)", () => {
   });
 
   it("switches column / stacked column / box / histogram to the Stat Stage", () => {
-    expect(plotTypePatch("column", { seriesStyles: {}, statPicks: {} }, [0])).toEqual({ statMode: true, statPicks: { mode: "bar", barStack: false } });
+    expect(plotTypePatch("column", { seriesStyles: {}, statPicks: {} }, [0])).toEqual({ statMode: true, polarMode: false, statPicks: { mode: "bar", barStack: false } });
     expect(plotTypePatch("stackedColumn", { seriesStyles: {}, statPicks: {} }, [0]).statPicks).toEqual({ mode: "bar", barStack: true });
     expect(plotTypePatch("histogram", { seriesStyles: {}, statPicks: {} }, [0]).statPicks).toEqual({ mode: "histogram" });
   });

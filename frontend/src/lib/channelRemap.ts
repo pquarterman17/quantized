@@ -72,16 +72,33 @@ import type { OriginDesignation } from "./columnmeta";
 import type { ErrorBinding } from "./errorRoles";
 import type { FigureBindings, FigureViewState } from "./figureDocument";
 import type { FigureEncoding } from "./figureEncoding";
-import type { ChannelRole, ColumnFilter, FitSpec, ModelingType, SeriesStyle } from "./types";
+import type { ColumnProps } from "./columnProps";
+import type { ChannelRole, ColumnFilter, Dataset, FitSpec, LinkedCurve, ModelingType, SeriesStyle } from "./types";
 
 /** One column-count change: a plain number is the REMOVED column (every
  *  helper below was written for that case); `{ inserted }` is a column added
- *  AT that index, which shifts every later one up and drops nothing. */
-export type ColumnShift = number | { readonly inserted: number };
+ *  AT that index, which shifts every later one up and drops nothing;
+ *  `{ from, to }` is the worksheet's Move Column — the column at `from` now
+ *  sits at `to`, the ones between close the gap, and nothing is dropped. */
+export type ColumnShift = number | { readonly inserted: number } | ColumnMove;
 
-/** Shift one channel index past a removed (down) or inserted (up) column.
- *  `null` = the index WAS the removed column and the caller must drop it. */
+/** Move Column (store/worksheetColumns.ts): `from` lands at `to`. */
+export interface ColumnMove {
+  readonly from: number;
+  readonly to: number;
+}
+
+/** Shift one channel index past a removed (down), inserted (up) or moved
+ *  column. `null` = the index WAS the removed column and the caller must drop
+ *  it; a move never returns `null`. */
 export function remapChannel(c: number, shift: ColumnShift): number | null {
+  if (typeof shift !== "number" && "from" in shift) {
+    const { from, to } = shift;
+    if (c === from) return to;
+    if (from < to && c > from && c <= to) return c - 1;
+    if (to < from && c >= to && c < from) return c + 1;
+    return c;
+  }
   if (typeof shift !== "number") return c >= shift.inserted ? c + 1 : c;
   if (c === shift) return null;
   return c > shift ? c - 1 : c;
@@ -193,6 +210,10 @@ export interface DatasetChannelState {
   filter?: ColumnFilter[];
   errorRoles?: ErrorBinding[];
   fitSpec?: FitSpec;
+  /** A live graph's curves: curve i IS the graph's column i (lib/linkedCurves.ts). */
+  linkedCurves?: LinkedCurve[];
+  /** Worksheet column comments + display number formats (lib/columnProps.ts). */
+  columnProps?: Record<number, ColumnProps>;
 }
 
 export function remapDatasetChannels(
@@ -210,6 +231,12 @@ export function remapDatasetChannels(
     filter: filter && filter.length ? filter : undefined,
     errorRoles: remapErrorRoles(d.errorRoles, removedCol),
     fitSpec: remapFitSpec(d.fitSpec, removedCol),
+    // A removed graph column drops its curve; an inserted one is no curve.
+    linkedCurves:
+      typeof removedCol === "number" && d.linkedCurves
+        ? d.linkedCurves.filter((_, i) => i !== removedCol)
+        : d.linkedCurves,
+    columnProps: remapKeyedRecord(d.columnProps, removedCol),
   };
 }
 
@@ -349,4 +376,26 @@ export function remapWindowViews<W extends { datasetId: string | null; view: Vie
       ? { ...w, view: { ...w.view, ...remapViewChannels(w.view, removedCol) } }
       : w,
   );
+}
+
+/** A source column removed (or inserted) in dataset `id`: every graph curve
+ *  reading that source follows its column. A curve whose X or Y WAS the
+ *  removed column is marked missing (-1) and drawn empty -- never shifted onto
+ *  the neighbouring column (fail closed). `null` when no graph reads `id`. */
+export function remapLinkedCurveSources(
+  datasets: readonly Dataset[],
+  id: string,
+  shift: ColumnShift,
+): Dataset[] | null {
+  const move = (c: number): number => (c < 0 ? c : (remapChannel(c, shift) ?? -1));
+  let changed = false;
+  const next = datasets.map((d) => {
+    if (!d.linkedCurves?.some((c) => c.datasetId === id)) return d;
+    changed = true;
+    const linkedCurves = d.linkedCurves.map((c) =>
+      c.datasetId !== id ? c : { ...c, yKey: move(c.yKey), xKey: c.xKey === null ? null : move(c.xKey) },
+    );
+    return { ...d, linkedCurves };
+  });
+  return changed ? next : null;
 }

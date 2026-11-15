@@ -31,7 +31,7 @@ __all__ = [
     "render_splom_figure",
 ]
 
-_FORMATS = ("pdf", "svg", "png", "tiff")
+_FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 _PANEL_IN = 1.6  # SPLOM per-variable panel edge length (inches)
 
 
