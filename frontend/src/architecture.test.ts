@@ -2804,6 +2804,14 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       call: 'import("./workbookTransferRun")',
     },
     {
+      // SLICE 28: the Duplicate body (`duplicateDataset` is already async: it
+      // awaits `resolveDataset` first). Its imports are all shared with eager
+      // modules, so nothing needs dragging out beside it.
+      module: "/store/duplicateDatasetRun.ts",
+      loader: "/store/datasetListEdits.ts",
+      call: 'import("./duplicateDatasetRun")',
+    },
+    {
       // SLICE 17: the Take Over Editing / Open as Copy bodies.
       module: "/commands/projectLockRun.ts",
       loader: "/commands/projectLockCommands.ts",
