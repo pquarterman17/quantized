@@ -38,13 +38,16 @@ export const MAX_GENERATION_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 /** Add `next` as the newest generation, dropping the oldest beyond the cap.
  *
  *  Newest-first ordering is the invariant every other function here relies on.
+ *  `existing` is SORTED first: a backend hands generations back in its own
+ *  order (IndexedDB's `getAll` is oldest-first by key), and slicing that
+ *  unsorted kept the OLDEST recovery points and dropped the newer ones.
  *  Returns a new array — callers persist the result. */
 export function rotate(
   existing: readonly Generation[],
   next: Generation,
   max = MAX_GENERATIONS,
 ): Generation[] {
-  return [next, ...existing].slice(0, Math.max(1, max));
+  return newestFirst([next, ...existing]).slice(0, Math.max(1, max));
 }
 
 /** Pick the generation to restore, newest first, skipping any that fail

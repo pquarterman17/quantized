@@ -7,7 +7,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useToasts } from "../store/toasts";
-import { connectLifecycle, STALE_SESSION_HINT, useConnection } from "./lifecycle";
+import { connectLifecycle, useConnection } from "./lifecycle";
+import { STALE_SESSION_HINT } from "./staleSession";
 
 class FakeSocket {
   static made: FakeSocket[] = [];
@@ -23,6 +24,7 @@ class FakeSocket {
 }
 
 async function flushPromises(): Promise<void> {
+  await vi.dynamicImportSettled(); // the probe is a lazy chunk (lib/staleSession.ts)
   for (let i = 0; i < 5; i++) await Promise.resolve();
 }
 
@@ -30,7 +32,7 @@ beforeEach(() => {
   FakeSocket.made = [];
   vi.useFakeTimers();
   vi.stubGlobal("WebSocket", FakeSocket);
-  useConnection.setState({ connected: false, stale: false });
+  useConnection.setState({ connected: false, stale: null });
   useToasts.setState({ toasts: [] });
 });
 
@@ -47,7 +49,7 @@ describe("connectLifecycle", () => {
     await flushPromises();
     await vi.advanceTimersByTimeAsync(30_000); // several backoff periods
     expect(FakeSocket.made).toHaveLength(1);
-    expect(useConnection.getState().stale).toBe(true);
+    expect(useConnection.getState().stale).toBe(STALE_SESSION_HINT);
     expect(useToasts.getState().toasts.at(-1)?.msg).toBe(STALE_SESSION_HINT);
   });
 
@@ -58,7 +60,7 @@ describe("connectLifecycle", () => {
     await flushPromises();
     await vi.advanceTimersByTimeAsync(600);
     expect(FakeSocket.made).toHaveLength(2);
-    expect(useConnection.getState().stale).toBe(false);
+    expect(useConnection.getState().stale).toBeNull();
   });
 
   it("retries after an ordinary drop the server answers normally", async () => {

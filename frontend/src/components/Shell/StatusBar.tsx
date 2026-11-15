@@ -6,7 +6,7 @@ import { plural } from "../../lib/plural";
 
 import { StatusDot } from "../primitives";
 import ExcludedRowsToggle from "./ExcludedRowsToggle";
-import { STALE_SESSION_HINT, useConnection } from "../../lib/lifecycle";
+import { useConnection } from "../../lib/lifecycle";
 import { useAutosaveStatus } from "../../store/autosaveStatus";
 import { usePendingOps, type PendingOp } from "../../store/pendingOps";
 import { useApp } from "../../store/useApp";
@@ -55,7 +55,7 @@ export default function StatusBar() {
     <footer className="qzk-statusbar">
       <span className="qzk-conn">
         <StatusDot tone={connected ? "ok" : "warn"} />
-        {stale && <span className="qzk-conn-stale">{STALE_SESSION_HINT}</span>}
+        {stale && <span className="qzk-conn-stale">{stale}</span>}
         {/* The result of most commands lands here: a polite live region,
             mounted while empty, and exempt from a dialog's background inert
             (R12) like the two regions below. */}

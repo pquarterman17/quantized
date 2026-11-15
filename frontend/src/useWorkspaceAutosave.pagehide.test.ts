@@ -21,9 +21,8 @@ import {
   saveAutosave,
   setAutosaveBackend,
   stashAutosave,
-  STASH_KEY,
-  STASH_MAX_CHARS,
 } from "./lib/autosave";
+import { STASH_KEY, STASH_MAX_CHARS } from "./lib/autosaveCore";
 import { localStorageBackend, memoryBackend, type AutosaveBackend } from "./lib/autosaveBackend";
 import type { Generation } from "./lib/autosaveGenerations";
 import { serializeWorkspace } from "./lib/workspace";
@@ -135,7 +134,9 @@ describe("leaving the page with an edit pending", () => {
     expect(writes).toBe(1);
   });
 
-  it("falls back to the async save alone when the codec is not loaded yet", async () => {
+  it("falls back to the async save alone when the stash chunk has not loaded yet", async () => {
+    // beforeEach reset the stash state: a page left before the startup
+    // restore brought lib/autosaveCore.ts in — the old, async-only path.
     renderHook(() => useWorkspaceAutosave());
     act(() => useApp.setState({ datasets: [ds("b.dat")] }));
     close();

@@ -4,23 +4,16 @@
 // Reconnects with backoff so a dev backend restart doesn't strand the page.
 // Connection state feeds the status bar's connected/offline segment.
 //
-// quantized divergence (soak test): a relaunched `qz` mints a new API token,
-// and every request from a page opened on the old one is refused (401; the
-// socket handshake 403). A page cannot read a handshake's status, so after a
-// close it asks an authenticated endpoint: a 401 means this page's session is
-// over — retrying cannot fix that, reloading can — so it stops, flags `stale`
-// and says to reload. Anything else (the server is down) keeps retrying.
+// quantized divergence (soak test): after a close, the lazy `./staleSession`
+// probe decides between retrying and stopping with a reload hint (`stale`)
+// — a relaunched `qz` refuses this page's old token forever.
 
 import { create } from "zustand";
 
-import { toast } from "../store/toasts";
-
-export const useConnection = create<{ connected: boolean; stale: boolean }>(() => ({
+export const useConnection = create<{ connected: boolean; stale: string | null }>(() => ({
   connected: false,
-  stale: false,
+  stale: null,
 }));
-
-export const STALE_SESSION_HINT = "qz was relaunched — reload this page to reconnect";
 
 export function connectLifecycle(): void {
   let delay = 500;
@@ -39,11 +32,7 @@ export function connectLifecycle(): void {
     };
     ws.onclose = () => {
       useConnection.setState({ connected: false });
-      fetch("/api/jobs", { credentials: "same-origin" }).then((r) => {
-        if (r.status !== 401) return retry();
-        useConnection.setState({ stale: true });
-        toast(STALE_SESSION_HINT, "danger", { ttlMs: 60_000 });
-      }, retry);
+      import("./staleSession").then((m) => m.probeSession(retry), retry);
     };
     ws.onerror = () => ws.close();
   };
