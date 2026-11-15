@@ -73,7 +73,6 @@ const publishBtn = () => screen.getByRole("button", { name: "Publish to peak tab
 async function fit(res: PeakModelFitResponse) {
   render(<PeakWizardPanel />);
   step("Find peaks");
-  fireEvent.click(screen.getByRole("button", { name: "Find peaks" }));
   await waitFor(() => expect(screen.getAllByRole("checkbox", { name: /include peak/ })).toHaveLength(2));
   stubModelFit(res);
   step("Fit & review");
