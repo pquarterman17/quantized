@@ -1,12 +1,20 @@
 # Bundle headroom campaign
 
+**Current state (2026-11-15, after slice 29):** the core command list's
+help copy (descriptions and ⌘K keywords) left the startup chunk for the
+full command list App loads right after mount. Measured on its parent
+`964352e5`: **815,231 -> 802,210 B (-13,021 B)**; merged over slice 28
+(`8df8529f`, 815,502 B) the eager total is **783.7 kB**, 13.2 kB under the
+UNMOVED 816,042 B pin. That headroom is for the gap-audit-4 features queued
+behind this slice. See "Slice 29".
+
 **Slice 28 (2026-11-15):** one async-only seam, the Duplicate body
 (`store/duplicateDatasetRun.ts`), taken to offset the overlay-binding
 branch's ~1.4 kB of irreducible render-path code. **816,658 -> 815,502 B
 (-1,156 B)**; the pin is NOT moved (816,042), 540 B of headroom remain. See
 "Slice 28".
 
-**Current state (2026-11-14, after slice 27):** three pieces left the
+**Previous state (2026-11-14, after slice 27):** three pieces left the
 startup chunk: the tool-dock plugins (pan, cursor readout, measure, region
 statistics, integrate, FWHM), warmed once the plot toolbar mounts; the
 overlay half of horizontal bars, a startup chunk; and the `.dwk` figure-doc
@@ -3492,6 +3500,69 @@ Exact bytes (`npm ci`, `.vite` wiped, `tsc -b --force`, `npm run build`):
 
 `createDerivedWorksheet` 1,081 B and `pasteDataFromClipboard` 763 B (slice 25
 list), unchanged.
+
+### Slice 29 — the core commands' help copy on demand, pin UNMOVED — **DONE (2026-11-15)**
+
+**Measured net eager delta −13,021 B — pin unchanged at 816,042 B**
+
+Exact bytes, `npm ci`, `node_modules/.vite` wiped, `npx tsc -b --force`,
+`npm run build` (entry chunk + Rolldown runtime):
+
+| tree | eager B | delta |
+|---|---:|---:|
+| `964352e5` (parent) | 815,231 | — |
+| this slice | 802,210 | **−13,021** |
+
+#### How it was found
+
+The slice-26/27 method (a throwaway plugin dumping `getModuleInfo()`
+import edges, the sourcemap profile, bytes each eager module alone keeps
+reachable) found no remaining click-only subtree worth a seam: what is left
+either runs at startup or is a synchronous store action. The largest
+startup-unused bytes were the string fields slice 27 named: the 115 core
+commands (File, View/Edit/Help, Data, Plot, Insert) carried ~12.4 kB of
+`description` and `keywords` text in `commands/*Commands.ts`.
+
+#### The move
+
+Only three surfaces read that copy: the menus' item tooltips (the menu
+model, `appMenuModel.ts`, is lazy), the ⌘K palette (lazy since slice 26)
+and Help (lazy). The copy moved verbatim (by a TypeScript-AST codemod,
+checked string-for-string) into `commands/commandDocs.ts`, keyed by command
+id. `buildAppActions` (`appCommands.ts`, the full list App already loads in
+a mount effect to add the Analyze group) merges it back with
+`withCommandDocs`, so the list the menus, palette and Help read once it lands
+is the same as before: dumped before and after, the full list is identical
+field for field (key order aside), and the core list differs only by the
+missing copy. `buildCoreActions`, the list App paints with, has none.
+
+The one observable difference is the window between first paint and the
+full list's arrival (the same mount-effect fetch that already brings the
+whole Analyze menu): a menu opened inside it shows core items without a
+tooltip, and a palette query inside it matches labels but not keywords.
+Both surfaces are themselves lazy chunks fetched in the same window. If the
+full-list chunk fails to load, the existing "Could not load the Analyze
+commands" toast fires and core tooltips stay absent along with Analyze.
+
+#### Guards and tests
+
+- `architecture.test.ts`: `DRAGGED_OUT` entry for `commands/commandDocs.ts`.
+- `commands/commandDocs.test.ts`: exactly one entry per core command and
+  none without one; no core command still carries its own description or
+  keywords (one home for the copy); the full list carries every entry; the
+  merge keeps other fields and ignores `Object.prototype` names.
+- The suites that pinned copy through a per-domain builder
+  (`dataCommands.statsText`, `figureBuilderCommand`, `fileCommands`) read it
+  through `withCommandDocs`, as the app does. `helpContent.test.ts` and
+  `tooltipSentenceAudit.test.ts` (which scans `commands/` sources) cover the
+  table unchanged.
+
+#### Candidates still not taken
+
+Slice 27's list less this one: the other lazy-only declarations (~3.3 kB),
+the async store actions' bodies (~3.5 kB), `uplotShapes`+`shapeHit`, the
+plot-window gesture, and the published-command copy of
+`useWindowCommands.ts` (same shape as this slice, smaller).
 
 ## What this does NOT change
 
