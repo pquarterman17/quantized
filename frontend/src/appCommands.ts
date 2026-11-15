@@ -15,6 +15,7 @@
 // "./appCommands") unchanged.
 
 import { buildAnalysisCommands } from "./commands/analysisCommands";
+import { withCommandDocs } from "./commands/commandDocs";
 import { buildDataCommands } from "./commands/dataCommands";
 import { buildFileCommands } from "./commands/fileCommands";
 import { buildPlotCommands } from "./commands/plotCommands";
@@ -23,13 +24,15 @@ import type { StoreGet } from "./lib/exportActive";
 import type { Action } from "./store/commands";
 
 /** Build the curated palette actions against the live store handle
- *  (`useApp.getState`) — store setters are stable, so callers build once. */
+ *  (`useApp.getState`) — store setters are stable, so callers build once.
+ *  The core commands' descriptions and keywords are merged in here
+ *  (commands/commandDocs.ts — kept out of the startup chunk). */
 export function buildAppActions(s: StoreGet): Action[] {
-  return [
+  return withCommandDocs([
     ...buildFileCommands(s),
     ...buildUiCommands(s),
     ...buildAnalysisCommands(s),
     ...buildDataCommands(s),
     ...buildPlotCommands(s),
-  ];
+  ]);
 }

@@ -6,11 +6,13 @@
 
 import { describe, expect, it } from "vitest";
 
+import { withCommandDocs } from "./commandDocs";
 import { buildDataCommands } from "./dataCommands";
 import { useApp } from "../store/useApp";
 
 function command(id: string) {
-  const c = buildDataCommands(useApp.getState).find((a) => a.id === id);
+  // The copy itself lives in commandDocs.ts, merged by the full list.
+  const c = withCommandDocs(buildDataCommands(useApp.getState)).find((a) => a.id === id);
   expect(c).toBeDefined();
   return c!;
 }

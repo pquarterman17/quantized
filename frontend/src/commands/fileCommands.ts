@@ -64,15 +64,12 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "new-workbook",
       group: "File",
       label: "New workbook",
-      description: "Add an empty worksheet to type or paste data into.",
-      keywords: "blank empty book sheet table create",
       run: () => void runLazy("Opening a new workbook…", () => import("../store/newWorkbook")).then((m) => m.newWorkbook(), onLoadFailure),
     },
     {
       id: "import",
       group: "File",
       label: "Import data…",
-      description: "Open one or more supported data files as datasets.",
       shortcut: "⌘O",
       run: () => {
         if (rejectIfImportRunning()) return;
@@ -83,7 +80,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "import-sheets",
       group: "File",
       label: "Import as sheets of one workbook…",
-      description: "One workbook, a sheet per file.",
       run: () => {
         if (rejectIfImportRunning()) return;
         openFilePicker((f) => void runLazy("Loading import…", () => import("./importAsSheets")).then((m) => m.runImportAsSheets(s, f), onLoadFailure), IMPORT_ACCEPT);
@@ -93,8 +89,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "import-append",
       group: "File",
       label: "Import & append as one dataset…",
-      description: "Import multiple compatible files and concatenate them into one dataset.",
-      keywords: "combine concatenate merge multi-file append",
       run: () => {
         if (rejectIfImportRunning()) return;
         openFilePicker((files) => {
@@ -119,16 +113,12 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "import-wizard",
       group: "File",
       label: "Import wizard (guided preview + saved filters)…",
-      description: "Preview and configure messy or unfamiliar files, then save the import settings for reuse.",
-      keywords: "guess preview parse delimiter header units filter messy",
       run: () => s().setImportWizardOpen(true),
     },
     {
       id: "import-origin-template",
       group: "File",
       label: "Import Origin template (.otp/.otpu)…",
-      description: "Import plot styling and layout from an Origin graph template.",
-      keywords: "otp otpu origin graph template style preset",
       // The picker opens in the click's own task; the upload client loads
       // once files are picked (bundle diet slice 21). A cancel loads nothing.
       run: () =>
@@ -142,7 +132,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "demo",
       group: "File",
       label: "Add demo dataset",
-      description: "Add a generated demonstration dataset for quickly trying plots and analysis.",
       run: () =>
         s().addDataset({
           id: nextDatasetId(),
@@ -154,8 +143,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "load-sample",
       group: "File",
       label: "Load sample dataset (bundled)",
-      description: "Load the bundled sample data for a guided first workflow without finding a file.",
-      keywords: "demo example first-run VSM hysteresis try this",
       run: () => {
         void loadSampleDataset().then(({ data, name, offline }) => {
           s().addDataset({ id: nextDatasetId(), name, data });
@@ -171,7 +158,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "save-workspace",
       group: "File",
       label: "Save workspace (.dwk)…",
-      description: "Save datasets, folders, figures, results, and settings as a Quantized workspace.",
       // Resolving pending lazy books (#38) before serializing lives in the
       // store (saveWorkspaceToFile) — not here, so this stays a thin command
       // like every other one in this list. Always prompts (native Save As
@@ -189,8 +175,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "pack-project",
       group: "File",
       label: "Pack Project…",
-      description: "Create a portable, self-contained copy of the open project and its source files.",
-      keywords: "pack project portable bundle copy sources",
       // Body lives in lazily-imported commands/packProjectCommands.ts (that
       // module's own doc comment) — keeps the desktop-shell check,
       // usePackProjectPanel, and store/packProject.ts off the eager bundle.
@@ -200,7 +184,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "open-workspace",
       group: "File",
       label: "Open workspace (.dwk)…",
-      description: "Replace the current session with a previously saved Quantized workspace.",
       // `loadWorkspace` REPLACES the entire library — confirm + undo-record
       // here (not inside `loadWorkspace`, which also has two legitimate
       // non-interactive callers: `clearAll`, and the startup autosave
@@ -220,8 +203,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "open-workspace-safe",
       group: "File",
       label: "Open without layout…",
-      description: "Replace the current session with a saved workspace, skipping its saved window layout.",
-      keywords: "safe recovery layout skip windows corrupted crash",
       // Same replace-and-confirm flow as "open-workspace" above, via
       // replaceWorkspaceSafely (skipLayout: true).
       run: openWorkspaceCommand(s, "open", (ws, native) =>
@@ -241,8 +222,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "append-workspace",
       group: "File",
       label: "Append workspace (.dwk)…",
-      description: "Merge another saved workspace into the current library without replacing it.",
-      keywords: "merge combine import project origin append second library",
       // P3.4 slice 4: no stageWorkspaceRestore call here — appendWorkspace
       // only merges `datasets` (store/useApp.ts), never `plotWindows`, so an
       // append can't trigger the multi-window mount storm loadWorkspace can.
@@ -265,7 +244,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "clear-autosave",
       group: "File",
       label: "Clear autosaved workspace…",
-      description: "Delete the recovery snapshot while leaving the currently open workspace unchanged.",
       run: () =>
         void clearAutosave().then((failed) => {
           if (failed === null) return s().setStatus("autosaved workspace cleared (current library unchanged)");
@@ -278,7 +256,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "File",
       label: "Remove all…",
       danger: true,
-      description: "Permanently clear every dataset, folder, report, and imported figure from the session.",
       // Body lives in lazily-imported commands/fileCommandsLazy.ts (bundle-
       // size ratchet); the import-running refusal stays here so it is instant.
       run: () => {
@@ -291,7 +268,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "export-csv",
       group: "File",
       label: "Export XRD CSV…",
-      description: "Export the active dataset as a diffraction-friendly CSV file.",
       // Body lives in lazily-imported commands/fileCommandsLazy.ts (bundle-
       // size ratchet — P3.4 safe-cancel-for-export pushed lib/exportActive.ts
       // itself out of the eager path; see that file's own doc comment).
@@ -310,7 +286,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "export-hdf5",
       group: "File",
       label: "Export HDF5…",
-      description: "Export the active dataset and available raw/corrected forms to HDF5.",
       // Body lives in lazily-imported commands/fileCommandsLazy.ts — see
       // "export-csv" above (same `void`-prefix + runLazy reasoning).
       run: () =>
@@ -322,10 +297,8 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Build & export",
       label: "Publication preview…",
-      description: "Preview or export the focused figure at publication size; Apply updates that figure without changing its data.",
       // Legacy names stay searchable — the F0.1 rename must not orphan
       // "figure builder" muscle memory in the palette or Help.
-      keywords: "figure builder live preview publication",
       run: () => {
         if (s().figurePublicationSession) {
           s().setStatus("finish or cancel the current Publication Preview before opening another");
@@ -367,10 +340,8 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Build & export",
       label: "Multi-panel export…",
-      description: "Temporarily compose multiple plots into an aligned publication page, then export it.",
       // Legacy names stay searchable — the F0.4 rename must not orphan
       // "figure page" muscle memory in the palette or Help.
-      keywords: "figure page multi panel composite",
       run: () => s().setFigurePageOpen(true),
     },
     {
@@ -378,7 +349,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Build & export",
       label: "Export figure…",
-      description: "Export the current plot or composed page to a publication-ready image or vector file.",
       // Body lives in lib/exportFigureCommand (store-size ratchet offset for
       // MAIN_PLAN #16's Append workspace command — see that file's doc).
       // Bundle: click-only — dynamic import keeps lib/exportFigureCommand
@@ -392,7 +362,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "export-origin",
       group: "File",
       label: "Export Origin (.ogs)…",
-      description: "Export data and current plot settings as an Origin script plus accompanying data.",
       // Body lives in lazily-imported commands/fileCommandsLazy.ts (bundle-
       // size ratchet — see that file's own doc comment on WHY the api.ts
       // calls stay imported here, eagerly, and are passed in as arguments
@@ -408,8 +377,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "export-origin-project",
       group: "File",
       label: "Export Origin project (.opj)…",
-      description: "Save the selected datasets, or all of them, as workbooks in one Origin project.",
-      keywords: "opj opju origin project workbook books export",
       // Lazy body + client (commands/originProjectExport.ts); it registers its
       // own cancellable op, hence `void` like "export-consolidated".
       run: () =>
@@ -420,7 +387,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "send-to-origin",
       group: "File",
       label: "Send to Origin (COM)…",
-      description: "Send selected datasets directly to a running Origin session on supported Windows systems.",
       // Body lives in lazily-imported commands/fileCommandsLazy.ts (bundle-
       // size ratchet — see that file's own doc comment): a Windows-only,
       // feature-flagged COM path most sessions never touch has no business
@@ -431,7 +397,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "export-worksheet",
       group: "File",
       label: "Export worksheet… (CSV, TSV, Excel)",
-      description: "Save worksheets with Long Name and Units rows.",
       // Lazy body (bundle ratchet): commands/worksheetExport.ts.
       run: () => void runLazy("Loading export…", () => import("./worksheetExport")).then((m) => m.runExportWorksheet(s), onLoadFailure),
     },
@@ -439,7 +404,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "export-consolidated",
       group: "File",
       label: "Export consolidated CSV…",
-      description: "Combine every loaded dataset into one consolidated CSV export.",
       // Body lives in lazily-imported commands/fileCommandsLazy.ts (bundle-
       // size ratchet — see that file's own doc comment). `void` + runLazy as
       // "export-csv" above: the body registers its own cancellable op (P3.4).
@@ -451,7 +415,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "preferences",
       group: "File",
       label: "Preferences…",
-      description: "Configure application appearance, behavior, and persistent user preferences.",
       shortcut: "⌘,",
       run: () => s().setPrefsOpen(true),
     },
@@ -459,8 +422,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "export-page",
       group: "File",
       label: "Export page… (spatial, true page coords)",
-      description: "Export an imported multi-panel page using its original spatial page coordinates.",
-      keywords: "origin multi-panel page rect true coordinates #54",
       // Body lives in lazily-imported lib/exportPageCommand.ts (bundle-size
       // ratchet — P3.4 safe-cancel-for-export's own pendingOps/AbortController
       // wiring pushed this off fileCommands.ts's eager import list; see that
