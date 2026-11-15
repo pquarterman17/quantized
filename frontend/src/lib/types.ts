@@ -55,6 +55,7 @@ export interface DataStruct {
 // Fidelity wire types live in ./originFidelityTypes (size ceiling); re-exported.
 import type {
   OriginCurveSheetNote,
+  OriginCurveSheetOmission,
   OriginFidelityManifest,
   OriginFigureFidelity,
   OriginSavedPreview,
@@ -62,6 +63,7 @@ import type {
 export type {
   OriginContainerIntegrity,
   OriginCurveSheetNote,
+  OriginCurveSheetOmission,
   OriginFidelityManifest,
   OriginFidelityStatus,
   OriginFigureFidelity,
@@ -278,6 +280,8 @@ export interface OriginFigure {
   saved_preview?: OriginSavedPreview;
   /** `.opj` only, present only when non-empty: see `OriginCurveSheetNote`. */
   curve_sheet_notes?: OriginCurveSheetNote[];
+  /** `.opju` only, present only when non-empty: see `OriginCurveSheetOmission`. */
+  curve_sheet_omitted?: OriginCurveSheetOmission[];
 }
 
 /** Response of POST /api/plot/series — uPlot-ready column data. */
