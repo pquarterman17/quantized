@@ -37,6 +37,16 @@ function compose(o: Partial<DisplayCompose> = {}): PlotPayload {
   });
 }
 
+describe("expandWaterfallX — N5 size-by diameters move with their series' block", () => {
+  it("places a size-by spec's per-row diameters like its z column", () => {
+    const spec = { channel: 1, z: [], colormap: "viridis" as const, lo: 0, hi: 1, flat: true, diam: [4, 8, 12] };
+    const out = expandWaterfallX(base(), 2, 0.5, { ...companions, colorByColumns: new Map([[2, spec]]) });
+    const d = out.colorByColumns.get(2)!.diam!;
+    expect(d).toHaveLength(6); // two blocks of 3 rows
+    expect(d.filter((v) => v != null)).toEqual([4, 8, 12]);
+  });
+});
+
 describe("expandWaterfallX — the canvas layout", () => {
   it("is off for a zero or non-finite step, and for a single series", () => {
     expect(waterfallXApplies(0)).toBe(false);

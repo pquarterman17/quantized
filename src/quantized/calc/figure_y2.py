@@ -33,6 +33,13 @@ from quantized.calc.figure_decor import _apply_region_shades, _split_region_shad
 from quantized.calc.figure_errorbars import apply_error_bars
 from quantized.calc.figure_inset import apply_inset
 from quantized.calc.figure_legend_order import draw_legend, tag_series_slots
+from quantized.calc.figure_marks import (
+    DropLine,
+    apply_drop_lines,
+    collect_drop,
+    draw_marked_series,
+    fill_xy,
+)
 from quantized.calc.figure_orient import oriented
 from quantized.calc.figure_overrides import legend_kwargs
 from quantized.calc.figure_scale import apply_axis_scale, drawable_lim, resolve_axis_scale
@@ -159,8 +166,8 @@ def draw_secondary_axes(
         kw = _plot_kwargs(st.line_width, st.marker_size, spec)
         if "color" not in kw:
             kw["color"] = f"C{(color_offset + i) % 10}"
-        (line,) = ax2.plot(xv, yv, label=label, **kw)
-        _apply_fill(ax2, xv, yv, series, i, spec, line.get_color())
+        line, _ = draw_marked_series(ax2, xv, yv, label, kw, spec, bars=False)
+        _apply_fill(ax2, *fill_xy(line, xv, yv, spec), series, i, spec, line.get_color())
         artists.append(line)
     apply_error_bars(ax2, xv, series, error_spans, artists, series_styles)
     resolved_y_scale = resolve_axis_scale(y_scale, False)
@@ -297,6 +304,11 @@ def render_with_secondary_axis(
     # After the y2 limits (audit #11): a shade's log-floor clamp and its
     # off-scale warning read the FINAL secondary range.
     _apply_region_shades(ax2, secondary_shades)
+    y2_drops: list[DropLine] = []
+    specs = y2_styles or [None] * len(y2_series)
+    for (_, y), spec, art in zip(y2_series, specs, y2_artists, strict=False):
+        collect_drop(y2_drops, xv, np.asarray(y, dtype=float), spec, art.get_color())
+    apply_drop_lines(ax2, y2_drops)  # N6: to the secondary axes' final bottom / left edge
     apply_inset(
         ax, artists, ov, resolve_axis_scale(x_scale, x_log), resolve_axis_scale(y_scale, y_log),
         st.grid_alpha, twin=(ax2, y2_artists, resolve_axis_scale(y2_scale, False)),

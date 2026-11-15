@@ -14,6 +14,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { fixedLim, type HalfLim } from "../../lib/axisLim";
 import { groupLevelLabel, levelOrderFor } from "../../lib/categorical";
 import { buildColorByColumns, type ColorScatterSpec } from "../../lib/colorscatter";
+import { blocksDecimation, marks, useMarksVersion } from "../../lib/marksLoader";
 import type { ErrorSpan } from "../../lib/errorbars";
 import { hasOverlayCompanions } from "./overlayCompanions";
 import { hasRichErrorBindings, type ErrorBinding } from "../../lib/errorRoles";
@@ -281,16 +282,16 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   const errorBars = useOffsetErrorBars(active, plotted, grouped, p.errKeys, p.seriesStyles, offsetsApply);
   const encodedLists = useEncodedLists(encoded, displayPayload, p.seriesStyles, p.seriesLabels); // P1.4
 
-  // Colour-mapped-scatter specs per plotted series (MAIN #14), same p+1 keying;
-  // P1.4 residual 4: an encoded gradient Color-by draws through the same map.
+  // Colour-mapped-scatter specs per plotted series (MAIN #14), same p+1 keying (P1.4: an encoded gradient too); N5 size-by joins once `loaded`.
+  const loaded = useMarksVersion();
   const colorByColumns = useMemo(
-    () =>
-      encoded?.colorBy
-        ? encoded.colorBy(encoded.styles(p.seriesStyles))
-        : data && groupCol === null && !encoded
-          ? buildColorByColumns(data, plotted, p.seriesStyles)
-          : new Map<number, ColorScatterSpec>(),
-    [data, plotted, p.seriesStyles, groupCol, encoded],
+    () => {
+      if (encoded?.colorBy) return encoded.colorBy(encoded.styles(p.seriesStyles));
+      if (!data || groupCol !== null || encoded) return new Map<number, ColorScatterSpec>();
+      const base = buildColorByColumns(data, plotted, p.seriesStyles);
+      return marks()?.withSizes(base, data, plotted, p.seriesStyles) ?? base;
+    },
+    [data, plotted, p.seriesStyles, groupCol, encoded, loaded], // eslint-disable-line react-hooks/exhaustive-deps -- loaded: the chunk settling
   );
 
   // Interactive-legend visibility, aligned 1:1 with the display series (overlays
@@ -334,7 +335,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       hasErrorBars: errorBars.size > 0,
       // M1: same bindings rule `errorSpans` below uses; this path draws X-error whiskers.
       hasErrorSpans: errorBindingsApplyToPlotted(useDocumentErrors ? documentErrors : active.errorRoles, plotted, { xErrorRenders: true }),
-      hasColorByColumns: colorByColumns.size > 0,
+      hasColorByColumns: colorByColumns.size > 0 || blocksDecimation(Object.values(p.seriesStyles), active.data.time.length), // size-by: row-indexed
       hasGroupSplit: groupCol !== null || encoded !== null,
     });
   // xCategories producer (gap #20 residual): a categorical-typed x channel

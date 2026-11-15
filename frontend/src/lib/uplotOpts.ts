@@ -28,6 +28,7 @@ import { logDecadeLabels, logGridSplits, logMajorTickFilter, spansDecade } from 
 export { logMajorTickFilter };
 import { decimalsForIncrement, pow10 } from "./ticks";
 import { ERROR_CAP_HALF_PX, errorRange, errorReach, fullYExtents, withXBarRows } from "./uplotErrorRange";
+import { marks } from "./marksLoader";
 import { fixedXRange, fullXExtents, scannedXRange } from "./uplotXRange";
 import { dateAwareXFmt, type Annotation, type AxisFormat, type AxisScale, type DefaultTrace, type RefLine, type RegionShade, type SeriesStyle, type Shape } from "./types";
 import {
@@ -999,9 +1000,8 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   if (legacyBars && legacyBars.size > 0) {
     plugins.push(errorBarsPlugin(legacyBars, inkDimColor, ERROR_CAP_HALF_PX));
   }
-  if (args.colorByColumns && args.colorByColumns.size > 0) {
-    plugins.push(colorScatterPlugin(args.colorByColumns));
-  }
+  if (args.colorByColumns && args.colorByColumns.size > 0) plugins.push(colorScatterPlugin(args.colorByColumns));
+  plugins.push(...(marks()?.marksPlugins(args.seriesStyles, args.colorByColumns) ?? [])); // N5/N6 (lazy; buildSeriesDefs asks for the load)
   if (args.axisBox) {
     plugins.push(axisBoxPlugin(inkDimColor));
   }

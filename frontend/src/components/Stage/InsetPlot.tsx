@@ -29,6 +29,7 @@ import type { PlotPayload } from "../../lib/plotdata";
 import type { InsetView, PlotView } from "../../lib/plotview";
 import { buildOpts, resolvePlotBg } from "../../lib/uplotOpts";
 import type { SeriesCycle } from "../../lib/seriesStyleCycle";
+import { useMarksVersion } from "../../lib/marksLoader";
 import type { SeriesStyle } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { patchBackgroundView } from "../../store/windowViewEdit";
@@ -71,6 +72,7 @@ function seedX(saved: InsetView | null, xs: number[]): [number, number] | null {
 }
 
 export default function InsetPlot({ payload, styleList, seriesCycle, view, windowId, plotRef: mainRef, hidden }: Props) {
+  const marksVer = useMarksVersion(); // a spline that arrives late rebuilds the inset
   const liveX = useApp((s) => s.xScale);
   const liveY = useApp((s) => s.yScale);
   const liveY2 = useApp((s) => s.y2Scale);
@@ -143,7 +145,7 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, windo
       hidden,
       tool: "zoom", // drag to re-zoom the inset
       onReadout: () => {},
-      seriesStyles: styleList,
+      seriesStyles: styleList?.map((s) => s && { ...s, dropLines: undefined, sizeBy: undefined }), // the export's inset omits them (and warns)
       seriesCycle,
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
@@ -212,7 +214,7 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, windo
       plotRef.current?.destroy();
       plotRef.current = null;
     };
-  }, [payload, styleList, seriesCycle, theme, accent, xScale, yScale, y2Scale, xReversed, hidden, showGrid]);
+  }, [payload, styleList, seriesCycle, theme, accent, xScale, yScale, y2Scale, xReversed, hidden, showGrid, marksVer]);
 
   // Place the box and draw the outline every frame (the main plot zooms, pans
   // and resizes without telling this overlay). Writes only on change.

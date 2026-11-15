@@ -34,6 +34,7 @@ import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
 import { loadPlotPerfPrefs } from "../../store/prefs";
 import { liveTicksPlugin } from "../../lib/liveTicksPlugin";
 import { plotDecorNeeds, useLazyPlotParts } from "./useLazyPlotParts";
+import { blocksDecimation } from "../../lib/marksLoader";
 import { useLivePaint } from "./useLivePaint";
 import { useResolvedLims } from "./useResolvedLims";
 
@@ -220,7 +221,7 @@ export default function PlotViewport(props: PlotViewportProps) {
         hasErrorBars: hasErrorMapEntries(errorBars),
         hasErrorSpans: hasErrorMapEntries(errorSpans),
         defaultTrace: args.defaultTrace,
-        hasColorByColumns: !!(colorByColumns && colorByColumns.size > 0),
+        hasColorByColumns: !!(colorByColumns && colorByColumns.size > 0) || blocksDecimation(args.seriesStyles ?? [], fullX.length),
       });
     let plotData = displayPayload.data;
     if (decimate) {

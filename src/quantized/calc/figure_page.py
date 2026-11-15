@@ -55,6 +55,7 @@ from quantized.calc import figure_page_layout as fpl
 from quantized.calc.figure import draw_series_axes, style_rc
 from quantized.calc.figure_greyscale import apply_greyscale
 from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_marks import drop_size_by
 from quantized.calc.figure_page_facets import (
     begin_grid_cell_fallback,
     draw_facet_panel_cell,
@@ -433,7 +434,8 @@ def _draw_panel(fig: Any, ax: Any, p: PagePanel, st: FigureStyle) -> None:
     y_label = safe_mathtext_label(p.y_label)
     # P3.3 review fix (F1): same one-line transform calc.figure._render_impl
     # applies for the single-figure route -- see PagePanel.greyscale's doc.
-    styles = p.series_styles
+    # The screen's multi-panel cells do not size points: omit size-by, warned.
+    styles: Sequence[Mapping[str, Any] | None] | None = drop_size_by(p.series_styles, "page panels")
     if p.greyscale:
         styles = apply_greyscale(styles, len(series))
     y2_mask = list(p.y2_mask) if p.y2_mask is not None else [False] * len(series)
