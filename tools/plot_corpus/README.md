@@ -15,6 +15,10 @@ Origin's own answers as `oracle.json` for the import and from-scratch scorers
 | `origin_oracle.py` | Reads the built graph back from Origin (plot type, `%Z`, refs, axes, styles). |
 | `qz_oracle.c` | Origin C `DataPlot::GetPlotType()`, the only plot-type readback found. |
 | `origin_build.py` | Builds every (family × type) specimen: `.opju`, PNG, `oracle.json`, `manifest.json`. |
+| `scratch_recipes.py` | Plan item 3: the clicks that build each type from scratch in quantized, or what is missing. |
+| `scratch_data.py` | The graphed sheet as the CSV a user imports; channel map; the worksheet edits to replay. |
+| `scratch_run.py` | Imports, runs the vitest recipe harness (`frontend/src/test/plotCorpus/`) against a live backend, renders each request, scores, writes the review page. |
+| `scratch_score.py` / `scratch_review.py` | Score a built figure against `oracle.json`; the per-type table and side-by-side HTML. |
 | `score_import.py` | Check 1 (plan item 2): imports every specimen through the import route's own composition and scores it; writes `scorecard.json` + `scorecard.md`. No Origin needed. |
 | `import_compare.py` / `import_values.py` | Pure verdict logic: curves, axes, styles, plot type / values, column metadata, sheet pairing. Every item is match / wrong / phantom / omitted + reason. |
 | `frontend_view.py` | Mirror of what the frontend draws for a figure; pinned to the real frontend by `tests/fixtures/plot_corpus/frontend_view_cases.json` (pytest + vitest). |
@@ -26,6 +30,8 @@ uv run python tools/plot_corpus/generate.py --out <gen>
 uv run --with pywin32 python tools/plot_corpus/origin_build.py --corpus <gen> --out <corpus>
 # check 1, no Origin needed:
 uv run python tools/plot_corpus/score_import.py --corpus <corpus> --generated <gen> --out <dir>
+# check 2, no Origin needed:
+uv run python tools/plot_corpus/scratch_run.py --corpus <corpus> --gen <gen> --out <review>
 ```
 
 Output stays out of the repo. Specimens join the private `test-data` corpus

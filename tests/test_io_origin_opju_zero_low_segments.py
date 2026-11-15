@@ -251,11 +251,14 @@ def _drawn(books: dict[str, Any], book: str, y: str) -> tuple[Any, Any]:
 @pytest.mark.realdata
 def test_realdata_zero_low_id_restores_book1d_sheet_27(corpus_dir: Path) -> None:
     """``Book1D``'s sheet-23 ``D`` has id 512 (``81 02 02``); with it the 27
-    ``D`` ids align with the 27 datasets. Origin plots Book1D_D@27 (n 301,
-    1.01245543614787..2.08069367088931) against Book1D_A@27 (0..30)."""
+    ``D`` ids align with the 27 datasets. Book1D_D@27 (n 301,
+    1.01245543614787..2.08069367088931) is in Graph59 as a Y-error-bar plot
+    (COM ``GetPlotType`` 231, 2026-11-15) on ``Book1D_C@27``: it is left out
+    as a curve (``error_bar_plot``) and its sheet stays proven."""
     figs, books = _import(corpus_dir, _RISK)
-    (c,) = [c for c in _layer(figs, "Graph59", 1)["curves"] if c["y"] == "D"]
-    assert (c["book"], c["x"]) == ("Book1D@27", "A")
+    notes = _layer(figs, "Graph59", 1)["curve_sheet_omitted"]
+    (n,) = [n for n in notes if n["y"] == "D"]
+    assert (n["recorded"], n["reason"]) == ("Book1D@27", "error_bar_plot")
     x, y = _drawn(books, "Book1D@27", "D")
     assert y.size == 301
     assert (y.min(), y.max()) == pytest.approx((1.01245543614787, 2.08069367088931), rel=1e-12)
@@ -265,11 +268,14 @@ def test_realdata_zero_low_id_restores_book1d_sheet_27(corpus_dir: Path) -> None
 @pytest.mark.realdata
 def test_realdata_zero_low_token_draws_graph10b(corpus_dir: Path) -> None:
     """Graph10B's ``Book1B_D@10`` token names id 3072 as ``81 02 0c``: an
-    Origin plot the decoder never saw (plan item 68). Origin: n 301,
-    1..1.99977098579975, against Book1B_A@10."""
+    Origin plot the decoder never saw (plan item 68): n 301,
+    1..1.99977098579975, a Y-error-bar plot (COM ``GetPlotType`` 231) on
+    ``Book1B_C@10`` -- left out as a curve, on its proven sheet."""
     figs, books = _import(corpus_dir, _RISK)
-    curves = _layer(figs, "Graph10B", 1)["curves"]
-    assert ("Book1B@10", "A", "D") in [(c["book"], c["x"], c["y"]) for c in curves]
+    notes = _layer(figs, "Graph10B", 1)["curve_sheet_omitted"]
+    assert ("Book1B@10", "D", "error_bar_plot") in [
+        (n["recorded"], n["y"], n["reason"]) for n in notes
+    ]
     _x, y = _drawn(books, "Book1B@10", "D")
     assert y.size == 301
     assert (y.min(), y.max()) == pytest.approx((1.0, 1.99977098579975), rel=1e-12)

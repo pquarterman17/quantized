@@ -183,6 +183,10 @@ def _figure_fidelity(fig: dict[str, Any]) -> FigureFidelity:
         # `.opju`: curves left out, not drawn from the wrong sheet
         # (`opju_curve_sheets`); the per-curve detail rides on the figure.
         omissions.append("curve_sheet_unresolved")
+    if fig.get("marker_encoding_not_decoded"):
+        # bubble / colour-mapped scatter: X/Y drawn, size/colour map not
+        # (`opju_layer_kind`)
+        omissions.append("marker_encoding_not_decoded")
     out: FigureFidelity = {
         # No current decoder proves every visual property, so "exact" is
         # deliberately reserved for a future preview/oracle comparison gate.

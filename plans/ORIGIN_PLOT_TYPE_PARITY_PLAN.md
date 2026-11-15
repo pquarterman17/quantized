@@ -124,6 +124,9 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
 - Items 5-8 are per plot-type family and parallelizable. Each one runs its
   import fixes (this session, COM) and books its creation gaps (cloud).
 - Item 9 (round trip quantized → Origin) is a later batch and reuses item 1.
+- Items 10-19 are creation gaps for the cloud sessions, independent of each
+  other; #10 and #14 share the missing bar-creation UI. Re-run
+  `tools/plot_corpus/scratch_run.py` to verify each.
 
 ### Resolved decisions (owner, 2026-11-15)
 
@@ -148,13 +151,6 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
 
 ## Tier 1 — High Impact
 
-3. **Check 2 — quantized-from-scratch scorer**
-   - [ ] Per (type × family) recipe building the same figure through
-         quantized's own figure model.
-   - [ ] Score it against the same `oracle.json`.
-   - [ ] Put quantized's export PNG next to Origin's for review.
-   - [ ] Unbuildable types → book as cloud items here.
-
 4. **First scorecard** — every 2D type × family, both checks, with a review
    page of side-by-side PNGs for the owner
 
@@ -164,22 +160,61 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
    stacked area, double-Y, error bars/bands, log/reversed axes, multi-layer.
    Measured by the item 2 scorer (2026-11-15, 231 specimens; anchor
    specimen named per gap). Items 6 and 7 share the first two gaps.
-   - [ ] **No curve binding decodes on any Origin 2026b `.opju`: 0 / 484
-         Origin curves.** `column_id_table` is empty on 231 / 231 specimens,
-         so `extract_figures_opju` takes the legacy counting fallback, which
-         binds nothing and leaves every figure unnamed (page unattributed).
-         Everything per curve is blocked behind it: plot type (0 decoded),
-         styles (0 / 750 planted: colour 334, line width 139, dash 139,
-         symbol 69, symbol size 69) and the drawn view. Anchor `line/clean`.
-   - [ ] **No column metadata decodes: designations 0 / 806, long names
-         0 / 806 (labels fall back to the letter), units 0 / 105.** With no
-         binding either, the frontend's default view draws WRONG curves:
-         `error_columns` draws Y-error and X-error as Y curves (12 phantom
-         curves in 6 specimens: line, scatter, line+symbol, step, area,
-         y_error); `area/multi_x` draws X2 as a curve and D against A instead
-         of C (1 wrong, 1 phantom); `double_y` draws every column on both
-         layers (6 phantom curves in 6 specimens). Error bars: 0 / 12.
-         Anchor `line/error_columns`.
+   - [x] ~~**No curve binding decodes on any Origin 2026b `.opju`: 0 / 484
+         Origin curves.**~~ FIXED 2026-11-15
+         (`fix/opju-2026b-saved-bindings`). Cause: the column-id table's
+         field walk required the `09` "separator" and the `21 51/21 61/30 61`
+         markers, which are really the column's display format (offset 30 =
+         9, Text & Numeric) and two format flag bits -- every COM/LabTalk-
+         filled column is Numeric (`01 50/01 60/10 60`, no `09`). Proven by a
+         COM matched pair (same book saved as format 1 vs 9: only offsets
+         30, 37 bit 0x20 and 38 bit 0x01 differ). New `opju_column_fixed`
+         reads the record at fixed offsets (code 17, name 18, format 30,
+         partner 35, flags 37/38; 36,240 corpus records where both readers
+         decode agree 100% on name + designation) and only ADDS ids the
+         walk did not resolve; `opju_curve_token_x` masks the same two
+         format bits. Scorer: curves 0 -> 229 match / 0 wrong; styles 0 ->
+         412 match / 0 wrong; plot type 13 -> 46 match; axes 804 -> 870
+         match. Histograms bind but omit (`x_not_a_column`, record X id 0:
+         Origin plots them against row numbers, item 71 of the decode plan).
+         Real corpus vs main (359 `.opju`, Origin 2026b COM `%Z` / `xof` /
+         `wks.col.type` / `lname$` on every changed file): 0 curves
+         vanished; every newly drawn curve matches Origin except 4 that are
+         error-bar plots (sub-task below); 3 main curves drawn against the
+         wrong X now bind Origin's X; every changed designation matches
+         `wks.col.type`; labels match or stay the short name (omitted), 11
+         carry the importer's existing duplicate-name suffix (`E (2)`).
+   - [x] ~~**No column metadata decodes: designations 0 / 806, long names
+         0 / 806, units 0 / 105.**~~ FIXED 2026-11-15. New `opju_record_meta`
+         labels sheets `windows_opju`'s raw marker scan leaves unlabelled,
+         from the column records themselves (designation code at offset 17,
+         label record after the record, sheet by the window's sheet headers
+         + the id table's sheet map; a sheet is labelled only when every
+         column is covered). Scorer: column metadata 0 -> 1,609 match /
+         0 wrong (108 omitted); error bars 0 -> 12 match.
+   - [x] ~~**Error-bar plots decode as curves**~~ FIXED 2026-11-15 (own
+         commit). The curve token's plot byte 76 = 0xe7 / 0xe9 is Origin's
+         plot 231 / 233 (y / x error bar); such a curve is omitted
+         (`error_bar_plot`, `opju_plot_gates`) and its caption dropped with
+         the rest renumbered. Scorer: curve/drawn phantoms 6 -> 0. Real
+         corpus: 2,738 error-bar curves -> 0 (36 files; 2,734 of them on
+         main). COM `GetPlotType()`: all 2,738 tokens with those bytes are
+         error-bar plots, 0 of 1,731 other-byte tokens are; resolved legend
+         captions of all 1,395 kept curves on those layers unchanged; 109
+         Y-error bars still attach to Origin's Y from the decoded
+         designations, 13 X-error bars do not draw (no horizontal whiskers)
+         and 2,616 Y-error bars are lost because their column's designation
+         does not decode (2,447), it is not Y-error (95) or pairs with
+         another Y (60) / an undrawn Y (14) -- an omission, never a line.
+   - [ ] **Error bars lost with the phantom lines** (2,616 Y-error + 13
+         X-error on the real corpus, above): bind a bar to the Y it
+         decorates from the token itself (its record X = the decorated Y),
+         not only from designations; X-error whiskers need a renderer.
+   - [x] ~~**Step drawn as a line**~~ FIXED 2026-11-15: curve record byte 17
+         = 11 is `line.connect` 7 (13 specimens, 39 curves; 0 of 7,103
+         corpus records), so the line style is withheld
+         (`opju_plot_gates`); the curve stays bound. Drawing true steps is
+         the "no quantized mapping for step" sub-task below.
    - [ ] **Phantom sheet from a deleted sheet.** `deleted_sheet` imports the
          deleted sheet's data as book `DelA@2` (wrong book name too) and names
          the survivor `Del@3`. 5 specimens (line, scatter, line+symbol, step,
@@ -216,19 +251,78 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
 7. **Specialised family import parity** — polar, contour, heatmap, ternary,
    waterfall, bubble/colour-mapped scatter, vector, inset, axis break,
    multi-panel. Measured by the item 2 scorer (2026-11-15).
-   - [ ] **Bubble / colour-mapped: the size / colour column is drawn as its
-         own curve** (22 phantom curves in 12 specimens: bubble and
-         color_mapped x {clean, descending_x, nan_gaps, negative, noisy,
-         unicode_names}). Anchor `bubble/clean`.
+   - [ ] **Bubble / colour-mapped: the size / colour encoding is not
+         decoded.** Since 2026-11-15 the X/Y bind (7 + 7 specimens) and the
+         figure carries `marker_encoding_not_decoded` (`opju_layer_kind`,
+         from the page's template name `bubble` / `colormapp`); the scorer
+         still counts these 14 plot types "drawn as scatter" (Origin's own
+         `GetPlotType()` reads 201 for them). Book: decode the size / colour
+         modifier column. Anchor `bubble/clean`.
    - [ ] **XYZ contour, ternary, matrix contour: figure and axes decode
          (6 / 6 each), but quantized draws Y and Z as lines against X.**
          Heatmap (matrix): no layer recovered. Matrix cells import exactly
          (800 / 800).
-   - [ ] **Polar draws as a Cartesian line** (axes 6 / 6 match; polar is the
-         layer's coordinate system, not a plot byte).
+   - [ ] **Polar and offset-stacked (waterfall) layers are not rebuilt.**
+         Since 2026-11-15 their curves are LEFT OUT
+         (`layer_kind_not_decoded`, `opju_layer_kind`, from the page's
+         template name `Polar` / `OffsetSta` -- a sufficient, not necessary,
+         signal) rather than drawn as Cartesian / un-offset lines. Real
+         corpus: 4 pages in 2 files carry `OffsetSta`, none with a decoded
+         curve, so 0 real-file curves are hidden vs main (8 + 1 specimens). Book: decode the
+         layer's coordinate system and offset (axes 6 / 6 match already).
 8. **Commit passing specimens** to `test-data/origin/generated/<type>/` with
    their `oracle.json`, PNG and `.truth.json`, plus the generator command that
    rebuilds them; add realdata tests that score them
+
+### Creation gaps found by check 2 (cloud items, owner decision 2026-11-15)
+
+Evidence for every item below: `tools/plot_corpus/scratch_run.py` over the
+231 ok specimens (scorecard in `<review>/scorecard.md`, side-by-side
+`<review>/index.html`); "N/M" = specimens of that type affected.
+
+10. **Horizontal bar** — no way to create one (11/11 `bar` specimens
+    unbuildable). `SeriesStyle.bars = "horizontal"` already renders on the
+    canvas (`lib/uplotOrient.ts`) and in export (`calc/figure_orient.py`),
+    but only an Origin import sets it: no gallery tile, Series card control
+    or Stat Stage orientation.
+11. **Horizontal stacked bar** — 11/11 `stacked_bar` unbuildable: the Stat
+    Stage bar is vertical only and `bars: "horizontal"` has no stacking.
+12. **Floating column** — 9/9 `floating_column` unbuildable: no bar that
+    spans two Y columns (low to high); every bar starts at zero.
+13. **Stacked area** — 8/8 `stacked_area` unbuildable: `fill` is
+    under-zero or between two curves, never cumulative on the previous
+    series.
+14. **Column / stacked column per X row** — 8/11 `column` and 8/11
+    `stacked_column` built the wrong figure. With a numeric X the gallery's
+    Column routes to the Stat Stage, which has no category column and
+    falls back to ONE bar per Y column (its mean ± SE, "n=50"); Origin
+    draws one bar per row at its X value, one series per Y column.
+    `duplicates` (1 Y) gives one bar for 20 rows. Only text-category X
+    (`text_categories`) and one-row data match. The XY-stage bar renderer
+    (`SeriesStyle.bars`) would draw Origin's figure but has no creation UI
+    (shared with #10). The bars also take no Series card colour (11/11
+    styles wrong on both types).
+15. **Histogram of several columns** — 8/11 `histogram`: the gallery's
+    Histogram bins only the first plotted column; Origin bins every
+    selected Y column in one graph. `single_point` (1 row) exports nothing
+    (the stage needs >= 2 values); Origin draws a one-bin histogram.
+16. **Double-Y axis assignment** — 6/8 `double_y` put the wrong curve on the
+    right axis: `plotTypePatch("doubleY")` moves the LAST plotted column to
+    Y2, Origin's `DOUBLEY` template puts the SECOND Y column on the right
+    and keeps the rest on the left (measured: layer 2 holds only `y2` of
+    `y1,y2,y3`). Both agree only with exactly two Y columns.
+17. **Ternary from an A,B,C sheet** — 1/1 `ternary` wrong axis order: the
+    gallery Ternary tile refuses the sheet ("Needs three composition
+    columns") because the first CSV column imports as the X axis, leaving
+    two channels; Plot > Ternary diagram... builds it, but its default picks
+    (`auxColumns.defaultPicks`) take channels first and the X column last,
+    so the axes come out B, C, A instead of A, B, C.
+18. **Bubble axis padding** — 5/7 `bubble`: X runs exactly to the data
+    ([0, 10]) so edge bubbles are cut in half; Origin pads the axis to the
+    largest bubble ([-0.68, 10.46]).
+19. **Polar line width** — the polar export always draws
+    `POLAR_LINE_PX` (`lib/polarFigureSpec.ts`), so a Series card width
+    (2 pt in the corpus) never reaches a polar figure.
 
 ## Tier 3 — Nice-to-Have
 
@@ -289,3 +383,37 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
     recipe or scope matter, not a refusal: heatmap from an XYZ sheet made no
     graph (heatmap is built from the matrix family); the waterfall template
     is 3D; vector XYXY (218) made no graph from the probe selection.
+- ~~**#3 Check 2 — quantized-from-scratch scorer**~~ (2026-11-15). Built in
+  `tools/plot_corpus/scratch_*.py` plus the vitest recipe harness
+  `frontend/src/test/plotCorpus/`; `tests/test_plot_corpus_scratch.py` and
+  `recipeHarness.test.tsx` run without Origin or the corpus.
+  - **Route.** Each family's graphed sheet is written as the CSV a user
+    opens and imported through the app's own `/api/parsers/upload` (a
+    matrix as long-form X,Y,Z; dates as ISO dates). The recipe table
+    (`scratch_recipes.py`) names the user's clicks; the harness replays them
+    on the real store (worksheet Set As, masked rows excluded, log axes,
+    `applyPlotType`, Series card modes/styles, Stat Stage picker, Map contour
+    toggle, Plot > Ternary diagram...) and builds the request with the app's
+    own export entry for what is on screen: `buildStageFigureSpec`, the
+    mounted `<StatStage>`'s registered exporter, `fetchMap` +
+    `mapFigureBody`, `buildTernaryRequest`. The app's `/api/...` calls go to
+    a live in-process backend, so nothing on the path is mocked. Each request
+    is posted to its export route at PNG; `/figure-hitmap` gives an XY
+    figure's drawn axis limits.
+  - **Scoring** vs `oracle.json`: type, curves (Y columns), binding (each
+    curve's drawn X points against Origin's X column, error-bar companions,
+    Y2 membership, ternary axis order), values, axes (scale, range within
+    5 % of span) and styles. `match` = built and the first four ok.
+  - **First run (231 ok specimens): 191 built, 158 match, 40 unbuildable.**
+    Matching every specimen: line, scatter, line+symbol, area, step, y-error,
+    waterfall offset, polar, box, violin, strip, bubble, colour-mapped,
+    contour (XYZ and matrix), heatmap. Unbuildable: horizontal bar, stacked
+    bar, floating column, stacked area (#10-#13). Built but wrong: column and
+    stacked column (#14), histogram (#15), double-Y (#16), ternary (#17).
+    Axis ranges differ on 7/18 XY specimens per type (Origin pads to a tick,
+    matplotlib to round numbers; area bases at 0 in Origin) and bubble
+    padding (#18); styles reach the request everywhere except stat bars
+    (#14) and polar width (#19).
+  - Review page with Origin's PNG beside quantized's for every specimen:
+    `scratch_run.py --out <review>` writes `index.html`, `scorecard.md`,
+    `scorecard.json` (run output stays out of the repo).

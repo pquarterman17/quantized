@@ -2,7 +2,7 @@
 // chosen datasets and exports a consolidated CSV with or without the offset baked
 // in. Renders its own uPlot (reuses buildOpts via a synthesized PlotPayload).
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import uPlot from "uplot";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../../lib/uplotPaths";
 import "uplot/dist/uPlot.min.css";
@@ -11,13 +11,17 @@ import { useWaterfall } from "./useWaterfall";
 import type { PlotPayload } from "../../../lib/plotdata";
 import { buildOpts } from "../../../lib/uplotOpts";
 import { useApp } from "../../../store/useApp";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import ToolWindow from "../../overlays/ToolWindow";
+
+const Waterfall3dSection = lazyRegion(() => import("./Waterfall3dSection"), "3-D waterfall");
 
 export default function WaterfallView() {
   const close = useApp((s) => s.setWaterfallOpen);
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const w = useWaterfall();
+  const [show3d, setShow3d] = useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
 
@@ -161,7 +165,11 @@ export default function WaterfallView() {
           <button className="qz-btn" disabled={!canPlot} onClick={() => void w.exportCSV(false)}>
             Export CSV (raw)
           </button>
+          <button className="qz-btn" disabled={!canPlot} aria-expanded={show3d} onClick={() => setShow3d((v) => !v)}>
+            3-D waterfall…
+          </button>
         </div>
+        {show3d && canPlot && <Waterfall3dSection series={w.series} channel={w.channel} xLabel={w.xLabel} zLabel={w.zLabel} />}
       </div>
     </ToolWindow>
   );

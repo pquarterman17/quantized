@@ -1055,6 +1055,22 @@ work.
           row-state exclusion) and a decision on how imported masked points
           plot (Origin's plot shows them per its mask display setting)
 
+72. **`windows_opju` reads three designations wrong** — booked 2026-11-15
+    (Origin 2026b COM `wks.col.type`, see `docs/origin_project_format.md`
+    §4.2 "These markers exist only for Text & Numeric columns"). The raw
+    marker scan maps `21 41` to label, `20 61` + code 4 to Z and code 5 to
+    X-error; Origin says `21 41` is DISREGARD, code 4 LABEL, code 5 Z, and a
+    real X-error column (code 6) writes `30 61`, which is read as Y-error.
+    `tests/test_io_origin_fuzz.py`'s `designations.opju` assertion
+    (D label, E Z, F X-error) pins the wrong values: COM reads D disregard,
+    E label, F Z.
+    - [ ] Read the designation from record offset 17 (`opju_column_fixed.
+          DESIGNATION_CODES`) instead of the marker; add `disregard` to the
+          import's designation vocabulary (the frontend already knows it)
+    - [ ] Re-pin the fuzz test to the COM values; corpus diff + COM check
+          of every changed designation (an X-error read as Y-error today
+          pairs as a Y's error bar)
+
 (items 40-42 booked 2026-07-09 from the first #39 gallery run on PNR.opj;
 item 40 CLOSED same day, see Completed)
 

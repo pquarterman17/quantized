@@ -84,6 +84,6 @@ describe("MapStage export", () => {
       colorbar_log10: true,
       filename: "scan_map",
     });
-    expect(body.z_grid!.length).toBe(body.y_axis.length);
+    expect(body.z_grid!.length).toBe(body.y_axis!.length);
   });
 });
