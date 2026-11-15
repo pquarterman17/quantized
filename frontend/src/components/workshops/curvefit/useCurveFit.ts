@@ -8,7 +8,7 @@ import { autoGuess, listFitModels } from "../../../lib/api/curvefit";
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { fitModel } from "../../../lib/api";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
-import type { CalcResult, Dataset, FitModel, FitWeighting, WeightMode } from "../../../lib/types";
+import type { CalcResult, Dataset, FitModel, FitOverlay, FitWeighting, WeightMode } from "../../../lib/types";
 import { publishFitAnalysisResult } from "../../../store/publishFitAnalysisResult";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { toast } from "../../../store/toasts";
@@ -95,8 +95,8 @@ export interface CurveFitState {
   weightNote: string | null;
   // ── "By" grouping (JMP_GAP J7 residual) ─────────────────────────────────
   // Display-only: none of it touches the plot overlay, the recorded macro/
-  // pipeline step, or the durable FitSpec, and every level fits UNWEIGHTED
-  // regardless of weightMode (see useCurveFitByLevel's header doc).
+  // pipeline step, or the durable FitSpec, and levels honour the panel's
+  // weighting (see useCurveFitByLevel's header doc).
   byOptions: ByColumnOption[];
   byCol: number | null;
   setByCol: (i: number | null) => void;
@@ -268,8 +268,13 @@ export function useCurveFit(): CurveFitState {
     return { p0: parsed.p0, lower: parsed.lower, upper: parsed.upper, fixed: parsed.fixed };
   }, [paramsCustom, paramRows, model]);
 
+  const byWeight = useMemo<FitWeighting | undefined>(
+    () => (plottedYKeyNow == null || weightMode === "none" ? undefined
+      : weightingOf(weightMode, errKeys, manualKey, scaleErrors, plottedYKeyNow)),
+    [weightMode, errKeys, manualKey, scaleErrors, plottedYKeyNow],
+  );
   const byLevel = useCurveFitByLevel(
-    active, data, byColumns, modelName, xKey, plottedYKeyNow, customStart,
+    active, data, byColumns, modelName, xKey, plottedYKeyNow, customStart, byWeight,
     selected?.factorKeys[0] ?? null,
   );
 
@@ -295,7 +300,7 @@ export function useCurveFit(): CurveFitState {
       const runYKeys = runSelection?.yKeys ?? state.yKeys;
       const localXy = selectedFitData(ds, runXKey, runYKeys, state.seriesOrder, runSelection);
       if (!localXy) return;
-      const fitXKey = ownXKey(ds, runXKey, localXy.yKey); // recorded X = the one the points came from
+      const fitXKey = localXy.xKey; // recorded X = the one the points came from (the Y's own X)
       const pairs = dropGapRows(localXy.x, localXy.y);
       if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
       if (!pairs.complete) {
@@ -414,7 +419,7 @@ export function useCurveFit(): CurveFitState {
           const kept = localXy.sourceRows ?? activeRowIndices(n, droppedRows(ds));
           const aligned = restoreGapRows(yFit, pairs);
           const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
-          const overlay = { datasetId: ds.id, y };
+          const overlay: FitOverlay = { datasetId: ds.id, binding: { yKey: localXy.yKey, xKey: fitXKey }, y };
           rememberCurveFitOverlay(overlay);
           setFitOverlay(overlay);
           retainFitted(done, useApp.getState().datasets.find((d) => d.id === ds.id) ?? null, overlay);

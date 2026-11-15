@@ -42,8 +42,11 @@ export async function resolveAnalysisResultPlot(
       return null;
     }
     const liveBinding = currentResult && fitDataset ? liveFitPlotBinding(currentResult, fitDataset) : null;
-    if (liveBinding) {
-      return { dataset: fitDataset!, channels: liveBinding.channels, xChannel: liveBinding.xChannel };
+    // A fit with no recorded X opens (legacy-tolerant, fit refused downstream),
+    // but a source-only builder keeps the saved binding's recorded X if it has one.
+    if (liveBinding && !(sourceOnly && liveBinding.xChannel === undefined && binding)) {
+      const { channels, xChannel } = liveBinding;
+      return { dataset: fitDataset!, channels, ...(xChannel === undefined ? {} : { xChannel }) };
     }
     if (!sourceOnly) {
       state.setStatus(`can't open result figure: ${fitDataset && !fitDataset.fitSpec

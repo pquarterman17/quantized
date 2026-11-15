@@ -118,7 +118,7 @@ describe("quick-fit result/model pairing", () => {
     pending[0].resolve({ params: [9, 9], R2: 0.1, yFit: [0, 2, 4] }); // the slow one lands last
     await vi.advanceTimersByTimeAsync(0);
     expect(useApp.getState().qfitResult).toMatchObject({ params: [2, 0] });
-    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "a", y: [null, null, null, 6, 8, 10] });
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "a", binding: { yKey: 0, xKey: null }, y: [null, null, null, 6, 8, 10] });
   });
 
   it("a failed refit clears the previous result instead of leaving it committable", async () => {

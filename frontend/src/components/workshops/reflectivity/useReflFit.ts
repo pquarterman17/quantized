@@ -333,7 +333,9 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
       const first = res.curves[0];
       if (first) {
         const sent = { q: built[0].channel.q, rows: built[0].rows };
-        const overlay: FitOverlay = { datasetId: channels[0].datasetId, y: alignToRows(first, sent, sizes[0]) };
+        // Q is the time column (reflFitData's buildChannel), R the channel's rCol.
+        const binding = { yKey: channels[0].rCol, xKey: null };
+        const overlay: FitOverlay = { datasetId: channels[0].datasetId, binding, y: alignToRows(first, sent, sizes[0]) };
         ownOverlayRef.current = overlay;
         setFitOverlay(overlay);
       }

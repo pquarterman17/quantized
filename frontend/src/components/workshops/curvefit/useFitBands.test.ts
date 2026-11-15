@@ -11,6 +11,7 @@ import { useApp } from "../../../store/useApp";
 import { rememberCurveFitOverlay } from "../../../store/curveFitOverlay";
 import { bandPrefs } from "../../../store/curveFitSession";
 import { useFitBands, type FitBandsTarget } from "./useFitBands";
+import { SINGLE_X } from "../../../test/overlayBinding";
 
 vi.mock("../../../lib/api/fitStats", () => ({ fitBands: vi.fn() }));
 
@@ -151,7 +152,7 @@ describe("useFitBands", () => {
 
   // Audit #9: the band is shaded around the curve ON THE MAIN GRAPH.
   it("shades the band on the Curve Fit's own overlay, at the overlay's rows, and removes it when off", async () => {
-    const overlay = { datasetId: "d1", y: [1, 3, null, 7, 9] };
+    const overlay = { datasetId: "d1", binding: SINGLE_X, y: [1, 3, null, 7, 9] };
     rememberCurveFitOverlay(overlay);
     useApp.setState({ fitOverlay: overlay });
     const { result } = renderHook(() => useFitBands(TARGET));
@@ -175,7 +176,7 @@ describe("useFitBands", () => {
   });
 
   it("never decorates a curve another tool put in the overlay slot", async () => {
-    useApp.setState({ fitOverlay: { datasetId: "d1", y: [1, 3, 5, 7, 9] } }); // e.g. Quick Fit
+    useApp.setState({ fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [1, 3, 5, 7, 9] } }); // e.g. Quick Fit
     const { result } = renderHook(() => useFitBands(TARGET));
     act(() => result.current.setOn(true));
     await waitFor(() => expect(result.current.halfWidth).toBe(0.5));

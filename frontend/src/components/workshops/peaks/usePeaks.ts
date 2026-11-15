@@ -21,7 +21,7 @@ import { peakTableMatchesData, peakTableToFitResult } from "../../../lib/peakTab
 import { peakOverlayArray } from "../../../lib/plotdataExtras";
 import { rowStateIdentity } from "../../../lib/rowstate";
 import type { Dataset, FittedPeak, MultiFitResult, Peak } from "../../../lib/types";
-import { peakInputs, peakTableMatchesInputs } from "./peakInputs";
+import { peakBinding, peakInputs, peakTableMatchesInputs, type PeakInputs } from "./peakInputs";
 import { labelFailureMessage, nextLabelGroupId, rejectIfHistoryBatchRunning } from "./peakLabelGuards";
 import { usePeakManualEdits } from "./usePeakManualEdits";
 import { finiteRange } from "./peakRanges";
@@ -116,7 +116,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
           : {};
         const res = await findPeaks({ x, y, ...xrdDefaults, ...(JSON.parse(findExtras) as Partial<PeakFindParams>) });
         if (cancelled) return;
-        setFoundPeaks(res.peaks, { x, y, fullX, background: res.background });
+        setFoundPeaks(res.peaks, { x, y, fullX, background: res.background, binding: peakBinding(inputs) });
       } catch (e: unknown) {
         if (!cancelled) setError(e instanceof Error ? e.message : "peak find failed");
       } finally {
@@ -131,10 +131,11 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
   // Draw fitted peak tops (height above the local background) as the overlay,
   // on the FULL plotted x so markers align with the full-length plot x.
   const overlayFitted = useCallback(
-    (ds: Dataset, fitted: FittedPeak[], fullX: number[]) => {
+    (ds: Dataset, fitted: FittedPeak[], used: Pick<PeakInputs, "fullX" | "xKeyUsed" | "yKeyUsed" | "fallback">) => {
       setPeakOverlay({
         datasetId: ds.id,
-        y: peakOverlayArray(fullX, fitted.map((p) => ({ center: p.center, height: p.height + p.bg }))),
+        binding: peakBinding(used),
+        y: peakOverlayArray(used.fullX, fitted.map((p) => ({ center: p.center, height: p.height + p.bg }))),
       });
     },
     [setPeakOverlay],
@@ -159,7 +160,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         if (!ds || stale()) return;
         const st = useApp.getState();
         const item = selectionItemForTool("peaks", ds.id);
-        const { x, y, fullX, xKeyUsed, yKeyUsed, sourceRows } = peakInputs(
+        const { x, y, fullX, xKeyUsed, yKeyUsed, fallback, sourceRows } = peakInputs(
           ds, item?.xKey ?? st.xKey, item?.yKeys ?? st.yKeys, st.seriesOrder, item,
         );
         const res = await fitMultiPeak({
@@ -173,7 +174,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         publishFitResult(ds.id, res, "simultaneous", {
           ...opts, xKey: xKeyUsed, yKey: yKeyUsed, ...(sourceRows ? { rowIds: sourceRows } : {}),
         });
-        overlayFitted(ds, res.peaks, fullX);
+        overlayFitted(ds, res.peaks, { fullX, xKeyUsed, yKeyUsed, fallback });
       } catch (e: unknown) {
         if (!stale()) setFitError(e instanceof Error ? e.message : "simultaneous fit failed");
       } finally {
@@ -208,7 +209,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         if (!ds || stale()) return;
         const st = useApp.getState();
         const item = selectionItemForTool("peaks", ds.id);
-        const { x, y, fullX, xKeyUsed, yKeyUsed, sourceRows } = peakInputs(
+        const { x, y, fullX, xKeyUsed, yKeyUsed, fallback, sourceRows } = peakInputs(
           ds, item?.xKey ?? st.xKey, item?.yKeys ?? st.yKeys, st.seriesOrder, item,
         );
         const fitted: FittedPeak[] = [];
@@ -240,7 +241,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         if (fitted.length > 0) publishFitResult(ds.id, result, "independent", {
           ...opts, xKey: xKeyUsed, yKey: yKeyUsed, ...(sourceRows ? { rowIds: sourceRows } : {}),
         });
-        if (fitted.length > 0) overlayFitted(ds, fitted, fullX);
+        if (fitted.length > 0) overlayFitted(ds, fitted, { fullX, xKeyUsed, yKeyUsed, fallback });
         // A deliberate cancel with zero completed peaks isn't a failure to report.
         if (fitted.length === 0 && !cancelled) {
           setFitError("No peaks could be fit individually.");

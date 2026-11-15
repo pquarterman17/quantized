@@ -76,6 +76,8 @@ class CurieWeissDataFitRequest(BaseModel):
     sample_mass_g: float | None = Field(default=None, allow_inf_nan=False)
     molar_mass_g_mol: float | None = Field(default=None, allow_inf_nan=False)
     response_errors: list[list[float]] = Field(default_factory=list)
+    # Applied-field 1-sigma columns (in field_unit), combined in quadrature.
+    field_errors: list[list[float]] = Field(default_factory=list)
 
 
 class LangevinRequest(BaseModel):
@@ -163,6 +165,7 @@ def curie_weiss_loaded_data(req: CurieWeissDataFitRequest) -> dict[str, Any]:
         sample_mass_g=req.sample_mass_g,
         molar_mass_g_mol=req.molar_mass_g_mol,
         response_errors=req.response_errors,
+        field_errors=req.field_errors,
     )
     return to_jsonable(result)  # type: ignore[no-any-return]
 

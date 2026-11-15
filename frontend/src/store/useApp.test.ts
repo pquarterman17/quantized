@@ -24,6 +24,7 @@ import { loadOriginApplyLibs } from "./originApplyLibs";
 import type { LoadedWorkspace } from "../lib/workspace";
 import { useApp } from "./useApp";
 import { useToasts } from "./toasts";
+import { SINGLE_X } from "../test/overlayBinding";
 
 vi.mock("../lib/api", () => ({
   applyCorrections: vi.fn(),
@@ -490,10 +491,10 @@ describe("useApp corrections", () => {
     useApp.setState({
       datasets: [{ id: "d1", name: "x", data: raw }],
       activeId: "d1",
-      fitOverlay: { datasetId: "d1", y: [100, 200, 300] },
-      baselineOverlay: { datasetId: "d1", y: [1, 2, 3] },
-      peakOverlay: { datasetId: "d1", y: [null, 20, null] },
-      derivOverlay: { datasetId: "d1", y: [0, 0, 0] },
+      fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [100, 200, 300] },
+      baselineOverlay: { datasetId: "d1", binding: SINGLE_X, y: [1, 2, 3] },
+      peakOverlay: { datasetId: "d1", binding: SINGLE_X, y: [null, 20, null] },
+      derivOverlay: { datasetId: "d1", binding: SINGLE_X, y: [0, 0, 0] },
     });
 
     await useApp.getState().applyCorrections("d1", { xTrimMin: 1.5 });
@@ -508,7 +509,7 @@ describe("useApp corrections", () => {
   it("keeps an overlay belonging to a DIFFERENT dataset when one is trimmed", async () => {
     const trimmed: DataStruct = { ...raw, time: [2, 3], values: [[20], [30]] };
     vi.mocked(applyCorrectionsApi).mockResolvedValue(trimmed);
-    const other = { datasetId: "d2", y: [7, 8, 9] };
+    const other = { datasetId: "d2", binding: SINGLE_X, y: [7, 8, 9] };
     useApp.setState({
       datasets: [{ id: "d1", name: "x", data: raw }],
       activeId: "d1",
@@ -522,7 +523,7 @@ describe("useApp corrections", () => {
 
   it("keeps a fit overlay when the correction preserves the row count", async () => {
     vi.mocked(applyCorrectionsApi).mockResolvedValue({ ...raw, values: [[5], [15], [25]] });
-    const overlay = { datasetId: "d1", y: [100, 200, 300] };
+    const overlay = { datasetId: "d1", binding: SINGLE_X, y: [100, 200, 300] };
     useApp.setState({
       datasets: [{ id: "d1", name: "x", data: raw }],
       activeId: "d1",
@@ -542,7 +543,7 @@ describe("useApp corrections", () => {
 
     // Build an overlay on the now-trimmed (2-row) dataset, then reset — which
     // restores the full 3 rows, so the row count changes again.
-    useApp.setState({ fitOverlay: { datasetId: "d1", y: [20, 30] } });
+    useApp.setState({ fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [20, 30] } });
     useApp.getState().resetCorrections("d1");
 
     expect(useApp.getState().fitOverlay).toBeNull();

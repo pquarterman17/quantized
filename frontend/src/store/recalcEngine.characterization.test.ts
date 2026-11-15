@@ -33,6 +33,7 @@ vi.mock("../lib/api", async (importOriginal) => ({
 }));
 
 import { fitModel } from "../lib/api";
+import { SINGLE_X } from "../test/overlayBinding";
 
 type Snap = Record<string, unknown>;
 
@@ -191,11 +192,11 @@ describe("recalcNow re-entrancy (module-level scheduler state)", () => {
   }
 
   it("keeps a fit stale and its old overlay when a backend result has no finite parameters", async () => {
-    seed({ staleDatasets: [], staleFits: ["a"], fitOverlay: { datasetId: "a", y: [9, 9, 9] } });
+    seed({ staleDatasets: [], staleFits: ["a"], fitOverlay: { datasetId: "a", binding: SINGLE_X, y: [9, 9, 9] } });
     vi.mocked(fitModel).mockResolvedValueOnce({ params: [Number.NaN], yFit: [2, 4, 6] });
     await act().recalcNow();
     expect(act().staleFits).toEqual(["a"]);
-    expect(act().fitOverlay).toEqual({ datasetId: "a", y: [9, 9, 9] });
+    expect(act().fitOverlay).toEqual({ datasetId: "a", binding: SINGLE_X, y: [9, 9, 9] });
     expect(act().status).toContain("finite parameter values");
   });
 

@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Dataset, FitSpec } from "../lib/types";
 import { useApp } from "./useApp";
+import { SINGLE_X } from "../test/overlayBinding";
 
 const SPEC: FitSpec = { model: "Linear", params: [2, 1] };
 const base = (over: Partial<Dataset> = {}): Dataset => ({
@@ -18,7 +19,7 @@ const base = (over: Partial<Dataset> = {}): Dataset => ({
   fitSpec: SPEC,
   ...over,
 });
-const CURVE = { datasetId: "d1", y: [1, 3, 5] };
+const CURVE = { datasetId: "d1", binding: SINGLE_X, y: [1, 3, 5] };
 
 function editThenUndo(before: Dataset, after: Dataset): void {
   useApp.setState({ datasets: [before], activeId: "d1", history: [], future: [], fitOverlay: CURVE });

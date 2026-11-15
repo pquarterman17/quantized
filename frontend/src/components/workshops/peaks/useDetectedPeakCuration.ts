@@ -24,6 +24,7 @@ export function useDetectedPeakCuration(activeId: string | null) {
     if (!activeId || !data) return;
     setPeakOverlay({
       datasetId: activeId,
+      binding: data.binding,
       y: peakOverlayArray(
         data.fullX,
         next.map((p) => ({ center: p.center, height: p.height + p.bg })),

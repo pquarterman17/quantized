@@ -95,6 +95,36 @@ def test_demag_correction_matches_si_and_cgs_forms() -> None:
     assert sigma_cgs[0] == pytest.approx([4.0 * np.pi * 0.25 * 0.04])
 
 
+def test_demag_applied_field_uncertainty_adds_in_quadrature_with_m() -> None:
+    # sigma_Hint^2 = sigma_H^2 + (N sigma_M)^2: N sigma_M = 10 A/m, sigma_H = 24 -> 26 (3-4-5 style)
+    _, out = demag_correct_field(
+        [10_000.0], [2_000.0], n_factor=0.25, field_unit="A/m", magnetization_unit="A/m",
+        magnetization_errors=[[40.0]], field_errors=[[24.0]],
+    )
+    assert out[0] == pytest.approx([26.0])
+    # Oe / emu/cm3: N sigma_M converts through 4*pi*N (CGS); field error is already in Oe.
+    _, cgs = demag_correct_field(
+        [10_000.0], [2.0], n_factor=0.25, field_unit="Oe", magnetization_unit="emu/cm³",
+        magnetization_errors=[[0.04]], field_errors=[[1.5]],
+    )
+    assert cgs[0] == pytest.approx([float(np.hypot(1.5, 4.0 * np.pi * 0.25 * 0.04))])
+    # Field error alone is carried through unchanged (dH_int/dH = 1), one array.
+    _, only_h = demag_correct_field(
+        [10_000.0], [2_000.0], n_factor=0.25, field_unit="A/m", magnetization_unit="A/m",
+        field_errors=[[3.0], [4.0]],
+    )
+    assert len(only_h) == 1 and only_h[0] == pytest.approx([5.0])
+
+
+def test_demag_field_uncertainty_fails_closed() -> None:
+    with pytest.raises(ValueError, match="applied-field uncertainty must match"):
+        demag_correct_field([1.0, 2.0], [1.0, 1.0], n_factor=0.5, field_unit="Oe",
+                            magnetization_unit="emu/cm³", field_errors=[[1.0]])
+    with pytest.raises(ValueError, match="must be finite"):
+        demag_correct_field([1.0], [1.0], n_factor=0.5, field_unit="Oe",
+                            magnetization_unit="emu/cm³", field_errors=[[float("nan")]])
+
+
 @pytest.mark.parametrize("unit", ["emu", "emu/g", "A·m²"])
 def test_demag_correction_rejects_nonvolumetric_moment(unit: str) -> None:
     with pytest.raises(ValueError, match="volume-normalized"):

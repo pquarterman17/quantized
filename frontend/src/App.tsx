@@ -222,7 +222,7 @@ export default function App() {
   useEffect(() => {
     fullCommands.core().then(
       (m) => setActions(m.buildAppActions(useApp.getState)),
-      (e: unknown) => toast(`Could not load the Analyze commands: ${e instanceof Error ? e.message : "error"}`, "danger"),
+      (e: unknown) => toast(`Could not load the Analyze commands and menu help (reload to retry): ${e instanceof Error ? e.message : "error"}`, "danger"),
     );
   }, []);
 

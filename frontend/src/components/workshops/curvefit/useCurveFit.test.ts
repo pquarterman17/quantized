@@ -146,7 +146,7 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
       await result.current.run("fit");
     });
     expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
-    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", y: [11, 21, 31, 41] });
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", binding: { yKey: 0, xKey: null }, y: [11, 21, 31, 41] });
   });
 
   it("excludes gap rows at the request boundary and restores their overlay positions", async () => {
@@ -207,7 +207,7 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
     // excluded row 1 dropped from the fit inputs
     expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 2, 3], y: [10, 30, 40] });
     // overlay expanded to full length with a null gap at the excluded row
-    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", y: [11, null, 31, 41] });
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", binding: { yKey: 0, xKey: null }, y: [11, null, 31, 41] });
   });
 
   it("also honors the local filter (#53) in the fit inputs", async () => {
@@ -225,7 +225,7 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
     });
     // keep values ≥ 25 → rows 2,3 (x = 2,3; y = 30,40)
     expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [2, 3], y: [30, 40] });
-    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", y: [null, null, 31, 41] });
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", binding: { yKey: 0, xKey: null }, y: [null, null, 31, 41] });
   });
 
   it("auto-guess also runs on the analysis subset", async () => {
@@ -282,7 +282,7 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
 
     expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: full.time, y: [10, 20, 30, 40, 50] });
     expect(useApp.getState().datasets[0].pending).toBeUndefined();
-    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", y: [11, 21, 31, 41, 51] });
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", binding: { yKey: 0, xKey: null }, y: [11, 21, 31, 41, 51] });
   });
 
   it("a pending-resolve failure aborts the fit without calling fitModel", async () => {

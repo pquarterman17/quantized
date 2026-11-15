@@ -51,3 +51,33 @@ export interface GlobalFitResult {
 export function globalFitJob(req: GlobalFitRequest): Promise<JobSubmitResponse> {
   return postJSON("/api/fitting/global/job", req);
 }
+
+/** One model's summary in a dataset comparison: weighted residual SS, point
+ *  and free-parameter counts, residual dof and information criteria. */
+export interface CompareFitStats {
+  rss: Num;
+  n: number;
+  nParams: number;
+  df: number;
+  aic: Num;
+  aicc: Num;
+  bic: Num;
+}
+
+/** POST /api/fitting/compare-datasets result (calc.dataset_compare): the
+ *  extra-sum-of-squares F-test of "these parameters share one value across
+ *  every dataset" (shared) against "each dataset has its own" (separate). */
+export interface DatasetCompareResult {
+  test: { F: Num; dfNum: number; dfDen: number; p: Num };
+  shared: CompareFitStats;
+  separate: CompareFitStats;
+  sharedParams: string[];
+  conclusion: "shared" | "separate";
+  paramNames: string[];
+}
+
+/** Queue a dataset comparison (same request as the global fit; the
+ *  constraints are the shared-parameter hypothesis under test). */
+export function compareDatasetsJob(req: GlobalFitRequest): Promise<JobSubmitResponse> {
+  return postJSON("/api/fitting/compare-datasets/job", req);
+}

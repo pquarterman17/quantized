@@ -57,7 +57,7 @@ export function finiteRange(xs: readonly number[]): [number, number] | null {
 export function fitSpecFrom(
   model: string,
   xKey: number | null,
-  sel: FitSelection,
+  sel: Omit<FitSelection, "xKey">, // the X is the explicit `xKey` above
   result: CalcResult,
   weight?: FitWeighting,
   /** Corrections active on the source at fit time (MAIN_PLAN #30). */

@@ -111,7 +111,7 @@ export function useBumpsFit(): BumpsFitState {
         const kept = activeRowIndices(n, droppedRows(ds));
         const aligned = restoreGapRows(fit.yFit, pairs);
         const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
-        useApp.getState().setFitOverlay({ datasetId: ds.id, y });
+        useApp.getState().setFitOverlay({ datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y });
       }
     } catch (e) {
       if (!(e instanceof JobCancelledError)) {
