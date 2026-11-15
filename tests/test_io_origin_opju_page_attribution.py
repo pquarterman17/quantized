@@ -29,6 +29,7 @@ import functools
 import json
 import math
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -169,7 +170,9 @@ def test_confirmed_separator_flags_decode(flag: int, lead: int) -> None:
 @pytest.mark.parametrize("flag", [0x02, 0x04, 0x10, 0x20, 0x49, 0xC8, 0xFF])
 def test_unconfirmed_separator_flags_stay_unrecovered(flag: int, lead: int) -> None:
     """Fail closed: a flag value no oracle has confirmed drops the record
-    (omitted, never guessed)."""
+    (omitted, never guessed). The byte looks like a bit field, but the admitted
+    set is evidence, not a bit model: an unseen combination of admitted bits
+    (0x49 = 41|08, 0xC8 = c0|08) has no oracle record and stays gated too."""
     assert extract_figures_opju(_with_sep_flag(flag, lead)) == []
 
 
@@ -274,6 +277,21 @@ def test_wide_pass_skips_a_coincidental_separator_before_the_real_one() -> None:
     ]
 
 
+@pytest.mark.parametrize("flag", [0x01, 0x08, 0x30, 0x41, 0x48])
+def test_wide_pass_skips_a_lookalike_with_a_newly_admitted_flag(flag: int) -> None:
+    """The 2026-11-15 flags include ASCII-range bytes (``30``/``41``/``48``), so
+    a coincidental ``81 ?? ?? 00 <flag> 01`` is likelier. It must not shadow
+    the real separator either: the record decodes exactly as without it."""
+    lookalike = bytes([0x81, 0xAA, 0xBB, 0x00, flag, 0x01])
+    assert _SEP_WIDE.match(lookalike)
+    want = extract_figures_opju(_wide_only_record())
+    got = extract_figures_opju(_wide_only_record(lookalike))
+    assert len(want) == 1
+    assert [(f["x_from"], f["x_to"], f["y_from"], f["y_to"]) for f in got] == [
+        (f["x_from"], f["x_to"], f["y_from"], f["y_to"]) for f in want
+    ]
+
+
 def test_wide_pass_with_only_a_false_separator_still_fails_closed() -> None:
     """Negative control: no real separator after the false one -> no figure."""
     rec = b"CPYUA 4.3811 222\n" + b"\x03\x00\x00\x1f" + b"\x80\x00\x00\x00\x40\x01" + b"\x00" * 60
@@ -328,6 +346,12 @@ def _same(got: tuple[float, ...], want: tuple[float, ...]) -> bool:
 
 
 @functools.cache
+def _decoded(project: Path) -> list[dict[str, Any]]:
+    """Every figure of one corpus project, decoded once per session."""
+    return extract_figures_opju(project.read_bytes())
+
+
+@functools.cache
 def _compare_to_oracle(corpus_dir: Path) -> tuple[set[_Key], set[_Key], int] | None:
     """``(phantoms, wrong, n_matched)`` over every oracle file (decoded once
     per session); ``None`` when the oracle JSON is absent."""
@@ -347,7 +371,7 @@ def _compare_to_oracle(corpus_dir: Path) -> tuple[set[_Key], set[_Key], int] | N
             for page, info in pages.items()
             for lay in info["layers"]
         }
-        for f in extract_figures_opju(project.read_bytes()):
+        for f in _decoded(project):
             if not f["name"]:  # embedded (workbook) graph: no page identity
                 continue
             key = (f["name"], f["layer"])
@@ -431,13 +455,17 @@ def test_realdata_admitted_flag_anchor_matches_origin(corpus_dir: Path, flag: in
     project = corpus_dir / rel
     if not (oracle_path.is_file() and project.is_file()):
         pytest.skip(f"{_AXIS_JSON} or {rel} not present")
-    oracle = json.loads(oracle_path.read_text(encoding="utf-8"))["files"][rel][page]
-    lay = next(x for x in oracle["layers"] if int(x["layer"]) == layer)
+    pages = json.loads(oracle_path.read_text(encoding="utf-8"))["files"].get(rel, {})
+    lays = [x for x in pages.get(page, {}).get("layers", []) if int(x["layer"]) == layer]
+    assert lays, f"oracle has no {rel} {page} layer {layer}: re-pick this flag's anchor"
+    lay = lays[0]
     want = (lay["x_from"], lay["x_to"], lay["y_from"], lay["y_to"])
-    got = [
-        (f["x_from"], f["x_to"], f["y_from"], f["y_to"])
-        for f in extract_figures_opju(project.read_bytes())
-        if (f["name"], f["layer"]) == (page, layer)
-    ]
+    got = [f for f in _decoded(project) if (f["name"], f["layer"]) == (page, layer)]
     assert len(got) == 1, f"{page} layer {layer} not recovered"
-    assert _same(got[0], want)
+    f = got[0]
+    assert _same((f["x_from"], f["x_to"], f["y_from"], f["y_to"]), want)
+    # Scale too: Origin's layer.x/y.type 1 is linear, 2 is log10.
+    for axis in ("x", "y"):
+        kind = lay[f"{axis}_type"]
+        assert kind in (1, 2), f"anchor {page} {axis}_type {kind}: not a lin/log anchor"
+        assert f[f"{axis}_log"] is (kind == 2)

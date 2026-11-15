@@ -2560,8 +2560,8 @@ form with a one-byte type `>= 0x80` exists in the 359-file corpus.
 `81|80 <id> <plen> 00 <flag> 01`, `<flag>` is not constant. Over the 244
 records that parse only with a free 5th byte: 00 ×44, 40 ×71, 80 ×82, c0 ×21,
 41 ×6, 01 ×7, 08 ×6, 30 ×3, 88 ×3, 48 ×1 (bit combinations: c0 = 40|80, 88 =
-08|80). The retry-only wide separator admits only the oracle-CONFIRMED values
-00/40/80/88/c0 (60 records match Origin's axes exactly). 01/08/30/41/48 were
+08|80). The retry-only wide separator admits only oracle-CONFIRMED values. On
+2026-11-14 that was 00/40/80/88/c0 (60 records match Origin's axes exactly). 01/08/30/41/48 were
 admitted 2026-11-15 once the 103-file oracle covered them: every corpus record
 carrying them (01 ×7, 08 ×6, 30 ×3, 41 ×6, 48 ×1, all 23 in oracle files)
 decodes onto Origin's exact axes, and every other record in the 359-file corpus
