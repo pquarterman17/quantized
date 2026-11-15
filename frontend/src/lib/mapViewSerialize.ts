@@ -22,6 +22,7 @@ export function serializeMapViews(m: MapViewMap): Record<string, MapViewState> {
       colorLimits: v.colorLimits ? [v.colorLimits[0], v.colorLimits[1]] : null,
       slices: v.slices.map((s) => ({ ...s, a: { ...s.a }, ...(s.b ? { b: { ...s.b } } : {}) })),
       annotations: v.annotations.map((a) => ({ ...a })),
+      ...(v.view3d ? { view3d: { ...v.view3d } } : {}),
     };
   }
   return out;

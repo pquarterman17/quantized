@@ -25,11 +25,14 @@ import type { ColormapName } from "../../lib/colormap";
 import { exportMapFigure, type MapFigureSpec } from "../../lib/api/mapFigure";
 import { shouldLockAspect } from "../../lib/mapAspect";
 import type { CutSpace } from "../../lib/mapcuts";
+import type { Map3dView } from "../../lib/mapView3d";
 import type { MapAnnotation, MapSliceDef } from "../../lib/mapView";
 import { interpolatedNote, type MapPayload } from "../../lib/mapdataFetch";
 import { exportCanvasPng } from "../../lib/plotExport";
 import { runCancellable } from "../../store/pendingOpActions";
 import { askParams } from "../overlays/ParamDialog";
+import { choose3d, FLAT_CHOICE, MAP3D_LABELS, MAP3D_MAX_POINTS, rawSource, sampleEvenly, view3dOptions, WATERFALL_MAX_LINES, type MapSource } from "./map3dRequest";
+import { sameMap3d } from "../../lib/mapView3d";
 import { effectiveColorLimits, minPositive } from "./mapRender";
 import { mapMarks } from "./mapSliceGeometry";
 import { FIGURE_STYLES } from "../workshops/figurebuilder/figureOutputConstants";
@@ -49,6 +52,12 @@ export interface MapExportView {
   colorLimits: readonly [number | null, number | null] | null;
   contour: { on: boolean; levelCount: number; scale: "linear" | "log" };
   /** The map's committed slices and text labels, and the axis space shown. */
+  /** Static 3-D view: the figure is the surface / scatter / waterfall the stage
+   *  previews (`map3dRequest.ts`), not the 2-D map. */
+  view3d?: Map3dView;
+  /** The map's raw columns and picks: a 3-D scatter of data that is NOT
+   *  gridded plots these original points, not the regridded surface. */
+  source?: MapSource;
   marks?: { slices: readonly MapSliceDef[]; annotations: readonly MapAnnotation[]; space: CutSpace | null };
 }
 
@@ -64,7 +73,10 @@ function zCell(v: number | null, view: MapExportView): number | null {
   // The canvas drops a non-positive cell under log BEFORE any limit applies.
   if (view.logZ && v <= 0) return null;
   let z = v;
-  if (view.colorLimits) {
+  // Colour limits saturate the COLOUR in 2-D. In 3-D z is the height: it goes out
+  // unchanged and `z_limits` alone sets the colour range, so a limit never
+  // flattens the data.
+  if (view.colorLimits && !view.view3d) {
     // Only a typed side saturates; an auto side is the data's own extent.
     const [lo, hi] = view.colorLimits;
     if (hi !== null) z = Math.min(hi, z);
@@ -87,12 +99,52 @@ function zLimits(p: MapPayload, view: MapExportView): [number, number] | null {
   return lim && view.logZ ? [Math.log10(lim[0]), Math.log10(lim[1])] : lim;
 }
 
+export interface PointStats {
+  /** Rows in the file, rows usable (finite; positive under log), rows sent. */
+  total: number;
+  valid: number;
+  sent: number;
+}
+
+/** Row indices of the raw points that can be drawn, then sampled to at most
+ *  MAP3D_MAX_POINTS evenly (first and last kept, order kept) -- the server's own
+ *  `decimate` rule, so a 465k-point cloud neither costs a 20 s render nor a 10 MB
+ *  request. */
+function sampledPoints(raw: { x: number[]; y: number[]; z: number[] }, view: MapExportView): { rows: number[]; stats: PointStats } {
+  const valid: number[] = [];
+  raw.z.forEach((v, i) => {
+    if (zCell(v, view) !== null && Number.isFinite(raw.x[i]) && Number.isFinite(raw.y[i])) valid.push(i);
+  });
+  const rows = valid.length <= MAP3D_MAX_POINTS ? valid : sampleEvenly(valid, MAP3D_MAX_POINTS);
+  return { rows, stats: { total: raw.z.length, valid: valid.length, sent: rows.length } };
+}
+
+export const pointStats = (raw: { x: number[]; y: number[]; z: number[] }, view: MapExportView): PointStats => sampledPoints(raw, view).stats;
+
+/** The raw measured points as the route's scattered source: every kept point
+ *  goes out unchanged (no grid, no resampling; z unclamped in 3-D). */
+function pointsBody(raw: { x: number[]; y: number[]; z: number[] }, view: MapExportView) {
+  const { rows, stats } = sampledPoints(raw, view);
+  return {
+    x_axis: rows.map((i) => raw.x[i]),
+    y_axis: rows.map((i) => raw.y[i]),
+    z_values: rows.map((i) => zCell(raw.z[i], view) as number),
+    contour_source: "points",
+    ...(stats.sent < stats.valid ? { note: `Plotting ${stats.sent.toLocaleString("en-US")} of ${stats.valid.toLocaleString("en-US")} points, evenly sampled.` } : {}),
+  };
+}
+
 /** The /api/export/map-figure body for what this map is showing. Pure. */
 export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOptions): MapFigureSpec {
-  const zLabel = withUnit(p.zLabel, p.zUnit);
+  const v3 = view.view3d;
+  const zLabel = v3 ? withUnit(v3.zLabel || p.zLabel, v3.zUnit || p.zUnit) : withUnit(p.zLabel, p.zUnit);
   const limits = zLimits(p, view);
-  const marks = view.marks ? mapMarks(p, view.marks.slices, view.marks.annotations, view.marks.space) : null;
-  const contour = view.contour.on
+  // Slices, labels and the contour overlay are 2-D marks; a 3-D figure has none.
+  const marks = view.marks && !v3 ? mapMarks(p, view.marks.slices, view.marks.annotations, view.marks.space) : null;
+  const raw = rawSource(p, view);
+  const contour = v3
+    ? { kind: v3.kind, view_elev: v3.elev, view_azim: v3.azim, ...(v3.kind === "waterfall" ? { max_lines: WATERFALL_MAX_LINES } : {}) }
+    : view.contour.on
     ? {
         kind: "contourf",
         levels: view.contour.levelCount,
@@ -102,16 +154,18 @@ export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOp
       }
     : { kind: "heatmap" };
   return {
-    x_axis: p.xAxis,
-    y_axis: p.yAxis,
-    z_grid: p.zGrid.map((row) => row.map((v) => zCell(v, view))),
+    ...(raw ? pointsBody(raw, view) : {
+      x_axis: p.xAxis,
+      y_axis: p.yAxis,
+      z_grid: p.zGrid.map((row) => row.map((v) => zCell(v, view))),
+    }),
     ...(limits ? { z_limits: limits } : {}),
     // The canvas letterboxes a map whose axes share a unit (`mapRender.plotRect`).
-    ...(shouldLockAspect(p.xUnit, p.yUnit) ? { equal_aspect: true } : {}),
+    ...(!v3 && shouldLockAspect(p.xUnit, p.yUnit) ? { equal_aspect: true } : {}),
     ...(marks?.lines.length ? { lines: marks.lines } : {}),
     ...(marks?.labels.length ? { labels: marks.labels } : {}),
     ...contour,
-    ...(p.interpolated ? { note: interpolatedNote(p.interpolated.nPoints) } : {}),
+    ...(p.interpolated && !raw ? { note: interpolatedNote(p.interpolated.nPoints) } : {}),
     fmt: o.fmt,
     style: o.style,
     cmap: MPL_CMAP[view.cmap] ?? "viridis",
@@ -135,15 +189,19 @@ export interface RunMapExportArgs {
   /** Filename stem (the dataset name without its extension). */
   stem: string;
   setStatus: (msg: string) => void;
+  /** Commit the 3-D choice made in the dialog to the figure state (undoable),
+   *  so the on-screen preview becomes exactly the figure that is exported. */
+  setView3d?: (v: Map3dView | undefined) => void;
 }
 
 /** Ask for format/style/title, then export: vector through the backend, PNG
  *  from the canvas. A cancelled dialog does nothing. */
-export async function runMapExport({ canvas, payload, loading, view, stem, setStatus }: RunMapExportArgs): Promise<void> {
+export async function runMapExport({ canvas, payload, loading, view, stem, setStatus, setView3d }: RunMapExportArgs): Promise<void> {
   if (loading) {
     setStatus("map export waits — the map is still loading");
     return;
   }
+  const v3 = view.view3d;
   const params = await askParams("Export map", [
     {
       key: "fmt",
@@ -151,30 +209,53 @@ export async function runMapExport({ canvas, payload, loading, view, stem, setSt
       type: "select",
       default: "pdf",
       options: ["pdf", "svg", "png"],
-      hint: "PDF / SVG are vector; PNG saves the on-screen canvas",
+      hint: "PDF / SVG are vector; PNG saves the on-screen canvas (a 3-D view: the server render)",
     },
-    { key: "style", label: "Style", type: "select", default: "default", options: FIGURE_STYLES },
-    { key: "title", label: "Title", type: "text", default: "" },
+    {
+      key: "view", label: "View", type: "select", default: v3 ? MAP3D_LABELS[v3.kind] : FLAT_CHOICE,
+      options: [FLAT_CHOICE, ...Object.values(MAP3D_LABELS)],
+      hint: "Surface / 3-D scatter / 3-D waterfall are static server renders; the choice is kept with the map",
+    },
+    { key: "elev", label: "Elevation (°)", type: "number", default: v3?.elev ?? 30, hint: "3-D views: -90 to 90" },
+    { key: "azim", label: "Azimuth (°)", type: "number", default: v3?.azim ?? -60, hint: "3-D views: -360 to 360" },
+    { key: "style", label: "Style", type: "select", default: v3?.style ?? "default", options: FIGURE_STYLES },
+    { key: "title", label: "Title", type: "text", default: v3?.title ?? "" },
   ], { confirmLabel: "Export" });
   if (!params) return;
   const filename = `${stem}_map`;
   const fmt = typeof params.fmt === "string" ? params.fmt : "pdf";
-  if (fmt === "png") {
+  const style = typeof params.style === "string" ? params.style : "default";
+  const title = typeof params.title === "string" ? params.title.trim() : "";
+  const choice = choose3d(v3, {
+    view: String(params.view), elev: Number(params.elev), azim: Number(params.azim), style, title,
+  });
+  if (!choice.ok) {
+    setStatus(`map export refused — ${choice.error}`);
+    return;
+  }
+  const next3d = choice.view3d;
+  // The dialog's view choice is kept with the map only once the export went
+  // through: a failed or cancelled export leaves the figure state alone.
+  const keep = () => {
+    if (!sameMap3d(v3, next3d)) setView3d?.(next3d);
+  };
+  if (fmt === "png" && !next3d) {
     if (canvas) exportCanvasPng(canvas, `${filename}.png`);
+    keep();
     return;
   }
   if (!payload) {
     setStatus("map export failed — nothing is mapped yet");
     return;
   }
-  const body = mapFigureBody(payload, view, {
-    fmt,
-    style: typeof params.style === "string" ? params.style : "default",
-    title: typeof params.title === "string" ? params.title.trim() : "",
-    filename,
-  });
+  const body = mapFigureBody(
+    payload,
+    { ...view, view3d: next3d },
+    next3d ? view3dOptions(next3d, fmt, filename) : { fmt, style, title, filename },
+  );
   try {
     const done = await runCancellable("Exporting map…", (signal) => exportMapFigure(body, signal));
+    if (done) keep();
     setStatus(done ? `exported ${filename}.${fmt}` : "export cancelled");
   } catch (e) {
     setStatus(`map export failed — ${e instanceof Error ? e.message : "unknown error"}`);
