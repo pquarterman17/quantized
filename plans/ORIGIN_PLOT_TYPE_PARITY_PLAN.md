@@ -215,10 +215,25 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
          corpus records), so the line style is withheld
          (`opju_plot_gates`); the curve stays bound. Drawing true steps is
          the "no quantized mapping for step" sub-task below.
-   - [ ] **Phantom sheet from a deleted sheet.** `deleted_sheet` imports the
-         deleted sheet's data as book `DelA@2` (wrong book name too) and names
-         the survivor `Del@3`. 5 specimens (line, scatter, line+symbol, step,
-         area). Anchor `line/deleted_sheet`.
+   - [x] ~~**Phantom sheet from a deleted sheet.**~~ FIXED 2026-11-15 with
+         the stacked `CS` book (item 6, `opju_loose_books`): Origin renames a
+         deleted sheet's datasets into a window-less book (`DelA_A@2`,
+         COM `doc -e S`), which is no book in Origin's `WorksheetPages`; it
+         is dropped (`loose_books_omitted`). The survivor's datasets are
+         Origin's own `Del_A@3` / `Del_B@3`, so its key `Del@3` is Origin's
+         sheet id, not a wrong name. Scorer: 5 phantom sheets -> 0.
+   - [ ] **Sheet display names.** A `Book@N` pseudo-book is titled
+         `"<Book> (sheet N)"` from its dataset id; Origin's sheet name
+         (`Keep3`, COM `Layers.Item(j).Name`) is not decoded for `.opju`.
+         The window section writes one `82 02 50 64` sheet header per live
+         sheet (`opju_sheet_segments`), the name ~65 bytes after it, and
+         segments map to ids. Needs a COM sheet-name / `%(i,@D)` dump of
+         every multi-sheet book before any title changes.
+   - [ ] **Loose datasets Origin plots** (real corpus, COM `%Z`):
+         `Book1A_D` / `Book1B_D` (`迭代次数`), `Book2_C` (`30流场`),
+         `Book2_C@3` (`50流场`) are drawn by graphs whose curves the figure
+         decode does not bind, and are no longer Library books. When those
+         curves decode they need their data without a Library book.
    - [ ] **Graph layer not recovered** (`graphs_not_recovered`, no axis
          record decoded): line / line+symbol / scatter / step x {duplicates,
          huge_tiny, log_range, masked_rows, multi_x}; area x {huge_tiny,
@@ -234,11 +249,25 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
    wiring `.opj`/`.opju` column/bar/histogram to the bar/stat renderers.
    Measured by the item 2 scorer (2026-11-15); bindings and metadata are
    item 5's first two gaps.
-   - [ ] **Phantom book: the stacked plots' hidden helper book `CS`** (the
-         cumulative sums, 3 columns, flagged `complex_imaginary`) is listed
-         as a Library book though Origin's own book list does not have it.
-         26 specimens: every stacked_area, stacked_column and stacked_bar.
-         Anchor `stacked_column/clean`.
+   - [x] ~~**Phantom book: the stacked plots' hidden helper book `CS`**~~
+         FIXED 2026-11-15. `CS_1..n` are loose datasets: no window owns them,
+         COM `WorksheetPages` / `doc -e W` never list `CS`, and the graph's
+         `%Z` plots the source sheet, never `CS` (35 / 35 stacked + deleted
+         specimens: 0 loose datasets plotted). New `opju_loose_books` drops
+         every book whose name is no window's (case-insensitive, as Origin's
+         names are; fail closed when the file has no windows or every book
+         is loose). Scorer: sheets phantom 31 -> 0, every other cell
+         unchanged. Real corpus vs main (359 `.opju`, COM on all 22 changed
+         files): 111 books dropped (`CS`, `TableN`, `<Book>A` leftovers),
+         0 of them a `WorksheetPages` book, 0 COM books vanished, 0 decoded
+         curves / labels / values changed, 1 primary book now a real one
+         (`CompareRc`: `Table1` -> `Book1`).
+   - [ ] **Residual phantom books (pre-existing).** Kept although COM lists
+         no such book: 184 `TableN` books in 10 files (they DO have a window
+         header -- table objects, not `WorksheetPages`; e.g. `Hc2 data`
+         `Table1..`, `Figure 3 and 4 amplitude` 68) and 35 books of 5
+         graph-only projects (all loose, kept by the fail-closed rule:
+         `BD_*_all`, `RSOS_*_all`, `F72_...TB_Product`).
    - [ ] **Box, violin and strip: no graph layer recovered on 33 / 33.**
          Column, bar, stacked column/bar and floating column: not recovered
          for {clean, descending_x, huge_tiny, masked_rows, nan_gaps, noisy};
