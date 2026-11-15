@@ -28,9 +28,12 @@ _PROJECTS = {
         "filtered": 0,
         "curves": 8,
     },
+    # Book3 is 3 rows, as in Origin's export (it was 32 rows of allocation
+    # padding); Book4@2 (the FitLinear report sheet, 44 x 25 of evaluated
+    # references in Origin) holds no decodable cell, so the Library omits it.
     "Moke.opj": {
-        "books": 7,
-        "lazy_books": 6,
+        "books": 6,
+        "lazy_books": 5,
         "actionable": 17,
         "total": 17,
         "filtered": 0,

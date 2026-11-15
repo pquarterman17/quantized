@@ -117,7 +117,18 @@ def test_real_corpus_has_zero_false_truncated_verdicts(corpus_dir: Path) -> None
     exactly. Prints the per-version distribution (``pytest -s``) -- the
     numbers the gate in ``integrity._MEASURED`` was set from."""
     origin = corpus_dir / "origin"
-    files = sorted(p for p in origin.rglob("*") if p.is_file() and p.suffix.lower() == ".opj")
+    # probes/ holds deliberately damaged files and specimens/qz_written.opj is
+    # quantized's own writer output (it records no size); neither is a file
+    # Origin wrote. They are asserted separately
+    # (test_corpus_truncation_probes_are_flagged), not part of "real".
+    files = sorted(
+        p
+        for p in origin.rglob("*")
+        if p.is_file()
+        and p.suffix.lower() == ".opj"
+        and "probes" not in p.relative_to(origin).parts
+        and p.name != "qz_written.opj"
+    )
     if not files:
         pytest.skip("no .opj files under the corpus")
     dist: dict[str, Counter[str]] = {}
@@ -151,3 +162,36 @@ def test_real_corpus_has_zero_false_truncated_verdicts(corpus_dir: Path) -> None
     assert false_truncated == []
     assert unverified == []  # a checked real file matches its header exactly
     assert sum(c["complete"] for c in dist.values()) > 0  # the check really ran
+
+
+def origin_dir_file(corpus_dir: Path, rel: str) -> Path | None:
+    p = corpus_dir / "origin" / rel
+    return p if p.is_file() else None
+
+
+@pytest.mark.realdata
+def test_corpus_truncation_probes_are_flagged(corpus_dir: Path) -> None:
+    """The deliberately damaged ``probes/`` files carry the verdict the
+    damage implies: a file with its trailer cut off, and one missing only
+    its last byte, are both TRUNCATED against their own header's declared
+    size; every other readable probe is either complete or unchecked (none
+    is called truncated or "longer")."""
+    probes = corpus_dir / "origin" / "probes"
+    truncated = {"P2_moke_no_trailer.opj", "PT2_minus_last_byte.opj"}
+    if not all((probes / name).is_file() for name in truncated):
+        pytest.skip("truncation probes not present on this machine")
+    verdicts: dict[str, bool | None] = {}
+    for path in sorted(probes.glob("*.opj")):
+        got = container_integrity(path.read_bytes(), "opj")
+        if got["checked"]:
+            verdicts[path.name] = got["complete"]
+    assert {n for n, ok in verdicts.items() if ok is False} == truncated
+    assert all(ok is True for n, ok in verdicts.items() if n not in truncated)
+    assert "P1_moke_copy.opj" in verdicts  # the checker really ran on the intact copy
+    # quantized's own writer leaves the header's size field at 0: the file is
+    # "longer than" what it records, which the checker reports as unverifiable
+    # (complete=None), never as truncated.
+    written = origin_dir_file(corpus_dir, "specimens/qz_written.opj")
+    if written is not None:
+        got = container_integrity(written.read_bytes(), "opj")
+        assert got["checked"] and got["complete"] is None and got["declared_bytes"] == 0
