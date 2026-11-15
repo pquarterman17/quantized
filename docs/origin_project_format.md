@@ -2540,15 +2540,16 @@ the 359 `.opju` files (references to another book's id — `Residual*`
 report pages — are ignored). **P** — a Y column is on its stored X
 partner's sheet: 15,556 rank-proven pairs agree, 0 disagree. A result is
 kept only if both signals that speak agree, the `Book_Col@N` dataset
-exists, and no other id of the name lands on that sheet. Corpus effect:
-`sheet_unknown` omissions 770 → 149; all re-bound curves in the
-COM-checked layers match Origin's `%Z` sheet. The sheet proves the Y, not
-the X Origin draws it against: a curve placed only this way is still
-omitted when it plots an X-designated column (`y_is_x_column`) or when its
-token record — or, if it names none, another token of the layer — stores
-`<id:u16> 21 61` naming a different column of the book (`x_token_differs`):
-Origin plots against that stored X (item 70), which is not decoded. Without
-that gate 51 of 784 newly drawn, COM-checked curves drew the wrong X.
+exists, and no other id of the name lands on that sheet. Corpus effect
+(vs the token-X decoder of `opju_curve_token_x`): 830 more curves drawn,
+`sheet_unknown` omissions down to 133; the re-bound curves in the
+COM-checked layers match Origin's `%Z` sheet and plotted values. The sheet
+proves the Y, not the X Origin draws it against: a curve placed only this
+way is still omitted when it plots an X-designated column
+(`y_is_x_column`) or when a `<id:u16> 21 61` reference in its token record
+— or, if it names none, in another token of the layer — names a different
+column of the book (`x_token_differs`). Without those two gates 12 more
+newly drawn, COM-checked curves drew the wrong X.
 
 `<fields…>` = tagged fields `<tag:0x80-0x9f> <len> <payload>`: the column
 short name (payload = optional `0x03`-X / `0x02`-Y-error designation prefix

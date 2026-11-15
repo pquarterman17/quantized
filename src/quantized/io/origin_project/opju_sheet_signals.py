@@ -160,7 +160,7 @@ def sheet_map(b: bytes, table: ColumnIdTable) -> tuple[dict[int, str], frozenset
 
 
 # A column id right before the Y designation marker: inside a curve token's
-# record, the X the plot itself stores (plan item 70; not decoded yet).
+# record, an X the plot itself stores (`opju_curve_token_x` reads the one at offset 35).
 _TOKEN_X = re.compile(rb"(?=(..)\x21\x61)", re.DOTALL)
 
 
@@ -176,18 +176,18 @@ def newly_proven_reason(
     """Why a curve whose column only the second signal places is NOT drawn
     (``""`` = draw it), checked against Origin 2026b COM (plan item 67):
 
-    * ``y_is_x_column``: the plotted column is itself X-designated, so the
-      curve's X is the one its token stores (item 70) -- of the 4 such
-      curves in the COM data check, 3 drew the wrong X, 1 drew nothing;
-    * ``x_token_differs``: the token's own record (``token_span``, up to the
-      next curve token) names, before a ``21 61`` marker, a column of the
-      same book other than ``x_col`` -- Origin plots against that column
-      (2x glass Epoxy Graph1 ``C`` -> ``B@2``, Catchment Graph6 ``I`` ->
-      ``D``), which the decoder does not use yet; or the token names none
-      and another token of the layer (``layer_span``) stores a different X.
+    * ``y_is_x_column``: the plotted column is itself X-designated;
+    * ``x_token_differs``: a ``<id> 21 61`` reference in the token's own
+      record (``token_span``, up to the next curve token) -- or, when it
+      names none, in another token of the layer (``layer_span``) -- names a
+      column of the same book other than ``x_col``, the X the decoder
+      settled on (``opju_curve_token_x`` included).
 
-    Curves the rank alignment proves are not subject to this check (their
-    X mechanism is item 70's, unchanged here).
+    On top of the token-X decode (#690), the COM data check of every newly
+    drawn curve found 12 more drawn against the wrong X with both gates off
+    (4 with only this one off) and 14 more identical; the gates keep the 12
+    out at the cost of the 14. Curves the rank alignment proves are not
+    subject to this check.
     """
     if cid in x_ids:
         return "y_is_x_column"
