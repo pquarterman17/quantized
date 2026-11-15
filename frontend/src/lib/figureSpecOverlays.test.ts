@@ -37,6 +37,12 @@ const VIEW: OverlayView = {
   yKeys: null,
   seriesOrder: null,
   hiddenChannels: [],
+  seriesStyles: {},
+  waterfall: 0,
+  facetKey: null,
+  stackMode: false,
+  polarMode: false,
+  statMode: false,
 };
 
 function flat(over: Partial<FigureSpec> = {}): FigureSpec {
@@ -142,6 +148,25 @@ describe("withAnalysisOverlays", () => {
       { ...flat({ log_offsets: [1] }), dataset: two.data, y_keys: [1] }, two, view, 1,
     );
     expect(col(out, 2)).toEqual([1.1, 4.9, 2.1, 0.9].map((v) => v * 1000));
+  });
+
+  it("scales a fit bound to an offset channel even when no LISTED channel is offset (canvas parity)", () => {
+    // Channel 0 carries 3 decades and is bound; the request lists only channel 1
+    // (offset 0), so the spec carries NO `log_offsets` -- the canvas still scales.
+    const two: Dataset = {
+      ...DS,
+      data: { ...DS.data, values: [[1, 7], [5, 7], [2, 7], [1, 7]], labels: ["A", "B"], units: ["", ""] },
+    };
+    const view: OverlayView = {
+      ...VIEW, peakOverlay: null, seriesStyles: { 0: { logOffset: 3 } },
+    };
+    const base = { ...flat(), dataset: two.data, y_keys: [1] };
+    expect(base.log_offsets).toBeUndefined();
+    const out = withAnalysisOverlays(base, two, view, 1);
+    expect(col(out, 2)).toEqual([1.1, 4.9, 2.1, 0.9].map((v) => v * 1000));
+    // ...and a mode the canvas does not offset in (waterfall) leaves it unscaled.
+    const wf = withAnalysisOverlays(base, two, { ...view, waterfall: 0.5 }, 1);
+    expect(col(wf, 2)).toEqual([1.1, 4.9, 2.1, 0.9]);
   });
 
   it("prunes the overlay to the rows a hide-mode export keeps", () => {

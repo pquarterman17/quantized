@@ -39,7 +39,8 @@ import { traceSeriesStyles } from "./exportDefaultTrace";
 import { lineWidthSeriesStyles } from "./exportLineWidth";
 import { canvasLineWidth } from "./plotTemplates";
 import type { ExportSeriesStyle } from "./publicationStyles";
-import { overlayDecadesFromStyles } from "./logOffset";
+import { logOffsetsApply, overlayDecadesFromStyles } from "./logOffset";
+import { overlayModesMatchTheCanvas } from "./seriesStyleCycle";
 import { droppedRows } from "./rowstate";
 import { seriesColor } from "./seriesStyleCycle";
 import { overlayLayout, placeOverlay, type OverlayLayout } from "./overlayPlacement";
@@ -60,9 +61,18 @@ export interface OverlayView {
   yKeys: number[] | null;
   seriesOrder: number[] | null;
   hiddenChannels: readonly number[];
-  /** Per-channel styles: the decade offsets an overlay inherits (the canvas'
-   *  source). Absent = no offsets. */
-  seriesStyles?: Record<number, SeriesStyle>;
+  /** Per-channel styles: the decade offsets an overlay inherits. REQUIRED and
+   *  taken from the SAME source as the base series' `log_offsets` (the focused
+   *  document's view when the export routes through one, else the live store),
+   *  so a fit is never offset by a different style map than its curve. */
+  seriesStyles: Record<number, SeriesStyle>;
+  /** With the mode flags below, the inputs of the offsets' shared predicate
+   *  (`logOffsetsApply` + `overlayModesMatchTheCanvas`), from that same source. */
+  waterfall: number;
+  facetKey: number | null;
+  stackMode: boolean;
+  polarMode: boolean;
+  statMode: boolean;
 }
 
 /** The rows the overlays align to: `ds` itself, or on a per-series-X sheet the
@@ -135,11 +145,14 @@ export function withAnalysisOverlays(
   // `band` is `PlotSeriesSpec.band`: how many series back the edge's curve is
   // (0 = not a band edge); an odd value is a lower edge.
   // The bound Y's offset: the canvas' rule (lib/logOffset.overlayDecadesFromStyles),
-  // read from the same series styles by CHANNEL, so it does not depend on which
-  // channels this request lists. `log_offsets` present = offsets apply here.
-  const channelStyles = view.seriesStyles ?? {};
+  // read from the series styles by CHANNEL, so it does not depend on which
+  // channels this request lists. Whether offsets apply at all is the predicate
+  // `logOffsetWire` uses, NOT the presence of `spec.log_offsets` (which is
+  // omitted when no LISTED channel is offset while a bound one is).
+  const offsetsApply =
+    logOffsetsApply(view.waterfall, null) && overlayModesMatchTheCanvas({ ...view, groupKey: null });
   const factorFor = (o: { binding?: OverlayBinding | null }): number =>
-    spec.log_offsets ? 10 ** overlayDecadesFromStyles(o.binding, channelStyles, keys as number[], view.hiddenChannels) : 1;
+    offsetsApply ? 10 ** overlayDecadesFromStyles(o.binding, view.seriesStyles, keys as number[], view.hiddenChannels) : 1;
   const present = candidates.flatMap(([label, o, points]) => {
     if (!o || o.datasetId !== ds.id || o.y.length < n) return [];
     const edges = (o.band ?? []).every((e) => e.y.length >= n) ? (o.band ?? []) : [];

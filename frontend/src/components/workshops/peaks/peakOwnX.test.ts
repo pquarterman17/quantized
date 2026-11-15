@@ -39,7 +39,9 @@ describe("secondary-X Y in the peak tools", () => {
     expect(pi.x).toEqual([1, 2, 3]);
     expect(pi.fullX).toEqual([1, 2, 3]);
     expect(pi.xKeyUsed).toBeNull();
-    // No Y is shown: the markers belong to no curve (-1), on time.
+    // The fit really consumed channel 0 -- that is the recorded provenance
+    // (publishFitResult) -- but no Y is shown, so the MARKERS bind to no curve.
+    expect(pi.yKeyUsed).toBe(0);
     expect(peakBinding(pi)).toEqual({ yKey: -1, xKey: null });
   });
 

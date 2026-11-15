@@ -89,8 +89,9 @@ export function useLogOffsetScaling(p: LogOffsetScalingParams): LogOffsetScaling
     [p.plotted, p.seriesStyles],
   );
 
-  // The unbound fallback's channel; each overlay's factor is a primitive, so
-  // a colour-only style edit re-scales nothing.
+  // Each overlay's factor is a primitive (read by bound channel, with a lazy
+  // first-visible fallback only for an unbound overlay), so a colour-only style
+  // edit re-scales nothing.
   const factorOf = (o: { binding?: OverlayBinding | null } | null): number =>
     !offsetsApply || !o ? 1 : 10 ** overlayDecadesFromStyles(o.binding, p.seriesStyles, p.plotted, p.hiddenChannels);
   const fitF = factorOf(p.fitOverlay), baseF = factorOf(p.baselineOverlay);

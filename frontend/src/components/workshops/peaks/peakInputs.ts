@@ -31,9 +31,15 @@ export interface PeakInputs {
    *  the label and unit of the plotted column — the exact misattribution the
    *  provenance field exists to prevent. */
   xKeyUsed: number | null;
-  /** The value channel the fit actually consumed. Null only when the dataset
-   * has no value column; persisted into the result's exact plot binding. */
+  /** The value channel the fit actually consumed (channel 0 in the fallback
+   * branch, which fits `values[*][0]`). Null only when the dataset has no value
+   * column. This is the PROVENANCE persisted into the result's exact plot
+   * binding, so it names the channel really fitted, fallback or not. */
   yKeyUsed: number | null;
+  /** True when `selectedFitData` returned null and x/y came from the time axis
+   * and channel 0. The fit's provenance still names channel 0, but no Y is
+   * plotted, so the MARKERS belong to no curve (`peakBinding` -> -1). */
+  fallback?: boolean;
   gapCount: number;
   sourceCount: number;
   /** Exact original rows after row/range selection and finite-pair pruning.
@@ -76,7 +82,8 @@ export function peakInputs(
     y: pairs.y,
     fullX,
     xKeyUsed: null,
-    yKeyUsed: null, // no Y is shown: the markers belong to no curve (peakBinding -> -1)
+    yKeyUsed: d.values[0]?.length ? 0 : null,
+    fallback: true,
     gapCount: pairs.n - pairs.keep.length,
     sourceCount: pairs.n,
   };
@@ -85,9 +92,10 @@ export function peakInputs(
 /** The curve a peak overlay drawn from these inputs belongs to: the Y and X
  *  the peaks were actually found/fitted on (lib/overlayPlacement.ts). `xKeyUsed`
  *  is the X the markers are positioned on (`fullX`); no value channel = no
- *  curve (-1). */
-export function peakBinding(i: Pick<PeakInputs, "xKeyUsed" | "yKeyUsed">): OverlayBinding {
-  return { yKey: i.yKeyUsed ?? -1, xKey: i.xKeyUsed };
+ *  curve (-1). The fallback branch fits channel 0 (`yKeyUsed` = 0, kept as
+ *  provenance) yet shows no Y, so its markers bind to no curve as well. */
+export function peakBinding(i: Pick<PeakInputs, "xKeyUsed" | "yKeyUsed" | "fallback">): OverlayBinding {
+  return { yKey: i.fallback ? -1 : (i.yKeyUsed ?? -1), xKey: i.xKeyUsed };
 }
 
 /** A saved peak table may be shown only beside the exact input contract it

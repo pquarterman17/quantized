@@ -23,7 +23,7 @@ interface Args {
   selection?: AnalysisSelectionItem;
   setFitResult: (value: MultiFitResult | null) => void;
   setPeakOverlay: (value: ReturnType<typeof useApp.getState>["peakOverlay"]) => void;
-  overlayFitted: (ds: Dataset, fitted: FittedPeak[], used: Pick<PeakInputs, "fullX" | "xKeyUsed" | "yKeyUsed">) => void;
+  overlayFitted: (ds: Dataset, fitted: FittedPeak[], used: Pick<PeakInputs, "fullX" | "xKeyUsed" | "yKeyUsed" | "fallback">) => void;
 }
 
 export function usePeakManualEdits({
