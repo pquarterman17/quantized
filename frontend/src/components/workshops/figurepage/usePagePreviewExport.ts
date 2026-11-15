@@ -17,14 +17,15 @@ import { useShallow } from "zustand/react/shallow";
 
 import { exportFigurePage, renderFigurePageBlob, type FigurePageSpec, type PagePanelSpec } from "../../../lib/api";
 import { clipboardImageSupported } from "../../../lib/clipboard";
-import { copySvgWanted, pagePointCount } from "../../../lib/copySvgBudget";
+import { COPY_SVG_MAX_POINTS, copySvgWanted, pagePointCount } from "../../../lib/copySvgBudget";
+import { copyFigureNative, describeCopiedFormats, nativeClipboardReady } from "../../../lib/desktopClipboard";
 import { chooseExcludedRows, pageExcludedChoiceMatters } from "../../../lib/excludedRowsChoice";
 import { ghosterFor } from "../../../lib/excludedRowsExport";
 import type { ExcludedRowsGhoster } from "../../../lib/figureSpec";
 import type { PageLabelFormat, PageLabelPosition } from "../../../lib/figurepage";
 import { filledCount, type PageSlot } from "../../../lib/figurepageActions";
 import type { PageLayoutSettings } from "../../../lib/pageDocument";
-import { copyOfficeGraphicAsync } from "../../../lib/officeClipboard";
+import { copyOfficeGraphicFormats } from "../../../lib/officeClipboard";
 import { withPageGreyscale } from "../../../lib/pageGreyscale";
 import { runCancellable } from "../../../store/pendingOpActions";
 import { toast } from "../../../store/toasts";
@@ -245,9 +246,15 @@ export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExpor
    *  BEFORE any async work (a render on a browser that can't accept it would
    *  be pure waste), then hand the PENDING renders to `copyOfficeGraphicAsync`
    *  (lib/officeClipboard.ts) rather than awaiting first, so the write stays
-   *  inside the originating click. */
+   *  inside the originating click.
+   *
+   *  gap-4 G14: under the Windows desktop shell with the native clipboard on
+   *  (startup-cached, read synchronously here) the same renders go through
+   *  lib/desktopClipboard.ts instead, and either way the status names the
+   *  format that landed ("vector" only when an SVG did). */
   async function copyNow(): Promise<void> {
-    if (!clipboardImageSupported()) {
+    const native = nativeClipboardReady();
+    if (!native && !clipboardImageSupported()) {
       const msg = "clipboard image unavailable - use Export";
       setStatus(msg);
       toast(msg, "danger");
@@ -271,27 +278,37 @@ export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExpor
     // as `false`, so a refusal only counts when the signal was not aborted.
     // A Cancel that lands after the clipboard write went through cannot undo
     // it, and is reported as the copy it was (lib/exportActive.ts's rule).
+    let failure = "clipboard write refused";
     const done = await runCancellable("Copying figure page…", async (signal) => {
       // PNG requested first: it is the mandatory representation, and the
       // backend serializes renders (one render lock), so the optional SVG
       // should not delay it.
       const png = renderFigurePageBlob({ ...spec, fmt: "png", dpi: COPY_PAGE_DPI }, signal);
-      const svg = copySvgWanted(pagePointCount(spec))
-        ? renderFigurePageBlob({ ...spec, fmt: "svg", svg_text_as_paths: true }, signal)
-        : null;
-      const ok = await copyOfficeGraphicAsync(
+      const points = pagePointCount(spec);
+      const svgWanted = native ? points <= COPY_SVG_MAX_POINTS : copySvgWanted(points);
+      const svg = svgWanted ? renderFigurePageBlob({ ...spec, fmt: "svg", svg_text_as_paths: true }, signal) : null;
+      if (native) {
+        try {
+          return describeCopiedFormats(await copyFigureNative(png, svg, signal));
+        } catch (e) {
+          signal.throwIfAborted();
+          failure = `copy failed: ${e instanceof Error ? e.message : "error"}`;
+          return null;
+        }
+      }
+      const formats = await copyOfficeGraphicFormats(
         { png, svg, pngDpi: COPY_PAGE_DPI, alt: "Quantized figure page" },
         signal,
       );
-      if (!ok) signal.throwIfAborted();
-      return ok;
+      if (!formats) signal.throwIfAborted();
+      return formats ? describeCopiedFormats(formats) : null;
     });
     if (!done) {
       setStatus("copy cancelled");
       return;
     }
-    setStatus(done.value ? "figure page copied to clipboard" : "");
-    if (!done.value) toast("clipboard write refused", "danger");
+    setStatus(done.value ? `figure page copied to clipboard ${done.value}` : failure);
+    if (!done.value) toast(failure, "danger");
   }
 
   return { preview, error, busy, buildSpec, exportNow, copyNow };

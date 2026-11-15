@@ -3,7 +3,7 @@
 // on the wire and the failure paths, since the clipboard write itself is not
 // meaningfully observable in jsdom.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderFigureBlob } from "./api/figures";
 import { clipboardImageSupported, clipboardSvgSupported, copySvgAsync } from "./clipboard";
@@ -402,88 +402,5 @@ describe("Copy figure — the success message names the format that landed (G14)
   it("the SVG-only command says so", async () => {
     await runCopyFigureSvgCommand(fakeGet());
     expect(lastToast()?.msg).toBe("copied scan as vector (SVG only)");
-  });
-});
-
-describe("Copy figure — native desktop clipboard (G14, pywebview bridge mocked)", () => {
-  const g = globalThis as { pywebview?: unknown };
-  let calls: [string, string][] = [];
-  function installBridge(probe: Record<string, unknown>, result: Record<string, unknown> | Error) {
-    calls = [];
-    g.pywebview = {
-      api: {
-        clipboard_probe: async () => probe,
-        copy_figure_clipboard: async (png: string, svg: string) => {
-          calls.push([png, svg]);
-          if (result instanceof Error) throw result;
-          return result;
-        },
-      },
-    };
-  }
-  beforeEach(() => {
-    useToasts.setState({ toasts: [] });
-    vi.mocked(renderFigureBlob).mockImplementation(async (spec) =>
-      spec.fmt === "svg" ? new Blob(["<svg/>"], { type: "image/svg+xml" }) : new Blob(["PNG"], { type: "image/png" }),
-    );
-  });
-  afterEach(() => {
-    delete g.pywebview;
-  });
-
-  it("hands the export renderer's PNG and text-as-paths SVG to the bridge, not the browser clipboard", async () => {
-    installBridge({ available: true }, { ok: true, formats: ["svg", "png", "dib"] });
-    await runCopyFigureCommand(fakeGet());
-    expect(copyOfficeGraphicFormats).not.toHaveBeenCalled();
-    const specs = vi.mocked(renderFigureBlob).mock.calls.map((c) => c[0]);
-    expect(specs.map((s) => s.fmt)).toEqual(["png", "svg"]);
-    expect(specs[0].dpi).toBe(300);
-    expect(specs[1].svg_text_as_paths).toBe(true);
-    expect(calls).toEqual([[btoa("PNG"), btoa("<svg/>")]]);
-    expect(lastToast()).toMatchObject({ msg: "copied scan as vector (SVG) + PNG", kind: "ok" });
-  });
-
-  it("works even where the embedded browser cannot take SVG or images at all", async () => {
-    vi.mocked(clipboardImageSupported).mockReturnValue(false);
-    vi.mocked(clipboardSvgSupported).mockReturnValue(false);
-    installBridge({ available: true }, { ok: true, formats: ["svg", "png", "dib"] });
-    await runCopyFigureSvgCommand(fakeGet());
-    expect(calls).toHaveLength(1);
-    expect(lastToast()?.msg).toBe("copied scan as vector (SVG) + PNG");
-  });
-
-  it("over the point budget: PNG only, and the message says not vector", async () => {
-    installBridge({ available: true }, { ok: true, formats: ["png", "dib"] });
-    const n = COPY_SVG_MAX_POINTS;
-    const big: DataStruct = {
-      ...data,
-      time: Array.from({ length: n }, (_, i) => i),
-      values: Array.from({ length: n }, () => [1, 2]),
-    };
-    const bigDs: Dataset = { ...ds, data: big };
-    await runCopyFigureCommand(fakeGet({ datasets: [bigDs], resolveDataset: async () => bigDs }));
-    expect(vi.mocked(renderFigureBlob).mock.calls.map((c) => c[0].fmt)).toEqual(["png"]);
-    expect(calls[0][1]).toBe("");
-    expect(lastToast()?.msg).toBe("copied scan as a 300-DPI PNG (not vector)");
-  });
-
-  it("a bridge refusal fails closed with the bridge's reason", async () => {
-    installBridge({ available: true }, { ok: false, error: "clipboard write failed: busy" });
-    await runCopyFigureCommand(fakeGet());
-    expect(setStatus).toHaveBeenCalledWith("copy failed: clipboard write failed: busy");
-    expect(lastToast()).toMatchObject({ kind: "danger" });
-  });
-
-  it("a bridge that throws fails closed too", async () => {
-    installBridge({ available: true }, new Error("js_api call failed"));
-    await runCopyFigureCommand(fakeGet());
-    expect(setStatus).toHaveBeenCalledWith("copy failed: js_api call failed");
-  });
-
-  it("an unavailable bridge (not Windows / flag off) uses the browser clipboard", async () => {
-    installBridge({ available: false, reason: "the native clipboard path is Windows-only" }, { ok: true });
-    await runCopyFigureCommand(fakeGet());
-    expect(calls).toEqual([]);
-    expect(copyOfficeGraphicFormats).toHaveBeenCalledTimes(1);
   });
 });

@@ -10,11 +10,18 @@
 //
 // The renders come from the SAME server renderer File ▸ Export uses; this
 // module only moves their bytes. Same family rules as desktopBridge.ts:
-// `false` from `desktopClipboardReady` means "no usable native path — use the
+// `nativeClipboardReady() === false` means "no usable native path — use the
 // browser clipboard", while a bridge that answers `{ok: false, error}` is a
 // real failure the caller must SAY (it throws here), never a silent fallback.
 //
-// Lazy-only: imported by lib/copyFigureCommand.ts, never by an eager module.
+// Readiness is probed ONCE, at startup (`primeNativeClipboard`, from App.tsx's
+// desktop-shell effect), and read synchronously at click time. A probe
+// round-trip in the click would put a bridge `await` in front of the BROWSER
+// clipboard write on every desktop shell where the native path is off
+// (macOS/Linux WebKit, Windows without the flag) — and WebKit refuses a
+// `clipboard.write` that has left the click's activation.
+//
+// Lazy-only: imported by copy commands and App.tsx's dynamic import.
 
 /** The formats the bridge reports writing: "svg" | "png" | "dib". */
 export type NativeClipboardFormat = string;
@@ -29,17 +36,27 @@ function bridge(): ClipboardBridgeApi | null {
   return w.pywebview?.api ?? null;
 }
 
-/** Can the native clipboard write run? Synchronous `false` (no `await`) when
- *  there is no desktop shell, so a browser click spends no microtask on it. */
-export function desktopClipboardReady(): false | Promise<boolean> {
+let nativeReady = false;
+
+/** Probe the bridge once and cache the answer (startup). Never throws; a
+ *  missing or failing bridge caches `false`. */
+export async function primeNativeClipboard(): Promise<boolean> {
   const api = bridge();
   if (typeof api?.clipboard_probe !== "function" || typeof api.copy_figure_clipboard !== "function") {
+    nativeReady = false;
     return false;
   }
-  return api.clipboard_probe().then(
-    (r) => r?.available === true,
-    () => false,
-  );
+  try {
+    nativeReady = (await api.clipboard_probe())?.available === true;
+  } catch {
+    nativeReady = false;
+  }
+  return nativeReady;
+}
+
+/** Synchronous: did the startup probe say the native path can run? */
+export function nativeClipboardReady(): boolean {
+  return nativeReady && typeof bridge()?.copy_figure_clipboard === "function";
 }
 
 async function toBase64(blob: Blob): Promise<string> {
@@ -52,33 +69,51 @@ async function toBase64(blob: Blob): Promise<string> {
   return btoa(bin);
 }
 
+export interface NativeCopyOptions {
+  /** An explicit vector request: a failed or missing SVG fails the copy
+   *  instead of silently degrading to the PNG. */
+  requireSvg?: boolean;
+}
+
 /** Write the rendered figure through the bridge; resolves to the formats it
  *  wrote. Throws with the bridge's own reason on any failure (fail closed).
- *  A failed SVG render drops the SVG and still copies the PNG — the result's
- *  formats then say so, and the caller must not claim vector. */
+ *  Without `requireSvg`, a failed SVG render drops the SVG and still copies
+ *  the PNG — the result's formats then say so, and the caller must not claim
+ *  vector. */
 export async function copyFigureNative(
   png: Promise<Blob | null>,
   svg: Promise<Blob | null> | null,
   signal?: AbortSignal,
+  opts: NativeCopyOptions = {},
 ): Promise<NativeClipboardFormat[]> {
   const api = bridge();
   if (typeof api?.copy_figure_clipboard !== "function") throw new Error("desktop clipboard bridge unavailable");
-  const [pngBlob, svgBlob] = await Promise.all([png, svg ? svg.catch(() => null) : null]);
+  const svgSettled = svg
+    ? svg.then(
+        (b) => ({ blob: b, error: b ? null : "the SVG render was empty" }),
+        (e: unknown) => ({ blob: null, error: e instanceof Error ? e.message : "error" }),
+      )
+    : Promise.resolve({ blob: null, error: "no SVG was rendered" });
+  const [pngBlob, svgOut] = await Promise.all([png, svgSettled]);
   if (!pngBlob) throw new Error("render produced no PNG");
   signal?.throwIfAborted();
-  const [pngB64, svgB64] = await Promise.all([toBase64(pngBlob), svgBlob ? toBase64(svgBlob) : ""]);
+  if (opts.requireSvg && !svgOut.blob) throw new Error(`vector render failed: ${svgOut.error}`);
+  const [pngB64, svgB64] = await Promise.all([toBase64(pngBlob), svgOut.blob ? toBase64(svgOut.blob) : ""]);
   signal?.throwIfAborted();
   const result = await api.copy_figure_clipboard(pngB64, svgB64);
   if (result?.ok !== true) {
     throw new Error(typeof result?.error === "string" && result.error ? result.error : "clipboard write refused");
   }
   const formats = Array.isArray(result.formats) ? result.formats.filter((f): f is string => typeof f === "string") : [];
+  if (opts.requireSvg && !formats.includes("svg")) throw new Error("the clipboard did not take the vector format");
   return formats;
 }
 
-/** The user-facing name of what landed — never "vector" unless an SVG did. */
+/** The user-facing name of what landed — never "vector" unless an SVG did.
+ *  Takes native names ("svg"/"png"/"dib") or browser MIME types. */
 export function describeCopiedFormats(formats: readonly string[]): string {
-  if (formats.includes("svg")) return "as vector (SVG) + PNG";
-  if (formats.includes("png")) return "as a 300-DPI PNG (not vector)";
+  const has = (short: string, mime: string) => formats.includes(short) || formats.includes(mime);
+  if (has("svg", "image/svg+xml")) return has("png", "image/png") ? "as vector (SVG) + PNG" : "as vector (SVG only)";
+  if (has("png", "image/png")) return "as a 300-DPI PNG (not vector)";
   return "";
 }

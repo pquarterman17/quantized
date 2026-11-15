@@ -2,9 +2,12 @@
 // never touches a real Windows clipboard (the Python half is mock-tested in
 // tests/test_desktop_bridge_clipboard.py).
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { afterEach, describe, expect, it } from "vitest";
 
-import { copyFigureNative, describeCopiedFormats, desktopClipboardReady } from "./desktopClipboard";
+import { copyFigureNative, describeCopiedFormats, nativeClipboardReady, primeNativeClipboard } from "./desktopClipboard";
 
 const g = globalThis as { pywebview?: unknown };
 
@@ -12,25 +15,36 @@ function install(api: Record<string, unknown>) {
   g.pywebview = { api };
 }
 
-afterEach(() => {
+afterEach(async () => {
   delete g.pywebview;
+  await primeNativeClipboard();
 });
 
-describe("desktopClipboardReady", () => {
-  it("is a synchronous false in a browser (no shell)", () => {
-    expect(desktopClipboardReady()).toBe(false);
+describe("startup probe cache (primeNativeClipboard / nativeClipboardReady)", () => {
+  it("is false in a browser (no shell), with no probe at all", async () => {
+    expect(await primeNativeClipboard()).toBe(false);
+    expect(nativeClipboardReady()).toBe(false);
   });
 
-  it("is a synchronous false for a shell without the clipboard methods", () => {
+  it("is false for a shell without the clipboard methods", async () => {
     install({ probe: async () => ({}) });
-    expect(desktopClipboardReady()).toBe(false);
+    expect(await primeNativeClipboard()).toBe(false);
+    expect(nativeClipboardReady()).toBe(false);
   });
 
-  it("follows the bridge's own probe", async () => {
-    install({ clipboard_probe: async () => ({ available: true }), copy_figure_clipboard: async () => ({}) });
-    expect(await desktopClipboardReady()).toBe(true);
+  it("caches the bridge's own answer; reading it never calls the bridge", async () => {
+    let probes = 0;
+    const probe = async () => {
+      probes += 1;
+      return { available: true };
+    };
+    install({ clipboard_probe: probe, copy_figure_clipboard: async () => ({}) });
+    expect(await primeNativeClipboard()).toBe(true);
+    expect([nativeClipboardReady(), nativeClipboardReady()]).toEqual([true, true]);
+    expect(probes).toBe(1);
     install({ clipboard_probe: async () => ({ available: false }), copy_figure_clipboard: async () => ({}) });
-    expect(await desktopClipboardReady()).toBe(false);
+    expect(await primeNativeClipboard()).toBe(false);
+    expect(nativeClipboardReady()).toBe(false);
   });
 
   it("a probe that throws means no native path, not a crash", async () => {
@@ -40,7 +54,19 @@ describe("desktopClipboardReady", () => {
       },
       copy_figure_clipboard: async () => ({}),
     });
-    expect(await desktopClipboardReady()).toBe(false);
+    expect(await primeNativeClipboard()).toBe(false);
+  });
+
+  it("a cached true is dropped if the bridge disappears", async () => {
+    install({ clipboard_probe: async () => ({ available: true }), copy_figure_clipboard: async () => ({}) });
+    await primeNativeClipboard();
+    delete g.pywebview;
+    expect(nativeClipboardReady()).toBe(false);
+  });
+
+  it("App primes it once at startup in the desktop shell", () => {
+    const app = readFileSync(resolve(__dirname, "../App.tsx"), "utf8");
+    expect(app).toMatch(/import\("\.\/lib\/desktopClipboard"\)\.then\(\(m\) => m\.primeNativeClipboard\(\)/);
   });
 });
 
@@ -98,11 +124,35 @@ describe("copyFigureNative", () => {
   });
 });
 
+describe("copyFigureNative — requireSvg (explicit vector request)", () => {
+  it("a failed SVG render fails the copy and never touches the clipboard", async () => {
+    const calls: unknown[] = [];
+    install({ copy_figure_clipboard: async (...a: unknown[]) => (calls.push(a), { ok: true, formats: ["png"] }) });
+    await expect(
+      copyFigureNative(Promise.resolve(new Blob(["P"])), Promise.reject(new Error("500")), undefined, { requireSvg: true }),
+    ).rejects.toThrow("vector render failed: 500");
+    await expect(copyFigureNative(Promise.resolve(new Blob(["P"])), null, undefined, { requireSvg: true })).rejects.toThrow(
+      "vector render failed",
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it("a bridge that wrote no SVG fails a vector request", async () => {
+    install({ copy_figure_clipboard: async () => ({ ok: true, formats: ["png", "dib"] }) });
+    await expect(
+      copyFigureNative(Promise.resolve(new Blob(["P"])), Promise.resolve(new Blob(["<svg/>"])), undefined, { requireSvg: true }),
+    ).rejects.toThrow("did not take the vector format");
+  });
+});
+
 describe("describeCopiedFormats", () => {
   it("claims vector only for an SVG", () => {
     expect(describeCopiedFormats(["svg", "png", "dib"])).toBe("as vector (SVG) + PNG");
     expect(describeCopiedFormats(["png", "dib"])).toBe("as a 300-DPI PNG (not vector)");
     expect(describeCopiedFormats(["png", "text/html"])).toBe("as a 300-DPI PNG (not vector)");
     expect(describeCopiedFormats([])).toBe("");
+    // Browser MIME names describe the same way.
+    expect(describeCopiedFormats(["image/png", "text/html", "image/svg+xml"])).toBe("as vector (SVG) + PNG");
+    expect(describeCopiedFormats(["image/svg+xml"])).toBe("as vector (SVG only)");
   });
 });
