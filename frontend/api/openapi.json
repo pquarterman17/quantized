@@ -8275,6 +8275,13 @@
             ],
             "title": "Lines"
           },
+          "max_lines": {
+            "default": 0,
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Max Lines",
+            "type": "integer"
+          },
           "note": {
             "default": "",
             "title": "Note",

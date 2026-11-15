@@ -138,6 +138,25 @@ describe("MapStage static 3-D", () => {
     expect(view3d()).toBeUndefined();
   });
 
+  it("a 3-D scatter of scattered data previews and exports the ORIGINAL points", async () => {
+    useApp.getState().setMapView3d("scan", { kind: "scatter3d", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "" });
+    vi.mocked(askParams).mockImplementation(async (_t, fields) => ({
+      ...Object.fromEntries(fields.map((f) => [f.key, f.default])), fmt: "svg",
+    }));
+    render(<MapStage />);
+    await screen.findByAltText("3-D map preview");
+    const preview = vi.mocked(renderMapFigure).mock.calls.at(-1)![0];
+    // the offline regrid is not the measured grid: the 16 source rows go out, no z_grid
+    expect(preview).toMatchObject({ contour_source: "points", kind: "scatter3d" });
+    expect(preview.z_grid).toBeUndefined();
+    expect(preview.z_values).toEqual(Array.from({ length: 16 }, (_, k) => 1 + k));
+    expect((await screen.findByText(/16 original points/)).textContent).toMatch(/not the regridded surface/);
+    fireEvent.click(screen.getByTitle(/^Export map/));
+    await waitFor(() => expect(useApp.getState().status).toBe("exported scan_map.svg"));
+    const exported = vi.mocked(exportMapFigure).mock.calls[0]![0];
+    expect({ ...exported, fmt: "", filename: "" }).toEqual({ ...preview, fmt: "", filename: "" });
+  });
+
   it("a server refusal (too few points) is shown as the reason, not a blank view", async () => {
     vi.mocked(renderMapFigure).mockRejectedValueOnce(new Error("a 3-D waterfall needs at least 2 curves"));
     useApp.getState().setMapView3d("scan", { kind: "waterfall", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "" });

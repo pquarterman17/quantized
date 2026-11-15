@@ -15,7 +15,7 @@ import { DEFAULT_MAP3D, MAP3D_KINDS, type Map3dView } from "../../lib/mapView3d"
 import { mapViewFor } from "../../lib/mapView";
 import { useApp } from "../../store/useApp";
 import { FIGURE_STYLES } from "../workshops/figurebuilder/figureOutputConstants";
-import { FLAT_CHOICE, MAP3D_LABELS } from "./map3dRequest";
+import { FLAT_CHOICE, MAP3D_LABELS, WATERFALL_MAX_LINES } from "./map3dRequest";
 
 const ROW = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 11 } as const;
 
@@ -123,7 +123,8 @@ export default function Map3dPanel({ datasetId, onClose }: { datasetId: string |
           <TextField label="Title" value={view3d.title} width={140} onCommit={(title) => edit({ title })} />
           <div style={{ fontSize: 11, color: "var(--text-dim)", whiteSpace: "normal", lineHeight: 1.4 }}>
             A static render; ⤓ exports exactly this view. Colormap is the toolbar's “map”. Needs a grid of at least 2×2
-            {view3d.kind === "waterfall" ? " and two or more curves (rows)" : ""}.
+            {view3d.kind === "waterfall" ? ` and two or more rows; at most ${WATERFALL_MAX_LINES} evenly stepped rows are drawn (the preview says how many)` : ""}
+            {view3d.kind === "scatter3d" ? "; scattered data plots your original points, not the regridded surface" : ""}.
           </div>
         </>
       ) : (

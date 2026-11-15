@@ -211,7 +211,7 @@ export default function MapStage({ dataset }: MapStageProps) {
       loading: !payloadFresh,
       view: {
         cmap, logZ, colorLimits: mapView.colorLimits, contour: { on: contourOn, levelCount: contourLevelCount, scale: contourScale },
-        marks: { slices: mapView.slices, annotations: mapView.annotations, space: cutSpace }, view3d: mapView.view3d,
+        marks: { slices: mapView.slices, annotations: mapView.annotations, space: cutSpace }, view3d: mapView.view3d, source: mapActive ? { data: mapActive.data, keys } : undefined,
       },
       stem: active?.name.replace(/\.[^.]+$/, "") ?? "map", setStatus, setView3d: (v) => setMapView3d(dsId, v),
     });
@@ -384,7 +384,7 @@ export default function MapStage({ dataset }: MapStageProps) {
       )}
 
       {mapView.view3d && payload && (
-        <Map3dPreview payload={payload} fresh={payloadFresh} view3d={mapView.view3d} cmap={cmap} logZ={logZ} colorLimits={mapView.colorLimits} top={hostTop} />
+        <Map3dPreview payload={payload} fresh={payloadFresh} view3d={mapView.view3d} cmap={cmap} logZ={logZ} colorLimits={mapView.colorLimits} top={hostTop} data={mapActive?.data} keys={keys} />
       )}
       {payload?.interpolated && <MapInterpolatedBadge nPoints={payload.interpolated.nPoints} />}
 

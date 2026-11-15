@@ -8,7 +8,39 @@
 // that body, so the body IS the preview's cache key.
 
 import { DEFAULT_MAP3D, MAP3D_KINDS, type Map3dView } from "../../lib/mapView3d";
-import type { MapExportOptions } from "./mapFigureExport";
+import type { MapPayload } from "../../lib/mapdataFetch";
+import type { DataStruct } from "../../lib/types";
+import type { MapExportOptions, MapExportView } from "./mapFigureExport";
+
+/** A 3-D waterfall of a grid draws at most this many evenly stepped rows, so a
+ *  200-row map reads as lines, not a dense surface (the route's `max_lines`). */
+export const WATERFALL_MAX_LINES = 40;
+
+export interface MapSource {
+  data: DataStruct;
+  keys: readonly [number, number, number];
+}
+
+/** The ORIGINAL x/y/z columns, when a 3-D scatter should plot them: the data was
+ *  scattered (the backend interpolated it, or the offline fallback regridded it)
+ *  rather than measured on a grid. Genuinely gridded data keeps the grid path. */
+export function rawSource(p: MapPayload, view: MapExportView): { x: number[]; y: number[]; z: number[] } | undefined {
+  const src = view.source;
+  if (view.view3d?.kind !== "scatter3d" || !src || !(p.interpolated || p.fallback)) return undefined;
+  const col = (k: number) => src.data.values.map((row) => row[k]);
+  return { x: col(src.keys[0]), y: col(src.keys[1]), z: col(src.keys[2]) };
+}
+
+/** One line under the preview saying what is actually drawn. */
+export function view3dCaption(p: MapPayload, view: MapExportView): string {
+  const raw = rawSource(p, view);
+  if (raw) return `Plotting your ${raw.z.length} original points (not the regridded surface).`;
+  const rows = p.yAxis.length;
+  if (view.view3d?.kind === "waterfall") {
+    return `Drawing ${Math.min(rows, WATERFALL_MAX_LINES)} of ${rows} grid rows${rows > WATERFALL_MAX_LINES ? " (evenly stepped)" : ""}.`;
+  }
+  return p.interpolated ? `Interpolated onto a regular grid from ${p.interpolated.nPoints} points.` : "";
+}
 
 export const FLAT_CHOICE = "2-D map";
 /** The dialog's / panel's view choices, by the kind each one means. */

@@ -9017,6 +9017,11 @@ export interface components {
             /** Lines */
             lines?: number[][] | null;
             /**
+             * Max Lines
+             * @default 0
+             */
+            max_lines?: number;
+            /**
              * Note
              * @default
              */

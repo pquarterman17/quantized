@@ -22,7 +22,7 @@ own it. Filenames are sanitized before reaching the Content-Disposition header.
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from quantized.heavy_import import heavy_imports
 from quantized.routes._errors import call_calc
@@ -102,6 +102,9 @@ class MapFigureRequest(BaseModel):
     height_in: float | None = None
     view_elev: float = 30.0
     view_azim: float = -60.0
+    # 3-D waterfall of a grid: draw at most this many evenly stepped rows
+    # (0 = every row).
+    max_lines: int = Field(default=0, ge=0, le=1000)
     # A footnote under the map (e.g. "Interpolated onto a regular grid"), so the
     # figure says what the screen badge says.
     note: str = ""
@@ -133,7 +136,7 @@ def export_map_figure(req: MapFigureRequest) -> Response:
         title=req.title, x_label=req.x_label, y_label=req.y_label, z_label=req.z_label,
         width_in=req.width_in, height_in=req.height_in,
         view_elev=req.view_elev, view_azim=req.view_azim, z_limits=req.z_limits,
-        equal_aspect=req.equal_aspect, note=req.note, lines=req.lines,
+        equal_aspect=req.equal_aspect, note=req.note, lines=req.lines, max_lines=req.max_lines,
         colorbar_log10=req.colorbar_log10,
         labels=[lab.model_dump() for lab in req.labels] if req.labels else None,
     )

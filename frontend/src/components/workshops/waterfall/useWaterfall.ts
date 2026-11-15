@@ -16,6 +16,7 @@ import {
   waterfallToCSV,
   type OffsetMode,
   type WaterfallOptions,
+  type WaterfallSeries,
 } from "../../../lib/waterfall";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
@@ -34,6 +35,8 @@ export interface WaterfallState {
   /** Offset-applied, union-aligned data for rendering: x + one y column per trace. */
   aligned: { x: number[]; ys: (number | null)[][] };
   traceLabels: string[];
+  /** The included datasets' raw channel series (no offset), for the 3-D section. */
+  series: WaterfallSeries[];
   count: number; // number of included datasets
   setIncluded: (id: string, on: boolean) => void;
   setChannel: (c: string) => void;
@@ -158,6 +161,7 @@ export function useWaterfall(): WaterfallState {
     logY,
     aligned,
     traceLabels: traces.map((t) => t.label),
+    series,
     count: included.length,
     setIncluded,
     setChannel: setChannelRaw,

@@ -170,7 +170,7 @@ def test_points_missing_z_values_raises() -> None:
 
 def test_points_kind_restricted_to_contour_kinds() -> None:
     x, y, z = _demo_points()
-    for bad_kind in ("heatmap", "surface", "scatter3d", "waterfall"):
+    for bad_kind in ("heatmap", "surface", "waterfall"):
         with pytest.raises(ValueError, match="only supports kind"):
             render_map_figure(
                 x, y, None, contour_source="points", z_values=z, kind=bad_kind
@@ -311,3 +311,59 @@ def test_3d_too_few_finite_cells_is_refused() -> None:
         render_map_figure(x, y, z, kind="surface", fmt="png")
     with pytest.raises(ValueError, match="at least 3 finite"):
         render_map_figure(x, y, z, kind="scatter3d", fmt="png")
+
+
+# ── 3-D scatter of RAW points / stepped waterfall rows (gap-5 lane F) ───────
+
+
+def _capture(monkeypatch: pytest.MonkeyPatch, name: str) -> list[tuple[Any, ...]]:
+    from mpl_toolkits.mplot3d import Axes3D
+
+    calls: list[tuple[Any, ...]] = []
+    real = getattr(Axes3D, name)
+
+    def spy(self: Any, *a: Any, **kw: Any) -> Any:
+        calls.append(a)
+        return real(self, *a, **kw)
+
+    monkeypatch.setattr(Axes3D, name, spy)
+    return calls
+
+
+def test_points_scatter3d_plots_exactly_the_source_points(monkeypatch: pytest.MonkeyPatch) -> None:
+    x, y, z = _demo_points()
+    x[3] = np.nan  # a non-finite row is dropped, nothing else is touched
+    calls = _capture(monkeypatch, "scatter")
+    data = render_map_figure(
+        x, y, None, contour_source="points", z_values=z, kind="scatter3d", fmt="png"
+    )
+    assert data[:4] == b"\x89PNG"
+    keep = np.isfinite(x) & np.isfinite(y) & np.isfinite(z)
+    (px, py, pz) = calls[0][:3]
+    assert np.array_equal(px, x[keep])
+    assert np.array_equal(py, y[keep])
+    assert np.array_equal(pz, z[keep])
+    assert len(px) == 59  # the raw count, not a resampled grid's
+
+
+def test_points_scatter3d_validates_angles_and_count() -> None:
+    x, y, z = _demo_points()
+    with pytest.raises(ValueError, match="view_elev"):
+        render_map_figure(x, y, None, contour_source="points", z_values=z, kind="scatter3d",
+                          view_elev=95.0)
+    with pytest.raises(ValueError, match="at least 3 finite"):
+        render_map_figure(x[:2], y[:2], None, contour_source="points", z_values=z[:2],
+                          kind="scatter3d")
+
+
+def test_waterfall_max_lines_steps_rows_and_keeps_the_ends(monkeypatch: pytest.MonkeyPatch) -> None:
+    x = np.linspace(0.0, 1.0, 6)
+    y = np.linspace(0.0, 99.0, 100)
+    z = np.add.outer(y, x)
+    calls = _capture(monkeypatch, "plot")
+    render_map_figure(x, y, z, kind="waterfall", fmt="png", max_lines=10)
+    drawn = [float(c[1][0]) for c in calls]
+    assert len(drawn) == 10 and drawn[0] == 0.0 and drawn[-1] == 99.0
+    calls.clear()
+    render_map_figure(x, y, z, kind="waterfall", fmt="png")  # 0 = every row
+    assert len(calls) == 100

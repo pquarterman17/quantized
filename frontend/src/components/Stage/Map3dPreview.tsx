@@ -9,14 +9,15 @@
 // JSON is the refetch key; a server refusal (too few points, a waterfall of one
 // curve, …) is shown as the reason instead of a stale picture.
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
-import { renderMapFigure } from "../../lib/api/mapFigure";
 import type { ColormapName } from "../../lib/colormap";
 import type { MapPayload } from "../../lib/mapdataFetch";
+import type { DataStruct } from "../../lib/types";
 import type { Map3dView } from "../../lib/mapView3d";
 import { mapFigureBody } from "./mapFigureExport";
-import { view3dOptions } from "./map3dRequest";
+import { view3dCaption, view3dOptions } from "./map3dRequest";
+import { useMap3dImage } from "./useMap3dImage";
 
 export interface Map3dPreviewProps {
   payload: MapPayload | null;
@@ -28,53 +29,22 @@ export interface Map3dPreviewProps {
   colorLimits: readonly [number | null, number | null] | null;
   /** Top inset (px): clears the toolbar dock, as the 2-D canvas host does. */
   top: number;
+  /** The map's columns and picks (see `MapExportView.source`). */
+  data: DataStruct | undefined;
+  keys: readonly [number, number, number];
 }
 
-const dataUrl = (b: Blob): Promise<string> =>
-  new Promise((ok, no) => {
-    const r = new FileReader();
-    r.onload = () => ok(String(r.result));
-    r.onerror = () => no(new Error("the 3-D view could not be read"));
-    r.readAsDataURL(b);
-  });
-
-type Shot = { url: string } | { error: string } | null;
-
-export default function Map3dPreview({ payload, fresh, view3d, cmap, logZ, colorLimits, top }: Map3dPreviewProps) {
-  const [shot, setShot] = useState<Shot>(null);
-  const body = useMemo(
-    () =>
-      payload && fresh
-        ? mapFigureBody(
-            payload,
-            { cmap, logZ, colorLimits, contour: { on: false, levelCount: 0, scale: "linear" }, view3d },
-            view3dOptions(view3d, "png", "preview"),
-          )
-        : null,
-    [payload, fresh, view3d, cmap, logZ, colorLimits],
+export default function Map3dPreview({ payload, fresh, view3d, cmap, logZ, colorLimits, top, data, keys }: Map3dPreviewProps) {
+  const view = useMemo(
+    () => ({ cmap, logZ, colorLimits, contour: { on: false, levelCount: 0, scale: "linear" as const }, view3d, ...(data ? { source: { data, keys } } : {}) }),
+    [cmap, logZ, colorLimits, view3d, data, keys],
   );
-  const key = useMemo(() => (body ? JSON.stringify(body) : null), [body]);
-
-  useEffect(() => {
-    if (!body) return;
-    const ctl = new AbortController();
-    const timer = setTimeout(() => {
-      renderMapFigure(body, ctl.signal).then(
-        // A data: URL, not a blob: URL -- the app's CSP is `img-src 'self' data:`.
-        // The previous picture stays up until this one is ready.
-        (blob) => dataUrl(blob).then((url) => !ctl.signal.aborted && setShot({ url })),
-        (e: unknown) => {
-          if (!ctl.signal.aborted) setShot({ error: e instanceof Error ? e.message : "the 3-D view could not be rendered" });
-        },
-      );
-    }, 200);
-    return () => {
-      clearTimeout(timer);
-      ctl.abort();
-    };
-    // `key` is the body's value: object identity alone would refetch on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  const body = useMemo(
+    () => (payload && fresh ? mapFigureBody(payload, view, view3dOptions(view3d, "png", "preview")) : null),
+    [payload, fresh, view, view3d],
+  );
+  const caption = payload ? view3dCaption(payload, view) : "";
+  const shot = useMap3dImage(body);
 
   return (
     <div
@@ -83,10 +53,15 @@ export default function Map3dPreview({ payload, fresh, view3d, cmap, logZ, color
       style={{ position: "absolute", inset: 8, top, zIndex: 2, display: "grid", placeItems: "center", background: "var(--surface-1)", overflow: "hidden" }}
     >
       {shot && "url" in shot ? (
-        <img alt="3-D map preview" src={shot.url} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+        <img alt="3-D map preview" src={shot.url} style={{ maxWidth: "100%", maxHeight: "calc(100% - 22px)", objectFit: "contain" }} />
       ) : (
-        <div role={shot ? "alert" : "status"} className="qzk-ds-meta" style={{ padding: 16, maxWidth: 420, textAlign: "center", color: shot ? "var(--danger)" : "var(--text-dim)" }}>
+        <div role={shot ? "alert" : "status"} className="qzk-ds-meta qzk-msg" style={{ padding: 16, maxWidth: 420, textAlign: "center", color: shot ? "var(--danger)" : "var(--text-dim)" }}>
           {shot ? `3-D view not drawn — ${shot.error}` : "Rendering 3-D view…"}
+        </div>
+      )}
+      {caption && (
+        <div data-map3d-caption="" style={{ position: "absolute", left: 0, right: 0, bottom: 2, textAlign: "center", fontSize: 11, color: "var(--text-dim)" }}>
+          {caption}
         </div>
       )}
     </div>

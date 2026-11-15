@@ -31,7 +31,7 @@ import { interpolatedNote, type MapPayload } from "../../lib/mapdataFetch";
 import { exportCanvasPng } from "../../lib/plotExport";
 import { runCancellable } from "../../store/pendingOpActions";
 import { askParams } from "../overlays/ParamDialog";
-import { choose3d, FLAT_CHOICE, MAP3D_LABELS, view3dOptions } from "./map3dRequest";
+import { choose3d, FLAT_CHOICE, MAP3D_LABELS, rawSource, view3dOptions, WATERFALL_MAX_LINES, type MapSource } from "./map3dRequest";
 import { sameMap3d } from "../../lib/mapView3d";
 import { effectiveColorLimits, minPositive } from "./mapRender";
 import { mapMarks } from "./mapSliceGeometry";
@@ -55,6 +55,9 @@ export interface MapExportView {
   /** Static 3-D view: the figure is the surface / scatter / waterfall the stage
    *  previews (`map3dRequest.ts`), not the 2-D map. */
   view3d?: Map3dView;
+  /** The map's raw columns and picks: a 3-D scatter of data that is NOT
+   *  gridded plots these original points, not the regridded surface. */
+  source?: MapSource;
   marks?: { slices: readonly MapSliceDef[]; annotations: readonly MapAnnotation[]; space: CutSpace | null };
 }
 
@@ -93,6 +96,21 @@ function zLimits(p: MapPayload, view: MapExportView): [number, number] | null {
   return lim && view.logZ ? [Math.log10(lim[0]), Math.log10(lim[1])] : lim;
 }
 
+/** The raw measured points as the route's scattered source: rows with a
+ *  non-finite value (or, under a log scale, a non-positive z) are dropped whole,
+ *  and every kept point goes out unchanged -- no grid, no resampling. */
+function pointsBody(raw: { x: number[]; y: number[]; z: number[] }, view: MapExportView) {
+  const out = { x_axis: [] as number[], y_axis: [] as number[], z_values: [] as number[], contour_source: "points" };
+  raw.z.forEach((v, i) => {
+    const z = zCell(v, view);
+    if (z === null || !Number.isFinite(raw.x[i]) || !Number.isFinite(raw.y[i])) return;
+    out.x_axis.push(raw.x[i]);
+    out.y_axis.push(raw.y[i]);
+    out.z_values.push(z);
+  });
+  return out;
+}
+
 /** The /api/export/map-figure body for what this map is showing. Pure. */
 export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOptions): MapFigureSpec {
   const v3 = view.view3d;
@@ -100,8 +118,9 @@ export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOp
   const limits = zLimits(p, view);
   // Slices, labels and the contour overlay are 2-D marks; a 3-D figure has none.
   const marks = view.marks && !v3 ? mapMarks(p, view.marks.slices, view.marks.annotations, view.marks.space) : null;
+  const raw = rawSource(p, view);
   const contour = v3
-    ? { kind: v3.kind, view_elev: v3.elev, view_azim: v3.azim }
+    ? { kind: v3.kind, view_elev: v3.elev, view_azim: v3.azim, ...(v3.kind === "waterfall" ? { max_lines: WATERFALL_MAX_LINES } : {}) }
     : view.contour.on
     ? {
         kind: "contourf",
@@ -112,16 +131,18 @@ export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOp
       }
     : { kind: "heatmap" };
   return {
-    x_axis: p.xAxis,
-    y_axis: p.yAxis,
-    z_grid: p.zGrid.map((row) => row.map((v) => zCell(v, view))),
+    ...(raw ? pointsBody(raw, view) : {
+      x_axis: p.xAxis,
+      y_axis: p.yAxis,
+      z_grid: p.zGrid.map((row) => row.map((v) => zCell(v, view))),
+    }),
     ...(limits ? { z_limits: limits } : {}),
     // The canvas letterboxes a map whose axes share a unit (`mapRender.plotRect`).
     ...(!v3 && shouldLockAspect(p.xUnit, p.yUnit) ? { equal_aspect: true } : {}),
     ...(marks?.lines.length ? { lines: marks.lines } : {}),
     ...(marks?.labels.length ? { labels: marks.labels } : {}),
     ...contour,
-    ...(p.interpolated ? { note: interpolatedNote(p.interpolated.nPoints) } : {}),
+    ...(p.interpolated && !raw ? { note: interpolatedNote(p.interpolated.nPoints) } : {}),
     fmt: o.fmt,
     style: o.style,
     cmap: MPL_CMAP[view.cmap] ?? "viridis",
