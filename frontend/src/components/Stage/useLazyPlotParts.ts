@@ -32,6 +32,7 @@ import { awaitsOriginEscapes, originEscapesSettled } from "../../lib/originEscap
 import type { AxisFormat, SeriesStyle } from "../../lib/types";
 import { hasHorizontalBars, orientTurnReady, orientTurnSettled } from "../../lib/uplotOrient";
 import { regionDecorReady, regionDecorSettled } from "../../lib/regionDecorLoader";
+import { loadMarks, marksPending, usesMarks } from "../../lib/marksLoader";
 import { richLabelsReady, richLabelsSettled } from "../../lib/richLabelsLoader";
 
 /** What the startup chunks would change on this plot: every label it draws
@@ -44,6 +45,8 @@ export interface LazyDecorNeeds {
   regionResult?: boolean;
   /** Horizontal bars: the plot is turned (lib/uplotOrient.ts). */
   turned?: boolean;
+  /** A series asks for spline / drop lines / size-by (lib/marksLoader.ts): rebuild once that chunk settles. */
+  marks?: boolean;
 }
 
 /** The `LazyDecorNeeds` of a viewport's labels, payload and overlays. */
@@ -58,6 +61,7 @@ export function plotDecorNeeds(
     texts: [...labels, payload?.xLabel, ...(payload?.series.map((s) => s.label) ?? []), ...(annotations ?? []).map((a) => a.text)],
     overlays: overlays > 0,
     ...(hasHorizontalBars(styles) ? { turned: true } : {}),
+    ...(styles?.some(usesMarks) ? { marks: true } : {}),
   };
 }
 
@@ -73,11 +77,12 @@ export function useLazyPlotParts(
   const needEscapes = decor.texts.some(awaitsOriginEscapes);
   const needDecor = decor.overlays && !regionDecorReady();
   const needTurn = !!decor.turned && !orientTurnReady();
+  const needMarks = !!decor.marks && marksPending();
   // The canvas title drawing (lib/richLabelsLoader.ts): any plot with a label
   // rebuilds once it lands, so rich / moved / draggable titles appear.
   const needTitles = !richLabelsReady() && decor.texts.some((t) => !!t?.trim());
   useEffect(() => {
-    if (!needExtras && !needGadgets && !needTools && !needEscapes && !needDecor && !needTitles && !needTurn) return;
+    if (!needExtras && !needGadgets && !needTools && !needEscapes && !needDecor && !needTitles && !needTurn && !needMarks) return;
     let live = true;
     // A failed chunk load leaves that part undrawn (the plot itself is
     // complete without it); the next need retries. The startup chunks never
@@ -90,6 +95,7 @@ export function useLazyPlotParts(
       needDecor ? regionDecorSettled : null,
       needTitles ? richLabelsSettled : null,
       needTurn ? orientTurnSettled : null,
+      needMarks ? loadMarks() : null,
     ]).then(
       () => {
         if (live) onReady();
@@ -100,7 +106,7 @@ export function useLazyPlotParts(
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `onReady` is a fresh closure each render; only the needs decide.
-  }, [needExtras, needGadgets, needTools, needEscapes, needDecor, needTitles, needTurn]);
+  }, [needExtras, needGadgets, needTools, needEscapes, needDecor, needTitles, needTurn, needMarks]);
 }
 
 /** `useLazyPlotParts` for a renderer that rebuilds on a counter (the

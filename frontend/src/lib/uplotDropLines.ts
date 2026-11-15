@@ -69,7 +69,7 @@ export function dropLinesPlugin(drops: Map<number, DropLines>): uPlot.Plugin {
 export function dropLinePlugins(styles: readonly (SeriesStyle | undefined)[] | undefined): uPlot.Plugin[] {
   const drops = new Map<number, DropLines>();
   styles?.forEach((st, i) => {
-    if (st?.dropLines) drops.set(i + 1, st.dropLines);
+    if (st?.dropLines && st.bars !== "horizontal") drops.set(i + 1, st.dropLines); // a turned plot: not drawn (the export warns)
   });
   return drops.size > 0 ? [dropLinesPlugin(drops)] : [];
 }

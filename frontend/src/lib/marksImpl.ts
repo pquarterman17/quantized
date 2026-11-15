@@ -20,13 +20,16 @@ export function sizeScatterPlugin(specs: Map<number, ColorScatterSpec>): uPlot.P
         const { ctx } = u;
         const { left, top, width, height } = u.bbox;
         const xs = u.data[0];
+        const k = window.devicePixelRatio || 1; // a diameter is CSS px, as for uPlot's own points and the key
         ctx.save();
         ctx.beginPath();
         ctx.rect(left, top, width, height);
         ctx.clip();
+        const shown: ColorScatterSpec[] = [];
         for (const [col, spec] of specs) {
           const ys = u.data[col];
-          if (!ys || !spec.diam) continue;
+          if (!ys || !spec.diam || u.series[col]?.show === false) continue;
+          shown.push(spec);
           const scaleKey = u.series[col]?.scale ?? "y";
           const flat = seriesStrokeColor(u, col);
           for (let i = 0; i < xs.length; i++) {
@@ -36,10 +39,10 @@ export function sizeScatterPlugin(specs: Map<number, ColorScatterSpec>): uPlot.P
             if (x == null || y == null || d == null) continue;
             const fill = spec.flat ? flat : colorScatterFill(spec, i);
             if (fill === null) continue;
-            paintColorPoint(ctx, u.valToPos(x, "x", true), u.valToPos(y, scaleKey, true), d / 2, fill, spec.shape, spec.hollow);
+            paintColorPoint(ctx, u.valToPos(x, "x", true), u.valToPos(y, scaleKey, true), (d / 2) * k, fill, spec.shape, spec.hollow);
           }
         }
-        drawSizeKey(u, [...specs.values()]);
+        drawSizeKey(u, shown); // a legend-hidden series takes its key with it
         ctx.restore();
       },
     },

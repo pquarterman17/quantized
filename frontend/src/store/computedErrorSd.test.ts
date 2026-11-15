@@ -111,3 +111,18 @@ describe("computed error: percent of value (re-verified)", () => {
     expect(state().errorRoles).toEqual([{ channel: 4, target: 0, axis: "y", side: "both" }]);
   });
 });
+
+describe("replicate selection follows the target and the dataset (review)", () => {
+  it("making a ticked replicate the target unticks it, and it is not silently dropped later", async () => {
+    const { rerender } = render(createElement(ErrorRolesCard, { active: state() }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Computed error source" }), { target: { value: "sd" } });
+    for (const n of ["r1", "r2", "r3"]) fireEvent.click(screen.getByRole("checkbox", { name: `Replicate ${n}` }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Computed error series" }), { target: { value: "1" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Computed error series" }), { target: { value: "0" } });
+    expect((screen.getByRole("checkbox", { name: "Replicate r1" }) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByRole("checkbox", { name: "Replicate r2" }) as HTMLInputElement).checked).toBe(true);
+    // another dataset: column indices mean other columns, so the ticks reset
+    rerender(createElement(ErrorRolesCard, { active: { ...state(), id: "other" } }));
+    expect((screen.getByRole("checkbox", { name: "Replicate r2" }) as HTMLInputElement).checked).toBe(false);
+  });
+});

@@ -40,7 +40,14 @@ from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
 from quantized.heavy_import import heavy_imports
 
 from .figure_errorbars import apply_error_bars
-from .figure_marks import DropLine, apply_drop_lines, draw_marked_series, warn_marks_not_drawn
+from .figure_marks import (
+    DropLine,
+    apply_drop_lines,
+    collect_drop,
+    draw_marked_series,
+    fill_xy,
+    warn_marks_not_drawn,
+)
 from .figure_orient import TransposedAxes, oriented
 
 __all__ = ["draw_series_axes", "render_figure", "style_rc"]
@@ -197,12 +204,12 @@ def draw_series_axes(
             cx, cy = (yv, xv) if turned else (xv, yv)
             real = ax.real if turned else ax
             artists.append(_draw_color_scatter(fig, real, cx, cy, label, spec, st))
+            collect_drop(drops, xv, yv, spec, spec.get("color") or "0.4")
             continue
         kw = _plot_kwargs(st.line_width, st.marker_size, spec)
         line, color = draw_marked_series(ax, xv, yv, label, kw, spec)
-        if spec and spec.get("drop_lines") in ("x", "y", "both") and not spec.get("bars"):
-            drops.append((xv, yv, str(spec["drop_lines"]), color))
-        _apply_fill(ax, xv, yv, series, i, spec, color)
+        collect_drop(drops, xv, yv, spec, color)
+        _apply_fill(ax, *fill_xy(line, xv, yv, spec), series, i, spec, color)
         artists.append(line)
     apply_error_bars(ax, xv, series, error_spans, artists, series_styles)
     tag_series_slots(artists)  # the legend's waterfall row order (figure_legend_order)

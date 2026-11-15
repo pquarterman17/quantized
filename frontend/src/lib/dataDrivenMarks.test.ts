@@ -44,7 +44,7 @@ const opts = (style: unknown, p: PlotPayload = payload, extra: object = {}) =>
 describe("lazy marks: before the module arrives", () => {
   it("a spline / size-by / drop-line series is HIDDEN (no straight stand-in, no default-size dots) and there is no drop-line plugin; its arrival bumps the rebuild version", async () => {
     const { result } = renderHook(() => useMarksVersion());
-    expect(result.current).toBeNull();
+    const v0 = result.current;
     expect(marks()).toBeNull();
     const calls: string[] = [];
     class P { moveTo() { calls.push("m"); } lineTo() { calls.push("l"); } }
@@ -62,7 +62,7 @@ describe("lazy marks: before the module arrives", () => {
     expect(sized.points.show).toBe(false);
     expect(marks()).toBeNull(); // still pending: all of the above was synchronous
     await waitFor(() => expect(marks()).not.toBeNull());
-    await waitFor(() => expect(result.current).not.toBeNull()); // the plot's rebuild trigger
+    await waitFor(() => expect(result.current).toBeGreaterThan(v0)); // the plot's rebuild trigger
   });
 });
 

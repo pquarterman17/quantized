@@ -13,7 +13,7 @@ import { seriesPoints, seriesTrace } from "./markers";
 import type { PlotPayload } from "./plotdata";
 import { DASH, resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
 import { BAR_PATHS } from "./uplotBars";
-import { ensureMarks, marks, usesMarks } from "./marksLoader";
+import { ensureMarks, marks, marksPending, usesMarks } from "./marksLoader";
 import { resolveFillBands, seriesFillProps, translucent } from "./uplotFill";
 import type { ErrorBarPaint } from "./uplotErrorRange";
 import type { BuildOptsArgs } from "./uplotOpts";
@@ -157,7 +157,7 @@ export function buildSeriesDefs(
       const cbSpec = args.colorByColumns?.get(i + 1);
       // A spline / size-by / drop-line series is hidden until its module has loaded: never a
       // straight stand-in that later jumps, nor default-size dots (see marksLoader).
-      if ((cbSpec && !cbSpec.flat) || (usesMarks(style) && !marks())) {
+      if ((cbSpec && !cbSpec.flat) || (usesMarks(style) && marksPending())) {
         return { label, scale, stroke, width: 0, points: { show: false }, show };
       }
       // Default trace shape (Preferences) when the series has no explicit style:
@@ -196,6 +196,11 @@ export function buildSeriesDefs(
         def.paths = BAR_PATHS;
         def.fill = translucent(stroke, 70);
         def.points = { show: false };
+      } else if (style?.connect === "spline" && marks() && !(style.fill && typeof style.fill === "object")) {
+        // N6 Spline connect (wins over a step shape; a fill-under follows it; a fill-BETWEEN keeps
+        // the straight line, as in the export): SPLINE_PATHS strokes the natural cubic spline, or the
+        // row-order polyline where X is not ascending (a loop) / the series is too long.
+        def.paths = marks()!.SPLINE_PATHS;
       } else if (style?.step) {
         const builder =
           style.step === "pre" ? args.steppedPathsPre
@@ -208,10 +213,6 @@ export function buildSeriesDefs(
         // RAW list, not the resolved `style`: a P3.3 auto dash is a DEFAULT and
         // must not read as an explicit choice, or the pref would un-step this.
         def.paths = xAscending ? args.steppedPaths : fullLine(args.steppedPaths);
-      } else if (style?.connect === "spline") {
-        // N6 Spline connect: SPLINE_PATHS strokes the natural cubic spline, or
-        // the straight row-order polyline where X is not ascending (a loop).
-        def.paths = marks()!.SPLINE_PATHS; // loaded: a series that uses a mark is hidden until it is
       } else if (!xAscending && width > 0 && args.linearPaths) {
         // Loop rendering: draw the line over every point in acquisition order.
         def.paths = fullLine(args.linearPaths);

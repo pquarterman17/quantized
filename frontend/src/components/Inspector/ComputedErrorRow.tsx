@@ -4,7 +4,7 @@
 // weights a fit and exports like any bound error column
 // (store/computedErrorRun.ts, loaded on click).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { ErrorSource } from "../../store/computedErrorRun";
 import { useApp } from "../../store/useApp";
@@ -32,6 +32,7 @@ export default function ComputedErrorRow({ datasetId, labels, series }: {
   const [param, setParam] = useState("5");
   const [busy, setBusy] = useState(false);
   const [reps, setReps] = useState<number[]>([]); // N9: the replicate columns of an SD / SEM source
+  useEffect(() => setReps([]), [datasetId]); // column indices belong to one dataset
   const stat = source === "sd" || source === "sem";
   const choices = series.length ? series : labels.map((_, i) => i);
   const t = target !== null && choices.includes(target) ? target : choices[0];
@@ -59,7 +60,7 @@ export default function ComputedErrorRow({ datasetId, labels, series }: {
           style={{ flex: "1.2 1 0", minWidth: 0 }}
           aria-label="Computed error series"
           value={String(t)}
-          onChange={(e) => setTarget(Number(e.target.value))}
+          onChange={(e) => { setTarget(Number(e.target.value)); setReps((r) => r.filter((c) => c !== Number(e.target.value))); }} // the mean series is never its own replicate
           options={choices.map((c) => ({ value: String(c), label: labels[c] ?? `ch ${c}` }))}
         />
         <Select

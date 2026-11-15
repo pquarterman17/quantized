@@ -34,7 +34,7 @@ import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
 import { loadPlotPerfPrefs } from "../../store/prefs";
 import { liveTicksPlugin } from "../../lib/liveTicksPlugin";
 import { plotDecorNeeds, useLazyPlotParts } from "./useLazyPlotParts";
-import { useMarksVersion } from "../../lib/marksLoader";
+import { blocksDecimation } from "../../lib/marksLoader";
 import { useLivePaint } from "./useLivePaint";
 import { useResolvedLims } from "./useResolvedLims";
 
@@ -85,7 +85,6 @@ export default function PlotViewport(props: PlotViewportProps) {
   const errorBars = useStableByEquality(args.errorBars);
   const errorSpans = useStableByEquality(args.errorSpans);
   const colorByColumns = useStableByEquality(args.colorByColumns);
-  const marksVer = useMarksVersion(); // a spline / drop-line module that arrives late rebuilds the plot
   const paintRef = useRef<LivePaintRef["current"]>(null);
   const xAscending = useMemo(
     () => !displayPayload || xIsAscending(displayPayload.data[0] as (number | null)[]),
@@ -222,7 +221,7 @@ export default function PlotViewport(props: PlotViewportProps) {
         hasErrorBars: hasErrorMapEntries(errorBars),
         hasErrorSpans: hasErrorMapEntries(errorSpans),
         defaultTrace: args.defaultTrace,
-        hasColorByColumns: !!(colorByColumns && colorByColumns.size > 0),
+        hasColorByColumns: !!(colorByColumns && colorByColumns.size > 0) || blocksDecimation(args.seriesStyles ?? [], fullX.length),
       });
     let plotData = displayPayload.data;
     if (decimate) {
@@ -339,7 +338,6 @@ export default function PlotViewport(props: PlotViewportProps) {
     errorBars,
     errorSpans,
     colorByColumns,
-    marksVer,
     hiddenKey,
     args.tool,
     args.integral,

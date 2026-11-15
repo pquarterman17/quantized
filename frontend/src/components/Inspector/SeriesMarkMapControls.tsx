@@ -5,7 +5,9 @@
 // in `colorscatter` / `uplotDropLines` / `uplotSpline`, the export in
 // `calc/figure_sizes.py` / `calc/figure_marks.py`.
 
-import { channelSplineEligible } from "../../lib/cubicSpline";
+import { channelSplineRefusal } from "../../lib/cubicSpline";
+import { marksFailed, useMarksVersion } from "../../lib/marksLoader";
+import { ownXKey } from "../../lib/perSeriesX";
 import { DEFAULT_SIZE_RANGE, sizeRange } from "../../lib/sizescatter";
 import type { DropLines, SeriesStyle } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -57,9 +59,11 @@ export default function SeriesMarkMapControls({ channel, style, setSeriesStyle: 
     const next: [number, number] = which === 0 ? [n, maxPx] : [minPx, n];
     if (next[0] <= next[1]) setSeriesStyle(channel, { sizeRange: next });
   };
-  // Spline only where X is strictly ascending; otherwise it draws straight, in
-  // row order, and says so (the export warns the same).
-  const straight = style.connect === "spline" && !!data && !channelSplineEligible(data, xKey, channel);
+  useMarksVersion(); // the "could not load" notice appears when the load settles
+  // Spline only where the series' OWN X (a multi-X sheet pairs each Y with its own) is strictly
+  // ascending and not too long; otherwise it draws straight, in row order, and says so (the export warns the same).
+  const refusal = style.connect === "spline" && active && data ? channelSplineRefusal(data, ownXKey(active, xKey, channel), channel) : null;
+  const straight = refusal === "loop" || refusal === "long";
 
   return (
     <>
@@ -121,8 +125,14 @@ export default function SeriesMarkMapControls({ channel, style, setSeriesStyle: 
       )}
       {straight && (
         <div className="qzk-ds-meta" role="status" style={{ marginTop: 4, color: "var(--warn, var(--text-faint))", whiteSpace: "normal" }}>
-          X is not strictly ascending here (a loop or repeated X), so this series is drawn with straight segments in
-          row order — a spline needs X to be a single-valued function.
+          {refusal === "long"
+            ? "A spline is not drawn above 20,000 points (the rows are denser than the pixels): this series is drawn with straight segments."
+            : "X is not strictly ascending here (a loop or repeated X), so this series is drawn with straight segments in row order — a spline needs X to be a single-valued function."}
+        </div>
+      )}
+      {marksFailed() && (style.connect || style.dropLines || style.sizeBy != null) && (
+        <div className="qzk-ds-meta" role="status" style={{ marginTop: 4, color: "var(--warn, var(--text-faint))", whiteSpace: "normal" }}>
+          The spline / drop-line / size-by code could not be loaded, so this series is drawn plain. Reload to retry.
         </div>
       )}
     </>

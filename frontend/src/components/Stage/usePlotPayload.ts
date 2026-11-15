@@ -14,7 +14,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { fixedLim, type HalfLim } from "../../lib/axisLim";
 import { groupLevelLabel, levelOrderFor } from "../../lib/categorical";
 import { buildColorByColumns, type ColorScatterSpec } from "../../lib/colorscatter";
-import { useMarksVersion } from "../../lib/marksLoader";
+import { blocksDecimation, marks, useMarksVersion } from "../../lib/marksLoader";
 import type { ErrorSpan } from "../../lib/errorbars";
 import { hasOverlayCompanions } from "./overlayCompanions";
 import { hasRichErrorBindings, type ErrorBinding } from "../../lib/errorRoles";
@@ -289,9 +289,9 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       if (encoded?.colorBy) return encoded.colorBy(encoded.styles(p.seriesStyles));
       if (!data || groupCol !== null || encoded) return new Map<number, ColorScatterSpec>();
       const base = buildColorByColumns(data, plotted, p.seriesStyles);
-      return loaded?.withSizes(base, data, plotted, p.seriesStyles) ?? base;
+      return marks()?.withSizes(base, data, plotted, p.seriesStyles) ?? base;
     },
-    [data, plotted, p.seriesStyles, groupCol, encoded, loaded],
+    [data, plotted, p.seriesStyles, groupCol, encoded, loaded], // eslint-disable-line react-hooks/exhaustive-deps -- loaded: the chunk settling
   );
 
   // Interactive-legend visibility, aligned 1:1 with the display series (overlays
@@ -338,7 +338,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       hasErrorBars: errorBars.size > 0,
       // M1: same bindings rule `errorSpans` below uses; this path draws X-error whiskers.
       hasErrorSpans: errorBindingsApplyToPlotted(useDocumentErrors ? documentErrors : active.errorRoles, plotted, { xErrorRenders: true }),
-      hasColorByColumns: colorByColumns.size > 0,
+      hasColorByColumns: colorByColumns.size > 0 || blocksDecimation(Object.values(p.seriesStyles), active.data.time.length), // size-by: row-indexed
       hasGroupSplit: groupCol !== null || encoded !== null,
     });
   // xCategories producer (gap #20 residual): a categorical-typed x channel

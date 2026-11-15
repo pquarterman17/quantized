@@ -58,7 +58,7 @@ def size_diameters(spec: Mapping[str, Any] | None, n: int) -> NDArray[np.float64
     raw = np.asarray(spec["size_by"], dtype=float)[:n]
     z[: len(raw)] = raw
     if lim is None:
-        return np.full(n, np.nan)
+        return None  # no finite size value: the series draws normal markers, as on screen
     lo, hi = _range(spec)
     span = lim[1] - lim[0]
     t = np.full(n, 0.5) if span <= 0 else (z - lim[0]) / span
@@ -67,25 +67,39 @@ def size_diameters(spec: Mapping[str, Any] | None, n: int) -> NDArray[np.float64
 
 
 def add_size_legend(ax: Any, spec: Mapping[str, Any], color: Any, marker: str = "o") -> None:
-    """The size key: three markers (data min, middle, max) in a second legend
-    titled ``size_label``. ``add_artist`` keeps it when the series legend is
-    (re)built afterwards."""
+    """The size key: three markers (data min, middle, max) in a legend titled
+    ``size_label``, bottom right. ONE key per distinct (title, range, size range) on the
+    figure (series sized by the same column share it), and further keys stack upward from
+    the first instead of overprinting it. ``add_artist`` keeps each when the series legend
+    is (re)built afterwards."""
     lim = _size_lim(spec)
     if lim is None:
         return
     lo, hi = _range(spec)
     vals = [lim[0], (lim[0] + lim[1]) / 2, lim[1]] if lim[1] > lim[0] else [lim[0]]
     diam = [lo, (lo + hi) / 2, hi] if lim[1] > lim[0] else [(lo + hi) / 2]
-    with heavy_imports("matplotlib.legend", "matplotlib.lines"):
+    title = str(spec.get("size_label") or "")
+    fig = ax.figure
+    placed: list[tuple[Any, float]] = fig.__dict__.setdefault("_qz_size_keys", [])
+    key = (title, lim, (lo, hi))
+    if any(k == key for k, _ in placed):
+        return
+    with heavy_imports("matplotlib.legend", "matplotlib.lines", "matplotlib.transforms"):
         from matplotlib.legend import Legend
         from matplotlib.lines import Line2D
+        from matplotlib.transforms import ScaledTranslation
     handles = [
         Line2D([], [], linestyle="none", marker=marker, markersize=d, color=color,
                markerfacecolor="none" if spec.get("marker_fill") == "hollow" else color)
         for d in diam
     ]
+    below = sum(h for _, h in placed)  # points already used by earlier keys
     leg = Legend(
-        ax, handles, [f"{v:.3g}" for v in vals], title=str(spec.get("size_label") or "") or None,
+        ax, handles, [f"{v:.3g}" for v in vals], title=title or None,
         loc="lower right", frameon=False, labelspacing=1.0,
+        bbox_to_anchor=(1.0, 0.0),
+        bbox_transform=ax.transAxes + ScaledTranslation(0.0, below / 72.0, fig.dpi_scale_trans),
     )
     ax.add_artist(leg)
+    rows = sum(max(d, 10.0) + 10.0 for d in diam)
+    placed.append((key, rows + 28.0))  # rows + title + padding, in points

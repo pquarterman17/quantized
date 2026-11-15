@@ -35,6 +35,10 @@ from quantized.calc.figure_warnings import note_figure_warning
 from quantized.heavy_import import heavy_imports
 
 __all__ = [
+    "SPLINE_MAX_ROWS",
+    "collect_drop",
+    "fill_xy",
+    "spline_refusal",
     "drop_size_by",
     "warn_marks_not_drawn",
     "SUBSTEPS",
@@ -47,51 +51,53 @@ __all__ = [
 
 #: Spline samples per segment -- ``lib/cubicSpline.ts``'s ``SUBSTEPS``.
 SUBSTEPS = 16
-
-
-def _natural_spline(
-    x: NDArray[np.float64], y: NDArray[np.float64]
-) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """Natural cubic spline through ``(x, y)`` at SUBSTEPS points per segment."""
-    with heavy_imports("scipy.interpolate"):
-        from scipy.interpolate import CubicSpline
-
-    xd = np.concatenate(
-        [np.linspace(x[i], x[i + 1], SUBSTEPS, endpoint=False) for i in range(len(x) - 1)]
-        + [x[-1:]]
-    )
-    return xd, np.asarray(CubicSpline(x, y, bc_type="natural")(xd), dtype=float)
+#: Above this many points a spline is not offered (rows are denser than pixels); the series is
+#: drawn straight -- `lib/marksLoader.SPLINE_MAX_ROWS` does the same on the canvas.
+SPLINE_MAX_ROWS = 20000
 
 
 def _runs(ok: NDArray[np.bool_]) -> list[tuple[int, int]]:
-    out: list[tuple[int, int]] = []
-    i = 0
-    while i < len(ok):
-        if not ok[i]:
-            i += 1
-            continue
-        j = i
-        while j + 1 < len(ok) and ok[j + 1]:
-            j += 1
-        out.append((i, j))
-        i = j + 1
-    return out
+    """``(first, last)`` of each maximal run of True, vectorised."""
+    edges = np.diff(np.concatenate(([0], ok.astype(np.int8), [0])))
+    starts, ends = np.flatnonzero(edges == 1), np.flatnonzero(edges == -1) - 1
+    return list(zip(starts.tolist(), ends.tolist(), strict=True))
+
+
+def _dense_run(
+    x: NDArray[np.float64], y: NDArray[np.float64]
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Natural cubic spline through one run, SUBSTEPS samples per segment (broadcast, no loop)."""
+    with heavy_imports("scipy.interpolate"):
+        from scipy.interpolate import CubicSpline
+
+    t = np.arange(SUBSTEPS) / SUBSTEPS
+    xd = np.concatenate(((x[:-1, None] + (x[1:] - x[:-1])[:, None] * t[None, :]).ravel(), x[-1:]))
+    return xd, np.asarray(CubicSpline(x, y, bc_type="natural")(xd), dtype=float)
+
+
+def spline_refusal(x: NDArray[np.float64], y: NDArray[np.float64]) -> str | None:
+    """Why a spline cannot be drawn ("loop", "long", "short") or None (``lib/cubicSpline``)."""
+    n = min(len(x), len(y))
+    xv, yv = np.asarray(x, dtype=float)[:n], np.asarray(y, dtype=float)[:n]
+    ok = np.isfinite(xv) & np.isfinite(yv)
+    if np.any(np.diff(xv[ok]) <= 0):
+        return "loop"
+    cnt = int(ok.sum())
+    return "long" if cnt > SPLINE_MAX_ROWS else "short" if cnt < 3 else None
 
 
 def spline_dense(
     x: NDArray[np.float64], y: NDArray[np.float64]
 ) -> tuple[NDArray[np.float64], NDArray[np.float64], list[int]] | None:
     """``(x, y, knot_indices)`` of the spline-connected curve, or ``None`` when
-    it cannot be drawn: X is not strictly ascending over the finite rows (a
-    loop or a tie), or no run of finite rows has the 3 points a cubic needs.
-    A non-finite row ends a run; each run is splined on its own and the runs
-    are joined by one NaN row so the line breaks there."""
-    xv, yv = np.asarray(x, dtype=float), np.asarray(y, dtype=float)
-    n = min(len(xv), len(yv))
-    xv, yv = xv[:n], yv[:n]
-    ok = np.isfinite(xv) & np.isfinite(yv)
-    if ok.sum() < 3 or np.any(np.diff(xv[ok]) <= 0):
+    it cannot be drawn (:func:`spline_refusal`). A non-finite row ends a run; each
+    run is splined on its own and the runs are joined by one NaN row so the line
+    breaks there."""
+    if spline_refusal(x, y) is not None:
         return None
+    n = min(len(x), len(y))
+    xv, yv = np.asarray(x, dtype=float)[:n], np.asarray(y, dtype=float)[:n]
+    ok = np.isfinite(xv) & np.isfinite(yv)
     xs: list[NDArray[np.float64]] = []
     ys: list[NDArray[np.float64]] = []
     knots: list[int] = []
@@ -99,8 +105,8 @@ def spline_dense(
     for a, b in _runs(ok):
         rx, ry = xv[a : b + 1], yv[a : b + 1]
         if len(rx) >= 3:
-            seg_x, seg_y = _natural_spline(rx, ry)
-            seg_k = [k * SUBSTEPS for k in range(len(rx))]
+            seg_x, seg_y = _dense_run(rx, ry)
+            seg_k = (np.arange(len(rx)) * SUBSTEPS).tolist()
         else:  # too short for a cubic: straight, knots only
             seg_x, seg_y, seg_k = rx, ry, list(range(len(rx)))
         if xs:
@@ -136,15 +142,30 @@ def draw_marked_series(
         kw.pop("markerfacecolor", None)
     px, py, mark = xv, yv, None
     if spec.get("connect") == "spline":
-        dense = spline_dense(xv, yv)
-        if dense is None:
+        if isinstance(spec.get("fill"), Mapping):  # a fill BETWEEN stays straight, as on screen
             note_figure_warning(
-                f"Spline connect needs monotonic (strictly ascending) X; series {label!r} "
-                "is drawn with straight segments in row order (a loop or repeated X "
-                "cannot be a spline)."
+                "Spline connect is not drawn with a fill between series; "
+                f"{label!r} is drawn straight."
             )
         else:
-            px, py, mark = dense
+            if kw.pop("drawstyle", None):  # the spline wins over a step shape (as on screen)
+                note_figure_warning(f"Spline connect replaces the step shape of series {label!r}.")
+            why = spline_refusal(xv, yv)
+            dense = spline_dense(xv, yv)
+            if dense is None and why == "long":
+                note_figure_warning(
+                    f"Spline connect is not drawn above {SPLINE_MAX_ROWS:,} points; "
+                    f"series {label!r} "
+                    "is drawn with straight segments."
+                )
+            elif dense is None:
+                note_figure_warning(
+                    f"Spline connect needs monotonic (strictly ascending) X; series {label!r} "
+                    "is drawn with straight segments in row order (a loop or repeated X "
+                    "cannot be a spline)."
+                )
+            else:
+                px, py, mark = dense
     if mark is not None and "marker" in kw:
         kw["markevery"] = mark
     (line,) = ax.plot(px, py, label=label, **kw)
@@ -153,6 +174,30 @@ def draw_marked_series(
         _scatter_sized(ax, xv, yv, sizes, spec, color)
         add_size_legend(ax, spec, color, _marker(spec))
     return line, color
+
+
+def fill_xy(
+    line: Any, xv: NDArray[np.float64], yv: NDArray[np.float64], spec: Mapping[str, Any] | None
+) -> tuple[Any, Any]:
+    """The path a fill-under follows: the spline's dense curve when one was drawn, else the rows."""
+    if spec and spec.get("connect") == "spline" and hasattr(line, "get_xdata"):
+        return line.get_xdata(), line.get_ydata()
+    return xv, yv
+
+
+def collect_drop(
+    drops: list[DropLine], xv: NDArray[np.float64], yv: NDArray[np.float64],
+    spec: Mapping[str, Any] | None, color: Any,
+) -> None:
+    """Queue one series' drop lines (drawn by :func:`apply_drop_lines` once the limits are final).
+    Colour-by, bar and plain series all get them, as on screen; a TURNED (horizontal-bar)
+    plot cannot, so it warns."""
+    if not spec or spec.get("drop_lines") not in ("x", "y", "both"):
+        return
+    if spec.get("bars") == "horizontal":
+        warn_marks_not_drawn([spec], "horizontal bar plots", ("drop_lines",))
+        return
+    drops.append((xv, yv, str(spec["drop_lines"]), color))
 
 
 def _plain(ax: Any, xv: Any, yv: Any, label: str, kw: dict[str, Any]) -> tuple[Any, Any]:
