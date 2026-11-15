@@ -54,18 +54,21 @@ export default function SignalPreview({
   channel,
   resultChannel = channel,
   showOriginal = true,
+  flagged = [],
 }: {
   source: DataStruct;
   result: DataStruct | null;
   channel: number;
   resultChannel?: number;
   showOriginal?: boolean;
+  /** Despike: the points about to be replaced, marked on the original trace. */
+  flagged?: readonly (readonly [number, number])[];
 }) {
   const width = 460;
   const height = 150;
   const originalRows = showOriginal ? samplePreviewRows(finiteRows(source, channel)) : [];
   const processedRows = result ? samplePreviewRows(finiteRows(result, resultChannel)) : [];
-  const combined = [...originalRows, ...processedRows];
+  const combined = [...originalRows, ...processedRows, ...flagged];
   const bounds = combined.length
     ? [
         Math.min(...combined.map(([x]) => x)),
@@ -79,6 +82,12 @@ export default function SignalPreview({
       <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={showOriginal ? "Original and processed signal preview" : "Analysis output preview"}>
         <rect x="0" y="0" width={width} height={height} fill="var(--bg-1)" />
         <polyline points={points(originalRows, bounds, width, height)} fill="none" stroke="var(--text-faint)" strokeWidth="1.2" />
+        {flagged.slice(0, 200).map(([x, y]) => {
+          const [xmin, xmax, ymin, ymax] = bounds;
+          const cx = 8 + ((x - xmin) / (xmax - xmin || 1)) * (width - 16);
+          const cy = 8 + (1 - (y - ymin) / (ymax - ymin || 1)) * (height - 16);
+          return <circle key={`${x}:${y}`} cx={cx.toFixed(1)} cy={cy.toFixed(1)} r="3" fill="none" stroke="var(--danger)" strokeWidth="1.4" data-flagged="" />;
+        })}
         {result && <polyline points={points(processedRows, bounds, width, height)} fill="none" stroke="var(--accent)" strokeWidth="1.8" />}
       </svg>
       <div className="qz-signal-preview-key">

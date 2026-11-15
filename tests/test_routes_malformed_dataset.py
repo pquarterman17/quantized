@@ -170,6 +170,11 @@ CASES = [
         GOOD_DATASET,
     ),
     (
+        "/api/transform/sigop",
+        lambda ds: {"dataset": ds, "method": "reduce-nth", "channels": [0], "args": {"n": 2}},
+        GOOD_DATASET,
+    ),
+    (
         "/api/transform/average",
         lambda ds: {
             "curves": [{"name": "a", "dataset": GOOD_DATASET}, {"name": "b", "dataset": ds}]

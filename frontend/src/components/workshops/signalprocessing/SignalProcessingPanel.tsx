@@ -18,6 +18,8 @@ import SignalPreview from "./SignalPreview";
 import CorrelationInputs, { type CorrelationSourceMode } from "./CorrelationInputs";
 import SignalChannelInputs from "./SignalChannelInputs";
 import SignalOperationPicker from "./SignalOperationPicker";
+import SigopBody from "./SigopBody";
+import { isSigopFilter, type SigopFilterMethod } from "./sigopModel";
 import SpectralControls from "./SpectralControls";
 import SpectralReadout from "./SpectralReadout";
 import SignalScopeNote from "./SignalScopeNote";
@@ -28,6 +30,7 @@ import {
   correlatedBoundErrors,
   buildCorrectionRecipe,
   channelsWithoutFiniteValues,
+  enteredFinite,
   isSpectralOperation,
   measuredChannels,
   operationLabel,
@@ -41,10 +44,6 @@ import {
   validateSpectralSettings,
 } from "./spectralSettings";
 
-function enteredFinite(value: string): boolean {
-  return value.trim() !== "" && Number.isFinite(Number(value));
-}
-
 export default function SignalProcessingPanel() {
   const setSignalProcessingOpen = useApp((s) => s.setSignalProcessingOpen);
   const datasets = useApp((s) => s.datasets);
@@ -57,6 +56,7 @@ export default function SignalProcessingPanel() {
   const available = useMemo(() => active ? measuredChannels(active) : [], [active]);
   const [channels, setChannels] = useState<number[]>([]);
   const [settings, setSettings] = useState<SignalSettings>(DEFAULT_SIGNAL_SETTINGS);
+  const [sigop, setSigop] = useState<SigopFilterMethod | null>(null); // median / despike / LOWESS / (de)convolution / Hilbert / inverse FFT
   const [spectralSettings, setSpectralSettings] = useState(DEFAULT_SPECTRAL_SETTINGS);
   const [correlationMode, setCorrelationMode] = useState<CorrelationSourceMode>("same");
   const [secondaryId, setSecondaryId] = useState("");
@@ -76,6 +76,10 @@ export default function SignalProcessingPanel() {
   const close = () => {
     commitController.current?.abort();
     setSignalProcessingOpen(false);
+  };
+  const pick = (op: string) => {
+    setSigop(isSigopFilter(op) ? op : null);
+    if (!isSigopFilter(op)) setSettings((c) => ({ ...c, operation: op as SignalSettings["operation"] }));
   };
   const spectralOperation = isSpectralOperation(settings.operation) ? settings.operation : null;
   const spectral = spectralOperation !== null;
@@ -191,7 +195,7 @@ export default function SignalProcessingPanel() {
     setPreview(null);
     setPreviewFor(null);
     setPreviewError("");
-    if (!active || validation || !recipe || (!spectral && !params)) return;
+    if (sigop || !active || validation || !recipe || (!spectral && !params)) return;
     const timer = window.setTimeout(() => {
       const request = spectral
         ? secondary
@@ -219,7 +223,7 @@ export default function SignalProcessingPanel() {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [active, params, recipe, secondary, spectral, validation]);
+  }, [active, params, recipe, secondary, sigop, spectral, validation]);
 
   const commit = async () => {
     if (!active || !displayedPreview || validation || outputError || commitInFlight.current) return;
@@ -270,12 +274,12 @@ export default function SignalProcessingPanel() {
     <ToolWindow id="signal-processing" title="Signal Processing" width={620} x={180} y={90} onClose={close}>
       <div className="qz-signal-workbench">
         <p className="qz-signal-intro">Transform selected signals with a live preview. Apply creates a linked worksheet; the source is never overwritten.</p>
-        {!active ? <p className="qz-error">Select a dataset to begin.</p> : (
+        {!active ? <p className="qz-error">Select a dataset to begin.</p> : sigop ? <SigopBody active={active} method={sigop} onPick={pick} onClose={close} /> : (
           <>
             <div className="qz-signal-note">
               Source: <strong>{active.name}</strong> · X: {xLabel}{xUnit ? ` (${xUnit})` : ""}
             </div>
-            <SignalOperationPicker value={settings.operation} onChange={(operation) => setSettings((current) => ({ ...current, operation }))} />
+            <SignalOperationPicker value={settings.operation} onChange={pick} />
             {settings.operation === "correlation" ? (
               <CorrelationInputs
                 active={active}
