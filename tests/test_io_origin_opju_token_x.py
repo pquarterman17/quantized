@@ -167,8 +167,11 @@ def test_realdata_rise_time_report_pages_are_not_books(corpus_dir: Path) -> None
     books |= {n["book"] for f in figs for n in f.get("curve_sheet_omitted") or []}
     assert not any(str(b).startswith("Residual") for b in books)
     g66 = _layer(corpus_dir, _RISE, "Graph66", 1)
-    assert g66["curves"] == []
-    assert ("Book56", "B", "sheet_unknown") in _omitted(g66)
+    # Origin plots Book56_B@5 here (and B@3, C, D, E, which no decoded
+    # token names); the host's B ids do not rank-align, the second sheet
+    # signal (opju_sheet_signals) places it on sheet 5.
+    assert [(c["book"], c["y"]) for c in g66["curves"]] == [("Book56@5", "B")]
+    assert _omitted(g66) == []
 
 
 @pytest.mark.realdata
