@@ -39,15 +39,10 @@ import { DESIGNATION_BADGE, type TextColumn } from "../../../lib/originTextColum
 import { userParamRows, userParamValue } from "../../../lib/userParams";
 import { channelLetter } from "../../../lib/formula";
 import type { ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
-import { Select } from "../../primitives";
+import ColumnTypeSelect from "./ColumnTypeSelect";
 import HiddenColumnsMarker from "./HiddenColumnsMarker";
 import type { TextColumnLayout } from "./textColumns";
 import type { ColumnAria } from "../../../lib/worksheetColumnView";
-
-/** Compact modeling-type tags — same table as ChannelsCard's, kept in sync
- *  by hand (P1.6b: the worksheet header is the SECOND surface for this, not
- *  a new source of truth — `lib/modeling.channelModelingType` is that). */
-const TYPE_TAG: Record<ModelingType, string> = { continuous: "C", ordinal: "O", nominal: "N" };
 
 export interface GridHeaderProps {
   data: DataStruct;
@@ -312,22 +307,11 @@ export default function GridHeader({
             {sortMark(c)}
           </span>
           {modelingTypeOf && onChangeChannelType && (
-            <Select
-              className="qzk-col-type"
-              style={{ width: "100%", marginTop: 2 }}
-              value={channelTypes?.[c] ?? ""}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => {
-                e.stopPropagation();
-                onChangeChannelType(c, e.target.value === "" ? null : (e.target.value as ModelingType));
-              }}
-              title="Modeling type — Continuous: a measurement axis · Ordinal: ordered levels · Nominal: categories; Auto = inferred (a level table always reads as nominal)."
-              options={[
-                { value: "", label: `auto·${TYPE_TAG[modelingTypeOf(c)]}` },
-                { value: "continuous", label: "Cont" },
-                { value: "ordinal", label: "Ord" },
-                { value: "nominal", label: "Nom" },
-              ]}
+            <ColumnTypeSelect
+              name={data.labels[c]}
+              effective={modelingTypeOf(c)}
+              override={channelTypes?.[c]}
+              onChange={(t) => onChangeChannelType(c, t)}
             />
           )}
           {comment(c, meta?.comment)}

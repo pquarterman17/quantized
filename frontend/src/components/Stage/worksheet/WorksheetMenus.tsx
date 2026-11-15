@@ -14,6 +14,7 @@ import { isRederived } from "../../../lib/rederived";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import type { Dataset } from "../../../lib/types";
 import { deleteRowsAt, insertRowsAbove, moveWorksheetRows } from "../../../store/moveRows";
+import { setColumnModelingType } from "../../../store/columnTypeActions";
 import { useRecode } from "../../../store/recode";
 import { useLevelOrderPanel } from "../../../store/levelOrderPanel";
 import { sortWorksheetRows } from "../../../store/sortRows";
@@ -23,6 +24,7 @@ import type { WorksheetView } from "./useWorksheetView";
 import type { ScvTarget } from "../../../lib/setColumnValues";
 import { fillColumnsDialog, numberFormatDialog, setRowCountDialog, sortWorksheetDialog } from "./worksheetDialogs";
 import { legendFromParamsDialog, orderByParamDialog } from "./worksheetParamDialogs";
+import { modelingTypeItems } from "./columnTypeMenu";
 import { columnViewItems, type ColumnViewControls } from "./columnViewMenu";
 import { columnEditItems, rowEditItems, type ColumnMove } from "./worksheetEditMenus";
 import { columnMenuItems, rowMenuItems } from "./worksheetMenuModel";
@@ -112,6 +114,12 @@ function columnItems(
               ),
           }),
     }),
+    ...(readOnly || col < 0
+      ? []
+      : [
+          { separator: true } as const,
+          ...modelingTypeItems(col, ds.channelTypes?.[col], (c, t) => setColumnModelingType(ds.id, c, t)),
+        ]),
     ...(colView ? [{ separator: true } as const, ...columnViewItems(colView, targets)] : []),
     ...(readOnly
       ? []
