@@ -26,9 +26,11 @@ This reader starts from the column records themselves, which
 
 Fail closed: a sheet is labelled only when every column the worksheet scan
 decoded for it has a record in its group, each column name has exactly one
-record, and every designation code is known. Only sheets ``windows_opju``
-left unlabelled reach this reader (``opju._window_metadata``), so nothing it
-already labelled changes.
+record, and every designation code is known. Such a sheet takes these
+by-name labels OVER ``windows_opju``'s positional reading, which marker
+bytes inside label text shift (decode-plan item 73,
+``opju._bind_by_record``); a positional reading that a record of the book's
+own window contradicts (``contradicted_books``) is dropped.
 
 **Evidence (Origin 2026b Student COM, 2026-11-15).** ``wks.col.type`` /
 ``lname$`` / ``unit$`` of the matched-pair book (8 columns, every
@@ -53,7 +55,7 @@ from quantized.io.origin_project.opju_sheet_segments import SHEET_MARK
 from quantized.io.origin_project.windows import BookMeta, ColumnMeta
 from quantized.io.origin_project.windows_opju import _find_label
 
-__all__ = ["record_column_metadata"]
+__all__ = ["contradicted_books", "record_column_metadata"]
 
 _LABELLED = frozenset(DESIGNATION_CODES.values())  # every code COM proves (item 72)
 _LABEL_REACH = 600  # bytes past the last column record searched for its label
@@ -144,4 +146,36 @@ def record_column_metadata(
             meta[name] = ColumnMeta(name, desig, rows[0], rows[1], rows[2])
         base = sheet.partition("@")[0]
         out[sheet] = BookMeta(base, base, {c: meta[c] for c in cols})
+    return out
+
+
+def contradicted_books(
+    b: bytes, pages: Sequence[tuple[int, str]], metas: Mapping[str, BookMeta]
+) -> set[str]:
+    """The books of ``metas`` (``windows_opju``'s positional reading) that a
+    column record in the book's OWN window span contradicts: a column name
+    with exactly one record in the span whose designation, or whose label
+    when both carry one, differs from what the positional run attached."""
+    bounds = [*pages, (len(b), "")]
+    out: set[str] = set()
+    for book, meta in metas.items():
+        records: dict[str, list[tuple[str, str | None]]] = defaultdict(list)
+        for (start, name), (end, _next) in zip(bounds, bounds[1:], strict=False):
+            if name != book.partition("@")[0]:
+                continue
+            for group in _groups(b, start, end):
+                for i, (off, _cid, col, desig) in enumerate(group):
+                    nxt = group[i + 1][0] if i + 1 < len(group) else min(end, off + _LABEL_REACH)
+                    records[col].append((desig, _find_label(b, off, nxt)))
+        for col, cm in meta.columns.items():
+            recs = records.get(col, [])
+            if len(recs) != 1:
+                continue
+            desig, label = recs[0]
+            long_name = label.split("\r\n")[0] if label else None
+            if (cm.designation and desig and cm.designation != desig) or (
+                long_name and cm.long_name and long_name != cm.long_name
+            ):
+                out.add(book)
+                break
     return out
