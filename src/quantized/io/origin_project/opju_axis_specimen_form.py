@@ -47,6 +47,31 @@ def _filler_third_byte_is_tag(b: bytes, tb: int) -> bool:
     return b[tb + 1 : tb + 3] == b"{@" and len(third) == 1 and 0x81 <= third[0] <= 0x8F
 
 
+def _filler(b: bytes, tb: int) -> tuple[bool | None, int] | None:
+    """The ``7b 40`` filler after the type byte at ``tb``: ``(x_log, y_start)``.
+
+    ``x_log`` is the exact X-scale flag (``7b 40 01`` linear / ``7b 40 08 01``
+    log10), else ``None``; ``y_start = tb + 4`` is where the Y span begins (a
+    log X's extra ``08`` is absorbed by the 2-byte tag-skip candidate).
+
+    ``None`` (refuse) when the third filler byte is already the Y span's first
+    value TAG: the geometry double carries no X-scale trailer (type byte 02 =
+    just ``7b 40``), so the fixed +3 skip would eat the tag. That is a
+    real-form record (it decodes there); never guess. Measured against the
+    corpus (2026-11-15): 12 anchors have this shape, ``_parse_real_record``
+    decodes all 12, and starting the Y span at ``tb + 3`` instead leaves the
+    hybrid with ``None`` on all 12 -- its Y span (to the step tag) swallows the
+    step token -- so decoding them here would be dead code with no oracle."""
+    x_log: bool | None = None
+    if b[tb + 1 : tb + 4] == b"\x7b\x40\x01":
+        x_log = False
+    elif b[tb + 1 : tb + 5] == b"\x7b\x40\x08\x01":
+        x_log = True
+    if _filler_third_byte_is_tag(b, tb):
+        return None
+    return x_log, tb + 4
+
+
 def _value_candidates(b: bytes, pos: int, end: int) -> list[tuple[float, int]]:
     """Every plausible ``(value, bytes_consumed)`` parse starting at ``pos``.
 
@@ -127,18 +152,10 @@ def _parse_specimen_record(
         return None
     tb = ytrans + len(_Y_TRANSITION)
     type_byte = b[tb]
-    x_log: bool | None = None
-    if b[tb + 1 : tb + 4] == b"\x7b\x40\x01":
-        x_log = False
-    elif b[tb + 1 : tb + 5] == b"\x7b\x40\x08\x01":
-        x_log = True
-    if _filler_third_byte_is_tag(b, tb):
-        # The skeleton's third filler byte is the Y span's first value TAG, not
-        # the ``01`` scale flag: the geometry double carries no X-scale trailer
-        # (type byte 02 = just ``7b 40``), so the fixed +3 skip below would eat
-        # the tag. That is a real-form record (it decodes there); never guess.
+    filler = _filler(b, tb)
+    if filler is None:
         return None
-    y_start = tb + 1 + 3  # + type byte + "7b 40 ..." filler (see docstring)
+    x_log, y_start = filler
     ystep = b.find(_STEP_TAG, y_start, min(len(b), y_start + _TAG_SEARCH_SPAN))
     if ystep < 0:
         return None
@@ -175,14 +192,10 @@ def parse_hybrid_record(
         return None
     tb = ytrans + len(_Y_TRANSITION)
     type_byte = b[tb]
-    x_log: bool | None = None
-    if b[tb + 1 : tb + 4] == b"\x7b\x40\x01":
-        x_log = False
-    elif b[tb + 1 : tb + 5] == b"\x7b\x40\x08\x01":
-        x_log = True
-    if _filler_third_byte_is_tag(b, tb):  # same guard as the specimen form
+    filler = _filler(b, tb)  # same refusal as the specimen form
+    if filler is None:
         return None
-    y_start = tb + 1 + 3
+    x_log, y_start = filler
     ystep = b.find(_STEP_TAG, y_start, min(len(b), y_start + _TAG_SEARCH_SPAN))
     if ystep < 0:
         return None
