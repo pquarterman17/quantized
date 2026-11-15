@@ -57,7 +57,8 @@ def extra_sum_of_squares(
     both zero gives ``F = 0, p = 1``. Raises ``ValueError`` for a non-nested
     pair (no extra parameters), no full-fit dof, or a negative/non-finite RSS.
     """
-    if not (math.isfinite(rss_restricted) and math.isfinite(rss_full)) or rss_restricted < 0 or rss_full < 0:
+    finite = math.isfinite(rss_restricted) and math.isfinite(rss_full)
+    if not finite or rss_restricted < 0 or rss_full < 0:
         raise ValueError("residual sums of squares must be finite and non-negative")
     df_num = df_restricted - df_full
     if df_num <= 0:

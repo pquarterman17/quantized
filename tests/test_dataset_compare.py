@@ -130,7 +130,8 @@ def test_route_returns_f_test_and_rejects_bad_requests() -> None:
     # no hypothesis named, or a hypothesis that does not span every dataset
     assert client.post("/api/fitting/compare-datasets", json=_req(x, y1, y2, [])).status_code == 422
     partial = [{"param_name": "m", "datasets": [0]}]
-    assert client.post("/api/fitting/compare-datasets", json=_req(x, y1, y2, partial)).status_code == 422
+    r = client.post("/api/fitting/compare-datasets", json=_req(x, y1, y2, partial))
+    assert r.status_code == 422
     one = _req(x, y1, y2, shared_all)
     one["datasets"] = one["datasets"][:1]
     assert client.post("/api/fitting/compare-datasets/job", json=one).status_code == 422

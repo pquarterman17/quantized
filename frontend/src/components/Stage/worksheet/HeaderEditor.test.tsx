@@ -91,3 +91,37 @@ describe("column structure menu", () => {
     expect(labels(columnEditItems(0, c))).toContain("Set row count…");
   });
 });
+
+describe("user-parameter header rows", () => {
+  it("adds a parameter in the header editor, shows it under the header, then edits it on another column", () => {
+    render(<WorksheetPane datasetId="w" />);
+    fireEvent.doubleClick(document.querySelector("[role=columnheader][data-col='0']")!);
+    fireEvent.change(screen.getByRole("textbox", { name: "New parameter name, A" }), { target: { value: "Temperature" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "New parameter value, A" }), { target: { value: "300 K" } });
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "New parameter value, A" }), { key: "Enter" });
+    expect(screen.getByText("Temperature: 300 K")).toBeInTheDocument();
+    expect(useApp.getState().history).toHaveLength(1);
+
+    // the parameter is now a row for every column: edit B's value
+    fireEvent.doubleClick(document.querySelector("[role=columnheader][data-col='1']")!);
+    fireEvent.change(screen.getByRole("textbox", { name: "Parameter Temperature, Twice" }), { target: { value: "10 K" } });
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Parameter Temperature, Twice" }), { key: "Enter" });
+    expect(screen.getByText("Temperature: 10 K")).toBeInTheDocument();
+    expect(screen.getByText("Temperature: 300 K")).toBeInTheDocument();
+  });
+
+  it("the X column has no parameter section", () => {
+    render(<WorksheetPane datasetId="w" />);
+    fireEvent.doubleClick(document.querySelector("[role=columnheader][data-col='-1']")!);
+    expect(screen.queryByRole("textbox", { name: /New parameter name/ })).toBeNull();
+  });
+
+  it("offers the legend and curve-order entries only when the host wires them (value columns)", () => {
+    const base = { baseCount: 1, targets: [0], editHeader: vi.fn(), setColumnValues: vi.fn(), numberFormat: vi.fn(), insertColumn: vi.fn(), addColumn: vi.fn(), deleteColumns: vi.fn(), moveColumn: vi.fn(), sortWorksheet: vi.fn(), fill: vi.fn(), setRowCount: vi.fn() };
+    const names = (items: ReturnType<typeof columnEditItems>) => items.flatMap((i) => ("label" in i ? [i.label] : []));
+    expect(names(columnEditItems(0, base))).not.toContain("Order curves by parameter…");
+    const wired = { ...base, legendFromParams: vi.fn(), orderByParam: vi.fn() };
+    expect(names(columnEditItems(0, wired))).toEqual(expect.arrayContaining(["Legend label from parameters…", "Order curves by parameter…"]));
+    expect(names(columnEditItems(-1, wired))).not.toContain("Order curves by parameter…");
+  });
+});

@@ -156,11 +156,13 @@ def test_applied_field_uncertainty_adds_in_quadrature_and_converts_units() -> No
     assert both["inverse_errors"][0] == pytest.approx((rel / chi).tolist(), rel=1e-9)
     # field uncertainty alone -> one series carrying only the field part
     only_h = curie_weiss_data_fit(
-        temperature, moment, field=field, field_unit="Oe", field_errors=[np.full(len(field), 1.0).tolist()],
+        temperature, moment, field=field, field_unit="Oe",
+        field_errors=[np.full(len(field), 1.0).tolist()],
         **kwargs,
     )
     assert len(only_h["inverse_errors"]) == 1
-    assert only_h["susceptibility_errors_molar"][0] == pytest.approx((chi * 0.001).tolist(), rel=1e-9)
+    expected = (chi * 0.001).tolist()
+    assert only_h["susceptibility_errors_molar"][0] == pytest.approx(expected, rel=1e-9)
 
 
 def test_applied_field_uncertainty_fails_closed() -> None:

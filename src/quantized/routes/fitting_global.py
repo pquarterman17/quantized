@@ -26,10 +26,10 @@ from fastapi import APIRouter, HTTPException
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 
+from quantized.calc.dataset_compare import compare_datasets
 from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_equation import equation_model
 from quantized.calc.fit_equation_init import auto_start
-from quantized.calc.dataset_compare import compare_datasets
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fitting import weights_from_dy
 from quantized.calc.global_curve_fit import (
@@ -294,7 +294,7 @@ def _checked_compare(req: GlobalFitRequest) -> _Problem:
     if not prob.constraints:
         raise HTTPException(
             status_code=422,
-            detail="name at least one parameter to test as shared across the datasets (constraints)")
+            detail="name at least one parameter to test as shared across the datasets")
     return prob
 
 

@@ -36,6 +36,7 @@ import { Fragment } from "react";
 
 import { columnMetaList, type ColumnMeta, type OriginDesignation } from "../../../lib/columnmeta";
 import { DESIGNATION_BADGE, type TextColumn } from "../../../lib/originTextColumns";
+import { userParamRows, userParamValue } from "../../../lib/userParams";
 import { channelLetter } from "../../../lib/formula";
 import type { ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
 import { Select } from "../../primitives";
@@ -165,6 +166,18 @@ export default function GridHeader({
   commentOf,
 }: GridHeaderProps) {
   const colMeta = columnMetaList(data);
+  // User parameter rows (Temperature, Sample, ...): one "name: value" line per
+  // parameter the column has a value for.
+  const params = userParamRows(data);
+  const paramLines = (col: number) =>
+    params.map((p) => {
+      const v = userParamValue(params, p.name, col);
+      return v ? (
+        <span key={p.name} className="comment" title={`${p.name}: ${v}`}>
+          {p.name}: {v}
+        </span>
+      ) : null;
+    });
   // The Comments row: the user's own (columnProps), else the book's.
   const comment = (col: number, book: string | undefined) => {
     const text = commentOf?.(col) ?? book;
@@ -322,6 +335,7 @@ export default function GridHeader({
                 />
               )}
               {comment(c, meta?.comment)}
+              {paramLines(c)}
               {resizeHandle(c)}
             </div>
             {textLayout.after(c).map(textHeaderCell)}
